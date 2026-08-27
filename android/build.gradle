@@ -1,0 +1,4 @@
+// 根构建文件: 只声明 AGP,子模块按需应用
+plugins {
+    id 'com.android.application' version '8.5.2' apply false
+}

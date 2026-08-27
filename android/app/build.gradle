@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.minincm.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.minincm.app"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+    // 零依赖: 不引入 androidx/kotlin, 全部使用 framework API
+}
+
+dependencies {
+    // 刻意留空 —— 所有能力来自 android.* framework + assets/www 前端
+}
