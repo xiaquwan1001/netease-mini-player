@@ -2,6 +2,7 @@
 
 > 最近更新: 2026-10-31。里程碑式记录 "做到了什么 / 怎么验证的 / 下一步",
 > 协议细节放 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`,
+> LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/lx-plugin.md`,
 > 社区项目与路线选择见 `docs/community-projects.md`,
 > fork/PR/自建对比见 `docs/build-vs-fork.md`。
 
