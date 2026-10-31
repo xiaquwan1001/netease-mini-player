@@ -9,15 +9,19 @@
 <body>
 <div id="app">
 
-  <!-- 登录视图: 扫码 -->
+  <!-- 登录视图: 自绘二维码(eapi 扫码登录接口, 无网页壳) -->
   <section id="view-login" class="view">
     <div class="login-box">
       <div class="logo">♪</div>
       <h1>轻音</h1>
       <p class="sub">网易云音乐 · 极简第三方客户端</p>
       <div id="qr"><div class="tip">加载中...</div></div>
-      <div id="qr-status" class="qr-status">准备中...</div>
+      <div id="qr-status" class="qr-status">准备中…</div>
       <button id="btn-qr-refresh" class="ghost">刷新二维码</button>
+      <div class="alt-row">
+        <button id="btn-web-login" class="link">官方网页登录</button>
+        <button id="btn-guest" class="link">先逛逛（免登录）</button>
+      </div>
       <p class="legal">扫码即登录 · 登录态仅存本机</p>
     </div>
   </section>

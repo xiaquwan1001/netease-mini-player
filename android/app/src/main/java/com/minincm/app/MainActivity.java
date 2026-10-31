@@ -3,6 +3,9 @@ package com.minincm.app;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
+import android.webkit.ConsoleMessage;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -43,6 +46,22 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(bridge, "Native");
 
         webView.setWebViewClient(new WebViewClient());
+
+        // 调试可见性: WebView console 转发到 logcat (adb logcat -s MINNCM_JS)
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage m) {
+                String line = m.message() + " @" + m.sourceId() + ":" + m.lineNumber();
+                if (m.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+                    Log.e("MINNCM_JS", line);
+                } else {
+                    Log.i("MINNCM_JS", line);
+                }
+                return true;
+            }
+        });
+        // 未捕获异常也要能看到
+        webView.evaluateJavascript("window.addEventListener('unhandledrejection',function(e){console.error('[unhandledrejection] '+(e.reason&&(e.reason.stack||e.reason.message)||e.reason));});window.addEventListener('error',function(e){console.error('[onerror] '+e.message+' @'+e.filename+':'+e.lineno);});", null);
 
         // 播放完成/状态事件 -> JS
         PlaybackService.setCompletionListener(() -> {

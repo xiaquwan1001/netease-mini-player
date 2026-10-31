@@ -176,6 +176,15 @@ public class AppBridge {
         }
     }
 
+    /** 把 WebView CookieManager 的内存 cookie 刷到磁盘(扫码登录拿 MUSIC_U 前后调用) */
+    @JavascriptInterface
+    public void cookieFlush() {
+        try {
+            android.webkit.CookieManager.getInstance().flush();
+        } catch (Exception ignore) {
+        }
+    }
+
     // ---------- 播放 ----------
 
     @JavascriptInterface

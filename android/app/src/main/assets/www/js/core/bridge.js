@@ -75,10 +75,23 @@
     /** 原生桥 POST(Java HttpURLConnection, 带 OkHttp 风格 TLS 指纹) */
     nativePost: nativePost,
 
+    /** 打开原生官方网页登录页(零风控通道); 登录成功后原生侧写 ncm.music_u */
+    loginWeb: function () {
+      if (typeof Native.loginWeb !== 'function') {
+        throw new Error('原生桥缺少 loginWeb (APK 版本过旧?)');
+      }
+      Native.loginWeb();
+    },
+
+    log: function (msg) {
+      try { if (Native.log) Native.log(String(msg)); } catch (e) { /* ignore */ }
+    },
+
     storeGet: function (k) { return Native.storeGet(k); },
     storeSet: function (k, v) { Native.storeSet(k, v); },
     storeRemove: function (k) { Native.storeRemove(k); },
     cookieGet: function (d) { return Native.cookieGet(d); },
+    cookieFlush: function () { if (Native.cookieFlush) Native.cookieFlush(); },
 
     play: function (url, meta) { Native.play(url, JSON.stringify(meta || {})); },
     pause: function () { Native.pause(); },

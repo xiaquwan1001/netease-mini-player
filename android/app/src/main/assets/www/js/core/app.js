@@ -22,14 +22,23 @@
 
   var state = {
     loggedIn: false,
+    guest: false,   // 选了「先逛逛」: 免登录使用(匿名可用)
     queue: [],      // 当前搜索结果即播放队列
     index: -1,
   };
+
+  /** 视图切换: 'login' | 'main' */
+  function showView(name) {
+    $('#view-login').classList.toggle('hidden', name !== 'login');
+    $('#view-main').classList.toggle('hidden', name !== 'main');
+  }
 
   function refreshLoginBadge() {
     state.loggedIn = activeProvider.isLoggedIn();
     $('#user-badge').textContent = state.loggedIn ? '✓' : '·';
     $('#user-badge').title = state.loggedIn ? '已登录, 点击退出' : '未登录, 点击登录';
+    $('#view-login').classList.toggle('hidden', state.loggedIn || state.guest);
+    $('#view-main').classList.toggle('hidden', !(state.loggedIn || state.guest));
   }
 
   // ================= 搜索 =================
@@ -116,8 +125,13 @@
   window.__nativeEvent = function (type) {
     if (type === 'loginStateChanged') {
       // 网页登录页返回: 刷新登录态
+      var was = state.loggedIn;
       refreshLoginBadge();
-      if (state.loggedIn) B.toast('登录成功');
+      if (state.loggedIn) {
+        stopQrPolling();
+        showView('main');
+        if (!was) B.toast('登录成功');
+      }
     } else if (type === 'ended') {
       if (state.index < state.queue.length - 1) {
         playAt(state.index + 1);
@@ -138,8 +152,10 @@
   $('#user-badge').addEventListener('click', function () {
     if (state.loggedIn) {
       activeProvider.logout();
+      state.guest = false;
       refreshLoginBadge();
       B.toast('已退出登录');
+      startQrLogin();   // 回到登录页并重新取二维码
     } else {
       B.loginWeb();   // 原生打开官方网页登录页
     }
@@ -147,8 +163,112 @@
 
   // ================= 启动 =================
 
-  (function init() {
-    // 匿名可用: 直接进主视图
+  // ================= 登录(自绘二维码, eapi 扫码接口) =================
+
+  var qrTimer = null;
+  var qrStarting = false;
+
+  function qrStatus(text, cls) {
+    var el = $('#qr-status');
+    el.textContent = text;
+    el.className = 'qr-status' + (cls ? ' ' + cls : '');
+  }
+
+  function stopQrPolling() {
+    if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }
+  }
+
+  function renderQr(text) {
+    var box = $('#qr');
+    box.innerHTML = '';
+    if (typeof QRCode === 'undefined') {
+      box.innerHTML = '<div class="tip err">二维码库未加载</div>';
+      return;
+    }
+    var size = Math.floor(box.clientWidth) - 20;
+    if (size < 120) size = 240;
+    new QRCode(box, {
+      text: text, width: size, height: size,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+  }
+
+  async function startQrLogin() {
+    if (qrStarting) return;
+    qrStarting = true;
+    stopQrPolling();
+    $('#qr').innerHTML = '<div class="tip">获取二维码…</div>';
+    qrStatus('准备中…');
+    try {
+      var r = await activeProvider.loginQr();
+      if (!r || !r.unikey) throw new Error('拿不到 unikey');
+      renderQr(r.qrurl);
+      qrStatus('用网易云音乐 App 扫码');
+      pollQr(r.unikey);
+    } catch (e) {
+      B.log('[login] 取二维码失败: ' + e.message);
+      $('#qr').innerHTML = '<div class="tip err">二维码获取失败</div>';
+      qrStatus('获取失败: ' + e.message + '（可试官方网页登录）');
+    } finally {
+      qrStarting = false;
+    }
+  }
+
+  function pollQr(unikey) {
+    var started = Date.now();
+    stopQrPolling();
+    qrTimer = setInterval(async function () {
+      // 二维码有效期约 5 分钟, 超时或视图已切走就停
+      if (Date.now() - started > 5 * 60 * 1000 || $('#view-login').classList.contains('hidden')) {
+        stopQrPolling();
+        return;
+      }
+      try {
+        var st = await activeProvider.loginCheck(unikey);
+        if (st.code === 800) {
+          stopQrPolling();
+          qrStatus('二维码已过期, 正在刷新…');
+          startQrLogin();
+        } else if (st.code === 802) {
+          qrStatus('已扫码, 请在手机上确认', 'confirm');
+        } else if (st.code === 8821) {
+          stopQrPolling();
+          qrStatus('环境风险拦截(8821), 请改用官方网页登录', 'err');
+          $('#qr').innerHTML = '<div class="tip err">此通道被风控拦截</div>';
+          B.toast('扫码登录被风控拦截, 请点「官方网页登录」');
+        } else if (st.code === 803) {
+          stopQrPolling();
+          qrStatus('登录成功', 'ok');
+          state.loggedIn = true;
+          refreshLoginBadge();
+          showView('main');
+          B.toast('登录成功');
+        } else {
+          qrStatus('用网易云音乐 App 扫码');
+        }
+      } catch (e) {
+        B.log('[login] 轮询失败: ' + e.message);
+      }
+    }, 2000);
+  }
+
+  $('#btn-qr-refresh').addEventListener('click', function () { startQrLogin(); });
+
+  $('#btn-web-login').addEventListener('click', function () {
+    stopQrPolling();
+    try { B.loginWeb(); } catch (e) { B.toast('打开登录页失败: ' + e.message); }
+  });
+
+  $('#btn-guest').addEventListener('click', function () {
+    stopQrPolling();
+    state.guest = true;   // 匿名可用: 直接进主视图
     refreshLoginBadge();
+  });
+
+  (function init() {
+    refreshLoginBadge();
+    // 未登录时自动开始扫码流程
+    if (!state.loggedIn) startQrLogin();
   })();
 })();
