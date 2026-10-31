@@ -39,6 +39,16 @@ Working approach — **emulate the web client**:
 - A remote API service (local api-enhanced) is a useful fallback/control path to
   separate "app logic bugs" from "direct-connection anti-bot".
 
+## Verified on device (2026-10-31, vivo X200 Ultra / Android 16, WebView 138)
+
+- eapi 直连 `interface3.music.163.com` 在真机 WebView 内跑通: 搜索(cloudsearch)、播放地址, 甚至
+  api-enhanced 标 `weapi` 的接口(`/api/v1/radio/get` 私人FM、`/api/v3/discovery/recommend/songs` 每日推荐)
+  换成 eapi 封装同样 200 → **不需要移植 weapi/RSA**。
+- `/eapi/song/enhance/player/url/v1` 的 params 必须含 `encodeType`(`flac`); 缺了返回
+  `{"msg":"参数错误","code":400}`, 而且响应是**两个拼接的 JSON**, 前端 `JSON.parse` 直接炸
+  (表现为“数据非 json”)→ 解析时按 `}{` 切开取第一个。
+- 匿名播放: `fee=1`(VIP)歌曲返回 `data[0].code=-110` 且无 url; `fee=8`/免费歌曲正常返回直链。
+
 ## Pitfalls
 - **Internal URI ≠ route path**: e.g. `song/url/v1` as a route path 404s; use the
   documented internal URI.
