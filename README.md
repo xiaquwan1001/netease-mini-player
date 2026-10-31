@@ -2,6 +2,18 @@
 
 **架构一句话**: 原生壳(WebView + 播放前台服务, ~200KB) + 前端 SPA(UI/加密/业务全在 JS, 可热更新) + 插件注册表(音乐源可插拔)。
 
+## 当前状态(2026-10-31)
+
+真机(vivo X200 Ultra / Android 16 / WebView 138)已跑通 **登录 → 搜索 → 播放** 全链路,APK **96KB**,
+冷启动 242ms,空闲 PSS 126MB。详见 `docs/PROGRESS.md`。
+
+文档索引:
+
+- `docs/PROGRESS.md` —— 进度、踩坑、待办
+- `docs/community-projects.md` —— 社区项目盘点、协议实测、登录通道结论
+- `docs/build-vs-fork.md` —— fork / PR / 自建 的资源实测与决策矩阵
+- `.pi/skills/netease-cloud-music-api-reverse/SKILL.md` —— 协议与反爬细节
+
 ## 设计原则
 
 - **功能与实现解耦**: 原生层只做三件事 —— HTTP IO(无 CORS 限制的桥)、SharedPreferences 存储、MediaPlayer 前台播放。所有业务逻辑(加密/接口/UI/状态机)都在 `assets/www` 的 JS 里。
@@ -35,13 +47,19 @@ netease-mini-player/
 ## 构建
 
 ```bash
-export JAVA_HOME=~/android-dev/jdk
-export PATH=$JAVA_HOME/bin:$PATH
-cd android
-~/android-dev/gradle-8.9/bin/gradle assembleDebug
-# 产物: app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+bash tools/setup-android-env.sh   # 首次: 用户级装 JDK21 + Gradle8.9 + Android SDK34 (~1GB, 无需 sudo)
+bash tools/build.sh               # 构建: android/app/build/outputs/apk/debug/app-debug.apk (~70KB)
+adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+工具链位置(全部用户级, 在 `~/android-dev`, 可用 `ANDROID_DEV_ROOT` 覆盖):
+`jdk`(Temurin 21) / `gradle-8.9` / `sdk`(platform-34, build-tools 34.0.0);
+`android/local.properties` 写死 `sdk.dir`(已 gitignore)。
+
+踩坑备查: JDK 17.0.2 会让 `validateSigningDebug` 因为
+`CgroupInfo.getMountPoint() ... anyController is null`(JDK-8263560 一类 cgroup v2 探测 NPE)
+直接崩 —— 这也是默认装 21 的原因; 下载源: Temurin 走 USTC 镜像, Gradle 走腾讯云镜像
+(官方 services.gradle.org 本机只有 KB/s 级)。
 
 ## 接口/加密协议(v1, 基于 NeteaseCloudMusicApiEnhanced 2026-08)
 
@@ -65,6 +83,8 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 6. **本地缓存**: 播放过的歌落盘, 离线可用
 
 ## 参考
+
+- **社区项目盘点与路线选择(先读这个)**: `docs/community-projects.md`
 
 - 协议蓝本: https://github.com/neteasecloudmusicapienhanced/api-enhanced (社区接力维护版)
 - 原版已应版权要求下架: Binaryify/NeteaseCloudMusicApi(README 仅剩声明)
