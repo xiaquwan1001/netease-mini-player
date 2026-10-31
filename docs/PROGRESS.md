@@ -64,6 +64,19 @@
    降级为低优先:实验台形态不追求 idle 指标(Melodia 的 `LxPluginEngine` 已有按需创建+空闲回收的现成做法)。
 6. 心动模式(依赖 playlistId 上下文,放队列重构之后)、歌词滚动、seek/进度条。
 
+
+## 对外贡献(Melodia,2026-10-31)
+
+| 类型 | 编号 | 内容 | 状态 |
+|---|---|---|---|
+| Issue | [#134](https://github.com/rinchao0721/Melodia/issues/134) | 社区源插件应可优先于官方直链(VIP 账号下插件完全不可达);附探针实测 | 待回应 |
+| PR | [#135](https://github.com/rinchao0721/Melodia/pull/135) | `docs/netease-playurl-identity.md`:播放直链接口身份/音质实测语义 | 待合并 |
+| PR | [#136](https://github.com/rinchao0721/Melodia/pull/136) | 修复 #128 心动模式 400:未指定上下文时挑选红心歌单(`specialType==5`),附 3 例单测 | 待合并 |
+
+#136 的根因实测(同一登录态只换 `playlistId`):红心歌单 200;自建/收藏歌单 400
+「不支持该歌单类型」;`0` 400「歌单不存在」。原实现取歌单列表**首项**当上下文,
+红心歌单不置顶的账号必挂 —— 这解释了 #128「换账号就正常」。
+
 ## 未决问题(需要决策)
 
 - ~~**路线**:继续 WebView 插件化(96KB APK / 126MB RAM)还是转向原生(= fork Ncrust 3.9MB / 87MB)。~~
