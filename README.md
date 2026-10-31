@@ -12,6 +12,8 @@
 - `docs/PROGRESS.md` —— 进度、踩坑、待办
 - `docs/community-projects.md` —— 社区项目盘点、协议实测、登录通道结论
 - `docs/build-vs-fork.md` —— fork / PR / 自建 的资源实测与决策矩阵
+- `docs/lx-plugin.md` —— LX 音源脚本工坊:沙盒契约、真机实测、社区脚本兼容性
+- `plugins/lx-music/ncm-wy.js` + `tools/lx-plugin-harness.mjs` —— 可直接在 Melodia 里跑的网易云直连音源脚本与回归台
 - `.pi/skills/netease-cloud-music-api-reverse/SKILL.md` —— 协议与反爬细节
 
 ## 设计原则
