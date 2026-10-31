@@ -37,6 +37,8 @@ API/protocol details and anti-bot technique live in the
 - 登录后带 Cookie 的请求会自动从 fetch 退回原生桥: `Cookie` 是 fetch 的 forbidden header,
   带它必抛 TypeError → `bridge.post` 的 fetch 分支失败后走 `Native.httpPost`(OkHttp 风格 cipher, 可用)。
 - 播放地址必须 `encodeType:'flac'`; 登录后 fee=1 的 VIP 歌也能拿到直链(匿名时是 -110)。
+- **2026-11 更正**: 匿名取链的真实语义是「缺 os/appver → VIP 曲 code=200 但 url=null;
+  补 os/appver → 128k 试听」。音质档位只由 MUSIC_U 决定, os=pc / os=android(9.0.90) 无差异。
 <!-- created=2026-10-31, last=2026-10-31 -->
 
 ## 登录通道的硬结论(2026-10-31, 真机实测 + Ncrust spec 交叉验证)

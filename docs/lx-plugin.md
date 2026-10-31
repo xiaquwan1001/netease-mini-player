@@ -55,6 +55,37 @@ App 内:**设置 → 音源 → 粘贴脚本导入**(它同时支持粘贴远程
 日志期望:`脚本校验成功: NCM-WY 直连音源 v0.1.0, 支持平台: [wy]`、
 `插件 [NCM-WY 直连音源] 沙盒激活成功 ... sources=[wy]`、`JS Console: [ncm-wy] id=... `。
 
+## 6. 真机实测结论(2026-10-31,vivo X200 Ultra + VIP 账号)
+
+### 6.1 插件槽位对 VIP 账号是**不可达**的
+
+`AudioSourceRouter.kt:32-40` 的顺序写死:`官方直链完整且非试听 → 直接 return`。VIP 账号官方永远成功,
+**插件一次都不会被调用**(真机播了多首含 VIP 歌,logcat 无 `LxPluginEngine` 行,探针无 `call`)。
+想让插件层成为"主音源",必须改上游路由顺序 —— 这是可提 PR 的点,不是脚本能绕过的。
+
+### 6.2 身份 cookie 的真实语义(更正了此前的结论)
+
+同一首歌(`/api/song/enhance/player/url/v1`,明文通道):
+
+| Cookie | 347230(VIP 曲) | 1330348068(可 hires 曲) |
+|---|---|---|
+| 无 | `code=200` 但 **`url=null`** | 320k(exhigh) |
+| 仅 `deviceId` | 同上 | 320k |
+| `os=pc; appver=3.0.6` | 128k **试听** | 320k |
+| 再加 `deviceId`/`channel` | 同(无变化) | 同 |
+| 再加 `MUSIC_U` | **flac 797 kbps** | **hires flac 2.83 Mbps** |
+
+`os=android; appver=9.0.90; osver=14` 与 `os=pc; appver=3.0.6` **结果完全一致**。
+结论:`os`/`appver` 是"能不能拿到直链"的闸门,**不是音质旋钮**;音质只跟登录态有关。
+
+### 6.3 脚本在本机(带 VIP cookie)已验证
+
+```
+[ncm-wy] id=1330348068 quality=flac24bit -> flac/2832352     PASS
+[ncm-wy] id=347230 quality=flac24bit -> flac/797831(降级告警)  PASS
+匿名: VIP 曲 -> "仅试听片段,需登录或换源"                      PASS
+```
+
 ## 5. 已知边界
 
 - 匿名只能到 **320k mp3**(`exhigh`),flac/hires 必须登录;登录态要手动填 `USER_COOKIE`。

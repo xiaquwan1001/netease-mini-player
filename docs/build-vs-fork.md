@@ -39,7 +39,10 @@
 
 **Ncrust `network/ClientIdentity.kt`** —— 客户端身份 cookie 的语义:
 - 写操作(歌单增删改)只带 `MUSIC_U`/`__csrf` 会被回 `403 illegal request!`;
-- 取链缺 `os`/`appver` 会**静默封顶音质**(code 仍是 200,客户端看不出异常);
+- ~~取链缺 `os`/`appver` 会**静默封顶音质**(code 仍是 200,客户端看不出异常);~~
+  **2026-11 更正(实测)**:缺 `os`/`appver` 时 VIP 曲目是 `code=200` 但 **`url=null`**(连试听都不给);
+  带上身份后才降级为 128k 试听。**音质档位只由 `MUSIC_U` 决定**,`os=pc` 与 `os=android;appver=9.0.90`
+  在三首样本(含 hires 2.83 Mbps)上**完全无差异**。详见 `docs/lx-plugin.md` 第 6 节。
 - 实测可用身份: `os=pc`、`appver=3.0.6`(2026-09 官方 PC 版)、`osver=10.0.19045`;
 - `deviceId` **用户 cookie 里已有就不动**,没有才补本机持久 id(换掉等于换会话指纹)。
 

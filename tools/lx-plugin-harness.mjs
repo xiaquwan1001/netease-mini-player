@@ -13,7 +13,9 @@ import path from 'node:path'
 
 const scriptPath = process.argv[2] || 'plugins/lx-music/ncm-wy.js'
 const songId = process.argv[3] || '33894312'
-const quality = process.argv[4] || 'flac'
+// 允许直接用宿主音质名(lossless/hires/exhigh)或 LX 代号(flac/flac24bit/320k)
+const QUALITY_ALIAS = { lossless: 'flac', hires: 'flac24bit', exhigh: '320k', standard: '128k' }
+const quality = QUALITY_ALIAS[process.argv[4]] || process.argv[4] || 'flac'
 
 let src = fs.readFileSync(path.resolve(scriptPath), 'utf8')
 if (process.env.NCM_COOKIE) {
@@ -141,14 +143,23 @@ for (const ev of [{ source: 'kg', action: 'musicUrl', info: {} }, { source: 'wy'
 }
 check(rejected === 2, '两个非法请求都被拒绝')
 
-console.log('== 6. 匿名 VIP 歌(347230/flac)只给试听片段,必须拒绝而不是返回 30s 片段')
-let trialRejected = false
-try {
-  await requestHandler({ source: 'wy', action: 'musicUrl', info: { type: 'flac', musicInfo: { id: '347230' } } })
-} catch (e) {
-  trialRejected = /试听/.test(e.message)
+if (process.env.NCM_COOKIE) {
+  console.log('== 6. 带登录态:VIP 歌(347230/hires)应给真无损,不是试听片段')
+  const vipUrl = await requestHandler({
+    source: 'wy', action: 'musicUrl',
+    info: { type: 'flac24bit', musicInfo: { id: '347230' } },
+  }).catch((e) => { console.log('  解析异常: ' + e.message); return null })
+  check(typeof vipUrl === 'string' && /^https?:\/\//.test(vipUrl || ''), 'VIP 歌返回直链', String(vipUrl).slice(0, 60))
+} else {
+  console.log('== 6. 匿名 VIP 歌(347230/flac)只给试听片段,必须拒绝而不是返回 30s 片段')
+  let trialRejected = false
+  try {
+    await requestHandler({ source: 'wy', action: 'musicUrl', info: { type: 'flac', musicInfo: { id: '347230' } } })
+  } catch (e) {
+    trialRejected = /试听/.test(e.message)
+  }
+  check(trialRejected, '试听片段被识别并拒绝')
 }
-check(trialRejected, '试听片段被识别并拒绝')
 
 console.log('')
 if (fails.length) {

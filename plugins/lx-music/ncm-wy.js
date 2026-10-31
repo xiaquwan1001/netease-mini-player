@@ -41,9 +41,24 @@ const QUALITY = {
   flac24bit: { level: 'hires', encodeType: 'flac' },
 }
 
+// 调试探针:留空关闭。填一个 URL(例如 http://127.0.0.1:8765/beacon)后,脚本每次被执行、
+// 每次被宿主调用都会上报一次 —— 宿主日志被吞掉(release 默认 WARN)时用它确认调用是否真的发生。
+// 这是「换源路由只在官方失败或试听时才 CALL 插件」这一事实的独立观测手段。
+const PROBE = ''
+
 // 直链有效期约 20 分钟,缓存 5 分钟足够避免同曲重复请求
 const CACHE_TTL = 5 * 60 * 1000
 const cache = new Map()
+
+function probe(hit, params) {
+  if (!PROBE) return
+  const q = Object.keys(params || {})
+    .map(function (k) { return k + '=' + encodeURIComponent(String(params[k])) })
+    .join('&')
+  try {
+    request(PROBE + '?' + hit + (q ? '&' + q : ''), { method: 'GET', headers: {} })
+  } catch (e) { /* 探针绝不能影响主流程 */ }
+}
 
 function identityCookie() {
   const parts = [
@@ -133,6 +148,14 @@ async function musicUrl(musicInfo, quality) {
 }
 
 lx.on(lx.EVENT_NAMES.request, (event) => {
+  const meta = (event && event.info && event.info.musicInfo) || {}
+  probe('call', {
+    source: event && event.source,
+    action: event && event.action,
+    type: event && event.info && event.info.type,
+    id: meta.id || meta.songmid,
+    name: meta.name,
+  })
   if (!event || event.source !== SOURCE) {
     return Promise.reject(new Error('不支持的音源: ' + (event && event.source)))
   }
@@ -142,6 +165,8 @@ lx.on(lx.EVENT_NAMES.request, (event) => {
   const info = event.info || {}
   return musicUrl(info.musicInfo, info.type)
 })
+
+probe('inited', { v: '0.1.0' })
 
 lx.send(lx.EVENT_NAMES.inited, {
   status: true,
