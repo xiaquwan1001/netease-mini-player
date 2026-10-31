@@ -86,6 +86,34 @@ App 内:**设置 → 音源 → 粘贴脚本导入**(它同时支持粘贴远程
 匿名: VIP 曲 -> "仅试听片段,需登录或换源"                      PASS
 ```
 
+
+## 7. 社区源脚本兼容性实测(2026-10-31,为 #133 排查)
+
+对象:最常用的社区源脚本 HelloWorld `260925`(只用 `lx.request` / `resp.statusCode` / `resp.body`,
+与 `LxShim` 契约兼容)。在 Node 里复刻 Melodia 沙盒语义跑 `musicUrl`(320k,同一首歌):
+
+| 平台 | 结果 | 耗时 |
+|---|---|---|
+| `wy` | 成功(匿名拿不到 VIP 曲) | 0.25 s |
+| `kw` | 成功 | 0.14–0.22 s |
+| `mg` | 成功 | 1.0–6.3 s |
+| `tx` | 成功 | 3.8 / 5.5 / **12.5** s |
+| `kg` | **稳定失败**(脚本内部抛错,非超时) | 1.4–23 s |
+
+对宿主实现的三个含义:
+
+1. `LxScriptSupport.RESOLVE_TIMEOUT_MS = 12000` 偏紧:`tx` 实测出现过 12.5 s;
+   一首 VIP 歌常常要先试 `wy`(失败)再串行试 `kw`/`kg`/`tx`,很容易「全部超时」。
+2. 只声明 `kg` 的脚本当前注定失败(脚本自身在 kg 路径报错),用户看到的就是「加了社区源还是听不了」。
+3. 沙盒契约与官方 spec 的差异(不是本脚本触发,但会影响别的脚本):
+   - `utils.buffer.from/bufToString` 在 Melodia 里是**恒等实现**(不做 utf-8/base64/hex 编解码);
+   - `utils.crypto` 只有 `md5`,缺 spec 里的 `aesEncrypt / rsaEncrypt / randomBytes`;
+   - `utils.zlib`(`inflate/deflate`)完全缺失;
+   - 代理请求把 `statusCode` **恒定为 200** 且非 2xx 直接抛异常,脚本看不到真实状态码/响应头。
+
+含 `weapi/eapi` 加密的网易云/QQ 音源脚本必然用到 `aesEncrypt` → 在 Melodia 沙盒里直接 TypeError。
+是否补齐这几项,取决于上游对插件层的定位(见 issue #134 的讨论)。
+
 ## 5. 已知边界
 
 - 匿名只能到 **320k mp3**(`exhigh`),flac/hires 必须登录;登录态要手动填 `USER_COOKIE`。
