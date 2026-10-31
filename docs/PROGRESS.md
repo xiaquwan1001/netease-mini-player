@@ -59,11 +59,13 @@
 3. **插件能力声明 v2**:`capabilities: ['login','search','songUrl','lyric','personalFm','heartMode','dailyRecommend']`,
    宿主只调声明过的能力。
 4. **私人FM / 每日推荐**(eapi 已验证,只需加能力键 + 列表页)。
-5. **内存优化**:登录 WebView 复用、`setRendererPriorityPolicy` 降级、SPA 懒加载(目标 ≤ 90MB idle)。
+5. ~~**内存优化**:登录 WebView 复用、`setRendererPriorityPolicy` 降级、SPA 懒加载(目标 ≤ 90MB idle)。~~
+   降级为低优先:实验台形态不追求 idle 指标(Melodia 的 `LxPluginEngine` 已有按需创建+空闲回收的现成做法)。
 6. 心动模式(依赖 playlistId 上下文,放队列重构之后)、歌词滚动、seek/进度条。
 
 ## 未决问题(需要决策)
 
-- **路线**:继续 WebView 插件化(96KB APK / 126MB RAM)还是转向原生(= fork Ncrust 3.9MB / 87MB)。
-  见 `docs/build-vs-fork.md` 第 5 节。
+- ~~**路线**:继续 WebView 插件化(96KB APK / 126MB RAM)还是转向原生(= fork Ncrust 3.9MB / 87MB)。~~
+  **已定(2026-11):PR 为主,只对 Melodia;不 fork 任何一方。** MiniNCM 降级为协议/风控实验台
+  + LX 插件脚本工坊,Ncrust 仅作低资源参照。见 `docs/build-vs-fork.md` 第 6 节。
 - 原生扫码是否还值得保留:目前保留为"快捷尝试",命中 8821 时提示改用官方网页登录。

@@ -77,3 +77,44 @@
 - 若首要目标是「尽快有一个真好用的客户端」→ fork Ncrust(3.9MB、原生、已完整),我们的插件想法作为二阶段。
 - 若首要目标是「极小、可热更新、插件化」→ 自建继续,但先做两件事:设备身份持久化 + 内存优化
   (登录 WebView 复用、`setRendererPriorityPolicy`、SPA 懒加载)。
+
+## 6. 第二轮定论(2026-11):PR 为主,不做整体 fork
+
+### 6.1 PR 通道实测(近 90 天)
+
+| 项目 | 合并 PR | 开放 PR | 外部贡献者 | 通道是否可用 |
+|---|---|---|---|---|
+| **Ncrust** | **0** | 0 | 无 | **不可用**(单人独占,6 个 issue 会回但代码只在自己侧仓演进) |
+| **Melodia** | **30** | 5 | dongyvu(7k 行 QQ 歌词源)、cyanrhythm、poesein(4 个待合) | **可用** |
+
+### 6.2 fork 成本实测(Ncrust)
+
+- `settings.gradle.kts` 里 `includeBuild("../Kanesumi-sec-a")`:`Kanesumi-sec-a` 是作者另一个
+  **0 star** 的 UI 库,32 个 `.kt` import 它,注释明写"迁移期间来回改两边 API"。
+  **只 clone Ncrust 构建不起来**,fork 等于同时分叉一个 0★ 库。
+- 已扩散到 5 条产品线(Android Kotlin / Windows C# / Lumia C++ / Rust Linux / Android4),
+  单作者垄断 → 分叉即永久分叉,没有回收上游的可能。
+- 插件化改造面:`network` 包 fan-in **51 个文件**,其中 **22 个**直接调 `RetrofitClient`。
+  这不是"换个网络层",是重做。
+
+### 6.3 Melodia 已经把我们想做的三件事做完了
+
+| 我们的设想 | Melodia 现成实现 |
+|---|---|
+| 运行期 provider 插件 | `core/source/`: `AudioSourceProvider` / `AudioSourceRouter`(官方直链失败或试听 → 自动换源) / `LxPluginRuntime`(Android=WebView 沙箱,桌面=GraalJS) / `LxPluginManager`(导入/启停/批量去重) / `LxArchiveReader` |
+| WebView 内存治理 | `feature/source/plugin/LxPluginEngine.kt`:沙盒**按需创建 + 空闲自动回收**("避免不换源时常驻 WebView") |
+| 身份/风控硬知识 | `HeaderInterceptor`:`os=android;appver=9.0.90` 与 `os=pc;appver=3.0.1…` 双身份、`NeteaseDeviceId` 持久化、cookie 合并;另加 xeapi 公钥/设备注册(比我们更远) |
+
+MIT、346★、22MB / 101MB、插件层约 **1.8k 行**(不是 152k)。
+
+### 6.4 结论
+
+1. **PR 为主,且只对 Melodia**;Ncrust 只当"低资源参照实现 + 阅读源"(无 PR 通道,不回馈)。
+2. **不做整体 fork**。唯一考虑 fork 的触发条件:上游明确拒绝音源/插件方向且我们必须长期改 provider;
+   即使那样,改动面也只有 `core/source/`(~1.8k 行)。
+3. **自建 MiniNCM 重新定位**:降级为「协议/风控实验台 + provider 脚本工坊」,
+   目标是产出 **LX 插件脚本 + PR + 结论文档**,不再追 App 功能对齐(UI/播放器/本地库不自己长)。
+4. **"最小依赖 = 省资源"被自己的数据否证**:96KB APK 却 126MB PSS,3.9MB/35 依赖的 Ncrust 只 87MB。
+   开销由**运行时选型**(Chromium vs Compose)决定,不由依赖个数决定;
+   零依赖只有在"没有 WebView 的原生壳"里成立 —— 而那就是 Ncrust 已经做完的事。
+
