@@ -74,6 +74,8 @@
 | PR | [#136](https://github.com/rinchao0721/Melodia/pull/136) | 修复 #128 心动模式 400:未指定上下文时挑选红心歌单(`specialType==5`),附 3 例单测 | 待合并 |
 | 评论 | [#133](https://github.com/rinchao0721/Melodia/issues/133#issuecomment-6544358387) | 社区源 VIP 歌听不了的实测定位(12s 超时偏紧、kg 平台脚本自身报错、四类失败形态) | 已发 |
 | PR | [#137](https://github.com/rinchao0721/Melodia/pull/137) | 社区源解析超时可配置(12s/30s)+ 各平台失败原因汇总回传 | 待合并 |
+| PR | [#139](https://github.com/rinchao0721/Melodia/pull/139) | 播放器级增益(0~-40 dB,逐档 0.4 dB):与系统音量/音量平衡相乘,压低蓝牙耳机最小档;已在真机验证 | 待合并 |
+| 分支 | feat/settings-entry-independent | 音乐库顶栏常驻设置入口(未登录也能进设置),真机验证后提 PR | 待验证 |
 
 #136 的根因实测(同一登录态只换 `playlistId`):红心歌单 200;自建/收藏歌单 400
 「不支持该歌单类型」;`0` 400「歌单不存在」。原实现取歌单列表**首项**当上下文,
