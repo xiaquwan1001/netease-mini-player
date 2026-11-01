@@ -87,6 +87,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ## 参考
 
 - **社区项目盘点与路线选择(先读这个)**: `docs/community-projects.md`
+- **给 Melodia 提 PR 的流程**(dev 目标分支/浅克隆坑/并存安装/截图托管): `docs/melodia-pr-workflow.md`
 
 - 协议蓝本: https://github.com/neteasecloudmusicapienhanced/api-enhanced (社区接力维护版)
 - 原版已应版权要求下架: Binaryify/NeteaseCloudMusicApi(README 仅剩声明)
