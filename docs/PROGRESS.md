@@ -77,6 +77,10 @@
 | PR | [#137](https://github.com/rinchao0721/Melodia/pull/137) | 社区源解析超时可配置(12s/30s)+ 各平台失败原因汇总回传 | 待合并 |
 | PR | [#139](https://github.com/rinchao0721/Melodia/pull/139) | 播放器级增益(0~-40 dB,逐档 0.4 dB):与系统音量/音量平衡相乘,压低蓝牙耳机最小档;已在真机验证 | 待合并 |
 | PR | [#140](https://github.com/rinchao0721/Melodia/pull/140) | 音乐库顶栏常驻设置入口:设置与账号解耦,未登录也能进设置(真机验证:未登录可达「播放与下载」) | 待合并 |
+| PR | [#141](https://github.com/rinchao0721/Melodia/pull/141) | 修复 #132 相似歌曲漫游循环:续接改追加(不再 `appendAfter` 截断队尾)+ 相似曲目去重;5 例单测 + 真机队列 6→8 增长验证 | 待合并 |
+| PR | [#142](https://github.com/rinchao0721/Melodia/pull/142) | #127 歌单/推荐歌曲列表显示序号(复用 `SongRow.index`);真机截图存 fork 的 `pr-assets` release | 待合并 |
+| 评论 | [#138](https://github.com/rinchao0721/Melodia/issues/138#issuecomment-6558443320) | 云盘 .m4a 不能播:追问 matchType/日志/mp3 对照/官方客户端行为 | 等回复 |
+| PR | [#144](https://github.com/rinchao0721/Melodia/pull/144) | 新增顺序播放(`SEQUENCE`)+ 播放模式合并为四态轮转按钮并移到操作行;真机验证四态轮转与队尾停止 | 待合并 |
 
 #136 的根因实测(同一登录态只换 `playlistId`):红心歌单 200;自建/收藏歌单 400
 「不支持该歌单类型」;`0` 400「歌单不存在」。原实现取歌单列表**首项**当上下文,
@@ -105,6 +109,9 @@ node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / �
 
 **下次接着做**(按价值排序):
 
+0. #144 补完验证:关闭「自动播放推荐新歌」后复测顺序播放自然播完停在队尾;补真机截图进 PR 正文
+   (截图走 fork 的 `pr-assets` release)。之后再做「UI 控件展示项」(#126:侧边栏/首页板块自定义)
+   与 vivo 锁屏歌词 issue(已定位为厂商白名单私有通道,应用侧不可接入)。
 1. 等上游 review #139 / #140:若维护者更希望用「guest 侧边栏」而不是顶栏齿轮,
    改 `ProfileSidebar + MelodiaApp` 的 nullable 化即可(已在 `docs/melodia-pr-workflow.md` 记录现状)。
 2. #139 的两个可选延伸(都还没做):音量键细调(拦截 `KEYCODE_VOLUME_*`,1/4 档虚拟音量梯)、

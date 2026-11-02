@@ -88,7 +88,23 @@ gh pr create --repo rinchao0721/Melodia --base dev --head xiaquwan1001:<branch> 
   --title "feat(player): …" --body-file body.md
 ```
 
-## 8. 本轮产出(2026-11-02)
+## 8. 本轮产出(2026-11-02 / 11-03 追加)
+
+| 编号 | 类型 | 内容 |
+|---|---|---|
+| #141 | fix | 漫游续接只追加不重写队尾 + 相似曲目去重(修复 #132),附 5 例 `SimilarRoamingControllerTest` |
+| #142 | feat | 歌单与「推荐歌曲」板块显示序号(#127) |
+
+排障笔记(两条都踩过):
+
+- **`PlaybackQueue.appendAfter` 是"截断+替换"语义**(内部 `originalItems.take(index+1) + items`),
+  任何"续接/预取"都别用它,用 `extend`(去重 + 追加)。
+- **真机 UI 自动化**:`adb shell input swipe` 在大列表里要持续多轮才滚到大歌单底部
+  (`热歌榜` 200 首 ≈ 20 次);`uiautomator dump` 偶发失败重试即可;
+  多设备同时连接时所有 adb 命令加 `ANDROID_SERIAL=<序列号>`,否则 `more than one device`。
+- 并存安装验证完后 `git checkout -- app/build.gradle.kts` 还原 `.gaintest` 后缀,别带进 PR。
+
+## 9. 上一轮产出(2026-11-02)
 
 | 编号 | 类型 | 内容 |
 |---|---|---|
@@ -98,3 +114,29 @@ gh pr create --repo rinchao0721/Melodia --base dev --head xiaquwan1001:<branch> 
 `#140` 根因:`MelodiaApp.kt` 里 `userProfile?.let { ProfileSidebar(...) }` 把整个侧边栏
 (含唯一 `Screen.Settings` 入口)锁在登录态后,且 `isDrawerDraggable` 也要求登录;
 设置页 9 个子菜单全是应用侧配置,与账号无关 —— 属于入口挂错层,不是缺功能。
+## 10. 本轮产出(2026-11-03) 播放模式合并
+
+| 编号 | 类型 | 内容 |
+|---|---|---|
+| #144 | feat | 新增顺序播放(`SEQUENCE`),播放模式合并为一个四态轮转按钮并移到操作行 |
+
+四条关键结论(都踩过):
+
+- **默认控制行 5 个按钮在 300dp 宽会溢出**:用户把系统显示密度调到 768dpi 后逻辑宽只有 300dp,
+  `shuffle+prev+play+next+repeat` 超出可用宽度,Row 居中越界 → 最右侧按钮只露几像素,
+  所以用户只"看见随机播放"。默认布局改为只放传输三键,模式按钮进操作行
+  (`ANDROID_ACTIONS` / 旧版 `ActionButtons`);旧布局里的 `shuffle` / `repeat` 令牌继续兼容。
+- **顺序播放与漫游冲突**:`SimilarRoamingController.onProgressTick` 在「当前就是队列最后一首
+  + 剩余 ≤15s + 自动播放推荐新歌开启」时追加相似曲目,所以"顺序播放不停"不是 bug;
+  验证队尾停止必须先关设置里的「自动播放推荐新歌」。
+- **`PlayMode` 是共享枚举**:桌面 mpv 与测试用 `SilentPlaybackController` 各有一份轮转 when,
+  加模式必须同步改,否则 `:desktopApp:test` 直接挂(现在由 `nextPlayMode()` / `nextRepeatMode()` 统一)。
+- **居中别用左右等宽 Spacer 凑数**:实测仍偏约 20dp;改为 `Box(contentAlignment = Center)` 才真正居中,
+  模式按钮移走后也不会留下空位。
+
+真机验证口径(vivo X200 Ultra / Android 16 / 密度 override 768 ≈ 300dp 宽):
+
+- uiautomator 读 `content-desc` 逐次确认四态轮转:列表循环 → 单曲循环 → 随机 → 顺序 → 列表循环;
+- 顺序播放最后一首点「下一首」→ `state=PAUSED` + 日志「顺序播放已到队尾，停止续播」;
+- 自然播完到队尾的路径受漫游续接影响,需关闭「自动播放推荐新歌」后复测(PR 里已注明未验证)。
+
