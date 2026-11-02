@@ -10,7 +10,7 @@
 | upstream | `rinchao0721/Melodia`(KMP + Compose,MIT) |
 | 目标分支 | `dev`(模板明文:功能/修复/重构都进 dev,预发布从 dev 打 tag,main 只收 dev 合入) |
 | 我们的 fork | `xiaquwan1001/Melodia`,本地 remote 名 `fork` |
-| 本地副本 | `~/Melodia`(2026-11-02 从本仓 `references/Melodia/` 迁出,独立项目;操作约定见该目录 AGENTS.md) |
+| 本地副本 | `~/melodia`(全小写;2026-11-02 从本仓 `references/Melodia/` 迁出,独立项目;操作约定见该目录 AGENTS.md) |
 | 分支命名 | `feat/…`、`fix/…`、`docs/…` |
 | commit 风格 | 中文 conventional:`feat(player): …`、`fix(ui): …` |
 
