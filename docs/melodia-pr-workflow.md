@@ -133,6 +133,13 @@ gh pr create --repo rinchao0721/Melodia --base dev --head xiaquwan1001:<branch> 
   加模式必须同步改,否则 `:desktopApp:test` 直接挂(现在由 `nextPlayMode()` / `nextRepeatMode()` 统一)。
 - **居中别用左右等宽 Spacer 凑数**:实测仍偏约 20dp;改为 `Box(contentAlignment = Center)` 才真正居中,
   模式按钮移走后也不会留下空位。
+- **300dp 宽放不下 5 个标准键**(实测密度 768dpi ≈ 4.8px/dp,逻辑宽 300dp):
+  `MelodiaIconButton` 实占 48dp、播放键 72dp,五键 + 28dp 间距 + 24dp 边距远超可用宽度,
+  末尾按钮会被压到只剩几像素。最终:播放键 56dp、图标 40dp、边距 8dp、`SpaceBetween` 等距,
+  实测中心点 134/408/720/1032/1306 px,严格对称。
+- **模式配色要统一**:只靠图标形状区分模式;不要"某些模式变红、默认模式白"(会被误读成按下态)。
+  仅漫游/心动这类临时特殊状态用主题色。
+- **分享/输出设备放封面顶部**「播放自…」行右侧,底栏只留歌词模式与音质标签,避免三个地方重复入口。
 
 真机验证口径(vivo X200 Ultra / Android 16 / 密度 override 768 ≈ 300dp 宽):
 

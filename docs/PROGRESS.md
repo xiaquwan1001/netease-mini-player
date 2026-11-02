@@ -80,7 +80,7 @@
 | PR | [#141](https://github.com/rinchao0721/Melodia/pull/141) | 修复 #132 相似歌曲漫游循环:续接改追加(不再 `appendAfter` 截断队尾)+ 相似曲目去重;5 例单测 + 真机队列 6→8 增长验证 | 待合并 |
 | PR | [#142](https://github.com/rinchao0721/Melodia/pull/142) | #127 歌单/推荐歌曲列表显示序号(复用 `SongRow.index`);真机截图存 fork 的 `pr-assets` release | 待合并 |
 | 评论 | [#138](https://github.com/rinchao0721/Melodia/issues/138#issuecomment-6558443320) | 云盘 .m4a 不能播:追问 matchType/日志/mp3 对照/官方客户端行为 | 等回复 |
-| PR | [#144](https://github.com/rinchao0721/Melodia/pull/144) | 新增顺序播放(`SEQUENCE`)+ 播放模式合并为四态轮转按钮并移到操作行;真机验证四态轮转与队尾停止 | 待合并 |
+| PR | [#144](https://github.com/rinchao0721/Melodia/pull/144) | 新增顺序播放(`SEQUENCE`) + 播放模式并入控制行等距五键(模式/上一首/播放/下一首/队列),分享与输出设备移到封面右上角;真机验证四态轮转、300dp 五键对称、队尾自然播完停止 | 待合并 |
 
 #136 的根因实测(同一登录态只换 `playlistId`):红心歌单 200;自建/收藏歌单 400
 「不支持该歌单类型」;`0` 400「歌单不存在」。原实现取歌单列表**首项**当上下文,
