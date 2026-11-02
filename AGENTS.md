@@ -5,6 +5,8 @@ provider 插件注册表。
 
 - 项目专属技能（`.pi/skills/`）：`netease-cloud-music-api-reverse`。
 - 项目记忆：`.pi/memory/`。
+- 相关项目（已迁出）：Melodia fork 在 `~/Melodia`，独立 git 仓库；
+  PR 工作流与历史见本仓 `docs/melodia-pr-workflow.md`。
 
 ## 环境(已就绪, 用户级)
 - 工具链 `~/android-dev/{jdk(Temurin21), gradle-8.9, sdk}`; 重装: `bash tools/setup-android-env.sh`;
