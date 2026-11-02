@@ -54,3 +54,16 @@ API/protocol details and anti-bot technique live in the
 - 同类项目可用性: Ncrust(3.9MB, MIT, 官方网页登录) 可用且最值得抄; Melodia(22MB, MIT, 原生扫码+Cookie导入)
   功能最全但没处理 8821; JetMelo 2025-03 归档, 已不适合依赖。
 <!-- created=2026-10-31, last=2026-10-31 -->
+
+## vivo 锁屏歌词 / 原子岛（2026-11-02，X200 Ultra / OriginOS 6 实测）
+- 第三方 MediaSession 应用**无法**接入 vivo 锁屏歌词与原子岛音乐卡片，不是开关、也不是 extras 写错。
+- 系统侧链路：SystemUI → `IMusicWidgetMixService.getLrcPath`（`SystemUIPlugin.apk`）→ `com.vivo.musicwidgetmix`。
+- 卡片准入：`VivoMusicMixCard` 的 `WhitelistManager` 硬编码 ~50 个包名，另有
+  `/data/bbkcore/NanoMusicPlayer_white_app_lists_2.5.xml` 云控增补；`com.lin0721.linmusic` 在两个 dex 里 0 命中。
+- 歌词来源：白名单内再分「深度适配」8 家（`initCooperationList`）。网易云走它自己的
+  `com.netease.cloudmusic.third.api.contract.ICMApi`（`execute(String, Bundle)`，歌词命令 `CMD_GET_COMPLETE_LYRIC`）；
+  白名单内非深度适配的应用由 vivo 内置酷狗 SDK 按歌名搜词（`LyricQueryStrategy`）。
+- Melodia 的 `lyricInfo` extras 是 **ColorOS 锁屏岛** 约定（LyricInfo 模块 README），OriginOS 不读；
+  Android 16 promoted notification 在 vivo SystemUI 未实现（SystemUIPlugin 0 处 promoted 引用）。
+- 结论：只能等 vivo 白名单/厂商合作，或在已 root/LSPosed 设备上装系统级模块；应用侧无解。
+<!-- created=2026-11-02, last=2026-11-02 -->

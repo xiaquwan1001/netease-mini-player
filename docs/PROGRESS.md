@@ -109,9 +109,10 @@ node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / �
 
 **下次接着做**(按价值排序):
 
-0. #144 补完验证:关闭「自动播放推荐新歌」后复测顺序播放自然播完停在队尾;补真机截图进 PR 正文
-   (截图走 fork 的 `pr-assets` release)。之后再做「UI 控件展示项」(#126:侧边栏/首页板块自定义)
-   与 vivo 锁屏歌词 issue(已定位为厂商白名单私有通道,应用侧不可接入)。
+0. #144 已补完验证并更新 PR:顺序播放自然播完停在队尾(`state=STOPPED`,位置=时长)、
+   300dp 下五键等距、截图已进 PR 正文;等上游 review。
+   下一件可做「UI 控件展示项」(#126:侧边栏/首页板块自定义;底栏的 `BottomBarLayout` + 拖拽弹层可直接复用)。
+   vivo 锁屏歌词已定位为厂商白名单私有通道(见 `.pi/memory/HINDSIGHT.md`),应用侧无解,最多补设置页说明。
 1. 等上游 review #139 / #140:若维护者更希望用「guest 侧边栏」而不是顶栏齿轮,
    改 `ProfileSidebar + MelodiaApp` 的 nullable 化即可(已在 `docs/melodia-pr-workflow.md` 记录现状)。
 2. #139 的两个可选延伸(都还没做):音量键细调(拦截 `KEYCODE_VOLUME_*`,1/4 档虚拟音量梯)、
