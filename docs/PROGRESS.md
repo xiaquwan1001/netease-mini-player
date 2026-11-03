@@ -15,7 +15,7 @@
 | S4 | CLI 取链 + 下载 | ✅ | `ncm url 3455095614 --download` 得到 320k mp3, 5.7MB |
 | S5 | 通道 spike(interface vs interface3) | ✅ | 两条都通, 保持库默认; 见 `docs/api-channel.md` |
 | S6 | FRB 桥 + 双端 UI smoke | ✅ | `flutter test` 4 用例(含真实网络搜索/取链) |
-| S7 | Android 交叉编译 | ⏳ | NDK 28.2 + 3 个 rust target 已装, 构建进行中 |
+| S7 | Android 交叉编译 | ✅ | debug APK 168MB(4 ABI, 带符号), **release arm64 APK 21.1MB** |
 | S8 | tools/CI 脚本 | ✅ | `tools/env.sh` / `build-linux.sh` / `build-android.sh` / `ci.sh` |
 
 ### 本轮关键事实
@@ -28,6 +28,11 @@
   链接失败。**crate 名必须用下划线**(`ncm_ffi`)。
 - **FRB 类型**: Rust `u64` 在 Dart 侧是 `BigInt`(id/durationMs),写 UI 时注意。
 - 本机 Flutter 3.47.9 默认 NDK = **28.2.13676358**(空 SDK 时 gradle 会尝试自动下载,建议预装)。
+- Gradle wrapper 默认从 services.gradle.org 拉 9.3.1-all(卡在 KB/s); 已改腾讯镜像 `-bin.zip`,并预置到
+  `~/.gradle/wrapper/dists` 绕过 JVM 直连。`tools/env.sh` 同时导出 rustup 的 USTC 镜像,
+  否则 cargokit 自动补 target 会卡死在 static.rust-lang.org。
+- 构建产物: `ui/build/app/outputs/flutter-apk/app-release.apk` = **21.1MB**(arm64)。
+- 未连真机(adb devices 为空),Android 端尚未做安装/冷启动/PSS 实测。
 
 
 # 进度记录(Progress)
