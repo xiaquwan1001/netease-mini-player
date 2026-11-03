@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'src/playback.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -39,9 +40,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _controller = TextEditingController(text: '晴天');
+  final _playback = Playback();
   rust.InitInfo? _info;
   rust.SearchResultDto? _result;
-  rust.PlayerStateDto? _player;
+  PlayerView? _player;
   rust.SongDto? _current;
   String? _error;
   bool _busy = false;
@@ -62,7 +64,8 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _bootstrap() async {
     try {
-      final info = await rust.init();
+      final dir = await _playback.dataDir();
+      final info = await rust.init(dataDir: dir);
       setState(() => _info = info);
     } catch (e) {
       setState(() => _error = '$e');
@@ -71,13 +74,13 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _pollPlayer() async {
     try {
-      final state = await rust.playerState();
+      final state = await _playback.state();
       if (!mounted) return;
       if (state.trackId != null || state.playing != (_player?.playing ?? false)) {
         setState(() => _player = state);
       }
     } catch (_) {
-      // 播放后端缺席(例如 Android 尚未接 Media3)时忽略
+      // 播放后端未就绪(MediaController 连接中)时忽略
     }
   }
 
@@ -108,7 +111,12 @@ class _HomePageState extends State<HomePage> {
         );
         return;
       }
-      final state = await rust.playTrack(trackId: song.id, url: url);
+      final state = await _playback.play(
+        trackId: song.id,
+        url: url,
+        title: song.name,
+        artist: song.artist,
+      );
       if (!mounted) return;
       setState(() => _player = state);
     } catch (e) {
@@ -119,7 +127,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _toggle() async {
     final playing = _player?.playing ?? false;
-    final state = playing ? await rust.playerPause() : await rust.playerResume();
+    final state = playing ? await _playback.pause() : await _playback.resume();
     if (!mounted) return;
     setState(() => _player = state);
   }
@@ -130,7 +138,7 @@ class _HomePageState extends State<HomePage> {
     final player = _player;
     final current = _current;
     return Scaffold(
-      appBar: AppBar(title: const Text('轻音 MiniNCM (M0/M2)')),
+      appBar: AppBar(title: const Text('轻音 MiniNCM')),
       body: Column(
         children: [
           Padding(
@@ -162,8 +170,7 @@ class _HomePageState extends State<HomePage> {
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'device=${info.deviceId.substring(0, 8)}  logged_in=${info.loggedIn}  '
-                  'providers=${info.providers.map((p) => p.id).join(',')}',
+                  'device=${info.deviceId.substring(0, 8)}  logged_in=${info.loggedIn}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
@@ -231,7 +238,7 @@ class _HomePageState extends State<HomePage> {
                       IconButton(
                         icon: const Icon(Icons.stop),
                         onPressed: () async {
-                          final state = await rust.playerStop();
+                          final state = await _playback.stop();
                           if (!mounted) return;
                           setState(() => _player = state);
                         },

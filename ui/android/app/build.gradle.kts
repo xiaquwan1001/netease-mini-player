@@ -44,6 +44,12 @@ kotlin {
     }
 }
 
+dependencies {
+    implementation("androidx.media3:media3-exoplayer:1.9.4")
+    implementation("androidx.media3:media3-session:1.9.4")
+    implementation("androidx.core:core-ktx:1.17.0")
+}
+
 flutter {
     source = "../.."
 }
