@@ -99,3 +99,21 @@ API/protocol details and anti-bot technique live in the
   Linux 同样代码正常。排查顺序:打印完整错误链 → native-roots/native-tls → DNS/IPv6 → adb shell curl 对照。
 - 电脑插多台设备后所有 adb 命令都要 `-s <serial>`(脚本用 `ANDROID_SERIAL`)。
 <!-- created=2026-11-03, last=2026-11-03 -->
+
+## 安卓模拟器环境（2026-11-03 本机建好，日常迭代默认用它）
+- 位置：`$HOME/android-dev/sdk`（`emulator` + `system-images;android-34/36;google_apis;x86_64`）；
+  AVD `a34`(API 34) / `a36`(API 36 = Android 16，与 vivo X200 Ultra 同 API)，均 pixel_7 1080x2400@420。
+  快捷脚本 `~/bin/avd`（`list|start|headless|stop|stopall|status`，默认 `-gpu host` 用 RTX 4060）。
+- 实测：a36 冷启动 20s；`adb install -r -t app-debug.apk` **0.6s 秒过**，绕开真机那条「vivo 二次确认阻塞」；
+  debug apk 的 Rust `libncm_ffi.so` x86_64 正常加载、Flutter UI 正常渲染，无 UnsatisfiedLinkError。
+- **x86_64 不是障碍**：cargokit 本就产出 x86_64/arm64-v8a/x86/armeabi-v7a 四份 `.so`，x86_64-linux-android target 已装，NDK 已有。
+- 网络：模拟器内访问宿主服务用 `10.0.2.2`，宿主访问模拟器用 `adb forward`。
+- 已查清（2026-11-03）：模拟器首启 debug apk 报 `Read-only file system (os error 30)` **不是模拟器问题**，
+  是 **APK 比代码旧**：`ui/build/…/app-debug.apk` 是 12:47 构建，而 `main.dart` 里
+  `await _playback.dataDir()` 是 14:31 才提交（685580a）。旧包 → Dart 不传 `dataDir` → Rust
+  `data_dir_default()` 跑 `HOME`（安卓 app 进程无 HOME）→ 相对路径 `./.local/share/ncm` → cwd 是 `/`
+  → EROFS。判定方法：UI 没显示 `device=… logged_in=…` 行（说明 `init` 失败）+ `files/ncm` 不存在。
+  `bash tools/build-android.sh` 重编后重装即好（60s 增量），搜索出 10 条结果正常 —— **模拟器 https 通道可用**，
+  真机那个 reqwest `error sending request` 不是通用的网络问题。
+- 厂商 SystemUI/白名单（锁屏歌词、原子岛）、Play Integrity 类结论仍只能真机验，模拟器不背这些。
+<!-- created=2026-11-03, last=2026-11-03 -->
