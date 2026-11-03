@@ -60,6 +60,24 @@ void main() {
     await rust.playerStop();
   }, timeout: const Timeout(Duration(seconds: 120)));
 
+  test('lyric lines are parsed and sorted', () async {
+    // 周杰伦 - 晴天(免费, 歌词必有)
+    final lines = await rust.lyricLinesI18N(trackId: BigInt.from(186016));
+    expect(lines, isNotEmpty);
+    for (var i = 1; i < lines.length; i++) {
+      expect(lines[i].timeMs >= lines[i - 1].timeMs, true, reason: '歌词必须按时间升序');
+    }
+    expect(lines.first.timeMs, BigInt.zero);
+    expect(lines.map((l) => l.text).any((t) => t.isNotEmpty), true);
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('english song lyric carries translation', () async {
+    // Ed Sheeran - Shape of You: 有 tlyric, 用来守住"按时间戳合并翻译"
+    final lines = await rust.lyricLinesI18N(trackId: BigInt.from(451703096));
+    expect(lines, isNotEmpty);
+    expect(lines.where((l) => l.sub != null), isNotEmpty);
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
   test('song url for a free track', () async {
     final page = await rust.search(keywords: '晴天', limit: 10);
     for (final s in page.songs.where((s) => s.fee == 0 || s.fee == 8).take(3)) {

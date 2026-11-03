@@ -20,6 +20,7 @@
 | 播放模式 | ✅ | 列表循环 → 单曲循环 → 顺序播放 三档轮转(snackbar + 图标) |
 | 进度条 seek | ✅ | 滑杆拖动到底部方式实测,拖动中冻结量程 |
 | 自动续播 | ✅ | seek 到 90% 播完后自动切下一首(轮询 500ms + 临界区保护) |
+| 歌词 | ✅ | `ncm-domain::lrc` 解析([mm:ss.xx]/多标签/offset/翻译对齐, 12 单测) + 播放页歌词自动滚动高亮;英文歌显示中文翻译;换曲自动重新拉词 |
 | Linux 回归 | ✅ | `flutter test` 18 通过(含 `NCM_AUDIO_TEST` 真实播放);`flutter analyze` 0 issue |
 
 ### 本轮两个根因
@@ -45,6 +46,18 @@ adb -s emulator-5554 shell dumpsys media_session | grep metadata  # 校验播放
 ```
 
 注意:手势导航条会吞掉屏幕最底部约 20dp 的点击(坐标别贴底,UI 已加 8dp 边距)。
+
+### 改 Rust API 后的固定三步(踩过)
+
+```bash
+flutter_rust_bridge_codegen generate --rust-input crate::api \
+  --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust   # 1. 重生成桥
+cargo build -p ncm_ffi --manifest-path core/Cargo.toml            # 2. 重编 cdylib
+cd ui && flutter test                                            # 3. 否则报 content hash 不一致
+```
+`flutter test` 的 `frb_smoke_test` 直接加载 `core/target/debug/libncm_ffi.so`,
+所以第 2 步漏了会得到 `Bad state: Content hash on Dart side (...) is different from Rust side`,
+**不是桥代码生成错**。
 
 ## v2 · M2(Android)状态(2026-11-03, vivo X200 Ultra)
 

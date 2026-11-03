@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'src/lyric.dart';
 import 'src/playback.dart';
 import 'src/queue.dart';
 import 'src/rust/api.dart' as rust;
@@ -55,6 +56,7 @@ class _HomePageState extends State<HomePage> {
   final _controller = TextEditingController(text: '晴天');
   final _playback = Playback();
   final _queue = PlayQueue<rust.SongDto>();
+  final _lyricScroll = ScrollController();
   rust.InitInfo? _info;
   rust.SearchResultDto? _result;
   PlayerView? _player;
@@ -73,6 +75,15 @@ class _HomePageState extends State<HomePage> {
   /// 续播临界区: 防止一次结束被处理两遍(轮询 500ms + 异步取链)
   bool _advancing = false;
 
+  // ---- 歌词 ----
+  static const double _lyricItemExtent = 56;
+  List<rust.LyricLineDto> _lyricLines = const [];
+  List<BigInt> _lyricTimes = const [];
+  BigInt? _lyricTrackId;
+  String? _lyricError;
+  int _lyricIndex = -1;
+  bool _showLyrics = false;
+
   rust.SongDto? get _current => _queue.current;
 
   @override
@@ -85,6 +96,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _lyricScroll.dispose();
     super.dispose();
   }
 
@@ -108,6 +120,7 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final wasPlaying = _player?.playing ?? false;
     setState(() => _player = state);
+    _syncLyricIndex(state);
     if (_looksEnded(wasPlaying, state)) {
       await _onTrackEnded();
     }
@@ -198,6 +211,7 @@ class _HomePageState extends State<HomePage> {
       );
       if (!mounted) return true;
       setState(() => _player = state);
+      unawaited(_loadLyric(song.id));
       return true;
     } catch (e) {
       if (!mounted) return false;
@@ -205,6 +219,62 @@ class _HomePageState extends State<HomePage> {
       return false;
     }
   }
+
+  // ---------------- 歌词 ----------------
+
+  Future<void> _loadLyric(BigInt trackId) async {
+    if (_lyricTrackId == trackId) return;
+    _lyricTrackId = trackId;
+    if (mounted) {
+      setState(() {
+        _lyricLines = const [];
+        _lyricTimes = const [];
+        _lyricIndex = -1;
+        _lyricError = null;
+      });
+    }
+    try {
+      final lines = await rust.lyricLinesI18N(trackId: trackId);
+      if (!mounted || _lyricTrackId != trackId) return;
+      setState(() {
+        _lyricLines = lines;
+        _lyricTimes = [for (final l in lines) l.timeMs];
+      });
+      _syncLyricIndex(_player ?? PlayerView.empty);
+    } catch (e) {
+      if (!mounted || _lyricTrackId != trackId) return;
+      setState(() => _lyricError = '$e');
+    }
+  }
+
+  void _syncLyricIndex(PlayerView state) {
+    if (!_showLyrics || _lyricTimes.isEmpty) return;
+    final idx = lyricIndexAt(_lyricTimes, state.positionMs);
+    if (idx == _lyricIndex) return;
+    setState(() => _lyricIndex = idx);
+    _scrollLyricTo(idx);
+  }
+
+  void _scrollLyricTo(int idx) {
+    if (!_lyricScroll.hasClients || idx < 0) return;
+    final position = _lyricScroll.position;
+    final target = idx * _lyricItemExtent - (position.viewportDimension - _lyricItemExtent) / 2;
+    final clamped = target.clamp(0.0, position.maxScrollExtent);
+    _lyricScroll.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _toggleLyrics() {
+    setState(() => _showLyrics = !_showLyrics);
+    if (_showLyrics && _player != null) {
+      _syncLyricIndex(_player!);
+    }
+  }
+
+  // ---------------- 播放控制 ----------------
 
   Future<void> _toggle() async {
     final playing = _player?.playing ?? false;
@@ -229,7 +299,14 @@ class _HomePageState extends State<HomePage> {
     _userStopped = true;
     final state = await _playback.stop();
     if (!mounted) return;
-    setState(() => _player = state);
+    setState(() {
+      _player = state;
+      _showLyrics = false;
+      _lyricLines = const [];
+      _lyricTimes = const [];
+      _lyricIndex = -1;
+      _lyricTrackId = null;
+    });
   }
 
   void _cycleMode() {
@@ -255,7 +332,10 @@ class _HomePageState extends State<HomePage> {
     final state = await _playback.seek(BigInt.from(target));
     if (!mounted) return;
     setState(() => _player = state);
+    _syncLyricIndex(state);
   }
+
+  // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
@@ -263,33 +343,20 @@ class _HomePageState extends State<HomePage> {
     final player = _player;
     final current = _current;
     return Scaffold(
-      appBar: AppBar(title: const Text('轻音 MiniNCM')),
+      appBar: AppBar(
+        title: Text(_showLyrics ? (current?.name ?? '歌词') : '轻音 MiniNCM'),
+        leading: _showLyrics
+            ? IconButton(
+                icon: const Icon(Icons.expand_more),
+                tooltip: '收起歌词',
+                onPressed: _toggleLyrics,
+              )
+            : null,
+      ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      labelText: '搜索',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _search(),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _busy ? null : _search,
-                  child: Text(_busy ? '搜索中' : '搜索'),
-                ),
-              ],
-            ),
-          ),
-          if (info != null)
+          if (!_showLyrics) _buildSearchBar(),
+          if (info != null && !_showLyrics)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Align(
@@ -305,28 +372,109 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.all(12),
               child: Text(_error!, style: const TextStyle(color: Colors.red)),
             ),
-          Expanded(
-            child: _result == null
-                ? const Center(child: Text('输入关键词后搜索'))
-                : ListView.builder(
-                    itemCount: _result!.songs.length,
-                    itemBuilder: (context, i) {
-                      final s = _result!.songs[i];
-                      final active = current?.id == s.id;
-                      return ListTile(
-                        dense: true,
-                        selected: active,
-                        title: Text(s.name),
-                        subtitle: Text('${s.artist} · ${s.album}'),
-                        trailing: Text('${s.durationMs ~/ BigInt.from(1000)}s'),
-                        onTap: () => _playFromList(s),
-                      );
-                    },
-                  ),
-          ),
+          Expanded(child: _showLyrics ? _buildLyrics() : _buildList()),
         ],
       ),
       bottomNavigationBar: player == null ? null : _buildPlayerBar(context, player, current),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: '搜索',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onSubmitted: (_) => _search(),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _busy ? null : _search,
+            child: Text(_busy ? '搜索中' : '搜索'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList() {
+    final current = _current;
+    if (_result == null) {
+      return const Center(child: Text('输入关键词后搜索'));
+    }
+    return ListView.builder(
+      itemCount: _result!.songs.length,
+      itemBuilder: (context, i) {
+        final s = _result!.songs[i];
+        final active = current?.id == s.id;
+        return ListTile(
+          dense: true,
+          selected: active,
+          title: Text(s.name),
+          subtitle: Text('${s.artist} · ${s.album}'),
+          trailing: Text('${s.durationMs ~/ BigInt.from(1000)}s'),
+          onTap: () => _playFromList(s),
+        );
+      },
+    );
+  }
+
+  Widget _buildLyrics() {
+    if (_lyricError != null) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(child: Text('歌词获取失败: $_lyricError', textAlign: TextAlign.center)),
+      );
+    }
+    if (_lyricLines.isEmpty) {
+      return const Center(child: Text('暂无歌词'));
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return ListView.builder(
+      controller: _lyricScroll,
+      itemExtent: _lyricItemExtent,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+      itemCount: _lyricLines.length,
+      itemBuilder: (context, i) {
+        final line = _lyricLines[i];
+        final active = i == _lyricIndex;
+        final text = line.text.isEmpty ? '♪' : line.text;
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: active ? 18 : 15,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                  color: active ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+              ),
+              if (line.sub != null)
+                Text(
+                  line.sub!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: active ? scheme.primary.withValues(alpha: 0.8) : scheme.outline,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -354,24 +502,30 @@ class _HomePageState extends State<HomePage> {
               Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          current?.name ?? '未在播放',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    child: InkWell(
+                      onTap: _toggleLyrics,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              current?.name ?? '未在播放',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                              '  ${current?.artist ?? ''}'
+                              '  $inQueue/${_queue.items.length}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ),
-                        Text(
-                          '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                          '  ${current?.artist ?? ''}'
-                          '  $inQueue/${_queue.items.length}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   IconButton(

@@ -5,6 +5,9 @@
 
 use serde::{Deserialize, Serialize};
 
+mod lrc;
+pub use lrc::{parse_lrc, parse_lrc_with_translation, LyricLine};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackId(pub u64);
 

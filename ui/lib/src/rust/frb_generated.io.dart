@@ -43,6 +43,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -50,6 +53,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
+
+  @protected
+  LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -106,6 +112,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<LyricLineDto> sse_decode_list_lyric_line_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -115,6 +126,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
+
+  @protected
+  LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -174,6 +188,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_lyric_line_dto(
+    List<LyricLineDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -187,6 +207,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_song_dto(List<SongDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

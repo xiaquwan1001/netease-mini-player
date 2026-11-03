@@ -24,6 +24,14 @@ Future<StreamDto> songUrl({required BigInt trackId, required String level}) =>
 Future<String> lyric({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyric(trackId: trackId);
 
+/// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
+Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiLyricLines(trackId: trackId);
+
+/// 带翻译的歌词时间轴(网易云 tlyric). 无翻译时等价于 lyric_lines.
+Future<List<LyricLineDto>> lyricLinesI18N({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiLyricLinesI18N(trackId: trackId);
+
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 Future<bool> loginWithCookie({required String cookie}) =>
     RustLib.instance.api.crateApiLoginWithCookie(cookie: cookie);
@@ -84,6 +92,27 @@ class InitInfo {
           deviceId == other.deviceId &&
           loggedIn == other.loggedIn &&
           providers == other.providers;
+}
+
+/// 一行歌词(已按时间排序, 翻译按时间戳对齐)
+class LyricLineDto {
+  final BigInt timeMs;
+  final String text;
+  final String? sub;
+
+  const LyricLineDto({required this.timeMs, required this.text, this.sub});
+
+  @override
+  int get hashCode => timeMs.hashCode ^ text.hashCode ^ sub.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LyricLineDto &&
+          runtimeType == other.runtimeType &&
+          timeMs == other.timeMs &&
+          text == other.text &&
+          sub == other.sub;
 }
 
 class PlayerStateDto {

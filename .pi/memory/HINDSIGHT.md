@@ -137,3 +137,17 @@ API/protocol details and anti-bot technique live in the
 - 模拟器手势导航条会吞掉屏幕最底部 ~20dp 的点击(tap 与真手指都一样), UI 加了 8dp 边距。
 - vendor `ncm-api` 自带的 integration 测试并行/连跑会被风控挂 2~3 条, 单跑即过, 别当回归。
 <!-- created=2026-11-03, last=2026-11-03 -->
+
+## 歌词 + FRB 改动闭环(2026-11-03 晚)
+- 歌词解析放 `ncm-domain::lrc`(`LyricLine{time_ms,text,sub}` + `parse_lrc_with_translation`):
+  支持 `[mm:ss.xx|.xxx|:xx]`、一行多标签、`[offset:±ms]`(正=提前)、按时间戳合并 `tlyric` 翻译;
+  解析不了的行静默丢弃(歌词是"有则更好"的数据)。12 单测。
+- UI 侧只要 `lyricIndexAt(times, position)`(二分) + 固定 itemExtent 的 `ListView` 居中滚动,
+  不需要 WebView/第三方歌词控件。
+- **改 Rust API 的固定三步**: `flutter_rust_bridge_codegen generate --rust-input crate::api
+  --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust` → `cargo build -p ncm_ffi` →
+  `flutter test`。`frb_smoke_test` 直接加载 `core/target/debug/libncm_ffi.so`,漏第二步会报
+  `Content hash on Dart side ... different from Rust side`(不是生成错)。
+- codegen 需要 rustfmt(`rustup component add rustfmt`),否则生成文件不格式化但仍可用。
+- 网易云 VIP 歌匿名只给 **30~45s 试听片段**(搜索结果的 duration 是完整时长),测试写断言别拿列表 duration。
+<!-- created=2026-11-03, last=2026-11-03 -->

@@ -148,6 +148,44 @@ pub async fn lyric(track_id: u64) -> Result<String, String> {
     Ok(lyric.lrc.unwrap_or_default())
 }
 
+/// 一行歌词(已按时间排序, 翻译按时间戳对齐)
+pub struct LyricLineDto {
+    pub time_ms: u64,
+    pub text: String,
+    pub sub: Option<String>,
+}
+
+/// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
+pub async fn lyric_lines(track_id: u64) -> Result<Vec<LyricLineDto>, String> {
+    let raw = lyric(track_id).await?;
+    Ok(ncm_domain::parse_lrc_with_translation(&raw, None)
+        .into_iter()
+        .map(|l| LyricLineDto { time_ms: l.time_ms, text: l.text, sub: l.sub })
+        .collect())
+}
+
+/// 带翻译的歌词时间轴(网易云 tlyric). 无翻译时等价于 lyric_lines.
+pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard
+            .providers
+            .first_with(Capability::Lyric)
+            .ok_or_else(|| "no provider supports lyric".to_string())?
+    };
+    let lyric = provider
+        .lyric(ncm_domain::TrackId::new(track_id))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ncm_domain::parse_lrc_with_translation(
+        lyric.lrc.as_deref().unwrap_or_default(),
+        lyric.translated.as_deref(),
+    )
+    .into_iter()
+    .map(|l| LyricLineDto { time_ms: l.time_ms, text: l.text, sub: l.sub })
+    .collect())
+}
+
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;

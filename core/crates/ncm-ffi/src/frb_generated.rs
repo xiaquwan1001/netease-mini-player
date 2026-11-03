@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
                     default_rust_auto_opaque = RustAutoOpaqueMoi,
                 );
                 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-                pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1992170377;
+                pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -727767500;
             
 
 // Section: executor
@@ -73,6 +73,24 @@ fn wire__crate__api__init_impl(port_: flutter_rust_bridge::for_generated::Messag
             let api_track_id = <u64>::sse_decode(&mut deserializer);deserializer.end(); move |context| async move {
                     transform_result_sse::<_, String>((move || async move {
                          let output_ok = crate::api::lyric(api_track_id).await?;   std::result::Result::Ok(output_ok)
+                    })().await)
+                } })
+            }fn wire__crate__api__lyric_lines_impl(port_: flutter_rust_bridge::for_generated::MessagePort,ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,rust_vec_len_: i32,data_len_: i32)  {
+                FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec,_,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "lyric_lines", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);deserializer.end(); move |context| async move {
+                    transform_result_sse::<_, String>((move || async move {
+                         let output_ok = crate::api::lyric_lines(api_track_id).await?;   std::result::Result::Ok(output_ok)
+                    })().await)
+                } })
+            }fn wire__crate__api__lyric_lines_i18n_impl(port_: flutter_rust_bridge::for_generated::MessagePort,ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,rust_vec_len_: i32,data_len_: i32)  {
+                FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec,_,_,_>(flutter_rust_bridge::for_generated::TaskInfo{ debug_name: "lyric_lines_i18n", port: Some(port_), mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal }, move || {
+            let message = unsafe { flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(ptr_, rust_vec_len_, data_len_) };
+            let mut deserializer = flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);deserializer.end(); move |context| async move {
+                    transform_result_sse::<_, String>((move || async move {
+                         let output_ok = crate::api::lyric_lines_i18n(api_track_id).await?;   std::result::Result::Ok(output_ok)
                     })().await)
                 } })
             }fn wire__crate__api__ping_impl(port_: flutter_rust_bridge::for_generated::MessagePort,ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,rust_vec_len_: i32,data_len_: i32)  {
@@ -211,6 +229,14 @@ return crate::api::InitInfo{data_dir: var_dataDir, device_id: var_deviceId, logg
         return ans_;}
                 }
                 
+                impl SseDecode for Vec<crate::api::LyricLineDto> {
+                    // Codec=Sse (Serialization based), see doc to use other codecs
+                    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ { ans_.push(<crate::api::LyricLineDto>::sse_decode(deserializer)); }
+        return ans_;}
+                }
+                
                 impl SseDecode for Vec<u8> {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut len_ = <i32>::sse_decode(deserializer);
@@ -233,6 +259,14 @@ return crate::api::InitInfo{data_dir: var_dataDir, device_id: var_deviceId, logg
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ { ans_.push(<crate::api::SongDto>::sse_decode(deserializer)); }
         return ans_;}
+                }
+                
+                impl SseDecode for crate::api::LyricLineDto {
+                    // Codec=Sse (Serialization based), see doc to use other codecs
+                    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {let mut var_timeMs = <u64>::sse_decode(deserializer);
+let mut var_text = <String>::sse_decode(deserializer);
+let mut var_sub = <Option<String>>::sse_decode(deserializer);
+return crate::api::LyricLineDto{time_ms: var_timeMs, text: var_text, sub: var_sub};}
                 }
                 
                 impl SseDecode for Option<String> {
@@ -335,16 +369,18 @@ return crate::api::StreamDto{url: var_url, quality: var_quality, br: var_br, exp
                         1 => wire__crate__api__init_impl(port, ptr, rust_vec_len, data_len),
 2 => wire__crate__api__login_with_cookie_impl(port, ptr, rust_vec_len, data_len),
 3 => wire__crate__api__lyric_impl(port, ptr, rust_vec_len, data_len),
-4 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-5 => wire__crate__api__play_track_impl(port, ptr, rust_vec_len, data_len),
-6 => wire__crate__api__player_pause_impl(port, ptr, rust_vec_len, data_len),
-7 => wire__crate__api__player_resume_impl(port, ptr, rust_vec_len, data_len),
-8 => wire__crate__api__player_seek_impl(port, ptr, rust_vec_len, data_len),
-9 => wire__crate__api__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
-10 => wire__crate__api__player_state_impl(port, ptr, rust_vec_len, data_len),
-11 => wire__crate__api__player_stop_impl(port, ptr, rust_vec_len, data_len),
-12 => wire__crate__api__search_impl(port, ptr, rust_vec_len, data_len),
-13 => wire__crate__api__song_url_impl(port, ptr, rust_vec_len, data_len),
+4 => wire__crate__api__lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+5 => wire__crate__api__lyric_lines_i18n_impl(port, ptr, rust_vec_len, data_len),
+6 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+7 => wire__crate__api__play_track_impl(port, ptr, rust_vec_len, data_len),
+8 => wire__crate__api__player_pause_impl(port, ptr, rust_vec_len, data_len),
+9 => wire__crate__api__player_resume_impl(port, ptr, rust_vec_len, data_len),
+10 => wire__crate__api__player_seek_impl(port, ptr, rust_vec_len, data_len),
+11 => wire__crate__api__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
+12 => wire__crate__api__player_state_impl(port, ptr, rust_vec_len, data_len),
+13 => wire__crate__api__player_stop_impl(port, ptr, rust_vec_len, data_len),
+14 => wire__crate__api__search_impl(port, ptr, rust_vec_len, data_len),
+15 => wire__crate__api__song_url_impl(port, ptr, rust_vec_len, data_len),
                         _ => unreachable!(),
                     }
                 }
@@ -379,6 +415,22 @@ self.providers.into_into_dart().into_dart()
             impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::InitInfo {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::InitInfo> for crate::api::InitInfo {
             fn into_into_dart(self) -> crate::api::InitInfo {
+                self
+            }
+        }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+            impl flutter_rust_bridge::IntoDart for crate::api::LyricLineDto {
+                fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+                    [
+                    self.time_ms.into_into_dart().into_dart(),
+self.text.into_into_dart().into_dart(),
+self.sub.into_into_dart().into_dart()
+                ].into_dart()
+                }
+            }
+            impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::LyricLineDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::LyricLineDto> for crate::api::LyricLineDto {
+            fn into_into_dart(self) -> crate::api::LyricLineDto {
                 self
             }
         }
@@ -503,6 +555,12 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::StreamDto> for crate::api::St
         for item in self { <String>::sse_encode(item, serializer); }}
                 }
                 
+                impl SseEncode for Vec<crate::api::LyricLineDto> {
+                    // Codec=Sse (Serialization based), see doc to use other codecs
+                    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<i32>::sse_encode(self.len() as _, serializer);
+        for item in self { <crate::api::LyricLineDto>::sse_encode(item, serializer); }}
+                }
+                
                 impl SseEncode for Vec<u8> {
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<i32>::sse_encode(self.len() as _, serializer);
@@ -519,6 +577,13 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::StreamDto> for crate::api::St
                     // Codec=Sse (Serialization based), see doc to use other codecs
                     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<i32>::sse_encode(self.len() as _, serializer);
         for item in self { <crate::api::SongDto>::sse_encode(item, serializer); }}
+                }
+                
+                impl SseEncode for crate::api::LyricLineDto {
+                    // Codec=Sse (Serialization based), see doc to use other codecs
+                    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {<u64>::sse_encode(self.time_ms, serializer);
+<String>::sse_encode(self.text, serializer);
+<Option<String>>::sse_encode(self.sub, serializer);}
                 }
                 
                 impl SseEncode for Option<String> {
