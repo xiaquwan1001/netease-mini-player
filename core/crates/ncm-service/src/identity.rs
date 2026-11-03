@@ -1,0 +1,259 @@
+//! 身份与会话持久化.
+//!
+//! 两条硬规则(2026-11 实战结论):
+//! - device_id 首次生成后**永久复用**: 每次随机等于每次换一台新设备, 会被风控盯上.
+//! - 设备 cookie 与登录 cookie 一起落盘, 登出不清除 device_id.
+
+pub use ncm_domain::Session;
+
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
+const IDENTITY_FILE: &str = "identity.json";
+
+/// 设备指纹 cookie 的默认身份(桌面形态, 与官方 PC 客户端对齐).
+/// 音质档位只由 MUSIC_U 决定, 与 os/appver 无关(v1 实测).
+const IDENTITY_DEFAULTS: &[(&str, &str)] = &[
+    ("os", "pc"),
+    ("appver", "3.1.17.204416"),
+    ("osver", "Microsoft-Windows-10-Professional-build-19045-64bit"),
+    ("channel", "netease"),
+    ("WEVNSM", "1.0.0"),
+    ("__remember_me", "true"),
+    ("ntes_kaola_ad", "1"),
+];
+
+pub struct IdentityStore {
+    dir: PathBuf,
+}
+
+impl IdentityStore {
+    pub fn open(dir: &Path) -> io::Result<Self> {
+        fs::create_dir_all(dir)?;
+        Ok(Self { dir: dir.to_path_buf() })
+    }
+
+    pub fn path(&self) -> PathBuf {
+        self.dir.join(IDENTITY_FILE)
+    }
+
+    /// 读已有身份; 不存在则生成 device_id 并落盘.
+    pub fn load_or_create(&self) -> io::Result<Session> {
+        match fs::read(self.path()) {
+            Ok(bytes) => {
+                let mut session: Session = serde_json::from_slice(&bytes)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                let mut dirty = false;
+                if session.device_id.is_empty() {
+                    session.device_id = new_device_id();
+                    dirty = true;
+                }
+                let normalized = merge_device_cookie(&session.cookie, "", &session.device_id);
+                if normalized != session.cookie {
+                    session.cookie = normalized;
+                    dirty = true;
+                }
+                if dirty {
+                    self.save(&session)?;
+                }
+                Ok(session)
+            }
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                let device_id = new_device_id();
+                let session = Session {
+                    cookie: merge_device_cookie("", "", &device_id),
+                    device_id,
+                    profile: None,
+                };
+                self.save(&session)?;
+                Ok(session)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// 原子写 + 0600 权限(Linux). 敏感文件不进日志.
+    pub fn save(&self, session: &Session) -> io::Result<()> {
+        let path = self.path();
+        let tmp = path.with_extension("json.tmp");
+        let data = serde_json::to_vec_pretty(session)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        fs::write(&tmp, &data)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+        }
+        fs::rename(&tmp, &path)?;
+        Ok(())
+    }
+}
+
+/// 合并 cookie: incoming 里的登录凭据优先, 设备指纹键保持既有值, 缺失则补默认值.
+///
+/// 为什么必须持久化这些键: 库在缺失时会**每进程随机**生成
+/// (_ntes_nuid/_ntes_nnid/NMTID/WNMCID/deviceId) —— 在风控眼里等于每次换新设备.
+pub fn merge_device_cookie(existing: &str, incoming: &str, device_id: &str) -> String {
+    use std::collections::BTreeMap;
+    let mut map: BTreeMap<String, String> = BTreeMap::new();
+    let mut absorb = |raw: &str, overwrite: bool| {
+        for pair in raw.split(';') {
+            let pair = pair.trim();
+            if pair.is_empty() {
+                continue;
+            }
+            if let Some((k, v)) = pair.split_once('=') {
+                let (k, v) = (k.trim(), v.trim());
+                if !k.is_empty() && !v.is_empty() {
+                    if overwrite {
+                        map.insert(k.to_string(), v.to_string());
+                    } else {
+                        map.entry(k.to_string()).or_insert_with(|| v.to_string());
+                    }
+                }
+            }
+        }
+    };
+    // 设备指纹先入, 登录 cookie 后入并可覆盖(换账号时 MUSIC_U 必须更新)
+    absorb(existing, false);
+    absorb(incoming, true);
+
+    for (k, v) in IDENTITY_DEFAULTS {
+        map.entry(k.to_string()).or_insert_with(|| v.to_string());
+    }
+    map.entry("deviceId".into())
+        .or_insert_with(|| device_id.to_string());
+
+    let nuid = map
+        .entry("_ntes_nuid".into())
+        .or_insert_with(|| random_hex(16))
+        .clone();
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    map.entry("_ntes_nnid".into())
+        .or_insert_with(|| format!("{nuid},{now_ms}"));
+    map.entry("WNMCID".into())
+        .or_insert_with(|| format!("{}.{}.01.0", random_alpha(6), now_ms));
+    map.entry("NMTID".into())
+        .or_insert_with(|| random_hex(8));
+
+    map.iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn random_hex(bytes: usize) -> String {
+    let mut state = seed();
+    (0..bytes * 2)
+        .map(|_| {
+            state = next(state);
+            b"0123456789abcdef"[(state & 0xF) as usize] as char
+        })
+        .collect()
+}
+
+fn random_alpha(n: usize) -> String {
+    let mut state = seed();
+    (0..n)
+        .map(|_| {
+            state = next(state);
+            b"abcdefghijklmnopqrstuvwxyz"[(state % 26) as usize] as char
+        })
+        .collect()
+}
+
+fn seed() -> u64 {
+    let t = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    t ^ ((std::process::id() as u64) << 32) ^ 0x9E37_79B9_7F4A_7C15
+}
+
+fn next(mut x: u64) -> u64 {
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    x
+}
+
+/// 52 位十六进制设备 id, 与官方客户端形态一致.
+pub fn new_device_id() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let mut state = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
+        ^ (std::process::id() as u64) << 32;
+    let mut out = String::with_capacity(52);
+    const HEX: &[u8] = b"0123456789ABCDEF";
+    // xorshift64*, 不引入 rand 依赖
+    for _ in 0..52 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        out.push(HEX[(state & 0xF) as usize] as char);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmpdir(tag: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("ncm-test-{}-{}", tag, std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        p
+    }
+
+    #[test]
+    fn device_cookie_is_seeded_and_preserved() {
+        let merged = merge_device_cookie("", "", "ABC");
+        assert!(merged.contains("deviceId=ABC"), "{merged}");
+        assert!(merged.contains("os=pc"), "{merged}");
+        assert!(merged.contains("_ntes_nuid="), "{merged}");
+        assert!(merged.contains("WNMCID="), "{merged}");
+        // 再合并一次不能换指纹
+        let again = merge_device_cookie(&merged, "", "ABC");
+        assert_eq!(again, merged);
+        // 登录 cookie 覆盖且不破坏指纹
+        let logged = merge_device_cookie(&merged, "MUSIC_U=x; os=pc", "ABC");
+        assert!(logged.contains("MUSIC_U=x"));
+        assert!(logged.contains("_ntes_nuid="));
+    }
+
+    #[test]
+    fn device_id_is_stable_across_reloads() {
+        let dir = tmpdir("stable");
+        let store = IdentityStore::open(&dir).unwrap();
+        let a = store.load_or_create().unwrap();
+        let b = store.load_or_create().unwrap();
+        assert_eq!(a.device_id, b.device_id);
+        assert_eq!(a.device_id.len(), 52);
+        assert!(!a.is_logged_in());
+    }
+
+    #[test]
+    fn login_cookie_persists_and_device_id_kept() {
+        let dir = tmpdir("cookie");
+        let store = IdentityStore::open(&dir).unwrap();
+        let mut s = store.load_or_create().unwrap();
+        let id = s.device_id.clone();
+        s.cookie = "MUSIC_U=deadbeef; os=pc".into();
+        store.save(&s).unwrap();
+        let loaded = store.load_or_create().unwrap();
+        assert!(loaded.is_logged_in());
+        assert_eq!(loaded.device_id, id);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = fs::metadata(store.path()).unwrap().permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
+}

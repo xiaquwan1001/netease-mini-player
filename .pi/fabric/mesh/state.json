@@ -1,0 +1,325 @@
+{
+  "format": 1,
+  "revisionFormat": 2,
+  "entries": {
+    "topology/peer-seq/3": {
+      "key": "topology/peer-seq/3",
+      "value": {
+        "format": 1,
+        "next": 7
+      },
+      "version": 10,
+      "updatedAt": 1793671137277,
+      "updatedBy": {
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5"
+      }
+    },
+    "topology/tombstones/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf": {
+      "key": "topology/tombstones/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf",
+      "value": {
+        "format": 1,
+        "id": "session:01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "kind": "root",
+        "rootId": "session:01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "ownerHostId": "session:01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "ownerIdentityId": "session:01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "ownerIncarnation": "edf22f6e-fcfe-4bea-982a-a13af656b54a",
+        "name": "main",
+        "label": "NMP-1",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "status": "stopped",
+        "startedAt": 1793432001938,
+        "lastSeenAt": 1793447940223
+      },
+      "version": 11405,
+      "updatedAt": 1793447940223,
+      "updatedBy": {
+        "id": "session:01a190df-eb3d-75f8-a5c5-7182de6f02be",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a190df-eb3d-75f8-a5c5-7182de6f02be"
+      }
+    },
+    "topology/tombstones/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925": {
+      "key": "topology/tombstones/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925",
+      "value": {
+        "format": 1,
+        "id": "session:01a191d3-d060-75f8-a5c5-7184788423b7",
+        "kind": "root",
+        "rootId": "session:01a191d3-d060-75f8-a5c5-7184788423b7",
+        "ownerHostId": "session:01a191d3-d060-75f8-a5c5-7184788423b7",
+        "ownerIdentityId": "session:01a191d3-d060-75f8-a5c5-7184788423b7",
+        "ownerIncarnation": "c5b74f1d-edf4-40ba-b368-a488fb58828f",
+        "name": "main",
+        "label": "NMP-2",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a191d3-d060-75f8-a5c5-7184788423b7",
+        "status": "stopped",
+        "startedAt": 1793457255578,
+        "lastSeenAt": 1793458183910
+      },
+      "version": 17805,
+      "updatedAt": 1793458183910,
+      "updatedBy": {
+        "id": "session:01a191d3-d060-75f8-a5c5-7184788423b7",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a191d3-d060-75f8-a5c5-7184788423b7"
+      }
+    },
+    "topology/tombstones/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8": {
+      "key": "topology/tombstones/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8",
+      "value": {
+        "format": 1,
+        "id": "session:01a1962f-d612-7511-8203-3c55b791d77a",
+        "kind": "root",
+        "rootId": "session:01a1962f-d612-7511-8203-3c55b791d77a",
+        "ownerHostId": "session:01a1962f-d612-7511-8203-3c55b791d77a",
+        "ownerIdentityId": "session:01a1962f-d612-7511-8203-3c55b791d77a",
+        "ownerIncarnation": "b8e7047e-0411-4053-ad09-585ecaf46917",
+        "name": "main",
+        "label": "NMP-3",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a1962f-d612-7511-8203-3c55b791d77a",
+        "status": "stopped",
+        "startedAt": 1793532424033,
+        "lastSeenAt": 1793533000346
+      },
+      "version": 25728,
+      "updatedAt": 1793533000346,
+      "updatedBy": {
+        "id": "session:01a1962f-d612-7511-8203-3c55b791d77a",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a1962f-d612-7511-8203-3c55b791d77a"
+      }
+    },
+    "topology/tombstones/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842": {
+      "key": "topology/tombstones/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842",
+      "value": {
+        "format": 1,
+        "id": "session:01a196e5-ba86-7321-879f-690c293dc972",
+        "kind": "root",
+        "rootId": "session:01a196e5-ba86-7321-879f-690c293dc972",
+        "ownerHostId": "session:01a196e5-ba86-7321-879f-690c293dc972",
+        "ownerIdentityId": "session:01a196e5-ba86-7321-879f-690c293dc972",
+        "ownerIncarnation": "24cf2bd9-430a-4159-90f5-40018ae42491",
+        "name": "main",
+        "label": "NMP-4",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a196e5-ba86-7321-879f-690c293dc972",
+        "status": "stopped",
+        "startedAt": 1793533286266,
+        "lastSeenAt": 1793541093606
+      },
+      "version": 31716,
+      "updatedAt": 1793541093606,
+      "updatedBy": {
+        "id": "session:01a196e5-ba86-7321-879f-690c293dc972",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a196e5-ba86-7321-879f-690c293dc972"
+      }
+    },
+    "topology/tombstones/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7": {
+      "key": "topology/tombstones/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7",
+      "value": {
+        "format": 1,
+        "id": "session:01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "kind": "root",
+        "rootId": "session:01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "ownerHostId": "session:01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "ownerIdentityId": "session:01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "ownerIncarnation": "16c15021-bccc-41ff-a950-d62b3e0e422e",
+        "name": "main",
+        "label": "NMP-5",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "status": "stopped",
+        "startedAt": 1793586517333,
+        "lastSeenAt": 1793605781444
+      },
+      "version": 45673,
+      "updatedAt": 1793605781444,
+      "updatedBy": {
+        "id": "session:01a197b1-9f22-71e8-abfb-13f16d958cee",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a197b1-9f22-71e8-abfb-13f16d958cee"
+      }
+    },
+    "topology/tombstones/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353": {
+      "key": "topology/tombstones/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353",
+      "value": {
+        "format": 1,
+        "id": "session:01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "kind": "root",
+        "rootId": "session:01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "ownerHostId": "session:01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "ownerIdentityId": "session:01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "ownerIncarnation": "2aa202f1-6a61-47ff-bf8f-6986c881deeb",
+        "name": "main",
+        "label": "NMP-6",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "status": "stopped",
+        "startedAt": 1793622101259,
+        "lastSeenAt": 1793623941860
+      },
+      "version": 55022,
+      "updatedAt": 1793623941860,
+      "updatedBy": {
+        "id": "session:01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a19b3c-47b7-77dc-b17e-62e2bf6b7b88"
+      }
+    },
+    "sessions/01a19f1f-7366-75eb-88e9-4774ab345ce5": {
+      "key": "sessions/01a19f1f-7366-75eb-88e9-4774ab345ce5",
+      "value": {
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "NMP-7",
+        "label": "NMP-7",
+        "kind": "peer",
+        "status": "running",
+        "runner": "pi",
+        "transport": "host",
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "model": "custom.ustc-pool/ustc",
+        "thinking": "low",
+        "startedAt": 1793672241020,
+        "updatedAt": 1793676411215,
+        "pendingMessages": false,
+        "local": false
+      },
+      "version": 56181,
+      "updatedAt": 1793676411224,
+      "updatedBy": {
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5"
+      }
+    },
+    "topology/participants/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f": {
+      "key": "topology/participants/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f",
+      "value": {
+        "format": 1,
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "kind": "root",
+        "rootId": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "ownerHostId": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "ownerIdentityId": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "main",
+        "status": "running",
+        "runner": "pi",
+        "transport": "host",
+        "capabilities": [
+          "steer",
+          "followUp",
+          "fabric"
+        ],
+        "cwd": "/home/xuqianhui/netease-mini-player",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "model": "custom.ustc-pool/ustc",
+        "thinking": "low",
+        "startedAt": 1793672241020,
+        "updatedAt": 1793676411215,
+        "pendingMessages": false,
+        "controlProtocol": "v1",
+        "ownerIncarnation": "681d793b-5774-41b1-bbe1-485431c6be9d",
+        "label": "NMP-7"
+      },
+      "version": 56182,
+      "updatedAt": 1793676411224,
+      "updatedBy": {
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5"
+      }
+    },
+    "topology/hosts/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f": {
+      "key": "topology/hosts/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f",
+      "value": {
+        "format": 1,
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "rootId": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "identity": {
+          "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+          "name": "main",
+          "kind": "main",
+          "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5"
+        },
+        "startedAt": 1793672241021,
+        "updatedAt": 1793676411224,
+        "expiresAt": 1793676426224
+      },
+      "version": 56183,
+      "updatedAt": 1793676411224,
+      "updatedBy": {
+        "id": "session:01a19f1f-7366-75eb-88e9-4774ab345ce5",
+        "name": "main",
+        "kind": "main",
+        "sessionId": "01a19f1f-7366-75eb-88e9-4774ab345ce5"
+      }
+    }
+  },
+  "highWater": 58496,
+  "versions": {
+    "sessions/01a190df-eb3d-75f8-a5c5-7182de6f02be": 3801,
+    "topology/participants/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf": 3803,
+    "topology/hosts/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf": 3804,
+    "topology/peer-seq/3": 10,
+    "topology/tombstones/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf": 11405,
+    "sessions/01a191d3-d060-75f8-a5c5-7184788423b7": 18012,
+    "topology/participants/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925": 18014,
+    "topology/hosts/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925": 18015,
+    "topology/tombstones/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925": 17805,
+    "sessions/01a1962f-d612-7511-8203-3c55b791d77a": 25865,
+    "topology/participants/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8": 25867,
+    "topology/hosts/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8": 25868,
+    "topology/tombstones/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8": 25728,
+    "sessions/01a196e5-ba86-7321-879f-690c293dc972": 27998,
+    "topology/participants/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842": 28000,
+    "topology/hosts/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842": 28001,
+    "topology/tombstones/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842": 31716,
+    "sessions/01a197b1-9f22-71e8-abfb-13f16d958cee": 36369,
+    "topology/participants/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7": 36371,
+    "topology/hosts/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7": 36372,
+    "topology/tombstones/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7": 45673,
+    "sessions/01a19b3c-47b7-77dc-b17e-62e2bf6b7b88": 48790,
+    "topology/participants/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353": 48792,
+    "topology/hosts/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353": 48793,
+    "topology/tombstones/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353": 55022,
+    "sessions/01a19f1f-7366-75eb-88e9-4774ab345ce5": 56181,
+    "topology/participants/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f": 56182,
+    "topology/hosts/1a969f5d7f6ab222eea8bf0c998ef7d30997e1956fb097de118bef415bf7ea0f": 56183
+  },
+  "tombstoneOrder": [
+    "sessions/01a190df-eb3d-75f8-a5c5-7182de6f02be",
+    "topology/participants/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf",
+    "topology/hosts/e2e3efb027a6889e4e474527e91e7db8283adf6b923f4c74c8dc75335be87bdf",
+    "sessions/01a191d3-d060-75f8-a5c5-7184788423b7",
+    "topology/participants/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925",
+    "topology/hosts/28e5646c6c6f22eaadaedc4b8ea5dab9154465513aebba93d00f9d721b062925",
+    "sessions/01a1962f-d612-7511-8203-3c55b791d77a",
+    "topology/participants/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8",
+    "topology/hosts/e930f2271ea0367be3f557cd58602f65b01c236a45cd3c041e484f8818ce49f8",
+    "sessions/01a196e5-ba86-7321-879f-690c293dc972",
+    "topology/participants/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842",
+    "topology/hosts/121e316fc00637148a3aaac562886dfa5a1237c6e2c2e1b90608f1e657f2e842",
+    "sessions/01a197b1-9f22-71e8-abfb-13f16d958cee",
+    "topology/participants/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7",
+    "topology/hosts/0c381da09c15fbd8ace126448df8da1bc1764468fbfe325c06f1523f47c29be7",
+    "sessions/01a19b3c-47b7-77dc-b17e-62e2bf6b7b88",
+    "topology/participants/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353",
+    "topology/hosts/ff5c88f2e808d76f54e82af478cdaaecc7fa9c6ab67aa20d44368b3e14676353"
+  ]
+}
