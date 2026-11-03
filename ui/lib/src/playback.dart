@@ -28,6 +28,17 @@ class PlayerView {
   );
 }
 
+/// 网易 CDN 直链默认是明文 http；模拟器 NAT / 公司网 / 部分运营商只放行 443,
+/// 明文 80 会被中间设备回 502(空 body), ExoPlayer 侧表现为
+/// "None of the available extractors could read the stream" 的假解码错误。
+/// CDN 同路径支持 https(证书覆盖 *.music.126.net), Android 边拉边播统一升级到 https。
+/// 纯函数, 方便单测。
+String preferHttpsStreamUrl(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.scheme != 'http' || uri.host.isEmpty) return url;
+  return uri.replace(scheme: 'https').toString();
+}
+
 /// 播放门面: Android 走 Media3(Kotlin), 其它平台走 Rust core.
 /// 规则: 平台差异只允许出现在这一层, UI 不感知.
 class Playback {
@@ -50,7 +61,7 @@ class Playback {
     if (isAndroid) {
       final map = await _channel.invokeMapMethod<String, Object?>('play', {
         'trackId': trackId.toInt(),
-        'url': url,
+        'url': preferHttpsStreamUrl(url),
         'title': title,
         'artist': artist,
       });

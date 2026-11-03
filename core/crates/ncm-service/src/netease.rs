@@ -90,13 +90,27 @@ fn make_query(cookie: &str, domain: &Option<String>, ua: &Option<String>) -> Que
     q
 }
 
+/// reqwest 会读 HTTPS_PROXY/ALL_PROXY 等环境变量。本机常见坑: 代理进程没起或换端口,
+/// 报错却是笼统的 "error sending request for url (...)", 看起来像"接口挂了/设备风控"。
+/// 这里附一句提示, 省掉一次误判。
+fn proxy_hint() -> String {
+    for key in ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"] {
+        if let Ok(v) = std::env::var(key) {
+            if !v.trim().is_empty() {
+                return format!(" (提示: 检测到 {key}={v}, 若代理未运行请 unset 后再试)");
+            }
+        }
+    }
+    String::new()
+}
+
 fn map_error(e: NcmError) -> ProviderError {
     match e {
         NcmError::AuthRequired(msg) => ProviderError::auth(msg),
         NcmError::RateLimited(msg) => ProviderError::risk_control(msg),
         NcmError::Api { code, msg } => map_code(code, msg),
         NcmError::Timeout(msg) => ProviderError::network(format!("timeout: {msg}")),
-        NcmError::Http(err) => ProviderError::network(err.to_string()),
+        NcmError::Http(err) => ProviderError::network(format!("{}{}", err, proxy_hint())),
         other => ProviderError::internal(other.to_string()),
     }
 }

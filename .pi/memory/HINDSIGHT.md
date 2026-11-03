@@ -117,3 +117,23 @@ API/protocol details and anti-bot technique live in the
   真机那个 reqwest `error sending request` 不是通用的网络问题。
 - 厂商 SystemUI/白名单（锁屏歌词、原子岛）、Play Integrity 类结论仍只能真机验，模拟器不背这些。
 <!-- created=2026-11-03, last=2026-11-03 -->
+
+## Android 模拟器验证闭环 + 播放链根因(2026-11-03 晚)
+- 日常迭代用 a36 模拟器(`~/bin/avd headless a36`,15s 起;`adb install -r -t` 0.7s),
+  真机只留给厂商特性/风控结论。驱动方式: `input tap/swipe` + `exec-out screencap`(读图看 UI)
+  + `dumpsys media_session | grep metadata`(看曲目/播放态), 不需要 flutter drive。
+- **明文 http 直链在本机被中间设备回 502(空 body)** → ExoPlayer 报
+  `UnrecognizedInputFormatException: None of the available extractors could read the stream`。
+  判定: 模拟器内 `nc www.baidu.com 80` 同样 502, https 全通, 而宿主 curl 走 80 是 200
+  ⇒ 转发/NAT 路径拦截, 与解码器/UA 无关。修法: `preferHttpsStreamUrl()` 把直链升到 https
+  (CDN 同路径 https 返回 audio/mpeg 200)。
+- **主机代理变量会毒化 Rust 侧请求**: clash 没起时 `HTTPS_PROXY=http://127.0.0.1:7890`
+  让 reqwest 报 `error sending request for url (...)`, 与"接口变了/设备风控"极像。
+  CLI/测试前 `env -u https_proxy ...`; `tools/ci.sh` 已默认清代理(`NCM_KEEP_PROXY=1` 可保留);
+  `ncm-service` 在网络错误里附代理提示。
+- 队列放 Dart 纯逻辑(`ui/lib/src/queue.dart`, 9 单测), 播放后端保持"一次一首"; 自动续播靠
+  500ms 轮询 `wasPlaying→!playing && pos≈dur`。两个坑: (a) 拖动滑杆时换曲会让 duration 突跳,
+  必须**冻结量程**(_dragMax), 否则新曲目被 seek 到末尾; (b) 续播要加 `_advancing` 临界区。
+- 模拟器手势导航条会吞掉屏幕最底部 ~20dp 的点击(tap 与真手指都一样), UI 加了 8dp 边距。
+- vendor `ncm-api` 自带的 integration 测试并行/连跑会被风控挂 2~3 条, 单跑即过, 别当回归。
+<!-- created=2026-11-03, last=2026-11-03 -->

@@ -5,6 +5,47 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · M2+ 播放链 + 队列(2026-11-03 晚, 模拟器 a36 / Android 16)
+
+全部在模拟器上验证(真机那条"安装二次确认"不再阻塞日常迭代)。
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 模拟器安装/启动 | ✅ | `avd headless a36` + `adb install -r -t` 0.7s;UI 正常渲染(Impeller/GLES) |
+| 搜索(模拟器) | ✅ | "晴天" 返回 10+ 条,eapi 直连正常 |
+| Media3 播放 | ✅ | ExoPlayer `state=PLAYING`,position 136s→142s 实时推进,通知栏标题正确 |
+| 直链 https 升级 | ✅ | `preferHttpsStreamUrl`(playback.dart)+ 3 个单测;见下方根因 |
+| 播放队列 | ✅ | `ui/lib/src/queue.dart` 纯逻辑 + 9 个单测;点列表重置队列并定位 |
+| 上一首/下一首 | ✅ | 点歌 → next 切到第 3 首;prev 回到上一首(从头播) |
+| 播放模式 | ✅ | 列表循环 → 单曲循环 → 顺序播放 三档轮转(snackbar + 图标) |
+| 进度条 seek | ✅ | 滑杆拖动到底部方式实测,拖动中冻结量程 |
+| 自动续播 | ✅ | seek 到 90% 播完后自动切下一首(轮询 500ms + 临界区保护) |
+| Linux 回归 | ✅ | `flutter test` 18 通过(含 `NCM_AUDIO_TEST` 真实播放);`flutter analyze` 0 issue |
+
+### 本轮两个根因
+
+1. **明文 http 直链在本机被中间设备回 502**(空 body)→ ExoPlayer 报
+   `UnrecognizedInputFormatException: None of the available extractors could read the stream`。
+   这不是解码问题:模拟器内 `nc www.baidu.com 80` 同样 502,而 https(443) 一切正常;
+   宿主自身 `curl` 走 80 是 200(说明是转发/NAT 路径上的拦截)。
+   → 播放统一升级到 https(CDN 同路径 `https://m701.music.126.net/...` 返回 200/audio-mpeg)。
+2. **主机代理环境变量会毒化 Rust 侧请求**:clash 没起时 `HTTPS_PROXY=http://127.0.0.1:7890`
+   让 reqwest 报 `error sending request for url (...)`,与"设备风控/接口变更"极像。
+   → `ncm-service` 在网络错误里附代理提示;跑 CLI/测试前先 `env -u https_proxy ...`。
+
+### 验证手法(下次照抄)
+
+```bash
+~/bin/avd headless a36                       # 无窗口模拟器, 15s 起
+bash tools/build-android.sh                  # 增量 ~10s
+adb -s emulator-5554 install -r -t ui/build/app/outputs/flutter-apk/app-debug.apk
+adb -s emulator-5554 shell am start -W -n com.minincm.minincm/.MainActivity
+adb -s emulator-5554 exec-out screencap -p > /tmp/shot.png   # 直接看 UI
+adb -s emulator-5554 shell dumpsys media_session | grep metadata  # 校验播放态/曲目
+```
+
+注意:手势导航条会吞掉屏幕最底部约 20dp 的点击(坐标别贴底,UI 已加 8dp 边距)。
+
 ## v2 · M2(Android)状态(2026-11-03, vivo X200 Ultra)
 
 | 项 | 状态 | 证据/备注 |
@@ -13,21 +54,19 @@
 | 安装 | ✅ | vivo **安装二次确认无法绕过**:每次都要用户在手机上点「安装/继续安装」;`push + pm install` 只是减少弹窗层级 |
 | 启动 | ✅ | ExoPlayerImpl / MediaSessionImpl 初始化成功,Impeller(Vulkan) 正常 |
 | Rust core 在设备上运行 | ✅ | UI 显示 device_id、搜索按钮可点 |
-| 搜索(设备 5G) | ❌ | `[network] error sending request for url (https://interface.music.163.com/eapi/cloudsearch/pc)` |
-| Media3 播放 | ⏳ 待搜索修好后再验 | 首次试播报 `PlaybackState ERROR(Source error)`,已补 cleartext + UA/Referer(未复测) |
+| 搜索(设备 5G) | ✅(模拟器已验,真机待复测) | 模拟器 10+ 条正常;真机那条 `error sending request` 疑似同一处裸机网络/代理差异 |
+| Media3 播放 | ✅(模拟器已验,真机待复测) | 见上一节;真机需注意明文 http 可能被运营商/NAT 拦 |
 
 ### 已知问题(下次接手第一件事)
 
-1. **设备端 https 请求失败**: Linux 同一二进制没问题,Android 上 rustls/reqwest 发不出请求。
-   当前错误只打印了最外层 Display,信息不足。下一步:
-   - 打完整错误链(`e.source()` 逐层),区分 DNS / TCP / TLS / 代理;
-   - 试 `reqwest` 的 `rustls-tls-native-roots`(用系统 CA)与 `native-tls`;
-   - 确认 Android 上 DNS(私有 DNS/运营商)与 IPv6 回退,必要时关 IPv6 happy-eyeballs;
-   - 对照:同一 URL 用 `adb shell curl` / WebView 是否可达。
-2. **播放链未在真机验证**:cleartext + UA/Referer 已加(`PlaybackService.kt`),等搜索通了再点歌验证;
-   同时看通知栏媒体卡片与锁屏控制。
+1. **真机 vs 模拟器差异待复测**:模拟器上搜索/播放全通,真机上 Rust 侧 https 曾报
+   `error sending request`。真机复测前先排除:代理类 VPN/私有 DNS/运营商 80 端口策略。
+2. **队尾停止的"顺序播放"未在设备上验**:逻辑有单测覆盖(`queue_test.dart`),设备上要真播到队尾才能看。
 3. **vivo 安装确认不可绕过**:每次覆盖安装都由用户在设备上点确认;脚本会阻塞等待并提示,
    不点/锁屏会报 `INSTALL_FAILED_ABORTED: User rejected permissions`(不要误判为脚本或包问题)。
+4. **vendor 自带集成测试并发/连跑易失败**: `cargo test -p ncm-api-rs --test integration`
+   并行或短时间内连跑会因风控/限流挂 2~3 条(`test_banner/test_search/test_countries_code_list`),
+   单跑或间隔重试即过 —— 不是我们的回归。本仓库测试用 `cargo test -p ncm-domain` 等本地用例为准。
 
 ### 本轮 Android 侧踩坑
 
