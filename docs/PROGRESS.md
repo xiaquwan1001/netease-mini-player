@@ -1,5 +1,37 @@
 # 进度记录(Progress)
 
+> 最近更新: 2026-11-03(v2 重启, M0 完成)。
+> 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
+> 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
+> 通道实测见 `docs/api-channel.md`。
+
+## v2 重启(2026-11-03): M0 完成情况
+
+| 步 | 内容 | 状态 | 证据 |
+|---|---|---|---|
+| S1 | Flutter 3.47.9 用户级安装 + Linux bundle 构建 | ✅ | `ui/build/linux/x64/debug/bundle/minincm` 构建通过 |
+| S2 | cargo workspace 五 crate + ncm-domain 单测 | ✅ | `cargo test` 8 用例全绿 |
+| S3 | vendor `ncm-api` + CLI 搜索 | ✅ | `ncm search 晴天` 返回 336 条, 0.2s |
+| S4 | CLI 取链 + 下载 | ✅ | `ncm url 3455095614 --download` 得到 320k mp3, 5.7MB |
+| S5 | 通道 spike(interface vs interface3) | ✅ | 两条都通, 保持库默认; 见 `docs/api-channel.md` |
+| S6 | FRB 桥 + 双端 UI smoke | ✅ | `flutter test` 4 用例(含真实网络搜索/取链) |
+| S7 | Android 交叉编译 | ⏳ | NDK 28.2 + 3 个 rust target 已装, 构建进行中 |
+| S8 | tools/CI 脚本 | ✅ | `tools/env.sh` / `build-linux.sh` / `build-android.sh` / `ci.sh` |
+
+### 本轮关键事实
+
+- **协议层零自研**: `core/vendor/ncm-api` = api-enhanced 的 Rust 移植(382 个 api 模块, rustls),
+  锁定 commit 见 `core/vendor/UPSTREAM.txt`。
+- **库的两个默认值必须覆盖**: `device_id` 是进程级随机(`LazyLock`)→ 我们落盘后 `set_device_id()` 注入;
+  `_ntes_nuid/_ntes_nnid/NMTID/WNMCID` 缺失时也随机 → 我们首启生成并写入 cookie,永久复用。
+- **cargokit 命名坑**: Rust crate 名含 `-` 时,产物是 `libncm_ffi.so` 但 cargokit 找 `libncm-ffi.so` →
+  链接失败。**crate 名必须用下划线**(`ncm_ffi`)。
+- **FRB 类型**: Rust `u64` 在 Dart 侧是 `BigInt`(id/durationMs),写 UI 时注意。
+- 本机 Flutter 3.47.9 默认 NDK = **28.2.13676358**(空 SDK 时 gradle 会尝试自动下载,建议预装)。
+
+
+# 进度记录(Progress)
+
 > 最近更新: 2026-11-02。里程碑式记录 "做到了什么 / 怎么验证的 / 下一步",
 > 协议细节放 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`,
 > LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/lx-plugin.md`,
