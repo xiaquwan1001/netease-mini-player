@@ -10,3 +10,6 @@ export PATH="$FLUTTER_ROOT/bin:$JAVA_HOME/bin:$HOME/.cargo/bin:$ANDROID_HOME/pla
 # 国内镜像(Flutter 引擎/pub)
 export FLUTTER_STORAGE_BASE_URL="${FLUTTER_STORAGE_BASE_URL:-https://storage.flutter-io.cn}"
 export PUB_HOSTED_URL="${PUB_HOSTED_URL:-https://pub.flutter-io.cn}"
+# rustup 走 USTC 镜像(否则 cargokit 自动装 target 会卡在 static.rust-lang.org)
+export RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-https://mirrors.ustc.edu.cn/rust-static}"
+export RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-https://mirrors.ustc.edu.cn/rust-static/rustup}"
