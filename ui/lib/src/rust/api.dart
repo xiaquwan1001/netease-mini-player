@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`
+// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`, `player`, `state_dto`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -30,6 +30,30 @@ Future<bool> loginWithCookie({required String cookie}) =>
 
 Future<String> ping({required String name}) =>
     RustLib.instance.api.crateApiPing(name: name);
+
+/// 下载(带缓存)后交给平台播放后端. 直链有时效, 所以先落盘再播.
+Future<PlayerStateDto> playTrack({
+  required BigInt trackId,
+  required String url,
+}) => RustLib.instance.api.crateApiPlayTrack(trackId: trackId, url: url);
+
+Future<PlayerStateDto> playerState() =>
+    RustLib.instance.api.crateApiPlayerState();
+
+Future<PlayerStateDto> playerPause() =>
+    RustLib.instance.api.crateApiPlayerPause();
+
+Future<PlayerStateDto> playerResume() =>
+    RustLib.instance.api.crateApiPlayerResume();
+
+Future<PlayerStateDto> playerStop() =>
+    RustLib.instance.api.crateApiPlayerStop();
+
+Future<PlayerStateDto> playerSeek({required BigInt positionMs}) =>
+    RustLib.instance.api.crateApiPlayerSeek(positionMs: positionMs);
+
+Future<PlayerStateDto> playerSetVolume({required double volume}) =>
+    RustLib.instance.api.crateApiPlayerSetVolume(volume: volume);
 
 class InitInfo {
   final String dataDir;
@@ -60,6 +84,41 @@ class InitInfo {
           deviceId == other.deviceId &&
           loggedIn == other.loggedIn &&
           providers == other.providers;
+}
+
+class PlayerStateDto {
+  final BigInt? trackId;
+  final bool playing;
+  final BigInt positionMs;
+  final BigInt durationMs;
+  final double volume;
+
+  const PlayerStateDto({
+    this.trackId,
+    required this.playing,
+    required this.positionMs,
+    required this.durationMs,
+    required this.volume,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      playing.hashCode ^
+      positionMs.hashCode ^
+      durationMs.hashCode ^
+      volume.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlayerStateDto &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          playing == other.playing &&
+          positionMs == other.positionMs &&
+          durationMs == other.durationMs &&
+          volume == other.volume;
 }
 
 class ProviderInfo {

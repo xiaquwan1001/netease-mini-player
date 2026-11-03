@@ -25,6 +25,7 @@ fn data_dir_default() -> String {
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 pub fn init(data_dir: Option<String>) -> Result<InitInfo, String> {
     let dir = data_dir.unwrap_or_else(data_dir_default);
+    let _ = DATA_DIR.set(std::path::PathBuf::from(&dir));
     if CORE.get().is_none() {
         let core = Core::open(Path::new(&dir)).map_err(|e| e.to_string())?;
         let _ = CORE.set(Mutex::new(core));
@@ -163,4 +164,73 @@ pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
 
 pub fn ping(name: String) -> String {
     format!("pong from rust: {name}")
+}
+
+// ---------------- 播放 ----------------
+
+static PLAYER: OnceLock<ncm_playback::Player> = OnceLock::new();
+static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+
+fn player() -> &'static ncm_playback::Player {
+    PLAYER.get_or_init(ncm_playback::Player::new)
+}
+
+pub struct PlayerStateDto {
+    pub track_id: Option<u64>,
+    pub playing: bool,
+    pub position_ms: u64,
+    pub duration_ms: u64,
+    pub volume: f32,
+}
+
+fn state_dto() -> PlayerStateDto {
+    let s = player().state();
+    PlayerStateDto {
+        track_id: s.track_id,
+        playing: s.playing,
+        position_ms: s.position_ms,
+        duration_ms: s.duration_ms,
+        volume: s.volume,
+    }
+}
+
+/// 下载(带缓存)后交给平台播放后端. 直链有时效, 所以先落盘再播.
+pub async fn play_track(track_id: u64, url: String) -> Result<PlayerStateDto, String> {
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?
+        .join("audio");
+    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())?;
+    let path = cache.fetch(track_id, &url).await?;
+    player().play_file(track_id, path.to_string_lossy().to_string());
+    Ok(state_dto())
+}
+
+pub fn player_state() -> PlayerStateDto {
+    state_dto()
+}
+
+pub fn player_pause() -> PlayerStateDto {
+    player().pause();
+    state_dto()
+}
+
+pub fn player_resume() -> PlayerStateDto {
+    player().resume();
+    state_dto()
+}
+
+pub fn player_stop() -> PlayerStateDto {
+    player().stop();
+    state_dto()
+}
+
+pub fn player_seek(position_ms: u64) -> PlayerStateDto {
+    player().seek(position_ms);
+    state_dto()
+}
+
+pub fn player_set_volume(volume: f32) -> PlayerStateDto {
+    player().set_volume(volume);
+    state_dto()
 }

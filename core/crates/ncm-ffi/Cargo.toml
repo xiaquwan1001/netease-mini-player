@@ -12,4 +12,5 @@ flutter_rust_bridge = "=2.13.0"
 ncm-domain.workspace = true
 ncm-provider.workspace = true
 ncm-service.workspace = true
+ncm-playback.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }

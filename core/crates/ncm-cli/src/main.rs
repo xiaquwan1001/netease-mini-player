@@ -162,6 +162,43 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+
+        "play" => {
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm play <id> [--level exhigh] [--seconds 8]")?
+                .parse()?;
+            let level = args
+                .value("--level")
+                .as_deref()
+                .and_then(AudioLevel::parse)
+                .unwrap_or_default();
+            let seconds: u64 = args.value("--seconds").as_deref().unwrap_or("8").parse()?;
+            let p = provider(&core, Capability::SongUrl)?;
+            announce(&core);
+            let stream = p
+                .song_url(&SongUrlRequest { track: TrackId::new(id), level })
+                .await?;
+            let url = stream.url.ok_or("no url (VIP 曲目需要登录 cookie)")?;
+            let cache = ncm_service::cache::AudioCache::open(&data_dir().join("audio"))?;
+            let path = cache.fetch(id, &url).await?;
+            eprintln!("cached -> {}", path.display());
+            let player = ncm_playback::Player::new();
+            player.play_file(id, path.to_string_lossy().to_string());
+            std::thread::sleep(std::time::Duration::from_millis(600));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+            while std::time::Instant::now() < deadline {
+                let s = player.state();
+                println!(
+                    "playing={} pos={}ms dur={}ms volume={}",
+                    s.playing, s.position_ms, s.duration_ms, s.volume
+                );
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+            player.stop();
+            Ok(())
+        }
         "lyric" => {
             let id: u64 = args
                 .positional

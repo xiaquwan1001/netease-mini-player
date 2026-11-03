@@ -5,6 +5,19 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · M2(Linux 播放)进度(2026-11-03)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 音频缓存(直链时效内落盘) | ✅ | `ncm play` 缓存到 `<data>/audio/<id>.mp3` |
+| Linux 播放(rodio 0.23 + CPAL/ALSA) | ✅ | 真实曲目 pos 0→5.3s 前进, dur 148.8s |
+| 播放控制(play/pause/resume/stop/seek/volume/state) | ✅ | FFI 暴露, Dart 端 500ms 轮询 |
+| 桥接端到端音频测试 | ✅ | `flutter test --dart-define=NCM_AUDIO_TEST=true` 6 用例全绿 |
+| Android Media3 后端 | ⏳ | 需要 `platform/android` Kotlin 层(下一步) |
+| 队列/上下曲/循环 | ⏳ | 目前单曲播放 |
+
+系统依赖: Linux 需要 `libasound2-dev`(编译期, 已装; 运行期只需 libasound2 本身)。
+
 ## v2 重启(2026-11-03): M0 完成情况
 
 | 步 | 内容 | 状态 | 证据 |

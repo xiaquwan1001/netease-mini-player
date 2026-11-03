@@ -4,6 +4,7 @@
 //! 1. 身份持久化(device_id 首启生成后永久复用, 设备 cookie 落盘)
 //! 2. 把 vendor 的 ncm-api-rs 包成我们的 Provider
 
+pub mod cache;
 pub mod identity;
 pub mod netease;
 
