@@ -67,3 +67,22 @@ API/protocol details and anti-bot technique live in the
   Android 16 promoted notification 在 vivo SystemUI 未实现（SystemUIPlugin 0 处 promoted 引用）。
 - 结论：只能等 vivo 白名单/厂商合作，或在已 root/LSPosed 设备上装系统级模块；应用侧无解。
 <!-- created=2026-11-02, last=2026-11-02 -->
+
+## v2 架构落地(2026-11-03)
+- 形态: `core/` Rust workspace + `ui/` Flutter(android+linux) + `platform/`(待建)。
+  协议/加密全部来自 `core/vendor/ncm-api`(api-enhanced 的 Rust 移植, 382 模块, rustls),
+  锁定 commit 见 `core/vendor/UPSTREAM.txt`;我们只做身份注入 + DTO 化。
+- 身份: device_id 首启生成 52 hex 落盘复用; `_ntes_nuid/_ntes_nnid/NMTID/WNMCID/deviceId`
+  也必须持久化(库默认每进程随机, 等于每次换设备)。见 `ncm-service/src/identity.rs`。
+- 通道: `interface`(App 形态)与 `interface3`(网页 UA)都通, 默认用前者; 见 `docs/api-channel.md`。
+- 播放: Linux = rodio 0.23(`DeviceSinkBuilder::open_default_sink` + `Player::connect_new`),
+  换曲用 `clear()` 而不是 `stop()`(stop 后不可复用); Android 计划 Media3。
+  编译期需要 `libasound2-dev`(系统包, 已装)。
+- 构建坑:
+  - cargokit 用 **Rust package 名**当产物名: crate 名带 `-` 时生成 `libncm_ffi.so` 但找 `libncm-ffi.so` → 链接失败。**package 名必须用下划线**。
+  - Gradle wrapper 从 services.gradle.org 拉 9.3.1-all 会卡死在 KB/s → 换腾讯镜像 `-bin.zip` 并预置到 `~/.gradle/wrapper/dists`。
+  - cargokit 自动 `rustup target add` 不走代理/镜像 → `tools/env.sh` 里导出 `RUSTUP_DIST_SERVER`(USTC)。
+  - FRB: Rust `u64` 在 Dart 是 `BigInt`。
+  - Flutter 3.47.9 默认 NDK = 28.2.13676358,需预装(否则 gradle 静默去下载)。
+- 实测数字: release arm64 APK 21.1MB; Linux debug bundle 可跑; rodio 真实播放 pos 前进。
+<!-- created=2026-11-03, last=2026-11-03 -->
