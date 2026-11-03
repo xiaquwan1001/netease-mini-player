@@ -86,3 +86,16 @@ API/protocol details and anti-bot technique live in the
   - Flutter 3.47.9 默认 NDK = 28.2.13676358,需预装(否则 gradle 静默去下载)。
 - 实测数字: release arm64 APK 21.1MB; Linux debug bundle 可跑; rodio 真实播放 pos 前进。
 <!-- created=2026-11-03, last=2026-11-03 -->
+
+## Android 真机(vivo X200 Ultra, 2026-11-03)
+- 安装: `adb install` 会 `INSTALL_FAILED_ABORTED: User rejected permissions`;改用
+  `adb push /data/local/tmp/x.apk` + `pm install -r -t`。**手机必须亮屏解锁**,否则 pm install 同样被拒。
+- Media3 1.9.4: `MediaSessionService` + ExoPlayer + MediaController(MethodChannel 桥)可正常初始化;
+  通知/锁屏走 Media3 默认通道。
+- 网易云直链是 plain-http 的 *.music.126.net:manifest 要 `usesCleartextTraffic="true"`,
+  ExoPlayer 要显式设 UA(官方桌面端)与 Referer(`https://music.163.com/`)。
+- Kotlin 块注释可嵌套:注释里出现 `/*`(例如写 URL `http://*`)会导致 Unclosed comment。
+- 未解:设备上 reqwest/rustls 请求 `https://interface.music.163.com` 报 "error sending request";
+  Linux 同样代码正常。排查顺序:打印完整错误链 → native-roots/native-tls → DNS/IPv6 → adb shell curl 对照。
+- 电脑插多台设备后所有 adb 命令都要 `-s <serial>`(脚本用 `ANDROID_SERIAL`)。
+<!-- created=2026-11-03, last=2026-11-03 -->

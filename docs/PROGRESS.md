@@ -5,6 +5,36 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · M2(Android)状态(2026-11-03, vivo X200 Ultra)
+
+| 项 | 状态 | 证据/备注 |
+|---|---|---|
+| release APK 构建 | ✅ | 22.0MB(arm64,Media3 1.9.4 + Rust core) |
+| 安装(绕过 vivo 二次确认) | ✅ | `adb push` + `pm install -r -t`;**手机必须亮屏解锁**,否则报 "User rejected permissions" |
+| 启动 | ✅ | ExoPlayerImpl / MediaSessionImpl 初始化成功,Impeller(Vulkan) 正常 |
+| Rust core 在设备上运行 | ✅ | UI 显示 device_id、搜索按钮可点 |
+| 搜索(设备 5G) | ❌ | `[network] error sending request for url (https://interface.music.163.com/eapi/cloudsearch/pc)` |
+| Media3 播放 | ⏳ 待搜索修好后再验 | 首次试播报 `PlaybackState ERROR(Source error)`,已补 cleartext + UA/Referer(未复测) |
+
+### 已知问题(下次接手第一件事)
+
+1. **设备端 https 请求失败**: Linux 同一二进制没问题,Android 上 rustls/reqwest 发不出请求。
+   当前错误只打印了最外层 Display,信息不足。下一步:
+   - 打完整错误链(`e.source()` 逐层),区分 DNS / TCP / TLS / 代理;
+   - 试 `reqwest` 的 `rustls-tls-native-roots`(用系统 CA)与 `native-tls`;
+   - 确认 Android 上 DNS(私有 DNS/运营商)与 IPv6 回退,必要时关 IPv6 happy-eyeballs;
+   - 对照:同一 URL 用 `adb shell curl` / WebView 是否可达。
+2. **播放链未在真机验证**:cleartext + UA/Referer 已加(`PlaybackService.kt`),等搜索通了再点歌验证;
+   同时看通知栏媒体卡片与锁屏控制。
+3. **vivo 安装体验**:每次覆盖安装都要亮屏;脚本已加提示。
+
+### 本轮 Android 侧踩坑
+
+- Kotlin **块注释可嵌套**:文档注释里写 `http://*` 会引入 `/*`,导致 "Unclosed comment" 编译失败。
+- ExoPlayer 默认 UA 是 ExoPlayerLib,网易 CDN 会拒;必须显式设置 UA/Referer。
+- 直链是 plain-http,`AndroidManifest` 必须 `usesCleartextTraffic="true"`(或 networkSecurityConfig 白名单)。
+- 电脑同时插多台设备时,所有 adb 命令都要 `-s <serial>`;脚本已支持 `ANDROID_SERIAL`。
+
 ## v2 · M2(Linux 播放)进度(2026-11-03)
 
 | 能力 | 状态 | 证据 |
