@@ -88,8 +88,8 @@ API/protocol details and anti-bot technique live in the
 <!-- created=2026-11-03, last=2026-11-03 -->
 
 ## Android 真机(vivo X200 Ultra, 2026-11-03)
-- 安装: `adb install` 会 `INSTALL_FAILED_ABORTED: User rejected permissions`;改用
-  `adb push /data/local/tmp/x.apk` + `pm install -r -t`。**手机必须亮屏解锁**,否则 pm install 同样被拒。
+- 安装: vivo 的安装二次确认**无法绕过**,每次都要用户手上点「安装/继续安装」;`pm install` 会阻塞等待,
+  不点/锁屏即返回 `INSTALL_FAILED_ABORTED: User rejected permissions`。`push + pm install` 只减少弹窗层级。
 - Media3 1.9.4: `MediaSessionService` + ExoPlayer + MediaController(MethodChannel 桥)可正常初始化;
   通知/锁屏走 Media3 默认通道。
 - 网易云直链是 plain-http 的 *.music.126.net:manifest 要 `usesCleartextTraffic="true"`,

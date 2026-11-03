@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 装到真机并抓首屏日志.
-# vivo 的 adb install 常被系统拒(INSTALL_FAILED_ABORTED), 改走 push + pm install;
-# 手机必须亮屏解锁, 否则 pm install 也会被"用户拒绝".
+# vivo 的安装确认无法绕过: 每次都要在手机上点「安装/继续安装」, 脚本会阻塞等待.
+# 未点确认(或屏幕锁着)时报 INSTALL_FAILED_ABORTED: User rejected permissions, 不是脚本问题.
+# 走 push + pm install 只是避开 streamed install 的额外弹窗, 二次确认仍然存在.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source tools/env.sh
@@ -18,6 +19,7 @@ if [ -z "$SERIAL" ]; then
 fi
 
 echo "device: $SERIAL"
+echo "==> 马上会在手机上弹出安装确认, 请点「安装/继续安装」(脚本会一直等)"
 adb -s "$SERIAL" push "$APK" /data/local/tmp/minincm.apk
 adb -s "$SERIAL" shell pm install -r -t /data/local/tmp/minincm.apk
 adb -s "$SERIAL" shell am force-stop com.minincm.minincm

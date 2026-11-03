@@ -10,7 +10,7 @@
 | 项 | 状态 | 证据/备注 |
 |---|---|---|
 | release APK 构建 | ✅ | 22.0MB(arm64,Media3 1.9.4 + Rust core) |
-| 安装(绕过 vivo 二次确认) | ✅ | `adb push` + `pm install -r -t`;**手机必须亮屏解锁**,否则报 "User rejected permissions" |
+| 安装 | ✅ | vivo **安装二次确认无法绕过**:每次都要用户在手机上点「安装/继续安装」;`push + pm install` 只是减少弹窗层级 |
 | 启动 | ✅ | ExoPlayerImpl / MediaSessionImpl 初始化成功,Impeller(Vulkan) 正常 |
 | Rust core 在设备上运行 | ✅ | UI 显示 device_id、搜索按钮可点 |
 | 搜索(设备 5G) | ❌ | `[network] error sending request for url (https://interface.music.163.com/eapi/cloudsearch/pc)` |
@@ -26,7 +26,8 @@
    - 对照:同一 URL 用 `adb shell curl` / WebView 是否可达。
 2. **播放链未在真机验证**:cleartext + UA/Referer 已加(`PlaybackService.kt`),等搜索通了再点歌验证;
    同时看通知栏媒体卡片与锁屏控制。
-3. **vivo 安装体验**:每次覆盖安装都要亮屏;脚本已加提示。
+3. **vivo 安装确认不可绕过**:每次覆盖安装都由用户在设备上点确认;脚本会阻塞等待并提示,
+   不点/锁屏会报 `INSTALL_FAILED_ABORTED: User rejected permissions`(不要误判为脚本或包问题)。
 
 ### 本轮 Android 侧踩坑
 
