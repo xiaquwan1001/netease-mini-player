@@ -206,3 +206,71 @@ v1 的 `LoginActivity` 思路(移动 UA + `/login` + 抓 `MUSIC_U`)。
 4. **Rust core 还是全 Dart?** 愿意承担 NDK + 交叉编译的一次性成本 → A;想最快出双端 → E。
 
 拍板后出 M0 落地清单(具体 crate 划分、CI 配置、Flutter 版本锁定、Android 签名与 SDK 目标)。
+
+## 11. 决策记录(2026-11-03)
+
+| # | 决策 | 结论 |
+|---|---|---|
+| D1 | 内存要求 | **中等偏小即可**,不追求极致 → 采用方案 A(Flutter UI + Rust core) |
+| D2 | 音源脚本插件 | **首版不做**,只留扩展缝(seam);音源走编译期 provider |
+| D3 | Linux 登录 | **预留多入口,从最简单的开始**:cookie 导入 → 局域网配对导入 → 内嵌 WebKitGTK |
+| D4 | 语言选型 | **Rust core + Dart UI + Kotlin(Android 平台层)+ Rust/GTK(Linux 平台层)**,按活选语言 |
+| D5 | 风控/加解密 | **不自己写**:采用社区现成 API 库 `ncm-api-rs`(api-enhanced 的 Rust 移植),我们只做包装与身份持久化 |
+
+### 11.1 预算随之放宽(避免过度优化)
+
+| 指标 | 原目标 | 调整后 | 触发动作 |
+|---|---|---|---|
+| Android 空闲 PSS | ≤110MB | **≤130MB** | >140MB 才做专项优化 |
+| Android 冷启动 | ≤500ms | ≤600ms | >1s 才查 |
+| APK | ≤25MB | ≤30MB(universal) | >40MB 查依赖/符号 |
+| Linux 空闲 RSS | ≤180MB | ≤200MB | >250MB 查 mpv/缓存 |
+| 开发节奏 | — | 先能听歌,再谈瘦身 | 每阶段出一次实测数字 |
+
+### 11.2 D2 的具体含义:留缝但不实现
+
+首版**不引入 QuickJS**,也不做插件市场。但以下三点从第一天就按"将来能插"来写,成本几乎为零:
+
+1. `Provider` trait + `ProviderRegistry`(能力声明 + id/name/priority),内置 provider 只是注册表里的一个实现;
+2. 所有 provider 出入参用**可序列化 DTO**(serde struct),不传 `&dyn Any`、不传数据库句柄;
+3. `Provider` 的错误类型统一 `ProviderError { kind, retryable, detail }`,UI 只按 `kind` 展示。
+
+将来加脚本宿主 = 新增 `ScriptProvider` 实现 `Provider` + 一个 `rquickjs` crate,**不动 UI/domain**。
+
+### 11.3 D3 的登录入口阶梯(从小到大)
+
+统一出口:任何方式最终都产出 `Session { cookie, device_id, profile }` 落库,UI 不关心来源。
+
+| 优先级 | 入口 | 平台 | 成本 | 说明 |
+|---|---|---|---|---|
+| P0 | 粘贴 cookie 导入(文本框 + 校验账号接口) | 双端 | ~半天 | Linux 首版必须有,也当调试入口 |
+| P1 | 内嵌 WebView 网页登录(抓 `MUSIC_U`) | Android | 已有 v1 经验 | 移动 UA + `https://music.163.com/login` |
+| P1 | 局域网配对:手机端出示一次性码/二维码,Linux 拉取会话 | Linux | ~1 天 | 体验最好且零 WebView;同 Wi-Fi,一次性 token,5 分钟过期 |
+| P2 | 内嵌 WebKitGTK 登录窗口 | Linux | 40~80 行 + 依赖 | 需 webkit2gtk 运行时,作为可选 feature |
+| 不做 | 原生扫码(eapi/weapi) | — | — | 8821 风控,已两次独立验证 |
+
+### 11.4 D5 的落地:为什么是 `ncm-api-rs`
+
+候选(2026-11 实抓 crates.io / GitHub):
+
+| 库 | 形态 | 覆盖 | 加密 | TLS | 许可 | 维护 | 结论 |
+|---|---|---|---|---|---|---|---|
+| **SPlayer-Dev/ncm-api-rs** | Rust 库 + 可选 axum 服务 | **382 个 api 模块** | weapi/eapi/linuxapi | **rustls**(Android 友好) | WTFPL | 2026-03 起,64★,SPlayer 作者维护 | **采用** |
+| two-mountains/ncmapi | Rust 库(强类型) | 搜索/曲库/账号/stream | eapi 等 | reqwest 默认 | MIT | 1.0 于 2026-08,17★ | 备选/类型设计参考 |
+| api-enhanced(Node) | 服务端 | 456 | 全套(含 xeapi) | Node | MIT | 活跃 | **只做本地对照 oracle,不进产物** |
+| SPlayer 本体 | Tauri 客户端 | — | — | — | — | 活跃 | 交互/功能参考 |
+
+选用理由:
+- 是 **api-enhanced 的 1:1 Rust 移植**(我们 `references/api-enhanced` 已熟),函数名/URI/参数一致,踩坑能对上;
+- `song_url_v1` 里**已写死 `encodeType: "flac"`**,`request.rs` 会按 cookie 里的 `os` 注入 `os/appver/osver` —— 正是我们自己试出来的两条硬结论;
+- rustls 无 OpenSSL 依赖,`cargo-ndk` 交叉编译到 `aarch64-linux-android` 无系统库坑;
+- `#![deny(unsafe_code)]`,协议代码可审计。
+
+必须由我们补的四件事(库不管):
+1. **device_id 持久化**: 库默认进程级随机(`LazyLock<String>`),必须首启生成后落库,通过 `set_device_id()` 注入(cookie 里已有则不动);
+2. **通道/域名选择**: 库默认 `interface.music.163.com`(App 形态)。若风控,切 `interface3` + 网页 UA(M1 spike 决定,`RequestOption.domain/ua` 可覆盖);
+3. **DTO 化**: 库返回 `serde_json::Value`,我们转成带类型的领域模型 + 单测,UI 永不直接吃 Value;
+4. **vendor + pin**: 复制进 `core/vendor/ncm-api`(WTFPL 允许),锁 commit、记录 patch;不跟上游大重构。
+
+已知风险: 0.1.0 / 单人维护 / 无 xeapi(只声明 weapi·eapi·linuxapi)。缓解: 协议是纯函数,必要时自己修;
+xeapi 需求出现时 `references/api-enhanced/util/crypto.js` 是现成蓝本。
