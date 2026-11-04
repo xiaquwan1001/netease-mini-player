@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'src/auth.dart';
 import 'src/lyric.dart';
 import 'src/playback.dart';
 import 'src/queue.dart';
@@ -55,6 +56,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _controller = TextEditingController(text: '晴天');
   final _playback = Playback();
+  final _auth = Auth();
   final _queue = PlayQueue<rust.SongDto>();
   final _lyricScroll = ScrollController();
   rust.InitInfo? _info;
@@ -274,6 +276,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // ---------------- 登录 ----------------
+
+  Future<void> _login() async {
+    try {
+      final cookie = await _auth.loginWeb();
+      if (cookie == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未获取到登录态')));
+        return;
+      }
+      final ok = await _auth.commitCookie(cookie);
+      final dir = await _playback.dataDir();
+      final info = await rust.init(dataDir: dir);
+      if (!mounted) return;
+      setState(() => _info = info);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '登录成功, 音质已解锁' : 'cookie 里没有 MUSIC_U, 登录未生效')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   // ---------------- 播放控制 ----------------
 
   Future<void> _toggle() async {
@@ -352,6 +378,14 @@ class _HomePageState extends State<HomePage> {
                 onPressed: _toggleLyrics,
               )
             : null,
+        actions: [
+          if (_auth.isAndroid)
+            TextButton.icon(
+              onPressed: _login,
+              icon: Icon(_info?.loggedIn == true ? Icons.person : Icons.login, size: 18),
+              label: Text(_info?.loggedIn == true ? '已登录' : '登录'),
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -375,7 +409,10 @@ class _HomePageState extends State<HomePage> {
           Expanded(child: _showLyrics ? _buildLyrics() : _buildList()),
         ],
       ),
-      bottomNavigationBar: player == null ? null : _buildPlayerBar(context, player, current),
+      // 没有曲目时不占位置(Media3 连接后拿到的是一份空状态)
+      bottomNavigationBar: (player == null || (player.trackId == null && current == null))
+          ? null
+          : _buildPlayerBar(context, player, current),
     );
   }
 

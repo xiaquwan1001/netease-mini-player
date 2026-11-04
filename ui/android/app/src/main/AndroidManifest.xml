@@ -29,6 +29,12 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false"
+            android:label="登录网易云"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
         <service
             android:name=".PlaybackService"
             android:exported="true"

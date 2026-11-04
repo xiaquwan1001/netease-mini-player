@@ -2,6 +2,7 @@ package com.minincm.minincm
 
 import android.Manifest
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.ActivityCompat
@@ -21,6 +22,9 @@ class MainActivity : FlutterActivity() {
     private var controller: MediaController? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
+    /** 官方网页登录: 页面结束后把 cookie 交回 Dart */
+    private var pendingLogin: MethodChannel.Result? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -30,6 +34,25 @@ class MainActivity : FlutterActivity() {
                 handle(call.method, call.arguments as? Map<*, *>, result)
             } catch (e: Exception) {
                 result.error("player_error", e.message, null)
+            }
+        }
+
+        // 登录通道: WebView 里完成官方授权页登录, 只回传 cookie, 不碰账号密码
+        val auth = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/auth")
+        auth.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "loginWeb" -> {
+                    if (pendingLogin != null) {
+                        result.error("login_busy", "登录页已经打开了", null)
+                    } else {
+                        pendingLogin = result
+                        startActivityForResult(
+                            Intent(this, LoginActivity::class.java),
+                            LoginActivity.REQUEST_CODE,
+                        )
+                    }
+                }
+                else -> result.notImplemented()
             }
         }
 
@@ -119,6 +142,16 @@ class MainActivity : FlutterActivity() {
                 )
             }
         }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == LoginActivity.REQUEST_CODE) {
+            val cookie = data?.getStringExtra(LoginActivity.EXTRA_COOKIE)
+            pendingLogin?.success(if (cookie.isNullOrBlank()) null else cookie)
+            pendingLogin = null
+            return
+        }
+        super.onActivityResult(requestCode, resultCode, data)
     }
 
     override fun onDestroy() {

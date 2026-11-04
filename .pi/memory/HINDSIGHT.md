@@ -151,3 +151,19 @@ API/protocol details and anti-bot technique live in the
 - codegen 需要 rustfmt(`rustup component add rustfmt`),否则生成文件不格式化但仍可用。
 - 网易云 VIP 歌匿名只给 **30~45s 试听片段**(搜索结果的 duration 是完整时长),测试写断言别拿列表 duration。
 <!-- created=2026-11-03, last=2026-11-03 -->
+
+## 官方网页登录落地(2026-11-04)
+- 形态: 原生 `LoginActivity` + `android.webkit.WebView`(零第三方依赖), 设备默认移动 UA,
+  URL = `https://music.163.com/login`(302 到 `y.music.163.com/m/login` 官方授权页)。
+  成功判据只有 **`MUSIC_U` cookie 出现**(页面文案/跳转都不可靠) → 每 1.5s 轮询
+  `music.163.com` 与 `163.com` 两个域的 cookie, 取到就回传。返回键也要回传(可能已登录未跳转)。
+- Dart `Auth.loginWeb()` → Kotlin Activity(for result) → `loginWithCookie` → Rust 与设备指纹合并落盘。
+  CLI 可离线验证整条合并链: `NCM_DATA_DIR=/tmp/x ncm login-cookie "MUSIC_U=dummy"` + `ncm whoami`。
+- **Kotlin 命名坑**: 在 `WebView(this).apply { ... }` 里写 `progress.visibility = ...` 会解析到
+  `WebView.getProgress()`(Int) → "Unresolved reference 'visibility'"。字段改名 `loadingBar` 即好。
+- **非导出 Activity 不能用 `adb shell am start` 直启**(Permission Denial, 且 `>/dev/null` 会让你误判
+  "没起来")。要调试就留一个 in-app 入口(如 LoginActivity 支持 `--es url` 由 MainActivity 转发)。
+- 模拟器出网差异(2026-11-04 早): 同一 guest 里 **rustls/reqwest 正常, chromium/WebView 的 TLS 握手被重置**
+  (`ssl_client_socket_impl.cc handshake failed, net_error -100`),系统 Chrome 同样打不开网抑云页面
+  ⇒ 是宿主 NAT/中间设备的 SNI 级拦截, 不是我们的 WebView 代码。判定不要只看一个栈。
+<!-- created=2026-11-04, last=2026-11-04 -->

@@ -20,6 +20,7 @@
 | 播放模式 | ✅ | 列表循环 → 单曲循环 → 顺序播放 三档轮转(snackbar + 图标) |
 | 进度条 seek | ✅ | 滑杆拖动到底部方式实测,拖动中冻结量程 |
 | 自动续播 | ✅ | seek 到 90% 播完后自动切下一首(轮询 500ms + 临界区保护) |
+| 登录(官方网页) | 🟡 代码就绪, 待真实登录 | LoginActivity(WebView) + MUSIC_U 轮询 + `ncm/auth` 通道 + Rust 合并落盘;`ncm login-cookie` 端到端验证过(设备指纹保留);当前模拟器内 **chromium/WebView 的 TLS 被中间设备重置**,同一 guest 里 rustls 正常 → 属宿主网络问题(另一路在修),真实登录需用户扫码 |
 | 歌词 | ✅ | `ncm-domain::lrc` 解析([mm:ss.xx]/多标签/offset/翻译对齐, 12 单测) + 播放页歌词自动滚动高亮;英文歌显示中文翻译;换曲自动重新拉词 |
 | Linux 回归 | ✅ | `flutter test` 18 通过(含 `NCM_AUDIO_TEST` 真实播放);`flutter analyze` 0 issue |
 
@@ -46,6 +47,19 @@ adb -s emulator-5554 shell dumpsys media_session | grep metadata  # 校验播放
 ```
 
 注意:手势导航条会吞掉屏幕最底部约 20dp 的点击(坐标别贴底,UI 已加 8dp 边距)。
+
+### 登录链(2026-11-04)
+
+`LoginActivity`(纯 `android.webkit.WebView`, 零第三方依赖)负责官方移动端授权页:
+设备默认移动 UA + `https://music.163.com/login`(302 到 `y.music.163.com/m/login`),
+每 1.5s 轮询 `music.163.com`/`163.com` 两个域的 cookie,出现 `MUSIC_U` 即回传并结束。
+Dart 侧 `src/auth.dart` 拿到 cookie 后调 `login_with_cookie`,Rust 与设备指纹合并写
+`identity.json`(0600);UI 刷新 `init()` 显示"已登录"。
+
+- 取消/未登录路径已验证:返回键 → `未获取到登录态` 提示,无崩溃。
+- 端到端(不含网络)用 CLI 验证:`NCM_DATA_DIR=/tmp/x ncm login-cookie "MUSIC_U=dummy"`
+  → `whoami` 显示 `logged_in = true` 且 `_ntes_nuid/deviceId` 保持原值。
+- **待办**:宿主网络恢复后重新打开授权页,由用户完成登录(扫码/手机号),再验 VIP 音质解锁。
 
 ### 改 Rust API 后的固定三步(踩过)
 
