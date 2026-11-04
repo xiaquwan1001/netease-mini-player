@@ -185,15 +185,20 @@ API/protocol details and anti-bot technique live in the
 ## 客户端形态必须成套(2026-11-04, 用户提醒后修正)
 - 规则: **安卓端一切按安卓形态, 桌面端一切按桌面形态** —— API 的
   `os/appver/osver/channel` + UA + 网页入口版式必须成套; 混着用最坏是**假通过**
-  (静默降权、取链只给试听), 比报错更难查。
-- 曾经的坑: cookie 写死 `os=pc` + Win10 指纹, 而 vendor 库对 `eapi` 的**默认 UA 是 iPhone**
-  (`NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2)`) —— "身份说 PC、UA 说 iPhone"。必须显式传 UA。
-- 现取值(对齐 vendor `util::config` 的 OS_ANDROID / OS_PC 与 `choose_user_agent`, 不自己编版本):
-  - Android: `os=android / 8.20.20.231215173437 / 14 / xiaomi` + `NeteaseMusic/9.1.65...(9001065);Dalvik/2.1.0 (Linux; U; Android 14; ...)`
-  - Linux/PC: `os=pc / 3.1.17.204416 / Microsoft-Windows-10-...-64bit / netease` + `... NeteaseMusicDesktop/3.0.18.203152`
-- 迁移策略: 形态四键**覆盖式**写入 identity.json(老 `os=pc` 的设备会被就地纠正),
-  但 deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID/MUSIC_U 一律保留 —— 换指纹=换设备, 不能动。
-- 网页入口同样是形态: 安卓 WebView 用设备默认移动 UA + `music.163.com/login`(302 → m/login 移动版);
-  PC 上的网页入口才用桌面 UA + 桌面站。**不要伪造桌面 UA 去开安卓端的登录页**。
-- CDN 也一样: 安卓播放器的 UA 换成官方安卓客户端 UA(与 API 同一串), 实测直链照常 200/audio-mpeg。
+  (静默降权
+
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/dd/ddb78a663ac4f60b568c100cc5f7852e4ca9e13460304f3e7739643a308ade2e.txt; sha256=ddb78a663ac4f60b568c100cc5f7852e4ca9e13460304f3e7739643a308ade2e; bytes=17642]
+## 账号登录/切换落地(2026-11-04)
+- 登录成功实测: 官方移动端授权页 → 轮询拿到 `MUSIC_U` → App 顶栏变"已登录", `logged_in=true`;
+  cookie 里同时带回 `JSESSIONID-WYYY/__csrf/_iuqxldmzr_` 等 web 侧键。
+- **退出登录只清凭据, 不换设备指纹**: `identity::clear_login_cookie` 去掉
+  `MUSIC_U/MUSIC_A/__csrf/JSESSIONID-WYYY/_iuqxldmzr_/__remember_me`, 保留
+  `deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID/os/appver/osver/channel`(有单测)。
+- **必须同时清 WebView 的 cookie**(Kotlin `CookieManager.removeAllCookies`), 否则"切换账号"
+  再开登录页会以旧账号自动登录 —— 只看 Rust 侧 cookie 会漏掉这个坑。
+- 模拟器窗口里键盘输入需要 AVD `hw.keyboard = yes`(默认 no = 宿主键盘不转发)。改成 yes 后
+  宿主键盘可用;但 `adb shell input text` 会因该项变化报 `NullPointerException ... length of null array`,
+  此时用 `input keyevent <码>` 逐字符敲(例: jay = 38 29 53)。
+- 驱动 UI 时坐标算错会误判"功能坏了": AppBar 里的 `PopupMenuButton` 用自定义 child 时点击区
+  不好估, 换成"账号图标 + `showModalBottomSheet`"后一次就命中, 移动端也更顺手。
 <!-- created=2026-11-04, last=2026-11-04 -->

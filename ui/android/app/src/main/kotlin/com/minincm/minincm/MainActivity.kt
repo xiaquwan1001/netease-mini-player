@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.webkit.CookieManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
@@ -50,6 +51,13 @@ class MainActivity : FlutterActivity() {
                             Intent(this, LoginActivity::class.java),
                             LoginActivity.REQUEST_CODE,
                         )
+                    }
+                }
+                // 退出/切换账号时必须清掉 WebView 的 cookie, 否则再开登录页会以旧账号自动登录
+                "clearCookies" -> {
+                    CookieManager.getInstance().removeAllCookies { removed ->
+                        CookieManager.getInstance().flush()
+                        result.success(removed)
                     }
                 }
                 else -> result.notImplemented()

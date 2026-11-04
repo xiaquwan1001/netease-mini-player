@@ -148,6 +148,17 @@ pub async fn lyric(track_id: u64) -> Result<String, String> {
     Ok(lyric.lrc.unwrap_or_default())
 }
 
+/// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留.
+/// 返回 true 表示现在已经不是登录态.
+pub fn logout() -> Result<bool, String> {
+    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    let mut next = guard.session.clone();
+    next.cookie = ncm_service::identity::clear_login_cookie(&next.cookie);
+    next.profile = None;
+    guard.apply_session(next).map_err(|e| e.to_string())?;
+    Ok(!guard.session.is_logged_in())
+}
+
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)
 pub struct LyricLineDto {
     pub time_ms: u64,

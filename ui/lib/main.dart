@@ -300,6 +300,61 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 账号面板: 已登录时提供"切换账号 / 退出登录"(弹出式菜单在 AppBar 里不好点, 用底部面板)
+  void _showAccountSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              dense: true,
+              title: Text('已登录'),
+              subtitle: Text('退出只清登录凭据, 设备指纹(deviceId 等)保持不变'),
+            ),
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz),
+              title: const Text('切换账号'),
+              subtitle: const Text('退出后立刻打开登录页'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _logout(thenLogin: true);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('退出登录'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _logout();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 退出登录; thenLogin=true 表示切换账号(退出后立刻再开授权页)
+  Future<void> _logout({bool thenLogin = false}) async {
+    try {
+      await _auth.logout();
+      final dir = await _playback.dataDir();
+      final info = await rust.init(dataDir: dir);
+      if (!mounted) return;
+      setState(() => _info = info);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(thenLogin ? '已退出, 请登录另一个账号' : '已退出登录')),
+      );
+      if (thenLogin) await _login();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   // ---------------- 播放控制 ----------------
 
   Future<void> _toggle() async {
@@ -380,11 +435,18 @@ class _HomePageState extends State<HomePage> {
             : null,
         actions: [
           if (_auth.isAndroid)
-            TextButton.icon(
-              onPressed: _login,
-              icon: Icon(_info?.loggedIn == true ? Icons.person : Icons.login, size: 18),
-              label: Text(_info?.loggedIn == true ? '已登录' : '登录'),
-            ),
+            if (_info?.loggedIn == true)
+              IconButton(
+                tooltip: '账号: 切换/退出',
+                icon: const Icon(Icons.account_circle),
+                onPressed: _showAccountSheet,
+              )
+            else
+              TextButton.icon(
+                onPressed: _login,
+                icon: const Icon(Icons.login, size: 18),
+                label: const Text('登录'),
+              ),
         ],
       ),
       body: Column(

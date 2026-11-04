@@ -130,6 +130,31 @@ impl IdentityStore {
     }
 }
 
+/// 登录凭据键: 退出登录只清这些, 设备指纹(deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID)
+/// 一律保留 —— **换账号不等于换设备**, 随机换指纹反而是风控特征。
+const LOGIN_KEYS: &[&str] = &[
+    "MUSIC_U",
+    "MUSIC_A",
+    "__csrf",
+    "JSESSIONID-WYYY",
+    "_iuqxldmzr_",
+    "__remember_me",
+];
+
+/// 去掉登录态, 返回仍然可用的 cookie(纯函数)
+pub fn clear_login_cookie(cookie: &str) -> String {
+    cookie
+        .split(';')
+        .map(str::trim)
+        .filter(|pair| !pair.is_empty())
+        .filter(|pair| {
+            let key = pair.split('=').next().unwrap_or("").trim();
+            !LOGIN_KEYS.contains(&key)
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
 /// 合并 cookie: incoming 里的登录凭据优先, 设备指纹键保持既有值, 缺失则补默认值.
 ///
 /// 为什么必须持久化这些键: 库在缺失时会**每进程随机**生成
@@ -287,6 +312,23 @@ mod tests {
         let logged = merge_device_cookie(&merged, "MUSIC_U=x; os=pc", "ABC");
         assert!(logged.contains("MUSIC_U=x"));
         assert!(logged.contains("_ntes_nuid="));
+    }
+
+    #[test]
+    fn logout_clears_credentials_but_keeps_fingerprint() {
+        let cookie = "MUSIC_U=secret; __csrf=abc; JSESSIONID-WYYY=x; deviceId=DEV;                       _ntes_nuid=aa; _ntes_nnid=aa,1; WNMCID=w; NMTID=n; os=android";
+        let out = clear_login_cookie(cookie);
+        for gone in ["MUSIC_U", "__csrf", "JSESSIONID-WYYY"] {
+            assert!(!out.contains(gone), "{gone} 还在: {out}");
+        }
+        for kept in ["deviceId=DEV", "_ntes_nuid=aa", "_ntes_nnid=aa,1", "WNMCID=w", "NMTID=n", "os=android"] {
+            assert!(out.contains(kept), "{kept} 丢了: {out}");
+        }
+        // 清完之后再合并一次(等价于 App 重启加载), 指纹不能变
+        let reloaded = merge_device_cookie_with(&out, "", "DEV", &ANDROID_PROFILE);
+        assert!(reloaded.contains("deviceId=DEV"));
+        assert!(reloaded.contains("_ntes_nuid=aa"));
+        assert!(!reloaded.contains("MUSIC_U"));
     }
 
     #[test]

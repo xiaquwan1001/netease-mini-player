@@ -24,6 +24,10 @@ Future<StreamDto> songUrl({required BigInt trackId, required String level}) =>
 Future<String> lyric({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyric(trackId: trackId);
 
+/// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留.
+/// 返回 true 表示现在已经不是登录态.
+Future<bool> logout() => RustLib.instance.api.crateApiLogout();
+
 /// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
 Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyricLines(trackId: trackId);

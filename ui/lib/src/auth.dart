@@ -27,4 +27,17 @@ class Auth {
 
   /// 把网页登录拿到的 cookie 与设备指纹合并后落盘(device_id 永久复用)
   Future<bool> commitCookie(String cookie) => rust.loginWithCookie(cookie: cookie);
+
+  /// 退出登录(换账号用): 清 Rust 侧登录凭据 + 清 WebView cookie,
+  /// 但**保留设备指纹**(deviceId/_ntes_nuid/WNMCID/NMTID 不变 = 还是同一台设备)。
+  Future<bool> logout() async {
+    if (isAndroid) {
+      try {
+        await _channel.invokeMethod<bool>('clearCookies');
+      } catch (_) {
+        // 清不干净也不阻塞退出, 下次打开登录页最多是旧账号已登录态
+      }
+    }
+    return rust.logout();
+  }
 }

@@ -21,6 +21,7 @@
 | 进度条 seek | ✅ | 滑杆拖动到底部方式实测,拖动中冻结量程 |
 | 自动续播 | ✅ | seek 到 90% 播完后自动切下一首(轮询 500ms + 临界区保护) |
 | 客户端形态自洽 | ✅ | 安卓 = `os=android/appver=8.20.20/channel=xiaomi` + 安卓 App UA + 移动版网页;桌面 = `os=pc` + 官方 PC UA。设备端 identity.json 已就地迁移(deviceId 不变),搜索/播放正常 |
+| 账号切换/退出 | ✅ | 顶栏账号图标 → 底部面板(切换账号/退出登录);退出清 MUSIC_U/__csrf/JSESSIONID 并清 WebView cookie,**设备指纹不变**(deviceId/\_ntes_*/WNMCID/NMTID 保留),登录页立即重开 |
 | 登录(官方网页) | 🟡 代码就绪, 待真实登录 | LoginActivity(WebView) + MUSIC_U 轮询 + `ncm/auth` 通道 + Rust 合并落盘;`ncm login-cookie` 端到端验证过(设备指纹保留);当前模拟器内 **chromium/WebView 的 TLS 被中间设备重置**,同一 guest 里 rustls 正常 → 属宿主网络问题(另一路在修),真实登录需用户扫码 |
 | 歌词 | ✅ | `ncm-domain::lrc` 解析([mm:ss.xx]/多标签/offset/翻译对齐, 12 单测) + 播放页歌词自动滚动高亮;英文歌显示中文翻译;换曲自动重新拉词 |
 | Linux 回归 | ✅ | `flutter test` 18 通过(含 `NCM_AUDIO_TEST` 真实播放);`flutter analyze` 0 issue |
