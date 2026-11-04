@@ -245,3 +245,16 @@ API/protocol details and anti-bot technique live in the
   `visibleSongs(all, liked)` / `hiddenUnplayableCount(all, liked)`: **无版权且未收藏 → 不显示(禁止交互)**;
   **无版权但已收藏 → 保留+灰显+点击提示**。列表顶部显示"已隐藏 N 首无版权曲目"(实测灌灌灌灌 447 首隐藏 5 首)。
   队列也用过滤后的列表, 自动续播遇到无版权曲目**静默跳过**(只有点列表才弹提示, 否则一路弹窗)。
+
+## Linux 桌面版检验跑道(2026-11-04, 可复用)
+- 本机桌面是 **Wayland**: 直接 `ffmpeg -f x11grab -i :0` 抓到全黑(XWayland root 不合成窗口),
+  且没有 xdotool 可用 X11 注入。**正确做法: 起一个 Xvfb 专用跑道**
+  `Xvfb :99 -screen 0 1600x1000x24 &` → 应用用 `DISPLAY=:99 GDK_BACKEND=x11 ./minincm`,
+  截图 `ffmpeg -f x11grab -video_size 1280x720 -i :99.0 -frames:v 1 out.png`,
+  点击 `DISPLAY=:99 xdotool mousemove X Y click 1`, 滚轮 `xdotool click --repeat N 5`(下)/`4`(上)。
+- 本机 **无免密 sudo**; 装工具走 sudo 插件(fabric_exec 的 `extensions.sudo_exec`), 如 `apt-get install -y xdotool`。
+- 桌面版滚轮速率实测 ≈1 行/格(1488 首的歌单滚 1200 格 ≈ 1320 行), 可用于定位深处的曲目。
+- 桌面版同样要清代理: 从带 `HTTPS_PROXY=127.0.0.1:7890` 的环境启动会直接报网络错误
+  (正好可以验证**重试 + 中文提示 + 重试按钮**)—— 想要正常联网就 `env -u ...` 启动。
+- `pkill -f bundle/minincm` 会**杀掉执行它的 shell**(自匹配), 一律用 `pkill -f '[b]undle/minincm'`。
+<!-- created=2026-11-04, last=2026-11-04 -->
