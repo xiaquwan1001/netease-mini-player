@@ -241,3 +241,7 @@ API/protocol details and anti-bot technique live in the
 - 排障命令: `ncm detail <id[,id]> [--json]`(打印 privileges) 与 `ncm searchraw <kw>`(打印 songs[].privilege/st)。
 - 血泪: 歌单浏览态曾经在"没搜过"时显示"输入关键词后搜索" —— `_buildList` 的 `_result == null` 判断要先放行 `_libraryTitle != null`。
 <!-- created=2026-11-04, last=2026-11-04 -->
+- 可见性策略(2026-11-04 深夜, 用户要求对齐官方): `ui/lib/src/library_view.dart` 纯函数
+  `visibleSongs(all, liked)` / `hiddenUnplayableCount(all, liked)`: **无版权且未收藏 → 不显示(禁止交互)**;
+  **无版权但已收藏 → 保留+灰显+点击提示**。列表顶部显示"已隐藏 N 首无版权曲目"(实测灌灌灌灌 447 首隐藏 5 首)。
+  队列也用过滤后的列表, 自动续播遇到无版权曲目**静默跳过**(只有点列表才弹提示, 否则一路弹窗)。

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'src/auth.dart';
 import 'src/lyric.dart';
 import 'src/playback.dart';
+import 'src/library_view.dart';
 import 'src/queue.dart';
 import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
@@ -99,9 +100,15 @@ class _HomePageState extends State<HomePage> {
 
   rust.SongDto? get _current => _queue.current;
 
-  /// 当前列表要显示/播放的曲目(歌单浏览优先)
-  List<rust.SongDto> get _visibleSongs =>
+  /// 当前列表的原始曲目(歌单浏览优先)
+  List<rust.SongDto> get _sourceSongs =>
       _libraryTitle != null ? _library : (_result?.songs ?? const <rust.SongDto>[]);
+
+  /// 真正要显示/入队的曲目: 无版权且没收藏的直接不显示(与官方一致)
+  List<rust.SongDto> get _visibleSongs => visibleSongs(_sourceSongs, _liked);
+
+  /// 被隐藏的无版权曲目数量(列表顶部提示用)
+  int get _hiddenUnplayable => hiddenUnplayableCount(_sourceSongs, _liked);
 
   @override
   void initState() {
@@ -222,11 +229,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<bool> _resolveAndPlay(rust.SongDto song) async {
-    // 没版权的曲目连取链都不用试(官方也是灰显+提示, 不占播放位)
-    if (!song.playable) {
-      _notifyUnplayable(song);
-      return false;
-    }
+    // 没版权的曲目连取链都不用试; 自动续播时静默跳过(点列表才提示, 否则一路弹窗)
+    if (!song.playable) return false;
     try {
       final stream = await rust.songUrl(trackId: song.id, level: 'exhigh');
       final url = stream.url;
@@ -808,13 +812,27 @@ class _HomePageState extends State<HomePage> {
       return const Center(child: Text('输入关键词后搜索'));
     }
     final songs = _visibleSongs;
+    final hidden = _hiddenUnplayable;
     if (songs.isEmpty) {
-      return const Center(child: Text('这个歌单是空的'));
+      return Center(
+        child: Text(hidden > 0 ? '这里没有可播放的曲目($hidden 首无版权已隐藏)' : '这个歌单是空的'),
+      );
     }
+    // 列表顶部一句说明: 无版权且没收藏的曲目按官方行为直接不出现, 但要让用户知道少了什么
+    final headerCount = hidden > 0 ? 1 : 0;
     return ListView.builder(
-      itemCount: songs.length,
+      itemCount: songs.length + headerCount,
       itemBuilder: (context, i) {
-        final s = songs[i];
+        if (headerCount == 1 && i == 0) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: Text(
+              '已隐藏 $hidden 首无版权曲目',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+        }
+        final s = songs[i - headerCount];
         final active = current?.id == s.id;
         // 没版权: 整行灰掉 + "无版权"标, 点了才提示(官方同款行为)
         return SongTile(
