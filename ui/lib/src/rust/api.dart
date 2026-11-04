@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`, `player`, `state_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `player`, `state_dto`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -25,8 +25,25 @@ Future<String> lyric({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyric(trackId: trackId);
 
 /// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留.
+/// 账号本身留在账号簿里, 下次可以一键切回(不用重新扫码).
 /// 返回 true 表示现在已经不是登录态.
 Future<bool> logout() => RustLib.instance.api.crateApiLogout();
+
+/// 已记住的账号列表(只含凭据, 指纹共享)
+Future<List<AccountDto>> accounts() => RustLib.instance.api.crateApiAccounts();
+
+/// 登录后/启动时调用: 拉一次账号资料并记进账号簿.
+/// 失败(离线/风控)不影响已登录状态, UI 只当作"没有昵称"。
+Future<AccountDto> accountSyncActive() =>
+    RustLib.instance.api.crateApiAccountSyncActive();
+
+/// 切换到账号簿里的某个账号(不重新登录)
+Future<bool> accountSwitch({required BigInt userId}) =>
+    RustLib.instance.api.crateApiAccountSwitch(userId: userId);
+
+/// 从账号簿移除某个账号(不影响当前登录态, 只是忘掉它的凭据)
+Future<bool> accountRemove({required BigInt userId}) =>
+    RustLib.instance.api.crateApiAccountRemove(userId: userId);
 
 /// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
 Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
@@ -66,6 +83,37 @@ Future<PlayerStateDto> playerSeek({required BigInt positionMs}) =>
 
 Future<PlayerStateDto> playerSetVolume({required double volume}) =>
     RustLib.instance.api.crateApiPlayerSetVolume(volume: volume);
+
+class AccountDto {
+  final BigInt userId;
+  final String nickname;
+  final String? avatarUrl;
+  final bool active;
+
+  const AccountDto({
+    required this.userId,
+    required this.nickname,
+    this.avatarUrl,
+    required this.active,
+  });
+
+  @override
+  int get hashCode =>
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      active.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AccountDto &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          active == other.active;
+}
 
 class InitInfo {
   final String dataDir;

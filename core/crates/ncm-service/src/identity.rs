@@ -64,6 +64,79 @@ const IDENTITY_DEFAULTS: &[(&str, &str)] = &[
     ("ntes_kaola_ad", "1"),
 ];
 
+/// 只取登录凭据(与 `clear_login_cookie` 互补), 用于按账号存档
+pub fn extract_login_cookie(cookie: &str) -> String {
+    cookie
+        .split(';')
+        .map(str::trim)
+        .filter(|pair| !pair.is_empty())
+        .filter(|pair| {
+            let key = pair.split('=').next().unwrap_or("").trim();
+            LOGIN_KEYS.contains(&key)
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+const ACCOUNTS_FILE: &str = "accounts.json";
+
+/// 记住的一个账号: **只存登录凭据**, 设备指纹(deviceId/_ntes_nuid/WNMCID/NMTID)在 identity.json 里共享.
+/// 这样切换账号不用重新登录, 也不会让同一台设备看起来像多台设备.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct StoredAccount {
+    pub user_id: u64,
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 只含登录凭据的 cookie 串
+    pub cookie: String,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct AccountBook {
+    /// 当前正在使用的账号
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<u64>,
+    #[serde(default)]
+    pub accounts: Vec<StoredAccount>,
+}
+
+impl AccountBook {
+    pub fn find(&self, user_id: u64) -> Option<&StoredAccount> {
+        self.accounts.iter().find(|a| a.user_id == user_id)
+    }
+
+    /// 新增或更新(同一个 uid 只留一条), 并设为当前账号
+    pub fn upsert(&mut self, account: StoredAccount) {
+        self.active = Some(account.user_id);
+        match self.accounts.iter_mut().find(|a| a.user_id == account.user_id) {
+            Some(slot) => *slot = account,
+            None => self.accounts.push(account),
+        }
+    }
+
+    /// 切换到已保存的账号, 返回该账号(没存过则 None)
+    pub fn switch(&mut self, user_id: u64) -> Option<StoredAccount> {
+        let found = self.find(user_id).cloned()?;
+        self.active = Some(user_id);
+        Some(found)
+    }
+
+    pub fn remove(&mut self, user_id: u64) -> bool {
+        let before = self.accounts.len();
+        self.accounts.retain(|a| a.user_id != user_id);
+        if self.active == Some(user_id) {
+            self.active = None;
+        }
+        before != self.accounts.len()
+    }
+
+    pub fn clear_active(&mut self) {
+        self.active = None;
+    }
+}
+
 pub struct IdentityStore {
     dir: PathBuf,
 }
@@ -113,19 +186,38 @@ impl IdentityStore {
         }
     }
 
+    /// 读取已保存的账号簿(不存在则空)
+    pub fn load_accounts(&self) -> io::Result<AccountBook> {
+        match fs::read(self.dir.join(ACCOUNTS_FILE)) {
+            Ok(bytes) => Ok(serde_json::from_slice(&bytes)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(AccountBook::default()),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub fn save_accounts(&self, book: &AccountBook) -> io::Result<()> {
+        let data = serde_json::to_vec_pretty(book)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        self.write_private(&self.dir.join(ACCOUNTS_FILE), &data)
+    }
+
     /// 原子写 + 0600 权限(Linux). 敏感文件不进日志.
     pub fn save(&self, session: &Session) -> io::Result<()> {
-        let path = self.path();
-        let tmp = path.with_extension("json.tmp");
         let data = serde_json::to_vec_pretty(session)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        fs::write(&tmp, &data)?;
+        self.write_private(&self.path(), &data)
+    }
+
+    fn write_private(&self, path: &Path, data: &[u8]) -> io::Result<()> {
+        let tmp = path.with_extension("json.tmp");
+        fs::write(&tmp, data)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
         }
-        fs::rename(&tmp, &path)?;
+        fs::rename(&tmp, path)?;
         Ok(())
     }
 }
@@ -312,6 +404,51 @@ mod tests {
         let logged = merge_device_cookie(&merged, "MUSIC_U=x; os=pc", "ABC");
         assert!(logged.contains("MUSIC_U=x"));
         assert!(logged.contains("_ntes_nuid="));
+    }
+
+    #[test]
+    fn extract_login_cookie_keeps_only_credentials() {
+        let all = "MUSIC_U=u; __csrf=c; JSESSIONID-WYYY=j; deviceId=D; _ntes_nuid=n; os=android";
+        let only = extract_login_cookie(all);
+        assert_eq!(only, "MUSIC_U=u; __csrf=c; JSESSIONID-WYYY=j");
+    }
+
+    #[test]
+    fn account_book_roundtrip_and_switch() {
+        let dir = tmpdir("accounts");
+        let store = IdentityStore::open(&dir).unwrap();
+        let mut book = store.load_accounts().unwrap();
+        assert!(book.accounts.is_empty());
+
+        book.upsert(StoredAccount {
+            user_id: 1,
+            nickname: "A".into(),
+            avatar_url: None,
+            cookie: extract_login_cookie("deviceId=D; MUSIC_U=a; __csrf=1; _ntes_nuid=n"),
+        });
+        book.upsert(StoredAccount {
+            user_id: 2,
+            nickname: "B".into(),
+            avatar_url: Some("http://avatar".into()),
+            cookie: "MUSIC_U=b".into(),
+        });
+        // 只存登录凭据, 设备指纹不进账号簿
+        assert!(book.accounts[0].cookie.contains("MUSIC_U=a"));
+        assert!(!book.accounts[0].cookie.contains("deviceId"));
+        store.save_accounts(&book).unwrap();
+
+        let mut reloaded = store.load_accounts().unwrap();
+        assert_eq!(reloaded.accounts.len(), 2);
+        assert_eq!(reloaded.active, Some(2), "最后一次 upsert 的账号是当前账号");
+
+        let switched = reloaded.switch(1).expect("已保存的账号应能直接切换");
+        assert_eq!(switched.nickname, "A");
+        assert_eq!(reloaded.active, Some(1));
+        assert!(reloaded.switch(999).is_none());
+
+        assert!(reloaded.remove(2));
+        assert_eq!(reloaded.accounts.len(), 1);
+        assert!(reloaded.find(2).is_none());
     }
 
     #[test]

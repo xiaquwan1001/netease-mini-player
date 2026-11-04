@@ -5,7 +5,7 @@
 //! - 错误统一成 ProviderError, UI 只按 kind 决策
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
-use ncm_domain::{Lyric, SearchPage, StreamUrl, TrackId};
+use ncm_domain::{Lyric, Profile, SearchPage, StreamUrl, TrackId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -196,6 +196,11 @@ pub trait Provider: Send + Sync {
     fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>>;
 
     fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>>;
+
+    /// 当前登录账号的资料(uid/昵称). 未登录或不支持时返回 Unsupported.
+    fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Profile>> {
+        Box::pin(async { Err(ProviderError::unsupported("no profile")) })
+    }
 }
 
 #[derive(Default, Clone)]

@@ -187,18 +187,18 @@ API/protocol details and anti-bot technique live in the
   `os/appver/osver/channel` + UA + 网页入口版式必须成套; 混着用最坏是**假通过**
   (静默降权
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/dd/ddb78a663ac4f60b568c100cc5f7852e4ca9e13460304f3e7739643a308ade2e.txt; sha256=ddb78a663ac4f60b568c100cc5f7852e4ca9e13460304f3e7739643a308ade2e; bytes=17642]
-## 账号登录/切换落地(2026-11-04)
-- 登录成功实测: 官方移动端授权页 → 轮询拿到 `MUSIC_U` → App 顶栏变"已登录", `logged_in=true`;
-  cookie 里同时带回 `JSESSIONID-WYYY/__csrf/_iuqxldmzr_` 等 web 侧键。
-- **退出登录只清凭据, 不换设备指纹**: `identity::clear_login_cookie` 去掉
-  `MUSIC_U/MUSIC_A/__csrf/JSESSIONID-WYYY/_iuqxldmzr_/__remember_me`, 保留
-  `deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID/os/appver/osver/channel`(有单测)。
-- **必须同时清 WebView 的 cookie**(Kotlin `CookieManager.removeAllCookies`), 否则"切换账号"
-  再开登录页会以旧账号自动登录 —— 只看 Rust 侧 cookie 会漏掉这个坑。
-- 模拟器窗口里键盘输入需要 AVD `hw.keyboard = yes`(默认 no = 宿主键盘不转发)。改成 yes 后
-  宿主键盘可用;但 `adb shell input text` 会因该项变化报 `NullPointerException ... length of null array`,
-  此时用 `input keyevent <码>` 逐字符敲(例: jay = 38 29 53)。
-- 驱动 UI 时坐标算错会误判"功能坏了": AppBar 里的 `PopupMenuButton` 用自定义 child 时点击区
-  不好估, 换成"账号图标 + `showModalBottomSheet`"后一次就命中, 移动端也更顺手。
+
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/0f/0f33393924eb5258ef161760127b507fd6ef3e4738aba8745cef1253a7ea9945.txt; sha256=0f33393924eb5258ef161760127b507fd6ef3e4738aba8745cef1253a7ea9945; bytes=17937]
+## 多账号 + VIP 结论(2026-11-04)
+- 账号簿落在 `files/ncm/accounts.json`(0600): `{active, accounts:[{user_id,nickname,avatar_url,cookie}]}`,
+  **cookie 只存登录凭据**(extract_login_cookie), 设备指纹永远只在 identity.json —— 同一台设备切 N 个号
+  也不会变成 N 台设备。切换 = clear_login_cookie(当前) + merge(账号凭据) → apply_session, 无需重新扫码。
+- 昵称/uid 来自 `/api/nuser/account/get`(`account.id` / `profile.userId+nickname`);登录后与 App 启动时
+  各同步一次(失败只当"没名字", 不影响登录态)。
+- **VIP 判定实测**: 同一首 `fee=1` 曲目(布拉格广场 210049)
+  匿名: 播放 00:30(取链 size≈481KB≈30s 128k) ; VIP 账号: 04:54 完整(= 列表 294s)。
+  `fee=8`(低音质免费)曲目匿名就给 320k 完整(屋顶 12.17MB) —— 所以验证 VIP 必须挑 `fee=1`。
+- 网易云搜索对匿名/登录给的排序不同, 用 CLI 拿 id 后不要假设 App 列表顺序一致; 挑曲目用 `fee` 字段。
+- `rustc` 偶发 `thread panicked while processing panic. aborting.`(SIGABRT) 是 incremental 缓存坏了:
+  `CARGO_INCREMENTAL=0 cargo build` 即好, 不用清整个 target。
 <!-- created=2026-11-04, last=2026-11-04 -->

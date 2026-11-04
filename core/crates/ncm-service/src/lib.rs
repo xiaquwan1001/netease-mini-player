@@ -8,7 +8,7 @@ pub mod cache;
 pub mod identity;
 pub mod netease;
 
-pub use identity::IdentityStore;
+pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use netease::NeteaseProvider;
 
 use ncm_provider::{Capability, ProviderRegistry};
@@ -42,6 +42,69 @@ impl Core {
         self.netease.update_session(session.clone());
         self.session = session;
         Ok(())
+    }
+
+    // ---------------- 多账号 ----------------
+
+    pub fn accounts(&self) -> std::io::Result<AccountBook> {
+        self.store.load_accounts()
+    }
+
+    /// 登录成功后记住这个账号(只存登录凭据, 指纹共享), 并设为当前账号
+    pub fn remember_account(&mut self, profile: &ncm_domain::Profile) -> std::io::Result<AccountBook> {
+        let mut book = self.store.load_accounts()?;
+        book.upsert(StoredAccount {
+            user_id: profile.user_id,
+            nickname: profile.nickname.clone(),
+            avatar_url: profile.avatar_url.clone(),
+            cookie: identity::extract_login_cookie(&self.session.cookie),
+        });
+        self.store.save_accounts(&book)?;
+        let mut next = self.session.clone();
+        next.profile = Some(profile.clone());
+        self.apply_session(next)?;
+        Ok(book)
+    }
+
+    /// 直接切到已保存的账号(不用重新登录); 返回是否切换成功
+    pub fn switch_account(&mut self, user_id: u64) -> std::io::Result<bool> {
+        let mut book = self.store.load_accounts()?;
+        let Some(account) = book.switch(user_id) else {
+            return Ok(false);
+        };
+        // 设备指纹取自当前会话(与账号无关), 登录凭据换成目标账号的
+        let device_only = identity::clear_login_cookie(&self.session.cookie);
+        let cookie = identity::merge_device_cookie(&device_only, &account.cookie, &self.session.device_id);
+        let mut next = self.session.clone();
+        next.cookie = cookie;
+        next.profile = Some(ncm_domain::Profile {
+            user_id,
+            nickname: account.nickname,
+            avatar_url: account.avatar_url,
+        });
+        self.apply_session(next)?;
+        self.store.save_accounts(&book)
+            .map(|_| true)
+    }
+
+    /// 从账号簿移除(不改变当前登录态, 只是忘掉这个账号的凭据)
+    pub fn forget_account(&mut self, user_id: u64) -> std::io::Result<AccountBook> {
+        let mut book = self.store.load_accounts()?;
+        book.remove(user_id);
+        self.store.save_accounts(&book)?;
+        Ok(book)
+    }
+
+    /// 退出登录: 清凭据(账号仍留在账号簿里, 下次可一键切回)
+    pub fn logout(&mut self) -> std::io::Result<AccountBook> {
+        let mut next = self.session.clone();
+        next.cookie = identity::clear_login_cookie(&next.cookie);
+        next.profile = None;
+        self.apply_session(next)?;
+        let mut book = self.store.load_accounts()?;
+        book.clear_active();
+        self.store.save_accounts(&book)?;
+        Ok(book)
     }
 
     pub fn capabilities(&self, provider_id: &str) -> Option<&'static [Capability]> {

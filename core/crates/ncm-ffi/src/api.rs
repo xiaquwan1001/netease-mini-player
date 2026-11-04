@@ -149,14 +149,88 @@ pub async fn lyric(track_id: u64) -> Result<String, String> {
 }
 
 /// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留.
+/// 账号本身留在账号簿里, 下次可以一键切回(不用重新扫码).
 /// 返回 true 表示现在已经不是登录态.
 pub fn logout() -> Result<bool, String> {
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-    let mut next = guard.session.clone();
-    next.cookie = ncm_service::identity::clear_login_cookie(&next.cookie);
-    next.profile = None;
-    guard.apply_session(next).map_err(|e| e.to_string())?;
+    guard.logout().map_err(|e| e.to_string())?;
     Ok(!guard.session.is_logged_in())
+}
+
+// ---------------- 多账号(账号簿) ----------------
+
+pub struct AccountDto {
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+    pub active: bool,
+}
+
+fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
+    let book = guard.accounts().map_err(|e| e.to_string())?;
+    Ok(book
+        .accounts
+        .into_iter()
+        .map(|a| AccountDto {
+            user_id: a.user_id,
+            nickname: a.nickname,
+            avatar_url: a.avatar_url,
+            active: book.active == Some(a.user_id),
+        })
+        .collect())
+}
+
+/// 已记住的账号列表(只含凭据, 指纹共享)
+pub fn accounts() -> Result<Vec<AccountDto>, String> {
+    let guard = core()?.lock().map_err(|e| e.to_string())?;
+    accounts_of(&guard)
+}
+
+/// 登录后/启动时调用: 拉一次账号资料并记进账号簿.
+/// 失败(离线/风控)不影响已登录状态, UI 只当作"没有昵称"。
+pub async fn account_sync_active() -> Result<AccountDto, String> {
+    let (logged_in, provider) = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        if !guard.session.is_logged_in() {
+            return Err("未登录".to_string());
+        }
+        let provider = guard
+            .providers
+            .first_with(Capability::Profile)
+            .ok_or_else(|| "no provider supports profile".to_string())?;
+        (true, provider)
+    };
+    debug_assert!(logged_in);
+    let profile = provider.profile().await.map_err(|e| e.to_string())?;
+    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    guard.remember_account(&profile).map_err(|e| e.to_string())?;
+    Ok(AccountDto {
+        user_id: profile.user_id,
+        nickname: profile.nickname,
+        avatar_url: profile.avatar_url,
+        active: true,
+    })
+}
+
+/// 切换到账号簿里的某个账号(不重新登录)
+pub async fn account_switch(user_id: u64) -> Result<bool, String> {
+    {
+        let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+        if !guard.switch_account(user_id).map_err(|e| e.to_string())? {
+            return Ok(false);
+        }
+    }
+    // 切完顺手同步一次昵称/头像(失败不影响切换)
+    let _ = account_sync_active().await;
+    Ok(true)
+}
+
+/// 从账号簿移除某个账号(不影响当前登录态, 只是忘掉它的凭据)
+pub fn account_remove(user_id: u64) -> Result<bool, String> {
+    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    let before = guard.accounts().map_err(|e| e.to_string())?.accounts.len();
+    let book = guard.forget_account(user_id).map_err(|e| e.to_string())?;
+    Ok(book.accounts.len() < before)
 }
 
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)

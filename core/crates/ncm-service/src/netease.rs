@@ -308,6 +308,40 @@ impl Provider for NeteaseProvider {
             parse_lyric(&resp.body)
         })
     }
+
+    /// 当前登录账号资料(用于多账号记忆: 登录成功后记住 uid/昵称)
+    fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<ncm_domain::Profile>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("未登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.user_account(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_profile(&resp.body)
+        })
+    }
+}
+
+/// `/api/nuser/account/get` 的响应形如
+/// `{code:200, account:{id,...}, profile:{userId, nickname, avatarUrl}}`
+fn parse_profile(body: &Value) -> ProviderResult<ncm_domain::Profile> {
+    let profile = body.get("profile").filter(|v| !v.is_null());
+    let account = body.get("account").filter(|v| !v.is_null());
+    let user_id = profile
+        .and_then(|p| p.get("userId").and_then(Value::as_u64))
+        .or_else(|| account.and_then(|a| a.get("id").and_then(Value::as_u64)))
+        .ok_or_else(|| ProviderError::auth("profile: 没有 userId(多半是未登录)"))?;
+    let nickname = profile
+        .and_then(|p| p.get("nickname").and_then(Value::as_str))
+        .unwrap_or("")
+        .to_string();
+    let avatar_url = profile
+        .and_then(|p| p.get("avatarUrl").and_then(Value::as_str))
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    Ok(ncm_domain::Profile { user_id, nickname, avatar_url })
 }
 
 #[cfg(test)]

@@ -107,6 +107,8 @@ class _HomePageState extends State<HomePage> {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
       setState(() => _info = info);
+      // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
+      if (info.loggedIn) unawaited(_syncAccount());
     } catch (e) {
       setState(() => _error = '$e');
     }
@@ -287,12 +289,14 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       final ok = await _auth.commitCookie(cookie);
-      final dir = await _playback.dataDir();
-      final info = await rust.init(dataDir: dir);
+      if (ok) {
+        // 记住这个账号(昵称/uid) 并设为当前账号, 下次可直接切换
+        await _syncAccount();
+      }
+      await _refreshInfo();
       if (!mounted) return;
-      setState(() => _info = info);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '登录成功, 音质已解锁' : 'cookie 里没有 MUSIC_U, 登录未生效')),
+        SnackBar(content: Text(ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -300,53 +304,127 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 账号面板: 已登录时提供"切换账号 / 退出登录"(弹出式菜单在 AppBar 里不好点, 用底部面板)
-  void _showAccountSheet() {
-    showModalBottomSheet<void>(
+  /// 账号面板: 账号簿(记住的账号可一键切换) + 添加账号 + 退出登录
+  /// 弹出式菜单在 AppBar 里不好点, 用底部面板; 切换账号不需要重新扫码,
+  /// 因为账号簿只存"登录凭据", 设备指纹始终是同一套。
+  Future<void> _showAccountSheet() async {
+    var saved = const <rust.AccountDto>[];
+    try {
+      saved = await rust.accounts();
+    } catch (_) {
+      // 账号簿读不出来不影响登录态, 面板里只显示"添加账号"
+    }
+    if (!mounted) return;
+    final loggedIn = _info?.loggedIn == true;
+    await showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
+            ListTile(
               dense: true,
-              title: Text('已登录'),
-              subtitle: Text('退出只清登录凭据, 设备指纹(deviceId 等)保持不变'),
+              title: const Text('账号'),
+              subtitle: Text(loggedIn ? '退出只清登录凭据, 设备指纹保持不变' : '未登录'),
             ),
             const Divider(height: 1),
+            if (saved.isEmpty)
+              const ListTile(
+                dense: true,
+                title: Text('还没有记住的账号'),
+                subtitle: Text('登录一次后会自动记住, 之后可直接切换'),
+              ),
+            for (final account in saved)
+              ListTile(
+                leading: Icon(account.active ? Icons.check_circle : Icons.person_outline),
+                title: Text(account.nickname.isEmpty ? '账号 ${account.userId}' : account.nickname),
+                subtitle: Text(account.active ? '当前账号' : '点击切换'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: '忘记这个账号',
+                  onPressed: () async {
+                    Navigator.pop(sheetContext);
+                    await rust.accountRemove(userId: account.userId);
+                    await _refreshInfo();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已从账号簿移除')),
+                    );
+                  },
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _switchAccount(account);
+                },
+              ),
             ListTile(
-              leading: const Icon(Icons.swap_horiz),
-              title: const Text('切换账号'),
-              subtitle: const Text('退出后立刻打开登录页'),
+              leading: const Icon(Icons.add),
+              title: const Text('添加账号'),
+              subtitle: const Text('打开官方登录页'),
               onTap: () {
                 Navigator.pop(sheetContext);
-                _logout(thenLogin: true);
+                _login();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('退出登录'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _logout();
-              },
-            ),
+            if (loggedIn)
+              ListTile(
+                leading: const Icon(Icons.logout),
+                title: const Text('退出登录'),
+                subtitle: const Text('账号仍留在账号簿, 下次一键切回'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _logout();
+                },
+              ),
           ],
         ),
       ),
     );
   }
 
+  Future<void> _switchAccount(rust.AccountDto account) async {
+    final name = account.nickname.isEmpty ? account.userId.toString() : account.nickname;
+    try {
+      final ok = await rust.accountSwitch(userId: account.userId);
+      await _refreshInfo();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  /// refresh init 信息(登录态/设备 id)
+  Future<void> _refreshInfo() async {
+    try {
+      final dir = await _playback.dataDir();
+      final info = await rust.init(dataDir: dir);
+      if (mounted) setState(() => _info = info);
+    } catch (_) {
+      // init 失败保持旧状态
+    }
+  }
+
+  /// 记账号资料(昵称/uid)进账号簿; 离线拉不到只是没名字, 不影响登录态
+  Future<void> _syncAccount() async {
+    try {
+      await rust.accountSyncActive();
+    } catch (_) {}
+  }
+
   /// 退出登录; thenLogin=true 表示切换账号(退出后立刻再开授权页)
   Future<void> _logout({bool thenLogin = false}) async {
     try {
       await _auth.logout();
-      final dir = await _playback.dataDir();
-      final info = await rust.init(dataDir: dir);
+      await _refreshInfo();
       if (!mounted) return;
-      setState(() => _info = info);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(thenLogin ? '已退出, 请登录另一个账号' : '已退出登录')),
+        SnackBar(
+          content: Text(thenLogin ? '已退出, 请登录另一个账号' : '已退出登录(账号仍留在账号簿)'),
+        ),
       );
       if (thenLogin) await _login();
     } catch (e) {
@@ -434,19 +512,22 @@ class _HomePageState extends State<HomePage> {
               )
             : null,
         actions: [
-          if (_auth.isAndroid)
+          if (_auth.isAndroid) ...[
             if (_info?.loggedIn == true)
-              IconButton(
-                tooltip: '账号: 切换/退出',
-                icon: const Icon(Icons.account_circle),
-                onPressed: _showAccountSheet,
-              )
+              const SizedBox.shrink()
             else
               TextButton.icon(
                 onPressed: _login,
                 icon: const Icon(Icons.login, size: 18),
                 label: const Text('登录'),
               ),
+            // 账号簿入口常驻: 退出后账号仍在簿里, 需要能一键切回
+            IconButton(
+              tooltip: '账号',
+              icon: const Icon(Icons.account_circle),
+              onPressed: _showAccountSheet,
+            ),
+          ],
         ],
       ),
       body: Column(
