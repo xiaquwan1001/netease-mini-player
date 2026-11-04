@@ -200,6 +200,7 @@ mod tests {
             album: None,
             duration_ms: 0,
             fee: None,
+            playable: true,
         };
         assert_eq!(song.artist_line(), "A / B");
     }
