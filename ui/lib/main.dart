@@ -91,6 +91,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // 通知栏/耳机键的上一首·下一首 → Dart 队列
+    Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
     _bootstrap();
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
   }
@@ -679,35 +681,37 @@ class _HomePageState extends State<HomePage> {
                 onChanged: dur <= 0 ? null : (v) => setState(() => _dragMs = v),
                 onChangeEnd: dur <= 0 ? null : (v) => _seekTo(v),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: _toggleLyrics,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              current?.name ?? '未在播放',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                              '  ${current?.artist ?? ''}'
-                              '  $inQueue/${_queue.items.length}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
+              // 窄屏(411dp) + 大字号下, 标题若和 5 个按钮抢同一行会被挤成"晴…",
+              // 因此标题独占一行, 控件单独居中一行.
+              InkWell(
+                onTap: _toggleLyrics,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        current?.name ?? '未在播放',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
                       ),
-                    ),
+                      Text(
+                        '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                        '  ${current?.artist ?? ''}'
+                        '  $inQueue/${_queue.items.length}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
                   ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
                   IconButton(
                     tooltip: _modeLabels[_queue.mode],
                     icon: Icon(_modeIcons[_queue.mode]),

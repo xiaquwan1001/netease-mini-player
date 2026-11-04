@@ -46,6 +46,23 @@ class Playback {
 
   bool get isAndroid => Platform.isAndroid;
 
+  /// 通知栏/耳机键/蓝牙的上一首·下一首回调.
+  /// 原生侧(ForwardingPlayer)只发意图, 真正的换曲在 Dart 队列里做 —— 队列只有一份.
+  static void setSkipHandlers({
+    void Function()? onNext,
+    void Function()? onPrevious,
+  }) {
+    _channel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'skipNext':
+          onNext?.call();
+        case 'skipPrevious':
+          onPrevious?.call();
+      }
+      return null;
+    });
+  }
+
   /// Android 需要应用私有目录(Rust 默认的 ~/.local/share 在手机上不可写)
   Future<String?> dataDir() async {
     if (!isAndroid) return null;

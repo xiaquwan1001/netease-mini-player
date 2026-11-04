@@ -21,6 +21,7 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var controller: MediaController? = null
+    private var playerChannel: MethodChannel? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
 
     /** 官方网页登录: 页面结束后把 cookie 交回 Dart */
@@ -30,6 +31,13 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/player")
+        playerChannel = channel
+        // 通知栏/耳机键/蓝牙的上一首·下一首: 播放队列在 Dart, 这里只做转发
+        PlaybackService.skipListener = { next ->
+            runOnUiThread {
+                channel.invokeMethod(if (next) "skipNext" else "skipPrevious", null)
+            }
+        }
         channel.setMethodCallHandler { call, result ->
             try {
                 handle(call.method, call.arguments as? Map<*, *>, result)
@@ -163,6 +171,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        PlaybackService.skipListener = null
+        playerChannel = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null
         super.onDestroy()
