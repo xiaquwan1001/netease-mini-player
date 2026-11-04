@@ -15,3 +15,13 @@
 ## 通用工作风格
 - 减少反复的同质化思考，每种方案只需一次正反判断。
 - 先查社区现成资源与本地已有等效资产。
+
+## 测试分工(2026-11-04 用户明确)
+- **功能/逻辑验证一律先在 PC 安卓模拟器(emulator-5554, debug 包)上做**; vivo 真机(V2454A)降级为
+  **只在打包发布时做冒烟**(装 release apk、确认能启动/能播/通知栏正常)。
+- 原因: 真机会被用户拿去用、自动锁屏(实测 screencap 全黑)、vivo 还关掉了 logcat(`adb logcat` 无输出),
+  交互验证成本高; 模拟器可随时点、能拿 logcat/dumpsys。
+- vivo 特殊点: `wm density` override = 768(实际逻辑宽仅 300dp)、font_scale=1.25 → 布局要按窄屏+大字号验证
+  (AppBar 标题曾截断, 已改 FittedBox)。
+- vivo 上 adb root 可用(可 pull /data/data 取 identity.json), 用完记得 `adb unroot`。
+<!-- created=2026-11-04, last=2026-11-04 -->

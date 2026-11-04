@@ -6,6 +6,7 @@ import 'src/auth.dart';
 import 'src/lyric.dart';
 import 'src/playback.dart';
 import 'src/library_view.dart';
+import 'src/net_retry.dart';
 import 'src/queue.dart';
 import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
@@ -42,6 +43,8 @@ class MiniNcmApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '轻音 MiniNCM',
+      // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: const Color(0xFFE60026), useMaterial3: true),
       home: const HomePage(),
     );
@@ -65,6 +68,9 @@ class _HomePageState extends State<HomePage> {
   rust.SearchResultDto? _result;
   PlayerView? _player;
   String? _error;
+
+  /// 出错时可以一键重试的动作(搜索/打开歌单这类幂等操作)
+  Future<void> Function()? _retryLast;
   bool _busy = false;
   Timer? _ticker;
 
@@ -192,10 +198,15 @@ class _HomePageState extends State<HomePage> {
       _libraryTitle = null;
     });
     try {
-      final result = await rust.search(keywords: _controller.text, limit: 20);
+      final result = await retryNetwork(
+        () => rust.search(keywords: _controller.text, limit: 20),
+      );
       setState(() => _result = result);
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() {
+        _error = friendlyError(e);
+        _retryLast = _search;
+      });
     } finally {
       setState(() => _busy = false);
     }
@@ -232,7 +243,10 @@ class _HomePageState extends State<HomePage> {
     // 没版权的曲目连取链都不用试; 自动续播时静默跳过(点列表才提示, 否则一路弹窗)
     if (!song.playable) return false;
     try {
-      final stream = await rust.songUrl(trackId: song.id, level: 'exhigh');
+      // 移动网络切网时会偶发 connection reset, 取链是幂等的, 值得重试
+      final stream = await retryNetwork(
+        () => rust.songUrl(trackId: song.id, level: 'exhigh'),
+      );
       final url = stream.url;
       if (url == null) {
         if (mounted) {
@@ -495,7 +509,7 @@ class _HomePageState extends State<HomePage> {
   /// 拉一次"我喜欢的音乐"的 id 集合. 失败不影响播放, 只是红心状态未知。
   Future<void> _loadLiked() async {
     try {
-      final ids = await rust.likedIds();
+      final ids = await retryNetwork(rust.likedIds);
       if (!mounted) return;
       setState(() => _liked = ids.toSet());
     } catch (_) {}
@@ -558,7 +572,7 @@ class _HomePageState extends State<HomePage> {
         child: SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.6,
           child: FutureBuilder<List<rust.PlaylistDto>>(
-            future: rust.myPlaylists(),
+            future: retryNetwork(rust.myPlaylists),
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
                 return const Center(child: CircularProgressIndicator());
@@ -610,9 +624,11 @@ class _HomePageState extends State<HomePage> {
       _error = null;
     });
     try {
-      final songs = pl.special
-          ? await rust.likedSongs()
-          : await rust.playlistSongs(playlistId: pl.id);
+      final songs = await retryNetwork(
+        () => pl.special
+            ? rust.likedSongs()
+            : rust.playlistSongs(playlistId: pl.id),
+      );
       if (!mounted) return;
       setState(() {
         _library = songs;
@@ -621,7 +637,10 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '$e');
+      setState(() {
+        _error = friendlyError(e);
+        _retryLast = () => _openPlaylist(pl);
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -705,10 +724,23 @@ class _HomePageState extends State<HomePage> {
     final current = _current;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _showLyrics
-              ? (current?.name ?? '歌词')
-              : (_libraryTitle ?? '轻音 MiniNCM'),
+        // 大字号 + 三个动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
+        // 标题固定用 titleMedium, 让品牌字至少完整显示
+        titleTextStyle: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.w600),
+        // 大字号设备(vivo 1440px + font_scale>1)会把标题挤成 "轻音 MiniN…",
+        // 用 FittedBox 缩排而不是截断
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _showLyrics
+                ? (current?.name ?? '歌词')
+                : (_libraryTitle ?? '轻音 MiniNCM'),
+            maxLines: 1,
+          ),
         ),
         leading: _showLyrics
             ? IconButton(
@@ -724,6 +756,17 @@ class _HomePageState extends State<HomePage> {
                   )
                 : null),
         actions: [
+          // 收藏/歌单/会员状态都走 Rust 侧, 各端都能用(桌面版同样需要这些入口)
+          if (_info?.loggedIn == true) ...[
+            IconButton(
+              tooltip: '我喜欢的音乐 / 我的歌单',
+              icon: const Icon(Icons.library_music),
+              onPressed: _showPlaylists,
+            ),
+            // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
+            if (_vip) const VipBadge(small: true),
+          ],
+          // 登录(WebView)/账号簿/退出登录只在安卓端(桌面版还没有网页登录宿主)
           if (_auth.isAndroid) ...[
             if (_info?.loggedIn == true)
               const SizedBox.shrink()
@@ -733,14 +776,6 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.login, size: 18),
                 label: const Text('登录'),
               ),
-            if (_info?.loggedIn == true)
-              IconButton(
-                tooltip: '我喜欢的音乐 / 我的歌单',
-                icon: const Icon(Icons.library_music),
-                onPressed: _showPlaylists,
-              ),
-            // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
-            if (_info?.loggedIn == true && _vip) const VipBadge(small: true),
             // 账号簿入口常驻: 退出后账号仍在簿里, 需要能一键切回
             IconButton(
               tooltip: '账号',
@@ -766,8 +801,26 @@ class _HomePageState extends State<HomePage> {
             ),
           if (_error != null)
             Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _error!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+                  if (_retryLast != null)
+                    TextButton(
+                      onPressed: () {
+                        final retry = _retryLast;
+                        setState(() => _error = null);
+                        retry?.call();
+                      },
+                      child: const Text('重试'),
+                    ),
+                ],
+              ),
             ),
           Expanded(child: _showLyrics ? _buildLyrics() : _buildList()),
         ],
