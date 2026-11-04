@@ -57,6 +57,7 @@ impl Core {
             user_id: profile.user_id,
             nickname: profile.nickname.clone(),
             avatar_url: profile.avatar_url.clone(),
+            vip: profile.vip,
             cookie: identity::extract_login_cookie(&self.session.cookie),
         });
         self.store.save_accounts(&book)?;
@@ -81,6 +82,7 @@ impl Core {
             user_id,
             nickname: account.nickname,
             avatar_url: account.avatar_url,
+            vip: account.vip,
         });
         self.apply_session(next)?;
         self.store.save_accounts(&book)

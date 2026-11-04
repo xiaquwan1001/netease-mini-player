@@ -1,7 +1,7 @@
 use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
-use ncm_domain::{Album, Artist, Lyric, SearchPage, Session, Song, StreamUrl, TrackId};
+use ncm_domain::{Album, Artist, Lyric, Playlist, SearchPage, Session, Song, StreamUrl, TrackId};
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
 };
@@ -13,6 +13,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Lyric,
     Capability::Login,
     Capability::Profile,
+    Capability::Playlist,
 ];
 
 /// 内置网易云直连 provider.
@@ -74,6 +75,18 @@ impl NeteaseProvider {
         let domain = guard.domain.clone();
         let ua = guard.ua.clone();
         *guard = Inner::new(session, domain, ua);
+    }
+
+    /// 当前账号 uid(登录后由 profile 落盘); 没有就先拉一次资料
+    async fn uid(&self) -> ProviderResult<u64> {
+        let cached = {
+            let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
+            guard.session.profile.as_ref().map(|p| p.user_id)
+        };
+        if let Some(uid) = cached {
+            return Ok(uid);
+        }
+        Ok(Provider::profile(self).await?.user_id)
     }
 
     /// await 之前先把要用的东西克隆出来: 避免 std RwLock guard 跨 await (破坏 Send)
@@ -330,6 +343,96 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// "我喜欢的音乐"曲目 id: 红心状态的唯一真相(不用每首去查详情)
+    fn liked_ids<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<TrackId>>> {
+        Box::pin(async move {
+            let uid = self.uid().await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
+            let resp = client.likelist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(resp
+                .body
+                .get("ids")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(Value::as_u64).map(TrackId::new).collect())
+                .unwrap_or_default())
+        })
+    }
+
+    /// 红心/取消红心. 网易云用 HTTP 200 里的 code 表达结果(200 = 成功)
+    fn set_like<'a>(&'a self, track: TrackId, liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("未登录不能收藏"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &track.to_string())
+                .param("like", if liked { "true" } else { "false" });
+            let resp = client.like(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 我的歌单(含"我喜欢的音乐")
+    fn user_playlists<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            let uid = self.uid().await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", "200");
+            let resp = client.user_playlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let list = resp
+                .body
+                .get("playlist")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            Ok(list.iter().filter_map(parse_playlist).collect())
+        })
+    }
+
+    /// 歌单曲目(vendor 内部先取 trackIds 再批量取详情)
+    fn playlist_songs<'a>(&'a self, playlist_id: u64) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if playlist_id == 0 {
+                return Err(ProviderError::not_found("playlist id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
+            let resp = client.playlist_track_all(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let songs = resp
+                .body
+                .get("songs")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            Ok(songs.iter().filter_map(parse_song).collect())
+        })
+    }
+
+    /// 批量曲目详情(红心列表要靠它补全元数据)
+    fn songs_detail<'a>(&'a self, ids: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("ids", ids);
+            let resp = client.song_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let songs = resp
+                .body
+                .get("songs")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            Ok(songs.iter().filter_map(parse_song).collect())
+        })
+    }
+
     /// 当前登录账号资料(用于多账号记忆: 登录成功后记住 uid/昵称)
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<ncm_domain::Profile>> {
         Box::pin(async move {
@@ -362,7 +465,24 @@ fn parse_profile(body: &Value) -> ProviderResult<ncm_domain::Profile> {
         .and_then(|p| p.get("avatarUrl").and_then(Value::as_str))
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    Ok(ncm_domain::Profile { user_id, nickname, avatar_url })
+    // vipType: 0 普通 / 10 音乐包 / 11 黑胶VIP; 账号与资料上都有, 任一大于 0 即会员
+    let vip_type = profile
+        .and_then(|p| p.get("vipType").and_then(Value::as_i64))
+        .or_else(|| account.and_then(|a| a.get("vipType").and_then(Value::as_i64)))
+        .unwrap_or(0);
+    Ok(ncm_domain::Profile { user_id, nickname, avatar_url, vip: vip_type > 0 })
+}
+
+/// 用户歌单列表里的一项. specialType=5 是"我喜欢的音乐"。
+fn parse_playlist(v: &Value) -> Option<Playlist> {
+    let id = u64_of(v, "id")?;
+    Some(Playlist {
+        id,
+        name: str_of(v, "name").unwrap_or_default(),
+        cover_url: str_of(v, "coverImgUrl").or_else(|| str_of(v, "coverUrl")),
+        track_count: u64_of(v, "trackCount").unwrap_or(0),
+        special: v.get("specialType").and_then(Value::as_i64) == Some(5),
+    })
 }
 
 #[cfg(test)]

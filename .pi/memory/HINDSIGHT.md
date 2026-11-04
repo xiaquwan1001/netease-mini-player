@@ -202,3 +202,25 @@ API/protocol details and anti-bot technique live in the
 - `rustc` 偶发 `thread panicked while processing panic. aborting.`(SIGABRT) 是 incremental 缓存坏了:
   `CARGO_INCREMENTAL=0 cargo build` 即好, 不用清整个 target。
 <!-- created=2026-11-04, last=2026-11-04 -->
+
+## 收藏(红心) + 歌单 + VIP 标识(2026-11-04 晚)
+- 接口全在 vendor 里, 不要自己拼: `likelist()`=/api/song/like/get(取我喜欢 id 集合, **红心状态唯一真相**,
+  别每首查详情), `like()`=/api/radio/like(weapi, alg=itembased&time=3, like=false 也走同一接口),
+  `user_playlist()`=/api/user/playlist(含 specialType=5 的"我喜欢的音乐"), `playlist_track_all()`(先拿 trackIds
+  再批量详情), `song_detail()`(逗号分隔 id, 响应**不保证顺序/可能缺曲** → 用 id→Song 映射按 likelist 顺序还原)。
+- **like 接口个别曲目返回 code=500 "Unknown error"**(实测周杰伦《晴天》186016 恒失败, 普通曲目成功);
+  UI 必须乐观更新 + 失败回滚, 不能等返回值才刷红心。
+- 队列纪律的代价: 原生侧只有一个 MediaItem ⇒ Media3 认为 hasNext=false, 通知栏只有上一首/暂停。
+  用 `ForwardingPlayer` 覆写 hasNextMediaItem/hasPreviousMediaItem(恒 true) + getAvailableCommands
+  补 COMMAND_SEEK_TO_NEXT(_MEDIA_ITEM), 把 seekToNext* 回调成 PlaybackService.skipListener →
+  MainActivity 转 MethodChannel('ncm/player') 的 skipNext/skipPrevious → Dart _next()/_previous()。
+  队列仍只有 Dart 一份; 模拟器上 KEYCODE_MEDIA_NEXT(87)/PREVIOUS(88) 已验证。
+  **已知限制**: 进程被杀只剩 Service 时 skipListener=null, 通知栏上下曲不响应(队列在 Dart, 无处可跳)。
+- VIP 标识两处: 歌曲用 Song::is_vip()(fee 1/8) + is_paid()(fee 4); 账号用 profile.vip(vipType>0,
+  来自 /api/nuser/account/get)。InitInfo.vip 读的是落盘的 session.profile.vip ⇒ **account_sync_active()
+  之后必须刷新 _vip**, 否则启动后 AppBar 不出 VIP 标(踩过: 账号明明是黑胶却没标)。
+- 歌单浏览复用搜索结果那一屏(_library/_libraryTitle), 队列就是打开的那个歌单; 搜索会清掉浏览态。
+- codegen 必须在 source tools/env.sh 之后跑, 否则 frb 找不到 flutter 直接失败(flutter: not found)。
+- 模拟器 tap 坐标要按截图缩放换算(截图 900x2000 → 实际 1080x2400, ×1.2); 播放条红心 y 会随
+  布局/字体略有漂移, 每次按**新截图**取坐标, 否则点到滑杆 = seek 到末尾 = 自动跳下一首(白排查半天)。
+<!-- created=2026-11-04, last=2026-11-04 -->

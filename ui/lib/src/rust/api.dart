@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `player`, `state_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `player`, `song_dto`, `state_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -44,6 +44,24 @@ Future<bool> accountSwitch({required BigInt userId}) =>
 /// 从账号簿移除某个账号(不影响当前登录态, 只是忘掉它的凭据)
 Future<bool> accountRemove({required BigInt userId}) =>
     RustLib.instance.api.crateApiAccountRemove(userId: userId);
+
+/// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
+Future<Uint64List> likedIds() => RustLib.instance.api.crateApiLikedIds();
+
+/// 红心/取消红心(需登录)
+Future<bool> setLiked({required BigInt trackId, required bool liked}) =>
+    RustLib.instance.api.crateApiSetLiked(trackId: trackId, liked: liked);
+
+/// 我的歌单(含"我喜欢的音乐")
+Future<List<PlaylistDto>> myPlaylists() =>
+    RustLib.instance.api.crateApiMyPlaylists();
+
+/// 某个歌单的曲目
+Future<List<SongDto>> playlistSongs({required BigInt playlistId}) =>
+    RustLib.instance.api.crateApiPlaylistSongs(playlistId: playlistId);
+
+/// "我喜欢的音乐"曲目详情(按红心时间倒序 = likelist 的顺序)
+Future<List<SongDto>> likedSongs() => RustLib.instance.api.crateApiLikedSongs();
 
 /// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
 Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
@@ -89,12 +107,14 @@ class AccountDto {
   final String nickname;
   final String? avatarUrl;
   final bool active;
+  final bool vip;
 
   const AccountDto({
     required this.userId,
     required this.nickname,
     this.avatarUrl,
     required this.active,
+    required this.vip,
   });
 
   @override
@@ -102,7 +122,8 @@ class AccountDto {
       userId.hashCode ^
       nickname.hashCode ^
       avatarUrl.hashCode ^
-      active.hashCode;
+      active.hashCode ^
+      vip.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -112,19 +133,24 @@ class AccountDto {
           userId == other.userId &&
           nickname == other.nickname &&
           avatarUrl == other.avatarUrl &&
-          active == other.active;
+          active == other.active &&
+          vip == other.vip;
 }
 
 class InitInfo {
   final String dataDir;
   final String deviceId;
   final bool loggedIn;
+
+  /// 当前账号是否会员(黑胶/音乐包)
+  final bool vip;
   final List<ProviderInfo> providers;
 
   const InitInfo({
     required this.dataDir,
     required this.deviceId,
     required this.loggedIn,
+    required this.vip,
     required this.providers,
   });
 
@@ -133,6 +159,7 @@ class InitInfo {
       dataDir.hashCode ^
       deviceId.hashCode ^
       loggedIn.hashCode ^
+      vip.hashCode ^
       providers.hashCode;
 
   @override
@@ -143,6 +170,7 @@ class InitInfo {
           dataDir == other.dataDir &&
           deviceId == other.deviceId &&
           loggedIn == other.loggedIn &&
+          vip == other.vip &&
           providers == other.providers;
 }
 
@@ -202,6 +230,43 @@ class PlayerStateDto {
           volume == other.volume;
 }
 
+class PlaylistDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final BigInt trackCount;
+
+  /// 是否"我喜欢的音乐"
+  final bool special;
+
+  const PlaylistDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.trackCount,
+    required this.special,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      trackCount.hashCode ^
+      special.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlaylistDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          trackCount == other.trackCount &&
+          special == other.special;
+}
+
 class ProviderInfo {
   final String id;
   final String name;
@@ -258,6 +323,12 @@ class SongDto {
   final BigInt durationMs;
   final PlatformInt64 fee;
 
+  /// VIP 专属(高音质需会员)
+  final bool vip;
+
+  /// 需单独购买的数字专辑
+  final bool paid;
+
   const SongDto({
     required this.id,
     required this.name,
@@ -265,6 +336,8 @@ class SongDto {
     required this.album,
     required this.durationMs,
     required this.fee,
+    required this.vip,
+    required this.paid,
   });
 
   @override
@@ -274,7 +347,9 @@ class SongDto {
       artist.hashCode ^
       album.hashCode ^
       durationMs.hashCode ^
-      fee.hashCode;
+      fee.hashCode ^
+      vip.hashCode ^
+      paid.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -286,7 +361,9 @@ class SongDto {
           artist == other.artist &&
           album == other.album &&
           durationMs == other.durationMs &&
-          fee == other.fee;
+          fee == other.fee &&
+          vip == other.vip &&
+          paid == other.paid;
 }
 
 class StreamDto {

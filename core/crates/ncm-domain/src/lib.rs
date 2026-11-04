@@ -54,6 +54,16 @@ pub struct Song {
 }
 
 impl Song {
+    /// VIP 专属(高音质需会员): 网易云 fee=1 是会员曲, fee=8 是"标准音质免费"。
+    pub fn is_vip(&self) -> bool {
+        matches!(self.fee, Some(1) | Some(8))
+    }
+
+    /// 需要单独购买的数字专辑
+    pub fn is_paid(&self) -> bool {
+        matches!(self.fee, Some(4))
+    }
+
     pub fn artist_line(&self) -> String {
         self.artists
             .iter()
@@ -113,6 +123,23 @@ pub struct Profile {
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+    /// 黑胶/音乐包会员(vipType > 0). 老数据没有这个字段, 默认为 false.
+    #[serde(default)]
+    pub vip: bool,
+}
+
+/// 账号下的歌单(我喜欢的音乐也在里面, 名称固定/specialType=5)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Playlist {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub track_count: u64,
+    /// 是否是"我喜欢的音乐"(网易云用 specialType=5 标记)
+    #[serde(default)]
+    pub special: bool,
 }
 
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.

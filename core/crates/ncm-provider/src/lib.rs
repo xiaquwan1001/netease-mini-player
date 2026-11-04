@@ -5,7 +5,7 @@
 //! - 错误统一成 ProviderError, UI 只按 kind 决策
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
-use ncm_domain::{Lyric, Profile, SearchPage, StreamUrl, TrackId};
+use ncm_domain::{Lyric, Playlist, Profile, SearchPage, Song, StreamUrl, TrackId};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -197,9 +197,34 @@ pub trait Provider: Send + Sync {
 
     fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>>;
 
-    /// 当前登录账号的资料(uid/昵称). 未登录或不支持时返回 Unsupported.
+    /// 当前登录账号的资料(uid/昵称/VIP). 未登录或不支持时返回 Unsupported.
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Profile>> {
         Box::pin(async { Err(ProviderError::unsupported("no profile")) })
+    }
+
+    /// "我喜欢的音乐"里的曲目 id(用于红心状态)
+    fn liked_ids<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<TrackId>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no liked ids")) })
+    }
+
+    /// 红心/取消红心. 返回 true 表示操作被接受.
+    fn set_like<'a>(&'a self, _track: TrackId, _liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no like")) })
+    }
+
+    /// 当前账号的歌单列表(含"我喜欢的音乐")
+    fn user_playlists<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlists")) })
+    }
+
+    /// 某个歌单的曲目
+    fn playlist_songs<'a>(&'a self, _playlist_id: u64) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist songs")) })
+    }
+
+    /// 批量取曲目详情(逗号分隔的 id)
+    fn songs_detail<'a>(&'a self, _ids: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song detail")) })
     }
 }
 

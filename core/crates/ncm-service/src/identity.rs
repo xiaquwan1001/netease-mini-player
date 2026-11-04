@@ -89,6 +89,9 @@ pub struct StoredAccount {
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+    /// 上次同步时的会员状态(离线也能显示标识, 不当作事实真相)
+    #[serde(default)]
+    pub vip: bool,
     /// 只含登录凭据的 cookie 串
     pub cookie: String,
 }
@@ -424,12 +427,14 @@ mod tests {
             user_id: 1,
             nickname: "A".into(),
             avatar_url: None,
+            vip: false,
             cookie: extract_login_cookie("deviceId=D; MUSIC_U=a; __csrf=1; _ntes_nuid=n"),
         });
         book.upsert(StoredAccount {
             user_id: 2,
             nickname: "B".into(),
             avatar_url: Some("http://avatar".into()),
+            vip: true,
             cookie: "MUSIC_U=b".into(),
         });
         // 只存登录凭据, 设备指纹不进账号簿

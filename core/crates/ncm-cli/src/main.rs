@@ -121,15 +121,90 @@ async fn run() -> Result<(), BoxErr> {
                 println!("total={} has_more={}", page.total, page.has_more);
                 for (i, s) in page.songs.iter().enumerate() {
                     println!(
-                        "{:>3}. [{}] {} — {} ({:.0}s) fee={:?}",
+                        "{:>3}. [{}] {} — {} ({:.0}s) fee={:?} vip={}",
                         i + 1,
                         s.id,
                         s.name,
                         s.artist_line(),
                         s.duration_ms as f64 / 1000.0,
-                        s.fee
+                        s.fee,
+                        if s.is_vip() { "Y" } else { "N" }
                     );
                 }
+            }
+            Ok(())
+        }
+        "liked" => {
+            let p = provider(&core, Capability::Playlist)?;
+            announce(&core);
+            let ids = p.liked_ids().await?;
+            println!("liked_count = {}", ids.len());
+            if !args.has("--quiet") {
+                let mut printed = 0;
+                for chunk in ids.chunks(50) {
+                    if printed >= 50 {
+                        break;
+                    }
+                    let ids: Vec<String> = chunk.iter().map(|t| t.0.to_string()).collect();
+                    let joined = ids.join(",");
+                    for s in p.songs_detail(&joined).await? {
+                        println!(
+                            "  [{}] {} — {} (fee={:?} vip={})",
+                            s.id,
+                            s.name,
+                            s.artist_line(),
+                            s.fee,
+                            s.is_vip()
+                        );
+                        printed += 1;
+                    }
+                }
+            }
+            Ok(())
+        }
+        "like" => {
+            let id: u64 = args.positional.first().ok_or("usage: ncm like <id> [--off]")?.parse()?;
+            let liked = !args.has("--off");
+            let p = provider(&core, Capability::Playlist)?;
+            announce(&core);
+            let ok = p.set_like(TrackId::new(id), liked).await?;
+            println!("set_like id={id} liked={liked} ok={ok}");
+            let ids = p.liked_ids().await?;
+            println!("now_in_likelist = {}", ids.iter().any(|t| t.0 == id));
+            Ok(())
+        }
+        "playlists" => {
+            let p = provider(&core, Capability::Playlist)?;
+            announce(&core);
+            let list = p.user_playlists().await?;
+            println!("playlist_count = {}", list.len());
+            for pl in &list {
+                println!(
+                    "  [{}] {} ({} 首){}",
+                    pl.id,
+                    pl.name,
+                    pl.track_count,
+                    if pl.special { "  <= 我喜欢的音乐" } else { "" }
+                );
+            }
+            Ok(())
+        }
+        "playlist" => {
+            let id: u64 = args.positional.first().ok_or("usage: ncm playlist <id>")?.parse()?;
+            let p = provider(&core, Capability::Playlist)?;
+            announce(&core);
+            let songs = p.playlist_songs(id).await?;
+            println!("song_count = {}", songs.len());
+            for (i, s) in songs.iter().take(30).enumerate() {
+                println!(
+                    "{:>3}. [{}] {} — {} (fee={:?} vip={})",
+                    i + 1,
+                    s.id,
+                    s.name,
+                    s.artist_line(),
+                    s.fee,
+                    s.is_vip()
+                );
             }
             Ok(())
         }
@@ -225,6 +300,10 @@ fn whoami(core: &Core) -> Result<(), BoxErr> {
     println!("data_dir   = {}", core.store.path().display());
     println!("device_id  = {}", core.session.device_id);
     println!("logged_in  = {}", core.session.is_logged_in());
+    match core.session.profile.as_ref() {
+        Some(p) => println!("account    = #{} {} vip={}", p.user_id, p.nickname, p.vip),
+        None => println!("account    = (尚未同步资料)"),
+    }
     println!("cookie_keys= {}",
         core.session
             .cookie

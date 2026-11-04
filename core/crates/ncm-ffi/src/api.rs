@@ -35,6 +35,7 @@ pub fn init(data_dir: Option<String>) -> Result<InitInfo, String> {
         data_dir: dir,
         device_id: guard.session.device_id.clone(),
         logged_in: guard.session.is_logged_in(),
+        vip: guard.session.profile.as_ref().map(|p| p.vip).unwrap_or(false),
         providers: guard
             .providers
             .all()
@@ -52,6 +53,8 @@ pub struct InitInfo {
     pub data_dir: String,
     pub device_id: String,
     pub logged_in: bool,
+    /// 当前账号是否会员(黑胶/音乐包)
+    pub vip: bool,
     pub providers: Vec<ProviderInfo>,
 }
 
@@ -68,6 +71,26 @@ pub struct SongDto {
     pub album: String,
     pub duration_ms: u64,
     pub fee: i64,
+    /// VIP 专属(高音质需会员)
+    pub vip: bool,
+    /// 需单独购买的数字专辑
+    pub paid: bool,
+}
+
+fn song_dto(s: ncm_domain::Song) -> SongDto {
+    let artist = s.artist_line();
+    let vip = s.is_vip();
+    let paid = s.is_paid();
+    SongDto {
+        id: s.id.0,
+        name: s.name,
+        artist,
+        album: s.album.map(|a| a.name).unwrap_or_default(),
+        duration_ms: s.duration_ms,
+        fee: s.fee.unwrap_or(0),
+        vip,
+        paid,
+    }
 }
 
 pub struct SearchResultDto {
@@ -96,21 +119,7 @@ pub async fn search(keywords: String, limit: u32) -> Result<SearchResultDto, Str
     Ok(SearchResultDto {
         total: page.total,
         has_more: page.has_more,
-        songs: page
-            .songs
-            .into_iter()
-            .map(|s| {
-                let artist = s.artist_line();
-                SongDto {
-                    id: s.id.0,
-                    name: s.name,
-                    artist,
-                    album: s.album.map(|a| a.name).unwrap_or_default(),
-                    duration_ms: s.duration_ms,
-                    fee: s.fee.unwrap_or(0),
-                }
-            })
-            .collect(),
+        songs: page.songs.into_iter().map(song_dto).collect(),
     })
 }
 
@@ -164,6 +173,7 @@ pub struct AccountDto {
     pub nickname: String,
     pub avatar_url: Option<String>,
     pub active: bool,
+    pub vip: bool,
 }
 
 fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
@@ -176,6 +186,7 @@ fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
             nickname: a.nickname,
             avatar_url: a.avatar_url,
             active: book.active == Some(a.user_id),
+            vip: a.vip,
         })
         .collect())
 }
@@ -209,6 +220,7 @@ pub async fn account_sync_active() -> Result<AccountDto, String> {
         nickname: profile.nickname,
         avatar_url: profile.avatar_url,
         active: true,
+        vip: profile.vip,
     })
 }
 
@@ -231,6 +243,94 @@ pub fn account_remove(user_id: u64) -> Result<bool, String> {
     let before = guard.accounts().map_err(|e| e.to_string())?.accounts.len();
     let book = guard.forget_account(user_id).map_err(|e| e.to_string())?;
     Ok(book.accounts.len() < before)
+}
+
+// ---------------- 收藏(红心)与歌单 ----------------
+
+pub struct PlaylistDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub track_count: u64,
+    /// 是否"我喜欢的音乐"
+    pub special: bool,
+}
+
+fn with_provider(
+    cap: Capability,
+) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, String> {
+    let guard = core()?.lock().map_err(|e| e.to_string())?;
+    guard
+        .providers
+        .first_with(cap)
+        .ok_or_else(|| format!("no provider supports {}", cap.as_str()))
+        .map(|p| p.clone())
+}
+
+/// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
+pub async fn liked_ids() -> Result<Vec<u64>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let ids = provider.liked_ids().await.map_err(|e| e.to_string())?;
+    Ok(ids.into_iter().map(|t| t.0).collect())
+}
+
+/// 红心/取消红心(需登录)
+pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    provider
+        .set_like(ncm_domain::TrackId::new(track_id), liked)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 我的歌单(含"我喜欢的音乐")
+pub async fn my_playlists() -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let list = provider.user_playlists().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|p| PlaylistDto {
+            id: p.id,
+            name: p.name,
+            cover_url: p.cover_url,
+            track_count: p.track_count,
+            special: p.special,
+        })
+        .collect())
+}
+
+/// 某个歌单的曲目
+pub async fn playlist_songs(playlist_id: u64) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let songs = provider
+        .playlist_songs(playlist_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(songs.into_iter().map(song_dto).collect())
+}
+
+/// "我喜欢的音乐"曲目详情(按红心时间倒序 = likelist 的顺序)
+pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let ids = provider.liked_ids().await.map_err(|e| e.to_string())?;
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    // 先把 id 拼成一次详情请求(vendor 的 song_detail 只认逗号分隔), 分块避免 URL 过长
+    // 详情接口不保证按请求顺序返回(还可能缺曲), 用 id→Song 映射按 likelist 顺序还原
+    let mut by_id: std::collections::HashMap<u64, ncm_domain::Song> =
+        std::collections::HashMap::new();
+    for chunk in ids.chunks(500) {
+        let joined = chunk.iter().map(|t| t.0.to_string()).collect::<Vec<_>>().join(",");
+        let detail = provider
+            .songs_detail(&joined)
+            .await
+            .map_err(|e| e.to_string())?;
+        for s in detail {
+            by_id.insert(s.id.0, s);
+        }
+    }
+    Ok(ids.iter().filter_map(|t| by_id.remove(&t.0)).map(song_dto).collect())
 }
 
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)

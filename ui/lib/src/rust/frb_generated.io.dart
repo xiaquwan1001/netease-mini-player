@@ -52,6 +52,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
 
   @protected
+  List<PlaylistDto> dco_decode_list_playlist_dto(dynamic raw);
+
+  @protected
+  Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
+
+  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -71,6 +77,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayerStateDto dco_decode_player_state_dto(dynamic raw);
+
+  @protected
+  PlaylistDto dco_decode_playlist_dto(dynamic raw);
 
   @protected
   ProviderInfo dco_decode_provider_info(dynamic raw);
@@ -129,6 +138,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PlaylistDto> sse_decode_list_playlist_dto(SseDeserializer deserializer);
+
+  @protected
+  Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
+
+  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -150,6 +165,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayerStateDto sse_decode_player_state_dto(SseDeserializer deserializer);
+
+  @protected
+  PlaylistDto sse_decode_playlist_dto(SseDeserializer deserializer);
 
   @protected
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
@@ -215,6 +233,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_playlist_dto(
+    List<PlaylistDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_64_strict(
+    Uint64List self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
     SseSerializer serializer,
@@ -243,6 +273,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PlayerStateDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_playlist_dto(PlaylistDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);

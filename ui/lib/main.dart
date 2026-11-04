@@ -86,7 +86,21 @@ class _HomePageState extends State<HomePage> {
   int _lyricIndex = -1;
   bool _showLyrics = false;
 
+  /// 当前账号是否会员(来自 /api/nuser/account/get 的 vipType)
+  bool _vip = false;
+
+  /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
+  Set<BigInt> _liked = <BigInt>{};
+
+  /// 歌单浏览态: 非空时列表显示这个歌单而不是搜索结果
+  List<rust.SongDto> _library = const [];
+  String? _libraryTitle;
+
   rust.SongDto? get _current => _queue.current;
+
+  /// 当前列表要显示/播放的曲目(歌单浏览优先)
+  List<rust.SongDto> get _visibleSongs =>
+      _libraryTitle != null ? _library : (_result?.songs ?? const <rust.SongDto>[]);
 
   @override
   void initState() {
@@ -108,9 +122,15 @@ class _HomePageState extends State<HomePage> {
     try {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
-      setState(() => _info = info);
+      setState(() {
+        _info = info;
+        _vip = info.vip;
+      });
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
-      if (info.loggedIn) unawaited(_syncAccount());
+      if (info.loggedIn) {
+        unawaited(_syncAccount());
+        unawaited(_loadLiked());
+      }
     } catch (e) {
       setState(() => _error = '$e');
     }
@@ -159,6 +179,9 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _busy = true;
       _error = null;
+      // 搜索即离开歌单浏览态, 结果列表要保持"这一屏是什么"的唯一来源
+      _library = const [];
+      _libraryTitle = null;
     });
     try {
       final result = await rust.search(keywords: _controller.text, limit: 20);
@@ -170,9 +193,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 点列表: 用当前搜索结果重置队列, 从被点那首开始
+  /// 点列表: 用当前可见列表(搜索/歌单)重置队列, 从被点那首开始
   Future<void> _playFromList(rust.SongDto song) async {
-    final songs = _result?.songs ?? const <rust.SongDto>[];
+    final songs = _visibleSongs;
     final start = songs.indexWhere((s) => s.id == song.id);
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
     _userStopped = false;
@@ -339,7 +362,17 @@ class _HomePageState extends State<HomePage> {
             for (final account in saved)
               ListTile(
                 leading: Icon(account.active ? Icons.check_circle : Icons.person_outline),
-                title: Text(account.nickname.isEmpty ? '账号 ${account.userId}' : account.nickname),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        account.nickname.isEmpty ? '账号 ${account.userId}' : account.nickname,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (account.vip) _vipBadge(sheetContext, small: true),
+                  ],
+                ),
                 subtitle: Text(account.active ? '当前账号' : '点击切换'),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline),
@@ -399,21 +432,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// refresh init 信息(登录态/设备 id)
+  /// refresh init 信息(登录态/设备 id/会员状态)
   Future<void> _refreshInfo() async {
     try {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
-      if (mounted) setState(() => _info = info);
+      if (mounted) {
+        setState(() {
+          _info = info;
+          _vip = info.vip;
+        });
+      }
+      if (info.loggedIn) {
+        await _loadLiked();
+      } else {
+        _liked = <BigInt>{};
+      }
     } catch (_) {
       // init 失败保持旧状态
     }
   }
 
-  /// 记账号资料(昵称/uid)进账号簿; 离线拉不到只是没名字, 不影响登录态
+  /// 记账号资料(昵称/uid/会员)进账号簿; 离线拉不到只是没名字, 不影响登录态
   Future<void> _syncAccount() async {
     try {
-      await rust.accountSyncActive();
+      final account = await rust.accountSyncActive();
+      if (!mounted) return;
+      setState(() => _vip = account.vip);
     } catch (_) {}
   }
 
@@ -433,6 +478,138 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  // ---------------- 收藏(红心)与歌单 ----------------
+
+  /// 拉一次"我喜欢的音乐"的 id 集合. 失败不影响播放, 只是红心状态未知。
+  Future<void> _loadLiked() async {
+    try {
+      final ids = await rust.likedIds();
+      if (!mounted) return;
+      setState(() => _liked = ids.toSet());
+    } catch (_) {}
+  }
+
+  bool _isLiked(BigInt? trackId) => trackId != null && _liked.contains(trackId);
+
+  /// 红心/取消红心(当前曲目). 先乐观更新, 失败回滚。
+  Future<void> _toggleLike() async {
+    final id = _current?.id;
+    if (id == null) return;
+    if (_info?.loggedIn != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('收藏需要先登录')),
+      );
+      return;
+    }
+    final wasLiked = _liked.contains(id);
+    setState(() {
+      if (wasLiked) {
+        _liked.remove(id);
+      } else {
+        _liked.add(id);
+      }
+    });
+    try {
+      await rust.setLiked(trackId: id, liked: !wasLiked);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        if (wasLiked) {
+          _liked.add(id);
+        } else {
+          _liked.remove(id);
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('收藏失败: $e')));
+    }
+  }
+
+  /// 收藏/歌单面板: 我喜欢的音乐 + 我的歌单
+  Future<void> _showPlaylists() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.6,
+          child: FutureBuilder<List<rust.PlaylistDto>>(
+            future: rust.myPlaylists(),
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(child: Text('歌单获取失败: ${snap.error}'));
+              }
+              final lists = snap.data ?? const <rust.PlaylistDto>[];
+              // "我喜欢的音乐"固定排最前(一次扫描就把 special 挑出来, 不依赖后端顺序)
+              final special = lists.where((p) => p.special).toList();
+              final others = lists.where((p) => !p.special).toList();
+              final ordered = [...special, ...others];
+              return ListView(
+                children: [
+                  ListTile(
+                    dense: true,
+                    title: const Text('我的收藏'),
+                    subtitle: Text('${ordered.length} 个歌单'),
+                  ),
+                  const Divider(height: 1),
+                  for (final pl in ordered)
+                    ListTile(
+                      leading: Icon(
+                        pl.special ? Icons.favorite : Icons.queue_music,
+                        color: pl.special
+                            ? Theme.of(context).colorScheme.primary
+                            : null,
+                      ),
+                      title: Text(pl.name),
+                      subtitle: Text('${pl.trackCount} 首'),
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _openPlaylist(pl);
+                      },
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 打开歌单: 曲目进列表(和搜索结果同一个列表, 点哪首播哪首, 队列就是整个歌单)
+  Future<void> _openPlaylist(rust.PlaylistDto pl) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final songs = pl.special
+          ? await rust.likedSongs()
+          : await rust.playlistSongs(playlistId: pl.id);
+      if (!mounted) return;
+      setState(() {
+        _library = songs;
+        _libraryTitle = pl.special ? '我喜欢的音乐' : pl.name;
+        if (pl.special) _liked = songs.map((s) => s.id).toSet();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 退出歌单浏览, 回到搜索
+  void _closeLibrary() {
+    setState(() {
+      _library = const [];
+      _libraryTitle = null;
+    });
   }
 
   // ---------------- 播放控制 ----------------
@@ -505,14 +682,24 @@ class _HomePageState extends State<HomePage> {
     final current = _current;
     return Scaffold(
       appBar: AppBar(
-        title: Text(_showLyrics ? (current?.name ?? '歌词') : '轻音 MiniNCM'),
+        title: Text(
+          _showLyrics
+              ? (current?.name ?? '歌词')
+              : (_libraryTitle ?? '轻音 MiniNCM'),
+        ),
         leading: _showLyrics
             ? IconButton(
                 icon: const Icon(Icons.expand_more),
                 tooltip: '收起歌词',
                 onPressed: _toggleLyrics,
               )
-            : null,
+            : (_libraryTitle != null
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: '返回搜索',
+                    onPressed: _closeLibrary,
+                  )
+                : null),
         actions: [
           if (_auth.isAndroid) ...[
             if (_info?.loggedIn == true)
@@ -523,6 +710,14 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.login, size: 18),
                 label: const Text('登录'),
               ),
+            if (_info?.loggedIn == true)
+              IconButton(
+                tooltip: '我喜欢的音乐 / 我的歌单',
+                icon: const Icon(Icons.library_music),
+                onPressed: _showPlaylists,
+              ),
+            // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
+            if (_info?.loggedIn == true && _vip) _vipBadge(context, small: true),
             // 账号簿入口常驻: 退出后账号仍在簿里, 需要能一键切回
             IconButton(
               tooltip: '账号',
@@ -592,15 +787,28 @@ class _HomePageState extends State<HomePage> {
     if (_result == null) {
       return const Center(child: Text('输入关键词后搜索'));
     }
+    final songs = _visibleSongs;
+    if (songs.isEmpty) {
+      return const Center(child: Text('这个歌单是空的'));
+    }
     return ListView.builder(
-      itemCount: _result!.songs.length,
+      itemCount: songs.length,
       itemBuilder: (context, i) {
-        final s = _result!.songs[i];
+        final s = songs[i];
         final active = current?.id == s.id;
         return ListTile(
           dense: true,
           selected: active,
-          title: Text(s.name),
+          leading: _isLiked(s.id)
+              ? Icon(Icons.favorite, size: 16, color: Theme.of(context).colorScheme.primary)
+              : null,
+          title: Row(
+            children: [
+              Flexible(child: Text(s.name, overflow: TextOverflow.ellipsis)),
+              if (s.vip) _vipBadge(context, small: true),
+              if (!s.vip && s.paid) _paidBadge(context),
+            ],
+          ),
           subtitle: Text('${s.artist} · ${s.album}'),
           trailing: Text('${s.durationMs ~/ BigInt.from(1000)}s'),
           onTap: () => _playFromList(s),
@@ -660,6 +868,51 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 会员/VIP 小标: 歌曲行与账号都用这一个(成套形态, 不要各处自己画)
+  Widget _vipBadge(BuildContext context, {bool small = false}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: EdgeInsets.symmetric(horizontal: small ? 4 : 6, vertical: small ? 1 : 2),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.5), width: 0.8),
+      ),
+      child: Text(
+        'VIP',
+        style: TextStyle(
+          fontSize: small ? 10 : 11,
+          height: 1.2,
+          fontWeight: FontWeight.w700,
+          color: scheme.primary,
+        ),
+      ),
+    );
+  }
+
+  /// 需单独购买的数字专辑
+  Widget _paidBadge(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(left: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: scheme.tertiary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        '付费',
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.2,
+          fontWeight: FontWeight.w700,
+          color: scheme.tertiary,
+        ),
+      ),
+    );
+  }
+
   Widget _buildPlayerBar(BuildContext context, PlayerView player, rust.SongDto? current) {
     final dur = player.durationMs.toDouble();
     // 拖动中冻结量程: 自动续播会让 duration 突跳
@@ -683,31 +936,57 @@ class _HomePageState extends State<HomePage> {
               ),
               // 窄屏(411dp) + 大字号下, 标题若和 5 个按钮抢同一行会被挤成"晴…",
               // 因此标题独占一行, 控件单独居中一行.
-              InkWell(
-                onTap: _toggleLyrics,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        current?.name ?? '未在播放',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall,
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _toggleLyrics,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 8, 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    current?.name ?? '未在播放',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                ),
+                                if (current?.vip == true) _vipBadge(context, small: true),
+                                if (current?.paid == true && current?.vip != true)
+                                  _paidBadge(context),
+                              ],
+                            ),
+                            Text(
+                              '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                              '  ${current?.artist ?? ''}'
+                              '  $inQueue/${_queue.items.length}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
                       ),
-                      Text(
-                        '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                        '  ${current?.artist ?? ''}'
-                        '  $inQueue/${_queue.items.length}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+                  // 红心: 当前曲目是否在我喜欢的音乐里, 点一下即收藏/取消
+                  IconButton(
+                    tooltip: _isLiked(current?.id) ? '取消喜欢' : '喜欢',
+                    icon: Icon(
+                      _isLiked(current?.id) ? Icons.favorite : Icons.favorite_border,
+                      color: _isLiked(current?.id)
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    onPressed: _toggleLike,
+                  ),
+                ],
               ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
