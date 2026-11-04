@@ -167,3 +167,17 @@ API/protocol details and anti-bot technique live in the
   (`ssl_client_socket_impl.cc handshake failed, net_error -100`),系统 Chrome 同样打不开网抑云页面
   ⇒ 是宿主 NAT/中间设备的 SNI 级拦截, 不是我们的 WebView 代码。判定不要只看一个栈。
 <!-- created=2026-11-04, last=2026-11-04 -->
+
+## 模拟器 WebView/Chrome 打不开 https: 是 virtio-wifi(2026-11-04 查明)
+- 症状: 同一 guest 里 rustls/reqwest 的 https 全通, 但 `WebView`/系统 Chrome 一律
+  `net::ERR_CONNECTION_RESET`(`ssl_client_socket_impl.cc handshake failed, net_error -101`);
+  宿主 `curl` 正常 ⇒ 不是站点、不是我们代码。
+- 真因: Android 的默认网络是 **wlan0(netsim 虚拟 wifi, 10.0.2.16)** 时 chromium 的 TLS 会被重置;
+  `adb shell svc wifi disable` 之后走 **eth0(cellular, 10.0.2.15)** 立刻正常
+  —— 官方移动端登录页完整渲染(手机号/微博/QQ 都在)。
+- 处理: `~/bin/avd headless` 现在会在启动完成时自动 `svc wifi disable`(注释里写了原因)。
+  手上有活的模拟器: `adb shell svc wifi disable` 即可。
+- 顺带两条: (a) `-gpu host` 在 Chrome 渲染重页面时会把 gfxstream 打崩(`glGenTextures: null ctx`),
+  headless 验证用 `-gpu swiftshader_indirect` 稳; (b) 该路径 MTU < 1500(`ping -M do -s 1472` 不通,
+  1400 通), 但把 guest MTU 降到 1400 并不能救 chromium, 所以 MTU 不是主因。
+<!-- created=2026-11-04, last=2026-11-04 -->
