@@ -12,13 +12,53 @@ use std::path::{Path, PathBuf};
 
 const IDENTITY_FILE: &str = "identity.json";
 
-/// 设备指纹 cookie 的默认身份(桌面形态, 与官方 PC 客户端对齐).
-/// 音质档位只由 MUSIC_U 决定, 与 os/appver 无关(v1 实测).
+/// 平台形态: **os/appver/osver/channel 四个键必须与 UA、与网页入口的形态自洽**。
+///
+/// 反面教材(2026-11-04 修正): 以前 cookie 写死 `os=pc` + Win10 指纹, 而 vendor 库对
+/// `eapi` 默认发 **iPhone UA**(api-enhanced 的默认值), 于是"身份说 PC、UA 说 iPhone",
+/// 风控视角就是一台自相矛盾的客户端 —— 这类不一致最坏的结果是**假通过**(静默降权、
+/// 取链只给试听), 比直接报错难查得多。
+///
+/// 取值全部对齐 vendor `util::config`(OS_ANDROID / OS_PC 与 `choose_user_agent`),
+/// 不自己编版本号。
+pub struct PlatformProfile {
+    pub os: &'static str,
+    pub appver: &'static str,
+    pub osver: &'static str,
+    pub channel: &'static str,
+    /// 与 os 形态配套的 UA(安卓端 = 官方安卓客户端 UA, 桌面端 = 官方 PC 客户端 UA)
+    pub ua: &'static str,
+}
+
+/// 安卓端: 与 vendor `OS_ANDROID` + `choose_user_agent("eapi", "android")` 一致
+pub const ANDROID_PROFILE: PlatformProfile = PlatformProfile {
+    os: "android",
+    appver: "8.20.20.231215173437",
+    osver: "14",
+    channel: "xiaomi",
+    ua: "NeteaseMusic/9.1.65.240927161425(9001065);Dalvik/2.1.0 (Linux; U; Android 14; 23013RK75C Build/UKQ1.230804.001)",
+};
+
+/// 桌面端: 与 vendor `OS_PC` + `choose_user_agent("eapi", "pc")` 一致
+pub const DESKTOP_PROFILE: PlatformProfile = PlatformProfile {
+    os: "pc",
+    appver: "3.1.17.204416",
+    osver: "Microsoft-Windows-10-Professional-build-19045-64bit",
+    channel: "netease",
+    ua: "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.0.18.203152",
+};
+
+/// 当前构建目标对应的形态(安卓 App 用安卓形态, 其它按桌面形态)
+pub fn platform_profile() -> &'static PlatformProfile {
+    if cfg!(target_os = "android") {
+        &ANDROID_PROFILE
+    } else {
+        &DESKTOP_PROFILE
+    }
+}
+
+/// 形态无关的默认值(缺了才补, 已有值不覆盖)
 const IDENTITY_DEFAULTS: &[(&str, &str)] = &[
-    ("os", "pc"),
-    ("appver", "3.1.17.204416"),
-    ("osver", "Microsoft-Windows-10-Professional-build-19045-64bit"),
-    ("channel", "netease"),
     ("WEVNSM", "1.0.0"),
     ("__remember_me", "true"),
     ("ntes_kaola_ad", "1"),
@@ -95,6 +135,20 @@ impl IdentityStore {
 /// 为什么必须持久化这些键: 库在缺失时会**每进程随机**生成
 /// (_ntes_nuid/_ntes_nnid/NMTID/WNMCID/deviceId) —— 在风控眼里等于每次换新设备.
 pub fn merge_device_cookie(existing: &str, incoming: &str, device_id: &str) -> String {
+    merge_device_cookie_with(existing, incoming, device_id, platform_profile())
+}
+
+/// 同 `merge_device_cookie`, 但显式指定形态(便于单测两种形态).
+///
+/// 形态四键(os/appver/osver/channel)是**声明式的身份**, 一律按 profile 覆盖:
+/// 老版本写过 `os=pc` 的 identity.json 在安卓上会被就地纠正, 其余指纹
+/// (deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID) 与登录凭据原样保留。
+pub fn merge_device_cookie_with(
+    existing: &str,
+    incoming: &str,
+    device_id: &str,
+    profile: &PlatformProfile,
+) -> String {
     use std::collections::BTreeMap;
     let mut map: BTreeMap<String, String> = BTreeMap::new();
     let mut absorb = |raw: &str, overwrite: bool| {
@@ -121,6 +175,14 @@ pub fn merge_device_cookie(existing: &str, incoming: &str, device_id: &str) -> S
 
     for (k, v) in IDENTITY_DEFAULTS {
         map.entry(k.to_string()).or_insert_with(|| v.to_string());
+    }
+    for (k, v) in [
+        ("os", profile.os),
+        ("appver", profile.appver),
+        ("osver", profile.osver),
+        ("channel", profile.channel),
+    ] {
+        map.insert(k.to_string(), v.to_string());
     }
     map.entry("deviceId".into())
         .or_insert_with(|| device_id.to_string());
@@ -225,6 +287,47 @@ mod tests {
         let logged = merge_device_cookie(&merged, "MUSIC_U=x; os=pc", "ABC");
         assert!(logged.contains("MUSIC_U=x"));
         assert!(logged.contains("_ntes_nuid="));
+    }
+
+    #[test]
+    fn profile_declares_matching_os_fields() {
+        let android =
+            merge_device_cookie_with("", "MUSIC_U=x; os=web; appver=1", "DEV", &ANDROID_PROFILE);
+        assert!(android.contains("os=android"), "{android}");
+        assert!(android.contains("appver=8.20.20.231215173437"), "{android}");
+        assert!(android.contains("channel=xiaomi"), "{android}");
+        // 登录凭据与设备指纹都不能被形态覆盖冲掉
+        assert!(android.contains("MUSIC_U=x"), "{android}");
+        assert!(android.contains("deviceId=DEV"), "{android}");
+
+        let desktop = merge_device_cookie_with("", "", "DEV", &DESKTOP_PROFILE);
+        assert!(desktop.contains("os=pc"), "{desktop}");
+        assert!(desktop.contains("appver=3.1.17.204416"), "{desktop}");
+        assert!(desktop.contains("channel=netease"), "{desktop}");
+    }
+
+    #[test]
+    fn stale_desktop_identity_migrates_to_android() {
+        let existing = "os=pc; appver=3.0.6; osver=10.0.19045; channel=netease; deviceId=DEV;                         _ntes_nuid=aa; WNMCID=w; MUSIC_U=keepme";
+        let migrated = merge_device_cookie_with(existing, "", "DEV", &ANDROID_PROFILE);
+        assert!(migrated.contains("os=android"), "{migrated}");
+        assert!(!migrated.contains("os=pc"), "{migrated}");
+        assert!(migrated.contains("appver=8.20.20.231215173437"), "{migrated}");
+        // 指纹与凭据原样保留
+        assert!(migrated.contains("_ntes_nuid=aa"), "{migrated}");
+        assert!(migrated.contains("WNMCID=w"), "{migrated}");
+        assert!(migrated.contains("MUSIC_U=keepme"), "{migrated}");
+        assert!(migrated.contains("deviceId=DEV"), "{migrated}");
+    }
+
+    #[test]
+    fn platform_profile_ua_matches_os() {
+        let a = platform_profile();
+        if a.os == "android" {
+            assert!(a.ua.contains("Android"), "{}", a.ua);
+        } else {
+            assert!(a.ua.contains("NeteaseMusicDesktop"), "{}", a.ua);
+        }
     }
 
     #[test]

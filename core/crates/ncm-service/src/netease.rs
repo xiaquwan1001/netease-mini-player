@@ -55,7 +55,12 @@ impl NeteaseProvider {
     /// 正式实现应改成配置项而不是环境变量.
     pub fn new(session: Session) -> Self {
         let domain = std::env::var("NCM_DOMAIN").ok().filter(|s| !s.is_empty());
-        let ua = std::env::var("NCM_UA").ok().filter(|s| !s.is_empty());
+        // UA 必须与身份 cookie 的 os 形态配套(安卓 App UA / PC 客户端 UA);
+        // vendor 库对 eapi 的默认值是 iPhone UA, 与我们的 os 声明不一致, 必须显式覆盖.
+        let ua = std::env::var("NCM_UA")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| Some(crate::identity::platform_profile().ua.to_string()));
         Self { inner: RwLock::new(Inner::new(session, domain, ua)) }
     }
 

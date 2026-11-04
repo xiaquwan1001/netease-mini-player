@@ -53,8 +53,13 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        /**
+         * CDN 的 UA 也要与客户端形态一致: 安卓 App 用官方安卓客户端 UA
+         * (与 ncm-service 的 ANDROID_PROFILE.ua 同一串), 不要拿 PC 桌面 UA 冒充。
+         * ExoPlayer 默认 UA(NeteaseLib/ExoPlayerLib) 会被 CDN 拒。
+         */
         const val USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) " +
-                "Safari/537.36 Chrome/91.0.4472.164 NeteaseMusicDesktop/3.0.18.203152"
+            "NeteaseMusic/9.1.65.240927161425(9001065);Dalvik/2.1.0 (Linux; U; Android 14; " +
+                "23013RK75C Build/UKQ1.230804.001)"
     }
 }

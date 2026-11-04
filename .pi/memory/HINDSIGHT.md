@@ -181,3 +181,19 @@ API/protocol details and anti-bot technique live in the
   headless 验证用 `-gpu swiftshader_indirect` 稳; (b) 该路径 MTU < 1500(`ping -M do -s 1472` 不通,
   1400 通), 但把 guest MTU 降到 1400 并不能救 chromium, 所以 MTU 不是主因。
 <!-- created=2026-11-04, last=2026-11-04 -->
+
+## 客户端形态必须成套(2026-11-04, 用户提醒后修正)
+- 规则: **安卓端一切按安卓形态, 桌面端一切按桌面形态** —— API 的
+  `os/appver/osver/channel` + UA + 网页入口版式必须成套; 混着用最坏是**假通过**
+  (静默降权、取链只给试听), 比报错更难查。
+- 曾经的坑: cookie 写死 `os=pc` + Win10 指纹, 而 vendor 库对 `eapi` 的**默认 UA 是 iPhone**
+  (`NeteaseMusic 9.0.90/5038 (iPhone; iOS 16.2)`) —— "身份说 PC、UA 说 iPhone"。必须显式传 UA。
+- 现取值(对齐 vendor `util::config` 的 OS_ANDROID / OS_PC 与 `choose_user_agent`, 不自己编版本):
+  - Android: `os=android / 8.20.20.231215173437 / 14 / xiaomi` + `NeteaseMusic/9.1.65...(9001065);Dalvik/2.1.0 (Linux; U; Android 14; ...)`
+  - Linux/PC: `os=pc / 3.1.17.204416 / Microsoft-Windows-10-...-64bit / netease` + `... NeteaseMusicDesktop/3.0.18.203152`
+- 迁移策略: 形态四键**覆盖式**写入 identity.json(老 `os=pc` 的设备会被就地纠正),
+  但 deviceId/_ntes_nuid/_ntes_nnid/WNMCID/NMTID/MUSIC_U 一律保留 —— 换指纹=换设备, 不能动。
+- 网页入口同样是形态: 安卓 WebView 用设备默认移动 UA + `music.163.com/login`(302 → m/login 移动版);
+  PC 上的网页入口才用桌面 UA + 桌面站。**不要伪造桌面 UA 去开安卓端的登录页**。
+- CDN 也一样: 安卓播放器的 UA 换成官方安卓客户端 UA(与 API 同一串), 实测直链照常 200/audio-mpeg。
+<!-- created=2026-11-04, last=2026-11-04 -->
