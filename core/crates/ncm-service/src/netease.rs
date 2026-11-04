@@ -109,13 +109,34 @@ fn proxy_hint() -> String {
     String::new()
 }
 
+/// 把错误链一路串起来(`外层 <- 内层 <- 根因`).
+/// reqwest 的 Display 只有一句 "error sending request", 真正的原因(DNS/TCP/TLS)
+/// 全在 source() 链里 —— 真机排障必须看到这一层。
+fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = err.to_string();
+    let mut depth = 0;
+    let mut cursor = err.source();
+    while let Some(source) = cursor {
+        depth += 1;
+        if depth > 5 {
+            break;
+        }
+        out.push_str(" <- ");
+        out.push_str(&source.to_string());
+        cursor = source.source();
+    }
+    out
+}
+
 fn map_error(e: NcmError) -> ProviderError {
     match e {
         NcmError::AuthRequired(msg) => ProviderError::auth(msg),
         NcmError::RateLimited(msg) => ProviderError::risk_control(msg),
         NcmError::Api { code, msg } => map_code(code, msg),
         NcmError::Timeout(msg) => ProviderError::network(format!("timeout: {msg}")),
-        NcmError::Http(err) => ProviderError::network(format!("{}{}", err, proxy_hint())),
+        NcmError::Http(err) => {
+            ProviderError::network(format!("{}{}", error_chain(&err), proxy_hint()))
+        }
         other => ProviderError::internal(other.to_string()),
     }
 }
