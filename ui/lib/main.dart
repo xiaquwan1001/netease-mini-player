@@ -6,6 +6,7 @@ import 'src/auth.dart';
 import 'src/lyric.dart';
 import 'src/playback.dart';
 import 'src/queue.dart';
+import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -221,6 +222,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<bool> _resolveAndPlay(rust.SongDto song) async {
+    // 没版权的曲目连取链都不用试(官方也是灰显+提示, 不占播放位)
+    if (!song.playable) {
+      _notifyUnplayable(song);
+      return false;
+    }
     try {
       final stream = await rust.songUrl(trackId: song.id, level: 'exhigh');
       final url = stream.url;
@@ -370,7 +376,7 @@ class _HomePageState extends State<HomePage> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (account.vip) _vipBadge(sheetContext, small: true),
+                    if (account.vip) const VipBadge(small: true),
                   ],
                 ),
                 subtitle: Text(account.active ? '当前账号' : '点击切换'),
@@ -492,6 +498,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   bool _isLiked(BigInt? trackId) => trackId != null && _liked.contains(trackId);
+
+  /// 无版权提示(与官方一致的"点了才告诉你")
+  void _notifyUnplayable(rust.SongDto song) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('《${song.name}》暂无版权, 无法播放'),
+          duration: const Duration(milliseconds: 1800),
+        ),
+      );
+  }
 
   /// 红心/取消红心(当前曲目). 先乐观更新, 失败回滚。
   Future<void> _toggleLike() async {
@@ -717,7 +736,7 @@ class _HomePageState extends State<HomePage> {
                 onPressed: _showPlaylists,
               ),
             // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
-            if (_info?.loggedIn == true && _vip) _vipBadge(context, small: true),
+            if (_info?.loggedIn == true && _vip) const VipBadge(small: true),
             // 账号簿入口常驻: 退出后账号仍在簿里, 需要能一键切回
             IconButton(
               tooltip: '账号',
@@ -784,7 +803,8 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildList() {
     final current = _current;
-    if (_result == null) {
+    // 歌单浏览态不需要搜索结果; 只有"既没搜过也没开歌单"才提示输入关键词
+    if (_result == null && _libraryTitle == null) {
       return const Center(child: Text('输入关键词后搜索'));
     }
     final songs = _visibleSongs;
@@ -796,22 +816,18 @@ class _HomePageState extends State<HomePage> {
       itemBuilder: (context, i) {
         final s = songs[i];
         final active = current?.id == s.id;
-        return ListTile(
-          dense: true,
-          selected: active,
-          leading: _isLiked(s.id)
-              ? Icon(Icons.favorite, size: 16, color: Theme.of(context).colorScheme.primary)
-              : null,
-          title: Row(
-            children: [
-              Flexible(child: Text(s.name, overflow: TextOverflow.ellipsis)),
-              if (s.vip) _vipBadge(context, small: true),
-              if (!s.vip && s.paid) _paidBadge(context),
-            ],
-          ),
-          subtitle: Text('${s.artist} · ${s.album}'),
-          trailing: Text('${s.durationMs ~/ BigInt.from(1000)}s'),
-          onTap: () => _playFromList(s),
+        // 没版权: 整行灰掉 + "无版权"标, 点了才提示(官方同款行为)
+        return SongTile(
+          song: s,
+          active: active,
+          liked: _isLiked(s.id),
+          onTap: () {
+            if (s.playable) {
+              _playFromList(s);
+            } else {
+              _notifyUnplayable(s);
+            }
+          },
         );
       },
     );
@@ -868,51 +884,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 会员/VIP 小标: 歌曲行与账号都用这一个(成套形态, 不要各处自己画)
-  Widget _vipBadge(BuildContext context, {bool small = false}) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: EdgeInsets.symmetric(horizontal: small ? 4 : 6, vertical: small ? 1 : 2),
-      decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.5), width: 0.8),
-      ),
-      child: Text(
-        'VIP',
-        style: TextStyle(
-          fontSize: small ? 10 : 11,
-          height: 1.2,
-          fontWeight: FontWeight.w700,
-          color: scheme.primary,
-        ),
-      ),
-    );
-  }
-
-  /// 需单独购买的数字专辑
-  Widget _paidBadge(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(left: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: scheme.tertiary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        '付费',
-        style: TextStyle(
-          fontSize: 10,
-          height: 1.2,
-          fontWeight: FontWeight.w700,
-          color: scheme.tertiary,
-        ),
-      ),
-    );
-  }
-
   Widget _buildPlayerBar(BuildContext context, PlayerView player, rust.SongDto? current) {
     final dur = player.durationMs.toDouble();
     // 拖动中冻结量程: 自动续播会让 duration 突跳
@@ -957,9 +928,9 @@ class _HomePageState extends State<HomePage> {
                                     style: Theme.of(context).textTheme.titleSmall,
                                   ),
                                 ),
-                                if (current?.vip == true) _vipBadge(context, small: true),
+                                if (current?.vip == true) const VipBadge(small: true),
                                 if (current?.paid == true && current?.vip != true)
-                                  _paidBadge(context),
+                                  const PaidBadge(),
                               ],
                             ),
                             Text(

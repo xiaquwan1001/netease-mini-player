@@ -1054,8 +1054,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   SongDto dco_decode_song_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 8)
-      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
     return SongDto(
       id: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -1065,6 +1065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       fee: dco_decode_i_64(arr[5]),
       vip: dco_decode_bool(arr[6]),
       paid: dco_decode_bool(arr[7]),
+      playable: dco_decode_bool(arr[8]),
     );
   }
 
@@ -1363,6 +1364,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_fee = sse_decode_i_64(deserializer);
     var var_vip = sse_decode_bool(deserializer);
     var var_paid = sse_decode_bool(deserializer);
+    var var_playable = sse_decode_bool(deserializer);
     return SongDto(
       id: var_id,
       name: var_name,
@@ -1372,6 +1374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       fee: var_fee,
       vip: var_vip,
       paid: var_paid,
+      playable: var_playable,
     );
   }
 
@@ -1636,6 +1639,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.fee, serializer);
     sse_encode_bool(self.vip, serializer);
     sse_encode_bool(self.paid, serializer);
+    sse_encode_bool(self.playable, serializer);
   }
 
   @protected

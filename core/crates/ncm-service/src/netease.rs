@@ -194,8 +194,50 @@ fn str_of(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
-fn parse_song(v: &Value) -> Option<Song> {
+/// 从响应里收集 `privileges[]`(key=曲目 id). 搜索/详情/歌单各接口给的位置不同,
+/// 有的直接内嵌在 song 上(`privilege`), 两种都认。
+fn parse_privileges(body: &Value) -> std::collections::HashMap<u64, bool> {
+    let mut map = std::collections::HashMap::new();
+    let arrays = [
+        body.get("privileges").and_then(Value::as_array),
+        body.get("result")
+            .and_then(|r| r.get("privileges"))
+            .and_then(Value::as_array),
+    ];
+    for arr in arrays.into_iter().flatten() {
+        for p in arr {
+            if let Some(id) = u64_of(p, "id") {
+                map.insert(id, privilege_playable(p));
+            }
+        }
+    }
+    map
+}
+
+/// st < 0 就是"这首在你这儿没版权/已下架"(实测 -200 最常见), pl=0 表示不可播。
+fn privilege_playable(p: &Value) -> bool {
+    let st = p.get("st").and_then(Value::as_i64).unwrap_or(0);
+    if st < 0 {
+        return false;
+    }
+    match p.get("pl").and_then(Value::as_i64) {
+        // 匿名/未登录时 VIP 曲目 pl=0, 但那只是"要会员", 仍属可播范畴
+        Some(_) => true,
+        None => true,
+    }
+}
+
+fn parse_song_with(
+    v: &Value,
+    privileges: &std::collections::HashMap<u64, bool>,
+) -> Option<Song> {
     let id = u64_of(v, "id")?;
+    // 优先级: song 自带的 privilege > 响应级 privileges[] > 默认可播
+    let playable = v
+        .get("privilege")
+        .map(privilege_playable)
+        .or_else(|| privileges.get(&id).copied())
+        .unwrap_or(true);
     let artists = v
         .get("ar")
         .or_else(|| v.get("artists"))
@@ -221,17 +263,36 @@ fn parse_song(v: &Value) -> Option<Song> {
         album,
         duration_ms: u64_of(v, "dt").or_else(|| u64_of(v, "duration")).unwrap_or(0),
         fee: v.get("fee").and_then(Value::as_i64),
+        playable,
     })
+}
+
+/// 详情类接口(body 里 songs[] + privileges[])统一走这个
+fn parse_song_list(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("songs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 pub fn parse_search(body: &Value) -> ProviderResult<SearchPage> {
     let result = body
         .get("result")
         .ok_or_else(|| ProviderError::internal("search: missing result"))?;
+    let privileges = parse_privileges(body);
     let songs = result
         .get("songs")
         .and_then(Value::as_array)
-        .map(|arr| arr.iter().filter_map(parse_song).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
         .unwrap_or_default();
     Ok(SearchPage {
         songs,
@@ -406,13 +467,7 @@ impl Provider for NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
             let resp = client.playlist_track_all(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
-            let songs = resp
-                .body
-                .get("songs")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            Ok(songs.iter().filter_map(parse_song).collect())
+            Ok(parse_song_list(&resp.body))
         })
     }
 
@@ -423,13 +478,7 @@ impl Provider for NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua).param("ids", ids);
             let resp = client.song_detail(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
-            let songs = resp
-                .body
-                .get("songs")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            Ok(songs.iter().filter_map(parse_song).collect())
+            Ok(parse_song_list(&resp.body))
         })
     }
 
@@ -514,6 +563,46 @@ mod tests {
         assert_eq!(page.songs.len(), 1);
         assert_eq!(page.songs[0].artist_line(), "周杰伦");
         assert_eq!(page.songs[0].album.as_ref().unwrap().name, "叶惠美");
+    }
+
+    /// 无版权判定: 搜索响应把 privilege 内嵌在 song 上, 详情响应是独立 privileges[],
+    /// 两种都要能标出 playable=false(st=-200).
+    #[test]
+    fn unlicensed_tracks_are_marked_unplayable() {
+        let search = json!({
+            "code": 200,
+            "result": {
+                "songCount": 1,
+                "hasMore": false,
+                "songs": [{
+                    "id": 186016,
+                    "name": "晴天",
+                    "ar": [{"id": 6452, "name": "周杰伦"}],
+                    "al": {"id": 1, "name": "叶惠美"},
+                    "dt": 269000,
+                    "fee": 0,
+                    "privilege": {"id": 186016, "st": -200, "pl": 0, "dl": 0}
+                }]
+            }
+        });
+        let page = parse_search(&search).unwrap();
+        assert!(!page.songs[0].playable, "st=-200 应判为不可播");
+
+        let detail = json!({
+            "code": 200,
+            "songs": [
+                {"id": 186016, "name": "晴天", "ar": [], "dt": 1, "fee": 0},
+                {"id": 347230, "name": "海阔天空", "ar": [], "dt": 1, "fee": 1}
+            ],
+            "privileges": [
+                {"id": 186016, "st": -200, "pl": 0, "dl": 0},
+                {"id": 347230, "st": 0, "pl": 999000, "dl": 999000}
+            ]
+        });
+        let songs = parse_song_list(&detail);
+        assert_eq!(songs.len(), 2);
+        assert!(!songs[0].playable);
+        assert!(songs[1].playable);
     }
 
     #[test]

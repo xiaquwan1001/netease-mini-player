@@ -75,12 +75,15 @@ pub struct SongDto {
     pub vip: bool,
     /// 需单独购买的数字专辑
     pub paid: bool,
+    /// 有版权、可播(false = 官方灰显那种"暂无版权")
+    pub playable: bool,
 }
 
 fn song_dto(s: ncm_domain::Song) -> SongDto {
     let artist = s.artist_line();
     let vip = s.is_vip();
     let paid = s.is_paid();
+    let playable = s.playable;
     SongDto {
         id: s.id.0,
         name: s.name,
@@ -90,6 +93,7 @@ fn song_dto(s: ncm_domain::Song) -> SongDto {
         fee: s.fee.unwrap_or(0),
         vip,
         paid,
+        playable,
     }
 }
 

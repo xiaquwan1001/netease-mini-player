@@ -5,6 +5,7 @@
 //!   ncm search "晴天" [--limit 10] [--offset 0] [--json]
 //!   ncm url <id> [--level exhigh] [--download out.flac] [--json]
 //!   ncm lyric <id> [--json]
+//!   ncm detail <id[,id...]>        打印曲目详情 + privilege(版权/可播性), 排障用
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
@@ -139,6 +140,9 @@ async fn run() -> Result<(), BoxErr> {
             announce(&core);
             let ids = p.liked_ids().await?;
             println!("liked_count = {}", ids.len());
+            if args.has("--ids") {
+                println!("{}", ids.iter().map(|t| t.0.to_string()).collect::<Vec<_>>().join(","));
+            }
             if !args.has("--quiet") {
                 let mut printed = 0;
                 for chunk in ids.chunks(50) {
@@ -289,8 +293,124 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "searchraw" => {
+            // 排障用: 搜索接口的原始返回(看 songs[].privilege 与 st, 判断无版权曲目被过滤/灰显)
+            let kw = args.positional.first().ok_or("usage: ncm searchraw <keywords> [--limit 10]")?;
+            let limit = args.value("--limit").unwrap_or_else(|| "10".into());
+            announce(&core);
+            let cookie = core.session.cookie.clone();
+            let mut client = ncm_api_rs::ApiClient::new(if cookie.is_empty() {
+                None
+            } else {
+                Some(cookie.clone())
+            });
+            if !core.session.device_id.is_empty() {
+                client.set_device_id(core.session.device_id.clone());
+            }
+            let mut q = ncm_api_rs::Query::new()
+                .cookie(&cookie)
+                .param("keywords", kw)
+                .param("limit", &limit)
+                .param("offset", "0")
+                .param("type", "1");
+            q.ua = Some(ncm_service::identity::platform_profile().ua.to_string());
+            let resp = client.cloudsearch(&q).await?;
+            let body = resp.body;
+            if args.has("--json") {
+                println!("{}", serde_json::to_string_pretty(&body)?);
+            } else {
+                let songs = body
+                    .get("result")
+                    .and_then(|r| r.get("songs"))
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                for s in songs {
+                    let id = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let fee = s.get("fee").and_then(|v| v.as_i64()).unwrap_or(-1);
+                    let artist = s
+                        .get("ar")
+                        .and_then(|v| v.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|x| x.get("name").and_then(|n| n.as_str()))
+                                .collect::<Vec<_>>()
+                                .join("/")
+                        })
+                        .unwrap_or_default();
+                    let priv_st = s
+                        .get("privilege")
+                        .and_then(|p| p.get("st"))
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "-".into());
+                    let priv_pl = s
+                        .get("privilege")
+                        .and_then(|p| p.get("pl"))
+                        .map(|v| v.to_string())
+                        .unwrap_or_else(|| "-".into());
+                    println!(
+                        "[{id}] {name} — {artist} fee={fee} privilege.st={priv_st} pl={priv_pl}"
+                    );
+                }
+            }
+            Ok(())
+        }
+        "detail" => {
+            // 排障用: 直接看 vendor 的原始 privileges(st/pl/dl/fee/cp), 判断曲目是否无版权
+            let ids = args
+                .positional
+                .first()
+                .ok_or("usage: ncm detail <id[,id...]>")?;
+            announce(&core);
+            let cookie = core.session.cookie.clone();
+            let mut client = ncm_api_rs::ApiClient::new(if cookie.is_empty() {
+                None
+            } else {
+                Some(cookie.clone())
+            });
+            if !core.session.device_id.is_empty() {
+                client.set_device_id(core.session.device_id.clone());
+            }
+            let mut q = ncm_api_rs::Query::new().cookie(&cookie).param("ids", ids);
+            q.ua = Some(ncm_service::identity::platform_profile().ua.to_string());
+            let resp = client.song_detail(&q).await?;
+            let body = resp.body;
+            if args.has("--json") {
+                println!("{}", serde_json::to_string_pretty(&body)?);
+            } else {
+                let privileges = body
+                    .get("privileges")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default();
+                for s in body.get("songs").and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+                    let id = s.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let fee = s.get("fee").and_then(|v| v.as_i64()).unwrap_or(-1);
+                    let st = s.get("st").and_then(|v| v.as_i64());
+                    let p = privileges
+                        .iter()
+                        .find(|p| p.get("id").and_then(|v| v.as_i64()) == Some(id));
+                    println!("[{id}] {name} fee={fee} st={st:?}");
+                    if let Some(p) = p {
+                        println!(
+                            "     privilege: st={:?} pl={:?} dl={:?} fl={:?} fee={:?} cp={:?} maxbr={:?}",
+                            p.get("st"),
+                            p.get("pl"),
+                            p.get("dl"),
+                            p.get("fl"),
+                            p.get("fee"),
+                            p.get("cp"),
+                            p.get("maxBr")
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | lyric"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | detail"
         )
         .into()),
     }

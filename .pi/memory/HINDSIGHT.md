@@ -224,3 +224,20 @@ API/protocol details and anti-bot technique live in the
 - 模拟器 tap 坐标要按截图缩放换算(截图 900x2000 → 实际 1080x2400, ×1.2); 播放条红心 y 会随
   布局/字体略有漂移, 每次按**新截图**取坐标, 否则点到滑杆 = seek 到末尾 = 自动跳下一首(白排查半天)。
 <!-- created=2026-11-04, last=2026-11-04 -->
+
+## 无版权(灰显)真实数据与判定(2026-11-04 深夜)
+- **周杰伦独唱曲在网易云全部无版权**: 晴天 186016 / 七里香 186001 / 彩虹 185809 / 外婆 186003
+  → song/detail 仍给元数据, 但 `privilege.st = -200, pl = 0, dl = 0`(st<0 = 你这儿没版权/已下架)。
+  他的**合作曲**正常(st=0 pl=999000), 所以搜"周杰伦"能搜到屋顶/布拉格广场/刀马旦, 独唱曲一个都不出现。
+- 两种官方表现, 数据层各自成立:
+  1) **搜索结果里直接消失**: cloudsearch 对 st<0 曲目完全不返回(实测 "晴天/God knows/嚣张/梦回还" 全无 st<0 结果);
+  2) **灰显 + 点击提示**: 只有从"我喜欢的音乐"/歌单/详情拿到 id 时才看得到(实测我喜欢 1488 首里 15 首 st=-200, 约 1%)。
+- `like()` 对 st<0 曲目返回 `code=500 Unknown error`(晴天复现 3 次, 普通曲目成功) —— 这就是之前那个 500 的真正原因,
+  不是风控也不是参数问题。
+- 我们侧实现: `Song.playable`(domain, 默认 true) ← `privilege.st >= 0`; 解析同时认 **song 内嵌 `privilege`**(cloudsearch)
+  与**响应级 `privileges[]`**(song/detail、playlist/track/all), 见 `parse_privileges`/`parse_song_with`/`parse_song_list`。
+  UI 抽成 `ui/lib/src/song_tile.dart: SongTile`(灰显 + "无版权"标 + 点击弹 SnackBar), 有 3 个 widget 测试;
+  取链前也挡一道(`_resolveAndPlay` 里 playable=false 直接跳过)。
+- 排障命令: `ncm detail <id[,id]> [--json]`(打印 privileges) 与 `ncm searchraw <kw>`(打印 songs[].privilege/st)。
+- 血泪: 歌单浏览态曾经在"没搜过"时显示"输入关键词后搜索" —— `_buildList` 的 `_result == null` 判断要先放行 `_libraryTitle != null`。
+<!-- created=2026-11-04, last=2026-11-04 -->

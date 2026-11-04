@@ -329,6 +329,9 @@ class SongDto {
   /// 需单独购买的数字专辑
   final bool paid;
 
+  /// 有版权、可播(false = 官方灰显那种"暂无版权")
+  final bool playable;
+
   const SongDto({
     required this.id,
     required this.name,
@@ -338,6 +341,7 @@ class SongDto {
     required this.fee,
     required this.vip,
     required this.paid,
+    required this.playable,
   });
 
   @override
@@ -349,7 +353,8 @@ class SongDto {
       durationMs.hashCode ^
       fee.hashCode ^
       vip.hashCode ^
-      paid.hashCode;
+      paid.hashCode ^
+      playable.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -363,7 +368,8 @@ class SongDto {
           durationMs == other.durationMs &&
           fee == other.fee &&
           vip == other.vip &&
-          paid == other.paid;
+          paid == other.paid &&
+          playable == other.playable;
 }
 
 class StreamDto {

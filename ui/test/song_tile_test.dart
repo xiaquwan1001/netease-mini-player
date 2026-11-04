@@ -1,0 +1,69 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/song_tile.dart';
+
+rust.SongDto song({
+  int id = 1,
+  String name = '晴天',
+  int fee = 0,
+  bool vip = false,
+  bool paid = false,
+  bool playable = true,
+}) =>
+    rust.SongDto(
+      id: BigInt.from(id),
+      name: name,
+      artist: '周杰伦',
+      album: '叶惠美',
+      durationMs: BigInt.from(269000),
+      fee: fee,
+      vip: vip,
+      paid: paid,
+      playable: playable,
+    );
+
+Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+void main() {
+  testWidgets('无版权曲目: 灰显 + 无版权标, 点击仍回调(由调用方弹提示)', (tester) async {
+    var taps = 0;
+    await tester.pumpWidget(host(SongTile(
+      song: song(playable: false),
+      active: false,
+      liked: false,
+      onTap: () => taps++,
+    )));
+
+    expect(find.text('无版权'), findsOneWidget);
+    expect(find.text('VIP'), findsNothing);
+    // 名称变灰
+    final title = tester.widget<Text>(find.text('晴天'));
+    expect(title.style?.color, isNotNull);
+    await tester.tap(find.text('晴天'));
+    expect(taps, 1);
+  });
+
+  testWidgets('VIP 曲目带 VIP 标, 可播曲目不显示无版权', (tester) async {
+    await tester.pumpWidget(host(SongTile(
+      song: song(fee: 1, vip: true),
+      active: true,
+      liked: true,
+      onTap: () {},
+    )));
+    expect(find.text('VIP'), findsOneWidget);
+    expect(find.text('无版权'), findsNothing);
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+  });
+
+  testWidgets('付费专辑显示 付费, 会员与非会员标不重复', (tester) async {
+    await tester.pumpWidget(host(SongTile(
+      song: song(fee: 4, paid: true),
+      active: false,
+      liked: false,
+      onTap: () {},
+    )));
+    expect(find.text('付费'), findsOneWidget);
+    expect(find.text('VIP'), findsNothing);
+  });
+}

@@ -51,6 +51,14 @@ pub struct Song {
     /// 网易云计费标记: 0 免费 / 1 VIP / 4 付费专辑 / 8 低音质免费
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fee: Option<i64>,
+    /// 是否可播(版权). 网易云 privilege.st < 0(-200 = 无版权) 时官方灰显并弹提示,
+    /// 老数据/接口不给 privilege 时按可播处理.
+    #[serde(default = "default_true")]
+    pub playable: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Song {

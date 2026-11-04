@@ -1180,6 +1180,7 @@ impl SseDecode for crate::api::SongDto {
         let mut var_fee = <i64>::sse_decode(deserializer);
         let mut var_vip = <bool>::sse_decode(deserializer);
         let mut var_paid = <bool>::sse_decode(deserializer);
+        let mut var_playable = <bool>::sse_decode(deserializer);
         return crate::api::SongDto {
             id: var_id,
             name: var_name,
@@ -1189,6 +1190,7 @@ impl SseDecode for crate::api::SongDto {
             fee: var_fee,
             vip: var_vip,
             paid: var_paid,
+            playable: var_playable,
         };
     }
 }
@@ -1435,6 +1437,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::SongDto {
             self.fee.into_into_dart().into_dart(),
             self.vip.into_into_dart().into_dart(),
             self.paid.into_into_dart().into_dart(),
+            self.playable.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1674,6 +1677,7 @@ impl SseEncode for crate::api::SongDto {
         <i64>::sse_encode(self.fee, serializer);
         <bool>::sse_encode(self.vip, serializer);
         <bool>::sse_encode(self.paid, serializer);
+        <bool>::sse_encode(self.playable, serializer);
     }
 }
 

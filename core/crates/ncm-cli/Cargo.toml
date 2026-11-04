@@ -12,6 +12,7 @@ path = "src/main.rs"
 ncm-domain.workspace = true
 ncm-provider.workspace = true
 ncm-service.workspace = true
+ncm-api-rs.workspace = true
 ncm-playback.workspace = true
 tokio.workspace = true
 serde_json.workspace = true

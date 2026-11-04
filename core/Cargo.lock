@@ -1355,6 +1355,7 @@ dependencies = [
 name = "ncm-cli"
 version = "0.1.0"
 dependencies = [
+ "ncm-api-rs",
  "ncm-domain",
  "ncm-playback",
  "ncm-provider",
