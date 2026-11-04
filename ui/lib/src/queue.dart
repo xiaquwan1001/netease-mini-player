@@ -1,9 +1,11 @@
+import 'dart:math';
+
 /// 播放队列(纯逻辑, 无 IO/无 UI), 便于单测.
 ///
 /// 约定:
-/// - 手动上一首/下一首: 总是移动, 列表首尾循环(单曲循环也允许手动跳);
+/// - 手动上一首/下一首: 总是移动(单曲循环也允许手动跳);
 /// - 自动续播(onEnded): 受 PlayMode 约束 —— 单曲循环原地重播, 顺序播放在队尾停止,
-///   列表循环回到队首。
+///   列表循环回到队首, 随机播放随机挑一首(不会还是当前这首)。
 enum PlayMode {
   /// 顺序播放: 播完队尾即停
   sequence,
@@ -13,12 +15,17 @@ enum PlayMode {
 
   /// 单曲循环
   repeatOne,
+
+  /// 随机播放: 下一首从队列里随机挑(不与当前重复)
+  shuffle,
 }
 
 class PlayQueue<T> {
-  PlayQueue({this.mode = PlayMode.repeatAll});
+  PlayQueue({this.mode = PlayMode.repeatAll, Random? random})
+      : _random = random ?? Random();
 
   final List<T> _items = [];
+  final Random _random;
   int _index = -1;
 
   /// 播放模式可变, 切换立即影响下一次自动续播
@@ -30,6 +37,17 @@ class PlayQueue<T> {
 
   T? get current => (_index >= 0 && _index < _items.length) ? _items[_index] : null;
   bool get hasNext => _items.isNotEmpty;
+
+  /// 随机播放时挑一个「不等于当前」的下标; 队列只有一首/空队列时原地不动。
+  int _randomIndex() {
+    final n = _items.length;
+    if (n <= 1) return _index;
+    int next;
+    do {
+      next = _random.nextInt(n);
+    } while (next == _index);
+    return next;
+  }
 
   /// 用一批曲目替换队列并定位到 startAt
   void setAll(List<T> items, {int startAt = 0}) {
@@ -47,13 +65,21 @@ class PlayQueue<T> {
   /// 手动下一首; 空队列返回 null
   T? next() {
     if (_items.isEmpty) return null;
+    if (mode == PlayMode.shuffle) {
+      _index = _randomIndex();
+      return current;
+    }
     _index = (_index + 1) % _items.length;
     return current;
   }
 
-  /// 手动上一首(队首向前回到队尾)
+  /// 手动上一首(队首向前回到队尾; 随机模式下随机挑一首)
   T? previous() {
     if (_items.isEmpty) return null;
+    if (mode == PlayMode.shuffle) {
+      _index = _randomIndex();
+      return current;
+    }
     _index = (_index <= 0) ? _items.length - 1 : _index - 1;
     return current;
   }
@@ -66,6 +92,9 @@ class PlayQueue<T> {
         return current;
       case PlayMode.repeatAll:
         _index = (_index + 1) % _items.length;
+        return current;
+      case PlayMode.shuffle:
+        _index = _randomIndex();
         return current;
       case PlayMode.sequence:
         if (_index + 1 >= _items.length) return null;

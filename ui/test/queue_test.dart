@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/queue.dart';
 
@@ -67,6 +69,43 @@ void main() {
       final q = PlayQueue<String>(mode: PlayMode.repeatAll)
         ..setAll(['a', 'b'], startAt: 1);
       q.mode = PlayMode.sequence;
+      expect(q.onEnded(), isNull);
+    });
+  });
+
+  group('PlayQueue 随机播放', () {
+    test('随机下一首永远不会是当前这首', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle, random: Random(7))
+        ..setAll(['a', 'b', 'c', 'd'], startAt: 0);
+      for (var i = 0; i < 20; i++) {
+        final before = q.current;
+        final next = q.onEnded();
+        expect(next, isNotNull);
+        expect(next, isNot(before));
+      }
+    });
+
+    test('随机模式下手动 next/previous 也不重复当前', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle, random: Random(3))
+        ..setAll(['a', 'b', 'c'], startAt: 1);
+      for (var i = 0; i < 20; i++) {
+        final before = q.current;
+        expect(q.next(), isNot(before));
+        final before2 = q.current;
+        expect(q.previous(), isNot(before2));
+      }
+    });
+
+    test('队列只有一首时随机模式原地重播', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle, random: Random(1))
+        ..setAll(['only'], startAt: 0);
+      expect(q.onEnded(), 'only');
+      expect(q.index, 0);
+    });
+
+    test('空队列随机模式返回 null', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle);
+      expect(q.next(), isNull);
       expect(q.onEnded(), isNull);
     });
   });

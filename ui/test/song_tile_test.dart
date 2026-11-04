@@ -16,6 +16,8 @@ rust.SongDto song({
       name: name,
       artist: '周杰伦',
       album: '叶惠美',
+      albumId: BigInt.from(1),
+      coverUrl: null,
       durationMs: BigInt.from(269000),
       fee: fee,
       vip: vip,
@@ -54,6 +56,22 @@ void main() {
     expect(find.text('VIP'), findsOneWidget);
     expect(find.text('无版权'), findsNothing);
     expect(find.byIcon(Icons.favorite), findsOneWidget);
+  });
+
+  testWidgets('红心跟在歌名后面(不做 leading, 保证歌名左对齐)', (tester) async {
+    await tester.pumpWidget(host(Column(
+      children: [
+        SongTile(song: song(id: 1, name: '普通歌曲'), active: false, liked: false, onTap: () {}),
+        SongTile(song: song(id: 2, name: '已收藏歌曲'), active: false, liked: true, onTap: () {}),
+      ],
+    )));
+    final plain = tester.getTopLeft(find.text('普通歌曲'));
+    final likedName = tester.getTopLeft(find.text('已收藏歌曲'));
+    // 两行歌名左边界一致(红心不再是 leading)
+    expect(likedName.dx, plain.dx);
+    // 红心在歌名右侧
+    final heart = tester.getTopLeft(find.byIcon(Icons.favorite));
+    expect(heart.dx, greaterThan(likedName.dx));
   });
 
   testWidgets('付费专辑显示 付费, 会员与非会员标不重复', (tester) async {

@@ -86,4 +86,57 @@ void main() {
       if (stream.url != null) return;
     }
   }, timeout: const Timeout(Duration(seconds: 90)));
+
+  test('daily recommend songs are typed', () async {
+    final songs = await rust.dailyRecommendSongs();
+    expect(songs, isNotEmpty);
+    expect(songs.first.id, greaterThan(BigInt.zero));
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('search suggestions are typed', () async {
+    final items = await rust.searchSuggest(keywords: '晴天');
+    expect(items, isNotEmpty);
+    expect(items.first.title, isNotEmpty);
+    expect(['song', 'artist', 'album', 'playlist'], contains(items.first.kind));
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('album detail carries cover and songs', () async {
+    final album = await rust.albumDetail(albumId: BigInt.from(255723258));
+    expect(album.name, isNotEmpty);
+    expect(album.coverUrl, isNotNull);
+    expect(album.songs, isNotEmpty);
+    expect(album.songs.first.albumId, album.id);
+  }, timeout: const Timeout(Duration(seconds: 60)));
+
+  test('podcast hot list and programs are typed', () async {
+    final radios = await rust.podcastHot(limit: 3);
+    expect(radios, isNotEmpty);
+    expect(radios.first.programCount, greaterThan(BigInt.zero));
+    final programs = await rust.podcastPrograms(
+      radioId: radios.first.id,
+      limit: 3,
+      offset: 0,
+    );
+    expect(programs, isNotEmpty);
+    expect(programs.first.song, isNotNull);
+    expect(programs.first.song!.id, greaterThan(BigInt.zero));
+  }, timeout: const Timeout(Duration(seconds: 90)));
+
+  test('search history roundtrip stays local', () async {
+    await rust.clearSearchHistory();
+    await rust.recordSearch(keyword: '晴天');
+    await rust.recordSearch(keyword: '七里香');
+    final list = await rust.searchHistory();
+    expect(list.take(2), ['七里香', '晴天']);
+    await rust.clearSearchHistory();
+    expect(await rust.searchHistory(), isEmpty);
+  });
+
+  test('local play history records a song', () async {
+    final page = await rust.search(keywords: '晴天', limit: 1);
+    final song = page.songs.first;
+    await rust.rememberPlay(song: song);
+    final recent = await rust.localRecentSongs(limit: 5);
+    expect(recent.any((s) => s.id == song.id), true);
+  }, timeout: const Timeout(Duration(seconds: 60)));
 }

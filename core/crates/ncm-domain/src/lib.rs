@@ -79,6 +79,16 @@ impl Song {
             .collect::<Vec<_>>()
             .join(" / ")
     }
+
+    /// 专辑封面(列表/播放条/预览统一从这里取)
+    pub fn cover_url(&self) -> Option<String> {
+        self.album.as_ref().and_then(|a| a.pic_url.clone())
+    }
+
+    /// 专辑 id(0 = 未知)
+    pub fn album_id(&self) -> u64 {
+        self.album.as_ref().map(|a| a.id).unwrap_or(0)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -148,6 +158,71 @@ pub struct Playlist {
     /// 是否是"我喜欢的音乐"(网易云用 specialType=5 标记)
     #[serde(default)]
     pub special: bool,
+}
+
+/// 专辑详情(封面预览用: 大图 + 曲目列表)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlbumDetail {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub songs: Vec<Song>,
+}
+
+/// 播客/电台(网易云叫"电台/播客", 接口是 djradio)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PodcastRadio {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub dj_name: String,
+    #[serde(default)]
+    pub program_count: u64,
+    #[serde(default)]
+    pub play_count: u64,
+}
+
+/// 播客单集(节目). 音频本体是 mainSong, 播放时用 song.id 取直链.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PodcastProgram {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub dj_name: String,
+    #[serde(default)]
+    pub radio_id: u64,
+    #[serde(default)]
+    pub radio_name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song: Option<Song>,
+}
+
+/// 搜索建议条目(kind = song / artist / album / playlist)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SuggestItem {
+    pub kind: String,
+    pub id: u64,
+    pub title: String,
+    #[serde(default)]
+    pub subtitle: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
 }
 
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.

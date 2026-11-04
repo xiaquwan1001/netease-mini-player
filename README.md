@@ -7,15 +7,16 @@
 **Rust core(协议/身份/缓存/播放控制) + Flutter UI(一份跑双端) + 平台层(Android Media3 / Linux mpv)。**
 音源走 Provider 抽象;首版不做脚本插件,但边界已按「将来能插」写好。
 
-## 当前状态(2026-11-03, v2 M0)
+## 当前状态(2026-11-04)
 
 | 项 | 状态 |
 |---|---|
-| Rust core + CLI | ✅ `ncm search / url / lyric` 在 Linux 真实跑通(取到 320k 直链并下载 5.7MB) |
-| 身份持久化 | ✅ device_id 首启生成后复用 + 设备指纹 cookie 落盘(0600) |
-| Flutter 双端壳 | ✅ Linux bundle 构建通过;Android 构建中 |
-| Dart ↔ Rust 桥 | ✅ flutter_rust_bridge,4 个 smoke 测试全绿(含真实网络搜索) |
-| 单元测试 | ✅ 8 个离线用例(映射/身份/错误分类) |
+| Rust core + CLI | ✅ 搜索/取链/歌词/歌单/收藏 + 每日推荐/心动模式/播客/专辑/最近播放 |
+| 身份持久化 | ✅ device_id 首启生成后复用 + 设备指纹 cookie 落盘(0600);多账号账号簿 |
+| Flutter 双端壳 | ✅ Linux bundle + Android APK 均构建通过;真机/模拟器闭环验证 |
+| Dart ↔ Rust 桥 | ✅ flutter_rust_bridge 2.13,smoke 测试含真实网络(每日推荐/建议/专辑/播客/历史) |
+| 功能 | ✅ 随机播放、心动模式、原版每日推荐(歌曲+歌单)、播客、专辑封面预览、搜索建议/历史、最近听过 |
+| 测试 | ✅ Rust 单测 + 62 个 Flutter 测试(离线纯函数/widget + 真实网络 smoke) |
 
 ## 目录
 
@@ -52,6 +53,8 @@ cargo run -p ncm-cli -- search 晴天 --limit 5
 cargo run -p ncm-cli -- url 3455095614 --download /tmp/a.mp3
 cargo run -p ncm-cli -- lyric 186016
 cargo run -p ncm-cli -- login-cookie "MUSIC_U=...; __csrf=..."
+cargo run -p ncm-cli -- heart 210049 --count 10   # 心动模式(需登录, 无歌单上下文时回落"我喜欢的音乐")
+cargo run -p ncm-cli -- raw recommend_songs       # 排障: 任意端点打印原始 JSON
 ```
 数据目录默认 `~/.local/share/ncm`(可用 `NCM_DATA_DIR` 覆盖),里面是 `identity.json`(0600)。
 

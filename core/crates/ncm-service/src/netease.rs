@@ -1,7 +1,10 @@
 use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
-use ncm_domain::{Album, Artist, Lyric, Playlist, SearchPage, Session, Song, StreamUrl, TrackId};
+use ncm_domain::{
+    Album, AlbumDetail, Artist, Lyric, Playlist, PodcastProgram, PodcastRadio, SearchPage, Session,
+    Song, StreamUrl, SuggestItem, TrackId,
+};
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
 };
@@ -14,6 +17,11 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Login,
     Capability::Profile,
     Capability::Playlist,
+    Capability::DailyRecommend,
+    Capability::Album,
+    Capability::Podcast,
+    Capability::SearchSuggest,
+    Capability::Recent,
 ];
 
 /// 内置网易云直连 provider.
@@ -87,6 +95,29 @@ impl NeteaseProvider {
             return Ok(uid);
         }
         Ok(Provider::profile(self).await?.user_id)
+    }
+
+    /// 心动模式没有歌单上下文时的默认歌单: "我喜欢的音乐"(specialType=5).
+    /// 用户至少要有这个歌单(登录后一定有), 否则给一条能看懂的错.
+    async fn default_playlist_id(&self) -> ProviderResult<u64> {
+        let uid = self.uid().await?;
+        let (client, domain, ua, cookie) = self.snapshot();
+        let q = make_query(&cookie, &domain, &ua)
+            .param("uid", &uid.to_string())
+            .param("limit", "200");
+        let resp = client.user_playlist(&q).await.map_err(map_error)?;
+        check_body(&resp.body)?;
+        let list = resp
+            .body
+            .get("playlist")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        list.iter()
+            .filter_map(parse_playlist)
+            .find(|p| p.special)
+            .map(|p| p.id)
+            .ok_or_else(|| ProviderError::not_found("心动模式需要登录并至少有一个歌单"))
     }
 
     /// await 之前先把要用的东西克隆出来: 避免 std RwLock guard 跨 await (破坏 Send)
@@ -202,6 +233,9 @@ fn parse_privileges(body: &Value) -> std::collections::HashMap<u64, bool> {
         body.get("privileges").and_then(Value::as_array),
         body.get("result")
             .and_then(|r| r.get("privileges"))
+            .and_then(Value::as_array),
+        body.get("data")
+            .and_then(|d| d.get("privileges"))
             .and_then(Value::as_array),
     ];
     for arr in arrays.into_iter().flatten() {
@@ -482,6 +516,161 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 每日推荐歌曲(原版每日推荐, 匿名也能取到; 登录后是个性化推荐)
+    fn daily_recommend_songs(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.recommend_songs(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_recommend_songs(&resp.body))
+        })
+    }
+
+    /// 每日推荐歌单(需要登录; 未登录时网易云返回 301)
+    fn daily_recommend_playlists(&self) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.recommend_resource(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_recommend_playlists(&resp.body))
+        })
+    }
+
+    /// 心动模式: 以当前曲目为种子, 在指定歌单里续播.
+    /// 网易云要求 pid 必须是一个**可用的歌单**(实测 pid=0 返回 400 歌单不存在);
+    /// 用户从搜索/单曲直接进入时没有歌单上下文, 这里自动回落到"我喜欢的音乐".
+    fn intelligence_songs(
+        &self,
+        song_id: u64,
+        playlist_id: u64,
+        count: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let mut pid = if playlist_id == 0 {
+                self.default_playlist_id().await?
+            } else {
+                playlist_id
+            };
+            let mut retried = false;
+            loop {
+                let (client, domain, ua, cookie) = self.snapshot();
+                let q = make_query(&cookie, &domain, &ua)
+                    .param("id", &song_id.to_string())
+                    .param("pid", &pid.to_string())
+                    .param("sid", &song_id.to_string())
+                    .param("count", &count.to_string());
+                let resp = client.playmode_intelligence_list(&q).await.map_err(map_error)?;
+                match check_body(&resp.body) {
+                    Ok(()) => {
+                        let mut songs = parse_intelligence(&resp.body);
+                        // 接口会一次给一整队(实测 149 首), 按调用方要的条数截断
+                        songs.truncate(count.max(1) as usize);
+                        return Ok(songs);
+                    }
+                    Err(e) => {
+                        // 有些自建歌单不被心动模式接受(实测 400 "不支持该歌单类型"):
+                        // 第一次失败就回落到"我喜欢的音乐"再试一次.
+                        let playlist_problem = e.detail.contains("歌单");
+                        if !retried && playlist_problem {
+                            retried = true;
+                            let fallback = self.default_playlist_id().await?;
+                            if fallback != pid {
+                                pid = fallback;
+                                continue;
+                            }
+                        }
+                        return Err(e);
+                    }
+                }
+            }
+        })
+    }
+
+    /// 搜索建议(输入联想). 匿名可用.
+    fn search_suggest<'a>(
+        &'a self,
+        keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<SuggestItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
+            let resp = client.search_suggest(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_suggest(&resp.body))
+        })
+    }
+
+    /// 最近播放(服务端记录, 需要登录)
+    fn recent_songs(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("最近播放需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+            let resp = client.record_recent_song(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_recent(&resp.body))
+        })
+    }
+
+    /// 专辑详情(封面预览 + 曲目)
+    fn album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("id", &album_id.to_string());
+            let resp = client.album(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_album(&resp.body)
+        })
+    }
+
+    /// 热门播客/电台
+    fn podcast_hot(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+            let resp = client.dj_hot(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_podcast_hot(&resp.body))
+        })
+    }
+
+    /// 某个播客的节目列表
+    fn podcast_programs(
+        &self,
+        radio_id: u64,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastProgram>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if radio_id == 0 {
+                return Err(ProviderError::not_found("radio id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("rid", &radio_id.to_string())
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.dj_program(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_podcast_programs(&resp.body))
+        })
+    }
+
+    /// 单个节目详情
+    fn podcast_program(&self, program_id: u64) -> BoxFuture<'_, ProviderResult<PodcastProgram>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("id", &program_id.to_string());
+            let resp = client.dj_program_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_podcast_program(&resp.body)
+        })
+    }
+
     /// 当前登录账号资料(用于多账号记忆: 登录成功后记住 uid/昵称)
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<ncm_domain::Profile>> {
         Box::pin(async move {
@@ -528,10 +717,258 @@ fn parse_playlist(v: &Value) -> Option<Playlist> {
     Some(Playlist {
         id,
         name: str_of(v, "name").unwrap_or_default(),
-        cover_url: str_of(v, "coverImgUrl").or_else(|| str_of(v, "coverUrl")),
+        cover_url: str_of(v, "coverImgUrl")
+            .or_else(|| str_of(v, "coverUrl"))
+            .or_else(|| str_of(v, "picUrl")),
         track_count: u64_of(v, "trackCount").unwrap_or(0),
         special: v.get("specialType").and_then(Value::as_i64) == Some(5),
     })
+}
+
+/// 每日推荐歌曲的响应形如 {code:200, data:{dailySongs:[...], privileges:[...]}}
+pub fn parse_recommend_songs(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("data")
+        .and_then(|d| d.get("dailySongs"))
+        .or_else(|| body.get("recommend"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 每日推荐歌单的响应形如 {code:200, recommend:[{id,name,picUrl,trackCount,...}]}
+pub fn parse_recommend_playlists(body: &Value) -> Vec<Playlist> {
+    body.get("recommend")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_playlist).collect())
+        .unwrap_or_default()
+}
+
+/// 心动模式/智能播放的响应.
+/// 实测(2026-11-04, 登录态)形如:
+///   {code:200, data:[{alg, id, recommended, songInfo:{...完整 song 对象...}}, ...]}
+/// 早期/其它变体也可能直接是 song 数组, 两种都认.
+pub fn parse_intelligence(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("data")
+        .and_then(Value::as_array)
+        .or_else(|| {
+            body.get("data")
+                .and_then(|d| d.get("songs"))
+                .and_then(Value::as_array)
+        })
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let song = item
+                        .get("songInfo")
+                        .or_else(|| item.get("song"))
+                        .or_else(|| item.get("data"))
+                        .unwrap_or(item);
+                    parse_song_with(song, &privileges)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn artists_line_of(v: &Value) -> String {
+    v.get("artists")
+        .or_else(|| v.get("ar"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| a.get("name").and_then(Value::as_str))
+                .collect::<Vec<_>>()
+                .join(" / ")
+        })
+        .unwrap_or_default()
+}
+
+/// 搜索建议的响应形如
+/// {code:200, result:{order:[songs,artists,albums,playlists], songs:[], artists:[], albums:[], playlists:[]}}
+/// 按 order 顺序扁平化成 UI 直接可渲染的条目.
+pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
+    let Some(result) = body.get("result") else {
+        return Vec::new();
+    };
+    let order: Vec<String> = result
+        .get("order")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_else(|| {
+            vec![
+                "songs".to_string(),
+                "artists".to_string(),
+                "albums".to_string(),
+                "playlists".to_string(),
+            ]
+        });
+    let mut out = Vec::new();
+    for key in order {
+        let kind = match key.as_str() {
+            "songs" => "song",
+            "artists" => "artist",
+            "albums" => "album",
+            "playlists" => "playlist",
+            _ => continue,
+        };
+        let Some(arr) = result.get(&key).and_then(Value::as_array) else {
+            continue;
+        };
+        for v in arr.iter().take(3) {
+            let Some(id) = u64_of(v, "id") else { continue };
+            let title = str_of(v, "name").unwrap_or_default();
+            if title.is_empty() {
+                continue;
+            }
+            let (subtitle, cover_url) = match kind {
+                "song" => (
+                    artists_line_of(v),
+                    v.get("album")
+                        .and_then(|a| str_of(a, "picUrl"))
+                        .or_else(|| str_of(v, "picUrl")),
+                ),
+                "artist" => ("歌手".to_string(), str_of(v, "picUrl")),
+                "album" => (
+                    v.get("artist")
+                        .and_then(|a| str_of(a, "name"))
+                        .unwrap_or_default(),
+                    v.get("artist")
+                        .and_then(|a| str_of(a, "picUrl"))
+                        .or_else(|| str_of(v, "picUrl")),
+                ),
+                _ => (
+                    format!(
+                        "歌单 · {} 首",
+                        u64_of(v, "trackCount")
+                            .or_else(|| u64_of(v, "bookCount"))
+                            .unwrap_or(0)
+                    ),
+                    str_of(v, "coverImgUrl"),
+                ),
+            };
+            out.push(SuggestItem {
+                kind: kind.to_string(),
+                id,
+                title,
+                subtitle,
+                cover_url,
+            });
+        }
+    }
+    out
+}
+
+/// 最近播放的响应形如 {code:200, data:{list:[{data:{song}, playCount, ...}]}}
+pub fn parse_recent(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("data")
+        .and_then(|d| d.get("list"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| parse_song_with(item.get("data").unwrap_or(item), &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 专辑详情的响应形如 {code:200, album:{id,name,picUrl,artist,description}, songs:[...]}
+pub fn parse_album(body: &Value) -> ProviderResult<AlbumDetail> {
+    let album = body
+        .get("album")
+        .ok_or_else(|| ProviderError::not_found("album: missing album"))?;
+    let artist = album
+        .get("artist")
+        .and_then(|a| str_of(a, "name"))
+        .or_else(|| {
+            album
+                .get("artists")
+                .and_then(Value::as_array)
+                .and_then(|a| a.first())
+                .and_then(|a| str_of(a, "name"))
+        })
+        .unwrap_or_default();
+    Ok(AlbumDetail {
+        id: u64_of(album, "id").unwrap_or(0),
+        name: str_of(album, "name").unwrap_or_default(),
+        cover_url: str_of(album, "picUrl").or_else(|| str_of(album, "blurPicUrl")),
+        artist,
+        description: str_of(album, "description").unwrap_or_default(),
+        songs: parse_song_list(body),
+    })
+}
+
+fn parse_radio(v: &Value) -> Option<PodcastRadio> {
+    let id = u64_of(v, "id")?;
+    Some(PodcastRadio {
+        id,
+        name: str_of(v, "name").unwrap_or_default(),
+        cover_url: str_of(v, "picUrl").or_else(|| str_of(v, "coverUrl")),
+        description: str_of(v, "desc")
+            .or_else(|| str_of(v, "rcmdtext"))
+            .unwrap_or_default(),
+        dj_name: v
+            .get("dj")
+            .and_then(|d| str_of(d, "nickname"))
+            .unwrap_or_default(),
+        program_count: u64_of(v, "programCount").unwrap_or(0),
+        play_count: u64_of(v, "playCount").unwrap_or(0),
+    })
+}
+
+/// 热门播客的响应形如 {code:200, djRadios:[...]}
+pub fn parse_podcast_hot(body: &Value) -> Vec<PodcastRadio> {
+    body.get("djRadios")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_radio).collect())
+        .unwrap_or_default()
+}
+
+fn parse_program(v: &Value) -> Option<PodcastProgram> {
+    let id = u64_of(v, "id")?;
+    let radio = v.get("radio");
+    Some(PodcastProgram {
+        id,
+        name: str_of(v, "name").unwrap_or_default(),
+        cover_url: str_of(v, "coverUrl").or_else(|| str_of(v, "blurCoverUrl")),
+        duration_ms: u64_of(v, "duration").unwrap_or(0),
+        dj_name: v
+            .get("dj")
+            .and_then(|d| str_of(d, "nickname"))
+            .unwrap_or_default(),
+        radio_id: radio.and_then(|r| u64_of(r, "id")).unwrap_or(0),
+        radio_name: radio.and_then(|r| str_of(r, "name")).unwrap_or_default(),
+        description: str_of(v, "description").unwrap_or_default(),
+        // 节目音频本体; 用它的 id 走 song_url 取直链(实测匿名可播)
+        song: v
+            .get("mainSong")
+            .and_then(|s| parse_song_with(s, &std::collections::HashMap::new())),
+    })
+}
+
+/// 节目列表的响应形如 {code:200, programs:[...], more}
+pub fn parse_podcast_programs(body: &Value) -> Vec<PodcastProgram> {
+    body.get("programs")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_program).collect())
+        .unwrap_or_default()
+}
+
+/// 节目详情的响应形如 {code:200, program:{...}}
+pub fn parse_podcast_program(body: &Value) -> ProviderResult<PodcastProgram> {
+    body.get("program")
+        .and_then(parse_program)
+        .ok_or_else(|| ProviderError::not_found("program: missing program"))
 }
 
 #[cfg(test)]
@@ -638,5 +1075,138 @@ mod tests {
         assert_eq!(l.lrc.as_deref(), Some("[00:00.00]hi"));
         assert_eq!(l.translated.as_deref(), Some("[00:00.00]嗨"));
         assert!(l.romaji.is_none());
+    }
+
+    #[test]
+    fn daily_recommend_mapping() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "dailySongs": [
+                    {"id": 1, "name": "A", "ar": [{"name": "x"}], "al": {"id": 9, "name": "al", "picUrl": "http://p/a.jpg"}, "dt": 1000, "fee": 0},
+                    {"id": 2, "name": "B", "ar": [{"name": "y"}], "al": {"id": 10, "name": "al2"}, "dt": 2000, "fee": 1}
+                ],
+                "privileges": [{"id": 2, "st": -200, "pl": 0}]
+            }
+        });
+        let songs = parse_recommend_songs(&body);
+        assert_eq!(songs.len(), 2);
+        assert!(songs[0].playable);
+        assert!(!songs[1].playable);
+        assert_eq!(songs[0].album_id(), 9);
+        assert_eq!(songs[0].cover_url().as_deref(), Some("http://p/a.jpg"));
+    }
+
+    #[test]
+    fn daily_playlists_mapping() {
+        let body = json!({"code": 200, "recommend": [
+            {"id": 11, "name": "pl", "picUrl": "http://p/1.jpg", "trackCount": 30, "playCount": 99}
+        ]});
+        let lists = parse_recommend_playlists(&body);
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].id, 11);
+        assert_eq!(lists[0].cover_url.as_deref(), Some("http://p/1.jpg"));
+        assert!(!lists[0].special);
+    }
+
+    #[test]
+    fn intelligence_mapping() {
+        // 实测形态: data[].songInfo 里才是完整 song(还带内嵌 privilege)
+        let body = json!({"code": 200, "data": [
+            {
+                "alg": "x", "id": 3, "recommended": true,
+                "songInfo": {
+                    "id": 3, "name": "C", "ar": [{"name": "z"}],
+                    "al": {"id": 1, "name": "a", "picUrl": "http://p/c.jpg"}, "dt": 500,
+                    "privilege": {"id": 3, "st": -200, "pl": 0}
+                }
+            }
+        ]});
+        let songs = parse_intelligence(&body);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].name, "C");
+        assert_eq!(songs[0].album_id(), 1);
+        assert!(!songs[0].playable);
+
+        // 兼容 data 直接是 song 数组
+        let plain = json!({"code": 200, "data": [
+            {"id": 4, "name": "D", "ar": [], "al": {"id": 1, "name": "a"}, "dt": 1}
+        ]});
+        assert_eq!(parse_intelligence(&plain).len(), 1);
+        // 兼容 data.songs 变体
+        let alt = json!({"code": 200, "data": {"songs": [
+            {"id": 5, "name": "E", "ar": [], "al": {"id": 1, "name": "a"}, "dt": 1}
+        ]}});
+        assert_eq!(parse_intelligence(&alt).len(), 1);
+    }
+
+    #[test]
+    fn suggest_mapping_follows_order() {
+        let body = json!({
+            "code": 200,
+            "result": {
+                "order": ["songs", "artists", "albums", "playlists"],
+                "songs": [{"id": 1, "name": "晴天", "artists": [{"name": "周杰伦"}], "album": {"picUrl": "http://p/s.jpg"}}],
+                "artists": [{"id": 2, "name": "周杰伦", "picUrl": "http://p/ar.jpg"}],
+                "albums": [{"id": 3, "name": "叶惠美", "artist": {"name": "周杰伦", "picUrl": "http://p/al.jpg"}}],
+                "playlists": [{"id": 4, "name": "歌单", "coverImgUrl": "http://p/pl.jpg", "trackCount": 12}]
+            }
+        });
+        let items = parse_suggest(&body);
+        assert_eq!(items.len(), 4);
+        assert_eq!(items[0].kind, "song");
+        assert_eq!(items[0].title, "晴天");
+        assert_eq!(items[1].kind, "artist");
+        assert_eq!(items[1].subtitle, "歌手");
+        assert_eq!(items[2].kind, "album");
+        assert_eq!(items[2].subtitle, "周杰伦");
+        assert_eq!(items[3].kind, "playlist");
+        assert!(items[3].subtitle.contains("12"));
+    }
+
+    #[test]
+    fn recent_mapping() {
+        let body = json!({"code": 200, "data": {"list": [
+            {"playCount": 3, "data": {"id": 7, "name": "R", "ar": [{"name": "q"}], "al": {"id": 2, "name": "a"}, "dt": 1000}}
+        ]}});
+        let songs = parse_recent(&body);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].id.0, 7);
+    }
+
+    #[test]
+    fn album_mapping() {
+        let body = json!({
+            "code": 200,
+            "album": {"id": 9, "name": "叶惠美", "picUrl": "http://p/al.jpg", "artist": {"name": "周杰伦"}, "description": "d"},
+            "songs": [{"id": 1, "name": "以父之名", "ar": [{"name": "周杰伦"}], "al": {"id": 9, "name": "叶惠美"}, "dt": 1}]
+        });
+        let d = parse_album(&body).unwrap();
+        assert_eq!(d.id, 9);
+        assert_eq!(d.name, "叶惠美");
+        assert_eq!(d.artist, "周杰伦");
+        assert_eq!(d.songs.len(), 1);
+    }
+
+    #[test]
+    fn podcast_mapping() {
+        let hot = json!({"code": 200, "djRadios": [
+            {"id": 5, "name": "电台", "picUrl": "http://p/r.jpg", "desc": "d", "dj": {"nickname": "主播"}, "programCount": 33, "playCount": 100}
+        ]});
+        let radios = parse_podcast_hot(&hot);
+        assert_eq!(radios.len(), 1);
+        assert_eq!(radios[0].dj_name, "主播");
+        assert_eq!(radios[0].program_count, 33);
+
+        let programs = json!({"code": 200, "programs": [{
+            "id": 6, "name": "单集", "coverUrl": "http://p/c.jpg", "duration": 22125,
+            "dj": {"nickname": "主播"}, "radio": {"id": 5, "name": "电台"}, "description": "dd",
+            "mainSong": {"id": 1442398087, "name": "单集", "artists": [{"name": "主播"}], "album": {"id": 0, "name": ""}, "duration": 22125, "fee": 0}
+        }]});
+        let list = parse_podcast_programs(&programs);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].radio_id, 5);
+        assert_eq!(list[0].duration_ms, 22125);
+        assert_eq!(list[0].song.as_ref().unwrap().id.0, 1442398087);
     }
 }

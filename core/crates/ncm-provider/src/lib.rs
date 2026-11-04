@@ -5,7 +5,10 @@
 //! - 错误统一成 ProviderError, UI 只按 kind 决策
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
-use ncm_domain::{Lyric, Playlist, Profile, SearchPage, Song, StreamUrl, TrackId};
+use ncm_domain::{
+    AlbumDetail, Lyric, Playlist, PodcastProgram, PodcastRadio, Profile, SearchPage, Song,
+    StreamUrl, SuggestItem, TrackId,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::future::Future;
@@ -25,6 +28,10 @@ pub enum Capability {
     Playlist,
     DailyRecommend,
     PersonalFm,
+    Album,
+    Podcast,
+    SearchSuggest,
+    Recent,
 }
 
 impl Capability {
@@ -38,6 +45,10 @@ impl Capability {
             Capability::Playlist => "playlist",
             Capability::DailyRecommend => "dailyRecommend",
             Capability::PersonalFm => "personalFm",
+            Capability::Album => "album",
+            Capability::Podcast => "podcast",
+            Capability::SearchSuggest => "searchSuggest",
+            Capability::Recent => "recent",
         }
     }
 }
@@ -225,6 +236,64 @@ pub trait Provider: Send + Sync {
     /// 批量取曲目详情(逗号分隔的 id)
     fn songs_detail<'a>(&'a self, _ids: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
         Box::pin(async { Err(ProviderError::unsupported("no song detail")) })
+    }
+
+    /// 每日推荐歌曲(原版"每日推荐")
+    fn daily_recommend_songs(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no daily recommend")) })
+    }
+
+    /// 每日推荐歌单(原版"推荐歌单")
+    fn daily_recommend_playlists(&self) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no daily playlists")) })
+    }
+
+    /// 心动模式(基于当前曲目的智能连续播放)
+    fn intelligence_songs(
+        &self,
+        _song_id: u64,
+        _playlist_id: u64,
+        _count: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no intelligence mode")) })
+    }
+
+    /// 搜索建议(输入联想)
+    fn search_suggest<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<SuggestItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no search suggest")) })
+    }
+
+    /// 最近播放(需要登录; 服务端记录)
+    fn recent_songs(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent songs")) })
+    }
+
+    /// 专辑详情(封面预览 + 曲目)
+    fn album_detail(&self, _album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no album detail")) })
+    }
+
+    /// 热门播客/电台
+    fn podcast_hot(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast")) })
+    }
+
+    /// 某个播客的节目列表
+    fn podcast_programs(
+        &self,
+        _radio_id: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastProgram>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast programs")) })
+    }
+
+    /// 单个节目详情
+    fn podcast_program(&self, _program_id: u64) -> BoxFuture<'_, ProviderResult<PodcastProgram>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast program")) })
     }
 }
 

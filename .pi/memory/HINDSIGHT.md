@@ -256,5 +256,57 @@ API/protocol details and anti-bot technique live in the
 - 桌面版滚轮速率实测 ≈1 行/格(1488 首的歌单滚 1200 格 ≈ 1320 行), 可用于定位深处的曲目。
 - 桌面版同样要清代理: 从带 `HTTPS_PROXY=127.0.0.1:7890` 的环境启动会直接报网络错误
   (正好可以验证**重试 + 中文提示 + 重试按钮**)—— 想要正常联网就 `env -u ...` 启动。
-- `pkill -f bundle/minincm` 会**杀掉执行它的 shell**(自匹配), 一律用 `pkill -f '[b]undle/minincm'`。
+- `pkill -f bundle/minincm` 会**杀掉执行它的 shell**(自匹配); 见下方 2026-11-04 深夜的更正
+  (`[b]undle` 写法在同一条命令里带真实路径时仍会自杀, 改用 `pkill -x minincm`)。
 <!-- created=2026-11-04, last=2026-11-04 -->
+
+## 发现/心动/播客/封面/历史 落地(2026-11-04 深夜)
+- 新增能力全走 provider trait + vendor 现成接口, 不自己拼 URL:
+  `recommend_songs`(每日推荐歌曲, 匿名也能取) / `recommend_resource`(每日推荐歌单, **需登录**) /
+  `playmode_intelligence_list`(心动模式) / `dj_hot` + `dj_program` + `dj_program_detail`(播客) /
+  `album`(专辑详情/封面) / `search_suggest`(联想, 匿名可用) / `record_recent_song`(最近播放, 需登录)。
+  播客单集的音频本体是 `program.mainSong`, 用 `mainSong.id` 走 `song_url_v1` 即可(匿名实测 320k 可播)。
+- **心动模式的三个实测约束**(用真机 cookie + `ncm heart` 验证):
+  1) `pid` 必须是**可用歌单**, 传 0 直接 400 "歌单不存在"; 有些自建歌单也会 400 "不支持该歌单类型"
+     → 实现为: pid=0 时自动回落到"我喜欢的音乐"(specialType=5), 指定歌单失败也回落重试一次。
+  2) 响应不是 song 数组, 而是 `{code:200, data:[{alg,id,recommended,songInfo:{...song...}}]}`;
+     解析必须取 `songInfo`, 内嵌 `privilege` 也要认(否则全被当成可播)。
+  3) `count` 参数**不生效**, 一次回 149 首, 调用方自己截断。
+- 每日推荐歌曲/最近播放/搜建议的响应都是"老式 song 对象"(`artists/album/duration` 而不是 `ar/al/dt`),
+  `parse_song_with` 本来就兼容; 推荐歌单在 `recommend[]`, 最近播放在 `data.list[].data`。
+- 本地历史: `ncm-service/src/history.rs`(`history.json`, 0600) 存搜索历史(去重, 20 条)与播放历史(100 条)。
+  "最近听过"策略: 登录时优先服务端 `record_recent_song`, 未登录/失败回落本地——保证任何状态都有内容。
+- 搜建议/历史是**输入框焦点驱动**的: 有焦点且输入为空显示历史 chip, 有输入 300ms 防抖后显示联想;
+  搜索提交后写历史并 `unfocus`。联想面板高度要 `ConstrainedBox(maxHeight:280)+SingleChildScrollView`。
+- 封面: `SongDto` 增加 `cover_url/album_id`(来自 `al.picUrl/al.id`), UI 统一走 `CoverArt`
+  (`http→https` 升级 + errorBuilder 占位)。
+- 测试: 6 个新纯函数/widget 测试(discover/podcast/album_preview/cover_art/search_suggest/queue shuffle);
+  frb_smoke 增加 6 条真实网络用例(每日推荐/建议/专辑/播客/历史)。全量 62 个 flutter 测试 + CI 绿。
+<!-- created=2026-11-04, last=2026-11-04 -->
+
+## 弹层/渲染踩坑(2026-11-04 深夜)
+- **不要在 `showModalBottomSheet` 里用 `AppBar`**: Column 给非 flex 子节点的是**无界高度**,
+  AppBar 内部是 `Column(spaceBetween + flex)` → 抛
+  `RenderFlex children have non-zero flex but incoming height constraints are unbounded`,
+  sheet 永远不显示(barrier 出来了, 内容层 ClipRect 无 children)。
+  统一用 `ui/lib/src/sheet_header.dart: SheetHeader`(固定高度 52 的 Row)。
+  这个 bug 是 **widget 测试**先抓到的(真实网络/设备上都可能因动画未推进而看不到异常)。
+- **Linux Xvfb + Impeller 下 modal bottom sheet 永远滑不出来**: 连最小
+  `showModalBottomSheet(... SizedBox(height:300, ColoredBox(red)))` 都只看到 barrier,
+  `debugDumpLayerTree` 显示顶层路由的 ClipRectLayer **没有 children**(动画停在 0, 被 clip 掉)。
+  Xvfb 的 :99 无 DRI3, Impeller OpenGLES 的转场动画不推进 → **Linux 桌面端只适合验证主界面/搜索/弹菜单,
+  弹层要上 Android 模拟器验证**。
+- **模拟器里封面全变音符占位**不是代码问题: 同一 guest 内 rustls(reqwest)的接口全通, 但
+  Flutter `Image.network`(Dart/BoringSSL TLS)拉 `p*.music.126.net` 失败 —— 与此前
+  chromium/WebView 被中间设备重置 TLS 是同一类; 真机正常。判据: 列表文字/接口都在, 只有图片占位。
+- `pkill -f 'bundle/minincm'` / `pkill -f '[b]undle/minincm'` 都可能自杀: 只要**同一条 bash 命令的
+  cmdline 里出现了真实路径** `.../bundle/minincm`, 父 shell 就会被匹配。杀进程用 `pkill -x minincm`
+  (按进程名精确匹配), 或在单独一次调用里杀。
+- 真机已登录 cookie 可拉下来做 CLI 验证(debug 包):
+  `adb shell run-as com.minincm.minincm cat files/ncm/identity.json` → `ncm login-cookie "<cookie>"`
+  (用独立 `NCM_DATA_DIR`), 之后 `ncm heart / ncm playlists / ncm raw recent` 都能按登录态实测。
+- 新增排障命令: `ncm raw <method> [k=v...]`(`recommend_songs/recommend_resource/playmode/search_suggest/
+  recent/dj_detail/dj_program/dj_program_detail/dj_hot/dj_rcmd/album/fm`, 原样打印 JSON);
+  `ncm heart <songId> [--pid] [--count]` 直接验证心动模式。
+<!-- created=2026-11-04, last=2026-11-04 -->
+

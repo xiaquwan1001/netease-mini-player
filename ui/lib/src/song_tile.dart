@@ -109,9 +109,6 @@ class SongTile extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: active,
-      leading: liked
-          ? Icon(Icons.favorite, size: 16, color: scheme.primary)
-          : null,
       title: Row(
         children: [
           Flexible(
@@ -121,6 +118,12 @@ class SongTile extends StatelessWidget {
               style: playable ? null : grey,
             ),
           ),
+          // 红心放在歌名后面(不要做 leading, 否则每行歌名缩进不齐)
+          if (liked)
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Icon(Icons.favorite, size: 13, color: scheme.primary),
+            ),
           if (playable && song.vip) const VipBadge(small: true),
           if (playable && !song.vip && song.paid) const PaidBadge(),
           if (!playable) const UnplayableBadge(),

@@ -409,8 +409,83 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "heart" => {
+            // 心动模式: 默认歌单 = 我喜欢的音乐(pid=0 时由 provider 自动回落)
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm heart <songId> [--pid <playlistId>] [--count 30]")?
+                .parse()?;
+            let pid: u64 = args.value("--pid").map(|s| s.parse()).transpose()?.unwrap_or(0);
+            let count: u32 = args
+                .value("--count")
+                .map(|s| s.parse())
+                .transpose()?
+                .unwrap_or(30);
+            let p = provider(&core, Capability::DailyRecommend)?;
+            announce(&core);
+            let songs = p.intelligence_songs(id, pid, count).await?;
+            println!("count = {}", songs.len());
+            for (i, s) in songs.iter().take(30).enumerate() {
+                println!(
+                    "{:>3}. [{}] {} — {} (fee={:?} playable={})",
+                    i + 1,
+                    s.id,
+                    s.name,
+                    s.artist_line(),
+                    s.fee,
+                    s.playable
+                );
+            }
+            Ok(())
+        }
+        "raw" => {
+            // 排障/建模用: 直接打任意 vendor 端点并打印原始 JSON.
+            // 用法: ncm raw <method> [key=value ...]
+            // methods: recommend_songs | recommend_resource | playmode | search_suggest |
+            //          recent | dj_detail | dj_program | dj_program_detail | album | fm
+            let method = args
+                .positional
+                .first()
+                .ok_or("usage: ncm raw <method> [key=value ...]")?
+                .clone();
+            announce(&core);
+            let cookie = core.session.cookie.clone();
+            let mut client = ncm_api_rs::ApiClient::new(if cookie.is_empty() {
+                None
+            } else {
+                Some(cookie.clone())
+            });
+            if !core.session.device_id.is_empty() {
+                client.set_device_id(core.session.device_id.clone());
+            }
+            let mut q = ncm_api_rs::Query::new().cookie(&cookie);
+            q.ua = Some(ncm_service::identity::platform_profile().ua.to_string());
+            for p in args.positional.iter().skip(1) {
+                if let Some((k, v)) = p.split_once('=') {
+                    q = q.param(k, v);
+                }
+            }
+            let resp = match method.as_str() {
+                "recommend_songs" => client.recommend_songs(&q).await?,
+                "recommend_resource" => client.recommend_resource(&q).await?,
+                "playmode" => client.playmode_intelligence_list(&q).await?,
+                "search_suggest" => client.search_suggest(&q).await?,
+                "recent" => client.record_recent_song(&q).await?,
+                "dj_detail" => client.dj_detail(&q).await?,
+                "dj_program" => client.dj_program(&q).await?,
+                "dj_program_detail" => client.dj_program_detail(&q).await?,
+                "album" => client.album(&q).await?,
+                "fm" => client.personal_fm(&q).await?,
+                "dj_hot" => client.dj_hot(&q).await?,
+                "dj_rcmd" => client.personalized_djprogram(&q).await?,
+                other => return Err(format!("unknown raw method: {other}").into()),
+            };
+            println!("{}", serde_json::to_string_pretty(&resp.body)?);
+            Ok(())
+        }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | detail"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | detail | raw"
         )
         .into()),
     }

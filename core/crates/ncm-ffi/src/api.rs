@@ -69,6 +69,10 @@ pub struct SongDto {
     pub name: String,
     pub artist: String,
     pub album: String,
+    /// 专辑 id(0 = 未知). 用于点封面看专辑详情
+    pub album_id: u64,
+    /// 专辑封面直链
+    pub cover_url: Option<String>,
     pub duration_ms: u64,
     pub fee: i64,
     /// VIP 专属(高音质需会员)
@@ -84,16 +88,41 @@ fn song_dto(s: ncm_domain::Song) -> SongDto {
     let vip = s.is_vip();
     let paid = s.is_paid();
     let playable = s.playable;
+    let album_id = s.album_id();
+    let cover_url = s.cover_url();
     SongDto {
         id: s.id.0,
         name: s.name,
         artist,
         album: s.album.map(|a| a.name).unwrap_or_default(),
+        album_id,
+        cover_url,
         duration_ms: s.duration_ms,
         fee: s.fee.unwrap_or(0),
         vip,
         paid,
         playable,
+    }
+}
+
+/// SongDto -> domain Song(本地播放历史用: 只保留展示必需字段).
+fn song_from_dto(d: &SongDto) -> ncm_domain::Song {
+    ncm_domain::Song {
+        id: ncm_domain::TrackId::new(d.id),
+        name: d.name.clone(),
+        artists: if d.artist.is_empty() {
+            vec![]
+        } else {
+            vec![ncm_domain::Artist { id: 0, name: d.artist.clone() }]
+        },
+        album: Some(ncm_domain::Album {
+            id: d.album_id,
+            name: d.album.clone(),
+            pic_url: d.cover_url.clone(),
+        }),
+        duration_ms: d.duration_ms,
+        fee: Some(d.fee),
+        playable: d.playable,
     }
 }
 
@@ -460,4 +489,253 @@ pub fn player_seek(position_ms: u64) -> PlayerStateDto {
 pub fn player_set_volume(volume: f32) -> PlayerStateDto {
     player().set_volume(volume);
     state_dto()
+}
+
+// ---------------- 每日推荐 / 心动模式 ----------------
+
+/// 每日推荐歌曲(原版每日推荐)
+pub async fn daily_recommend_songs() -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    let songs = provider
+        .daily_recommend_songs()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(songs.into_iter().map(song_dto).collect())
+}
+
+/// 每日推荐歌单(原版推荐歌单, 需要登录)
+pub async fn daily_recommend_playlists() -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    let list = provider
+        .daily_recommend_playlists()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|p| PlaylistDto {
+            id: p.id,
+            name: p.name,
+            cover_url: p.cover_url,
+            track_count: p.track_count,
+            special: p.special,
+        })
+        .collect())
+}
+
+/// 心动模式: 以当前曲目为种子, 在 playlist_id(0 = 不限定)里续播 count 首
+pub async fn heart_mode_songs(
+    song_id: u64,
+    playlist_id: u64,
+    count: u32,
+) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    let songs = provider
+        .intelligence_songs(song_id, playlist_id, count)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(songs.into_iter().map(song_dto).collect())
+}
+
+// ---------------- 搜索建议 / 历史 ----------------
+
+pub struct SuggestItemDto {
+    /// song | artist | album | playlist
+    pub kind: String,
+    pub id: u64,
+    pub title: String,
+    pub subtitle: String,
+    pub cover_url: Option<String>,
+}
+
+/// 搜索建议(输入联想)
+pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItemDto>, String> {
+    if keywords.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    let provider = with_provider(Capability::SearchSuggest)?;
+    let items = provider
+        .search_suggest(keywords.trim())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(items
+        .into_iter()
+        .map(|s| SuggestItemDto {
+            kind: s.kind,
+            id: s.id,
+            title: s.title,
+            subtitle: s.subtitle,
+            cover_url: s.cover_url,
+        })
+        .collect())
+}
+
+fn history_store() -> Result<ncm_service::HistoryStore, String> {
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?;
+    ncm_service::HistoryStore::open(dir).map_err(|e| e.to_string())
+}
+
+/// 搜索历史(最近在前)
+pub fn search_history() -> Result<Vec<String>, String> {
+    Ok(history_store()?.search_history())
+}
+
+/// 记一条搜索(去重, 最近在前), 返回新的历史列表
+pub fn record_search(keyword: String) -> Result<Vec<String>, String> {
+    history_store()?
+        .record_search(&keyword)
+        .map_err(|e| e.to_string())
+}
+
+pub fn clear_search_history() -> Result<bool, String> {
+    history_store()?.clear_search().map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// 记一次播放到本地历史(未登录/离线时的"最近听过"来源)
+pub fn remember_play(song: SongDto) -> Result<bool, String> {
+    let domain = song_from_dto(&song);
+    history_store()?
+        .record_play(&domain)
+        .map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
+/// 本地播放历史
+pub fn local_recent_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+    let n = limit.max(1) as usize;
+    Ok(history_store()?
+        .played()
+        .into_iter()
+        .take(n)
+        .map(song_dto)
+        .collect())
+}
+
+/// 最近听过: 登录时优先服务端记录, 失败/未登录回落到本地历史
+pub async fn recent_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+    let logged_in = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard.session.is_logged_in()
+    };
+    if logged_in {
+        if let Ok(provider) = with_provider(Capability::Recent) {
+            if let Ok(list) = provider.recent_songs(limit).await {
+                if !list.is_empty() {
+                    return Ok(list.into_iter().map(song_dto).collect());
+                }
+            }
+        }
+    }
+    local_recent_songs(limit)
+}
+
+// ---------------- 专辑封面预览 ----------------
+
+pub struct AlbumDetailDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub artist: String,
+    pub description: String,
+    pub songs: Vec<SongDto>,
+}
+
+pub async fn album_detail(album_id: u64) -> Result<AlbumDetailDto, String> {
+    let provider = with_provider(Capability::Album)?;
+    let album = provider
+        .album_detail(album_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(AlbumDetailDto {
+        id: album.id,
+        name: album.name,
+        cover_url: album.cover_url,
+        artist: album.artist,
+        description: album.description,
+        songs: album.songs.into_iter().map(song_dto).collect(),
+    })
+}
+
+// ---------------- 播客 ----------------
+
+pub struct PodcastRadioDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub description: String,
+    pub dj_name: String,
+    pub program_count: u64,
+    pub play_count: u64,
+}
+
+pub struct PodcastProgramDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub duration_ms: u64,
+    pub dj_name: String,
+    pub radio_id: u64,
+    pub radio_name: String,
+    pub description: String,
+    /// 节目音频本体(播放用 song.id 取直链)
+    pub song: Option<SongDto>,
+}
+
+fn radio_dto(r: ncm_domain::PodcastRadio) -> PodcastRadioDto {
+    PodcastRadioDto {
+        id: r.id,
+        name: r.name,
+        cover_url: r.cover_url,
+        description: r.description,
+        dj_name: r.dj_name,
+        program_count: r.program_count,
+        play_count: r.play_count,
+    }
+}
+
+fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
+    PodcastProgramDto {
+        id: p.id,
+        name: p.name,
+        cover_url: p.cover_url,
+        duration_ms: p.duration_ms,
+        dj_name: p.dj_name,
+        radio_id: p.radio_id,
+        radio_name: p.radio_name,
+        description: p.description,
+        song: p.song.map(song_dto),
+    }
+}
+
+/// 热门播客/电台
+pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
+    let provider = with_provider(Capability::Podcast)?;
+    let list = provider.podcast_hot(limit).await.map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(radio_dto).collect())
+}
+
+/// 某个播客的节目列表
+pub async fn podcast_programs(
+    radio_id: u64,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<PodcastProgramDto>, String> {
+    let provider = with_provider(Capability::Podcast)?;
+    let list = provider
+        .podcast_programs(radio_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(program_dto).collect())
+}
+
+/// 单个节目详情
+pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, String> {
+    let provider = with_provider(Capability::Podcast)?;
+    let p = provider
+        .podcast_program(program_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(program_dto(p))
 }

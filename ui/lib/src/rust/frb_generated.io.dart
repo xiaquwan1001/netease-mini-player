@@ -28,7 +28,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AccountDto dco_decode_account_dto(dynamic raw);
 
   @protected
+  AlbumDetailDto dco_decode_album_detail_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  SongDto dco_decode_box_autoadd_song_dto(dynamic raw);
 
   @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
@@ -55,6 +61,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlaylistDto> dco_decode_list_playlist_dto(dynamic raw);
 
   @protected
+  List<PodcastProgramDto> dco_decode_list_podcast_program_dto(dynamic raw);
+
+  @protected
+  List<PodcastRadioDto> dco_decode_list_podcast_radio_dto(dynamic raw);
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
@@ -67,10 +79,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
 
   @protected
+  List<SuggestItemDto> dco_decode_list_suggest_item_dto(dynamic raw);
+
+  @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
@@ -80,6 +98,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaylistDto dco_decode_playlist_dto(dynamic raw);
+
+  @protected
+  PodcastProgramDto dco_decode_podcast_program_dto(dynamic raw);
+
+  @protected
+  PodcastRadioDto dco_decode_podcast_radio_dto(dynamic raw);
 
   @protected
   ProviderInfo dco_decode_provider_info(dynamic raw);
@@ -92,6 +116,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StreamDto dco_decode_stream_dto(dynamic raw);
+
+  @protected
+  SuggestItemDto dco_decode_suggest_item_dto(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -112,7 +139,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AccountDto sse_decode_account_dto(SseDeserializer deserializer);
 
   @protected
+  AlbumDetailDto sse_decode_album_detail_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
@@ -141,6 +174,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlaylistDto> sse_decode_list_playlist_dto(SseDeserializer deserializer);
 
   @protected
+  List<PodcastProgramDto> sse_decode_list_podcast_program_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PodcastRadioDto> sse_decode_list_podcast_radio_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -155,10 +198,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
 
   @protected
+  List<SuggestItemDto> sse_decode_list_suggest_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  SongDto? sse_decode_opt_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
@@ -168,6 +219,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaylistDto sse_decode_playlist_dto(SseDeserializer deserializer);
+
+  @protected
+  PodcastProgramDto sse_decode_podcast_program_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PodcastRadioDto sse_decode_podcast_radio_dto(SseDeserializer deserializer);
 
   @protected
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
@@ -180,6 +239,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StreamDto sse_decode_stream_dto(SseDeserializer deserializer);
+
+  @protected
+  SuggestItemDto sse_decode_suggest_item_dto(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -203,7 +265,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_account_dto(AccountDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_album_detail_dto(
+    AlbumDetailDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
@@ -239,6 +310,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_podcast_program_dto(
+    List<PodcastProgramDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_podcast_radio_dto(
+    List<PodcastRadioDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
     Uint64List self,
     SseSerializer serializer,
@@ -260,10 +343,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_song_dto(List<SongDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_suggest_item_dto(
+    List<SuggestItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_song_dto(
+    SongDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
@@ -276,6 +371,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_playlist_dto(PlaylistDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_podcast_program_dto(
+    PodcastProgramDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_podcast_radio_dto(
+    PodcastRadioDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);
@@ -291,6 +398,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_stream_dto(StreamDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_suggest_item_dto(
+    SuggestItemDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);

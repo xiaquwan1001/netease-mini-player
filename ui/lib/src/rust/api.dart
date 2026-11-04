@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `player`, `song_dto`, `state_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -102,6 +102,74 @@ Future<PlayerStateDto> playerSeek({required BigInt positionMs}) =>
 Future<PlayerStateDto> playerSetVolume({required double volume}) =>
     RustLib.instance.api.crateApiPlayerSetVolume(volume: volume);
 
+/// 每日推荐歌曲(原版每日推荐)
+Future<List<SongDto>> dailyRecommendSongs() =>
+    RustLib.instance.api.crateApiDailyRecommendSongs();
+
+/// 每日推荐歌单(原版推荐歌单, 需要登录)
+Future<List<PlaylistDto>> dailyRecommendPlaylists() =>
+    RustLib.instance.api.crateApiDailyRecommendPlaylists();
+
+/// 心动模式: 以当前曲目为种子, 在 playlist_id(0 = 不限定)里续播 count 首
+Future<List<SongDto>> heartModeSongs({
+  required BigInt songId,
+  required BigInt playlistId,
+  required int count,
+}) => RustLib.instance.api.crateApiHeartModeSongs(
+  songId: songId,
+  playlistId: playlistId,
+  count: count,
+);
+
+/// 搜索建议(输入联想)
+Future<List<SuggestItemDto>> searchSuggest({required String keywords}) =>
+    RustLib.instance.api.crateApiSearchSuggest(keywords: keywords);
+
+/// 搜索历史(最近在前)
+Future<List<String>> searchHistory() =>
+    RustLib.instance.api.crateApiSearchHistory();
+
+/// 记一条搜索(去重, 最近在前), 返回新的历史列表
+Future<List<String>> recordSearch({required String keyword}) =>
+    RustLib.instance.api.crateApiRecordSearch(keyword: keyword);
+
+Future<bool> clearSearchHistory() =>
+    RustLib.instance.api.crateApiClearSearchHistory();
+
+/// 记一次播放到本地历史(未登录/离线时的"最近听过"来源)
+Future<bool> rememberPlay({required SongDto song}) =>
+    RustLib.instance.api.crateApiRememberPlay(song: song);
+
+/// 本地播放历史
+Future<List<SongDto>> localRecentSongs({required int limit}) =>
+    RustLib.instance.api.crateApiLocalRecentSongs(limit: limit);
+
+/// 最近听过: 登录时优先服务端记录, 失败/未登录回落到本地历史
+Future<List<SongDto>> recentSongs({required int limit}) =>
+    RustLib.instance.api.crateApiRecentSongs(limit: limit);
+
+Future<AlbumDetailDto> albumDetail({required BigInt albumId}) =>
+    RustLib.instance.api.crateApiAlbumDetail(albumId: albumId);
+
+/// 热门播客/电台
+Future<List<PodcastRadioDto>> podcastHot({required int limit}) =>
+    RustLib.instance.api.crateApiPodcastHot(limit: limit);
+
+/// 某个播客的节目列表
+Future<List<PodcastProgramDto>> podcastPrograms({
+  required BigInt radioId,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiPodcastPrograms(
+  radioId: radioId,
+  limit: limit,
+  offset: offset,
+);
+
+/// 单个节目详情
+Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
+    RustLib.instance.api.crateApiPodcastProgram(programId: programId);
+
 class AccountDto {
   final BigInt userId;
   final String nickname;
@@ -135,6 +203,45 @@ class AccountDto {
           avatarUrl == other.avatarUrl &&
           active == other.active &&
           vip == other.vip;
+}
+
+class AlbumDetailDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String artist;
+  final String description;
+  final List<SongDto> songs;
+
+  const AlbumDetailDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.artist,
+    required this.description,
+    required this.songs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      artist.hashCode ^
+      description.hashCode ^
+      songs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AlbumDetailDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          artist == other.artist &&
+          description == other.description &&
+          songs == other.songs;
 }
 
 class InitInfo {
@@ -267,6 +374,102 @@ class PlaylistDto {
           special == other.special;
 }
 
+class PodcastProgramDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final BigInt durationMs;
+  final String djName;
+  final BigInt radioId;
+  final String radioName;
+  final String description;
+
+  /// 节目音频本体(播放用 song.id 取直链)
+  final SongDto? song;
+
+  const PodcastProgramDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.durationMs,
+    required this.djName,
+    required this.radioId,
+    required this.radioName,
+    required this.description,
+    this.song,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      durationMs.hashCode ^
+      djName.hashCode ^
+      radioId.hashCode ^
+      radioName.hashCode ^
+      description.hashCode ^
+      song.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PodcastProgramDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          durationMs == other.durationMs &&
+          djName == other.djName &&
+          radioId == other.radioId &&
+          radioName == other.radioName &&
+          description == other.description &&
+          song == other.song;
+}
+
+class PodcastRadioDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String description;
+  final String djName;
+  final BigInt programCount;
+  final BigInt playCount;
+
+  const PodcastRadioDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.description,
+    required this.djName,
+    required this.programCount,
+    required this.playCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      description.hashCode ^
+      djName.hashCode ^
+      programCount.hashCode ^
+      playCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PodcastRadioDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          description == other.description &&
+          djName == other.djName &&
+          programCount == other.programCount &&
+          playCount == other.playCount;
+}
+
 class ProviderInfo {
   final String id;
   final String name;
@@ -320,6 +523,12 @@ class SongDto {
   final String name;
   final String artist;
   final String album;
+
+  /// 专辑 id(0 = 未知). 用于点封面看专辑详情
+  final BigInt albumId;
+
+  /// 专辑封面直链
+  final String? coverUrl;
   final BigInt durationMs;
   final PlatformInt64 fee;
 
@@ -337,6 +546,8 @@ class SongDto {
     required this.name,
     required this.artist,
     required this.album,
+    required this.albumId,
+    this.coverUrl,
     required this.durationMs,
     required this.fee,
     required this.vip,
@@ -350,6 +561,8 @@ class SongDto {
       name.hashCode ^
       artist.hashCode ^
       album.hashCode ^
+      albumId.hashCode ^
+      coverUrl.hashCode ^
       durationMs.hashCode ^
       fee.hashCode ^
       vip.hashCode ^
@@ -365,6 +578,8 @@ class SongDto {
           name == other.name &&
           artist == other.artist &&
           album == other.album &&
+          albumId == other.albumId &&
+          coverUrl == other.coverUrl &&
           durationMs == other.durationMs &&
           fee == other.fee &&
           vip == other.vip &&
@@ -393,4 +608,40 @@ class StreamDto {
           quality == other.quality &&
           br == other.br &&
           expireAt == other.expireAt;
+}
+
+class SuggestItemDto {
+  /// song | artist | album | playlist
+  final String kind;
+  final BigInt id;
+  final String title;
+  final String subtitle;
+  final String? coverUrl;
+
+  const SuggestItemDto({
+    required this.kind,
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    this.coverUrl,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^
+      id.hashCode ^
+      title.hashCode ^
+      subtitle.hashCode ^
+      coverUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SuggestItemDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          id == other.id &&
+          title == other.title &&
+          subtitle == other.subtitle &&
+          coverUrl == other.coverUrl;
 }

@@ -2,12 +2,17 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'src/album_preview.dart';
 import 'src/auth.dart';
+import 'src/cover_art.dart';
+import 'src/discover.dart';
 import 'src/lyric.dart';
-import 'src/playback.dart';
 import 'src/library_view.dart';
 import 'src/net_retry.dart';
+import 'src/playback.dart';
+import 'src/podcast.dart';
 import 'src/queue.dart';
+import 'src/search_suggest.dart';
 import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -28,12 +33,14 @@ const _modeIcons = {
   PlayMode.repeatAll: Icons.repeat,
   PlayMode.repeatOne: Icons.repeat_one,
   PlayMode.sequence: Icons.playlist_play,
+  PlayMode.shuffle: Icons.shuffle,
 };
 
 const _modeLabels = {
   PlayMode.repeatAll: '列表循环',
   PlayMode.repeatOne: '单曲循环',
   PlayMode.sequence: '顺序播放',
+  PlayMode.shuffle: '随机播放',
 };
 
 class MiniNcmApp extends StatelessWidget {
@@ -104,6 +111,15 @@ class _HomePageState extends State<HomePage> {
   List<rust.SongDto> _library = const [];
   String? _libraryTitle;
 
+  /// 当前浏览的歌单 id(心动模式要用 playlistId; 搜索态为 null)
+  BigInt? _libraryPlaylistId;
+
+  // ---- 搜索建议 / 历史 ----
+  final _searchFocus = FocusNode();
+  Timer? _suggestDebounce;
+  List<rust.SuggestItemDto> _suggestions = const [];
+  List<String> _searchHistory = const [];
+
   rust.SongDto? get _current => _queue.current;
 
   /// 当前列表的原始曲目(歌单浏览优先)
@@ -121,13 +137,18 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // 通知栏/耳机键的上一首·下一首 → Dart 队列
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
+    _searchFocus.addListener(_onSearchFocusChanged);
     _bootstrap();
+    _loadSearchHistory();
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _suggestDebounce?.cancel();
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    _searchFocus.dispose();
     _lyricScroll.dispose();
     super.dispose();
   }
@@ -190,26 +211,194 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _search() async {
+    final keyword = _controller.text.trim();
+    if (keyword.isEmpty) return;
+    _suggestDebounce?.cancel();
+    _searchFocus.unfocus();
     setState(() {
       _busy = true;
       _error = null;
+      _suggestions = const [];
       // 搜索即离开歌单浏览态, 结果列表要保持"这一屏是什么"的唯一来源
       _library = const [];
       _libraryTitle = null;
+      _libraryPlaylistId = null;
     });
     try {
       final result = await retryNetwork(
-        () => rust.search(keywords: _controller.text, limit: 20),
+        () => rust.search(keywords: keyword, limit: 20),
       );
+      if (!mounted) return;
       setState(() => _result = result);
+      // 搜索历史是本地记录, 失败不影响搜索结果
+      try {
+        final history = await rust.recordSearch(keyword: keyword);
+        if (mounted) setState(() => _searchHistory = history);
+      } catch (_) {}
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = friendlyError(e);
         _retryLast = _search;
       });
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
+  }
+
+  // ---------------- 搜索建议 / 历史 ----------------
+
+  void _onSearchFocusChanged() {
+    if (!mounted) return;
+    if (!_searchFocus.hasFocus) {
+      setState(() => _suggestions = const []);
+    } else {
+      // 重新获得焦点: 刷新历史(别处可能新增过)
+      _loadSearchHistory();
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadSearchHistory() async {
+    try {
+      final list = await rust.searchHistory();
+      if (!mounted) return;
+      setState(() => _searchHistory = list);
+    } catch (_) {
+      // 历史读不出来不影响主流程
+    }
+  }
+
+  void _onQueryChanged(String value) {
+    _suggestDebounce?.cancel();
+    final q = value.trim();
+    if (q.isEmpty) {
+      setState(() => _suggestions = const []);
+      return;
+    }
+    _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
+      try {
+        final items = await rust.searchSuggest(keywords: q);
+        if (!mounted || _controller.text.trim() != q) return;
+        setState(() => _suggestions = items);
+      } catch (_) {
+        // 建议是锦上添花, 失败静默
+      }
+    });
+  }
+
+  Future<void> _searchKeyword(String keyword) async {
+    _controller.text = keyword;
+    _controller.selection = TextSelection.collapsed(offset: keyword.length);
+    setState(() => _suggestions = const []);
+    await _search();
+  }
+
+  Future<void> _clearSearchHistory() async {
+    try {
+      await rust.clearSearchHistory();
+      if (mounted) setState(() => _searchHistory = const []);
+    } catch (_) {}
+  }
+
+  /// 用一批曲目重置队列并从 index 开始播放(专辑/播客/每日推荐/最近听过共用)
+  Future<void> _playSongsList(List<rust.SongDto> songs, int index) async {
+    if (songs.isEmpty) return;
+    final start = index.clamp(0, songs.length - 1);
+    _queue.setAll(songs, startAt: start);
+    _userStopped = false;
+    setState(() {
+      _library = songs;
+      _libraryTitle = '正在播放';
+      _libraryPlaylistId = null;
+    });
+    await _playSong(songs[start]);
+  }
+
+  // ---------------- 心动模式 / 每日推荐 / 播客 / 最近听过 / 封面预览 ----------------
+
+  /// 心动模式: 以当前曲目为种子, 在当前歌单(0=不限定)里续播一队推荐.
+  /// 网易云这个接口需要登录, 未登录会返回 [auth] 错误.
+  Future<void> _heartMode() async {
+    final current = _current;
+    final id = current?.id;
+    if (id == null) {
+      _toast('先播一首歌, 再开启心动模式');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final songs = await retryNetwork(
+        () => rust.heartModeSongs(
+          songId: id,
+          playlistId: _libraryPlaylistId ?? BigInt.zero,
+          count: 30,
+        ),
+      );
+      if (!mounted) return;
+      final seen = <BigInt>{id};
+      final list = <rust.SongDto>[?current];
+      for (final s in songs) {
+        if (s.playable && seen.add(s.id)) list.add(s);
+      }
+      if (list.length <= 1) {
+        _toast('心动模式暂时没有推荐(登录后推荐更准)');
+        return;
+      }
+      _queue.setAll(list, startAt: 0);
+      _userStopped = false;
+      setState(() {
+        _library = list;
+        _libraryTitle = '心动模式';
+      });
+      final next = _queue.next();
+      if (next != null) await _playSong(next);
+    } catch (e) {
+      if (!mounted) return;
+      _toast(friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _openDiscover() {
+    showDiscoverSheet(
+      context,
+      onPlaySongs: (songs, index) => _playSongsList(songs, index),
+      onOpenPlaylist: (pl) => _openPlaylist(pl),
+    );
+  }
+
+  void _openPodcast() {
+    showPodcastSheet(
+      context,
+      onPlay: (songs, index) => _playSongsList(songs, index),
+    );
+  }
+
+  void _openRecent() {
+    showRecentSheet(
+      context,
+      onPlay: (songs, index) => _playSongsList(songs, index),
+    );
+  }
+
+  void _openAlbumPreview(rust.SongDto? song) {
+    if (song == null) return;
+    showAlbumPreview(
+      context,
+      albumId: song.albumId,
+      albumName: song.album,
+      coverUrl: song.coverUrl,
+      onPlay: (songs, index) => _playSongsList(songs, index),
+    );
   }
 
   /// 点列表: 用当前可见列表(搜索/歌单)重置队列, 从被点那首开始
@@ -264,6 +453,8 @@ class _HomePageState extends State<HomePage> {
       );
       if (!mounted) return true;
       setState(() => _player = state);
+      // 本地播放历史(未登录/离线时"最近听过"的来源); 失败不影响播放
+      unawaited(rust.rememberPlay(song: song).catchError((_) => false));
       unawaited(_loadLyric(song.id));
       return true;
     } catch (e) {
@@ -633,6 +824,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _library = songs;
         _libraryTitle = pl.special ? '我喜欢的音乐' : pl.name;
+        _libraryPlaylistId = pl.id;
         if (pl.special) _liked = songs.map((s) => s.id).toSet();
       });
     } catch (e) {
@@ -651,6 +843,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _library = const [];
       _libraryTitle = null;
+      _libraryPlaylistId = null;
     });
   }
 
@@ -766,6 +959,62 @@ class _HomePageState extends State<HomePage> {
             // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
             if (_vip) const VipBadge(small: true),
           ],
+          PopupMenuButton<String>(
+            tooltip: '发现',
+            icon: const Icon(Icons.explore_outlined),
+            onSelected: (value) {
+              // 弹出菜单的路由还在退场; 立刻 push 会让新路由的入场动画卡在 0
+              // (Linux/Impeller 实测: barrier 出来了, sheet 永远停在屏幕外).
+              // 等这一帧结束再打开, 让 Navigator 先把菜单路由清理干净.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                switch (value) {
+                  case 'daily':
+                    _openDiscover();
+                  case 'heart':
+                    _heartMode();
+                  case 'podcast':
+                    _openPodcast();
+                  case 'recent':
+                    _openRecent();
+                }
+              });
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'daily',
+                child: Row(children: [
+                  Icon(Icons.auto_awesome),
+                  SizedBox(width: 10),
+                  Text('每日推荐'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'heart',
+                child: Row(children: [
+                  Icon(Icons.auto_awesome),
+                  SizedBox(width: 10),
+                  Text('心动模式'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'podcast',
+                child: Row(children: [
+                  Icon(Icons.podcasts),
+                  SizedBox(width: 10),
+                  Text('播客'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'recent',
+                child: Row(children: [
+                  Icon(Icons.history),
+                  SizedBox(width: 10),
+                  Text('最近听过'),
+                ]),
+              ),
+            ],
+          ),
           // 登录(WebView)/账号簿/退出登录只在安卓端(桌面版还没有网页登录宿主)
           if (_auth.isAndroid) ...[
             if (_info?.loggedIn == true)
@@ -788,6 +1037,25 @@ class _HomePageState extends State<HomePage> {
       body: Column(
         children: [
           if (!_showLyrics) _buildSearchBar(),
+          // 没输入内容时给搜索历史, 有输入时给输入联想(原版交互)
+          if (!_showLyrics &&
+              _searchFocus.hasFocus &&
+              _controller.text.trim().isEmpty)
+            SearchHistoryBar(
+              history: _searchHistory,
+              onSelected: _searchKeyword,
+              onClear: _clearSearchHistory,
+            ),
+          if (!_showLyrics && _suggestions.isNotEmpty)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 280),
+              child: SingleChildScrollView(
+                child: SuggestionPanel(
+                  items: _suggestions,
+                  onSelected: (item) => _searchKeyword(item.title),
+                ),
+              ),
+            ),
           if (info != null && !_showLyrics)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -840,11 +1108,14 @@ class _HomePageState extends State<HomePage> {
           Expanded(
             child: TextField(
               controller: _controller,
+              focusNode: _searchFocus,
               decoration: const InputDecoration(
                 labelText: '搜索',
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
+              textInputAction: TextInputAction.search,
+              onChanged: _onQueryChanged,
               onSubmitted: (_) => _search(),
             ),
           ),
@@ -980,6 +1251,14 @@ class _HomePageState extends State<HomePage> {
               // 因此标题独占一行, 控件单独居中一行.
               Row(
                 children: [
+                  // 封面: 点开看专辑大图 + 曲目
+                  GestureDetector(
+                    onTap: () => _openAlbumPreview(current),
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, right: 4),
+                      child: CoverArt(url: current?.coverUrl, size: 40, radius: 6),
+                    ),
+                  ),
                   Expanded(
                     child: InkWell(
                       onTap: _toggleLyrics,
@@ -1016,6 +1295,12 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
+                  ),
+                  // 心动模式: 以当前曲目为种子续播一队智能推荐
+                  IconButton(
+                    tooltip: '心动模式',
+                    icon: const Icon(Icons.auto_awesome),
+                    onPressed: _busy ? null : _heartMode,
                   ),
                   // 红心: 当前曲目是否在我喜欢的音乐里, 点一下即收藏/取消
                   IconButton(

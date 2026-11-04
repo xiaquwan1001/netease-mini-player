@@ -5,9 +5,11 @@
 //! 2. 把 vendor 的 ncm-api-rs 包成我们的 Provider
 
 pub mod cache;
+pub mod history;
 pub mod identity;
 pub mod netease;
 
+pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use netease::NeteaseProvider;
 
