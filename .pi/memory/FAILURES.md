@@ -12,3 +12,9 @@
   chromium 不通, 且宿主 curl 通 ⇒ 先怀疑模拟器的会话语义(本次是 wlan0/netsim, 关 wifi 即好)。
 - 身份指纹"成套"才有效: cookie 说 `os=pc` 而 UA 是 iPhone / 网页是移动版, 属于自相矛盾的客户端,
   风控会"假通过"(静默降权)而不是报错 —— 曾长期带着这个不一致在跑。
+
+§
+## 2026-11-05 手工跑 cargo test 挂 vendor 联网集成测试
+- `tools/env.sh` 会 export 指向 127.0.0.1:7890 的代理变量(本机 7890 常没起): 手工跑 `cargo test --manifest-path core/Cargo.toml` 时 vendor/ncm-api 的 8 个真实联网集成测试 reqwest 走死代理必挂 `assert!(result.is_ok())`。手工跑测试前必须 `unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY`(ci.sh 自己会 unset, 所以 CI 没暴露)。
+- vendor/ncm-api/tests/integration.rs(8 个)打真实网易云接口, 全量连跑偶发 1~3 个风控失败, 且每轮失败集合不同; 单独复跑即过, 是网络抖动不是代码问题。判据: 只盯新增/离线单测, vendor 联网测试复跑确认。
+- fabric/pi 会话里别裸 `git stash`: 会把运行时一直改写的 `.pi/fabric/mesh/state.json` 一起 stash, pop 必被卡"本地修改将被合并操作覆盖"。解法: pop 前 `git checkout -- .pi/fabric/mesh/state.json` 再 pop。
