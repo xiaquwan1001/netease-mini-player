@@ -6,8 +6,9 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Artist, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist, PlaylistDetail,
-    PodcastProgram, PodcastRadio, Profile, SearchPage, Song, StreamUrl, SuggestItem, TrackId,
+    AlbumDetail, Artist, ArtistDetail, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist,
+    PlaylistDetail, PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage,
+    Song, StreamUrl, SuggestItem, TrackId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -38,6 +39,10 @@ pub enum Capability {
     Comment,
     Share,
     PodcastDetail,
+    SearchAll,
+    Artist,
+    ProfileDetail,
+    PlaylistEdit,
 }
 
 impl Capability {
@@ -61,6 +66,10 @@ impl Capability {
             Capability::Comment => "comment",
             Capability::Share => "share",
             Capability::PodcastDetail => "podcastDetail",
+            Capability::SearchAll => "searchAll",
+            Capability::Artist => "artist",
+            Capability::ProfileDetail => "profileDetail",
+            Capability::PlaylistEdit => "playlistEdit",
         }
     }
 }
@@ -215,6 +224,22 @@ pub trait Provider: Send + Sync {
     }
 
     fn search<'a>(&'a self, query: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>>;
+
+    /// 综合搜索: 单曲/歌手/专辑/歌单/播客分板块.
+    /// 默认退化成只搜单曲(兼容只实现 search 的 provider).
+    fn search_all<'a>(
+        &'a self,
+        query: &'a SearchQuery,
+    ) -> BoxFuture<'a, ProviderResult<SearchBundle>> {
+        Box::pin(async move {
+            let page = self.search(query).await?;
+            Ok(SearchBundle {
+                songs: page.songs,
+                song_total: page.total,
+                ..SearchBundle::default()
+            })
+        })
+    }
 
     fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>>;
 
@@ -383,6 +408,30 @@ pub trait Provider: Send + Sync {
     /// 播客/电台详情
     fn podcast_radio(&self, _radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
         Box::pin(async { Err(ProviderError::unsupported("no podcast radio")) })
+    }
+
+    /// 歌手详情(头像/简介/热门歌曲/专辑)
+    fn artist_detail(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<ArtistDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist detail")) })
+    }
+
+    /// 当前账号资料详情(个人主页背景图/头像/签名/关注数)
+    fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no profile detail")) })
+    }
+
+    /// 收藏曲目到指定歌单(需要登录). 返回 true 表示接口接受.
+    fn add_to_playlist(
+        &self,
+        _playlist_id: u64,
+        _track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist edit")) })
+    }
+
+    /// "我喜欢的音乐"曲目, 按收藏时间从新到旧(服务端 addTime 排序).
+    fn liked_songs_ordered(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no liked songs")) })
     }
 }
 

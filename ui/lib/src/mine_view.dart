@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'profile_header.dart';
 import 'rust/api.dart' as rust;
+import 'song_actions.dart';
 
-/// "我的": 我喜欢 / 收藏歌单 / 收藏播客 / 关注艺人 / 关注动态 / 最近听过.
+/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 关注艺人 / 最近听过.
+/// 关注动态已拆到独立的"关注"底部 tab。
 /// 所有区块独立加载; 未登录时只显示登录引导.
 class MineView extends StatefulWidget {
   const MineView({
@@ -22,7 +25,7 @@ class MineView extends StatefulWidget {
     this.loadPlaylists,
     this.loadPodcasts,
     this.loadArtists,
-    this.loadFeed,
+    this.loadProfile,
     this.loadRecent,
   });
 
@@ -45,7 +48,7 @@ class MineView extends StatefulWidget {
   final Future<List<rust.PlaylistDto>> Function()? loadPlaylists;
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
   final Future<List<rust.ArtistDto>> Function()? loadArtists;
-  final Future<List<rust.FeedEventDto>> Function()? loadFeed;
+  final Future<rust.ProfileDetailDto> Function()? loadProfile;
   final Future<List<rust.SongDto>> Function()? loadRecent;
 
   @override
@@ -61,10 +64,6 @@ class _MineViewState extends State<MineView> {
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
   Future<List<rust.ArtistDto>> Function() get _artists =>
       widget.loadArtists ?? (() => rust.subscribedArtists(limit: 50));
-  Future<List<rust.FeedEventDto>> Function() get _feed =>
-      widget.loadFeed ??
-      (() => rust.feedEvents(limit: 20, lastTime: -1));
-
   /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
   Future<List<rust.SongDto>> _loadRecent() async {
     try {
@@ -87,7 +86,7 @@ class _MineViewState extends State<MineView> {
             children: [
               Icon(Icons.account_circle, size: 56, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 12),
-              const Text('登录后查看我喜欢的音乐、收藏歌单/播客和关注动态'),
+              const Text('登录后查看我喜欢的音乐、收藏歌单/播客和关注艺人'),
               const SizedBox(height: 16),
               FilledButton(onPressed: widget.onLogin, child: const Text('登录')),
               TextButton(
@@ -104,6 +103,13 @@ class _MineViewState extends State<MineView> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
+          _ProfileSection(
+            loggedIn: widget.loggedIn,
+            onOpenAccounts: widget.onOpenAccounts,
+            onLogin: widget.onLogin,
+            load: widget.loadProfile,
+          ),
+          const SizedBox(height: 4),
           _LikedSection(
             load: _liked,
             onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
@@ -115,8 +121,6 @@ class _MineViewState extends State<MineView> {
           _PodcastsSection(load: _podcasts, onOpen: widget.onOpenPodcast),
           const SizedBox(height: 16),
           _ArtistsSection(load: _artists),
-          const SizedBox(height: 16),
-          _FeedSection(load: _feed, onPlay: widget.onPlaySongs),
           const SizedBox(height: 16),
           _RecentSection(
             load: _loadRecent,
@@ -247,6 +251,64 @@ class _InlineError extends StatelessWidget {
   }
 }
 
+// ---------------- 个人资料卡(背景图/头像) ----------------
+
+class _ProfileSection extends StatefulWidget {
+  const _ProfileSection({
+    required this.loggedIn,
+    required this.onOpenAccounts,
+    required this.onLogin,
+    this.load,
+  });
+
+  final bool loggedIn;
+  final VoidCallback onOpenAccounts;
+  final VoidCallback onLogin;
+  final Future<rust.ProfileDetailDto> Function()? load;
+
+  @override
+  State<_ProfileSection> createState() => _ProfileSectionState();
+}
+
+class _ProfileSectionState extends State<_ProfileSection> {
+  rust.ProfileDetailDto? _detail;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loggedIn) _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProfileSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.loggedIn && !oldWidget.loggedIn) _load();
+    if (!widget.loggedIn && _detail != null) {
+      _detail = null;
+    }
+  }
+
+  Future<void> _load() async {
+    try {
+      final detail = await retryNetwork(widget.load ?? rust.profileDetail);
+      if (!mounted) return;
+      setState(() => _detail = detail);
+    } catch (_) {
+      // 资料卡是锦上添花: 失败只保留默认背景/昵称
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ProfileHeader(
+      detail: _detail,
+      fallbackNickname: widget.loggedIn ? '我的账号' : null,
+      loggedIn: widget.loggedIn,
+      onTap: widget.loggedIn ? widget.onOpenAccounts : widget.onLogin,
+    );
+  }
+}
+
 // ---------------- 我喜欢 ----------------
 
 class _LikedSection extends StatelessWidget {
@@ -296,10 +358,15 @@ class _LikedSection extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: songs.length > preview.length && i == preview.length - 1
-                          ? Text('共 ${songs.length} 首',
-                              style: Theme.of(context).textTheme.labelSmall)
-                          : null,
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (songs.length > preview.length && i == preview.length - 1)
+                            Text('共 ${songs.length} 首',
+                                style: Theme.of(context).textTheme.labelSmall),
+                          SongOverflowButton(song: preview[i], size: 20),
+                        ],
+                      ),
                       onTap: preview[i].playable
                           ? () {
                               final index =
@@ -469,12 +536,7 @@ class _ArtistsSection extends StatelessWidget {
               for (final a in artists)
                 Chip(
                   visualDensity: VisualDensity.compact,
-                  avatar: CircleAvatar(
-                    child: Text(
-                      a.name.characters.first,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ),
+                  avatar: CircleCover(url: a.avatarUrl, size: 24),
                   label: Text(a.name),
                 ),
             ],
@@ -483,198 +545,6 @@ class _ArtistsSection extends StatelessWidget {
       ],
     );
   }
-}
-
-// ---------------- 关注动态 ----------------
-
-class _FeedSection extends StatelessWidget {
-  const _FeedSection({required this.load, required this.onPlay});
-
-  final Future<List<rust.FeedEventDto>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader(title: '关注动态'),
-        _AsyncSection<List<rust.FeedEventDto>>(
-          load: load,
-          emptyText: '关注的艺人/好友还没有新动态',
-          builder: (context, events, reload) {
-            final songs = [
-              for (final e in events)
-                if (e.song != null && e.song!.playable) e.song!,
-            ];
-            return Card(
-              margin: EdgeInsets.zero,
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final e in events)
-                    _FeedTile(
-                      event: e,
-                      onPlay: e.song == null || !e.song!.playable
-                          ? null
-                          : () {
-                              final index = songs.indexWhere((s) => s.id == e.song!.id);
-                              onPlay(songs, index < 0 ? 0 : index);
-                            },
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _FeedTile extends StatelessWidget {
-  const _FeedTile({required this.event, required this.onPlay});
-
-  final rust.FeedEventDto event;
-  final VoidCallback? onPlay;
-
-  String get _kindLabel => switch (event.kind) {
-        'song' => '分享了单曲',
-        'album' => '分享了专辑',
-        'playlist' => '分享了歌单',
-        'program' => '分享了节目',
-        'text' => '发布了动态',
-        _ => '发布了动态',
-      };
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final song = event.song;
-    final body = event.text.isNotEmpty ? event.text : (song?.name ?? '');
-    return InkWell(
-      onTap: onPlay,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: scheme.surfaceContainerHighest,
-              backgroundImage:
-                  event.avatarUrl == null ? null : NetworkImage(event.avatarUrl!),
-              child: event.avatarUrl == null
-                  ? Text(
-                      event.userName.isEmpty ? '?' : event.userName.characters.first,
-                      style: const TextStyle(fontSize: 12),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          event.userName.isEmpty ? '未知用户' : event.userName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        _kindLabel,
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                      const Spacer(),
-                      Text(
-                        _relativeTime(event.timeMs),
-                        style: Theme.of(context).textTheme.labelSmall,
-                      ),
-                    ],
-                  ),
-                  if (body.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        body,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  if (song != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        children: [
-                          CoverArt(url: song.coverUrl, size: 40, radius: 4),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  song.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                Text(
-                                  song.artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (onPlay != null)
-                            Icon(Icons.play_circle_outline, color: scheme.primary),
-                        ],
-                      ),
-                    ),
-                  if (event.images.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        children: [
-                          for (final url in event.images.take(3))
-                            Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: CoverArt(url: url, size: 56, radius: 4),
-                            ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-String _relativeTime(BigInt timeMs) {
-  if (timeMs <= BigInt.zero) return '';
-  final dt = DateTime.fromMillisecondsSinceEpoch(timeMs.toInt());
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return '刚刚';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
-  if (diff.inHours < 24) return '${diff.inHours} 小时前';
-  if (diff.inDays < 30) return '${diff.inDays} 天前';
-  return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 }
 
 // ---------------- 最近听过 ----------------
@@ -725,6 +595,7 @@ class _RecentSection extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      trailing: SongOverflowButton(song: preview[i], size: 20),
                       onTap: () => onPlay(songs, i),
                     ),
                 ],

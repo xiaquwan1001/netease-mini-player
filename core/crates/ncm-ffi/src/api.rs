@@ -68,6 +68,8 @@ pub struct SongDto {
     pub id: u64,
     pub name: String,
     pub artist: String,
+    /// 第一歌手的 id(0 = 未知). 用于"歌手信息"
+    pub artist_id: u64,
     pub album: String,
     /// 专辑 id(0 = 未知). 用于点封面看专辑详情
     pub album_id: u64,
@@ -90,10 +92,12 @@ fn song_dto(s: ncm_domain::Song) -> SongDto {
     let playable = s.playable;
     let album_id = s.album_id();
     let cover_url = s.cover_url();
+    let artist_id = s.artists.first().map(|a| a.id).unwrap_or(0);
     SongDto {
         id: s.id.0,
         name: s.name,
         artist,
+        artist_id,
         album: s.album.map(|a| a.name).unwrap_or_default(),
         album_id,
         cover_url,
@@ -113,7 +117,11 @@ fn song_from_dto(d: &SongDto) -> ncm_domain::Song {
         artists: if d.artist.is_empty() {
             vec![]
         } else {
-            vec![ncm_domain::Artist { id: 0, name: d.artist.clone() }]
+            vec![ncm_domain::Artist {
+                id: d.artist_id,
+                name: d.artist.clone(),
+                avatar_url: None,
+            }]
         },
         album: Some(ncm_domain::Album {
             id: d.album_id,
@@ -154,6 +162,212 @@ pub async fn search(keywords: String, limit: u32) -> Result<SearchResultDto, Str
         has_more: page.has_more,
         songs: page.songs.into_iter().map(song_dto).collect(),
     })
+}
+
+// ---------------- 综合搜索(分板块) ----------------
+
+pub struct SearchArtistDto {
+    pub id: u64,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    /// 别名, 已用 " / " 拼好
+    pub alias: String,
+    pub album_count: u64,
+    pub music_count: u64,
+}
+
+pub struct SearchAlbumDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub artist: String,
+    pub track_count: u64,
+}
+
+pub struct SearchPlaylistDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub creator_name: String,
+    pub track_count: u64,
+    pub play_count: u64,
+}
+
+pub struct SearchPodcastDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub dj_name: String,
+    pub program_count: u64,
+    pub play_count: u64,
+}
+
+/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客 各一个板块
+pub struct SearchBundleDto {
+    pub songs: Vec<SongDto>,
+    pub song_total: u64,
+    pub artists: Vec<SearchArtistDto>,
+    pub albums: Vec<SearchAlbumDto>,
+    pub playlists: Vec<SearchPlaylistDto>,
+    pub podcasts: Vec<SearchPodcastDto>,
+}
+
+/// 综合搜索: 一次拿回所有板块(UI 分区展示).
+pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto, String> {
+    let provider = with_provider(Capability::SearchAll)?;
+    let query = SearchQuery { keywords, limit, offset: 0 };
+    let bundle = provider
+        .search_all(&query)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SearchBundleDto {
+        songs: bundle.songs.into_iter().map(song_dto).collect(),
+        song_total: bundle.song_total,
+        artists: bundle
+            .artists
+            .into_iter()
+            .map(|a| SearchArtistDto {
+                id: a.id,
+                name: a.name,
+                avatar_url: a.avatar_url,
+                alias: a.alias,
+                album_count: a.album_count,
+                music_count: a.music_count,
+            })
+            .collect(),
+        albums: bundle
+            .albums
+            .into_iter()
+            .map(|a| SearchAlbumDto {
+                id: a.id,
+                name: a.name,
+                cover_url: a.cover_url,
+                artist: a.artist,
+                track_count: a.track_count,
+            })
+            .collect(),
+        playlists: bundle
+            .playlists
+            .into_iter()
+            .map(|p| SearchPlaylistDto {
+                id: p.id,
+                name: p.name,
+                cover_url: p.cover_url,
+                creator_name: p.creator_name,
+                track_count: p.track_count,
+                play_count: p.play_count,
+            })
+            .collect(),
+        podcasts: bundle
+            .podcasts
+            .into_iter()
+            .map(|r| SearchPodcastDto {
+                id: r.id,
+                name: r.name,
+                cover_url: r.cover_url,
+                dj_name: r.dj_name,
+                program_count: r.program_count,
+                play_count: r.play_count,
+            })
+            .collect(),
+    })
+}
+
+// ---------------- 歌手详情 ----------------
+
+pub struct AlbumBriefDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub track_count: u64,
+    pub publish_time: u64,
+}
+
+pub struct ArtistDetailDto {
+    pub id: u64,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub cover_url: Option<String>,
+    pub alias: Vec<String>,
+    pub brief_desc: String,
+    pub album_count: u64,
+    pub music_count: u64,
+    pub songs: Vec<SongDto>,
+    pub albums: Vec<AlbumBriefDto>,
+}
+
+/// 歌手详情(头像/简介/热门歌曲/专辑)
+pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let a = provider
+        .artist_detail(artist_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ArtistDetailDto {
+        id: a.id,
+        name: a.name,
+        avatar_url: a.avatar_url,
+        cover_url: a.cover_url,
+        alias: a.alias,
+        brief_desc: a.brief_desc,
+        album_count: a.album_count,
+        music_count: a.music_count,
+        songs: a.songs.into_iter().map(song_dto).collect(),
+        albums: a
+            .albums
+            .into_iter()
+            .map(|x| AlbumBriefDto {
+                id: x.id,
+                name: x.name,
+                cover_url: x.cover_url,
+                track_count: x.track_count,
+                publish_time: x.publish_time,
+            })
+            .collect(),
+    })
+}
+
+// ---------------- 个人主页资料 ----------------
+
+pub struct ProfileDetailDto {
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+    pub background_url: Option<String>,
+    pub signature: String,
+    pub vip: bool,
+    pub follows: u64,
+    pub followeds: u64,
+    pub level: u64,
+}
+
+/// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
+pub async fn profile_detail() -> Result<ProfileDetailDto, String> {
+    let provider = with_provider(Capability::ProfileDetail)?;
+    let p = provider
+        .profile_detail()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ProfileDetailDto {
+        user_id: p.user_id,
+        nickname: p.nickname,
+        avatar_url: p.avatar_url,
+        background_url: p.background_url,
+        signature: p.signature,
+        vip: p.vip,
+        follows: p.follows,
+        followeds: p.followeds,
+        level: p.level,
+    })
+}
+
+/// 收藏曲目到指定歌单(需登录)
+pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider
+        .add_to_playlist(playlist_id, ncm_domain::TrackId::new(track_id))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 pub async fn song_url(track_id: u64, level: String) -> Result<StreamDto, String> {
@@ -342,9 +556,15 @@ pub async fn playlist_songs(playlist_id: u64) -> Result<Vec<SongDto>, String> {
     Ok(songs.into_iter().map(song_dto).collect())
 }
 
-/// "我喜欢的音乐"曲目详情(按红心时间倒序 = likelist 的顺序)
+/// "我喜欢的音乐"曲目详情(按收藏时间从新到旧)
 pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
     let provider = with_provider(Capability::Playlist)?;
+    // 优先用歌单详情的 addTime(真实收藏时间)排序; 老 provider 回落到 likelist 顺序
+    match provider.liked_songs_ordered().await {
+        Ok(songs) if !songs.is_empty() => return Ok(songs.into_iter().map(song_dto).collect()),
+        Ok(_) => {}
+        Err(_) => {}
+    }
     let ids = provider.liked_ids().await.map_err(|e| e.to_string())?;
     if ids.is_empty() {
         return Ok(Vec::new());
@@ -909,6 +1129,7 @@ pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, Str
 pub struct ArtistDto {
     pub id: u64,
     pub name: String,
+    pub avatar_url: Option<String>,
 }
 
 /// 关注的艺人(需登录)
@@ -920,7 +1141,7 @@ pub async fn subscribed_artists(limit: u32) -> Result<Vec<ArtistDto>, String> {
         .map_err(|e| e.to_string())?;
     Ok(list
         .into_iter()
-        .map(|a| ArtistDto { id: a.id, name: a.name })
+        .map(|a| ArtistDto { id: a.id, name: a.name, avatar_url: a.avatar_url })
         .collect())
 }
 
@@ -934,6 +1155,8 @@ pub struct FeedEventDto {
     pub song: Option<SongDto>,
     pub cover_url: Option<String>,
     pub images: Vec<String>,
+    /// 视频动态的直链
+    pub video_url: Option<String>,
     /// unix 毫秒
     pub time_ms: u64,
 }
@@ -956,6 +1179,7 @@ pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>
             song: e.song.map(song_dto),
             cover_url: e.cover_url,
             images: e.images,
+            video_url: e.video_url,
             time_ms: e.time_ms,
         })
         .collect())

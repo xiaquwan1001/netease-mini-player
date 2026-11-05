@@ -110,6 +110,22 @@ class PlayQueue<T> {
     return current;
   }
 
+  /// "下一首播放": 插到当前曲目之后(没有当前曲目时插到队首), 不切歌.
+  /// 已在队列里则不重复插入, 只把它的位置挪到当前之后.
+  int insertNext(T item) {
+    final existing = _items.indexOf(item);
+    var insertAt = _index < 0 ? 0 : _index + 1;
+    if (existing >= 0) {
+      _items.removeAt(existing);
+      if (existing < _index) _index -= 1;
+      insertAt = _index < 0 ? 0 : _index + 1;
+    }
+    insertAt = insertAt.clamp(0, _items.length);
+    _items.insert(insertAt, item);
+    if (_index < 0) _index = 0;
+    return insertAt;
+  }
+
   /// 跳到与 target 相同的那一项(点击列表时用, 避免下标签重不一致)
   T? jumpToItem(T target) {
     final i = _items.indexOf(target);

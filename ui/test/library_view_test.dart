@@ -6,6 +6,7 @@ rust.SongDto s(int id, {bool playable = true}) => rust.SongDto(
       id: BigInt.from(id),
       name: 'song$id',
       artist: 'a',
+      artistId: BigInt.one,
       album: 'b',
       albumId: BigInt.zero,
       coverUrl: null,

@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'song_actions.dart';
 
 typedef RadioLoader = Future<List<rust.PodcastRadioDto>> Function(int limit);
 typedef ProgramLoader = Future<List<rust.PodcastProgramDto>> Function(
@@ -233,6 +234,7 @@ class _ProgramListState extends State<_ProgramList> {
             overflow: TextOverflow.ellipsis,
           ),
           enabled: song != null,
+          trailing: song == null ? null : SongOverflowButton(song: song, size: 20),
           onTap: song == null
               ? null
               : () {

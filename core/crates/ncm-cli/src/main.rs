@@ -138,6 +138,71 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "searchall" => {
+            let kw = args.positional.first().ok_or("usage: ncm searchall <keywords>")?;
+            let p = provider(&core, Capability::SearchAll)?;
+            announce(&core);
+            let mut q = SearchQuery::new(kw.clone());
+            if let Some(l) = args.value("--limit") {
+                q.limit = l.parse()?;
+            }
+            let b = p.search_all(&q).await?;
+            if args.has("--json") {
+                println!("{}", serde_json::to_string_pretty(&b)?);
+            } else {
+                println!("songs={} (total {}) artists={} albums={} playlists={} podcasts={}",
+                    b.songs.len(), b.song_total, b.artists.len(), b.albums.len(), b.playlists.len(), b.podcasts.len());
+                for a in b.artists.iter().take(5) {
+                    println!("  artist [{}] {} {}", a.id, a.name, a.alias);
+                }
+                for a in b.albums.iter().take(5) {
+                    println!("  album  [{}] {} — {} ({} 首) {}", a.id, a.name, a.artist, a.track_count, a.cover_url.clone().unwrap_or_default());
+                }
+                for a in b.playlists.iter().take(5) {
+                    println!("  list   [{}] {} — {} ({} 首)", a.id, a.name, a.creator_name, a.track_count);
+                }
+                for a in b.podcasts.iter().take(5) {
+                    println!("  podcast[{}] {} — {} ({} 集)", a.id, a.name, a.dj_name, a.program_count);
+                }
+            }
+            Ok(())
+        }
+        "artist" => {
+            let id: u64 = args.positional.first().ok_or("usage: ncm artist <artistId>")?.parse()?;
+            let p = provider(&core, Capability::Artist)?;
+            announce(&core);
+            let a = p.artist_detail(id).await?;
+            if args.has("--json") {
+                println!("{}", serde_json::to_string_pretty(&a)?);
+            } else {
+                println!("[{}] {} alias={:?} avatar={:?}", a.id, a.name, a.alias, a.avatar_url);
+                println!("  albums={} songs={} desc={} chars", a.album_count, a.music_count, a.brief_desc.chars().count());
+                for s in a.songs.iter().take(10) {
+                    println!("  song [{}] {} — {}", s.id, s.name, s.artist_line());
+                }
+                for al in a.albums.iter().take(10) {
+                    println!("  album[{}] {} ({} 首) {}", al.id, al.name, al.track_count, al.cover_url.clone().unwrap_or_default());
+                }
+            }
+            Ok(())
+        }
+        "likedorder" => {
+            let p = provider(&core, Capability::Playlist)?;
+            announce(&core);
+            let songs = p.liked_songs_ordered().await?;
+            println!("count = {}", songs.len());
+            for (i, s) in songs.iter().take(20).enumerate() {
+                println!("{:>3}. [{}] {} — {}", i + 1, s.id, s.name, s.artist_line());
+            }
+            Ok(())
+        }
+        "profile" => {
+            let p = provider(&core, Capability::ProfileDetail)?;
+            announce(&core);
+            let d = p.profile_detail().await?;
+            println!("{}", serde_json::to_string_pretty(&d)?);
+            Ok(())
+        }
         "liked" => {
             let p = provider(&core, Capability::Playlist)?;
             announce(&core);
@@ -559,6 +624,11 @@ async fn run() -> Result<(), BoxErr> {
                 }
             }
             let resp = match method.as_str() {
+                "cloudsearch" => client.cloudsearch(&q).await?,
+                "artist_detail" => client.artist_detail(&q).await?,
+                "artist_songs" => client.artist_songs(&q).await?,
+                "artist_album" => client.artist_album(&q).await?,
+                "artist_top_song" => client.artist_top_song(&q).await?,
                 "recommend_songs" => client.recommend_songs(&q).await?,
                 "recommend_resource" => client.recommend_resource(&q).await?,
                 "playmode" => client.playmode_intelligence_list(&q).await?,

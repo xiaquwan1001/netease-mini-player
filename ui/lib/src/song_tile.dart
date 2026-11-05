@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'cover_art.dart';
 import 'rust/api.dart' as rust;
 
 /// 会员标: 歌曲行 / 播放条 / 账号都用同一个, 避免各处自己画一套形态
@@ -94,12 +95,16 @@ class SongTile extends StatelessWidget {
     required this.active,
     required this.liked,
     required this.onTap,
+    this.onMenu,
   });
 
   final rust.SongDto song;
   final bool active;
   final bool liked;
   final VoidCallback onTap;
+
+  /// 行尾的"..."更多操作(下一首/喜欢/收藏到歌单/分享/评论/歌手/专辑/下载)
+  final VoidCallback? onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +114,8 @@ class SongTile extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: active,
+      // 每首歌展示封面(搜索结果/歌单/最近听过统一)
+      leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
       title: Row(
         children: [
           Flexible(
@@ -133,9 +140,22 @@ class SongTile extends StatelessWidget {
         '${song.artist} · ${song.album}',
         style: playable ? null : grey,
       ),
-      trailing: Text(
-        '${song.durationMs ~/ BigInt.from(1000)}s',
-        style: playable ? null : grey,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${song.durationMs ~/ BigInt.from(1000)}s',
+            style: playable ? null : grey,
+          ),
+          if (onMenu != null)
+            IconButton(
+              tooltip: '更多操作',
+              visualDensity: VisualDensity.compact,
+              iconSize: 20,
+              icon: const Icon(Icons.more_vert),
+              onPressed: onMenu,
+            ),
+        ],
       ),
       onTap: onTap,
     );

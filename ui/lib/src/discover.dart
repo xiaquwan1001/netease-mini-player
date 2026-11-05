@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'song_actions.dart';
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
 typedef PlaylistListLoader = Future<List<rust.PlaylistDto>> Function();
@@ -322,9 +323,14 @@ class _SongRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: song.playable
-          ? null
-          : Text('无版权', style: Theme.of(context).textTheme.labelSmall),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!song.playable)
+            Text('无版权', style: Theme.of(context).textTheme.labelSmall),
+          SongOverflowButton(song: song, size: 20),
+        ],
+      ),
       onTap: onTap,
     );
   }

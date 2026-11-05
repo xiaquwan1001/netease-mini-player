@@ -1,10 +1,13 @@
 package com.minincm.minincm
 
 import android.Manifest
+import android.app.DownloadManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.webkit.CookieManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -66,6 +69,55 @@ class MainActivity : FlutterActivity() {
                     CookieManager.getInstance().removeAllCookies { removed ->
                         CookieManager.getInstance().flush()
                         result.success(removed)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        // 打开外部链接 / 下载: 不引第三方插件, 用系统 Intent + DownloadManager
+        val open = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/open")
+        open.setMethodCallHandler { call, result ->
+            val args = call.arguments as? Map<*, *>
+            when (call.method) {
+                "openUrl" -> {
+                    val url = args?.get("url") as? String
+                    if (url.isNullOrBlank()) {
+                        result.error("bad_args", "url missing", null)
+                    } else {
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("open_error", e.message, null)
+                        }
+                    }
+                }
+                "download" -> {
+                    val url = args?.get("url") as? String
+                    val filename = (args?.get("filename") as? String) ?: "download.mp3"
+                    val ua = args?.get("ua") as? String
+                    if (url.isNullOrBlank()) {
+                        result.error("bad_args", "url missing", null)
+                    } else {
+                        try {
+                            val req = DownloadManager.Request(Uri.parse(url))
+                                .setTitle(filename)
+                                .setDescription("轻音 MiniNCM 下载")
+                                .setNotificationVisibility(
+                                    DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                                )
+                                .setDestinationInExternalPublicDir(
+                                    Environment.DIRECTORY_DOWNLOADS,
+                                    "MiniNCM/$filename"
+                                )
+                            if (!ua.isNullOrBlank()) req.addRequestHeader("User-Agent", ua)
+                            req.addRequestHeader("Referer", "https://music.163.com/")
+                            val dm = getSystemService(DOWNLOAD_SERVICE) as DownloadManager
+                            result.success(dm.enqueue(req).toString())
+                        } catch (e: Exception) {
+                            result.error("download_error", e.message, null)
+                        }
                     }
                 }
                 else -> result.notImplemented()

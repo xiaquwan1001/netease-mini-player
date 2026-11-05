@@ -7,6 +7,7 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       id: BigInt.from(id),
       name: name,
       artist: '歌手',
+      artistId: BigInt.one,
       album: '专辑',
       albumId: BigInt.one,
       coverUrl: null,
@@ -49,19 +50,7 @@ MineView buildMine({
           playCount: BigInt.zero,
         ),
       ],
-      loadArtists: () async => [rust.ArtistDto(id: BigInt.from(4), name: '关注艺人')],
-      loadFeed: () async => [
-        rust.FeedEventDto(
-          id: BigInt.from(5),
-          kind: 'song',
-          userName: '某艺人',
-          text: '新歌来了',
-          song: song(6, '动态里的歌'),
-          coverUrl: null,
-          images: const [],
-          timeMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
-        ),
-      ],
+      loadArtists: () async => [rust.ArtistDto(id: BigInt.from(4), name: '关注艺人', avatarUrl: null)],
       onPlaySongs: onPlay ?? (_, __) {},
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
@@ -79,7 +68,7 @@ void main() {
     expect(logins, 1);
   });
 
-  testWidgets('登录后展示我喜欢/歌单/播客/艺人/动态', (tester) async {
+  testWidgets('登录后展示我喜欢/歌单/播客/艺人', (tester) async {
     List<rust.SongDto>? played;
     int? index;
     await tester.pumpWidget(host(buildMine(
@@ -100,12 +89,9 @@ void main() {
     expect(index, 0);
 
     // 下半部分要滚动才会被 ListView 构建
-    await tester.drag(find.byType(ListView).first, const Offset(0, -900));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
     await tester.pumpAndSettle();
     expect(find.text('收藏播客'), findsOneWidget);
     expect(find.text('关注艺人'), findsOneWidget);
-    expect(find.text('关注动态'), findsOneWidget);
-    expect(find.text('某艺人'), findsOneWidget);
-    expect(find.text('动态里的歌'), findsOneWidget);
   });
 }

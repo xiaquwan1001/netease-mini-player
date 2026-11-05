@@ -18,6 +18,29 @@ Future<SearchResultDto> search({
   required int limit,
 }) => RustLib.instance.api.crateApiSearch(keywords: keywords, limit: limit);
 
+/// 综合搜索: 一次拿回所有板块(UI 分区展示).
+Future<SearchBundleDto> searchAll({
+  required String keywords,
+  required int limit,
+}) => RustLib.instance.api.crateApiSearchAll(keywords: keywords, limit: limit);
+
+/// 歌手详情(头像/简介/热门歌曲/专辑)
+Future<ArtistDetailDto> artistDetail({required BigInt artistId}) =>
+    RustLib.instance.api.crateApiArtistDetail(artistId: artistId);
+
+/// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
+Future<ProfileDetailDto> profileDetail() =>
+    RustLib.instance.api.crateApiProfileDetail();
+
+/// 收藏曲目到指定歌单(需登录)
+Future<bool> addToPlaylist({
+  required BigInt playlistId,
+  required BigInt trackId,
+}) => RustLib.instance.api.crateApiAddToPlaylist(
+  playlistId: playlistId,
+  trackId: trackId,
+);
+
 Future<StreamDto> songUrl({required BigInt trackId, required String level}) =>
     RustLib.instance.api.crateApiSongUrl(trackId: trackId, level: level);
 
@@ -60,7 +83,7 @@ Future<List<PlaylistDto>> myPlaylists() =>
 Future<List<SongDto>> playlistSongs({required BigInt playlistId}) =>
     RustLib.instance.api.crateApiPlaylistSongs(playlistId: playlistId);
 
-/// "我喜欢的音乐"曲目详情(按红心时间倒序 = likelist 的顺序)
+/// "我喜欢的音乐"曲目详情(按收藏时间从新到旧)
 Future<List<SongDto>> likedSongs() => RustLib.instance.api.crateApiLikedSongs();
 
 /// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
@@ -271,6 +294,41 @@ class AccountDto {
           vip == other.vip;
 }
 
+class AlbumBriefDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final BigInt trackCount;
+  final BigInt publishTime;
+
+  const AlbumBriefDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.trackCount,
+    required this.publishTime,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      trackCount.hashCode ^
+      publishTime.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AlbumBriefDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          trackCount == other.trackCount &&
+          publishTime == other.publishTime;
+}
+
 class AlbumDetailDto {
   final BigInt id;
   final String name;
@@ -310,14 +368,70 @@ class AlbumDetailDto {
           songs == other.songs;
 }
 
+class ArtistDetailDto {
+  final BigInt id;
+  final String name;
+  final String? avatarUrl;
+  final String? coverUrl;
+  final List<String> alias;
+  final String briefDesc;
+  final BigInt albumCount;
+  final BigInt musicCount;
+  final List<SongDto> songs;
+  final List<AlbumBriefDto> albums;
+
+  const ArtistDetailDto({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    this.coverUrl,
+    required this.alias,
+    required this.briefDesc,
+    required this.albumCount,
+    required this.musicCount,
+    required this.songs,
+    required this.albums,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      avatarUrl.hashCode ^
+      coverUrl.hashCode ^
+      alias.hashCode ^
+      briefDesc.hashCode ^
+      albumCount.hashCode ^
+      musicCount.hashCode ^
+      songs.hashCode ^
+      albums.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistDetailDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          avatarUrl == other.avatarUrl &&
+          coverUrl == other.coverUrl &&
+          alias == other.alias &&
+          briefDesc == other.briefDesc &&
+          albumCount == other.albumCount &&
+          musicCount == other.musicCount &&
+          songs == other.songs &&
+          albums == other.albums;
+}
+
 class ArtistDto {
   final BigInt id;
   final String name;
+  final String? avatarUrl;
 
-  const ArtistDto({required this.id, required this.name});
+  const ArtistDto({required this.id, required this.name, this.avatarUrl});
 
   @override
-  int get hashCode => id.hashCode ^ name.hashCode;
+  int get hashCode => id.hashCode ^ name.hashCode ^ avatarUrl.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -325,7 +439,8 @@ class ArtistDto {
       other is ArtistDto &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          name == other.name;
+          name == other.name &&
+          avatarUrl == other.avatarUrl;
 }
 
 class CommentDto {
@@ -412,6 +527,9 @@ class FeedEventDto {
   final String? coverUrl;
   final List<String> images;
 
+  /// 视频动态的直链
+  final String? videoUrl;
+
   /// unix 毫秒
   final BigInt timeMs;
 
@@ -424,6 +542,7 @@ class FeedEventDto {
     this.song,
     this.coverUrl,
     required this.images,
+    this.videoUrl,
     required this.timeMs,
   });
 
@@ -437,6 +556,7 @@ class FeedEventDto {
       song.hashCode ^
       coverUrl.hashCode ^
       images.hashCode ^
+      videoUrl.hashCode ^
       timeMs.hashCode;
 
   @override
@@ -452,6 +572,7 @@ class FeedEventDto {
           song == other.song &&
           coverUrl == other.coverUrl &&
           images == other.images &&
+          videoUrl == other.videoUrl &&
           timeMs == other.timeMs;
 }
 
@@ -767,6 +888,57 @@ class PodcastRadioDto {
           playCount == other.playCount;
 }
 
+class ProfileDetailDto {
+  final BigInt userId;
+  final String nickname;
+  final String? avatarUrl;
+  final String? backgroundUrl;
+  final String signature;
+  final bool vip;
+  final BigInt follows;
+  final BigInt followeds;
+  final BigInt level;
+
+  const ProfileDetailDto({
+    required this.userId,
+    required this.nickname,
+    this.avatarUrl,
+    this.backgroundUrl,
+    required this.signature,
+    required this.vip,
+    required this.follows,
+    required this.followeds,
+    required this.level,
+  });
+
+  @override
+  int get hashCode =>
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      backgroundUrl.hashCode ^
+      signature.hashCode ^
+      vip.hashCode ^
+      follows.hashCode ^
+      followeds.hashCode ^
+      level.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ProfileDetailDto &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          backgroundUrl == other.backgroundUrl &&
+          signature == other.signature &&
+          vip == other.vip &&
+          follows == other.follows &&
+          followeds == other.followeds &&
+          level == other.level;
+}
+
 class ProviderInfo {
   final String id;
   final String name;
@@ -789,6 +961,200 @@ class ProviderInfo {
           id == other.id &&
           name == other.name &&
           capabilities == other.capabilities;
+}
+
+class SearchAlbumDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String artist;
+  final BigInt trackCount;
+
+  const SearchAlbumDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.artist,
+    required this.trackCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      artist.hashCode ^
+      trackCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchAlbumDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          artist == other.artist &&
+          trackCount == other.trackCount;
+}
+
+class SearchArtistDto {
+  final BigInt id;
+  final String name;
+  final String? avatarUrl;
+
+  /// 别名, 已用 " / " 拼好
+  final String alias;
+  final BigInt albumCount;
+  final BigInt musicCount;
+
+  const SearchArtistDto({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    required this.alias,
+    required this.albumCount,
+    required this.musicCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      avatarUrl.hashCode ^
+      alias.hashCode ^
+      albumCount.hashCode ^
+      musicCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchArtistDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          avatarUrl == other.avatarUrl &&
+          alias == other.alias &&
+          albumCount == other.albumCount &&
+          musicCount == other.musicCount;
+}
+
+/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客 各一个板块
+class SearchBundleDto {
+  final List<SongDto> songs;
+  final BigInt songTotal;
+  final List<SearchArtistDto> artists;
+  final List<SearchAlbumDto> albums;
+  final List<SearchPlaylistDto> playlists;
+  final List<SearchPodcastDto> podcasts;
+
+  const SearchBundleDto({
+    required this.songs,
+    required this.songTotal,
+    required this.artists,
+    required this.albums,
+    required this.playlists,
+    required this.podcasts,
+  });
+
+  @override
+  int get hashCode =>
+      songs.hashCode ^
+      songTotal.hashCode ^
+      artists.hashCode ^
+      albums.hashCode ^
+      playlists.hashCode ^
+      podcasts.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchBundleDto &&
+          runtimeType == other.runtimeType &&
+          songs == other.songs &&
+          songTotal == other.songTotal &&
+          artists == other.artists &&
+          albums == other.albums &&
+          playlists == other.playlists &&
+          podcasts == other.podcasts;
+}
+
+class SearchPlaylistDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String creatorName;
+  final BigInt trackCount;
+  final BigInt playCount;
+
+  const SearchPlaylistDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.creatorName,
+    required this.trackCount,
+    required this.playCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      creatorName.hashCode ^
+      trackCount.hashCode ^
+      playCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchPlaylistDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          creatorName == other.creatorName &&
+          trackCount == other.trackCount &&
+          playCount == other.playCount;
+}
+
+class SearchPodcastDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String djName;
+  final BigInt programCount;
+  final BigInt playCount;
+
+  const SearchPodcastDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.djName,
+    required this.programCount,
+    required this.playCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      djName.hashCode ^
+      programCount.hashCode ^
+      playCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchPodcastDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          djName == other.djName &&
+          programCount == other.programCount &&
+          playCount == other.playCount;
 }
 
 class SearchResultDto {
@@ -819,6 +1185,9 @@ class SongDto {
   final BigInt id;
   final String name;
   final String artist;
+
+  /// 第一歌手的 id(0 = 未知). 用于"歌手信息"
+  final BigInt artistId;
   final String album;
 
   /// 专辑 id(0 = 未知). 用于点封面看专辑详情
@@ -842,6 +1211,7 @@ class SongDto {
     required this.id,
     required this.name,
     required this.artist,
+    required this.artistId,
     required this.album,
     required this.albumId,
     this.coverUrl,
@@ -857,6 +1227,7 @@ class SongDto {
       id.hashCode ^
       name.hashCode ^
       artist.hashCode ^
+      artistId.hashCode ^
       album.hashCode ^
       albumId.hashCode ^
       coverUrl.hashCode ^
@@ -874,6 +1245,7 @@ class SongDto {
           id == other.id &&
           name == other.name &&
           artist == other.artist &&
+          artistId == other.artistId &&
           album == other.album &&
           albumId == other.albumId &&
           coverUrl == other.coverUrl &&

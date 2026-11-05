@@ -5,6 +5,23 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 搜索分板块 / 图片 / 歌曲操作 / 关注 tab / 我喜欢顺序(2026-11-06)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 搜索分板块 | ✅ | `rust.searchAll` 并发 cloudsearch type=1/10/100/1000/1009 → 单曲/歌手/专辑/歌单/播客五区(空区不渲染); type=2000(声音/节目)实测返回空, 未单列 |
+| 搜索显式取消 | ✅ | 输入框清空按钮 + 「取消」按钮; 取消后丢弃在途结果(请求代次 `_searchToken`) |
+| 图片 | ✅ | 歌曲行封面/歌手圆头像/专辑/歌单/播客卡片/歌手页横幅/评论头像/动态配图; **CDN 对 `Dart/x (dart:io)` UA 回 403, 统一带浏览器 UA+Referer**; `?param=NxN` 缩略图(全宽图片跳过, 防 Infinity.toInt 崩溃) |
+| VIP 误标修复 | ✅ | `Song::is_vip()` 只认 fee=1; fee=8 是「低音质免费」, 之前 21/30 首免费歌被误标 VIP |
+| 我喜欢的音乐顺序 | ✅ | `liked_songs_ordered`: playlist detail `trackIds[].at` 按收藏时间倒序, 不再依赖 likelist 顺序 |
+| 关注独立 tab | ✅ | 底部五栏: 搜索/推荐/关注/我的/设置; `feed_view.dart` 复用 feed_events, 动态图片可看大图、视频封面点击交系统打开 |
+| 歌曲操作菜单 | ✅ | 每行 `...` + 播放条 `...`: 下一首播放/喜欢/收藏到歌单/分享/查看评论/歌手信息/专辑信息/下载; 评论复用 `showCommentsSheet`; 歌手页 `showArtistDetail`(热门歌曲+专辑) |
+| 下载 | ✅ | Android DownloadManager(免存储权限, 存 Download/MiniNCM); Linux curl 到 `~/Downloads` |
+| 个人资料卡 | ✅ | `profile_detail` (user_detail: 背景图/头像/签名/关注/粉丝/等级) + Mine 顶部 `ProfileHeader` |
+| 回归 | ✅ | Rust 49 个本地单测(Song fee8/Artist 头像等); Flutter 76 用例(新增 search_results/song_actions); analyze 仅 7 条历史 info; Linux/APK debug 构建通过 |
+
+**环境事实**: a36 模拟器上图片偶发 403(Dart UA 修正后仍有), 同一 URL 在 Linux 桌面正常; 属模拟器 NAT/中间设备对 CDN 的差异(Chrome 也报 No internet), 真机/Linux 不受影响。
+
 ## v2 · 底部四栏 + 搜索/推荐/我的/设置(2026-11-05)
 
 | 能力 | 状态 | 证据 |

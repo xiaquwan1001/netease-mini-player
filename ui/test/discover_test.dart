@@ -7,6 +7,7 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       id: BigInt.from(id),
       name: name,
       artist: '歌手',
+      artistId: BigInt.one,
       album: '专辑',
       albumId: BigInt.one,
       coverUrl: null,

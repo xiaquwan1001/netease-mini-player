@@ -2,9 +2,10 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumDetail, Artist, Comment, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist,
-    PlaylistDetail, PodcastProgram, PodcastRadio, SearchPage, Session, Song, StreamUrl,
-    SuggestItem, TrackId,
+    Album, AlbumBrief, AlbumDetail, Artist, ArtistDetail, Comment, CommentPage, FeedEvent,
+    HotSearchTerm, Lyric, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail,
+    SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem, SearchPodcast, Session,
+    Song, StreamUrl, SuggestItem, TrackId,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
@@ -30,6 +31,10 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Comment,
     Capability::Share,
     Capability::PodcastDetail,
+    Capability::SearchAll,
+    Capability::Artist,
+    Capability::ProfileDetail,
+    Capability::PlaylistEdit,
 ];
 
 /// 内置网易云直连 provider.
@@ -126,6 +131,47 @@ impl NeteaseProvider {
             .find(|p| p.special)
             .map(|p| p.id)
             .ok_or_else(|| ProviderError::not_found("心动模式需要登录并至少有一个歌单"))
+    }
+
+    /// "我喜欢的音乐"歌单 id(specialType=5). 未登录时给能看懂的错.
+    async fn liked_playlist_id(&self) -> ProviderResult<u64> {
+        let uid = self.uid().await?;
+        let (client, domain, ua, cookie) = self.snapshot();
+        let q = make_query(&cookie, &domain, &ua)
+            .param("uid", &uid.to_string())
+            .param("limit", "200");
+        let resp = client.user_playlist(&q).await.map_err(map_error)?;
+        check_body(&resp.body)?;
+        let list = resp
+            .body
+            .get("playlist")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        list.iter()
+            .filter_map(parse_playlist)
+            .find(|p| p.special)
+            .map(|p| p.id)
+            .ok_or_else(|| ProviderError::not_found("登录后才能读取我喜欢的音乐"))
+    }
+
+    /// cloudsearch 的通用调用: type = 1 单曲 / 10 专辑 / 100 歌手 / 1000 歌单 / 1009 播客
+    async fn cloudsearch_body(
+        &self,
+        keywords: &str,
+        kind: u32,
+        limit: u32,
+        offset: u32,
+    ) -> ProviderResult<Value> {
+        let (client, domain, ua, cookie) = self.snapshot();
+        let q = make_query(&cookie, &domain, &ua)
+            .param("keywords", keywords)
+            .param("limit", &limit.to_string())
+            .param("offset", &offset.to_string())
+            .param("type", &kind.to_string());
+        let resp = client.cloudsearch(&q).await.map_err(map_error)?;
+        check_body(&resp.body)?;
+        Ok(resp.body)
     }
 
     /// await 之前先把要用的东西克隆出来: 避免 std RwLock guard 跨 await (破坏 Send)
@@ -289,6 +335,9 @@ fn parse_song_with(
                 .map(|a| Artist {
                     id: u64_of(a, "id").unwrap_or(0),
                     name: str_of(a, "name").unwrap_or_default(),
+                    avatar_url: str_of(a, "picUrl")
+                        .or_else(|| str_of(a, "img1v1Url"))
+                        .filter(|s| !s.is_empty()),
                 })
                 .collect()
         })
@@ -345,6 +394,219 @@ pub fn parse_search(body: &Value) -> ProviderResult<SearchPage> {
             .or_else(|| result.get("more").and_then(Value::as_bool))
             .unwrap_or(false),
     })
+}
+
+/// 综合搜索各板块的解析. 入参是 cloudsearch 的 `result` 对象.
+pub fn parse_search_artists(result: &Value) -> Vec<SearchArtist> {
+    result
+        .get("artists")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    let id = u64_of(a, "id")?;
+                    let name = str_of(a, "name").unwrap_or_default();
+                    if id == 0 || name.is_empty() {
+                        return None;
+                    }
+                    let avatar = str_of(a, "picUrl")
+                        .or_else(|| str_of(a, "img1v1Url"))
+                        .filter(|s| !s.is_empty());
+                    let alias = a
+                        .get("alias")
+                        .and_then(Value::as_array)
+                        .map(|x| {
+                            x.iter()
+                                .filter_map(Value::as_str)
+                                .filter(|s| !s.is_empty())
+                                .collect::<Vec<_>>()
+                                .join(" / ")
+                        })
+                        .unwrap_or_default();
+                    Some(SearchArtist {
+                        id,
+                        name,
+                        avatar_url: avatar,
+                        alias,
+                        album_count: u64_of(a, "albumSize").unwrap_or(0),
+                        music_count: u64_of(a, "musicSize").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn parse_search_albums(result: &Value) -> Vec<SearchAlbum> {
+    result
+        .get("albums")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    let id = u64_of(a, "id")?;
+                    let name = str_of(a, "name").unwrap_or_default();
+                    if id == 0 || name.is_empty() {
+                        return None;
+                    }
+                    let cover = str_of(a, "picUrl")
+                        .or_else(|| str_of(a, "blurPicUrl"))
+                        .filter(|s| !s.is_empty());
+                    let artist = str_of(a, "artist")
+                        .or_else(|| a.get("artist").and_then(|x| str_of(x, "name")))
+                        .or_else(|| {
+                            a.get("artists").and_then(Value::as_array).map(|x| {
+                                x.iter()
+                                    .filter_map(|v| str_of(v, "name"))
+                                    .collect::<Vec<_>>()
+                                    .join(" / ")
+                            })
+                        })
+                        .unwrap_or_default();
+                    Some(SearchAlbum {
+                        id,
+                        name,
+                        cover_url: cover,
+                        artist,
+                        track_count: u64_of(a, "size").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn parse_search_playlists(result: &Value) -> Vec<SearchPlaylistItem> {
+    result
+        .get("playlists")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|p| {
+                    let id = u64_of(p, "id")?;
+                    let name = str_of(p, "name").unwrap_or_default();
+                    if id == 0 {
+                        return None;
+                    }
+                    Some(SearchPlaylistItem {
+                        id,
+                        name,
+                        cover_url: str_of(p, "coverImgUrl").filter(|s| !s.is_empty()),
+                        creator_name: p
+                            .get("creator")
+                            .and_then(|c| str_of(c, "nickname"))
+                            .unwrap_or_default(),
+                        track_count: u64_of(p, "trackCount").unwrap_or(0),
+                        play_count: u64_of(p, "playCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn parse_search_podcasts(result: &Value) -> Vec<SearchPodcast> {
+    result
+        .get("djRadios")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let id = u64_of(r, "id")?;
+                    let name = str_of(r, "name").unwrap_or_default();
+                    if id == 0 {
+                        return None;
+                    }
+                    Some(SearchPodcast {
+                        id,
+                        name,
+                        cover_url: str_of(r, "picUrl").filter(|s| !s.is_empty()),
+                        dj_name: r
+                            .get("dj")
+                            .and_then(|d| str_of(d, "nickname"))
+                            .unwrap_or_default(),
+                        program_count: u64_of(r, "programCount").unwrap_or(0),
+                        play_count: u64_of(r, "playCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 歌手详情: 头部(data.artist) + 热门歌曲(songs) + 专辑(hotAlbums)
+pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> ArtistDetail {
+    let info = detail.get("data").and_then(|d| d.get("artist")).or_else(|| detail.get("artist"));
+    let id = info.and_then(|a| u64_of(a, "id")).unwrap_or(0);
+    let name = info.and_then(|a| str_of(a, "name")).unwrap_or_default();
+    let alias = info
+        .and_then(|a| a.get("alias"))
+        .and_then(Value::as_array)
+        .map(|x| x.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .unwrap_or_default();
+    let privileges = parse_privileges(top);
+    let songs = top
+        .get("songs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default();
+    let album_list = albums
+        .get("hotAlbums")
+        .or_else(|| albums.get("albums"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    let id = u64_of(a, "id")?;
+                    Some(AlbumBrief {
+                        id,
+                        name: str_of(a, "name").unwrap_or_default(),
+                        cover_url: str_of(a, "picUrl").filter(|s| !s.is_empty()),
+                        track_count: u64_of(a, "size").unwrap_or(0),
+                        publish_time: u64_of(a, "publishTime").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ArtistDetail {
+        id,
+        name,
+        avatar_url: info
+            .and_then(|a| str_of(a, "avatar"))
+            .or_else(|| info.and_then(|a| str_of(a, "picUrl")))
+            .filter(|s| !s.is_empty()),
+        cover_url: info
+            .and_then(|a| str_of(a, "cover"))
+            .or_else(|| info.and_then(|a| str_of(a, "coverUrl")))
+            .filter(|s| !s.is_empty()),
+        alias,
+        brief_desc: info.and_then(|a| str_of(a, "briefDesc")).unwrap_or_default(),
+        album_count: info.and_then(|a| u64_of(a, "albumSize")).unwrap_or(0),
+        music_count: info.and_then(|a| u64_of(a, "musicSize")).unwrap_or(0),
+        songs,
+        albums: album_list,
+    }
+}
+
+/// 账号资料详情: user_detail 的 `profile` 对象
+pub fn parse_profile_detail(body: &Value) -> ProfileDetail {
+    let p = body.get("profile").unwrap_or(body);
+    ProfileDetail {
+        user_id: u64_of(p, "userId").unwrap_or(0),
+        nickname: str_of(p, "nickname").unwrap_or_default(),
+        avatar_url: str_of(p, "avatarUrl").filter(|s| !s.is_empty()),
+        background_url: str_of(p, "backgroundUrl").filter(|s| !s.is_empty()),
+        signature: str_of(p, "signature").unwrap_or_default(),
+        vip: p.get("vipType").and_then(Value::as_i64).unwrap_or(0) > 0,
+        follows: u64_of(p, "follows").unwrap_or(0),
+        followeds: u64_of(p, "followeds").unwrap_or(0),
+        level: u64_of(p, "level").unwrap_or(0),
+    }
 }
 
 pub fn parse_stream(body: &Value, level: &str) -> ProviderResult<StreamUrl> {
@@ -777,6 +1039,175 @@ impl Provider for NeteaseProvider {
             let resp = client.dj_detail(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             parse_podcast_radio_detail(&resp.body)
+        })
+    }
+
+    /// 综合搜索: 单曲/歌手/专辑/歌单/播客 五个板块并发拉取.
+    /// 单曲失败直接报错(主板块); 其余板块失败只留空, 不让一个类型拖垮整页.
+    fn search_all<'a>(
+        &'a self,
+        query: &'a SearchQuery,
+    ) -> BoxFuture<'a, ProviderResult<SearchBundle>> {
+        Box::pin(async move {
+            let kw = query.keywords.as_str();
+            let song_limit = query.limit.max(1);
+            let side_limit = 10u32;
+            let (song_body, artist_body, album_body, playlist_body, podcast_body) =
+                futures::future::join5(
+                    self.cloudsearch_body(kw, 1, song_limit, query.offset),
+                    self.cloudsearch_body(kw, 100, side_limit, 0),
+                    self.cloudsearch_body(kw, 10, side_limit, 0),
+                    self.cloudsearch_body(kw, 1000, side_limit, 0),
+                    self.cloudsearch_body(kw, 1009, side_limit, 0),
+                )
+                .await;
+            let song_body = song_body?;
+            let page = parse_search(&song_body)?;
+            let result_of = |b: ProviderResult<Value>| -> Option<Value> {
+                b.ok().and_then(|v| v.get("result").cloned())
+            };
+            let artists = result_of(artist_body)
+                .map(|r| parse_search_artists(&r))
+                .unwrap_or_default();
+            let albums = result_of(album_body)
+                .map(|r| parse_search_albums(&r))
+                .unwrap_or_default();
+            let playlists = result_of(playlist_body)
+                .map(|r| parse_search_playlists(&r))
+                .unwrap_or_default();
+            let podcasts = result_of(podcast_body)
+                .map(|r| parse_search_podcasts(&r))
+                .unwrap_or_default();
+            Ok(SearchBundle {
+                songs: page.songs,
+                song_total: page.total,
+                artists,
+                albums,
+                playlists,
+                podcasts,
+            })
+        })
+    }
+
+    /// 歌手详情: 头部资料 + 热门歌曲 + 专辑. 专辑接口失败只影响专辑板块.
+    fn artist_detail(&self, artist_id: u64) -> BoxFuture<'_, ProviderResult<ArtistDetail>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let base = || {
+                make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string())
+            };
+            let (detail, top, albums) = futures::future::join3(
+                async { client.artist_detail(&base()).await.map_err(map_error) },
+                async { client.artist_top_song(&base()).await.map_err(map_error) },
+                async {
+                    client
+                        .artist_album(&base().param("limit", "20"))
+                        .await
+                        .map_err(map_error)
+                },
+            )
+            .await;
+            let detail = detail?;
+            check_body(&detail.body)?;
+            let top = top?;
+            check_body(&top.body)?;
+            // 专辑走 weapi, 匿名/风控下可能失败: 不是致命错误
+            let albums_body = match albums {
+                Ok(resp) if check_body(&resp.body).is_ok() => resp.body,
+                _ => Value::Null,
+            };
+            Ok(parse_artist_detail(&detail.body, &top.body, &albums_body))
+        })
+    }
+
+    /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
+    fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async move {
+            let uid = self.uid().await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
+            let resp = client.user_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_profile_detail(&resp.body))
+        })
+    }
+
+    /// 收藏曲目到歌单(需要登录)
+    fn add_to_playlist(
+        &self,
+        playlist_id: u64,
+        track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            if playlist_id == 0 {
+                return Err(ProviderError::not_found("playlist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("收藏到歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("op", "add")
+                .param("pid", &playlist_id.to_string())
+                .param("tracks", &track.to_string());
+            let resp = client.playlist_tracks(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// "我喜欢的音乐"曲目, 按收藏时间从新到旧.
+    /// likelist 的 id 顺序不可靠(实测体感随机); 歌单详情的 trackIds[].at 才是加入时间(ms).
+    fn liked_songs_ordered(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let playlist_id = self.liked_playlist_id().await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &playlist_id.to_string())
+                .param("s", "8");
+            let resp = client.playlist_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut entries: Vec<(u64, i64)> = resp
+                .body
+                .get("playlist")
+                .and_then(|p| p.get("trackIds"))
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|t| {
+                            Some((
+                                u64_of(t, "id")?,
+                                t.get("at").and_then(Value::as_i64).unwrap_or(0),
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if entries.is_empty() {
+                return Ok(Vec::new());
+            }
+            // at 大 = 更晚收藏; at 缺失(0) 保持服务端顺序
+            entries.sort_by(|a, b| b.1.cmp(&a.1));
+            let ids: Vec<u64> = entries.into_iter().map(|(id, _)| id).collect();
+            let mut by_id: std::collections::HashMap<u64, Song> =
+                std::collections::HashMap::new();
+            for chunk in ids.chunks(500) {
+                let joined = chunk
+                    .iter()
+                    .map(|id| id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let q = make_query(&cookie, &domain, &ua).param("ids", &joined);
+                let detail = client.song_detail(&q).await.map_err(map_error)?;
+                check_body(&detail.body)?;
+                for s in parse_song_list(&detail.body) {
+                    by_id.insert(s.id.0, s);
+                }
+            }
+            Ok(ids.iter().filter_map(|id| by_id.remove(id)).collect())
         })
     }
 
@@ -1331,7 +1762,14 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
             if name.is_empty() {
                 return None;
             }
-            Some(Artist { id: u64_of(v, "id").unwrap_or(0), name })
+            Some(Artist {
+                id: u64_of(v, "id").unwrap_or(0),
+                name,
+                avatar_url: str_of(v, "picUrl")
+                    .or_else(|| str_of(v, "img1v1Url"))
+                    .or_else(|| str_of(v, "avatar"))
+                    .filter(|s| !s.is_empty()),
+            })
         })
         .collect()
 }
@@ -1413,6 +1851,17 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             .or_else(|| event.get("pics"))
             .map(parse_event_images)
             .unwrap_or_default();
+        // 视频动态: 封面照旧用图片, 直链单独给 UI(点击交给系统播放器/浏览器)
+        let video = payload
+            .and_then(|p| p.get("video").or_else(|| p.get("mv")))
+            .or_else(|| event.get("video"));
+        let video_url = video
+            .and_then(|v| {
+                str_of(v, "playUrl")
+                    .or_else(|| str_of(v, "playUrlHd"))
+                    .or_else(|| str_of(v, "url"))
+            })
+            .filter(|s| !s.is_empty());
         let cover_url = song.as_ref().and_then(Song::cover_url).or_else(|| {
             payload.and_then(|p| {
                 str_of(p, "coverUrl")
@@ -1420,7 +1869,10 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
                     .or_else(|| p.get("album").and_then(|a| str_of(a, "picUrl")))
                     .or_else(|| p.get("playlist").and_then(|x| str_of(x, "coverImgUrl")))
             })
-        }).or_else(|| images.first().cloned());
+        }).or_else(|| images.first().cloned()).or_else(|| {
+            video.and_then(|v| str_of(v, "coverUrl").or_else(|| str_of(v, "cover")))
+                .filter(|s| !s.is_empty())
+        });
         let user = event.get("user");
         let user_name = user
             .and_then(|u| str_of(u, "nickname"))
@@ -1439,6 +1891,7 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             song,
             cover_url,
             images,
+            video_url,
             time_ms,
         });
     }

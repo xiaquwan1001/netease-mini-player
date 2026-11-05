@@ -32,6 +32,17 @@ void main() {
       expect(q.onEnded(), isNull);
     });
 
+    test('下一首播放: 插到当前之后并去重', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b'], startAt: 0);
+      expect(q.insertNext('x'), 1);
+      expect(q.items, ['a', 'x', 'b']);
+      expect(q.current, 'a');
+      // 已存在的项挪到当前之后, 不重复插入
+      expect(q.insertNext('b'), 1);
+      expect(q.items, ['a', 'b', 'x']);
+      expect(q.next(), 'b');
+    });
+
     test('jumpTo 越界返回 null 且不改变当前', () {
       final q = PlayQueue<String>()..setAll(['a', 'b'], startAt: 0);
       expect(q.jumpTo(5), isNull);

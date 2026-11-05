@@ -6,6 +6,8 @@ import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
+import 'song_actions.dart';
 import 'song_tile.dart';
 
 /// 歌单/播客(电台)详情页: 全屏路由, AppBar 以下单滚动(CustomScrollView),
@@ -14,6 +16,42 @@ import 'song_tile.dart';
 
 /// 曲目/节目行统一行高, "定位正在播放"的滚动偏移按它算
 const double _kRowHeight = 56.0;
+
+/// 评论底部面板(歌曲/歌单/专辑/播客通用): "..." 菜单里的"查看评论"走这里
+Future<void> showCommentsSheet(
+  BuildContext context, {
+  required String kind,
+  required BigInt resourceId,
+  String title = '评论',
+  int totalHint = 0,
+}) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (sheetContext) => SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.75,
+        child: Column(
+          children: [
+            SheetHeader(
+              title: title,
+              onClose: () => Navigator.pop(sheetContext),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: _CommentsSection(
+                  kind: kind,
+                  resourceId: resourceId,
+                  totalHint: totalHint,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 /// 时长: h:mm:ss(超过 1 小时)/mm:ss, 与 podcast.dart 同一套格式
 String _fmtDuration(BigInt ms) {
@@ -951,6 +989,7 @@ class _SongRow extends StatelessWidget {
               ),
               onPressed: onToggleLike,
             ),
+            SongOverflowButton(song: song, size: 20),
           ],
         ),
       ),
@@ -969,30 +1008,38 @@ class _ProgramRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context).textTheme;
+    final song = program.song;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.only(left: 16, right: 4),
+        child: Row(
           children: [
-            Text(
-              program.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.bodyMedium,
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    program.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.bodyMedium,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      if (program.djName.isNotEmpty) program.djName,
+                      _fmtDuration(program.durationMs),
+                    ].join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              [
-                if (program.djName.isNotEmpty) program.djName,
-                _fmtDuration(program.durationMs),
-              ].join(' · '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
+            if (song != null) SongOverflowButton(song: song, size: 20),
           ],
         ),
       ),
@@ -1309,21 +1356,13 @@ class _CommentTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final avatarUrl = comment.avatarUrl;
-    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 12,
-            backgroundColor: scheme.surfaceContainerHighest,
-            backgroundImage:
-                hasAvatar ? NetworkImage(httpsImageUrl(avatarUrl)) : null,
-            child: hasAvatar
-                ? null
-                : Icon(Icons.person_outline, size: 14, color: scheme.outline),
-          ),
+          // 头像统一走 CircleCover(带浏览器 UA, CDN 会拒 Dart 默认 UA)
+          CircleCover(url: avatarUrl, size: 24, icon: Icons.person_outline),
           const SizedBox(width: 8),
           Expanded(
             child: Column(

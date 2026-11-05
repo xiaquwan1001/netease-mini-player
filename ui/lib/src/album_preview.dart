@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'song_actions.dart';
 
 typedef AlbumLoader = Future<rust.AlbumDetailDto> Function(BigInt albumId);
 
@@ -182,6 +183,7 @@ class _AlbumPreviewDialogState extends State<_AlbumPreviewDialog> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           enabled: s.playable,
+                          trailing: SongOverflowButton(song: s, size: 20),
                           onTap: s.playable
                               ? () {
                                   Navigator.pop(context);

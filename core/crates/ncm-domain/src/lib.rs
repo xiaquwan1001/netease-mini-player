@@ -27,6 +27,9 @@ impl std::fmt::Display for TrackId {
 pub struct Artist {
     pub id: u64,
     pub name: String,
+    /// 头像(关注艺人列表/歌手搜索结果才有)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -62,9 +65,11 @@ fn default_true() -> bool {
 }
 
 impl Song {
-    /// VIP 专属(高音质需会员): 网易云 fee=1 是会员曲, fee=8 是"标准音质免费"。
+    /// VIP 专属: 只有 fee=1 是会员曲。
+    /// fee=8 是"低音质(128k)免费"——非会员也能完整播放, 不能标 VIP
+    /// (2026-11-06 修复: 之前把 8 也算进来, 导致大部分免费歌被误标 VIP)。
     pub fn is_vip(&self) -> bool {
-        matches!(self.fee, Some(1) | Some(8))
+        matches!(self.fee, Some(1))
     }
 
     /// 需要单独购买的数字专辑
@@ -96,6 +101,151 @@ pub struct SearchPage {
     pub songs: Vec<Song>,
     pub total: u64,
     pub has_more: bool,
+}
+
+/// 搜索命中的歌手(带头像, 搜索结果分区用)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchArtist {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub alias: String,
+    #[serde(default)]
+    pub album_count: u64,
+    #[serde(default)]
+    pub music_count: u64,
+}
+
+/// 搜索命中的专辑(带封面)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchAlbum {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub track_count: u64,
+}
+
+/// 搜索命中的歌单(带封面)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchPlaylistItem {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub creator_name: String,
+    #[serde(default)]
+    pub track_count: u64,
+    #[serde(default)]
+    pub play_count: u64,
+}
+
+/// 搜索命中的播客/电台(带封面)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchPodcast {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub dj_name: String,
+    #[serde(default)]
+    pub program_count: u64,
+    #[serde(default)]
+    pub play_count: u64,
+}
+
+/// 一次"综合搜索"的结果: 每个类型一个板块.
+/// 网易云 cloudsearch 的 type: 1 单曲 / 10 专辑 / 100 歌手 / 1000 歌单 / 1009 播客.
+/// (type=2000 声音/节目实测返回空, 本接口不支持节目搜索.)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SearchBundle {
+    #[serde(default)]
+    pub songs: Vec<Song>,
+    #[serde(default)]
+    pub song_total: u64,
+    #[serde(default)]
+    pub artists: Vec<SearchArtist>,
+    #[serde(default)]
+    pub albums: Vec<SearchAlbum>,
+    #[serde(default)]
+    pub playlists: Vec<SearchPlaylistItem>,
+    #[serde(default)]
+    pub podcasts: Vec<SearchPodcast>,
+}
+
+impl SearchBundle {
+    pub fn is_empty(&self) -> bool {
+        self.songs.is_empty()
+            && self.artists.is_empty()
+            && self.albums.is_empty()
+            && self.playlists.is_empty()
+            && self.podcasts.is_empty()
+    }
+}
+
+/// 专辑简介(歌手页/搜索结果用, 只有展示必需字段)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlbumBrief {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub track_count: u64,
+    #[serde(default)]
+    pub publish_time: u64,
+}
+
+/// 歌手详情(歌手页头部 + 热门歌曲 + 专辑)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtistDetail {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 歌手页大图(横幅)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub alias: Vec<String>,
+    #[serde(default)]
+    pub brief_desc: String,
+    #[serde(default)]
+    pub album_count: u64,
+    #[serde(default)]
+    pub music_count: u64,
+    #[serde(default)]
+    pub songs: Vec<Song>,
+    #[serde(default)]
+    pub albums: Vec<AlbumBrief>,
+}
+
+/// 账号资料详情(个人主页: 背景图 + 头像 + 签名 + 关注数)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileDetail {
+    pub user_id: u64,
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_url: Option<String>,
+    #[serde(default)]
+    pub signature: String,
+    #[serde(default)]
+    pub vip: bool,
+    #[serde(default)]
+    pub follows: u64,
+    #[serde(default)]
+    pub followeds: u64,
+    #[serde(default)]
+    pub level: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -282,6 +432,9 @@ pub struct FeedEvent {
     /// 配图(最多 3 张, 由 provider 截断)
     #[serde(default)]
     pub images: Vec<String>,
+    /// 动态里的视频直链(视频动态才有)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_url: Option<String>,
     /// 发布时间(unix 毫秒)
     #[serde(default)]
     pub time_ms: u64,
@@ -355,13 +508,32 @@ mod tests {
     }
 
     #[test]
+    fn fee8_is_not_vip() {
+        let mut s = Song {
+            id: TrackId::new(1),
+            name: "n".into(),
+            artists: vec![],
+            album: None,
+            duration_ms: 0,
+            fee: Some(8),
+            playable: true,
+        };
+        assert!(!s.is_vip());
+        s.fee = Some(1);
+        assert!(s.is_vip());
+        s.fee = Some(4);
+        assert!(!s.is_vip());
+        assert!(s.is_paid());
+    }
+
+    #[test]
     fn artist_line_joins() {
         let song = Song {
             id: TrackId::new(1),
             name: "n".into(),
             artists: vec![
-                Artist { id: 1, name: "A".into() },
-                Artist { id: 2, name: "B".into() },
+                Artist { id: 1, name: "A".into(), avatar_url: None },
+                Artist { id: 2, name: "B".into(), avatar_url: None },
             ],
             album: None,
             duration_ms: 0,

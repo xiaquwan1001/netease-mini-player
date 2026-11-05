@@ -1,23 +1,29 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
 import 'src/app_settings.dart';
+import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/cover_art.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
+import 'src/feed_view.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/playback.dart';
 import 'src/queue.dart';
+import 'src/platform.dart';
 import 'src/recommend_view.dart';
 import 'src/search_landing.dart';
+import 'src/search_results.dart';
 import 'src/search_suggest.dart';
 import 'src/settings_view.dart';
+import 'src/song_actions.dart';
 import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -48,6 +54,11 @@ const _modeLabels = {
   PlayMode.shuffle: '随机播放',
 };
 
+/// 全局动作回调宿主: MaterialApp.builder 里包一层 AppActions,
+/// 这样搜索结果/详情页/底部面板等所有路由里的 "..." 菜单都能拿到同一套回调。
+final ValueNotifier<SongActionHost?> _actionsHost =
+    ValueNotifier<SongActionHost?>(null);
+
 class MiniNcmApp extends StatelessWidget {
   const MiniNcmApp({super.key});
 
@@ -73,7 +84,13 @@ class MiniNcmApp extends StatelessWidget {
           themeMode: settings.themeMode,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
-            child: child ?? const SizedBox.shrink(),
+            // 动作回调挂在 Navigator 之上, pushed route 也能取到
+            child: ValueListenableBuilder<SongActionHost?>(
+              valueListenable: _actionsHost,
+              builder: (_, host, inner) =>
+                  host == null ? inner! : AppActions(host: host, child: inner!),
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
           home: const HomePage(),
         );
@@ -96,7 +113,7 @@ class _HomePageState extends State<HomePage> {
   final _queue = PlayQueue<rust.SongDto>();
   final _lyricScroll = ScrollController();
   rust.InitInfo? _info;
-  rust.SearchResultDto? _result;
+  rust.SearchBundleDto? _bundle;
   PlayerView? _player;
   String? _error;
 
@@ -142,8 +159,11 @@ class _HomePageState extends State<HomePage> {
   /// "我喜欢的音乐"这个歌单的 id(懒解析: 从"我的"页点播时要用它标记队列来源)
   BigInt? _likedPlaylistId;
 
-  /// 底部导航: 0 搜索 / 1 推荐 / 2 我的 / 3 设置
+  /// 底部导航: 0 搜索 / 1 推荐 / 2 关注 / 3 我的 / 4 设置
   int _tab = 0;
+
+  /// 搜索请求代次: 取消/重新搜索后旧请求的结果直接丢弃
+  int _searchToken = 0;
 
   // ---- 搜索建议 / 历史 ----
   final _searchFocus = FocusNode();
@@ -161,7 +181,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 当前列表的原始曲目(歌单浏览优先)
   List<rust.SongDto> get _sourceSongs =>
-      _libraryTitle != null ? _library : (_result?.songs ?? const <rust.SongDto>[]);
+      _libraryTitle != null ? _library : (_bundle?.songs ?? const <rust.SongDto>[]);
 
   /// 真正要显示/入队的曲目: 无版权且没收藏的直接不显示(与官方一致)
   List<rust.SongDto> get _visibleSongs => visibleSongs(_sourceSongs, _liked);
@@ -174,6 +194,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // 通知栏/耳机键的上一首·下一首 → Dart 队列
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
+    // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
+    _actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
     _bootstrap();
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
@@ -196,6 +218,7 @@ class _HomePageState extends State<HomePage> {
       await AppSettings.instance.load(info.dataDir);
       if (!mounted) return;
       setState(() => _info = info);
+      _actionsHost.value = _buildActionsHost();
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
       unawaited(_loadSearchHistory());
       unawaited(_loadSearchLanding());
@@ -252,6 +275,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _search() async {
     final keyword = _controller.text.trim();
     if (keyword.isEmpty) return;
+    final token = ++_searchToken;
     _suggestDebounce?.cancel();
     _searchFocus.unfocus();
     setState(() {
@@ -265,24 +289,42 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       final result = await retryNetwork(
-        () => rust.search(keywords: keyword, limit: 20),
+        () => rust.searchAll(keywords: keyword, limit: 20),
       );
-      if (!mounted) return;
-      setState(() => _result = result);
+      if (!mounted || token != _searchToken) return;
+      setState(() => _bundle = result);
       // 搜索历史是本地记录, 失败不影响搜索结果
       try {
         final history = await rust.recordSearch(keyword: keyword);
         if (mounted) setState(() => _searchHistory = history);
       } catch (_) {}
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || token != _searchToken) return;
       setState(() {
         _error = friendlyError(e);
         _retryLast = _search;
       });
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && token == _searchToken) setState(() => _busy = false);
     }
+  }
+
+  /// 显式取消: 清掉输入、上一轮结果、联想和错误, 回到搜索落地页
+  void _clearSearch() {
+    _searchToken += 1;
+    _suggestDebounce?.cancel();
+    _controller.clear();
+    _searchFocus.unfocus();
+    setState(() {
+      _bundle = null;
+      _suggestions = const [];
+      _error = null;
+      _retryLast = null;
+      _busy = false;
+      _library = const [];
+      _libraryTitle = null;
+      _libraryPlaylistId = null;
+    });
   }
 
   // ---------------- 搜索建议 / 历史 ----------------
@@ -335,6 +377,8 @@ class _HomePageState extends State<HomePage> {
 
   void _onQueryChanged(String value) {
     _suggestDebounce?.cancel();
+    // 让"清空/取消"按钮随输入内容即时出现
+    if (mounted) setState(() {});
     final q = value.trim();
     if (q.isEmpty) {
       setState(() => _suggestions = const []);
@@ -482,6 +526,72 @@ class _HomePageState extends State<HomePage> {
     _userStopped = false;
     _queuePlaylistId = null; // 搜索列表点播不算歌单队列
     await _playSong(song);
+  }
+
+  /// 搜索结果里点单曲: 用"可见单曲"重置队列(跳过无版权), 并定位到这首
+  Future<void> _playFromSearch(rust.SongDto song) async {
+    final songs = visibleSongs(_bundle?.songs ?? const <rust.SongDto>[], _liked);
+    final start = songs.indexWhere((s) => s.id == song.id);
+    if (songs.isEmpty) return;
+    _queue.setAll(songs, startAt: start < 0 ? 0 : start);
+    _userStopped = false;
+    _queuePlaylistId = null;
+    await _playSong(song);
+  }
+
+  /// 搜索结果: 歌手卡片 → 歌手页
+  Future<void> _openSearchArtist(rust.SearchArtistDto artist) async {
+    await showArtistDetail(
+      context,
+      artistId: artist.id,
+      name: artist.name,
+      onPlaySongs: (songs, i) => _playSongsList(songs, i),
+      onOpenAlbum: (id, name, cover) => showAlbumPreview(
+        context,
+        albumId: id,
+        albumName: name,
+        coverUrl: cover,
+        onPlay: (songs, i) => _playSongsList(songs, i),
+      ),
+    );
+  }
+
+  void _openSearchAlbum(rust.SearchAlbumDto album) {
+    showAlbumPreview(
+      context,
+      albumId: album.id,
+      albumName: album.name,
+      coverUrl: album.coverUrl,
+      onPlay: (songs, i) => _playSongsList(songs, i),
+    );
+  }
+
+  /// 搜索结果: 歌单卡片 → 歌单详情
+  void _openSearchPlaylist(rust.SearchPlaylistDto item) {
+    _openPlaylist(
+      rust.PlaylistDto(
+        id: item.id,
+        name: item.name,
+        coverUrl: item.coverUrl,
+        trackCount: item.trackCount,
+        special: false,
+      ),
+    );
+  }
+
+  /// 搜索结果: 播客卡片 → 播客详情
+  void _openSearchPodcast(rust.SearchPodcastDto item) {
+    _openPodcastRadio(
+      rust.PodcastRadioDto(
+        id: item.id,
+        name: item.name,
+        coverUrl: item.coverUrl,
+        description: '',
+        djName: item.djName,
+        programCount: item.programCount,
+        playCount: item.playCount,
+      ),
+    );
   }
 
   /// 跳过取不到直链的曲目(会员/版权限制), 最多绕队列一圈
@@ -730,6 +840,7 @@ class _HomePageState extends State<HomePage> {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
       if (mounted) setState(() => _info = info);
+      _actionsHost.value = _buildActionsHost();
       if (info.loggedIn) {
         await _loadLiked();
       } else {
@@ -778,29 +889,27 @@ class _HomePageState extends State<HomePage> {
 
   bool _isLiked(BigInt? trackId) => trackId != null && _liked.contains(trackId);
 
-  /// 无版权提示(与官方一致的"点了才告诉你")
-  void _notifyUnplayable(rust.SongDto song) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('《${song.name}》暂无版权, 无法播放'),
-          duration: const Duration(milliseconds: 1800),
-        ),
-      );
-  }
+  /// "..." 菜单的回调宿主(登录态变化时重建)
+  SongActionHost _buildActionsHost() => SongActionHost(
+    loggedIn: _info?.loggedIn == true,
+    isLiked: _isLiked,
+    toggleLike: _toggleLikeFor,
+    playNext: _playNextSong,
+    addToPlaylist: _showAddToPlaylist,
+    share: _showShareSong,
+    comments: _showSongComments,
+    openArtist: _openSongArtist,
+    openAlbum: _openSongAlbum,
+    download: _downloadSong,
+  );
 
-  /// 红心/取消红心(当前曲目). 先乐观更新, 失败回滚。
-  Future<void> _toggleLike() async {
-    final id = _current?.id;
-    if (id == null) return;
+  /// 任意曲目的红心切换(列表/播放条共用; 先乐观更新, 失败回滚)
+  Future<void> _toggleLikeFor(rust.SongDto song) async {
     if (_info?.loggedIn != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('收藏需要先登录')),
-      );
+      _toast('收藏需要先登录');
       return;
     }
+    final id = song.id;
     final wasLiked = _liked.contains(id);
     setState(() {
       if (wasLiked) {
@@ -820,7 +929,202 @@ class _HomePageState extends State<HomePage> {
           _liked.remove(id);
         }
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('收藏失败: $e')));
+      rethrow;
+    }
+  }
+
+  Future<void> _playNextSong(rust.SongDto song) async {
+    _queue.insertNext(song);
+    if (mounted) {
+      setState(() {});
+      _toast('已添加到下一首播放');
+    }
+  }
+
+  /// 收藏到歌单: 先选歌单, 再调接口. "我喜欢的音乐"走红心接口.
+  Future<void> _showAddToPlaylist(rust.SongDto song) async {
+    if (_info?.loggedIn != true) {
+      _toast('收藏到歌单需要先登录');
+      return;
+    }
+    final lists = await retryNetwork(rust.myPlaylists);
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<rust.PlaylistDto>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.5,
+          child: Column(
+            children: [
+              ListTile(
+                dense: true,
+                title: const Text('收藏到歌单'),
+                subtitle: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: lists.length,
+                  itemBuilder: (context, i) {
+                    final pl = lists[i];
+                    return ListTile(
+                      dense: true,
+                      leading: CoverArt(url: pl.coverUrl, size: 40, radius: 4),
+                      title: Text(
+                        pl.special ? '我喜欢的音乐' : pl.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('${pl.trackCount} 首'),
+                      onTap: () => Navigator.pop(sheetContext, pl),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null) return;
+    if (picked.special) {
+      await rust.setLiked(trackId: song.id, liked: true);
+      if (!mounted) return;
+      setState(() => _liked.add(song.id));
+      _toast('已加入我喜欢的音乐');
+      return;
+    }
+    final ok = await rust.addToPlaylist(playlistId: picked.id, trackId: song.id);
+    if (!mounted) return;
+    _toast(ok ? '已收藏到《${picked.name}》' : '收藏未生效, 请稍后重试');
+  }
+
+  Future<void> _showShareSong(rust.SongDto song) async {
+    final link = 'https://music.163.com/#/song?id=${song.id}';
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text('分享到动态'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                try {
+                  final ok = await rust.shareResource(
+                    kind: 'song',
+                    resourceId: song.id,
+                    msg: song.name,
+                  );
+                  if (mounted) _toast(ok ? '已分享到动态' : '分享未生效');
+                } catch (e) {
+                  if (mounted) _toast(friendlyError(e));
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('复制链接'),
+              onTap: () async {
+                Navigator.pop(sheetContext);
+                await Clipboard.setData(ClipboardData(text: link));
+                if (mounted) _toast('链接已复制');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSongComments(rust.SongDto song) async {
+    await showCommentsSheet(
+      context,
+      kind: 'song',
+      resourceId: song.id,
+      title: '《${song.name}》的评论',
+    );
+  }
+
+  Future<void> _openSongArtist(rust.SongDto song) async {
+    if (song.artistId == BigInt.zero) {
+      _toast('这首歌没有关联歌手信息');
+      return;
+    }
+    await showArtistDetail(
+      context,
+      artistId: song.artistId,
+      name: song.artist,
+      onPlaySongs: (songs, i) => _playSongsList(songs, i),
+      onOpenAlbum: (id, name, cover) => showAlbumPreview(
+        context,
+        albumId: id,
+        albumName: name,
+        coverUrl: cover,
+        onPlay: (songs, i) => _playSongsList(songs, i),
+      ),
+    );
+  }
+
+  Future<void> _openSongAlbum(rust.SongDto song) async {
+    await showAlbumPreview(
+      context,
+      albumId: song.albumId,
+      albumName: song.album,
+      coverUrl: song.coverUrl,
+      onPlay: (songs, i) => _playSongsList(songs, i),
+    );
+  }
+
+  Future<void> _downloadSong(rust.SongDto song) async {
+    _toast('正在获取下载地址…');
+    try {
+      final stream = await retryNetwork(
+        () => rust.songUrl(
+          trackId: song.id,
+          level: AppSettings.instance.audioLevel,
+        ),
+      );
+      final raw = stream.url;
+      if (raw == null || raw.isEmpty) {
+        _toast('这首歌暂时没有可用直链(会员/版权限制)');
+        return;
+      }
+      final url = preferHttpsStreamUrl(raw);
+      final ext = url.contains('.flac') ? 'flac' : 'mp3';
+      final name = '${song.artist} - ${song.name}.$ext';
+      final saved = await PlatformBridge.download(url: url, filename: name);
+      if (!mounted) return;
+      _toast(saved == null ? '下载失败' : '已开始下载(Android 在通知栏/Download 目录)');
+    } catch (e) {
+      if (!mounted) return;
+      _toast('下载失败: ${friendlyError(e)}');
+    }
+  }
+
+  /// 无版权提示(与官方一致的"点了才告诉你")
+  void _notifyUnplayable(rust.SongDto song) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('《${song.name}》暂无版权, 无法播放'),
+          duration: const Duration(milliseconds: 1800),
+        ),
+      );
+  }
+
+  /// 红心/取消红心(当前曲目). 先乐观更新, 失败回滚。
+  Future<void> _toggleLike() async {
+    final song = _current;
+    if (song == null) return;
+    try {
+      await _toggleLikeFor(song);
+    } catch (e) {
+      if (mounted) _toast('收藏失败: $e');
     }
   }
 
@@ -1010,7 +1314,8 @@ class _HomePageState extends State<HomePage> {
                     ? (_libraryTitle ?? '轻音 MiniNCM')
                     : switch (_tab) {
                         1 => '推荐',
-                        2 => '我的',
+                        2 => '关注',
+                        3 => '我的',
                         _ => '设置',
                       }),
             maxLines: 1,
@@ -1111,6 +1416,11 @@ class _HomePageState extends State<HomePage> {
                 label: '推荐',
               ),
               NavigationDestination(
+                icon: Icon(Icons.dynamic_feed_outlined),
+                selectedIcon: Icon(Icons.dynamic_feed),
+                label: '关注',
+              ),
+              NavigationDestination(
                 icon: Icon(Icons.person_outline),
                 selectedIcon: Icon(Icons.person),
                 label: '我的',
@@ -1149,6 +1459,14 @@ class _HomePageState extends State<HomePage> {
           onOpenDaily: _openDiscover,
         );
       case 2:
+        return FeedView(
+          key: ValueKey('feed-${_info?.loggedIn}'),
+          loggedIn: _info?.loggedIn == true,
+          onLogin: _login,
+          onPlaySongs: _playSongsList,
+          onOpenUrl: PlatformBridge.openUrl,
+        );
+      case 3:
         return MineView(
           key: ValueKey('mine-${_info?.loggedIn}-${_info?.vip}'),
           loggedIn: _info?.loggedIn == true,
@@ -1162,7 +1480,7 @@ class _HomePageState extends State<HomePage> {
           onPlayLiked: (songs, i) =>
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );
-      case 3:
+      case 4:
         return SettingsView(
           info: _info,
           isAndroid: _auth.isAndroid,
@@ -1178,8 +1496,12 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSearchTab() {
     final query = _controller.text.trim();
+    // 歌单浏览态优先(从我的/推荐点进来的)
+    if (_libraryTitle != null) return _buildList();
+    // 有上一轮结果就展示分区结果; 取消按钮会清空它
+    if (_bundle != null) return _buildSearchResults();
     // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
-    if (query.isEmpty && _libraryTitle == null) {
+    if (query.isEmpty) {
       return SearchLanding(
         history: _searchHistory,
         hot: _hotTerms,
@@ -1194,6 +1516,21 @@ class _HomePageState extends State<HomePage> {
     return _buildList();
   }
 
+  /// 综合搜索结果: 单曲/歌手/专辑/歌单/播客分区
+  Widget _buildSearchResults() {
+    return SearchResultsView(
+      bundle: _bundle!,
+      liked: _liked,
+      currentTrackId: _current?.id,
+      onPlaySong: _playFromSearch,
+      onOpenArtist: _openSearchArtist,
+      onOpenAlbum: _openSearchAlbum,
+      onOpenPlaylist: _openSearchPlaylist,
+      onOpenPodcast: _openSearchPodcast,
+      onMenu: (song) => showSongActionsSheet(context, song, _buildActionsHost()),
+    );
+  }
+
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -1203,10 +1540,18 @@ class _HomePageState extends State<HomePage> {
             child: TextField(
               controller: _controller,
               focusNode: _searchFocus,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '搜索',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 isDense: true,
+                // 输入过东西或已有结果时给一个显式的清空按钮
+                suffixIcon: (_controller.text.isEmpty && _bundle == null)
+                    ? null
+                    : IconButton(
+                        tooltip: '清空搜索',
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: _clearSearch,
+                      ),
               ),
               textInputAction: TextInputAction.search,
               onChanged: _onQueryChanged,
@@ -1218,6 +1563,18 @@ class _HomePageState extends State<HomePage> {
             onPressed: _busy ? null : _search,
             child: Text(_busy ? '搜索中' : '搜索'),
           ),
+          // 显式取消: 清掉上一轮结果并回到搜索落地页
+          if (_controller.text.isNotEmpty || _bundle != null || _error != null) ...[
+            const SizedBox(width: 2),
+            TextButton(
+              onPressed: _busy ? null : _clearSearch,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 40),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: const Text('取消'),
+            ),
+          ],
         ],
       ),
     );
@@ -1225,8 +1582,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildList() {
     final current = _current;
-    // 歌单浏览态不需要搜索结果; 只有"既没搜过也没开歌单"才提示输入关键词
-    if (_result == null && _libraryTitle == null) {
+    if (_libraryTitle == null) {
       return const Center(child: Text('输入关键词后搜索'));
     }
     final songs = _visibleSongs;
@@ -1264,6 +1620,7 @@ class _HomePageState extends State<HomePage> {
               _notifyUnplayable(s);
             }
           },
+          onMenu: () => showSongActionsSheet(context, s, _buildActionsHost()),
         );
       },
     );
@@ -1407,6 +1764,9 @@ class _HomePageState extends State<HomePage> {
                     ),
                     onPressed: _toggleLike,
                   ),
+                  // 正在播放的曲目也有完整操作菜单
+                  if (current != null)
+                    SongOverflowButton(song: current, size: 22),
                 ],
               ),
               Row(
