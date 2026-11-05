@@ -2,8 +2,8 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumDetail, Artist, Lyric, Playlist, PodcastProgram, PodcastRadio, SearchPage, Session,
-    Song, StreamUrl, SuggestItem, TrackId,
+    Album, AlbumDetail, Artist, FeedEvent, HotSearchTerm, Lyric, Playlist, PodcastProgram,
+    PodcastRadio, SearchPage, Session, Song, StreamUrl, SuggestItem, TrackId,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
@@ -22,6 +22,8 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Podcast,
     Capability::SearchSuggest,
     Capability::Recent,
+    Capability::SearchHot,
+    Capability::Feed,
 ];
 
 /// 内置网易云直连 provider.
@@ -671,6 +673,99 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 搜索热词榜. type=1111 返回 result.hots(按热度排序), 没有特权/登录要求.
+    fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.search_hot(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_hot_search(&resp.body))
+        })
+    }
+
+    /// 默认/推荐搜索词("猜你想搜")
+    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.search_default(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_default_search(&resp.body))
+        })
+    }
+
+    /// 私人 FM: 登录后按口味连续推歌(/api/v1/radio/get), 匿名会返回 301.
+    fn personal_fm(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("私人 FM 需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.personal_fm(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut songs = parse_fm_songs(&resp.body);
+            songs.truncate(limit.max(1) as usize);
+            Ok(songs)
+        })
+    }
+
+    /// 已订阅的播客/电台
+    fn subscribed_podcasts(
+        &self,
+        limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看收藏播客需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.max(1).to_string())
+                .param("offset", "0");
+            let resp = client.dj_sublist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_subscribed_podcasts(&resp.body))
+        })
+    }
+
+    /// 关注的艺人
+    fn subscribed_artists(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看关注艺人需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.max(1).to_string())
+                .param("offset", "0");
+            let resp = client.artist_sublist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_subscribed_artists(&resp.body))
+        })
+    }
+
+    /// 关注动态: /api/v1/event/get 返回"我关注的人"的动态(含艺人发布).
+    fn feed_events(
+        &self,
+        limit: u32,
+        last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看关注动态需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("pagesize", &limit.max(1).to_string())
+                .param("lasttime", &last_time.to_string());
+            let resp = client.event(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_feed_events(&resp.body))
+        })
+    }
+
     /// 当前登录账号资料(用于多账号记忆: 登录成功后记住 uid/昵称)
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<ncm_domain::Profile>> {
         Box::pin(async move {
@@ -971,6 +1066,195 @@ pub fn parse_podcast_program(body: &Value) -> ProviderResult<PodcastProgram> {
         .ok_or_else(|| ProviderError::not_found("program: missing program"))
 }
 
+/// 搜索热词榜的响应形如
+///   {code:200, result:{hots:[{first:"...", keyword:"晴天", iconType:1}, ...]}}
+/// 老版本/其它通道也可能给 result.hotKeywords 或 data[] 字符串.
+pub fn parse_hot_search(body: &Value) -> Vec<HotSearchTerm> {
+    let arr = body
+        .get("result")
+        .and_then(|r| r.get("hots").or_else(|| r.get("hotKeywords")))
+        .or_else(|| body.get("data"))
+        .and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for v in arr {
+        let keyword = str_of(v, "keyword")
+            .or_else(|| str_of(v, "first"))
+            .or_else(|| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        let keyword = keyword.trim().to_string();
+        if keyword.is_empty() {
+            continue;
+        }
+        out.push(HotSearchTerm { rank: out.len() as u32 + 1, keyword });
+    }
+    out
+}
+
+/// 默认搜索词的响应形如 {code:200, data:{showKeyword:"...", realkeyword:"..."}}
+pub fn parse_default_search(body: &Value) -> Option<String> {
+    let data = body.get("data").unwrap_or(body);
+    ["showKeyword", "realkeyword", "defaultKeyword", "keyword"]
+        .iter()
+        .find_map(|key| str_of(data, key))
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// 私人 FM 的响应形如 {code:200, data:[{id,name,ar,al,dt,fee,...}, ...]}
+pub fn parse_fm_songs(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("data")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let song = item.get("songInfo").or_else(|| item.get("song")).unwrap_or(item);
+                    parse_song_with(song, &privileges)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 已订阅播客的响应形如 {code:200, djRadios:[{id,name,picUrl,...}]}
+/// 部分通道返回 data:[{radio:{...}}], 两种都认.
+pub fn parse_subscribed_podcasts(body: &Value) -> Vec<PodcastRadio> {
+    let arr = body
+        .get("djRadios")
+        .or_else(|| body.get("data"))
+        .or_else(|| body.get("radios"))
+        .and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| parse_radio(v.get("radio").unwrap_or(v)))
+        .collect()
+}
+
+/// 关注艺人的响应形如 {code:200, data:[{id,name,picUrl,albumSize,...}]}
+pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
+    let arr = body
+        .get("data")
+        .or_else(|| body.get("artists"))
+        .and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| {
+            let name = str_of(v, "name")?;
+            if name.is_empty() {
+                return None;
+            }
+            Some(Artist { id: u64_of(v, "id").unwrap_or(0), name })
+        })
+        .collect()
+}
+
+fn event_kind(event_type: i64) -> &'static str {
+    match event_type {
+        18 => "song",
+        13 => "playlist",
+        19 => "album",
+        17 | 22 => "program",
+        5 | 6 | 7 | 8 => "text",
+        _ => "other",
+    }
+}
+
+fn parse_event_images(value: &Value) -> Vec<String> {
+    let Some(arr) = value.as_array() else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| {
+            v.as_str()
+                .map(str::to_string)
+                .or_else(|| str_of(v, "url"))
+                .or_else(|| str_of(v, "thumbUrl"))
+        })
+        .filter(|s| !s.is_empty())
+        .take(3)
+        .collect()
+}
+
+/// 关注动态的响应形如
+///   {code:200, events:[{id, eventType, eventTime, user:{nickname,avatarUrl},
+///                       json:{song:{...}, comment:"..."}|"...", pics:[...]}], lasttime}
+/// json 有时是字符串(需要再解析一次), 各种 eventType 的字段名也不统一,
+/// 这里只提取 UI 能直接展示的最小集合.
+pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
+    let Some(arr) = body.get("events").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let privileges = parse_privileges(body);
+    let mut out = Vec::new();
+    for event in arr {
+        let Some(id) = u64_of(event, "id") else { continue };
+        let event_type = event
+            .get("eventType")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        // json 可能是对象, 也可能是字符串
+        let payload_owned = event.get("json").and_then(|j| match j {
+            Value::String(s) => serde_json::from_str::<Value>(s).ok(),
+            other => Some(other.clone()),
+        });
+        let payload = payload_owned.as_ref();
+        let info = event.get("info");
+        let song_value = payload
+            .and_then(|p| p.get("song").or_else(|| p.get("songInfo")))
+            .or_else(|| info.and_then(|i| i.get("song")));
+        let song = song_value.and_then(|s| parse_song_with(s, &privileges));
+        let text = payload
+            .and_then(|p| {
+                str_of(p, "msg")
+                    .or_else(|| str_of(p, "comment"))
+                    .or_else(|| str_of(p, "description"))
+            })
+            .or_else(|| info.and_then(|i| str_of(i, "comment")))
+            .unwrap_or_default();
+        let images = payload
+            .and_then(|p| p.get("pics").or_else(|| p.get("imgs")))
+            .or_else(|| event.get("pics"))
+            .map(parse_event_images)
+            .unwrap_or_default();
+        let cover_url = song.as_ref().and_then(Song::cover_url).or_else(|| {
+            payload.and_then(|p| {
+                str_of(p, "coverUrl")
+                    .or_else(|| str_of(p, "coverImgUrl"))
+                    .or_else(|| p.get("album").and_then(|a| str_of(a, "picUrl")))
+                    .or_else(|| p.get("playlist").and_then(|x| str_of(x, "coverImgUrl")))
+            })
+        }).or_else(|| images.first().cloned());
+        let user = event.get("user");
+        let user_name = user
+            .and_then(|u| str_of(u, "nickname"))
+            .or_else(|| payload.and_then(|p| str_of(p, "nickname")))
+            .unwrap_or_default();
+        let avatar_url = user.and_then(|u| str_of(u, "avatarUrl"));
+        let time_ms = u64_of(event, "eventTime")
+            .or_else(|| u64_of(event, "time"))
+            .unwrap_or(0);
+        out.push(FeedEvent {
+            id,
+            kind: event_kind(event_type).to_string(),
+            user_name,
+            avatar_url,
+            text,
+            song,
+            cover_url,
+            images,
+            time_ms,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1208,5 +1492,88 @@ mod tests {
         assert_eq!(list[0].radio_id, 5);
         assert_eq!(list[0].duration_ms, 22125);
         assert_eq!(list[0].song.as_ref().unwrap().id.0, 1442398087);
+    }
+
+    #[test]
+    fn search_hot_and_default() {
+        let hot = json!({"code": 200, "result": {"hots": [
+            {"first": "晴天", "keyword": "晴天", "iconType": 1},
+            {"first": "", "keyword": "周杰伦", "iconType": 0},
+            {"keyword": "  "}
+        ]}});
+        let terms = parse_hot_search(&hot);
+        assert_eq!(terms.len(), 2);
+        assert_eq!(terms[0].rank, 1);
+        assert_eq!(terms[0].keyword, "晴天");
+        assert_eq!(terms[1].rank, 2);
+
+        let def = json!({"code": 200, "data": {"showKeyword": "周杰伦", "realkeyword": "周杰伦"}});
+        assert_eq!(parse_default_search(&def).as_deref(), Some("周杰伦"));
+        assert_eq!(parse_default_search(&json!({"code": 200, "data": {}})), None);
+    }
+
+    #[test]
+    fn fm_songs_mapping() {
+        let body = json!({"code": 200, "data": [
+            {"id": 11, "name": "FM 曲", "ar": [{"name": "A"}], "al": {"id": 3, "name": "al"}, "dt": 1000, "fee": 0}
+        ]});
+        let songs = parse_fm_songs(&body);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].id.0, 11);
+        assert_eq!(songs[0].artist_line(), "A");
+    }
+
+    #[test]
+    fn subscribed_podcasts_and_artists() {
+        let subs = json!({"code": 200, "djRadios": [
+            {"id": 5, "name": "订阅电台", "picUrl": "http://p/r.jpg", "dj": {"nickname": "主播"}, "programCount": 3}
+        ]});
+        let radios = parse_subscribed_podcasts(&subs);
+        assert_eq!(radios.len(), 1);
+        assert_eq!(radios[0].name, "订阅电台");
+
+        let artists = json!({"code": 200, "data": [
+            {"id": 6452, "name": "周杰伦", "picUrl": "http://p/a.jpg"},
+            {"id": 0}
+        ]});
+        let list = parse_subscribed_artists(&artists);
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "周杰伦");
+    }
+
+    #[test]
+    fn feed_event_mapping() {
+        let body = json!({"code": 200, "events": [
+            {
+                "id": 100,
+                "eventType": 18,
+                "eventTime": 1700000000000u64,
+                "user": {"nickname": "某艺人", "avatarUrl": "http://p/u.jpg"},
+                "json": {
+                    "msg": "分享一首歌",
+                    "song": {
+                        "id": 7, "name": "新歌", "ar": [{"name": "某艺人"}],
+                        "al": {"id": 3, "name": "专辑", "picUrl": "http://p/c.jpg"}, "dt": 1000, "fee": 1
+                    }
+                }
+            },
+            {
+                "id": 101,
+                "eventType": 13,
+                "eventTime": 1700000001000u64,
+                "user": {"nickname": "好友"},
+                "json": "{\"playlist\":{\"coverImgUrl\":\"http://p/pl.jpg\"},\"comment\":\"推荐歌单\"}"
+            }
+        ]});
+        let events = parse_feed_events(&body);
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].kind, "song");
+        assert_eq!(events[0].user_name, "某艺人");
+        assert_eq!(events[0].song.as_ref().unwrap().name, "新歌");
+        assert_eq!(events[0].cover_url.as_deref(), Some("http://p/c.jpg"));
+        assert_eq!(events[0].time_ms, 1700000000000);
+        assert_eq!(events[1].kind, "playlist");
+        assert_eq!(events[1].text, "推荐歌单");
+        assert_eq!(events[1].cover_url.as_deref(), Some("http://p/pl.jpg"));
     }
 }

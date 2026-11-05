@@ -3,16 +3,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'src/album_preview.dart';
+import 'src/app_settings.dart';
 import 'src/auth.dart';
 import 'src/cover_art.dart';
 import 'src/discover.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
+import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/playback.dart';
 import 'src/podcast.dart';
 import 'src/queue.dart';
+import 'src/recommend_view.dart';
+import 'src/search_landing.dart';
 import 'src/search_suggest.dart';
+import 'src/settings_view.dart';
 import 'src/song_tile.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -48,12 +53,31 @@ class MiniNcmApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '轻音 MiniNCM',
-      // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: const Color(0xFFE60026), useMaterial3: true),
-      home: const HomePage(),
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) {
+        final settings = AppSettings.instance;
+        return MaterialApp(
+          title: '轻音 MiniNCM',
+          // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorSchemeSeed: const Color(0xFFE60026),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorSchemeSeed: const Color(0xFFE60026),
+            brightness: Brightness.dark,
+            useMaterial3: true,
+          ),
+          themeMode: settings.themeMode,
+          builder: (context, child) => MediaQuery(
+            data: scaledMediaQuery(context, settings.textScale),
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: const HomePage(),
+        );
+      },
     );
   }
 }
@@ -66,7 +90,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final _controller = TextEditingController(text: '晴天');
+  final _controller = TextEditingController();
   final _playback = Playback();
   final _auth = Auth();
   final _queue = PlayQueue<rust.SongDto>();
@@ -114,11 +138,20 @@ class _HomePageState extends State<HomePage> {
   /// 当前浏览的歌单 id(心动模式要用 playlistId; 搜索态为 null)
   BigInt? _libraryPlaylistId;
 
+  /// 底部导航: 0 搜索 / 1 推荐 / 2 我的 / 3 设置
+  int _tab = 0;
+
   // ---- 搜索建议 / 历史 ----
   final _searchFocus = FocusNode();
   Timer? _suggestDebounce;
   List<rust.SuggestItemDto> _suggestions = const [];
   List<String> _searchHistory = const [];
+
+  // ---- 搜索落地页(热词/推荐词) ----
+  List<rust.HotSearchTermDto> _hotTerms = const [];
+  String? _recommendedKeyword;
+  bool _hotLoading = false;
+  String? _hotError;
 
   rust.SongDto? get _current => _queue.current;
 
@@ -139,7 +172,6 @@ class _HomePageState extends State<HomePage> {
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
     _searchFocus.addListener(_onSearchFocusChanged);
     _bootstrap();
-    _loadSearchHistory();
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
   }
 
@@ -157,10 +189,15 @@ class _HomePageState extends State<HomePage> {
     try {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
+      await AppSettings.instance.load(info.dataDir);
+      if (!mounted) return;
       setState(() {
         _info = info;
         _vip = info.vip;
       });
+      // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
+      unawaited(_loadSearchHistory());
+      unawaited(_loadSearchLanding());
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
       if (info.loggedIn) {
         unawaited(_syncAccount());
@@ -269,6 +306,31 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 搜索落地页的热词榜 + 默认/推荐搜索词. 两块互相独立, 失败不影响搜索.
+  Future<void> _loadSearchLanding() async {
+    if (mounted) setState(() => _hotLoading = true);
+    try {
+      final hot = await retryNetwork(rust.hotSearch);
+      if (!mounted) return;
+      setState(() {
+        _hotTerms = hot;
+        _hotError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _hotError = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _hotLoading = false);
+    }
+    try {
+      final keyword = await rust.defaultSearch();
+      if (!mounted) return;
+      setState(() => _recommendedKeyword = keyword);
+    } catch (_) {
+      // 推荐词是锦上添花, 失败静默
+    }
+  }
+
   void _onQueryChanged(String value) {
     _suggestDebounce?.cancel();
     final q = value.trim();
@@ -319,8 +381,8 @@ class _HomePageState extends State<HomePage> {
 
   /// 心动模式: 以当前曲目为种子, 在当前歌单(0=不限定)里续播一队推荐.
   /// 网易云这个接口需要登录, 未登录会返回 [auth] 错误.
-  Future<void> _heartMode() async {
-    final current = _current;
+  Future<void> _heartMode({rust.SongDto? seed}) async {
+    final current = seed ?? _current;
     final id = current?.id;
     if (id == null) {
       _toast('先播一首歌, 再开启心动模式');
@@ -383,6 +445,15 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 直接打开某个播客的节目列表(推荐/我的页面的卡片点进来)
+  void _openPodcastRadio(rust.PodcastRadioDto radio) {
+    showPodcastSheet(
+      context,
+      initialRadio: radio,
+      onPlay: (songs, index) => _playSongsList(songs, index),
+    );
+  }
+
   void _openRecent() {
     showRecentSheet(
       context,
@@ -434,7 +505,10 @@ class _HomePageState extends State<HomePage> {
     try {
       // 移动网络切网时会偶发 connection reset, 取链是幂等的, 值得重试
       final stream = await retryNetwork(
-        () => rust.songUrl(trackId: song.id, level: 'exhigh'),
+        () => rust.songUrl(
+          trackId: song.id,
+          level: AppSettings.instance.audioLevel,
+        ),
       );
       final url = stream.url;
       if (url == null) {
@@ -912,7 +986,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final info = _info;
     final player = _player;
     final current = _current;
     return Scaffold(
@@ -931,7 +1004,13 @@ class _HomePageState extends State<HomePage> {
           child: Text(
             _showLyrics
                 ? (current?.name ?? '歌词')
-                : (_libraryTitle ?? '轻音 MiniNCM'),
+                : (_tab == 0
+                    ? (_libraryTitle ?? '轻音 MiniNCM')
+                    : switch (_tab) {
+                        1 => '推荐',
+                        2 => '我的',
+                        _ => '设置',
+                      }),
             maxLines: 1,
           ),
         ),
@@ -941,7 +1020,7 @@ class _HomePageState extends State<HomePage> {
                 tooltip: '收起歌词',
                 onPressed: _toggleLyrics,
               )
-            : (_libraryTitle != null
+            : (_tab == 0 && _libraryTitle != null
                 ? IconButton(
                     icon: const Icon(Icons.arrow_back),
                     tooltip: '返回搜索',
@@ -1036,17 +1115,9 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Column(
         children: [
-          if (!_showLyrics) _buildSearchBar(),
-          // 没输入内容时给搜索历史, 有输入时给输入联想(原版交互)
-          if (!_showLyrics &&
-              _searchFocus.hasFocus &&
-              _controller.text.trim().isEmpty)
-            SearchHistoryBar(
-              history: _searchHistory,
-              onSelected: _searchKeyword,
-              onClear: _clearSearchHistory,
-            ),
-          if (!_showLyrics && _suggestions.isNotEmpty)
+          if (!_showLyrics && _tab == 0) _buildSearchBar(),
+          // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
+          if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
               child: SingleChildScrollView(
@@ -1056,18 +1127,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
-          if (info != null && !_showLyrics)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'device=${info.deviceId.substring(0, 8)}  logged_in=${info.loggedIn}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ),
-            ),
-          if (_error != null)
+          if (!_showLyrics && _tab == 0 && _error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Row(
@@ -1090,14 +1150,109 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-          Expanded(child: _showLyrics ? _buildLyrics() : _buildList()),
+          Expanded(child: _showLyrics ? _buildLyrics() : _buildTabBody()),
         ],
       ),
-      // 没有曲目时不占位置(Media3 连接后拿到的是一份空状态)
-      bottomNavigationBar: (player == null || (player.trackId == null && current == null))
-          ? null
-          : _buildPlayerBar(context, player, current),
+      // 播放条 + 底部导航: 没有曲目时播放条不占位置(Media3 连接后拿到的是一份空状态)
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (player != null && (player.trackId != null || current != null))
+            _buildPlayerBar(context, player, current),
+          NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: _onTabSelected,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.search_outlined),
+                selectedIcon: Icon(Icons.search),
+                label: '搜索',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.explore_outlined),
+                selectedIcon: Icon(Icons.explore),
+                label: '推荐',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: '我的',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: '设置',
+              ),
+            ],
+          ),
+        ],
+      ),
     );
+  }
+
+  void _onTabSelected(int index) {
+    if (_tab == index) return;
+    setState(() {
+      _tab = index;
+      _searchFocus.unfocus();
+    });
+    if (index == 0) _loadSearchHistory();
+  }
+
+  Widget _buildTabBody() {
+    switch (_tab) {
+      case 1:
+        return RecommendView(
+          key: ValueKey('recommend-${_info?.loggedIn}-${_info?.vip}'),
+          loggedIn: _info?.loggedIn == true,
+          onPlaySongs: _playSongsList,
+          onOpenPlaylist: _openPlaylist,
+          onOpenPodcast: _openPodcastRadio,
+          onHeartMode: () => _heartMode(),
+          onOpenDaily: _openDiscover,
+          onOpenRecent: _openRecent,
+        );
+      case 2:
+        return MineView(
+          key: ValueKey('mine-${_info?.loggedIn}-${_info?.vip}'),
+          loggedIn: _info?.loggedIn == true,
+          onLogin: _login,
+          onOpenAccounts: _showAccountSheet,
+          onPlaySongs: _playSongsList,
+          onOpenPlaylist: _openPlaylist,
+          onOpenPodcast: _openPodcastRadio,
+        );
+      case 3:
+        return SettingsView(
+          info: _info,
+          isAndroid: _auth.isAndroid,
+          onLogin: _login,
+          onLogout: () => _logout(),
+          onShowAccounts: _showAccountSheet,
+          onClearSearchHistory: _clearSearchHistory,
+        );
+      default:
+        return _buildSearchTab();
+    }
+  }
+
+  Widget _buildSearchTab() {
+    final query = _controller.text.trim();
+    // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
+    if (query.isEmpty && _libraryTitle == null) {
+      return SearchLanding(
+        history: _searchHistory,
+        hot: _hotTerms,
+        recommended: _recommendedKeyword,
+        onSelected: _searchKeyword,
+        onClearHistory: _clearSearchHistory,
+        hotLoading: _hotLoading,
+        hotError: _hotError,
+        onRetryHot: _loadSearchLanding,
+      );
+    }
+    return _buildList();
   }
 
   Widget _buildSearchBar() {

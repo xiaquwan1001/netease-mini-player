@@ -25,6 +25,7 @@ String _fmtDuration(BigInt ms) {
 Future<void> showPodcastSheet(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlay,
+  rust.PodcastRadioDto? initialRadio,
   RadioLoader? loadRadios,
   ProgramLoader? loadPrograms,
 }) {
@@ -40,6 +41,7 @@ Future<void> showPodcastSheet(
         height: MediaQuery.of(sheetContext).size.height * 0.75,
         child: _PodcastBrowser(
           onPlay: onPlay,
+          initialRadio: initialRadio,
           loadRadios: radios,
           loadPrograms: programs,
         ),
@@ -53,18 +55,20 @@ class _PodcastBrowser extends StatefulWidget {
     required this.onPlay,
     required this.loadRadios,
     required this.loadPrograms,
+    this.initialRadio,
   });
 
   final void Function(List<rust.SongDto> songs, int index) onPlay;
   final RadioLoader loadRadios;
   final ProgramLoader loadPrograms;
+  final rust.PodcastRadioDto? initialRadio;
 
   @override
   State<_PodcastBrowser> createState() => _PodcastBrowserState();
 }
 
 class _PodcastBrowserState extends State<_PodcastBrowser> {
-  rust.PodcastRadioDto? _radio;
+  late rust.PodcastRadioDto? _radio = widget.initialRadio;
 
   @override
   Widget build(BuildContext context) {

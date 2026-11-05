@@ -6,8 +6,8 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Lyric, Playlist, PodcastProgram, PodcastRadio, Profile, SearchPage, Song,
-    StreamUrl, SuggestItem, TrackId,
+    AlbumDetail, Artist, FeedEvent, HotSearchTerm, Lyric, Playlist, PodcastProgram, PodcastRadio,
+    Profile, SearchPage, Song, StreamUrl, SuggestItem, TrackId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -32,6 +32,8 @@ pub enum Capability {
     Podcast,
     SearchSuggest,
     Recent,
+    SearchHot,
+    Feed,
 }
 
 impl Capability {
@@ -49,6 +51,8 @@ impl Capability {
             Capability::Podcast => "podcast",
             Capability::SearchSuggest => "searchSuggest",
             Capability::Recent => "recent",
+            Capability::SearchHot => "searchHot",
+            Capability::Feed => "feed",
         }
     }
 }
@@ -294,6 +298,43 @@ pub trait Provider: Send + Sync {
     /// 单个节目详情
     fn podcast_program(&self, _program_id: u64) -> BoxFuture<'_, ProviderResult<PodcastProgram>> {
         Box::pin(async { Err(ProviderError::unsupported("no podcast program")) })
+    }
+
+    /// 搜索热词榜(已按热度排序, rank 从 1 开始)
+    fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot search")) })
+    }
+
+    /// 默认/推荐搜索词("猜你想搜")
+    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no default search")) })
+    }
+
+    /// 私人 FM(需要登录)
+    fn personal_fm(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no personal fm")) })
+    }
+
+    /// 已订阅的播客/电台(需要登录)
+    fn subscribed_podcasts(
+        &self,
+        _limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed podcasts")) })
+    }
+
+    /// 关注的艺人(需要登录)
+    fn subscribed_artists(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed artists")) })
+    }
+
+    /// 关注动态(关注的人/艺人发布的内容, 需要登录)
+    fn feed_events(
+        &self,
+        _limit: u32,
+        _last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no feed")) })
     }
 }
 

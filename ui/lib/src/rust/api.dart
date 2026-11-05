@@ -170,6 +170,31 @@ Future<List<PodcastProgramDto>> podcastPrograms({
 Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
     RustLib.instance.api.crateApiPodcastProgram(programId: programId);
 
+/// 热门搜索榜(按热度排序)
+Future<List<HotSearchTermDto>> hotSearch() =>
+    RustLib.instance.api.crateApiHotSearch();
+
+/// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
+Future<String?> defaultSearch() => RustLib.instance.api.crateApiDefaultSearch();
+
+/// 私人 FM(需登录)
+Future<List<SongDto>> personalFm({required int limit}) =>
+    RustLib.instance.api.crateApiPersonalFm(limit: limit);
+
+/// 已收藏/订阅的播客(需登录)
+Future<List<PodcastRadioDto>> subscribedPodcasts({required int limit}) =>
+    RustLib.instance.api.crateApiSubscribedPodcasts(limit: limit);
+
+/// 关注的艺人(需登录)
+Future<List<ArtistDto>> subscribedArtists({required int limit}) =>
+    RustLib.instance.api.crateApiSubscribedArtists(limit: limit);
+
+/// 关注动态(需登录): 关注的人/艺人发布的单曲、歌单、专辑、节目或文字动态
+Future<List<FeedEventDto>> feedEvents({
+  required int limit,
+  required PlatformInt64 lastTime,
+}) => RustLib.instance.api.crateApiFeedEvents(limit: limit, lastTime: lastTime);
+
 class AccountDto {
   final BigInt userId;
   final String nickname;
@@ -242,6 +267,98 @@ class AlbumDetailDto {
           artist == other.artist &&
           description == other.description &&
           songs == other.songs;
+}
+
+class ArtistDto {
+  final BigInt id;
+  final String name;
+
+  const ArtistDto({required this.id, required this.name});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name;
+}
+
+class FeedEventDto {
+  final BigInt id;
+
+  /// song | playlist | album | program | text | other
+  final String kind;
+  final String userName;
+  final String? avatarUrl;
+  final String text;
+  final SongDto? song;
+  final String? coverUrl;
+  final List<String> images;
+
+  /// unix 毫秒
+  final BigInt timeMs;
+
+  const FeedEventDto({
+    required this.id,
+    required this.kind,
+    required this.userName,
+    this.avatarUrl,
+    required this.text,
+    this.song,
+    this.coverUrl,
+    required this.images,
+    required this.timeMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      kind.hashCode ^
+      userName.hashCode ^
+      avatarUrl.hashCode ^
+      text.hashCode ^
+      song.hashCode ^
+      coverUrl.hashCode ^
+      images.hashCode ^
+      timeMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FeedEventDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          kind == other.kind &&
+          userName == other.userName &&
+          avatarUrl == other.avatarUrl &&
+          text == other.text &&
+          song == other.song &&
+          coverUrl == other.coverUrl &&
+          images == other.images &&
+          timeMs == other.timeMs;
+}
+
+class HotSearchTermDto {
+  /// 1 开始的名次
+  final int rank;
+  final String keyword;
+
+  const HotSearchTermDto({required this.rank, required this.keyword});
+
+  @override
+  int get hashCode => rank.hashCode ^ keyword.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HotSearchTermDto &&
+          runtimeType == other.runtimeType &&
+          rank == other.rank &&
+          keyword == other.keyword;
 }
 
 class InitInfo {

@@ -225,6 +225,40 @@ pub struct SuggestItem {
     pub cover_url: Option<String>,
 }
 
+/// 搜索热词(rank 从 1 开始, 按接口返回顺序排列)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotSearchTerm {
+    pub rank: u32,
+    pub keyword: String,
+}
+
+/// 关注动态(艺人/好友发布的内容). kind 是网易云 eventType 的语义化标签:
+/// song / album / playlist / program / text / other
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeedEvent {
+    pub id: u64,
+    pub kind: String,
+    /// 发布者昵称(关注的艺人名就是这里)
+    pub user_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 动态正文/配文(可能为空)
+    #[serde(default)]
+    pub text: String,
+    /// 附带曲目(分享单曲时)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song: Option<Song>,
+    /// 封面(专辑/歌单/单曲封面或动态配图第一张)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// 配图(最多 3 张, 由 provider 截断)
+    #[serde(default)]
+    pub images: Vec<String>,
+    /// 发布时间(unix 毫秒)
+    #[serde(default)]
+    pub time_ms: u64,
+}
+
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Session {

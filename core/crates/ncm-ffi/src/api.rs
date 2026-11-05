@@ -739,3 +739,104 @@ pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, Strin
         .map_err(|e| e.to_string())?;
     Ok(program_dto(p))
 }
+
+// ---------------- 搜索页(热词/推荐词) ----------------
+
+pub struct HotSearchTermDto {
+    /// 1 开始的名次
+    pub rank: u32,
+    pub keyword: String,
+}
+
+/// 热门搜索榜(按热度排序)
+pub async fn hot_search() -> Result<Vec<HotSearchTermDto>, String> {
+    let provider = with_provider(Capability::SearchHot)?;
+    let list = provider.hot_search().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|t| HotSearchTermDto { rank: t.rank, keyword: t.keyword })
+        .collect())
+}
+
+/// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
+pub async fn default_search() -> Result<Option<String>, String> {
+    let provider = with_provider(Capability::SearchHot)?;
+    provider.default_search().await.map_err(|e| e.to_string())
+}
+
+// ---------------- 推荐页(私人 FM) / 我的(收藏播客/关注艺人/动态) ----------------
+
+/// 私人 FM(需登录)
+pub async fn personal_fm(limit: u32) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::PersonalFm)?;
+    let songs = provider
+        .personal_fm(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(songs.into_iter().map(song_dto).collect())
+}
+
+/// 已收藏/订阅的播客(需登录)
+pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
+    let provider = with_provider(Capability::Podcast)?;
+    let list = provider
+        .subscribed_podcasts(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(radio_dto).collect())
+}
+
+pub struct ArtistDto {
+    pub id: u64,
+    pub name: String,
+}
+
+/// 关注的艺人(需登录)
+pub async fn subscribed_artists(limit: u32) -> Result<Vec<ArtistDto>, String> {
+    let provider = with_provider(Capability::Feed)?;
+    let list = provider
+        .subscribed_artists(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| ArtistDto { id: a.id, name: a.name })
+        .collect())
+}
+
+pub struct FeedEventDto {
+    pub id: u64,
+    /// song | playlist | album | program | text | other
+    pub kind: String,
+    pub user_name: String,
+    pub avatar_url: Option<String>,
+    pub text: String,
+    pub song: Option<SongDto>,
+    pub cover_url: Option<String>,
+    pub images: Vec<String>,
+    /// unix 毫秒
+    pub time_ms: u64,
+}
+
+/// 关注动态(需登录): 关注的人/艺人发布的单曲、歌单、专辑、节目或文字动态
+pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>, String> {
+    let provider = with_provider(Capability::Feed)?;
+    let list = provider
+        .feed_events(limit, last_time)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|e| FeedEventDto {
+            id: e.id,
+            kind: e.kind,
+            user_name: e.user_name,
+            avatar_url: e.avatar_url,
+            text: e.text,
+            song: e.song.map(song_dto),
+            cover_url: e.cover_url,
+            images: e.images,
+            time_ms: e.time_ms,
+        })
+        .collect())
+}

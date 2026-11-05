@@ -443,7 +443,8 @@ async fn run() -> Result<(), BoxErr> {
             // 排障/建模用: 直接打任意 vendor 端点并打印原始 JSON.
             // 用法: ncm raw <method> [key=value ...]
             // methods: recommend_songs | recommend_resource | playmode | search_suggest |
-            //          recent | dj_detail | dj_program | dj_program_detail | album | fm
+            //          recent | dj_detail | dj_program | dj_program_detail | album | fm |
+            //          search_hot | search_default | dj_sublist | artist_sublist | event
             let method = args
                 .positional
                 .first()
@@ -477,6 +478,11 @@ async fn run() -> Result<(), BoxErr> {
                 "dj_program_detail" => client.dj_program_detail(&q).await?,
                 "album" => client.album(&q).await?,
                 "fm" => client.personal_fm(&q).await?,
+                "search_hot" => client.search_hot(&q).await?,
+                "search_default" => client.search_default(&q).await?,
+                "dj_sublist" => client.dj_sublist(&q).await?,
+                "artist_sublist" => client.artist_sublist(&q).await?,
+                "event" => client.event(&q).await?,
                 "dj_hot" => client.dj_hot(&q).await?,
                 "dj_rcmd" => client.personalized_djprogram(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),

@@ -1,0 +1,307 @@
+import 'package:flutter/material.dart';
+
+import 'app_settings.dart';
+import 'rust/api.dart' as rust;
+import 'song_tile.dart';
+
+/// 设置页: 账号凭据(登录/切换/退出/设备指纹) + 界面与播放偏好.
+class SettingsView extends StatelessWidget {
+  const SettingsView({
+    super.key,
+    required this.info,
+    required this.isAndroid,
+    required this.onLogin,
+    required this.onLogout,
+    required this.onShowAccounts,
+    required this.onClearSearchHistory,
+  });
+
+  final rust.InitInfo? info;
+  final bool isAndroid;
+  final VoidCallback onLogin;
+  final Future<void> Function() onLogout;
+  final VoidCallback onShowAccounts;
+  final VoidCallback onClearSearchHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettings.instance;
+    return AnimatedBuilder(
+      animation: settings,
+      builder: (context, _) => ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        children: [
+          _SectionTitle('账号'),
+          _AccountCard(
+            info: info,
+            isAndroid: isAndroid,
+            onLogin: onLogin,
+            onLogout: onLogout,
+            onShowAccounts: onShowAccounts,
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle('界面'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  title: const Text('主题模式'),
+                  subtitle: Text(_themeLabel(settings.themeMode)),
+                  trailing: SegmentedButton<ThemeMode>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto),
+                        label: Text('跟随'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode),
+                        label: Text('浅色'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode),
+                        label: Text('深色'),
+                      ),
+                    ],
+                    selected: {settings.themeMode},
+                    onSelectionChanged: (value) {
+                      settings.update(themeMode: value.first);
+                    },
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('界面字号'),
+                  subtitle: Text(_scaleLabel(settings.textScale)),
+                  trailing: DropdownButton<double>(
+                    value: settings.textScale,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final entry in AppSettings.textScales.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) settings.update(textScale: value);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle('播放'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              title: const Text('取链音质'),
+              subtitle: Text(
+                '${AppSettings.audioLevels[settings.audioLevel] ?? settings.audioLevel}'
+                ' · 需要会员的音质会自动回落到可用档位',
+              ),
+              trailing: DropdownButton<String>(
+                value: settings.audioLevel,
+                underline: const SizedBox.shrink(),
+                items: [
+                  for (final entry in AppSettings.audioLevels.entries)
+                    DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+                ],
+                onChanged: (value) {
+                  if (value != null) settings.update(audioLevel: value);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle('数据'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.search_off),
+                  title: const Text('清空搜索历史'),
+                  onTap: onClearSearchHistory,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.badge_outlined),
+                  title: const Text('设备 ID'),
+                  subtitle: SelectableText(
+                    info?.deviceId ?? '初始化中…',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.folder_outlined),
+                  title: const Text('数据目录'),
+                  subtitle: SelectableText(
+                    info?.dataDir ?? '-',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle('关于'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('轻音 MiniNCM'),
+              subtitle: const Text(
+                'Rust core + Flutter UI · 协议/加解密由 vendor 库负责\n'
+                '登录凭据与设备指纹只保存在本机数据目录',
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _themeLabel(ThemeMode mode) => switch (mode) {
+        ThemeMode.light => '浅色',
+        ThemeMode.dark => '深色',
+        ThemeMode.system => '跟随系统',
+      };
+
+  static String _scaleLabel(double scale) {
+    for (final entry in AppSettings.textScales.entries) {
+      if ((entry.key - scale).abs() < 0.01) return entry.value;
+    }
+    return scale.toStringAsFixed(2);
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        title,
+        style: Theme.of(context)
+            .textTheme
+            .titleSmall
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _AccountCard extends StatefulWidget {
+  const _AccountCard({
+    required this.info,
+    required this.isAndroid,
+    required this.onLogin,
+    required this.onLogout,
+    required this.onShowAccounts,
+  });
+
+  final rust.InitInfo? info;
+  final bool isAndroid;
+  final VoidCallback onLogin;
+  final Future<void> Function() onLogout;
+  final VoidCallback onShowAccounts;
+
+  @override
+  State<_AccountCard> createState() => _AccountCardState();
+}
+
+class _AccountCardState extends State<_AccountCard> {
+  late final Future<List<rust.AccountDto>> _accounts = rust.accounts();
+
+  @override
+  Widget build(BuildContext context) {
+    final info = widget.info;
+    final loggedIn = info?.loggedIn == true;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Column(
+        children: [
+          FutureBuilder<List<rust.AccountDto>>(
+            future: _accounts,
+            builder: (context, snap) {
+              final accounts = snap.data ?? const <rust.AccountDto>[];
+              final active = accounts.where((a) => a.active).firstOrNull;
+              final nickname = active?.nickname;
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Icon(loggedIn ? Icons.person : Icons.person_outline),
+                ),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        loggedIn
+                            ? (nickname == null || nickname.isEmpty
+                                ? '已登录'
+                                : nickname)
+                            : '未登录',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (active?.vip == true) const VipBadge(small: true),
+                  ],
+                ),
+                subtitle: Text(
+                  loggedIn
+                      ? '账号与登录凭据保存在本机, 可随时切换'
+                      : '登录后可同步收藏/歌单/推荐',
+                ),
+                trailing: loggedIn
+                    ? TextButton(
+                        onPressed: widget.onShowAccounts,
+                        child: const Text('账号管理'),
+                      )
+                    : (widget.isAndroid
+                        ? FilledButton(
+                            onPressed: widget.onLogin,
+                            child: const Text('登录'),
+                          )
+                        : null),
+              );
+            },
+          ),
+          if (loggedIn) ...[
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.switch_account),
+              title: const Text('切换 / 管理账号'),
+              subtitle: const Text('记住的账号可一键切换, 不需要重新扫码'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.onShowAccounts,
+            ),
+            ListTile(
+              leading: const Icon(Icons.logout),
+              title: const Text('退出登录'),
+              subtitle: const Text('账号仍留在账号簿, 下次可一键切回'),
+              onTap: () async {
+                await widget.onLogout();
+              },
+            ),
+          ],
+          if (!widget.isAndroid && !loggedIn)
+            const ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('桌面端暂不支持内嵌登录'),
+              subtitle: Text('可用 ncm login-cookie "MUSIC_U=..." 导入登录凭据'),
+            ),
+        ],
+      ),
+    );
+  }
+}

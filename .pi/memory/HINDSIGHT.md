@@ -310,3 +310,19 @@ API/protocol details and anti-bot technique live in the
   `ncm heart <songId> [--pid] [--count]` 直接验证心动模式。
 <!-- created=2026-11-04, last=2026-11-04 -->
 
+
+## 底部四栏与搜索/推荐/我的(2026-11-05)
+- UI 结构: `main.dart` 保留唯一 HomePage(播放器/队列/歌词/登录态), `_tab` 切四栏:
+  搜索(原搜索+落地页) / 推荐(`recommend_view.dart`) / 我的(`mine_view.dart`) / 设置(`settings_view.dart`)。
+  播放条与 `NavigationBar` 一起放在 `bottomNavigationBar: Column` 里, 播放器是全局状态, 不随 tab 重建。
+- 搜索落地页 `search_landing.dart`: 历史/猜你想搜/带名次热词, 与结果共用同一个 ListView。
+  **必须等 `rust.init()` 完成后再拉历史/热词**, 否则首帧会报 `core not initialized`(initState 里直接调是坑)。
+- 新增 provider 方法/能力: `hot_search/default_search`(SearchHot)、`personal_fm`(复用 PersonalFm)、
+  `subscribed_podcasts/dj_sublist`、`subscribed_artists/artist_sublist`、`feed_events/event`(Feed)。
+  解析器都在 `ncm-service/src/netease.rs`, 响应字段有字符串/对象两种形态(动态 json 可能是字符串),
+  已按多形态兜底并有单测。`ncm raw` 同步新增 search_hot/search_default/dj_sublist/artist_sublist/event。
+- 设置持久化不引第三方插件: `app_settings.dart` 直接写 `<dataDir>/settings.json`
+  (主题/字号/取链音质), 由 `AnimatedBuilder` 驱动 MaterialApp; 取链音质在 `_resolveAndPlay` 读取。
+- 账号卡片的 `FutureBuilder(rust.accounts())` 要缓存 future(改成 StatefulWidget), 否则播放轮询
+  每 500ms 重建会反复读账号簿。
+<!-- created=2026-11-05, last=2026-11-05 -->

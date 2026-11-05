@@ -31,6 +31,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AlbumDetailDto dco_decode_album_detail_dto(dynamic raw);
 
   @protected
+  ArtistDto dco_decode_artist_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -43,6 +46,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_32(dynamic raw);
 
   @protected
+  FeedEventDto dco_decode_feed_event_dto(dynamic raw);
+
+  @protected
+  HotSearchTermDto dco_decode_hot_search_term_dto(dynamic raw);
+
+  @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
@@ -53,6 +62,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AccountDto> dco_decode_list_account_dto(dynamic raw);
+
+  @protected
+  List<ArtistDto> dco_decode_list_artist_dto(dynamic raw);
+
+  @protected
+  List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
+
+  @protected
+  List<HotSearchTermDto> dco_decode_list_hot_search_term_dto(dynamic raw);
 
   @protected
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
@@ -142,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AlbumDetailDto sse_decode_album_detail_dto(SseDeserializer deserializer);
 
   @protected
+  ArtistDto sse_decode_artist_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -154,6 +175,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
+  FeedEventDto sse_decode_feed_event_dto(SseDeserializer deserializer);
+
+  @protected
+  HotSearchTermDto sse_decode_hot_search_term_dto(SseDeserializer deserializer);
+
+  @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
@@ -164,6 +191,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AccountDto> sse_decode_list_account_dto(SseDeserializer deserializer);
+
+  @protected
+  List<ArtistDto> sse_decode_list_artist_dto(SseDeserializer deserializer);
+
+  @protected
+  List<FeedEventDto> sse_decode_list_feed_event_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HotSearchTermDto> sse_decode_list_hot_search_term_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<LyricLineDto> sse_decode_list_lyric_line_dto(
@@ -271,6 +311,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_artist_dto(ArtistDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -281,6 +324,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_feed_event_dto(FeedEventDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_hot_search_term_dto(
+    HotSearchTermDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
@@ -294,6 +346,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_account_dto(
     List<AccountDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_artist_dto(
+    List<ArtistDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_feed_event_dto(
+    List<FeedEventDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_hot_search_term_dto(
+    List<HotSearchTermDto> self,
     SseSerializer serializer,
   );
 
