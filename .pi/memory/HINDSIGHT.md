@@ -340,3 +340,27 @@ API/protocol details and anti-bot technique live in the
   复制到 `/tmp/ncm-xxx/identity.json`,启动时 `NCM_DATA_DIR=/tmp/ncm-xxx`;不覆盖真实目录。
 - Xvfb 截图尺寸必须与 `Xvfb -screen` 一致;模拟器截图坐标按实际/显示比例换算(900x2000 → 1080x2400 ×1.2)。
 <!-- created=2026-11-05, last=2026-11-05 -->
+
+## UI 重构批次: 详情页 / 顶栏瘦身 / 最近听过搬家(2026-11-05 下午)
+
+- **歌单/播客详情页** `ui/lib/src/detail_page.dart`(新): 全屏路由, 头部(封面/创建者/曲目数/播放数/简介展开/tags)
+  + 本地搜歌 + `SliverFixedExtentList` 定高 56 行 + 评论区 + 收藏/分享。播客详情复用同文件。
+- **"定位正在播放"** 只在"当前队列来源 == 本歌单"时出现: 行高恒定 56, 滚动偏移 =
+  `RenderAbstractViewport.getOffsetToReveal` 现场量的列表起点 + index×56, clamp 到 maxScrollExtent。
+  **队列来源 id 由 main.dart 的 `_queuePlaylistId` 维护**: `_playSongsList(..., playlistId:)` 写入,
+  搜索/心动模式/推荐流置 null;"我喜欢的音乐"从"我的"页点播时 main 会懒解析 special 歌单 id 传进去。
+- **页内点播后立刻可定位**: detail_page 自己记 `_localTrackId`(点行后 setState), 不等父层回传状态。
+- **顶栏只留账号按钮**。收藏歌单/VIP 徽标/发现菜单都删了(被底部四栏取代);
+  `_vip` 字段因此成死字段一并删除。注意 `ui/test/*` 里 RecommendView 少了 onOpenRecent、
+  MineView 多了 onOpenOpenLiked/onOpenRecent/loadRecent, 改签名必须同步改 widget 测试否则 analyze 报 error。
+- 新增 Rust 能力(FFI 已 codegen): `playlist_detail`(PlaylistDetail)、`set_playlist_subscribed`、
+  `comments(kind: song|playlist|album|podcast)`(CommentPage)、`share_resource`、`podcast_radio`。
+  **评论接口返回 hotComments + comments 两段**, 解析时 hot 在前、按 commentId 去重, total 用顶层 total。
+- **GNOME 报模拟器"应用无响应"**: 不是模拟器坏, 是 mutter 的挂起检测——它用 `_NET_WM_PING` 探活
+  X11/XWayland 客户端, 门限 `org.gnome.mutter check-alive-timeout`(默认 5000ms)。
+  实测空载/连续滑动/resize 时 qemu 的 Qt 主线程 wchan 恒为 poll(事件循环在线), VM 更与本弹窗无关。
+  处置: `gsettings set org.gnome.mutter check-alive-timeout 0`(mutter 启动时读, 重新登录生效;
+  `gsettings reset` 恢复)。agent 日常用 `~/bin/avd headless a36` 根本不触发。
+- **测试假失败**: `cargo test` 里 vendor 的 8 个 integration 与 `flutter test` 的 `frb_smoke_test`
+  都是**真实联网**用例, 并发跑偶发风控失败(每次失败集合不同), 单跑能过; 断言失败前先单跑确认。
+<!-- created=2026-11-05, last=2026-11-05 -->

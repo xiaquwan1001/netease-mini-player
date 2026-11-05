@@ -151,6 +151,43 @@ Future<List<SongDto>> recentSongs({required int limit}) =>
 Future<AlbumDetailDto> albumDetail({required BigInt albumId}) =>
     RustLib.instance.api.crateApiAlbumDetail(albumId: albumId);
 
+/// 歌单详情(歌单页头部信息)
+Future<PlaylistDetailDto> playlistDetail({required BigInt playlistId}) =>
+    RustLib.instance.api.crateApiPlaylistDetail(playlistId: playlistId);
+
+/// 收藏/取消收藏歌单(需登录)
+Future<bool> setPlaylistSubscribed({
+  required BigInt playlistId,
+  required bool subscribed,
+}) => RustLib.instance.api.crateApiSetPlaylistSubscribed(
+  playlistId: playlistId,
+  subscribed: subscribed,
+);
+
+/// 评论列表: kind = song | playlist | album | podcast
+Future<CommentPageDto> comments({
+  required String kind,
+  required BigInt resourceId,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiComments(
+  kind: kind,
+  resourceId: resourceId,
+  limit: limit,
+  offset: offset,
+);
+
+/// 分享资源到动态(需登录). kind = song | playlist | album | podcast
+Future<bool> shareResource({
+  required String kind,
+  required BigInt resourceId,
+  required String msg,
+}) => RustLib.instance.api.crateApiShareResource(
+  kind: kind,
+  resourceId: resourceId,
+  msg: msg,
+);
+
 /// 热门播客/电台
 Future<List<PodcastRadioDto>> podcastHot({required int limit}) =>
     RustLib.instance.api.crateApiPodcastHot(limit: limit);
@@ -169,6 +206,10 @@ Future<List<PodcastProgramDto>> podcastPrograms({
 /// 单个节目详情
 Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
     RustLib.instance.api.crateApiPodcastProgram(programId: programId);
+
+/// 播客/电台详情
+Future<PodcastRadioDto> podcastRadio({required BigInt radioId}) =>
+    RustLib.instance.api.crateApiPodcastRadio(radioId: radioId);
 
 /// 热门搜索榜(按热度排序)
 Future<List<HotSearchTermDto>> hotSearch() =>
@@ -285,6 +326,78 @@ class ArtistDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name;
+}
+
+class CommentDto {
+  final BigInt id;
+  final String userName;
+  final String? avatarUrl;
+  final String content;
+
+  /// 发布时间(unix 毫秒)
+  final BigInt timeMs;
+  final BigInt likedCount;
+
+  /// 当前账号是否已赞
+  final bool liked;
+
+  const CommentDto({
+    required this.id,
+    required this.userName,
+    this.avatarUrl,
+    required this.content,
+    required this.timeMs,
+    required this.likedCount,
+    required this.liked,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      userName.hashCode ^
+      avatarUrl.hashCode ^
+      content.hashCode ^
+      timeMs.hashCode ^
+      likedCount.hashCode ^
+      liked.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommentDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          userName == other.userName &&
+          avatarUrl == other.avatarUrl &&
+          content == other.content &&
+          timeMs == other.timeMs &&
+          likedCount == other.likedCount &&
+          liked == other.liked;
+}
+
+class CommentPageDto {
+  /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
+  final List<CommentDto> comments;
+  final BigInt total;
+  final bool hasMore;
+
+  const CommentPageDto({
+    required this.comments,
+    required this.total,
+    required this.hasMore,
+  });
+
+  @override
+  int get hashCode => comments.hashCode ^ total.hashCode ^ hasMore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommentPageDto &&
+          runtimeType == other.runtimeType &&
+          comments == other.comments &&
+          total == other.total &&
+          hasMore == other.hasMore;
 }
 
 class FeedEventDto {
@@ -452,6 +565,73 @@ class PlayerStateDto {
           positionMs == other.positionMs &&
           durationMs == other.durationMs &&
           volume == other.volume;
+}
+
+class PlaylistDetailDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String description;
+
+  /// 创建者昵称
+  final String creatorName;
+  final BigInt trackCount;
+  final BigInt playCount;
+
+  /// 当前账号是否已收藏
+  final bool subscribed;
+  final BigInt subscribedCount;
+  final BigInt shareCount;
+  final BigInt commentCount;
+  final List<String> tags;
+
+  const PlaylistDetailDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.description,
+    required this.creatorName,
+    required this.trackCount,
+    required this.playCount,
+    required this.subscribed,
+    required this.subscribedCount,
+    required this.shareCount,
+    required this.commentCount,
+    required this.tags,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      description.hashCode ^
+      creatorName.hashCode ^
+      trackCount.hashCode ^
+      playCount.hashCode ^
+      subscribed.hashCode ^
+      subscribedCount.hashCode ^
+      shareCount.hashCode ^
+      commentCount.hashCode ^
+      tags.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlaylistDetailDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          description == other.description &&
+          creatorName == other.creatorName &&
+          trackCount == other.trackCount &&
+          playCount == other.playCount &&
+          subscribed == other.subscribed &&
+          subscribedCount == other.subscribedCount &&
+          shareCount == other.shareCount &&
+          commentCount == other.commentCount &&
+          tags == other.tags;
 }
 
 class PlaylistDto {

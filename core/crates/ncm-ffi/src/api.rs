@@ -658,6 +658,116 @@ pub async fn album_detail(album_id: u64) -> Result<AlbumDetailDto, String> {
     })
 }
 
+// ---------------- 歌单详情 / 评论 / 分享 ----------------
+
+pub struct PlaylistDetailDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub description: String,
+    /// 创建者昵称
+    pub creator_name: String,
+    pub track_count: u64,
+    pub play_count: u64,
+    /// 当前账号是否已收藏
+    pub subscribed: bool,
+    pub subscribed_count: u64,
+    pub share_count: u64,
+    pub comment_count: u64,
+    pub tags: Vec<String>,
+}
+
+/// 歌单详情(歌单页头部信息)
+pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetailDto, String> {
+    let provider = with_provider(Capability::PlaylistDetail)?;
+    let d = provider
+        .playlist_detail(playlist_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(PlaylistDetailDto {
+        id: d.id,
+        name: d.name,
+        cover_url: d.cover_url,
+        description: d.description,
+        creator_name: d.creator_name,
+        track_count: d.track_count,
+        play_count: d.play_count,
+        subscribed: d.subscribed,
+        subscribed_count: d.subscribed_count,
+        share_count: d.share_count,
+        comment_count: d.comment_count,
+        tags: d.tags,
+    })
+}
+
+/// 收藏/取消收藏歌单(需登录)
+pub async fn set_playlist_subscribed(playlist_id: u64, subscribed: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistDetail)?;
+    provider
+        .set_playlist_subscribed(playlist_id, subscribed)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub struct CommentDto {
+    pub id: u64,
+    pub user_name: String,
+    pub avatar_url: Option<String>,
+    pub content: String,
+    /// 发布时间(unix 毫秒)
+    pub time_ms: u64,
+    pub liked_count: u64,
+    /// 当前账号是否已赞
+    pub liked: bool,
+}
+
+pub struct CommentPageDto {
+    /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
+    pub comments: Vec<CommentDto>,
+    pub total: u64,
+    pub has_more: bool,
+}
+
+/// 评论列表: kind = song | playlist | album | podcast
+pub async fn comments(
+    kind: String,
+    resource_id: u64,
+    limit: u32,
+    offset: u32,
+) -> Result<CommentPageDto, String> {
+    let provider = with_provider(Capability::Comment)?;
+    let page = provider
+        .comments(&kind, resource_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(CommentPageDto {
+        comments: page
+            .comments
+            .into_iter()
+            .map(|c| CommentDto {
+                id: c.id,
+                user_name: c.user_name,
+                avatar_url: c.avatar_url,
+                content: c.content,
+                time_ms: c.time_ms,
+                liked_count: c.liked_count,
+                liked: c.liked,
+            })
+            .collect(),
+        total: page.total,
+        has_more: page.has_more,
+    })
+}
+
+/// 分享资源到动态(需登录). kind = song | playlist | album | podcast
+pub async fn share_resource(kind: String, resource_id: u64, msg: String) -> Result<bool, String> {
+    let provider = with_provider(Capability::Share)?;
+    provider
+        .share_resource(&kind, resource_id, &msg)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ---------------- 播客 ----------------
 
 pub struct PodcastRadioDto {
@@ -738,6 +848,16 @@ pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, Strin
         .await
         .map_err(|e| e.to_string())?;
     Ok(program_dto(p))
+}
+
+/// 播客/电台详情
+pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadioDto, String> {
+    let provider = with_provider(Capability::PodcastDetail)?;
+    let r = provider
+        .podcast_radio(radio_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(radio_dto(r))
 }
 
 // ---------------- 搜索页(热词/推荐词) ----------------

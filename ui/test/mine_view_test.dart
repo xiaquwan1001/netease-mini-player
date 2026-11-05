@@ -65,6 +65,9 @@ MineView buildMine({
       onPlaySongs: onPlay ?? (_, __) {},
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
+      onOpenLiked: () {},
+      onOpenRecent: () {},
+      loadRecent: () async => [song(7, '最近听的歌')],
     );
 
 void main() {

@@ -16,7 +16,6 @@ class RecommendView extends StatefulWidget {
     required this.onOpenPodcast,
     required this.onHeartMode,
     required this.onOpenDaily,
-    required this.onOpenRecent,
     this.loadDailySongs,
     this.loadDailyPlaylists,
     this.loadPodcasts,
@@ -29,7 +28,6 @@ class RecommendView extends StatefulWidget {
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
   final VoidCallback onHeartMode;
   final VoidCallback onOpenDaily;
-  final VoidCallback onOpenRecent;
 
   final Future<List<rust.SongDto>> Function()? loadDailySongs;
   final Future<List<rust.PlaylistDto>> Function()? loadDailyPlaylists;
@@ -50,8 +48,6 @@ class _RecommendViewState extends State<RecommendView> {
   Future<List<rust.SongDto>> Function() get _fm =>
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
 
-  int _fmLoading = 0;
-
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
@@ -61,7 +57,7 @@ class _RecommendViewState extends State<RecommendView> {
         children: [
           _QuickActions(
             onOpenDaily: widget.onOpenDaily,
-            onOpenRecent: widget.onOpenRecent,
+            onPlayFm: _playFm,
             onHeartMode: widget.onHeartMode,
           ),
           const SizedBox(height: 12),
@@ -78,17 +74,6 @@ class _RecommendViewState extends State<RecommendView> {
           ),
           const SizedBox(height: 16),
           _PodcastSection(load: _podcasts, loggedIn: widget.loggedIn, onOpen: widget.onOpenPodcast),
-          const SizedBox(height: 16),
-          _FmSection(
-            loggedIn: widget.loggedIn,
-            loading: _fmLoading > 0,
-            onPlay: _playFm,
-          ),
-          const SizedBox(height: 16),
-          _HeartModeCard(
-            loggedIn: widget.loggedIn,
-            onTap: widget.onHeartMode,
-          ),
         ],
       ),
     );
@@ -99,7 +84,6 @@ class _RecommendViewState extends State<RecommendView> {
       _snack('私人 FM 需要先登录');
       return;
     }
-    setState(() => _fmLoading += 1);
     try {
       final songs = await retryNetwork(_fm);
       final playable = [
@@ -113,8 +97,6 @@ class _RecommendViewState extends State<RecommendView> {
       widget.onPlaySongs(playable, 0);
     } catch (e) {
       _snack(friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _fmLoading -= 1);
     }
   }
 
@@ -256,12 +238,12 @@ class _InlineError extends StatelessWidget {
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
     required this.onOpenDaily,
-    required this.onOpenRecent,
+    required this.onPlayFm,
     required this.onHeartMode,
   });
 
   final VoidCallback onOpenDaily;
-  final VoidCallback onOpenRecent;
+  final VoidCallback onPlayFm;
   final VoidCallback onHeartMode;
 
   @override
@@ -286,9 +268,9 @@ class _QuickActions extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _ActionCard(
-            icon: Icons.history,
-            label: '最近听过',
-            onTap: onOpenRecent,
+            icon: Icons.radio,
+            label: '私人FM',
+            onTap: onPlayFm,
           ),
         ),
       ],
@@ -539,75 +521,6 @@ class _CoverCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ---------------- 私人 FM / 心动模式 ----------------
-
-class _FmSection extends StatelessWidget {
-  const _FmSection({
-    required this.loggedIn,
-    required this.loading,
-    required this.onPlay,
-  });
-
-  final bool loggedIn;
-  final bool loading;
-  final VoidCallback onPlay;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: scheme.primaryContainer,
-          child: Icon(Icons.radio, color: scheme.onPrimaryContainer),
-        ),
-        title: const Text('每日私人 FM'),
-        subtitle: Text(
-          loggedIn ? '按你的口味连续推荐, 从第一首开始播放' : '登录后可用',
-        ),
-        trailing: loading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : FilledButton.tonal(
-                onPressed: loggedIn ? onPlay : null,
-                child: const Text('播放'),
-              ),
-      ),
-    );
-  }
-}
-
-class _HeartModeCard extends StatelessWidget {
-  const _HeartModeCard({required this.loggedIn, required this.onTap});
-
-  final bool loggedIn;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: scheme.secondaryContainer,
-          child: Icon(Icons.auto_awesome, color: scheme.onSecondaryContainer),
-        ),
-        title: const Text('心动模式'),
-        subtitle: Text(
-          loggedIn ? '以当前播放的歌曲为种子, 连续推荐相似曲目' : '登录后推荐更准',
-        ),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
       ),
     );
   }

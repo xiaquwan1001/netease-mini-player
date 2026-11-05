@@ -45,6 +45,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  CommentDto dco_decode_comment_dto(dynamic raw);
+
+  @protected
+  CommentPageDto dco_decode_comment_page_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -67,6 +73,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArtistDto> dco_decode_list_artist_dto(dynamic raw);
+
+  @protected
+  List<CommentDto> dco_decode_list_comment_dto(dynamic raw);
 
   @protected
   List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
@@ -115,6 +124,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayerStateDto dco_decode_player_state_dto(dynamic raw);
+
+  @protected
+  PlaylistDetailDto dco_decode_playlist_detail_dto(dynamic raw);
 
   @protected
   PlaylistDto dco_decode_playlist_dto(dynamic raw);
@@ -174,6 +186,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  CommentDto sse_decode_comment_dto(SseDeserializer deserializer);
+
+  @protected
+  CommentPageDto sse_decode_comment_page_dto(SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -196,6 +214,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ArtistDto> sse_decode_list_artist_dto(SseDeserializer deserializer);
+
+  @protected
+  List<CommentDto> sse_decode_list_comment_dto(SseDeserializer deserializer);
 
   @protected
   List<FeedEventDto> sse_decode_list_feed_event_dto(
@@ -258,6 +279,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayerStateDto sse_decode_player_state_dto(SseDeserializer deserializer);
+
+  @protected
+  PlaylistDetailDto sse_decode_playlist_detail_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlaylistDto sse_decode_playlist_dto(SseDeserializer deserializer);
@@ -325,6 +351,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
+  void sse_encode_comment_dto(CommentDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_comment_page_dto(
+    CommentPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -354,6 +389,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_artist_dto(
     List<ArtistDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_comment_dto(
+    List<CommentDto> self,
     SseSerializer serializer,
   );
 
@@ -438,6 +479,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_player_state_dto(
     PlayerStateDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playlist_detail_dto(
+    PlaylistDetailDto self,
     SseSerializer serializer,
   );
 

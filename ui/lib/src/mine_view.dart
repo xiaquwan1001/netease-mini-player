@@ -4,7 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
-/// "我的": 我喜欢 / 收藏歌单 / 收藏播客 / 关注艺人 / 关注动态.
+/// "我的": 我喜欢 / 收藏歌单 / 收藏播客 / 关注艺人 / 关注动态 / 最近听过.
 /// 所有区块独立加载; 未登录时只显示登录引导.
 class MineView extends StatefulWidget {
   const MineView({
@@ -15,11 +15,15 @@ class MineView extends StatefulWidget {
     required this.onPlaySongs,
     required this.onOpenPlaylist,
     required this.onOpenPodcast,
+    required this.onOpenRecent,
+    required this.onOpenLiked,
+    this.onPlayLiked,
     this.loadLiked,
     this.loadPlaylists,
     this.loadPodcasts,
     this.loadArtists,
     this.loadFeed,
+    this.loadRecent,
   });
 
   final bool loggedIn;
@@ -28,12 +32,21 @@ class MineView extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
+  final VoidCallback onOpenRecent;
+
+  /// 打开"我喜欢的音乐"详情页
+  final VoidCallback onOpenLiked;
+
+  /// 点播"我喜欢的音乐"里的曲目(与 onPlaySongs 的区别: 队列来源可以标成
+  /// "我喜欢的音乐"这个歌单 id, 详情页的"定位正在播放"才有依据)。缺省回落 onPlaySongs。
+  final void Function(List<rust.SongDto> songs, int index)? onPlayLiked;
 
   final Future<List<rust.SongDto>> Function()? loadLiked;
   final Future<List<rust.PlaylistDto>> Function()? loadPlaylists;
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
   final Future<List<rust.ArtistDto>> Function()? loadArtists;
   final Future<List<rust.FeedEventDto>> Function()? loadFeed;
+  final Future<List<rust.SongDto>> Function()? loadRecent;
 
   @override
   State<MineView> createState() => _MineViewState();
@@ -51,6 +64,17 @@ class _MineViewState extends State<MineView> {
   Future<List<rust.FeedEventDto>> Function() get _feed =>
       widget.loadFeed ??
       (() => rust.feedEvents(limit: 20, lastTime: -1));
+
+  /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
+  Future<List<rust.SongDto>> _loadRecent() async {
+    try {
+      return await retryNetwork(
+        widget.loadRecent ?? (() => rust.recentSongs(limit: 20)),
+      );
+    } catch (_) {
+      return rust.localRecentSongs(limit: 20);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +104,11 @@ class _MineViewState extends State<MineView> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
-          _LikedSection(load: _liked, onPlay: widget.onPlaySongs),
+          _LikedSection(
+            load: _liked,
+            onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
+            onOpenAll: widget.onOpenLiked,
+          ),
           const SizedBox(height: 16),
           _PlaylistsSection(load: _playlists, onOpen: widget.onOpenPlaylist),
           const SizedBox(height: 16),
@@ -89,6 +117,12 @@ class _MineViewState extends State<MineView> {
           _ArtistsSection(load: _artists),
           const SizedBox(height: 16),
           _FeedSection(load: _feed, onPlay: widget.onPlaySongs),
+          const SizedBox(height: 16),
+          _RecentSection(
+            load: _loadRecent,
+            onOpenAll: widget.onOpenRecent,
+            onPlay: widget.onPlaySongs,
+          ),
         ],
       ),
     );
@@ -98,20 +132,29 @@ class _MineViewState extends State<MineView> {
 // ---------------- 区块骨架 ----------------
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.title, this.trailing});
 
   final String title;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.w600),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
       ),
     );
   }
@@ -207,17 +250,25 @@ class _InlineError extends StatelessWidget {
 // ---------------- 我喜欢 ----------------
 
 class _LikedSection extends StatelessWidget {
-  const _LikedSection({required this.load, required this.onPlay});
+  const _LikedSection({
+    required this.load,
+    required this.onPlay,
+    required this.onOpenAll,
+  });
 
   final Future<List<rust.SongDto>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final VoidCallback onOpenAll;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '我喜欢的音乐'),
+        _SectionHeader(
+          title: '我喜欢的音乐',
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+        ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
           emptyText: '还没有喜欢的歌曲',
@@ -624,4 +675,64 @@ String _relativeTime(BigInt timeMs) {
   if (diff.inHours < 24) return '${diff.inHours} 小时前';
   if (diff.inDays < 30) return '${diff.inDays} 天前';
   return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+}
+
+// ---------------- 最近听过 ----------------
+
+class _RecentSection extends StatelessWidget {
+  const _RecentSection({
+    required this.load,
+    required this.onOpenAll,
+    required this.onPlay,
+  });
+
+  final Future<List<rust.SongDto>> Function() load;
+  final VoidCallback onOpenAll;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: '最近听过',
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+        ),
+        _AsyncSection<List<rust.SongDto>>(
+          load: load,
+          emptyText: '还没有播放记录',
+          builder: (context, songs, reload) {
+            final preview = songs.take(5).toList();
+            return Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < preview.length; i++)
+                    ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: CoverArt(url: preview[i].coverUrl, size: 40, radius: 4),
+                      title: Text(
+                        preview[i].name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        preview[i].artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => onPlay(songs, i),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
 }

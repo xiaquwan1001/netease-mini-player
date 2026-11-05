@@ -6,13 +6,13 @@ import 'src/album_preview.dart';
 import 'src/app_settings.dart';
 import 'src/auth.dart';
 import 'src/cover_art.dart';
+import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/playback.dart';
-import 'src/podcast.dart';
 import 'src/queue.dart';
 import 'src/recommend_view.dart';
 import 'src/search_landing.dart';
@@ -125,9 +125,6 @@ class _HomePageState extends State<HomePage> {
   int _lyricIndex = -1;
   bool _showLyrics = false;
 
-  /// 当前账号是否会员(来自 /api/nuser/account/get 的 vipType)
-  bool _vip = false;
-
   /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
   Set<BigInt> _liked = <BigInt>{};
 
@@ -137,6 +134,13 @@ class _HomePageState extends State<HomePage> {
 
   /// 当前浏览的歌单 id(心动模式要用 playlistId; 搜索态为 null)
   BigInt? _libraryPlaylistId;
+
+  /// 当前播放队列的来源歌单 id(详情页"定位正在播放"用;
+  /// 搜索/心动模式/推荐流等非歌单队列为 null)
+  BigInt? _queuePlaylistId;
+
+  /// "我喜欢的音乐"这个歌单的 id(懒解析: 从"我的"页点播时要用它标记队列来源)
+  BigInt? _likedPlaylistId;
 
   /// 底部导航: 0 搜索 / 1 推荐 / 2 我的 / 3 设置
   int _tab = 0;
@@ -191,10 +195,7 @@ class _HomePageState extends State<HomePage> {
       final info = await rust.init(dataDir: dir);
       await AppSettings.instance.load(info.dataDir);
       if (!mounted) return;
-      setState(() {
-        _info = info;
-        _vip = info.vip;
-      });
+      setState(() => _info = info);
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
       unawaited(_loadSearchHistory());
       unawaited(_loadSearchLanding());
@@ -202,6 +203,7 @@ class _HomePageState extends State<HomePage> {
       if (info.loggedIn) {
         unawaited(_syncAccount());
         unawaited(_loadLiked());
+        unawaited(_resolveLikedPlaylistId());
       }
     } catch (e) {
       setState(() => _error = '$e');
@@ -363,8 +365,13 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {}
   }
 
-  /// 用一批曲目重置队列并从 index 开始播放(专辑/播客/每日推荐/最近听过共用)
-  Future<void> _playSongsList(List<rust.SongDto> songs, int index) async {
+  /// 用一批曲目重置队列并从 index 开始播放(专辑/播客/每日推荐/最近听过共用).
+  /// playlistId: 来源歌单(歌单详情页"定位正在播放"用), 不传即非歌单队列。
+  Future<void> _playSongsList(
+    List<rust.SongDto> songs,
+    int index, {
+    BigInt? playlistId,
+  }) async {
     if (songs.isEmpty) return;
     final start = index.clamp(0, songs.length - 1);
     _queue.setAll(songs, startAt: start);
@@ -373,6 +380,7 @@ class _HomePageState extends State<HomePage> {
       _library = songs;
       _libraryTitle = '正在播放';
       _libraryPlaylistId = null;
+      _queuePlaylistId = playlistId;
     });
     await _playSong(songs[start]);
   }
@@ -412,6 +420,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _library = list;
         _libraryTitle = '心动模式';
+        _queuePlaylistId = null;
       });
       final next = _queue.next();
       if (next != null) await _playSong(next);
@@ -438,19 +447,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _openPodcast() {
-    showPodcastSheet(
-      context,
-      onPlay: (songs, index) => _playSongsList(songs, index),
-    );
-  }
-
-  /// 直接打开某个播客的节目列表(推荐/我的页面的卡片点进来)
+  /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
   void _openPodcastRadio(rust.PodcastRadioDto radio) {
-    showPodcastSheet(
+    showPodcastDetail(
       context,
-      initialRadio: radio,
-      onPlay: (songs, index) => _playSongsList(songs, index),
+      radio: radio,
+      onPlaySongs: (songs, index) => _playSongsList(songs, index),
     );
   }
 
@@ -478,6 +480,7 @@ class _HomePageState extends State<HomePage> {
     final start = songs.indexWhere((s) => s.id == song.id);
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
     _userStopped = false;
+    _queuePlaylistId = null; // 搜索列表点播不算歌单队列
     await _playSong(song);
   }
 
@@ -726,12 +729,7 @@ class _HomePageState extends State<HomePage> {
     try {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
-      if (mounted) {
-        setState(() {
-          _info = info;
-          _vip = info.vip;
-        });
-      }
+      if (mounted) setState(() => _info = info);
       if (info.loggedIn) {
         await _loadLiked();
       } else {
@@ -745,9 +743,7 @@ class _HomePageState extends State<HomePage> {
   /// 记账号资料(昵称/uid/会员)进账号簿; 离线拉不到只是没名字, 不影响登录态
   Future<void> _syncAccount() async {
     try {
-      final account = await rust.accountSyncActive();
-      if (!mounted) return;
-      setState(() => _vip = account.vip);
+      await rust.accountSyncActive();
     } catch (_) {}
   }
 
@@ -828,85 +824,91 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 收藏/歌单面板: 我喜欢的音乐 + 我的歌单
-  Future<void> _showPlaylists() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.6,
-          child: FutureBuilder<List<rust.PlaylistDto>>(
-            future: retryNetwork(rust.myPlaylists),
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError) {
-                return Center(child: Text('歌单获取失败: ${snap.error}'));
-              }
-              final lists = snap.data ?? const <rust.PlaylistDto>[];
-              // "我喜欢的音乐"固定排最前(一次扫描就把 special 挑出来, 不依赖后端顺序)
-              final special = lists.where((p) => p.special).toList();
-              final others = lists.where((p) => !p.special).toList();
-              final ordered = [...special, ...others];
-              return ListView(
-                children: [
-                  ListTile(
-                    dense: true,
-                    title: const Text('我的收藏'),
-                    subtitle: Text('${ordered.length} 个歌单'),
-                  ),
-                  const Divider(height: 1),
-                  for (final pl in ordered)
-                    ListTile(
-                      leading: Icon(
-                        pl.special ? Icons.favorite : Icons.queue_music,
-                        color: pl.special
-                            ? Theme.of(context).colorScheme.primary
-                            : null,
-                      ),
-                      title: Text(pl.name),
-                      subtitle: Text('${pl.trackCount} 首'),
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        _openPlaylist(pl);
-                      },
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
+  /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
+  /// 不再把曲目塞进搜索页列表。
+  Future<void> _openPlaylist(rust.PlaylistDto pl) async {
+    await showPlaylistDetail(
+      context,
+      playlistId: pl.id,
+      name: pl.name,
+      coverUrl: pl.coverUrl,
+      special: pl.special,
+      loggedIn: _info?.loggedIn == true,
+      likedIds: _liked,
+      currentTrackId: _current?.id,
+      currentPlaylistId: _queuePlaylistId,
+      onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: pl.id),
+      onLikeChanged: (id, liked) => setState(() {
+        if (liked) {
+          _liked.add(id);
+        } else {
+          _liked.remove(id);
+        }
+      }),
     );
   }
 
-  /// 打开歌单: 曲目进列表(和搜索结果同一个列表, 点哪首播哪首, 队列就是整个歌单)
-  Future<void> _openPlaylist(rust.PlaylistDto pl) async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
+  /// 从"我的"页打开"我喜欢的音乐"详情(要用 myPlaylists 找到这个歌单的 id)
+  /// 解析"我喜欢的音乐"歌单 id(缓存). 失败静默: 只是"定位正在播放"少一个依据.
+  Future<void> _resolveLikedPlaylistId() async {
+    if (_likedPlaylistId != null) return;
     try {
-      final songs = await retryNetwork(
-        () => pl.special
-            ? rust.likedSongs()
-            : rust.playlistSongs(playlistId: pl.id),
-      );
+      final pls = await rust.myPlaylists();
+      for (final p in pls) {
+        if (p.special) {
+          if (mounted) setState(() => _likedPlaylistId = p.id);
+          return;
+        }
+      }
+    } catch (_) {
+      // 未登录/网络异常: 下次进"我喜欢的音乐"详情时再试
+    }
+  }
+
+  Future<void> _openLikedDetail() async {
+    if (_info?.loggedIn != true) {
+      _toast('登录后才能查看我喜欢的音乐');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      final pls = await retryNetwork(rust.myPlaylists);
       if (!mounted) return;
-      setState(() {
-        _library = songs;
-        _libraryTitle = pl.special ? '我喜欢的音乐' : pl.name;
-        _libraryPlaylistId = pl.id;
-        if (pl.special) _liked = songs.map((s) => s.id).toSet();
-      });
+      rust.PlaylistDto? found;
+      for (final p in pls) {
+        if (p.special) {
+          found = p;
+          break;
+        }
+      }
+      final sp = found;
+      if (sp == null) {
+        _toast('没有找到"我喜欢的音乐"歌单');
+        return;
+      }
+      _likedPlaylistId = sp.id;
+      await showPlaylistDetail(
+        context,
+        playlistId: sp.id,
+        name: '我喜欢的音乐',
+        coverUrl: sp.coverUrl,
+        special: true,
+        loggedIn: _info?.loggedIn == true,
+        likedIds: _liked,
+        currentTrackId: _current?.id,
+        currentPlaylistId: _queuePlaylistId,
+        onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: sp.id),
+        onLikeChanged: (id, liked) => setState(() {
+          if (liked) {
+            _liked.add(id);
+          } else {
+            _liked.remove(id);
+          }
+        }),
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _retryLast = () => _openPlaylist(pl);
-      });
+      _toast(friendlyError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1028,72 +1030,6 @@ class _HomePageState extends State<HomePage> {
                   )
                 : null),
         actions: [
-          // 收藏/歌单/会员状态都走 Rust 侧, 各端都能用(桌面版同样需要这些入口)
-          if (_info?.loggedIn == true) ...[
-            IconButton(
-              tooltip: '我喜欢的音乐 / 我的歌单',
-              icon: const Icon(Icons.library_music),
-              onPressed: _showPlaylists,
-            ),
-            // 会员标识: 一眼看出当前账号是不是黑胶(曲库可用范围/音质跟它相关)
-            if (_vip) const VipBadge(small: true),
-          ],
-          PopupMenuButton<String>(
-            tooltip: '发现',
-            icon: const Icon(Icons.explore_outlined),
-            onSelected: (value) {
-              // 弹出菜单的路由还在退场; 立刻 push 会让新路由的入场动画卡在 0
-              // (Linux/Impeller 实测: barrier 出来了, sheet 永远停在屏幕外).
-              // 等这一帧结束再打开, 让 Navigator 先把菜单路由清理干净.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                switch (value) {
-                  case 'daily':
-                    _openDiscover();
-                  case 'heart':
-                    _heartMode();
-                  case 'podcast':
-                    _openPodcast();
-                  case 'recent':
-                    _openRecent();
-                }
-              });
-            },
-            itemBuilder: (_) => const [
-              PopupMenuItem(
-                value: 'daily',
-                child: Row(children: [
-                  Icon(Icons.auto_awesome),
-                  SizedBox(width: 10),
-                  Text('每日推荐'),
-                ]),
-              ),
-              PopupMenuItem(
-                value: 'heart',
-                child: Row(children: [
-                  Icon(Icons.auto_awesome),
-                  SizedBox(width: 10),
-                  Text('心动模式'),
-                ]),
-              ),
-              PopupMenuItem(
-                value: 'podcast',
-                child: Row(children: [
-                  Icon(Icons.podcasts),
-                  SizedBox(width: 10),
-                  Text('播客'),
-                ]),
-              ),
-              PopupMenuItem(
-                value: 'recent',
-                child: Row(children: [
-                  Icon(Icons.history),
-                  SizedBox(width: 10),
-                  Text('最近听过'),
-                ]),
-              ),
-            ],
-          ),
           // 登录(WebView)/账号簿/退出登录只在安卓端(桌面版还没有网页登录宿主)
           if (_auth.isAndroid) ...[
             if (_info?.loggedIn == true)
@@ -1211,7 +1147,6 @@ class _HomePageState extends State<HomePage> {
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
-          onOpenRecent: _openRecent,
         );
       case 2:
         return MineView(
@@ -1222,6 +1157,10 @@ class _HomePageState extends State<HomePage> {
           onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
+          onOpenRecent: _openRecent,
+          onOpenLiked: _openLikedDetail,
+          onPlayLiked: (songs, i) =>
+              _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );
       case 3:
         return SettingsView(

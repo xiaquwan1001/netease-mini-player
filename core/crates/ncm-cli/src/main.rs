@@ -6,6 +6,9 @@
 //!   ncm url <id> [--level exhigh] [--download out.flac] [--json]
 //!   ncm lyric <id> [--json]
 //!   ncm detail <id[,id...]>        打印曲目详情 + privilege(版权/可播性), 排障用
+//!   ncm playlist-detail <id>       歌单详情(标题/创建者/曲目数/评论数)
+//!   ncm comments <song|playlist|album|podcast> <id> [limit]   评论列表(展示前 3 条)
+//!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
@@ -209,6 +212,94 @@ async fn run() -> Result<(), BoxErr> {
                     s.fee,
                     s.is_vip()
                 );
+            }
+            Ok(())
+        }
+        "playlist-detail" => {
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm playlist-detail <id>")?
+                .parse()?;
+            let p = provider(&core, Capability::PlaylistDetail)?;
+            announce(&core);
+            let d = p.playlist_detail(id).await?;
+            println!("[{}] {}", d.id, d.name);
+            println!("creator     = {}", d.creator_name);
+            println!("tracks      = {}  plays = {}", d.track_count, d.play_count);
+            println!(
+                "subscribed  = {} ({} 人收藏, {} 分享, {} 评论)",
+                d.subscribed, d.subscribed_count, d.share_count, d.comment_count
+            );
+            if !d.tags.is_empty() {
+                println!("tags        = {}", d.tags.join(", "));
+            }
+            if !d.description.is_empty() {
+                println!("desc        = {}", d.description.lines().next().unwrap_or(""));
+            }
+            Ok(())
+        }
+        "comments" => {
+            let kind = args
+                .positional
+                .first()
+                .ok_or("usage: ncm comments <song|playlist|album|podcast> <id> [limit]")?
+                .clone();
+            let id: u64 = args
+                .positional
+                .get(1)
+                .ok_or("usage: ncm comments <song|playlist|album|podcast> <id> [limit]")?
+                .parse()?;
+            let limit: u32 = args
+                .positional
+                .get(2)
+                .map(|s| s.parse())
+                .transpose()?
+                .unwrap_or(20);
+            let p = provider(&core, Capability::Comment)?;
+            announce(&core);
+            let page = p.comments(&kind, id, limit, 0).await?;
+            println!(
+                "total = {} has_more = {} shown = {}",
+                page.total,
+                page.has_more,
+                page.comments.len()
+            );
+            for (i, c) in page.comments.iter().take(3).enumerate() {
+                let first_line = c.content.lines().next().unwrap_or("");
+                let short: String = if first_line.chars().count() > 40 {
+                    let mut s: String = first_line.chars().take(40).collect();
+                    s.push('…');
+                    s
+                } else {
+                    first_line.to_string()
+                };
+                println!(
+                    "{:>2}. {}({}): {} [赞 {}{}]",
+                    i + 1,
+                    c.user_name,
+                    c.id,
+                    short,
+                    c.liked_count,
+                    if c.liked { ", 已赞" } else { "" }
+                );
+            }
+            Ok(())
+        }
+        "podcast-radio" => {
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm podcast-radio <id>")?
+                .parse()?;
+            let p = provider(&core, Capability::PodcastDetail)?;
+            announce(&core);
+            let r = p.podcast_radio(id).await?;
+            println!("[{}] {}", r.id, r.name);
+            println!("dj          = {}", r.dj_name);
+            println!("programs    = {}  plays = {}", r.program_count, r.play_count);
+            if !r.description.is_empty() {
+                println!("desc        = {}", r.description.lines().next().unwrap_or(""));
             }
             Ok(())
         }
@@ -491,7 +582,7 @@ async fn run() -> Result<(), BoxErr> {
             Ok(())
         }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | detail | raw"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | raw"
         )
         .into()),
     }

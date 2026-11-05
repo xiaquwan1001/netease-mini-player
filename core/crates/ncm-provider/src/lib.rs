@@ -6,8 +6,8 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Artist, FeedEvent, HotSearchTerm, Lyric, Playlist, PodcastProgram, PodcastRadio,
-    Profile, SearchPage, Song, StreamUrl, SuggestItem, TrackId,
+    AlbumDetail, Artist, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist, PlaylistDetail,
+    PodcastProgram, PodcastRadio, Profile, SearchPage, Song, StreamUrl, SuggestItem, TrackId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -34,6 +34,10 @@ pub enum Capability {
     Recent,
     SearchHot,
     Feed,
+    PlaylistDetail,
+    Comment,
+    Share,
+    PodcastDetail,
 }
 
 impl Capability {
@@ -53,6 +57,10 @@ impl Capability {
             Capability::Recent => "recent",
             Capability::SearchHot => "searchHot",
             Capability::Feed => "feed",
+            Capability::PlaylistDetail => "playlistDetail",
+            Capability::Comment => "comment",
+            Capability::Share => "share",
+            Capability::PodcastDetail => "podcastDetail",
         }
     }
 }
@@ -335,6 +343,46 @@ pub trait Provider: Send + Sync {
         _last_time: i64,
     ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
         Box::pin(async { Err(ProviderError::unsupported("no feed")) })
+    }
+
+    /// 歌单详情(歌单页头部信息)
+    fn playlist_detail(&self, _playlist_id: u64) -> BoxFuture<'_, ProviderResult<PlaylistDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist detail")) })
+    }
+
+    /// 收藏/取消收藏歌单(需要登录). 返回 true 表示操作被接受.
+    fn set_playlist_subscribed(
+        &self,
+        _playlist_id: u64,
+        _subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist subscribe")) })
+    }
+
+    /// 评论列表. kind = song | playlist | album | podcast
+    fn comments<'a>(
+        &'a self,
+        _kind: &'a str,
+        _id: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comments")) })
+    }
+
+    /// 分享资源到动态(需要登录). 返回 true 表示操作被接受.
+    fn share_resource<'a>(
+        &'a self,
+        _kind: &'a str,
+        _id: u64,
+        _msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no share")) })
+    }
+
+    /// 播客/电台详情
+    fn podcast_radio(&self, _radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast radio")) })
     }
 }
 

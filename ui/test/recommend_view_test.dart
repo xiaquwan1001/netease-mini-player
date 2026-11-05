@@ -59,7 +59,6 @@ void main() {
       onOpenPodcast: (r) => openedRadio = r,
       onHeartMode: () => heart++,
       onOpenDaily: () {},
-      onOpenRecent: () {},
     )));
     await tester.pumpAndSettle();
 
@@ -82,7 +81,9 @@ void main() {
     await tester.tap(find.text('推荐播客A'));
     expect(openedRadio?.id, BigInt.from(20));
 
-    await tester.ensureVisible(find.text('心动模式'));
+    // 「心动模式」快捷卡片在列表顶部, 前面的 ensureVisible 已经把列表滚下去了,
+    // 顶部卡片被回收, 要先滚回顶部再点。
+    await tester.drag(find.byType(ListView).first, const Offset(0, 1500));
     await tester.pumpAndSettle();
     await tester.tap(find.text('心动模式'));
     expect(heart, 1);
@@ -101,10 +102,9 @@ void main() {
       onOpenPodcast: (_) {},
       onHeartMode: () {},
       onOpenDaily: () {},
-      onOpenRecent: () {},
     )));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('播放'));
+    await tester.tap(find.text('私人FM'));
     await tester.pumpAndSettle();
     expect(played?.single.name, 'FM 曲');
   });

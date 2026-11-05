@@ -2,8 +2,9 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumDetail, Artist, FeedEvent, HotSearchTerm, Lyric, Playlist, PodcastProgram,
-    PodcastRadio, SearchPage, Session, Song, StreamUrl, SuggestItem, TrackId,
+    Album, AlbumDetail, Artist, Comment, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist,
+    PlaylistDetail, PodcastProgram, PodcastRadio, SearchPage, Session, Song, StreamUrl,
+    SuggestItem, TrackId,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
@@ -25,6 +26,10 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Recent,
     Capability::SearchHot,
     Capability::Feed,
+    Capability::PlaylistDetail,
+    Capability::Comment,
+    Capability::Share,
+    Capability::PodcastDetail,
 ];
 
 /// 内置网易云直连 provider.
@@ -674,6 +679,107 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 歌单详情(歌单页头部信息)
+    fn playlist_detail(&self, playlist_id: u64) -> BoxFuture<'_, ProviderResult<PlaylistDetail>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if playlist_id == 0 {
+                return Err(ProviderError::not_found("playlist id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
+            let resp = client.playlist_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_playlist_detail(&resp.body)
+        })
+    }
+
+    /// 收藏/取消收藏歌单(需登录; t=1 收藏, t=2 取消)
+    fn set_playlist_subscribed(
+        &self,
+        playlist_id: u64,
+        subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("收藏歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &playlist_id.to_string())
+                .param("t", if subscribed { "1" } else { "2" });
+            let resp = client.playlist_subscribe(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 评论列表: vendor 按 kind 分派到不同资源端点(song/playlist/album/podcast)
+    fn comments<'a>(
+        &'a self,
+        kind: &'a str,
+        id: u64,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &id.to_string())
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = match kind {
+                "song" => client.comment_music(&q).await,
+                "playlist" => client.comment_playlist(&q).await,
+                "album" => client.comment_album(&q).await,
+                "podcast" => client.comment_dj(&q).await,
+                other => {
+                    return Err(ProviderError::unsupported(format!(
+                        "comments: 未知资源类型 {other} (应为 song|playlist|album|podcast)"
+                    )));
+                }
+            };
+            let resp = resp.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_comments(&resp.body)
+        })
+    }
+
+    /// 分享资源到动态(需登录). kind 直接透传接口 type(song/playlist/album/podcast)
+    fn share_resource<'a>(
+        &'a self,
+        kind: &'a str,
+        id: u64,
+        msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("分享到动态需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", kind)
+                .param("id", &id.to_string())
+                .param("msg", msg);
+            let resp = client.share_resource(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 播客/电台详情
+    fn podcast_radio(&self, radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if radio_id == 0 {
+                return Err(ProviderError::not_found("radio id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("rid", &radio_id.to_string());
+            let resp = client.dj_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_podcast_radio_detail(&resp.body)
+        })
+    }
+
     /// 搜索热词榜. type=1111 返回 result.hots(按热度排序), 没有特权/登录要求.
     fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
         Box::pin(async move {
@@ -1065,6 +1171,80 @@ pub fn parse_podcast_program(body: &Value) -> ProviderResult<PodcastProgram> {
     body.get("program")
         .and_then(parse_program)
         .ok_or_else(|| ProviderError::not_found("program: missing program"))
+}
+
+/// 歌单详情的响应形如 {code:200, playlist:{id,name,coverImgUrl,description,creator:{nickname},
+/// trackCount,playCount,subscribed,subscribedCount,shareCount,commentCount,tags:[]}}
+pub fn parse_playlist_detail(body: &Value) -> ProviderResult<PlaylistDetail> {
+    let pl = body
+        .get("playlist")
+        .ok_or_else(|| ProviderError::not_found("playlist_detail: missing playlist"))?;
+    Ok(PlaylistDetail {
+        id: u64_of(pl, "id").unwrap_or(0),
+        name: str_of(pl, "name").unwrap_or_default(),
+        cover_url: str_of(pl, "coverImgUrl").or_else(|| str_of(pl, "picUrl")),
+        description: str_of(pl, "description").unwrap_or_default(),
+        creator_name: pl
+            .get("creator")
+            .and_then(|c| str_of(c, "nickname"))
+            .unwrap_or_default(),
+        track_count: u64_of(pl, "trackCount").unwrap_or(0),
+        play_count: u64_of(pl, "playCount").unwrap_or(0),
+        subscribed: pl.get("subscribed").and_then(Value::as_bool).unwrap_or(false),
+        subscribed_count: u64_of(pl, "subscribedCount").unwrap_or(0),
+        share_count: u64_of(pl, "shareCount").unwrap_or(0),
+        comment_count: u64_of(pl, "commentCount").unwrap_or(0),
+        tags: pl
+            .get("tags")
+            .and_then(Value::as_array)
+            .map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .unwrap_or_default(),
+    })
+}
+
+/// 评论条目形如 {commentId, user:{nickname,avatarUrl}, content, time, likedCount, liked}
+fn parse_comment(v: &Value) -> Option<Comment> {
+    let id = u64_of(v, "commentId")?;
+    let user = v.get("user");
+    Some(Comment {
+        id,
+        user_name: user.and_then(|u| str_of(u, "nickname")).unwrap_or_default(),
+        avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
+        content: str_of(v, "content").unwrap_or_default(),
+        time_ms: u64_of(v, "time").unwrap_or(0),
+        liked_count: u64_of(v, "likedCount").unwrap_or(0),
+        liked: v.get("liked").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+/// 评论列表的响应形如 {code:200, total, more, hotComments:[...], comments:[...]}
+/// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.
+pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
+    let mut seen = std::collections::HashSet::new();
+    let mut comments = Vec::new();
+    for key in ["hotComments", "comments"] {
+        let Some(arr) = body.get(key).and_then(Value::as_array) else {
+            continue;
+        };
+        for v in arr {
+            let Some(c) = parse_comment(v) else { continue };
+            if seen.insert(c.id) {
+                comments.push(c);
+            }
+        }
+    }
+    Ok(CommentPage {
+        comments,
+        total: u64_of(body, "total").unwrap_or(0),
+        has_more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+/// 电台详情(dj_detail)的响应形如 {code:200, data:{id,name,picUrl,desc,dj:{nickname},programCount,playCount}}
+pub fn parse_podcast_radio_detail(body: &Value) -> ProviderResult<PodcastRadio> {
+    body.get("data")
+        .and_then(parse_radio)
+        .ok_or_else(|| ProviderError::not_found("podcast_radio: missing data"))
 }
 
 /// 搜索热词榜的响应形如
@@ -1510,6 +1690,90 @@ mod tests {
         assert!(CAPABILITIES.contains(&Capability::PersonalFm));
         assert!(CAPABILITIES.contains(&Capability::SearchHot));
         assert!(CAPABILITIES.contains(&Capability::Feed));
+    }
+
+    #[test]
+    fn playlist_detail_mapping() {
+        let body = json!({
+            "code": 200,
+            "playlist": {
+                "id": 9, "name": "歌单", "coverImgUrl": "http://p/pl.jpg",
+                "description": "desc", "creator": {"nickname": "作者"},
+                "trackCount": 30, "playCount": 999, "subscribed": true,
+                "subscribedCount": 12, "shareCount": 3, "commentCount": 45,
+                "tags": ["流行", "华语"]
+            }
+        });
+        let d = parse_playlist_detail(&body).unwrap();
+        assert_eq!(d.id, 9);
+        assert_eq!(d.name, "歌单");
+        assert_eq!(d.cover_url.as_deref(), Some("http://p/pl.jpg"));
+        assert_eq!(d.creator_name, "作者");
+        assert_eq!(d.track_count, 30);
+        assert_eq!(d.play_count, 999);
+        assert!(d.subscribed);
+        assert_eq!(d.subscribed_count, 12);
+        assert_eq!(d.comment_count, 45);
+        assert_eq!(d.tags, vec!["流行".to_string(), "华语".to_string()]);
+        // 缺 playlist 字段要报 NotFound 而不是 panic
+        let err = parse_playlist_detail(&json!({"code": 200})).unwrap_err();
+        assert_eq!(err.kind, ProviderErrorKind::NotFound);
+    }
+
+    #[test]
+    fn comments_mapping_hot_first_and_dedup() {
+        let body = json!({
+            "code": 200,
+            "total": 123,
+            "more": true,
+            "hotComments": [
+                {"commentId": 1, "user": {"nickname": "A", "avatarUrl": "http://p/a.jpg"},
+                 "content": "好", "time": 1700000000000u64, "likedCount": 10, "liked": true},
+                {"commentId": 2, "user": {"nickname": "B"}, "content": "赞"}
+            ],
+            "comments": [
+                {"commentId": 2, "user": {"nickname": "B"}, "content": "赞"},
+                {"commentId": 3, "user": {"nickname": "C"}, "content": "三"}
+            ]
+        });
+        let page = parse_comments(&body).unwrap();
+        assert_eq!(page.total, 123);
+        assert!(page.has_more);
+        // 精彩评论在前, 跨列表按 commentId 去重
+        let ids: Vec<u64> = page.comments.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![1, 2, 3]);
+        assert_eq!(page.comments[0].user_name, "A");
+        assert_eq!(page.comments[0].avatar_url.as_deref(), Some("http://p/a.jpg"));
+        assert_eq!(page.comments[0].time_ms, 1700000000000);
+        assert_eq!(page.comments[0].liked_count, 10);
+        assert!(page.comments[0].liked);
+        assert!(!page.comments[2].liked);
+    }
+
+    #[test]
+    fn podcast_radio_detail_mapping() {
+        let body = json!({
+            "code": 200,
+            "data": {"id": 5, "name": "电台", "picUrl": "http://p/r.jpg", "desc": "d",
+                     "dj": {"nickname": "主播"}, "programCount": 33, "playCount": 100}
+        });
+        let r = parse_podcast_radio_detail(&body).unwrap();
+        assert_eq!(r.id, 5);
+        assert_eq!(r.name, "电台");
+        assert_eq!(r.cover_url.as_deref(), Some("http://p/r.jpg"));
+        assert_eq!(r.dj_name, "主播");
+        assert_eq!(r.program_count, 33);
+        let err = parse_podcast_radio_detail(&json!({"code": 200})).unwrap_err();
+        assert_eq!(err.kind, ProviderErrorKind::NotFound);
+    }
+
+    #[test]
+    fn capabilities_include_new_apis() {
+        // 漏加这项时 FFI 会报 "no provider supports xxx"(项目踩过)
+        assert!(CAPABILITIES.contains(&Capability::PlaylistDetail));
+        assert!(CAPABILITIES.contains(&Capability::Comment));
+        assert!(CAPABILITIES.contains(&Capability::Share));
+        assert!(CAPABILITIES.contains(&Capability::PodcastDetail));
     }
 
     #[test]

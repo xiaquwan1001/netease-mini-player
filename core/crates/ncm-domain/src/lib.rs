@@ -160,6 +160,34 @@ pub struct Playlist {
     pub special: bool,
 }
 
+/// 歌单详情(歌单页头部信息)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaylistDetail {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub creator_name: String,
+    #[serde(default)]
+    pub track_count: u64,
+    #[serde(default)]
+    pub play_count: u64,
+    /// 当前账号是否已收藏(匿名恒为 false)
+    #[serde(default)]
+    pub subscribed: bool,
+    #[serde(default)]
+    pub subscribed_count: u64,
+    #[serde(default)]
+    pub share_count: u64,
+    #[serde(default)]
+    pub comment_count: u64,
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
 /// 专辑详情(封面预览用: 大图 + 曲目列表)
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlbumDetail {
@@ -257,6 +285,35 @@ pub struct FeedEvent {
     /// 发布时间(unix 毫秒)
     #[serde(default)]
     pub time_ms: u64,
+}
+
+/// 一条评论(歌曲/歌单/专辑/播客共用)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Comment {
+    pub id: u64,
+    pub user_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    pub content: String,
+    /// 发布时间(unix 毫秒)
+    #[serde(default)]
+    pub time_ms: u64,
+    #[serde(default)]
+    pub liked_count: u64,
+    #[serde(default)]
+    pub liked: bool,
+}
+
+/// 评论列表页. comments 里精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommentPage {
+    /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
+    #[serde(default)]
+    pub comments: Vec<Comment>,
+    #[serde(default)]
+    pub total: u64,
+    #[serde(default)]
+    pub has_more: bool,
 }
 
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.
