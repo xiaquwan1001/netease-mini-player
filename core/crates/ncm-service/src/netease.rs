@@ -18,6 +18,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Profile,
     Capability::Playlist,
     Capability::DailyRecommend,
+    Capability::PersonalFm,
     Capability::Album,
     Capability::Podcast,
     Capability::SearchSuggest,
@@ -1161,7 +1162,8 @@ fn event_kind(event_type: i64) -> &'static str {
         13 => "playlist",
         19 => "album",
         17 | 22 => "program",
-        5 | 6 | 7 | 8 => "text",
+        // 35 是"发动态/文字+图", 5..8 是更老版本的文字动态
+        5..=8 | 35 => "text",
         _ => "other",
     }
 }
@@ -1188,15 +1190,23 @@ fn parse_event_images(value: &Value) -> Vec<String> {
 /// json 有时是字符串(需要再解析一次), 各种 eventType 的字段名也不统一,
 /// 这里只提取 UI 能直接展示的最小集合.
 pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
-    let Some(arr) = body.get("events").and_then(Value::as_array) else {
+    // 线上实测(2026-11-05, /api/v1/event/get)顶层字段叫 event(单数);
+    // 旧包装/其它通道可能给 events, 两种都认.
+    let Some(arr) = body
+        .get("event")
+        .or_else(|| body.get("events"))
+        .and_then(Value::as_array)
+    else {
         return Vec::new();
     };
     let privileges = parse_privileges(body);
     let mut out = Vec::new();
     for event in arr {
         let Some(id) = u64_of(event, "id") else { continue };
+        // 线上字段是 type, 老接口叫 eventType
         let event_type = event
-            .get("eventType")
+            .get("type")
+            .or_else(|| event.get("eventType"))
             .and_then(Value::as_i64)
             .unwrap_or(0);
         // json 可能是对象, 也可能是字符串
@@ -1495,6 +1505,14 @@ mod tests {
     }
 
     #[test]
+    fn capabilities_include_personal_fm() {
+        // 漏掉这项时 UI 会报 "no provider supports personalFm"(模拟器实测踩过)
+        assert!(CAPABILITIES.contains(&Capability::PersonalFm));
+        assert!(CAPABILITIES.contains(&Capability::SearchHot));
+        assert!(CAPABILITIES.contains(&Capability::Feed));
+    }
+
+    #[test]
     fn search_hot_and_default() {
         let hot = json!({"code": 200, "result": {"hots": [
             {"first": "晴天", "keyword": "晴天", "iconType": 1},
@@ -1543,10 +1561,10 @@ mod tests {
 
     #[test]
     fn feed_event_mapping() {
-        let body = json!({"code": 200, "events": [
+        let body = json!({"code": 200, "event": [
             {
                 "id": 100,
-                "eventType": 18,
+                "type": 18,
                 "eventTime": 1700000000000u64,
                 "user": {"nickname": "某艺人", "avatarUrl": "http://p/u.jpg"},
                 "json": {
