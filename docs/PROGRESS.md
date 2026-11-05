@@ -1,9 +1,27 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-03(v2 重启, M0 完成)。
+> 最近更新: 2026-11-05(底部四栏 + 双端实测)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 底部四栏 + 搜索/推荐/我的/设置(2026-11-05)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 底部导航 | ✅ | 搜索/推荐/我的/设置四栏,播放条与导航栏同处 `bottomNavigationBar`,播放器状态跨 tab 不重建 |
+| 搜索落地页 | ✅ | 历史 + 猜你想搜 + 10 条热词榜;热词点击直接搜索;必须等 `rust.init()` 后再拉 |
+| 推荐页 | ✅ | 每日推荐歌曲/歌单、推荐播客、每日私人 FM、心动模式入口 |
+| 我的页 | ✅ | 我喜欢、收藏歌单、收藏播客、关注艺人、关注动态(艺人分享单曲可播放) |
+| 设置页 | ✅ | 账号/账号簿、主题(跟随/浅色/深色)、界面字号、取链音质、设备 ID/数据目录、清空搜索历史 |
+| 新 provider | ✅ | `hot_search/default_search`、`personal_fm`、`subscribed_podcasts`、`subscribed_artists`、`feed_events` + DTO/FFI/桥/单测 |
+| Android 模拟器实测 | ✅ | a36(Android 16):热词/搜索/推荐/私人 FM 播放(`PLAYING`)/我的/动态/设置/主题切换 |
+| Linux 实测 | ✅ | Xvfb + 真实账号(隔离 `NCM_DATA_DIR`):四栏/热词/推荐封面/我的/设置/歌曲播放(00:10 推进) |
+| 回归 | ✅ | Rust 31 个 service 测试;Flutter 69 个测试;Linux/APK debug 构建通过 |
+
+本轮实测发现并修复: `Capability::PersonalFm` 漏声明(私人 FM 报 no provider)、
+关注动态线上字段是 `event`/`type` 而非 `events`/`eventType`。
+完整流程与踩坑见 **`docs/testing-dual-platform.md`**。
 
 ## v2 · M2+ 播放链 + 队列(2026-11-03 晚, 模拟器 a36 / Android 16)
 

@@ -326,3 +326,17 @@ API/protocol details and anti-bot technique live in the
 - 账号卡片的 `FutureBuilder(rust.accounts())` 要缓存 future(改成 StatefulWidget), 否则播放轮询
   每 500ms 重建会反复读账号簿。
 <!-- created=2026-11-05, last=2026-11-05 -->
+
+## 双端实测与两处线上字段(2026-11-05)
+- Android a36 / Linux Xvfb 均用同一账号跑通四栏;完整步骤见 `docs/testing-dual-platform.md`。
+- **PersonalFm**: `Capability::PersonalFm` 枚举早就有,但 `NeteaseProvider::CAPABILITIES` 漏了,
+  UI 一调就报 `no provider supports personalFm`。加能力后补回归单测。
+- **关注动态**: 线上 `/api/v1/event/get` 顶层是 `event`(单数),事件类型字段是 `type`
+  (不是 `events`/`eventType`);`type=18` 分享单曲,`type=35` 文字动态。
+  另外 `json` 仍是字符串,需二次解析;song 用 `artists/album/duration` 而非 `ar/al/dt`(parse_song_with 已兼容)。
+- **Linux 侧不要带 HTTPS_PROXY 启动**: 宿主代理没起时 GUI 热词/推荐会一直转圈,CLI 报
+  `error sending request`。清大小写全部 proxy 变量后 curl/Rust/Linux 全通。
+- 模拟器登录态验证 Linux: `adb shell run-as com.minincm.minincm cat files/ncm/identity.json`
+  复制到 `/tmp/ncm-xxx/identity.json`,启动时 `NCM_DATA_DIR=/tmp/ncm-xxx`;不覆盖真实目录。
+- Xvfb 截图尺寸必须与 `Xvfb -screen` 一致;模拟器截图坐标按实际/显示比例换算(900x2000 → 1080x2400 ×1.2)。
+<!-- created=2026-11-05, last=2026-11-05 -->
