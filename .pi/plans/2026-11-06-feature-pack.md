@@ -45,7 +45,10 @@
 - 全部 7 项已落地; Rust 单测/Flutter 76 用例通过, Linux + APK debug 构建通过。
 - 验证: CLI `ncm searchall/artist/likedorder`; Linux Xvfb 截图(搜索五区、封面、菜单、歌手页、取消);
   a36 模拟器五栏/搜索/取消/菜单可用。
-- 已知环境限制: 模拟器 NAT 对 CDN 图片偶发 403(Dart UA 已修, 同 URL Linux 正常), 真机不受影响。
+- ~~已知环境限制: 模拟器 NAT 对 CDN 图片偶发 403~~ → 2026-11-06 定位为**代码问题不是环境**:
+  `Image.network(headers:)` 的 UA 是追加到 `Dart/3.x (dart:io)` 后面, 拼成双 UA 被 CDN 403。
+  已改为自定义 `_UaNetworkImage`(替换 `HttpClient.userAgent`) + IndexedStack 保活, 全端封面正常。
+  详见 `.pi/memory/FAILURES.md` 2026-11-06 条目。
 
 ## 风险
 
