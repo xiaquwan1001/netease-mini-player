@@ -3,10 +3,11 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
-    DefaultSearch, FeedEvent, FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory,
-    PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle,
-    SearchPage, SearchPlaylistItem, SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl,
-    StyleTag, SuggestItem, TrackId, UserItem, WikiFact,
+    DefaultSearch, FeedEvent, FollowCount, HotSearchTerm, InboxItem, Lyric, MessageCounts, PlayRankEntry,
+    Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
+    PrivateSession, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
+    SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    UserItem, WikiFact,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -46,6 +47,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Similar,
     Capability::Signin,
     Capability::Wiki,
+    Capability::Message,
 ];
 
 /// 最近播放的三种资源(专辑/歌单/电台)
@@ -199,6 +201,12 @@ impl NeteaseProvider {
         let resp = client.cloudsearch(&q).await.map_err(map_error)?;
         check_body(&resp.body)?;
         Ok(resp.body)
+    }
+
+    /// 同步拿已缓存的当前账号 uid(不触发网络请求)
+    fn uid_cached(&self) -> Option<u64> {
+        let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
+        guard.session.profile.as_ref().map(|p| p.user_id)
     }
 
     /// 最近播放三类(专辑/歌单/电台)共用的取数: 响应都是 {code, data:{list:[{data:{...}}]}}
@@ -1721,6 +1729,110 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 未读消息计数(需登录)
+    fn message_counts(&self) -> BoxFuture<'_, ProviderResult<MessageCounts>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("消息需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.pl_count(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let n = |key: &str| -> u32 {
+                resp.body.get(key).and_then(Value::as_u64).unwrap_or(0) as u32
+            };
+            Ok(MessageCounts {
+                private: n("msg"),
+                notices: n("notice"),
+                comments: n("comment"),
+                forwards: n("forward"),
+            })
+        })
+    }
+
+    /// 私信会话列表(需登录)
+    fn private_sessions(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateSession>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("私信需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.msg_private(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_private_sessions(&resp.body))
+        })
+    }
+
+    /// 私信历史(需登录)
+    fn private_history(
+        &self,
+        user_id: u64,
+        limit: u32,
+        before_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("私信需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &user_id.to_string())
+                .param("limit", &limit.to_string())
+                .param("before", &before_ms.to_string());
+            let resp = client.msg_private_history(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let me = self.uid_cached().unwrap_or(0);
+            Ok(parse_private_history(&resp.body, me))
+        })
+    }
+
+    /// 通知(需登录)
+    fn message_notices(
+        &self,
+        limit: u32,
+        last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("通知需要登录"));
+            }
+            let before = if last_time_ms == 0 { -1 } else { last_time_ms as i64 };
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("lasttime", &before.to_string());
+            let resp = client.msg_notices(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_notices(&resp.body))
+        })
+    }
+
+    /// 评论/回复消息(需登录)
+    fn comment_messages(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("评论消息需要登录"));
+            }
+            let uid = self.uid().await?;
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", &limit.to_string())
+                .param("before", "-1");
+            let resp = client.msg_comments(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_comment_messages(&resp.body))
+        })
+    }
+
     /// 专辑详情(封面预览 + 曲目)
     fn album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
         Box::pin(async move {
@@ -2847,6 +2959,176 @@ pub fn parse_playlist_bucket(body: &Value, key: &str) -> Vec<Playlist> {
         .unwrap_or_default()
 }
 
+/// 私信/通知里那段 JSON 字符串(`"{\"msg\":\"...\"}"`)抽成一句纯文本。
+/// 富消息(卡片/会员通知)没有 `msg`, 就退到 generalMsg 的标题/摘要/pushMsg。
+pub fn msg_text(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let Ok(v) = serde_json::from_str::<Value>(trimmed) else {
+        return trimmed.to_string();
+    };
+    if let Some(s) = v.get("msg").and_then(Value::as_str) {
+        if !s.trim().is_empty() {
+            return s.to_string();
+        }
+    }
+    // 富消息(会员/活动卡片): 标题比 pushMsg 长文案更适合当列表摘要
+    if let Some(g) = v.get("generalMsg") {
+        for key in ["title", "inboxBriefContent", "noticeMsg", "subTitle"] {
+            if let Some(s) = str_of(g, key) {
+                if !s.trim().is_empty() {
+                    return s;
+                }
+            }
+        }
+    }
+    if let Some(s) = v.get("pushMsg").and_then(Value::as_str) {
+        if !s.trim().is_empty() {
+            return s.to_string();
+        }
+    }
+    String::new()
+}
+
+/// 私信会话列表: {code, msgs:[{fromUser:{userId,nickname,avatarUrl},
+/// lastMsg(JSON 字符串), lastMsgTime, newMsgCount}], newMsgCount}
+pub fn parse_private_sessions(body: &Value) -> Vec<PrivateSession> {
+    body.get("msgs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    let user = m.get("fromUser").or_else(|| m.get("toUser"))?;
+                    let user_id = u64_of(user, "userId")?;
+                    Some(PrivateSession {
+                        user_id,
+                        nickname: str_of(user, "nickname").unwrap_or_default(),
+                        avatar_url: str_of(user, "avatarUrl"),
+                        last_message: str_of(m, "lastMsg")
+                            .map(|s| msg_text(&s))
+                            .unwrap_or_default(),
+                        last_time_ms: u64_of(m, "lastMsgTime").unwrap_or(0),
+                        unread: u64_of(m, "newMsgCount").unwrap_or(0) as u32,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 私信历史: {code, msgs:[{id, fromUser:{userId,nickname,avatarUrl}, toUser, msg(JSON 字符串), time}]}
+/// 接口按时间倒序给, 这里翻成正序(老的在前), 方便 UI 直接往下排。
+pub fn parse_private_history(body: &Value, my_uid: u64) -> Vec<PrivateMessage> {
+    let mut out: Vec<PrivateMessage> = body
+        .get("msgs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    let from = m.get("fromUser").or_else(|| m.get("realFromUser"));
+                    let from_user = from.and_then(|u| u64_of(u, "userId")).unwrap_or(0);
+                    let content = str_of(m, "msg").map(|s| msg_text(&s)).unwrap_or_default();
+                    if content.is_empty() {
+                        return None;
+                    }
+                    Some(PrivateMessage {
+                        id: u64_of(m, "id").unwrap_or(0),
+                        from_me: my_uid != 0 && from_user == my_uid,
+                        nickname: from
+                            .and_then(|u| str_of(u, "nickname"))
+                            .unwrap_or_default(),
+                        avatar_url: from.and_then(|u| str_of(u, "avatarUrl")),
+                        content,
+                        time_ms: u64_of(m, "time").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.reverse();
+    out
+}
+
+/// 通知: {code, notices:[{id, time, notice(JSON 字符串:
+/// {generalNotice:{actionDesc,content,nativeUrl}, user:{userId,nickname,avatarUrl}})}]}
+pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
+    body.get("notices")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|n| {
+                    let raw = str_of(n, "notice").unwrap_or_default();
+                    let inner: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
+                    let general = inner.get("generalNotice");
+                    let user = inner.get("user");
+                    let mut text = general
+                        .and_then(|g| str_of(g, "actionDesc"))
+                        .unwrap_or_default();
+                    let detail = general
+                        .and_then(|g| str_of(g, "content"))
+                        .unwrap_or_default();
+                    if text.is_empty() {
+                        // 没 actionDesc 的系统通知: 用 pushMsg/notice 兜底
+                        text = str_of(n, "pushMsg")
+                            .filter(|s| !s.trim().is_empty())
+                            .unwrap_or_else(|| "系统通知".to_string());
+                    }
+                    Some(InboxItem {
+                        id: u64_of(n, "id").unwrap_or(0),
+                        kind: "notice".to_string(),
+                        actor: user
+                            .and_then(|u| str_of(u, "nickname"))
+                            .unwrap_or_default(),
+                        avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
+                        text,
+                        detail,
+                        time_ms: u64_of(n, "time").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 评论/回复消息: {code, comments:[{commentId, content, beRepliedContent, time,
+/// user:{userId,nickname,avatarUrl}, resourceJson(JSON 字符串:{name,...})}]}
+pub fn parse_comment_messages(body: &Value) -> Vec<InboxItem> {
+    body.get("comments")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    let text = str_of(c, "content").unwrap_or_default();
+                    if text.is_empty() {
+                        return None;
+                    }
+                    let user = c.get("user");
+                    // 附注优先级: 被回复的资源名 > 我方原评论("我: 「...」")
+                    let resource = str_of(c, "resourceJson")
+                        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                        .and_then(|v| str_of(&v, "name"))
+                        .unwrap_or_default();
+                    let replied = str_of(c, "beRepliedContent").unwrap_or_default();
+                    let detail = if !resource.is_empty() { resource } else { replied };
+                    Some(InboxItem {
+                        id: u64_of(c, "commentId").unwrap_or(0),
+                        kind: "comment".to_string(),
+                        actor: user
+                            .and_then(|u| str_of(u, "nickname"))
+                            .unwrap_or_default(),
+                        avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
+                        text,
+                        detail,
+                        time_ms: u64_of(c, "time").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 收藏的专辑: {code, data:[{id,name,picUrl,artist:{name},size,subTime}], hasMore}
 pub fn parse_album_items(body: &Value) -> Vec<AlbumItem> {
     body.get("data")
@@ -3457,6 +3739,85 @@ mod tests {
         assert_eq!(facts[0].value, "流行-华语流行 / 原声带-动画片原声");
         assert_eq!(facts[1].value, "国语");
         assert_eq!(facts[2].value, "第30届东方风云榜 获 动感101年度金曲");
+    }
+
+
+    /// 私信里的 msg/lastMsg 是 JSON 字符串, 富消息要退到 generalMsg 的标题/摘要
+    #[test]
+    fn msg_text_unwraps_json_and_rich_payload() {
+        assert_eq!(msg_text("你好"), "你好", "纯文本原样返回");
+        assert_eq!(msg_text(r#"{"msg":"在吗"}"#), "在吗");
+        assert_eq!(
+            msg_text(r#"{"generalMsg":{"title":"本月等级权益已更新"},"pushMsg":"push"}"#),
+            "本月等级权益已更新",
+            "富消息优先用 generalMsg 标题"
+        );
+        assert_eq!(msg_text("  "), "");
+    }
+
+    #[test]
+    fn private_sessions_and_history_mapping() {
+        let sessions = json!({
+            "code": 200,
+            "msgs": [
+                {"fromUser": {"userId": 7, "nickname": "VIP", "avatarUrl": "http://a/1.jpg"},
+                 "lastMsg": "{\"msg\":\"本月权益已更新\"}", "lastMsgTime": 1700000000000u64, "newMsgCount": 6},
+                {"fromUser": {"userId": 8, "nickname": "好友"}, "lastMsg": "hi", "lastMsgTime": 1600000000000u64, "newMsgCount": 0}
+            ]
+        });
+        let list = parse_private_sessions(&sessions);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].user_id, 7);
+        assert_eq!(list[0].last_message, "本月权益已更新");
+        assert_eq!(list[0].unread, 6);
+        assert_eq!(list[1].last_message, "hi");
+
+        let history = json!({
+            "code": 200,
+            "msgs": [
+                {"id": 2, "fromUser": {"userId": 42, "nickname": "我"}, "msg": "{\"msg\":\"在的\"}", "time": 200},
+                {"id": 1, "fromUser": {"userId": 7, "nickname": "VIP"}, "msg": "你好", "time": 100}
+            ]
+        });
+        let list = parse_private_history(&history, 42);
+        assert_eq!(list.len(), 2);
+        assert!(!list[0].from_me, "接口给的是倒序, 解析后老的在前");
+        assert_eq!(list[0].content, "你好");
+        assert!(list[1].from_me);
+        assert_eq!(list[1].content, "在的");
+    }
+
+    #[test]
+    fn notices_and_comment_messages_mapping() {
+        let notices = json!({
+            "code": 200,
+            "notices": [
+                {"id": 11, "time": 1779, "pushMsg": "push 文案",
+                 "notice": "{\"generalNotice\":{\"actionDesc\":\"赞了你的主页背景\"},\"user\":{\"nickname\":\"小明\",\"avatarUrl\":\"http://a/2.jpg\"}}"},
+                {"id": 12, "time": 1778, "pushMsg": "", "notice": "garbage"}
+            ]
+        });
+        let list = parse_notices(&notices);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].actor, "小明");
+        assert_eq!(list[0].text, "赞了你的主页背景");
+        assert_eq!(list[0].time_ms, 1779);
+        assert_eq!(list[1].text, "系统通知", "解析不出来的通知给兜底文案");
+
+        let comments = json!({
+            "code": 200,
+            "comments": [
+                {"commentId": 21, "content": "来了来了", "beRepliedContent": "我: 「旧评论」",
+                 "time": 1777, "user": {"userId": 5, "nickname": "小红"},
+                 "resourceJson": "{\"name\":\"我喜欢的音乐\",\"id\":9}"},
+                {"commentId": 22, "content": "", "time": 1776}
+            ]
+        });
+        let list = parse_comment_messages(&comments);
+        assert_eq!(list.len(), 1, "空评论要丢掉");
+        assert_eq!(list[0].actor, "小红");
+        assert_eq!(list[0].text, "来了来了");
+        assert_eq!(list[0].detail, "我喜欢的音乐", "优先显示被评论的资源名");
     }
 
 

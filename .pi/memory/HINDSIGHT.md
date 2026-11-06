@@ -236,4 +236,18 @@ API/protocol details and anti-bot technique live in the
 - 非日推/非 FM 的歌点"不感兴趣"服务端回 `code=432 Unknown error`(接口只认日推/FM 上下文),
   暂时原样弹错; 要友好就得在 UI 侧只对日推/FM 队列显示该入口。
 
+## 消息中心接入(2026-11-06)
+
+- 未读计数 `/api/pl/count`(weapi) 的键是 **`msg` / `notice` / `comment` / `forward`**, 不是私有消息那套命名;
+  `pushMsg` 字段只是给推送用的文案。
+- 私信会话 `/api/msg/private/users`: `{code, msgs:[{fromUser:{userId,nickname,avatarUrl}, lastMsg, lastMsgTime, newMsgCount}], newMsgCount}`;
+  `lastMsg` 是 **JSON 字符串**, 富消息(会员/活动卡片)没有 `msg`, 只有 `generalMsg{title,inboxBriefContent,noticeMsg}` 和 `pushMsg`。
+- 私信历史 `/api/msg/private/history?uid=&limit=&time=`: `msgs[]` **倒序**, 单条 `{id, fromUser, toUser, msg(JSON 字符串), time}`;
+  按 `fromUser.userId == my_uid` 判断是否我方气泡。
+- 通知 `/api/msg/notices?limit=&lasttime=`: `notices[].notice` 又是 JSON 字符串 →
+  `generalNotice.actionDesc`(动作) + `user.nickname/avatarUrl`; 解析不出时退 `pushMsg`/"系统通知"。
+- 评论消息 `/api/v1/user/comments/<uid>?uid=&limit=&before=-1`: `comments[].{commentId,content,beRepliedContent,time,user,resourceJson}`;
+  `resourceJson` 也是 JSON 字符串, `name` 是被评论的资源名。
+- vendor 没有私信发送接口 → UI 明确标"只读"; 已读上报也没做。
+
 <!-- created=2026-11-06, last=2026-11-06 -->

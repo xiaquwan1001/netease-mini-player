@@ -5,6 +5,27 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 消息中心(2026-11-07 晚)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 未读计数 | ✅ | `pl_count`: "我的"页消息入口角标 + 分项摘要("私信 18"); 实测 18 未读 |
+| 私信会话 | ✅ | `msg_private`: 头像/昵称/最后一条消息/相对时间/未读气泡, 按最近时间倒序 |
+| 私信记录 | ✅(只读) | `msg_private_history`: 点会话开底部面板, 气泡按发送方左右分列; 尾部提示"只读, 回复请到官方客户端"(vendor 无发包接口) |
+| 通知 | ✅ | `msg_notices`: 点赞/关注/系统通知; `notice` 是 JSON 字符串, 取 `generalNotice.actionDesc` + `user.nickname/avatarUrl`, 解析不出时用 pushMsg/"系统通知" |
+| 评论消息 | ✅ | `msg_comments`: 评论内容 + 被评论资源名(取 `resourceJson.name`), 兜底显示我方原评论 `beRepliedContent` |
+| 回归 | ✅ | Rust 53 单测(新增 msg_text/会话/通知/评论解析 3 组); Flutter 112 用例(消息页 3 例 + 入口卡 2 例); Linux + APK 构建通过; 模拟器 a36 实机走过三个页签与会话面板 |
+
+**协议事实(写进代码注释/记忆)**:
+- `pl_count` 的键是 **`msg` / `notice` / `comment` / `forward`**(不是 private/notices/...), 合计即角标。
+- 私信/通知正文都是**双层 JSON 字符串**: 外层 `lastMsg`/`notice`, 内层还有 `msg` 或 `generalMsg{title,inboxBriefContent}`;
+  `msg_text()` 的优先级 = `msg` → generalMsg 标题/摘要 → `pushMsg`(实测会员通知的 pushMsg 是一大段营销文案, 标题更合适)。
+- 私信历史 `msgs[]` 是**倒序**给的, Rust 侧翻成正序再交给 UI。
+- `msg_comments` 必须带自己的 uid(参数名 `uid`), 走 `/api/v1/user/comments/<uid>`。
+
+**未做**: @我(`msg_forwards` 该账号为空, 形状未验证)与最近联系人(`msg_recentcontact`);
+会话只读(不提供发送), 也不做已读回执上报。
+
 ## v2 · 功能包: 最近播放分类 / 签到 / 评论删除 / 歌曲百科(2026-11-07 下午)
 
 | 能力 | 状态 | 证据 |

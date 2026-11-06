@@ -82,6 +82,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  InboxItemDto dco_decode_inbox_item_dto(dynamic raw);
+
+  @protected
   InitInfo dco_decode_init_info(dynamic raw);
 
   @protected
@@ -112,6 +115,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HotSearchTermDto> dco_decode_list_hot_search_term_dto(dynamic raw);
 
   @protected
+  List<InboxItemDto> dco_decode_list_inbox_item_dto(dynamic raw);
+
+  @protected
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
 
   @protected
@@ -134,6 +140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  List<PrivateMessageDto> dco_decode_list_private_message_dto(dynamic raw);
+
+  @protected
+  List<PrivateSessionDto> dco_decode_list_private_session_dto(dynamic raw);
 
   @protected
   List<ProviderInfo> dco_decode_list_provider_info(dynamic raw);
@@ -172,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
 
   @protected
+  MessageCountsDto dco_decode_message_counts_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -203,6 +218,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PodcastRadioDto dco_decode_podcast_radio_dto(dynamic raw);
+
+  @protected
+  PrivateMessageDto dco_decode_private_message_dto(dynamic raw);
+
+  @protected
+  PrivateSessionDto dco_decode_private_session_dto(dynamic raw);
 
   @protected
   ProfileDetailDto dco_decode_profile_detail_dto(dynamic raw);
@@ -327,6 +348,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  InboxItemDto sse_decode_inbox_item_dto(SseDeserializer deserializer);
+
+  @protected
   InitInfo sse_decode_init_info(SseDeserializer deserializer);
 
   @protected
@@ -367,6 +391,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<InboxItemDto> sse_decode_list_inbox_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<LyricLineDto> sse_decode_list_lyric_line_dto(
     SseDeserializer deserializer,
   );
@@ -399,6 +428,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<PrivateMessageDto> sse_decode_list_private_message_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PrivateSessionDto> sse_decode_list_private_session_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<ProviderInfo> sse_decode_list_provider_info(
@@ -451,6 +490,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
+  MessageCountsDto sse_decode_message_counts_dto(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -490,6 +532,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PodcastRadioDto sse_decode_podcast_radio_dto(SseDeserializer deserializer);
+
+  @protected
+  PrivateMessageDto sse_decode_private_message_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PrivateSessionDto sse_decode_private_session_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ProfileDetailDto sse_decode_profile_detail_dto(SseDeserializer deserializer);
@@ -641,6 +693,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_inbox_item_dto(InboxItemDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_init_info(InitInfo self, SseSerializer serializer);
 
   @protected
@@ -695,6 +750,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_inbox_item_dto(
+    List<InboxItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_lyric_line_dto(
     List<LyricLineDto> self,
     SseSerializer serializer,
@@ -739,6 +800,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_prim_u_8_strict(
     Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_private_message_dto(
+    List<PrivateMessageDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_private_session_dto(
+    List<PrivateSessionDto> self,
     SseSerializer serializer,
   );
 
@@ -809,6 +882,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_message_counts_dto(
+    MessageCountsDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -862,6 +941,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_podcast_radio_dto(
     PodcastRadioDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_private_message_dto(
+    PrivateMessageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_private_session_dto(
+    PrivateSessionDto self,
     SseSerializer serializer,
   );
 

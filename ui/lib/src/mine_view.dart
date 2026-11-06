@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'messages_page.dart';
 import 'net_retry.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
@@ -24,6 +25,8 @@ class MineView extends StatefulWidget {
     required this.onOpenFollows,
     required this.onOpenFolloweds,
     required this.onOpenLiked,
+    this.onOpenMessages,
+    this.loadMessageCounts,
     this.onPlayLiked,
     this.loadLiked,
     this.loadPlaylists,
@@ -49,6 +52,12 @@ class MineView extends StatefulWidget {
 
   /// 打开"我喜欢的音乐"详情页
   final VoidCallback onOpenLiked;
+
+  /// 打开消息中心(不传就不显示入口)
+  final VoidCallback? onOpenMessages;
+
+  /// 未读计数(缺省走 rust.messageCounts)
+  final MessageCountsLoader? loadMessageCounts;
 
   /// 点播"我喜欢的音乐"里的曲目(与 onPlaySongs 的区别: 队列来源可以标成
   /// "我喜欢的音乐"这个歌单 id, 详情页的"定位正在播放"才有依据)。缺省回落 onPlaySongs。
@@ -126,6 +135,13 @@ class _MineViewState extends State<MineView> {
             onOpenFollows: widget.onOpenFollows,
             onOpenFolloweds: widget.onOpenFolloweds,
           ),
+          if (widget.onOpenMessages != null) ...[
+            const SizedBox(height: 4),
+            MessageEntryCard(
+              onOpen: widget.onOpenMessages!,
+              load: widget.loadMessageCounts,
+            ),
+          ],
           const SizedBox(height: 4),
           const SigninCard(),
           const SizedBox(height: 4),
@@ -682,6 +698,72 @@ class _RecentSection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+// ---------------- 消息中心入口 ----------------
+
+/// "我的"页的消息入口: 未读数合计 + 分项摘要。
+/// 载入失败(未登录/网络)时退化成只有标题, 不报错。
+class MessageEntryCard extends StatefulWidget {
+  const MessageEntryCard({super.key, required this.onOpen, this.load});
+
+  final VoidCallback onOpen;
+  final MessageCountsLoader? load;
+
+  @override
+  State<MessageEntryCard> createState() => _MessageEntryCardState();
+}
+
+class _MessageEntryCardState extends State<MessageEntryCard> {
+  rust.MessageCountsDto? _counts;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final counts = await retryNetwork(widget.load ?? rust.messageCounts);
+      if (!mounted) return;
+      setState(() => _counts = counts);
+    } catch (_) {
+      // 静默: 入口仍可点开, 页内各自报错
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final counts = _counts;
+    final theme = Theme.of(context);
+    final detail = counts == null
+        ? '私信 / 通知 / 评论'
+        : [
+            if (counts.private > 0) '私信 ${counts.private}',
+            if (counts.notices > 0) '通知 ${counts.notices}',
+            if (counts.comments > 0) '评论 ${counts.comments}',
+          ].join(' · ');
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        dense: true,
+        leading: Badge(
+          isLabelVisible: (counts?.total ?? 0) > 0,
+          label: Text('${counts?.total ?? 0}'),
+          child: const Icon(Icons.forum_outlined),
+        ),
+        title: const Text('消息中心'),
+        subtitle: Text(
+          detail.isEmpty ? '暂无未读' : detail,
+          style: theme.textTheme.bodySmall,
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: widget.onOpen,
+      ),
     );
   }
 }

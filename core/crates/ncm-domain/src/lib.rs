@@ -600,6 +600,77 @@ pub struct AlbumItem {
     pub track_count: u64,
 }
 
+/// 未读消息计数(私信/通知/评论/@我). 未登录或接口失败时为全 0.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MessageCounts {
+    /// 私信会话未读数
+    pub private: u32,
+    /// 通知(点赞/关注/系统通知)
+    pub notices: u32,
+    /// 评论/回复
+    pub comments: u32,
+    /// @我
+    pub forwards: u32,
+}
+
+impl MessageCounts {
+    pub fn total(&self) -> u32 {
+        self.private + self.notices + self.comments + self.forwards
+    }
+}
+
+/// 私信会话列表的一行
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateSession {
+    /// 对方 uid
+    pub user_id: u64,
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 最后一条消息的纯文本(富消息取标题/摘要)
+    #[serde(default)]
+    pub last_message: String,
+    #[serde(default)]
+    pub last_time_ms: u64,
+    #[serde(default)]
+    pub unread: u32,
+}
+
+/// 一段私信会话里的一条消息
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PrivateMessage {
+    pub id: u64,
+    /// 我发的(true)还是对方发的(false)
+    pub from_me: bool,
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    pub content: String,
+    #[serde(default)]
+    pub time_ms: u64,
+}
+
+/// 通知/评论这类"通知流"里的一行(结构统一, 便于一个列表渲染)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InboxItem {
+    pub id: u64,
+    /// notice | comment
+    pub kind: String,
+    /// 触发人昵称(系统通知可能为空)
+    #[serde(default)]
+    pub actor: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 主体文案(通知=动作描述, 评论=评论内容)
+    #[serde(default)]
+    pub text: String,
+    /// 附注(评论=被评论的资源名或我的原评论; 通知=内容摘要)
+    #[serde(default)]
+    pub detail: String,
+    #[serde(default)]
+    pub time_ms: u64,
+}
+
 /// 签到日历里的一天
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigninDay {

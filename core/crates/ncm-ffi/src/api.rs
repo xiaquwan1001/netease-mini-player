@@ -1810,6 +1810,139 @@ pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFactDto>, String> {
         .collect())
 }
 
+pub struct MessageCountsDto {
+    pub private: u32,
+    pub notices: u32,
+    pub comments: u32,
+    pub forwards: u32,
+    /// 四项之和(角标用)
+    pub total: u32,
+}
+
+/// 未读消息计数(需登录)
+pub async fn message_counts() -> Result<MessageCountsDto, String> {
+    let provider = with_provider(Capability::Message)?;
+    let c = provider.message_counts().await.map_err(|e| e.to_string())?;
+    Ok(MessageCountsDto {
+        private: c.private,
+        notices: c.notices,
+        comments: c.comments,
+        forwards: c.forwards,
+        total: c.total(),
+    })
+}
+
+pub struct PrivateSessionDto {
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+    pub last_message: String,
+    pub last_time_ms: u64,
+    pub unread: u32,
+}
+
+/// 私信会话列表(需登录)
+pub async fn private_sessions(
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<PrivateSessionDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .private_sessions(limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|s| PrivateSessionDto {
+            user_id: s.user_id,
+            nickname: s.nickname,
+            avatar_url: s.avatar_url,
+            last_message: s.last_message,
+            last_time_ms: s.last_time_ms,
+            unread: s.unread,
+        })
+        .collect())
+}
+
+pub struct PrivateMessageDto {
+    pub id: u64,
+    pub from_me: bool,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+    pub content: String,
+    pub time_ms: u64,
+}
+
+/// 与某人的私信历史(需登录, 老的在前; before_ms = 0 取最新一页)
+pub async fn private_history(
+    user_id: u64,
+    limit: u32,
+    before_ms: u64,
+) -> Result<Vec<PrivateMessageDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .private_history(user_id, limit, before_ms)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|m| PrivateMessageDto {
+            id: m.id,
+            from_me: m.from_me,
+            nickname: m.nickname,
+            avatar_url: m.avatar_url,
+            content: m.content,
+            time_ms: m.time_ms,
+        })
+        .collect())
+}
+
+pub struct InboxItemDto {
+    pub id: u64,
+    /// notice | comment
+    pub kind: String,
+    pub actor: String,
+    pub avatar_url: Option<String>,
+    pub text: String,
+    pub detail: String,
+    pub time_ms: u64,
+}
+
+fn inbox_dto(i: ncm_domain::InboxItem) -> InboxItemDto {
+    InboxItemDto {
+        id: i.id,
+        kind: i.kind,
+        actor: i.actor,
+        avatar_url: i.avatar_url,
+        text: i.text,
+        detail: i.detail,
+        time_ms: i.time_ms,
+    }
+}
+
+/// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
+pub async fn message_notices(
+    limit: u32,
+    last_time_ms: u64,
+) -> Result<Vec<InboxItemDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .message_notices(limit, last_time_ms)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(inbox_dto).collect())
+}
+
+/// 评论/回复消息(需登录, 新的在前)
+pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItemDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .comment_messages(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(inbox_dto).collect())
+}
+
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 pub fn my_uid() -> Result<u64, String> {
     let guard = core()?.lock().map_err(|e| e.to_string())?;

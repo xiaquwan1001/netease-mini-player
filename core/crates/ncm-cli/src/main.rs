@@ -459,6 +459,103 @@ async fn run() -> Result<(), BoxErr> {
             println!("deleted = {}", p.delete_comment(&thread, cid).await?);
             Ok(())
         }
+        "messages" => {
+            // 未读数 / 私信会话 / 通知 / 评论消息
+            //   ncm messages            未读数
+            //   ncm messages dm         私信会话列表
+            //   ncm messages dm <uid>   与某人的私信历史
+            //   ncm messages notice     通知
+            //   ncm messages comment    评论/回复
+            announce(&core);
+            let p = provider(&core, Capability::Message)?;
+            match args.positional.first().map(String::as_str) {
+                None => {
+                    let c = p.message_counts().await?;
+                    println!(
+                        "private={} notice={} comment={} forward={} total={}",
+                        c.private,
+                        c.notices,
+                        c.comments,
+                        c.forwards,
+                        c.total()
+                    );
+                }
+                Some("dm") => match args.positional.get(1) {
+                    Some(uid) => {
+                        let uid: u64 = uid.parse()?;
+                        let limit: u32 = args
+                            .value("--limit")
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(30);
+                        let list = p.private_history(uid, limit, 0).await?;
+                        println!("count = {}", list.len());
+                        for m in list.iter() {
+                            println!(
+                                "[{}] {}: {}",
+                                if m.from_me { "我" } else { m.nickname.as_str() },
+                                m.time_ms,
+                                m.content
+                            );
+                        }
+                    }
+                    None => {
+                        let limit: u32 = args
+                            .value("--limit")
+                            .and_then(|v| v.parse().ok())
+                            .unwrap_or(20);
+                        let list = p.private_sessions(limit, 0).await?;
+                        println!("count = {}", list.len());
+                        for s in list.iter() {
+                            println!(
+                                "[{}] {} (未读 {}) {} <- {}",
+                                s.user_id,
+                                s.nickname,
+                                s.unread,
+                                s.last_time_ms,
+                                short_line(&s.last_message, 60)
+                            );
+                        }
+                    }
+                },
+                Some("notice") => {
+                    let limit: u32 = args
+                        .value("--limit")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(20);
+                    let list = p.message_notices(limit, 0).await?;
+                    println!("count = {}", list.len());
+                    for i in list.iter() {
+                        println!(
+                            "[{}] {} {} {}",
+                            i.time_ms,
+                            i.actor,
+                            i.text,
+                            short_line(&i.detail, 40)
+                        );
+                    }
+                }
+                Some("comment") => {
+                    let limit: u32 = args
+                        .value("--limit")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(20);
+                    let list = p.comment_messages(limit).await?;
+                    println!("count = {}", list.len());
+                    for i in list.iter() {
+                        println!(
+                            "[{}] {}: {} ({})",
+                            i.time_ms,
+                            i.actor,
+                            short_line(&i.text, 50),
+                            short_line(&i.detail, 30)
+                        );
+                    }
+                }
+                Some(other) => return Err(format!("unknown messages kind: {other}").into()),
+            }
+            Ok(())
+        }
+
         "podcast-radio" => {
             let id: u64 = args
                 .positional
@@ -785,6 +882,21 @@ async fn run() -> Result<(), BoxErr> {
                 "comment_delete" => client.comment_delete(&q).await?,
                 "song_wiki_summary" => client.song_wiki_summary(&q).await?,
                 "user_level" => client.user_level(&q).await?,
+                "top_song" => client.top_song(&q).await?,
+                "top_artists" => client.top_artists(&q).await?,
+                "album_newest" => client.album_newest(&q).await?,
+                "search_multimatch" => client.search_multimatch(&q).await?,
+                "pl_count" => client.pl_count(&q).await?,
+                "comment_hot" => client.comment_hot(&q).await?,
+                "comment_info_list" => client.comment_info_list(&q).await?,
+                "lyric_new" => client.lyric_new(&q).await?,
+                "vip_sign_info" => client.vip_sign_info(&q).await?,
+                "msg_private" => client.msg_private(&q).await?,
+                "msg_private_history" => client.msg_private_history(&q).await?,
+                "msg_notices" => client.msg_notices(&q).await?,
+                "msg_comments" => client.msg_comments(&q).await?,
+                "msg_forwards" => client.msg_forwards(&q).await?,
+                "msg_recentcontact" => client.msg_recentcontact(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);
@@ -823,6 +935,17 @@ fn provider(core: &Core, cap: Capability) -> Result<std::sync::Arc<dyn Provider>
     core.providers
         .first_with(cap)
         .ok_or_else(|| format!("no provider supports {}", cap.as_str()).into())
+}
+
+/// 单行摘要(去掉换行, 超长截断): CLI 打印长文本用
+fn short_line(s: &str, max_chars: usize) -> String {
+    let one_line: String = s.chars().map(|c| if c == '\n' { ' ' } else { c }).collect();
+    let trimmed = one_line.trim();
+    if trimmed.chars().count() <= max_chars {
+        return trimmed.to_string();
+    }
+    let head: String = trimmed.chars().take(max_chars).collect();
+    format!("{head}…")
 }
 
 fn announce(core: &Core) {

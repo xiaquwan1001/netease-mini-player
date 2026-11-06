@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -515,6 +515,41 @@ Future<bool> deleteComment({
 /// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
 Future<List<WikiFactDto>> songWiki({required BigInt songId}) =>
     RustLib.instance.api.crateApiSongWiki(songId: songId);
+
+/// 未读消息计数(需登录)
+Future<MessageCountsDto> messageCounts() =>
+    RustLib.instance.api.crateApiMessageCounts();
+
+/// 私信会话列表(需登录)
+Future<List<PrivateSessionDto>> privateSessions({
+  required int limit,
+  required int offset,
+}) =>
+    RustLib.instance.api.crateApiPrivateSessions(limit: limit, offset: offset);
+
+/// 与某人的私信历史(需登录, 老的在前; before_ms = 0 取最新一页)
+Future<List<PrivateMessageDto>> privateHistory({
+  required BigInt userId,
+  required int limit,
+  required BigInt beforeMs,
+}) => RustLib.instance.api.crateApiPrivateHistory(
+  userId: userId,
+  limit: limit,
+  beforeMs: beforeMs,
+);
+
+/// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
+Future<List<InboxItemDto>> messageNotices({
+  required int limit,
+  required BigInt lastTimeMs,
+}) => RustLib.instance.api.crateApiMessageNotices(
+  limit: limit,
+  lastTimeMs: lastTimeMs,
+);
+
+/// 评论/回复消息(需登录, 新的在前)
+Future<List<InboxItemDto>> commentMessages({required int limit}) =>
+    RustLib.instance.api.crateApiCommentMessages(limit: limit);
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
@@ -1029,6 +1064,51 @@ class HotSearchTermDto {
           keyword == other.keyword;
 }
 
+class InboxItemDto {
+  final BigInt id;
+
+  /// notice | comment
+  final String kind;
+  final String actor;
+  final String? avatarUrl;
+  final String text;
+  final String detail;
+  final BigInt timeMs;
+
+  const InboxItemDto({
+    required this.id,
+    required this.kind,
+    required this.actor,
+    this.avatarUrl,
+    required this.text,
+    required this.detail,
+    required this.timeMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      kind.hashCode ^
+      actor.hashCode ^
+      avatarUrl.hashCode ^
+      text.hashCode ^
+      detail.hashCode ^
+      timeMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InboxItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          kind == other.kind &&
+          actor == other.actor &&
+          avatarUrl == other.avatarUrl &&
+          text == other.text &&
+          detail == other.detail &&
+          timeMs == other.timeMs;
+}
+
 class InitInfo {
   final String dataDir;
   final String deviceId;
@@ -1085,6 +1165,43 @@ class LyricLineDto {
           timeMs == other.timeMs &&
           text == other.text &&
           sub == other.sub;
+}
+
+class MessageCountsDto {
+  final int private;
+  final int notices;
+  final int comments;
+  final int forwards;
+
+  /// 四项之和(角标用)
+  final int total;
+
+  const MessageCountsDto({
+    required this.private,
+    required this.notices,
+    required this.comments,
+    required this.forwards,
+    required this.total,
+  });
+
+  @override
+  int get hashCode =>
+      private.hashCode ^
+      notices.hashCode ^
+      comments.hashCode ^
+      forwards.hashCode ^
+      total.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MessageCountsDto &&
+          runtimeType == other.runtimeType &&
+          private == other.private &&
+          notices == other.notices &&
+          comments == other.comments &&
+          forwards == other.forwards &&
+          total == other.total;
 }
 
 class PlayRankEntryDto {
@@ -1375,6 +1492,84 @@ class PodcastRadioDto {
           djName == other.djName &&
           programCount == other.programCount &&
           playCount == other.playCount;
+}
+
+class PrivateMessageDto {
+  final BigInt id;
+  final bool fromMe;
+  final String nickname;
+  final String? avatarUrl;
+  final String content;
+  final BigInt timeMs;
+
+  const PrivateMessageDto({
+    required this.id,
+    required this.fromMe,
+    required this.nickname,
+    this.avatarUrl,
+    required this.content,
+    required this.timeMs,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      fromMe.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      content.hashCode ^
+      timeMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PrivateMessageDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          fromMe == other.fromMe &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          content == other.content &&
+          timeMs == other.timeMs;
+}
+
+class PrivateSessionDto {
+  final BigInt userId;
+  final String nickname;
+  final String? avatarUrl;
+  final String lastMessage;
+  final BigInt lastTimeMs;
+  final int unread;
+
+  const PrivateSessionDto({
+    required this.userId,
+    required this.nickname,
+    this.avatarUrl,
+    required this.lastMessage,
+    required this.lastTimeMs,
+    required this.unread,
+  });
+
+  @override
+  int get hashCode =>
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      lastMessage.hashCode ^
+      lastTimeMs.hashCode ^
+      unread.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PrivateSessionDto &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          lastMessage == other.lastMessage &&
+          lastTimeMs == other.lastTimeMs &&
+          unread == other.unread;
 }
 
 class ProfileDetailDto {

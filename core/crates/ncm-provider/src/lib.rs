@@ -8,8 +8,9 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song,
-    StreamUrl, StyleTag, SuggestItem, TrackId, UserItem, WikiFact,
+    InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile,
+    ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    UserItem, WikiFact,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -62,6 +63,8 @@ pub enum Capability {
     Signin,
     /// 歌曲百科(曲风/语种/BPM/获奖)
     Wiki,
+    /// 消息中心(私信/通知/评论)
+    Message,
 }
 
 impl Capability {
@@ -98,6 +101,7 @@ impl Capability {
             Capability::Similar => "similar",
             Capability::Signin => "signin",
             Capability::Wiki => "wiki",
+            Capability::Message => "message",
         }
     }
 }
@@ -759,6 +763,44 @@ pub trait Provider: Send + Sync {
     /// 歌曲百科(曲风/语种/BPM/获奖成就...). 没有百科时返回空列表.
     fn song_wiki(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
         Box::pin(async { Err(ProviderError::unsupported("no song wiki")) })
+    }
+
+    /// 未读消息计数(需登录)
+    fn message_counts(&self) -> BoxFuture<'_, ProviderResult<MessageCounts>> {
+        Box::pin(async { Err(ProviderError::unsupported("no message counts")) })
+    }
+
+    /// 私信会话列表(需登录, 按最后一条消息倒序)
+    fn private_sessions(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateSession>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private sessions")) })
+    }
+
+    /// 与某人的私信历史(需登录; before_ms = 0 表示最新一页)
+    fn private_history(
+        &self,
+        _user_id: u64,
+        _limit: u32,
+        _before_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private history")) })
+    }
+
+    /// 通知(点赞/关注/系统), 新的在前
+    fn message_notices(
+        &self,
+        _limit: u32,
+        _last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no notices")) })
+    }
+
+    /// 评论/回复消息(需登录), 新的在前
+    fn comment_messages(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment messages")) })
     }
 }
 

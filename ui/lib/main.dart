@@ -15,6 +15,7 @@ import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
+import 'src/messages_page.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/playback.dart';
@@ -1646,6 +1647,7 @@ class _HomePageState extends State<HomePage> {
           ),
           onOpenRecent: _openRecent,
           onOpenLiked: _openLikedDetail,
+          onOpenMessages: () => showMessagesPage(context),
           onPlayLiked: (songs, i) =>
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );
