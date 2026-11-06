@@ -646,6 +646,11 @@ async fn run() -> Result<(), BoxErr> {
                 "event" => client.event(&q).await?,
                 "dj_hot" => client.dj_hot(&q).await?,
                 "dj_rcmd" => client.personalized_djprogram(&q).await?,
+                "style_preference" => client.style_preference(&q).await?,
+                "style_song" => client.style_song(&q).await?,
+                "style_playlist" => client.style_playlist(&q).await?,
+                "style_list" => client.style_list(&q).await?,
+                "user_record" => client.user_record(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);

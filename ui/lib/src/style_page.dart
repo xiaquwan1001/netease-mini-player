@@ -1,0 +1,389 @@
+import 'package:flutter/material.dart';
+
+import 'cover_art.dart';
+import 'net_retry.dart';
+import 'rust/api.dart' as rust;
+
+/// 曲风详情页: 系统推荐给"我"的风格下面有哪些歌单和歌.
+///
+/// 入口在推荐页的"风格推荐"(见 recommend_view.dart), 数据来自
+/// /api/style-tag/home/{song,playlist}(见 ncm-service)。
+typedef StyleSongsLoader = Future<List<rust.SongDto>> Function(String tagId);
+typedef StylePlaylistsLoader = Future<List<rust.PlaylistDto>> Function(
+    String tagId);
+
+Future<void> showStyleDetail(
+  BuildContext context, {
+  required rust.StyleTagDto tag,
+  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
+  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  StyleSongsLoader? loadSongs,
+  StylePlaylistsLoader? loadPlaylists,
+}) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text(tag.name)),
+        body: StyleDetailView(
+          tag: tag,
+          onPlaySongs: onPlaySongs,
+          onOpenPlaylist: onOpenPlaylist,
+          loadSongs: loadSongs,
+          loadPlaylists: loadPlaylists,
+        ),
+      ),
+    ),
+  );
+}
+
+class StyleDetailView extends StatefulWidget {
+  const StyleDetailView({
+    super.key,
+    required this.tag,
+    required this.onPlaySongs,
+    required this.onOpenPlaylist,
+    this.loadSongs,
+    this.loadPlaylists,
+  });
+
+  final rust.StyleTagDto tag;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final StyleSongsLoader? loadSongs;
+  final StylePlaylistsLoader? loadPlaylists;
+
+  @override
+  State<StyleDetailView> createState() => _StyleDetailViewState();
+}
+
+class _StyleDetailViewState extends State<StyleDetailView> {
+  StyleSongsLoader get _songs =>
+      widget.loadSongs ??
+      (tagId) => rust.styleSongs(tagId: tagId, limit: 50);
+  StylePlaylistsLoader get _playlists =>
+      widget.loadPlaylists ??
+      (tagId) => rust.stylePlaylists(tagId: tagId, limit: 20);
+
+  late Future<List<rust.SongDto>> _songsFuture;
+  late Future<List<rust.PlaylistDto>> _playlistsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  void _reload() {
+    _songsFuture = retryNetwork(() => _songs(widget.tag.id));
+    _playlistsFuture = retryNetwork(() => _playlists(widget.tag.id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () async => setState(_reload),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        children: [
+          _StyleHeader(tag: widget.tag),
+          const SizedBox(height: 12),
+          _SectionTitle(
+            title: '风格歌单',
+            trailing: widget.tag.songCount == null
+                ? null
+                : Text(
+                    '共 ${widget.tag.songCount} 首',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+          ),
+          _PlaylistRow(
+            future: _playlistsFuture,
+            onOpen: widget.onOpenPlaylist,
+            onRetry: () => setState(_reload),
+          ),
+          const SizedBox(height: 16),
+          const _SectionTitle(title: '风格歌曲'),
+          _SongList(
+            future: _songsFuture,
+            onPlay: widget.onPlaySongs,
+            onRetry: () => setState(_reload),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StyleHeader extends StatelessWidget {
+  const _StyleHeader({required this.tag});
+
+  final rust.StyleTagDto tag;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            if (tag.coverUrl != null)
+              CoverArt(url: tag.coverUrl, size: 56, radius: 8)
+            else
+              CircleAvatar(
+                radius: 28,
+                backgroundColor: scheme.primaryContainer,
+                child: Icon(Icons.piano, color: scheme.primary),
+              ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tag.name,
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '系统按你的听歌口味推荐',
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: scheme.outline),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({required this.title, this.trailing});
+
+  final String title;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (trailing != null) trailing!,
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            message,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        TextButton(onPressed: onRetry, child: const Text('重试')),
+      ],
+    );
+  }
+}
+
+class _PlaylistRow extends StatelessWidget {
+  const _PlaylistRow({
+    required this.future,
+    required this.onOpen,
+    required this.onRetry,
+  });
+
+  final Future<List<rust.PlaylistDto>> future;
+  final void Function(rust.PlaylistDto playlist) onOpen;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<rust.PlaylistDto>>(
+      future: future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (snap.hasError) {
+          return _InlineError(
+            message: friendlyError(snap.error!),
+            onRetry: onRetry,
+          );
+        }
+        final lists = snap.data ?? const <rust.PlaylistDto>[];
+        if (lists.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              '这个风格暂时没有歌单',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+        }
+        return SizedBox(
+          height: 176,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: lists.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) {
+              final pl = lists[i];
+              return SizedBox(
+                width: 118,
+                child: InkWell(
+                  onTap: () => onOpen(pl),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CoverArt(url: pl.coverUrl, size: 118, radius: 8),
+                      const SizedBox(height: 4),
+                      Text(
+                        pl.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      Text(
+                        '${pl.trackCount} 首',
+                        maxLines: 1,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SongList extends StatelessWidget {
+  const _SongList({
+    required this.future,
+    required this.onPlay,
+    required this.onRetry,
+  });
+
+  final Future<List<rust.SongDto>> future;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<rust.SongDto>>(
+      future: future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          );
+        }
+        if (snap.hasError) {
+          return _InlineError(
+            message: friendlyError(snap.error!),
+            onRetry: onRetry,
+          );
+        }
+        final songs = snap.data ?? const <rust.SongDto>[];
+        if (songs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              '这个风格暂时没有歌曲',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          );
+        }
+        final playable = [
+          for (final s in songs)
+            if (s.playable) s,
+        ];
+        return Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final s in songs)
+                ListTile(
+                  dense: true,
+                  visualDensity: VisualDensity.compact,
+                  leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
+                  title: Text(
+                    s.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    s.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: s.playable
+                      ? () {
+                          final index =
+                              playable.indexWhere((x) => x.id == s.id);
+                          onPlay(playable, index < 0 ? 0 : index);
+                        }
+                      : null,
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}

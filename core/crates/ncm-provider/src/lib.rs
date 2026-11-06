@@ -6,9 +6,9 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Artist, ArtistDetail, CommentPage, DefaultSearch, FeedEvent, HotSearchTerm, Lyric, Playlist,
-    PlaylistDetail, PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage,
-    Song, StreamUrl, SuggestItem, TrackId,
+    AlbumDetail, Artist, ArtistDetail, CommentPage, DefaultSearch, FeedEvent, HotSearchTerm, Lyric, PlayRankEntry,
+    Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage,
+    Song, StreamUrl, StyleTag, SuggestItem, TrackId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -43,6 +43,10 @@ pub enum Capability {
     Artist,
     ProfileDetail,
     PlaylistEdit,
+    /// 听歌排行(总量/当周)
+    ListeningRank,
+    /// 曲风推荐(我的曲风偏好 / 曲风下的歌曲与歌单)
+    StyleRecommend,
 }
 
 impl Capability {
@@ -70,6 +74,8 @@ impl Capability {
             Capability::Artist => "artist",
             Capability::ProfileDetail => "profileDetail",
             Capability::PlaylistEdit => "playlistEdit",
+            Capability::ListeningRank => "listeningRank",
+            Capability::StyleRecommend => "styleRecommend",
         }
     }
 }
@@ -461,6 +467,66 @@ pub trait Provider: Send + Sync {
     /// "我喜欢的音乐"曲目, 按收藏时间从新到旧(服务端 addTime 排序).
     fn liked_songs_ordered(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async { Err(ProviderError::unsupported("no liked songs")) })
+    }
+
+    /// 听歌排行(需要登录): 全部时间 / 最近一周. 顺序即名次.
+    fn play_ranking(
+        &self,
+        _period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no play ranking")) })
+    }
+
+    /// 我的曲风偏好(系统按听歌口味算出来的风格, 需要登录; 未登录可退化成通用曲风表).
+    fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style preference")) })
+    }
+
+    /// 某个曲风下的歌曲
+    fn style_songs<'a>(
+        &'a self,
+        _tag_id: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style songs")) })
+    }
+
+    /// 某个曲风下的歌单
+    fn style_playlists<'a>(
+        &'a self,
+        _tag_id: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style playlists")) })
+    }
+}
+
+/// 听歌排行的统计区间.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum RankingPeriod {
+    /// 全部时间(总量排行)
+    #[default]
+    All,
+    /// 最近一周
+    Week,
+}
+
+impl RankingPeriod {
+    /// 接口的 type 参数: 0 = 全部时间, 1 = 最近一周
+    pub fn type_param(&self) -> &'static str {
+        match self {
+            RankingPeriod::All => "0",
+            RankingPeriod::Week => "1",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "all" | "0" | "" => Some(RankingPeriod::All),
+            "week" | "1" => Some(RankingPeriod::Week),
+            _ => None,
+        }
     }
 }
 

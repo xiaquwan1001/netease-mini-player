@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
-use ncm_provider::{Capability, SearchQuery};
+use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
 
 static CORE: OnceLock<Mutex<Core>> = OnceLock::new();
@@ -1253,4 +1253,81 @@ pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<b
         .forward_event(event_id, user_id, &msg)
         .await
         .map_err(|e| e.to_string())
+}
+
+pub struct PlayRankEntryDto {
+    pub song: SongDto,
+    /// 播放次数(周榜是本周的)
+    pub play_count: u64,
+    /// 网易云给的推荐分值
+    pub score: u64,
+}
+
+/// 听歌排行(需登录): period = "all"(总量排行) | "week"(当周排行).
+/// 返回顺序即名次(1 开始由 UI 用下标表达).
+pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, String> {
+    let provider = with_provider(Capability::ListeningRank)?;
+    let period = RankingPeriod::parse(&period).unwrap_or_default();
+    let list = provider.play_ranking(period).await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|e| PlayRankEntryDto {
+            song: song_dto(e.song),
+            play_count: e.play_count,
+            score: e.score,
+        })
+        .collect())
+}
+
+pub struct StyleTagDto {
+    /// 曲风 tagId(字符串, 直接回传给 style_songs/style_playlists)
+    pub id: String,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub song_count: Option<u64>,
+}
+
+/// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
+pub async fn style_preference() -> Result<Vec<StyleTagDto>, String> {
+    let provider = with_provider(Capability::StyleRecommend)?;
+    let list = provider.style_preference().await.map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(style_tag_dto).collect())
+}
+
+/// 某个曲风下的歌曲
+pub async fn style_songs(tag_id: String, limit: u32) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::StyleRecommend)?;
+    let list = provider
+        .style_songs(&tag_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(song_dto).collect())
+}
+
+/// 某个曲风下的歌单
+pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::StyleRecommend)?;
+    let list = provider
+        .style_playlists(&tag_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|p| PlaylistDto {
+            id: p.id,
+            name: p.name,
+            cover_url: p.cover_url,
+            track_count: p.track_count,
+            special: p.special,
+        })
+        .collect())
+}
+
+fn style_tag_dto(tag: ncm_domain::StyleTag) -> StyleTagDto {
+    StyleTagDto {
+        id: tag.id,
+        name: tag.name,
+        cover_url: tag.cover_url,
+        song_count: tag.song_count,
+    }
 }

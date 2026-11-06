@@ -501,6 +501,32 @@ pub struct CommentPage {
     pub has_more: bool,
 }
 
+/// 听歌排行的一项. 总量榜与周榜共用同一结构, 顺序即名次(接口已排好序).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlayRankEntry {
+    pub song: Song,
+    /// 播放次数(周榜是本周播放次数)
+    #[serde(default)]
+    pub play_count: u64,
+    /// 网易云给的推荐分值(越大越靠前), 与 play_count 不完全一致
+    #[serde(default)]
+    pub score: u64,
+}
+
+/// 曲风/风格标签: 推荐页的"风格入口"与风格详情页共用.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StyleTag {
+    /// 网易云的 tagId(接口按字符串传, 数字在 JSON 里可能带/不带引号)
+    pub id: String,
+    pub name: String,
+    /// 曲风配图(体系标签才有)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// 该曲风下曲目总数(部分接口不给)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub song_count: Option<u64>,
+}
+
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Session {

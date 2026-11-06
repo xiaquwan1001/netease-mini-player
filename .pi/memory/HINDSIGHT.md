@@ -200,3 +200,20 @@ API/protocol details and anti-bot technique live in the
 - **评论面板复用**: detail_page 的 `_CommentsSection` 通过 `showCommentsSheet(context, kind:, resourceId:)` 暴露, 供歌曲菜单/动态使用。
 - **AppActions**: 动作回调挂在 `MaterialApp.builder`(Navigator 之上)才能被 pushed route 取到; 宿主用全局 `ValueNotifier<SongActionHost?>` 随登录态刷新。
 <!-- created=2026-11-06, last=2026-11-06 -->
+
+## 听歌排行 / 曲风推荐 接入(2026-11-06)
+- 新能力: `Capability::ListeningRank` + `Capability::StyleRecommend`; domain 新增
+  `PlayRankEntry` / `StyleTag`; FFI `play_ranking(period)` / `style_preference()` /
+  `style_songs(tagId,limit)` / `style_playlists(tagId,limit)`.
+- 实测响应形状(匿名也能验的用 `ncm raw` 打过):
+  - 听歌排行 `/api/v1/play/record`(weapi, 需登录): `{code,allData:[{playCount,score,song}],weekData:[...]}`,
+    type=0/1 选区间。未登录是 code≠200("无权限访问")。
+  - 曲风偏好 `/api/tag/my/preference/get`: `{code:200,data:{tagPreferenceVos:[],tags:[]}}`,
+    **匿名恒为空** ⇒ 后端必须退化到 `/api/tag/list/get`(style_list) 的二级标签, 否则推荐页没有入口。
+  - 曲风歌曲 `/api/style-tag/home/song`: `{data:{songs:[完整 song],page}}`;
+    曲风歌单 `/api/style-tag/home/playlist`: `{data:{playlist:[{id,name,cover,songCount,playCount}]}}`
+    —— 注意歌单字段是 **cover/songCount**, 不是用户歌单的 coverImgUrl/trackCount。
+- "关注动态"按艺人分类的排序是纯 UI 侧聚合(一页 30 条): 分数 = 动态条数*6 + 点赞 + 评论*2 + 转发*2,
+  同分按首次出现(≈最近时间)排; 分类行只放前 8 个, 末尾"进入全部"面板再合并 `subscribedArtists`
+  (关注但本页没发动态的艺人也能选)。
+<!-- created=2026-11-06, last=2026-11-06 -->

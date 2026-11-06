@@ -52,6 +52,10 @@ void main() {
       loadDailyPlaylists: () async => [playlist(10, '推荐歌单A')],
       loadPodcasts: () async => [radio(20, '推荐播客A')],
       loadFm: () async => [song(3, 'FM 曲')],
+      loadStyles: () async => const [
+        rust.StyleTagDto(id: '1009', name: '粤语流行'),
+        rust.StyleTagDto(id: '1020', name: '华语流行'),
+      ],
       onPlaySongs: (songs, index) {
         played = songs;
         playedIndex = index;
@@ -62,6 +66,11 @@ void main() {
       onOpenDaily: () {},
     )));
     await tester.pumpAndSettle();
+
+    // 系统推荐的乐曲风格入口
+    expect(find.text('风格推荐'), findsOneWidget);
+    expect(find.text('粤语流行'), findsOneWidget);
+    expect(find.text('华语流行'), findsOneWidget);
 
     expect(find.text('每日推荐歌曲'), findsOneWidget);
     expect(find.text('推荐歌单'), findsOneWidget);
@@ -98,6 +107,7 @@ void main() {
       loadDailyPlaylists: () async => const [],
       loadPodcasts: () async => const [],
       loadFm: () async => [song(7, 'FM 曲')],
+      loadStyles: () async => const [],
       onPlaySongs: (songs, index) => played = songs,
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},

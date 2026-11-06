@@ -3,12 +3,13 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, Artist, ArtistDetail, Comment, CommentPage, DefaultSearch,
-    FeedEvent, HotSearchTerm, Lyric, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail,
-    SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem, SearchPodcast, Session,
-    Song, StreamUrl, SuggestItem, TrackId,
+    FeedEvent, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio,
+    ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem, SearchPodcast,
+    Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
 };
 use ncm_provider::{
-    BoxFuture, Capability, Provider, ProviderError, ProviderResult, SearchQuery, SongUrlRequest,
+    BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
+    SongUrlRequest,
 };
 use serde_json::Value;
 
@@ -35,6 +36,8 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Artist,
     Capability::ProfileDetail,
     Capability::PlaylistEdit,
+    Capability::ListeningRank,
+    Capability::StyleRecommend,
 ];
 
 /// 内置网易云直连 provider.
@@ -722,6 +725,84 @@ impl Provider for NeteaseProvider {
                 .and_then(Value::as_array)
                 .map(|arr| arr.iter().filter_map(Value::as_u64).map(TrackId::new).collect())
                 .unwrap_or_default())
+        })
+    }
+
+    /// 听歌排行(需要登录): type=0 全部时间 / type=1 最近一周.
+    /// 响应形如 {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}
+    fn play_ranking(
+        &self,
+        period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async move {
+            let uid = self.uid().await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("type", period.type_param());
+            let resp = client.user_record(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_play_ranking(&resp.body, period))
+        })
+    }
+
+    /// 我的曲风偏好: 系统按听歌口味算出来的风格(登录才有).
+    /// 未登录/接口给空时退化成通用曲风表(style_list 的二级标签), 保证推荐页总有入口.
+    fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.style_preference(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut tags = parse_style_preference(&resp.body);
+            if tags.is_empty() {
+                let fallback = client.style_list(&q).await.map_err(map_error)?;
+                check_body(&fallback.body)?;
+                tags = parse_style_list(&fallback.body, 12);
+            }
+            Ok(tags)
+        })
+    }
+
+    /// 某个曲风下的歌曲: 响应形如 {code:200, data:{songs:[...], page:{...}}}
+    fn style_songs<'a>(
+        &'a self,
+        tag_id: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            if tag_id.is_empty() {
+                return Err(ProviderError::not_found("曲风 id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("tagId", tag_id)
+                .param("size", &limit.to_string())
+                .param("cursor", "0");
+            let resp = client.style_song(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_style_songs(&resp.body))
+        })
+    }
+
+    /// 某个曲风下的歌单: 响应形如 {code:200, data:{playlist:[...], page:{...}}}
+    fn style_playlists<'a>(
+        &'a self,
+        tag_id: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            if tag_id.is_empty() {
+                return Err(ProviderError::not_found("曲风 id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("tagId", tag_id)
+                .param("size", &limit.to_string())
+                .param("cursor", "0");
+            let resp = client.style_playlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_style_playlists(&resp.body))
         })
     }
 
@@ -1851,6 +1932,170 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
         .collect()
 }
 
+/// 听歌排行的响应: {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}.
+/// 名次按 score(其次 play_count)倒序, 保证 UI 拿到的顺序稳定.
+pub fn parse_play_ranking(body: &Value, period: RankingPeriod) -> Vec<PlayRankEntry> {
+    let key = match period {
+        RankingPeriod::All => "allData",
+        RankingPeriod::Week => "weekData",
+    };
+    let privileges = parse_privileges(body);
+    let mut out: Vec<PlayRankEntry> = body
+        .get(key)
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|item| {
+                    let song = parse_song_with(item.get("song")?, &privileges)?;
+                    Some(PlayRankEntry {
+                        song,
+                        play_count: u64_of(item, "playCount").unwrap_or(0),
+                        score: u64_of(item, "score").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| b.play_count.cmp(&a.play_count))
+    });
+    out
+}
+
+/// 曲风偏好的响应: {code:200, data:{tagPreferenceVos:[...], tags:[...]}}.
+/// 登录态下真正有内容的是这两个数组之一, 字段名各版本略有差异, 统一容错.
+pub fn parse_style_preference(body: &Value) -> Vec<StyleTag> {
+    let data = body.get("data").unwrap_or(body);
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for key in ["tagPreferenceVos", "tags", "preferenceTags"] {
+        let Some(arr) = data.get(key).and_then(Value::as_array) else {
+            continue;
+        };
+        for item in arr {
+            if let Some(tag) = parse_style_tag(item) {
+                if seen.insert(tag.id.clone()) {
+                    out.push(tag);
+                }
+            }
+        }
+    }
+    // 有的版本 data 直接是数组
+    if out.is_empty() {
+        if let Some(arr) = data.as_array() {
+            for item in arr {
+                if let Some(tag) = parse_style_tag(item) {
+                    if seen.insert(tag.id.clone()) {
+                        out.push(tag);
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+/// 通用曲风表(style_list)的响应: {code:200, data:[{tagId,tagName,picUrl,childrenTags:[...]}]}.
+/// 取二级标签(level 2)作为推荐页入口; 二级为空时退回一级标签本身.
+/// 这是"我的曲风偏好"为空时的兜底, 也是未登录用户能看到的风格入口.
+pub fn parse_style_list(body: &Value, limit: usize) -> Vec<StyleTag> {
+    let Some(arr) = body.get("data").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for top in arr {
+        // 有二级标签就用二级; 一级标签本身只是分组名("语种"/"风格"), 不单列
+        let mut expanded = false;
+        if let Some(children) = top.get("childrenTags").and_then(Value::as_array) {
+            for child in children {
+                if let Some(tag) = parse_style_tag(child) {
+                    out.push(tag);
+                    expanded = true;
+                }
+                if out.len() >= limit {
+                    return out;
+                }
+            }
+        }
+        if !expanded {
+            if let Some(tag) = parse_style_tag(top) {
+                out.push(tag);
+            }
+        }
+        if out.len() >= limit {
+            return out;
+        }
+    }
+    out
+}
+
+fn parse_style_tag(v: &Value) -> Option<StyleTag> {
+    // tagId 有时是数字有时是字符串
+    let id = u64_of(v, "tagId")
+        .map(|n| n.to_string())
+        .or_else(|| str_of(v, "tagId"))
+        .or_else(|| u64_of(v, "id").map(|n| n.to_string()))
+        .or_else(|| str_of(v, "id"))?;
+    let name = str_of(v, "tagName")
+        .or_else(|| str_of(v, "name"))
+        .unwrap_or_default();
+    if id.is_empty() || name.is_empty() {
+        return None;
+    }
+    // style_list 的 picUrl 是相对路径(yyimgs/<hash>), 没有 host, 直接用会报
+    // "No host specified in URI"; 只保留绝对地址, 其余交给 UI 用默认图标.
+    let cover_url = str_of(v, "picUrl")
+        .or_else(|| str_of(v, "coverUrl"))
+        .or_else(|| str_of(v, "imageUrl"))
+        .filter(|s| s.starts_with("http"));
+    Some(StyleTag {
+        id,
+        name,
+        cover_url,
+        song_count: u64_of(v, "songCount").or_else(|| u64_of(v, "songNum")),
+    })
+}
+
+/// 曲风歌曲的响应: {code:200, data:{songs:[{...完整 song 对象...}], page:{...}}}
+pub fn parse_style_songs(body: &Value) -> Vec<Song> {
+    let data = body.get("data").unwrap_or(body);
+    let privileges = parse_privileges(body);
+    data.get("songs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 曲风歌单的响应: {code:200, data:{playlist:[{id,name,cover,songCount,...}], page:{...}}}
+pub fn parse_style_playlists(body: &Value) -> Vec<Playlist> {
+    let data = body.get("data").unwrap_or(body);
+    data.get("playlist")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_style_playlist).collect())
+        .unwrap_or_default()
+}
+
+/// 曲风歌单用的字段名与用户歌单不同: cover / songCount(没有 coverImgUrl/trackCount)
+fn parse_style_playlist(v: &Value) -> Option<Playlist> {
+    let id = u64_of(v, "id")?;
+    Some(Playlist {
+        id,
+        name: str_of(v, "name").unwrap_or_default(),
+        cover_url: str_of(v, "cover")
+            .or_else(|| str_of(v, "coverImgUrl"))
+            .or_else(|| str_of(v, "picUrl"))
+            .filter(|s| !s.is_empty()),
+        track_count: u64_of(v, "songCount").or_else(|| u64_of(v, "trackCount")).unwrap_or(0),
+        special: false,
+    })
+}
+
 fn event_kind(event_type: i64) -> &'static str {
     match event_type {
         18 => "song",
@@ -2481,5 +2726,87 @@ mod tests {
         assert_eq!(e.liked_count, 30);
         assert_eq!(e.share_count, 4);
         assert_eq!(e.comment_count, 3);
+    }
+
+    #[test]
+    fn play_ranking_mapping() {
+        let body = json!({
+            "code": 200,
+            "allData": [
+                {"playCount": 100, "score": 90, "song": {"id": 1, "name": "A", "ar": [{"id": 7, "name": "x"}], "dt": 1000}},
+                {"playCount": 200, "score": 95, "song": {"id": 2, "name": "B", "ar": [{"name": "y"}], "dt": 2000}}
+            ],
+            "weekData": [
+                {"playCount": 5, "score": 5, "song": {"id": 3, "name": "C", "ar": [], "dt": 3000}}
+            ]
+        });
+        let all = parse_play_ranking(&body, RankingPeriod::All);
+        assert_eq!(all.len(), 2);
+        // 按 score 倒序: B(95) 在 A(90) 前
+        assert_eq!(all[0].song.name, "B");
+        assert_eq!(all[0].play_count, 200);
+        let week = parse_play_ranking(&body, RankingPeriod::Week);
+        assert_eq!(week.len(), 1);
+        assert_eq!(week[0].song.name, "C");
+    }
+
+    #[test]
+    fn style_preference_mapping() {
+        // 登录态: data 下的 tagPreferenceVos / tags 两种字段都认
+        let body = json!({"code": 200, "data": {
+            "tagPreferenceVos": [{"tagId": 1009, "tagName": "粤语流行"}],
+            "tags": [
+                {"tagId": "1020", "tagName": "华语流行", "picUrl": "http://p/a.jpg"},
+                {"tagId": 1021, "tagName": "相对图", "picUrl": "yyimgs/abc==/123"}
+            ]
+        }});
+        let tags = parse_style_preference(&body);
+        assert_eq!(tags.len(), 3);
+        // 相对路径(无 host)的 picUrl 要丢掉, 否则 UI 报 No host specified in URI
+        assert!(tags[2].cover_url.is_none());
+        assert_eq!(tags[0].id, "1009");
+        assert_eq!(tags[1].name, "华语流行");
+        assert_eq!(tags[1].cover_url.as_deref(), Some("http://p/a.jpg"));
+
+        // 空偏好(未登录)返回空, 由调用方退化到通用曲风表
+        let empty = json!({"code": 200, "data": {"tagPreferenceVos": [], "tags": []}});
+        assert!(parse_style_preference(&empty).is_empty());
+    }
+
+    #[test]
+    fn style_list_flattens_children() {
+        let body = json!({"code": 200, "data": [
+            {"tagId": 1, "tagName": "语种", "childrenTags": [
+                {"tagId": 1009, "tagName": "粤语流行"},
+                {"tagId": 1020, "tagName": "华语流行"}
+            ]},
+            {"tagId": 2, "tagName": "风格"}
+        ]});
+        let tags = parse_style_list(&body, 10);
+        assert_eq!(tags.len(), 3);
+        assert_eq!(tags[0].id, "1009");
+        assert_eq!(tags[2].name, "风格");
+        // limit 生效
+        assert_eq!(parse_style_list(&body, 1).len(), 1);
+    }
+
+    #[test]
+    fn style_songs_and_playlists_mapping() {
+        let songs_body = json!({"code": 200, "data": {
+            "songs": [{"id": 11, "name": "S", "ar": [{"name": "x"}], "dt": 1000, "fee": 1}],
+            "page": {"total": 1}
+        }});
+        let songs = parse_style_songs(&songs_body);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].name, "S");
+
+        let pl_body = json!({"code": 200, "data": {
+            "playlist": [{"id": 22, "name": "P", "cover": "http://p/c.jpg", "songCount": 200}],
+            "page": {"total": 1}
+        }});
+        let lists = parse_style_playlists(&pl_body);
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].track_count, 200);
+        assert_eq!(lists[0].cover_url.as_deref(), Some("http://p/c.jpg"));
     }
 }

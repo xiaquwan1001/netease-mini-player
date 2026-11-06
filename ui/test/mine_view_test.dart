@@ -56,6 +56,13 @@ MineView buildMine({
       onOpenLiked: () {},
       onOpenRecent: () {},
       loadRecent: () async => [song(7, '最近听的歌')],
+      loadRanking: (period) async => [
+        rust.PlayRankEntryDto(
+          song: song(period == 'week' ? 9 : 8, period == 'week' ? '本周常听' : '最常听'),
+          playCount: BigInt.from(period == 'week' ? 3 : 42),
+          score: BigInt.from(period == 'week' ? 30 : 420),
+        ),
+      ],
     );
 
 void main() {
@@ -93,5 +100,21 @@ void main() {
     expect(find.text('收藏播客'), findsOneWidget);
     // 关注艺人不在这里: 已挪到独立的「关注」tab
     expect(find.text('关注艺人'), findsNothing);
+  });
+
+  testWidgets('登录后下方有听歌排行, 支持总排行/当周切换', (tester) async {
+    await tester.pumpWidget(host(buildMine(loggedIn: true)));
+    await tester.pumpAndSettle();
+
+    // 听歌排行在"我的"最下方, 要滚到底
+    await tester.drag(find.byType(ListView).first, const Offset(0, -2200));
+    await tester.pumpAndSettle();
+    expect(find.text('听歌排行'), findsOneWidget);
+    expect(find.text('最常听'), findsOneWidget);
+
+    await tester.tap(find.text('当周'));
+    await tester.pumpAndSettle();
+    expect(find.text('本周常听'), findsOneWidget);
+    expect(find.text('最常听'), findsNothing);
   });
 }

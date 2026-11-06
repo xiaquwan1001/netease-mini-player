@@ -4,8 +4,9 @@ import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'style_page.dart';
 
-/// 推荐页: 每日推荐(歌曲/歌单) + 推荐播客 + 每日私人 FM + 心动模式.
+/// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
 ///
 /// 所有数据源独立加载(某块失败不影响其它块), 登录态变化时由上层换 key 重建.
 class RecommendView extends StatefulWidget {
@@ -21,6 +22,7 @@ class RecommendView extends StatefulWidget {
     this.loadDailyPlaylists,
     this.loadPodcasts,
     this.loadFm,
+    this.loadStyles,
   });
 
   final bool loggedIn;
@@ -35,6 +37,9 @@ class RecommendView extends StatefulWidget {
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
   final Future<List<rust.SongDto>> Function()? loadFm;
 
+  /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
+  final Future<List<rust.StyleTagDto>> Function()? loadStyles;
+
   @override
   State<RecommendView> createState() => _RecommendViewState();
 }
@@ -48,6 +53,8 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadPodcasts ?? (() => rust.podcastHot(limit: 10));
   Future<List<rust.SongDto>> Function() get _fm =>
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
+  Future<List<rust.StyleTagDto>> Function() get _styles =>
+      widget.loadStyles ?? rust.stylePreference;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +77,12 @@ class _RecommendViewState extends State<RecommendView> {
             onHeartMode: widget.onHeartMode,
           ),
           const SizedBox(height: 12),
+          _StyleSection(
+            load: _styles,
+            onPlaySongs: widget.onPlaySongs,
+            onOpenPlaylist: widget.onOpenPlaylist,
+          ),
+          const SizedBox(height: 16),
           _DailySongsSection(
             load: _dailySongs,
             onPlay: widget.onPlaySongs,
@@ -319,6 +332,67 @@ class _ActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------- 风格推荐入口 ----------------
+
+/// 系统按听歌口味算出来的曲风(网易云"风格推荐").
+/// 点一个风格进风格详情页: 该曲风下的歌单 + 歌曲.
+class _StyleSection extends StatelessWidget {
+  const _StyleSection({
+    required this.load,
+    required this.onPlaySongs,
+    required this.onOpenPlaylist,
+  });
+
+  final Future<List<rust.StyleTagDto>> Function() load;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: '风格推荐',
+          trailing: Text(
+            '按你的听歌口味',
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.outline),
+          ),
+        ),
+        _AsyncSection<List<rust.StyleTagDto>>(
+          load: load,
+          emptyText: '暂时没有风格推荐',
+          builder: (context, tags, reload) => Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final tag in tags)
+                ActionChip(
+                  // 风格的图都是小图标(yyimgs 相对路径), 不一定要拉图;
+                  // 统一用钢琴图标, 保证离线/图挂了也有可点的入口
+                  avatar: Icon(
+                    Icons.piano,
+                    size: 18,
+                    color: theme.colorScheme.primary,
+                  ),
+                  label: Text(tag.name),
+                  onPressed: () => showStyleDetail(
+                    context,
+                    tag: tag,
+                    onPlaySongs: onPlaySongs,
+                    onOpenPlaylist: onOpenPlaylist,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

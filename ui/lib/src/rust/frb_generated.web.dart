@@ -102,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
 
   @protected
+  List<PlayRankEntryDto> dco_decode_list_play_rank_entry_dto(dynamic raw);
+
+  @protected
   List<PlaylistDto> dco_decode_list_playlist_dto(dynamic raw);
 
   @protected
@@ -135,6 +138,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
 
   @protected
+  List<StyleTagDto> dco_decode_list_style_tag_dto(dynamic raw);
+
+  @protected
   List<SuggestItemDto> dco_decode_list_suggest_item_dto(dynamic raw);
 
   @protected
@@ -151,6 +157,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
 
   @protected
   PlayerStateDto dco_decode_player_state_dto(dynamic raw);
@@ -196,6 +205,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StreamDto dco_decode_stream_dto(dynamic raw);
+
+  @protected
+  StyleTagDto dco_decode_style_tag_dto(dynamic raw);
 
   @protected
   SuggestItemDto dco_decode_suggest_item_dto(dynamic raw);
@@ -301,6 +313,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PlayRankEntryDto> sse_decode_list_play_rank_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PlaylistDto> sse_decode_list_playlist_dto(SseDeserializer deserializer);
 
   @protected
@@ -348,6 +365,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
 
   @protected
+  List<StyleTagDto> sse_decode_list_style_tag_dto(SseDeserializer deserializer);
+
+  @protected
   List<SuggestItemDto> sse_decode_list_suggest_item_dto(
     SseDeserializer deserializer,
   );
@@ -368,6 +388,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
 
   @protected
   PlayerStateDto sse_decode_player_state_dto(SseDeserializer deserializer);
@@ -419,6 +442,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   StreamDto sse_decode_stream_dto(SseDeserializer deserializer);
+
+  @protected
+  StyleTagDto sse_decode_style_tag_dto(SseDeserializer deserializer);
 
   @protected
   SuggestItemDto sse_decode_suggest_item_dto(SseDeserializer deserializer);
@@ -556,6 +582,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_play_rank_entry_dto(
+    List<PlayRankEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_playlist_dto(
     List<PlaylistDto> self,
     SseSerializer serializer,
@@ -619,6 +651,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_song_dto(List<SongDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_style_tag_dto(
+    List<StyleTagDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_suggest_item_dto(
     List<SuggestItemDto> self,
     SseSerializer serializer,
@@ -644,6 +682,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_play_rank_entry_dto(
+    PlayRankEntryDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_player_state_dto(
@@ -722,6 +766,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_stream_dto(StreamDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_style_tag_dto(StyleTagDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_suggest_item_dto(

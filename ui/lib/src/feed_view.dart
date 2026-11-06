@@ -18,6 +18,7 @@ class FeedView extends StatefulWidget {
     required this.onPlaySongs, // void Function(List<rust.SongDto>, int)
     required this.onOpenUrl, // Future<void> Function(String url) —— 视频交给系统打开
     this.loadFeed, // 测试注入
+    this.loadSubscribedArtists, // 测试注入(关注艺人, 用于"全部艺人"面板)
   });
 
   final bool loggedIn;
@@ -25,6 +26,7 @@ class FeedView extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final Future<List<rust.FeedEventDto>> Function()? loadFeed;
+  final Future<List<rust.ArtistDto>> Function()? loadSubscribedArtists;
 
   @override
   State<FeedView> createState() => _FeedViewState();
@@ -76,20 +78,52 @@ class _FeedViewState extends State<FeedView> {
     }
   }
 
-  /// 本页出现过的发布者(按首次出现顺序 = 最近的时间顺序), 供分类行使用
+  /// 本页出现过的发布者, 按"互动频率"从高到低(详见 [_Author.score]).
+  /// 同分保持首次出现顺序(≈ 最近一次发动态的时间), 避免分类行顺序乱跳.
   List<_Author> get _authors {
-    final seen = <BigInt>{};
-    final out = <_Author>[];
+    final byKey = <BigInt, _Author>{};
+    var firstSeen = 0;
     for (final e in _events ?? const <rust.FeedEventDto>[]) {
       final key = e.userId != BigInt.zero ? e.userId : BigInt.from(-e.id.toInt());
-      if (!seen.add(key)) continue;
-      out.add(_Author(
-        userId: e.userId,
-        name: e.userName.isEmpty ? '网易云用户' : e.userName,
-        avatarUrl: e.avatarUrl,
-      ));
+      final existing = byKey[key];
+      if (existing == null) {
+        byKey[key] = _Author(
+          userId: e.userId,
+          name: e.userName.isEmpty ? '网易云用户' : e.userName,
+          avatarUrl: e.avatarUrl,
+          firstSeen: firstSeen++,
+        ).addEvent(e);
+      } else {
+        byKey[key] = existing.addEvent(e);
+      }
     }
+    final out = byKey.values.toList()
+      ..sort((a, b) {
+        final byScore = b.score.compareTo(a.score);
+        return byScore != 0 ? byScore : a.firstSeen.compareTo(b.firstSeen);
+      });
     return out;
+  }
+
+  /// 分类行只放互动频率最高的几个, 其余走"进入全部"
+  static const _visibleAuthorCount = 8;
+
+  /// 打开"全部艺人"面板: 本页发布者(按频率) + 关注但本页没发动态的艺人
+  Future<void> _openAllArtists() async {
+    final selected = await showModalBottomSheet<BigInt?>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _AllArtistsSheet(
+        authors: _authors,
+        selected: _authorFilter,
+        loadSubscribed: widget.loadSubscribedArtists ??
+            () => rust.subscribedArtists(limit: 100),
+      ),
+    );
+    // null = 用户取消(不动筛选); BigInt.zero = 面板里的"全部动态"(清筛选)
+    if (selected == null || !mounted) return;
+    setState(() => _authorFilter = selected == BigInt.zero ? null : selected);
   }
 
   List<rust.FeedEventDto> get _visible {
@@ -143,12 +177,15 @@ class _FeedViewState extends State<FeedView> {
       );
     }
     final events = _visible;
+    final authors = _authors;
     return Column(
       children: [
         _ArtistFilterBar(
-          authors: _authors,
+          authors: authors.take(_visibleAuthorCount).toList(),
+          totalAuthors: authors.length,
           selected: _authorFilter,
           onSelected: (id) => setState(() => _authorFilter = id),
+          onOpenAll: _openAllArtists,
         ),
         Expanded(
           child: RefreshIndicator(
@@ -196,24 +233,73 @@ class _FeedViewState extends State<FeedView> {
 }
 
 class _Author {
-  const _Author({required this.userId, required this.name, this.avatarUrl});
+  const _Author({
+    required this.userId,
+    required this.name,
+    this.avatarUrl,
+    this.firstSeen = 0,
+    this.postCount = 0,
+    this.likes = 0,
+    this.comments = 0,
+    this.shares = 0,
+  });
 
   final BigInt userId;
   final String name;
   final String? avatarUrl;
+
+  /// 在本页动态流里首次出现的位置(同分时的次序 + "全部艺人"里的展示顺序)
+  final int firstSeen;
+
+  /// 本页动态条数(≈ 发动态的频率)
+  final int postCount;
+  final int likes;
+  final int comments;
+  final int shares;
+
+  /// "互动频率"分数: 发动态本身权重最高, 其次是被人点赞/评论/转发.
+  /// 只统计当前这页动态(30 条窗口), 因此反映的是"最近谁最活跃/最被互动",
+  /// 不是历史总量 —— 与"当前互动频率较高"的语义一致.
+  int get score => postCount * 6 + likes + comments * 2 + shares * 2;
+
+  _Author addEvent(rust.FeedEventDto e) => _Author(
+        userId: userId,
+        name: name,
+        avatarUrl: avatarUrl ?? e.avatarUrl,
+        firstSeen: firstSeen,
+        postCount: postCount + 1,
+        likes: likes + e.likedCount.toInt(),
+        comments: comments + e.commentCount.toInt(),
+        shares: shares + e.shareCount.toInt(),
+      );
+
+  /// "3 条动态 · 120 互动"
+  String get subtitle {
+    final interactions = likes + comments + shares;
+    final parts = <String>['$postCount 条动态'];
+    if (interactions > 0) parts.add('$interactions 互动');
+    return parts.join(' · ');
+  }
 }
 
-/// 横向艺人分类: "全部" + 本页出现的发布者(头像 + 昵称)
+/// 横向艺人分类: "全部" + 互动频率最高的若干发布者 + 末尾"进入全部"入口
 class _ArtistFilterBar extends StatelessWidget {
   const _ArtistFilterBar({
     required this.authors,
+    required this.totalAuthors,
     required this.selected,
     required this.onSelected,
+    required this.onOpenAll,
   });
 
+  /// 已按互动频率排序, 且已截断到"高频率的几位"
   final List<_Author> authors;
+
+  /// 本页发布者总数(> authors.length 时"进入全部"才有意义)
+  final int totalAuthors;
   final BigInt? selected;
   final void Function(BigInt? userId) onSelected;
+  final Future<void> Function() onOpenAll;
 
   @override
   Widget build(BuildContext context) {
@@ -241,6 +327,18 @@ class _ArtistFilterBar extends StatelessWidget {
               onTap: () => onSelected(a.userId),
               scheme: scheme,
             ),
+          // 末尾固定一个"进入全部": 浏览所有艺人(本页 + 已关注)
+          _AuthorChip(
+            label: totalAuthors > authors.length
+                ? '进入全部($totalAuthors)'
+                : '进入全部',
+            avatarUrl: null,
+            icon: Icons.grid_view,
+            selected: false,
+            onTap: onOpenAll,
+            scheme: scheme,
+            wide: true,
+          ),
         ],
       ),
     );
@@ -255,6 +353,7 @@ class _AuthorChip extends StatelessWidget {
     required this.onTap,
     required this.scheme,
     this.icon,
+    this.wide = false,
   });
 
   final String label;
@@ -263,6 +362,9 @@ class _AuthorChip extends StatelessWidget {
   final VoidCallback onTap;
   final ColorScheme scheme;
   final IconData? icon;
+
+  /// "进入全部"这类文字较长的入口用更宽的格子
+  final bool wide;
 
   @override
   Widget build(BuildContext context) {
@@ -273,7 +375,7 @@ class _AuthorChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: SizedBox(
-          width: 64,
+          width: wide ? 84 : 64,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -648,6 +750,170 @@ class _VideoThumb extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+/// "进入全部": 本页发布者(按互动频率) + 已关注但本页没发动态的艺人.
+/// 选中后把 userId 回传给 FeedView, 由它设置分类筛选.
+class _AllArtistsSheet extends StatefulWidget {
+  const _AllArtistsSheet({
+    required this.authors,
+    required this.selected,
+    required this.loadSubscribed,
+  });
+
+  final List<_Author> authors;
+  final BigInt? selected;
+  final Future<List<rust.ArtistDto>> Function() loadSubscribed;
+
+  @override
+  State<_AllArtistsSheet> createState() => _AllArtistsSheetState();
+}
+
+class _AllArtistsSheetState extends State<_AllArtistsSheet> {
+  List<rust.ArtistDto>? _subscribed;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final list = await retryNetwork(widget.loadSubscribed);
+      if (!mounted) return;
+      setState(() => _subscribed = list);
+    } catch (e) {
+      if (!mounted) return;
+      // 关注列表拉不到不算错: 本页发布者照样能选
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// 已关注但本页没发过动态的艺人(按关注列表顺序)
+  List<rust.ArtistDto> get _others {
+    final list = _subscribed ?? const <rust.ArtistDto>[];
+    if (list.isEmpty) return const [];
+    final inFeed = {for (final a in widget.authors) a.userId};
+    final seen = <BigInt>{};
+    return [
+      for (final a in list)
+        if (!inFeed.contains(a.id) && seen.add(a.id)) a,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final others = _others;
+    final height = MediaQuery.of(context).size.height * 0.75;
+    return SizedBox(
+      height: height,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '全部艺人',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Text(
+                  '共 ${widget.authors.length + others.length} 位',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: scheme.outline),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 16),
+              children: [
+                // 点这一行 = 取消筛选, 回到全部动态
+                ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.all_inclusive, size: 18)),
+                  title: const Text('全部动态'),
+                  subtitle: const Text('不按艺人筛选'),
+                  trailing: widget.selected == null
+                      ? Icon(Icons.check, color: scheme.primary)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(BigInt.zero),
+                ),
+                const Divider(height: 1),
+                if (widget.authors.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: Text(
+                      '本页动态 · 按互动频率排序',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: scheme.outline),
+                    ),
+                  ),
+                for (final a in widget.authors)
+                  ListTile(
+                    leading: CircleCover(url: a.avatarUrl, size: 40),
+                    title: Text(
+                      a.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(a.subtitle),
+                    trailing: widget.selected == a.userId
+                        ? Icon(Icons.check, color: scheme.primary)
+                        : null,
+                    onTap: () => Navigator.of(context).pop(a.userId),
+                  ),
+                if (_subscribed == null && _error == null)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                if (others.isNotEmpty) ...[
+                  const Divider(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    child: Text(
+                      '已关注 · 本页暂无动态',
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: scheme.outline),
+                    ),
+                  ),
+                  for (final a in others)
+                    ListTile(
+                      leading: CircleCover(url: a.avatarUrl, size: 40),
+                      title: Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: const Text('暂无动态'),
+                      trailing: widget.selected == a.id
+                          ? Icon(Icons.check, color: scheme.primary)
+                          : null,
+                      onTap: () => Navigator.of(context).pop(a.id),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

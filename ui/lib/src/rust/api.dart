@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -285,6 +285,25 @@ Future<bool> forwardEvent({
   userId: userId,
   msg: msg,
 );
+
+/// 听歌排行(需登录): period = "all"(总量排行) | "week"(当周排行).
+/// 返回顺序即名次(1 开始由 UI 用下标表达).
+Future<List<PlayRankEntryDto>> playRanking({required String period}) =>
+    RustLib.instance.api.crateApiPlayRanking(period: period);
+
+/// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
+Future<List<StyleTagDto>> stylePreference() =>
+    RustLib.instance.api.crateApiStylePreference();
+
+/// 某个曲风下的歌曲
+Future<List<SongDto>> styleSongs({required String tagId, required int limit}) =>
+    RustLib.instance.api.crateApiStyleSongs(tagId: tagId, limit: limit);
+
+/// 某个曲风下的歌单
+Future<List<PlaylistDto>> stylePlaylists({
+  required String tagId,
+  required int limit,
+}) => RustLib.instance.api.crateApiStylePlaylists(tagId: tagId, limit: limit);
 
 class AccountDto {
   final BigInt userId;
@@ -739,6 +758,34 @@ class LyricLineDto {
           timeMs == other.timeMs &&
           text == other.text &&
           sub == other.sub;
+}
+
+class PlayRankEntryDto {
+  final SongDto song;
+
+  /// 播放次数(周榜是本周的)
+  final BigInt playCount;
+
+  /// 网易云给的推荐分值
+  final BigInt score;
+
+  const PlayRankEntryDto({
+    required this.song,
+    required this.playCount,
+    required this.score,
+  });
+
+  @override
+  int get hashCode => song.hashCode ^ playCount.hashCode ^ score.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlayRankEntryDto &&
+          runtimeType == other.runtimeType &&
+          song == other.song &&
+          playCount == other.playCount &&
+          score == other.score;
 }
 
 class PlayerStateDto {
@@ -1365,6 +1412,35 @@ class StreamDto {
           quality == other.quality &&
           br == other.br &&
           expireAt == other.expireAt;
+}
+
+class StyleTagDto {
+  /// 曲风 tagId(字符串, 直接回传给 style_songs/style_playlists)
+  final String id;
+  final String name;
+  final String? coverUrl;
+  final BigInt? songCount;
+
+  const StyleTagDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    this.songCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ coverUrl.hashCode ^ songCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StyleTagDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          songCount == other.songCount;
 }
 
 class SuggestItemDto {

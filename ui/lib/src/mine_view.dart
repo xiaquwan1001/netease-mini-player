@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'profile_header.dart';
+import 'ranking_view.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
-/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过.
+/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过 / 听歌排行.
 /// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
 /// 所有区块独立加载; 未登录时只显示登录引导.
 class MineView extends StatefulWidget {
@@ -26,6 +27,7 @@ class MineView extends StatefulWidget {
     this.loadPodcasts,
     this.loadProfile,
     this.loadRecent,
+    this.loadRanking,
   });
 
   final bool loggedIn;
@@ -48,6 +50,9 @@ class MineView extends StatefulWidget {
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
   final Future<rust.ProfileDetailDto> Function()? loadProfile;
   final Future<List<rust.SongDto>> Function()? loadRecent;
+
+  /// 听歌排行("all" 总量 / "week" 当周). 缺省走 rust.playRanking.
+  final RankingLoader? loadRanking;
 
   @override
   State<MineView> createState() => _MineViewState();
@@ -120,6 +125,16 @@ class _MineViewState extends State<MineView> {
             load: _loadRecent,
             onOpenAll: widget.onOpenRecent,
             onPlay: widget.onPlaySongs,
+          ),
+          const SizedBox(height: 16),
+          _RankingSection(
+            load: widget.loadRanking,
+            onPlay: widget.onPlaySongs,
+            onOpenAll: () => showPlayRanking(
+              context,
+              onPlaySongs: widget.onPlaySongs,
+              load: widget.loadRanking,
+            ),
           ),
         ],
       ),
@@ -503,6 +518,37 @@ class _CoverCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------- 听歌排行 ----------------
+
+/// "我的"页下方的听歌排行: 总排行/当周切换 + 前 5 条 + 查看全部.
+class _RankingSection extends StatelessWidget {
+  const _RankingSection({
+    required this.load,
+    required this.onPlay,
+    required this.onOpenAll,
+  });
+
+  final RankingLoader? load;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final VoidCallback onOpenAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: '听歌排行'),
+        PlayRankingView(
+          load: load,
+          onPlaySongs: onPlay,
+          compact: true,
+          onOpenAll: onOpenAll,
+        ),
+      ],
     );
   }
 }
