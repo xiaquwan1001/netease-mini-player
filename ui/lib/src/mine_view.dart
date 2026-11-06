@@ -19,6 +19,7 @@ class MineView extends StatefulWidget {
     required this.onPlaySongs,
     required this.onOpenPlaylist,
     required this.onOpenPodcast,
+    required this.onOpenAlbum,
     required this.onOpenRecent,
     required this.onOpenLiked,
     this.onPlayLiked,
@@ -28,6 +29,7 @@ class MineView extends StatefulWidget {
     this.loadProfile,
     this.loadRecent,
     this.loadRanking,
+    this.loadAlbums,
   });
 
   final bool loggedIn;
@@ -36,6 +38,7 @@ class MineView extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
+  final void Function(rust.AlbumItemDto album) onOpenAlbum;
   final VoidCallback onOpenRecent;
 
   /// 打开"我喜欢的音乐"详情页
@@ -54,6 +57,9 @@ class MineView extends StatefulWidget {
   /// 听歌排行("all" 总量 / "week" 当周). 缺省走 rust.playRanking.
   final RankingLoader? loadRanking;
 
+  /// 收藏的专辑(需登录). 缺省走 rust.subscribedAlbums.
+  final Future<List<rust.AlbumItemDto>> Function()? loadAlbums;
+
   @override
   State<MineView> createState() => _MineViewState();
 }
@@ -65,6 +71,8 @@ class _MineViewState extends State<MineView> {
       widget.loadPlaylists ?? rust.myPlaylists;
   Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
+  Future<List<rust.AlbumItemDto>> Function() get _albums =>
+      widget.loadAlbums ?? (() => rust.subscribedAlbums(limit: 50));
   /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
   Future<List<rust.SongDto>> _loadRecent() async {
     try {
@@ -120,6 +128,8 @@ class _MineViewState extends State<MineView> {
           _PlaylistsSection(load: _playlists, onOpen: widget.onOpenPlaylist),
           const SizedBox(height: 16),
           _PodcastsSection(load: _podcasts, onOpen: widget.onOpenPodcast),
+          const SizedBox(height: 16),
+          _AlbumsSection(load: _albums, onOpen: widget.onOpenAlbum),
           const SizedBox(height: 16),
           _RecentSection(
             load: _loadRecent,
@@ -518,6 +528,52 @@ class _CoverCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ---------------- 收藏的专辑 ----------------
+
+class _AlbumsSection extends StatelessWidget {
+  const _AlbumsSection({required this.load, required this.onOpen});
+
+  final Future<List<rust.AlbumItemDto>> Function() load;
+  final void Function(rust.AlbumItemDto album) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: '收藏的专辑'),
+        _AsyncSection<List<rust.AlbumItemDto>>(
+          load: load,
+          emptyText: '还没有收藏专辑(在专辑页点收藏)',
+          builder: (context, albums, reload) => SizedBox(
+            height: 176,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: albums.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, i) {
+                final a = albums[i];
+                return SizedBox(
+                  width: 118,
+                  child: _CoverCard(
+                    coverUrl: a.coverUrl,
+                    title: a.name,
+                    subtitle: [
+                      if (a.artist.isNotEmpty) a.artist,
+                      if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
+                    ].join(' · '),
+                    onTap: () => onOpen(a),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

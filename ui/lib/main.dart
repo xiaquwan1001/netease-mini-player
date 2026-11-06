@@ -959,17 +959,31 @@ class _HomePageState extends State<HomePage> {
     }
     final lists = await retryNetwork(rust.myPlaylists);
     if (!mounted) return;
-    final picked = await showModalBottomSheet<rust.PlaylistDto>(
+    // 返回 PlaylistDto(选已有歌单) 或 'create'(新建歌单)
+    final picked = await showModalBottomSheet<Object>(
       context: context,
       builder: (sheetContext) => SafeArea(
         child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.5,
+          height: MediaQuery.of(sheetContext).size.height * 0.6,
           child: Column(
             children: [
               ListTile(
                 dense: true,
                 title: const Text('收藏到歌单'),
                 subtitle: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                dense: true,
+                leading: CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Icon(Icons.add, size: 20),
+                ),
+                title: const Text('新建歌单'),
+                subtitle: const Text('创建后把这首加进去'),
+                onTap: () => Navigator.pop(sheetContext, 'create'),
               ),
               const Divider(height: 1),
               Expanded(
@@ -997,16 +1011,60 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     if (picked == null) return;
-    if (picked.special) {
+    if (picked is String) {
+      await _createPlaylistAndAdd(song);
+      return;
+    }
+    final pl = picked as rust.PlaylistDto;
+    if (pl.special) {
       await rust.setLiked(trackId: song.id, liked: true);
       if (!mounted) return;
       setState(() => _liked.add(song.id));
       _toast('已加入我喜欢的音乐');
       return;
     }
-    final ok = await rust.addToPlaylist(playlistId: picked.id, trackId: song.id);
+    final ok = await rust.addToPlaylist(playlistId: pl.id, trackId: song.id);
     if (!mounted) return;
-    _toast(ok ? '已收藏到《${picked.name}》' : '收藏未生效, 请稍后重试');
+    _toast(ok ? '已收藏到《${pl.name}》' : '收藏未生效, 请稍后重试');
+  }
+
+  /// 新建歌单并把当前歌曲放进去
+  Future<void> _createPlaylistAndAdd(rust.SongDto song) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('新建歌单'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: '歌单名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      final id = await rust.createPlaylist(name: name);
+      final ok = await rust.addToPlaylist(playlistId: id, trackId: song.id);
+      if (!mounted) return;
+      _toast(ok ? '已新建《$name》并收藏' : '歌单已建, 收藏未生效');
+    } catch (e) {
+      if (!mounted) return;
+      _toast('新建歌单失败: ${friendlyError(e)}');
+    }
   }
 
   Future<void> _showShareSong(rust.SongDto song) async {
@@ -1510,6 +1568,14 @@ class _HomePageState extends State<HomePage> {
           onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
+          onOpenAlbum: (album) => showAlbumPreview(
+            context,
+            albumId: album.id,
+            albumName: album.name,
+            coverUrl: album.coverUrl,
+            onPlay: _playSongsList,
+            initiallySubscribed: true,
+          ),
           onOpenRecent: _openRecent,
           onOpenLiked: _openLikedDetail,
           onPlayLiked: (songs, i) =>

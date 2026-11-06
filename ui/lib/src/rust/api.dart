@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -305,6 +305,82 @@ Future<List<PlaylistDto>> stylePlaylists({
   required int limit,
 }) => RustLib.instance.api.crateApiStylePlaylists(tagId: tagId, limit: limit);
 
+/// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
+Future<List<ChartSummaryDto>> chartList() =>
+    RustLib.instance.api.crateApiChartList();
+
+/// 歌单分类(歌单广场的筛选条)
+Future<List<PlaylistCategoryDto>> playlistCategories() =>
+    RustLib.instance.api.crateApiPlaylistCategories();
+
+/// 某个分类下的歌单(按热度, offset 翻页)
+Future<List<PlaylistDto>> playlistsByCategory({
+  required String cat,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiPlaylistsByCategory(
+  cat: cat,
+  limit: limit,
+  offset: offset,
+);
+
+/// 精品歌单(编辑精选)
+Future<List<PlaylistDto>> highQualityPlaylists({
+  required String cat,
+  required int limit,
+}) => RustLib.instance.api.crateApiHighQualityPlaylists(cat: cat, limit: limit);
+
+/// 我收藏的专辑(需登录)
+Future<List<AlbumItemDto>> subscribedAlbums({required int limit}) =>
+    RustLib.instance.api.crateApiSubscribedAlbums(limit: limit);
+
+/// 收藏/取消收藏专辑(需登录)
+Future<bool> setAlbumSubscribed({
+  required BigInt albumId,
+  required bool subscribed,
+}) => RustLib.instance.api.crateApiSetAlbumSubscribed(
+  albumId: albumId,
+  subscribed: subscribed,
+);
+
+/// 新建歌单(需登录), 返回新歌单 id
+Future<BigInt> createPlaylist({required String name}) =>
+    RustLib.instance.api.crateApiCreatePlaylist(name: name);
+
+/// 删除歌单(需登录, 且只能删自己的)
+Future<bool> deletePlaylist({required BigInt playlistId}) =>
+    RustLib.instance.api.crateApiDeletePlaylist(playlistId: playlistId);
+
+/// 改歌单名
+Future<bool> renamePlaylist({
+  required BigInt playlistId,
+  required String name,
+}) => RustLib.instance.api.crateApiRenamePlaylist(
+  playlistId: playlistId,
+  name: name,
+);
+
+/// 改歌单简介
+Future<bool> updatePlaylistDesc({
+  required BigInt playlistId,
+  required String desc,
+}) => RustLib.instance.api.crateApiUpdatePlaylistDesc(
+  playlistId: playlistId,
+  desc: desc,
+);
+
+/// 把一首歌移出歌单(需登录)
+Future<bool> removeFromPlaylist({
+  required BigInt playlistId,
+  required BigInt trackId,
+}) => RustLib.instance.api.crateApiRemoveFromPlaylist(
+  playlistId: playlistId,
+  trackId: trackId,
+);
+
+/// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
+Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
+
 class AccountDto {
   final BigInt userId;
   final String nickname;
@@ -414,6 +490,41 @@ class AlbumDetailDto {
           songs == other.songs;
 }
 
+class AlbumItemDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String artist;
+  final BigInt trackCount;
+
+  const AlbumItemDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.artist,
+    required this.trackCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      artist.hashCode ^
+      trackCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AlbumItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          artist == other.artist &&
+          trackCount == other.trackCount;
+}
+
 class ArtistDetailDto {
   final BigInt id;
   final String name;
@@ -487,6 +598,48 @@ class ArtistDto {
           id == other.id &&
           name == other.name &&
           avatarUrl == other.avatarUrl;
+}
+
+class ChartSummaryDto {
+  /// 榜单就是歌单, 直接喂给 playlist_songs / playlist_detail
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+
+  /// "每周四更新" / "刚刚更新"
+  final String updateFrequency;
+  final BigInt trackCount;
+  final BigInt playCount;
+
+  const ChartSummaryDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.updateFrequency,
+    required this.trackCount,
+    required this.playCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      updateFrequency.hashCode ^
+      trackCount.hashCode ^
+      playCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChartSummaryDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          updateFrequency == other.updateFrequency &&
+          trackCount == other.trackCount &&
+          playCount == other.playCount;
 }
 
 class CommentDto {
@@ -823,6 +976,27 @@ class PlayerStateDto {
           volume == other.volume;
 }
 
+class PlaylistCategoryDto {
+  /// 一级分类(语种/风格/场景/情感/主题)
+  final String group;
+
+  /// 该分类下的子分类名(华语/欧美/流行…), 直接作为 playlists_by_category 的 cat
+  final List<String> subs;
+
+  const PlaylistCategoryDto({required this.group, required this.subs});
+
+  @override
+  int get hashCode => group.hashCode ^ subs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlaylistCategoryDto &&
+          runtimeType == other.runtimeType &&
+          group == other.group &&
+          subs == other.subs;
+}
+
 class PlaylistDetailDto {
   final BigInt id;
   final String name;
@@ -831,6 +1005,9 @@ class PlaylistDetailDto {
 
   /// 创建者昵称
   final String creatorName;
+
+  /// 创建者 uid(0 = 未知); 与 my_uid() 相同即可编辑这个歌单
+  final BigInt creatorId;
   final BigInt trackCount;
   final BigInt playCount;
 
@@ -847,6 +1024,7 @@ class PlaylistDetailDto {
     this.coverUrl,
     required this.description,
     required this.creatorName,
+    required this.creatorId,
     required this.trackCount,
     required this.playCount,
     required this.subscribed,
@@ -863,6 +1041,7 @@ class PlaylistDetailDto {
       coverUrl.hashCode ^
       description.hashCode ^
       creatorName.hashCode ^
+      creatorId.hashCode ^
       trackCount.hashCode ^
       playCount.hashCode ^
       subscribed.hashCode ^
@@ -881,6 +1060,7 @@ class PlaylistDetailDto {
           coverUrl == other.coverUrl &&
           description == other.description &&
           creatorName == other.creatorName &&
+          creatorId == other.creatorId &&
           trackCount == other.trackCount &&
           playCount == other.playCount &&
           subscribed == other.subscribed &&

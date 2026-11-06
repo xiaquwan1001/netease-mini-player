@@ -85,6 +85,16 @@ pub struct SongDto {
     pub playable: bool,
 }
 
+fn playlist_dto(p: ncm_domain::Playlist) -> PlaylistDto {
+    PlaylistDto {
+        id: p.id,
+        name: p.name,
+        cover_url: p.cover_url,
+        track_count: p.track_count,
+        special: p.special,
+    }
+}
+
 fn song_dto(s: ncm_domain::Song) -> SongDto {
     let artist = s.artist_line();
     let vip = s.is_vip();
@@ -887,6 +897,8 @@ pub struct PlaylistDetailDto {
     pub description: String,
     /// 创建者昵称
     pub creator_name: String,
+    /// 创建者 uid(0 = 未知); 与 my_uid() 相同即可编辑这个歌单
+    pub creator_id: u64,
     pub track_count: u64,
     pub play_count: u64,
     /// 当前账号是否已收藏
@@ -910,6 +922,7 @@ pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetailDto, Stri
         cover_url: d.cover_url,
         description: d.description,
         creator_name: d.creator_name,
+        creator_id: d.creator_id,
         track_count: d.track_count,
         play_count: d.play_count,
         subscribed: d.subscribed,
@@ -1321,6 +1334,156 @@ pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<PlaylistD
             special: p.special,
         })
         .collect())
+}
+
+pub struct ChartSummaryDto {
+    /// 榜单就是歌单, 直接喂给 playlist_songs / playlist_detail
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    /// "每周四更新" / "刚刚更新"
+    pub update_frequency: String,
+    pub track_count: u64,
+    pub play_count: u64,
+}
+
+/// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
+pub async fn chart_list() -> Result<Vec<ChartSummaryDto>, String> {
+    let provider = with_provider(Capability::Chart)?;
+    let list = provider.charts().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|c| ChartSummaryDto {
+            id: c.id,
+            name: c.name,
+            cover_url: c.cover_url,
+            update_frequency: c.update_frequency,
+            track_count: c.track_count,
+            play_count: c.play_count,
+        })
+        .collect())
+}
+
+pub struct PlaylistCategoryDto {
+    /// 一级分类(语种/风格/场景/情感/主题)
+    pub group: String,
+    /// 该分类下的子分类名(华语/欧美/流行…), 直接作为 playlists_by_category 的 cat
+    pub subs: Vec<String>,
+}
+
+/// 歌单分类(歌单广场的筛选条)
+pub async fn playlist_categories() -> Result<Vec<PlaylistCategoryDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let list = provider.playlist_categories().await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|c| PlaylistCategoryDto { group: c.group, subs: c.subs })
+        .collect())
+}
+
+/// 某个分类下的歌单(按热度, offset 翻页)
+pub async fn playlists_by_category(
+    cat: String,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let list = provider
+        .playlists_by_category(&cat, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(playlist_dto).collect())
+}
+
+/// 精品歌单(编辑精选)
+pub async fn high_quality_playlists(cat: String, limit: u32) -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::Playlist)?;
+    let list = provider
+        .high_quality_playlists(&cat, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(playlist_dto).collect())
+}
+
+pub struct AlbumItemDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    pub artist: String,
+    pub track_count: u64,
+}
+
+/// 我收藏的专辑(需登录)
+pub async fn subscribed_albums(limit: u32) -> Result<Vec<AlbumItemDto>, String> {
+    let provider = with_provider(Capability::AlbumSub)?;
+    let list = provider
+        .subscribed_albums(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| AlbumItemDto {
+            id: a.id,
+            name: a.name,
+            cover_url: a.cover_url,
+            artist: a.artist,
+            track_count: a.track_count,
+        })
+        .collect())
+}
+
+/// 收藏/取消收藏专辑(需登录)
+pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::AlbumSub)?;
+    provider
+        .set_album_subscribed(album_id, subscribed)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 新建歌单(需登录), 返回新歌单 id
+pub async fn create_playlist(name: String) -> Result<u64, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider.create_playlist(&name).await.map_err(|e| e.to_string())
+}
+
+/// 删除歌单(需登录, 且只能删自己的)
+pub async fn delete_playlist(playlist_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider.delete_playlist(playlist_id).await.map_err(|e| e.to_string())
+}
+
+/// 改歌单名
+pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider
+        .rename_playlist(playlist_id, &name)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 改歌单简介
+pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider
+        .update_playlist_desc(playlist_id, &desc)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 把一首歌移出歌单(需登录)
+pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::PlaylistEdit)?;
+    provider
+        .remove_track(playlist_id, ncm_domain::TrackId::new(track_id))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
+pub fn my_uid() -> Result<u64, String> {
+    let guard = core()?.lock().map_err(|e| e.to_string())?;
+    Ok(guard.session.profile.as_ref().map(|p| p.user_id).unwrap_or(0))
 }
 
 fn style_tag_dto(tag: ncm_domain::StyleTag) -> StyleTagDto {

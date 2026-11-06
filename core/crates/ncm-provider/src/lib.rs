@@ -6,9 +6,10 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Artist, ArtistDetail, CommentPage, DefaultSearch, FeedEvent, HotSearchTerm, Lyric, PlayRankEntry,
-    Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage,
-    Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
+    HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram,
+    PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, Song, StreamUrl, StyleTag, SuggestItem,
+    TrackId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -47,6 +48,10 @@ pub enum Capability {
     ListeningRank,
     /// 曲风推荐(我的曲风偏好 / 曲风下的歌曲与歌单)
     StyleRecommend,
+    /// 排行榜(榜单列表; 榜单本身就是一个歌单)
+    Chart,
+    /// 收藏专辑(收藏/取消收藏 + 我收藏的专辑)
+    AlbumSub,
 }
 
 impl Capability {
@@ -76,6 +81,8 @@ impl Capability {
             Capability::PlaylistEdit => "playlistEdit",
             Capability::ListeningRank => "listeningRank",
             Capability::StyleRecommend => "styleRecommend",
+            Capability::Chart => "chart",
+            Capability::AlbumSub => "albumSub",
         }
     }
 }
@@ -498,6 +505,86 @@ pub trait Provider: Send + Sync {
         _limit: u32,
     ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
         Box::pin(async { Err(ProviderError::unsupported("no style playlists")) })
+    }
+
+    /// 排行榜列表(飙升/新歌/热歌/原创 + 各语种/曲风榜)
+    fn charts(&self) -> BoxFuture<'_, ProviderResult<Vec<ChartSummary>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no charts")) })
+    }
+
+    /// 歌单分类(语种/风格/场景/情感/主题)
+    fn playlist_categories(&self) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist categories")) })
+    }
+
+    /// 某个分类下的歌单(按热度/最新排序, 支持 offset 翻页)
+    fn playlists_by_category<'a>(
+        &'a self,
+        _cat: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no category playlists")) })
+    }
+
+    /// 精品歌单(编辑精选)
+    fn high_quality_playlists<'a>(
+        &'a self,
+        _cat: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no high quality playlists")) })
+    }
+
+    /// 我收藏的专辑(需要登录)
+    fn subscribed_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed albums")) })
+    }
+
+    /// 收藏/取消收藏专辑(需要登录)
+    fn set_album_subscribed(
+        &self,
+        _album_id: u64,
+        _subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no album subscribe")) })
+    }
+
+    /// 新建歌单(需要登录), 返回新歌单 id
+    fn create_playlist<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, ProviderResult<u64>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist create")) })
+    }
+
+    /// 删除歌单(需要登录)
+    fn delete_playlist(&self, _playlist_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist delete")) })
+    }
+
+    /// 改歌单名
+    fn rename_playlist<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _name: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist rename")) })
+    }
+
+    /// 改歌单简介
+    fn update_playlist_desc<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _desc: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist desc")) })
+    }
+
+    /// 把一首歌移出歌单(需要登录)
+    fn remove_track(
+        &self,
+        _playlist_id: u64,
+        _track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist track delete")) })
     }
 }
 

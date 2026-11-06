@@ -2,10 +2,10 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumBrief, AlbumDetail, Artist, ArtistDetail, Comment, CommentPage, DefaultSearch,
-    FeedEvent, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio,
-    ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem, SearchPodcast,
-    Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
+    DefaultSearch, FeedEvent, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    PodcastProgram, PodcastRadio, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage,
+    SearchPlaylistItem, SearchPodcast, Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -38,6 +38,8 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::PlaylistEdit,
     Capability::ListeningRank,
     Capability::StyleRecommend,
+    Capability::Chart,
+    Capability::AlbumSub,
 ];
 
 /// 内置网易云直连 provider.
@@ -803,6 +805,202 @@ impl Provider for NeteaseProvider {
             let resp = client.style_playlist(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_style_playlists(&resp.body))
+        })
+    }
+
+    /// 排行榜列表: 榜单就是歌单, 详情直接走 playlist_songs / playlist_detail.
+    /// 响应形如 {code, list:[{id,name,coverImgUrl,updateFrequency,trackCount,playCount,tracks}]}
+    fn charts(&self) -> BoxFuture<'_, ProviderResult<Vec<ChartSummary>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.toplist_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_charts(&resp.body))
+        })
+    }
+
+    /// 歌单分类: 响应形如 {code, categories:{0:"语种",...}, sub:[{category:0,name:"华语"},...]}
+    fn playlist_categories(&self) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.playlist_catlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_playlist_categories(&resp.body))
+        })
+    }
+
+    /// 分类歌单: /api/playlist/list, 响应 {code, playlists:[{id,name,coverImgUrl,trackCount}], total, more}
+    fn playlists_by_category<'a>(
+        &'a self,
+        cat: &'a str,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("cat", if cat.is_empty() { "全部" } else { cat })
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string())
+                .param("order", "hot");
+            let resp = client.top_playlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_playlist_bucket(&resp.body, "playlists"))
+        })
+    }
+
+    /// 精品歌单: /api/playlist/highquality/list, 响应 {code, playlists:[...], more, lasttime}
+    fn high_quality_playlists<'a>(
+        &'a self,
+        cat: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("cat", if cat.is_empty() { "全部" } else { cat })
+                .param("limit", &limit.to_string());
+            let resp = client.top_playlist_highquality(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_playlist_bucket(&resp.body, "playlists"))
+        })
+    }
+
+    /// 我收藏的专辑: 响应 {code, data:[{id,name,picUrl,artist:{name},size}], hasMore}
+    fn subscribed_albums(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看收藏的专辑需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", "0");
+            let resp = client.album_sublist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_album_items(&resp.body))
+        })
+    }
+
+    /// 收藏/取消收藏专辑: t=1 收藏, 0 取消
+    fn set_album_subscribed(
+        &self,
+        album_id: u64,
+        subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("收藏专辑需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &album_id.to_string())
+                .param("t", if subscribed { "1" } else { "0" });
+            let resp = client.album_sub(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 新建歌单: 响应 {code, id, playlist:{id,...}}
+    fn create_playlist<'a>(&'a self, name: &'a str) -> BoxFuture<'a, ProviderResult<u64>> {
+        Box::pin(async move {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(ProviderError::internal("歌单名不能为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("新建歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("name", name);
+            let resp = client.playlist_create(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let body = &resp.body;
+            u64_of(body, "id")
+                .or_else(|| body.get("playlist").and_then(|p| u64_of(p, "id")))
+                .ok_or_else(|| ProviderError::internal("新建歌单: 响应里没有 id"))
+        })
+    }
+
+    /// 删除歌单
+    fn delete_playlist(&self, playlist_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("删除歌单需要登录"));
+            }
+            if playlist_id == 0 {
+                return Err(ProviderError::not_found("playlist id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
+            let resp = client.playlist_delete(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    fn rename_playlist<'a>(
+        &'a self,
+        playlist_id: u64,
+        name: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(ProviderError::internal("歌单名不能为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("修改歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &playlist_id.to_string())
+                .param("name", name);
+            let resp = client.playlist_name_update(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    fn update_playlist_desc<'a>(
+        &'a self,
+        playlist_id: u64,
+        desc: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("修改歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &playlist_id.to_string())
+                .param("desc", desc);
+            let resp = client.playlist_desc_update(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 把一首歌移出歌单
+    fn remove_track(
+        &self,
+        playlist_id: u64,
+        track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("修改歌单需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &playlist_id.to_string())
+                .param("ids", &track.to_string());
+            let resp = client.playlist_track_delete(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
         })
     }
 
@@ -1762,6 +1960,11 @@ pub fn parse_playlist_detail(body: &Value) -> ProviderResult<PlaylistDetail> {
             .get("creator")
             .and_then(|c| str_of(c, "nickname"))
             .unwrap_or_default(),
+        creator_id: pl
+            .get("creator")
+            .and_then(|c| u64_of(c, "userId"))
+            .or_else(|| u64_of(pl, "userId"))
+            .unwrap_or(0),
         track_count: u64_of(pl, "trackCount").unwrap_or(0),
         play_count: u64_of(pl, "playCount").unwrap_or(0),
         subscribed: pl.get("subscribed").and_then(Value::as_bool).unwrap_or(false),
@@ -1930,6 +2133,116 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
             })
         })
         .collect()
+}
+
+/// 排行榜列表: {code, list:[{id,name,coverImgUrl,updateFrequency,trackCount,playCount,tracks}]}.
+/// 只取摘要, 曲目进榜单详情时再拉(接口本来也只给前 3 首做预览).
+pub fn parse_charts(body: &Value) -> Vec<ChartSummary> {
+    body.get("list")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    let id = u64_of(v, "id")?;
+                    let name = str_of(v, "name")?;
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(ChartSummary {
+                        id,
+                        name,
+                        cover_url: str_of(v, "coverImgUrl").filter(|s| s.starts_with("http")),
+                        update_frequency: str_of(v, "updateFrequency").unwrap_or_default(),
+                        track_count: u64_of(v, "trackCount").unwrap_or(0),
+                        play_count: u64_of(v, "playCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 歌单分类: {code, categories:{0:"语种",1:"风格",...}, sub:[{category:0,name:"华语"},...]}
+/// 结果按 categories 的 key 顺序给出, 同一一级分类下的子分类按接口顺序.
+pub fn parse_playlist_categories(body: &Value) -> Vec<PlaylistCategory> {
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    let mut index_of = std::collections::HashMap::new();
+    let categories = body.get("categories").and_then(Value::as_object);
+    if let Some(cats) = categories {
+        let mut keys: Vec<(&String, &Value)> = cats.iter().collect();
+        // key 是 "0".."4" 的数字字符串, 按数值排才和图上的顺序一致
+        keys.sort_by_key(|(k, _)| k.parse::<u32>().unwrap_or(u32::MAX));
+        for (k, v) in keys {
+            let name = v.as_str().unwrap_or(k).to_string();
+            index_of.insert(k.clone(), groups.len());
+            groups.push((name, Vec::new()));
+        }
+    }
+    if let Some(subs) = body.get("sub").and_then(Value::as_array) {
+        for sub in subs {
+            let name = str_of(sub, "name").unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            let key = sub
+                .get("category")
+                .map(|c| c.to_string().trim_matches('"').to_string())
+                .unwrap_or_default();
+            match index_of.get(&key) {
+                Some(&i) => groups[i].1.push(name),
+                None => groups.push((String::new(), vec![name])),
+            }
+        }
+    }
+    groups
+        .into_iter()
+        .filter(|(group, subs)| !group.is_empty() && !subs.is_empty())
+        .map(|(group, subs)| PlaylistCategory { group, subs })
+        .collect()
+}
+
+/// 歌单桶: {code, playlists:[{id,name,coverImgUrl,trackCount}]}
+pub fn parse_playlist_bucket(body: &Value, key: &str) -> Vec<Playlist> {
+    body.get(key)
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_playlist).collect())
+        .unwrap_or_default()
+}
+
+/// 收藏的专辑: {code, data:[{id,name,picUrl,artist:{name},size,subTime}], hasMore}
+pub fn parse_album_items(body: &Value) -> Vec<AlbumItem> {
+    body.get("data")
+        .or_else(|| body.get("albums"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    let id = u64_of(v, "id")?;
+                    let name = str_of(v, "name")?;
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(AlbumItem {
+                        id,
+                        name,
+                        cover_url: str_of(v, "picUrl").filter(|s| s.starts_with("http")),
+                        artist: v
+                            .get("artist")
+                            .and_then(|a| str_of(a, "name"))
+                            .or_else(|| v.get("artists").and_then(|a| {
+                                a.as_array()
+                                    .and_then(|arr| arr.first())
+                                    .and_then(|x| str_of(x, "name"))
+                            }))
+                            .unwrap_or_default(),
+                        track_count: u64_of(v, "size")
+                            .or_else(|| u64_of(v, "trackCount"))
+                            .unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 听歌排行的响应: {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}.
@@ -2788,6 +3101,65 @@ mod tests {
         assert_eq!(tags[2].name, "风格");
         // limit 生效
         assert_eq!(parse_style_list(&body, 1).len(), 1);
+    }
+
+    #[test]
+    fn charts_mapping() {
+        let body = json!({"code": 200, "list": [
+            {"id": 19723756, "name": "飙升榜", "coverImgUrl": "https://p/a.jpg",
+             "updateFrequency": "刚刚更新", "trackCount": 100, "playCount": 6522631680u64,
+             "tracks": [{"id": 1, "name": "t"}]},
+            {"id": 3778678, "name": "热歌榜", "coverImgUrl": "yyimgs/rel", "updateFrequency": "更新17首"},
+            {"id": 2, "name": ""}
+        ]});
+        let charts = parse_charts(&body);
+        assert_eq!(charts.len(), 2);
+        assert_eq!(charts[0].name, "飙升榜");
+        assert_eq!(charts[0].update_frequency, "刚刚更新");
+        // 相对图片地址丢掉
+        assert!(charts[1].cover_url.is_none());
+    }
+
+    #[test]
+    fn playlist_categories_mapping() {
+        let body = json!({"code": 200,
+            "categories": {"0": "语种", "1": "风格", "4": "主题"},
+            "sub": [
+                {"category": 1, "name": "流行"},
+                {"category": 0, "name": "华语"},
+                {"category": 4, "name": "综艺"},
+                {"category": 0, "name": "欧美"}
+            ]});
+        let groups = parse_playlist_categories(&body);
+        // 按 categories 的数字 key 排序: 语种 → 风格 → 主题, 空组被过滤
+        assert_eq!(groups.len(), 3);
+        assert_eq!(groups[0].group, "语种");
+        assert_eq!(groups[0].subs, vec!["华语".to_string(), "欧美".to_string()]);
+        assert_eq!(groups[1].group, "风格");
+        assert_eq!(groups[1].subs, vec!["流行".to_string()]);
+    }
+
+    #[test]
+    fn playlists_and_albums_mapping() {
+        let body = json!({"code": 200, "playlists": [
+            {"id": 9, "name": "歌单一", "coverImgUrl": "https://p/c.jpg", "trackCount": 30}
+        ]});
+        let lists = parse_playlist_bucket(&body, "playlists");
+        assert_eq!(lists.len(), 1);
+        assert_eq!(lists[0].track_count, 30);
+
+        let albums = json!({"code": 200, "data": [
+            {"id": 5, "name": "专辑一", "picUrl": "https://p/a.jpg",
+             "artist": {"id": 7, "name": "歌手"}, "size": 12},
+            {"id": 6, "name": "专辑二", "picUrl": "yyimgs/rel",
+             "artists": [{"name": "歌手B"}], "trackCount": 8}
+        ]});
+        let items = parse_album_items(&albums);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].artist, "歌手");
+        assert_eq!(items[0].track_count, 12);
+        assert_eq!(items[1].artist, "歌手B");
+        assert!(items[1].cover_url.is_none());
     }
 
     #[test]

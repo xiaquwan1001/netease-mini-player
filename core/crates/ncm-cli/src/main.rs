@@ -651,6 +651,15 @@ async fn run() -> Result<(), BoxErr> {
                 "style_playlist" => client.style_playlist(&q).await?,
                 "style_list" => client.style_list(&q).await?,
                 "user_record" => client.user_record(&q).await?,
+                "toplist" => client.toplist(&q).await?,
+                "toplist_detail" => client.toplist_detail(&q).await?,
+                "toplist_detail_v2" => client.toplist_detail_v2(&q).await?,
+                "playlist_catlist" => client.playlist_catlist(&q).await?,
+                "playlist_category_list" => client.playlist_category_list(&q).await?,
+                "top_playlist" => client.top_playlist(&q).await?,
+                "top_playlist_highquality" => client.top_playlist_highquality(&q).await?,
+                "playlist_hot" => client.playlist_hot(&q).await?,
+                "album_sublist" => client.album_sublist(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);

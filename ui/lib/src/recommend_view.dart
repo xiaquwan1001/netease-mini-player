@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'playlist_square_page.dart';
 import 'rust/api.dart' as rust;
 import 'style_page.dart';
 
@@ -23,6 +24,7 @@ class RecommendView extends StatefulWidget {
     this.loadPodcasts,
     this.loadFm,
     this.loadStyles,
+    this.loadCharts,
   });
 
   final bool loggedIn;
@@ -40,6 +42,9 @@ class RecommendView extends StatefulWidget {
   /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
   final Future<List<rust.StyleTagDto>> Function()? loadStyles;
 
+  /// 排行榜(榜单就是歌单)
+  final Future<List<rust.ChartSummaryDto>> Function()? loadCharts;
+
   @override
   State<RecommendView> createState() => _RecommendViewState();
 }
@@ -55,6 +60,8 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
   Future<List<rust.StyleTagDto>> Function() get _styles =>
       widget.loadStyles ?? rust.stylePreference;
+  Future<List<rust.ChartSummaryDto>> Function() get _charts =>
+      widget.loadCharts ?? rust.chartList;
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +83,8 @@ class _RecommendViewState extends State<RecommendView> {
             onPlayFm: _playFm,
             onHeartMode: widget.onHeartMode,
           ),
+          const SizedBox(height: 16),
+          _ChartSection(load: _charts, onOpen: widget.onOpenPlaylist),
           const SizedBox(height: 12),
           _StyleSection(
             load: _styles,
@@ -93,6 +102,18 @@ class _RecommendViewState extends State<RecommendView> {
             load: _dailyPlaylists,
             loggedIn: widget.loggedIn,
             onOpen: widget.onOpenPlaylist,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => showPlaylistSquare(
+                context,
+                onOpenPlaylist: widget.onOpenPlaylist,
+              ),
+              icon: const Icon(Icons.grid_view, size: 18),
+              label: const Text('歌单广场'),
+            ),
           ),
           const SizedBox(height: 16),
           _PodcastSection(load: _podcasts, loggedIn: widget.loggedIn, onOpen: widget.onOpenPodcast),
@@ -332,6 +353,51 @@ class _ActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------- 排行榜 ----------------
+
+/// 排行榜入口: 飙升榜/新歌榜/热歌榜…(榜单本身就是歌单, 点开走歌单详情页)
+class _ChartSection extends StatelessWidget {
+  const _ChartSection({required this.load, required this.onOpen});
+
+  final Future<List<rust.ChartSummaryDto>> Function() load;
+  final void Function(rust.PlaylistDto playlist) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: '排行榜'),
+        _AsyncSection<List<rust.ChartSummaryDto>>(
+          load: load,
+          emptyText: '暂时没有榜单',
+          builder: (context, charts, reload) => _CoverRow(
+            height: 176,
+            rows: AppSettings.instance.coverRows,
+            children: [
+              for (final chart in charts)
+                _CoverCard(
+                  coverUrl: chart.coverUrl,
+                  title: chart.name,
+                  subtitle: chart.updateFrequency.isEmpty
+                      ? '${chart.trackCount} 首'
+                      : chart.updateFrequency,
+                  onTap: () => onOpen(rust.PlaylistDto(
+                    id: chart.id,
+                    name: chart.name,
+                    coverUrl: chart.coverUrl,
+                    trackCount: chart.trackCount,
+                    special: false,
+                  )),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

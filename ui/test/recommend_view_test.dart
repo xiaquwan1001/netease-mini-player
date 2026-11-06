@@ -56,6 +56,16 @@ void main() {
         rust.StyleTagDto(id: '1009', name: '粤语流行'),
         rust.StyleTagDto(id: '1020', name: '华语流行'),
       ],
+      loadCharts: () async => [
+        rust.ChartSummaryDto(
+          id: BigInt.from(19723756),
+          name: '飙升榜',
+          coverUrl: null,
+          updateFrequency: '刚刚更新',
+          trackCount: BigInt.from(100),
+          playCount: BigInt.from(1000),
+        ),
+      ],
       onPlaySongs: (songs, index) {
         played = songs;
         playedIndex = index;
@@ -67,6 +77,11 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
+    // 排行榜入口(榜单就是歌单)
+    expect(find.text('排行榜'), findsOneWidget);
+    expect(find.text('飙升榜'), findsOneWidget);
+    expect(find.text('刚刚更新'), findsOneWidget);
+
     // 系统推荐的乐曲风格入口
     expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('粤语流行'), findsOneWidget);
@@ -74,15 +89,27 @@ void main() {
 
     expect(find.text('每日推荐歌曲'), findsOneWidget);
     expect(find.text('推荐歌单'), findsOneWidget);
-    expect(find.text('推荐播客'), findsOneWidget);
     expect(find.text('每日一歌'), findsOneWidget);
     expect(find.text('推荐歌单A'), findsOneWidget);
+
+    // 播客区块在页面下方(排行榜/风格推荐/每日推荐都在它前面), 先滚过去
+    await tester.scrollUntilVisible(
+      find.text('推荐播客'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('推荐播客'), findsOneWidget);
     expect(find.text('推荐播客A'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('每日二歌'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('每日二歌'));
     expect(played?.length, 2);
     expect(playedIndex, 1);
 
+    await tester.ensureVisible(find.text('推荐歌单A'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('推荐歌单A'));
     expect(openedPlaylist?.id, BigInt.from(10));
 
@@ -108,6 +135,7 @@ void main() {
       loadPodcasts: () async => const [],
       loadFm: () async => [song(7, 'FM 曲')],
       loadStyles: () async => const [],
+      loadCharts: () async => const [],
       onPlaySongs: (songs, index) => played = songs,
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},

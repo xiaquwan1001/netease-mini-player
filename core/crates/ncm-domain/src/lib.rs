@@ -321,6 +321,9 @@ pub struct PlaylistDetail {
     pub description: String,
     #[serde(default)]
     pub creator_name: String,
+    /// 创建者 uid(0 = 未知). 与当前账号 uid 相同即可编辑歌单
+    #[serde(default)]
+    pub creator_id: u64,
     #[serde(default)]
     pub track_count: u64,
     #[serde(default)]
@@ -525,6 +528,44 @@ pub struct StyleTag {
     /// 该曲风下曲目总数(部分接口不给)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub song_count: Option<u64>,
+}
+
+/// 排行榜(榜单)摘要: 热歌榜/飙升榜/新歌榜…
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChartSummary {
+    /// 榜单是歌单, 这个 id 可以直接喂给 playlist_detail / playlist_songs
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// "每周四更新" / "刚刚更新" / "更新17首"
+    #[serde(default)]
+    pub update_frequency: String,
+    #[serde(default)]
+    pub track_count: u64,
+    #[serde(default)]
+    pub play_count: u64,
+}
+
+/// 歌单分类: 一级分类(语种/风格/场景/情感/主题) + 其下子分类名
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlaylistCategory {
+    pub group: String,
+    #[serde(default)]
+    pub subs: Vec<String>,
+}
+
+/// 专辑条目: 收藏专辑列表/搜索结果共用(比 AlbumBrief 多歌手名)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AlbumItem {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub track_count: u64,
 }
 
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.

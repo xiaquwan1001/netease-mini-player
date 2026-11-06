@@ -17,6 +17,10 @@ Future<void> showAlbumPreview(
   String? coverUrl,
   required void Function(List<rust.SongDto> songs, int index) onPlay,
   AlbumLoader? loadAlbum,
+  /// 从"收藏的专辑"进来时已知已收藏, 直接显示"已收藏"
+  bool initiallySubscribed = false,
+  /// 测试注入: 收藏/取消收藏
+  Future<bool> Function(BigInt albumId, bool subscribed)? setSubscribed,
 }) {
   return showDialog<void>(
     context: context,
@@ -26,6 +30,12 @@ Future<void> showAlbumPreview(
       coverUrl: coverUrl,
       onPlay: onPlay,
       load: loadAlbum ?? (id) => rust.albumDetail(albumId: id),
+      initiallySubscribed: initiallySubscribed,
+      setSubscribed: setSubscribed ??
+          (id, subscribed) => rust.setAlbumSubscribed(
+                albumId: id,
+                subscribed: subscribed,
+              ),
     ),
   );
 }
@@ -37,6 +47,8 @@ class _AlbumPreviewDialog extends StatefulWidget {
     required this.coverUrl,
     required this.onPlay,
     required this.load,
+    required this.initiallySubscribed,
+    required this.setSubscribed,
   });
 
   final BigInt albumId;
@@ -44,6 +56,8 @@ class _AlbumPreviewDialog extends StatefulWidget {
   final String? coverUrl;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
   final AlbumLoader load;
+  final bool initiallySubscribed;
+  final Future<bool> Function(BigInt albumId, bool subscribed) setSubscribed;
 
   @override
   State<_AlbumPreviewDialog> createState() => _AlbumPreviewDialogState();
@@ -53,6 +67,11 @@ class _AlbumPreviewDialogState extends State<_AlbumPreviewDialog> {
   rust.AlbumDetailDto? _album;
   String? _error;
   bool _loading = false;
+
+  /// 收藏状态: 由入参决定初值, 点按钮后本地翻转(没有可靠的"是否已收藏"查询接口)
+  late bool _subscribed = widget.initiallySubscribed;
+  bool _subBusy = false;
+  String? _subError;
 
   @override
   void initState() {
@@ -74,6 +93,24 @@ class _AlbumPreviewDialogState extends State<_AlbumPreviewDialog> {
       setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _toggleSubscribe() async {
+    final target = !_subscribed;
+    setState(() {
+      _subBusy = true;
+      _subError = null;
+    });
+    try {
+      final ok = await widget.setSubscribed(widget.albumId, target);
+      if (!mounted) return;
+      setState(() => _subscribed = ok ? target : _subscribed);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _subError = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _subBusy = false);
     }
   }
 
@@ -133,6 +170,40 @@ class _AlbumPreviewDialogState extends State<_AlbumPreviewDialog> {
                     ),
                   ],
                 ),
+                if (widget.albumId > BigInt.zero)
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: _subBusy ? null : _toggleSubscribe,
+                        icon: Icon(
+                          _subscribed ? Icons.favorite : Icons.favorite_border,
+                          size: 18,
+                          color: _subscribed
+                              ? Theme.of(context).colorScheme.primary
+                              : null,
+                        ),
+                        label: Text(_subscribed ? '已收藏' : '收藏专辑'),
+                      ),
+                      if (_subBusy)
+                        const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      if (_subError != null)
+                        Expanded(
+                          child: Text(
+                            _subError!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 const SizedBox(height: 8),
                 if (_loading)
                   const Padding(

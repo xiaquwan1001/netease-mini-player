@@ -55,6 +55,16 @@ MineView buildMine({
       onOpenPodcast: (_) {},
       onOpenLiked: () {},
       onOpenRecent: () {},
+      onOpenAlbum: (_) {},
+      loadAlbums: () async => [
+        rust.AlbumItemDto(
+          id: BigInt.from(4),
+          name: '收藏专辑',
+          coverUrl: null,
+          artist: '歌手',
+          trackCount: BigInt.from(10),
+        ),
+      ],
       loadRecent: () async => [song(7, '最近听的歌')],
       loadRanking: (period) async => [
         rust.PlayRankEntryDto(
@@ -98,6 +108,7 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
     await tester.pumpAndSettle();
     expect(find.text('收藏播客'), findsOneWidget);
+    expect(find.text('收藏的专辑'), findsOneWidget);
     // 关注艺人不在这里: 已挪到独立的「关注」tab
     expect(find.text('关注艺人'), findsNothing);
   });
@@ -106,8 +117,12 @@ void main() {
     await tester.pumpWidget(host(buildMine(loggedIn: true)));
     await tester.pumpAndSettle();
 
-    // 听歌排行在"我的"最下方, 要滚到底
-    await tester.drag(find.byType(ListView).first, const Offset(0, -2200));
+    // 听歌排行在"我的"最下方(收藏专辑/最近听过都在它前面), 要滚到底
+    await tester.scrollUntilVisible(
+      find.text('当周'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
     expect(find.text('听歌排行'), findsOneWidget);
     expect(find.text('最常听'), findsOneWidget);

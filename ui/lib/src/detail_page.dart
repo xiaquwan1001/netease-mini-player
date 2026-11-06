@@ -150,6 +150,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   bool _subscribed = false;
   bool _subBusy = false;
 
+  /// 歌单是不是自己的(创建者 uid == 当前账号 uid) —— 决定能否改名/删除/移出曲目
+  bool _canEdit = false;
+  /// "移出曲目"模式: 开着的时候点曲目行 = 从歌单移除
+  bool _editingTracks = false;
+
   List<rust.SongDto>? _songs;
   String? _songsError;
 
@@ -181,13 +186,28 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         () => rust.playlistDetail(playlistId: widget.playlistId),
       );
       if (!mounted) return;
+      final myUid = await _currentUid();
+      if (!mounted) return;
       setState(() {
         _detail = d;
         _subscribed = d.subscribed;
+        _canEdit = widget.loggedIn &&
+            !widget.special &&
+            d.creatorId > BigInt.zero &&
+            d.creatorId == myUid;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _detailError = friendlyError(e));
+    }
+  }
+
+  /// 当前账号 uid(同步接口, 未登录返回 0). 用来判断歌单归属
+  Future<BigInt> _currentUid() async {
+    try {
+      return rust.myUid();
+    } catch (_) {
+      return BigInt.zero;
     }
   }
 
@@ -305,6 +325,127 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     }
   }
 
+  /// 编辑歌单信息(名称/简介). 自己的歌单才有入口.
+  Future<void> _showEditSheet() async {
+    final d = _detail;
+    if (d == null) return;
+    final nameCtrl = TextEditingController(text: d.name);
+    final descCtrl = TextEditingController(text: d.description);
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('编辑歌单信息'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              maxLength: 40,
+              decoration: const InputDecoration(labelText: '名称'),
+            ),
+            TextField(
+              controller: descCtrl,
+              maxLines: 4,
+              minLines: 2,
+              maxLength: 300,
+              decoration: const InputDecoration(labelText: '简介'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    final name = nameCtrl.text.trim();
+    final desc = descCtrl.text;
+    nameCtrl.dispose();
+    descCtrl.dispose();
+    if (save != true || !mounted) return;
+    try {
+      if (name.isNotEmpty && name != d.name) {
+        await rust.renamePlaylist(playlistId: d.id, name: name);
+      }
+      if (desc != d.description) {
+        await rust.updatePlaylistDesc(playlistId: d.id, desc: desc);
+      }
+      _toast('已保存');
+      await _loadDetail();
+    } catch (e) {
+      _toast('保存失败: ${friendlyError(e)}');
+    }
+  }
+
+  /// 删除歌单(自己创建的). 成功后直接退出详情页.
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除歌单'),
+        content: Text('确定删除《${_detail?.name ?? widget.name}》? 删除后无法恢复。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await rust.deletePlaylist(playlistId: widget.playlistId);
+      if (!mounted) return;
+      _toast('歌单已删除');
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      _toast('删除失败: ${friendlyError(e)}');
+    }
+  }
+
+  /// 把一首歌移出歌单
+  Future<void> _removeTrack(rust.SongDto song) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移出歌单'),
+        content: Text('把《${song.name}》移出这个歌单?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('移出'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await rust.removeFromPlaylist(
+        playlistId: widget.playlistId,
+        trackId: song.id,
+      );
+      if (!mounted) return;
+      setState(() => _songs?.removeWhere((s) => s.id == song.id));
+      _toast('已移出《${song.name}》');
+    } catch (e) {
+      _toast('移出失败: ${friendlyError(e)}');
+    }
+  }
+
   void _showShareSheet() {
     _showResourceShareSheet(
       context,
@@ -360,6 +501,30 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
               icon: Icon(_subscribed ? Icons.favorite : Icons.favorite_border),
               onPressed: _subBusy ? null : _toggleSubscribe,
             ),
+          // 自己的歌单才能管理(改名/移出曲目/删除)
+          if (_canEdit)
+            PopupMenuButton<String>(
+              tooltip: '歌单管理',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                switch (value) {
+                  case 'edit':
+                    _showEditSheet();
+                  case 'remove':
+                    setState(() => _editingTracks = !_editingTracks);
+                  case 'delete':
+                    _confirmDelete();
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(value: 'edit', child: Text('编辑歌单信息')),
+                PopupMenuItem(
+                  value: 'remove',
+                  child: Text(_editingTracks ? '结束移出曲目' : '移出曲目'),
+                ),
+                const PopupMenuItem(value: 'delete', child: Text('删除歌单')),
+              ],
+            ),
           IconButton(
             tooltip: '分享',
             icon: const Icon(Icons.share_outlined),
@@ -371,6 +536,35 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         controller: _scroll,
         slivers: [
           SliverToBoxAdapter(child: _buildHeaderCard()),
+          if (_editingTracks)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.remove_circle_outline, size: 16),
+                      const SizedBox(width: 6),
+                      const Expanded(
+                        child: Text(
+                          '移出曲目模式: 点击曲目即可移出歌单',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => _editingTracks = false),
+                        child: const Text('完成'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           SliverToBoxAdapter(child: _buildToolbar()),
           if (_hiddenCount > 0) SliverToBoxAdapter(child: _buildHiddenNote()),
           _buildSongs(display),
@@ -577,6 +771,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
             liked: _liked.contains(song.id),
             onToggleLike: () => _toggleLike(song),
             onTap: () {
+              // 移出模式下点行 = 移出歌单(不动播放队列)
+              if (_editingTracks) {
+                _removeTrack(song);
+                return;
+              }
               widget.onPlaySongs(display, i);
               setState(() => _localTrackId = song.id);
             },

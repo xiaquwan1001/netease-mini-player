@@ -1,15 +1,15 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-06。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-06(第二批: 排行榜/歌单广场/收藏专辑/歌单编辑已接入)。口径与复算方式见文末, 一条命令可重跑。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **45(11%)** |
-| 未接入 | **337** |
-| FFI 导出给 Dart 的函数 | 61 |
+| `ncm-service`(provider)实际调用的 | **56(15%)** |
+| 未接入 | **326** |
+| FFI 导出给 Dart 的函数 | 73 |
 | 其中 UI 还没有入口的 | 6(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `ping`) |
 
 复算:
@@ -19,7 +19,7 @@ bash tools/api-coverage.sh          # 只打统计
 bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 ```
 
-结论先说: **播放链路(搜索/取链/歌词/歌单/专辑/歌手/播客/动态/排行/风格)已经够用**,
+结论先说: **播放链路(搜索/取链/歌词/歌单/专辑/歌手/播客/动态/听歌排行/风格/榜单/歌单广场/收藏专辑/歌单编辑)已经够用**,
 剩下的缺口集中在三块 —— ①"内容发现"类(排行榜/歌单广场/新歌新碟/相似推荐)、
 ②"社区互动"类(评论点赞/私信通知/转发)、③"账号周边"类(收藏专辑/关注粉丝/歌单编辑/签到)。
 ④ MV/视频、云盘、一起听、创作者中心这类需要额外能力(视频解码、上传分片、长连接、权限)的, 建议先不做。
@@ -45,26 +45,28 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 最近播放 | `record_recent_song` | 我的/最近听过 |
 | 听歌排行 | `user_record` | 我的/听歌排行 |
 | 曲风推荐 | `style_preference` `style_list` `style_song` `style_playlist` | 推荐/风格推荐 + 曲风页 |
+| 排行榜 | `toplist_detail` | 推荐页"排行榜"横排 → 榜单详情(榜单即歌单) |
+| 歌单广场 | `playlist_catlist` `top_playlist` `top_playlist_highquality` | 推荐页"歌单广场": 分类筛选/热门/精品/分页 |
+| 收藏专辑 | `album_sub` `album_sublist` | "我的/收藏的专辑" + 专辑弹窗收藏按钮 |
+| 歌单编辑 | `playlist_create` `playlist_delete` `playlist_name_update` `playlist_desc_update` `playlist_track_delete` | 收藏到歌单时新建；自己歌单的编辑信息/移出曲目/删除 |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
-| 1 | 排行榜(热歌/新歌/飙升/原创) | `toplist` `toplist_detail` `toplist_detail_v2` `toplist_artist` | 推荐页入口 + 榜单详情(复用歌单页) | 最高性价比: 详情返回就是 songs 数组 |
-| 2 | 歌单广场/分类浏览 | `playlist_catlist` `playlist_category_list` `playlist_hot` `top_playlist` `top_playlist_highquality` `playlist_highquality_tags` | 发现/推荐页"歌单分类" | 目前只能看推荐 & 自己收藏 |
-| 3 | 新歌/新碟/热门单曲 | `personalized_newsong` `album_new` `album_newest` `top_song` `top_album` `top_artists` | 推荐页新增区块 | 现成 DTO(Song/AlbumBrief) |
-| 4 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` `simi_user` | 歌曲操作菜单"相似歌曲"/歌手页"相似歌手" | 扩展收听路径 |
-| 5 | 收藏专辑 | `album_sub` `album_sublist` | "我的"新增"收藏的专辑" + 专辑页收藏按钮 | 现在专辑只能看不能收 |
-| 6 | 歌单编辑 | `playlist_create` `playlist_delete` `playlist_name_update` `playlist_desc_update` `playlist_track_add` `playlist_track_delete` `playlist_privacy` `playlist_order_update` | 歌单页/歌曲菜单 | 现在"收藏到歌单"无法新建歌单 → 体验断点 |
-| 7 | 评论点赞/楼层/回复 | `comment_like` `comment_floor` `comment_reply` `comment_hot` `comment_delete` | 评论区 | 目前只能看和翻页 |
-| 8 | 关注/粉丝列表 | `user_follows` `user_followeds` `user_subcount` `follow` `user_follow_mixed` | 资料卡的"关注 44·粉丝 11"点进去 | 数字现在是死的 |
-| 9 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
-| 10 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐/FM 菜单 | 调教推荐必需 |
-| 11 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐页"历史推荐" | 错过当天也能补 |
-| 12 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
-| 13 | 签到 | `daily_signin` `signin_progress` `vip_sign` `vip_sign_info` `sign_happy_info` | "我的"/设置 | 只读展示即可, 不碰支付 |
-| 14 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
-| 15 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
+| 1 | 新歌/新碟/热门单曲 | `personalized_newsong` `album_new` `album_newest` `top_song` `top_album` `top_artists` | 推荐页新增区块 | 现成 DTO(Song/AlbumBrief) |
+| 2 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` `simi_user` | 歌曲操作菜单"相似歌曲"/歌手页"相似歌手" | 扩展收听路径 |
+| 3 | 评论点赞/楼层/回复 | `comment_like` `comment_floor` `comment_reply` `comment_hot` `comment_delete` | 评论区 | 目前只能看和翻页 |
+| 4 | 关注/粉丝列表 | `user_follows` `user_followeds` `user_subcount` `follow` `user_follow_mixed` | 资料卡的"关注 44·粉丝 11"点进去 | 数字现在是死的 |
+| 5 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
+| 6 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐/FM 菜单 | 调教推荐必需 |
+| 7 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐页"历史推荐" | 错过当天也能补 |
+| 8 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
+| 9 | 签到 | `daily_signin` `signin_progress` `vip_sign` `vip_sign_info` `sign_happy_info` | "我的"/设置 | 只读展示即可, 不碰支付 |
+| 10 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
+| 11 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
+| 12 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
+| 13 | 歌单细分编辑 | `playlist_privacy` `playlist_order_update` `playlist_cover_update` `playlist_tags_update` | 歌单管理菜单 | **vendor 限制**: `playlist_privacy` 的 `privacy` 写死为 0(只能"取消私密"), 改私密需自己拼请求; 排序/换封面/改标签同理 |
 
 ## 4. 未接入 · 中价值(P1, 有额外成本)
 
@@ -99,25 +101,24 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `podcast_program`(单节目详情)/`podcast_radio`(电台详情): 已导出, UI 用列表数据渲染, 详情刷新没接。
 - `search`(单类型搜索): 已被 `search_all` 取代, 可以直接删掉导出。
 
-## 附录: 未接入 337 个 endpoint(按前缀分组)
+## 附录: 未接入 326 个 endpoint(按前缀分组)
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|
 | `dj` | 25 | `dj_banner`, `dj_category_excludehot`, `dj_category_recommend`, `dj_catelist`, `dj_difm_all_style_channel`, `dj_difm_channel_subscribe`, `dj_difm_channel_unsubscribe`, `dj_difm_playing_tracks_list`, `dj_difm_subscribe_channels_get`, `dj_paygift`, `dj_personalize_recommend`, `dj_program_toplist`, `dj_program_toplist_hours`, `dj_radio_hot`, `dj_radio_top`, `dj_recommend`, `dj_recommend_type`, `dj_sub`, `dj_subscriber`, `dj_today_perfered`, `dj_toplist`, `dj_toplist_hours`, `dj_toplist_newcomer`, `dj_toplist_pay`, `dj_toplist_popular` |
 | `user` | 25 | `user_audio`, `user_binding`, `user_bindingcellphone`, `user_cloud`, `user_cloud_del`, `user_cloud_detail`, `user_comment_history`, `user_detail_new`, `user_dj`, `user_event`, `user_follow_mixed`, `user_followeds`, `user_follows`, `user_level`, `user_medal`, `user_mutualfollow_get`, `user_playlist_collect`, `user_playlist_create`, `user_replacephone`, `user_social_status`, `user_social_status_edit`, `user_social_status_rcmd`, `user_social_status_support`, `user_subcount`, `user_update` |
-| `playlist` | 23 | `playlist_category_list`, `playlist_catlist`, `playlist_cover_update`, `playlist_create`, `playlist_delete`, `playlist_desc_update`, `playlist_detail_dynamic`, `playlist_detail_rcmd_get`, `playlist_highquality_tags`, `playlist_hot`, `playlist_import_name_task_create`, `playlist_import_task_status`, `playlist_mylike`, `playlist_name_update`, `playlist_order_update`, `playlist_privacy`, `playlist_subscribers`, `playlist_tags_update`, `playlist_track_add`, `playlist_track_delete`, `playlist_update`, `playlist_update_playcount`, `playlist_video_recent` |
 | `song` | 22 | `song_chorus`, `song_downlist`, `song_download_url`, `song_download_url_v1`, `song_dynamic_cover`, `song_like`, `song_like_check`, `song_lyrics_mark`, `song_lyrics_mark_add`, `song_lyrics_mark_del`, `song_lyrics_mark_user_page`, `song_monthdownlist`, `song_music_detail`, `song_order_update`, `song_purchased`, `song_red_count`, `song_singledownlist`, `song_url`, `song_url_match`, `song_url_ncmget`, `song_url_v1_302`, `song_wiki_summary` |
+| `playlist` | 17 | `playlist_category_list`, `playlist_cover_update`, `playlist_detail_dynamic`, `playlist_detail_rcmd_get`, `playlist_highquality_tags`, `playlist_hot`, `playlist_import_name_task_create`, `playlist_import_task_status`, `playlist_mylike`, `playlist_order_update`, `playlist_privacy`, `playlist_subscribers`, `playlist_tags_update`, `playlist_track_add`, `playlist_update`, `playlist_update_playcount`, `playlist_video_recent` |
 | `artist` | 11 | `artist_desc`, `artist_detail_dynamic`, `artist_fans`, `artist_follow_count`, `artist_list`, `artist_mv`, `artist_new_mv`, `artist_new_song`, `artist_songs`, `artist_sub`, `artist_video` |
 | `comment` | 11 | `comment`, `comment_delete`, `comment_floor`, `comment_hot`, `comment_hug_list`, `comment_info_list`, `comment_like`, `comment_mv`, `comment_new`, `comment_reply`, `comment_video` |
 | `yunbei` | 11 | `yunbei`, `yunbei_expense`, `yunbei_info`, `yunbei_rcmd_song`, `yunbei_rcmd_song_history`, `yunbei_receipt`, `yunbei_sign`, `yunbei_task_finish`, `yunbei_tasks`, `yunbei_tasks_todo`, `yunbei_today` |
-| `album` | 10 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_new`, `album_newest`, `album_privilege`, `album_songsaleboard`, `album_sub`, `album_sublist` |
 | `listentogether` | 9 | `listentogether_accept`, `listentogether_end`, `listentogether_heatbeat`, `listentogether_play_command`, `listentogether_room_check`, `listentogether_room_create`, `listentogether_status`, `listentogether_sync_list_command`, `listentogether_sync_playlist_get` |
 | `video` | 9 | `video_category_list`, `video_detail`, `video_detail_info`, `video_group`, `video_group_list`, `video_sub`, `video_timeline_all`, `video_timeline_recommend`, `video_url` |
 | `vip` | 9 | `vip_growthpoint`, `vip_growthpoint_details`, `vip_growthpoint_get`, `vip_info`, `vip_info_v2`, `vip_sign`, `vip_sign_info`, `vip_tasks`, `vip_timemachine` |
+| `album` | 8 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_new`, `album_newest`, `album_privilege`, `album_songsaleboard` |
 | `musician` | 8 | `musician_cloudbean`, `musician_cloudbean_obtain`, `musician_data_overview`, `musician_play_trend`, `musician_sign`, `musician_tasks`, `musician_tasks_new`, `musician_vip_tasks` |
 | `mv` | 8 | `mv_all`, `mv_detail`, `mv_detail_info`, `mv_exclusive_rcmd`, `mv_first`, `mv_sub`, `mv_sublist`, `mv_url` |
 | `login` | 7 | `login`, `login_cellphone`, `login_qr_check`, `login_qr_create`, `login_qr_key`, `login_refresh`, `login_status` |
-| `top` | 7 | `top_album`, `top_artists`, `top_list`, `top_mv`, `top_playlist`, `top_playlist_highquality`, `top_song` |
 | `ugc` | 7 | `ugc_album_get`, `ugc_artist_get`, `ugc_artist_search`, `ugc_detail`, `ugc_mv_get`, `ugc_song_get`, `ugc_user_devote` |
 | `cloud` | 6 | `cloud`, `cloud_import`, `cloud_lyric_get`, `cloud_match`, `cloud_upload_complete`, `cloud_upload_token` |
 | `msg` | 6 | `msg_comments`, `msg_forwards`, `msg_notices`, `msg_private`, `msg_private_history`, `msg_recentcontact` |
@@ -129,13 +130,14 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `record` | 5 | `record_recent_album`, `record_recent_dj`, `record_recent_playlist`, `record_recent_video`, `record_recent_voice` |
 | `search` | 5 | `search`, `search_hot_detail`, `search_match`, `search_multimatch`, `search_suggest_pc` |
 | `simi` | 5 | `simi_artist`, `simi_mv`, `simi_playlist`, `simi_song`, `simi_user` |
+| `top` | 5 | `top_album`, `top_artists`, `top_list`, `top_mv`, `top_song` |
 | `digital` | 4 | `digital_album_detail`, `digital_album_ordering`, `digital_album_purchased`, `digital_album_sales` |
 | `send` | 4 | `send_album`, `send_playlist`, `send_song`, `send_text` |
-| `toplist` | 4 | `toplist`, `toplist_artist`, `toplist_detail`, `toplist_detail_v2` |
 | `voice` | 4 | `voice_delete`, `voice_detail`, `voice_lyric`, `voice_upload` |
 | `mlog` | 3 | `mlog_music_rcmd`, `mlog_to_video`, `mlog_url` |
 | `style` | 3 | `style_album`, `style_artist`, `style_detail` |
 | `topic` | 3 | `topic_detail`, `topic_detail_event_hot`, `topic_sublist` |
+| `toplist` | 3 | `toplist`, `toplist_artist`, `toplist_detail_v2` |
 | `captcha` | 2 | `captcha_sent`, `captcha_verify` |
 | `history` | 2 | `history_recommend_songs`, `history_recommend_songs_detail` |
 | `homepage` | 2 | `homepage_block_page`, `homepage_dragon_ball` |

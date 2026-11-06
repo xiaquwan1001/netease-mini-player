@@ -67,6 +67,35 @@ void main() {
     expect(playedIndex, 1);
   });
 
+  testWidgets('专辑预览: 收藏按钮切换收藏/取消', (tester) async {
+    final calls = <String>[];
+    await tester.pumpWidget(host(() {
+      showAlbumPreview(
+        tester.element(find.text('open')),
+        albumId: BigInt.from(9),
+        onPlay: (_, _) {},
+        loadAlbum: (_) async => album(),
+        setSubscribed: (id, subscribed) async {
+          calls.add('${id}:$subscribed');
+          return true;
+        },
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('收藏专辑'), findsOneWidget);
+    await tester.tap(find.text('收藏专辑'));
+    await tester.pumpAndSettle();
+    expect(calls, ['9:true']);
+    expect(find.text('已收藏'), findsOneWidget);
+
+    await tester.tap(find.text('已收藏'));
+    await tester.pumpAndSettle();
+    expect(calls, ['9:true', '9:false']);
+    expect(find.text('收藏专辑'), findsOneWidget);
+  });
+
   testWidgets('专辑预览: albumId 为 0 时只显示封面标题(无网络请求)', (tester) async {
     var called = false;
     await tester.pumpWidget(host(() {
