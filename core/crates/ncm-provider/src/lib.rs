@@ -692,6 +692,29 @@ pub trait Provider: Send + Sync {
     fn similar_artists(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
         Box::pin(async { Err(ProviderError::unsupported("no similar artists")) })
     }
+
+    /// 每日推荐"不感兴趣"(需要登录): 把这首歌从以后的日推里排掉
+    fn dislike_recommend_song(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recommend dislike")) })
+    }
+
+    /// 私人 FM"不再播放"(需要登录)
+    fn trash_fm_song(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no fm trash")) })
+    }
+
+    /// 历史日推可用日期(黑胶 VIP; 形如 "2024-06-20", 新的在前)
+    fn history_recommend_dates(&self) -> BoxFuture<'_, ProviderResult<Vec<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no history recommend dates")) })
+    }
+
+    /// 某个日期的历史日推曲目
+    fn history_recommend_songs<'a>(
+        &'a self,
+        _date: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no history recommend songs")) })
+    }
 }
 
 /// 听歌排行的统计区间.

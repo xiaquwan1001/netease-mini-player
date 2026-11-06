@@ -1341,6 +1341,75 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 每日推荐"不感兴趣": /api/v2/discovery/recommend/dislike
+    fn dislike_recommend_song(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            if song_id == 0 {
+                return Err(ProviderError::not_found("song id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("不感兴趣需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &song_id.to_string());
+            let resp = client.recommend_songs_dislike(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 私人 FM"不再播放": /api/radio/trash/add
+    fn trash_fm_song(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            if song_id == 0 {
+                return Err(ProviderError::not_found("song id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("不感兴趣需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &song_id.to_string());
+            let resp = client.fm_trash(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 历史日推日期列表: {code, data:{dates:[...], noHistoryMessage, purchaseUrl}}
+    /// 非 VIP 时 dates 为空并给一句提示, 当成"没有历史"处理.
+    fn history_recommend_dates(&self) -> BoxFuture<'_, ProviderResult<Vec<String>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("历史日推需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.history_recommend_songs(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_history_dates(&resp.body))
+        })
+    }
+
+    /// 某个日期的历史日推: {code, data:{songs:[...]}}
+    fn history_recommend_songs<'a>(&'a self, date: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            if date.trim().is_empty() {
+                return Err(ProviderError::not_found("日期为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("历史日推需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("date", date);
+            let resp = client.history_recommend_songs_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_song_bucket(
+                resp.body.get("data").unwrap_or(&resp.body),
+                "songs",
+            ))
+        })
+    }
+
     /// 红心/取消红心. 网易云用 HTTP 200 里的 code 表达结果(200 = 成功)
     fn set_like<'a>(&'a self, track: TrackId, liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async move {
@@ -2483,6 +2552,24 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
         .collect()
 }
 
+/// 历史日推日期: {code, data:{dates:["2024-06-20", ...]}}.
+/// 兼容两种形态: 纯字符串数组 或 [{date: "..."}] 对象数组.
+pub fn parse_history_dates(body: &Value) -> Vec<String> {
+    let data = body.get("data").unwrap_or(body);
+    let Some(arr) = data.get("dates").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| {
+            v.as_str()
+                .map(str::to_string)
+                .or_else(|| str_of(v, "date"))
+                .or_else(|| str_of(v, "day"))
+        })
+        .filter(|s| !s.trim().is_empty())
+        .collect()
+}
+
 /// 新歌速递: {code, result:[{id,name,picUrl,song:{完整歌曲}}]} —— 曲目在 item.song 里
 pub fn parse_new_songs(body: &Value) -> Vec<Song> {
     let privileges = parse_privileges(body);
@@ -3560,6 +3647,21 @@ mod tests {
         let fans = parse_user_items(&followeds, "followeds", false);
         assert_eq!(fans.len(), 1);
         assert!(!fans[0].followed);
+    }
+
+    #[test]
+    fn history_dates_mapping() {
+        // 字符串数组
+        let a = json!({"code": 200, "data": {"dates": ["2024-06-20", "2024-06-19"]}});
+        assert_eq!(parse_history_dates(&a), vec!["2024-06-20", "2024-06-19"]);
+        // 对象数组
+        let b = json!({"code": 200, "data": {"dates": [
+            {"date": "2024-06-18"}, {"day": "2024-06-17"}, {"x": 1}
+        ]}});
+        assert_eq!(parse_history_dates(&b), vec!["2024-06-18", "2024-06-17"]);
+        // 非 VIP: 空数组
+        let c = json!({"code": 200, "data": {"dates": [], "noHistoryMessage": "黑胶VIP可查看"}});
+        assert!(parse_history_dates(&c).is_empty());
     }
 
     #[test]

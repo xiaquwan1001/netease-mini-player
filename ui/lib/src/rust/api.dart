@@ -378,6 +378,22 @@ Future<bool> removeFromPlaylist({
   trackId: trackId,
 );
 
+/// 每日推荐"不感兴趣"(需登录)
+Future<bool> dislikeRecommendSong({required BigInt songId}) =>
+    RustLib.instance.api.crateApiDislikeRecommendSong(songId: songId);
+
+/// 私人 FM"不再播放"(需登录)
+Future<bool> trashFmSong({required BigInt songId}) =>
+    RustLib.instance.api.crateApiTrashFmSong(songId: songId);
+
+/// 历史日推可用日期(黑胶 VIP; 新的在前)
+Future<List<String>> historyRecommendDates() =>
+    RustLib.instance.api.crateApiHistoryRecommendDates();
+
+/// 某个日期的历史日推曲目
+Future<List<SongDto>> historyRecommendSongs({required String date}) =>
+    RustLib.instance.api.crateApiHistoryRecommendSongs(date: date);
+
 /// 推荐新音乐("新歌速递")
 Future<List<SongDto>> newSongs({required int limit}) =>
     RustLib.instance.api.crateApiNewSongs(limit: limit);

@@ -17,6 +17,7 @@ class SongActionHost {
     required this.openAlbum,
     required this.download,
     this.similarSongs,
+    this.dislike,
   });
 
   /// 是否已登录(收藏/喜欢仍会回调, 未登录由调用方提示)
@@ -51,6 +52,9 @@ class SongActionHost {
 
   /// 相似歌曲(不传就不显示这一项)
   final Future<void> Function(rust.SongDto song)? similarSongs;
+
+  /// 不感兴趣(每日推荐/FM; 不传就不显示这一项)
+  final Future<void> Function(rust.SongDto song)? dislike;
 }
 
 /// InheritedWidget: 任一子树里的 SongOverflowButton 自动拿到 host
@@ -187,6 +191,13 @@ List<Widget> _menu(
       ),
       onTap: artistEnabled ? () => run(() => host.openArtist(song)) : null,
     ),
+    if (host.dislike != null)
+      ListTile(
+        leading: const Icon(Icons.do_not_disturb_on_outlined),
+        title: const Text('不感兴趣'),
+        subtitle: const Text('少推这类歌(日推/FM)'),
+        onTap: () => run(() => host.dislike!(song)),
+      ),
     if (host.similarSongs != null)
       ListTile(
         leading: const Icon(Icons.auto_awesome_motion_outlined),

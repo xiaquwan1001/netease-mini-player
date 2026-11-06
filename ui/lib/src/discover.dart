@@ -8,15 +8,21 @@ import 'song_actions.dart';
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
 typedef PlaylistListLoader = Future<List<rust.PlaylistDto>> Function();
+typedef DateListLoader = Future<List<String>> Function();
+typedef HistorySongsLoader = Future<List<rust.SongDto>> Function(String date);
 
-/// 每日推荐(原版): 推荐歌曲 + 推荐歌单两个页签.
-/// loadSongs/loadPlaylists 可注入(测试用), 默认走 Rust 接口.
+/// 每日推荐(原版): 推荐歌曲 / 推荐歌单 / 历史日推 三个页签.
+/// loadSongs/loadPlaylists/loadHistoryDates 可注入(测试用), 默认走 Rust 接口.
 Future<void> showDiscoverSheet(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
   SongListLoader? loadSongs,
   PlaylistListLoader? loadPlaylists,
+  DateListLoader? loadHistoryDates,
+  HistorySongsLoader? loadHistorySongs,
+  /// 每日推荐里"不感兴趣"(不传就不显示那个按钮)
+  Future<void> Function(rust.SongDto song)? onDislike,
 }) {
   final songs = loadSongs ?? rust.dailyRecommendSongs;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
@@ -24,7 +30,7 @@ Future<void> showDiscoverSheet(
     context: context,
     isScrollControlled: true,
     builder: (sheetContext) => DefaultTabController(
-      length: 2,
+      length: 3,
       child: SafeArea(
         child: SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.72,
@@ -38,13 +44,24 @@ Future<void> showDiscoverSheet(
                 tabs: [
                   Tab(text: '推荐歌曲'),
                   Tab(text: '推荐歌单'),
+                  Tab(text: '历史日推'),
                 ],
               ),
               Expanded(
                 child: TabBarView(
                   children: [
-                    _DailySongsTab(load: songs, onPlay: onPlaySongs),
+                    _DailySongsTab(
+                      load: songs,
+                      onPlay: onPlaySongs,
+                      onDislike: onDislike,
+                    ),
                     _DailyPlaylistsTab(load: playlists, onOpen: onOpenPlaylist),
+                    _HistoryTab(
+                      loadDates: loadHistoryDates ?? rust.historyRecommendDates,
+                      loadSongs: loadHistorySongs ??
+                          (date) => rust.historyRecommendSongs(date: date),
+                      onPlay: onPlaySongs,
+                    ),
                   ],
                 ),
               ),
@@ -57,10 +74,15 @@ Future<void> showDiscoverSheet(
 }
 
 class _DailySongsTab extends StatefulWidget {
-  const _DailySongsTab({required this.load, required this.onPlay});
+  const _DailySongsTab({
+    required this.load,
+    required this.onPlay,
+    this.onDislike,
+  });
 
   final SongListLoader load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final Future<void> Function(rust.SongDto song)? onDislike;
 
   @override
   State<_DailySongsTab> createState() => _DailySongsTabState();
@@ -112,12 +134,188 @@ class _DailySongsTabState extends State<_DailySongsTab>
         return _SongRow(
           song: s,
           index: i + 1,
+          trailing: widget.onDislike == null
+              ? null
+              : IconButton(
+                  tooltip: '不感兴趣',
+                  icon: const Icon(Icons.do_not_disturb_on_outlined, size: 20),
+                  onPressed: () => _dislike(s),
+                ),
           onTap: s.playable
               ? () {
                   Navigator.pop(context);
                   widget.onPlay(songs, i);
                 }
               : null,
+        );
+      },
+    );
+  }
+
+  /// 不感兴趣: 调接口成功后从本地列表里去掉(以后不会再被推)
+  Future<void> _dislike(rust.SongDto song) async {
+    final handler = widget.onDislike;
+    if (handler == null) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    try {
+      await handler(song);
+      if (!mounted) return;
+      setState(() => _songs?.removeWhere((s) => s.id == song.id));
+      messenger?.showSnackBar(
+        SnackBar(content: Text('已减少《${song.name}》这类推荐')),
+      );
+    } catch (e) {
+      messenger?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+    }
+  }
+}
+
+class _HistoryTab extends StatefulWidget {
+  const _HistoryTab({
+    required this.loadDates,
+    required this.loadSongs,
+    required this.onPlay,
+  });
+
+  final DateListLoader loadDates;
+  final HistorySongsLoader loadSongs;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  @override
+  State<_HistoryTab> createState() => _HistoryTabState();
+}
+
+class _HistoryTabState extends State<_HistoryTab>
+    with AutomaticKeepAliveClientMixin {
+  List<String>? _dates;
+  String? _error;
+  /// 选中的日期(非空时展示那一天的歌单)
+  String? _date;
+  List<rust.SongDto>? _songs;
+  Future<void> Function()? _retry;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDates();
+  }
+
+  Future<void> _loadDates() async {
+    setState(() {
+      _error = null;
+      _retry = _loadDates;
+    });
+    try {
+      final dates = await retryNetwork(widget.loadDates);
+      if (!mounted) return;
+      setState(() => _dates = dates);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  Future<void> _loadSongs(String date) async {
+    setState(() {
+      _date = date;
+      _songs = null;
+      _error = null;
+      _retry = () => _loadSongs(date);
+    });
+    try {
+      final songs = await retryNetwork(() => widget.loadSongs(date));
+      if (!mounted) return;
+      setState(() => _songs = songs);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final theme = Theme.of(context);
+    if (_error != null) {
+      final retry = _retry;
+      return retry == null
+          ? const SizedBox.shrink()
+          : _ErrorView(message: _error!, onRetry: retry);
+    }
+    // 已选日期: 展示那天推荐的歌
+    if (_date != null) {
+      final songs = _songs;
+      if (songs == null) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      return Column(
+        children: [
+          ListTile(
+            dense: true,
+            leading: IconButton(
+              tooltip: '返回日期列表',
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => setState(() {
+                _date = null;
+                _songs = null;
+              }),
+            ),
+            title: Text('$_date 的日推'),
+            subtitle: Text('${songs.length} 首'),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: songs.isEmpty
+                ? const Center(child: Text('这一天没有记录'))
+                : ListView.builder(
+                    itemCount: songs.length,
+                    itemBuilder: (context, i) {
+                      final s = songs[i];
+                      return _SongRow(
+                        song: s,
+                        index: i + 1,
+                        onTap: s.playable
+                            ? () {
+                                Navigator.pop(context);
+                                widget.onPlay(songs, i);
+                              }
+                            : null,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      );
+    }
+    final dates = _dates;
+    if (dates == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (dates.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            '最近 5 次日推仅黑胶 VIP 可见\n(开通后明天再来就会出现在这里)',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      );
+    }
+    return ListView.separated(
+      itemCount: dates.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, i) {
+        final d = dates[i];
+        return ListTile(
+          leading: const Icon(Icons.history),
+          title: Text(d),
+          subtitle: const Text('查看这一天的每日推荐'),
+          onTap: () => _loadSongs(d),
         );
       },
     );
@@ -291,11 +489,15 @@ class _SongRow extends StatelessWidget {
     required this.song,
     required this.index,
     required this.onTap,
+    this.trailing,
   });
 
   final rust.SongDto song;
   final int index;
   final VoidCallback? onTap;
+
+  /// 行尾附加按钮(每日推荐的"不感兴趣")
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -326,6 +528,7 @@ class _SongRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (trailing != null) trailing!,
           if (!song.playable)
             Text('无版权', style: Theme.of(context).textTheme.labelSmall),
           SongOverflowButton(song: song, size: 20),

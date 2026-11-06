@@ -651,6 +651,8 @@ async fn run() -> Result<(), BoxErr> {
                 "style_playlist" => client.style_playlist(&q).await?,
                 "style_list" => client.style_list(&q).await?,
                 "user_record" => client.user_record(&q).await?,
+                "history_recommend_songs" => client.history_recommend_songs(&q).await?,
+                "history_recommend_songs_detail" => client.history_recommend_songs_detail(&q).await?,
                 "personalized_newsong" => client.personalized_newsong(&q).await?,
                 "album_new" => client.album_new(&q).await?,
                 "top_album" => client.top_album(&q).await?,

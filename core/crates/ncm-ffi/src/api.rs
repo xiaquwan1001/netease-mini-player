@@ -1489,6 +1489,43 @@ pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<boo
         .map_err(|e| e.to_string())
 }
 
+/// 每日推荐"不感兴趣"(需登录)
+pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    provider
+        .dislike_recommend_song(song_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 私人 FM"不再播放"(需登录)
+pub async fn trash_fm_song(song_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::PersonalFm)?;
+    provider
+        .trash_fm_song(song_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 历史日推可用日期(黑胶 VIP; 新的在前)
+pub async fn history_recommend_dates() -> Result<Vec<String>, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    provider
+        .history_recommend_dates()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 某个日期的历史日推曲目
+pub async fn history_recommend_songs(date: String) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::DailyRecommend)?;
+    let list = provider
+        .history_recommend_songs(&date)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(song_dto).collect())
+}
+
 /// 推荐新音乐("新歌速递")
 pub async fn new_songs(limit: u32) -> Result<Vec<SongDto>, String> {
     let provider = with_provider(Capability::NewRelease)?;

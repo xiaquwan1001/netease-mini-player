@@ -5,6 +5,20 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 不感兴趣 / 历史日推(2026-11-07 中午)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 日推不感兴趣 | ✅ | `recommend_songs_dislike`: 每日推荐每行 ⊖ → 接口写成功、列表本地移除; 实测"Sahara/Joe Satriani"消失 |
+| FM 不感兴趣 | ✅ | `fm_trash`: 歌曲菜单"不感兴趣"在 FM 队列(`onPlayFm` 标记 `_fmActive`)时走"不再播放", 其余场景走日推 dislike |
+| 历史日推 | ✅ | `history_recommend_songs` + `..._detail`: 每日推荐面板第三个页签, 日期列表 → 某天的歌单; 实测 2026-11-05~11-01 五天, 打开 11-05 得到 34 首 |
+| 回归 | ✅ | Rust 47 单测(新增历史日期解析); Flutter 97 用例(日推不感兴趣/历史日推/菜单显隐); Linux + APK 构建通过 |
+
+**环境坑(重要)**: `tools/build-linux.sh` 报 `rust-lld: undefined hidden symbol ... wire__crate__api__ping_impl` 链接失败,
+是 **cargokit 的增量缓存坏了**(与代码无关): 删掉
+`ui/build/linux/x64/debug/plugins/rust_lib_minincm/cargokit_build` 再构建即好。
+历史日推是**黑胶 VIP 专属**, 非 VIP 时 dates 为空, UI 给一句说明。
+
 ## v2 · 功能包: 新歌新碟 / 相似推荐(2026-11-07 上午)
 
 | 能力 | 状态 | 证据 |

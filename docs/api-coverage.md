@@ -7,9 +7,9 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **68(17%)** |
-| 未接入 | **314** |
-| FFI 导出给 Dart 的函数 | 85 |
+| `ncm-service`(provider)实际调用的 | **72(18%)** |
+| 未接入 | **310** |
+| FFI 导出给 Dart 的函数 | 89 |
 | 其中 UI 还没有入口的 | 7(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
@@ -53,6 +53,8 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 关注/粉丝 | `user_follows` `user_followeds` `follow` `user_subcount` | 资料卡"关注 N/粉丝 N"点进去: 两 tab 列表 + 行内关注/取关 |
 | 新歌/新碟 | `personalized_newsong` `album_new` | 推荐页"新歌速递"(6 首预览, 整批起播) + "新碟上架"(封面横排, 点开专辑弹窗) |
 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` | 歌曲菜单"相似歌曲"(面板: 相似歌曲 + 相似歌单); 歌手页"相似歌手"胶囊(需登录) |
+| 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐每行 ⊖ 按钮; 歌曲菜单"不感兴趣"(FM 队列走 fm_trash, 其余走日推 dislike) |
+| 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐面板第三个页签: 日期列表 → 某天的歌单(黑胶 VIP 专属) |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
@@ -62,14 +64,12 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 2 | 评论管理 | `comment_delete` `comment_hot` `comment_info_list` | 评论区 | 取消自己的评论需要 `comment_delete`(还要判断是不是自己发的); 热门评论已经合在首次返回里 |
 | 3 | 互关/关注推荐 | `user_follow_mixed` `user_mutualfollow_get` `user_followeds` 的分页优化 | 关注页 | 现在关注列表靠 offset 翻页, 混合场景接口能一次拿"关注+互关" |
 | 4 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
-| 6 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐/FM 菜单 | 调教推荐必需 |
-| 7 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐页"历史推荐" | 错过当天也能补 |
-| 8 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
-| 9 | 签到 | `daily_signin` `signin_progress` `vip_sign` `vip_sign_info` `sign_happy_info` | "我的"/设置 | 只读展示即可, 不碰支付 |
-| 10 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
-| 11 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
-| 12 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
-| 13 | 歌单细分编辑 | `playlist_privacy` `playlist_order_update` `playlist_cover_update` `playlist_tags_update` | 歌单管理菜单 | **vendor 限制**: `playlist_privacy` 的 `privacy` 写死为 0(只能"取消私密"), 改私密需自己拼请求; 排序/换封面/改标签同理 |
+| 5 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
+| 6 | 签到 | `daily_signin` `signin_progress` `vip_sign` `vip_sign_info` `sign_happy_info` | "我的"/设置 | 只读展示即可, 不碰支付 |
+| 7 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
+| 8 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
+| 9 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
+| 10 | 歌单细分编辑 | `playlist_privacy` `playlist_order_update` `playlist_cover_update` `playlist_tags_update` | 歌单管理菜单 | **vendor 限制**: `playlist_privacy` 的 `privacy` 写死为 0(只能"取消私密"), 改私密需自己拼请求; 排序/换封面/改标签同理 |
 
 ## 4. 未接入 · 中价值(P1, 有额外成本)
 
@@ -106,7 +106,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
 
-## 附录: 未接入 314 个 endpoint(按前缀分组)
+## 附录: 未接入 310 个 endpoint(按前缀分组)
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|
@@ -143,7 +143,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `topic` | 3 | `topic_detail`, `topic_detail_event_hot`, `topic_sublist` |
 | `toplist` | 3 | `toplist`, `toplist_artist`, `toplist_detail_v2` |
 | `captcha` | 2 | `captcha_sent`, `captcha_verify` |
-| `history` | 2 | `history_recommend_songs`, `history_recommend_songs_detail` |
 | `homepage` | 2 | `homepage_block_page`, `homepage_dragon_ball` |
 | `register` | 2 | `register_anonimous`, `register_cellphone` |
 | `related` | 2 | `related_allvideo`, `related_playlist` |
@@ -166,7 +165,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `daily` | 1 | `daily_signin` |
 | `eapi` | 1 | `eapi_decrypt` |
 | `event` | 1 | `event_del` |
-| `fm` | 1 | `fm_trash` |
 | `get` | 1 | `get_userids` |
 | `hot` | 1 | `hot_topic` |
 | `hug` | 1 | `hug_comment` |
@@ -182,7 +180,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `program` | 1 | `program_recommend` |
 | `rebind` | 1 | `rebind` |
 | `recent` | 1 | `recent_listen_list` |
-| `recommend` | 1 | `recommend_songs_dislike` |
 | `scrobble` | 1 | `scrobble` |
 | `setting` | 1 | `setting` |
 | `sign` | 1 | `sign_happy_info` |

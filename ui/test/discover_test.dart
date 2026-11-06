@@ -119,4 +119,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(played?.single.name, '最近一首');
   });
+
+  testWidgets('每日推荐: 不感兴趣把歌从列表里去掉', (tester) async {
+    final disliked = <String>[];
+    await tester.pumpWidget(host(() {
+      showDiscoverSheet(
+        tester.element(find.text('open')),
+        onPlaySongs: (_, __) {},
+        onOpenPlaylist: (_) {},
+        loadSongs: () async => [song(1, '晴天'), song(2, '七里香')],
+        loadPlaylists: () async => const [],
+        onDislike: (s) async => disliked.add(s.name),
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('不感兴趣'), findsNWidgets(2));
+    await tester.tap(find.byTooltip('不感兴趣').first);
+    await tester.pumpAndSettle();
+
+    expect(disliked, ['晴天']);
+    expect(find.text('晴天'), findsNothing);
+    expect(find.text('七里香'), findsOneWidget);
+  });
+
+  testWidgets('历史日推: 日期列表 → 某天的歌单', (tester) async {
+    List<rust.SongDto>? played;
+    await tester.pumpWidget(host(() {
+      showDiscoverSheet(
+        tester.element(find.text('open')),
+        onPlaySongs: (songs, index) => played = songs,
+        onOpenPlaylist: (_) {},
+        loadSongs: () async => const [],
+        loadPlaylists: () async => const [],
+        loadHistoryDates: () async => ['2024-06-20', '2024-06-19'],
+        loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+    expect(find.text('2024-06-20'), findsOneWidget);
+    expect(find.text('2024-06-19'), findsOneWidget);
+
+    await tester.tap(find.text('2024-06-20'));
+    await tester.pumpAndSettle();
+    expect(find.text('2024-06-20 的日推'), findsOneWidget);
+    expect(find.text('2024-06-20 的歌'), findsOneWidget);
+
+    await tester.tap(find.text('2024-06-20 的歌'));
+    await tester.pumpAndSettle();
+    expect(played?.single.id, BigInt.from(7));
+  });
 }

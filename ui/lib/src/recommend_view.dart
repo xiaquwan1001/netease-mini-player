@@ -28,6 +28,7 @@ class RecommendView extends StatefulWidget {
     this.loadNewSongs,
     this.loadNewAlbums,
     this.onOpenAlbum,
+    this.onPlayFm,
   });
 
   final bool loggedIn;
@@ -54,6 +55,10 @@ class RecommendView extends StatefulWidget {
 
   /// 点专辑卡片(不传就不显示"新碟上架")
   final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+
+  /// 私人FM 起播(不传就回落到 onPlaySongs)。上层用它标记"当前队列来自 FM",
+  /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
+  final void Function(List<rust.SongDto> songs, int index)? onPlayFm;
 
   @override
   State<RecommendView> createState() => _RecommendViewState();
@@ -161,7 +166,12 @@ class _RecommendViewState extends State<RecommendView> {
         _snack('暂时没有可播放的 FM 曲目');
         return;
       }
-      widget.onPlaySongs(playable, 0);
+      final start = widget.onPlayFm;
+      if (start != null) {
+        start(playable, 0);
+      } else {
+        widget.onPlaySongs(playable, 0);
+      }
     } catch (e) {
       _snack(friendlyError(e));
     }

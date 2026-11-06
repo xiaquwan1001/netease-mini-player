@@ -131,6 +131,45 @@ void main() {
     expect(find.textContaining('操作失败'), findsOneWidget);
   });
 
+  testWidgets('挂了"不感兴趣"回调才显示该菜单项', (tester) async {
+    var disliked = 0;
+    final host = SongActionHost(
+      loggedIn: true,
+      isLiked: (_) => false,
+      toggleLike: (_) async {},
+      playNext: (_) async {},
+      addToPlaylist: (_) async {},
+      share: (_) async {},
+      comments: (_) async {},
+      openArtist: (_) async {},
+      openAlbum: (_) async {},
+      download: (_) async {},
+      dislike: (_) async => disliked++,
+    );
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: AppActions(
+          host: host,
+          child: SongOverflowButton(song: fakeSong()),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+    expect(find.text('不感兴趣'), findsOneWidget);
+    await tester.tap(find.text('不感兴趣'));
+    await tester.pumpAndSettle();
+    expect(disliked, 1);
+  });
+
+  testWidgets('没有回调时不显示"不感兴趣"与"相似歌曲"', (tester) async {
+    await tester.pumpWidget(app(FakeHost(), fakeSong()));
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+    expect(find.text('不感兴趣'), findsNothing);
+    expect(find.text('相似歌曲'), findsNothing);
+  });
+
   testWidgets('未挂 AppActions 时按钮渲染为空', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

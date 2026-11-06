@@ -500,6 +500,7 @@ class _HomePageState extends State<HomePage> {
       context,
       onPlaySongs: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
+      onDislike: (song) => rust.dislikeRecommendSong(songId: song.id),
     );
   }
 
@@ -913,6 +914,7 @@ class _HomePageState extends State<HomePage> {
     openArtist: _openSongArtist,
     openAlbum: _openSongAlbum,
     download: _downloadSong,
+    dislike: _dislikeSong,
     similarSongs: (song) => showSimilarSongs(
       context,
       song: song,
@@ -1201,6 +1203,31 @@ class _HomePageState extends State<HomePage> {
       await _toggleLikeFor(song);
     } catch (e) {
       if (mounted) _toast('收藏失败: $e');
+    }
+  }
+
+  /// 当前队列是否来自私人FM(决定"不感兴趣"走 fm_trash 还是日推 dislike)
+  bool _fmActive = false;
+
+  /// 不感兴趣: FM 队列里走"不再播放", 其它场景走"少推这类歌"
+  Future<void> _dislikeSong(rust.SongDto song) async {
+    if (_info?.loggedIn != true) {
+      _toast('不感兴趣需要先登录');
+      return;
+    }
+    try {
+      if (_fmActive) {
+        await rust.trashFmSong(songId: song.id);
+        if (!mounted) return;
+        _toast('已从私人FM里去掉《${song.name}》');
+      } else {
+        await rust.dislikeRecommendSong(songId: song.id);
+        if (!mounted) return;
+        _toast('已减少《${song.name}》这类推荐');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _toast('操作失败: ${friendlyError(e)}');
     }
   }
 
@@ -1567,6 +1594,10 @@ class _HomePageState extends State<HomePage> {
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
+          onPlayFm: (songs, index) {
+            _fmActive = true;
+            _playSongsList(songs, index);
+          },
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,
