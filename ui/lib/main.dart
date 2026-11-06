@@ -16,6 +16,7 @@ import 'src/feed_view.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
 import 'src/messages_page.dart';
+import 'src/new_release_page.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/playback.dart';
@@ -1616,6 +1617,30 @@ class _HomePageState extends State<HomePage> {
             albumName: album.name,
             coverUrl: album.coverUrl,
             onPlay: _playSongsList,
+          ),
+          onOpenNewRelease: () => showNewReleasePage(
+            context,
+            onPlaySongs: _playSongsList,
+            onOpenAlbum: (album) => showAlbumPreview(
+              context,
+              albumId: album.id,
+              albumName: album.name,
+              coverUrl: album.coverUrl,
+              onPlay: _playSongsList,
+            ),
+            onOpenArtist: (artist) => showArtistDetail(
+              context,
+              artistId: artist.id,
+              name: artist.name,
+              onPlaySongs: (songs, i) => _playSongsList(songs, i),
+              onOpenAlbum: (id, name, cover) => showAlbumPreview(
+                context,
+                albumId: id,
+                albumName: name,
+                coverUrl: cover,
+                onPlay: (songs, i) => _playSongsList(songs, i),
+              ),
+            ),
           ),
         );
       case 2:

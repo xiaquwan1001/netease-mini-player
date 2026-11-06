@@ -516,6 +516,24 @@ Future<bool> deleteComment({
 Future<List<WikiFactDto>> songWiki({required BigInt songId}) =>
     RustLib.instance.api.crateApiSongWiki(songId: songId);
 
+/// 新歌速递(按地区; area = all|zh|ea|jp|kr)
+Future<List<SongDto>> newSongsByArea({
+  required String area,
+  required int limit,
+}) => RustLib.instance.api.crateApiNewSongsByArea(area: area, limit: limit);
+
+/// 新碟上架(按地区)
+Future<List<AlbumItemDto>> newAlbumsByArea({
+  required String area,
+  required int limit,
+}) => RustLib.instance.api.crateApiNewAlbumsByArea(area: area, limit: limit);
+
+/// 热门歌手榜
+Future<List<HotArtistDto>> hotArtists({
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiHotArtists(limit: limit, offset: offset);
+
 /// 未读消息计数(需登录)
 Future<MessageCountsDto> messageCounts() =>
     RustLib.instance.api.crateApiMessageCounts();
@@ -1042,6 +1060,36 @@ class FollowCountDto {
       other is FollowCountDto &&
           runtimeType == other.runtimeType &&
           follows == other.follows &&
+          fans == other.fans;
+}
+
+class HotArtistDto {
+  final BigInt id;
+  final String name;
+  final String? avatarUrl;
+
+  /// 粉丝数(列表页显示热度)
+  final BigInt fans;
+
+  const HotArtistDto({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    required this.fans,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ avatarUrl.hashCode ^ fans.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HotArtistDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          avatarUrl == other.avatarUrl &&
           fans == other.fans;
 }
 

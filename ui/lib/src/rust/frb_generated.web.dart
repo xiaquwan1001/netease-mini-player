@@ -78,6 +78,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FollowCountDto dco_decode_follow_count_dto(dynamic raw);
 
   @protected
+  HotArtistDto dco_decode_hot_artist_dto(dynamic raw);
+
+  @protected
   HotSearchTermDto dco_decode_hot_search_term_dto(dynamic raw);
 
   @protected
@@ -112,6 +115,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
+
+  @protected
+  List<HotArtistDto> dco_decode_list_hot_artist_dto(dynamic raw);
 
   @protected
   List<HotSearchTermDto> dco_decode_list_hot_search_term_dto(dynamic raw);
@@ -344,6 +350,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FollowCountDto sse_decode_follow_count_dto(SseDeserializer deserializer);
 
   @protected
+  HotArtistDto sse_decode_hot_artist_dto(SseDeserializer deserializer);
+
+  @protected
   HotSearchTermDto sse_decode_hot_search_term_dto(SseDeserializer deserializer);
 
   @protected
@@ -384,6 +393,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FeedEventDto> sse_decode_list_feed_event_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HotArtistDto> sse_decode_list_hot_artist_dto(
     SseDeserializer deserializer,
   );
 
@@ -686,6 +700,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_hot_artist_dto(HotArtistDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_hot_search_term_dto(
     HotSearchTermDto self,
     SseSerializer serializer,
@@ -742,6 +759,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_feed_event_dto(
     List<FeedEventDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_hot_artist_dto(
+    List<HotArtistDto> self,
     SseSerializer serializer,
   );
 

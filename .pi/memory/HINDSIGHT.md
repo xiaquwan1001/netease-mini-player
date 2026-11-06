@@ -250,4 +250,14 @@ API/protocol details and anti-bot technique live in the
   `resourceJson` 也是 JSON 字符串, `name` 是被评论的资源名。
 - vendor 没有私信发送接口 → UI 明确标"只读"; 已读上报也没做。
 
+## 新歌/新碟分地区 + 歌手榜(2026-11-06)
+
+- `top_song`(`/api/v1/discovery/new/songs`) 的 `type` 实为 **areaId**, 只有
+  **0 全部 / 7 华语 / 8 日语 / 16 韩语 / 96 欧美** 有数据; 1..6、17、18 都是空数组(别按"0-4 五种语言"的旧文档写)。
+- `top_album`(`/api/discovery/new/albums/area`): `area` 是 **字符串** ALL/ZH/EA/JP/KR;
+  **部分地区 weekData 空、monthData 有货**(ZH 就是), 必须两桶合并去重, 否则华语新碟显示为空。
+- `top_artists`(`/api/artist/top`): 顺序是服务端热度序, **不是 fansCount 倒序**; 前端别重排。
+- `top_song` 的 `data[]` 是完整 song 对象但字段是 `artists`/`album`/`duration`
+  (cloudsearch 是 `ar`/`al`/`dt`), 现有 `parse_song_with` 两种都认, 直接复用即可。
+
 <!-- created=2026-11-06, last=2026-11-06 -->

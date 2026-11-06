@@ -1810,6 +1810,61 @@ pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFactDto>, String> {
         .collect())
 }
 
+/// 新歌速递(按地区; area = all|zh|ea|jp|kr)
+pub async fn new_songs_by_area(area: String, limit: u32) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider
+        .new_songs_by_area(&area, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(song_dto).collect())
+}
+
+/// 新碟上架(按地区)
+pub async fn new_albums_by_area(area: String, limit: u32) -> Result<Vec<AlbumItemDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider
+        .new_albums_by_area(&area, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| AlbumItemDto {
+            id: a.id,
+            name: a.name,
+            cover_url: a.cover_url,
+            artist: a.artist,
+            track_count: a.track_count,
+        })
+        .collect())
+}
+
+pub struct HotArtistDto {
+    pub id: u64,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    /// 粉丝数(列表页显示热度)
+    pub fans: u64,
+}
+
+/// 热门歌手榜
+pub async fn hot_artists(limit: u32, offset: u32) -> Result<Vec<HotArtistDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider
+        .hot_artists(limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| HotArtistDto {
+            id: a.id,
+            name: a.name,
+            avatar_url: a.avatar_url,
+            fans: a.fans,
+        })
+        .collect())
+}
+
 pub struct MessageCountsDto {
     pub private: u32,
     pub notices: u32,

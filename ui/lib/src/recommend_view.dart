@@ -29,6 +29,7 @@ class RecommendView extends StatefulWidget {
     this.loadNewAlbums,
     this.onOpenAlbum,
     this.onPlayFm,
+    this.onOpenNewRelease,
   });
 
   final bool loggedIn;
@@ -59,6 +60,9 @@ class RecommendView extends StatefulWidget {
   /// 私人FM 起播(不传就回落到 onPlaySongs)。上层用它标记"当前队列来自 FM",
   /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
   final void Function(List<rust.SongDto> songs, int index)? onPlayFm;
+
+  /// 打开"新歌 / 新碟 / 歌手"分类页(不传就不显示"更多"入口)
+  final VoidCallback? onOpenNewRelease;
 
   @override
   State<RecommendView> createState() => _RecommendViewState();
@@ -117,7 +121,11 @@ class _RecommendViewState extends State<RecommendView> {
             onOpenAll: widget.onOpenDaily,
           ),
           const SizedBox(height: 16),
-          _NewSongsSection(load: _newSongs, onPlay: widget.onPlaySongs),
+          _NewSongsSection(
+            load: _newSongs,
+            onPlay: widget.onPlaySongs,
+            onMore: widget.onOpenNewRelease,
+          ),
           const SizedBox(height: 16),
           _DailyPlaylistsSection(
             load: _dailyPlaylists,
@@ -142,6 +150,7 @@ class _RecommendViewState extends State<RecommendView> {
               load: _newAlbums,
               onOpen: widget.onOpenAlbum!,
               loggedIn: widget.loggedIn,
+              onMore: widget.onOpenNewRelease,
             ),
           ],
           const SizedBox(height: 16),
@@ -395,17 +404,25 @@ class _ActionCard extends StatelessWidget {
 
 /// 新歌速递: 一排歌曲(点任意一首按这个列表起播)
 class _NewSongsSection extends StatelessWidget {
-  const _NewSongsSection({required this.load, required this.onPlay});
+  const _NewSongsSection({required this.load, required this.onPlay, this.onMore});
 
   final Future<List<rust.SongDto>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  /// "更多"入口(新歌/新碟/歌手分类页)
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '新歌速递'),
+        _SectionHeader(
+          title: '新歌速递',
+          trailing: onMore == null
+              ? null
+              : TextButton(onPressed: onMore, child: const Text('更多')),
+        ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
           emptyText: '暂时没有新歌',
@@ -460,18 +477,27 @@ class _NewAlbumsSection extends StatelessWidget {
     required this.load,
     required this.onOpen,
     required this.loggedIn,
+    this.onMore,
   });
 
   final Future<List<rust.AlbumItemDto>> Function() load;
   final void Function(rust.AlbumItemDto album) onOpen;
   final bool loggedIn;
 
+  /// "更多"入口(新歌/新碟/歌手分类页)
+  final VoidCallback? onMore;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '新碟上架'),
+        _SectionHeader(
+          title: '新碟上架',
+          trailing: onMore == null
+              ? null
+              : TextButton(onPressed: onMore, child: const Text('更多')),
+        ),
         _AsyncSection<List<rust.AlbumItemDto>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',

@@ -8,7 +8,7 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile,
+    HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     UserItem, WikiFact,
 };
@@ -787,6 +787,33 @@ pub trait Provider: Send + Sync {
         _before_ms: u64,
     ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
         Box::pin(async { Err(ProviderError::unsupported("no private history")) })
+    }
+
+    /// 新歌速递(按地区; area = all|zh|ea|jp|kr)
+    fn new_songs_by_area<'a>(
+        &'a self,
+        _area: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new songs by area")) })
+    }
+
+    /// 新碟上架(按地区; area 同上)
+    fn new_albums_by_area<'a>(
+        &'a self,
+        _area: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new albums by area")) })
+    }
+
+    /// 热门歌手榜(按粉丝/热度倒序)
+    fn hot_artists(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<HotArtist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot artists")) })
     }
 
     /// 通知(点赞/关注/系统), 新的在前

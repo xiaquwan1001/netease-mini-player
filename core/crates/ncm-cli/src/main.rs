@@ -459,6 +459,64 @@ async fn run() -> Result<(), BoxErr> {
             println!("deleted = {}", p.delete_comment(&thread, cid).await?);
             Ok(())
         }
+        "newsongs" | "newalbums" | "topartists" => {
+            // ncm newsongs [all|zh|ea|jp|kr] [--limit 20]
+            // ncm newalbums [all|zh|ea|jp|kr] [--limit 20]
+            // ncm topartists [--limit 20]
+            let area = args.positional.first().cloned().unwrap_or_else(|| "all".into());
+            let limit: u32 = args
+                .value("--limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(20);
+            announce(&core);
+            let p = provider(&core, Capability::NewRelease)?;
+            match args.cmd.as_str() {
+                "newsongs" => {
+                    let list = p.new_songs_by_area(&area, limit).await?;
+                    println!("count = {}", list.len());
+                    for (i, s) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} — {} ({:.0}s) vip={}",
+                            i + 1,
+                            s.id,
+                            s.name,
+                            s.artist_line(),
+                            s.duration_ms as f64 / 1000.0,
+                            s.is_vip()
+                        );
+                    }
+                }
+                "newalbums" => {
+                    let list = p.new_albums_by_area(&area, limit).await?;
+                    println!("count = {}", list.len());
+                    for (i, a) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} — {} ({} 首)",
+                            i + 1,
+                            a.id,
+                            a.name,
+                            a.artist,
+                            a.track_count
+                        );
+                    }
+                }
+                _ => {
+                    let list = p.hot_artists(limit, 0).await?;
+                    println!("count = {}", list.len());
+                    for (i, a) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} 粉丝 {}",
+                            i + 1,
+                            a.id,
+                            a.name,
+                            a.fans
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+
         "messages" => {
             // 未读数 / 私信会话 / 通知 / 评论消息
             //   ncm messages            未读数

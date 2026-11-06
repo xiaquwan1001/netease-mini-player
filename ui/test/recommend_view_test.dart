@@ -53,6 +53,7 @@ void main() {
     rust.PodcastRadioDto? openedRadio;
     rust.AlbumItemDto? openedAlbum;
     var heart = 0;
+    var moreTaps = 0;
 
     await tester.pumpWidget(host(RecommendView(
       loggedIn: true,
@@ -85,6 +86,7 @@ void main() {
         ),
       ],
       onOpenAlbum: (album) => openedAlbum = album,
+      onOpenNewRelease: () => moreTaps++,
       onPlaySongs: (songs, index) {
         played = songs;
         playedIndex = index;
@@ -113,9 +115,13 @@ void main() {
     expect(played?.length, 2);
     expect(playedIndex, 1);
 
-    // 新歌速递
+    // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
+    expect(find.text('更多'), findsNWidgets(2), reason: '新歌速递 + 新碟上架各一个');
+    await tester.tap(find.text('更多').first);
+    await tester.pumpAndSettle();
+    expect(moreTaps, 1);
 
     // 推荐歌单
     expect(find.text('推荐歌单'), findsOneWidget);

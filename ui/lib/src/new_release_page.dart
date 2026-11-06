@@ -1,0 +1,431 @@
+import 'package:flutter/material.dart';
+
+import 'cover_art.dart';
+import 'net_retry.dart';
+import 'rust/api.dart' as rust;
+
+typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
+typedef AreaAlbumLoader = Future<List<rust.AlbumItemDto>> Function(String area);
+typedef HotArtistLoader = Future<List<rust.HotArtistDto>> Function();
+
+/// 地区选项: key 传给 Rust(area 简写), label 给 UI
+const List<({String key, String label})> releaseAreas = [
+  (key: 'all', label: '全部'),
+  (key: 'zh', label: '华语'),
+  (key: 'ea', label: '欧美'),
+  (key: 'jp', label: '日本'),
+  (key: 'kr', label: '韩国'),
+];
+
+/// 新歌 / 新碟 / 热门歌手 三个页签的"更多"页.
+/// 新歌=top_song(按地区 areaId), 新碟=top_album(weekData+monthData 合并), 歌手=top_artists.
+Future<void> showNewReleasePage(
+  BuildContext context, {
+  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
+  required void Function(rust.AlbumItemDto album) onOpenAlbum,
+  required void Function(rust.HotArtistDto artist) onOpenArtist,
+  AreaSongLoader? loadSongs,
+  AreaAlbumLoader? loadAlbums,
+  HotArtistLoader? loadArtists,
+}) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => NewReleasePage(
+        onPlaySongs: onPlaySongs,
+        onOpenAlbum: onOpenAlbum,
+        onOpenArtist: onOpenArtist,
+        loadSongs: loadSongs,
+        loadAlbums: loadAlbums,
+        loadArtists: loadArtists,
+      ),
+    ),
+  );
+}
+
+class NewReleasePage extends StatelessWidget {
+  const NewReleasePage({
+    super.key,
+    required this.onPlaySongs,
+    required this.onOpenAlbum,
+    required this.onOpenArtist,
+    this.loadSongs,
+    this.loadAlbums,
+    this.loadArtists,
+  });
+
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final void Function(rust.AlbumItemDto album) onOpenAlbum;
+  final void Function(rust.HotArtistDto artist) onOpenArtist;
+  final AreaSongLoader? loadSongs;
+  final AreaAlbumLoader? loadAlbums;
+  final HotArtistLoader? loadArtists;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('新歌 · 新碟 · 歌手'),
+          bottom: const TabBar(
+            tabs: [Tab(text: '新歌'), Tab(text: '新碟'), Tab(text: '歌手')],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _NewSongsTab(
+              load: loadSongs ??
+                  (area) => rust.newSongsByArea(area: area, limit: 50),
+              onPlay: onPlaySongs,
+            ),
+            _NewAlbumsTab(
+              load: loadAlbums ??
+                  (area) => rust.newAlbumsByArea(area: area, limit: 30),
+              onOpen: onOpenAlbum,
+            ),
+            _HotArtistsTab(
+              load: loadArtists ?? () => rust.hotArtists(limit: 50, offset: 0),
+              onOpen: onOpenArtist,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 地区筛选条
+class _AreaChips extends StatelessWidget {
+  const _AreaChips({required this.value, required this.onChange});
+
+  final String value;
+  final ValueChanged<String> onChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        children: [
+          for (final a in releaseAreas)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(a.label),
+                selected: value == a.key,
+                onSelected: (_) => onChange(a.key),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NewSongsTab extends StatefulWidget {
+  const _NewSongsTab({required this.load, required this.onPlay});
+
+  final AreaSongLoader load;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  @override
+  State<_NewSongsTab> createState() => _NewSongsTabState();
+}
+
+class _NewSongsTabState extends State<_NewSongsTab> {
+  String _area = 'all';
+  List<rust.SongDto>? _songs;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _error = null;
+      _songs = null;
+    });
+    try {
+      final songs = await retryNetwork(() => widget.load(_area));
+      if (!mounted) return;
+      setState(() => _songs = songs);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final songs = _songs;
+    return Column(
+      children: [
+        _AreaChips(
+          value: _area,
+          onChange: (area) {
+            if (area == _area) return;
+            _area = area;
+            _load();
+          },
+        ),
+        Expanded(
+          child: _AsyncBody(
+            error: _error,
+            onRetry: _load,
+            isEmpty: songs?.isEmpty ?? false,
+            emptyText: '这个地区暂时没有新歌',
+            child: songs == null
+                ? null
+                : ListView.builder(
+                    itemCount: songs.length,
+                    itemBuilder: (context, i) {
+                      final s = songs[i];
+                      return ListTile(
+                        dense: true,
+                        leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
+                        title: Text(
+                          s.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          s.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Text(
+                          _duration(s.durationMs),
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        onTap: s.playable
+                            ? () => widget.onPlay(songs, i)
+                            : null,
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _duration(BigInt ms) {
+    if (ms <= BigInt.zero) return '';
+    final total = ms.toInt() ~/ 1000;
+    return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}';
+  }
+}
+
+class _NewAlbumsTab extends StatefulWidget {
+  const _NewAlbumsTab({required this.load, required this.onOpen});
+
+  final AreaAlbumLoader load;
+  final void Function(rust.AlbumItemDto album) onOpen;
+
+  @override
+  State<_NewAlbumsTab> createState() => _NewAlbumsTabState();
+}
+
+class _NewAlbumsTabState extends State<_NewAlbumsTab> {
+  String _area = 'all';
+  List<rust.AlbumItemDto>? _albums;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _error = null;
+      _albums = null;
+    });
+    try {
+      final albums = await retryNetwork(() => widget.load(_area));
+      if (!mounted) return;
+      setState(() => _albums = albums);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final albums = _albums;
+    return Column(
+      children: [
+        _AreaChips(
+          value: _area,
+          onChange: (area) {
+            if (area == _area) return;
+            _area = area;
+            _load();
+          },
+        ),
+        Expanded(
+          child: _AsyncBody(
+            error: _error,
+            onRetry: _load,
+            isEmpty: albums?.isEmpty ?? false,
+            emptyText: '这个地区暂时没有新碟',
+            child: albums == null
+                ? null
+                : ListView.builder(
+                    itemCount: albums.length,
+                    itemBuilder: (context, i) {
+                      final a = albums[i];
+                      return ListTile(
+                        leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
+                        title: Text(
+                          a.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          [
+                            if (a.artist.isNotEmpty) a.artist,
+                            if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () => widget.onOpen(a),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HotArtistsTab extends StatefulWidget {
+  const _HotArtistsTab({required this.load, required this.onOpen});
+
+  final HotArtistLoader load;
+  final void Function(rust.HotArtistDto artist) onOpen;
+
+  @override
+  State<_HotArtistsTab> createState() => _HotArtistsTabState();
+}
+
+class _HotArtistsTabState extends State<_HotArtistsTab> {
+  List<rust.HotArtistDto>? _artists;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final artists = await retryNetwork(widget.load);
+      if (!mounted) return;
+      setState(() => _artists = artists);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final artists = _artists;
+    return _AsyncBody(
+      error: _error,
+      onRetry: _load,
+      isEmpty: artists?.isEmpty ?? false,
+      emptyText: '暂时没有歌手榜',
+      child: artists == null
+          ? null
+          : ListView.builder(
+              itemCount: artists.length,
+              itemBuilder: (context, i) {
+                final a = artists[i];
+                return ListTile(
+                  leading: CircleCover(
+                    url: a.avatarUrl,
+                    size: 44,
+                    icon: Icons.person_outline,
+                  ),
+                  title: Text(
+                    a.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(formatFans(a.fans)),
+                  onTap: () => widget.onOpen(a),
+                );
+              },
+            ),
+    );
+  }
+}
+
+/// 粉丝数: 16908300 → "1690.8万"
+String formatFans(BigInt fans) {
+  if (fans <= BigInt.zero) return '';
+  if (fans < BigInt.from(10000)) return '${fans} 粉丝';
+  final wan = fans.toDouble() / 10000;
+  final text = wan >= 100 ? wan.toStringAsFixed(0) : wan.toStringAsFixed(1);
+  return '$text 万粉丝';
+}
+
+/// 三种 tab 共用的"加载中 / 错误 / 空"壳
+class _AsyncBody extends StatelessWidget {
+  const _AsyncBody({
+    required this.error,
+    required this.onRetry,
+    required this.isEmpty,
+    required this.emptyText,
+    required this.child,
+  });
+
+  final String? error;
+  final VoidCallback onRetry;
+  final bool isEmpty;
+  final String emptyText;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (error != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                error!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            TextButton(onPressed: onRetry, child: const Text('重试')),
+          ],
+        ),
+      );
+    }
+    if (child == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (isEmpty) {
+      return Center(child: Text(emptyText));
+    }
+    return child!;
+  }
+}

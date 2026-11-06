@@ -600,6 +600,17 @@ pub struct AlbumItem {
     pub track_count: u64,
 }
 
+/// 热门歌手榜里的一行(比 Artist 多粉丝数, 榜单要展示热度)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotArtist {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub fans: u64,
+}
+
 /// 未读消息计数(私信/通知/评论/@我). 未登录或接口失败时为全 0.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageCounts {

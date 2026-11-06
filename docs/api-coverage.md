@@ -1,15 +1,15 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-06(第四批: 消息中心(私信/通知/评论)已接入)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-06(第五批: 新歌/新碟分地区 + 热门歌手榜已接入)。口径与复算方式见文末, 一条命令可重跑。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **84(21%)** |
-| 未接入 | **298** |
-| FFI 导出给 Dart 的函数 | 101 |
+| `ncm-service`(provider)实际调用的 | **87(22%)** |
+| 未接入 | **295** |
+| FFI 导出给 Dart 的函数 | 104 |
 | 其中 UI 还没有入口的 | 8(`lyric` `lyric_lines` `lyric_lines_i18n` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
@@ -52,6 +52,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 评论互动 | `comment_like` `comment_floor` `comment_reply` | 评论区: 点赞(乐观更新) + 楼层回复列表 + 发回复; 歌曲/歌单/专辑/播客/动态共用一套 `comment_thread.dart` |
 | 关注/粉丝 | `user_follows` `user_followeds` `follow` `user_subcount` | 资料卡"关注 N/粉丝 N"点进去: 两 tab 列表 + 行内关注/取关 |
 | 新歌/新碟 | `personalized_newsong` `album_new` | 推荐页"新歌速递"(6 首预览, 整批起播) + "新碟上架"(封面横排, 点开专辑弹窗) |
+| 新歌/新碟分地区 + 歌手榜 | `top_song` `top_album` `top_artists` | 推荐页两个板块的"更多"→"新歌·新碟·歌手"页: 新歌(全部/华语/欧美/日本/韩国)、新碟(同地区维度)、歌手榜(粉丝数格式化, 点开歌手页) |
 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` | 歌曲菜单"相似歌曲"(面板: 相似歌曲 + 相似歌单); 歌手页"相似歌手"胶囊(需登录) |
 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐每行 ⊖ 按钮; 歌曲菜单"不感兴趣"(FM 队列走 fm_trash, 其余走日推 dislike) |
 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐面板第三个页签: 日期列表 → 某天的歌单(黑胶 VIP 专属) |
@@ -65,7 +66,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
-| 1 | 新碟/新歌更多入口 | `album_newest` `top_song` `top_album` `top_artists` `simi_user` | 推荐页分类 tab | 与已接入的新歌/新碟同构, 只是分区/语种维度 |
+| 1 | 新碟/新歌剩余入口 | `album_newest` `simi_user` | 推荐页分类页 | `top_song`/`top_album`/`top_artists` 已接入; `album_newest`(最新专辑)与已接入的新碟基本重复, `simi_user`(相似用户)价值低 |
 | 2 | 评论补充 | `comment_hot` `comment_info_list` | 评论区 | 删自己的评论已接入(`comment_delete`); 热门评论/评论附加信息(IP 归属等)还没展示 |
 | 3 | @我 / 消息增强 | `msg_forwards` `msg_recentcontact` + 私信分页 | 消息中心 | 私信/通知/评论已接入; @我 形状未验证, 会话目前只读(发包接口 vendor 未提供) |
 | 4 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
@@ -111,7 +112,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
 
-## 附录: 未接入 298 个 endpoint(按前缀分组)
+## 附录: 未接入 295 个 endpoint(按前缀分组)
 
 > 名单是 2026-11-06 的快照; 每批接入后请用 `bash tools/api-coverage.sh --list` 重算, 以脚本输出为准.
 

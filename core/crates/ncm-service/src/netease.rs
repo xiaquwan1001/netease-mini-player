@@ -3,7 +3,8 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
-    DefaultSearch, FeedEvent, FollowCount, HotSearchTerm, InboxItem, Lyric, MessageCounts, PlayRankEntry,
+    DefaultSearch, FeedEvent, FollowCount, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
+    PlayRankEntry,
     Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
     PrivateSession, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
@@ -1729,6 +1730,60 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 新歌速递(按地区). area → areaId 是服务端的枚举: 0 全部 / 7 华语 / 8 日语 / 16 韩语 / 96 欧美
+    fn new_songs_by_area<'a>(
+        &'a self,
+        area: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", &song_area_id(area).to_string());
+            let resp = client.top_song(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut songs = parse_top_songs(&resp.body);
+            songs.truncate(limit as usize);
+            Ok(songs)
+        })
+    }
+
+    /// 新碟上架(按地区). `top_album` 的 weekData 在部分地区为空, monthData 才有货,
+    /// 所以两边合并(按 id 去重)再截断。
+    fn new_albums_by_area<'a>(
+        &'a self,
+        area: &'a str,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("area", album_area_code(area))
+                .param("limit", &limit.to_string())
+                .param("offset", "0");
+            let resp = client.top_album(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_new_albums(&resp.body, limit))
+        })
+    }
+
+    /// 热门歌手榜
+    fn hot_artists(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<HotArtist>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.top_artists(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_hot_artists(&resp.body))
+        })
+    }
+
     /// 未读消息计数(需登录)
     fn message_counts(&self) -> BoxFuture<'_, ProviderResult<MessageCounts>> {
         Box::pin(async move {
@@ -2959,6 +3014,90 @@ pub fn parse_playlist_bucket(body: &Value, key: &str) -> Vec<Playlist> {
         .unwrap_or_default()
 }
 
+/// 地区简写 → 新歌接口的 areaId(服务端枚举, 实测只有这五个有货)
+fn song_area_id(area: &str) -> i64 {
+    match area {
+        "zh" => 7,
+        "jp" => 8,
+        "kr" => 16,
+        "ea" => 96,
+        _ => 0,
+    }
+}
+
+/// 地区简写 → 新碟接口的 area 参数
+fn album_area_code(area: &str) -> &'static str {
+    match area {
+        "zh" => "ZH",
+        "jp" => "JP",
+        "kr" => "KR",
+        "ea" => "EA",
+        _ => "ALL",
+    }
+}
+
+/// 新歌速递: {code, data:[完整 song 对象(ar/artists + al/album + duration + privilege)]}
+pub fn parse_top_songs(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("data")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 新碟: {code, weekData:[album], monthData:[album]} —— 两边合并去重后截断
+pub fn parse_new_albums(body: &Value, limit: u32) -> Vec<AlbumItem> {
+    let mut out: Vec<AlbumItem> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for key in ["weekData", "monthData"] {
+        let Some(arr) = body.get(key).and_then(Value::as_array) else {
+            continue;
+        };
+        for v in arr {
+            let Some(item) = parse_album_item(v) else {
+                continue;
+            };
+            if seen.insert(item.id) {
+                out.push(item);
+                if out.len() >= limit as usize {
+                    return out;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// 热门歌手榜: {artists:[{id,name,picUrl,fansCount}]}
+pub fn parse_hot_artists(body: &Value) -> Vec<HotArtist> {
+    body.get("artists")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    let id = u64_of(a, "id")?;
+                    let name = str_of(a, "name")?;
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(HotArtist {
+                        id,
+                        name,
+                        avatar_url: str_of(a, "picUrl")
+                            .or_else(|| str_of(a, "img1v1Url"))
+                            .filter(|s| s.starts_with("http")),
+                        fans: u64_of(a, "fansCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 私信/通知里那段 JSON 字符串(`"{\"msg\":\"...\"}"`)抽成一句纯文本。
 /// 富消息(卡片/会员通知)没有 `msg`, 就退到 generalMsg 的标题/摘要/pushMsg。
 pub fn msg_text(raw: &str) -> String {
@@ -3818,6 +3957,65 @@ mod tests {
         assert_eq!(list[0].actor, "小红");
         assert_eq!(list[0].text, "来了来了");
         assert_eq!(list[0].detail, "我喜欢的音乐", "优先显示被评论的资源名");
+    }
+
+
+    /// 新歌速递: data[] 是完整 song 对象(artists/album/duration/privilege)
+    #[test]
+    fn top_songs_mapping() {
+        let body = json!({
+            "code": 200,
+            "data": [
+                {"id": 1, "name": "最重要的听众", "artists": [{"id": 9, "name": "法老"}],
+                 "album": {"id": 3, "name": "专辑", "picUrl": "http://p/1.jpg"},
+                 "duration": 334000, "fee": 0, "privilege": {"st": 0}},
+                {"id": 2, "name": "Masterpiece", "artists": [{"id": 10, "name": "LNGSHOT"}],
+                 "duration": 170000, "fee": 1, "privilege": {"st": -200}}
+            ]
+        });
+        let songs = parse_top_songs(&body);
+        assert_eq!(songs.len(), 2);
+        assert_eq!(songs[0].artist_line(), "法老");
+        assert_eq!(songs[0].duration_ms, 334000);
+        assert_eq!(songs[0].album.as_ref().unwrap().name, "专辑");
+        assert!(songs[0].playable);
+        assert!(!songs[1].playable, "privilege.st=-200 要标成不可播");
+        assert!(songs[1].is_vip());
+    }
+
+    /// 新碟: weekData 与 monthData 合并去重, 再按 limit 截断
+    #[test]
+    fn new_albums_merge_and_dedupe() {
+        let album = |id: u64, name: &str| {
+            json!({"id": id, "name": name, "picUrl": "http://p/a.jpg",
+                   "artist": {"name": "歌手"}, "size": 3})
+        };
+        let body = json!({
+            "code": 200,
+            "weekData": [album(1, "Growth")],
+            "monthData": [album(1, "Growth"), album(2, "Iceberg"), album(3, "家后")]
+        });
+        let list = parse_new_albums(&body, 2);
+        assert_eq!(list.len(), 2, "同一张碟只出现一次, 且按 limit 截断");
+        assert_eq!(list[0].name, "Growth");
+        assert_eq!(list[1].name, "Iceberg");
+        assert_eq!(list[0].track_count, 3);
+        assert_eq!(list[0].artist, "歌手");
+    }
+
+    #[test]
+    fn hot_artists_mapping() {
+        let body = json!({
+            "artists": [
+                {"id": 3684, "name": "林俊杰", "picUrl": "http://p/1.jpg", "fansCount": 16908300},
+                {"id": 0, "name": "", "fansCount": 1}
+            ]
+        });
+        let list = parse_hot_artists(&body);
+        assert_eq!(list.len(), 1, "空名字要跳过");
+        assert_eq!(list[0].name, "林俊杰");
+        assert_eq!(list[0].fans, 16908300);
+        assert_eq!(list[0].avatar_url.as_deref(), Some("http://p/1.jpg"));
     }
 
 
