@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -239,7 +239,8 @@ Future<List<HotSearchTermDto>> hotSearch() =>
     RustLib.instance.api.crateApiHotSearch();
 
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
-Future<String?> defaultSearch() => RustLib.instance.api.crateApiDefaultSearch();
+Future<DefaultSearchDto?> defaultSearch() =>
+    RustLib.instance.api.crateApiDefaultSearch();
 
 /// 私人 FM(需登录)
 Future<List<SongDto>> personalFm({required int limit}) =>
@@ -258,6 +259,32 @@ Future<List<FeedEventDto>> feedEvents({
   required int limit,
   required PlatformInt64 lastTime,
 }) => RustLib.instance.api.crateApiFeedEvents(limit: limit, lastTime: lastTime);
+
+/// 动态评论区(threadId 来自 FeedEvent.thread_id)
+Future<CommentPageDto> eventComments({
+  required String threadId,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiEventComments(
+  threadId: threadId,
+  limit: limit,
+  offset: offset,
+);
+
+/// 点赞/取消点赞一条动态
+Future<bool> likeEvent({required String threadId, required bool liked}) =>
+    RustLib.instance.api.crateApiLikeEvent(threadId: threadId, liked: liked);
+
+/// 转发一条动态(附转发语)
+Future<bool> forwardEvent({
+  required BigInt eventId,
+  required BigInt userId,
+  required String msg,
+}) => RustLib.instance.api.crateApiForwardEvent(
+  eventId: eventId,
+  userId: userId,
+  msg: msg,
+);
 
 class AccountDto {
   final BigInt userId;
@@ -515,8 +542,41 @@ class CommentPageDto {
           hasMore == other.hasMore;
 }
 
+class DefaultSearchDto {
+  /// 真正要搜索的关键词(不含推荐理由)
+  final String keyword;
+
+  /// 官方展示文案, 形如 "🔥Mili 你的十月榜首"
+  final String showText;
+  final String? imageUrl;
+
+  const DefaultSearchDto({
+    required this.keyword,
+    required this.showText,
+    this.imageUrl,
+  });
+
+  @override
+  int get hashCode => keyword.hashCode ^ showText.hashCode ^ imageUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DefaultSearchDto &&
+          runtimeType == other.runtimeType &&
+          keyword == other.keyword &&
+          showText == other.showText &&
+          imageUrl == other.imageUrl;
+}
+
 class FeedEventDto {
   final BigInt id;
+
+  /// 评论/点赞用的 threadId
+  final String threadId;
+
+  /// 发布者用户 id
+  final BigInt userId;
 
   /// song | playlist | album | program | text | other
   final String kind;
@@ -530,11 +590,20 @@ class FeedEventDto {
   /// 视频动态的直链
   final String? videoUrl;
 
+  /// 动态自带标题(艺人长文)
+  final String title;
+
   /// unix 毫秒
   final BigInt timeMs;
+  final bool liked;
+  final BigInt likedCount;
+  final BigInt shareCount;
+  final BigInt commentCount;
 
   const FeedEventDto({
     required this.id,
+    required this.threadId,
+    required this.userId,
     required this.kind,
     required this.userName,
     this.avatarUrl,
@@ -543,12 +612,19 @@ class FeedEventDto {
     this.coverUrl,
     required this.images,
     this.videoUrl,
+    required this.title,
     required this.timeMs,
+    required this.liked,
+    required this.likedCount,
+    required this.shareCount,
+    required this.commentCount,
   });
 
   @override
   int get hashCode =>
       id.hashCode ^
+      threadId.hashCode ^
+      userId.hashCode ^
       kind.hashCode ^
       userName.hashCode ^
       avatarUrl.hashCode ^
@@ -557,7 +633,12 @@ class FeedEventDto {
       coverUrl.hashCode ^
       images.hashCode ^
       videoUrl.hashCode ^
-      timeMs.hashCode;
+      title.hashCode ^
+      timeMs.hashCode ^
+      liked.hashCode ^
+      likedCount.hashCode ^
+      shareCount.hashCode ^
+      commentCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -565,6 +646,8 @@ class FeedEventDto {
       other is FeedEventDto &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          threadId == other.threadId &&
+          userId == other.userId &&
           kind == other.kind &&
           userName == other.userName &&
           avatarUrl == other.avatarUrl &&
@@ -573,7 +656,12 @@ class FeedEventDto {
           coverUrl == other.coverUrl &&
           images == other.images &&
           videoUrl == other.videoUrl &&
-          timeMs == other.timeMs;
+          title == other.title &&
+          timeMs == other.timeMs &&
+          liked == other.liked &&
+          likedCount == other.likedCount &&
+          shareCount == other.shareCount &&
+          commentCount == other.commentCount;
 }
 
 class HotSearchTermDto {

@@ -18,3 +18,10 @@
 - `tools/env.sh` 会 export 指向 127.0.0.1:7890 的代理变量(本机 7890 常没起): 手工跑 `cargo test --manifest-path core/Cargo.toml` 时 vendor/ncm-api 的 8 个真实联网集成测试 reqwest 走死代理必挂 `assert!(result.is_ok())`。手工跑测试前必须 `unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY`(ci.sh 自己会 unset, 所以 CI 没暴露)。
 - vendor/ncm-api/tests/integration.rs(8 个)打真实网易云接口, 全量连跑偶发 1~3 个风控失败, 且每轮失败集合不同; 单独复跑即过, 是网络抖动不是代码问题。判据: 只盯新增/离线单测, vendor 联网测试复跑确认。
 - fabric/pi 会话里别裸 `git stash`: 会把运行时一直改写的 `.pi/fabric/mesh/state.json` 一起 stash, pop 必被卡"本地修改将被合并操作覆盖"。解法: pop 前 `git checkout -- .pi/fabric/mesh/state.json` 再 pop。
+
+§
+## 2026-11-06 封面图全 403 / 切 tab 占位符高频闪烁
+- 现象: 所有封面/头像只显示占位音符, logcat 里逐个 `HTTP request failed, statusCode: 403`; 切 tab 时占位符和图片交替闪。
+- 根因 1(403): 网易 CDN 对默认 `Dart/3.x (dart:io)` UA 回 403。用 `Image.network(headers: {'User-Agent': browser})` **修不好** —— NetworkImage 内部是 `HttpHeaders.add`, 会**追加**到 HttpClient 预置的默认 UA 后面, 实际发出 "Dart/3.9 (dart:io), Mozilla/..." 拼接值, 照样 403。必须自定义 ImageProvider, 用 `HttpClient()..userAgent = ...` 整体替换(见 `ui/lib/src/cover_art.dart::_UaNetworkImage`)。
+- 根因 2(闪烁): tab 用 switch 直接返回新 Widget ⇒ 每次切 tab 都销毁重建子树, 图片 State 重来 + 占位符重绘。改为 IndexedStack + 访问过才构建(`_tabVisited`), 并让 provider 实现 `==`/`hashCode` 以命中 ImageCache, 再加 `gaplessPlayback: true`。
+- 判据: `adb logcat | grep IMGFAIL` 为 0; 连续截图 md5 相同即无闪烁。

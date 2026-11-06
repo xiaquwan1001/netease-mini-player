@@ -948,19 +948,9 @@ pub struct CommentPageDto {
     pub has_more: bool,
 }
 
-/// 评论列表: kind = song | playlist | album | podcast
-pub async fn comments(
-    kind: String,
-    resource_id: u64,
-    limit: u32,
-    offset: u32,
-) -> Result<CommentPageDto, String> {
-    let provider = with_provider(Capability::Comment)?;
-    let page = provider
-        .comments(&kind, resource_id, limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(CommentPageDto {
+/// 评论页 → DTO(歌曲/歌单/动态共用)
+fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
+    CommentPageDto {
         comments: page
             .comments
             .into_iter()
@@ -976,7 +966,22 @@ pub async fn comments(
             .collect(),
         total: page.total,
         has_more: page.has_more,
-    })
+    }
+}
+
+/// 评论列表: kind = song | playlist | album | podcast
+pub async fn comments(
+    kind: String,
+    resource_id: u64,
+    limit: u32,
+    offset: u32,
+) -> Result<CommentPageDto, String> {
+    let provider = with_provider(Capability::Comment)?;
+    let page = provider
+        .comments(&kind, resource_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(comment_page_dto(page))
 }
 
 /// 分享资源到动态(需登录). kind = song | playlist | album | podcast
@@ -1098,10 +1103,26 @@ pub async fn hot_search() -> Result<Vec<HotSearchTermDto>, String> {
         .collect())
 }
 
+pub struct DefaultSearchDto {
+    /// 真正要搜索的关键词(不含推荐理由)
+    pub keyword: String,
+    /// 官方展示文案, 形如 "🔥Mili 你的十月榜首"
+    pub show_text: String,
+    pub image_url: Option<String>,
+}
+
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
-pub async fn default_search() -> Result<Option<String>, String> {
+pub async fn default_search() -> Result<Option<DefaultSearchDto>, String> {
     let provider = with_provider(Capability::SearchHot)?;
-    provider.default_search().await.map_err(|e| e.to_string())
+    Ok(provider
+        .default_search()
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|d| DefaultSearchDto {
+            keyword: d.keyword,
+            show_text: d.show_text,
+            image_url: d.image_url,
+        }))
 }
 
 // ---------------- 推荐页(私人 FM) / 我的(收藏播客/关注艺人/动态) ----------------
@@ -1147,6 +1168,10 @@ pub async fn subscribed_artists(limit: u32) -> Result<Vec<ArtistDto>, String> {
 
 pub struct FeedEventDto {
     pub id: u64,
+    /// 评论/点赞用的 threadId
+    pub thread_id: String,
+    /// 发布者用户 id
+    pub user_id: u64,
     /// song | playlist | album | program | text | other
     pub kind: String,
     pub user_name: String,
@@ -1157,8 +1182,14 @@ pub struct FeedEventDto {
     pub images: Vec<String>,
     /// 视频动态的直链
     pub video_url: Option<String>,
+    /// 动态自带标题(艺人长文)
+    pub title: String,
     /// unix 毫秒
     pub time_ms: u64,
+    pub liked: bool,
+    pub liked_count: u64,
+    pub share_count: u64,
+    pub comment_count: u64,
 }
 
 /// 关注动态(需登录): 关注的人/艺人发布的单曲、歌单、专辑、节目或文字动态
@@ -1172,6 +1203,8 @@ pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>
         .into_iter()
         .map(|e| FeedEventDto {
             id: e.id,
+            thread_id: e.thread_id,
+            user_id: e.user_id,
             kind: e.kind,
             user_name: e.user_name,
             avatar_url: e.avatar_url,
@@ -1180,7 +1213,44 @@ pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>
             cover_url: e.cover_url,
             images: e.images,
             video_url: e.video_url,
+            title: e.title,
             time_ms: e.time_ms,
+            liked: e.liked,
+            liked_count: e.liked_count,
+            share_count: e.share_count,
+            comment_count: e.comment_count,
         })
         .collect())
+}
+
+/// 动态评论区(threadId 来自 FeedEvent.thread_id)
+pub async fn event_comments(
+    thread_id: String,
+    limit: u32,
+    offset: u32,
+) -> Result<CommentPageDto, String> {
+    let provider = with_provider(Capability::Feed)?;
+    let page = provider
+        .event_comments(&thread_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(comment_page_dto(page))
+}
+
+/// 点赞/取消点赞一条动态
+pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::Feed)?;
+    provider
+        .like_event(&thread_id, liked)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 转发一条动态(附转发语)
+pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, String> {
+    let provider = with_provider(Capability::Feed)?;
+    provider
+        .forward_event(event_id, user_id, &msg)
+        .await
+        .map_err(|e| e.to_string())
 }

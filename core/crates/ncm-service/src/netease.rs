@@ -2,8 +2,8 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumBrief, AlbumDetail, Artist, ArtistDetail, Comment, CommentPage, FeedEvent,
-    HotSearchTerm, Lyric, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail,
+    Album, AlbumBrief, AlbumDetail, Artist, ArtistDetail, Comment, CommentPage, DefaultSearch,
+    FeedEvent, HotSearchTerm, Lyric, Playlist, PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail,
     SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem, SearchPodcast, Session,
     Song, StreamUrl, SuggestItem, TrackId,
 };
@@ -1223,7 +1223,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 默认/推荐搜索词("猜你想搜")
-    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<DefaultSearch>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua);
@@ -1301,6 +1301,68 @@ impl Provider for NeteaseProvider {
             let resp = client.event(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_feed_events(&resp.body))
+        })
+    }
+
+    /// 动态评论: vendor 走 /api/v1/resource/comments/<threadId>.
+    fn event_comments<'a>(
+        &'a self,
+        thread_id: &'a str,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("threadId", thread_id)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.comment_event(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_comments(&resp.body)
+        })
+    }
+
+    /// 动态点赞: vendor resource_like, type=6 表示动态, 传 threadId.
+    fn like_event<'a>(
+        &'a self,
+        thread_id: &'a str,
+        liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("点赞动态需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", "6")
+                .param("threadId", thread_id)
+                .param("t", if liked { "1" } else { "0" });
+            let resp = client.resource_like(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 转发动态: /api/event/forward
+    fn forward_event<'a>(
+        &'a self,
+        event_id: u64,
+        user_id: u64,
+        msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("转发动态需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("evId", &event_id.to_string())
+                .param("uid", &user_id.to_string())
+                .param("forwards", msg);
+            let resp = client.event_forward(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
         })
     }
 
@@ -1705,14 +1767,29 @@ pub fn parse_hot_search(body: &Value) -> Vec<HotSearchTerm> {
     out
 }
 
-/// 默认搜索词的响应形如 {code:200, data:{showKeyword:"...", realkeyword:"..."}}
-pub fn parse_default_search(body: &Value) -> Option<String> {
+/// 默认搜索词的响应形如
+/// {code:200, data:{showKeyword:"🔥The Weeknd 最近很火哦", realkeyword:"The Weeknd", imageUrl:null}}
+///
+/// 线上(2026-11-06 实测)只有这一条: showKeyword 是"关键词 + 推荐理由"拼成的
+/// 展示文案, realkeyword 才是应该拿去搜的词。两者必须分开交给 UI,
+/// 否则点一下会把"最近很火哦"也当成关键词搜出去。
+pub fn parse_default_search(body: &Value) -> Option<DefaultSearch> {
     let data = body.get("data").unwrap_or(body);
-    ["showKeyword", "realkeyword", "defaultKeyword", "keyword"]
+    // showKeyword 只在没有 realkeyword 时兜底(它的文案里带推荐理由)
+    let keyword = ["realkeyword", "defaultKeyword", "keyword", "showKeyword"]
         .iter()
         .find_map(|key| str_of(data, key))
         .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())?;
+    let show = str_of(data, "showKeyword")
+        .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| keyword.clone());
+    Some(DefaultSearch {
+        show_text: show,
+        keyword,
+        image_url: str_of(data, "imageUrl").filter(|s| !s.is_empty()),
+    })
 }
 
 /// 私人 FM 的响应形如 {code:200, data:[{id,name,ar,al,dt,fee,...}, ...]}
@@ -1786,20 +1863,43 @@ fn event_kind(event_type: i64) -> &'static str {
     }
 }
 
-fn parse_event_images(value: &Value) -> Vec<String> {
+/// 动态配图. 线上 pics 是对象数组(2026-11-06 实测), 用 originUrl 拿最大图,
+/// 退化到 pcSquareUrl/pcRectangleUrl/squareUrl/rectangleUrl;
+/// 老的字符串数组形态也认.
+pub fn parse_event_images(value: &Value) -> Vec<String> {
     let Some(arr) = value.as_array() else {
         return Vec::new();
     };
     arr.iter()
         .filter_map(|v| {
-            v.as_str()
-                .map(str::to_string)
-                .or_else(|| str_of(v, "url"))
-                .or_else(|| str_of(v, "thumbUrl"))
+            v.as_str().map(str::to_string).or_else(|| {
+                [
+                    "originUrl",
+                    "pcSquareUrl",
+                    "pcRectangleUrl",
+                    "squareUrl",
+                    "rectangleUrl",
+                    "thumbUrl",
+                    "url",
+                ]
+                .iter()
+                .find_map(|key| str_of(v, key))
+            })
         })
         .filter(|s| !s.is_empty())
-        .take(3)
+        .take(9)
         .collect()
+}
+
+/// 从 pics 里捞视频直链(部分动态把视频挂在配图节点上)
+fn video_from_pics(value: &Value) -> Option<String> {
+    let arr = value.as_array()?;
+    arr.iter().find_map(|v| {
+        ["videoUrl", "videoOriginalUrl"]
+            .iter()
+            .find_map(|key| str_of(v, key))
+            .filter(|s| !s.is_empty())
+    })
 }
 
 /// 关注动态的响应形如
@@ -1846,11 +1946,11 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             })
             .or_else(|| info.and_then(|i| str_of(i, "comment")))
             .unwrap_or_default();
-        let images = payload
-            .and_then(|p| p.get("pics").or_else(|| p.get("imgs")))
-            .or_else(|| event.get("pics"))
-            .map(parse_event_images)
-            .unwrap_or_default();
+        // 配图在顶层 pics(线上实测), 少数通道塞在 json.pics/imgs 里
+        let pics_value = event
+            .get("pics")
+            .or_else(|| payload.and_then(|p| p.get("pics").or_else(|| p.get("imgs"))));
+        let images = pics_value.map(parse_event_images).unwrap_or_default();
         // 视频动态: 封面照旧用图片, 直链单独给 UI(点击交给系统播放器/浏览器)
         let video = payload
             .and_then(|p| p.get("video").or_else(|| p.get("mv")))
@@ -1861,7 +1961,14 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
                     .or_else(|| str_of(v, "playUrlHd"))
                     .or_else(|| str_of(v, "url"))
             })
+            .or_else(|| pics_value.and_then(video_from_pics))
             .filter(|s| !s.is_empty());
+        // 动态自带标题(艺人长文常用), 空串就当没有
+        let title = payload
+            .and_then(|p| str_of(p, "title"))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
         let cover_url = song.as_ref().and_then(Song::cover_url).or_else(|| {
             payload.and_then(|p| {
                 str_of(p, "coverUrl")
@@ -1879,11 +1986,29 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             .or_else(|| payload.and_then(|p| str_of(p, "nickname")))
             .unwrap_or_default();
         let avatar_url = user.and_then(|u| str_of(u, "avatarUrl"));
+        let user_id = user.and_then(|u| u64_of(u, "userId")).unwrap_or(0);
+        // 评论/点赞都按 threadId 走, 优先 info.threadId, 兜底 info.commentThread.id
+        let thread_id = info
+            .and_then(|i| str_of(i, "threadId"))
+            .or_else(|| {
+                info.and_then(|i| i.get("commentThread"))
+                    .and_then(|c| str_of(c, "id"))
+            })
+            .unwrap_or_default();
+        let liked = info
+            .and_then(|i| i.get("liked"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let liked_count = info.and_then(|i| u64_of(i, "likedCount")).unwrap_or(0);
+        let share_count = info.and_then(|i| u64_of(i, "shareCount")).unwrap_or(0);
+        let comment_count = info.and_then(|i| u64_of(i, "commentCount")).unwrap_or(0);
         let time_ms = u64_of(event, "eventTime")
             .or_else(|| u64_of(event, "time"))
             .unwrap_or(0);
         out.push(FeedEvent {
             id,
+            thread_id,
+            user_id,
             kind: event_kind(event_type).to_string(),
             user_name,
             avatar_url,
@@ -1892,7 +2017,12 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             cover_url,
             images,
             video_url,
+            title,
             time_ms,
+            liked,
+            liked_count,
+            share_count,
+            comment_count,
         });
     }
     out
@@ -2242,8 +2372,16 @@ mod tests {
         assert_eq!(terms[0].keyword, "晴天");
         assert_eq!(terms[1].rank, 2);
 
-        let def = json!({"code": 200, "data": {"showKeyword": "周杰伦", "realkeyword": "周杰伦"}});
-        assert_eq!(parse_default_search(&def).as_deref(), Some("周杰伦"));
+        // 关键词和推荐理由是两回事: keyword 拿去搜, show 只用来展示
+        let def = json!({"code": 200, "data": {
+            "showKeyword": "🔥Mili 你的十月榜首", "realkeyword": "Mili"
+        }});
+        let d = parse_default_search(&def).unwrap();
+        assert_eq!(d.keyword, "Mili");
+        assert_eq!(d.show_text, "🔥Mili 你的十月榜首");
+        // 只有 showKeyword 时退化成"用它当关键词"
+        let only_show = json!({"code": 200, "data": {"showKeyword": "周杰伦"}});
+        assert_eq!(parse_default_search(&only_show).unwrap().keyword, "周杰伦");
         assert_eq!(parse_default_search(&json!({"code": 200, "data": {}})), None);
     }
 
@@ -2310,5 +2448,38 @@ mod tests {
         assert_eq!(events[1].kind, "playlist");
         assert_eq!(events[1].text, "推荐歌单");
         assert_eq!(events[1].cover_url.as_deref(), Some("http://p/pl.jpg"));
+    }
+
+    #[test]
+    fn feed_event_detail_fields() {
+        // 线上(2026-11-06)真实字段: pics 是对象数组, info 里有 threadId/likedCount,
+        // user 里有 userId, json 里可能带 title. 这些是详情页/点赞/评论的依据.
+        let body = json!({"code": 200, "event": [{
+            "id": 38024377972u64,
+            "type": 35,
+            "eventTime": 1793228407720u64,
+            "user": {"nickname": "某艺人", "userId": 1373758224u64,
+                     "avatarUrl": "http://p/u.jpg"},
+            "json": {"msg": "长文正文", "title": "标题一句"},
+            "pics": [
+                {"originUrl": "http://p/1.jpg", "pcSquareUrl": "http://p/1s.jpg"},
+                {"originUrl": "http://p/2.jpg", "videoUrl": "http://v/2.mp4"}
+            ],
+            "info": {
+                "threadId": "A_EV_2_38024377972_1373758224",
+                "liked": true, "likedCount": 30, "shareCount": 4, "commentCount": 3
+            }
+        }]});
+        let e = &parse_feed_events(&body)[0];
+        assert_eq!(e.kind, "text");
+        assert_eq!(e.user_id, 1373758224);
+        assert_eq!(e.thread_id, "A_EV_2_38024377972_1373758224");
+        assert_eq!(e.title, "标题一句");
+        assert_eq!(e.images, vec!["http://p/1.jpg".to_string(), "http://p/2.jpg".to_string()]);
+        assert_eq!(e.video_url.as_deref(), Some("http://v/2.mp4"));
+        assert!(e.liked);
+        assert_eq!(e.liked_count, 30);
+        assert_eq!(e.share_count, 4);
+        assert_eq!(e.comment_count, 3);
     }
 }

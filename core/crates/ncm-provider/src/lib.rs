@@ -6,7 +6,7 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, Artist, ArtistDetail, CommentPage, FeedEvent, HotSearchTerm, Lyric, Playlist,
+    AlbumDetail, Artist, ArtistDetail, CommentPage, DefaultSearch, FeedEvent, HotSearchTerm, Lyric, Playlist,
     PlaylistDetail, PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage,
     Song, StreamUrl, SuggestItem, TrackId,
 };
@@ -338,8 +338,8 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no hot search")) })
     }
 
-    /// 默认/推荐搜索词("猜你想搜")
-    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+    /// 默认/推荐搜索词("猜你想搜"): keyword 是要搜的词, show 是推荐理由文案
+    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<DefaultSearch>>> {
         Box::pin(async { Err(ProviderError::unsupported("no default search")) })
     }
 
@@ -368,6 +368,35 @@ pub trait Provider: Send + Sync {
         _last_time: i64,
     ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
         Box::pin(async { Err(ProviderError::unsupported("no feed")) })
+    }
+
+    /// 动态的评论列表(threadId 来自 FeedEvent.thread_id)
+    fn event_comments<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event comments")) })
+    }
+
+    /// 点赞/取消点赞一条动态(threadId 来自 FeedEvent.thread_id)
+    fn like_event<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event like")) })
+    }
+
+    /// 转发一条动态(附转发语)
+    fn forward_event<'a>(
+        &'a self,
+        _event_id: u64,
+        _user_id: u64,
+        _msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event forward")) })
     }
 
     /// 歌单详情(歌单页头部信息)

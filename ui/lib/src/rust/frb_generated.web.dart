@@ -45,6 +45,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  DefaultSearchDto dco_decode_box_autoadd_default_search_dto(dynamic raw);
+
+  @protected
   SongDto dco_decode_box_autoadd_song_dto(dynamic raw);
 
   @protected
@@ -55,6 +58,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentPageDto dco_decode_comment_page_dto(dynamic raw);
+
+  @protected
+  DefaultSearchDto dco_decode_default_search_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -136,6 +142,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  DefaultSearchDto? dco_decode_opt_box_autoadd_default_search_dto(dynamic raw);
 
   @protected
   SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw);
@@ -225,6 +234,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  DefaultSearchDto sse_decode_box_autoadd_default_search_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -235,6 +249,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentPageDto sse_decode_comment_page_dto(SseDeserializer deserializer);
+
+  @protected
+  DefaultSearchDto sse_decode_default_search_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -342,6 +359,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  DefaultSearchDto? sse_decode_opt_box_autoadd_default_search_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SongDto? sse_decode_opt_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -444,6 +466,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_default_search_dto(
+    DefaultSearchDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
@@ -455,6 +483,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_comment_page_dto(
     CommentPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_default_search_dto(
+    DefaultSearchDto self,
     SseSerializer serializer,
   );
 
@@ -595,6 +629,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_default_search_dto(
+    DefaultSearchDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_opt_box_autoadd_song_dto(

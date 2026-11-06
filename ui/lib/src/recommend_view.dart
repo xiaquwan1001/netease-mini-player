@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -50,6 +51,14 @@ class _RecommendViewState extends State<RecommendView> {
 
   @override
   Widget build(BuildContext context) {
+    // 卡片排列(一排/两排)是用户设置, 改了要立刻反映到已渲染的区块
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) => _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       child: ListView(
@@ -408,6 +417,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
           builder: (context, lists, reload) => _CoverRow(
             height: 176,
+            rows: AppSettings.instance.coverRows,
             children: [
               for (final pl in lists)
                 _CoverCard(
@@ -446,6 +456,7 @@ class _PodcastSection extends StatelessWidget {
           emptyText: '暂无推荐播客',
           builder: (context, radios, reload) => _CoverRow(
             height: 176,
+            rows: AppSettings.instance.coverRows,
             children: [
               for (final radio in radios)
                 _CoverCard(
@@ -465,21 +476,41 @@ class _PodcastSection extends StatelessWidget {
   }
 }
 
+/// 歌单/播客卡片行. rows=1 是单行横向滑动, rows=2 拆成两行横滑
+/// (每行仍横滑, 只是把内容对半分, 一屏能多看到一倍).
 class _CoverRow extends StatelessWidget {
-  const _CoverRow({required this.children, required this.height});
+  const _CoverRow({required this.children, required this.height, this.rows = 1});
 
   final List<Widget> children;
   final double height;
+  final int rows;
 
   @override
   Widget build(BuildContext context) {
+    if (rows <= 1 || children.length < 2) return _row(children);
+    final half = (children.length + 1) ~/ 2;
+    return SizedBox(
+      height: height * 2,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _row(children.take(half).toList()),
+          const SizedBox(height: 4),
+          _row(children.skip(half).toList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(List<Widget> items) {
+    if (items.isEmpty) return SizedBox(height: height);
     return SizedBox(
       height: height,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: children.length,
+        itemCount: items.length,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => SizedBox(width: 118, child: children[i]),
+        itemBuilder: (_, i) => SizedBox(width: 118, child: items[i]),
       ),
     );
   }

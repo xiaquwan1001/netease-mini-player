@@ -162,6 +162,11 @@ class _HomePageState extends State<HomePage> {
   /// 底部导航: 0 搜索 / 1 推荐 / 2 关注 / 3 我的 / 4 设置
   int _tab = 0;
 
+  /// 已经打开过的 tab: 只有访问过的页面才进 IndexedStack(惰性构建),
+  /// 之后一直保留 State —— 否则每次切 tab 都销毁重建子树,
+  /// 图片 Widget 重新解析, 占位符会高频闪烁, 列表滚动位置也会丢
+  final Set<int> _tabVisited = <int>{0};
+
   /// 搜索请求代次: 取消/重新搜索后旧请求的结果直接丢弃
   int _searchToken = 0;
 
@@ -173,7 +178,9 @@ class _HomePageState extends State<HomePage> {
 
   // ---- 搜索落地页(热词/推荐词) ----
   List<rust.HotSearchTermDto> _hotTerms = const [];
+  /// "猜你想搜": keyword 是真正要搜的词, reason 是官方给的推荐理由(只展示)
   String? _recommendedKeyword;
+  String? _recommendedReason;
   bool _hotLoading = false;
   String? _hotError;
 
@@ -367,9 +374,12 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => _hotLoading = false);
     }
     try {
-      final keyword = await rust.defaultSearch();
+      final recommended = await rust.defaultSearch();
       if (!mounted) return;
-      setState(() => _recommendedKeyword = keyword);
+      setState(() {
+        _recommendedKeyword = recommended?.keyword;
+        _recommendedReason = recommended?.showText;
+      });
     } catch (_) {
       // 推荐词是锦上添花, 失败静默
     }
@@ -1248,20 +1258,6 @@ class _HomePageState extends State<HomePage> {
     await _playSong(prev);
   }
 
-  Future<void> _stop() async {
-    _userStopped = true;
-    final state = await _playback.stop();
-    if (!mounted) return;
-    setState(() {
-      _player = state;
-      _showLyrics = false;
-      _lyricLines = const [];
-      _lyricTimes = const [];
-      _lyricIndex = -1;
-      _lyricTrackId = null;
-    });
-  }
-
   void _cycleMode() {
     setState(() {
       final modes = PlayMode.values;
@@ -1391,7 +1387,17 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-          Expanded(child: _showLyrics ? _buildLyrics() : _buildTabBody()),
+          Expanded(
+            child: Stack(
+              children: [
+                // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
+                Positioned.fill(
+                  child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
+                ),
+                if (_showLyrics) Positioned.fill(child: _buildLyrics()),
+              ],
+            ),
+          ),
         ],
       ),
       // 播放条 + 底部导航: 没有曲目时播放条不占位置(Media3 连接后拿到的是一份空状态)
@@ -1439,15 +1445,44 @@ class _HomePageState extends State<HomePage> {
 
   void _onTabSelected(int index) {
     if (_tab == index) return;
+    _tabVisited.add(index);
+    // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
+    final wasLyrics = _showLyrics;
     setState(() {
       _tab = index;
       _searchFocus.unfocus();
+      _showLyrics = false;
     });
-    if (index == 0) _loadSearchHistory();
+    // 回到搜索: 按设置决定是否丢弃上一次的输入/结果/错误
+    if (index == 0) {
+      if (AppSettings.instance.clearSearchOnTabSwitch &&
+          (wasLyrics ||
+              _controller.text.isNotEmpty ||
+              _bundle != null ||
+              _libraryTitle != null ||
+              _error != null)) {
+        _clearSearch();
+      }
+      _loadSearchHistory();
+    }
   }
 
-  Widget _buildTabBody() {
-    switch (_tab) {
+  /// 五个 tab 都塞进 IndexedStack(访问过的才真正构建), 保留各自的 State.
+  Widget _buildTabPages() {
+    return IndexedStack(
+      index: _tab,
+      children: [
+        for (var i = 0; i < 5; i++)
+          if (_tabVisited.contains(i))
+            _buildTabPage(i)
+          else
+            const SizedBox.shrink(),
+      ],
+    );
+  }
+
+  Widget _buildTabPage(int index) {
+    switch (index) {
       case 1:
         return RecommendView(
           key: ValueKey('recommend-${_info?.loggedIn}-${_info?.vip}'),
@@ -1506,6 +1541,7 @@ class _HomePageState extends State<HomePage> {
         history: _searchHistory,
         hot: _hotTerms,
         recommended: _recommendedKeyword,
+        recommendedReason: _recommendedReason,
         onSelected: _searchKeyword,
         onClearHistory: _clearSearchHistory,
         hotLoading: _hotLoading,
@@ -1747,12 +1783,6 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  // 心动模式: 以当前曲目为种子续播一队智能推荐
-                  IconButton(
-                    tooltip: '心动模式',
-                    icon: const Icon(Icons.auto_awesome),
-                    onPressed: _busy ? null : _heartMode,
-                  ),
                   // 红心: 当前曲目是否在我喜欢的音乐里, 点一下即收藏/取消
                   IconButton(
                     tooltip: _isLiked(current?.id) ? '取消喜欢' : '喜欢',
@@ -1784,7 +1814,12 @@ class _HomePageState extends State<HomePage> {
                     onPressed: _toggle,
                   ),
                   IconButton(icon: const Icon(Icons.skip_next), onPressed: _next),
-                  IconButton(icon: const Icon(Icons.stop), onPressed: _stop),
+                  // 心动模式: 以当前曲目为种子续播一队智能推荐(原"中止"位置)
+                  IconButton(
+                    tooltip: '心动模式',
+                    icon: const Icon(Icons.auto_awesome),
+                    onPressed: _busy ? null : _heartMode,
+                  ),
                 ],
               ),
               // 手势导航条会吞掉最底部约 20dp 的点击, 留一点安全边距

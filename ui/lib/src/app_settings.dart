@@ -21,6 +21,12 @@ class AppSettings extends ChangeNotifier {
   /// ncm-provider 的音质字符串: standard / higher / exhigh / lossless / hires
   String audioLevel = 'exhigh';
 
+  /// 推荐页歌单/播客卡片每屏展示几排(1 排 = 横向滑动, 2 排 = 网格)
+  int coverRows = 1;
+
+  /// 切回"搜索"底部 tab 时是否丢弃上一次的输入/结果(默认丢弃, 避免残留)
+  bool clearSearchOnTabSwitch = true;
+
   File? _file;
   bool _loaded = false;
 
@@ -53,6 +59,12 @@ class AppSettings extends ChangeNotifier {
           if (level is String && audioLevels.containsKey(level)) {
             audioLevel = level;
           }
+          final rows = raw['coverRows'];
+          if (rows is num && (rows.toInt() == 1 || rows.toInt() == 2)) {
+            coverRows = rows.toInt();
+          }
+          final clearOnSwitch = raw['clearSearchOnTabSwitch'];
+          if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
         }
       }
     } catch (_) {
@@ -66,11 +78,19 @@ class AppSettings extends ChangeNotifier {
     ThemeMode? themeMode,
     double? textScale,
     String? audioLevel,
+    int? coverRows,
+    bool? clearSearchOnTabSwitch,
   }) async {
     if (themeMode != null) this.themeMode = themeMode;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
     if (audioLevel != null && audioLevels.containsKey(audioLevel)) {
       this.audioLevel = audioLevel;
+    }
+    if (coverRows != null && (coverRows == 1 || coverRows == 2)) {
+      this.coverRows = coverRows;
+    }
+    if (clearSearchOnTabSwitch != null) {
+      this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
     }
     notifyListeners();
     await _save();
@@ -85,6 +105,8 @@ class AppSettings extends ChangeNotifier {
         'themeMode': _themeName(themeMode),
         'textScale': textScale,
         'audioLevel': audioLevel,
+        'coverRows': coverRows,
+        'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
       }));
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效

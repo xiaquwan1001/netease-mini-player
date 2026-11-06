@@ -92,7 +92,40 @@ class SettingsView extends StatelessWidget {
                     },
                   ),
                 ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('推荐卡片排列'),
+                  subtitle: Text(
+                    settings.coverRows == 1
+                        ? '一排: 横向滑动, 一屏看得更多'
+                        : '两排: 网格平铺, 少滑动多浏览',
+                  ),
+                  trailing: SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 1, label: Text('一排')),
+                      ButtonSegment(value: 2, label: Text('两排')),
+                    ],
+                    selected: {settings.coverRows},
+                    onSelectionChanged: (value) {
+                      settings.update(coverRows: value.first);
+                    },
+                  ),
+                ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _SectionTitle('搜索'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: SwitchListTile(
+              title: const Text('切到搜索时清空上次结果'),
+              subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
+              value: settings.clearSearchOnTabSwitch,
+              onChanged: (value) {
+                settings.update(clearSearchOnTabSwitch: value);
+              },
             ),
           ),
           const SizedBox(height: 16),

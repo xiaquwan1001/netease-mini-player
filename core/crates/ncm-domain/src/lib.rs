@@ -415,6 +415,12 @@ pub struct HotSearchTerm {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeedEvent {
     pub id: u64,
+    /// 评论/点赞用的 threadId(形如 A_EV_2_<eventId>_<userId>)
+    #[serde(default)]
+    pub thread_id: String,
+    /// 发布者的用户 id(艺人/好友都按用户维度区分)
+    #[serde(default)]
+    pub user_id: u64,
     pub kind: String,
     /// 发布者昵称(关注的艺人名就是这里)
     pub user_name: String,
@@ -429,15 +435,41 @@ pub struct FeedEvent {
     /// 封面(专辑/歌单/单曲封面或动态配图第一张)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cover_url: Option<String>,
-    /// 配图(最多 3 张, 由 provider 截断)
+    /// 配图(最多 9 张, 由 provider 截断)
     #[serde(default)]
     pub images: Vec<String>,
     /// 动态里的视频直链(视频动态才有)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_url: Option<String>,
+    /// 动态自带的标题(艺人发的长文常用; 为空就是没有)
+    #[serde(default)]
+    pub title: String,
     /// 发布时间(unix 毫秒)
     #[serde(default)]
     pub time_ms: u64,
+    /// 当前账号是否已赞
+    #[serde(default)]
+    pub liked: bool,
+    #[serde(default)]
+    pub liked_count: u64,
+    /// 转发/分享数
+    #[serde(default)]
+    pub share_count: u64,
+    /// 评论数
+    #[serde(default)]
+    pub comment_count: u64,
+}
+
+/// "猜你想搜": keyword 才是真正要搜的词, show 是官方给的推荐理由/文案
+/// (形如 "🔥The Weeknd 最近很火哦"), UI 必须把两者分开显示.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DefaultSearch {
+    pub keyword: String,
+    /// 官方展示文案(含推荐理由). 不能叫 show: Dart 里 show 是关键字, 桥接会变成 show_
+    #[serde(default, rename = "show")]
+    pub show_text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_url: Option<String>,
 }
 
 /// 一条评论(歌曲/歌单/专辑/播客共用)

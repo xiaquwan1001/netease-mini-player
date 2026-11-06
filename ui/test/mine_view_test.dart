@@ -50,7 +50,6 @@ MineView buildMine({
           playCount: BigInt.zero,
         ),
       ],
-      loadArtists: () async => [rust.ArtistDto(id: BigInt.from(4), name: '关注艺人', avatarUrl: null)],
       onPlaySongs: onPlay ?? (_, __) {},
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
@@ -68,7 +67,7 @@ void main() {
     expect(logins, 1);
   });
 
-  testWidgets('登录后展示我喜欢/歌单/播客/艺人', (tester) async {
+  testWidgets('登录后展示我喜欢/歌单/播客(关注艺人在独立 tab)', (tester) async {
     List<rust.SongDto>? played;
     int? index;
     await tester.pumpWidget(host(buildMine(
@@ -92,6 +91,7 @@ void main() {
     await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
     await tester.pumpAndSettle();
     expect(find.text('收藏播客'), findsOneWidget);
-    expect(find.text('关注艺人'), findsOneWidget);
+    // 关注艺人不在这里: 已挪到独立的「关注」tab
+    expect(find.text('关注艺人'), findsNothing);
   });
 }

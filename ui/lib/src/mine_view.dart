@@ -6,8 +6,8 @@ import 'profile_header.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
-/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 关注艺人 / 最近听过.
-/// 关注动态已拆到独立的"关注"底部 tab。
+/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过.
+/// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
 /// 所有区块独立加载; 未登录时只显示登录引导.
 class MineView extends StatefulWidget {
   const MineView({
@@ -24,7 +24,6 @@ class MineView extends StatefulWidget {
     this.loadLiked,
     this.loadPlaylists,
     this.loadPodcasts,
-    this.loadArtists,
     this.loadProfile,
     this.loadRecent,
   });
@@ -47,7 +46,6 @@ class MineView extends StatefulWidget {
   final Future<List<rust.SongDto>> Function()? loadLiked;
   final Future<List<rust.PlaylistDto>> Function()? loadPlaylists;
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
-  final Future<List<rust.ArtistDto>> Function()? loadArtists;
   final Future<rust.ProfileDetailDto> Function()? loadProfile;
   final Future<List<rust.SongDto>> Function()? loadRecent;
 
@@ -62,8 +60,6 @@ class _MineViewState extends State<MineView> {
       widget.loadPlaylists ?? rust.myPlaylists;
   Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
-  Future<List<rust.ArtistDto>> Function() get _artists =>
-      widget.loadArtists ?? (() => rust.subscribedArtists(limit: 50));
   /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
   Future<List<rust.SongDto>> _loadRecent() async {
     try {
@@ -119,8 +115,6 @@ class _MineViewState extends State<MineView> {
           _PlaylistsSection(load: _playlists, onOpen: widget.onOpenPlaylist),
           const SizedBox(height: 16),
           _PodcastsSection(load: _podcasts, onOpen: widget.onOpenPodcast),
-          const SizedBox(height: 16),
-          _ArtistsSection(load: _artists),
           const SizedBox(height: 16),
           _RecentSection(
             load: _loadRecent,
@@ -509,40 +503,6 @@ class _CoverCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ---------------- 关注艺人 ----------------
-
-class _ArtistsSection extends StatelessWidget {
-  const _ArtistsSection({required this.load});
-
-  final Future<List<rust.ArtistDto>> Function() load;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SectionHeader(title: '关注的艺人'),
-        _AsyncSection<List<rust.ArtistDto>>(
-          load: load,
-          emptyText: '还没有关注艺人',
-          builder: (context, artists, reload) => Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final a in artists)
-                Chip(
-                  visualDensity: VisualDensity.compact,
-                  avatar: CircleCover(url: a.avatarUrl, size: 24),
-                  label: Text(a.name),
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

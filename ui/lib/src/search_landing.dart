@@ -12,6 +12,7 @@ class SearchLanding extends StatelessWidget {
     required this.recommended,
     required this.onSelected,
     required this.onClearHistory,
+    this.recommendedReason,
     this.hotLoading = false,
     this.hotError,
     this.onRetryHot,
@@ -19,7 +20,12 @@ class SearchLanding extends StatelessWidget {
 
   final List<String> history;
   final List<rust.HotSearchTermDto> hot;
+  /// "猜你想搜"的关键词(真正要搜的词)
   final String? recommended;
+
+  /// 官方给的推荐理由文案(形如 "🔥Mili 你的十月榜首"), 只用于展示
+  final String? recommendedReason;
+
   final void Function(String keyword) onSelected;
   final VoidCallback onClearHistory;
   final bool hotLoading;
@@ -68,7 +74,17 @@ class SearchLanding extends StatelessWidget {
             child: ListTile(
               dense: true,
               leading: Icon(Icons.auto_awesome, color: scheme.primary),
+              // 关键词和推荐理由必须分开: 点一下只搜关键词, 理由只是说明
               title: Text(recommended!),
+              subtitle: (recommendedReason == null ||
+                      recommendedReason!.isEmpty ||
+                      recommendedReason == recommended)
+                  ? null
+                  : Text(
+                      recommendedReason!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
               trailing: const Icon(Icons.north_west, size: 16),
               onTap: () => onSelected(recommended!),
             ),
