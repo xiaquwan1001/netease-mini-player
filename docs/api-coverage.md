@@ -1,6 +1,7 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
 > 最近更新: 2026-11-07(第六批: 评论热门 + IP 归属已接入)。口径与复算方式见文末, 一条命令可重跑。
+> 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
 
