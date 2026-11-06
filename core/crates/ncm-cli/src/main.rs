@@ -351,6 +351,49 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "hotcomments" => {
+            let kind = args
+                .positional
+                .first()
+                .ok_or("usage: ncm hotcomments <song|playlist|album|podcast> <id> [limit]")?
+                .clone();
+            let id: u64 = args
+                .positional
+                .get(1)
+                .ok_or("usage: ncm hotcomments <song|playlist|album|podcast> <id> [limit]")?
+                .parse()?;
+            let limit: u32 = args
+                .positional
+                .get(2)
+                .map(|s| s.parse())
+                .transpose()?
+                .unwrap_or(20);
+            let thread_id = ncm_service::thread_id_for(&kind, id)
+                .ok_or_else(|| format!("unknown kind {kind}"))?;
+            let p = provider(&core, Capability::Comment)?;
+            announce(&core);
+            let page = p.hot_comments(&thread_id, limit, 0).await?;
+            println!(
+                "hot total = {} has_more = {} shown = {}",
+                page.total,
+                page.has_more,
+                page.comments.len()
+            );
+            for (i, c) in page.comments.iter().take(5).enumerate() {
+                let first_line = c.content.lines().next().unwrap_or("");
+                let short: String = first_line.chars().take(40).collect();
+                println!(
+                    "{:>2}. {}({}) @{}: {} [赞 {}]",
+                    i + 1,
+                    c.user_name,
+                    c.id,
+                    if c.ip_location.is_empty() { "-" } else { &c.ip_location },
+                    short,
+                    c.liked_count
+                );
+            }
+            Ok(())
+        }
         "recent-albums" | "recent-playlists" | "recent-podcasts" => {
             let bucket = args.cmd.clone();
             // 最近播放的三个分类(服务端记录, 需登录)

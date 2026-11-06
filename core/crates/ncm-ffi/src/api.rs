@@ -956,6 +956,10 @@ pub struct CommentDto {
     pub liked: bool,
     /// 该评论下的回复数(>0 才显示"回复 N")
     pub reply_count: u64,
+    /// IP 归属地(如 "广东"); 精彩评论通常为空
+    pub ip_location: String,
+    /// 是否精彩评论
+    pub hot: bool,
 }
 
 pub struct CommentPageDto {
@@ -984,6 +988,8 @@ fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
                 liked_count: c.liked_count,
                 liked: c.liked,
                 reply_count: c.reply_count,
+                ip_location: c.ip_location,
+                hot: c.hot,
             })
             .collect(),
         total: page.total,
@@ -1001,6 +1007,20 @@ pub async fn comments(
     let provider = with_provider(Capability::Comment)?;
     let page = provider
         .comments(&kind, resource_id, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(comment_page_dto(page))
+}
+
+/// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
+pub async fn hot_comments(
+    thread_id: String,
+    limit: u32,
+    offset: u32,
+) -> Result<CommentPageDto, String> {
+    let provider = with_provider(Capability::Comment)?;
+    let page = provider
+        .hot_comments(&thread_id, limit, offset)
         .await
         .map_err(|e| e.to_string())?;
     Ok(comment_page_dto(page))

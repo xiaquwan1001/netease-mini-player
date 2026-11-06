@@ -1,15 +1,15 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-06(第五批: 新歌/新碟分地区 + 热门歌手榜已接入)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-07(第六批: 评论热门 + IP 归属已接入)。口径与复算方式见文末, 一条命令可重跑。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **87(22%)** |
-| 未接入 | **295** |
-| FFI 导出给 Dart 的函数 | 104 |
+| `ncm-service`(provider)实际调用的 | **88(23%)** |
+| 未接入 | **294** |
+| FFI 导出给 Dart 的函数 | 105 |
 | 其中 UI 还没有入口的 | 8(`lyric` `lyric_lines` `lyric_lines_i18n` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
@@ -61,13 +61,14 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 评论删除 | `comment_delete` | 评论区: 只有自己发的评论显示"删除", 二次确认后本地移除 |
 | 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 | 消息中心 | `pl_count` `msg_private` `msg_private_history` `msg_notices` `msg_comments` | "我的"/消息中心: 未读角标 + 三页签(私信会话→只读聊天记录 / 通知 / 评论消息); 实测私信 18 未读、通知含点赞/系统通知、评论含被评资源名 |
+| 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
 | 1 | 新碟/新歌剩余入口 | `album_newest` `simi_user` | 推荐页分类页 | `top_song`/`top_album`/`top_artists` 已接入; `album_newest`(最新专辑)与已接入的新碟基本重复, `simi_user`(相似用户)价值低 |
-| 2 | 评论补充 | `comment_hot` `comment_info_list` | 评论区 | 删自己的评论已接入(`comment_delete`); 热门评论/评论附加信息(IP 归属等)还没展示 |
+| 2 | 评论补充 | `comment_info_list` | 评论区 | 热门评论已接入(`comment_hot`), IP 归属地从评论负载的 `ipLocation.location` 直接取; 剩评论统计数据(资源评论/分享/收藏数)未展示 |
 | 3 | @我 / 消息增强 | `msg_forwards` `msg_recentcontact` + 私信分页 | 消息中心 | 私信/通知/评论已接入; @我 形状未验证, 会话目前只读(发包接口 vendor 未提供) |
 | 4 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
 | 5 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
@@ -112,37 +113,34 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
 
-## 附录: 未接入 295 个 endpoint(按前缀分组)
+## 附录: 未接入 294 个 endpoint(按前缀分组)
 
-> 名单是 2026-11-06 的快照; 每批接入后请用 `bash tools/api-coverage.sh --list` 重算, 以脚本输出为准.
+> 名单是 2026-11-07 的快照; 每批接入后请用 `bash tools/api-coverage.sh --list` 重算, 以脚本输出为准.
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|
 | `dj` | 25 | `dj_banner`, `dj_category_excludehot`, `dj_category_recommend`, `dj_catelist`, `dj_difm_all_style_channel`, `dj_difm_channel_subscribe`, `dj_difm_channel_unsubscribe`, `dj_difm_playing_tracks_list`, `dj_difm_subscribe_channels_get`, `dj_paygift`, `dj_personalize_recommend`, `dj_program_toplist`, `dj_program_toplist_hours`, `dj_radio_hot`, `dj_radio_top`, `dj_recommend`, `dj_recommend_type`, `dj_sub`, `dj_subscriber`, `dj_today_perfered`, `dj_toplist`, `dj_toplist_hours`, `dj_toplist_newcomer`, `dj_toplist_pay`, `dj_toplist_popular` |
-| `song` | 22 | `song_chorus`, `song_downlist`, `song_download_url`, `song_download_url_v1`, `song_dynamic_cover`, `song_like`, `song_like_check`, `song_lyrics_mark`, `song_lyrics_mark_add`, `song_lyrics_mark_del`, `song_lyrics_mark_user_page`, `song_monthdownlist`, `song_music_detail`, `song_order_update`, `song_purchased`, `song_red_count`, `song_singledownlist`, `song_url`, `song_url_match`, `song_url_ncmget`, `song_url_v1_302`, `song_wiki_summary` |
 | `user` | 22 | `user_audio`, `user_binding`, `user_bindingcellphone`, `user_cloud`, `user_cloud_del`, `user_cloud_detail`, `user_comment_history`, `user_detail_new`, `user_dj`, `user_event`, `user_follow_mixed`, `user_level`, `user_medal`, `user_mutualfollow_get`, `user_playlist_collect`, `user_playlist_create`, `user_replacephone`, `user_social_status`, `user_social_status_edit`, `user_social_status_rcmd`, `user_social_status_support`, `user_update` |
+| `song` | 21 | `song_chorus`, `song_downlist`, `song_download_url`, `song_download_url_v1`, `song_dynamic_cover`, `song_like`, `song_like_check`, `song_lyrics_mark`, `song_lyrics_mark_add`, `song_lyrics_mark_del`, `song_lyrics_mark_user_page`, `song_monthdownlist`, `song_music_detail`, `song_order_update`, `song_purchased`, `song_red_count`, `song_singledownlist`, `song_url`, `song_url_match`, `song_url_ncmget`, `song_url_v1_302` |
 | `playlist` | 17 | `playlist_category_list`, `playlist_cover_update`, `playlist_detail_dynamic`, `playlist_detail_rcmd_get`, `playlist_highquality_tags`, `playlist_hot`, `playlist_import_name_task_create`, `playlist_import_task_status`, `playlist_mylike`, `playlist_order_update`, `playlist_privacy`, `playlist_subscribers`, `playlist_tags_update`, `playlist_track_add`, `playlist_update`, `playlist_update_playcount`, `playlist_video_recent` |
 | `artist` | 11 | `artist_desc`, `artist_detail_dynamic`, `artist_fans`, `artist_follow_count`, `artist_list`, `artist_mv`, `artist_new_mv`, `artist_new_song`, `artist_songs`, `artist_sub`, `artist_video` |
 | `yunbei` | 11 | `yunbei`, `yunbei_expense`, `yunbei_info`, `yunbei_rcmd_song`, `yunbei_rcmd_song_history`, `yunbei_receipt`, `yunbei_sign`, `yunbei_task_finish`, `yunbei_tasks`, `yunbei_tasks_todo`, `yunbei_today` |
 | `listentogether` | 9 | `listentogether_accept`, `listentogether_end`, `listentogether_heatbeat`, `listentogether_play_command`, `listentogether_room_check`, `listentogether_room_create`, `listentogether_status`, `listentogether_sync_list_command`, `listentogether_sync_playlist_get` |
 | `video` | 9 | `video_category_list`, `video_detail`, `video_detail_info`, `video_group`, `video_group_list`, `video_sub`, `video_timeline_all`, `video_timeline_recommend`, `video_url` |
 | `vip` | 9 | `vip_growthpoint`, `vip_growthpoint_details`, `vip_growthpoint_get`, `vip_info`, `vip_info_v2`, `vip_sign`, `vip_sign_info`, `vip_tasks`, `vip_timemachine` |
-| `comment` | 8 | `comment`, `comment_delete`, `comment_hot`, `comment_hug_list`, `comment_info_list`, `comment_mv`, `comment_new`, `comment_video` |
 | `musician` | 8 | `musician_cloudbean`, `musician_cloudbean_obtain`, `musician_data_overview`, `musician_play_trend`, `musician_sign`, `musician_tasks`, `musician_tasks_new`, `musician_vip_tasks` |
 | `mv` | 8 | `mv_all`, `mv_detail`, `mv_detail_info`, `mv_exclusive_rcmd`, `mv_first`, `mv_sub`, `mv_sublist`, `mv_url` |
 | `album` | 7 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_newest`, `album_privilege`, `album_songsaleboard` |
 | `login` | 7 | `login`, `login_cellphone`, `login_qr_check`, `login_qr_create`, `login_qr_key`, `login_refresh`, `login_status` |
 | `ugc` | 7 | `ugc_album_get`, `ugc_artist_get`, `ugc_artist_search`, `ugc_detail`, `ugc_mv_get`, `ugc_song_get`, `ugc_user_devote` |
 | `cloud` | 6 | `cloud`, `cloud_import`, `cloud_lyric_get`, `cloud_match`, `cloud_upload_complete`, `cloud_upload_token` |
-| `msg` | 6 | `msg_comments`, `msg_forwards`, `msg_notices`, `msg_private`, `msg_private_history`, `msg_recentcontact` |
+| `comment` | 6 | `comment`, `comment_hug_list`, `comment_info_list`, `comment_mv`, `comment_new`, `comment_video` |
 | `voicelist` | 6 | `voicelist_detail`, `voicelist_list`, `voicelist_list_search`, `voicelist_my_created`, `voicelist_search`, `voicelist_trans` |
 | `broadcast` | 5 | `broadcast_category_region_get`, `broadcast_channel_collect_list`, `broadcast_channel_currentinfo`, `broadcast_channel_list`, `broadcast_sub` |
 | `fanscenter` | 5 | `fanscenter_basicinfo_age_get`, `fanscenter_basicinfo_gender_get`, `fanscenter_basicinfo_province_get`, `fanscenter_overview_get`, `fanscenter_trend_list` |
 | `listen` | 5 | `listen_data_realtime_report`, `listen_data_report`, `listen_data_today_song`, `listen_data_total`, `listen_data_year_report` |
 | `personalized` | 5 | `personalized`, `personalized_djprogram`, `personalized_mv`, `personalized_privatecontent`, `personalized_privatecontent_list` |
-| `record` | 5 | `record_recent_album`, `record_recent_dj`, `record_recent_playlist`, `record_recent_video`, `record_recent_voice` |
 | `search` | 5 | `search`, `search_hot_detail`, `search_match`, `search_multimatch`, `search_suggest_pc` |
-| `top` | 5 | `top_album`, `top_artists`, `top_list`, `top_mv`, `top_song` |
 | `digital` | 4 | `digital_album_detail`, `digital_album_ordering`, `digital_album_purchased`, `digital_album_sales` |
 | `send` | 4 | `send_album`, `send_playlist`, `send_song`, `send_text` |
 | `voice` | 4 | `voice_delete`, `voice_detail`, `voice_lyric`, `voice_upload` |
@@ -152,10 +150,13 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `toplist` | 3 | `toplist`, `toplist_artist`, `toplist_detail_v2` |
 | `captcha` | 2 | `captcha_sent`, `captcha_verify` |
 | `homepage` | 2 | `homepage_block_page`, `homepage_dragon_ball` |
+| `msg` | 2 | `msg_forwards`, `msg_recentcontact` |
+| `record` | 2 | `record_recent_video`, `record_recent_voice` |
 | `register` | 2 | `register_anonimous`, `register_cellphone` |
 | `related` | 2 | `related_allvideo`, `related_playlist` |
 | `sheet` | 2 | `sheet_list`, `sheet_preview` |
 | `simi` | 2 | `simi_mv`, `simi_user` |
+| `top` | 2 | `top_list`, `top_mv` |
 | `verify` | 2 | `verify_get_qr`, `verify_qrcodestatus` |
 | `activate` | 1 | `activate_init_profile` |
 | `aidj` | 1 | `aidj_content_rcmd` |
@@ -170,7 +171,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `check` | 1 | `check_music` |
 | `countries` | 1 | `countries_code_list` |
 | `creator` | 1 | `creator_authinfo_get` |
-| `daily` | 1 | `daily_signin` |
 | `eapi` | 1 | `eapi_decrypt` |
 | `event` | 1 | `event_del` |
 | `get` | 1 | `get_userids` |
@@ -183,7 +183,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `music` | 1 | `music_first_listen_info` |
 | `nickname` | 1 | `nickname_check` |
 | `personal` | 1 | `personal_fm_mode` |
-| `pl` | 1 | `pl_count` |
 | `playmode` | 1 | `playmode_song_vector` |
 | `program` | 1 | `program_recommend` |
 | `rebind` | 1 | `rebind` |
@@ -191,7 +190,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `scrobble` | 1 | `scrobble` |
 | `setting` | 1 | `setting` |
 | `sign` | 1 | `sign_happy_info` |
-| `signin` | 1 | `signin_progress` |
 | `starpick` | 1 | `starpick_comments_summary` |
 | `summary` | 1 | `summary_annual` |
 | `threshold` | 1 | `threshold_detail_get` |

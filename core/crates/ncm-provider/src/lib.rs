@@ -456,6 +456,16 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no comments")) })
     }
 
+    /// 精彩评论(单独接口, 可单独翻页). threadId 来自 CommentPage.thread_id
+    fn hot_comments<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot comments")) })
+    }
+
     /// 分享资源到动态(需要登录). 返回 true 表示操作被接受.
     fn share_resource<'a>(
         &'a self,

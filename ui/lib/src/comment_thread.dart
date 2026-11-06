@@ -29,6 +29,7 @@ class CommentThread extends StatefulWidget {
     this.title = '评论',
     this.pageSize = 10,
     this.loadPage,
+    this.loadHot,
     this.like,
     this.loadReplies,
     this.reply,
@@ -47,6 +48,9 @@ class CommentThread extends StatefulWidget {
   final int pageSize;
 
   final CommentPageLoader? loadPage;
+
+  /// 热门评论加载器(不传就走 rust.hotComments). 动态评论不支持热门, 传空即可
+  final CommentPageLoader? loadHot;
   final CommentLikeHook? like;
   final CommentRepliesLoader? loadReplies;
   final CommentReplyHook? reply;
@@ -73,6 +77,9 @@ class _CommentThreadState extends State<CommentThread> {
   /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
 
+  /// false = 全部(精彩评论 + 最新, 接口默认页), true = 只看精彩评论
+  bool _hot = false;
+
   /// 当前账号 uid(0 = 未登录): 只有自己发的评论才给"删除"
   BigInt _myUid = BigInt.zero;
 
@@ -90,6 +97,18 @@ class _CommentThreadState extends State<CommentThread> {
           offset: offset,
         );
       };
+
+  CommentPageLoader get _loadHotPage =>
+      widget.loadHot ??
+      (limit, offset) => rust.hotComments(
+            threadId: _threadId,
+            limit: limit,
+            offset: offset,
+          );
+
+  /// 当前页签对应的加载器: 全部走默认页, 热门走 comment_hot
+  CommentPageLoader get _fetchPage =>
+      _hot ? _loadHotPage : _loadPage;
 
   CommentLikeHook get _like =>
       widget.like ??
@@ -149,7 +168,7 @@ class _CommentThreadState extends State<CommentThread> {
       _moreError = null;
     });
     try {
-      final page = await retryNetwork(() => _loadPage(widget.pageSize, 0));
+      final page = await retryNetwork(() => _fetchPage(widget.pageSize, 0));
       if (!mounted) return;
       setState(() {
         _items
@@ -169,6 +188,11 @@ class _CommentThreadState extends State<CommentThread> {
     }
   }
 
+  /// "全部"页的 offset 只能数"最新评论"(接口的 offset 作用在 latest 上,
+  /// 精彩评论每次都随首页一起返回; 用 items.length 会把位置算多, 还会重复拉热评)
+  int get _nextOffset =>
+      _hot ? _items.length : _items.where((c) => !c.hot).length;
+
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
     setState(() {
@@ -177,11 +201,13 @@ class _CommentThreadState extends State<CommentThread> {
     });
     try {
       final page = await retryNetwork(
-        () => _loadPage(widget.pageSize, _items.length),
+        () => _fetchPage(widget.pageSize, _nextOffset),
       );
       if (!mounted) return;
       setState(() {
-        _items.addAll(page.comments);
+        // 兜底去重: 同一页里热评可能再次出现
+        final seen = _items.map((c) => c.id).toSet();
+        _items.addAll(page.comments.where((c) => seen.add(c.id)));
         _total = page.total;
         _hasMore = page.hasMore;
         _loadingMore = false;
@@ -230,6 +256,8 @@ class _CommentThreadState extends State<CommentThread> {
       likedCount: count < BigInt.zero ? BigInt.zero : count,
       liked: liked,
       replyCount: c.replyCount,
+      ipLocation: c.ipLocation,
+      hot: c.hot,
     );
   }
 
@@ -259,6 +287,8 @@ class _CommentThreadState extends State<CommentThread> {
         likedCount: c.likedCount,
         liked: c.liked,
         replyCount: c.replyCount + BigInt.one,
+        ipLocation: c.ipLocation,
+        hot: c.hot,
       );
     });
   }
@@ -299,6 +329,23 @@ class _CommentThreadState extends State<CommentThread> {
     } catch (e) {
       _snack('删除失败: ${friendlyError(e)}');
     }
+  }
+
+  /// 只有资源类评论(歌曲/歌单/专辑/播客)能查热门; 动态评论的 threadId 带 uid, 接口不认
+  bool get _supportsHot => widget.kind != null || widget.loadHot != null;
+
+  bool get _canHot => _threadId.isNotEmpty || widget.loadHot != null;
+
+  /// 切"全部/热门": 换加载器并整页重载
+  void _switchMode(bool hot) {
+    if (_hot == hot) return;
+    setState(() {
+      _hot = hot;
+      _items.clear();
+      _total = BigInt.zero;
+      _hasMore = false;
+    });
+    _reload();
   }
 
   void _snack(String message) {
@@ -350,6 +397,24 @@ class _CommentThreadState extends State<CommentThread> {
               ],
             ],
           ),
+          if (_supportsHot) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              children: [
+                ChoiceChip(
+                  label: const Text('全部'),
+                  selected: !_hot,
+                  onSelected: (_) => _switchMode(false),
+                ),
+                ChoiceChip(
+                  label: const Text('热门'),
+                  selected: _hot,
+                  onSelected: _canHot ? (_) => _switchMode(true) : null,
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 8),
           if (_loading)
             const Padding(
@@ -467,10 +532,38 @@ class _CommentTile extends StatelessWidget {
                             ?.copyWith(color: scheme.primary),
                       ),
                     ),
+                    if (comment.hot) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '热门',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onPrimaryContainer,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
                     if (timeText.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Text(
                         timeText,
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: scheme.outline),
+                      ),
+                    ],
+                    if (comment.ipLocation.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        comment.ipLocation,
                         style: theme.textTheme.labelSmall
                             ?.copyWith(color: scheme.outline),
                       ),

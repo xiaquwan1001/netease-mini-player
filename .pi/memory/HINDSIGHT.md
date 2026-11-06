@@ -261,3 +261,17 @@ API/protocol details and anti-bot technique live in the
   (cloudsearch 是 `ar`/`al`/`dt`), 现有 `parse_song_with` 两种都认, 直接复用即可。
 
 <!-- created=2026-11-06, last=2026-11-06 -->
+
+## 评论热门 / IP 归属(2026-11-07)
+
+- 普通评论页 `/api/v1/resource/comments/<threadId>` 同时回 `hotComments` 和 `comments`:
+  热评**没有 IP 归属地**(`ipLocation.location` 为空串), 且同一条评论可能在两处重复;
+  去重时先保留热评版本, 再用后一份把 `ipLocation` 补上。
+- 热门评论页 `/api/v1/resource/hotcomments/<threadId>?type=&id=&limit=&offset=`:
+  分页字段是 **`hasMore`**(普通页是 `more`), `total` 是热门评论总数(孤勇者 9405, 全部 31 万)。
+- 客户端"全部"列表翻页的 offset 只能数**非热评项**(热评每次都随首页返回), 用 items.length
+  会重复拉热评并跳过若干条最新。
+- 动态 `A_EV_2_<eventId>_<uid>` 不能直接喂热门接口(只认 eventId), UI 对动态隐藏热门页签。
+- CLI 新增 `ncm hotcomments <kind> <id> [limit]`, 便于脱离 UI 验证。
+
+<!-- created=2026-11-07, last=2026-11-07 -->

@@ -11,7 +11,7 @@ pub mod netease;
 
 pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
-pub use netease::NeteaseProvider;
+pub use netease::{thread_id_for, NeteaseProvider};
 
 use ncm_provider::{Capability, ProviderRegistry};
 use std::path::Path;

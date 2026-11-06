@@ -14,6 +14,8 @@ rust.CommentDto comment(int id, String content, BigInt userId) =>
       likedCount: BigInt.zero,
       liked: false,
       replyCount: BigInt.zero,
+      ipLocation: '',
+      hot: false,
     );
 
 rust.CommentPageDto page(List<rust.CommentDto> items) => rust.CommentPageDto(

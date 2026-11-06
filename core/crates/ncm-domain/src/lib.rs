@@ -496,6 +496,12 @@ pub struct Comment {
     /// 该评论下有多少条回复(>0 才显示"回复 N")
     #[serde(default)]
     pub reply_count: u64,
+    /// IP 归属地(接口给的 `ipLocation.location`, 如 "广东"); 精彩评论通常为空
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ip_location: String,
+    /// 是否来自精彩评论(`hotComments`). 接口把精彩评论和最新评论混在一页返回, 靠它区分
+    #[serde(default)]
+    pub hot: bool,
 }
 
 /// 评论列表页. comments 里精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.

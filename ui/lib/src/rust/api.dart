@@ -200,6 +200,17 @@ Future<CommentPageDto> comments({
   offset: offset,
 );
 
+/// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
+Future<CommentPageDto> hotComments({
+  required String threadId,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiHotComments(
+  threadId: threadId,
+  limit: limit,
+  offset: offset,
+);
+
 /// 分享资源到动态(需登录). kind = song | playlist | album | podcast
 Future<bool> shareResource({
   required String kind,
@@ -852,6 +863,12 @@ class CommentDto {
   /// 该评论下的回复数(>0 才显示"回复 N")
   final BigInt replyCount;
 
+  /// IP 归属地(如 "广东"); 精彩评论通常为空
+  final String ipLocation;
+
+  /// 是否精彩评论
+  final bool hot;
+
   const CommentDto({
     required this.id,
     required this.userId,
@@ -862,6 +879,8 @@ class CommentDto {
     required this.likedCount,
     required this.liked,
     required this.replyCount,
+    required this.ipLocation,
+    required this.hot,
   });
 
   @override
@@ -874,7 +893,9 @@ class CommentDto {
       timeMs.hashCode ^
       likedCount.hashCode ^
       liked.hashCode ^
-      replyCount.hashCode;
+      replyCount.hashCode ^
+      ipLocation.hashCode ^
+      hot.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -889,7 +910,9 @@ class CommentDto {
           timeMs == other.timeMs &&
           likedCount == other.likedCount &&
           liked == other.liked &&
-          replyCount == other.replyCount;
+          replyCount == other.replyCount &&
+          ipLocation == other.ipLocation &&
+          hot == other.hot;
 }
 
 class CommentPageDto {

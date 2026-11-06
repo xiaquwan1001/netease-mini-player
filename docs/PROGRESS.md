@@ -1,9 +1,25 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-06(接口覆盖推进到 87/382: 最近播放分类 / 签到 / 评论删除 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-07(接口覆盖推进到 88/382: 评论热门页签 / IP 归属; 前序含最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 评论热门 + IP 归属(2026-11-07 晚)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 热门评论页签 | ✅ | `comment_hot`: 评论区新增"全部/热门"两个 ChoiceChip; 热门单独走 `/api/v1/resource/hotcomments/<threadId>` 并独立翻页, 计数显示热门总数(9405)而不是全部评论数(312165); 模拟器 a36 实测切换正常 |
+| IP 归属地 | ✅ | 普通评论在昵称行尾显示 `ipLocation.location`(实测 河北/广西/上海/浙江/山西/重庆/辽宁/天津/福建/北京); 精彩评论的 location 是空串, 所以不显示 |
+| "热门"角标 | ✅ | `hotComments` 里的评论在昵称旁显示小号"热门"标签, 与最新评论区分开 |
+| 翻页修正 | ✅ | 修掉既有 bug: "全部"页的 offset 原来用 `_items.length`(含 15 条热评), 会重复拉热评并跳过 5 条最新; 改为只数非热评项, 并追加时按 commentId 兜底去重 |
+| 回归 | ✅ | Rust 73 单测(服务层 57, 新增热门页 hasMore/热门标记/IP 补全); Flutter 118 用例(新增热门页签 1 例 + 翻页 offset/去重 1 例); Android APK 构建通过; 模拟器 a36 实机走过全部/热门切换、IP 展示、翻页 |
+
+**协议事实(已写进代码注释)**:
+- 普通评论页 `/api/v1/resource/comments/<threadId>` 同时返回 `hotComments` 与 `comments`,
+  热评**没有 IP 归属地**, 且同一评论可能在两处重复; 去重时保留先到的热评版本, 再用后一份补 `ipLocation`。
+- 热门评论页 `comment_hot` 的分页字段是 **`hasMore`**(不是普通页的 `more`), 且 `total` 是热门评论总数。
+- 动态(`A_EV_2_<eventId>_<uid>`)的 threadId 不能直接给热门接口(只认 eventId), UI 对动态隐藏热门页签。
 
 ## v2 · 功能包: 新歌/新碟分地区 + 歌手榜(2026-11-08)
 

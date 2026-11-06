@@ -396,7 +396,7 @@ pub fn parse_comment_floor(body: &Value) -> ProviderResult<CommentPage> {
         return Ok(CommentPage::default());
     };
     Ok(CommentPage {
-        comments: arr.iter().filter_map(parse_comment).collect(),
+        comments: arr.iter().filter_map(|v| parse_comment(v, false)).collect(),
         total: u64_of(data, "total").unwrap_or(0),
         has_more: data.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
         thread_id: String::new(),
@@ -2010,6 +2010,35 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 精彩评论(单独接口). threadId 反解出 vendor 的 type + id, 再按资源查。
+    /// 动态(A_EV_2_)的 id 段是 `eventId_userId`, 热门接口只认 eventId, 这里不支持。
+    fn hot_comments<'a>(
+        &'a self,
+        thread_id: &'a str,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async move {
+            let (ty, rid) = split_thread_id(thread_id).ok_or_else(|| {
+                ProviderError::unsupported(format!("hot_comments: 无法识别的 threadId {thread_id}"))
+            })?;
+            if ty == "6" {
+                return Err(ProviderError::unsupported("hot_comments: 动态暂不支持热门评论"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", ty)
+                .param("id", &rid)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.comment_hot(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut page = parse_comments(&resp.body)?;
+            page.thread_id = thread_id.to_string();
+            Ok(page)
+        })
+    }
+
     /// 分享资源到动态(需登录). kind 直接透传接口 type(song/playlist/album/podcast)
     fn share_resource<'a>(
         &'a self,
@@ -2707,7 +2736,7 @@ pub fn parse_playlist_detail(body: &Value) -> ProviderResult<PlaylistDetail> {
 }
 
 /// 评论条目形如 {commentId, user:{nickname,avatarUrl}, content, time, likedCount, liked}
-fn parse_comment(v: &Value) -> Option<Comment> {
+fn parse_comment(v: &Value, hot: bool) -> Option<Comment> {
     let id = u64_of(v, "commentId")?;
     let user = v.get("user");
     Some(Comment {
@@ -2724,22 +2753,40 @@ fn parse_comment(v: &Value) -> Option<Comment> {
             .and_then(|f| u64_of(f, "replyCount"))
             .or_else(|| u64_of(v, "replyCount"))
             .unwrap_or(0),
+        // 精彩评论的 ipLocation.location 是空串, 只有普通评论才有归属地
+        ip_location: v
+            .get("ipLocation")
+            .and_then(|ip| str_of(ip, "location"))
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default(),
+        hot,
     })
 }
 
 /// 评论列表的响应形如 {code:200, total, more, hotComments:[...], comments:[...]}
 /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.
 pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
-    let mut seen = std::collections::HashSet::new();
-    let mut comments = Vec::new();
-    for key in ["hotComments", "comments"] {
+    let mut seen = std::collections::HashMap::new();
+    let mut comments: Vec<Comment> = Vec::new();
+    for (key, hot) in [("hotComments", true), ("comments", false)] {
         let Some(arr) = body.get(key).and_then(Value::as_array) else {
             continue;
         };
         for v in arr {
-            let Some(c) = parse_comment(v) else { continue };
-            if seen.insert(c.id) {
-                comments.push(c);
+            let Some(c) = parse_comment(v, hot) else { continue };
+            match seen.get(&c.id).copied() {
+                Some(idx) => {
+                    // 同一条评论在热评和最新里各出现一次: 保留先到的(hot 版),
+                    // 但热评常常没有 IP 归属地, 从后面那份补上
+                    let existing: &mut Comment = &mut comments[idx];
+                    if existing.ip_location.is_empty() {
+                        existing.ip_location = c.ip_location;
+                    }
+                }
+                None => {
+                    seen.insert(c.id, comments.len());
+                    comments.push(c);
+                }
             }
         }
     }
@@ -2747,7 +2794,12 @@ pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
         thread_id: String::new(),
         comments,
         total: u64_of(body, "total").unwrap_or(0),
-        has_more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+        // 普通评论页用 more, 热门评论页(comment_hot)用 hasMore
+        has_more: body
+            .get("more")
+            .or_else(|| body.get("hasMore"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -4296,11 +4348,13 @@ mod tests {
             "more": true,
             "hotComments": [
                 {"commentId": 1, "user": {"nickname": "A", "avatarUrl": "http://p/a.jpg"},
-                 "content": "好", "time": 1700000000000u64, "likedCount": 10, "liked": true},
+                 "content": "好", "time": 1700000000000u64, "likedCount": 10, "liked": true,
+                 "ipLocation": {"location": ""}},
                 {"commentId": 2, "user": {"nickname": "B"}, "content": "赞"}
             ],
             "comments": [
-                {"commentId": 2, "user": {"nickname": "B"}, "content": "赞"},
+                {"commentId": 2, "user": {"nickname": "B"}, "content": "赞",
+                 "ipLocation": {"location": "广东"}},
                 {"commentId": 3, "user": {"nickname": "C"}, "content": "三"}
             ]
         });
@@ -4316,6 +4370,37 @@ mod tests {
         assert_eq!(page.comments[0].liked_count, 10);
         assert!(page.comments[0].liked);
         assert!(!page.comments[2].liked);
+        // 精彩评论带 hot 标记; 去重时保留先出现的 hot 版本, IP 归属地仍是空
+        assert!(page.comments[0].hot);
+        assert!(page.comments[1].hot);
+        assert!(!page.comments[2].hot);
+        assert!(page.comments[0].ip_location.is_empty());
+        // 热评版没有 IP, 去重时从后面同一评论的普通版本补上
+        assert_eq!(page.comments[1].ip_location, "广东");
+        // 没有 ipLocation 字段时是空串(UI 不显示)
+        assert!(page.comments[2].ip_location.is_empty());
+    }
+
+    #[test]
+    fn hot_comments_page_shape() {
+        // vendor comment_hot 的响应: {code, hasMore, hotComments:[...], total}
+        // 注意用的是 hasMore(不是普通评论页的 more), 总数也是"热门评论"的总数
+        let body = json!({
+            "code": 200,
+            "hasMore": true,
+            "total": 9405,
+            "hotComments": [
+                {"commentId": 7, "user": {"nickname": "D"}, "content": "热",
+                 "likedCount": 444050, "ipLocation": {"location": ""}},
+                {"commentId": 8, "user": {"nickname": "E"}, "content": "也热"}
+            ]
+        });
+        let page = parse_comments(&body).unwrap();
+        assert_eq!(page.total, 9405);
+        assert!(page.has_more);
+        assert_eq!(page.comments.len(), 2);
+        assert!(page.comments.iter().all(|c| c.hot));
+        assert_eq!(page.comments[0].liked_count, 444050);
     }
 
     #[test]
