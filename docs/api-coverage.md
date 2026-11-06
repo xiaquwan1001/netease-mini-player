@@ -1,16 +1,16 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-06(第二批: 排行榜/歌单广场/收藏专辑/歌单编辑已接入)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-06(第三批: 最近播放分类/云贝签到/评论删除/歌曲百科已接入)。口径与复算方式见文末, 一条命令可重跑。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **72(18%)** |
-| 未接入 | **310** |
-| FFI 导出给 Dart 的函数 | 89 |
-| 其中 UI 还没有入口的 | 7(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
+| `ncm-service`(provider)实际调用的 | **79(20%)** |
+| 未接入 | **303** |
+| FFI 导出给 Dart 的函数 | 96 |
+| 其中 UI 还没有入口的 | 8(`lyric` `lyric_lines` `lyric_lines_i18n` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
 
@@ -55,17 +55,21 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` | 歌曲菜单"相似歌曲"(面板: 相似歌曲 + 相似歌单); 歌手页"相似歌手"胶囊(需登录) |
 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐每行 ⊖ 按钮; 歌曲菜单"不感兴趣"(FM 队列走 fm_trash, 其余走日推 dislike) |
 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐面板第三个页签: 日期列表 → 某天的歌单(黑胶 VIP 专属) |
+| 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` | "我的/最近听过" 四个页签: 单曲/专辑/歌单/播客(点专辑→封面预览, 点歌单/播客→对应详情) |
+| 云贝签到 | `daily_signin` `signin_progress` | "我的"顶部签到卡: 今日状态 + 累计/连续/本周天数 + 一键签到(实测确认只有 `type=1` 真的签上, `type=0` 回"功能暂不支持") |
+| 评论删除 | `comment_delete` | 评论区: 只有自己发的评论显示"删除", 二次确认后本地移除 |
+| 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
 | 1 | 新碟/新歌更多入口 | `album_newest` `top_song` `top_album` `top_artists` `simi_user` | 推荐页分类 tab | 与已接入的新歌/新碟同构, 只是分区/语种维度 |
-| 2 | 评论管理 | `comment_delete` `comment_hot` `comment_info_list` | 评论区 | 取消自己的评论需要 `comment_delete`(还要判断是不是自己发的); 热门评论已经合在首次返回里 |
+| 2 | 评论补充 | `comment_hot` `comment_info_list` | 评论区 | 删自己的评论已接入(`comment_delete`); 热门评论/评论附加信息(IP 归属等)还没展示 |
 | 3 | 互关/关注推荐 | `user_follow_mixed` `user_mutualfollow_get` `user_followeds` 的分页优化 | 关注页 | 现在关注列表靠 offset 翻页, 混合场景接口能一次拿"关注+互关" |
-| 4 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
-| 5 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
-| 6 | 签到 | `daily_signin` `signin_progress` `vip_sign` `vip_sign_info` `sign_happy_info` | "我的"/设置 | 只读展示即可, 不碰支付 |
+| 4 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
+| 5 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
+| 6 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付 |
 | 7 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
 | 8 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
 | 9 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
@@ -106,7 +110,9 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
 
-## 附录: 未接入 310 个 endpoint(按前缀分组)
+## 附录: 未接入 303 个 endpoint(按前缀分组)
+
+> 名单是 2026-11-06 的快照; 每批接入后请用 `bash tools/api-coverage.sh --list` 重算, 以脚本输出为准.
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|

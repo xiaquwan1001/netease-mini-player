@@ -392,46 +392,172 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
   }
 }
 
-/// 最近听过(登录时服务端记录, 否则本地播放历史)
+typedef AlbumListLoader = Future<List<rust.AlbumItemDto>> Function();
+typedef PodcastListLoader = Future<List<rust.PodcastRadioDto>> Function();
+
+/// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
+/// 都来自服务端播放记录(需登录), 未登录时由调用方回落到本地历史.
 Future<void> showRecentSheet(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlay,
   SongListLoader? loadRecent,
+  AlbumListLoader? loadAlbums,
+  PlaylistListLoader? loadPlaylists,
+  PodcastListLoader? loadPodcasts,
+  void Function(rust.PlaylistDto playlist)? onOpenPlaylist,
+  void Function(rust.PodcastRadioDto radio)? onOpenPodcast,
+  void Function(rust.AlbumItemDto album)? onOpenAlbum,
 }) {
-  final load = loadRecent ?? () => rust.recentSongs(limit: 100);
+  final songs = loadRecent ?? () => rust.recentSongs(limit: 100);
+  final albums = loadAlbums ?? () => rust.recentAlbums(limit: 100);
+  final playlists = loadPlaylists ?? () => rust.recentPlaylists(limit: 100);
+  final podcasts = loadPodcasts ?? () => rust.recentPodcasts(limit: 100);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    builder: (sheetContext) => SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(sheetContext).size.height * 0.7,
-        child: Column(
-          children: [
-            SheetHeader(
-              title: '最近听过',
-              onClose: () => Navigator.pop(sheetContext),
-            ),
-            Expanded(child: _RecentList(load: load, onPlay: onPlay)),
-          ],
+    builder: (sheetContext) => DefaultTabController(
+      length: 4,
+      child: SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.72,
+          child: Column(
+            children: [
+              SheetHeader(
+                title: '最近听过',
+                onClose: () => Navigator.pop(sheetContext),
+              ),
+              const TabBar(
+                tabs: [
+                  Tab(text: '单曲'),
+                  Tab(text: '专辑'),
+                  Tab(text: '歌单'),
+                  Tab(text: '播客'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _RecentBucketTab<rust.SongDto>(
+                      load: songs,
+                      emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
+                      itemBuilder: (context, s, i, list) => _SongRow(
+                        song: s,
+                        index: i + 1,
+                        onTap: s.playable
+                            ? () {
+                                Navigator.pop(context);
+                                onPlay(list.cast<rust.SongDto>(), i);
+                              }
+                            : null,
+                      ),
+                    ),
+                    _RecentBucketTab<rust.AlbumItemDto>(
+                      load: albums,
+                      emptyText: '还没有最近听过的专辑',
+                      itemBuilder: (context, a, i, _) => ListTile(
+                        leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
+                        title: Text(
+                          a.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          a.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: onOpenAlbum == null
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                onOpenAlbum(a);
+                              },
+                      ),
+                    ),
+                    _RecentBucketTab<rust.PlaylistDto>(
+                      load: playlists,
+                      emptyText: '还没有最近听过的歌单',
+                      itemBuilder: (context, pl, i, _) => ListTile(
+                        leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
+                        title: Text(
+                          pl.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: pl.trackCount > BigInt.zero
+                            ? Text('${pl.trackCount} 首')
+                            : null,
+                        onTap: onOpenPlaylist == null
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                onOpenPlaylist(pl);
+                              },
+                      ),
+                    ),
+                    _RecentBucketTab<rust.PodcastRadioDto>(
+                      load: podcasts,
+                      emptyText: '还没有最近听过的播客',
+                      itemBuilder: (context, r, i, _) => ListTile(
+                        leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
+                        title: Text(
+                          r.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          [
+                            if (r.djName.isNotEmpty) r.djName,
+                            if (r.programCount > BigInt.zero) '${r.programCount} 集',
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: onOpenPodcast == null
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                                onOpenPodcast(r);
+                              },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     ),
   );
 }
 
-class _RecentList extends StatefulWidget {
-  const _RecentList({required this.load, required this.onPlay});
+/// 一个分类的列表: 自己加载 + 自己保活, 切 tab 不重新请求.
+class _RecentBucketTab<T> extends StatefulWidget {
+  const _RecentBucketTab({
+    required this.load,
+    required this.emptyText,
+    required this.itemBuilder,
+  });
 
-  final SongListLoader load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final Future<List<T>> Function() load;
+  final String emptyText;
+
+  /// 第四个参数是整份列表(点播单曲需要用它重置队列)
+  final Widget Function(BuildContext context, T item, int index, List<T> list)
+      itemBuilder;
 
   @override
-  State<_RecentList> createState() => _RecentListState();
+  State<_RecentBucketTab<T>> createState() => _RecentBucketTabState<T>();
 }
 
-class _RecentListState extends State<_RecentList> {
-  List<rust.SongDto>? _songs;
+class _RecentBucketTabState<T> extends State<_RecentBucketTab<T>>
+    with AutomaticKeepAliveClientMixin {
+  List<T>? _items;
   String? _error;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -442,9 +568,9 @@ class _RecentListState extends State<_RecentList> {
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final songs = await retryNetwork(widget.load);
+      final items = await retryNetwork(widget.load);
       if (!mounted) return;
-      setState(() => _songs = songs);
+      setState(() => _items = items);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
@@ -453,33 +579,21 @@ class _RecentListState extends State<_RecentList> {
 
   @override
   Widget build(BuildContext context) {
-    final songs = _songs;
+    super.build(context);
     if (_error != null) {
       return _ErrorView(message: _error!, onRetry: _load);
     }
-    if (songs == null) {
+    final items = _items;
+    if (items == null) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (songs.isEmpty) {
-      return const Center(
-        child: Text('还没有最近听过\n(登录后会自动同步服务端记录)'),
-      );
+    if (items.isEmpty) {
+      return Center(child: Text(widget.emptyText));
     }
     return ListView.builder(
-      itemCount: songs.length,
-      itemBuilder: (context, i) {
-        final s = songs[i];
-        return _SongRow(
-          song: s,
-          index: i + 1,
-          onTap: s.playable
-              ? () {
-                  Navigator.pop(context);
-                  widget.onPlay(songs, i);
-                }
-              : null,
-        );
-      },
+      itemCount: items.length,
+      itemBuilder: (context, i) =>
+          widget.itemBuilder(context, items[i], i, items),
     );
   }
 }

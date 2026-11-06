@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -483,6 +483,38 @@ Future<bool> setFollow({required BigInt uid, required bool follow}) =>
 /// 我的关注/粉丝数(需登录)
 Future<FollowCountDto> followCounts() =>
     RustLib.instance.api.crateApiFollowCounts();
+
+/// 最近播放的专辑(需登录)
+Future<List<AlbumItemDto>> recentAlbums({required int limit}) =>
+    RustLib.instance.api.crateApiRecentAlbums(limit: limit);
+
+/// 最近播放的歌单(需登录)
+Future<List<PlaylistDto>> recentPlaylists({required int limit}) =>
+    RustLib.instance.api.crateApiRecentPlaylists(limit: limit);
+
+/// 最近播放的播客/电台(需登录)
+Future<List<PodcastRadioDto>> recentPodcasts({required int limit}) =>
+    RustLib.instance.api.crateApiRecentPodcasts(limit: limit);
+
+/// 云贝签到状态(需登录)
+Future<SigninStatusDto> signinStatus() =>
+    RustLib.instance.api.crateApiSigninStatus();
+
+/// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
+Future<SigninStatusDto> signIn() => RustLib.instance.api.crateApiSignIn();
+
+/// 删除自己的评论(需登录)
+Future<bool> deleteComment({
+  required String threadId,
+  required BigInt commentId,
+}) => RustLib.instance.api.crateApiDeleteComment(
+  threadId: threadId,
+  commentId: commentId,
+);
+
+/// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
+Future<List<WikiFactDto>> songWiki({required BigInt songId}) =>
+    RustLib.instance.api.crateApiSongWiki(songId: songId);
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
@@ -1638,6 +1670,74 @@ class SearchResultDto {
           songs == other.songs;
 }
 
+class SigninDayDto {
+  /// yyyy-mm-dd
+  final String day;
+  final bool signed;
+
+  const SigninDayDto({required this.day, required this.signed});
+
+  @override
+  int get hashCode => day.hashCode ^ signed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SigninDayDto &&
+          runtimeType == other.runtimeType &&
+          day == other.day &&
+          signed == other.signed;
+}
+
+class SigninStatusDto {
+  final bool signedToday;
+
+  /// 累计签到天数
+  final int totalDays;
+
+  /// 连续签到天数
+  final int continuousDays;
+
+  /// 本周签到天数
+  final int weekDays;
+
+  /// 最近 7 天(新的在前)
+  final List<SigninDayDto> recent;
+
+  /// 本次签到得到云贝(只有刚签完非 0)
+  final int todayPoint;
+
+  const SigninStatusDto({
+    required this.signedToday,
+    required this.totalDays,
+    required this.continuousDays,
+    required this.weekDays,
+    required this.recent,
+    required this.todayPoint,
+  });
+
+  @override
+  int get hashCode =>
+      signedToday.hashCode ^
+      totalDays.hashCode ^
+      continuousDays.hashCode ^
+      weekDays.hashCode ^
+      recent.hashCode ^
+      todayPoint.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SigninStatusDto &&
+          runtimeType == other.runtimeType &&
+          signedToday == other.signedToday &&
+          totalDays == other.totalDays &&
+          continuousDays == other.continuousDays &&
+          weekDays == other.weekDays &&
+          recent == other.recent &&
+          todayPoint == other.todayPoint;
+}
+
 class SongDto {
   final BigInt id;
   final String name;
@@ -1836,4 +1936,25 @@ class UserItemDto {
           avatarUrl == other.avatarUrl &&
           signature == other.signature &&
           followed == other.followed;
+}
+
+class WikiFactDto {
+  /// 分组(曲风/语种/BPM/获奖成就...)
+  final String label;
+
+  /// 值(多个已用 " / " 拼好)
+  final String value;
+
+  const WikiFactDto({required this.label, required this.value});
+
+  @override
+  int get hashCode => label.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WikiFactDto &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          value == other.value;
 }

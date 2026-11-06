@@ -110,6 +110,9 @@ void main() {
         tester.element(find.text('open')),
         onPlay: (songs, index) => played = songs,
         loadRecent: () async => [song(3, '最近一首')],
+        loadAlbums: () async => const [],
+        loadPlaylists: () async => const [],
+        loadPodcasts: () async => const [],
       );
     }));
     await tester.tap(find.text('open'));
@@ -118,6 +121,93 @@ void main() {
     await tester.tap(find.text('最近一首'));
     await tester.pumpAndSettle();
     expect(played?.single.name, '最近一首');
+  });
+
+  testWidgets('最近听过: 单曲/专辑/歌单/播客四个分类各自渲染', (tester) async {
+    rust.AlbumItemDto? openedAlbum;
+    await tester.pumpWidget(host(() {
+      showRecentSheet(
+        tester.element(find.text('open')),
+        onPlay: (_, _) {},
+        loadRecent: () async => [song(3, '最近一首')],
+        loadAlbums: () async => [
+          rust.AlbumItemDto(
+            id: BigInt.from(11),
+            name: '野泳',
+            coverUrl: null,
+            artist: '祝游会',
+            trackCount: BigInt.from(7),
+          ),
+        ],
+        loadPlaylists: () async => [playlist(9, '最近歌单', 3)],
+        loadPodcasts: () async => [
+          rust.PodcastRadioDto(
+            id: BigInt.from(7),
+            name: '最近播客',
+            coverUrl: null,
+            description: '',
+            djName: '主播',
+            programCount: BigInt.from(5),
+            playCount: BigInt.zero,
+          ),
+        ],
+        onOpenAlbum: (a) => openedAlbum = a,
+        onOpenPlaylist: (_) {},
+        onOpenPodcast: (_) {},
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('专辑'));
+    await tester.pumpAndSettle();
+    expect(find.text('野泳'), findsOneWidget);
+    await tester.tap(find.text('野泳'));
+    await tester.pumpAndSettle();
+    expect(openedAlbum?.name, '野泳');
+  });
+
+  testWidgets('最近听过: 歌单/播客页签可打开', (tester) async {
+    rust.PlaylistDto? openedPlaylist;
+    rust.PodcastRadioDto? openedPodcast;
+    await tester.pumpWidget(host(() {
+      showRecentSheet(
+        tester.element(find.text('open')),
+        onPlay: (_, _) {},
+        loadRecent: () async => const [],
+        loadAlbums: () async => const [],
+        loadPlaylists: () async => [playlist(9, '最近歌单', 3)],
+        loadPodcasts: () async => [
+          rust.PodcastRadioDto(
+            id: BigInt.from(7),
+            name: '最近播客',
+            coverUrl: null,
+            description: '',
+            djName: '主播',
+            programCount: BigInt.from(5),
+            playCount: BigInt.zero,
+          ),
+        ],
+        onOpenPlaylist: (p) => openedPlaylist = p,
+        onOpenPodcast: (r) => openedPodcast = r,
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('歌单'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最近歌单'));
+    await tester.pumpAndSettle();
+    expect(openedPlaylist?.name, '最近歌单');
+
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('播客'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最近播客'));
+    await tester.pumpAndSettle();
+    expect(openedPodcast?.name, '最近播客');
   });
 
   testWidgets('每日推荐: 不感兴趣把歌从列表里去掉', (tester) async {

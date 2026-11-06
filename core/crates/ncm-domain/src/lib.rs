@@ -600,6 +600,43 @@ pub struct AlbumItem {
     pub track_count: u64,
 }
 
+/// 签到日历里的一天
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SigninDay {
+    /// yyyy-mm-dd
+    pub day: String,
+    pub signed: bool,
+}
+
+/// 签到状态(云贝签到). 进度接口给的是"累计/每周/连续"三套计数, 这里挑常用字段.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SigninStatus {
+    /// 今天是否已签到
+    pub signed_today: bool,
+    /// 累计签到天数(不循环)
+    pub total_days: u32,
+    /// 连续签到天数(28 天循环内的当前进度)
+    pub continuous_days: u32,
+    /// 本周签到天数(周一到周日)
+    pub week_days: u32,
+    /// 最近若干天的签到情况(新的在前)
+    #[serde(default)]
+    pub recent: Vec<SigninDay>,
+    /// 本次签到得到的云贝(只有刚签完才有值)
+    #[serde(default)]
+    pub today_point: u32,
+}
+
+/// 歌曲百科的一条信息(曲风/语种/BPM/获奖成就...).
+/// 接口是"装修块 + 富文本"结构, 这里压成 label/value 对, UI 直接两列渲染.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WikiFact {
+    /// 分组名(曲风/语种/BPM/...)
+    pub label: String,
+    /// 值(多个用 " / " 拼好)
+    pub value: String,
+}
+
 /// 一次登录的产物. 不论从哪个入口登录, 最终都落到这个结构.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Session {

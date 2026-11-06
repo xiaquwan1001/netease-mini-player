@@ -64,5 +64,6 @@ void main() {
 
     // 面板关闭后没有内容了(点歌会 pop)
     expect(find.text('相似一'), findsNothing);
+    expect(opened, isNull, reason: '点歌不该顺手打开歌单');
   });
 }

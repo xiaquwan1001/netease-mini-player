@@ -5,8 +5,8 @@ use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
     DefaultSearch, FeedEvent, FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory,
     PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle,
-    SearchPage, SearchPlaylistItem, SearchPodcast, Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    UserItem,
+    SearchPage, SearchPlaylistItem, SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl,
+    StyleTag, SuggestItem, TrackId, UserItem, WikiFact,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -44,7 +44,17 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Follow,
     Capability::NewRelease,
     Capability::Similar,
+    Capability::Signin,
+    Capability::Wiki,
 ];
+
+/// 最近播放的三种资源(专辑/歌单/电台)
+#[derive(Debug, Clone, Copy)]
+enum RecentBucket {
+    Album,
+    Playlist,
+    Podcast,
+}
 
 /// 内置网易云直连 provider.
 /// 协议与加解密全部委托给 vendor/ncm-api (api-enhanced 的 Rust 移植).
@@ -189,6 +199,39 @@ impl NeteaseProvider {
         let resp = client.cloudsearch(&q).await.map_err(map_error)?;
         check_body(&resp.body)?;
         Ok(resp.body)
+    }
+
+    /// 最近播放三类(专辑/歌单/电台)共用的取数: 响应都是 {code, data:{list:[{data:{...}}]}}
+    async fn recent_bucket(
+        &self,
+        bucket: RecentBucket,
+        limit: u32,
+    ) -> ProviderResult<Vec<Value>> {
+        let (client, domain, ua, cookie) = self.snapshot();
+        if !cookie.contains("MUSIC_U=") {
+            return Err(ProviderError::auth("最近播放需要登录"));
+        }
+        let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+        let resp = match bucket {
+            RecentBucket::Album => client.record_recent_album(&q).await,
+            RecentBucket::Playlist => client.record_recent_playlist(&q).await,
+            RecentBucket::Podcast => client.record_recent_dj(&q).await,
+        }
+        .map_err(map_error)?;
+        check_body(&resp.body)?;
+        Ok(recent_items(&resp.body))
+    }
+
+    /// 签到进度原始结构 → SigninStatus
+    async fn fetch_signin_progress(&self) -> ProviderResult<SigninStatus> {
+        let (client, domain, ua, cookie) = self.snapshot();
+        if !cookie.contains("MUSIC_U=") {
+            return Err(ProviderError::auth("签到需要登录"));
+        }
+        let q = make_query(&cookie, &domain, &ua);
+        let resp = client.signin_progress(&q).await.map_err(map_error)?;
+        check_body(&resp.body)?;
+        Ok(parse_signin_progress(&resp.body))
     }
 
     /// await 之前先把要用的东西克隆出来: 避免 std RwLock guard 跨 await (破坏 Send)
@@ -1571,6 +1614,113 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 最近播放-专辑(服务端记录, 需要登录)
+    fn recent_albums(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async move {
+            let items = self.recent_bucket(RecentBucket::Album, limit).await?;
+            Ok(items.iter().filter_map(parse_album_item).collect())
+        })
+    }
+
+    /// 最近播放-歌单(服务端记录, 需要登录)
+    fn recent_playlists(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            let items = self.recent_bucket(RecentBucket::Playlist, limit).await?;
+            Ok(items.iter().filter_map(parse_playlist).collect())
+        })
+    }
+
+    /// 最近播放-播客/电台(服务端记录, 需要登录)
+    fn recent_podcasts(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async move {
+            let items = self.recent_bucket(RecentBucket::Podcast, limit).await?;
+            Ok(items.iter().filter_map(parse_radio).collect())
+        })
+    }
+
+    /// 云贝签到状态(需要登录)
+    fn signin_status(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async move { self.fetch_signin_progress().await })
+    }
+
+    /// 签到(需要登录). 已签到时不重复请求(接口会回 "重复签到" 错误).
+    fn sign_in(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async move {
+            let before = self.fetch_signin_progress().await?;
+            if before.signed_today {
+                return Ok(before);
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            // type=0 实测回 "功能暂不支持"(安卓端通道), 只有 type=1(web) 真的签到成功.
+            let q = make_query(&cookie, &domain, &ua).param("type", "1");
+            let resp = client.daily_signin(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let point = resp
+                .body
+                .get("point")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as u32;
+            let mut status = self.fetch_signin_progress().await?;
+            status.signed_today = true;
+            status.today_point = point;
+            Ok(status)
+        })
+    }
+
+    /// 删除自己的评论(需要登录)
+    fn delete_comment<'a>(
+        &'a self,
+        thread_id: &'a str,
+        comment_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("删除评论需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("threadId", thread_id)
+                .param("commentId", &comment_id.to_string());
+            let resp = client.comment_delete(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 歌曲百科: 曲风/语种/BPM/获奖成就, 压成 label/value 对.
+    ///
+    /// vendor 的 song_wiki_summary 走 eapi: 桌面身份(PC UA + os=pc)实测正常,
+    /// 安卓身份(官方安卓 UA + os=android)实测回 code=432 Unknown error;
+    /// 同一个 path 换 weapi 通道两边都正常, 所以先用 weapi, 失败再退回 vendor 的 eapi 实现。
+    fn song_wiki(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let mut opt = ncm_api_rs::RequestOption::default();
+            opt.crypto = ncm_api_rs::CryptoType::Weapi;
+            if !cookie.is_empty() {
+                opt.cookie = Some(cookie.clone());
+            }
+            opt.ua = ua.clone();
+            opt.domain = domain.clone();
+            let body = serde_json::json!({ "songId": song_id.to_string() });
+            let weapi = client
+                .request("/api/song/play/about/block/page", body, opt)
+                .await
+                .map_err(map_error)
+                .and_then(|r| {
+                    check_body(&r.body)?;
+                    Ok(r)
+                });
+            if let Ok(resp) = weapi {
+                return Ok(parse_song_wiki(&resp.body));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &song_id.to_string());
+            let resp = client.song_wiki_summary(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_song_wiki(&resp.body))
+        })
+    }
+
     /// 专辑详情(封面预览 + 曲目)
     fn album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
         Box::pin(async move {
@@ -2702,35 +2852,168 @@ pub fn parse_album_items(body: &Value) -> Vec<AlbumItem> {
     body.get("data")
         .or_else(|| body.get("albums"))
         .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_album_item).collect())
+        .unwrap_or_default()
+}
+
+/// 单个专辑对象(收藏专辑/最近播放专辑/新碟共用)
+pub fn parse_album_item(v: &Value) -> Option<AlbumItem> {
+    let id = u64_of(v, "id")?;
+    let name = str_of(v, "name")?;
+    if name.is_empty() {
+        return None;
+    }
+    Some(AlbumItem {
+        id,
+        name,
+        cover_url: str_of(v, "picUrl")
+            .or_else(|| str_of(v, "coverImgUrl"))
+            .filter(|s| s.starts_with("http")),
+        artist: v
+            .get("artist")
+            .and_then(|a| str_of(a, "name"))
+            .or_else(|| {
+                v.get("artists").and_then(|a| {
+                    a.as_array()
+                        .and_then(|arr| arr.first())
+                        .and_then(|x| str_of(x, "name"))
+                })
+            })
+            .unwrap_or_default(),
+        track_count: u64_of(v, "size")
+            .or_else(|| u64_of(v, "trackCount"))
+            .unwrap_or(0),
+    })
+}
+
+/// 最近播放(专辑/歌单/电台)的响应形状: {code, data:{list:[{data:{...}}]}}
+/// 只留下每条记录的 data 对象, 由各类型的解析器处理.
+pub fn recent_items(body: &Value) -> Vec<Value> {
+    body.get("data")
+        .and_then(|d| d.get("list"))
+        .and_then(Value::as_array)
         .map(|arr| {
             arr.iter()
-                .filter_map(|v| {
-                    let id = u64_of(v, "id")?;
-                    let name = str_of(v, "name")?;
-                    if name.is_empty() {
-                        return None;
-                    }
-                    Some(AlbumItem {
-                        id,
-                        name,
-                        cover_url: str_of(v, "picUrl").filter(|s| s.starts_with("http")),
-                        artist: v
-                            .get("artist")
-                            .and_then(|a| str_of(a, "name"))
-                            .or_else(|| v.get("artists").and_then(|a| {
-                                a.as_array()
-                                    .and_then(|arr| arr.first())
-                                    .and_then(|x| str_of(x, "name"))
-                            }))
-                            .unwrap_or_default(),
-                        track_count: u64_of(v, "size")
-                            .or_else(|| u64_of(v, "trackCount"))
-                            .unwrap_or(0),
-                    })
-                })
+                .filter_map(|it| it.get("data").cloned().filter(|d| d.is_object()))
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// 签到进度: {code, data:{records:[{day,signed}], stats:[{id,currentProgress,description}],
+/// today:{todaySignedIn}}}
+/// stats 的 id: 6001 累计签到 / 4001 每周签到 / 5001 连续签到(28 天循环).
+pub fn parse_signin_progress(body: &Value) -> SigninStatus {
+    let data = body.get("data").unwrap_or(body);
+    let signed_today = data
+        .get("today")
+        .and_then(|t| t.get("todaySignedIn"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let stats = data.get("stats").and_then(Value::as_array);
+    let progress_of = |id: i64| -> u32 {
+        stats
+            .and_then(|arr| {
+                arr.iter().find(|s| {
+                    s.get("id").and_then(Value::as_i64) == Some(id)
+                })
+            })
+            .and_then(|s| s.get("currentProgress").and_then(Value::as_u64))
+            .unwrap_or(0) as u32
+    };
+    let recent = data
+        .get("records")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let day = str_of(r, "day")?;
+                    Some(SigninDay {
+                        day,
+                        signed: r.get("signed").and_then(Value::as_bool).unwrap_or(false),
+                    })
+                })
+                .take(7)
+                .collect()
+        })
+        .unwrap_or_default();
+    SigninStatus {
+        signed_today,
+        total_days: progress_of(6001),
+        continuous_days: progress_of(5001),
+        week_days: progress_of(4001),
+        recent,
+        today_point: 0,
+    }
+}
+
+/// 歌曲百科: {code, data:{blocks:[{code, creatives:[{creativeType, uiElement:{mainTitle, textLinks},
+/// resources:[{uiElement:{mainTitle, subTitles}}]}]}]}}
+/// 只取 "音乐百科" 那个块(其余是相似歌曲/相关歌单/回忆坐标, 我们已有等价入口).
+pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
+    let blocks = body
+        .get("data")
+        .and_then(|d| d.get("blocks"))
+        .and_then(Value::as_array);
+    let Some(blocks) = blocks else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for block in blocks {
+        if str_of(block, "code").as_deref() != Some("SONG_PLAY_ABOUT_SONG_BASIC") {
+            continue;
+        }
+        let Some(creatives) = block.get("creatives").and_then(Value::as_array) else {
+            continue;
+        };
+        for creative in creatives {
+            let ui = creative.get("uiElement");
+            let label = ui
+                .and_then(|u| u.get("mainTitle"))
+                .and_then(|t| str_of(t, "title"))
+                .unwrap_or_default();
+            if label.is_empty() {
+                continue;
+            }
+            let mut values: Vec<String> = Vec::new();
+            if let Some(texts) = ui.and_then(|u| u.get("textLinks")).and_then(Value::as_array) {
+                for text in texts {
+                    if let Some(t) = str_of(text, "text").filter(|s| !s.is_empty()) {
+                        values.push(t);
+                    }
+                }
+            }
+            if let Some(resources) = creative.get("resources").and_then(Value::as_array) {
+                for res in resources {
+                    let rui = res.get("uiElement");
+                    let title = rui
+                        .and_then(|u| u.get("mainTitle"))
+                        .and_then(|t| str_of(t, "title"))
+                        .unwrap_or_default();
+                    let mut parts: Vec<String> = Vec::new();
+                    if !title.is_empty() {
+                        parts.push(title);
+                    }
+                    if let Some(subs) = rui.and_then(|u| u.get("subTitles")).and_then(Value::as_array)
+                    {
+                        for sub in subs {
+                            if let Some(t) = str_of(sub, "title").filter(|s| !s.is_empty()) {
+                                parts.push(t);
+                            }
+                        }
+                    }
+                    if !parts.is_empty() {
+                        values.push(parts.join(" "));
+                    }
+                }
+            }
+            if values.is_empty() {
+                continue;
+            }
+            out.push(WikiFact { label, value: values.join(" / ") });
+        }
+    }
+    out
 }
 
 /// 听歌排行的响应: {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}.
@@ -3079,6 +3362,103 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// 最近播放三类共用的外层形状: data.list[].data
+    #[test]
+    fn recent_bucket_unwraps_item_data() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "list": [
+                    {"data": {"id": 1, "name": "野泳", "artists": [{"name": "祝游会"}], "size": 7}},
+                    {"playCount": 3},
+                    {"data": {"id": 2, "name": "", "size": 1}}
+                ]
+            }
+        });
+        let items = recent_items(&body);
+        assert_eq!(items.len(), 2, "没有 data 对象的条目要丢掉");
+        let album = parse_album_item(&items[0]).unwrap();
+        assert_eq!(album.name, "野泳");
+        assert_eq!(album.artist, "祝游会");
+        assert_eq!(album.track_count, 7);
+        assert!(parse_album_item(&items[1]).is_none(), "空名称的专辑要跳过");
+    }
+
+    /// 签到进度: today.todaySignedIn + stats[6001/4001/5001] + records
+    #[test]
+    fn signin_progress_mapping() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "records": [
+                    {"day": "2026-11-06", "signed": true},
+                    {"day": "2026-11-05", "signed": false}
+                ],
+                "stats": [
+                    {"id": 6001, "currentProgress": 13},
+                    {"id": 4001, "currentProgress": 5},
+                    {"id": 5001, "currentProgress": 1}
+                ],
+                "today": {"todaySignedIn": true}
+            }
+        });
+        let s = parse_signin_progress(&body);
+        assert!(s.signed_today);
+        assert_eq!(s.total_days, 13);
+        assert_eq!(s.week_days, 5);
+        assert_eq!(s.continuous_days, 1);
+        assert_eq!(s.recent.len(), 2);
+        assert!(s.recent[0].signed);
+        assert_eq!(s.today_point, 0, "进度接口不给本次奖励");
+    }
+
+    /// 歌曲百科: 只取 SONG_PLAY_ABOUT_SONG_BASIC 块, 富文本压成 "a / b"
+    #[test]
+    fn song_wiki_flattens_basic_block() {
+        let body = json!({
+            "code": 200,
+            "data": {"blocks": [
+                {"code": "SONG_PLAY_ABOUT_MUSIC_MEMORY", "creatives": []},
+                {"code": "SONG_PLAY_ABOUT_SONG_BASIC", "creatives": [
+                    {
+                        "creativeType": "songTag",
+                        "uiElement": {"mainTitle": {"title": "曲风"}},
+                        "resources": [
+                            {"uiElement": {"mainTitle": {"title": "流行-华语流行"}}},
+                            {"uiElement": {"mainTitle": {"title": "原声带-动画片原声"}}}
+                        ]
+                    },
+                    {
+                        "creativeType": "language",
+                        "uiElement": {
+                            "mainTitle": {"title": "语种"},
+                            "textLinks": [{"text": "国语"}]
+                        },
+                        "resources": []
+                    },
+                    {
+                        "creativeType": "songAward",
+                        "uiElement": {"mainTitle": {"title": "获奖成就"}},
+                        "resources": [
+                            {"uiElement": {
+                                "mainTitle": {"title": "第30届东方风云榜"},
+                                "subTitles": [{"title": "获"}, {"title": "动感101年度金曲"}]
+                            }}
+                        ]
+                    },
+                    {"creativeType": "bpm", "uiElement": {"mainTitle": {"title": "BPM"}}, "resources": []}
+                ]}
+            ]}
+        });
+        let facts = parse_song_wiki(&body);
+        assert_eq!(facts.len(), 3, "空值的 BPM 不出现; 其它三个块不算");
+        assert_eq!(facts[0].label, "曲风");
+        assert_eq!(facts[0].value, "流行-华语流行 / 原声带-动画片原声");
+        assert_eq!(facts[1].value, "国语");
+        assert_eq!(facts[2].value, "第30届东方风云榜 获 动感101年度金曲");
+    }
+
 
     #[test]
     fn search_mapping() {

@@ -8,8 +8,8 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, Song, StreamUrl,
-    StyleTag, SuggestItem, TrackId, UserItem,
+    PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song,
+    StreamUrl, StyleTag, SuggestItem, TrackId, UserItem, WikiFact,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -58,6 +58,10 @@ pub enum Capability {
     NewRelease,
     /// 相似推荐(相似歌曲/歌单/歌手)
     Similar,
+    /// 云贝签到(今日状态 / 签到)
+    Signin,
+    /// 歌曲百科(曲风/语种/BPM/获奖)
+    Wiki,
 }
 
 impl Capability {
@@ -92,6 +96,8 @@ impl Capability {
             Capability::Follow => "follow",
             Capability::NewRelease => "newRelease",
             Capability::Similar => "similar",
+            Capability::Signin => "signin",
+            Capability::Wiki => "wiki",
         }
     }
 }
@@ -714,6 +720,45 @@ pub trait Provider: Send + Sync {
         _date: &'a str,
     ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
         Box::pin(async { Err(ProviderError::unsupported("no history recommend songs")) })
+    }
+
+    /// 最近播放的专辑(服务端记录, 需要登录)
+    fn recent_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent albums")) })
+    }
+
+    /// 最近播放的歌单(服务端记录, 需要登录)
+    fn recent_playlists(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent playlists")) })
+    }
+
+    /// 最近播放的播客/电台(服务端记录, 需要登录)
+    fn recent_podcasts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent podcasts")) })
+    }
+
+    /// 云贝签到状态(需要登录)
+    fn signin_status(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async { Err(ProviderError::unsupported("no signin status")) })
+    }
+
+    /// 签到(需要登录). 返回签到后的状态; 今日已签到时 Unsupported("已签到")
+    fn sign_in(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async { Err(ProviderError::unsupported("no signin")) })
+    }
+
+    /// 删除自己的评论(需要登录)
+    fn delete_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment delete")) })
+    }
+
+    /// 歌曲百科(曲风/语种/BPM/获奖成就...). 没有百科时返回空列表.
+    fn song_wiki(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song wiki")) })
     }
 }
 

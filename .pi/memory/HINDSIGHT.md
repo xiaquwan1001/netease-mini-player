@@ -216,4 +216,24 @@ API/protocol details and anti-bot technique live in the
 - "关注动态"按艺人分类的排序是纯 UI 侧聚合(一页 30 条): 分数 = 动态条数*6 + 点赞 + 评论*2 + 转发*2,
   同分按首次出现(≈最近时间)排; 分类行只放前 8 个, 末尾"进入全部"面板再合并 `subscribedArtists`
   (关注但本页没发动态的艺人也能选)。
+
+## 最近播放 / 签到 / 评论删除 / 歌曲百科 接入(2026-11-06)
+
+- **`daily_signin` 只有 `type=1` 能签**: `type=0`(安卓通道) 回 `code=200 msg=功能暂不支持`,
+  `type=1`(web) 回 `{code:200,point:N}` 并真到账; 重复签到抛 `Invalid parameter: 重复签到`。
+  所以 provider 先看 `signin_progress.data.today.todaySignedIn`, 再决定发不发写请求。
+- 签到进度三套计数在 `data.stats[]`, **id 6001 累计 / 4001 每周 / 5001 连续(28 天循环)**, 取 `currentProgress`;
+  `data.records[]` 是最近 N 天 `{day,signed}`(新的在前)。
+- `record_recent_album|playlist|dj` 形状统一 `{code, data:{list:[{data:{...}}]}}`(外层还带 lastSong/uiPlaylistType),
+  **最近播放歌单不带 trackCount** → UI 别显示 "0 首"。
+- `song_wiki_summary` 是装修块富文本 `data.blocks[]`, 只要 `code==SONG_PLAY_ABOUT_SONG_BASIC` 那个块;
+  label 取 `creative.uiElement.mainTitle.title`, 值取 `resources[].uiElement.mainTitle.title` +
+  `subTitles[].title` 或 `textLinks[].text`。桌面/安卓身份 eapi 都能过, 仍保留 weapi 兜底。
+- **模拟器点按坐标别忘 1.2 倍换算**: 截图显示 900x2000, 实际 1080x2400。把"歌曲百科"按显示坐标点下去
+  实际落在"不感兴趣"上, 于是看到 `code=432`, 一度误判成 eapi 在安卓身份下挂了;
+  交叉验证方法: 把同一份 identity.json 和 cross-compiled probe(`--target x86_64-linux-android`)
+  `adb push` 进模拟器跑, 结果 200 —— 说明不是身份/网络问题, 是点错了。
+- 非日推/非 FM 的歌点"不感兴趣"服务端回 `code=432 Unknown error`(接口只认日推/FM 上下文),
+  暂时原样弹错; 要友好就得在 UI 侧只对日推/FM 队列显示该入口。
+
 <!-- created=2026-11-06, last=2026-11-06 -->

@@ -27,6 +27,7 @@ import 'src/search_suggest.dart';
 import 'src/settings_view.dart';
 import 'src/song_actions.dart';
 import 'src/song_tile.dart';
+import 'src/song_wiki.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -517,6 +518,15 @@ class _HomePageState extends State<HomePage> {
     showRecentSheet(
       context,
       onPlay: (songs, index) => _playSongsList(songs, index),
+      onOpenPlaylist: _openPlaylist,
+      onOpenPodcast: _openPodcastRadio,
+      onOpenAlbum: (album) => showAlbumPreview(
+        context,
+        albumId: album.id,
+        albumName: album.name,
+        coverUrl: album.coverUrl,
+        onPlay: (songs, index) => _playSongsList(songs, index),
+      ),
     );
   }
 
@@ -915,6 +925,7 @@ class _HomePageState extends State<HomePage> {
     openAlbum: _openSongAlbum,
     download: _downloadSong,
     dislike: _dislikeSong,
+    songWiki: (song) => showSongWiki(context, song: song),
     similarSongs: (song) => showSimilarSongs(
       context,
       song: song,

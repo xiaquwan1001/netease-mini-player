@@ -351,6 +351,114 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "recent-albums" | "recent-playlists" | "recent-podcasts" => {
+            let bucket = args.cmd.clone();
+            // 最近播放的三个分类(服务端记录, 需登录)
+            let limit: u32 = args.value("--limit").and_then(|v| v.parse().ok()).unwrap_or(20);
+            announce(&core);
+            let p = provider(&core, Capability::Recent)?;
+            match bucket.as_str() {
+                "recent-albums" => {
+                    let list = p.recent_albums(limit).await?;
+                    println!("count = {}", list.len());
+                    for (i, a) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} — {} ({} 首) {}",
+                            i + 1,
+                            a.id,
+                            a.name,
+                            a.artist,
+                            a.track_count,
+                            a.cover_url.clone().unwrap_or_default()
+                        );
+                    }
+                }
+                "recent-playlists" => {
+                    let list = p.recent_playlists(limit).await?;
+                    println!("count = {}", list.len());
+                    for (i, pl) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} ({} 首) {}",
+                            i + 1,
+                            pl.id,
+                            pl.name,
+                            pl.track_count,
+                            pl.cover_url.clone().unwrap_or_default()
+                        );
+                    }
+                }
+                _ => {
+                    let list = p.recent_podcasts(limit).await?;
+                    println!("count = {}", list.len());
+                    for (i, r) in list.iter().enumerate() {
+                        println!(
+                            "{:>3}. [{}] {} — {} ({} 集) {}",
+                            i + 1,
+                            r.id,
+                            r.name,
+                            r.dj_name,
+                            r.program_count,
+                            r.cover_url.clone().unwrap_or_default()
+                        );
+                    }
+                }
+            }
+            Ok(())
+        }
+        "signin" => {
+            // ncm signin          -> 只看状态
+            // ncm signin --do     -> 真签到
+            announce(&core);
+            let p = provider(&core, Capability::Signin)?;
+            let s = if args.has("--do") {
+                p.sign_in().await?
+            } else {
+                p.signin_status().await?
+            };
+            println!(
+                "signed_today = {} point = {}",
+                s.signed_today, s.today_point
+            );
+            println!(
+                "total = {} 连续 = {} 本周 = {}",
+                s.total_days, s.continuous_days, s.week_days
+            );
+            for d in &s.recent {
+                println!("  {} {}", d.day, if d.signed { "已签" } else { "-" });
+            }
+            Ok(())
+        }
+        "wiki" => {
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm wiki <songId>")?
+                .parse()?;
+            announce(&core);
+            let p = provider(&core, Capability::Wiki)?;
+            let facts = p.song_wiki(id).await?;
+            println!("facts = {}", facts.len());
+            for f in facts {
+                println!("  {}: {}", f.label, f.value);
+            }
+            Ok(())
+        }
+        "comment-delete" => {
+            let thread = args
+                .positional
+                .first()
+                .ok_or("usage: ncm comment-delete <threadId> <commentId>")?
+                .clone();
+            let cid: u64 = args
+                .positional
+                .get(1)
+                .ok_or("usage: ncm comment-delete <threadId> <commentId>")?
+                .parse()?;
+            announce(&core);
+            let p = provider(&core, Capability::Comment)?;
+            println!("deleted = {}", p.delete_comment(&thread, cid).await?);
+            Ok(())
+        }
         "podcast-radio" => {
             let id: u64 = args
                 .positional
@@ -669,6 +777,14 @@ async fn run() -> Result<(), BoxErr> {
                 "top_playlist_highquality" => client.top_playlist_highquality(&q).await?,
                 "playlist_hot" => client.playlist_hot(&q).await?,
                 "album_sublist" => client.album_sublist(&q).await?,
+                "record_recent_album" => client.record_recent_album(&q).await?,
+                "record_recent_playlist" => client.record_recent_playlist(&q).await?,
+                "record_recent_dj" => client.record_recent_dj(&q).await?,
+                "daily_signin" => client.daily_signin(&q).await?,
+                "signin_progress" => client.signin_progress(&q).await?,
+                "comment_delete" => client.comment_delete(&q).await?,
+                "song_wiki_summary" => client.song_wiki_summary(&q).await?,
+                "user_level" => client.user_level(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);

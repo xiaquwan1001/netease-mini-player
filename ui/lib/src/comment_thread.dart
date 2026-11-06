@@ -17,6 +17,7 @@ typedef CommentRepliesLoader = Future<rust.CommentPageDto> Function(
     BigInt parentId, int limit);
 typedef CommentReplyHook = Future<bool> Function(
     BigInt commentId, String content);
+typedef CommentDeleteHook = Future<bool> Function(BigInt commentId);
 
 class CommentThread extends StatefulWidget {
   const CommentThread({
@@ -31,6 +32,8 @@ class CommentThread extends StatefulWidget {
     this.like,
     this.loadReplies,
     this.reply,
+    this.delete,
+    this.myUid,
   });
 
   /// song | playlist | album | podcast
@@ -48,6 +51,12 @@ class CommentThread extends StatefulWidget {
   final CommentRepliesLoader? loadReplies;
   final CommentReplyHook? reply;
 
+  /// 删除自己的评论(不传就走 rust.deleteComment)
+  final CommentDeleteHook? delete;
+
+  /// 当前账号 uid(测试注入); 不传就向 Rust 要. 决定哪些评论显示"删除".
+  final BigInt? myUid;
+
   @override
   State<CommentThread> createState() => _CommentThreadState();
 }
@@ -61,8 +70,11 @@ class _CommentThreadState extends State<CommentThread> {
   String? _error;
   String? _moreError;
 
-  /// 点赞/回复都要用它(来自第一页)
+  /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
+
+  /// 当前账号 uid(0 = 未登录): 只有自己发的评论才给"删除"
+  BigInt _myUid = BigInt.zero;
 
   CommentPageLoader get _loadPage =>
       widget.loadPage ??
@@ -103,11 +115,31 @@ class _CommentThreadState extends State<CommentThread> {
             content: content,
           );
 
+  CommentDeleteHook get _delete =>
+      widget.delete ??
+      (commentId) => rust.deleteComment(
+            threadId: _threadId,
+            commentId: commentId,
+          );
+
   @override
   void initState() {
     super.initState();
     _threadId = widget.threadId ?? '';
+    final injected = widget.myUid;
+    if (injected != null && injected != BigInt.zero) _myUid = injected;
     _reload();
+    if (injected == null) _loadMyUid();
+  }
+
+  Future<void> _loadMyUid() async {
+    try {
+      final uid = await rust.myUid();
+      if (!mounted || uid == BigInt.zero) return;
+      setState(() => _myUid = uid);
+    } catch (_) {
+      // 未登录: 不显示删除入口
+    }
   }
 
   Future<void> _reload() async {
@@ -231,6 +263,44 @@ class _CommentThreadState extends State<CommentThread> {
     });
   }
 
+  /// 删除自己发的评论: 先确认, 成功后本地移除(不整页刷新)
+  Future<void> _deleteComment(int index) async {
+    final comment = _items[index];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除这条评论?'),
+        content: Text(
+          comment.content.length > 60
+              ? '${comment.content.substring(0, 60)}...'
+              : comment.content,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _delete(comment.id);
+      if (!mounted) return;
+      setState(() {
+        _items.removeAt(index);
+        if (_total > BigInt.zero) _total -= BigInt.one;
+      });
+      _snack('已删除');
+    } catch (e) {
+      _snack('删除失败: ${friendlyError(e)}');
+    }
+  }
+
   void _snack(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
@@ -316,6 +386,9 @@ class _CommentThreadState extends State<CommentThread> {
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
                 onOpenReplies: () => _openReplies(_items[i]),
+                onDelete: _myUid != BigInt.zero && _items[i].userId == _myUid
+                    ? () => _deleteComment(i)
+                    : null,
               ),
           if (!_loading && _error == null && _items.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -353,12 +426,16 @@ class _CommentTile extends StatelessWidget {
     required this.timeText,
     required this.onToggleLike,
     required this.onOpenReplies,
+    this.onDelete,
   });
 
   final rust.CommentDto comment;
   final String timeText;
   final VoidCallback onToggleLike;
   final VoidCallback onOpenReplies;
+
+  /// 只有自己发的评论才给(别人的评论官方也不允许删)
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -461,6 +538,31 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (onDelete != null) ...[
+                      const SizedBox(width: 10),
+                      InkWell(
+                        onTap: onDelete,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline,
+                                  size: 14, color: scheme.outline),
+                              const SizedBox(width: 3),
+                              Text(
+                                '删除',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(color: scheme.outline),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],

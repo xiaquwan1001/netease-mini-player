@@ -1682,6 +1682,134 @@ pub async fn follow_counts() -> Result<FollowCountDto, String> {
     Ok(FollowCountDto { follows: c.follows, fans: c.fans })
 }
 
+/// 最近播放的专辑(需登录)
+pub async fn recent_albums(limit: u32) -> Result<Vec<AlbumItemDto>, String> {
+    let provider = with_provider(Capability::Recent)?;
+    let list = provider
+        .recent_albums(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| AlbumItemDto {
+            id: a.id,
+            name: a.name,
+            cover_url: a.cover_url,
+            artist: a.artist,
+            track_count: a.track_count,
+        })
+        .collect())
+}
+
+/// 最近播放的歌单(需登录)
+pub async fn recent_playlists(limit: u32) -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::Recent)?;
+    let list = provider
+        .recent_playlists(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(playlist_dto).collect())
+}
+
+/// 最近播放的播客/电台(需登录)
+pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
+    let provider = with_provider(Capability::Recent)?;
+    let list = provider
+        .recent_podcasts(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|r| PodcastRadioDto {
+            id: r.id,
+            name: r.name,
+            cover_url: r.cover_url,
+            description: r.description,
+            dj_name: r.dj_name,
+            program_count: r.program_count,
+            play_count: r.play_count,
+        })
+        .collect())
+}
+
+pub struct SigninDayDto {
+    /// yyyy-mm-dd
+    pub day: String,
+    pub signed: bool,
+}
+
+pub struct SigninStatusDto {
+    pub signed_today: bool,
+    /// 累计签到天数
+    pub total_days: u32,
+    /// 连续签到天数
+    pub continuous_days: u32,
+    /// 本周签到天数
+    pub week_days: u32,
+    /// 最近 7 天(新的在前)
+    pub recent: Vec<SigninDayDto>,
+    /// 本次签到得到云贝(只有刚签完非 0)
+    pub today_point: u32,
+}
+
+fn signin_status_dto(s: ncm_domain::SigninStatus) -> SigninStatusDto {
+    SigninStatusDto {
+        signed_today: s.signed_today,
+        total_days: s.total_days,
+        continuous_days: s.continuous_days,
+        week_days: s.week_days,
+        recent: s
+            .recent
+            .into_iter()
+            .map(|d| SigninDayDto { day: d.day, signed: d.signed })
+            .collect(),
+        today_point: s.today_point,
+    }
+}
+
+/// 云贝签到状态(需登录)
+pub async fn signin_status() -> Result<SigninStatusDto, String> {
+    let provider = with_provider(Capability::Signin)?;
+    let s = provider.signin_status().await.map_err(|e| e.to_string())?;
+    Ok(signin_status_dto(s))
+}
+
+/// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
+pub async fn sign_in() -> Result<SigninStatusDto, String> {
+    let provider = with_provider(Capability::Signin)?;
+    let s = provider.sign_in().await.map_err(|e| e.to_string())?;
+    Ok(signin_status_dto(s))
+}
+
+/// 删除自己的评论(需登录)
+pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, String> {
+    let provider = with_provider(Capability::Comment)?;
+    provider
+        .delete_comment(&thread_id, comment_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub struct WikiFactDto {
+    /// 分组(曲风/语种/BPM/获奖成就...)
+    pub label: String,
+    /// 值(多个已用 " / " 拼好)
+    pub value: String,
+}
+
+/// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
+pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFactDto>, String> {
+    let provider = with_provider(Capability::Wiki)?;
+    let list = provider
+        .song_wiki(song_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|f| WikiFactDto { label: f.label, value: f.value })
+        .collect())
+}
+
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 pub fn my_uid() -> Result<u64, String> {
     let guard = core()?.lock().map_err(|e| e.to_string())?;

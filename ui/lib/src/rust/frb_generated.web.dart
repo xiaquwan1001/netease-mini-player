@@ -153,6 +153,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SearchPodcastDto> dco_decode_list_search_podcast_dto(dynamic raw);
 
   @protected
+  List<SigninDayDto> dco_decode_list_signin_day_dto(dynamic raw);
+
+  @protected
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
 
   @protected
@@ -163,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
+
+  @protected
+  List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw);
 
   @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
@@ -225,6 +231,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchResultDto dco_decode_search_result_dto(dynamic raw);
 
   @protected
+  SigninDayDto dco_decode_signin_day_dto(dynamic raw);
+
+  @protected
+  SigninStatusDto dco_decode_signin_status_dto(dynamic raw);
+
+  @protected
   SongDto dco_decode_song_dto(dynamic raw);
 
   @protected
@@ -250,6 +262,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserItemDto dco_decode_user_item_dto(dynamic raw);
+
+  @protected
+  WikiFactDto dco_decode_wiki_fact_dto(dynamic raw);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -413,6 +428,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<SigninDayDto> sse_decode_list_signin_day_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -425,6 +445,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
+
+  @protected
+  List<WikiFactDto> sse_decode_list_wiki_fact_dto(SseDeserializer deserializer);
 
   @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
@@ -497,6 +520,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchResultDto sse_decode_search_result_dto(SseDeserializer deserializer);
 
   @protected
+  SigninDayDto sse_decode_signin_day_dto(SseDeserializer deserializer);
+
+  @protected
+  SigninStatusDto sse_decode_signin_status_dto(SseDeserializer deserializer);
+
+  @protected
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -522,6 +551,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   UserItemDto sse_decode_user_item_dto(SseDeserializer deserializer);
+
+  @protected
+  WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -743,6 +775,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_signin_day_dto(
+    List<SigninDayDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_song_dto(List<SongDto> self, SseSerializer serializer);
 
   @protected
@@ -760,6 +798,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_user_item_dto(
     List<UserItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_wiki_fact_dto(
+    List<WikiFactDto> self,
     SseSerializer serializer,
   );
 
@@ -869,6 +913,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_signin_day_dto(SigninDayDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_signin_status_dto(
+    SigninStatusDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
@@ -897,6 +950,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_user_item_dto(UserItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);

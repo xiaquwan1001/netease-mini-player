@@ -127,6 +127,8 @@ class _MineViewState extends State<MineView> {
             onOpenFolloweds: widget.onOpenFolloweds,
           ),
           const SizedBox(height: 4),
+          const SigninCard(),
+          const SizedBox(height: 4),
           _LikedSection(
             load: _liked,
             onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
@@ -680,6 +682,110 @@ class _RecentSection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+// ---------------- 每日签到(云贝) ----------------
+
+/// 签到卡片: 今日状态 + 累计/连续/本周天数.
+/// 载入失败(未登录/网络)就整块不显示 —— 它是锦上添花, 不该在"我的"顶部占一行报错.
+/// load/sign 可注入(测试用), 默认走 Rust 接口.
+class SigninCard extends StatefulWidget {
+  const SigninCard({super.key, this.load, this.sign});
+
+  final Future<rust.SigninStatusDto> Function()? load;
+  final Future<rust.SigninStatusDto> Function()? sign;
+
+  @override
+  State<SigninCard> createState() => _SigninCardState();
+}
+
+class _SigninCardState extends State<SigninCard> {
+  rust.SigninStatusDto? _status;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final status = await retryNetwork(widget.load ?? rust.signinStatus);
+      if (!mounted) return;
+      setState(() => _status = status);
+    } catch (_) {
+      // 未登录/网络失败: 不显示这块
+    }
+  }
+
+  Future<void> _sign() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final before = _status;
+      final status = await (widget.sign ?? rust.signIn)();
+      if (!mounted) return;
+      setState(() => _status = status);
+      final earned = status.todayPoint;
+      final already = before?.signedToday == true;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              already || earned == 0
+                  ? '今天已经签过了(累计 ${status.totalDays} 天)'
+                  : '签到成功, 云贝 +$earned(累计 ${status.totalDays} 天)',
+            ),
+          ),
+        );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('签到失败: ${friendlyError(e)}')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    if (status == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final detail = [
+      '累计 ${status.totalDays} 天',
+      '连续 ${status.continuousDays} 天',
+      '本周 ${status.weekDays} 天',
+    ].join(' · ');
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+          status.signedToday ? Icons.task_alt : Icons.calendar_month_outlined,
+          color: status.signedToday ? theme.colorScheme.primary : null,
+        ),
+        title: Text(status.signedToday ? '今日已签到' : '今天还没签到'),
+        subtitle: Text(detail, style: theme.textTheme.bodySmall),
+        trailing: status.signedToday
+            ? Text('已签', style: TextStyle(color: theme.colorScheme.outline))
+            : FilledButton.tonal(
+                onPressed: _busy ? null : _sign,
+                child: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('签到'),
+              ),
+      ),
     );
   }
 }

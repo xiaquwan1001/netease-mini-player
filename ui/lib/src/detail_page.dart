@@ -65,18 +65,6 @@ String _fmtDuration(BigInt ms) {
   return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
 }
 
-String _relativeTime(BigInt timeMs) {
-  if (timeMs <= BigInt.zero) return '';
-  final dt = DateTime.fromMillisecondsSinceEpoch(timeMs.toInt());
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return '刚刚';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
-  if (diff.inHours < 24) return '${diff.inHours} 小时前';
-  if (diff.inDays < 30) return '${diff.inDays} 天前';
-  return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-      '${dt.day.toString().padLeft(2, '0')}';
-}
-
 // ---------------- 歌单详情 ----------------
 
 /// 打开歌单详情页(全屏路由). special=true 表示"我喜欢的音乐"(曲目走 likedSongs)。
@@ -206,7 +194,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   /// 当前账号 uid(同步接口, 未登录返回 0). 用来判断歌单归属
   Future<BigInt> _currentUid() async {
     try {
-      return rust.myUid();
+      return await rust.myUid();
     } catch (_) {
       return BigInt.zero;
     }

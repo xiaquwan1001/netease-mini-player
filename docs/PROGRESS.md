@@ -5,6 +5,34 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 最近播放分类 / 签到 / 评论删除 / 歌曲百科(2026-11-07 下午)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 最近播放分类 | ✅ | `record_recent_album` / `record_recent_playlist` / `record_recent_dj`: "最近听过"四个页签(单曲/专辑/歌单/播客); 实测专辑 8 张、播客 8 个(点专辑→封面预览, 点歌单/播客→详情) |
+| 云贝签到 | ✅ | `signin_progress` + `daily_signin`: "我的"顶部签到卡(今日状态 + 累计/连续/本周天数), 点"签到"后变"已签到"并提示云贝数; 实测累计 13 天 / 本周 5 天 |
+| 评论删除 | ✅(单测) | `comment_delete`: 只有 `userId == my_uid` 的评论显示"删除", 二次确认后本地移除并减总数 |
+| 歌曲百科 | ✅ | `song_wiki_summary`: 歌曲菜单"歌曲百科"(曲风/推荐标签/语种/BPM/获奖成就/影视节目/乐评); 实测《孤勇者》7 条 |
+| 回归 | ✅ | Rust 50 单测(新增最近播放/签到/百科解析 3 组); Flutter 107 用例(新增四个页签/签到卡/评论删除/百科面板 7 例); Linux + APK 构建通过; 模拟器 a36 实机走过四个新入口 |
+
+**协议事实(踩过, 已写进代码注释)**:
+- `daily_signin` 的 `type=0`(安卓通道) 实测回 `code=200 msg=功能暂不支持`, **只有 `type=1`(web) 真的签到成功**;
+  重复签到回 `Invalid parameter: 重复签到` → provider 先查 `signin_progress.today.todaySignedIn` 再决定是否发请求。
+- 签到进度的三套计数在 `data.stats[]` 里按 id 区分: **6001 累计 / 4001 每周 / 5001 连续(28 天循环)**, 取 `currentProgress`。
+- `record_recent_*` 的形状是 `{code, data:{list:[{data:{...}}]}}`(每项外面套一层 `lastSong/uiPlaylistType`),
+  且**最近播放歌单不带 `trackCount`** → UI 只在 >0 时显示曲目数。
+- `song_wiki_summary` 返回的是装修块富文本(`data.blocks[]`), 只需 `SONG_PLAY_ABOUT_SONG_BASIC` 那个块;
+  Rust 侧压成 label/value 对(标题取 `creative.uiElement.mainTitle.title`, 值取 `resources[].uiElement.mainTitle` +
+  `subTitles` 或 `textLinks[].text`)。该接口 vendor 走 eapi, 安卓身份实测也正常, 但仍保留了 weapi 兜底。
+- 顺手修掉两处会挡住 `flutter analyze` 的既有告警(detail_page 死函数 + `rust.myUid()` 未 await),
+  现在 `bash tools/ci.sh` 能一路跑到双端构建通过。
+
+**未做/待评估**: 评论区还不显示热门评论与 IP 归属(`comment_hot`/`comment_info_list`);
+`record_recent_video`/`record_recent_voice` 需要视频播放器/创作者内容, 暂不做;
+`vip_sign*`/`sign_happy_info` 是黑胶专属任务, 可后续做只读展示。
+- 另: 非日推/FM 的歌点"不感兴趣"服务端回 `code=432`, 目前会原样弹 `操作失败: [internal] code=432`;
+  若要更友好, 需要在 UI 侧限制入口(只在日推/FM 队列里显示)。
+
 ## v2 · 功能包: 不感兴趣 / 历史日推(2026-11-07 中午)
 
 | 能力 | 状态 | 证据 |
