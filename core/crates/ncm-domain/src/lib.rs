@@ -479,6 +479,9 @@ pub struct DefaultSearch {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Comment {
     pub id: u64,
+    /// 评论者 uid(0 = 未知), 用于跳用户主页/判断是不是自己发的
+    #[serde(default)]
+    pub user_id: u64,
     pub user_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
@@ -490,11 +493,17 @@ pub struct Comment {
     pub liked_count: u64,
     #[serde(default)]
     pub liked: bool,
+    /// 该评论下有多少条回复(>0 才显示"回复 N")
+    #[serde(default)]
+    pub reply_count: u64,
 }
 
 /// 评论列表页. comments 里精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommentPage {
+    /// 这条评论线程的 threadId(A_EV_2_.../R_SO_4_...), 点赞/回复都要用它
+    #[serde(default)]
+    pub thread_id: String,
     /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
     #[serde(default)]
     pub comments: Vec<Comment>,
@@ -553,6 +562,29 @@ pub struct PlaylistCategory {
     pub group: String,
     #[serde(default)]
     pub subs: Vec<String>,
+}
+
+/// 用户条目(关注/粉丝列表): 头像/昵称/签名
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserItem {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    #[serde(default)]
+    pub signature: String,
+    /// 当前账号是否已关注 ta(粉丝列表里接口不给, 按 false 处理)
+    #[serde(default)]
+    pub followed: bool,
+}
+
+/// 关注/粉丝数
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FollowCount {
+    #[serde(default)]
+    pub follows: u64,
+    #[serde(default)]
+    pub fans: u64,
 }
 
 /// 专辑条目: 收藏专辑列表/搜索结果共用(比 AlbumBrief 多歌手名)

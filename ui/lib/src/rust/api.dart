@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -378,6 +378,69 @@ Future<bool> removeFromPlaylist({
   trackId: trackId,
 );
 
+/// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
+Future<bool> likeComment({
+  required String threadId,
+  required BigInt commentId,
+  required bool liked,
+}) => RustLib.instance.api.crateApiLikeComment(
+  threadId: threadId,
+  commentId: commentId,
+  liked: liked,
+);
+
+/// 某条评论下的回复(楼层)
+Future<CommentPageDto> commentReplies({
+  required String threadId,
+  required BigInt parentCommentId,
+  required int limit,
+}) => RustLib.instance.api.crateApiCommentReplies(
+  threadId: threadId,
+  parentCommentId: parentCommentId,
+  limit: limit,
+);
+
+/// 回复某条评论(需登录)
+Future<bool> replyComment({
+  required String threadId,
+  required BigInt commentId,
+  required String content,
+}) => RustLib.instance.api.crateApiReplyComment(
+  threadId: threadId,
+  commentId: commentId,
+  content: content,
+);
+
+/// 某人关注的人(uid = 0 用当前账号)
+Future<List<UserItemDto>> userFollows({
+  required BigInt uid,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiUserFollows(
+  uid: uid,
+  limit: limit,
+  offset: offset,
+);
+
+/// 某人的粉丝(uid = 0 用当前账号)
+Future<List<UserItemDto>> userFolloweds({
+  required BigInt uid,
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiUserFolloweds(
+  uid: uid,
+  limit: limit,
+  offset: offset,
+);
+
+/// 关注/取关某人(需登录)
+Future<bool> setFollow({required BigInt uid, required bool follow}) =>
+    RustLib.instance.api.crateApiSetFollow(uid: uid, follow: follow);
+
+/// 我的关注/粉丝数(需登录)
+Future<FollowCountDto> followCounts() =>
+    RustLib.instance.api.crateApiFollowCounts();
+
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 
@@ -644,6 +707,9 @@ class ChartSummaryDto {
 
 class CommentDto {
   final BigInt id;
+
+  /// 评论者 uid(0 = 未知)
+  final BigInt userId;
   final String userName;
   final String? avatarUrl;
   final String content;
@@ -655,25 +721,32 @@ class CommentDto {
   /// 当前账号是否已赞
   final bool liked;
 
+  /// 该评论下的回复数(>0 才显示"回复 N")
+  final BigInt replyCount;
+
   const CommentDto({
     required this.id,
+    required this.userId,
     required this.userName,
     this.avatarUrl,
     required this.content,
     required this.timeMs,
     required this.likedCount,
     required this.liked,
+    required this.replyCount,
   });
 
   @override
   int get hashCode =>
       id.hashCode ^
+      userId.hashCode ^
       userName.hashCode ^
       avatarUrl.hashCode ^
       content.hashCode ^
       timeMs.hashCode ^
       likedCount.hashCode ^
-      liked.hashCode;
+      liked.hashCode ^
+      replyCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -681,34 +754,42 @@ class CommentDto {
       other is CommentDto &&
           runtimeType == other.runtimeType &&
           id == other.id &&
+          userId == other.userId &&
           userName == other.userName &&
           avatarUrl == other.avatarUrl &&
           content == other.content &&
           timeMs == other.timeMs &&
           likedCount == other.likedCount &&
-          liked == other.liked;
+          liked == other.liked &&
+          replyCount == other.replyCount;
 }
 
 class CommentPageDto {
+  /// 这条线程的 threadId(点赞/回复要用)
+  final String threadId;
+
   /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
   final List<CommentDto> comments;
   final BigInt total;
   final bool hasMore;
 
   const CommentPageDto({
+    required this.threadId,
     required this.comments,
     required this.total,
     required this.hasMore,
   });
 
   @override
-  int get hashCode => comments.hashCode ^ total.hashCode ^ hasMore.hashCode;
+  int get hashCode =>
+      threadId.hashCode ^ comments.hashCode ^ total.hashCode ^ hasMore.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is CommentPageDto &&
           runtimeType == other.runtimeType &&
+          threadId == other.threadId &&
           comments == other.comments &&
           total == other.total &&
           hasMore == other.hasMore;
@@ -834,6 +915,24 @@ class FeedEventDto {
           likedCount == other.likedCount &&
           shareCount == other.shareCount &&
           commentCount == other.commentCount;
+}
+
+class FollowCountDto {
+  final BigInt follows;
+  final BigInt fans;
+
+  const FollowCountDto({required this.follows, required this.fans});
+
+  @override
+  int get hashCode => follows.hashCode ^ fans.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FollowCountDto &&
+          runtimeType == other.runtimeType &&
+          follows == other.follows &&
+          fans == other.fans;
 }
 
 class HotSearchTermDto {
@@ -1657,4 +1756,41 @@ class SuggestItemDto {
           title == other.title &&
           subtitle == other.subtitle &&
           coverUrl == other.coverUrl;
+}
+
+class UserItemDto {
+  final BigInt id;
+  final String name;
+  final String? avatarUrl;
+  final String signature;
+
+  /// 是否已关注(关注列表恒 true; 粉丝列表按未关注处理)
+  final bool followed;
+
+  const UserItemDto({
+    required this.id,
+    required this.name,
+    this.avatarUrl,
+    required this.signature,
+    required this.followed,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      avatarUrl.hashCode ^
+      signature.hashCode ^
+      followed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          avatarUrl == other.avatarUrl &&
+          signature == other.signature &&
+          followed == other.followed;
 }

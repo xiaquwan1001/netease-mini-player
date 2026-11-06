@@ -7,9 +7,9 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
-    HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram,
-    PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, Song, StreamUrl, StyleTag, SuggestItem,
-    TrackId,
+    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    PodcastProgram, PodcastRadio, Profile, ProfileDetail, SearchBundle, SearchPage, Song, StreamUrl,
+    StyleTag, SuggestItem, TrackId, UserItem,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -52,6 +52,8 @@ pub enum Capability {
     Chart,
     /// 收藏专辑(收藏/取消收藏 + 我收藏的专辑)
     AlbumSub,
+    /// 关注关系(关注/粉丝列表、关注/取关)
+    Follow,
 }
 
 impl Capability {
@@ -83,6 +85,7 @@ impl Capability {
             Capability::StyleRecommend => "styleRecommend",
             Capability::Chart => "chart",
             Capability::AlbumSub => "albumSub",
+            Capability::Follow => "follow",
         }
     }
 }
@@ -585,6 +588,66 @@ pub trait Provider: Send + Sync {
         _track: TrackId,
     ) -> BoxFuture<'_, ProviderResult<bool>> {
         Box::pin(async { Err(ProviderError::unsupported("no playlist track delete")) })
+    }
+
+    /// 评论点赞/取消点赞(需要登录). threadId 来自 CommentPage.thread_id
+    fn like_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment like")) })
+    }
+
+    /// 某条评论下的回复(楼层)
+    fn comment_replies<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _parent_comment_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment replies")) })
+    }
+
+    /// 回复某条评论(需要登录)
+    fn reply_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+        _content: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment reply")) })
+    }
+
+    /// 某人关注的人(不传 uid 用当前账号)
+    fn user_follows(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user follows")) })
+    }
+
+    /// 某人的粉丝
+    fn user_followeds(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user followeds")) })
+    }
+
+    /// 关注/取关某人(需要登录)
+    fn set_follow(&self, _uid: u64, _follow: bool) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no follow")) })
+    }
+
+    /// 我的关注/粉丝数
+    fn follow_counts(&self) -> BoxFuture<'_, ProviderResult<FollowCount>> {
+        Box::pin(async { Err(ProviderError::unsupported("no follow counts")) })
     }
 }
 

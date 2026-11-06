@@ -21,6 +21,8 @@ class MineView extends StatefulWidget {
     required this.onOpenPodcast,
     required this.onOpenAlbum,
     required this.onOpenRecent,
+    required this.onOpenFollows,
+    required this.onOpenFolloweds,
     required this.onOpenLiked,
     this.onPlayLiked,
     this.loadLiked,
@@ -40,6 +42,10 @@ class MineView extends StatefulWidget {
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
   final void Function(rust.AlbumItemDto album) onOpenAlbum;
   final VoidCallback onOpenRecent;
+
+  /// 资料卡上的"关注 N" / "粉丝 N"
+  final VoidCallback onOpenFollows;
+  final VoidCallback onOpenFolloweds;
 
   /// 打开"我喜欢的音乐"详情页
   final VoidCallback onOpenLiked;
@@ -117,6 +123,8 @@ class _MineViewState extends State<MineView> {
             onOpenAccounts: widget.onOpenAccounts,
             onLogin: widget.onLogin,
             load: widget.loadProfile,
+            onOpenFollows: widget.onOpenFollows,
+            onOpenFolloweds: widget.onOpenFolloweds,
           ),
           const SizedBox(height: 4),
           _LikedSection(
@@ -277,12 +285,16 @@ class _ProfileSection extends StatefulWidget {
     required this.loggedIn,
     required this.onOpenAccounts,
     required this.onLogin,
+    required this.onOpenFollows,
+    required this.onOpenFolloweds,
     this.load,
   });
 
   final bool loggedIn;
   final VoidCallback onOpenAccounts;
   final VoidCallback onLogin;
+  final VoidCallback onOpenFollows;
+  final VoidCallback onOpenFolloweds;
   final Future<rust.ProfileDetailDto> Function()? load;
 
   @override
@@ -324,6 +336,8 @@ class _ProfileSectionState extends State<_ProfileSection> {
       fallbackNickname: widget.loggedIn ? '我的账号' : null,
       loggedIn: widget.loggedIn,
       onTap: widget.loggedIn ? widget.onOpenAccounts : widget.onLogin,
+      onTapFollows: widget.loggedIn ? widget.onOpenFollows : null,
+      onTapFolloweds: widget.loggedIn ? widget.onOpenFolloweds : null,
     );
   }
 }

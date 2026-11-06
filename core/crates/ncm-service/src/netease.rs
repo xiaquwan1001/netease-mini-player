@@ -3,9 +3,10 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
-    DefaultSearch, FeedEvent, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    PodcastProgram, PodcastRadio, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage,
-    SearchPlaylistItem, SearchPodcast, Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    DefaultSearch, FeedEvent, FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory,
+    PlaylistDetail, PodcastProgram, PodcastRadio, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle,
+    SearchPage, SearchPlaylistItem, SearchPodcast, Session, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    UserItem,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -40,6 +41,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::StyleRecommend,
     Capability::Chart,
     Capability::AlbumSub,
+    Capability::Follow,
 ];
 
 /// 内置网易云直连 provider.
@@ -101,6 +103,14 @@ impl NeteaseProvider {
         let domain = guard.domain.clone();
         let ua = guard.ua.clone();
         *guard = Inner::new(session, domain, ua);
+    }
+
+    /// 传 0 表示"用当前账号"
+    async fn resolve_uid(&self, uid: u64) -> ProviderResult<u64> {
+        if uid > 0 {
+            return Ok(uid);
+        }
+        self.uid().await
     }
 
     /// 当前账号 uid(登录后由 profile 落盘); 没有就先拉一次资料
@@ -282,6 +292,93 @@ fn u64_of(v: &Value, key: &str) -> Option<u64> {
 
 fn str_of(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+/// 资源类型 → 评论 threadId 前缀(与 vendor 的 RESOURCE_TYPE_MAP 对齐)
+pub fn thread_id_for(kind: &str, id: u64) -> Option<String> {
+    let prefix = match kind {
+        "song" => "R_SO_4_",
+        "mv" => "R_MV_5_",
+        "playlist" => "A_PL_0_",
+        "album" => "R_AL_3_",
+        "podcast" | "djradio" => "A_DJ_1_",
+        "video" => "R_VI_62_",
+        "event" => "A_EV_2_",
+        "program" => "A_DR_14_",
+        _ => return None,
+    };
+    Some(format!("{prefix}{id}"))
+}
+
+/// threadId → (vendor 的 type 参数, id 段). 用于点赞/楼层这类"只吃 type+id"的接口.
+/// 动态的 threadId 是 A_EV_2_<eventId>_<userId>, id 段要原样保留这两段.
+pub fn split_thread_id(thread_id: &str) -> Option<(&'static str, String)> {
+    const MAP: &[(&str, &str)] = &[
+        ("R_SO_4_", "0"),
+        ("R_MV_5_", "1"),
+        ("A_PL_0_", "2"),
+        ("R_AL_3_", "3"),
+        ("A_DJ_1_", "4"),
+        ("R_VI_62_", "5"),
+        ("A_EV_2_", "6"),
+        ("A_DR_14_", "7"),
+    ];
+    for (prefix, ty) in MAP {
+        if let Some(rest) = thread_id.strip_prefix(prefix) {
+            if rest.is_empty() {
+                return None;
+            }
+            return Some((ty, rest.to_string()));
+        }
+    }
+    None
+}
+
+/// 楼层回复: {code, data:{comments:[...], hasMore, time}}
+pub fn parse_comment_floor(body: &Value) -> ProviderResult<CommentPage> {
+    let data = body.get("data").unwrap_or(body);
+    let arr = data.get("comments").and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Ok(CommentPage::default());
+    };
+    Ok(CommentPage {
+        comments: arr.iter().filter_map(parse_comment).collect(),
+        total: u64_of(data, "total").unwrap_or(0),
+        has_more: data.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+        thread_id: String::new(),
+    })
+}
+
+/// 关注/粉丝列表: {code, follow:[{userId,nickname,avatarUrl,signature}]} /
+/// 粉丝接口把数组放在 "followeds"
+pub fn parse_user_items(body: &Value, key: &str, followed: bool) -> Vec<UserItem> {
+    let arr = body
+        .get(key)
+        .or_else(|| body.get("data"))
+        .and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| {
+            let id = u64_of(v, "userId").or_else(|| u64_of(v, "id"))?;
+            let name = str_of(v, "nickname")
+                .or_else(|| str_of(v, "name"))
+                .unwrap_or_default();
+            if name.is_empty() {
+                return None;
+            }
+            Some(UserItem {
+                id,
+                name,
+                avatar_url: str_of(v, "avatarUrl")
+                    .or_else(|| str_of(v, "picUrl"))
+                    .filter(|s| s.starts_with("http")),
+                signature: str_of(v, "signature").unwrap_or_default(),
+                followed,
+            })
+        })
+        .collect()
 }
 
 /// 从响应里收集 `privileges[]`(key=曲目 id). 搜索/详情/歌单各接口给的位置不同,
@@ -1004,6 +1101,159 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 评论点赞: vendor 用 (type,id) 拼 threadId, 这里反解 threadId
+    fn like_comment<'a>(
+        &'a self,
+        thread_id: &'a str,
+        comment_id: u64,
+        liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (resource_type, owner) = split_thread_id(thread_id)
+                .ok_or_else(|| ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}")))?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("点赞评论需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", resource_type)
+                .param("id", &owner)
+                .param("cid", &comment_id.to_string())
+                .param("t", if liked { "1" } else { "0" });
+            let resp = client.comment_like(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 楼层回复: 某条评论下的回复列表
+    fn comment_replies<'a>(
+        &'a self,
+        thread_id: &'a str,
+        parent_comment_id: u64,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async move {
+            let (resource_type, owner) = split_thread_id(thread_id)
+                .ok_or_else(|| ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}")))?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", resource_type)
+                .param("id", &owner)
+                .param("parentCommentId", &parent_comment_id.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.comment_floor(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut page = parse_comment_floor(&resp.body)?;
+            page.thread_id = thread_id.to_string();
+            Ok(page)
+        })
+    }
+
+    /// 回复评论(需要登录)
+    fn reply_comment<'a>(
+        &'a self,
+        thread_id: &'a str,
+        comment_id: u64,
+        content: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            let content = content.trim();
+            if content.is_empty() {
+                return Err(ProviderError::internal("回复内容不能为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("回复评论需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("threadId", thread_id)
+                .param("commentId", &comment_id.to_string())
+                .param("content", content);
+            let resp = client.comment_reply(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 某人关注的人. 响应形如 {code, follow:[{userId,nickname,avatarUrl,signature}]}
+    fn user_follows(
+        &self,
+        uid: u64,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async move {
+            let uid = self.resolve_uid(uid).await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.user_follows(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            // 这个列表里的人都是我关注的
+            Ok(parse_user_items(&resp.body, "follow", true))
+        })
+    }
+
+    /// 某人的粉丝
+    fn user_followeds(
+        &self,
+        uid: u64,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async move {
+            let uid = self.resolve_uid(uid).await?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.user_followeds(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            // 粉丝列表里接口不给"我有没有关注 ta", 在 UI 里按需点关注
+            Ok(parse_user_items(&resp.body, "followeds", false))
+        })
+    }
+
+    /// 关注/取关某人: t=1 关注, 0 取关
+    fn set_follow(&self, uid: u64, follow: bool) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            if uid == 0 {
+                return Err(ProviderError::not_found("用户 id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("关注需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &uid.to_string())
+                .param("t", if follow { "1" } else { "0" });
+            let resp = client.follow(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 我的关注/粉丝数: {code, follow, fans, ...}
+    fn follow_counts(&self) -> BoxFuture<'_, ProviderResult<FollowCount>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("关注数需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.user_subcount(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(FollowCount {
+                follows: u64_of(&resp.body, "follow").unwrap_or(0),
+                fans: u64_of(&resp.body, "fans").unwrap_or(0),
+            })
+        })
+    }
+
     /// 红心/取消红心. 网易云用 HTTP 200 里的 code 表达结果(200 = 成功)
     fn set_like<'a>(&'a self, track: TrackId, liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async move {
@@ -1281,7 +1531,9 @@ impl Provider for NeteaseProvider {
             };
             let resp = resp.map_err(map_error)?;
             check_body(&resp.body)?;
-            parse_comments(&resp.body)
+            let mut page = parse_comments(&resp.body)?;
+            page.thread_id = thread_id_for(kind, id).unwrap_or_default();
+            Ok(page)
         })
     }
 
@@ -1598,7 +1850,9 @@ impl Provider for NeteaseProvider {
                 .param("offset", &offset.to_string());
             let resp = client.comment_event(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
-            parse_comments(&resp.body)
+            let mut page = parse_comments(&resp.body)?;
+            page.thread_id = thread_id.to_string();
+            Ok(page)
         })
     }
 
@@ -1985,12 +2239,18 @@ fn parse_comment(v: &Value) -> Option<Comment> {
     let user = v.get("user");
     Some(Comment {
         id,
+        user_id: user.and_then(|u| u64_of(u, "userId")).unwrap_or(0),
         user_name: user.and_then(|u| str_of(u, "nickname")).unwrap_or_default(),
         avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
         content: str_of(v, "content").unwrap_or_default(),
         time_ms: u64_of(v, "time").unwrap_or(0),
         liked_count: u64_of(v, "likedCount").unwrap_or(0),
         liked: v.get("liked").and_then(Value::as_bool).unwrap_or(false),
+        reply_count: v
+            .get("showFloorComment")
+            .and_then(|f| u64_of(f, "replyCount"))
+            .or_else(|| u64_of(v, "replyCount"))
+            .unwrap_or(0),
     })
 }
 
@@ -2011,6 +2271,7 @@ pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
         }
     }
     Ok(CommentPage {
+        thread_id: String::new(),
         comments,
         total: u64_of(body, "total").unwrap_or(0),
         has_more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
@@ -3101,6 +3362,64 @@ mod tests {
         assert_eq!(tags[2].name, "风格");
         // limit 生效
         assert_eq!(parse_style_list(&body, 1).len(), 1);
+    }
+
+    #[test]
+    fn thread_id_roundtrip_and_split() {
+        assert_eq!(thread_id_for("song", 42).as_deref(), Some("R_SO_4_42"));
+        assert_eq!(thread_id_for("playlist", 7).as_deref(), Some("A_PL_0_7"));
+        assert!(thread_id_for("unknown", 1).is_none());
+
+        assert_eq!(
+            split_thread_id("R_SO_4_42"),
+            Some(("0", "42".to_string()))
+        );
+        assert_eq!(
+            split_thread_id("A_PL_0_7"),
+            Some(("2", "7".to_string()))
+        );
+        // 动态的 id 段要保留 eventId_userId
+        assert_eq!(
+            split_thread_id("A_EV_2_38024377972_1373758224"),
+            Some(("6", "38024377972_1373758224".to_string()))
+        );
+        assert!(split_thread_id("R_SO_4_").is_none());
+        assert!(split_thread_id("garbage").is_none());
+    }
+
+    #[test]
+    fn comment_floor_and_users_mapping() {
+        let floor = json!({"code": 200, "data": {
+            "comments": [
+                {"commentId": 1, "content": "回复一", "user": {"userId": 9, "nickname": "A", "avatarUrl": "https://p/a.jpg"},
+                 "likedCount": 2, "liked": true, "showFloorComment": {"replyCount": 3}},
+                {"commentId": 2, "content": "回复二", "user": {"nickname": "B"}}
+            ],
+            "hasMore": true, "total": 2
+        }});
+        let page = parse_comment_floor(&floor).unwrap();
+        assert_eq!(page.comments.len(), 2);
+        assert_eq!(page.comments[0].user_id, 9);
+        assert_eq!(page.comments[0].reply_count, 3);
+        assert!(page.comments[0].liked);
+        assert!(page.has_more);
+
+        let follows = json!({"code": 200, "follow": [
+            {"userId": 11, "nickname": "关注的人", "avatarUrl": "https://p/f.jpg", "signature": "hi"},
+            {"userId": 12, "nickname": "另一个"}
+        ]});
+        let users = parse_user_items(&follows, "follow", true);
+        assert_eq!(users.len(), 2);
+        assert_eq!(users[0].signature, "hi");
+        assert!(users[0].followed);
+        assert_eq!(users[1].avatar_url, None);
+
+        let followeds = json!({"code": 200, "followeds": [
+            {"userId": 13, "nickname": "粉丝"}
+        ]});
+        let fans = parse_user_items(&followeds, "followeds", false);
+        assert_eq!(fans.len(), 1);
+        assert!(!fans[0].followed);
     }
 
     #[test]

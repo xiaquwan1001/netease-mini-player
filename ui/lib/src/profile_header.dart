@@ -12,12 +12,18 @@ class ProfileHeader extends StatelessWidget {
     this.fallbackNickname,
     required this.loggedIn,
     this.onTap,
+    this.onTapFollows,
+    this.onTapFolloweds,
   });
 
   final rust.ProfileDetailDto? detail;
   final String? fallbackNickname;
   final bool loggedIn;
   final VoidCallback? onTap;
+
+  /// 点"关注 N" / "粉丝 N"
+  final VoidCallback? onTapFollows;
+  final VoidCallback? onTapFolloweds;
 
   @override
   Widget build(BuildContext context) {
@@ -192,21 +198,67 @@ class ProfileHeader extends StatelessWidget {
               ),
             ),
             // 底部统计行: 关注 X · 粉丝 Y · Lv.Z(缺失显示 0)
+            // 关注/粉丝可点, 进去看列表
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                loggedIn
-                    ? '关注 ${d?.follows ?? BigInt.zero} · '
-                          '粉丝 ${d?.followeds ?? BigInt.zero} · '
-                          'Lv.${d?.level ?? BigInt.zero}'
-                    : '点击登录后同步账号资料',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
+              child: loggedIn
+                  ? Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _StatEntry(
+                          label: '关注 ${d?.follows ?? BigInt.zero}',
+                          onTap: onTapFollows,
+                        ),
+                        Text(
+                          ' · ',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                        _StatEntry(
+                          label: '粉丝 ${d?.followeds ?? BigInt.zero}',
+                          onTap: onTapFolloweds,
+                        ),
+                        Text(
+                          ' · Lv.${d?.level ?? BigInt.zero}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      '点击登录后同步账号资料',
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: scheme.onSurfaceVariant),
+                    ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 可点的统计数字(关注/粉丝)
+class _StatEntry extends StatelessWidget {
+  const _StatEntry({required this.label, this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: onTap == null
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : Theme.of(context).colorScheme.primary,
+        );
+    if (onTap == null) return Text(label, style: style);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Text(label, style: style),
       ),
     );
   }

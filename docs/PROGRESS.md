@@ -5,6 +5,19 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 评论互动 / 关注粉丝(2026-11-07 凌晨)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 评论区统一 | ✅ | 新增 `comment_thread.dart`, 歌曲/歌单/专辑/播客/动态共用: 列表分页 + 点赞(乐观更新, 失败回滚) + 楼层回复 + 发回复; 旧的 `_CommentsSection`/`_EventComments` 两份实现(约 250 行)删除 |
+| 评论点赞 | ✅ | `comment_like`: 模拟器实测 624 → 625 且红心点亮(真实写入) |
+| 楼层回复 | ✅ | `comment_floor`(threadId → type+id 反解): 实测"回复 18"面板列出真实楼层 + 底部输入框(`comment_reply`) |
+| 关注/粉丝列表 | ✅ | `user_follows`/`user_followeds`/`follow`/`user_subcount`: 资料卡"关注 44/粉丝 11"可点 → 两 tab 列表 + 行内关注/取关; 实测关注 44 人、粉丝 11 人列表均正常 |
+| 回归 | ✅ | Rust 47 单测(新增 threadId 往返/楼层/用户列表 2 组); Flutter 92 用例(新增 comment_thread 3 例、user_list 2 例); Linux 构建通过 |
+
+**protocol 备忘**: 评论点赞/楼层接口只吃 `type + id`(vendor 自己拼 threadId), 动态的 id 段是 `eventId_userId`,
+所以 `split_thread_id` 要把整段保留; `CommentPage.thread_id` 由 provider 回填后 UI 直接用。
+
 ## v2 · 功能包: 排行榜 / 歌单广场 / 收藏专辑 / 歌单编辑(2026-11-06 深夜)
 
 | 能力 | 状态 | 证据 |

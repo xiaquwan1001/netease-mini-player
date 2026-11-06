@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 
+import 'comment_thread.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
@@ -39,7 +40,7 @@ Future<void> showCommentsSheet(
             ),
             Expanded(
               child: SingleChildScrollView(
-                child: _CommentsSection(
+                child: CommentThread(
                   kind: kind,
                   resourceId: resourceId,
                   totalHint: totalHint,
@@ -569,7 +570,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
           if (_hiddenCount > 0) SliverToBoxAdapter(child: _buildHiddenNote()),
           _buildSongs(display),
           SliverToBoxAdapter(
-            child: _CommentsSection(
+            child: CommentThread(
               kind: 'playlist',
               resourceId: widget.playlistId,
               totalHint: _detail?.commentCount.toInt() ?? 0,
@@ -906,7 +907,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
           SliverToBoxAdapter(child: _buildToolbar()),
           _buildPrograms(_display),
           SliverToBoxAdapter(
-            child: _CommentsSection(kind: 'podcast', resourceId: radio.id),
+            child: CommentThread(kind: 'podcast', resourceId: radio.id),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
@@ -1348,262 +1349,3 @@ class _SkeletonList extends StatelessWidget {
   }
 }
 
-/// 评论区块: 独立加载, 失败只在本区块显示"加载失败 + 重试"
-class _CommentsSection extends StatefulWidget {
-  const _CommentsSection({
-    required this.kind,
-    required this.resourceId,
-    this.totalHint = 0,
-  });
-
-  /// song | playlist | album | podcast
-  final String kind;
-  final BigInt resourceId;
-
-  /// 详情接口里的评论数(评论首页拉到之前的占位)
-  final int totalHint;
-
-  @override
-  State<_CommentsSection> createState() => _CommentsSectionState();
-}
-
-class _CommentsSectionState extends State<_CommentsSection> {
-  static const int _pageSize = 10;
-
-  final List<rust.CommentDto> _items = <rust.CommentDto>[];
-  BigInt _total = BigInt.zero;
-  bool _hasMore = false;
-  bool _loading = true;
-  bool _loadingMore = false;
-  String? _error;
-  String? _moreError;
-
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _moreError = null;
-    });
-    try {
-      final page = await retryNetwork(
-        () => rust.comments(
-          kind: widget.kind,
-          resourceId: widget.resourceId,
-          limit: _pageSize,
-          offset: 0,
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _items
-          ..clear()
-          ..addAll(page.comments);
-        _total = page.total;
-        _hasMore = page.hasMore;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore) return;
-    setState(() {
-      _loadingMore = true;
-      _moreError = null;
-    });
-    try {
-      final page = await retryNetwork(
-        () => rust.comments(
-          kind: widget.kind,
-          resourceId: widget.resourceId,
-          limit: _pageSize,
-          offset: _items.length,
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page.comments);
-        _total = page.total;
-        _hasMore = page.hasMore;
-        _loadingMore = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingMore = false;
-        _moreError = friendlyError(e);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    // 首页没拉到之前用详情里的 commentCount 占位
-    final count = (_loading || _error != null) && _total == BigInt.zero
-        ? BigInt.from(widget.totalHint)
-        : _total;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '评论',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (count > BigInt.zero) ...[
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (_loading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            )
-          else if (_error != null)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '评论加载失败: $_error',
-                    style: TextStyle(color: scheme.error, fontSize: 12),
-                  ),
-                ),
-                TextButton(onPressed: _reload, child: const Text('重试')),
-              ],
-            )
-          else if (_items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                '还没有评论',
-                style: theme.textTheme.bodySmall,
-              ),
-            )
-          else ...[
-            for (final c in _items) _CommentTile(comment: c),
-            if (_moreError != null)
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _moreError!,
-                      style: TextStyle(color: scheme.error, fontSize: 12),
-                    ),
-                  ),
-                  TextButton(onPressed: _loadMore, child: const Text('重试')),
-                ],
-              ),
-            if (_hasMore)
-              Center(
-                child: _loadingMore
-                    ? const Padding(
-                        padding: EdgeInsets.all(8),
-                        child: SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : TextButton(onPressed: _loadMore, child: const Text('加载更多')),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CommentTile extends StatelessWidget {
-  const _CommentTile({required this.comment});
-
-  final rust.CommentDto comment;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final avatarUrl = comment.avatarUrl;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 头像统一走 CircleCover(带浏览器 UA, CDN 会拒 Dart 默认 UA)
-          CircleCover(url: avatarUrl, size: 24, icon: Icons.person_outline),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        comment.userName.isEmpty ? '匿名用户' : comment.userName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelLarge,
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      comment.liked ? Icons.favorite : Icons.favorite_border,
-                      size: 12,
-                      color: comment.liked ? scheme.primary : scheme.outline,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${comment.likedCount}',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.outline),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(comment.content, style: theme.textTheme.bodyMedium),
-                const SizedBox(height: 2),
-                Text(
-                  _relativeTime(comment.timeMs),
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: scheme.outline),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

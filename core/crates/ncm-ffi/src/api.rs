@@ -944,6 +944,8 @@ pub async fn set_playlist_subscribed(playlist_id: u64, subscribed: bool) -> Resu
 
 pub struct CommentDto {
     pub id: u64,
+    /// 评论者 uid(0 = 未知)
+    pub user_id: u64,
     pub user_name: String,
     pub avatar_url: Option<String>,
     pub content: String,
@@ -952,9 +954,13 @@ pub struct CommentDto {
     pub liked_count: u64,
     /// 当前账号是否已赞
     pub liked: bool,
+    /// 该评论下的回复数(>0 才显示"回复 N")
+    pub reply_count: u64,
 }
 
 pub struct CommentPageDto {
+    /// 这条线程的 threadId(点赞/回复要用)
+    pub thread_id: String,
     /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
     pub comments: Vec<CommentDto>,
     pub total: u64,
@@ -964,17 +970,20 @@ pub struct CommentPageDto {
 /// 评论页 → DTO(歌曲/歌单/动态共用)
 fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
     CommentPageDto {
+        thread_id: page.thread_id,
         comments: page
             .comments
             .into_iter()
             .map(|c| CommentDto {
                 id: c.id,
+                user_id: c.user_id,
                 user_name: c.user_name,
                 avatar_url: c.avatar_url,
                 content: c.content,
                 time_ms: c.time_ms,
                 liked_count: c.liked_count,
                 liked: c.liked,
+                reply_count: c.reply_count,
             })
             .collect(),
         total: page.total,
@@ -1478,6 +1487,103 @@ pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<boo
         .remove_track(playlist_id, ncm_domain::TrackId::new(track_id))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
+pub async fn like_comment(
+    thread_id: String,
+    comment_id: u64,
+    liked: bool,
+) -> Result<bool, String> {
+    let provider = with_provider(Capability::Comment)?;
+    provider
+        .like_comment(&thread_id, comment_id, liked)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 某条评论下的回复(楼层)
+pub async fn comment_replies(
+    thread_id: String,
+    parent_comment_id: u64,
+    limit: u32,
+) -> Result<CommentPageDto, String> {
+    let provider = with_provider(Capability::Comment)?;
+    let page = provider
+        .comment_replies(&thread_id, parent_comment_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(comment_page_dto(page))
+}
+
+/// 回复某条评论(需登录)
+pub async fn reply_comment(
+    thread_id: String,
+    comment_id: u64,
+    content: String,
+) -> Result<bool, String> {
+    let provider = with_provider(Capability::Comment)?;
+    provider
+        .reply_comment(&thread_id, comment_id, &content)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+pub struct UserItemDto {
+    pub id: u64,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub signature: String,
+    /// 是否已关注(关注列表恒 true; 粉丝列表按未关注处理)
+    pub followed: bool,
+}
+
+fn user_item_dto(u: ncm_domain::UserItem) -> UserItemDto {
+    UserItemDto {
+        id: u.id,
+        name: u.name,
+        avatar_url: u.avatar_url,
+        signature: u.signature,
+        followed: u.followed,
+    }
+}
+
+/// 某人关注的人(uid = 0 用当前账号)
+pub async fn user_follows(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItemDto>, String> {
+    let provider = with_provider(Capability::Follow)?;
+    let list = provider
+        .user_follows(uid, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(user_item_dto).collect())
+}
+
+/// 某人的粉丝(uid = 0 用当前账号)
+pub async fn user_followeds(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItemDto>, String> {
+    let provider = with_provider(Capability::Follow)?;
+    let list = provider
+        .user_followeds(uid, limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(user_item_dto).collect())
+}
+
+/// 关注/取关某人(需登录)
+pub async fn set_follow(uid: u64, follow: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::Follow)?;
+    provider.set_follow(uid, follow).await.map_err(|e| e.to_string())
+}
+
+pub struct FollowCountDto {
+    pub follows: u64,
+    pub fans: u64,
+}
+
+/// 我的关注/粉丝数(需登录)
+pub async fn follow_counts() -> Result<FollowCountDto, String> {
+    let provider = with_provider(Capability::Follow)?;
+    let c = provider.follow_counts().await.map_err(|e| e.to_string())?;
+    Ok(FollowCountDto { follows: c.follows, fans: c.fans })
 }
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
+import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
@@ -1196,6 +1197,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// 打开"关注/粉丝"列表(当前账号)
+  Future<void> _openUserList({required bool startOnFans}) async {
+    if (_info?.loggedIn != true) {
+      _toast('登录后才能查看关注与粉丝');
+      return;
+    }
+    await showUserList(context, startOnFans: startOnFans);
+  }
+
   /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
   /// 不再把曲目塞进搜索页列表。
   Future<void> _openPlaylist(rust.PlaylistDto pl) async {
@@ -1568,6 +1578,8 @@ class _HomePageState extends State<HomePage> {
           onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
+          onOpenFollows: () => _openUserList(startOnFans: false),
+          onOpenFolloweds: () => _openUserList(startOnFans: true),
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,

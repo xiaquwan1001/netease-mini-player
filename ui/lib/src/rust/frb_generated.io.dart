@@ -73,6 +73,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FeedEventDto dco_decode_feed_event_dto(dynamic raw);
 
   @protected
+  FollowCountDto dco_decode_follow_count_dto(dynamic raw);
+
+  @protected
   HotSearchTermDto dco_decode_hot_search_term_dto(dynamic raw);
 
   @protected
@@ -155,6 +158,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<SuggestItemDto> dco_decode_list_suggest_item_dto(dynamic raw);
+
+  @protected
+  List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
 
   @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
@@ -241,6 +247,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  UserItemDto dco_decode_user_item_dto(dynamic raw);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -292,6 +301,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FeedEventDto sse_decode_feed_event_dto(SseDeserializer deserializer);
+
+  @protected
+  FollowCountDto sse_decode_follow_count_dto(SseDeserializer deserializer);
 
   @protected
   HotSearchTermDto sse_decode_hot_search_term_dto(SseDeserializer deserializer);
@@ -410,6 +422,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
+
+  @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
@@ -504,6 +519,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  UserItemDto sse_decode_user_item_dto(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
@@ -574,6 +592,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_feed_event_dto(FeedEventDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_follow_count_dto(
+    FollowCountDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_hot_search_term_dto(
@@ -732,6 +756,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_user_item_dto(
+    List<UserItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
 
   @protected
@@ -862,6 +892,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_user_item_dto(UserItemDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);

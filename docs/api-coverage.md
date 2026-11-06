@@ -7,10 +7,10 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **56(15%)** |
-| 未接入 | **326** |
-| FFI 导出给 Dart 的函数 | 73 |
-| 其中 UI 还没有入口的 | 6(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `ping`) |
+| `ncm-service`(provider)实际调用的 | **63(16%)** |
+| 未接入 | **319** |
+| FFI 导出给 Dart 的函数 | 80 |
+| 其中 UI 还没有入口的 | 7(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
 
@@ -49,6 +49,8 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 歌单广场 | `playlist_catlist` `top_playlist` `top_playlist_highquality` | 推荐页"歌单广场": 分类筛选/热门/精品/分页 |
 | 收藏专辑 | `album_sub` `album_sublist` | "我的/收藏的专辑" + 专辑弹窗收藏按钮 |
 | 歌单编辑 | `playlist_create` `playlist_delete` `playlist_name_update` `playlist_desc_update` `playlist_track_delete` | 收藏到歌单时新建；自己歌单的编辑信息/移出曲目/删除 |
+| 评论互动 | `comment_like` `comment_floor` `comment_reply` | 评论区: 点赞(乐观更新) + 楼层回复列表 + 发回复; 歌曲/歌单/专辑/播客/动态共用一套 `comment_thread.dart` |
+| 关注/粉丝 | `user_follows` `user_followeds` `follow` `user_subcount` | 资料卡"关注 N/粉丝 N"点进去: 两 tab 列表 + 行内关注/取关 |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
@@ -56,8 +58,8 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 |---|---|---|---|---|
 | 1 | 新歌/新碟/热门单曲 | `personalized_newsong` `album_new` `album_newest` `top_song` `top_album` `top_artists` | 推荐页新增区块 | 现成 DTO(Song/AlbumBrief) |
 | 2 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` `simi_user` | 歌曲操作菜单"相似歌曲"/歌手页"相似歌手" | 扩展收听路径 |
-| 3 | 评论点赞/楼层/回复 | `comment_like` `comment_floor` `comment_reply` `comment_hot` `comment_delete` | 评论区 | 目前只能看和翻页 |
-| 4 | 关注/粉丝列表 | `user_follows` `user_followeds` `user_subcount` `follow` `user_follow_mixed` | 资料卡的"关注 44·粉丝 11"点进去 | 数字现在是死的 |
+| 3 | 评论管理 | `comment_delete` `comment_hot` `comment_info_list` | 评论区 | 取消自己的评论需要 `comment_delete`(还要判断是不是自己发的); 热门评论已经合在首次返回里 |
+| 4 | 互关/关注推荐 | `user_follow_mixed` `user_mutualfollow_get` `user_followeds` 的分页优化 | 关注页 | 现在关注列表靠 offset 翻页, 混合场景接口能一次拿"关注+互关" |
 | 5 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
 | 6 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐/FM 菜单 | 调教推荐必需 |
 | 7 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐页"历史推荐" | 错过当天也能补 |
@@ -100,22 +102,24 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `lyric`(纯文本)/`lyric_lines`(逐行, 无翻译): 已导出, UI 只用了 `lyric_lines_i18n`(逐行+翻译)。
 - `podcast_program`(单节目详情)/`podcast_radio`(电台详情): 已导出, UI 用列表数据渲染, 详情刷新没接。
 - `search`(单类型搜索): 已被 `search_all` 取代, 可以直接删掉导出。
+- `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
+  后续可在这里补一次刷新。
 
-## 附录: 未接入 326 个 endpoint(按前缀分组)
+## 附录: 未接入 319 个 endpoint(按前缀分组)
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|
 | `dj` | 25 | `dj_banner`, `dj_category_excludehot`, `dj_category_recommend`, `dj_catelist`, `dj_difm_all_style_channel`, `dj_difm_channel_subscribe`, `dj_difm_channel_unsubscribe`, `dj_difm_playing_tracks_list`, `dj_difm_subscribe_channels_get`, `dj_paygift`, `dj_personalize_recommend`, `dj_program_toplist`, `dj_program_toplist_hours`, `dj_radio_hot`, `dj_radio_top`, `dj_recommend`, `dj_recommend_type`, `dj_sub`, `dj_subscriber`, `dj_today_perfered`, `dj_toplist`, `dj_toplist_hours`, `dj_toplist_newcomer`, `dj_toplist_pay`, `dj_toplist_popular` |
-| `user` | 25 | `user_audio`, `user_binding`, `user_bindingcellphone`, `user_cloud`, `user_cloud_del`, `user_cloud_detail`, `user_comment_history`, `user_detail_new`, `user_dj`, `user_event`, `user_follow_mixed`, `user_followeds`, `user_follows`, `user_level`, `user_medal`, `user_mutualfollow_get`, `user_playlist_collect`, `user_playlist_create`, `user_replacephone`, `user_social_status`, `user_social_status_edit`, `user_social_status_rcmd`, `user_social_status_support`, `user_subcount`, `user_update` |
 | `song` | 22 | `song_chorus`, `song_downlist`, `song_download_url`, `song_download_url_v1`, `song_dynamic_cover`, `song_like`, `song_like_check`, `song_lyrics_mark`, `song_lyrics_mark_add`, `song_lyrics_mark_del`, `song_lyrics_mark_user_page`, `song_monthdownlist`, `song_music_detail`, `song_order_update`, `song_purchased`, `song_red_count`, `song_singledownlist`, `song_url`, `song_url_match`, `song_url_ncmget`, `song_url_v1_302`, `song_wiki_summary` |
+| `user` | 22 | `user_audio`, `user_binding`, `user_bindingcellphone`, `user_cloud`, `user_cloud_del`, `user_cloud_detail`, `user_comment_history`, `user_detail_new`, `user_dj`, `user_event`, `user_follow_mixed`, `user_level`, `user_medal`, `user_mutualfollow_get`, `user_playlist_collect`, `user_playlist_create`, `user_replacephone`, `user_social_status`, `user_social_status_edit`, `user_social_status_rcmd`, `user_social_status_support`, `user_update` |
 | `playlist` | 17 | `playlist_category_list`, `playlist_cover_update`, `playlist_detail_dynamic`, `playlist_detail_rcmd_get`, `playlist_highquality_tags`, `playlist_hot`, `playlist_import_name_task_create`, `playlist_import_task_status`, `playlist_mylike`, `playlist_order_update`, `playlist_privacy`, `playlist_subscribers`, `playlist_tags_update`, `playlist_track_add`, `playlist_update`, `playlist_update_playcount`, `playlist_video_recent` |
 | `artist` | 11 | `artist_desc`, `artist_detail_dynamic`, `artist_fans`, `artist_follow_count`, `artist_list`, `artist_mv`, `artist_new_mv`, `artist_new_song`, `artist_songs`, `artist_sub`, `artist_video` |
-| `comment` | 11 | `comment`, `comment_delete`, `comment_floor`, `comment_hot`, `comment_hug_list`, `comment_info_list`, `comment_like`, `comment_mv`, `comment_new`, `comment_reply`, `comment_video` |
 | `yunbei` | 11 | `yunbei`, `yunbei_expense`, `yunbei_info`, `yunbei_rcmd_song`, `yunbei_rcmd_song_history`, `yunbei_receipt`, `yunbei_sign`, `yunbei_task_finish`, `yunbei_tasks`, `yunbei_tasks_todo`, `yunbei_today` |
 | `listentogether` | 9 | `listentogether_accept`, `listentogether_end`, `listentogether_heatbeat`, `listentogether_play_command`, `listentogether_room_check`, `listentogether_room_create`, `listentogether_status`, `listentogether_sync_list_command`, `listentogether_sync_playlist_get` |
 | `video` | 9 | `video_category_list`, `video_detail`, `video_detail_info`, `video_group`, `video_group_list`, `video_sub`, `video_timeline_all`, `video_timeline_recommend`, `video_url` |
 | `vip` | 9 | `vip_growthpoint`, `vip_growthpoint_details`, `vip_growthpoint_get`, `vip_info`, `vip_info_v2`, `vip_sign`, `vip_sign_info`, `vip_tasks`, `vip_timemachine` |
 | `album` | 8 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_new`, `album_newest`, `album_privilege`, `album_songsaleboard` |
+| `comment` | 8 | `comment`, `comment_delete`, `comment_hot`, `comment_hug_list`, `comment_info_list`, `comment_mv`, `comment_new`, `comment_video` |
 | `musician` | 8 | `musician_cloudbean`, `musician_cloudbean_obtain`, `musician_data_overview`, `musician_play_trend`, `musician_sign`, `musician_tasks`, `musician_tasks_new`, `musician_vip_tasks` |
 | `mv` | 8 | `mv_all`, `mv_detail`, `mv_detail_info`, `mv_exclusive_rcmd`, `mv_first`, `mv_sub`, `mv_sublist`, `mv_url` |
 | `login` | 7 | `login`, `login_cellphone`, `login_qr_check`, `login_qr_create`, `login_qr_key`, `login_refresh`, `login_status` |
@@ -162,7 +166,6 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `eapi` | 1 | `eapi_decrypt` |
 | `event` | 1 | `event_del` |
 | `fm` | 1 | `fm_trash` |
-| `follow` | 1 | `follow` |
 | `get` | 1 | `get_userids` |
 | `hot` | 1 | `hot_topic` |
 | `hug` | 1 | `hug_comment` |
