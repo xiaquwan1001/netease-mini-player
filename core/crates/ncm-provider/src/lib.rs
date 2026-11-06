@@ -54,6 +54,10 @@ pub enum Capability {
     AlbumSub,
     /// 关注关系(关注/粉丝列表、关注/取关)
     Follow,
+    /// 新歌/新碟(推荐页"新歌速递/新碟上架")
+    NewRelease,
+    /// 相似推荐(相似歌曲/歌单/歌手)
+    Similar,
 }
 
 impl Capability {
@@ -86,6 +90,8 @@ impl Capability {
             Capability::Chart => "chart",
             Capability::AlbumSub => "albumSub",
             Capability::Follow => "follow",
+            Capability::NewRelease => "newRelease",
+            Capability::Similar => "similar",
         }
     }
 }
@@ -648,6 +654,43 @@ pub trait Provider: Send + Sync {
     /// 我的关注/粉丝数
     fn follow_counts(&self) -> BoxFuture<'_, ProviderResult<FollowCount>> {
         Box::pin(async { Err(ProviderError::unsupported("no follow counts")) })
+    }
+
+    /// 推荐新音乐("新歌速递")
+    fn new_songs(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new songs")) })
+    }
+
+    /// 新碟上架(region = ALL|ZH|EA|KR|JP)
+    fn new_albums(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new albums")) })
+    }
+
+    /// 相似歌曲
+    fn similar_songs(
+        &self,
+        _song_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar songs")) })
+    }
+
+    /// 相似歌单
+    fn similar_playlists(
+        &self,
+        _song_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar playlists")) })
+    }
+
+    /// 相似歌手(需要登录)
+    fn similar_artists(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar artists")) })
     }
 }
 

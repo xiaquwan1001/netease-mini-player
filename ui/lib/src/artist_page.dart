@@ -15,6 +15,7 @@ Future<void> showArtistDetail(
   void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum,
   Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist, // 测试注入
+  Future<List<rust.ArtistDto>> Function(BigInt)? loadSimilar, // 测试注入
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -24,6 +25,7 @@ Future<void> showArtistDetail(
         onPlaySongs: onPlaySongs,
         onOpenAlbum: onOpenAlbum,
         loadArtist: loadArtist,
+        loadSimilar: loadSimilar,
       ),
     ),
   );
@@ -36,6 +38,7 @@ class _ArtistDetailPage extends StatefulWidget {
     this.name,
     this.onOpenAlbum,
     this.loadArtist,
+    this.loadSimilar,
   });
 
   final BigInt artistId;
@@ -44,6 +47,7 @@ class _ArtistDetailPage extends StatefulWidget {
   final void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum;
   final Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist;
+  final Future<List<rust.ArtistDto>> Function(BigInt)? loadSimilar;
 
   @override
   State<_ArtistDetailPage> createState() => _ArtistDetailPageState();
@@ -53,10 +57,26 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
   rust.ArtistDetailDto? _detail;
   String? _error;
 
+  /// 相似歌手(需要登录; 拿不到就整块不显示, 不打扰其它内容)
+  List<rust.ArtistDto> _similar = const [];
+
   @override
   void initState() {
     super.initState();
     _load();
+    _loadSimilar();
+  }
+
+  Future<void> _loadSimilar() async {
+    try {
+      final list = await (widget.loadSimilar != null
+          ? widget.loadSimilar!(widget.artistId)
+          : retryNetwork(() => rust.similarArtists(artistId: widget.artistId)));
+      if (!mounted) return;
+      setState(() => _similar = list);
+    } catch (_) {
+      // 未登录/接口不支持: 静默隐藏
+    }
   }
 
   Future<void> _load() async {
@@ -131,6 +151,10 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
               ..._buildSongs(theme, detail.songs),
               if (detail.albums.isNotEmpty) _SectionTitle('专辑'),
               _buildAlbums(detail.albums),
+              if (_similar.isNotEmpty) ...[
+                _SectionTitle('相似歌手'),
+                _buildSimilarArtists(theme),
+              ],
             ],
           ),
         ),
@@ -214,6 +238,31 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
           onTap: () => widget.onPlaySongs(songs, i),
         ),
     ];
+  }
+
+  /// 相似歌手: 头像 + 名字的小胶囊, 点开进入对应歌手页
+  Widget _buildSimilarArtists(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final a in _similar)
+            ActionChip(
+              avatar: CircleCover(url: a.avatarUrl, size: 24),
+              label: Text(a.name),
+              onPressed: () => showArtistDetail(
+                context,
+                artistId: a.id,
+                name: a.name,
+                onPlaySongs: widget.onPlaySongs,
+                onOpenAlbum: widget.onOpenAlbum,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   /// 专辑: 横向滚动的封面卡片(118 宽, 行高 176)

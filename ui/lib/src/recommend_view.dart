@@ -25,6 +25,9 @@ class RecommendView extends StatefulWidget {
     this.loadFm,
     this.loadStyles,
     this.loadCharts,
+    this.loadNewSongs,
+    this.loadNewAlbums,
+    this.onOpenAlbum,
   });
 
   final bool loggedIn;
@@ -45,6 +48,13 @@ class RecommendView extends StatefulWidget {
   /// 排行榜(榜单就是歌单)
   final Future<List<rust.ChartSummaryDto>> Function()? loadCharts;
 
+  /// 新歌速递 / 新碟上架
+  final Future<List<rust.SongDto>> Function()? loadNewSongs;
+  final Future<List<rust.AlbumItemDto>> Function()? loadNewAlbums;
+
+  /// 点专辑卡片(不传就不显示"新碟上架")
+  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+
   @override
   State<RecommendView> createState() => _RecommendViewState();
 }
@@ -62,6 +72,10 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadStyles ?? rust.stylePreference;
   Future<List<rust.ChartSummaryDto>> Function() get _charts =>
       widget.loadCharts ?? rust.chartList;
+  Future<List<rust.SongDto>> Function() get _newSongs =>
+      widget.loadNewSongs ?? (() => rust.newSongs(limit: 20));
+  Future<List<rust.AlbumItemDto>> Function() get _newAlbums =>
+      widget.loadNewAlbums ?? (() => rust.newAlbums(limit: 20, offset: 0));
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +112,8 @@ class _RecommendViewState extends State<RecommendView> {
             onOpenAll: widget.onOpenDaily,
           ),
           const SizedBox(height: 16),
+          _NewSongsSection(load: _newSongs, onPlay: widget.onPlaySongs),
+          const SizedBox(height: 16),
           _DailyPlaylistsSection(
             load: _dailyPlaylists,
             loggedIn: widget.loggedIn,
@@ -115,6 +131,14 @@ class _RecommendViewState extends State<RecommendView> {
               label: const Text('歌单广场'),
             ),
           ),
+          if (widget.onOpenAlbum != null) ...[
+            const SizedBox(height: 16),
+            _NewAlbumsSection(
+              load: _newAlbums,
+              onOpen: widget.onOpenAlbum!,
+              loggedIn: widget.loggedIn,
+            ),
+          ],
           const SizedBox(height: 16),
           _PodcastSection(load: _podcasts, loggedIn: widget.loggedIn, onOpen: widget.onOpenPodcast),
         ],
@@ -353,6 +377,112 @@ class _ActionCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------- 新歌速递 / 新碟上架 ----------------
+
+/// 新歌速递: 一排歌曲(点任意一首按这个列表起播)
+class _NewSongsSection extends StatelessWidget {
+  const _NewSongsSection({required this.load, required this.onPlay});
+
+  final Future<List<rust.SongDto>> Function() load;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: '新歌速递'),
+        _AsyncSection<List<rust.SongDto>>(
+          load: load,
+          emptyText: '暂时没有新歌',
+          builder: (context, songs, reload) {
+            final playable = [
+              for (final s in songs)
+                if (s.playable) s,
+            ];
+            final preview = songs.take(6).toList();
+            return Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final s in preview)
+                    ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
+                      title: Text(
+                        s.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        s.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: s.playable
+                          ? () {
+                              final index =
+                                  playable.indexWhere((x) => x.id == s.id);
+                              onPlay(playable, index < 0 ? 0 : index);
+                            }
+                          : null,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// 新碟上架: 横向封面卡片
+class _NewAlbumsSection extends StatelessWidget {
+  const _NewAlbumsSection({
+    required this.load,
+    required this.onOpen,
+    required this.loggedIn,
+  });
+
+  final Future<List<rust.AlbumItemDto>> Function() load;
+  final void Function(rust.AlbumItemDto album) onOpen;
+  final bool loggedIn;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: '新碟上架'),
+        _AsyncSection<List<rust.AlbumItemDto>>(
+          load: load,
+          emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
+          builder: (context, albums, reload) => _CoverRow(
+            height: 176,
+            rows: AppSettings.instance.coverRows,
+            children: [
+              for (final a in albums)
+                _CoverCard(
+                  coverUrl: a.coverUrl,
+                  title: a.name,
+                  subtitle: [
+                    if (a.artist.isNotEmpty) a.artist,
+                    if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
+                  ].join(' · '),
+                  onTap: () => onOpen(a),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

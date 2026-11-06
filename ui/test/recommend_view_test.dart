@@ -39,11 +39,19 @@ rust.PodcastRadioDto radio(int id, String name) => rust.PodcastRadioDto(
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
-  testWidgets('推荐页展示每日推荐/歌单/播客, 点歌回调整批曲目', (tester) async {
+  testWidgets('推荐页展示每日推荐/歌单/播客/榜单/新碟, 点歌回调整批曲目', (tester) async {
+    // 页面很长(榜单/风格/每日推荐/新歌/歌单/新碟/播客), 用高视口一次构建,
+    // 避免在测试里反复滚动造成的不稳定。
+    tester.view.physicalSize = const Size(1200, 4200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     List<rust.SongDto>? played;
     int? playedIndex;
     rust.PlaylistDto? openedPlaylist;
     rust.PodcastRadioDto? openedRadio;
+    rust.AlbumItemDto? openedAlbum;
     var heart = 0;
 
     await tester.pumpWidget(host(RecommendView(
@@ -66,6 +74,17 @@ void main() {
           playCount: BigInt.from(1000),
         ),
       ],
+      loadNewSongs: () async => [song(30, '新歌速递一')],
+      loadNewAlbums: () async => [
+        rust.AlbumItemDto(
+          id: BigInt.from(40),
+          name: '新碟A',
+          coverUrl: null,
+          artist: '歌手',
+          trackCount: BigInt.from(8),
+        ),
+      ],
+      onOpenAlbum: (album) => openedAlbum = album,
       onPlaySongs: (songs, index) {
         played = songs;
         playedIndex = index;
@@ -77,51 +96,43 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    // 排行榜入口(榜单就是歌单)
+    // 排行榜(榜单就是歌单)
     expect(find.text('排行榜'), findsOneWidget);
     expect(find.text('飙升榜'), findsOneWidget);
     expect(find.text('刚刚更新'), findsOneWidget);
 
-    // 系统推荐的乐曲风格入口
+    // 风格推荐
     expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('粤语流行'), findsOneWidget);
     expect(find.text('华语流行'), findsOneWidget);
 
+    // 每日推荐歌曲
     expect(find.text('每日推荐歌曲'), findsOneWidget);
-    expect(find.text('推荐歌单'), findsOneWidget);
     expect(find.text('每日一歌'), findsOneWidget);
-    expect(find.text('推荐歌单A'), findsOneWidget);
-
-    // 播客区块在页面下方(排行榜/风格推荐/每日推荐都在它前面), 先滚过去
-    await tester.scrollUntilVisible(
-      find.text('推荐播客'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('推荐播客'), findsOneWidget);
-    expect(find.text('推荐播客A'), findsOneWidget);
-
-    await tester.ensureVisible(find.text('每日二歌'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('每日二歌'));
     expect(played?.length, 2);
     expect(playedIndex, 1);
 
-    await tester.ensureVisible(find.text('推荐歌单A'));
-    await tester.pumpAndSettle();
+    // 新歌速递
+    expect(find.text('新歌速递'), findsOneWidget);
+    expect(find.text('新歌速递一'), findsOneWidget);
+
+    // 推荐歌单
+    expect(find.text('推荐歌单'), findsOneWidget);
     await tester.tap(find.text('推荐歌单A'));
     expect(openedPlaylist?.id, BigInt.from(10));
 
-    await tester.ensureVisible(find.text('推荐播客A'));
-    await tester.pumpAndSettle();
+    // 新碟上架
+    expect(find.text('新碟上架'), findsOneWidget);
+    await tester.tap(find.text('新碟A'));
+    expect(openedAlbum?.id, BigInt.from(40));
+
+    // 推荐播客
+    expect(find.text('推荐播客'), findsOneWidget);
     await tester.tap(find.text('推荐播客A'));
     expect(openedRadio?.id, BigInt.from(20));
 
-    // 「心动模式」快捷卡片在列表顶部, 前面的 ensureVisible 已经把列表滚下去了,
-    // 顶部卡片被回收, 要先滚回顶部再点。
-    await tester.drag(find.byType(ListView).first, const Offset(0, 1500));
-    await tester.pumpAndSettle();
+    // 心动模式快捷卡片
     await tester.tap(find.text('心动模式'));
     expect(heart, 1);
   });
@@ -136,6 +147,8 @@ void main() {
       loadFm: () async => [song(7, 'FM 曲')],
       loadStyles: () async => const [],
       loadCharts: () async => const [],
+      loadNewSongs: () async => const [],
+      loadNewAlbums: () async => const [],
       onPlaySongs: (songs, index) => played = songs,
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},

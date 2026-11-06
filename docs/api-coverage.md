@@ -7,9 +7,9 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **63(16%)** |
-| 未接入 | **319** |
-| FFI 导出给 Dart 的函数 | 80 |
+| `ncm-service`(provider)实际调用的 | **68(17%)** |
+| 未接入 | **314** |
+| FFI 导出给 Dart 的函数 | 85 |
 | 其中 UI 还没有入口的 | 7(`lyric` `lyric_lines` `search` `podcast_program` `podcast_radio` `follow_counts` `ping`) |
 
 复算:
@@ -51,16 +51,17 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 歌单编辑 | `playlist_create` `playlist_delete` `playlist_name_update` `playlist_desc_update` `playlist_track_delete` | 收藏到歌单时新建；自己歌单的编辑信息/移出曲目/删除 |
 | 评论互动 | `comment_like` `comment_floor` `comment_reply` | 评论区: 点赞(乐观更新) + 楼层回复列表 + 发回复; 歌曲/歌单/专辑/播客/动态共用一套 `comment_thread.dart` |
 | 关注/粉丝 | `user_follows` `user_followeds` `follow` `user_subcount` | 资料卡"关注 N/粉丝 N"点进去: 两 tab 列表 + 行内关注/取关 |
+| 新歌/新碟 | `personalized_newsong` `album_new` | 推荐页"新歌速递"(6 首预览, 整批起播) + "新碟上架"(封面横排, 点开专辑弹窗) |
+| 相似推荐 | `simi_song` `simi_playlist` `simi_artist` | 歌曲菜单"相似歌曲"(面板: 相似歌曲 + 相似歌单); 歌手页"相似歌手"胶囊(需登录) |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
-| 1 | 新歌/新碟/热门单曲 | `personalized_newsong` `album_new` `album_newest` `top_song` `top_album` `top_artists` | 推荐页新增区块 | 现成 DTO(Song/AlbumBrief) |
-| 2 | 相似推荐 | `simi_song` `simi_playlist` `simi_artist` `simi_user` | 歌曲操作菜单"相似歌曲"/歌手页"相似歌手" | 扩展收听路径 |
-| 3 | 评论管理 | `comment_delete` `comment_hot` `comment_info_list` | 评论区 | 取消自己的评论需要 `comment_delete`(还要判断是不是自己发的); 热门评论已经合在首次返回里 |
-| 4 | 互关/关注推荐 | `user_follow_mixed` `user_mutualfollow_get` `user_followeds` 的分页优化 | 关注页 | 现在关注列表靠 offset 翻页, 混合场景接口能一次拿"关注+互关" |
-| 5 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
+| 1 | 新碟/新歌更多入口 | `album_newest` `top_song` `top_album` `top_artists` `simi_user` | 推荐页分类 tab | 与已接入的新歌/新碟同构, 只是分区/语种维度 |
+| 2 | 评论管理 | `comment_delete` `comment_hot` `comment_info_list` | 评论区 | 取消自己的评论需要 `comment_delete`(还要判断是不是自己发的); 热门评论已经合在首次返回里 |
+| 3 | 互关/关注推荐 | `user_follow_mixed` `user_mutualfollow_get` `user_followeds` 的分页优化 | 关注页 | 现在关注列表靠 offset 翻页, 混合场景接口能一次拿"关注+互关" |
+| 4 | 最近播放分类 | `record_recent_album` `record_recent_playlist` `record_recent_dj` `record_recent_video` `record_recent_voice` | "我的/最近听过"加分类 tab | 现有最近听过只有单曲 |
 | 6 | 不感兴趣 | `recommend_songs_dislike` `fm_trash` | 每日推荐/FM 菜单 | 调教推荐必需 |
 | 7 | 历史日推 | `history_recommend_songs` `history_recommend_songs_detail` | 每日推荐页"历史推荐" | 错过当天也能补 |
 | 8 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) `song_wiki_summary`(歌曲百科) | 歌词页/歌曲详情 | 现有歌词接口是逐行, 逐字要新接口 |
@@ -105,7 +106,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
 
-## 附录: 未接入 319 个 endpoint(按前缀分组)
+## 附录: 未接入 314 个 endpoint(按前缀分组)
 
 | 前缀 | 数量 | 接口 |
 |---|---|---|
@@ -118,22 +119,21 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `listentogether` | 9 | `listentogether_accept`, `listentogether_end`, `listentogether_heatbeat`, `listentogether_play_command`, `listentogether_room_check`, `listentogether_room_create`, `listentogether_status`, `listentogether_sync_list_command`, `listentogether_sync_playlist_get` |
 | `video` | 9 | `video_category_list`, `video_detail`, `video_detail_info`, `video_group`, `video_group_list`, `video_sub`, `video_timeline_all`, `video_timeline_recommend`, `video_url` |
 | `vip` | 9 | `vip_growthpoint`, `vip_growthpoint_details`, `vip_growthpoint_get`, `vip_info`, `vip_info_v2`, `vip_sign`, `vip_sign_info`, `vip_tasks`, `vip_timemachine` |
-| `album` | 8 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_new`, `album_newest`, `album_privilege`, `album_songsaleboard` |
 | `comment` | 8 | `comment`, `comment_delete`, `comment_hot`, `comment_hug_list`, `comment_info_list`, `comment_mv`, `comment_new`, `comment_video` |
 | `musician` | 8 | `musician_cloudbean`, `musician_cloudbean_obtain`, `musician_data_overview`, `musician_play_trend`, `musician_sign`, `musician_tasks`, `musician_tasks_new`, `musician_vip_tasks` |
 | `mv` | 8 | `mv_all`, `mv_detail`, `mv_detail_info`, `mv_exclusive_rcmd`, `mv_first`, `mv_sub`, `mv_sublist`, `mv_url` |
+| `album` | 7 | `album_detail`, `album_detail_dynamic`, `album_list`, `album_list_style`, `album_newest`, `album_privilege`, `album_songsaleboard` |
 | `login` | 7 | `login`, `login_cellphone`, `login_qr_check`, `login_qr_create`, `login_qr_key`, `login_refresh`, `login_status` |
 | `ugc` | 7 | `ugc_album_get`, `ugc_artist_get`, `ugc_artist_search`, `ugc_detail`, `ugc_mv_get`, `ugc_song_get`, `ugc_user_devote` |
 | `cloud` | 6 | `cloud`, `cloud_import`, `cloud_lyric_get`, `cloud_match`, `cloud_upload_complete`, `cloud_upload_token` |
 | `msg` | 6 | `msg_comments`, `msg_forwards`, `msg_notices`, `msg_private`, `msg_private_history`, `msg_recentcontact` |
-| `personalized` | 6 | `personalized`, `personalized_djprogram`, `personalized_mv`, `personalized_newsong`, `personalized_privatecontent`, `personalized_privatecontent_list` |
 | `voicelist` | 6 | `voicelist_detail`, `voicelist_list`, `voicelist_list_search`, `voicelist_my_created`, `voicelist_search`, `voicelist_trans` |
 | `broadcast` | 5 | `broadcast_category_region_get`, `broadcast_channel_collect_list`, `broadcast_channel_currentinfo`, `broadcast_channel_list`, `broadcast_sub` |
 | `fanscenter` | 5 | `fanscenter_basicinfo_age_get`, `fanscenter_basicinfo_gender_get`, `fanscenter_basicinfo_province_get`, `fanscenter_overview_get`, `fanscenter_trend_list` |
 | `listen` | 5 | `listen_data_realtime_report`, `listen_data_report`, `listen_data_today_song`, `listen_data_total`, `listen_data_year_report` |
+| `personalized` | 5 | `personalized`, `personalized_djprogram`, `personalized_mv`, `personalized_privatecontent`, `personalized_privatecontent_list` |
 | `record` | 5 | `record_recent_album`, `record_recent_dj`, `record_recent_playlist`, `record_recent_video`, `record_recent_voice` |
 | `search` | 5 | `search`, `search_hot_detail`, `search_match`, `search_multimatch`, `search_suggest_pc` |
-| `simi` | 5 | `simi_artist`, `simi_mv`, `simi_playlist`, `simi_song`, `simi_user` |
 | `top` | 5 | `top_album`, `top_artists`, `top_list`, `top_mv`, `top_song` |
 | `digital` | 4 | `digital_album_detail`, `digital_album_ordering`, `digital_album_purchased`, `digital_album_sales` |
 | `send` | 4 | `send_album`, `send_playlist`, `send_song`, `send_text` |
@@ -148,6 +148,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `register` | 2 | `register_anonimous`, `register_cellphone` |
 | `related` | 2 | `related_allvideo`, `related_playlist` |
 | `sheet` | 2 | `sheet_list`, `sheet_preview` |
+| `simi` | 2 | `simi_mv`, `simi_user` |
 | `verify` | 2 | `verify_get_qr`, `verify_qrcodestatus` |
 | `activate` | 1 | `activate_init_profile` |
 | `aidj` | 1 | `aidj_content_rcmd` |

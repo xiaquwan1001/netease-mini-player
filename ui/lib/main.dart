@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
+import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/artist_page.dart';
@@ -912,6 +913,12 @@ class _HomePageState extends State<HomePage> {
     openArtist: _openSongArtist,
     openAlbum: _openSongAlbum,
     download: _downloadSong,
+    similarSongs: (song) => showSimilarSongs(
+      context,
+      song: song,
+      onPlay: _playSongsList,
+      onOpenPlaylist: _openPlaylist,
+    ),
   );
 
   /// 任意曲目的红心切换(列表/播放条共用; 先乐观更新, 失败回滚)
@@ -1560,6 +1567,13 @@ class _HomePageState extends State<HomePage> {
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
+          onOpenAlbum: (album) => showAlbumPreview(
+            context,
+            albumId: album.id,
+            albumName: album.name,
+            coverUrl: album.coverUrl,
+            onPlay: _playSongsList,
+          ),
         );
       case 2:
         return FeedView(

@@ -1489,6 +1489,65 @@ pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<boo
         .map_err(|e| e.to_string())
 }
 
+/// 推荐新音乐("新歌速递")
+pub async fn new_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider.new_songs(limit).await.map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(song_dto).collect())
+}
+
+/// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItemDto
+pub async fn new_albums(limit: u32, offset: u32) -> Result<Vec<AlbumItemDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider
+        .new_albums(limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| AlbumItemDto {
+            id: a.id,
+            name: a.name,
+            cover_url: a.cover_url,
+            artist: a.artist,
+            track_count: a.track_count,
+        })
+        .collect())
+}
+
+/// 相似歌曲
+pub async fn similar_songs(song_id: u64, limit: u32) -> Result<Vec<SongDto>, String> {
+    let provider = with_provider(Capability::Similar)?;
+    let list = provider
+        .similar_songs(song_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(song_dto).collect())
+}
+
+/// 相似歌单
+pub async fn similar_playlists(song_id: u64, limit: u32) -> Result<Vec<PlaylistDto>, String> {
+    let provider = with_provider(Capability::Similar)?;
+    let list = provider
+        .similar_playlists(song_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(playlist_dto).collect())
+}
+
+/// 相似歌手(需登录)
+pub async fn similar_artists(artist_id: u64) -> Result<Vec<ArtistDto>, String> {
+    let provider = with_provider(Capability::Similar)?;
+    let list = provider
+        .similar_artists(artist_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| ArtistDto { id: a.id, name: a.name, avatar_url: a.avatar_url })
+        .collect())
+}
+
 /// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
 pub async fn like_comment(
     thread_id: String,

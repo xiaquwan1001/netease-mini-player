@@ -5,6 +5,19 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 功能包: 新歌新碟 / 相似推荐(2026-11-07 上午)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 新歌速递 | ✅ | `personalized_newsong`(曲目嵌在 result[].song): 推荐页 6 首预览, 点任意一首按整批起播; 实测 Hong Kong(feat.王菲季候风)/The Weeknd 等 |
+| 新碟上架 | ✅ | `album_new`: 推荐页封面横排(歌手·曲数), 点开专辑弹窗; 实测 Coco Jones/瓷ci/Lil Baby |
+| 相似歌曲 | ✅ | `simi_song` + `simi_playlist`: 歌曲菜单「相似歌曲」→ 面板(相似歌曲列表 + 相似歌单横排); 实测《泪海》→ 再见太难/甲乙丙丁… + 3 张相似歌单 |
+| 相似歌手 | ✅(需登录) | `simi_artist`: 歌手页「相似歌手」胶囊, 点开递归进歌手页; 匿名调用返回 Authentication required, UI 静默隐藏 |
+| 回归 | ✅ | Rust 46 单测(新增新歌/相似解析 1 组); Flutter 93 用例(推荐页改为高视口一次断言, 新增相似面板 1 例); Linux/APK 构建通过 |
+
+**踩坑**: 推荐页测试用 `scrollUntilVisible` 在超长页面里容易 "Bad state: No element"(横向 ListView 抢到 `Scrollable.first` /
+元素被回收)。改为 `tester.view.physicalSize = Size(1200, 4200)` 一次性构建整页, 稳定且更快。
+
 ## v2 · 功能包: 评论互动 / 关注粉丝(2026-11-07 凌晨)
 
 | 能力 | 状态 | 证据 |

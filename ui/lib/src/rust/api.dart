@@ -378,6 +378,33 @@ Future<bool> removeFromPlaylist({
   trackId: trackId,
 );
 
+/// 推荐新音乐("新歌速递")
+Future<List<SongDto>> newSongs({required int limit}) =>
+    RustLib.instance.api.crateApiNewSongs(limit: limit);
+
+/// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItemDto
+Future<List<AlbumItemDto>> newAlbums({
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiNewAlbums(limit: limit, offset: offset);
+
+/// 相似歌曲
+Future<List<SongDto>> similarSongs({
+  required BigInt songId,
+  required int limit,
+}) => RustLib.instance.api.crateApiSimilarSongs(songId: songId, limit: limit);
+
+/// 相似歌单
+Future<List<PlaylistDto>> similarPlaylists({
+  required BigInt songId,
+  required int limit,
+}) =>
+    RustLib.instance.api.crateApiSimilarPlaylists(songId: songId, limit: limit);
+
+/// 相似歌手(需登录)
+Future<List<ArtistDto>> similarArtists({required BigInt artistId}) =>
+    RustLib.instance.api.crateApiSimilarArtists(artistId: artistId);
+
 /// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
 Future<bool> likeComment({
   required String threadId,

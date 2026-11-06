@@ -42,6 +42,8 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Chart,
     Capability::AlbumSub,
     Capability::Follow,
+    Capability::NewRelease,
+    Capability::Similar,
 ];
 
 /// 内置网易云直连 provider.
@@ -1254,6 +1256,91 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 新歌速递: {code, result:[{id,name,picUrl,song:{完整歌曲}}]}
+    fn new_songs(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+            let resp = client.personalized_newsong(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_new_songs(&resp.body))
+        })
+    }
+
+    /// 新碟上架: {code, albums:[{id,name,picUrl,artist:{name},size}]}
+    fn new_albums(
+        &self,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.album_new(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_album_items(&resp.body))
+        })
+    }
+
+    /// 相似歌曲: {code, songs:[完整歌曲]}
+    fn similar_songs(
+        &self,
+        song_id: u64,
+        limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async move {
+            if song_id == 0 {
+                return Err(ProviderError::not_found("song id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &song_id.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.simi_song(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_song_bucket(&resp.body, "songs"))
+        })
+    }
+
+    /// 相似歌单: {code, playlists:[...]}
+    fn similar_playlists(
+        &self,
+        song_id: u64,
+        limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            if song_id == 0 {
+                return Err(ProviderError::not_found("song id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &song_id.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.simi_playlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_playlist_bucket(&resp.body, "playlists"))
+        })
+    }
+
+    /// 相似歌手: {code, artists:[{id,name,picUrl}]}(需要登录)
+    fn similar_artists(&self, artist_id: u64) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("相似歌手需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
+            let resp = client.simi_artist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_similar_artists(&resp.body))
+        })
+    }
+
     /// 红心/取消红心. 网易云用 HTTP 200 里的 code 表达结果(200 = 成功)
     fn set_like<'a>(&'a self, track: TrackId, liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async move {
@@ -2396,6 +2483,59 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
         .collect()
 }
 
+/// 新歌速递: {code, result:[{id,name,picUrl,song:{完整歌曲}}]} —— 曲目在 item.song 里
+pub fn parse_new_songs(body: &Value) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get("result")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                // 只认 song 字段里的完整歌曲; 外层的 id/name 是推荐位元数据
+                .filter_map(|item| parse_song_with(item.get("song")?, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 通用"songs 数组"桶: 相似歌曲/搜索结果等
+pub fn parse_song_bucket(body: &Value, key: &str) -> Vec<Song> {
+    let privileges = parse_privileges(body);
+    body.get(key)
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| parse_song_with(s, &privileges))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 相似歌手: {code, artists:[{id,name,picUrl,img1v1Url}]}
+pub fn parse_similar_artists(body: &Value) -> Vec<Artist> {
+    let arr = body
+        .get("artists")
+        .or_else(|| body.get("data"))
+        .and_then(Value::as_array);
+    let Some(arr) = arr else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter_map(|v| {
+            let name = str_of(v, "name")?;
+            if name.is_empty() {
+                return None;
+            }
+            Some(Artist {
+                id: u64_of(v, "id").unwrap_or(0),
+                name,
+                avatar_url: str_of(v, "picUrl")
+                    .or_else(|| str_of(v, "img1v1Url"))
+                    .filter(|s| s.starts_with("http")),
+            })
+        })
+        .collect()
+}
+
 /// 排行榜列表: {code, list:[{id,name,coverImgUrl,updateFrequency,trackCount,playCount,tracks}]}.
 /// 只取摘要, 曲目进榜单详情时再拉(接口本来也只给前 3 首做预览).
 pub fn parse_charts(body: &Value) -> Vec<ChartSummary> {
@@ -3420,6 +3560,36 @@ mod tests {
         let fans = parse_user_items(&followeds, "followeds", false);
         assert_eq!(fans.len(), 1);
         assert!(!fans[0].followed);
+    }
+
+    #[test]
+    fn new_release_and_similar_mapping() {
+        // 新歌: 曲目嵌在 result[].song 里
+        let newsong = json!({"code": 200, "result": [
+            {"id": 9, "name": "外层名", "song": {"id": 1, "name": "新歌一", "ar": [{"name": "A"}], "dt": 1000}},
+            {"id": 10, "name": "没有 song 字段"}
+        ]});
+        let songs = parse_new_songs(&newsong);
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].name, "新歌一");
+
+        // 相似歌曲: 直接是 songs 数组
+        let simi = json!({"code": 200, "songs": [
+            {"id": 2, "name": "像它", "ar": [{"name": "B"}], "dt": 2000, "fee": 1}
+        ]});
+        let similar = parse_song_bucket(&simi, "songs");
+        assert_eq!(similar.len(), 1);
+        assert_eq!(similar[0].name, "像它");
+
+        // 相似歌手
+        let artists = json!({"code": 200, "artists": [
+            {"id": 3, "name": "歌手C", "picUrl": "https://p/c.jpg"},
+            {"id": 4, "name": "歌手D", "picUrl": "yyimgs/rel"}
+        ]});
+        let list = parse_similar_artists(&artists);
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0].avatar_url.as_deref(), Some("https://p/c.jpg"));
+        assert!(list[1].avatar_url.is_none());
     }
 
     #[test]
