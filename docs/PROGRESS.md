@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-05(底部四栏 + 双端实测)。
+> 最近更新: 2026-11-06(接口覆盖推进到 87/382: 最近播放分类 / 签到 / 评论删除 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
