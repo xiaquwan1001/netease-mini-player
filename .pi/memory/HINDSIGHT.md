@@ -280,7 +280,7 @@ API/protocol details and anti-bot technique live in the
 
 - 规划文档: `docs/remaining-batches.md`(S/M/L/X 分级、Wave 流水线、派工模板、编排者收口清单)。
 - 关键硬约束: `netease.rs`/`api.rs`/`frb_generated.*` 是单写者文件, **codegen 全局串行**;
-  同仓同工作树安全并行度 = 2(Rust 桥 + 纯 Dart), 设备实测与构建必须串行。
+  同仓同工作树安全并行度 = 2(Rust 桥 + 纯 Dart); 构建串行, 设备实测单台内串行、两台模拟器(a34/a36)可并行。
 - 新批开工前先在本文件 §3 查并行矩阵, 收口一律由编排者重跑 `tools/ci.sh` 与模拟器走查。
 
 <!-- created=2026-11-07, last=2026-11-07 -->

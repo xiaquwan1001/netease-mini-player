@@ -13,7 +13,7 @@
 | Provider trait 在 `core/crates/ncm-provider/src/lib.rs`, FFI 在 `core/crates/ncm-ffi/src/api.rs` | 同上, 且必须成对改 |
 | `flutter_rust_bridge_codegen` 一次重写 `ui/lib/src/rust/*` + `core/crates/ncm-ffi/src/frb_generated.rs` | **codegen 是全局串行点**, 同一时刻只能有一个批次跑它 |
 | `cargo` 共用 `core/target`, Gradle/Flutter 共用 `ui/build` | 两个批次同时 `cargo test`/`flutter build` 会互相排队或锁死 |
-| 模拟器只有一台(a36), 真机只在发布冒烟用 | 设备实测(截图/点击)必须串行, 放在集成后 |
+| 模拟器有两台(**a34 / a36**, 一般占 5554/5556), 真机只在发布冒烟用 | 单台设备内实测串行; 两台可各跑一个批次(用 `adb -s` 指定), 但同一账号的写操作仍要串行 |
 | UI 测试按文件拆分(`ui/test/*.dart`), `flutter test` 可全量跑 | Dart 测试本身可并行开发, 但全量跑建议集成时一次 |
 
 **结论**: 同仓同工作树里, 真正安全的并行度是 **2**: 一条「Rust 桥」车道(独占 codegen) + 一条「纯 Dart」车道(只改自己那份 `ui/lib/src/*.dart` 与 `ui/test/*.dart`)。
@@ -67,7 +67,7 @@
 | 一个 S/M 级 + 「只读调研/文档」 | ✅ | 调研不改代码, 产物写 `/tmp` 或 docs |
 | 一个 Rust 批 + 另一个批的「mock 版 UI + widget test」 | ✅ | 前提: DTO 形状已先定稿(见 §5 schema 先行) |
 | 两个 Rust 批(不同 worktree) | ⚠️ | 可行但合并要串行 codegen, 只有大改(如 B5)才值得 |
-| 两条设备实测 | ❌ | 只有一台模拟器 |
+| 两条设备实测 | ✅(上限 2) | 各绑一台模拟器(a34/a36), 用 `adb -s emulator-5554/5556` 区分; 写操作(点赞/签到/歌单编辑)不要两台同时用同一账号 |
 | 两次 `flutter build` / `cargo build` | ❌ | 构建锁, 由编排者最后跑一次 `bash tools/ci.sh` |
 
 ## 4. B0 · 纯 Dart 收尾批(任何轮次都能搭车)
@@ -94,7 +94,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 ```
 
 规则:
-1. 每波结束由**编排者**串行收口: `bash tools/ci.sh` → 模拟器 a36 实机走查 → 更新 docs + memory → commit。
+1. 每波结束由**编排者**收口: `bash tools/ci.sh` → 模拟器走查(a34/a36 可分工并行, 同一功能只需一台) → 更新 docs + memory → commit。
 2. 同一波内 Rust 批先落 **DTO + provider + FFI + codegen**(schema 先行), Dart 批只依赖已定稿 DTO。
 3. 不允许 Dart 批直接改 `ui/lib/src/rust/*`(那是生成物, 会被下次 codegen 覆盖)。
 
@@ -107,7 +107,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
    `flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust`
    然后 `cargo build -p ncm_ffi`(漏了会报 content hash 不一致)。
 5. **UI**: 先写 mock loader 的 widget test, 再接真实 Rust 调用。
-6. **实测**: 模拟器 a36 手动路径 + logcat; 真机只在发布冒烟。
+6. **实测**: 模拟器 a34 或 a36 手动路径 + logcat(两台可并行分担不同批次); 真机只在发布冒烟。
+   a34(API 34)与 a36(API 36)版本不同, 涉及系统行为(Media3/通知/权限)的批次建议两台各跑一次。
 7. **收口**: 更新 `docs/api-coverage.md` 数字(跑 `tools/api-coverage.sh`)、`docs/PROGRESS.md` 新小节、`.pi/memory/HINDSIGHT.md` 协议事实。
 8. **提交**: 一个批次一个 commit, 消息格式 `feat: <能力>(<关键接口>)`。
 
@@ -134,12 +135,13 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
   (cd ui && flutter analyze --no-fatal-infos && flutter test)
 【落盘节奏】每完成 ①②④ 各写一次文件/commit 说明, 不要攒到最后一次性输出
 【自报不可信】最终由编排者重跑 ci.sh + 模拟器走查
+【设备】本批用 a36(或 a34), 用 adb -s emulator-XXXX 指定; 不要两台同时写同一账号
 ```
 
 **编排者收口清单**
 - [ ] `git status` 只含本批文件; 无生成物手改
 - [ ] `bash tools/ci.sh` → `CI OK`(编排者自己跑, 不信 worker)
-- [ ] 模拟器 a36 真机路径走查(截图/日志), 热门/空态/未登录各一次
+- [ ] 模拟器走查(a34/a36 任选一台; 系统相关改动两台各一次), 空态/未登录各一次
 - [ ] `bash tools/api-coverage.sh` 数字与 docs 一致
 - [ ] memory 写入协议事实(字段名/分页字段/风控坑)
 - [ ] 一个 commit, 不含 `.pi/fabric/mesh/state.json`
@@ -150,5 +152,5 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 - **codegen 产物冲突无法手工解决**: 一律由当前 codegen 窗口的批次重新生成, 其他批次 `git checkout -- ui/lib/src/rust core/crates/ncm-ffi/src/frb_generated.rs` 后再合。
 - **接口形状不可信文档**: vendor 是 api-enhanced 移植, 但 hasMore/more、areaId/area 这类差异反复出现, 必须先 dump。
 - **写操作先小样本**: 签到/评论/歌单编辑先在模拟器用测试号验证, 避免污染真实账号数据。
-- **设备是稀缺资源**: 模拟器只跑 debug 包; vivo 只在 release 冒烟, 且会被用户拿走。
+- **两台模拟器都只跑 debug 包**: a34/a36 可并行分担批次, 但端口(5554/5556)与账号写入要错开; vivo 只在 release 冒烟, 且会被用户拿走。
 - **长跑任务设时间盒**: 子代理单批 15 分钟无进展就落盘卡点收尾, 换直连模型重派。

@@ -7,7 +7,8 @@
 
 | 端 | 环境 |
 |---|---|
-| Android | AVD `a36`(API 36 / Android 16, x86_64, google_apis),无窗口启动 |
+| Android | AVD **两台**: `a34`(API 34) / `a36`(API 36 / Android 16), x86_64 google_apis, 无窗口启动。
+先启的那台占 5554, 第二台 5556; 命令一律带 `adb -s emulator-XXXX`。两台可并行跑不同批次(写操作别抢同一账号) |
 | Linux | Xvfb `:99`(1280x720)+ `GDK_BACKEND=x11`,`flutter build linux --debug` |
 
 启动/安装:
@@ -17,6 +18,8 @@ source tools/env.sh
 ~/bin/avd headless a36
 adb -s emulator-5554 install -r -t ui/build/app/outputs/flutter-apk/app-debug.apk
 adb -s emulator-5554 shell monkey -p com.minincm.minincm -c android.intent.category.LAUNCHER 1
+# 第二台: ~/bin/avd headless a34  ->  emulator-5556
+# 两台都装: for d in emulator-5554 emulator-5556; do adb -s $d install -r -t <apk>; done
 ```
 
 Linux(注意先清代理,见第 5 节):
