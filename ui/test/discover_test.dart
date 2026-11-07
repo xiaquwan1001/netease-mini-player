@@ -42,7 +42,7 @@ void main() {
     List<rust.SongDto>? played;
     int? playedIndex;
     await tester.pumpWidget(host(() {
-      showDiscoverSheet(
+      showDiscoverPage(
         tester.element(find.text('open')),
         onPlaySongs: (songs, index) {
           played = songs;
@@ -69,7 +69,7 @@ void main() {
   testWidgets('每日推荐: 歌单页签展示并可打开', (tester) async {
     rust.PlaylistDto? opened;
     await tester.pumpWidget(host(() {
-      showDiscoverSheet(
+      showDiscoverPage(
         tester.element(find.text('open')),
         onPlaySongs: (_, _) {},
         onOpenPlaylist: (pl) => opened = pl,
@@ -83,14 +83,16 @@ void main() {
     await tester.pumpAndSettle();
     // 歌单名称 + 曲目数
     expect(find.text('12 首'), findsOneWidget);
-    await tester.tap(find.text('推荐歌单').last);
+    // 全页后 AppBar 的 TabBar 在树里排在 body 之后, find.text().last 会命中
+    // tab 标签而不是列表行, 因此这里显式定位列表行。
+    await tester.tap(find.widgetWithText(ListTile, '推荐歌单'));
     await tester.pumpAndSettle();
     expect(opened?.id, BigInt.from(9));
   });
 
   testWidgets('每日推荐: 加载失败展示错误与重试', (tester) async {
     await tester.pumpWidget(host(() {
-      showDiscoverSheet(
+      showDiscoverPage(
         tester.element(find.text('open')),
         onPlaySongs: (_, _) {},
         onOpenPlaylist: (_) {},
@@ -106,7 +108,7 @@ void main() {
   testWidgets('最近听过: 列表可点并回调', (tester) async {
     List<rust.SongDto>? played;
     await tester.pumpWidget(host(() {
-      showRecentSheet(
+      showRecentPage(
         tester.element(find.text('open')),
         onPlay: (songs, index) => played = songs,
         loadRecent: () async => [song(3, '最近一首')],
@@ -126,7 +128,7 @@ void main() {
   testWidgets('最近听过: 单曲/专辑/歌单/播客四个分类各自渲染', (tester) async {
     rust.AlbumItemDto? openedAlbum;
     await tester.pumpWidget(host(() {
-      showRecentSheet(
+      showRecentPage(
         tester.element(find.text('open')),
         onPlay: (_, _) {},
         loadRecent: () async => [song(3, '最近一首')],
@@ -171,7 +173,7 @@ void main() {
     rust.PlaylistDto? openedPlaylist;
     rust.PodcastRadioDto? openedPodcast;
     await tester.pumpWidget(host(() {
-      showRecentSheet(
+      showRecentPage(
         tester.element(find.text('open')),
         onPlay: (_, _) {},
         loadRecent: () async => const [],
@@ -213,7 +215,7 @@ void main() {
   testWidgets('每日推荐: 不感兴趣把歌从列表里去掉', (tester) async {
     final disliked = <String>[];
     await tester.pumpWidget(host(() {
-      showDiscoverSheet(
+      showDiscoverPage(
         tester.element(find.text('open')),
         onPlaySongs: (_, __) {},
         onOpenPlaylist: (_) {},
@@ -237,7 +239,7 @@ void main() {
   testWidgets('历史日推: 日期列表 → 某天的歌单', (tester) async {
     List<rust.SongDto>? played;
     await tester.pumpWidget(host(() {
-      showDiscoverSheet(
+      showDiscoverPage(
         tester.element(find.text('open')),
         onPlaySongs: (songs, index) => played = songs,
         onOpenPlaylist: (_) {},

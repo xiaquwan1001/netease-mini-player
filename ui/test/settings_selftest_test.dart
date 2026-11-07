@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
-import 'package:minincm/src/settings_view.dart';
+import 'package:minincm/src/settings_diagnostics_page.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -120,23 +120,18 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('不注入 ping 时 SettingsView 仍能正常 build', (tester) async {
+  testWidgets('不注入 ping 时诊断页仍能正常 build', (tester) async {
     RustLib.initMock(api: _FakeRustApi());
-    // 列表较长, 拉大视口让「诊断」节进入懒加载视窗
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(800, 2200);
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(host(SettingsView(
-      info: fakeInfo(),
-      isAndroid: false,
-      onLogin: () {},
-      onLogout: () async {},
-      onShowAccounts: () {},
-      onClearSearchHistory: () {},
-    )));
+    // 批次 C: 自检/设备ID/数据目录搬到了「诊断与数据」二级页(审查 P1-7.9)
+    await tester.pumpWidget(host(DiagnosticsPage(info: fakeInfo())));
     await tester.pump();
     expect(find.text('诊断'), findsOneWidget);
     expect(find.text('Rust 通道自检'), findsOneWidget);
+    expect(find.text('设备 ID'), findsOneWidget);
+    expect(find.text('dev-1'), findsOneWidget);
     expect(tester.takeException(), isNull);
     // 不点自检: 默认 rust.ping 需要真实通道, 这里只验证挂载与 build.
   });

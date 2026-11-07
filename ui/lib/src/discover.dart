@@ -4,7 +4,6 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show FullError;
-import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'toast.dart' show showToastWith;
 
@@ -13,9 +12,12 @@ typedef PlaylistListLoader = Future<List<rust.PlaylistDto>> Function();
 typedef DateListLoader = Future<List<String>> Function();
 typedef HistorySongsLoader = Future<List<rust.SongDto>> Function(String date);
 
-/// 每日推荐(原版): 推荐歌曲 / 推荐歌单 / 历史日推 三个页签.
+/// 每日推荐: 推荐歌曲 / 推荐歌单 / 历史日推 三个页签.
 /// loadSongs/loadPlaylists/loadHistoryDates 可注入(测试用), 默认走 Rust 接口.
-Future<void> showDiscoverSheet(
+///
+/// 审查 §5.6: 3 个列表 + 内部二级层级塞进 72% 高的 sheet 局促, 改为全页
+/// [Scaffold](与歌单详情/新歌新碟一致); 行为与注入点不变。
+Future<void> showDiscoverPage(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
@@ -28,52 +30,76 @@ Future<void> showDiscoverSheet(
 }) {
   final songs = loadSongs ?? rust.dailyRecommendSongs;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (sheetContext) => DefaultTabController(
-      length: 3,
-      child: SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.72,
-          child: Column(
-            children: [
-              SheetHeader(
-                title: '每日推荐',
-                onClose: () => Navigator.pop(sheetContext),
-              ),
-              const TabBar(
-                tabs: [
-                  Tab(text: '推荐歌曲'),
-                  Tab(text: '推荐歌单'),
-                  Tab(text: '历史日推'),
-                ],
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _DailySongsTab(
-                      load: songs,
-                      onPlay: onPlaySongs,
-                      onDislike: onDislike,
-                    ),
-                    _DailyPlaylistsTab(load: playlists, onOpen: onOpenPlaylist),
-                    _HistoryTab(
-                      loadDates: loadHistoryDates ?? rust.historyRecommendDates,
-                      loadSongs: loadHistorySongs ??
-                          (date) => rust.historyRecommendSongs(date: date),
-                      onPlay: onPlaySongs,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => DailyRecommendPage(
+        loadSongs: songs,
+        loadPlaylists: playlists,
+        loadHistoryDates: loadHistoryDates ?? rust.historyRecommendDates,
+        loadHistorySongs: loadHistorySongs ??
+            (date) => rust.historyRecommendSongs(date: date),
+        onPlaySongs: onPlaySongs,
+        onOpenPlaylist: onOpenPlaylist,
+        onDislike: onDislike,
       ),
     ),
   );
+}
+
+/// 每日推荐全页(原 showDiscoverSheet 的弹层内容)。
+class DailyRecommendPage extends StatelessWidget {
+  const DailyRecommendPage({
+    super.key,
+    required this.loadSongs,
+    required this.loadPlaylists,
+    required this.loadHistoryDates,
+    required this.loadHistorySongs,
+    required this.onPlaySongs,
+    required this.onOpenPlaylist,
+    this.onDislike,
+  });
+
+  final SongListLoader loadSongs;
+  final PlaylistListLoader loadPlaylists;
+  final DateListLoader loadHistoryDates;
+  final HistorySongsLoader loadHistorySongs;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final Future<void> Function(rust.SongDto song)? onDislike;
+
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('每日推荐'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '推荐歌曲'),
+              Tab(text: '推荐歌单'),
+              Tab(text: '历史日推'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _DailySongsTab(
+              load: loadSongs,
+              onPlay: onPlaySongs,
+              onDislike: onDislike,
+            ),
+            _DailyPlaylistsTab(load: loadPlaylists, onOpen: onOpenPlaylist),
+            _HistoryTab(
+              loadDates: loadHistoryDates,
+              loadSongs: loadHistorySongs,
+              onPlay: onPlaySongs,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DailySongsTab extends StatefulWidget {
@@ -243,6 +269,22 @@ class _HistoryTabState extends State<_HistoryTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    // 审查 P1-7.14: 「某一天的日推」是本页内部的二级层级,
+    // 系统返回键 / AppBar 返回箭头都应先退回日期列表, 而不是直接关掉整页。
+    return PopScope(
+      canPop: _date == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _date == null) return;
+        setState(() {
+          _date = null;
+          _songs = null;
+        });
+      },
+      child: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final theme = Theme.of(context);
     if (_error != null) {
       final retry = _retry;
@@ -402,7 +444,9 @@ typedef PodcastListLoader = Future<List<rust.PodcastRadioDto>> Function();
 
 /// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
 /// 都来自服务端播放记录(需登录), 未登录时由调用方回落到本地历史.
-Future<void> showRecentSheet(
+///
+/// 审查 §5.6: 4 个列表放进 72% 高的 sheet 同样局促, 改为全页 [Scaffold]。
+Future<void> showRecentPage(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlay,
   SongListLoader? loadRecent,
@@ -417,34 +461,69 @@ Future<void> showRecentSheet(
   final albums = loadAlbums ?? () => rust.recentAlbums(limit: 100);
   final playlists = loadPlaylists ?? () => rust.recentPlaylists(limit: 100);
   final podcasts = loadPodcasts ?? () => rust.recentPodcasts(limit: 100);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (sheetContext) => DefaultTabController(
+  return Navigator.of(context).push<void>(
+    MaterialPageRoute<void>(
+      builder: (_) => RecentPlayedPage(
+        loadRecent: songs,
+        loadAlbums: albums,
+        loadPlaylists: playlists,
+        loadPodcasts: podcasts,
+        onPlay: onPlay,
+        onOpenPlaylist: onOpenPlaylist,
+        onOpenPodcast: onOpenPodcast,
+        onOpenAlbum: onOpenAlbum,
+      ),
+    ),
+  );
+}
+
+/// 最近听过全页(原 showRecentSheet 的弹层内容)。
+class RecentPlayedPage extends StatelessWidget {
+  const RecentPlayedPage({
+    super.key,
+    required this.loadRecent,
+    required this.loadAlbums,
+    required this.loadPlaylists,
+    required this.loadPodcasts,
+    required this.onPlay,
+    this.onOpenPlaylist,
+    this.onOpenPodcast,
+    this.onOpenAlbum,
+  });
+
+  final SongListLoader loadRecent;
+  final AlbumListLoader loadAlbums;
+  final PlaylistListLoader loadPlaylists;
+  final PodcastListLoader loadPodcasts;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final void Function(rust.PlaylistDto playlist)? onOpenPlaylist;
+  final void Function(rust.PodcastRadioDto radio)? onOpenPodcast;
+  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+
+  @override
+  Widget build(BuildContext context) {
+    // 字段是 public 的, 不能直接靠 null 检查做类型提升 —— 提到局部变量
+    final openAlbum = onOpenAlbum;
+    final openPlaylist = onOpenPlaylist;
+    final openPodcast = onOpenPodcast;
+    return DefaultTabController(
       length: 4,
-      child: SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.72,
-          child: Column(
-            children: [
-              SheetHeader(
-                title: '最近听过',
-                onClose: () => Navigator.pop(sheetContext),
-              ),
-              const TabBar(
-                tabs: [
-                  Tab(text: '单曲'),
-                  Tab(text: '专辑'),
-                  Tab(text: '歌单'),
-                  Tab(text: '播客'),
-                ],
-              ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _RecentBucketTab<rust.SongDto>(
-                      load: songs,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('最近听过'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: '单曲'),
+              Tab(text: '专辑'),
+              Tab(text: '歌单'),
+              Tab(text: '播客'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _RecentBucketTab<rust.SongDto>(
+                      load: loadRecent,
                       emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
                       itemBuilder: (context, s, i, list) => _SongRow(
                         song: s,
@@ -458,7 +537,7 @@ Future<void> showRecentSheet(
                       ),
                     ),
                     _RecentBucketTab<rust.AlbumItemDto>(
-                      load: albums,
+                      load: loadAlbums,
                       emptyText: '还没有最近听过的专辑',
                       itemBuilder: (context, a, i, _) => ListTile(
                         leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
@@ -472,16 +551,16 @@ Future<void> showRecentSheet(
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: onOpenAlbum == null
+                        onTap: openAlbum == null
                             ? null
                             : () {
                                 Navigator.pop(context);
-                                onOpenAlbum(a);
+                                openAlbum(a);
                               },
                       ),
                     ),
                     _RecentBucketTab<rust.PlaylistDto>(
-                      load: playlists,
+                      load: loadPlaylists,
                       emptyText: '还没有最近听过的歌单',
                       itemBuilder: (context, pl, i, _) => ListTile(
                         leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
@@ -493,16 +572,16 @@ Future<void> showRecentSheet(
                         subtitle: pl.trackCount > BigInt.zero
                             ? Text('${pl.trackCount} 首')
                             : null,
-                        onTap: onOpenPlaylist == null
+                        onTap: openPlaylist == null
                             ? null
                             : () {
                                 Navigator.pop(context);
-                                onOpenPlaylist(pl);
+                                openPlaylist(pl);
                               },
                       ),
                     ),
                     _RecentBucketTab<rust.PodcastRadioDto>(
-                      load: podcasts,
+                      load: loadPodcasts,
                       emptyText: '还没有最近听过的播客',
                       itemBuilder: (context, r, i, _) => ListTile(
                         leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
@@ -519,23 +598,19 @@ Future<void> showRecentSheet(
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: onOpenPodcast == null
+                        onTap: openPodcast == null
                             ? null
                             : () {
                                 Navigator.pop(context);
-                                onOpenPodcast(r);
+                                openPodcast(r);
                               },
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          ],
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// 一个分类的列表: 自己加载 + 自己保活, 切 tab 不重新请求.

@@ -108,8 +108,9 @@ void main() {
     expect(find.text('粤语流行'), findsOneWidget);
     expect(find.text('华语流行'), findsOneWidget);
 
-    // 每日推荐歌曲
-    expect(find.text('每日推荐歌曲'), findsOneWidget);
+    // 每日推荐(批次 C: 「每日推荐歌曲」与「每日推荐歌单」合并成一格;
+    // 「每日推荐」文案同时出现在快捷卡与区块标题上, 所以是 findsNWidgets(2))
+    expect(find.text('每日推荐'), findsNWidgets(2));
     expect(find.text('每日一歌'), findsOneWidget);
     await tester.tap(find.text('每日二歌'));
     expect(played?.length, 2);
@@ -118,12 +119,13 @@ void main() {
     // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
-    // 文案统一后所有区块出口都叫「全部」: 排行榜 / 每日推荐 / 新歌 / 新碟 / 播客
+    // 文案统一后所有区块出口都叫「全部」, 合并后仍是 5 个:
+    // 每日推荐 / 排行榜 / 推荐歌单 / 新歌新碟 / 推荐播客
     expect(find.text('更多'), findsNothing);
     expect(find.text('查看全部'), findsNothing);
     expect(find.text('全部'), findsNWidgets(5));
-    // at(2) = 新歌速递 标题右侧那个(tab 顺序: 排行榜, 每日推荐, 新歌, 新碟, 播客)
-    await tester.tap(find.text('全部').at(2));
+    // at(3) = 新歌新碟 标题右侧那个(顺序: 每日推荐, 排行榜, 推荐歌单, 新歌新碟, 播客)
+    await tester.tap(find.text('全部').at(3));
     await tester.pumpAndSettle();
     expect(moreTaps, 1);
 

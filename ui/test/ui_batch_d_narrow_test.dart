@@ -43,7 +43,7 @@ void main() {
     narrow(tester);
     await tester.pumpWidget(scaled(Builder(
       builder: (ctx) => TextButton(
-        onPressed: () => showDiscoverSheet(
+        onPressed: () => showDiscoverPage(
           ctx,
           onPlaySongs: (_, __) {},
           onOpenPlaylist: (_) {},

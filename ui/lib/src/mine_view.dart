@@ -30,6 +30,7 @@ class MineView extends StatefulWidget {
     required this.onOpenLiked,
     this.onOpenMessages,
     this.onOpenMedals,
+    this.onOpenVip,
     this.loadMessageCounts,
     this.onPlayLiked,
     this.loadLiked,
@@ -63,6 +64,10 @@ class MineView extends StatefulWidget {
 
   /// 等级/勋章墙入口(未登录或未接线时不显示)
   final VoidCallback? onOpenMedals;
+
+  /// 黑胶会员入口(审查 P1-7.9: 会员是账号资产, 从设置搬到「我的」;
+  /// 不传则不显示该行)
+  final VoidCallback? onOpenVip;
 
   /// 未读计数(缺省走 rust.messageCounts)
   final MessageCountsLoader? loadMessageCounts;
@@ -148,6 +153,19 @@ class _MineViewState extends State<MineView> {
             MessageEntryCard(
               onOpen: widget.onOpenMessages!,
               load: widget.loadMessageCounts,
+            ),
+          ],
+          if (widget.onOpenVip != null) ...[
+            const SizedBox(height: 4),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('黑胶会员'),
+                subtitle: const Text('签到 / 任务 / 成长值(只读)'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: widget.onOpenVip,
+              ),
             ),
           ],
           if (widget.loggedIn) ...[

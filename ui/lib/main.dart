@@ -29,6 +29,7 @@ import 'src/search_landing.dart';
 import 'src/search_exact_bar.dart';
 import 'src/search_results.dart';
 import 'src/search_suggest.dart';
+import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/song_actions.dart';
 import 'src/song_tile.dart';
@@ -696,7 +697,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openDiscover() {
-    showDiscoverSheet(
+    showDiscoverPage(
       context,
       onPlaySongs: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
@@ -714,7 +715,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openRecent() {
-    showRecentSheet(
+    showRecentPage(
       context,
       onPlay: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: _openPlaylist,
@@ -1017,7 +1018,8 @@ class _HomePageState extends State<HomePage> {
 
   // ---------------- 登录 ----------------
 
-  /// 设置页 -> 黑胶会员(只读)页面; 未登录时页面内给「登录」入口
+  /// 黑胶会员(只读)页面; 未登录时页面内给「登录」入口。
+  /// 入口:「我的」页的「黑胶会员」行 / 账号与会员页的「会员」分组(审查 P1-7.9)。
   Future<void> _openVip() => showVipPage(context, onLogin: _login);
 
   Future<void> _login() async {
@@ -1045,91 +1047,26 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 账号面板: 账号簿(记住的账号可一键切换) + 添加账号 + 退出登录
-  /// 弹出式菜单在 AppBar 里不好点, 用底部面板; 切换账号不需要重新扫码,
-  /// 因为账号簿只存"登录凭据", 设备指纹始终是同一套。
-  Future<void> _showAccountSheet() async {
-    var saved = const <rust.AccountDto>[];
-    try {
-      saved = await rust.accounts();
-    } catch (_) {
-      // 账号簿读不出来不影响登录态, 面板里只显示"添加账号"
-    }
-    if (!mounted) return;
-    final loggedIn = _info?.loggedIn == true;
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              dense: true,
-              title: const Text('账号'),
-              subtitle: Text(loggedIn ? '退出只清登录凭据, 设备指纹保持不变' : '未登录'),
-            ),
-            const Divider(height: 1),
-            if (saved.isEmpty)
-              const ListTile(
-                dense: true,
-                title: Text('还没有记住的账号'),
-                subtitle: Text('登录一次后会自动记住, 之后可直接切换'),
-              ),
-            for (final account in saved)
-              ListTile(
-                leading: Icon(account.active ? Icons.check_circle : Icons.person_outline),
-                title: Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        account.nickname.isEmpty ? '账号 ${account.userId}' : account.nickname,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (account.vip) const VipBadge(small: true),
-                  ],
-                ),
-                subtitle: Text(account.active ? '当前账号' : '点击切换'),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline),
-                  tooltip: '忘记这个账号',
-                  onPressed: () async {
-                    Navigator.pop(sheetContext);
-                    await rust.accountRemove(userId: account.userId);
-                    await _refreshInfo();
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已从账号簿移除')),
-                    );
-                  },
-                ),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _switchAccount(account);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('添加账号'),
-              subtitle: const Text('打开官方登录页'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _login();
-              },
-            ),
-            if (loggedIn)
-              ListTile(
-                leading: const Icon(Icons.logout),
-                title: const Text('退出登录'),
-                subtitle: const Text('账号仍留在账号簿, 下次一键切回'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _logout();
-                },
-              ),
-          ],
-        ),
-      ),
+  /// 账号与会员页 —— 全 App 唯一账号面(账号簿/切换/添加/退出登录/黑胶会员).
+  /// 审查 P1-7.10: 原先账号入口 3 处(AppBar / 我的页 / 设置页), 而「退出登录」
+  /// 只在设置里; 现在入口只剩「我的」页资料头, 退出登录在账号页底部。
+  Future<void> _openAccountPage() {
+    return showAccountPage(
+      context,
+      info: _info,
+      isAndroid: _auth.isAndroid,
+      onLogin: _login,
+      onLogout: () => _logout(),
+      onOpenVip: _openVip,
+      onSwitchAccount: _switchAccount,
+      onRemoveAccount: (account) async {
+        await rust.accountRemove(userId: account.userId);
+        await _refreshInfo();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已从账号簿移除')),
+        );
+      },
     );
   }
 
@@ -1823,23 +1760,15 @@ class _HomePageState extends State<HomePage> {
                   )
                 : null),
         actions: [
-          // 登录(WebView)/账号簿/退出登录只在安卓端(桌面版还没有网页登录宿主)
-          if (_auth.isAndroid) ...[
-            if (_info?.loggedIn == true)
-              const SizedBox.shrink()
-            else
-              TextButton.icon(
-                onPressed: _login,
-                icon: const Icon(Icons.login, size: 18),
-                label: const Text('登录'),
-              ),
-            // 账号簿入口常驻: 退出后账号仍在簿里, 需要能一键切回
-            IconButton(
-              tooltip: '账号',
-              icon: const Icon(Icons.account_circle),
-              onPressed: _showAccountSheet,
+          // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
+          // 审查 P1-7.10: 账号入口 3→1 —— AppBar 的账号图标已删,
+          // 账号簿/切换/退出登录统一走「我的」页资料头(登录态切换后常驻)。
+          if (_auth.isAndroid && _info?.loggedIn != true)
+            TextButton.icon(
+              onPressed: _login,
+              icon: const Icon(Icons.login, size: 18),
+              label: const Text('登录'),
             ),
-          ],
         ],
       ),
       body: Column(
@@ -2051,7 +1980,7 @@ class _HomePageState extends State<HomePage> {
           key: ValueKey('mine-${_info?.loggedIn}-${_info?.vip}'),
           loggedIn: _info?.loggedIn == true,
           onLogin: _login,
-          onOpenAccounts: _showAccountSheet,
+          onOpenAccounts: _openAccountPage,
           onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
@@ -2069,19 +1998,14 @@ class _HomePageState extends State<HomePage> {
           onOpenLiked: _openLikedDetail,
           onOpenMessages: () => showMessagesPage(context),
           onOpenMedals: () => showMedalWall(context, isVip: _info?.vip == true),
+          onOpenVip: _openVip,
           onPlayLiked: (songs, i) =>
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );
       case 4:
-        return SettingsView(
-          info: _info,
-          isAndroid: _auth.isAndroid,
-          onLogin: _login,
-          onLogout: () => _logout(),
-          onShowAccounts: _showAccountSheet,
-          onClearSearchHistory: _clearSearchHistory,
-          onOpenVip: _openVip,
-        );
+        // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口(审查 P1-7.9):
+        // 账号/会员在「我的」, 诊断与数据是设置 → 关于里的二级页。
+        return SettingsView(info: _info);
       default:
         return _buildSearchTab();
     }

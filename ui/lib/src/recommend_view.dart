@@ -102,19 +102,18 @@ class _RecommendViewState extends State<RecommendView> {
       onRefresh: () async => setState(() {}),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        // 审查 P1-7.8 / §5.5: 首屏平级模块 8 个 + 1 个游离按钮 → 5 个。
+        //  - 每日推荐歌曲 + 每日推荐歌单      → 合并为「每日推荐」(歌单在落地页第二个 tab)
+        //  - 新歌速递 + 新碟上架              → 合并为「新歌新碟」(同一个「全部」)
+        //  - 风格推荐                        → 下沉为排行榜区块内一行 chips(不再独占区块)
+        //  - 歌单广场(游离按钮)              → 提升为「推荐歌单」标题右侧的「全部」
+        //  - 推荐播客                        → 保留, 降到最底(第 2 屏)
+        // 每个模块的落地页/回调都保持原样, 可达性零损失(见 test/ui_batch_c_ia_test.dart)。
         children: [
           _QuickActions(
             onOpenDaily: widget.onOpenDaily,
             onPlayFm: _playFm,
             onHeartMode: widget.onHeartMode,
-          ),
-          const SizedBox(height: 16),
-          _ChartSection(load: _charts, onOpen: widget.onOpenPlaylist),
-          const SizedBox(height: 12),
-          _StyleSection(
-            load: _styles,
-            onPlaySongs: widget.onPlaySongs,
-            onOpenPlaylist: widget.onOpenPlaylist,
           ),
           const SizedBox(height: 16),
           _DailySongsSection(
@@ -123,38 +122,31 @@ class _RecommendViewState extends State<RecommendView> {
             onOpenAll: widget.onOpenDaily,
           ),
           const SizedBox(height: 16),
-          _NewSongsSection(
-            load: _newSongs,
-            onPlay: widget.onPlaySongs,
-            onMore: widget.onOpenNewRelease,
+          _ChartSection(
+            load: _charts,
+            onOpen: widget.onOpenPlaylist,
+            loadStyles: _styles,
+            onPlaySongs: widget.onPlaySongs,
           ),
           const SizedBox(height: 16),
           _DailyPlaylistsSection(
             load: _dailyPlaylists,
             loggedIn: widget.loggedIn,
             onOpen: widget.onOpenPlaylist,
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () => showPlaylistSquare(
-                context,
-                onOpenPlaylist: widget.onOpenPlaylist,
-              ),
-              icon: const Icon(Icons.grid_view, size: 18),
-              label: const Text('歌单广场'),
+            onOpenAll: () => showPlaylistSquare(
+              context,
+              onOpenPlaylist: widget.onOpenPlaylist,
             ),
           ),
-          if (widget.onOpenAlbum != null) ...[
-            const SizedBox(height: 16),
-            _NewAlbumsSection(
-              load: _newAlbums,
-              onOpen: widget.onOpenAlbum!,
-              loggedIn: widget.loggedIn,
-              onMore: widget.onOpenNewRelease,
-            ),
-          ],
+          const SizedBox(height: 16),
+          _NewReleaseSection(
+            loadSongs: _newSongs,
+            loadAlbums: widget.onOpenAlbum == null ? null : _newAlbums,
+            loggedIn: widget.loggedIn,
+            onPlay: widget.onPlaySongs,
+            onOpenAlbum: widget.onOpenAlbum,
+            onMore: widget.onOpenNewRelease,
+          ),
           const SizedBox(height: 16),
           _PodcastSection(
             load: _podcasts,
@@ -411,25 +403,18 @@ class _ActionCard extends StatelessWidget {
 
 /// 新歌速递: 一排歌曲(点任意一首按这个列表起播)
 class _NewSongsSection extends StatelessWidget {
-  const _NewSongsSection({required this.load, required this.onPlay, this.onMore});
+  const _NewSongsSection({required this.load, required this.onPlay});
 
   final Future<List<rust.SongDto>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
-
-  /// "全部"入口(新歌/新碟/歌手分类页)
-  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
-          title: '新歌速递',
-          trailing: onMore == null
-              ? null
-              : TextButton(onPressed: onMore, child: const Text('全部')),
-        ),
+        // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
+        const _Caption('新歌速递'),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
           emptyText: '暂时没有新歌',
@@ -484,27 +469,19 @@ class _NewAlbumsSection extends StatelessWidget {
     required this.load,
     required this.onOpen,
     required this.loggedIn,
-    this.onMore,
   });
 
   final Future<List<rust.AlbumItemDto>> Function() load;
   final void Function(rust.AlbumItemDto album) onOpen;
   final bool loggedIn;
 
-  /// "全部"入口(新歌/新碟/歌手分类页)
-  final VoidCallback? onMore;
-
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
-          title: '新碟上架',
-          trailing: onMore == null
-              ? null
-              : TextButton(onPressed: onMore, child: const Text('全部')),
-        ),
+        // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
+        const _Caption('新碟上架'),
         _AsyncSection<List<rust.AlbumItemDto>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
@@ -530,14 +507,90 @@ class _NewAlbumsSection extends StatelessWidget {
   }
 }
 
+/// 小标题: 合并区块内部的次级分类名(不是平级区块, 没有自己的「全部」出口)。
+class _Caption extends StatelessWidget {
+  const _Caption(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6, top: 2),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium
+            ?.copyWith(color: theme.colorScheme.outline),
+      ),
+    );
+  }
+}
+
+/// 新歌新碟: 新歌速递 + 新碟上架 合并成一格(审查 §5.5: 两者原本各自有一个
+/// 「全部」且都指向同一个 NewReleasePage, 重复入口让人以为内容不同)。
+/// 一个标题 + 一个「全部」, 内部用两个小标题区分; 两个列表仍各自独立加载。
+class _NewReleaseSection extends StatelessWidget {
+  const _NewReleaseSection({
+    required this.loadSongs,
+    required this.loadAlbums,
+    required this.loggedIn,
+    required this.onPlay,
+    this.onOpenAlbum,
+    this.onMore,
+  });
+
+  final Future<List<rust.SongDto>> Function() loadSongs;
+
+  /// 为 null 表示不显示新碟(上层没给 onOpenAlbum)
+  final Future<List<rust.AlbumItemDto>> Function()? loadAlbums;
+  final bool loggedIn;
+  final void Function(List<rust.SongDto> songs, int index) onPlay;
+  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+
+  /// "全部"入口(新歌/新碟/歌手分类页)
+  final VoidCallback? onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final albums = loadAlbums;
+    final open = onOpenAlbum;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionHeader(
+          title: '新歌新碟',
+          trailing: onMore == null
+              ? null
+              : TextButton(onPressed: onMore, child: const Text('全部')),
+        ),
+        _NewSongsSection(load: loadSongs, onPlay: onPlay),
+        if (albums != null && open != null) ...[
+          const SizedBox(height: 10),
+          _NewAlbumsSection(load: albums, onOpen: open, loggedIn: loggedIn),
+        ],
+      ],
+    );
+  }
+}
+
 // ---------------- 排行榜 ----------------
 
 /// 排行榜入口: 飙升榜/新歌榜/热歌榜…(榜单本身就是歌单, 点开走歌单详情页)
 class _ChartSection extends StatelessWidget {
-  const _ChartSection({required this.load, required this.onOpen});
+  const _ChartSection({
+    required this.load,
+    required this.onOpen,
+    required this.loadStyles,
+    required this.onPlaySongs,
+  });
 
   final Future<List<rust.ChartSummaryDto>> Function() load;
   final void Function(rust.PlaylistDto playlist) onOpen;
+
+  /// 风格推荐下沉到这里: 一行 chips, 不再独占一个平级区块(审查 §5.5)
+  final Future<List<rust.StyleTagDto>> Function() loadStyles;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
   Widget build(BuildContext context) {
@@ -579,17 +632,21 @@ class _ChartSection extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 8),
+        _StyleChips(load: loadStyles, onPlaySongs: onPlaySongs, onOpenPlaylist: onOpen),
       ],
     );
   }
 }
 
-// ---------------- 风格推荐入口 ----------------
+// ---------------- 风格推荐(下沉为排行榜区块内的一行 chips) ----------------
 
 /// 系统按听歌口味算出来的曲风(网易云"风格推荐").
 /// 点一个风格进风格详情页: 该曲风下的歌单 + 歌曲.
-class _StyleSection extends StatelessWidget {
-  const _StyleSection({
+/// 审查 §5.5: 不再单独占一个平级区块, 改为排行榜下方的次级 chips;
+/// 可达性不变(每枚 chip 仍进 showStyleDetail)。
+class _StyleChips extends StatelessWidget {
+  const _StyleChips({
     required this.load,
     required this.onPlaySongs,
     required this.onOpenPlaylist,
@@ -605,14 +662,7 @@ class _StyleSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
-          title: '风格推荐',
-          trailing: Text(
-            '按你的听歌口味',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.outline),
-          ),
-        ),
+        _Caption('风格推荐'),
         _AsyncSection<List<rust.StyleTagDto>>(
           load: load,
           emptyText: '暂时没有风格推荐',
@@ -663,8 +713,10 @@ class _DailySongsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 审查 §5.5: 「每日推荐歌曲」+「每日推荐歌单」合并成一格「每日推荐」,
+        // 歌单落在落地页的第二个 tab; 同屏不再出现第二个「查看全部」。
         _SectionHeader(
-          title: '每日推荐歌曲',
+          title: '每日推荐',
           // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
           trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
         ),
@@ -723,18 +775,28 @@ class _DailyPlaylistsSection extends StatelessWidget {
     required this.load,
     required this.loggedIn,
     required this.onOpen,
+    this.onOpenAll,
   });
 
   final Future<List<rust.PlaylistDto>> Function() load;
   final bool loggedIn;
   final void Function(rust.PlaylistDto playlist) onOpen;
 
+  /// 「全部」出口: 歌单广场(原先是区块下方一枚游离的「歌单广场」按钮,
+  /// 审查 §5.5 要求提到标题右侧, 与其它区块一致)
+  final VoidCallback? onOpenAll;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '推荐歌单'),
+        _SectionHeader(
+          title: '推荐歌单',
+          trailing: onOpenAll == null
+              ? null
+              : TextButton(onPressed: onOpenAll, child: const Text('全部')),
+        ),
         _AsyncSection<List<rust.PlaylistDto>>(
           load: load,
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
