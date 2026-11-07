@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.CommentDto comment(
+rust.Comment comment(
   int id,
   String content, {
   int likedCount = 0,
@@ -12,7 +12,7 @@ rust.CommentDto comment(
   String ipLocation = '',
   bool hot = false,
 }) =>
-    rust.CommentDto(
+    rust.Comment(
       id: BigInt.from(id),
       userId: BigInt.from(100 + id),
       userName: '用户$id',
@@ -26,9 +26,9 @@ rust.CommentDto comment(
       hot: hot,
     );
 
-rust.CommentPageDto page(List<rust.CommentDto> items,
+rust.CommentPage page(List<rust.Comment> items,
         {String threadId = 'R_SO_4_1'}) =>
-    rust.CommentPageDto(
+    rust.CommentPage(
       threadId: threadId,
       comments: items,
       total: BigInt.from(items.length),
@@ -134,7 +134,7 @@ void main() {
       loadPage: (limit, offset) async {
         offsets.add(offset);
         if (offset == 0) {
-          return rust.CommentPageDto(
+          return rust.CommentPage(
             threadId: 'R_SO_4_1',
             comments: [
               comment(1, '热评一', hot: true),
@@ -145,7 +145,7 @@ void main() {
             hasMore: true,
           );
         }
-        return rust.CommentPageDto(
+        return rust.CommentPage(
           threadId: 'R_SO_4_1',
           comments: [comment(2, '热评二', hot: true), comment(4, '最新二')],
           total: BigInt.from(5),

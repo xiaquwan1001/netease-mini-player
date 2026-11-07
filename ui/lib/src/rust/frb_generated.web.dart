@@ -72,13 +72,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChartSummaryDto dco_decode_chart_summary_dto(dynamic raw);
 
   @protected
-  CommentDto dco_decode_comment_dto(dynamic raw);
+  Comment dco_decode_comment(dynamic raw);
 
   @protected
-  CommentPageDto dco_decode_comment_page_dto(dynamic raw);
+  CommentPage dco_decode_comment_page(dynamic raw);
 
   @protected
-  CommentStatsDto dco_decode_comment_stats_dto(dynamic raw);
+  CommentStats dco_decode_comment_stats(dynamic raw);
 
   @protected
   DefaultSearchDto dco_decode_default_search_dto(dynamic raw);
@@ -150,7 +150,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ChartSummaryDto> dco_decode_list_chart_summary_dto(dynamic raw);
 
   @protected
-  List<CommentDto> dco_decode_list_comment_dto(dynamic raw);
+  List<Comment> dco_decode_list_comment(dynamic raw);
 
   @protected
   List<DigitalAlbumEntryDto> dco_decode_list_digital_album_entry_dto(
@@ -257,7 +257,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SearchPodcastDto> dco_decode_list_search_podcast_dto(dynamic raw);
 
   @protected
-  List<SigninDayDto> dco_decode_list_signin_day_dto(dynamic raw);
+  List<SigninDay> dco_decode_list_signin_day(dynamic raw);
 
   @protected
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
@@ -414,10 +414,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchPodcastDto dco_decode_search_podcast_dto(dynamic raw);
 
   @protected
-  SigninDayDto dco_decode_signin_day_dto(dynamic raw);
+  SigninDay dco_decode_signin_day(dynamic raw);
 
   @protected
-  SigninStatusDto dco_decode_signin_status_dto(dynamic raw);
+  SigninStatus dco_decode_signin_status(dynamic raw);
 
   @protected
   SongDto dco_decode_song_dto(dynamic raw);
@@ -546,13 +546,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChartSummaryDto sse_decode_chart_summary_dto(SseDeserializer deserializer);
 
   @protected
-  CommentDto sse_decode_comment_dto(SseDeserializer deserializer);
+  Comment sse_decode_comment(SseDeserializer deserializer);
 
   @protected
-  CommentPageDto sse_decode_comment_page_dto(SseDeserializer deserializer);
+  CommentPage sse_decode_comment_page(SseDeserializer deserializer);
 
   @protected
-  CommentStatsDto sse_decode_comment_stats_dto(SseDeserializer deserializer);
+  CommentStats sse_decode_comment_stats(SseDeserializer deserializer);
 
   @protected
   DefaultSearchDto sse_decode_default_search_dto(SseDeserializer deserializer);
@@ -638,7 +638,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<CommentDto> sse_decode_list_comment_dto(SseDeserializer deserializer);
+  List<Comment> sse_decode_list_comment(SseDeserializer deserializer);
 
   @protected
   List<DigitalAlbumEntryDto> sse_decode_list_digital_album_entry_dto(
@@ -791,9 +791,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<SigninDayDto> sse_decode_list_signin_day_dto(
-    SseDeserializer deserializer,
-  );
+  List<SigninDay> sse_decode_list_signin_day(SseDeserializer deserializer);
 
   @protected
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
@@ -984,10 +982,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchPodcastDto sse_decode_search_podcast_dto(SseDeserializer deserializer);
 
   @protected
-  SigninDayDto sse_decode_signin_day_dto(SseDeserializer deserializer);
+  SigninDay sse_decode_signin_day(SseDeserializer deserializer);
 
   @protected
-  SigninStatusDto sse_decode_signin_status_dto(SseDeserializer deserializer);
+  SigninStatus sse_decode_signin_status(SseDeserializer deserializer);
 
   @protected
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
@@ -1135,19 +1133,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_comment_dto(CommentDto self, SseSerializer serializer);
+  void sse_encode_comment(Comment self, SseSerializer serializer);
 
   @protected
-  void sse_encode_comment_page_dto(
-    CommentPageDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_comment_page(CommentPage self, SseSerializer serializer);
 
   @protected
-  void sse_encode_comment_stats_dto(
-    CommentStatsDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_comment_stats(CommentStats self, SseSerializer serializer);
 
   @protected
   void sse_encode_default_search_dto(
@@ -1255,10 +1247,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_comment_dto(
-    List<CommentDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_comment(List<Comment> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_digital_album_entry_dto(
@@ -1447,8 +1436,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_signin_day_dto(
-    List<SigninDayDto> self,
+  void sse_encode_list_signin_day(
+    List<SigninDay> self,
     SseSerializer serializer,
   );
 
@@ -1720,13 +1709,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_signin_day_dto(SigninDayDto self, SseSerializer serializer);
+  void sse_encode_signin_day(SigninDay self, SseSerializer serializer);
 
   @protected
-  void sse_encode_signin_status_dto(
-    SigninStatusDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_signin_status(SigninStatus self, SseSerializer serializer);
 
   @protected
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);

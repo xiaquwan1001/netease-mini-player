@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/detail_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.CommentDto comment(int id, String content) => rust.CommentDto(
+rust.Comment comment(int id, String content) => rust.Comment(
   id: BigInt.from(id),
   userId: BigInt.from(100 + id),
   userName: '用户$id',
@@ -17,7 +17,7 @@ rust.CommentDto comment(int id, String content) => rust.CommentDto(
   hot: false,
 );
 
-rust.CommentPageDto page(List<rust.CommentDto> items) => rust.CommentPageDto(
+rust.CommentPage page(List<rust.Comment> items) => rust.CommentPage(
   threadId: 'R_SO_4_1',
   comments: items,
   total: BigInt.from(items.length),

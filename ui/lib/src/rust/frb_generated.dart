@@ -102,15 +102,15 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<InboxItemDto>> crateApiCommentMessages({required int limit});
 
-  Future<CommentPageDto> crateApiCommentReplies({
+  Future<CommentPage> crateApiCommentReplies({
     required String threadId,
     required BigInt parentCommentId,
     required int limit,
   });
 
-  Future<CommentStatsDto> crateApiCommentStats({required String threadId});
+  Future<CommentStats> crateApiCommentStats({required String threadId});
 
-  Future<CommentPageDto> crateApiComments({
+  Future<CommentPage> crateApiComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -147,7 +147,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<bool> crateApiDislikeRecommendSong({required BigInt songId});
 
-  Future<CommentPageDto> crateApiEventComments({
+  Future<CommentPage> crateApiEventComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -191,7 +191,7 @@ abstract class RustLibApi extends BaseApi {
     required int offset,
   });
 
-  Future<CommentPageDto> crateApiHotComments({
+  Future<CommentPage> crateApiHotComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -397,9 +397,9 @@ abstract class RustLibApi extends BaseApi {
     required String msg,
   });
 
-  Future<SigninStatusDto> crateApiSignIn();
+  Future<SigninStatus> crateApiSignIn();
 
-  Future<SigninStatusDto> crateApiSigninStatus();
+  Future<SigninStatus> crateApiSigninStatus();
 
   Future<List<Artist>> crateApiSimilarArtists({required BigInt artistId});
 
@@ -766,7 +766,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "comment_messages", argNames: ["limit"]);
 
   @override
-  Future<CommentPageDto> crateApiCommentReplies({
+  Future<CommentPage> crateApiCommentReplies({
     required String threadId,
     required BigInt parentCommentId,
     required int limit,
@@ -786,7 +786,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_comment_page_dto,
+          decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCommentRepliesConstMeta,
@@ -802,7 +802,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<CommentStatsDto> crateApiCommentStats({required String threadId}) {
+  Future<CommentStats> crateApiCommentStats({required String threadId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -816,7 +816,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_comment_stats_dto,
+          decodeSuccessData: sse_decode_comment_stats,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCommentStatsConstMeta,
@@ -830,7 +830,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "comment_stats", argNames: ["threadId"]);
 
   @override
-  Future<CommentPageDto> crateApiComments({
+  Future<CommentPage> crateApiComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -852,7 +852,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_comment_page_dto,
+          decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCommentsConstMeta,
@@ -1171,7 +1171,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<CommentPageDto> crateApiEventComments({
+  Future<CommentPage> crateApiEventComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -1191,7 +1191,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_comment_page_dto,
+          decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiEventCommentsConstMeta,
@@ -1501,7 +1501,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<CommentPageDto> crateApiHotComments({
+  Future<CommentPage> crateApiHotComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -1521,7 +1521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_comment_page_dto,
+          decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiHotCommentsConstMeta,
@@ -3521,7 +3521,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<SigninStatusDto> crateApiSignIn() {
+  Future<SigninStatus> crateApiSignIn() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3534,7 +3534,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_signin_status_dto,
+          decodeSuccessData: sse_decode_signin_status,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSignInConstMeta,
@@ -3548,7 +3548,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "sign_in", argNames: []);
 
   @override
-  Future<SigninStatusDto> crateApiSigninStatus() {
+  Future<SigninStatus> crateApiSigninStatus() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3561,7 +3561,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_signin_status_dto,
+          decodeSuccessData: sse_decode_signin_status,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSigninStatusConstMeta,
@@ -4384,12 +4384,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CommentDto dco_decode_comment_dto(dynamic raw) {
+  Comment dco_decode_comment(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 11)
       throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
-    return CommentDto(
+    return Comment(
       id: dco_decode_u_64(arr[0]),
       userId: dco_decode_u_64(arr[1]),
       userName: dco_decode_String(arr[2]),
@@ -4405,26 +4405,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CommentPageDto dco_decode_comment_page_dto(dynamic raw) {
+  CommentPage dco_decode_comment_page(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 4)
       throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return CommentPageDto(
+    return CommentPage(
       threadId: dco_decode_String(arr[0]),
-      comments: dco_decode_list_comment_dto(arr[1]),
+      comments: dco_decode_list_comment(arr[1]),
       total: dco_decode_u_64(arr[2]),
       hasMore: dco_decode_bool(arr[3]),
     );
   }
 
   @protected
-  CommentStatsDto dco_decode_comment_stats_dto(dynamic raw) {
+  CommentStats dco_decode_comment_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 9)
       throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return CommentStatsDto(
+    return CommentStats(
       threadId: dco_decode_String(arr[0]),
       resourceId: dco_decode_u_64(arr[1]),
       commentCount: dco_decode_u_64(arr[2]),
@@ -4703,9 +4703,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<CommentDto> dco_decode_list_comment_dto(dynamic raw) {
+  List<Comment> dco_decode_list_comment(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_comment_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_comment).toList();
   }
 
   @protected
@@ -4923,9 +4923,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<SigninDayDto> dco_decode_list_signin_day_dto(dynamic raw) {
+  List<SigninDay> dco_decode_list_signin_day(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_signin_day_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_signin_day).toList();
   }
 
   @protected
@@ -5519,29 +5519,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SigninDayDto dco_decode_signin_day_dto(dynamic raw) {
+  SigninDay dco_decode_signin_day(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return SigninDayDto(
+    return SigninDay(
       day: dco_decode_String(arr[0]),
       signed: dco_decode_bool(arr[1]),
     );
   }
 
   @protected
-  SigninStatusDto dco_decode_signin_status_dto(dynamic raw) {
+  SigninStatus dco_decode_signin_status(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return SigninStatusDto(
+    return SigninStatus(
       signedToday: dco_decode_bool(arr[0]),
       totalDays: dco_decode_u_32(arr[1]),
       continuousDays: dco_decode_u_32(arr[2]),
       weekDays: dco_decode_u_32(arr[3]),
-      recent: dco_decode_list_signin_day_dto(arr[4]),
+      recent: dco_decode_list_signin_day(arr[4]),
       todayPoint: dco_decode_u_32(arr[5]),
     );
   }
@@ -6058,7 +6058,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CommentDto sse_decode_comment_dto(SseDeserializer deserializer) {
+  Comment sse_decode_comment(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_64(deserializer);
     var var_userId = sse_decode_u_64(deserializer);
@@ -6071,7 +6071,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_replyCount = sse_decode_u_64(deserializer);
     var var_ipLocation = sse_decode_String(deserializer);
     var var_hot = sse_decode_bool(deserializer);
-    return CommentDto(
+    return Comment(
       id: var_id,
       userId: var_userId,
       userName: var_userName,
@@ -6087,13 +6087,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CommentPageDto sse_decode_comment_page_dto(SseDeserializer deserializer) {
+  CommentPage sse_decode_comment_page(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_threadId = sse_decode_String(deserializer);
-    var var_comments = sse_decode_list_comment_dto(deserializer);
+    var var_comments = sse_decode_list_comment(deserializer);
     var var_total = sse_decode_u_64(deserializer);
     var var_hasMore = sse_decode_bool(deserializer);
-    return CommentPageDto(
+    return CommentPage(
       threadId: var_threadId,
       comments: var_comments,
       total: var_total,
@@ -6102,7 +6102,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  CommentStatsDto sse_decode_comment_stats_dto(SseDeserializer deserializer) {
+  CommentStats sse_decode_comment_stats(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_threadId = sse_decode_String(deserializer);
     var var_resourceId = sse_decode_u_64(deserializer);
@@ -6113,7 +6113,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_liked = sse_decode_bool(deserializer);
     var var_musicianSaidCount = sse_decode_u_64(deserializer);
     var var_commentUpgraded = sse_decode_bool(deserializer);
-    return CommentStatsDto(
+    return CommentStats(
       threadId: var_threadId,
       resourceId: var_resourceId,
       commentCount: var_commentCount,
@@ -6468,13 +6468,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<CommentDto> sse_decode_list_comment_dto(SseDeserializer deserializer) {
+  List<Comment> sse_decode_list_comment(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <CommentDto>[];
+    var ans_ = <Comment>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_comment_dto(deserializer));
+      ans_.add(sse_decode_comment(deserializer));
     }
     return ans_;
   }
@@ -6908,15 +6908,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<SigninDayDto> sse_decode_list_signin_day_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<SigninDay> sse_decode_list_signin_day(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <SigninDayDto>[];
+    var ans_ = <SigninDay>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_signin_day_dto(deserializer));
+      ans_.add(sse_decode_signin_day(deserializer));
     }
     return ans_;
   }
@@ -7720,23 +7718,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SigninDayDto sse_decode_signin_day_dto(SseDeserializer deserializer) {
+  SigninDay sse_decode_signin_day(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_day = sse_decode_String(deserializer);
     var var_signed = sse_decode_bool(deserializer);
-    return SigninDayDto(day: var_day, signed: var_signed);
+    return SigninDay(day: var_day, signed: var_signed);
   }
 
   @protected
-  SigninStatusDto sse_decode_signin_status_dto(SseDeserializer deserializer) {
+  SigninStatus sse_decode_signin_status(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_signedToday = sse_decode_bool(deserializer);
     var var_totalDays = sse_decode_u_32(deserializer);
     var var_continuousDays = sse_decode_u_32(deserializer);
     var var_weekDays = sse_decode_u_32(deserializer);
-    var var_recent = sse_decode_list_signin_day_dto(deserializer);
+    var var_recent = sse_decode_list_signin_day(deserializer);
     var var_todayPoint = sse_decode_u_32(deserializer);
-    return SigninStatusDto(
+    return SigninStatus(
       signedToday: var_signedToday,
       totalDays: var_totalDays,
       continuousDays: var_continuousDays,
@@ -8263,7 +8261,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_comment_dto(CommentDto self, SseSerializer serializer) {
+  void sse_encode_comment(Comment self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.id, serializer);
     sse_encode_u_64(self.userId, serializer);
@@ -8279,22 +8277,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_comment_page_dto(
-    CommentPageDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_comment_page(CommentPage self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.threadId, serializer);
-    sse_encode_list_comment_dto(self.comments, serializer);
+    sse_encode_list_comment(self.comments, serializer);
     sse_encode_u_64(self.total, serializer);
     sse_encode_bool(self.hasMore, serializer);
   }
 
   @protected
-  void sse_encode_comment_stats_dto(
-    CommentStatsDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_comment_stats(CommentStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.threadId, serializer);
     sse_encode_u_64(self.resourceId, serializer);
@@ -8562,14 +8554,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_comment_dto(
-    List<CommentDto> self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_list_comment(List<Comment> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_comment_dto(item, serializer);
+      sse_encode_comment(item, serializer);
     }
   }
 
@@ -8951,14 +8940,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_signin_day_dto(
-    List<SigninDayDto> self,
+  void sse_encode_list_signin_day(
+    List<SigninDay> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_signin_day_dto(item, serializer);
+      sse_encode_signin_day(item, serializer);
     }
   }
 
@@ -9586,23 +9575,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_signin_day_dto(SigninDayDto self, SseSerializer serializer) {
+  void sse_encode_signin_day(SigninDay self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.day, serializer);
     sse_encode_bool(self.signed, serializer);
   }
 
   @protected
-  void sse_encode_signin_status_dto(
-    SigninStatusDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_signin_status(SigninStatus self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.signedToday, serializer);
     sse_encode_u_32(self.totalDays, serializer);
     sse_encode_u_32(self.continuousDays, serializer);
     sse_encode_u_32(self.weekDays, serializer);
-    sse_encode_list_signin_day_dto(self.recent, serializer);
+    sse_encode_list_signin_day(self.recent, serializer);
     sse_encode_u_32(self.todayPoint, serializer);
   }
 

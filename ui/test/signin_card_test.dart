@@ -3,14 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SigninStatusDto status({
+rust.SigninStatus status({
   required bool signed,
   int total = 13,
   int continuous = 1,
   int week = 5,
   int point = 0,
 }) =>
-    rust.SigninStatusDto(
+    rust.SigninStatus(
       signedToday: signed,
       totalDays: total,
       continuousDays: continuous,

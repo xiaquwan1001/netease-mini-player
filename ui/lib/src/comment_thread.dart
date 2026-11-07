@@ -11,10 +11,10 @@ import 'rust/api.dart' as rust;
 /// - 歌曲/歌单/专辑/播客: 传 [kind] + [resourceId](内部走 rust.comments)
 /// - 动态: 传 [threadId](内部走 rust.eventComments)
 /// 点赞/回复统一用 CommentPage.threadId。
-typedef CommentPageLoader = Future<rust.CommentPageDto> Function(
+typedef CommentPageLoader = Future<rust.CommentPage> Function(
     int limit, int offset);
 typedef CommentLikeHook = Future<bool> Function(BigInt commentId, bool liked);
-typedef CommentRepliesLoader = Future<rust.CommentPageDto> Function(
+typedef CommentRepliesLoader = Future<rust.CommentPage> Function(
     BigInt parentId, int limit);
 typedef CommentReplyHook = Future<bool> Function(
     BigInt commentId, String content);
@@ -76,7 +76,7 @@ class CommentThread extends StatefulWidget {
 }
 
 class _CommentThreadState extends State<CommentThread> {
-  final List<rust.CommentDto> _items = <rust.CommentDto>[];
+  final List<rust.Comment> _items = <rust.Comment>[];
   BigInt _total = BigInt.zero;
   bool _hasMore = false;
   bool _loading = true;
@@ -87,7 +87,7 @@ class _CommentThreadState extends State<CommentThread> {
   /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
   /// 评论/分享/点赞统计(comment_info_list; 动态评论接口不支持, 保持 null)
-  rust.CommentStatsDto? _stats;
+  rust.CommentStats? _stats;
 
   /// false = 全部(精彩评论 + 最新, 接口默认页), true = 只看精彩评论
   bool _hot = false;
@@ -268,13 +268,13 @@ class _CommentThreadState extends State<CommentThread> {
     }
   }
 
-  rust.CommentDto _copy(
-    rust.CommentDto c, {
+  rust.Comment _copy(
+    rust.Comment c, {
     required bool liked,
     required int likedDelta,
   }) {
     final count = c.likedCount + BigInt.from(likedDelta);
-    return rust.CommentDto(
+    return rust.Comment(
       id: c.id,
       userId: c.userId,
       userName: c.userName,
@@ -289,7 +289,7 @@ class _CommentThreadState extends State<CommentThread> {
     );
   }
 
-  Future<void> _openReplies(rust.CommentDto comment) async {
+  Future<void> _openReplies(rust.Comment comment) async {
     final sent = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -305,7 +305,7 @@ class _CommentThreadState extends State<CommentThread> {
     if (index < 0) return;
     setState(() {
       final c = _items[index];
-      _items[index] = rust.CommentDto(
+      _items[index] = rust.Comment(
         id: c.id,
         userId: c.userId,
         userName: c.userName,
@@ -388,7 +388,7 @@ class _CommentThreadState extends State<CommentThread> {
   /// 走 [CommentSendHook](= rust.replyComment + commentId 0), 没有新增 FFI。
   Future<void> _submitComment(String content) async {
     final at = _draftIndex;
-    final draft = rust.CommentDto(
+    final draft = rust.Comment(
       // 服务端还没回 id: 这一项不给"删除"入口(id == 0 时不显示删除)
       id: BigInt.zero,
       userId: _myUid,
@@ -605,7 +605,7 @@ class _CommentTile extends StatelessWidget {
     this.onDelete,
   });
 
-  final rust.CommentDto comment;
+  final rust.Comment comment;
   final String timeText;
   final VoidCallback onToggleLike;
   final VoidCallback onOpenReplies;
@@ -786,7 +786,7 @@ class _RepliesSheet extends StatefulWidget {
     required this.reply,
   });
 
-  final rust.CommentDto parent;
+  final rust.Comment parent;
   final CommentRepliesLoader load;
   final CommentReplyHook reply;
 
@@ -797,7 +797,7 @@ class _RepliesSheet extends StatefulWidget {
 class _RepliesSheetState extends State<_RepliesSheet> {
   static const _limit = 20;
   final TextEditingController _controller = TextEditingController();
-  List<rust.CommentDto>? _replies;
+  List<rust.Comment>? _replies;
   String? _error;
   bool _sending = false;
 

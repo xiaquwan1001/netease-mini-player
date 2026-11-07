@@ -9,8 +9,8 @@ use std::sync::{Mutex, OnceLock};
 use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
-    AlbumItem, Artist, FollowCount, HotArtist, Playlist, PlaylistDetail, ProfileDetail, StyleTag,
-    SuggestItem, UserItem,
+    AlbumItem, Artist, Comment, CommentPage, CommentStats, FollowCount, HotArtist, Playlist,
+    PlaylistDetail, ProfileDetail, SigninDay, SigninStatus, StyleTag, SuggestItem, UserItem,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -918,7 +918,8 @@ pub async fn set_playlist_subscribed(playlist_id: u64, subscribed: bool) -> Resu
         .map_err(|e| e.to_string())
 }
 
-pub struct CommentDto {
+#[frb(mirror(Comment))]
+pub struct _Comment {
     pub id: u64,
     /// 评论者 uid(0 = 未知)
     pub user_id: u64,
@@ -938,18 +939,20 @@ pub struct CommentDto {
     pub hot: bool,
 }
 
-pub struct CommentPageDto {
+#[frb(mirror(CommentPage))]
+pub struct _CommentPage {
     /// 这条线程的 threadId(点赞/回复要用)
     pub thread_id: String,
     /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
-    pub comments: Vec<CommentDto>,
+    pub comments: Vec<Comment>,
     pub total: u64,
     pub has_more: bool,
 }
 
 /// 评论统计(评论数/分享数/点赞数). 实测形状见 ncm_domain::CommentStats 的文档注释:
 /// 没有 subscribedCount(收藏数) 与 hotCount(热门评论数) —— 别在 UI 里显示这两个.
-pub struct CommentStatsDto {
+#[frb(mirror(CommentStats))]
+pub struct _CommentStats {
     /// 评论线程 id(R_SO_4_/A_PL_0_/R_AL_3_/A_DJ_1_/R_VI_62_…)
     pub thread_id: String,
     /// 资源 id
@@ -1118,66 +1121,20 @@ pub async fn digital_album_sales(
         .collect())
 }
 
-/// 评论页 → DTO(歌曲/歌单/动态共用)
-fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
-    CommentPageDto {
-        thread_id: page.thread_id,
-        comments: page
-            .comments
-            .into_iter()
-            .map(|c| CommentDto {
-                id: c.id,
-                user_id: c.user_id,
-                user_name: c.user_name,
-                avatar_url: c.avatar_url,
-                content: c.content,
-                time_ms: c.time_ms,
-                liked_count: c.liked_count,
-                liked: c.liked,
-                reply_count: c.reply_count,
-                ip_location: c.ip_location,
-                hot: c.hot,
-            })
-            .collect(),
-        total: page.total,
-        has_more: page.has_more,
-    }
-}
-
 /// 评论列表: kind = song | playlist | album | podcast
 pub async fn comments(
     kind: String,
     resource_id: u64,
     limit: u32,
     offset: u32,
-) -> Result<CommentPageDto, String> {
-    let provider = with_provider(Capability::Comment)?;
-    let page = provider
-        .comments(&kind, resource_id, limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(comment_page_dto(page))
+) -> Result<CommentPage, String> {
+    ffi_forward!(Capability::Comment, provider.comments(&kind, resource_id, limit, offset))
 }
 
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
-pub async fn comment_stats(thread_id: String) -> Result<CommentStatsDto, String> {
-    let provider = with_provider(Capability::Comment)?;
-    let s = provider
-        .comment_stats(&thread_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(CommentStatsDto {
-        thread_id: s.thread_id,
-        resource_id: s.resource_id,
-        comment_count: s.comment_count,
-        comment_count_desc: s.comment_count_desc,
-        share_count: s.share_count,
-        liked_count: s.liked_count,
-        liked: s.liked,
-        musician_said_count: s.musician_said_count,
-        comment_upgraded: s.comment_upgraded,
-    })
+pub async fn comment_stats(thread_id: String) -> Result<CommentStats, String> {
+    ffi_forward!(Capability::Comment, provider.comment_stats(&thread_id))
 }
 
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
@@ -1185,13 +1142,8 @@ pub async fn hot_comments(
     thread_id: String,
     limit: u32,
     offset: u32,
-) -> Result<CommentPageDto, String> {
-    let provider = with_provider(Capability::Comment)?;
-    let page = provider
-        .hot_comments(&thread_id, limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(comment_page_dto(page))
+) -> Result<CommentPage, String> {
+    ffi_forward!(Capability::Comment, provider.hot_comments(&thread_id, limit, offset))
 }
 
 /// 分享资源到动态(需登录). kind = song | playlist | album | podcast
@@ -1664,13 +1616,8 @@ pub async fn event_comments(
     thread_id: String,
     limit: u32,
     offset: u32,
-) -> Result<CommentPageDto, String> {
-    let provider = with_provider(Capability::Feed)?;
-    let page = provider
-        .event_comments(&thread_id, limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(comment_page_dto(page))
+) -> Result<CommentPage, String> {
+    ffi_forward!(Capability::Feed, provider.event_comments(&thread_id, limit, offset))
 }
 
 /// 点赞/取消点赞一条动态
@@ -1971,13 +1918,8 @@ pub async fn comment_replies(
     thread_id: String,
     parent_comment_id: u64,
     limit: u32,
-) -> Result<CommentPageDto, String> {
-    let provider = with_provider(Capability::Comment)?;
-    let page = provider
-        .comment_replies(&thread_id, parent_comment_id, limit)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(comment_page_dto(page))
+) -> Result<CommentPage, String> {
+    ffi_forward!(Capability::Comment, provider.comment_replies(&thread_id, parent_comment_id, limit))
 }
 
 /// 回复某条评论(需登录)
@@ -2068,13 +2010,15 @@ pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, String>
         .collect())
 }
 
-pub struct SigninDayDto {
+#[frb(mirror(SigninDay))]
+pub struct _SigninDay {
     /// yyyy-mm-dd
     pub day: String,
     pub signed: bool,
 }
 
-pub struct SigninStatusDto {
+#[frb(mirror(SigninStatus))]
+pub struct _SigninStatus {
     pub signed_today: bool,
     /// 累计签到天数
     pub total_days: u32,
@@ -2083,34 +2027,19 @@ pub struct SigninStatusDto {
     /// 本周签到天数
     pub week_days: u32,
     /// 最近 7 天(新的在前)
-    pub recent: Vec<SigninDayDto>,
+    pub recent: Vec<SigninDay>,
     /// 本次签到得到云贝(只有刚签完非 0)
     pub today_point: u32,
 }
 
-fn signin_status_dto(s: ncm_domain::SigninStatus) -> SigninStatusDto {
-    SigninStatusDto {
-        signed_today: s.signed_today,
-        total_days: s.total_days,
-        continuous_days: s.continuous_days,
-        week_days: s.week_days,
-        recent: s
-            .recent
-            .into_iter()
-            .map(|d| SigninDayDto { day: d.day, signed: d.signed })
-            .collect(),
-        today_point: s.today_point,
-    }
-}
-
 /// 云贝签到状态(需登录)
-pub async fn signin_status() -> Result<SigninStatusDto, String> {
-    ffi_forward!(Capability::Signin, provider.signin_status(), map signin_status_dto)
+pub async fn signin_status() -> Result<SigninStatus, String> {
+    ffi_forward!(Capability::Signin, provider.signin_status())
 }
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
-pub async fn sign_in() -> Result<SigninStatusDto, String> {
-    ffi_forward!(Capability::Signin, provider.sign_in(), map signin_status_dto)
+pub async fn sign_in() -> Result<SigninStatus, String> {
+    ffi_forward!(Capability::Signin, provider.sign_in())
 }
 
 /// 删除自己的评论(需登录)

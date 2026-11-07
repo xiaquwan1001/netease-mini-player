@@ -820,15 +820,15 @@ class _MessageEntryCardState extends State<MessageEntryCard> {
 class SigninCard extends StatefulWidget {
   const SigninCard({super.key, this.load, this.sign});
 
-  final Future<rust.SigninStatusDto> Function()? load;
-  final Future<rust.SigninStatusDto> Function()? sign;
+  final Future<rust.SigninStatus> Function()? load;
+  final Future<rust.SigninStatus> Function()? sign;
 
   @override
   State<SigninCard> createState() => _SigninCardState();
 }
 
 class _SigninCardState extends State<SigninCard> {
-  rust.SigninStatusDto? _status;
+  rust.SigninStatus? _status;
   bool _busy = false;
 
   @override

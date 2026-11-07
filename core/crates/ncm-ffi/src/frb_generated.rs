@@ -4509,6 +4509,39 @@ const _: fn() = || {
         let _: Option<String> = Artist.avatar_url;
     }
     {
+        let Comment = None::<crate::api::Comment>.unwrap();
+        let _: u64 = Comment.id;
+        let _: u64 = Comment.user_id;
+        let _: String = Comment.user_name;
+        let _: Option<String> = Comment.avatar_url;
+        let _: String = Comment.content;
+        let _: u64 = Comment.time_ms;
+        let _: u64 = Comment.liked_count;
+        let _: bool = Comment.liked;
+        let _: u64 = Comment.reply_count;
+        let _: String = Comment.ip_location;
+        let _: bool = Comment.hot;
+    }
+    {
+        let CommentPage = None::<crate::api::CommentPage>.unwrap();
+        let _: String = CommentPage.thread_id;
+        let _: Vec<crate::api::Comment> = CommentPage.comments;
+        let _: u64 = CommentPage.total;
+        let _: bool = CommentPage.has_more;
+    }
+    {
+        let CommentStats = None::<crate::api::CommentStats>.unwrap();
+        let _: String = CommentStats.thread_id;
+        let _: u64 = CommentStats.resource_id;
+        let _: u64 = CommentStats.comment_count;
+        let _: String = CommentStats.comment_count_desc;
+        let _: u64 = CommentStats.share_count;
+        let _: u64 = CommentStats.liked_count;
+        let _: bool = CommentStats.liked;
+        let _: u64 = CommentStats.musician_said_count;
+        let _: bool = CommentStats.comment_upgraded;
+    }
+    {
         let FollowCount = None::<crate::api::FollowCount>.unwrap();
         let _: u64 = FollowCount.follows;
         let _: u64 = FollowCount.fans;
@@ -4555,6 +4588,20 @@ const _: fn() = || {
         let _: u64 = ProfileDetail.follows;
         let _: u64 = ProfileDetail.followeds;
         let _: u64 = ProfileDetail.level;
+    }
+    {
+        let SigninDay = None::<crate::api::SigninDay>.unwrap();
+        let _: String = SigninDay.day;
+        let _: bool = SigninDay.signed;
+    }
+    {
+        let SigninStatus = None::<crate::api::SigninStatus>.unwrap();
+        let _: bool = SigninStatus.signed_today;
+        let _: u32 = SigninStatus.total_days;
+        let _: u32 = SigninStatus.continuous_days;
+        let _: u32 = SigninStatus.week_days;
+        let _: Vec<crate::api::SigninDay> = SigninStatus.recent;
+        let _: u32 = SigninStatus.today_point;
     }
     {
         let StyleTag = None::<crate::api::StyleTag>.unwrap();
@@ -4734,7 +4781,7 @@ impl SseDecode for crate::api::ChartSummaryDto {
     }
 }
 
-impl SseDecode for crate::api::CommentDto {
+impl SseDecode for crate::api::Comment {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -4748,7 +4795,7 @@ impl SseDecode for crate::api::CommentDto {
         let mut var_replyCount = <u64>::sse_decode(deserializer);
         let mut var_ipLocation = <String>::sse_decode(deserializer);
         let mut var_hot = <bool>::sse_decode(deserializer);
-        return crate::api::CommentDto {
+        return crate::api::Comment {
             id: var_id,
             user_id: var_userId,
             user_name: var_userName,
@@ -4764,14 +4811,14 @@ impl SseDecode for crate::api::CommentDto {
     }
 }
 
-impl SseDecode for crate::api::CommentPageDto {
+impl SseDecode for crate::api::CommentPage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_threadId = <String>::sse_decode(deserializer);
-        let mut var_comments = <Vec<crate::api::CommentDto>>::sse_decode(deserializer);
+        let mut var_comments = <Vec<crate::api::Comment>>::sse_decode(deserializer);
         let mut var_total = <u64>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
-        return crate::api::CommentPageDto {
+        return crate::api::CommentPage {
             thread_id: var_threadId,
             comments: var_comments,
             total: var_total,
@@ -4780,7 +4827,7 @@ impl SseDecode for crate::api::CommentPageDto {
     }
 }
 
-impl SseDecode for crate::api::CommentStatsDto {
+impl SseDecode for crate::api::CommentStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_threadId = <String>::sse_decode(deserializer);
@@ -4792,7 +4839,7 @@ impl SseDecode for crate::api::CommentStatsDto {
         let mut var_liked = <bool>::sse_decode(deserializer);
         let mut var_musicianSaidCount = <u64>::sse_decode(deserializer);
         let mut var_commentUpgraded = <bool>::sse_decode(deserializer);
-        return crate::api::CommentStatsDto {
+        return crate::api::CommentStats {
             thread_id: var_threadId,
             resource_id: var_resourceId,
             comment_count: var_commentCount,
@@ -5160,13 +5207,13 @@ impl SseDecode for Vec<crate::api::ChartSummaryDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::CommentDto> {
+impl SseDecode for Vec<crate::api::Comment> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::CommentDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::Comment>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5560,13 +5607,13 @@ impl SseDecode for Vec<crate::api::SearchPodcastDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::SigninDayDto> {
+impl SseDecode for Vec<crate::api::SigninDay> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::SigninDayDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::SigninDay>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -6372,28 +6419,28 @@ impl SseDecode for crate::api::SearchPodcastDto {
     }
 }
 
-impl SseDecode for crate::api::SigninDayDto {
+impl SseDecode for crate::api::SigninDay {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_day = <String>::sse_decode(deserializer);
         let mut var_signed = <bool>::sse_decode(deserializer);
-        return crate::api::SigninDayDto {
+        return crate::api::SigninDay {
             day: var_day,
             signed: var_signed,
         };
     }
 }
 
-impl SseDecode for crate::api::SigninStatusDto {
+impl SseDecode for crate::api::SigninStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_signedToday = <bool>::sse_decode(deserializer);
         let mut var_totalDays = <u32>::sse_decode(deserializer);
         let mut var_continuousDays = <u32>::sse_decode(deserializer);
         let mut var_weekDays = <u32>::sse_decode(deserializer);
-        let mut var_recent = <Vec<crate::api::SigninDayDto>>::sse_decode(deserializer);
+        let mut var_recent = <Vec<crate::api::SigninDay>>::sse_decode(deserializer);
         let mut var_todayPoint = <u32>::sse_decode(deserializer);
-        return crate::api::SigninStatusDto {
+        return crate::api::SigninStatus {
             signed_today: var_signedToday,
             total_days: var_totalDays,
             continuous_days: var_continuousDays,
@@ -7093,71 +7140,82 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ChartSummaryDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::CommentDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::Comment> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.user_id.into_into_dart().into_dart(),
-            self.user_name.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.content.into_into_dart().into_dart(),
-            self.time_ms.into_into_dart().into_dart(),
-            self.liked_count.into_into_dart().into_dart(),
-            self.liked.into_into_dart().into_dart(),
-            self.reply_count.into_into_dart().into_dart(),
-            self.ip_location.into_into_dart().into_dart(),
-            self.hot.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.user_id.into_into_dart().into_dart(),
+            self.0.user_name.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.content.into_into_dart().into_dart(),
+            self.0.time_ms.into_into_dart().into_dart(),
+            self.0.liked_count.into_into_dart().into_dart(),
+            self.0.liked.into_into_dart().into_dart(),
+            self.0.reply_count.into_into_dart().into_dart(),
+            self.0.ip_location.into_into_dart().into_dart(),
+            self.0.hot.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CommentDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::CommentDto> for crate::api::CommentDto {
-    fn into_into_dart(self) -> crate::api::CommentDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::CommentPageDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.thread_id.into_into_dart().into_dart(),
-            self.comments.into_into_dart().into_dart(),
-            self.total.into_into_dart().into_dart(),
-            self.has_more.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CommentPageDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::CommentPageDto> for crate::api::CommentPageDto {
-    fn into_into_dart(self) -> crate::api::CommentPageDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::CommentStatsDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.thread_id.into_into_dart().into_dart(),
-            self.resource_id.into_into_dart().into_dart(),
-            self.comment_count.into_into_dart().into_dart(),
-            self.comment_count_desc.into_into_dart().into_dart(),
-            self.share_count.into_into_dart().into_dart(),
-            self.liked_count.into_into_dart().into_dart(),
-            self.liked.into_into_dart().into_dart(),
-            self.musician_said_count.into_into_dart().into_dart(),
-            self.comment_upgraded.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CommentStatsDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::CommentStatsDto>
-    for crate::api::CommentStatsDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::Comment>
 {
-    fn into_into_dart(self) -> crate::api::CommentStatsDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::Comment>> for crate::api::Comment {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::Comment> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::CommentPage> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.thread_id.into_into_dart().into_dart(),
+            self.0.comments.into_into_dart().into_dart(),
+            self.0.total.into_into_dart().into_dart(),
+            self.0.has_more.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::CommentPage>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::CommentPage>>
+    for crate::api::CommentPage
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::CommentPage> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::CommentStats> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.thread_id.into_into_dart().into_dart(),
+            self.0.resource_id.into_into_dart().into_dart(),
+            self.0.comment_count.into_into_dart().into_dart(),
+            self.0.comment_count_desc.into_into_dart().into_dart(),
+            self.0.share_count.into_into_dart().into_dart(),
+            self.0.liked_count.into_into_dart().into_dart(),
+            self.0.liked.into_into_dart().into_dart(),
+            self.0.musician_said_count.into_into_dart().into_dart(),
+            self.0.comment_upgraded.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::CommentStats>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::CommentStats>>
+    for crate::api::CommentStats
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::CommentStats> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8112,41 +8170,49 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::SearchPodcastDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::SigninDayDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::SigninDay> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.day.into_into_dart().into_dart(),
-            self.signed.into_into_dart().into_dart(),
+            self.0.day.into_into_dart().into_dart(),
+            self.0.signed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::SigninDayDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::SigninDayDto> for crate::api::SigninDayDto {
-    fn into_into_dart(self) -> crate::api::SigninDayDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::SigninDay>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::SigninDay>>
+    for crate::api::SigninDay
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::SigninDay> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::SigninStatusDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::SigninStatus> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.signed_today.into_into_dart().into_dart(),
-            self.total_days.into_into_dart().into_dart(),
-            self.continuous_days.into_into_dart().into_dart(),
-            self.week_days.into_into_dart().into_dart(),
-            self.recent.into_into_dart().into_dart(),
-            self.today_point.into_into_dart().into_dart(),
+            self.0.signed_today.into_into_dart().into_dart(),
+            self.0.total_days.into_into_dart().into_dart(),
+            self.0.continuous_days.into_into_dart().into_dart(),
+            self.0.week_days.into_into_dart().into_dart(),
+            self.0.recent.into_into_dart().into_dart(),
+            self.0.today_point.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::SigninStatusDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::SigninStatusDto>
-    for crate::api::SigninStatusDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::SigninStatus>
 {
-    fn into_into_dart(self) -> crate::api::SigninStatusDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::SigninStatus>>
+    for crate::api::SigninStatus
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::SigninStatus> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8654,7 +8720,7 @@ impl SseEncode for crate::api::ChartSummaryDto {
     }
 }
 
-impl SseEncode for crate::api::CommentDto {
+impl SseEncode for crate::api::Comment {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -8671,17 +8737,17 @@ impl SseEncode for crate::api::CommentDto {
     }
 }
 
-impl SseEncode for crate::api::CommentPageDto {
+impl SseEncode for crate::api::CommentPage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.thread_id, serializer);
-        <Vec<crate::api::CommentDto>>::sse_encode(self.comments, serializer);
+        <Vec<crate::api::Comment>>::sse_encode(self.comments, serializer);
         <u64>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
     }
 }
 
-impl SseEncode for crate::api::CommentStatsDto {
+impl SseEncode for crate::api::CommentStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.thread_id, serializer);
@@ -8937,12 +9003,12 @@ impl SseEncode for Vec<crate::api::ChartSummaryDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::CommentDto> {
+impl SseEncode for Vec<crate::api::Comment> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::CommentDto>::sse_encode(item, serializer);
+            <crate::api::Comment>::sse_encode(item, serializer);
         }
     }
 }
@@ -9267,12 +9333,12 @@ impl SseEncode for Vec<crate::api::SearchPodcastDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::SigninDayDto> {
+impl SseEncode for Vec<crate::api::SigninDay> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::SigninDayDto>::sse_encode(item, serializer);
+            <crate::api::SigninDay>::sse_encode(item, serializer);
         }
     }
 }
@@ -9819,7 +9885,7 @@ impl SseEncode for crate::api::SearchPodcastDto {
     }
 }
 
-impl SseEncode for crate::api::SigninDayDto {
+impl SseEncode for crate::api::SigninDay {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.day, serializer);
@@ -9827,14 +9893,14 @@ impl SseEncode for crate::api::SigninDayDto {
     }
 }
 
-impl SseEncode for crate::api::SigninStatusDto {
+impl SseEncode for crate::api::SigninStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.signed_today, serializer);
         <u32>::sse_encode(self.total_days, serializer);
         <u32>::sse_encode(self.continuous_days, serializer);
         <u32>::sse_encode(self.week_days, serializer);
-        <Vec<crate::api::SigninDayDto>>::sse_encode(self.recent, serializer);
+        <Vec<crate::api::SigninDay>>::sse_encode(self.recent, serializer);
         <u32>::sse_encode(self.today_point, serializer);
     }
 }

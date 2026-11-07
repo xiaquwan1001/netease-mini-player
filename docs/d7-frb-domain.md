@@ -10,7 +10,7 @@
 |---|---|
 | 策略 spike(方案 A mirror / 方案 B domain 注注解) | ✅ 方案 A 可行(见 §1) |
 | Dart 类名是否零改动 | ❌ 不可能(**frb 2.13 不支持给 struct 改名**, 见 §1.3); 采用脚本化 `rust.XDto`→`rust.X` 重命名, 逐批用 `dart analyze` + `flutter test` 兜底 |
-| 迁移批次 | 批1 已收口(11/57, 见 §3) |
+| 迁移批次 | 批1+批2 已收口(16/57, 见 §3) |
 
 ## 3. 批次日志(增量)
 
@@ -47,7 +47,20 @@
 `Vec<ncm_domain::Playlist>: IntoIntoDart` 之类 106 个错误 —— 那是 `frb_generated.rs` 过期, 不是签名写错;
 正确顺序永远是 **api.rs → codegen → cargo build → dart rename → analyze → test**。
 
-### 待办(批2 起)
+### 批2(2026-11-09)—— 评论/签到 5 个类型, 已提交
+
+`Comment` / `CommentPage` / `CommentStats` / `SigninDay` / `SigninStatus`
+
+- 删掉 `comment_page_dto` 与 `signin_status_dto` 两个转换函数, 4 个评论导出(comments/hot_comments/
+  event_comments/comment_replies)统一改 `ffi_forward!`, 签名直接 `Result<CommentPage, String>`。
+- Dart 侧 7 个文件机械重命名(`comment_thread.dart` / `detail_page.dart` / 测试等)。
+- 门禁同上, 全绿(cargo build 0 warning, analyze 39 info, flutter test 309+1skip)。
+
+**坑(第二次踩)**: codegen 会先按**旧的 `frb_generated.rs`** 试编译, 因此删类型后第一次
+`generate` 会刷一屏 `cannot find type XxxDto in module crate::api` —— 但它仍会把新生成物写好,
+紧接着 `cargo build` 是通过的。判断标准是看 `ui/lib/src/rust/api.dart` 里是否已有新类名, 而不是看那屏报错。
+
+### 待办(批3 起)
 
 按 §2.2 表里剩下的 46 个 (a) 类型分批迁移, 建议按模块成簇(每批 8–12 个), 每批一套完整门禁:
 

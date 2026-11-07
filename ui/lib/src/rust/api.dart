@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -207,7 +207,7 @@ Future<List<DigitalAlbumSalesDto>> digitalAlbumSales({
 }) => RustLib.instance.api.crateApiDigitalAlbumSales(albumIds: albumIds);
 
 /// 评论列表: kind = song | playlist | album | podcast
-Future<CommentPageDto> comments({
+Future<CommentPage> comments({
   required String kind,
   required BigInt resourceId,
   required int limit,
@@ -221,11 +221,11 @@ Future<CommentPageDto> comments({
 
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
-Future<CommentStatsDto> commentStats({required String threadId}) =>
+Future<CommentStats> commentStats({required String threadId}) =>
     RustLib.instance.api.crateApiCommentStats(threadId: threadId);
 
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
-Future<CommentPageDto> hotComments({
+Future<CommentPage> hotComments({
   required String threadId,
   required int limit,
   required int offset,
@@ -331,7 +331,7 @@ Future<List<FeedEventDto>> feedEvents({
 }) => RustLib.instance.api.crateApiFeedEvents(limit: limit, lastTime: lastTime);
 
 /// 动态评论区(threadId 来自 FeedEvent.thread_id)
-Future<CommentPageDto> eventComments({
+Future<CommentPage> eventComments({
   required String threadId,
   required int limit,
   required int offset,
@@ -509,7 +509,7 @@ Future<bool> likeComment({
 );
 
 /// 某条评论下的回复(楼层)
-Future<CommentPageDto> commentReplies({
+Future<CommentPage> commentReplies({
   required String threadId,
   required BigInt parentCommentId,
   required int limit,
@@ -573,11 +573,11 @@ Future<List<PodcastRadioDto>> recentPodcasts({required int limit}) =>
     RustLib.instance.api.crateApiRecentPodcasts(limit: limit);
 
 /// 云贝签到状态(需登录)
-Future<SigninStatusDto> signinStatus() =>
+Future<SigninStatus> signinStatus() =>
     RustLib.instance.api.crateApiSigninStatus();
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
-Future<SigninStatusDto> signIn() => RustLib.instance.api.crateApiSignIn();
+Future<SigninStatus> signIn() => RustLib.instance.api.crateApiSignIn();
 
 /// 删除自己的评论(需登录)
 Future<bool> deleteComment({
@@ -934,7 +934,7 @@ class ChartSummaryDto {
           playCount == other.playCount;
 }
 
-class CommentDto {
+class Comment {
   final BigInt id;
 
   /// 评论者 uid(0 = 未知)
@@ -959,7 +959,7 @@ class CommentDto {
   /// 是否精彩评论
   final bool hot;
 
-  const CommentDto({
+  const Comment({
     required this.id,
     required this.userId,
     required this.userName,
@@ -990,7 +990,7 @@ class CommentDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CommentDto &&
+      other is Comment &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           userId == other.userId &&
@@ -1005,16 +1005,16 @@ class CommentDto {
           hot == other.hot;
 }
 
-class CommentPageDto {
+class CommentPage {
   /// 这条线程的 threadId(点赞/回复要用)
   final String threadId;
 
   /// 精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重
-  final List<CommentDto> comments;
+  final List<Comment> comments;
   final BigInt total;
   final bool hasMore;
 
-  const CommentPageDto({
+  const CommentPage({
     required this.threadId,
     required this.comments,
     required this.total,
@@ -1028,7 +1028,7 @@ class CommentPageDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CommentPageDto &&
+      other is CommentPage &&
           runtimeType == other.runtimeType &&
           threadId == other.threadId &&
           comments == other.comments &&
@@ -1038,7 +1038,7 @@ class CommentPageDto {
 
 /// 评论统计(评论数/分享数/点赞数). 实测形状见 ncm_domain::CommentStats 的文档注释:
 /// 没有 subscribedCount(收藏数) 与 hotCount(热门评论数) —— 别在 UI 里显示这两个.
-class CommentStatsDto {
+class CommentStats {
   /// 评论线程 id(R_SO_4_/A_PL_0_/R_AL_3_/A_DJ_1_/R_VI_62_…)
   final String threadId;
 
@@ -1066,7 +1066,7 @@ class CommentStatsDto {
   /// 评论区是否已升级到新版(服务端灰度, 实测恒 false)
   final bool commentUpgraded;
 
-  const CommentStatsDto({
+  const CommentStats({
     required this.threadId,
     required this.resourceId,
     required this.commentCount,
@@ -1093,7 +1093,7 @@ class CommentStatsDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is CommentStatsDto &&
+      other is CommentStats &&
           runtimeType == other.runtimeType &&
           threadId == other.threadId &&
           resourceId == other.resourceId &&
@@ -2712,12 +2712,12 @@ class SearchPodcastDto {
           playCount == other.playCount;
 }
 
-class SigninDayDto {
+class SigninDay {
   /// yyyy-mm-dd
   final String day;
   final bool signed;
 
-  const SigninDayDto({required this.day, required this.signed});
+  const SigninDay({required this.day, required this.signed});
 
   @override
   int get hashCode => day.hashCode ^ signed.hashCode;
@@ -2725,13 +2725,13 @@ class SigninDayDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SigninDayDto &&
+      other is SigninDay &&
           runtimeType == other.runtimeType &&
           day == other.day &&
           signed == other.signed;
 }
 
-class SigninStatusDto {
+class SigninStatus {
   final bool signedToday;
 
   /// 累计签到天数
@@ -2744,12 +2744,12 @@ class SigninStatusDto {
   final int weekDays;
 
   /// 最近 7 天(新的在前)
-  final List<SigninDayDto> recent;
+  final List<SigninDay> recent;
 
   /// 本次签到得到云贝(只有刚签完非 0)
   final int todayPoint;
 
-  const SigninStatusDto({
+  const SigninStatus({
     required this.signedToday,
     required this.totalDays,
     required this.continuousDays,
@@ -2770,7 +2770,7 @@ class SigninStatusDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SigninStatusDto &&
+      other is SigninStatus &&
           runtimeType == other.runtimeType &&
           signedToday == other.signedToday &&
           totalDays == other.totalDays &&
