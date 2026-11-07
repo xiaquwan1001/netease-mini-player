@@ -414,9 +414,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchPodcastDto dco_decode_search_podcast_dto(dynamic raw);
 
   @protected
-  SearchResultDto dco_decode_search_result_dto(dynamic raw);
-
-  @protected
   SigninDayDto dco_decode_signin_day_dto(dynamic raw);
 
   @protected
@@ -993,9 +990,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SearchPodcastDto sse_decode_search_podcast_dto(SseDeserializer deserializer);
-
-  @protected
-  SearchResultDto sse_decode_search_result_dto(SseDeserializer deserializer);
 
   @protected
   SigninDayDto sse_decode_signin_day_dto(SseDeserializer deserializer);
@@ -1748,12 +1742,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_search_podcast_dto(
     SearchPodcastDto self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_search_result_dto(
-    SearchResultDto self,
     SseSerializer serializer,
   );
 

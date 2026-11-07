@@ -44,8 +44,9 @@ void main() {
     expect(a.deviceId.length, 52);
   });
 
-  test('search returns typed songs', () async {
-    final page = await _net(() => rust.search(keywords: '晴天', limit: 3));
+  test('searchAll returns typed songs', () async {
+    // D1: 单类型 rust.search 已删, UI/smoke 统一走 rust.searchAll
+    final page = await _net(() => rust.searchAll(keywords: '晴天', limit: 3));
     expect(page.songs, isNotEmpty);
     expect(page.songs.first.id, greaterThan(BigInt.zero));
     expect(page.songs.first.name, isNotEmpty);
@@ -62,7 +63,7 @@ void main() {
       markTestSkipped('set --dart-define=NCM_AUDIO_TEST=true to run (needs audio device)');
       return;
     }
-    final page = await _net(() => rust.search(keywords: '晴天', limit: 10));
+    final page = await _net(() => rust.searchAll(keywords: '晴天', limit: 10));
     final song = page.songs.firstWhere((s) => s.fee == 0 || s.fee == 8);
     final stream = await rust.songUrl(trackId: song.id, level: 'exhigh');
     final url = stream.url;
@@ -94,7 +95,7 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('song url for a free track', () async {
-    final page = await _net(() => rust.search(keywords: '晴天', limit: 10));
+    final page = await _net(() => rust.searchAll(keywords: '晴天', limit: 10));
     for (final s in page.songs.where((s) => s.fee == 0 || s.fee == 8).take(3)) {
       final stream = await rust.songUrl(trackId: s.id, level: 'exhigh');
       expect(stream.quality, 'exhigh');
@@ -148,7 +149,7 @@ void main() {
   });
 
   test('local play history records a song', () async {
-    final page = await rust.search(keywords: '晴天', limit: 1);
+    final page = await _net(() => rust.searchAll(keywords: '晴天', limit: 1));
     final song = page.songs.first;
     await rust.rememberPlay(song: song);
     final recent = await rust.localRecentSongs(limit: 5);

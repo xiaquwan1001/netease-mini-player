@@ -144,34 +144,11 @@ fn song_from_dto(d: &SongDto) -> ncm_domain::Song {
     }
 }
 
-pub struct SearchResultDto {
-    pub total: u64,
-    pub has_more: bool,
-    pub songs: Vec<SongDto>,
-}
-
 pub struct StreamDto {
     pub url: Option<String>,
     pub quality: String,
     pub br: Option<u64>,
     pub expire_at: Option<u64>,
-}
-
-pub async fn search(keywords: String, limit: u32) -> Result<SearchResultDto, String> {
-    let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
-        guard
-            .providers
-            .first_with(Capability::Search)
-            .ok_or_else(|| "no provider supports search".to_string())?
-    };
-    let query = SearchQuery { keywords, limit, offset: 0 };
-    let page = provider.search(&query).await.map_err(|e| e.to_string())?;
-    Ok(SearchResultDto {
-        total: page.total,
-        has_more: page.has_more,
-        songs: page.songs.into_iter().map(song_dto).collect(),
-    })
 }
 
 // ---------------- 综合搜索(分板块) ----------------
@@ -524,6 +501,29 @@ fn with_provider(
         .map(|p| p.clone())
 }
 
+/// D5: 纯 provider 转发型 FFI 封装统一 helper。
+/// - ffi_forward!(Capability::X, provider.method(args))             返回值直接透传
+/// - ffi_forward!(Capability::X, provider.method(args), map conv)     末步转 Dto(conv 为普通 fn/闭包)
+/// - ffi_forward!(Capability::X, provider.method(args), map_each conv) Vec 转 Vec<Dto>
+/// 错误映射统一 |e| e.to_string(), 与手写导出一致; frb 只看函数签名, 宏只生成函数体。
+macro_rules! ffi_forward {
+    ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map $conv:expr) => {{
+        let $p = with_provider($cap)?;
+        let v = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        Ok(($conv)(v))
+    }};
+    ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map_each $conv:expr) => {{
+        let $p = with_provider($cap)?;
+        let list = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        Ok(list.into_iter().map($conv).collect())
+    }};
+    ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* )) => {{
+        let $p = with_provider($cap)?;
+        let v = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        Ok(v)
+    }};
+}
+
 /// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
 pub async fn liked_ids() -> Result<Vec<u64>, String> {
     let provider = with_provider(Capability::Playlist)?;
@@ -533,11 +533,7 @@ pub async fn liked_ids() -> Result<Vec<u64>, String> {
 
 /// 红心/取消红心(需登录)
 pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, String> {
-    let provider = with_provider(Capability::Playlist)?;
-    provider
-        .set_like(ncm_domain::TrackId::new(track_id), liked)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::Playlist, provider.set_like(ncm_domain::TrackId::new(track_id), liked))
 }
 
 /// 我的歌单(含"我喜欢的音乐")
@@ -603,16 +599,7 @@ pub struct LyricLineDto {
     pub sub: Option<String>,
 }
 
-/// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
-pub async fn lyric_lines(track_id: u64) -> Result<Vec<LyricLineDto>, String> {
-    let raw = lyric(track_id).await?;
-    Ok(ncm_domain::parse_lrc_with_translation(&raw, None)
-        .into_iter()
-        .map(|l| LyricLineDto { time_ms: l.time_ms, text: l.text, sub: l.sub })
-        .collect())
-}
-
-/// 带翻译的歌词时间轴(网易云 tlyric). 无翻译时等价于 lyric_lines.
+/// 带翻译的歌词时间轴(网易云 tlyric). UI 只需要按 position 找当前行, 不再自己啃 LRC.
 pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, String> {
     let provider = {
         let guard = core()?.lock().map_err(|e| e.to_string())?;
@@ -1338,9 +1325,7 @@ fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
 
 /// 热门播客/电台
 pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
-    let provider = with_provider(Capability::Podcast)?;
-    let list = provider.podcast_hot(limit).await.map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(radio_dto).collect())
+    ffi_forward!(Capability::Podcast, provider.podcast_hot(limit), map_each radio_dto)
 }
 
 /// 某个播客的节目列表
@@ -1472,9 +1457,7 @@ pub async fn radio_explore_home() -> Result<RadioExploreHomeDto, String> {
 
 /// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
 pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadioDto>, String> {
-    let provider = with_provider(Capability::RadioExplore)?;
-    let list = provider.radio_recommend(cate_id).await.map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(radio_dto).collect())
+    ffi_forward!(Capability::RadioExplore, provider.radio_recommend(cate_id), map_each radio_dto)
 }
 
 /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
@@ -1589,11 +1572,7 @@ fn artist_dto(a: ncm_domain::Artist) -> ArtistDto {
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
 pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, String> {
-    let provider = with_provider(Capability::SearchSuggest)?;
-    provider
-        .search_suggest_keywords(&keywords)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::SearchSuggest, provider.search_suggest_keywords(&keywords))
 }
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
@@ -1775,20 +1754,12 @@ pub async fn event_comments(
 
 /// 点赞/取消点赞一条动态
 pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, String> {
-    let provider = with_provider(Capability::Feed)?;
-    provider
-        .like_event(&thread_id, liked)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::Feed, provider.like_event(&thread_id, liked))
 }
 
 /// 转发一条动态(附转发语)
 pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, String> {
-    let provider = with_provider(Capability::Feed)?;
-    provider
-        .forward_event(event_id, user_id, &msg)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::Feed, provider.forward_event(event_id, user_id, &msg))
 }
 
 pub struct PlayRankEntryDto {
@@ -1825,9 +1796,7 @@ pub struct StyleTagDto {
 
 /// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
 pub async fn style_preference() -> Result<Vec<StyleTagDto>, String> {
-    let provider = with_provider(Capability::StyleRecommend)?;
-    let list = provider.style_preference().await.map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(style_tag_dto).collect())
+    ffi_forward!(Capability::StyleRecommend, provider.style_preference(), map_each style_tag_dto)
 }
 
 /// 某个曲风下的歌曲
@@ -2015,94 +1984,57 @@ pub async fn subscribed_albums(limit: u32) -> Result<Vec<AlbumItemDto>, String> 
 
 /// 收藏/取消收藏专辑(需登录)
 pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<bool, String> {
-    let provider = with_provider(Capability::AlbumSub)?;
-    provider
-        .set_album_subscribed(album_id, subscribed)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::AlbumSub, provider.set_album_subscribed(album_id, subscribed))
 }
 
 /// 新建歌单(需登录), 返回新歌单 id
 pub async fn create_playlist(name: String) -> Result<u64, String> {
-    let provider = with_provider(Capability::PlaylistEdit)?;
-    provider.create_playlist(&name).await.map_err(|e| e.to_string())
+    ffi_forward!(Capability::PlaylistEdit, provider.create_playlist(&name))
 }
 
 /// 删除歌单(需登录, 且只能删自己的)
 pub async fn delete_playlist(playlist_id: u64) -> Result<bool, String> {
-    let provider = with_provider(Capability::PlaylistEdit)?;
-    provider.delete_playlist(playlist_id).await.map_err(|e| e.to_string())
+    ffi_forward!(Capability::PlaylistEdit, provider.delete_playlist(playlist_id))
 }
 
 /// 改歌单名
 pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, String> {
-    let provider = with_provider(Capability::PlaylistEdit)?;
-    provider
-        .rename_playlist(playlist_id, &name)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::PlaylistEdit, provider.rename_playlist(playlist_id, &name))
 }
 
 /// 改歌单简介
 pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, String> {
-    let provider = with_provider(Capability::PlaylistEdit)?;
-    provider
-        .update_playlist_desc(playlist_id, &desc)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::PlaylistEdit, provider.update_playlist_desc(playlist_id, &desc))
 }
 
 /// 把一首歌移出歌单(需登录)
 pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
-    let provider = with_provider(Capability::PlaylistEdit)?;
-    provider
-        .remove_track(playlist_id, ncm_domain::TrackId::new(track_id))
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::PlaylistEdit, provider.remove_track(playlist_id, ncm_domain::TrackId::new(track_id)))
 }
 
 /// 每日推荐"不感兴趣"(需登录)
 pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, String> {
-    let provider = with_provider(Capability::DailyRecommend)?;
-    provider
-        .dislike_recommend_song(song_id)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::DailyRecommend, provider.dislike_recommend_song(song_id))
 }
 
 /// 私人 FM"不再播放"(需登录)
 pub async fn trash_fm_song(song_id: u64) -> Result<bool, String> {
-    let provider = with_provider(Capability::PersonalFm)?;
-    provider
-        .trash_fm_song(song_id)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::PersonalFm, provider.trash_fm_song(song_id))
 }
 
 /// 历史日推可用日期(黑胶 VIP; 新的在前)
 pub async fn history_recommend_dates() -> Result<Vec<String>, String> {
-    let provider = with_provider(Capability::DailyRecommend)?;
-    provider
-        .history_recommend_dates()
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::DailyRecommend, provider.history_recommend_dates())
 }
 
 /// 某个日期的历史日推曲目
 pub async fn history_recommend_songs(date: String) -> Result<Vec<SongDto>, String> {
-    let provider = with_provider(Capability::DailyRecommend)?;
-    let list = provider
-        .history_recommend_songs(&date)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(song_dto).collect())
+    ffi_forward!(Capability::DailyRecommend, provider.history_recommend_songs(&date), map_each song_dto)
 }
 
 /// 推荐新音乐("新歌速递")
 pub async fn new_songs(limit: u32) -> Result<Vec<SongDto>, String> {
-    let provider = with_provider(Capability::NewRelease)?;
-    let list = provider.new_songs(limit).await.map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(song_dto).collect())
+    ffi_forward!(Capability::NewRelease, provider.new_songs(limit), map_each song_dto)
 }
 
 /// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItemDto
@@ -2249,9 +2181,7 @@ pub struct FollowCountDto {
 
 /// 我的关注/粉丝数(需登录)
 pub async fn follow_counts() -> Result<FollowCountDto, String> {
-    let provider = with_provider(Capability::Follow)?;
-    let c = provider.follow_counts().await.map_err(|e| e.to_string())?;
-    Ok(FollowCountDto { follows: c.follows, fans: c.fans })
+    ffi_forward!(Capability::Follow, provider.follow_counts(), map |c: ncm_domain::FollowCount| FollowCountDto { follows: c.follows, fans: c.fans })
 }
 
 /// 最近播放的专辑(需登录)
@@ -2341,25 +2271,17 @@ fn signin_status_dto(s: ncm_domain::SigninStatus) -> SigninStatusDto {
 
 /// 云贝签到状态(需登录)
 pub async fn signin_status() -> Result<SigninStatusDto, String> {
-    let provider = with_provider(Capability::Signin)?;
-    let s = provider.signin_status().await.map_err(|e| e.to_string())?;
-    Ok(signin_status_dto(s))
+    ffi_forward!(Capability::Signin, provider.signin_status(), map signin_status_dto)
 }
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
 pub async fn sign_in() -> Result<SigninStatusDto, String> {
-    let provider = with_provider(Capability::Signin)?;
-    let s = provider.sign_in().await.map_err(|e| e.to_string())?;
-    Ok(signin_status_dto(s))
+    ffi_forward!(Capability::Signin, provider.sign_in(), map signin_status_dto)
 }
 
 /// 删除自己的评论(需登录)
 pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, String> {
-    let provider = with_provider(Capability::Comment)?;
-    provider
-        .delete_comment(&thread_id, comment_id)
-        .await
-        .map_err(|e| e.to_string())
+    ffi_forward!(Capability::Comment, provider.delete_comment(&thread_id, comment_id))
 }
 
 pub struct WikiFactDto {
@@ -2799,9 +2721,7 @@ pub struct UserMedalDto {
 
 /// 账号听歌等级(需要登录)
 pub async fn user_level() -> Result<UserLevelDto, String> {
-    let provider = with_provider(Capability::ProfileDetail)?;
-    let l = provider.user_level().await.map_err(|e| e.to_string())?;
-    Ok(to_user_level_dto(l))
+    ffi_forward!(Capability::ProfileDetail, provider.user_level(), map to_user_level_dto)
 }
 
 /// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.

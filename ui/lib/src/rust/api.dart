@@ -13,11 +13,6 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<InitInfo> init({String? dataDir}) =>
     RustLib.instance.api.crateApiInit(dataDir: dataDir);
 
-Future<SearchResultDto> search({
-  required String keywords,
-  required int limit,
-}) => RustLib.instance.api.crateApiSearch(keywords: keywords, limit: limit);
-
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
 Future<SearchBundleDto> searchAll({
   required String keywords,
@@ -86,11 +81,7 @@ Future<List<SongDto>> playlistSongs({required BigInt playlistId}) =>
 /// "我喜欢的音乐"曲目详情(按收藏时间从新到旧)
 Future<List<SongDto>> likedSongs() => RustLib.instance.api.crateApiLikedSongs();
 
-/// 解析好的歌词时间轴. UI 只需要按 position 找当前行, 不再自己啃 LRC.
-Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
-    RustLib.instance.api.crateApiLyricLines(trackId: trackId);
-
-/// 带翻译的歌词时间轴(网易云 tlyric). 无翻译时等价于 lyric_lines.
+/// 带翻译的歌词时间轴(网易云 tlyric). UI 只需要按 position 找当前行, 不再自己啃 LRC.
 Future<List<LyricLineDto>> lyricLinesI18N({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyricLinesI18N(trackId: trackId);
 
@@ -2716,30 +2707,6 @@ class SearchPodcastDto {
           djName == other.djName &&
           programCount == other.programCount &&
           playCount == other.playCount;
-}
-
-class SearchResultDto {
-  final BigInt total;
-  final bool hasMore;
-  final List<SongDto> songs;
-
-  const SearchResultDto({
-    required this.total,
-    required this.hasMore,
-    required this.songs,
-  });
-
-  @override
-  int get hashCode => total.hashCode ^ hasMore.hashCode ^ songs.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is SearchResultDto &&
-          runtimeType == other.runtimeType &&
-          total == other.total &&
-          hasMore == other.hasMore &&
-          songs == other.songs;
 }
 
 class SigninDayDto {
