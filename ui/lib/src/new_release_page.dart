@@ -85,8 +85,11 @@ class NewReleasePage extends StatelessWidget {
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
+        // P1-7.15: 底部让出手势导航条
+        body: SafeArea(
+          top: false,
+          child: TabBarView(
+            children: [
             _NewSongsTab(
               load: loadSongs ??
                   (area) => rust.newSongsByArea(area: area, limit: 50),
@@ -105,7 +108,8 @@ class NewReleasePage extends StatelessWidget {
               load: loadNewestAlbums ?? () => rust.newestAlbums(limit: 12),
               onOpen: onOpenAlbum,
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );

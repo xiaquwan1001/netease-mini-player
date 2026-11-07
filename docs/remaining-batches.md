@@ -226,6 +226,6 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | ~~**A · S 速修**~~ ✅ **已完成**(2026-11-09) | 返回键 `PopScope` 三级语义 + `formatSongDuration` + 红心可点 + 6 类控件 48dp + 出口文案统一「全部」; 新增 22 用例 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | ~~S~~ 已做 | 见 `docs/ui-batch-a.md` |
 | **B · 两个新面板** | 评论输入框(含 `viewInsets` 键盘避让 + 发送/失败重试)、播放队列面板(先给 `queue.dart` 补 `removeAt` 等 + 单测, 再接 UI) | P0-7.2 / P0-7.3 | M | 独立文件为主, 但与 A 同碰 `main.dart` ⇒ **错序执行** |
 | **C · 信息架构重排** | 设置瘦身(账号/会员/诊断拆到二级页)、账号入口 3→1、推荐页 8→5 个平级模块、专辑详情 Dialog→全页、日推/最近听过 sheet→全页 | P1-7.5/7.8/7.9/7.10/7.11/7.14 | M(需人工过视觉) | 跨 5 文件, **单独一条车道** |
-| **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` ~300 行死代码、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
+| **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` 的半死入口(实测非整文件: 仅 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行零生产调用, 且被 10 处测试当宿主, 需同步改写 ⇒ 未做)、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
 
 **与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。

@@ -34,7 +34,7 @@ class SettingsView extends StatelessWidget {
     return AnimatedBuilder(
       animation: settings,
       builder: (context, _) => ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
         children: [
           _SectionTitle('账号'),
           _AccountCard(

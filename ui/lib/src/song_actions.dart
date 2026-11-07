@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'toast.dart' show showToastWith;
 import 'rust/api.dart' as rust;
 
 /// 动作回调集合(由 main.dart 组装, 行组件通过 AppActions 取)
@@ -113,6 +114,7 @@ Future<void> showSongActionsSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       // 8 个动作 + 头部在矮屏会超过半屏, 用可滚动面板兜住
       child: ConstrainedBox(
@@ -147,7 +149,9 @@ List<Widget> _menu(
     try {
       await action();
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('操作失败: ${friendlyError(e)}')));
+      if (messenger != null) {
+        showToastWith(messenger, '操作失败: ${friendlyError(e)}', isError: true);
+      }
     }
   }
 

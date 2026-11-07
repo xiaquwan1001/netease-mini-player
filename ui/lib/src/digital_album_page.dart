@@ -123,7 +123,7 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
       );
     }
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+      padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
       children: [
         if (albums.isNotEmpty) ...[
           Text('已购数字专辑(${albums.length})', style: Theme.of(context).textTheme.titleSmall),

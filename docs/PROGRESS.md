@@ -36,7 +36,7 @@
 |---|---|---|
 | **P0(3)** | ①**返回键语义完全没做**: 全仓 `PopScope/WillPopScope` = **0** 处 ⇒ 歌词页/非首 tab 按系统返回直接退出 App; ②**评论区无「写评论」入口**(只有 `CommentReplyHook` 与 `rust.replyComment`, 无输入框); ③**播放队列零 UI**(`queue.dart` 只有 `PlayQueue<T>` 数据结构, 播放条仅显示 `inQueue/len` 序号) | `rg PopScope ui/lib`=0; `comment_thread.dart` 无 TextField; `queue.dart:23` 仅数据类 |
 | **P1(15)** | 歌曲行时长显示 `245s`(`song_tile.dart:147` 直接 `durationMs~/1000`+s)、红心指示器不可点但歌单详情同款可点、专辑详情用 Dialog 无返回、分页全靠按钮无自动加载、8 页无下拉刷新、6 类高频控件 <48dp、播放条 168dp 占屏 39%、评论标题必溢出、底部安全区缺失 | 逐条 file:line 见报告 §7 |
-| **P2(13)** | 6 处错误态各写一份、6 份 SnackBar、5 份时长格式化、弹层 4 种标题写法、0 处 `Semantics`、深色 2 处硬编码、`podcast.dart` ~300 行死代码、300dp 回归只覆盖 15/45 测试文件 | 同上 |
+| **P2(13)** | 6 处错误态各写一份、6 份 SnackBar、5 份时长格式化、弹层 4 种标题写法、0 处 `Semantics`、深色 2 处硬编码、~~`podcast.dart` ~300 行死代码~~(实测**整文件非死代码**, 真正零调用的只有 `showPodcastSheet`+`_PodcastBrowser*` 约 88 行且被 10 处测试占用)、300dp 回归只覆盖 15/45 测试文件 | 同上 |
 
 **结构事实校正**: 底栏实际是 **5 栏**(搜索/推荐/关注/我的/**设置**), 不是 README 长期写的 4 栏 —— 已在 README/AGENTS 校准。
 Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。

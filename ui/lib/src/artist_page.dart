@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
+import 'format.dart' show formatDurationMs;
 
 /// 歌手详情页: 横幅 + 简介(可展开) + 热门歌曲 + 专辑。
 /// 打开方式: [showArtistDetail], 全屏 MaterialPageRoute。
@@ -131,7 +132,7 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
     }
     final detail = _detail!;
     return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(bottom: 24 + MediaQuery.viewPaddingOf(context).bottom),
       children: [
         _buildBanner(theme, detail),
         Padding(
@@ -397,7 +398,7 @@ class _ArtistSongRow extends StatelessWidget {
               ),
             ),
             Text(
-              _fmtDuration(song.durationMs),
+              formatDurationMs(song.durationMs),
               style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
             ),
             SongOverflowButton(song: song, size: 20),
@@ -456,13 +457,3 @@ class _ExpandableTextState extends State<_ExpandableText> {
   }
 }
 
-/// 时长: mm:ss(超过 1 小时用 h:mm:ss), 与 detail_page 同一套格式
-String _fmtDuration(BigInt ms) {
-  final total = (ms ~/ BigInt.from(1000)).toInt();
-  final h = total ~/ 3600;
-  final m = (total % 3600) ~/ 60;
-  final s = total % 60;
-  final mm = m.toString().padLeft(2, '0');
-  final ss = s.toString().padLeft(2, '0');
-  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
-}

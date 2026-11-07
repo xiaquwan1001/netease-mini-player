@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'error_views.dart' show FullError;
 import 'sheet_header.dart';
 import 'song_actions.dart';
+import 'toast.dart' show showToastWith;
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
 typedef PlaylistListLoader = Future<List<rust.PlaylistDto>> Function();
@@ -29,6 +31,7 @@ Future<void> showDiscoverSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (sheetContext) => DefaultTabController(
       length: 3,
       child: SafeArea(
@@ -119,7 +122,7 @@ class _DailySongsTabState extends State<_DailySongsTab>
     super.build(context);
     final songs = _songs;
     if (_error != null) {
-      return _ErrorView(message: _error!, onRetry: _load);
+      return FullError(message: _error!, onRetry: _load);
     }
     if (songs == null) {
       return const Center(child: CircularProgressIndicator());
@@ -161,11 +164,13 @@ class _DailySongsTabState extends State<_DailySongsTab>
       await handler(song);
       if (!mounted) return;
       setState(() => _songs?.removeWhere((s) => s.id == song.id));
-      messenger?.showSnackBar(
-        SnackBar(content: Text('已减少《${song.name}》这类推荐')),
-      );
+      if (messenger != null) {
+        showToastWith(messenger, '已减少《${song.name}》这类推荐');
+      }
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('操作失败: ${friendlyError(e)}')));
+      if (messenger != null) {
+        showToastWith(messenger, '操作失败: ${friendlyError(e)}', isError: true);
+      }
     }
   }
 }
@@ -243,7 +248,7 @@ class _HistoryTabState extends State<_HistoryTab>
       final retry = _retry;
       return retry == null
           ? const SizedBox.shrink()
-          : _ErrorView(message: _error!, onRetry: retry);
+          : FullError(message: _error!, onRetry: retry);
     }
     // 已选日期: 展示那天推荐的歌
     if (_date != null) {
@@ -363,7 +368,7 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
     super.build(context);
     final lists = _lists;
     if (_error != null) {
-      return _ErrorView(
+      return FullError(
         message: '推荐歌单需要登录后才能获取\n$_error',
         onRetry: _load,
       );
@@ -415,6 +420,7 @@ Future<void> showRecentSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (sheetContext) => DefaultTabController(
       length: 4,
       child: SafeArea(
@@ -581,7 +587,7 @@ class _RecentBucketTabState<T> extends State<_RecentBucketTab<T>>
   Widget build(BuildContext context) {
     super.build(context);
     if (_error != null) {
-      return _ErrorView(message: _error!, onRetry: _load);
+      return FullError(message: _error!, onRetry: _load);
     }
     final items = _items;
     if (items == null) {
@@ -649,28 +655,6 @@ class _SongRow extends StatelessWidget {
         ],
       ),
       onTap: onTap,
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('重试')),
-        ],
-      ),
     );
   }
 }

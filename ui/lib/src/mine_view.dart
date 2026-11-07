@@ -7,7 +7,9 @@ import 'net_retry.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'rust/api.dart' as rust;
+import 'error_views.dart' show InlineError;
 import 'song_actions.dart';
+import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过 / 听歌排行.
 /// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
@@ -288,7 +290,7 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
           );
         }
         if (snap.hasError) {
-          return _InlineError(
+          return InlineError(
             message: friendlyError(snap.error!),
             onRetry: _reload,
           );
@@ -305,28 +307,6 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
         }
         return widget.builder(context, data as T, _reload);
       },
-    );
-  }
-}
-
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            message,
-            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
-          ),
-        ),
-        TextButton(onPressed: onRetry, child: const Text('重试')),
-      ],
     );
   }
 }
@@ -859,22 +839,15 @@ class _SigninCardState extends State<SigninCard> {
       setState(() => _status = status);
       final earned = status.todayPoint;
       final already = before?.signedToday == true;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(
-              already || earned == 0
-                  ? '今天已经签过了(累计 ${status.totalDays} 天)'
-                  : '签到成功, 云贝 +$earned(累计 ${status.totalDays} 天)',
-            ),
-          ),
-        );
+      showToast(
+        context,
+        already || earned == 0
+            ? '今天已经签过了(累计 ${status.totalDays} 天)'
+            : '签到成功, 云贝 +$earned(累计 ${status.totalDays} 天)',
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text('签到失败: ${friendlyError(e)}')));
+      showToast(context, '签到失败: ${friendlyError(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'format.dart' show formatDurationMs;
 
 /// 可注入加载器(测试用 mock)
 typedef LoadRadioHome = Future<rust.RadioExploreHomeDto?> Function();
@@ -160,7 +161,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
         children: [
           _CategoryChips(
             categories: categories,
@@ -428,7 +429,7 @@ class _ToplistTabs extends StatelessWidget {
             [
               if (pr.program.radioName.isNotEmpty) pr.program.radioName,
               if (pr.program.djName.isNotEmpty) pr.program.djName,
-              _fmtDuration(pr.program.durationMs),
+              formatDurationMs(pr.program.durationMs),
             ].join(' · '),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
@@ -507,16 +508,6 @@ class _ToplistTabs extends StatelessWidget {
   }
 }
 
-/// 时长: h:mm:ss / mm:ss(与 detail_page 同一套口径)
-String _fmtDuration(BigInt ms) {
-  final total = (ms ~/ BigInt.from(1000)).toInt();
-  final h = total ~/ 3600;
-  final m = (total % 3600) ~/ 60;
-  final s = total % 60;
-  final mm = m.toString().padLeft(2, '0');
-  final ss = s.toString().padLeft(2, '0');
-  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
-}
 
 String _fmtCount(BigInt n) {
   final v = n.toInt();

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'error_views.dart' show InlineError;
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
 
 /// 曲风详情页: 系统推荐给"我"的风格下面有哪些歌单和歌.
 ///
@@ -80,7 +82,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
 
   /// 下拉刷新: 已有数据时不走 FutureBuilder 重置(避免清空/闪烁),
   /// 只有全部成功才替换数据; 失败只提示, 保留旧内容。
-  Future<void> _refresh(BuildContext context) async {
+  Future<void> _refresh() async {
     try {
       final songs = await retryNetwork(() => _songs(widget.tag.id));
       final playlists = await retryNetwork(() => _playlists(widget.tag.id));
@@ -91,16 +93,14 @@ class _StyleDetailViewState extends State<StyleDetailView> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      showToast(context, friendlyError(e), isError: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () => _refresh(context),
+      onRefresh: _refresh,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
@@ -212,31 +212,6 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            message,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: 12,
-            ),
-          ),
-        ),
-        TextButton(onPressed: onRetry, child: const Text('重试')),
-      ],
-    );
-  }
-}
-
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
     required this.future,
@@ -266,7 +241,7 @@ class _PlaylistRow extends StatelessWidget {
           );
         }
         if (snap.hasError) {
-          return _InlineError(
+          return InlineError(
             message: friendlyError(snap.error!),
             onRetry: onRetry,
           );
@@ -351,7 +326,7 @@ class _SongList extends StatelessWidget {
           );
         }
         if (snap.hasError) {
-          return _InlineError(
+          return InlineError(
             message: friendlyError(snap.error!),
             onRetry: onRetry,
           );

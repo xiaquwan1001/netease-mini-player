@@ -10,11 +10,15 @@ class SheetHeader extends StatelessWidget {
     required this.title,
     this.onBack,
     this.onClose,
+    this.trailing,
   });
 
   final String title;
   final VoidCallback? onBack;
   final VoidCallback? onClose;
+
+  /// 关闭键左侧的附加内容(如加载小圈).
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -40,12 +44,17 @@ class SheetHeader extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
+          if (trailing != null) ...[
+            trailing!,
+            const SizedBox(width: 8),
+          ],
           if (onClose != null)
             IconButton(
               icon: const Icon(Icons.close),
               tooltip: '关闭',
               onPressed: onClose,
             ),
+          if (onClose == null) const SizedBox(width: 12),
         ],
       ),
     );

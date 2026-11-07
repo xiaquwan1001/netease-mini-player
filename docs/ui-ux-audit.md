@@ -391,6 +391,7 @@ HomePage (唯一根路由, main.dart:107)
 | 歌曲动作 / 分享 / 收藏到歌单 / 歌曲百科 / 相似歌曲 | sheet | 小(列表/短文本) | 匹配 ✓ | 保留(统一补 `SheetHeader`) |
 | 歌单广场 / 全部榜单 / 新歌新碟 / 歌手页 / 粉丝列表 / 消息 / 勋章墙 / VIP | 全页 | 大 | 匹配 ✓ | 保留 |
 | 电台浏览(`_PodcastBrowser`) | sheet,生产零调用 | 大 | 死代码 | 删除或改全页接入 |
+| **勘误(2026-11-09, 批次 D 实测)** | **`podcast.dart` 整文件不是死代码**: `ProgramDetailSheet` 被 `detail_page.dart:1016` 及 3 个测试真实引用。真正零调用的是入口 `showPodcastSheet`(`:26-61`)+`_PodcastBrowser`(`:63-82`)/`_PodcastBrowserState`(`:84-115`), 合计 **约 88 行**(非 300); 但它被 10 处测试当宿主调用(`podcast_test.dart` 8 + `program_detail_test.dart` 2), 删除需一并改写那些用例 ⇒ **单列一批, 不在 D 批做** | 中 | 半死 | 删 88 行 + 改 10 处测试调用 |
 | 播放队列 | **不存在** | 中 | — | 新增 sheet(从播放条进) |
 
 ## 6. 移动端细节(安全区/小屏/深色/截断)

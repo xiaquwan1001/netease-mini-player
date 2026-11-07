@@ -12,6 +12,8 @@ import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart';
+import 'format.dart' show formatDurationMs;
+import 'toast.dart' show showToast;
 
 /// 歌单/播客(电台)详情页: 全屏路由, AppBar 以下单滚动(CustomScrollView),
 /// 曲目/节目行定高 56。曲目可见性沿用 library_view 的统一规则
@@ -31,6 +33,7 @@ Future<void> showCommentsSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: SizedBox(
         height: MediaQuery.of(sheetContext).size.height * 0.75,
@@ -56,16 +59,6 @@ Future<void> showCommentsSheet(
   );
 }
 
-/// 时长: h:mm:ss(超过 1 小时)/mm:ss, 与 podcast.dart 同一套格式
-String _fmtDuration(BigInt ms) {
-  final total = (ms ~/ BigInt.from(1000)).toInt();
-  final h = total ~/ 3600;
-  final m = (total % 3600) ~/ 60;
-  final s = total % 60;
-  final mm = m.toString().padLeft(2, '0');
-  final ss = s.toString().padLeft(2, '0');
-  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
-}
 
 // ---------------- 歌单详情 ----------------
 
@@ -266,9 +259,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   Future<void> _toggleLike(rust.SongDto song) async {
@@ -1013,6 +1004,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (_) => ProgramDetailSheet(
         program: p,
         loadDetail: widget.loadProgramDetail,
@@ -1211,7 +1203,7 @@ class _SongRow extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                _fmtDuration(song.durationMs),
+                formatDurationMs(song.durationMs),
                 style: theme.bodySmall?.copyWith(color: scheme.outline),
               ),
             ),
@@ -1272,7 +1264,7 @@ class _ProgramRow extends StatelessWidget {
                   Text(
                     [
                       if (program.djName.isNotEmpty) program.djName,
-                      _fmtDuration(program.durationMs),
+                      formatDurationMs(program.durationMs),
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1309,6 +1301,7 @@ void _showResourceShareSheet(
 }) {
   showModalBottomSheet<void>(
     context: context,
+    showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1325,13 +1318,10 @@ void _showResourceShareSheet(
                   msg: message,
                 );
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(ok ? '已分享到动态' : '分享未生效, 请稍后重试')),
-                );
+                showToast(context, ok ? '已分享到动态' : '分享未生效, 请稍后重试');
               } catch (e) {
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context)
-                    .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+                showToast(context, friendlyError(e), isError: true);
               }
             },
           ),
@@ -1342,8 +1332,7 @@ void _showResourceShareSheet(
               Navigator.pop(sheetContext);
               await Clipboard.setData(ClipboardData(text: link));
               if (!context.mounted) return;
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('链接已复制')));
+              showToast(context, '链接已复制');
             },
           ),
         ],

@@ -5,6 +5,7 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_actions.dart';
+import 'format.dart' show formatDurationMs;
 
 typedef RadioLoader = Future<List<rust.PodcastRadioDto>> Function(int limit);
 typedef ProgramLoader = Future<List<rust.PodcastProgramDto>> Function(
@@ -18,15 +19,6 @@ typedef RadioDetailLoader = Future<rust.PodcastRadioDto> Function(BigInt radioId
 typedef ProgramDetailLoader = Future<rust.PodcastProgramDto> Function(
     BigInt programId);
 
-String _fmtDuration(BigInt ms) {
-  final total = (ms ~/ BigInt.from(1000)).toInt();
-  final h = total ~/ 3600;
-  final m = (total % 3600) ~/ 60;
-  final s = total % 60;
-  final mm = m.toString().padLeft(2, '0');
-  final ss = s.toString().padLeft(2, '0');
-  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
-}
 
 /// 播客(电台): 热门电台 → 节目列表 → 点单集播放.
 /// 一集的音频本体是 program.song, 播放链路和普通歌曲完全一致(取直链 → 播放).
@@ -51,6 +43,7 @@ Future<void> showPodcastSheet(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: SizedBox(
         height: MediaQuery.of(sheetContext).size.height * 0.75,
@@ -301,6 +294,7 @@ class _ProgramListState extends State<_ProgramList> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       builder: (_) => ProgramDetailSheet(
         program: p,
         loadDetail: widget.loadProgramDetail,
@@ -352,7 +346,7 @@ class _ProgramListState extends State<_ProgramList> {
                     subtitle: Text(
                       [
                         if (p.djName.isNotEmpty) p.djName,
-                        _fmtDuration(p.durationMs),
+                        formatDurationMs(p.durationMs),
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -545,7 +539,7 @@ class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
     final meta = [
       if (p.djName.isNotEmpty) p.djName,
       if (p.radioName.isNotEmpty) '《${p.radioName}》',
-      _fmtDuration(p.durationMs),
+      formatDurationMs(p.durationMs),
     ].join(' · ');
     final desc = p.description.trim();
     return SafeArea(
@@ -559,28 +553,16 @@ class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '节目详情',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_loading)
-                    const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    tooltip: '关闭',
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
+              SheetHeader(
+                title: '节目详情',
+                onClose: () => Navigator.pop(context),
+                trailing: _loading
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
               ),
               if (_error != null)
                 Padding(
