@@ -20,6 +20,11 @@ typedef CommentReplyHook = Future<bool> Function(
     BigInt commentId, String content);
 typedef CommentDeleteHook = Future<bool> Function(BigInt commentId);
 
+/// 发表顶层评论: 完全复用 [CommentReplyHook] 的形态 —— commentId 传
+/// [BigInt.zero] 表示"评论整个资源"(网易云 comment_reply 接口 commentId=0 即顶层评论),
+/// 所以这条链路不需要新增任何 FFI。
+typedef CommentSendHook = CommentReplyHook;
+
 class CommentThread extends StatefulWidget {
   const CommentThread({
     super.key,
@@ -34,6 +39,7 @@ class CommentThread extends StatefulWidget {
     this.like,
     this.loadReplies,
     this.reply,
+    this.send,
     this.delete,
     this.myUid,
   });
@@ -55,6 +61,9 @@ class CommentThread extends StatefulWidget {
   final CommentLikeHook? like;
   final CommentRepliesLoader? loadReplies;
   final CommentReplyHook? reply;
+
+  /// 发表顶层评论(不传则复用 [reply] / rust.replyComment, commentId = 0)
+  final CommentSendHook? send;
 
   /// 删除自己的评论(不传就走 rust.deleteComment)
   final CommentDeleteHook? delete;
@@ -136,6 +145,8 @@ class _CommentThreadState extends State<CommentThread> {
             commentId: commentId,
             content: content,
           );
+
+  CommentSendHook get _send => widget.send ?? _reply;
 
   CommentDeleteHook get _delete =>
       widget.delete ??
@@ -348,6 +359,70 @@ class _CommentThreadState extends State<CommentThread> {
     }
   }
 
+  // ---------------- 发表顶层评论 ----------------
+
+  /// 能不能发评论: 需要 threadId(评论列表第一页返回, 资源类/动态都有)
+  bool get _canCompose => _threadId.isNotEmpty;
+
+  /// 新评论插在热评之后(与接口"精彩评论 + 最新"的顺序一致)
+  int get _draftIndex {
+    final at = _items.indexWhere((c) => !c.hot);
+    return at < 0 ? _items.length : at;
+  }
+
+  /// 打开"写评论"面板。面板负责输入/发送/失败重试, 这里负责本地插入与回滚。
+  Future<void> _openCompose() async {
+    if (!_canCompose) {
+      _snack('评论暂时不可用, 请先重试加载评论');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ComposeSheet(submit: _submitComment),
+    );
+  }
+
+  /// 发顶层评论: 先乐观插入(无头像 / "刚刚"), 失败回滚并把异常抛回面板。
+  /// 走 [CommentSendHook](= rust.replyComment + commentId 0), 没有新增 FFI。
+  Future<void> _submitComment(String content) async {
+    final at = _draftIndex;
+    final draft = rust.CommentDto(
+      // 服务端还没回 id: 这一项不给"删除"入口(id == 0 时不显示删除)
+      id: BigInt.zero,
+      userId: _myUid,
+      userName: '我',
+      avatarUrl: null,
+      content: content,
+      timeMs: BigInt.from(DateTime.now().millisecondsSinceEpoch),
+      likedCount: BigInt.zero,
+      liked: false,
+      replyCount: BigInt.zero,
+      ipLocation: '',
+      hot: false,
+    );
+    setState(() {
+      _items.insert(at, draft);
+      _total += BigInt.one;
+    });
+    try {
+      await _send(BigInt.zero, content);
+    } catch (e) {
+      // 回滚乐观项: 用对象身份定位, 不受相同文案的其它评论影响
+      if (mounted) {
+        setState(() {
+          final i = _items.indexWhere((c) => identical(c, draft));
+          if (i >= 0) _items.removeAt(i);
+          if (_total > BigInt.zero) _total -= BigInt.one;
+        });
+      }
+      rethrow; // 面板据此显示 friendlyError 并保留已输入文本
+    }
+    if (!mounted) return;
+    _snack('已发表');
+  }
+
   /// 只有资源类评论(歌曲/歌单/专辑/播客)能查热门; 动态评论的 threadId 带 uid, 接口不认
   bool get _supportsHot => widget.kind != null || widget.loadHot != null;
 
@@ -479,7 +554,10 @@ class _CommentThreadState extends State<CommentThread> {
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
                 onOpenReplies: () => _openReplies(_items[i]),
-                onDelete: _myUid != BigInt.zero && _items[i].userId == _myUid
+                // 刚发表的乐观项(id == 0)还没有服务端 id, 不给删除入口
+                onDelete: _myUid != BigInt.zero &&
+                        _items[i].userId == _myUid &&
+                        _items[i].id != BigInt.zero
                     ? () => _deleteComment(i)
                     : null,
               ),
@@ -507,6 +585,11 @@ class _CommentThreadState extends State<CommentThread> {
               ],
             ),
           ],
+          // 底部"写评论"入口: 点开才是 TextField(见 _ComposeSheet)。
+          // 不常驻输入框的两个理由: 楼层回复面板里已有一个 TextField,
+          // 常驻会让"写评论/发回复"在语义与测试上互相歧义;
+          // 且评论区常嵌在 75% 高的弹层里, 常驻输入框会被键盘压住。
+          _ComposerBar(enabled: _canCompose, onTap: _openCompose),
         ],
       ),
     );
@@ -867,6 +950,174 @@ class _RepliesSheetState extends State<_RepliesSheet> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 评论区底部"写评论"入口(点击打开输入面板)。
+class _ComposerBar extends StatelessWidget {
+  const _ComposerBar({required this.enabled, required this.onTap});
+
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Material(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(22),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined,
+                    size: 18, color: scheme.onSurfaceVariant),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    enabled ? '写评论…' : '评论暂时不可用',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ),
+                Icon(Icons.send,
+                    size: 18,
+                    color: enabled ? scheme.primary : scheme.outline),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 发表顶层评论的输入面板: TextField + 发送(不新增 FFI, 发送走 [submit])。
+///
+/// 键盘避让: 面板整体按 MediaQuery.viewInsets.bottom 抬升。它是
+/// isScrollControlled 的 bottom sheet, 高度随内容撑开, 底部再垫键盘高度,
+/// 所以输入框始终贴在键盘上沿 —— 从详情页的评论区弹层里打开也一样。
+class _ComposeSheet extends StatefulWidget {
+  const _ComposeSheet({required this.submit});
+
+  /// 真正的发送动作(父级做乐观插入 + 失败回滚); 抛异常 = 失败
+  final Future<void> Function(String content) submit;
+
+  @override
+  State<_ComposeSheet> createState() => _ComposeSheetState();
+}
+
+class _ComposeSheetState extends State<_ComposeSheet> {
+  final TextEditingController _controller = TextEditingController();
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// 空文本 / 发送中都不给发
+  bool get _canSend => !_sending && _controller.text.trim().isNotEmpty;
+
+  Future<void> _send() async {
+    if (!_canSend) return;
+    final content = _controller.text.trim();
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await widget.submit(content);
+      if (!mounted) return;
+      _controller.clear();
+      FocusScope.of(context).unfocus();
+      Navigator.of(context).pop();
+    } catch (e) {
+      // 失败: 保留已输入文本, 原地给 friendlyError, 按钮恢复可点(= 重试)
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      // 键盘避让(弹层内打开同样生效)
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '写评论',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _controller,
+                autofocus: true,
+                minLines: 1,
+                maxLines: 4,
+                maxLength: 140,
+                textInputAction: TextInputAction.newline,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: '说点什么…',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  _error!,
+                  style: TextStyle(color: scheme.error, fontSize: 12),
+                ),
+              ],
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed:
+                        _sending ? null : () => Navigator.of(context).pop(),
+                    child: const Text('取消'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _canSend ? _send : null,
+                    child: _sending
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('发送'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

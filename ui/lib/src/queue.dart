@@ -126,6 +126,42 @@ class PlayQueue<T> {
     return insertAt;
   }
 
+  /// 从队列里删掉第 i 项(队列面板的滑删/长按删). 返回被删的项, 越界返回 null.
+  ///
+  /// 下标修正规则(UI 依赖它决定"要不要换歌"):
+  /// - 删的是当前项: 当前位置由原来的下一首顶上(删的是队尾则当前项前移到新的队尾);
+  /// - 删的是当前项之前的项: 当前下标 -1, 当前曲目不变;
+  /// - 队列被删空: index 回到 -1, current 为 null.
+  /// 调用方判断"删的是不是当前项"应在删除前比较 [index], 本方法只做纯下标修正.
+  T? removeAt(int i) {
+    if (i < 0 || i >= _items.length) return null;
+    final removed = _items.removeAt(i);
+    if (_items.isEmpty) {
+      _index = -1;
+      return removed;
+    }
+    if (i < _index) _index -= 1;
+    if (_index >= _items.length) _index = _items.length - 1;
+    return removed;
+  }
+
+  /// 拖拽排序: 把 from 处的项移到 to 处, 当前曲目保持不变(下标跟着修正).
+  /// 下标越界或原地不动返回 false.
+  bool moveTo(int from, int to) {
+    final n = _items.length;
+    if (from < 0 || from >= n || to < 0 || to >= n || from == to) return false;
+    final item = _items.removeAt(from);
+    _items.insert(to, item);
+    if (from == _index) {
+      _index = to;
+    } else if (from < _index && to >= _index) {
+      _index -= 1;
+    } else if (from > _index && to <= _index) {
+      _index += 1;
+    }
+    return true;
+  }
+
   /// 跳到与 target 相同的那一项(点击列表时用, 避免下标签重不一致)
   T? jumpToItem(T target) {
     final i = _items.indexOf(target);

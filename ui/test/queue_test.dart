@@ -120,4 +120,82 @@ void main() {
       expect(q.onEnded(), isNull);
     });
   });
+
+  group('PlayQueue 队列面板操作', () {
+    test('removeAt 删非当前项: 当前曲目不变, 下标左移', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b', 'c'], startAt: 2);
+      expect(q.removeAt(0), 'a');
+      expect(q.items, ['b', 'c']);
+      expect(q.index, 1);
+      expect(q.current, 'c');
+    });
+
+    test('removeAt 删当前项: 下一首顶上; 队尾时前移到新的队尾', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b', 'c'], startAt: 1);
+      expect(q.removeAt(1), 'b');
+      expect(q.items, ['a', 'c']);
+      expect(q.current, 'c', reason: '删当前项由顶上来的下一首接棒');
+      // 删当前项里的队尾
+      expect(q.removeAt(1), 'c');
+      expect(q.current, 'a');
+      expect(q.index, 0);
+    });
+
+    test('removeAt 删空队列: index 回到 -1, current 为 null', () {
+      final q = PlayQueue<String>()..setAll(['only'], startAt: 0);
+      expect(q.removeAt(0), 'only');
+      expect(q.isEmpty, isTrue);
+      expect(q.index, -1);
+      expect(q.current, isNull);
+      expect(q.next(), isNull);
+    });
+
+    test('removeAt 越界返回 null 且不改队列', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b'], startAt: 1);
+      expect(q.removeAt(2), isNull);
+      expect(q.removeAt(-1), isNull);
+      expect(q.items, ['a', 'b']);
+      expect(q.current, 'b');
+    });
+
+    test('moveTo 移动当前项: 当前曲目跟到新位置', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b', 'c'], startAt: 0);
+      expect(q.moveTo(0, 2), isTrue);
+      expect(q.items, ['b', 'c', 'a']);
+      expect(q.current, 'a');
+      expect(q.index, 2);
+    });
+
+    test('moveTo 跨过当前项时下标自动修正', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b', 'c'], startAt: 1);
+      // 把队首挪到队尾: 当前曲目整体左移一位
+      expect(q.moveTo(0, 2), isTrue);
+      expect(q.items, ['b', 'c', 'a']);
+      expect(q.current, 'b');
+      expect(q.index, 0);
+      // 把队尾挪到队首: 当前曲目回到中间
+      expect(q.moveTo(2, 0), isTrue);
+      expect(q.items, ['a', 'b', 'c']);
+      expect(q.current, 'b');
+      expect(q.index, 1);
+    });
+
+    test('moveTo 越界/原地不动返回 false', () {
+      final q = PlayQueue<String>()..setAll(['a', 'b'], startAt: 0);
+      expect(q.moveTo(0, 0), isFalse);
+      expect(q.moveTo(0, 5), isFalse);
+      expect(q.moveTo(-1, 1), isFalse);
+      expect(q.items, ['a', 'b']);
+      expect(q.current, 'a');
+    });
+
+    test('删当前项后 next/onEnded 仍按队列长度走', () {
+      final q = PlayQueue<String>(mode: PlayMode.repeatAll)
+        ..setAll(['a', 'b', 'c'], startAt: 0);
+      q.removeAt(0);
+      expect(q.current, 'b');
+      expect(q.onEnded(), 'c');
+      expect(q.onEnded(), 'b');
+    });
+  });
 }
