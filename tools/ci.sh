@@ -33,7 +33,13 @@ if [ "$smoke_ok" != 1 ]; then
 fi
 
 echo "== flutter analyze"
-(cd ui && flutter analyze --no-fatal-infos)
+# 本机 flutter analyze 会稳定 SIGSEGV(analysis server 的 Dart VM 在并发标记 GC 崩,
+# 2026-11-09 实测: 清 build/.dart_tool/~/.dartServer 无效, 而 dart analyze/flutter test/构建全正常)。
+# 兜底: 失败则回落到 dart analyze —— 同一套 lint 规则, 只差 flutter 专有信息; 真 error 仍会阻塞。
+if ! (cd ui && flutter analyze --no-fatal-infos); then
+  echo "WARN: flutter analyze 崩溃(本机已知问题), 回落到 dart analyze"
+  (cd ui && dart analyze)
+fi
 echo "== bridge test (loads cdylib directly)"
 cargo build -p ncm_ffi --manifest-path core/Cargo.toml
 (cd ui && flutter test)
