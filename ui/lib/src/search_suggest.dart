@@ -41,8 +41,8 @@ class SuggestionPanel extends StatelessWidget {
     required this.onSelected,
   });
 
-  final List<rust.SuggestItemDto> items;
-  final void Function(rust.SuggestItemDto) onSelected;
+  final List<rust.SuggestItem> items;
+  final void Function(rust.SuggestItem) onSelected;
 
   @override
   Widget build(BuildContext context) {

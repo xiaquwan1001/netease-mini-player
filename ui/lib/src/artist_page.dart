@@ -16,7 +16,7 @@ Future<void> showArtistDetail(
   void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum,
   Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist, // 测试注入
-  Future<List<rust.ArtistDto>> Function(BigInt)? loadSimilar, // 测试注入
+  Future<List<rust.Artist>> Function(BigInt)? loadSimilar, // 测试注入
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -48,7 +48,7 @@ class _ArtistDetailPage extends StatefulWidget {
   final void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum;
   final Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist;
-  final Future<List<rust.ArtistDto>> Function(BigInt)? loadSimilar;
+  final Future<List<rust.Artist>> Function(BigInt)? loadSimilar;
 
   @override
   State<_ArtistDetailPage> createState() => _ArtistDetailPageState();
@@ -59,7 +59,7 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
   String? _error;
 
   /// 相似歌手(需要登录; 拿不到就整块不显示, 不打扰其它内容)
-  List<rust.ArtistDto> _similar = const [];
+  List<rust.Artist> _similar = const [];
 
   @override
   void initState() {

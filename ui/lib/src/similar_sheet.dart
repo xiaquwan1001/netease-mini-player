@@ -10,14 +10,14 @@ import 'song_actions.dart';
 /// 数据: simi_song / simi_playlist(都以 song id 为种子)
 typedef SimilarSongsLoader = Future<List<rust.SongDto>> Function(
     BigInt songId, int limit);
-typedef SimilarPlaylistsLoader = Future<List<rust.PlaylistDto>> Function(
+typedef SimilarPlaylistsLoader = Future<List<rust.Playlist>> Function(
     BigInt songId, int limit);
 
 Future<void> showSimilarSongs(
   BuildContext context, {
   required rust.SongDto song,
   required void Function(List<rust.SongDto> songs, int index) onPlay,
-  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  required void Function(rust.Playlist playlist) onOpenPlaylist,
   SimilarSongsLoader? loadSongs,
   SimilarPlaylistsLoader? loadPlaylists,
 }) {
@@ -52,7 +52,7 @@ class _SimilarSheet extends StatefulWidget {
 
   final rust.SongDto song;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final SimilarSongsLoader loadSongs;
   final SimilarPlaylistsLoader loadPlaylists;
 
@@ -62,7 +62,7 @@ class _SimilarSheet extends StatefulWidget {
 
 class _SimilarSheetState extends State<_SimilarSheet> {
   List<rust.SongDto>? _songs;
-  List<rust.PlaylistDto>? _playlists;
+  List<rust.Playlist>? _playlists;
   String? _error;
 
   @override
@@ -81,7 +81,7 @@ class _SimilarSheetState extends State<_SimilarSheet> {
       if (!mounted) return;
       setState(() {
         _songs = results[0] as List<rust.SongDto>;
-        _playlists = results[1] as List<rust.PlaylistDto>;
+        _playlists = results[1] as List<rust.Playlist>;
       });
     } catch (e) {
       if (!mounted) return;

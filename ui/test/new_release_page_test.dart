@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/new_release_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.AlbumItemDto album(int id, String name) => rust.AlbumItemDto(
+rust.AlbumItem album(int id, String name) => rust.AlbumItem(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -15,7 +15,7 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('精选新碟页签: 网格渲染 + 点击回调', (tester) async {
-    rust.AlbumItemDto? opened;
+    rust.AlbumItem? opened;
     await tester.pumpWidget(host(NewReleasePage(
       onPlaySongs: (_, __) {},
       onOpenAlbum: (a) => opened = a,
@@ -65,7 +65,7 @@ void main() {
       onOpenArtist: (_) {},
       loadNewestAlbums: () async {
         if (fail) throw Exception('[network] boom');
-        return <rust.AlbumItemDto>[];
+        return <rust.AlbumItem>[];
       },
     )));
     await tester.pumpAndSettle();

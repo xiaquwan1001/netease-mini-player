@@ -10,14 +10,14 @@ import 'rust/api.dart' as rust;
 /// 数据来源: playlist_categories(分类) + playlists_by_category(分类歌单, 可分页)
 /// + high_quality_playlists(精品歌单)。点卡片走歌单详情页。
 typedef CategoryLoader = Future<List<rust.PlaylistCategoryDto>> Function();
-typedef CategoryPageLoader = Future<List<rust.PlaylistDto>> Function(
+typedef CategoryPageLoader = Future<List<rust.Playlist>> Function(
     String cat, int limit, int offset);
-typedef HighQualityLoader = Future<List<rust.PlaylistDto>> Function(
+typedef HighQualityLoader = Future<List<rust.Playlist>> Function(
     String cat, int limit);
 
 Future<void> showPlaylistSquare(
   BuildContext context, {
-  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  required void Function(rust.Playlist playlist) onOpenPlaylist,
   CategoryLoader? loadCategories,
   CategoryPageLoader? loadPage,
   HighQualityLoader? loadHighQuality,
@@ -46,7 +46,7 @@ class PlaylistSquareView extends StatefulWidget {
     this.loadHighQuality,
   });
 
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final CategoryLoader? loadCategories;
   final CategoryPageLoader? loadPage;
   final HighQualityLoader? loadHighQuality;
@@ -96,7 +96,7 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
   }
 
   /// 精品歌单一次性拉 50 条, 不分页; 分类歌单按 offset 分页
-  PagedLoader<rust.PlaylistDto> get _pageLoader {
+  PagedLoader<rust.Playlist> get _pageLoader {
     final cat = _cat;
     final hq = _highQuality;
     if (hq) {
@@ -126,7 +126,7 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return PagedListView<rust.PlaylistDto>(
+    return PagedListView<rust.Playlist>(
       key: ValueKey('$_highQuality|$_cat'),
       loader: _pageLoader,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -253,7 +253,7 @@ class _CatChip extends StatelessWidget {
 class _PlaylistCard extends StatelessWidget {
   const _PlaylistCard({required this.playlist, required this.onTap});
 
-  final rust.PlaylistDto playlist;
+  final rust.Playlist playlist;
   final VoidCallback onTap;
 
   @override

@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/user_list_page.dart';
 
-rust.UserItemDto user(int id, String name, {bool followed = false}) =>
-    rust.UserItemDto(
+rust.UserItem user(int id, String name, {bool followed = false}) =>
+    rust.UserItem(
       id: BigInt.from(id),
       name: name,
       avatarUrl: null,

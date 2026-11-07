@@ -246,7 +246,7 @@ class _HomePageState extends State<HomePage> {
   // ---- 搜索建议 / 历史 ----
   final _searchFocus = FocusNode();
   Timer? _suggestDebounce;
-  List<rust.SuggestItemDto> _suggestions = const [];
+  List<rust.SuggestItem> _suggestions = const [];
   /// 精确实体命中(search_multimatch; orders 为空 = 无命中)
   rust.SearchExactDto? _exact;
   /// 纯关键词联想(mobile search_suggest; 卡片/实体都空时的兜底)
@@ -567,7 +567,7 @@ class _HomePageState extends State<HomePage> {
       );
 
   Future<void> _openExactArtist(int id) async {
-    for (final a in _exact?.artists ?? const <rust.ArtistDto>[]) {
+    for (final a in _exact?.artists ?? const <rust.Artist>[]) {
       if (a.id.toInt() != id) continue;
       await showArtistDetail(
         context,
@@ -587,7 +587,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openExactPlaylist(int id) async {
-    for (final p in _exact?.playlists ?? const <rust.PlaylistDto>[]) {
+    for (final p in _exact?.playlists ?? const <rust.Playlist>[]) {
       if (p.id.toInt() == id) {
         await _openPlaylist(p);
         return;
@@ -792,7 +792,7 @@ class _HomePageState extends State<HomePage> {
   /// 搜索结果: 歌单卡片 → 歌单详情
   void _openSearchPlaylist(rust.SearchPlaylistDto item) {
     _openPlaylist(
-      rust.PlaylistDto(
+      rust.Playlist(
         id: item.id,
         name: item.name,
         coverUrl: item.coverUrl,
@@ -1266,7 +1266,7 @@ class _HomePageState extends State<HomePage> {
       await _createPlaylistAndAdd(song);
       return;
     }
-    final pl = picked as rust.PlaylistDto;
+    final pl = picked as rust.Playlist;
     if (pl.special) {
       await rust.setLiked(trackId: song.id, liked: true);
       if (!mounted) return;
@@ -1483,7 +1483,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
   /// 不再把曲目塞进搜索页列表。
-  Future<void> _openPlaylist(rust.PlaylistDto pl) async {
+  Future<void> _openPlaylist(rust.Playlist pl) async {
     await showPlaylistDetail(
       context,
       playlistId: pl.id,
@@ -1531,7 +1531,7 @@ class _HomePageState extends State<HomePage> {
     try {
       final pls = await retryNetwork(rust.myPlaylists);
       if (!mounted) return;
-      rust.PlaylistDto? found;
+      rust.Playlist? found;
       for (final p in pls) {
         if (p.special) {
           found = p;

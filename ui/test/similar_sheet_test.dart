@@ -24,7 +24,7 @@ void main() {
   testWidgets('相似歌曲面板: 点歌整批起播, 相似歌单可点开', (tester) async {
     List<rust.SongDto>? played;
     int? playedIndex;
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
 
     await tester.pumpWidget(host(Builder(
       builder: (ctx) => TextButton(
@@ -38,7 +38,7 @@ void main() {
           onOpenPlaylist: (pl) => opened = pl,
           loadSongs: (id, limit) async => [song(2, '相似一'), song(3, '相似二')],
           loadPlaylists: (id, limit) async => [
-            rust.PlaylistDto(
+            rust.Playlist(
               id: BigInt.from(9),
               name: '相似歌单A',
               coverUrl: null,

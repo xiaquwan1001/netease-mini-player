@@ -31,7 +31,7 @@ MineView buildMine({
       onOpenAccounts: () {},
       loadLiked: () async => [song(1, '喜欢的歌')],
       loadPlaylists: () async => [
-        rust.PlaylistDto(
+        rust.Playlist(
           id: BigInt.from(2),
           name: '收藏歌单',
           coverUrl: null,
@@ -59,7 +59,7 @@ MineView buildMine({
       onOpenFolloweds: () async {},
       onOpenAlbum: (_) {},
       loadAlbums: () async => [
-        rust.AlbumItemDto(
+        rust.AlbumItem(
           id: BigInt.from(4),
           name: '收藏专辑',
           coverUrl: null,

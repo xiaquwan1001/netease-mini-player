@@ -8,7 +8,7 @@ import 'song_actions.dart';
 import 'toast.dart' show showToastWith;
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
-typedef PlaylistListLoader = Future<List<rust.PlaylistDto>> Function();
+typedef PlaylistListLoader = Future<List<rust.Playlist>> Function();
 typedef DateListLoader = Future<List<String>> Function();
 typedef HistorySongsLoader = Future<List<rust.SongDto>> Function(String date);
 
@@ -20,7 +20,7 @@ typedef HistorySongsLoader = Future<List<rust.SongDto>> Function(String date);
 Future<void> showDiscoverPage(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
-  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  required void Function(rust.Playlist playlist) onOpenPlaylist,
   SongListLoader? loadSongs,
   PlaylistListLoader? loadPlaylists,
   DateListLoader? loadHistoryDates,
@@ -64,7 +64,7 @@ class DailyRecommendPage extends StatelessWidget {
   final DateListLoader loadHistoryDates;
   final HistorySongsLoader loadHistorySongs;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final Future<void> Function(rust.SongDto song)? onDislike;
 
   @override
@@ -373,7 +373,7 @@ class _DailyPlaylistsTab extends StatefulWidget {
   const _DailyPlaylistsTab({required this.load, required this.onOpen});
 
   final PlaylistListLoader load;
-  final void Function(rust.PlaylistDto playlist) onOpen;
+  final void Function(rust.Playlist playlist) onOpen;
 
   @override
   State<_DailyPlaylistsTab> createState() => _DailyPlaylistsTabState();
@@ -381,7 +381,7 @@ class _DailyPlaylistsTab extends StatefulWidget {
 
 class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
     with AutomaticKeepAliveClientMixin {
-  List<rust.PlaylistDto>? _lists;
+  List<rust.Playlist>? _lists;
   String? _error;
 
   @override
@@ -439,7 +439,7 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
   }
 }
 
-typedef AlbumListLoader = Future<List<rust.AlbumItemDto>> Function();
+typedef AlbumListLoader = Future<List<rust.AlbumItem>> Function();
 typedef PodcastListLoader = Future<List<rust.PodcastRadioDto>> Function();
 
 /// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
@@ -453,9 +453,9 @@ Future<void> showRecentPage(
   AlbumListLoader? loadAlbums,
   PlaylistListLoader? loadPlaylists,
   PodcastListLoader? loadPodcasts,
-  void Function(rust.PlaylistDto playlist)? onOpenPlaylist,
+  void Function(rust.Playlist playlist)? onOpenPlaylist,
   void Function(rust.PodcastRadioDto radio)? onOpenPodcast,
-  void Function(rust.AlbumItemDto album)? onOpenAlbum,
+  void Function(rust.AlbumItem album)? onOpenAlbum,
 }) {
   final songs = loadRecent ?? () => rust.recentSongs(limit: 100);
   final albums = loadAlbums ?? () => rust.recentAlbums(limit: 100);
@@ -496,9 +496,9 @@ class RecentPlayedPage extends StatelessWidget {
   final PlaylistListLoader loadPlaylists;
   final PodcastListLoader loadPodcasts;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
-  final void Function(rust.PlaylistDto playlist)? onOpenPlaylist;
+  final void Function(rust.Playlist playlist)? onOpenPlaylist;
   final void Function(rust.PodcastRadioDto radio)? onOpenPodcast;
-  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+  final void Function(rust.AlbumItem album)? onOpenAlbum;
 
   @override
   Widget build(BuildContext context) {
@@ -536,7 +536,7 @@ class RecentPlayedPage extends StatelessWidget {
                             : null,
                       ),
                     ),
-                    _RecentBucketTab<rust.AlbumItemDto>(
+                    _RecentBucketTab<rust.AlbumItem>(
                       load: loadAlbums,
                       emptyText: '还没有最近听过的专辑',
                       itemBuilder: (context, a, i, _) => ListTile(
@@ -559,7 +559,7 @@ class RecentPlayedPage extends StatelessWidget {
                               },
                       ),
                     ),
-                    _RecentBucketTab<rust.PlaylistDto>(
+                    _RecentBucketTab<rust.Playlist>(
                       load: loadPlaylists,
                       emptyText: '还没有最近听过的歌单',
                       itemBuilder: (context, pl, i, _) => ListTile(

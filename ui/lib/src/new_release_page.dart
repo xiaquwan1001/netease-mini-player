@@ -6,9 +6,9 @@ import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
-typedef AreaAlbumLoader = Future<List<rust.AlbumItemDto>> Function(String area);
-typedef HotArtistLoader = Future<List<rust.HotArtistDto>> Function();
-typedef NewestAlbumLoader = Future<List<rust.AlbumItemDto>> Function();
+typedef AreaAlbumLoader = Future<List<rust.AlbumItem>> Function(String area);
+typedef HotArtistLoader = Future<List<rust.HotArtist>> Function();
+typedef NewestAlbumLoader = Future<List<rust.AlbumItem>> Function();
 
 /// 地区选项: key 传给 Rust(area 简写), label 给 UI
 const List<({String key, String label})> releaseAreas = [
@@ -24,8 +24,8 @@ const List<({String key, String label})> releaseAreas = [
 Future<void> showNewReleasePage(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
-  required void Function(rust.AlbumItemDto album) onOpenAlbum,
-  required void Function(rust.HotArtistDto artist) onOpenArtist,
+  required void Function(rust.AlbumItem album) onOpenAlbum,
+  required void Function(rust.HotArtist artist) onOpenArtist,
   AreaSongLoader? loadSongs,
   AreaAlbumLoader? loadAlbums,
   HotArtistLoader? loadArtists,
@@ -59,8 +59,8 @@ class NewReleasePage extends StatelessWidget {
   });
 
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.AlbumItemDto album) onOpenAlbum;
-  final void Function(rust.HotArtistDto artist) onOpenArtist;
+  final void Function(rust.AlbumItem album) onOpenAlbum;
+  final void Function(rust.HotArtist artist) onOpenArtist;
   final AreaSongLoader? loadSongs;
   final AreaAlbumLoader? loadAlbums;
   final HotArtistLoader? loadArtists;
@@ -217,7 +217,7 @@ class _NewAlbumsTab extends StatefulWidget {
   const _NewAlbumsTab({required this.load, required this.onOpen});
 
   final AreaAlbumLoader load;
-  final void Function(rust.AlbumItemDto album) onOpen;
+  final void Function(rust.AlbumItem album) onOpen;
 
   @override
   State<_NewAlbumsTab> createState() => _NewAlbumsTabState();
@@ -238,7 +238,7 @@ class _NewAlbumsTabState extends State<_NewAlbumsTab> {
           },
         ),
         Expanded(
-          child: PagedListView<rust.AlbumItemDto>(
+          child: PagedListView<rust.AlbumItem>(
             key: ValueKey(_area),
             refreshable: false,
             emptyText: '这个地区暂时没有新碟',
@@ -274,11 +274,11 @@ class _HotArtistsTab extends StatelessWidget {
   const _HotArtistsTab({required this.load, required this.onOpen});
 
   final HotArtistLoader load;
-  final void Function(rust.HotArtistDto artist) onOpen;
+  final void Function(rust.HotArtist artist) onOpen;
 
   @override
   Widget build(BuildContext context) {
-    return PagedListView<rust.HotArtistDto>(
+    return PagedListView<rust.HotArtist>(
       refreshable: false,
       emptyText: '暂时没有歌手榜',
       loader: (cursor) async =>
@@ -315,7 +315,7 @@ class _NewestAlbumsTab extends StatefulWidget {
   const _NewestAlbumsTab({required this.load, required this.onOpen});
 
   final NewestAlbumLoader load;
-  final void Function(rust.AlbumItemDto album) onOpen;
+  final void Function(rust.AlbumItem album) onOpen;
 
   @override
   State<_NewestAlbumsTab> createState() => _NewestAlbumsTabState();
@@ -324,7 +324,7 @@ class _NewestAlbumsTab extends StatefulWidget {
 class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
   @override
   Widget build(BuildContext context) {
-    return PagedListView<rust.AlbumItemDto>(
+    return PagedListView<rust.AlbumItem>(
       refreshable: false,
       emptyText: '暂时没有精选新碟',
       padding: const EdgeInsets.all(12),

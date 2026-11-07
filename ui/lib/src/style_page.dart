@@ -11,14 +11,14 @@ import 'toast.dart' show showToast;
 /// 入口在推荐页的"风格推荐"(见 recommend_view.dart), 数据来自
 /// /api/style-tag/home/{song,playlist}(见 ncm-service)。
 typedef StyleSongsLoader = Future<List<rust.SongDto>> Function(String tagId);
-typedef StylePlaylistsLoader = Future<List<rust.PlaylistDto>> Function(
+typedef StylePlaylistsLoader = Future<List<rust.Playlist>> Function(
     String tagId);
 
 Future<void> showStyleDetail(
   BuildContext context, {
-  required rust.StyleTagDto tag,
+  required rust.StyleTag tag,
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
-  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  required void Function(rust.Playlist playlist) onOpenPlaylist,
   StyleSongsLoader? loadSongs,
   StylePlaylistsLoader? loadPlaylists,
 }) {
@@ -48,9 +48,9 @@ class StyleDetailView extends StatefulWidget {
     this.loadPlaylists,
   });
 
-  final rust.StyleTagDto tag;
+  final rust.StyleTag tag;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final StyleSongsLoader? loadSongs;
   final StylePlaylistsLoader? loadPlaylists;
 
@@ -67,7 +67,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
       (tagId) => rust.stylePlaylists(tagId: tagId, limit: 20);
 
   late Future<List<rust.SongDto>> _songsFuture;
-  late Future<List<rust.PlaylistDto>> _playlistsFuture;
+  late Future<List<rust.Playlist>> _playlistsFuture;
 
   @override
   void initState() {
@@ -136,7 +136,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
 class _StyleHeader extends StatelessWidget {
   const _StyleHeader({required this.tag});
 
-  final rust.StyleTagDto tag;
+  final rust.StyleTag tag;
 
   @override
   Widget build(BuildContext context) {
@@ -219,13 +219,13 @@ class _PlaylistRow extends StatelessWidget {
     required this.onRetry,
   });
 
-  final Future<List<rust.PlaylistDto>> future;
-  final void Function(rust.PlaylistDto playlist) onOpen;
+  final Future<List<rust.Playlist>> future;
+  final void Function(rust.Playlist playlist) onOpen;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<rust.PlaylistDto>>(
+    return FutureBuilder<List<rust.Playlist>>(
       future: future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
@@ -246,7 +246,7 @@ class _PlaylistRow extends StatelessWidget {
             onRetry: onRetry,
           );
         }
-        final lists = snap.data ?? const <rust.PlaylistDto>[];
+        final lists = snap.data ?? const <rust.Playlist>[];
         if (lists.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),

@@ -22,7 +22,7 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('按分组渲染, 中文小标题, 点可播条目回调歌单', (tester) async {
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
     await tester.pumpWidget(host(AllChartsPage(
       onOpenPlaylist: (p) => opened = p,
       loadCatalog: () async => [
@@ -46,7 +46,7 @@ void main() {
   });
 
   testWidgets('canPlay=false 灰显不可点', (tester) async {
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
     await tester.pumpWidget(host(AllChartsPage(
       onOpenPlaylist: (p) => opened = p,
       loadCatalog: () async => [

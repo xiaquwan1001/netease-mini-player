@@ -23,17 +23,17 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 void main() {
   testWidgets('曲风详情页展示歌单与歌曲', (tester) async {
     List<rust.SongDto>? played;
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
 
     await tester.pumpWidget(host(StyleDetailView(
-      tag: rust.StyleTagDto(
+      tag: rust.StyleTag(
         id: '1009',
         name: '粤语流行',
         songCount: BigInt.from(2046),
       ),
       loadSongs: (_) async => [song(1, '风格单曲')],
       loadPlaylists: (_) async => [
-        rust.PlaylistDto(
+        rust.Playlist(
           id: BigInt.from(22),
           name: '粤语流行趋势',
           coverUrl: null,
@@ -59,7 +59,7 @@ void main() {
 
   testWidgets('空态: 风格歌单/歌曲为空时给出占位提示', (tester) async {
     await tester.pumpWidget(host(StyleDetailView(
-      tag: rust.StyleTagDto(id: '1', name: '冷门风格', songCount: null),
+      tag: rust.StyleTag(id: '1', name: '冷门风格', songCount: null),
       loadSongs: (_) async => const [],
       loadPlaylists: (_) async => const [],
       onPlaySongs: (_, _) {},
@@ -73,7 +73,7 @@ void main() {
   testWidgets('加载失败: friendlyError + 重试, 重试后出数据', (tester) async {
     var attempts = 0;
     await tester.pumpWidget(host(StyleDetailView(
-      tag: rust.StyleTagDto(id: '1', name: '失败风格', songCount: null),
+      tag: rust.StyleTag(id: '1', name: '失败风格', songCount: null),
       loadSongs: (_) async {
         attempts++;
         if (attempts <= 3) throw Exception('[network] reset');
@@ -101,14 +101,14 @@ void main() {
         data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
         child: Scaffold(
           body: StyleDetailView(
-            tag: rust.StyleTagDto(
+            tag: rust.StyleTag(
               id: '1009',
               name: '一个名字特别特别长的曲风用于小屏回归测试',
               songCount: BigInt.from(2046),
             ),
             loadSongs: (_) async => [song(1, '小屏风格歌')],
             loadPlaylists: (_) async => [
-              rust.PlaylistDto(
+              rust.Playlist(
                 id: BigInt.from(22),
                 name: '小屏上的一个很长很长很长很长很长名称的歌单',
                 coverUrl: null,

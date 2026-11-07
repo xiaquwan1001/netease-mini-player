@@ -26,7 +26,7 @@ class FeedView extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final Future<List<rust.FeedEventDto>> Function()? loadFeed;
-  final Future<List<rust.ArtistDto>> Function()? loadSubscribedArtists;
+  final Future<List<rust.Artist>> Function()? loadSubscribedArtists;
 
   @override
   State<FeedView> createState() => _FeedViewState();
@@ -765,14 +765,14 @@ class _AllArtistsSheet extends StatefulWidget {
 
   final List<_Author> authors;
   final BigInt? selected;
-  final Future<List<rust.ArtistDto>> Function() loadSubscribed;
+  final Future<List<rust.Artist>> Function() loadSubscribed;
 
   @override
   State<_AllArtistsSheet> createState() => _AllArtistsSheetState();
 }
 
 class _AllArtistsSheetState extends State<_AllArtistsSheet> {
-  List<rust.ArtistDto>? _subscribed;
+  List<rust.Artist>? _subscribed;
   String? _error;
 
   @override
@@ -794,8 +794,8 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
   }
 
   /// 已关注但本页没发过动态的艺人(按关注列表顺序)
-  List<rust.ArtistDto> get _others {
-    final list = _subscribed ?? const <rust.ArtistDto>[];
+  List<rust.Artist> get _others {
+    final list = _subscribed ?? const <rust.Artist>[];
     if (list.isEmpty) return const [];
     final inFeed = {for (final a in widget.authors) a.userId};
     final seen = <BigInt>{};

@@ -535,7 +535,7 @@ Future<VipPageData> loadVipPageData() async {
   return mapVipOverview(overview, profile);
 }
 
-Future<rust.ProfileDetailDto?> _tryProfileDetail() async {
+Future<rust.ProfileDetail?> _tryProfileDetail() async {
   try {
     return await rust.profileDetail();
   } catch (_) {
@@ -546,7 +546,7 @@ Future<rust.ProfileDetailDto?> _tryProfileDetail() async {
 /// Rust DTO -> 视图模型(纯函数, 便于单测).
 VipPageData mapVipOverview(
   rust.VipOverviewDto overview, [
-  rust.ProfileDetailDto? profile,
+  rust.ProfileDetail? profile,
 ]) {
   if (!overview.loggedIn) {
     return const VipPageData(isLoggedIn: false);

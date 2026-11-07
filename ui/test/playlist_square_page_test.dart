@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/playlist_square_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.PlaylistDto playlist(int id, String name) => rust.PlaylistDto(
+rust.Playlist playlist(int id, String name) => rust.Playlist(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -16,7 +16,7 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 void main() {
   testWidgets('分类筛选切换会重新取数, 点歌单回调', (tester) async {
     final calls = <String>[];
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
 
     await tester.pumpWidget(host(PlaylistSquareView(
       loadCategories: () async => const [

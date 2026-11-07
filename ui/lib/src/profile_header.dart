@@ -22,7 +22,7 @@ class ProfileHeader extends StatefulWidget {
     this.loadDetail,
   });
 
-  final rust.ProfileDetailDto? detail;
+  final rust.ProfileDetail? detail;
   final String? fallbackNickname;
   final bool loggedIn;
   final VoidCallback? onTap;
@@ -33,14 +33,14 @@ class ProfileHeader extends StatefulWidget {
 
   /// 注入式详情 loader(refreshCounts 用, 测试可注入 mock);
   /// 未注入或未登录时 refreshCounts 是 no-op。
-  final Future<rust.ProfileDetailDto?> Function()? loadDetail;
+  final Future<rust.ProfileDetail?> Function()? loadDetail;
 
   @override
   ProfileHeaderState createState() => ProfileHeaderState();
 }
 
 class ProfileHeaderState extends State<ProfileHeader> {
-  rust.ProfileDetailDto? _detail;
+  rust.ProfileDetail? _detail;
   bool _refreshing = false;
 
   @override

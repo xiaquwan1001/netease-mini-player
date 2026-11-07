@@ -46,9 +46,9 @@ class MineView extends StatefulWidget {
   final VoidCallback onLogin;
   final VoidCallback onOpenAccounts;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
-  final void Function(rust.AlbumItemDto album) onOpenAlbum;
+  final void Function(rust.AlbumItem album) onOpenAlbum;
   final VoidCallback onOpenRecent;
 
   /// 资料卡上的"关注 N" / "粉丝 N"
@@ -77,16 +77,16 @@ class MineView extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index)? onPlayLiked;
 
   final Future<List<rust.SongDto>> Function()? loadLiked;
-  final Future<List<rust.PlaylistDto>> Function()? loadPlaylists;
+  final Future<List<rust.Playlist>> Function()? loadPlaylists;
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
-  final Future<rust.ProfileDetailDto> Function()? loadProfile;
+  final Future<rust.ProfileDetail> Function()? loadProfile;
   final Future<List<rust.SongDto>> Function()? loadRecent;
 
   /// 听歌排行("all" 总量 / "week" 当周). 缺省走 rust.playRanking.
   final RankingLoader? loadRanking;
 
   /// 收藏的专辑(需登录). 缺省走 rust.subscribedAlbums.
-  final Future<List<rust.AlbumItemDto>> Function()? loadAlbums;
+  final Future<List<rust.AlbumItem>> Function()? loadAlbums;
 
   @override
   State<MineView> createState() => _MineViewState();
@@ -95,11 +95,11 @@ class MineView extends StatefulWidget {
 class _MineViewState extends State<MineView> {
   Future<List<rust.SongDto>> Function() get _liked =>
       widget.loadLiked ?? rust.likedSongs;
-  Future<List<rust.PlaylistDto>> Function() get _playlists =>
+  Future<List<rust.Playlist>> Function() get _playlists =>
       widget.loadPlaylists ?? rust.myPlaylists;
   Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
-  Future<List<rust.AlbumItemDto>> Function() get _albums =>
+  Future<List<rust.AlbumItem>> Function() get _albums =>
       widget.loadAlbums ?? (() => rust.subscribedAlbums(limit: 50));
   /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
   Future<List<rust.SongDto>> _loadRecent() async {
@@ -346,14 +346,14 @@ class _ProfileSection extends StatefulWidget {
   final VoidCallback onLogin;
   final Future<void> Function() onOpenFollows;
   final Future<void> Function() onOpenFolloweds;
-  final Future<rust.ProfileDetailDto> Function()? load;
+  final Future<rust.ProfileDetail> Function()? load;
 
   @override
   State<_ProfileSection> createState() => _ProfileSectionState();
 }
 
 class _ProfileSectionState extends State<_ProfileSection> {
-  rust.ProfileDetailDto? _detail;
+  rust.ProfileDetail? _detail;
 
   @override
   void initState() {
@@ -485,8 +485,8 @@ class _LikedSection extends StatelessWidget {
 class _PlaylistsSection extends StatelessWidget {
   const _PlaylistsSection({required this.load, required this.onOpen});
 
-  final Future<List<rust.PlaylistDto>> Function() load;
-  final void Function(rust.PlaylistDto playlist) onOpen;
+  final Future<List<rust.Playlist>> Function() load;
+  final void Function(rust.Playlist playlist) onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -494,7 +494,7 @@ class _PlaylistsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(title: '收藏的歌单'),
-        _AsyncSection<List<rust.PlaylistDto>>(
+        _AsyncSection<List<rust.Playlist>>(
           load: load,
           emptyText: '还没有收藏歌单',
           builder: (context, lists, reload) => SizedBox(
@@ -613,8 +613,8 @@ class _CoverCard extends StatelessWidget {
 class _AlbumsSection extends StatelessWidget {
   const _AlbumsSection({required this.load, required this.onOpen});
 
-  final Future<List<rust.AlbumItemDto>> Function() load;
-  final void Function(rust.AlbumItemDto album) onOpen;
+  final Future<List<rust.AlbumItem>> Function() load;
+  final void Function(rust.AlbumItem album) onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -622,7 +622,7 @@ class _AlbumsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(title: '收藏的专辑'),
-        _AsyncSection<List<rust.AlbumItemDto>>(
+        _AsyncSection<List<rust.AlbumItem>>(
           load: load,
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
           builder: (context, albums, reload) => SizedBox(

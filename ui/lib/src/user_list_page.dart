@@ -8,7 +8,7 @@ import 'rust/api.dart' as rust;
 /// 关注/粉丝列表: 两个 tab, 每行可关注/取关.
 ///
 /// uid = 0 时后端用当前登录账号(我的资料卡点进来就是这种)。
-typedef UserListLoader = Future<List<rust.UserItemDto>> Function(
+typedef UserListLoader = Future<List<rust.UserItem>> Function(
     BigInt uid, int limit, int offset);
 typedef FollowHook = Future<bool> Function(BigInt uid, bool follow);
 
@@ -81,7 +81,7 @@ class _UserListViewState extends State<UserListView> {
       (uid, follow) => rust.setFollow(uid: uid, follow: follow);
 
   /// offset 追加按服务端已消费行数算(与去重后的列表长度无关)
-  PagedLoader<rust.UserItemDto> get _loader {
+  PagedLoader<rust.UserItem> get _loader {
     final raw = _rawLoader;
     final uid = widget.uid;
     var consumed = 0;
@@ -92,10 +92,10 @@ class _UserListViewState extends State<UserListView> {
     };
   }
 
-  bool _followed(rust.UserItemDto u) =>
+  bool _followed(rust.UserItem u) =>
       _followOverrides[u.id] ?? u.followed;
 
-  Future<void> _toggleFollow(rust.UserItemDto u) async {
+  Future<void> _toggleFollow(rust.UserItem u) async {
     final target = !_followed(u);
     setState(() => _followOverrides[u.id] = target);
     try {
@@ -136,7 +136,7 @@ class _UserListViewState extends State<UserListView> {
           ),
         ),
         Expanded(
-          child: PagedListView<rust.UserItemDto>(
+          child: PagedListView<rust.UserItem>(
             key: ValueKey(_fans),
             loader: _loader,
             itemBuilder: (context, u, i, items) {

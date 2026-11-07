@@ -24,7 +24,7 @@ class _FakeRustApi implements RustLibApi {
       const [];
 
   @override
-  Future<List<rust.PlaylistDto>> crateApiPlaylistsByCategory({
+  Future<List<rust.Playlist>> crateApiPlaylistsByCategory({
     required String cat,
     required int limit,
     required int offset,
@@ -32,7 +32,7 @@ class _FakeRustApi implements RustLibApi {
       const [];
 
   @override
-  Future<List<rust.PlaylistDto>> crateApiHighQualityPlaylists({
+  Future<List<rust.Playlist>> crateApiHighQualityPlaylists({
     required String cat,
     required int limit,
   }) async =>
@@ -243,7 +243,7 @@ void main() {
         loadPodcasts: () async => const [],
         loadFm: () async => const [],
         loadStyles: () async => const [
-          rust.StyleTagDto(id: '1009', name: '粤语流行'),
+          rust.StyleTag(id: '1009', name: '粤语流行'),
         ],
         loadCharts: () async => [
           rust.ChartSummaryDto(
@@ -257,7 +257,7 @@ void main() {
         ],
         loadNewSongs: () async => [song(30, '新歌速递一')],
         loadNewAlbums: () async => [
-          rust.AlbumItemDto(
+          rust.AlbumItem(
             id: BigInt.from(40),
             name: '新碟A',
             coverUrl: null,

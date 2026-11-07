@@ -75,7 +75,7 @@ void main() {
   test('映射: 会员/成长值/签到/任务 字段一一对应', () {
     final data = mapVipOverview(
       overview(),
-      rust.ProfileDetailDto(
+      rust.ProfileDetail(
         userId: BigInt.from(42),
         nickname: '测试用户',
         avatarUrl: 'https://example.com/a.jpg',

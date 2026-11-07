@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `artist_dto`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `to_user_level_dto`, `to_user_medal_dto`, `user_item_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -24,7 +24,7 @@ Future<ArtistDetailDto> artistDetail({required BigInt artistId}) =>
     RustLib.instance.api.crateApiArtistDetail(artistId: artistId);
 
 /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
-Future<ProfileDetailDto> profileDetail() =>
+Future<ProfileDetail> profileDetail() =>
     RustLib.instance.api.crateApiProfileDetail();
 
 /// 收藏曲目到指定歌单(需登录)
@@ -71,7 +71,7 @@ Future<bool> setLiked({required BigInt trackId, required bool liked}) =>
     RustLib.instance.api.crateApiSetLiked(trackId: trackId, liked: liked);
 
 /// 我的歌单(含"我喜欢的音乐")
-Future<List<PlaylistDto>> myPlaylists() =>
+Future<List<Playlist>> myPlaylists() =>
     RustLib.instance.api.crateApiMyPlaylists();
 
 /// 某个歌单的曲目
@@ -125,7 +125,7 @@ Future<List<SongDto>> dailyRecommendSongs() =>
     RustLib.instance.api.crateApiDailyRecommendSongs();
 
 /// 每日推荐歌单(原版推荐歌单, 需要登录)
-Future<List<PlaylistDto>> dailyRecommendPlaylists() =>
+Future<List<Playlist>> dailyRecommendPlaylists() =>
     RustLib.instance.api.crateApiDailyRecommendPlaylists();
 
 /// 心动模式: 以当前曲目为种子, 在 playlist_id(0 = 不限定)里续播 count 首
@@ -140,7 +140,7 @@ Future<List<SongDto>> heartModeSongs({
 );
 
 /// 搜索建议(输入联想)
-Future<List<SuggestItemDto>> searchSuggest({required String keywords}) =>
+Future<List<SuggestItem>> searchSuggest({required String keywords}) =>
     RustLib.instance.api.crateApiSearchSuggest(keywords: keywords);
 
 /// 搜索历史(最近在前)
@@ -170,7 +170,7 @@ Future<AlbumDetailDto> albumDetail({required BigInt albumId}) =>
     RustLib.instance.api.crateApiAlbumDetail(albumId: albumId);
 
 /// 歌单详情(歌单页头部信息)
-Future<PlaylistDetailDto> playlistDetail({required BigInt playlistId}) =>
+Future<PlaylistDetail> playlistDetail({required BigInt playlistId}) =>
     RustLib.instance.api.crateApiPlaylistDetail(playlistId: playlistId);
 
 /// 收藏/取消收藏歌单(需登录)
@@ -321,7 +321,7 @@ Future<List<PodcastRadioDto>> subscribedPodcasts({required int limit}) =>
     RustLib.instance.api.crateApiSubscribedPodcasts(limit: limit);
 
 /// 关注的艺人(需登录)
-Future<List<ArtistDto>> subscribedArtists({required int limit}) =>
+Future<List<Artist>> subscribedArtists({required int limit}) =>
     RustLib.instance.api.crateApiSubscribedArtists(limit: limit);
 
 /// 关注动态(需登录): 关注的人/艺人发布的单曲、歌单、专辑、节目或文字动态
@@ -362,7 +362,7 @@ Future<List<PlayRankEntryDto>> playRanking({required String period}) =>
     RustLib.instance.api.crateApiPlayRanking(period: period);
 
 /// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
-Future<List<StyleTagDto>> stylePreference() =>
+Future<List<StyleTag>> stylePreference() =>
     RustLib.instance.api.crateApiStylePreference();
 
 /// 某个曲风下的歌曲
@@ -370,7 +370,7 @@ Future<List<SongDto>> styleSongs({required String tagId, required int limit}) =>
     RustLib.instance.api.crateApiStyleSongs(tagId: tagId, limit: limit);
 
 /// 某个曲风下的歌单
-Future<List<PlaylistDto>> stylePlaylists({
+Future<List<Playlist>> stylePlaylists({
   required String tagId,
   required int limit,
 }) => RustLib.instance.api.crateApiStylePlaylists(tagId: tagId, limit: limit);
@@ -379,8 +379,8 @@ Future<List<PlaylistDto>> stylePlaylists({
 Future<List<ChartSummaryDto>> chartList() =>
     RustLib.instance.api.crateApiChartList();
 
-/// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItemDto
-Future<List<AlbumItemDto>> newestAlbums({required int limit}) =>
+/// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItem
+Future<List<AlbumItem>> newestAlbums({required int limit}) =>
     RustLib.instance.api.crateApiNewestAlbums(limit: limit);
 
 /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
@@ -392,7 +392,7 @@ Future<List<PlaylistCategoryDto>> playlistCategories() =>
     RustLib.instance.api.crateApiPlaylistCategories();
 
 /// 某个分类下的歌单(按热度, offset 翻页)
-Future<List<PlaylistDto>> playlistsByCategory({
+Future<List<Playlist>> playlistsByCategory({
   required String cat,
   required int limit,
   required int offset,
@@ -403,13 +403,13 @@ Future<List<PlaylistDto>> playlistsByCategory({
 );
 
 /// 精品歌单(编辑精选)
-Future<List<PlaylistDto>> highQualityPlaylists({
+Future<List<Playlist>> highQualityPlaylists({
   required String cat,
   required int limit,
 }) => RustLib.instance.api.crateApiHighQualityPlaylists(cat: cat, limit: limit);
 
 /// 我收藏的专辑(需登录)
-Future<List<AlbumItemDto>> subscribedAlbums({required int limit}) =>
+Future<List<AlbumItem>> subscribedAlbums({required int limit}) =>
     RustLib.instance.api.crateApiSubscribedAlbums(limit: limit);
 
 /// 收藏/取消收藏专辑(需登录)
@@ -476,11 +476,9 @@ Future<List<SongDto>> historyRecommendSongs({required String date}) =>
 Future<List<SongDto>> newSongs({required int limit}) =>
     RustLib.instance.api.crateApiNewSongs(limit: limit);
 
-/// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItemDto
-Future<List<AlbumItemDto>> newAlbums({
-  required int limit,
-  required int offset,
-}) => RustLib.instance.api.crateApiNewAlbums(limit: limit, offset: offset);
+/// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItem
+Future<List<AlbumItem>> newAlbums({required int limit, required int offset}) =>
+    RustLib.instance.api.crateApiNewAlbums(limit: limit, offset: offset);
 
 /// 相似歌曲
 Future<List<SongDto>> similarSongs({
@@ -489,14 +487,14 @@ Future<List<SongDto>> similarSongs({
 }) => RustLib.instance.api.crateApiSimilarSongs(songId: songId, limit: limit);
 
 /// 相似歌单
-Future<List<PlaylistDto>> similarPlaylists({
+Future<List<Playlist>> similarPlaylists({
   required BigInt songId,
   required int limit,
 }) =>
     RustLib.instance.api.crateApiSimilarPlaylists(songId: songId, limit: limit);
 
 /// 相似歌手(需登录)
-Future<List<ArtistDto>> similarArtists({required BigInt artistId}) =>
+Future<List<Artist>> similarArtists({required BigInt artistId}) =>
     RustLib.instance.api.crateApiSimilarArtists(artistId: artistId);
 
 /// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
@@ -533,7 +531,7 @@ Future<bool> replyComment({
 );
 
 /// 某人关注的人(uid = 0 用当前账号)
-Future<List<UserItemDto>> userFollows({
+Future<List<UserItem>> userFollows({
   required BigInt uid,
   required int limit,
   required int offset,
@@ -544,7 +542,7 @@ Future<List<UserItemDto>> userFollows({
 );
 
 /// 某人的粉丝(uid = 0 用当前账号)
-Future<List<UserItemDto>> userFolloweds({
+Future<List<UserItem>> userFolloweds({
   required BigInt uid,
   required int limit,
   required int offset,
@@ -559,15 +557,15 @@ Future<bool> setFollow({required BigInt uid, required bool follow}) =>
     RustLib.instance.api.crateApiSetFollow(uid: uid, follow: follow);
 
 /// 我的关注/粉丝数(需登录)
-Future<FollowCountDto> followCounts() =>
+Future<FollowCount> followCounts() =>
     RustLib.instance.api.crateApiFollowCounts();
 
 /// 最近播放的专辑(需登录)
-Future<List<AlbumItemDto>> recentAlbums({required int limit}) =>
+Future<List<AlbumItem>> recentAlbums({required int limit}) =>
     RustLib.instance.api.crateApiRecentAlbums(limit: limit);
 
 /// 最近播放的歌单(需登录)
-Future<List<PlaylistDto>> recentPlaylists({required int limit}) =>
+Future<List<Playlist>> recentPlaylists({required int limit}) =>
     RustLib.instance.api.crateApiRecentPlaylists(limit: limit);
 
 /// 最近播放的播客/电台(需登录)
@@ -601,16 +599,14 @@ Future<List<SongDto>> newSongsByArea({
 }) => RustLib.instance.api.crateApiNewSongsByArea(area: area, limit: limit);
 
 /// 新碟上架(按地区)
-Future<List<AlbumItemDto>> newAlbumsByArea({
+Future<List<AlbumItem>> newAlbumsByArea({
   required String area,
   required int limit,
 }) => RustLib.instance.api.crateApiNewAlbumsByArea(area: area, limit: limit);
 
 /// 热门歌手榜
-Future<List<HotArtistDto>> hotArtists({
-  required int limit,
-  required int offset,
-}) => RustLib.instance.api.crateApiHotArtists(limit: limit, offset: offset);
+Future<List<HotArtist>> hotArtists({required int limit, required int offset}) =>
+    RustLib.instance.api.crateApiHotArtists(limit: limit, offset: offset);
 
 /// 未读消息计数(需登录)
 Future<MessageCountsDto> messageCounts() =>
@@ -784,14 +780,15 @@ class AlbumDetailDto {
           songs == other.songs;
 }
 
-class AlbumItemDto {
+/// 专辑列表项: 直接镜像 domain 类型 `AlbumItem`.
+class AlbumItem {
   final BigInt id;
   final String name;
   final String? coverUrl;
   final String artist;
   final BigInt trackCount;
 
-  const AlbumItemDto({
+  const AlbumItem({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -810,13 +807,34 @@ class AlbumItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is AlbumItemDto &&
+      other is AlbumItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
           coverUrl == other.coverUrl &&
           artist == other.artist &&
           trackCount == other.trackCount;
+}
+
+/// 歌手(简化版): 直接镜像 domain 类型 `Artist`.
+class Artist {
+  final BigInt id;
+  final String name;
+  final String? avatarUrl;
+
+  const Artist({required this.id, required this.name, this.avatarUrl});
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ avatarUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Artist &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          avatarUrl == other.avatarUrl;
 }
 
 class ArtistDetailDto {
@@ -872,26 +890,6 @@ class ArtistDetailDto {
           musicCount == other.musicCount &&
           songs == other.songs &&
           albums == other.albums;
-}
-
-class ArtistDto {
-  final BigInt id;
-  final String name;
-  final String? avatarUrl;
-
-  const ArtistDto({required this.id, required this.name, this.avatarUrl});
-
-  @override
-  int get hashCode => id.hashCode ^ name.hashCode ^ avatarUrl.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ArtistDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          avatarUrl == other.avatarUrl;
 }
 
 class ChartSummaryDto {
@@ -1385,11 +1383,12 @@ class FeedEventDto {
           commentCount == other.commentCount;
 }
 
-class FollowCountDto {
+/// 关注/粉丝数: 直接镜像 domain 类型 `FollowCount`.
+class FollowCount {
   final BigInt follows;
   final BigInt fans;
 
-  const FollowCountDto({required this.follows, required this.fans});
+  const FollowCount({required this.follows, required this.fans});
 
   @override
   int get hashCode => follows.hashCode ^ fans.hashCode;
@@ -1397,7 +1396,7 @@ class FollowCountDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is FollowCountDto &&
+      other is FollowCount &&
           runtimeType == other.runtimeType &&
           follows == other.follows &&
           fans == other.fans;
@@ -1454,7 +1453,8 @@ class ForwardItemDto {
           picUrl == other.picUrl;
 }
 
-class HotArtistDto {
+/// 热门歌手: 直接镜像 domain 类型 `HotArtist`.
+class HotArtist {
   final BigInt id;
   final String name;
   final String? avatarUrl;
@@ -1462,7 +1462,7 @@ class HotArtistDto {
   /// 粉丝数(列表页显示热度)
   final BigInt fans;
 
-  const HotArtistDto({
+  const HotArtist({
     required this.id,
     required this.name,
     this.avatarUrl,
@@ -1476,7 +1476,7 @@ class HotArtistDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is HotArtistDto &&
+      other is HotArtist &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -1739,6 +1739,44 @@ class PlayerStateDto {
           volume == other.volume;
 }
 
+/// 歌单(列表项): 直接镜像 domain 类型 `Playlist`.
+class Playlist {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final BigInt trackCount;
+
+  /// 是否"我喜欢的音乐"
+  final bool special;
+
+  const Playlist({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.trackCount,
+    required this.special,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      trackCount.hashCode ^
+      special.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Playlist &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          trackCount == other.trackCount &&
+          special == other.special;
+}
+
 class PlaylistCategoryDto {
   /// 一级分类(语种/风格/场景/情感/主题)
   final String group;
@@ -1760,7 +1798,8 @@ class PlaylistCategoryDto {
           subs == other.subs;
 }
 
-class PlaylistDetailDto {
+/// 歌单详情: 直接镜像 domain 类型 `PlaylistDetail`.
+class PlaylistDetail {
   final BigInt id;
   final String name;
   final String? coverUrl;
@@ -1781,7 +1820,7 @@ class PlaylistDetailDto {
   final BigInt commentCount;
   final List<String> tags;
 
-  const PlaylistDetailDto({
+  const PlaylistDetail({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -1816,7 +1855,7 @@ class PlaylistDetailDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PlaylistDetailDto &&
+      other is PlaylistDetail &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -1831,43 +1870,6 @@ class PlaylistDetailDto {
           shareCount == other.shareCount &&
           commentCount == other.commentCount &&
           tags == other.tags;
-}
-
-class PlaylistDto {
-  final BigInt id;
-  final String name;
-  final String? coverUrl;
-  final BigInt trackCount;
-
-  /// 是否"我喜欢的音乐"
-  final bool special;
-
-  const PlaylistDto({
-    required this.id,
-    required this.name,
-    this.coverUrl,
-    required this.trackCount,
-    required this.special,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      name.hashCode ^
-      coverUrl.hashCode ^
-      trackCount.hashCode ^
-      special.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PlaylistDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          name == other.name &&
-          coverUrl == other.coverUrl &&
-          trackCount == other.trackCount &&
-          special == other.special;
 }
 
 class PodcastProgramDto {
@@ -2044,7 +2046,8 @@ class PrivateSessionDto {
           unread == other.unread;
 }
 
-class ProfileDetailDto {
+/// 个人主页资料: 直接镜像 domain 类型 `ProfileDetail`.
+class ProfileDetail {
   final BigInt userId;
   final String nickname;
   final String? avatarUrl;
@@ -2055,7 +2058,7 @@ class ProfileDetailDto {
   final BigInt followeds;
   final BigInt level;
 
-  const ProfileDetailDto({
+  const ProfileDetail({
     required this.userId,
     required this.nickname,
     this.avatarUrl,
@@ -2082,7 +2085,7 @@ class ProfileDetailDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ProfileDetailDto &&
+      other is ProfileDetail &&
           runtimeType == other.runtimeType &&
           userId == other.userId &&
           nickname == other.nickname &&
@@ -2602,8 +2605,8 @@ class SearchBundleDto {
 class SearchExactDto {
   /// 命中类型顺序, 原样保留 (artist / playlist / voice / ...)
   final List<String> orders;
-  final List<ArtistDto> artists;
-  final List<PlaylistDto> playlists;
+  final List<Artist> artists;
+  final List<Playlist> playlists;
   final List<PodcastRadioDto> podcasts;
 
   const SearchExactDto({
@@ -2899,14 +2902,15 @@ class StreamDto {
           expireAt == other.expireAt;
 }
 
-class StyleTagDto {
+/// 曲风标签: 直接镜像 domain 类型(D7 spike), Dart 侧靠 dart_code 的 typedef 保持旧名.
+class StyleTag {
   /// 曲风 tagId(字符串, 直接回传给 style_songs/style_playlists)
   final String id;
   final String name;
   final String? coverUrl;
   final BigInt? songCount;
 
-  const StyleTagDto({
+  const StyleTag({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -2920,7 +2924,7 @@ class StyleTagDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is StyleTagDto &&
+      other is StyleTag &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -2928,7 +2932,8 @@ class StyleTagDto {
           songCount == other.songCount;
 }
 
-class SuggestItemDto {
+/// 搜索联想项: 直接镜像 domain 类型 `SuggestItem`.
+class SuggestItem {
   /// song | artist | album | playlist
   final String kind;
   final BigInt id;
@@ -2936,7 +2941,7 @@ class SuggestItemDto {
   final String subtitle;
   final String? coverUrl;
 
-  const SuggestItemDto({
+  const SuggestItem({
     required this.kind,
     required this.id,
     required this.title,
@@ -2955,7 +2960,7 @@ class SuggestItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SuggestItemDto &&
+      other is SuggestItem &&
           runtimeType == other.runtimeType &&
           kind == other.kind &&
           id == other.id &&
@@ -3027,7 +3032,8 @@ class ToplistCatalogItemDto {
           canPlay == other.canPlay;
 }
 
-class UserItemDto {
+/// 用户列表项: 直接镜像 domain 类型 `UserItem`.
+class UserItem {
   final BigInt id;
   final String name;
   final String? avatarUrl;
@@ -3036,7 +3042,7 @@ class UserItemDto {
   /// 是否已关注(关注列表恒 true; 粉丝列表按未关注处理)
   final bool followed;
 
-  const UserItemDto({
+  const UserItem({
     required this.id,
     required this.name,
     this.avatarUrl,
@@ -3055,7 +3061,7 @@ class UserItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UserItemDto &&
+      other is UserItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&

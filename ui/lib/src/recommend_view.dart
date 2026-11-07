@@ -36,28 +36,28 @@ class RecommendView extends StatefulWidget {
 
   final bool loggedIn;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
   final VoidCallback onHeartMode;
   final VoidCallback onOpenDaily;
 
   final Future<List<rust.SongDto>> Function()? loadDailySongs;
-  final Future<List<rust.PlaylistDto>> Function()? loadDailyPlaylists;
+  final Future<List<rust.Playlist>> Function()? loadDailyPlaylists;
   final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
   final Future<List<rust.SongDto>> Function()? loadFm;
 
   /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
-  final Future<List<rust.StyleTagDto>> Function()? loadStyles;
+  final Future<List<rust.StyleTag>> Function()? loadStyles;
 
   /// 排行榜(榜单就是歌单)
   final Future<List<rust.ChartSummaryDto>> Function()? loadCharts;
 
   /// 新歌速递 / 新碟上架
   final Future<List<rust.SongDto>> Function()? loadNewSongs;
-  final Future<List<rust.AlbumItemDto>> Function()? loadNewAlbums;
+  final Future<List<rust.AlbumItem>> Function()? loadNewAlbums;
 
   /// 点专辑卡片(不传就不显示"新碟上架")
-  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+  final void Function(rust.AlbumItem album)? onOpenAlbum;
 
   /// 私人FM 起播(不传就回落到 onPlaySongs)。上层用它标记"当前队列来自 FM",
   /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
@@ -73,19 +73,19 @@ class RecommendView extends StatefulWidget {
 class _RecommendViewState extends State<RecommendView> {
   Future<List<rust.SongDto>> Function() get _dailySongs =>
       widget.loadDailySongs ?? rust.dailyRecommendSongs;
-  Future<List<rust.PlaylistDto>> Function() get _dailyPlaylists =>
+  Future<List<rust.Playlist>> Function() get _dailyPlaylists =>
       widget.loadDailyPlaylists ?? rust.dailyRecommendPlaylists;
   Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.podcastHot(limit: 10));
   Future<List<rust.SongDto>> Function() get _fm =>
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
-  Future<List<rust.StyleTagDto>> Function() get _styles =>
+  Future<List<rust.StyleTag>> Function() get _styles =>
       widget.loadStyles ?? rust.stylePreference;
   Future<List<rust.ChartSummaryDto>> Function() get _charts =>
       widget.loadCharts ?? rust.chartList;
   Future<List<rust.SongDto>> Function() get _newSongs =>
       widget.loadNewSongs ?? (() => rust.newSongs(limit: 20));
-  Future<List<rust.AlbumItemDto>> Function() get _newAlbums =>
+  Future<List<rust.AlbumItem>> Function() get _newAlbums =>
       widget.loadNewAlbums ?? (() => rust.newAlbums(limit: 20, offset: 0));
 
   @override
@@ -471,8 +471,8 @@ class _NewAlbumsSection extends StatelessWidget {
     required this.loggedIn,
   });
 
-  final Future<List<rust.AlbumItemDto>> Function() load;
-  final void Function(rust.AlbumItemDto album) onOpen;
+  final Future<List<rust.AlbumItem>> Function() load;
+  final void Function(rust.AlbumItem album) onOpen;
   final bool loggedIn;
 
   @override
@@ -482,7 +482,7 @@ class _NewAlbumsSection extends StatelessWidget {
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
         const _Caption('新碟上架'),
-        _AsyncSection<List<rust.AlbumItemDto>>(
+        _AsyncSection<List<rust.AlbumItem>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
           builder: (context, albums, reload) => _CoverRow(
@@ -543,10 +543,10 @@ class _NewReleaseSection extends StatelessWidget {
   final Future<List<rust.SongDto>> Function() loadSongs;
 
   /// 为 null 表示不显示新碟(上层没给 onOpenAlbum)
-  final Future<List<rust.AlbumItemDto>> Function()? loadAlbums;
+  final Future<List<rust.AlbumItem>> Function()? loadAlbums;
   final bool loggedIn;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
-  final void Function(rust.AlbumItemDto album)? onOpenAlbum;
+  final void Function(rust.AlbumItem album)? onOpenAlbum;
 
   /// "全部"入口(新歌/新碟/歌手分类页)
   final VoidCallback? onMore;
@@ -586,10 +586,10 @@ class _ChartSection extends StatelessWidget {
   });
 
   final Future<List<rust.ChartSummaryDto>> Function() load;
-  final void Function(rust.PlaylistDto playlist) onOpen;
+  final void Function(rust.Playlist playlist) onOpen;
 
   /// 风格推荐下沉到这里: 一行 chips, 不再独占一个平级区块(审查 §5.5)
-  final Future<List<rust.StyleTagDto>> Function() loadStyles;
+  final Future<List<rust.StyleTag>> Function() loadStyles;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
@@ -621,7 +621,7 @@ class _ChartSection extends StatelessWidget {
                   subtitle: chart.updateFrequency.isEmpty
                       ? '${chart.trackCount} 首'
                       : chart.updateFrequency,
-                  onTap: () => onOpen(rust.PlaylistDto(
+                  onTap: () => onOpen(rust.Playlist(
                     id: chart.id,
                     name: chart.name,
                     coverUrl: chart.coverUrl,
@@ -652,9 +652,9 @@ class _StyleChips extends StatelessWidget {
     required this.onOpenPlaylist,
   });
 
-  final Future<List<rust.StyleTagDto>> Function() load;
+  final Future<List<rust.StyleTag>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -663,7 +663,7 @@ class _StyleChips extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Caption('风格推荐'),
-        _AsyncSection<List<rust.StyleTagDto>>(
+        _AsyncSection<List<rust.StyleTag>>(
           load: load,
           emptyText: '暂时没有风格推荐',
           builder: (context, tags, reload) => Wrap(
@@ -778,9 +778,9 @@ class _DailyPlaylistsSection extends StatelessWidget {
     this.onOpenAll,
   });
 
-  final Future<List<rust.PlaylistDto>> Function() load;
+  final Future<List<rust.Playlist>> Function() load;
   final bool loggedIn;
-  final void Function(rust.PlaylistDto playlist) onOpen;
+  final void Function(rust.Playlist playlist) onOpen;
 
   /// 「全部」出口: 歌单广场(原先是区块下方一枚游离的「歌单广场」按钮,
   /// 审查 §5.5 要求提到标题右侧, 与其它区块一致)
@@ -797,7 +797,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
               ? null
               : TextButton(onPressed: onOpenAll, child: const Text('全部')),
         ),
-        _AsyncSection<List<rust.PlaylistDto>>(
+        _AsyncSection<List<rust.Playlist>>(
           load: load,
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
           builder: (context, lists, reload) => _CoverRow(

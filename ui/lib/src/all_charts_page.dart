@@ -25,7 +25,7 @@ String toplistGroupTitle(String code) => switch (code) {
 /// 打开"全部榜单"页(榜单即歌单, 点可播条目走上层歌单详情回调).
 Future<void> showAllChartsPage(
   BuildContext context, {
-  required void Function(rust.PlaylistDto playlist) onOpenPlaylist,
+  required void Function(rust.Playlist playlist) onOpenPlaylist,
   ToplistCatalogLoader? loadCatalog,
 }) {
   return Navigator.of(context).push(
@@ -41,7 +41,7 @@ Future<void> showAllChartsPage(
 class AllChartsPage extends StatefulWidget {
   const AllChartsPage({super.key, required this.onOpenPlaylist, this.loadCatalog});
 
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   /// 可注入(测试用); 默认走 FFI toplist_catalog.
   final ToplistCatalogLoader? loadCatalog;
@@ -76,7 +76,7 @@ class _GroupSection extends StatelessWidget {
   const _GroupSection({required this.group, required this.onOpenPlaylist});
 
   final rust.ToplistCatalogGroupDto group;
-  final void Function(rust.PlaylistDto playlist) onOpenPlaylist;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +113,7 @@ class _GroupSection extends StatelessWidget {
             ),
             // canPlay=false 的条目灰显不可点(榜单即歌单, 传 id 走歌单详情)
             onTap: item.canPlay
-                ? () => onOpenPlaylist(rust.PlaylistDto(
+                ? () => onOpenPlaylist(rust.Playlist(
                       id: item.id,
                       name: item.name,
                       coverUrl: item.coverUrl,

@@ -76,8 +76,8 @@ void main() {
       onOpenUrl: (_) async {},
       loadFeed: () async => events,
       loadSubscribedArtists: () async => [
-        rust.ArtistDto(id: BigInt.from(10), name: '本页艺人'),
-        rust.ArtistDto(id: BigInt.from(99), name: '没发动态的艺人'),
+        rust.Artist(id: BigInt.from(10), name: '本页艺人'),
+        rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
       ],
     )));
     await tester.pumpAndSettle();

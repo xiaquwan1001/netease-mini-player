@@ -18,7 +18,7 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       playable: true,
     );
 
-rust.PlaylistDto playlist(int id, String name) => rust.PlaylistDto(
+rust.Playlist playlist(int id, String name) => rust.Playlist(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -49,9 +49,9 @@ void main() {
 
     List<rust.SongDto>? played;
     int? playedIndex;
-    rust.PlaylistDto? openedPlaylist;
+    rust.Playlist? openedPlaylist;
     rust.PodcastRadioDto? openedRadio;
-    rust.AlbumItemDto? openedAlbum;
+    rust.AlbumItem? openedAlbum;
     var heart = 0;
     var moreTaps = 0;
 
@@ -62,8 +62,8 @@ void main() {
       loadPodcasts: () async => [radio(20, '推荐播客A')],
       loadFm: () async => [song(3, 'FM 曲')],
       loadStyles: () async => const [
-        rust.StyleTagDto(id: '1009', name: '粤语流行'),
-        rust.StyleTagDto(id: '1020', name: '华语流行'),
+        rust.StyleTag(id: '1009', name: '粤语流行'),
+        rust.StyleTag(id: '1020', name: '华语流行'),
       ],
       loadCharts: () async => [
         rust.ChartSummaryDto(
@@ -77,7 +77,7 @@ void main() {
       ],
       loadNewSongs: () async => [song(30, '新歌速递一')],
       loadNewAlbums: () async => [
-        rust.AlbumItemDto(
+        rust.AlbumItem(
           id: BigInt.from(40),
           name: '新碟A',
           coverUrl: null,

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_suggest.dart';
 
-rust.SuggestItemDto item(String kind, String title) => rust.SuggestItemDto(
+rust.SuggestItem item(String kind, String title) => rust.SuggestItem(
       kind: kind,
       id: BigInt.one,
       title: title,
@@ -15,7 +15,7 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('建议面板展示条目并回调', (tester) async {
-    rust.SuggestItemDto? tapped;
+    rust.SuggestItem? tapped;
     await tester.pumpWidget(host(SuggestionPanel(
       items: [item('song', '晴天'), item('artist', '周杰伦')],
       onSelected: (v) => tapped = v,

@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/profile_header.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.ProfileDetailDto detail({
+rust.ProfileDetail detail({
   int follows = 10,
   int fans = 20,
   String nickname = '小明',
   String signature = '签名',
 }) =>
-    rust.ProfileDetailDto(
+    rust.ProfileDetail(
       userId: BigInt.one,
       nickname: nickname,
       avatarUrl: null,
@@ -22,9 +22,9 @@ rust.ProfileDetailDto detail({
     );
 
 Widget host({
-  rust.ProfileDetailDto? detail,
+  rust.ProfileDetail? detail,
   bool loggedIn = true,
-  Future<rust.ProfileDetailDto?> Function()? loadDetail,
+  Future<rust.ProfileDetail?> Function()? loadDetail,
   Key? headerKey,
 }) =>
     MaterialApp(

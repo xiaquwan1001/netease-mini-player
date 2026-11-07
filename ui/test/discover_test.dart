@@ -18,7 +18,7 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       playable: true,
     );
 
-rust.PlaylistDto playlist(int id, String name, int count) => rust.PlaylistDto(
+rust.Playlist playlist(int id, String name, int count) => rust.Playlist(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -67,7 +67,7 @@ void main() {
   });
 
   testWidgets('每日推荐: 歌单页签展示并可打开', (tester) async {
-    rust.PlaylistDto? opened;
+    rust.Playlist? opened;
     await tester.pumpWidget(host(() {
       showDiscoverPage(
         tester.element(find.text('open')),
@@ -126,14 +126,14 @@ void main() {
   });
 
   testWidgets('最近听过: 单曲/专辑/歌单/播客四个分类各自渲染', (tester) async {
-    rust.AlbumItemDto? openedAlbum;
+    rust.AlbumItem? openedAlbum;
     await tester.pumpWidget(host(() {
       showRecentPage(
         tester.element(find.text('open')),
         onPlay: (_, _) {},
         loadRecent: () async => [song(3, '最近一首')],
         loadAlbums: () async => [
-          rust.AlbumItemDto(
+          rust.AlbumItem(
             id: BigInt.from(11),
             name: '野泳',
             coverUrl: null,
@@ -170,7 +170,7 @@ void main() {
   });
 
   testWidgets('最近听过: 歌单/播客页签可打开', (tester) async {
-    rust.PlaylistDto? openedPlaylist;
+    rust.Playlist? openedPlaylist;
     rust.PodcastRadioDto? openedPodcast;
     await tester.pumpWidget(host(() {
       showRecentPage(

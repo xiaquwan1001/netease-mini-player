@@ -4490,6 +4490,97 @@ fn wire__crate__api__word_lyric_lines_impl(
     )
 }
 
+// Section: static_checks
+
+#[allow(clippy::unnecessary_literal_unwrap)]
+const _: fn() = || {
+    {
+        let AlbumItem = None::<crate::api::AlbumItem>.unwrap();
+        let _: u64 = AlbumItem.id;
+        let _: String = AlbumItem.name;
+        let _: Option<String> = AlbumItem.cover_url;
+        let _: String = AlbumItem.artist;
+        let _: u64 = AlbumItem.track_count;
+    }
+    {
+        let Artist = None::<crate::api::Artist>.unwrap();
+        let _: u64 = Artist.id;
+        let _: String = Artist.name;
+        let _: Option<String> = Artist.avatar_url;
+    }
+    {
+        let FollowCount = None::<crate::api::FollowCount>.unwrap();
+        let _: u64 = FollowCount.follows;
+        let _: u64 = FollowCount.fans;
+    }
+    {
+        let HotArtist = None::<crate::api::HotArtist>.unwrap();
+        let _: u64 = HotArtist.id;
+        let _: String = HotArtist.name;
+        let _: Option<String> = HotArtist.avatar_url;
+        let _: u64 = HotArtist.fans;
+    }
+    {
+        let Playlist = None::<crate::api::Playlist>.unwrap();
+        let _: u64 = Playlist.id;
+        let _: String = Playlist.name;
+        let _: Option<String> = Playlist.cover_url;
+        let _: u64 = Playlist.track_count;
+        let _: bool = Playlist.special;
+    }
+    {
+        let PlaylistDetail = None::<crate::api::PlaylistDetail>.unwrap();
+        let _: u64 = PlaylistDetail.id;
+        let _: String = PlaylistDetail.name;
+        let _: Option<String> = PlaylistDetail.cover_url;
+        let _: String = PlaylistDetail.description;
+        let _: String = PlaylistDetail.creator_name;
+        let _: u64 = PlaylistDetail.creator_id;
+        let _: u64 = PlaylistDetail.track_count;
+        let _: u64 = PlaylistDetail.play_count;
+        let _: bool = PlaylistDetail.subscribed;
+        let _: u64 = PlaylistDetail.subscribed_count;
+        let _: u64 = PlaylistDetail.share_count;
+        let _: u64 = PlaylistDetail.comment_count;
+        let _: Vec<String> = PlaylistDetail.tags;
+    }
+    {
+        let ProfileDetail = None::<crate::api::ProfileDetail>.unwrap();
+        let _: u64 = ProfileDetail.user_id;
+        let _: String = ProfileDetail.nickname;
+        let _: Option<String> = ProfileDetail.avatar_url;
+        let _: Option<String> = ProfileDetail.background_url;
+        let _: String = ProfileDetail.signature;
+        let _: bool = ProfileDetail.vip;
+        let _: u64 = ProfileDetail.follows;
+        let _: u64 = ProfileDetail.followeds;
+        let _: u64 = ProfileDetail.level;
+    }
+    {
+        let StyleTag = None::<crate::api::StyleTag>.unwrap();
+        let _: String = StyleTag.id;
+        let _: String = StyleTag.name;
+        let _: Option<String> = StyleTag.cover_url;
+        let _: Option<u64> = StyleTag.song_count;
+    }
+    {
+        let SuggestItem = None::<crate::api::SuggestItem>.unwrap();
+        let _: String = SuggestItem.kind;
+        let _: u64 = SuggestItem.id;
+        let _: String = SuggestItem.title;
+        let _: String = SuggestItem.subtitle;
+        let _: Option<String> = SuggestItem.cover_url;
+    }
+    {
+        let UserItem = None::<crate::api::UserItem>.unwrap();
+        let _: u64 = UserItem.id;
+        let _: String = UserItem.name;
+        let _: Option<String> = UserItem.avatar_url;
+        let _: String = UserItem.signature;
+        let _: bool = UserItem.followed;
+    }
+};
+
 // Section: dart2rust
 
 impl SseDecode for String {
@@ -4556,7 +4647,7 @@ impl SseDecode for crate::api::AlbumDetailDto {
     }
 }
 
-impl SseDecode for crate::api::AlbumItemDto {
+impl SseDecode for crate::api::AlbumItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -4564,12 +4655,26 @@ impl SseDecode for crate::api::AlbumItemDto {
         let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_artist = <String>::sse_decode(deserializer);
         let mut var_trackCount = <u64>::sse_decode(deserializer);
-        return crate::api::AlbumItemDto {
+        return crate::api::AlbumItem {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
             artist: var_artist,
             track_count: var_trackCount,
+        };
+    }
+}
+
+impl SseDecode for crate::api::Artist {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <u64>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
+        return crate::api::Artist {
+            id: var_id,
+            name: var_name,
+            avatar_url: var_avatarUrl,
         };
     }
 }
@@ -4598,20 +4703,6 @@ impl SseDecode for crate::api::ArtistDetailDto {
             music_count: var_musicCount,
             songs: var_songs,
             albums: var_albums,
-        };
-    }
-}
-
-impl SseDecode for crate::api::ArtistDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u64>::sse_decode(deserializer);
-        let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
-        return crate::api::ArtistDto {
-            id: var_id,
-            name: var_name,
-            avatar_url: var_avatarUrl,
         };
     }
 }
@@ -4861,12 +4952,12 @@ impl SseDecode for crate::api::FeedEventDto {
     }
 }
 
-impl SseDecode for crate::api::FollowCountDto {
+impl SseDecode for crate::api::FollowCount {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_follows = <u64>::sse_decode(deserializer);
         let mut var_fans = <u64>::sse_decode(deserializer);
-        return crate::api::FollowCountDto {
+        return crate::api::FollowCount {
             follows: var_follows,
             fans: var_fans,
         };
@@ -4899,14 +4990,14 @@ impl SseDecode for crate::api::ForwardItemDto {
     }
 }
 
-impl SseDecode for crate::api::HotArtistDto {
+impl SseDecode for crate::api::HotArtist {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_fans = <u64>::sse_decode(deserializer);
-        return crate::api::HotArtistDto {
+        return crate::api::HotArtist {
             id: var_id,
             name: var_name,
             avatar_url: var_avatarUrl,
@@ -5033,25 +5124,25 @@ impl SseDecode for Vec<crate::api::AlbumBriefDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::AlbumItemDto> {
+impl SseDecode for Vec<crate::api::AlbumItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::AlbumItemDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::AlbumItem>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::ArtistDto> {
+impl SseDecode for Vec<crate::api::Artist> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::ArtistDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::Artist>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5129,13 +5220,13 @@ impl SseDecode for Vec<crate::api::ForwardItemDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::HotArtistDto> {
+impl SseDecode for Vec<crate::api::HotArtist> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::HotArtistDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::HotArtist>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5215,6 +5306,18 @@ impl SseDecode for Vec<crate::api::PlayRankEntryDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::Playlist> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::Playlist>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::PlaylistCategoryDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5222,18 +5325,6 @@ impl SseDecode for Vec<crate::api::PlaylistCategoryDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::PlaylistCategoryDto>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
-impl SseDecode for Vec<crate::api::PlaylistDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::PlaylistDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5493,25 +5584,25 @@ impl SseDecode for Vec<crate::api::SongDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::StyleTagDto> {
+impl SseDecode for Vec<crate::api::StyleTag> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::StyleTagDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::StyleTag>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::SuggestItemDto> {
+impl SseDecode for Vec<crate::api::SuggestItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::SuggestItemDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::SuggestItem>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5545,13 +5636,13 @@ impl SseDecode for Vec<crate::api::ToplistCatalogItemDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::UserItemDto> {
+impl SseDecode for Vec<crate::api::UserItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::UserItemDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::UserItem>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5781,6 +5872,24 @@ impl SseDecode for crate::api::PlayerStateDto {
     }
 }
 
+impl SseDecode for crate::api::Playlist {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <u64>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_trackCount = <u64>::sse_decode(deserializer);
+        let mut var_special = <bool>::sse_decode(deserializer);
+        return crate::api::Playlist {
+            id: var_id,
+            name: var_name,
+            cover_url: var_coverUrl,
+            track_count: var_trackCount,
+            special: var_special,
+        };
+    }
+}
+
 impl SseDecode for crate::api::PlaylistCategoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5793,7 +5902,7 @@ impl SseDecode for crate::api::PlaylistCategoryDto {
     }
 }
 
-impl SseDecode for crate::api::PlaylistDetailDto {
+impl SseDecode for crate::api::PlaylistDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -5809,7 +5918,7 @@ impl SseDecode for crate::api::PlaylistDetailDto {
         let mut var_shareCount = <u64>::sse_decode(deserializer);
         let mut var_commentCount = <u64>::sse_decode(deserializer);
         let mut var_tags = <Vec<String>>::sse_decode(deserializer);
-        return crate::api::PlaylistDetailDto {
+        return crate::api::PlaylistDetail {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
@@ -5823,24 +5932,6 @@ impl SseDecode for crate::api::PlaylistDetailDto {
             share_count: var_shareCount,
             comment_count: var_commentCount,
             tags: var_tags,
-        };
-    }
-}
-
-impl SseDecode for crate::api::PlaylistDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_id = <u64>::sse_decode(deserializer);
-        let mut var_name = <String>::sse_decode(deserializer);
-        let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
-        let mut var_trackCount = <u64>::sse_decode(deserializer);
-        let mut var_special = <bool>::sse_decode(deserializer);
-        return crate::api::PlaylistDto {
-            id: var_id,
-            name: var_name,
-            cover_url: var_coverUrl,
-            track_count: var_trackCount,
-            special: var_special,
         };
     }
 }
@@ -5933,7 +6024,7 @@ impl SseDecode for crate::api::PrivateSessionDto {
     }
 }
 
-impl SseDecode for crate::api::ProfileDetailDto {
+impl SseDecode for crate::api::ProfileDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_userId = <u64>::sse_decode(deserializer);
@@ -5945,7 +6036,7 @@ impl SseDecode for crate::api::ProfileDetailDto {
         let mut var_follows = <u64>::sse_decode(deserializer);
         let mut var_followeds = <u64>::sse_decode(deserializer);
         let mut var_level = <u64>::sse_decode(deserializer);
-        return crate::api::ProfileDetailDto {
+        return crate::api::ProfileDetail {
             user_id: var_userId,
             nickname: var_nickname,
             avatar_url: var_avatarUrl,
@@ -6229,8 +6320,8 @@ impl SseDecode for crate::api::SearchExactDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_orders = <Vec<String>>::sse_decode(deserializer);
-        let mut var_artists = <Vec<crate::api::ArtistDto>>::sse_decode(deserializer);
-        let mut var_playlists = <Vec<crate::api::PlaylistDto>>::sse_decode(deserializer);
+        let mut var_artists = <Vec<crate::api::Artist>>::sse_decode(deserializer);
+        let mut var_playlists = <Vec<crate::api::Playlist>>::sse_decode(deserializer);
         let mut var_podcasts = <Vec<crate::api::PodcastRadioDto>>::sse_decode(deserializer);
         return crate::api::SearchExactDto {
             orders: var_orders,
@@ -6375,14 +6466,14 @@ impl SseDecode for crate::api::StreamDto {
     }
 }
 
-impl SseDecode for crate::api::StyleTagDto {
+impl SseDecode for crate::api::StyleTag {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <String>::sse_decode(deserializer);
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_songCount = <Option<u64>>::sse_decode(deserializer);
-        return crate::api::StyleTagDto {
+        return crate::api::StyleTag {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
@@ -6391,7 +6482,7 @@ impl SseDecode for crate::api::StyleTagDto {
     }
 }
 
-impl SseDecode for crate::api::SuggestItemDto {
+impl SseDecode for crate::api::SuggestItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_kind = <String>::sse_decode(deserializer);
@@ -6399,7 +6490,7 @@ impl SseDecode for crate::api::SuggestItemDto {
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_subtitle = <String>::sse_decode(deserializer);
         let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
-        return crate::api::SuggestItemDto {
+        return crate::api::SuggestItem {
             kind: var_kind,
             id: var_id,
             title: var_title,
@@ -6467,7 +6558,7 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
-impl SseDecode for crate::api::UserItemDto {
+impl SseDecode for crate::api::UserItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -6475,7 +6566,7 @@ impl SseDecode for crate::api::UserItemDto {
         let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_signature = <String>::sse_decode(deserializer);
         let mut var_followed = <bool>::sse_decode(deserializer);
-        return crate::api::UserItemDto {
+        return crate::api::UserItem {
             id: var_id,
             name: var_name,
             avatar_url: var_avatarUrl,
@@ -6910,22 +7001,47 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::AlbumDetailDto> for crate::ap
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::AlbumItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::AlbumItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.artist.into_into_dart().into_dart(),
-            self.track_count.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.artist.into_into_dart().into_dart(),
+            self.0.track_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::AlbumItemDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::AlbumItemDto> for crate::api::AlbumItemDto {
-    fn into_into_dart(self) -> crate::api::AlbumItemDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::AlbumItem>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::AlbumItem>>
+    for crate::api::AlbumItem
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::AlbumItem> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::Artist> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::Artist>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::Artist>> for crate::api::Artist {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::Artist> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -6951,23 +7067,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ArtistDetailDto>
     for crate::api::ArtistDetailDto
 {
     fn into_into_dart(self) -> crate::api::ArtistDetailDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ArtistDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ArtistDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ArtistDto> for crate::api::ArtistDto {
-    fn into_into_dart(self) -> crate::api::ArtistDto {
         self
     }
 }
@@ -7210,19 +7309,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::FeedEventDto> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::FollowCountDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::FollowCount> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.follows.into_into_dart().into_dart(),
-            self.fans.into_into_dart().into_dart(),
+            self.0.follows.into_into_dart().into_dart(),
+            self.0.fans.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::FollowCountDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::FollowCountDto> for crate::api::FollowCountDto {
-    fn into_into_dart(self) -> crate::api::FollowCountDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::FollowCount>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::FollowCount>>
+    for crate::api::FollowCount
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::FollowCount> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -7249,21 +7353,26 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ForwardItemDto> for crate::ap
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::HotArtistDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::HotArtist> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.fans.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.fans.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::HotArtistDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::HotArtistDto> for crate::api::HotArtistDto {
-    fn into_into_dart(self) -> crate::api::HotArtistDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::HotArtist>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::HotArtist>>
+    for crate::api::HotArtist
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::HotArtist> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -7424,6 +7533,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PlayerStateDto> for crate::ap
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::Playlist> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.track_count.into_into_dart().into_dart(),
+            self.0.special.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::Playlist>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::Playlist>> for crate::api::Playlist {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::Playlist> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::PlaylistCategoryDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -7445,51 +7576,35 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PlaylistCategoryDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PlaylistDetailDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::PlaylistDetail> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.description.into_into_dart().into_dart(),
-            self.creator_name.into_into_dart().into_dart(),
-            self.creator_id.into_into_dart().into_dart(),
-            self.track_count.into_into_dart().into_dart(),
-            self.play_count.into_into_dart().into_dart(),
-            self.subscribed.into_into_dart().into_dart(),
-            self.subscribed_count.into_into_dart().into_dart(),
-            self.share_count.into_into_dart().into_dart(),
-            self.comment_count.into_into_dart().into_dart(),
-            self.tags.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.description.into_into_dart().into_dart(),
+            self.0.creator_name.into_into_dart().into_dart(),
+            self.0.creator_id.into_into_dart().into_dart(),
+            self.0.track_count.into_into_dart().into_dart(),
+            self.0.play_count.into_into_dart().into_dart(),
+            self.0.subscribed.into_into_dart().into_dart(),
+            self.0.subscribed_count.into_into_dart().into_dart(),
+            self.0.share_count.into_into_dart().into_dart(),
+            self.0.comment_count.into_into_dart().into_dart(),
+            self.0.tags.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PlaylistDetailDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PlaylistDetailDto>
-    for crate::api::PlaylistDetailDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::PlaylistDetail>
 {
-    fn into_into_dart(self) -> crate::api::PlaylistDetailDto {
-        self
-    }
 }
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PlaylistDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.track_count.into_into_dart().into_dart(),
-            self.special.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PlaylistDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PlaylistDto> for crate::api::PlaylistDto {
-    fn into_into_dart(self) -> crate::api::PlaylistDto {
-        self
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PlaylistDetail>>
+    for crate::api::PlaylistDetail
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::PlaylistDetail> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -7585,28 +7700,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::PrivateSessionDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ProfileDetailDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ProfileDetail> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.user_id.into_into_dart().into_dart(),
-            self.nickname.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.background_url.into_into_dart().into_dart(),
-            self.signature.into_into_dart().into_dart(),
-            self.vip.into_into_dart().into_dart(),
-            self.follows.into_into_dart().into_dart(),
-            self.followeds.into_into_dart().into_dart(),
-            self.level.into_into_dart().into_dart(),
+            self.0.user_id.into_into_dart().into_dart(),
+            self.0.nickname.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.background_url.into_into_dart().into_dart(),
+            self.0.signature.into_into_dart().into_dart(),
+            self.0.vip.into_into_dart().into_dart(),
+            self.0.follows.into_into_dart().into_dart(),
+            self.0.followeds.into_into_dart().into_dart(),
+            self.0.level.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ProfileDetailDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ProfileDetailDto>
-    for crate::api::ProfileDetailDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::ProfileDetail>
 {
-    fn into_into_dart(self) -> crate::api::ProfileDetailDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::ProfileDetail>>
+    for crate::api::ProfileDetail
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::ProfileDetail> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8095,40 +8213,48 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::StreamDto> for crate::api::St
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::StyleTagDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::StyleTag> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.song_count.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.song_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::StyleTagDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::StyleTagDto> for crate::api::StyleTagDto {
-    fn into_into_dart(self) -> crate::api::StyleTagDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::StyleTag>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::StyleTag>> for crate::api::StyleTag {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::StyleTag> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::SuggestItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::SuggestItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.kind.into_into_dart().into_dart(),
-            self.id.into_into_dart().into_dart(),
-            self.title.into_into_dart().into_dart(),
-            self.subtitle.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
+            self.0.kind.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.title.into_into_dart().into_dart(),
+            self.0.subtitle.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::SuggestItemDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::SuggestItemDto> for crate::api::SuggestItemDto {
-    fn into_into_dart(self) -> crate::api::SuggestItemDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::SuggestItem>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::SuggestItem>>
+    for crate::api::SuggestItem
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::SuggestItem> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8178,22 +8304,25 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ToplistCatalogItemDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::UserItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::UserItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.signature.into_into_dart().into_dart(),
-            self.followed.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.signature.into_into_dart().into_dart(),
+            self.0.followed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::UserItemDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::UserItemDto> for crate::api::UserItemDto {
-    fn into_into_dart(self) -> crate::api::UserItemDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::UserItem>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::UserItem>> for crate::api::UserItem {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::UserItem> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8470,7 +8599,7 @@ impl SseEncode for crate::api::AlbumDetailDto {
     }
 }
 
-impl SseEncode for crate::api::AlbumItemDto {
+impl SseEncode for crate::api::AlbumItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -8478,6 +8607,15 @@ impl SseEncode for crate::api::AlbumItemDto {
         <Option<String>>::sse_encode(self.cover_url, serializer);
         <String>::sse_encode(self.artist, serializer);
         <u64>::sse_encode(self.track_count, serializer);
+    }
+}
+
+impl SseEncode for crate::api::Artist {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <Option<String>>::sse_encode(self.avatar_url, serializer);
     }
 }
 
@@ -8494,15 +8632,6 @@ impl SseEncode for crate::api::ArtistDetailDto {
         <u64>::sse_encode(self.music_count, serializer);
         <Vec<crate::api::SongDto>>::sse_encode(self.songs, serializer);
         <Vec<crate::api::AlbumBriefDto>>::sse_encode(self.albums, serializer);
-    }
-}
-
-impl SseEncode for crate::api::ArtistDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.id, serializer);
-        <String>::sse_encode(self.name, serializer);
-        <Option<String>>::sse_encode(self.avatar_url, serializer);
     }
 }
 
@@ -8659,7 +8788,7 @@ impl SseEncode for crate::api::FeedEventDto {
     }
 }
 
-impl SseEncode for crate::api::FollowCountDto {
+impl SseEncode for crate::api::FollowCount {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.follows, serializer);
@@ -8682,7 +8811,7 @@ impl SseEncode for crate::api::ForwardItemDto {
     }
 }
 
-impl SseEncode for crate::api::HotArtistDto {
+impl SseEncode for crate::api::HotArtist {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -8778,22 +8907,22 @@ impl SseEncode for Vec<crate::api::AlbumBriefDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::AlbumItemDto> {
+impl SseEncode for Vec<crate::api::AlbumItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::AlbumItemDto>::sse_encode(item, serializer);
+            <crate::api::AlbumItem>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::ArtistDto> {
+impl SseEncode for Vec<crate::api::Artist> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::ArtistDto>::sse_encode(item, serializer);
+            <crate::api::Artist>::sse_encode(item, serializer);
         }
     }
 }
@@ -8858,12 +8987,12 @@ impl SseEncode for Vec<crate::api::ForwardItemDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::HotArtistDto> {
+impl SseEncode for Vec<crate::api::HotArtist> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::HotArtistDto>::sse_encode(item, serializer);
+            <crate::api::HotArtist>::sse_encode(item, serializer);
         }
     }
 }
@@ -8928,22 +9057,22 @@ impl SseEncode for Vec<crate::api::PlayRankEntryDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::Playlist> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::Playlist>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::PlaylistCategoryDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::PlaylistCategoryDto>::sse_encode(item, serializer);
-        }
-    }
-}
-
-impl SseEncode for Vec<crate::api::PlaylistDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::PlaylistDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -9158,22 +9287,22 @@ impl SseEncode for Vec<crate::api::SongDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::StyleTagDto> {
+impl SseEncode for Vec<crate::api::StyleTag> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::StyleTagDto>::sse_encode(item, serializer);
+            <crate::api::StyleTag>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::SuggestItemDto> {
+impl SseEncode for Vec<crate::api::SuggestItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::SuggestItemDto>::sse_encode(item, serializer);
+            <crate::api::SuggestItem>::sse_encode(item, serializer);
         }
     }
 }
@@ -9198,12 +9327,12 @@ impl SseEncode for Vec<crate::api::ToplistCatalogItemDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::UserItemDto> {
+impl SseEncode for Vec<crate::api::UserItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::UserItemDto>::sse_encode(item, serializer);
+            <crate::api::UserItem>::sse_encode(item, serializer);
         }
     }
 }
@@ -9388,6 +9517,17 @@ impl SseEncode for crate::api::PlayerStateDto {
     }
 }
 
+impl SseEncode for crate::api::Playlist {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <Option<String>>::sse_encode(self.cover_url, serializer);
+        <u64>::sse_encode(self.track_count, serializer);
+        <bool>::sse_encode(self.special, serializer);
+    }
+}
+
 impl SseEncode for crate::api::PlaylistCategoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -9396,7 +9536,7 @@ impl SseEncode for crate::api::PlaylistCategoryDto {
     }
 }
 
-impl SseEncode for crate::api::PlaylistDetailDto {
+impl SseEncode for crate::api::PlaylistDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -9412,17 +9552,6 @@ impl SseEncode for crate::api::PlaylistDetailDto {
         <u64>::sse_encode(self.share_count, serializer);
         <u64>::sse_encode(self.comment_count, serializer);
         <Vec<String>>::sse_encode(self.tags, serializer);
-    }
-}
-
-impl SseEncode for crate::api::PlaylistDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.id, serializer);
-        <String>::sse_encode(self.name, serializer);
-        <Option<String>>::sse_encode(self.cover_url, serializer);
-        <u64>::sse_encode(self.track_count, serializer);
-        <bool>::sse_encode(self.special, serializer);
     }
 }
 
@@ -9478,7 +9607,7 @@ impl SseEncode for crate::api::PrivateSessionDto {
     }
 }
 
-impl SseEncode for crate::api::ProfileDetailDto {
+impl SseEncode for crate::api::ProfileDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.user_id, serializer);
@@ -9660,8 +9789,8 @@ impl SseEncode for crate::api::SearchExactDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Vec<String>>::sse_encode(self.orders, serializer);
-        <Vec<crate::api::ArtistDto>>::sse_encode(self.artists, serializer);
-        <Vec<crate::api::PlaylistDto>>::sse_encode(self.playlists, serializer);
+        <Vec<crate::api::Artist>>::sse_encode(self.artists, serializer);
+        <Vec<crate::api::Playlist>>::sse_encode(self.playlists, serializer);
         <Vec<crate::api::PodcastRadioDto>>::sse_encode(self.podcasts, serializer);
     }
 }
@@ -9747,7 +9876,7 @@ impl SseEncode for crate::api::StreamDto {
     }
 }
 
-impl SseEncode for crate::api::StyleTagDto {
+impl SseEncode for crate::api::StyleTag {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.id, serializer);
@@ -9757,7 +9886,7 @@ impl SseEncode for crate::api::StyleTagDto {
     }
 }
 
-impl SseEncode for crate::api::SuggestItemDto {
+impl SseEncode for crate::api::SuggestItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.kind, serializer);
@@ -9814,7 +9943,7 @@ impl SseEncode for () {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
 }
 
-impl SseEncode for crate::api::UserItemDto {
+impl SseEncode for crate::api::UserItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);

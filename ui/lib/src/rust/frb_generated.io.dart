@@ -34,13 +34,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AlbumDetailDto dco_decode_album_detail_dto(dynamic raw);
 
   @protected
-  AlbumItemDto dco_decode_album_item_dto(dynamic raw);
+  AlbumItem dco_decode_album_item(dynamic raw);
+
+  @protected
+  Artist dco_decode_artist(dynamic raw);
 
   @protected
   ArtistDetailDto dco_decode_artist_detail_dto(dynamic raw);
-
-  @protected
-  ArtistDto dco_decode_artist_dto(dynamic raw);
 
   @protected
   bool dco_decode_bool(dynamic raw);
@@ -103,13 +103,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FeedEventDto dco_decode_feed_event_dto(dynamic raw);
 
   @protected
-  FollowCountDto dco_decode_follow_count_dto(dynamic raw);
+  FollowCount dco_decode_follow_count(dynamic raw);
 
   @protected
   ForwardItemDto dco_decode_forward_item_dto(dynamic raw);
 
   @protected
-  HotArtistDto dco_decode_hot_artist_dto(dynamic raw);
+  HotArtist dco_decode_hot_artist(dynamic raw);
 
   @protected
   HotSearchDetailItemDto dco_decode_hot_search_detail_item_dto(dynamic raw);
@@ -139,10 +139,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<AlbumBriefDto> dco_decode_list_album_brief_dto(dynamic raw);
 
   @protected
-  List<AlbumItemDto> dco_decode_list_album_item_dto(dynamic raw);
+  List<AlbumItem> dco_decode_list_album_item(dynamic raw);
 
   @protected
-  List<ArtistDto> dco_decode_list_artist_dto(dynamic raw);
+  List<Artist> dco_decode_list_artist(dynamic raw);
 
   @protected
   List<ChartSummaryDto> dco_decode_list_chart_summary_dto(dynamic raw);
@@ -167,7 +167,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ForwardItemDto> dco_decode_list_forward_item_dto(dynamic raw);
 
   @protected
-  List<HotArtistDto> dco_decode_list_hot_artist_dto(dynamic raw);
+  List<HotArtist> dco_decode_list_hot_artist(dynamic raw);
 
   @protected
   List<HotSearchDetailItemDto> dco_decode_list_hot_search_detail_item_dto(
@@ -190,10 +190,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlayRankEntryDto> dco_decode_list_play_rank_entry_dto(dynamic raw);
 
   @protected
-  List<PlaylistCategoryDto> dco_decode_list_playlist_category_dto(dynamic raw);
+  List<Playlist> dco_decode_list_playlist(dynamic raw);
 
   @protected
-  List<PlaylistDto> dco_decode_list_playlist_dto(dynamic raw);
+  List<PlaylistCategoryDto> dco_decode_list_playlist_category_dto(dynamic raw);
 
   @protected
   List<PodcastProgramDto> dco_decode_list_podcast_program_dto(dynamic raw);
@@ -261,10 +261,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> dco_decode_list_song_dto(dynamic raw);
 
   @protected
-  List<StyleTagDto> dco_decode_list_style_tag_dto(dynamic raw);
+  List<StyleTag> dco_decode_list_style_tag(dynamic raw);
 
   @protected
-  List<SuggestItemDto> dco_decode_list_suggest_item_dto(dynamic raw);
+  List<SuggestItem> dco_decode_list_suggest_item(dynamic raw);
 
   @protected
   List<ToplistCatalogGroupDto> dco_decode_list_toplist_catalog_group_dto(
@@ -277,7 +277,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
+  List<UserItem> dco_decode_list_user_item(dynamic raw);
 
   @protected
   List<UserMedalDto> dco_decode_list_user_medal_dto(dynamic raw);
@@ -334,13 +334,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlayerStateDto dco_decode_player_state_dto(dynamic raw);
 
   @protected
+  Playlist dco_decode_playlist(dynamic raw);
+
+  @protected
   PlaylistCategoryDto dco_decode_playlist_category_dto(dynamic raw);
 
   @protected
-  PlaylistDetailDto dco_decode_playlist_detail_dto(dynamic raw);
-
-  @protected
-  PlaylistDto dco_decode_playlist_dto(dynamic raw);
+  PlaylistDetail dco_decode_playlist_detail(dynamic raw);
 
   @protected
   PodcastProgramDto dco_decode_podcast_program_dto(dynamic raw);
@@ -355,7 +355,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PrivateSessionDto dco_decode_private_session_dto(dynamic raw);
 
   @protected
-  ProfileDetailDto dco_decode_profile_detail_dto(dynamic raw);
+  ProfileDetail dco_decode_profile_detail(dynamic raw);
 
   @protected
   ProviderInfo dco_decode_provider_info(dynamic raw);
@@ -427,10 +427,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StreamDto dco_decode_stream_dto(dynamic raw);
 
   @protected
-  StyleTagDto dco_decode_style_tag_dto(dynamic raw);
+  StyleTag dco_decode_style_tag(dynamic raw);
 
   @protected
-  SuggestItemDto dco_decode_suggest_item_dto(dynamic raw);
+  SuggestItem dco_decode_suggest_item(dynamic raw);
 
   @protected
   ToplistCatalogGroupDto dco_decode_toplist_catalog_group_dto(dynamic raw);
@@ -451,7 +451,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
-  UserItemDto dco_decode_user_item_dto(dynamic raw);
+  UserItem dco_decode_user_item(dynamic raw);
 
   @protected
   UserLevelDto dco_decode_user_level_dto(dynamic raw);
@@ -502,13 +502,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AlbumDetailDto sse_decode_album_detail_dto(SseDeserializer deserializer);
 
   @protected
-  AlbumItemDto sse_decode_album_item_dto(SseDeserializer deserializer);
+  AlbumItem sse_decode_album_item(SseDeserializer deserializer);
+
+  @protected
+  Artist sse_decode_artist(SseDeserializer deserializer);
 
   @protected
   ArtistDetailDto sse_decode_artist_detail_dto(SseDeserializer deserializer);
-
-  @protected
-  ArtistDto sse_decode_artist_dto(SseDeserializer deserializer);
 
   @protected
   bool sse_decode_bool(SseDeserializer deserializer);
@@ -585,13 +585,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FeedEventDto sse_decode_feed_event_dto(SseDeserializer deserializer);
 
   @protected
-  FollowCountDto sse_decode_follow_count_dto(SseDeserializer deserializer);
+  FollowCount sse_decode_follow_count(SseDeserializer deserializer);
 
   @protected
   ForwardItemDto sse_decode_forward_item_dto(SseDeserializer deserializer);
 
   @protected
-  HotArtistDto sse_decode_hot_artist_dto(SseDeserializer deserializer);
+  HotArtist sse_decode_hot_artist(SseDeserializer deserializer);
 
   @protected
   HotSearchDetailItemDto sse_decode_hot_search_detail_item_dto(
@@ -625,12 +625,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<AlbumItemDto> sse_decode_list_album_item_dto(
-    SseDeserializer deserializer,
-  );
+  List<AlbumItem> sse_decode_list_album_item(SseDeserializer deserializer);
 
   @protected
-  List<ArtistDto> sse_decode_list_artist_dto(SseDeserializer deserializer);
+  List<Artist> sse_decode_list_artist(SseDeserializer deserializer);
 
   @protected
   List<ChartSummaryDto> sse_decode_list_chart_summary_dto(
@@ -661,9 +659,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<HotArtistDto> sse_decode_list_hot_artist_dto(
-    SseDeserializer deserializer,
-  );
+  List<HotArtist> sse_decode_list_hot_artist(SseDeserializer deserializer);
 
   @protected
   List<HotSearchDetailItemDto> sse_decode_list_hot_search_detail_item_dto(
@@ -694,12 +690,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<Playlist> sse_decode_list_playlist(SseDeserializer deserializer);
+
+  @protected
   List<PlaylistCategoryDto> sse_decode_list_playlist_category_dto(
     SseDeserializer deserializer,
   );
-
-  @protected
-  List<PlaylistDto> sse_decode_list_playlist_dto(SseDeserializer deserializer);
 
   @protected
   List<PodcastProgramDto> sse_decode_list_podcast_program_dto(
@@ -801,12 +797,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SongDto> sse_decode_list_song_dto(SseDeserializer deserializer);
 
   @protected
-  List<StyleTagDto> sse_decode_list_style_tag_dto(SseDeserializer deserializer);
+  List<StyleTag> sse_decode_list_style_tag(SseDeserializer deserializer);
 
   @protected
-  List<SuggestItemDto> sse_decode_list_suggest_item_dto(
-    SseDeserializer deserializer,
-  );
+  List<SuggestItem> sse_decode_list_suggest_item(SseDeserializer deserializer);
 
   @protected
   List<ToplistCatalogGroupDto> sse_decode_list_toplist_catalog_group_dto(
@@ -819,7 +813,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
+  List<UserItem> sse_decode_list_user_item(SseDeserializer deserializer);
 
   @protected
   List<UserMedalDto> sse_decode_list_user_medal_dto(
@@ -890,17 +884,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlayerStateDto sse_decode_player_state_dto(SseDeserializer deserializer);
 
   @protected
+  Playlist sse_decode_playlist(SseDeserializer deserializer);
+
+  @protected
   PlaylistCategoryDto sse_decode_playlist_category_dto(
     SseDeserializer deserializer,
   );
 
   @protected
-  PlaylistDetailDto sse_decode_playlist_detail_dto(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  PlaylistDto sse_decode_playlist_dto(SseDeserializer deserializer);
+  PlaylistDetail sse_decode_playlist_detail(SseDeserializer deserializer);
 
   @protected
   PodcastProgramDto sse_decode_podcast_program_dto(
@@ -921,7 +913,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  ProfileDetailDto sse_decode_profile_detail_dto(SseDeserializer deserializer);
+  ProfileDetail sse_decode_profile_detail(SseDeserializer deserializer);
 
   @protected
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
@@ -1005,10 +997,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   StreamDto sse_decode_stream_dto(SseDeserializer deserializer);
 
   @protected
-  StyleTagDto sse_decode_style_tag_dto(SseDeserializer deserializer);
+  StyleTag sse_decode_style_tag(SseDeserializer deserializer);
 
   @protected
-  SuggestItemDto sse_decode_suggest_item_dto(SseDeserializer deserializer);
+  SuggestItem sse_decode_suggest_item(SseDeserializer deserializer);
 
   @protected
   ToplistCatalogGroupDto sse_decode_toplist_catalog_group_dto(
@@ -1033,7 +1025,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  UserItemDto sse_decode_user_item_dto(SseDeserializer deserializer);
+  UserItem sse_decode_user_item(SseDeserializer deserializer);
 
   @protected
   UserLevelDto sse_decode_user_level_dto(SseDeserializer deserializer);
@@ -1087,16 +1079,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_album_item_dto(AlbumItemDto self, SseSerializer serializer);
+  void sse_encode_album_item(AlbumItem self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist(Artist self, SseSerializer serializer);
 
   @protected
   void sse_encode_artist_detail_dto(
     ArtistDetailDto self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_artist_dto(ArtistDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -1195,10 +1187,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_feed_event_dto(FeedEventDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_follow_count_dto(
-    FollowCountDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_follow_count(FollowCount self, SseSerializer serializer);
 
   @protected
   void sse_encode_forward_item_dto(
@@ -1207,7 +1196,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_hot_artist_dto(HotArtistDto self, SseSerializer serializer);
+  void sse_encode_hot_artist(HotArtist self, SseSerializer serializer);
 
   @protected
   void sse_encode_hot_search_detail_item_dto(
@@ -1249,16 +1238,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_album_item_dto(
-    List<AlbumItemDto> self,
+  void sse_encode_list_album_item(
+    List<AlbumItem> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_artist_dto(
-    List<ArtistDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_artist(List<Artist> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_chart_summary_dto(
@@ -1297,8 +1283,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_hot_artist_dto(
-    List<HotArtistDto> self,
+  void sse_encode_list_hot_artist(
+    List<HotArtist> self,
     SseSerializer serializer,
   );
 
@@ -1336,14 +1322,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_playlist_category_dto(
-    List<PlaylistCategoryDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_playlist(List<Playlist> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_playlist_dto(
-    List<PlaylistDto> self,
+  void sse_encode_list_playlist_category_dto(
+    List<PlaylistCategoryDto> self,
     SseSerializer serializer,
   );
 
@@ -1471,14 +1454,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_song_dto(List<SongDto> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_style_tag_dto(
-    List<StyleTagDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_style_tag(List<StyleTag> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_suggest_item_dto(
-    List<SuggestItemDto> self,
+  void sse_encode_list_suggest_item(
+    List<SuggestItem> self,
     SseSerializer serializer,
   );
 
@@ -1495,10 +1475,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_user_item_dto(
-    List<UserItemDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_user_item(List<UserItem> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_user_medal_dto(
@@ -1597,19 +1574,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_playlist(Playlist self, SseSerializer serializer);
+
+  @protected
   void sse_encode_playlist_category_dto(
     PlaylistCategoryDto self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_playlist_detail_dto(
-    PlaylistDetailDto self,
+  void sse_encode_playlist_detail(
+    PlaylistDetail self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_playlist_dto(PlaylistDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_podcast_program_dto(
@@ -1636,10 +1613,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_profile_detail_dto(
-    ProfileDetailDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_profile_detail(ProfileDetail self, SseSerializer serializer);
 
   @protected
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);
@@ -1765,13 +1739,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_stream_dto(StreamDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_style_tag_dto(StyleTagDto self, SseSerializer serializer);
+  void sse_encode_style_tag(StyleTag self, SseSerializer serializer);
 
   @protected
-  void sse_encode_suggest_item_dto(
-    SuggestItemDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_suggest_item(SuggestItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_toplist_catalog_group_dto(
@@ -1798,7 +1769,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_user_item_dto(UserItemDto self, SseSerializer serializer);
+  void sse_encode_user_item(UserItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_user_level_dto(UserLevelDto self, SseSerializer serializer);

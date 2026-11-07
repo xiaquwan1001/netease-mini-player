@@ -153,7 +153,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   final TextEditingController _filterController = TextEditingController();
   String _filter = '';
 
-  rust.PlaylistDetailDto? _detail;
+  rust.PlaylistDetail? _detail;
   String? _detailError;
   bool _subscribed = false;
   bool _subBusy = false;
