@@ -37,6 +37,26 @@ void main() {
     expect(opened?.id, BigInt.one);
   });
 
+  testWidgets('新歌页签: 错误重试 + 空态文案', (tester) async {
+    var fail = true;
+    await tester.pumpWidget(host(NewReleasePage(
+      onPlaySongs: (_, __) {},
+      onOpenAlbum: (_) {},
+      onOpenArtist: (_) {},
+      loadSongs: (area) async {
+        if (fail) throw Exception('[network] boom');
+        return <rust.SongDto>[];
+      },
+    )));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('网络不稳定'), findsOneWidget);
+
+    fail = false;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('这个地区暂时没有新歌'), findsOneWidget);
+  });
+
   testWidgets('精选新碟: 空态与错误重试', (tester) async {
     var fail = true;
     await tester.pumpWidget(host(NewReleasePage(

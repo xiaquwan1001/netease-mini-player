@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 typedef ToplistCatalogLoader = Future<List<rust.ToplistCatalogGroupDto>> Function();
@@ -50,50 +51,22 @@ class AllChartsPage extends StatefulWidget {
 }
 
 class _AllChartsPageState extends State<AllChartsPage> {
-  List<rust.ToplistCatalogGroupDto>? _groups;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _error = null;
-      _groups = null;
-    });
-    try {
-      final groups =
-          await retryNetwork(widget.loadCatalog ?? rust.toplistCatalog);
-      if (!mounted) return;
-      setState(() => _groups = groups);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final groups = _groups;
     return Scaffold(
       appBar: AppBar(title: const Text('全部榜单')),
-      body: _AsyncBody(
-        error: _error,
-        onRetry: _load,
-        isEmpty: groups != null && groups.isEmpty,
+      // PagedListView 非分页模式: loader 恒 hasMore:false, 三态壳交给组件
+      body: PagedListView<rust.ToplistCatalogGroupDto>(
+        refreshable: false,
         emptyText: '暂时没有榜单',
-        child: groups == null
-            ? null
-            : ListView.builder(
-                itemCount: groups.length,
-                itemBuilder: (context, i) => _GroupSection(
-                  group: groups[i],
-                  onOpenPlaylist: widget.onOpenPlaylist,
-                ),
-              ),
+        loader: (cursor) async => PagedPage(
+          await retryNetwork(widget.loadCatalog ?? rust.toplistCatalog),
+          hasMore: false,
+        ),
+        itemBuilder: (context, g, i, groups) => _GroupSection(
+          group: g,
+          onOpenPlaylist: widget.onOpenPlaylist,
+        ),
       ),
     );
   }
@@ -155,49 +128,3 @@ class _GroupSection extends StatelessWidget {
   }
 }
 
-/// 与 new_release_page.dart 的 _AsyncBody 同口径: 加载中 / 错误+重试 / 空态
-class _AsyncBody extends StatelessWidget {
-  const _AsyncBody({
-    required this.error,
-    required this.onRetry,
-    required this.isEmpty,
-    required this.emptyText,
-    required this.child,
-  });
-
-  final String? error;
-  final VoidCallback onRetry;
-  final bool isEmpty;
-  final String emptyText;
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                error!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            TextButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
-    if (child == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (isEmpty) {
-      return Center(child: Text(emptyText));
-    }
-    return child!;
-  }
-}

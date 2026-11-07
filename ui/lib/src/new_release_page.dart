@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
@@ -158,78 +159,47 @@ class _NewSongsTab extends StatefulWidget {
 
 class _NewSongsTabState extends State<_NewSongsTab> {
   String _area = 'all';
-  List<rust.SongDto>? _songs;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _error = null;
-      _songs = null;
-    });
-    try {
-      final songs = await retryNetwork(() => widget.load(_area));
-      if (!mounted) return;
-      setState(() => _songs = songs);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final songs = _songs;
     return Column(
       children: [
         _AreaChips(
           value: _area,
           onChange: (area) {
             if (area == _area) return;
-            _area = area;
-            _load();
+            setState(() => _area = area);
           },
         ),
         Expanded(
-          child: _AsyncBody(
-            error: _error,
-            onRetry: _load,
-            isEmpty: songs?.isEmpty ?? false,
+          // PagedListView 非分页模式: loader 恒 hasMore:false, 三态壳交给组件
+          child: PagedListView<rust.SongDto>(
+            key: ValueKey(_area),
+            refreshable: false,
             emptyText: '这个地区暂时没有新歌',
-            child: songs == null
-                ? null
-                : ListView.builder(
-                    itemCount: songs.length,
-                    itemBuilder: (context, i) {
-                      final s = songs[i];
-                      return ListTile(
-                        dense: true,
-                        leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
-                        title: Text(
-                          s.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          s.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Text(
-                          _duration(s.durationMs),
-                          style: Theme.of(context).textTheme.labelSmall,
-                        ),
-                        onTap: s.playable
-                            ? () => widget.onPlay(songs, i)
-                            : null,
-                      );
-                    },
-                  ),
+            loader: (cursor) async => PagedPage(
+              await retryNetwork(() => widget.load(_area)),
+              hasMore: false,
+            ),
+            itemBuilder: (context, s, i, songs) => ListTile(
+              dense: true,
+              leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
+              title: Text(
+                s.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                s.artist,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Text(
+                _duration(s.durationMs),
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+              onTap: s.playable ? () => widget.onPlay(songs, i) : null,
+            ),
           ),
         ),
       ],
@@ -255,74 +225,44 @@ class _NewAlbumsTab extends StatefulWidget {
 
 class _NewAlbumsTabState extends State<_NewAlbumsTab> {
   String _area = 'all';
-  List<rust.AlbumItemDto>? _albums;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _error = null;
-      _albums = null;
-    });
-    try {
-      final albums = await retryNetwork(() => widget.load(_area));
-      if (!mounted) return;
-      setState(() => _albums = albums);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
-    final albums = _albums;
     return Column(
       children: [
         _AreaChips(
           value: _area,
           onChange: (area) {
             if (area == _area) return;
-            _area = area;
-            _load();
+            setState(() => _area = area);
           },
         ),
         Expanded(
-          child: _AsyncBody(
-            error: _error,
-            onRetry: _load,
-            isEmpty: albums?.isEmpty ?? false,
+          child: PagedListView<rust.AlbumItemDto>(
+            key: ValueKey(_area),
+            refreshable: false,
             emptyText: '这个地区暂时没有新碟',
-            child: albums == null
-                ? null
-                : ListView.builder(
-                    itemCount: albums.length,
-                    itemBuilder: (context, i) {
-                      final a = albums[i];
-                      return ListTile(
-                        leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
-                        title: Text(
-                          a.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          [
-                            if (a.artist.isNotEmpty) a.artist,
-                            if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => widget.onOpen(a),
-                      );
-                    },
-                  ),
+            loader: (cursor) async => PagedPage(
+              await retryNetwork(() => widget.load(_area)),
+              hasMore: false,
+            ),
+            itemBuilder: (context, a, i, albums) => ListTile(
+              leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
+              title: Text(
+                a.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                [
+                  if (a.artist.isNotEmpty) a.artist,
+                  if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () => widget.onOpen(a),
+            ),
           ),
         ),
       ],
@@ -330,68 +270,33 @@ class _NewAlbumsTabState extends State<_NewAlbumsTab> {
   }
 }
 
-class _HotArtistsTab extends StatefulWidget {
+class _HotArtistsTab extends StatelessWidget {
   const _HotArtistsTab({required this.load, required this.onOpen});
 
   final HotArtistLoader load;
   final void Function(rust.HotArtistDto artist) onOpen;
 
   @override
-  State<_HotArtistsTab> createState() => _HotArtistsTabState();
-}
-
-class _HotArtistsTabState extends State<_HotArtistsTab> {
-  List<rust.HotArtistDto>? _artists;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _error = null);
-    try {
-      final artists = await retryNetwork(widget.load);
-      if (!mounted) return;
-      setState(() => _artists = artists);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final artists = _artists;
-    return _AsyncBody(
-      error: _error,
-      onRetry: _load,
-      isEmpty: artists?.isEmpty ?? false,
+    return PagedListView<rust.HotArtistDto>(
+      refreshable: false,
       emptyText: '暂时没有歌手榜',
-      child: artists == null
-          ? null
-          : ListView.builder(
-              itemCount: artists.length,
-              itemBuilder: (context, i) {
-                final a = artists[i];
-                return ListTile(
-                  leading: CircleCover(
-                    url: a.avatarUrl,
-                    size: 44,
-                    icon: Icons.person_outline,
-                  ),
-                  title: Text(
-                    a.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text(formatFans(a.fans)),
-                  onTap: () => widget.onOpen(a),
-                );
-              },
-            ),
+      loader: (cursor) async =>
+          PagedPage(await retryNetwork(load), hasMore: false),
+      itemBuilder: (context, a, i, artists) => ListTile(
+        leading: CircleCover(
+          url: a.avatarUrl,
+          size: 44,
+          icon: Icons.person_outline,
+        ),
+        title: Text(
+          a.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(formatFans(a.fans)),
+        onTap: () => onOpen(a),
+      ),
     );
   }
 }
@@ -399,59 +304,11 @@ class _HotArtistsTabState extends State<_HotArtistsTab> {
 /// 粉丝数: 16908300 → "1690.8万"
 String formatFans(BigInt fans) {
   if (fans <= BigInt.zero) return '';
-  if (fans < BigInt.from(10000)) return '${fans} 粉丝';
+  if (fans < BigInt.from(10000)) return '$fans 粉丝';
   final wan = fans.toDouble() / 10000;
   final text = wan >= 100 ? wan.toStringAsFixed(0) : wan.toStringAsFixed(1);
   return '$text 万粉丝';
 }
-
-/// 三种 tab 共用的"加载中 / 错误 / 空"壳
-class _AsyncBody extends StatelessWidget {
-  const _AsyncBody({
-    required this.error,
-    required this.onRetry,
-    required this.isEmpty,
-    required this.emptyText,
-    required this.child,
-  });
-
-  final String? error;
-  final VoidCallback onRetry;
-  final bool isEmpty;
-  final String emptyText;
-  final Widget? child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (error != null) {
-      return Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                error!,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-            TextButton(onPressed: onRetry, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
-    if (child == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (isEmpty) {
-      return Center(child: Text(emptyText));
-    }
-    return child!;
-  }
-}
-
 
 /// "精选新碟"页签: album_newest 固定 12 张编辑精选新碟, 封面网格(无地区筛选).
 class _NewestAlbumsTab extends StatefulWidget {
@@ -465,80 +322,47 @@ class _NewestAlbumsTab extends StatefulWidget {
 }
 
 class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
-  List<rust.AlbumItemDto>? _albums;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _error = null;
-      _albums = null;
-    });
-    try {
-      final albums = await retryNetwork(widget.load);
-      if (!mounted) return;
-      setState(() => _albums = albums);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final albums = _albums;
-    return _AsyncBody(
-      error: _error,
-      onRetry: _load,
-      isEmpty: albums?.isEmpty ?? false,
+    return PagedListView<rust.AlbumItemDto>(
+      refreshable: false,
       emptyText: '暂时没有精选新碟',
-      child: albums == null
-          ? null
-          : GridView.builder(
-              padding: const EdgeInsets.all(12),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 160,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.72,
-              ),
-              itemCount: albums.length,
-              itemBuilder: (context, i) {
-                final a = albums[i];
-                return InkWell(
-                  onTap: () => widget.onOpen(a),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 封面随格子宽度伸缩(AspectRatio), 避免固定 size 溢出
-                      AspectRatio(
-                        aspectRatio: 1,
-                        child: CoverArt(url: a.coverUrl, size: 100, radius: 8),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        a.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      Text(
-                        a.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
-                );
-              },
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 160,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.72,
+      ),
+      loader: (cursor) async =>
+          PagedPage(await retryNetwork(widget.load), hasMore: false),
+      itemBuilder: (context, a, i, albums) => InkWell(
+        onTap: () => widget.onOpen(a),
+        borderRadius: BorderRadius.circular(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 封面随格子宽度伸缩(AspectRatio), 避免固定 size 溢出
+            AspectRatio(
+              aspectRatio: 1,
+              child: CoverArt(url: a.coverUrl, size: 100, radius: 8),
             ),
+            const SizedBox(height: 4),
+            Text(
+              a.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            Text(
+              a.artist,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 /// 可注入的加载器(测试用 mock)
@@ -24,42 +25,54 @@ class DigitalAlbumPage extends StatefulWidget {
   State<DigitalAlbumPage> createState() => _DigitalAlbumPageState();
 }
 
+/// 列表统一条目: 区块小标题 / 已购专辑行 / 已购单曲行.
+sealed class _Entry {
+  const _Entry();
+}
+
+class _SectionHead extends _Entry {
+  const _SectionHead(this.title, {required this.gapAbove});
+  final String title;
+
+  /// 单曲区块标题上方多留一档间距(与旧版 SizedBox(height:12) 对齐)
+  final bool gapAbove;
+}
+
+class _AlbumEntry extends _Entry {
+  const _AlbumEntry(this.album);
+  final rust.DigitalAlbumEntryDto album;
+}
+
+class _SongEntry extends _Entry {
+  const _SongEntry(this.song);
+  final rust.PurchasedSongDto song;
+}
+
 class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
-  rust.DigitalAlbumPurchasedDto? _albums;
-  rust.SongPurchasedDto? _songs;
-  String? _error;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final loadA = widget.loadAlbums ??
-          () => retryNetwork(() => rust.digitalAlbumPurchased(limit: 30, offset: 0));
-      final loadS = widget.loadSongs ??
-          () => retryNetwork(() => rust.songPurchased(limit: 20, offset: 0));
+  // PagedListView 非分页模式: 专辑+单曲合并为一个列表, 恒 hasMore:false;
+  // 任一加载失败 → 组件整页错误视图(friendlyError) + 重试, 与旧版一致。
+  PagedLoader<_Entry> get _entryLoader {
+    final loadA = widget.loadAlbums ??
+        () => retryNetwork(() => rust.digitalAlbumPurchased(limit: 30, offset: 0));
+    final loadS = widget.loadSongs ??
+        () => retryNetwork(() => rust.songPurchased(limit: 20, offset: 0));
+    return (cursor) async {
       final results = await Future.wait<Object?>([loadA(), loadS()]);
-      if (!mounted) return;
-      setState(() {
-        _albums = results[0] as rust.DigitalAlbumPurchasedDto?;
-        _songs = results[1] as rust.SongPurchasedDto?;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
+      final albums = (results[0] as rust.DigitalAlbumPurchasedDto?)?.albums ??
+          const <rust.DigitalAlbumEntryDto>[];
+      final songs = (results[1] as rust.SongPurchasedDto?)?.songs ??
+          const <rust.PurchasedSongDto>[];
+      return PagedPage<_Entry>([
+        if (albums.isNotEmpty) ...[
+          _SectionHead('已购数字专辑(${albums.length})', gapAbove: false),
+          for (final a in albums) _AlbumEntry(a),
+        ],
+        if (songs.isNotEmpty) ...[
+          _SectionHead('已购单曲(${songs.length})', gapAbove: true),
+          for (final s in songs) _SongEntry(s),
+        ],
+      ], hasMore: false);
+    };
   }
 
   Future<void> _openDetail(rust.DigitalAlbumEntryDto album) async {
@@ -80,82 +93,47 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('数字专辑(只读)')),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _buildBody(context),
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return ListView(
-        children: [
-          const SizedBox(height: 80),
-          Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.outline),
-          const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              '加载失败: $_error',
-              textAlign: TextAlign.center,
+      body: PagedListView<_Entry>(
+        loader: _entryLoader,
+        padding: EdgeInsets.fromLTRB(
+            12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
+        emptyBuilder: (context, items) => ListView(
+          children: const [
+            SizedBox(height: 96),
+            Icon(Icons.album_outlined, size: 56),
+            SizedBox(height: 12),
+            Center(child: Text('还没有已购的数字专辑或单曲')),
+            Center(child: Text('购买后会展现在这里(本页只读, 不支持下单)')),
+          ],
+        ),
+        itemBuilder: (context, e, i, items) => switch (e) {
+          _SectionHead() => Padding(
+              padding: EdgeInsets.only(top: e.gapAbove ? 12 : 0, bottom: 4),
+              child: Text(e.title, style: Theme.of(context).textTheme.titleSmall),
             ),
-          ),
-          const SizedBox(height: 12),
-          Center(child: FilledButton(onPressed: _load, child: const Text('重试'))),
-        ],
-      );
-    }
-    final albums = _albums?.albums ?? const <rust.DigitalAlbumEntryDto>[];
-    final songs = _songs?.songs ?? const <rust.PurchasedSongDto>[];
-    if (albums.isEmpty && songs.isEmpty) {
-      return ListView(
-        children: const [
-          SizedBox(height: 96),
-          Icon(Icons.album_outlined, size: 56),
-          SizedBox(height: 12),
-          Center(child: Text('还没有已购的数字专辑或单曲')),
-          Center(child: Text('购买后会展现在这里(本页只读, 不支持下单)')),
-        ],
-      );
-    }
-    return ListView(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
-      children: [
-        if (albums.isNotEmpty) ...[
-          Text('已购数字专辑(${albums.length})', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          ...albums.map((a) => Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                child: ListTile(
-                  leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
-                  title: Text(a.albumName, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(
-                    '${a.artistName} · x${a.boughtCount} · ${_fmtDate(a.paidTimeMs)}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openDetail(a),
-                ),
-              )),
-        ],
-        if (songs.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text('已购单曲(${songs.length})', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          ...songs.map((s) => ListTile(
-                leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
-                title: Text(s.name, overflow: TextOverflow.ellipsis),
+          _AlbumEntry() => Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ListTile(
+                leading: CoverArt(url: e.album.coverUrl, size: 48, radius: 6),
+                title: Text(e.album.albumName, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
-                  '${s.artistName} · ${_fmtDate(s.paidTimeMs)}',
+                  '${e.album.artistName} · x${e.album.boughtCount} · ${_fmtDate(e.album.paidTimeMs)}',
                   overflow: TextOverflow.ellipsis,
                 ),
-              )),
-        ],
-      ],
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _openDetail(e.album),
+              ),
+            ),
+          _SongEntry() => ListTile(
+              leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
+              title: Text(e.song.name, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        },
+      ),
     );
   }
 

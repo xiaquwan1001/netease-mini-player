@@ -79,7 +79,8 @@ void main() {
       albums: () async => throw Exception('[network] boom'),
       songs: () async => _songs(),
     );
-    expect(find.textContaining('加载失败'), findsOneWidget);
+    // 迁移 PagedListView 后错误文案直接用 friendlyError(不再带 "加载失败:" 前缀)
+    expect(find.textContaining('网络不稳定'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
   });
 
