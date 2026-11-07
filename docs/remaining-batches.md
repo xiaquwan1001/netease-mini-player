@@ -3,7 +3,11 @@
 > 用途: 后续每轮开工前先在这里选批次, 按「并行矩阵」决定能不能同时派。
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`.pi/memory/`(踩坑)。
-> 口径日期: 2026-11-07 (88/382 已接入)。
+> 口径日期: 2026-11-07 (90/382 已接入)。
+>
+> **进度**: Wave 1 已完成 —— [Rust] B1 消息增强(@我 / 最近联系人 / 私信分页) + [Dart] B0 收尾
+> (歌词纯文本兜底 / 播客详情刷新 / 资料卡关注数 / 窄屏用例); 见 `docs/PROGRESS.md` 对应小节。
+> 下一波按 §5: [Rust] B3 会员只读 ｜ [Dart] B1 的 UI 集成(已完成) → 可直接进 B4 搜索增强或 B3。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -25,7 +29,7 @@
 
 | 批次 | 目标 | 新增接口 | Rust 改动 | UI 文件 | 设备 |
 |---|---|---|---|---|---|
-| **B1 消息增强** | @我 / 最近联系人 / 私信分页 | `msg_forwards` `msg_recentcontact` | parse 2 个 + FFI 2 个 | `messages_page.dart` | 要 |
+| ~~**B1 消息增强**~~ ✅已做 | @我 / 最近联系人 / 私信分页 | `msg_forwards` `msg_recentcontact` | parse 2 个 + FFI 2 个 | `messages_page.dart` | 已验(a36) |
 | **B2 评论统计** | 评论/分享/收藏计数 | `comment_info_list` | parse 1 个 + FFI 1 个 | `comment_thread.dart` 或详情页标题 | 要 |
 | **B3 会员只读** | 黑胶签到/任务/成长值(不碰支付) | `vip_info` `vip_sign_info` `vip_tasks` `sign_happy_info` | parse 3~4 + FFI 3~4 | 新 `vip_page.dart` + `settings_view.dart` 入口 | 要(未登录时给空态) |
 | **B4 搜索增强** | 联想命中词/热搜详情/多类型匹配 | `search_match` `search_multimatch` `search_hot_detail` | parse 2~3 + FFI 2~3 | `search_landing.dart` `search_suggest.dart` | 要 |
