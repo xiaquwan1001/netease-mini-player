@@ -250,7 +250,7 @@ class _HomePageState extends State<HomePage> {
         unawaited(_resolveLikedPlaylistId());
       }
     } catch (e) {
-      setState(() => _error = '$e');
+      setState(() => _error = friendlyError(e));
     }
   }
 
@@ -801,7 +801,8 @@ class _HomePageState extends State<HomePage> {
       return true;
     } catch (e) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
       return false;
     }
   }
@@ -925,7 +926,8 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('登录失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1028,7 +1030,8 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('切换账号失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1070,7 +1073,8 @@ class _HomePageState extends State<HomePage> {
       if (thenLogin) await _login();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('退出登录失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1388,7 +1392,7 @@ class _HomePageState extends State<HomePage> {
     try {
       await _toggleLikeFor(song);
     } catch (e) {
-      if (mounted) _toast('收藏失败: $e');
+      if (mounted) _toast('收藏失败: ${friendlyError(e)}');
     }
   }
 

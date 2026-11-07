@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
 /// 动作回调集合(由 main.dart 组装, 行组件通过 AppActions 取)
@@ -146,7 +147,7 @@ List<Widget> _menu(
     try {
       await action();
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      messenger?.showSnackBar(SnackBar(content: Text('操作失败: ${friendlyError(e)}')));
     }
   }
 

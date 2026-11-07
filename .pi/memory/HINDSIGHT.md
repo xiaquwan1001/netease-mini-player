@@ -188,24 +188,23 @@ API/protocol details and anti-bot technique live in the
   (静默降权
 
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/8a/8adfa2e10cafe68504f0d82c8ffedf085389c1c42a7bdc84b3d9594a2ad55963.txt; sha256=8adfa2e10cafe68504f0d82c8ffedf085389c1c42a7bdc84b3d9594a2ad55963; bytes=31805]
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/34/3423780bd8cbfeced684e39e6fa0d8f575018dbfc960c9d3d98f626525cf2bc4.txt; sha256=3423780bd8cbfeced684e39e6fa0d8f575018dbfc960c9d3d98f626525cf2bc4; bytes=18285]
 
-## 评论统计(comment_info_list)(2026-11-09)
+## 数字专辑只读(digital_album_* / song_purchased)(2026-11-09)
 
-- `comment_info_list`(`/api/resource/commentInfo/list`, weapi)入参是 **`type`(资源类型数字) + `ids`(逗号分隔)**,
-  **不是 threadId**。传 threadId("R_SO_4_186016")只会得到 `code=200` + `data:[]` 的"假成功";
-  正确写法是 `type=0&ids=186016`。type 映射与 `RESOURCE_TYPE_MAP` 一致(0=歌曲 1=MV 2=歌单 3=专辑 4=播客 5=视频 6=动态 7=节目)。
-- 响应 `data` 是**数组**(每个请求 id 一项), 取第一项; 字段
-  `{commentCount, commentCountDesc, commentUpgraded, comments, latestLikedUsers, liked, likedCount,
-  musicianSaidCount, resourceId, resourceType, shareCount, threadId}`。
-  实测歌曲 186016: 评论 1969911(`commentCountDesc="100w+"`) / 分享 109723 / 点赞 352;
-  歌单 24381616: 评论 0 / 分享 6; 专辑 32311: 分享 10519。
-- **文档有但实测不回的两个字段: `subscribedCount`(收藏数) 与 `hotCount`(热评数)** ——
-  收藏数只能从 `PlaylistDetail` 拿, 热评要单独打 `comment_hot`。别按文档补字段。
-- `resourceType` 是服务端**归一后的子类型**(歌曲=4, 专辑=3, 歌单=0, 播客=1, 视频=62), 与请求 type 数值不同,
-  不能拿来当入参; `threadId` 才是权威(与请求一致)。
-- 动态(A_EV_2_`eventId_userId`)该接口不支持; `data` 缺失/空数组/空对象一律退化成全 0(用入参 threadId 兜底),
-  评论数缺失不该让详情页失败。
-- CLI: `ncm comment-info <song|playlist|album|podcast|mv|video> <id>`(内部用 `split_thread_id` 反解 type+bare id)。
+- `digital_album_purchased`(`/api/digitalAlbum/purchased`, weapi, body `{limit,offset,total:true}`):
+  **顶层 `paidAlbums` + `total`,没有 data 包装**; 元素 `{albumId, albumName, artist{id,name}, cover,
+  paidTime(ms), boughtCount}`。匿名/未登录服务端报 auth 错, UI 要按登录态过滤入口。
+- `song_purchased` 的真实端点写死在 vendor 里: `/api/single/mybought/song/list`;
+  形状 `data:{count, hasMore, list[]}`, 分页用 `hasMore`(不是 total)。空账号 list 为空, 元素命名
+  `id/songId`、`name/songName` 两种都见过, 解析要兼容。
+- `digital_album_detail`(`/api/vipmall/albumproduct/detail`): 本体字段在 **`album`**
+  (`albumId/albumName/artistName/artistId/coverUrl`), 价格/上架/标签/简介在 **`product`**
+  (`price/pubTime/tags[]/descr[]{resource,type}`); `descr` 用 `</br>` 当分隔占位, 拼简介必须过滤;
+  `product.saleNum` 恒 0 —— 真实销量不能从这里取。
+- `digital_album_sales` 实际端点 `/api/vipmall/albumproduct/album/query/sales`, vendor 入参键是
+  **`albumIds`**(CLI query 键名 `ids`), 响应 `data` 是 **{专辑id字符串: 销量数字} 的 map**,
+  不是数组, 也没有 bizType/limit/offset(与 Node 文档口径不同, 以实测为准)。
+- 下单接口 `digital_album_ordering` 明确不做(涉及支付)。
 
 <!-- created=2026-11-09, last=2026-11-09 -->

@@ -13,6 +13,11 @@ typedef ProgramLoader = Future<List<rust.PodcastProgramDto>> Function(
 /// 电台单条详情(详情页打开时刷新最新信息用)
 typedef RadioDetailLoader = Future<rust.PodcastRadioDto> Function(BigInt radioId);
 
+/// 单集详情加载器. 节目列表里的 description 往往被截断甚至为空,
+/// 点开"节目详情"时用 podcast_program 再拉一次完整数据(简介/时长/音频本体).
+typedef ProgramDetailLoader = Future<rust.PodcastProgramDto> Function(
+    BigInt programId);
+
 String _fmtDuration(BigInt ms) {
   final total = (ms ~/ BigInt.from(1000)).toInt();
   final h = total ~/ 3600;
@@ -33,6 +38,7 @@ Future<void> showPodcastSheet(
   RadioLoader? loadRadios,
   ProgramLoader? loadPrograms,
   RadioDetailLoader? loadRadioDetail,
+  ProgramDetailLoader? loadProgramDetail,
 }) {
   final radios = loadRadios ?? (limit) => rust.podcastHot(limit: limit);
   final programs = loadPrograms ??
@@ -40,6 +46,8 @@ Future<void> showPodcastSheet(
           rust.podcastPrograms(radioId: id, limit: limit, offset: offset);
   final radioDetail = loadRadioDetail ??
       (id) => rust.podcastRadio(radioId: id);
+  final programDetail =
+      loadProgramDetail ?? (id) => rust.podcastProgram(programId: id);
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -52,6 +60,7 @@ Future<void> showPodcastSheet(
           loadRadios: radios,
           loadPrograms: programs,
           loadRadioDetail: radioDetail,
+          loadProgramDetail: programDetail,
         ),
       ),
     ),
@@ -64,6 +73,7 @@ class _PodcastBrowser extends StatefulWidget {
     required this.loadRadios,
     required this.loadPrograms,
     required this.loadRadioDetail,
+    required this.loadProgramDetail,
     this.initialRadio,
   });
 
@@ -71,6 +81,7 @@ class _PodcastBrowser extends StatefulWidget {
   final RadioLoader loadRadios;
   final ProgramLoader loadPrograms;
   final RadioDetailLoader loadRadioDetail;
+  final ProgramDetailLoader loadProgramDetail;
   final rust.PodcastRadioDto? initialRadio;
 
   @override
@@ -100,6 +111,7 @@ class _PodcastBrowserState extends State<_PodcastBrowser> {
                   radio: radio,
                   load: widget.loadPrograms,
                   loadRadioDetail: widget.loadRadioDetail,
+                  loadProgramDetail: widget.loadProgramDetail,
                   onPlay: widget.onPlay,
                   onRadioUpdated: (r) => setState(() => _radio = r),
                 ),
@@ -203,6 +215,7 @@ class _ProgramList extends StatefulWidget {
     required this.radio,
     required this.load,
     required this.loadRadioDetail,
+    required this.loadProgramDetail,
     required this.onPlay,
     this.onRadioUpdated,
   });
@@ -210,6 +223,7 @@ class _ProgramList extends StatefulWidget {
   final rust.PodcastRadioDto radio;
   final ProgramLoader load;
   final RadioDetailLoader loadRadioDetail;
+  final ProgramDetailLoader loadProgramDetail;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   /// 详情刷新拿到更新的电台信息后回报(标题栏同步更新)
@@ -276,6 +290,30 @@ class _ProgramListState extends State<_ProgramList> {
     }
   }
 
+  /// 打开单集详情(podcast_program). 列表里的数据先占位, 详情自己再拉一次.
+  Future<void> _openProgramDetail(rust.PodcastProgramDto p) async {
+    final all = _programs ?? const <rust.PodcastProgramDto>[];
+    final songs = [
+      for (final x in all)
+        if (x.song != null) x.song!,
+    ];
+    final index = all.indexWhere((x) => x.id == p.id);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ProgramDetailSheet(
+        program: p,
+        loadDetail: widget.loadProgramDetail,
+        onPlay: p.song == null
+            ? null
+            : () {
+                Navigator.pop(context); // 先关详情, 再起播(列表弹层保留)
+                widget.onPlay(songs, index < 0 ? 0 : index);
+              },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) {
@@ -320,8 +358,22 @@ class _ProgramListState extends State<_ProgramList> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     enabled: song != null,
-                    trailing:
-                        song == null ? null : SongOverflowButton(song: song, size: 20),
+                    // 详情按钮对每一集都可用(没有音频本体的单集也能看简介)
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.info_outline, size: 20),
+                          tooltip: '节目详情',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints:
+                              const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () => _openProgramDetail(p),
+                        ),
+                        if (song != null) SongOverflowButton(song: song, size: 20),
+                      ],
+                    ),
                     onTap: song == null
                         ? null
                         : () {
@@ -422,6 +474,197 @@ class _RetryView extends StatelessWidget {
           const SizedBox(height: 12),
           FilledButton(onPressed: onRetry, child: const Text('重试')),
         ],
+      ),
+    );
+  }
+}
+
+
+/// 单集详情弹层(podcast_program).
+///
+/// 列表项只当**首屏占位**: 列表里的 `description` 经常被截断甚至为空,
+/// 打开后立刻用 [loadDetail] 再拉一次完整数据; 拉取失败保留占位 + 顶部错误条可重试,
+/// 绝不清空 —— 详情是"有则更好"的数据, 不该因为一次请求失败让用户什么都看不到。
+class ProgramDetailSheet extends StatefulWidget {
+  const ProgramDetailSheet({
+    super.key,
+    required this.program,
+    required this.loadDetail,
+    this.onPlay,
+  });
+
+  /// 列表带来的节目数据(占位)
+  final rust.PodcastProgramDto program;
+
+  final ProgramDetailLoader loadDetail;
+
+  /// null = 这一集没有音频本体(或调用方不给播放入口), 播放按钮置灰
+  final VoidCallback? onPlay;
+
+  @override
+  State<ProgramDetailSheet> createState() => _ProgramDetailSheetState();
+}
+
+class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
+  late rust.PodcastProgramDto _program = widget.program;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final p = await widget.loadDetail(widget.program.id);
+      if (!mounted) return;
+      setState(() {
+        _program = p;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = friendlyError(e);
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final p = _program;
+    final meta = [
+      if (p.djName.isNotEmpty) p.djName,
+      if (p.radioName.isNotEmpty) '《${p.radioName}》',
+      _fmtDuration(p.durationMs),
+    ].join(' · ');
+    final desc = p.description.trim();
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    '节目详情',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(width: 8),
+                  if (_loading)
+                    const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: '关闭',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, size: 16, color: scheme.error),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: scheme.error),
+                        ),
+                      ),
+                      TextButton(onPressed: _load, child: const Text('重试')),
+                    ],
+                  ),
+                ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CoverArt(url: p.coverUrl, size: 64, radius: 8),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  p.name,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  meta,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        desc.isEmpty ? '这一集没有文字简介' : desc,
+                        style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: widget.onPlay,
+                  icon: const Icon(Icons.play_arrow, size: 18),
+                  label: const Text('播放本集'),
+                ),
+              ),
+              if (widget.onPlay == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    '这一集没有可播放的音频',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'comment_thread.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
+import 'podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_actions.dart';
@@ -783,11 +784,16 @@ Future<void> showPodcastDetail(
   BuildContext context, {
   required rust.PodcastRadioDto radio,
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
+  ProgramDetailLoader? loadProgramDetail,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
-      builder: (_) =>
-          _PodcastDetailPage(radio: radio, onPlaySongs: onPlaySongs),
+      builder: (_) => _PodcastDetailPage(
+        radio: radio,
+        onPlaySongs: onPlaySongs,
+        loadProgramDetail:
+            loadProgramDetail ?? (id) => rust.podcastProgram(programId: id),
+      ),
     ),
   );
 }
@@ -796,10 +802,14 @@ class _PodcastDetailPage extends StatefulWidget {
   const _PodcastDetailPage({
     required this.radio,
     required this.onPlaySongs,
+    required this.loadProgramDetail,
   });
 
   final rust.PodcastRadioDto radio;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+
+  /// 单集详情(podcast_program), 测试可注入 mock
+  final ProgramDetailLoader loadProgramDetail;
 
   @override
   State<_PodcastDetailPage> createState() => _PodcastDetailPageState();
@@ -983,6 +993,27 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     );
   }
 
+  /// 单集详情: 列表数据先占位, 弹层自己再拉一次完整简介(podcast_program)
+  Future<void> _openProgramDetail(int index) async {
+    final display = _display;
+    if (index < 0 || index >= display.length) return;
+    final p = display[index];
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ProgramDetailSheet(
+        program: p,
+        loadDetail: widget.loadProgramDetail,
+        onPlay: p.song == null
+            ? null
+            : () {
+                Navigator.pop(context);
+                _playProgram(index);
+              },
+      ),
+    );
+  }
+
   Widget _buildPrograms(List<rust.PodcastProgramDto> display) {
     if (_programs == null && _programsError == null) {
       return const SliverToBoxAdapter(child: _SkeletonList());
@@ -1023,7 +1054,11 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       delegate: SliverChildBuilderDelegate(
         (context, i) {
           final p = display[i];
-          return _ProgramRow(program: p, onTap: () => _playProgram(i));
+          return _ProgramRow(
+            program: p,
+            onTap: () => _playProgram(i),
+            onInfo: () => _openProgramDetail(i),
+          );
         },
         childCount: display.length,
       ),
@@ -1187,10 +1222,17 @@ class _SongRow extends StatelessWidget {
 
 /// 定高 56 的节目行: 节目名 + DJ · 时长
 class _ProgramRow extends StatelessWidget {
-  const _ProgramRow({required this.program, required this.onTap});
+  const _ProgramRow({
+    required this.program,
+    required this.onTap,
+    this.onInfo,
+  });
 
   final rust.PodcastProgramDto program;
   final VoidCallback onTap;
+
+  /// 打开单集详情(没有音频本体的单集也给这个入口)
+  final VoidCallback? onInfo;
 
   @override
   Widget build(BuildContext context) {
@@ -1227,6 +1269,16 @@ class _ProgramRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (onInfo != null)
+              IconButton(
+                icon: const Icon(Icons.info_outline, size: 20),
+                tooltip: '节目详情',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 36, minHeight: 36),
+                onPressed: onInfo,
+              ),
             if (song != null) SongOverflowButton(song: song, size: 20),
           ],
         ),

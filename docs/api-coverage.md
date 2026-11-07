@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-09(第十一批: 评论统计 B2 已接入, 覆盖 99/382)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-09(第十二批: 数字专辑只读 B12 已接入, 覆盖 103/382)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -8,10 +8,10 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **99(25%)** |
-| 未接入 | **283** |
-| FFI 导出给 Dart 的函数 | 114 |
-| 其中 UI 还没有入口的 | 5(`lyric_lines` `lyric_lines_i18n` `ping` `podcast_program` `search`) |
+| `ncm-service`(provider)实际调用的 | **103(26%)** |
+| 未接入 | **279** |
+| FFI 导出给 Dart 的函数 | 118 |
+| 其中 UI 还没有入口的 | 4(`lyric_lines` `lyric_lines_i18n` `ping` `search`) |
 
 复算:
 
@@ -62,6 +62,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 评论删除 | `comment_delete` | 评论区: 只有自己发的评论显示"删除", 二次确认后本地移除 |
 | 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 | 消息中心 | `pl_count` `msg_private` `msg_private_history` `msg_notices` `msg_comments` | "我的"/消息中心: 未读角标 + 三页签(私信会话→只读聊天记录 / 通知 / 评论消息); 实测私信 18 未读、通知含点赞/系统通知、评论含被评资源名 |
+| 数字专辑只读 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` | "我的"→数字专辑(只读): 已购数字专辑列表(封面/歌手/购买时间/份数) + BottomSheet 详情(价格/标签/销量/简介); 未登录不显示入口; 下单(`digital_album_ordering`)不做 |
 | 评论统计 | `comment_info_list` | 评论区标题下统计条「评论 N · 分享 N · 点赞 N」(空/失败不显示); 歌曲/歌单/专辑/播客/视频共用, **动态评论接口不认**, 且**没有收藏数/热评数**(官方文档有但不回) |
 | 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
 | 消息增强 | `msg_forwards` `msg_recentcontact` | 消息中心第四页签"@我"(空账号, 防御式解析) + 私信页顶部"最近联系人"横滑条(data.follow, 服务端顺序) + 私信会话/聊天记录分页(触底预取/按钮, 返回 < limit 到底, 聊天用最早一条 time_ms 当游标) |

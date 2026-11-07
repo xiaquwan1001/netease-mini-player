@@ -43,3 +43,13 @@
   「本地 workspace 测试(阻塞门)」+「vendor 8 例匿名联网 smoke(3 次重试, 仅 WARN)」;
   需要严格核验公网链路时 `NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh`。
 
+§
+## 2026-11-09 本机 flutter analyze 连续 SIGSEGV（dart analyze 正常）
+- 现象: `flutter analyze [--no-fatal-infos]` 每次都 `analysis server exited with code -6`，
+  `si_signo=Segmentation fault(11) ... dart::ConcurrentMarkTask::Run / MarkingVisitor::VisitPointers`
+  崩溃在并发标记 GC；同一份代码 `dart analyze`（整包）与 `dart analyze lib/src/xxx.dart`（单文件）全正常，
+  内存 43G 可用、/tmp 未满、无残留 analysis_server 进程，`flutter test`/`flutter build` 也都正常。
+- 判据与处置: 这是本机 Dart VM/GC 级的偶发不稳定（与 litellm/Gradle 那次 SIGSEGV 同源史），**不是代码问题**。
+  连续 3+ 次失败后不要继续怀疑自己的改动，改用 `cd ui && dart analyze`（0 error 即过，info 级照旧忽略）
+  作为 analyze 门；`tools/ci.sh` 会因此 RC=250 停在 analyze 步，其余步骤(test/两端构建)可手工补跑。
+  需要在 ci.sh 里长期兜底时，可考虑把 analyze 步骤改成「flutter analyze 失败则回落 dart analyze」。

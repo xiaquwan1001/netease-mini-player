@@ -8,8 +8,9 @@
 > **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
 > 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
 > **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**;
-> **Wave 5 完成(B2 评论统计: 评论区统计条, 覆盖 99/382)**。
-> 下一波建议: [Rust] B10 电台补充 或 B12 数字专辑只读(M 级) ｜ [Dart] §4 纯 Dart 打磨。
+> **Wave 5 完成(B2 评论统计: 评论区统计条, 覆盖 99/382)**;
+> **Wave 6 完成(B12 数字专辑只读 + 纯 Dart 车道: 播客单集详情/错误文案统一, 覆盖 103/382)**。
+> 下一波建议: [Rust] B10 电台补充(M 级) ｜ [Dart] §4 纯 Dart 打磨。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -60,7 +61,7 @@
 | **B6 榜单 v2** | 「更新 N 首」/歌手榜细分 | `toplist` `toplist_detail_v2` `toplist_artist` | ROI 低, 现有 detail 已够用 |
 | **B7 歌单细分编辑** | 私密切换/标签/排序/换封面 | `playlist_privacy` `playlist_order_update` `playlist_tags_update` `playlist_cover_update` | **vendor 把 privacy 写死 0**; 其余要自己拼请求或上传 |
 | **B10 电台补充** | 电台榜单/分类/订阅/主播 | `dj_toplist*`(5) `dj_catelist` `dj_category_*`(2) `dj_recommend*`(2) `dj_sub` `dj_subscriber` | `dj_difm_*`(6) 语义未验证, 先不碰 |
-| **B12 数字专辑只读** | 已购/销量/详情 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` | 只读; 下单接口(`digital_album_ordering`)不做 |
+| ~~**B12 数字专辑只读**~~ ✅已做 | 已购/销量/详情 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` | 6 DTO + 4 parse + FFI 4 + `digital_album_page.dart`(新) + 我的页入口; 下单不碰 |
 
 ### L 级 · 需要新能力(单独立项, 不建议和上面混批)
 

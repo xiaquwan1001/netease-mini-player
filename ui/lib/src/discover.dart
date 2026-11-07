@@ -165,7 +165,7 @@ class _DailySongsTabState extends State<_DailySongsTab>
         SnackBar(content: Text('已减少《${song.name}》这类推荐')),
       );
     } catch (e) {
-      messenger?.showSnackBar(SnackBar(content: Text('操作失败: $e')));
+      messenger?.showSnackBar(SnackBar(content: Text('操作失败: ${friendlyError(e)}')));
     }
   }
 }

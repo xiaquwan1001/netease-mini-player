@@ -1,9 +1,28 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 99/382: 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 103/382: 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 数字专辑只读 B12 + 纯 Dart 车道(2026-11-09)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 已购数字专辑 | ✅ | `digital_album_purchased`: 顶层 `paidAlbums`+ `total`(**无 data 包装**); 实测 2 张(伍六七原声大碟 / 冀西南林路行), 行显示 歌手·份数·购买日期 |
+| 专辑详情 | ✅ | `digital_album_detail`: 字段在 `album`(albumId/albumName/artistName/coverUrl) + `product`(price/pubTime/tags/descr); `descr` 的 `</br>` 要过滤; BottomSheet 显示 ¥15.0 · 独家/无损 → 销量 2.0万 + 简介 |
+| 销量 | ✅ | `digital_album_sales` 实际端点 `/api/vipmall/albumproduct/album/query/sales`, 入参键 **`albumIds`**; `data` 是 **{专辑id串: 销量} map**(实测 `{"120605500":1300053}`), 不是数组 |
+| 已购单曲 | ✅ | `song_purchased` = `/api/single/mybought/song/list`, `data.{count,hasMore,list}`; 本账号 list 为空(DTO 兼容 id/songId 两种命名) |
+| 入口 | ✅ | 「我的」→「数字专辑(只读)」(`widget.loggedIn` 过滤, 未登录不显示); 下单接口 `digital_album_ordering` **不做** |
+| 播客单集详情 | ✅ | `podcast_program`: 节目行新增 ⓘ 按钮(有/无音频都给), 弹层拉完整简介 + 「播放本集」; 列表弹层与全页(`detail_page.dart`)两条路径都接 |
+| 错误文案统一 | ✅ | main/discover/song_actions 里 7 处裸 `'$e'` 改为 `friendlyError(e)` 并补语境前缀(登录失败/切换账号失败/退出登录失败/收藏失败…) |
+| 回归 | ✅ | Rust `ncm-service` 78→**83** 单测(+5 数字专辑); Flutter 181→**192** 用例(+5 digital_album_page / +6 program_detail); analyze 0 error; `tools/ci.sh` → **CI OK**(vendor smoke 8/8); a36 走查: 我的页入口/已购列表/详情弹层/节目详情弹层 |
+
+**协议/实现事实**:
+- `digital_album_purchased` 与 `song_purchased` **匿名会报 auth 错** → UI 用 `loggedIn` 过滤入口, provider 侧仍保留 auth 错误映射。
+- `digital_album_sales` 的 vendor 入参键是 `albumIds`(CLI query 键名 `ids`); 返回 map 而不是列表, 解析要按 albumId 字符串查。
+- `digital_album_detail` 的 `product.saleNum` 恒 0, 真实销量只能走 sales 接口。
+- 详细真实响应片段见 `docs/b12-digital-album-notes.md`。
 
 ## v2 · 功能包: 评论统计 B2(comment_info_list)(2026-11-09)
 
