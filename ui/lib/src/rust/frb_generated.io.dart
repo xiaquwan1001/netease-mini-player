@@ -52,6 +52,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto dco_decode_box_autoadd_song_dto(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -74,6 +77,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FollowCountDto dco_decode_follow_count_dto(dynamic raw);
+
+  @protected
+  ForwardItemDto dco_decode_forward_item_dto(dynamic raw);
 
   @protected
   HotArtistDto dco_decode_hot_artist_dto(dynamic raw);
@@ -113,6 +119,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
+
+  @protected
+  List<ForwardItemDto> dco_decode_list_forward_item_dto(dynamic raw);
 
   @protected
   List<HotArtistDto> dco_decode_list_hot_artist_dto(dynamic raw);
@@ -155,6 +164,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProviderInfo> dco_decode_list_provider_info(dynamic raw);
+
+  @protected
+  List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw);
 
   @protected
   List<SearchAlbumDto> dco_decode_list_search_album_dto(dynamic raw);
@@ -202,6 +214,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -236,6 +251,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProviderInfo dco_decode_provider_info(dynamic raw);
+
+  @protected
+  RecentContactDto dco_decode_recent_contact_dto(dynamic raw);
 
   @protected
   SearchAlbumDto dco_decode_search_album_dto(dynamic raw);
@@ -324,6 +342,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -346,6 +367,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FollowCountDto sse_decode_follow_count_dto(SseDeserializer deserializer);
+
+  @protected
+  ForwardItemDto sse_decode_forward_item_dto(SseDeserializer deserializer);
 
   @protected
   HotArtistDto sse_decode_hot_artist_dto(SseDeserializer deserializer);
@@ -391,6 +415,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<FeedEventDto> sse_decode_list_feed_event_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ForwardItemDto> sse_decode_list_forward_item_dto(
     SseDeserializer deserializer,
   );
 
@@ -459,6 +488,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RecentContactDto> sse_decode_list_recent_contact_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<SearchAlbumDto> sse_decode_list_search_album_dto(
     SseDeserializer deserializer,
   );
@@ -518,6 +552,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto? sse_decode_opt_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -562,6 +599,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
+
+  @protected
+  RecentContactDto sse_decode_recent_contact_dto(SseDeserializer deserializer);
 
   @protected
   SearchAlbumDto sse_decode_search_album_dto(SseDeserializer deserializer);
@@ -662,6 +702,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -694,6 +737,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_follow_count_dto(
     FollowCountDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_forward_item_dto(
+    ForwardItemDto self,
     SseSerializer serializer,
   );
 
@@ -757,6 +806,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_feed_event_dto(
     List<FeedEventDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_forward_item_dto(
+    List<ForwardItemDto> self,
     SseSerializer serializer,
   );
 
@@ -845,6 +900,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_recent_contact_dto(
+    List<RecentContactDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_search_album_dto(
     List<SearchAlbumDto> self,
     SseSerializer serializer,
@@ -926,6 +987,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
@@ -987,6 +1051,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_recent_contact_dto(
+    RecentContactDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_search_album_dto(

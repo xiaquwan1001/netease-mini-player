@@ -3,10 +3,10 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
-    DefaultSearch, FeedEvent, FollowCount, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
+    DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
     Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
-    PrivateSession, ProfileDetail, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
+    PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     UserItem, WikiFact,
 };
@@ -1888,6 +1888,45 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 消息中心"@我"(需登录). vendor 的 msg_forwards 只发 offset/limit, 没有
+    /// lasttime 游标 → last_time_ms 保留参数形状, 当前恒取最新一页.
+    fn forward_messages(
+        &self,
+        limit: u32,
+        _last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<ForwardItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("@我需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", "0");
+            let resp = client.msg_forwards(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_forwards(&resp.body))
+        })
+    }
+
+    /// 最近联系人(需登录). vendor 的 msg_recentcontact 发空 body, limit 只能客户端截断.
+    fn recent_contacts(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<RecentContact>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("最近联系人需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.msg_recentcontact(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut list = parse_recent_contacts(&resp.body);
+            if (limit as usize) < list.len() {
+                list.truncate(limit as usize);
+            }
+            Ok(list)
+        })
+    }
+
     /// 专辑详情(封面预览 + 曲目)
     fn album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
         Box::pin(async move {
@@ -3320,6 +3359,106 @@ pub fn parse_comment_messages(body: &Value) -> Vec<InboxItem> {
         .unwrap_or_default()
 }
 
+/// @我: {code, forwards:[...], lasttime, more, newCount}
+/// 真实空账号响应(2026-11 实测): {"code":200,"forwards":[],"lasttime":0,"more":false,"newCount":0}
+/// 非空条目形状未实测(空账号拿不到), 按邻近接口(msg_private/notices)风格做防御式解析,
+/// 兼容: {id|msgId, time|forwardTime, type, content|comment, json(JSON 字符串),
+/// user|fromUser:{userId,nickname,avatarUrl}, eventId|event.id, picUrl|json.pics[].picUrl}.
+/// 解析不出任何 id 的条目直接跳过.
+pub fn parse_forwards(body: &Value) -> Vec<ForwardItem> {
+    body.get("forwards")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| {
+                    let event = f.get("event");
+                    let id = u64_of(f, "id").or_else(|| u64_of(f, "msgId"));
+                    let event_id =
+                        u64_of(f, "eventId").or_else(|| event.and_then(|e| u64_of(e, "id")));
+                    if id.is_none() && event_id.is_none() {
+                        return None;
+                    }
+                    let user = f.get("user").or_else(|| f.get("fromUser"));
+                    let mut comment = str_of(f, "content")
+                        .or_else(|| str_of(f, "comment"))
+                        .map(|s| msg_text(&s))
+                        .unwrap_or_default();
+                    if comment.is_empty() {
+                        comment = str_of(f, "json").map(|s| msg_text(&s)).unwrap_or_default();
+                    }
+                    // 图片: 顶层 picUrl > 顶层对象/转发原动态(pics[].picUrl|urlCommon)
+                    let pic_url = str_of(f, "picUrl")
+                        .or_else(|| pics_of(f))
+                        .or_else(|| event.and_then(pics_of))
+                        .or_else(|| {
+                            str_of(f, "json")
+                                .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                                .and_then(|v| pics_of(&v))
+                        });
+                    Some(ForwardItem {
+                        id,
+                        event_id,
+                        user_id: user.and_then(|u| u64_of(u, "userId")),
+                        nickname: user.and_then(|u| str_of(u, "nickname")),
+                        avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
+                        comment: if comment.is_empty() { None } else { Some(comment) },
+                        time_ms: u64_of(f, "time")
+                            .or_else(|| u64_of(f, "forwardTime"))
+                            .map(normalize_ms),
+                        forward_type: u64_of(f, "type").map(|t| t as u32),
+                        pic_url,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 转发/动态载荷里的首图: pics[].picUrl|urlCommon
+fn pics_of(v: &Value) -> Option<String> {
+    v.get("pics")
+        .and_then(Value::as_array)
+        .and_then(|p| p.first())
+        .and_then(|p| str_of(p, "picUrl").or_else(|| str_of(p, "urlCommon")))
+}
+
+/// 网易部分接口给秒级时间戳(10 位), 统一归一成毫秒.
+/// 阈值 1e11(约 5138 年的秒数 / 1973 年的毫秒数), 两侧都不会误伤.
+fn normalize_ms(t: u64) -> u64 {
+    if t > 0 && t < 100_000_000_000 {
+        t * 1000
+    } else {
+        t
+    }
+}
+
+/// 最近联系人: {code, data:{follow:[{userId, nickname, avatarUrl, mutual, onlined,
+/// vipType, gender, userType, remarkName, py, avatarDetail{...}}]}}
+/// 实测(2026-11): 只有 data.follow 一个数组, 是"可发起私信的联系人/关注列表",
+/// 不是"最近聊天"; 顺序是服务端顺序.
+pub fn parse_recent_contacts(body: &Value) -> Vec<RecentContact> {
+    body.get("data")
+        .and_then(|d| d.get("follow"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    let user_id = u64_of(c, "userId")?;
+                    Some(RecentContact {
+                        user_id,
+                        nickname: str_of(c, "nickname").unwrap_or_default(),
+                        avatar_url: str_of(c, "avatarUrl").filter(|s| s.starts_with("http")),
+                        mutual: c.get("mutual").and_then(Value::as_bool).unwrap_or(false),
+                        onlined: c.get("onlined").and_then(Value::as_bool).unwrap_or(false),
+                        vip_type: u64_of(c, "vipType").unwrap_or(0) as u32,
+                        remark_name: str_of(c, "remarkName").filter(|s| !s.trim().is_empty()),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 收藏的专辑: {code, data:[{id,name,picUrl,artist:{name},size,subTime}], hasMore}
 pub fn parse_album_items(body: &Value) -> Vec<AlbumItem> {
     body.get("data")
@@ -4011,6 +4150,81 @@ mod tests {
         assert_eq!(list[0].detail, "我喜欢的音乐", "优先显示被评论的资源名");
     }
 
+
+    /// @我: 真实空响应(2026-11 实测, 本账号没有 @我 消息) — 顶层 forwards/lasttime/more/newCount
+    #[test]
+    fn forwards_empty_real_response() {
+        let body = json!({"code": 200, "forwards": [], "lasttime": 0, "more": false, "newCount": 0});
+        assert!(parse_forwards(&body).is_empty());
+        // 缺 forwards 键 / 条目不是对象都不炸
+        assert!(parse_forwards(&json!({"code": 301})).is_empty());
+        assert!(parse_forwards(&json!({"code": 200, "forwards": [null, 1, "x"]})).is_empty());
+    }
+
+    /// @我 非空形状未实测, 用合成条目覆盖防御式解析的各分支
+    #[test]
+    fn forwards_synthetic_items_defensive() {
+        let body = json!({
+            "code": 200,
+            "forwards": [
+                // 形状 A: 顶层 content/user + eventId, content 是 JSON 字符串, 秒级时间
+                {"id": 9001, "time": 1700000000i64, "type": 2,
+                 "content": "{\"msg\":\"转发一句话\"}",
+                 "user": {"userId": 7, "nickname": "小明", "avatarUrl": "http://a/1.jpg"},
+                 "eventId": 42},
+                // 形状 B: fromUser + event{id,pics} + json 兜底正文
+                {"id": 9002, "forwardTime": 1600000000i64,
+                 "fromUser": {"userId": 8, "nickname": "小红"},
+                 "event": {"id": 43, "pics": [{"picUrl": "http://p/1.jpg"}]},
+                 "json": "{\"msg\":\"看看图\"}"},
+                // 无法识别 id → 跳过
+                {"user": {"userId": 9, "nickname": "路人"}}
+            ]
+        });
+        let list = parse_forwards(&body);
+        assert_eq!(list.len(), 2, "解析不出 id 的条目跳过");
+        assert_eq!(list[0].id, Some(9001));
+        assert_eq!(list[0].event_id, Some(42));
+        assert_eq!(list[0].user_id, Some(7));
+        assert_eq!(list[0].nickname.as_deref(), Some("小明"));
+        assert_eq!(list[0].comment.as_deref(), Some("转发一句话"));
+        assert_eq!(list[0].forward_type, Some(2));
+        assert_eq!(list[0].time_ms, Some(1_700_000_000_000), "秒级时间戳归一成毫秒");
+        assert_eq!(list[1].id, Some(9002));
+        assert_eq!(list[1].event_id, Some(43));
+        assert_eq!(list[1].user_id, Some(8));
+        assert_eq!(list[1].comment.as_deref(), Some("看看图"));
+        assert_eq!(list[1].pic_url.as_deref(), Some("http://p/1.jpg"));
+        assert!(list[1].avatar_url.is_none());
+    }
+
+    /// 最近联系人: 真实形状(2026-11 实测 data.follow)
+    #[test]
+    fn recent_contacts_follow_mapping() {
+        let body = json!({
+            "code": 200,
+            "data": {"follow": [
+                {"userId": 32953014u64, "nickname": "云音乐VIP",
+                 "avatarUrl": "https://p4.music.126.net/a.jpg",
+                 "mutual": false, "onlined": false, "vipType": 11, "gender": 0,
+                 "userType": 10, "remarkName": "", "py": "VIP"},
+                {"userId": 2, "nickname": "好友", "mutual": true, "onlined": true,
+                 "remarkName": "老王"},
+                {"nickname": "幽灵"}
+            ]}
+        });
+        let list = parse_recent_contacts(&body);
+        assert_eq!(list.len(), 2, "没有 userId 的条目跳过");
+        assert_eq!(list[0].user_id, 32953014);
+        assert_eq!(list[0].nickname, "云音乐VIP");
+        assert_eq!(list[0].vip_type, 11);
+        assert!(!list[0].mutual && !list[0].onlined);
+        assert_eq!(list[0].remark_name, None, "空 remarkName 归 None");
+        assert_eq!(list[1].remark_name.as_deref(), Some("老王"));
+        assert!(list[1].mutual && list[1].onlined);
+        // 顶层不是 data.follow 也不炸
+        assert!(parse_recent_contacts(&json!({"code": 200})).is_empty());
+    }
 
     /// 新歌速递: data[] 是完整 song 对象(artists/album/duration/privilege)
     #[test]

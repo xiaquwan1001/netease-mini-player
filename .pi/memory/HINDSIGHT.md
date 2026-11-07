@@ -250,6 +250,19 @@ API/protocol details and anti-bot technique live in the
   `resourceJson` 也是 JSON 字符串, `name` 是被评论的资源名。
 - vendor 没有私信发送接口 → UI 明确标"只读"; 已读上报也没做。
 
+## 消息增强: @我 / 最近联系人 / 私信分页(2026-11-07)
+
+- `msg_forwards`(`/api/forwards/get`, weapi) 顶层是 **`forwards` / `lasttime` / `more` / `newCount`**;
+  vendor 实现只发 **offset/limit**(没有 lasttime 游标), trait 的 last_time_ms 参数保留形状、当前恒取最新一页。
+- **空账号拿不到 @我 条目的非空形状**(实测本账号 `forwards:[]`), ForwardItem 全字段 Option/serde(default),
+  解析兼容 {id|msgId, time|forwardTime, type, content|comment, json(字符串), user|fromUser, eventId|event.id};
+  解析不出任何 id 的条目直接跳过。时间戳按"10 位=秒"归一毫秒 —— **这是假设, 拿到真实非空数据要复核**。
+- `msg_recentcontact`(`/api/msg/recentcontact/get`, weapi): vendor 实现发**空 body**(limit 不上送, 只能客户端截断);
+  返回只有 **`data.follow`** 一个数组({userId,nickname,avatarUrl,mutual,onlined,vipType,gender,userType,remarkName,py,avatarDetail}),
+  是"可发起私信的联系人/关注列表"而**不是"最近聊天"**; 顺序是服务端顺序, 前端别重排; remarkName 常是空串(归 None)。
+- 私信分页: 会话用 `msg_private` 的 limit/offset(**offset 要用服务端已消费行数**, 去重后的列表长度不行);
+  聊天历史翻旧页用最早一条的 `time` 当 `before`, 按 id 去重防边界重复; 返回条数 < limit 视为到底。
+
 ## 新歌/新碟分地区 + 歌手榜(2026-11-06)
 
 - `top_song`(`/api/v1/discovery/new/songs`) 的 `type` 实为 **areaId**, 只有

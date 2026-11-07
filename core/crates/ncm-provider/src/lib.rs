@@ -8,7 +8,8 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile,
+    ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
+    Profile, RecentContact,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     UserItem, WikiFact,
 };
@@ -838,6 +839,21 @@ pub trait Provider: Send + Sync {
     /// 评论/回复消息(需登录), 新的在前
     fn comment_messages(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
         Box::pin(async { Err(ProviderError::unsupported("no comment messages")) })
+    }
+
+    /// 消息中心"@我"(需登录, 新的在前).
+    /// 网易该接口实际用 offset/limit 分页, last_time_ms 只是保留游标形状, 实现可忽略.
+    fn forward_messages(
+        &self,
+        _limit: u32,
+        _last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<ForwardItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no forward messages")) })
+    }
+
+    /// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
+    fn recent_contacts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<RecentContact>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent contacts")) })
     }
 }
 

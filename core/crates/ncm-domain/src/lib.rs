@@ -688,6 +688,58 @@ pub struct InboxItem {
     pub time_ms: u64,
 }
 
+/// 消息中心"@我"页签里的一行(转发/提到我的动态).
+/// 空账号拿不到非空条目的真实形状, 字段全部可缺(Option/serde(default));
+/// 解析函数对拿不到任何 id 的条目直接跳过, 所以这里不保证 id 非空.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ForwardItem {
+    /// 通知自身 id(部分条目形状可能缺失)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<u64>,
+    /// 被转发/提到的动态 id
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nickname: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 转发/评论正文(富载荷抽文本后)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_ms: Option<u64>,
+    /// 服务端 type 字段(语义未实测, 原样透传)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_type: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pic_url: Option<String>,
+}
+
+/// 私信页顶部的"最近联系人"一行.
+/// 注意: /msg/recentcontact 返回的是 data.follow —— "可发起私信的联系人/关注列表",
+/// 不是"最近聊天"; 顺序是服务端顺序, 前端不要重排.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentContact {
+    pub user_id: u64,
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+    /// 双向关注
+    #[serde(default)]
+    pub mutual: bool,
+    /// 在线状态
+    #[serde(default)]
+    pub onlined: bool,
+    /// 0 = 非会员, >0 会员类型(原样透传)
+    #[serde(default)]
+    pub vip_type: u32,
+    /// 好友备注名(空串归 None)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remark_name: Option<String>,
+}
+
 /// 签到日历里的一天
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SigninDay {

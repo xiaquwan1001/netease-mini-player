@@ -580,6 +580,19 @@ Future<List<InboxItemDto>> messageNotices({
 Future<List<InboxItemDto>> commentMessages({required int limit}) =>
     RustLib.instance.api.crateApiCommentMessages(limit: limit);
 
+/// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
+Future<List<ForwardItemDto>> forwardMessages({
+  required int limit,
+  required BigInt lastTimeMs,
+}) => RustLib.instance.api.crateApiForwardMessages(
+  limit: limit,
+  lastTimeMs: lastTimeMs,
+);
+
+/// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
+Future<List<RecentContactDto>> recentContacts({required int limit}) =>
+    RustLib.instance.api.crateApiRecentContacts(limit: limit);
+
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 
@@ -1084,6 +1097,57 @@ class FollowCountDto {
           runtimeType == other.runtimeType &&
           follows == other.follows &&
           fans == other.fans;
+}
+
+class ForwardItemDto {
+  final BigInt? id;
+  final BigInt? eventId;
+  final BigInt? userId;
+  final String? nickname;
+  final String? avatarUrl;
+  final String? comment;
+  final BigInt? timeMs;
+  final int? forwardType;
+  final String? picUrl;
+
+  const ForwardItemDto({
+    this.id,
+    this.eventId,
+    this.userId,
+    this.nickname,
+    this.avatarUrl,
+    this.comment,
+    this.timeMs,
+    this.forwardType,
+    this.picUrl,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      eventId.hashCode ^
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      comment.hashCode ^
+      timeMs.hashCode ^
+      forwardType.hashCode ^
+      picUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ForwardItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          eventId == other.eventId &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          comment == other.comment &&
+          timeMs == other.timeMs &&
+          forwardType == other.forwardType &&
+          picUrl == other.picUrl;
 }
 
 class HotArtistDto {
@@ -1716,6 +1780,49 @@ class ProviderInfo {
           id == other.id &&
           name == other.name &&
           capabilities == other.capabilities;
+}
+
+class RecentContactDto {
+  final BigInt userId;
+  final String nickname;
+  final String? avatarUrl;
+  final bool mutual;
+  final bool onlined;
+  final int vipType;
+  final String? remarkName;
+
+  const RecentContactDto({
+    required this.userId,
+    required this.nickname,
+    this.avatarUrl,
+    required this.mutual,
+    required this.onlined,
+    required this.vipType,
+    this.remarkName,
+  });
+
+  @override
+  int get hashCode =>
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      mutual.hashCode ^
+      onlined.hashCode ^
+      vipType.hashCode ^
+      remarkName.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecentContactDto &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          mutual == other.mutual &&
+          onlined == other.onlined &&
+          vipType == other.vipType &&
+          remarkName == other.remarkName;
 }
 
 class SearchAlbumDto {

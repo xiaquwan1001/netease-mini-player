@@ -2018,6 +2018,72 @@ pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItemDto>, String> {
     Ok(list.into_iter().map(inbox_dto).collect())
 }
 
+pub struct ForwardItemDto {
+    pub id: Option<u64>,
+    pub event_id: Option<u64>,
+    pub user_id: Option<u64>,
+    pub nickname: Option<String>,
+    pub avatar_url: Option<String>,
+    pub comment: Option<String>,
+    pub time_ms: Option<u64>,
+    pub forward_type: Option<u32>,
+    pub pic_url: Option<String>,
+}
+
+/// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
+pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItemDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .forward_messages(limit, last_time_ms)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|f| ForwardItemDto {
+            id: f.id,
+            event_id: f.event_id,
+            user_id: f.user_id,
+            nickname: f.nickname,
+            avatar_url: f.avatar_url,
+            comment: f.comment,
+            time_ms: f.time_ms,
+            forward_type: f.forward_type,
+            pic_url: f.pic_url,
+        })
+        .collect())
+}
+
+pub struct RecentContactDto {
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+    pub mutual: bool,
+    pub onlined: bool,
+    pub vip_type: u32,
+    pub remark_name: Option<String>,
+}
+
+/// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
+pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContactDto>, String> {
+    let provider = with_provider(Capability::Message)?;
+    let list = provider
+        .recent_contacts(limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|c| RecentContactDto {
+            user_id: c.user_id,
+            nickname: c.nickname,
+            avatar_url: c.avatar_url,
+            mutual: c.mutual,
+            onlined: c.onlined,
+            vip_type: c.vip_type,
+            remark_name: c.remark_name,
+        })
+        .collect())
+}
+
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 pub fn my_uid() -> Result<u64, String> {
     let guard = core()?.lock().map_err(|e| e.to_string())?;

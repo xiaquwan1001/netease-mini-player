@@ -5,30 +5,39 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
-typedef SessionsLoader = Future<List<rust.PrivateSessionDto>> Function();
-typedef HistoryLoader = Future<List<rust.PrivateMessageDto>> Function();
-typedef HistoryByUserLoader = Future<List<rust.PrivateMessageDto>> Function(
-    BigInt userId);
+typedef SessionsPageLoader = Future<List<rust.PrivateSessionDto>> Function(
+    int limit, int offset);
+typedef ContactsLoader = Future<List<rust.RecentContactDto>> Function();
+typedef ForwardsLoader = Future<List<rust.ForwardItemDto>> Function();
+typedef HistoryPageLoader = Future<List<rust.PrivateMessageDto>> Function(
+    BigInt userId, int limit, BigInt beforeMs);
 typedef InboxLoader = Future<List<rust.InboxItemDto>> Function();
 
-/// 消息中心: 私信 / 通知 / 评论 三个页签(全部只读, 不在本 App 内回复).
+/// 消息中心: 私信 / 通知 / 评论 / @我 四个页签(全部只读, 不在本 App 内回复).
 /// 未登录时每个页签各自给一句登录提示, 不整页报错.
+/// 私信会话与聊天记录支持分页: 触底或按钮触发, 返回条数 < limit 视为到底.
 Future<void> showMessagesPage(
   BuildContext context, {
   MessageCountsLoader? loadCounts,
-  SessionsLoader? loadSessions,
-  HistoryByUserLoader? loadHistory,
+  SessionsPageLoader? loadSessions,
+  ContactsLoader? loadContacts,
+  HistoryPageLoader? loadHistory,
   InboxLoader? loadNotices,
   InboxLoader? loadComments,
+  ForwardsLoader? loadForwards,
+  int pageSize = 30,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => MessagesPage(
         loadCounts: loadCounts,
         loadSessions: loadSessions,
+        loadContacts: loadContacts,
         loadHistory: loadHistory,
         loadNotices: loadNotices,
         loadComments: loadComments,
+        loadForwards: loadForwards,
+        pageSize: pageSize,
       ),
     ),
   );
@@ -39,16 +48,24 @@ class MessagesPage extends StatefulWidget {
     super.key,
     this.loadCounts,
     this.loadSessions,
+    this.loadContacts,
     this.loadHistory,
     this.loadNotices,
     this.loadComments,
+    this.loadForwards,
+    this.pageSize = 30,
   });
 
   final MessageCountsLoader? loadCounts;
-  final SessionsLoader? loadSessions;
-  final HistoryByUserLoader? loadHistory;
+  final SessionsPageLoader? loadSessions;
+  final ContactsLoader? loadContacts;
+  final HistoryPageLoader? loadHistory;
   final InboxLoader? loadNotices;
   final InboxLoader? loadComments;
+  final ForwardsLoader? loadForwards;
+
+  /// 会话/聊天记录每页条数(也是"返回条数 < limit 视为到底"的阈值)
+  final int pageSize;
 
   @override
   State<MessagesPage> createState() => _MessagesPageState();
@@ -57,17 +74,22 @@ class MessagesPage extends StatefulWidget {
 class _MessagesPageState extends State<MessagesPage> {
   rust.MessageCountsDto? _counts;
 
-  SessionsLoader get _sessions =>
+  SessionsPageLoader get _sessions =>
       widget.loadSessions ??
-      () => rust.privateSessions(limit: 50, offset: 0);
-  HistoryByUserLoader get _history =>
-      widget.loadHistory ??
-      (uid) => rust.privateHistory(userId: uid, limit: 50, beforeMs: BigInt.zero);
+      (limit, offset) => rust.privateSessions(limit: limit, offset: offset);
+  ContactsLoader get _contacts =>
+      widget.loadContacts ?? () => rust.recentContacts(limit: widget.pageSize);
+  HistoryPageLoader get _history => widget.loadHistory ??
+      (uid, limit, before) =>
+          rust.privateHistory(userId: uid, limit: limit, beforeMs: before);
   InboxLoader get _notices =>
       widget.loadNotices ??
-      () => rust.messageNotices(limit: 50, lastTimeMs: BigInt.zero);
+      () => rust.messageNotices(limit: widget.pageSize, lastTimeMs: BigInt.zero);
   InboxLoader get _comments =>
-      widget.loadComments ?? () => rust.commentMessages(limit: 50);
+      widget.loadComments ?? () => rust.commentMessages(limit: widget.pageSize);
+  ForwardsLoader get _forwards =>
+      widget.loadForwards ??
+      () => rust.forwardMessages(limit: widget.pageSize, lastTimeMs: BigInt.zero);
 
   @override
   void initState() {
@@ -89,7 +111,7 @@ class _MessagesPageState extends State<MessagesPage> {
   Widget build(BuildContext context) {
     final counts = _counts;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('消息'),
@@ -98,12 +120,18 @@ class _MessagesPageState extends State<MessagesPage> {
               Tab(text: _label('私信', counts?.private)),
               Tab(text: _label('通知', counts?.notices)),
               Tab(text: _label('评论', counts?.comments)),
+              Tab(text: _label('@我', counts?.forwards)),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _SessionsTab(load: _sessions, loadHistory: _history),
+            _SessionsTab(
+              load: _sessions,
+              loadHistory: _history,
+              loadContacts: _contacts,
+              pageSize: widget.pageSize,
+            ),
             _InboxTab(
               load: _notices,
               emptyText: '还没有通知',
@@ -114,6 +142,7 @@ class _MessagesPageState extends State<MessagesPage> {
               emptyText: '还没有评论消息',
               icon: Icons.mode_comment_outlined,
             ),
+            _ForwardsTab(load: _forwards),
           ],
         ),
       ),
@@ -142,10 +171,17 @@ String relativeTime(BigInt timeMs) {
 // ---------------- 私信 ----------------
 
 class _SessionsTab extends StatefulWidget {
-  const _SessionsTab({required this.load, required this.loadHistory});
+  const _SessionsTab({
+    required this.load,
+    required this.loadHistory,
+    required this.loadContacts,
+    required this.pageSize,
+  });
 
-  final SessionsLoader load;
-  final HistoryByUserLoader loadHistory;
+  final SessionsPageLoader load;
+  final HistoryPageLoader loadHistory;
+  final ContactsLoader loadContacts;
+  final int pageSize;
 
   @override
   State<_SessionsTab> createState() => _SessionsTabState();
@@ -153,25 +189,70 @@ class _SessionsTab extends StatefulWidget {
 
 class _SessionsTabState extends State<_SessionsTab> {
   List<rust.PrivateSessionDto>? _items;
+  List<rust.RecentContactDto> _contacts = const [];
   String? _error;
+  /// 服务端已消费的行数(offset 追加用, 与去重后的 _items 无关)
+  int _offset = 0;
+  bool _loadingMore = false;
+  bool _noMore = false;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadContacts();
   }
 
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final items = await retryNetwork(widget.load);
+      final items = await retryNetwork(() => widget.load(widget.pageSize, 0));
       if (!mounted) return;
-      setState(() => _items = items);
+      setState(() {
+        _items = items;
+        _offset = items.length;
+        _noMore = items.length < widget.pageSize;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
     }
   }
+
+  /// 最近联系人横滑条: 拿不到就不显示, 不影响会话列表
+  Future<void> _loadContacts() async {
+    try {
+      final contacts = await retryNetwork(widget.loadContacts);
+      if (!mounted) return;
+      setState(() => _contacts = contacts);
+    } catch (_) {}
+  }
+
+  Future<void> _loadMore() async {
+    final items = _items;
+    if (items == null || _loadingMore || _noMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await retryNetwork(() => widget.load(widget.pageSize, _offset));
+      if (!mounted) return;
+      final known = items.map((s) => s.userId).toSet();
+      final fresh = page.where((s) => !known.contains(s.userId)).toList();
+      setState(() {
+        _items = [...items, ...fresh];
+        _offset += page.length;
+        _loadingMore = false;
+        if (page.length < widget.pageSize) _noMore = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _error = friendlyError(e);
+      });
+    }
+  }
+
+  bool get _hasMore => _items != null && _items!.isNotEmpty && !_noMore;
 
   @override
   Widget build(BuildContext context) {
@@ -185,44 +266,160 @@ class _SessionsTabState extends State<_SessionsTab> {
     if (items.isEmpty) {
       return const Center(child: Text('还没有私信'));
     }
-    return ListView.separated(
-      itemCount: items.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
-      itemBuilder: (context, i) {
-        final s = items[i];
-        return ListTile(
-          leading: CircleCover(
-            url: s.avatarUrl,
-            size: 44,
-            icon: Icons.person_outline,
-          ),
-          title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(
-            s.lastMessage,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                relativeTime(s.lastTimeMs),
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              if (s.unread > 0) ...[
-                const SizedBox(height: 4),
-                Badge(label: Text('${s.unread}')),
-              ],
-            ],
-          ),
-          onTap: () => showPrivateChat(
-            context,
-            session: s,
-            load: () => widget.loadHistory(s.userId),
-          ),
-        );
+    final headerCount = _contacts.isEmpty ? 0 : 1;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        // 触底前 300px 自动预取; 短列表不产生滚动通知, 靠底部按钮兜底
+        if (n.metrics.pixels >= n.metrics.maxScrollExtent - 300) {
+          _loadMore();
+        }
+        return false;
       },
+      child: ListView.separated(
+        itemCount: headerCount + items.length + 1,
+        separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
+        itemBuilder: (context, i) {
+          if (i < headerCount) {
+            return _ContactsStrip(contacts: _contacts);
+          }
+          final index = i - headerCount;
+          if (index < items.length) {
+            final s = items[index];
+            return ListTile(
+              leading: CircleCover(
+                url: s.avatarUrl,
+                size: 44,
+                icon: Icons.person_outline,
+              ),
+              title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                s.lastMessage,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    relativeTime(s.lastTimeMs),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  if (s.unread > 0) ...[
+                    const SizedBox(height: 4),
+                    Badge(label: Text('${s.unread}')),
+                  ],
+                ],
+              ),
+              onTap: () => showPrivateChat(
+                context,
+                session: s,
+                load: widget.loadHistory,
+                pageSize: widget.pageSize,
+              ),
+            );
+          }
+          return _MoreRow(
+            hasMore: _hasMore,
+            loading: _loadingMore,
+            noMore: _noMore,
+            moreText: '加载更多',
+            endText: '没有更多了',
+            onTap: _loadMore,
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 私信页顶部"最近联系人"横滑条(顺序 = 服务端顺序, 前端不重排; 备注名优先)
+class _ContactsStrip extends StatelessWidget {
+  const _ContactsStrip({required this.contacts});
+
+  final List<rust.RecentContactDto> contacts;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 84,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: contacts.length,
+        itemBuilder: (context, i) {
+          final c = contacts[i];
+          final remark = c.remarkName;
+          final name = (remark != null && remark.isNotEmpty) ? remark : c.nickname;
+          return SizedBox(
+            width: 68,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircleCover(
+                    url: c.avatarUrl,
+                    size: 44,
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 列表尾部的分页行: 加载按钮 / 加载中 / 到底提示
+/// (与 NotificationListener 的触底预取配合, 短列表也能手动触发)
+class _MoreRow extends StatelessWidget {
+  const _MoreRow({
+    required this.hasMore,
+    required this.loading,
+    required this.noMore,
+    required this.moreText,
+    required this.endText,
+    this.onTap,
+  });
+
+  final bool hasMore;
+  final bool loading;
+  final bool noMore;
+  final String moreText;
+  final String endText;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasMore && !loading) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: Text(endText, style: Theme.of(context).textTheme.labelSmall),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: loading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : TextButton(onPressed: onTap, child: Text(moreText)),
+      ),
     );
   }
 }
@@ -231,7 +428,8 @@ class _SessionsTabState extends State<_SessionsTab> {
 Future<void> showPrivateChat(
   BuildContext context, {
   required rust.PrivateSessionDto session,
-  required HistoryLoader load,
+  required HistoryPageLoader load,
+  int pageSize = 30,
 }) {
   return showModalBottomSheet<void>(
     context: context,
@@ -254,7 +452,9 @@ Future<void> showPrivateChat(
               ),
             ),
             const Divider(height: 1),
-            Expanded(child: _ChatBody(session: session, load: load)),
+            Expanded(
+              child: _ChatBody(session: session, load: load, pageSize: pageSize),
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Text(
@@ -270,10 +470,15 @@ Future<void> showPrivateChat(
 }
 
 class _ChatBody extends StatefulWidget {
-  const _ChatBody({required this.session, required this.load});
+  const _ChatBody({
+    required this.session,
+    required this.load,
+    required this.pageSize,
+  });
 
   final rust.PrivateSessionDto session;
-  final HistoryLoader load;
+  final HistoryPageLoader load;
+  final int pageSize;
 
   @override
   State<_ChatBody> createState() => _ChatBodyState();
@@ -282,6 +487,8 @@ class _ChatBody extends StatefulWidget {
 class _ChatBodyState extends State<_ChatBody> {
   List<rust.PrivateMessageDto>? _items;
   String? _error;
+  bool _loadingOlder = false;
+  bool _noMore = false;
 
   @override
   void initState() {
@@ -292,12 +499,49 @@ class _ChatBodyState extends State<_ChatBody> {
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final items = await retryNetwork(widget.load);
+      final items = await retryNetwork(
+        () => widget.load(widget.session.userId, widget.pageSize, BigInt.zero),
+      );
       if (!mounted) return;
-      setState(() => _items = items);
+      setState(() {
+        _items = items;
+        _noMore = items.length < widget.pageSize;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// 加载更早: 用当前最早一条的 time_ms 当 before_ms, 不重复拉最新一页
+  Future<void> _loadOlder() async {
+    final items = _items;
+    if (items == null || items.isEmpty || _loadingOlder || _noMore) return;
+    final before = items.first.timeMs;
+    if (before <= BigInt.zero) {
+      // 没有可用游标(异常数据), 不再翻页
+      setState(() => _noMore = true);
+      return;
+    }
+    setState(() => _loadingOlder = true);
+    try {
+      final page = await retryNetwork(
+        () => widget.load(widget.session.userId, widget.pageSize, before),
+      );
+      if (!mounted) return;
+      final known = items.map((m) => m.id).toSet();
+      final fresh = page.where((m) => !known.contains(m.id)).toList();
+      setState(() {
+        _items = [...fresh, ...items];
+        _loadingOlder = false;
+        if (page.length < widget.pageSize) _noMore = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingOlder = false;
+        _error = friendlyError(e);
+      });
     }
   }
 
@@ -314,11 +558,27 @@ class _ChatBodyState extends State<_ChatBody> {
       return const Center(child: Text('还没有消息'));
     }
     final scheme = Theme.of(context).colorScheme;
+    // reverse: 列表锚在底部(最新消息在下), 顶部是"加载更早"
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: items.length,
+      reverse: true,
+      itemCount: items.length + (_noMore ? 0 : 1),
       itemBuilder: (context, i) {
-        final m = items[i];
+        if (i == items.length) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(
+              child: _loadingOlder
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : TextButton(onPressed: _loadOlder, child: const Text('加载更早')),
+            ),
+          );
+        }
+        final m = items[items.length - 1 - i];
         final mine = m.fromMe;
         return Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -419,6 +679,79 @@ class _InboxTabState extends State<_InboxTab> {
           trailing: Text(
             relativeTime(item.timeMs),
             style: theme.textTheme.labelSmall,
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ---------------- @我 ----------------
+
+class _ForwardsTab extends StatefulWidget {
+  const _ForwardsTab({required this.load});
+
+  final ForwardsLoader load;
+
+  @override
+  State<_ForwardsTab> createState() => _ForwardsTabState();
+}
+
+class _ForwardsTabState extends State<_ForwardsTab> {
+  List<rust.ForwardItemDto>? _items;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final items = await retryNetwork(widget.load);
+      if (!mounted) return;
+      setState(() => _items = items);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return _ErrorRow(message: _error!, onRetry: _load);
+    }
+    final items = _items;
+    if (items == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (items.isEmpty) {
+      return const Center(child: Text('还没有@我'));
+    }
+    return ListView.separated(
+      itemCount: items.length,
+      separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
+      itemBuilder: (context, i) {
+        final f = items[i];
+        final nickname = f.nickname;
+        final comment = f.comment ?? '';
+        final actor = (nickname == null || nickname.isEmpty) ? '云音乐用户' : nickname;
+        return ListTile(
+          leading: CircleCover(
+            url: f.avatarUrl,
+            size: 44,
+            icon: Icons.alternate_email,
+          ),
+          title: Text(actor, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: comment.isEmpty
+              ? null
+              : Text(comment, maxLines: 2, overflow: TextOverflow.ellipsis),
+          trailing: Text(
+            relativeTime(f.timeMs ?? BigInt.zero),
+            style: Theme.of(context).textTheme.labelSmall,
           ),
         );
       },

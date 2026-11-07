@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-07(第六批: 评论热门 + IP 归属已接入)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-07(第七批: 消息增强 @我/最近联系人/私信分页已接入, 覆盖 90/382)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -63,6 +63,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 | 消息中心 | `pl_count` `msg_private` `msg_private_history` `msg_notices` `msg_comments` | "我的"/消息中心: 未读角标 + 三页签(私信会话→只读聊天记录 / 通知 / 评论消息); 实测私信 18 未读、通知含点赞/系统通知、评论含被评资源名 |
 | 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
+| 消息增强 | `msg_forwards` `msg_recentcontact` | 消息中心第四页签"@我"(空账号, 防御式解析) + 私信页顶部"最近联系人"横滑条(data.follow, 服务端顺序) + 私信会话/聊天记录分页(触底预取/按钮, 返回 < limit 到底, 聊天用最早一条 time_ms 当游标) |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
 
@@ -70,21 +71,19 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 |---|---|---|---|---|
 | 1 | 新碟/新歌剩余入口 | `album_newest` `simi_user` | 推荐页分类页 | `top_song`/`top_album`/`top_artists` 已接入; `album_newest`(最新专辑)与已接入的新碟基本重复, `simi_user`(相似用户)价值低 |
 | 2 | 评论补充 | `comment_info_list` | 评论区 | 热门评论已接入(`comment_hot`), IP 归属地从评论负载的 `ipLocation.location` 直接取; 剩评论统计数据(资源评论/分享/收藏数)未展示 |
-| 3 | @我 / 消息增强 | `msg_forwards` `msg_recentcontact` + 私信分页 | 消息中心 | 私信/通知/评论已接入; @我 形状未验证, 会话目前只读(发包接口 vendor 未提供) |
-| 4 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
-| 5 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
-| 6 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付 |
-| 7 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
-| 8 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
-| 9 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
-| 10 | 歌单细分编辑 | `playlist_privacy` `playlist_order_update` `playlist_cover_update` `playlist_tags_update` | 歌单管理菜单 | **vendor 限制**: `playlist_privacy` 的 `privacy` 写死为 0(只能"取消私密"), 改私密需自己拼请求; 排序/换封面/改标签同理 |
+| 3 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
+| 4 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
+| 5 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付 |
+| 6 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
+| 7 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
+| 8 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |
+| 9 | 歌单细分编辑 | `playlist_privacy` `playlist_order_update` `playlist_cover_update` `playlist_tags_update` | 歌单管理菜单 | **vendor 限制**: `playlist_privacy` 的 `privacy` 写死为 0(只能"取消私密"), 改私密需自己拼请求; 排序/换封面/改标签同理 |
 
 ## 4. 未接入 · 中价值(P1, 有额外成本)
 
 | 能力 | 接口 | 成本/前置 |
 |---|---|---|
 | MV / 视频 | `mv_all` `mv_detail` `mv_url` `mv_sub` `mv_sublist` `mv_first` `mv_exclusive_rcmd` `personalized_mv` `artist_mv` `artist_video` `simi_mv` `video_*`(9) `related_allvideo` `mlog_url` | 要视频播放器(Media3 ExoPlayer/mpv 已有, 但 UI 与对象存储/防盗链需处理) |
-| 私信 / 通知 | `msg_private` `msg_private_history` `msg_notices` `msg_comments` `msg_forwards` `msg_recentcontact` | 消息中心 UI + 未读同步 |
 | 动态增强 | `event_del` `send_song` `send_text` `send_playlist` `send_album` `topic_detail` `topic_sublist` `topic_detail_event_hot` `hot_topic` `hug_comment` `comment_hug_list` | 发动态/话题页/抱一抱 |
 | 云盘 | `user_cloud` `user_cloud_detail` `user_cloud_del` `cloud_upload_token` `cloud_upload_complete` `cloud_import` `cloud_match` `cloud_lyric_get` | 分片上传 + 文件选择 + 匹配库 |
 | 声音/播客创作 | `voice_upload` `voice_delete` `voice_detail` `voice_lyric` `voicelist_*`(6) | 发布审核链路, 非听众功能 |
@@ -151,7 +150,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | `toplist` | 3 | `toplist`, `toplist_artist`, `toplist_detail_v2` |
 | `captcha` | 2 | `captcha_sent`, `captcha_verify` |
 | `homepage` | 2 | `homepage_block_page`, `homepage_dragon_ball` |
-| `msg` | 2 | `msg_forwards`, `msg_recentcontact` |
+| `msg` | 0 | |
 | `record` | 2 | `record_recent_video`, `record_recent_voice` |
 | `register` | 2 | `register_anonimous`, `register_cellphone` |
 | `related` | 2 | `related_allvideo`, `related_playlist` |
