@@ -9,6 +9,7 @@ use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, SearchExact,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
@@ -289,6 +290,11 @@ pub trait Provider: Send + Sync {
     fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>>;
 
     fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>>;
+
+    /// 逐字歌词(YRC). 默认不支持; 解析失败在实现内部退化为整词行, 不返回错误.
+    fn word_lyric<'a>(&'a self, _track: TrackId) -> BoxFuture<'a, ProviderResult<WordLyric>> {
+        Box::pin(async { Err(ProviderError::unsupported("no word lyric")) })
+    }
 
     /// 当前登录账号的资料(uid/昵称/VIP). 未登录或不支持时返回 Unsupported.
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Profile>> {

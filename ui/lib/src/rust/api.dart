@@ -94,6 +94,10 @@ Future<List<LyricLineDto>> lyricLines({required BigInt trackId}) =>
 Future<List<LyricLineDto>> lyricLinesI18N({required BigInt trackId}) =>
     RustLib.instance.api.crateApiLyricLinesI18N(trackId: trackId);
 
+/// 逐字歌词(YRC). 无逐字数据时 lines 为空, UI 应回落 lyric_lines_i18n.
+Future<WordLyricDto> wordLyricLines({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiWordLyricLines(trackId: trackId);
+
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 Future<bool> loginWithCookie({required String cookie}) =>
     RustLib.instance.api.crateApiLoginWithCookie(cookie: cookie);
@@ -3397,4 +3401,80 @@ class WikiFactDto {
           runtimeType == other.runtimeType &&
           label == other.label &&
           value == other.value;
+}
+
+/// 一个词(字)的逐字时间与文本
+class WordItemDto {
+  final PlatformInt64 startMs;
+  final PlatformInt64 endMs;
+  final String text;
+
+  const WordItemDto({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+  });
+
+  @override
+  int get hashCode => startMs.hashCode ^ endMs.hashCode ^ text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WordItemDto &&
+          runtimeType == other.runtimeType &&
+          startMs == other.startMs &&
+          endMs == other.endMs &&
+          text == other.text;
+}
+
+/// 逐字歌词整体 DTO(frb 不直接吃 domain 类型)
+class WordLyricDto {
+  final List<WordLyricLineDto> lines;
+  final List<String?> translationLines;
+  final bool hasWordTiming;
+
+  const WordLyricDto({
+    required this.lines,
+    required this.translationLines,
+    required this.hasWordTiming,
+  });
+
+  @override
+  int get hashCode =>
+      lines.hashCode ^ translationLines.hashCode ^ hasWordTiming.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WordLyricDto &&
+          runtimeType == other.runtimeType &&
+          lines == other.lines &&
+          translationLines == other.translationLines &&
+          hasWordTiming == other.hasWordTiming;
+}
+
+/// 一行逐字歌词; words 为空或单词 = 无词级时间(退化行)
+class WordLyricLineDto {
+  final PlatformInt64 startMs;
+  final PlatformInt64 endMs;
+  final List<WordItemDto> words;
+
+  const WordLyricLineDto({
+    required this.startMs,
+    required this.endMs,
+    required this.words,
+  });
+
+  @override
+  int get hashCode => startMs.hashCode ^ endMs.hashCode ^ words.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WordLyricLineDto &&
+          runtimeType == other.runtimeType &&
+          startMs == other.startMs &&
+          endMs == other.endMs &&
+          words == other.words;
 }

@@ -184,6 +184,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
 
   @protected
+  List<String?> dco_decode_list_opt_String(dynamic raw);
+
+  @protected
   List<PlayRankEntryDto> dco_decode_list_play_rank_entry_dto(dynamic raw);
 
   @protected
@@ -277,6 +280,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw);
+
+  @protected
+  List<WordItemDto> dco_decode_list_word_item_dto(dynamic raw);
+
+  @protected
+  List<WordLyricLineDto> dco_decode_list_word_lyric_line_dto(dynamic raw);
 
   @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
@@ -457,6 +466,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WikiFactDto dco_decode_wiki_fact_dto(dynamic raw);
+
+  @protected
+  WordItemDto dco_decode_word_item_dto(dynamic raw);
+
+  @protected
+  WordLyricDto dco_decode_word_lyric_dto(dynamic raw);
+
+  @protected
+  WordLyricLineDto dco_decode_word_lyric_line_dto(dynamic raw);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -655,6 +673,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<String?> sse_decode_list_opt_String(SseDeserializer deserializer);
+
+  @protected
   List<PlayRankEntryDto> sse_decode_list_play_rank_entry_dto(
     SseDeserializer deserializer,
   );
@@ -792,6 +813,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<WikiFactDto> sse_decode_list_wiki_fact_dto(SseDeserializer deserializer);
+
+  @protected
+  List<WordItemDto> sse_decode_list_word_item_dto(SseDeserializer deserializer);
+
+  @protected
+  List<WordLyricLineDto> sse_decode_list_word_lyric_line_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
@@ -1002,6 +1031,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer);
+
+  @protected
+  WordItemDto sse_decode_word_item_dto(SseDeserializer deserializer);
+
+  @protected
+  WordLyricDto sse_decode_word_lyric_dto(SseDeserializer deserializer);
+
+  @protected
+  WordLyricLineDto sse_decode_word_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -1259,6 +1297,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_opt_String(List<String?> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_play_rank_entry_dto(
     List<PlayRankEntryDto> self,
     SseSerializer serializer,
@@ -1438,6 +1479,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_wiki_fact_dto(
     List<WikiFactDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_word_item_dto(
+    List<WordItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_word_lyric_line_dto(
+    List<WordLyricLineDto> self,
     SseSerializer serializer,
   );
 
@@ -1734,6 +1787,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_word_item_dto(WordItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_word_lyric_dto(WordLyricDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_word_lyric_line_dto(
+    WordLyricLineDto self,
+    SseSerializer serializer,
+  );
 }
 
 // Section: wire_class

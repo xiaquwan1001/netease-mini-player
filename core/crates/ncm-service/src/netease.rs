@@ -10,6 +10,7 @@ use ncm_domain::{
     SearchExact,
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
+    WordLyric,
     MedalWall, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
     VipTask, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
@@ -1073,6 +1074,32 @@ pub fn parse_lyric(body: &Value) -> ProviderResult<Lyric> {
     })
 }
 
+/// 从 lyric_new 响应解析逐字歌词; 无 yrc 时返回空 WordLyric(不报错, 由调用方退化).
+pub fn parse_word_lyric_body(body: &Value) -> ProviderResult<WordLyric> {
+    let yrc = body
+        .get("yrc")
+        .and_then(|x| x.get("lyric"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let Some(yrc) = yrc else {
+        return Ok(WordLyric::default());
+    };
+    // ytlrc 实测恒空; 翻译兜底用 tlyric(行级 LRC, 按行首对齐)
+    let translated = body
+        .get("ytlrc")
+        .and_then(|x| x.get("lyric"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .or_else(|| {
+            body.get("tlyric")
+                .and_then(|x| x.get("lyric"))
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+        });
+    Ok(ncm_domain::parse_word_lyric_with_translation(&yrc, translated))
+}
+
 impl Provider for NeteaseProvider {
     fn id(&self) -> &'static str {
         "netease"
@@ -1120,6 +1147,16 @@ impl Provider for NeteaseProvider {
             let resp = client.lyric(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             parse_lyric(&resp.body)
+        })
+    }
+
+    fn word_lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<WordLyric>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
+            let resp = client.lyric_new(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_word_lyric_body(&resp.body)
         })
     }
 
@@ -5905,6 +5942,42 @@ mod tests {
         assert_eq!(l.lrc.as_deref(), Some("[00:00.00]hi"));
         assert_eq!(l.translated.as_deref(), Some("[00:00.00]嗨"));
         assert!(l.romaji.is_none());
+    }
+
+    #[test]
+    fn word_lyric_real_shape() {
+        // 实测 id=5264842 的 yrc 片段(署名 JSON 行 + 逐字行混排)
+        let yrc = concat!(
+            "{\"t\":0,\"c\":[{\"tx\":\"作词: \"},{\"tx\":\"席慕容\"}]}",
+            "\n[21960,7590](21960,470,0)让(22430,2610,0)我(25400,280,0)与(25680,640,0)你(26320,1940,0)握(28290,750,0)别",
+        );
+        let body = json!({"code": 200, "yrc": {"version": 7, "lyric": yrc}});
+        let wl = parse_word_lyric_body(&body).unwrap();
+        assert_eq!(wl.lines.len(), 2);
+        assert!(wl.has_word_timing);
+        assert_eq!(wl.lines[1].words.len(), 6);
+        assert_eq!(wl.lines[0].words[0].text, "作词: 席慕容");
+    }
+
+    #[test]
+    fn word_lyric_missing_yrc_is_empty() {
+        // 老歌(晴天)实测: 只有 lrc/tlyric, 无 yrc
+        let body = json!({"code": 200, "lrc": {"version": 70, "lyric": "[00:01.00]hi"}, "tlyric": {"lyric": ""}});
+        let wl = parse_word_lyric_body(&body).unwrap();
+        assert!(wl.is_empty());
+    }
+
+    #[test]
+    fn word_lyric_translation_falls_back_to_tlyric() {
+        let body = json!({
+            "code": 200,
+            "yrc": {"version": 1, "lyric": "[1000,500](1000,500,0)hello\n[2000,500](2000,500,0)world"},
+            "ytlrc": {"version": 0, "lyric": ""},
+            "tlyric": {"version": 24, "lyric": "[00:01.00]你好"}
+        });
+        let wl = parse_word_lyric_body(&body).unwrap();
+        assert_eq!(wl.translation_lines[0].as_deref(), Some("你好"));
+        assert_eq!(wl.translation_lines[1], None);
     }
 
     #[test]

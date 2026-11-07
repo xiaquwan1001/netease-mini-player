@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 547580932;
+  int get rustContentHash => 1047177797;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -477,6 +477,8 @@ abstract class RustLibApi extends BaseApi {
   Future<List<UserMedalDto>> crateApiUserMedals();
 
   Future<VipOverviewDto> crateApiVipOverview();
+
+  Future<WordLyricDto> crateApiWordLyricLines({required BigInt trackId});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -4202,6 +4204,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiVipOverviewConstMeta =>
       const TaskConstMeta(debugName: "vip_overview", argNames: []);
 
+  @override
+  Future<WordLyricDto> crateApiWordLyricLines({required BigInt trackId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(trackId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 123,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_word_lyric_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiWordLyricLinesConstMeta,
+        argValues: [trackId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiWordLyricLinesConstMeta =>
+      const TaskConstMeta(debugName: "word_lyric_lines", argNames: ["trackId"]);
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -4758,6 +4788,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String?> dco_decode_list_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_opt_String).toList();
+  }
+
+  @protected
   List<PlayRankEntryDto> dco_decode_list_play_rank_entry_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_play_rank_entry_dto).toList();
@@ -4951,6 +4987,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_wiki_fact_dto).toList();
+  }
+
+  @protected
+  List<WordItemDto> dco_decode_list_word_item_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_word_item_dto).toList();
+  }
+
+  @protected
+  List<WordLyricLineDto> dco_decode_list_word_lyric_line_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_word_lyric_line_dto).toList();
   }
 
   @protected
@@ -5763,6 +5811,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WordItemDto dco_decode_word_item_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return WordItemDto(
+      startMs: dco_decode_i_64(arr[0]),
+      endMs: dco_decode_i_64(arr[1]),
+      text: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  WordLyricDto dco_decode_word_lyric_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return WordLyricDto(
+      lines: dco_decode_list_word_lyric_line_dto(arr[0]),
+      translationLines: dco_decode_list_opt_String(arr[1]),
+      hasWordTiming: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
+  WordLyricLineDto dco_decode_word_lyric_line_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return WordLyricLineDto(
+      startMs: dco_decode_i_64(arr[0]),
+      endMs: dco_decode_i_64(arr[1]),
+      words: dco_decode_list_word_item_dto(arr[2]),
+    );
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
@@ -6499,6 +6586,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<String?> sse_decode_list_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String?>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_opt_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<PlayRankEntryDto> sse_decode_list_play_rank_entry_dto(
     SseDeserializer deserializer,
   ) {
@@ -6908,6 +7007,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <WikiFactDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_wiki_fact_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<WordItemDto> sse_decode_list_word_item_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <WordItemDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_word_item_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<WordLyricLineDto> sse_decode_list_word_lyric_line_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <WordLyricLineDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_word_lyric_line_dto(deserializer));
     }
     return ans_;
   }
@@ -7890,6 +8017,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WordItemDto sse_decode_word_item_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_startMs = sse_decode_i_64(deserializer);
+    var var_endMs = sse_decode_i_64(deserializer);
+    var var_text = sse_decode_String(deserializer);
+    return WordItemDto(startMs: var_startMs, endMs: var_endMs, text: var_text);
+  }
+
+  @protected
+  WordLyricDto sse_decode_word_lyric_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lines = sse_decode_list_word_lyric_line_dto(deserializer);
+    var var_translationLines = sse_decode_list_opt_String(deserializer);
+    var var_hasWordTiming = sse_decode_bool(deserializer);
+    return WordLyricDto(
+      lines: var_lines,
+      translationLines: var_translationLines,
+      hasWordTiming: var_hasWordTiming,
+    );
+  }
+
+  @protected
+  WordLyricLineDto sse_decode_word_lyric_line_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_startMs = sse_decode_i_64(deserializer);
+    var var_endMs = sse_decode_i_64(deserializer);
+    var var_words = sse_decode_list_word_item_dto(deserializer);
+    return WordLyricLineDto(
+      startMs: var_startMs,
+      endMs: var_endMs,
+      words: var_words,
+    );
+  }
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
@@ -8468,6 +8632,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_opt_String(
+    List<String?> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_opt_String(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_play_rank_entry_dto(
     List<PlayRankEntryDto> self,
     SseSerializer serializer,
@@ -8829,6 +9005,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_wiki_fact_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_word_item_dto(
+    List<WordItemDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_word_item_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_word_lyric_line_dto(
+    List<WordLyricLineDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_word_lyric_line_dto(item, serializer);
     }
   }
 
@@ -9544,5 +9744,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.label, serializer);
     sse_encode_String(self.value, serializer);
+  }
+
+  @protected
+  void sse_encode_word_item_dto(WordItemDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.startMs, serializer);
+    sse_encode_i_64(self.endMs, serializer);
+    sse_encode_String(self.text, serializer);
+  }
+
+  @protected
+  void sse_encode_word_lyric_dto(WordLyricDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_word_lyric_line_dto(self.lines, serializer);
+    sse_encode_list_opt_String(self.translationLines, serializer);
+    sse_encode_bool(self.hasWordTiming, serializer);
+  }
+
+  @protected
+  void sse_encode_word_lyric_line_dto(
+    WordLyricLineDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_64(self.startMs, serializer);
+    sse_encode_i_64(self.endMs, serializer);
+    sse_encode_list_word_item_dto(self.words, serializer);
   }
 }

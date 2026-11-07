@@ -5,6 +5,7 @@
 //!   ncm search "晴天" [--limit 10] [--offset 0] [--json]
 //!   ncm url <id> [--level exhigh] [--download out.flac] [--json]
 //!   ncm lyric <id> [--json]
+//!   ncm yrc <songId>               逐字歌词(前 10 行 + 统计)
 //!   ncm detail <id[,id...]>        打印曲目详情 + privilege(版权/可播性), 排障用
 //!   ncm playlist-detail <id>       歌单详情(标题/创建者/曲目数/评论数)
 //!   ncm comments <song|playlist|album|podcast> <id> [limit]   评论列表(展示前 3 条)
@@ -1039,6 +1040,43 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "yrc" => {
+            // 逐字歌词: 前 10 行(行时间 + 每词时间/文本) + 统计
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm yrc <songId>")?
+                .parse()?;
+            announce(&core);
+            let p = provider(&core, Capability::Lyric)?;
+            let wl = p.word_lyric(TrackId::new(id)).await?;
+            if wl.is_empty() {
+                println!("(no yrc: 该曲无逐字歌词, 请用 ncm lyric)");
+                return Ok(());
+            }
+            let word_count: usize = wl.lines.iter().map(|l| l.words.len()).sum();
+            for line in wl.lines.iter().take(10) {
+                println!(
+                    "[{:>6} -> {:>6}] {}",
+                    line.start_ms,
+                    line.end_ms,
+                    line
+                        .words
+                        .iter()
+                        .map(|w| format!("({},{}){}", w.start_ms, w.end_ms, w.text))
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
+            }
+            println!(
+                "-- 统计: 行数 {} / 词数 {} / 逐字 {} / 翻译行 {}",
+                wl.lines.len(),
+                word_count,
+                if wl.has_word_timing { "有" } else { "无(已退化)" },
+                wl.translation_lines.iter().filter(|t| t.is_some()).count(),
+            );
+            Ok(())
+        }
         "searchraw" => {
             // 排障用: 搜索接口的原始返回(看 songs[].privilege 与 st, 判断无版权曲目被过滤/灰显)
             let kw = args.positional.first().ok_or("usage: ncm searchraw <keywords> [--limit 10]")?;
@@ -1339,6 +1377,7 @@ async fn run() -> Result<(), BoxErr> {
                 "comment_hot" => client.comment_hot(&q).await?,
                 "comment_info_list" => client.comment_info_list(&q).await?,
                 "lyric_new" => client.lyric_new(&q).await?,
+                "song_lyrics_mark" => client.song_lyrics_mark(&q).await?,
                 "vip_sign_info" => client.vip_sign_info(&q).await?,
                 "vip_info_v2" => client.vip_info_v2(&q).await?,
                 "digital_album_detail" => client.digital_album_detail(&q).await?,

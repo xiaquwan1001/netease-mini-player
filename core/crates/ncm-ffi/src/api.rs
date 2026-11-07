@@ -634,6 +634,64 @@ pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, String
     .collect())
 }
 
+/// 一个词(字)的逐字时间与文本
+pub struct WordItemDto {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub text: String,
+}
+
+/// 一行逐字歌词; words 为空或单词 = 无词级时间(退化行)
+pub struct WordLyricLineDto {
+    pub start_ms: i64,
+    pub end_ms: i64,
+    pub words: Vec<WordItemDto>,
+}
+
+/// 逐字歌词(YRC). 无逐字数据时 lines 为空, UI 应回落 lyric_lines_i18n.
+pub async fn word_lyric_lines(track_id: u64) -> Result<WordLyricDto, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard
+            .providers
+            .first_with(Capability::Lyric)
+            .ok_or_else(|| "no provider supports lyric".to_string())?
+    };
+    let wl = provider
+        .word_lyric(ncm_domain::TrackId::new(track_id))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(WordLyricDto {
+        lines: wl
+            .lines
+            .iter()
+            .zip(wl.translation_lines.iter())
+            .map(|(l, _t)| WordLyricLineDto {
+                start_ms: l.start_ms,
+                end_ms: l.end_ms,
+                words: l
+                    .words
+                    .iter()
+                    .map(|w| WordItemDto {
+                        start_ms: w.start_ms,
+                        end_ms: w.end_ms,
+                        text: w.text.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        translation_lines: wl.translation_lines,
+        has_word_timing: wl.has_word_timing,
+    })
+}
+
+/// 逐字歌词整体 DTO(frb 不直接吃 domain 类型)
+pub struct WordLyricDto {
+    pub lines: Vec<WordLyricLineDto>,
+    pub translation_lines: Vec<Option<String>>,
+    pub has_word_timing: bool,
+}
+
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;
