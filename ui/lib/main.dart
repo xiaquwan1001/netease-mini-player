@@ -14,6 +14,7 @@ import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/lyric.dart';
+import 'src/word_lyric_view.dart';
 import 'src/library_view.dart';
 import 'src/medal_wall.dart';
 import 'src/messages_page.dart';
@@ -152,6 +153,15 @@ class _HomePageState extends State<HomePage> {
   int _lyricIndex = -1;
   bool _showLyrics = false;
 
+  /// 逐字(karaoke)歌词数据; 有则优先用 [WordLyricView], 无则回落行级/纯文本链。
+  List<WordLyricLineData> _wordLines = const [];
+
+  /// 播放位置(毫秒)注入给 [WordLyricView]: 刷新只重建当前行, 不整页 setState。
+  final ValueNotifier<int> _wordPositionMs = ValueNotifier<int>(0);
+
+  /// 展开歌词时的高频位置刷新(~120ms); 收起必须停掉, 避免后台耗电。
+  Timer? _lyricTicker;
+
   /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
   Set<BigInt> _liked = <BigInt>{};
 
@@ -228,7 +238,9 @@ class _HomePageState extends State<HomePage> {
     _suggestDebounce?.cancel();
     _searchFocus.removeListener(_onSearchFocusChanged);
     _searchFocus.dispose();
+    _lyricTicker?.cancel();
     _lyricScroll.dispose();
+    _wordPositionMs.dispose();
     super.dispose();
   }
 
@@ -264,6 +276,9 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final wasPlaying = _player?.playing ?? false;
     setState(() => _player = state);
+    if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
+      _wordPositionMs.value = state.positionMs.toInt();
+    }
     _syncLyricIndex(state);
     if (_looksEnded(wasPlaying, state)) {
       await _onTrackEnded();
@@ -819,7 +834,42 @@ class _HomePageState extends State<HomePage> {
         _lyricPlain = null;
         _lyricIndex = -1;
         _lyricError = null;
+        _wordLines = const [];
       });
+      _wordPositionMs.value = 0;
+    }
+    // 逐字歌词: 有则更好, 失败/缺失都静默回落到行级链。
+    try {
+      final word = await rust.wordLyricLines(trackId: trackId);
+      if (!mounted || _lyricTrackId != trackId) return;
+      if (word.hasWordTiming && word.lines.isNotEmpty) {
+        setState(() {
+          _lyricError = null;
+          _lyricPlain = null;
+          _wordLines = [
+            for (var i = 0; i < word.lines.length; i++)
+              WordLyricLineData(
+                startMs: word.lines[i].startMs,
+                endMs: word.lines[i].endMs,
+                words: [
+                  for (final w in word.lines[i].words)
+                    WordLyricWord(
+                      startMs: w.startMs,
+                      endMs: w.endMs,
+                      text: w.text,
+                    ),
+                ],
+                sub: i < word.translationLines.length
+                    ? word.translationLines[i]
+                    : null,
+              ),
+          ];
+        });
+        _wordPositionMs.value = _player?.positionMs.toInt() ?? 0;
+        return;
+      }
+    } catch (_) {
+      // 歌词是“有则更好”: 逐字拉取失败不报错, 走原有行级链。
     }
     try {
       final lines = await rust.lyricLinesI18N(trackId: trackId);
@@ -896,8 +946,20 @@ class _HomePageState extends State<HomePage> {
 
   void _toggleLyrics() {
     setState(() => _showLyrics = !_showLyrics);
-    if (_showLyrics && _player != null) {
-      _syncLyricIndex(_player!);
+    if (_showLyrics) {
+      // 仅展开期间提高刷新频率; 收起/切 tab 时必须停掉。
+      _lyricTicker?.cancel();
+      _lyricTicker = Timer.periodic(
+        const Duration(milliseconds: 120),
+        (_) => _pollPlayer(),
+      );
+      if (_player != null) {
+        _syncLyricIndex(_player!);
+        _wordPositionMs.value = _player!.positionMs.toInt();
+      }
+    } else {
+      _lyricTicker?.cancel();
+      _lyricTicker = null;
     }
   }
 
@@ -1761,6 +1823,8 @@ class _HomePageState extends State<HomePage> {
       _searchFocus.unfocus();
       _showLyrics = false;
     });
+    _lyricTicker?.cancel();
+    _lyricTicker = null;
     // 回到搜索: 按设置决定是否丢弃上一次的输入/结果/错误
     if (index == 0) {
       if (AppSettings.instance.clearSearchOnTabSwitch &&
@@ -2019,6 +2083,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildLyrics() {
+    if (_wordLines.isNotEmpty) {
+      return WordLyricView(
+        lines: _wordLines,
+        positionMs: _wordPositionMs,
+        controller: _lyricScroll,
+        itemExtent: _lyricItemExtent,
+      );
+    }
     final plain = _lyricPlain;
     if (plain != null) {
       return PlainLyricView(lines: plain);

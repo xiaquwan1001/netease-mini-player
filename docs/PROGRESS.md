@@ -1,9 +1,28 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 113/382: 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 114/382: 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 逐字歌词契约 B5-1 + 列表页空态统一(2026-11-09)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 逐字歌词 UI | ✅ | `word_lyric_view.dart`: 逐字(karaoke)着色(已唱 primary / 未唱 55% 不透明)+ 行级自动滚动; 数据流改为注入 `List<WordLyricLineData>` + `ValueListenable<int> positionMs`, 组件不碰 FFI; 只有当前行随 tick 重建(其余行静态 RichText + RepaintBoundary), 换行才通知整列表 |
+| 逐字回归 | ✅ | Flutter 215→**223**(+8: 三时间点词级推进/行滚动/无逐字回落/空态/300dp+1.25/含标点词文本/销毁后无残留监听/纯逻辑 `wordStylesAt`); a36 实测: Lonely(Nana, 有 yrc) 放大截图可见「Usin' our」已唱红色、「hands to buy and supply」未唱灰色; 纯音乐曲目正确回落行级 |
+| 逐字歌词契约 | ✅ | `lyric_new`(`/api/song/lyric/v1`, vendor 写死 yv=0 就回 yrc) → domain `WordLyric/WordLyricLine/WordItem` + `parse_word_lyric`; provider `word_lyric`(复用 `Capability::Lyric`) + FFI `word_lyric_lines` + CLI `ncm yrc <id>`; UI 由 B5-2 跟进 |
+| 退化策略 | ✅ | 逐字头坏 → 整行退化为单个整词(start/end=0)；JSON 署名行保留为单词行；缺 yrc → 空结果不报错；`has_word_timing` 全退化时为 false 供 UI 回落 |
+| 列表页口径 | ✅ | ranking_view 整页首屏失败 → 整页错误视图(重试) 并修掉 `setState(() => _future = _load())` 返回 Future 的断言隐患; style_page 下拉刷新失败保留旧数据(改 SnackBar); album_preview 空曲目空态; user_list_page 空态补可操作提示 |
+| 回归 | ✅ | Rust domain 9→**22**(+13) / service 89→**92**(+3); Flutter 203→**215**(+11 列表页三态与 300dp); `dart analyze` 0 error; `tools/ci.sh` → CI OK |
+
+**协议/实测事实(YRC)**:
+- 端点 `lyric_new`;旧 `lyric` 永远没有 yrc。两种行混排:署名 JSON 行 `{"t":0,"c":[{"tx":"作词: "},...]}`(t 可为负)
+  与逐字行 `[行start,行dur](词start,词dur,0)字(...)字`;词文本可含空格/标点, 词时长可为 0。
+- **`ytlrc`/`yromalrc` 抽样 8+ 首恒空**(vendor body 写死 ytv/yrv=0, vendor 禁改) ⇒ 逐字级翻译暂时拿不到,
+  翻译只能用行级 `tlyric`;要 yrc 级翻译需上游开参数口。
+- 老歌(如 晴天 186016)无 yrc;UI 必须保留整行滚动回落。
+- 详细样例与门禁记录见 `docs/b5-word-lyric-notes.md`。
 
 ## v2 · 功能包: 电台只读 B10 + 设置页通道自检(2026-11-09)
 

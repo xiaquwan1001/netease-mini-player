@@ -10,8 +10,9 @@
 > **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**;
 > **Wave 5 完成(B2 评论统计: 评论区统计条, 覆盖 99/382)**;
 > **Wave 6 完成(B12 数字专辑只读 + 纯 Dart 车道: 播客单集详情/错误文案统一, 覆盖 103/382)**;
-> **Wave 7 完成(B10 电台只读 + 设置页通道自检, 覆盖 113/382)**。
-> 下一波建议: [Rust] B5 逐字歌词(需换滚动实现) 或 §4 剩余 endpoint 收尾 ｜ [Dart] 电台榜节目页签/主播主页路由。
+> **Wave 7 完成(B10 电台只读 + 设置页通道自检, 覆盖 113/382)**;
+> **Wave 8 进行中(B5 逐字歌词: 契约层已合入, UI 车道在跑 + 列表页空态/窄屏统一, 覆盖 114/382)**。
+> 下一波建议: [Rust] §4 剩余 endpoint 收尾(album_newest/simi_user/toplist_detail_v2) ｜ [Dart] 电台节目榜页签/主播主页路由。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -58,7 +59,7 @@
 
 | 批次 | 目标 | 接口 | 风险点 |
 |---|---|---|---|
-| **B5 逐字歌词** | 歌词页逐字高亮 | `lyric_new` `song_lyrics_mark*`(4) | 要换滚动实现; mark 系列写操作谨慎(可能影响云端歌词) |
+| ~~**B5 逐字歌词**~~ 🔄进行中 | 歌词页逐字高亮 | `lyric_new`(已接) `song_lyrics_mark*`(只读 dump, 写不接) | 契约层已合入；**ytlrc/yromalrc 实测恒空** ⇒ 翻译只能行级; 老歌无 yrc 必须回落 |
 | **B6 榜单 v2** | 「更新 N 首」/歌手榜细分 | `toplist` `toplist_detail_v2` `toplist_artist` | ROI 低, 现有 detail 已够用 |
 | **B7 歌单细分编辑** | 私密切换/标签/排序/换封面 | `playlist_privacy` `playlist_order_update` `playlist_tags_update` `playlist_cover_update` | **vendor 把 privacy 写死 0**; 其余要自己拼请求或上传 |
 | ~~**B10 电台补充**~~ ✅已做(只读) | 电台榜单/分类/推荐/主播 | `dj_toplist*` `dj_catelist` `dj_category_*` `dj_recommend_type` `dj_program_toplist` `dj_subscriber` | 12 DTO + 6 parse + FFI 4 + `radio_explore_page.dart`(新); **`dj_sub` 订阅与 `dj_difm_*`(6) 不做**(写/语义未验证) |

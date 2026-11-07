@@ -188,24 +188,21 @@ API/protocol details and anti-bot technique live in the
   (静默降权
 
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/fa/fa209849c38bbf24477ff55882b03c192f67ee639646c69ef1f4ff1f38ab062d.txt; sha256=fa209849c38bbf24477ff55882b03c192f67ee639646c69ef1f4ff1f38ab062d; bytes=18118]
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/c4/c47a206bf3eca7891a4d71faba0de2d4947da0f55f2fbfaf1b00bb5f8f2e8f86.txt; sha256=c47a206bf3eca7891a4d71faba0de2d4947da0f55f2fbfaf1b00bb5f8f2e8f86; bytes=18148]
 
-## 电台只读族(dj_*)(2026-11-09)
+## 逐字歌词 YRC(lyric_new)(2026-11-09)
 
-- `dj_catelist`(`/api/djradio/category/get`): 响应**顶层直接给 `categories`**, 没有 `code` 字段(别用它判断成功);
-  实测 19 个分类(id 形如 2001)。
-- `dj_category_recommend`(`/api/djradio/home/category/recommend`): `data[]{categoryId, categoryName, radios[3]}`,
-  每个 radio 有 `rcmdText`、`icon`(可 null)。适合"精选分组"这种宫格。
-- `dj_recommend_type`(`/api/djradio/recommend`): **type=0 返回空 `djRadios`**(文档说按 type 推荐);
-  传真实分类 id(如 2001)才回 10 条, 响应带 `hasMore`。
-- `dj_toplist`(`/api/djradio/toplist`): 顶层 `toplist[]`, 元素 `rank/score/lastRank` + 电台本体;
-  推荐语字段名是**全小写 `rcmdtext`**(全族里少见的非驼峰)。
-- `dj_toplist_hours` / `newcomer` / `popular`: **实测是主播(用户)榜, 不是电台榜**, `data.list[]` 为
-  `{nickName, avatarUrl, score, userFollowedCount}`; UI 要按"主播榜"呈现。
-- `dj_toplist_pay`(`data.list[]` 电台 `{name,picUrl,creatorName,score}`)与 `dj_program_toplist`
-  (`toplist[]{rank,lastRank,program}`, program 与 `dj_program` 同形)才是内容榜。
-- `dj_subscriber`(`/api/djradio/subscriber`): 顶层 `hasMore` + `subscribers[]`(完整 user),
-  **分页游标是时间戳(time), 不是 offset**。
-- 写操作一律没接: `dj_sub`(订阅)、`dj_difm_channel_subscribe/unsubscribe`; `dj_difm_*` 其余语义未验证。
+- 只有 `lyric_new`(`/api/song/lyric/v1`) 会回逐字歌词: vendor body 把 `yv` 等开关写死为 0 时**照样回 yrc**;
+  老接口 `lyric`(`/api/song/lyric`) 永远只有 lrc/tlyric/klyric,**不要指望它给逐字**。
+- 响应里 `yrc.lyric` 是**两种行混排**的纯文本:
+  1. 署名/说明行是 JSON: `{"t":0,"c":[{"tx":"作词: "},{"tx":"方文山"}]}` —— `t` 可为负(实测 -1000);
+  2. 歌词行: `[21960,7590](21960,470,0)让(22430,2610,0)我(25400,280,0)与你握别`
+     = `[行起点ms,行时长ms]` + 每词 `(词起点,词时长,0)文本`。
+  词文本可含空格/标点, **词时长可以为 0**(连读词), 解析不能假设 >0。
+- **`ytlrc`/`yromalrc` 抽样 8+ 首恒空**(vendor body 写死 ytv/yrv=0 且 vendor 禁改) ⇒ 逐字级翻译暂时拿不到;
+  翻译只能用行级 `tlyric`(按行首 ms 对齐), UI 上逐字高亮 + 行级翻译是当前上限。
+- 很多老歌/纯音乐**没有 yrc**(如 晴天 186016) ⇒ UI 必须保留"行级滚动"与"纯文本"两条回落路径,
+  并把 `has_word_timing=false` 当作"当作整行歌词用"; 解析失败一律退化成整行单整词, 绝不丢行。
+- `klyric` 实测恒 ver 0, 未建模; `song_lyrics_mark`(用户标记)只读 dump 过, 写操作(add/del)没接。
 
 <!-- created=2026-11-09, last=2026-11-09 -->

@@ -1,0 +1,311 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+/// 逐字(karaoke)歌词的纯展示组件。
+///
+/// 设计约束:
+/// - **不拉 FFI、不读全局单例**: 数据([WordLyricLineData])与播放位置
+///   (positionMs, `ValueListenable<int>` 毫秒)全部由调用方注入, 可在 widget
+///   test 里直接 pump 驱动;
+/// - 位置 tick 只重建**当前行**(其余行是静态 Text, 且各行有 RepaintBoundary),
+///   行下标变化时最多重建两行, 不会整页 setState;
+/// - 数据为空显示空态文案; 词文本含空格/标点原样渲染。
+
+/// 一个词: 毫秒时间窗 + 文本。
+class WordLyricWord {
+  const WordLyricWord({
+    required this.startMs,
+    required this.endMs,
+    required this.text,
+  });
+
+  final int startMs;
+  final int endMs;
+  final String text;
+}
+
+/// 一行逐字歌词。词表为空时退化为整行(startMs..endMs 一次性高亮)。
+class WordLyricLineData {
+  const WordLyricLineData({
+    required this.startMs,
+    required this.endMs,
+    required this.words,
+    this.sub,
+  });
+
+  final int startMs;
+  final int endMs;
+  final List<WordLyricWord> words;
+
+  /// 行级翻译(来自 tlyric 按行首对齐), 可为 null。
+  final String? sub;
+}
+
+/// 返回 [0, lines.length) 的行下标; -1 表示还没唱到第一行。
+/// [lines] 必须按 startMs 升序。
+int wordLineIndexAt(List<WordLyricLineData> lines, int positionMs) {
+  var lo = 0;
+  var hi = lines.length - 1;
+  var found = -1;
+  while (lo <= hi) {
+    final mid = (lo + hi) >> 1;
+    if (lines[mid].startMs <= positionMs) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return found;
+}
+
+/// 行内的着色决策(纯逻辑, 便于单测):
+/// 每个词给一个状态与进度(progress 仅对“当前词”有意义, 0..1)。
+enum WordHighlightState { sung, current, upcoming }
+
+class WordSpanStyle {
+  const WordSpanStyle(this.state, this.progress, this.text);
+
+  final WordHighlightState state;
+  final double progress;
+  final String text;
+}
+
+/// 纯逻辑: 给定一行与位置, 算出每个词的着色状态与当前词进度。
+/// 词表为空时退化为整行(行窗内为 current)。
+List<WordSpanStyle> wordStylesAt(WordLyricLineData line, int positionMs) {
+  if (line.words.isEmpty) {
+    final inLine = positionMs >= line.startMs && positionMs < line.endMs;
+    return [
+      WordSpanStyle(
+        inLine ? WordHighlightState.current : WordHighlightState.upcoming,
+        0,
+        '♪',
+      ),
+    ];
+  }
+  return [
+    for (final w in line.words)
+      if (positionMs >= w.startMs && (w.endMs <= w.startMs || positionMs < w.endMs))
+        WordSpanStyle(
+          w.endMs <= w.startMs
+              ? WordHighlightState.sung // 零时长词: 到点即视为已唱
+              : WordHighlightState.current,
+          w.endMs <= w.startMs
+              ? 1
+              : (positionMs - w.startMs) / (w.endMs - w.startMs),
+          w.text,
+        )
+      else if (positionMs >= w.endMs)
+        WordSpanStyle(WordHighlightState.sung, 1, w.text)
+      else
+        WordSpanStyle(WordHighlightState.upcoming, 0, w.text),
+  ];
+}
+
+/// 逐字歌词视图。固定 itemExtent 的行级列表 + 当前行逐字着色 + 行级自动滚动。
+class WordLyricView extends StatefulWidget {
+  const WordLyricView({
+    super.key,
+    required this.lines,
+    required this.positionMs,
+    this.controller,
+    this.itemExtent = 56,
+    this.emptyText = '暂无歌词',
+    this.padding,
+  });
+
+  /// 行数据(升序); 空列表显示空态。
+  final List<WordLyricLineData> lines;
+
+  /// 当前播放位置(毫秒)。用 ValueListenable 注入, 避免父级每 tick setState。
+  final ValueListenable<int> positionMs;
+
+  final ScrollController? controller;
+  final double itemExtent;
+  final String emptyText;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  State<WordLyricView> createState() => _WordLyricViewState();
+}
+
+class _WordLyricViewState extends State<WordLyricView> {
+  /// 当前行下标(-1 = 未开始)。由 positionMs 派生: 行变化才通知, 行内 tick 不发。
+  final ValueNotifier<int> _activeIndex = ValueNotifier<int>(-1);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.positionMs.addListener(_onPosition);
+    _onPosition();
+  }
+
+  @override
+  void didUpdateWidget(covariant WordLyricView old) {
+    super.didUpdateWidget(old);
+    if (old.positionMs != widget.positionMs) {
+      old.positionMs.removeListener(_onPosition);
+      widget.positionMs.addListener(_onPosition);
+      _activeIndex.value = -1;
+      _onPosition();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.positionMs.removeListener(_onPosition);
+    _activeIndex.dispose();
+    super.dispose();
+  }
+
+  void _onPosition() {
+    final pos = widget.positionMs.value;
+    final idx = widget.lines.isEmpty ? -1 : wordLineIndexAt(widget.lines, pos);
+    if (idx != _activeIndex.value) {
+      _activeIndex.value = idx;
+      _scrollTo(idx);
+    }
+  }
+
+  void _scrollTo(int idx) {
+    final controller = widget.controller;
+    if (controller == null || !controller.hasClients || idx < 0) return;
+    final position = controller.position;
+    final target =
+        idx * widget.itemExtent - (position.viewportDimension - widget.itemExtent) / 2;
+    final clamped = target.clamp(0.0, position.maxScrollExtent);
+    controller.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.lines.isEmpty) {
+      return Center(child: Text(widget.emptyText));
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return ValueListenableBuilder<int>(
+      valueListenable: _activeIndex,
+      builder: (context, activeIndex, _) => ListView.builder(
+        controller: widget.controller,
+        itemExtent: widget.itemExtent,
+        padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+        itemCount: widget.lines.length,
+        itemBuilder: (context, i) {
+          final line = widget.lines[i];
+          final isActive = i == activeIndex;
+          return RepaintBoundary(
+            child: isActive
+                ? ValueListenableBuilder<int>(
+                    valueListenable: widget.positionMs,
+                    builder: (context, pos, _) => _ActiveWordLine(
+                      line: line,
+                      positionMs: pos,
+                      scheme: scheme,
+                    ),
+                  )
+                : _StaticWordLine(line: line, scheme: scheme),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StaticWordLine extends StatelessWidget {
+  const _StaticWordLine({required this.line, required this.scheme});
+
+  final WordLyricLineData line;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = line.words.isEmpty
+        ? '♪'
+        : [for (final w in line.words) w.text].join();
+    return _LineBody(
+      main: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: 15,
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w400,
+        ),
+      ),
+      sub: line.sub,
+      subColor: scheme.outline,
+    );
+  }
+}
+
+class _ActiveWordLine extends StatelessWidget {
+  const _ActiveWordLine({
+    required this.line,
+    required this.positionMs,
+    required this.scheme,
+  });
+
+  final WordLyricLineData line;
+  final int positionMs;
+  final ColorScheme scheme;
+
+  @override
+  Widget build(BuildContext context) {
+    final styles = wordStylesAt(line, positionMs);
+    final sung = scheme.primary;
+    final upcoming = scheme.onSurfaceVariant.withValues(alpha: 0.55);
+    return _LineBody(
+      main: TextSpan(
+        children: [
+          for (final s in styles)
+            TextSpan(
+              text: s.text,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: s.state == WordHighlightState.upcoming ? upcoming : sung,
+              ),
+            ),
+        ],
+      ),
+      sub: line.sub,
+      subColor: scheme.primary.withValues(alpha: 0.8),
+    );
+  }
+}
+
+class _LineBody extends StatelessWidget {
+  const _LineBody({required this.main, required this.sub, required this.subColor});
+
+  final InlineSpan main;
+  final String? sub;
+  final Color subColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          RichText(
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            text: main,
+          ),
+          if (sub != null)
+            Text(
+              sub!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, color: subColor),
+            ),
+        ],
+      ),
+    );
+  }
+}
