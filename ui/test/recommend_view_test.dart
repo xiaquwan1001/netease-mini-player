@@ -118,7 +118,7 @@ void main() {
     // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
-    expect(find.text('更多'), findsNWidgets(2), reason: '新歌速递 + 新碟上架各一个');
+    expect(find.text('更多'), findsNWidgets(3), reason: '新歌速递 + 新碟上架 + 推荐播客各一个');
     await tester.tap(find.text('更多').first);
     await tester.pumpAndSettle();
     expect(moreTaps, 1);

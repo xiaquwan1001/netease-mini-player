@@ -15,6 +15,10 @@
 //!   ncm digital-purchased [limit] [offset]   我的已购数字专辑(需登录)
 //!   ncm purchased-songs [limit] [offset]     我的已购单曲(需登录)
 //!   ncm digital-sales <id[,id...]>   数字专辑销量
+//!   ncm radio-cats                 电台分类 + 各分类精选(匿名可用)
+//!   ncm radio-rec <cateId>         某分类推荐电台
+//!   ncm radio-top <hot|new|pay|hours|newcomer|popular|program>  电台榜单
+//!   ncm radio-sub <radioId> [limit]  电台订阅者列表(只读)
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
 
@@ -861,6 +865,99 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "radio-cats" => {
+            let p = provider(&core, Capability::RadioExplore)?;
+            announce(&core);
+            let home = p.radio_explore_home().await?;
+            println!("categories = {}", home.categories.len());
+            for c in home.categories.iter().take(40) {
+                println!("  [{}] {}", c.id, c.name);
+            }
+            println!("picks = {} 组", home.picks.len());
+            for g in &home.picks {
+                println!("  -- {} [{}]", g.category_name, g.category_id);
+                for r in g.radios.iter().take(3) {
+                    println!("     [{}] {} — {} ({} 集, {} 播放)", r.id, r.name, r.dj_name, r.program_count, r.play_count);
+                }
+            }
+            Ok(())
+        }
+        "radio-rec" => {
+            let cate: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm radio-rec <cateId>")?
+                .parse()?;
+            let p = provider(&core, Capability::RadioExplore)?;
+            announce(&core);
+            let list = p.radio_recommend(cate).await?;
+            println!("count = {}", list.len());
+            for (i, r) in list.iter().take(30).enumerate() {
+                println!(
+                    "{:>3}. [{}] {} — {} ({} 集) {}",
+                    i + 1, r.id, r.name, r.dj_name, r.program_count,
+                    r.cover_url.clone().unwrap_or_default()
+                );
+            }
+            Ok(())
+        }
+        "radio-top" => {
+            let kind = args
+                .positional
+                .first()
+                .ok_or("usage: ncm radio-top <hot|new|pay|hours|newcomer|popular|program>")?
+                .clone();
+            let p = provider(&core, Capability::RadioExplore)?;
+            announce(&core);
+            let t = p.radio_toplist(&kind).await?;
+            if !t.radios.is_empty() {
+                println!("电台榜 {} ({} 条)", kind, t.radios.len());
+                for r in t.radios.iter().take(20) {
+                    println!(
+                        "{:>3}. [{}] {} — {} 得分={} 播放={} (上期 {})",
+                        r.rank, r.radio_id, r.name, r.dj_name, r.score, r.play_count, r.last_rank
+                    );
+                }
+            }
+            if !t.djs.is_empty() {
+                println!("主播榜 {} ({} 条)", kind, t.djs.len());
+                for d in t.djs.iter().take(20) {
+                    println!(
+                        "{:>3}. [{}] {} 得分={} 粉丝={} (上期 {})",
+                        d.rank, d.user_id, d.nickname, d.score, d.followed_count, d.last_rank
+                    );
+                }
+            }
+            if !t.programs.is_empty() {
+                println!("节目榜 {} ({} 条)", kind, t.programs.len());
+                for e in t.programs.iter().take(20) {
+                    println!(
+                        "{:>3}. [{}] {} — {} ({}ms)",
+                        e.rank, e.program.id, e.program.name, e.program.dj_name, e.program.duration_ms
+                    );
+                }
+            }
+            if t.radios.is_empty() && t.djs.is_empty() && t.programs.is_empty() {
+                println!("榜单 {} 为空", kind);
+            }
+            Ok(())
+        }
+        "radio-sub" => {
+            let id: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm radio-sub <radioId> [limit]")?
+                .parse()?;
+            let limit: u32 = args.positional.get(1).and_then(|s| s.parse().ok()).unwrap_or(10);
+            let p = provider(&core, Capability::RadioExplore)?;
+            announce(&core);
+            let page = p.radio_subscribers(id, limit).await?;
+            println!("has_more = {}  count = {}", page.has_more, page.subscribers.len());
+            for s in &page.subscribers {
+                println!("  [{}] {} {}", s.user_id, s.nickname, s.signature);
+            }
+            Ok(())
+        }
         "url" => {
             let id: u64 = args
                 .positional
@@ -1259,6 +1356,16 @@ async fn run() -> Result<(), BoxErr> {
                 "msg_forwards" => client.msg_forwards(&q).await?,
                 "msg_recentcontact" => client.msg_recentcontact(&q).await?,
                 "search_hot_detail" => client.search_hot_detail(&q).await?,
+                "dj_catelist" => client.dj_catelist(&q).await?,
+                "dj_category_recommend" => client.dj_category_recommend(&q).await?,
+                "dj_recommend_type" => client.dj_recommend_type(&q).await?,
+                "dj_toplist" => client.dj_toplist(&q).await?,
+                "dj_toplist_hours" => client.dj_toplist_hours(&q).await?,
+                "dj_toplist_newcomer" => client.dj_toplist_newcomer(&q).await?,
+                "dj_toplist_pay" => client.dj_toplist_pay(&q).await?,
+                "dj_toplist_popular" => client.dj_toplist_popular(&q).await?,
+                "dj_program_toplist" => client.dj_program_toplist(&q).await?,
+                "dj_subscriber" => client.dj_subscriber(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);

@@ -1,9 +1,31 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 103/382: 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 113/382: 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 电台只读 B10 + 设置页通道自检(2026-11-09)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 电台广场 | ✅ | 推荐页「推荐播客 → 更多」: 分类胶囊(19 分类) + 精选分组(dj_category_recommend, 每组 3 个) + 推荐电台(dj_recommend_type, 真实分类 id 才给数据) + 热门榜(rank/score). 点行复用 `showPodcastDetail` |
+| 榜单族 | ✅ | `dj_toplist`(电台榜, 顶层 `toplist`, 元素带 rank/score/lastRank) / `dj_toplist_hours``newcomer``popular`(**主播榜不是电台榜**) / `dj_toplist_pay`(付费精品, 电台) / `dj_program_toplist`(节目榜) |
+| 主播 | ✅ | `dj_subscriber`(顶层 `hasMore`+`subscribers`, 游标是 time 不是 offset); CLI `ncm radio-sub` |
+| CLI | ✅ | `ncm radio-cats` / `radio-rec` / `radio-top <type>` / `radio-sub <id>`; raw 补 10 个接线 |
+| 通道自检 | ✅ | 设置页「诊断 → Rust 通道自检」: 调 FFI `ping`, 显示耗时与返回值, 失败给 friendlyError 可重试, 防重入; 补上「FFI 有导出但 UI 无入口」的 ping 缺口 |
+| 回归 | ✅ | Rust `ncm-service` 83→**89** 单测(+6); Flutter 192→**203** 用例(+6 电台页 / +5 自检); `dart analyze` 0 error; 双端构建通过; a36 走查: 入口/分类切换/榜单/详情跳转/断网错误态+重试 |
+| 环境坑 | ⚠️ | 本机 `flutter analyze` 稳定 SIGSEGV(analysis server 并发标记 GC 崩), 清缓存/删 `~/.dartServer` 均无效 ⇒ analyze 门改用 `cd ui && dart analyze`, `tools/ci.sh` 会停在 analyze 步, 其余步骤手工补跑(见 FAILURES 2026-11-09) |
+
+**协议/实测事实**:
+- `dj_catelist`(`/api/djradio/category/get`)顶层直接 `categories`, **没有 code 字段**; 19 个分类。
+- `dj_recommend_type`(`/api/djradio/recommend`)的 **type=0 返回空 `djRadios`**(文档口径差异), 必须传真实分类 id
+  (如 2001); 响应带 `hasMore`。
+- `dj_toplist_hours/newcomer/popular` 实测是**主播(用户)榜**, `data.list[]` 是 `{nickName, avatarUrl, score,
+  userFollowedCount}`; 只有 `dj_toplist`/`dj_toplist_pay`/`dj_program_toplist` 是电台/节目。
+- `dj_subscriber` 分页游标是**时间戳**, 不是 offset; 返回完整 user 结构。
+- `dj_toplist` 元素的推荐语字段名是小写 `rcmdtext`(与其它接口的 camelCase 不一致)。
+- 详细响应片段见 `docs/b10-radio-notes.md`。
 
 ## v2 · 功能包: 数字专辑只读 B12 + 纯 Dart 车道(2026-11-09)
 

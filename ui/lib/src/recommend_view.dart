@@ -4,6 +4,7 @@ import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'playlist_square_page.dart';
+import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
 import 'style_page.dart';
 
@@ -756,7 +757,19 @@ class _PodcastSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '推荐播客'),
+        _SectionHeader(
+          title: '推荐播客',
+          trailing: TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => RadioExplorePage(
+                  onOpenRadio: (ctx, radio) { onOpen(radio); }
+                ),
+              ),
+            ),
+            child: const Text('更多'),
+          ),
+        ),
         _AsyncSection<List<rust.PodcastRadioDto>>(
           load: load,
           emptyText: '暂无推荐播客',

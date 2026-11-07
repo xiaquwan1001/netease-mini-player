@@ -14,6 +14,7 @@ use ncm_domain::{
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     MedalWall, UserItem, UserLevel, VipOverview, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumSalesEntry, SongPurchasedPage,
+    RadioExploreHome, RadioSubscriberPage, RadioToplist,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -72,6 +73,8 @@ pub enum Capability {
     Vip,
     /// 数字专辑只读(详情/已购/销量/已购单曲; 不含下单)
     DigitalAlbum,
+    /// 电台发现(只读: 分类/精选/推荐/榜单/订阅者; 不含订阅写操作)
+    RadioExplore,
 }
 
 impl Capability {
@@ -111,6 +114,7 @@ impl Capability {
             Capability::Message => "message",
             Capability::Vip => "vip",
             Capability::DigitalAlbum => "digitalAlbum",
+            Capability::RadioExplore => "radioExplore",
         }
     }
 }
@@ -853,6 +857,38 @@ pub trait Provider: Send + Sync {
         _album_ids: &'a str,
     ) -> BoxFuture<'a, ProviderResult<Vec<DigitalAlbumSalesEntry>>> {
         Box::pin(async { Err(ProviderError::unsupported("no digital album sales")) })
+    }
+
+    // ---- 电台发现(只读; 能力声明 Capability::RadioExplore) ----
+
+    /// 电台发现首页: 分类列表(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
+    fn radio_explore_home(&self) -> BoxFuture<'_, ProviderResult<RadioExploreHome>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio explore")) })
+    }
+
+    /// 某分类下的推荐电台(dj_recommend_type; cate_id 必须是真实分类 id, 0 返回空).
+    fn radio_recommend<'a>(
+        &'a self,
+        _cate_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio recommend")) })
+    }
+
+    /// 电台榜单(kind: "hot"|"new"|"pay"|"hours"|"newcomer"|"popular"|"program").
+    fn radio_toplist<'a>(
+        &'a self,
+        _kind: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<RadioToplist>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio toplist")) })
+    }
+
+    /// 电台订阅者列表(只读; 订阅/取消订阅等写操作不做).
+    fn radio_subscribers<'a>(
+        &'a self,
+        _radio_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<RadioSubscriberPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio subscribers")) })
     }
 
     /// 删除自己的评论(需要登录)

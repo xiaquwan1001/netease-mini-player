@@ -274,6 +274,27 @@ Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
 Future<PodcastRadioDto> podcastRadio({required BigInt radioId}) =>
     RustLib.instance.api.crateApiPodcastRadio(radioId: radioId);
 
+/// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
+Future<RadioExploreHomeDto> radioExploreHome() =>
+    RustLib.instance.api.crateApiRadioExploreHome();
+
+/// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
+Future<List<PodcastRadioDto>> radioRecommend({required BigInt cateId}) =>
+    RustLib.instance.api.crateApiRadioRecommend(cateId: cateId);
+
+/// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
+Future<RadioToplistDto> radioToplist({required String kind}) =>
+    RustLib.instance.api.crateApiRadioToplist(kind: kind);
+
+/// 电台订阅者列表(只读).
+Future<RadioSubscriberPageDto> radioSubscribers({
+  required BigInt radioId,
+  required int limit,
+}) => RustLib.instance.api.crateApiRadioSubscribers(
+  radioId: radioId,
+  limit: limit,
+);
+
 /// 热门搜索榜(按热度排序)
 Future<List<HotSearchTermDto>> hotSearch() =>
     RustLib.instance.api.crateApiHotSearch();
@@ -2127,6 +2148,289 @@ class PurchasedSongDto {
           artistName == other.artistName &&
           coverUrl == other.coverUrl &&
           paidTimeMs == other.paidTimeMs;
+}
+
+class RadioCategoryDto {
+  final BigInt id;
+  final String name;
+  final String coverUrl;
+
+  const RadioCategoryDto({
+    required this.id,
+    required this.name,
+    required this.coverUrl,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ name.hashCode ^ coverUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioCategoryDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl;
+}
+
+class RadioExploreHomeDto {
+  final List<RadioCategoryDto> categories;
+  final List<RadioPickDto> picks;
+
+  const RadioExploreHomeDto({required this.categories, required this.picks});
+
+  @override
+  int get hashCode => categories.hashCode ^ picks.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioExploreHomeDto &&
+          runtimeType == other.runtimeType &&
+          categories == other.categories &&
+          picks == other.picks;
+}
+
+class RadioPickDto {
+  final BigInt categoryId;
+  final String categoryName;
+  final List<PodcastRadioDto> radios;
+
+  const RadioPickDto({
+    required this.categoryId,
+    required this.categoryName,
+    required this.radios,
+  });
+
+  @override
+  int get hashCode =>
+      categoryId.hashCode ^ categoryName.hashCode ^ radios.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioPickDto &&
+          runtimeType == other.runtimeType &&
+          categoryId == other.categoryId &&
+          categoryName == other.categoryName &&
+          radios == other.radios;
+}
+
+class RadioRankedDjDto {
+  final int rank;
+  final int lastRank;
+  final BigInt userId;
+  final String nickname;
+  final String avatarUrl;
+  final BigInt score;
+  final BigInt followedCount;
+
+  const RadioRankedDjDto({
+    required this.rank,
+    required this.lastRank,
+    required this.userId,
+    required this.nickname,
+    required this.avatarUrl,
+    required this.score,
+    required this.followedCount,
+  });
+
+  @override
+  int get hashCode =>
+      rank.hashCode ^
+      lastRank.hashCode ^
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      score.hashCode ^
+      followedCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioRankedDjDto &&
+          runtimeType == other.runtimeType &&
+          rank == other.rank &&
+          lastRank == other.lastRank &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          score == other.score &&
+          followedCount == other.followedCount;
+}
+
+class RadioRankedProgramDto {
+  final int rank;
+  final int lastRank;
+  final PodcastProgramDto program;
+
+  const RadioRankedProgramDto({
+    required this.rank,
+    required this.lastRank,
+    required this.program,
+  });
+
+  @override
+  int get hashCode => rank.hashCode ^ lastRank.hashCode ^ program.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioRankedProgramDto &&
+          runtimeType == other.runtimeType &&
+          rank == other.rank &&
+          lastRank == other.lastRank &&
+          program == other.program;
+}
+
+class RadioRankedRadioDto {
+  final int rank;
+
+  /// 上期名次(-1 表示新上榜)
+  final int lastRank;
+  final BigInt radioId;
+  final String name;
+  final String coverUrl;
+  final String djName;
+  final String category;
+  final BigInt playCount;
+  final BigInt programCount;
+  final BigInt subCount;
+  final BigInt score;
+  final String rcmdText;
+
+  const RadioRankedRadioDto({
+    required this.rank,
+    required this.lastRank,
+    required this.radioId,
+    required this.name,
+    required this.coverUrl,
+    required this.djName,
+    required this.category,
+    required this.playCount,
+    required this.programCount,
+    required this.subCount,
+    required this.score,
+    required this.rcmdText,
+  });
+
+  @override
+  int get hashCode =>
+      rank.hashCode ^
+      lastRank.hashCode ^
+      radioId.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      djName.hashCode ^
+      category.hashCode ^
+      playCount.hashCode ^
+      programCount.hashCode ^
+      subCount.hashCode ^
+      score.hashCode ^
+      rcmdText.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioRankedRadioDto &&
+          runtimeType == other.runtimeType &&
+          rank == other.rank &&
+          lastRank == other.lastRank &&
+          radioId == other.radioId &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          djName == other.djName &&
+          category == other.category &&
+          playCount == other.playCount &&
+          programCount == other.programCount &&
+          subCount == other.subCount &&
+          score == other.score &&
+          rcmdText == other.rcmdText;
+}
+
+class RadioSubscriberDto {
+  final BigInt userId;
+  final String nickname;
+  final String avatarUrl;
+  final String signature;
+  final BigInt subscribeTimeMs;
+
+  const RadioSubscriberDto({
+    required this.userId,
+    required this.nickname,
+    required this.avatarUrl,
+    required this.signature,
+    required this.subscribeTimeMs,
+  });
+
+  @override
+  int get hashCode =>
+      userId.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode ^
+      signature.hashCode ^
+      subscribeTimeMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioSubscriberDto &&
+          runtimeType == other.runtimeType &&
+          userId == other.userId &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl &&
+          signature == other.signature &&
+          subscribeTimeMs == other.subscribeTimeMs;
+}
+
+class RadioSubscriberPageDto {
+  final bool hasMore;
+  final List<RadioSubscriberDto> subscribers;
+
+  const RadioSubscriberPageDto({
+    required this.hasMore,
+    required this.subscribers,
+  });
+
+  @override
+  int get hashCode => hasMore.hashCode ^ subscribers.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioSubscriberPageDto &&
+          runtimeType == other.runtimeType &&
+          hasMore == other.hasMore &&
+          subscribers == other.subscribers;
+}
+
+class RadioToplistDto {
+  final String kind;
+  final List<RadioRankedRadioDto> radios;
+  final List<RadioRankedDjDto> djs;
+  final List<RadioRankedProgramDto> programs;
+
+  const RadioToplistDto({
+    required this.kind,
+    required this.radios,
+    required this.djs,
+    required this.programs,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^ radios.hashCode ^ djs.hashCode ^ programs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RadioToplistDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          radios == other.radios &&
+          djs == other.djs &&
+          programs == other.programs;
 }
 
 class RecentContactDto {

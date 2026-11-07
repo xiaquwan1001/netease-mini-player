@@ -1177,6 +1177,140 @@ pub struct DigitalAlbumSalesEntry {
     pub sales: u64,
 }
 
+/// 电台分类(dj_catelist 的 categories[] 元素, 按实测裁剪; 顶层无 code).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioCategory {
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default)]
+    pub name: String,
+    /// pic56x56Url(有 https)
+    #[serde(default)]
+    pub cover_url: String,
+}
+
+/// dj_category_recommend 的一组精选: 每个分类下 3 个推荐电台(radios 元素与 DjRadio 同形状).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RadioPick {
+    #[serde(default)]
+    pub category_id: u64,
+    #[serde(default)]
+    pub category_name: String,
+    #[serde(default)]
+    pub radios: Vec<PodcastRadio>,
+}
+
+/// 电台发现首页(dj_catelist + dj_category_recommend 聚合).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RadioExploreHome {
+    #[serde(default)]
+    pub categories: Vec<RadioCategory>,
+    #[serde(default)]
+    pub picks: Vec<RadioPick>,
+}
+
+/// 电台榜里的一个电台(dj_toplist / dj_toplist_pay 元素, 榜单特有 rank/score).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioRankedRadio {
+    #[serde(default)]
+    pub rank: u32,
+    /// 上期名次(服务器给 -1 表示新上榜; 这里用 i32 原样保留)
+    #[serde(default)]
+    pub last_rank: i32,
+    #[serde(default)]
+    pub radio_id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub cover_url: String,
+    #[serde(default)]
+    pub dj_name: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub play_count: u64,
+    #[serde(default)]
+    pub program_count: u64,
+    #[serde(default)]
+    pub sub_count: u64,
+    #[serde(default)]
+    pub score: u64,
+    #[serde(default)]
+    pub rcmd_text: String,
+}
+
+/// 主播榜(dj_toplist_hours/newcomer/popular 的 data.list 元素; 是用户不是电台).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioRankedDj {
+    #[serde(default)]
+    pub rank: u32,
+    #[serde(default)]
+    pub last_rank: i32,
+    #[serde(default)]
+    pub user_id: u64,
+    /// 注意接口字段是 nickName(驼峰), 与 dj.nickname 不同
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default)]
+    pub avatar_url: String,
+    #[serde(default)]
+    pub score: u64,
+    #[serde(default)]
+    pub followed_count: u64,
+}
+
+/// 节目榜(dj_program_toplist 的 toplist[] 元素 = {rank,lastRank,program}).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RadioRankedProgram {
+    #[serde(default)]
+    pub rank: u32,
+    #[serde(default)]
+    pub last_rank: i32,
+    #[serde(default)]
+    pub program: PodcastProgram,
+}
+
+/// 电台榜单聚合(按 kind 只填其中一组; 空组当"没有这类数据").
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RadioToplist {
+    /// hot/new 榜(dj_toplist)与付费精品榜(dj_toplist_pay)的电台
+    #[serde(default)]
+    pub radios: Vec<RadioRankedRadio>,
+    /// 主播榜(hours/newcomer/popular)
+    #[serde(default)]
+    pub djs: Vec<RadioRankedDj>,
+    /// 节目榜(dj_program_toplist)
+    #[serde(default)]
+    pub programs: Vec<RadioRankedProgram>,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+/// 电台订阅者(dj_subscriber 的 subscribers[] 元素, 完整 user 对象按实测裁剪).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioSubscriber {
+    #[serde(default)]
+    pub user_id: u64,
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default)]
+    pub avatar_url: String,
+    #[serde(default)]
+    pub signature: String,
+    /// 订阅时间(毫秒时间戳)
+    #[serde(default)]
+    pub subscribe_time_ms: u64,
+}
+
+/// 电台订阅者分页(顶层 hasMore + subscribers; 游标是 time=上一页最后 subscribeTime).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RadioSubscriberPage {
+    #[serde(default)]
+    pub has_more: bool,
+    #[serde(default)]
+    pub subscribers: Vec<RadioSubscriber>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

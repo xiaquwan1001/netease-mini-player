@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1334649531;
+  int get rustContentHash => 547580932;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -319,6 +319,19 @@ abstract class RustLibApi extends BaseApi {
   });
 
   Future<ProfileDetailDto> crateApiProfileDetail();
+
+  Future<RadioExploreHomeDto> crateApiRadioExploreHome();
+
+  Future<List<PodcastRadioDto>> crateApiRadioRecommend({
+    required BigInt cateId,
+  });
+
+  Future<RadioSubscriberPageDto> crateApiRadioSubscribers({
+    required BigInt radioId,
+    required int limit,
+  });
+
+  Future<RadioToplistDto> crateApiRadioToplist({required String kind});
 
   Future<List<AlbumItemDto>> crateApiRecentAlbums({required int limit});
 
@@ -2775,6 +2788,125 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "profile_detail", argNames: []);
 
   @override
+  Future<RadioExploreHomeDto> crateApiRadioExploreHome() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 77,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_radio_explore_home_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiRadioExploreHomeConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRadioExploreHomeConstMeta =>
+      const TaskConstMeta(debugName: "radio_explore_home", argNames: []);
+
+  @override
+  Future<List<PodcastRadioDto>> crateApiRadioRecommend({
+    required BigInt cateId,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(cateId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 78,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_podcast_radio_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiRadioRecommendConstMeta,
+        argValues: [cateId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRadioRecommendConstMeta =>
+      const TaskConstMeta(debugName: "radio_recommend", argNames: ["cateId"]);
+
+  @override
+  Future<RadioSubscriberPageDto> crateApiRadioSubscribers({
+    required BigInt radioId,
+    required int limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(radioId, serializer);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 79,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_radio_subscriber_page_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiRadioSubscribersConstMeta,
+        argValues: [radioId, limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRadioSubscribersConstMeta => const TaskConstMeta(
+    debugName: "radio_subscribers",
+    argNames: ["radioId", "limit"],
+  );
+
+  @override
+  Future<RadioToplistDto> crateApiRadioToplist({required String kind}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(kind, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 80,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_radio_toplist_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiRadioToplistConstMeta,
+        argValues: [kind],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRadioToplistConstMeta =>
+      const TaskConstMeta(debugName: "radio_toplist", argNames: ["kind"]);
+
+  @override
   Future<List<AlbumItemDto>> crateApiRecentAlbums({required int limit}) {
     return handler.executeNormal(
       NormalTask(
@@ -2784,7 +2916,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 77,
+            funcId: 81,
             port: port_,
           );
         },
@@ -2812,7 +2944,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 78,
+            funcId: 82,
             port: port_,
           );
         },
@@ -2840,7 +2972,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 79,
+            funcId: 83,
             port: port_,
           );
         },
@@ -2868,7 +3000,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 80,
+            funcId: 84,
             port: port_,
           );
         },
@@ -2896,7 +3028,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 81,
+            funcId: 85,
             port: port_,
           );
         },
@@ -2924,7 +3056,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 86,
             port: port_,
           );
         },
@@ -2952,7 +3084,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 87,
             port: port_,
           );
         },
@@ -2984,7 +3116,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 88,
             port: port_,
           );
         },
@@ -3018,7 +3150,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 85,
+            funcId: 89,
             port: port_,
           );
         },
@@ -3054,7 +3186,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 90,
             port: port_,
           );
         },
@@ -3088,7 +3220,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 87,
+            funcId: 91,
             port: port_,
           );
         },
@@ -3120,7 +3252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 88,
+            funcId: 92,
             port: port_,
           );
         },
@@ -3150,7 +3282,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 89,
+            funcId: 93,
             port: port_,
           );
         },
@@ -3177,7 +3309,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 90,
+            funcId: 94,
             port: port_,
           );
         },
@@ -3207,7 +3339,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 91,
+            funcId: 95,
             port: port_,
           );
         },
@@ -3237,7 +3369,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 92,
+            funcId: 96,
             port: port_,
           );
         },
@@ -3272,7 +3404,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 93,
+            funcId: 97,
             port: port_,
           );
         },
@@ -3303,7 +3435,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 94,
+            funcId: 98,
             port: port_,
           );
         },
@@ -3335,7 +3467,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 95,
+            funcId: 99,
             port: port_,
           );
         },
@@ -3369,7 +3501,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 96,
+            funcId: 100,
             port: port_,
           );
         },
@@ -3406,7 +3538,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 97,
+            funcId: 101,
             port: port_,
           );
         },
@@ -3435,7 +3567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 98,
+            funcId: 102,
             port: port_,
           );
         },
@@ -3462,7 +3594,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 99,
+            funcId: 103,
             port: port_,
           );
         },
@@ -3490,7 +3622,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 100,
+            funcId: 104,
             port: port_,
           );
         },
@@ -3522,7 +3654,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 101,
+            funcId: 105,
             port: port_,
           );
         },
@@ -3556,7 +3688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 102,
+            funcId: 106,
             port: port_,
           );
         },
@@ -3590,7 +3722,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 103,
+            funcId: 107,
             port: port_,
           );
         },
@@ -3624,7 +3756,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 104,
+            funcId: 108,
             port: port_,
           );
         },
@@ -3654,7 +3786,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 105,
+            funcId: 109,
             port: port_,
           );
         },
@@ -3686,7 +3818,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 106,
+            funcId: 110,
             port: port_,
           );
         },
@@ -3715,7 +3847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 107,
+            funcId: 111,
             port: port_,
           );
         },
@@ -3747,7 +3879,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 108,
+            funcId: 112,
             port: port_,
           );
         },
@@ -3777,7 +3909,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 109,
+            funcId: 113,
             port: port_,
           );
         },
@@ -3805,7 +3937,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 110,
+            funcId: 114,
             port: port_,
           );
         },
@@ -3835,7 +3967,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 111,
+            funcId: 115,
             port: port_,
           );
         },
@@ -3865,7 +3997,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 112,
+            funcId: 116,
             port: port_,
           );
         },
@@ -3897,7 +4029,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 113,
+            funcId: 117,
             port: port_,
           );
         },
@@ -3933,7 +4065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 114,
+            funcId: 118,
             port: port_,
           );
         },
@@ -3969,7 +4101,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 115,
+            funcId: 119,
             port: port_,
           );
         },
@@ -3998,7 +4130,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 116,
+            funcId: 120,
             port: port_,
           );
         },
@@ -4025,7 +4157,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 117,
+            funcId: 121,
             port: port_,
           );
         },
@@ -4052,7 +4184,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 118,
+            funcId: 122,
             port: port_,
           );
         },
@@ -4694,6 +4826,50 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<RadioCategoryDto> dco_decode_list_radio_category_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_radio_category_dto).toList();
+  }
+
+  @protected
+  List<RadioPickDto> dco_decode_list_radio_pick_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_radio_pick_dto).toList();
+  }
+
+  @protected
+  List<RadioRankedDjDto> dco_decode_list_radio_ranked_dj_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_radio_ranked_dj_dto).toList();
+  }
+
+  @protected
+  List<RadioRankedProgramDto> dco_decode_list_radio_ranked_program_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_radio_ranked_program_dto)
+        .toList();
+  }
+
+  @protected
+  List<RadioRankedRadioDto> dco_decode_list_radio_ranked_radio_dto(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_radio_ranked_radio_dto)
+        .toList();
+  }
+
+  @protected
+  List<RadioSubscriberDto> dco_decode_list_radio_subscriber_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_radio_subscriber_dto).toList();
+  }
+
+  @protected
   List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_recent_contact_dto).toList();
@@ -5043,6 +5219,137 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       artistName: dco_decode_String(arr[2]),
       coverUrl: dco_decode_String(arr[3]),
       paidTimeMs: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
+  RadioCategoryDto dco_decode_radio_category_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RadioCategoryDto(
+      id: dco_decode_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      coverUrl: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  RadioExploreHomeDto dco_decode_radio_explore_home_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RadioExploreHomeDto(
+      categories: dco_decode_list_radio_category_dto(arr[0]),
+      picks: dco_decode_list_radio_pick_dto(arr[1]),
+    );
+  }
+
+  @protected
+  RadioPickDto dco_decode_radio_pick_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RadioPickDto(
+      categoryId: dco_decode_u_64(arr[0]),
+      categoryName: dco_decode_String(arr[1]),
+      radios: dco_decode_list_podcast_radio_dto(arr[2]),
+    );
+  }
+
+  @protected
+  RadioRankedDjDto dco_decode_radio_ranked_dj_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return RadioRankedDjDto(
+      rank: dco_decode_u_32(arr[0]),
+      lastRank: dco_decode_i_32(arr[1]),
+      userId: dco_decode_u_64(arr[2]),
+      nickname: dco_decode_String(arr[3]),
+      avatarUrl: dco_decode_String(arr[4]),
+      score: dco_decode_u_64(arr[5]),
+      followedCount: dco_decode_u_64(arr[6]),
+    );
+  }
+
+  @protected
+  RadioRankedProgramDto dco_decode_radio_ranked_program_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return RadioRankedProgramDto(
+      rank: dco_decode_u_32(arr[0]),
+      lastRank: dco_decode_i_32(arr[1]),
+      program: dco_decode_podcast_program_dto(arr[2]),
+    );
+  }
+
+  @protected
+  RadioRankedRadioDto dco_decode_radio_ranked_radio_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
+    return RadioRankedRadioDto(
+      rank: dco_decode_u_32(arr[0]),
+      lastRank: dco_decode_i_32(arr[1]),
+      radioId: dco_decode_u_64(arr[2]),
+      name: dco_decode_String(arr[3]),
+      coverUrl: dco_decode_String(arr[4]),
+      djName: dco_decode_String(arr[5]),
+      category: dco_decode_String(arr[6]),
+      playCount: dco_decode_u_64(arr[7]),
+      programCount: dco_decode_u_64(arr[8]),
+      subCount: dco_decode_u_64(arr[9]),
+      score: dco_decode_u_64(arr[10]),
+      rcmdText: dco_decode_String(arr[11]),
+    );
+  }
+
+  @protected
+  RadioSubscriberDto dco_decode_radio_subscriber_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return RadioSubscriberDto(
+      userId: dco_decode_u_64(arr[0]),
+      nickname: dco_decode_String(arr[1]),
+      avatarUrl: dco_decode_String(arr[2]),
+      signature: dco_decode_String(arr[3]),
+      subscribeTimeMs: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
+  RadioSubscriberPageDto dco_decode_radio_subscriber_page_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return RadioSubscriberPageDto(
+      hasMore: dco_decode_bool(arr[0]),
+      subscribers: dco_decode_list_radio_subscriber_dto(arr[1]),
+    );
+  }
+
+  @protected
+  RadioToplistDto dco_decode_radio_toplist_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return RadioToplistDto(
+      kind: dco_decode_String(arr[0]),
+      radios: dco_decode_list_radio_ranked_radio_dto(arr[1]),
+      djs: dco_decode_list_radio_ranked_dj_dto(arr[2]),
+      programs: dco_decode_list_radio_ranked_program_dto(arr[3]),
     );
   }
 
@@ -6330,6 +6637,90 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<RadioCategoryDto> sse_decode_list_radio_category_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioCategoryDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_category_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<RadioPickDto> sse_decode_list_radio_pick_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioPickDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_pick_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<RadioRankedDjDto> sse_decode_list_radio_ranked_dj_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioRankedDjDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_ranked_dj_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<RadioRankedProgramDto> sse_decode_list_radio_ranked_program_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioRankedProgramDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_ranked_program_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<RadioRankedRadioDto> sse_decode_list_radio_ranked_radio_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioRankedRadioDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_ranked_radio_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<RadioSubscriberDto> sse_decode_list_radio_subscriber_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <RadioSubscriberDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_radio_subscriber_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<RecentContactDto> sse_decode_list_recent_contact_dto(
     SseDeserializer deserializer,
   ) {
@@ -6879,6 +7270,156 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       artistName: var_artistName,
       coverUrl: var_coverUrl,
       paidTimeMs: var_paidTimeMs,
+    );
+  }
+
+  @protected
+  RadioCategoryDto sse_decode_radio_category_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_coverUrl = sse_decode_String(deserializer);
+    return RadioCategoryDto(id: var_id, name: var_name, coverUrl: var_coverUrl);
+  }
+
+  @protected
+  RadioExploreHomeDto sse_decode_radio_explore_home_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_categories = sse_decode_list_radio_category_dto(deserializer);
+    var var_picks = sse_decode_list_radio_pick_dto(deserializer);
+    return RadioExploreHomeDto(categories: var_categories, picks: var_picks);
+  }
+
+  @protected
+  RadioPickDto sse_decode_radio_pick_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_categoryId = sse_decode_u_64(deserializer);
+    var var_categoryName = sse_decode_String(deserializer);
+    var var_radios = sse_decode_list_podcast_radio_dto(deserializer);
+    return RadioPickDto(
+      categoryId: var_categoryId,
+      categoryName: var_categoryName,
+      radios: var_radios,
+    );
+  }
+
+  @protected
+  RadioRankedDjDto sse_decode_radio_ranked_dj_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_rank = sse_decode_u_32(deserializer);
+    var var_lastRank = sse_decode_i_32(deserializer);
+    var var_userId = sse_decode_u_64(deserializer);
+    var var_nickname = sse_decode_String(deserializer);
+    var var_avatarUrl = sse_decode_String(deserializer);
+    var var_score = sse_decode_u_64(deserializer);
+    var var_followedCount = sse_decode_u_64(deserializer);
+    return RadioRankedDjDto(
+      rank: var_rank,
+      lastRank: var_lastRank,
+      userId: var_userId,
+      nickname: var_nickname,
+      avatarUrl: var_avatarUrl,
+      score: var_score,
+      followedCount: var_followedCount,
+    );
+  }
+
+  @protected
+  RadioRankedProgramDto sse_decode_radio_ranked_program_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_rank = sse_decode_u_32(deserializer);
+    var var_lastRank = sse_decode_i_32(deserializer);
+    var var_program = sse_decode_podcast_program_dto(deserializer);
+    return RadioRankedProgramDto(
+      rank: var_rank,
+      lastRank: var_lastRank,
+      program: var_program,
+    );
+  }
+
+  @protected
+  RadioRankedRadioDto sse_decode_radio_ranked_radio_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_rank = sse_decode_u_32(deserializer);
+    var var_lastRank = sse_decode_i_32(deserializer);
+    var var_radioId = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_coverUrl = sse_decode_String(deserializer);
+    var var_djName = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_playCount = sse_decode_u_64(deserializer);
+    var var_programCount = sse_decode_u_64(deserializer);
+    var var_subCount = sse_decode_u_64(deserializer);
+    var var_score = sse_decode_u_64(deserializer);
+    var var_rcmdText = sse_decode_String(deserializer);
+    return RadioRankedRadioDto(
+      rank: var_rank,
+      lastRank: var_lastRank,
+      radioId: var_radioId,
+      name: var_name,
+      coverUrl: var_coverUrl,
+      djName: var_djName,
+      category: var_category,
+      playCount: var_playCount,
+      programCount: var_programCount,
+      subCount: var_subCount,
+      score: var_score,
+      rcmdText: var_rcmdText,
+    );
+  }
+
+  @protected
+  RadioSubscriberDto sse_decode_radio_subscriber_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_userId = sse_decode_u_64(deserializer);
+    var var_nickname = sse_decode_String(deserializer);
+    var var_avatarUrl = sse_decode_String(deserializer);
+    var var_signature = sse_decode_String(deserializer);
+    var var_subscribeTimeMs = sse_decode_u_64(deserializer);
+    return RadioSubscriberDto(
+      userId: var_userId,
+      nickname: var_nickname,
+      avatarUrl: var_avatarUrl,
+      signature: var_signature,
+      subscribeTimeMs: var_subscribeTimeMs,
+    );
+  }
+
+  @protected
+  RadioSubscriberPageDto sse_decode_radio_subscriber_page_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_hasMore = sse_decode_bool(deserializer);
+    var var_subscribers = sse_decode_list_radio_subscriber_dto(deserializer);
+    return RadioSubscriberPageDto(
+      hasMore: var_hasMore,
+      subscribers: var_subscribers,
+    );
+  }
+
+  @protected
+  RadioToplistDto sse_decode_radio_toplist_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_kind = sse_decode_String(deserializer);
+    var var_radios = sse_decode_list_radio_ranked_radio_dto(deserializer);
+    var var_djs = sse_decode_list_radio_ranked_dj_dto(deserializer);
+    var var_programs = sse_decode_list_radio_ranked_program_dto(deserializer);
+    return RadioToplistDto(
+      kind: var_kind,
+      radios: var_radios,
+      djs: var_djs,
+      programs: var_programs,
     );
   }
 
@@ -8055,6 +8596,78 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_radio_category_dto(
+    List<RadioCategoryDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_category_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_radio_pick_dto(
+    List<RadioPickDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_pick_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_radio_ranked_dj_dto(
+    List<RadioRankedDjDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_ranked_dj_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_radio_ranked_program_dto(
+    List<RadioRankedProgramDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_ranked_program_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_radio_ranked_radio_dto(
+    List<RadioRankedRadioDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_ranked_radio_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_radio_subscriber_dto(
+    List<RadioSubscriberDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_radio_subscriber_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_recent_contact_dto(
     List<RecentContactDto> self,
     SseSerializer serializer,
@@ -8496,6 +9109,116 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.artistName, serializer);
     sse_encode_String(self.coverUrl, serializer);
     sse_encode_u_64(self.paidTimeMs, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_category_dto(
+    RadioCategoryDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.coverUrl, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_explore_home_dto(
+    RadioExploreHomeDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_radio_category_dto(self.categories, serializer);
+    sse_encode_list_radio_pick_dto(self.picks, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_pick_dto(RadioPickDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.categoryId, serializer);
+    sse_encode_String(self.categoryName, serializer);
+    sse_encode_list_podcast_radio_dto(self.radios, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_ranked_dj_dto(
+    RadioRankedDjDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.rank, serializer);
+    sse_encode_i_32(self.lastRank, serializer);
+    sse_encode_u_64(self.userId, serializer);
+    sse_encode_String(self.nickname, serializer);
+    sse_encode_String(self.avatarUrl, serializer);
+    sse_encode_u_64(self.score, serializer);
+    sse_encode_u_64(self.followedCount, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_ranked_program_dto(
+    RadioRankedProgramDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.rank, serializer);
+    sse_encode_i_32(self.lastRank, serializer);
+    sse_encode_podcast_program_dto(self.program, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_ranked_radio_dto(
+    RadioRankedRadioDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.rank, serializer);
+    sse_encode_i_32(self.lastRank, serializer);
+    sse_encode_u_64(self.radioId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.coverUrl, serializer);
+    sse_encode_String(self.djName, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_u_64(self.playCount, serializer);
+    sse_encode_u_64(self.programCount, serializer);
+    sse_encode_u_64(self.subCount, serializer);
+    sse_encode_u_64(self.score, serializer);
+    sse_encode_String(self.rcmdText, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_subscriber_dto(
+    RadioSubscriberDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.userId, serializer);
+    sse_encode_String(self.nickname, serializer);
+    sse_encode_String(self.avatarUrl, serializer);
+    sse_encode_String(self.signature, serializer);
+    sse_encode_u_64(self.subscribeTimeMs, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_subscriber_page_dto(
+    RadioSubscriberPageDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.hasMore, serializer);
+    sse_encode_list_radio_subscriber_dto(self.subscribers, serializer);
+  }
+
+  @protected
+  void sse_encode_radio_toplist_dto(
+    RadioToplistDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.kind, serializer);
+    sse_encode_list_radio_ranked_radio_dto(self.radios, serializer);
+    sse_encode_list_radio_ranked_dj_dto(self.djs, serializer);
+    sse_encode_list_radio_ranked_program_dto(self.programs, serializer);
   }
 
   @protected

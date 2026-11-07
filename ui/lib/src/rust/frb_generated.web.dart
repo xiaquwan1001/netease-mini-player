@@ -219,6 +219,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PurchasedSongDto> dco_decode_list_purchased_song_dto(dynamic raw);
 
   @protected
+  List<RadioCategoryDto> dco_decode_list_radio_category_dto(dynamic raw);
+
+  @protected
+  List<RadioPickDto> dco_decode_list_radio_pick_dto(dynamic raw);
+
+  @protected
+  List<RadioRankedDjDto> dco_decode_list_radio_ranked_dj_dto(dynamic raw);
+
+  @protected
+  List<RadioRankedProgramDto> dco_decode_list_radio_ranked_program_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<RadioRankedRadioDto> dco_decode_list_radio_ranked_radio_dto(dynamic raw);
+
+  @protected
+  List<RadioSubscriberDto> dco_decode_list_radio_subscriber_dto(dynamic raw);
+
+  @protected
   List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw);
 
   @protected
@@ -325,6 +345,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PurchasedSongDto dco_decode_purchased_song_dto(dynamic raw);
+
+  @protected
+  RadioCategoryDto dco_decode_radio_category_dto(dynamic raw);
+
+  @protected
+  RadioExploreHomeDto dco_decode_radio_explore_home_dto(dynamic raw);
+
+  @protected
+  RadioPickDto dco_decode_radio_pick_dto(dynamic raw);
+
+  @protected
+  RadioRankedDjDto dco_decode_radio_ranked_dj_dto(dynamic raw);
+
+  @protected
+  RadioRankedProgramDto dco_decode_radio_ranked_program_dto(dynamic raw);
+
+  @protected
+  RadioRankedRadioDto dco_decode_radio_ranked_radio_dto(dynamic raw);
+
+  @protected
+  RadioSubscriberDto dco_decode_radio_subscriber_dto(dynamic raw);
+
+  @protected
+  RadioSubscriberPageDto dco_decode_radio_subscriber_page_dto(dynamic raw);
+
+  @protected
+  RadioToplistDto dco_decode_radio_toplist_dto(dynamic raw);
 
   @protected
   RecentContactDto dco_decode_recent_contact_dto(dynamic raw);
@@ -659,6 +706,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<RadioCategoryDto> sse_decode_list_radio_category_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RadioPickDto> sse_decode_list_radio_pick_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RadioRankedDjDto> sse_decode_list_radio_ranked_dj_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RadioRankedProgramDto> sse_decode_list_radio_ranked_program_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RadioRankedRadioDto> sse_decode_list_radio_ranked_radio_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<RadioSubscriberDto> sse_decode_list_radio_subscriber_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<RecentContactDto> sse_decode_list_recent_contact_dto(
     SseDeserializer deserializer,
   );
@@ -801,6 +878,43 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PurchasedSongDto sse_decode_purchased_song_dto(SseDeserializer deserializer);
+
+  @protected
+  RadioCategoryDto sse_decode_radio_category_dto(SseDeserializer deserializer);
+
+  @protected
+  RadioExploreHomeDto sse_decode_radio_explore_home_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RadioPickDto sse_decode_radio_pick_dto(SseDeserializer deserializer);
+
+  @protected
+  RadioRankedDjDto sse_decode_radio_ranked_dj_dto(SseDeserializer deserializer);
+
+  @protected
+  RadioRankedProgramDto sse_decode_radio_ranked_program_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RadioRankedRadioDto sse_decode_radio_ranked_radio_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RadioSubscriberDto sse_decode_radio_subscriber_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RadioSubscriberPageDto sse_decode_radio_subscriber_page_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  RadioToplistDto sse_decode_radio_toplist_dto(SseDeserializer deserializer);
 
   @protected
   RecentContactDto sse_decode_recent_contact_dto(SseDeserializer deserializer);
@@ -1213,6 +1327,42 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_radio_category_dto(
+    List<RadioCategoryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_radio_pick_dto(
+    List<RadioPickDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_radio_ranked_dj_dto(
+    List<RadioRankedDjDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_radio_ranked_program_dto(
+    List<RadioRankedProgramDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_radio_ranked_radio_dto(
+    List<RadioRankedRadioDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_radio_subscriber_dto(
+    List<RadioSubscriberDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_recent_contact_dto(
     List<RecentContactDto> self,
     SseSerializer serializer,
@@ -1404,6 +1554,57 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_purchased_song_dto(
     PurchasedSongDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_category_dto(
+    RadioCategoryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_explore_home_dto(
+    RadioExploreHomeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_pick_dto(RadioPickDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_radio_ranked_dj_dto(
+    RadioRankedDjDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_ranked_program_dto(
+    RadioRankedProgramDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_ranked_radio_dto(
+    RadioRankedRadioDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_subscriber_dto(
+    RadioSubscriberDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_subscriber_page_dto(
+    RadioSubscriberPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_radio_toplist_dto(
+    RadioToplistDto self,
     SseSerializer serializer,
   );
 

@@ -14,6 +14,8 @@ use ncm_domain::{
     VipTask, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     PurchasedSongEntry, SongPurchasedPage,
+    RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedProgram, RadioRankedRadio,
+    RadioSubscriber, RadioSubscriberPage, RadioToplist,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -56,6 +58,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Message,
     Capability::Vip,
     Capability::DigitalAlbum,
+    Capability::RadioExplore,
 ];
 
 /// 最近播放的三种资源(专辑/歌单/电台)
@@ -591,6 +594,17 @@ fn u64_of(v: &Value, key: &str) -> Option<u64> {
 
 fn str_of(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_string)
+}
+
+fn u32_of(v: &Value, key: &str) -> Option<u32> {
+    u64_of(v, key).and_then(|n| u32::try_from(n).ok())
+}
+
+/// lastRank 是 i32(服务器用 -1 表示新上榜), 与其它计数不同
+fn i32_of(v: &Value, key: &str) -> Option<i32> {
+    v.get(key)
+        .and_then(|x| x.as_i64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|n| i32::try_from(n).ok())
 }
 
 /// 资源类型 → 评论 threadId 前缀(与 vendor 的 RESOURCE_TYPE_MAP 对齐)
@@ -2564,6 +2578,101 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    // ---- 电台发现(只读; 全部匿名可用) ----
+
+    /// 电台发现首页: dj_catelist(分类) + dj_category_recommend(各分类精选), 并发拉取.
+    fn radio_explore_home(&self) -> BoxFuture<'_, ProviderResult<RadioExploreHome>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let (cats, picks) = futures::future::join(
+                client.dj_catelist(&q),
+                client.dj_category_recommend(&q),
+            )
+            .await;
+            let categories = parse_radio_categories(&cats.map_err(map_error)?.body);
+            let picks_body = picks.map_err(map_error)?;
+            check_body(&picks_body.body)?;
+            Ok(RadioExploreHome { categories, picks: parse_radio_picks(&picks_body.body) })
+        })
+    }
+
+    /// 某分类推荐电台(dj_recommend_type). cate_id=0 服务端返回空 djRadios, 原样透传空列表.
+    fn radio_recommend<'a>(&'a self, cate_id: u64) -> BoxFuture<'a, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("type", &cate_id.to_string());
+            let resp = client.dj_recommend_type(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(resp
+                .body
+                .get("djRadios")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(parse_radio).collect())
+                .unwrap_or_default())
+        })
+    }
+
+    /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
+    fn radio_toplist<'a>(&'a self, kind: &'a str) -> BoxFuture<'a, ProviderResult<RadioToplist>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            match kind {
+                "hot" | "new" => {
+                    // vendor 把 type "hot"→1 其余→0
+                    let q = q.param("type", if kind == "hot" { "1" } else { "0" });
+                    let resp = client.dj_toplist(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(parse_radio_toplist_radios(&resp.body))
+                }
+                "pay" => {
+                    let resp = client.dj_toplist_pay(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(parse_radio_toplist_radios(&resp.body))
+                }
+                "hours" | "newcomer" | "popular" => {
+                    let resp = match kind {
+                        "hours" => client.dj_toplist_hours(&q).await,
+                        "newcomer" => client.dj_toplist_newcomer(&q).await,
+                        _ => client.dj_toplist_popular(&q).await,
+                    }
+                    .map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(parse_radio_toplist_djs(&resp.body))
+                }
+                "program" => {
+                    let resp = client.dj_program_toplist(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(parse_radio_toplist_programs(&resp.body))
+                }
+                other => Err(ProviderError::not_found(format!("未知电台榜单: {other}"))),
+            }
+        })
+    }
+
+    /// 电台订阅者列表(dj_subscriber; 游标 time=-1 表示最新一页).
+    fn radio_subscribers<'a>(
+        &'a self,
+        radio_id: u64,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<RadioSubscriberPage>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if radio_id == 0 {
+                return Err(ProviderError::not_found("radio id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &radio_id.to_string())
+                .param("limit", &limit.to_string())
+                .param("time", "-1")
+                .param("total", "true");
+            let resp = client.dj_subscriber(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_radio_subscribers(&resp.body)
+        })
+    }
+
     /// 播客/电台详情
     fn podcast_radio(&self, radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
         Box::pin(async move {
@@ -3420,6 +3529,147 @@ pub fn parse_song_purchased(body: &Value) -> ProviderResult<SongPurchasedPage> {
         count: data.and_then(|d| u64_of(d, "count")).unwrap_or(0),
         has_more: data.and_then(|d| d.get("hasMore")).and_then(Value::as_bool).unwrap_or(false),
         songs,
+    })
+}
+
+/// 电台分类(dj_catelist). **顶层直接是 categories, 没有 code 字段**, 判断空数组即可.
+pub fn parse_radio_categories(body: &Value) -> Vec<RadioCategory> {
+    body.get("categories")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|c| {
+                    Some(RadioCategory {
+                        id: u64_of(c, "id")?,
+                        name: str_of(c, "name").unwrap_or_default(),
+                        cover_url: str_of(c, "pic56x56Url").unwrap_or_default(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 各分类精选(dj_category_recommend 的 data[] 元素 = {categoryId, categoryName, radios}).
+pub fn parse_radio_picks(body: &Value) -> Vec<RadioPick> {
+    body.get("data")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .map(|g| RadioPick {
+                    category_id: u64_of(g, "categoryId").unwrap_or(0),
+                    category_name: str_of(g, "categoryName").unwrap_or_default(),
+                    radios: g
+                        .get("radios")
+                        .and_then(Value::as_array)
+                        .map(|rs| rs.iter().filter_map(parse_radio).collect())
+                        .unwrap_or_default(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// dj_toplist(顶层 toplist, 元素是 DjRadio 超集 + rank/score/lastRank).
+/// 注意推荐语字段是 rcmdtext(全小写).
+fn ranked_radio(v: &Value) -> Option<RadioRankedRadio> {
+    Some(RadioRankedRadio {
+        rank: u32_of(v, "rank")?,
+        last_rank: i32_of(v, "lastRank").unwrap_or(-1),
+        radio_id: u64_of(v, "id")?,
+        name: str_of(v, "name").unwrap_or_default(),
+        cover_url: str_of(v, "picUrl").unwrap_or_default(),
+        dj_name: v
+            .get("dj")
+            .and_then(|d| str_of(d, "nickname"))
+            .or_else(|| str_of(v, "creatorName"))
+            .unwrap_or_default(),
+        category: str_of(v, "category").unwrap_or_default(),
+        play_count: u64_of(v, "playCount").unwrap_or(0),
+        program_count: u64_of(v, "programCount").unwrap_or(0),
+        sub_count: u64_of(v, "subCount").unwrap_or(0),
+        score: u64_of(v, "score").unwrap_or(0),
+        rcmd_text: str_of(v, "rcmdtext").unwrap_or_default(),
+    })
+}
+
+pub fn parse_radio_toplist_radios(body: &Value) -> RadioToplist {
+    let radios = body
+        .get("toplist")
+        .or_else(|| body.get("data").and_then(|d| d.get("list")))
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(ranked_radio).collect())
+        .unwrap_or_default();
+    RadioToplist { radios, ..RadioToplist::default() }
+}
+
+/// 主播榜(hours/newcomer/popular): data.list, 元素是用户(nickName 驼峰).
+pub fn parse_radio_toplist_djs(body: &Value) -> RadioToplist {
+    let djs = body
+        .get("data")
+        .and_then(|d| d.get("list"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|d| {
+                    Some(RadioRankedDj {
+                        rank: u32_of(d, "rank")?,
+                        last_rank: i32_of(d, "lastRank").unwrap_or(-1),
+                        user_id: u64_of(d, "id")?,
+                        nickname: str_of(d, "nickName").unwrap_or_default(),
+                        avatar_url: str_of(d, "avatarUrl").unwrap_or_default(),
+                        score: u64_of(d, "score").unwrap_or(0),
+                        followed_count: u64_of(d, "userFollowedCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    RadioToplist { djs, ..RadioToplist::default() }
+}
+
+/// 节目榜(dj_program_toplist): 顶层 toplist, 元素 = {rank,lastRank,program}.
+pub fn parse_radio_toplist_programs(body: &Value) -> RadioToplist {
+    let programs = body
+        .get("toplist")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|e| {
+                    Some(RadioRankedProgram {
+                        rank: u32_of(e, "rank")?,
+                        last_rank: i32_of(e, "lastRank").unwrap_or(-1),
+                        program: e.get("program").and_then(parse_program)?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    RadioToplist { programs, ..RadioToplist::default() }
+}
+
+/// 电台订阅者(dj_subscriber): 顶层 hasMore + subscribers(完整 user 对象).
+pub fn parse_radio_subscribers(body: &Value) -> ProviderResult<RadioSubscriberPage> {
+    let subs = body
+        .get("subscribers")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| {
+                    Some(RadioSubscriber {
+                        user_id: u64_of(s, "userId")?,
+                        nickname: str_of(s, "nickname").unwrap_or_default(),
+                        avatar_url: str_of(s, "avatarUrl").unwrap_or_default(),
+                        signature: str_of(s, "signature").unwrap_or_default(),
+                        subscribe_time_ms: u64_of(s, "subscribeTime").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(RadioSubscriberPage {
+        has_more: body.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+        subscribers: subs,
     })
 }
 
@@ -4900,6 +5150,142 @@ mod tests {
         // data 缺失/非对象 → 空列表, 不报错
         assert!(parse_digital_album_sales(&json!({"code": 200})).is_empty());
         assert!(parse_digital_album_sales(&json!({"code": 200, "data": []})).is_empty());
+    }
+
+    // ---- B10 电台补充(只读) ----
+
+    /// dj_catelist: 顶层直接是 categories, 没有 code; 缺字段要兜底
+    #[test]
+    fn radio_categories_parses_real_shape() {
+        let body = json!({"categories": [
+            {"id": 3, "name": "情感", "pic56x56Url": "https://p4.music.126.net/x.jpg",
+             "picWebUrl": "https://p3.music.126.net/y.jpg"},
+            {"id": 2, "name": "音乐播客"}
+        ]});
+        let cats = parse_radio_categories(&body);
+        assert_eq!(cats.len(), 2);
+        assert_eq!(cats[0].id, 3);
+        assert_eq!(cats[0].name, "情感");
+        assert!(cats[0].cover_url.starts_with("https://"));
+        assert!(cats[1].cover_url.is_empty());
+        // 空/缺 categories → 空列表不报错
+        assert!(parse_radio_categories(&json!({})).is_empty());
+    }
+
+    /// dj_category_recommend: data 是数组, radios 元素与 DjRadio 同形状(icon 可 null)
+    #[test]
+    fn radio_picks_parses_real_shape() {
+        let body = json!({"code": 200, "data": [
+            {"categoryId": 3, "categoryName": "情感", "radios": [
+                {"id": 526564706, "name": "伴听FM", "picUrl": "https://x.jpg",
+                 "playCount": 6555956u64, "programCount": 18, "subCount": 0,
+                 "lastProgramName": "想和你把生活过成一首诗", "radioFeeType": 0, "icon": null,
+                 "dj": {"nickname": "小北"}}
+            ]}
+        ]});
+        let picks = parse_radio_picks(&body);
+        assert_eq!(picks.len(), 1);
+        assert_eq!(picks[0].category_id, 3);
+        assert_eq!(picks[0].radios.len(), 1);
+        assert_eq!(picks[0].radios[0].name, "伴听FM");
+        assert_eq!(picks[0].radios[0].dj_name, "小北");
+        // data 缺失 → 空
+        assert!(parse_radio_picks(&json!({"code": 200})).is_empty());
+    }
+
+    /// dj_toplist: 顶层 toplist, 元素带 rank/score/lastRank, rcmdtext 全小写
+    #[test]
+    fn radio_toplist_radios_parses_real_shape() {
+        let body = json!({"code": 200, "toplist": [
+            {"rank": 1, "lastRank": 3, "score": 116563u64, "category": "创作翻唱", "categoryId": 2001,
+             "id": 792868378u64, "name": "一条小团团OvO的翻唱合集", "picUrl": "http://p2.music.126.net/x.jpg",
+             "playCount": 131838544u64, "programCount": 56, "subCount": 456521u64,
+             "creatorName": "一条小团团OvO", "dj": {"nickname": "一条小团团OvO"},
+             "rcmdtext": "可神经可温柔的宝藏女声"}
+        ]});
+        let t = parse_radio_toplist_radios(&body);
+        assert_eq!(t.radios.len(), 1);
+        let r = &t.radios[0];
+        assert_eq!(r.rank, 1);
+        assert_eq!(r.last_rank, 3);
+        assert_eq!(r.radio_id, 792868378);
+        assert_eq!(r.dj_name, "一条小团团OvO");
+        assert_eq!(r.rcmd_text, "可神经可温柔的宝藏女声");
+        assert_eq!(r.play_count, 131838544);
+        // pay 榜形状(在 data.list 下) + 缺 dj 用 creatorName 兜底 + lastRank=-1
+        let pay = json!({"code": 200, "data": {"list": [
+            {"rank": 1, "lastRank": -1, "id": 988499285u64, "name": "猫小九历险记",
+             "picUrl": "https://p3.music.126.net/y.jpg", "creatorName": "奇喵君故事", "score": 11104632u64}
+        ]}});
+        let t = parse_radio_toplist_radios(&pay);
+        assert_eq!(t.radios.len(), 1);
+        assert_eq!(t.radios[0].dj_name, "奇喵君故事");
+        assert_eq!(t.radios[0].last_rank, -1);
+        assert_eq!(t.radios[0].program_count, 0);
+        // 缺 toplist → 空
+        assert!(parse_radio_toplist_radios(&json!({"code": 200})).radios.is_empty());
+    }
+
+    /// 主播榜(hours/newcomer/popular): data.list 是用户, 字段 nickName(驼峰)
+    #[test]
+    fn radio_toplist_djs_parses_real_shape() {
+        let body = json!({"code": 200, "data": {"list": [
+            {"rank": 1, "lastRank": 2, "id": 287921940u64, "nickName": "开心锤锤",
+             "avatarUrl": "http://p1.music.126.net/z.jpg", "score": 3581801u64,
+             "userFollowedCount": 79757u64, "userType": 4, "avatarDetail": null}
+        ]}});
+        let t = parse_radio_toplist_djs(&body);
+        assert_eq!(t.djs.len(), 1);
+        let d = &t.djs[0];
+        assert_eq!(d.rank, 1);
+        assert_eq!(d.user_id, 287921940);
+        assert_eq!(d.nickname, "开心锤锤");
+        assert_eq!(d.followed_count, 79757);
+        // data.list 缺失 → 空
+        assert!(parse_radio_toplist_djs(&json!({"code": 200})).djs.is_empty());
+        assert!(parse_radio_toplist_djs(&json!({"code": 200, "data": {}})).djs.is_empty());
+    }
+
+    /// 节目榜: toplist 元素 = {rank,lastRank,program}; program 与 dj_program 同形状
+    #[test]
+    fn radio_toplist_programs_parses_real_shape() {
+        let body = json!({"code": 200, "toplist": [
+            {"rank": 1, "lastRank": 3, "program": {
+                "id": 3731681674u64, "name": "罗言新歌", "coverUrl": "https://p3.music.126.net/a.jpg",
+                "duration": 92400, "description": "比冬天先来的是罗言的新歌",
+                "dj": {"nickname": "_XXXTENTACION-_"}, "mainSong": {"id": 1, "name": "s"}}}
+        ]});
+        let t = parse_radio_toplist_programs(&body);
+        assert_eq!(t.programs.len(), 1);
+        assert_eq!(t.programs[0].rank, 1);
+        assert_eq!(t.programs[0].program.name, "罗言新歌");
+        assert_eq!(t.programs[0].program.duration_ms, 92400);
+        // 缺 program 的条目跳过
+        let partial = json!({"code": 200, "toplist": [
+            {"rank": 2, "lastRank": 1},
+            {"rank": 3, "lastRank": 2, "program": {"id": 9u64, "name": "p"}}
+        ]});
+        let t = parse_radio_toplist_programs(&partial);
+        assert_eq!(t.programs.len(), 1);
+        assert_eq!(t.programs[0].program.id, 9);
+    }
+
+    /// dj_subscriber: 顶层 hasMore + subscribers(完整 user 对象)
+    #[test]
+    fn radio_subscribers_parses_real_shape() {
+        let body = json!({"code": 200, "hasMore": true, "subscribers": [
+            {"userId": 1594251132u64, "nickname": "饱饭三餐何来忧", "avatarUrl": "http://x.jpg",
+             "signature": "一个喜欢音乐的过客！", "subscribeTime": 1793611157940u64, "userType": 0}
+        ]});
+        let p = parse_radio_subscribers(&body).expect("subs");
+        assert!(p.has_more);
+        assert_eq!(p.subscribers.len(), 1);
+        assert_eq!(p.subscribers[0].user_id, 1594251132);
+        assert_eq!(p.subscribers[0].subscribe_time_ms, 1793611157940);
+        // subscribers 缺失/为空 → 空页不报错
+        let empty = parse_radio_subscribers(&json!({"code": 200, "hasMore": false})).expect("empty");
+        assert!(!empty.has_more);
+        assert!(empty.subscribers.is_empty());
     }
 
     /// comment_info_list: 实测字段(歌曲 186016), 只取 data[0], 服务端 threadId 优先

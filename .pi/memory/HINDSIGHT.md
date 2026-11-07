@@ -188,23 +188,24 @@ API/protocol details and anti-bot technique live in the
   (静默降权
 
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/34/3423780bd8cbfeced684e39e6fa0d8f575018dbfc960c9d3d98f626525cf2bc4.txt; sha256=3423780bd8cbfeced684e39e6fa0d8f575018dbfc960c9d3d98f626525cf2bc4; bytes=18285]
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/fa/fa209849c38bbf24477ff55882b03c192f67ee639646c69ef1f4ff1f38ab062d.txt; sha256=fa209849c38bbf24477ff55882b03c192f67ee639646c69ef1f4ff1f38ab062d; bytes=18118]
 
-## 数字专辑只读(digital_album_* / song_purchased)(2026-11-09)
+## 电台只读族(dj_*)(2026-11-09)
 
-- `digital_album_purchased`(`/api/digitalAlbum/purchased`, weapi, body `{limit,offset,total:true}`):
-  **顶层 `paidAlbums` + `total`,没有 data 包装**; 元素 `{albumId, albumName, artist{id,name}, cover,
-  paidTime(ms), boughtCount}`。匿名/未登录服务端报 auth 错, UI 要按登录态过滤入口。
-- `song_purchased` 的真实端点写死在 vendor 里: `/api/single/mybought/song/list`;
-  形状 `data:{count, hasMore, list[]}`, 分页用 `hasMore`(不是 total)。空账号 list 为空, 元素命名
-  `id/songId`、`name/songName` 两种都见过, 解析要兼容。
-- `digital_album_detail`(`/api/vipmall/albumproduct/detail`): 本体字段在 **`album`**
-  (`albumId/albumName/artistName/artistId/coverUrl`), 价格/上架/标签/简介在 **`product`**
-  (`price/pubTime/tags[]/descr[]{resource,type}`); `descr` 用 `</br>` 当分隔占位, 拼简介必须过滤;
-  `product.saleNum` 恒 0 —— 真实销量不能从这里取。
-- `digital_album_sales` 实际端点 `/api/vipmall/albumproduct/album/query/sales`, vendor 入参键是
-  **`albumIds`**(CLI query 键名 `ids`), 响应 `data` 是 **{专辑id字符串: 销量数字} 的 map**,
-  不是数组, 也没有 bizType/limit/offset(与 Node 文档口径不同, 以实测为准)。
-- 下单接口 `digital_album_ordering` 明确不做(涉及支付)。
+- `dj_catelist`(`/api/djradio/category/get`): 响应**顶层直接给 `categories`**, 没有 `code` 字段(别用它判断成功);
+  实测 19 个分类(id 形如 2001)。
+- `dj_category_recommend`(`/api/djradio/home/category/recommend`): `data[]{categoryId, categoryName, radios[3]}`,
+  每个 radio 有 `rcmdText`、`icon`(可 null)。适合"精选分组"这种宫格。
+- `dj_recommend_type`(`/api/djradio/recommend`): **type=0 返回空 `djRadios`**(文档说按 type 推荐);
+  传真实分类 id(如 2001)才回 10 条, 响应带 `hasMore`。
+- `dj_toplist`(`/api/djradio/toplist`): 顶层 `toplist[]`, 元素 `rank/score/lastRank` + 电台本体;
+  推荐语字段名是**全小写 `rcmdtext`**(全族里少见的非驼峰)。
+- `dj_toplist_hours` / `newcomer` / `popular`: **实测是主播(用户)榜, 不是电台榜**, `data.list[]` 为
+  `{nickName, avatarUrl, score, userFollowedCount}`; UI 要按"主播榜"呈现。
+- `dj_toplist_pay`(`data.list[]` 电台 `{name,picUrl,creatorName,score}`)与 `dj_program_toplist`
+  (`toplist[]{rank,lastRank,program}`, program 与 `dj_program` 同形)才是内容榜。
+- `dj_subscriber`(`/api/djradio/subscriber`): 顶层 `hasMore` + `subscribers[]`(完整 user),
+  **分页游标是时间戳(time), 不是 offset**。
+- 写操作一律没接: `dj_sub`(订阅)、`dj_difm_channel_subscribe/unsubscribe`; `dj_difm_*` 其余语义未验证。
 
 <!-- created=2026-11-09, last=2026-11-09 -->

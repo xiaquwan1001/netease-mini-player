@@ -1319,6 +1319,178 @@ pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadioDto, String> {
     Ok(radio_dto(r))
 }
 
+// ---------------- 电台发现(只读) ----------------
+
+pub struct RadioCategoryDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: String,
+}
+
+pub struct RadioPickDto {
+    pub category_id: u64,
+    pub category_name: String,
+    pub radios: Vec<PodcastRadioDto>,
+}
+
+pub struct RadioExploreHomeDto {
+    pub categories: Vec<RadioCategoryDto>,
+    pub picks: Vec<RadioPickDto>,
+}
+
+pub struct RadioRankedRadioDto {
+    pub rank: u32,
+    /// 上期名次(-1 表示新上榜)
+    pub last_rank: i32,
+    pub radio_id: u64,
+    pub name: String,
+    pub cover_url: String,
+    pub dj_name: String,
+    pub category: String,
+    pub play_count: u64,
+    pub program_count: u64,
+    pub sub_count: u64,
+    pub score: u64,
+    pub rcmd_text: String,
+}
+
+pub struct RadioRankedDjDto {
+    pub rank: u32,
+    pub last_rank: i32,
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: String,
+    pub score: u64,
+    pub followed_count: u64,
+}
+
+pub struct RadioRankedProgramDto {
+    pub rank: u32,
+    pub last_rank: i32,
+    pub program: PodcastProgramDto,
+}
+
+pub struct RadioToplistDto {
+    pub kind: String,
+    pub radios: Vec<RadioRankedRadioDto>,
+    pub djs: Vec<RadioRankedDjDto>,
+    pub programs: Vec<RadioRankedProgramDto>,
+}
+
+pub struct RadioSubscriberDto {
+    pub user_id: u64,
+    pub nickname: String,
+    pub avatar_url: String,
+    pub signature: String,
+    pub subscribe_time_ms: u64,
+}
+
+pub struct RadioSubscriberPageDto {
+    pub has_more: bool,
+    pub subscribers: Vec<RadioSubscriberDto>,
+}
+
+/// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
+pub async fn radio_explore_home() -> Result<RadioExploreHomeDto, String> {
+    let provider = with_provider(Capability::RadioExplore)?;
+    let r = provider.radio_explore_home().await.map_err(|e| e.to_string())?;
+    Ok(RadioExploreHomeDto {
+        categories: r
+            .categories
+            .into_iter()
+            .map(|c| RadioCategoryDto { id: c.id, name: c.name, cover_url: c.cover_url })
+            .collect(),
+        picks: r
+            .picks
+            .into_iter()
+            .map(|g| RadioPickDto {
+                category_id: g.category_id,
+                category_name: g.category_name,
+                radios: g.radios.into_iter().map(radio_dto).collect(),
+            })
+            .collect(),
+    })
+}
+
+/// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
+pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadioDto>, String> {
+    let provider = with_provider(Capability::RadioExplore)?;
+    let list = provider.radio_recommend(cate_id).await.map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(radio_dto).collect())
+}
+
+/// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
+pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, String> {
+    let provider = with_provider(Capability::RadioExplore)?;
+    let r = provider.radio_toplist(&kind).await.map_err(|e| e.to_string())?;
+    Ok(RadioToplistDto {
+        kind,
+        radios: r
+            .radios
+            .into_iter()
+            .map(|x| RadioRankedRadioDto {
+                rank: x.rank,
+                last_rank: x.last_rank,
+                radio_id: x.radio_id,
+                name: x.name,
+                cover_url: x.cover_url,
+                dj_name: x.dj_name,
+                category: x.category,
+                play_count: x.play_count,
+                program_count: x.program_count,
+                sub_count: x.sub_count,
+                score: x.score,
+                rcmd_text: x.rcmd_text,
+            })
+            .collect(),
+        djs: r
+            .djs
+            .into_iter()
+            .map(|x| RadioRankedDjDto {
+                rank: x.rank,
+                last_rank: x.last_rank,
+                user_id: x.user_id,
+                nickname: x.nickname,
+                avatar_url: x.avatar_url,
+                score: x.score,
+                followed_count: x.followed_count,
+            })
+            .collect(),
+        programs: r
+            .programs
+            .into_iter()
+            .map(|x| RadioRankedProgramDto {
+                rank: x.rank,
+                last_rank: x.last_rank,
+                program: program_dto(x.program),
+            })
+            .collect(),
+    })
+}
+
+/// 电台订阅者列表(只读).
+pub async fn radio_subscribers(radio_id: u64, limit: u32) -> Result<RadioSubscriberPageDto, String> {
+    let provider = with_provider(Capability::RadioExplore)?;
+    let r = provider
+        .radio_subscribers(radio_id, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(RadioSubscriberPageDto {
+        has_more: r.has_more,
+        subscribers: r
+            .subscribers
+            .into_iter()
+            .map(|s| RadioSubscriberDto {
+                user_id: s.user_id,
+                nickname: s.nickname,
+                avatar_url: s.avatar_url,
+                signature: s.signature,
+                subscribe_time_ms: s.subscribe_time_ms,
+            })
+            .collect(),
+    })
+}
+
 // ---------------- 搜索页(热词/推荐词) ----------------
 
 pub struct HotSearchTermDto {
