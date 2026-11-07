@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'rust/api.dart' as rust;
+import 'song_actions.dart';
 
 /// 会员标: 歌曲行 / 播放条 / 账号都用同一个, 避免各处自己画一套形态
 class VipBadge extends StatelessWidget {
@@ -87,6 +88,22 @@ class UnplayableBadge extends StatelessWidget {
   }
 }
 
+/// 时长文案: `mm:ss`(满一小时用 `h:mm:ss`).
+///
+/// 纯函数(便于单测): 歌曲行以前显示原始秒数(如 `245s`), 与播放条/歌单详情的
+/// `mm:ss` 不一致; 这里是全 App 歌曲行的唯一口径.
+String formatSongDuration(BigInt durationMs) {
+  final total =
+      durationMs.isNegative ? 0 : (durationMs ~/ BigInt.from(1000)).toInt();
+  String two(int v) => v.toString().padLeft(2, '0');
+  final hours = total ~/ 3600;
+  final minutes = (total % 3600) ~/ 60;
+  final seconds = total % 60;
+  // 超过 1 小时才带小时位(小时不补零, 与歌单详情 h:mm:ss 一致)
+  if (hours > 0) return '$hours:${two(minutes)}:${two(seconds)}';
+  return '${two(minutes)}:${two(seconds)}';
+}
+
 /// 列表里的一行曲目: 红心 / VIP / 付费 / 无版权 的形态都收在这里
 class SongTile extends StatelessWidget {
   const SongTile({
@@ -96,6 +113,7 @@ class SongTile extends StatelessWidget {
     required this.liked,
     required this.onTap,
     this.onMenu,
+    this.onToggleLike,
   });
 
   final rust.SongDto song;
@@ -106,11 +124,20 @@ class SongTile extends StatelessWidget {
   /// 行尾的"..."更多操作(下一首/喜欢/收藏到歌单/分享/评论/歌手/专辑/下载)
   final VoidCallback? onMenu;
 
+  /// 点红心 = 喜欢/取消喜欢(与歌单详情页 _SongRow 同款行为).
+  /// 不传时退到 [AppActions] 的 toggleLike(全局动作宿主);
+  /// 两者都没有时红心退回"只读指示器", 不再假装可点.
+  final VoidCallback? onToggleLike;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final playable = song.playable;
     final grey = TextStyle(color: scheme.outline);
+    // 红心可点: 显式回调 > 全局动作宿主 > 无(退回只读指示器)
+    final host = onToggleLike == null ? AppActions.maybeOf(context) : null;
+    final onLike = onToggleLike ??
+        (host == null ? null : () => host.toggleLike(song));
     return ListTile(
       dense: true,
       selected: active,
@@ -125,8 +152,9 @@ class SongTile extends StatelessWidget {
               style: playable ? null : grey,
             ),
           ),
-          // 红心放在歌名后面(不要做 leading, 否则每行歌名缩进不齐)
-          if (liked)
+          // 没有可点路径时才在这里画只读红心(不要做 leading, 否则歌名缩进不齐);
+          // 可点红心统一放行尾, 与歌单详情页的位置/行为一致
+          if (onLike == null && liked)
             Padding(
               padding: const EdgeInsets.only(left: 4),
               child: Icon(Icons.favorite, size: 13, color: scheme.primary),
@@ -144,14 +172,29 @@ class SongTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            '${song.durationMs ~/ BigInt.from(1000)}s',
+            formatSongDuration(song.durationMs),
             style: playable ? null : grey,
           ),
+          // 命中区 ≥48dp: compact 密度 + iconSize 20 只有 40dp, 换成显式 constraints
+          if (onLike != null)
+            IconButton(
+              tooltip: liked ? '取消喜欢' : '喜欢',
+              iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              icon: Icon(
+                liked ? Icons.favorite : Icons.favorite_border,
+                size: 20,
+                color: liked ? scheme.primary : null,
+              ),
+              onPressed: onLike,
+            ),
           if (onMenu != null)
             IconButton(
               tooltip: '更多操作',
-              visualDensity: VisualDensity.compact,
               iconSize: 20,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: const Icon(Icons.more_vert),
               onPressed: onMenu,
             ),

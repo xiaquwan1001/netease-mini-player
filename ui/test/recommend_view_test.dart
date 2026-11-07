@@ -118,8 +118,12 @@ void main() {
     // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
-    expect(find.text('更多'), findsNWidgets(3), reason: '新歌速递 + 新碟上架 + 推荐播客各一个');
-    await tester.tap(find.text('更多').first);
+    // 文案统一后所有区块出口都叫「全部」: 排行榜 / 每日推荐 / 新歌 / 新碟 / 播客
+    expect(find.text('更多'), findsNothing);
+    expect(find.text('查看全部'), findsNothing);
+    expect(find.text('全部'), findsNWidgets(5));
+    // at(2) = 新歌速递 标题右侧那个(tab 顺序: 排行榜, 每日推荐, 新歌, 新碟, 播客)
+    await tester.tap(find.text('全部').at(2));
     await tester.pumpAndSettle();
     expect(moreTaps, 1);
 

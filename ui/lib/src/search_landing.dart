@@ -41,11 +41,13 @@ class SearchLanding extends StatelessWidget {
         if (history.isNotEmpty) ...[
           _SectionTitle(
             title: '搜索历史',
+            // 命中区 ≥48dp(审查 P1-7.12): 原来 minimumSize 高 32, 是大字号下最难点的控件
             trailing: TextButton(
               onPressed: onClearHistory,
               style: TextButton.styleFrom(
-                minimumSize: const Size(0, 32),
+                minimumSize: const Size(48, 48),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
+                tapTargetSize: MaterialTapTargetSize.padded,
               ),
               child: const Text('清空'),
             ),
@@ -55,8 +57,9 @@ class SearchLanding extends StatelessWidget {
             runSpacing: 4,
             children: [
               for (final keyword in history)
+                // 不要 compact: 它把 chip 压到 32dp, 低于 48dp 最小触控(审查 P1-7.12)
                 ActionChip(
-                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
                   label: Text(
                     keyword,
                     style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
@@ -113,7 +116,14 @@ class SearchLanding extends StatelessWidget {
                   ),
                 ),
                 if (onRetryHot != null)
-                  TextButton(onPressed: onRetryHot, child: const Text('重试')),
+                  TextButton(
+                    onPressed: onRetryHot,
+                    style: TextButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    child: const Text('重试'),
+                  ),
               ],
             ),
           )

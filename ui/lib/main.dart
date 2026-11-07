@@ -108,6 +108,58 @@ class MiniNcmApp extends StatelessWidget {
   }
 }
 
+/// 根页面的返回键优先级, 从高到低:
+/// 歌词展开 → 收起歌词; 非首 tab → 回搜索 tab; 歌单浏览态 → 退出浏览;
+/// 都没有(栈底 + 无二级态) → 交还系统, 由系统退出 App.
+///
+/// 纯函数, 便于单测(返回键的分支比 UI 更容易出错).
+enum HomeBackAction {
+  collapseLyrics,
+  resetTab,
+  closeLibrary,
+  exitApp,
+}
+
+HomeBackAction resolveHomeBackAction({
+  required bool showLyrics,
+  required int tab,
+  required bool libraryOpen,
+}) {
+  if (showLyrics) return HomeBackAction.collapseLyrics;
+  if (tab != 0) return HomeBackAction.resetTab;
+  if (libraryOpen) return HomeBackAction.closeLibrary;
+  return HomeBackAction.exitApp;
+}
+
+/// 把 [HomeBackAction] 接到系统返回键(Android 手势/返回键, 桌面 Esc)上.
+///
+/// 只有"栈底且无二级态"时 canPop=true 让系统退出, 其余一律拦下来先退一层;
+/// 否则用户在歌词页/推荐页按返回会直接退出 App(审查 P0-7.1).
+class HomeBackGuard extends StatelessWidget {
+  const HomeBackGuard({
+    super.key,
+    required this.action,
+    required this.onBack,
+    required this.child,
+  });
+
+  final HomeBackAction action;
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope<Object?>(
+      canPop: action == HomeBackAction.exitApp,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        onBack();
+      },
+      child: child,
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -1642,6 +1694,34 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final backAction = resolveHomeBackAction(
+      showLyrics: _showLyrics,
+      tab: _tab,
+      libraryOpen: _libraryTitle != null,
+    );
+    return HomeBackGuard(
+      action: backAction,
+      onBack: () => _handleBack(backAction),
+      child: _buildPage(context),
+    );
+  }
+
+  /// 返回键: 先退一级(歌词 → 非首 tab → 歌单浏览态), 栈底才交还系统退出
+  void _handleBack(HomeBackAction action) {
+    switch (action) {
+      case HomeBackAction.collapseLyrics:
+        _toggleLyrics();
+      case HomeBackAction.resetTab:
+        _onTabSelected(0);
+      case HomeBackAction.closeLibrary:
+        _closeLibrary();
+      case HomeBackAction.exitApp:
+        // canPop=true 时由系统退出; 走到这里说明确实无可退层级, 兜底交还系统
+        SystemNavigator.pop();
+    }
+  }
+
+  Widget _buildPage(BuildContext context) {
     final player = _player;
     final current = _current;
     return Scaffold(
@@ -2015,22 +2095,12 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           const SizedBox(width: 8),
+          // 不再并排放「取消」: 它与输入框里的清空 suffix 是同一个动作
+          // (_clearSearch), 两个同义按钮只会让人不知道该按哪个(审查 P1-7.4)
           FilledButton(
             onPressed: _busy ? null : _search,
             child: Text(_busy ? '搜索中' : '搜索'),
           ),
-          // 显式取消: 清掉上一轮结果并回到搜索落地页
-          if (_controller.text.isNotEmpty || _bundle != null || _error != null) ...[
-            const SizedBox(width: 2),
-            TextButton(
-              onPressed: _busy ? null : _clearSearch,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-              ),
-              child: const Text('取消'),
-            ),
-          ],
         ],
       ),
     );

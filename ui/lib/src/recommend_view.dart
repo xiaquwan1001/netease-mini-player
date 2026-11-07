@@ -63,7 +63,7 @@ class RecommendView extends StatefulWidget {
   /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
   final void Function(List<rust.SongDto> songs, int index)? onPlayFm;
 
-  /// 打开"新歌 / 新碟 / 歌手"分类页(不传就不显示"更多"入口)
+  /// 打开"新歌 / 新碟 / 歌手"分类页(不传就不显示"全部"入口)
   final VoidCallback? onOpenNewRelease;
 
   @override
@@ -416,7 +416,7 @@ class _NewSongsSection extends StatelessWidget {
   final Future<List<rust.SongDto>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
 
-  /// "更多"入口(新歌/新碟/歌手分类页)
+  /// "全部"入口(新歌/新碟/歌手分类页)
   final VoidCallback? onMore;
 
   @override
@@ -428,7 +428,7 @@ class _NewSongsSection extends StatelessWidget {
           title: '新歌速递',
           trailing: onMore == null
               ? null
-              : TextButton(onPressed: onMore, child: const Text('更多')),
+              : TextButton(onPressed: onMore, child: const Text('全部')),
         ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
@@ -491,7 +491,7 @@ class _NewAlbumsSection extends StatelessWidget {
   final void Function(rust.AlbumItemDto album) onOpen;
   final bool loggedIn;
 
-  /// "更多"入口(新歌/新碟/歌手分类页)
+  /// "全部"入口(新歌/新碟/歌手分类页)
   final VoidCallback? onMore;
 
   @override
@@ -503,7 +503,7 @@ class _NewAlbumsSection extends StatelessWidget {
           title: '新碟上架',
           trailing: onMore == null
               ? null
-              : TextButton(onPressed: onMore, child: const Text('更多')),
+              : TextButton(onPressed: onMore, child: const Text('全部')),
         ),
         _AsyncSection<List<rust.AlbumItemDto>>(
           load: load,
@@ -665,7 +665,8 @@ class _DailySongsSection extends StatelessWidget {
       children: [
         _SectionHeader(
           title: '每日推荐歌曲',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
         ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
@@ -787,7 +788,7 @@ class _PodcastSection extends StatelessWidget {
                 ),
               ),
             ),
-            child: const Text('更多'),
+            child: const Text('全部'),
           ),
         ),
         _AsyncSection<List<rust.PodcastRadioDto>>(
