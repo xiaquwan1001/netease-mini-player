@@ -50,7 +50,10 @@ Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
 | **A** UI 速修 | ✅ | `HomeBackAction` 纯函数 + `HomeBackGuard(PopScope)`(优先级: 歌词>非首 tab>歌单浏览>交还系统); `formatSongDuration`(245s→04:05); 红心改可点 `IconButton`; 6 类高频控件提到 **48dp**; 出口文案统一「全部」; 新增 **22** 用例(含 7 条 `handlePopRoute()` 驱动的三级返回键测试) |
 | **B** 缺失面板 | ✅ | 评论可发: 底部「写评论…」→ `_ComposeSheet`(空文本/发送中禁用、失败保草稿可重试、`viewInsets` 键盘避让、乐观插入按对象身份回滚), 走 `CommentSendHook` 复用 `rust.replyComment`(commentId=0), **零新增 FFI**; 播放队列: `PlayQueue` 补 `removeAt`/`moveTo`(`main.dart` 播放条 → `PlayQueueSheet`, 高亮/跳播/滑删+长按删确认/空态, 删当前项自动播下一首、删空 stop); 新增 **18** 用例(全离线注入) |
 | **D** 技术债收敛 | ✅ | 新增 `format.dart`(时长, 收编 4 份实现/6 调用点)、`error_views.dart`(3 页 7 处)、`toast.dart`(收编 10 处 SnackBar); 弹层 8 处补 `showDragHandle` + podcast 自绘头部改走 `SheetHeader`(新增 trailing 槽); 5 页补底部 SafeArea; 净 **−98 行**; 新增 7 用例。**勘误**: 审计"podcast.dart ~300 行死代码"为误判(整文件非死代码, 真死点是 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行且被 10 处测试占用) |
-| 收口门(编排者重跑) | ✅ | 全量 `flutter test` **289 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→289 只增不减**(改写 3 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部、frb smoke search→searchAll); `dart analyze` **error/warning = 0**; `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
+| **B2** 键盘遮挡 | ✅ | `showCommentsSheet` 根节点补 `viewInsets.bottom` padding + 高度 `max(200, 75%屏高−insets)`(只加 padding 不改高度会留白), 收起自动回弹; 顺带给该弹层加可选 hook 注入以便离线测键盘; 新增 4 用例 |
+| **D6b** 继续迁移 | ✅ | `new_release`(4 页签)/`all_charts`/`digital_album` 迁到 `PagedListView`, 净 **−271 行**, 未改被锁定的组件; `radio_explore`/`style_page` 因「多 section 内嵌三态」需先给组件加能力, 已列建议 |
+| **C** 信息架构重排 | ✅ | 设置瘦身为 3 组 + 2 个二级页(`settings_account_page`/`settings_diagnostics_page`); 账号入口 **3→1**(统一到「我的」, 未登录显示引导); 推荐页首屏 **8→5 区块**(合并日推歌曲+歌单/新歌+新碟, 风格推荐下沉榜单 chips); 专辑详情 **Dialog→全页**、日推/最近听过 **sheet→全页**; 新增 11 条可达性用例, 6 处断言随结构调整改写(0 删除); 视觉待人工过目清单见 `docs/ui-batch-c.md` §7 |
+| 收口门(编排者重跑) | ✅ | 全量 `flutter test` **305 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→289 只增不减**(改写 3 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部、frb smoke search→searchAll); `dart analyze` **error/warning = 0**; `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
 
 ## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)
 
