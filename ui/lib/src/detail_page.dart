@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
@@ -29,36 +31,58 @@ Future<void> showCommentsSheet(
   required BigInt resourceId,
   String title = '评论',
   int totalHint = 0,
+
+  // 测试注入(不传走 rust), 与 CommentThread 的可选 hook 一一对应
+  CommentPageLoader? loadPage,
+  CommentLikeHook? like,
+  CommentRepliesLoader? loadReplies,
+  CommentSendHook? send,
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(sheetContext).size.height * 0.75,
-        child: Column(
-          children: [
-            SheetHeader(
-              title: title,
-              onClose: () => Navigator.pop(sheetContext),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                child: CommentThread(
-                  kind: kind,
-                  resourceId: resourceId,
-                  totalHint: totalHint,
+    builder: (sheetContext) {
+      // 键盘避让: 根节点按 viewInsets.bottom 抬升, 同时把面板高度压掉同样的量,
+      // 保证输入框可见、列表可滚、收起键盘后高度回弹(不留白)。
+      final insets = MediaQuery.of(sheetContext).viewInsets.bottom;
+      final height = math.max(
+        200.0,
+        MediaQuery.of(sheetContext).size.height * 0.75 - insets,
+      );
+      return Padding(
+        key: const ValueKey('b2-sheet-root'),
+        padding: EdgeInsets.only(bottom: insets),
+        child: SafeArea(
+          child: SizedBox(
+            height: height,
+            child: Column(
+              children: [
+                SheetHeader(
+                  title: title,
+                  onClose: () => Navigator.pop(sheetContext),
                 ),
-              ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: CommentThread(
+                      kind: kind,
+                      resourceId: resourceId,
+                      totalHint: totalHint,
+                      loadPage: loadPage,
+                      like: like,
+                      loadReplies: loadReplies,
+                      send: send,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
-
 
 // ---------------- 歌单详情 ----------------
 
@@ -136,6 +160,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   /// 歌单是不是自己的(创建者 uid == 当前账号 uid) —— 决定能否改名/删除/移出曲目
   bool _canEdit = false;
+
   /// "移出曲目"模式: 开着的时候点曲目行 = 从歌单移除
   bool _editingTracks = false;
 
@@ -175,7 +200,8 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       setState(() {
         _detail = d;
         _subscribed = d.subscribed;
-        _canEdit = widget.loggedIn &&
+        _canEdit =
+            widget.loggedIn &&
             !widget.special &&
             d.creatorId > BigInt.zero &&
             d.creatorId == myUid;
@@ -252,7 +278,8 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   /// 当前队列正是这个歌单(或本页刚点播过)时才显示"定位正在播放"
   bool get _canLocate =>
-      (_localTrackId != null || widget.currentPlaylistId == widget.playlistId) &&
+      (_localTrackId != null ||
+          widget.currentPlaylistId == widget.playlistId) &&
       _playingId != null;
 
   // ---------- 动作 ----------
@@ -458,8 +485,10 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         base = viewport.getOffsetToReveal(listRo, 0).offset;
       }
     }
-    final target =
-        (base + index * _kRowHeight).clamp(0.0, _scroll.position.maxScrollExtent);
+    final target = (base + index * _kRowHeight).clamp(
+      0.0,
+      _scroll.position.maxScrollExtent,
+    );
     _scroll.animateTo(
       target,
       duration: const Duration(milliseconds: 300),
@@ -523,7 +552,10 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.secondaryContainer,
                     borderRadius: BorderRadius.circular(8),
@@ -584,8 +616,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
                         d?.name ?? widget.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (d != null && d.creatorName.isNotEmpty)
                         Padding(
@@ -611,14 +644,20 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
                           child: Wrap(
                             spacing: 6,
                             runSpacing: 4,
-                            children: [for (final t in d.tags) _buildTagChip(t)],
+                            children: [
+                              for (final t in d.tags) _buildTagChip(t),
+                            ],
                           ),
                         ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                CoverArt(url: d?.coverUrl ?? widget.coverUrl, size: 120, radius: 8),
+                CoverArt(
+                  url: d?.coverUrl ?? widget.coverUrl,
+                  size: 120,
+                  radius: 8,
+                ),
               ],
             ),
             if (_detailError != null)
@@ -729,8 +768,8 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       final message = _filter.trim().isNotEmpty
           ? '没有匹配 "${_filter.trim()}" 的曲目'
           : (_hiddenCount > 0
-              ? '这里没有可播放的曲目($_hiddenCount 首无版权已隐藏)'
-              : (widget.special ? '还没有喜欢的歌曲' : '这个歌单是空的'));
+                ? '这里没有可播放的曲目($_hiddenCount 首无版权已隐藏)'
+                : (widget.special ? '还没有喜欢的歌曲' : '这个歌单是空的'));
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
@@ -743,28 +782,25 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     return SliverFixedExtentList(
       key: _listKey,
       itemExtent: _kRowHeight,
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          final song = display[i];
-          return _SongRow(
-            song: song,
-            index: i,
-            playing: _playingId == song.id,
-            liked: _liked.contains(song.id),
-            onToggleLike: () => _toggleLike(song),
-            onTap: () {
-              // 移出模式下点行 = 移出歌单(不动播放队列)
-              if (_editingTracks) {
-                _removeTrack(song);
-                return;
-              }
-              widget.onPlaySongs(display, i);
-              setState(() => _localTrackId = song.id);
-            },
-          );
-        },
-        childCount: display.length,
-      ),
+      delegate: SliverChildBuilderDelegate((context, i) {
+        final song = display[i];
+        return _SongRow(
+          song: song,
+          index: i,
+          playing: _playingId == song.id,
+          liked: _liked.contains(song.id),
+          onToggleLike: () => _toggleLike(song),
+          onTap: () {
+            // 移出模式下点行 = 移出歌单(不动播放队列)
+            if (_editingTracks) {
+              _removeTrack(song);
+              return;
+            }
+            widget.onPlaySongs(display, i);
+            setState(() => _localTrackId = song.id);
+          },
+        );
+      }, childCount: display.length),
     );
   }
 }
@@ -839,7 +875,10 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       if (!mounted) return;
       // song 为空的节目没有音频本体, 不进列表(点了也没法播)
       setState(() {
-        _programs = [for (final p in programs) if (p.song != null) p];
+        _programs = [
+          for (final p in programs)
+            if (p.song != null) p,
+        ];
       });
     } catch (e) {
       if (!mounted) return;
@@ -936,8 +975,9 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
                         radio.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       if (radio.djName.isNotEmpty)
                         Padding(
@@ -1055,17 +1095,14 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     }
     return SliverFixedExtentList(
       itemExtent: _kRowHeight,
-      delegate: SliverChildBuilderDelegate(
-        (context, i) {
-          final p = display[i];
-          return _ProgramRow(
-            program: p,
-            onTap: () => _playProgram(i),
-            onInfo: () => _openProgramDetail(i),
-          );
-        },
-        childCount: display.length,
-      ),
+      delegate: SliverChildBuilderDelegate((context, i) {
+        final p = display[i];
+        return _ProgramRow(
+          program: p,
+          onTap: () => _playProgram(i),
+          onInfo: () => _openProgramDetail(i),
+        );
+      }, childCount: display.length),
     );
   }
 }
@@ -1111,8 +1148,9 @@ class _ExpandableTextState extends State<_ExpandableText> {
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Text(
                   expanded ? '收起' : '展开',
-                  style: theme.textTheme.labelMedium
-                      ?.copyWith(color: theme.colorScheme.primary),
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -1147,8 +1185,10 @@ class _SongRow extends StatelessWidget {
     final theme = Theme.of(context).textTheme;
     final grey = TextStyle(color: scheme.outline);
     final titleStyle = playing
-        ? theme.bodyMedium
-            ?.copyWith(color: scheme.primary, fontWeight: FontWeight.w600)
+        ? theme.bodyMedium?.copyWith(
+            color: scheme.primary,
+            fontWeight: FontWeight.w600,
+          )
         : (song.playable ? theme.bodyMedium : grey);
     return InkWell(
       onTap: onTap,
@@ -1183,7 +1223,8 @@ class _SongRow extends StatelessWidget {
                           style: titleStyle,
                         ),
                       ),
-                      if (song.playable && song.vip) const VipBadge(small: true),
+                      if (song.playable && song.vip)
+                        const VipBadge(small: true),
                       if (song.playable && !song.vip && song.paid)
                         const PaidBadge(),
                       if (!song.playable) const UnplayableBadge(),
@@ -1194,8 +1235,9 @@ class _SongRow extends StatelessWidget {
                     '${song.artist} · ${song.album}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.labelSmall
-                        ?.copyWith(color: song.playable ? null : scheme.outline),
+                    style: theme.labelSmall?.copyWith(
+                      color: song.playable ? null : scheme.outline,
+                    ),
                   ),
                 ],
               ),
@@ -1226,11 +1268,7 @@ class _SongRow extends StatelessWidget {
 
 /// 定高 56 的节目行: 节目名 + DJ · 时长
 class _ProgramRow extends StatelessWidget {
-  const _ProgramRow({
-    required this.program,
-    required this.onTap,
-    this.onInfo,
-  });
+  const _ProgramRow({required this.program, required this.onTap, this.onInfo});
 
   final rust.PodcastProgramDto program;
   final VoidCallback onTap;
@@ -1268,7 +1306,9 @@ class _ProgramRow extends StatelessWidget {
                     ].join(' · '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -1279,8 +1319,7 @@ class _ProgramRow extends StatelessWidget {
                 tooltip: '节目详情',
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints(minWidth: 36, minHeight: 36),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 onPressed: onInfo,
               ),
             if (song != null) SongOverflowButton(song: song, size: 20),
@@ -1389,4 +1428,3 @@ class _SkeletonList extends StatelessWidget {
     );
   }
 }
-
