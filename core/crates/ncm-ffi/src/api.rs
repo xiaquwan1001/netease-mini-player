@@ -971,6 +971,29 @@ pub struct CommentPageDto {
     pub has_more: bool,
 }
 
+/// 评论统计(评论数/分享数/点赞数). 实测形状见 ncm_domain::CommentStats 的文档注释:
+/// 没有 subscribedCount(收藏数) 与 hotCount(热门评论数) —— 别在 UI 里显示这两个.
+pub struct CommentStatsDto {
+    /// 评论线程 id(R_SO_4_/A_PL_0_/R_AL_3_/A_DJ_1_/R_VI_62_…)
+    pub thread_id: String,
+    /// 资源 id
+    pub resource_id: u64,
+    /// 评论总数
+    pub comment_count: u64,
+    /// 评论数的官方展示文案("100w+"/"999+"/空串)
+    pub comment_count_desc: String,
+    /// 分享数
+    pub share_count: u64,
+    /// 该 thread 被点赞数
+    pub liked_count: u64,
+    /// 当前账号是否点过赞(匿名恒 false)
+    pub liked: bool,
+    /// 作者参与评论数
+    pub musician_said_count: u64,
+    /// 评论区是否已升级到新版(服务端灰度, 实测恒 false)
+    pub comment_upgraded: bool,
+}
+
 /// 评论页 → DTO(歌曲/歌单/动态共用)
 fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
     CommentPageDto {
@@ -1010,6 +1033,27 @@ pub async fn comments(
         .await
         .map_err(|e| e.to_string())?;
     Ok(comment_page_dto(page))
+}
+
+/// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
+/// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
+pub async fn comment_stats(thread_id: String) -> Result<CommentStatsDto, String> {
+    let provider = with_provider(Capability::Comment)?;
+    let s = provider
+        .comment_stats(&thread_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(CommentStatsDto {
+        thread_id: s.thread_id,
+        resource_id: s.resource_id,
+        comment_count: s.comment_count,
+        comment_count_desc: s.comment_count_desc,
+        share_count: s.share_count,
+        liked_count: s.liked_count,
+        liked: s.liked,
+        musician_said_count: s.musician_said_count,
+        comment_upgraded: s.comment_upgraded,
+    })
 }
 
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回

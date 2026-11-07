@@ -188,168 +188,24 @@ API/protocol details and anti-bot technique live in the
   (静默降权
 
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/cf/cfd10c9eba2d4736c437536d0ed30e6ad61c713909f42de9fc8d677ef83952fd.txt; sha256=cfd10c9eba2d4736c437536d0ed30e6ad61c713909f42de9fc8d677ef83952fd; bytes=33641]
-## 搜索分板块 / 图片 / 歌曲菜单(2026-11-06)
-- **cloudsearch type**: 1 单曲 / 10 专辑 / 100 歌手 / 1000 歌单 / 1009 播客(电台); **2000(声音/节目)返回空 result**, 本接口不支持节目搜索。各板块响应分别读 `result.songs/albums/artists/playlists/djRadios`。
-- **fee 语义**: 0 免费 / 1 VIP / 4 付费专辑 / 8 **低音质(128k)免费**。`is_vip` 只能认 1 —— 把 8 也算进来会让大部分免费歌被标 VIP(实测 30 条搜索结果 21 条 fee=8)。
-- **我喜欢的音乐排序**: `likelist` 的 ids 顺序不可靠; 用 `/api/v6/playlist/detail` 的 `playlist.trackIds[].at`(收藏时间 ms) 倒序, 再 `song/detail` 批量补全。
-- **网易云图片 CDN**: 对 `Dart/3.x (dart:io)` 默认 UA 直接回 **403**(同 URL 浏览器 UA 200), Flutter 的 Image.network/NetworkImage 全要显式 `headers: {'User-Agent': 浏览器UA, 'Referer': 'https://music.163.com/'}`。
-  缩略图用 `?param=NxN`(服务端裁剪, 1.8MB→几 KB); **`width: double.infinity` 不能参与 round()**, 会抛 `Unsupported operation: Infinity or NaN toInt`。
-- **模拟器图片 403 的另一半**: Dart UA 修好后, a36 上同一 URL 仍偶发 403(Chrome 也提示 No internet), 而 Linux 桌面同代码正常 ⇒ 是模拟器 NAT/中间设备问题, 不要误判成应用 bug; 验证图片优先用 Linux Xvfb。
-- **下载**: 不引第三方包。Android 用 DownloadManager(`setDestinationInExternalPublicDir(DIRECTORY_DOWNLOADS, "MiniNCM/...")`, 免存储权限) + UA/Referer 头; Linux 用 curl 到 `~/Downloads`。
-- **评论面板复用**: detail_page 的 `_CommentsSection` 通过 `showCommentsSheet(context, kind:, resourceId:)` 暴露, 供歌曲菜单/动态使用。
-- **AppActions**: 动作回调挂在 `MaterialApp.builder`(Navigator 之上)才能被 pushed route 取到; 宿主用全局 `ValueNotifier<SongActionHost?>` 随登录态刷新。
-<!-- created=2026-11-06, last=2026-11-06 -->
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/8a/8adfa2e10cafe68504f0d82c8ffedf085389c1c42a7bdc84b3d9594a2ad55963.txt; sha256=8adfa2e10cafe68504f0d82c8ffedf085389c1c42a7bdc84b3d9594a2ad55963; bytes=31805]
 
-## 听歌排行 / 曲风推荐 接入(2026-11-06)
-- 新能力: `Capability::ListeningRank` + `Capability::StyleRecommend`; domain 新增
-  `PlayRankEntry` / `StyleTag`; FFI `play_ranking(period)` / `style_preference()` /
-  `style_songs(tagId,limit)` / `style_playlists(tagId,limit)`.
-- 实测响应形状(匿名也能验的用 `ncm raw` 打过):
-  - 听歌排行 `/api/v1/play/record`(weapi, 需登录): `{code,allData:[{playCount,score,song}],weekData:[...]}`,
-    type=0/1 选区间。未登录是 code≠200("无权限访问")。
-  - 曲风偏好 `/api/tag/my/preference/get`: `{code:200,data:{tagPreferenceVos:[],tags:[]}}`,
-    **匿名恒为空** ⇒ 后端必须退化到 `/api/tag/list/get`(style_list) 的二级标签, 否则推荐页没有入口。
-  - 曲风歌曲 `/api/style-tag/home/song`: `{data:{songs:[完整 song],page}}`;
-    曲风歌单 `/api/style-tag/home/playlist`: `{data:{playlist:[{id,name,cover,songCount,playCount}]}}`
-    —— 注意歌单字段是 **cover/songCount**, 不是用户歌单的 coverImgUrl/trackCount。
-- "关注动态"按艺人分类的排序是纯 UI 侧聚合(一页 30 条): 分数 = 动态条数*6 + 点赞 + 评论*2 + 转发*2,
-  同分按首次出现(≈最近时间)排; 分类行只放前 8 个, 末尾"进入全部"面板再合并 `subscribedArtists`
-  (关注但本页没发动态的艺人也能选)。
+## 评论统计(comment_info_list)(2026-11-09)
 
-## 最近播放 / 签到 / 评论删除 / 歌曲百科 接入(2026-11-06)
+- `comment_info_list`(`/api/resource/commentInfo/list`, weapi)入参是 **`type`(资源类型数字) + `ids`(逗号分隔)**,
+  **不是 threadId**。传 threadId("R_SO_4_186016")只会得到 `code=200` + `data:[]` 的"假成功";
+  正确写法是 `type=0&ids=186016`。type 映射与 `RESOURCE_TYPE_MAP` 一致(0=歌曲 1=MV 2=歌单 3=专辑 4=播客 5=视频 6=动态 7=节目)。
+- 响应 `data` 是**数组**(每个请求 id 一项), 取第一项; 字段
+  `{commentCount, commentCountDesc, commentUpgraded, comments, latestLikedUsers, liked, likedCount,
+  musicianSaidCount, resourceId, resourceType, shareCount, threadId}`。
+  实测歌曲 186016: 评论 1969911(`commentCountDesc="100w+"`) / 分享 109723 / 点赞 352;
+  歌单 24381616: 评论 0 / 分享 6; 专辑 32311: 分享 10519。
+- **文档有但实测不回的两个字段: `subscribedCount`(收藏数) 与 `hotCount`(热评数)** ——
+  收藏数只能从 `PlaylistDetail` 拿, 热评要单独打 `comment_hot`。别按文档补字段。
+- `resourceType` 是服务端**归一后的子类型**(歌曲=4, 专辑=3, 歌单=0, 播客=1, 视频=62), 与请求 type 数值不同,
+  不能拿来当入参; `threadId` 才是权威(与请求一致)。
+- 动态(A_EV_2_`eventId_userId`)该接口不支持; `data` 缺失/空数组/空对象一律退化成全 0(用入参 threadId 兜底),
+  评论数缺失不该让详情页失败。
+- CLI: `ncm comment-info <song|playlist|album|podcast|mv|video> <id>`(内部用 `split_thread_id` 反解 type+bare id)。
 
-- **`daily_signin` 只有 `type=1` 能签**: `type=0`(安卓通道) 回 `code=200 msg=功能暂不支持`,
-  `type=1`(web) 回 `{code:200,point:N}` 并真到账; 重复签到抛 `Invalid parameter: 重复签到`。
-  所以 provider 先看 `signin_progress.data.today.todaySignedIn`, 再决定发不发写请求。
-- 签到进度三套计数在 `data.stats[]`, **id 6001 累计 / 4001 每周 / 5001 连续(28 天循环)**, 取 `currentProgress`;
-  `data.records[]` 是最近 N 天 `{day,signed}`(新的在前)。
-- `record_recent_album|playlist|dj` 形状统一 `{code, data:{list:[{data:{...}}]}}`(外层还带 lastSong/uiPlaylistType),
-  **最近播放歌单不带 trackCount** → UI 别显示 "0 首"。
-- `song_wiki_summary` 是装修块富文本 `data.blocks[]`, 只要 `code==SONG_PLAY_ABOUT_SONG_BASIC` 那个块;
-  label 取 `creative.uiElement.mainTitle.title`, 值取 `resources[].uiElement.mainTitle.title` +
-  `subTitles[].title` 或 `textLinks[].text`。桌面/安卓身份 eapi 都能过, 仍保留 weapi 兜底。
-- **模拟器点按坐标别忘 1.2 倍换算**: 截图显示 900x2000, 实际 1080x2400。把"歌曲百科"按显示坐标点下去
-  实际落在"不感兴趣"上, 于是看到 `code=432`, 一度误判成 eapi 在安卓身份下挂了;
-  交叉验证方法: 把同一份 identity.json 和 cross-compiled probe(`--target x86_64-linux-android`)
-  `adb push` 进模拟器跑, 结果 200 —— 说明不是身份/网络问题, 是点错了。
-- 非日推/非 FM 的歌点"不感兴趣"服务端回 `code=432 Unknown error`(接口只认日推/FM 上下文),
-  暂时原样弹错; 要友好就得在 UI 侧只对日推/FM 队列显示该入口。
-
-## 消息中心接入(2026-11-06)
-
-- 未读计数 `/api/pl/count`(weapi) 的键是 **`msg` / `notice` / `comment` / `forward`**, 不是私有消息那套命名;
-  `pushMsg` 字段只是给推送用的文案。
-- 私信会话 `/api/msg/private/users`: `{code, msgs:[{fromUser:{userId,nickname,avatarUrl}, lastMsg, lastMsgTime, newMsgCount}], newMsgCount}`;
-  `lastMsg` 是 **JSON 字符串**, 富消息(会员/活动卡片)没有 `msg`, 只有 `generalMsg{title,inboxBriefContent,noticeMsg}` 和 `pushMsg`。
-- 私信历史 `/api/msg/private/history?uid=&limit=&time=`: `msgs[]` **倒序**, 单条 `{id, fromUser, toUser, msg(JSON 字符串), time}`;
-  按 `fromUser.userId == my_uid` 判断是否我方气泡。
-- 通知 `/api/msg/notices?limit=&lasttime=`: `notices[].notice` 又是 JSON 字符串 →
-  `generalNotice.actionDesc`(动作) + `user.nickname/avatarUrl`; 解析不出时退 `pushMsg`/"系统通知"。
-- 评论消息 `/api/v1/user/comments/<uid>?uid=&limit=&before=-1`: `comments[].{commentId,content,beRepliedContent,time,user,resourceJson}`;
-  `resourceJson` 也是 JSON 字符串, `name` 是被评论的资源名。
-- vendor 没有私信发送接口 → UI 明确标"只读"; 已读上报也没做。
-
-## 消息增强: @我 / 最近联系人 / 私信分页(2026-11-07)
-
-- `msg_forwards`(`/api/forwards/get`, weapi) 顶层是 **`forwards` / `lasttime` / `more` / `newCount`**;
-  vendor 实现只发 **offset/limit**(没有 lasttime 游标), trait 的 last_time_ms 参数保留形状、当前恒取最新一页。
-- **空账号拿不到 @我 条目的非空形状**(实测本账号 `forwards:[]`), ForwardItem 全字段 Option/serde(default),
-  解析兼容 {id|msgId, time|forwardTime, type, content|comment, json(字符串), user|fromUser, eventId|event.id};
-  解析不出任何 id 的条目直接跳过。时间戳按"10 位=秒"归一毫秒 —— **这是假设, 拿到真实非空数据要复核**。
-- `msg_recentcontact`(`/api/msg/recentcontact/get`, weapi): vendor 实现发**空 body**(limit 不上送, 只能客户端截断);
-  返回只有 **`data.follow`** 一个数组({userId,nickname,avatarUrl,mutual,onlined,vipType,gender,userType,remarkName,py,avatarDetail}),
-  是"可发起私信的联系人/关注列表"而**不是"最近聊天"**; 顺序是服务端顺序, 前端别重排; remarkName 常是空串(归 None)。
-- 私信分页: 会话用 `msg_private` 的 limit/offset(**offset 要用服务端已消费行数**, 去重后的列表长度不行);
-  聊天历史翻旧页用最早一条的 `time` 当 `before`, 按 id 去重防边界重复; 返回条数 < limit 视为到底。
-
-## 新歌/新碟分地区 + 歌手榜(2026-11-06)
-
-- `top_song`(`/api/v1/discovery/new/songs`) 的 `type` 实为 **areaId**, 只有
-  **0 全部 / 7 华语 / 8 日语 / 16 韩语 / 96 欧美** 有数据; 1..6、17、18 都是空数组(别按"0-4 五种语言"的旧文档写)。
-- `top_album`(`/api/discovery/new/albums/area`): `area` 是 **字符串** ALL/ZH/EA/JP/KR;
-  **部分地区 weekData 空、monthData 有货**(ZH 就是), 必须两桶合并去重, 否则华语新碟显示为空。
-- `top_artists`(`/api/artist/top`): 顺序是服务端热度序, **不是 fansCount 倒序**; 前端别重排。
-- `top_song` 的 `data[]` 是完整 song 对象但字段是 `artists`/`album`/`duration`
-  (cloudsearch 是 `ar`/`al`/`dt`), 现有 `parse_song_with` 两种都认, 直接复用即可。
-
-<!-- created=2026-11-06, last=2026-11-06 -->
-
-## 评论热门 / IP 归属(2026-11-07)
-
-- 普通评论页 `/api/v1/resource/comments/<threadId>` 同时回 `hotComments` 和 `comments`:
-  热评**没有 IP 归属地**(`ipLocation.location` 为空串), 且同一条评论可能在两处重复;
-  去重时先保留热评版本, 再用后一份把 `ipLocation` 补上。
-- 热门评论页 `/api/v1/resource/hotcomments/<threadId>?type=&id=&limit=&offset=`:
-  分页字段是 **`hasMore`**(普通页是 `more`), `total` 是热门评论总数(孤勇者 9405, 全部 31 万)。
-- 客户端"全部"列表翻页的 offset 只能数**非热评项**(热评每次都随首页返回), 用 items.length
-  会重复拉热评并跳过若干条最新。
-- 动态 `A_EV_2_<eventId>_<uid>` 不能直接喂热门接口(只认 eventId), UI 对动态隐藏热门页签。
-- CLI 新增 `ncm hotcomments <kind> <id> [limit]`, 便于脱离 UI 验证。
-
-<!-- created=2026-11-07, last=2026-11-07 -->
-
-## 剩余待办的批次与派发规划(2026-11-07)
-
-- 规划文档: `docs/remaining-batches.md`(S/M/L/X 分级、Wave 流水线、派工模板、编排者收口清单)。
-- 关键硬约束: `netease.rs`/`api.rs`/`frb_generated.*` 是单写者文件, **codegen 全局串行**;
-  同仓同工作树安全并行度 = 2(Rust 桥 + 纯 Dart); 构建串行, 设备实测单台内串行、两台模拟器(a34/a36)可并行。
-- 新批开工前先在本文件 §3 查并行矩阵, 收口一律由编排者重跑 `tools/ci.sh` 与模拟器走查。
-
-<!-- created=2026-11-07, last=2026-11-07 -->
-## 黑胶会员只读(vip_info_v2/vip_growthpoint/vip_sign_info/vip_tasks)(2026-11-07)
-
-- 会员判定只能看 `associator.expireTime > data.now`; `vipCode`/`vipLevel`/`redVipLevel` 在过期后仍是旧值。
-  `redVipAnnualCount = -1` 表示未知/非年费, 别当 0 显示。
-- `vip_growthpoint` 的今日成长值在 `userLevel.extJson`(JSON **字符串**)的 `todayScore`; 成长值本体是 `userLevel.growthPoint`,
-  等级名优先 `levelCard.levelName`(空则 `userLevel.levelName`), 形如 "黑胶·叁"。
-- `vip_sign_info` 返回 `data` 为**最近 7 天数组**(不是月份/累计), 每项 `{timeStr,today,score,recordId,time,...}`;
-  **`score > 0` 才算已签** —— 未签那天的 `recordId`/`time` 也是 0, 拿它们判断会把整周都判成已签。
-- `vip_tasks` 的 `taskList[].taskItems[]` 要平铺; `name` 实测为空串, 可读标题在 `action`, 奖励文案在 `description`;
-  `targets: null` = 无可量化目标(不显示进度条), 非 null 形状未实测(兼容数字/数组); `status == 2` 视为已完成。
-- `vip_info`(旧版)比 `vip_info_v2` 多 `redplus`/`familyVip`, 但缺 `now` 字段, 会员判定要本机时间 → 统一用 v2。
-- 四个子接口互相独立: provider 用 `futures::future::join4` 并行, 单个失败只让对应字段为 None(全部失败才报错);
-  未登录直接回 `logged_in=false` 空态, **不要**抛 auth 错误(否则 UI 走错误页而不是"登录后可查看")。
-
-<!-- created=2026-11-07, last=2026-11-07 -->
-
-## 搜索增强: multimatch / mobile 联想 / 热搜榜(2026-11-07)
-
-- `search_multimatch`(`/api/search/suggest/multimatch`, weapi, body `{type:1,s:<kw>}`) 只回"精确实体改写":
-  每类最多 1 条、无分页、无高亮; `orders` 列出命中类型(artist/playlist/voice/...)。
-  **空命中是 200 + `result:{orders:[]}` 的"假成功"**, 必须按 `orders.is_empty()` 判空; `type` 参数实测无效。
-  多类型卡片仍应走 `search_suggest`(web)。
-- multimatch 的 `voice`(电台)结构与 `dj_detail` 完全不同: id/name 在 `baseInfo`, 主播 `baseInfo.dj.nickname`,
-  节目数 `baseInfo.radio.programCount`, 听众数 `baseInfo.listenerCount`。
-- `search_suggest` 加 `type=mobile` 只回 `result.allMatch[].keyword`(6 条纯关键词串, 去重保序);
-  不加 type 时是 web 形态(`result.order/songs/artists/albums/playlists` 实体卡片)。两者同一 vendor 方法。
-- `search_hot_detail`(`/api/hotsearchlist/get`, weapi, body `{}`) → `data:[{searchWord,score,iconType,iconUrl,content,source,url}]`,
-  固定 20 条, **服务端不给 rank**, 榜位 = 数组下标 + 1; 老接口 `search_hot` 只有 10 条瘦字段, 可作兜底。
-- CLI raw 的参数是位置参数 `key=value`(不是 `--param`); 遇到 raw 分支没接线的接口, 先补一行 arm 再 dump。
-
-<!-- created=2026-11-07, last=2026-11-07 -->
-
-## 等级 / 勋章(user_level / user_medal)(2026-11-08)
-
-- `user_level`(`/api/user/level`, weapi, body `{}`)回 `data:{level,nowPlayCount,nextPlayCount,
-  nowLoginCount,nextLoginCount,progress,info,userId}`; 实测 9 级 2301/12000 首、350/350 天,
-  **`progress` = nowPlayCount/nextPlayCount**(0.19175); 登录天数已顶满, 所以"谁封顶"未实测。
-  `info` 是权益文案、`$` 分隔; **没有**等级名字段(`levelName` 在 `vip_growthpoint` 里, 别混用)。
-- `user_medal`(`/api/medal/user/page`, eapi)的 **uid 必填**: vendor 传空串时服务端回 `code=499`,
-  偶尔直接是 http 层 reset。uid 取 `user_level` 的 `data.userId`(服务端权威)比读本地 session 稳。
-- 响应形状: `data.categoryMedalBlockVos[].medalVOS[]` 是唯一数据源; `data.obtainMedals[]` 是
-  **同一批对象里已获得的那部分**, 两个都解析会重复计数。实测 5 分类 200 枚、`medalNum=157`
-  = `status=="OBTAIN"` 枚数 = `obtainTime != null` 枚数(三者一致, 以 status 为准)。
-- `status` 四种: `OBTAIN` / `NOT_OBTAIN_PROCESS`(进行中) / `NOT_OBTAIN_NO_PROCESS`(未开始) /
-  `WILL_OBTAIN`(即将获得); `obtainTime` 是**毫秒**, 未获得为 null(偶见 0, 当 null 处理)。
-- 易踩字段: `medalCode` 是**字符串**(乐迷徽章 `20170503_1081839`); `progress` 本身是**字符串文案**
-  ("当前进度1897/5000", 仅 28/200); `rankText` = "前0.033%获得该徽章"(122/200);
-  `levelTitle` = "Lv.4 乐迷" 只有乐迷徽章有(132/200); `userObtainProportion`/`detailPage`/`sideBarGuideText`
-  实测全 null, 别建模。徽章图 url **http 与 https 混用**, 必须原样透传。
-- **`/api/medal/user/page` 限流极严**: 不间断连打 5 次只通 2 次(Connection reset by peer);
-  每次隔 ≥10s 则 5/5 全通; "先打一次 user_level 再打勋章"照样被 reset → 触发在服务端, 与客户端并发无关。
-  provider 里做了有界重试(退避 1.5s/3s, 业务错误不重试), 实测 5/10 → 9/10。
-- CLI: `ncm level` / `ncm medals` 可直接 headless 复现; raw 分支参数是位置参数 `key=value`
-  (`ncm raw user_medal uid=1822714196`), 漏 uid 会得到 499 —— 别误判成"接口挂了"。
-
-<!-- created=2026-11-08, last=2026-11-08 -->
+<!-- created=2026-11-09, last=2026-11-09 -->

@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-08(第十批: 等级/勋章 B8 已接入, 覆盖 98/382)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-09(第十一批: 评论统计 B2 已接入, 覆盖 99/382)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -8,9 +8,9 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **98(25%)** |
-| 未接入 | **284** |
-| FFI 导出给 Dart 的函数 | 113 |
+| `ncm-service`(provider)实际调用的 | **99(25%)** |
+| 未接入 | **283** |
+| FFI 导出给 Dart 的函数 | 114 |
 | 其中 UI 还没有入口的 | 5(`lyric_lines` `lyric_lines_i18n` `ping` `podcast_program` `search`) |
 
 复算:
@@ -62,6 +62,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 评论删除 | `comment_delete` | 评论区: 只有自己发的评论显示"删除", 二次确认后本地移除 |
 | 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 | 消息中心 | `pl_count` `msg_private` `msg_private_history` `msg_notices` `msg_comments` | "我的"/消息中心: 未读角标 + 三页签(私信会话→只读聊天记录 / 通知 / 评论消息); 实测私信 18 未读、通知含点赞/系统通知、评论含被评资源名 |
+| 评论统计 | `comment_info_list` | 评论区标题下统计条「评论 N · 分享 N · 点赞 N」(空/失败不显示); 歌曲/歌单/专辑/播客/视频共用, **动态评论接口不认**, 且**没有收藏数/热评数**(官方文档有但不回) |
 | 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
 | 消息增强 | `msg_forwards` `msg_recentcontact` | 消息中心第四页签"@我"(空账号, 防御式解析) + 私信页顶部"最近联系人"横滑条(data.follow, 服务端顺序) + 私信会话/聊天记录分页(触底预取/按钮, 返回 < limit 到底, 聊天用最早一条 time_ms 当游标) |
 
@@ -70,7 +71,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | # | 能力 | 接口 | 落地位置 | 备注 |
 |---|---|---|---|---|
 | 1 | 新碟/新歌剩余入口 | `album_newest` `simi_user` | 推荐页分类页 | `top_song`/`top_album`/`top_artists` 已接入; `album_newest`(最新专辑)与已接入的新碟基本重复, `simi_user`(相似用户)价值低 |
-| 2 | 评论补充 | `comment_info_list` | 评论区 | 热门评论已接入(`comment_hot`), IP 归属地从评论负载的 `ipLocation.location` 直接取; 剩评论统计数据(资源评论/分享/收藏数)未展示 |
+| 2 | ~~评论补充~~ ✅已做 | `comment_info_list` | 评论区 | 统计条已接入(B2); 同族只剩 `comment_mv`/`comment_video`(MV/视频评论区, 等视频能力落地) |
 | 3 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
 | 4 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
 | 5 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付 |

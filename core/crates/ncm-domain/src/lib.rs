@@ -569,6 +569,55 @@ pub struct CommentPage {
     pub has_more: bool,
 }
 
+/// 评论统计(评论页/详情页标题上的「N 评论 · N 分享 · N 点赞」).
+///
+/// 来源: `/api/resource/commentInfo/list`(vendor `comment_info_list`, weapi)。**实测形状**
+/// (2026-11-09, 匿名/登录态一致):
+/// 入参是 `type`(资源类型 **数字**, 对应 `RESOURCE_TYPE_MAP`: 0=歌曲 1=MV 2=歌单 3=专辑
+/// 4=播客 5=视频 6=动态 7=节目)+ `ids`(逗号分隔的若干 id), **不是 threadId**; 传 threadId 只会
+/// 得到 200 + 空数组。响应 `data` 是**数组**, 每个请求 id 一项:
+/// `{commentCount, commentCountDesc, commentUpgraded, comments, latestLikedUsers, liked,
+///   likedCount, musicianSaidCount, resourceId, resourceType, shareCount, threadId}`。
+///
+/// 与工单草案的差异(按实测裁剪, 不按文档猜):
+/// - **没有 `subscribedCount`**(收藏数不在这个接口; 歌单的收藏数仍走 `PlaylistDetail`);
+/// - **没有 `hotCount`**(热门评论数不存在, 精彩评论靠 `comment_hot` 单独拉);
+/// - `likedCount` 实测是**这条评论线程本身被点赞数**(歌曲 186016 = 352, 歌单/播客/视频为 0),
+///   与"分享数 `shareCount`"并列存在, 保留;
+/// - `resourceType` 是**服务端归一后的子类型**(歌曲=4, 专辑=3, 歌单=0, 播客=1, 视频=62),
+///   与请求的 `type` 数值不同, 不要拿来当入参; `threadId` 才是权威 threadId(与请求保持一致)。
+/// - `commentCountDesc` 是官方展示文案("100w+"/"999+"/空串), 数字过大时用它更接近官方观感。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommentStats {
+    /// 评论线程 id(R_SO_4_/A_PL_0_/R_AL_3_/A_DJ_1_/R_VI_62_…), 与请求一致
+    #[serde(default)]
+    pub thread_id: String,
+    /// 资源 id(原样回显请求的 id)
+    #[serde(default)]
+    pub resource_id: u64,
+    /// 评论总数
+    #[serde(default)]
+    pub comment_count: u64,
+    /// 评论数的官方展示文案, 如 "100w+"/"999+"(少评论时为空串)
+    #[serde(default)]
+    pub comment_count_desc: String,
+    /// 分享数
+    #[serde(default)]
+    pub share_count: u64,
+    /// 该 thread 被点赞数
+    #[serde(default)]
+    pub liked_count: u64,
+    /// 当前账号是否点过赞(匿名恒 false)
+    #[serde(default)]
+    pub liked: bool,
+    /// 作者(= 歌手/创作者)参与评论数
+    #[serde(default)]
+    pub musician_said_count: u64,
+    /// 评论区是否已升级到新版(服务端灰度开关, 实测恒 false)
+    #[serde(default)]
+    pub comment_upgraded: bool,
+}
+
 /// 听歌排行的一项. 总量榜与周榜共用同一结构, 顺序即名次(接口已排好序).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayRankEntry {

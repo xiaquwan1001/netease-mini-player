@@ -6,7 +6,7 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
+    AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, SearchExact,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
@@ -485,6 +485,15 @@ pub trait Provider: Send + Sync {
         _offset: u32,
     ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
         Box::pin(async { Err(ProviderError::unsupported("no comments")) })
+    }
+
+    /// 评论统计(评论总数/分享数/点赞数). 能力复用 Capability::Comment.
+    /// threadId 形如 R_SO_4_186016 / A_PL_0_24381616, 来自 CommentPage.thread_id 或 thread_id_for.
+    fn comment_stats<'a>(
+        &'a self,
+        _thread_id: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<CommentStats>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment stats")) })
     }
 
     /// 精彩评论(单独接口, 可单独翻页). threadId 来自 CommentPage.thread_id

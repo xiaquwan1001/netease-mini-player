@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 584680148;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -725481305;
 
 // Section: executor
 
@@ -431,6 +431,42 @@ fn wire__crate__api__comment_replies_impl(
                             api_limit,
                         )
                         .await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__comment_stats_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "comment_stats",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_thread_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::comment_stats(api_thread_id).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -4325,6 +4361,32 @@ impl SseDecode for crate::api::CommentPageDto {
     }
 }
 
+impl SseDecode for crate::api::CommentStatsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_threadId = <String>::sse_decode(deserializer);
+        let mut var_resourceId = <u64>::sse_decode(deserializer);
+        let mut var_commentCount = <u64>::sse_decode(deserializer);
+        let mut var_commentCountDesc = <String>::sse_decode(deserializer);
+        let mut var_shareCount = <u64>::sse_decode(deserializer);
+        let mut var_likedCount = <u64>::sse_decode(deserializer);
+        let mut var_liked = <bool>::sse_decode(deserializer);
+        let mut var_musicianSaidCount = <u64>::sse_decode(deserializer);
+        let mut var_commentUpgraded = <bool>::sse_decode(deserializer);
+        return crate::api::CommentStatsDto {
+            thread_id: var_threadId,
+            resource_id: var_resourceId,
+            comment_count: var_commentCount,
+            comment_count_desc: var_commentCountDesc,
+            share_count: var_shareCount,
+            liked_count: var_likedCount,
+            liked: var_liked,
+            musician_said_count: var_musicianSaidCount,
+            comment_upgraded: var_commentUpgraded,
+        };
+    }
+}
+
 impl SseDecode for crate::api::DefaultSearchDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5835,108 +5897,109 @@ fn pde_ffi_dispatcher_primary_impl(
         9 => wire__crate__api__clear_search_history_impl(port, ptr, rust_vec_len, data_len),
         10 => wire__crate__api__comment_messages_impl(port, ptr, rust_vec_len, data_len),
         11 => wire__crate__api__comment_replies_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__comments_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__create_playlist_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__daily_recommend_playlists_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__daily_recommend_songs_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__default_search_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__delete_comment_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__delete_playlist_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__dislike_recommend_song_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__event_comments_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__feed_events_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__follow_counts_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__forward_event_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__forward_messages_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__heart_mode_songs_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__high_quality_playlists_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__history_recommend_dates_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__history_recommend_songs_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__hot_artists_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__hot_comments_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__hot_search_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__hot_search_detail_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__init_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__like_comment_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__like_event_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__liked_ids_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__liked_songs_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__local_recent_songs_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__login_with_cookie_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__logout_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__lyric_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__lyric_lines_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__lyric_lines_i18n_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__message_counts_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__message_notices_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__my_playlists_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__my_uid_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__new_albums_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__new_albums_by_area_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__new_songs_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__new_songs_by_area_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__personal_fm_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__play_ranking_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__play_track_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__player_pause_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__player_resume_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__player_seek_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__player_state_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__player_stop_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__playlist_categories_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__playlist_detail_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__playlist_songs_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__playlists_by_category_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__podcast_hot_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__podcast_program_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__podcast_programs_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__podcast_radio_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__private_history_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__private_sessions_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__profile_detail_impl(port, ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__recent_albums_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__recent_contacts_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__recent_playlists_impl(port, ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__recent_podcasts_impl(port, ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__recent_songs_impl(port, ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__record_search_impl(port, ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__remember_play_impl(port, ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__remove_from_playlist_impl(port, ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__rename_playlist_impl(port, ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__reply_comment_impl(port, ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__search_impl(port, ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__search_all_impl(port, ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__search_exact_impl(port, ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__search_history_impl(port, ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__search_suggest_impl(port, ptr, rust_vec_len, data_len),
-        88 => wire__crate__api__search_suggest_keywords_impl(port, ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__set_album_subscribed_impl(port, ptr, rust_vec_len, data_len),
-        90 => wire__crate__api__set_follow_impl(port, ptr, rust_vec_len, data_len),
-        91 => wire__crate__api__set_liked_impl(port, ptr, rust_vec_len, data_len),
-        92 => wire__crate__api__set_playlist_subscribed_impl(port, ptr, rust_vec_len, data_len),
-        93 => wire__crate__api__share_resource_impl(port, ptr, rust_vec_len, data_len),
-        94 => wire__crate__api__sign_in_impl(port, ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__signin_status_impl(port, ptr, rust_vec_len, data_len),
-        96 => wire__crate__api__similar_artists_impl(port, ptr, rust_vec_len, data_len),
-        97 => wire__crate__api__similar_playlists_impl(port, ptr, rust_vec_len, data_len),
-        98 => wire__crate__api__similar_songs_impl(port, ptr, rust_vec_len, data_len),
-        99 => wire__crate__api__song_url_impl(port, ptr, rust_vec_len, data_len),
-        100 => wire__crate__api__song_wiki_impl(port, ptr, rust_vec_len, data_len),
-        101 => wire__crate__api__style_playlists_impl(port, ptr, rust_vec_len, data_len),
-        102 => wire__crate__api__style_preference_impl(port, ptr, rust_vec_len, data_len),
-        103 => wire__crate__api__style_songs_impl(port, ptr, rust_vec_len, data_len),
-        104 => wire__crate__api__subscribed_albums_impl(port, ptr, rust_vec_len, data_len),
-        105 => wire__crate__api__subscribed_artists_impl(port, ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__subscribed_podcasts_impl(port, ptr, rust_vec_len, data_len),
-        107 => wire__crate__api__trash_fm_song_impl(port, ptr, rust_vec_len, data_len),
-        108 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
-        109 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
-        110 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
-        111 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
-        112 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
-        113 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__comment_stats_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__comments_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__create_playlist_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__daily_recommend_playlists_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__daily_recommend_songs_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__default_search_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__delete_comment_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__delete_playlist_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__dislike_recommend_song_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__event_comments_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__feed_events_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__follow_counts_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__forward_event_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__forward_messages_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__heart_mode_songs_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__high_quality_playlists_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__history_recommend_dates_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__history_recommend_songs_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__hot_artists_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__hot_comments_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__hot_search_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__hot_search_detail_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__init_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__like_comment_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__like_event_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__liked_ids_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__liked_songs_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__local_recent_songs_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__login_with_cookie_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__logout_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__lyric_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__lyric_lines_i18n_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__message_counts_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__message_notices_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__my_playlists_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__my_uid_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__new_albums_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__new_albums_by_area_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__new_songs_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__new_songs_by_area_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__personal_fm_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__play_ranking_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__play_track_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__player_pause_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__player_resume_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__player_seek_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__player_set_volume_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__player_state_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__player_stop_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__playlist_categories_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__playlist_detail_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__playlist_songs_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__playlists_by_category_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__podcast_hot_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__podcast_program_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__podcast_programs_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__podcast_radio_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__private_history_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__private_sessions_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__profile_detail_impl(port, ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__recent_albums_impl(port, ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__recent_contacts_impl(port, ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__recent_playlists_impl(port, ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__recent_podcasts_impl(port, ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__recent_songs_impl(port, ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__record_search_impl(port, ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__remember_play_impl(port, ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__remove_from_playlist_impl(port, ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__rename_playlist_impl(port, ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__reply_comment_impl(port, ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__search_impl(port, ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__search_all_impl(port, ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__search_exact_impl(port, ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__search_history_impl(port, ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__search_suggest_impl(port, ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__search_suggest_keywords_impl(port, ptr, rust_vec_len, data_len),
+        90 => wire__crate__api__set_album_subscribed_impl(port, ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__set_follow_impl(port, ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__set_liked_impl(port, ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__set_playlist_subscribed_impl(port, ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__share_resource_impl(port, ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__sign_in_impl(port, ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__signin_status_impl(port, ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__similar_artists_impl(port, ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__similar_playlists_impl(port, ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__similar_songs_impl(port, ptr, rust_vec_len, data_len),
+        100 => wire__crate__api__song_url_impl(port, ptr, rust_vec_len, data_len),
+        101 => wire__crate__api__song_wiki_impl(port, ptr, rust_vec_len, data_len),
+        102 => wire__crate__api__style_playlists_impl(port, ptr, rust_vec_len, data_len),
+        103 => wire__crate__api__style_preference_impl(port, ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__style_songs_impl(port, ptr, rust_vec_len, data_len),
+        105 => wire__crate__api__subscribed_albums_impl(port, ptr, rust_vec_len, data_len),
+        106 => wire__crate__api__subscribed_artists_impl(port, ptr, rust_vec_len, data_len),
+        107 => wire__crate__api__subscribed_podcasts_impl(port, ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__trash_fm_song_impl(port, ptr, rust_vec_len, data_len),
+        109 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
+        110 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
+        113 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
+        114 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -6137,6 +6200,31 @@ impl flutter_rust_bridge::IntoDart for crate::api::CommentPageDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CommentPageDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::CommentPageDto> for crate::api::CommentPageDto {
     fn into_into_dart(self) -> crate::api::CommentPageDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::CommentStatsDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.thread_id.into_into_dart().into_dart(),
+            self.resource_id.into_into_dart().into_dart(),
+            self.comment_count.into_into_dart().into_dart(),
+            self.comment_count_desc.into_into_dart().into_dart(),
+            self.share_count.into_into_dart().into_dart(),
+            self.liked_count.into_into_dart().into_dart(),
+            self.liked.into_into_dart().into_dart(),
+            self.musician_said_count.into_into_dart().into_dart(),
+            self.comment_upgraded.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::CommentStatsDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::CommentStatsDto>
+    for crate::api::CommentStatsDto
+{
+    fn into_into_dart(self) -> crate::api::CommentStatsDto {
         self
     }
 }
@@ -7212,6 +7300,21 @@ impl SseEncode for crate::api::CommentPageDto {
         <Vec<crate::api::CommentDto>>::sse_encode(self.comments, serializer);
         <u64>::sse_encode(self.total, serializer);
         <bool>::sse_encode(self.has_more, serializer);
+    }
+}
+
+impl SseEncode for crate::api::CommentStatsDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.thread_id, serializer);
+        <u64>::sse_encode(self.resource_id, serializer);
+        <u64>::sse_encode(self.comment_count, serializer);
+        <String>::sse_encode(self.comment_count_desc, serializer);
+        <u64>::sse_encode(self.share_count, serializer);
+        <u64>::sse_encode(self.liked_count, serializer);
+        <bool>::sse_encode(self.liked, serializer);
+        <u64>::sse_encode(self.musician_said_count, serializer);
+        <bool>::sse_encode(self.comment_upgraded, serializer);
     }
 }
 

@@ -8,6 +8,7 @@
 //!   ncm detail <id[,id...]>        打印曲目详情 + privilege(版权/可播性), 排障用
 //!   ncm playlist-detail <id>       歌单详情(标题/创建者/曲目数/评论数)
 //!   ncm comments <song|playlist|album|podcast> <id> [limit]   评论列表(展示前 3 条)
+//!   ncm comment-info <song|playlist|album|podcast|mv|video> <id>  评论统计(评论数/分享数/点赞数)
 //!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
 //!
@@ -349,6 +350,33 @@ async fn run() -> Result<(), BoxErr> {
                     if c.liked { ", 已赞" } else { "" }
                 );
             }
+            Ok(())
+        }
+        "comment-info" => {
+            let kind = args
+                .positional
+                .first()
+                .ok_or("usage: ncm comment-info <song|playlist|album|podcast|mv|video> <id>")?
+                .clone();
+            let id: u64 = args
+                .positional
+                .get(1)
+                .ok_or("usage: ncm comment-info <song|playlist|album|podcast|mv|video> <id>")?
+                .parse()?;
+            let thread_id = ncm_service::thread_id_for(&kind, id)
+                .ok_or_else(|| format!("unknown kind {kind}"))?;
+            let p = provider(&core, Capability::Comment)?;
+            announce(&core);
+            let s = p.comment_stats(&thread_id).await?;
+            println!(
+                "{} 评论 {} ({}) · 分享 {} · 点赞 {} · 作者评论 {}",
+                s.thread_id,
+                s.comment_count,
+                if s.comment_count_desc.is_empty() { "-" } else { &s.comment_count_desc },
+                s.share_count,
+                s.liked_count,
+                s.musician_said_count
+            );
             Ok(())
         }
         "hotcomments" => {

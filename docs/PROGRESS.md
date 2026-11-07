@@ -1,9 +1,31 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-08(接口覆盖推进到 98/382: 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 99/382: 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 评论统计 B2(comment_info_list)(2026-11-09)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 统计条 | ✅ | 评论区标题下方一行「💬 评论 197万 · 分享 11万 · ❤ 点赞 352」; 数据来自 `comment_info_list`, 加载失败/无数据时**整条不显示**(不打扰用户) |
+| 资源类型 | ✅ | 歌曲/歌单/专辑/播客/视频共用 `split_thread_id` 反解 type; **动态(A_EV_2_…)不支持**, 直接 unsupported |
+| 数字格式 | ✅ | 组件内 `formatCompactCount`: <1000 原样 / 千 / 万(一位小数去 `.0`); 300dp + 1.25 字号不溢出, 每项 Flexible + FittedBox |
+| CLI | ✅ | `ncm comment-info <song|playlist|album|podcast|mv|video> <id>`; 实测歌曲 186016 = 评论 1969911(100w+) / 分享 109723 / 点赞 352 |
+| 回归 | ✅ | Rust `ncm-service` 75→78 单测全绿(+3: 实测形状 / data 缺失空数组兼容 / 四种资源同形); Flutter 174→181 用例全绿(+7 统计条); analyze 0 error; codegen 一次 + `cargo build -p ncm_ffi`; a36 走查 |
+
+**协议/实现事实**:
+- `comment_info_list`(`/api/resource/commentInfo/list`, weapi)入参是 **`type`(资源类型数字)+ `ids`(逗号分隔)**,
+  **不是 threadId** —— 传 threadId 只会拿到 200 + 空数组(最容易踩的一条)。
+- 响应 `data` 是**数组**(一个 id 一项): `{commentCount, commentCountDesc, commentUpgraded, comments,
+  latestLikedUsers, liked, likedCount, musicianSaidCount, resourceId, resourceType, shareCount, threadId}`。
+- **没有 `subscribedCount`(收藏数), 也没有 `hotCount`(热评数)** —— 官方文档里有字段但实测不回,
+  UI 不要为这两个补占位; 歌单收藏数仍取 `PlaylistDetail`。
+- `likedCount` 是**这条评论线程整体被点赞数**(歌曲 186016=352); `resourceType` 是服务端归一后的子类型
+  (歌曲=4/专辑=3/歌单=0/播客=1/视频=62), **与请求的 type 数值不同**, 不要拿它当入参, `threadId` 才是权威。
+- `commentCountDesc` 是官方展示文案("100w+"/"999+", 少评论时为空串); 我们仍用自己算的紧凑数字
+  (197万), 文案字段留给需要"官方观感"的地方。
 
 ## v2 · 功能包: 等级/勋章 B8(user_level / user_medal)(2026-11-08)
 

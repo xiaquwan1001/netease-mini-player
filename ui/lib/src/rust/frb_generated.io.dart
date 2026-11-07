@@ -76,6 +76,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CommentPageDto dco_decode_comment_page_dto(dynamic raw);
 
   @protected
+  CommentStatsDto dco_decode_comment_stats_dto(dynamic raw);
+
+  @protected
   DefaultSearchDto dco_decode_default_search_dto(dynamic raw);
 
   @protected
@@ -436,6 +439,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentPageDto sse_decode_comment_page_dto(SseDeserializer deserializer);
+
+  @protected
+  CommentStatsDto sse_decode_comment_stats_dto(SseDeserializer deserializer);
 
   @protected
   DefaultSearchDto sse_decode_default_search_dto(SseDeserializer deserializer);
@@ -886,6 +892,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_comment_page_dto(
     CommentPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_comment_stats_dto(
+    CommentStatsDto self,
     SseSerializer serializer,
   );
 

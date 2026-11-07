@@ -200,6 +200,11 @@ Future<CommentPageDto> comments({
   offset: offset,
 );
 
+/// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
+/// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
+Future<CommentStatsDto> commentStats({required String threadId}) =>
+    RustLib.instance.api.crateApiCommentStats(threadId: threadId);
+
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
 Future<CommentPageDto> hotComments({
   required String threadId,
@@ -981,6 +986,76 @@ class CommentPageDto {
           comments == other.comments &&
           total == other.total &&
           hasMore == other.hasMore;
+}
+
+/// 评论统计(评论数/分享数/点赞数). 实测形状见 ncm_domain::CommentStats 的文档注释:
+/// 没有 subscribedCount(收藏数) 与 hotCount(热门评论数) —— 别在 UI 里显示这两个.
+class CommentStatsDto {
+  /// 评论线程 id(R_SO_4_/A_PL_0_/R_AL_3_/A_DJ_1_/R_VI_62_…)
+  final String threadId;
+
+  /// 资源 id
+  final BigInt resourceId;
+
+  /// 评论总数
+  final BigInt commentCount;
+
+  /// 评论数的官方展示文案("100w+"/"999+"/空串)
+  final String commentCountDesc;
+
+  /// 分享数
+  final BigInt shareCount;
+
+  /// 该 thread 被点赞数
+  final BigInt likedCount;
+
+  /// 当前账号是否点过赞(匿名恒 false)
+  final bool liked;
+
+  /// 作者参与评论数
+  final BigInt musicianSaidCount;
+
+  /// 评论区是否已升级到新版(服务端灰度, 实测恒 false)
+  final bool commentUpgraded;
+
+  const CommentStatsDto({
+    required this.threadId,
+    required this.resourceId,
+    required this.commentCount,
+    required this.commentCountDesc,
+    required this.shareCount,
+    required this.likedCount,
+    required this.liked,
+    required this.musicianSaidCount,
+    required this.commentUpgraded,
+  });
+
+  @override
+  int get hashCode =>
+      threadId.hashCode ^
+      resourceId.hashCode ^
+      commentCount.hashCode ^
+      commentCountDesc.hashCode ^
+      shareCount.hashCode ^
+      likedCount.hashCode ^
+      liked.hashCode ^
+      musicianSaidCount.hashCode ^
+      commentUpgraded.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CommentStatsDto &&
+          runtimeType == other.runtimeType &&
+          threadId == other.threadId &&
+          resourceId == other.resourceId &&
+          commentCount == other.commentCount &&
+          commentCountDesc == other.commentCountDesc &&
+          shareCount == other.shareCount &&
+          likedCount == other.likedCount &&
+          liked == other.liked &&
+          musicianSaidCount == other.musicianSaidCount &&
+          commentUpgraded == other.commentUpgraded;
 }
 
 class DefaultSearchDto {

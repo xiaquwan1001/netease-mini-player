@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'comment_stats_bar.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -76,6 +77,8 @@ class _CommentThreadState extends State<CommentThread> {
 
   /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
+  /// 评论/分享/点赞统计(comment_info_list; 动态评论接口不支持, 保持 null)
+  rust.CommentStatsDto? _stats;
 
   /// false = 全部(精彩评论 + 最新, 接口默认页), true = 只看精彩评论
   bool _hot = false;
@@ -179,12 +182,26 @@ class _CommentThreadState extends State<CommentThread> {
         if (page.threadId.isNotEmpty) _threadId = page.threadId;
         _loading = false;
       });
+      _loadStats();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = friendlyError(e);
         _loading = false;
       });
+    }
+  }
+
+  /// 统计条: 只有资源类评论有(动态评论 threadId 带 uid, 接口不认), 失败静默.
+  Future<void> _loadStats() async {
+    final tid = _threadId;
+    if (tid.isEmpty || widget.threadId != null) return;
+    try {
+      final s = await rust.commentStats(threadId: tid);
+      if (!mounted || _threadId != tid) return;
+      setState(() => _stats = s);
+    } catch (_) {
+      // 统计是锦上添花, 失败不打扰用户
     }
   }
 
@@ -387,7 +404,8 @@ class _CommentThreadState extends State<CommentThread> {
                 style: theme.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w600),
               ),
-              if (count > BigInt.zero) ...[
+              // 有统计条时不再重复显示裸评论数(统计条里已是紧凑格式)
+              if (count > BigInt.zero && _stats == null) ...[
                 const SizedBox(width: 6),
                 Text(
                   '$count',
@@ -397,6 +415,16 @@ class _CommentThreadState extends State<CommentThread> {
               ],
             ],
           ),
+          if (_stats != null) ...[
+            const SizedBox(height: 4),
+            CommentStatsBar(
+              view: CommentStatsView(
+                commentCount: _stats!.commentCount.toInt(),
+                shareCount: _stats!.shareCount.toInt(),
+                likedCount: _stats!.likedCount.toInt(),
+              ),
+            ),
+          ],
           if (_supportsHot) ...[
             const SizedBox(height: 6),
             Wrap(

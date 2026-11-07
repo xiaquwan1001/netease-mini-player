@@ -3,6 +3,7 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
+    CommentStats,
     DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
     HotSearchDetailItem, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
@@ -2447,6 +2448,31 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 评论统计(实测: vendor comment_info_list = /api/resource/commentInfo/list, weapi).
+    /// 入参是 type(资源类型数字) + ids(逗号分隔), **不是 threadId** —— 传 threadId 只会拿到空数组;
+    /// 这里用 split_thread_id 把 threadId 反解成 (type, id). 动态(A_EV_2_)的 id 段是
+    /// `eventId_userId`, 该接口不认, 直接 unsupported.
+    fn comment_stats<'a>(
+        &'a self,
+        thread_id: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<CommentStats>> {
+        Box::pin(async move {
+            let (ty, rid) = split_thread_id(thread_id).ok_or_else(|| {
+                ProviderError::unsupported(format!("comment_stats: 无法识别的 threadId {thread_id}"))
+            })?;
+            if ty == "6" {
+                return Err(ProviderError::unsupported("comment_stats: 动态暂不支持评论统计"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", ty)
+                .param("ids", &rid);
+            let resp = client.comment_info_list(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_comment_stats(&resp.body, thread_id)
+        })
+    }
+
     /// 分享资源到动态(需登录). kind 直接透传接口 type(song/playlist/album/podcast)
     fn share_resource<'a>(
         &'a self,
@@ -3219,6 +3245,42 @@ pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
             .or_else(|| body.get("hasMore"))
             .and_then(Value::as_bool)
             .unwrap_or(false),
+    })
+}
+
+/// 评论统计(comment_info_list = /api/resource/commentInfo/list)的响应形如
+///   {code:200, data:[{commentCount, commentCountDesc, commentUpgraded, comments, latestLikedUsers,
+///                     liked, likedCount, musicianSaidCount, resourceId, resourceType, shareCount, threadId}]}
+/// 实测要点:
+/// - `data` 是**数组**(一个请求 id 对应一项), 这里只发一个 id, 取第一项;
+/// - **没有 subscribedCount / hotCount**, 别按文档补齐字段;
+/// - `data` 缺失、空数组、空对象都当"全 0"返回(用请求的 threadId 兜底), 不报错也不 panic ——
+///   评论数缺失不该让整个详情页失败;
+/// - 服务端回显的 threadId 优先(与请求一致), 缺失时用入参兜底.
+pub fn parse_comment_stats(body: &Value, thread_id: &str) -> ProviderResult<CommentStats> {
+    let first = body
+        .get("data")
+        .and_then(|d| match d {
+            Value::Array(arr) => arr.first(),
+            Value::Object(_) => Some(d),
+            _ => None,
+        })
+        .filter(|v| v.is_object());
+    let Some(v) = first else {
+        return Ok(CommentStats { thread_id: thread_id.to_string(), ..Default::default() });
+    };
+    Ok(CommentStats {
+        thread_id: str_of(v, "threadId")
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| thread_id.to_string()),
+        resource_id: u64_of(v, "resourceId").unwrap_or(0),
+        comment_count: u64_of(v, "commentCount").unwrap_or(0),
+        comment_count_desc: str_of(v, "commentCountDesc").unwrap_or_default(),
+        share_count: u64_of(v, "shareCount").unwrap_or(0),
+        liked_count: u64_of(v, "likedCount").unwrap_or(0),
+        liked: v.get("liked").and_then(Value::as_bool).unwrap_or(false),
+        musician_said_count: u64_of(v, "musicianSaidCount").unwrap_or(0),
+        comment_upgraded: v.get("commentUpgraded").and_then(Value::as_bool).unwrap_or(false),
     })
 }
 
@@ -4515,6 +4577,80 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// comment_info_list: 实测字段(歌曲 186016), 只取 data[0], 服务端 threadId 优先
+    #[test]
+    fn comment_stats_parses_real_shape() {
+        // 2026-11-09 实测: ncm raw comment_info_list type=0 ids=186016
+        let body = json!({
+            "code": 200,
+            "data": [{
+                "commentCount": 1_969_911u64,
+                "commentCountDesc": "100w+",
+                "commentUpgraded": false,
+                "comments": null,
+                "latestLikedUsers": null,
+                "liked": false,
+                "likedCount": 352,
+                "musicianSaidCount": 0,
+                "resourceId": 186016,
+                "resourceType": 4,
+                "shareCount": 109_723u64,
+                "threadId": "R_SO_4_186016"
+            }]
+        });
+        let s = parse_comment_stats(&body, "R_SO_4_186016").expect("stats");
+        assert_eq!(s.thread_id, "R_SO_4_186016");
+        assert_eq!(s.resource_id, 186016);
+        assert_eq!(s.comment_count, 1_969_911);
+        assert_eq!(s.comment_count_desc, "100w+");
+        assert_eq!(s.share_count, 109_723);
+        assert_eq!(s.liked_count, 352);
+        assert!(!s.liked);
+        assert_eq!(s.musician_said_count, 0);
+        assert!(!s.comment_upgraded);
+    }
+
+    /// data 缺失 / 空数组 / 空对象 / null 都退化成全 0(threadId 用入参), 不能 panic 也不能报错
+    #[test]
+    fn comment_stats_tolerates_missing_data() {
+        for body in [
+            json!({"code": 200}),
+            json!({"code": 200, "data": []}),
+            json!({"code": 200, "data": {}}),
+            json!({"code": 200, "data": null}),
+        ] {
+            let s = parse_comment_stats(&body, "A_PL_0_24381616").expect("stats");
+            assert_eq!(s.thread_id, "A_PL_0_24381616", "body={body}");
+            assert_eq!(s.comment_count, 0);
+            assert_eq!(s.share_count, 0);
+            assert_eq!(s.liked_count, 0);
+            assert!(s.comment_count_desc.is_empty());
+        }
+    }
+
+    /// 歌单/专辑/播客/视频共用同一形状, 只是数值不同(实测均为空 desc + 0 评论)
+    #[test]
+    fn comment_stats_shape_is_same_across_resource_types() {
+        let cases = [
+            ("A_PL_0_24381616", 24381616u64, 6u64),
+            ("R_AL_3_32311", 32311, 10_519),
+            ("A_DJ_1_32507038", 32507038, 0),
+            ("R_VI_62_12147019", 12147019, 0),
+        ];
+        for (tid, rid, share) in cases {
+            let body = json!({"code": 200, "data": [{
+                "commentCount": 0, "commentCountDesc": "", "commentUpgraded": false,
+                "comments": null, "latestLikedUsers": null, "liked": false, "likedCount": 0,
+                "musicianSaidCount": 0, "resourceId": rid, "resourceType": 0,
+                "shareCount": share, "threadId": tid
+            }]});
+            let s = parse_comment_stats(&body, tid).expect("stats");
+            assert_eq!(s.thread_id, tid);
+            assert_eq!(s.resource_id, rid);
+            assert_eq!(s.share_count, share);
+        }
+    }
 
     /// vip_info_v2: is_vip 只看 expireTime > now(vipCode/vipLevel 过期后仍是旧值)
     #[test]

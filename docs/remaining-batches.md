@@ -7,8 +7,9 @@
 >
 > **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
 > 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
-> **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**。
-> 下一波建议: [Rust] B2 评论统计(最小) 或 B10 电台补充(M 级) ｜ [Dart] 评论统计 UI mock 或 §4 纯 Dart 打磨。
+> **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**;
+> **Wave 5 完成(B2 评论统计: 评论区统计条, 覆盖 99/382)**。
+> 下一波建议: [Rust] B10 电台补充 或 B12 数字专辑只读(M 级) ｜ [Dart] §4 纯 Dart 打磨。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -31,7 +32,7 @@
 | 批次 | 目标 | 新增接口 | Rust 改动 | UI 文件 | 设备 |
 |---|---|---|---|---|---|
 | ~~**B1 消息增强**~~ ✅已做 | @我 / 最近联系人 / 私信分页 | `msg_forwards` `msg_recentcontact` | parse 2 个 + FFI 2 个 | `messages_page.dart` | 已验(a36) |
-| **B2 评论统计** | 评论/分享/收藏计数 | `comment_info_list` | parse 1 个 + FFI 1 个 | `comment_thread.dart` 或详情页标题 | 要 |
+| ~~**B2 评论统计**~~ ✅已做 | 评论/分享/点赞计数(无收藏数/热评数) | `comment_info_list` | `CommentStats` DTO + parse + FFI 1 个 | `comment_stats_bar.dart`(新) + `comment_thread.dart` | 已验 |
 | ~~**B3 会员只读**~~ ✅已做 | 黑胶会员卡/成长值/本周签到/任务(不碰支付) | `vip_info_v2` `vip_growthpoint` `vip_sign_info` `vip_tasks` | `vip_overview` 1 个聚合方法(内部 join4) + FFI 1 个 | `vip_page.dart` + `settings_view.dart` 入口 | 已验(a36 登录/未登录) |
 | ~~**B4 搜索增强**~~ ✅已做 | 精确实体条/关键词联想/热搜榜 | `search_multimatch` `search_suggest`(web/mobile) `search_hot_detail` | parse 3 + FFI 3 | `search_exact_bar.dart`(新) + `search_suggest.dart` + 落地页热榜 | 已验(a36) |
 
