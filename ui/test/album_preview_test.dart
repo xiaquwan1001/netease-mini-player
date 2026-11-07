@@ -115,4 +115,80 @@ void main() {
     expect(find.text('未知专辑'), findsOneWidget);
     expect(called, false);
   });
+
+  testWidgets('专辑无曲目时显示空态提示', (tester) async {
+    final empty = rust.AlbumDetailDto(
+      id: BigInt.from(9),
+      name: '空专辑',
+      coverUrl: null,
+      artist: '某人',
+      description: '',
+      songs: const [],
+    );
+    await tester.pumpWidget(host(() {
+      showAlbumPreview(
+        tester.element(find.text('open')),
+        albumId: BigInt.from(9),
+        onPlay: (_, _) {},
+        loadAlbum: (_) async => empty,
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('暂无曲目'), findsOneWidget);
+  });
+
+  testWidgets('加载失败显示 friendlyError + 重试后成功', (tester) async {
+    var attempts = 0;
+    await tester.pumpWidget(host(() {
+      showAlbumPreview(
+        tester.element(find.text('open')),
+        albumId: BigInt.from(9),
+        onPlay: (_, _) {},
+        loadAlbum: (_) async {
+          attempts++;
+          if (attempts <= 3) throw Exception('[network] timeout');
+          return album();
+        },
+      );
+    }));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('网络不稳定'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('以父之名'), findsOneWidget);
+    expect(attempts, 4);
+  });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => showAlbumPreview(
+                ctx,
+                albumId: BigInt.from(9),
+                albumName: '一个特别特别长的专辑名称用来测试小屏溢出情况',
+                onPlay: (_, _) {},
+                loadAlbum: (_) async => album(),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.text('以父之名'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

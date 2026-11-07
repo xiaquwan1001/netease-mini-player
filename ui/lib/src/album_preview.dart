@@ -227,6 +227,11 @@ class _AlbumPreviewDialogState extends State<_AlbumPreviewDialog> {
                       ],
                     ),
                   ),
+                if (album != null && songs.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: Text('这张专辑暂无曲目, 先去听听别的吧')),
+                  ),
                 if (songs.isNotEmpty)
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 320),

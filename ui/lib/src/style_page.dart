@@ -78,10 +78,29 @@ class _StyleDetailViewState extends State<StyleDetailView> {
     _playlistsFuture = retryNetwork(() => _playlists(widget.tag.id));
   }
 
+  /// 下拉刷新: 已有数据时不走 FutureBuilder 重置(避免清空/闪烁),
+  /// 只有全部成功才替换数据; 失败只提示, 保留旧内容。
+  Future<void> _refresh(BuildContext context) async {
+    try {
+      final songs = await retryNetwork(() => _songs(widget.tag.id));
+      final playlists = await retryNetwork(() => _playlists(widget.tag.id));
+      if (!mounted) return;
+      setState(() {
+        _songsFuture = Future.value(songs);
+        _playlistsFuture = Future.value(playlists);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () async => setState(_reload),
+      onRefresh: () => _refresh(context),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [

@@ -202,9 +202,23 @@ class _UserListViewState extends State<UserListView> {
                     )
                   : _items.isEmpty
                       ? Center(
-                          child: Text(
-                            _fans ? '还没有粉丝' : '还没有关注任何人',
-                            style: theme.textTheme.bodySmall,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _fans ? '还没有粉丝' : '还没有关注任何人',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _fans
+                                    ? '多发动态、被点赞后粉丝会慢慢多起来'
+                                    : '去发现页找找感兴趣的人并关注吧',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ],
                           ),
                         )
                       : ListView.builder(

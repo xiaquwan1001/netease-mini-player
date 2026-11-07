@@ -127,23 +127,48 @@ class _PlayRankingViewState extends State<PlayRankingView> {
               );
             }
             if (snap.hasError) {
+              final message = friendlyError(snap.error!);
+              final retry = () => setState(() {
+                    _future = _load();
+                  });
+              // 整页(compact=false)首屏失败 → 居中错误视图 + 重试;
+              // compact 内嵌时保持行内错误条, 不撑坏父布局。
+              if (!widget.compact) {
+                return Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.tonal(
+                          onPressed: retry,
+                          child: const Text('重试'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        friendlyError(snap.error!),
+                        message,
                         style: TextStyle(
                           color: theme.colorScheme.error,
                           fontSize: 12,
                         ),
                       ),
                     ),
-                    TextButton(
-                      onPressed: () => setState(() => _future = _load()),
-                      child: const Text('重试'),
-                    ),
+                    TextButton(onPressed: retry, child: const Text('重试')),
                   ],
                 ),
               );

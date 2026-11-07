@@ -92,4 +92,86 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('还没有听歌记录'), findsOneWidget);
   });
+
+  testWidgets('整页首屏失败: friendlyError + 重试按钮, 重试后出数据', (tester) async {
+    var attempts = 0;
+    await tester.pumpWidget(host(PlayRankingView(
+      load: (period) async {
+        attempts++;
+        if (attempts <= 3) throw Exception('[network] reset');
+        return [entry(1, '重试后的歌', 5)];
+      },
+      onPlaySongs: (_, _) {},
+    )));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('网络不稳定'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('重试后的歌'), findsOneWidget);
+    expect(attempts, 4);
+  });
+
+  testWidgets('300dp + 1.25 字号: 有数据不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: PlayRankingView(
+            load: (_) async => [entry(1, '小屏上的第一名歌曲名很长', 999)],
+            onPlaySongs: (_, _) {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('小屏上的第一名歌曲名很长'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('300dp + 1.25 字号: 错误态不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: PlayRankingView(
+            load: (_) async => throw Exception(' boom'),
+            onPlaySongs: (_, _) {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Exception'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('300dp + 1.25 字号: 空态不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: PlayRankingView(
+            load: (_) async => const [],
+            onPlaySongs: (_, _) {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('还没有听歌记录'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
 }
