@@ -216,4 +216,36 @@ API/protocol details and anti-bot technique live in the
   P2 `tokio` 去 `full` 按需 feature、P3 再量一次 release/strip 后的 `libncm_ffi.so` 各 ABI 体积,
   只有 vendor 相关 >5MB 才值得考虑自写客户端。
 
+§
+
+- **P1/P2 后端裁剪已落地(2026-11-09)**: vendor endpoint **382→118**(未接入 0)、LOC 12,035→4,069、体积 1.7M→564K;
+  `tokio` 从 vendor 直接依赖**整体移除**(库本体只走 reqwest async, 只有 dev-deps 测试用);
+  上游 `server` 特性(axum + `src/bin/server.rs` + 5 个可选依赖)是**死特性**(启用即因 endpoint 被删 E0599), 已整块删除。
+  依赖数 213/279/257 → 207/274/252(口径: `cargo tree -p X --prefix none | sort -u | wc -l`),
+  冷编 vendor 1.40→0.65 s, release `.so` 14,246,736→14,157,856(strip 8,971,718→8,918,104)。
+  连带: vendor 联网 smoke **8→4 例**(删的 4 例打在未接入 endpoint), `ncm-cli raw` 少 9 个分支。见 `docs/backend-prune.md`。
+
+§
+
+- **`tools/api-coverage.sh` 的 UI 入口判定必须大小写不敏感**: frb 生成名不总是严格 camelCase
+  (实测 `lyric_lines_i18n` → `lyricLinesI18N`, 大写 N), 原 camel 精确匹配把它误判成"无 UI 入口";
+  改成小写化标识符集合比对后真实死导出为 **2**(`search` `api.rs:160` / `lyric_lines` `api.rs:607`)。
+  另: 统计 endpoint 时必须排除 `api/mod.rs`(模块清单不是 endpoint, 否则永远显示"未接入 1")。
+
+§
+
+- **`tools/env.sh` 不导出 `ANDROID_NDK_HOME`**: 只有 PATH/镜像。任何带 C/asm 依赖的 crate
+  (`ring`/`zstd-sys` 等)做 `--target aarch64-linux-android` 都要自己配
+  `CC_/CXX_/AR_aarch64_linux_android`(= `$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang`)
+  + `.cargo/config.toml` 的 linker, 否则末尾报 `Relocations in generic ELF (EM: 183) / file in wrong format`。
+  现有 cargokit 链路不受影响(它自带这些)。
+
+§
+
+- **`netease-music` 0.1.1 换库裁决 = 暂不切(2026-11-09 spike)**: 搜索/歌词与现实现逐字节一致、
+  Android 交叉编译配 NDK 即过; 但取链匿名态被风控(ncm 404 / crate -460)、且 crate **每进程随机**
+  `device_id/sDeviceId`(`client.rs:61,63`), 必须自建 identity.json 回灌层(`ensure_cookie`=`or_insert` 可回灌),
+  `login_qr_url()` 还会重复拼 `codekey=` 产生畸形 URL。净收益仅"少 2.4k 行加解密"。
+  复测门槛见 `docs/backend-service-options.md` §6; 报告 `docs/spikes/2026-11-09-netease-music-spike.md`。
+
 <!-- created=2026-11-09, last=2026-11-09 -->

@@ -5,6 +5,29 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 后端精简与体量实测(2026-11-09)
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 产物体积 | 📄 已测 | release `libncm_ffi.so` 13.6 MiB → **strip 后 8.6 MiB**; debug 215 MiB; Linux debug bundle 304 MB; APK(debug, 4 ABI) **231.8 MB**, 其中 Rust 只占 arm64 16.4 MB(7%), `libflutter.so`×3 = 118 MB + `kernel_blob` 46.6 MB + Vk validation 15.2 MB ⇒ **包体大头是 Flutter 运行时/debug 配置, 不是协议库** |
+| 运行时占用 | 📄 已测 | Linux debug bundle(Xvfb, Impeller)首帧后 **RSS 555 MB / 84 线程**; Rust core release CLI 单次 search **峰值 8.7 MB**, wall 0.52 s ⇒ core 侧 MB 级, UI 侧大头是 debug 未 AOT |
+| 构建产物占地 | 📄 已测 | 仓库 27 GB 中 26.9 GB(99.6%)是产物: `ui/build` 18 GB(`rust_lib_minincm` 单目录 12 GB) + `core/target/debug` 8.9 GB; 源码+文档+参考仓 ≈55 MB |
+| §3 P3 门判定 | ✅ 已定 | 门槛「strip 后 vendor 相关代码 >5 MB 才考虑方案 c」——整个动态库也才 8.6 MiB ⇒ **门未通过, 自写最小客户端仍不推荐** |
+| 新候选 `netease-music` 0.1.1 | ⛔ spike 结论: 暂不切 | src **2,448 行**, 依赖 **132 包**(↓81), 搜索/歌词与现实现**完全一致**, Android 交叉编译配 NDK 即过; 但取链匿名态两端都被风控(ncm 404 / crate -460)、**身份每进程随机需自建回灌层**、appver 形态更粗、43/118 封装落差 ⇒ 净收益仅「少 2.4k 行加解密」。门槛与复测清单见 `docs/backend-service-options.md` §6 |
+| **P1+P2 裁剪** | ✅ 已做(2026-11-09) | vendor endpoint **382→118**(未接入 **0**, 100%)、LOC **12,035→4,069**(−66%)、体积 1.7 M→564 K、`api/mod.rs` 566→252 行; `tokio` 从 vendor 直接依赖**整体移除**(库本体不用), 死特性 `server`(axum/bin/5 个可选依赖)一并删除; 依赖数 **213/279/257 → 207/274/252**; 冷编 vendor **1.40→0.65 s**; release `.so` 14,246,736→**14,157,856**(strip 8,971,728→**8,918,104**); 门禁: `--all-targets` 0 error + **119** 测试全绿 + coverage 118/0。详见 `docs/backend-prune.md` |
+| 收益排序 | 📄 结论 | 打包配置(release + split-per-abi, 231 MB→约 30–40 MB/ABI) > Rust 依赖瘦身(~~P1 裁 vendor / P2 tokio~~ ✅已完成) > 方案 c |
+
+详细数据与测量命令: `docs/backend-service-options.md` §5–§6。
+
+### 附带: API/实现重叠审计(只读, `docs/api-overlap-audit.md`)
+
+| 结论 | 证据 |
+|---|---|
+| 代码已高度去重 | 语义重叠多为"同名不同义", provider 已用 `comments(kind)`/`by_area` 等 enum 合并; **无重复 friendlyError**(错误映射集中在 `netease.rs:329` `map_error/map_code/check_body/take_body`, 全文件仅 5 处直接构造 `ProviderErrorKind::*`); **无 >200 行函数**(最大 `parse_feed_events` 120 行, 318 个函数中 191 个 <20 行); **Capability 实为 35 个**(`ncm-provider/src/lib.rs:30`), 之前口头引用的 47 是 `Capability::` 出现次数不是枚举项数 |
+| 口径脚本 bug 已修 | `tools/api-coverage.sh` 的 camel 匹配大小写敏感 ⇒ `lyric_lines_i18n`(`lyricLinesI18N`, 大写 N, `main.dart:875` 在用)被误报; 已改小写化比对, 真实**死导出 = 2**(`search` `api.rs:160` / `lyric_lines` `api.rs:607`, UI 调用均为 0) |
+| 可精简收益 | 保守 ~430–670 行(FFI 死导出 + Dart 样板 + 文档); 激进 D7(frb 直接透传 domain DTO, 删 74 个 Dto ≈646 行 + 内联转换 ~400 行)可达 ~1400–1800 行, 但需给 domain 加 frb 注解 + 双端全量回归, **排在 vendor 裁剪之后另开车道** |
+| 无应删写接口 | follow/like/playlist_edit/comment_delete/reply/sign_in 全部有 UI 入口且在用 |
+
 ## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)
 
 | 能力 | 状态 | 证据 |

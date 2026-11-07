@@ -166,8 +166,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 **编排者收口清单**
 - [ ] `git status` 只含本批文件; 无生成物手改
-- [ ] `bash tools/ci.sh` → `CI OK`(编排者自己跑, 不信 worker); 其中 vendor 的 8 例
-      **匿名真实联网 smoke** 允许打 `WARN` 不阻塞(上游风控/公网抖动, 3 次重试), 需要硬核验公网时
+- [ ] `bash tools/ci.sh` → `CI OK`(编排者自己跑, 不信 worker); 其中 vendor 的 4 例
+      **匿名真实联网 smoke**(P1 裁剪后 8→4, 删的 4 例打在未接入 endpoint 上)允许打 `WARN` 不阻塞(上游风控/公网抖动, 3 次重试), 需要硬核验公网时
       `NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh`; 本地 workspace 单测/analyze/flutter test/双端构建仍是硬门
 - [ ] 模拟器走查(a34/a36 任选一台; 系统相关改动两台各一次), 空态/未登录各一次
 - [ ] `bash tools/api-coverage.sh` 数字与 docs 一致
@@ -182,3 +182,36 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 - **写操作先小样本**: 签到/评论/歌单编辑先在模拟器用测试号验证, 避免污染真实账号数据。
 - **两台模拟器都只跑 debug 包**: a34/a36 可并行分担批次, 但端口(5554/5556)与账号写入要错开; vivo 只在 release 冒烟, 且会被用户拿走。
 - **长跑任务设时间盒**: 子代理单批 15 分钟无进展就落盘卡点收尾, 换直连模型重派。
+
+## 9. 精简项排队(2026-11-09 审计产出, 按依赖顺序)
+
+> 来源: `docs/api-overlap-audit.md`(D1–D7) + `docs/backend-service-options.md` §3/§5.5(P1/P2)。
+> 硬约束: **codegen 是全局串行点, cargo 共用 `core/target`** ⇒ 下列批次互斥, 一律串行。
+
+| 序 | 批次 | 内容 | 触碰面 | 前提 |
+|---|---|---|---|---|
+| 1 | ~~**P1+P2 vendor 裁剪**~~ ✅ **已完成**(2026-11-09) | 删 264 个未接 endpoint + `api/mod.rs` 清单 + tokio 移除 + 死特性 `server` 删除; 382→118/12k→4.1k 行/冷编 1.40→0.65 s/119 测试全绿 | `core/vendor` | 见 `docs/backend-prune.md` |
+| 2 | **D1+D2 删死导出** | 删 FFI `search`(`api.rs:160`)/`lyric_lines`(`api.rs:607`) | `ncm-ffi` → **必须跑一次 codegen** | 排 1 之后(避 codegen 冲突) |
+| 3 | **D5 转发宏** | ~20 个纯转发 FFI 封装收敛为宏 | `ncm-ffi` + codegen | 与 2 合并成一批做 |
+| 4 | **D6 PagedListView** | 抽"分页+空态+错误重试"公共列表组件(空态文案现手写 31 处; `net_retry.dart` 已被 27 文件复用) | 纯 Dart 车道, 可并行 | 与 2/3 不同文件, 可同波 |
+| 5 | **D7 frb 透传 domain** | 删 74 个 Dto struct(`api.rs`)≈646 行 + 内联转换 ~400 行 | `ncm-domain`(加 frb 注解)+ `ncm-ffi` + Dart | **需用户决策**; 收益最大(~1400–1800 行合计)但跨 crate 契约变动 + 双端全量回归 |
+| — | ~~方案 c: 换 `netease-music`~~ | ⛔ 已裁决不切 | — | 见 `docs/backend-service-options.md` §6 门槛 |
+
+**决策记录(2026-11-09, 用户已批准)**:
+- **D7 批准做, 记为待办**(不做前置条件, 但要等 1–4 收口, 单独一波), 验收口径见下 §9.1。
+- **D1/D2 直接删, 不留 release 周期**(两个都是零调用死导出, provider/CLI 侧不受影响)。
+- 顺序不变: 1 → 2+3(含 D1/D2) → 4(可与 2+3 同波) → 5(D7)。
+
+### 9.1 D7 待办卡(frb 直接透传 domain DTO)
+
+- **目标**: 删掉 `ncm-ffi/src/api.rs` 里 74 个重复的 `*Dto` struct(≈646 行)及其内联转换(~400 行),
+  让 frb 直接暴露 `ncm-domain` 类型; `ui/lib/src/rust/` 由 codegen 重新生成。
+- **前置**: ①P1 vendor 裁剪已合; ②D1/D2/D5 已合(减少 codegen 冲突面);
+  ③`ncm-domain` 加 frb 注解前先确认它仍是**纯数据 crate**(不得引入 flutter_rust_bridge 之外的运行时依赖)。
+- **契约要求**: domain 类型需实现 frb 可见的形态(字段 `pub` + `#[frb]`/mirror 宏策略二选一, 开工前先做 10 行 spike 决定走 mirror 还是直接注注解)。
+- **门禁(编排者自己跑, 不信 worker)**: `cargo build --offline --workspace` 0 error;
+  `cargo test -p ncm-domain -p ncm-service` 全绿; `dart analyze` 0 error;
+  `flutter test` 全量 235+ 用例绿; `bash tools/api-coverage.sh` = 118/0、无 UI 入口 2(删完 D1/D2 后应为 0);
+  双端构建 + 模拟器走查(空态/未登录各一次)。
+- **回滚**: `git restore --staged --worktree core/crates/ncm-domain core/crates/ncm-ffi ui/lib/src/rust` 一键还原。
+- **收益**: 合计约 1400–1800 行(含保守项), 且以后新增接口不再重复定义三层 DTO。

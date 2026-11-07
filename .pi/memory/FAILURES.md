@@ -40,7 +40,7 @@
   `ui/android/hs_err_pid*.log` 里 `SIGSEGV ... G1CMOopClosure::oop_oop_iterate`。`./gradlew --stop` 后重跑即成功。
   本机 14700KF 有内存/内核级不稳定史(litellm 同理), 同类崩溃先"重跑一次"再查代码; hs_err/core 产物别提交。
 - **vendor 匿名联网 smoke 连跑 3 次全挂**: 与 2026-11-05 条目同源(上游风控/公网抖动)。已把 `tools/ci.sh` 拆成
-  「本地 workspace 测试(阻塞门)」+「vendor 8 例匿名联网 smoke(3 次重试, 仅 WARN)」;
+  「本地 workspace 测试(阻塞门)」+「vendor 4 例匿名联网 smoke(3 次重试, 仅 WARN; P1 裁剪后由 8 例降为 4 例)」;
   需要严格核验公网链路时 `NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh`。
 
 §

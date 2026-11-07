@@ -255,7 +255,7 @@ v1 的 `LoginActivity` 思路(移动 UA + `/login` + 抓 `MUSIC_U`)。
 
 | 库 | 形态 | 覆盖 | 加密 | TLS | 许可 | 维护 | 结论 |
 |---|---|---|---|---|---|---|---|
-| **SPlayer-Dev/ncm-api-rs** | Rust 库 + 可选 axum 服务 | **382 个 api 模块** | weapi/eapi/linuxapi | **rustls**(Android 友好) | WTFPL | 2026-03 起,64★,SPlayer 作者维护 | **采用** |
+| **SPlayer-Dev/ncm-api-rs** | Rust 库(axum 服务端特性已于 2026-11-09 裁剪删除) | **382 → 118 个 api 模块**(P1 裁剪, 见 `docs/backend-prune.md`) | weapi/eapi/linuxapi | **rustls**(Android 友好) | WTFPL | 2026-03 起,64★,SPlayer 作者维护 | **采用** |
 | two-mountains/ncmapi | Rust 库(强类型) | 搜索/曲库/账号/stream | eapi 等 | reqwest 默认 | MIT | 1.0 于 2026-08,17★ | 备选/类型设计参考 |
 | api-enhanced(Node) | 服务端 | 456 | 全套(含 xeapi) | Node | MIT | 活跃 | **只做本地对照 oracle,不进产物** |
 | SPlayer 本体 | Tauri 客户端 | — | — | — | — | 活跃 | 交互/功能参考 |

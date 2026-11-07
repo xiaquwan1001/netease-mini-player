@@ -32,7 +32,7 @@
 | **c. 自写最小客户端(~15 核心接口)** | 可删 rsa/cbc/regex-lite/chrono(若只走 eapi); tokio 可 rt-only; 估 213→~190 crates | 加解密+请求层参考 Netease-Music-VScode(MIT, TS: crypto 92 + http 249 行)→Rust 约 **1.5–2.5k 行**含 serde struct | 15, 每加一个接口自己写 | 自己维护头序/身份(已有 ncm-service 经验可搬) | 不变 | 自持 | 自持 | **中高**: request.rs 509 行(签名/头序/错误语义)是要重新踩的坑; eapi 加密本体只有 ~60 行, 大头是 endpoint 文件里的隐式参数约定 |
 | **d. Node sidecar(NeteaseCloudMusicApi / api-enhanced)** | api-enhanced 仓库 147 MB, Node 18+ runtime; APK 需打包 Node(≈20-40MB/ABI)或依赖 Termux | 服务端 456 模块 | 456 | 服务端形态, 与 App 形态(身份四键/CDN UA)**不一致**, 头序自洽原则被打破(api-channel.md) | Android 不能天然跑 Node(Termux 或自带 runtime); Linux 可 | MIT | api-enhanced 2.2k★, 2026-11 活跃 | **高**: 每请求多一跳 IPC, 离线/后台保活双端差异大, 违背"双端一份二进制"架构 |
 | **e. 其它 Rust 现成客户端** | etnt/ncrust(Rust, 0★, 借鉴价值低); Ncrust(GuitaristRin) 是 **Kotlin 不是 Rust**(239★, MIT, 2026-11 活跃) — 其 ClientIdentity 语义我们已吸收进 ncm-service | — | — | 同 App 形态 | Android only | MIT | 见左 | Rust 侧无现成"加解密+请求层"成品; **Netease-Music-VScode(MIT, TS)是最接近的可移植样板** |
-| **f. wasm / 单文件服务** | ncm-api-rs 本身已带 server feature(axum, optional, 默认不编) — 现状已是"集成式内嵌", 独立服务进程是倒退 | — | 382 | 同现状 | 双端各起一进程 | — | — | 负收益, 排除 |
+| **f. wasm / 单文件服务** | ncm-api-rs 曾带 server feature(axum, optional, 默认不编), **已于 2026-11-09 随 P1 裁剪直接删除**(本项目从未启用, 且启用后因 endpoint 被删会 E0599) — 现状是"集成式内嵌", 独立服务进程是倒退 | — | 382 | 同现状 | 双端各起一进程 | — | — | 负收益, 排除 |
 
 ## 3. 推荐路线
 
@@ -80,3 +80,104 @@ for i in 1 2 3 4 5; do /usr/bin/time -f '%es' target/debug/ncm search 周杰伦 
 ```
 
 *本次测量缺口: release/strip 体积与 APK 占比(本机无 release 产物, 且调研约束禁止全量 build), 已列入 P3。*
+
+---
+
+## 5. 补充实测(2026-11-09 编排者复测, 填 §3 P3 的空缺)
+
+全部数字来自本仓实测, 环境: 本机 dev 热缓存, 网络已 unset 全部 proxy。
+
+### 5.1 产物体积(release/strip 空白已填)
+
+| 产物 | 体积 | 说明 |
+|---|---|---|
+| `target/release/libncm_ffi.so` | **14,246,736 B (13.6 MiB)** | `cargo build --release -p ncm_ffi --offline` |
+| 同上 strip 后 | **8,971,728 B (8.6 MiB)** | 含 std + reqwest + tokio + rustls + vendor 12k + 自写 4k **全部** |
+| `target/debug/libncm_ffi.so` | 225,687,640 B (215 MiB) | debuginfo 无参考意义 |
+| Linux debug bundle 整树 | 304 MB | = 上者 225 MB + `libflutter_linux_gtk.so` 43 MB |
+| `app-debug.apk` | **231.8 MB** | 见下表构成 |
+
+APK(debug, 4 ABI 全打)构成 top:
+
+| 条目 | 体积 |
+|---|---|
+| `lib/*/libflutter.so` × 3 ABI | 118 MB (x86_64 40.1 / arm64 38.8 / v7a 33.2) |
+| `assets/flutter_assets/kernel_blob.bin`(debug JIT) | 46.6 MB |
+| `lib/arm64-v8a/libVkLayer_khronos_validation.so` | 15.2 MB |
+| `lib/*/libncm_ffi.so` × 4 ABI | 62.6 MB (arm64 16.4 / x86_64 18.1 / x86 19.3 / v7a 8.6) |
+| `classes*.dex` | ≈15 MB |
+| `isolate_snapshot_data` | 11.6 MB |
+
+**读法**: Rust 侧(arm64 strip 后 16.4 MB)只占 APK **7%**, 而 `libflutter.so` 单 ABI 就 38 MB —— **包体大头是 Flutter 运行时 + debug 配置, 不是协议库**。所以「精简后端」在包体维度的收益上限很低; 正确的第一步是 release + `--split-per-abi`(预估可把 231 MB 打到 ~30–40 MB/ABI), 与选哪个协议库无关。
+
+### 5.2 运行时占用(实测)
+
+| 场景 | RSS / 线程 / CPU |
+|---|---|
+| Linux debug bundle(`Xvfb :99`, Impeller OpenGL)首帧后 | **555 MB / 84 线程 / ≈47% CPU** |
+| Rust core release CLI 单次 `search`(含网络) | **峰值 8.7 MB**, wall 0.52 s |
+
+即 core 侧稳态内存是 MB 级, UI 侧 555 MB 主要是 debug(未 AOT、带 VM service); release 未测, 仍是空白。
+
+### 5.3 构建产物占地
+
+仓库 27 GB 中 **26.9 GB(99.6%)是构建产物**: `ui/build` 18 GB(其中 `rust_lib_minincm` 单目录 **12 GB**, 4 ABI × 多份中间产物) + `core/target/debug` 8.9 GB。源码+文档+参考仓合计 ≈55 MB。
+
+### 5.4 候选库实测: `netease-music` 0.1.1(§2 表外的新发现)
+
+§2 调研时未发现的 crates.io 现成库, 已下载源码并实测依赖树:
+
+| 指标 | 实测值 |
+|---|---|
+| crate 包体 / 源码 | 40,663 B / `src` **2,448 行**(client 709 + ncbl 704 + services 771 + crypto 149 + request 49 + types/error/lib 66), 另有 tests 145 / example 629 |
+| 依赖树 | **132 个唯一包**(同法 `cargo tree` 于临时 crate), 对照 `ncm-service` 213 / `ncm_ffi` 279 ⇒ **↓81 包** |
+| tokio | **无直接依赖**, 但**并非「去 tokio」**: 仅经 `reqwest(blocking)` 带入, tokio 仍在链接内(树中 9 处引用)。实务收益只是 FFI 层可去掉自持的 `rt-multi-thread` 直接依赖 + 代码从 async 改同步(见 §6 spike 更正) |
+| 其他依赖画像 | reqwest 0.12 blocking+rustls、aes/cbc/ecb/cipher、flate2、**zstd(C)**, ring(asm), num-bigint, md5, rand, serde_json |
+| 冷构建 | release **11.07 s**(临时 crate) |
+| 许可 | LICENSE.md 是 **MIT 文本**, 但首行 copyright 写着 "GitHub Inc."(沿袭上游 fork); crates.io 元数据因此标 `non-standard`(license-file) ⇒ 实质 MIT 可用, 归档需保留原文 |
+| 活跃度 | 单版本 0.1.1(2026-07-01), 仓库 0★ / 519 下载 / 单作者(ddy314, fork 自 anhoder 系) |
+| 能力 | weapi/eapi/linuxapi/raw 四种请求; cookie 持久化(捕获 Set-Cookie); **自动补 `appver/osver/_ntes_nuid/NMTID` 身份 cookie**; `interface.music.163.com` eapi 带 encoded client header; **43 个 `pub fn` 类型化封装**(登录/扫码登录/验证码/搜索/联想/热搜/账号/banner/推荐歌单/每日推荐/签到/歌曲 URL v1/歌词/播放上报/歌单详情+全量曲目/歌曲详情/用户详情+歌单/喜欢列表/最近/听歌数据)+ raw 兜底 |
+| 缺口 | 我们用的 118 个 endpoint 里只有 **43 个有类型封装**, 其余 ~75 个要走 raw 手写参数; 登录上下文按 **PC 形态**(NetEaseCloudMusicApi 4.32.0)建模, 与我们的 App 形态头序需实测比对 |
+
+**§3 P3 门判定**: 门槛是「strip 后 vendor 相关代码 >5 MB 才值得进入方案 c」。实测 strip 后**整个动态库**(std+网络栈+vendor 12k+自写)仅 8.6 MiB, vendor 部分必然远低于 5 MB ⇒ **门未通过, 方案 c 仍不推荐**。
+
+**新增候选 g(`netease-music`)的定位**: 它不改变「网络栈省不掉」的结论(仍带 reqwest+rustls+tokio 内部运行时), 但在**依赖数(213→132)、自持代码(不写加解密与请求层)、同步 API(FFI 去 tokio)**三点上优于现状; 代价是 118→43 的封装落差与身份形态需重验。是否切换取决于 spike 结论, 见 §6。
+
+### 5.5 收益排序(修正 §3 的优先级)
+
+1. **打包配置**(release + `--split-per-abi` + 去 Vk validation): 收益最大(231 MB → 约 30–40 MB/ABI), 零协议风险;
+2. **Rust 依赖瘦身**(P1 vendor 裁剪 + P2 tokio 按需; 或换 `netease-music`): 中等收益, 决定 FFI .so 与编译/维护面;
+3. 方案 c(自写最小客户端): 仍不推荐。
+
+## 6. Spike: `netease-music` 可行性验证(2026-11-09 完成)
+
+工作区 `/home/xuqianhui/.cache/pi-spike-netease-music`(独立 target); 完整报告已归档入库: **`docs/spikes/2026-11-09-netease-music-spike.md`**(8 节 + 可复现命令清单)。
+
+### 6.1 结论
+
+**暂不切换。** 搜索/歌词与现实现逐字节一致、Android 交叉编译配好 NDK 后一次通过; 但两项决定性验证都没过:
+①**取链**匿名态两端都被风控拦(ncm `code=404`、crate `-460`/`404`), 登录态 level/size 降级行为未测;
+②**身份不等价**: crate 每进程 `random_device_id()` + 随机 `sDeviceId`(源码 `client.rs:61,63,598`), 必须新写「identity.json → `ClientBuilder.cookie()` 回灌 + device_id 持久化 + appver 形态对齐」层。
+切换的净收益因此缩到「少 ~2.4k 行自维护加解密代码」, 不足以抵消新增身份层与 43/118 封装落差。
+
+### 6.2 实测结果
+
+| 验证项 | 结果 | 证据 |
+|---|---|---|
+| 依赖/编译 | ✅ 132 唯一包, release 13.0 s, 0 error | `cargo tree` 302 行/132 包 |
+| 搜索一致性 | ✅ **完全相同**(id 集合与顺序) | `2668397359, 2653714443, 3391116218, 2730151393, 3452155836` |
+| 歌词一致性 | ✅ `lrc_len=2486`, 首行/署名行全同 | id=186016 对照 |
+| 取链 | ⚠️ 匿名不可用: 5 次中 2 次 `-460`(网络环境风险), 3 次 200 但 `data.code=404,url=None,size=0`; ncm 侧稳定 404 | **须带 MUSIC_U 重测** |
+| 身份等价 | ⚠️ 不等价: 默认只有 `sDeviceId` 且每进程随机; `ensure_cookie`(= `or_insert`, `client.rs:298`) 保证回灌不被覆盖 ⇒ 回灌可行但要我们写; appver `"3.1.17"`+versioncode `204416` vs 仓库 `"3.1.17.204416"`(`identity.rs:45`) | 五键 `deviceId/WNMCID/_ntes_nuid/_ntes_nnid/NMTID` 齐全 ✅ |
+| 扫码登录 | ✅ 形态可用, 未扫码回 `code=800`; **坑**: `login_qr_key` 返回的 unikey 本身已是完整 URL(`https://music.163.com/login?codekey=<uuid>`), `login_qr_url()` 又拼一次前缀 ⇒ 畸形 URL(`services/mod.rs:238`), 集成需自己截 codekey | 未做真实扫码(按约束只到 800) |
+| Android 交叉编译 | ✅ 配好即过(7.9 s 编 174 包); 不配则 `cc-rs: failed to find tool "aarch64-linux-android-clang"`, 命中 `ring 0.17.14` + `zstd-sys 2.1.2` | 需 `ANDROID_NDK_HOME` + `CC_/CXX_/AR_aarch64_linux_android` + `.cargo/config.toml` linker(否则末尾 `EM: 183/in wrong format`) |
+| `env.sh` 缺陷 | ⚠️ `tools/env.sh` 只配 PATH/镜像, **不导出 `ANDROID_NDK_HOME`** ⇒ 任何带 C 依赖的 crate 做 Android 交叉都要自己补 | 现有 cargokit 链路不受影响 |
+
+### 6.3 「全过再切」的门槛(若将来重启此事)
+
+1. 回灌 MUSIC_U 后重测 `song_url_v1` 的 exhigh/lossless/hires level 与 size, 与 vendor 逐字段对比;
+2. 回灌身份后多进程跑, 确认 `device_id/sDeviceId/_ntes_nuid` 稳定且无 `-460`;
+3. Android 形态(appver 8.20.20 / osver 14)经 `raw_eapi` 注入是否被风控接受;
+4. 本项目用到的 75 个无同步封装的接口能否全部走 `raw_*`(参数形状逐个验证)。
+
+任一条不过 → 维持现状 + 只做 §3 的 P1/P2 裁剪。
