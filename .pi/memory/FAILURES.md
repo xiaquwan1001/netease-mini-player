@@ -53,3 +53,15 @@
   连续 3+ 次失败后不要继续怀疑自己的改动，改用 `cd ui && dart analyze`（0 error 即过，info 级照旧忽略）
   作为 analyze 门；`tools/ci.sh` 会因此 RC=250 停在 analyze 步，其余步骤(test/两端构建)可手工补跑。
   需要在 ci.sh 里长期兜底时，可考虑把 analyze 步骤改成「flutter analyze 失败则回落 dart analyze」。
+- 后续验证(同日): `flutter clean`(清掉 20G build + 173M .dart_tool) 与删 `~/.dartServer`(133M) 后**仍然崩溃**,
+  `flutter analyze lib` / `flutter analyze test` 都崩 ⇒ 不是脏状态或某个文件触发, 是 flutter_tools 这层起 analysis server
+  的 Dart VM 在本机稳定崩(并发标记 GC)；`dart analyze`、`flutter test`、`flutter build` 全部正常。
+  结论: analyze 门固定用 `cd ui && dart analyze`，不要再反复重试 flutter analyze。
+
+## flutter analyze 崩溃：是 DAS 并发标记的竞态，不是硬件随机位翻转（2026-11-07 量化）
+- 崩溃点固定：`dart::MarkingVisitor::VisitPointers` ← `dart::UntaggedObjectPool::VisitObjectPoolPointers` ← `ConcurrentMarkTask::Run`（analysis server 并发标记对象池）；si_addr 每次漂移：nil / 0x44 / 0xa8 / 0xffffffffffff0000。
+- 实测分布（同一台机、同一时刻）：空项目 `/tmp/azt` `flutter analyze` **11/11 通过**（含 8 路并发 8/8）；
+  本项目 `lib` 3/3 崩、`test` 3/3 崩、`lib/src/rust` 1/3 崩；同项目 `dart analyze` 3/3 通过、稳定 28 issues。
+  ⇒ 概率随 DAS 工作量上升，与代码内容无关；位翻转不可能造成「空项目 0 次 / 本项目 3/3」。
+  ⇒ 定性为 Flutter 3.47.9 / Dart 3.13.7 在本机上 DAS 并发标记的竞态（flutter_tools 启动参数路径更容易命中），不是本机 VM 全局不稳、也不是脏缓存。
+- 门禁仍固定 `cd ui && dart analyze`；不要重装 Flutter/清缓存来「修复」它。

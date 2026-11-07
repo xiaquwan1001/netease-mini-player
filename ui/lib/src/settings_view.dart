@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart';
 
@@ -170,6 +171,12 @@ class SettingsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _SectionTitle('诊断'),
+          const Card(
+            margin: EdgeInsets.zero,
+            child: ChannelSelfCheckTile(),
+          ),
+          const SizedBox(height: 16),
           _SectionTitle('数据'),
           Card(
             margin: EdgeInsets.zero,
@@ -230,6 +237,86 @@ class SettingsView extends StatelessWidget {
       if ((entry.key - scale).abs() < 0.01) return entry.value;
     }
     return scale.toStringAsFixed(2);
+  }
+}
+
+/// 「Rust 通道自检」: 调用 FFI ping, 展示返回值与耗时. 可注入 ping 便于测试.
+class ChannelSelfCheckTile extends StatefulWidget {
+  const ChannelSelfCheckTile({super.key, this.ping});
+
+  /// 默认走 rust.ping(name: 'selftest')
+  final Future<String> Function()? ping;
+
+  @override
+  State<ChannelSelfCheckTile> createState() => _ChannelSelfCheckTileState();
+}
+
+class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
+  bool _running = false;
+  String? _result;
+  String? _error;
+  int _elapsedMs = 0;
+
+  Future<void> _run() async {
+    if (_running) return; // 防重入: 连点只跑一次
+    setState(() {
+      _running = true;
+      _result = null;
+      _error = null;
+    });
+    final sw = Stopwatch()..start();
+    try {
+      final value = await (widget.ping ?? () => rust.ping(name: 'selftest'))();
+      sw.stop();
+      if (!mounted) return;
+      setState(() {
+        _result = value;
+        _elapsedMs = sw.elapsedMilliseconds;
+      });
+    } catch (e) {
+      sw.stop();
+      if (!mounted) return;
+      setState(() {
+        _error = friendlyError(e);
+        _elapsedMs = sw.elapsedMilliseconds;
+      });
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = _running
+        ? '正在自检…'
+        : _result != null
+            ? '通道正常 ($_elapsedMs ms): $_result'
+            : _error != null
+                ? '通道异常 ($_elapsedMs ms): $_error'
+                : '调用 Rust FFI ping 验证 Dart⇄Rust 通道';
+    return ListTile(
+      leading: _running
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              _result != null
+                  ? Icons.check_circle_outline
+                  : _error != null
+                      ? Icons.error_outline
+                      : Icons.monitor_heart_outlined,
+              color: _result != null
+                  ? Colors.green
+                  : _error != null
+                      ? Theme.of(context).colorScheme.error
+                      : null,
+            ),
+      title: const Text('Rust 通道自检'),
+      subtitle: Text(subtitle),
+      onTap: _running ? null : _run,
+    );
   }
 }
 
