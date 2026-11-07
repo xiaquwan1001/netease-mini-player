@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-09(第十四批: 逐字歌词契约 B5-1 + 列表页空态/窄屏统一, 覆盖 114/382)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-09(第十五批: §4 收尾 album_newest/toplist_detail_v2/comment_mv+video, 覆盖 118/382)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -8,8 +8,8 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **114(29%)** |
-| 未接入 | **268** |
+| `ncm-service`(provider)实际调用的 | **118(31%)** |
+| 未接入 | **264** |
 | FFI 导出给 Dart 的函数 | 123 |
 | 其中 UI 还没有入口的 | 4(`lyric_lines` `lyric_lines_i18n` `radio_subscribers` `search`) |
 
@@ -63,6 +63,9 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 歌曲百科 | `song_wiki_summary` | 歌曲菜单"歌曲百科": 曲风/语种/BPM/获奖成就(接口是装修块富文本, Rust 侧压成 label/value) |
 | 消息中心 | `pl_count` `msg_private` `msg_private_history` `msg_notices` `msg_comments` | "我的"/消息中心: 未读角标 + 三页签(私信会话→只读聊天记录 / 通知 / 评论消息); 实测私信 18 未读、通知含点赞/系统通知、评论含被评资源名 |
 | 数字专辑只读 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` | "我的"→数字专辑(只读): 已购数字专辑列表(封面/歌手/购买时间/份数) + BottomSheet 详情(价格/标签/销量/简介); 未登录不显示入口; 下单(`digital_album_ordering`)不做 |
+| 最新专辑 | `album_newest` | FFI `newest_albums` + CLI `ncm album-newest`(**UI 入口待接**); 与 `album_new` 不同: 固定 12 张编辑精选、无分页 |
+| 榜单 v2 | `toplist_detail_v2` | FFI `toplist_catalog` + CLI `ncm toplist-v2`(**UI 入口待接**); 真增量是 categoryCode 分组(7 组 45 榜) + `canPlay`, 没有数字型更新条数 |
+| MV/视频评论 | `comment_mv` `comment_video` | 与歌曲评论同形, 直接复用 `CommentPage`; provider `comments(kind: mv/video)` |
 | 逐字歌词 | `lyric_new` | domain `WordLyric` 契约 + FFI `word_lyric_lines` + CLI `ncm yrc <id>`；UI 侧 `word_lyric_view.dart` 做逐字(karaoke)着色 + 行级自动滚动，**无 yrc 时回落行级/纯文本**（老歌如 晴天 186016 无 yrc） |
 | 电台广场(只读) | `dj_catelist` `dj_category_recommend` `dj_recommend_type` `dj_toplist` `dj_toplist_hours` `dj_toplist_newcomer` `dj_toplist_pay` `dj_toplist_popular` `dj_program_toplist` `dj_subscriber` | 推荐页「推荐播客 → 更多」: 分类胶囊 → 精选分组/推荐电台 → 热门/新晋/付费/主播榜; 点行复用 `showPodcastDetail`。**订阅(`dj_sub`)与 `dj_difm_*` 不做** |
 | 通道自检 | (FFI `ping`) | 设置页「诊断 → Rust 通道自检」: 点击显示耗时与返回值, 失败给 `friendlyError` 并允许重试(防重入) |

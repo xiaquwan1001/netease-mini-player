@@ -12,7 +12,9 @@
 > **Wave 6 完成(B12 数字专辑只读 + 纯 Dart 车道: 播客单集详情/错误文案统一, 覆盖 103/382)**;
 > **Wave 7 完成(B10 电台只读 + 设置页通道自检, 覆盖 113/382)**;
 > **Wave 8 进行中(B5 逐字歌词: 契约层已合入, UI 车道在跑 + 列表页空态/窄屏统一, 覆盖 114/382)**。
-> 下一波建议: [Rust] §4 剩余 endpoint 收尾(album_newest/simi_user/toplist_detail_v2) ｜ [Dart] 电台节目榜页签/主播主页路由。
+> **Wave 9 完成(收尾: album_newest/toplist_detail_v2/MV+视频评论 + 电台节目榜/听众页 + 后端形态调研, 覆盖 118/382)**；
+> `simi_user` 实测恒空已判定不做。
+> 下一波建议: [Dart] 把 `newest_albums`/`toplist_catalog` 接上 UI(推荐页/排行榜) ｜ 主播/听众 → 用户主页路由。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 

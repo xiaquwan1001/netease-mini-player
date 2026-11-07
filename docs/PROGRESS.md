@@ -1,9 +1,30 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 114/382: 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 118/382: 收尾(album_newest/toplist_v2/MV视频评论) + 电台节目榜/听众页 + 后端轻量化调研结论 + 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 最新专辑 | ✅ | `album_newest`: **不是 album_new 的重复**(固定 12 张编辑精选、无 total、id 集合与前 5 完全不同) → `newest_albums`(Capability::NewRelease) + FFI + CLI `ncm album-newest` |
+| 榜单 v2 | ✅ | `toplist_detail_v2`: **没有 v1 的 trackUpdateTime 数字字段**,"更新 N 首/刚刚更新"只混在 `updateFrequency` 文案里;真正增量是 categoryCode 分组(7 组 45 榜)+ `canPlay` → `ToplistCatalog` + FFI + CLI `ncm toplist-v2` |
+| MV/视频评论 | ✅ | `comment_mv`/`comment_video` 与歌曲评论**同形**(`R_MV_5_`/`R_VI_62_`),直接复用 `parse_comments`/`CommentPage`; provider `comments()` 新增 kind `mv`/`video`;实测 `comments mv 5436712` total=689 |
+| 相似用户 | ⛔ 不做 | `simi_user` 登录态下 id/userId 两种参数、多个 uid 实测**恒回空数组**(`userprofiles: []`),无可解析形状,已记档 |
+| 电台节目榜 | ✅ | 电台广场新增「节目」页签(`radioToplist(kind:'program')`: 排名 badge + 节目名 + 电台·主播·时长);点行直接播放(无音频回落电台详情) |
+| 电台听众页 | ✅ | 新 `radio_subscribers_page.dart`: 电台详情 AppBar「听众」→ 列表(头像/昵称/签名), **时间游标真分页**(provider/FFI 新增 `time_ms`, 用上一页最后一条 subscribeTimeMs), 空态/错误重试/去重 |
+| 后端形态调研 | 📄 | `docs/backend-service-options.md`: 结论 **不换形态、只裁剪** —— vendor 12,035 LOC/382 endpoint 我们只用 118(31%),但 vendor 边际依赖为 **0**(213-crate 服务树差集为空)、单独重编译仅 1.3s ⇒ 不是编译/依赖瓶颈;延迟 search 中位 0.39s、detail 0.14s;体积大头是 reqwest/tokio/rustls 网络栈,换方案也省不掉 |
+| 回归 | ✅ | Rust service **102** 单测(收尾 +6, 游标改动后全绿); Flutter **231** 用例; `tools/ci.sh` → **CI OK**; a36 独立走查: 节目榜页签/节目播放/听众列表真实数据 |
+
+**协议/实测事实**:
+- `album_newest` 响应 `{code, albums[12]}`,专辑对象与 `album_new` 同构;无 total、无分页。
+- `toplist_detail_v2` 响应 `{code, data:[{categoryCode, list:[{id,name,coverUrl,updateFrequency,targetType:"PLAYLIST",canPlay}]}]}`,
+  分组顺序 TOPPING/OFFICIAL/FEATURE/MUSIC_STYLE/GLOBAL/LANGUAGE/MORE;个别条目 `id=0` 且 `canPlay=false`。
+- `comment_mv`/`comment_video` 与歌曲评论同形, 只有 thread 前缀不同; video 的测试 id 可能 200+空。
+- `dj_subscriber` 的 `time` 参数是**上一页最后一条 subscribeTime(ms)**, 首页传 -1。
+- 详细样例见 `docs/wave9-endpoint-notes.md`; 后端形态测算见 `docs/backend-service-options.md`。
 
 ## v2 · 功能包: 逐字歌词契约 B5-1 + 列表页空态统一(2026-11-09)
 

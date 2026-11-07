@@ -188,21 +188,32 @@ API/protocol details and anti-bot technique live in the
   (静默降权
 
 
-[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/c4/c47a206bf3eca7891a4d71faba0de2d4947da0f55f2fbfaf1b00bb5f8f2e8f86.txt; sha256=c47a206bf3eca7891a4d71faba0de2d4947da0f55f2fbfaf1b00bb5f8f2e8f86; bytes=18148]
+[Exact evidence: /home/xuqianhui/.pi/agent/sessions/--home-xuqianhui-netease-mini-player--/pi-fold-evidence/pi-session/sha256/8f/8f69d30e9492a0a696036416c39e5a84cd9968e33e17845480b0641263062679.txt; sha256=8f69d30e9492a0a696036416c39e5a84cd9968e33e17845480b0641263062679; bytes=18034]
 
-## 逐字歌词 YRC(lyric_new)(2026-11-09)
+## 收尾批实测(album_newest / toplist_detail_v2 / comment_mv+video)(2026-11-09)
 
-- 只有 `lyric_new`(`/api/song/lyric/v1`) 会回逐字歌词: vendor body 把 `yv` 等开关写死为 0 时**照样回 yrc**;
-  老接口 `lyric`(`/api/song/lyric`) 永远只有 lrc/tlyric/klyric,**不要指望它给逐字**。
-- 响应里 `yrc.lyric` 是**两种行混排**的纯文本:
-  1. 署名/说明行是 JSON: `{"t":0,"c":[{"tx":"作词: "},{"tx":"方文山"}]}` —— `t` 可为负(实测 -1000);
-  2. 歌词行: `[21960,7590](21960,470,0)让(22430,2610,0)我(25400,280,0)与你握别`
-     = `[行起点ms,行时长ms]` + 每词 `(词起点,词时长,0)文本`。
-  词文本可含空格/标点, **词时长可以为 0**(连读词), 解析不能假设 >0。
-- **`ytlrc`/`yromalrc` 抽样 8+ 首恒空**(vendor body 写死 ytv/yrv=0 且 vendor 禁改) ⇒ 逐字级翻译暂时拿不到;
-  翻译只能用行级 `tlyric`(按行首 ms 对齐), UI 上逐字高亮 + 行级翻译是当前上限。
-- 很多老歌/纯音乐**没有 yrc**(如 晴天 186016) ⇒ UI 必须保留"行级滚动"与"纯文本"两条回落路径,
-  并把 `has_word_timing=false` 当作"当作整行歌词用"; 解析失败一律退化成整行单整词, 绝不丢行。
-- `klyric` 实测恒 ver 0, 未建模; `song_lyrics_mark`(用户标记)只读 dump 过, 写操作(add/del)没接。
+- `album_newest`(`/api/album/newest`): `{code, albums[12]}`,固定 12 张编辑精选、**没有 total/分页**;
+  专辑对象与 `album_new` 同构,但 id 集合与 `album_new` 前几张完全不同 ⇒ 两者不是重复接口。
+- `toplist_detail_v2`: 响应 `{code, data:[{categoryCode, list:[{id,name,coverUrl,updateFrequency,
+  targetType:"PLAYLIST",canPlay}]}]}`;分组顺序 TOPPING/OFFICIAL/FEATURE/MUSIC_STYLE/GLOBAL/LANGUAGE/MORE(7 组 45 榜)。
+  **"更新 N 首 / 刚刚更新"只存在于 `updateFrequency` 文案里**,v1 的 `trackUpdateTime` 数字字段在 v2 没有;
+  个别条目 `id=0` 且 `canPlay=false`(不可播)。
+- `comment_mv`/`comment_video` 与歌曲评论**完全同形**(`{total, more, hotComments, comments, topComments}`),
+  只有 thread 前缀不同(`R_MV_5_`/`R_VI_62_`) ⇒ 直接复用歌曲评论的 parse/DTO,不要新建结构。
+- `simi_user` **实测恒空**(登录态下 id/userId 两种参数、多个 uid 都回 `{"code":200,"userprofiles":[]}`),
+  判定不做;怀疑服务端已下线该能力。
+- `dj_subscriber` 的分页游标是 `time` = **上一页最后一条的 subscribeTime(ms)**,首页传 `-1`;
+  FFI 侧已加 `time_ms: Option<u64>`,Dart 传 null 表示首页。
+
+## 后端形态调研结论(2026-11-09, 详见 docs/backend-service-options.md)
+
+- **不换形态,只裁剪**:vendor 12,035 LOC / 382 endpoint(我们用 118, 31%),但它的**边际依赖为 0**
+  (213-crate 服务树与去掉 vendor 后的差集为空),单独重编译仅 1.3s ⇒ vendor 不是编译或依赖瓶颈。
+- 体积大头是网络栈(reqwest/tokio/rustls),换成 Node sidecar(api-enhanced 仓库 147MB,Android 还要带 Node runtime)
+  或自写最小客户端都省不掉这部分,却会新增运行时/维护成本。
+- 实测延迟(直连、proxy 已清):search 中位 **0.39s**、detail 中位 **0.14s**。
+- 推荐 P1 删未接入的 264 个 endpoint 文件(vendor 10.3k→~3.2k LOC,验收=编译通过+延迟不劣化)、
+  P2 `tokio` 去 `full` 按需 feature、P3 再量一次 release/strip 后的 `libncm_ffi.so` 各 ABI 体积,
+  只有 vendor 相关 >5MB 才值得考虑自写客户端。
 
 <!-- created=2026-11-09, last=2026-11-09 -->
