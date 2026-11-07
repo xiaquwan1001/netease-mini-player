@@ -11,6 +11,10 @@
 //!   ncm comment-info <song|playlist|album|podcast|mv|video> <id>  评论统计(评论数/分享数/点赞数)
 //!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
+//!   ncm digital <albumId>            数字专辑详情(价格/标签/是否已购)
+//!   ncm digital-purchased [limit] [offset]   我的已购数字专辑(需登录)
+//!   ncm purchased-songs [limit] [offset]     我的已购单曲(需登录)
+//!   ncm digital-sales <id[,id...]>   数字专辑销量
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
 
@@ -1084,6 +1088,69 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "digital" => {
+            // 数字专辑详情: ncm digital <albumId>
+            let id: u64 = args.positional.first().ok_or("usage: ncm digital <albumId>")?.parse()?;
+            announce(&core);
+            let p = provider(&core, Capability::DigitalAlbum)?;
+            let d = p.digital_album_detail(id).await?;
+            println!(
+                "{} — {}\n价格: {} 元 上架: {} 销量(product.saleNum): {}\n标签: {} 已购: {}",
+                d.name,
+                d.artist_name,
+                d.price,
+                fmt_date(d.pub_time_ms),
+                d.sale_num,
+                if d.tags.is_empty() { "-".to_string() } else { d.tags.join(" / ") },
+                d.has_album
+            );
+            if !d.description.is_empty() {
+                println!("简介: {}", short_line(&d.description, 120));
+            }
+            Ok(())
+        }
+        "digital-purchased" => {
+            // 我的已购数字专辑: ncm digital-purchased [limit] [offset]
+            let limit: u32 = args.positional.first().and_then(|s| s.parse().ok()).unwrap_or(30);
+            let offset: u32 = args.positional.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+            announce(&core);
+            let p = provider(&core, Capability::DigitalAlbum)?;
+            let r = p.digital_album_purchased(limit, offset).await?;
+            println!("已购数字专辑: {} 张(服务端 total={})", r.albums.len(), r.total);
+            for a in &r.albums {
+                println!(
+                    "  {} — {} · {}x · 购于 {}",
+                    a.album_name,
+                    a.artist_name,
+                    a.bought_count,
+                    fmt_date(a.paid_time_ms)
+                );
+            }
+            Ok(())
+        }
+        "purchased-songs" => {
+            // 我的已购单曲: ncm purchased-songs [limit] [offset]
+            let limit: u32 = args.positional.first().and_then(|s| s.parse().ok()).unwrap_or(20);
+            let offset: u32 = args.positional.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
+            announce(&core);
+            let p = provider(&core, Capability::DigitalAlbum)?;
+            let r = p.song_purchased(limit, offset).await?;
+            println!("已购单曲: {} 首 hasMore={}", r.songs.len(), r.has_more);
+            for s in &r.songs {
+                println!("  {} — {} ({})", s.name, s.artist_name, fmt_date(s.paid_time_ms));
+            }
+            Ok(())
+        }
+        "digital-sales" => {
+            // 数字专辑销量: ncm digital-sales <id[,id...]>
+            let ids = args.positional.first().ok_or("usage: ncm digital-sales <id[,id...]>")?;
+            announce(&core);
+            let p = provider(&core, Capability::DigitalAlbum)?;
+            for e in p.digital_album_sales(ids).await? {
+                println!("专辑 {}: 销量 {}", e.album_id, e.sales);
+            }
+            Ok(())
+        }
         "raw" => {
             // 排障/建模用: 直接打任意 vendor 端点并打印原始 JSON.
             // 用法: ncm raw <method> [key=value ...]
@@ -1177,6 +1244,10 @@ async fn run() -> Result<(), BoxErr> {
                 "lyric_new" => client.lyric_new(&q).await?,
                 "vip_sign_info" => client.vip_sign_info(&q).await?,
                 "vip_info_v2" => client.vip_info_v2(&q).await?,
+                "digital_album_detail" => client.digital_album_detail(&q).await?,
+                "digital_album_purchased" => client.digital_album_purchased(&q).await?,
+                "digital_album_sales" => client.digital_album_sales(&q).await?,
+                "song_purchased" => client.song_purchased(&q).await?,
                 "vip_info" => client.vip_info(&q).await?,
                 "vip_tasks" => client.vip_tasks(&q).await?,
                 "sign_happy_info" => client.sign_happy_info(&q).await?,

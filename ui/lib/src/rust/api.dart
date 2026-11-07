@@ -187,6 +187,30 @@ Future<bool> setPlaylistSubscribed({
   subscribed: subscribed,
 );
 
+/// 已购数字专辑(需登录; limit/offset 分页)
+Future<DigitalAlbumPurchasedDto> digitalAlbumPurchased({
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiDigitalAlbumPurchased(
+  limit: limit,
+  offset: offset,
+);
+
+/// 已购单曲(需登录; limit/offset 分页)
+Future<SongPurchasedDto> songPurchased({
+  required int limit,
+  required int offset,
+}) => RustLib.instance.api.crateApiSongPurchased(limit: limit, offset: offset);
+
+/// 数字专辑详情(只读; 不提供下单)
+Future<DigitalAlbumDetailDto> digitalAlbumDetail({required BigInt albumId}) =>
+    RustLib.instance.api.crateApiDigitalAlbumDetail(albumId: albumId);
+
+/// 数字专辑销量(album_ids 逗号分隔)
+Future<List<DigitalAlbumSalesDto>> digitalAlbumSales({
+  required String albumIds,
+}) => RustLib.instance.api.crateApiDigitalAlbumSales(albumIds: albumIds);
+
 /// 评论列表: kind = song | playlist | album | podcast
 Future<CommentPageDto> comments({
   required String kind,
@@ -1085,6 +1109,161 @@ class DefaultSearchDto {
           imageUrl == other.imageUrl;
 }
 
+/// 数字专辑详情(album + product 平铺, 实测形状见 ncm_domain::DigitalAlbumDetail)
+class DigitalAlbumDetailDto {
+  final BigInt albumId;
+  final String name;
+  final BigInt artistId;
+  final String artistName;
+  final String coverUrl;
+
+  /// 当前账号是否已购
+  final bool hasAlbum;
+
+  /// 售价(元)
+  final double price;
+
+  /// 上架时间(毫秒时间戳)
+  final BigInt pubTimeMs;
+
+  /// product.saleNum(实测恒 0, 真实销量用 digital_album_sales)
+  final BigInt saleNum;
+  final List<String> tags;
+
+  /// 简介(descr 拼接, 已过滤 </br>)
+  final String description;
+
+  const DigitalAlbumDetailDto({
+    required this.albumId,
+    required this.name,
+    required this.artistId,
+    required this.artistName,
+    required this.coverUrl,
+    required this.hasAlbum,
+    required this.price,
+    required this.pubTimeMs,
+    required this.saleNum,
+    required this.tags,
+    required this.description,
+  });
+
+  @override
+  int get hashCode =>
+      albumId.hashCode ^
+      name.hashCode ^
+      artistId.hashCode ^
+      artistName.hashCode ^
+      coverUrl.hashCode ^
+      hasAlbum.hashCode ^
+      price.hashCode ^
+      pubTimeMs.hashCode ^
+      saleNum.hashCode ^
+      tags.hashCode ^
+      description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DigitalAlbumDetailDto &&
+          runtimeType == other.runtimeType &&
+          albumId == other.albumId &&
+          name == other.name &&
+          artistId == other.artistId &&
+          artistName == other.artistName &&
+          coverUrl == other.coverUrl &&
+          hasAlbum == other.hasAlbum &&
+          price == other.price &&
+          pubTimeMs == other.pubTimeMs &&
+          saleNum == other.saleNum &&
+          tags == other.tags &&
+          description == other.description;
+}
+
+/// 已购数字专辑的一项(实测形状见 ncm_domain::DigitalAlbumPurchasedEntry 注释)
+class DigitalAlbumEntryDto {
+  final BigInt albumId;
+  final String albumName;
+  final BigInt artistId;
+  final String artistName;
+  final String coverUrl;
+
+  /// 购买时间(毫秒时间戳)
+  final BigInt paidTimeMs;
+
+  /// 购买数量
+  final BigInt boughtCount;
+
+  const DigitalAlbumEntryDto({
+    required this.albumId,
+    required this.albumName,
+    required this.artistId,
+    required this.artistName,
+    required this.coverUrl,
+    required this.paidTimeMs,
+    required this.boughtCount,
+  });
+
+  @override
+  int get hashCode =>
+      albumId.hashCode ^
+      albumName.hashCode ^
+      artistId.hashCode ^
+      artistName.hashCode ^
+      coverUrl.hashCode ^
+      paidTimeMs.hashCode ^
+      boughtCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DigitalAlbumEntryDto &&
+          runtimeType == other.runtimeType &&
+          albumId == other.albumId &&
+          albumName == other.albumName &&
+          artistId == other.artistId &&
+          artistName == other.artistName &&
+          coverUrl == other.coverUrl &&
+          paidTimeMs == other.paidTimeMs &&
+          boughtCount == other.boughtCount;
+}
+
+class DigitalAlbumPurchasedDto {
+  /// 服务端给的已购总数(分页用)
+  final BigInt total;
+  final List<DigitalAlbumEntryDto> albums;
+
+  const DigitalAlbumPurchasedDto({required this.total, required this.albums});
+
+  @override
+  int get hashCode => total.hashCode ^ albums.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DigitalAlbumPurchasedDto &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          albums == other.albums;
+}
+
+class DigitalAlbumSalesDto {
+  final String albumId;
+  final BigInt sales;
+
+  const DigitalAlbumSalesDto({required this.albumId, required this.sales});
+
+  @override
+  int get hashCode => albumId.hashCode ^ sales.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DigitalAlbumSalesDto &&
+          runtimeType == other.runtimeType &&
+          albumId == other.albumId &&
+          sales == other.sales;
+}
+
 class FeedEventDto {
   final BigInt id;
 
@@ -1914,6 +2093,42 @@ class ProviderInfo {
           capabilities == other.capabilities;
 }
 
+/// 已购单曲的一项(元素形状未实测到, 字段宽松)
+class PurchasedSongDto {
+  final BigInt songId;
+  final String name;
+  final String artistName;
+  final String coverUrl;
+  final BigInt paidTimeMs;
+
+  const PurchasedSongDto({
+    required this.songId,
+    required this.name,
+    required this.artistName,
+    required this.coverUrl,
+    required this.paidTimeMs,
+  });
+
+  @override
+  int get hashCode =>
+      songId.hashCode ^
+      name.hashCode ^
+      artistName.hashCode ^
+      coverUrl.hashCode ^
+      paidTimeMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PurchasedSongDto &&
+          runtimeType == other.runtimeType &&
+          songId == other.songId &&
+          name == other.name &&
+          artistName == other.artistName &&
+          coverUrl == other.coverUrl &&
+          paidTimeMs == other.paidTimeMs;
+}
+
 class RecentContactDto {
   final BigInt userId;
   final String nickname;
@@ -2350,6 +2565,30 @@ class SongDto {
           vip == other.vip &&
           paid == other.paid &&
           playable == other.playable;
+}
+
+class SongPurchasedDto {
+  final BigInt count;
+  final bool hasMore;
+  final List<PurchasedSongDto> songs;
+
+  const SongPurchasedDto({
+    required this.count,
+    required this.hasMore,
+    required this.songs,
+  });
+
+  @override
+  int get hashCode => count.hashCode ^ hasMore.hashCode ^ songs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SongPurchasedDto &&
+          runtimeType == other.runtimeType &&
+          count == other.count &&
+          hasMore == other.hasMore &&
+          songs == other.songs;
 }
 
 class StreamDto {

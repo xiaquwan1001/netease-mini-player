@@ -12,6 +12,8 @@ use ncm_domain::{
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     MedalWall, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
     VipTask, WikiFact,
+    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
+    PurchasedSongEntry, SongPurchasedPage,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -53,6 +55,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Wiki,
     Capability::Message,
     Capability::Vip,
+    Capability::DigitalAlbum,
 ];
 
 /// 最近播放的三种资源(专辑/歌单/电台)
@@ -2495,6 +2498,72 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 已购数字专辑(digitalAlbum/purchased, weapi). 实测顶层是 paidAlbums + total.
+    fn digital_album_purchased<'a>(
+        &'a self,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<DigitalAlbumPurchased>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("已购数字专辑需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string())
+                .param("total", "true");
+            let resp = client.digital_album_purchased(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_digital_album_purchased(&resp.body)
+        })
+    }
+
+    /// 已购单曲(song/purchased = /api/single/mybought/song/list, weapi).
+    fn song_purchased<'a>(
+        &'a self,
+        limit: u32,
+        offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<SongPurchasedPage>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("已购单曲需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("limit", &limit.to_string())
+                .param("offset", &offset.to_string());
+            let resp = client.song_purchased(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_song_purchased(&resp.body)
+        })
+    }
+
+    /// 数字专辑详情(vipmall/albumproduct/detail, weapi, 入参 id).
+    fn digital_album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("id", &album_id.to_string());
+            let resp = client.digital_album_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_digital_album_detail(&resp.body)
+        })
+    }
+
+    /// 数字专辑销量(vipmall/albumproduct/album/query/sales, weapi, 入参键 albumIds).
+    fn digital_album_sales<'a>(
+        &'a self,
+        album_ids: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<DigitalAlbumSalesEntry>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("ids", album_ids);
+            let resp = client.digital_album_sales(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_digital_album_sales(&resp.body))
+        })
+    }
+
     /// 播客/电台详情
     fn podcast_radio(&self, radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
         Box::pin(async move {
@@ -3282,6 +3351,129 @@ pub fn parse_comment_stats(body: &Value, thread_id: &str) -> ProviderResult<Comm
         musician_said_count: u64_of(v, "musicianSaidCount").unwrap_or(0),
         comment_upgraded: v.get("commentUpgraded").and_then(Value::as_bool).unwrap_or(false),
     })
+}
+
+/// 已购数字专辑(digitalAlbum/purchased)的响应形如
+///   {code:200, total:2, paidAlbums:[{albumId, albumName, artist:{id,name}, cover, paidTime,
+///                                     boughtCount, sub, channel, valid, …}]}
+/// 实测要点(2026-11-09):
+/// - **顶层是 paidAlbums + total, 没有 data 包装**; 分页字段只有 total, 没有 hasMore/more;
+/// - `paidTime` 是毫秒时间戳, `boughtCount` 是购买数量, 封面字段就叫 `cover`;
+/// - paidAlbums 缺失/为 null 时当空列表(总数仍取 total), 不报错.
+pub fn parse_digital_album_purchased(body: &Value) -> ProviderResult<DigitalAlbumPurchased> {
+    let albums = body
+        .get("paidAlbums")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|a| {
+                    Some(DigitalAlbumPurchasedEntry {
+                        album_id: u64_of(a, "albumId")?,
+                        album_name: str_of(a, "albumName").unwrap_or_default(),
+                        artist_id: a.get("artist").and_then(|x| u64_of(x, "id")).unwrap_or(0),
+                        artist_name: a
+                            .get("artist")
+                            .and_then(|x| str_of(x, "name"))
+                            .unwrap_or_default(),
+                        cover_url: str_of(a, "cover").unwrap_or_default(),
+                        paid_time_ms: u64_of(a, "paidTime").unwrap_or(0),
+                        bought_count: u64_of(a, "boughtCount").unwrap_or(0),
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(DigitalAlbumPurchased { total: u64_of(body, "total").unwrap_or(0), albums })
+}
+
+/// 已购单曲(song/purchased)的响应形如
+///   {code:200, data:{count:0, hasMore:false, list:[]}}
+/// 本账号无已购单曲, list 元素形状未实测到, 字段宽松取常见命名(id/name/paidTime 等).
+pub fn parse_song_purchased(body: &Value) -> ProviderResult<SongPurchasedPage> {
+    let data = body.get("data");
+    let songs = data
+        .and_then(|d| d.get("list"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|s| {
+                    Some(PurchasedSongEntry {
+                        song_id: u64_of(s, "id").or_else(|| u64_of(s, "songId"))?,
+                        name: str_of(s, "name").or_else(|| str_of(s, "songName")).unwrap_or_default(),
+                        artist_name: s
+                            .get("artist")
+                            .and_then(|x| str_of(x, "name"))
+                            .or_else(|| str_of(s, "artistName"))
+                            .unwrap_or_default(),
+                        cover_url: str_of(s, "cover")
+                            .or_else(|| str_of(s, "picUrl"))
+                            .unwrap_or_default(),
+                        paid_time_ms: u64_of(s, "paidTime")
+                            .or_else(|| u64_of(s, "purchaseTime"))
+                            .unwrap_or(0),
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    Ok(SongPurchasedPage {
+        count: data.and_then(|d| u64_of(d, "count")).unwrap_or(0),
+        has_more: data.and_then(|d| d.get("hasMore")).and_then(Value::as_bool).unwrap_or(false),
+        songs,
+    })
+}
+
+/// 数字专辑详情(vipmall/albumproduct/detail)的响应形如
+///   {code:200, hasAlbum:true, boughtCnt:1,
+///    album:{albumId, albumName, artistName, artistId, coverUrl, …},
+///    product:{price:22.0, pubTime, saleNum, tags:[…], descr:[{resource,type}], …}}
+/// 实测要点: 专辑字段在 album, 价格/上架/标签在 product; descr 的 `</br>` 是分隔占位要过滤.
+pub fn parse_digital_album_detail(body: &Value) -> ProviderResult<DigitalAlbumDetail> {
+    let album = body.get("album").ok_or_else(|| ProviderError::not_found("digital_album_detail: missing album"))?;
+    let product = body.get("product");
+    let tags = product
+        .and_then(|p| p.get("tags"))
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .unwrap_or_default();
+    let description = product
+        .and_then(|p| p.get("descr"))
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|d| d.get("resource").and_then(Value::as_str))
+                .filter(|s| *s != "</br>")
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default();
+    Ok(DigitalAlbumDetail {
+        album_id: u64_of(album, "albumId").unwrap_or(0),
+        name: str_of(album, "albumName").unwrap_or_default(),
+        artist_id: u64_of(album, "artistId").unwrap_or(0),
+        artist_name: str_of(album, "artistName").unwrap_or_default(),
+        cover_url: str_of(album, "coverUrl").unwrap_or_default(),
+        has_album: body.get("hasAlbum").and_then(Value::as_bool).unwrap_or(false),
+        price: product.and_then(|p| p.get("price")).and_then(Value::as_f64).unwrap_or(0.0),
+        pub_time_ms: product.and_then(|p| u64_of(p, "pubTime")).unwrap_or(0),
+        sale_num: product.and_then(|p| u64_of(p, "saleNum")).unwrap_or(0),
+        tags,
+        description,
+    })
+}
+
+/// 数字专辑销量(vipmall/albumproduct/album/query/sales)的响应形如
+///   {code:200, data:{"120605500":1300052}}
+/// `data` 是 {专辑id字符串: 销量} 的 map, 不是数组(实测, 与工单里 bizType/limit 的说法不符).
+pub fn parse_digital_album_sales(body: &Value) -> Vec<DigitalAlbumSalesEntry> {
+    body.get("data")
+        .and_then(Value::as_object)
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| Some(DigitalAlbumSalesEntry { album_id: k.clone(), sales: v.as_u64()? }))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// 电台详情(dj_detail)的响应形如 {code:200, data:{id,name,picUrl,desc,dj:{nickname},programCount,playCount}}
@@ -4577,6 +4769,138 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// digitalAlbum/purchased: 2026-11-09 实测形状(顶层 paidAlbums + total, 封面叫 cover)
+    #[test]
+    fn digital_album_purchased_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "total": 2,
+            "paidAlbums": [{
+                "albumId": 120605500u64,
+                "albumName": "冀西南林路行",
+                "artist": {"id": 13223, "name": "万能青年旅店"},
+                "cover": "https://p4.music.126.net/aEehIWg8Qk5DXLGf0XZHqw==/109951166554891221.jpg",
+                "paidTime": 1638063971559u64,
+                "boughtCount": 1,
+                "sub": false,
+                "channel": 0,
+                "valid": 99
+            }, {
+                "albumId": 162008967u64,
+                "albumName": "伍六七之暗影宿命 原声大碟",
+                "artist": {"id": 56085302, "name": "伍六七"},
+                "cover": "https://p3.music.126.net/MJOV25-FS6XdLEjqDddt-g==/109951168553533864.jpg",
+                "paidTime": 1687007720179u64,
+                "boughtCount": 1
+            }]
+        });
+        let p = parse_digital_album_purchased(&body).expect("purchased");
+        assert_eq!(p.total, 2);
+        assert_eq!(p.albums.len(), 2);
+        let first = &p.albums[0];
+        assert_eq!(first.album_id, 120605500);
+        assert_eq!(first.album_name, "冀西南林路行");
+        assert_eq!(first.artist_id, 13223);
+        assert_eq!(first.artist_name, "万能青年旅店");
+        assert!(first.cover_url.starts_with("https://"));
+        assert_eq!(first.paid_time_ms, 1638063971559);
+        assert_eq!(first.bought_count, 1);
+    }
+
+    /// paidAlbums 缺失 / null / 空数组都当空列表, total 仍取服务端值
+    #[test]
+    fn digital_album_purchased_tolerates_missing_albums() {
+        for body in [
+            json!({"code": 200, "total": 2}),
+            json!({"code": 200, "total": 2, "paidAlbums": null}),
+            json!({"code": 200, "total": 0, "paidAlbums": []}),
+        ] {
+            let p = parse_digital_album_purchased(&body).expect("purchased");
+            assert!(p.albums.is_empty(), "body={body}");
+            assert_eq!(p.total, if p.total == 0 { 0 } else { 2 });
+        }
+        // 元素缺 albumId 的坏条目直接跳过, 不 panic
+        let bad = json!({"code": 200, "total": 1, "paidAlbums": [{"albumName": "x"}]});
+        let p = parse_digital_album_purchased(&bad).expect("purchased");
+        assert!(p.albums.is_empty());
+    }
+
+    /// song_purchased: 实测(无已购单曲)为 data.{count,hasMore,list:[]}; list 元素宽松兼容两种命名
+    #[test]
+    fn song_purchased_parses_pagination_and_empty() {
+        let empty = json!({"code": 200, "data": {"count": 0, "hasMore": false, "list": []}, "message": ""});
+        let p = parse_song_purchased(&empty).expect("purchased");
+        assert_eq!(p.count, 0);
+        assert!(!p.has_more);
+        assert!(p.songs.is_empty());
+
+        let listed = json!({"code": 200, "data": {"count": 1, "hasMore": true, "list": [
+            {"id": 186016u64, "name": "晴天", "artist": {"name": "周杰伦"}, "cover": "https://c", "paidTime": 1700000000000u64},
+            {"songId": 999, "songName": "别名兼容", "artistName": "A/B"}
+        ]}});
+        let p = parse_song_purchased(&listed).expect("purchased");
+        assert_eq!(p.count, 1);
+        assert!(p.has_more);
+        assert_eq!(p.songs.len(), 2);
+        assert_eq!(p.songs[0].song_id, 186016);
+        assert_eq!(p.songs[0].artist_name, "周杰伦");
+        assert_eq!(p.songs[1].song_id, 999);
+        assert_eq!(p.songs[1].name, "别名兼容");
+    }
+
+    /// digital_album_detail: 专辑字段在 album, 价格/上架/标签在 product, descr 过滤 </br>
+    #[test]
+    fn digital_album_detail_parses_real_shape() {
+        // 2026-11-09 实测: ncm raw digital_album_detail id=120605500
+        let body = json!({
+            "code": 200,
+            "hasAlbum": true,
+            "boughtCnt": 1,
+            "album": {
+                "albumId": 120605500u64,
+                "albumName": "冀西南林路行",
+                "artistName": "万能青年旅店",
+                "artistId": 13223,
+                "coverUrl": "https://p4.music.126.net/aEehIWg8Qk5DXLGf0XZHqw==/109951166554891221.jpg"
+            },
+            "product": {
+                "price": 22.0,
+                "pubTime": 1608566401510u64,
+                "saleNum": 0,
+                "tags": ["独家", "无损品质收听＆下载"],
+                "descr": [{"resource": "发端似乎在2013年", "type": 1}, {"resource": "</br>", "type": 1}, {"resource": "西郊有密林", "type": 1}]
+            }
+        });
+        let d = parse_digital_album_detail(&body).expect("detail");
+        assert_eq!(d.album_id, 120605500);
+        assert_eq!(d.name, "冀西南林路行");
+        assert_eq!(d.artist_name, "万能青年旅店");
+        assert!(d.has_album);
+        assert!((d.price - 22.0).abs() < f64::EPSILON);
+        assert_eq!(d.pub_time_ms, 1608566401510);
+        assert_eq!(d.sale_num, 0);
+        assert_eq!(d.tags, vec!["独家", "无损品质收听＆下载"]);
+        assert_eq!(d.description, "发端似乎在2013年\n西郊有密林");
+        // 缺 product 只退化字段, album 缺失才是 not_found
+        let no_product = json!({"code": 200, "album": {"albumId": 1, "albumName": "x"}});
+        let d = parse_digital_album_detail(&no_product).expect("detail");
+        assert_eq!(d.price, 0.0);
+        assert!(d.tags.is_empty());
+        assert!(parse_digital_album_detail(&json!({"code": 200})).is_err());
+    }
+
+    /// digital_album_sales: data 是 {专辑id串: 销量} map, 不是数组
+    #[test]
+    fn digital_album_sales_parses_map() {
+        let body = json!({"code": 200, "data": {"120605500": 1300052u64, "162008967": 7u64}});
+        let s = parse_digital_album_sales(&body);
+        assert_eq!(s.len(), 2);
+        assert!(s.contains(&DigitalAlbumSalesEntry { album_id: "120605500".into(), sales: 1300052 }));
+        // data 缺失/非对象 → 空列表, 不报错
+        assert!(parse_digital_album_sales(&json!({"code": 200})).is_empty());
+        assert!(parse_digital_album_sales(&json!({"code": 200, "data": []})).is_empty());
+    }
 
     /// comment_info_list: 实测字段(歌曲 186016), 只取 data[0], 服务端 threadId 优先
     #[test]

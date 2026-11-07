@@ -82,6 +82,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DefaultSearchDto dco_decode_default_search_dto(dynamic raw);
 
   @protected
+  DigitalAlbumDetailDto dco_decode_digital_album_detail_dto(dynamic raw);
+
+  @protected
+  DigitalAlbumEntryDto dco_decode_digital_album_entry_dto(dynamic raw);
+
+  @protected
+  DigitalAlbumPurchasedDto dco_decode_digital_album_purchased_dto(dynamic raw);
+
+  @protected
+  DigitalAlbumSalesDto dco_decode_digital_album_sales_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -139,6 +151,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CommentDto> dco_decode_list_comment_dto(dynamic raw);
 
   @protected
+  List<DigitalAlbumEntryDto> dco_decode_list_digital_album_entry_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<DigitalAlbumSalesDto> dco_decode_list_digital_album_sales_dto(
+    dynamic raw,
+  );
+
+  @protected
   List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
 
   @protected
@@ -190,6 +212,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProviderInfo> dco_decode_list_provider_info(dynamic raw);
+
+  @protected
+  List<PurchasedSongDto> dco_decode_list_purchased_song_dto(dynamic raw);
 
   @protected
   List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw);
@@ -297,6 +322,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProviderInfo dco_decode_provider_info(dynamic raw);
 
   @protected
+  PurchasedSongDto dco_decode_purchased_song_dto(dynamic raw);
+
+  @protected
   RecentContactDto dco_decode_recent_contact_dto(dynamic raw);
 
   @protected
@@ -328,6 +356,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SongDto dco_decode_song_dto(dynamic raw);
+
+  @protected
+  SongPurchasedDto dco_decode_song_purchased_dto(dynamic raw);
 
   @protected
   StreamDto dco_decode_stream_dto(dynamic raw);
@@ -447,6 +478,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DefaultSearchDto sse_decode_default_search_dto(SseDeserializer deserializer);
 
   @protected
+  DigitalAlbumDetailDto sse_decode_digital_album_detail_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DigitalAlbumEntryDto sse_decode_digital_album_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DigitalAlbumPurchasedDto sse_decode_digital_album_purchased_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  DigitalAlbumSalesDto sse_decode_digital_album_sales_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -510,6 +561,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CommentDto> sse_decode_list_comment_dto(SseDeserializer deserializer);
+
+  @protected
+  List<DigitalAlbumEntryDto> sse_decode_list_digital_album_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<DigitalAlbumSalesDto> sse_decode_list_digital_album_sales_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<FeedEventDto> sse_decode_list_feed_event_dto(
@@ -587,6 +648,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ProviderInfo> sse_decode_list_provider_info(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PurchasedSongDto> sse_decode_list_purchased_song_dto(
     SseDeserializer deserializer,
   );
 
@@ -732,6 +798,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
 
   @protected
+  PurchasedSongDto sse_decode_purchased_song_dto(SseDeserializer deserializer);
+
+  @protected
   RecentContactDto sse_decode_recent_contact_dto(SseDeserializer deserializer);
 
   @protected
@@ -765,6 +834,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
+
+  @protected
+  SongPurchasedDto sse_decode_song_purchased_dto(SseDeserializer deserializer);
 
   @protected
   StreamDto sse_decode_stream_dto(SseDeserializer deserializer);
@@ -908,6 +980,30 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_digital_album_detail_dto(
+    DigitalAlbumDetailDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_digital_album_entry_dto(
+    DigitalAlbumEntryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_digital_album_purchased_dto(
+    DigitalAlbumPurchasedDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_digital_album_sales_dto(
+    DigitalAlbumSalesDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -991,6 +1087,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_comment_dto(
     List<CommentDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_digital_album_entry_dto(
+    List<DigitalAlbumEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_digital_album_sales_dto(
+    List<DigitalAlbumSalesDto> self,
     SseSerializer serializer,
   );
 
@@ -1093,6 +1201,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_provider_info(
     List<ProviderInfo> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_purchased_song_dto(
+    List<PurchasedSongDto> self,
     SseSerializer serializer,
   );
 
@@ -1286,6 +1400,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);
 
   @protected
+  void sse_encode_purchased_song_dto(
+    PurchasedSongDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_recent_contact_dto(
     RecentContactDto self,
     SseSerializer serializer,
@@ -1344,6 +1464,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_song_purchased_dto(
+    SongPurchasedDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_stream_dto(StreamDto self, SseSerializer serializer);

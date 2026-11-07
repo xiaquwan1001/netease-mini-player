@@ -1076,6 +1076,107 @@ pub struct MedalWall {
     pub medals: Vec<UserMedal>,
 }
 
+/// 已购数字专辑的一项(digitalAlbum/purchased 顶层 paidAlbums[] 元素, 按实测裁剪).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DigitalAlbumPurchasedEntry {
+    #[serde(default)]
+    pub album_id: u64,
+    #[serde(default)]
+    pub album_name: String,
+    #[serde(default)]
+    pub artist_id: u64,
+    #[serde(default)]
+    pub artist_name: String,
+    /// 封面字段就叫 `cover`(不是 picUrl)
+    #[serde(default)]
+    pub cover_url: String,
+    /// 购买时间(毫秒时间戳)
+    #[serde(default)]
+    pub paid_time_ms: u64,
+    /// 购买数量
+    #[serde(default)]
+    pub bought_count: u64,
+}
+
+/// 我的已购数字专辑(digitalAlbum/purchased). 顶层是 paidAlbums + total, 没有 data 包装.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DigitalAlbumPurchased {
+    /// 已购总数(服务端给的 total, 与 paidAlbums.len() 在未翻页时可能不同)
+    #[serde(default)]
+    pub total: u64,
+    #[serde(default)]
+    pub albums: Vec<DigitalAlbumPurchasedEntry>,
+}
+
+/// 已购单曲的一项(song/purchased = /api/single/mybought/song/list 的 data.list 元素).
+/// 该账号无已购单曲, 元素形状未实测到, 字段宽松取常见命名, 全部带默认值.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PurchasedSongEntry {
+    #[serde(default)]
+    pub song_id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub cover_url: String,
+    /// 购买时间(毫秒时间戳, 缺失为 0)
+    #[serde(default)]
+    pub paid_time_ms: u64,
+}
+
+/// 已购单曲分页(data.{count, hasMore, list}).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongPurchasedPage {
+    #[serde(default)]
+    pub count: u64,
+    #[serde(default)]
+    pub has_more: bool,
+    #[serde(default)]
+    pub songs: Vec<PurchasedSongEntry>,
+}
+
+/// 数字专辑详情(vipmall/albumproduct/detail 的 album + product 平铺, 按实测裁剪).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DigitalAlbumDetail {
+    #[serde(default)]
+    pub album_id: u64,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub artist_id: u64,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub cover_url: String,
+    /// 当前账号是否已购(顶层 hasAlbum)
+    #[serde(default)]
+    pub has_album: bool,
+    /// 售价(元)
+    #[serde(default)]
+    pub price: f64,
+    /// 上架时间(毫秒时间戳, product.pubTime)
+    #[serde(default)]
+    pub pub_time_ms: u64,
+    /// 销量(product.saleNum, 实测恒 0; 真实销量走 digital_album_sales)
+    #[serde(default)]
+    pub sale_num: u64,
+    /// 标签(product.tags, 如「独家」「无损品质收听＆下载」)
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// 简介(product.descr[].resource, 已过滤 `</br>` 占位)
+    #[serde(default)]
+    pub description: String,
+}
+
+/// 数字专辑销量的一项(vipmall/albumproduct/album/query/sales 返回 data 为 {专辑id串: 销量}).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DigitalAlbumSalesEntry {
+    /// 专辑 id(JSON map 的 key 是字符串)
+    pub album_id: String,
+    pub sales: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

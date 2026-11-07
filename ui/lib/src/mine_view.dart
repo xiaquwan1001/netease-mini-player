@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'digital_album_page.dart';
 import 'messages_page.dart';
 import 'net_retry.dart';
 import 'profile_header.dart';
@@ -145,6 +146,22 @@ class _MineViewState extends State<MineView> {
             MessageEntryCard(
               onOpen: widget.onOpenMessages!,
               load: widget.loadMessageCounts,
+            ),
+          ],
+          if (widget.loggedIn) ...[
+            const SizedBox(height: 4),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.album_outlined),
+                title: const Text('数字专辑(只读)'),
+                subtitle: const Text('已购专辑 / 已购单曲 / 详情销量'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(builder: (_) => const DigitalAlbumPage()),
+                ),
+              ),
             ),
           ],
           if (widget.loggedIn && widget.onOpenMedals != null) ...[

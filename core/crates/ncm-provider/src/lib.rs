@@ -13,6 +13,7 @@ use ncm_domain::{
     Profile, RecentContact,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     MedalWall, UserItem, UserLevel, VipOverview, WikiFact,
+    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumSalesEntry, SongPurchasedPage,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -69,6 +70,8 @@ pub enum Capability {
     Message,
     /// 黑胶会员只读(等级/成长值/签到/任务)
     Vip,
+    /// 数字专辑只读(详情/已购/销量/已购单曲; 不含下单)
+    DigitalAlbum,
 }
 
 impl Capability {
@@ -107,6 +110,7 @@ impl Capability {
             Capability::Wiki => "wiki",
             Capability::Message => "message",
             Capability::Vip => "vip",
+            Capability::DigitalAlbum => "digitalAlbum",
         }
     }
 }
@@ -818,6 +822,37 @@ pub trait Provider: Send + Sync {
     /// 能力复用 [`Capability::ProfileDetail`](crate::Capability::ProfileDetail).
     fn user_medals(&self) -> BoxFuture<'_, ProviderResult<MedalWall>> {
         Box::pin(async { Err(ProviderError::unsupported("no user medals")) })
+    }
+
+    /// 已购数字专辑(digitalAlbum/purchased; 需要登录).
+    fn digital_album_purchased<'a>(
+        &'a self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<DigitalAlbumPurchased>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album purchased")) })
+    }
+
+    /// 已购单曲(song/purchased, 分页; 需要登录).
+    fn song_purchased<'a>(
+        &'a self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<SongPurchasedPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song purchased")) })
+    }
+
+    /// 数字专辑详情(vipmall/albumproduct/detail, 只读).
+    fn digital_album_detail(&self, _album_id: u64) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album detail")) })
+    }
+
+    /// 数字专辑销量(逗号分隔的专辑 id 串 → 每个专辑一条销量).
+    fn digital_album_sales<'a>(
+        &'a self,
+        _album_ids: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<DigitalAlbumSalesEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album sales")) })
     }
 
     /// 删除自己的评论(需要登录)

@@ -994,6 +994,154 @@ pub struct CommentStatsDto {
     pub comment_upgraded: bool,
 }
 
+/// 已购数字专辑的一项(实测形状见 ncm_domain::DigitalAlbumPurchasedEntry 注释)
+pub struct DigitalAlbumEntryDto {
+    pub album_id: u64,
+    pub album_name: String,
+    pub artist_id: u64,
+    pub artist_name: String,
+    pub cover_url: String,
+    /// 购买时间(毫秒时间戳)
+    pub paid_time_ms: u64,
+    /// 购买数量
+    pub bought_count: u64,
+}
+
+pub struct DigitalAlbumPurchasedDto {
+    /// 服务端给的已购总数(分页用)
+    pub total: u64,
+    pub albums: Vec<DigitalAlbumEntryDto>,
+}
+
+/// 已购单曲的一项(元素形状未实测到, 字段宽松)
+pub struct PurchasedSongDto {
+    pub song_id: u64,
+    pub name: String,
+    pub artist_name: String,
+    pub cover_url: String,
+    pub paid_time_ms: u64,
+}
+
+pub struct SongPurchasedDto {
+    pub count: u64,
+    pub has_more: bool,
+    pub songs: Vec<PurchasedSongDto>,
+}
+
+/// 数字专辑详情(album + product 平铺, 实测形状见 ncm_domain::DigitalAlbumDetail)
+pub struct DigitalAlbumDetailDto {
+    pub album_id: u64,
+    pub name: String,
+    pub artist_id: u64,
+    pub artist_name: String,
+    pub cover_url: String,
+    /// 当前账号是否已购
+    pub has_album: bool,
+    /// 售价(元)
+    pub price: f64,
+    /// 上架时间(毫秒时间戳)
+    pub pub_time_ms: u64,
+    /// product.saleNum(实测恒 0, 真实销量用 digital_album_sales)
+    pub sale_num: u64,
+    pub tags: Vec<String>,
+    /// 简介(descr 拼接, 已过滤 </br>)
+    pub description: String,
+}
+
+pub struct DigitalAlbumSalesDto {
+    pub album_id: String,
+    pub sales: u64,
+}
+
+/// 已购数字专辑(需登录; limit/offset 分页)
+pub async fn digital_album_purchased(
+    limit: u32,
+    offset: u32,
+) -> Result<DigitalAlbumPurchasedDto, String> {
+    let provider = with_provider(Capability::DigitalAlbum)?;
+    let r = provider
+        .digital_album_purchased(limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(DigitalAlbumPurchasedDto {
+        total: r.total,
+        albums: r
+            .albums
+            .into_iter()
+            .map(|a| DigitalAlbumEntryDto {
+                album_id: a.album_id,
+                album_name: a.album_name,
+                artist_id: a.artist_id,
+                artist_name: a.artist_name,
+                cover_url: a.cover_url,
+                paid_time_ms: a.paid_time_ms,
+                bought_count: a.bought_count,
+            })
+            .collect(),
+    })
+}
+
+/// 已购单曲(需登录; limit/offset 分页)
+pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedDto, String> {
+    let provider = with_provider(Capability::DigitalAlbum)?;
+    let r = provider
+        .song_purchased(limit, offset)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SongPurchasedDto {
+        count: r.count,
+        has_more: r.has_more,
+        songs: r
+            .songs
+            .into_iter()
+            .map(|s| PurchasedSongDto {
+                song_id: s.song_id,
+                name: s.name,
+                artist_name: s.artist_name,
+                cover_url: s.cover_url,
+                paid_time_ms: s.paid_time_ms,
+            })
+            .collect(),
+    })
+}
+
+/// 数字专辑详情(只读; 不提供下单)
+pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetailDto, String> {
+    let provider = with_provider(Capability::DigitalAlbum)?;
+    let d = provider
+        .digital_album_detail(album_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(DigitalAlbumDetailDto {
+        album_id: d.album_id,
+        name: d.name,
+        artist_id: d.artist_id,
+        artist_name: d.artist_name,
+        cover_url: d.cover_url,
+        has_album: d.has_album,
+        price: d.price,
+        pub_time_ms: d.pub_time_ms,
+        sale_num: d.sale_num,
+        tags: d.tags,
+        description: d.description,
+    })
+}
+
+/// 数字专辑销量(album_ids 逗号分隔)
+pub async fn digital_album_sales(
+    album_ids: String,
+) -> Result<Vec<DigitalAlbumSalesDto>, String> {
+    let provider = with_provider(Capability::DigitalAlbum)?;
+    let list = provider
+        .digital_album_sales(&album_ids)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|e| DigitalAlbumSalesDto { album_id: e.album_id, sales: e.sales })
+        .collect())
+}
+
 /// 评论页 → DTO(歌曲/歌单/动态共用)
 fn comment_page_dto(page: ncm_domain::CommentPage) -> CommentPageDto {
     CommentPageDto {
