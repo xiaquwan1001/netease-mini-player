@@ -504,6 +504,50 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "level" => {
+            // 账号听歌等级(user_level): 等级/听歌数进度/登录天数/权益
+            announce(&core);
+            let p = provider(&core, Capability::ProfileDetail)?;
+            let l = p.user_level().await?;
+            println!(
+                "等级 Lv.{} 听歌 {}/{} 登录 {}/{} 进度 {:.2}%",
+                l.level,
+                l.now_play_count,
+                l.next_play_count,
+                l.now_login_count,
+                l.next_login_count,
+                l.progress * 100.0
+            );
+            for line in l.privileges.split('$').filter(|s| !s.trim().is_empty()) {
+                println!("  权益: {line}");
+            }
+            Ok(())
+        }
+        "medals" => {
+            // 勋章墙(user_medal): 已获得/进行中/未开始/即将获得
+            announce(&core);
+            let p = provider(&core, Capability::ProfileDetail)?;
+            let wall = p.user_medals().await?;
+            let got = wall.medals.iter().filter(|m| m.obtained).count();
+            println!("勋章: 已获得 {}/{}(接口 medalNum={})", got, wall.medals.len(), wall.medal_num);
+            for m in wall.medals.iter().filter(|m| !m.obtained).take(10) {
+                println!(
+                    "  [{}] {} {}",
+                    m.status,
+                    m.name,
+                    m.progress_text.clone().unwrap_or_default()
+                );
+            }
+            for m in wall.medals.iter().filter(|m| m.obtained).take(5) {
+                println!(
+                    "  [取得] {} {} {}",
+                    m.name,
+                    m.level_title.clone().unwrap_or_default(),
+                    fmt_date(m.obtain_time_ms.unwrap_or(0))
+                );
+            }
+            Ok(())
+        }
         "exact" => {
             // 精确实体命中(search_multimatch): orders 为空 = 无命中(空命中是 200, 不是错误)
             let kw = args
@@ -1094,6 +1138,7 @@ async fn run() -> Result<(), BoxErr> {
                 "comment_delete" => client.comment_delete(&q).await?,
                 "song_wiki_summary" => client.song_wiki_summary(&q).await?,
                 "user_level" => client.user_level(&q).await?,
+                "user_medal" => client.user_medal(&q).await?,
                 "top_song" => client.top_song(&q).await?,
                 "top_artists" => client.top_artists(&q).await?,
                 "album_newest" => client.album_newest(&q).await?,

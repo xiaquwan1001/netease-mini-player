@@ -1,9 +1,31 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-07(接口覆盖推进到 96/382: 搜索增强 B4(精确实体条/关键词联想/热搜榜) + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-08(接口覆盖推进到 98/382: 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 等级/勋章 B8(user_level / user_medal)(2026-11-08)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 等级 | ✅ | `user_level`: Lv.9 / 听歌 2301/12000 / 登录 350/350 / 进度 19.18%; **进度按听歌数算**(不是成长值), 权益文案 `$` 分隔 |
+| 勋章墙 | ✅ | `user_medal`(uid 必填): 5 分类 200 枚(已获得 157 / 进行中 16 / 未开始 14 / 即将获得 13); 未获得灰显仍占位 |
+| 入口 | ✅ | 我的页「等级与勋章」→ 勋章墙: 顶部等级卡(LevelBadge Lv.9 + 进度 2301/12000) + 每行 3 枚勋章网格, 下拉刷新 |
+| 限流处理 | ✅ | `/api/medal/user/page` 服务端限流很严(连打 5 次只通 2 次); provider 做有界重试(1.5s/3s 退避, 业务错不重试), 实测 5/10 → 9/10 |
+| CLI | ✅ | `ncm level` / `ncm medals`; raw 补 `user_medal` 接线(`ncm raw user_medal uid=<uid>`) |
+| 回归 | ✅ | Rust `ncm-service` 70→75 单测全绿(+5: 等级映射/缺 data/空勋章/勋章映射/medalNum 兜底跳坏条目); Flutter 174 用例全绿(medal_wall 11 + 映射 3); analyze 0 error; codegen 一次 + `cargo build -p ncm_ffi`; `tools/ci.sh` → CI OK; a36 走查: 我的页入口 + Lv.9 等级卡 + 200 枚勋章网格 |
+
+**协议/实现事实**:
+- `user_level`(`/api/user/level`): `data={level,nowPlayCount,nextPlayCount,nowLoginCount,nextLoginCount,progress,info,userId}`;
+  `progress` 是 0..1 的听歌进度(2301/12000=0.19175), 没有等级名(等级名只在 `vip_growthpoint` 里)。
+- `user_medal`(`/api/medal/user/page`, eapi) **uid 必填**(空串 → `code=499`); 唯一数据源是
+  `data.categoryMedalBlockVos[].medalVOS[]`, `data.obtainMedals[]` 是其中已获得的那部分(重复解析会翻倍计数)。
+- 勋章 `status` 四态: `OBTAIN` / `NOT_OBTAIN_PROCESS` / `NOT_OBTAIN_NO_PROCESS` / `WILL_OBTAIN`;
+  `medalNum` 与 `OBTAIN` 枚数、`obtainTime != null` 枚数三者一致(以 status 为准)。
+- 易踩字段: `medalCode` 是字符串; `progress`/`rankText`/`levelTitle` 本身是文案字符串(非数字); 徽章图 http/https 混用。
+- 勋章接口**限流在服务端**, 与客户端并发/是否先打 user_level 无关: 连打必被 reset, 隔 ≥10s 才稳。
+  → UI 侧不要为"勋章枚数"再单独请求一次(已移除多余 FFI), 直接用列表长度。
 
 ## v2 · 功能包: 搜索增强 B4(精确实体 / 关键词联想 / 热搜榜)(2026-11-07)
 

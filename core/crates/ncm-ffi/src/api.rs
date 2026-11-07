@@ -2271,6 +2271,90 @@ pub async fn vip_overview() -> Result<VipOverviewDto, String> {
     })
 }
 
+/// 账号听歌等级(用户等级)
+pub struct UserLevelDto {
+    /// 当前等级数字
+    pub level: u32,
+    /// 本等级已累计听歌数
+    pub now_play_count: u64,
+    /// 升到下一级所需累计听歌数
+    pub next_play_count: u64,
+    /// 本等级已累计登录天数
+    pub now_login_count: u64,
+    /// 升到下一级所需登录天数
+    pub next_login_count: u64,
+    /// 0..=1 的进度(按听歌数算)
+    pub progress: f64,
+    /// 该等级权益文案, 用 `$` 分隔多条
+    pub privileges: String,
+}
+
+/// 一枚勋章
+pub struct UserMedalDto {
+    /// 唯一 id(字符串, 乐迷徽章形如 "20170503_1081839")
+    pub code: String,
+    pub name: String,
+    pub pic_url: Option<String>,
+    /// 佩戴/横排版图
+    pub wear_pic_url: Option<String>,
+    /// 达成条件文案
+    pub condition: String,
+    /// 是否已获得(以服务端 status == "OBTAIN" 为准)
+    pub obtained: bool,
+    /// 获得时间(毫秒), 未获得为 None
+    pub obtain_time_ms: Option<u64>,
+    /// 等级文本, 如 "Lv.4 乐迷"(仅乐迷徽章)
+    pub level_title: Option<String>,
+    /// 进度文案, 如 "当前进度1897/5000"
+    pub progress_text: Option<String>,
+    /// 获得比例文案, 如 "前0.033%获得该徽章"
+    pub rank_text: Option<String>,
+    /// 服务端状态原值(OBTAIN / NOT_OBTAIN_PROCESS / NOT_OBTAIN_NO_PROCESS / WILL_OBTAIN)
+    pub status: String,
+}
+
+/// 账号听歌等级(需要登录)
+pub async fn user_level() -> Result<UserLevelDto, String> {
+    let provider = with_provider(Capability::ProfileDetail)?;
+    let l = provider.user_level().await.map_err(|e| e.to_string())?;
+    Ok(to_user_level_dto(l))
+}
+
+/// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
+pub async fn user_medals() -> Result<Vec<UserMedalDto>, String> {
+    let provider = with_provider(Capability::ProfileDetail)?;
+    let wall = provider.user_medals().await.map_err(|e| e.to_string())?;
+    Ok(wall.medals.into_iter().map(to_user_medal_dto).collect())
+}
+
+fn to_user_level_dto(l: ncm_domain::UserLevel) -> UserLevelDto {
+    UserLevelDto {
+        level: l.level,
+        now_play_count: l.now_play_count,
+        next_play_count: l.next_play_count,
+        now_login_count: l.now_login_count,
+        next_login_count: l.next_login_count,
+        progress: l.progress,
+        privileges: l.privileges,
+    }
+}
+
+fn to_user_medal_dto(m: ncm_domain::UserMedal) -> UserMedalDto {
+    UserMedalDto {
+        code: m.code,
+        name: m.name,
+        pic_url: m.pic_url,
+        wear_pic_url: m.wear_pic_url,
+        condition: m.condition,
+        obtained: m.obtained,
+        obtain_time_ms: m.obtain_time_ms,
+        level_title: m.level_title,
+        progress_text: m.progress_text,
+        rank_text: m.rank_text,
+        status: m.status,
+    }
+}
+
 fn style_tag_dto(tag: ncm_domain::StyleTag) -> StyleTagDto {
     StyleTagDto {
         id: tag.id,

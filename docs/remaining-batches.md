@@ -7,8 +7,8 @@
 >
 > **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
 > 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
-> **Wave 3 完成(B4 搜索增强: 精确实体条/关键词联想/热搜榜, 覆盖 96/382)**。
-> 下一波建议: [Rust] B2 评论统计 或 B8 等级/勋章 ｜ [Dart] 任意纯 Dart 打磨批(见 §4)。
+> **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**。
+> 下一波建议: [Rust] B2 评论统计(最小) 或 B10 电台补充(M 级) ｜ [Dart] 评论统计 UI mock 或 §4 纯 Dart 打磨。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -49,7 +49,7 @@
 - `search_hot` 固定 10 条、无 rank/score; `search_default`(`/api/search/defaultkeyword/get`)顶层用 `data` 而非 `result`。
 - CLI 的 raw 子命令参数是**位置参数 `key=value`**, 不是 `--param key=value`。
 
-| **B8 等级/勋章** | 资料卡等级、勋章墙 | `user_level` `user_medal` | parse 2 + FFI 2 | `profile_header.dart` + 新页 | 要 |
+| ~~**B8 等级/勋章**~~ ✅已做 | 等级进度 + 勋章墙 | `user_level` `user_medal` | parse 2 + FFI 2(勋章接口有界重试) | `medal_wall.dart`(新) + `mine_view.dart` 入口 | 已验(a36) |
 
 ### M 级 · 要新交互/新页面/vendor 有限制(1 轮 1 个, 1~2 天量)
 

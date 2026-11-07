@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `artist_dto`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `artist_dto`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `to_user_level_dto`, `to_user_medal_dto`, `user_item_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -612,6 +612,13 @@ Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
 Future<VipOverviewDto> vipOverview() =>
     RustLib.instance.api.crateApiVipOverview();
+
+/// 账号听歌等级(需要登录)
+Future<UserLevelDto> userLevel() => RustLib.instance.api.crateApiUserLevel();
+
+/// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
+Future<List<UserMedalDto>> userMedals() =>
+    RustLib.instance.api.crateApiUserMedals();
 
 class AccountDto {
   final BigInt userId;
@@ -2393,6 +2400,140 @@ class UserItemDto {
           avatarUrl == other.avatarUrl &&
           signature == other.signature &&
           followed == other.followed;
+}
+
+/// 账号听歌等级(用户等级)
+class UserLevelDto {
+  /// 当前等级数字
+  final int level;
+
+  /// 本等级已累计听歌数
+  final BigInt nowPlayCount;
+
+  /// 升到下一级所需累计听歌数
+  final BigInt nextPlayCount;
+
+  /// 本等级已累计登录天数
+  final BigInt nowLoginCount;
+
+  /// 升到下一级所需登录天数
+  final BigInt nextLoginCount;
+
+  /// 0..=1 的进度(按听歌数算)
+  final double progress;
+
+  /// 该等级权益文案, 用 `$` 分隔多条
+  final String privileges;
+
+  const UserLevelDto({
+    required this.level,
+    required this.nowPlayCount,
+    required this.nextPlayCount,
+    required this.nowLoginCount,
+    required this.nextLoginCount,
+    required this.progress,
+    required this.privileges,
+  });
+
+  @override
+  int get hashCode =>
+      level.hashCode ^
+      nowPlayCount.hashCode ^
+      nextPlayCount.hashCode ^
+      nowLoginCount.hashCode ^
+      nextLoginCount.hashCode ^
+      progress.hashCode ^
+      privileges.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserLevelDto &&
+          runtimeType == other.runtimeType &&
+          level == other.level &&
+          nowPlayCount == other.nowPlayCount &&
+          nextPlayCount == other.nextPlayCount &&
+          nowLoginCount == other.nowLoginCount &&
+          nextLoginCount == other.nextLoginCount &&
+          progress == other.progress &&
+          privileges == other.privileges;
+}
+
+/// 一枚勋章
+class UserMedalDto {
+  /// 唯一 id(字符串, 乐迷徽章形如 "20170503_1081839")
+  final String code;
+  final String name;
+  final String? picUrl;
+
+  /// 佩戴/横排版图
+  final String? wearPicUrl;
+
+  /// 达成条件文案
+  final String condition;
+
+  /// 是否已获得(以服务端 status == "OBTAIN" 为准)
+  final bool obtained;
+
+  /// 获得时间(毫秒), 未获得为 None
+  final BigInt? obtainTimeMs;
+
+  /// 等级文本, 如 "Lv.4 乐迷"(仅乐迷徽章)
+  final String? levelTitle;
+
+  /// 进度文案, 如 "当前进度1897/5000"
+  final String? progressText;
+
+  /// 获得比例文案, 如 "前0.033%获得该徽章"
+  final String? rankText;
+
+  /// 服务端状态原值(OBTAIN / NOT_OBTAIN_PROCESS / NOT_OBTAIN_NO_PROCESS / WILL_OBTAIN)
+  final String status;
+
+  const UserMedalDto({
+    required this.code,
+    required this.name,
+    this.picUrl,
+    this.wearPicUrl,
+    required this.condition,
+    required this.obtained,
+    this.obtainTimeMs,
+    this.levelTitle,
+    this.progressText,
+    this.rankText,
+    required this.status,
+  });
+
+  @override
+  int get hashCode =>
+      code.hashCode ^
+      name.hashCode ^
+      picUrl.hashCode ^
+      wearPicUrl.hashCode ^
+      condition.hashCode ^
+      obtained.hashCode ^
+      obtainTimeMs.hashCode ^
+      levelTitle.hashCode ^
+      progressText.hashCode ^
+      rankText.hashCode ^
+      status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is UserMedalDto &&
+          runtimeType == other.runtimeType &&
+          code == other.code &&
+          name == other.name &&
+          picUrl == other.picUrl &&
+          wearPicUrl == other.wearPicUrl &&
+          condition == other.condition &&
+          obtained == other.obtained &&
+          obtainTimeMs == other.obtainTimeMs &&
+          levelTitle == other.levelTitle &&
+          progressText == other.progressText &&
+          rankText == other.rankText &&
+          status == other.status;
 }
 
 /// 黑胶成长值 / 等级卡

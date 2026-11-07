@@ -935,6 +935,98 @@ pub struct VipOverview {
     pub task_score: i64,
 }
 
+/// 账号听歌/登录等级(对应 vendor 的 `user_level`, 端点 /api/user/level, weapi, body {}).
+///
+/// 实测(2026-11-08, 已登录设备):
+/// ```json
+/// {"code":200,"data":{"info":"60G音乐网盘免费容量$黑名单上限120$...","level":9,
+///  "nextLoginCount":350,"nextPlayCount":12000,"nowLoginCount":350,"nowPlayCount":2301,
+///  "progress":0.19175,"userId":1822714196},"full":false}
+/// ```
+/// `progress` 实测 = now_play_count / next_play_count(2301/12000 = 0.19175), **按听歌数算**;
+/// 该账号 now_login_count 已顶满(350/350), 100% 封顶时以哪个维度为准**未实测**。
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct UserLevel {
+    /// 当前等级数字(接口的 level, 实测 9)
+    #[serde(default)]
+    pub level: u32,
+    /// 本等级已累计听歌数(接口的 nowPlayCount)
+    #[serde(default)]
+    pub now_play_count: u64,
+    /// 升到下一级所需累计听歌数(接口的 nextPlayCount)
+    #[serde(default)]
+    pub next_play_count: u64,
+    /// 本等级已累计登录天数(接口的 nowLoginCount)
+    #[serde(default)]
+    pub now_login_count: u64,
+    /// 升到下一级所需登录天数(接口的 nextLoginCount)
+    #[serde(default)]
+    pub next_login_count: u64,
+    /// 0..=1 的进度(接口的 progress, 按听歌数算)
+    #[serde(default)]
+    pub progress: f64,
+    /// 该等级权益文案, 接口的 info, 用 `$` 分隔多条; UI 自己 split
+    #[serde(default)]
+    pub privileges: String,
+}
+
+/// 一枚勋章(对应 vendor 的 `user_medal`, 端点 /api/medal/user/page, eapi, body 必带 uid).
+///
+/// 实测(2026-11-08): 服务端按分类回 `data.categoryMedalBlockVos[].medalVOS[]`, 共 5 类 200 枚;
+/// 同一个对象也出现在 `data.obtainMedals[]`(只含已获得的), 解析时只用前者避免重复。
+/// `status` 取值实测 4 种: `OBTAIN` / `NOT_OBTAIN_PROCESS`(进行中) /
+/// `NOT_OBTAIN_NO_PROCESS`(未开始) / `WILL_OBTAIN`(即将获得)。
+/// `medalNum` = status=OBTAIN 的枚数 = obtainTime 非空的枚数(实测 157 对 157)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserMedal {
+    /// 唯一 id(接口的 medalCode, **字符串**: "22086503" / 乐迷徽章 "20170503_1081839")
+    #[serde(default)]
+    pub code: String,
+    /// 名称(乐迷徽章就是艺术家名)
+    #[serde(default)]
+    pub name: String,
+    /// 徽章图(接口的 medalPicUrl; http:// 与 https:// 两种都出现过, 原样透传)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pic_url: Option<String>,
+    /// 佩戴/横排版图(接口的 wearPic); 徽章墙用方形 pic_url, 佩戴位用这张
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wear_pic_url: Option<String>,
+    /// 达成条件文案(接口的 acceptCondition, 200/200 非空)
+    #[serde(default)]
+    pub condition: String,
+    /// 已获得 = 接口 status == "OBTAIN"(与 obtain_time_ms.is_some() 实测等价, 以 status 为准)
+    #[serde(default)]
+    pub obtained: bool,
+    /// 获得时间, **毫秒**(接口的 obtainTime, 未获得为 null)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub obtain_time_ms: Option<u64>,
+    /// 等级文本, 如 "Lv.4 乐迷"; 仅乐迷徽章有(132/200), 其余为 None
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub level_title: Option<String>,
+    /// 进度文案, 接口的 progress **本身就是字符串**如 "当前进度1897/5000";
+    /// 实测只有 28/200 有值(未获得且有可量化目标), 不自己拆数字
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub progress_text: Option<String>,
+    /// 获得比例文案, 如 "前0.033%获得该徽章"(接口的 rankText, 122/200)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rank_text: Option<String>,
+    /// 接口 status 原值(OBTAIN / NOT_OBTAIN_PROCESS / NOT_OBTAIN_NO_PROCESS / WILL_OBTAIN),
+    /// UI 要区分"进行中"与"未开始"时用; 未知新值原样保留
+    #[serde(default)]
+    pub status: String,
+}
+
+/// 勋章墙(data.medalNum / categoryMedalBlockVos 的扁平化结果).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MedalWall {
+    /// 已获得枚数(接口的 medalNum, 实测 = status=OBTAIN 的枚数)
+    #[serde(default)]
+    pub medal_num: u32,
+    /// 全部勋章(按服务端分类顺序平铺, 不重排)
+    #[serde(default)]
+    pub medals: Vec<UserMedal>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

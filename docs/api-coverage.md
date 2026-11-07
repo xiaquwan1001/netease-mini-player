@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-07(第九批: 搜索增强 B4 已接入, 覆盖 96/382)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-08(第十批: 等级/勋章 B8 已接入, 覆盖 98/382)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -8,9 +8,9 @@
 | 指标 | 数值 |
 |---|---|
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **96(25%)** |
-| 未接入 | **286** |
-| FFI 导出给 Dart 的函数 | 111 |
+| `ncm-service`(provider)实际调用的 | **98(25%)** |
+| 未接入 | **284** |
+| FFI 导出给 Dart 的函数 | 113 |
 | 其中 UI 还没有入口的 | 5(`lyric_lines` `lyric_lines_i18n` `ping` `podcast_program` `search`) |
 
 复算:

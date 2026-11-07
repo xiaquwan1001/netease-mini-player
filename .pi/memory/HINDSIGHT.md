@@ -329,3 +329,27 @@ API/protocol details and anti-bot technique live in the
 
 <!-- created=2026-11-07, last=2026-11-07 -->
 
+## 等级 / 勋章(user_level / user_medal)(2026-11-08)
+
+- `user_level`(`/api/user/level`, weapi, body `{}`)回 `data:{level,nowPlayCount,nextPlayCount,
+  nowLoginCount,nextLoginCount,progress,info,userId}`; 实测 9 级 2301/12000 首、350/350 天,
+  **`progress` = nowPlayCount/nextPlayCount**(0.19175); 登录天数已顶满, 所以"谁封顶"未实测。
+  `info` 是权益文案、`$` 分隔; **没有**等级名字段(`levelName` 在 `vip_growthpoint` 里, 别混用)。
+- `user_medal`(`/api/medal/user/page`, eapi)的 **uid 必填**: vendor 传空串时服务端回 `code=499`,
+  偶尔直接是 http 层 reset。uid 取 `user_level` 的 `data.userId`(服务端权威)比读本地 session 稳。
+- 响应形状: `data.categoryMedalBlockVos[].medalVOS[]` 是唯一数据源; `data.obtainMedals[]` 是
+  **同一批对象里已获得的那部分**, 两个都解析会重复计数。实测 5 分类 200 枚、`medalNum=157`
+  = `status=="OBTAIN"` 枚数 = `obtainTime != null` 枚数(三者一致, 以 status 为准)。
+- `status` 四种: `OBTAIN` / `NOT_OBTAIN_PROCESS`(进行中) / `NOT_OBTAIN_NO_PROCESS`(未开始) /
+  `WILL_OBTAIN`(即将获得); `obtainTime` 是**毫秒**, 未获得为 null(偶见 0, 当 null 处理)。
+- 易踩字段: `medalCode` 是**字符串**(乐迷徽章 `20170503_1081839`); `progress` 本身是**字符串文案**
+  ("当前进度1897/5000", 仅 28/200); `rankText` = "前0.033%获得该徽章"(122/200);
+  `levelTitle` = "Lv.4 乐迷" 只有乐迷徽章有(132/200); `userObtainProportion`/`detailPage`/`sideBarGuideText`
+  实测全 null, 别建模。徽章图 url **http 与 https 混用**, 必须原样透传。
+- **`/api/medal/user/page` 限流极严**: 不间断连打 5 次只通 2 次(Connection reset by peer);
+  每次隔 ≥10s 则 5/5 全通; "先打一次 user_level 再打勋章"照样被 reset → 触发在服务端, 与客户端并发无关。
+  provider 里做了有界重试(退避 1.5s/3s, 业务错误不重试), 实测 5/10 → 9/10。
+- CLI: `ncm level` / `ncm medals` 可直接 headless 复现; raw 分支参数是位置参数 `key=value`
+  (`ncm raw user_medal uid=1822714196`), 漏 uid 会得到 499 —— 别误判成"接口挂了"。
+
+<!-- created=2026-11-08, last=2026-11-08 -->

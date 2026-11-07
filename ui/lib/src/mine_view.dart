@@ -26,6 +26,7 @@ class MineView extends StatefulWidget {
     required this.onOpenFolloweds,
     required this.onOpenLiked,
     this.onOpenMessages,
+    this.onOpenMedals,
     this.loadMessageCounts,
     this.onPlayLiked,
     this.loadLiked,
@@ -56,6 +57,9 @@ class MineView extends StatefulWidget {
 
   /// 打开消息中心(不传就不显示入口)
   final VoidCallback? onOpenMessages;
+
+  /// 等级/勋章墙入口(未登录或未接线时不显示)
+  final VoidCallback? onOpenMedals;
 
   /// 未读计数(缺省走 rust.messageCounts)
   final MessageCountsLoader? loadMessageCounts;
@@ -141,6 +145,19 @@ class _MineViewState extends State<MineView> {
             MessageEntryCard(
               onOpen: widget.onOpenMessages!,
               load: widget.loadMessageCounts,
+            ),
+          ],
+          if (widget.loggedIn && widget.onOpenMedals != null) ...[
+            const SizedBox(height: 4),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.military_tech_outlined),
+                title: const Text('等级与勋章'),
+                subtitle: const Text('等级进度 / 勋章墙(只读)'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: widget.onOpenMedals,
+              ),
             ),
           ],
           const SizedBox(height: 4),

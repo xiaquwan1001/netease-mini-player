@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 568458432;
+  int get rustContentHash => 584680148;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -438,6 +438,10 @@ abstract class RustLibApi extends BaseApi {
     required int limit,
     required int offset,
   });
+
+  Future<UserLevelDto> crateApiUserLevel();
+
+  Future<List<UserMedalDto>> crateApiUserMedals();
 
   Future<VipOverviewDto> crateApiVipOverview();
 }
@@ -3805,7 +3809,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<VipOverviewDto> crateApiVipOverview() {
+  Future<UserLevelDto> crateApiUserLevel() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3814,6 +3818,60 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 111,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_user_level_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiUserLevelConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUserLevelConstMeta =>
+      const TaskConstMeta(debugName: "user_level", argNames: []);
+
+  @override
+  Future<List<UserMedalDto>> crateApiUserMedals() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 112,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_user_medal_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiUserMedalsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUserMedalsConstMeta =>
+      const TaskConstMeta(debugName: "user_medals", argNames: []);
+
+  @override
+  Future<VipOverviewDto> crateApiVipOverview() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 113,
             port: port_,
           );
         },
@@ -4045,6 +4103,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @protected
   double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  double dco_decode_f_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as double;
   }
@@ -4399,6 +4463,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_user_item_dto).toList();
+  }
+
+  @protected
+  List<UserMedalDto> dco_decode_list_user_medal_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_user_medal_dto).toList();
   }
 
   @protected
@@ -4929,6 +4999,44 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UserLevelDto dco_decode_user_level_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return UserLevelDto(
+      level: dco_decode_u_32(arr[0]),
+      nowPlayCount: dco_decode_u_64(arr[1]),
+      nextPlayCount: dco_decode_u_64(arr[2]),
+      nowLoginCount: dco_decode_u_64(arr[3]),
+      nextLoginCount: dco_decode_u_64(arr[4]),
+      progress: dco_decode_f_64(arr[5]),
+      privileges: dco_decode_String(arr[6]),
+    );
+  }
+
+  @protected
+  UserMedalDto dco_decode_user_medal_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return UserMedalDto(
+      code: dco_decode_String(arr[0]),
+      name: dco_decode_String(arr[1]),
+      picUrl: dco_decode_opt_String(arr[2]),
+      wearPicUrl: dco_decode_opt_String(arr[3]),
+      condition: dco_decode_String(arr[4]),
+      obtained: dco_decode_bool(arr[5]),
+      obtainTimeMs: dco_decode_opt_box_autoadd_u_64(arr[6]),
+      levelTitle: dco_decode_opt_String(arr[7]),
+      progressText: dco_decode_opt_String(arr[8]),
+      rankText: dco_decode_opt_String(arr[9]),
+      status: dco_decode_String(arr[10]),
+    );
+  }
+
+  @protected
   VipGrowthDto dco_decode_vip_growth_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -5278,6 +5386,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   double sse_decode_f_32(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return deserializer.buffer.getFloat32();
+  }
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat64();
   }
 
   @protected
@@ -5892,6 +6006,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <UserItemDto>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_user_item_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<UserMedalDto> sse_decode_list_user_medal_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <UserMedalDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_user_medal_dto(deserializer));
     }
     return ans_;
   }
@@ -6570,6 +6698,56 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  UserLevelDto sse_decode_user_level_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_level = sse_decode_u_32(deserializer);
+    var var_nowPlayCount = sse_decode_u_64(deserializer);
+    var var_nextPlayCount = sse_decode_u_64(deserializer);
+    var var_nowLoginCount = sse_decode_u_64(deserializer);
+    var var_nextLoginCount = sse_decode_u_64(deserializer);
+    var var_progress = sse_decode_f_64(deserializer);
+    var var_privileges = sse_decode_String(deserializer);
+    return UserLevelDto(
+      level: var_level,
+      nowPlayCount: var_nowPlayCount,
+      nextPlayCount: var_nextPlayCount,
+      nowLoginCount: var_nowLoginCount,
+      nextLoginCount: var_nextLoginCount,
+      progress: var_progress,
+      privileges: var_privileges,
+    );
+  }
+
+  @protected
+  UserMedalDto sse_decode_user_medal_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_code = sse_decode_String(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_picUrl = sse_decode_opt_String(deserializer);
+    var var_wearPicUrl = sse_decode_opt_String(deserializer);
+    var var_condition = sse_decode_String(deserializer);
+    var var_obtained = sse_decode_bool(deserializer);
+    var var_obtainTimeMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_levelTitle = sse_decode_opt_String(deserializer);
+    var var_progressText = sse_decode_opt_String(deserializer);
+    var var_rankText = sse_decode_opt_String(deserializer);
+    var var_status = sse_decode_String(deserializer);
+    return UserMedalDto(
+      code: var_code,
+      name: var_name,
+      picUrl: var_picUrl,
+      wearPicUrl: var_wearPicUrl,
+      condition: var_condition,
+      obtained: var_obtained,
+      obtainTimeMs: var_obtainTimeMs,
+      levelTitle: var_levelTitle,
+      progressText: var_progressText,
+      rankText: var_rankText,
+      status: var_status,
+    );
+  }
+
+  @protected
   VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_level = sse_decode_u_32(deserializer);
@@ -6879,6 +7057,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_f_32(double self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     serializer.buffer.putFloat32(self);
+  }
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat64(self);
   }
 
   @protected
@@ -7394,6 +7578,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_user_medal_dto(
+    List<UserMedalDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_user_medal_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_vip_sign_day_dto(
     List<VipSignDayDto> self,
     SseSerializer serializer,
@@ -7902,6 +8098,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.avatarUrl, serializer);
     sse_encode_String(self.signature, serializer);
     sse_encode_bool(self.followed, serializer);
+  }
+
+  @protected
+  void sse_encode_user_level_dto(UserLevelDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.level, serializer);
+    sse_encode_u_64(self.nowPlayCount, serializer);
+    sse_encode_u_64(self.nextPlayCount, serializer);
+    sse_encode_u_64(self.nowLoginCount, serializer);
+    sse_encode_u_64(self.nextLoginCount, serializer);
+    sse_encode_f_64(self.progress, serializer);
+    sse_encode_String(self.privileges, serializer);
+  }
+
+  @protected
+  void sse_encode_user_medal_dto(UserMedalDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.code, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_opt_String(self.picUrl, serializer);
+    sse_encode_opt_String(self.wearPicUrl, serializer);
+    sse_encode_String(self.condition, serializer);
+    sse_encode_bool(self.obtained, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.obtainTimeMs, serializer);
+    sse_encode_opt_String(self.levelTitle, serializer);
+    sse_encode_opt_String(self.progressText, serializer);
+    sse_encode_opt_String(self.rankText, serializer);
+    sse_encode_String(self.status, serializer);
   }
 
   @protected

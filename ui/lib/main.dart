@@ -15,6 +15,7 @@ import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/lyric.dart';
 import 'src/library_view.dart';
+import 'src/medal_wall.dart';
 import 'src/messages_page.dart';
 import 'src/new_release_page.dart';
 import 'src/mine_view.dart';
@@ -1861,6 +1862,7 @@ class _HomePageState extends State<HomePage> {
           onOpenRecent: _openRecent,
           onOpenLiked: _openLikedDetail,
           onOpenMessages: () => showMessagesPage(context),
+          onOpenMedals: () => showMedalWall(context, isVip: _info?.vip == true),
           onPlayLiked: (songs, i) =>
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );

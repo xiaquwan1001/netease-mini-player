@@ -9,7 +9,8 @@ use ncm_domain::{
     SearchExact,
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    UserItem, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
+    MedalWall, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
+    VipTask, WikiFact,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -210,6 +211,26 @@ impl NeteaseProvider {
     fn uid_cached(&self) -> Option<u64> {
         let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
         guard.session.profile.as_ref().map(|p| p.user_id)
+    }
+
+    /// 取当前登录账号 uid: 先问等级接口(data.userId, 服务端权威), 失败/缺失再回退本地缓存.
+    /// 勋章接口的 uid 是**必填**(空串时服务端回 code=499).
+    async fn remote_uid(
+        &self,
+        client: &ApiClient,
+        domain: &Option<String>,
+        ua: &Option<String>,
+        cookie: &str,
+    ) -> Option<u64> {
+        let resp = client.user_level(&make_query(cookie, domain, ua)).await.ok()?;
+        if check_body(&resp.body).is_err() {
+            return self.uid_cached();
+        }
+        resp.body
+            .get("data")
+            .and_then(|d| u64_of(d, "userId"))
+            .filter(|u| *u > 0)
+            .or_else(|| self.uid_cached())
     }
 
     /// 最近播放三类(专辑/歌单/电台)共用的取数: 响应都是 {code, data:{list:[{data:{...}}]}}
@@ -491,6 +512,73 @@ pub fn parse_vip_tasks(body: &Value) -> (Vec<VipTask>, i64) {
         }
     }
     (out, task_score)
+}
+
+/// user_level: data = {level, nowPlayCount, nextPlayCount, nowLoginCount, nextLoginCount,
+/// progress, info, userId}. 实测(2026-11-08): level=9, 2301/12000, progress=0.19175(= 听歌数比).
+/// data 缺失时返回 None(由调用方按"接口成功但没有数据"处理).
+pub fn parse_user_level(body: &Value) -> Option<UserLevel> {
+    let data = body.get("data")?;
+    if !data.is_object() {
+        return None;
+    }
+    Some(UserLevel {
+        level: u64_of(data, "level").unwrap_or(0) as u32,
+        now_play_count: u64_of(data, "nowPlayCount").unwrap_or(0),
+        next_play_count: u64_of(data, "nextPlayCount").unwrap_or(0),
+        now_login_count: u64_of(data, "nowLoginCount").unwrap_or(0),
+        next_login_count: u64_of(data, "nextLoginCount").unwrap_or(0),
+        // progress 实测是 f64(0.19175), 但防御性兼容字符串形态
+        progress: data
+            .get("progress")
+            .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .unwrap_or(0.0),
+        privileges: str_of(data, "info").unwrap_or_default(),
+    })
+}
+
+/// user_medal: data.categoryMedalBlockVos[].medalVOS[] 平铺.
+///
+/// 实测(2026-11-08, uid=1822714196): 5 个分类共 200 枚, status 分布
+/// OBTAIN 157 / NOT_OBTAIN_PROCESS 16 / NOT_OBTAIN_NO_PROCESS 14 / WILL_OBTAIN 13;
+/// data.medalNum = 157 = OBTAIN 枚数。data.obtainMedals 是同一批对象里已获得的那部分,
+/// **只解析 categoryMedalBlockVos**, 否则会重复计数。
+///
+/// medalCode 是字符串(乐迷徽章形如 "20170503_1081839"), 缺 code 的条目直接跳过。
+pub fn parse_user_medals(body: &Value) -> MedalWall {
+    let data = body.get("data").unwrap_or(&Value::Null);
+    let mut medals: Vec<UserMedal> = Vec::new();
+    if let Some(groups) = data.get("categoryMedalBlockVos").and_then(Value::as_array) {
+        for g in groups {
+            let Some(items) = g.get("medalVOS").and_then(Value::as_array) else {
+                continue;
+            };
+            for m in items {
+                let Some(code) = str_of(m, "medalCode").filter(|c| !c.trim().is_empty()) else {
+                    continue;
+                };
+                let status = str_of(m, "status").unwrap_or_default();
+                medals.push(UserMedal {
+                    code,
+                    name: str_of(m, "medalName").unwrap_or_default(),
+                    pic_url: str_of(m, "medalPicUrl").filter(|u| !u.trim().is_empty()),
+                    wear_pic_url: str_of(m, "wearPic").filter(|u| !u.trim().is_empty()),
+                    condition: str_of(m, "acceptCondition").unwrap_or_default(),
+                    obtained: status == "OBTAIN",
+                    obtain_time_ms: u64_of(m, "obtainTime").filter(|t| *t > 0),
+                    level_title: str_of(m, "levelTitle").filter(|s| !s.trim().is_empty()),
+                    progress_text: str_of(m, "progress").filter(|s| !s.trim().is_empty()),
+                    rank_text: str_of(m, "rankText").filter(|s| !s.trim().is_empty()),
+                    status,
+                });
+            }
+        }
+    }
+    let medal_num = u64_of(data, "medalNum")
+        .map(|n| n as u32)
+        // 兜底: 接口没给 medalNum 时按 obtainTime 数(实测与 OBTAIN 枚数等价)
+        .unwrap_or_else(|| medals.iter().filter(|m| m.obtained).count() as u32);
+    MedalWall { medal_num, medals }
 }
 
 fn u64_of(v: &Value, key: &str) -> Option<u64> {
@@ -1895,6 +1983,65 @@ impl Provider for NeteaseProvider {
                 tasks,
                 task_score,
             })
+        })
+    }
+
+    /// 账号听歌等级(/api/user/level, weapi, body {}).
+    fn user_level(&self) -> BoxFuture<'_, ProviderResult<UserLevel>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看等级需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.user_level(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            parse_user_level(&resp.body)
+                .ok_or_else(|| ProviderError::internal("user_level 响应缺少 data"))
+        })
+    }
+
+    /// 账号勋章墙(/api/medal/user/page, eapi, body **必须带 uid**).
+    ///
+    /// uid 优先取等级接口里服务端回的 data.userId(不依赖本地缓存的 profile),
+    /// 拿不到再回退 session.profile.user_id。实测空 uid 时服务端回 code=499.
+    fn user_medals(&self) -> BoxFuture<'_, ProviderResult<MedalWall>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看勋章需要登录"));
+            }
+            let uid = self
+                .remote_uid(&client, &domain, &ua, &cookie)
+                .await
+                .ok_or_else(|| ProviderError::auth("拿不到账号 uid, 无法查勋章"))?;
+            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
+            // 该 eapi 端点限流很严(实测 2026-11-08: 不间断连打 5 次只通 2 次;
+            // 每次隔 ≥10s 则 5/5 全通; "先打一次 user_level 再打勋章" 也照样被 reset
+            // -> 触发条件在服务端, 与客户端连发次数无关). 这里做有界重试, 退避 1.5s/3s,
+            // 收紧后实测 8/10(单次 5/10). 业务错误(301/499)不重试.
+            let mut last: Option<ProviderError> = None;
+            for delay_ms in [0u64, 1500, 3000] {
+                if delay_ms > 0 {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                }
+                match client.user_medal(&q).await {
+                    Ok(resp) => match check_body(&resp.body) {
+                        Ok(()) => return Ok(parse_user_medals(&resp.body)),
+                        // 业务错误不重试(301/499 之类重试也没用)
+                        Err(e) => return Err(e),
+                    },
+                    Err(e) => {
+                        let pe = map_error(e);
+                        // 只有网络类错误值得重试
+                        if pe.kind != ncm_provider::ProviderErrorKind::Network {
+                            return Err(pe);
+                        }
+                        last = Some(pe);
+                    }
+                }
+            }
+            Err(last.unwrap_or_else(|| ProviderError::network("user_medal 重试耗尽")))
         })
     }
 
@@ -5668,5 +5815,158 @@ mod tests {
         // 无 data / 空数组
         assert!(parse_hot_search_detail(&json!({"code": 200})).is_empty());
         assert!(parse_hot_search_detail(&json!({"code": 200, "data": []})).is_empty());
+    }
+
+    #[test]
+    fn user_level_mapping() {
+        // 实测响应原样(2026-11-08, 已登录: 9 级, 2301/12000 首, 350/350 天)
+        let body = json!({"code": 200, "full": false, "data": {
+            "info": "60G音乐网盘免费容量$黑名单上限120$云音乐商城满100减12元优惠券",
+            "level": 9,
+            "nextLoginCount": 350,
+            "nextPlayCount": 12000,
+            "nowLoginCount": 350,
+            "nowPlayCount": 2301,
+            "progress": 0.19175,
+            "userId": 1822714196u64
+        }});
+        let lv = parse_user_level(&body).expect("data 存在应解析成功");
+        assert_eq!(lv.level, 9);
+        assert_eq!(lv.now_play_count, 2301);
+        assert_eq!(lv.next_play_count, 12000);
+        assert_eq!(lv.now_login_count, 350);
+        assert_eq!(lv.next_login_count, 350);
+        // progress 实测 = nowPlayCount / nextPlayCount = 0.19175
+        assert!((lv.progress - 0.19175).abs() < 1e-9);
+        assert!(lv.privileges.starts_with("60G音乐网盘免费容量$"));
+        assert_eq!(lv.privileges.split('$').count(), 3);
+    }
+
+    #[test]
+    fn user_level_missing_data() {
+        // data 缺失 / 不是对象 / 字段缺失: 前者返回 None, 后者全 0 不 panic
+        assert!(parse_user_level(&json!({"code": 200})).is_none());
+        assert!(parse_user_level(&json!({"code": 200, "data": null})).is_none());
+        assert!(parse_user_level(&json!({"code": 200, "data": []})).is_none());
+        assert!(parse_user_level(&json!({})).is_none());
+        let empty = parse_user_level(&json!({"code": 200, "data": {}})).expect("空对象也要有默认值");
+        assert_eq!(empty.level, 0);
+        assert_eq!(empty.now_play_count, 0);
+        assert_eq!(empty.progress, 0.0);
+        assert!(empty.privileges.is_empty());
+        // progress 若被服务端换成字符串, 也要能吃
+        let lv = parse_user_level(&json!({"code": 200, "data": {"progress": "0.5"}})).unwrap();
+        assert!((lv.progress - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn user_medals_empty() {
+        // 空账号/空分类: 不 panic, medal_num 落 0
+        assert_eq!(parse_user_medals(&json!({"code": 200})), MedalWall::default());
+        let wall = parse_user_medals(&json!({"code": 200, "data": {
+            "medalNum": 0, "categoryMedalBlockVos": []
+        }}));
+        assert_eq!(wall.medal_num, 0);
+        assert!(wall.medals.is_empty());
+        // 分类存在但没有 medalVOS / medalVOS 不是数组
+        let wall = parse_user_medals(&json!({"code": 200, "data": {
+            "medalNum": 3,
+            "categoryMedalBlockVos": [{"categoryTitle": "A"}, {"categoryTitle": "B", "medalVOS": "x"}]
+        }}));
+        assert_eq!(wall.medal_num, 3);
+        assert!(wall.medals.is_empty());
+    }
+
+    #[test]
+    fn user_medals_mapping() {
+        // 三项覆盖三种实测形态: 已获得(普通) / 未获得有进度(进程文字) / 乐迷徽章(等级+艺术家)
+        let body = json!({"code": 200, "data": {
+            "medalNum": 2,
+            "obtainMedals": [{"medalCode": "忽略我", "status": "OBTAIN"}],
+            "categoryMedalBlockVos": [
+                {"categoryCode": "will_obtain", "categoryTitle": "即将获得", "medalVOS": [
+                    {"medalCode": "23811503", "medalName": "喵！优秀达人", "status": "WILL_OBTAIN",
+                     "acceptCondition": "参与「笔记达人限时挑战」活动",
+                     "medalPicUrl": "http://p5.music.126.net/obj/a.png",
+                     "wearPic": "http://p5.music.126.net/obj/a_wear.png",
+                     "obtainTime": null, "progress": null, "rankText": null,
+                     "levelTitle": null, "userObtainProportion": null}
+                ]},
+                {"categoryCode": "genre_language", "categoryTitle": "成就徽章", "medalVOS": [
+                    {"medalCode": "21298503", "medalName": "听歌成就·奏鸣", "status": "NOT_OBTAIN_PROCESS",
+                     "acceptCondition": "统计歌曲需满足完整播放", "medalPicUrl": "http://p5/b.png",
+                     "wearPic": "", "obtainTime": null, "progress": "当前进度1897/5000",
+                     "rankText": null, "levelTitle": null},
+                    {"medalCode": "22086503", "medalName": "汪牌认证", "status": "OBTAIN",
+                     "acceptCondition": "为歌曲下你喜欢的乐评点个赞吧",
+                     "medalPicUrl": "http://p5/c.png", "wearPic": "http://p5/c_wear.png",
+                     "obtainTime": 1787144904304u64, "progress": null,
+                     "rankText": "前0.033%获得该徽章", "levelTitle": null}
+                ]},
+                {"categoryTitle": "乐迷徽章", "medalVOS": [
+                    {"medalCode": "20170503_1081839", "medalName": "Chinese Football",
+                     "status": "OBTAIN", "specialMedalType": "new_fans_level",
+                     "acceptCondition": "关注99天", "artistName": "Chinese Football",
+                     "medalPicUrl": "https://p5/d.png", "wearPic": "http://p5/d_wear.png",
+                     "levelTitle": "Lv.4 乐迷", "levelTitleShort": "Lv.4",
+                     "medalLevel": 4, "medalLevelAll": 9,
+                     "obtainTime": 1721337006822u64, "rankText": "前2.839%获得该徽章"}
+                ]}
+            ]
+        }});
+        let wall = parse_user_medals(&body);
+        // 只解析 categoryMedalBlockVos, obtainMedals 不重复计入
+        assert_eq!(wall.medals.len(), 4);
+        assert_eq!(wall.medal_num, 2); // 接口给的 medalNum
+
+        let will = &wall.medals[0];
+        assert_eq!(will.code, "23811503");
+        assert_eq!(will.name, "喵！优秀达人");
+        assert_eq!(will.status, "WILL_OBTAIN");
+        assert!(!will.obtained);
+        assert_eq!(will.obtain_time_ms, None);
+        assert_eq!(will.pic_url.as_deref(), Some("http://p5.music.126.net/obj/a.png"));
+        assert_eq!(will.wear_pic_url.as_deref(), Some("http://p5.music.126.net/obj/a_wear.png"));
+        assert!(will.progress_text.is_none() && will.rank_text.is_none() && will.level_title.is_none());
+
+        let busy = &wall.medals[1];
+        assert_eq!(busy.code, "21298503");
+        assert!(!busy.obtained);
+        // progress 是字符串文案, 原样保留不拆数字
+        assert_eq!(busy.progress_text.as_deref(), Some("当前进度1897/5000"));
+        // 空串 wearPic 归 None
+        assert!(busy.wear_pic_url.is_none());
+
+        let got = &wall.medals[2];
+        assert!(got.obtained);
+        assert_eq!(got.obtain_time_ms, Some(1787144904304));
+        assert_eq!(got.rank_text.as_deref(), Some("前0.033%获得该徽章"));
+
+        let fans = &wall.medals[3];
+        assert_eq!(fans.code, "20170503_1081839");
+        assert_eq!(fans.name, "Chinese Football");
+        assert_eq!(fans.level_title.as_deref(), Some("Lv.4 乐迷"));
+        assert_eq!(fans.obtain_time_ms, Some(1721337006822));
+    }
+
+    #[test]
+    fn user_medals_num_fallback_and_skip_bad() {
+        // 缺 medalNum 时按 status=OBTAIN 数; 缺 medalCode 的条目跳过
+        let body = json!({"code": 200, "data": {"categoryMedalBlockVos": [
+            {"medalVOS": [
+                {"medalName": "无 code", "status": "OBTAIN"},
+                {"medalCode": "", "medalName": "空 code", "status": "OBTAIN"},
+                {"medalCode": "A1", "medalName": "x", "status": "OBTAIN", "obtainTime": 1},
+                {"medalCode": "A2", "medalName": "y", "status": "NOT_OBTAIN_NO_PROCESS", "obtainTime": 0}
+            ]}
+        ]}});
+        let wall = parse_user_medals(&body);
+        assert_eq!(wall.medals.len(), 2);
+        assert_eq!(wall.medal_num, 1);
+        assert_eq!(wall.medals[0].code, "A1");
+        assert_eq!(wall.medals[0].name, "x"); // 缺 acceptCondition → 空串
+        assert_eq!(wall.medals[0].condition, "");
+        // obtainTime = 0 视为未获得(null), 不能当 1970 年
+        assert_eq!(wall.medals[1].obtain_time_ms, None);
     }
 }

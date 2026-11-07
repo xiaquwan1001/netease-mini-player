@@ -84,6 +84,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   double dco_decode_f_32(dynamic raw);
 
   @protected
+  double dco_decode_f_64(dynamic raw);
+
+  @protected
   FeedEventDto dco_decode_feed_event_dto(dynamic raw);
 
   @protected
@@ -218,6 +221,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
 
   @protected
+  List<UserMedalDto> dco_decode_list_user_medal_dto(dynamic raw);
+
+  @protected
   List<VipSignDayDto> dco_decode_list_vip_sign_day_dto(dynamic raw);
 
   @protected
@@ -347,6 +353,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItemDto dco_decode_user_item_dto(dynamic raw);
 
   @protected
+  UserLevelDto dco_decode_user_level_dto(dynamic raw);
+
+  @protected
+  UserMedalDto dco_decode_user_medal_dto(dynamic raw);
+
+  @protected
   VipGrowthDto dco_decode_vip_growth_dto(dynamic raw);
 
   @protected
@@ -432,6 +444,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_64(SseDeserializer deserializer);
 
   @protected
   FeedEventDto sse_decode_feed_event_dto(SseDeserializer deserializer);
@@ -616,6 +631,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
 
   @protected
+  List<UserMedalDto> sse_decode_list_user_medal_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<VipSignDayDto> sse_decode_list_vip_sign_day_dto(
     SseDeserializer deserializer,
   );
@@ -767,6 +787,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItemDto sse_decode_user_item_dto(SseDeserializer deserializer);
 
   @protected
+  UserLevelDto sse_decode_user_level_dto(SseDeserializer deserializer);
+
+  @protected
+  UserMedalDto sse_decode_user_medal_dto(SseDeserializer deserializer);
+
+  @protected
   VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer);
 
   @protected
@@ -873,6 +899,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_64(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_feed_event_dto(FeedEventDto self, SseSerializer serializer);
@@ -1115,6 +1144,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_user_medal_dto(
+    List<UserMedalDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_vip_sign_day_dto(
     List<VipSignDayDto> self,
     SseSerializer serializer,
@@ -1326,6 +1361,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_user_item_dto(UserItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_user_level_dto(UserLevelDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_user_medal_dto(UserMedalDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_vip_growth_dto(VipGrowthDto self, SseSerializer serializer);

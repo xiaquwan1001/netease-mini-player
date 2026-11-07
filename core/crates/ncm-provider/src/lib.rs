@@ -12,7 +12,7 @@ use ncm_domain::{
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    UserItem, VipOverview, WikiFact,
+    MedalWall, UserItem, UserLevel, VipOverview, WikiFact,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -797,6 +797,18 @@ pub trait Provider: Send + Sync {
     /// 四个子接口互相独立: 单个失败只让对应字段为 None, 全部失败才返回错误.
     fn vip_overview(&self) -> BoxFuture<'_, ProviderResult<VipOverview>> {
         Box::pin(async { Err(ProviderError::unsupported("no vip overview")) })
+    }
+
+    /// 账号听歌等级(听歌数/登录天数/进度; 需要登录).
+    /// 能力复用 [`Capability::ProfileDetail`](crate::Capability::ProfileDetail).
+    fn user_level(&self) -> BoxFuture<'_, ProviderResult<UserLevel>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user level")) })
+    }
+
+    /// 账号勋章墙(已获得 + 未获得, 按服务端分类顺序平铺; 需要登录).
+    /// 能力复用 [`Capability::ProfileDetail`](crate::Capability::ProfileDetail).
+    fn user_medals(&self) -> BoxFuture<'_, ProviderResult<MedalWall>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user medals")) })
     }
 
     /// 删除自己的评论(需要登录)

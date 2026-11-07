@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 568458432;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 584680148;
 
 // Section: executor
 
@@ -4020,6 +4020,76 @@ fn wire__crate__api__user_follows_impl(
         },
     )
 }
+fn wire__crate__api__user_level_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "user_level",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::user_level().await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__user_medals_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "user_medals",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::user_medals().await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__vip_overview_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4273,6 +4343,13 @@ impl SseDecode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         deserializer.cursor.read_f32::<NativeEndian>().unwrap()
+    }
+}
+
+impl SseDecode for f64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_f64::<NativeEndian>().unwrap()
     }
 }
 
@@ -4859,6 +4936,18 @@ impl SseDecode for Vec<crate::api::UserItemDto> {
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
             ans_.push(<crate::api::UserItemDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::UserMedalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = Vec::with_capacity(len_ as usize);
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::UserMedalDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5552,6 +5641,58 @@ impl SseDecode for crate::api::UserItemDto {
     }
 }
 
+impl SseDecode for crate::api::UserLevelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_level = <u32>::sse_decode(deserializer);
+        let mut var_nowPlayCount = <u64>::sse_decode(deserializer);
+        let mut var_nextPlayCount = <u64>::sse_decode(deserializer);
+        let mut var_nowLoginCount = <u64>::sse_decode(deserializer);
+        let mut var_nextLoginCount = <u64>::sse_decode(deserializer);
+        let mut var_progress = <f64>::sse_decode(deserializer);
+        let mut var_privileges = <String>::sse_decode(deserializer);
+        return crate::api::UserLevelDto {
+            level: var_level,
+            now_play_count: var_nowPlayCount,
+            next_play_count: var_nextPlayCount,
+            now_login_count: var_nowLoginCount,
+            next_login_count: var_nextLoginCount,
+            progress: var_progress,
+            privileges: var_privileges,
+        };
+    }
+}
+
+impl SseDecode for crate::api::UserMedalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_code = <String>::sse_decode(deserializer);
+        let mut var_name = <String>::sse_decode(deserializer);
+        let mut var_picUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_wearPicUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_condition = <String>::sse_decode(deserializer);
+        let mut var_obtained = <bool>::sse_decode(deserializer);
+        let mut var_obtainTimeMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_levelTitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_progressText = <Option<String>>::sse_decode(deserializer);
+        let mut var_rankText = <Option<String>>::sse_decode(deserializer);
+        let mut var_status = <String>::sse_decode(deserializer);
+        return crate::api::UserMedalDto {
+            code: var_code,
+            name: var_name,
+            pic_url: var_picUrl,
+            wear_pic_url: var_wearPicUrl,
+            condition: var_condition,
+            obtained: var_obtained,
+            obtain_time_ms: var_obtainTimeMs,
+            level_title: var_levelTitle,
+            progress_text: var_progressText,
+            rank_text: var_rankText,
+            status: var_status,
+        };
+    }
+}
+
 impl SseDecode for crate::api::VipGrowthDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5793,7 +5934,9 @@ fn pde_ffi_dispatcher_primary_impl(
         108 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
         109 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
         110 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
-        111 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
+        111 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
+        112 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
+        113 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -6770,6 +6913,52 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::UserItemDto> for crate::api::
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::UserLevelDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.level.into_into_dart().into_dart(),
+            self.now_play_count.into_into_dart().into_dart(),
+            self.next_play_count.into_into_dart().into_dart(),
+            self.now_login_count.into_into_dart().into_dart(),
+            self.next_login_count.into_into_dart().into_dart(),
+            self.progress.into_into_dart().into_dart(),
+            self.privileges.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::UserLevelDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::UserLevelDto> for crate::api::UserLevelDto {
+    fn into_into_dart(self) -> crate::api::UserLevelDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::UserMedalDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.code.into_into_dart().into_dart(),
+            self.name.into_into_dart().into_dart(),
+            self.pic_url.into_into_dart().into_dart(),
+            self.wear_pic_url.into_into_dart().into_dart(),
+            self.condition.into_into_dart().into_dart(),
+            self.obtained.into_into_dart().into_dart(),
+            self.obtain_time_ms.into_into_dart().into_dart(),
+            self.level_title.into_into_dart().into_dart(),
+            self.progress_text.into_into_dart().into_dart(),
+            self.rank_text.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::UserMedalDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::UserMedalDto> for crate::api::UserMedalDto {
+    fn into_into_dart(self) -> crate::api::UserMedalDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::VipGrowthDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -7039,6 +7228,13 @@ impl SseEncode for f32 {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         serializer.cursor.write_f32::<NativeEndian>(self).unwrap();
+    }
+}
+
+impl SseEncode for f64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_f64::<NativeEndian>(self).unwrap();
     }
 }
 
@@ -7490,6 +7686,16 @@ impl SseEncode for Vec<crate::api::UserItemDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::UserItemDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::UserMedalDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::UserMedalDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -7952,6 +8158,36 @@ impl SseEncode for crate::api::UserItemDto {
         <Option<String>>::sse_encode(self.avatar_url, serializer);
         <String>::sse_encode(self.signature, serializer);
         <bool>::sse_encode(self.followed, serializer);
+    }
+}
+
+impl SseEncode for crate::api::UserLevelDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.level, serializer);
+        <u64>::sse_encode(self.now_play_count, serializer);
+        <u64>::sse_encode(self.next_play_count, serializer);
+        <u64>::sse_encode(self.now_login_count, serializer);
+        <u64>::sse_encode(self.next_login_count, serializer);
+        <f64>::sse_encode(self.progress, serializer);
+        <String>::sse_encode(self.privileges, serializer);
+    }
+}
+
+impl SseEncode for crate::api::UserMedalDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.code, serializer);
+        <String>::sse_encode(self.name, serializer);
+        <Option<String>>::sse_encode(self.pic_url, serializer);
+        <Option<String>>::sse_encode(self.wear_pic_url, serializer);
+        <String>::sse_encode(self.condition, serializer);
+        <bool>::sse_encode(self.obtained, serializer);
+        <Option<u64>>::sse_encode(self.obtain_time_ms, serializer);
+        <Option<String>>::sse_encode(self.level_title, serializer);
+        <Option<String>>::sse_encode(self.progress_text, serializer);
+        <Option<String>>::sse_encode(self.rank_text, serializer);
+        <String>::sse_encode(self.status, serializer);
     }
 }
 
