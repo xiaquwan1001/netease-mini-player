@@ -17,13 +17,26 @@ typedef LoadRadioToplist = Future<rust.RadioToplistDto?> Function(String kind);
 /// 点电台行(调用方接 showPodcastDetail + 播放回调)
 typedef OnOpenRadio = void Function(BuildContext context, rust.PodcastRadioDto radio);
 
+/// 播放回调链(与详情页 onPlaySongs 同一签名): 节目榜点行直接播放该节目
+typedef OnPlaySongs = void Function(List<rust.SongDto> songs, int index);
+
 class RadioExplorePage extends StatefulWidget {
-  const RadioExplorePage({super.key, this.loadHome, this.loadRecommend, this.loadToplist, this.onOpenRadio});
+  const RadioExplorePage({
+    super.key,
+    this.loadHome,
+    this.loadRecommend,
+    this.loadToplist,
+    this.onOpenRadio,
+    this.onPlaySongs,
+  });
 
   final LoadRadioHome? loadHome;
   final LoadRadioRecommend? loadRecommend;
   final LoadRadioToplist? loadToplist;
   final OnOpenRadio? onOpenRadio;
+
+  /// 节目榜点行直接播放该节目(不传则回落打开电台详情)
+  final OnPlaySongs? onPlaySongs;
 
   @override
   State<RadioExplorePage> createState() => _RadioExplorePageState();
@@ -164,6 +177,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
             error: _toplistError,
             onRetry: () => _loadToplist(_topKind),
             onOpenRadio: (ctx, radio) => _openRadio(radio),
+            onPlaySongs: widget.onPlaySongs,
           ),
         ],
       ),
@@ -312,6 +326,7 @@ class _ToplistTabs extends StatelessWidget {
     required this.error,
     required this.onRetry,
     required this.onOpenRadio,
+    this.onPlaySongs,
   });
 
   final String kind;
@@ -320,12 +335,14 @@ class _ToplistTabs extends StatelessWidget {
   final String? error;
   final VoidCallback onRetry;
   final OnOpenRadio onOpenRadio;
+  final OnPlaySongs? onPlaySongs;
 
   static const _kinds = [
     ('hot', '热门'),
     ('new', '新晋'),
     ('pay', '付费'),
     ('popular', '主播'),
+    ('program', '节目'),
   ];
 
   @override
@@ -370,8 +387,30 @@ class _ToplistTabs extends StatelessWidget {
     );
   }
 
+  /// 节目榜点行: 有音频直接播放(走注入的 onPlaySongs 回调链);
+  /// 无音频本体回落打开所属电台详情(只读榜单接口部分节目不带 song).
+  void _openProgram(BuildContext context, rust.PodcastProgramDto p) {
+    final song = p.song;
+    final play = onPlaySongs;
+    if (song != null && play != null) {
+      play([song], 0);
+      return;
+    }
+    onOpenRadio(
+      context,
+      rust.PodcastRadioDto(
+        id: p.radioId,
+        name: p.radioName.isEmpty ? p.name : p.radioName,
+        description: p.description,
+        djName: p.djName,
+        programCount: BigInt.zero,
+        playCount: BigInt.zero,
+      ),
+    );
+  }
+
   List<Widget> _buildEntries(BuildContext context, rust.RadioToplistDto t) {
-    if (t.radios.isEmpty && t.djs.isEmpty) {
+    if (t.radios.isEmpty && t.djs.isEmpty && t.programs.isEmpty) {
       return const [
         SizedBox(height: 24),
         Center(child: Text('该榜单暂无数据')),
@@ -379,6 +418,26 @@ class _ToplistTabs extends StatelessWidget {
       ];
     }
     return [
+      // 节目榜: 排名 + 节目名 + 电台名 + 主播 + 时长, 点行直接播放
+      for (final pr in t.programs)
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: _rankBadge(pr.rank, pr.program.coverUrl ?? ''),
+          title: Text(pr.program.name, overflow: TextOverflow.ellipsis, maxLines: 1),
+          subtitle: Text(
+            [
+              if (pr.program.radioName.isNotEmpty) pr.program.radioName,
+              if (pr.program.djName.isNotEmpty) pr.program.djName,
+              _fmtDuration(pr.program.durationMs),
+            ].join(' · '),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+          trailing: Icon(
+            pr.program.song != null ? Icons.play_arrow : Icons.chevron_right,
+          ),
+          onTap: () => _openProgram(context, pr.program),
+        ),
       for (final r in t.radios)
         ListTile(
           contentPadding: EdgeInsets.zero,
@@ -446,6 +505,17 @@ class _ToplistTabs extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 时长: h:mm:ss / mm:ss(与 detail_page 同一套口径)
+String _fmtDuration(BigInt ms) {
+  final total = (ms ~/ BigInt.from(1000)).toInt();
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = total % 60;
+  final mm = m.toString().padLeft(2, '0');
+  final ss = s.toString().padLeft(2, '0');
+  return h > 0 ? '$h:$mm:$ss' : '$mm:$ss';
 }
 
 String _fmtCount(BigInt n) {

@@ -62,7 +62,51 @@ rust.RadioToplistDto _top(String kind) => rust.RadioToplistDto(
               ),
             ]
           : const [],
-      programs: const [],
+      programs: kind == 'program'
+          ? [
+              rust.RadioRankedProgramDto(
+                rank: 1,
+                lastRank: 3,
+                program: _program(9001, '深夜电台第 100 期', hasSong: true),
+              ),
+              rust.RadioRankedProgramDto(
+                rank: 2,
+                lastRank: -1,
+                program: _program(9002, '无音频的节目', hasSong: false),
+              ),
+            ]
+          : const [],
+    );
+
+rust.PodcastProgramDto _program(
+  int id,
+  String name, {
+  required bool hasSong,
+}) => rust.PodcastProgramDto(
+      id: BigInt.from(id),
+      name: name,
+      coverUrl: '',
+      durationMs: BigInt.from(924000),
+      djName: '主播小张',
+      radioId: BigInt.from(526564706),
+      radioName: '伴听FM',
+      description: '',
+      song: hasSong
+          ? rust.SongDto(
+              id: BigInt.from(777001),
+              name: 'song-777001',
+              artist: '主播小张',
+              artistId: BigInt.one,
+              album: '伴听FM',
+              albumId: BigInt.one,
+              coverUrl: null,
+              durationMs: BigInt.from(924000),
+              fee: 0,
+              vip: false,
+              paid: false,
+              playable: true,
+            )
+          : null,
     );
 
 Future<void> _pump(
@@ -71,6 +115,7 @@ Future<void> _pump(
   Future<List<rust.PodcastRadioDto>> Function(BigInt)? recommend,
   Future<rust.RadioToplistDto?> Function(String)? toplist,
   void Function(BuildContext, rust.PodcastRadioDto)? onOpenRadio,
+  void Function(List<rust.SongDto>, int)? onPlaySongs,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -79,6 +124,7 @@ Future<void> _pump(
         loadRecommend: recommend,
         loadToplist: toplist,
         onOpenRadio: onOpenRadio,
+        onPlaySongs: onPlaySongs,
       ),
     ),
   );
@@ -173,6 +219,50 @@ void main() {
     await tester.tap(find.text('榜单电台0'));
     expect(opened?.id, BigInt.from(792868378));
     expect(opened?.name, '榜单电台0');
+  });
+
+  testWidgets('节目榜页签: 渲染排名/节目名/电台/主播/时长, 点行直接播放', (tester) async {
+    List<rust.SongDto>? played;
+    var playIndex = -1;
+    rust.PodcastRadioDto? opened;
+    await _pump(
+      tester,
+      home: () async => _home(),
+      toplist: (kind) async => _top(kind),
+      onOpenRadio: (ctx, radio) => opened = radio,
+      onPlaySongs: (songs, i) {
+        played = songs;
+        playIndex = i;
+      },
+    );
+    await tester.tap(find.text('节目'));
+    await tester.pumpAndSettle();
+    expect(find.text('深夜电台第 100 期'), findsOneWidget);
+    expect(find.textContaining('伴听FM'), findsWidgets); // 两条节目同电台
+    expect(find.textContaining('主播小张'), findsWidgets);
+    expect(find.textContaining('15:24'), findsWidgets); // 924000ms
+    // 有音频的节目直接走播放回调链
+    await tester.tap(find.text('深夜电台第 100 期'));
+    expect(played?.single.id, BigInt.from(777001));
+    expect(playIndex, 0);
+    // 无音频本体回落打开电台详情(复用 onOpenRadio 链)
+    await tester.tap(find.text('无音频的节目'));
+    expect(opened?.id, BigInt.from(526564706));
+    expect(opened?.name, '伴听FM');
+  });
+
+  testWidgets('未注入播放回调时节目行回落打开电台详情', (tester) async {
+    rust.PodcastRadioDto? opened;
+    await _pump(
+      tester,
+      home: () async => _home(),
+      toplist: (kind) async => _top(kind),
+      onOpenRadio: (ctx, radio) => opened = radio,
+    );
+    await tester.tap(find.text('节目'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('深夜电台第 100 期'));
+    expect(opened?.id, BigInt.from(526564706));
   });
 
   testWidgets('窄屏 300dp + 1.25 字号不溢出', (tester) async {

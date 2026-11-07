@@ -6,6 +6,7 @@ import 'comment_thread.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
+import 'radio_subscribers_page.dart';
 import 'podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
@@ -892,6 +893,17 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       appBar: AppBar(
         title: Text(radio.name),
         actions: [
+          // 电台头部卡片没有订阅数字段(PodcastRadioDto 无 subCount),
+          // 听众入口放 AppBar 图标(与分享并排).
+          IconButton(
+            tooltip: '听众',
+            icon: const Icon(Icons.groups_outlined),
+            onPressed: () => showRadioSubscribers(
+              context,
+              radioId: radio.id,
+              radioName: radio.name,
+            ),
+          ),
           IconButton(
             tooltip: '分享',
             icon: const Icon(Icons.share_outlined),

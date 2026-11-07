@@ -155,7 +155,12 @@ class _RecommendViewState extends State<RecommendView> {
             ),
           ],
           const SizedBox(height: 16),
-          _PodcastSection(load: _podcasts, loggedIn: widget.loggedIn, onOpen: widget.onOpenPodcast),
+          _PodcastSection(
+            load: _podcasts,
+            loggedIn: widget.loggedIn,
+            onOpen: widget.onOpenPodcast,
+            onPlaySongs: widget.onPlaySongs,
+          ),
         ],
       ),
     );
@@ -746,11 +751,15 @@ class _PodcastSection extends StatelessWidget {
     required this.load,
     required this.loggedIn,
     required this.onOpen,
+    this.onPlaySongs,
   });
 
   final Future<List<rust.PodcastRadioDto>> Function() load;
   final bool loggedIn;
   final void Function(rust.PodcastRadioDto radio) onOpen;
+
+  /// 电台广场节目榜点行直接播放(与上层播放回调同一签名)
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   Widget build(BuildContext context) {
@@ -763,7 +772,8 @@ class _PodcastSection extends StatelessWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => RadioExplorePage(
-                  onOpenRadio: (ctx, radio) { onOpen(radio); }
+                  onOpenRadio: (ctx, radio) { onOpen(radio); },
+                  onPlaySongs: onPlaySongs,
                 ),
               ),
             ),
