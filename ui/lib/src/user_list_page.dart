@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 /// 关注/粉丝列表: 两个 tab, 每行可关注/取关.
@@ -63,16 +64,11 @@ class _UserListViewState extends State<UserListView> {
   static const _pageSize = 30;
 
   late bool _fans = widget.startOnFans;
-  final List<rust.UserItemDto> _items = [];
-  bool _loading = true;
-  bool _loadingMore = false;
-  bool _hasMore = true;
-  String? _error;
 
   /// 关注状态的本地覆盖(点过按钮的才有)
   final Map<BigInt, bool> _followOverrides = {};
 
-  UserListLoader get _loader => _fans
+  UserListLoader get _rawLoader => _fans
       ? (widget.loadFolloweds ??
           (uid, limit, offset) =>
               rust.userFolloweds(uid: uid, limit: limit, offset: offset))
@@ -84,56 +80,16 @@ class _UserListViewState extends State<UserListView> {
       widget.setFollow ??
       (uid, follow) => rust.setFollow(uid: uid, follow: follow);
 
-  @override
-  void initState() {
-    super.initState();
-    _reload();
-  }
-
-  Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _hasMore = true;
-      _items.clear();
-    });
-    try {
-      final page = await retryNetwork(
-        () => _loader(widget.uid, _pageSize, 0),
-      );
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page);
-        _hasMore = page.length >= _pageSize;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
-    }
-  }
-
-  Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await retryNetwork(
-        () => _loader(widget.uid, _pageSize, _items.length),
-      );
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page);
-        _hasMore = page.length >= _pageSize;
-        _loadingMore = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingMore = false);
-      _snack(friendlyError(e));
-    }
+  /// offset 追加按服务端已消费行数算(与去重后的列表长度无关)
+  PagedLoader<rust.UserItemDto> get _loader {
+    final raw = _rawLoader;
+    final uid = widget.uid;
+    var consumed = 0;
+    return (cursor) async {
+      final page = await retryNetwork(() => raw(uid, _pageSize, cursor));
+      consumed = cursor + page.length;
+      return PagedPage(page, hasMore: page.length >= _pageSize, nextCursor: consumed);
+    };
   }
 
   bool _followed(rust.UserItemDto u) =>
@@ -174,108 +130,68 @@ class _UserListViewState extends State<UserListView> {
             selected: {_fans},
             onSelectionChanged: (s) {
               if (s.first == _fans) return;
+              // PagedListView 以 _fans 为 key, 切换即重挂载并重新加载
               setState(() => _fans = s.first);
-              _reload();
             },
           ),
         ),
         Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: theme.colorScheme.error),
-                          ),
-                          const SizedBox(height: 8),
-                          FilledButton.tonal(
-                            onPressed: _reload,
-                            child: const Text('重试'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : _items.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _fans ? '还没有粉丝' : '还没有关注任何人',
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _fans
-                                    ? '多发动态、被点赞后粉丝会慢慢多起来'
-                                    : '去发现页找找感兴趣的人并关注吧',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.outline,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          itemCount: _items.length + 1,
-                          itemBuilder: (context, i) {
-                            if (i == _items.length) {
-                              return _buildFooter();
-                            }
-                            final u = _items[i];
-                            final followed = _followed(u);
-                            return ListTile(
-                              leading: CircleCover(
-                                url: u.avatarUrl,
-                                size: 40,
-                                icon: Icons.person_outline,
-                              ),
-                              title: Text(
-                                u.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Text(
-                                u.signature.isEmpty ? '暂无签名' : u.signature,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: widget.onOpenUser == null
-                                  ? null
-                                  : () => widget.onOpenUser!(u.id),
-                              trailing: OutlinedButton(
-                                onPressed: () => _toggleFollow(u),
-                                child: Text(
-                                  followed ? '已关注' : '关注',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
+          child: PagedListView<rust.UserItemDto>(
+            key: ValueKey(_fans),
+            loader: _loader,
+            itemBuilder: (context, u, i, items) {
+              final followed = _followed(u);
+              return ListTile(
+                leading: CircleCover(
+                  url: u.avatarUrl,
+                  size: 40,
+                  icon: Icons.person_outline,
+                ),
+                title: Text(
+                  u.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  u.signature.isEmpty ? '暂无签名' : u.signature,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: widget.onOpenUser == null
+                    ? null
+                    : () => widget.onOpenUser!(u.id),
+                trailing: OutlinedButton(
+                  onPressed: () => _toggleFollow(u),
+                  child: Text(
+                    followed ? '已关注' : '关注',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              );
+            },
+            emptyBuilder: (context, _) => Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _fans ? '还没有粉丝' : '还没有关注任何人',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _fans
+                        ? '多发动态、被点赞后粉丝会慢慢多起来'
+                        : '去发现页找找感兴趣的人并关注吧',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
-    );
-  }
-
-  Widget _buildFooter() {
-    if (!_hasMore) return const SizedBox(height: 24);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Center(
-        child: _loadingMore
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : TextButton(onPressed: _loadMore, child: const Text('加载更多')),
-      ),
     );
   }
 }

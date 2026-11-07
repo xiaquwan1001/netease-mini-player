@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 /// 听歌排行(需登录): 总量排行 + 当周排行.
@@ -65,7 +66,8 @@ class _PlayRankingViewState extends State<PlayRankingView> {
   @override
   void initState() {
     super.initState();
-    _future = _load();
+    // 整页模式由 PagedListView 负责加载, 只有 compact 内嵌模式走 FutureBuilder
+    if (widget.compact) _future = _load();
   }
 
   Future<List<rust.PlayRankEntryDto>> _load() =>
@@ -75,42 +77,100 @@ class _PlayRankingViewState extends State<PlayRankingView> {
     if (period == _period) return;
     setState(() {
       _period = period;
-      _future = _load();
+      // compact 模式走 FutureBuilder; 整页模式由 PagedListView 的 key 重挂载触发
+      if (widget.compact) _future = _load();
     });
+  }
+
+  /// 整页模式: 非分页单次加载, 三态(加载/错误/空)交给 PagedListView
+  PagedLoader<rust.PlayRankEntryDto> get _pagedLoader {
+    final period = _period;
+    final raw = _loader;
+    return (_) async {
+      final entries = await retryNetwork(() => raw(period));
+      return PagedPage(entries, hasMore: false);
+    };
+  }
+
+  Widget _buildControls() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: const ButtonStyle(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            segments: [
+              for (final (value, label) in rankingPeriods)
+                ButtonSegment<String>(value: value, label: Text(label)),
+            ],
+            selected: {_period},
+            onSelectionChanged: (s) => _switchPeriod(s.first),
+          ),
+          const Spacer(),
+          if (widget.compact && widget.onOpenAll != null)
+            TextButton(
+              onPressed: widget.onOpenAll,
+              child: const Text('查看全部'),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    if (!widget.compact) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildControls(),
+          Expanded(
+            child: PagedListView<rust.PlayRankEntryDto>(
+              key: ValueKey(_period),
+              loader: _pagedLoader,
+              refreshable: false,
+              emptyBuilder: (context, _) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Text(
+                  _period == 'week'
+                      ? '这周还没有听歌记录'
+                      : '还没有听歌记录(登录后听几首歌就有了)',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+              itemBuilder: (context, e, i, items) {
+                final playable = [
+                  for (final e in items)
+                    if (e.song.playable) e.song,
+                ];
+                return _RankRow(
+                  rank: i + 1,
+                  entry: e,
+                  onTap: e.song.playable
+                      ? () {
+                          final index = playable.indexWhere(
+                            (s) => s.id == e.song.id,
+                          );
+                          widget.onPlaySongs(
+                              playable, index < 0 ? 0 : index);
+                        }
+                      : null,
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              SegmentedButton<String>(
-                showSelectedIcon: false,
-                style: const ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                segments: [
-                  for (final (value, label) in rankingPeriods)
-                    ButtonSegment<String>(value: value, label: Text(label)),
-                ],
-                selected: {_period},
-                onSelectionChanged: (s) => _switchPeriod(s.first),
-              ),
-              const Spacer(),
-              if (widget.compact && widget.onOpenAll != null)
-                TextButton(
-                  onPressed: widget.onOpenAll,
-                  child: const Text('查看全部'),
-                ),
-            ],
-          ),
-        ),
+        _buildControls(),
         FutureBuilder<List<rust.PlayRankEntryDto>>(
           future: _future,
           builder: (context, snap) {

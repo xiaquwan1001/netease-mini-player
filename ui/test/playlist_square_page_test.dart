@@ -68,11 +68,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(offsets, [0]);
 
+    // D6 迁移后: 触底自动加载下一页(不再依赖手动"加载更多"按钮)
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('加载更多'));
+    expect(offsets, [0, 30, 60], reason: '触底自动连续预取两页');
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -3000));
     await tester.pumpAndSettle();
-    expect(offsets, [0, 30]);
-    expect(find.text('歌单31'), findsWidgets);
+    expect(offsets.length, 5, reason: '继续触底自动加载(每页 offset +30)');
+    // 第 31 个歌单由第二页(offset=30)返回
+    expect(offsets, contains(30));
   });
 }

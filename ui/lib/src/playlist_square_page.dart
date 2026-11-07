@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 /// 歌单广场: 按分类浏览歌单(热门) / 精品歌单.
@@ -64,12 +65,6 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
   List<rust.PlaylistCategoryDto> _categories = const [];
   String? _categoriesError;
 
-  final List<rust.PlaylistDto> _items = [];
-  bool _loading = false;
-  bool _loadingMore = false;
-  bool _hasMore = true;
-  String? _error;
-
   CategoryLoader get _loadCategories =>
       widget.loadCategories ?? rust.playlistCategories;
   CategoryPageLoader get _loadPage =>
@@ -87,7 +82,6 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
   void initState() {
     super.initState();
     _loadCategoryList();
-    _reload();
   }
 
   Future<void> _loadCategoryList() async {
@@ -101,48 +95,23 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
     }
   }
 
-  Future<void> _reload() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _hasMore = true;
-      _items.clear();
-    });
-    try {
-      final page = _highQuality
-          ? await retryNetwork(() => _loadHighQuality(_cat, 50))
-          : await retryNetwork(() => _loadPage(_cat, _pageSize, 0));
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page);
-        _hasMore = !_highQuality && page.length >= _pageSize;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  /// 精品歌单一次性拉 50 条, 不分页; 分类歌单按 offset 分页
+  PagedLoader<rust.PlaylistDto> get _pageLoader {
+    final cat = _cat;
+    final hq = _highQuality;
+    if (hq) {
+      final loadHq = _loadHighQuality;
+      return (_) async {
+        final page = await retryNetwork(() => loadHq(cat, 50));
+        return PagedPage(page, hasMore: false);
+      };
     }
-  }
-
-  Future<void> _loadMore() async {
-    if (_loadingMore || !_hasMore || _highQuality) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await retryNetwork(() => _loadPage(_cat, _pageSize, _items.length));
-      if (!mounted) return;
-      setState(() {
-        _items.addAll(page);
-        _hasMore = page.length >= _pageSize;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
-    } finally {
-      if (mounted) setState(() => _loadingMore = false);
-    }
+    final loadPage = _loadPage;
+    return (cursor) async {
+      final page =
+          await retryNetwork(() => loadPage(cat, _pageSize, cursor));
+      return PagedPage(page, hasMore: page.length >= _pageSize);
+    };
   }
 
   void _select(String cat, {bool? highQuality}) {
@@ -152,93 +121,26 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
       _cat = cat;
       _highQuality = nextHq;
     });
-    _reload();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return RefreshIndicator(
-      onRefresh: _reload,
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildFilterBar(theme)),
-          if (_loading)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            )
-          else if (_error != null)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.colorScheme.error),
-                    ),
-                    const SizedBox(height: 8),
-                    FilledButton.tonal(onPressed: _reload, child: const Text('重试')),
-                  ],
-                ),
-              ),
-            )
-          else if (_items.isEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: Text('这个分类下暂时没有歌单', style: theme.textTheme.bodySmall),
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 180,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.72,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, i) => _PlaylistCard(
-                    playlist: _items[i],
-                    onTap: () => widget.onOpenPlaylist(_items[i]),
-                  ),
-                  childCount: _items.length,
-                ),
-              ),
-            ),
-          SliverToBoxAdapter(child: _buildFooter(theme)),
-        ],
+    return PagedListView<rust.PlaylistDto>(
+      key: ValueKey('$_highQuality|$_cat'),
+      loader: _pageLoader,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 180,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.72,
       ),
-    );
-  }
-
-  Widget _buildFooter(ThemeData theme) {
-    if (_loading) return const SizedBox(height: 24);
-    if (!_hasMore || _highQuality) {
-      return const SizedBox(height: 24);
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-      child: Center(
-        child: _loadingMore
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : OutlinedButton(
-                onPressed: _loadMore,
-                child: const Text('加载更多'),
-              ),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      emptyText: '这个分类下暂时没有歌单',
+      header: _buildFilterBar(theme),
+      itemBuilder: (context, pl, i, items) => _PlaylistCard(
+        playlist: pl,
+        onTap: () => widget.onOpenPlaylist(pl),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
@@ -188,35 +189,12 @@ class _SessionsTab extends StatefulWidget {
 }
 
 class _SessionsTabState extends State<_SessionsTab> {
-  List<rust.PrivateSessionDto>? _items;
   List<rust.RecentContactDto> _contacts = const [];
-  String? _error;
-  /// 服务端已消费的行数(offset 追加用, 与去重后的 _items 无关)
-  int _offset = 0;
-  bool _loadingMore = false;
-  bool _noMore = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
     _loadContacts();
-  }
-
-  Future<void> _load() async {
-    setState(() => _error = null);
-    try {
-      final items = await retryNetwork(() => widget.load(widget.pageSize, 0));
-      if (!mounted) return;
-      setState(() {
-        _items = items;
-        _offset = items.length;
-        _noMore = items.length < widget.pageSize;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
   }
 
   /// 最近联系人横滑条: 拿不到就不显示, 不影响会话列表
@@ -228,106 +206,65 @@ class _SessionsTabState extends State<_SessionsTab> {
     } catch (_) {}
   }
 
-  Future<void> _loadMore() async {
-    final items = _items;
-    if (items == null || _loadingMore || _noMore) return;
-    setState(() => _loadingMore = true);
-    try {
-      final page = await retryNetwork(() => widget.load(widget.pageSize, _offset));
-      if (!mounted) return;
-      final known = items.map((s) => s.userId).toSet();
-      final fresh = page.where((s) => !known.contains(s.userId)).toList();
-      setState(() {
-        _items = [...items, ...fresh];
-        _offset += page.length;
-        _loadingMore = false;
-        if (page.length < widget.pageSize) _noMore = true;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingMore = false;
-        _error = friendlyError(e);
-      });
-    }
+  /// 分页闭包: offset 按服务端已消费行数追加(与去重后的列表长度无关),
+  /// 去重交给 PagedListView.keyOf。
+  PagedLoader<rust.PrivateSessionDto> get _sessionLoader {
+    final load = widget.load;
+    final pageSize = widget.pageSize;
+    return (cursor) async {
+      final page = await retryNetwork(() => load(pageSize, cursor));
+      return PagedPage(
+        page,
+        hasMore: page.length >= pageSize,
+        nextCursor: cursor + page.length,
+      );
+    };
   }
-
-  bool get _hasMore => _items != null && _items!.isNotEmpty && !_noMore;
 
   @override
   Widget build(BuildContext context) {
-    if (_error != null) {
-      return _ErrorRow(message: _error!, onRetry: _load);
-    }
-    final items = _items;
-    if (items == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (items.isEmpty) {
-      return const Center(child: Text('还没有私信'));
-    }
-    final headerCount = _contacts.isEmpty ? 0 : 1;
-    return NotificationListener<ScrollNotification>(
-      onNotification: (n) {
-        // 触底前 300px 自动预取; 短列表不产生滚动通知, 靠底部按钮兜底
-        if (n.metrics.pixels >= n.metrics.maxScrollExtent - 300) {
-          _loadMore();
-        }
-        return false;
-      },
-      child: ListView.separated(
-        itemCount: headerCount + items.length + 1,
-        separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
-        itemBuilder: (context, i) {
-          if (i < headerCount) {
-            return _ContactsStrip(contacts: _contacts);
-          }
-          final index = i - headerCount;
-          if (index < items.length) {
-            final s = items[index];
-            return ListTile(
-              leading: CircleCover(
-                url: s.avatarUrl,
-                size: 44,
-                icon: Icons.person_outline,
-              ),
-              title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
-              subtitle: Text(
-                s.lastMessage,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    relativeTime(s.lastTimeMs),
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  if (s.unread > 0) ...[
-                    const SizedBox(height: 4),
-                    Badge(label: Text('${s.unread}')),
-                  ],
-                ],
-              ),
-              onTap: () => showPrivateChat(
-                context,
-                session: s,
-                load: widget.loadHistory,
-                pageSize: widget.pageSize,
-              ),
-            );
-          }
-          return _MoreRow(
-            hasMore: _hasMore,
-            loading: _loadingMore,
-            noMore: _noMore,
-            moreText: '加载更多',
-            endText: '没有更多了',
-            onTap: _loadMore,
-          );
-        },
+    final contacts = _contacts;
+    return PagedListView<rust.PrivateSessionDto>(
+      loader: _sessionLoader,
+      keyOf: (s) => s.userId,
+      emptyText: '还没有私信',
+      endText: '没有更多了',
+      separator: const Divider(height: 1, indent: 68),
+      header: contacts.isEmpty
+          ? null
+          : _ContactsStrip(contacts: contacts),
+      itemBuilder: (context, s, index, items) => ListTile(
+        leading: CircleCover(
+          url: s.avatarUrl,
+          size: 44,
+          icon: Icons.person_outline,
+        ),
+        title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text(
+          s.lastMessage,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              relativeTime(s.lastTimeMs),
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+            if (s.unread > 0) ...[
+              const SizedBox(height: 4),
+              Badge(label: Text('${s.unread}')),
+            ],
+          ],
+        ),
+        onTap: () => showPrivateChat(
+          context,
+          session: s,
+          load: widget.loadHistory,
+          pageSize: widget.pageSize,
+        ),
       ),
     );
   }
@@ -375,50 +312,6 @@ class _ContactsStrip extends StatelessWidget {
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-/// 列表尾部的分页行: 加载按钮 / 加载中 / 到底提示
-/// (与 NotificationListener 的触底预取配合, 短列表也能手动触发)
-class _MoreRow extends StatelessWidget {
-  const _MoreRow({
-    required this.hasMore,
-    required this.loading,
-    required this.noMore,
-    required this.moreText,
-    required this.endText,
-    this.onTap,
-  });
-
-  final bool hasMore;
-  final bool loading;
-  final bool noMore;
-  final String moreText;
-  final String endText;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hasMore && !loading) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Center(
-          child: Text(endText, style: Theme.of(context).textTheme.labelSmall),
-        ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Center(
-        child: loading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
-            : TextButton(onPressed: onTap, child: Text(moreText)),
       ),
     );
   }
