@@ -48,7 +48,9 @@ Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
 | **D1+D2+D5** FFI 清理 | ✅ | 删死导出 `search`/`lyric_lines`(+ `SearchResultDto`): 导出 **125→123**、**「UI 没有入口」3→0**; 新增 `ffi_forward!` 宏(直转/`map`/`map_each` 三分支)收敛 **22** 个转发封装, `api.rs` 净 **−80 行**; release `.so` 14,157,856→**14,068,144**(strip 8,918,104→**8,880,312**) |
 | **D6** 列表三态抽象 | ✅ | 新 `paged_list_view.dart`(`loader(cursor)` 注入 + `PagedPage{items,hasMore,nextCursor}` + `keyOf` 去重 + grid/list 双模式 + 加载更多失败保旧数据), 迁移 **4 页**(user_list/messages 私信/playlist_square/ranking_view), 新增 8 用例 |
 | **A** UI 速修 | ✅ | `HomeBackAction` 纯函数 + `HomeBackGuard(PopScope)`(优先级: 歌词>非首 tab>歌单浏览>交还系统); `formatSongDuration`(245s→04:05); 红心改可点 `IconButton`; 6 类高频控件提到 **48dp**; 出口文案统一「全部」; 新增 **22** 用例(含 7 条 `handlePopRoute()` 驱动的三级返回键测试) |
-| 收口门(编排者重跑) | ✅ | 全量 `flutter test` **264 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→265 只增不减**(改写 2 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部); `dart analyze` **error/warning = 0**(32 条 info 为既有 lint); `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
+| **B** 缺失面板 | ✅ | 评论可发: 底部「写评论…」→ `_ComposeSheet`(空文本/发送中禁用、失败保草稿可重试、`viewInsets` 键盘避让、乐观插入按对象身份回滚), 走 `CommentSendHook` 复用 `rust.replyComment`(commentId=0), **零新增 FFI**; 播放队列: `PlayQueue` 补 `removeAt`/`moveTo`(`main.dart` 播放条 → `PlayQueueSheet`, 高亮/跳播/滑删+长按删确认/空态, 删当前项自动播下一首、删空 stop); 新增 **18** 用例(全离线注入) |
+| **D** 技术债收敛 | ✅ | 新增 `format.dart`(时长, 收编 4 份实现/6 调用点)、`error_views.dart`(3 页 7 处)、`toast.dart`(收编 10 处 SnackBar); 弹层 8 处补 `showDragHandle` + podcast 自绘头部改走 `SheetHeader`(新增 trailing 槽); 5 页补底部 SafeArea; 净 **−98 行**; 新增 7 用例。**勘误**: 审计"podcast.dart ~300 行死代码"为误判(整文件非死代码, 真死点是 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行且被 10 处测试占用) |
+| 收口门(编排者重跑) | ✅ | 全量 `flutter test` **289 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→289 只增不减**(改写 3 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部、frb smoke search→searchAll); `dart analyze` **error/warning = 0**; `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
 
 ## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)
 
