@@ -32,6 +32,34 @@ class SearchLanding extends StatelessWidget {
   final String? hotError;
   final VoidCallback? onRetryHot;
 
+  /// 清空历史前的二次确认(C2): 一次误触就不可恢复, 且这是页面上唯一的破坏性操作.
+  /// 先把回调取出来再 await, 避免 "use_build_context_synchronously".
+  Future<void> _confirmClear(BuildContext context) async {
+    final clear = onClearHistory;
+    final count = history.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清空搜索历史'),
+        content: Text(count == 1 ? '将删除这 1 条搜索历史。' : '将删除全部 $count 条搜索历史。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('清空'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) clear();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -43,7 +71,7 @@ class SearchLanding extends StatelessWidget {
             title: '搜索历史',
             // 命中区 ≥48dp(审查 P1-7.12): 原来 minimumSize 高 32, 是大字号下最难点的控件
             trailing: TextButton(
-              onPressed: onClearHistory,
+              onPressed: () => _confirmClear(context),
               style: TextButton.styleFrom(
                 minimumSize: const Size(48, 48),
                 padding: const EdgeInsets.symmetric(horizontal: 8),

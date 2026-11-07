@@ -32,7 +32,23 @@ void main() {
     await tester.tap(find.text('周杰伦'));
     expect(chosen, '周杰伦');
 
+    // C2: 清空需二次确认 —— 先弹确认框, 取消不清, 确认才清
     await tester.tap(find.text('清空'));
+    await tester.pumpAndSettle();
+    expect(find.text('清空搜索历史'), findsOneWidget);
+    expect(cleared, 0, reason: '弹确认框时不应立刻清空');
+
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+    expect(cleared, 0, reason: '取消后不清空');
+
+    await tester.tap(find.text('清空'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.widgetWithText(TextButton, '清空'),
+    ));
+    await tester.pumpAndSettle();
     expect(cleared, 1);
   });
 
