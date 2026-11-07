@@ -27,6 +27,60 @@ class AppSettings extends ChangeNotifier {
   /// 切回"搜索"底部 tab 时是否丢弃上一次的输入/结果(默认丢弃, 避免残留)
   bool clearSearchOnTabSwitch = true;
 
+  // ---------------- 播放与外观(2026-11 任务书 docs/plan-2026-11-09-settings-and-player.md) ----------------
+  // 原则: 默认值一律等于"不改变现状", 老配置读进来行为不变.
+
+  /// R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212
+  bool oledDark = false;
+
+  /// R2: 播放器级精细音量增益(dB). 与系统音量相乘, 0 = 不变.
+  /// 范围 -40..0, 步进 0.5; 0 dB 时完全旁路.
+  double volumeGainDb = 0.0;
+
+  /// R2b/R7: 响度均衡(EBU R128 测量 -> ReplayGain 2.0 语义的静态增益)
+  bool loudnessNormalize = false;
+
+  /// 响度均衡目标电平(LUFS). 移动端常用 -16, 广播口径 -23.
+  double loudnessTargetLufs = -16.0;
+
+  /// R7: 动态 AGC 模式(默认 false = 静态 ReplayGain, 无 pumping)
+  bool loudnessDynamic = false;
+
+  /// R7: 生效的自定义响度曲线名(AutoEQ ParametricEQ.txt 导入时取文件名)
+  String? eqProfileName;
+
+  /// R7: 曲线原文(AutoEQ ParametricEQ.txt / GraphicEQ.txt). null = 旁路
+  String? eqProfileText;
+
+  /// R5: 淡入淡出时长(ms). 0 = 关闭
+  int fadeMs = 0;
+
+  /// R5: 优先硬解(仅 Android; Linux 纯软解无此概念)
+  bool hardwareDecode = true;
+
+  /// R5: 边听边存(流式缓存落盘)
+  bool streamCache = true;
+
+  /// R5: 缓存占用上限(MB)
+  int cacheLimitMb = 512;
+
+  // 注意: double 作 key 不能用 const map(Dart 常量 map 的 key 必须原始相等语义)
+  static final loudnessTargets = <double, String>{
+    -23.0: '-23 LUFS(广播)',
+    -18.0: '-18 LUFS',
+    -16.0: '-16 LUFS(推荐)',
+    -14.0: '-14 LUFS(响亮)',
+  };
+
+  static const fadeOptions = <int, String>{
+    0: '关闭',
+    200: '200 ms',
+    500: '500 ms',
+    1000: '1 s',
+  };
+
+  static const cacheLimits = <int>[128, 256, 512, 1024, 2048];
+
   File? _file;
   bool _loaded = false;
 
@@ -65,6 +119,35 @@ class AppSettings extends ChangeNotifier {
           }
           final clearOnSwitch = raw['clearSearchOnTabSwitch'];
           if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
+
+          if (raw['oledDark'] is bool) oledDark = raw['oledDark'] as bool;
+          volumeGainDb = _doubleOf(raw['volumeGainDb'], 0.0).clamp(-40.0, 0.0);
+          if (raw['loudnessNormalize'] is bool) {
+            loudnessNormalize = raw['loudnessNormalize'] as bool;
+          }
+          loudnessTargetLufs =
+              _doubleOf(raw['loudnessTargetLufs'], -16.0).clamp(-30.0, -5.0);
+          if (raw['loudnessDynamic'] is bool) {
+            loudnessDynamic = raw['loudnessDynamic'] as bool;
+          }
+          final eqName = raw['eqProfileName'];
+          if (eqName is String && eqName.isNotEmpty) eqProfileName = eqName;
+          final eqText = raw['eqProfileText'];
+          if (eqText is String && eqText.trim().isNotEmpty) {
+            eqProfileText = eqText;
+          }
+          final fade = raw['fadeMs'];
+          if (fade is num && fadeOptions.containsKey(fade.toInt())) {
+            fadeMs = fade.toInt();
+          }
+          if (raw['hardwareDecode'] is bool) {
+            hardwareDecode = raw['hardwareDecode'] as bool;
+          }
+          if (raw['streamCache'] is bool) streamCache = raw['streamCache'] as bool;
+          final limit = raw['cacheLimitMb'];
+          if (limit is num && cacheLimits.contains(limit.toInt())) {
+            cacheLimitMb = limit.toInt();
+          }
         }
       }
     } catch (_) {
@@ -80,6 +163,17 @@ class AppSettings extends ChangeNotifier {
     String? audioLevel,
     int? coverRows,
     bool? clearSearchOnTabSwitch,
+    bool? oledDark,
+    double? volumeGainDb,
+    bool? loudnessNormalize,
+    double? loudnessTargetLufs,
+    bool? loudnessDynamic,
+    String? eqProfileName,
+    String? eqProfileText,
+    int? fadeMs,
+    bool? hardwareDecode,
+    bool? streamCache,
+    int? cacheLimitMb,
   }) async {
     if (themeMode != null) this.themeMode = themeMode;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
@@ -91,6 +185,23 @@ class AppSettings extends ChangeNotifier {
     }
     if (clearSearchOnTabSwitch != null) {
       this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
+    }
+    if (oledDark != null) this.oledDark = oledDark;
+    if (volumeGainDb != null) {
+      this.volumeGainDb = volumeGainDb.clamp(-40.0, 0.0);
+    }
+    if (loudnessNormalize != null) this.loudnessNormalize = loudnessNormalize;
+    if (loudnessTargetLufs != null) {
+      this.loudnessTargetLufs = loudnessTargetLufs.clamp(-30.0, -5.0);
+    }
+    if (loudnessDynamic != null) this.loudnessDynamic = loudnessDynamic;
+    if (eqProfileName != null) this.eqProfileName = eqProfileName;
+    if (eqProfileText != null) this.eqProfileText = eqProfileText;
+    if (fadeMs != null && fadeOptions.containsKey(fadeMs)) this.fadeMs = fadeMs;
+    if (hardwareDecode != null) this.hardwareDecode = hardwareDecode;
+    if (streamCache != null) this.streamCache = streamCache;
+    if (cacheLimitMb != null && cacheLimits.contains(cacheLimitMb)) {
+      this.cacheLimitMb = cacheLimitMb;
     }
     notifyListeners();
     await _save();
@@ -107,6 +218,17 @@ class AppSettings extends ChangeNotifier {
         'audioLevel': audioLevel,
         'coverRows': coverRows,
         'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
+        'oledDark': oledDark,
+        'volumeGainDb': volumeGainDb,
+        'loudnessNormalize': loudnessNormalize,
+        'loudnessTargetLufs': loudnessTargetLufs,
+        'loudnessDynamic': loudnessDynamic,
+        'eqProfileName': eqProfileName,
+        'eqProfileText': eqProfileText,
+        'fadeMs': fadeMs,
+        'hardwareDecode': hardwareDecode,
+        'streamCache': streamCache,
+        'cacheLimitMb': cacheLimitMb,
       }));
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效
