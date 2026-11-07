@@ -96,7 +96,11 @@
 四条设计约束(比选型更重要):
 1. **真相只有一份**: 队列/播放状态/登录态在 core,UI 只订阅。否则双端行为漂移 + 状态 bug。
 2. **播放后端不统一**: Android 必须走 Media3(MediaSession、通知、音频焦点、车机、厂商适配都在这一层);
-   Linux 走 mpv(格式全、gapless、硬解)。core 只定义 `PlaybackBackend` trait,两端各实现,
+   Linux 走 mpv(格式全、gapless、硬解)。
+   > **实现现状(2026-11-09 校正)**: Linux **没有用 mpv/MPRIS**,实际是 `ncm-playback` 里的
+   > **rodio 0.23 + symphonia**(纯 Rust, 无系统依赖;见 `core/crates/ncm-playback/Cargo.toml`)。
+   > 下文凡提 "mpv" 均按此替换阅读;MPRIS 未实现。
+   core 只定义 `PlaybackBackend` trait,两端各实现,
    事件统一成 `PlaybackEvent`。
 3. **协议层可离线测**: 每个接口一组 request/response fixture(脱敏),CI 不联网跑单测。
    Ncrust 的 `spec/` 就是干这个的,抄结构不抄代码。

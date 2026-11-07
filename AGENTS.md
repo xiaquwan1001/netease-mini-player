@@ -10,7 +10,8 @@
   协议/加解密/风控细节都在这里,不要自己重写加密。
 - `ui/` Flutter(android + linux 一份 UI),桥接用 flutter_rust_bridge 2.13,
   由 `ui/rust_builder`(cargokit)在构建时编译 Rust。
-- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),Linux 用 mpv + MPRIS。
+- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),Linux 用 **rodio/CPAL**(纯 Rust + symphonia, 无系统依赖)。
+  早期设计写的 mpv + MPRIS **未实现**(见 `docs/architecture-restart.md` §3 的现状注记),不要再按 mpv 规划。
 - `legacy/` 是 v1 的 WebView 实现,只读存档,不要再往里加功能。
 
 ## 环境(用户级, 已就绪)

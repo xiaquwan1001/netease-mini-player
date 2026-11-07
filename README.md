@@ -4,7 +4,8 @@
 
 ## 架构一句话
 
-**Rust core(协议/身份/缓存/播放控制) + Flutter UI(一份跑双端) + 平台层(Android Media3 / Linux mpv)。**
+**Rust core(协议/身份/缓存/播放控制) + Flutter UI(一份跑双端) + 平台层(Android Media3 / Linux rodio+CPAL)。**
+(README 早期写的 "Linux mpv + MPRIS" 是设计稿,未实现;现状见 `core/crates/ncm-playback`。)}
 音源走 Provider 抽象;首版不做脚本插件,但边界已按「将来能插」写好。
 
 ## 当前状态(2026-11-05)
@@ -15,7 +16,7 @@
 | 身份持久化 | ✅ device_id 首启生成后复用 + 设备指纹 cookie 落盘(0600);多账号账号簿 |
 | Flutter 双端壳 | ✅ Linux bundle + Android APK 均构建通过;Linux Xvfb + 模拟器 a36 双端闭环(见 `docs/testing-dual-platform.md`) |
 | Dart ↔ Rust 桥 | ✅ flutter_rust_bridge 2.13,smoke 测试含真实网络(每日推荐/建议/专辑/播客/历史) |
-| 功能 | ✅ 底部四栏(搜索/推荐/我的/设置)、搜索历史+联想+热词榜/猜你想搜、每日推荐(歌曲/歌单/播客)、每日私人 FM、心动模式、我的收藏(我喜欢/歌单/播客/关注艺人/关注动态)、账号与 UI 设置 |
+| 功能 | ✅ 底部五栏(搜索/推荐/关注/我的/设置;2026-11 起由四栏扩为五栏) 、搜索历史+联想+热词榜/猜你想搜、每日推荐(歌曲/歌单/播客)、每日私人 FM、心动模式、我的收藏(我喜欢/歌单/播客/关注艺人/关注动态)、账号与 UI 设置 |
 | 测试 | ✅ Rust 单测(31 个 service 测试) + 69 个 Flutter 测试(离线纯函数/widget + 真实网络 smoke);双端实测记录见 `docs/testing-dual-platform.md` |
 
 ## 目录

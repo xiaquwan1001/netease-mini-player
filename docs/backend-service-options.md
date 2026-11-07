@@ -94,6 +94,7 @@ for i in 1 2 3 4 5; do /usr/bin/time -f '%es' target/debug/ncm search 周杰伦 
 | `target/release/libncm_ffi.so` | **14,246,736 B (13.6 MiB)** | `cargo build --release -p ncm_ffi --offline` |
 | 同上 strip 后 | **8,971,728 B (8.6 MiB)** | 含 std + reqwest + tokio + rustls + vendor 12k + 自写 4k **全部** |
 | `target/debug/libncm_ffi.so` | 225,687,640 B (215 MiB) | debuginfo 无参考意义 |
+| **Android arm64 release**(P1 裁剪后) | 12,197,912 B (11.6 MiB) → `llvm-strip` 后 **6,564,056 B (6.3 MiB)** | 交叉编译需自配 `ANDROID_NDK_HOME`+`CC_*`+`CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER`(`tools/env.sh` 不带), 否则报 `Relocations in generic ELF (EM: 183)` |
 | Linux debug bundle 整树 | 304 MB | = 上者 225 MB + `libflutter_linux_gtk.so` 43 MB |
 | `app-debug.apk` | **231.8 MB** | 见下表构成 |
 

@@ -166,6 +166,7 @@ git restore tools/api-coverage.sh core/crates/ncm-cli/src/main.rs
 | 依赖数(同口径 `cargo tree --prefix none \| sort -u \| wc -l`) | 213/279/257 → 207/274/252 | **207 / 274 / 252**(一致) | ✅ |
 | vendor 体量 | 12,035→4,755 行, 1.7 M→604 K | 我按 `src/*.rs + api/*.rs + util/*.rs` 计 **4,069 行 / 564 K**(含 `server/` 删除后); agent 数含 server/crypto/request 全文 | ✅ 量级一致 |
 | release `libncm_ffi.so` | 14,165,640 / strip 8,919,808 | 移除死特性后 **14,157,856 / strip 8,918,104**(基线 14,246,736 / 8,971,728) | ✅ −89 KB / −54 KB |
+| **Android arm64 交叉编译**(裁剪是否破坏 cargokit 链路) | 未自报 | ✅ 通过: `cargo build --release -p ncm_ffi --target aarch64-linux-android` 20.4 s, 产物 12,197,912 B → `llvm-strip` 后 **6,564,056 B** | ✅ |
 | `ncm search/url` 延迟 | 0.49→0.45 / 0.23→0.21 s | 复跑遇到本机对 interface.music.163.com 的间歇 `Connection reset`(与裁剪无关, spike 同日也见), 成功样本 0.10–0.53 s | ⚠️ 未劣化, 但网络抖动使单次测量不可用 |
 
 ### 9.1 编排者追加的改动(修掉唯一未达标项)

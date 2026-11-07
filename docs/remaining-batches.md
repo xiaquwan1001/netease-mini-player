@@ -215,3 +215,18 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
   双端构建 + 模拟器走查(空态/未登录各一次)。
 - **回滚**: `git restore --staged --worktree core/crates/ncm-domain core/crates/ncm-ffi ui/lib/src/rust` 一键还原。
 - **收益**: 合计约 1400–1800 行(含保守项), 且以后新增接口不再重复定义三层 DTO。
+
+## 10. UI/UX 走查批次(A–D, 2026-11-09 审计产出)
+
+> 来源 `docs/ui-ux-audit.md`(506 行, 每条带 file:line)。P0=3 / P1=15 / P2=13。
+> **验证口径**: 这些批次**不要**用 `build-android`/`ci.sh` 验证 UI —— 用 `flutter test test/xxx.dart` 单文件
+> + 设备走查; 且 A 批的 `PopScope` 改动**必须配一条 widget 测试**(返回键三次: 歌词→tab→退出), 否则后续易回退。
+
+| 批次 | 内容 | 对应条目 | 成本 | 并行性 |
+|---|---|---|---|---|
+| **A · S 速修** | 返回键语义(0→`PopScope`)、`SongTile` 三修(时长格式/红心可点/触控 ≥48dp)、搜索页去掉冗余「取消」、统一「全部」入口文案、三处 <48dp 组件 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | **S, 约 1 天** | 只碰 `main.dart`/`song_tile.dart`/`search_landing.dart`/`recommend_view.dart`, 与 B/C 冲突小 |
+| **B · 两个新面板** | 评论输入框(含 `viewInsets` 键盘避让 + 发送/失败重试)、播放队列面板(先给 `queue.dart` 补 `removeAt` 等 + 单测, 再接 UI) | P0-7.2 / P0-7.3 | M | 独立文件为主, 但与 A 同碰 `main.dart` ⇒ **错序执行** |
+| **C · 信息架构重排** | 设置瘦身(账号/会员/诊断拆到二级页)、账号入口 3→1、推荐页 8→5 个平级模块、专辑详情 Dialog→全页、日推/最近听过 sheet→全页 | P1-7.5/7.8/7.9/7.10/7.11/7.14 | M(需人工过视觉) | 跨 5 文件, **单独一条车道** |
+| **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` ~300 行死代码、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
+
+**与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
