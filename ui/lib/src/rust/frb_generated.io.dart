@@ -67,7 +67,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw);
 
   @protected
-  ChartSummaryDto dco_decode_chart_summary_dto(dynamic raw);
+  ChartSummary dco_decode_chart_summary(dynamic raw);
 
   @protected
   Comment dco_decode_comment(dynamic raw);
@@ -145,7 +145,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Artist> dco_decode_list_artist(dynamic raw);
 
   @protected
-  List<ChartSummaryDto> dco_decode_list_chart_summary_dto(dynamic raw);
+  List<ChartSummary> dco_decode_list_chart_summary(dynamic raw);
 
   @protected
   List<Comment> dco_decode_list_comment(dynamic raw);
@@ -193,7 +193,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Playlist> dco_decode_list_playlist(dynamic raw);
 
   @protected
-  List<PlaylistCategoryDto> dco_decode_list_playlist_category_dto(dynamic raw);
+  List<PlaylistCategory> dco_decode_list_playlist_category(dynamic raw);
 
   @protected
   List<PodcastProgramDto> dco_decode_list_podcast_program_dto(dynamic raw);
@@ -267,14 +267,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SuggestItem> dco_decode_list_suggest_item(dynamic raw);
 
   @protected
-  List<ToplistCatalogGroupDto> dco_decode_list_toplist_catalog_group_dto(
-    dynamic raw,
-  );
+  List<ToplistCatalogGroup> dco_decode_list_toplist_catalog_group(dynamic raw);
 
   @protected
-  List<ToplistCatalogItemDto> dco_decode_list_toplist_catalog_item_dto(
-    dynamic raw,
-  );
+  List<ToplistCatalogItem> dco_decode_list_toplist_catalog_item(dynamic raw);
 
   @protected
   List<UserItem> dco_decode_list_user_item(dynamic raw);
@@ -289,7 +285,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<VipTaskDto> dco_decode_list_vip_task_dto(dynamic raw);
 
   @protected
-  List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw);
+  List<WikiFact> dco_decode_list_wiki_fact(dynamic raw);
 
   @protected
   List<WordItemDto> dco_decode_list_word_item_dto(dynamic raw);
@@ -337,7 +333,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Playlist dco_decode_playlist(dynamic raw);
 
   @protected
-  PlaylistCategoryDto dco_decode_playlist_category_dto(dynamic raw);
+  PlaylistCategory dco_decode_playlist_category(dynamic raw);
 
   @protected
   PlaylistDetail dco_decode_playlist_detail(dynamic raw);
@@ -433,10 +429,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SuggestItem dco_decode_suggest_item(dynamic raw);
 
   @protected
-  ToplistCatalogGroupDto dco_decode_toplist_catalog_group_dto(dynamic raw);
+  ToplistCatalogGroup dco_decode_toplist_catalog_group(dynamic raw);
 
   @protected
-  ToplistCatalogItemDto dco_decode_toplist_catalog_item_dto(dynamic raw);
+  ToplistCatalogItem dco_decode_toplist_catalog_item(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -478,7 +474,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipTaskDto dco_decode_vip_task_dto(dynamic raw);
 
   @protected
-  WikiFactDto dco_decode_wiki_fact_dto(dynamic raw);
+  WikiFact dco_decode_wiki_fact(dynamic raw);
 
   @protected
   WordItemDto dco_decode_word_item_dto(dynamic raw);
@@ -541,7 +537,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer);
 
   @protected
-  ChartSummaryDto sse_decode_chart_summary_dto(SseDeserializer deserializer);
+  ChartSummary sse_decode_chart_summary(SseDeserializer deserializer);
 
   @protected
   Comment sse_decode_comment(SseDeserializer deserializer);
@@ -631,7 +627,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Artist> sse_decode_list_artist(SseDeserializer deserializer);
 
   @protected
-  List<ChartSummaryDto> sse_decode_list_chart_summary_dto(
+  List<ChartSummary> sse_decode_list_chart_summary(
     SseDeserializer deserializer,
   );
 
@@ -693,7 +689,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Playlist> sse_decode_list_playlist(SseDeserializer deserializer);
 
   @protected
-  List<PlaylistCategoryDto> sse_decode_list_playlist_category_dto(
+  List<PlaylistCategory> sse_decode_list_playlist_category(
     SseDeserializer deserializer,
   );
 
@@ -801,12 +797,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SuggestItem> sse_decode_list_suggest_item(SseDeserializer deserializer);
 
   @protected
-  List<ToplistCatalogGroupDto> sse_decode_list_toplist_catalog_group_dto(
+  List<ToplistCatalogGroup> sse_decode_list_toplist_catalog_group(
     SseDeserializer deserializer,
   );
 
   @protected
-  List<ToplistCatalogItemDto> sse_decode_list_toplist_catalog_item_dto(
+  List<ToplistCatalogItem> sse_decode_list_toplist_catalog_item(
     SseDeserializer deserializer,
   );
 
@@ -827,7 +823,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<VipTaskDto> sse_decode_list_vip_task_dto(SseDeserializer deserializer);
 
   @protected
-  List<WikiFactDto> sse_decode_list_wiki_fact_dto(SseDeserializer deserializer);
+  List<WikiFact> sse_decode_list_wiki_fact(SseDeserializer deserializer);
 
   @protected
   List<WordItemDto> sse_decode_list_word_item_dto(SseDeserializer deserializer);
@@ -885,9 +881,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Playlist sse_decode_playlist(SseDeserializer deserializer);
 
   @protected
-  PlaylistCategoryDto sse_decode_playlist_category_dto(
-    SseDeserializer deserializer,
-  );
+  PlaylistCategory sse_decode_playlist_category(SseDeserializer deserializer);
 
   @protected
   PlaylistDetail sse_decode_playlist_detail(SseDeserializer deserializer);
@@ -1001,12 +995,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SuggestItem sse_decode_suggest_item(SseDeserializer deserializer);
 
   @protected
-  ToplistCatalogGroupDto sse_decode_toplist_catalog_group_dto(
+  ToplistCatalogGroup sse_decode_toplist_catalog_group(
     SseDeserializer deserializer,
   );
 
   @protected
-  ToplistCatalogItemDto sse_decode_toplist_catalog_item_dto(
+  ToplistCatalogItem sse_decode_toplist_catalog_item(
     SseDeserializer deserializer,
   );
 
@@ -1050,7 +1044,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipTaskDto sse_decode_vip_task_dto(SseDeserializer deserializer);
 
   @protected
-  WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer);
+  WikiFact sse_decode_wiki_fact(SseDeserializer deserializer);
 
   @protected
   WordItemDto sse_decode_word_item_dto(SseDeserializer deserializer);
@@ -1125,10 +1119,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_chart_summary_dto(
-    ChartSummaryDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_chart_summary(ChartSummary self, SseSerializer serializer);
 
   @protected
   void sse_encode_comment(Comment self, SseSerializer serializer);
@@ -1239,8 +1230,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_artist(List<Artist> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_chart_summary_dto(
-    List<ChartSummaryDto> self,
+  void sse_encode_list_chart_summary(
+    List<ChartSummary> self,
     SseSerializer serializer,
   );
 
@@ -1314,8 +1305,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_playlist(List<Playlist> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_playlist_category_dto(
-    List<PlaylistCategoryDto> self,
+  void sse_encode_list_playlist_category(
+    List<PlaylistCategory> self,
     SseSerializer serializer,
   );
 
@@ -1452,14 +1443,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_toplist_catalog_group_dto(
-    List<ToplistCatalogGroupDto> self,
+  void sse_encode_list_toplist_catalog_group(
+    List<ToplistCatalogGroup> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_toplist_catalog_item_dto(
-    List<ToplistCatalogItemDto> self,
+  void sse_encode_list_toplist_catalog_item(
+    List<ToplistCatalogItem> self,
     SseSerializer serializer,
   );
 
@@ -1485,10 +1476,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_wiki_fact_dto(
-    List<WikiFactDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_wiki_fact(List<WikiFact> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_word_item_dto(
@@ -1566,8 +1554,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_playlist(Playlist self, SseSerializer serializer);
 
   @protected
-  void sse_encode_playlist_category_dto(
-    PlaylistCategoryDto self,
+  void sse_encode_playlist_category(
+    PlaylistCategory self,
     SseSerializer serializer,
   );
 
@@ -1731,14 +1719,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_suggest_item(SuggestItem self, SseSerializer serializer);
 
   @protected
-  void sse_encode_toplist_catalog_group_dto(
-    ToplistCatalogGroupDto self,
+  void sse_encode_toplist_catalog_group(
+    ToplistCatalogGroup self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_toplist_catalog_item_dto(
-    ToplistCatalogItemDto self,
+  void sse_encode_toplist_catalog_item(
+    ToplistCatalogItem self,
     SseSerializer serializer,
   );
 
@@ -1791,7 +1779,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_vip_task_dto(VipTaskDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer);
+  void sse_encode_wiki_fact(WikiFact self, SseSerializer serializer);
 
   @protected
   void sse_encode_word_item_dto(WordItemDto self, SseSerializer serializer);

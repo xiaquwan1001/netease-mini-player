@@ -4509,6 +4509,15 @@ const _: fn() = || {
         let _: Option<String> = Artist.avatar_url;
     }
     {
+        let ChartSummary = None::<crate::api::ChartSummary>.unwrap();
+        let _: u64 = ChartSummary.id;
+        let _: String = ChartSummary.name;
+        let _: Option<String> = ChartSummary.cover_url;
+        let _: String = ChartSummary.update_frequency;
+        let _: u64 = ChartSummary.track_count;
+        let _: u64 = ChartSummary.play_count;
+    }
+    {
         let Comment = None::<crate::api::Comment>.unwrap();
         let _: u64 = Comment.id;
         let _: u64 = Comment.user_id;
@@ -4560,6 +4569,11 @@ const _: fn() = || {
         let _: Option<String> = Playlist.cover_url;
         let _: u64 = Playlist.track_count;
         let _: bool = Playlist.special;
+    }
+    {
+        let PlaylistCategory = None::<crate::api::PlaylistCategory>.unwrap();
+        let _: String = PlaylistCategory.group;
+        let _: Vec<String> = PlaylistCategory.subs;
     }
     {
         let PlaylistDetail = None::<crate::api::PlaylistDetail>.unwrap();
@@ -4619,12 +4633,31 @@ const _: fn() = || {
         let _: Option<String> = SuggestItem.cover_url;
     }
     {
+        let ToplistCatalogGroup = None::<crate::api::ToplistCatalogGroup>.unwrap();
+        let _: String = ToplistCatalogGroup.code;
+        let _: Vec<crate::api::ToplistCatalogItem> = ToplistCatalogGroup.items;
+    }
+    {
+        let ToplistCatalogItem = None::<crate::api::ToplistCatalogItem>.unwrap();
+        let _: u64 = ToplistCatalogItem.id;
+        let _: String = ToplistCatalogItem.name;
+        let _: Option<String> = ToplistCatalogItem.cover_url;
+        let _: String = ToplistCatalogItem.update_frequency;
+        let _: String = ToplistCatalogItem.target_type;
+        let _: bool = ToplistCatalogItem.can_play;
+    }
+    {
         let UserItem = None::<crate::api::UserItem>.unwrap();
         let _: u64 = UserItem.id;
         let _: String = UserItem.name;
         let _: Option<String> = UserItem.avatar_url;
         let _: String = UserItem.signature;
         let _: bool = UserItem.followed;
+    }
+    {
+        let WikiFact = None::<crate::api::WikiFact>.unwrap();
+        let _: String = WikiFact.label;
+        let _: String = WikiFact.value;
     }
 };
 
@@ -4761,7 +4794,7 @@ impl SseDecode for bool {
     }
 }
 
-impl SseDecode for crate::api::ChartSummaryDto {
+impl SseDecode for crate::api::ChartSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -4770,7 +4803,7 @@ impl SseDecode for crate::api::ChartSummaryDto {
         let mut var_updateFrequency = <String>::sse_decode(deserializer);
         let mut var_trackCount = <u64>::sse_decode(deserializer);
         let mut var_playCount = <u64>::sse_decode(deserializer);
-        return crate::api::ChartSummaryDto {
+        return crate::api::ChartSummary {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
@@ -5195,13 +5228,13 @@ impl SseDecode for Vec<crate::api::Artist> {
     }
 }
 
-impl SseDecode for Vec<crate::api::ChartSummaryDto> {
+impl SseDecode for Vec<crate::api::ChartSummary> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::ChartSummaryDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::ChartSummary>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5365,13 +5398,13 @@ impl SseDecode for Vec<crate::api::Playlist> {
     }
 }
 
-impl SseDecode for Vec<crate::api::PlaylistCategoryDto> {
+impl SseDecode for Vec<crate::api::PlaylistCategory> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::PlaylistCategoryDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::PlaylistCategory>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5655,29 +5688,25 @@ impl SseDecode for Vec<crate::api::SuggestItem> {
     }
 }
 
-impl SseDecode for Vec<crate::api::ToplistCatalogGroupDto> {
+impl SseDecode for Vec<crate::api::ToplistCatalogGroup> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::ToplistCatalogGroupDto>::sse_decode(
-                deserializer,
-            ));
+            ans_.push(<crate::api::ToplistCatalogGroup>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::ToplistCatalogItemDto> {
+impl SseDecode for Vec<crate::api::ToplistCatalogItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::ToplistCatalogItemDto>::sse_decode(
-                deserializer,
-            ));
+            ans_.push(<crate::api::ToplistCatalogItem>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5731,13 +5760,13 @@ impl SseDecode for Vec<crate::api::VipTaskDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::WikiFactDto> {
+impl SseDecode for Vec<crate::api::WikiFact> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::WikiFactDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::WikiFact>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5937,12 +5966,12 @@ impl SseDecode for crate::api::Playlist {
     }
 }
 
-impl SseDecode for crate::api::PlaylistCategoryDto {
+impl SseDecode for crate::api::PlaylistCategory {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_group = <String>::sse_decode(deserializer);
         let mut var_subs = <Vec<String>>::sse_decode(deserializer);
-        return crate::api::PlaylistCategoryDto {
+        return crate::api::PlaylistCategory {
             group: var_group,
             subs: var_subs,
         };
@@ -6547,19 +6576,19 @@ impl SseDecode for crate::api::SuggestItem {
     }
 }
 
-impl SseDecode for crate::api::ToplistCatalogGroupDto {
+impl SseDecode for crate::api::ToplistCatalogGroup {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_code = <String>::sse_decode(deserializer);
-        let mut var_items = <Vec<crate::api::ToplistCatalogItemDto>>::sse_decode(deserializer);
-        return crate::api::ToplistCatalogGroupDto {
+        let mut var_items = <Vec<crate::api::ToplistCatalogItem>>::sse_decode(deserializer);
+        return crate::api::ToplistCatalogGroup {
             code: var_code,
             items: var_items,
         };
     }
 }
 
-impl SseDecode for crate::api::ToplistCatalogItemDto {
+impl SseDecode for crate::api::ToplistCatalogItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -6568,7 +6597,7 @@ impl SseDecode for crate::api::ToplistCatalogItemDto {
         let mut var_updateFrequency = <String>::sse_decode(deserializer);
         let mut var_targetType = <String>::sse_decode(deserializer);
         let mut var_canPlay = <bool>::sse_decode(deserializer);
-        return crate::api::ToplistCatalogItemDto {
+        return crate::api::ToplistCatalogItem {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
@@ -6785,12 +6814,12 @@ impl SseDecode for crate::api::VipTaskDto {
     }
 }
 
-impl SseDecode for crate::api::WikiFactDto {
+impl SseDecode for crate::api::WikiFact {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_label = <String>::sse_decode(deserializer);
         let mut var_value = <String>::sse_decode(deserializer);
-        return crate::api::WikiFactDto {
+        return crate::api::WikiFact {
             label: var_label,
             value: var_value,
         };
@@ -7118,25 +7147,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ArtistDetailDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ChartSummaryDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ChartSummary> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.update_frequency.into_into_dart().into_dart(),
-            self.track_count.into_into_dart().into_dart(),
-            self.play_count.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.update_frequency.into_into_dart().into_dart(),
+            self.0.track_count.into_into_dart().into_dart(),
+            self.0.play_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ChartSummaryDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ChartSummaryDto>
-    for crate::api::ChartSummaryDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::ChartSummary>
 {
-    fn into_into_dart(self) -> crate::api::ChartSummaryDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::ChartSummary>>
+    for crate::api::ChartSummary
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::ChartSummary> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -7613,24 +7645,24 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::Playlist>> for cra
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PlaylistCategoryDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::PlaylistCategory> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.group.into_into_dart().into_dart(),
-            self.subs.into_into_dart().into_dart(),
+            self.0.group.into_into_dart().into_dart(),
+            self.0.subs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::PlaylistCategoryDto
+    for FrbWrapper<crate::api::PlaylistCategory>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PlaylistCategoryDto>
-    for crate::api::PlaylistCategoryDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PlaylistCategory>>
+    for crate::api::PlaylistCategory
 {
-    fn into_into_dart(self) -> crate::api::PlaylistCategoryDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::PlaylistCategory> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8324,49 +8356,49 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::SuggestItem>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ToplistCatalogGroupDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ToplistCatalogGroup> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.code.into_into_dart().into_dart(),
-            self.items.into_into_dart().into_dart(),
+            self.0.code.into_into_dart().into_dart(),
+            self.0.items.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::ToplistCatalogGroupDto
+    for FrbWrapper<crate::api::ToplistCatalogGroup>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ToplistCatalogGroupDto>
-    for crate::api::ToplistCatalogGroupDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::ToplistCatalogGroup>>
+    for crate::api::ToplistCatalogGroup
 {
-    fn into_into_dart(self) -> crate::api::ToplistCatalogGroupDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::ToplistCatalogGroup> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ToplistCatalogItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ToplistCatalogItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.update_frequency.into_into_dart().into_dart(),
-            self.target_type.into_into_dart().into_dart(),
-            self.can_play.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.update_frequency.into_into_dart().into_dart(),
+            self.0.target_type.into_into_dart().into_dart(),
+            self.0.can_play.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::ToplistCatalogItemDto
+    for FrbWrapper<crate::api::ToplistCatalogItem>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ToplistCatalogItemDto>
-    for crate::api::ToplistCatalogItemDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::ToplistCatalogItem>>
+    for crate::api::ToplistCatalogItem
 {
-    fn into_into_dart(self) -> crate::api::ToplistCatalogItemDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::ToplistCatalogItem> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8555,19 +8587,22 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::VipTaskDto> for crate::api::V
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::WikiFactDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::WikiFact> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.label.into_into_dart().into_dart(),
-            self.value.into_into_dart().into_dart(),
+            self.0.label.into_into_dart().into_dart(),
+            self.0.value.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WikiFactDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::WikiFactDto> for crate::api::WikiFactDto {
-    fn into_into_dart(self) -> crate::api::WikiFactDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::WikiFact>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::WikiFact>> for crate::api::WikiFact {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::WikiFact> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8708,7 +8743,7 @@ impl SseEncode for bool {
     }
 }
 
-impl SseEncode for crate::api::ChartSummaryDto {
+impl SseEncode for crate::api::ChartSummary {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -8993,12 +9028,12 @@ impl SseEncode for Vec<crate::api::Artist> {
     }
 }
 
-impl SseEncode for Vec<crate::api::ChartSummaryDto> {
+impl SseEncode for Vec<crate::api::ChartSummary> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::ChartSummaryDto>::sse_encode(item, serializer);
+            <crate::api::ChartSummary>::sse_encode(item, serializer);
         }
     }
 }
@@ -9133,12 +9168,12 @@ impl SseEncode for Vec<crate::api::Playlist> {
     }
 }
 
-impl SseEncode for Vec<crate::api::PlaylistCategoryDto> {
+impl SseEncode for Vec<crate::api::PlaylistCategory> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::PlaylistCategoryDto>::sse_encode(item, serializer);
+            <crate::api::PlaylistCategory>::sse_encode(item, serializer);
         }
     }
 }
@@ -9373,22 +9408,22 @@ impl SseEncode for Vec<crate::api::SuggestItem> {
     }
 }
 
-impl SseEncode for Vec<crate::api::ToplistCatalogGroupDto> {
+impl SseEncode for Vec<crate::api::ToplistCatalogGroup> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::ToplistCatalogGroupDto>::sse_encode(item, serializer);
+            <crate::api::ToplistCatalogGroup>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::ToplistCatalogItemDto> {
+impl SseEncode for Vec<crate::api::ToplistCatalogItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::ToplistCatalogItemDto>::sse_encode(item, serializer);
+            <crate::api::ToplistCatalogItem>::sse_encode(item, serializer);
         }
     }
 }
@@ -9433,12 +9468,12 @@ impl SseEncode for Vec<crate::api::VipTaskDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::WikiFactDto> {
+impl SseEncode for Vec<crate::api::WikiFact> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::WikiFactDto>::sse_encode(item, serializer);
+            <crate::api::WikiFact>::sse_encode(item, serializer);
         }
     }
 }
@@ -9594,7 +9629,7 @@ impl SseEncode for crate::api::Playlist {
     }
 }
 
-impl SseEncode for crate::api::PlaylistCategoryDto {
+impl SseEncode for crate::api::PlaylistCategory {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.group, serializer);
@@ -9963,15 +9998,15 @@ impl SseEncode for crate::api::SuggestItem {
     }
 }
 
-impl SseEncode for crate::api::ToplistCatalogGroupDto {
+impl SseEncode for crate::api::ToplistCatalogGroup {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.code, serializer);
-        <Vec<crate::api::ToplistCatalogItemDto>>::sse_encode(self.items, serializer);
+        <Vec<crate::api::ToplistCatalogItem>>::sse_encode(self.items, serializer);
     }
 }
 
-impl SseEncode for crate::api::ToplistCatalogItemDto {
+impl SseEncode for crate::api::ToplistCatalogItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -10117,7 +10152,7 @@ impl SseEncode for crate::api::VipTaskDto {
     }
 }
 
-impl SseEncode for crate::api::WikiFactDto {
+impl SseEncode for crate::api::WikiFact {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.label, serializer);

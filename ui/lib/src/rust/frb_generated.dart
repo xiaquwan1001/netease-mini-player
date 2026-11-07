@@ -96,7 +96,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<ArtistDetailDto> crateApiArtistDetail({required BigInt artistId});
 
-  Future<List<ChartSummaryDto>> crateApiChartList();
+  Future<List<ChartSummary>> crateApiChartList();
 
   Future<bool> crateApiClearSearchHistory();
 
@@ -281,7 +281,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<PlayerStateDto> crateApiPlayerStop();
 
-  Future<List<PlaylistCategoryDto>> crateApiPlaylistCategories();
+  Future<List<PlaylistCategory>> crateApiPlaylistCategories();
 
   Future<PlaylistDetail> crateApiPlaylistDetail({required BigInt playlistId});
 
@@ -423,7 +423,7 @@ abstract class RustLibApi extends BaseApi {
     required String level,
   });
 
-  Future<List<WikiFactDto>> crateApiSongWiki({required BigInt songId});
+  Future<List<WikiFact>> crateApiSongWiki({required BigInt songId});
 
   Future<List<Playlist>> crateApiStylePlaylists({
     required String tagId,
@@ -445,7 +445,7 @@ abstract class RustLibApi extends BaseApi {
     required int limit,
   });
 
-  Future<List<ToplistCatalogGroupDto>> crateApiToplistCatalog();
+  Future<List<ToplistCatalogGroup>> crateApiToplistCatalog();
 
   Future<bool> crateApiTrashFmSong({required BigInt songId});
 
@@ -684,7 +684,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "artist_detail", argNames: ["artistId"]);
 
   @override
-  Future<List<ChartSummaryDto>> crateApiChartList() {
+  Future<List<ChartSummary>> crateApiChartList() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -697,7 +697,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_chart_summary_dto,
+          decodeSuccessData: sse_decode_list_chart_summary,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiChartListConstMeta,
@@ -2437,7 +2437,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "player_stop", argNames: []);
 
   @override
-  Future<List<PlaylistCategoryDto>> crateApiPlaylistCategories() {
+  Future<List<PlaylistCategory>> crateApiPlaylistCategories() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2450,7 +2450,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_playlist_category_dto,
+          decodeSuccessData: sse_decode_list_playlist_category,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPlaylistCategoriesConstMeta,
@@ -3739,7 +3739,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<List<WikiFactDto>> crateApiSongWiki({required BigInt songId}) {
+  Future<List<WikiFact>> crateApiSongWiki({required BigInt songId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3753,7 +3753,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_wiki_fact_dto,
+          decodeSuccessData: sse_decode_list_wiki_fact,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSongWikiConstMeta,
@@ -3950,7 +3950,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<List<ToplistCatalogGroupDto>> crateApiToplistCatalog() {
+  Future<List<ToplistCatalogGroup>> crateApiToplistCatalog() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3963,7 +3963,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_toplist_catalog_group_dto,
+          decodeSuccessData: sse_decode_list_toplist_catalog_group,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiToplistCatalogConstMeta,
@@ -4368,12 +4368,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ChartSummaryDto dco_decode_chart_summary_dto(dynamic raw) {
+  ChartSummary dco_decode_chart_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return ChartSummaryDto(
+    return ChartSummary(
       id: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       coverUrl: dco_decode_opt_String(arr[2]),
@@ -4697,9 +4697,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ChartSummaryDto> dco_decode_list_chart_summary_dto(dynamic raw) {
+  List<ChartSummary> dco_decode_list_chart_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_chart_summary_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_chart_summary).toList();
   }
 
   @protected
@@ -4793,11 +4793,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PlaylistCategoryDto> dco_decode_list_playlist_category_dto(dynamic raw) {
+  List<PlaylistCategory> dco_decode_list_playlist_category(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_playlist_category_dto)
-        .toList();
+    return (raw as List<dynamic>).map(dco_decode_playlist_category).toList();
   }
 
   @protected
@@ -4947,23 +4945,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ToplistCatalogGroupDto> dco_decode_list_toplist_catalog_group_dto(
-    dynamic raw,
-  ) {
+  List<ToplistCatalogGroup> dco_decode_list_toplist_catalog_group(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
-        .map(dco_decode_toplist_catalog_group_dto)
+        .map(dco_decode_toplist_catalog_group)
         .toList();
   }
 
   @protected
-  List<ToplistCatalogItemDto> dco_decode_list_toplist_catalog_item_dto(
-    dynamic raw,
-  ) {
+  List<ToplistCatalogItem> dco_decode_list_toplist_catalog_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>)
-        .map(dco_decode_toplist_catalog_item_dto)
-        .toList();
+    return (raw as List<dynamic>).map(dco_decode_toplist_catalog_item).toList();
   }
 
   @protected
@@ -4991,9 +4983,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw) {
+  List<WikiFact> dco_decode_list_wiki_fact(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_wiki_fact_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_wiki_fact).toList();
   }
 
   @protected
@@ -5128,12 +5120,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PlaylistCategoryDto dco_decode_playlist_category_dto(dynamic raw) {
+  PlaylistCategory dco_decode_playlist_category(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return PlaylistCategoryDto(
+    return PlaylistCategory(
       group: dco_decode_String(arr[0]),
       subs: dco_decode_list_String(arr[1]),
     );
@@ -5625,24 +5617,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ToplistCatalogGroupDto dco_decode_toplist_catalog_group_dto(dynamic raw) {
+  ToplistCatalogGroup dco_decode_toplist_catalog_group(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return ToplistCatalogGroupDto(
+    return ToplistCatalogGroup(
       code: dco_decode_String(arr[0]),
-      items: dco_decode_list_toplist_catalog_item_dto(arr[1]),
+      items: dco_decode_list_toplist_catalog_item(arr[1]),
     );
   }
 
   @protected
-  ToplistCatalogItemDto dco_decode_toplist_catalog_item_dto(dynamic raw) {
+  ToplistCatalogItem dco_decode_toplist_catalog_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return ToplistCatalogItemDto(
+    return ToplistCatalogItem(
       id: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       coverUrl: dco_decode_opt_String(arr[2]),
@@ -5821,12 +5813,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  WikiFactDto dco_decode_wiki_fact_dto(dynamic raw) {
+  WikiFact dco_decode_wiki_fact(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return WikiFactDto(
+    return WikiFact(
       label: dco_decode_String(arr[0]),
       value: dco_decode_String(arr[1]),
     );
@@ -6039,7 +6031,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ChartSummaryDto sse_decode_chart_summary_dto(SseDeserializer deserializer) {
+  ChartSummary sse_decode_chart_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_64(deserializer);
     var var_name = sse_decode_String(deserializer);
@@ -6047,7 +6039,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_updateFrequency = sse_decode_String(deserializer);
     var var_trackCount = sse_decode_u_64(deserializer);
     var var_playCount = sse_decode_u_64(deserializer);
-    return ChartSummaryDto(
+    return ChartSummary(
       id: var_id,
       name: var_name,
       coverUrl: var_coverUrl,
@@ -6454,15 +6446,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ChartSummaryDto> sse_decode_list_chart_summary_dto(
+  List<ChartSummary> sse_decode_list_chart_summary(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ChartSummaryDto>[];
+    var ans_ = <ChartSummary>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_chart_summary_dto(deserializer));
+      ans_.add(sse_decode_chart_summary(deserializer));
     }
     return ans_;
   }
@@ -6642,15 +6634,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PlaylistCategoryDto> sse_decode_list_playlist_category_dto(
+  List<PlaylistCategory> sse_decode_list_playlist_category(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <PlaylistCategoryDto>[];
+    var ans_ = <PlaylistCategory>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_playlist_category_dto(deserializer));
+      ans_.add(sse_decode_playlist_category(deserializer));
     }
     return ans_;
   }
@@ -6956,29 +6948,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ToplistCatalogGroupDto> sse_decode_list_toplist_catalog_group_dto(
+  List<ToplistCatalogGroup> sse_decode_list_toplist_catalog_group(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ToplistCatalogGroupDto>[];
+    var ans_ = <ToplistCatalogGroup>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_toplist_catalog_group_dto(deserializer));
+      ans_.add(sse_decode_toplist_catalog_group(deserializer));
     }
     return ans_;
   }
 
   @protected
-  List<ToplistCatalogItemDto> sse_decode_list_toplist_catalog_item_dto(
+  List<ToplistCatalogItem> sse_decode_list_toplist_catalog_item(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ToplistCatalogItemDto>[];
+    var ans_ = <ToplistCatalogItem>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_toplist_catalog_item_dto(deserializer));
+      ans_.add(sse_decode_toplist_catalog_item(deserializer));
     }
     return ans_;
   }
@@ -7036,15 +7028,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<WikiFactDto> sse_decode_list_wiki_fact_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<WikiFact> sse_decode_list_wiki_fact(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <WikiFactDto>[];
+    var ans_ = <WikiFact>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_wiki_fact_dto(deserializer));
+      ans_.add(sse_decode_wiki_fact(deserializer));
     }
     return ans_;
   }
@@ -7249,13 +7239,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PlaylistCategoryDto sse_decode_playlist_category_dto(
-    SseDeserializer deserializer,
-  ) {
+  PlaylistCategory sse_decode_playlist_category(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_group = sse_decode_String(deserializer);
     var var_subs = sse_decode_list_String(deserializer);
-    return PlaylistCategoryDto(group: var_group, subs: var_subs);
+    return PlaylistCategory(group: var_group, subs: var_subs);
   }
 
   @protected
@@ -7836,17 +7824,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ToplistCatalogGroupDto sse_decode_toplist_catalog_group_dto(
+  ToplistCatalogGroup sse_decode_toplist_catalog_group(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_code = sse_decode_String(deserializer);
-    var var_items = sse_decode_list_toplist_catalog_item_dto(deserializer);
-    return ToplistCatalogGroupDto(code: var_code, items: var_items);
+    var var_items = sse_decode_list_toplist_catalog_item(deserializer);
+    return ToplistCatalogGroup(code: var_code, items: var_items);
   }
 
   @protected
-  ToplistCatalogItemDto sse_decode_toplist_catalog_item_dto(
+  ToplistCatalogItem sse_decode_toplist_catalog_item(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -7856,7 +7844,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_updateFrequency = sse_decode_String(deserializer);
     var var_targetType = sse_decode_String(deserializer);
     var var_canPlay = sse_decode_bool(deserializer);
-    return ToplistCatalogItemDto(
+    return ToplistCatalogItem(
       id: var_id,
       name: var_name,
       coverUrl: var_coverUrl,
@@ -8063,11 +8051,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer) {
+  WikiFact sse_decode_wiki_fact(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_label = sse_decode_String(deserializer);
     var var_value = sse_decode_String(deserializer);
-    return WikiFactDto(label: var_label, value: var_value);
+    return WikiFact(label: var_label, value: var_value);
   }
 
   @protected
@@ -8247,10 +8235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_chart_summary_dto(
-    ChartSummaryDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_chart_summary(ChartSummary self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.id, serializer);
     sse_encode_String(self.name, serializer);
@@ -8542,14 +8527,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_chart_summary_dto(
-    List<ChartSummaryDto> self,
+  void sse_encode_list_chart_summary(
+    List<ChartSummary> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_chart_summary_dto(item, serializer);
+      sse_encode_chart_summary(item, serializer);
     }
   }
 
@@ -8704,14 +8689,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_playlist_category_dto(
-    List<PlaylistCategoryDto> self,
+  void sse_encode_list_playlist_category(
+    List<PlaylistCategory> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_playlist_category_dto(item, serializer);
+      sse_encode_playlist_category(item, serializer);
     }
   }
 
@@ -8985,26 +8970,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_toplist_catalog_group_dto(
-    List<ToplistCatalogGroupDto> self,
+  void sse_encode_list_toplist_catalog_group(
+    List<ToplistCatalogGroup> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_toplist_catalog_group_dto(item, serializer);
+      sse_encode_toplist_catalog_group(item, serializer);
     }
   }
 
   @protected
-  void sse_encode_list_toplist_catalog_item_dto(
-    List<ToplistCatalogItemDto> self,
+  void sse_encode_list_toplist_catalog_item(
+    List<ToplistCatalogItem> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_toplist_catalog_item_dto(item, serializer);
+      sse_encode_toplist_catalog_item(item, serializer);
     }
   }
 
@@ -9057,14 +9042,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_wiki_fact_dto(
-    List<WikiFactDto> self,
+  void sse_encode_list_wiki_fact(
+    List<WikiFact> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_wiki_fact_dto(item, serializer);
+      sse_encode_wiki_fact(item, serializer);
     }
   }
 
@@ -9243,8 +9228,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_playlist_category_dto(
-    PlaylistCategoryDto self,
+  void sse_encode_playlist_category(
+    PlaylistCategory self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9649,18 +9634,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_toplist_catalog_group_dto(
-    ToplistCatalogGroupDto self,
+  void sse_encode_toplist_catalog_group(
+    ToplistCatalogGroup self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.code, serializer);
-    sse_encode_list_toplist_catalog_item_dto(self.items, serializer);
+    sse_encode_list_toplist_catalog_item(self.items, serializer);
   }
 
   @protected
-  void sse_encode_toplist_catalog_item_dto(
-    ToplistCatalogItemDto self,
+  void sse_encode_toplist_catalog_item(
+    ToplistCatalogItem self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9804,7 +9789,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer) {
+  void sse_encode_wiki_fact(WikiFact self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.label, serializer);
     sse_encode_String(self.value, serializer);

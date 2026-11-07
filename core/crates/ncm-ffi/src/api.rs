@@ -9,8 +9,9 @@ use std::sync::{Mutex, OnceLock};
 use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
-    AlbumItem, Artist, Comment, CommentPage, CommentStats, FollowCount, HotArtist, Playlist,
-    PlaylistDetail, ProfileDetail, SigninDay, SigninStatus, StyleTag, SuggestItem, UserItem,
+    AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, FollowCount, HotArtist,
+    Playlist, PlaylistCategory, PlaylistDetail, ProfileDetail, SigninDay, SigninStatus, StyleTag,
+    SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -1684,7 +1685,8 @@ pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<Playlist>
     ffi_forward!(Capability::StyleRecommend, provider.style_playlists(&tag_id, limit))
 }
 
-pub struct ChartSummaryDto {
+#[frb(mirror(ChartSummary))]
+pub struct _ChartSummary {
     /// 榜单就是歌单, 直接喂给 playlist_songs / playlist_detail
     pub id: u64,
     pub name: String,
@@ -1696,24 +1698,13 @@ pub struct ChartSummaryDto {
 }
 
 /// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
-pub async fn chart_list() -> Result<Vec<ChartSummaryDto>, String> {
-    let provider = with_provider(Capability::Chart)?;
-    let list = provider.charts().await.map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|c| ChartSummaryDto {
-            id: c.id,
-            name: c.name,
-            cover_url: c.cover_url,
-            update_frequency: c.update_frequency,
-            track_count: c.track_count,
-            play_count: c.play_count,
-        })
-        .collect())
+pub async fn chart_list() -> Result<Vec<ChartSummary>, String> {
+    ffi_forward!(Capability::Chart, provider.charts())
 }
 
 /// 榜单 v2 目录里的一张榜单卡
-pub struct ToplistCatalogItemDto {
+#[frb(mirror(ToplistCatalogItem))]
+pub struct _ToplistCatalogItem {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -1725,9 +1716,10 @@ pub struct ToplistCatalogItemDto {
 }
 
 /// 榜单 v2 目录的一个分组(categoryCode)
-pub struct ToplistCatalogGroupDto {
+#[frb(mirror(ToplistCatalogGroup))]
+pub struct _ToplistCatalogGroup {
     pub code: String,
-    pub items: Vec<ToplistCatalogItemDto>,
+    pub items: Vec<ToplistCatalogItem>,
 }
 
 /// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItem
@@ -1736,30 +1728,12 @@ pub async fn newest_albums(limit: u32) -> Result<Vec<AlbumItem>, String> {
 }
 
 /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
-pub async fn toplist_catalog() -> Result<Vec<ToplistCatalogGroupDto>, String> {
-    let provider = with_provider(Capability::Chart)?;
-    let groups = provider.toplist_catalog().await.map_err(|e| e.to_string())?;
-    Ok(groups
-        .into_iter()
-        .map(|g| ToplistCatalogGroupDto {
-            code: g.code,
-            items: g
-                .items
-                .into_iter()
-                .map(|it| ToplistCatalogItemDto {
-                    id: it.id,
-                    name: it.name,
-                    cover_url: it.cover_url,
-                    update_frequency: it.update_frequency,
-                    target_type: it.target_type,
-                    can_play: it.can_play,
-                })
-                .collect(),
-        })
-        .collect())
+pub async fn toplist_catalog() -> Result<Vec<ToplistCatalogGroup>, String> {
+    ffi_forward!(Capability::Chart, provider.toplist_catalog())
 }
 
-pub struct PlaylistCategoryDto {
+#[frb(mirror(PlaylistCategory))]
+pub struct _PlaylistCategory {
     /// 一级分类(语种/风格/场景/情感/主题)
     pub group: String,
     /// 该分类下的子分类名(华语/欧美/流行…), 直接作为 playlists_by_category 的 cat
@@ -1767,13 +1741,8 @@ pub struct PlaylistCategoryDto {
 }
 
 /// 歌单分类(歌单广场的筛选条)
-pub async fn playlist_categories() -> Result<Vec<PlaylistCategoryDto>, String> {
-    let provider = with_provider(Capability::Playlist)?;
-    let list = provider.playlist_categories().await.map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|c| PlaylistCategoryDto { group: c.group, subs: c.subs })
-        .collect())
+pub async fn playlist_categories() -> Result<Vec<PlaylistCategory>, String> {
+    ffi_forward!(Capability::Playlist, provider.playlist_categories())
 }
 
 /// 某个分类下的歌单(按热度, offset 翻页)
@@ -2047,7 +2016,8 @@ pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, 
     ffi_forward!(Capability::Comment, provider.delete_comment(&thread_id, comment_id))
 }
 
-pub struct WikiFactDto {
+#[frb(mirror(WikiFact))]
+pub struct _WikiFact {
     /// 分组(曲风/语种/BPM/获奖成就...)
     pub label: String,
     /// 值(多个已用 " / " 拼好)
@@ -2055,16 +2025,8 @@ pub struct WikiFactDto {
 }
 
 /// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
-pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFactDto>, String> {
-    let provider = with_provider(Capability::Wiki)?;
-    let list = provider
-        .song_wiki(song_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|f| WikiFactDto { label: f.label, value: f.value })
-        .collect())
+pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFact>, String> {
+    ffi_forward!(Capability::Wiki, provider.song_wiki(song_id))
 }
 
 /// 新歌速递(按地区; area = all|zh|ea|jp|kr)

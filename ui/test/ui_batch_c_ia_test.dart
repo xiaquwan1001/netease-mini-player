@@ -20,7 +20,7 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<List<rust.PlaylistCategoryDto>> crateApiPlaylistCategories() async =>
+  Future<List<rust.PlaylistCategory>> crateApiPlaylistCategories() async =>
       const [];
 
   @override
@@ -246,7 +246,7 @@ void main() {
           rust.StyleTag(id: '1009', name: '粤语流行'),
         ],
         loadCharts: () async => [
-          rust.ChartSummaryDto(
+          rust.ChartSummary(
             id: BigInt.from(19723756),
             name: '飙升榜',
             coverUrl: null,

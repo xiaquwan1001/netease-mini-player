@@ -66,7 +66,7 @@ void main() {
         rust.StyleTag(id: '1020', name: '华语流行'),
       ],
       loadCharts: () async => [
-        rust.ChartSummaryDto(
+        rust.ChartSummary(
           id: BigInt.from(19723756),
           name: '飙升榜',
           coverUrl: null,

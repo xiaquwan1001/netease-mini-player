@@ -5,7 +5,7 @@ import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
-typedef ToplistCatalogLoader = Future<List<rust.ToplistCatalogGroupDto>> Function();
+typedef ToplistCatalogLoader = Future<List<rust.ToplistCatalogGroup>> Function();
 
 /// toplist_catalog 的 categoryCode → 中文小标题.
 /// 实测 7 组(顺序按服务端返回): TOPPING(置顶推广) / OFFICIAL(官方榜) /
@@ -56,7 +56,7 @@ class _AllChartsPageState extends State<AllChartsPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('全部榜单')),
       // PagedListView 非分页模式: loader 恒 hasMore:false, 三态壳交给组件
-      body: PagedListView<rust.ToplistCatalogGroupDto>(
+      body: PagedListView<rust.ToplistCatalogGroup>(
         refreshable: false,
         emptyText: '暂时没有榜单',
         loader: (cursor) async => PagedPage(
@@ -75,7 +75,7 @@ class _AllChartsPageState extends State<AllChartsPage> {
 class _GroupSection extends StatelessWidget {
   const _GroupSection({required this.group, required this.onOpenPlaylist});
 
-  final rust.ToplistCatalogGroupDto group;
+  final rust.ToplistCatalogGroup group;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override

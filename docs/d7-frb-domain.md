@@ -10,7 +10,7 @@
 |---|---|
 | 策略 spike(方案 A mirror / 方案 B domain 注注解) | ✅ 方案 A 可行(见 §1) |
 | Dart 类名是否零改动 | ❌ 不可能(**frb 2.13 不支持给 struct 改名**, 见 §1.3); 采用脚本化 `rust.XDto`→`rust.X` 重命名, 逐批用 `dart analyze` + `flutter test` 兜底 |
-| 迁移批次 | 批1+批2 已收口(16/57, 见 §3) |
+| 迁移批次 | 批1–批3 已收口(21/57, 见 §3) |
 
 ## 3. 批次日志(增量)
 
@@ -60,16 +60,25 @@
 `generate` 会刷一屏 `cannot find type XxxDto in module crate::api` —— 但它仍会把新生成物写好,
 紧接着 `cargo build` 是通过的。判断标准是看 `ui/lib/src/rust/api.dart` 里是否已有新类名, 而不是看那屏报错。
 
-### 待办(批3 起)
+### 批3(2026-11-09)—— 榜单/分类/百科 5 个类型, 已提交
+
+`ChartSummary` / `ToplistCatalogItem` / `ToplistCatalogGroup` / `PlaylistCategory` / `WikiFact`
+
+- 4 个导出(chart_list/toplist_catalog/playlist_categories/song_wiki)改 `ffi_forward!`, 转换函数全删。
+- Dart 侧 9 个文件重命名。门禁全绿。
+
+### 待办(批4 起)
 
 按 §2.2 表里剩下的 46 个 (a) 类型分批迁移, 建议按模块成簇(每批 8–12 个), 每批一套完整门禁:
 
 | 批 | 簇 | 类型 |
 |---|---|---|
-| 2 | 评论/签到/搜索 | `Comment` `CommentPage` `CommentStats` `SigninDay` `SigninStatus` `SearchArtist` `SearchAlbum` `SearchPlaylistItem` `SearchPodcast` `AlbumBrief` `SearchExact` `HotSearchTerm` `HotSearchDetailItem` `DefaultSearch` |
-| 3 | 电台/榜单 | `PodcastRadio` `RadioCategory` `RadioPick` `RadioExploreHome` `RadioRankedRadio` `RadioRankedDj` `RadioSubscriber` `RadioSubscriberPage` `ChartSummary` `ToplistCatalogItem` `ToplistCatalogGroup` `PlaylistCategory` `WikiFact` |
-| 4 | 数字专辑/VIP/私信 | `DigitalAlbumPurchasedEntry` `DigitalAlbumPurchased` `PurchasedSongEntry` `SongPurchasedPage` `DigitalAlbumDetail` `DigitalAlbumSalesEntry` `VipMembership` `VipGrowth` `VipSignDay` `VipSign` `VipTask` `VipOverview` `UserMedal` `PrivateSession` `PrivateMessage` `InboxItem` `ForwardItem` `RecentContact` |
-| 5 | 流地址 | `StreamUrl`(`StreamDto` 是 (a+) 超集: domain 多 `size`, Dart 只是多拿一个字段) |
+| ~~2~~ | ~~评论/签到~~ | ✅ 已做(批2) |
+| ~~3~~ | ~~榜单/分类/百科~~ | ✅ 已做(批3) |
+| 4 | 搜索(带 (c) 连带改动) | `SearchArtist` `SearchAlbum` `SearchPlaylistItem` `SearchPodcast` `AlbumBrief` `SearchExact` `HotSearchTerm` `HotSearchDetailItem` `DefaultSearch`(需同时把 `SearchBundleDto`/`ArtistDetailDto` 的字段改成 domain 类型) |
+| 5 | 电台 | `PodcastRadio` `RadioCategory` `RadioPick` `RadioExploreHome` `RadioRankedRadio` `RadioRankedDj` `RadioSubscriber` `RadioSubscriberPage` |
+| 6 | 数字专辑/VIP/私信 | `DigitalAlbumPurchasedEntry` `DigitalAlbumPurchased` `PurchasedSongEntry` `SongPurchasedPage` `DigitalAlbumDetail` `DigitalAlbumSalesEntry` `VipMembership` `VipGrowth` `VipSignDay` `VipSign` `VipTask` `VipOverview` `UserMedal` `PrivateSession` `PrivateMessage` `InboxItem` `ForwardItem` `RecentContact` |
+| 7 | 流地址 | `StreamUrl`(`StreamDto` 是 (a+) 超集: domain 多 `size`, Dart 只是多拿一个字段) |
 
 **注意**: `SearchArtist`/`SearchAlbum`/`SearchPlaylistItem`/`SearchPodcast`/`AlbumBrief` 虽然自身可迁,
 但仍被 `SearchBundleDto`/`ArtistDetailDto`(含 `SongDto`)引用 —— 迁移后要把这些 (c) 类型的字段改成 domain 类型,

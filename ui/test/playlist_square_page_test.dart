@@ -20,8 +20,8 @@ void main() {
 
     await tester.pumpWidget(host(PlaylistSquareView(
       loadCategories: () async => const [
-        rust.PlaylistCategoryDto(group: '语种', subs: ['华语', '欧美']),
-        rust.PlaylistCategoryDto(group: '风格', subs: ['流行']),
+        rust.PlaylistCategory(group: '语种', subs: ['华语', '欧美']),
+        rust.PlaylistCategory(group: '风格', subs: ['流行']),
       ],
       loadPage: (cat, limit, offset) async {
         calls.add('$cat@$offset');

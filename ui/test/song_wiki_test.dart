@@ -39,9 +39,9 @@ void main() {
       ctx,
       song: song(),
       load: (_) async => const [
-        rust.WikiFactDto(label: '曲风', value: '流行-华语流行 / 原声带-动画片原声'),
-        rust.WikiFactDto(label: '语种', value: '国语'),
-        rust.WikiFactDto(label: 'BPM', value: '64'),
+        rust.WikiFact(label: '曲风', value: '流行-华语流行 / 原声带-动画片原声'),
+        rust.WikiFact(label: '语种', value: '国语'),
+        rust.WikiFact(label: 'BPM', value: '64'),
       ],
     );
     await tester.pumpAndSettle();
@@ -74,7 +74,7 @@ void main() {
       load: (_) async {
         calls++;
         if (calls == 1) throw Exception('[internal] 挂了');
-        return const [rust.WikiFactDto(label: '语种', value: '国语')];
+        return const [rust.WikiFact(label: '语种', value: '国语')];
       },
     );
     await tester.pumpAndSettle();

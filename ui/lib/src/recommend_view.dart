@@ -50,7 +50,7 @@ class RecommendView extends StatefulWidget {
   final Future<List<rust.StyleTag>> Function()? loadStyles;
 
   /// 排行榜(榜单就是歌单)
-  final Future<List<rust.ChartSummaryDto>> Function()? loadCharts;
+  final Future<List<rust.ChartSummary>> Function()? loadCharts;
 
   /// 新歌速递 / 新碟上架
   final Future<List<rust.SongDto>> Function()? loadNewSongs;
@@ -81,7 +81,7 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
   Future<List<rust.StyleTag>> Function() get _styles =>
       widget.loadStyles ?? rust.stylePreference;
-  Future<List<rust.ChartSummaryDto>> Function() get _charts =>
+  Future<List<rust.ChartSummary>> Function() get _charts =>
       widget.loadCharts ?? rust.chartList;
   Future<List<rust.SongDto>> Function() get _newSongs =>
       widget.loadNewSongs ?? (() => rust.newSongs(limit: 20));
@@ -585,7 +585,7 @@ class _ChartSection extends StatelessWidget {
     required this.onPlaySongs,
   });
 
-  final Future<List<rust.ChartSummaryDto>> Function() load;
+  final Future<List<rust.ChartSummary>> Function() load;
   final void Function(rust.Playlist playlist) onOpen;
 
   /// 风格推荐下沉到这里: 一行 chips, 不再独占一个平级区块(审查 §5.5)
@@ -607,7 +607,7 @@ class _ChartSection extends StatelessWidget {
             child: const Text('全部'),
           ),
         ),
-        _AsyncSection<List<rust.ChartSummaryDto>>(
+        _AsyncSection<List<rust.ChartSummary>>(
           load: load,
           emptyText: '暂时没有榜单',
           builder: (context, charts, reload) => _CoverRow(

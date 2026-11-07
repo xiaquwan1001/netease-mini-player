@@ -5,7 +5,7 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 
-typedef WikiLoader = Future<List<rust.WikiFactDto>> Function(BigInt songId);
+typedef WikiLoader = Future<List<rust.WikiFact>> Function(BigInt songId);
 
 /// 歌曲百科: 曲风/语种/BPM/获奖成就等标签(网易云"音乐百科"那块).
 ///
@@ -68,7 +68,7 @@ Future<void> showSongWiki(
   );
 }
 
-typedef WikiFactsLoader = Future<List<rust.WikiFactDto>> Function();
+typedef WikiFactsLoader = Future<List<rust.WikiFact>> Function();
 
 class _WikiBody extends StatefulWidget {
   const _WikiBody({required this.load});
@@ -80,7 +80,7 @@ class _WikiBody extends StatefulWidget {
 }
 
 class _WikiBodyState extends State<_WikiBody> {
-  List<rust.WikiFactDto>? _facts;
+  List<rust.WikiFact>? _facts;
   String? _error;
 
   @override

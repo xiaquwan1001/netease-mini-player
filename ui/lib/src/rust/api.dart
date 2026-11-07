@@ -376,7 +376,7 @@ Future<List<Playlist>> stylePlaylists({
 }) => RustLib.instance.api.crateApiStylePlaylists(tagId: tagId, limit: limit);
 
 /// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
-Future<List<ChartSummaryDto>> chartList() =>
+Future<List<ChartSummary>> chartList() =>
     RustLib.instance.api.crateApiChartList();
 
 /// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItem
@@ -384,11 +384,11 @@ Future<List<AlbumItem>> newestAlbums({required int limit}) =>
     RustLib.instance.api.crateApiNewestAlbums(limit: limit);
 
 /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
-Future<List<ToplistCatalogGroupDto>> toplistCatalog() =>
+Future<List<ToplistCatalogGroup>> toplistCatalog() =>
     RustLib.instance.api.crateApiToplistCatalog();
 
 /// 歌单分类(歌单广场的筛选条)
-Future<List<PlaylistCategoryDto>> playlistCategories() =>
+Future<List<PlaylistCategory>> playlistCategories() =>
     RustLib.instance.api.crateApiPlaylistCategories();
 
 /// 某个分类下的歌单(按热度, offset 翻页)
@@ -589,7 +589,7 @@ Future<bool> deleteComment({
 );
 
 /// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
-Future<List<WikiFactDto>> songWiki({required BigInt songId}) =>
+Future<List<WikiFact>> songWiki({required BigInt songId}) =>
     RustLib.instance.api.crateApiSongWiki(songId: songId);
 
 /// 新歌速递(按地区; area = all|zh|ea|jp|kr)
@@ -892,7 +892,7 @@ class ArtistDetailDto {
           albums == other.albums;
 }
 
-class ChartSummaryDto {
+class ChartSummary {
   /// 榜单就是歌单, 直接喂给 playlist_songs / playlist_detail
   final BigInt id;
   final String name;
@@ -903,7 +903,7 @@ class ChartSummaryDto {
   final BigInt trackCount;
   final BigInt playCount;
 
-  const ChartSummaryDto({
+  const ChartSummary({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -924,7 +924,7 @@ class ChartSummaryDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ChartSummaryDto &&
+      other is ChartSummary &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -1777,14 +1777,14 @@ class Playlist {
           special == other.special;
 }
 
-class PlaylistCategoryDto {
+class PlaylistCategory {
   /// 一级分类(语种/风格/场景/情感/主题)
   final String group;
 
   /// 该分类下的子分类名(华语/欧美/流行…), 直接作为 playlists_by_category 的 cat
   final List<String> subs;
 
-  const PlaylistCategoryDto({required this.group, required this.subs});
+  const PlaylistCategory({required this.group, required this.subs});
 
   @override
   int get hashCode => group.hashCode ^ subs.hashCode;
@@ -1792,7 +1792,7 @@ class PlaylistCategoryDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PlaylistCategoryDto &&
+      other is PlaylistCategory &&
           runtimeType == other.runtimeType &&
           group == other.group &&
           subs == other.subs;
@@ -2970,11 +2970,11 @@ class SuggestItem {
 }
 
 /// 榜单 v2 目录的一个分组(categoryCode)
-class ToplistCatalogGroupDto {
+class ToplistCatalogGroup {
   final String code;
-  final List<ToplistCatalogItemDto> items;
+  final List<ToplistCatalogItem> items;
 
-  const ToplistCatalogGroupDto({required this.code, required this.items});
+  const ToplistCatalogGroup({required this.code, required this.items});
 
   @override
   int get hashCode => code.hashCode ^ items.hashCode;
@@ -2982,14 +2982,14 @@ class ToplistCatalogGroupDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ToplistCatalogGroupDto &&
+      other is ToplistCatalogGroup &&
           runtimeType == other.runtimeType &&
           code == other.code &&
           items == other.items;
 }
 
 /// 榜单 v2 目录里的一张榜单卡
-class ToplistCatalogItemDto {
+class ToplistCatalogItem {
   final BigInt id;
   final String name;
   final String? coverUrl;
@@ -3001,7 +3001,7 @@ class ToplistCatalogItemDto {
   final String targetType;
   final bool canPlay;
 
-  const ToplistCatalogItemDto({
+  const ToplistCatalogItem({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -3022,7 +3022,7 @@ class ToplistCatalogItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ToplistCatalogItemDto &&
+      other is ToplistCatalogItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -3428,14 +3428,14 @@ class VipTaskDto {
           url == other.url;
 }
 
-class WikiFactDto {
+class WikiFact {
   /// 分组(曲风/语种/BPM/获奖成就...)
   final String label;
 
   /// 值(多个已用 " / " 拼好)
   final String value;
 
-  const WikiFactDto({required this.label, required this.value});
+  const WikiFact({required this.label, required this.value});
 
   @override
   int get hashCode => label.hashCode ^ value.hashCode;
@@ -3443,7 +3443,7 @@ class WikiFactDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is WikiFactDto &&
+      other is WikiFact &&
           runtimeType == other.runtimeType &&
           label == other.label &&
           value == other.value;

@@ -9,7 +9,7 @@ import 'rust/api.dart' as rust;
 ///
 /// 数据来源: playlist_categories(分类) + playlists_by_category(分类歌单, 可分页)
 /// + high_quality_playlists(精品歌单)。点卡片走歌单详情页。
-typedef CategoryLoader = Future<List<rust.PlaylistCategoryDto>> Function();
+typedef CategoryLoader = Future<List<rust.PlaylistCategory>> Function();
 typedef CategoryPageLoader = Future<List<rust.Playlist>> Function(
     String cat, int limit, int offset);
 typedef HighQualityLoader = Future<List<rust.Playlist>> Function(
@@ -62,7 +62,7 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
   String _cat = '';
   bool _highQuality = false;
 
-  List<rust.PlaylistCategoryDto> _categories = const [];
+  List<rust.PlaylistCategory> _categories = const [];
   String? _categoriesError;
 
   CategoryLoader get _loadCategories =>

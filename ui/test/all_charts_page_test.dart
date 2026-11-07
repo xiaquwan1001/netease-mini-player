@@ -3,13 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/all_charts_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.ToplistCatalogItemDto item(
+rust.ToplistCatalogItem item(
   int id,
   String name, {
   bool canPlay = true,
   String freq = '每天更新',
 }) =>
-    rust.ToplistCatalogItemDto(
+    rust.ToplistCatalogItem(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -26,11 +26,11 @@ void main() {
     await tester.pumpWidget(host(AllChartsPage(
       onOpenPlaylist: (p) => opened = p,
       loadCatalog: () async => [
-        rust.ToplistCatalogGroupDto(
+        rust.ToplistCatalogGroup(
           code: 'OFFICIAL',
           items: [item(1, '飙升榜'), item(2, '新歌榜', freq: '每周五更新')],
         ),
-        rust.ToplistCatalogGroupDto(code: 'GLOBAL', items: []),
+        rust.ToplistCatalogGroup(code: 'GLOBAL', items: []),
       ],
     )));
     await tester.pumpAndSettle();
@@ -50,7 +50,7 @@ void main() {
     await tester.pumpWidget(host(AllChartsPage(
       onOpenPlaylist: (p) => opened = p,
       loadCatalog: () async => [
-        rust.ToplistCatalogGroupDto(
+        rust.ToplistCatalogGroup(
           code: 'MORE',
           items: [item(3, '云音乐古典榜', canPlay: false), item(4, 'ACG 榜')],
         ),
@@ -81,7 +81,7 @@ void main() {
       loadCatalog: () async {
         if (fail) throw Exception('[network] boom');
         return [
-          rust.ToplistCatalogGroupDto(code: 'OFFICIAL', items: [item(9, '热歌榜')]),
+          rust.ToplistCatalogGroup(code: 'OFFICIAL', items: [item(9, '热歌榜')]),
         ];
       },
     )));
@@ -103,7 +103,7 @@ void main() {
     await tester.pumpWidget(host(AllChartsPage(
       onOpenPlaylist: (_) {},
       loadCatalog: () async => [
-        rust.ToplistCatalogGroupDto(
+        rust.ToplistCatalogGroup(
           code: 'LANGUAGE',
           items: [
             item(11, '华语速爆新歌超长榜单名字测试测试', freq: '每天更新'),
