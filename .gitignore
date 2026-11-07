@@ -10,3 +10,6 @@ references/
 legacy/android/.gradle/
 legacy/android/local.properties
 **/*.iml
+
+# 临时走查截图(设备实测产物, 不入库)
+screenshots/

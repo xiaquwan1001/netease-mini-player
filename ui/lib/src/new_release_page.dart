@@ -7,6 +7,7 @@ import 'rust/api.dart' as rust;
 typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
 typedef AreaAlbumLoader = Future<List<rust.AlbumItemDto>> Function(String area);
 typedef HotArtistLoader = Future<List<rust.HotArtistDto>> Function();
+typedef NewestAlbumLoader = Future<List<rust.AlbumItemDto>> Function();
 
 /// 地区选项: key 传给 Rust(area 简写), label 给 UI
 const List<({String key, String label})> releaseAreas = [
@@ -27,6 +28,7 @@ Future<void> showNewReleasePage(
   AreaSongLoader? loadSongs,
   AreaAlbumLoader? loadAlbums,
   HotArtistLoader? loadArtists,
+  NewestAlbumLoader? loadNewestAlbums,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -37,6 +39,7 @@ Future<void> showNewReleasePage(
         loadSongs: loadSongs,
         loadAlbums: loadAlbums,
         loadArtists: loadArtists,
+        loadNewestAlbums: loadNewestAlbums,
       ),
     ),
   );
@@ -51,6 +54,7 @@ class NewReleasePage extends StatelessWidget {
     this.loadSongs,
     this.loadAlbums,
     this.loadArtists,
+    this.loadNewestAlbums,
   });
 
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
@@ -60,15 +64,25 @@ class NewReleasePage extends StatelessWidget {
   final AreaAlbumLoader? loadAlbums;
   final HotArtistLoader? loadArtists;
 
+  /// "精选新碟"页签(album_newest, 固定 12 张, 无地区/分页); 可注入(测试用)
+  final NewestAlbumLoader? loadNewestAlbums;
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('新歌 · 新碟 · 歌手'),
           bottom: const TabBar(
-            tabs: [Tab(text: '新歌'), Tab(text: '新碟'), Tab(text: '歌手')],
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            tabs: [
+              Tab(text: '新歌'),
+              Tab(text: '新碟'),
+              Tab(text: '歌手'),
+              Tab(text: '精选新碟'),
+            ],
           ),
         ),
         body: TabBarView(
@@ -86,6 +100,10 @@ class NewReleasePage extends StatelessWidget {
             _HotArtistsTab(
               load: loadArtists ?? () => rust.hotArtists(limit: 50, offset: 0),
               onOpen: onOpenArtist,
+            ),
+            _NewestAlbumsTab(
+              load: loadNewestAlbums ?? () => rust.newestAlbums(limit: 12),
+              onOpen: onOpenAlbum,
             ),
           ],
         ),
@@ -427,5 +445,96 @@ class _AsyncBody extends StatelessWidget {
       return Center(child: Text(emptyText));
     }
     return child!;
+  }
+}
+
+
+/// "精选新碟"页签: album_newest 固定 12 张编辑精选新碟, 封面网格(无地区筛选).
+class _NewestAlbumsTab extends StatefulWidget {
+  const _NewestAlbumsTab({required this.load, required this.onOpen});
+
+  final NewestAlbumLoader load;
+  final void Function(rust.AlbumItemDto album) onOpen;
+
+  @override
+  State<_NewestAlbumsTab> createState() => _NewestAlbumsTabState();
+}
+
+class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
+  List<rust.AlbumItemDto>? _albums;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _error = null;
+      _albums = null;
+    });
+    try {
+      final albums = await retryNetwork(widget.load);
+      if (!mounted) return;
+      setState(() => _albums = albums);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = friendlyError(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final albums = _albums;
+    return _AsyncBody(
+      error: _error,
+      onRetry: _load,
+      isEmpty: albums?.isEmpty ?? false,
+      emptyText: '暂时没有精选新碟',
+      child: albums == null
+          ? null
+          : GridView.builder(
+              padding: const EdgeInsets.all(12),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 160,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 0.72,
+              ),
+              itemCount: albums.length,
+              itemBuilder: (context, i) {
+                final a = albums[i];
+                return InkWell(
+                  onTap: () => widget.onOpen(a),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 封面随格子宽度伸缩(AspectRatio), 避免固定 size 溢出
+                      AspectRatio(
+                        aspectRatio: 1,
+                        child: CoverArt(url: a.coverUrl, size: 100, radius: 8),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        a.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      Text(
+                        a.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+    );
   }
 }

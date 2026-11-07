@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'all_charts_page.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
@@ -543,7 +544,16 @@ class _ChartSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '排行榜'),
+        _SectionHeader(
+          title: '排行榜',
+          trailing: TextButton(
+            onPressed: () => showAllChartsPage(
+              context,
+              onOpenPlaylist: onOpen,
+            ),
+            child: const Text('全部'),
+          ),
+        ),
         _AsyncSection<List<rust.ChartSummaryDto>>(
           load: load,
           emptyText: '暂时没有榜单',

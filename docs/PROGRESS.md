@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 118/382: 收尾(album_newest/toplist_v2/MV视频评论) + 电台节目榜/听众页 + 后端轻量化调研结论 + 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(接口覆盖推进到 118/382、FFI 125 个里只剩 3 个无 UI 入口: 收尾(album_newest/toplist_v2/MV视频评论) + 精选新碟页签/全部榜单页 + 电台节目榜/听众页 + 后端轻量化调研结论 + 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
@@ -9,6 +9,8 @@
 
 | 能力 | 状态 | 证据 |
 |---|---|---|
+| 最新专辑(UI) | ✅ | 新碟上架「更多」→ 新增第 4 页签「精选新碟」: 12 张封面网格(注入式 loader), 点卡走专辑预览 |
+| 全部榜单(UI) | ✅ | 推荐页「排行榜 → 全部」→ `all_charts_page.dart`: 7 组(置顶/官方/特色/曲风/全球/语种/更多)封面卡 + 更新频率; `canPlay=false` 灰显不可点; 点条目直接进歌单详情(榜单即歌单) |
 | 最新专辑 | ✅ | `album_newest`: **不是 album_new 的重复**(固定 12 张编辑精选、无 total、id 集合与前 5 完全不同) → `newest_albums`(Capability::NewRelease) + FFI + CLI `ncm album-newest` |
 | 榜单 v2 | ✅ | `toplist_detail_v2`: **没有 v1 的 trackUpdateTime 数字字段**,"更新 N 首/刚刚更新"只混在 `updateFrequency` 文案里;真正增量是 categoryCode 分组(7 组 45 榜)+ `canPlay` → `ToplistCatalog` + FFI + CLI `ncm toplist-v2` |
 | MV/视频评论 | ✅ | `comment_mv`/`comment_video` 与歌曲评论**同形**(`R_MV_5_`/`R_VI_62_`),直接复用 `parse_comments`/`CommentPage`; provider `comments()` 新增 kind `mv`/`video`;实测 `comments mv 5436712` total=689 |
