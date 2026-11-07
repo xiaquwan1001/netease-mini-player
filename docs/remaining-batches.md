@@ -144,7 +144,9 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 **编排者收口清单**
 - [ ] `git status` 只含本批文件; 无生成物手改
-- [ ] `bash tools/ci.sh` → `CI OK`(编排者自己跑, 不信 worker)
+- [ ] `bash tools/ci.sh` → `CI OK`(编排者自己跑, 不信 worker); 其中 vendor 的 8 例
+      **匿名真实联网 smoke** 允许打 `WARN` 不阻塞(上游风控/公网抖动, 3 次重试), 需要硬核验公网时
+      `NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh`; 本地 workspace 单测/analyze/flutter test/双端构建仍是硬门
 - [ ] 模拟器走查(a34/a36 任选一台; 系统相关改动两台各一次), 空态/未登录各一次
 - [ ] `bash tools/api-coverage.sh` 数字与 docs 一致
 - [ ] memory 写入协议事实(字段名/分页字段/风控坑)
