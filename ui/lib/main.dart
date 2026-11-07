@@ -24,6 +24,7 @@ import 'src/queue.dart';
 import 'src/platform.dart';
 import 'src/recommend_view.dart';
 import 'src/search_landing.dart';
+import 'src/search_exact_bar.dart';
 import 'src/search_results.dart';
 import 'src/search_suggest.dart';
 import 'src/settings_view.dart';
@@ -182,6 +183,10 @@ class _HomePageState extends State<HomePage> {
   final _searchFocus = FocusNode();
   Timer? _suggestDebounce;
   List<rust.SuggestItemDto> _suggestions = const [];
+  /// 精确实体命中(search_multimatch; orders 为空 = 无命中)
+  rust.SearchExactDto? _exact;
+  /// 纯关键词联想(mobile search_suggest; 卡片/实体都空时的兜底)
+  List<String> _keywordSuggestions = const [];
   List<String> _searchHistory = const [];
 
   // ---- 搜索落地页(热词/推荐词) ----
@@ -297,6 +302,8 @@ class _HomePageState extends State<HomePage> {
       _busy = true;
       _error = null;
       _suggestions = const [];
+      _exact = null;
+      _keywordSuggestions = const [];
       // 搜索即离开歌单浏览态, 结果列表要保持"这一屏是什么"的唯一来源
       _library = const [];
       _libraryTitle = null;
@@ -333,6 +340,8 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _bundle = null;
       _suggestions = const [];
+      _exact = null;
+      _keywordSuggestions = const [];
       _error = null;
       _retryLast = null;
       _busy = false;
@@ -347,7 +356,11 @@ class _HomePageState extends State<HomePage> {
   void _onSearchFocusChanged() {
     if (!mounted) return;
     if (!_searchFocus.hasFocus) {
-      setState(() => _suggestions = const []);
+      setState(() {
+        _suggestions = const [];
+        _exact = null;
+        _keywordSuggestions = const [];
+      });
     } else {
       // 重新获得焦点: 刷新历史(别处可能新增过)
       _loadSearchHistory();
@@ -369,7 +382,18 @@ class _HomePageState extends State<HomePage> {
   Future<void> _loadSearchLanding() async {
     if (mounted) setState(() => _hotLoading = true);
     try {
-      final hot = await retryNetwork(rust.hotSearch);
+      // 热搜用 hotsearchlist(带服务端榜位/热度, 固定 20 条); 失败再退回老的热词接口
+      List<rust.HotSearchTermDto> hot;
+      try {
+        final detail = await retryNetwork(rust.hotSearchDetail);
+        hot = [
+          for (final it in detail)
+            rust.HotSearchTermDto(rank: it.rank, keyword: it.keyword),
+        ];
+        if (hot.isEmpty) hot = await retryNetwork(rust.hotSearch);
+      } catch (_) {
+        hot = await retryNetwork(rust.hotSearch);
+      }
       if (!mounted) return;
       setState(() {
         _hotTerms = hot;
@@ -399,10 +423,17 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() {});
     final q = value.trim();
     if (q.isEmpty) {
-      setState(() => _suggestions = const []);
+      setState(() {
+        _suggestions = const [];
+        _exact = null;
+        _keywordSuggestions = const [];
+      });
       return;
     }
     _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
+      // 三个来源并行: 联想卡片(web) / 精确实体(multimatch) / 纯关键词(mobile)
+      final exactFuture = _loadExact(q);
+      final keywordsFuture = _loadSuggestKeywords(q);
       try {
         final items = await rust.searchSuggest(keywords: q);
         if (!mounted || _controller.text.trim() != q) return;
@@ -410,13 +441,108 @@ class _HomePageState extends State<HomePage> {
       } catch (_) {
         // 建议是锦上添花, 失败静默
       }
+      final exact = await exactFuture;
+      final keywords = await keywordsFuture;
+      if (!mounted || _controller.text.trim() != q) return;
+      setState(() {
+        _exact = exact;
+        _keywordSuggestions = keywords;
+      });
     });
+  }
+
+  Future<rust.SearchExactDto?> _loadExact(String q) async {
+    try {
+      final exact = await rust.searchExact(keywords: q);
+      // orders 为空就是空命中伪装成 200, 当作没有
+      return exact.orders.isEmpty ? null : exact;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<String>> _loadSuggestKeywords(String q) async {
+    try {
+      return await rust.searchSuggestKeywords(keywords: q);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// DTO -> 精确实体条视图(空命中由 SearchExactBar 自己隐藏)
+  SearchExactView _exactView(rust.SearchExactDto e) => SearchExactView(
+        orders: e.orders,
+        artists: [
+          for (final a in e.artists)
+            SearchExactArtist(id: a.id.toInt(), name: a.name, avatarUrl: a.avatarUrl),
+        ],
+        playlists: [
+          for (final p in e.playlists)
+            SearchExactPlaylist(
+              id: p.id.toInt(),
+              name: p.name,
+              coverUrl: p.coverUrl,
+              trackCount: p.trackCount.toInt(),
+            ),
+        ],
+        podcasts: [
+          for (final r in e.podcasts)
+            SearchExactRadio(
+              id: r.id.toInt(),
+              name: r.name,
+              coverUrl: r.coverUrl,
+              djName: r.djName,
+              programCount: r.programCount.toInt(),
+            ),
+        ],
+      );
+
+  Future<void> _openExactArtist(int id) async {
+    for (final a in _exact?.artists ?? const <rust.ArtistDto>[]) {
+      if (a.id.toInt() != id) continue;
+      await showArtistDetail(
+        context,
+        artistId: a.id,
+        name: a.name,
+        onPlaySongs: (songs, i) => _playSongsList(songs, i),
+        onOpenAlbum: (albumId, name, cover) => showAlbumPreview(
+          context,
+          albumId: albumId,
+          albumName: name,
+          coverUrl: cover,
+          onPlay: (songs, i) => _playSongsList(songs, i),
+        ),
+      );
+      return;
+    }
+  }
+
+  Future<void> _openExactPlaylist(int id) async {
+    for (final p in _exact?.playlists ?? const <rust.PlaylistDto>[]) {
+      if (p.id.toInt() == id) {
+        await _openPlaylist(p);
+        return;
+      }
+    }
+  }
+
+  void _openExactRadio(int id) {
+    for (final r in _exact?.podcasts ?? const <rust.PodcastRadioDto>[]) {
+      if (r.id.toInt() == id) {
+        _openPodcastRadio(r);
+        return;
+      }
+    }
   }
 
   Future<void> _searchKeyword(String keyword) async {
     _controller.text = keyword;
     _controller.selection = TextSelection.collapsed(offset: keyword.length);
-    setState(() => _suggestions = const []);
+    setState(() {
+        _suggestions = const [];
+        _exact = null;
+        _keywordSuggestions = const [];
+      });
     await _search();
   }
 
@@ -1515,6 +1641,22 @@ class _HomePageState extends State<HomePage> {
         children: [
           if (!_showLyrics && _tab == 0) _buildSearchBar(),
           // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
+          if (!_showLyrics && _tab == 0 && _exact != null)
+            SearchExactBar(
+              view: _exactView(_exact!),
+              onPickArtist: _openExactArtist,
+              onPickPlaylist: _openExactPlaylist,
+              onPickRadio: _openExactRadio,
+            ),
+          if (!_showLyrics &&
+              _tab == 0 &&
+              _suggestions.isEmpty &&
+              _exact == null &&
+              _keywordSuggestions.isNotEmpty)
+            KeywordSuggestBar(
+              keywords: _keywordSuggestions,
+              onSelected: _searchKeyword,
+            ),
           if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),

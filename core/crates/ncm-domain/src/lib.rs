@@ -413,6 +413,56 @@ pub struct HotSearchTerm {
     pub keyword: String,
 }
 
+/// 精确实体改写(对应 vendor 的 `search_multimatch`, 端点 /api/search/suggest/multimatch w/ eapi).
+///
+/// 语义: 输入一个关键词, 服务端只在「歌手/歌单/电台节目」里挑**最精确的实体**回 1 条,
+/// 不是模糊多类型搜索。实测(2026-11-07):
+/// - `orders` 是命中类型的展示顺序, 同时是「有哪些字段」的清单;
+///   出现过的值: `artist` / `playlist` / `voice`(另按 vendor 约定可能有 song/album/djRadio, 不可依赖)。
+/// - **空命中伪装成功**: 完全无命中时回 `{"code":200,"result":{"orders":[]}}`,
+///   各类型 key 直接不存在。所以消费方必须按 `orders.is_empty()` 判空, 不能看 key 存在与否。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchExact {
+    /// 命中类型顺序, 原样保留服务端字符串(artist/playlist/voice/...)
+    #[serde(default)]
+    pub orders: Vec<String>,
+    #[serde(default)]
+    pub artists: Vec<Artist>,
+    #[serde(default)]
+    pub playlists: Vec<Playlist>,
+    #[serde(default)]
+    pub podcasts: Vec<PodcastRadio>,
+}
+
+impl SearchExact {
+    /// 无命中(空命中伪装成 200 时用它)
+    pub fn is_empty(&self) -> bool {
+        self.orders.is_empty()
+            && self.artists.is_empty()
+            && self.playlists.is_empty()
+            && self.podcasts.is_empty()
+    }
+}
+
+/// 热搜榜详情行(对应 vendor 的 `search_hot_detail`, 端点 /api/hotsearchlist/get w/ eapi).
+///
+/// 实测(2026-11-07, debug 构建已登录设备): `POST /api/hotsearchlist/get`, body `{}`, 返回
+/// `{code:200, data:[{searchWord, score, iconType, iconUrl, content, source, url, alg?, trp?}]}`,
+/// 固定 20 条; **服务端不给 rank 字段**, 排名就是数组下标(解析时按顺序写 1..=n)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HotSearchDetailItem {
+    /// 要展示/可搜索的词(接口字段 searchWord, 可能带空格如 `"无 意"`, 原样保留)
+    pub keyword: String,
+    /// 榜位, 从 1 开始(数组下标推导)
+    pub rank: u32,
+    /// 热度分(接口字段 score, 实测 5 位数)
+    #[serde(default)]
+    pub score: u64,
+    /// 图标种类(接口字段 iconType: 0 = 无图标, 2/4/5 = 火焰/推荐等; 未知值原样保留)
+    #[serde(default)]
+    pub icon_type: u32,
+}
+
 /// 关注动态(艺人/好友发布的内容). kind 是网易云 eventType 的语义化标签:
 /// song / album / playlist / program / text / other
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

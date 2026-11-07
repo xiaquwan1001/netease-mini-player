@@ -1145,6 +1145,74 @@ pub async fn hot_search() -> Result<Vec<HotSearchTermDto>, String> {
         .collect())
 }
 
+// ---------------- 搜索增强(B4): 纯词联想 / 精确实体改写 / 热搜详情 ----------------
+
+/// 精确实体改写的结果(对应 ncm_domain::SearchExact).
+/// 注意: orders 为空即"无命中"(接口把空命中伪装成 code=200), 此时三个数组也都为空.
+pub struct SearchExactDto {
+    /// 命中类型顺序, 原样保留 (artist / playlist / voice / ...)
+    pub orders: Vec<String>,
+    pub artists: Vec<ArtistDto>,
+    pub playlists: Vec<PlaylistDto>,
+    pub podcasts: Vec<PodcastRadioDto>,
+}
+
+fn artist_dto(a: ncm_domain::Artist) -> ArtistDto {
+    ArtistDto { id: a.id, name: a.name, avatar_url: a.avatar_url }
+}
+
+/// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
+pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, String> {
+    let provider = with_provider(Capability::SearchSuggest)?;
+    provider
+        .search_suggest_keywords(&keywords)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
+pub async fn search_exact(keywords: String) -> Result<SearchExactDto, String> {
+    let provider = with_provider(Capability::SearchSuggest)?;
+    let ex = provider
+        .search_exact(&keywords)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(SearchExactDto {
+        orders: ex.orders,
+        artists: ex.artists.into_iter().map(artist_dto).collect(),
+        playlists: ex.playlists.into_iter().map(playlist_dto).collect(),
+        podcasts: ex.podcasts.into_iter().map(radio_dto).collect(),
+    })
+}
+
+/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTermDto 多 score/icon_type)
+pub struct HotSearchDetailItemDto {
+    pub keyword: String,
+    /// 1 开始的榜位
+    pub rank: u32,
+    pub score: u64,
+    /// 角标种类: 0 无图标, 2/4/5 等(未知值原样透传)
+    pub icon_type: u32,
+}
+
+/// 热搜榜详情(20 条, 带 score/rank; 需要登录态更稳)
+pub async fn hot_search_detail() -> Result<Vec<HotSearchDetailItemDto>, String> {
+    let provider = with_provider(Capability::SearchHot)?;
+    let list = provider
+        .hot_search_detail()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|i| HotSearchDetailItemDto {
+            keyword: i.keyword,
+            rank: i.rank,
+            score: i.score,
+            icon_type: i.icon_type,
+        })
+        .collect())
+}
+
 pub struct DefaultSearchDto {
     /// 真正要搜索的关键词(不含推荐理由)
     pub keyword: String,

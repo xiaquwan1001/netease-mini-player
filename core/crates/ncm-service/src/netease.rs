@@ -5,7 +5,8 @@ use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
     DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
-    Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
+    HotSearchDetailItem, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
+    SearchExact,
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     UserItem, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
@@ -1761,6 +1762,33 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 联想下拉的纯关键词候选(type=mobile 分支, /api/search/suggest/keyword).
+    fn search_suggest_keywords<'a>(
+        &'a self,
+        keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<String>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("type", "mobile")
+                .param("keywords", keywords);
+            let resp = client.search_suggest(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_suggest_keywords(&resp.body))
+        })
+    }
+
+    /// 精确实体改写(/api/search/suggest/multimatch). vendor 内部固定发 {type:1, s:<kw>}.
+    fn search_exact<'a>(&'a self, keywords: &'a str) -> BoxFuture<'a, ProviderResult<SearchExact>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
+            let resp = client.search_multimatch(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_search_exact(&resp.body))
+        })
+    }
+
     /// 最近播放(服务端记录, 需要登录)
     fn recent_songs(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
@@ -2488,6 +2516,17 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 热搜榜详情(/api/hotsearchlist/get, weapi, 无参数): 带 score + 榜位.
+    fn hot_search_detail(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchDetailItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.search_hot_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_hot_search_detail(&resp.body))
+        })
+    }
+
     /// 默认/推荐搜索词("猜你想搜")
     fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<DefaultSearch>>> {
         Box::pin(async move {
@@ -3066,6 +3105,167 @@ pub fn parse_hot_search(body: &Value) -> Vec<HotSearchTerm> {
             continue;
         }
         out.push(HotSearchTerm { rank: out.len() as u32 + 1, keyword });
+    }
+    out
+}
+
+/// 联想下拉的纯关键词候选(vendor `search_suggest` 的 mobile 分支).
+///
+/// 请求: `client.search_suggest(&q.param("type","mobile").param("keywords", kw))`
+/// → vendor 打 `/api/search/suggest/keyword`, 响应形如
+///   {code:200, result:{allMatch:[{keyword:"晴天周杰伦", type:1, alg:"…", feature:"", lastKeyword:""}]}}
+/// (实测固定 6 条, 无分页). 只有 `keyword` 可用, alg/feature 是埋点, 忽略.
+///
+/// 处理: 去掉首尾空白 + 丢弃空串 + **去重保序**(服务端可能给重复词), 最多 6 条.
+pub fn parse_suggest_keywords(body: &Value) -> Vec<String> {
+    const MAX: usize = 6;
+    let Some(arr) = body
+        .get("result")
+        .and_then(|r| r.get("allMatch"))
+        .and_then(Value::as_array)
+    else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = Vec::new();
+    for v in arr {
+        let Some(kw) = str_of(v, "keyword") else { continue };
+        let kw = kw.trim().to_string();
+        if kw.is_empty() || out.iter().any(|x| x == &kw) {
+            continue;
+        }
+        out.push(kw);
+        if out.len() >= MAX {
+            break;
+        }
+    }
+    out
+}
+
+/// 精确实体改写(vendor `search_multimatch`, POST /api/search/suggest/multimatch w/ eapi).
+///
+/// 响应形如(实测 2026-11-07):
+///   {code:200, result:{
+///      orders:["artist","playlist"],                    // 命中类型顺序, 同时是「有哪个 key」的清单
+///      artist:[{id,name,picUrl,alias:[…],…}],           // 最多 1 条, picUrl 是头像(http)
+///      playlist:[{id,name,coverImgUrl,trackCount,…}],   // 最多 1 条
+///      voice:[{resourceId,resourceName,baseInfo:{…}}]    // 电台/播客节目, id/name 在 baseInfo 里
+///   }}
+///
+/// **空命中伪装成功**: 无命中回 `{"code":200,"result":{"orders":[]}}`, 各类型 key 直接不存在.
+/// 这里按 orders 判空 → 返回 [`SearchExact::default()`], 绝不报错.
+pub fn parse_search_exact(body: &Value) -> SearchExact {
+    let Some(result) = body.get("result") else {
+        return SearchExact::default();
+    };
+    let orders: Vec<String> = result
+        .get("orders")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if orders.is_empty() {
+        return SearchExact::default();
+    }
+    let arr_of = |key: &str| -> Vec<Value> {
+        result
+            .get(key)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    let artists = arr_of("artist")
+        .iter()
+        .filter_map(|v| {
+            let id = u64_of(v, "id")?;
+            let name = str_of(v, "name").unwrap_or_default();
+            Some(Artist {
+                id,
+                name,
+                avatar_url: str_of(v, "picUrl").filter(|s| !s.is_empty()),
+            })
+        })
+        .collect();
+    let playlists = arr_of("playlist")
+        .iter()
+        .filter_map(|v| {
+            let id = u64_of(v, "id")?;
+            Some(Playlist {
+                id,
+                name: str_of(v, "name").unwrap_or_default(),
+                cover_url: str_of(v, "coverImgUrl").filter(|s| !s.is_empty()),
+                track_count: u64_of(v, "trackCount").unwrap_or(0),
+                special: u64_of(v, "specialType").map(|t| t == 5).unwrap_or(false),
+            })
+        })
+        .collect();
+    let podcasts = arr_of("voice").iter().filter_map(parse_voice_radio).collect();
+    SearchExact { orders, artists, playlists, podcasts }
+}
+
+/// multimatch 的 `voice` 是"播客节目"对象, 结构与 dj_detail 完全不同:
+///   {resourceId, resourceName, resourceType:"voice", internalType:null,
+///    baseInfo:{id, name, coverUrl, trackCount, listenerCount, dj:{nickname}, radio:{name, programCount}}}
+/// 映射成 [`PodcastRadio`]: id/name 取 baseInfo.id/name(播客**单集**),
+/// dj_name 取 baseInfo.dj.nickname, program_count 取 baseInfo.radio.programCount,
+/// play_count 取 baseInfo.listenerCount.
+fn parse_voice_radio(v: &Value) -> Option<PodcastRadio> {
+    let base = v.get("baseInfo").unwrap_or(v);
+    let id = u64_of(base, "id").or_else(|| u64_of(v, "resourceId"))?;
+    if id == 0 {
+        return None;
+    }
+    let name = str_of(base, "name")
+        .or_else(|| str_of(v, "resourceName"))
+        .unwrap_or_default();
+    let radio = base.get("radio");
+    Some(PodcastRadio {
+        id,
+        name,
+        cover_url: str_of(base, "coverUrl")
+            .or_else(|| base.get("radio").and_then(|r| str_of(r, "picUrl")))
+            .filter(|s| !s.is_empty()),
+        description: String::new(),
+        dj_name: base
+            .get("dj")
+            .and_then(|d| str_of(d, "nickname"))
+            .unwrap_or_default(),
+        program_count: radio.and_then(|r| u64_of(r, "programCount")).unwrap_or(0),
+        play_count: u64_of(base, "listenerCount").unwrap_or(0),
+    })
+}
+
+/// 热搜榜详情(vendor `search_hot_detail`, POST /api/hotsearchlist/get w/ eapi, body 空).
+///
+/// 实测响应(2026-11-07):
+///   {code:200, message:null, trp:null, data:[
+///      {searchWord:"天龙八部之宿敌", score:91197, iconType:4,
+///       iconUrl:"https://p1.music.126.net/….png", content:"", source:0, url:"", alg?:…}
+///      … 固定 20 条 …]}
+/// 注意: **服务端不给 rank 字段**, 榜位就是数组顺序(rank = 下标 + 1);
+/// iconType 0 = 无图标, 2/4/5 = 不同角标; content/url/source 目前恒空.
+pub fn parse_hot_search_detail(body: &Value) -> Vec<HotSearchDetailItem> {
+    let Some(arr) = body.get("data").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for v in arr {
+        let keyword = str_of(v, "searchWord")
+            .or_else(|| str_of(v, "keyword"))
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        if keyword.is_empty() {
+            continue;
+        }
+        out.push(HotSearchDetailItem {
+            keyword,
+            rank: out.len() as u32 + 1,
+            score: u64_of(v, "score").unwrap_or(0),
+            icon_type: u64_of(v, "iconType").unwrap_or(0) as u32,
+        });
     }
     out
 }
@@ -5338,5 +5538,135 @@ mod tests {
         assert_eq!(lists.len(), 1);
         assert_eq!(lists[0].track_count, 200);
         assert_eq!(lists[0].cover_url.as_deref(), Some("http://p/c.jpg"));
+    }
+
+    #[test]
+    fn suggest_keywords_dedup_and_order() {
+        let body = json!({"code": 200, "result": {"allMatch": [
+            {"keyword": "晴天周杰伦", "type": 1, "alg": "x"},
+            {"keyword": " 晴天 ", "type": 1, "alg": "y"},
+            {"keyword": "晴天周杰伦", "type": 1},
+            {"keyword": "", "type": 1},
+            {"keyword": "   ", "type": 1},
+            {"keyword": "晴天弦乐版", "type": 1},
+            {"keyword": "晴天有点孤单玩具丢在旁边", "type": 1},
+            {"keyword": "第7条应被截断", "type": 1}
+        ]}});
+        let kws = parse_suggest_keywords(&body);
+        // 去重保序 + 去空白 + 丢弃空串 + 最多 6 条
+        assert_eq!(
+            kws,
+            vec![
+                "晴天周杰伦",
+                "晴天",
+                "晴天弦乐版",
+                "晴天有点孤单玩具丢在旁边",
+                "第7条应被截断"
+            ]
+        );
+    }
+
+    #[test]
+    fn suggest_keywords_empty_and_missing_keyword() {
+        // web 分支的空命中形态: result 是空对象
+        assert!(parse_suggest_keywords(&json!({"code": 200, "result": {}})).is_empty());
+        // 无 result / allMatch 不是数组 / 缺 keyword 或 keyword 非字符串
+        assert!(parse_suggest_keywords(&json!({"code": 200})).is_empty());
+        assert!(parse_suggest_keywords(&json!({"code": 200, "result": {"allMatch": "x"}})).is_empty());
+        let body = json!({"code": 200, "result": {"allMatch": [
+            {"type": 1, "alg": "no-keyword"},
+            {"keyword": null},
+            {"keyword": 123},
+            {"keyword": "唯一有效"}
+        ]}});
+        assert_eq!(parse_suggest_keywords(&body), vec!["唯一有效".to_string()]);
+        // 超过 6 条时截断
+        let many: Vec<Value> = (0..9).map(|i| json!({"keyword": format!("k{i}")})).collect();
+        let body = json!({"code": 200, "result": {"allMatch": many}});
+        assert_eq!(parse_suggest_keywords(&body).len(), 6);
+    }
+
+    #[test]
+    fn search_exact_with_orders() {
+        let body = json!({"code": 200, "result": {
+            "orders": ["artist", "playlist", "voice"],
+            "artist": [{"id": 6452, "name": "周杰伦", "picUrl": "http://p4/head.jpg",
+                        "alias": ["Jay Chou"], "alg": "埋点"}],
+            "playlist": [{"id": 8181670003u64, "name": "听薛之谦热门精选",
+                          "coverImgUrl": "http://p1/cover.jpg", "trackCount": 40,
+                          "playCount": 17158528, "specialType": 0}],
+            "voice": [{"resourceId": 2543533915u64, "resourceName": "声音",
+                       "resourceType": "voice", "internalType": null,
+                       "baseInfo": {"id": 2543533915u64, "name": "霉霉横扫Billboard",
+                                    "coverUrl": "http://p4/voice.jpg",
+                                    "listenerCount": 1109996,
+                                    "dj": {"nickname": "伦敦酒吐座"},
+                                    "radio": {"name": "Billboard风云录", "programCount": 15}}}]
+        }});
+        let ex = parse_search_exact(&body);
+        assert_eq!(ex.orders, vec!["artist", "playlist", "voice"]);
+        assert!(!ex.is_empty());
+        assert_eq!(ex.artists.len(), 1);
+        assert_eq!(ex.artists[0].id, 6452);
+        assert_eq!(ex.artists[0].name, "周杰伦");
+        assert_eq!(ex.artists[0].avatar_url.as_deref(), Some("http://p4/head.jpg"));
+        assert_eq!(ex.playlists.len(), 1);
+        assert_eq!(ex.playlists[0].id, 8181670003);
+        assert_eq!(ex.playlists[0].track_count, 40);
+        assert_eq!(ex.playlists[0].cover_url.as_deref(), Some("http://p1/cover.jpg"));
+        assert!(!ex.playlists[0].special);
+        assert_eq!(ex.podcasts.len(), 1);
+        assert_eq!(ex.podcasts[0].id, 2543533915);
+        assert_eq!(ex.podcasts[0].name, "霉霉横扫Billboard");
+        assert_eq!(ex.podcasts[0].dj_name, "伦敦酒吐座");
+        assert_eq!(ex.podcasts[0].program_count, 15);
+        assert_eq!(ex.podcasts[0].play_count, 1109996);
+    }
+
+    #[test]
+    fn search_exact_empty_orders_is_fake_success() {
+        // 实测的"空命中伪装成功": code=200 但 result 只有空 orders, 各类型 key 不存在
+        let body = json!({"code": 200, "result": {"orders": []}});
+        let ex = parse_search_exact(&body);
+        assert!(ex.is_empty());
+        assert!(
+            ex.orders.is_empty()
+                && ex.artists.is_empty()
+                && ex.playlists.is_empty()
+                && ex.podcasts.is_empty()
+        );
+        // 没有 result(400 之类)也当无命中, 不 panic
+        assert!(parse_search_exact(&json!({"code": 400})).is_empty());
+        assert!(parse_search_exact(&json!({})).is_empty());
+        // orders 有值但对应数组缺失: 保留 orders, 实体为空
+        let ex = parse_search_exact(&json!({"code": 200, "result": {"orders": ["song"]}}));
+        assert_eq!(ex.orders, vec!["song"]);
+        assert!(ex.artists.is_empty());
+    }
+
+    #[test]
+    fn hot_search_detail_rank_and_fields() {
+        let body = json!({"code": 200, "message": null, "trp": null, "data": [
+            {"searchWord": "天龙八部之宿敌", "score": 91197, "iconType": 4,
+             "iconUrl": "http://p1/icon.png", "content": "", "source": 0, "url": ""},
+            {"searchWord": "无 意", "score": 65196, "iconType": 2, "alg": "埋点"},
+            {"searchWord": "  ", "score": 1, "iconType": 0},
+            {"searchWord": "季候风"}
+        ]});
+        let items = parse_hot_search_detail(&body);
+        assert_eq!(items.len(), 3); // 空白词被丢弃
+        assert_eq!(items[0].rank, 1);
+        assert_eq!(items[0].keyword, "天龙八部之宿敌");
+        assert_eq!(items[0].score, 91197);
+        assert_eq!(items[0].icon_type, 4);
+        assert_eq!(items[1].keyword, "无 意"); // 中间空格原样保留
+        assert_eq!(items[1].rank, 2);
+        assert_eq!(items[2].keyword, "季候风");
+        assert_eq!(items[2].rank, 3);
+        assert_eq!(items[2].score, 0); // 缺字段默认 0
+        assert_eq!(items[2].icon_type, 0);
+        // 无 data / 空数组
+        assert!(parse_hot_search_detail(&json!({"code": 200})).is_empty());
+        assert!(parse_hot_search_detail(&json!({"code": 200, "data": []})).is_empty());
     }
 }

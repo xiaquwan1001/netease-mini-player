@@ -1,9 +1,27 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-07(接口覆盖推进到 94/382: 黑胶会员只读 B3(会员卡/成长值/本周签到/任务 + 设置页入口) + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-07(接口覆盖推进到 96/382: 搜索增强 B4(精确实体条/关键词联想/热搜榜) + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 搜索增强 B4(精确实体 / 关键词联想 / 热搜榜)(2026-11-07)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 精确实体条 | ✅ | `search_multimatch` → `search_exact`: 搜索框输入后在联想上方显示「精确匹配」分区(歌手圆形头像 / 歌单 / 电台); 实测输入 `Taylor Swift` 出「歌手 Taylor swift + 电台」, 点歌手卡片进歌手页 |
+| 空命中判定 | ✅ | multimatch 的"空命中伪装成功"(`code=200 + orders:[]`)按 `orders.isEmpty()` 当无命中, 不渲染也不报错 |
+| 关键词联想兜底 | ✅ | `search_suggest_keywords`(mobile, `type=mobile`) → 卡片与实体都空时显示「猜你想搜」chips; 纯关键词串 6 条, 去重保序 |
+| 热搜榜 | ✅ | `search_hot_detail`(`/api/hotsearchlist/get`)固定 20 条, **服务端不给 rank**, 榜位按数组下标推导; 搜索落地页热门榜改用它, 失败回退 `search_hot` |
+| CLI | ✅ | `ncm exact <kw>` / `ncm suggestkw <kw>` / `ncm hotdetail`, 另给 raw 分支补了 `search_hot_detail` 接线 |
+| 回归 | ✅ | Rust `ncm-service` 65→70 单测全绿(+5 组: 关键词去重/空 result/缺 keyword、exact 有命中与假成功、hot_detail 榜位字段); Flutter 157→160 用例全绿(search_exact_bar 7 + 关键词条 1); analyze 0 error; `tools/ci.sh` → CI OK; a36 走查: 精确匹配分区、点卡片进歌手页、无命中空态 |
+
+**协议/实现事实**:
+- `search_multimatch` 只回"精确实体改写"(每类最多 1 条, 无分页无高亮), 且 `晴天`/`Taylor`/`Chinese Football` 都是 `orders:[]` 的"假成功";
+  `type` 参数实测无效。它不能当多类型匹配数据源 —— 多类型卡片仍走 `search_suggest`(web)。
+- `voice`(电台命中)结构与 `dj_detail` 完全不同: id/name 在 `baseInfo` 里, `baseInfo.dj.nickname` / `baseInfo.radio.programCount` / `baseInfo.listenerCount`。
+- `search_hot_detail`(`/api/hotsearchlist/get`, weapi, body `{}`)回 `data:[{searchWord,score,iconType,iconUrl,content,source,url}]`, **无 rank 字段**, 榜位 = 数组下标 + 1。
+- mobile 联想 `search_suggest` 加 `type=mobile` 后只回 `result.allMatch[].keyword`(6 条纯串), 与 web 版(实体卡片)是同一路径的两个形态。
 
 ## v2 · 功能包: 黑胶会员只读 B3(2026-11-07)
 

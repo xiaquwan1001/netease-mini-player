@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `artist_dto`, `comment_page_dto`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `playlist_dto`, `program_dto`, `radio_dto`, `signin_status_dto`, `song_dto`, `song_from_dto`, `state_dto`, `style_tag_dto`, `user_item_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -248,6 +248,18 @@ Future<PodcastRadioDto> podcastRadio({required BigInt radioId}) =>
 /// 热门搜索榜(按热度排序)
 Future<List<HotSearchTermDto>> hotSearch() =>
     RustLib.instance.api.crateApiHotSearch();
+
+/// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
+Future<List<String>> searchSuggestKeywords({required String keywords}) =>
+    RustLib.instance.api.crateApiSearchSuggestKeywords(keywords: keywords);
+
+/// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
+Future<SearchExactDto> searchExact({required String keywords}) =>
+    RustLib.instance.api.crateApiSearchExact(keywords: keywords);
+
+/// 热搜榜详情(20 条, 带 score/rank; 需要登录态更稳)
+Future<List<HotSearchDetailItemDto>> hotSearchDetail() =>
+    RustLib.instance.api.crateApiHotSearchDetail();
 
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
 Future<DefaultSearchDto?> defaultSearch() =>
@@ -1185,6 +1197,39 @@ class HotArtistDto {
           fans == other.fans;
 }
 
+/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTermDto 多 score/icon_type)
+class HotSearchDetailItemDto {
+  final String keyword;
+
+  /// 1 开始的榜位
+  final int rank;
+  final BigInt score;
+
+  /// 角标种类: 0 无图标, 2/4/5 等(未知值原样透传)
+  final int iconType;
+
+  const HotSearchDetailItemDto({
+    required this.keyword,
+    required this.rank,
+    required this.score,
+    required this.iconType,
+  });
+
+  @override
+  int get hashCode =>
+      keyword.hashCode ^ rank.hashCode ^ score.hashCode ^ iconType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is HotSearchDetailItemDto &&
+          runtimeType == other.runtimeType &&
+          keyword == other.keyword &&
+          rank == other.rank &&
+          score == other.score &&
+          iconType == other.iconType;
+}
+
 class HotSearchTermDto {
   /// 1 开始的名次
   final int rank;
@@ -1942,6 +1987,40 @@ class SearchBundleDto {
           songTotal == other.songTotal &&
           artists == other.artists &&
           albums == other.albums &&
+          playlists == other.playlists &&
+          podcasts == other.podcasts;
+}
+
+/// 精确实体改写的结果(对应 ncm_domain::SearchExact).
+/// 注意: orders 为空即"无命中"(接口把空命中伪装成 code=200), 此时三个数组也都为空.
+class SearchExactDto {
+  /// 命中类型顺序, 原样保留 (artist / playlist / voice / ...)
+  final List<String> orders;
+  final List<ArtistDto> artists;
+  final List<PlaylistDto> playlists;
+  final List<PodcastRadioDto> podcasts;
+
+  const SearchExactDto({
+    required this.orders,
+    required this.artists,
+    required this.playlists,
+    required this.podcasts,
+  });
+
+  @override
+  int get hashCode =>
+      orders.hashCode ^
+      artists.hashCode ^
+      playlists.hashCode ^
+      podcasts.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchExactDto &&
+          runtimeType == other.runtimeType &&
+          orders == other.orders &&
+          artists == other.artists &&
           playlists == other.playlists &&
           podcasts == other.podcasts;
 }

@@ -7,6 +7,7 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, DefaultSearch, FeedEvent,
+    HotSearchDetailItem, SearchExact,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
@@ -339,6 +340,26 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no search suggest")) })
     }
 
+    /// 联想下拉的**纯关键词候选**(最多 6 条, 已去重保序).
+    ///
+    /// 与 `search_suggest` 的区别: 后者回的是「实体卡片」( songs/artists/albums/playlists 分段),
+    /// 这里只是可点的候选词串, 适合输入框下方的简版下拉.
+    /// 能力声明复用 [`Capability::SearchSuggest`].
+    fn search_suggest_keywords<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no suggest keywords")) })
+    }
+
+    /// 精确实体改写: 关键词命中歌手/歌单/电台时的"最精确那一条".
+    ///
+    /// 注意**空命中伪装成功**: provider 侧必须把 orders 为空的结果翻成 [`SearchExact::default()`],
+    /// 不要当错误抛. 能力声明复用 [`Capability::SearchSuggest`].
+    fn search_exact<'a>(&'a self, _keywords: &'a str) -> BoxFuture<'a, ProviderResult<SearchExact>> {
+        Box::pin(async { Err(ProviderError::unsupported("no search exact")) })
+    }
+
     /// 最近播放(需要登录; 服务端记录)
     fn recent_songs(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async { Err(ProviderError::unsupported("no recent songs")) })
@@ -372,6 +393,12 @@ pub trait Provider: Send + Sync {
     /// 搜索热词榜(已按热度排序, rank 从 1 开始)
     fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
         Box::pin(async { Err(ProviderError::unsupported("no hot search")) })
+    }
+
+    /// 热搜榜详情(带热度分与榜位, 比 [`Self::hot_search`] 的瘦热词多 score/rank).
+    /// 能力声明复用 [`Capability::SearchHot`].
+    fn hot_search_detail(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchDetailItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot search detail")) })
     }
 
     /// 默认/推荐搜索词("猜你想搜"): keyword 是要搜的词, show 是推荐理由文案

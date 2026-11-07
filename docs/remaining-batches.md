@@ -7,7 +7,8 @@
 >
 > **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
 > 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
-> 下一波按 §5: [Rust] B4 搜索增强(预研已完成, 见 §2 B4 与 `docs/b4-search-notes.md`) ｜ [Dart] B3 的 UI 打磨(已完成)。
+> **Wave 3 完成(B4 搜索增强: 精确实体条/关键词联想/热搜榜, 覆盖 96/382)**。
+> 下一波建议: [Rust] B2 评论统计 或 B8 等级/勋章 ｜ [Dart] 任意纯 Dart 打磨批(见 §4)。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -32,7 +33,7 @@
 | ~~**B1 消息增强**~~ ✅已做 | @我 / 最近联系人 / 私信分页 | `msg_forwards` `msg_recentcontact` | parse 2 个 + FFI 2 个 | `messages_page.dart` | 已验(a36) |
 | **B2 评论统计** | 评论/分享/收藏计数 | `comment_info_list` | parse 1 个 + FFI 1 个 | `comment_thread.dart` 或详情页标题 | 要 |
 | ~~**B3 会员只读**~~ ✅已做 | 黑胶会员卡/成长值/本周签到/任务(不碰支付) | `vip_info_v2` `vip_growthpoint` `vip_sign_info` `vip_tasks` | `vip_overview` 1 个聚合方法(内部 join4) + FFI 1 个 | `vip_page.dart` + `settings_view.dart` 入口 | 已验(a36 登录/未登录) |
-| **B4 搜索增强** | 联想下拉分区(多类型)/热搜详情 | `search_multimatch`(精确实体, 常空) `search_suggest`(web/mobile) `search_hot_detail`(CLI 未接线) | parse 2~3 + FFI 2~3 | `search_landing.dart` `search_suggest.dart` | 要 |
+| ~~**B4 搜索增强**~~ ✅已做 | 精确实体条/关键词联想/热搜榜 | `search_multimatch` `search_suggest`(web/mobile) `search_hot_detail` | parse 3 + FFI 3 | `search_exact_bar.dart`(新) + `search_suggest.dart` + 落地页热榜 | 已验(a36) |
 
 ## B4 搜索增强 · 预研结论(2026-11-07, 实测)
 

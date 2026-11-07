@@ -504,6 +504,61 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "exact" => {
+            // 精确实体命中(search_multimatch): orders 为空 = 无命中(空命中是 200, 不是错误)
+            let kw = args
+                .positional
+                .first()
+                .ok_or("usage: ncm exact <keywords>")?
+                .clone();
+            announce(&core);
+            let p = provider(&core, Capability::SearchSuggest)?;
+            let o = p.search_exact(&kw).await?;
+            println!(
+                "orders = {:?} artists = {} playlists = {} podcasts = {}",
+                o.orders,
+                o.artists.len(),
+                o.playlists.len(),
+                o.podcasts.len()
+            );
+            for a in &o.artists {
+                println!("  [artist] {} ({})", a.name, a.id);
+            }
+            for pl in &o.playlists {
+                println!("  [playlist] {} ({} 首)", pl.name, pl.track_count);
+            }
+            for r in &o.podcasts {
+                println!("  [voice] {} ({} 期)", r.name, r.program_count);
+            }
+            Ok(())
+        }
+        "suggestkw" => {
+            // pure keyword suggestions (mobile search_suggest)
+            let kw = args
+                .positional
+                .first()
+                .ok_or("usage: ncm suggestkw <keywords>")?
+                .clone();
+            announce(&core);
+            let p = provider(&core, Capability::SearchSuggest)?;
+            let list = p.search_suggest_keywords(&kw).await?;
+            println!("keywords = {}", list.len());
+            for k in list {
+                println!("  {k}");
+            }
+            Ok(())
+        }
+        "hotdetail" => {
+            // hot search detail (rank by array index; server gives no rank field)
+            announce(&core);
+            let p = provider(&core, Capability::SearchHot)?;
+            let list = p.hot_search_detail().await?;
+            println!("hot = {}", list.len());
+            for it in list.iter().take(10) {
+                println!("  #{:02} {} score={}", it.rank, it.keyword, it.score);
+            }
+            Ok(())
+        }
         "signin" => {
             // ncm signin          -> 只看状态
             // ncm signin --do     -> 真签到
@@ -1059,13 +1114,14 @@ async fn run() -> Result<(), BoxErr> {
                 "msg_comments" => client.msg_comments(&q).await?,
                 "msg_forwards" => client.msg_forwards(&q).await?,
                 "msg_recentcontact" => client.msg_recentcontact(&q).await?,
+                "search_hot_detail" => client.search_hot_detail(&q).await?,
                 other => return Err(format!("unknown raw method: {other}").into()),
             };
             println!("{}", serde_json::to_string_pretty(&resp.body)?);
             Ok(())
         }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | vip | raw"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | vip | exact | suggestkw | hotdetail | raw"
         )
         .into()),
     }

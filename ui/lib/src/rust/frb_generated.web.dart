@@ -96,6 +96,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HotArtistDto dco_decode_hot_artist_dto(dynamic raw);
 
   @protected
+  HotSearchDetailItemDto dco_decode_hot_search_detail_item_dto(dynamic raw);
+
+  @protected
   HotSearchTermDto dco_decode_hot_search_term_dto(dynamic raw);
 
   @protected
@@ -139,6 +142,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HotArtistDto> dco_decode_list_hot_artist_dto(dynamic raw);
+
+  @protected
+  List<HotSearchDetailItemDto> dco_decode_list_hot_search_detail_item_dto(
+    dynamic raw,
+  );
 
   @protected
   List<HotSearchTermDto> dco_decode_list_hot_search_term_dto(dynamic raw);
@@ -294,6 +302,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchBundleDto dco_decode_search_bundle_dto(dynamic raw);
 
   @protected
+  SearchExactDto dco_decode_search_exact_dto(dynamic raw);
+
+  @protected
   SearchPlaylistDto dco_decode_search_playlist_dto(dynamic raw);
 
   @protected
@@ -435,6 +446,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   HotArtistDto sse_decode_hot_artist_dto(SseDeserializer deserializer);
 
   @protected
+  HotSearchDetailItemDto sse_decode_hot_search_detail_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   HotSearchTermDto sse_decode_hot_search_term_dto(SseDeserializer deserializer);
 
   @protected
@@ -488,6 +504,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<HotArtistDto> sse_decode_list_hot_artist_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<HotSearchDetailItemDto> sse_decode_list_hot_search_detail_item_dto(
     SseDeserializer deserializer,
   );
 
@@ -699,6 +720,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SearchBundleDto sse_decode_search_bundle_dto(SseDeserializer deserializer);
 
   @protected
+  SearchExactDto sse_decode_search_exact_dto(SseDeserializer deserializer);
+
+  @protected
   SearchPlaylistDto sse_decode_search_playlist_dto(
     SseDeserializer deserializer,
   );
@@ -869,6 +893,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_hot_artist_dto(HotArtistDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_hot_search_detail_item_dto(
+    HotSearchDetailItemDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_hot_search_term_dto(
     HotSearchTermDto self,
     SseSerializer serializer,
@@ -940,6 +970,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_hot_artist_dto(
     List<HotArtistDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_hot_search_detail_item_dto(
+    List<HotSearchDetailItemDto> self,
     SseSerializer serializer,
   );
 
@@ -1225,6 +1261,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_search_bundle_dto(
     SearchBundleDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_search_exact_dto(
+    SearchExactDto self,
     SseSerializer serializer,
   );
 

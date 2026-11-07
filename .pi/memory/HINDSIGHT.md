@@ -313,3 +313,19 @@ API/protocol details and anti-bot technique live in the
 
 <!-- created=2026-11-07, last=2026-11-07 -->
 
+## 搜索增强: multimatch / mobile 联想 / 热搜榜(2026-11-07)
+
+- `search_multimatch`(`/api/search/suggest/multimatch`, weapi, body `{type:1,s:<kw>}`) 只回"精确实体改写":
+  每类最多 1 条、无分页、无高亮; `orders` 列出命中类型(artist/playlist/voice/...)。
+  **空命中是 200 + `result:{orders:[]}` 的"假成功"**, 必须按 `orders.is_empty()` 判空; `type` 参数实测无效。
+  多类型卡片仍应走 `search_suggest`(web)。
+- multimatch 的 `voice`(电台)结构与 `dj_detail` 完全不同: id/name 在 `baseInfo`, 主播 `baseInfo.dj.nickname`,
+  节目数 `baseInfo.radio.programCount`, 听众数 `baseInfo.listenerCount`。
+- `search_suggest` 加 `type=mobile` 只回 `result.allMatch[].keyword`(6 条纯关键词串, 去重保序);
+  不加 type 时是 web 形态(`result.order/songs/artists/albums/playlists` 实体卡片)。两者同一 vendor 方法。
+- `search_hot_detail`(`/api/hotsearchlist/get`, weapi, body `{}`) → `data:[{searchWord,score,iconType,iconUrl,content,source,url}]`,
+  固定 20 条, **服务端不给 rank**, 榜位 = 数组下标 + 1; 老接口 `search_hot` 只有 10 条瘦字段, 可作兜底。
+- CLI raw 的参数是位置参数 `key=value`(不是 `--param`); 遇到 raw 分支没接线的接口, 先补一行 arm 再 dump。
+
+<!-- created=2026-11-07, last=2026-11-07 -->
+
