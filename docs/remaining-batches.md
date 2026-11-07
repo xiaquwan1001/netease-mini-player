@@ -5,9 +5,9 @@
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`.pi/memory/`(踩坑)。
 > 口径日期: 2026-11-07 (90/382 已接入)。
 >
-> **进度**: Wave 1 已完成 —— [Rust] B1 消息增强(@我 / 最近联系人 / 私信分页) + [Dart] B0 收尾
-> (歌词纯文本兜底 / 播客详情刷新 / 资料卡关注数 / 窄屏用例); 见 `docs/PROGRESS.md` 对应小节。
-> 下一波按 §5: [Rust] B3 会员只读 ｜ [Dart] B1 的 UI 集成(已完成) → 可直接进 B4 搜索增强或 B3。
+> **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
+> 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
+> 下一波按 §5: [Rust] B4 搜索增强(预研已完成, 见 §2 B4 与 `docs/b4-search-notes.md`) ｜ [Dart] B3 的 UI 打磨(已完成)。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -31,8 +31,23 @@
 |---|---|---|---|---|---|
 | ~~**B1 消息增强**~~ ✅已做 | @我 / 最近联系人 / 私信分页 | `msg_forwards` `msg_recentcontact` | parse 2 个 + FFI 2 个 | `messages_page.dart` | 已验(a36) |
 | **B2 评论统计** | 评论/分享/收藏计数 | `comment_info_list` | parse 1 个 + FFI 1 个 | `comment_thread.dart` 或详情页标题 | 要 |
-| **B3 会员只读** | 黑胶签到/任务/成长值(不碰支付) | `vip_info` `vip_sign_info` `vip_tasks` `sign_happy_info` | parse 3~4 + FFI 3~4 | 新 `vip_page.dart` + `settings_view.dart` 入口 | 要(未登录时给空态) |
-| **B4 搜索增强** | 联想命中词/热搜详情/多类型匹配 | `search_match` `search_multimatch` `search_hot_detail` | parse 2~3 + FFI 2~3 | `search_landing.dart` `search_suggest.dart` | 要 |
+| ~~**B3 会员只读**~~ ✅已做 | 黑胶会员卡/成长值/本周签到/任务(不碰支付) | `vip_info_v2` `vip_growthpoint` `vip_sign_info` `vip_tasks` | `vip_overview` 1 个聚合方法(内部 join4) + FFI 1 个 | `vip_page.dart` + `settings_view.dart` 入口 | 已验(a36 登录/未登录) |
+| **B4 搜索增强** | 联想下拉分区(多类型)/热搜详情 | `search_multimatch`(精确实体, 常空) `search_suggest`(web/mobile) `search_hot_detail`(CLI 未接线) | parse 2~3 + FFI 2~3 | `search_landing.dart` `search_suggest.dart` | 要 |
+
+## B4 搜索增强 · 预研结论(2026-11-07, 实测)
+
+完整实测记录与响应样例见 [`docs/b4-search-notes.md`](b4-search-notes.md)。要点:
+
+- **`search_multimatch` 不是多类型匹配的数据源**: 它只回 1 条"精确实体改写"(歌手/歌单/电台),
+  且 `晴天`/`Taylor`/`Chinese Football` 全返回 `{"code":200,"result":{"orders":[]}}` ——
+  **空命中伪装成成功**, 必须按 `orders.is_empty()` 判空; `type` 参数实测无效。
+- **多类型联想用 `search_suggest`**: web 版(`/api/search/suggest/web`)返回 songs/artists/albums/playlists
+  实体卡片(现有 `parse_suggest` 已经在吃这个); mobile 版(`type=mobile`)只回 6 条纯关键词串, 适合下拉候选。
+- **`search_hot_detail` / `search_match` 无法实测**: CLI 的 raw 分支没有对应 arm(会落 `unknown raw method`),
+  vendor 里实现都在; 要用先给 CLI 加接线。`search_match` 语义是"本地文件→线上歌曲匹配", 与 B4 无关, 建议排除。
+- `search_hot` 固定 10 条、无 rank/score; `search_default`(`/api/search/defaultkeyword/get`)顶层用 `data` 而非 `result`。
+- CLI 的 raw 子命令参数是**位置参数 `key=value`**, 不是 `--param key=value`。
+
 | **B8 等级/勋章** | 资料卡等级、勋章墙 | `user_level` `user_medal` | parse 2 + FFI 2 | `profile_header.dart` + 新页 | 要 |
 
 ### M 级 · 要新交互/新页面/vendor 有限制(1 轮 1 个, 1~2 天量)

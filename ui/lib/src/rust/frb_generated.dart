@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -803954096;
+  int get rustContentHash => -462139270;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -430,6 +430,8 @@ abstract class RustLibApi extends BaseApi {
     required int limit,
     required int offset,
   });
+
+  Future<VipOverviewDto> crateApiVipOverview();
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -3706,6 +3708,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     argNames: ["uid", "limit", "offset"],
   );
 
+  @override
+  Future<VipOverviewDto> crateApiVipOverview() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 108,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_vip_overview_dto,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiVipOverviewConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiVipOverviewConstMeta =>
+      const TaskConstMeta(debugName: "vip_overview", argNames: []);
+
   @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -3834,6 +3863,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_u_64(raw);
+  }
+
+  @protected
+  VipGrowthDto dco_decode_box_autoadd_vip_growth_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_vip_growth_dto(raw);
+  }
+
+  @protected
+  VipMembershipDto dco_decode_box_autoadd_vip_membership_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_vip_membership_dto(raw);
+  }
+
+  @protected
+  VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_vip_sign_dto(raw);
   }
 
   @protected
@@ -3988,6 +4035,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       rank: dco_decode_u_32(arr[0]),
       keyword: dco_decode_String(arr[1]),
     );
+  }
+
+  @protected
+  int dco_decode_i_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
   }
 
   @protected
@@ -4229,6 +4282,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<VipSignDayDto> dco_decode_list_vip_sign_day_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_vip_sign_day_dto).toList();
+  }
+
+  @protected
+  List<VipTaskDto> dco_decode_list_vip_task_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_vip_task_dto).toList();
+  }
+
+  @protected
   List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_wiki_fact_dto).toList();
@@ -4290,6 +4355,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  VipGrowthDto? dco_decode_opt_box_autoadd_vip_growth_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_vip_growth_dto(raw);
+  }
+
+  @protected
+  VipMembershipDto? dco_decode_opt_box_autoadd_vip_membership_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_vip_membership_dto(raw);
+  }
+
+  @protected
+  VipSignDto? dco_decode_opt_box_autoadd_vip_sign_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_vip_sign_dto(raw);
   }
 
   @protected
@@ -4712,6 +4795,97 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  VipGrowthDto dco_decode_vip_growth_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return VipGrowthDto(
+      level: dco_decode_u_32(arr[0]),
+      levelName: dco_decode_String(arr[1]),
+      growthPoint: dco_decode_i_64(arr[2]),
+      todayScore: dco_decode_i_64(arr[3]),
+      maxLevel: dco_decode_bool(arr[4]),
+    );
+  }
+
+  @protected
+  VipMembershipDto dco_decode_vip_membership_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return VipMembershipDto(
+      level: dco_decode_u_32(arr[0]),
+      redVipLevel: dco_decode_u_32(arr[1]),
+      expireTimeMs: dco_decode_u_64(arr[2]),
+      isVip: dco_decode_bool(arr[3]),
+      annualCount: dco_decode_i_32(arr[4]),
+    );
+  }
+
+  @protected
+  VipOverviewDto dco_decode_vip_overview_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return VipOverviewDto(
+      loggedIn: dco_decode_bool(arr[0]),
+      membership: dco_decode_opt_box_autoadd_vip_membership_dto(arr[1]),
+      growth: dco_decode_opt_box_autoadd_vip_growth_dto(arr[2]),
+      sign: dco_decode_opt_box_autoadd_vip_sign_dto(arr[3]),
+      tasks: dco_decode_list_vip_task_dto(arr[4]),
+      taskScore: dco_decode_i_64(arr[5]),
+    );
+  }
+
+  @protected
+  VipSignDayDto dco_decode_vip_sign_day_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return VipSignDayDto(
+      date: dco_decode_String(arr[0]),
+      signed: dco_decode_bool(arr[1]),
+      today: dco_decode_bool(arr[2]),
+      score: dco_decode_u_32(arr[3]),
+    );
+  }
+
+  @protected
+  VipSignDto dco_decode_vip_sign_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return VipSignDto(
+      days: dco_decode_list_vip_sign_day_dto(arr[0]),
+      signedToday: dco_decode_bool(arr[1]),
+      weekSigned: dco_decode_u_32(arr[2]),
+    );
+  }
+
+  @protected
+  VipTaskDto dco_decode_vip_task_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return VipTaskDto(
+      title: dco_decode_String(arr[0]),
+      reward: dco_decode_String(arr[1]),
+      growthPoint: dco_decode_i_32(arr[2]),
+      progress: dco_decode_i_64(arr[3]),
+      target: dco_decode_i_64(arr[4]),
+      done: dco_decode_bool(arr[5]),
+      showProgress: dco_decode_bool(arr[6]),
+      url: dco_decode_opt_String(arr[7]),
+    );
+  }
+
+  @protected
   WikiFactDto dco_decode_wiki_fact_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -4866,6 +5040,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
+  VipGrowthDto sse_decode_box_autoadd_vip_growth_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_vip_growth_dto(deserializer));
+  }
+
+  @protected
+  VipMembershipDto sse_decode_box_autoadd_vip_membership_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_vip_membership_dto(deserializer));
+  }
+
+  @protected
+  VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_vip_sign_dto(deserializer));
   }
 
   @protected
@@ -5047,6 +5243,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_rank = sse_decode_u_32(deserializer);
     var var_keyword = sse_decode_String(deserializer);
     return HotSearchTermDto(rank: var_rank, keyword: var_keyword);
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -5530,6 +5732,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<VipSignDayDto> sse_decode_list_vip_sign_day_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <VipSignDayDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_vip_sign_day_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<VipTaskDto> sse_decode_list_vip_task_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <VipTaskDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_vip_task_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<WikiFactDto> sse_decode_list_wiki_fact_dto(
     SseDeserializer deserializer,
   ) {
@@ -5621,6 +5849,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  VipGrowthDto? sse_decode_opt_box_autoadd_vip_growth_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_vip_growth_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  VipMembershipDto? sse_decode_opt_box_autoadd_vip_membership_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_vip_membership_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  VipSignDto? sse_decode_opt_box_autoadd_vip_sign_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_vip_sign_dto(deserializer));
     } else {
       return null;
     }
@@ -6123,17 +6390,117 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_level = sse_decode_u_32(deserializer);
+    var var_levelName = sse_decode_String(deserializer);
+    var var_growthPoint = sse_decode_i_64(deserializer);
+    var var_todayScore = sse_decode_i_64(deserializer);
+    var var_maxLevel = sse_decode_bool(deserializer);
+    return VipGrowthDto(
+      level: var_level,
+      levelName: var_levelName,
+      growthPoint: var_growthPoint,
+      todayScore: var_todayScore,
+      maxLevel: var_maxLevel,
+    );
+  }
+
+  @protected
+  VipMembershipDto sse_decode_vip_membership_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_level = sse_decode_u_32(deserializer);
+    var var_redVipLevel = sse_decode_u_32(deserializer);
+    var var_expireTimeMs = sse_decode_u_64(deserializer);
+    var var_isVip = sse_decode_bool(deserializer);
+    var var_annualCount = sse_decode_i_32(deserializer);
+    return VipMembershipDto(
+      level: var_level,
+      redVipLevel: var_redVipLevel,
+      expireTimeMs: var_expireTimeMs,
+      isVip: var_isVip,
+      annualCount: var_annualCount,
+    );
+  }
+
+  @protected
+  VipOverviewDto sse_decode_vip_overview_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_loggedIn = sse_decode_bool(deserializer);
+    var var_membership = sse_decode_opt_box_autoadd_vip_membership_dto(
+      deserializer,
+    );
+    var var_growth = sse_decode_opt_box_autoadd_vip_growth_dto(deserializer);
+    var var_sign = sse_decode_opt_box_autoadd_vip_sign_dto(deserializer);
+    var var_tasks = sse_decode_list_vip_task_dto(deserializer);
+    var var_taskScore = sse_decode_i_64(deserializer);
+    return VipOverviewDto(
+      loggedIn: var_loggedIn,
+      membership: var_membership,
+      growth: var_growth,
+      sign: var_sign,
+      tasks: var_tasks,
+      taskScore: var_taskScore,
+    );
+  }
+
+  @protected
+  VipSignDayDto sse_decode_vip_sign_day_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_date = sse_decode_String(deserializer);
+    var var_signed = sse_decode_bool(deserializer);
+    var var_today = sse_decode_bool(deserializer);
+    var var_score = sse_decode_u_32(deserializer);
+    return VipSignDayDto(
+      date: var_date,
+      signed: var_signed,
+      today: var_today,
+      score: var_score,
+    );
+  }
+
+  @protected
+  VipSignDto sse_decode_vip_sign_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_days = sse_decode_list_vip_sign_day_dto(deserializer);
+    var var_signedToday = sse_decode_bool(deserializer);
+    var var_weekSigned = sse_decode_u_32(deserializer);
+    return VipSignDto(
+      days: var_days,
+      signedToday: var_signedToday,
+      weekSigned: var_weekSigned,
+    );
+  }
+
+  @protected
+  VipTaskDto sse_decode_vip_task_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_title = sse_decode_String(deserializer);
+    var var_reward = sse_decode_String(deserializer);
+    var var_growthPoint = sse_decode_i_32(deserializer);
+    var var_progress = sse_decode_i_64(deserializer);
+    var var_target = sse_decode_i_64(deserializer);
+    var var_done = sse_decode_bool(deserializer);
+    var var_showProgress = sse_decode_bool(deserializer);
+    var var_url = sse_decode_opt_String(deserializer);
+    return VipTaskDto(
+      title: var_title,
+      reward: var_reward,
+      growthPoint: var_growthPoint,
+      progress: var_progress,
+      target: var_target,
+      done: var_done,
+      showProgress: var_showProgress,
+      url: var_url,
+    );
+  }
+
+  @protected
   WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_label = sse_decode_String(deserializer);
     var var_value = sse_decode_String(deserializer);
     return WikiFactDto(label: var_label, value: var_value);
-  }
-
-  @protected
-  int sse_decode_i_32(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return deserializer.buffer.getInt32();
   }
 
   @protected
@@ -6246,6 +6613,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_vip_growth_dto(
+    VipGrowthDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_vip_growth_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_vip_membership_dto(
+    VipMembershipDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_vip_membership_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_vip_sign_dto(
+    VipSignDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_vip_sign_dto(self, serializer);
   }
 
   @protected
@@ -6373,6 +6767,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.rank, serializer);
     sse_encode_String(self.keyword, serializer);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
   }
 
   @protected
@@ -6790,6 +7190,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_vip_sign_day_dto(
+    List<VipSignDayDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_vip_sign_day_dto(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_vip_task_dto(
+    List<VipTaskDto> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_vip_task_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_wiki_fact_dto(
     List<WikiFactDto> self,
     SseSerializer serializer,
@@ -6875,6 +7299,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_growth_dto(
+    VipGrowthDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_vip_growth_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_membership_dto(
+    VipMembershipDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_vip_membership_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_sign_dto(
+    VipSignDto? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_vip_sign_dto(self, serializer);
     }
   }
 
@@ -7226,15 +7689,79 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_vip_growth_dto(VipGrowthDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.level, serializer);
+    sse_encode_String(self.levelName, serializer);
+    sse_encode_i_64(self.growthPoint, serializer);
+    sse_encode_i_64(self.todayScore, serializer);
+    sse_encode_bool(self.maxLevel, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_membership_dto(
+    VipMembershipDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.level, serializer);
+    sse_encode_u_32(self.redVipLevel, serializer);
+    sse_encode_u_64(self.expireTimeMs, serializer);
+    sse_encode_bool(self.isVip, serializer);
+    sse_encode_i_32(self.annualCount, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_overview_dto(
+    VipOverviewDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.loggedIn, serializer);
+    sse_encode_opt_box_autoadd_vip_membership_dto(self.membership, serializer);
+    sse_encode_opt_box_autoadd_vip_growth_dto(self.growth, serializer);
+    sse_encode_opt_box_autoadd_vip_sign_dto(self.sign, serializer);
+    sse_encode_list_vip_task_dto(self.tasks, serializer);
+    sse_encode_i_64(self.taskScore, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_sign_day_dto(
+    VipSignDayDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.date, serializer);
+    sse_encode_bool(self.signed, serializer);
+    sse_encode_bool(self.today, serializer);
+    sse_encode_u_32(self.score, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_sign_dto(VipSignDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_vip_sign_day_dto(self.days, serializer);
+    sse_encode_bool(self.signedToday, serializer);
+    sse_encode_u_32(self.weekSigned, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_task_dto(VipTaskDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.title, serializer);
+    sse_encode_String(self.reward, serializer);
+    sse_encode_i_32(self.growthPoint, serializer);
+    sse_encode_i_64(self.progress, serializer);
+    sse_encode_i_64(self.target, serializer);
+    sse_encode_bool(self.done, serializer);
+    sse_encode_bool(self.showProgress, serializer);
+    sse_encode_opt_String(self.url, serializer);
+  }
+
+  @protected
   void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.label, serializer);
     sse_encode_String(self.value, serializer);
-  }
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    serializer.buffer.putInt32(self);
   }
 }

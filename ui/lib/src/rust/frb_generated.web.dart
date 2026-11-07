@@ -60,6 +60,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  VipGrowthDto dco_decode_box_autoadd_vip_growth_dto(dynamic raw);
+
+  @protected
+  VipMembershipDto dco_decode_box_autoadd_vip_membership_dto(dynamic raw);
+
+  @protected
+  VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw);
+
+  @protected
   ChartSummaryDto dco_decode_chart_summary_dto(dynamic raw);
 
   @protected
@@ -88,6 +97,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HotSearchTermDto dco_decode_hot_search_term_dto(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   PlatformInt64 dco_decode_i_64(dynamic raw);
@@ -198,6 +210,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
 
   @protected
+  List<VipSignDayDto> dco_decode_list_vip_sign_day_dto(dynamic raw);
+
+  @protected
+  List<VipTaskDto> dco_decode_list_vip_task_dto(dynamic raw);
+
+  @protected
   List<WikiFactDto> dco_decode_list_wiki_fact_dto(dynamic raw);
 
   @protected
@@ -220,6 +238,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  VipGrowthDto? dco_decode_opt_box_autoadd_vip_growth_dto(dynamic raw);
+
+  @protected
+  VipMembershipDto? dco_decode_opt_box_autoadd_vip_membership_dto(dynamic raw);
+
+  @protected
+  VipSignDto? dco_decode_opt_box_autoadd_vip_sign_dto(dynamic raw);
 
   @protected
   PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
@@ -309,6 +336,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItemDto dco_decode_user_item_dto(dynamic raw);
 
   @protected
+  VipGrowthDto dco_decode_vip_growth_dto(dynamic raw);
+
+  @protected
+  VipMembershipDto dco_decode_vip_membership_dto(dynamic raw);
+
+  @protected
+  VipOverviewDto dco_decode_vip_overview_dto(dynamic raw);
+
+  @protected
+  VipSignDayDto dco_decode_vip_sign_day_dto(dynamic raw);
+
+  @protected
+  VipSignDto dco_decode_vip_sign_dto(dynamic raw);
+
+  @protected
+  VipTaskDto dco_decode_vip_task_dto(dynamic raw);
+
+  @protected
   WikiFactDto dco_decode_wiki_fact_dto(dynamic raw);
 
   @protected
@@ -350,6 +395,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
+  VipGrowthDto sse_decode_box_autoadd_vip_growth_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VipMembershipDto sse_decode_box_autoadd_vip_membership_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer);
+
+  @protected
   ChartSummaryDto sse_decode_chart_summary_dto(SseDeserializer deserializer);
 
   @protected
@@ -378,6 +436,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   HotSearchTermDto sse_decode_hot_search_term_dto(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
@@ -534,6 +595,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
 
   @protected
+  List<VipSignDayDto> sse_decode_list_vip_sign_day_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<VipTaskDto> sse_decode_list_vip_task_dto(SseDeserializer deserializer);
+
+  @protected
   List<WikiFactDto> sse_decode_list_wiki_fact_dto(SseDeserializer deserializer);
 
   @protected
@@ -558,6 +627,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  VipGrowthDto? sse_decode_opt_box_autoadd_vip_growth_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VipMembershipDto? sse_decode_opt_box_autoadd_vip_membership_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  VipSignDto? sse_decode_opt_box_autoadd_vip_sign_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
@@ -659,10 +743,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItemDto sse_decode_user_item_dto(SseDeserializer deserializer);
 
   @protected
-  WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer);
+  VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  VipMembershipDto sse_decode_vip_membership_dto(SseDeserializer deserializer);
+
+  @protected
+  VipOverviewDto sse_decode_vip_overview_dto(SseDeserializer deserializer);
+
+  @protected
+  VipSignDayDto sse_decode_vip_sign_day_dto(SseDeserializer deserializer);
+
+  @protected
+  VipSignDto sse_decode_vip_sign_dto(SseDeserializer deserializer);
+
+  @protected
+  VipTaskDto sse_decode_vip_task_dto(SseDeserializer deserializer);
+
+  @protected
+  WikiFactDto sse_decode_wiki_fact_dto(SseDeserializer deserializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -708,6 +807,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_vip_growth_dto(
+    VipGrowthDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vip_membership_dto(
+    VipMembershipDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_vip_sign_dto(
+    VipSignDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_chart_summary_dto(
@@ -756,6 +873,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     HotSearchTermDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
@@ -959,6 +1079,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_vip_sign_day_dto(
+    List<VipSignDayDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_vip_task_dto(
+    List<VipTaskDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_wiki_fact_dto(
     List<WikiFactDto> self,
     SseSerializer serializer,
@@ -993,6 +1125,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_growth_dto(
+    VipGrowthDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_membership_dto(
+    VipMembershipDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_vip_sign_dto(
+    VipSignDto? self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_play_rank_entry_dto(
@@ -1136,10 +1286,34 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_user_item_dto(UserItemDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer);
+  void sse_encode_vip_growth_dto(VipGrowthDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_vip_membership_dto(
+    VipMembershipDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_vip_overview_dto(
+    VipOverviewDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_vip_sign_day_dto(
+    VipSignDayDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_vip_sign_dto(VipSignDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_vip_task_dto(VipTaskDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_wiki_fact_dto(WikiFactDto self, SseSerializer serializer);
 }
 
 // Section: wire_class

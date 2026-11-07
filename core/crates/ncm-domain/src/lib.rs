@@ -793,6 +793,98 @@ impl Session {
     }
 }
 
+/// 黑胶会员等级(vip_info_v2 的 data: associator + redVipLevel).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipMembership {
+    /// associator.vipLevel(黑胶主套餐等级, 0 表示没有黑胶)
+    pub level: u32,
+    /// redVipLevel(红黑胶展示等级, 未开通时为 0)
+    pub red_vip_level: u32,
+    /// associator.expireTime(毫秒; 0 表示从未开通)
+    pub expire_time_ms: u64,
+    /// expireTime > now(服务端 now, 缺省用本机时间)
+    pub is_vip: bool,
+    /// redVipAnnualCount(年费剩余月数; -1 表示未知)
+    pub annual_count: i32,
+}
+
+/// 黑胶成长值 / 等级卡(vip_growthpoint 的 data.levelCard + data.userLevel).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipGrowth {
+    /// userLevel.level
+    pub level: u32,
+    /// levelCard.levelName(空则退回 userLevel.levelName), 形如 "黑胶·叁"
+    pub level_name: String,
+    /// userLevel.growthPoint
+    pub growth_point: i64,
+    /// userLevel.extJson.todayScore(解析失败为 0)
+    pub today_score: i64,
+    /// userLevel.maxLevel
+    pub max_level: bool,
+}
+
+/// 某一天的签到状态(vip_sign_info; 接口只回最近 7 天).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipSignDay {
+    /// yyyy-MM-dd(接口的 timeStr)
+    pub date: String,
+    /// score > 0 才算已签(recordId/time 在未签时也是 0, 不能用来判断)
+    pub signed: bool,
+    /// 接口的 today 标记
+    pub today: bool,
+    /// 当天签到得到的成长值
+    pub score: u32,
+}
+
+/// 黑胶签到概览. 接口不提供"本月/累计"天数, 只能按返回的最近 7 天统计.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipSign {
+    /// 按日期升序(接口原序即升序)
+    #[serde(default)]
+    pub days: Vec<VipSignDay>,
+    pub signed_today: bool,
+    /// days 里已签的天数
+    pub week_signed: u32,
+}
+
+/// 黑胶任务(vip_tasks 的 data.taskList[].taskItems[], 已平铺).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipTask {
+    /// name 非空取 name, 否则取 action(实测 name 常为空串)
+    pub title: String,
+    /// description, 形如 "成长值+3"
+    pub reward: String,
+    pub growth_point: i32,
+    pub progress: i64,
+    /// targets: 数字取数值, 数组取长度, null/缺失为 0(= 不显示进度条)
+    pub target: i64,
+    /// status == 2 或 target > 0 且 progress >= target
+    pub done: bool,
+    pub show_progress: bool,
+    /// 跳转链接(需要用户去官方页完成的任务)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+}
+
+/// 黑胶会员总览(会员等级 + 成长值 + 本周签到 + 任务).
+///
+/// 四个子接口互相独立: 任何一个失败只让对应字段为 None, 不影响其它字段;
+/// 全部失败时 provider 返回第一个错误.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VipOverview {
+    pub logged_in: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub membership: Option<VipMembership>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub growth: Option<VipGrowth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sign: Option<VipSign>,
+    #[serde(default)]
+    pub tasks: Vec<VipTask>,
+    /// vip_tasks 的 data.taskScore
+    pub task_score: i64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

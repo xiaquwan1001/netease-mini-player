@@ -11,7 +11,7 @@ use ncm_domain::{
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
     ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    UserItem, WikiFact,
+    UserItem, VipOverview, WikiFact,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -66,6 +66,8 @@ pub enum Capability {
     Wiki,
     /// 消息中心(私信/通知/评论)
     Message,
+    /// 黑胶会员只读(等级/成长值/签到/任务)
+    Vip,
 }
 
 impl Capability {
@@ -103,6 +105,7 @@ impl Capability {
             Capability::Signin => "signin",
             Capability::Wiki => "wiki",
             Capability::Message => "message",
+            Capability::Vip => "vip",
         }
     }
 }
@@ -760,6 +763,13 @@ pub trait Provider: Send + Sync {
     /// 签到(需要登录). 返回签到后的状态; 今日已签到时 Unsupported("已签到")
     fn sign_in(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
         Box::pin(async { Err(ProviderError::unsupported("no signin")) })
+    }
+
+    /// 黑胶会员总览(会员等级 / 成长值 / 本周签到 / 任务; 需要登录).
+    ///
+    /// 四个子接口互相独立: 单个失败只让对应字段为 None, 全部失败才返回错误.
+    fn vip_overview(&self) -> BoxFuture<'_, ProviderResult<VipOverview>> {
+        Box::pin(async { Err(ProviderError::unsupported("no vip overview")) })
     }
 
     /// 删除自己的评论(需要登录)

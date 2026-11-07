@@ -596,6 +596,11 @@ Future<List<RecentContactDto>> recentContacts({required int limit}) =>
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 
+/// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
+/// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
+Future<VipOverviewDto> vipOverview() =>
+    RustLib.instance.api.crateApiVipOverview();
+
 class AccountDto {
   final BigInt userId;
   final String nickname;
@@ -2309,6 +2314,230 @@ class UserItemDto {
           avatarUrl == other.avatarUrl &&
           signature == other.signature &&
           followed == other.followed;
+}
+
+/// 黑胶成长值 / 等级卡
+class VipGrowthDto {
+  final int level;
+  final String levelName;
+  final PlatformInt64 growthPoint;
+  final PlatformInt64 todayScore;
+  final bool maxLevel;
+
+  const VipGrowthDto({
+    required this.level,
+    required this.levelName,
+    required this.growthPoint,
+    required this.todayScore,
+    required this.maxLevel,
+  });
+
+  @override
+  int get hashCode =>
+      level.hashCode ^
+      levelName.hashCode ^
+      growthPoint.hashCode ^
+      todayScore.hashCode ^
+      maxLevel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipGrowthDto &&
+          runtimeType == other.runtimeType &&
+          level == other.level &&
+          levelName == other.levelName &&
+          growthPoint == other.growthPoint &&
+          todayScore == other.todayScore &&
+          maxLevel == other.maxLevel;
+}
+
+/// 黑胶会员等级
+class VipMembershipDto {
+  final int level;
+  final int redVipLevel;
+  final BigInt expireTimeMs;
+
+  /// 到期时间晚于服务端 now 才算会员(过期后 vipLevel 仍是旧值, 别拿它判断)
+  final bool isVip;
+
+  /// 年费剩余月数, 负数 = 未知
+  final int annualCount;
+
+  const VipMembershipDto({
+    required this.level,
+    required this.redVipLevel,
+    required this.expireTimeMs,
+    required this.isVip,
+    required this.annualCount,
+  });
+
+  @override
+  int get hashCode =>
+      level.hashCode ^
+      redVipLevel.hashCode ^
+      expireTimeMs.hashCode ^
+      isVip.hashCode ^
+      annualCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipMembershipDto &&
+          runtimeType == other.runtimeType &&
+          level == other.level &&
+          redVipLevel == other.redVipLevel &&
+          expireTimeMs == other.expireTimeMs &&
+          isVip == other.isVip &&
+          annualCount == other.annualCount;
+}
+
+/// 黑胶会员总览(只读)
+class VipOverviewDto {
+  final bool loggedIn;
+  final VipMembershipDto? membership;
+  final VipGrowthDto? growth;
+  final VipSignDto? sign;
+  final List<VipTaskDto> tasks;
+  final PlatformInt64 taskScore;
+
+  const VipOverviewDto({
+    required this.loggedIn,
+    this.membership,
+    this.growth,
+    this.sign,
+    required this.tasks,
+    required this.taskScore,
+  });
+
+  @override
+  int get hashCode =>
+      loggedIn.hashCode ^
+      membership.hashCode ^
+      growth.hashCode ^
+      sign.hashCode ^
+      tasks.hashCode ^
+      taskScore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipOverviewDto &&
+          runtimeType == other.runtimeType &&
+          loggedIn == other.loggedIn &&
+          membership == other.membership &&
+          growth == other.growth &&
+          sign == other.sign &&
+          tasks == other.tasks &&
+          taskScore == other.taskScore;
+}
+
+/// 某一天的签到状态(接口只回最近 7 天)
+class VipSignDayDto {
+  /// yyyy-MM-dd
+  final String date;
+
+  /// score > 0 才算已签
+  final bool signed;
+  final bool today;
+  final int score;
+
+  const VipSignDayDto({
+    required this.date,
+    required this.signed,
+    required this.today,
+    required this.score,
+  });
+
+  @override
+  int get hashCode =>
+      date.hashCode ^ signed.hashCode ^ today.hashCode ^ score.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipSignDayDto &&
+          runtimeType == other.runtimeType &&
+          date == other.date &&
+          signed == other.signed &&
+          today == other.today &&
+          score == other.score;
+}
+
+/// 黑胶签到概览(本周维度)
+class VipSignDto {
+  final List<VipSignDayDto> days;
+  final bool signedToday;
+  final int weekSigned;
+
+  const VipSignDto({
+    required this.days,
+    required this.signedToday,
+    required this.weekSigned,
+  });
+
+  @override
+  int get hashCode =>
+      days.hashCode ^ signedToday.hashCode ^ weekSigned.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipSignDto &&
+          runtimeType == other.runtimeType &&
+          days == other.days &&
+          signedToday == other.signedToday &&
+          weekSigned == other.weekSigned;
+}
+
+/// 黑胶任务
+class VipTaskDto {
+  final String title;
+  final String reward;
+  final int growthPoint;
+  final PlatformInt64 progress;
+
+  /// 0 = 没有可量化目标(不显示进度条)
+  final PlatformInt64 target;
+  final bool done;
+  final bool showProgress;
+  final String? url;
+
+  const VipTaskDto({
+    required this.title,
+    required this.reward,
+    required this.growthPoint,
+    required this.progress,
+    required this.target,
+    required this.done,
+    required this.showProgress,
+    this.url,
+  });
+
+  @override
+  int get hashCode =>
+      title.hashCode ^
+      reward.hashCode ^
+      growthPoint.hashCode ^
+      progress.hashCode ^
+      target.hashCode ^
+      done.hashCode ^
+      showProgress.hashCode ^
+      url.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipTaskDto &&
+          runtimeType == other.runtimeType &&
+          title == other.title &&
+          reward == other.reward &&
+          growthPoint == other.growthPoint &&
+          progress == other.progress &&
+          target == other.target &&
+          done == other.done &&
+          showProgress == other.showProgress &&
+          url == other.url;
 }
 
 class WikiFactDto {

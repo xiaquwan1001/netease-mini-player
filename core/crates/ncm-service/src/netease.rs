@@ -8,7 +8,7 @@ use ncm_domain::{
     Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    UserItem, WikiFact,
+    UserItem, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
@@ -49,6 +49,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Signin,
     Capability::Wiki,
     Capability::Message,
+    Capability::Vip,
 ];
 
 /// 最近播放的三种资源(专辑/歌单/电台)
@@ -338,6 +339,157 @@ fn check_body(body: &Value) -> ProviderResult<()> {
             Err(map_code(code, msg))
         }
     }
+}
+
+/// 并行子请求的失败容忍: 把错误收进 errs, 只返回成功的 body.
+fn take_body(
+    result: Result<ncm_api_rs::ApiResponse, NcmError>,
+    errs: &mut Vec<ProviderError>,
+) -> Option<Value> {
+    match result {
+        Ok(resp) => match check_body(&resp.body) {
+            Ok(()) => Some(resp.body),
+            Err(e) => {
+                errs.push(e);
+                None
+            }
+        },
+        Err(e) => {
+            errs.push(map_error(e));
+            None
+        }
+    }
+}
+
+/// vip_info_v2: data.associator + redVipLevel.
+/// is_vip 判定用 associator.expireTime > now(服务端 data.now, 缺省本机时间);
+/// **不要**按 vipCode/vipLevel 判断 —— 过期账号这两个字段仍是旧值.
+pub fn parse_vip_membership(body: &Value) -> Option<VipMembership> {
+    let data = body.get("data")?;
+    let associator = data.get("associator").unwrap_or(&Value::Null);
+    let expire_time_ms = u64_of(associator, "expireTime").unwrap_or(0);
+    let now = u64_of(data, "now").unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    });
+    Some(VipMembership {
+        level: u64_of(associator, "vipLevel").unwrap_or(0) as u32,
+        red_vip_level: data
+            .get("redVipLevel")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            .max(0) as u32,
+        expire_time_ms,
+        is_vip: expire_time_ms > 0 && expire_time_ms > now,
+        // 负数(= 未知/非年费)保留原值, 由 UI 决定怎么显示
+        annual_count: data
+            .get("redVipAnnualCount")
+            .and_then(Value::as_i64)
+            .unwrap_or(-1) as i32,
+    })
+}
+
+/// vip_growthpoint: data.userLevel(成长值/今日成长值) + data.levelCard(等级名/图).
+/// 今日成长值藏在 userLevel.extJson 这个"JSON 字符串"里(不是对象).
+pub fn parse_vip_growth(body: &Value) -> Option<VipGrowth> {
+    let data = body.get("data")?;
+    let user = data.get("userLevel").unwrap_or(&Value::Null);
+    let card = data.get("levelCard").unwrap_or(&Value::Null);
+    let mut level_name = str_of(card, "levelName").unwrap_or_default();
+    if level_name.trim().is_empty() {
+        level_name = str_of(user, "levelName").unwrap_or_default();
+    }
+    let today_score = str_of(user, "extJson")
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v.get("todayScore").and_then(Value::as_i64))
+        .unwrap_or(0);
+    Some(VipGrowth {
+        level: u64_of(user, "level")
+            .or_else(|| u64_of(card, "level"))
+            .unwrap_or(0) as u32,
+        level_name,
+        growth_point: user.get("growthPoint").and_then(Value::as_i64).unwrap_or(0),
+        today_score,
+        max_level: user.get("maxLevel").and_then(Value::as_bool).unwrap_or(false),
+    })
+}
+
+/// vip_sign_info: data 是**数组, 只回最近 7 天**(不是月份/累计).
+/// score > 0 才算已签 —— 未签的那天 recordId/time 也是 0, 拿它们判断会全判成"已签".
+pub fn parse_vip_sign(body: &Value) -> VipSign {
+    let days: Vec<VipSignDay> = body
+        .get("data")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|v| {
+                    let date = str_of(v, "timeStr")?;
+                    let score = u64_of(v, "score").unwrap_or(0) as u32;
+                    Some(VipSignDay {
+                        date,
+                        signed: score > 0,
+                        today: v.get("today").and_then(Value::as_bool).unwrap_or(false),
+                        score,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let signed_today = days.iter().any(|d| d.today && d.signed);
+    let week_signed = days.iter().filter(|d| d.signed).count() as u32;
+    VipSign {
+        days,
+        signed_today,
+        week_signed,
+    }
+}
+
+/// vip_tasks: data.taskList[].taskItems[] 平铺.
+/// 实测 name 常为空串(action 才是可读标题); targets 为 null = 没有可量化目标(不显示进度条).
+/// 非 null 的 targets 形状未实测, 这里兼容 数字 / 数组 两种.
+pub fn parse_vip_tasks(body: &Value) -> (Vec<VipTask>, i64) {
+    let data = body.get("data").unwrap_or(&Value::Null);
+    let task_score = data.get("taskScore").and_then(Value::as_i64).unwrap_or(0);
+    let mut out: Vec<VipTask> = Vec::new();
+    if let Some(groups) = data.get("taskList").and_then(Value::as_array) {
+        for g in groups {
+            let Some(items) = g.get("taskItems").and_then(Value::as_array) else {
+                continue;
+            };
+            for it in items {
+                let name = str_of(it, "name").unwrap_or_default();
+                let action = str_of(it, "action").unwrap_or_default();
+                let title = if name.trim().is_empty() { action } else { name };
+                if title.trim().is_empty() {
+                    continue;
+                }
+                let target = match it.get("targets") {
+                    Some(Value::Number(n)) => n.as_i64().unwrap_or(0),
+                    Some(Value::Array(a)) => a.len() as i64,
+                    _ => 0,
+                };
+                let progress = it.get("currentProgress").and_then(Value::as_i64).unwrap_or(0);
+                let status = it.get("status").and_then(Value::as_i64).unwrap_or(0);
+                out.push(VipTask {
+                    title,
+                    reward: str_of(it, "description").unwrap_or_default(),
+                    growth_point: it.get("growthPoint").and_then(Value::as_i64).unwrap_or(0) as i32,
+                    progress,
+                    target,
+                    done: status == 2 || (target > 0 && progress >= target),
+                    show_progress: it
+                        .get("showProgress")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                    url: str_of(it, "url").filter(|u| !u.trim().is_empty()),
+                });
+            }
+        }
+    }
+    (out, task_score)
 }
 
 fn u64_of(v: &Value, key: &str) -> Option<u64> {
@@ -1673,6 +1825,48 @@ impl Provider for NeteaseProvider {
             status.signed_today = true;
             status.today_point = point;
             Ok(status)
+        })
+    }
+
+    /// 黑胶会员总览(需要登录). 四个子接口并行, 单个失败只丢对应字段.
+    fn vip_overview(&self) -> BoxFuture<'_, ProviderResult<VipOverview>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                // 未登录不报鉴权错误: 回 logged_in=false, UI 走"登录后可见"空态.
+                return Ok(VipOverview::default());
+            }
+            let mk = || make_query(&cookie, &domain, &ua);
+            let (a, b, c, d) = futures::future::join4(
+                client.vip_info_v2(&mk()),
+                client.vip_growthpoint(&mk()),
+                client.vip_sign_info(&mk()),
+                client.vip_tasks(&mk()),
+            )
+            .await;
+            let mut errs: Vec<ProviderError> = Vec::new();
+            let membership = take_body(a, &mut errs)
+                .as_ref()
+                .and_then(parse_vip_membership);
+            let growth = take_body(b, &mut errs).as_ref().and_then(parse_vip_growth);
+            let sign = take_body(c, &mut errs).as_ref().map(parse_vip_sign);
+            let (tasks, task_score) = take_body(d, &mut errs)
+                .as_ref()
+                .map(parse_vip_tasks)
+                .unwrap_or_default();
+            if membership.is_none() && growth.is_none() && sign.is_none() && tasks.is_empty() {
+                if let Some(e) = errs.into_iter().next() {
+                    return Err(e);
+                }
+            }
+            Ok(VipOverview {
+                logged_in: true,
+                membership,
+                growth,
+                sign,
+                tasks,
+                task_score,
+            })
         })
     }
 
@@ -3974,6 +4168,141 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// vip_info_v2: is_vip 只看 expireTime > now(vipCode/vipLevel 过期后仍是旧值)
+    #[test]
+    fn vip_membership_is_vip_by_expire_time() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "now": 1_794_021_180_859u64,
+                "redVipLevel": 3,
+                "redVipAnnualCount": -1,
+                "associator": {"vipCode": 100, "vipLevel": 3, "expireTime": 1_794_326_399_000u64}
+            }
+        });
+        let m = parse_vip_membership(&body).expect("membership");
+        assert_eq!(m.level, 3);
+        assert_eq!(m.red_vip_level, 3);
+        assert!(m.is_vip, "expireTime 晚于 now 应算会员");
+        assert_eq!(m.annual_count, -1);
+
+        // 同一个账号, 把 now 挪到过期之后 -> 不再是会员(但 vipLevel 仍是 3)
+        let expired = json!({
+            "code": 200,
+            "data": {
+                "now": 1_800_000_000_000u64,
+                "associator": {"vipLevel": 3, "expireTime": 1_794_326_399_000u64}
+            }
+        });
+        let m = parse_vip_membership(&expired).expect("membership");
+        assert!(!m.is_vip);
+        assert_eq!(m.level, 3);
+        assert_eq!(m.red_vip_level, 0);
+    }
+
+    /// vip_growthpoint: 今日成长值藏在 userLevel.extJson(JSON 字符串) 里
+    #[test]
+    fn vip_growth_reads_today_score_from_ext_json() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "levelCard": {"level": 3, "levelName": "黑胶·叁"},
+                "userLevel": {
+                    "level": 3,
+                    "levelName": "黑胶·叁",
+                    "growthPoint": 2195,
+                    "maxLevel": false,
+                    "extJson": "{\"yearMonth\":\"202610\",\"todayScore\":6,\"totalScore\":0}"
+                }
+            }
+        });
+        let g = parse_vip_growth(&body).expect("growth");
+        assert_eq!(g.level, 3);
+        assert_eq!(g.level_name, "黑胶·叁");
+        assert_eq!(g.growth_point, 2195);
+        assert_eq!(g.today_score, 6);
+        assert!(!g.max_level);
+
+        // extJson 坏掉时不能 panic, 今日成长值退 0
+        let broken = json!({"data": {"userLevel": {"growthPoint": 1, "extJson": "not-json"}}});
+        let g = parse_vip_growth(&broken).expect("growth");
+        assert_eq!(g.today_score, 0);
+    }
+
+    /// vip_sign_info: 只回最近 7 天, score > 0 才算已签(recordId/time 未签时也是 0)
+    #[test]
+    fn vip_sign_uses_score_not_record_id() {
+        let body = json!({
+            "code": 200,
+            "data": [
+                {"timeStr": "2026-11-05", "today": false, "score": 0, "recordId": 0, "time": 0},
+                {"timeStr": "2026-11-06", "today": false, "score": 3, "recordId": 0, "time": 0},
+                {"timeStr": "2026-11-07", "today": true, "score": 3, "recordId": 0, "time": 0}
+            ]
+        });
+        let s = parse_vip_sign(&body);
+        assert_eq!(s.days.len(), 3);
+        assert_eq!(s.week_signed, 2);
+        assert!(s.days[0].signed == false);
+        assert!(s.days[1].signed);
+        assert!(s.signed_today);
+        assert!(s.days[2].today);
+
+        let empty = json!({"code": 200, "data": []});
+        let s = parse_vip_sign(&empty);
+        assert!(s.days.is_empty());
+        assert!(!s.signed_today);
+        assert_eq!(s.week_signed, 0);
+    }
+
+    /// vip_tasks: name 空回退 action; targets=null 时 target=0(不显示进度条); status=2 算完成
+    #[test]
+    fn vip_tasks_flatten_and_fallback_title() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "taskScore": 7,
+                "taskList": [
+                    {"seqName": "个性化任务", "taskItems": [
+                        {"action": "浏览黑胶时光机", "name": "", "description": "成长值+3",
+                         "growthPoint": 3, "currentProgress": 0, "targets": null,
+                         "showProgress": true, "status": 0,
+                         "url": "https://music.163.com/prime/m/viptimemachine"},
+                        {"action": "听歌 60 分钟", "name": "每日听歌", "description": "成长值+2",
+                         "growthPoint": 2, "currentProgress": 60, "targets": 60,
+                         "showProgress": true, "status": 0},
+                        {"action": "已完成的任务", "name": "", "description": "云贝+10",
+                         "growthPoint": 0, "currentProgress": 0, "targets": null,
+                         "showProgress": false, "status": 2}
+                    ]}
+                ]
+            }
+        });
+        let (tasks, score) = parse_vip_tasks(&body);
+        assert_eq!(score, 7);
+        assert_eq!(tasks.len(), 3);
+        assert_eq!(tasks[0].title, "浏览黑胶时光机");
+        assert_eq!(tasks[0].reward, "成长值+3");
+        assert_eq!(tasks[0].target, 0);
+        assert!(!tasks[0].done);
+        assert!(tasks[0].url.is_some());
+        assert_eq!(tasks[1].title, "每日听歌");
+        assert_eq!(tasks[1].target, 60);
+        assert!(tasks[1].done);
+        assert!(tasks[2].done);
+        assert!(!tasks[2].show_progress);
+    }
+
+    /// 未登录时 vip_overview 不该报鉴权错误, 而是 logged_in=false 的空态
+    #[tokio::test]
+    async fn vip_overview_anonymous_is_empty_state() {
+        let provider = NeteaseProvider::new(Session::default());
+        let o = provider.vip_overview().await.expect("anonymous ok");
+        assert!(!o.logged_in);
+        assert!(o.membership.is_none());
+        assert!(o.tasks.is_empty());
+    }
 
     /// 最近播放三类共用的外层形状: data.list[].data
     #[test]

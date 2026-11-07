@@ -2090,6 +2090,119 @@ pub fn my_uid() -> Result<u64, String> {
     Ok(guard.session.profile.as_ref().map(|p| p.user_id).unwrap_or(0))
 }
 
+/// 黑胶会员等级
+pub struct VipMembershipDto {
+    pub level: u32,
+    pub red_vip_level: u32,
+    pub expire_time_ms: u64,
+    /// 到期时间晚于服务端 now 才算会员(过期后 vipLevel 仍是旧值, 别拿它判断)
+    pub is_vip: bool,
+    /// 年费剩余月数, 负数 = 未知
+    pub annual_count: i32,
+}
+
+/// 黑胶成长值 / 等级卡
+pub struct VipGrowthDto {
+    pub level: u32,
+    pub level_name: String,
+    pub growth_point: i64,
+    pub today_score: i64,
+    pub max_level: bool,
+}
+
+/// 某一天的签到状态(接口只回最近 7 天)
+pub struct VipSignDayDto {
+    /// yyyy-MM-dd
+    pub date: String,
+    /// score > 0 才算已签
+    pub signed: bool,
+    pub today: bool,
+    pub score: u32,
+}
+
+/// 黑胶签到概览(本周维度)
+pub struct VipSignDto {
+    pub days: Vec<VipSignDayDto>,
+    pub signed_today: bool,
+    pub week_signed: u32,
+}
+
+/// 黑胶任务
+pub struct VipTaskDto {
+    pub title: String,
+    pub reward: String,
+    pub growth_point: i32,
+    pub progress: i64,
+    /// 0 = 没有可量化目标(不显示进度条)
+    pub target: i64,
+    pub done: bool,
+    pub show_progress: bool,
+    pub url: Option<String>,
+}
+
+/// 黑胶会员总览(只读)
+pub struct VipOverviewDto {
+    pub logged_in: bool,
+    pub membership: Option<VipMembershipDto>,
+    pub growth: Option<VipGrowthDto>,
+    pub sign: Option<VipSignDto>,
+    pub tasks: Vec<VipTaskDto>,
+    pub task_score: i64,
+}
+
+/// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
+/// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
+pub async fn vip_overview() -> Result<VipOverviewDto, String> {
+    let provider = with_provider(Capability::Vip)?;
+    let o = provider.vip_overview().await.map_err(|e| e.to_string())?;
+    Ok(VipOverviewDto {
+        logged_in: o.logged_in,
+        membership: o.membership.map(|m| VipMembershipDto {
+            level: m.level,
+            red_vip_level: m.red_vip_level,
+            expire_time_ms: m.expire_time_ms,
+            is_vip: m.is_vip,
+            annual_count: m.annual_count,
+        }),
+        growth: o.growth.map(|g| VipGrowthDto {
+            level: g.level,
+            level_name: g.level_name,
+            growth_point: g.growth_point,
+            today_score: g.today_score,
+            max_level: g.max_level,
+        }),
+        sign: o.sign.map(|s| VipSignDto {
+            days: s
+                .days
+                .into_iter()
+                .map(|d| VipSignDayDto {
+                    date: d.date,
+                    signed: d.signed,
+                    today: d.today,
+                    score: d.score,
+                })
+                .collect(),
+            signed_today: s.signed_today,
+            week_signed: s.week_signed,
+        }),
+        tasks: o
+            .tasks
+            .into_iter()
+            .map(|t| VipTaskDto {
+                title: t.title,
+                reward: t.reward,
+                growth_point: t.growth_point,
+                progress: t.progress,
+                target: t.target,
+                done: t.done,
+                show_progress: t.show_progress,
+                url: t.url,
+            })
+            .collect(),
+        task_score: o.task_score,
+    })
+}
+
 fn style_tag_dto(tag: ncm_domain::StyleTag) -> StyleTagDto {
     StyleTagDto {
         id: tag.id,

@@ -448,6 +448,62 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "vip" => {
+            // 黑胶会员只读总览: 等级/成长值/本周签到/任务
+            announce(&core);
+            let p = provider(&core, Capability::Vip)?;
+            let o = p.vip_overview().await?;
+            if !o.logged_in {
+                println!("未登录: 会员只读页会给登录入口");
+                return Ok(());
+            }
+            match &o.membership {
+                Some(m) => println!(
+                    "黑胶: is_vip={} level={} red_level={} 到期={}",
+                    m.is_vip,
+                    m.level,
+                    m.red_vip_level,
+                    fmt_date(m.expire_time_ms)
+                ),
+                None => println!("黑胶: (vip_info 拉取失败)"),
+            }
+            if let Some(g) = &o.growth {
+                println!(
+                    "成长值: {} 今日 +{} 等级={} ({})",
+                    g.growth_point, g.today_score, g.level, g.level_name
+                );
+            }
+            if let Some(s) = &o.sign {
+                println!(
+                    "签到: 本周 {}/{} 天 今日已签={}",
+                    s.week_signed,
+                    s.days.len(),
+                    s.signed_today
+                );
+                for d in &s.days {
+                    println!(
+                        "  {} {}{}",
+                        d.date,
+                        if d.signed { "已签" } else { "-" },
+                        if d.today { " (今天)" } else { "" }
+                    );
+                }
+            }
+            println!("任务: {} 项 任务分={}", o.tasks.len(), o.task_score);
+            for t in &o.tasks {
+                println!(
+                    "  [{}] {} {}",
+                    if t.done { "x" } else { " " },
+                    t.title,
+                    if t.target > 0 {
+                        format!("{}/{}", t.progress, t.target)
+                    } else {
+                        t.reward.clone()
+                    }
+                );
+            }
+            Ok(())
+        }
         "signin" => {
             // ncm signin          -> 只看状态
             // ncm signin --do     -> 真签到
@@ -992,6 +1048,11 @@ async fn run() -> Result<(), BoxErr> {
                 "comment_info_list" => client.comment_info_list(&q).await?,
                 "lyric_new" => client.lyric_new(&q).await?,
                 "vip_sign_info" => client.vip_sign_info(&q).await?,
+                "vip_info_v2" => client.vip_info_v2(&q).await?,
+                "vip_info" => client.vip_info(&q).await?,
+                "vip_tasks" => client.vip_tasks(&q).await?,
+                "sign_happy_info" => client.sign_happy_info(&q).await?,
+                "vip_growthpoint" => client.vip_growthpoint(&q).await?,
                 "msg_private" => client.msg_private(&q).await?,
                 "msg_private_history" => client.msg_private_history(&q).await?,
                 "msg_notices" => client.msg_notices(&q).await?,
@@ -1004,10 +1065,29 @@ async fn run() -> Result<(), BoxErr> {
             Ok(())
         }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | raw"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | vip | raw"
         )
         .into()),
     }
+}
+
+/// 毫秒时间戳 -> yyyy-MM-dd(本地时区, 简易 civil_from_days; 0 显示 "-")
+fn fmt_date(ms: u64) -> String {
+    if ms == 0 {
+        return "-".to_string();
+    }
+    let days = (ms / 1000) as i64 / 86_400;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 fn whoami(core: &Core) -> Result<(), BoxErr> {

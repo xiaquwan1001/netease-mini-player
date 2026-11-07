@@ -297,3 +297,19 @@ API/protocol details and anti-bot technique live in the
 - 新批开工前先在本文件 §3 查并行矩阵, 收口一律由编排者重跑 `tools/ci.sh` 与模拟器走查。
 
 <!-- created=2026-11-07, last=2026-11-07 -->
+## 黑胶会员只读(vip_info_v2/vip_growthpoint/vip_sign_info/vip_tasks)(2026-11-07)
+
+- 会员判定只能看 `associator.expireTime > data.now`; `vipCode`/`vipLevel`/`redVipLevel` 在过期后仍是旧值。
+  `redVipAnnualCount = -1` 表示未知/非年费, 别当 0 显示。
+- `vip_growthpoint` 的今日成长值在 `userLevel.extJson`(JSON **字符串**)的 `todayScore`; 成长值本体是 `userLevel.growthPoint`,
+  等级名优先 `levelCard.levelName`(空则 `userLevel.levelName`), 形如 "黑胶·叁"。
+- `vip_sign_info` 返回 `data` 为**最近 7 天数组**(不是月份/累计), 每项 `{timeStr,today,score,recordId,time,...}`;
+  **`score > 0` 才算已签** —— 未签那天的 `recordId`/`time` 也是 0, 拿它们判断会把整周都判成已签。
+- `vip_tasks` 的 `taskList[].taskItems[]` 要平铺; `name` 实测为空串, 可读标题在 `action`, 奖励文案在 `description`;
+  `targets: null` = 无可量化目标(不显示进度条), 非 null 形状未实测(兼容数字/数组); `status == 2` 视为已完成。
+- `vip_info`(旧版)比 `vip_info_v2` 多 `redplus`/`familyVip`, 但缺 `now` 字段, 会员判定要本机时间 → 统一用 v2。
+- 四个子接口互相独立: provider 用 `futures::future::join4` 并行, 单个失败只让对应字段为 None(全部失败才报错);
+  未登录直接回 `logged_in=false` 空态, **不要**抛 auth 错误(否则 UI 走错误页而不是"登录后可查看")。
+
+<!-- created=2026-11-07, last=2026-11-07 -->
+

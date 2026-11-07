@@ -30,6 +30,7 @@ import 'src/settings_view.dart';
 import 'src/song_actions.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
+import 'src/vip_page.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -773,6 +774,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ---------------- 登录 ----------------
+
+  /// 设置页 -> 黑胶会员(只读)页面; 未登录时页面内给「登录」入口
+  Future<void> _openVip() => showVipPage(context, onLogin: _login);
 
   Future<void> _login() async {
     try {
@@ -1726,6 +1730,7 @@ class _HomePageState extends State<HomePage> {
           onLogout: () => _logout(),
           onShowAccounts: _showAccountSheet,
           onClearSearchHistory: _clearSearchHistory,
+          onOpenVip: _openVip,
         );
       default:
         return _buildSearchTab();

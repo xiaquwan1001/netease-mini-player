@@ -1,9 +1,29 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-07(接口覆盖推进到 90/382: 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾(歌词纯文本兜底/播客详情刷新/资料卡关注数); 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-07(接口覆盖推进到 94/382: 黑胶会员只读 B3(会员卡/成长值/本周签到/任务 + 设置页入口) + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 黑胶会员只读 B3(2026-11-07)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 会员卡 | ✅ | `vip_info_v2` + `vip_growthpoint`: 黑胶·叁 / 成长值 2195 / 今日 +6 / 到期 2026-11-10; `is_vip` 只认 `associator.expireTime > now`(过期账号 vipLevel 仍是旧值) |
+| 本周签到 | ✅ | `vip_sign_info` 只回最近 7 天且 `score > 0` 才算已签(未签那天的 recordId/time 也是 0); 实测"本周已签 1/7 天 · 今日已签" |
+| 任务 | ✅ | `vip_tasks` 的 `taskList[].taskItems[]` 平铺; `name` 常为空串→回退 `action`; `targets=null` 不渲染进度条, 只显示状态 |
+| 入口 | ✅ | 设置页新增「会员 / 黑胶会员」卡片 → `VipPage`; 未登录走"登录后可查看会员信息 + 登录"空态, 不报鉴权错 |
+| 数据聚合 | ✅ | provider 一次 `vip_overview`(4 个子接口并行 join4), 单个子接口失败只让对应字段为 None; 全部失败才返回错误 |
+| CLI | ✅ | `ncm vip`: 等级/成长值/本周签到/任务一次打印(headless 可复现) |
+| 回归 | ✅ | Rust `ncm-service` 60→65 单测全绿; `flutter analyze` 0 error; Flutter 152 用例全绿(vip_page 7 例 + vip_mapping 4 例); codegen 一次 + `cargo build -p ncm_ffi`; `tools/ci.sh` → CI OK; a36 走查: 登录态(资料卡/签到条/任务条)与未登录空态均正常 |
+
+**协议/实现事实**:
+- `vip_info_v2`(`/api/music-vip-membership/client/vip/info`) 的会员判定必须用 `associator.expireTime > data.now`;
+  `vipCode`/`vipLevel` 在过期后仍是旧值。`redVipAnnualCount = -1` 表示未知/非年费。
+- `vip_growthpoint` 的今日成长值在 `userLevel.extJson` 这个 **JSON 字符串**里(`todayScore`), 不是对象字段。
+- `vip_sign_info`(`/api/vip/sign` 系)返回的是**最近 7 天数组**, 没有"本月/累计"维度; UI 只能显示"本周 X/7 天"。
+- `vip_tasks` 的 `taskItems[].name` 实测为空串, 可读标题在 `action`; `targets` 非 null 的形状未实测(兼容 数字/数组)。
+- `tools/ci.sh` 里 vendor 匿名联网 smoke(search/toplist)本轮随机挂 2 例, 属已知上游风控抖动; workspace 单测/analyze/flutter test/双端构建全绿。
 
 ## v2 · 功能包: 消息增强 @我/最近联系人/私信分页(2026-11-07 深夜)
 

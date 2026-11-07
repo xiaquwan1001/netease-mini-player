@@ -14,6 +14,7 @@ class SettingsView extends StatelessWidget {
     required this.onLogout,
     required this.onShowAccounts,
     required this.onClearSearchHistory,
+    this.onOpenVip,
   });
 
   final rust.InitInfo? info;
@@ -22,6 +23,9 @@ class SettingsView extends StatelessWidget {
   final Future<void> Function() onLogout;
   final VoidCallback onShowAccounts;
   final VoidCallback onClearSearchHistory;
+
+  /// 打开黑胶会员页(不传则不显示入口)
+  final VoidCallback? onOpenVip;
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +43,20 @@ class SettingsView extends StatelessWidget {
             onLogout: onLogout,
             onShowAccounts: onShowAccounts,
           ),
+          if (onOpenVip != null) ...[
+            const SizedBox(height: 16),
+            _SectionTitle('会员'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.workspace_premium_outlined),
+                title: const Text('黑胶会员'),
+                subtitle: const Text('签到/任务/成长值(只读)'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onOpenVip,
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           _SectionTitle('界面'),
           Card(
