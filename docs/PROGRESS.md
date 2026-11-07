@@ -41,6 +41,15 @@
 **结构事实校正**: 底栏实际是 **5 栏**(搜索/推荐/关注/我的/**设置**), 不是 README 长期写的 4 栏 —— 已在 README/AGENTS 校准。
 Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
 
+### 第二波已落地批次(2026-11-09, 4 条车道并行 + 编排者独立复核)
+
+| 批次 | 结果 | 关键证据 |
+|---|---|---|
+| **D1+D2+D5** FFI 清理 | ✅ | 删死导出 `search`/`lyric_lines`(+ `SearchResultDto`): 导出 **125→123**、**「UI 没有入口」3→0**; 新增 `ffi_forward!` 宏(直转/`map`/`map_each` 三分支)收敛 **22** 个转发封装, `api.rs` 净 **−80 行**; release `.so` 14,157,856→**14,068,144**(strip 8,918,104→**8,880,312**) |
+| **D6** 列表三态抽象 | ✅ | 新 `paged_list_view.dart`(`loader(cursor)` 注入 + `PagedPage{items,hasMore,nextCursor}` + `keyOf` 去重 + grid/list 双模式 + 加载更多失败保旧数据), 迁移 **4 页**(user_list/messages 私信/playlist_square/ranking_view), 新增 8 用例 |
+| **A** UI 速修 | ✅ | `HomeBackAction` 纯函数 + `HomeBackGuard(PopScope)`(优先级: 歌词>非首 tab>歌单浏览>交还系统); `formatSongDuration`(245s→04:05); 红心改可点 `IconButton`; 6 类高频控件提到 **48dp**; 出口文案统一「全部」; 新增 **22** 用例(含 7 条 `handlePopRoute()` 驱动的三级返回键测试) |
+| 收口门(编排者重跑) | ✅ | 全量 `flutter test` **264 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→265 只增不减**(改写 2 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部); `dart analyze` **error/warning = 0**(32 条 info 为既有 lint); `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
+
 ## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)
 
 | 能力 | 状态 | 证据 |

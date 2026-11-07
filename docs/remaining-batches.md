@@ -191,9 +191,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 序 | 批次 | 内容 | 触碰面 | 前提 |
 |---|---|---|---|---|
 | 1 | ~~**P1+P2 vendor 裁剪**~~ ✅ **已完成**(2026-11-09) | 删 264 个未接 endpoint + `api/mod.rs` 清单 + tokio 移除 + 死特性 `server` 删除; 382→118/12k→4.1k 行/冷编 1.40→0.65 s/119 测试全绿 | `core/vendor` | 见 `docs/backend-prune.md` |
-| 2 | **D1+D2 删死导出** | 删 FFI `search`(`api.rs:160`)/`lyric_lines`(`api.rs:607`) | `ncm-ffi` → **必须跑一次 codegen** | 排 1 之后(避 codegen 冲突) |
-| 3 | **D5 转发宏** | ~20 个纯转发 FFI 封装收敛为宏 | `ncm-ffi` + codegen | 与 2 合并成一批做 |
-| 4 | **D6 PagedListView** | 抽"分页+空态+错误重试"公共列表组件(空态文案现手写 31 处; `net_retry.dart` 已被 27 文件复用) | 纯 Dart 车道, 可并行 | 与 2/3 不同文件, 可同波 |
+| 2+3 | ~~**D1+D2 删死导出 + D5 转发宏**~~ ✅ **已完成**(2026-11-09) | 导出 125→123、「UI 无入口」3→0; `ffi_forward!` 宏收敛 22 封装, 净 −80 行 | `ncm-ffi` + codegen(已用一次) | 见 `docs/ffi-cleanup-d1d2d5.md` |
+| 4 | ~~**D6 PagedListView**~~ ✅ **已完成**(2026-11-09) | 新组件 + 迁移 4 页(仍可迁: new_release/all_charts/radio_explore/digital_album/style) | 纯 Dart | 见 `docs/ui-batch-d6.md` |
 | 5 | **D7 frb 透传 domain** | 删 74 个 Dto struct(`api.rs`)≈646 行 + 内联转换 ~400 行 | `ncm-domain`(加 frb 注解)+ `ncm-ffi` + Dart | **需用户决策**; 收益最大(~1400–1800 行合计)但跨 crate 契约变动 + 双端全量回归 |
 | — | ~~方案 c: 换 `netease-music`~~ | ⛔ 已裁决不切 | — | 见 `docs/backend-service-options.md` §6 门槛 |
 
@@ -224,7 +223,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 | 批次 | 内容 | 对应条目 | 成本 | 并行性 |
 |---|---|---|---|---|
-| **A · S 速修** | 返回键语义(0→`PopScope`)、`SongTile` 三修(时长格式/红心可点/触控 ≥48dp)、搜索页去掉冗余「取消」、统一「全部」入口文案、三处 <48dp 组件 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | **S, 约 1 天** | 只碰 `main.dart`/`song_tile.dart`/`search_landing.dart`/`recommend_view.dart`, 与 B/C 冲突小 |
+| ~~**A · S 速修**~~ ✅ **已完成**(2026-11-09) | 返回键 `PopScope` 三级语义 + `formatSongDuration` + 红心可点 + 6 类控件 48dp + 出口文案统一「全部」; 新增 22 用例 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | ~~S~~ 已做 | 见 `docs/ui-batch-a.md` |
 | **B · 两个新面板** | 评论输入框(含 `viewInsets` 键盘避让 + 发送/失败重试)、播放队列面板(先给 `queue.dart` 补 `removeAt` 等 + 单测, 再接 UI) | P0-7.2 / P0-7.3 | M | 独立文件为主, 但与 A 同碰 `main.dart` ⇒ **错序执行** |
 | **C · 信息架构重排** | 设置瘦身(账号/会员/诊断拆到二级页)、账号入口 3→1、推荐页 8→5 个平级模块、专辑详情 Dialog→全页、日推/最近听过 sheet→全页 | P1-7.5/7.8/7.9/7.10/7.11/7.14 | M(需人工过视觉) | 跨 5 文件, **单独一条车道** |
 | **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` ~300 行死代码、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
