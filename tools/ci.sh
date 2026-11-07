@@ -10,7 +10,8 @@ if [ "${NCM_KEEP_PROXY:-0}" != "1" ]; then
   unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
 fi
 echo "== rust tests (本地: domain/provider/service/ffi/cli)"
-# vendor(ncm-api-rs) 的 tests/integration.rs 是 8 例**匿名真实联网 smoke**,
+# vendor(ncm-api-rs) 的 tests/integration.rs 是 4 例**匿名真实联网 smoke**(P1 裁剪前 8 例,
+    # 4 例打在已删的未接入 endpoint 上, 随模块一起删),
 # 高频繁跑会被上游风控/公网抖动弹回非 200, 与本次改动无关(2026-11-07 实测:
 # 同一轮内不同用例随机挂)。所以它单独作为"允许抖动"的 smoke, 不阻塞收口;
 # 需要严格核验公网链路时用 NCM_VENDOR_SMOKE_STRICT=1 跑。

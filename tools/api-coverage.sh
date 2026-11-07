@@ -11,7 +11,8 @@ SERVICE = "core/crates/ncm-service/src/netease.rs"
 FFI = "core/crates/ncm-ffi/src/api.rs"
 UI = "ui/lib"
 
-all_endpoints = sorted(f[:-3] for f in os.listdir(VENDOR) if f.endswith(".rs"))
+# mod.rs 是模块清单本身, 不是 endpoint, 不计入统计
+all_endpoints = sorted(f[:-3] for f in os.listdir(VENDOR) if f.endswith(".rs") and f != "mod.rs")
 src = open(SERVICE).read()
 # 跨行也认: client \n  .method(
 used = sorted(set(re.findall(r"client\s*\.\s*([a-z0-9_]+)\s*\(", src)))
@@ -27,7 +28,10 @@ ui_text = "".join(
     p.read_text() for p in __import__("pathlib").Path(UI).rglob("*.dart")
     if "/src/rust/" not in str(p)
 )
-no_ui = [f for f in ffi if not re.search(r"rust\." + camel(f) + r"\b", ui_text)]
+# 大小写不敏感匹配: frb 生成名不总是严格 camelCase(实测 lyric_lines_i18n -> lyricLinesI18N,
+# 大写 N), 按 camel 精确匹配会把它误判成"无 UI 入口"。这里统一小写化后比对标识符集合。
+ui_idents = {m.lower() for m in re.findall(r"rust\.([A-Za-z0-9_]+)", ui_text)}
+no_ui = [f for f in ffi if camel(f).lower() not in ui_idents]
 
 print(f"vendor endpoint 模块 : {len(all_endpoints)}")
 print(f"service 已调用        : {len(used)}  ({len(used) * 100 // max(len(all_endpoints), 1)}%)")

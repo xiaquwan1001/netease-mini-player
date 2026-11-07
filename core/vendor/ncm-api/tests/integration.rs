@@ -4,17 +4,6 @@
 use ncm_api_rs::{create_client, Query};
 
 #[tokio::test]
-async fn test_banner() {
-    let client = create_client(None);
-    let query = Query::new();
-    let result = client.banner(&query).await;
-    assert!(result.is_ok());
-    let resp = result.unwrap();
-    assert_eq!(resp.status, 200);
-    assert!(resp.body.get("banners").is_some());
-}
-
-#[tokio::test]
 async fn test_search() {
     let client = create_client(None);
     let query = Query::new()
@@ -51,17 +40,6 @@ async fn test_song_detail_multiple_ids() {
 }
 
 #[tokio::test]
-async fn test_toplist() {
-    let client = create_client(None);
-    let query = Query::new();
-    let result = client.toplist(&query).await;
-    assert!(result.is_ok());
-    let resp = result.unwrap();
-    assert_eq!(resp.status, 200);
-    assert!(resp.body.get("list").is_some());
-}
-
-#[tokio::test]
 async fn test_search_hot_detail() {
     let client = create_client(None);
     let query = Query::new();
@@ -71,21 +49,3 @@ async fn test_search_hot_detail() {
     assert_eq!(resp.status, 200);
 }
 
-#[tokio::test]
-async fn test_login_status_without_cookie() {
-    let client = create_client(None);
-    let query = Query::new();
-    // 未登录应该正常返回（不会报错）
-    let result = client.login_status(&query).await;
-    assert!(result.is_ok());
-}
-
-#[tokio::test]
-async fn test_countries_code_list() {
-    let client = create_client(None);
-    let query = Query::new();
-    let result = client.countries_code_list(&query).await;
-    assert!(result.is_ok());
-    let resp = result.unwrap();
-    assert_eq!(resp.status, 200);
-}
