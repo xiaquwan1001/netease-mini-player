@@ -7,7 +7,7 @@ use ncm_domain::{
     DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
     HotSearchDetailItem, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
-    SearchExact,
+    SearchExact, ToplistCatalogGroup, ToplistCatalogItem,
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     WordLyric,
@@ -1267,6 +1267,19 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 榜单 v2 目录(toplist_detail_v2): 按 categoryCode 分组的榜单卡.
+    /// 实测没有 v1 的 trackUpdateTime 数字字段; "更新 N 首"混在 updateFrequency 字符串里,
+    /// 增强点是按 categoryCode 分组 + canPlay(个别卡 id=0 且不可播).
+    fn toplist_catalog(&self) -> BoxFuture<'_, ProviderResult<Vec<ToplistCatalogGroup>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.toplist_detail_v2(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_toplist_catalog(&resp.body))
+        })
+    }
+
     /// 歌单分类: 响应形如 {code, categories:{0:"语种",...}, sub:[{category:0,name:"华语"},...]}
     fn playlist_categories(&self) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
         Box::pin(async move {
@@ -1629,6 +1642,19 @@ impl Provider for NeteaseProvider {
             let resp = client.album_new(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_album_items(&resp.body))
+        })
+    }
+
+    /// 最新专辑(album_newest): 与 album_new 不同源, 实测固定 12 张, 无 total, 不翻页.
+    fn newest_albums(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua);
+            let resp = client.album_newest(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let mut out = parse_album_items(&resp.body);
+            out.truncate(limit as usize);
+            Ok(out)
         })
     }
 
@@ -2459,6 +2485,9 @@ impl Provider for NeteaseProvider {
                 "playlist" => client.comment_playlist(&q).await,
                 "album" => client.comment_album(&q).await,
                 "podcast" => client.comment_dj(&q).await,
+                // MV(R_MV_5_) / 视频(R_VI_62_)评论区: 形状与歌曲评论一致, 复用 parse_comments
+                "mv" => client.comment_mv(&q).await,
+                "video" => client.comment_video(&q).await,
                 other => {
                     return Err(ProviderError::unsupported(format!(
                         "comments: 未知资源类型 {other} (应为 song|playlist|album|podcast)"
@@ -2693,6 +2722,7 @@ impl Provider for NeteaseProvider {
         &'a self,
         radio_id: u64,
         limit: u32,
+        time_ms: Option<u64>,
     ) -> BoxFuture<'a, ProviderResult<RadioSubscriberPage>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
@@ -2702,7 +2732,8 @@ impl Provider for NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua)
                 .param("id", &radio_id.to_string())
                 .param("limit", &limit.to_string())
-                .param("time", "-1")
+                // 游标是"上一页最后一条的 subscribeTime"(ms), 首页传 -1
+                .param("time", &time_ms.map(|t| t.to_string()).unwrap_or_else(|| "-1".to_string()))
                 .param("total", "true");
             let resp = client.dj_subscriber(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
@@ -4140,6 +4171,47 @@ pub fn parse_charts(body: &Value) -> Vec<ChartSummary> {
         .unwrap_or_default()
 }
 
+/// 榜单 v2 目录: {code, data:[{categoryCode, list:[{id,name,coverUrl,updateFrequency,
+///                targetType,canPlay}]}]}. data 缺失/为空都返回空目录.
+pub fn parse_toplist_catalog(body: &Value) -> Vec<ToplistCatalogGroup> {
+    body.get("data")
+        .and_then(Value::as_array)
+        .map(|groups| {
+            groups
+                .iter()
+                .map(|g| ToplistCatalogGroup {
+                    code: str_of(g, "categoryCode").unwrap_or_default(),
+                    items: g
+                        .get("list")
+                        .and_then(Value::as_array)
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| {
+                                    let id = u64_of(v, "id")?;
+                                    let name = str_of(v, "name")?;
+                                    if name.is_empty() {
+                                        return None;
+                                    }
+                                    Some(ToplistCatalogItem {
+                                        id,
+                                        name,
+                                        cover_url: str_of(v, "coverUrl")
+                                            .filter(|s| s.starts_with("http")),
+                                        update_frequency: str_of(v, "updateFrequency")
+                                            .unwrap_or_default(),
+                                        target_type: str_of(v, "targetType").unwrap_or_default(),
+                                        can_play: v.get("canPlay").and_then(Value::as_bool).unwrap_or(false),
+                                    })
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// 歌单分类: {code, categories:{0:"语种",1:"风格",...}, sub:[{category:0,name:"华语"},...]}
 /// 结果按 categories 的 key 顺序给出, 同一一级分类下的子分类按接口顺序.
 pub fn parse_playlist_categories(body: &Value) -> Vec<PlaylistCategory> {
@@ -5056,6 +5128,99 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// album_newest: 2026-11-09 实测形状(顶层 albums, 固定 12 张, 专辑对象同 album_new).
+    #[test]
+    fn album_newest_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "albums": [{
+                "id": 404764114u64,
+                "name": "Love Me Later 巡回演唱会LIVE TRACKS",
+                "picUrl": "https://p4.music.126.net/RT7TwtwTJ8Gw-9qaltqjkw==/109951174134867745.jpg",
+                "size": 10,
+                "publishTime": 1792598400000u64,
+                "artist": {"id": 12236125u64, "name": "王以太", "picUrl": "https://p4.music.126.net/x.jpg"},
+                "songs": null
+            }]
+        });
+        let albums = parse_album_items(&body);
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].id, 404764114);
+        assert_eq!(albums[0].artist, "王以太");
+        assert_eq!(albums[0].track_count, 10);
+        assert!(albums[0].cover_url.as_deref().unwrap_or("").starts_with("https://"));
+    }
+
+    /// album_newest: albums 缺失(code!=200 / 接口变更)时给空列表, 不 panic.
+    #[test]
+    fn album_newest_missing_albums_is_empty() {
+        assert!(parse_album_items(&json!({"code": 301})).is_empty());
+        assert!(parse_album_items(&json!({"code": 200, "albums": null})).is_empty());
+    }
+
+    /// toplist_detail_v2: 2026-11-09 实测形状(data[].categoryCode 分组 + list[] 榜单卡;
+    /// 无 trackUpdateTime / "更新 N 首", 元素带 canPlay/targetType).
+    #[test]
+    fn toplist_catalog_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "data": [
+                {"categoryCode": "TOPPING", "displayType": "ONLY_COVER", "list": [
+                    {"id": 5059633707u64, "name": "网易云摇滚榜", "category": "MUSIC_STYLE",
+                     "coverUrl": "https://p3.music.126.net/abc.jpg", "updateFrequency": "每周五更新",
+                     "targetType": "PLAYLIST", "canPlay": true, "tracks": null, "trackRankList": null}
+                ]},
+                {"categoryCode": "GLOBAL", "list": [
+                    {"id": 60131u64, "name": "日本Oricon榜", "coverUrl": "https://p3.music.126.net/def.jpg",
+                     "updateFrequency": "每天更新", "targetType": "PLAYLIST", "canPlay": true}
+                ]}
+            ]
+        });
+        let groups = parse_toplist_catalog(&body);
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].code, "TOPPING");
+        assert_eq!(groups[0].items.len(), 1);
+        let it = &groups[0].items[0];
+        assert_eq!(it.id, 5059633707);
+        assert_eq!(it.name, "网易云摇滚榜");
+        assert_eq!(it.update_frequency, "每周五更新");
+        assert_eq!(it.target_type, "PLAYLIST");
+        assert!(it.can_play);
+        assert_eq!(groups[1].items[0].name, "日本Oricon榜");
+    }
+
+    /// toplist_detail_v2: data 缺失/空数组/空分组都返回空目录.
+    #[test]
+    fn toplist_catalog_missing_data_is_empty() {
+        assert!(parse_toplist_catalog(&json!({"code": 200})).is_empty());
+        assert!(parse_toplist_catalog(&json!({"code": 200, "data": []})).is_empty());
+        let groups = parse_toplist_catalog(&json!({"code": 200, "data": [{"categoryCode": "X"}]}));
+        assert_eq!(groups.len(), 1);
+        assert!(groups[0].items.is_empty());
+    }
+
+    /// MV/视频评论: /api/v1/resource/comments/R_MV_5_|R_VI_62_ 与歌曲评论同形,
+    /// parse_comments 直接复用(hotComments + comments + total + more).
+    #[test]
+    fn mv_video_comments_share_comment_page_shape() {
+        let body = json!({
+            "code": 200,
+            "total": 1234u64,
+            "more": true,
+            "hotComments": [{"commentId": 1u64, "content": "神作", "likedCount": 99u64}],
+            "comments": [{"commentId": 2u64, "content": "前排", "likedCount": 1u64}]
+        });
+        let page = parse_comments(&body).expect("parse ok");
+        assert_eq!(page.total, 1234);
+        assert!(page.has_more);
+        assert_eq!(page.comments.len(), 2);
+        assert!(page.comments[0].hot);
+        assert!(!page.comments[1].hot);
+        // kind → threadId 前缀映射早已存在
+        assert_eq!(thread_id_for("mv", 5436712).as_deref(), Some("R_MV_5_5436712"));
+        assert_eq!(thread_id_for("video", 144634).as_deref(), Some("R_VI_62_144634"));
+    }
 
     /// digitalAlbum/purchased: 2026-11-09 实测形状(顶层 paidAlbums + total, 封面叫 cover)
     #[test]

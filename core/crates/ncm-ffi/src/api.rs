@@ -1527,10 +1527,14 @@ pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, String> {
 }
 
 /// 电台订阅者列表(只读).
-pub async fn radio_subscribers(radio_id: u64, limit: u32) -> Result<RadioSubscriberPageDto, String> {
+pub async fn radio_subscribers(
+    radio_id: u64,
+    limit: u32,
+    time_ms: Option<u64>,
+) -> Result<RadioSubscriberPageDto, String> {
     let provider = with_provider(Capability::RadioExplore)?;
     let r = provider
-        .radio_subscribers(radio_id, limit)
+        .radio_subscribers(radio_id, limit, time_ms)
         .await
         .map_err(|e| e.to_string())?;
     Ok(RadioSubscriberPageDto {
@@ -1879,6 +1883,64 @@ pub async fn chart_list() -> Result<Vec<ChartSummaryDto>, String> {
             update_frequency: c.update_frequency,
             track_count: c.track_count,
             play_count: c.play_count,
+        })
+        .collect())
+}
+
+/// 榜单 v2 目录里的一张榜单卡
+pub struct ToplistCatalogItemDto {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    /// "每周五更新"
+    pub update_frequency: String,
+    /// 实测恒 "PLAYLIST"
+    pub target_type: String,
+    pub can_play: bool,
+}
+
+/// 榜单 v2 目录的一个分组(categoryCode)
+pub struct ToplistCatalogGroupDto {
+    pub code: String,
+    pub items: Vec<ToplistCatalogItemDto>,
+}
+
+/// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItemDto
+pub async fn newest_albums(limit: u32) -> Result<Vec<AlbumItemDto>, String> {
+    let provider = with_provider(Capability::NewRelease)?;
+    let list = provider.newest_albums(limit).await.map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|a| AlbumItemDto {
+            id: a.id,
+            name: a.name,
+            cover_url: a.cover_url,
+            artist: a.artist,
+            track_count: a.track_count,
+        })
+        .collect())
+}
+
+/// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
+pub async fn toplist_catalog() -> Result<Vec<ToplistCatalogGroupDto>, String> {
+    let provider = with_provider(Capability::Chart)?;
+    let groups = provider.toplist_catalog().await.map_err(|e| e.to_string())?;
+    Ok(groups
+        .into_iter()
+        .map(|g| ToplistCatalogGroupDto {
+            code: g.code,
+            items: g
+                .items
+                .into_iter()
+                .map(|it| ToplistCatalogItemDto {
+                    id: it.id,
+                    name: it.name,
+                    cover_url: it.cover_url,
+                    update_frequency: it.update_frequency,
+                    target_type: it.target_type,
+                    can_play: it.can_play,
+                })
+                .collect(),
         })
         .collect())
 }

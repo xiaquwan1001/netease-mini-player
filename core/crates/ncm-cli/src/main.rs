@@ -8,7 +8,9 @@
 //!   ncm yrc <songId>               逐字歌词(前 10 行 + 统计)
 //!   ncm detail <id[,id...]>        打印曲目详情 + privilege(版权/可播性), 排障用
 //!   ncm playlist-detail <id>       歌单详情(标题/创建者/曲目数/评论数)
-//!   ncm comments <song|playlist|album|podcast> <id> [limit]   评论列表(展示前 3 条)
+//!   ncm comments <song|playlist|album|podcast|mv|video> <id> [limit]   评论列表(展示前 3 条)
+//!   ncm album-newest [--limit 12]  最新专辑(album_newest, 固定 12 张)
+//!   ncm toplist-v2                 榜单 v2 目录(按 categoryCode 分组)
 //!   ncm comment-info <song|playlist|album|podcast|mv|video> <id>  评论统计(评论数/分享数/点赞数)
 //!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
@@ -318,12 +320,12 @@ async fn run() -> Result<(), BoxErr> {
             let kind = args
                 .positional
                 .first()
-                .ok_or("usage: ncm comments <song|playlist|album|podcast> <id> [limit]")?
+                .ok_or("usage: ncm comments <song|playlist|album|podcast|mv|video> <id> [limit]")?
                 .clone();
             let id: u64 = args
                 .positional
                 .get(1)
-                .ok_or("usage: ncm comments <song|playlist|album|podcast> <id> [limit]")?
+                .ok_or("usage: ncm comments <song|playlist|album|podcast|mv|video> <id> [limit]")?
                 .parse()?;
             let limit: u32 = args
                 .positional
@@ -694,6 +696,35 @@ async fn run() -> Result<(), BoxErr> {
             println!("deleted = {}", p.delete_comment(&thread, cid).await?);
             Ok(())
         }
+        "album-newest" => {
+            // ncm album-newest [--limit 12]  最新专辑(album_newest, 固定 12 张)
+            let limit: u32 = args
+                .value("--limit")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(12);
+            announce(&core);
+            let p = provider(&core, Capability::NewRelease)?;
+            let list = p.newest_albums(limit).await?;
+            println!("count = {}", list.len());
+            for (i, a) in list.iter().enumerate() {
+                println!("{:>3}. [{}] {} — {} ({} 首)", i + 1, a.id, a.name, a.artist, a.track_count);
+            }
+            Ok(())
+        }
+        "toplist-v2" => {
+            // ncm toplist-v2  榜单 v2 目录(分组 + 榜单卡)
+            announce(&core);
+            let p = provider(&core, Capability::Chart)?;
+            let groups = p.toplist_catalog().await?;
+            println!("groups = {}", groups.len());
+            for g in &groups {
+                println!("[{}] {} 个榜单", g.code, g.items.len());
+                for it in g.items.iter().take(3) {
+                    println!("  [{:>10}] {} ({}, 可播={})", it.id, it.name, it.update_frequency, it.can_play);
+                }
+            }
+            Ok(())
+        }
         "newsongs" | "newalbums" | "topartists" => {
             // ncm newsongs [all|zh|ea|jp|kr] [--limit 20]
             // ncm newalbums [all|zh|ea|jp|kr] [--limit 20]
@@ -952,7 +983,7 @@ async fn run() -> Result<(), BoxErr> {
             let limit: u32 = args.positional.get(1).and_then(|s| s.parse().ok()).unwrap_or(10);
             let p = provider(&core, Capability::RadioExplore)?;
             announce(&core);
-            let page = p.radio_subscribers(id, limit).await?;
+            let page = p.radio_subscribers(id, limit, None).await?;
             println!("has_more = {}  count = {}", page.has_more, page.subscribers.len());
             for s in &page.subscribers {
                 println!("  [{}] {} {}", s.user_id, s.nickname, s.signature);
@@ -1376,6 +1407,8 @@ async fn run() -> Result<(), BoxErr> {
                 "pl_count" => client.pl_count(&q).await?,
                 "comment_hot" => client.comment_hot(&q).await?,
                 "comment_info_list" => client.comment_info_list(&q).await?,
+                "comment_mv" => client.comment_mv(&q).await?,
+                "comment_video" => client.comment_video(&q).await?,
                 "lyric_new" => client.lyric_new(&q).await?,
                 "song_lyrics_mark" => client.song_lyrics_mark(&q).await?,
                 "vip_sign_info" => client.vip_sign_info(&q).await?,

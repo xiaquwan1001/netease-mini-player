@@ -267,6 +267,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<SuggestItemDto> dco_decode_list_suggest_item_dto(dynamic raw);
 
   @protected
+  List<ToplistCatalogGroupDto> dco_decode_list_toplist_catalog_group_dto(
+    dynamic raw,
+  );
+
+  @protected
+  List<ToplistCatalogItemDto> dco_decode_list_toplist_catalog_item_dto(
+    dynamic raw,
+  );
+
+  @protected
   List<UserItemDto> dco_decode_list_user_item_dto(dynamic raw);
 
   @protected
@@ -424,6 +434,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SuggestItemDto dco_decode_suggest_item_dto(dynamic raw);
+
+  @protected
+  ToplistCatalogGroupDto dco_decode_toplist_catalog_group_dto(dynamic raw);
+
+  @protected
+  ToplistCatalogItemDto dco_decode_toplist_catalog_item_dto(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -796,6 +812,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<ToplistCatalogGroupDto> sse_decode_list_toplist_catalog_group_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<ToplistCatalogItemDto> sse_decode_list_toplist_catalog_item_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<UserItemDto> sse_decode_list_user_item_dto(SseDeserializer deserializer);
 
   @protected
@@ -989,6 +1015,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SuggestItemDto sse_decode_suggest_item_dto(SseDeserializer deserializer);
+
+  @protected
+  ToplistCatalogGroupDto sse_decode_toplist_catalog_group_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  ToplistCatalogItemDto sse_decode_toplist_catalog_item_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -1453,6 +1489,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_toplist_catalog_group_dto(
+    List<ToplistCatalogGroupDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_toplist_catalog_item_dto(
+    List<ToplistCatalogItemDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_user_item_dto(
     List<UserItemDto> self,
     SseSerializer serializer,
@@ -1734,6 +1782,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_suggest_item_dto(
     SuggestItemDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_toplist_catalog_group_dto(
+    ToplistCatalogGroupDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_toplist_catalog_item_dto(
+    ToplistCatalogItemDto self,
     SseSerializer serializer,
   );
 

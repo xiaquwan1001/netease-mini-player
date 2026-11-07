@@ -7,7 +7,7 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
-    HotSearchDetailItem, SearchExact,
+    HotSearchDetailItem, SearchExact, ToplistCatalogGroup,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
@@ -595,6 +595,17 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no charts")) })
     }
 
+    /// 最新专辑(album_newest, 实测固定 12 张, 无 total). 能力复用 Capability::NewRelease.
+    fn newest_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no newest albums")) })
+    }
+
+    /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组的榜单卡).
+    /// 能力复用 Capability::Chart.
+    fn toplist_catalog(&self) -> BoxFuture<'_, ProviderResult<Vec<ToplistCatalogGroup>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no toplist catalog")) })
+    }
+
     /// 歌单分类(语种/风格/场景/情感/主题)
     fn playlist_categories(&self) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
         Box::pin(async { Err(ProviderError::unsupported("no playlist categories")) })
@@ -889,10 +900,12 @@ pub trait Provider: Send + Sync {
     }
 
     /// 电台订阅者列表(只读; 订阅/取消订阅等写操作不做).
+    /// 电台订阅者/听众列表. `time_ms` 是**时间游标**(首页传 None, 之后传上一页最后一条的 subscribe_time_ms).
     fn radio_subscribers<'a>(
         &'a self,
         _radio_id: u64,
         _limit: u32,
+        _time_ms: Option<u64>,
     ) -> BoxFuture<'a, ProviderResult<RadioSubscriberPage>> {
         Box::pin(async { Err(ProviderError::unsupported("no radio subscribers")) })
     }

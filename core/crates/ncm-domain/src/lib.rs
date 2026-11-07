@@ -663,6 +663,36 @@ pub struct ChartSummary {
     pub play_count: u64,
 }
 
+/// 榜单 v2 目录里的一张榜单卡(toplist_detail_v2 的 data[].list[]).
+/// 实测(2026-11-09): v2 **没有** v1 的 trackUpdateTime/trackNumberUpdateTime 数字字段,
+/// "更新 N 首"只以字符串形式混在 updateFrequency(如 "更新18首"/"刚刚更新");
+/// 增强点是「按 categoryCode 分组 + canPlay + targetType(个别卡 id=0 且不可播)」.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToplistCatalogItem {
+    /// 榜单 id(榜单本身还是歌单, 可喂 playlist_detail)
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// "每周五更新"
+    #[serde(default)]
+    pub update_frequency: String,
+    /// 实测恒 "PLAYLIST"
+    #[serde(default)]
+    pub target_type: String,
+    #[serde(default)]
+    pub can_play: bool,
+}
+
+/// 榜单 v2 目录的一个分组(实测顺序: TOPPING/OFFICIAL/FEATURE/MUSIC_STYLE/GLOBAL/LANGUAGE/MORE)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToplistCatalogGroup {
+    /// 服务端的分组代码(大写英文), 接口不给中文名
+    pub code: String,
+    #[serde(default)]
+    pub items: Vec<ToplistCatalogItem>,
+}
+
 /// 歌单分类: 一级分类(语种/风格/场景/情感/主题) + 其下子分类名
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlaylistCategory {

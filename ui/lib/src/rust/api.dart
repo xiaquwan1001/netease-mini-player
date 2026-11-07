@@ -294,9 +294,11 @@ Future<RadioToplistDto> radioToplist({required String kind}) =>
 Future<RadioSubscriberPageDto> radioSubscribers({
   required BigInt radioId,
   required int limit,
+  BigInt? timeMs,
 }) => RustLib.instance.api.crateApiRadioSubscribers(
   radioId: radioId,
   limit: limit,
+  timeMs: timeMs,
 );
 
 /// 热门搜索榜(按热度排序)
@@ -385,6 +387,14 @@ Future<List<PlaylistDto>> stylePlaylists({
 /// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
 Future<List<ChartSummaryDto>> chartList() =>
     RustLib.instance.api.crateApiChartList();
+
+/// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItemDto
+Future<List<AlbumItemDto>> newestAlbums({required int limit}) =>
+    RustLib.instance.api.crateApiNewestAlbums(limit: limit);
+
+/// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
+Future<List<ToplistCatalogGroupDto>> toplistCatalog() =>
+    RustLib.instance.api.crateApiToplistCatalog();
 
 /// 歌单分类(歌单广场的筛选条)
 Future<List<PlaylistCategoryDto>> playlistCategories() =>
@@ -2985,6 +2995,69 @@ class SuggestItemDto {
           title == other.title &&
           subtitle == other.subtitle &&
           coverUrl == other.coverUrl;
+}
+
+/// 榜单 v2 目录的一个分组(categoryCode)
+class ToplistCatalogGroupDto {
+  final String code;
+  final List<ToplistCatalogItemDto> items;
+
+  const ToplistCatalogGroupDto({required this.code, required this.items});
+
+  @override
+  int get hashCode => code.hashCode ^ items.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ToplistCatalogGroupDto &&
+          runtimeType == other.runtimeType &&
+          code == other.code &&
+          items == other.items;
+}
+
+/// 榜单 v2 目录里的一张榜单卡
+class ToplistCatalogItemDto {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+
+  /// "每周五更新"
+  final String updateFrequency;
+
+  /// 实测恒 "PLAYLIST"
+  final String targetType;
+  final bool canPlay;
+
+  const ToplistCatalogItemDto({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.updateFrequency,
+    required this.targetType,
+    required this.canPlay,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      updateFrequency.hashCode ^
+      targetType.hashCode ^
+      canPlay.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ToplistCatalogItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          updateFrequency == other.updateFrequency &&
+          targetType == other.targetType &&
+          canPlay == other.canPlay;
 }
 
 class UserItemDto {
