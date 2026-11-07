@@ -1,9 +1,40 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-07(接口覆盖推进到 88/382: 评论热门页签 / IP 归属; 前序含最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-07(接口覆盖推进到 90/382: 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾(歌词纯文本兜底/播客详情刷新/资料卡关注数); 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 功能包: 消息增强 @我/最近联系人/私信分页(2026-11-07 深夜)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| @我 页签 | ✅(只读) | `msg_forwards`: 消息中心第四页签"@我"(未读数取 pl_count 的 forward); 本账号为空, 走空态"还没有@我"; 非空条目形状未实测, Rust 侧防御式解析 + 合成单测覆盖 |
+| 最近联系人 | ✅ | `msg_recentcontact`: 私信页签顶部横滑条(头像/备注名优先/昵称), 数据是 data.follow("可发起私信的联系人/关注列表"), 服务端顺序不重排 |
+| 会话分页 | ✅ | `msg_private` limit/offset: 触底前 300px 预取 + 底部"加载更多"按钮; 按 user id 去重, 返回条数 < limit 显示"没有更多了" |
+| 聊天分页 | ✅ | `msg_private_history`: 聊天面板改 reverse 列表(最新在下), 顶部"加载更早"用当前最早一条 time_ms 当 before_ms, 按 id 去重, 不重复拉最新页 |
+| 回归 | ✅ | Rust 离线 81 单测全绿(ncm-service 57→60, 新增 @我 空响应/合成条目/最近联系人 3 组); flutter analyze 0 error; messages_page_test 7/7(旧 3 例改签名 + 新 4 例); codegen 一次 + cargo build -p ncm_ffi 通过; vendor 匿名接口集成测试(banner/toplist)本轮网络抖动随机挂, 与本批无关, 交由编排者 ci.sh 复核 |
+
+**协议事实(写进代码注释/记忆)**:
+- `msg_forwards` 顶层是 **`forwards` / `lasttime` / `more` / `newCount`**; 空账号拿不到非空条目形状,
+  ForwardItem 全字段 Option/serde(default), 解析不出任何 id 的条目直接跳过;
+  时间戳按"10 位=秒"归一成毫秒(假设, 待真实数据复核)。
+- `msg_forwards` 的 vendor 实现只发 **offset/limit**(没有 lasttime 游标), trait 的 last_time_ms 参数保留形状、当前恒取最新一页。
+- `msg_recentcontact` 的 vendor 实现发**空 body**(limit 不上送, 只能客户端截断); 返回只有 `data.follow` 一个数组。
+
+## v2 · 功能包: B0 纯 Dart 收尾(歌词纯文本 / 播客详情刷新 / 资料卡关注数 / 窄屏)(2026-11-07)
+
+| 能力 | 状态 | 证据 |
+|---|---|---|
+| 纯文本歌词兜底 | ✅ | `lyric.dart` 新增 `parseLrc`(时间轴 / 纯文本回退 / 格式异常容忍 / tlyric 按毫秒合并) + `PlainLyricView`; `main.dart` 在 `lyricLinesI18N` 为空或抛错时改走 `rust.lyric` 原始 LRC: 有轴等价逐行高亮, 只有纯文本则按行展示, 都没有才显示可读错误短文案 |
+| 播客详情刷新 | ✅ | `podcast.dart`: 详情打开即并行刷新 `podcast_radio` + `podcast_program`, 列表数据只作首屏占位; 两级列表加 RefreshIndicator; 刷新失败保留旧数据 + 顶部错误条(重试/关闭), 一个数据都没有才整页重试。默认 loader 走 `rust.podcastRadio`, 现有调用点零改动生效 |
+| 资料卡关注数刷新 | ✅ | `profile_header.dart` 变 StatefulWidget(`ProfileHeaderState.refreshCounts()`, 可注入 `loadDetail`); `mine_view.dart` 把「关注/粉丝列表」回调改成返回 Future, pop 回来重拉资料卡, 关注/取关后数字立即更新(不再等重进页面) |
+| 空态/错误态 + 窄屏 | ✅ | 三页文案统一(短中文 + 重试按钮); 300dp + 1.25 字号有 widget 用例守护(长文本不溢出), 未改全局主题 |
+| 回归 | ✅ | Flutter 141 用例全绿(lyric 5→14 / podcast 2→7 / 新增 profile_header_test 5 例); `flutter analyze --no-fatal-infos` 0 error; Linux 构建通过; a36 模拟器实测: 消息 4 页签 / 最近联系人横滑条 / 会话滚到底「没有更多了」/ 聊天「加载更早」/ 资料卡返回数字正常 |
+
+**协议/实现事实**:
+- `lyric_lines`(逐行)与 `lyric`(原始 LRC)是两条独立链路: 前者解析后为空时(纯文本歌词)必须回退后者, 否则只会显示「暂无歌词」。
+- 聊天历史翻旧页用「当前最早一条 time_ms」当 `before`, 与 `parse_private_history` 已翻正的升序列表配合, 不会重复拉最新页。
 
 ## v2 · 功能包: 评论热门 + IP 归属(2026-11-07 晚)
 
@@ -56,8 +87,7 @@
 - 私信历史 `msgs[]` 是**倒序**给的, Rust 侧翻成正序再交给 UI。
 - `msg_comments` 必须带自己的 uid(参数名 `uid`), 走 `/api/v1/user/comments/<uid>`。
 
-**未做**: @我(`msg_forwards` 该账号为空, 形状未验证)与最近联系人(`msg_recentcontact`);
-会话只读(不提供发送), 也不做已读回执上报。
+**未做**: 会话只读(不提供发送), 也不做已读回执上报。(@我 与最近联系人已于本日「消息增强」批次补上)
 
 ## v2 · 功能包: 最近播放分类 / 签到 / 评论删除 / 歌曲百科(2026-11-07 下午)
 

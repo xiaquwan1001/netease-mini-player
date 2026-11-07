@@ -142,6 +142,8 @@ class _HomePageState extends State<HomePage> {
   static const double _lyricItemExtent = 56;
   List<rust.LyricLineDto> _lyricLines = const [];
   List<BigInt> _lyricTimes = const [];
+  /// 纯文本歌词兜底(无时间轴): 逐行接口失败/返回空时用 [parseLrc] 从原始 LRC 里取。
+  List<String>? _lyricPlain;
   BigInt? _lyricTrackId;
   String? _lyricError;
   int _lyricIndex = -1;
@@ -685,6 +687,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _lyricLines = const [];
         _lyricTimes = const [];
+        _lyricPlain = null;
         _lyricIndex = -1;
         _lyricError = null;
       });
@@ -692,14 +695,53 @@ class _HomePageState extends State<HomePage> {
     try {
       final lines = await rust.lyricLinesI18N(trackId: trackId);
       if (!mounted || _lyricTrackId != trackId) return;
-      setState(() {
-        _lyricLines = lines;
-        _lyricTimes = [for (final l in lines) l.timeMs];
-      });
-      _syncLyricIndex(_player ?? PlayerView.empty);
+      if (lines.isNotEmpty) {
+        setState(() {
+          _lyricLines = lines;
+          _lyricTimes = [for (final l in lines) l.timeMs];
+        });
+        _syncLyricIndex(_player ?? PlayerView.empty);
+        return;
+      }
+      // 逐行接口没有内容(纯文本/老格式歌词) → 退回原始 LRC
+      await _loadRawLyric(trackId);
     } catch (e) {
       if (!mounted || _lyricTrackId != trackId) return;
-      setState(() => _lyricError = '$e');
+      // 兜底: 原始 LRC 里往往还有纯文本可显示; 都没有才报错
+      final ok = await _loadRawLyric(trackId);
+      if (!ok && mounted && _lyricTrackId == trackId) {
+        setState(() => _lyricError = friendlyError(e));
+      }
+    }
+  }
+
+  /// 原始 LRC 兜底(逐行接口失败/为空时): 有时间轴就等价于逐行高亮,
+  /// 只有纯文本就走 [PlainLyricView]。返回是否有内容可用。
+  Future<bool> _loadRawLyric(BigInt trackId) async {
+    try {
+      final raw = await rust.lyric(trackId: trackId);
+      if (!mounted || _lyricTrackId != trackId) return false;
+      final doc = parseLrc(raw);
+      if (doc.isEmpty) return false;
+      setState(() {
+        _lyricError = null;
+        if (doc.hasTimeline) {
+          _lyricPlain = null;
+          _lyricLines = [
+            for (final l in doc.timed)
+              rust.LyricLineDto(timeMs: l.timeMs, text: l.text, sub: l.sub),
+          ];
+          _lyricTimes = [for (final l in doc.timed) l.timeMs];
+        } else {
+          _lyricLines = const [];
+          _lyricTimes = const [];
+          _lyricPlain = doc.plain;
+        }
+      });
+      if (doc.hasTimeline) _syncLyricIndex(_player ?? PlayerView.empty);
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -1824,10 +1866,14 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildLyrics() {
+    final plain = _lyricPlain;
+    if (plain != null) {
+      return PlainLyricView(lines: plain);
+    }
     if (_lyricError != null) {
       return Padding(
         padding: const EdgeInsets.all(24),
-        child: Center(child: Text('歌词获取失败: $_lyricError', textAlign: TextAlign.center)),
+        child: Center(child: Text(_lyricError!, textAlign: TextAlign.center)),
       );
     }
     if (_lyricLines.isEmpty) {

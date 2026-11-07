@@ -5,7 +5,12 @@ import 'rust/api.dart' as rust;
 
 /// 个人主页头部卡片: 背景图 + 头像/昵称/VIP/签名 + 关注/粉丝/等级一行。
 /// 未登录时显示默认灰背景卡片, 点击触发 onTap(登录)。
-class ProfileHeader extends StatelessWidget {
+///
+/// 关注/取关动作不在本组件内(发生在关注/粉丝列表页), 成功后由持有
+/// [GlobalKey<ProfileHeaderState>] 的一方调用 [ProfileHeaderState.refreshCounts]
+/// 重拉 [loadDetail](默认可接 rust.profileDetail / rust.followCounts)刷新
+/// 「关注 N / 粉丝 M」, 不必等重进页面。
+class ProfileHeader extends StatefulWidget {
   const ProfileHeader({
     super.key,
     this.detail,
@@ -14,6 +19,7 @@ class ProfileHeader extends StatelessWidget {
     this.onTap,
     this.onTapFollows,
     this.onTapFolloweds,
+    this.loadDetail,
   });
 
   final rust.ProfileDetailDto? detail;
@@ -25,23 +31,74 @@ class ProfileHeader extends StatelessWidget {
   final VoidCallback? onTapFollows;
   final VoidCallback? onTapFolloweds;
 
+  /// 注入式详情 loader(refreshCounts 用, 测试可注入 mock);
+  /// 未注入或未登录时 refreshCounts 是 no-op。
+  final Future<rust.ProfileDetailDto?> Function()? loadDetail;
+
+  @override
+  ProfileHeaderState createState() => ProfileHeaderState();
+}
+
+class ProfileHeaderState extends State<ProfileHeader> {
+  rust.ProfileDetailDto? _detail;
+  bool _refreshing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _detail = widget.detail;
+  }
+
+  @override
+  void didUpdateWidget(ProfileHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 父层带来新数据则以父层为准; 登出时清空。
+    // 父层传 null 但仍登录时保留本地已刷新的数据(避免重 build 抹掉)。
+    if (widget.detail != null) {
+      _detail = widget.detail;
+    } else if (!widget.loggedIn) {
+      _detail = null;
+    }
+  }
+
+  /// 关注/取关成功后调用: 重拉 [ProfileHeader.loadDetail] 更新「关注 N / 粉丝 M」。
+  /// 返回是否刷新成功; 未注入 loader/未登录/已在刷新中/加载失败时返回 false,
+  /// 失败时保留旧数字不崩。
+  Future<bool> refreshCounts() async {
+    final load = widget.loadDetail;
+    if (load == null || !widget.loggedIn || _refreshing) return false;
+    _refreshing = true;
+    try {
+      final detail = await load();
+      if (!mounted) return false;
+      if (detail != null) {
+        setState(() => _detail = detail);
+      }
+      return detail != null;
+    } catch (_) {
+      return false; // 失败保留旧数字
+    } finally {
+      _refreshing = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final d = detail;
-    final nickname = loggedIn
+    final d = _detail;
+    final nickname = widget.loggedIn
         ? (d?.nickname.isNotEmpty == true
               ? d!.nickname
-              : (fallbackNickname ?? '未命名用户'))
+              : (widget.fallbackNickname ?? '未命名用户'))
         : '未登录';
-    final signature = loggedIn ? (d?.signature ?? '') : '';
+    final signature = widget.loggedIn ? (d?.signature ?? '') : '';
 
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: const EdgeInsets.all(12),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -52,7 +109,7 @@ class ProfileHeader extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   // 背景: 登录且有背景图时用图片, 否则灰底
-                  if (loggedIn && d?.backgroundUrl != null)
+                  if (widget.loggedIn && d?.backgroundUrl != null)
                     NetImage(
                       url: d!.backgroundUrl,
                       width: double.infinity,
@@ -77,7 +134,7 @@ class ProfileHeader extends StatelessWidget {
                     ),
                   ),
                   // 右上角"账号管理"小按钮
-                  if (onTap != null)
+                  if (widget.onTap != null)
                     Positioned(
                       top: 8,
                       right: 8,
@@ -86,7 +143,7 @@ class ProfileHeader extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
-                          onTap: onTap,
+                          onTap: widget.onTap,
                           child: const Padding(
                             padding: EdgeInsets.symmetric(
                               horizontal: 8,
@@ -129,7 +186,7 @@ class ProfileHeader extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                           child: CircleCover(
-                            url: loggedIn ? d?.avatarUrl : null,
+                            url: widget.loggedIn ? d?.avatarUrl : null,
                             size: 64,
                           ),
                         ),
@@ -153,7 +210,7 @@ class ProfileHeader extends StatelessWidget {
                                           ),
                                     ),
                                   ),
-                                  if (loggedIn && (d?.vip ?? false)) ...[
+                                  if (widget.loggedIn && (d?.vip ?? false)) ...[
                                     const SizedBox(width: 6),
                                     Container(
                                       padding: const EdgeInsets.symmetric(
@@ -201,13 +258,13 @@ class ProfileHeader extends StatelessWidget {
             // 关注/粉丝可点, 进去看列表
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: loggedIn
+              child: widget.loggedIn
                   ? Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _StatEntry(
                           label: '关注 ${d?.follows ?? BigInt.zero}',
-                          onTap: onTapFollows,
+                          onTap: widget.onTapFollows,
                         ),
                         Text(
                           ' · ',
@@ -216,7 +273,7 @@ class ProfileHeader extends StatelessWidget {
                         ),
                         _StatEntry(
                           label: '粉丝 ${d?.followeds ?? BigInt.zero}',
-                          onTap: onTapFolloweds,
+                          onTap: widget.onTapFolloweds,
                         ),
                         Text(
                           ' · Lv.${d?.level ?? BigInt.zero}',

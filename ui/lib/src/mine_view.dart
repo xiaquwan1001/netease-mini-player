@@ -47,8 +47,9 @@ class MineView extends StatefulWidget {
   final VoidCallback onOpenRecent;
 
   /// 资料卡上的"关注 N" / "粉丝 N"
-  final VoidCallback onOpenFollows;
-  final VoidCallback onOpenFolloweds;
+  /// 返回 Future: 列表页 pop 后资料卡要重拉一次, 让关注/取关后的数字立即更新。
+  final Future<void> Function() onOpenFollows;
+  final Future<void> Function() onOpenFolloweds;
 
   /// 打开"我喜欢的音乐"详情页
   final VoidCallback onOpenLiked;
@@ -311,8 +312,8 @@ class _ProfileSection extends StatefulWidget {
   final bool loggedIn;
   final VoidCallback onOpenAccounts;
   final VoidCallback onLogin;
-  final VoidCallback onOpenFollows;
-  final VoidCallback onOpenFolloweds;
+  final Future<void> Function() onOpenFollows;
+  final Future<void> Function() onOpenFolloweds;
   final Future<rust.ProfileDetailDto> Function()? load;
 
   @override
@@ -347,6 +348,13 @@ class _ProfileSectionState extends State<_ProfileSection> {
     }
   }
 
+  /// 关注/粉丝列表页里可能关注/取关了, 返回后重拉资料卡让数字立即更新。
+  Future<void> _openFollowList(Future<void> Function() open) async {
+    await open();
+    if (!mounted || !widget.loggedIn) return;
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return ProfileHeader(
@@ -354,8 +362,12 @@ class _ProfileSectionState extends State<_ProfileSection> {
       fallbackNickname: widget.loggedIn ? '我的账号' : null,
       loggedIn: widget.loggedIn,
       onTap: widget.loggedIn ? widget.onOpenAccounts : widget.onLogin,
-      onTapFollows: widget.loggedIn ? widget.onOpenFollows : null,
-      onTapFolloweds: widget.loggedIn ? widget.onOpenFolloweds : null,
+      onTapFollows: widget.loggedIn
+          ? () => _openFollowList(widget.onOpenFollows)
+          : null,
+      onTapFolloweds: widget.loggedIn
+          ? () => _openFollowList(widget.onOpenFolloweds)
+          : null,
     );
   }
 }

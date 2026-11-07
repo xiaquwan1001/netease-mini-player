@@ -25,3 +25,21 @@
 - 根因 1(403): 网易 CDN 对默认 `Dart/3.x (dart:io)` UA 回 403。用 `Image.network(headers: {'User-Agent': browser})` **修不好** —— NetworkImage 内部是 `HttpHeaders.add`, 会**追加**到 HttpClient 预置的默认 UA 后面, 实际发出 "Dart/3.9 (dart:io), Mozilla/..." 拼接值, 照样 403。必须自定义 ImageProvider, 用 `HttpClient()..userAgent = ...` 整体替换(见 `ui/lib/src/cover_art.dart::_UaNetworkImage`)。
 - 根因 2(闪烁): tab 用 switch 直接返回新 Widget ⇒ 每次切 tab 都销毁重建子树, 图片 State 重来 + 占位符重绘。改为 IndexedStack + 访问过才构建(`_tabVisited`), 并让 provider 实现 `==`/`hashCode` 以命中 ImageCache, 再加 `gaplessPlayback: true`。
 - 判据: `adb logcat | grep IMGFAIL` 为 0; 连续截图 md5 相同即无闪烁。
+
+§
+## 2026-11-07 本机不稳定导致的一次「子代理全灭」+ 三处环境假故障
+- **/tmp 整体被清空, fabric 子代理全灭**: 08:35 前后本机出现内存/内核级异常(同日 `litellm` 反复 SIGSEGV、
+  /tmp tmpfs 被清、两个 fabric worker 消失且 `/tmp/pi-fabric-runs-*` 全没)。教训: 派工单要求 worker
+  的阶段产物**写仓库或 `~/.cache`, 不要只写 `/tmp/*.md`**; 判定 worker 存活不能只看 `agents.list`(会返回空),
+  用 `pgrep -af pi-fabric/dist/worker` + run 目录里的 `status.json`; 收口前先把 /tmp 里的报告 cp 出来。
+- **cargo 假网络故障**: `cargo test` 报 `failed to download 'litemap v0.8.3'`, 根因是
+  `~/.cargo/registry/src/.../litemap-0.8.3/Cargo.toml` **缓存文件 utf-8 损坏**(位翻转),
+  `cargo fetch` 直接报 `path ... was not valid utf-8`。删掉该版本的 src 目录与 `cache/*.crate` 后重 fetch 即好,
+  别一看到 download 失败就怀疑镜像/代理。
+- **Gradle daemon JVM SIGSEGV(一次性)**: `assembleDebug` 报 `daemon disappeared`,
+  `ui/android/hs_err_pid*.log` 里 `SIGSEGV ... G1CMOopClosure::oop_oop_iterate`。`./gradlew --stop` 后重跑即成功。
+  本机 14700KF 有内存/内核级不稳定史(litellm 同理), 同类崩溃先"重跑一次"再查代码; hs_err/core 产物别提交。
+- **vendor 匿名联网 smoke 连跑 3 次全挂**: 与 2026-11-05 条目同源(上游风控/公网抖动)。已把 `tools/ci.sh` 拆成
+  「本地 workspace 测试(阻塞门)」+「vendor 8 例匿名联网 smoke(3 次重试, 仅 WARN)」;
+  需要严格核验公网链路时 `NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh`。
+

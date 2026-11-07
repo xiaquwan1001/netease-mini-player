@@ -55,8 +55,8 @@ MineView buildMine({
       onOpenPodcast: (_) {},
       onOpenLiked: () {},
       onOpenRecent: () {},
-      onOpenFollows: () {},
-      onOpenFolloweds: () {},
+      onOpenFollows: () async {},
+      onOpenFolloweds: () async {},
       onOpenAlbum: (_) {},
       loadAlbums: () async => [
         rust.AlbumItemDto(
