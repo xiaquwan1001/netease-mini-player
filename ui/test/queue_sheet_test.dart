@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:minincm/main.dart';
+import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
