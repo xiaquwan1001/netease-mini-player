@@ -288,4 +288,23 @@ API/protocol details and anti-bot technique live in the
   (com.android.intentresolver) 预览会报 `Permission Denial: opening provider ... FileProvider ... not exported`;
   加 `clipData = ClipData.newRawUri("image", uri)` + `FLAG_GRANT_READ_URI_PERMISSION` 才正常。
 
+§
+
+- **v0.1.0 发布链路(2026-11-08)**:
+  - 产物: `flutter build apk --release --target-platform android-arm64` → **27.9MB**(仅 arm64-v8a);
+    `flutter build linux --release` → bundle 39MB, tar.gz **14.7MB**。release 包 ListView 里
+    Gradle `buildTypes.release` 仍用 **debug 签名**(模板 TODO 未换), 对外必须写清楚。
+  - GitHub Actions: `android-actions/setup-android@v3` 现在**必挂**(它跑 `sdkmanager tools`,
+    GitHub 镜像已移除该包 → `Failed to find package 'tools'`); 直接用镜像自带的
+    `$ANDROID_HOME/cmdline-tools/*/bin/sdkmanager` 装 `ndk;28.2.13676358` 等即可。
+  - 联网 smoke 用 `@Tags(['network'])` + `ui/dart_test.yaml` 声明, CI 跑
+    `flutter test --exclude-tags network`(349 例, 11s);不排掉会因网易风控常年红。
+- **Gradle daemon JVM 内部崩溃**: release 构建时报
+  `Internal Error (concurrentHashTable.inline.hpp:684) fatal error: Cannot resize table:
+  Node hash code has changed possibly due to corruption of the contents`(daemon 已跑 2h42m,
+  -Xmx8G)。对策: `cd ui/android && ./gradlew --stop` + 删 `hs_err_pid*.log`,
+  再以 `GRADLE_OPTS='-Dorg.gradle.daemon=false'` 重跑即成功。
+  与之前 **Flutter SDK 源文件被写坏**(`home_menu.g.dart` 多出 `  (`)合起来看, 本机(i7-14700KF)
+  有内存/CPU 不稳的嫌疑; 同类“诡异损坏”再出现, 先跑 memtest86 + 更新 BIOS 微码, 别急着怀疑代码。
+
 <!-- created=2026-11-09, last=2026-11-09 -->
