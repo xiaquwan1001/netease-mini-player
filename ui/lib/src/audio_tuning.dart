@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'rust/api.dart' as rust;
 
 import 'app_settings.dart';
@@ -121,11 +123,14 @@ Future<void> applyLoudnessForTrack(int trackId, {String? streamUrl}) async {
       // Android: 音频在 Media3 的 SimpleCache 里, 先问 Kotlin 要缓存文件路径再让 Rust 解码测量
       if (dto == null && streamUrl != null && _facade.isAndroid) {
         final path = await _facade.cachedAudioFile(streamUrl);
-        if (path != null) {
+        if (path == null) {
+          debugPrint('[R2b] 播放中还没有可测的缓存文件 track=$trackId');
+        } else {
           dto = await rust.loudnessMeasurePath(
             trackId: BigInt.from(trackId),
             path: path,
             targetLufs: target,
+            formatHint: _formatHintFromUrl(streamUrl),
           );
         }
       }
@@ -133,14 +138,27 @@ Future<void> applyLoudnessForTrack(int trackId, {String? streamUrl}) async {
         trackId: BigInt.from(trackId),
         targetLufs: target,
       );
-      if (dto != null) gain = dto.gainDb;
-    } catch (_) {
-      // 测量失败(未缓存 / 该平台没有解码能力)就让这首按 0 dB 播
+      if (dto != null) {
+        gain = dto.gainDb;
+      } else {
+        debugPrint('[R2b] 未拿到测量结果 track=$trackId(先按 0 dB 播)');
+      }
+    } catch (e) {
+      // 测量失败(未缓存 / 解码失败)就让这首按 0 dB 播, 但要留下可查的日志
+      debugPrint('[R2b] 测量失败 track=$trackId: $e');
     }
   }
-  gain ??= 0.0;
-  _loudnessGainCache[trackId] = gain;
-  await applyAudioTuning(loudnessGainDb: gain);
+  // 只有真的测到才记进缓存: 否则 0 dB 会被当成"已知", 之后的补测就不会再发生了
+  if (gain != null) _loudnessGainCache[trackId] = gain;
+  await applyAudioTuning(loudnessGainDb: gain ?? 0.0);
+}
+
+/// Media3 缓存文件没有扩展名, symphonia 的 m4a/mp4 解封装需要扩展名提示 ⇒ 从直链里猜
+String? _formatHintFromUrl(String url) {
+  for (final ext in const ['mp3', 'flac', 'm4a', 'mp4', 'ogg', 'wav']) {
+    if (url.toLowerCase().contains('.$ext')) return ext;
+  }
+  return null;
 }
 
 /// 某首曲目的响度增益是否已经算出来过(用于"还没测到就隔一会儿再试")

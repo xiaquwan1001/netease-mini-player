@@ -188,6 +188,18 @@ pub fn measure(
 ///
 /// 支持的封装/编码由 ncm-playback 的 symphonia features 决定(mp3/flac/mp4-aac/wav/ogg)。
 pub fn measure_file(path: &std::path::Path) -> Result<Option<LoudnessMeasurement>, String> {
+    let hint = path.extension().and_then(|e| e.to_str());
+    measure_file_with_hint(path, hint)
+}
+
+/// 同 [measure_file], 但显式给解码器一个扩展名提示。
+///
+/// 场景: Android 的 Media3 缓存文件没有扩展名(如 `<id>.v3.exo`), 而 symphonia 的某些
+/// 解封装器(尤其 isomp4/m4a)需要扩展名才肯认领, 所以由调用方按直链 URL 猜一个。
+pub fn measure_file_with_hint(
+    path: &std::path::Path,
+    format_hint: Option<&str>,
+) -> Result<Option<LoudnessMeasurement>, String> {
     use symphonia::core::audio::SampleBuffer;
     use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
     use symphonia::core::errors::Error as SymError;
@@ -199,7 +211,7 @@ pub fn measure_file(path: &std::path::Path) -> Result<Option<LoudnessMeasurement
     let file = std::fs::File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
     let stream = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
-    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+    if let Some(ext) = format_hint.or_else(|| path.extension().and_then(|e| e.to_str())) {
         hint.with_extension(ext);
     }
     let probed = symphonia::default::get_probe()

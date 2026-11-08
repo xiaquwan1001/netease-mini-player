@@ -249,6 +249,7 @@ abstract class RustLibApi extends BaseApi {
     required BigInt trackId,
     required String path,
     required double targetLufs,
+    String? formatHint,
   });
 
   Future<String> crateApiLyric({required BigInt trackId});
@@ -2054,6 +2055,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required BigInt trackId,
     required String path,
     required double targetLufs,
+    String? formatHint,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -2062,6 +2064,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_u_64(trackId, serializer);
           sse_encode_String(path, serializer);
           sse_encode_f_64(targetLufs, serializer);
+          sse_encode_opt_String(formatHint, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2074,7 +2077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiLoudnessMeasurePathConstMeta,
-        argValues: [trackId, path, targetLufs],
+        argValues: [trackId, path, targetLufs, formatHint],
         apiImpl: this,
       ),
     );
@@ -2083,7 +2086,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiLoudnessMeasurePathConstMeta =>
       const TaskConstMeta(
         debugName: "loudness_measure_path",
-        argNames: ["trackId", "path", "targetLufs"],
+        argNames: ["trackId", "path", "targetLufs", "formatHint"],
       );
 
   @override

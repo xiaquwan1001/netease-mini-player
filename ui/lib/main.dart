@@ -924,9 +924,12 @@ class _HomePageState extends State<HomePage> {
         }
         return false;
       }
-      // Android 的响度均衡要靠这条直链去 Media3 的 SimpleCache 里找缓存文件
+      // Android 的响度均衡要靠这条直链去 Media3 的 SimpleCache 里找缓存文件;
+      // 注意必须用**播放时实际用的**URL(playback.play 会把 http 升级成 https),
+      // 否则 SimpleCache 的 key 对不上, 永远找不到缓存文件.
       final playingId = song.id.toInt();
-      _streamUrlByTrack[playingId] = url;
+      final cacheKeyUrl = preferHttpsStreamUrl(url);
+      _streamUrlByTrack[playingId] = cacheKeyUrl;
       if (_streamUrlByTrack.length > 64) {
         _streamUrlByTrack.remove(_streamUrlByTrack.keys.first);
       }
@@ -940,7 +943,7 @@ class _HomePageState extends State<HomePage> {
       setState(() => _player = state);
       // 立刻按这首的响度给一次增益(未测到就先 0 dB, 轮询里会再补一次)
       _loudnessAppliedTrackId = playingId;
-      unawaited(applyLoudnessForTrack(playingId, streamUrl: url));
+      unawaited(applyLoudnessForTrack(playingId, streamUrl: cacheKeyUrl));
       // 本地播放历史(未登录/离线时"最近听过"的来源); 失败不影响播放
       unawaited(rust.rememberPlay(song: song).catchError((_) => false));
       unawaited(_loadLyric(song.id));

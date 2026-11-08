@@ -947,10 +947,11 @@ pub async fn loudness_measure_path(
     track_id: u64,
     path: String,
     target_lufs: f64,
+    format_hint: Option<String>,
 ) -> Result<Option<LoudnessDto>, String> {
     let path_buf = std::path::PathBuf::from(&path);
     let measured = tokio::task::spawn_blocking(move || {
-        ncm_playback::loudness::measure_file(&path_buf)
+        ncm_playback::loudness::measure_file_with_hint(&path_buf, format_hint.as_deref())
     })
     .await
     .map_err(|e| e.to_string())??;

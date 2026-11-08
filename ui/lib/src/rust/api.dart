@@ -180,10 +180,12 @@ Future<LoudnessDto?> loudnessMeasurePath({
   required BigInt trackId,
   required String path,
   required double targetLufs,
+  String? formatHint,
 }) => RustLib.instance.api.crateApiLoudnessMeasurePath(
   trackId: trackId,
   path: path,
   targetLufs: targetLufs,
+  formatHint: formatHint,
 );
 
 /// 每日推荐歌曲(原版每日推荐)

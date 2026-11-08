@@ -99,21 +99,23 @@ class PlaybackService : MediaSessionService() {
      * 全部在应用主线程执行(MethodChannel 回调线程)。
      */
 
-    /**
-     * 返回某条直链在 SimpleCache 里的**完整**缓存文件路径(没有缓存/只缓存了一部分时返回 null).
+/**
+     * 返回某条直链在 SimpleCache 里可用的音频文件路径, 给响度测量(R2b)用。
      *
-     * 用途: 响度均衡(R2b)在 Android 上要测当前曲目 —— 音频是 Media3 缓存的, Rust 侧
-     * `AudioCache` 拿不到它, 所以由 Kotlin 把路径交给 Dart, 再让 Rust 解码测量(两边共用同一份 BS.1770 实现).
+     * - 优先返回**完整**缓存 span(整首已存完);
+     * - 否则返回"从 0 开始且已存够 [minPrefixBytes]"的前缀 span —— ExoPlayer 正常播放时只缓冲
+     *   前方几十秒, 等整首存完要等到播完, 那之前先按前缀测(前缀响度足以代表整首);
+     * - 都没有就返回 null(下一次补测再试)。
      */
-    fun cachedFileFor(url: String): String? {
+    fun cachedFileFor(url: String, minPrefixBytes: Long = 256L * 1024): String? {
         val cache = simpleCache ?: return null
         return try {
-            cache.getCachedSpans(url)
-                .firstOrNull { it.isCached && it.length > 0 }
-                ?.file
-                ?.absolutePath
+            val spans = cache.getCachedSpans(url)
+            val complete = spans.firstOrNull { it.isCached && it.length > 0 }
+            val prefix = spans.firstOrNull { it.position == 0L && it.length >= minPrefixBytes }
+            (complete ?: prefix)?.file?.absolutePath
         } catch (e: Exception) {
-            Log.w("NCM-PLAYER", "cachedFileFor($url) failed: $e")
+            Log.w("NCM-PLAYER", "cachedFileFor failed: $e")
             null
         }
     }

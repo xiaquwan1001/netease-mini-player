@@ -1871,6 +1871,7 @@ fn wire__crate__api__loudness_measure_path_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_path = <String>::sse_decode(&mut deserializer);
             let api_target_lufs = <f64>::sse_decode(&mut deserializer);
+            let api_format_hint = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
@@ -1879,6 +1880,7 @@ fn wire__crate__api__loudness_measure_path_impl(
                             api_track_id,
                             api_path,
                             api_target_lufs,
+                            api_format_hint,
                         )
                         .await?;
                         std::result::Result::Ok(output_ok)
