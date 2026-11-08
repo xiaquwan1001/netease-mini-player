@@ -10,7 +10,7 @@
 |---|---|
 | 策略 spike(方案 A mirror / 方案 B domain 注注解) | ✅ 方案 A 可行(见 §1) |
 | Dart 类名是否零改动 | ❌ 不可能(**frb 2.13 不支持给 struct 改名**, 见 §1.3); 采用脚本化 `rust.XDto`→`rust.X` 重命名, 逐批用 `dart analyze` + `flutter test` 兜底 |
-| 迁移批次 | 批1–批5 已收口(38/57, 见 §3) |
+| 迁移批次 | ✅ **批1–批6 全部收口(57/57)**, 车道关闭 |
 
 ## 3. 批次日志(增量)
 
@@ -82,7 +82,29 @@
 - 删 `radio_dto`; 7 个导出改 `ffi_forward!`;
 - `PodcastRadio` 迁完后 `SearchExact` 变成纯镜像(字段全对得上), `SearchExactDto` 一并删除。
 
-### 待办(批6 起)
+### 批6(2026-11-09)—— 19 个类型, 已提交, **D7 车道关闭**
+
+`DigitalAlbumPurchasedEntry` `DigitalAlbumPurchased` `PurchasedSongEntry` `SongPurchasedPage`
+`DigitalAlbumDetail` `DigitalAlbumSalesEntry` `VipMembership` `VipGrowth` `VipSignDay` `VipSign`
+`VipTask` `VipOverview` `PrivateSession` `PrivateMessage` `InboxItem` `ForwardItem` `RecentContact`
+`UserMedal` `StreamUrl`
+
+- 补漏: `UserLevelDto` 在批1 的提交信息里写了但实际没迁, 批6 一并补上;
+- 删掉 13 个手写转换函数, 全部改 `ffi_forward!`;
+- `StreamDto` 原本是 `StreamUrl` 的子集, 迁移后 Dart 多拿到一个 `size` 字段。
+
+## 4. 收尾
+
+| 项 | 结果 |
+|---|---|
+| `#[frb(mirror(...))]` 数量 | **57** |
+| 剩余 `*Dto` | 21 个, 全部是必须保留的: 16 个 (b)/(c)(SongDto 及其下游、Account/MessageCounts/PlayerState/Lyric/Word*) + 5 个 S4 新增的 FFI 投影(EqValidation/PlaybackTuning/CacheStats/CacheEviction/Loudness) |
+| `ncm-ffi/src/api.rs` 行数 | 2324(D7 起点约 2500, 累计删除约 600 行转换样板) |
+| 门禁 | cargo build 0 warning; cargo test 32/31/106; dart analyze 0 error/0 warning; flutter test 351 + 1skip; build-android 0 error |
+| 结束时间 | 2026-11-09 |
+
+**后续若还想继续压缩**: 只能动 (b) 那 16 个 —— 需要先决定 `SongDto` 是否改成 domain `Song`
+(UI 侧 `artist`/`album` 拼接字符串、`vip`/`paid` 都要改由 Dart 计算), 那是另一条 UI 车道, 不在 D7 范围。
 
 按 §2.2 表里剩下的 46 个 (a) 类型分批迁移, 建议按模块成簇(每批 8–12 个), 每批一套完整门禁:
 
