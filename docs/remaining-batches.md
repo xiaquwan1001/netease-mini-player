@@ -14,7 +14,10 @@
 > **Wave 8 进行中(B5 逐字歌词: 契约层已合入, UI 车道在跑 + 列表页空态/窄屏统一, 覆盖 114/382)**。
 > **Wave 9 完成(收尾: album_newest/toplist_detail_v2/MV+视频评论 + 电台节目榜/听众页 + 后端形态调研, 覆盖 118/382)**；
 > `simi_user` 实测恒空已判定不做。
-> 下一波建议: [Dart] 把 `newest_albums`/`toplist_catalog` 接上 UI(推荐页/排行榜) ｜ 主播/听众 → 用户主页路由。
+> **2026-11-09 尾声: D7(frb 直透 domain)车道关闭 57/57** —— `docs/d7-frb-domain.md`；
+> **设置项扩充 + 播放体验修复(R1–R7)全部落地** —— `docs/plan-2026-11-09-settings-and-player.md`。
+> 当前**没有待开工的批次**; 唯一未完成项是「真机听感验收」(EQ/淡入/响度均衡/硬解, 见任务书 §5)。
+> 若还要继续做功能: [Dart] 把 `newest_albums`/`toplist_catalog` 接上 UI(推荐页/排行榜) ｜ 主播/听众 → 用户主页路由。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 

@@ -1,9 +1,69 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(接口覆盖推进到 118/382、FFI 125 个里只剩 3 个无 UI 入口: 收尾(album_newest/toplist_v2/MV视频评论) + 精选新碟页签/全部榜单页 + 电台节目榜/听众页 + 后端轻量化调研结论 + 逐字歌词契约 B5-1 + 列表页空态/窄屏统一 + 电台只读 B10(电台广场) + 设置页通道自检 + 数字专辑只读 B12(已购列表/详情/销量) + 播客单集详情 + 评论统计 B2(评论区统计条) + 等级/勋章 B8(我的页入口 + 勋章墙) + 搜索增强 B4 + 黑胶会员只读 B3 + 消息增强 @我/最近联系人/私信分页 + B0 纯 Dart 收尾; 前序含评论热门页签 / IP 归属 / 最近播放分类 / 签到 / 歌曲百科 / 消息中心 / 新歌新碟分地区 / 歌手榜)。
+> 最近更新: 2026-11-09(**设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏) + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重; 门禁 `flutter test` 351+1skip / `cargo test` 32+31+106 / analyze 0 error 0 warning。剩听感真机验收。前序: 接口覆盖 118/382、FFI 125 个里 0 个无 UI 入口、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等)。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 设置项扩充 + 播放体验修复(R1–R7)与 D7 收尾(2026-11-09)
+
+任务书: `docs/plan-2026-11-09-settings-and-player.md`(§10 有逐批执行记录);
+FFI 车道: `docs/d7-frb-domain.md`(车道已关闭)。
+
+### 1. 七项需求全部落地
+
+| # | 需求 | 落点 | 证据 |
+|---|---|---|---|
+| **R1** | 推荐页两排封面 overflow | `recommend_view.dart::_CoverRow` 外层 `height*2` 少算 4px 行间距 → `height*2+4` | `s1_two_row_overflow_test.dart`(先复现 `overflowed by 4.0 pixels` 再转绿) |
+| **R2** | 设置里精细音量(dB) | `PlaybackTuning.gain_db`(Rust) + Media3 `configure*gainDb`(Android) | a36: `configure gain=-12.0` 实测生效 |
+| **R2b** | 曲间音量平衡(响度均衡) | Rust 自实现 BS.1770-4 `LoudnessMeter` + `loudness.json` 缓存 + `replay_gain_db` 叠加到增益 | a36: 播 20s 后测出 `lufs=-7.33` → `configure gain=-8.67`(target −16) |
+| **R3** | 「关于」给 GitHub 网址 | `src/app_meta.dart` + 设置页「开源仓库/版本与许可」, 走 `PlatformBridge.openUrl` | `s2_about_page_test.dart`(含 `ncm/open` 通道 mock 断言 URL) |
+| **R4** | 播放条与底栏之间的空白 | 播放条自己的 `SafeArea` 又吃一次 bottom inset(`NavigationBar` 内部已有) → `SafeArea(bottom:false)` | a36 像素 A/B: 空白 **115px → 52px**, 差值 63px = 24dp 手势 inset |
+| **R5** | 淡入淡出 / 硬解 / 音质 / 边听边存 / 缓存上限 | 淡入 `fade_in(ValueAnimator)`; 硬解 `MediaCodecSelector` 过滤非硬件 codec; `SimpleCache`+`LeastRecentlyUsedCacheEvictor`; `AudioCache::enforce_limit`(Linux, 保护正在播文件) | a36: `cache/audio` 落盘 10MB; `configure ... cache=true limit=256MB` |
+| **R6** | OLED 纯黑 | `src/theme.dart::buildDarkTheme(oled:)`, surface 系列压 `#000000`、onSurface `#E6E6E6` | a36 像素采样: 页面/卡片/底栏/状态栏全 `(0,0,0)`; 关闭前 `(35,25,25)` |
+| **R7** | 响度均衡 + AutoEQ 曲线导入导出 | `ncm-domain::EqProfile`(权威解析/序列化, 带行号错误) + `ncm-playback::biquad`(RBJ PK/LS/HS) + `AudioProcessor`(Android) + Dart `eq_profile.dart`(导入即时校验) | 「播放与音质」二级页 5 组控件, 曲线导入/导出/清除 + 20 例测试 |
+
+### 2. 车道与提交(13 个 commit)
+
+| 车道 | 内容 | 提交 |
+|---|---|---|
+| S1 | R1 修复 + 回归用例 | `dd175cf` |
+| S2a + 编排者 | R3 关于页 / R6 OLED 主题与开关 / R4 播放条贴底栏 | `7a9cdcc` / `ad463ad` |
+| S4 批1 | 曲线解析 + biquad + R128 + 缓存 LRU | `b3bcf55` |
+| S4 批2 | 流式 LoudnessMeter + LoudnessStore + FFI 契约 + Dart 接线 | `f073a9b` |
+| S5a | 「播放与音质」设置页 + 曲线导入导出 | `c6ea894` |
+| S3 | Android Media3: 精细音量/淡入/硬解/边做边存/EQ AudioProcessor | `5504fad` |
+| 编排者 | R2b 手机端闭环(Media3 缓存文件 → Rust 测量) | `c57387c` |
+| AGC | 动态限速 <=3 dB/s 接到 Rust 与 Media3 | `67fbd03` |
+| 编排者 | 顶部栏去重(四 tab 无 AppBar) + 搜索页去横幅 | `30065cf` / `7dd3bf7` |
+| D7 批4+5 / 批6 | 搜索·播客·电台 17 个 + 数字专辑·VIP·私信 19 个 Dto 直透 domain | `0ff7f78` / `79729c2` |
+
+### 3. 顺带完成与口径变更
+
+| 项 | 结论 |
+|---|---|
+| **D7 车道关闭** | `#[frb(mirror)]` **57 个**, `api.rs` 2500→**2324 行**; 剩余 21 个 `*Dto` 全属必须保留(16 个 (b)/(c) + 5 个 S4 新增 FFI 投影) |
+| **顶部信息架构** | 五个 tab 首页全部无 AppBar(标题与底部导航重复); 搜索页去掉「轻音 MiniNCM」横幅; 歌词/歌单浏览态保留顶部栏; a36 实测首行上移 147px≈56dp |
+| **APK ABI** | `tools/build-android.sh` 改为只出 `arm64 + x86_64`: `armeabi-v7a` 在当前 rustc+NDK lld 下链接失败(`.debug_aranges unsupported compression type (44)`), 与业务代码无关 |
+| **R2b 两个真 bug** | ①缓存 key 用 http 直链而播放时升级 https ⇒ SimpleCache 永远命中不了; ②未测到时把 0 dB 写进增益缓存被当成"已测" ⇒ 补测再也不发生。**两个都只能靠 adb 实测发现** |
+
+### 4. 收口门(编排者独立重跑)
+
+| 命令 | 结果 |
+|---|---|
+| `cargo build --offline --workspace --all-targets` | 0 error / **0 warning** |
+| `cargo test -p ncm-domain -p ncm-playback -p ncm-service` | **32 + 31 + 106** 全绿(起点 22 + 0 + 97) |
+| `cd ui && dart analyze` | **0 error / 0 warning**(39 条历史 info) |
+| `cd ui && flutter test` | **351 passed + 1 skip**(起点 309 + 1) |
+| `bash tools/build-android.sh` | 0 error, a36 安装启动、五 tab 切换无崩溃 |
+
+### 5. 剩余(仅真机听感验收)
+
+1. 动态响度(`loudnessDynamic`)开关下增益应按 <=3 dB/s 平滑过渡而非瞬跳;
+2. EQ 极端正增益曲线是否可听出削波(只做样本级 [-1,1] 限幅, 无 makeup gain);
+3. 淡入时长手感(缓冲比 fadeMs 长时首句没有淡入);
+4. 响度均衡开/关 A/B;
+5. 硬解关闭后各格式仍能出声(MediaCodecSelector 用"过滤非硬件 codec"而非 `emptyList()`)。
 
 ## v2 · 后端精简与体量实测(2026-11-09)
 

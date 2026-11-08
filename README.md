@@ -17,7 +17,9 @@
 | Flutter 双端壳 | ✅ Linux bundle + Android APK 均构建通过;Linux Xvfb + 模拟器 a36 双端闭环(见 `docs/testing-dual-platform.md`) |
 | Dart ↔ Rust 桥 | ✅ flutter_rust_bridge 2.13,smoke 测试含真实网络(每日推荐/建议/专辑/播客/历史) |
 | 功能 | ✅ 底部五栏(搜索/推荐/关注/我的/设置;2026-11 起由四栏扩为五栏) 、搜索历史+联想+热词榜/猜你想搜、每日推荐(歌曲/歌单/播客)、每日私人 FM、心动模式、我的收藏(我喜欢/歌单/播客/关注艺人/关注动态)、账号与 UI 设置 |
-| 测试 | ✅ Rust 单测(31 个 service 测试) + 69 个 Flutter 测试(离线纯函数/widget + 真实网络 smoke);双端实测记录见 `docs/testing-dual-platform.md` |
+| 播放能力 | ✅ 精细音量(-40..0 dB,与系统音量相乘)、响度均衡(EBU R128 / BS.1770-4 测量 + ReplayGain 2.0 静态增益 + 可选动态 AGC 限速 3 dB/s)、自定义响度曲线(AutoEQ `ParametricEQ.txt` 导入/导出/清除,PK·LS·HS,≤20 filter,±24 dB)、淡入淡出 0/200/500/1000 ms、优先硬解/仅软解(Android)、边听边存 + 缓存上限 LRU(128..2048 MB);设置入口「设置 → 播放与音质」 |
+| 外观 | ✅ 主题/字号/推荐卡片排数/OLED 纯黑(`#000000` 基底,M3 语义保留);顶部栏只在承载导航外信息时出现(歌词/歌单浏览),五栏首页不再重复导航标签 |
+| 测试 | ✅ Rust 单测 **169**(domain 32 / playback 31 / service 106) + Flutter **351 + 1 skip**(离线纯函数/widget + 真实网络 smoke);双端实测记录见 `docs/testing-dual-platform.md` |
 
 ## 目录
 
