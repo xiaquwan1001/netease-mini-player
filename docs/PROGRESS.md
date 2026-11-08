@@ -10,6 +10,25 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 首个公开预览版 v0.1.0(2026-11-08)
+
+**发布**: tag `v0.1.0` → Release 资产 `MiniNCM-0.1.0-android-arm64.apk`(27.9MB, arm64, release 构建)
++ `MiniNCM-0.1.0-linux-x64.tar.gz`(15MB)+ `SHA256SUMS.txt`;版本号 `pubspec 0.1.0+1` / `kAppVersion 0.1.0`。
+
+**许可**: 根目录新增 `LICENSE`(MIT);`THIRD_PARTY_NOTICES.md` 盘点全部第三方组件
+(网易云接口实现 ncm-api-rs = **WTFPL**,其上游 api-enhanced = **MIT**,© 2013-2022 Binaryify;
+symphonia = MPL-2.0 未修改;symphonia/qr_flutter 等 BSD-3)并附关键许可全文。
+
+**CI**: `.github/workflows/ci.yml` —— rust 测试(alsa 依赖)+ `dart analyze` +
+`flutter test --exclude-tags network`(联网 smoke 打 `network` 标签,`ui/dart_test.yaml`) + Linux bundle 构建;
+`.github/workflows/release.yml` —— 打 tag 自动出 arm64 APK + Linux tar.gz 并挂 Release。
+首次绿灯记录: CI run `42484875142`(3 个 job 全成功)。
+
+**门面**: 英文 `README.en.md`(中英互链)、CI/License 徽章、`CONTRIBUTING.md`。
+
+**已知限制**: Android APK 仍是 debug 签名(正式 key 待定);Linux 未做 AppImage/deb;
+格式检查(`cargo fmt`/`dart format`)未纳入 CI。
+
 ## v2 · 播放条合并 + 歌曲详情页(2026-11-08)
 
 用户三条要求一次落地, 详见 `docs/ui-song-detail-share.md`:
