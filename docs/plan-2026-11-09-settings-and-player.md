@@ -145,9 +145,19 @@ Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 | R1 两排封面 overflow | ✅ `_CoverRow` 外层 `height*2` 少算 4px 行间距 → `height*2+4` | `dd175cf` | `s1_two_row_overflow_test.dart`(2 例, 先复现 4.0px 再转绿) |
 | R3 关于页 GitHub | ✅ `src/app_meta.dart` + 「开源仓库」「版本与许可」两项, 走 `PlatformBridge.openUrl` | `7a9cdcc` | `s2_about_page_test.dart`(3 例) |
 | R6 OLED 纯黑 | ✅ `src/theme.dart`(`buildDarkTheme(oled:)`, surface 全黑 + onSurface #E6E6E6)+ 设置页「OLED 纯黑」开关 | `7a9cdcc` | `r6_oled_theme_test.dart`(4 例) |
-| R4 播放条贴底栏 | ✅ 根因 = 播放条自己的 `SafeArea` 又吃了一次 bottom inset(`NavigationBar` 内部已有 SafeArea), 改 `SafeArea(bottom:false)` | `7a9cdcc` | 无单测(播放条依赖 Media3 通道, Linux 测试环境走不到), **待 a36 截图走查** |
+| R4 播放条贴底栏 | ✅ 根因 = 播放条自己的 `SafeArea` 又吃了一次 bottom inset(`NavigationBar` 内部已有 SafeArea), 改 `SafeArea(bottom:false)` | `7a9cdcc` | 无单测(播放条依赖 Media3 通道, Linux 测试环境走不到); **a36 已 A/B 走查, 见下** |
 
 门禁: `dart analyze` 0 error/0 warning(39 info); `flutter test` **318 passed + 1 skip**(基线 309, 新增 9)。
+
+**a36 走查记录(2026-11-09, 模拟器 a36 1080x2400)**
+
+- R4 A/B 量化(同一屏同一曲目, 像素测量): 播放条内「控制行最低像素 → NavigationBar 顶沿」的空白
+  修复前 **115 px**, 修复后 **52 px**, 差值 **63 px = 24 dp = 系统手势条 inset** —— 证实那条空白就是重复吃掉的
+  bottom inset。剩余 52 px 是播放条自身的 `IconButton` 内边距 + 末尾 `SizedBox(height: 8)`, 属设计内留白。
+- R6 像素采样(设置 → 深色 → 打开「OLED 纯黑」): 页面中部 / 空白区 / 卡片内 / 底部导航栏 / 状态栏
+  全部 `(0,0,0)`; 关闭前同位置为 `(35,25,25)`(M3 带色 surface)、`(26,17,17)`。
+- 结论: R4/R6 视觉验收通过(仍有「色带/间距」的观感判断留给你过目, 截图在 `/tmp/a36-fix.png`、
+  `/tmp/a36-oled.png`)。
 
 ### 下一波(未开工)
 
