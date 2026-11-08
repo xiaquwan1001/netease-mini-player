@@ -10,7 +10,7 @@
 |---|---|
 | 策略 spike(方案 A mirror / 方案 B domain 注注解) | ✅ 方案 A 可行(见 §1) |
 | Dart 类名是否零改动 | ❌ 不可能(**frb 2.13 不支持给 struct 改名**, 见 §1.3); 采用脚本化 `rust.XDto`→`rust.X` 重命名, 逐批用 `dart analyze` + `flutter test` 兜底 |
-| 迁移批次 | 批1–批3 已收口(21/57, 见 §3) |
+| 迁移批次 | 批1–批5 已收口(38/57, 见 §3) |
 
 ## 3. 批次日志(增量)
 
@@ -67,7 +67,22 @@
 - 4 个导出(chart_list/toplist_catalog/playlist_categories/song_wiki)改 `ffi_forward!`, 转换函数全删。
 - Dart 侧 9 个文件重命名。门禁全绿。
 
-### 待办(批4 起)
+### 批4+批5(2026-11-09)—— 搜索/播客/电台 17 个类型, 已提交
+
+批4(8 个): `SearchArtist` `SearchAlbum` `SearchPlaylistItem` `SearchPodcast` `AlbumBrief`
+`HotSearchTerm` `HotSearchDetailItem` `DefaultSearch`
+
+- `SearchBundleDto` 保留(字段含 `SongDto`), 但 `artists/albums/playlists/podcasts` 四组改成 domain 类型,
+  `search_all` 里四段手写转换全删;
+- `ArtistDetailDto.albums` 改 `Vec<AlbumBrief>`。
+
+批5(9 个): `PodcastRadio` `RadioCategory` `RadioPick` `RadioExploreHome` `RadioRankedRadio`
+`RadioRankedDj` `RadioSubscriber` `RadioSubscriberPage` + `SearchExact`
+
+- 删 `radio_dto`; 7 个导出改 `ffi_forward!`;
+- `PodcastRadio` 迁完后 `SearchExact` 变成纯镜像(字段全对得上), `SearchExactDto` 一并删除。
+
+### 待办(批6 起)
 
 按 §2.2 表里剩下的 46 个 (a) 类型分批迁移, 建议按模块成簇(每批 8–12 个), 每批一套完整门禁:
 
