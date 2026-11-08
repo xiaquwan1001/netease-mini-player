@@ -159,6 +159,18 @@ Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 - 结论: R4/R6 视觉验收通过(仍有「色带/间距」的观感判断留给你过目, 截图在 `/tmp/a36-fix.png`、
   `/tmp/a36-oled.png`)。
 
+### 2026-11-09 · 第二波: S4(Rust 播放地基) + S5a(设置 UI)
+
+| 车道 | 内容 | 提交 | 验证 |
+|---|---|---|---|
+| **S4 批1** | `ncm-domain::EqProfile`(AutoEQ 解析/序列化/校验, 错误带行号) / `ncm-playback::biquad`(RBJ PK·LS·HS + 转置直接 II 型链) / `ncm-playback::loudness`(自实现 BS.1770-4) / `AudioCache::enforce_limit`(LRU, 保护正在播放) | `b3bcf55` | cargo test: domain 32 / playback 19 / service 102 |
+| **S4 批2** | 流式 `LoudnessMeter` + `measure_file`(Linux symphonia) / `TrackLoudness` / `LoudnessStore`(loudness.json) / FFI: `eq_profile_validate`·`player_configure`·`cache_stats`·`cache_enforce_limit`·`loudness_cached`·`loudness_measure_cached` + Dart `audio_tuning.dart` 与 main.dart 接线 | `f073a9b` | cargo 32/20/106; analyze 0; flutter test 342+1skip |
+| **S5a** | 「播放与音质」二级页(5 组控件)+ Dart 侧 `eq_profile.dart`(与 Rust 同规则)+ 曲线导入/导出/清除 | `c6ea894` | 新增 20 例, flutter test 338+1skip |
+
+**曲线解析的双实现口径(已拍板)**: Rust `ncm-domain::EqProfile` 是权威(求值/落盘用), Dart `eq_profile.dart` 只做导入时的即时校验;
+两侧规则一致(PK/LS/HS、≤20 filter、Gain/Preamp ±24 报错不裁剪、Q>0、0<Fc≤48k、忽略注释、1 基行号)。
+序列化字节差异(Dart 保留 `.0` 与原始序号, Rust 去尾 0 并按位置重编号)不影响语义, UI 导出**复制用户原文**, 不做归一化。
+
 ### 下一波(未开工)
 
 - **S4(Rust, 先做)**: rodio 增益/淡入淡出、biquad EQ、R128 测量 + `loudness.json`、`AudioCache` 上限淘汰、AutoEQ 曲线解析。契约稳定后再做 S3。
