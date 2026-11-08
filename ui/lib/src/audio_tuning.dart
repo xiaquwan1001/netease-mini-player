@@ -89,6 +89,9 @@ Future<void> applyAudioTuning({double loudnessGainDb = 0.0}) async {
         streamCache: AppSettings.instance.streamCache,
         cacheLimitMb: AppSettings.instance.cacheLimitMb,
         eqText: request.eqText,
+        // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时, 行为不变。
+        // Linux 侧由 Rust 自己在 200ms tick 上做同样的限速, 这里不用管。
+        gainSlewDbPerSec: AppSettings.instance.loudnessDynamic ? 3.0 : 0.0,
       );
       return;
     }

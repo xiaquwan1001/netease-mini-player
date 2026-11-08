@@ -139,6 +139,7 @@ class Playback {
   /// S3: 把播放调音参数(R2/R5/R7)应用到 Android 的 Media3 播放器。
   /// 非 Android 平台直接返回 null(不抛错, Linux 由 Rust 侧处理)。
   /// [gainDb] 已由调用方把「精细音量 + 响度增益」合成好, 这里原样透传。
+  /// [gainSlewDbPerSec] = 增益变化的限速(dB/s): 0 = 瞬时(静态 RG2.0); 3.0 = 动态 AGC 防 pump。
   Future<Map<String, Object?>?> applyTuning({
     required double gainDb,
     required int fadeMs,
@@ -146,6 +147,7 @@ class Playback {
     required bool streamCache,
     required int cacheLimitMb,
     String? eqText,
+    double gainSlewDbPerSec = 0.0,
   }) async {
     if (!isAndroid) return null;
     return _channel.invokeMapMethod<String, Object?>('configure', {
@@ -155,6 +157,7 @@ class Playback {
       'streamCache': streamCache,
       'cacheLimitMb': cacheLimitMb,
       'eqText': eqText,
+      'gainSlewDbPerSec': gainSlewDbPerSec,
     });
   }
 

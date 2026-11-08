@@ -53,6 +53,10 @@ class PlaybackService : MediaSessionService() {
 
     // Dart 已把「精细音量 + 响度增益」合成为 gainDb(-40..+12), 这里如实乘上, 不自己测响度
     private var gainDb = 0.0
+    // 增益斜坡的限速(dB/s): 0 = 瞬时(默认, 静态 RG2.0); >0 时按该速率从当前增益逼近目标(动态 AGC 防 pump)
+    private var gainSlewDbPerSec = 0.0
+    // 当前**实际施加**的增益(dB): 斜坡期间与 gainDb(目标)不同, 结束后相等
+    private var appliedGainDb = 0.0
     private var fadeMs = 0
     private var hardwareDecode = true
     private var streamCache = true
@@ -61,6 +65,7 @@ class PlaybackService : MediaSessionService() {
     private var eqProcessor: EqAudioProcessor? = null
 
     private var fadeAnimator: ValueAnimator? = null
+    private var gainSlewAnimator: ValueAnimator? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
@@ -84,6 +89,8 @@ class PlaybackService : MediaSessionService() {
         instance = null
         fadeAnimator?.cancel()
         fadeAnimator = null
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
         mediaSession?.run {
             player.release()
             release()
@@ -122,6 +129,7 @@ class PlaybackService : MediaSessionService() {
 
     fun configure(args: Map<*, *>): Map<String, Any?> {
         val newGainDb = (args["gainDb"] as? Number)?.toDouble() ?: gainDb
+        val newGainSlewDbPerSec = (args["gainSlewDbPerSec"] as? Number)?.toDouble() ?: gainSlewDbPerSec
         val newFadeMs = (args["fadeMs"] as? Number)?.toInt() ?: fadeMs
         val newHardwareDecode = args["hardwareDecode"] as? Boolean ?: hardwareDecode
         val newStreamCache = args["streamCache"] as? Boolean ?: streamCache
@@ -132,6 +140,12 @@ class PlaybackService : MediaSessionService() {
         val clampedGain = newGainDb.coerceIn(-40.0, 12.0)
         val clampedFade = newFadeMs.coerceIn(0, 5000)
         val clampedLimit = newCacheLimitMb.coerceIn(1, 65536)
+        // 限速只接受正的有限值, 其余(0/负/NaN)一律按瞬时处理(与 Dart 侧 0 = 瞬时口径一致)
+        val clampedGainSlew = if (newGainSlewDbPerSec.isFinite() && newGainSlewDbPerSec > 0.0) {
+            newGainSlewDbPerSec
+        } else {
+            0.0
+        }
 
         // EQ 解析: 失败则旁路(不生效), 记 logcat NCM-EQ 前缀 + 行号/原因, 并在回显里带上 eqError
         var eqOk = true
@@ -159,7 +173,7 @@ class PlaybackService : MediaSessionService() {
         // 一行可观测日志: 便于 adb logcat 核对「设置真的落到播放器上」(编排者/回归都用它)
         Log.d(
             "NCM-PLAYER",
-            "configure gain=$clampedGain fade=$clampedFade hw=$newHardwareDecode " +
+            "configure gain=$clampedGain fade=$clampedFade slew=$clampedGainSlew hw=$newHardwareDecode " +
                 "cache=$newStreamCache limit=${clampedLimit}MB eqFilters=$eqFilterCount eqError=$eqError",
         )
 
@@ -176,6 +190,7 @@ class PlaybackService : MediaSessionService() {
 
         // 先更新字段再重建: buildExoPlayer()/buildDataSourceFactory() 读的就是这些字段
         gainDb = clampedGain
+        gainSlewDbPerSec = clampedGainSlew
         fadeMs = clampedFade
         hardwareDecode = newHardwareDecode
         streamCache = newStreamCache
@@ -185,11 +200,12 @@ class PlaybackService : MediaSessionService() {
 
         if (rebuildNeeded) rebuildPlayer()
 
-        // 增益变化即时生效(改增益不触发淡入)
-        applyTargetVolumeImmediate()
+        // 增益变化: 动态模式(限速>0)按 dB/s 斜坡逼近, 静态模式瞬时(默认, 行为不变)
+        applyGainChange()
 
         return mapOf(
             "gainDb" to gainDb,
+            "gainSlewDbPerSec" to gainSlewDbPerSec,
             "fadeMs" to fadeMs,
             "hardwareDecode" to hardwareDecode,
             "streamCache" to streamCache,
@@ -200,16 +216,25 @@ class PlaybackService : MediaSessionService() {
         )
     }
 
-    /** ncm/player#volume: 只更新用户音量档, 立即生效(取消正在进行的淡入) */
+    /** ncm/player#volume: 只更新用户音量档, 立即生效(取消正在进行的淡入, 但不打断增益斜坡) */
     fun setUserVolume(v: Float) {
         userVolume = v.coerceIn(0f, 1f)
-        applyTargetVolumeImmediate()
+        // 系统音量必须立刻响应: 只取消淡入(淡入目标里含旧 userVolume);
+        // 增益斜坡(若有)继续跑, 它的每帧回调会读最新的 userVolume, 这里先同步一次当前值。
+        fadeAnimator?.cancel()
+        fadeAnimator = null
+        exoPlayer?.volume = appliedVolume()
     }
 
     /** 换曲/开始: 在 fadeMs 内把音量从 0 线性升到目标值, 避免切歌爆音(0 = 关闭) */
     fun fadeIn() {
         val exo = exoPlayer ?: return
         fadeAnimator?.cancel()
+        // 淡入与增益斜坡互斥(last-wins): 淡入开始即取消斜坡, 并把 appliedGainDb 对齐到当前目标增益,
+        // 这样淡入结束后音量就是目标值, 下一次 configure 的斜坡也从正确基线出发(不带半截斜坡残留)。
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        appliedGainDb = gainDb
         val target = targetVolume()
         if (fadeMs <= 0) {
             exo.volume = target
@@ -231,10 +256,36 @@ class PlaybackService : MediaSessionService() {
         return (userVolume * linear).coerceIn(0f, 1f)
     }
 
-    private fun applyTargetVolumeImmediate() {
+    /** 当前实际音量 = 系统音量档 × 10^(appliedGainDb/20): 斜坡期间 appliedGainDb 还没到 gainDb */
+    private fun appliedVolume(): Float {
+        val linear = 10.0.pow(appliedGainDb / 20.0).toFloat()
+        return (userVolume * linear).coerceIn(0f, 1f)
+    }
+
+    /** 把目标增益 [gainDb] 作用到音量: 限速>0 时按 dB/s 斜坡逼近, 否则瞬时(静态 RG2.0 行为不变) */
+    private fun applyGainChange() {
+        // 增益变化与淡入互斥: 这里(重新)接管 volume, 先取消淡入(last-wins)
         fadeAnimator?.cancel()
         fadeAnimator = null
-        exoPlayer?.volume = targetVolume()
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        val delta = gainDb - appliedGainDb
+        if (gainSlewDbPerSec > 0.0 && kotlin.math.abs(delta) > 1e-4) {
+            // 按 dB/s 限速: 时长 = |ΔdB| / slew。斜坡在 dB 域线性推进, 与 Rust GainLimiter(3 dB/s)口径一致,
+            // 保证"每秒最多变 slew dB"严格成立(在 volume 线性域直接差值会把 dB 变成非均匀速率)。
+            val durationMs = (kotlin.math.abs(delta) / gainSlewDbPerSec * 1000.0).toLong().coerceAtLeast(1L)
+            val animator = ValueAnimator.ofFloat(appliedGainDb.toFloat(), gainDb.toFloat())
+            animator.duration = durationMs
+            animator.addUpdateListener { a ->
+                appliedGainDb = (a.animatedValue as Float).toDouble()
+                exoPlayer?.volume = appliedVolume()
+            }
+            gainSlewAnimator = animator
+            animator.start()
+        } else {
+            appliedGainDb = gainDb
+            exoPlayer?.volume = appliedVolume()
+        }
     }
 
     private fun buildExoPlayer(): ExoPlayer {
@@ -310,7 +361,13 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.setPlayer(SkipAwarePlayer(newExo))
 
         old.release()
-        applyTargetVolumeImmediate()
+        // 新 player 的音量按当前实际增益补上(重建不改增益, appliedGainDb 保持不变);
+        // 取消可能存在的淡入/斜坡 —— 它们的回调引用的旧 player 已被 release。
+        fadeAnimator?.cancel()
+        fadeAnimator = null
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        exoPlayer?.volume = appliedVolume()
     }
 
     /**

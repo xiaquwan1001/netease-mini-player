@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub mod agc;
 pub mod biquad;
@@ -174,6 +174,13 @@ impl Drop for Player {
     }
 }
 
+/// 实际输出音量 = 系统音量 × 增益(线性), 两者相乘且都钳在 0..1。
+/// [gain_db] 是**当前实际施加**的增益(可能被 GainLimiter 限速后还没到目标),
+/// 与 [PlaybackTuning::gain_db] 的目标值区分开。抽成 crate 级纯函数, 便于无音频设备单测。
+fn effective_volume_db(user_volume: f32, gain_db: f32) -> f32 {
+    (user_volume * biquad::db_to_linear(gain_db.clamp(-40.0, 12.0))).clamp(0.0, 1.0)
+}
+
 #[cfg(target_os = "linux")]
 mod backend {
     use super::*;
@@ -251,17 +258,25 @@ mod backend {
             }
         };
         let player = RodioPlayer::connect_new(&sink_handle.mixer());
-        // user_volume 是"系统音量"(0..1), 精细音量(R2)作为独立增益乘上去
+        // user_volume 是"系统音量"(0..1), 精细音量(R2)/响度增益作为独立增益乘上去
         let mut user_volume = 1.0f32;
         let mut local = tuning.lock().map(|t| t.clone()).unwrap_or_default();
-        player.set_volume(effective_volume(user_volume, &local));
+        // 增益限速器: Cmd::Configure 改的是目标增益, 每个 tick 按 GainLimiter(默认 3 dB/s)逼近,
+        // 避免动态响度(AGC)在安静段/鼓点上突然抽一下(pump)。Cmd::Play 用 reset_to 立即到位,
+        // Cmd::Volume(系统音量)完全不经过它, 保持瞬时。
+        let mut limiter = agc::GainLimiter::new();
+        limiter.reset_to(local.gain_db);
+        let mut last_tick = Instant::now();
+        player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
 
         loop {
             match rx.recv_timeout(Duration::from_millis(200)) {
                 Ok(Cmd::Play { track_id, path }) => {
                     // stop() 之后不可复用,换曲用 clear()
                     player.clear();
-                    player.set_volume(effective_volume(user_volume, &local));
+                    // 换曲: 增益立即对齐到当前目标, 不带着上一曲半截斜坡的残留、也不从 0 慢慢爬
+                    limiter.reset_to(local.gain_db);
+                    player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
                     match File::open(&path) {
                         Ok(file) => match Decoder::try_from(file) {
                             Ok(decoder) => {
@@ -306,7 +321,8 @@ mod backend {
                 }
                 Ok(Cmd::Volume(v)) => {
                     user_volume = v;
-                    player.set_volume(effective_volume(user_volume, &local));
+                    // 系统音量瞬时生效(拧音量键必须立刻响应), 但增益部分仍用限速后的当前值
+                    player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
                     if let Ok(mut st) = state.lock() {
                         st.volume = v;
                     }
@@ -316,12 +332,20 @@ mod backend {
                     if let Ok(mut shared) = tuning.lock() {
                         *shared = local.clone();
                     }
-                    // 增益即时生效; EQ/淡入在下一首开始时套用(换曲时重新追加源)
-                    player.set_volume(effective_volume(user_volume, &local));
+                    // 不在这里直接改音量: 目标增益已更新, 由循环尾部的 tick 按限速逐步逼近;
+                    // EQ/淡入仍在下一首开始时套用(换曲时重新追加源)
                 }
                 Ok(Cmd::Shutdown) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
             }
+
+            // 增益限速 tick: 循环最多 200ms 醒一次, 用真实流逝时间算步长(命令到达会提前醒,
+            // 不能固定按 200ms 算, 否则限速不精确)。只有目标增益在变时 step 才会真的移动。
+            let now = Instant::now();
+            let dt = (now - last_tick).as_secs_f32();
+            last_tick = now;
+            let applied_gain = limiter.step(local.gain_db, dt);
+            player.set_volume(effective_volume_db(user_volume, applied_gain));
 
             let pos = player.get_pos().as_millis() as u64;
             let empty = player.empty();
@@ -335,10 +359,6 @@ mod backend {
         }
     }
 
-    /// 实际输出音量 = 系统音量 × 精细音量增益(R2), 两者相乘且都钳在 0..1
-    fn effective_volume(user_volume: f32, tuning: &PlaybackTuning) -> f32 {
-        (user_volume * tuning.gain_linear()).clamp(0.0, 1.0)
-    }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -385,5 +405,38 @@ mod tests {
         p.set_volume(3.0);
         std::thread::sleep(Duration::from_millis(120));
         assert!(p.state().volume <= 1.0);
+    }
+
+    #[test]
+    fn effective_volume_db_zero_gain_is_passthrough_and_clamps() {
+        // 0 dB = 不变(只乘系统音量)
+        assert!((effective_volume_db(0.8, 0.0) - 0.8).abs() < 1e-6);
+        // -6 dB ≈ ×0.501
+        assert!((effective_volume_db(1.0, -6.0) - 0.501).abs() < 0.001);
+        // 正增益在系统音量满格时被钳到 1, 不引入额外削波
+        assert_eq!(effective_volume_db(1.0, 12.0), 1.0);
+        // 越界增益先钳再算, 与 PlaybackTuning::sanitized 口径一致
+        assert_eq!(effective_volume_db(1.0, 99.0), effective_volume_db(1.0, 12.0));
+        assert_eq!(effective_volume_db(1.0, -99.0), effective_volume_db(1.0, -40.0));
+    }
+
+    /// 后端接线的策略回归: Configure 用 step(限速逼近), Play 用 reset_to(立即到位),
+    /// 系统音量(Volume)直接按限速后的当前增益算, 三者口径不打架。
+    #[test]
+    fn configure_slews_play_resets_and_volume_follows_applied_gain() {
+        let mut limiter = agc::GainLimiter::new();
+        // Configure: 目标 +9 dB, 每 200ms 一个 tick(3 dB/s ⇒ 每 tick 最多 0.6 dB)
+        let mut applied = 0.0;
+        for _ in 0..5 {
+            applied = limiter.step(9.0, 0.2);
+        }
+        assert!((applied - 3.0).abs() < 1e-3, "1 秒后只应走 3 dB, 实测 {applied}");
+        // Play: 换曲立即对齐目标, 不从当前值(3 dB)慢慢爬
+        limiter.reset_to(9.0);
+        assert_eq!(limiter.current_db(), 9.0);
+        // 系统音量瞬时变化: 用限速后的当前增益直接算音量, 不触发再次逼近
+        let before = effective_volume_db(0.5, limiter.current_db());
+        let after = effective_volume_db(0.5, limiter.current_db());
+        assert_eq!(before, after);
     }
 }
