@@ -1,7 +1,24 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+/// 正式签名 keystore 配置: ui/android/key.properties(不入库, 见 ui/android/.gitignore)
+///   storeFile=/绝对路径/minincm-release.jks
+///   storePassword=...
+///   keyAlias=minincm
+///   keyPassword=...
+/// 缺失时回落到 debug 签名(新克隆/无凭据环境仍能构建), 但那样每次构建签名都可能不同,
+/// 已发布的 APK 永远无法覆盖升级 —— 正式发布必须在带 keystore 的环境里构建。
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
 
 android {
@@ -29,11 +46,34 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            // debug 包换包名后缀: 可以和正式包并存, 真机验证时不会顶掉已装版本,
+            // 也不会因签名不同而 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn(
+                    "WARNING: ui/android/key.properties 不存在 → release 用 debug 签名; " +
+                        "该 APK 无法覆盖升级其他签名构建出的版本"
+                )
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }

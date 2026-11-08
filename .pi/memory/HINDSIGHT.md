@@ -308,3 +308,31 @@ API/protocol details and anti-bot technique live in the
   有内存/CPU 不稳的嫌疑; 同类“诡异损坏”再出现, 先跑 memtest86 + 更新 BIOS 微码, 别急着怀疑代码。
 
 <!-- created=2026-11-09, last=2026-11-09 -->
+
+## 2026-11-09 设置页「主题模式」在 vivo 真机文字竖排/越界(300dp + 字号 1.25)
+
+- 现象: 用户报面板上「主题」那一档文字竖着、越界; 小屏模拟(300dp/1.3)只报语义断言, 看不清病因。
+- 真机口径(关键): `adb shell wm size/density` + `settings get system font_scale` ⇒ 1440x3168 @ density
+  override **768** ⇒ **逻辑宽仅 300dp**; font_scale **1.25**。dp 宽要自己算 `px/density*160`, 别假设 360dp。
+- 根因: `ListTile(trailing: SegmentedButton(...3 段, 每段 icon+label))`。窄屏/大字号下 trailing 被要求吃满整行,
+  framework 直接抛 `Trailing widget consumes the entire tile width`; 该 ListTile 及其后续 render box 全部不参与布局
+  ⇒ 整列文字挤成竖排、内容越界(报错本身不会标红在 UI 上)。
+- 修法: 分段控件从 trailing 挪到标题下方独立一行(`_SegmentedSettingTile`, 见 `ui/lib/src/settings_view.dart`),
+  去掉 icon 只留 2 字文案, 外层 `SingleChildScrollView(horizontal)` 兜极端字号。
+- 回归: `ui/test/settings_narrow_overflow_test.dart` —— 300dp × 字号 {1.0,1.25,1.3,1.625} 断言
+  ① FlutterError 为空 ② 三段同一 y、x 递增(真·横排) ③ 控件右边界不超出内容区。
+- 真机复核: debug 包已带 `applicationIdSuffix=".dev"`(包名 com.minincm.minincm.dev, 与正式包并存),
+  `adb logcat | grep -E 'Trailing widget|overflow' | head -5` 无输出 + 截图 OCR/像素行分析确认三段横向排列。
+
+## 2026-11-09 签名/版本号: release 用 debug keystore ⇒ 老用户永远无法覆盖升级
+
+- 现象: `adb install -r` debug 包报 `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`;
+  设备上 v0.1.0 的包签名与本地 `~/.android/debug.keystore` 不同。
+- 根因: `ui/android/app/build.gradle.kts` 的 release 一直 `signingConfig = signingConfigs.getByName("debug")`。
+  本地 debug keystore 每台机器不同, GitHub runner 每次全新生成 ⇒ 每次构建签名都可能不同, 覆盖升级必然失败。
+- 处置(本次): 加 `key.properties` 注入的 release signingConfig(缺失回落 debug + Gradle 警告)、
+  CI 从 Secrets 落 keystore 并在缺失时 `::warning::`、`debug` 加 `.dev` 后缀可与正式包并存;
+  版本号单源 `pubspec version X.Y.Z+N` + `tools/bump-version.sh`(同步 kAppVersion、+N 递增) +
+  `ui/test/version_consistency_test.dart` 守一致性。文档 `docs/android-signing.md`。
+- 教训: **keystore 是凭据**, 生成/托管必须由用户执行; 没有 key.properties 时的产物不能当发布包。
+

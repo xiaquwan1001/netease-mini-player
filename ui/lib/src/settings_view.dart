@@ -40,33 +40,18 @@ class SettingsView extends StatelessWidget {
             margin: EdgeInsets.zero,
             child: Column(
               children: [
-                ListTile(
-                  title: const Text('主题模式'),
-                  subtitle: Text(_themeLabel(settings.themeMode)),
-                  trailing: SegmentedButton<ThemeMode>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(
-                        value: ThemeMode.system,
-                        icon: Icon(Icons.brightness_auto),
-                        label: Text('跟随'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeMode.light,
-                        icon: Icon(Icons.light_mode),
-                        label: Text('浅色'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeMode.dark,
-                        icon: Icon(Icons.dark_mode),
-                        label: Text('深色'),
-                      ),
-                    ],
-                    selected: {settings.themeMode},
-                    onSelectionChanged: (value) {
-                      settings.update(themeMode: value.first);
-                    },
-                  ),
+                _SegmentedSettingTile<ThemeMode>(
+                  title: '主题模式',
+                  subtitle: _themeLabel(settings.themeMode),
+                  segments: const [
+                    ButtonSegment(value: ThemeMode.system, label: Text('跟随')),
+                    ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
+                    ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
+                  ],
+                  selected: settings.themeMode,
+                  onSelectionChanged: (value) {
+                    settings.update(themeMode: value);
+                  },
                 ),
                 const Divider(height: 1),
                 // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
@@ -101,24 +86,19 @@ class SettingsView extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                ListTile(
-                  title: const Text('推荐卡片排列'),
-                  subtitle: Text(
-                    settings.coverRows == 1
-                        ? '一排: 横向滑动, 一屏看得更多'
-                        : '两排: 网格平铺, 少滑动多浏览',
-                  ),
-                  trailing: SegmentedButton<int>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: 1, label: Text('一排')),
-                      ButtonSegment(value: 2, label: Text('两排')),
-                    ],
-                    selected: {settings.coverRows},
-                    onSelectionChanged: (value) {
-                      settings.update(coverRows: value.first);
-                    },
-                  ),
+                _SegmentedSettingTile<int>(
+                  title: '推荐卡片排列',
+                  subtitle: settings.coverRows == 1
+                      ? '一排: 横向滑动, 一屏看得更多'
+                      : '两排: 网格平铺, 少滑动多浏览',
+                  segments: const [
+                    ButtonSegment(value: 1, label: Text('一排')),
+                    ButtonSegment(value: 2, label: Text('两排')),
+                  ],
+                  selected: settings.coverRows,
+                  onSelectionChanged: (value) {
+                    settings.update(coverRows: value);
+                  },
                 ),
               ],
             ),
@@ -129,9 +109,7 @@ class SettingsView extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.graphic_eq),
               title: const Text('播放与音质'),
-              subtitle: const Text(
-                '精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线',
-              ),
+              subtitle: const Text('精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => showAudioSettingsPage(context),
             ),
@@ -230,16 +208,76 @@ class SettingsView extends StatelessWidget {
   }
 
   static String _themeLabel(ThemeMode mode) => switch (mode) {
-        ThemeMode.light => '浅色',
-        ThemeMode.dark => '深色',
-        ThemeMode.system => '跟随系统',
-      };
+    ThemeMode.light => '浅色',
+    ThemeMode.dark => '深色',
+    ThemeMode.system => '跟随系统',
+  };
 
   static String _scaleLabel(double scale) {
     for (final entry in AppSettings.textScales.entries) {
       if ((entry.key - scale).abs() < 0.01) return entry.value;
     }
     return scale.toStringAsFixed(2);
+  }
+}
+
+/// 带分段选择器的设置行。
+///
+/// 之前用 `ListTile(trailing: SegmentedButton(...))`: 窄屏 + 大字号下(例如
+/// vivo 真机 1440x3168 @ density 768 ⇒ 300dp 宽, 系统字号 1.25)trailing 被要求
+/// 吃掉整行宽度, ListTile 直接抛
+/// "Trailing widget consumes the entire tile width", 该 ListTile 及其后的
+/// render box 都不再布局 ⇒ 文案竖排、内容越界。
+/// 所以分段控件单独占一行, 宽度跟着内容走, 极端字号下退化为横向滚动。
+class _SegmentedSettingTile<T> extends StatelessWidget {
+  const _SegmentedSettingTile({
+    required this.title,
+    required this.subtitle,
+    required this.segments,
+    required this.selected,
+    required this.onSelectionChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<ButtonSegment<T>> segments;
+  final T selected;
+  final ValueChanged<T> onSelectionChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // 外层 Card 的 Column 是交叉轴 center, 不给满宽就会整行被居中
+    // (表现为「主题模式」这行相对上下 ListTile 缩进/不对齐)。
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: theme.textTheme.bodyLarge),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<T>(
+                showSelectedIcon: false,
+                segments: segments,
+                selected: {selected},
+                onSelectionChanged: (value) => onSelectionChanged(value.first),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -254,9 +292,7 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         title,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
+        style: Theme.of(context).textTheme.titleSmall
             ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );

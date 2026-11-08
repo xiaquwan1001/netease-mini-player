@@ -56,6 +56,27 @@ jobs:
         working-directory: ui
         run: flutter pub get
 
+      # 正式签名: 在仓库 Secrets 里配置(见 docs/android-signing.md)
+      #   ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+      # 没有配置时回落到 debug 签名(能出包, 但签名不固定, 老用户无法覆盖升级)。
+      - name: Release keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        working-directory: ui/android
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.jks
+          cat > key.properties <<EOF
+          storeFile=$PWD/release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
+      - name: Signing sanity check
+        run: |
+          if [ ! -f ui/android/key.properties ]; then
+            echo "::warning::未配置 ANDROID_KEYSTORE_BASE64 —— 本次 APK 用 debug 签名, 无法覆盖升级此前发布版本"
+          fi
+
       - name: Build Android APK (arm64, release)
         working-directory: ui
         run: flutter build apk --release --target-platform android-arm64

@@ -26,7 +26,9 @@ symphonia = MPL-2.0 未修改;symphonia/qr_flutter 等 BSD-3)并附关键许可�
 
 **门面**: 英文 `README.en.md`(中英互链)、CI/License 徽章、`CONTRIBUTING.md`。
 
-**已知限制**: Android APK 仍是 debug 签名(正式 key 待定);Linux 未做 AppImage/deb;
+**已知限制**: Android APK 仍是 debug 签名(v0.1.0 产物, 无法覆盖升级 —— 已定方案见
+[`docs/android-signing.md`](android-signing.md): 固定 keystore + `key.properties`/Secrets 注入,
+`versionCode` 用 `tools/bump-version.sh` 递增);Linux 未做 AppImage/deb;
 格式检查(`cargo fmt`/`dart format`)未纳入 CI。
 
 ## v2 · 播放条合并 + 歌曲详情页(2026-11-08)
