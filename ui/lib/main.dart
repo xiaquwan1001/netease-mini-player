@@ -7,6 +7,7 @@ import 'src/album_preview.dart';
 import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
+import 'src/audio_tuning.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/cover_art.dart';
@@ -273,6 +274,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // 通知栏/耳机键的上一首·下一首 → Dart 队列
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
+    // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
+    AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
     _actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
@@ -282,6 +285,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    AppSettings.instance.removeListener(_onAudioSettingsChanged);
     _ticker?.cancel();
     _suggestDebounce?.cancel();
     _searchFocus.removeListener(_onSearchFocusChanged);
@@ -297,6 +301,9 @@ class _HomePageState extends State<HomePage> {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
       await AppSettings.instance.load(info.dataDir);
+      // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
+      unawaited(applyAudioTuning());
+      unawaited(enforceCacheLimit());
       if (!mounted) return;
       setState(() => _info = info);
       _actionsHost.value = _buildActionsHost();
@@ -311,6 +318,23 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// 播放参数变化时才真的调 FFI(设置页里每拖一格 Slider 都会 notifyListeners)
+  AudioTuningRequest? _lastTuning;
+  int? _lastCacheLimitMb;
+
+  void _onAudioSettingsChanged() {
+    final settings = AppSettings.instance;
+    final request = AudioTuningRequest.fromSettings(settings);
+    if (request != _lastTuning) {
+      _lastTuning = request;
+      unawaited(applyAudioTuning());
+    }
+    if (settings.cacheLimitMb != _lastCacheLimitMb) {
+      _lastCacheLimitMb = settings.cacheLimitMb;
+      unawaited(enforceCacheLimit(keepTrackId: _player?.trackId?.toInt()));
     }
   }
 

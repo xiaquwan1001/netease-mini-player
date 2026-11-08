@@ -741,6 +741,213 @@ pub fn player_set_volume(volume: f32) -> PlayerStateDto {
     state_dto()
 }
 
+
+// ---------------- 播放参数: 精细音量 / 淡入 / 自定义曲线 (R2/R5/R7) ----------------
+
+/// 当前生效的播放参数(回显给 UI, 便于确认设置真的落地了)
+pub struct PlaybackTuningDto {
+    /// 精细音量增益(dB, -40..=0)
+    pub gain_db: f64,
+    /// 淡入时长(ms)
+    pub fade_ms: u32,
+    /// 生效的滤波器数量(0 = 曲线旁路)
+    pub eq_filters: u32,
+    /// 曲线前级增益(dB)
+    pub eq_preamp_db: f64,
+}
+
+fn tuning_dto(t: &ncm_playback::PlaybackTuning) -> PlaybackTuningDto {
+    let (filters, preamp) = match &t.eq {
+        Some(profile) => (profile.active_filters().count() as u32, profile.preamp_db as f64),
+        None => (0, 0.0),
+    };
+    PlaybackTuningDto { gain_db: t.gain_db as f64, fade_ms: t.fade_ms, eq_filters: filters, eq_preamp_db: preamp }
+}
+
+/// 曲线校验结果(导入时给 UI 显示"生效了 N 个滤波器 / 前级 -6 dB / 峰值抬升 +2.5 dB")
+pub struct EqValidationDto {
+    /// 曲线里一共有多少个 filter(含 OFF)
+    pub filters: u32,
+    /// 实际参与求值的 filter(ON 且增益非 0)
+    pub active_filters: u32,
+    pub preamp_db: f64,
+    /// 保守估计的总抬升(前级 + 各 filter 正增益之和), > 0 时可能削波
+    pub max_boost_db: f64,
+}
+
+/// 校验 AutoEQ ParametricEQ.txt 文本。错误消息已是 "第 N 行: 原因" 形式, UI 直接显示。
+pub fn eq_profile_validate(text: String) -> Result<EqValidationDto, String> {
+    let profile = ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?;
+    Ok(EqValidationDto {
+        filters: profile.filters.len() as u32,
+        active_filters: profile
+            .active_filters()
+            .filter(|f| f.gain_db.abs() > f32::EPSILON)
+            .count() as u32,
+        preamp_db: profile.preamp_db as f64,
+        max_boost_db: profile.max_boost_db() as f64,
+    })
+}
+
+/// 归一化曲线文本(统一成 Rust 侧的规范格式, 便于落盘与跨端一致)
+pub fn eq_profile_normalize(text: String) -> Result<String, String> {
+    let profile = ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?;
+    Ok(profile.to_text())
+}
+
+/// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
+///
+/// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
+pub fn player_configure(
+    gain_db: f64,
+    fade_ms: u32,
+    eq_text: Option<String>,
+) -> Result<PlaybackTuningDto, String> {
+    let eq = match eq_text {
+        Some(text) if !text.trim().is_empty() => {
+            Some(ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?)
+        }
+        _ => None,
+    };
+    let tuning = ncm_playback::PlaybackTuning {
+        gain_db: gain_db as f32,
+        fade_ms,
+        eq,
+    };
+    player().configure(tuning);
+    Ok(tuning_dto(&player().tuning()))
+}
+
+/// 读取当前生效的播放参数
+pub fn player_tuning() -> PlaybackTuningDto {
+    tuning_dto(&player().tuning())
+}
+
+// ---------------- 音频缓存占用上限 (R5) ----------------
+
+fn audio_cache() -> Result<ncm_service::cache::AudioCache, String> {
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?
+        .join("audio");
+    ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())
+}
+
+/// 缓存占用(limit_mb = 0 表示不限制)
+pub struct CacheStatsDto {
+    pub total_bytes: u64,
+    pub limit_bytes: u64,
+    pub files: u32,
+}
+
+/// 只读统计, 不删任何文件
+pub fn cache_stats(limit_mb: u32) -> Result<CacheStatsDto, String> {
+    let cache = audio_cache()?;
+    Ok(CacheStatsDto {
+        total_bytes: cache.total_bytes(),
+        limit_bytes: limit_mb as u64 * 1024 * 1024,
+        files: cache.file_count() as u32,
+    })
+}
+
+/// 按上限收敛缓存(最久未修改优先), 返回删了多少
+pub struct CacheEvictionDto {
+    pub removed: u32,
+    pub freed_bytes: u64,
+    pub total_bytes: u64,
+    pub limit_bytes: u64,
+}
+
+pub fn cache_enforce_limit(
+    limit_mb: u32,
+    keep_track_id: Option<u64>,
+) -> Result<CacheEvictionDto, String> {
+    let cache = audio_cache()?;
+    let limit = limit_mb as u64 * 1024 * 1024;
+    let r = cache.enforce_limit(limit, keep_track_id)?;
+    Ok(CacheEvictionDto {
+        removed: r.removed as u32,
+        freed_bytes: r.freed_bytes,
+        total_bytes: r.total_bytes,
+        limit_bytes: limit,
+    })
+}
+
+// ---------------- 响度测量 (R2b/R7) ----------------
+
+/// 一次响度测量的对外形态(track_id + 测量值 + 相对目标电平的静态增益)
+pub struct LoudnessDto {
+    pub track_id: u64,
+    pub lufs: f64,
+    pub sample_peak: f64,
+    /// ReplayGain 2.0 语义: target - measured(已钳到 ±24 dB)
+    pub gain_db: f64,
+    pub measured_at_ms: u64,
+}
+
+fn loudness_dto(track_id: u64, l: ncm_domain::TrackLoudness, target_lufs: f64) -> LoudnessDto {
+    LoudnessDto {
+        track_id,
+        lufs: l.lufs as f64,
+        sample_peak: l.sample_peak as f64,
+        gain_db: ncm_playback::loudness::replay_gain_db(target_lufs as f32, l.lufs) as f64,
+        measured_at_ms: l.measured_at_ms,
+    }
+}
+
+fn loudness_store() -> Result<ncm_service::LoudnessStore, String> {
+    let dir = DATA_DIR.get().ok_or_else(|| "core not initialized".to_string())?;
+    Ok(ncm_service::LoudnessStore::open(dir))
+}
+
+/// 读缓存的响度(没测过就是 None, 播放时按 0 dB 处理)
+pub fn loudness_cached(track_id: u64, target_lufs: f64) -> Result<Option<LoudnessDto>, String> {
+    let store = loudness_store()?;
+    Ok(store.get(track_id).map(|l| loudness_dto(track_id, *l, target_lufs)))
+}
+
+/// 测量已缓存音频文件的响度并写入 `loudness.json`。未缓存该曲目时返回 None(不下载)。
+pub async fn loudness_measure_cached(
+    track_id: u64,
+    target_lufs: f64,
+) -> Result<Option<LoudnessDto>, String> {
+    if let Ok(store) = loudness_store() {
+        if let Some(existing) = store.get(track_id) {
+            return Ok(Some(loudness_dto(track_id, *existing, target_lufs)));
+        }
+    }
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?
+        .join("audio");
+    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())?;
+    let Some(path) = cache.cached_path(track_id) else {
+        return Ok(None);
+    };
+    let path_for_task = path.clone();
+    let measured = tokio::task::spawn_blocking(move || ncm_playback::loudness::measure_file(&path_for_task))
+        .await
+        .map_err(|e| e.to_string())??;
+    let Some(m) = measured else {
+        return Ok(None);
+    };
+    let entry = ncm_domain::TrackLoudness {
+        lufs: m.lufs,
+        sample_peak: m.sample_peak,
+        measured_at_ms: now_ms(),
+    };
+    let mut store = loudness_store()?;
+    store.put(track_id, entry)?;
+    Ok(Some(loudness_dto(track_id, entry, target_lufs)))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
 // ---------------- 每日推荐 / 心动模式 ----------------
 
 /// 每日推荐歌曲(原版每日推荐)

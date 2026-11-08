@@ -83,6 +83,25 @@ impl AudioCache {
         out
     }
 
+    /// 不看直链, 直接按曲目 id 找已缓存文件(响度测量等后台任务用)
+    pub fn cached_path(&self, track_id: u64) -> Option<PathBuf> {
+        let prefix = format!("{track_id}.");
+        self.entries()
+            .into_iter()
+            .find(|(p, _, _)| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with(prefix.as_str()))
+                    .unwrap_or(false)
+            })
+            .map(|(p, _, _)| p)
+    }
+
+    /// 已完成缓存文件的数量(不含 .part)
+    pub fn file_count(&self) -> usize {
+        self.entries().len()
+    }
+
     /// 当前缓存总占用(字节, 不含 .part)
     pub fn total_bytes(&self) -> u64 {
         self.entries().iter().map(|(_, size, _)| *size).sum()

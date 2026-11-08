@@ -8,6 +8,22 @@ use serde::{Deserialize, Serialize};
 mod eq_profile;
 mod lrc;
 mod word_lyric;
+/// 一次响度测量的结果(R2b/R7 的 ReplayGain 输入).
+///
+/// 只对首播后台测一次并缓存在 `loudness.json`(key = trackId), 未测曲目按 0 dB 播放。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+pub struct TrackLoudness {
+    /// integrated loudness(LUFS, BS.1770-4)
+    #[serde(default)]
+    pub lufs: f32,
+    /// 样本峰值(线性 0..1; 未做过采样, 与真峰值差 <1 dB)
+    #[serde(default)]
+    pub sample_peak: f32,
+    /// 测量时间(unix 毫秒)
+    #[serde(default)]
+    pub measured_at_ms: u64,
+}
+
 pub use eq_profile::{
     EqFilter, EqFilterKind, EqProfile, EqProfileError, MAX_FILTERS, MAX_FREQ_HZ, MAX_GAIN_DB,
 };

@@ -86,82 +86,126 @@ impl KWeighting {
     }
 }
 
+/// 流式响度计: 逐帧喂 PCM, 内存占用与文件长度无关(Android 侧也要用, 不能整段解码)。
+pub struct LoudnessMeter {
+    channels: usize,
+    hop: usize,
+    hops_per_block: usize,
+    filters: Vec<KWeighting>,
+    sample_peak: f32,
+    acc: f64,
+    acc_len: usize,
+    hop_energies: Vec<f32>,
+    block_energies: Vec<f32>,
+}
+
+impl LoudnessMeter {
+    pub fn new(channels: usize, sample_rate: u32) -> Self {
+        let channels = channels.max(1);
+        let fs = sample_rate.max(8_000);
+        let block = (fs as f32 * 0.4) as usize;
+        let hop = ((fs as f32 * 0.1) as usize).max(1);
+        Self {
+            channels,
+            hop,
+            hops_per_block: (block / hop).max(1),
+            filters: (0..channels).map(|_| KWeighting::new(fs as f32)).collect(),
+            sample_peak: 0.0,
+            acc: 0.0,
+            acc_len: 0,
+            hop_energies: Vec::with_capacity((block / hop).max(1) + 1),
+            block_energies: Vec::new(),
+        }
+    }
+
+    /// 喂一帧(每声道一个样本)
+    pub fn push_frame(&mut self, frame: &[f32]) {
+        let mut frame_energy = 0f32;
+        for c in 0..self.channels {
+            let raw = frame.get(c).copied().unwrap_or(0.0);
+            self.sample_peak = self.sample_peak.max(raw.abs());
+            let y = self.filters[c].process(raw);
+            frame_energy += channel_weight(c) * y * y;
+        }
+        self.acc += frame_energy as f64;
+        self.acc_len += 1;
+        if self.acc_len == self.hop {
+            self.hop_energies.push((self.acc / self.hop as f64) as f32);
+            self.acc = 0.0;
+            self.acc_len = 0;
+            if self.hop_energies.len() >= self.hops_per_block {
+                let window_len = self.hops_per_block.min(self.hop_energies.len());
+                let sum: f32 = self.hop_energies[self.hop_energies.len() - window_len..].iter().sum();
+                self.block_energies.push(sum / window_len as f32);
+            }
+        }
+    }
+
+    /// 收尾: 应用绝对/相对门限并给出 integrated loudness
+    pub fn finish(self) -> Option<LoudnessMeasurement> {
+        let LoudnessMeter { block_energies, sample_peak, .. } = self;
+        if block_energies.is_empty() {
+            return None;
+        }
+        let abs_energy = lufs_to_energy(ABSOLUTE_GATE_LUFS);
+        let above_abs: Vec<f32> =
+            block_energies.iter().copied().filter(|e| *e > abs_energy).collect();
+        if above_abs.is_empty() {
+            return None;
+        }
+        let mean_abs = above_abs.iter().sum::<f32>() / above_abs.len() as f32;
+        // 相对门限 = 平均能量低 10 LU(RELATIVE_GATE_LU 本身是负数: -10)
+        let rel_gate = mean_abs * 10f32.powf(RELATIVE_GATE_LU / 10.0);
+        let gated: Vec<f32> = above_abs.iter().copied().filter(|e| *e >= rel_gate).collect();
+        if gated.is_empty() {
+            return None;
+        }
+        let mean = gated.iter().sum::<f32>() / gated.len() as f32;
+        let lufs = -0.691 + 10.0 * mean.log10();
+        Some(LoudnessMeasurement { lufs, sample_peak, blocks: gated.len() })
+    }
+}
+
 /// 测量一段交错 PCM 的 integrated loudness。样本不足 400 ms 时返回 `None`。
 pub fn measure(
     samples: &[f32],
     channels: usize,
     sample_rate: u32,
 ) -> Option<LoudnessMeasurement> {
+    let mut meter = LoudnessMeter::new(channels, sample_rate);
     let channels = channels.max(1);
-    let fs = sample_rate.max(8_000);
-    let frames = samples.len() / channels;
-    let block = (fs as f32 * 0.4) as usize;
-    let hop = (fs as f32 * 0.1) as usize;
-    if block == 0 || frames < block {
-        return None;
+    for frame in samples.chunks_exact(channels) {
+        meter.push_frame(frame);
     }
+    meter.finish()
+}
 
-    // K 加权后逐声道存能量(按帧累加, 避免整段副本)
-    let mut filters: Vec<KWeighting> = (0..channels).map(|_| KWeighting::new(fs as f32)).collect();
-    // 每个测量窗的加权均方
-    let mut block_energies: Vec<f32> = Vec::new();
-    let mut sample_peak = 0f32;
-
-    let mut window = vec![0f32; channels];
-    let mut acc = 0f64; // 当前 hop 段内加权平方和
-    let mut acc_len = 0usize;
-    // 环形缓冲: 保存最近 (block/hop) 个 hop 段的能量, 构成 400 ms 窗(75% 重叠)
-    let hops_per_block = block / hop;
-    let mut hop_energies: Vec<f32> = Vec::with_capacity(hops_per_block + 1);
-
-    let mut i = 0usize;
-    while i < frames {
-        let base = i * channels;
-        let mut frame_energy = 0f32;
-        for c in 0..channels {
-            let raw = samples[base + c];
-            sample_peak = sample_peak.max(raw.abs());
-            let y = filters[c].process(raw);
-            window[c] = y;
-            frame_energy += channel_weight(c) * y * y;
+/// 一次性解码整个文件并测量(Linux 走 rodio/symphonia; 供 CLI 与后台补测使用)
+#[cfg(target_os = "linux")]
+pub fn measure_file(path: &std::path::Path) -> Result<Option<LoudnessMeasurement>, String> {
+    use rodio::{Decoder, Source};
+    use std::fs::File;
+    let file = File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
+    let decoder = Decoder::try_from(file).map_err(|e| format!("decode {}: {e}", path.display()))?;
+    let channels = decoder.channels().get() as usize;
+    let mut meter = LoudnessMeter::new(channels, decoder.sample_rate().get());
+    let mut frame = vec![0f32; channels];
+    let mut idx = 0usize;
+    for sample in decoder {
+        frame[idx] = sample;
+        idx += 1;
+        if idx == channels {
+            meter.push_frame(&frame);
+            idx = 0;
         }
-        acc += frame_energy as f64;
-        acc_len += 1;
-        if acc_len == hop {
-            hop_energies.push((acc / hop as f64) as f32);
-            acc = 0.0;
-            acc_len = 0;
-            if hop_energies.len() >= hops_per_block {
-                let window_len = hops_per_block.min(hop_energies.len());
-                let sum: f32 = hop_energies[hop_energies.len() - window_len..].iter().sum();
-                block_energies.push(sum / window_len as f32);
-            }
-        }
-        i += 1;
     }
-    let _ = window;
+    Ok(meter.finish())
+}
 
-    if block_energies.is_empty() {
-        return None;
-    }
-
-    // 绝对门限
-    let abs_energy = lufs_to_energy(ABSOLUTE_GATE_LUFS);
-    let above_abs: Vec<f32> = block_energies.iter().copied().filter(|e| *e > abs_energy).collect();
-    if above_abs.is_empty() {
-        return None;
-    }
-    // 相对门限: 以通过绝对门限的窗的平均能量 - 10 LU 为界
-    let mean_abs = above_abs.iter().sum::<f32>() / above_abs.len() as f32;
-    // 相对门限 = 平均能量低 10 LU(RELATIVE_GATE_LU 本身是负数: -10)
-    let rel_gate = mean_abs * 10f32.powf(RELATIVE_GATE_LU / 10.0);
-    let gated: Vec<f32> = above_abs.iter().copied().filter(|e| *e >= rel_gate).collect();
-    if gated.is_empty() {
-        return None;
-    }
-    let mean = gated.iter().sum::<f32>() / gated.len() as f32;
-    let lufs = -0.691 + 10.0 * mean.log10();
-    Some(LoudnessMeasurement { lufs, sample_peak, blocks: gated.len() })
+/// 无解码能力时的占位(Android 复用 Rust 结果需要先有可解码路径, 见任务书 S3)
+#[cfg(not(target_os = "linux"))]
+pub fn measure_file(_path: &std::path::Path) -> Result<Option<LoudnessMeasurement>, String> {
+    Err("loudness measurement needs a decoder on this platform".to_string())
 }
 
 /// 给定曲线(如 "Filter 1: ON PK Fc 100 Hz Gain 6 dB Q 1")
@@ -242,6 +286,18 @@ mod tests {
         let low = measure(&sine(0.5, 50.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
         let mid = measure(&sine(0.5, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
         assert!(mid.lufs - low.lufs > 3.0, "低频应低于中频: {} vs {}", low.lufs, mid.lufs);
+    }
+
+    #[test]
+    fn streaming_meter_matches_slice_api() {
+        let samples = sine(0.2, 440.0, 48_000, 2.0, 2);
+        let slice = measure(&samples, 2, 48_000).unwrap();
+        let mut meter = LoudnessMeter::new(2, 48_000);
+        for frame in samples.chunks_exact(2) {
+            meter.push_frame(frame);
+        }
+        let streamed = meter.finish().unwrap();
+        assert_eq!(slice, streamed);
     }
 
     #[test]

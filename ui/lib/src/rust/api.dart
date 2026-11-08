@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `tuning_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -119,6 +119,61 @@ Future<PlayerStateDto> playerSeek({required BigInt positionMs}) =>
 
 Future<PlayerStateDto> playerSetVolume({required double volume}) =>
     RustLib.instance.api.crateApiPlayerSetVolume(volume: volume);
+
+/// 校验 AutoEQ ParametricEQ.txt 文本。错误消息已是 "第 N 行: 原因" 形式, UI 直接显示。
+Future<EqValidationDto> eqProfileValidate({required String text}) =>
+    RustLib.instance.api.crateApiEqProfileValidate(text: text);
+
+/// 归一化曲线文本(统一成 Rust 侧的规范格式, 便于落盘与跨端一致)
+Future<String> eqProfileNormalize({required String text}) =>
+    RustLib.instance.api.crateApiEqProfileNormalize(text: text);
+
+/// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
+///
+/// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
+Future<PlaybackTuningDto> playerConfigure({
+  required double gainDb,
+  required int fadeMs,
+  String? eqText,
+}) => RustLib.instance.api.crateApiPlayerConfigure(
+  gainDb: gainDb,
+  fadeMs: fadeMs,
+  eqText: eqText,
+);
+
+/// 读取当前生效的播放参数
+Future<PlaybackTuningDto> playerTuning() =>
+    RustLib.instance.api.crateApiPlayerTuning();
+
+/// 只读统计, 不删任何文件
+Future<CacheStatsDto> cacheStats({required int limitMb}) =>
+    RustLib.instance.api.crateApiCacheStats(limitMb: limitMb);
+
+Future<CacheEvictionDto> cacheEnforceLimit({
+  required int limitMb,
+  BigInt? keepTrackId,
+}) => RustLib.instance.api.crateApiCacheEnforceLimit(
+  limitMb: limitMb,
+  keepTrackId: keepTrackId,
+);
+
+/// 读缓存的响度(没测过就是 None, 播放时按 0 dB 处理)
+Future<LoudnessDto?> loudnessCached({
+  required BigInt trackId,
+  required double targetLufs,
+}) => RustLib.instance.api.crateApiLoudnessCached(
+  trackId: trackId,
+  targetLufs: targetLufs,
+);
+
+/// 测量已缓存音频文件的响度并写入 `loudness.json`。未缓存该曲目时返回 None(不下载)。
+Future<LoudnessDto?> loudnessMeasureCached({
+  required BigInt trackId,
+  required double targetLufs,
+}) => RustLib.instance.api.crateApiLoudnessMeasureCached(
+  trackId: trackId,
+  targetLufs: targetLufs,
+);
 
 /// 每日推荐歌曲(原版每日推荐)
 Future<List<SongDto>> dailyRecommendSongs() =>
@@ -892,6 +947,64 @@ class ArtistDetailDto {
           albums == other.albums;
 }
 
+/// 按上限收敛缓存(最久未修改优先), 返回删了多少
+class CacheEvictionDto {
+  final int removed;
+  final BigInt freedBytes;
+  final BigInt totalBytes;
+  final BigInt limitBytes;
+
+  const CacheEvictionDto({
+    required this.removed,
+    required this.freedBytes,
+    required this.totalBytes,
+    required this.limitBytes,
+  });
+
+  @override
+  int get hashCode =>
+      removed.hashCode ^
+      freedBytes.hashCode ^
+      totalBytes.hashCode ^
+      limitBytes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CacheEvictionDto &&
+          runtimeType == other.runtimeType &&
+          removed == other.removed &&
+          freedBytes == other.freedBytes &&
+          totalBytes == other.totalBytes &&
+          limitBytes == other.limitBytes;
+}
+
+/// 缓存占用(limit_mb = 0 表示不限制)
+class CacheStatsDto {
+  final BigInt totalBytes;
+  final BigInt limitBytes;
+  final int files;
+
+  const CacheStatsDto({
+    required this.totalBytes,
+    required this.limitBytes,
+    required this.files,
+  });
+
+  @override
+  int get hashCode =>
+      totalBytes.hashCode ^ limitBytes.hashCode ^ files.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CacheStatsDto &&
+          runtimeType == other.runtimeType &&
+          totalBytes == other.totalBytes &&
+          limitBytes == other.limitBytes &&
+          files == other.files;
+}
+
 class ChartSummary {
   /// 榜单就是歌单, 直接喂给 playlist_songs / playlist_detail
   final BigInt id;
@@ -1288,6 +1401,43 @@ class DigitalAlbumSalesDto {
           sales == other.sales;
 }
 
+/// 曲线校验结果(导入时给 UI 显示"生效了 N 个滤波器 / 前级 -6 dB / 峰值抬升 +2.5 dB")
+class EqValidationDto {
+  /// 曲线里一共有多少个 filter(含 OFF)
+  final int filters;
+
+  /// 实际参与求值的 filter(ON 且增益非 0)
+  final int activeFilters;
+  final double preampDb;
+
+  /// 保守估计的总抬升(前级 + 各 filter 正增益之和), > 0 时可能削波
+  final double maxBoostDb;
+
+  const EqValidationDto({
+    required this.filters,
+    required this.activeFilters,
+    required this.preampDb,
+    required this.maxBoostDb,
+  });
+
+  @override
+  int get hashCode =>
+      filters.hashCode ^
+      activeFilters.hashCode ^
+      preampDb.hashCode ^
+      maxBoostDb.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is EqValidationDto &&
+          runtimeType == other.runtimeType &&
+          filters == other.filters &&
+          activeFilters == other.activeFilters &&
+          preampDb == other.preampDb &&
+          maxBoostDb == other.maxBoostDb;
+}
+
 class FeedEventDto {
   final BigInt id;
 
@@ -1618,6 +1768,44 @@ class InitInfo {
           providers == other.providers;
 }
 
+/// 一次响度测量的对外形态(track_id + 测量值 + 相对目标电平的静态增益)
+class LoudnessDto {
+  final BigInt trackId;
+  final double lufs;
+  final double samplePeak;
+
+  /// ReplayGain 2.0 语义: target - measured(已钳到 ±24 dB)
+  final double gainDb;
+  final BigInt measuredAtMs;
+
+  const LoudnessDto({
+    required this.trackId,
+    required this.lufs,
+    required this.samplePeak,
+    required this.gainDb,
+    required this.measuredAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      trackId.hashCode ^
+      lufs.hashCode ^
+      samplePeak.hashCode ^
+      gainDb.hashCode ^
+      measuredAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is LoudnessDto &&
+          runtimeType == other.runtimeType &&
+          trackId == other.trackId &&
+          lufs == other.lufs &&
+          samplePeak == other.samplePeak &&
+          gainDb == other.gainDb &&
+          measuredAtMs == other.measuredAtMs;
+}
+
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)
 class LyricLineDto {
   final BigInt timeMs;
@@ -1702,6 +1890,45 @@ class PlayRankEntryDto {
           song == other.song &&
           playCount == other.playCount &&
           score == other.score;
+}
+
+/// 当前生效的播放参数(回显给 UI, 便于确认设置真的落地了)
+class PlaybackTuningDto {
+  /// 精细音量增益(dB, -40..=0)
+  final double gainDb;
+
+  /// 淡入时长(ms)
+  final int fadeMs;
+
+  /// 生效的滤波器数量(0 = 曲线旁路)
+  final int eqFilters;
+
+  /// 曲线前级增益(dB)
+  final double eqPreampDb;
+
+  const PlaybackTuningDto({
+    required this.gainDb,
+    required this.fadeMs,
+    required this.eqFilters,
+    required this.eqPreampDb,
+  });
+
+  @override
+  int get hashCode =>
+      gainDb.hashCode ^
+      fadeMs.hashCode ^
+      eqFilters.hashCode ^
+      eqPreampDb.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PlaybackTuningDto &&
+          runtimeType == other.runtimeType &&
+          gainDb == other.gainDb &&
+          fadeMs == other.fadeMs &&
+          eqFilters == other.eqFilters &&
+          eqPreampDb == other.eqPreampDb;
 }
 
 class PlayerStateDto {

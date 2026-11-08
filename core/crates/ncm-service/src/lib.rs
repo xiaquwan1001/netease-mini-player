@@ -7,10 +7,12 @@
 pub mod cache;
 pub mod history;
 pub mod identity;
+pub mod loudness_store;
 pub mod netease;
 
 pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
+pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
 
 use ncm_provider::{Capability, ProviderRegistry};

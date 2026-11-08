@@ -51,6 +51,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DefaultSearchDto dco_decode_box_autoadd_default_search_dto(dynamic raw);
 
   @protected
+  LoudnessDto dco_decode_box_autoadd_loudness_dto(dynamic raw);
+
+  @protected
   SongDto dco_decode_box_autoadd_song_dto(dynamic raw);
 
   @protected
@@ -67,6 +70,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw);
+
+  @protected
+  CacheEvictionDto dco_decode_cache_eviction_dto(dynamic raw);
+
+  @protected
+  CacheStatsDto dco_decode_cache_stats_dto(dynamic raw);
 
   @protected
   ChartSummary dco_decode_chart_summary(dynamic raw);
@@ -94,6 +103,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DigitalAlbumSalesDto dco_decode_digital_album_sales_dto(dynamic raw);
+
+  @protected
+  EqValidationDto dco_decode_eq_validation_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -296,6 +308,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<WordLyricLineDto> dco_decode_list_word_lyric_line_dto(dynamic raw);
 
   @protected
+  LoudnessDto dco_decode_loudness_dto(dynamic raw);
+
+  @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
 
   @protected
@@ -306,6 +321,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DefaultSearchDto? dco_decode_opt_box_autoadd_default_search_dto(dynamic raw);
+
+  @protected
+  LoudnessDto? dco_decode_opt_box_autoadd_loudness_dto(dynamic raw);
 
   @protected
   SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw);
@@ -327,6 +345,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
+
+  @protected
+  PlaybackTuningDto dco_decode_playback_tuning_dto(dynamic raw);
 
   @protected
   PlayerStateDto dco_decode_player_state_dto(dynamic raw);
@@ -517,6 +538,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  LoudnessDto sse_decode_box_autoadd_loudness_dto(SseDeserializer deserializer);
+
+  @protected
   SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -537,6 +561,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer);
+
+  @protected
+  CacheEvictionDto sse_decode_cache_eviction_dto(SseDeserializer deserializer);
+
+  @protected
+  CacheStatsDto sse_decode_cache_stats_dto(SseDeserializer deserializer);
 
   @protected
   ChartSummary sse_decode_chart_summary(SseDeserializer deserializer);
@@ -572,6 +602,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DigitalAlbumSalesDto sse_decode_digital_album_sales_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  EqValidationDto sse_decode_eq_validation_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -836,6 +869,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  LoudnessDto sse_decode_loudness_dto(SseDeserializer deserializer);
+
+  @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
@@ -846,6 +882,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   DefaultSearchDto? sse_decode_opt_box_autoadd_default_search_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  LoudnessDto? sse_decode_opt_box_autoadd_loudness_dto(
     SseDeserializer deserializer,
   );
 
@@ -875,6 +916,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
+
+  @protected
+  PlaybackTuningDto sse_decode_playback_tuning_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PlayerStateDto sse_decode_player_state_dto(SseDeserializer deserializer);
@@ -1094,6 +1140,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_loudness_dto(
+    LoudnessDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
@@ -1119,6 +1171,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     VipSignDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_cache_eviction_dto(
+    CacheEvictionDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_cache_stats_dto(CacheStatsDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_chart_summary(ChartSummary self, SseSerializer serializer);
@@ -1159,6 +1220,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_digital_album_sales_dto(
     DigitalAlbumSalesDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_eq_validation_dto(
+    EqValidationDto self,
     SseSerializer serializer,
   );
 
@@ -1493,6 +1560,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_loudness_dto(LoudnessDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
 
   @protected
@@ -1507,6 +1577,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_default_search_dto(
     DefaultSearchDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_loudness_dto(
+    LoudnessDto? self,
     SseSerializer serializer,
   );
 
@@ -1543,6 +1619,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_play_rank_entry_dto(
     PlayRankEntryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_playback_tuning_dto(
+    PlaybackTuningDto self,
     SseSerializer serializer,
   );
 
