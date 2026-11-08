@@ -138,14 +138,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(handled, isTrue);
-    expect(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.text('轻音 MiniNCM'),
-      ),
-      findsOneWidget,
-      reason: '应回到搜索(首)tab(首 tab 有品牌名, 不与导航重复)',
-    );
+    // 2026-11-09: 首 tab 也去掉了顶部品牌横幅, 所以"回到搜索"的判据用导航选中态
+    expect(find.byType(AppBar), findsNothing, reason: '搜索页没有顶部栏');
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 0);
     expect(calls, isNot(contains('SystemNavigator.pop')));

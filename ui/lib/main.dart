@@ -1803,7 +1803,12 @@ class _HomePageState extends State<HomePage> {
     final topBar = _buildTopBar(context, current);
     return Scaffold(
       appBar: topBar,
-      body: Column(
+      // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
+      body: Padding(
+        padding: EdgeInsets.only(
+          top: topBar == null ? MediaQuery.paddingOf(context).top : 0,
+        ),
+        child: Column(
         children: [
           if (!_showLyrics && _tab == 0) _buildSearchBar(),
           // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
@@ -1861,19 +1866,14 @@ class _HomePageState extends State<HomePage> {
               children: [
                 // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
                 Positioned.fill(
-                  // 没有 AppBar 的 tab(推荐/关注/我的/设置)自己吃状态栏安全区,
-                  // 否则内容会顶到状态栏下面
-                  child: SafeArea(
-                    top: topBar == null,
-                    bottom: false,
-                    child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
-                  ),
+                  child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
                 ),
                 if (_showLyrics) Positioned.fill(child: _buildLyrics()),
               ],
             ),
           ),
         ],
+        ),
       ),
       // 播放条 + 底部导航: 没有曲目时播放条不占位置(Media3 连接后拿到的是一份空状态)
       bottomNavigationBar: Column(
@@ -1946,15 +1946,17 @@ class _HomePageState extends State<HomePage> {
 
   /// 五个 tab 都塞进 IndexedStack(访问过的才真正构建), 保留各自的 State.
 
-  /// 顶部栏: **只在标题不与底部导航重复时才出现**。
+  /// 顶部栏: **只在它承载了导航里没有的信息时才出现**。
   ///
-  /// - 歌词页: 显示曲名 + 收起按钮(导航里没有曲名, 不重复);
-  /// - 「搜索」tab: 显示品牌名 / 正在浏览的歌单名(导航标签是"搜索", 不重复);
-  /// - 「推荐 / 关注 / 我的 / 设置」tab: 原来的标题就是这个 tab 的名字, 与底部导航**完全重复**,
-  ///   因此整条 AppBar 不出现, 把 56dp 高度让给内容(用户要求"更多空间留给内容")。
-  ///   这几页也不再有 AppBar 动作: 登录/账号入口统一在「我的」页资料头(审查 P1-7.10 已定)。
+  /// - 歌词页: 曲名 + 收起按钮;
+  /// - 歌单/正在播放/心动模式的浏览态: 当前列表名 + 返回按钮;
+  /// - 其它情况(含「搜索」tab 首页、「推荐/关注/我的/设置」): **整条 AppBar 不出现**。
+  ///   两处理由: ①这四页标题原本就是底部导航标签, 完全重复;
+  ///   ②搜索页顶部的品牌横幅只是装饰, 用户明确要求去掉 —— 省下的 56dp 全给内容。
+  ///   没有 AppBar 时也不再有顶部「登录」动作: 未登录引导在「我的」页(mine_view 的登录按钮)
+  ///   与资料头点击(审查 P1-7.10 已定: 账号入口 3→1)。
   PreferredSizeWidget? _buildTopBar(BuildContext context, rust.SongDto? current) {
-    final showBar = _showLyrics || _tab == 0;
+    final showBar = _showLyrics || _libraryTitle != null;
     if (!showBar) return null;
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),

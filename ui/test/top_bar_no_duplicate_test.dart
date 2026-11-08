@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 
-/// 顶部栏不再重复底部导航的关键词(2026-11-09 用户要求"更多空间留给内容")。
+/// 顶部栏只承载导航里没有的信息(2026-11-09 用户要求: 去掉与底部导航重复的关键词,
+/// 并去掉搜索页顶部的「轻音 MiniNCM」横幅, 把高度让给内容)。
 ///
 /// 规则:
-/// - 首 tab(搜索): 顶部显示品牌名/歌单名 —— 与导航标签"搜索"不重复, 保留;
-/// - 推荐/关注/我的/设置: 原标题就是导航标签本身 ⇒ 整条 AppBar 不出现, 56dp 让给内容。
+/// - 五个 tab 的首页都**没有** AppBar;
+/// - 歌词展开 / 歌单浏览态才有顶部栏(曲名·列表名 + 收起·返回按钮)。
 void main() {
   Future<void> pumpHome(WidgetTester tester) async {
     tester.view.physicalSize = const Size(1200, 2400);
@@ -24,28 +25,24 @@ void main() {
     });
   }
 
-  testWidgets('首 tab 有顶部栏(品牌名), 且不与导航标签重复', (tester) async {
+  testWidgets('搜索页没有「轻音 MiniNCM」横幅(无 AppBar)', (tester) async {
     await pumpHome(tester);
-    expect(find.byType(AppBar), findsOneWidget);
+    expect(find.byType(AppBar), findsNothing);
+    expect(find.text('轻音 MiniNCM'), findsNothing);
+    // 搜索框自身也有"搜索"字样, 这里只保证顶部不再有重复的标题区(无 AppBar 即无标题)
     expect(
-      find.descendant(of: find.byType(AppBar), matching: find.text('轻音 MiniNCM')),
+      find.descendant(of: find.byType(NavigationBar), matching: find.text('搜索')),
       findsOneWidget,
-    );
-    // 顶部不该出现"搜索"(那是底部导航的标签)
-    expect(
-      find.descendant(of: find.byType(AppBar), matching: find.text('搜索')),
-      findsNothing,
     );
   });
 
-  testWidgets('推荐/关注/我的/设置 tab 都没有顶部栏', (tester) async {
+  testWidgets('推荐/关注/我的/设置 tab 都没有顶部栏, 关键词只在导航出现一次', (tester) async {
     await pumpHome(tester);
     for (final label in ['推荐', '关注', '我的', '设置']) {
-      await tester.tap(find.text(label).last);
+      await tester.tap(find.text(label));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 32));
       expect(find.byType(AppBar), findsNothing, reason: '$label tab 不该有顶部栏');
-      // 该 tab 的关键词只在底部导航里出现一次(不再有顶部标题复制一份)
       expect(find.text(label), findsOneWidget, reason: '$label 只应出现在底部导航里');
     }
   });
