@@ -1,72 +1,154 @@
-# 轻音 MiniNCM — 网易云音乐第三方客户端(Android + Linux)
+<div align="center">
 
-极简、可长期维护的双端客户端。
+# 轻音 MiniNCM
 
-## 架构一句话
+**网易云音乐第三方客户端 · Android + Linux 双端**
 
-**Rust core(协议/身份/缓存/播放控制) + Flutter UI(一份跑双端) + 平台层(Android Media3 / Linux rodio+CPAL)。**
-(README 早期写的 "Linux mpv + MPRIS" 是设计稿,未实现;现状见 `core/crates/ncm-playback`。)}
-音源走 Provider 抽象;首版不做脚本插件,但边界已按「将来能插」写好。
+Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平台层(Android Media3 / Linux rodio)
 
-## 当前状态(2026-11-05)
+[![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![Rust](https://img.shields.io/badge/Rust-core-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)](#)
+[![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
+[![tests](https://img.shields.io/badge/tests-Dart%20362%20%2B%20Rust%20169-brightgreen)](#测试与门禁)
 
-| 项 | 状态 |
+<img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
+
+</div>
+
+## 这是什么
+
+一个**极简、可长期维护**的网易云音乐客户端:播放条只有一行、点开就是歌词详情页,
+不喜欢的歌一律不推;协议、加解密、风控与身份都在 Rust 里,UI 只负责"好看好用"。
+
+- **一份 UI 跑两个平台**:`ui/` 的 Dart 代码同时构建 Android APK 与 Linux 桌面;
+  平台差异只出现在 `playback.dart` / `platform.dart` 两个文件。
+- **协议不自研**:加解密/风控/接口形态全部来自 `core/vendor/ncm-api`(api-enhanced 的 Rust 移植,
+  锁定 commit),我们只做身份注入、DTO 转换与缓存。
+- **身份纪律**:`device_id` 首启生成后永久复用,设备 cookie(`_ntes_nuid/_ntes_nnid/NMTID/WNMCID`)
+  落盘 0600,禁止每进程随机 —— 少一次"莫名其妙被风控"。
+
+## 界面
+
+<table>
+<tr>
+<td width="33%"><img src="docs/images/phone-recommend.png" alt="推荐"></td>
+<td width="33%"><img src="docs/images/phone-lyric-i18n.png" alt="歌曲详情页"></td>
+<td width="33%"><img src="docs/images/phone-share-sheet.png" alt="分享"></td>
+</tr>
+<tr>
+<td align="center">推荐:每日推荐 / 排行榜 / 风格</td>
+<td align="center">歌曲详情页:逐行歌词 + 翻译开关</td>
+<td align="center">歌词多选 → 分享卡片</td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/images/phone-search.png" alt="搜索结果"></td>
+<td width="33%"><img src="docs/images/phone-lyric-select.png" alt="多选歌词"></td>
+<td width="33%"><img src="docs/images/phone-audio.png" alt="播放与音质"></td>
+</tr>
+<tr>
+<td align="center">搜索:单曲/歌单/播客分类</td>
+<td align="center">长按歌词 → 多选</td>
+<td align="center">播放与音质:响度均衡 / AutoEQ</td>
+</tr>
+</table>
+
+### 分享卡片
+
+歌词长按进多选,选中后右上角「分享所选歌词」→ 生成带封面、歌词与二维码的卡片
+(二维码指向官方网页,任何扫码器可打开),可系统分享或存图库:
+
+<img src="docs/images/share-card.png" alt="分享卡片" width="360">
+
+## 功能一览
+
+| 模块 | 已实现 |
 |---|---|
-| Rust core + CLI | ✅ 搜索/取链/歌词/歌单/收藏 + 每日推荐/心动模式/播客/专辑/最近播放 |
-| 身份持久化 | ✅ device_id 首启生成后复用 + 设备指纹 cookie 落盘(0600);多账号账号簿 |
-| Flutter 双端壳 | ✅ Linux bundle + Android APK 均构建通过;Linux Xvfb + 模拟器 a36 双端闭环(见 `docs/testing-dual-platform.md`) |
-| Dart ↔ Rust 桥 | ✅ flutter_rust_bridge 2.13,smoke 测试含真实网络(每日推荐/建议/专辑/播客/历史) |
-| 功能 | ✅ 底部五栏(搜索/推荐/关注/我的/设置;2026-11 起由四栏扩为五栏) 、搜索历史+联想+热词榜/猜你想搜、每日推荐(歌曲/歌单/播客)、每日私人 FM、心动模式、我的收藏(我喜欢/歌单/播客/关注艺人/关注动态)、账号与 UI 设置 |
-| 播放能力 | ✅ 精细音量(-40..0 dB,与系统音量相乘)、响度均衡(EBU R128 / BS.1770-4 测量 + ReplayGain 2.0 静态增益 + 可选动态 AGC 限速 3 dB/s)、自定义响度曲线(AutoEQ `ParametricEQ.txt` 导入/导出/清除,PK·LS·HS,≤20 filter,±24 dB)、淡入淡出 0/200/500/1000 ms、优先硬解/仅软解(Android)、边听边存 + 缓存上限 LRU(128..2048 MB);设置入口「设置 → 播放与音质」 |
-| 外观 | ✅ 主题/字号/推荐卡片排数/OLED 纯黑(`#000000` 基底,M3 语义保留);顶部栏只在承载导航外信息时出现(歌词/歌单浏览),五栏首页不再重复导航标签 |
-| 测试 | ✅ Rust 单测 **169**(domain 32 / playback 31 / service 106) + Flutter **351 + 1 skip**(离线纯函数/widget + 真实网络 smoke);双端实测记录见 `docs/testing-dual-platform.md` |
+| 发现 | 搜索(历史/联想/热词榜)、每日推荐(歌曲·歌单·播客)、每日私人 FM、心动模式、排行榜、新碟上架、风格推荐、关注动态、私信与评论 |
+| 播放 | 播放条(一行)、播放队列(可跳可删)、播放模式、歌曲详情页(歌词/翻译/多选分享/定位当前句)、逐字歌词 |
+| 播放质量 | 精细音量(-40..0 dB)、响度均衡(EBU R128/BS.1770-4 测量 + ReplayGain 2.0 静态增益,可选动态 AGC ≤3 dB/s)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、优先硬解/仅软解、边听边存 + 缓存上限 LRU |
+| 账号 | 网页登录(Android WebView,只回传 cookie)、多账号账号簿、我喜欢/歌单/播客/关注 |
+| 外观 | 主题(浅色/深色/OLED 纯黑)、界面字号、推荐卡片一排/两排 |
 
-## 目录
+## 架构
 
-```
-core/                 Rust workspace
-  crates/ncm-domain   领域模型(纯数据)
-  crates/ncm-provider Provider trait + 能力声明 + 注册表
-  crates/ncm-service  身份持久化 + 网易云 provider(包装 vendor 库)
-  crates/ncm-ffi      Flutter 桥(cdylib/staticlib)
-  crates/ncm-cli      headless CLI: 无 UI 也能验证全链路
-  vendor/ncm-api      api-enhanced 的 Rust 移植(锁定 commit, 见 vendor/UPSTREAM.txt)
-ui/                   Flutter 应用(android + linux, 含 rust_builder/cargokit)
-platform/             (待建) Android Kotlin 层 / Linux GTK 层
-plugins/              (待建) 未来音源脚本
-legacy/               v1 WebView 实现(只读存档)
-tools/                env.sh / build-linux.sh / build-android.sh / ci.sh
-docs/                 架构决策、协议实测、里程碑
+```text
+┌──────────────── Flutter UI(ui/, 一份双端)────────────────┐
+│  页面/组件 · 播放条 · 歌曲详情页 · 分享卡片                 │
+└───────────┬───────────────────────────────┬──────────────┘
+            │ flutter_rust_bridge 2.13        │ ncm/player (MethodChannel)
+┌───────────▼───────────────┐      ┌─────────▼──────────────┐
+│ Rust core (core/)          │      │ Android 平台层 (Kotlin) │
+│  ncm-domain   纯模型        │      │  Media3 ExoPlayer       │
+│  ncm-provider Provider 抽象 │      │  MediaSessionService    │
+│  ncm-service  身份 + 网易云  │      │  登录 WebView / 分享    │
+│  ncm-ffi      Flutter 桥    │      └────────────────────────┘
+│  ncm-cli      headless 验证 │      ┌────────────────────────┐
+│  vendor/ncm-api 协议(锁定)  │      │ Linux 平台层(纯 Rust)   │
+└────────────────────────────┘      │  rodio + CPAL + symphonia│
+                                     └────────────────────────┘
 ```
 
-## 构建
+- 跨层只传 `ncm-domain` 里可序列化的类型;provider 错误统一转
+  `ProviderError{kind, retryable, detail}`,UI 按 `kind` 决策。
+- Linux 端**零系统播放器依赖**(不用 mpv/MPRIS),桌面包解压即用。
+
+## 快速开始
 
 ```bash
-source tools/env.sh          # JDK21 / Flutter / Android SDK / Rust 全在 ~/android-dev
-bash tools/build-linux.sh     # Linux: ui/build/linux/x64/debug/bundle/minincm
-bash tools/build-android.sh   # Android: ui/build/app/outputs/flutter-apk/app-debug.apk
-bash tools/ci.sh              # 单测 + 桥接测试 + 双端构建
+git clone https://github.com/xiaquwan1001/netease-mini-player.git
+cd netease-mini-player
+source tools/env.sh          # 用户级 JDK21 / Flutter / Android SDK / Rust(按需改成本机路径)
+
+bash tools/build-linux.sh    # → ui/build/linux/x64/debug/bundle/minincm
+bash tools/build-android.sh  # → ui/build/app/outputs/flutter-apk/app-debug.apk
+bash tools/ci.sh             # 单测 + 桥接测试 + 双端构建
 ```
 
-命令行(无 UI 验证):
+无 UI 也能验证链路(headless CLI):
 
 ```bash
 cd core
 cargo run -p ncm-cli -- search 晴天 --limit 5
-cargo run -p ncm-cli -- url 3455095614 --download /tmp/a.mp3
+cargo run -p ncm-cli -- url 186016 --download /tmp/a.mp3
 cargo run -p ncm-cli -- lyric 186016
-cargo run -p ncm-cli -- login-cookie "MUSIC_U=...; __csrf=..."
-cargo run -p ncm-cli -- heart 210049 --count 10   # 心动模式(需登录, 无歌单上下文时回落"我喜欢的音乐")
-cargo run -p ncm-cli -- raw recommend_songs       # 排障: 任意端点打印原始 JSON
 ```
-数据目录默认 `~/.local/share/ncm`(可用 `NCM_DATA_DIR` 覆盖),里面是 `identity.json`(0600)。
+
+## 测试与门禁
+
+| 门禁 | 现状 |
+|---|---|
+| `cargo test --workspace`(排除 vendor 联网 smoke) | **169** 通过(domain 32 / playback 31 / service 106) |
+| `flutter test` | **362 + 1 skip** 通过(纯函数/widget + 少量真实网络 smoke) |
+| `dart analyze` | 0 error / 0 warning |
+| 构建 | Linux bundle + Android debug APK 均通过 |
+| 设备走查 | a34 模拟器(API 34)全流程;记录见 `docs/testing-dual-platform.md` |
+
+## 项目进度
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
+| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,LOC 12k → 4k) | ✅ |
+| 双端壳 | Flutter Android/Linux、FRB 2.13 桥、双端构建链路 | ✅ |
+| 播放 | Media3(Android)/ rodio(Linux)、响度均衡、AutoEQ、缓存 | ✅ |
+| UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
+| 待办 | 发布包体积实测、真机听感验收、音源插件化(设计已留边界) | ⏳ |
+
+进度明细与每批验收证据见 `docs/PROGRESS.md`。
 
 ## 文档
 
-- `docs/architecture-restart.md` —— 双端架构选型、决策记录、插件边界
-- `docs/m0-plan.md` —— M0 落地清单与验收
-- `docs/api-channel.md` —— interface / interface3 通道实测
-- `docs/PROGRESS.md` —— 进度记录(v1/v2 历史 + 最新功能)
-- `docs/testing-dual-platform.md` —— Linux/Android 模拟器双端测试流程、结果与踩坑
-- `docs/build-vs-fork.md`、`docs/community-projects.md` —— v1 时代的社区盘点与资源实测
-- `.pi/skills/netease-cloud-music-api-reverse/SKILL.md` —— 协议与反爬细节
+| 文档 | 内容 |
+|---|---|
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(v1/v2 历史 + 每批验收) |
+| [`docs/architecture-restart.md`](docs/architecture-restart.md) | 架构选型、决策记录、插件边界 |
+| [`docs/ui-song-detail-share.md`](docs/ui-song-detail-share.md) | 播放条合并 / 歌曲详情页 / 分享卡片与通道契约 |
+| [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 双端测试流程、语义驱动自测法、踩坑速查 |
+| [`docs/api-channel.md`](docs/api-channel.md) | 接口通道(interface / interface3)实测 |
+| [`tools/devui/`](tools/devui/README.md) | 无窗口模拟器自测脚本(按语义树点击/截图/像素核对) |
+
+## 声明
+
+仅供学习与研究,请支持正版。本项目不提供、不存储任何音频内容,播放直链由官方接口按需获取;
+登录态只保存在本机(0600 文件),不上传任何服务器。

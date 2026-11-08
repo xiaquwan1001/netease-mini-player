@@ -275,8 +275,9 @@ API/protocol details and anti-bot technique live in the
     播放中每 500ms `setState` + 输入框光标闪烁。对策: 先点播放条的播放/暂停键暂停(并让输入框失焦),
     dump 立刻成功; 用 `adb shell input keyevent 4` 直接把 App 退到后台会导致 dump 拿到 launcher。
   - Flutter 的语义树能用 uiautomator 读到(`content-desc`), 前提是
-    `adb shell settings put secure accessibility_enabled 1`; 驱动脚本: `~/bin/uix`(列 desc+bounds)/
-    `~/bin/uitap`/`~/bin/uilong`; 看画面用 `~/bin/shotmap`(灰度 ASCII)与 `~/bin/cropmap`(RGB)。
+    `adb shell settings put secure accessibility_enabled 1`; 驱动脚本已入库 `tools/devui/`
+    (`uix` 列 desc+bounds / `uitap` / `uilong` / `shot` / `shotmap` 灰度 ASCII / `cropmap` RGB),
+    `~/bin/` 下是同一批的个人副本。脚本默认 `DEV=emulator-5554`, 另一台在跑时要显式传。
   - 别用窗口模式起 a34(`-gpu host` 下 gles_v2 满屏 `error null ctx`), 用 `~/bin/avd headless a34`。
   - a36 常被**另一个项目**占用(5554), 本项目统一用 a34, 一律 `adb -s emulator-5556`。
 - **Flutter SDK 文件会被写坏**: 崩溃/突然关机后 `packages/flutter/lib/src/material/animated_icons/data/home_menu.g.dart`

@@ -1,11 +1,16 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-09(**设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏) + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重; 门禁 `flutter test` 351+1skip / `cargo test` 32+31+106 / analyze 0 error 0 warning。剩听感真机验收。前序: 接口覆盖 118/382、FFI 125 个里 0 个无 UI 入口、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等)。
+> 最近更新: 2026-11-08 晚(**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)**;
+> 门禁 `flutter test` 362+1skip / `cargo test` 32+31+106 / `dart analyze` 0 error 0 warning /
+> Linux+Android 双端构建通过。详见 `docs/ui-song-detail-share.md`)。
+> 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
+> + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
+> 更早: 接口覆盖 118/382、FFI 125 个里 0 个无 UI 入口、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
-## v2 · 播放条合并 + 歌曲详情页(2026-11-08, `316093e`)
+## v2 · 播放条合并 + 歌曲详情页(2026-11-08)
 
 用户三条要求一次落地, 详见 `docs/ui-song-detail-share.md`:
 

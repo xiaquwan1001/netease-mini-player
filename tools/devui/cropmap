@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# 截图的某块区域 → RGB 均值表(查背景色/红黄条): tools/devui/cropmap /tmp/a.png x y w h [cols] [rows]
+set -euo pipefail
+img=$1; cx=$2; cy=$3; cw=$4; ch=$5; cols=${6:-8}; rows=${7:-8}
+ffmpeg -y -loglevel error -i "$img" -vf "crop=$cw:$ch:$cx:$cy,scale=$cols:$rows:flags=area" -pix_fmt rgb24 -f rawvideo /tmp/_cropmap.raw
+python3 - "$cols" "$rows" <<'PY'
+import sys
+cols, rows = int(sys.argv[1]), int(sys.argv[2])
+d = open('/tmp/_cropmap.raw', 'rb').read()
+for y in range(rows):
+    cells = []
+    for x in range(cols):
+        i = (y*cols+x)*3
+        cells.append(f'{d[i]:02x}{d[i+1]:02x}{d[i+2]:02x}')
+    print(f'{y:02d} ' + ' '.join(cells))
+PY

@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# 列出当前屏幕的 Flutter 语义节点(content-desc + 点击坐标),用于无窗口驱动自测。
+# 用法: DEV=emulator-5554 tools/devui/uix [关键词]
+# 前置: adb shell settings put secure accessibility_enabled 1
+# 退出码 3 = dump 失败(通常是 App 一直在出帧, 见 README 的说明)
+set -uo pipefail
+export PATH="${ANDROID_HOME:-$HOME/android-dev/sdk}/platform-tools:$PATH"
+DEV=${DEV:-emulator-5554}
+rm -f /tmp/ui.xml
+ok=0
+for _ in 1 2 3 4 5 6; do
+  out=$(adb -s "$DEV" shell uiautomator dump /sdcard/ui.xml 2>&1 | tr -d '\r')
+  case "$out" in *dumped*) ok=1; break ;; esac
+  sleep 1
+done
+if [ "$ok" != 1 ]; then echo "DUMP_FAILED: last=$out" >&2; exit 3; fi
+adb -s "$DEV" shell cat /sdcard/ui.xml > /tmp/ui.xml
+python3 - "${1:-}" <<'PY'
+import re, sys, html
+pat = sys.argv[1] if len(sys.argv) > 1 else ''
+x = open('/tmp/ui.xml', encoding='utf-8').read()
+for m in re.finditer(r'<node[^>]*>', x):
+    tag = m.group(0)
+    desc = re.search(r'content-desc="([^"]*)"', tag)
+    b = re.search(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', tag)
+    if not (desc and b):
+        continue
+    d = html.unescape(desc.group(1)).replace('\n', ' | ')
+    if not d.strip():
+        continue
+    if pat and pat not in d:
+        continue
+    x1, y1, x2, y2 = map(int, b.groups())
+    print(f'{d[:70]:72s} tap {(x1+x2)//2:5d} {(y1+y2)//2:5d}  [{x1},{y1}-{x2},{y2}]')
+PY

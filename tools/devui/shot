@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# 截图: tools/devui/shot /tmp/a.png   (DEV=emulator-5554)
+set -euo pipefail
+out=${1:?usage: shot <out.png>}
+export PATH="${ANDROID_HOME:-$HOME/android-dev/sdk}/platform-tools:$PATH"
+adb -s "${DEV:-emulator-5554}" exec-out screencap -p > "$out"
+echo "$out"

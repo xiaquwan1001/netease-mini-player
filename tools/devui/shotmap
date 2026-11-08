@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# 截图 → 灰度 ASCII(纯文本里"看"界面): tools/devui/shotmap /tmp/a.png [cols] [rows]
+set -euo pipefail
+img=${1:?usage: shotmap <png> [cols] [rows]}
+cols=${2:-40}; rows=${3:-40}
+ffmpeg -y -loglevel error -i "$img" -vf "scale=$cols:$rows:flags=area" -pix_fmt gray -f rawvideo /tmp/_shotmap.raw
+python3 - "$cols" "$rows" <<'PY'
+import sys
+cols, rows = int(sys.argv[1]), int(sys.argv[2])
+d = open('/tmp/_shotmap.raw', 'rb').read()
+chars = ' .:-=+*#%@'
+for y in range(rows):
+    print(f'{y:02d} ' + ''.join(chars[min(len(chars)-1, d[y*cols+x]*len(chars)//256)] for x in range(cols)))
+PY

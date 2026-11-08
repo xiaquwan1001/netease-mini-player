@@ -1,7 +1,8 @@
 # 双端测试记录(Linux + Android 模拟器)
 
-> 最近验证: 2026-11-05。日常功能回归优先 Android 模拟器; Linux 验证 UI 布局 +
-> 真实网络/播放链路。真机只在打包发布时做冒烟。
+> 最近验证: **2026-11-08**(播放条合并 / 歌曲详情页 / 分享, 详见 `docs/ui-song-detail-share.md`)。
+> 日常功能回归优先 Android 模拟器(**本项目默认 a34; a36 常被另一项目借走**);
+> Linux 验证 UI 布局 + 真实网络/播放链路。真机只在打包发布时做冒烟。
 
 ## 1. 环境
 
@@ -11,16 +12,42 @@
 先启的那台占 5554, 第二台 5556; 命令一律带 `adb -s emulator-XXXX`。两台可并行跑不同批次(写操作别抢同一账号) |
 | Linux | Xvfb `:99`(1280x720)+ `GDK_BACKEND=x11`,`flutter build linux --debug` |
 
-启动/安装:
+启动/安装(本项目用 **a34**;若 a36 空闲也可用):
 
 ```bash
 source tools/env.sh
-~/bin/avd headless a36
-adb -s emulator-5554 install -r -t ui/build/app/outputs/flutter-apk/app-debug.apk
-adb -s emulator-5554 shell monkey -p com.minincm.minincm -c android.intent.category.LAUNCHER 1
-# 第二台: ~/bin/avd headless a34  ->  emulator-5556
-# 两台都装: for d in emulator-5554 emulator-5556; do adb -s $d install -r -t <apk>; done
+~/bin/avd headless a34                       # 无窗口 + 自动关 netsim wifi
+DEV=$(adb devices | awk '/emulator-/{print $1; exit}')   # a34 若排在第二台会是 emulator-5556
+echo "DEV=$DEV"
+
+adb -s "$DEV" shell pm grant com.minincm.minincm android.permission.POST_NOTIFICATIONS
+# debug APK 现在 ~213MB(双 ABI): 必须 --no-streaming, 否则报
+# INSTALL_PARSE_FAILED_NO_CERTIFICATES (SHA-256 digest did not verify)
+adb -s "$DEV" install --no-streaming -r -t ui/build/app/outputs/flutter-apk/app-debug.apk
+adb -s "$DEV" shell monkey -p com.minincm.minincm -c android.intent.category.LAUNCHER 1
 ```
+
+### 1.1 无窗口模拟器上怎么"看"和"点"(agent 自测用)
+
+Flutter 的语义树能被 uiautomator 读到,前提是打开无障碍开关:
+
+```bash
+export DEV=$(adb devices | awk '/emulator-/{print $1; exit}')   # 所有 devui 脚本都认 $DEV
+adb -s "$DEV" shell settings put secure accessibility_enabled 1  # Flutter 才上报语义树
+
+tools/devui/uix                 # 列所有 content-desc + bounds(失败退出码 3)
+tools/devui/uix 分享            # 只列含关键词的节点
+tools/devui/uitap "分享这首歌"   # 按文案点击
+tools/devui/uilong "The club"    # 按文案长按(900ms)
+tools/devui/shot /tmp/a.png      # 截图
+tools/devui/shotmap /tmp/a.png 44 40        # 灰度 ASCII 缩略图
+tools/devui/cropmap /tmp/a.png x y w h 8 8  # 区域 RGB 均值表(查背景色/红黄条)
+```
+
+脚本都在 `tools/devui/`(见该目录 README); **`uiautomator dump` 报 `could not get idle state` 的唯一原因是 App 一直在出帧**:
+播放中每 500ms 一次 `setState`、输入框光标闪烁都算。对策: 先点播放条的播放/暂停键暂停
+(`_pollPlayer` 值不变时已不再 setState),让输入框失焦后立刻能 dump;
+**不要**用 `input keyevent 4` 退出 App —— 那样 dump 拿到的是 launcher。
 
 Linux(注意先清代理,见第 5 节):
 
@@ -49,7 +76,7 @@ NCM_DATA_DIR=/tmp/ncm-a36 ./core/target/debug/ncm whoami
 
 ## 3. 验证项与结果
 
-| 功能 | Android a36 | Linux Xvfb |
+| 功能 | Android(a34/a36 模拟器) | Linux Xvfb |
 |---|---|---|
 | 底部四栏(搜索/推荐/我的/设置) | ✅ | ✅ |
 | 搜索历史 + 猜你想搜 + 热词榜 | ✅ 真实数据 | ✅ 真实数据 |
@@ -94,7 +121,7 @@ NCM_DATA_DIR=/tmp/ncm-a36 ./core/target/debug/ncm whoami
 测试结束后:
 
 ```bash
-~/bin/avd stop a36
+~/bin/avd stop a34          # 或 stopall(a36 若是别人的项目在用, 别 stopall)
 kill <linux-app-pid>
 ```
 
