@@ -891,8 +891,10 @@ class _CoverRow extends StatelessWidget {
   Widget build(BuildContext context) {
     if (rows <= 1 || children.length < 2) return _row(children);
     final half = (children.length + 1) ~/ 2;
+    // 两排时内容高 = 2*height + 行间距(4): 外层高度必须把间距算进去,
+    // 否则 Column 内容比外层高 4px, 触发 "RenderFlex overflowed by 4.0 pixels"(R1).
     return SizedBox(
-      height: height * 2,
+      height: height * 2 + 4,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
