@@ -324,9 +324,27 @@ class _HomePageState extends State<HomePage> {
   /// 播放参数变化时才真的调 FFI(设置页里每拖一格 Slider 都会 notifyListeners)
   AudioTuningRequest? _lastTuning;
   int? _lastCacheLimitMb;
+  bool? _lastLoudnessNormalize;
+  double? _lastLoudnessTarget;
+  /// 已经为哪首曲目应用过响度增益(避免每 500ms 轮询都重算)
+  int? _loudnessAppliedTrackId;
 
   void _onAudioSettingsChanged() {
     final settings = AppSettings.instance;
+    // 响度均衡的开关/目标电平变化 ⇒ 已算好的每曲增益全部作废, 当前曲目重算
+    final loudnessChanged = settings.loudnessNormalize != _lastLoudnessNormalize ||
+        settings.loudnessTargetLufs != _lastLoudnessTarget;
+    _lastLoudnessNormalize = settings.loudnessNormalize;
+    _lastLoudnessTarget = settings.loudnessTargetLufs;
+    if (loudnessChanged) {
+      forgetLoudnessGain();
+      final id = _player?.trackId?.toInt();
+      if (id != null) {
+        _loudnessAppliedTrackId = id;
+        unawaited(applyLoudnessForTrack(id));
+      }
+      return;
+    }
     final request = AudioTuningRequest.fromSettings(settings);
     if (request != _lastTuning) {
       _lastTuning = request;
@@ -348,6 +366,15 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final wasPlaying = _player?.playing ?? false;
     setState(() => _player = state);
+    // R2b: 曲目一换就按新曲目的响度给一次增益(未测则后台补测, 先按 0 dB 播)
+    final playingId = state.trackId?.toInt();
+    if (playingId != _loudnessAppliedTrackId) {
+      _loudnessAppliedTrackId = playingId;
+      if (playingId != null) {
+        unawaited(applyLoudnessForTrack(playingId));
+        unawaited(enforceCacheLimit(keepTrackId: playingId));
+      }
+    }
     if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
       _wordPositionMs.value = state.positionMs.toInt();
     }

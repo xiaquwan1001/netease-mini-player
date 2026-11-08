@@ -16,7 +16,11 @@ pub mod loudness;
 /// 播放期的可调参数(R2/R5/R7 的落点). 全部由设置页写入, 默认值 = 完全不改变现状.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackTuning {
-    /// R2 精细音量: -40..=0 dB, 与系统音量相乘(0 = 不变)
+    /// R2 精细音量: -40..=+12 dB, 与系统音量相乘(0 = 不变)。
+    ///
+    /// 上限是 +12 而不是 0: 响度均衡(R2b)对安静曲目要能给出**正增益**
+    /// (ReplayGain 2.0 语义 `target - measured`), 用户自己的音量滑块仍限制在 -40..0。
+    /// 正增益实际被"系统音量满格"自然封顶(乘法链钳 0..1), 所以不会引入额外削波。
     pub gain_db: f32,
     /// R5 淡入: 0 / 200 / 500 / 1000 ms
     pub fade_ms: u32,
@@ -28,7 +32,7 @@ impl PlaybackTuning {
     /// 收敛到合法范围(设置页与 FFI 都可能传越界值, 防御性处理)
     pub fn sanitized(self) -> Self {
         Self {
-            gain_db: if self.gain_db.is_finite() { self.gain_db.clamp(-40.0, 0.0) } else { 0.0 },
+            gain_db: if self.gain_db.is_finite() { self.gain_db.clamp(-40.0, 12.0) } else { 0.0 },
             fade_ms: self.fade_ms.min(5_000),
             eq: self.eq,
         }
@@ -36,7 +40,7 @@ impl PlaybackTuning {
 
     /// 精细音量的线性倍数(0 dB => 1.0)
     pub fn gain_linear(&self) -> f32 {
-        biquad::db_to_linear(self.gain_db.clamp(-40.0, 0.0))
+        biquad::db_to_linear(self.gain_db.clamp(-40.0, 12.0))
     }
 }
 
@@ -360,6 +364,18 @@ mod tests {
         assert!(!s.playing);
         assert_eq!(s.position_ms, 0);
         assert_eq!(s.volume, 1.0);
+    }
+
+    #[test]
+    fn tuning_allows_loudness_boost_but_clamps_both_ends() {
+        let p = Player::new();
+        p.configure(PlaybackTuning { gain_db: 30.0, fade_ms: 0, eq: None });
+        assert_eq!(p.tuning().gain_db, 12.0);
+        assert!((p.tuning().gain_linear() - 3.981).abs() < 0.01);
+        p.configure(PlaybackTuning { gain_db: -99.0, fade_ms: 0, eq: None });
+        assert_eq!(p.tuning().gain_db, -40.0);
+        p.configure(PlaybackTuning { gain_db: f32::NAN, fade_ms: 0, eq: None });
+        assert_eq!(p.tuning().gain_db, 0.0);
     }
 
     #[test]

@@ -300,6 +300,61 @@ mod tests {
         assert_eq!(slice, streamed);
     }
 
+    /// 写一个 16-bit PCM WAV(单声道/双声道), 用来验证 `measure_file` 的解码链路
+    #[cfg(target_os = "linux")]
+    fn write_wav(path: &std::path::Path, amp: f32, freq: f32, fs: u32, secs: f32, channels: u16) {
+        let frames = (fs as f32 * secs) as usize;
+        let data_len = frames * channels as usize * 2;
+        let mut buf = Vec::with_capacity(44 + data_len);
+        buf.extend_from_slice(b"RIFF");
+        buf.extend_from_slice(&((36 + data_len) as u32).to_le_bytes());
+        buf.extend_from_slice(b"WAVEfmt ");
+        buf.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+        buf.extend_from_slice(&1u16.to_le_bytes()); // PCM
+        buf.extend_from_slice(&channels.to_le_bytes());
+        buf.extend_from_slice(&fs.to_le_bytes());
+        buf.extend_from_slice(&(fs * channels as u32 * 2).to_le_bytes()); // byte rate
+        buf.extend_from_slice(&(channels * 2).to_le_bytes()); // block align
+        buf.extend_from_slice(&16u16.to_le_bytes()); // bits per sample
+        buf.extend_from_slice(b"data");
+        buf.extend_from_slice(&(data_len as u32).to_le_bytes());
+        for i in 0..frames {
+            let x = (std::f32::consts::TAU * freq * i as f32 / fs as f32).sin() * amp;
+            let v = (x.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+            for _ in 0..channels {
+                buf.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        std::fs::write(path, buf).unwrap();
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn measure_file_decodes_wav_and_matches_slice_measurement() {
+        let path = std::env::temp_dir().join(format!(
+            "ncm-loud-wav-{}-{}.wav",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        write_wav(&path, 0.1, 1000.0, 48_000, 3.0, 2);
+        let m = measure_file(&path).expect("解码+测量应成功").expect("应有测量结果");
+        assert!((m.lufs + 20.0).abs() < 1.5, "实测 {} LUFS", m.lufs);
+        assert!(m.sample_peak > 0.09 && m.sample_peak < 0.11);
+        // 与等价的浮点切片测量结果一致(差异只来自 16-bit 量化)
+        let reference = measure(&sine(0.1, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
+        assert!((m.lufs - reference.lufs).abs() < 0.2, "{} vs {}", m.lufs, reference.lufs);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn measure_file_reports_missing_file() {
+        assert!(measure_file(std::path::Path::new("/nonexistent/ncm.wav")).is_err());
+    }
+
     #[test]
     fn replay_gain_follows_replaygain_2_semantics() {
         assert!((replay_gain_db(-16.0, -10.0) + 6.0).abs() < 1e-6);
