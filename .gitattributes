@@ -1,0 +1,9 @@
+# GitHub 语言统计口径:第三方移植与 v1 历史存档不计入本项目主语言
+core/vendor/**   linguist-vendored
+legacy/**        linguist-vendored
+references/**    linguist-vendored
+docs/**          linguist-documentation
+
+# 生成的桥接代码: 计入 Rust/Dart 也可以, 但 diff 噪音大, 折叠掉
+core/crates/ncm-ffi/src/frb_generated.rs  linguist-generated
+ui/lib/src/rust/**                        linguist-generated
