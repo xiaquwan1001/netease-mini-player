@@ -171,6 +171,19 @@ Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 两侧规则一致(PK/LS/HS、≤20 filter、Gain/Preamp ±24 报错不裁剪、Q>0、0<Fc≤48k、忽略注释、1 基行号)。
 序列化字节差异(Dart 保留 `.0` 与原始序号, Rust 去尾 0 并按位置重编号)不影响语义, UI 导出**复制用户原文**, 不做归一化。
 
+### 2026-11-09 · 第三波: S3(Android Media3) + R2b 手机端闭环 + 顶部栏去重
+
+| 事项 | 结论 | 提交 | 验证 |
+|---|---|---|---|
+| **S3 · Media3** | 精细音量(系统音量档 × 10^(gain/20)) / 淡入 ValueAnimator / 硬解开关(过滤非硬件 codec, 不用 emptyList) / `SimpleCache`+LRU / EQ `AudioProcessor`(RBJ PK·LS·HS) / 换参数重建 player 保留播放项 | `5504fad` | NCM-PLAYER 日志实测 `configure gain=-12.0 fade=500 eqFilters=2 eqError=null`; 播放正常; 缓存落盘 10MB |
+| **R2b 手机端** | 响度测量改由 symphonia 直解(Android 也能用), Media3 缓存文件路径经通道交给 Rust; 播放中每 20s 补测(先按前缀测) | `c57387c` | a36 实测 `lufs=-7.33` → `configure gain=-8.67`(target -16), `loudness.json` 已写 |
+| **顶部栏去重** | 「推荐/关注/我的/设置」不再渲染 AppBar(标题与底部导航重复), 56dp 让给内容; 「搜索」保留品牌名 | `30065cf` | a36 实测首行从 y=423 上移到 y=276(147px≈56dp); 新增 `top_bar_no_duplicate_test.dart` |
+| **构建口径** | `tools/build-android.sh` 只出 arm64+x86_64: armeabi-v7a 在 rustc+NDK lld 下链接失败(`.debug_aranges unsupported compression type (44)`) | `c57387c` | 构建 0 error, 安装运行正常 |
+
+**R2b 两个真 bug(靠 adb 实测才发现, 都不是逻辑推理能看出来的)**:
+1. 缓存 key 用了原始 `http` 直链, 而 `playback.play` 会升级成 `https` ⇒ `SimpleCache` 永远命中不了;
+2. 未测到时把 `0 dB` 写进了增益缓存, 被 `hasLoudnessGain` 当成"已测"⇒ 补测再也不会发生。
+
 ### 下一波(未开工)
 
 - **S4(Rust, 先做)**: rodio 增益/淡入淡出、biquad EQ、R128 测量 + `loudness.json`、`AudioCache` 上限淘汰、AutoEQ 曲线解析。契约稳定后再做 S3。
