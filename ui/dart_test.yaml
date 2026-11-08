@@ -1,0 +1,5 @@
+# 测试标签声明。CI 用 `flutter test --exclude-tags network` 跳过真实联网 smoke
+# (GitHub 出口 IP 打网易接口不稳定, 与代码无关)。本地默认仍会跑。
+tags:
+  network:
+    description: 真实联网 smoke(上游风控/公网抖动会抖动, CI 默认跳过)

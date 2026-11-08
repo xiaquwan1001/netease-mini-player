@@ -4,12 +4,15 @@
 
 **网易云音乐第三方客户端 · Android + Linux 双端**
 
+[**中文**](README.md) · [English](README.en.md)
+
 Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平台层(Android Media3 / Linux rodio)
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Rust](https://img.shields.io/badge/Rust-core-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)](#)
 [![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![tests](https://img.shields.io/badge/tests-Dart%20362%20%2B%20Rust%20169-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
@@ -147,6 +150,12 @@ cargo run -p ncm-cli -- lyric 186016
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 双端测试流程、语义驱动自测法、踩坑速查 |
 | [`docs/api-channel.md`](docs/api-channel.md) | 接口通道(interface / interface3)实测 |
 | [`tools/devui/`](tools/devui/README.md) | 无窗口模拟器自测脚本(按语义树点击/截图/像素核对) |
+
+## 许可
+
+本项目代码以 **MIT** 发布,见 [`LICENSE`](LICENSE)。第三方组件与许可(WTFPL / MIT / MPL-2.0 / BSD-3-Clause)
+逐项列在 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md),其中网易云接口实现
+(`core/vendor/ncm-api`,WTFPL)由 api-enhanced(MIT, © 2013-2022 Binaryify)移植而来。
 
 ## 声明
 

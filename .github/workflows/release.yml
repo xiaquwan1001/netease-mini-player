@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.1.0)'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build release assets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - name: NDK (cargokit 需要 28.2)
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0' > /dev/null
+      - name: System deps (linux build + alsa)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev liblzma-dev libstdc++-12-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: pub get
+        working-directory: ui
+        run: flutter pub get
+      - name: Build Android APK (arm64, release)
+        working-directory: ui
+        run: flutter build apk --release --target-platform android-arm64
+      - name: Build Linux bundle (release)
+        working-directory: ui
+        run: flutter build linux --release
+      - name: Package
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          [ -z "$VERSION" ] && VERSION=dev
+          mkdir -p dist
+          cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-${VERSION}-android-arm64.apk"
+          tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-${VERSION}-linux-x64.tar.gz" bundle
+          ls -lh dist
+      - name: Upload to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          fail_on_unmatched_files: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/*
