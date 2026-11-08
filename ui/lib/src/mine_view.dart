@@ -47,7 +47,7 @@ class MineView extends StatefulWidget {
   final VoidCallback onOpenAccounts;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
-  final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
+  final void Function(rust.PodcastRadio radio) onOpenPodcast;
   final void Function(rust.AlbumItem album) onOpenAlbum;
   final VoidCallback onOpenRecent;
 
@@ -78,7 +78,7 @@ class MineView extends StatefulWidget {
 
   final Future<List<rust.SongDto>> Function()? loadLiked;
   final Future<List<rust.Playlist>> Function()? loadPlaylists;
-  final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
+  final Future<List<rust.PodcastRadio>> Function()? loadPodcasts;
   final Future<rust.ProfileDetail> Function()? loadProfile;
   final Future<List<rust.SongDto>> Function()? loadRecent;
 
@@ -97,7 +97,7 @@ class _MineViewState extends State<MineView> {
       widget.loadLiked ?? rust.likedSongs;
   Future<List<rust.Playlist>> Function() get _playlists =>
       widget.loadPlaylists ?? rust.myPlaylists;
-  Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
+  Future<List<rust.PodcastRadio>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
   Future<List<rust.AlbumItem>> Function() get _albums =>
       widget.loadAlbums ?? (() => rust.subscribedAlbums(limit: 50));
@@ -526,8 +526,8 @@ class _PlaylistsSection extends StatelessWidget {
 class _PodcastsSection extends StatelessWidget {
   const _PodcastsSection({required this.load, required this.onOpen});
 
-  final Future<List<rust.PodcastRadioDto>> Function() load;
-  final void Function(rust.PodcastRadioDto radio) onOpen;
+  final Future<List<rust.PodcastRadio>> Function() load;
+  final void Function(rust.PodcastRadio radio) onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +535,7 @@ class _PodcastsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionHeader(title: '收藏的播客'),
-        _AsyncSection<List<rust.PodcastRadioDto>>(
+        _AsyncSection<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '还没有收藏播客',
           builder: (context, radios, reload) => SizedBox(

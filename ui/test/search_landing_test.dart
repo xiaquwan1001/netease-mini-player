@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_landing.dart';
 
-rust.HotSearchTermDto hot(int rank, String keyword) =>
-    rust.HotSearchTermDto(rank: rank, keyword: keyword);
+rust.HotSearchTerm hot(int rank, String keyword) =>
+    rust.HotSearchTerm(rank: rank, keyword: keyword);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 

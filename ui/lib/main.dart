@@ -244,13 +244,13 @@ class _HomePageState extends State<HomePage> {
   Timer? _suggestDebounce;
   List<rust.SuggestItem> _suggestions = const [];
   /// 精确实体命中(search_multimatch; orders 为空 = 无命中)
-  rust.SearchExactDto? _exact;
+  rust.SearchExact? _exact;
   /// 纯关键词联想(mobile search_suggest; 卡片/实体都空时的兜底)
   List<String> _keywordSuggestions = const [];
   List<String> _searchHistory = const [];
 
   // ---- 搜索落地页(热词/推荐词) ----
-  List<rust.HotSearchTermDto> _hotTerms = const [];
+  List<rust.HotSearchTerm> _hotTerms = const [];
   /// "猜你想搜": keyword 是真正要搜的词, reason 是官方给的推荐理由(只展示)
   String? _recommendedKeyword;
   String? _recommendedReason;
@@ -521,12 +521,12 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() => _hotLoading = true);
     try {
       // 热搜用 hotsearchlist(带服务端榜位/热度, 固定 20 条); 失败再退回老的热词接口
-      List<rust.HotSearchTermDto> hot;
+      List<rust.HotSearchTerm> hot;
       try {
         final detail = await retryNetwork(rust.hotSearchDetail);
         hot = [
           for (final it in detail)
-            rust.HotSearchTermDto(rank: it.rank, keyword: it.keyword),
+            rust.HotSearchTerm(rank: it.rank, keyword: it.keyword),
         ];
         if (hot.isEmpty) hot = await retryNetwork(rust.hotSearch);
       } catch (_) {
@@ -589,7 +589,7 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  Future<rust.SearchExactDto?> _loadExact(String q) async {
+  Future<rust.SearchExact?> _loadExact(String q) async {
     try {
       final exact = await rust.searchExact(keywords: q);
       // orders 为空就是空命中伪装成 200, 当作没有
@@ -608,7 +608,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// DTO -> 精确实体条视图(空命中由 SearchExactBar 自己隐藏)
-  SearchExactView _exactView(rust.SearchExactDto e) => SearchExactView(
+  SearchExactView _exactView(rust.SearchExact e) => SearchExactView(
         orders: e.orders,
         artists: [
           for (final a in e.artists)
@@ -665,7 +665,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openExactRadio(int id) {
-    for (final r in _exact?.podcasts ?? const <rust.PodcastRadioDto>[]) {
+    for (final r in _exact?.podcasts ?? const <rust.PodcastRadio>[]) {
       if (r.id.toInt() == id) {
         _openPodcastRadio(r);
         return;
@@ -775,7 +775,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
-  void _openPodcastRadio(rust.PodcastRadioDto radio) {
+  void _openPodcastRadio(rust.PodcastRadio radio) {
     showPodcastDetail(
       context,
       radio: radio,
@@ -832,7 +832,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 搜索结果: 歌手卡片 → 歌手页
-  Future<void> _openSearchArtist(rust.SearchArtistDto artist) async {
+  Future<void> _openSearchArtist(rust.SearchArtist artist) async {
     await showArtistDetail(
       context,
       artistId: artist.id,
@@ -848,7 +848,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _openSearchAlbum(rust.SearchAlbumDto album) {
+  void _openSearchAlbum(rust.SearchAlbum album) {
     showAlbumPreview(
       context,
       albumId: album.id,
@@ -859,7 +859,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 搜索结果: 歌单卡片 → 歌单详情
-  void _openSearchPlaylist(rust.SearchPlaylistDto item) {
+  void _openSearchPlaylist(rust.SearchPlaylistItem item) {
     _openPlaylist(
       rust.Playlist(
         id: item.id,
@@ -872,9 +872,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 搜索结果: 播客卡片 → 播客详情
-  void _openSearchPodcast(rust.SearchPodcastDto item) {
+  void _openSearchPodcast(rust.SearchPodcast item) {
     _openPodcastRadio(
-      rust.PodcastRadioDto(
+      rust.PodcastRadio(
         id: item.id,
         name: item.name,
         coverUrl: item.coverUrl,

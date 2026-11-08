@@ -11,12 +11,12 @@ import 'rust/api.dart' as rust;
 import 'format.dart' show formatDurationMs;
 
 /// 可注入加载器(测试用 mock)
-typedef LoadRadioHome = Future<rust.RadioExploreHomeDto?> Function();
-typedef LoadRadioRecommend = Future<List<rust.PodcastRadioDto>> Function(BigInt cateId);
+typedef LoadRadioHome = Future<rust.RadioExploreHome?> Function();
+typedef LoadRadioRecommend = Future<List<rust.PodcastRadio>> Function(BigInt cateId);
 typedef LoadRadioToplist = Future<rust.RadioToplistDto?> Function(String kind);
 
 /// 点电台行(调用方接 showPodcastDetail + 播放回调)
-typedef OnOpenRadio = void Function(BuildContext context, rust.PodcastRadioDto radio);
+typedef OnOpenRadio = void Function(BuildContext context, rust.PodcastRadio radio);
 
 /// 播放回调链(与详情页 onPlaySongs 同一签名): 节目榜点行直接播放该节目
 typedef OnPlaySongs = void Function(List<rust.SongDto> songs, int index);
@@ -44,13 +44,13 @@ class RadioExplorePage extends StatefulWidget {
 }
 
 class _RadioExplorePageState extends State<RadioExplorePage> {
-  rust.RadioExploreHomeDto? _home;
+  rust.RadioExploreHome? _home;
   String? _error;
   bool _loading = true;
 
   /// 当前选中分类: null = 精选(各分类推荐聚合)
-  rust.RadioCategoryDto? _selected;
-  List<rust.PodcastRadioDto>? _recommend;
+  rust.RadioCategory? _selected;
+  List<rust.PodcastRadio>? _recommend;
   String? _recommendError;
 
   /// 当前榜单页签(热门/新晋/付费/主播)
@@ -90,7 +90,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
   }
 
   /// 选中/切回精选时拉推荐电台
-  Future<void> _selectCategory(rust.RadioCategoryDto? cat) async {
+  Future<void> _selectCategory(rust.RadioCategory? cat) async {
     setState(() {
       _selected = cat;
       _recommend = null;
@@ -127,7 +127,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     }
   }
 
-  void _openRadio(rust.PodcastRadioDto radio) {
+  void _openRadio(rust.PodcastRadio radio) {
     widget.onOpenRadio?.call(context, radio);
   }
 
@@ -157,7 +157,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       );
     }
     final home = _home;
-    final categories = home?.categories ?? const <rust.RadioCategoryDto>[];
+    final categories = home?.categories ?? const <rust.RadioCategory>[];
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -185,8 +185,8 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     );
   }
 
-  List<Widget> _buildPicks(BuildContext context, rust.RadioExploreHomeDto? home) {
-    final picks = home?.picks ?? const <rust.RadioPickDto>[];
+  List<Widget> _buildPicks(BuildContext context, rust.RadioExploreHome? home) {
+    final picks = home?.picks ?? const <rust.RadioPick>[];
     if (picks.isEmpty) {
       return const [
         SizedBox(height: 32),
@@ -256,9 +256,9 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
 class _CategoryChips extends StatelessWidget {
   const _CategoryChips({required this.categories, required this.selectedId, required this.onSelected});
 
-  final List<rust.RadioCategoryDto> categories;
+  final List<rust.RadioCategory> categories;
   final BigInt? selectedId;
-  final void Function(rust.RadioCategoryDto? cat) onSelected;
+  final void Function(rust.RadioCategory? cat) onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -295,7 +295,7 @@ class _CategoryChips extends StatelessWidget {
 class _RadioRow extends StatelessWidget {
   const _RadioRow({required this.radio, required this.onTap, this.trailing});
 
-  final rust.PodcastRadioDto radio;
+  final rust.PodcastRadio radio;
   final VoidCallback onTap;
   final String? trailing;
 
@@ -399,7 +399,7 @@ class _ToplistTabs extends StatelessWidget {
     }
     onOpenRadio(
       context,
-      rust.PodcastRadioDto(
+      rust.PodcastRadio(
         id: p.radioId,
         name: p.radioName.isEmpty ? p.name : p.radioName,
         description: p.description,
@@ -454,7 +454,7 @@ class _ToplistTabs extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => onOpenRadio(
             context,
-            rust.PodcastRadioDto(
+            rust.PodcastRadio(
               id: r.radioId,
               name: r.name,
               coverUrl: r.coverUrl.isEmpty ? null : r.coverUrl,

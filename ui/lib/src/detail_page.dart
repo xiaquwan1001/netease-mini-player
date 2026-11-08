@@ -810,7 +810,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 /// 打开播客/电台详情页(全屏路由). 电台订阅本轮不做(Rust 侧暂无接口)。
 Future<void> showPodcastDetail(
   BuildContext context, {
-  required rust.PodcastRadioDto radio,
+  required rust.PodcastRadio radio,
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   ProgramDetailLoader? loadProgramDetail,
 }) async {
@@ -833,7 +833,7 @@ class _PodcastDetailPage extends StatefulWidget {
     required this.loadProgramDetail,
   });
 
-  final rust.PodcastRadioDto radio;
+  final rust.PodcastRadio radio;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   /// 单集详情(podcast_program), 测试可注入 mock
@@ -955,7 +955,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     );
   }
 
-  Widget _buildHeaderCard(rust.PodcastRadioDto radio) {
+  Widget _buildHeaderCard(rust.PodcastRadio radio) {
     final theme = Theme.of(context);
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),

@@ -37,13 +37,13 @@ class RecommendView extends StatefulWidget {
   final bool loggedIn;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
-  final void Function(rust.PodcastRadioDto radio) onOpenPodcast;
+  final void Function(rust.PodcastRadio radio) onOpenPodcast;
   final VoidCallback onHeartMode;
   final VoidCallback onOpenDaily;
 
   final Future<List<rust.SongDto>> Function()? loadDailySongs;
   final Future<List<rust.Playlist>> Function()? loadDailyPlaylists;
-  final Future<List<rust.PodcastRadioDto>> Function()? loadPodcasts;
+  final Future<List<rust.PodcastRadio>> Function()? loadPodcasts;
   final Future<List<rust.SongDto>> Function()? loadFm;
 
   /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
@@ -75,7 +75,7 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadDailySongs ?? rust.dailyRecommendSongs;
   Future<List<rust.Playlist>> Function() get _dailyPlaylists =>
       widget.loadDailyPlaylists ?? rust.dailyRecommendPlaylists;
-  Future<List<rust.PodcastRadioDto>> Function() get _podcasts =>
+  Future<List<rust.PodcastRadio>> Function() get _podcasts =>
       widget.loadPodcasts ?? (() => rust.podcastHot(limit: 10));
   Future<List<rust.SongDto>> Function() get _fm =>
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
@@ -827,9 +827,9 @@ class _PodcastSection extends StatelessWidget {
     this.onPlaySongs,
   });
 
-  final Future<List<rust.PodcastRadioDto>> Function() load;
+  final Future<List<rust.PodcastRadio>> Function() load;
   final bool loggedIn;
-  final void Function(rust.PodcastRadioDto radio) onOpen;
+  final void Function(rust.PodcastRadio radio) onOpen;
 
   /// 电台广场节目榜点行直接播放(与上层播放回调同一签名)
   final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
@@ -853,7 +853,7 @@ class _PodcastSection extends StatelessWidget {
             child: const Text('全部'),
           ),
         ),
-        _AsyncSection<List<rust.PodcastRadioDto>>(
+        _AsyncSection<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '暂无推荐播客',
           builder: (context, radios, reload) => _CoverRow(

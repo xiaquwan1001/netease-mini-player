@@ -26,7 +26,7 @@ rust.Playlist playlist(int id, String name) => rust.Playlist(
       special: false,
     );
 
-rust.PodcastRadioDto radio(int id, String name) => rust.PodcastRadioDto(
+rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,
@@ -50,7 +50,7 @@ void main() {
     List<rust.SongDto>? played;
     int? playedIndex;
     rust.Playlist? openedPlaylist;
-    rust.PodcastRadioDto? openedRadio;
+    rust.PodcastRadio? openedRadio;
     rust.AlbumItem? openedAlbum;
     var heart = 0;
     var moreTaps = 0;

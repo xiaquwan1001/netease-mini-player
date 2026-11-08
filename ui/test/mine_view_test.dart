@@ -40,7 +40,7 @@ MineView buildMine({
         ),
       ],
       loadPodcasts: () async => [
-        rust.PodcastRadioDto(
+        rust.PodcastRadio(
           id: BigInt.from(3),
           name: '收藏播客',
           coverUrl: null,

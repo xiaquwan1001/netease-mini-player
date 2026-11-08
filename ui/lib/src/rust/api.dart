@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `radio_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `tuning_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `tuning_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -315,7 +315,7 @@ Future<bool> shareResource({
 );
 
 /// 热门播客/电台
-Future<List<PodcastRadioDto>> podcastHot({required int limit}) =>
+Future<List<PodcastRadio>> podcastHot({required int limit}) =>
     RustLib.instance.api.crateApiPodcastHot(limit: limit);
 
 /// 某个播客的节目列表
@@ -334,15 +334,15 @@ Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
     RustLib.instance.api.crateApiPodcastProgram(programId: programId);
 
 /// 播客/电台详情
-Future<PodcastRadioDto> podcastRadio({required BigInt radioId}) =>
+Future<PodcastRadio> podcastRadio({required BigInt radioId}) =>
     RustLib.instance.api.crateApiPodcastRadio(radioId: radioId);
 
 /// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
-Future<RadioExploreHomeDto> radioExploreHome() =>
+Future<RadioExploreHome> radioExploreHome() =>
     RustLib.instance.api.crateApiRadioExploreHome();
 
 /// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
-Future<List<PodcastRadioDto>> radioRecommend({required BigInt cateId}) =>
+Future<List<PodcastRadio>> radioRecommend({required BigInt cateId}) =>
     RustLib.instance.api.crateApiRadioRecommend(cateId: cateId);
 
 /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
@@ -350,7 +350,7 @@ Future<RadioToplistDto> radioToplist({required String kind}) =>
     RustLib.instance.api.crateApiRadioToplist(kind: kind);
 
 /// 电台订阅者列表(只读).
-Future<RadioSubscriberPageDto> radioSubscribers({
+Future<RadioSubscriberPage> radioSubscribers({
   required BigInt radioId,
   required int limit,
   BigInt? timeMs,
@@ -361,7 +361,7 @@ Future<RadioSubscriberPageDto> radioSubscribers({
 );
 
 /// 热门搜索榜(按热度排序)
-Future<List<HotSearchTermDto>> hotSearch() =>
+Future<List<HotSearchTerm>> hotSearch() =>
     RustLib.instance.api.crateApiHotSearch();
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
@@ -369,15 +369,15 @@ Future<List<String>> searchSuggestKeywords({required String keywords}) =>
     RustLib.instance.api.crateApiSearchSuggestKeywords(keywords: keywords);
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
-Future<SearchExactDto> searchExact({required String keywords}) =>
+Future<SearchExact> searchExact({required String keywords}) =>
     RustLib.instance.api.crateApiSearchExact(keywords: keywords);
 
 /// 热搜榜详情(20 条, 带 score/rank; 需要登录态更稳)
-Future<List<HotSearchDetailItemDto>> hotSearchDetail() =>
+Future<List<HotSearchDetailItem>> hotSearchDetail() =>
     RustLib.instance.api.crateApiHotSearchDetail();
 
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
-Future<DefaultSearchDto?> defaultSearch() =>
+Future<DefaultSearch?> defaultSearch() =>
     RustLib.instance.api.crateApiDefaultSearch();
 
 /// 私人 FM(需登录)
@@ -385,7 +385,7 @@ Future<List<SongDto>> personalFm({required int limit}) =>
     RustLib.instance.api.crateApiPersonalFm(limit: limit);
 
 /// 已收藏/订阅的播客(需登录)
-Future<List<PodcastRadioDto>> subscribedPodcasts({required int limit}) =>
+Future<List<PodcastRadio>> subscribedPodcasts({required int limit}) =>
     RustLib.instance.api.crateApiSubscribedPodcasts(limit: limit);
 
 /// 关注的艺人(需登录)
@@ -637,7 +637,7 @@ Future<List<Playlist>> recentPlaylists({required int limit}) =>
     RustLib.instance.api.crateApiRecentPlaylists(limit: limit);
 
 /// 最近播放的播客/电台(需登录)
-Future<List<PodcastRadioDto>> recentPodcasts({required int limit}) =>
+Future<List<PodcastRadio>> recentPodcasts({required int limit}) =>
     RustLib.instance.api.crateApiRecentPodcasts(limit: limit);
 
 /// 云贝签到状态(需登录)
@@ -774,14 +774,14 @@ class AccountDto {
           vip == other.vip;
 }
 
-class AlbumBriefDto {
+class AlbumBrief {
   final BigInt id;
   final String name;
   final String? coverUrl;
   final BigInt trackCount;
   final BigInt publishTime;
 
-  const AlbumBriefDto({
+  const AlbumBrief({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -800,7 +800,7 @@ class AlbumBriefDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is AlbumBriefDto &&
+      other is AlbumBrief &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -915,7 +915,7 @@ class ArtistDetailDto {
   final BigInt albumCount;
   final BigInt musicCount;
   final List<SongDto> songs;
-  final List<AlbumBriefDto> albums;
+  final List<AlbumBrief> albums;
 
   const ArtistDetailDto({
     required this.id,
@@ -1232,7 +1232,7 @@ class CommentStats {
           commentUpgraded == other.commentUpgraded;
 }
 
-class DefaultSearchDto {
+class DefaultSearch {
   /// 真正要搜索的关键词(不含推荐理由)
   final String keyword;
 
@@ -1240,7 +1240,7 @@ class DefaultSearchDto {
   final String showText;
   final String? imageUrl;
 
-  const DefaultSearchDto({
+  const DefaultSearch({
     required this.keyword,
     required this.showText,
     this.imageUrl,
@@ -1252,7 +1252,7 @@ class DefaultSearchDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DefaultSearchDto &&
+      other is DefaultSearch &&
           runtimeType == other.runtimeType &&
           keyword == other.keyword &&
           showText == other.showText &&
@@ -1647,8 +1647,8 @@ class HotArtist {
           fans == other.fans;
 }
 
-/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTermDto 多 score/icon_type)
-class HotSearchDetailItemDto {
+/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTerm 多 score/icon_type)
+class HotSearchDetailItem {
   final String keyword;
 
   /// 1 开始的榜位
@@ -1658,7 +1658,7 @@ class HotSearchDetailItemDto {
   /// 角标种类: 0 无图标, 2/4/5 等(未知值原样透传)
   final int iconType;
 
-  const HotSearchDetailItemDto({
+  const HotSearchDetailItem({
     required this.keyword,
     required this.rank,
     required this.score,
@@ -1672,7 +1672,7 @@ class HotSearchDetailItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is HotSearchDetailItemDto &&
+      other is HotSearchDetailItem &&
           runtimeType == other.runtimeType &&
           keyword == other.keyword &&
           rank == other.rank &&
@@ -1680,12 +1680,12 @@ class HotSearchDetailItemDto {
           iconType == other.iconType;
 }
 
-class HotSearchTermDto {
+class HotSearchTerm {
   /// 1 开始的名次
   final int rank;
   final String keyword;
 
-  const HotSearchTermDto({required this.rank, required this.keyword});
+  const HotSearchTerm({required this.rank, required this.keyword});
 
   @override
   int get hashCode => rank.hashCode ^ keyword.hashCode;
@@ -1693,7 +1693,7 @@ class HotSearchTermDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is HotSearchTermDto &&
+      other is HotSearchTerm &&
           runtimeType == other.runtimeType &&
           rank == other.rank &&
           keyword == other.keyword;
@@ -2165,7 +2165,7 @@ class PodcastProgramDto {
           song == other.song;
 }
 
-class PodcastRadioDto {
+class PodcastRadio {
   final BigInt id;
   final String name;
   final String? coverUrl;
@@ -2174,7 +2174,7 @@ class PodcastRadioDto {
   final BigInt programCount;
   final BigInt playCount;
 
-  const PodcastRadioDto({
+  const PodcastRadio({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -2197,7 +2197,7 @@ class PodcastRadioDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PodcastRadioDto &&
+      other is PodcastRadio &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -2398,12 +2398,12 @@ class PurchasedSongDto {
           paidTimeMs == other.paidTimeMs;
 }
 
-class RadioCategoryDto {
+class RadioCategory {
   final BigInt id;
   final String name;
   final String coverUrl;
 
-  const RadioCategoryDto({
+  const RadioCategory({
     required this.id,
     required this.name,
     required this.coverUrl,
@@ -2415,18 +2415,18 @@ class RadioCategoryDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioCategoryDto &&
+      other is RadioCategory &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
           coverUrl == other.coverUrl;
 }
 
-class RadioExploreHomeDto {
-  final List<RadioCategoryDto> categories;
-  final List<RadioPickDto> picks;
+class RadioExploreHome {
+  final List<RadioCategory> categories;
+  final List<RadioPick> picks;
 
-  const RadioExploreHomeDto({required this.categories, required this.picks});
+  const RadioExploreHome({required this.categories, required this.picks});
 
   @override
   int get hashCode => categories.hashCode ^ picks.hashCode;
@@ -2434,18 +2434,18 @@ class RadioExploreHomeDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioExploreHomeDto &&
+      other is RadioExploreHome &&
           runtimeType == other.runtimeType &&
           categories == other.categories &&
           picks == other.picks;
 }
 
-class RadioPickDto {
+class RadioPick {
   final BigInt categoryId;
   final String categoryName;
-  final List<PodcastRadioDto> radios;
+  final List<PodcastRadio> radios;
 
-  const RadioPickDto({
+  const RadioPick({
     required this.categoryId,
     required this.categoryName,
     required this.radios,
@@ -2458,14 +2458,14 @@ class RadioPickDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioPickDto &&
+      other is RadioPick &&
           runtimeType == other.runtimeType &&
           categoryId == other.categoryId &&
           categoryName == other.categoryName &&
           radios == other.radios;
 }
 
-class RadioRankedDjDto {
+class RadioRankedDj {
   final int rank;
   final int lastRank;
   final BigInt userId;
@@ -2474,7 +2474,7 @@ class RadioRankedDjDto {
   final BigInt score;
   final BigInt followedCount;
 
-  const RadioRankedDjDto({
+  const RadioRankedDj({
     required this.rank,
     required this.lastRank,
     required this.userId,
@@ -2497,7 +2497,7 @@ class RadioRankedDjDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioRankedDjDto &&
+      other is RadioRankedDj &&
           runtimeType == other.runtimeType &&
           rank == other.rank &&
           lastRank == other.lastRank &&
@@ -2532,7 +2532,7 @@ class RadioRankedProgramDto {
           program == other.program;
 }
 
-class RadioRankedRadioDto {
+class RadioRankedRadio {
   final int rank;
 
   /// 上期名次(-1 表示新上榜)
@@ -2548,7 +2548,7 @@ class RadioRankedRadioDto {
   final BigInt score;
   final String rcmdText;
 
-  const RadioRankedRadioDto({
+  const RadioRankedRadio({
     required this.rank,
     required this.lastRank,
     required this.radioId,
@@ -2581,7 +2581,7 @@ class RadioRankedRadioDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioRankedRadioDto &&
+      other is RadioRankedRadio &&
           runtimeType == other.runtimeType &&
           rank == other.rank &&
           lastRank == other.lastRank &&
@@ -2597,14 +2597,14 @@ class RadioRankedRadioDto {
           rcmdText == other.rcmdText;
 }
 
-class RadioSubscriberDto {
+class RadioSubscriber {
   final BigInt userId;
   final String nickname;
   final String avatarUrl;
   final String signature;
   final BigInt subscribeTimeMs;
 
-  const RadioSubscriberDto({
+  const RadioSubscriber({
     required this.userId,
     required this.nickname,
     required this.avatarUrl,
@@ -2623,7 +2623,7 @@ class RadioSubscriberDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioSubscriberDto &&
+      other is RadioSubscriber &&
           runtimeType == other.runtimeType &&
           userId == other.userId &&
           nickname == other.nickname &&
@@ -2632,14 +2632,11 @@ class RadioSubscriberDto {
           subscribeTimeMs == other.subscribeTimeMs;
 }
 
-class RadioSubscriberPageDto {
+class RadioSubscriberPage {
   final bool hasMore;
-  final List<RadioSubscriberDto> subscribers;
+  final List<RadioSubscriber> subscribers;
 
-  const RadioSubscriberPageDto({
-    required this.hasMore,
-    required this.subscribers,
-  });
+  const RadioSubscriberPage({required this.hasMore, required this.subscribers});
 
   @override
   int get hashCode => hasMore.hashCode ^ subscribers.hashCode;
@@ -2647,7 +2644,7 @@ class RadioSubscriberPageDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RadioSubscriberPageDto &&
+      other is RadioSubscriberPage &&
           runtimeType == other.runtimeType &&
           hasMore == other.hasMore &&
           subscribers == other.subscribers;
@@ -2655,8 +2652,8 @@ class RadioSubscriberPageDto {
 
 class RadioToplistDto {
   final String kind;
-  final List<RadioRankedRadioDto> radios;
-  final List<RadioRankedDjDto> djs;
+  final List<RadioRankedRadio> radios;
+  final List<RadioRankedDj> djs;
   final List<RadioRankedProgramDto> programs;
 
   const RadioToplistDto({
@@ -2724,14 +2721,14 @@ class RecentContactDto {
           remarkName == other.remarkName;
 }
 
-class SearchAlbumDto {
+class SearchAlbum {
   final BigInt id;
   final String name;
   final String? coverUrl;
   final String artist;
   final BigInt trackCount;
 
-  const SearchAlbumDto({
+  const SearchAlbum({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -2750,7 +2747,7 @@ class SearchAlbumDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SearchAlbumDto &&
+      other is SearchAlbum &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -2759,7 +2756,7 @@ class SearchAlbumDto {
           trackCount == other.trackCount;
 }
 
-class SearchArtistDto {
+class SearchArtist {
   final BigInt id;
   final String name;
   final String? avatarUrl;
@@ -2769,7 +2766,7 @@ class SearchArtistDto {
   final BigInt albumCount;
   final BigInt musicCount;
 
-  const SearchArtistDto({
+  const SearchArtist({
     required this.id,
     required this.name,
     this.avatarUrl,
@@ -2790,7 +2787,7 @@ class SearchArtistDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SearchArtistDto &&
+      other is SearchArtist &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -2804,10 +2801,10 @@ class SearchArtistDto {
 class SearchBundleDto {
   final List<SongDto> songs;
   final BigInt songTotal;
-  final List<SearchArtistDto> artists;
-  final List<SearchAlbumDto> albums;
-  final List<SearchPlaylistDto> playlists;
-  final List<SearchPodcastDto> podcasts;
+  final List<SearchArtist> artists;
+  final List<SearchAlbum> albums;
+  final List<SearchPlaylistItem> playlists;
+  final List<SearchPodcast> podcasts;
 
   const SearchBundleDto({
     required this.songs,
@@ -2840,16 +2837,16 @@ class SearchBundleDto {
           podcasts == other.podcasts;
 }
 
-/// 精确实体改写的结果(对应 ncm_domain::SearchExact).
+/// 精确实体改写的结果: 直接镜像 domain SearchExact.
 /// 注意: orders 为空即"无命中"(接口把空命中伪装成 code=200), 此时三个数组也都为空.
-class SearchExactDto {
+class SearchExact {
   /// 命中类型顺序, 原样保留 (artist / playlist / voice / ...)
   final List<String> orders;
   final List<Artist> artists;
   final List<Playlist> playlists;
-  final List<PodcastRadioDto> podcasts;
+  final List<PodcastRadio> podcasts;
 
-  const SearchExactDto({
+  const SearchExact({
     required this.orders,
     required this.artists,
     required this.playlists,
@@ -2866,7 +2863,7 @@ class SearchExactDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SearchExactDto &&
+      other is SearchExact &&
           runtimeType == other.runtimeType &&
           orders == other.orders &&
           artists == other.artists &&
@@ -2874,7 +2871,7 @@ class SearchExactDto {
           podcasts == other.podcasts;
 }
 
-class SearchPlaylistDto {
+class SearchPlaylistItem {
   final BigInt id;
   final String name;
   final String? coverUrl;
@@ -2882,7 +2879,7 @@ class SearchPlaylistDto {
   final BigInt trackCount;
   final BigInt playCount;
 
-  const SearchPlaylistDto({
+  const SearchPlaylistItem({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -2903,7 +2900,7 @@ class SearchPlaylistDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SearchPlaylistDto &&
+      other is SearchPlaylistItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&
@@ -2913,7 +2910,7 @@ class SearchPlaylistDto {
           playCount == other.playCount;
 }
 
-class SearchPodcastDto {
+class SearchPodcast {
   final BigInt id;
   final String name;
   final String? coverUrl;
@@ -2921,7 +2918,7 @@ class SearchPodcastDto {
   final BigInt programCount;
   final BigInt playCount;
 
-  const SearchPodcastDto({
+  const SearchPodcast({
     required this.id,
     required this.name,
     this.coverUrl,
@@ -2942,7 +2939,7 @@ class SearchPodcastDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SearchPodcastDto &&
+      other is SearchPodcast &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           name == other.name &&

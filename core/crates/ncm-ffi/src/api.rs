@@ -9,8 +9,11 @@ use std::sync::{Mutex, OnceLock};
 use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
-    AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, FollowCount, HotArtist,
-    Playlist, PlaylistCategory, PlaylistDetail, ProfileDetail, SigninDay, SigninStatus, StyleTag,
+    AlbumBrief, AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
+    FollowCount, HotArtist, HotSearchDetailItem, HotSearchTerm, Playlist, PlaylistCategory,
+    PlaylistDetail, PodcastRadio, ProfileDetail, RadioCategory, RadioExploreHome, RadioPick,
+    RadioRankedDj, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, SearchAlbum,
+    SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus, StyleTag,
     SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
@@ -173,7 +176,8 @@ pub struct StreamDto {
 
 // ---------------- 综合搜索(分板块) ----------------
 
-pub struct SearchArtistDto {
+#[frb(mirror(SearchArtist))]
+pub struct _SearchArtist {
     pub id: u64,
     pub name: String,
     pub avatar_url: Option<String>,
@@ -183,7 +187,8 @@ pub struct SearchArtistDto {
     pub music_count: u64,
 }
 
-pub struct SearchAlbumDto {
+#[frb(mirror(SearchAlbum))]
+pub struct _SearchAlbum {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -191,7 +196,8 @@ pub struct SearchAlbumDto {
     pub track_count: u64,
 }
 
-pub struct SearchPlaylistDto {
+#[frb(mirror(SearchPlaylistItem))]
+pub struct _SearchPlaylistItem {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -200,7 +206,8 @@ pub struct SearchPlaylistDto {
     pub play_count: u64,
 }
 
-pub struct SearchPodcastDto {
+#[frb(mirror(SearchPodcast))]
+pub struct _SearchPodcast {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -213,10 +220,10 @@ pub struct SearchPodcastDto {
 pub struct SearchBundleDto {
     pub songs: Vec<SongDto>,
     pub song_total: u64,
-    pub artists: Vec<SearchArtistDto>,
-    pub albums: Vec<SearchAlbumDto>,
-    pub playlists: Vec<SearchPlaylistDto>,
-    pub podcasts: Vec<SearchPodcastDto>,
+    pub artists: Vec<SearchArtist>,
+    pub albums: Vec<SearchAlbum>,
+    pub playlists: Vec<SearchPlaylistItem>,
+    pub podcasts: Vec<SearchPodcast>,
 }
 
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
@@ -230,59 +237,17 @@ pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto,
     Ok(SearchBundleDto {
         songs: bundle.songs.into_iter().map(song_dto).collect(),
         song_total: bundle.song_total,
-        artists: bundle
-            .artists
-            .into_iter()
-            .map(|a| SearchArtistDto {
-                id: a.id,
-                name: a.name,
-                avatar_url: a.avatar_url,
-                alias: a.alias,
-                album_count: a.album_count,
-                music_count: a.music_count,
-            })
-            .collect(),
-        albums: bundle
-            .albums
-            .into_iter()
-            .map(|a| SearchAlbumDto {
-                id: a.id,
-                name: a.name,
-                cover_url: a.cover_url,
-                artist: a.artist,
-                track_count: a.track_count,
-            })
-            .collect(),
-        playlists: bundle
-            .playlists
-            .into_iter()
-            .map(|p| SearchPlaylistDto {
-                id: p.id,
-                name: p.name,
-                cover_url: p.cover_url,
-                creator_name: p.creator_name,
-                track_count: p.track_count,
-                play_count: p.play_count,
-            })
-            .collect(),
-        podcasts: bundle
-            .podcasts
-            .into_iter()
-            .map(|r| SearchPodcastDto {
-                id: r.id,
-                name: r.name,
-                cover_url: r.cover_url,
-                dj_name: r.dj_name,
-                program_count: r.program_count,
-                play_count: r.play_count,
-            })
-            .collect(),
+        artists: bundle.artists,
+        albums: bundle.albums,
+        playlists: bundle.playlists,
+        podcasts: bundle.podcasts,
     })
 }
 
 // ---------------- 歌手详情 ----------------
 
-pub struct AlbumBriefDto {
+#[frb(mirror(AlbumBrief))]
+pub struct _AlbumBrief {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -300,7 +265,7 @@ pub struct ArtistDetailDto {
     pub album_count: u64,
     pub music_count: u64,
     pub songs: Vec<SongDto>,
-    pub albums: Vec<AlbumBriefDto>,
+    pub albums: Vec<AlbumBrief>,
 }
 
 /// 歌手详情(头像/简介/热门歌曲/专辑)
@@ -320,17 +285,7 @@ pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, String> {
         album_count: a.album_count,
         music_count: a.music_count,
         songs: a.songs.into_iter().map(song_dto).collect(),
-        albums: a
-            .albums
-            .into_iter()
-            .map(|x| AlbumBriefDto {
-                id: x.id,
-                name: x.name,
-                cover_url: x.cover_url,
-                track_count: x.track_count,
-                publish_time: x.publish_time,
-            })
-            .collect(),
+        albums: a.albums,
     })
 }
 
@@ -1392,7 +1347,8 @@ pub async fn share_resource(kind: String, resource_id: u64, msg: String) -> Resu
 
 // ---------------- 播客 ----------------
 
-pub struct PodcastRadioDto {
+#[frb(mirror(PodcastRadio))]
+pub struct _PodcastRadio {
     pub id: u64,
     pub name: String,
     pub cover_url: Option<String>,
@@ -1415,18 +1371,6 @@ pub struct PodcastProgramDto {
     pub song: Option<SongDto>,
 }
 
-fn radio_dto(r: ncm_domain::PodcastRadio) -> PodcastRadioDto {
-    PodcastRadioDto {
-        id: r.id,
-        name: r.name,
-        cover_url: r.cover_url,
-        description: r.description,
-        dj_name: r.dj_name,
-        program_count: r.program_count,
-        play_count: r.play_count,
-    }
-}
-
 fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
     PodcastProgramDto {
         id: p.id,
@@ -1442,8 +1386,8 @@ fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
 }
 
 /// 热门播客/电台
-pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
-    ffi_forward!(Capability::Podcast, provider.podcast_hot(limit), map_each radio_dto)
+pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+    ffi_forward!(Capability::Podcast, provider.podcast_hot(limit))
 }
 
 /// 某个播客的节目列表
@@ -1471,35 +1415,34 @@ pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, Strin
 }
 
 /// 播客/电台详情
-pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadioDto, String> {
-    let provider = with_provider(Capability::PodcastDetail)?;
-    let r = provider
-        .podcast_radio(radio_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(radio_dto(r))
+pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadio, String> {
+    ffi_forward!(Capability::PodcastDetail, provider.podcast_radio(radio_id))
 }
 
 // ---------------- 电台发现(只读) ----------------
 
-pub struct RadioCategoryDto {
+#[frb(mirror(RadioCategory))]
+pub struct _RadioCategory {
     pub id: u64,
     pub name: String,
     pub cover_url: String,
 }
 
-pub struct RadioPickDto {
+#[frb(mirror(RadioPick))]
+pub struct _RadioPick {
     pub category_id: u64,
     pub category_name: String,
-    pub radios: Vec<PodcastRadioDto>,
+    pub radios: Vec<PodcastRadio>,
 }
 
-pub struct RadioExploreHomeDto {
-    pub categories: Vec<RadioCategoryDto>,
-    pub picks: Vec<RadioPickDto>,
+#[frb(mirror(RadioExploreHome))]
+pub struct _RadioExploreHome {
+    pub categories: Vec<RadioCategory>,
+    pub picks: Vec<RadioPick>,
 }
 
-pub struct RadioRankedRadioDto {
+#[frb(mirror(RadioRankedRadio))]
+pub struct _RadioRankedRadio {
     pub rank: u32,
     /// 上期名次(-1 表示新上榜)
     pub last_rank: i32,
@@ -1515,7 +1458,8 @@ pub struct RadioRankedRadioDto {
     pub rcmd_text: String,
 }
 
-pub struct RadioRankedDjDto {
+#[frb(mirror(RadioRankedDj))]
+pub struct _RadioRankedDj {
     pub rank: u32,
     pub last_rank: i32,
     pub user_id: u64,
@@ -1533,12 +1477,13 @@ pub struct RadioRankedProgramDto {
 
 pub struct RadioToplistDto {
     pub kind: String,
-    pub radios: Vec<RadioRankedRadioDto>,
-    pub djs: Vec<RadioRankedDjDto>,
+    pub radios: Vec<RadioRankedRadio>,
+    pub djs: Vec<RadioRankedDj>,
     pub programs: Vec<RadioRankedProgramDto>,
 }
 
-pub struct RadioSubscriberDto {
+#[frb(mirror(RadioSubscriber))]
+pub struct _RadioSubscriber {
     pub user_id: u64,
     pub nickname: String,
     pub avatar_url: String,
@@ -1546,36 +1491,20 @@ pub struct RadioSubscriberDto {
     pub subscribe_time_ms: u64,
 }
 
-pub struct RadioSubscriberPageDto {
+#[frb(mirror(RadioSubscriberPage))]
+pub struct _RadioSubscriberPage {
     pub has_more: bool,
-    pub subscribers: Vec<RadioSubscriberDto>,
+    pub subscribers: Vec<RadioSubscriber>,
 }
 
 /// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
-pub async fn radio_explore_home() -> Result<RadioExploreHomeDto, String> {
-    let provider = with_provider(Capability::RadioExplore)?;
-    let r = provider.radio_explore_home().await.map_err(|e| e.to_string())?;
-    Ok(RadioExploreHomeDto {
-        categories: r
-            .categories
-            .into_iter()
-            .map(|c| RadioCategoryDto { id: c.id, name: c.name, cover_url: c.cover_url })
-            .collect(),
-        picks: r
-            .picks
-            .into_iter()
-            .map(|g| RadioPickDto {
-                category_id: g.category_id,
-                category_name: g.category_name,
-                radios: g.radios.into_iter().map(radio_dto).collect(),
-            })
-            .collect(),
-    })
+pub async fn radio_explore_home() -> Result<RadioExploreHome, String> {
+    ffi_forward!(Capability::RadioExplore, provider.radio_explore_home())
 }
 
 /// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
-pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadioDto>, String> {
-    ffi_forward!(Capability::RadioExplore, provider.radio_recommend(cate_id), map_each radio_dto)
+pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadio>, String> {
+    ffi_forward!(Capability::RadioExplore, provider.radio_recommend(cate_id))
 }
 
 /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
@@ -1584,37 +1513,8 @@ pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, String> {
     let r = provider.radio_toplist(&kind).await.map_err(|e| e.to_string())?;
     Ok(RadioToplistDto {
         kind,
-        radios: r
-            .radios
-            .into_iter()
-            .map(|x| RadioRankedRadioDto {
-                rank: x.rank,
-                last_rank: x.last_rank,
-                radio_id: x.radio_id,
-                name: x.name,
-                cover_url: x.cover_url,
-                dj_name: x.dj_name,
-                category: x.category,
-                play_count: x.play_count,
-                program_count: x.program_count,
-                sub_count: x.sub_count,
-                score: x.score,
-                rcmd_text: x.rcmd_text,
-            })
-            .collect(),
-        djs: r
-            .djs
-            .into_iter()
-            .map(|x| RadioRankedDjDto {
-                rank: x.rank,
-                last_rank: x.last_rank,
-                user_id: x.user_id,
-                nickname: x.nickname,
-                avatar_url: x.avatar_url,
-                score: x.score,
-                followed_count: x.followed_count,
-            })
-            .collect(),
+        radios: r.radios,
+        djs: r.djs,
         programs: r
             .programs
             .into_iter()
@@ -1632,56 +1532,35 @@ pub async fn radio_subscribers(
     radio_id: u64,
     limit: u32,
     time_ms: Option<u64>,
-) -> Result<RadioSubscriberPageDto, String> {
-    let provider = with_provider(Capability::RadioExplore)?;
-    let r = provider
-        .radio_subscribers(radio_id, limit, time_ms)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(RadioSubscriberPageDto {
-        has_more: r.has_more,
-        subscribers: r
-            .subscribers
-            .into_iter()
-            .map(|s| RadioSubscriberDto {
-                user_id: s.user_id,
-                nickname: s.nickname,
-                avatar_url: s.avatar_url,
-                signature: s.signature,
-                subscribe_time_ms: s.subscribe_time_ms,
-            })
-            .collect(),
-    })
+) -> Result<RadioSubscriberPage, String> {
+    ffi_forward!(Capability::RadioExplore, provider.radio_subscribers(radio_id, limit, time_ms))
 }
 
 // ---------------- 搜索页(热词/推荐词) ----------------
 
-pub struct HotSearchTermDto {
+#[frb(mirror(HotSearchTerm))]
+pub struct _HotSearchTerm {
     /// 1 开始的名次
     pub rank: u32,
     pub keyword: String,
 }
 
 /// 热门搜索榜(按热度排序)
-pub async fn hot_search() -> Result<Vec<HotSearchTermDto>, String> {
-    let provider = with_provider(Capability::SearchHot)?;
-    let list = provider.hot_search().await.map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|t| HotSearchTermDto { rank: t.rank, keyword: t.keyword })
-        .collect())
+pub async fn hot_search() -> Result<Vec<HotSearchTerm>, String> {
+    ffi_forward!(Capability::SearchHot, provider.hot_search())
 }
 
 // ---------------- 搜索增强(B4): 纯词联想 / 精确实体改写 / 热搜详情 ----------------
 
-/// 精确实体改写的结果(对应 ncm_domain::SearchExact).
+/// 精确实体改写的结果: 直接镜像 domain SearchExact.
 /// 注意: orders 为空即"无命中"(接口把空命中伪装成 code=200), 此时三个数组也都为空.
-pub struct SearchExactDto {
+#[frb(mirror(SearchExact))]
+pub struct _SearchExact {
     /// 命中类型顺序, 原样保留 (artist / playlist / voice / ...)
     pub orders: Vec<String>,
     pub artists: Vec<Artist>,
     pub playlists: Vec<Playlist>,
-    pub podcasts: Vec<PodcastRadioDto>,
+    pub podcasts: Vec<PodcastRadio>,
 }
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
@@ -1690,22 +1569,13 @@ pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, St
 }
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
-pub async fn search_exact(keywords: String) -> Result<SearchExactDto, String> {
-    let provider = with_provider(Capability::SearchSuggest)?;
-    let ex = provider
-        .search_exact(&keywords)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(SearchExactDto {
-        orders: ex.orders,
-        artists: ex.artists,
-        playlists: ex.playlists,
-        podcasts: ex.podcasts.into_iter().map(radio_dto).collect(),
-    })
+pub async fn search_exact(keywords: String) -> Result<SearchExact, String> {
+    ffi_forward!(Capability::SearchSuggest, provider.search_exact(&keywords))
 }
 
-/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTermDto 多 score/icon_type)
-pub struct HotSearchDetailItemDto {
+/// 热搜榜详情行: 带热度分与榜位(比 HotSearchTerm 多 score/icon_type)
+#[frb(mirror(HotSearchDetailItem))]
+pub struct _HotSearchDetailItem {
     pub keyword: String,
     /// 1 开始的榜位
     pub rank: u32,
@@ -1715,24 +1585,12 @@ pub struct HotSearchDetailItemDto {
 }
 
 /// 热搜榜详情(20 条, 带 score/rank; 需要登录态更稳)
-pub async fn hot_search_detail() -> Result<Vec<HotSearchDetailItemDto>, String> {
-    let provider = with_provider(Capability::SearchHot)?;
-    let list = provider
-        .hot_search_detail()
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|i| HotSearchDetailItemDto {
-            keyword: i.keyword,
-            rank: i.rank,
-            score: i.score,
-            icon_type: i.icon_type,
-        })
-        .collect())
+pub async fn hot_search_detail() -> Result<Vec<HotSearchDetailItem>, String> {
+    ffi_forward!(Capability::SearchHot, provider.hot_search_detail())
 }
 
-pub struct DefaultSearchDto {
+#[frb(mirror(DefaultSearch))]
+pub struct _DefaultSearch {
     /// 真正要搜索的关键词(不含推荐理由)
     pub keyword: String,
     /// 官方展示文案, 形如 "🔥Mili 你的十月榜首"
@@ -1741,17 +1599,8 @@ pub struct DefaultSearchDto {
 }
 
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
-pub async fn default_search() -> Result<Option<DefaultSearchDto>, String> {
-    let provider = with_provider(Capability::SearchHot)?;
-    Ok(provider
-        .default_search()
-        .await
-        .map_err(|e| e.to_string())?
-        .map(|d| DefaultSearchDto {
-            keyword: d.keyword,
-            show_text: d.show_text,
-            image_url: d.image_url,
-        }))
+pub async fn default_search() -> Result<Option<DefaultSearch>, String> {
+    ffi_forward!(Capability::SearchHot, provider.default_search())
 }
 
 // ---------------- 推荐页(私人 FM) / 我的(收藏播客/关注艺人/动态) ----------------
@@ -1767,13 +1616,8 @@ pub async fn personal_fm(limit: u32) -> Result<Vec<SongDto>, String> {
 }
 
 /// 已收藏/订阅的播客(需登录)
-pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
-    let provider = with_provider(Capability::Podcast)?;
-    let list = provider
-        .subscribed_podcasts(limit)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(radio_dto).collect())
+pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+    ffi_forward!(Capability::Podcast, provider.subscribed_podcasts(limit))
 }
 
 /// 歌手(简化版): 直接镜像 domain 类型 `Artist`.
@@ -2193,24 +2037,8 @@ pub async fn recent_playlists(limit: u32) -> Result<Vec<Playlist>, String> {
 }
 
 /// 最近播放的播客/电台(需登录)
-pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadioDto>, String> {
-    let provider = with_provider(Capability::Recent)?;
-    let list = provider
-        .recent_podcasts(limit)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|r| PodcastRadioDto {
-            id: r.id,
-            name: r.name,
-            cover_url: r.cover_url,
-            description: r.description,
-            dj_name: r.dj_name,
-            program_count: r.program_count,
-            play_count: r.play_count,
-        })
-        .collect())
+pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+    ffi_forward!(Capability::Recent, provider.recent_podcasts(limit))
 }
 
 #[frb(mirror(SigninDay))]

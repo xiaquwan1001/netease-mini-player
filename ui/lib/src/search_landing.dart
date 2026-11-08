@@ -19,7 +19,7 @@ class SearchLanding extends StatelessWidget {
   });
 
   final List<String> history;
-  final List<rust.HotSearchTermDto> hot;
+  final List<rust.HotSearchTerm> hot;
   /// "猜你想搜"的关键词(真正要搜的词)
   final String? recommended;
 

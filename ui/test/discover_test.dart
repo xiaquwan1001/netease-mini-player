@@ -143,7 +143,7 @@ void main() {
         ],
         loadPlaylists: () async => [playlist(9, '最近歌单', 3)],
         loadPodcasts: () async => [
-          rust.PodcastRadioDto(
+          rust.PodcastRadio(
             id: BigInt.from(7),
             name: '最近播客',
             coverUrl: null,
@@ -171,7 +171,7 @@ void main() {
 
   testWidgets('最近听过: 歌单/播客页签可打开', (tester) async {
     rust.Playlist? openedPlaylist;
-    rust.PodcastRadioDto? openedPodcast;
+    rust.PodcastRadio? openedPodcast;
     await tester.pumpWidget(host(() {
       showRecentPage(
         tester.element(find.text('open')),
@@ -180,7 +180,7 @@ void main() {
         loadAlbums: () async => const [],
         loadPlaylists: () async => [playlist(9, '最近歌单', 3)],
         loadPodcasts: () async => [
-          rust.PodcastRadioDto(
+          rust.PodcastRadio(
             id: BigInt.from(7),
             name: '最近播客',
             coverUrl: null,

@@ -11,7 +11,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    rust.SearchAlbumDto? openedAlbum;
+    rust.SearchAlbum? openedAlbum;
 
     final song = rust.SongDto(
       id: BigInt.from(1),
@@ -32,7 +32,7 @@ void main() {
       songs: [song, song],
       songTotal: BigInt.from(2),
       artists: [
-        rust.SearchArtistDto(
+        rust.SearchArtist(
           id: BigInt.from(9),
           name: '测试歌手',
           avatarUrl: null,
@@ -42,7 +42,7 @@ void main() {
         ),
       ],
       albums: [
-        rust.SearchAlbumDto(
+        rust.SearchAlbum(
           id: BigInt.from(8),
           name: '测试专辑',
           coverUrl: null,
@@ -51,7 +51,7 @@ void main() {
         ),
       ],
       playlists: [
-        rust.SearchPlaylistDto(
+        rust.SearchPlaylistItem(
           id: BigInt.from(5),
           name: '测试歌单',
           coverUrl: null,
@@ -61,7 +61,7 @@ void main() {
         ),
       ],
       podcasts: [
-        rust.SearchPodcastDto(
+        rust.SearchPodcast(
           id: BigInt.from(6),
           name: '测试播客',
           coverUrl: null,

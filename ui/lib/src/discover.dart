@@ -440,7 +440,7 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
 }
 
 typedef AlbumListLoader = Future<List<rust.AlbumItem>> Function();
-typedef PodcastListLoader = Future<List<rust.PodcastRadioDto>> Function();
+typedef PodcastListLoader = Future<List<rust.PodcastRadio>> Function();
 
 /// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
 /// 都来自服务端播放记录(需登录), 未登录时由调用方回落到本地历史.
@@ -454,7 +454,7 @@ Future<void> showRecentPage(
   PlaylistListLoader? loadPlaylists,
   PodcastListLoader? loadPodcasts,
   void Function(rust.Playlist playlist)? onOpenPlaylist,
-  void Function(rust.PodcastRadioDto radio)? onOpenPodcast,
+  void Function(rust.PodcastRadio radio)? onOpenPodcast,
   void Function(rust.AlbumItem album)? onOpenAlbum,
 }) {
   final songs = loadRecent ?? () => rust.recentSongs(limit: 100);
@@ -497,7 +497,7 @@ class RecentPlayedPage extends StatelessWidget {
   final PodcastListLoader loadPodcasts;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.Playlist playlist)? onOpenPlaylist;
-  final void Function(rust.PodcastRadioDto radio)? onOpenPodcast;
+  final void Function(rust.PodcastRadio radio)? onOpenPodcast;
   final void Function(rust.AlbumItem album)? onOpenAlbum;
 
   @override
@@ -580,7 +580,7 @@ class RecentPlayedPage extends StatelessWidget {
                               },
                       ),
                     ),
-                    _RecentBucketTab<rust.PodcastRadioDto>(
+                    _RecentBucketTab<rust.PodcastRadio>(
                       load: loadPodcasts,
                       emptyText: '还没有最近听过的播客',
                       itemBuilder: (context, r, i, _) => ListTile(

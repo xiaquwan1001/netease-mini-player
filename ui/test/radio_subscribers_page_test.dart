@@ -3,8 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/radio_subscribers_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.RadioSubscriberDto _sub(int id, String nick, {String sig = '签名', BigInt? timeMs}) =>
-    rust.RadioSubscriberDto(
+rust.RadioSubscriber _sub(int id, String nick, {String sig = '签名', BigInt? timeMs}) =>
+    rust.RadioSubscriber(
       userId: BigInt.from(id),
       nickname: nick,
       avatarUrl: '',
@@ -33,7 +33,7 @@ void main() {
   testWidgets('列表渲染: 头像位/昵称/签名, 标题带电台名', (tester) async {
     await _pump(
       tester,
-      load: (id, time) async => rust.RadioSubscriberPageDto(
+      load: (id, time) async => rust.RadioSubscriberPage(
         hasMore: false,
         subscribers: [
           _sub(1, '听众甲', sig: '音乐爱好者'),
@@ -54,7 +54,7 @@ void main() {
     await _pump(
       tester,
       load: (id, time) async =>
-          const rust.RadioSubscriberPageDto(hasMore: false, subscribers: []),
+          const rust.RadioSubscriberPage(hasMore: false, subscribers: []),
     );
     await tester.pumpAndSettle();
     expect(find.text('还没有听众'), findsOneWidget);
@@ -66,7 +66,7 @@ void main() {
       tester,
       load: (id, time) async {
         if (fail) throw Exception('[network] boom');
-        return rust.RadioSubscriberPageDto(
+        return rust.RadioSubscriberPage(
           hasMore: false,
           subscribers: [_sub(1, '听众甲')],
         );
@@ -88,12 +88,12 @@ void main() {
       load: (id, time) async {
         calls.add(time);
         if (time == BigInt.from(-1)) {
-          return rust.RadioSubscriberPageDto(
+          return rust.RadioSubscriberPage(
             hasMore: true,
             subscribers: [_sub(1, '听众甲', timeMs: BigInt.from(1111))],
           );
         }
-        return rust.RadioSubscriberPageDto(
+        return rust.RadioSubscriberPage(
           hasMore: false,
           subscribers: [_sub(2, '听众乙', timeMs: BigInt.from(2222))],
         );
@@ -115,7 +115,7 @@ void main() {
       tester,
       load: (id, time) async {
         if (time == BigInt.from(-1)) {
-          return rust.RadioSubscriberPageDto(
+          return rust.RadioSubscriberPage(
             hasMore: true,
             subscribers: [_sub(1, '听众甲', timeMs: BigInt.from(1111))],
           );
@@ -140,7 +140,7 @@ void main() {
     await _pump(
       tester,
       radioName: '一个很长很长很长很长的电台名字的听众',
-      load: (id, time) async => rust.RadioSubscriberPageDto(
+      load: (id, time) async => rust.RadioSubscriberPage(
         hasMore: true,
         subscribers: List.generate(
           8,

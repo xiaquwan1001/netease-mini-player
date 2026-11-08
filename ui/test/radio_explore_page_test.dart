@@ -3,11 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/radio_explore_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.RadioCategoryDto _cat(int id, String name) =>
-    rust.RadioCategoryDto(id: BigInt.from(id), name: name, coverUrl: '');
+rust.RadioCategory _cat(int id, String name) =>
+    rust.RadioCategory(id: BigInt.from(id), name: name, coverUrl: '');
 
-rust.PodcastRadioDto _radio(int id, String name, {String dj = '主播', int progs = 12, BigInt? plays}) =>
-    rust.PodcastRadioDto(
+rust.PodcastRadio _radio(int id, String name, {String dj = '主播', int progs = 12, BigInt? plays}) =>
+    rust.PodcastRadio(
       id: BigInt.from(id),
       name: name,
       coverUrl: '',
@@ -17,11 +17,11 @@ rust.PodcastRadioDto _radio(int id, String name, {String dj = '主播', int prog
       playCount: plays ?? BigInt.from(6555956),
     );
 
-rust.RadioExploreHomeDto _home({int cats = 3, int picks = 2}) => rust.RadioExploreHomeDto(
+rust.RadioExploreHome _home({int cats = 3, int picks = 2}) => rust.RadioExploreHome(
       categories: List.generate(cats, (i) => _cat(2001 + i, '分类$i')),
       picks: List.generate(
         picks,
-        (i) => rust.RadioPickDto(
+        (i) => rust.RadioPick(
           categoryId: BigInt.from(2001 + i),
           categoryName: '分类$i',
           radios: [_radio(526564706 + i, '精选电台$i')],
@@ -33,7 +33,7 @@ rust.RadioToplistDto _top(String kind) => rust.RadioToplistDto(
       kind: kind,
       radios: kind == 'hot' || kind == 'pay'
           ? [
-              rust.RadioRankedRadioDto(
+              rust.RadioRankedRadio(
                 rank: 1,
                 lastRank: 3,
                 radioId: BigInt.from(792868378),
@@ -51,7 +51,7 @@ rust.RadioToplistDto _top(String kind) => rust.RadioToplistDto(
           : const [],
       djs: kind == 'popular'
           ? [
-              rust.RadioRankedDjDto(
+              rust.RadioRankedDj(
                 rank: 1,
                 lastRank: 3,
                 userId: BigInt.from(97137413),
@@ -111,10 +111,10 @@ rust.PodcastProgramDto _program(
 
 Future<void> _pump(
   WidgetTester tester, {
-  Future<rust.RadioExploreHomeDto?> Function()? home,
-  Future<List<rust.PodcastRadioDto>> Function(BigInt)? recommend,
+  Future<rust.RadioExploreHome?> Function()? home,
+  Future<List<rust.PodcastRadio>> Function(BigInt)? recommend,
   Future<rust.RadioToplistDto?> Function(String)? toplist,
-  void Function(BuildContext, rust.PodcastRadioDto)? onOpenRadio,
+  void Function(BuildContext, rust.PodcastRadio)? onOpenRadio,
   void Function(List<rust.SongDto>, int)? onPlaySongs,
 }) async {
   await tester.pumpWidget(
@@ -206,7 +206,7 @@ void main() {
   });
 
   testWidgets('行点击回调携带电台 DTO', (tester) async {
-    rust.PodcastRadioDto? opened;
+    rust.PodcastRadio? opened;
     await _pump(
       tester,
       home: () async => _home(),
@@ -224,7 +224,7 @@ void main() {
   testWidgets('节目榜页签: 渲染排名/节目名/电台/主播/时长, 点行直接播放', (tester) async {
     List<rust.SongDto>? played;
     var playIndex = -1;
-    rust.PodcastRadioDto? opened;
+    rust.PodcastRadio? opened;
     await _pump(
       tester,
       home: () async => _home(),
@@ -252,7 +252,7 @@ void main() {
   });
 
   testWidgets('未注入播放回调时节目行回落打开电台详情', (tester) async {
-    rust.PodcastRadioDto? opened;
+    rust.PodcastRadio? opened;
     await _pump(
       tester,
       home: () async => _home(),

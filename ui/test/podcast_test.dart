@@ -18,7 +18,7 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       playable: true,
     );
 
-rust.PodcastRadioDto radio([String name = '深夜电台']) => rust.PodcastRadioDto(
+rust.PodcastRadio radio([String name = '深夜电台']) => rust.PodcastRadio(
       id: BigInt.from(5),
       name: name,
       coverUrl: null,

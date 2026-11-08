@@ -28,7 +28,7 @@ rust.Playlist playlist(int id, String name) => rust.Playlist(
       special: false,
     );
 
-rust.PodcastRadioDto radio(int id, String name) => rust.PodcastRadioDto(
+rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
       id: BigInt.from(id),
       name: name,
       coverUrl: null,

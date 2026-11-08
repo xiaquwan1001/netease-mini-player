@@ -8,7 +8,7 @@ import 'rust/api.dart' as rust;
 /// subscribeTimeMs, 首屏传 -1). 注意: 当前 FFI radioSubscribers 只有
 /// radioId+limit, 暂不支持 time 入参, 默认加载器忽略游标并对 userId 去重.
 typedef LoadRadioSubscribers =
-    Future<rust.RadioSubscriberPageDto?> Function(BigInt radioId, BigInt timeMs);
+    Future<rust.RadioSubscriberPage?> Function(BigInt radioId, BigInt timeMs);
 
 /// 打开某电台的订阅者/听众列表页(只读, 不做关注/跳转用户主页)
 Future<void> showRadioSubscribers(
@@ -49,7 +49,7 @@ class RadioSubscribersPage extends StatefulWidget {
 class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
   static const int _pageSize = 30;
 
-  final List<rust.RadioSubscriberDto> _items = [];
+  final List<rust.RadioSubscriber> _items = [];
   final Set<BigInt> _seenIds = {};
   bool _hasMore = false;
   bool _loading = true;
@@ -98,7 +98,7 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
     }
   }
 
-  void _applyPage(rust.RadioSubscriberPageDto? page) {
+  void _applyPage(rust.RadioSubscriberPage? page) {
     if (page == null) {
       _hasMore = false;
       return;
@@ -205,7 +205,7 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
 class _SubscriberRow extends StatelessWidget {
   const _SubscriberRow({required this.subscriber});
 
-  final rust.RadioSubscriberDto subscriber;
+  final rust.RadioSubscriber subscriber;
 
   @override
   Widget build(BuildContext context) {

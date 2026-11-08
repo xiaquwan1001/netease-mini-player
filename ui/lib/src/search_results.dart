@@ -27,10 +27,10 @@ class SearchResultsView extends StatelessWidget {
 
   /// 点单曲: 用可见单曲列表重置队列后播放
   final void Function(rust.SongDto) onPlaySong;
-  final void Function(rust.SearchArtistDto) onOpenArtist;
-  final void Function(rust.SearchAlbumDto) onOpenAlbum;
-  final void Function(rust.SearchPlaylistDto) onOpenPlaylist;
-  final void Function(rust.SearchPodcastDto) onOpenPodcast;
+  final void Function(rust.SearchArtist) onOpenArtist;
+  final void Function(rust.SearchAlbum) onOpenAlbum;
+  final void Function(rust.SearchPlaylistItem) onOpenPlaylist;
+  final void Function(rust.SearchPodcast) onOpenPodcast;
 
   /// 行尾 "..." 菜单
   final void Function(rust.SongDto)? onMenu;

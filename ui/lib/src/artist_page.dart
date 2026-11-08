@@ -267,7 +267,7 @@ class _ArtistDetailPageState extends State<_ArtistDetailPage> {
   }
 
   /// 专辑: 横向滚动的封面卡片(118 宽, 行高 176)
-  Widget _buildAlbums(List<rust.AlbumBriefDto> albums) {
+  Widget _buildAlbums(List<rust.AlbumBrief> albums) {
     return SizedBox(
       height: 176,
       child: ListView.separated(

@@ -7,12 +7,12 @@ import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'format.dart' show formatDurationMs;
 
-typedef RadioLoader = Future<List<rust.PodcastRadioDto>> Function(int limit);
+typedef RadioLoader = Future<List<rust.PodcastRadio>> Function(int limit);
 typedef ProgramLoader = Future<List<rust.PodcastProgramDto>> Function(
     BigInt radioId, int limit, int offset);
 
 /// 电台单条详情(详情页打开时刷新最新信息用)
-typedef RadioDetailLoader = Future<rust.PodcastRadioDto> Function(BigInt radioId);
+typedef RadioDetailLoader = Future<rust.PodcastRadio> Function(BigInt radioId);
 
 /// 单集详情加载器. 节目列表里的 description 往往被截断甚至为空,
 /// 点开"节目详情"时用 podcast_program 再拉一次完整数据(简介/时长/音频本体).
@@ -26,7 +26,7 @@ typedef ProgramDetailLoader = Future<rust.PodcastProgramDto> Function(
 Future<void> showPodcastSheet(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlay,
-  rust.PodcastRadioDto? initialRadio,
+  rust.PodcastRadio? initialRadio,
   RadioLoader? loadRadios,
   ProgramLoader? loadPrograms,
   RadioDetailLoader? loadRadioDetail,
@@ -75,14 +75,14 @@ class _PodcastBrowser extends StatefulWidget {
   final ProgramLoader loadPrograms;
   final RadioDetailLoader loadRadioDetail;
   final ProgramDetailLoader loadProgramDetail;
-  final rust.PodcastRadioDto? initialRadio;
+  final rust.PodcastRadio? initialRadio;
 
   @override
   State<_PodcastBrowser> createState() => _PodcastBrowserState();
 }
 
 class _PodcastBrowserState extends State<_PodcastBrowser> {
-  late rust.PodcastRadioDto? _radio = widget.initialRadio;
+  late rust.PodcastRadio? _radio = widget.initialRadio;
 
   @override
   Widget build(BuildContext context) {
@@ -118,14 +118,14 @@ class _RadioList extends StatefulWidget {
   const _RadioList({required this.load, required this.onOpen});
 
   final RadioLoader load;
-  final void Function(rust.PodcastRadioDto radio) onOpen;
+  final void Function(rust.PodcastRadio radio) onOpen;
 
   @override
   State<_RadioList> createState() => _RadioListState();
 }
 
 class _RadioListState extends State<_RadioList> {
-  List<rust.PodcastRadioDto>? _radios;
+  List<rust.PodcastRadio>? _radios;
 
   /// 致命错误: 一条数据都没有, 整页给重试
   String? _error;
@@ -213,14 +213,14 @@ class _ProgramList extends StatefulWidget {
     this.onRadioUpdated,
   });
 
-  final rust.PodcastRadioDto radio;
+  final rust.PodcastRadio radio;
   final ProgramLoader load;
   final RadioDetailLoader loadRadioDetail;
   final ProgramDetailLoader loadProgramDetail;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   /// 详情刷新拿到更新的电台信息后回报(标题栏同步更新)
-  final void Function(rust.PodcastRadioDto radio)? onRadioUpdated;
+  final void Function(rust.PodcastRadio radio)? onRadioUpdated;
 
   @override
   State<_ProgramList> createState() => _ProgramListState();
@@ -228,7 +228,7 @@ class _ProgramList extends StatefulWidget {
 
 class _ProgramListState extends State<_ProgramList> {
   /// 列表带来的电台信息只作首屏占位, 打开后用后端最新数据覆盖
-  late rust.PodcastRadioDto _radio = widget.radio;
+  late rust.PodcastRadio _radio = widget.radio;
   List<rust.PodcastProgramDto>? _programs;
 
   /// 致命错误: 节目列表一条都没有
