@@ -27,12 +27,22 @@ List<Map<Object?, Object?>> recordOpenUrlCalls(WidgetTester tester) {
   return calls;
 }
 
-Widget host() =>
-    const MaterialApp(home: Scaffold(body: SettingsView(info: null)));
+/// 设置页是长 ListView(「关于」在很下面), 测试视口必须够高才会被构建出来;
+/// 窄屏 300dp 的溢出回归由 s5/s6 系列测试覆盖, 这里只关心「关于」内容。
+Future<void> pumpSettings(WidgetTester tester) async {
+  tester.view.physicalSize = const Size(1000, 2800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
+  );
+  await tester.pumpAndSettle();
+}
 
 void main() {
   testWidgets('关于分组展示 GitHub 链接与版本号/许可', (tester) async {
-    await tester.pumpWidget(host());
+    await pumpSettings(tester);
 
     expect(find.text('开源仓库'), findsOneWidget);
     expect(find.text(kGithubUrl), findsOneWidget);
@@ -42,7 +52,7 @@ void main() {
 
   testWidgets('点「开源仓库」把正确 URL 交给 PlatformBridge', (tester) async {
     final calls = recordOpenUrlCalls(tester);
-    await tester.pumpWidget(host());
+    await pumpSettings(tester);
 
     if (Platform.isAndroid) {
       await tester.tap(find.text('开源仓库'));
@@ -65,7 +75,7 @@ void main() {
   });
 
   testWidgets('关于 subtitle 设了 maxLines/ellipsis 防窄屏溢出', (tester) async {
-    await tester.pumpWidget(host());
+    await pumpSettings(tester);
 
     final urlSub = tester.widget<Text>(find.text(kGithubUrl));
     expect(urlSub.maxLines, 2);

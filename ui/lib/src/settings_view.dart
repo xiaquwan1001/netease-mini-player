@@ -4,6 +4,7 @@ import 'app_meta.dart';
 import 'app_settings.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
+import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
 
 /// 设置页(审查 P1-7.9 瘦身后): 只剩「App 怎么表现」的偏好开关 + 分组入口。
@@ -120,6 +121,19 @@ class SettingsView extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.graphic_eq),
+              title: const Text('播放与音质'),
+              subtitle: const Text(
+                '精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => showAudioSettingsPage(context),
             ),
           ),
           const SizedBox(height: 16),
