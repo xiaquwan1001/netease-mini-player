@@ -4,10 +4,6 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to build (e.g. v0.1.0)'
-        required: false
 
 permissions:
   contents: write
@@ -21,52 +17,73 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
-      - name: NDK (cargokit 需要 28.2)
+
+      # GitHub 的 ubuntu 镜像自带 Android SDK, 但**没有** NDK 28.2;
+      # 不能用 android-actions/setup-android(GitHub 已移除 'tools' 包, 该 action 会直接失败),
+      # 这里直接用镜像里的 sdkmanager 装 NDK / platform / build-tools。
+      - name: Android SDK components (NDK 28.2)
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0' > /dev/null
-      - name: System deps (linux build + alsa)
+          SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
+          echo "sdkmanager=$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      - name: System deps (Linux build + alsa for cpal)
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev liblzma-dev libstdc++-12-dev
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
+            libasound2-dev liblzma-dev libstdc++-12-dev
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,x86_64-linux-android
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
       - name: pub get
         working-directory: ui
         run: flutter pub get
+
       - name: Build Android APK (arm64, release)
         working-directory: ui
         run: flutter build apk --release --target-platform android-arm64
+
       - name: Build Linux bundle (release)
         working-directory: ui
         run: flutter build linux --release
+
       - name: Package
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          [ -z "$VERSION" ] && VERSION=dev
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in v*) ;; *) VERSION=$(sed -n 's/^version: \([0-9.]*\).*/\1/p' ui/pubspec.yaml);; esac
           mkdir -p dist
           cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-${VERSION}-android-arm64.apk"
           tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-${VERSION}-linux-x64.tar.gz" bundle
+          (cd dist && sha256sum * > SHA256SUMS.txt)
           ls -lh dist
-      - name: Upload to release
+
+      - name: Attach assets to release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/*.apk
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
+
       - uses: actions/upload-artifact@v4
         with:
           name: release-assets
