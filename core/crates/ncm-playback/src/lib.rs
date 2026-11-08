@@ -10,6 +10,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+pub mod agc;
 pub mod biquad;
 pub mod loudness;
 
