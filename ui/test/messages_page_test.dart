@@ -17,8 +17,8 @@ rust.MessageCountsDto counts({
       total: private + notices + comments + forwards,
     );
 
-rust.PrivateSessionDto session(int uid, String name, String last, int unread) =>
-    rust.PrivateSessionDto(
+rust.PrivateSession session(int uid, String name, String last, int unread) =>
+    rust.PrivateSession(
       userId: BigInt.from(uid),
       nickname: name,
       avatarUrl: null,
@@ -27,8 +27,8 @@ rust.PrivateSessionDto session(int uid, String name, String last, int unread) =>
       unread: unread,
     );
 
-rust.PrivateMessageDto message(int id, String content, {bool mine = false, int timeMs = 1700000000000}) =>
-    rust.PrivateMessageDto(
+rust.PrivateMessage message(int id, String content, {bool mine = false, int timeMs = 1700000000000}) =>
+    rust.PrivateMessage(
       id: BigInt.from(id),
       fromMe: mine,
       nickname: mine ? '我' : '对方',
@@ -37,14 +37,14 @@ rust.PrivateMessageDto message(int id, String content, {bool mine = false, int t
       timeMs: BigInt.from(timeMs),
     );
 
-rust.InboxItemDto inbox(
+rust.InboxItem inbox(
   int id,
   String kind,
   String actor,
   String text, {
   String detail = '',
 }) =>
-    rust.InboxItemDto(
+    rust.InboxItem(
       id: BigInt.from(id),
       kind: kind,
       actor: actor,
@@ -54,13 +54,13 @@ rust.InboxItemDto inbox(
       timeMs: BigInt.from(1700000000000),
     );
 
-rust.ForwardItemDto forward(
+rust.ForwardItem forward(
   int id,
   String nickname,
   String comment, {
   BigInt? timeMs,
 }) =>
-    rust.ForwardItemDto(
+    rust.ForwardItem(
       id: BigInt.from(id),
       eventId: BigInt.from(42),
       userId: BigInt.from(7),
@@ -72,8 +72,8 @@ rust.ForwardItemDto forward(
       picUrl: null,
     );
 
-rust.RecentContactDto contact(int uid, String nickname, {String? remark}) =>
-    rust.RecentContactDto(
+rust.RecentContact contact(int uid, String nickname, {String? remark}) =>
+    rust.RecentContact(
       userId: BigInt.from(uid),
       nickname: nickname,
       avatarUrl: null,

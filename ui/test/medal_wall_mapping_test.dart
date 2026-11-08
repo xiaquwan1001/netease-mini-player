@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/medal_wall.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.UserLevelDto levelDto({int level = 9}) => rust.UserLevelDto(
+rust.UserLevel levelDto({int level = 9}) => rust.UserLevel(
       level: level,
       nowPlayCount: BigInt.from(2301),
       nextPlayCount: BigInt.from(12000),
@@ -12,8 +12,8 @@ rust.UserLevelDto levelDto({int level = 9}) => rust.UserLevelDto(
       privileges: r'60G音乐网盘免费容量$黑名单上限120',
     );
 
-rust.UserMedalDto medalDto(String name, {bool obtained = true}) =>
-    rust.UserMedalDto(
+rust.UserMedal medalDto(String name, {bool obtained = true}) =>
+    rust.UserMedal(
       code: 'code-$name',
       name: name,
       picUrl: null,

@@ -77,10 +77,10 @@ void main() {
   testWidgets('已购数字专辑页: 300dp + 1.25 不溢出', (tester) async {
     narrow(tester);
     await tester.pumpWidget(scaled(DigitalAlbumPage(
-      loadAlbums: () async => rust.DigitalAlbumPurchasedDto(
+      loadAlbums: () async => rust.DigitalAlbumPurchased(
         total: BigInt.one,
         albums: [
-          rust.DigitalAlbumEntryDto(
+          rust.DigitalAlbumPurchasedEntry(
             albumId: BigInt.one,
             albumName: '一张名字特别特别特别长的已购专辑用于小屏回归测试',
             artistId: BigInt.one,
@@ -91,11 +91,11 @@ void main() {
           ),
         ],
       ),
-      loadSongs: () async => rust.SongPurchasedDto(
+      loadSongs: () async => rust.SongPurchasedPage(
         count: BigInt.one,
         hasMore: false,
         songs: [
-          rust.PurchasedSongDto(
+          rust.PurchasedSongEntry(
             songId: BigInt.one,
             name: '一首名字特别特别特别长的已购单曲用于小屏回归测试',
             artistName: '一个名字特别特别长的歌手用于小屏回归测试',

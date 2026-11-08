@@ -6,13 +6,13 @@ import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
-typedef SessionsPageLoader = Future<List<rust.PrivateSessionDto>> Function(
+typedef SessionsPageLoader = Future<List<rust.PrivateSession>> Function(
     int limit, int offset);
-typedef ContactsLoader = Future<List<rust.RecentContactDto>> Function();
-typedef ForwardsLoader = Future<List<rust.ForwardItemDto>> Function();
-typedef HistoryPageLoader = Future<List<rust.PrivateMessageDto>> Function(
+typedef ContactsLoader = Future<List<rust.RecentContact>> Function();
+typedef ForwardsLoader = Future<List<rust.ForwardItem>> Function();
+typedef HistoryPageLoader = Future<List<rust.PrivateMessage>> Function(
     BigInt userId, int limit, BigInt beforeMs);
-typedef InboxLoader = Future<List<rust.InboxItemDto>> Function();
+typedef InboxLoader = Future<List<rust.InboxItem>> Function();
 
 /// 消息中心: 私信 / 通知 / 评论 / @我 四个页签(全部只读, 不在本 App 内回复).
 /// 未登录时每个页签各自给一句登录提示, 不整页报错.
@@ -189,7 +189,7 @@ class _SessionsTab extends StatefulWidget {
 }
 
 class _SessionsTabState extends State<_SessionsTab> {
-  List<rust.RecentContactDto> _contacts = const [];
+  List<rust.RecentContact> _contacts = const [];
 
   @override
   void initState() {
@@ -208,7 +208,7 @@ class _SessionsTabState extends State<_SessionsTab> {
 
   /// 分页闭包: offset 按服务端已消费行数追加(与去重后的列表长度无关),
   /// 去重交给 PagedListView.keyOf。
-  PagedLoader<rust.PrivateSessionDto> get _sessionLoader {
+  PagedLoader<rust.PrivateSession> get _sessionLoader {
     final load = widget.load;
     final pageSize = widget.pageSize;
     return (cursor) async {
@@ -224,7 +224,7 @@ class _SessionsTabState extends State<_SessionsTab> {
   @override
   Widget build(BuildContext context) {
     final contacts = _contacts;
-    return PagedListView<rust.PrivateSessionDto>(
+    return PagedListView<rust.PrivateSession>(
       loader: _sessionLoader,
       keyOf: (s) => s.userId,
       emptyText: '还没有私信',
@@ -274,7 +274,7 @@ class _SessionsTabState extends State<_SessionsTab> {
 class _ContactsStrip extends StatelessWidget {
   const _ContactsStrip({required this.contacts});
 
-  final List<rust.RecentContactDto> contacts;
+  final List<rust.RecentContact> contacts;
 
   @override
   Widget build(BuildContext context) {
@@ -320,7 +320,7 @@ class _ContactsStrip extends StatelessWidget {
 /// 单人私信历史(只读; 官方 App 才允许回复)
 Future<void> showPrivateChat(
   BuildContext context, {
-  required rust.PrivateSessionDto session,
+  required rust.PrivateSession session,
   required HistoryPageLoader load,
   int pageSize = 30,
 }) {
@@ -369,7 +369,7 @@ class _ChatBody extends StatefulWidget {
     required this.pageSize,
   });
 
-  final rust.PrivateSessionDto session;
+  final rust.PrivateSession session;
   final HistoryPageLoader load;
   final int pageSize;
 
@@ -378,7 +378,7 @@ class _ChatBody extends StatefulWidget {
 }
 
 class _ChatBodyState extends State<_ChatBody> {
-  List<rust.PrivateMessageDto>? _items;
+  List<rust.PrivateMessage>? _items;
   String? _error;
   bool _loadingOlder = false;
   bool _noMore = false;
@@ -513,7 +513,7 @@ class _InboxTab extends StatefulWidget {
 }
 
 class _InboxTabState extends State<_InboxTab> {
-  List<rust.InboxItemDto>? _items;
+  List<rust.InboxItem>? _items;
   String? _error;
 
   @override
@@ -591,7 +591,7 @@ class _ForwardsTab extends StatefulWidget {
 }
 
 class _ForwardsTabState extends State<_ForwardsTab> {
-  List<rust.ForwardItemDto>? _items;
+  List<rust.ForwardItem>? _items;
   String? _error;
 
   @override

@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `inbox_dto`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `to_user_level_dto`, `to_user_medal_dto`, `tuning_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -36,7 +36,7 @@ Future<bool> addToPlaylist({
   trackId: trackId,
 );
 
-Future<StreamDto> songUrl({required BigInt trackId, required String level}) =>
+Future<StreamUrl> songUrl({required BigInt trackId, required String level}) =>
     RustLib.instance.api.crateApiSongUrl(trackId: trackId, level: level);
 
 Future<String> lyric({required BigInt trackId}) =>
@@ -251,7 +251,7 @@ Future<bool> setPlaylistSubscribed({
 );
 
 /// 已购数字专辑(需登录; limit/offset 分页)
-Future<DigitalAlbumPurchasedDto> digitalAlbumPurchased({
+Future<DigitalAlbumPurchased> digitalAlbumPurchased({
   required int limit,
   required int offset,
 }) => RustLib.instance.api.crateApiDigitalAlbumPurchased(
@@ -260,17 +260,17 @@ Future<DigitalAlbumPurchasedDto> digitalAlbumPurchased({
 );
 
 /// 已购单曲(需登录; limit/offset 分页)
-Future<SongPurchasedDto> songPurchased({
+Future<SongPurchasedPage> songPurchased({
   required int limit,
   required int offset,
 }) => RustLib.instance.api.crateApiSongPurchased(limit: limit, offset: offset);
 
 /// 数字专辑详情(只读; 不提供下单)
-Future<DigitalAlbumDetailDto> digitalAlbumDetail({required BigInt albumId}) =>
+Future<DigitalAlbumDetail> digitalAlbumDetail({required BigInt albumId}) =>
     RustLib.instance.api.crateApiDigitalAlbumDetail(albumId: albumId);
 
 /// 数字专辑销量(album_ids 逗号分隔)
-Future<List<DigitalAlbumSalesDto>> digitalAlbumSales({
+Future<List<DigitalAlbumSalesEntry>> digitalAlbumSales({
   required String albumIds,
 }) => RustLib.instance.api.crateApiDigitalAlbumSales(albumIds: albumIds);
 
@@ -681,14 +681,14 @@ Future<MessageCountsDto> messageCounts() =>
     RustLib.instance.api.crateApiMessageCounts();
 
 /// 私信会话列表(需登录)
-Future<List<PrivateSessionDto>> privateSessions({
+Future<List<PrivateSession>> privateSessions({
   required int limit,
   required int offset,
 }) =>
     RustLib.instance.api.crateApiPrivateSessions(limit: limit, offset: offset);
 
 /// 与某人的私信历史(需登录, 老的在前; before_ms = 0 取最新一页)
-Future<List<PrivateMessageDto>> privateHistory({
+Future<List<PrivateMessage>> privateHistory({
   required BigInt userId,
   required int limit,
   required BigInt beforeMs,
@@ -699,7 +699,7 @@ Future<List<PrivateMessageDto>> privateHistory({
 );
 
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
-Future<List<InboxItemDto>> messageNotices({
+Future<List<InboxItem>> messageNotices({
   required int limit,
   required BigInt lastTimeMs,
 }) => RustLib.instance.api.crateApiMessageNotices(
@@ -708,11 +708,11 @@ Future<List<InboxItemDto>> messageNotices({
 );
 
 /// 评论/回复消息(需登录, 新的在前)
-Future<List<InboxItemDto>> commentMessages({required int limit}) =>
+Future<List<InboxItem>> commentMessages({required int limit}) =>
     RustLib.instance.api.crateApiCommentMessages(limit: limit);
 
 /// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
-Future<List<ForwardItemDto>> forwardMessages({
+Future<List<ForwardItem>> forwardMessages({
   required int limit,
   required BigInt lastTimeMs,
 }) => RustLib.instance.api.crateApiForwardMessages(
@@ -721,7 +721,7 @@ Future<List<ForwardItemDto>> forwardMessages({
 );
 
 /// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
-Future<List<RecentContactDto>> recentContacts({required int limit}) =>
+Future<List<RecentContact>> recentContacts({required int limit}) =>
     RustLib.instance.api.crateApiRecentContacts(limit: limit);
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
@@ -729,14 +729,13 @@ Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 
 /// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
-Future<VipOverviewDto> vipOverview() =>
-    RustLib.instance.api.crateApiVipOverview();
+Future<VipOverview> vipOverview() => RustLib.instance.api.crateApiVipOverview();
 
 /// 账号听歌等级(需要登录)
-Future<UserLevelDto> userLevel() => RustLib.instance.api.crateApiUserLevel();
+Future<UserLevel> userLevel() => RustLib.instance.api.crateApiUserLevel();
 
 /// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
-Future<List<UserMedalDto>> userMedals() =>
+Future<List<UserMedal>> userMedals() =>
     RustLib.instance.api.crateApiUserMedals();
 
 class AccountDto {
@@ -1260,7 +1259,7 @@ class DefaultSearch {
 }
 
 /// 数字专辑详情(album + product 平铺, 实测形状见 ncm_domain::DigitalAlbumDetail)
-class DigitalAlbumDetailDto {
+class DigitalAlbumDetail {
   final BigInt albumId;
   final String name;
   final BigInt artistId;
@@ -1283,7 +1282,7 @@ class DigitalAlbumDetailDto {
   /// 简介(descr 拼接, 已过滤 </br>)
   final String description;
 
-  const DigitalAlbumDetailDto({
+  const DigitalAlbumDetail({
     required this.albumId,
     required this.name,
     required this.artistId,
@@ -1314,7 +1313,7 @@ class DigitalAlbumDetailDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DigitalAlbumDetailDto &&
+      other is DigitalAlbumDetail &&
           runtimeType == other.runtimeType &&
           albumId == other.albumId &&
           name == other.name &&
@@ -1329,8 +1328,27 @@ class DigitalAlbumDetailDto {
           description == other.description;
 }
 
+class DigitalAlbumPurchased {
+  /// 服务端给的已购总数(分页用)
+  final BigInt total;
+  final List<DigitalAlbumPurchasedEntry> albums;
+
+  const DigitalAlbumPurchased({required this.total, required this.albums});
+
+  @override
+  int get hashCode => total.hashCode ^ albums.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DigitalAlbumPurchased &&
+          runtimeType == other.runtimeType &&
+          total == other.total &&
+          albums == other.albums;
+}
+
 /// 已购数字专辑的一项(实测形状见 ncm_domain::DigitalAlbumPurchasedEntry 注释)
-class DigitalAlbumEntryDto {
+class DigitalAlbumPurchasedEntry {
   final BigInt albumId;
   final String albumName;
   final BigInt artistId;
@@ -1343,7 +1361,7 @@ class DigitalAlbumEntryDto {
   /// 购买数量
   final BigInt boughtCount;
 
-  const DigitalAlbumEntryDto({
+  const DigitalAlbumPurchasedEntry({
     required this.albumId,
     required this.albumName,
     required this.artistId,
@@ -1366,7 +1384,7 @@ class DigitalAlbumEntryDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DigitalAlbumEntryDto &&
+      other is DigitalAlbumPurchasedEntry &&
           runtimeType == other.runtimeType &&
           albumId == other.albumId &&
           albumName == other.albumName &&
@@ -1377,30 +1395,11 @@ class DigitalAlbumEntryDto {
           boughtCount == other.boughtCount;
 }
 
-class DigitalAlbumPurchasedDto {
-  /// 服务端给的已购总数(分页用)
-  final BigInt total;
-  final List<DigitalAlbumEntryDto> albums;
-
-  const DigitalAlbumPurchasedDto({required this.total, required this.albums});
-
-  @override
-  int get hashCode => total.hashCode ^ albums.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is DigitalAlbumPurchasedDto &&
-          runtimeType == other.runtimeType &&
-          total == other.total &&
-          albums == other.albums;
-}
-
-class DigitalAlbumSalesDto {
+class DigitalAlbumSalesEntry {
   final String albumId;
   final BigInt sales;
 
-  const DigitalAlbumSalesDto({required this.albumId, required this.sales});
+  const DigitalAlbumSalesEntry({required this.albumId, required this.sales});
 
   @override
   int get hashCode => albumId.hashCode ^ sales.hashCode;
@@ -1408,7 +1407,7 @@ class DigitalAlbumSalesDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is DigitalAlbumSalesDto &&
+      other is DigitalAlbumSalesEntry &&
           runtimeType == other.runtimeType &&
           albumId == other.albumId &&
           sales == other.sales;
@@ -1565,7 +1564,7 @@ class FollowCount {
           fans == other.fans;
 }
 
-class ForwardItemDto {
+class ForwardItem {
   final BigInt? id;
   final BigInt? eventId;
   final BigInt? userId;
@@ -1576,7 +1575,7 @@ class ForwardItemDto {
   final int? forwardType;
   final String? picUrl;
 
-  const ForwardItemDto({
+  const ForwardItem({
     this.id,
     this.eventId,
     this.userId,
@@ -1603,7 +1602,7 @@ class ForwardItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ForwardItemDto &&
+      other is ForwardItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           eventId == other.eventId &&
@@ -1699,7 +1698,7 @@ class HotSearchTerm {
           keyword == other.keyword;
 }
 
-class InboxItemDto {
+class InboxItem {
   final BigInt id;
 
   /// notice | comment
@@ -1710,7 +1709,7 @@ class InboxItemDto {
   final String detail;
   final BigInt timeMs;
 
-  const InboxItemDto({
+  const InboxItem({
     required this.id,
     required this.kind,
     required this.actor,
@@ -1733,7 +1732,7 @@ class InboxItemDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is InboxItemDto &&
+      other is InboxItem &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           kind == other.kind &&
@@ -2208,7 +2207,7 @@ class PodcastRadio {
           playCount == other.playCount;
 }
 
-class PrivateMessageDto {
+class PrivateMessage {
   final BigInt id;
   final bool fromMe;
   final String nickname;
@@ -2216,7 +2215,7 @@ class PrivateMessageDto {
   final String content;
   final BigInt timeMs;
 
-  const PrivateMessageDto({
+  const PrivateMessage({
     required this.id,
     required this.fromMe,
     required this.nickname,
@@ -2237,7 +2236,7 @@ class PrivateMessageDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PrivateMessageDto &&
+      other is PrivateMessage &&
           runtimeType == other.runtimeType &&
           id == other.id &&
           fromMe == other.fromMe &&
@@ -2247,7 +2246,7 @@ class PrivateMessageDto {
           timeMs == other.timeMs;
 }
 
-class PrivateSessionDto {
+class PrivateSession {
   final BigInt userId;
   final String nickname;
   final String? avatarUrl;
@@ -2255,7 +2254,7 @@ class PrivateSessionDto {
   final BigInt lastTimeMs;
   final int unread;
 
-  const PrivateSessionDto({
+  const PrivateSession({
     required this.userId,
     required this.nickname,
     this.avatarUrl,
@@ -2276,7 +2275,7 @@ class PrivateSessionDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PrivateSessionDto &&
+      other is PrivateSession &&
           runtimeType == other.runtimeType &&
           userId == other.userId &&
           nickname == other.nickname &&
@@ -2363,14 +2362,14 @@ class ProviderInfo {
 }
 
 /// 已购单曲的一项(元素形状未实测到, 字段宽松)
-class PurchasedSongDto {
+class PurchasedSongEntry {
   final BigInt songId;
   final String name;
   final String artistName;
   final String coverUrl;
   final BigInt paidTimeMs;
 
-  const PurchasedSongDto({
+  const PurchasedSongEntry({
     required this.songId,
     required this.name,
     required this.artistName,
@@ -2389,7 +2388,7 @@ class PurchasedSongDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is PurchasedSongDto &&
+      other is PurchasedSongEntry &&
           runtimeType == other.runtimeType &&
           songId == other.songId &&
           name == other.name &&
@@ -2678,7 +2677,7 @@ class RadioToplistDto {
           programs == other.programs;
 }
 
-class RecentContactDto {
+class RecentContact {
   final BigInt userId;
   final String nickname;
   final String? avatarUrl;
@@ -2687,7 +2686,7 @@ class RecentContactDto {
   final int vipType;
   final String? remarkName;
 
-  const RecentContactDto({
+  const RecentContact({
     required this.userId,
     required this.nickname,
     this.avatarUrl,
@@ -2710,7 +2709,7 @@ class RecentContactDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is RecentContactDto &&
+      other is RecentContact &&
           runtimeType == other.runtimeType &&
           userId == other.userId &&
           nickname == other.nickname &&
@@ -3092,12 +3091,12 @@ class SongDto {
           playable == other.playable;
 }
 
-class SongPurchasedDto {
+class SongPurchasedPage {
   final BigInt count;
   final bool hasMore;
-  final List<PurchasedSongDto> songs;
+  final List<PurchasedSongEntry> songs;
 
-  const SongPurchasedDto({
+  const SongPurchasedPage({
     required this.count,
     required this.hasMore,
     required this.songs,
@@ -3109,33 +3108,45 @@ class SongPurchasedDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is SongPurchasedDto &&
+      other is SongPurchasedPage &&
           runtimeType == other.runtimeType &&
           count == other.count &&
           hasMore == other.hasMore &&
           songs == other.songs;
 }
 
-class StreamDto {
+class StreamUrl {
   final String? url;
   final String quality;
   final BigInt? br;
+  final BigInt? size;
   final BigInt? expireAt;
 
-  const StreamDto({this.url, required this.quality, this.br, this.expireAt});
+  const StreamUrl({
+    this.url,
+    required this.quality,
+    this.br,
+    this.size,
+    this.expireAt,
+  });
 
   @override
   int get hashCode =>
-      url.hashCode ^ quality.hashCode ^ br.hashCode ^ expireAt.hashCode;
+      url.hashCode ^
+      quality.hashCode ^
+      br.hashCode ^
+      size.hashCode ^
+      expireAt.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is StreamDto &&
+      other is StreamUrl &&
           runtimeType == other.runtimeType &&
           url == other.url &&
           quality == other.quality &&
           br == other.br &&
+          size == other.size &&
           expireAt == other.expireAt;
 }
 
@@ -3308,7 +3319,7 @@ class UserItem {
 }
 
 /// 账号听歌等级(用户等级)
-class UserLevelDto {
+class UserLevel {
   /// 当前等级数字
   final int level;
 
@@ -3330,7 +3341,7 @@ class UserLevelDto {
   /// 该等级权益文案, 用 `$` 分隔多条
   final String privileges;
 
-  const UserLevelDto({
+  const UserLevel({
     required this.level,
     required this.nowPlayCount,
     required this.nextPlayCount,
@@ -3353,7 +3364,7 @@ class UserLevelDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UserLevelDto &&
+      other is UserLevel &&
           runtimeType == other.runtimeType &&
           level == other.level &&
           nowPlayCount == other.nowPlayCount &&
@@ -3365,7 +3376,7 @@ class UserLevelDto {
 }
 
 /// 一枚勋章
-class UserMedalDto {
+class UserMedal {
   /// 唯一 id(字符串, 乐迷徽章形如 "20170503_1081839")
   final String code;
   final String name;
@@ -3395,7 +3406,7 @@ class UserMedalDto {
   /// 服务端状态原值(OBTAIN / NOT_OBTAIN_PROCESS / NOT_OBTAIN_NO_PROCESS / WILL_OBTAIN)
   final String status;
 
-  const UserMedalDto({
+  const UserMedal({
     required this.code,
     required this.name,
     this.picUrl,
@@ -3426,7 +3437,7 @@ class UserMedalDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is UserMedalDto &&
+      other is UserMedal &&
           runtimeType == other.runtimeType &&
           code == other.code &&
           name == other.name &&
@@ -3442,14 +3453,14 @@ class UserMedalDto {
 }
 
 /// 黑胶成长值 / 等级卡
-class VipGrowthDto {
+class VipGrowth {
   final int level;
   final String levelName;
   final PlatformInt64 growthPoint;
   final PlatformInt64 todayScore;
   final bool maxLevel;
 
-  const VipGrowthDto({
+  const VipGrowth({
     required this.level,
     required this.levelName,
     required this.growthPoint,
@@ -3468,7 +3479,7 @@ class VipGrowthDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VipGrowthDto &&
+      other is VipGrowth &&
           runtimeType == other.runtimeType &&
           level == other.level &&
           levelName == other.levelName &&
@@ -3478,7 +3489,7 @@ class VipGrowthDto {
 }
 
 /// 黑胶会员等级
-class VipMembershipDto {
+class VipMembership {
   final int level;
   final int redVipLevel;
   final BigInt expireTimeMs;
@@ -3489,7 +3500,7 @@ class VipMembershipDto {
   /// 年费剩余月数, 负数 = 未知
   final int annualCount;
 
-  const VipMembershipDto({
+  const VipMembership({
     required this.level,
     required this.redVipLevel,
     required this.expireTimeMs,
@@ -3508,7 +3519,7 @@ class VipMembershipDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VipMembershipDto &&
+      other is VipMembership &&
           runtimeType == other.runtimeType &&
           level == other.level &&
           redVipLevel == other.redVipLevel &&
@@ -3518,15 +3529,15 @@ class VipMembershipDto {
 }
 
 /// 黑胶会员总览(只读)
-class VipOverviewDto {
+class VipOverview {
   final bool loggedIn;
-  final VipMembershipDto? membership;
-  final VipGrowthDto? growth;
-  final VipSignDto? sign;
-  final List<VipTaskDto> tasks;
+  final VipMembership? membership;
+  final VipGrowth? growth;
+  final VipSign? sign;
+  final List<VipTask> tasks;
   final PlatformInt64 taskScore;
 
-  const VipOverviewDto({
+  const VipOverview({
     required this.loggedIn,
     this.membership,
     this.growth,
@@ -3547,7 +3558,7 @@ class VipOverviewDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VipOverviewDto &&
+      other is VipOverview &&
           runtimeType == other.runtimeType &&
           loggedIn == other.loggedIn &&
           membership == other.membership &&
@@ -3557,8 +3568,34 @@ class VipOverviewDto {
           taskScore == other.taskScore;
 }
 
+/// 黑胶签到概览(本周维度)
+class VipSign {
+  final List<VipSignDay> days;
+  final bool signedToday;
+  final int weekSigned;
+
+  const VipSign({
+    required this.days,
+    required this.signedToday,
+    required this.weekSigned,
+  });
+
+  @override
+  int get hashCode =>
+      days.hashCode ^ signedToday.hashCode ^ weekSigned.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is VipSign &&
+          runtimeType == other.runtimeType &&
+          days == other.days &&
+          signedToday == other.signedToday &&
+          weekSigned == other.weekSigned;
+}
+
 /// 某一天的签到状态(接口只回最近 7 天)
-class VipSignDayDto {
+class VipSignDay {
   /// yyyy-MM-dd
   final String date;
 
@@ -3567,7 +3604,7 @@ class VipSignDayDto {
   final bool today;
   final int score;
 
-  const VipSignDayDto({
+  const VipSignDay({
     required this.date,
     required this.signed,
     required this.today,
@@ -3581,7 +3618,7 @@ class VipSignDayDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VipSignDayDto &&
+      other is VipSignDay &&
           runtimeType == other.runtimeType &&
           date == other.date &&
           signed == other.signed &&
@@ -3589,34 +3626,8 @@ class VipSignDayDto {
           score == other.score;
 }
 
-/// 黑胶签到概览(本周维度)
-class VipSignDto {
-  final List<VipSignDayDto> days;
-  final bool signedToday;
-  final int weekSigned;
-
-  const VipSignDto({
-    required this.days,
-    required this.signedToday,
-    required this.weekSigned,
-  });
-
-  @override
-  int get hashCode =>
-      days.hashCode ^ signedToday.hashCode ^ weekSigned.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is VipSignDto &&
-          runtimeType == other.runtimeType &&
-          days == other.days &&
-          signedToday == other.signedToday &&
-          weekSigned == other.weekSigned;
-}
-
 /// 黑胶任务
-class VipTaskDto {
+class VipTask {
   final String title;
   final String reward;
   final int growthPoint;
@@ -3628,7 +3639,7 @@ class VipTaskDto {
   final bool showProgress;
   final String? url;
 
-  const VipTaskDto({
+  const VipTask({
     required this.title,
     required this.reward,
     required this.growthPoint,
@@ -3653,7 +3664,7 @@ class VipTaskDto {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is VipTaskDto &&
+      other is VipTask &&
           runtimeType == other.runtimeType &&
           title == other.title &&
           reward == other.reward &&

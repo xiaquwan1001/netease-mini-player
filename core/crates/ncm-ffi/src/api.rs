@@ -10,11 +10,16 @@ use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
     AlbumBrief, AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
-    FollowCount, HotArtist, HotSearchDetailItem, HotSearchTerm, Playlist, PlaylistCategory,
-    PlaylistDetail, PodcastRadio, ProfileDetail, RadioCategory, RadioExploreHome, RadioPick,
-    RadioRankedDj, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, SearchAlbum,
-    SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus, StyleTag,
-    SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, WikiFact,
+    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
+    FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
+    Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession,
+    ProfileDetail, PurchasedSongEntry, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
+    RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RecentContact, SearchAlbum,
+    SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus,
+    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
+    UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
+    VipTask,
+    WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -167,10 +172,12 @@ fn song_from_dto(d: &SongDto) -> ncm_domain::Song {
     }
 }
 
-pub struct StreamDto {
+#[frb(mirror(StreamUrl))]
+pub struct _StreamUrl {
     pub url: Option<String>,
     pub quality: String,
     pub br: Option<u64>,
+    pub size: Option<u64>,
     pub expire_at: Option<u64>,
 }
 
@@ -319,7 +326,7 @@ pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, St
         .map_err(|e| e.to_string())
 }
 
-pub async fn song_url(track_id: u64, level: String) -> Result<StreamDto, String> {
+pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, String> {
     let provider = {
         let guard = core()?.lock().map_err(|e| e.to_string())?;
         guard
@@ -330,12 +337,7 @@ pub async fn song_url(track_id: u64, level: String) -> Result<StreamDto, String>
     let level = ncm_provider::AudioLevel::parse(&level).unwrap_or_default();
     let req = ncm_provider::SongUrlRequest { track: ncm_domain::TrackId::new(track_id), level };
     let stream = provider.song_url(&req).await.map_err(|e| e.to_string())?;
-    Ok(StreamDto {
-        url: stream.url,
-        quality: stream.quality,
-        br: stream.br,
-        expire_at: stream.expire_at,
-    })
+    Ok(stream)
 }
 
 pub async fn lyric(track_id: u64) -> Result<String, String> {
@@ -1164,7 +1166,8 @@ pub struct _CommentStats {
 }
 
 /// 已购数字专辑的一项(实测形状见 ncm_domain::DigitalAlbumPurchasedEntry 注释)
-pub struct DigitalAlbumEntryDto {
+#[frb(mirror(DigitalAlbumPurchasedEntry))]
+pub struct _DigitalAlbumPurchasedEntry {
     pub album_id: u64,
     pub album_name: String,
     pub artist_id: u64,
@@ -1176,14 +1179,16 @@ pub struct DigitalAlbumEntryDto {
     pub bought_count: u64,
 }
 
-pub struct DigitalAlbumPurchasedDto {
+#[frb(mirror(DigitalAlbumPurchased))]
+pub struct _DigitalAlbumPurchased {
     /// 服务端给的已购总数(分页用)
     pub total: u64,
-    pub albums: Vec<DigitalAlbumEntryDto>,
+    pub albums: Vec<DigitalAlbumPurchasedEntry>,
 }
 
 /// 已购单曲的一项(元素形状未实测到, 字段宽松)
-pub struct PurchasedSongDto {
+#[frb(mirror(PurchasedSongEntry))]
+pub struct _PurchasedSongEntry {
     pub song_id: u64,
     pub name: String,
     pub artist_name: String,
@@ -1191,14 +1196,16 @@ pub struct PurchasedSongDto {
     pub paid_time_ms: u64,
 }
 
-pub struct SongPurchasedDto {
+#[frb(mirror(SongPurchasedPage))]
+pub struct _SongPurchasedPage {
     pub count: u64,
     pub has_more: bool,
-    pub songs: Vec<PurchasedSongDto>,
+    pub songs: Vec<PurchasedSongEntry>,
 }
 
 /// 数字专辑详情(album + product 平铺, 实测形状见 ncm_domain::DigitalAlbumDetail)
-pub struct DigitalAlbumDetailDto {
+#[frb(mirror(DigitalAlbumDetail))]
+pub struct _DigitalAlbumDetail {
     pub album_id: u64,
     pub name: String,
     pub artist_id: u64,
@@ -1217,7 +1224,8 @@ pub struct DigitalAlbumDetailDto {
     pub description: String,
 }
 
-pub struct DigitalAlbumSalesDto {
+#[frb(mirror(DigitalAlbumSalesEntry))]
+pub struct _DigitalAlbumSalesEntry {
     pub album_id: String,
     pub sales: u64,
 }
@@ -1226,89 +1234,25 @@ pub struct DigitalAlbumSalesDto {
 pub async fn digital_album_purchased(
     limit: u32,
     offset: u32,
-) -> Result<DigitalAlbumPurchasedDto, String> {
-    let provider = with_provider(Capability::DigitalAlbum)?;
-    let r = provider
-        .digital_album_purchased(limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(DigitalAlbumPurchasedDto {
-        total: r.total,
-        albums: r
-            .albums
-            .into_iter()
-            .map(|a| DigitalAlbumEntryDto {
-                album_id: a.album_id,
-                album_name: a.album_name,
-                artist_id: a.artist_id,
-                artist_name: a.artist_name,
-                cover_url: a.cover_url,
-                paid_time_ms: a.paid_time_ms,
-                bought_count: a.bought_count,
-            })
-            .collect(),
-    })
+) -> Result<DigitalAlbumPurchased, String> {
+    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_purchased(limit, offset))
 }
 
 /// 已购单曲(需登录; limit/offset 分页)
-pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedDto, String> {
-    let provider = with_provider(Capability::DigitalAlbum)?;
-    let r = provider
-        .song_purchased(limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(SongPurchasedDto {
-        count: r.count,
-        has_more: r.has_more,
-        songs: r
-            .songs
-            .into_iter()
-            .map(|s| PurchasedSongDto {
-                song_id: s.song_id,
-                name: s.name,
-                artist_name: s.artist_name,
-                cover_url: s.cover_url,
-                paid_time_ms: s.paid_time_ms,
-            })
-            .collect(),
-    })
+pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedPage, String> {
+    ffi_forward!(Capability::DigitalAlbum, provider.song_purchased(limit, offset))
 }
 
 /// 数字专辑详情(只读; 不提供下单)
-pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetailDto, String> {
-    let provider = with_provider(Capability::DigitalAlbum)?;
-    let d = provider
-        .digital_album_detail(album_id)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(DigitalAlbumDetailDto {
-        album_id: d.album_id,
-        name: d.name,
-        artist_id: d.artist_id,
-        artist_name: d.artist_name,
-        cover_url: d.cover_url,
-        has_album: d.has_album,
-        price: d.price,
-        pub_time_ms: d.pub_time_ms,
-        sale_num: d.sale_num,
-        tags: d.tags,
-        description: d.description,
-    })
+pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, String> {
+    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_detail(album_id))
 }
 
 /// 数字专辑销量(album_ids 逗号分隔)
 pub async fn digital_album_sales(
     album_ids: String,
-) -> Result<Vec<DigitalAlbumSalesDto>, String> {
-    let provider = with_provider(Capability::DigitalAlbum)?;
-    let list = provider
-        .digital_album_sales(&album_ids)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|e| DigitalAlbumSalesDto { album_id: e.album_id, sales: e.sales })
-        .collect())
+) -> Result<Vec<DigitalAlbumSalesEntry>, String> {
+    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_sales(&album_ids))
 }
 
 /// 评论列表: kind = song | playlist | album | podcast
@@ -2143,7 +2087,8 @@ pub async fn message_counts() -> Result<MessageCountsDto, String> {
     })
 }
 
-pub struct PrivateSessionDto {
+#[frb(mirror(PrivateSession))]
+pub struct _PrivateSession {
     pub user_id: u64,
     pub nickname: String,
     pub avatar_url: Option<String>,
@@ -2156,26 +2101,12 @@ pub struct PrivateSessionDto {
 pub async fn private_sessions(
     limit: u32,
     offset: u32,
-) -> Result<Vec<PrivateSessionDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .private_sessions(limit, offset)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|s| PrivateSessionDto {
-            user_id: s.user_id,
-            nickname: s.nickname,
-            avatar_url: s.avatar_url,
-            last_message: s.last_message,
-            last_time_ms: s.last_time_ms,
-            unread: s.unread,
-        })
-        .collect())
+) -> Result<Vec<PrivateSession>, String> {
+    ffi_forward!(Capability::Message, provider.private_sessions(limit, offset))
 }
 
-pub struct PrivateMessageDto {
+#[frb(mirror(PrivateMessage))]
+pub struct _PrivateMessage {
     pub id: u64,
     pub from_me: bool,
     pub nickname: String,
@@ -2189,26 +2120,12 @@ pub async fn private_history(
     user_id: u64,
     limit: u32,
     before_ms: u64,
-) -> Result<Vec<PrivateMessageDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .private_history(user_id, limit, before_ms)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|m| PrivateMessageDto {
-            id: m.id,
-            from_me: m.from_me,
-            nickname: m.nickname,
-            avatar_url: m.avatar_url,
-            content: m.content,
-            time_ms: m.time_ms,
-        })
-        .collect())
+) -> Result<Vec<PrivateMessage>, String> {
+    ffi_forward!(Capability::Message, provider.private_history(user_id, limit, before_ms))
 }
 
-pub struct InboxItemDto {
+#[frb(mirror(InboxItem))]
+pub struct _InboxItem {
     pub id: u64,
     /// notice | comment
     pub kind: String,
@@ -2219,42 +2136,22 @@ pub struct InboxItemDto {
     pub time_ms: u64,
 }
 
-fn inbox_dto(i: ncm_domain::InboxItem) -> InboxItemDto {
-    InboxItemDto {
-        id: i.id,
-        kind: i.kind,
-        actor: i.actor,
-        avatar_url: i.avatar_url,
-        text: i.text,
-        detail: i.detail,
-        time_ms: i.time_ms,
-    }
-}
 
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
 pub async fn message_notices(
     limit: u32,
     last_time_ms: u64,
-) -> Result<Vec<InboxItemDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .message_notices(limit, last_time_ms)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(inbox_dto).collect())
+) -> Result<Vec<InboxItem>, String> {
+    ffi_forward!(Capability::Message, provider.message_notices(limit, last_time_ms))
 }
 
 /// 评论/回复消息(需登录, 新的在前)
-pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItemDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .comment_messages(limit)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list.into_iter().map(inbox_dto).collect())
+pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItem>, String> {
+    ffi_forward!(Capability::Message, provider.comment_messages(limit))
 }
 
-pub struct ForwardItemDto {
+#[frb(mirror(ForwardItem))]
+pub struct _ForwardItem {
     pub id: Option<u64>,
     pub event_id: Option<u64>,
     pub user_id: Option<u64>,
@@ -2267,29 +2164,12 @@ pub struct ForwardItemDto {
 }
 
 /// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
-pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItemDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .forward_messages(limit, last_time_ms)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|f| ForwardItemDto {
-            id: f.id,
-            event_id: f.event_id,
-            user_id: f.user_id,
-            nickname: f.nickname,
-            avatar_url: f.avatar_url,
-            comment: f.comment,
-            time_ms: f.time_ms,
-            forward_type: f.forward_type,
-            pic_url: f.pic_url,
-        })
-        .collect())
+pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItem>, String> {
+    ffi_forward!(Capability::Message, provider.forward_messages(limit, last_time_ms))
 }
 
-pub struct RecentContactDto {
+#[frb(mirror(RecentContact))]
+pub struct _RecentContact {
     pub user_id: u64,
     pub nickname: String,
     pub avatar_url: Option<String>,
@@ -2300,24 +2180,8 @@ pub struct RecentContactDto {
 }
 
 /// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
-pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContactDto>, String> {
-    let provider = with_provider(Capability::Message)?;
-    let list = provider
-        .recent_contacts(limit)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|c| RecentContactDto {
-            user_id: c.user_id,
-            nickname: c.nickname,
-            avatar_url: c.avatar_url,
-            mutual: c.mutual,
-            onlined: c.onlined,
-            vip_type: c.vip_type,
-            remark_name: c.remark_name,
-        })
-        .collect())
+pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContact>, String> {
+    ffi_forward!(Capability::Message, provider.recent_contacts(limit))
 }
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
@@ -2327,7 +2191,8 @@ pub fn my_uid() -> Result<u64, String> {
 }
 
 /// 黑胶会员等级
-pub struct VipMembershipDto {
+#[frb(mirror(VipMembership))]
+pub struct _VipMembership {
     pub level: u32,
     pub red_vip_level: u32,
     pub expire_time_ms: u64,
@@ -2338,7 +2203,8 @@ pub struct VipMembershipDto {
 }
 
 /// 黑胶成长值 / 等级卡
-pub struct VipGrowthDto {
+#[frb(mirror(VipGrowth))]
+pub struct _VipGrowth {
     pub level: u32,
     pub level_name: String,
     pub growth_point: i64,
@@ -2347,7 +2213,8 @@ pub struct VipGrowthDto {
 }
 
 /// 某一天的签到状态(接口只回最近 7 天)
-pub struct VipSignDayDto {
+#[frb(mirror(VipSignDay))]
+pub struct _VipSignDay {
     /// yyyy-MM-dd
     pub date: String,
     /// score > 0 才算已签
@@ -2357,14 +2224,16 @@ pub struct VipSignDayDto {
 }
 
 /// 黑胶签到概览(本周维度)
-pub struct VipSignDto {
-    pub days: Vec<VipSignDayDto>,
+#[frb(mirror(VipSign))]
+pub struct _VipSign {
+    pub days: Vec<VipSignDay>,
     pub signed_today: bool,
     pub week_signed: u32,
 }
 
 /// 黑胶任务
-pub struct VipTaskDto {
+#[frb(mirror(VipTask))]
+pub struct _VipTask {
     pub title: String,
     pub reward: String,
     pub growth_point: i32,
@@ -2377,70 +2246,27 @@ pub struct VipTaskDto {
 }
 
 /// 黑胶会员总览(只读)
-pub struct VipOverviewDto {
+#[frb(mirror(VipOverview))]
+pub struct _VipOverview {
     pub logged_in: bool,
-    pub membership: Option<VipMembershipDto>,
-    pub growth: Option<VipGrowthDto>,
-    pub sign: Option<VipSignDto>,
-    pub tasks: Vec<VipTaskDto>,
+    pub membership: Option<VipMembership>,
+    pub growth: Option<VipGrowth>,
+    pub sign: Option<VipSign>,
+    pub tasks: Vec<VipTask>,
     pub task_score: i64,
 }
 
 /// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
-pub async fn vip_overview() -> Result<VipOverviewDto, String> {
+pub async fn vip_overview() -> Result<VipOverview, String> {
     let provider = with_provider(Capability::Vip)?;
     let o = provider.vip_overview().await.map_err(|e| e.to_string())?;
-    Ok(VipOverviewDto {
-        logged_in: o.logged_in,
-        membership: o.membership.map(|m| VipMembershipDto {
-            level: m.level,
-            red_vip_level: m.red_vip_level,
-            expire_time_ms: m.expire_time_ms,
-            is_vip: m.is_vip,
-            annual_count: m.annual_count,
-        }),
-        growth: o.growth.map(|g| VipGrowthDto {
-            level: g.level,
-            level_name: g.level_name,
-            growth_point: g.growth_point,
-            today_score: g.today_score,
-            max_level: g.max_level,
-        }),
-        sign: o.sign.map(|s| VipSignDto {
-            days: s
-                .days
-                .into_iter()
-                .map(|d| VipSignDayDto {
-                    date: d.date,
-                    signed: d.signed,
-                    today: d.today,
-                    score: d.score,
-                })
-                .collect(),
-            signed_today: s.signed_today,
-            week_signed: s.week_signed,
-        }),
-        tasks: o
-            .tasks
-            .into_iter()
-            .map(|t| VipTaskDto {
-                title: t.title,
-                reward: t.reward,
-                growth_point: t.growth_point,
-                progress: t.progress,
-                target: t.target,
-                done: t.done,
-                show_progress: t.show_progress,
-                url: t.url,
-            })
-            .collect(),
-        task_score: o.task_score,
-    })
+    Ok(o)
 }
 
 /// 账号听歌等级(用户等级)
-pub struct UserLevelDto {
+#[frb(mirror(UserLevel))]
+pub struct _UserLevel {
     /// 当前等级数字
     pub level: u32,
     /// 本等级已累计听歌数
@@ -2458,7 +2284,8 @@ pub struct UserLevelDto {
 }
 
 /// 一枚勋章
-pub struct UserMedalDto {
+#[frb(mirror(UserMedal))]
+pub struct _UserMedal {
     /// 唯一 id(字符串, 乐迷徽章形如 "20170503_1081839")
     pub code: String,
     pub name: String,
@@ -2482,43 +2309,16 @@ pub struct UserMedalDto {
 }
 
 /// 账号听歌等级(需要登录)
-pub async fn user_level() -> Result<UserLevelDto, String> {
-    ffi_forward!(Capability::ProfileDetail, provider.user_level(), map to_user_level_dto)
+pub async fn user_level() -> Result<UserLevel, String> {
+    ffi_forward!(Capability::ProfileDetail, provider.user_level())
 }
 
 /// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
-pub async fn user_medals() -> Result<Vec<UserMedalDto>, String> {
+pub async fn user_medals() -> Result<Vec<UserMedal>, String> {
     let provider = with_provider(Capability::ProfileDetail)?;
     let wall = provider.user_medals().await.map_err(|e| e.to_string())?;
-    Ok(wall.medals.into_iter().map(to_user_medal_dto).collect())
+    Ok(wall.medals)
 }
 
-fn to_user_level_dto(l: ncm_domain::UserLevel) -> UserLevelDto {
-    UserLevelDto {
-        level: l.level,
-        now_play_count: l.now_play_count,
-        next_play_count: l.next_play_count,
-        now_login_count: l.now_login_count,
-        next_login_count: l.next_login_count,
-        progress: l.progress,
-        privileges: l.privileges,
-    }
-}
-
-fn to_user_medal_dto(m: ncm_domain::UserMedal) -> UserMedalDto {
-    UserMedalDto {
-        code: m.code,
-        name: m.name,
-        pic_url: m.pic_url,
-        wear_pic_url: m.wear_pic_url,
-        condition: m.condition,
-        obtained: m.obtained,
-        obtain_time_ms: m.obtain_time_ms,
-        level_title: m.level_title,
-        progress_text: m.progress_text,
-        rank_text: m.rank_text,
-        status: m.status,
-    }
-}
 
 

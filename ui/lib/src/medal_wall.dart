@@ -235,7 +235,7 @@ Future<MedalWallData> loadMedalWallData({bool isVip = false}) async {
   return mapMedalWall(level, medals, isVip: isVip);
 }
 
-Future<rust.UserLevelDto?> _tryUserLevel() async {
+Future<rust.UserLevel?> _tryUserLevel() async {
   try {
     return await rust.userLevel();
   } catch (_) {
@@ -247,8 +247,8 @@ Future<rust.UserLevelDto?> _tryUserLevel() async {
 /// 注意: user_level 的 progress 按**听歌数**算(nowPlayCount/nextPlayCount),
 /// 不是成长值; 这里直接把两个计数当 progress/target 传给进度条.
 MedalWallData mapMedalWall(
-  rust.UserLevelDto? level,
-  List<rust.UserMedalDto> medals, {
+  rust.UserLevel? level,
+  List<rust.UserMedal> medals, {
   bool isVip = false,
 }) {
   return MedalWallData(

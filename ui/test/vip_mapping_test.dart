@@ -2,16 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/vip_page.dart';
 
-rust.VipOverviewDto overview({
+rust.VipOverview overview({
   bool loggedIn = true,
   bool isVip = true,
   bool signedToday = true,
   bool taskDone = false,
 }) =>
-    rust.VipOverviewDto(
+    rust.VipOverview(
       loggedIn: loggedIn,
       membership: loggedIn
-          ? rust.VipMembershipDto(
+          ? rust.VipMembership(
               level: 3,
               redVipLevel: 3,
               // 2026-12-10T00:00:00Z 附近(本地时区展示为 yyyy-MM-dd)
@@ -21,7 +21,7 @@ rust.VipOverviewDto overview({
             )
           : null,
       growth: loggedIn
-          ? rust.VipGrowthDto(
+          ? rust.VipGrowth(
               level: 3,
               levelName: '黑胶·叁',
               growthPoint: 2195,
@@ -30,13 +30,13 @@ rust.VipOverviewDto overview({
             )
           : null,
       sign: loggedIn
-          ? rust.VipSignDto(
+          ? rust.VipSign(
               signedToday: signedToday,
               weekSigned: signedToday ? 2 : 1,
               days: [
-                rust.VipSignDayDto(
+                rust.VipSignDay(
                     date: '2026-11-06', signed: true, today: false, score: 3),
-                rust.VipSignDayDto(
+                rust.VipSignDay(
                     date: '2026-11-07',
                     signed: signedToday,
                     today: true,
@@ -46,7 +46,7 @@ rust.VipOverviewDto overview({
           : null,
       tasks: loggedIn
           ? [
-              rust.VipTaskDto(
+              rust.VipTask(
                 title: '浏览黑胶时光机',
                 reward: '成长值+3',
                 growthPoint: 3,
@@ -56,7 +56,7 @@ rust.VipOverviewDto overview({
                 showProgress: true,
                 url: null,
               ),
-              rust.VipTaskDto(
+              rust.VipTask(
                 title: '每日听歌',
                 reward: '成长值+2',
                 growthPoint: 2,

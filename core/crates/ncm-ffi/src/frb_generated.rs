@@ -4885,9 +4885,55 @@ const _: fn() = || {
         let _: Option<String> = DefaultSearch.image_url;
     }
     {
+        let DigitalAlbumDetail = None::<crate::api::DigitalAlbumDetail>.unwrap();
+        let _: u64 = DigitalAlbumDetail.album_id;
+        let _: String = DigitalAlbumDetail.name;
+        let _: u64 = DigitalAlbumDetail.artist_id;
+        let _: String = DigitalAlbumDetail.artist_name;
+        let _: String = DigitalAlbumDetail.cover_url;
+        let _: bool = DigitalAlbumDetail.has_album;
+        let _: f64 = DigitalAlbumDetail.price;
+        let _: u64 = DigitalAlbumDetail.pub_time_ms;
+        let _: u64 = DigitalAlbumDetail.sale_num;
+        let _: Vec<String> = DigitalAlbumDetail.tags;
+        let _: String = DigitalAlbumDetail.description;
+    }
+    {
+        let DigitalAlbumPurchased = None::<crate::api::DigitalAlbumPurchased>.unwrap();
+        let _: u64 = DigitalAlbumPurchased.total;
+        let _: Vec<crate::api::DigitalAlbumPurchasedEntry> = DigitalAlbumPurchased.albums;
+    }
+    {
+        let DigitalAlbumPurchasedEntry = None::<crate::api::DigitalAlbumPurchasedEntry>.unwrap();
+        let _: u64 = DigitalAlbumPurchasedEntry.album_id;
+        let _: String = DigitalAlbumPurchasedEntry.album_name;
+        let _: u64 = DigitalAlbumPurchasedEntry.artist_id;
+        let _: String = DigitalAlbumPurchasedEntry.artist_name;
+        let _: String = DigitalAlbumPurchasedEntry.cover_url;
+        let _: u64 = DigitalAlbumPurchasedEntry.paid_time_ms;
+        let _: u64 = DigitalAlbumPurchasedEntry.bought_count;
+    }
+    {
+        let DigitalAlbumSalesEntry = None::<crate::api::DigitalAlbumSalesEntry>.unwrap();
+        let _: String = DigitalAlbumSalesEntry.album_id;
+        let _: u64 = DigitalAlbumSalesEntry.sales;
+    }
+    {
         let FollowCount = None::<crate::api::FollowCount>.unwrap();
         let _: u64 = FollowCount.follows;
         let _: u64 = FollowCount.fans;
+    }
+    {
+        let ForwardItem = None::<crate::api::ForwardItem>.unwrap();
+        let _: Option<u64> = ForwardItem.id;
+        let _: Option<u64> = ForwardItem.event_id;
+        let _: Option<u64> = ForwardItem.user_id;
+        let _: Option<String> = ForwardItem.nickname;
+        let _: Option<String> = ForwardItem.avatar_url;
+        let _: Option<String> = ForwardItem.comment;
+        let _: Option<u64> = ForwardItem.time_ms;
+        let _: Option<u32> = ForwardItem.forward_type;
+        let _: Option<String> = ForwardItem.pic_url;
     }
     {
         let HotArtist = None::<crate::api::HotArtist>.unwrap();
@@ -4907,6 +4953,16 @@ const _: fn() = || {
         let HotSearchTerm = None::<crate::api::HotSearchTerm>.unwrap();
         let _: u32 = HotSearchTerm.rank;
         let _: String = HotSearchTerm.keyword;
+    }
+    {
+        let InboxItem = None::<crate::api::InboxItem>.unwrap();
+        let _: u64 = InboxItem.id;
+        let _: String = InboxItem.kind;
+        let _: String = InboxItem.actor;
+        let _: Option<String> = InboxItem.avatar_url;
+        let _: String = InboxItem.text;
+        let _: String = InboxItem.detail;
+        let _: u64 = InboxItem.time_ms;
     }
     {
         let Playlist = None::<crate::api::Playlist>.unwrap();
@@ -4948,6 +5004,24 @@ const _: fn() = || {
         let _: u64 = PodcastRadio.play_count;
     }
     {
+        let PrivateMessage = None::<crate::api::PrivateMessage>.unwrap();
+        let _: u64 = PrivateMessage.id;
+        let _: bool = PrivateMessage.from_me;
+        let _: String = PrivateMessage.nickname;
+        let _: Option<String> = PrivateMessage.avatar_url;
+        let _: String = PrivateMessage.content;
+        let _: u64 = PrivateMessage.time_ms;
+    }
+    {
+        let PrivateSession = None::<crate::api::PrivateSession>.unwrap();
+        let _: u64 = PrivateSession.user_id;
+        let _: String = PrivateSession.nickname;
+        let _: Option<String> = PrivateSession.avatar_url;
+        let _: String = PrivateSession.last_message;
+        let _: u64 = PrivateSession.last_time_ms;
+        let _: u32 = PrivateSession.unread;
+    }
+    {
         let ProfileDetail = None::<crate::api::ProfileDetail>.unwrap();
         let _: u64 = ProfileDetail.user_id;
         let _: String = ProfileDetail.nickname;
@@ -4958,6 +5032,14 @@ const _: fn() = || {
         let _: u64 = ProfileDetail.follows;
         let _: u64 = ProfileDetail.followeds;
         let _: u64 = ProfileDetail.level;
+    }
+    {
+        let PurchasedSongEntry = None::<crate::api::PurchasedSongEntry>.unwrap();
+        let _: u64 = PurchasedSongEntry.song_id;
+        let _: String = PurchasedSongEntry.name;
+        let _: String = PurchasedSongEntry.artist_name;
+        let _: String = PurchasedSongEntry.cover_url;
+        let _: u64 = PurchasedSongEntry.paid_time_ms;
     }
     {
         let RadioCategory = None::<crate::api::RadioCategory>.unwrap();
@@ -5013,6 +5095,16 @@ const _: fn() = || {
         let RadioSubscriberPage = None::<crate::api::RadioSubscriberPage>.unwrap();
         let _: bool = RadioSubscriberPage.has_more;
         let _: Vec<crate::api::RadioSubscriber> = RadioSubscriberPage.subscribers;
+    }
+    {
+        let RecentContact = None::<crate::api::RecentContact>.unwrap();
+        let _: u64 = RecentContact.user_id;
+        let _: String = RecentContact.nickname;
+        let _: Option<String> = RecentContact.avatar_url;
+        let _: bool = RecentContact.mutual;
+        let _: bool = RecentContact.onlined;
+        let _: u32 = RecentContact.vip_type;
+        let _: Option<String> = RecentContact.remark_name;
     }
     {
         let SearchAlbum = None::<crate::api::SearchAlbum>.unwrap();
@@ -5071,6 +5163,20 @@ const _: fn() = || {
         let _: u32 = SigninStatus.today_point;
     }
     {
+        let SongPurchasedPage = None::<crate::api::SongPurchasedPage>.unwrap();
+        let _: u64 = SongPurchasedPage.count;
+        let _: bool = SongPurchasedPage.has_more;
+        let _: Vec<crate::api::PurchasedSongEntry> = SongPurchasedPage.songs;
+    }
+    {
+        let StreamUrl = None::<crate::api::StreamUrl>.unwrap();
+        let _: Option<String> = StreamUrl.url;
+        let _: String = StreamUrl.quality;
+        let _: Option<u64> = StreamUrl.br;
+        let _: Option<u64> = StreamUrl.size;
+        let _: Option<u64> = StreamUrl.expire_at;
+    }
+    {
         let StyleTag = None::<crate::api::StyleTag>.unwrap();
         let _: String = StyleTag.id;
         let _: String = StyleTag.name;
@@ -5106,6 +5212,79 @@ const _: fn() = || {
         let _: Option<String> = UserItem.avatar_url;
         let _: String = UserItem.signature;
         let _: bool = UserItem.followed;
+    }
+    {
+        let UserLevel = None::<crate::api::UserLevel>.unwrap();
+        let _: u32 = UserLevel.level;
+        let _: u64 = UserLevel.now_play_count;
+        let _: u64 = UserLevel.next_play_count;
+        let _: u64 = UserLevel.now_login_count;
+        let _: u64 = UserLevel.next_login_count;
+        let _: f64 = UserLevel.progress;
+        let _: String = UserLevel.privileges;
+    }
+    {
+        let UserMedal = None::<crate::api::UserMedal>.unwrap();
+        let _: String = UserMedal.code;
+        let _: String = UserMedal.name;
+        let _: Option<String> = UserMedal.pic_url;
+        let _: Option<String> = UserMedal.wear_pic_url;
+        let _: String = UserMedal.condition;
+        let _: bool = UserMedal.obtained;
+        let _: Option<u64> = UserMedal.obtain_time_ms;
+        let _: Option<String> = UserMedal.level_title;
+        let _: Option<String> = UserMedal.progress_text;
+        let _: Option<String> = UserMedal.rank_text;
+        let _: String = UserMedal.status;
+    }
+    {
+        let VipGrowth = None::<crate::api::VipGrowth>.unwrap();
+        let _: u32 = VipGrowth.level;
+        let _: String = VipGrowth.level_name;
+        let _: i64 = VipGrowth.growth_point;
+        let _: i64 = VipGrowth.today_score;
+        let _: bool = VipGrowth.max_level;
+    }
+    {
+        let VipMembership = None::<crate::api::VipMembership>.unwrap();
+        let _: u32 = VipMembership.level;
+        let _: u32 = VipMembership.red_vip_level;
+        let _: u64 = VipMembership.expire_time_ms;
+        let _: bool = VipMembership.is_vip;
+        let _: i32 = VipMembership.annual_count;
+    }
+    {
+        let VipOverview = None::<crate::api::VipOverview>.unwrap();
+        let _: bool = VipOverview.logged_in;
+        let _: Option<crate::api::VipMembership> = VipOverview.membership;
+        let _: Option<crate::api::VipGrowth> = VipOverview.growth;
+        let _: Option<crate::api::VipSign> = VipOverview.sign;
+        let _: Vec<crate::api::VipTask> = VipOverview.tasks;
+        let _: i64 = VipOverview.task_score;
+    }
+    {
+        let VipSign = None::<crate::api::VipSign>.unwrap();
+        let _: Vec<crate::api::VipSignDay> = VipSign.days;
+        let _: bool = VipSign.signed_today;
+        let _: u32 = VipSign.week_signed;
+    }
+    {
+        let VipSignDay = None::<crate::api::VipSignDay>.unwrap();
+        let _: String = VipSignDay.date;
+        let _: bool = VipSignDay.signed;
+        let _: bool = VipSignDay.today;
+        let _: u32 = VipSignDay.score;
+    }
+    {
+        let VipTask = None::<crate::api::VipTask>.unwrap();
+        let _: String = VipTask.title;
+        let _: String = VipTask.reward;
+        let _: i32 = VipTask.growth_point;
+        let _: i64 = VipTask.progress;
+        let _: i64 = VipTask.target;
+        let _: bool = VipTask.done;
+        let _: bool = VipTask.show_progress;
+        let _: Option<String> = VipTask.url;
     }
     {
         let WikiFact = None::<crate::api::WikiFact>.unwrap();
@@ -5383,7 +5562,7 @@ impl SseDecode for crate::api::DefaultSearch {
     }
 }
 
-impl SseDecode for crate::api::DigitalAlbumDetailDto {
+impl SseDecode for crate::api::DigitalAlbumDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_albumId = <u64>::sse_decode(deserializer);
@@ -5397,7 +5576,7 @@ impl SseDecode for crate::api::DigitalAlbumDetailDto {
         let mut var_saleNum = <u64>::sse_decode(deserializer);
         let mut var_tags = <Vec<String>>::sse_decode(deserializer);
         let mut var_description = <String>::sse_decode(deserializer);
-        return crate::api::DigitalAlbumDetailDto {
+        return crate::api::DigitalAlbumDetail {
             album_id: var_albumId,
             name: var_name,
             artist_id: var_artistId,
@@ -5413,7 +5592,20 @@ impl SseDecode for crate::api::DigitalAlbumDetailDto {
     }
 }
 
-impl SseDecode for crate::api::DigitalAlbumEntryDto {
+impl SseDecode for crate::api::DigitalAlbumPurchased {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_total = <u64>::sse_decode(deserializer);
+        let mut var_albums =
+            <Vec<crate::api::DigitalAlbumPurchasedEntry>>::sse_decode(deserializer);
+        return crate::api::DigitalAlbumPurchased {
+            total: var_total,
+            albums: var_albums,
+        };
+    }
+}
+
+impl SseDecode for crate::api::DigitalAlbumPurchasedEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_albumId = <u64>::sse_decode(deserializer);
@@ -5423,7 +5615,7 @@ impl SseDecode for crate::api::DigitalAlbumEntryDto {
         let mut var_coverUrl = <String>::sse_decode(deserializer);
         let mut var_paidTimeMs = <u64>::sse_decode(deserializer);
         let mut var_boughtCount = <u64>::sse_decode(deserializer);
-        return crate::api::DigitalAlbumEntryDto {
+        return crate::api::DigitalAlbumPurchasedEntry {
             album_id: var_albumId,
             album_name: var_albumName,
             artist_id: var_artistId,
@@ -5435,24 +5627,12 @@ impl SseDecode for crate::api::DigitalAlbumEntryDto {
     }
 }
 
-impl SseDecode for crate::api::DigitalAlbumPurchasedDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_total = <u64>::sse_decode(deserializer);
-        let mut var_albums = <Vec<crate::api::DigitalAlbumEntryDto>>::sse_decode(deserializer);
-        return crate::api::DigitalAlbumPurchasedDto {
-            total: var_total,
-            albums: var_albums,
-        };
-    }
-}
-
-impl SseDecode for crate::api::DigitalAlbumSalesDto {
+impl SseDecode for crate::api::DigitalAlbumSalesEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_albumId = <String>::sse_decode(deserializer);
         let mut var_sales = <u64>::sse_decode(deserializer);
-        return crate::api::DigitalAlbumSalesDto {
+        return crate::api::DigitalAlbumSalesEntry {
             album_id: var_albumId,
             sales: var_sales,
         };
@@ -5543,7 +5723,7 @@ impl SseDecode for crate::api::FollowCount {
     }
 }
 
-impl SseDecode for crate::api::ForwardItemDto {
+impl SseDecode for crate::api::ForwardItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <Option<u64>>::sse_decode(deserializer);
@@ -5555,7 +5735,7 @@ impl SseDecode for crate::api::ForwardItemDto {
         let mut var_timeMs = <Option<u64>>::sse_decode(deserializer);
         let mut var_forwardType = <Option<u32>>::sse_decode(deserializer);
         let mut var_picUrl = <Option<String>>::sse_decode(deserializer);
-        return crate::api::ForwardItemDto {
+        return crate::api::ForwardItem {
             id: var_id,
             event_id: var_eventId,
             user_id: var_userId,
@@ -5627,7 +5807,7 @@ impl SseDecode for i64 {
     }
 }
 
-impl SseDecode for crate::api::InboxItemDto {
+impl SseDecode for crate::api::InboxItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -5637,7 +5817,7 @@ impl SseDecode for crate::api::InboxItemDto {
         let mut var_text = <String>::sse_decode(deserializer);
         let mut var_detail = <String>::sse_decode(deserializer);
         let mut var_timeMs = <u64>::sse_decode(deserializer);
-        return crate::api::InboxItemDto {
+        return crate::api::InboxItem {
             id: var_id,
             kind: var_kind,
             actor: var_actor,
@@ -5751,25 +5931,29 @@ impl SseDecode for Vec<crate::api::Comment> {
     }
 }
 
-impl SseDecode for Vec<crate::api::DigitalAlbumEntryDto> {
+impl SseDecode for Vec<crate::api::DigitalAlbumPurchasedEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::DigitalAlbumEntryDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::DigitalAlbumPurchasedEntry>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::DigitalAlbumSalesDto> {
+impl SseDecode for Vec<crate::api::DigitalAlbumSalesEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::DigitalAlbumSalesDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::DigitalAlbumSalesEntry>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -5787,13 +5971,13 @@ impl SseDecode for Vec<crate::api::FeedEventDto> {
     }
 }
 
-impl SseDecode for Vec<crate::api::ForwardItemDto> {
+impl SseDecode for Vec<crate::api::ForwardItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::ForwardItemDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::ForwardItem>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5835,13 +6019,13 @@ impl SseDecode for Vec<crate::api::HotSearchTerm> {
     }
 }
 
-impl SseDecode for Vec<crate::api::InboxItemDto> {
+impl SseDecode for Vec<crate::api::InboxItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::InboxItemDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::InboxItem>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5955,25 +6139,25 @@ impl SseDecode for Vec<u8> {
     }
 }
 
-impl SseDecode for Vec<crate::api::PrivateMessageDto> {
+impl SseDecode for Vec<crate::api::PrivateMessage> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::PrivateMessageDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::PrivateMessage>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::PrivateSessionDto> {
+impl SseDecode for Vec<crate::api::PrivateSession> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::PrivateSessionDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::PrivateSession>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5991,13 +6175,13 @@ impl SseDecode for Vec<crate::api::ProviderInfo> {
     }
 }
 
-impl SseDecode for Vec<crate::api::PurchasedSongDto> {
+impl SseDecode for Vec<crate::api::PurchasedSongEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::PurchasedSongDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::PurchasedSongEntry>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -6077,13 +6261,13 @@ impl SseDecode for Vec<crate::api::RadioSubscriber> {
     }
 }
 
-impl SseDecode for Vec<crate::api::RecentContactDto> {
+impl SseDecode for Vec<crate::api::RecentContact> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::RecentContactDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::RecentContact>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -6221,37 +6405,37 @@ impl SseDecode for Vec<crate::api::UserItem> {
     }
 }
 
-impl SseDecode for Vec<crate::api::UserMedalDto> {
+impl SseDecode for Vec<crate::api::UserMedal> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::UserMedalDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::UserMedal>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::VipSignDayDto> {
+impl SseDecode for Vec<crate::api::VipSignDay> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::VipSignDayDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::VipSignDay>::sse_decode(deserializer));
         }
         return ans_;
     }
 }
 
-impl SseDecode for Vec<crate::api::VipTaskDto> {
+impl SseDecode for Vec<crate::api::VipTask> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut len_ = <i32>::sse_decode(deserializer);
         let mut ans_ = Vec::with_capacity(len_ as usize);
         for idx_ in 0..len_ {
-            ans_.push(<crate::api::VipTaskDto>::sse_decode(deserializer));
+            ans_.push(<crate::api::VipTask>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -6409,33 +6593,33 @@ impl SseDecode for Option<u64> {
     }
 }
 
-impl SseDecode for Option<crate::api::VipGrowthDto> {
+impl SseDecode for Option<crate::api::VipGrowth> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::VipGrowthDto>::sse_decode(deserializer));
+            return Some(<crate::api::VipGrowth>::sse_decode(deserializer));
         } else {
             return None;
         }
     }
 }
 
-impl SseDecode for Option<crate::api::VipMembershipDto> {
+impl SseDecode for Option<crate::api::VipMembership> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::VipMembershipDto>::sse_decode(deserializer));
+            return Some(<crate::api::VipMembership>::sse_decode(deserializer));
         } else {
             return None;
         }
     }
 }
 
-impl SseDecode for Option<crate::api::VipSignDto> {
+impl SseDecode for Option<crate::api::VipSign> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::VipSignDto>::sse_decode(deserializer));
+            return Some(<crate::api::VipSign>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -6602,7 +6786,7 @@ impl SseDecode for crate::api::PodcastRadio {
     }
 }
 
-impl SseDecode for crate::api::PrivateMessageDto {
+impl SseDecode for crate::api::PrivateMessage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <u64>::sse_decode(deserializer);
@@ -6611,7 +6795,7 @@ impl SseDecode for crate::api::PrivateMessageDto {
         let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_content = <String>::sse_decode(deserializer);
         let mut var_timeMs = <u64>::sse_decode(deserializer);
-        return crate::api::PrivateMessageDto {
+        return crate::api::PrivateMessage {
             id: var_id,
             from_me: var_fromMe,
             nickname: var_nickname,
@@ -6622,7 +6806,7 @@ impl SseDecode for crate::api::PrivateMessageDto {
     }
 }
 
-impl SseDecode for crate::api::PrivateSessionDto {
+impl SseDecode for crate::api::PrivateSession {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_userId = <u64>::sse_decode(deserializer);
@@ -6631,7 +6815,7 @@ impl SseDecode for crate::api::PrivateSessionDto {
         let mut var_lastMessage = <String>::sse_decode(deserializer);
         let mut var_lastTimeMs = <u64>::sse_decode(deserializer);
         let mut var_unread = <u32>::sse_decode(deserializer);
-        return crate::api::PrivateSessionDto {
+        return crate::api::PrivateSession {
             user_id: var_userId,
             nickname: var_nickname,
             avatar_url: var_avatarUrl,
@@ -6682,7 +6866,7 @@ impl SseDecode for crate::api::ProviderInfo {
     }
 }
 
-impl SseDecode for crate::api::PurchasedSongDto {
+impl SseDecode for crate::api::PurchasedSongEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_songId = <u64>::sse_decode(deserializer);
@@ -6690,7 +6874,7 @@ impl SseDecode for crate::api::PurchasedSongDto {
         let mut var_artistName = <String>::sse_decode(deserializer);
         let mut var_coverUrl = <String>::sse_decode(deserializer);
         let mut var_paidTimeMs = <u64>::sse_decode(deserializer);
-        return crate::api::PurchasedSongDto {
+        return crate::api::PurchasedSongEntry {
             song_id: var_songId,
             name: var_name,
             artist_name: var_artistName,
@@ -6854,7 +7038,7 @@ impl SseDecode for crate::api::RadioToplistDto {
     }
 }
 
-impl SseDecode for crate::api::RecentContactDto {
+impl SseDecode for crate::api::RecentContact {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_userId = <u64>::sse_decode(deserializer);
@@ -6864,7 +7048,7 @@ impl SseDecode for crate::api::RecentContactDto {
         let mut var_onlined = <bool>::sse_decode(deserializer);
         let mut var_vipType = <u32>::sse_decode(deserializer);
         let mut var_remarkName = <Option<String>>::sse_decode(deserializer);
-        return crate::api::RecentContactDto {
+        return crate::api::RecentContact {
             user_id: var_userId,
             nickname: var_nickname,
             avatar_url: var_avatarUrl,
@@ -7054,13 +7238,13 @@ impl SseDecode for crate::api::SongDto {
     }
 }
 
-impl SseDecode for crate::api::SongPurchasedDto {
+impl SseDecode for crate::api::SongPurchasedPage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_count = <u64>::sse_decode(deserializer);
         let mut var_hasMore = <bool>::sse_decode(deserializer);
-        let mut var_songs = <Vec<crate::api::PurchasedSongDto>>::sse_decode(deserializer);
-        return crate::api::SongPurchasedDto {
+        let mut var_songs = <Vec<crate::api::PurchasedSongEntry>>::sse_decode(deserializer);
+        return crate::api::SongPurchasedPage {
             count: var_count,
             has_more: var_hasMore,
             songs: var_songs,
@@ -7068,17 +7252,19 @@ impl SseDecode for crate::api::SongPurchasedDto {
     }
 }
 
-impl SseDecode for crate::api::StreamDto {
+impl SseDecode for crate::api::StreamUrl {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_url = <Option<String>>::sse_decode(deserializer);
         let mut var_quality = <String>::sse_decode(deserializer);
         let mut var_br = <Option<u64>>::sse_decode(deserializer);
+        let mut var_size = <Option<u64>>::sse_decode(deserializer);
         let mut var_expireAt = <Option<u64>>::sse_decode(deserializer);
-        return crate::api::StreamDto {
+        return crate::api::StreamUrl {
             url: var_url,
             quality: var_quality,
             br: var_br,
+            size: var_size,
             expire_at: var_expireAt,
         };
     }
@@ -7194,7 +7380,7 @@ impl SseDecode for crate::api::UserItem {
     }
 }
 
-impl SseDecode for crate::api::UserLevelDto {
+impl SseDecode for crate::api::UserLevel {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_level = <u32>::sse_decode(deserializer);
@@ -7204,7 +7390,7 @@ impl SseDecode for crate::api::UserLevelDto {
         let mut var_nextLoginCount = <u64>::sse_decode(deserializer);
         let mut var_progress = <f64>::sse_decode(deserializer);
         let mut var_privileges = <String>::sse_decode(deserializer);
-        return crate::api::UserLevelDto {
+        return crate::api::UserLevel {
             level: var_level,
             now_play_count: var_nowPlayCount,
             next_play_count: var_nextPlayCount,
@@ -7216,7 +7402,7 @@ impl SseDecode for crate::api::UserLevelDto {
     }
 }
 
-impl SseDecode for crate::api::UserMedalDto {
+impl SseDecode for crate::api::UserMedal {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_code = <String>::sse_decode(deserializer);
@@ -7230,7 +7416,7 @@ impl SseDecode for crate::api::UserMedalDto {
         let mut var_progressText = <Option<String>>::sse_decode(deserializer);
         let mut var_rankText = <Option<String>>::sse_decode(deserializer);
         let mut var_status = <String>::sse_decode(deserializer);
-        return crate::api::UserMedalDto {
+        return crate::api::UserMedal {
             code: var_code,
             name: var_name,
             pic_url: var_picUrl,
@@ -7246,7 +7432,7 @@ impl SseDecode for crate::api::UserMedalDto {
     }
 }
 
-impl SseDecode for crate::api::VipGrowthDto {
+impl SseDecode for crate::api::VipGrowth {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_level = <u32>::sse_decode(deserializer);
@@ -7254,7 +7440,7 @@ impl SseDecode for crate::api::VipGrowthDto {
         let mut var_growthPoint = <i64>::sse_decode(deserializer);
         let mut var_todayScore = <i64>::sse_decode(deserializer);
         let mut var_maxLevel = <bool>::sse_decode(deserializer);
-        return crate::api::VipGrowthDto {
+        return crate::api::VipGrowth {
             level: var_level,
             level_name: var_levelName,
             growth_point: var_growthPoint,
@@ -7264,7 +7450,7 @@ impl SseDecode for crate::api::VipGrowthDto {
     }
 }
 
-impl SseDecode for crate::api::VipMembershipDto {
+impl SseDecode for crate::api::VipMembership {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_level = <u32>::sse_decode(deserializer);
@@ -7272,7 +7458,7 @@ impl SseDecode for crate::api::VipMembershipDto {
         let mut var_expireTimeMs = <u64>::sse_decode(deserializer);
         let mut var_isVip = <bool>::sse_decode(deserializer);
         let mut var_annualCount = <i32>::sse_decode(deserializer);
-        return crate::api::VipMembershipDto {
+        return crate::api::VipMembership {
             level: var_level,
             red_vip_level: var_redVipLevel,
             expire_time_ms: var_expireTimeMs,
@@ -7282,16 +7468,16 @@ impl SseDecode for crate::api::VipMembershipDto {
     }
 }
 
-impl SseDecode for crate::api::VipOverviewDto {
+impl SseDecode for crate::api::VipOverview {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_loggedIn = <bool>::sse_decode(deserializer);
-        let mut var_membership = <Option<crate::api::VipMembershipDto>>::sse_decode(deserializer);
-        let mut var_growth = <Option<crate::api::VipGrowthDto>>::sse_decode(deserializer);
-        let mut var_sign = <Option<crate::api::VipSignDto>>::sse_decode(deserializer);
-        let mut var_tasks = <Vec<crate::api::VipTaskDto>>::sse_decode(deserializer);
+        let mut var_membership = <Option<crate::api::VipMembership>>::sse_decode(deserializer);
+        let mut var_growth = <Option<crate::api::VipGrowth>>::sse_decode(deserializer);
+        let mut var_sign = <Option<crate::api::VipSign>>::sse_decode(deserializer);
+        let mut var_tasks = <Vec<crate::api::VipTask>>::sse_decode(deserializer);
         let mut var_taskScore = <i64>::sse_decode(deserializer);
-        return crate::api::VipOverviewDto {
+        return crate::api::VipOverview {
             logged_in: var_loggedIn,
             membership: var_membership,
             growth: var_growth,
@@ -7302,14 +7488,28 @@ impl SseDecode for crate::api::VipOverviewDto {
     }
 }
 
-impl SseDecode for crate::api::VipSignDayDto {
+impl SseDecode for crate::api::VipSign {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_days = <Vec<crate::api::VipSignDay>>::sse_decode(deserializer);
+        let mut var_signedToday = <bool>::sse_decode(deserializer);
+        let mut var_weekSigned = <u32>::sse_decode(deserializer);
+        return crate::api::VipSign {
+            days: var_days,
+            signed_today: var_signedToday,
+            week_signed: var_weekSigned,
+        };
+    }
+}
+
+impl SseDecode for crate::api::VipSignDay {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_date = <String>::sse_decode(deserializer);
         let mut var_signed = <bool>::sse_decode(deserializer);
         let mut var_today = <bool>::sse_decode(deserializer);
         let mut var_score = <u32>::sse_decode(deserializer);
-        return crate::api::VipSignDayDto {
+        return crate::api::VipSignDay {
             date: var_date,
             signed: var_signed,
             today: var_today,
@@ -7318,21 +7518,7 @@ impl SseDecode for crate::api::VipSignDayDto {
     }
 }
 
-impl SseDecode for crate::api::VipSignDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_days = <Vec<crate::api::VipSignDayDto>>::sse_decode(deserializer);
-        let mut var_signedToday = <bool>::sse_decode(deserializer);
-        let mut var_weekSigned = <u32>::sse_decode(deserializer);
-        return crate::api::VipSignDto {
-            days: var_days,
-            signed_today: var_signedToday,
-            week_signed: var_weekSigned,
-        };
-    }
-}
-
-impl SseDecode for crate::api::VipTaskDto {
+impl SseDecode for crate::api::VipTask {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_title = <String>::sse_decode(deserializer);
@@ -7343,7 +7529,7 @@ impl SseDecode for crate::api::VipTaskDto {
         let mut var_done = <bool>::sse_decode(deserializer);
         let mut var_showProgress = <bool>::sse_decode(deserializer);
         let mut var_url = <Option<String>>::sse_decode(deserializer);
-        return crate::api::VipTaskDto {
+        return crate::api::VipTask {
             title: var_title,
             reward: var_reward,
             growth_point: var_growthPoint,
@@ -7866,101 +8052,101 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::DefaultSearch>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::DigitalAlbumDetailDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::DigitalAlbumDetail> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.album_id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.artist_id.into_into_dart().into_dart(),
-            self.artist_name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.has_album.into_into_dart().into_dart(),
-            self.price.into_into_dart().into_dart(),
-            self.pub_time_ms.into_into_dart().into_dart(),
-            self.sale_num.into_into_dart().into_dart(),
-            self.tags.into_into_dart().into_dart(),
-            self.description.into_into_dart().into_dart(),
+            self.0.album_id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.artist_id.into_into_dart().into_dart(),
+            self.0.artist_name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.has_album.into_into_dart().into_dart(),
+            self.0.price.into_into_dart().into_dart(),
+            self.0.pub_time_ms.into_into_dart().into_dart(),
+            self.0.sale_num.into_into_dart().into_dart(),
+            self.0.tags.into_into_dart().into_dart(),
+            self.0.description.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::DigitalAlbumDetailDto
+    for FrbWrapper<crate::api::DigitalAlbumDetail>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::DigitalAlbumDetailDto>
-    for crate::api::DigitalAlbumDetailDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::DigitalAlbumDetail>>
+    for crate::api::DigitalAlbumDetail
 {
-    fn into_into_dart(self) -> crate::api::DigitalAlbumDetailDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::DigitalAlbumDetail> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::DigitalAlbumEntryDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::DigitalAlbumPurchased> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.album_id.into_into_dart().into_dart(),
-            self.album_name.into_into_dart().into_dart(),
-            self.artist_id.into_into_dart().into_dart(),
-            self.artist_name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.paid_time_ms.into_into_dart().into_dart(),
-            self.bought_count.into_into_dart().into_dart(),
+            self.0.total.into_into_dart().into_dart(),
+            self.0.albums.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::DigitalAlbumEntryDto
+    for FrbWrapper<crate::api::DigitalAlbumPurchased>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::DigitalAlbumEntryDto>
-    for crate::api::DigitalAlbumEntryDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::DigitalAlbumPurchased>>
+    for crate::api::DigitalAlbumPurchased
 {
-    fn into_into_dart(self) -> crate::api::DigitalAlbumEntryDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::DigitalAlbumPurchased> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::DigitalAlbumPurchasedDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::DigitalAlbumPurchasedEntry> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.total.into_into_dart().into_dart(),
-            self.albums.into_into_dart().into_dart(),
+            self.0.album_id.into_into_dart().into_dart(),
+            self.0.album_name.into_into_dart().into_dart(),
+            self.0.artist_id.into_into_dart().into_dart(),
+            self.0.artist_name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.paid_time_ms.into_into_dart().into_dart(),
+            self.0.bought_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::DigitalAlbumPurchasedDto
+    for FrbWrapper<crate::api::DigitalAlbumPurchasedEntry>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::DigitalAlbumPurchasedDto>
-    for crate::api::DigitalAlbumPurchasedDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::DigitalAlbumPurchasedEntry>>
+    for crate::api::DigitalAlbumPurchasedEntry
 {
-    fn into_into_dart(self) -> crate::api::DigitalAlbumPurchasedDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::DigitalAlbumPurchasedEntry> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::DigitalAlbumSalesDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::DigitalAlbumSalesEntry> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.album_id.into_into_dart().into_dart(),
-            self.sales.into_into_dart().into_dart(),
+            self.0.album_id.into_into_dart().into_dart(),
+            self.0.sales.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::DigitalAlbumSalesDto
+    for FrbWrapper<crate::api::DigitalAlbumSalesEntry>
 {
 }
-impl flutter_rust_bridge::IntoIntoDart<crate::api::DigitalAlbumSalesDto>
-    for crate::api::DigitalAlbumSalesDto
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::DigitalAlbumSalesEntry>>
+    for crate::api::DigitalAlbumSalesEntry
 {
-    fn into_into_dart(self) -> crate::api::DigitalAlbumSalesDto {
-        self
+    fn into_into_dart(self) -> FrbWrapper<crate::api::DigitalAlbumSalesEntry> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8036,26 +8222,31 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::FollowCount>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ForwardItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ForwardItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.event_id.into_into_dart().into_dart(),
-            self.user_id.into_into_dart().into_dart(),
-            self.nickname.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.comment.into_into_dart().into_dart(),
-            self.time_ms.into_into_dart().into_dart(),
-            self.forward_type.into_into_dart().into_dart(),
-            self.pic_url.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.event_id.into_into_dart().into_dart(),
+            self.0.user_id.into_into_dart().into_dart(),
+            self.0.nickname.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.comment.into_into_dart().into_dart(),
+            self.0.time_ms.into_into_dart().into_dart(),
+            self.0.forward_type.into_into_dart().into_dart(),
+            self.0.pic_url.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ForwardItemDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ForwardItemDto> for crate::api::ForwardItemDto {
-    fn into_into_dart(self) -> crate::api::ForwardItemDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::ForwardItem>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::ForwardItem>>
+    for crate::api::ForwardItem
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::ForwardItem> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8126,24 +8317,29 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::HotSearchTerm>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::InboxItemDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::InboxItem> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.kind.into_into_dart().into_dart(),
-            self.actor.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.text.into_into_dart().into_dart(),
-            self.detail.into_into_dart().into_dart(),
-            self.time_ms.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.kind.into_into_dart().into_dart(),
+            self.0.actor.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.text.into_into_dart().into_dart(),
+            self.0.detail.into_into_dart().into_dart(),
+            self.0.time_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::InboxItemDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::InboxItemDto> for crate::api::InboxItemDto {
-    fn into_into_dart(self) -> crate::api::InboxItemDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::InboxItem>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::InboxItem>>
+    for crate::api::InboxItem
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::InboxItem> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8407,47 +8603,53 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PodcastRadio>>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PrivateMessageDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::PrivateMessage> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.id.into_into_dart().into_dart(),
-            self.from_me.into_into_dart().into_dart(),
-            self.nickname.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.content.into_into_dart().into_dart(),
-            self.time_ms.into_into_dart().into_dart(),
+            self.0.id.into_into_dart().into_dart(),
+            self.0.from_me.into_into_dart().into_dart(),
+            self.0.nickname.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.content.into_into_dart().into_dart(),
+            self.0.time_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PrivateMessageDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PrivateMessageDto>
-    for crate::api::PrivateMessageDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::PrivateMessage>
 {
-    fn into_into_dart(self) -> crate::api::PrivateMessageDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PrivateMessage>>
+    for crate::api::PrivateMessage
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::PrivateMessage> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PrivateSessionDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::PrivateSession> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.user_id.into_into_dart().into_dart(),
-            self.nickname.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.last_message.into_into_dart().into_dart(),
-            self.last_time_ms.into_into_dart().into_dart(),
-            self.unread.into_into_dart().into_dart(),
+            self.0.user_id.into_into_dart().into_dart(),
+            self.0.nickname.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.last_message.into_into_dart().into_dart(),
+            self.0.last_time_ms.into_into_dart().into_dart(),
+            self.0.unread.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PrivateSessionDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PrivateSessionDto>
-    for crate::api::PrivateSessionDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::PrivateSession>
 {
-    fn into_into_dart(self) -> crate::api::PrivateSessionDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PrivateSession>>
+    for crate::api::PrivateSession
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::PrivateSession> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8496,24 +8698,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ProviderInfo> for crate::api:
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::PurchasedSongDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::PurchasedSongEntry> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.song_id.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.artist_name.into_into_dart().into_dart(),
-            self.cover_url.into_into_dart().into_dart(),
-            self.paid_time_ms.into_into_dart().into_dart(),
+            self.0.song_id.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.artist_name.into_into_dart().into_dart(),
+            self.0.cover_url.into_into_dart().into_dart(),
+            self.0.paid_time_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PurchasedSongDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::PurchasedSongDto>
-    for crate::api::PurchasedSongDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::PurchasedSongEntry>
 {
-    fn into_into_dart(self) -> crate::api::PurchasedSongDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::PurchasedSongEntry>>
+    for crate::api::PurchasedSongEntry
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::PurchasedSongEntry> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8726,26 +8931,29 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::RadioToplistDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::RecentContactDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::RecentContact> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.user_id.into_into_dart().into_dart(),
-            self.nickname.into_into_dart().into_dart(),
-            self.avatar_url.into_into_dart().into_dart(),
-            self.mutual.into_into_dart().into_dart(),
-            self.onlined.into_into_dart().into_dart(),
-            self.vip_type.into_into_dart().into_dart(),
-            self.remark_name.into_into_dart().into_dart(),
+            self.0.user_id.into_into_dart().into_dart(),
+            self.0.nickname.into_into_dart().into_dart(),
+            self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.mutual.into_into_dart().into_dart(),
+            self.0.onlined.into_into_dart().into_dart(),
+            self.0.vip_type.into_into_dart().into_dart(),
+            self.0.remark_name.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::RecentContactDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::RecentContactDto>
-    for crate::api::RecentContactDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::RecentContact>
 {
-    fn into_into_dart(self) -> crate::api::RecentContactDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::RecentContact>>
+    for crate::api::RecentContact
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::RecentContact> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -8965,40 +9173,49 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::SongDto> for crate::api::Song
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::SongPurchasedDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::SongPurchasedPage> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.count.into_into_dart().into_dart(),
-            self.has_more.into_into_dart().into_dart(),
-            self.songs.into_into_dart().into_dart(),
+            self.0.count.into_into_dart().into_dart(),
+            self.0.has_more.into_into_dart().into_dart(),
+            self.0.songs.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::SongPurchasedDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::SongPurchasedDto>
-    for crate::api::SongPurchasedDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::SongPurchasedPage>
 {
-    fn into_into_dart(self) -> crate::api::SongPurchasedDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::SongPurchasedPage>>
+    for crate::api::SongPurchasedPage
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::SongPurchasedPage> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::StreamDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::StreamUrl> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.url.into_into_dart().into_dart(),
-            self.quality.into_into_dart().into_dart(),
-            self.br.into_into_dart().into_dart(),
-            self.expire_at.into_into_dart().into_dart(),
+            self.0.url.into_into_dart().into_dart(),
+            self.0.quality.into_into_dart().into_dart(),
+            self.0.br.into_into_dart().into_dart(),
+            self.0.size.into_into_dart().into_dart(),
+            self.0.expire_at.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::StreamDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::StreamDto> for crate::api::StreamDto {
-    fn into_into_dart(self) -> crate::api::StreamDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::StreamUrl>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::StreamUrl>>
+    for crate::api::StreamUrl
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::StreamUrl> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -9115,166 +9332,200 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::UserItem>> for cra
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::UserLevelDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::UserLevel> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.level.into_into_dart().into_dart(),
-            self.now_play_count.into_into_dart().into_dart(),
-            self.next_play_count.into_into_dart().into_dart(),
-            self.now_login_count.into_into_dart().into_dart(),
-            self.next_login_count.into_into_dart().into_dart(),
-            self.progress.into_into_dart().into_dart(),
-            self.privileges.into_into_dart().into_dart(),
+            self.0.level.into_into_dart().into_dart(),
+            self.0.now_play_count.into_into_dart().into_dart(),
+            self.0.next_play_count.into_into_dart().into_dart(),
+            self.0.now_login_count.into_into_dart().into_dart(),
+            self.0.next_login_count.into_into_dart().into_dart(),
+            self.0.progress.into_into_dart().into_dart(),
+            self.0.privileges.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::UserLevelDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::UserLevelDto> for crate::api::UserLevelDto {
-    fn into_into_dart(self) -> crate::api::UserLevelDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::UserMedalDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.code.into_into_dart().into_dart(),
-            self.name.into_into_dart().into_dart(),
-            self.pic_url.into_into_dart().into_dart(),
-            self.wear_pic_url.into_into_dart().into_dart(),
-            self.condition.into_into_dart().into_dart(),
-            self.obtained.into_into_dart().into_dart(),
-            self.obtain_time_ms.into_into_dart().into_dart(),
-            self.level_title.into_into_dart().into_dart(),
-            self.progress_text.into_into_dart().into_dart(),
-            self.rank_text.into_into_dart().into_dart(),
-            self.status.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::UserMedalDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::UserMedalDto> for crate::api::UserMedalDto {
-    fn into_into_dart(self) -> crate::api::UserMedalDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipGrowthDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.level.into_into_dart().into_dart(),
-            self.level_name.into_into_dart().into_dart(),
-            self.growth_point.into_into_dart().into_dart(),
-            self.today_score.into_into_dart().into_dart(),
-            self.max_level.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipGrowthDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipGrowthDto> for crate::api::VipGrowthDto {
-    fn into_into_dart(self) -> crate::api::VipGrowthDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipMembershipDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.level.into_into_dart().into_dart(),
-            self.red_vip_level.into_into_dart().into_dart(),
-            self.expire_time_ms.into_into_dart().into_dart(),
-            self.is_vip.into_into_dart().into_dart(),
-            self.annual_count.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipMembershipDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipMembershipDto>
-    for crate::api::VipMembershipDto
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::UserLevel>
 {
-    fn into_into_dart(self) -> crate::api::VipMembershipDto {
-        self
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::UserLevel>>
+    for crate::api::UserLevel
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::UserLevel> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipOverviewDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::UserMedal> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.logged_in.into_into_dart().into_dart(),
-            self.membership.into_into_dart().into_dart(),
-            self.growth.into_into_dart().into_dart(),
-            self.sign.into_into_dart().into_dart(),
-            self.tasks.into_into_dart().into_dart(),
-            self.task_score.into_into_dart().into_dart(),
+            self.0.code.into_into_dart().into_dart(),
+            self.0.name.into_into_dart().into_dart(),
+            self.0.pic_url.into_into_dart().into_dart(),
+            self.0.wear_pic_url.into_into_dart().into_dart(),
+            self.0.condition.into_into_dart().into_dart(),
+            self.0.obtained.into_into_dart().into_dart(),
+            self.0.obtain_time_ms.into_into_dart().into_dart(),
+            self.0.level_title.into_into_dart().into_dart(),
+            self.0.progress_text.into_into_dart().into_dart(),
+            self.0.rank_text.into_into_dart().into_dart(),
+            self.0.status.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipOverviewDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipOverviewDto> for crate::api::VipOverviewDto {
-    fn into_into_dart(self) -> crate::api::VipOverviewDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::UserMedal>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::UserMedal>>
+    for crate::api::UserMedal
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::UserMedal> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipSignDayDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipGrowth> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.date.into_into_dart().into_dart(),
-            self.signed.into_into_dart().into_dart(),
-            self.today.into_into_dart().into_dart(),
-            self.score.into_into_dart().into_dart(),
+            self.0.level.into_into_dart().into_dart(),
+            self.0.level_name.into_into_dart().into_dart(),
+            self.0.growth_point.into_into_dart().into_dart(),
+            self.0.today_score.into_into_dart().into_dart(),
+            self.0.max_level.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipSignDayDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipSignDayDto> for crate::api::VipSignDayDto {
-    fn into_into_dart(self) -> crate::api::VipSignDayDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipGrowth>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipGrowth>>
+    for crate::api::VipGrowth
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipGrowth> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipSignDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipMembership> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.days.into_into_dart().into_dart(),
-            self.signed_today.into_into_dart().into_dart(),
-            self.week_signed.into_into_dart().into_dart(),
+            self.0.level.into_into_dart().into_dart(),
+            self.0.red_vip_level.into_into_dart().into_dart(),
+            self.0.expire_time_ms.into_into_dart().into_dart(),
+            self.0.is_vip.into_into_dart().into_dart(),
+            self.0.annual_count.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipSignDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipSignDto> for crate::api::VipSignDto {
-    fn into_into_dart(self) -> crate::api::VipSignDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipMembership>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipMembership>>
+    for crate::api::VipMembership
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipMembership> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::VipTaskDto {
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipOverview> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.title.into_into_dart().into_dart(),
-            self.reward.into_into_dart().into_dart(),
-            self.growth_point.into_into_dart().into_dart(),
-            self.progress.into_into_dart().into_dart(),
-            self.target.into_into_dart().into_dart(),
-            self.done.into_into_dart().into_dart(),
-            self.show_progress.into_into_dart().into_dart(),
-            self.url.into_into_dart().into_dart(),
+            self.0.logged_in.into_into_dart().into_dart(),
+            self.0.membership.into_into_dart().into_dart(),
+            self.0.growth.into_into_dart().into_dart(),
+            self.0.sign.into_into_dart().into_dart(),
+            self.0.tasks.into_into_dart().into_dart(),
+            self.0.task_score.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
 }
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::VipTaskDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::VipTaskDto> for crate::api::VipTaskDto {
-    fn into_into_dart(self) -> crate::api::VipTaskDto {
-        self
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipOverview>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipOverview>>
+    for crate::api::VipOverview
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipOverview> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipSign> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.days.into_into_dart().into_dart(),
+            self.0.signed_today.into_into_dart().into_dart(),
+            self.0.week_signed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipSign>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipSign>> for crate::api::VipSign {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipSign> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipSignDay> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.date.into_into_dart().into_dart(),
+            self.0.signed.into_into_dart().into_dart(),
+            self.0.today.into_into_dart().into_dart(),
+            self.0.score.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipSignDay>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipSignDay>>
+    for crate::api::VipSignDay
+{
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipSignDay> {
+        self.into()
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipTask> {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.0.title.into_into_dart().into_dart(),
+            self.0.reward.into_into_dart().into_dart(),
+            self.0.growth_point.into_into_dart().into_dart(),
+            self.0.progress.into_into_dart().into_dart(),
+            self.0.target.into_into_dart().into_dart(),
+            self.0.done.into_into_dart().into_dart(),
+            self.0.show_progress.into_into_dart().into_dart(),
+            self.0.url.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for FrbWrapper<crate::api::VipTask>
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipTask>> for crate::api::VipTask {
+    fn into_into_dart(self) -> FrbWrapper<crate::api::VipTask> {
+        self.into()
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -9516,7 +9767,7 @@ impl SseEncode for crate::api::DefaultSearch {
     }
 }
 
-impl SseEncode for crate::api::DigitalAlbumDetailDto {
+impl SseEncode for crate::api::DigitalAlbumDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.album_id, serializer);
@@ -9533,7 +9784,15 @@ impl SseEncode for crate::api::DigitalAlbumDetailDto {
     }
 }
 
-impl SseEncode for crate::api::DigitalAlbumEntryDto {
+impl SseEncode for crate::api::DigitalAlbumPurchased {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.total, serializer);
+        <Vec<crate::api::DigitalAlbumPurchasedEntry>>::sse_encode(self.albums, serializer);
+    }
+}
+
+impl SseEncode for crate::api::DigitalAlbumPurchasedEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.album_id, serializer);
@@ -9546,15 +9805,7 @@ impl SseEncode for crate::api::DigitalAlbumEntryDto {
     }
 }
 
-impl SseEncode for crate::api::DigitalAlbumPurchasedDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <u64>::sse_encode(self.total, serializer);
-        <Vec<crate::api::DigitalAlbumEntryDto>>::sse_encode(self.albums, serializer);
-    }
-}
-
-impl SseEncode for crate::api::DigitalAlbumSalesDto {
+impl SseEncode for crate::api::DigitalAlbumSalesEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.album_id, serializer);
@@ -9617,7 +9868,7 @@ impl SseEncode for crate::api::FollowCount {
     }
 }
 
-impl SseEncode for crate::api::ForwardItemDto {
+impl SseEncode for crate::api::ForwardItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<u64>>::sse_encode(self.id, serializer);
@@ -9674,7 +9925,7 @@ impl SseEncode for i64 {
     }
 }
 
-impl SseEncode for crate::api::InboxItemDto {
+impl SseEncode for crate::api::InboxItem {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -9768,22 +10019,22 @@ impl SseEncode for Vec<crate::api::Comment> {
     }
 }
 
-impl SseEncode for Vec<crate::api::DigitalAlbumEntryDto> {
+impl SseEncode for Vec<crate::api::DigitalAlbumPurchasedEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::DigitalAlbumEntryDto>::sse_encode(item, serializer);
+            <crate::api::DigitalAlbumPurchasedEntry>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::DigitalAlbumSalesDto> {
+impl SseEncode for Vec<crate::api::DigitalAlbumSalesEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::DigitalAlbumSalesDto>::sse_encode(item, serializer);
+            <crate::api::DigitalAlbumSalesEntry>::sse_encode(item, serializer);
         }
     }
 }
@@ -9798,12 +10049,12 @@ impl SseEncode for Vec<crate::api::FeedEventDto> {
     }
 }
 
-impl SseEncode for Vec<crate::api::ForwardItemDto> {
+impl SseEncode for Vec<crate::api::ForwardItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::ForwardItemDto>::sse_encode(item, serializer);
+            <crate::api::ForwardItem>::sse_encode(item, serializer);
         }
     }
 }
@@ -9838,12 +10089,12 @@ impl SseEncode for Vec<crate::api::HotSearchTerm> {
     }
 }
 
-impl SseEncode for Vec<crate::api::InboxItemDto> {
+impl SseEncode for Vec<crate::api::InboxItem> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::InboxItemDto>::sse_encode(item, serializer);
+            <crate::api::InboxItem>::sse_encode(item, serializer);
         }
     }
 }
@@ -9938,22 +10189,22 @@ impl SseEncode for Vec<u8> {
     }
 }
 
-impl SseEncode for Vec<crate::api::PrivateMessageDto> {
+impl SseEncode for Vec<crate::api::PrivateMessage> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::PrivateMessageDto>::sse_encode(item, serializer);
+            <crate::api::PrivateMessage>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::PrivateSessionDto> {
+impl SseEncode for Vec<crate::api::PrivateSession> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::PrivateSessionDto>::sse_encode(item, serializer);
+            <crate::api::PrivateSession>::sse_encode(item, serializer);
         }
     }
 }
@@ -9968,12 +10219,12 @@ impl SseEncode for Vec<crate::api::ProviderInfo> {
     }
 }
 
-impl SseEncode for Vec<crate::api::PurchasedSongDto> {
+impl SseEncode for Vec<crate::api::PurchasedSongEntry> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::PurchasedSongDto>::sse_encode(item, serializer);
+            <crate::api::PurchasedSongEntry>::sse_encode(item, serializer);
         }
     }
 }
@@ -10038,12 +10289,12 @@ impl SseEncode for Vec<crate::api::RadioSubscriber> {
     }
 }
 
-impl SseEncode for Vec<crate::api::RecentContactDto> {
+impl SseEncode for Vec<crate::api::RecentContact> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::RecentContactDto>::sse_encode(item, serializer);
+            <crate::api::RecentContact>::sse_encode(item, serializer);
         }
     }
 }
@@ -10158,32 +10409,32 @@ impl SseEncode for Vec<crate::api::UserItem> {
     }
 }
 
-impl SseEncode for Vec<crate::api::UserMedalDto> {
+impl SseEncode for Vec<crate::api::UserMedal> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::UserMedalDto>::sse_encode(item, serializer);
+            <crate::api::UserMedal>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::VipSignDayDto> {
+impl SseEncode for Vec<crate::api::VipSignDay> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::VipSignDayDto>::sse_encode(item, serializer);
+            <crate::api::VipSignDay>::sse_encode(item, serializer);
         }
     }
 }
 
-impl SseEncode for Vec<crate::api::VipTaskDto> {
+impl SseEncode for Vec<crate::api::VipTask> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
-            <crate::api::VipTaskDto>::sse_encode(item, serializer);
+            <crate::api::VipTask>::sse_encode(item, serializer);
         }
     }
 }
@@ -10309,32 +10560,32 @@ impl SseEncode for Option<u64> {
     }
 }
 
-impl SseEncode for Option<crate::api::VipGrowthDto> {
+impl SseEncode for Option<crate::api::VipGrowth> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <crate::api::VipGrowthDto>::sse_encode(value, serializer);
+            <crate::api::VipGrowth>::sse_encode(value, serializer);
         }
     }
 }
 
-impl SseEncode for Option<crate::api::VipMembershipDto> {
+impl SseEncode for Option<crate::api::VipMembership> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <crate::api::VipMembershipDto>::sse_encode(value, serializer);
+            <crate::api::VipMembership>::sse_encode(value, serializer);
         }
     }
 }
 
-impl SseEncode for Option<crate::api::VipSignDto> {
+impl SseEncode for Option<crate::api::VipSign> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
-            <crate::api::VipSignDto>::sse_encode(value, serializer);
+            <crate::api::VipSign>::sse_encode(value, serializer);
         }
     }
 }
@@ -10435,7 +10686,7 @@ impl SseEncode for crate::api::PodcastRadio {
     }
 }
 
-impl SseEncode for crate::api::PrivateMessageDto {
+impl SseEncode for crate::api::PrivateMessage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.id, serializer);
@@ -10447,7 +10698,7 @@ impl SseEncode for crate::api::PrivateMessageDto {
     }
 }
 
-impl SseEncode for crate::api::PrivateSessionDto {
+impl SseEncode for crate::api::PrivateSession {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.user_id, serializer);
@@ -10483,7 +10734,7 @@ impl SseEncode for crate::api::ProviderInfo {
     }
 }
 
-impl SseEncode for crate::api::PurchasedSongDto {
+impl SseEncode for crate::api::PurchasedSongEntry {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.song_id, serializer);
@@ -10589,7 +10840,7 @@ impl SseEncode for crate::api::RadioToplistDto {
     }
 }
 
-impl SseEncode for crate::api::RecentContactDto {
+impl SseEncode for crate::api::RecentContact {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.user_id, serializer);
@@ -10709,21 +10960,22 @@ impl SseEncode for crate::api::SongDto {
     }
 }
 
-impl SseEncode for crate::api::SongPurchasedDto {
+impl SseEncode for crate::api::SongPurchasedPage {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.count, serializer);
         <bool>::sse_encode(self.has_more, serializer);
-        <Vec<crate::api::PurchasedSongDto>>::sse_encode(self.songs, serializer);
+        <Vec<crate::api::PurchasedSongEntry>>::sse_encode(self.songs, serializer);
     }
 }
 
-impl SseEncode for crate::api::StreamDto {
+impl SseEncode for crate::api::StreamUrl {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<String>>::sse_encode(self.url, serializer);
         <String>::sse_encode(self.quality, serializer);
         <Option<u64>>::sse_encode(self.br, serializer);
+        <Option<u64>>::sse_encode(self.size, serializer);
         <Option<u64>>::sse_encode(self.expire_at, serializer);
     }
 }
@@ -10806,7 +11058,7 @@ impl SseEncode for crate::api::UserItem {
     }
 }
 
-impl SseEncode for crate::api::UserLevelDto {
+impl SseEncode for crate::api::UserLevel {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.level, serializer);
@@ -10819,7 +11071,7 @@ impl SseEncode for crate::api::UserLevelDto {
     }
 }
 
-impl SseEncode for crate::api::UserMedalDto {
+impl SseEncode for crate::api::UserMedal {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.code, serializer);
@@ -10836,7 +11088,7 @@ impl SseEncode for crate::api::UserMedalDto {
     }
 }
 
-impl SseEncode for crate::api::VipGrowthDto {
+impl SseEncode for crate::api::VipGrowth {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.level, serializer);
@@ -10847,7 +11099,7 @@ impl SseEncode for crate::api::VipGrowthDto {
     }
 }
 
-impl SseEncode for crate::api::VipMembershipDto {
+impl SseEncode for crate::api::VipMembership {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u32>::sse_encode(self.level, serializer);
@@ -10858,19 +11110,28 @@ impl SseEncode for crate::api::VipMembershipDto {
     }
 }
 
-impl SseEncode for crate::api::VipOverviewDto {
+impl SseEncode for crate::api::VipOverview {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.logged_in, serializer);
-        <Option<crate::api::VipMembershipDto>>::sse_encode(self.membership, serializer);
-        <Option<crate::api::VipGrowthDto>>::sse_encode(self.growth, serializer);
-        <Option<crate::api::VipSignDto>>::sse_encode(self.sign, serializer);
-        <Vec<crate::api::VipTaskDto>>::sse_encode(self.tasks, serializer);
+        <Option<crate::api::VipMembership>>::sse_encode(self.membership, serializer);
+        <Option<crate::api::VipGrowth>>::sse_encode(self.growth, serializer);
+        <Option<crate::api::VipSign>>::sse_encode(self.sign, serializer);
+        <Vec<crate::api::VipTask>>::sse_encode(self.tasks, serializer);
         <i64>::sse_encode(self.task_score, serializer);
     }
 }
 
-impl SseEncode for crate::api::VipSignDayDto {
+impl SseEncode for crate::api::VipSign {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::VipSignDay>>::sse_encode(self.days, serializer);
+        <bool>::sse_encode(self.signed_today, serializer);
+        <u32>::sse_encode(self.week_signed, serializer);
+    }
+}
+
+impl SseEncode for crate::api::VipSignDay {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.date, serializer);
@@ -10880,16 +11141,7 @@ impl SseEncode for crate::api::VipSignDayDto {
     }
 }
 
-impl SseEncode for crate::api::VipSignDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<crate::api::VipSignDayDto>>::sse_encode(self.days, serializer);
-        <bool>::sse_encode(self.signed_today, serializer);
-        <u32>::sse_encode(self.week_signed, serializer);
-    }
-}
-
-impl SseEncode for crate::api::VipTaskDto {
+impl SseEncode for crate::api::VipTask {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.title, serializer);

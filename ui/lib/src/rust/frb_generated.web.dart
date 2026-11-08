@@ -63,13 +63,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
-  VipGrowthDto dco_decode_box_autoadd_vip_growth_dto(dynamic raw);
+  VipGrowth dco_decode_box_autoadd_vip_growth(dynamic raw);
 
   @protected
-  VipMembershipDto dco_decode_box_autoadd_vip_membership_dto(dynamic raw);
+  VipMembership dco_decode_box_autoadd_vip_membership(dynamic raw);
 
   @protected
-  VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw);
+  VipSign dco_decode_box_autoadd_vip_sign(dynamic raw);
 
   @protected
   CacheEvictionDto dco_decode_cache_eviction_dto(dynamic raw);
@@ -93,16 +93,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DefaultSearch dco_decode_default_search(dynamic raw);
 
   @protected
-  DigitalAlbumDetailDto dco_decode_digital_album_detail_dto(dynamic raw);
+  DigitalAlbumDetail dco_decode_digital_album_detail(dynamic raw);
 
   @protected
-  DigitalAlbumEntryDto dco_decode_digital_album_entry_dto(dynamic raw);
+  DigitalAlbumPurchased dco_decode_digital_album_purchased(dynamic raw);
 
   @protected
-  DigitalAlbumPurchasedDto dco_decode_digital_album_purchased_dto(dynamic raw);
+  DigitalAlbumPurchasedEntry dco_decode_digital_album_purchased_entry(
+    dynamic raw,
+  );
 
   @protected
-  DigitalAlbumSalesDto dco_decode_digital_album_sales_dto(dynamic raw);
+  DigitalAlbumSalesEntry dco_decode_digital_album_sales_entry(dynamic raw);
 
   @protected
   EqValidationDto dco_decode_eq_validation_dto(dynamic raw);
@@ -120,7 +122,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FollowCount dco_decode_follow_count(dynamic raw);
 
   @protected
-  ForwardItemDto dco_decode_forward_item_dto(dynamic raw);
+  ForwardItem dco_decode_forward_item(dynamic raw);
 
   @protected
   HotArtist dco_decode_hot_artist(dynamic raw);
@@ -138,7 +140,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
-  InboxItemDto dco_decode_inbox_item_dto(dynamic raw);
+  InboxItem dco_decode_inbox_item(dynamic raw);
 
   @protected
   InitInfo dco_decode_init_info(dynamic raw);
@@ -165,12 +167,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Comment> dco_decode_list_comment(dynamic raw);
 
   @protected
-  List<DigitalAlbumEntryDto> dco_decode_list_digital_album_entry_dto(
-    dynamic raw,
-  );
+  List<DigitalAlbumPurchasedEntry>
+  dco_decode_list_digital_album_purchased_entry(dynamic raw);
 
   @protected
-  List<DigitalAlbumSalesDto> dco_decode_list_digital_album_sales_dto(
+  List<DigitalAlbumSalesEntry> dco_decode_list_digital_album_sales_entry(
     dynamic raw,
   );
 
@@ -178,7 +179,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<FeedEventDto> dco_decode_list_feed_event_dto(dynamic raw);
 
   @protected
-  List<ForwardItemDto> dco_decode_list_forward_item_dto(dynamic raw);
+  List<ForwardItem> dco_decode_list_forward_item(dynamic raw);
 
   @protected
   List<HotArtist> dco_decode_list_hot_artist(dynamic raw);
@@ -190,7 +191,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<HotSearchTerm> dco_decode_list_hot_search_term(dynamic raw);
 
   @protected
-  List<InboxItemDto> dco_decode_list_inbox_item_dto(dynamic raw);
+  List<InboxItem> dco_decode_list_inbox_item(dynamic raw);
 
   @protected
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
@@ -220,16 +221,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
-  List<PrivateMessageDto> dco_decode_list_private_message_dto(dynamic raw);
+  List<PrivateMessage> dco_decode_list_private_message(dynamic raw);
 
   @protected
-  List<PrivateSessionDto> dco_decode_list_private_session_dto(dynamic raw);
+  List<PrivateSession> dco_decode_list_private_session(dynamic raw);
 
   @protected
   List<ProviderInfo> dco_decode_list_provider_info(dynamic raw);
 
   @protected
-  List<PurchasedSongDto> dco_decode_list_purchased_song_dto(dynamic raw);
+  List<PurchasedSongEntry> dco_decode_list_purchased_song_entry(dynamic raw);
 
   @protected
   List<RadioCategory> dco_decode_list_radio_category(dynamic raw);
@@ -252,7 +253,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<RadioSubscriber> dco_decode_list_radio_subscriber(dynamic raw);
 
   @protected
-  List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw);
+  List<RecentContact> dco_decode_list_recent_contact(dynamic raw);
 
   @protected
   List<SearchAlbum> dco_decode_list_search_album(dynamic raw);
@@ -288,13 +289,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItem> dco_decode_list_user_item(dynamic raw);
 
   @protected
-  List<UserMedalDto> dco_decode_list_user_medal_dto(dynamic raw);
+  List<UserMedal> dco_decode_list_user_medal(dynamic raw);
 
   @protected
-  List<VipSignDayDto> dco_decode_list_vip_sign_day_dto(dynamic raw);
+  List<VipSignDay> dco_decode_list_vip_sign_day(dynamic raw);
 
   @protected
-  List<VipTaskDto> dco_decode_list_vip_task_dto(dynamic raw);
+  List<VipTask> dco_decode_list_vip_task(dynamic raw);
 
   @protected
   List<WikiFact> dco_decode_list_wiki_fact(dynamic raw);
@@ -333,13 +334,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
-  VipGrowthDto? dco_decode_opt_box_autoadd_vip_growth_dto(dynamic raw);
+  VipGrowth? dco_decode_opt_box_autoadd_vip_growth(dynamic raw);
 
   @protected
-  VipMembershipDto? dco_decode_opt_box_autoadd_vip_membership_dto(dynamic raw);
+  VipMembership? dco_decode_opt_box_autoadd_vip_membership(dynamic raw);
 
   @protected
-  VipSignDto? dco_decode_opt_box_autoadd_vip_sign_dto(dynamic raw);
+  VipSign? dco_decode_opt_box_autoadd_vip_sign(dynamic raw);
 
   @protected
   PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
@@ -366,10 +367,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PodcastRadio dco_decode_podcast_radio(dynamic raw);
 
   @protected
-  PrivateMessageDto dco_decode_private_message_dto(dynamic raw);
+  PrivateMessage dco_decode_private_message(dynamic raw);
 
   @protected
-  PrivateSessionDto dco_decode_private_session_dto(dynamic raw);
+  PrivateSession dco_decode_private_session(dynamic raw);
 
   @protected
   ProfileDetail dco_decode_profile_detail(dynamic raw);
@@ -378,7 +379,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProviderInfo dco_decode_provider_info(dynamic raw);
 
   @protected
-  PurchasedSongDto dco_decode_purchased_song_dto(dynamic raw);
+  PurchasedSongEntry dco_decode_purchased_song_entry(dynamic raw);
 
   @protected
   RadioCategory dco_decode_radio_category(dynamic raw);
@@ -408,7 +409,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RadioToplistDto dco_decode_radio_toplist_dto(dynamic raw);
 
   @protected
-  RecentContactDto dco_decode_recent_contact_dto(dynamic raw);
+  RecentContact dco_decode_recent_contact(dynamic raw);
 
   @protected
   SearchAlbum dco_decode_search_album(dynamic raw);
@@ -438,10 +439,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto dco_decode_song_dto(dynamic raw);
 
   @protected
-  SongPurchasedDto dco_decode_song_purchased_dto(dynamic raw);
+  SongPurchasedPage dco_decode_song_purchased_page(dynamic raw);
 
   @protected
-  StreamDto dco_decode_stream_dto(dynamic raw);
+  StreamUrl dco_decode_stream_url(dynamic raw);
 
   @protected
   StyleTag dco_decode_style_tag(dynamic raw);
@@ -471,28 +472,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItem dco_decode_user_item(dynamic raw);
 
   @protected
-  UserLevelDto dco_decode_user_level_dto(dynamic raw);
+  UserLevel dco_decode_user_level(dynamic raw);
 
   @protected
-  UserMedalDto dco_decode_user_medal_dto(dynamic raw);
+  UserMedal dco_decode_user_medal(dynamic raw);
 
   @protected
-  VipGrowthDto dco_decode_vip_growth_dto(dynamic raw);
+  VipGrowth dco_decode_vip_growth(dynamic raw);
 
   @protected
-  VipMembershipDto dco_decode_vip_membership_dto(dynamic raw);
+  VipMembership dco_decode_vip_membership(dynamic raw);
 
   @protected
-  VipOverviewDto dco_decode_vip_overview_dto(dynamic raw);
+  VipOverview dco_decode_vip_overview(dynamic raw);
 
   @protected
-  VipSignDayDto dco_decode_vip_sign_day_dto(dynamic raw);
+  VipSign dco_decode_vip_sign(dynamic raw);
 
   @protected
-  VipSignDto dco_decode_vip_sign_dto(dynamic raw);
+  VipSignDay dco_decode_vip_sign_day(dynamic raw);
 
   @protected
-  VipTaskDto dco_decode_vip_task_dto(dynamic raw);
+  VipTask dco_decode_vip_task(dynamic raw);
 
   @protected
   WikiFact dco_decode_wiki_fact(dynamic raw);
@@ -548,17 +549,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
-  VipGrowthDto sse_decode_box_autoadd_vip_growth_dto(
+  VipGrowth sse_decode_box_autoadd_vip_growth(SseDeserializer deserializer);
+
+  @protected
+  VipMembership sse_decode_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   );
 
   @protected
-  VipMembershipDto sse_decode_box_autoadd_vip_membership_dto(
-    SseDeserializer deserializer,
-  );
-
-  @protected
-  VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer);
+  VipSign sse_decode_box_autoadd_vip_sign(SseDeserializer deserializer);
 
   @protected
   CacheEvictionDto sse_decode_cache_eviction_dto(SseDeserializer deserializer);
@@ -582,22 +581,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   DefaultSearch sse_decode_default_search(SseDeserializer deserializer);
 
   @protected
-  DigitalAlbumDetailDto sse_decode_digital_album_detail_dto(
+  DigitalAlbumDetail sse_decode_digital_album_detail(
     SseDeserializer deserializer,
   );
 
   @protected
-  DigitalAlbumEntryDto sse_decode_digital_album_entry_dto(
+  DigitalAlbumPurchased sse_decode_digital_album_purchased(
     SseDeserializer deserializer,
   );
 
   @protected
-  DigitalAlbumPurchasedDto sse_decode_digital_album_purchased_dto(
+  DigitalAlbumPurchasedEntry sse_decode_digital_album_purchased_entry(
     SseDeserializer deserializer,
   );
 
   @protected
-  DigitalAlbumSalesDto sse_decode_digital_album_sales_dto(
+  DigitalAlbumSalesEntry sse_decode_digital_album_sales_entry(
     SseDeserializer deserializer,
   );
 
@@ -617,7 +616,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FollowCount sse_decode_follow_count(SseDeserializer deserializer);
 
   @protected
-  ForwardItemDto sse_decode_forward_item_dto(SseDeserializer deserializer);
+  ForwardItem sse_decode_forward_item(SseDeserializer deserializer);
 
   @protected
   HotArtist sse_decode_hot_artist(SseDeserializer deserializer);
@@ -637,7 +636,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
-  InboxItemDto sse_decode_inbox_item_dto(SseDeserializer deserializer);
+  InboxItem sse_decode_inbox_item(SseDeserializer deserializer);
 
   @protected
   InitInfo sse_decode_init_info(SseDeserializer deserializer);
@@ -666,12 +665,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<Comment> sse_decode_list_comment(SseDeserializer deserializer);
 
   @protected
-  List<DigitalAlbumEntryDto> sse_decode_list_digital_album_entry_dto(
-    SseDeserializer deserializer,
-  );
+  List<DigitalAlbumPurchasedEntry>
+  sse_decode_list_digital_album_purchased_entry(SseDeserializer deserializer);
 
   @protected
-  List<DigitalAlbumSalesDto> sse_decode_list_digital_album_sales_dto(
+  List<DigitalAlbumSalesEntry> sse_decode_list_digital_album_sales_entry(
     SseDeserializer deserializer,
   );
 
@@ -681,9 +679,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<ForwardItemDto> sse_decode_list_forward_item_dto(
-    SseDeserializer deserializer,
-  );
+  List<ForwardItem> sse_decode_list_forward_item(SseDeserializer deserializer);
 
   @protected
   List<HotArtist> sse_decode_list_hot_artist(SseDeserializer deserializer);
@@ -699,9 +695,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<InboxItemDto> sse_decode_list_inbox_item_dto(
-    SseDeserializer deserializer,
-  );
+  List<InboxItem> sse_decode_list_inbox_item(SseDeserializer deserializer);
 
   @protected
   List<LyricLineDto> sse_decode_list_lyric_line_dto(
@@ -741,12 +735,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
-  List<PrivateMessageDto> sse_decode_list_private_message_dto(
+  List<PrivateMessage> sse_decode_list_private_message(
     SseDeserializer deserializer,
   );
 
   @protected
-  List<PrivateSessionDto> sse_decode_list_private_session_dto(
+  List<PrivateSession> sse_decode_list_private_session(
     SseDeserializer deserializer,
   );
 
@@ -756,7 +750,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<PurchasedSongDto> sse_decode_list_purchased_song_dto(
+  List<PurchasedSongEntry> sse_decode_list_purchased_song_entry(
     SseDeserializer deserializer,
   );
 
@@ -789,7 +783,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  List<RecentContactDto> sse_decode_list_recent_contact_dto(
+  List<RecentContact> sse_decode_list_recent_contact(
     SseDeserializer deserializer,
   );
 
@@ -837,17 +831,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserItem> sse_decode_list_user_item(SseDeserializer deserializer);
 
   @protected
-  List<UserMedalDto> sse_decode_list_user_medal_dto(
-    SseDeserializer deserializer,
-  );
+  List<UserMedal> sse_decode_list_user_medal(SseDeserializer deserializer);
 
   @protected
-  List<VipSignDayDto> sse_decode_list_vip_sign_day_dto(
-    SseDeserializer deserializer,
-  );
+  List<VipSignDay> sse_decode_list_vip_sign_day(SseDeserializer deserializer);
 
   @protected
-  List<VipTaskDto> sse_decode_list_vip_task_dto(SseDeserializer deserializer);
+  List<VipTask> sse_decode_list_vip_task(SseDeserializer deserializer);
 
   @protected
   List<WikiFact> sse_decode_list_wiki_fact(SseDeserializer deserializer);
@@ -892,19 +882,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
-  VipGrowthDto? sse_decode_opt_box_autoadd_vip_growth_dto(
+  VipGrowth? sse_decode_opt_box_autoadd_vip_growth(
     SseDeserializer deserializer,
   );
 
   @protected
-  VipMembershipDto? sse_decode_opt_box_autoadd_vip_membership_dto(
+  VipMembership? sse_decode_opt_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   );
 
   @protected
-  VipSignDto? sse_decode_opt_box_autoadd_vip_sign_dto(
-    SseDeserializer deserializer,
-  );
+  VipSign? sse_decode_opt_box_autoadd_vip_sign(SseDeserializer deserializer);
 
   @protected
   PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
@@ -935,14 +923,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PodcastRadio sse_decode_podcast_radio(SseDeserializer deserializer);
 
   @protected
-  PrivateMessageDto sse_decode_private_message_dto(
-    SseDeserializer deserializer,
-  );
+  PrivateMessage sse_decode_private_message(SseDeserializer deserializer);
 
   @protected
-  PrivateSessionDto sse_decode_private_session_dto(
-    SseDeserializer deserializer,
-  );
+  PrivateSession sse_decode_private_session(SseDeserializer deserializer);
 
   @protected
   ProfileDetail sse_decode_profile_detail(SseDeserializer deserializer);
@@ -951,7 +935,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ProviderInfo sse_decode_provider_info(SseDeserializer deserializer);
 
   @protected
-  PurchasedSongDto sse_decode_purchased_song_dto(SseDeserializer deserializer);
+  PurchasedSongEntry sse_decode_purchased_song_entry(
+    SseDeserializer deserializer,
+  );
 
   @protected
   RadioCategory sse_decode_radio_category(SseDeserializer deserializer);
@@ -985,7 +971,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   RadioToplistDto sse_decode_radio_toplist_dto(SseDeserializer deserializer);
 
   @protected
-  RecentContactDto sse_decode_recent_contact_dto(SseDeserializer deserializer);
+  RecentContact sse_decode_recent_contact(SseDeserializer deserializer);
 
   @protected
   SearchAlbum sse_decode_search_album(SseDeserializer deserializer);
@@ -1017,10 +1003,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
 
   @protected
-  SongPurchasedDto sse_decode_song_purchased_dto(SseDeserializer deserializer);
+  SongPurchasedPage sse_decode_song_purchased_page(
+    SseDeserializer deserializer,
+  );
 
   @protected
-  StreamDto sse_decode_stream_dto(SseDeserializer deserializer);
+  StreamUrl sse_decode_stream_url(SseDeserializer deserializer);
 
   @protected
   StyleTag sse_decode_style_tag(SseDeserializer deserializer);
@@ -1054,28 +1042,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   UserItem sse_decode_user_item(SseDeserializer deserializer);
 
   @protected
-  UserLevelDto sse_decode_user_level_dto(SseDeserializer deserializer);
+  UserLevel sse_decode_user_level(SseDeserializer deserializer);
 
   @protected
-  UserMedalDto sse_decode_user_medal_dto(SseDeserializer deserializer);
+  UserMedal sse_decode_user_medal(SseDeserializer deserializer);
 
   @protected
-  VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer);
+  VipGrowth sse_decode_vip_growth(SseDeserializer deserializer);
 
   @protected
-  VipMembershipDto sse_decode_vip_membership_dto(SseDeserializer deserializer);
+  VipMembership sse_decode_vip_membership(SseDeserializer deserializer);
 
   @protected
-  VipOverviewDto sse_decode_vip_overview_dto(SseDeserializer deserializer);
+  VipOverview sse_decode_vip_overview(SseDeserializer deserializer);
 
   @protected
-  VipSignDayDto sse_decode_vip_sign_day_dto(SseDeserializer deserializer);
+  VipSign sse_decode_vip_sign(SseDeserializer deserializer);
 
   @protected
-  VipSignDto sse_decode_vip_sign_dto(SseDeserializer deserializer);
+  VipSignDay sse_decode_vip_sign_day(SseDeserializer deserializer);
 
   @protected
-  VipTaskDto sse_decode_vip_task_dto(SseDeserializer deserializer);
+  VipTask sse_decode_vip_task(SseDeserializer deserializer);
 
   @protected
   WikiFact sse_decode_wiki_fact(SseDeserializer deserializer);
@@ -1141,22 +1129,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_vip_growth_dto(
-    VipGrowthDto self,
+  void sse_encode_box_autoadd_vip_growth(
+    VipGrowth self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_box_autoadd_vip_membership_dto(
-    VipMembershipDto self,
+  void sse_encode_box_autoadd_vip_membership(
+    VipMembership self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_box_autoadd_vip_sign_dto(
-    VipSignDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_box_autoadd_vip_sign(VipSign self, SseSerializer serializer);
 
   @protected
   void sse_encode_cache_eviction_dto(
@@ -1183,26 +1168,26 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_default_search(DefaultSearch self, SseSerializer serializer);
 
   @protected
-  void sse_encode_digital_album_detail_dto(
-    DigitalAlbumDetailDto self,
+  void sse_encode_digital_album_detail(
+    DigitalAlbumDetail self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_digital_album_entry_dto(
-    DigitalAlbumEntryDto self,
+  void sse_encode_digital_album_purchased(
+    DigitalAlbumPurchased self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_digital_album_purchased_dto(
-    DigitalAlbumPurchasedDto self,
+  void sse_encode_digital_album_purchased_entry(
+    DigitalAlbumPurchasedEntry self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_digital_album_sales_dto(
-    DigitalAlbumSalesDto self,
+  void sse_encode_digital_album_sales_entry(
+    DigitalAlbumSalesEntry self,
     SseSerializer serializer,
   );
 
@@ -1225,10 +1210,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_follow_count(FollowCount self, SseSerializer serializer);
 
   @protected
-  void sse_encode_forward_item_dto(
-    ForwardItemDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_forward_item(ForwardItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_hot_artist(HotArtist self, SseSerializer serializer);
@@ -1249,7 +1231,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
-  void sse_encode_inbox_item_dto(InboxItemDto self, SseSerializer serializer);
+  void sse_encode_inbox_item(InboxItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_init_info(InitInfo self, SseSerializer serializer);
@@ -1288,14 +1270,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_comment(List<Comment> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_digital_album_entry_dto(
-    List<DigitalAlbumEntryDto> self,
+  void sse_encode_list_digital_album_purchased_entry(
+    List<DigitalAlbumPurchasedEntry> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_digital_album_sales_dto(
-    List<DigitalAlbumSalesDto> self,
+  void sse_encode_list_digital_album_sales_entry(
+    List<DigitalAlbumSalesEntry> self,
     SseSerializer serializer,
   );
 
@@ -1306,8 +1288,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_forward_item_dto(
-    List<ForwardItemDto> self,
+  void sse_encode_list_forward_item(
+    List<ForwardItem> self,
     SseSerializer serializer,
   );
 
@@ -1330,8 +1312,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_inbox_item_dto(
-    List<InboxItemDto> self,
+  void sse_encode_list_inbox_item(
+    List<InboxItem> self,
     SseSerializer serializer,
   );
 
@@ -1384,14 +1366,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_private_message_dto(
-    List<PrivateMessageDto> self,
+  void sse_encode_list_private_message(
+    List<PrivateMessage> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_private_session_dto(
-    List<PrivateSessionDto> self,
+  void sse_encode_list_private_session(
+    List<PrivateSession> self,
     SseSerializer serializer,
   );
 
@@ -1402,8 +1384,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_purchased_song_dto(
-    List<PurchasedSongDto> self,
+  void sse_encode_list_purchased_song_entry(
+    List<PurchasedSongEntry> self,
     SseSerializer serializer,
   );
 
@@ -1444,8 +1426,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_recent_contact_dto(
-    List<RecentContactDto> self,
+  void sse_encode_list_recent_contact(
+    List<RecentContact> self,
     SseSerializer serializer,
   );
 
@@ -1507,22 +1489,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_user_item(List<UserItem> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_user_medal_dto(
-    List<UserMedalDto> self,
+  void sse_encode_list_user_medal(
+    List<UserMedal> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_vip_sign_day_dto(
-    List<VipSignDayDto> self,
+  void sse_encode_list_vip_sign_day(
+    List<VipSignDay> self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_list_vip_task_dto(
-    List<VipTaskDto> self,
-    SseSerializer serializer,
-  );
+  void sse_encode_list_vip_task(List<VipTask> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_wiki_fact(List<WikiFact> self, SseSerializer serializer);
@@ -1579,20 +1558,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_growth_dto(
-    VipGrowthDto? self,
+  void sse_encode_opt_box_autoadd_vip_growth(
+    VipGrowth? self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_membership_dto(
-    VipMembershipDto? self,
+  void sse_encode_opt_box_autoadd_vip_membership(
+    VipMembership? self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_sign_dto(
-    VipSignDto? self,
+  void sse_encode_opt_box_autoadd_vip_sign(
+    VipSign? self,
     SseSerializer serializer,
   );
 
@@ -1639,14 +1618,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_podcast_radio(PodcastRadio self, SseSerializer serializer);
 
   @protected
-  void sse_encode_private_message_dto(
-    PrivateMessageDto self,
+  void sse_encode_private_message(
+    PrivateMessage self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_private_session_dto(
-    PrivateSessionDto self,
+  void sse_encode_private_session(
+    PrivateSession self,
     SseSerializer serializer,
   );
 
@@ -1657,8 +1636,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_provider_info(ProviderInfo self, SseSerializer serializer);
 
   @protected
-  void sse_encode_purchased_song_dto(
-    PurchasedSongDto self,
+  void sse_encode_purchased_song_entry(
+    PurchasedSongEntry self,
     SseSerializer serializer,
   );
 
@@ -1708,10 +1687,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_recent_contact_dto(
-    RecentContactDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_recent_contact(RecentContact self, SseSerializer serializer);
 
   @protected
   void sse_encode_search_album(SearchAlbum self, SseSerializer serializer);
@@ -1747,13 +1723,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_song_purchased_dto(
-    SongPurchasedDto self,
+  void sse_encode_song_purchased_page(
+    SongPurchasedPage self,
     SseSerializer serializer,
   );
 
   @protected
-  void sse_encode_stream_dto(StreamDto self, SseSerializer serializer);
+  void sse_encode_stream_url(StreamUrl self, SseSerializer serializer);
 
   @protected
   void sse_encode_style_tag(StyleTag self, SseSerializer serializer);
@@ -1789,37 +1765,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_user_item(UserItem self, SseSerializer serializer);
 
   @protected
-  void sse_encode_user_level_dto(UserLevelDto self, SseSerializer serializer);
+  void sse_encode_user_level(UserLevel self, SseSerializer serializer);
 
   @protected
-  void sse_encode_user_medal_dto(UserMedalDto self, SseSerializer serializer);
+  void sse_encode_user_medal(UserMedal self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_growth_dto(VipGrowthDto self, SseSerializer serializer);
+  void sse_encode_vip_growth(VipGrowth self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_membership_dto(
-    VipMembershipDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_vip_membership(VipMembership self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_overview_dto(
-    VipOverviewDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_vip_overview(VipOverview self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_sign_day_dto(
-    VipSignDayDto self,
-    SseSerializer serializer,
-  );
+  void sse_encode_vip_sign(VipSign self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_sign_dto(VipSignDto self, SseSerializer serializer);
+  void sse_encode_vip_sign_day(VipSignDay self, SseSerializer serializer);
 
   @protected
-  void sse_encode_vip_task_dto(VipTaskDto self, SseSerializer serializer);
+  void sse_encode_vip_task(VipTask self, SseSerializer serializer);
 
   @protected
   void sse_encode_wiki_fact(WikiFact self, SseSerializer serializer);

@@ -107,7 +107,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<bool> crateApiClearSearchHistory();
 
-  Future<List<InboxItemDto>> crateApiCommentMessages({required int limit});
+  Future<List<InboxItem>> crateApiCommentMessages({required int limit});
 
   Future<CommentPage> crateApiCommentReplies({
     required String threadId,
@@ -139,16 +139,16 @@ abstract class RustLibApi extends BaseApi {
 
   Future<bool> crateApiDeletePlaylist({required BigInt playlistId});
 
-  Future<DigitalAlbumDetailDto> crateApiDigitalAlbumDetail({
+  Future<DigitalAlbumDetail> crateApiDigitalAlbumDetail({
     required BigInt albumId,
   });
 
-  Future<DigitalAlbumPurchasedDto> crateApiDigitalAlbumPurchased({
+  Future<DigitalAlbumPurchased> crateApiDigitalAlbumPurchased({
     required int limit,
     required int offset,
   });
 
-  Future<List<DigitalAlbumSalesDto>> crateApiDigitalAlbumSales({
+  Future<List<DigitalAlbumSalesEntry>> crateApiDigitalAlbumSales({
     required String albumIds,
   });
 
@@ -177,7 +177,7 @@ abstract class RustLibApi extends BaseApi {
     required String msg,
   });
 
-  Future<List<ForwardItemDto>> crateApiForwardMessages({
+  Future<List<ForwardItem>> crateApiForwardMessages({
     required int limit,
     required BigInt lastTimeMs,
   });
@@ -258,7 +258,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<MessageCountsDto> crateApiMessageCounts();
 
-  Future<List<InboxItemDto>> crateApiMessageNotices({
+  Future<List<InboxItem>> crateApiMessageNotices({
     required int limit,
     required BigInt lastTimeMs,
   });
@@ -341,13 +341,13 @@ abstract class RustLibApi extends BaseApi {
 
   Future<PodcastRadio> crateApiPodcastRadio({required BigInt radioId});
 
-  Future<List<PrivateMessageDto>> crateApiPrivateHistory({
+  Future<List<PrivateMessage>> crateApiPrivateHistory({
     required BigInt userId,
     required int limit,
     required BigInt beforeMs,
   });
 
-  Future<List<PrivateSessionDto>> crateApiPrivateSessions({
+  Future<List<PrivateSession>> crateApiPrivateSessions({
     required int limit,
     required int offset,
   });
@@ -368,7 +368,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<AlbumItem>> crateApiRecentAlbums({required int limit});
 
-  Future<List<RecentContactDto>> crateApiRecentContacts({required int limit});
+  Future<List<RecentContact>> crateApiRecentContacts({required int limit});
 
   Future<List<Playlist>> crateApiRecentPlaylists({required int limit});
 
@@ -447,12 +447,12 @@ abstract class RustLibApi extends BaseApi {
     required int limit,
   });
 
-  Future<SongPurchasedDto> crateApiSongPurchased({
+  Future<SongPurchasedPage> crateApiSongPurchased({
     required int limit,
     required int offset,
   });
 
-  Future<StreamDto> crateApiSongUrl({
+  Future<StreamUrl> crateApiSongUrl({
     required BigInt trackId,
     required String level,
   });
@@ -498,11 +498,11 @@ abstract class RustLibApi extends BaseApi {
     required int offset,
   });
 
-  Future<UserLevelDto> crateApiUserLevel();
+  Future<UserLevel> crateApiUserLevel();
 
-  Future<List<UserMedalDto>> crateApiUserMedals();
+  Future<List<UserMedal>> crateApiUserMedals();
 
-  Future<VipOverviewDto> crateApiVipOverview();
+  Future<VipOverview> crateApiVipOverview();
 
   Future<WordLyricDto> crateApiWordLyricLines({required BigInt trackId});
 }
@@ -832,7 +832,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "clear_search_history", argNames: []);
 
   @override
-  Future<List<InboxItemDto>> crateApiCommentMessages({required int limit}) {
+  Future<List<InboxItem>> crateApiCommentMessages({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -846,7 +846,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_inbox_item_dto,
+          decodeSuccessData: sse_decode_list_inbox_item,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiCommentMessagesConstMeta,
@@ -1135,7 +1135,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<DigitalAlbumDetailDto> crateApiDigitalAlbumDetail({
+  Future<DigitalAlbumDetail> crateApiDigitalAlbumDetail({
     required BigInt albumId,
   }) {
     return handler.executeNormal(
@@ -1151,7 +1151,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_digital_album_detail_dto,
+          decodeSuccessData: sse_decode_digital_album_detail,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiDigitalAlbumDetailConstMeta,
@@ -1167,7 +1167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<DigitalAlbumPurchasedDto> crateApiDigitalAlbumPurchased({
+  Future<DigitalAlbumPurchased> crateApiDigitalAlbumPurchased({
     required int limit,
     required int offset,
   }) {
@@ -1185,7 +1185,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_digital_album_purchased_dto,
+          decodeSuccessData: sse_decode_digital_album_purchased,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiDigitalAlbumPurchasedConstMeta,
@@ -1202,7 +1202,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<DigitalAlbumSalesDto>> crateApiDigitalAlbumSales({
+  Future<List<DigitalAlbumSalesEntry>> crateApiDigitalAlbumSales({
     required String albumIds,
   }) {
     return handler.executeNormal(
@@ -1218,7 +1218,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_digital_album_sales_dto,
+          decodeSuccessData: sse_decode_list_digital_album_sales_entry,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiDigitalAlbumSalesConstMeta,
@@ -1456,7 +1456,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<List<ForwardItemDto>> crateApiForwardMessages({
+  Future<List<ForwardItem>> crateApiForwardMessages({
     required int limit,
     required BigInt lastTimeMs,
   }) {
@@ -1474,7 +1474,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_forward_item_dto,
+          decodeSuccessData: sse_decode_list_forward_item,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiForwardMessagesConstMeta,
@@ -2169,7 +2169,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "message_counts", argNames: []);
 
   @override
-  Future<List<InboxItemDto>> crateApiMessageNotices({
+  Future<List<InboxItem>> crateApiMessageNotices({
     required int limit,
     required BigInt lastTimeMs,
   }) {
@@ -2187,7 +2187,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_inbox_item_dto,
+          decodeSuccessData: sse_decode_list_inbox_item,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiMessageNoticesConstMeta,
@@ -3008,7 +3008,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "podcast_radio", argNames: ["radioId"]);
 
   @override
-  Future<List<PrivateMessageDto>> crateApiPrivateHistory({
+  Future<List<PrivateMessage>> crateApiPrivateHistory({
     required BigInt userId,
     required int limit,
     required BigInt beforeMs,
@@ -3028,7 +3028,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_private_message_dto,
+          decodeSuccessData: sse_decode_list_private_message,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPrivateHistoryConstMeta,
@@ -3044,7 +3044,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<List<PrivateSessionDto>> crateApiPrivateSessions({
+  Future<List<PrivateSession>> crateApiPrivateSessions({
     required int limit,
     required int offset,
   }) {
@@ -3062,7 +3062,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_private_session_dto,
+          decodeSuccessData: sse_decode_list_private_session,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiPrivateSessionsConstMeta,
@@ -3252,7 +3252,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "recent_albums", argNames: ["limit"]);
 
   @override
-  Future<List<RecentContactDto>> crateApiRecentContacts({required int limit}) {
+  Future<List<RecentContact>> crateApiRecentContacts({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3266,7 +3266,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_recent_contact_dto,
+          decodeSuccessData: sse_decode_list_recent_contact,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiRecentContactsConstMeta,
@@ -3992,7 +3992,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<SongPurchasedDto> crateApiSongPurchased({
+  Future<SongPurchasedPage> crateApiSongPurchased({
     required int limit,
     required int offset,
   }) {
@@ -4010,7 +4010,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_song_purchased_dto,
+          decodeSuccessData: sse_decode_song_purchased_page,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSongPurchasedConstMeta,
@@ -4026,7 +4026,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<StreamDto> crateApiSongUrl({
+  Future<StreamUrl> crateApiSongUrl({
     required BigInt trackId,
     required String level,
   }) {
@@ -4044,7 +4044,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_stream_dto,
+          decodeSuccessData: sse_decode_stream_url,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiSongUrlConstMeta,
@@ -4430,7 +4430,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   );
 
   @override
-  Future<UserLevelDto> crateApiUserLevel() {
+  Future<UserLevel> crateApiUserLevel() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4443,7 +4443,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_user_level_dto,
+          decodeSuccessData: sse_decode_user_level,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiUserLevelConstMeta,
@@ -4457,7 +4457,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "user_level", argNames: []);
 
   @override
-  Future<List<UserMedalDto>> crateApiUserMedals() {
+  Future<List<UserMedal>> crateApiUserMedals() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4470,7 +4470,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_user_medal_dto,
+          decodeSuccessData: sse_decode_list_user_medal,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiUserMedalsConstMeta,
@@ -4484,7 +4484,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "user_medals", argNames: []);
 
   @override
-  Future<VipOverviewDto> crateApiVipOverview() {
+  Future<VipOverview> crateApiVipOverview() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4497,7 +4497,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_vip_overview_dto,
+          decodeSuccessData: sse_decode_vip_overview,
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiVipOverviewConstMeta,
@@ -4675,21 +4675,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto dco_decode_box_autoadd_vip_growth_dto(dynamic raw) {
+  VipGrowth dco_decode_box_autoadd_vip_growth(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_vip_growth_dto(raw);
+    return dco_decode_vip_growth(raw);
   }
 
   @protected
-  VipMembershipDto dco_decode_box_autoadd_vip_membership_dto(dynamic raw) {
+  VipMembership dco_decode_box_autoadd_vip_membership(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_vip_membership_dto(raw);
+    return dco_decode_vip_membership(raw);
   }
 
   @protected
-  VipSignDto dco_decode_box_autoadd_vip_sign_dto(dynamic raw) {
+  VipSign dco_decode_box_autoadd_vip_sign(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_vip_sign_dto(raw);
+    return dco_decode_vip_sign(raw);
   }
 
   @protected
@@ -4803,12 +4803,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumDetailDto dco_decode_digital_album_detail_dto(dynamic raw) {
+  DigitalAlbumDetail dco_decode_digital_album_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 11)
       throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
-    return DigitalAlbumDetailDto(
+    return DigitalAlbumDetail(
       albumId: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       artistId: dco_decode_u_64(arr[2]),
@@ -4824,12 +4824,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumEntryDto dco_decode_digital_album_entry_dto(dynamic raw) {
+  DigitalAlbumPurchased dco_decode_digital_album_purchased(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return DigitalAlbumPurchased(
+      total: dco_decode_u_64(arr[0]),
+      albums: dco_decode_list_digital_album_purchased_entry(arr[1]),
+    );
+  }
+
+  @protected
+  DigitalAlbumPurchasedEntry dco_decode_digital_album_purchased_entry(
+    dynamic raw,
+  ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 7)
       throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return DigitalAlbumEntryDto(
+    return DigitalAlbumPurchasedEntry(
       albumId: dco_decode_u_64(arr[0]),
       albumName: dco_decode_String(arr[1]),
       artistId: dco_decode_u_64(arr[2]),
@@ -4841,24 +4855,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumPurchasedDto dco_decode_digital_album_purchased_dto(dynamic raw) {
+  DigitalAlbumSalesEntry dco_decode_digital_album_sales_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 2)
       throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return DigitalAlbumPurchasedDto(
-      total: dco_decode_u_64(arr[0]),
-      albums: dco_decode_list_digital_album_entry_dto(arr[1]),
-    );
-  }
-
-  @protected
-  DigitalAlbumSalesDto dco_decode_digital_album_sales_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-    return DigitalAlbumSalesDto(
+    return DigitalAlbumSalesEntry(
       albumId: dco_decode_String(arr[0]),
       sales: dco_decode_u_64(arr[1]),
     );
@@ -4930,12 +4932,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ForwardItemDto dco_decode_forward_item_dto(dynamic raw) {
+  ForwardItem dco_decode_forward_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 9)
       throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-    return ForwardItemDto(
+    return ForwardItem(
       id: dco_decode_opt_box_autoadd_u_64(arr[0]),
       eventId: dco_decode_opt_box_autoadd_u_64(arr[1]),
       userId: dco_decode_opt_box_autoadd_u_64(arr[2]),
@@ -5001,12 +5003,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  InboxItemDto dco_decode_inbox_item_dto(dynamic raw) {
+  InboxItem dco_decode_inbox_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 7)
       throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return InboxItemDto(
+    return InboxItem(
       id: dco_decode_u_64(arr[0]),
       kind: dco_decode_String(arr[1]),
       actor: dco_decode_String(arr[2]),
@@ -5075,22 +5077,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<DigitalAlbumEntryDto> dco_decode_list_digital_album_entry_dto(
-    dynamic raw,
-  ) {
+  List<DigitalAlbumPurchasedEntry>
+  dco_decode_list_digital_album_purchased_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
-        .map(dco_decode_digital_album_entry_dto)
+        .map(dco_decode_digital_album_purchased_entry)
         .toList();
   }
 
   @protected
-  List<DigitalAlbumSalesDto> dco_decode_list_digital_album_sales_dto(
+  List<DigitalAlbumSalesEntry> dco_decode_list_digital_album_sales_entry(
     dynamic raw,
   ) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
-        .map(dco_decode_digital_album_sales_dto)
+        .map(dco_decode_digital_album_sales_entry)
         .toList();
   }
 
@@ -5101,9 +5102,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ForwardItemDto> dco_decode_list_forward_item_dto(dynamic raw) {
+  List<ForwardItem> dco_decode_list_forward_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_forward_item_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_forward_item).toList();
   }
 
   @protected
@@ -5129,9 +5130,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<InboxItemDto> dco_decode_list_inbox_item_dto(dynamic raw) {
+  List<InboxItem> dco_decode_list_inbox_item(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_inbox_item_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_inbox_item).toList();
   }
 
   @protected
@@ -5189,15 +5190,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PrivateMessageDto> dco_decode_list_private_message_dto(dynamic raw) {
+  List<PrivateMessage> dco_decode_list_private_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_private_message_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_private_message).toList();
   }
 
   @protected
-  List<PrivateSessionDto> dco_decode_list_private_session_dto(dynamic raw) {
+  List<PrivateSession> dco_decode_list_private_session(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_private_session_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_private_session).toList();
   }
 
   @protected
@@ -5207,9 +5208,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PurchasedSongDto> dco_decode_list_purchased_song_dto(dynamic raw) {
+  List<PurchasedSongEntry> dco_decode_list_purchased_song_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_purchased_song_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_purchased_song_entry).toList();
   }
 
   @protected
@@ -5253,9 +5254,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<RecentContactDto> dco_decode_list_recent_contact_dto(dynamic raw) {
+  List<RecentContact> dco_decode_list_recent_contact(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_recent_contact_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_recent_contact).toList();
   }
 
   @protected
@@ -5327,21 +5328,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<UserMedalDto> dco_decode_list_user_medal_dto(dynamic raw) {
+  List<UserMedal> dco_decode_list_user_medal(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_user_medal_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_user_medal).toList();
   }
 
   @protected
-  List<VipSignDayDto> dco_decode_list_vip_sign_day_dto(dynamic raw) {
+  List<VipSignDay> dco_decode_list_vip_sign_day(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_vip_sign_day_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_vip_sign_day).toList();
   }
 
   @protected
-  List<VipTaskDto> dco_decode_list_vip_task_dto(dynamic raw) {
+  List<VipTask> dco_decode_list_vip_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_vip_task_dto).toList();
+    return (raw as List<dynamic>).map(dco_decode_vip_task).toList();
   }
 
   @protected
@@ -5442,21 +5443,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto? dco_decode_opt_box_autoadd_vip_growth_dto(dynamic raw) {
+  VipGrowth? dco_decode_opt_box_autoadd_vip_growth(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_vip_growth_dto(raw);
+    return raw == null ? null : dco_decode_box_autoadd_vip_growth(raw);
   }
 
   @protected
-  VipMembershipDto? dco_decode_opt_box_autoadd_vip_membership_dto(dynamic raw) {
+  VipMembership? dco_decode_opt_box_autoadd_vip_membership(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_vip_membership_dto(raw);
+    return raw == null ? null : dco_decode_box_autoadd_vip_membership(raw);
   }
 
   @protected
-  VipSignDto? dco_decode_opt_box_autoadd_vip_sign_dto(dynamic raw) {
+  VipSign? dco_decode_opt_box_autoadd_vip_sign(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_vip_sign_dto(raw);
+    return raw == null ? null : dco_decode_box_autoadd_vip_sign(raw);
   }
 
   @protected
@@ -5588,12 +5589,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrivateMessageDto dco_decode_private_message_dto(dynamic raw) {
+  PrivateMessage dco_decode_private_message(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return PrivateMessageDto(
+    return PrivateMessage(
       id: dco_decode_u_64(arr[0]),
       fromMe: dco_decode_bool(arr[1]),
       nickname: dco_decode_String(arr[2]),
@@ -5604,12 +5605,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrivateSessionDto dco_decode_private_session_dto(dynamic raw) {
+  PrivateSession dco_decode_private_session(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return PrivateSessionDto(
+    return PrivateSession(
       userId: dco_decode_u_64(arr[0]),
       nickname: dco_decode_String(arr[1]),
       avatarUrl: dco_decode_opt_String(arr[2]),
@@ -5652,12 +5653,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PurchasedSongDto dco_decode_purchased_song_dto(dynamic raw) {
+  PurchasedSongEntry dco_decode_purchased_song_entry(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 5)
       throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return PurchasedSongDto(
+    return PurchasedSongEntry(
       songId: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       artistName: dco_decode_String(arr[2]),
@@ -5798,12 +5799,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RecentContactDto dco_decode_recent_contact_dto(dynamic raw) {
+  RecentContact dco_decode_recent_contact(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 7)
       throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return RecentContactDto(
+    return RecentContact(
       userId: dco_decode_u_64(arr[0]),
       nickname: dco_decode_String(arr[1]),
       avatarUrl: dco_decode_opt_String(arr[2]),
@@ -5958,29 +5959,30 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SongPurchasedDto dco_decode_song_purchased_dto(dynamic raw) {
+  SongPurchasedPage dco_decode_song_purchased_page(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 3)
       throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return SongPurchasedDto(
+    return SongPurchasedPage(
       count: dco_decode_u_64(arr[0]),
       hasMore: dco_decode_bool(arr[1]),
-      songs: dco_decode_list_purchased_song_dto(arr[2]),
+      songs: dco_decode_list_purchased_song_entry(arr[2]),
     );
   }
 
   @protected
-  StreamDto dco_decode_stream_dto(dynamic raw) {
+  StreamUrl dco_decode_stream_url(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return StreamDto(
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return StreamUrl(
       url: dco_decode_opt_String(arr[0]),
       quality: dco_decode_String(arr[1]),
       br: dco_decode_opt_box_autoadd_u_64(arr[2]),
-      expireAt: dco_decode_opt_box_autoadd_u_64(arr[3]),
+      size: dco_decode_opt_box_autoadd_u_64(arr[3]),
+      expireAt: dco_decode_opt_box_autoadd_u_64(arr[4]),
     );
   }
 
@@ -6081,12 +6083,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  UserLevelDto dco_decode_user_level_dto(dynamic raw) {
+  UserLevel dco_decode_user_level(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 7)
       throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-    return UserLevelDto(
+    return UserLevel(
       level: dco_decode_u_32(arr[0]),
       nowPlayCount: dco_decode_u_64(arr[1]),
       nextPlayCount: dco_decode_u_64(arr[2]),
@@ -6098,12 +6100,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  UserMedalDto dco_decode_user_medal_dto(dynamic raw) {
+  UserMedal dco_decode_user_medal(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 11)
       throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
-    return UserMedalDto(
+    return UserMedal(
       code: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
       picUrl: dco_decode_opt_String(arr[2]),
@@ -6119,12 +6121,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto dco_decode_vip_growth_dto(dynamic raw) {
+  VipGrowth dco_decode_vip_growth(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 5)
       throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return VipGrowthDto(
+    return VipGrowth(
       level: dco_decode_u_32(arr[0]),
       levelName: dco_decode_String(arr[1]),
       growthPoint: dco_decode_i_64(arr[2]),
@@ -6134,12 +6136,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipMembershipDto dco_decode_vip_membership_dto(dynamic raw) {
+  VipMembership dco_decode_vip_membership(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 5)
       throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-    return VipMembershipDto(
+    return VipMembership(
       level: dco_decode_u_32(arr[0]),
       redVipLevel: dco_decode_u_32(arr[1]),
       expireTimeMs: dco_decode_u_64(arr[2]),
@@ -6149,28 +6151,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipOverviewDto dco_decode_vip_overview_dto(dynamic raw) {
+  VipOverview dco_decode_vip_overview(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 6)
       throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-    return VipOverviewDto(
+    return VipOverview(
       loggedIn: dco_decode_bool(arr[0]),
-      membership: dco_decode_opt_box_autoadd_vip_membership_dto(arr[1]),
-      growth: dco_decode_opt_box_autoadd_vip_growth_dto(arr[2]),
-      sign: dco_decode_opt_box_autoadd_vip_sign_dto(arr[3]),
-      tasks: dco_decode_list_vip_task_dto(arr[4]),
+      membership: dco_decode_opt_box_autoadd_vip_membership(arr[1]),
+      growth: dco_decode_opt_box_autoadd_vip_growth(arr[2]),
+      sign: dco_decode_opt_box_autoadd_vip_sign(arr[3]),
+      tasks: dco_decode_list_vip_task(arr[4]),
       taskScore: dco_decode_i_64(arr[5]),
     );
   }
 
   @protected
-  VipSignDayDto dco_decode_vip_sign_day_dto(dynamic raw) {
+  VipSign dco_decode_vip_sign(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return VipSign(
+      days: dco_decode_list_vip_sign_day(arr[0]),
+      signedToday: dco_decode_bool(arr[1]),
+      weekSigned: dco_decode_u_32(arr[2]),
+    );
+  }
+
+  @protected
+  VipSignDay dco_decode_vip_sign_day(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 4)
       throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return VipSignDayDto(
+    return VipSignDay(
       date: dco_decode_String(arr[0]),
       signed: dco_decode_bool(arr[1]),
       today: dco_decode_bool(arr[2]),
@@ -6179,25 +6194,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipSignDto dco_decode_vip_sign_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return VipSignDto(
-      days: dco_decode_list_vip_sign_day_dto(arr[0]),
-      signedToday: dco_decode_bool(arr[1]),
-      weekSigned: dco_decode_u_32(arr[2]),
-    );
-  }
-
-  @protected
-  VipTaskDto dco_decode_vip_task_dto(dynamic raw) {
+  VipTask dco_decode_vip_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
     if (arr.length != 8)
       throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-    return VipTaskDto(
+    return VipTask(
       title: dco_decode_String(arr[0]),
       reward: dco_decode_String(arr[1]),
       growthPoint: dco_decode_i_32(arr[2]),
@@ -6414,25 +6416,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto sse_decode_box_autoadd_vip_growth_dto(
-    SseDeserializer deserializer,
-  ) {
+  VipGrowth sse_decode_box_autoadd_vip_growth(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_vip_growth_dto(deserializer));
+    return (sse_decode_vip_growth(deserializer));
   }
 
   @protected
-  VipMembershipDto sse_decode_box_autoadd_vip_membership_dto(
+  VipMembership sse_decode_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_vip_membership_dto(deserializer));
+    return (sse_decode_vip_membership(deserializer));
   }
 
   @protected
-  VipSignDto sse_decode_box_autoadd_vip_sign_dto(SseDeserializer deserializer) {
+  VipSign sse_decode_box_autoadd_vip_sign(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_vip_sign_dto(deserializer));
+    return (sse_decode_vip_sign(deserializer));
   }
 
   @protected
@@ -6565,7 +6565,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumDetailDto sse_decode_digital_album_detail_dto(
+  DigitalAlbumDetail sse_decode_digital_album_detail(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6580,7 +6580,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_saleNum = sse_decode_u_64(deserializer);
     var var_tags = sse_decode_list_String(deserializer);
     var var_description = sse_decode_String(deserializer);
-    return DigitalAlbumDetailDto(
+    return DigitalAlbumDetail(
       albumId: var_albumId,
       name: var_name,
       artistId: var_artistId,
@@ -6596,7 +6596,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumEntryDto sse_decode_digital_album_entry_dto(
+  DigitalAlbumPurchased sse_decode_digital_album_purchased(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_total = sse_decode_u_64(deserializer);
+    var var_albums = sse_decode_list_digital_album_purchased_entry(
+      deserializer,
+    );
+    return DigitalAlbumPurchased(total: var_total, albums: var_albums);
+  }
+
+  @protected
+  DigitalAlbumPurchasedEntry sse_decode_digital_album_purchased_entry(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6607,7 +6619,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_coverUrl = sse_decode_String(deserializer);
     var var_paidTimeMs = sse_decode_u_64(deserializer);
     var var_boughtCount = sse_decode_u_64(deserializer);
-    return DigitalAlbumEntryDto(
+    return DigitalAlbumPurchasedEntry(
       albumId: var_albumId,
       albumName: var_albumName,
       artistId: var_artistId,
@@ -6619,23 +6631,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  DigitalAlbumPurchasedDto sse_decode_digital_album_purchased_dto(
-    SseDeserializer deserializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_total = sse_decode_u_64(deserializer);
-    var var_albums = sse_decode_list_digital_album_entry_dto(deserializer);
-    return DigitalAlbumPurchasedDto(total: var_total, albums: var_albums);
-  }
-
-  @protected
-  DigitalAlbumSalesDto sse_decode_digital_album_sales_dto(
+  DigitalAlbumSalesEntry sse_decode_digital_album_sales_entry(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_albumId = sse_decode_String(deserializer);
     var var_sales = sse_decode_u_64(deserializer);
-    return DigitalAlbumSalesDto(albumId: var_albumId, sales: var_sales);
+    return DigitalAlbumSalesEntry(albumId: var_albumId, sales: var_sales);
   }
 
   @protected
@@ -6715,7 +6717,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  ForwardItemDto sse_decode_forward_item_dto(SseDeserializer deserializer) {
+  ForwardItem sse_decode_forward_item(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_eventId = sse_decode_opt_box_autoadd_u_64(deserializer);
@@ -6726,7 +6728,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_timeMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_forwardType = sse_decode_opt_box_autoadd_u_32(deserializer);
     var var_picUrl = sse_decode_opt_String(deserializer);
-    return ForwardItemDto(
+    return ForwardItem(
       id: var_id,
       eventId: var_eventId,
       userId: var_userId,
@@ -6792,7 +6794,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  InboxItemDto sse_decode_inbox_item_dto(SseDeserializer deserializer) {
+  InboxItem sse_decode_inbox_item(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_64(deserializer);
     var var_kind = sse_decode_String(deserializer);
@@ -6801,7 +6803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_text = sse_decode_String(deserializer);
     var var_detail = sse_decode_String(deserializer);
     var var_timeMs = sse_decode_u_64(deserializer);
-    return InboxItemDto(
+    return InboxItem(
       id: var_id,
       kind: var_kind,
       actor: var_actor,
@@ -6916,29 +6918,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<DigitalAlbumEntryDto> sse_decode_list_digital_album_entry_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<DigitalAlbumPurchasedEntry>
+  sse_decode_list_digital_album_purchased_entry(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <DigitalAlbumEntryDto>[];
+    var ans_ = <DigitalAlbumPurchasedEntry>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_digital_album_entry_dto(deserializer));
+      ans_.add(sse_decode_digital_album_purchased_entry(deserializer));
     }
     return ans_;
   }
 
   @protected
-  List<DigitalAlbumSalesDto> sse_decode_list_digital_album_sales_dto(
+  List<DigitalAlbumSalesEntry> sse_decode_list_digital_album_sales_entry(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <DigitalAlbumSalesDto>[];
+    var ans_ = <DigitalAlbumSalesEntry>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_digital_album_sales_dto(deserializer));
+      ans_.add(sse_decode_digital_album_sales_entry(deserializer));
     }
     return ans_;
   }
@@ -6958,15 +6959,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<ForwardItemDto> sse_decode_list_forward_item_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<ForwardItem> sse_decode_list_forward_item(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <ForwardItemDto>[];
+    var ans_ = <ForwardItem>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_forward_item_dto(deserializer));
+      ans_.add(sse_decode_forward_item(deserializer));
     }
     return ans_;
   }
@@ -7012,15 +7011,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<InboxItemDto> sse_decode_list_inbox_item_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<InboxItem> sse_decode_list_inbox_item(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <InboxItemDto>[];
+    var ans_ = <InboxItem>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_inbox_item_dto(deserializer));
+      ans_.add(sse_decode_inbox_item(deserializer));
     }
     return ans_;
   }
@@ -7134,29 +7131,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PrivateMessageDto> sse_decode_list_private_message_dto(
+  List<PrivateMessage> sse_decode_list_private_message(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <PrivateMessageDto>[];
+    var ans_ = <PrivateMessage>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_private_message_dto(deserializer));
+      ans_.add(sse_decode_private_message(deserializer));
     }
     return ans_;
   }
 
   @protected
-  List<PrivateSessionDto> sse_decode_list_private_session_dto(
+  List<PrivateSession> sse_decode_list_private_session(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <PrivateSessionDto>[];
+    var ans_ = <PrivateSession>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_private_session_dto(deserializer));
+      ans_.add(sse_decode_private_session(deserializer));
     }
     return ans_;
   }
@@ -7176,15 +7173,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<PurchasedSongDto> sse_decode_list_purchased_song_dto(
+  List<PurchasedSongEntry> sse_decode_list_purchased_song_entry(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <PurchasedSongDto>[];
+    var ans_ = <PurchasedSongEntry>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_purchased_song_dto(deserializer));
+      ans_.add(sse_decode_purchased_song_entry(deserializer));
     }
     return ans_;
   }
@@ -7272,15 +7269,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<RecentContactDto> sse_decode_list_recent_contact_dto(
+  List<RecentContact> sse_decode_list_recent_contact(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <RecentContactDto>[];
+    var ans_ = <RecentContact>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_recent_contact_dto(deserializer));
+      ans_.add(sse_decode_recent_contact(deserializer));
     }
     return ans_;
   }
@@ -7428,41 +7425,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<UserMedalDto> sse_decode_list_user_medal_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<UserMedal> sse_decode_list_user_medal(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <UserMedalDto>[];
+    var ans_ = <UserMedal>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_user_medal_dto(deserializer));
+      ans_.add(sse_decode_user_medal(deserializer));
     }
     return ans_;
   }
 
   @protected
-  List<VipSignDayDto> sse_decode_list_vip_sign_day_dto(
-    SseDeserializer deserializer,
-  ) {
+  List<VipSignDay> sse_decode_list_vip_sign_day(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <VipSignDayDto>[];
+    var ans_ = <VipSignDay>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_vip_sign_day_dto(deserializer));
+      ans_.add(sse_decode_vip_sign_day(deserializer));
     }
     return ans_;
   }
 
   @protected
-  List<VipTaskDto> sse_decode_list_vip_task_dto(SseDeserializer deserializer) {
+  List<VipTask> sse_decode_list_vip_task(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <VipTaskDto>[];
+    var ans_ = <VipTask>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_vip_task_dto(deserializer));
+      ans_.add(sse_decode_vip_task(deserializer));
     }
     return ans_;
   }
@@ -7621,39 +7614,37 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto? sse_decode_opt_box_autoadd_vip_growth_dto(
+  VipGrowth? sse_decode_opt_box_autoadd_vip_growth(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_vip_growth_dto(deserializer));
+      return (sse_decode_box_autoadd_vip_growth(deserializer));
     } else {
       return null;
     }
   }
 
   @protected
-  VipMembershipDto? sse_decode_opt_box_autoadd_vip_membership_dto(
+  VipMembership? sse_decode_opt_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_vip_membership_dto(deserializer));
+      return (sse_decode_box_autoadd_vip_membership(deserializer));
     } else {
       return null;
     }
   }
 
   @protected
-  VipSignDto? sse_decode_opt_box_autoadd_vip_sign_dto(
-    SseDeserializer deserializer,
-  ) {
+  VipSign? sse_decode_opt_box_autoadd_vip_sign(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_vip_sign_dto(deserializer));
+      return (sse_decode_box_autoadd_vip_sign(deserializer));
     } else {
       return null;
     }
@@ -7815,9 +7806,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrivateMessageDto sse_decode_private_message_dto(
-    SseDeserializer deserializer,
-  ) {
+  PrivateMessage sse_decode_private_message(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_u_64(deserializer);
     var var_fromMe = sse_decode_bool(deserializer);
@@ -7825,7 +7814,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_avatarUrl = sse_decode_opt_String(deserializer);
     var var_content = sse_decode_String(deserializer);
     var var_timeMs = sse_decode_u_64(deserializer);
-    return PrivateMessageDto(
+    return PrivateMessage(
       id: var_id,
       fromMe: var_fromMe,
       nickname: var_nickname,
@@ -7836,9 +7825,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PrivateSessionDto sse_decode_private_session_dto(
-    SseDeserializer deserializer,
-  ) {
+  PrivateSession sse_decode_private_session(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_userId = sse_decode_u_64(deserializer);
     var var_nickname = sse_decode_String(deserializer);
@@ -7846,7 +7833,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_lastMessage = sse_decode_String(deserializer);
     var var_lastTimeMs = sse_decode_u_64(deserializer);
     var var_unread = sse_decode_u_32(deserializer);
-    return PrivateSessionDto(
+    return PrivateSession(
       userId: var_userId,
       nickname: var_nickname,
       avatarUrl: var_avatarUrl,
@@ -7895,14 +7882,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  PurchasedSongDto sse_decode_purchased_song_dto(SseDeserializer deserializer) {
+  PurchasedSongEntry sse_decode_purchased_song_entry(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_songId = sse_decode_u_64(deserializer);
     var var_name = sse_decode_String(deserializer);
     var var_artistName = sse_decode_String(deserializer);
     var var_coverUrl = sse_decode_String(deserializer);
     var var_paidTimeMs = sse_decode_u_64(deserializer);
-    return PurchasedSongDto(
+    return PurchasedSongEntry(
       songId: var_songId,
       name: var_name,
       artistName: var_artistName,
@@ -8054,7 +8043,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  RecentContactDto sse_decode_recent_contact_dto(SseDeserializer deserializer) {
+  RecentContact sse_decode_recent_contact(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_userId = sse_decode_u_64(deserializer);
     var var_nickname = sse_decode_String(deserializer);
@@ -8063,7 +8052,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_onlined = sse_decode_bool(deserializer);
     var var_vipType = sse_decode_u_32(deserializer);
     var var_remarkName = sse_decode_opt_String(deserializer);
-    return RecentContactDto(
+    return RecentContact(
       userId: var_userId,
       nickname: var_nickname,
       avatarUrl: var_avatarUrl,
@@ -8243,12 +8232,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  SongPurchasedDto sse_decode_song_purchased_dto(SseDeserializer deserializer) {
+  SongPurchasedPage sse_decode_song_purchased_page(
+    SseDeserializer deserializer,
+  ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_count = sse_decode_u_64(deserializer);
     var var_hasMore = sse_decode_bool(deserializer);
-    var var_songs = sse_decode_list_purchased_song_dto(deserializer);
-    return SongPurchasedDto(
+    var var_songs = sse_decode_list_purchased_song_entry(deserializer);
+    return SongPurchasedPage(
       count: var_count,
       hasMore: var_hasMore,
       songs: var_songs,
@@ -8256,16 +8247,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  StreamDto sse_decode_stream_dto(SseDeserializer deserializer) {
+  StreamUrl sse_decode_stream_url(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_url = sse_decode_opt_String(deserializer);
     var var_quality = sse_decode_String(deserializer);
     var var_br = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_size = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_expireAt = sse_decode_opt_box_autoadd_u_64(deserializer);
-    return StreamDto(
+    return StreamUrl(
       url: var_url,
       quality: var_quality,
       br: var_br,
+      size: var_size,
       expireAt: var_expireAt,
     );
   }
@@ -8374,7 +8367,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  UserLevelDto sse_decode_user_level_dto(SseDeserializer deserializer) {
+  UserLevel sse_decode_user_level(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_level = sse_decode_u_32(deserializer);
     var var_nowPlayCount = sse_decode_u_64(deserializer);
@@ -8383,7 +8376,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_nextLoginCount = sse_decode_u_64(deserializer);
     var var_progress = sse_decode_f_64(deserializer);
     var var_privileges = sse_decode_String(deserializer);
-    return UserLevelDto(
+    return UserLevel(
       level: var_level,
       nowPlayCount: var_nowPlayCount,
       nextPlayCount: var_nextPlayCount,
@@ -8395,7 +8388,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  UserMedalDto sse_decode_user_medal_dto(SseDeserializer deserializer) {
+  UserMedal sse_decode_user_medal(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_code = sse_decode_String(deserializer);
     var var_name = sse_decode_String(deserializer);
@@ -8408,7 +8401,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_progressText = sse_decode_opt_String(deserializer);
     var var_rankText = sse_decode_opt_String(deserializer);
     var var_status = sse_decode_String(deserializer);
-    return UserMedalDto(
+    return UserMedal(
       code: var_code,
       name: var_name,
       picUrl: var_picUrl,
@@ -8424,14 +8417,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipGrowthDto sse_decode_vip_growth_dto(SseDeserializer deserializer) {
+  VipGrowth sse_decode_vip_growth(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_level = sse_decode_u_32(deserializer);
     var var_levelName = sse_decode_String(deserializer);
     var var_growthPoint = sse_decode_i_64(deserializer);
     var var_todayScore = sse_decode_i_64(deserializer);
     var var_maxLevel = sse_decode_bool(deserializer);
-    return VipGrowthDto(
+    return VipGrowth(
       level: var_level,
       levelName: var_levelName,
       growthPoint: var_growthPoint,
@@ -8441,14 +8434,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipMembershipDto sse_decode_vip_membership_dto(SseDeserializer deserializer) {
+  VipMembership sse_decode_vip_membership(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_level = sse_decode_u_32(deserializer);
     var var_redVipLevel = sse_decode_u_32(deserializer);
     var var_expireTimeMs = sse_decode_u_64(deserializer);
     var var_isVip = sse_decode_bool(deserializer);
     var var_annualCount = sse_decode_i_32(deserializer);
-    return VipMembershipDto(
+    return VipMembership(
       level: var_level,
       redVipLevel: var_redVipLevel,
       expireTimeMs: var_expireTimeMs,
@@ -8458,17 +8451,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipOverviewDto sse_decode_vip_overview_dto(SseDeserializer deserializer) {
+  VipOverview sse_decode_vip_overview(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_loggedIn = sse_decode_bool(deserializer);
-    var var_membership = sse_decode_opt_box_autoadd_vip_membership_dto(
+    var var_membership = sse_decode_opt_box_autoadd_vip_membership(
       deserializer,
     );
-    var var_growth = sse_decode_opt_box_autoadd_vip_growth_dto(deserializer);
-    var var_sign = sse_decode_opt_box_autoadd_vip_sign_dto(deserializer);
-    var var_tasks = sse_decode_list_vip_task_dto(deserializer);
+    var var_growth = sse_decode_opt_box_autoadd_vip_growth(deserializer);
+    var var_sign = sse_decode_opt_box_autoadd_vip_sign(deserializer);
+    var var_tasks = sse_decode_list_vip_task(deserializer);
     var var_taskScore = sse_decode_i_64(deserializer);
-    return VipOverviewDto(
+    return VipOverview(
       loggedIn: var_loggedIn,
       membership: var_membership,
       growth: var_growth,
@@ -8479,13 +8472,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipSignDayDto sse_decode_vip_sign_day_dto(SseDeserializer deserializer) {
+  VipSign sse_decode_vip_sign(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_days = sse_decode_list_vip_sign_day(deserializer);
+    var var_signedToday = sse_decode_bool(deserializer);
+    var var_weekSigned = sse_decode_u_32(deserializer);
+    return VipSign(
+      days: var_days,
+      signedToday: var_signedToday,
+      weekSigned: var_weekSigned,
+    );
+  }
+
+  @protected
+  VipSignDay sse_decode_vip_sign_day(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_date = sse_decode_String(deserializer);
     var var_signed = sse_decode_bool(deserializer);
     var var_today = sse_decode_bool(deserializer);
     var var_score = sse_decode_u_32(deserializer);
-    return VipSignDayDto(
+    return VipSignDay(
       date: var_date,
       signed: var_signed,
       today: var_today,
@@ -8494,20 +8500,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  VipSignDto sse_decode_vip_sign_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_days = sse_decode_list_vip_sign_day_dto(deserializer);
-    var var_signedToday = sse_decode_bool(deserializer);
-    var var_weekSigned = sse_decode_u_32(deserializer);
-    return VipSignDto(
-      days: var_days,
-      signedToday: var_signedToday,
-      weekSigned: var_weekSigned,
-    );
-  }
-
-  @protected
-  VipTaskDto sse_decode_vip_task_dto(SseDeserializer deserializer) {
+  VipTask sse_decode_vip_task(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_title = sse_decode_String(deserializer);
     var var_reward = sse_decode_String(deserializer);
@@ -8517,7 +8510,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_done = sse_decode_bool(deserializer);
     var var_showProgress = sse_decode_bool(deserializer);
     var var_url = sse_decode_opt_String(deserializer);
-    return VipTaskDto(
+    return VipTask(
       title: var_title,
       reward: var_reward,
       growthPoint: var_growthPoint,
@@ -8693,30 +8686,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_box_autoadd_vip_growth_dto(
-    VipGrowthDto self,
+  void sse_encode_box_autoadd_vip_growth(
+    VipGrowth self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_vip_growth_dto(self, serializer);
+    sse_encode_vip_growth(self, serializer);
   }
 
   @protected
-  void sse_encode_box_autoadd_vip_membership_dto(
-    VipMembershipDto self,
+  void sse_encode_box_autoadd_vip_membership(
+    VipMembership self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_vip_membership_dto(self, serializer);
+    sse_encode_vip_membership(self, serializer);
   }
 
   @protected
-  void sse_encode_box_autoadd_vip_sign_dto(
-    VipSignDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_box_autoadd_vip_sign(VipSign self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_vip_sign_dto(self, serializer);
+    sse_encode_vip_sign(self, serializer);
   }
 
   @protected
@@ -8801,8 +8791,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_digital_album_detail_dto(
-    DigitalAlbumDetailDto self,
+  void sse_encode_digital_album_detail(
+    DigitalAlbumDetail self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8820,8 +8810,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_digital_album_entry_dto(
-    DigitalAlbumEntryDto self,
+  void sse_encode_digital_album_purchased(
+    DigitalAlbumPurchased self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.total, serializer);
+    sse_encode_list_digital_album_purchased_entry(self.albums, serializer);
+  }
+
+  @protected
+  void sse_encode_digital_album_purchased_entry(
+    DigitalAlbumPurchasedEntry self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8835,18 +8835,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_digital_album_purchased_dto(
-    DigitalAlbumPurchasedDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_64(self.total, serializer);
-    sse_encode_list_digital_album_entry_dto(self.albums, serializer);
-  }
-
-  @protected
-  void sse_encode_digital_album_sales_dto(
-    DigitalAlbumSalesDto self,
+  void sse_encode_digital_album_sales_entry(
+    DigitalAlbumSalesEntry self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -8908,10 +8898,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_forward_item_dto(
-    ForwardItemDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_forward_item(ForwardItem self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_box_autoadd_u_64(self.id, serializer);
     sse_encode_opt_box_autoadd_u_64(self.eventId, serializer);
@@ -8968,7 +8955,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_inbox_item_dto(InboxItemDto self, SseSerializer serializer) {
+  void sse_encode_inbox_item(InboxItem self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.id, serializer);
     sse_encode_String(self.kind, serializer);
@@ -9065,26 +9052,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_digital_album_entry_dto(
-    List<DigitalAlbumEntryDto> self,
+  void sse_encode_list_digital_album_purchased_entry(
+    List<DigitalAlbumPurchasedEntry> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_digital_album_entry_dto(item, serializer);
+      sse_encode_digital_album_purchased_entry(item, serializer);
     }
   }
 
   @protected
-  void sse_encode_list_digital_album_sales_dto(
-    List<DigitalAlbumSalesDto> self,
+  void sse_encode_list_digital_album_sales_entry(
+    List<DigitalAlbumSalesEntry> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_digital_album_sales_dto(item, serializer);
+      sse_encode_digital_album_sales_entry(item, serializer);
     }
   }
 
@@ -9101,14 +9088,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_forward_item_dto(
-    List<ForwardItemDto> self,
+  void sse_encode_list_forward_item(
+    List<ForwardItem> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_forward_item_dto(item, serializer);
+      sse_encode_forward_item(item, serializer);
     }
   }
 
@@ -9149,14 +9136,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_inbox_item_dto(
-    List<InboxItemDto> self,
+  void sse_encode_list_inbox_item(
+    List<InboxItem> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_inbox_item_dto(item, serializer);
+      sse_encode_inbox_item(item, serializer);
     }
   }
 
@@ -9262,26 +9249,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_private_message_dto(
-    List<PrivateMessageDto> self,
+  void sse_encode_list_private_message(
+    List<PrivateMessage> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_private_message_dto(item, serializer);
+      sse_encode_private_message(item, serializer);
     }
   }
 
   @protected
-  void sse_encode_list_private_session_dto(
-    List<PrivateSessionDto> self,
+  void sse_encode_list_private_session(
+    List<PrivateSession> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_private_session_dto(item, serializer);
+      sse_encode_private_session(item, serializer);
     }
   }
 
@@ -9298,14 +9285,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_purchased_song_dto(
-    List<PurchasedSongDto> self,
+  void sse_encode_list_purchased_song_entry(
+    List<PurchasedSongEntry> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_purchased_song_dto(item, serializer);
+      sse_encode_purchased_song_entry(item, serializer);
     }
   }
 
@@ -9382,14 +9369,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_recent_contact_dto(
-    List<RecentContactDto> self,
+  void sse_encode_list_recent_contact(
+    List<RecentContact> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_recent_contact_dto(item, serializer);
+      sse_encode_recent_contact(item, serializer);
     }
   }
 
@@ -9523,38 +9510,35 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_user_medal_dto(
-    List<UserMedalDto> self,
+  void sse_encode_list_user_medal(
+    List<UserMedal> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_user_medal_dto(item, serializer);
+      sse_encode_user_medal(item, serializer);
     }
   }
 
   @protected
-  void sse_encode_list_vip_sign_day_dto(
-    List<VipSignDayDto> self,
+  void sse_encode_list_vip_sign_day(
+    List<VipSignDay> self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_vip_sign_day_dto(item, serializer);
+      sse_encode_vip_sign_day(item, serializer);
     }
   }
 
   @protected
-  void sse_encode_list_vip_task_dto(
-    List<VipTaskDto> self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_list_vip_task(List<VipTask> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
-      sse_encode_vip_task_dto(item, serializer);
+      sse_encode_vip_task(item, serializer);
     }
   }
 
@@ -9695,41 +9679,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_growth_dto(
-    VipGrowthDto? self,
+  void sse_encode_opt_box_autoadd_vip_growth(
+    VipGrowth? self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_vip_growth_dto(self, serializer);
+      sse_encode_box_autoadd_vip_growth(self, serializer);
     }
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_membership_dto(
-    VipMembershipDto? self,
+  void sse_encode_opt_box_autoadd_vip_membership(
+    VipMembership? self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_vip_membership_dto(self, serializer);
+      sse_encode_box_autoadd_vip_membership(self, serializer);
     }
   }
 
   @protected
-  void sse_encode_opt_box_autoadd_vip_sign_dto(
-    VipSignDto? self,
+  void sse_encode_opt_box_autoadd_vip_sign(
+    VipSign? self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
-      sse_encode_box_autoadd_vip_sign_dto(self, serializer);
+      sse_encode_box_autoadd_vip_sign(self, serializer);
     }
   }
 
@@ -9840,8 +9824,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_private_message_dto(
-    PrivateMessageDto self,
+  void sse_encode_private_message(
+    PrivateMessage self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9854,8 +9838,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_private_session_dto(
-    PrivateSessionDto self,
+  void sse_encode_private_session(
+    PrivateSession self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -9890,8 +9874,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_purchased_song_dto(
-    PurchasedSongDto self,
+  void sse_encode_purchased_song_entry(
+    PurchasedSongEntry self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10010,10 +9994,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_recent_contact_dto(
-    RecentContactDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_recent_contact(RecentContact self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.userId, serializer);
     sse_encode_String(self.nickname, serializer);
@@ -10129,22 +10110,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_song_purchased_dto(
-    SongPurchasedDto self,
+  void sse_encode_song_purchased_page(
+    SongPurchasedPage self,
     SseSerializer serializer,
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.count, serializer);
     sse_encode_bool(self.hasMore, serializer);
-    sse_encode_list_purchased_song_dto(self.songs, serializer);
+    sse_encode_list_purchased_song_entry(self.songs, serializer);
   }
 
   @protected
-  void sse_encode_stream_dto(StreamDto self, SseSerializer serializer) {
+  void sse_encode_stream_url(StreamUrl self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_String(self.url, serializer);
     sse_encode_String(self.quality, serializer);
     sse_encode_opt_box_autoadd_u_64(self.br, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.size, serializer);
     sse_encode_opt_box_autoadd_u_64(self.expireAt, serializer);
   }
 
@@ -10225,7 +10207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_user_level_dto(UserLevelDto self, SseSerializer serializer) {
+  void sse_encode_user_level(UserLevel self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.level, serializer);
     sse_encode_u_64(self.nowPlayCount, serializer);
@@ -10237,7 +10219,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_user_medal_dto(UserMedalDto self, SseSerializer serializer) {
+  void sse_encode_user_medal(UserMedal self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.code, serializer);
     sse_encode_String(self.name, serializer);
@@ -10253,7 +10235,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_vip_growth_dto(VipGrowthDto self, SseSerializer serializer) {
+  void sse_encode_vip_growth(VipGrowth self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.level, serializer);
     sse_encode_String(self.levelName, serializer);
@@ -10263,10 +10245,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_vip_membership_dto(
-    VipMembershipDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_vip_membership(VipMembership self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_32(self.level, serializer);
     sse_encode_u_32(self.redVipLevel, serializer);
@@ -10276,24 +10255,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_vip_overview_dto(
-    VipOverviewDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_vip_overview(VipOverview self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.loggedIn, serializer);
-    sse_encode_opt_box_autoadd_vip_membership_dto(self.membership, serializer);
-    sse_encode_opt_box_autoadd_vip_growth_dto(self.growth, serializer);
-    sse_encode_opt_box_autoadd_vip_sign_dto(self.sign, serializer);
-    sse_encode_list_vip_task_dto(self.tasks, serializer);
+    sse_encode_opt_box_autoadd_vip_membership(self.membership, serializer);
+    sse_encode_opt_box_autoadd_vip_growth(self.growth, serializer);
+    sse_encode_opt_box_autoadd_vip_sign(self.sign, serializer);
+    sse_encode_list_vip_task(self.tasks, serializer);
     sse_encode_i_64(self.taskScore, serializer);
   }
 
   @protected
-  void sse_encode_vip_sign_day_dto(
-    VipSignDayDto self,
-    SseSerializer serializer,
-  ) {
+  void sse_encode_vip_sign(VipSign self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_vip_sign_day(self.days, serializer);
+    sse_encode_bool(self.signedToday, serializer);
+    sse_encode_u_32(self.weekSigned, serializer);
+  }
+
+  @protected
+  void sse_encode_vip_sign_day(VipSignDay self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.date, serializer);
     sse_encode_bool(self.signed, serializer);
@@ -10302,15 +10283,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_vip_sign_dto(VipSignDto self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_vip_sign_day_dto(self.days, serializer);
-    sse_encode_bool(self.signedToday, serializer);
-    sse_encode_u_32(self.weekSigned, serializer);
-  }
-
-  @protected
-  void sse_encode_vip_task_dto(VipTaskDto self, SseSerializer serializer) {
+  void sse_encode_vip_task(VipTask self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.title, serializer);
     sse_encode_String(self.reward, serializer);

@@ -8,10 +8,10 @@ import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
 /// 可注入的加载器(测试用 mock)
-typedef LoadPurchasedAlbums = Future<rust.DigitalAlbumPurchasedDto?> Function();
-typedef LoadPurchasedSongs = Future<rust.SongPurchasedDto?> Function();
-typedef LoadAlbumSales = Future<List<rust.DigitalAlbumSalesDto>?> Function(String albumIds);
-typedef LoadAlbumDetail = Future<rust.DigitalAlbumDetailDto?> Function(BigInt albumId);
+typedef LoadPurchasedAlbums = Future<rust.DigitalAlbumPurchased?> Function();
+typedef LoadPurchasedSongs = Future<rust.SongPurchasedPage?> Function();
+typedef LoadAlbumSales = Future<List<rust.DigitalAlbumSalesEntry>?> Function(String albumIds);
+typedef LoadAlbumDetail = Future<rust.DigitalAlbumDetail?> Function(BigInt albumId);
 
 class DigitalAlbumPage extends StatefulWidget {
   const DigitalAlbumPage({super.key, this.loadAlbums, this.loadSongs, this.loadSales, this.loadDetail});
@@ -40,12 +40,12 @@ class _SectionHead extends _Entry {
 
 class _AlbumEntry extends _Entry {
   const _AlbumEntry(this.album);
-  final rust.DigitalAlbumEntryDto album;
+  final rust.DigitalAlbumPurchasedEntry album;
 }
 
 class _SongEntry extends _Entry {
   const _SongEntry(this.song);
-  final rust.PurchasedSongDto song;
+  final rust.PurchasedSongEntry song;
 }
 
 class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
@@ -58,10 +58,10 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
         () => retryNetwork(() => rust.songPurchased(limit: 20, offset: 0));
     return (cursor) async {
       final results = await Future.wait<Object?>([loadA(), loadS()]);
-      final albums = (results[0] as rust.DigitalAlbumPurchasedDto?)?.albums ??
-          const <rust.DigitalAlbumEntryDto>[];
-      final songs = (results[1] as rust.SongPurchasedDto?)?.songs ??
-          const <rust.PurchasedSongDto>[];
+      final albums = (results[0] as rust.DigitalAlbumPurchased?)?.albums ??
+          const <rust.DigitalAlbumPurchasedEntry>[];
+      final songs = (results[1] as rust.SongPurchasedPage?)?.songs ??
+          const <rust.PurchasedSongEntry>[];
       return PagedPage<_Entry>([
         if (albums.isNotEmpty) ...[
           _SectionHead('已购数字专辑(${albums.length})', gapAbove: false),
@@ -75,7 +75,7 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
     };
   }
 
-  Future<void> _openDetail(rust.DigitalAlbumEntryDto album) async {
+  Future<void> _openDetail(rust.DigitalAlbumPurchasedEntry album) async {
     final detailLoader = widget.loadDetail ?? (BigInt id) => rust.digitalAlbumDetail(albumId: id);
     final salesLoader = widget.loadSales ?? (ids) => rust.digitalAlbumSales(albumIds: ids);
     await showModalBottomSheet<void>(
@@ -151,7 +151,7 @@ class _DetailSheet extends StatefulWidget {
     required this.loadSales,
   });
 
-  final rust.DigitalAlbumEntryDto album;
+  final rust.DigitalAlbumPurchasedEntry album;
   final LoadAlbumDetail loadDetail;
   final LoadAlbumSales loadSales;
 
@@ -160,8 +160,8 @@ class _DetailSheet extends StatefulWidget {
 }
 
 class _DetailSheetState extends State<_DetailSheet> {
-  rust.DigitalAlbumDetailDto? _detail;
-  List<rust.DigitalAlbumSalesDto>? _sales;
+  rust.DigitalAlbumDetail? _detail;
+  List<rust.DigitalAlbumSalesEntry>? _sales;
   String? _error;
 
   @override
@@ -179,8 +179,8 @@ class _DetailSheetState extends State<_DetailSheet> {
       ]);
       if (!mounted) return;
       setState(() {
-        _detail = results[0] as rust.DigitalAlbumDetailDto?;
-        _sales = results[1] as List<rust.DigitalAlbumSalesDto>?;
+        _detail = results[0] as rust.DigitalAlbumDetail?;
+        _sales = results[1] as List<rust.DigitalAlbumSalesEntry>?;
       });
     } catch (e) {
       if (!mounted) return;
