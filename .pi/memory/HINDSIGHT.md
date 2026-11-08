@@ -336,3 +336,9 @@ API/protocol details and anti-bot technique live in the
   `ui/test/version_consistency_test.dart` 守一致性。文档 `docs/android-signing.md`。
 - 教训: **keystore 是凭据**, 生成/托管必须由用户执行; 没有 key.properties 时的产物不能当发布包。
 
+
+- 本机正式签名材料(2026-11-09 生成): keystore `~/.android/keys/minincm-release.jks`(alias minincm, RSA2048,
+  10000 天, SHA-256 `bc87c50b…76cd5b`); 密码写在 `~/.android/keys/minincm-keystore.properties`(600);
+  `ui/android/key.properties`(git 忽略)指向它。**密码/keystore 不入库、不进记忆**。
+  GitHub Secrets 仍未配置 ⇒ CI 打的 release 仍是 runner 的 debug 签名(workflow 会 `::warning::`)。
+
