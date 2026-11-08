@@ -1,6 +1,8 @@
 # 任务书 · 设置项扩充 + 播放体验修复(2026-11-09)
 
-> 状态: **已落盘待执行**(本文是唯一权威清单; 断电/换会话后从这里接着做)
+> 状态: **执行中**(本文是唯一权威清单; 断电/换会话后从这里接着做)。
+> 2026-11-09 进度: D7 批1–3 已收口(cargo 空闲); **R1 ✅ / R3 ✅ / R6 ✅ / R4 ✅(待 a36 视觉走查)**;
+> 剩下 R2 / R2b / R5 / R7 = S3(Android)/ S4(Rust)/ S5(设置 UI)。执行记录见 §10。
 > 关联: 进度 `docs/PROGRESS.md`; 队列 `docs/remaining-batches.md`; 审计 `docs/ui-ux-audit.md`
 > 基线: HEAD = `2d53b68`(C2 完成, 模拟器 a36 GUI 已装新包); 后台车道 `D7`(frb 透传 domain) 正在改 `core/crates/ncm-ffi/api.rs`, **独占 codegen 与 cargo**
 
@@ -133,3 +135,25 @@ Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 - 响度均衡默认目标电平: 建议 **-16 LUFS**(移动端); 广播口径 -23。
 - 缓存上限默认 **512 MB**。
 - 「硬解」Linux 不适用 ⇒ 该设置项仅 Android 显示。
+
+## 10. 执行记录(增量, 每批落盘)
+
+### 2026-11-09 · 第一波: R1 + R3 + R6 + R4
+
+| 需求 | 结论 | 提交 | 测试 |
+|---|---|---|---|
+| R1 两排封面 overflow | ✅ `_CoverRow` 外层 `height*2` 少算 4px 行间距 → `height*2+4` | `dd175cf` | `s1_two_row_overflow_test.dart`(2 例, 先复现 4.0px 再转绿) |
+| R3 关于页 GitHub | ✅ `src/app_meta.dart` + 「开源仓库」「版本与许可」两项, 走 `PlatformBridge.openUrl` | `7a9cdcc` | `s2_about_page_test.dart`(3 例) |
+| R6 OLED 纯黑 | ✅ `src/theme.dart`(`buildDarkTheme(oled:)`, surface 全黑 + onSurface #E6E6E6)+ 设置页「OLED 纯黑」开关 | `7a9cdcc` | `r6_oled_theme_test.dart`(4 例) |
+| R4 播放条贴底栏 | ✅ 根因 = 播放条自己的 `SafeArea` 又吃了一次 bottom inset(`NavigationBar` 内部已有 SafeArea), 改 `SafeArea(bottom:false)` | `7a9cdcc` | 无单测(播放条依赖 Media3 通道, Linux 测试环境走不到), **待 a36 截图走查** |
+
+门禁: `dart analyze` 0 error/0 warning(39 info); `flutter test` **318 passed + 1 skip**(基线 309, 新增 9)。
+
+### 下一波(未开工)
+
+- **S4(Rust, 先做)**: rodio 增益/淡入淡出、biquad EQ、R128 测量 + `loudness.json`、`AudioCache` 上限淘汰、AutoEQ 曲线解析。契约稳定后再做 S3。
+- **S3(Android Media3)**: 精细音量增益、淡入淡出 ramp、硬解开关、`SimpleCache`+LRU、响度增益、EQ AudioProcessor。
+- **S5(设置 UI)**: 把 R2/R2b/R5/R7 全接进设置页(分「外观/播放/音质与缓存/关于/诊断」)+ 曲线导入导出。
+- D7 剩余批4–批7(见 `docs/d7-frb-domain.md` §3)。
+- 唯一 cargo/codegen 车道约束仍然有效: S3/S4 与 D7 不能同时跑。
+
