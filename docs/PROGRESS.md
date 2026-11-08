@@ -1,11 +1,11 @@
 # 进度记录(Progress)
 
 > 最近更新: 2026-11-08 晚(**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)**;
-> 门禁 `flutter test` 362+1skip / `cargo test` 32+31+106 / `dart analyze` 0 error 0 warning /
+> 门禁 `flutter test --exclude-tags network` 351 通过(离线口径, 网络 smoke 单列) / `cargo test` 32+31+106+1 / `dart analyze` 0 error 0 warning /
 > Linux+Android 双端构建通过。详见 `docs/ui-song-detail-share.md`)。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
-> 更早: 接口覆盖 118/382、FFI 125 个里 0 个无 UI 入口、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
+> 更早: 接口覆盖 118/118、FFI 132 个里 3 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
@@ -43,7 +43,7 @@ symphonia = MPL-2.0 未修改;symphonia/qr_flutter 等 BSD-3)并附关键许可�
    Android 自建 `ncm/share` 通道(FileProvider + clipData + ACTION_SEND; 保存走 MediaStore),
    桌面落 `~/Pictures/MiniNCM`; 二维码依赖 `qr_flutter`(纯 Dart)。
 
-门禁: `flutter test` **362 通过**(新增 11 例) / `dart analyze` 0 error 0 warning;
+门禁: `flutter test` 通过(本轮新增 11 例; 当时数字含 network 标签用例, 离线口径见 2026-11-09 小节 = 351) / `dart analyze` 0 error 0 warning;
 a34 模拟器实测通过(翻译开关 / 多选分享 / 保存 680x628 PNG / 系统分享面板 / 定位当前句)。
 
 ## v2 · 设置项扩充 + 播放体验修复(R1–R7)与 D7 收尾(2026-11-09)

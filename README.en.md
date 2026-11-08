@@ -14,7 +14,7 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 [![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20362%20%2B%20Rust%20169-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%20351%20%2B%20Rust%20170-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 
@@ -122,8 +122,8 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --workspace` (vendor network smoke excluded) | **169** passing (domain 32 / playback 31 / service 106) |
-| `flutter test` | **362 + 1 skip** passing (pure logic / widget tests + a few real-network smoke tests) |
+| `cargo test --workspace` (vendor network smoke excluded) | **170** passing (domain 32 / playback 31 / service 106 / provider 1) |
+| `flutter test --exclude-tags network` | **351** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | 0 error / 0 warning |
 | Builds | Linux bundle + Android debug APK |
 | Device run-through | emulator a34 (API 34) — see `docs/testing-dual-platform.md` |

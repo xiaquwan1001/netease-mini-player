@@ -184,11 +184,10 @@ Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 1. 缓存 key 用了原始 `http` 直链, 而 `playback.play` 会升级成 `https` ⇒ `SimpleCache` 永远命中不了;
 2. 未测到时把 `0 dB` 写进了增益缓存, 被 `hasLoudnessGain` 当成"已测"⇒ 补测再也不会发生。
 
-### 下一波(未开工)
+### ~~下一波(未开工)~~ → 已全部完成(2026-11-09 当日晚)
 
-- **S4(Rust, 先做)**: rodio 增益/淡入淡出、biquad EQ、R128 测量 + `loudness.json`、`AudioCache` 上限淘汰、AutoEQ 曲线解析。契约稳定后再做 S3。
-- **S3(Android Media3)**: 精细音量增益、淡入淡出 ramp、硬解开关、`SimpleCache`+LRU、响度增益、EQ AudioProcessor。
-- **S5(设置 UI)**: 把 R2/R2b/R5/R7 全接进设置页(分「外观/播放/音质与缓存/关于/诊断」)+ 曲线导入导出。
-- D7 剩余批4–批7(见 `docs/d7-frb-domain.md` §3)。
-- 唯一 cargo/codegen 车道约束仍然有效: S3/S4 与 D7 不能同时跑。
+> 本小节原列的 S4 / S3 / S5 / D7 批4–批7 **均已落地**, 证据在 §10 第二轮与第三轮:
+> S4 批1 `b3bcf55` · S4 批2 `f073a9b` · S5a `c6ea894` · S3 `5504fad` · D7 批4+5 `0ff7f78` / 批6 `79729c2`(车道 57/57 关闭)。
+> 本任务书**只剩 §5 里依赖人耳的 5 条验收**(需要真机 + 用户听感), 其余无未完成项。
+> 后续新功能不从这里接: 见 `docs/remaining-batches.md`。
 

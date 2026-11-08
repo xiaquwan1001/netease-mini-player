@@ -14,7 +14,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平
 [![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20362%20%2B%20Rust%20169-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%20351%20%2B%20Rust%20170-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -122,8 +122,8 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --workspace`(排除 vendor 联网 smoke) | **169** 通过(domain 32 / playback 31 / service 106) |
-| `flutter test` | **362 + 1 skip** 通过(纯函数/widget + 少量真实网络 smoke) |
+| `cargo test --workspace`(排除 vendor 联网 smoke) | **170** 通过(domain 32 / playback 31 / service 106 / provider 1) |
+| `flutter test --exclude-tags network` | **351** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | 0 error / 0 warning |
 | 构建 | Linux bundle + Android debug APK 均通过 |
 | 设备走查 | a34 模拟器(API 34)全流程;记录见 `docs/testing-dual-platform.md` |

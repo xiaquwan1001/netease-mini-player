@@ -49,8 +49,8 @@ API/protocol details and anti-bot technique live in the
 - **不要伪造桌面 UA 打开登录页**: `music.163.com/#/login` + Windows Chrome UA = 桌面 SPA(重、二维码小、
   手机号/QQ/微信二级页加载不出来)。设备默认移动 UA + 无 hash `https://music.163.com/login` 会 302 到
   `https://y.music.163.com/m/login` = 官方移动端授权页(手机号/微信/QQ/扫码全有)。
-- 待办: **设备 cookie 持久化**(NMTID/_ntes_nuid/_ntes_nnid/WNMCID/WEVNSM + deviceId 首启生成永久复用),
-  我们现在的 `genDeviceId()` 每次随机, 是风控特征。
+- ~~待办: **设备 cookie 持久化**(NMTID/_ntes_nuid/_ntes_nnid/WNMCID/WEVNSM + deviceId 首启生成永久复用);
+  当时 `genDeviceId()` 每次随机, 是风控特征。~~ **已落地**(2026-11-09, `core/crates/ncm-service/src/identity.rs`: 设备 cookie 首启生成后与登录 cookie 一起落盘复用)。
 - 同类项目可用性: Ncrust(3.9MB, MIT, 官方网页登录) 可用且最值得抄; Melodia(22MB, MIT, 原生扫码+Cookie导入)
   功能最全但没处理 8821; JetMelo 2025-03 归档, 已不适合依赖。
 <!-- created=2026-10-31, last=2026-10-31 -->
@@ -293,12 +293,12 @@ API/protocol details and anti-bot technique live in the
 - **v0.1.0 发布链路(2026-11-08)**:
   - 产物: `flutter build apk --release --target-platform android-arm64` → **27.9MB**(仅 arm64-v8a);
     `flutter build linux --release` → bundle 39MB, tar.gz **14.7MB**。release 包 ListView 里
-    Gradle `buildTypes.release` 仍用 **debug 签名**(模板 TODO 未换), 对外必须写清楚。
+    Gradle `buildTypes.release` 仍用 **debug 签名**(模板 TODO 未换) —— **已解决**(c7644d9/dff762b: `key.properties` 注入正式 keystore + CI 签名自检, 见 docs/android-signing.md)。
   - GitHub Actions: `android-actions/setup-android@v3` 现在**必挂**(它跑 `sdkmanager tools`,
     GitHub 镜像已移除该包 → `Failed to find package 'tools'`); 直接用镜像自带的
     `$ANDROID_HOME/cmdline-tools/*/bin/sdkmanager` 装 `ndk;28.2.13676358` 等即可。
   - 联网 smoke 用 `@Tags(['network'])` + `ui/dart_test.yaml` 声明, CI 跑
-    `flutter test --exclude-tags network`(349 例, 11s);不排掉会因网易风控常年红。
+    `flutter test --exclude-tags network`(当时 349 例, 现 351 例; 不排掉会因网易风控常年红)。
 - **Gradle daemon JVM 内部崩溃**: release 构建时报
   `Internal Error (concurrentHashTable.inline.hpp:684) fatal error: Cannot resize table:
   Node hash code has changed possibly due to corruption of the contents`(daemon 已跑 2h42m,
