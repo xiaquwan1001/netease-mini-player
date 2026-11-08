@@ -58,28 +58,45 @@ jobs:
 
       # 正式签名: 在仓库 Secrets 里配置(见 docs/android-signing.md)
       #   ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
-      # 没有配置时回落到 debug 签名(能出包, 但签名不固定, 老用户无法覆盖升级)。
+      # 注意: secrets 上下文不能用在 `if:` 里(workflow 会解析失败), 只能经 env 传入后在 shell 里判断。
+      # 没配置时回落 debug 签名(能出包, 但签名不固定, 老用户无法覆盖升级)。
       - name: Release keystore
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        working-directory: ui/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > release.jks
-          cat > key.properties <<EOF
-          storeFile=$PWD/release.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
-
-      - name: Signing sanity check
-        run: |
-          if [ ! -f ui/android/key.properties ]; then
+          if [ -z "$KEYSTORE_BASE64" ]; then
             echo "::warning::未配置 ANDROID_KEYSTORE_BASE64 —— 本次 APK 用 debug 签名, 无法覆盖升级此前发布版本"
+            exit 0
           fi
+          echo "$KEYSTORE_BASE64" | base64 -d > ui/android/release.jks
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/ui/android/release.jks"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > ui/android/key.properties
+          echo "已写入 key.properties, alias=$KEY_ALIAS"
 
       - name: Build Android APK (arm64, release)
         working-directory: ui
         run: flutter build apk --release --target-platform android-arm64
+
+      # 自检: 配了正式 keystore 就不许产出 debug 签名的包(debug 签名会让老用户无法覆盖升级)
+      - name: Verify APK signature
+        run: |
+          APK=ui/build/app/outputs/flutter-apk/app-release.apk
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | tail -1)
+          "$APKSIGNER" verify --print-certs "$APK" | grep -E 'certificate (DN|SHA-256)' || true
+          if [ -f ui/android/key.properties ]; then
+            if "$APKSIGNER" verify --print-certs "$APK" | grep -q 'CN=Android Debug'; then
+              echo "::error::APK 仍是 debug 签名(应为正式 keystore)"
+              exit 1
+            fi
+            echo "正式签名 OK"
+          fi
 
       - name: Build Linux bundle (release)
         working-directory: ui
