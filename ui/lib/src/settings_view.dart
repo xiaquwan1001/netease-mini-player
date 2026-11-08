@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_meta.dart';
 import 'app_settings.dart';
+import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'settings_diagnostics_page.dart';
 
@@ -64,6 +66,19 @@ class SettingsView extends StatelessWidget {
                       settings.update(themeMode: value.first);
                     },
                   ),
+                ),
+                const Divider(height: 1),
+                // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
+                // 只在深色/跟随系统时才有意义, 所以浅色态下用文案说明.
+                SwitchListTile(
+                  title: const Text('OLED 纯黑'),
+                  subtitle: Text(
+                    settings.themeMode == ThemeMode.light
+                        ? '当前是浅色主题, 切到深色后生效'
+                        : '深色下用 #000000 取代 #121212(OLED 屏更省电, 无灰边)',
+                  ),
+                  value: settings.oledDark,
+                  onChanged: (value) => settings.update(oledDark: value),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -160,6 +175,28 @@ class SettingsView extends StatelessWidget {
                   subtitle: Text(
                     'Rust core + Flutter UI · 协议/加解密由 vendor 库负责\n'
                     '登录凭据与设备指纹只保存在本机数据目录',
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.code),
+                  title: const Text('开源仓库'),
+                  subtitle: const Text(
+                    kGithubUrl,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => PlatformBridge.openUrl(kGithubUrl),
+                ),
+                const Divider(height: 1),
+                const ListTile(
+                  leading: Icon(Icons.description_outlined),
+                  title: Text('版本与许可'),
+                  subtitle: Text(
+                    'v$kAppVersion · $kLicenseSummary',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const Divider(height: 1),

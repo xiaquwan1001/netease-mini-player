@@ -34,6 +34,7 @@ import 'src/settings_view.dart';
 import 'src/song_actions.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
+import 'src/theme.dart';
 import 'src/vip_page.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -82,15 +83,9 @@ class MiniNcmApp extends StatelessWidget {
           title: '轻音 MiniNCM',
           // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            colorSchemeSeed: const Color(0xFFE60026),
-            useMaterial3: true,
-          ),
-          darkTheme: ThemeData(
-            colorSchemeSeed: const Color(0xFFE60026),
-            brightness: Brightness.dark,
-            useMaterial3: true,
-          ),
+          theme: buildLightTheme(),
+          // R6: 深色 + OLED 开关 ⇒ 纯黑基底(见 src/theme.dart)
+          darkTheme: buildDarkTheme(oled: settings.oledDark),
           themeMode: settings.themeMode,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
@@ -2205,7 +2200,10 @@ class _HomePageState extends State<HomePage> {
     final inQueue = _queue.isEmpty ? 1 : _queue.index + 1;
     return Material(
       elevation: 8,
+      // 播放条贴在 NavigationBar 之上, 底部的系统安全区由 NavigationBar 自己的 SafeArea
+      // 负责; 这里若再吃一次 bottom inset, 就会在播放条与底栏之间留出一条空白(R4).
       child: SafeArea(
+        bottom: false,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(
