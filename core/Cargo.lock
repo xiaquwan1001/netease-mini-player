@@ -1276,6 +1276,7 @@ dependencies = [
  "ncm-domain",
  "rodio",
  "serde",
+ "symphonia",
 ]
 
 [[package]]

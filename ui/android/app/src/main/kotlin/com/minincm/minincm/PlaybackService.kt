@@ -98,6 +98,26 @@ class PlaybackService : MediaSessionService() {
      * S3 通道 configure 的落地: 应用调音参数并回显生效值, 便于 Dart 断言.
      * 全部在应用主线程执行(MethodChannel 回调线程)。
      */
+
+    /**
+     * 返回某条直链在 SimpleCache 里的**完整**缓存文件路径(没有缓存/只缓存了一部分时返回 null).
+     *
+     * 用途: 响度均衡(R2b)在 Android 上要测当前曲目 —— 音频是 Media3 缓存的, Rust 侧
+     * `AudioCache` 拿不到它, 所以由 Kotlin 把路径交给 Dart, 再让 Rust 解码测量(两边共用同一份 BS.1770 实现).
+     */
+    fun cachedFileFor(url: String): String? {
+        val cache = simpleCache ?: return null
+        return try {
+            cache.getCachedSpans(url)
+                .firstOrNull { it.isCached && it.length > 0 }
+                ?.file
+                ?.absolutePath
+        } catch (e: Exception) {
+            Log.w("NCM-PLAYER", "cachedFileFor($url) failed: $e")
+            null
+        }
+    }
+
     fun configure(args: Map<*, *>): Map<String, Any?> {
         val newGainDb = (args["gainDb"] as? Number)?.toDouble() ?: gainDb
         val newFadeMs = (args["fadeMs"] as? Number)?.toInt() ?: fadeMs

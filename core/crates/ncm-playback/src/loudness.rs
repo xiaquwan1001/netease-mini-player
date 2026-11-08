@@ -180,32 +180,76 @@ pub fn measure(
     meter.finish()
 }
 
-/// 一次性解码整个文件并测量(Linux 走 rodio/symphonia; 供 CLI 与后台补测使用)
-#[cfg(target_os = "linux")]
+/// 一次性解码整个文件并测量。
+///
+/// 用 **symphonia 直接解码**(而不是 rodio 的 Decoder): 纯 Rust、无系统依赖, Linux 桌面与
+/// Android 走同一份代码 —— 响度均衡(R2b)的手机端也要能出结果, 不能只依赖 Linux 后端。
+/// 流式喂给 [LoudnessMeter], 内存占用与文件长度无关。
+///
+/// 支持的封装/编码由 ncm-playback 的 symphonia features 决定(mp3/flac/mp4-aac/wav/ogg)。
 pub fn measure_file(path: &std::path::Path) -> Result<Option<LoudnessMeasurement>, String> {
-    use rodio::{Decoder, Source};
-    use std::fs::File;
-    let file = File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
-    let decoder = Decoder::try_from(file).map_err(|e| format!("decode {}: {e}", path.display()))?;
-    let channels = decoder.channels().get() as usize;
-    let mut meter = LoudnessMeter::new(channels, decoder.sample_rate().get());
-    let mut frame = vec![0f32; channels];
-    let mut idx = 0usize;
-    for sample in decoder {
-        frame[idx] = sample;
-        idx += 1;
-        if idx == channels {
-            meter.push_frame(&frame);
-            idx = 0;
+    use symphonia::core::audio::SampleBuffer;
+    use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
+    use symphonia::core::errors::Error as SymError;
+    use symphonia::core::formats::FormatOptions;
+    use symphonia::core::io::MediaSourceStream;
+    use symphonia::core::meta::MetadataOptions;
+    use symphonia::core::probe::Hint;
+
+    let file = std::fs::File::open(path).map_err(|e| format!("open {}: {e}", path.display()))?;
+    let stream = MediaSourceStream::new(Box::new(file), Default::default());
+    let mut hint = Hint::new();
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        hint.with_extension(ext);
+    }
+    let probed = symphonia::default::get_probe()
+        .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
+        .map_err(|e| format!("probe {}: {e}", path.display()))?;
+    let mut format = probed.format;
+    let track = format
+        .tracks()
+        .iter()
+        .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+        .ok_or_else(|| format!("no decodable track in {}", path.display()))?;
+    let track_id = track.id;
+    let mut decoder = symphonia::default::get_codecs()
+        .make(&track.codec_params, &DecoderOptions::default())
+        .map_err(|e| format!("codec {}: {e}", path.display()))?;
+
+    let mut meter: Option<LoudnessMeter> = None;
+    let mut buffer: Option<SampleBuffer<f32>> = None;
+    loop {
+        let packet = match format.next_packet() {
+            Ok(p) => p,
+            // 正常结束(EOF)与损坏尾部都按"测到哪算哪"处理
+            Err(_) => break,
+        };
+        if packet.track_id() != track_id {
+            continue;
+        }
+        let decoded = match decoder.decode(&packet) {
+            Ok(d) => d,
+            Err(SymError::DecodeError(_)) => continue,
+            Err(_) => break,
+        };
+        let spec = *decoded.spec();
+        let channels = spec.channels.count();
+        if channels == 0 {
+            continue;
+        }
+        let meter = meter.get_or_insert_with(|| LoudnessMeter::new(channels, spec.rate));
+        let buf = buffer.get_or_insert_with(|| {
+            SampleBuffer::<f32>::new(decoded.capacity() as u64, spec)
+        });
+        if buf.capacity() < decoded.frames() as usize * channels {
+            *buf = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
+        }
+        buf.copy_interleaved_ref(decoded);
+        for frame in buf.samples().chunks_exact(channels) {
+            meter.push_frame(frame);
         }
     }
-    Ok(meter.finish())
-}
-
-/// 无解码能力时的占位(Android 复用 Rust 结果需要先有可解码路径, 见任务书 S3)
-#[cfg(not(target_os = "linux"))]
-pub fn measure_file(_path: &std::path::Path) -> Result<Option<LoudnessMeasurement>, String> {
-    Err("loudness measurement needs a decoder on this platform".to_string())
+    Ok(meter.and_then(|m| m.finish()))
 }
 
 /// 给定曲线(如 "Filter 1: ON PK Fc 100 Hz Gain 6 dB Q 1")

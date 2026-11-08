@@ -329,6 +329,12 @@ class _HomePageState extends State<HomePage> {
   /// 已经为哪首曲目应用过响度增益(避免每 500ms 轮询都重算)
   int? _loudnessAppliedTrackId;
 
+  /// 最近取到的直链(曲目 id -> url): Android 的响度测量要靠它去 SimpleCache 里找缓存文件
+  final Map<int, String> _streamUrlByTrack = <int, String>{};
+
+  /// 上一次"补测响度"的时间(Android 的缓存文件要整首存完才能测, 所以播放中隔一会儿重试)
+  DateTime? _lastLoudnessRetry;
+
   void _onAudioSettingsChanged() {
     final settings = AppSettings.instance;
     // 响度均衡的开关/目标电平变化 ⇒ 已算好的每曲增益全部作废, 当前曲目重算
@@ -371,8 +377,25 @@ class _HomePageState extends State<HomePage> {
     if (playingId != _loudnessAppliedTrackId) {
       _loudnessAppliedTrackId = playingId;
       if (playingId != null) {
-        unawaited(applyLoudnessForTrack(playingId));
+        unawaited(applyLoudnessForTrack(
+          playingId,
+          streamUrl: _streamUrlByTrack[playingId],
+        ));
         unawaited(enforceCacheLimit(keepTrackId: playingId));
+      }
+    }
+    // Android: 边听边存要整首存完才有"完整缓存 span", 所以播放中每 20s 补测一次
+    if (playingId != null &&
+        AppSettings.instance.loudnessNormalize &&
+        !hasLoudnessGain(playingId)) {
+      final now = DateTime.now();
+      final last = _lastLoudnessRetry;
+      if (last == null || now.difference(last) > const Duration(seconds: 20)) {
+        _lastLoudnessRetry = now;
+        unawaited(applyLoudnessForTrack(
+          playingId,
+          streamUrl: _streamUrlByTrack[playingId],
+        ));
       }
     }
     if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
@@ -901,6 +924,12 @@ class _HomePageState extends State<HomePage> {
         }
         return false;
       }
+      // Android 的响度均衡要靠这条直链去 Media3 的 SimpleCache 里找缓存文件
+      final playingId = song.id.toInt();
+      _streamUrlByTrack[playingId] = url;
+      if (_streamUrlByTrack.length > 64) {
+        _streamUrlByTrack.remove(_streamUrlByTrack.keys.first);
+      }
       final state = await _playback.play(
         trackId: song.id,
         url: url,
@@ -909,6 +938,9 @@ class _HomePageState extends State<HomePage> {
       );
       if (!mounted) return true;
       setState(() => _player = state);
+      // 立刻按这首的响度给一次增益(未测到就先 0 dB, 轮询里会再补一次)
+      _loudnessAppliedTrackId = playingId;
+      unawaited(applyLoudnessForTrack(playingId, streamUrl: url));
       // 本地播放历史(未登录/离线时"最近听过"的来源); 失败不影响播放
       unawaited(rust.rememberPlay(song: song).catchError((_) => false));
       unawaited(_loadLyric(song.id));
@@ -1765,58 +1797,9 @@ class _HomePageState extends State<HomePage> {
   Widget _buildPage(BuildContext context) {
     final player = _player;
     final current = _current;
+    final topBar = _buildTopBar(context, current);
     return Scaffold(
-      appBar: AppBar(
-        // 大字号 + 三个动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
-        // 标题固定用 titleMedium, 让品牌字至少完整显示
-        titleTextStyle: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.w600),
-        // 大字号设备(vivo 1440px + font_scale>1)会把标题挤成 "轻音 MiniN…",
-        // 用 FittedBox 缩排而不是截断
-        title: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _showLyrics
-                ? (current?.name ?? '歌词')
-                : (_tab == 0
-                    ? (_libraryTitle ?? '轻音 MiniNCM')
-                    : switch (_tab) {
-                        1 => '推荐',
-                        2 => '关注',
-                        3 => '我的',
-                        _ => '设置',
-                      }),
-            maxLines: 1,
-          ),
-        ),
-        leading: _showLyrics
-            ? IconButton(
-                icon: const Icon(Icons.expand_more),
-                tooltip: '收起歌词',
-                onPressed: _toggleLyrics,
-              )
-            : (_tab == 0 && _libraryTitle != null
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: '返回搜索',
-                    onPressed: _closeLibrary,
-                  )
-                : null),
-        actions: [
-          // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
-          // 审查 P1-7.10: 账号入口 3→1 —— AppBar 的账号图标已删,
-          // 账号簿/切换/退出登录统一走「我的」页资料头(登录态切换后常驻)。
-          if (_auth.isAndroid && _info?.loggedIn != true)
-            TextButton.icon(
-              onPressed: _login,
-              icon: const Icon(Icons.login, size: 18),
-              label: const Text('登录'),
-            ),
-        ],
-      ),
+      appBar: topBar,
       body: Column(
         children: [
           if (!_showLyrics && _tab == 0) _buildSearchBar(),
@@ -1875,7 +1858,13 @@ class _HomePageState extends State<HomePage> {
               children: [
                 // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
                 Positioned.fill(
-                  child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
+                  // 没有 AppBar 的 tab(推荐/关注/我的/设置)自己吃状态栏安全区,
+                  // 否则内容会顶到状态栏下面
+                  child: SafeArea(
+                    top: topBar == null,
+                    bottom: false,
+                    child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
+                  ),
                 ),
                 if (_showLyrics) Positioned.fill(child: _buildLyrics()),
               ],
@@ -1953,6 +1942,59 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 五个 tab 都塞进 IndexedStack(访问过的才真正构建), 保留各自的 State.
+
+  /// 顶部栏: **只在标题不与底部导航重复时才出现**。
+  ///
+  /// - 歌词页: 显示曲名 + 收起按钮(导航里没有曲名, 不重复);
+  /// - 「搜索」tab: 显示品牌名 / 正在浏览的歌单名(导航标签是"搜索", 不重复);
+  /// - 「推荐 / 关注 / 我的 / 设置」tab: 原来的标题就是这个 tab 的名字, 与底部导航**完全重复**,
+  ///   因此整条 AppBar 不出现, 把 56dp 高度让给内容(用户要求"更多空间留给内容")。
+  ///   这几页也不再有 AppBar 动作: 登录/账号入口统一在「我的」页资料头(审查 P1-7.10 已定)。
+  PreferredSizeWidget? _buildTopBar(BuildContext context, rust.SongDto? current) {
+    final showBar = _showLyrics || _tab == 0;
+    if (!showBar) return null;
+    return AppBar(
+      // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
+      // 标题固定用 titleMedium, 让品牌字至少完整显示
+      titleTextStyle: Theme.of(context)
+          .textTheme
+          .titleMedium
+          ?.copyWith(fontWeight: FontWeight.w600),
+      // 大字号设备会把标题挤成 "轻音 MiniN…", 用 FittedBox 缩排而不是截断
+      title: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _showLyrics ? (current?.name ?? '歌词') : (_libraryTitle ?? '轻音 MiniNCM'),
+          maxLines: 1,
+        ),
+      ),
+      leading: _showLyrics
+          ? IconButton(
+              icon: const Icon(Icons.expand_more),
+              tooltip: '收起歌词',
+              onPressed: _toggleLyrics,
+            )
+          : (_libraryTitle != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  tooltip: '返回搜索',
+                  onPressed: _closeLibrary,
+                )
+              : null),
+      actions: [
+        // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
+        // 审查 P1-7.10: 账号入口 3→1 —— 账号簿/切换/退出登录统一走「我的」页资料头。
+        if (_auth.isAndroid && _info?.loggedIn != true)
+          TextButton.icon(
+            onPressed: _login,
+            icon: const Icon(Icons.login, size: 18),
+            label: const Text('登录'),
+          ),
+      ],
+    );
+  }
+
   Widget _buildTabPages() {
     return IndexedStack(
       index: _tab,

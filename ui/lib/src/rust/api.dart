@@ -175,6 +175,17 @@ Future<LoudnessDto?> loudnessMeasureCached({
   targetLufs: targetLufs,
 );
 
+/// 测量任意音频文件路径的响度并写入 `loudness.json`(Android 侧 Media3 的 SimpleCache 文件用)。
+Future<LoudnessDto?> loudnessMeasurePath({
+  required BigInt trackId,
+  required String path,
+  required double targetLufs,
+}) => RustLib.instance.api.crateApiLoudnessMeasurePath(
+  trackId: trackId,
+  path: path,
+  targetLufs: targetLufs,
+);
+
 /// 每日推荐歌曲(原版每日推荐)
 Future<List<SongDto>> dailyRecommendSongs() =>
     RustLib.instance.api.crateApiDailyRecommendSongs();

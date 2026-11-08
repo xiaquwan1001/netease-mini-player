@@ -155,6 +155,19 @@ class MainActivity : FlutterActivity() {
             }
             return
         }
+        // cachedAudioFile 同 configure: 落在 PlaybackService(缓存由它拥有)
+        if (method == "cachedAudioFile") {
+            val url = args?.get("url") as? String
+            val svc = PlaybackService.instance
+            if (url == null) {
+                result.error("bad_args", "url missing", null)
+            } else if (svc == null) {
+                result.error("not_ready", "PlaybackService 尚未创建", null)
+            } else {
+                result.success(svc.cachedFileFor(url))
+            }
+            return
+        }
         val c = controller
         if (c == null) {
             result.error("not_ready", "MediaController 尚未连接", null)

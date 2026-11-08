@@ -941,6 +941,32 @@ pub async fn loudness_measure_cached(
     Ok(Some(loudness_dto(track_id, entry, target_lufs)))
 }
 
+
+/// 测量任意音频文件路径的响度并写入 `loudness.json`(Android 侧 Media3 的 SimpleCache 文件用)。
+pub async fn loudness_measure_path(
+    track_id: u64,
+    path: String,
+    target_lufs: f64,
+) -> Result<Option<LoudnessDto>, String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    let measured = tokio::task::spawn_blocking(move || {
+        ncm_playback::loudness::measure_file(&path_buf)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    let Some(m) = measured else {
+        return Ok(None);
+    };
+    let entry = ncm_domain::TrackLoudness {
+        lufs: m.lufs,
+        sample_peak: m.sample_peak,
+        measured_at_ms: now_ms(),
+    };
+    let mut store = loudness_store()?;
+    store.put(track_id, entry)?;
+    Ok(Some(loudness_dto(track_id, entry, target_lufs)))
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

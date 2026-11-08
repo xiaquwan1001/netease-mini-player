@@ -128,10 +128,10 @@ void main() {
     await tester.tap(find.text('推荐'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
-    expect(
-      find.descendant(of: find.byType(AppBar), matching: find.text('推荐')),
-      findsOneWidget,
-    );
+    // 2026-11-09: 顶部栏不再重复底部导航的关键词 —— 非首 tab 干脆没有 AppBar, 高度让给内容
+    expect(find.byType(AppBar), findsNothing);
+    final navOnRecommend = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(navOnRecommend.selectedIndex, 1);
 
     final handled = await tester.binding.handlePopRoute();
     await tester.pump();
@@ -144,7 +144,7 @@ void main() {
         matching: find.text('轻音 MiniNCM'),
       ),
       findsOneWidget,
-      reason: '应回到搜索(首)tab',
+      reason: '应回到搜索(首)tab(首 tab 有品牌名, 不与导航重复)',
     );
     final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
     expect(bar.selectedIndex, 0);

@@ -7,6 +7,9 @@ license.workspace = true
 [dependencies]
 ncm-domain.workspace = true
 serde.workspace = true
+# 响度测量要解码音频: symphonia 是纯 Rust(无系统依赖), Linux/Android 共用同一份实现。
+# rodio 内部也用它, 因此离线 registry 里就有, 不需要联网。
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "flac", "isomp4", "aac", "pcm", "ogg", "vorbis"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-all"] }

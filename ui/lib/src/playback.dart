@@ -158,6 +158,18 @@ class Playback {
     });
   }
 
+  /// Android: 当前直链在 Media3 SimpleCache 里的完整缓存文件路径(未缓存/未就绪返回 null)。
+  ///
+  /// 响度均衡(R2b)在手机上要测的就是这个文件 —— 音频由 Media3 缓存, Rust 的 AudioCache 看不到。
+  Future<String?> cachedAudioFile(String url) async {
+    if (!isAndroid) return null;
+    try {
+      return await _channel.invokeMethod<String>('cachedAudioFile', {'url': url});
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<PlayerView> setVolume(double volume) async {
     if (isAndroid) {
       final map = await _channel.invokeMapMethod<String, Object?>(

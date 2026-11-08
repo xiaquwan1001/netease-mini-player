@@ -104,7 +104,7 @@ Future<void> applyAudioTuning({double loudnessGainDb = 0.0}) async {
 ///
 /// 顺序: 缓存命中 → 直接用; 未测且音频已缓存 → 后台测量并写 `loudness.json`;
 /// 都没拿到(未缓存/未解码能力) → 按 0 dB 播放(任务书 §2.1 的验收口径)。
-Future<void> applyLoudnessForTrack(int trackId) async {
+Future<void> applyLoudnessForTrack(int trackId, {String? streamUrl}) async {
   final settings = AppSettings.instance;
   if (!settings.loudnessNormalize) {
     await applyAudioTuning();
@@ -118,6 +118,17 @@ Future<void> applyLoudnessForTrack(int trackId) async {
         trackId: BigInt.from(trackId),
         targetLufs: target,
       );
+      // Android: 音频在 Media3 的 SimpleCache 里, 先问 Kotlin 要缓存文件路径再让 Rust 解码测量
+      if (dto == null && streamUrl != null && _facade.isAndroid) {
+        final path = await _facade.cachedAudioFile(streamUrl);
+        if (path != null) {
+          dto = await rust.loudnessMeasurePath(
+            trackId: BigInt.from(trackId),
+            path: path,
+            targetLufs: target,
+          );
+        }
+      }
       dto ??= await rust.loudnessMeasureCached(
         trackId: BigInt.from(trackId),
         targetLufs: target,
@@ -131,6 +142,9 @@ Future<void> applyLoudnessForTrack(int trackId) async {
   _loudnessGainCache[trackId] = gain;
   await applyAudioTuning(loudnessGainDb: gain);
 }
+
+/// 某首曲目的响度增益是否已经算出来过(用于"还没测到就隔一会儿再试")
+bool hasLoudnessGain(int trackId) => _loudnessGainCache.containsKey(trackId);
 
 /// 忘记某首曲目的响度增益缓存(切换目标电平后要重算)
 void forgetLoudnessGain({int? trackId}) {
