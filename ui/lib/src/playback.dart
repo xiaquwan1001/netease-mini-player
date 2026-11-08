@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart';
 
 import 'rust/api.dart' as rust;
@@ -44,7 +45,11 @@ String preferHttpsStreamUrl(String url) {
 class Playback {
   static const _channel = MethodChannel('ncm/player');
 
-  bool get isAndroid => Platform.isAndroid;
+  /// 测试专用: host 上 Platform.isAndroid 恒为 false, 置 true 可强制走 Android 分支
+  @visibleForTesting
+  static bool debugForceAndroid = false;
+
+  bool get isAndroid => Platform.isAndroid || debugForceAndroid;
 
   /// 通知栏/耳机键/蓝牙的上一首·下一首回调.
   /// 原生侧(ForwardingPlayer)只发意图, 真正的换曲在 Dart 队列里做 —— 队列只有一份.
@@ -129,6 +134,28 @@ class Playback {
       return _fromMap(map);
     }
     return _fromRust(await rust.playerSeek(positionMs: positionMs));
+  }
+
+  /// S3: 把播放调音参数(R2/R5/R7)应用到 Android 的 Media3 播放器。
+  /// 非 Android 平台直接返回 null(不抛错, Linux 由 Rust 侧处理)。
+  /// [gainDb] 已由调用方把「精细音量 + 响度增益」合成好, 这里原样透传。
+  Future<Map<String, Object?>?> applyTuning({
+    required double gainDb,
+    required int fadeMs,
+    required bool hardwareDecode,
+    required bool streamCache,
+    required int cacheLimitMb,
+    String? eqText,
+  }) async {
+    if (!isAndroid) return null;
+    return _channel.invokeMapMethod<String, Object?>('configure', {
+      'gainDb': gainDb,
+      'fadeMs': fadeMs,
+      'hardwareDecode': hardwareDecode,
+      'streamCache': streamCache,
+      'cacheLimitMb': cacheLimitMb,
+      'eqText': eqText,
+    });
   }
 
   Future<PlayerView> setVolume(double volume) async {

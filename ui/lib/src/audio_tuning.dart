@@ -1,6 +1,7 @@
 import 'rust/api.dart' as rust;
 
 import 'app_settings.dart';
+import 'playback.dart';
 
 /// 把 AppSettings 里的播放参数(R2/R2b/R5/R7)翻成一次 FFI 调用。
 ///
@@ -59,6 +60,9 @@ class AudioTuningRequest {
 Future<rust.EqValidationDto> validateEqProfile(String text) =>
     rust.eqProfileValidate(text: text);
 
+/// 平台门面(无状态: 只做通道/Rust 的分发)
+final Playback _facade = Playback();
+
 /// 每个曲目测得的响度增益缓存(避免每次切歌都过一遍 FFI)
 final Map<int, double> _loudnessGainCache = <int, double>{};
 
@@ -73,6 +77,19 @@ Future<void> applyAudioTuning({double loudnessGainDb = 0.0}) async {
     loudnessGainDb: loudnessGainDb,
   );
   try {
+    if (_facade.isAndroid) {
+      // Android: Media3(S3)消费同一份参数 —— 增益乘系统音量档、淡入用 ValueAnimator、
+      // 硬解/边听边存/缓存上限/EQ 由 Kotlin 侧建 player 时套用
+      await _facade.applyTuning(
+        gainDb: request.gainDb,
+        fadeMs: request.fadeMs,
+        hardwareDecode: AppSettings.instance.hardwareDecode,
+        streamCache: AppSettings.instance.streamCache,
+        cacheLimitMb: AppSettings.instance.cacheLimitMb,
+        eqText: request.eqText,
+      );
+      return;
+    }
     await rust.playerConfigure(
       gainDb: request.gainDb,
       fadeMs: request.fadeMs,
@@ -129,6 +146,9 @@ Future<void> enforceCacheLimit({int? keepTrackId}) async {
   final settings = AppSettings.instance;
   if (settings.cacheLimitMb <= 0) return;
   try {
+    // Android 用 Media3 的 SimpleCache + LeastRecentlyUsedCacheEvictor 自己收敛上限,
+    // 这里不重复调用(两边缓存目录是隔离的, 见 PlaybackService 注释)
+    if (_facade.isAndroid) return;
     await rust.cacheEnforceLimit(
       limitMb: settings.cacheLimitMb,
       keepTrackId: keepTrackId == null ? null : BigInt.from(keepTrackId),

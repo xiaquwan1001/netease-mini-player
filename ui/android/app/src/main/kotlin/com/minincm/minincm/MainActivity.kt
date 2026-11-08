@@ -145,6 +145,16 @@ class MainActivity : FlutterActivity() {
             result.success(dataDir())
             return
         }
+        // configure 不需要 MediaController: 它落在 PlaybackService 上(服务拥有 ExoPlayer)
+        if (method == "configure") {
+            val svc = PlaybackService.instance
+            if (svc == null) {
+                result.error("not_ready", "PlaybackService 尚未创建", null)
+            } else {
+                result.success(svc.configure(args ?: emptyMap<Any?, Any?>()))
+            }
+            return
+        }
         val c = controller
         if (c == null) {
             result.error("not_ready", "MediaController 尚未连接", null)
@@ -169,6 +179,8 @@ class MainActivity : FlutterActivity() {
                 c.setMediaItem(item)
                 c.prepare()
                 c.play()
+                // 换曲/开始: 按 fadeMs 做淡入, 避免切歌爆音(0 = 关闭)
+                PlaybackService.instance?.fadeIn()
                 result.success(stateMap(c))
             }
             "pause" -> { c.pause(); result.success(stateMap(c)) }
@@ -179,7 +191,10 @@ class MainActivity : FlutterActivity() {
                 result.success(stateMap(c))
             }
             "volume" -> {
-                c.volume = ((args?.get("volume") as? Number)?.toFloat() ?: 1f).coerceIn(0f, 1f)
+                val v = ((args?.get("volume") as? Number)?.toFloat() ?: 1f).coerceIn(0f, 1f)
+                // 用户音量档交给服务管(服务会乘上精细增益), 避免两端各存一份音量状态
+                val svc = PlaybackService.instance
+                if (svc != null) svc.setUserVolume(v) else c.volume = v
                 result.success(stateMap(c))
             }
             "state" -> result.success(stateMap(c))

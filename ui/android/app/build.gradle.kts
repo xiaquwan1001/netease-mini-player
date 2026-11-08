@@ -47,6 +47,9 @@ kotlin {
 dependencies {
     implementation("androidx.media3:media3-exoplayer:1.9.4")
     implementation("androidx.media3:media3-session:1.9.4")
+    // S3: SimpleCache/CacheDataSource/LeastRecentlyUsedCacheEvictor 在 datasource 模块里;
+    // exoplayer 只是传递依赖它, 这里显式声明并锁到同一 1.9.4, 避免版本漂移
+    implementation("androidx.media3:media3-datasource:1.9.4")
     implementation("androidx.core:core-ktx:1.17.0")
 }
 

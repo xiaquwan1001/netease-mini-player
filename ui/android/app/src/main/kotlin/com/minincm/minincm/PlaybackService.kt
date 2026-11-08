@@ -1,14 +1,29 @@
 package com.minincm.minincm
 
+import android.animation.ValueAnimator
+import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import java.io.File
+import kotlin.math.pow
 
 /**
  * 媒体会话服务: 拥有 ExoPlayer 与 MediaSession.
@@ -22,27 +37,37 @@ import androidx.media3.session.MediaSessionService
  * 因此 Media3 默认认为 hasNext/hasPrevious=false, 通知栏/耳机键不会出现上一首·下一首.
  * 这里用 ForwardingPlayer 声明"有上下曲", 并把跳转请求回调给 Dart 队列执行,
  * 业务逻辑仍只有一份.
+ *
+ * S3 新增: 精细音量(增益×系统音量)、淡入、硬解开关、边听边存(SimpleCache)+LRU 上限、
+ * 自定义曲线 EQ(AudioProcessor)。配置入口是 MainActivity 的 ncm/player#configure 通道,
+ * 直接经 [configure] 落到本服务; [userVolume]/[gainDb]/[fadeMs] 是音量三要素, 都归这里管,
+ * 避免 MainActivity 与 Service 各存一份音量状态。
  */
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var exoPlayer: ExoPlayer? = null
+    private var simpleCache: SimpleCache? = null
+
+    // 用户通过 ncm/player#volume 设的"系统音量档"(0..1), 与精细增益相乘后才是 player.volume
+    private var userVolume = 1.0f
+
+    // Dart 已把「精细音量 + 响度增益」合成为 gainDb(-40..+12), 这里如实乘上, 不自己测响度
+    private var gainDb = 0.0
+    private var fadeMs = 0
+    private var hardwareDecode = true
+    private var streamCache = true
+    private var cacheLimitMb = 512
+    private var eqText: String? = null
+    private var eqProcessor: EqAudioProcessor? = null
+
+    private var fadeAnimator: ValueAnimator? = null
 
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
-
-        val dataSource = DefaultHttpDataSource.Factory()
-            .setUserAgent(USER_AGENT)
-            .setDefaultRequestProperties(mapOf("Referer" to "https://music.163.com/"))
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
-            .setAllowCrossProtocolRedirects(true)
-
-        val exo = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
-            .build()
+        instance = this
+        val exo = buildExoPlayer()
         exoPlayer = exo
-
         mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo)).build()
     }
 
@@ -56,13 +81,248 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        instance = null
+        fadeAnimator?.cancel()
+        fadeAnimator = null
         mediaSession?.run {
             player.release()
             release()
         }
         mediaSession = null
         exoPlayer = null
+        releaseCache()
         super.onDestroy()
+    }
+
+    /**
+     * S3 通道 configure 的落地: 应用调音参数并回显生效值, 便于 Dart 断言.
+     * 全部在应用主线程执行(MethodChannel 回调线程)。
+     */
+    fun configure(args: Map<*, *>): Map<String, Any?> {
+        val newGainDb = (args["gainDb"] as? Number)?.toDouble() ?: gainDb
+        val newFadeMs = (args["fadeMs"] as? Number)?.toInt() ?: fadeMs
+        val newHardwareDecode = args["hardwareDecode"] as? Boolean ?: hardwareDecode
+        val newStreamCache = args["streamCache"] as? Boolean ?: streamCache
+        val newCacheLimitMb = (args["cacheLimitMb"] as? Number)?.toInt() ?: cacheLimitMb
+        val rawEqText = args["eqText"] as? String
+        val newEqText = if (rawEqText.isNullOrBlank()) null else rawEqText
+
+        val clampedGain = newGainDb.coerceIn(-40.0, 12.0)
+        val clampedFade = newFadeMs.coerceIn(0, 5000)
+        val clampedLimit = newCacheLimitMb.coerceIn(1, 65536)
+
+        // EQ 解析: 失败则旁路(不生效), 记 logcat NCM-EQ 前缀 + 行号/原因, 并在回显里带上 eqError
+        var eqOk = true
+        var eqError: String? = null
+        var eqFilterCount = 0
+        var newEqProcessor: EqAudioProcessor? = null
+        if (newEqText != null) {
+            try {
+                val profile = parseParametricEq(newEqText)
+                if (profile.hasEffect) {
+                    newEqProcessor = EqAudioProcessor(profile)
+                    eqFilterCount = profile.activeFilters().size
+                }
+            } catch (e: EqParseException) {
+                eqOk = false
+                eqError = "第 ${e.line} 行: ${e.reason}"
+                Log.w("NCM-EQ", "第 ${e.line} 行: ${e.reason}")
+            } catch (e: Exception) {
+                eqOk = false
+                eqError = "EQ 解析失败: ${e.message}"
+                Log.w("NCM-EQ", "EQ 解析失败", e)
+            }
+        }
+
+        // 一行可观测日志: 便于 adb logcat 核对「设置真的落到播放器上」(编排者/回归都用它)
+        Log.d(
+            "NCM-PLAYER",
+            "configure gain=$clampedGain fade=$clampedFade hw=$newHardwareDecode " +
+                "cache=$newStreamCache limit=${clampedLimit}MB eqFilters=$eqFilterCount eqError=$eqError",
+        )
+
+        // media3 1.9 没有运行期 setAudioProcessors, EQ 变化也要重建 player(见 rebuildPlayer 注释)
+        val rebuildNeeded = newHardwareDecode != hardwareDecode ||
+            newStreamCache != streamCache ||
+            clampedLimit != cacheLimitMb ||
+            newEqText != eqText
+
+        if (rebuildNeeded && (newStreamCache != streamCache || clampedLimit != cacheLimitMb)) {
+            // 缓存上限变化要换 evictor; 开关变化要整体重建 —— 都先丢旧缓存库
+            releaseCache()
+        }
+
+        // 先更新字段再重建: buildExoPlayer()/buildDataSourceFactory() 读的就是这些字段
+        gainDb = clampedGain
+        fadeMs = clampedFade
+        hardwareDecode = newHardwareDecode
+        streamCache = newStreamCache
+        cacheLimitMb = clampedLimit
+        eqText = newEqText
+        eqProcessor = newEqProcessor
+
+        if (rebuildNeeded) rebuildPlayer()
+
+        // 增益变化即时生效(改增益不触发淡入)
+        applyTargetVolumeImmediate()
+
+        return mapOf(
+            "gainDb" to gainDb,
+            "fadeMs" to fadeMs,
+            "hardwareDecode" to hardwareDecode,
+            "streamCache" to streamCache,
+            "cacheLimitMb" to cacheLimitMb,
+            "eqApplied" to eqOk,
+            "eqError" to eqError,
+            "eqFilters" to eqFilterCount,
+        )
+    }
+
+    /** ncm/player#volume: 只更新用户音量档, 立即生效(取消正在进行的淡入) */
+    fun setUserVolume(v: Float) {
+        userVolume = v.coerceIn(0f, 1f)
+        applyTargetVolumeImmediate()
+    }
+
+    /** 换曲/开始: 在 fadeMs 内把音量从 0 线性升到目标值, 避免切歌爆音(0 = 关闭) */
+    fun fadeIn() {
+        val exo = exoPlayer ?: return
+        fadeAnimator?.cancel()
+        val target = targetVolume()
+        if (fadeMs <= 0) {
+            exo.volume = target
+            return
+        }
+        val animator = ValueAnimator.ofFloat(0f, target)
+        animator.duration = fadeMs.toLong()
+        animator.addUpdateListener { a ->
+            exo.volume = (a.animatedValue as Float).coerceIn(0f, 1f)
+        }
+        fadeAnimator = animator
+        animator.start()
+    }
+
+    private fun targetVolume(): Float {
+        // 精细音量 = 系统音量档 × 10^(gainDb/20), 钳到 0..1:
+        // 正增益在系统音量满时自然封顶, 不引入额外削波(削波只发生在 EQ 样本级)
+        val linear = 10.0.pow(gainDb / 20.0).toFloat()
+        return (userVolume * linear).coerceIn(0f, 1f)
+    }
+
+    private fun applyTargetVolumeImmediate() {
+        fadeAnimator?.cancel()
+        fadeAnimator = null
+        exoPlayer?.volume = targetVolume()
+    }
+
+    private fun buildExoPlayer(): ExoPlayer {
+        val dataSourceFactory = buildDataSourceFactory()
+        val processors: Array<AudioProcessor> = eqProcessor?.let { arrayOf(it) } ?: emptyArray()
+        val renderersFactory = NcmRenderersFactory(forceSoftware = !hardwareDecode, processors = processors)
+        return ExoPlayer.Builder(this)
+            .setRenderersFactory(renderersFactory)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .build()
+    }
+
+    private fun buildDataSourceFactory(): DataSource.Factory {
+        val http = DefaultHttpDataSource.Factory()
+            .setUserAgent(USER_AGENT)
+            .setDefaultRequestProperties(mapOf("Referer" to "https://music.163.com/"))
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(20_000)
+            .setAllowCrossProtocolRedirects(true)
+        if (!streamCache) return http
+        // streamCache=true: 边听边存。不设 flags(默认 0) ⇒ 缓存未命中时回源、边读边写缓存;
+        // 与 FLAG_BLOCK_ON_CACHE(强制只读缓存)语义相反, 后者会卡住直链首播。
+        return CacheDataSource.Factory()
+            .setCache(ensureCache())
+            .setUpstreamDataSourceFactory(http)
+    }
+
+    private fun ensureCache(): SimpleCache {
+        simpleCache?.let { return it }
+        val dir = File(cacheDir, "audio")
+        if (!dir.exists()) dir.mkdirs()
+        // 缓存目录放在应用私有 cacheDir/audio, 与 Rust 的 dataDir/audio 不共享:
+        // Rust AudioCache 是"播完才落盘的完整文件缓存", Media3 SimpleCache 是"边播边写的分片缓存",
+        // 二者同目录会互相把对方当垃圾淘汰/双写同一批文件, 所以刻意隔离。
+        val cache = SimpleCache(
+            dir,
+            LeastRecentlyUsedCacheEvictor(cacheLimitMb.toLong() * 1024L * 1024L),
+            StandaloneDatabaseProvider(this),
+        )
+        simpleCache = cache
+        return cache
+    }
+
+    private fun releaseCache() {
+        simpleCache?.release()
+        simpleCache = null
+    }
+
+    /**
+     * 重建 ExoPlayer(硬解开关 / 缓存开关 / 缓存上限 / EQ 变化时)。
+     * 为什么必须重建: MediaCodecSelector 与 CacheDataSource 都只在 ExoPlayer 创建时生效;
+     * media3 1.9 也没有运行期 setAudioProcessors, EQ 要换 processor 链也只能重建。
+     * 代价: 当前曲目会短暂中断一下(几十毫秒); 这里保留播放项/位置, 属于可接受范围。
+     */
+    private fun rebuildPlayer() {
+        val old = exoPlayer ?: return
+        val item = old.currentMediaItem
+        val position = old.currentPosition
+        val playWhenReady = old.playWhenReady
+
+        val newExo = buildExoPlayer()
+        exoPlayer = newExo
+
+        if (item != null) {
+            newExo.setMediaItem(item)
+            newExo.prepare()
+            newExo.seekTo(position)
+            newExo.playWhenReady = playWhenReady
+        }
+
+        // 同一个 MediaSession 换底层 player: media3 会通知已连接的 MediaController 更新,
+        // MainActivity 的 controller 无需重连。
+        mediaSession?.setPlayer(SkipAwarePlayer(newExo))
+
+        old.release()
+        applyTargetVolumeImmediate()
+    }
+
+    /**
+     * 渲染器工厂: 承载硬解开关(MediaCodecSelector)与 EQ(AudioProcessor 注入 AudioSink)。
+     * EQ 注入只能走 buildAudioSink 覆写, 因为 media3 1.9 的 ExoPlayer 没有 setAudioProcessors。
+     */
+    private inner class NcmRenderersFactory(
+        private val forceSoftware: Boolean,
+        private val processors: Array<AudioProcessor>,
+    ) : DefaultRenderersFactory(this@PlaybackService) {
+        init {
+            if (forceSoftware) {
+                // 强制软解: 过滤掉硬件加速的 codec。
+                // 为什么不是 emptyList(): MediaCodecAudioRenderer 拿不到任何解码器会直接无声/失败,
+                // 而"强制软解"的语义是"只用软解 codec 且仍可播", 所以过滤 hardwareAccelerated=false。
+                setMediaCodecSelector { mimeType, requiresSecureDecoder, requiresTunnelingDecoder ->
+                    MediaCodecSelector.DEFAULT
+                        .getDecoderInfos(mimeType, requiresSecureDecoder, requiresTunnelingDecoder)
+                        .filter { !it.hardwareAccelerated }
+                }
+            }
+        }
+
+        override fun buildAudioSink(
+            context: Context,
+            enableFloatOutput: Boolean,
+            enableAudioOutputPlaybackParameters: Boolean,
+        ): AudioSink {
+            return DefaultAudioSink.Builder(context)
+                .setAudioProcessors(processors)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParameters)
+                .build()
+        }
     }
 
     companion object {
@@ -74,6 +334,10 @@ class PlaybackService : MediaSessionService() {
         const val USER_AGENT =
             "NeteaseMusic/9.1.65.240927161425(9001065);Dalvik/2.1.0 (Linux; U; Android 14; " +
                 "23013RK75C Build/UKQ1.230804.001)"
+
+        /** 同进程引用, 让 MainActivity 的 MethodChannel 直接落到本服务(同进程, 无 IPC) */
+        @Volatile
+        var instance: PlaybackService? = null
 
         /**
          * 上一首/下一首的出口: true=下一首, false=上一首.
