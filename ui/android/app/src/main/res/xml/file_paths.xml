@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 分享图片临时目录: MainActivity.writeShareCache 写这里 -->
+    <cache-path name="shared" path="shared/" />
+</paths>

@@ -117,11 +117,23 @@ class PlainLyricView extends StatelessWidget {
     required this.lines,
     this.emptyText = '暂无歌词',
     this.padding,
+    this.controller,
+    this.selected = const <int>{},
+    this.onLineTap,
+    this.onLineLongPress,
   });
 
   final List<String> lines;
   final String emptyText;
   final EdgeInsetsGeometry? padding;
+
+  /// 传进来即可支持"定位到当前行"这类外部滚动
+  final ScrollController? controller;
+
+  /// 多选状态下选中的行下标(纯文本歌词同样能长按选中分享)
+  final Set<int> selected;
+  final void Function(int index)? onLineTap;
+  final void Function(int index)? onLineLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -130,19 +142,36 @@ class PlainLyricView extends StatelessWidget {
     }
     final scheme = Theme.of(context).colorScheme;
     return ListView.builder(
+      controller: controller,
       padding: padding ?? const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       itemCount: lines.length,
       itemBuilder: (context, i) {
         final line = lines[i];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Text(
-            line.trim().isEmpty ? '♪' : line,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.4,
-              color: scheme.onSurfaceVariant,
+        final isSelected = selected.contains(i);
+        return GestureDetector(
+          key: ValueKey('plain-lyric-line-$i'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onLineTap == null ? null : () => onLineTap!(i),
+          onLongPress:
+              onLineLongPress == null ? null : () => onLineLongPress!(i),
+          child: Container(
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  )
+                : null,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              child: Text(
+                line.trim().isEmpty ? '♪' : line,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.4,
+                  color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
+                ),
+              ),
             ),
           ),
         );
@@ -150,3 +179,114 @@ class PlainLyricView extends StatelessWidget {
     );
   }
 }
+
+/// 行级歌词视图(带时间轴): 当前行高亮 + 翻译开关 + 多选.
+///
+/// 纯展示组件: 当前行下标/滚动控制/选中集合都由调用方给, 因此能在 widget test
+/// 里直接 pump 各种状态; 滚动位置由外部 [controller] 拥有(调用方决定"跟不跟随").
+class TimedLyricView extends StatelessWidget {
+  const TimedLyricView({
+    super.key,
+    required this.lines,
+    required this.activeIndex,
+    this.controller,
+    this.itemExtent = 56,
+    this.showTranslation = true,
+    this.selected = const <int>{},
+    this.onLineTap,
+    this.onLineLongPress,
+    this.emptyText = '暂无歌词',
+    this.padding = const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+  });
+
+  /// 已按 timeMs 升序的行(见 [parseLrc])
+  final List<ParsedLyricLine> lines;
+
+  /// 当前高亮行下标; -1 = 还没到第一句
+  final int activeIndex;
+
+  final ScrollController? controller;
+  final double itemExtent;
+
+  /// 关掉时整块不渲染翻译行(歌词本身没有翻译时开关也不该出现)
+  final bool showTranslation;
+
+  /// 多选状态下选中的行下标
+  final Set<int> selected;
+
+  /// 点某一行(多选模式下用来加/减选); 为 null 时点击无反馈
+  final void Function(int index)? onLineTap;
+
+  /// 长按某一行(进入多选并选中该行); 为 null 时长按无反馈
+  final void Function(int index)? onLineLongPress;
+
+  final String emptyText;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    if (lines.isEmpty) return Center(child: Text(emptyText));
+    final scheme = Theme.of(context).colorScheme;
+    return ListView.builder(
+      controller: controller,
+      itemExtent: itemExtent,
+      padding: padding,
+      itemCount: lines.length,
+      itemBuilder: (context, i) {
+        final line = lines[i];
+        final active = i == activeIndex;
+        final isSelected = selected.contains(i);
+        final text = line.text.isEmpty ? '♪' : line.text;
+        final sub = showTranslation ? line.sub : null;
+        final body = Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: active ? 18 : 15,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active
+                    ? scheme.primary
+                    : (isSelected ? scheme.onSurface : scheme.onSurfaceVariant),
+              ),
+            ),
+            if (sub != null)
+              Text(
+                sub,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: active
+                      ? scheme.primary.withValues(alpha: 0.8)
+                      : scheme.outline,
+                ),
+              ),
+          ],
+        );
+        return GestureDetector(
+          key: ValueKey('lyric-line-$i'),
+          behavior: HitTestBehavior.opaque,
+          onTap: onLineTap == null ? null : () => onLineTap!(i),
+          onLongPress:
+              onLineLongPress == null ? null : () => onLineLongPress!(i),
+          child: Container(
+            decoration: isSelected
+                ? BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  )
+                : null,
+            child: Center(child: body),
+          ),
+        );
+      },
+    );
+  }
+}
+

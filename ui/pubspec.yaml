@@ -37,6 +37,7 @@ dependencies:
   rust_lib_minincm:
     path: rust_builder
   flutter_rust_bridge: 2.13.0
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

@@ -113,6 +113,11 @@ class WordLyricView extends StatefulWidget {
     this.itemExtent = 56,
     this.emptyText = '暂无歌词',
     this.padding,
+    this.showTranslation = true,
+    this.selected = const <int>{},
+    this.onLineTap,
+    this.onLineLongPress,
+    this.autoScroll = true,
   });
 
   /// 行数据(升序); 空列表显示空态。
@@ -125,6 +130,19 @@ class WordLyricView extends StatefulWidget {
   final double itemExtent;
   final String emptyText;
   final EdgeInsetsGeometry? padding;
+
+  /// 翻译开关(关掉时不渲染行级 sub)
+  final bool showTranslation;
+
+  /// 多选状态下选中的行下标
+  final Set<int> selected;
+
+  /// 点/长按某一行(多选入口); 为 null 时无反馈
+  final void Function(int index)? onLineTap;
+  final void Function(int index)? onLineLongPress;
+
+  /// 跟随播放自动滚动; 用户手动滚动时由调用方置 false, 点"定位"再置回 true
+  final bool autoScroll;
 
   @override
   State<WordLyricView> createState() => _WordLyricViewState();
@@ -169,6 +187,7 @@ class _WordLyricViewState extends State<WordLyricView> {
   }
 
   void _scrollTo(int idx) {
+    if (!widget.autoScroll) return;
     final controller = widget.controller;
     if (controller == null || !controller.hasClients || idx < 0) return;
     final position = controller.position;
@@ -198,17 +217,43 @@ class _WordLyricViewState extends State<WordLyricView> {
         itemBuilder: (context, i) {
           final line = widget.lines[i];
           final isActive = i == activeIndex;
+          final isSelected = widget.selected.contains(i);
           return RepaintBoundary(
-            child: isActive
-                ? ValueListenableBuilder<int>(
-                    valueListenable: widget.positionMs,
-                    builder: (context, pos, _) => _ActiveWordLine(
-                      line: line,
-                      positionMs: pos,
-                      scheme: scheme,
-                    ),
-                  )
-                : _StaticWordLine(line: line, scheme: scheme),
+            child: GestureDetector(
+              key: ValueKey('word-lyric-line-$i'),
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onLineTap == null
+                  ? null
+                  : () => widget.onLineTap!(i),
+              onLongPress: widget.onLineLongPress == null
+                  ? null
+                  : () => widget.onLineLongPress!(i),
+              child: Container(
+                decoration: isSelected
+                    ? BoxDecoration(
+                        color: scheme.primary.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                      )
+                    : null,
+                child: isActive
+                    ? ValueListenableBuilder<int>(
+                        valueListenable: widget.positionMs,
+                        builder: (context, pos, _) => _ActiveWordLine(
+                          line: line,
+                          positionMs: pos,
+                          scheme: scheme,
+                          isSelected: isSelected,
+                          showTranslation: widget.showTranslation,
+                        ),
+                      )
+                    : _StaticWordLine(
+                        line: line,
+                        scheme: scheme,
+                        isSelected: isSelected,
+                        showTranslation: widget.showTranslation,
+                      ),
+              ),
+            ),
           );
         },
       ),
@@ -217,10 +262,17 @@ class _WordLyricViewState extends State<WordLyricView> {
 }
 
 class _StaticWordLine extends StatelessWidget {
-  const _StaticWordLine({required this.line, required this.scheme});
+  const _StaticWordLine({
+    required this.line,
+    required this.scheme,
+    this.isSelected = false,
+    this.showTranslation = true,
+  });
 
   final WordLyricLineData line;
   final ColorScheme scheme;
+  final bool isSelected;
+  final bool showTranslation;
 
   @override
   Widget build(BuildContext context) {
@@ -232,11 +284,11 @@ class _StaticWordLine extends StatelessWidget {
         text: text,
         style: TextStyle(
           fontSize: 15,
-          color: scheme.onSurfaceVariant,
+          color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
           fontWeight: FontWeight.w400,
         ),
       ),
-      sub: line.sub,
+      sub: showTranslation ? line.sub : null,
       subColor: scheme.outline,
     );
   }
@@ -247,11 +299,15 @@ class _ActiveWordLine extends StatelessWidget {
     required this.line,
     required this.positionMs,
     required this.scheme,
+    this.isSelected = false,
+    this.showTranslation = true,
   });
 
   final WordLyricLineData line;
   final int positionMs;
   final ColorScheme scheme;
+  final bool isSelected;
+  final bool showTranslation;
 
   @override
   Widget build(BuildContext context) {
@@ -272,7 +328,7 @@ class _ActiveWordLine extends StatelessWidget {
             ),
         ],
       ),
-      sub: line.sub,
+      sub: showTranslation ? line.sub : null,
       subColor: scheme.primary.withValues(alpha: 0.8),
     );
   }

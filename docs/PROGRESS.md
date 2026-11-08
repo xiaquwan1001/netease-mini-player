@@ -5,6 +5,21 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 播放条合并 + 歌曲详情页(2026-11-08, `316093e`)
+
+用户三条要求一次落地, 详见 `docs/ui-song-detail-share.md`:
+
+1. **播放条两排合并成一排**: 封面 + 曲名/进度 + 喜欢/上一首/播放/下一首(40dp 紧凑点击区);
+   播放模式/心动/队列移到详情页底部横条, 行尾 "..." 移进详情页 AppBar。
+2. **歌曲详情页**: 右上角分享 + 翻译开关(仅 tlyric 存在时) + "..."; 歌词长按进多选并分享所选;
+   右下角一键定位当前句; 手指拖动即暂停跟随(`dragDetails` 判定)。
+3. **分享**: `src/song_share.dart` 卡片(封面/曲名/歌手/专辑/歌词/二维码) → RepaintBoundary 导出 PNG;
+   Android 自建 `ncm/share` 通道(FileProvider + clipData + ACTION_SEND; 保存走 MediaStore),
+   桌面落 `~/Pictures/MiniNCM`; 二维码依赖 `qr_flutter`(纯 Dart)。
+
+门禁: `flutter test` **362 通过**(新增 11 例) / `dart analyze` 0 error 0 warning;
+a34 模拟器实测通过(翻译开关 / 多选分享 / 保存 680x628 PNG / 系统分享面板 / 定位当前句)。
+
 ## v2 · 设置项扩充 + 播放体验修复(R1–R7)与 D7 收尾(2026-11-09)
 
 任务书: `docs/plan-2026-11-09-settings-and-player.md`(§10 有逐批执行记录);

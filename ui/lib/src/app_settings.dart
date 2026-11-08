@@ -64,6 +64,9 @@ class AppSettings extends ChangeNotifier {
   /// R5: 缓存占用上限(MB)
   int cacheLimitMb = 512;
 
+  /// 歌词页是否显示翻译(tlyric). 只有歌词本身带翻译时该开关才出现.
+  bool lyricTranslation = true;
+
   // 注意: double 作 key 不能用 const map(Dart 常量 map 的 key 必须原始相等语义)
   static final loudnessTargets = <double, String>{
     -23.0: '-23 LUFS(广播)',
@@ -148,6 +151,8 @@ class AppSettings extends ChangeNotifier {
           if (limit is num && cacheLimits.contains(limit.toInt())) {
             cacheLimitMb = limit.toInt();
           }
+          final trans = raw['lyricTranslation'];
+          if (trans is bool) lyricTranslation = trans;
         }
       }
     } catch (_) {
@@ -174,6 +179,7 @@ class AppSettings extends ChangeNotifier {
     bool? hardwareDecode,
     bool? streamCache,
     int? cacheLimitMb,
+    bool? lyricTranslation,
   }) async {
     if (themeMode != null) this.themeMode = themeMode;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
@@ -203,6 +209,7 @@ class AppSettings extends ChangeNotifier {
     if (cacheLimitMb != null && cacheLimits.contains(cacheLimitMb)) {
       this.cacheLimitMb = cacheLimitMb;
     }
+    if (lyricTranslation != null) this.lyricTranslation = lyricTranslation;
     notifyListeners();
     await _save();
   }
@@ -229,6 +236,7 @@ class AppSettings extends ChangeNotifier {
         'hardwareDecode': hardwareDecode,
         'streamCache': streamCache,
         'cacheLimitMb': cacheLimitMb,
+        'lyricTranslation': lyricTranslation,
       }));
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效

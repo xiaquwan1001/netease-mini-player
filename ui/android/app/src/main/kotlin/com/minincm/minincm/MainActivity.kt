@@ -8,9 +8,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.webkit.CookieManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -124,6 +126,48 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // 歌曲分享: 图片走 FileProvider + ACTION_SEND, 不引第三方插件
+        val share = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/share")
+        share.setMethodCallHandler { call, result ->
+            val args = call.arguments as? Map<*, *>
+            val bytes = args?.get("bytes") as? ByteArray
+            val filename = (args?.get("filename") as? String) ?: "share.png"
+            val text = (args?.get("text") as? String) ?: ""
+            if (bytes == null || bytes.isEmpty()) {
+                result.error("bad_args", "bytes missing", null)
+                return@setMethodCallHandler
+            }
+            try {
+                when (call.method) {
+                    "shareImage" -> {
+                        val file = writeShareCache(bytes, sanitize(filename))
+                        val uri = FileProvider.getUriForFile(
+                            this,
+                            "${applicationContext.packageName}.fileprovider",
+                            file,
+                        )
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            // clipData 必须一起带上: 只给 EXTRA_STREAM 时, 系统选择器
+                            // (com.android.intentresolver) 的缩略图预览会报
+                            // "Permission Denial ... FileProvider ... not exported"
+                            clipData = android.content.ClipData.newRawUri("image", uri)
+                            if (text.isNotBlank()) putExtra(Intent.EXTRA_TEXT, text)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(intent, "分享到"))
+                        result.success(true)
+                    }
+                    // 保存到系统图库: Q+ 走 MediaStore(免权限), 老系统落公共 Pictures
+                    "saveImage" -> result.success(saveToGallery(bytes, sanitize(filename)))
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("share_error", e.message, null)
+            }
+        }
+
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         controllerFuture = MediaController.Builder(this, token).buildAsync().also { future ->
             future.addListener({
@@ -132,6 +176,45 @@ class MainActivity : FlutterActivity() {
         }
 
         ensureNotificationPermission()
+    }
+
+    private fun sanitize(name: String): String =
+        name.replace(Regex("""[/\\:*?"<>|]"""), "_").ifBlank { "share.png" }
+
+    /** 分享用的临时文件: 必须放在 FileProvider 声明的路径(cache/shared)下 */
+    private fun writeShareCache(bytes: ByteArray, filename: String): File {
+        val dir = File(cacheDir, "shared")
+        if (!dir.exists()) dir.mkdirs()
+        val file = File(dir, filename)
+        file.writeBytes(bytes)
+        return file
+    }
+
+    private fun saveToGallery(bytes: ByteArray, filename: String): String {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = android.content.ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MiniNCM")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val resolver = contentResolver
+            val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("无法写入图库")
+            resolver.openOutputStream(uri)?.use { it.write(bytes) }
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            return "系统图库 Pictures/MiniNCM"
+        }
+        val dir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            "MiniNCM",
+        )
+        if (!dir.exists()) dir.mkdirs()
+        val file = File(dir, filename)
+        file.writeBytes(bytes)
+        return file.absolutePath
     }
 
     private fun dataDir(): String {

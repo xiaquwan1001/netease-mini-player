@@ -248,4 +248,43 @@ API/protocol details and anti-bot technique live in the
   `login_qr_url()` 还会重复拼 `codekey=` 产生畸形 URL。净收益仅"少 2.4k 行加解密"。
   复测门槛见 `docs/backend-service-options.md` §6; 报告 `docs/spikes/2026-11-09-netease-music-spike.md`。
 
+§
+
+- **播放条合并 + 歌曲详情页(2026-11-08)**: 播放条只剩 **一行**(封面 52 + 4×40dp 紧凑图标: 喜欢/上一首/播放/下一首),
+  播放模式·心动·队列挪到详情页底部横条(`_buildDetailActionStrip`, 横向可滚防 300dp 挤爆);
+  行尾 "..." (`SongOverflowButton`) 从播放条挪进详情页 AppBar。
+- **详情页就是原来的歌词叠层**(`_showLyrics` / `_toggleLyrics`, 仍在 body 内 Stack, 不是新路由), 因此返回键优先级
+  (`resolveHomeBackAction`) 不变; 多选歌词时返回键先退多选。
+- **分享链路不引插件**: 二维码用 `qr_flutter`(纯 Dart, 带 `qr`), 卡片是普通 widget + `RepaintBoundary.toImage`
+  导出 PNG(预览即导出, 没有第二套排版); Android 走自建 `ncm/share` 通道(`shareImage` = FileProvider +
+  cache/shared + ACTION_SEND, `saveImage` = MediaStore Q+/公共 Pictures), Linux 直接落 `~/Pictures/MiniNCM`。
+  新增 `res/xml/file_paths.xml` + manifest provider(`${applicationId}.fileprovider`); 坑: FileProvider 的 paths
+  必须覆盖真正写文件的目录(cache/shared), 否则 `getUriForFile` 直接抛 IllegalArgumentException。
+- **歌词跟随**: 自动滚动只在换行时触发; 手指拖动(`ScrollUpdateNotification.dragDetails != null`)即暂停跟随,
+  **必须只认 dragDetails** —— 自动跟随用的 `animateTo` 也发 ScrollNotification, 只看 UserScrollNotification 会误判自锁。
+  "定位到当前歌词"按钮同时恢复跟随 + 滚到当前行; 翻译开关存 `AppSettings.lyricTranslation`, 只在该曲歌词确有
+  tlyric 时才显示开关。歌词长按进多选 → 右上角 "分享所选歌词"。
+
+§
+
+- **模拟器实测踩坑(2026-11-08, a34)**:
+  - 213MB debug APK 用 `adb install` **streamed install 会失败**
+    (`INSTALL_PARSE_FAILED_NO_CERTIFICATES: SHA-256 digest of contents did not verify`),
+    换 `adb install --no-streaming -r -t` 必成。
+  - `uiautomator dump` 报 `ERROR: could not get idle state` 的原因是**App 一直在出帧**:
+    播放中每 500ms `setState` + 输入框光标闪烁。对策: 先点播放条的播放/暂停键暂停(并让输入框失焦),
+    dump 立刻成功; 用 `adb shell input keyevent 4` 直接把 App 退到后台会导致 dump 拿到 launcher。
+  - Flutter 的语义树能用 uiautomator 读到(`content-desc`), 前提是
+    `adb shell settings put secure accessibility_enabled 1`; 驱动脚本: `~/bin/uix`(列 desc+bounds)/
+    `~/bin/uitap`/`~/bin/uilong`; 看画面用 `~/bin/shotmap`(灰度 ASCII)与 `~/bin/cropmap`(RGB)。
+  - 别用窗口模式起 a34(`-gpu host` 下 gles_v2 满屏 `error null ctx`), 用 `~/bin/avd headless a34`。
+  - a36 常被**另一个项目**占用(5554), 本项目统一用 a34, 一律 `adb -s emulator-5556`。
+- **Flutter SDK 文件会被写坏**: 崩溃/突然关机后 `packages/flutter/lib/src/material/animated_icons/data/home_menu.g.dart`
+  第 1405 行多出一个 `  (` 前缀, 症状是所有 widget test 编译失败报
+  `Can't find ')' to match '('`(报错指向 SDK 自身)。修法: `git -C ~/android-dev/flutter status --porcelain`
+  看被改的文件, 逐个 `git checkout -- <file>`(本机 SDK 是干净 checkout, 改动一律视为损坏)。
+- **Android 分享图片必须带 clipData**: ACTION_SEND 只放 `EXTRA_STREAM` 时, 系统选择器
+  (com.android.intentresolver) 预览会报 `Permission Denial: opening provider ... FileProvider ... not exported`;
+  加 `clipData = ClipData.newRawUri("image", uri)` + `FLAG_GRANT_READ_URI_PERMISSION` 才正常。
+
 <!-- created=2026-11-09, last=2026-11-09 -->

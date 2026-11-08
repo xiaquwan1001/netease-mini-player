@@ -33,6 +33,7 @@ import 'src/search_suggest.dart';
 import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/song_actions.dart';
+import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
 import 'src/theme.dart';
@@ -193,7 +194,7 @@ class _HomePageState extends State<HomePage> {
 
   // ---- 歌词 ----
   static const double _lyricItemExtent = 56;
-  List<rust.LyricLineDto> _lyricLines = const [];
+  List<ParsedLyricLine> _lyricLines = const [];
   List<BigInt> _lyricTimes = const [];
   /// 纯文本歌词兜底(无时间轴): 逐行接口失败/返回空时用 [parseLrc] 从原始 LRC 里取。
   List<String>? _lyricPlain;
@@ -201,6 +202,12 @@ class _HomePageState extends State<HomePage> {
   String? _lyricError;
   int _lyricIndex = -1;
   bool _showLyrics = false;
+
+  /// 歌词是否跟随播放自动滚动: 用户手动滑歌词时置 false, 点"定位"再置回 true
+  bool _autoFollowLyric = true;
+
+  /// 详情页歌词多选: 长按进入, 点行加/减选, 选中后右上角变成分享/取消
+  final Set<int> _selectedLyricLines = <int>{};
 
   /// 逐字(karaoke)歌词数据; 有则优先用 [WordLyricView], 无则回落行级/纯文本链。
   List<WordLyricLineData> _wordLines = const [];
@@ -371,7 +378,17 @@ class _HomePageState extends State<HomePage> {
     }
     if (!mounted) return;
     final wasPlaying = _player?.playing ?? false;
-    setState(() => _player = state);
+    // 值没变就不 setState: 暂停时每 500ms 一次无意义的整页重建,
+    // 除了费电还会让 uiautomator 之类"等空闲"的工具永远等不到稳定帧。
+    final prev = _player;
+    if (prev == null ||
+        prev.trackId != state.trackId ||
+        prev.playing != state.playing ||
+        prev.positionMs != state.positionMs ||
+        prev.durationMs != state.durationMs ||
+        prev.volume != state.volume) {
+      setState(() => _player = state);
+    }
     // R2b: 曲目一换就按新曲目的响度给一次增益(未测则后台补测, 先按 0 dB 播)
     final playingId = state.trackId?.toInt();
     if (playingId != _loudnessAppliedTrackId) {
@@ -1010,7 +1027,10 @@ class _HomePageState extends State<HomePage> {
       if (!mounted || _lyricTrackId != trackId) return;
       if (lines.isNotEmpty) {
         setState(() {
-          _lyricLines = lines;
+          _lyricLines = [
+            for (final l in lines)
+              ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+          ];
           _lyricTimes = [for (final l in lines) l.timeMs];
         });
         _syncLyricIndex(_player ?? PlayerView.empty);
@@ -1040,10 +1060,7 @@ class _HomePageState extends State<HomePage> {
         _lyricError = null;
         if (doc.hasTimeline) {
           _lyricPlain = null;
-          _lyricLines = [
-            for (final l in doc.timed)
-              rust.LyricLineDto(timeMs: l.timeMs, text: l.text, sub: l.sub),
-          ];
+          _lyricLines = doc.timed;
           _lyricTimes = [for (final l in doc.timed) l.timeMs];
         } else {
           _lyricLines = const [];
@@ -1067,6 +1084,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _scrollLyricTo(int idx) {
+    if (!_autoFollowLyric) return;
     if (!_lyricScroll.hasClients || idx < 0) return;
     final position = _lyricScroll.position;
     final target = idx * _lyricItemExtent - (position.viewportDimension - _lyricItemExtent) / 2;
@@ -1079,7 +1097,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _toggleLyrics() {
-    setState(() => _showLyrics = !_showLyrics);
+    setState(() {
+      _showLyrics = !_showLyrics;
+      // 每次进入详情页都恢复"跟随 + 无选中", 避免上次留下的状态让人困惑
+      _autoFollowLyric = true;
+      _selectedLyricLines.clear();
+    });
     if (_showLyrics) {
       // 仅展开期间提高刷新频率; 收起/切 tab 时必须停掉。
       _lyricTicker?.cancel();
@@ -1095,6 +1118,114 @@ class _HomePageState extends State<HomePage> {
       _lyricTicker?.cancel();
       _lyricTicker = null;
     }
+  }
+
+
+  // ---------------- 详情页: 翻译 / 多选 / 分享 / 定位 ----------------
+
+  /// 歌曲详情页(歌词页)是否可用: 就是歌词叠层本身, 从播放条点进来
+  bool get _lyricSelecting => _selectedLyricLines.isNotEmpty;
+
+  /// 歌词里有没有翻译(tlyric). 没有时整页不出现翻译开关, 免得点出个空开关
+  bool get _hasLyricTranslation =>
+      _wordLines.any((l) => (l.sub ?? '').trim().isNotEmpty) ||
+      _lyricLines.any((l) => (l.sub ?? '').trim().isNotEmpty);
+
+  /// 当前播放位置对应的歌词行(-1 = 还没唱到第一句)
+  int get _currentLyricIndex {
+    final pos = _player?.positionMs ?? BigInt.zero;
+    if (_wordLines.isNotEmpty) return wordLineIndexAt(_wordLines, pos.toInt());
+    if (_lyricTimes.isNotEmpty) return lyricIndexAt(_lyricTimes, pos);
+    return -1;
+  }
+
+  /// 取第 [i] 行歌词的纯文本(逐字歌词把词拼回整行)
+  String _lyricTextAt(int i) {
+    if (_wordLines.isNotEmpty) {
+      if (i < 0 || i >= _wordLines.length) return '';
+      return [for (final w in _wordLines[i].words) w.text].join();
+    }
+    if (_lyricLines.isNotEmpty) {
+      if (i < 0 || i >= _lyricLines.length) return '';
+      return _lyricLines[i].text;
+    }
+    final plain = _lyricPlain;
+    if (plain == null || i < 0 || i >= plain.length) return '';
+    return plain[i];
+  }
+
+  /// 一键回到当前唱到的那句(并恢复跟随)
+  void _locateCurrentLyric() {
+    final idx = _currentLyricIndex;
+    setState(() => _autoFollowLyric = true);
+    if (idx < 0) {
+      _toast('还没唱到第一句');
+      return;
+    }
+    _scrollLyricTo(idx);
+  }
+
+  /// 用户手动滑歌词: 停止自动跟随(否则下一句会把列表拽回去, 根本看不远)
+  void _pauseLyricFollow() {
+    if (!_autoFollowLyric) return;
+    setState(() => _autoFollowLyric = false);
+  }
+
+  /// 长按歌词行: 进入多选并选中该行; 之后点击任意行加/减选
+  void _selectLyricLine(int index, {bool longPress = false}) {
+    setState(() {
+      if (longPress) {
+        _selectedLyricLines.add(index);
+      } else if (!_selectedLyricLines.remove(index)) {
+        _selectedLyricLines.add(index);
+      }
+    });
+    if (longPress && _selectedLyricLines.length == 1) {
+      _toast('已选中 1 句歌词, 继续点击可多选');
+    }
+  }
+
+  void _clearLyricSelection() {
+    if (_selectedLyricLines.isEmpty) return;
+    setState(() => _selectedLyricLines.clear());
+  }
+
+  /// 选中行的文本(按行号排序, 最多 8 行 —— 分享卡片放不下更多)
+  List<String> _selectedLyricTexts() {
+    final indexes = _selectedLyricLines.toList()..sort();
+    return shareableLyricLines(
+      [for (final i in indexes) _lyricTextAt(i)],
+      max: 8,
+    );
+  }
+
+  void _toggleLyricTranslation() {
+    final next = !AppSettings.instance.lyricTranslation;
+    setState(() {});
+    unawaited(AppSettings.instance.update(lyricTranslation: next));
+  }
+
+  /// 分享(详情页右上角 / 选中歌词后的分享): 卡片带封面 + 歌词 + 二维码
+  Future<void> _shareSong({List<String>? lyrics}) async {
+    final song = _current;
+    if (song == null) {
+      _toast('当前没有正在播放的歌曲');
+      return;
+    }
+    await showSongShareSheet(
+      context,
+      song: song,
+      lyricLines: lyrics ?? const <String>[],
+    );
+  }
+
+  Future<void> _shareSelectedLyrics() async {
+    final lines = _selectedLyricTexts();
+    if (lines.isEmpty) {
+      _toast('没有可分享的歌词');
+      return;
+    }
+    await _shareSong(lyrics: lines);
   }
 
   // ---------------- 登录 ----------------
@@ -1786,7 +1917,12 @@ class _HomePageState extends State<HomePage> {
   void _handleBack(HomeBackAction action) {
     switch (action) {
       case HomeBackAction.collapseLyrics:
-        _toggleLyrics();
+        // 详情页里正在多选歌词时, 返回键先退多选(与常见相册/文件选择一致)
+        if (_lyricSelecting) {
+          _clearLyricSelection();
+        } else {
+          _toggleLyrics();
+        }
       case HomeBackAction.resetTab:
         _onTabSelected(0);
       case HomeBackAction.closeLibrary:
@@ -1970,7 +2106,11 @@ class _HomePageState extends State<HomePage> {
         fit: BoxFit.scaleDown,
         alignment: Alignment.centerLeft,
         child: Text(
-          _showLyrics ? (current?.name ?? '歌词') : (_libraryTitle ?? '轻音 MiniNCM'),
+          _showLyrics
+              ? (_lyricSelecting
+                  ? '已选 ${_selectedLyricLines.length} 句'
+                  : (current?.name ?? '歌词'))
+              : (_libraryTitle ?? '轻音 MiniNCM'),
           maxLines: 1,
         ),
       ),
@@ -1988,9 +2128,44 @@ class _HomePageState extends State<HomePage> {
                 )
               : null),
       actions: [
-        // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
-        // 审查 P1-7.10: 账号入口 3→1 —— 账号簿/切换/退出登录统一走「我的」页资料头。
-        if (_auth.isAndroid && _info?.loggedIn != true)
+        // 歌曲详情页(歌词页)的右上角: 分享 / 翻译开关 / "..." 菜单
+        if (_showLyrics) ...[
+          if (_lyricSelecting) ...[
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: '分享所选歌词',
+              onPressed: _shareSelectedLyrics,
+            ),
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: '取消选择',
+              onPressed: _clearLyricSelection,
+            ),
+          ] else ...[
+            if (_hasLyricTranslation)
+              IconButton(
+                icon: Icon(
+                  Icons.translate,
+                  color: AppSettings.instance.lyricTranslation
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                tooltip: AppSettings.instance.lyricTranslation
+                    ? '关闭翻译'
+                    : '显示翻译',
+                onPressed: _toggleLyricTranslation,
+              ),
+            // "..." 从播放条挪到详情页里(播放条只留播放控制)
+            if (current != null) SongOverflowButton(song: current, size: 22),
+            IconButton(
+              icon: const Icon(Icons.share),
+              tooltip: '分享这首歌',
+              onPressed: () => _shareSong(),
+            ),
+          ],
+        ] else if (_auth.isAndroid && _info?.loggedIn != true)
+          // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
+          // 审查 P1-7.10: 账号入口 3→1 —— 账号簿/切换/退出登录统一走「我的」页资料头。
           TextButton.icon(
             onPressed: _login,
             icon: const Icon(Icons.login, size: 18),
@@ -2227,66 +2402,142 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 歌曲详情页正文 = 歌词 + (定位当前句 / 底部次要控制)
   Widget _buildLyrics() {
+    // 多选态: 点行 = 加/减选; 非多选态点击不做事(避免误改焦点)
+    final onTap = _lyricSelecting ? (int i) => _selectLyricLine(i) : null;
+    final onLong = _selectLyricLine;
+    final showTranslation = AppSettings.instance.lyricTranslation;
+
+    final Widget body;
     if (_wordLines.isNotEmpty) {
-      return WordLyricView(
+      body = WordLyricView(
         lines: _wordLines,
         positionMs: _wordPositionMs,
         controller: _lyricScroll,
         itemExtent: _lyricItemExtent,
+        showTranslation: showTranslation,
+        selected: _selectedLyricLines,
+        onLineTap: onTap,
+        onLineLongPress: onLong,
+        autoScroll: _autoFollowLyric,
       );
-    }
-    final plain = _lyricPlain;
-    if (plain != null) {
-      return PlainLyricView(lines: plain);
-    }
-    if (_lyricError != null) {
-      return Padding(
+    } else if (_lyricPlain != null) {
+      body = PlainLyricView(
+        lines: _lyricPlain!,
+        controller: _lyricScroll,
+        selected: _selectedLyricLines,
+        onLineTap: onTap,
+        onLineLongPress: onLong,
+      );
+    } else if (_lyricError != null) {
+      body = Padding(
         padding: const EdgeInsets.all(24),
         child: Center(child: Text(_lyricError!, textAlign: TextAlign.center)),
       );
+    } else if (_lyricLines.isEmpty) {
+      body = const Center(child: Text('暂无歌词'));
+    } else {
+      body = TimedLyricView(
+        lines: _lyricLines,
+        activeIndex: _lyricIndex,
+        controller: _lyricScroll,
+        itemExtent: _lyricItemExtent,
+        showTranslation: showTranslation,
+        selected: _selectedLyricLines,
+        onLineTap: onTap,
+        onLineLongPress: onLong,
+      );
     }
-    if (_lyricLines.isEmpty) {
-      return const Center(child: Text('暂无歌词'));
-    }
-    final scheme = Theme.of(context).colorScheme;
-    return ListView.builder(
-      controller: _lyricScroll,
-      itemExtent: _lyricItemExtent,
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
-      itemCount: _lyricLines.length,
-      itemBuilder: (context, i) {
-        final line = _lyricLines[i];
-        final active = i == _lyricIndex;
-        final text = line.text.isEmpty ? '♪' : line.text;
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                text,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: active ? 18 : 15,
-                  fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                  color: active ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-              ),
-              if (line.sub != null)
-                Text(
-                  line.sub!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: active ? scheme.primary.withValues(alpha: 0.8) : scheme.outline,
+
+    return Column(
+      children: [
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            // 只认"手指拖动"(dragDetails != null): 自动跟随用的 animateTo 不会误判
+            onNotification: (n) {
+              if (n is ScrollUpdateNotification && n.dragDetails != null) {
+                _pauseLyricFollow();
+              }
+              return false;
+            },
+            child: Stack(
+              children: [
+                Positioned.fill(child: body),
+                Positioned(
+                  right: 8,
+                  bottom: 8,
+                  child: IconButton.filledTonal(
+                    tooltip: '定位到当前歌词',
+                    icon: const Icon(Icons.my_location, size: 20),
+                    onPressed: _locateCurrentLyric,
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+        ),
+        _buildDetailActionStrip(context),
+      ],
+    );
+  }
+
+  /// 详情页底部的次要控制: 播放模式 / 心动模式 / 播放队列.
+  ///
+  /// 播放条合并成一行后只留"喜欢 + 上一首/播放/下一首", 这三个低频动作挪到这里,
+  /// 保证详情页里也够得着(不用先收起详情页).
+  Widget _buildDetailActionStrip(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+        ),
+      ),
+      // 300dp 窄屏 + 大字号会把三个带文字的按钮挤爆, 横向可滚更稳
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            TextButton.icon(
+              onPressed: _cycleMode,
+              icon: Icon(_modeIcons[_queue.mode], size: 20),
+              label: Text(_modeLabels[_queue.mode]!),
+            ),
+            TextButton.icon(
+              onPressed: _busy ? null : _heartMode,
+              icon: const Icon(Icons.auto_awesome, size: 20),
+              label: const Text('心动'),
+            ),
+            TextButton.icon(
+              onPressed: _openQueueSheet,
+              icon: const Icon(Icons.queue_music, size: 20),
+              label: Text('队列 ${_queue.items.length}'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 播放条上的紧凑图标按钮: 40dp 点击区 + 无内边距.
+  ///
+  /// 合并成一行后总宽 = 封面 52 + 4×40 = 212dp, 300dp 窄屏上文本仍有 ~90dp,
+  /// 配合 Expanded + ellipsis 不会溢出.
+  Widget _barIcon({
+    required String tooltip,
+    required Widget icon,
+    required VoidCallback? onPressed,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      icon: icon,
+      onPressed: onPressed,
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
     );
   }
 
@@ -2314,8 +2565,8 @@ class _HomePageState extends State<HomePage> {
                 onChanged: dur <= 0 ? null : (v) => setState(() => _dragMs = v),
                 onChangeEnd: dur <= 0 ? null : (v) => _seekTo(v),
               ),
-              // 窄屏(411dp) + 大字号下, 标题若和 5 个按钮抢同一行会被挤成"晴…",
-              // 因此标题独占一行, 控件单独居中一行.
+              // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
+              // 窄屏/大字号下只会变短不会溢出.
               Row(
                 children: [
                   // 封面: 点开看专辑大图 + 曲目
@@ -2363,48 +2614,36 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  // 红心: 当前曲目是否在我喜欢的音乐里, 点一下即收藏/取消
-                  IconButton(
+                  // 红心 + 上一首/播放/下一首: 与歌曲信息挤在同一行(用户要求把两排合并),
+                  // 紧凑点击区 40dp; 播放模式/心动/队列挪到详情页底部, 低频动作不占播放条.
+                  _barIcon(
                     tooltip: _isLiked(current?.id) ? '取消喜欢' : '喜欢',
                     icon: Icon(
                       _isLiked(current?.id) ? Icons.favorite : Icons.favorite_border,
+                      size: 22,
                       color: _isLiked(current?.id)
                           ? Theme.of(context).colorScheme.primary
                           : null,
                     ),
                     onPressed: _toggleLike,
                   ),
-                  // 正在播放的曲目也有完整操作菜单
-                  if (current != null)
-                    SongOverflowButton(song: current, size: 22),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: _modeLabels[_queue.mode],
-                    icon: Icon(_modeIcons[_queue.mode]),
-                    onPressed: _cycleMode,
+                  _barIcon(
+                    tooltip: '上一首',
+                    icon: const Icon(Icons.skip_previous, size: 26),
+                    onPressed: _previous,
                   ),
-                  IconButton(icon: const Icon(Icons.skip_previous), onPressed: _previous),
-                  IconButton(
-                    iconSize: 36,
-                    icon: Icon(player.playing ? Icons.pause_circle : Icons.play_circle),
+                  _barIcon(
+                    tooltip: player.playing ? '暂停' : '播放',
+                    icon: Icon(
+                      player.playing ? Icons.pause_circle : Icons.play_circle,
+                      size: 38,
+                    ),
                     onPressed: _toggle,
                   ),
-                  IconButton(icon: const Icon(Icons.skip_next), onPressed: _next),
-                  // 心动模式: 以当前曲目为种子续播一队智能推荐(原"中止"位置)
-                  IconButton(
-                    tooltip: '心动模式',
-                    icon: const Icon(Icons.auto_awesome),
-                    onPressed: _busy ? null : _heartMode,
-                  ),
-                  // 播放队列: 看得到"接下来播什么", 可跳曲/移除
-                  IconButton(
-                    tooltip: '播放队列',
-                    icon: const Icon(Icons.queue_music),
-                    onPressed: _openQueueSheet,
+                  _barIcon(
+                    tooltip: '下一首',
+                    icon: const Icon(Icons.skip_next, size: 26),
+                    onPressed: _next,
                   ),
                 ],
               ),
