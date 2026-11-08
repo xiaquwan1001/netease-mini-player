@@ -5,8 +5,12 @@
 
 use serde::{Deserialize, Serialize};
 
+mod eq_profile;
 mod lrc;
 mod word_lyric;
+pub use eq_profile::{
+    EqFilter, EqFilterKind, EqProfile, EqProfileError, MAX_FILTERS, MAX_FREQ_HZ, MAX_GAIN_DB,
+};
 pub use lrc::{parse_lrc, parse_lrc_with_translation, LyricLine};
 pub use word_lyric::{parse_word_lyric, parse_word_lyric_with_translation, WordItem, WordLyric, WordLyricLine};
 
