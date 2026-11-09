@@ -527,6 +527,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<WordLyricWithSourceDto> crateApiWordLyricWithFallback({
     required BigInt trackId,
+    required String preference,
   });
 }
 
@@ -4698,12 +4699,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @override
   Future<WordLyricWithSourceDto> crateApiWordLyricWithFallback({
     required BigInt trackId,
+    required String preference,
   }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_64(trackId, serializer);
+          sse_encode_String(preference, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -4716,7 +4719,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_String,
         ),
         constMeta: kCrateApiWordLyricWithFallbackConstMeta,
-        argValues: [trackId],
+        argValues: [trackId, preference],
         apiImpl: this,
       ),
     );
@@ -4725,7 +4728,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   TaskConstMeta get kCrateApiWordLyricWithFallbackConstMeta =>
       const TaskConstMeta(
         debugName: "word_lyric_with_fallback",
-        argNames: ["trackId"],
+        argNames: ["trackId", "preference"],
       );
 
   @protected
@@ -6514,11 +6517,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   WordLyricWithSourceDto dco_decode_word_lyric_with_source_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return WordLyricWithSourceDto(
       lyric: dco_decode_word_lyric_dto(arr[0]),
       source: dco_decode_String(arr[1]),
+      reason: dco_decode_opt_String(arr[2]),
     );
   }
 
@@ -8906,7 +8910,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_lyric = sse_decode_word_lyric_dto(deserializer);
     var var_source = sse_decode_String(deserializer);
-    return WordLyricWithSourceDto(lyric: var_lyric, source: var_source);
+    var var_reason = sse_decode_opt_String(deserializer);
+    return WordLyricWithSourceDto(
+      lyric: var_lyric,
+      source: var_source,
+      reason: var_reason,
+    );
   }
 
   @protected
@@ -10744,5 +10753,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_word_lyric_dto(self.lyric, serializer);
     sse_encode_String(self.source, serializer);
+    sse_encode_opt_String(self.reason, serializer);
   }
 }

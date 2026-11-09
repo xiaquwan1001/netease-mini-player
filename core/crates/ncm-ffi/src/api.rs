@@ -721,15 +721,19 @@ pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, Str
 }
 
 /// 逐字歌词 + 来源标记("yrc" / "ttml" / "line"), UI 只用小字展示, 不打扰.
+/// reason 为 auto 择优时的短理由(如 "yrc 时间错乱"), 其它路径为 null.
 pub struct WordLyricWithSourceDto {
     pub lyric: WordLyricDto,
     pub source: String,
+    pub reason: Option<String>,
 }
 
-/// B13: 聚合逐字歌词(第二来源 AMLL TTML).
-/// yrc 优先 -> yrc 无逐字/覆盖率 < 0.6 时取 TTML(带磁盘缓存) -> 都没有回退行级 LRC.
-/// 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级, 不影响行级兜底.
-pub async fn word_lyric_with_fallback(track_id: u64) -> Result<WordLyricWithSourceDto, String> {
+/// B13/C2: 聚合逐字歌词, 按偏好(auto 打分择优 / netease yrc 优先 / amll TTML 优先).
+/// TTML 带磁盘缓存; 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级.
+pub async fn word_lyric_with_fallback(
+    track_id: u64,
+    preference: String,
+) -> Result<WordLyricWithSourceDto, String> {
     let provider = {
         let guard = core()?.lock().map_err(|e| e.to_string())?;
         guard
@@ -741,14 +745,25 @@ pub async fn word_lyric_with_fallback(track_id: u64) -> Result<WordLyricWithSour
         .get()
         .ok_or_else(|| "core not initialized".to_string())?
         .clone();
-    let r = ncm_service::ttml_source::word_lyric_with_fallback(provider.as_ref(), &dir, track_id)
-        .await?;
+    let pref = ncm_service::ttml_source::LyricSourcePreference::parse(&preference);
+    let r = ncm_service::ttml_source::word_lyric_with_fallback(
+        provider.as_ref(),
+        &ncm_service::ttml_source::CachedTtmlProbe,
+        &dir,
+        track_id,
+        pref,
+    )
+    .await?;
     let source = match r.source {
         ncm_service::ttml_source::LyricSource::Yrc => "yrc",
         ncm_service::ttml_source::LyricSource::Ttml => "ttml",
         ncm_service::ttml_source::LyricSource::LineLevel => "line",
     };
-    Ok(WordLyricWithSourceDto { source: source.to_string(), lyric: word_lyric_dto(r.lyric) })
+    Ok(WordLyricWithSourceDto {
+        source: source.to_string(),
+        reason: r.reason,
+        lyric: word_lyric_dto(r.lyric),
+    })
 }
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.

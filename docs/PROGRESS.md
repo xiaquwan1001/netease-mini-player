@@ -835,3 +835,23 @@ yrc 无逐字或逐字行覆盖率 < 0.6 时, 自动改用 AMLL 社区库的 TTM
 FFI `word_lyric_with_fallback` / `ttml_lyric_lines`、`ui/lib/main.dart` 三来源
 `resolveLyricSource`(假 loader 7 单测) + 歌词页左下角来源小字标注。
 实测响应记录: `docs/b13-ttml-lyrics-notes.md`。
+
+
+---
+
+## C2: 逐字歌词来源偏好与打分择优(2026-11-11)
+
+TTML 来源从「yrc 缺失才回退」升级为用户可控三态偏好(设置 → 播放与音质 → 歌词来源):
+`auto`(默认, 打分择优) / `netease`(只用 yrc, 缺失才 TTML, 旧 0.6 覆盖率口径) /
+`amll`(优先 TTML, 失败再 yrc)。
+打分纯函数 `score_word_lyric`(Rust)与 Dart 镜像 `scoreWordLyric`: 覆盖率 0.3 +
+时间单调 0.2 + 首字贴行首 0.15 + 每行粒度 0.15 + 行级 LRC 一致性 0.2;
+auto 下 yrc 得分 ≥ 0.9 直接短路, 不探测 TTML(省网络); 得分接近时才取行级 LRC
+做一致性加分。择优理由一行短文案进来源标注(如「逐字歌词 · AMLL(择优: yrc 时间错乱)」)。
+TTML 探测经 `TtmlProbe` trait 注入, 测试不联网。
+实现: `core/crates/ncm-service/src/ttml_source.rs`(打分+择优+偏好, 10 新单测)、
+`core/crates/ncm-ffi/src/api.rs`(word_lyric_with_fallback 加 preference/reason)、
+`ui/lib/src/app_settings.dart` + `settings_audio_page.dart`(分段控件)、
+`ui/lib/main.dart`(解析与标注, 9 新单测)、真实抽样 `docs/c2-lyric-source-quality.md`
+(AMLL 覆盖 6/17, 纯比较 AMLL 6/6 胜, 真实 auto 口径 AMLL 2/17)。
+

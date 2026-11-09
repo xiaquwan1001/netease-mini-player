@@ -71,11 +71,47 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             const _SectionTitle('解码与缓存'),
             Card(margin: EdgeInsets.zero, child: _decodeCacheCard(settings)),
             const SizedBox(height: 16),
+            const _SectionTitle('歌词来源'),
+            Card(margin: EdgeInsets.zero, child: _lyricSourceCard(settings)),
+            const SizedBox(height: 16),
             const _SectionTitle('自定义响度曲线'),
             Card(margin: EdgeInsets.zero, child: _eqCard(context, settings)),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _lyricSourceCard(AppSettings settings) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Text('逐字歌词来源', style: theme.textTheme.titleMedium),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: SegmentedButton<String>(
+            key: const Key('lyricSourcePrefSegmented'),
+            segments: [
+              for (final e in AppSettings.lyricSourceOptions.entries)
+                ButtonSegment(value: e.key, label: Text(e.value)),
+            ],
+            selected: {settings.lyricSourcePreference},
+            onSelectionChanged: (sel) =>
+                settings.update(lyricSourcePreference: sel.first),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Text(
+            AppSettings.lyricSourceDescription(settings.lyricSourcePreference),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      ],
     );
   }
 

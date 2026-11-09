@@ -8,6 +8,7 @@ import 'comment_thread.dart';
 import 'cover_backdrop.dart';
 import 'cover_palette.dart';
 import 'marquee_text.dart';
+import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
@@ -1229,16 +1230,15 @@ class _SongRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          song.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: titleStyle,
-                        ),
-                      ),
+                  // 窄宽降级走共享组件 AdaptiveTextRow(Expanded + 单行;
+                  // 标题区 <120px 时整组收起装饰性徽标, 不再把曲名压到 0 宽).
+                  // 原 Flexible(Text) 在徽标挤压下可把曲名压到 0 宽(同 song_tile 竖排 bug 根因).
+                  AdaptiveTextRow(
+                    title: song.name,
+                    style: titleStyle,
+                    // 保持原行为: 单行 ellipsis, 不跑马灯.
+                    marquee: false,
+                    badges: [
                       if (song.playable && song.vip)
                         const VipBadge(small: true),
                       if (song.playable && !song.vip && song.paid)

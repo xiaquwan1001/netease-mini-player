@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text_row.dart';
 import 'cover_art.dart';
-import 'marquee_text.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
@@ -144,36 +144,20 @@ class SongTile extends StatelessWidget {
       selected: active,
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
-      title: LayoutBuilder(
-        builder: (context, constraints) {
-          // 窄屏(如 300dp/大字号)下 trailing 会把标题区挤到 ~70px:
-          // 徽标是固定宽, 强行并排会把歌名压到 0 宽(竖排/消失)且 Row 溢出.
-          // 标题区 <120px 时降级隐藏装饰性徽标(红心指示器/VIP/付费/无版权),
-          // 保住歌名可读与不溢出; 宽度足够时照常显示.
-          final showBadges = constraints.maxWidth >= 120;
-          return Row(
-            children: [
-              // Expanded(而非 Flexible): loose 会在徽标挤压下把歌名压到 0 宽.
-              Expanded(
-                child: MarqueeText(
-                  song.name,
-                  style: playable ? null : grey,
-                ),
-              ),
-              // 没有可点路径时才在这里画只读红心(不要做 leading, 否则歌名缩进不齐);
-              // 可点红心统一放行尾, 与歌单详情页的位置/行为一致
-              if (showBadges && onLike == null && liked)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Icon(Icons.favorite, size: 13, color: scheme.primary),
-                ),
-              if (showBadges && playable && song.vip) const VipBadge(small: true),
-              if (showBadges && playable && !song.vip && song.paid)
-                const PaidBadge(),
-              if (showBadges && !playable) const UnplayableBadge(),
-            ],
-          );
-        },
+      // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee;
+      // 标题区 <120px 时整组隐藏装饰性徽标, 绝不把歌名压到 0 宽).
+      title: AdaptiveTextRow(
+        title: song.name,
+        style: playable ? null : grey,
+        badges: [
+          // 没有可点路径时才在这里画只读红心(不要做 leading, 否则歌名缩进不齐);
+          // 可点红心统一放行尾, 与歌单详情页的位置/行为一致
+          if (onLike == null && liked)
+            Icon(Icons.favorite, size: 13, color: scheme.primary),
+          if (playable && song.vip) const VipBadge(small: true),
+          if (playable && !song.vip && song.paid) const PaidBadge(),
+          if (!playable) const UnplayableBadge(),
+        ],
       ),
       subtitle: Text(
         '${song.artist} · ${song.album}',

@@ -70,6 +70,23 @@ class AppSettings extends ChangeNotifier {
   /// 歌词页是否显示翻译(tlyric). 只有歌词本身带翻译时该开关才出现.
   bool lyricTranslation = true;
 
+  /// C2: 逐字歌词来源偏好. auto = 打分择优(默认), netease = 只用 yrc(缺失才 TTML),
+  /// amll = 优先 TTML(失败再 yrc).
+  String lyricSourcePreference = 'auto';
+
+  static const lyricSourceOptions = <String, String>{
+    'auto': '自动择优',
+    'netease': '网易云优先',
+    'amll': 'AMLL 优先',
+  };
+
+  /// 各偏好的一句语义说明(设置页副标题).
+  static String lyricSourceDescription(String pref) => switch (pref) {
+        'netease' => '只用网易云 yrc, 缺失才用 AMLL TTML',
+        'amll' => '优先 AMLL TTML, 失败再用网易云 yrc',
+        _ => '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',
+      };
+
   // 注意: double 作 key 不能用 const map(Dart 常量 map 的 key 必须原始相等语义)
   static final loudnessTargets = <double, String>{
     -23.0: '-23 LUFS(广播)',
@@ -158,6 +175,10 @@ class AppSettings extends ChangeNotifier {
           }
           final trans = raw['lyricTranslation'];
           if (trans is bool) lyricTranslation = trans;
+          final srcPref = raw['lyricSourcePreference'];
+          if (srcPref is String && lyricSourceOptions.containsKey(srcPref)) {
+            lyricSourcePreference = srcPref;
+          }
         }
       }
     } catch (_) {
@@ -186,6 +207,7 @@ class AppSettings extends ChangeNotifier {
     bool? streamCache,
     int? cacheLimitMb,
     bool? lyricTranslation,
+    String? lyricSourcePreference,
   }) async {
     if (themeMode != null) this.themeMode = themeMode;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
@@ -217,6 +239,10 @@ class AppSettings extends ChangeNotifier {
       this.cacheLimitMb = cacheLimitMb;
     }
     if (lyricTranslation != null) this.lyricTranslation = lyricTranslation;
+    if (lyricSourcePreference != null &&
+        lyricSourceOptions.containsKey(lyricSourcePreference)) {
+      this.lyricSourcePreference = lyricSourcePreference;
+    }
     notifyListeners();
     await _save();
   }
@@ -245,6 +271,7 @@ class AppSettings extends ChangeNotifier {
         'streamCache': streamCache,
         'cacheLimitMb': cacheLimitMb,
         'lyricTranslation': lyricTranslation,
+        'lyricSourcePreference': lyricSourcePreference,
       }));
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效

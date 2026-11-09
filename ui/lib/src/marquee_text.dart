@@ -40,12 +40,24 @@ class _MarqueeTextState extends State<MarqueeText>
   AnimationController? _controller;
   Animation<double>? _offset;
 
+  /// 在途 postFrame 守卫: 宽度快速连续变化时同一帧队列里可能挂了多个
+  /// _start 回调, 每个都会建 AnimationController => SingleTickerProviderStateMixin
+  /// 的 "multiple tickers" 断言。同一时刻最多只允许一个在途 _start。
+  bool _startScheduled = false;
+
+  /// 实测: 即使 _start 里先 dispose 旧 controller 再建新的,
+  /// SingleTickerProviderStateMixin 仍会报 "multiple tickers"(同帧销毁重建不豁免)。
+  /// 因此 controller 整个 State 生命周期只建一次, 重排时只改 duration 并重建
+  /// TweenSequence(AnimationController.duration 可变), 彻底避免二次 createTicker。
+
   /// 标识当前动画对应的 (文本, 视口宽) 组合; 变了就要重建.
   String? _animKey;
 
   @override
   void dispose() {
+    // controller 复用整个 State 生命周期, 只在这里销毁一次(无泄漏)。
     _controller?.dispose();
+    _controller = null;
     super.dispose();
   }
 
@@ -69,13 +81,15 @@ class _MarqueeTextState extends State<MarqueeText>
   }
 
   void _start(double distance, String key) {
+    // 无论 key 是否仍有效都先消费在途标志, 否则失效回调会让后续重排永远无法再调度。
+    _startScheduled = false;
     if (!mounted || _animKey != key) return;
-    _controller?.dispose();
     final scrollMs = (distance / _speed * 1000).round().clamp(120, 60000);
-    final controller = AnimationController(
+    final controller = _controller ??= AnimationController(
       vsync: this,
       duration: Duration(milliseconds: scrollMs * 2 + _pauseMs * 2),
     );
+    controller.duration = Duration(milliseconds: scrollMs * 2 + _pauseMs * 2);
     _offset = controller.drive(
       TweenSequence<double>([
         // 起点停 1s
@@ -97,15 +111,19 @@ class _MarqueeTextState extends State<MarqueeText>
       ]),
     );
     _controller = controller;
-    controller.repeat();
+    controller
+      ..stop()
+      ..value = 0
+      ..repeat();
     setState(() {});
   }
 
   void _stop() {
-    _controller?.dispose();
-    _controller = null;
+    // 不 dispose controller(复用, 避免 multiple tickers), 只停动画并清状态。
+    _controller?.stop();
     _offset = null;
     _animKey = null;
+    _startScheduled = false;
     if (mounted) setState(() {});
   }
 
@@ -132,9 +150,9 @@ class _MarqueeTextState extends State<MarqueeText>
         if (!maxWidth.isFinite) return plain;
         final fits = textWidth <= maxWidth;
         if (fits || reduceMotion) {
-          if (_controller != null) {
+          if (_offset != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && _controller != null) _stop();
+              if (mounted && _offset != null) _stop();
             });
           }
           return plain;
@@ -142,8 +160,9 @@ class _MarqueeTextState extends State<MarqueeText>
         // 需要滚动: 单行 + ClipRect + 位移.
         final distance = textWidth - maxWidth + _tailGap;
         final key = '${identityHashCode(widget.text)}|$maxWidth|${scaler.hashCode}';
-        if (_offset == null || _animKey != key) {
+        if (!_startScheduled && (_offset == null || _animKey != key)) {
           _animKey = key;
+          _startScheduled = true;
           WidgetsBinding.instance.addPostFrameCallback((_) => _start(distance, key));
         }
         return ClipRect(

@@ -4986,11 +4986,14 @@ fn wire__crate__api__word_lyric_with_fallback_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_track_id = <u64>::sse_decode(&mut deserializer);
+            let api_preference = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, String>(
                     (move || async move {
-                        let output_ok = crate::api::word_lyric_with_fallback(api_track_id).await?;
+                        let output_ok =
+                            crate::api::word_lyric_with_fallback(api_track_id, api_preference)
+                                .await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -7858,9 +7861,11 @@ impl SseDecode for crate::api::WordLyricWithSourceDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_lyric = <crate::api::WordLyricDto>::sse_decode(deserializer);
         let mut var_source = <String>::sse_decode(deserializer);
+        let mut var_reason = <Option<String>>::sse_decode(deserializer);
         return crate::api::WordLyricWithSourceDto {
             lyric: var_lyric,
             source: var_source,
+            reason: var_reason,
         };
     }
 }
@@ -9936,6 +9941,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::WordLyricWithSourceDto {
         [
             self.lyric.into_into_dart().into_dart(),
             self.source.into_into_dart().into_dart(),
+            self.reason.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -11594,6 +11600,7 @@ impl SseEncode for crate::api::WordLyricWithSourceDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::WordLyricDto>::sse_encode(self.lyric, serializer);
         <String>::sse_encode(self.source, serializer);
+        <Option<String>>::sse_encode(self.reason, serializer);
     }
 }
 
