@@ -1,0 +1,71 @@
+name: Windows desktop
+
+# 仅用于验证/产出 Windows 桌面版(不阻塞主 CI)。flutter/cargokit 会在 windows-latest 上
+# 用 MSVC 编译 Rust(core 上的 rodio/cpal 走 WASAPI)。
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/windows]
+    paths:
+      - 'ui/windows/**'
+      - 'ui/lib/**'
+      - 'ui/pubspec.yaml'
+      - 'core/**'
+      - '.github/workflows/windows.yml'
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: pub get
+        working-directory: ui
+        run: flutter pub get
+
+      # 单独先跑一次 cargo: cargokit 的 custom build 失败时 MSBuild 只报 MSB8066,
+      # 真正的 rustc 报错会被吞掉; 这一步让错误直接出现在日志里(也顺便预热缓存)。
+      - name: cargo build (ncm_ffi, windows)
+        working-directory: core
+        run: cargo build --release -p ncm_ffi --target x86_64-pc-windows-msvc
+
+      - name: build windows (release)
+        working-directory: ui
+        run: flutter build windows --release -v
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path ui/pubspec.yaml -Pattern '^version:\s*([0-9.]+)\+' ).Matches.Groups[1].Value
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path ui/build/windows/x64/runner/Release/* -DestinationPath "dist/MiniNCM-$ver-windows-x64.zip"
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: dist/*.zip
+          if-no-files-found: error
