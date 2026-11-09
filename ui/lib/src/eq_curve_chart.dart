@@ -2,6 +2,7 @@
 // 纯 Dart + Flutter painting, 无新依赖; 权威解析在 eq_profile.dart.
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import 'eq_profile.dart';
@@ -172,31 +173,29 @@ class EqCurvePanel extends StatefulWidget {
 class _EqCurvePanelState extends State<EqCurvePanel> {
   _EqView _view = _EqView.curve;
 
+  /// 空文本时回退到内置默认曲线(10 段全 0 dB), 无需先导入即可编辑.
+  String get _effectiveText {
+    final text = widget.text?.trim() ?? '';
+    return text.isEmpty ? defaultEqProfileText() : text;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final text = widget.text?.trim() ?? '';
+    final text = _effectiveText;
 
     Widget body;
-    if (text.isEmpty) {
-      body = _EmptyMessage(
-        icon: Icons.graphic_eq,
-        message: '未启用自定义曲线\n请先导入 AutoEQ ParametricEQ.txt',
-      );
-    } else {
-      try {
-        final eq = parseParametricEq(text);
-        body = _view == _EqView.curve
-            ? _CurveChart(eq: eq)
-            : _BarChart(eq: eq, onGainCommitted: _commitGain);
-      } on EqProfileException catch (e) {
+    try {
+      final eq = parseParametricEq(text);
+      body = _view == _EqView.curve
+          ? _CurveChart(eq: eq)
+          : _BarChart(eq: eq, onGainCommitted: _commitGain);
+    } on EqProfileException catch (e) {
         body = _EmptyMessage(
           icon: Icons.error_outline,
           message: '曲线解析失败\n${e.message}',
           isError: true,
         );
-      }
     }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -221,8 +220,7 @@ class _EqCurvePanelState extends State<EqCurvePanel> {
   }
 
   void _commitGain(int filterIndex, double gain) {
-    final text = widget.text?.trim() ?? '';
-    if (text.isEmpty) return;
+    final text = _effectiveText;
     try {
       final eq = parseParametricEq(text);
       widget.onChanged(rewriteEqFilterGain(eq, filterIndex, gain));
@@ -471,6 +469,60 @@ class _BarChartState extends State<_BarChart> {
     return stepped.clamp(-maxEqGainDb, maxEqGainDb).toDouble();
   }
 
+  /// 把第 [i] 根柱的拖动回调直接挂到“立即接管 arena”的识别器上.
+  /// 不能在下面再嵌套 GestureDetector: 它会和本识别器在同一个 arena 竞争,
+  /// 识别器 pointer down 即 accept, 内层 GestureDetector 永远拿不到回调.
+  void _bindColumnGestures(
+    _EagerVerticalDragGestureRecognizer instance,
+    int i,
+    double plotH,
+  ) {
+    final enabled = _sorted[i].enabled;
+    instance.onStart = enabled
+        ? (DragStartDetails d) {
+            setState(() {
+              _dragColumn = i;
+              _dragStartDy = d.localPosition.dy;
+              _previewGain = _sorted[i].gainDb;
+            });
+          }
+        : null;
+    instance.onUpdate = enabled
+        ? (DragUpdateDetails d) {
+            if (_dragColumn != i || _dragStartDy == null) return;
+            setState(() {
+              _previewGain = _gainFromDelta(
+                _sorted[i].gainDb,
+                d.localPosition.dy - _dragStartDy!,
+                plotH,
+              );
+            });
+          }
+        : null;
+    instance.onEnd = enabled
+        ? (DragEndDetails d) {
+            if (_dragColumn == i) {
+              widget.onGainCommitted(
+                _sorted[i].index,
+                _previewGain ?? _sorted[i].gainDb,
+              );
+            }
+            setState(() {
+              _dragColumn = null;
+              _dragStartDy = null;
+              _previewGain = null;
+            });
+          }
+        : null;
+    instance.onCancel = enabled
+        ? () => setState(() {
+              _dragColumn = null;
+              _dragStartDy = null;
+              _previewGain = null;
+            })
+        : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -508,45 +560,37 @@ class _BarChartState extends State<_BarChart> {
                 width: colW,
                 top: 0,
                 height: h,
-                child: GestureDetector(
+                child: RawGestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onVerticalDragStart: bars[i].enabled
-                      ? (d) => setState(() {
-                            _dragColumn = i;
-                            _dragStartDy = d.localPosition.dy;
-                            _previewGain = bars[i].gainDb;
-                          })
-                      : null,
-                  onVerticalDragUpdate: bars[i].enabled && _dragColumn == i
-                      ? (d) => setState(() {
-                            _previewGain = _gainFromDelta(
-                              bars[i].gainDb,
-                              d.localPosition.dy - _dragStartDy!,
-                              plotH,
-                            );
-                          })
-                      : null,
-                  onVerticalDragEnd: bars[i].enabled && _dragColumn == i
-                      ? (_) {
-                          widget.onGainCommitted(bars[i].index, _previewGain ?? bars[i].gainDb);
-                          setState(() {
-                            _dragColumn = null;
-                            _dragStartDy = null;
-                            _previewGain = null;
-                          });
-                        }
-                      : null,
-                  onVerticalDragCancel: () => setState(() {
-                    _dragColumn = null;
-                    _dragStartDy = null;
-                    _previewGain = null;
-                  }),
+                  // 用“立即接管 arena”的垂直拖动识别器: 否则外层 ListView
+                  // 的滚动手势会在 arena 竞争中胜出, 柱状图在设置页里拖不动.
+                  gestures: <Type, GestureRecognizerFactory>{
+                    _EagerVerticalDragGestureRecognizer:
+                        GestureRecognizerFactoryWithHandlers<
+                            _EagerVerticalDragGestureRecognizer>(
+                      () => _EagerVerticalDragGestureRecognizer(),
+                      (instance) => _bindColumnGestures(instance, i, plotH),
+                    ),
+                  },
                 ),
               ),
           ],
         );
       },
     );
+  }
+}
+
+/// 立即接管手势 arena 的垂直拖动识别器.
+///
+/// 默认的 GestureDetector 垂直拖动在外层 ListView/滚动容器里会输给滚动手势
+/// (arena 竞争), 导致柱状图在设置页里拖不动. 在 pointer down 时立刻 accept,
+/// 图表区域的垂直拖动优先于页面滚动.
+class _EagerVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+  @override
+  void addPointer(PointerDownEvent event) {
+    super.addPointer(event);
+    resolve(GestureDisposition.accepted);
   }
 }
 

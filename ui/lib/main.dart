@@ -70,6 +70,30 @@ const _modeLabels = {
   PlayMode.shuffle: '随机播放',
 };
 
+/// 通知栏「播放顺序」按钮的轮转顺序(列表循环→单曲循环→顺序播放→随机播放→心动模式).
+/// 心动模式不是 PlayMode, 用返回 null 表示「下一步应进入心动模式」. 纯函数, 便于单测.
+PlayMode? nextNotificationMode(PlayMode mode) {
+  const order = [
+    PlayMode.repeatAll,
+    PlayMode.repeatOne,
+    PlayMode.sequence,
+    PlayMode.shuffle,
+  ];
+  final i = order.indexOf(mode);
+  return i + 1 < order.length ? order[i + 1] : null;
+}
+
+/// 通知栏模式按钮的图标名(与 Kotlin 侧 modeIconRes 对齐); 心动模式优先用 heart 表达.
+String notificationModeIcon(PlayMode mode, {required bool heartActive}) {
+  if (heartActive) return 'heart';
+  return switch (mode) {
+    PlayMode.repeatAll => 'repeat',
+    PlayMode.repeatOne => 'repeatOne',
+    PlayMode.sequence => 'sequence',
+    PlayMode.shuffle => 'shuffle',
+  };
+}
+
 /// 全局动作回调宿主: MaterialApp.builder 里包一层 AppActions,
 /// 这样搜索结果/详情页/底部面板等所有路由里的 "..." 菜单都能拿到同一套回调。
 final ValueNotifier<SongActionHost?> _actionsHost =
@@ -284,6 +308,8 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // 通知栏/耳机键的上一首·下一首 → Dart 队列
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
+    // 通知栏自定义按钮(喜欢/播放顺序): 原生只发意图, 状态与副作用都在 Dart
+    Playback.setActionHandlers(onToggleLike: _toggleLike, onCycleMode: _cycleModeFromNotification);
     // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
     AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
@@ -396,6 +422,8 @@ class _HomePageState extends State<HomePage> {
     final playingId = state.trackId?.toInt();
     if (playingId != _loudnessAppliedTrackId) {
       _loudnessAppliedTrackId = playingId;
+      // 通知栏红心按钮跟当前曲目走
+      unawaited(_syncActionState());
       if (playingId != null) {
         unawaited(applyLoudnessForTrack(
           playingId,
@@ -768,6 +796,7 @@ class _HomePageState extends State<HomePage> {
         _libraryTitle = '心动模式';
         _queuePlaylistId = null;
       });
+      unawaited(_syncActionState());
       final next = _queue.next();
       if (next != null) await _playSong(next);
     } catch (e) {
@@ -1396,6 +1425,8 @@ class _HomePageState extends State<HomePage> {
     });
     try {
       await rust.setLiked(trackId: id, liked: !wasLiked);
+      // 通知栏红心按钮同步(当前曲目才影响通知图标, _syncActionState 里已取 _current)
+      if (id == _current?.id) unawaited(_syncActionState());
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -1405,6 +1436,7 @@ class _HomePageState extends State<HomePage> {
           _liked.remove(id);
         }
       });
+      if (id == _current?.id) unawaited(_syncActionState());
       rethrow;
     }
   }
@@ -1886,6 +1918,41 @@ class _HomePageState extends State<HomePage> {
           duration: const Duration(milliseconds: 900),
         ));
     });
+    unawaited(_syncActionState());
+  }
+
+  /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
+  bool get _heartActive => _libraryTitle == '心动模式';
+
+  /// 把当前红心/模式状态回传给原生, 刷新通知自定义按钮图标
+  Future<void> _syncActionState() async {
+    await _playback.setActionState(
+      liked: _isLiked(_current?.id),
+      modeIcon: notificationModeIcon(_queue.mode, heartActive: _heartActive),
+    );
+  }
+
+  /// 通知栏「播放顺序」按钮: 列表循环→单曲循环→顺序播放→随机播放→心动模式→(回到)列表循环.
+  /// 心动模式那一步调 _heartMode(); 未登录/失败时 _heartMode 会自己 toast, 这里回退列表循环.
+  Future<void> _cycleModeFromNotification() async {
+    if (_heartActive) {
+      setState(() => _queue.mode = PlayMode.repeatAll);
+      _toast('列表循环');
+    } else {
+      final next = nextNotificationMode(_queue.mode);
+      if (next == null) {
+        await _heartMode();
+        if (!mounted) return;
+        if (!_heartActive) {
+          setState(() => _queue.mode = PlayMode.repeatAll);
+          _toast('列表循环');
+        }
+      } else {
+        setState(() => _queue.mode = next);
+        _toast(_modeLabels[next]!);
+      }
+    }
+    await _syncActionState();
   }
 
   Future<void> _seekTo(double ms) async {

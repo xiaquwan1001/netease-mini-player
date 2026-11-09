@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
+import 'package:minincm/src/eq_profile.dart';
 import 'package:minincm/src/settings_audio_page.dart';
 
 /// S5: 设置页「播放与音质」二级页的字段写回测试(R2/R2b/R5/R7).
@@ -134,8 +135,10 @@ void main() {
 
     expect(find.textContaining('第 1 行'), findsOneWidget);
     expect(find.textContaining('±24'), findsOneWidget);
-    expect(settings.eqProfileText, isNull);
-    expect(settings.eqProfileName, isNull);
+    // 进入页面已自动生成默认曲线, 非法导入不覆盖它.
+    final eq = parseParametricEq(settings.eqProfileText!);
+    expect(eq.filters.length, 10);
+    expect(eq.filters.every((f) => f.gainDb == 0.0), isTrue);
   });
 
   testWidgets('导入合法曲线: 写回 eqProfileText/eqProfileName', (tester) async {
@@ -184,7 +187,7 @@ void main() {
     expect(find.text('已复制 2 行'), findsOneWidget);
   });
 
-  testWidgets('清除: 两个字段置 null', (tester) async {
+  testWidgets('重置为默认: 文本回 10 段全 0, 名称变为默认曲线', (tester) async {
     settings.eqProfileName = '自定义曲线';
     settings.eqProfileText = 'Preamp: 0.0 dB\n'
         'Filter 1: ON PK Fc 100 Hz Gain -1.0 dB Q 0.7';
@@ -193,11 +196,13 @@ void main() {
     await pumpPage(tester);
     expect(find.text('自定义曲线'), findsOneWidget);
 
-    await tester.tap(find.text('清除'));
+    await tester.tap(find.text('重置为默认'));
     await tester.pumpAndSettle();
 
-    expect(settings.eqProfileName, isNull);
-    expect(settings.eqProfileText, isNull);
-    expect(find.text('未启用'), findsOneWidget);
+    expect(settings.eqProfileName, '默认曲线');
+    final eq = parseParametricEq(settings.eqProfileText!);
+    expect(eq.filters.length, 10);
+    expect(eq.filters.every((f) => f.gainDb == 0.0), isTrue);
+    expect(find.text('默认曲线(10 段, 全 0 dB)'), findsOneWidget);
   });
 }

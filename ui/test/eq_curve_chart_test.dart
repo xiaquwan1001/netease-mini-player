@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/eq_curve_chart.dart';
@@ -126,10 +127,25 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('空态: 未启用时显示导入提示, 不崩', (tester) async {
+  testWidgets('空态: 回退到默认曲线(10 段全 0), 可直接拖柱', (tester) async {
     await pumpPanel(tester, text: null);
-    expect(find.textContaining('未启用自定义曲线'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    await tester.tap(find.text('柱状'));
+    await tester.pumpAndSettle();
+    final size = tester.getSize(find.byType(EqCurvePanel));
+    final colW = size.width / 10;
+    final gesture = await tester.startGesture(Offset(colW * 3.5, 232 / 2));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -30));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final eq = parseOk(settings.eqProfileText!);
+    expect(eq.filters.length, 10);
+    // 第 4 根柱(250 Hz)被抬起, 其余仍为 0.
+    final changed = eq.filters.firstWhere((f) => f.gainDb != 0);
+    expect(changed.freqHz, 250);
+    expect(eq.filters.where((f) => f.gainDb == 0).length, 9);
   });
 
   testWidgets('默认显示曲线视图, 可切到柱状视图', (tester) async {
@@ -243,8 +259,15 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: AudioSettingsPage()));
     await tester.pumpAndSettle();
 
-    // 未启用 → 空态.
-    expect(find.textContaining('请先导入'), findsOneWidget);
+    // 未启用 → 自动生成默认曲线(10 段全 0 dB).
+    expect(find.text('生效曲线'), findsOneWidget);
+    expect(find.text('默认曲线(10 段, 全 0 dB)'), findsOneWidget);
+    expect(settings.eqProfileText, isNotNull);
+    final eq0 = parseOk(settings.eqProfileText!);
+    expect(eq0.filters.length, 10);
+    expect(eq0.preampDb, 0.0);
+    expect(eq0.filters.every((f) => f.gainDb == 0.0), isTrue);
+    expect(settings.eqProfileName, '默认曲线');
 
     await tester.tap(find.text('导入曲线'));
     await tester.pumpAndSettle();
@@ -255,5 +278,132 @@ void main() {
     expect(find.textContaining('请先导入'), findsNothing);
     expect(settings.eqProfileName, '自定义曲线');
     expect(tester.takeException(), isNull);
+  });
+
+  group('默认曲线与重置', () {
+    test('defaultEqProfileText: 10 段 PK 全 0, Preamp 0, 可往返解析', () {
+      final eq = parseOk(defaultEqProfileText());
+      expect(eq.filters.length, 10);
+      expect(eq.preampDb, 0.0);
+      expect(
+        eq.filters.map((f) => f.freqHz).toList(),
+        defaultEqBandFrequencies,
+      );
+      expect(
+        eq.filters.every(
+          (f) => f.gainDb == 0.0 && f.type == EqFilterType.pk && f.q == 1.0,
+        ),
+        isTrue,
+      );
+      // 全 0 dB 等价旁路: 任意频点响应均为 0 dB.
+      for (final f in [20.0, 500.0, 1000.0, 8000.0, 16000.0]) {
+        expect(evaluateEqDb(eq, [f]).first, closeTo(0.0, 1e-9));
+      }
+    });
+
+    testWidgets('无 profile 拖柱: 文本写回, 只有目标段变化', (tester) async {
+      settings.eqProfileText = null;
+      settings.eqProfileName = null;
+      settings.notifyListeners();
+      tester.view.physicalSize = const Size(1200, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: AudioSettingsPage()));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('柱状'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('柱状'), warnIfMissed: true);
+      await tester.pumpAndSettle();
+      // 确认已切到柱状视图: 当前 EqCurvePanel 子树不再有曲线路径, 改为
+      // 拖动后检查写回结果(柱状标注是画布文本, 无 Text widget 可查).
+      final size = tester.getSize(find.byType(EqCurvePanel));
+      final colW = size.width / 10;
+      await tester.ensureVisible(find.byType(EqCurvePanel));
+      await tester.pumpAndSettle();
+      final origin2 = tester.getTopLeft(find.byType(EqCurvePanel));
+      final gesture = await tester.startGesture(origin2 + Offset(colW * 6.5, 232 / 2));
+      await tester.pump(const Duration(milliseconds: 100));
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump(const Duration(milliseconds: 100));
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+            final eq = parseOk(settings.eqProfileText!);
+      final nonZero = eq.filters.where((f) => f.gainDb != 0).toList();
+      expect(nonZero.length, 1);
+      expect(nonZero.first.freqHz, 2000);
+      expect(nonZero.first.gainDb, greaterThan(0));
+      expect(eq.preampDb, 0.0);
+    });
+
+    testWidgets('已有自定义 profile: 进入页面不覆盖', (tester) async {
+      settings.eqProfileText = sampleText;
+      settings.eqProfileName = '自定义曲线';
+      settings.notifyListeners();
+      tester.view.physicalSize = const Size(1200, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: AudioSettingsPage()));
+      await tester.pumpAndSettle();
+
+      expect(settings.eqProfileText, sampleText);
+      expect(settings.eqProfileName, '自定义曲线');
+      expect(find.text('自定义曲线'), findsOneWidget);
+    });
+
+    testWidgets('重置为默认: 文本回 10 段全 0 且名称变化', (tester) async {
+      settings.eqProfileText = sampleText;
+      settings.eqProfileName = '自定义曲线';
+      settings.notifyListeners();
+      tester.view.physicalSize = const Size(1200, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: AudioSettingsPage()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('重置为默认'));
+      await tester.pumpAndSettle();
+
+      final eq = parseOk(settings.eqProfileText!);
+      expect(eq.filters.length, 10);
+      expect(eq.preampDb, 0.0);
+      expect(eq.filters.every((f) => f.gainDb == 0.0), isTrue);
+      expect(settings.eqProfileName, '默认曲线');
+    });
+
+    testWidgets('导出: 复制内容与当前文本一致(往返)', (tester) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null);
+      });
+      settings.eqProfileText = sampleText;
+      settings.eqProfileName = '自定义曲线';
+      settings.notifyListeners();
+      tester.view.physicalSize = const Size(1200, 3600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(const MaterialApp(home: AudioSettingsPage()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('导出曲线'));
+      await tester.pumpAndSettle();
+      expect(copied, sampleText);
+      // 往返: 导出的文本能解析回相同曲线.
+      final eq1 = parseOk(sampleText);
+      final eq2 = parseOk(copied!);
+      expect(eq2.filters.length, eq1.filters.length);
+      expect(eq2.preampDb, eq1.preampDb);
+    });
   });
 }

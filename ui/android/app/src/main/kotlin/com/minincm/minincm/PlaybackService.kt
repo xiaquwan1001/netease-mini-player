@@ -20,8 +20,14 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import android.os.Bundle
+import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
 import java.io.File
 import kotlin.math.pow
 
@@ -73,7 +79,72 @@ class PlaybackService : MediaSessionService() {
         instance = this
         val exo = buildExoPlayer()
         exoPlayer = exo
-        mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo)).build()
+        mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo))
+            .setCallback(sessionCallback)
+            .build()
+        // 通知上的自定义按钮(喜欢/播放顺序): 只发意图, 状态由 Dart 经 setActionState 回推
+        mediaSession?.setCustomLayout(buildCustomLayout())
+    }
+
+    // ---- 通知自定义按钮(喜欢 / 播放顺序): 只发意图, 队列/红心/模式状态全在 Dart ----
+    private var likedState = false
+    private var modeIcon = "sequence"
+
+    private val sessionCallback = object : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                .buildUpon()
+                .add(SessionCommand(CMD_LIKE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_MODE, Bundle.EMPTY))
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            // 与 skipListener 同款: 只把点击转发给 Dart, 不碰 ExoPlayer
+            actionListener?.invoke(customCommand.customAction)
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+    }
+
+    fun setActionState(liked: Boolean, icon: String) {
+        likedState = liked
+        modeIcon = icon
+        mediaSession?.setCustomLayout(buildCustomLayout())
+    }
+
+    private fun buildCustomLayout(): List<CommandButton> = listOf(
+        CommandButton.Builder()
+            .setDisplayName(if (likedState) "取消喜欢" else "喜欢")
+            .setSessionCommand(SessionCommand(CMD_LIKE, Bundle.EMPTY))
+            .setIconResId(
+                if (likedState) R.drawable.ic_notif_heart_filled
+                else R.drawable.ic_notif_heart_outline
+            )
+            .build(),
+        CommandButton.Builder()
+            .setDisplayName("播放顺序")
+            .setSessionCommand(SessionCommand(CMD_MODE, Bundle.EMPTY))
+            .setIconResId(modeIconRes(modeIcon))
+            .build(),
+    )
+
+    private fun modeIconRes(icon: String): Int = when (icon) {
+        "repeat" -> R.drawable.ic_notif_repeat
+        "repeatOne" -> R.drawable.ic_notif_repeat_one
+        "shuffle" -> R.drawable.ic_notif_shuffle
+        "heart" -> R.drawable.ic_notif_heart_filled
+        else -> R.drawable.ic_notif_sequence
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -428,6 +499,12 @@ class PlaybackService : MediaSessionService() {
         fun requestSkip(next: Boolean) {
             skipListener?.invoke(next)
         }
+
+        const val CMD_LIKE = "ncm.LIKE"
+        const val CMD_MODE = "ncm.MODE"
+
+        @Volatile
+        var actionListener: ((String) -> Unit)? = null
     }
 }
 

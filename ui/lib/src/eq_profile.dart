@@ -193,3 +193,19 @@ String _fmtFreq(double v) =>
 
 String _fmtQ(double v) =>
     v == v.roundToDouble() ? v.round().toString() : v.toString();
+
+/// 默认 EQ 段中心频率(10 段 PK).
+const List<double> defaultEqBandFrequencies = [
+  20, 60, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+];
+
+/// 默认曲线文本: Preamp 0.0 dB + 10 段 PK(Gain 全 0.0, Q 1.0).
+/// 全 0 dB 等价旁路 —— 音质无变化.
+String defaultEqProfileText() {
+  final buf = StringBuffer()..writeln('Preamp: 0.0 dB');
+  for (var i = 0; i < defaultEqBandFrequencies.length; i++) {
+    final f = defaultEqBandFrequencies[i];
+    buf.writeln('Filter ${i + 1}: ON PK Fc ${_fmtFreq(f)} Hz Gain 0.0 dB Q 1.0');
+  }
+  return buf.toString();
+}

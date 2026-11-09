@@ -18,8 +18,31 @@ Future<void> showAudioSettingsPage(BuildContext context) {
   );
 }
 
-class AudioSettingsPage extends StatelessWidget {
+class AudioSettingsPage extends StatefulWidget {
   const AudioSettingsPage({super.key});
+
+  @override
+  State<AudioSettingsPage> createState() => _AudioSettingsPageState();
+}
+
+class _AudioSettingsPageState extends State<AudioSettingsPage> {
+  @override
+  void initState() {
+    super.initState();
+    _ensureDefaultCurve();
+  }
+
+  /// 无 profile 时首次生成默认曲线(10 段全 0 dB, 等价旁路)并生效.
+  /// 已有内容(默认或用户导入/拖动过的)一律不覆盖.
+  void _ensureDefaultCurve() {
+    final settings = AppSettings.instance;
+    final text = settings.eqProfileText;
+    if (text != null && text.trim().isNotEmpty) return;
+    settings.update(
+      eqProfileText: defaultEqProfileText(),
+      eqProfileName: '默认曲线',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -209,12 +232,28 @@ class AudioSettingsPage extends StatelessWidget {
   }
 
   Widget _eqCard(BuildContext context, AppSettings settings) {
+    final theme = Theme.of(context);
+    final isDefault = settings.eqProfileText?.trim() == defaultEqProfileText().trim();
     return Column(
       children: [
         ListTile(
           leading: const Icon(Icons.graphic_eq),
           title: const Text('生效曲线'),
-          subtitle: Text(settings.eqProfileName ?? '未启用'),
+          subtitle: Text(
+            isDefault
+                ? '默认曲线(10 段, 全 0 dB)'
+                : (settings.eqProfileName ?? '自定义曲线'),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '拖动柱子即可调整, 无需导入',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
         ),
         SizedBox(
           height: 232,
@@ -222,7 +261,8 @@ class AudioSettingsPage extends StatelessWidget {
             text: settings.eqProfileText,
             onChanged: (text) => settings.update(
               eqProfileText: text,
-              eqProfileName: '自定义曲线',
+              eqProfileName:
+                  text.trim() == defaultEqProfileText().trim() ? '默认曲线' : '自定义曲线',
             ),
           ),
         ),
@@ -243,8 +283,8 @@ class AudioSettingsPage extends StatelessWidget {
             ),
             Expanded(
               child: TextButton(
-                onPressed: () => _clearEq(context),
-                child: const Text('清除'),
+                onPressed: () => _resetEq(context),
+                child: const Text('重置为默认'),
               ),
             ),
           ],
@@ -276,14 +316,14 @@ class AudioSettingsPage extends StatelessWidget {
     if (context.mounted) showToast(context, '已复制 $lines 行');
   }
 
-  Future<void> _clearEq(BuildContext context) async {
-    final settings = AppSettings.instance;
-    // update() 的 String? 参数无法用 null 表达"置空", 这里直接置空字段后
-    // 用无参 update() 触发 notifyListeners + 落盘(把两个 null 写回 settings.json).
-    settings.eqProfileName = null;
-    settings.eqProfileText = null;
-    await settings.update();
-    if (context.mounted) showToast(context, '已清除自定义响度曲线');
+  /// 重置为默认曲线(10 段全 0 dB, 等价旁路): 不删除文本, 因此 EQ 仍处于
+  /// "启用但全 0" 状态, 对音质无影响.
+  Future<void> _resetEq(BuildContext context) async {
+    await AppSettings.instance.update(
+      eqProfileText: defaultEqProfileText(),
+      eqProfileName: '默认曲线',
+    );
+    if (context.mounted) showToast(context, '已重置为默认曲线(全 0 dB)');
   }
 }
 

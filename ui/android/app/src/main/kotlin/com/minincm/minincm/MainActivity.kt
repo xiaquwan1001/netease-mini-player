@@ -43,6 +43,15 @@ class MainActivity : FlutterActivity() {
                 channel.invokeMethod(if (next) "skipNext" else "skipPrevious", null)
             }
         }
+        // 通知栏自定义按钮(喜欢/播放顺序): 同样只转发, 状态与副作用都在 Dart
+        PlaybackService.actionListener = { cmd ->
+            runOnUiThread {
+                channel.invokeMethod(
+                    if (cmd == PlaybackService.CMD_LIKE) "toggleLike" else "cycleMode",
+                    null,
+                )
+            }
+        }
         channel.setMethodCallHandler { call, result ->
             try {
                 handle(call.method, call.arguments as? Map<*, *>, result)
@@ -251,6 +260,14 @@ class MainActivity : FlutterActivity() {
             }
             return
         }
+        // 通知按钮状态回传(Dart → 原生): 更新按钮图标并刷新通知
+        if (method == "setActionState") {
+            val liked = args?.get("liked") as? Boolean ?: false
+            val icon = args?.get("modeIcon") as? String ?: "sequence"
+            PlaybackService.instance?.setActionState(liked, icon)
+            result.success(null)
+            return
+        }
         val c = controller
         if (c == null) {
             result.error("not_ready", "MediaController 尚未连接", null)
@@ -335,6 +352,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         PlaybackService.skipListener = null
+        PlaybackService.actionListener = null
         playerChannel = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null

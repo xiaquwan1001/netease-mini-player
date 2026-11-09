@@ -51,21 +51,65 @@ class Playback {
 
   bool get isAndroid => Platform.isAndroid || debugForceAndroid;
 
+  // 原生 → Dart 的单向回调(通知栏/耳机键/蓝牙都只发意图, 逻辑在 Dart):
+  // 两条注册入口共用一个 handler, 后注册的不会把先注册的覆盖掉.
+  static void Function()? _onNext;
+  static void Function()? _onPrevious;
+  static void Function()? _onToggleLike;
+  static void Function()? _onCycleMode;
+
   /// 通知栏/耳机键/蓝牙的上一首·下一首回调.
   /// 原生侧(ForwardingPlayer)只发意图, 真正的换曲在 Dart 队列里做 —— 队列只有一份.
   static void setSkipHandlers({
     void Function()? onNext,
     void Function()? onPrevious,
   }) {
+    _onNext = onNext;
+    _onPrevious = onPrevious;
+    _registerNativeHandler();
+  }
+
+  /// 通知栏自定义按钮(喜欢/播放顺序)的回调: 原生只发意图, 状态与副作用全在 Dart.
+  static void setActionHandlers({
+    void Function()? onToggleLike,
+    void Function()? onCycleMode,
+  }) {
+    _onToggleLike = onToggleLike;
+    _onCycleMode = onCycleMode;
+    _registerNativeHandler();
+  }
+
+  static void _registerNativeHandler() {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'skipNext':
-          onNext?.call();
+          _onNext?.call();
         case 'skipPrevious':
-          onPrevious?.call();
+          _onPrevious?.call();
+        case 'toggleLike':
+          _onToggleLike?.call();
+        case 'cycleMode':
+          _onCycleMode?.call();
       }
       return null;
     });
+  }
+
+  /// Dart → 原生: 通知自定义按钮的状态(红心实/空 + 模式图标), 原生据此重设按钮并刷新通知.
+  /// 失败静默(通知未就绪/未连接时不影响播放).
+  Future<void> setActionState({
+    required bool liked,
+    required String modeIcon,
+  }) async {
+    if (!isAndroid) return;
+    try {
+      await _channel.invokeMethod('setActionState', {
+        'liked': liked,
+        'modeIcon': modeIcon,
+      });
+    } on PlatformException {
+      // 通知还没建好/服务未起: 忽略, 下次状态变化再同步
+    }
   }
 
   /// Android 需要应用私有目录(Rust 默认的 ~/.local/share 在手机上不可写)
