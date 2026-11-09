@@ -215,3 +215,106 @@ double score(Swatch s, double targetS, double targetL, double maxPop) {
 - accompanist-lyrics-ui：https://github.com/ljyh223/accompanist-lyrics-ui（main 分支 tarball，Apache-2.0；git clone 未成功仅取得 tarball，未记 sha）
   - `src/src/commonMain/kotlin/com/mocharealm/accompanist/lyrics/ui/composable/lyrics/KaraokeLyricsView.kt`
 - Mei 仓库名确认：GitHub API `users/ljyh223/repos` 列出 42 个仓库，确为 `Mei`（「一个网易云音乐的第三方音乐软件」，226 stars，Kotlin，Apache-2.0）；无 Mei-lyric/MeiMusic 等歧义名。
+
+## 5. AMLL / TTML 逐字歌词(2026-11-10 补充调研)
+
+> 只读调研,基线 commit: a61f9876beeef31b4b57c45a9d07f13f44516a91 (amll-dev/amll-ttml-db)。
+
+### 5.1 仓库定位
+
+- **定位**:AMLL 生态的**逐词歌词数据库**——存储人工制作/审核的 Apple Music 风格 TTML 逐词歌词,不是格式规范文档(规范在 wiki「格式规范」),也不是渲染器。配套工具:amll-ttml-tool / amll-editor(编辑器)、amll-ttml-api(官方 HTTP API,同组织)、amll-player / applemusic-like-lyrics(播放与渲染核心)。
+- **目录结构**(commit `a61f9876`):`am-lyrics/`(按 Apple Music ID 命名, 2818 个 .ttml)、`ncm-lyrics/`(按网易云 ID 命名, 3775)、`qq-lyrics/`(3236)、`spotify-lyrics/`(2635);每首歌同目录附 `.lrc/.lys/.qrc/.eslrc` 导出。另有 `raw-lyrics/`(3431, 文件名 `<时间戳>-<作者ID>-<hash>.ttml`)、`metadata/raw-lyrics-index.jsonl`(检索索引)、`metadata/contributors.jsonl`(170 人)、`scripts/`(Rust 校验 bot)。全仓 .ttml 共 **15912 个**。
+- **License**:`LICENSE` = **CC0 1.0**(公有领域)。
+- **审核**:提交需带至少一个平台 ID,经审核团人工审核(wiki 上传歌词/审核细则)。
+
+
+### 5.2 格式与样例
+
+标准单行结构(真实片段,ncm-lyrics/0.ttml,`a61f9876`):
+
+- 根元素带 `itunes:timing="Word"`;`<head>` 内 `<ttm:agent xml:id="v1" type="person"/>` 与 `v2`(type="other")表主/副声,`<p ttm:agent="v1|v2">` 标声部;15912/15912 个文件都用 `ttm:agent`。
+- 元数据用 AMLL 扩展 `<amll:meta key="..." value="..."/>`:`musicName/artists/album` 可多语言重复;ID 类:`ncmMusicId`(156358 处)/`appleMusicId`/`spotifyId`/`qqMusicId`/`isrc`(18174 处);作者:`ttmlAuthorGithub(Login)`。
+
+样例 1(主声+翻译行):
+```xml
+<p begin="0.835" end="6.598" itunes:key="L1" ttm:agent="v1">
+  <span begin="0.835" end="1.401">A</span> <span begin="1.401" end="2.287">lu</span><span begin="2.287" end="3.126">na,</span>
+  <span ttm:role="x-translation" xml:lang="zh-CN">我的月亮呀，我亲爱的歌</span>
+</p>
+```
+- 翻译/罗马音是**无时间戳的行内 span**:`ttm:role="x-translation"`(可带 xml:lang)、`ttm:role="x-roman"`(3201 个文件,粤语例:ncm-lyrics/86849.ttml `kei4 sat6 zi6 ...`)。
+- 背景和声:`ttm:role="x-bg"` 包裹的子 span(1890 个文件,如 spotify-lyrics/ac56491a2aa44057.ttml);AMLL parser 另识别 `tts:ruby` 容器注音。
+- 段落标签:`itunes:songPart="Verse|PreChorus|Chorus|Hook|Bridge"`(1078 个文件,如 spotify-lyrics/7sG4hU8FpyjNhGBSBDNjU0.ttml)。
+- 间奏表达:不做空 span,直接在 `<p>` 之间留时间空隙(0.ttml 1:25.573 → 2:21.676);全库"空 span"仅 233 处(ncm-lyrics/725692.ttml 的 5ms 哨兵,非间奏表达)。
+- 双声并行:0.ttml L31(v1)与 L32(v2)时间重叠(3:07.6 / 3:08.1 起),渲染为双层行。
+
+
+### 5.3 粒度与对齐
+
+- **粒度是音节/词块,不保证单字**:日英按音节切(`lu`/`na,`/`can`/`ti`/`ca`),中文多为 1 字 1 span,但也见 2-3 字(`<span>lucem al</span>`,0.ttml L12)。**不要假设 span==单字**,按 span 文本渲染渐变即可,粒度与 yrc"逐字"等价。
+- **词内空格**是 span 之间的**裸文本节点**(`</span> <span>`),非空 span;AMLL parser 记为 `endsWithSpace`(ttml/src/parser.ts processElementNode)。少数文件把空格写进 span 尾部。
+- **时间**:相对时钟字符串,两种形式混用——纯秒 `begin="0.835"` 与 `m:ss.mmm` `begin="1:02.520"`(行 p 上常见);毫秒精度 3 位。**begin/end 必带;span 不用 dur**(全库 0 处 span-dur),但 `<body dur="4:10.610">` 存在总时长。
+- **衔接规则**:span 时间相邻衔接(end=next begin),词间可有停顿(0.ttml L8 `i` 48.047 → `a` 48.736,空 0.689s);官方 parser(ttml/src/parser.ts)对缺失 begin/end 用相邻词推算并 clamp 到 p 范围,begin==end==0 的 fallback 词丢弃。
+
+
+### 5.4 最小 Dart 解析器草案
+
+Flutter 侧只需 `xml` 包把 span 压平成与 yrc 等价的行/字结构:
+
+```dart
+// WordLine { t0, t1, words: [Word{t0, t1, text}], translation?, roman? }
+List<WordLine> parseTtml(String xml) {
+  final doc = xml.XmlDocument.parse(xml);
+  double t(String? s) { // 兼容 "12.345" 与 "1:02.520"
+    if (s == null || s.isEmpty) return 0;
+    if (s.endsWith('s')) s = s.substring(0, s.length - 1);
+    final parts = s.split(':');
+    var v = double.parse(parts.last);
+    if (parts.length > 1) v += double.parse(parts[parts.length - 2]) * 60;
+    if (parts.length > 2) v += double.parse(parts[0]) * 3600;
+    return v;
+  }
+  return doc.findAllElements('p').map((p) {
+    final words = <Word>[];
+    String? translation;
+    for (final node in p.children) {
+      if (node.nodeType == XmlNodeType.ELEMENT && node.name.local == 'span') {
+        final role = node.getAttribute('ttm:role');
+        if (role == 'x-translation') { translation = node.innerText; continue; }
+        if (role == 'x-roman' || role == 'x-bg') continue; // 可选:存 roman/背景声
+        words.add(Word(t(node.getAttribute('begin')),
+                       t(node.getAttribute('end')), node.innerText));
+      } else if (node.nodeType == XmlNodeType.TEXT && node.value!.trim().isEmpty) {
+        if (words.isNotEmpty) words.last.text += ' '; // 词间空格
+      }
+    }
+    return WordLine(t(p.getAttribute('begin')), t(p.getAttribute('end')), words, translation);
+  }).toList();
+}
+```
+
+**质量/可用性启发式**(任一不过就回退 yrc/普通 LRC):
+1. span 覆盖率:带时间的 span / span 总数 ≥ 0.9,单行至少 1 个 span。
+2. 时间单调:行内 begin 非降、span.end ≥ span.begin、行区间不倒退。
+3. 首行 begin 与音频起始偏差 < 5s;行间空隙 < 60s(防整段错位)。
+4. span 时长 > 0 且 < 30s;零时长 span 丢弃。
+5. 元数据匹配:检索返回的 ncmMusicId/isrc 与当前曲目一致(API 检索天然保证)。
+6. 精度粗检:时间小数位 ≤ 3;若全部尾数只有 0/500ms,疑似机打时间轴,降权。
+
+
+### 5.5 数据可用性与许可
+
+- **官方 HTTP API 存在**(amll-dev/amll-ttml-api,Rust,Apache/MIT 双许可):base `https://api.amll.dev`,CORS 全开,限速 50 req/s/IP。接口文档:https://amll.dev/reference/http-api/overview 与 OpenAPI https://amll.dev/api/ttml/openapi.yaml。
+  - `GET /v1/lyrics/get?ncmMusicId=186016`(也支持 `id`(53 位文件名哈希,优先级最高)/`filename`/`qqMusicId`/`appleMusicId`/`spotifyId`/`isrc`,多 ID 取交集 AND)→ 200 返回 `{id, filename, musicNames, artistNames, albumNames, ncmMusicIds, isrcs, authorUsernames, lyrics:"<tt ...>"}`,**lyrics 内联完整 TTML**(实测"晴天" 186016 命中,返回含 isrc TWK970300503)。
+  - `GET /v1/lyrics/search?musicName=晴天&artistName=周杰伦&limit=N`(或 `q` 模糊/`albumName`/`lyricText`/`authorId`)→ `{items:[...]}`;另有 `/v1/lrclib/search|get` 代理与 `/v1/status`、`/v1/version`。
+  - 官方缓存建议:按 `id`/`filename` 取到的内容**永久不变**,建议永久缓存;平台 ID / 模糊检索结果会随词库更新,只做短缓存。
+- **License:CC0 1.0**——无署名义务、可内置进 App、可商用。受限点不在数据许可而在**服务**:api.amll.dev 是社区服务(无 SLA),客户端必须本地/永久缓存 + 多源回退(yrc 优先、TTML 兜底),不要硬依赖其可用性;另外**歌词文本本身可能仍有第三方歌词版权**,不要把歌词打进安装包,缓存应可清除。
+
+
+### 5.6 与现有结论的差异与建议
+
+- **渲染跟随暂停**(applemusic-like-lyrics@`f3228586`,packages/core/src/lyric-player/base/scroll.ts):交互期间置 `isInteracting` 暂停自动对齐;松手记 `scrollEndTime`,**延迟仅 500ms**(`AUTO_ALIGN_RESUME_DELAY_MS`)后 `canResumeAutoAlign=true` 恢复跟随;惯性滚动用 rAF 逐帧衰减并每帧发 `onScrollUpdate(true)`。与既有结论(常见 1-3s 固定恢复)相比,AMLL 恢复窗口更短且以"惯性结束"为锚点,可借鉴:用**滚动速度/惯性归零**而非固定 timer 决定恢复。
+- **逐字渲染差异**:AMLL 是 **span(syllable)级**渐变,并带行内翻译/罗马音/背景声三路附属层,比我们 word_lyric_view 的整行渐变更细;其 parser(ttml/src/parser.ts)对 span 时间缺失有推算兜底,Dart 解析器应做同等容错。
+- **建议**:1) yrc 仍为主源;2) 新增 TTMLProvider 作第二逐字源,走 `api.amll.dev/v1/lyrics/get?ncmMusicId=`(我们天然有网易云 ID,零映射成本),按 ncmMusicId 永久缓存;3) 解析后跑 5.4 启发式,合格才切换逐字渲染,否则回退;4) TTML span 与 yrc word 同构,现有逐字管线可直接复用;5) 不把歌词打进安装包,缓存可清除。
+
+
