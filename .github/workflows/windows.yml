@@ -52,27 +52,6 @@ jobs:
         working-directory: core
         run: cargo build --release -p ncm_ffi --target x86_64-pc-windows-msvc
 
-      # cargokit 作为 CMake custom command 运行时, 失败只报 MSB8066, 真正的 Dart/cargo 报错被吞。
-      # 这里手动按同样的环境跑一次 build-cmake, 让错误出现在日志里。
-      - name: cargokit build-cmake (probe, 暴露真实错误)
-        shell: pwsh
-        working-directory: ui
-        run: |
-          $root = (Get-Location).Path
-          $env:CARGOKIT_CMAKE = "cmake"
-          $env:CARGOKIT_CONFIGURATION = "Release"
-          $env:CARGOKIT_MANIFEST_DIR = Join-Path $root "..\core\crates\ncm-ffi"
-          $env:CARGOKIT_TARGET_TEMP_DIR = Join-Path $root "build\cargokit_probe\target"
-          $env:CARGOKIT_OUTPUT_DIR = Join-Path $root "build\cargokit_probe\out"
-          $env:CARGOKIT_TARGET_PLATFORM = "windows-x64"
-          $env:CARGOKIT_TOOL_TEMP_DIR = Join-Path $root "build\cargokit_probe\tool"
-          $env:CARGOKIT_ROOT_PROJECT_DIR = $root
-          New-Item -ItemType Directory -Force -Path $env:CARGOKIT_TARGET_TEMP_DIR, $env:CARGOKIT_OUTPUT_DIR, $env:CARGOKIT_TOOL_TEMP_DIR | Out-Null
-          Write-Host "MANIFEST=$env:CARGOKIT_MANIFEST_DIR"
-          Test-Path (Join-Path $env:CARGOKIT_MANIFEST_DIR "Cargo.toml")
-          & "$root\rust_builder\cargokit\run_build_tool.cmd" build-cmake
-          if ($LASTEXITCODE -ne 0) { Write-Host "cargokit exit=$LASTEXITCODE"; exit 1 }
-
       - name: build windows (release)
         working-directory: ui
         run: flutter build windows --release -v
