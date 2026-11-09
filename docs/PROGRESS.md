@@ -10,6 +10,22 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 2026-11-10: 通知栏快捷按钮 / 响度曲线 GUI / 歌词跟随 / 封面取色 / 热搜开关
+
+| 需求 | 落点 | 证据 |
+|---|---|---|
+| 通知栏「喜欢 / 播放顺序」 | Kotlin `MediaSession.setCustomLayout` + `onCustomCommand` → `ncm/player` 转发; Dart `Playback.setActionHandlers/setActionState`; main.dart 轮转 列表循环→单曲→顺序→随机→心动 | 模拟器 logcat `custom actions=[Action:mName='喜欢'…, '播放顺序']`; 单测 4 例 |
+| 响度均衡确认 | Rust R128 → `replay_gain_db` → Media3 `configure gain` | 模拟器实测: lufs **-13.001**, target -16 ⇒ `configure gain=-2.9989051818847656`(逐位吻合); 另一首 -21.76 ⇒ **+5.76**; `loudness.json` 落盘 |
+| 响度曲线 GUI(免导入) | `eq_curve_chart.dart`(对数频响曲线 + 可拖柱) + 首次自动生成 10 段全 0dB 默认曲线; 「清除」→「重置为默认」; 修柱状拖动被 ListView 手势 arena 吞掉的既有 bug | 模拟器: 不导入直接拖 Filter 3 → **+17.4 dB** 写回 `settings.json`(名称变「自定义曲线」), 重置回默认; 新增 20 例 |
+| 长歌名竖排/超界 + 详情页字号小 | `MarqueeText`(放不下才横向滚动, 否则普通 Text); 列表行缺 `maxLines` 是竖排根因; 歌词页 AppBar `titleMedium→titleLarge`, 头卡 `→headlineSmall` | `marquee_long_title_test.dart` 5 例(300dp×1.25 单行不溢出 / reduce motion 退化 ellipsis) |
+| 歌词 seek 后不跟随 | 暂停判据 `ScrollUpdateNotification→ScrollStartNotification` 的 `dragDetails`; `_seekTo` 无条件恢复跟随 + `_syncLyricIndex(force:true)`; `WordLyricView.didUpdateWidget` 恢复即时回行 | 模拟器: 手动滑歌词→暂停跟随; 拖/点进度条后歌词回当前句并继续跟随; 新增 4 例 |
+| 背景色跟随封面 | `cover_palette.dart`(纯 Dart 复刻 node-vibrant: 5bit 直方图 + Vibrant/DarkVibrant/Muted 打分 + 无彩回退 + LRU) + `CoverBackdrop`(300ms 渐变) | 歌词页背景像素随封面变色(粉系封面 → (255,248,247) 而非主题默认); 16 例单测 |
+| 搜索「热搜建议」开关 | `showHotSearch`(默认 true) + 设置「通用」开关 + 搜索页不渲染热榜, 留历史/猜你想搜 | 4 例 |
+
+调研: [`docs/research-2026-11-10-lyric-and-color.md`](research-2026-11-10-lyric-and-color.md) —— SPlayer-Next/lyric-dom(AGPL, 只借鉴思路)、node-vibrant(MIT, 算法可移植)、Mei(ljyh223, Apache-2.0)、逐字歌词实现对照。
+
+门禁: `dart analyze` 0 error / 0 warning(40 info) · `flutter test --exclude-tags network` **403 全绿** · `bash tools/build-android.sh` OK。
+
 ## v2 · 首个公开预览版 v0.1.0(2026-11-08)
 
 **发布**: tag `v0.1.0` → Release 资产 `MiniNCM-0.1.0-android-arm64.apk`(27.9MB, arm64, release 构建)
