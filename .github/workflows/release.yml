@@ -12,9 +12,47 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # 发布门: tag 之前必须先在**同一 commit**上跑过测试, 否则打 tag 就能把红的代码发出去。
+  # (CI 的 ci.yml 只在 main push / PR 上跑, tag 上的 release 与它是两条独立流水线。)
+  verify:
+    name: Tests gate before release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag / pubspec 版本一致性
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PUB=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' ui/pubspec.yaml | head -1)
+          META=$(sed -n "s/.*kAppVersion = '\([^']*\)'.*/\1/p" ui/lib/src/app_meta.dart | head -1)
+          echo "tag=$TAG pubspec=$PUB kAppVersion=$META"
+          if [ "$TAG" != "$PUB" ] || [ "$PUB" != "$META" ]; then
+            echo "::error::版本号不一致(tag/pubspec/kAppVersion), 请用 tools/bump-version.sh 后重新打 tag"
+            exit 1
+          fi
+      - name: System deps (alsa for cpal)
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: cargo test (workspace, vendor 联网 smoke 排除)
+        run: cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
+      - name: pub get + analyze + widget tests
+        working-directory: ui
+        run: |
+          flutter pub get
+          dart analyze
+          flutter test --exclude-tags network
+
   build:
     name: Build release assets
     runs-on: ubuntu-24.04
+    needs: [verify]
     steps:
       - uses: actions/checkout@v4
 
