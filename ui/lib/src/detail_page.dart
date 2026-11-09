@@ -5,6 +5,8 @@ import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
+import 'cover_backdrop.dart';
+import 'cover_palette.dart';
 import 'marquee_text.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
@@ -155,6 +157,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   String _filter = '';
 
   rust.PlaylistDetail? _detail;
+
+  /// 当前歌单封面的取色结果(头部卡片主色调背景), null/回退时透明直通主题
+  CoverPalette? _palette;
   String? _detailError;
   bool _subscribed = false;
   bool _subBusy = false;
@@ -196,6 +201,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         () => rust.playlistDetail(playlistId: widget.playlistId),
       );
       if (!mounted) return;
+      // 封面取色: 决定头部卡片的主色调背景(失败/灰白封面 → 回退主题, 不闪黑)
+      paletteFromUrl(d.coverUrl ?? widget.coverUrl).then((palette) {
+        if (!mounted) return;
+        setState(() => _palette = palette);
+      });
       final myUid = await _currentUid();
       if (!mounted) return;
       setState(() {
@@ -599,7 +609,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   Widget _buildHeaderCard() {
     final d = _detail;
     final theme = Theme.of(context);
-    return Card(
+    // 头部卡片用封面取色渐变做背景; 卡片本体半透明, 让主色调透出来
+    return CoverBackdrop(
+      palette: _palette,
+      child: Card(
+      color: theme.colorScheme.surface.withValues(alpha: 0.82),
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -676,6 +690,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
               _ExpandableText(text: d.description),
           ],
         ),
+      ),
       ),
     );
   }
