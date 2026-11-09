@@ -72,6 +72,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipSign dco_decode_box_autoadd_vip_sign(dynamic raw);
 
   @protected
+  WordLyricDto dco_decode_box_autoadd_word_lyric_dto(dynamic raw);
+
+  @protected
   CacheEvictionDto dco_decode_cache_eviction_dto(dynamic raw);
 
   @protected
@@ -343,6 +346,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipSign? dco_decode_opt_box_autoadd_vip_sign(dynamic raw);
 
   @protected
+  WordLyricDto? dco_decode_opt_box_autoadd_word_lyric_dto(dynamic raw);
+
+  @protected
   PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
 
   @protected
@@ -508,6 +514,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto dco_decode_word_lyric_line_dto(dynamic raw);
 
   @protected
+  WordLyricWithSourceDto dco_decode_word_lyric_with_source_dto(dynamic raw);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -558,6 +567,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VipSign sse_decode_box_autoadd_vip_sign(SseDeserializer deserializer);
+
+  @protected
+  WordLyricDto sse_decode_box_autoadd_word_lyric_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   CacheEvictionDto sse_decode_cache_eviction_dto(SseDeserializer deserializer);
@@ -895,6 +909,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipSign? sse_decode_opt_box_autoadd_vip_sign(SseDeserializer deserializer);
 
   @protected
+  WordLyricDto? sse_decode_opt_box_autoadd_word_lyric_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
 
   @protected
@@ -1078,6 +1097,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto sse_decode_word_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
+  WordLyricWithSourceDto sse_decode_word_lyric_with_source_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -1142,6 +1166,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_vip_sign(VipSign self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_word_lyric_dto(
+    WordLyricDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_cache_eviction_dto(
@@ -1576,6 +1606,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_word_lyric_dto(
+    WordLyricDto? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_play_rank_entry_dto(
     PlayRankEntryDto self,
     SseSerializer serializer,
@@ -1800,6 +1836,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_word_lyric_line_dto(
     WordLyricLineDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_word_lyric_with_source_dto(
+    WordLyricWithSourceDto self,
     SseSerializer serializer,
   );
 }

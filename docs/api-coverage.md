@@ -214,3 +214,17 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
   `lyric_lines_i18n` → `lyricLinesI18N`(大写 N), 旧的 camel 精确匹配把它误判成"无 UI 入口"(3 个);
   放宽后真实数字是 **2 个**: `search` / `lyric_lines`(见 `docs/api-overlap-audit.md` D1/D2)。
 - 新增能力时跑一次 `bash tools/api-coverage.sh` 保持本文数字同步。
+
+---
+
+## B13: AMLL TTML 逐字歌词第二来源(2026-11-10)
+
+- **外部 API(非网易云)**: `GET https://api.amll.dev/v1/lyrics/get?ncmMusicId=<id>`
+  (AMLL 社区库; 200 → `data.lyrics` 内联 TTML, 404 → JSON error; 实测见 docs/b13-ttml-lyrics-notes.md)。
+- Rust: `ncm-service/src/ttml_source.rs` — `fetch_ttml`(5s 超时 + 磁盘缓存
+  `dataDir/ttml/<id>.ttml` / 无数据标记 `<id>.none`)、`word_lyric_with_fallback`
+  (yrc → 覆盖率 < 0.6 或缺失时 TTML → 行级 LRC)、`TtmlDoc`。
+- Domain: `ncm-domain/src/ttml.rs` — 手写轻量 TTML 解析器 `parse_ttml`
+  (x-translation 行译文 / x-roman 罗马音保存, x-bg 跳过, 缺 end 用下一行 begin 兜底, 错误带行号)。
+- FFI: `word_lyric_with_fallback`、`ttml_lyric_lines`(codegen 已跑)。
+- UI: `main.dart` 顶部 `resolveLyricSource`(三来源可注入 loader) + 歌词页左下角来源小字。

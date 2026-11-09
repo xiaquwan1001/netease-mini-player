@@ -611,6 +611,79 @@ pub struct WordLyricDto {
     pub has_word_timing: bool,
 }
 
+/// WordLyric -> DTO(聚合导出与 TTML 单独导出共用).
+fn word_lyric_dto(wl: ncm_domain::WordLyric) -> WordLyricDto {
+    WordLyricDto {
+        lines: wl
+            .lines
+            .iter()
+            .zip(wl.translation_lines.iter())
+            .map(|(l, _t)| WordLyricLineDto {
+                start_ms: l.start_ms,
+                end_ms: l.end_ms,
+                words: l
+                    .words
+                    .iter()
+                    .map(|w| WordItemDto {
+                        start_ms: w.start_ms,
+                        end_ms: w.end_ms,
+                        text: w.text.clone(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        translation_lines: wl.translation_lines,
+        has_word_timing: wl.has_word_timing,
+    }
+}
+
+/// B13: 只取 TTML 第二来源(带磁盘缓存: `dataDir/ttml/<id>.ttml` / `<id>.none`).
+/// 无数据/解析失败返回 Ok(None), 网络错误返回 Err —— 调用方(或 Dart 侧)静默回退.
+pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, String> {
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?
+        .clone();
+    match ncm_service::ttml_source::fetch_ttml(&dir, track_id).await {
+        Ok(Some(doc)) => Ok(Some(word_lyric_dto(ncm_service::ttml_source::ttml_to_word_lyric(
+            &doc,
+        )))),
+        Ok(None) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+/// 逐字歌词 + 来源标记("yrc" / "ttml" / "line"), UI 只用小字展示, 不打扰.
+pub struct WordLyricWithSourceDto {
+    pub lyric: WordLyricDto,
+    pub source: String,
+}
+
+/// B13: 聚合逐字歌词(第二来源 AMLL TTML).
+/// yrc 优先 -> yrc 无逐字/覆盖率 < 0.6 时取 TTML(带磁盘缓存) -> 都没有回退行级 LRC.
+/// 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级, 不影响行级兜底.
+pub async fn word_lyric_with_fallback(track_id: u64) -> Result<WordLyricWithSourceDto, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard
+            .providers
+            .first_with(Capability::Lyric)
+            .ok_or_else(|| "no provider supports lyric".to_string())?
+    };
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?
+        .clone();
+    let r = ncm_service::ttml_source::word_lyric_with_fallback(provider.as_ref(), &dir, track_id)
+        .await?;
+    let source = match r.source {
+        ncm_service::ttml_source::LyricSource::Yrc => "yrc",
+        ncm_service::ttml_source::LyricSource::Ttml => "ttml",
+        ncm_service::ttml_source::LyricSource::LineLevel => "line",
+    };
+    Ok(WordLyricWithSourceDto { source: source.to_string(), lyric: word_lyric_dto(r.lyric) })
+}
+
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;

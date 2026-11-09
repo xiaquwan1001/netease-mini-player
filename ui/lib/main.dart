@@ -46,6 +46,61 @@ import 'src/vip_page.dart';
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
+/// ---------------- B13: 逐字歌词三来源解析(yrc -> AMLL TTML -> 行级) ----------------
+
+/// 三个来源的 loader 抽象: 生产环境包 rust.* 调用, 单测注入假实现(不联网)。
+class LyricSourceLoaders {
+  final Future<rust.WordLyricDto?> Function(BigInt trackId) yrc;
+  final Future<rust.WordLyricDto?> Function(BigInt trackId) ttml;
+  final Future<List<rust.LyricLineDto>?> Function(BigInt trackId) lineLevel;
+  const LyricSourceLoaders({required this.yrc, required this.ttml, required this.lineLevel});
+}
+
+/// 解析结果: word = 逐字数据(来源 yrc/ttml), line = 行级兜底, source 给小字标注。
+class ResolvedLyric {
+  final rust.WordLyricDto? word;
+  final List<rust.LyricLineDto>? line;
+  final String source;
+  const ResolvedLyric.word_(this.word) : line = null, source = 'yrc';
+  const ResolvedLyric.ttml_(this.word) : line = null, source = 'ttml';
+  const ResolvedLyric.line_(this.line) : word = null, source = 'line';
+}
+
+/// yrc 逐字行覆盖率: 有词级时间(end > start)的行占比. 与 Rust
+/// ncm_service::ttml_source::yrc_word_coverage 同口径, 阈值 0.6(六成行是逐字才算合格)。
+const double kYrcWordCoverageThreshold = 0.6;
+
+bool yrcWordGoodEnough(rust.WordLyricDto? wl) {
+  if (wl == null || wl.lines.isEmpty || !wl.hasWordTiming) return false;
+  final covered = wl.lines.where((l) => l.words.any((w) => w.endMs > w.startMs)).length;
+  return covered / wl.lines.length >= kYrcWordCoverageThreshold;
+}
+
+/// 三来源决策. 任一来源抛错都当作"该来源没有", 继续回退, 绝不上抛。
+Future<ResolvedLyric?> resolveLyricSource(BigInt trackId, LyricSourceLoaders loaders) async {
+  // 1) 网易云 yrc: 够好就直接用(不碰 TTML)
+  rust.WordLyricDto? yrc;
+  try {
+    yrc = await loaders.yrc(trackId);
+    if (yrcWordGoodEnough(yrc)) return ResolvedLyric.word_(yrc);
+  } catch (_) {
+    yrc = null;
+  }
+  // 2) AMLL TTML 第二来源(Rust 侧带磁盘缓存; 失败/无数据都继续)
+  try {
+    final ttml = await loaders.ttml(trackId);
+    if (ttml != null && ttml.lines.isNotEmpty) return ResolvedLyric.ttml_(ttml);
+  } catch (_) {}
+  // 3) yrc 差但非空: 仍比行级好
+  if (yrc != null && yrc.lines.isNotEmpty) return ResolvedLyric.word_(yrc);
+  // 4) 行级兜底
+  try {
+    final line = await loaders.lineLevel(trackId);
+    if (line != null && line.isNotEmpty) return ResolvedLyric.line_(line);
+  } catch (_) {}
+  return null;
+}
+
 Future<void> main() async {
   await RustLib.init();
   runApp(const MiniNcmApp());
@@ -229,6 +284,8 @@ class _HomePageState extends State<HomePage> {
   List<String>? _lyricPlain;
   BigInt? _lyricTrackId;
   String? _lyricError;
+  /// 逐字/行级歌词来源标记("yrc"/"ttml"/"line"), 歌词页底部小字展示。
+  String? _lyricSource;
   int _lyricIndex = -1;
   bool _showLyrics = false;
 
@@ -1021,18 +1078,27 @@ class _HomePageState extends State<HomePage> {
         _lyricPlain = null;
         _lyricIndex = -1;
         _lyricError = null;
+        _lyricSource = null;
         _wordLines = const [];
       });
       _wordPositionMs.value = 0;
     }
-    // 逐字歌词: 有则更好, 失败/缺失都静默回落到行级链。
-    try {
-      final word = await rust.wordLyricLines(trackId: trackId);
-      if (!mounted || _lyricTrackId != trackId) return;
-      if (word.hasWordTiming && word.lines.isNotEmpty) {
+    // B13: 逐字歌词三来源决策(yrc -> AMLL TTML -> 行级), loader 可注入(单测不联网)。
+    final resolved = await resolveLyricSource(
+      trackId,
+      LyricSourceLoaders(
+        yrc: (id) async => rust.wordLyricLines(trackId: id),
+        ttml: (id) async => rust.ttmlLyricLines(trackId: id),
+        lineLevel: (id) async => rust.lyricLinesI18N(trackId: id),
+      ),
+    );
+    if (resolved != null && mounted && _lyricTrackId == trackId) {
+      final word = resolved.word;
+      if (word != null) {
         setState(() {
           _lyricError = null;
           _lyricPlain = null;
+          _lyricSource = resolved.source;
           _wordLines = [
             for (var i = 0; i < word.lines.length; i++)
               WordLyricLineData(
@@ -1055,14 +1121,27 @@ class _HomePageState extends State<HomePage> {
         _wordPositionMs.value = _player?.positionMs.toInt() ?? 0;
         return;
       }
-    } catch (_) {
-      // 歌词是“有则更好”: 逐字拉取失败不报错, 走原有行级链。
+      final lines = resolved.line;
+      if (lines != null && lines.isNotEmpty) {
+        setState(() {
+          _lyricError = null;
+          _lyricSource = resolved.source;
+          _lyricLines = [
+            for (final l in lines)
+              ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+          ];
+          _lyricTimes = [for (final l in lines) l.timeMs];
+        });
+        _syncLyricIndex(_player ?? PlayerView.empty);
+        return;
+      }
     }
     try {
       final lines = await rust.lyricLinesI18N(trackId: trackId);
       if (!mounted || _lyricTrackId != trackId) return;
       if (lines.isNotEmpty) {
         setState(() {
+          _lyricSource = 'line';
           _lyricLines = [
             for (final l in lines)
               ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
@@ -2569,6 +2648,27 @@ class _HomePageState extends State<HomePage> {
             child: Stack(
               children: [
                 Positioned.fill(child: body),
+                // 来源小字(yrc/ttml/line): 歌词页左下角常驻一行浅色标注, 不打扰。
+                if (_lyricSource != null)
+                  Positioned(
+                    left: 12,
+                    bottom: 8,
+                    child: IgnorePointer(
+                      child: Text(
+                        switch (_lyricSource) {
+                          'yrc' => '逐字歌词 · 网易云',
+                          'ttml' => '逐字歌词 · AMLL',
+                          _ => '逐行歌词',
+                        },
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withValues(alpha: 0.35),
+                            ),
+                      ),
+                    ),
+                  ),
                 Positioned(
                   right: 8,
                   bottom: 8,

@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1492412862;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -190853006;
 
 // Section: executor
 
@@ -4552,6 +4552,42 @@ fn wire__crate__api__trash_fm_song_impl(
         },
     )
 }
+fn wire__crate__api__ttml_lyric_lines_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "ttml_lyric_lines",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::ttml_lyric_lines(api_track_id).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__update_playlist_desc_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -4801,6 +4837,42 @@ fn wire__crate__api__word_lyric_lines_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::word_lyric_lines(api_track_id).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__word_lyric_with_fallback_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "word_lyric_with_fallback",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_track_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::word_lyric_with_fallback(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -6626,6 +6698,17 @@ impl SseDecode for Option<crate::api::VipSign> {
     }
 }
 
+impl SseDecode for Option<crate::api::WordLyricDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::WordLyricDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for crate::api::PlayRankEntryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7596,6 +7679,18 @@ impl SseDecode for crate::api::WordLyricLineDto {
     }
 }
 
+impl SseDecode for crate::api::WordLyricWithSourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_lyric = <crate::api::WordLyricDto>::sse_decode(deserializer);
+        let mut var_source = <String>::sse_decode(deserializer);
+        return crate::api::WordLyricWithSourceDto {
+            lyric: var_lyric,
+            source: var_source,
+        };
+    }
+}
+
 fn pde_ffi_dispatcher_primary_impl(
     func_id: i32,
     port: flutter_rust_bridge::for_generated::MessagePort,
@@ -7730,13 +7825,15 @@ fn pde_ffi_dispatcher_primary_impl(
         123 => wire__crate__api__subscribed_podcasts_impl(port, ptr, rust_vec_len, data_len),
         124 => wire__crate__api__toplist_catalog_impl(port, ptr, rust_vec_len, data_len),
         125 => wire__crate__api__trash_fm_song_impl(port, ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
-        128 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
-        129 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
-        132 => wire__crate__api__word_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__ttml_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
+        131 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
+        133 => wire__crate__api__word_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+        134 => wire__crate__api__word_lyric_with_fallback_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -9600,6 +9697,27 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::WordLyricLineDto>
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::WordLyricWithSourceDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.lyric.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::WordLyricWithSourceDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::WordLyricWithSourceDto>
+    for crate::api::WordLyricWithSourceDto
+{
+    fn into_into_dart(self) -> crate::api::WordLyricWithSourceDto {
+        self
+    }
+}
 
 impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -10590,6 +10708,16 @@ impl SseEncode for Option<crate::api::VipSign> {
     }
 }
 
+impl SseEncode for Option<crate::api::WordLyricDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::WordLyricDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::PlayRankEntryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -11187,6 +11315,14 @@ impl SseEncode for crate::api::WordLyricLineDto {
         <i64>::sse_encode(self.start_ms, serializer);
         <i64>::sse_encode(self.end_ms, serializer);
         <Vec<crate::api::WordItemDto>>::sse_encode(self.words, serializer);
+    }
+}
+
+impl SseEncode for crate::api::WordLyricWithSourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::WordLyricDto>::sse_encode(self.lyric, serializer);
+        <String>::sse_encode(self.source, serializer);
     }
 }
 

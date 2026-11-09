@@ -822,3 +822,16 @@ node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / �
   **已定(2026-11):PR 为主,只对 Melodia;不 fork 任何一方。** MiniNCM 降级为协议/风控实验台
   + LX 插件脚本工坊,Ncrust 仅作低资源参照。见 `docs/build-vs-fork.md` 第 6 节。
 - 原生扫码是否还值得保留:目前保留为"快捷尝试",命中 8821 时提示改用官方网页登录。
+
+---
+
+## B13: 逐字歌词第二来源 AMLL TTML(2026-11-10)
+
+yrc 无逐字或逐字行覆盖率 < 0.6 时, 自动改用 AMLL 社区库的 TTML 逐字(api.amll.dev,
+按 ncmMusicId 查询), 复用现有逐字渲染; 都没有再回退行级 LRC。TTML 原文落盘
+`dataDir/ttml/<id>.ttml`, 无数据/解析失败写 `<id>.none` 避免反复打 API。
+实现: `core/crates/ncm-domain/src/ttml.rs`(解析器+14 单测)、
+`core/crates/ncm-service/src/ttml_source.rs`(抓取+缓存+聚合, 8 单测)、
+FFI `word_lyric_with_fallback` / `ttml_lyric_lines`、`ui/lib/main.dart` 三来源
+`resolveLyricSource`(假 loader 7 单测) + 歌词页左下角来源小字标注。
+实测响应记录: `docs/b13-ttml-lyrics-notes.md`。

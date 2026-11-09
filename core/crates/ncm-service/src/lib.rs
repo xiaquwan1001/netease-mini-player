@@ -9,11 +9,13 @@ pub mod history;
 pub mod identity;
 pub mod loudness_store;
 pub mod netease;
+pub mod ttml_source;
 
 pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
+pub use ttml_source::{fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource};
 
 use ncm_provider::{Capability, ProviderRegistry};
 use std::path::Path;

@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -88,6 +88,18 @@ Future<List<LyricLineDto>> lyricLinesI18N({required BigInt trackId}) =>
 /// 逐字歌词(YRC). 无逐字数据时 lines 为空, UI 应回落 lyric_lines_i18n.
 Future<WordLyricDto> wordLyricLines({required BigInt trackId}) =>
     RustLib.instance.api.crateApiWordLyricLines(trackId: trackId);
+
+/// B13: 只取 TTML 第二来源(带磁盘缓存: `dataDir/ttml/<id>.ttml` / `<id>.none`).
+/// 无数据/解析失败返回 Ok(None), 网络错误返回 Err —— 调用方(或 Dart 侧)静默回退.
+Future<WordLyricDto?> ttmlLyricLines({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiTtmlLyricLines(trackId: trackId);
+
+/// B13: 聚合逐字歌词(第二来源 AMLL TTML).
+/// yrc 优先 -> yrc 无逐字/覆盖率 < 0.6 时取 TTML(带磁盘缓存) -> 都没有回退行级 LRC.
+/// 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级, 不影响行级兜底.
+Future<WordLyricWithSourceDto> wordLyricWithFallback({
+  required BigInt trackId,
+}) => RustLib.instance.api.crateApiWordLyricWithFallback(trackId: trackId);
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 Future<bool> loginWithCookie({required String cookie}) =>
@@ -3771,4 +3783,23 @@ class WordLyricLineDto {
           startMs == other.startMs &&
           endMs == other.endMs &&
           words == other.words;
+}
+
+/// 逐字歌词 + 来源标记("yrc" / "ttml" / "line"), UI 只用小字展示, 不打扰.
+class WordLyricWithSourceDto {
+  final WordLyricDto lyric;
+  final String source;
+
+  const WordLyricWithSourceDto({required this.lyric, required this.source});
+
+  @override
+  int get hashCode => lyric.hashCode ^ source.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WordLyricWithSourceDto &&
+          runtimeType == other.runtimeType &&
+          lyric == other.lyric &&
+          source == other.source;
 }

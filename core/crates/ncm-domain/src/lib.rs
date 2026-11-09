@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 
 mod eq_profile;
 mod lrc;
+mod ttml;
 mod word_lyric;
 /// 一次响度测量的结果(R2b/R7 的 ReplayGain 输入).
 ///
@@ -28,6 +29,7 @@ pub use eq_profile::{
     EqFilter, EqFilterKind, EqProfile, EqProfileError, MAX_FILTERS, MAX_FREQ_HZ, MAX_GAIN_DB,
 };
 pub use lrc::{parse_lrc, parse_lrc_with_translation, LyricLine};
+pub use ttml::{parse_ttml, parse_ttml_time, TtmlLine, TtmlWord};
 pub use word_lyric::{parse_word_lyric, parse_word_lyric_with_translation, WordItem, WordLyric, WordLyricLine};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
