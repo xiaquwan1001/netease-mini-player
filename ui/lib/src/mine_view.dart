@@ -459,7 +459,11 @@ class _LikedSection extends StatelessWidget {
                           if (songs.length > preview.length && i == preview.length - 1)
                             Text('共 ${songs.length} 首',
                                 style: Theme.of(context).textTheme.labelSmall),
-                          SongOverflowButton(song: preview[i], size: 20),
+                          SongOverflowButton(
+                            song: preview[i],
+                            size: 20,
+                            source: SongActionSource.playlist,
+                          ),
                         ],
                       ),
                       onTap: preview[i].playable
@@ -733,7 +737,11 @@ class _RecentSection extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      trailing: SongOverflowButton(song: preview[i], size: 20),
+                      trailing: SongOverflowButton(
+                        song: preview[i],
+                        size: 20,
+                        source: SongActionSource.playlist,
+                      ),
                       onTap: () => onPlay(songs, i),
                     ),
                 ],

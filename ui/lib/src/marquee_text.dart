@@ -49,15 +49,23 @@ class _MarqueeTextState extends State<MarqueeText>
     super.dispose();
   }
 
-  double _measure(String text, TextStyle? style) {
+  /// 用与真实渲染一致的 textScaler 测量单行宽度与行高.
+  /// 之前漏传 textScaler(默认 1.0), 用户开大字体(如 1.25)时测得宽度偏小 25%,
+  /// 导致"放得下"误判不滚动, 或临界时真实文本撑破父约束(Right overflowed by 8.6px).
+  (double width, double height) _measure(
+    String text,
+    TextStyle? style,
+    TextScaler scaler,
+  ) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
       maxLines: 1,
       textDirection: Directionality.of(context),
+      textScaler: scaler,
     )..layout();
-    final w = tp.width;
+    final size = (tp.width, tp.height);
     tp.dispose();
-    return w;
+    return size;
   }
 
   void _start(double distance, String key) {
@@ -107,6 +115,12 @@ class _MarqueeTextState extends State<MarqueeText>
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
+        final scaler = MediaQuery.textScalerOf(context);
+        final (textWidth, textHeight) = _measure(
+          widget.text,
+          widget.style,
+          scaler,
+        );
         final plain = Text(
           widget.text,
           style: widget.style,
@@ -116,7 +130,7 @@ class _MarqueeTextState extends State<MarqueeText>
         );
         // 宽度无界(如 UnconstrainedBox 里): 退化为 ellipsis, 不测量不滚动.
         if (!maxWidth.isFinite) return plain;
-        final fits = _measure(widget.text, widget.style) <= maxWidth;
+        final fits = textWidth <= maxWidth;
         if (fits || reduceMotion) {
           if (_controller != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,8 +140,8 @@ class _MarqueeTextState extends State<MarqueeText>
           return plain;
         }
         // 需要滚动: 单行 + ClipRect + 位移.
-        final distance = _measure(widget.text, widget.style) - maxWidth + _tailGap;
-        final key = '${identityHashCode(widget.text)}|$maxWidth|${widget.style?.fontSize}';
+        final distance = textWidth - maxWidth + _tailGap;
+        final key = '${identityHashCode(widget.text)}|$maxWidth|${scaler.hashCode}';
         if (_offset == null || _animKey != key) {
           _animKey = key;
           WidgetsBinding.instance.addPostFrameCallback((_) => _start(distance, key));
@@ -135,6 +149,7 @@ class _MarqueeTextState extends State<MarqueeText>
         return ClipRect(
           child: SizedBox(
             width: maxWidth,
+            height: textHeight,
             child: _offset == null
                 ? Align(
                     alignment: Alignment.centerLeft,
@@ -145,10 +160,17 @@ class _MarqueeTextState extends State<MarqueeText>
                 : AnimatedBuilder(
                     animation: _offset!,
                     builder: (context, _) {
-                      return Align(
+                      // 滚动中的文本必须按"测量出的全文宽"自由排版:
+                      // 若仍吃 SizedBox 的 maxWidth, 会先被 ellipsis/clip 截到
+                      // 视口宽再整体平移 => "滚的只是被截断的那一截".
+                      // OverflowBox 把子项约束放宽到全文宽(高度钉在实测行高),
+                      // 配合外层 ClipRect 裁切.
+                      return OverflowBox(
                         alignment: Alignment.centerLeft,
-                        widthFactor: 1,
-                        heightFactor: 1,
+                        minWidth: textWidth,
+                        maxWidth: textWidth,
+                        minHeight: textHeight,
+                        maxHeight: textHeight,
                         child: Transform.translate(
                           offset: Offset(-_offset!.value, 0),
                           child: Text(
@@ -156,6 +178,8 @@ class _MarqueeTextState extends State<MarqueeText>
                             style: widget.style,
                             maxLines: 1,
                             softWrap: false,
+                            overflow: TextOverflow.visible,
+                            textScaler: scaler,
                           ),
                         ),
                       );

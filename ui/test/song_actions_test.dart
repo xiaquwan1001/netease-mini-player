@@ -53,11 +53,15 @@ rust.SongDto fakeSong({BigInt? artistId, BigInt? albumId}) => rust.SongDto(
 );
 
 void main() {
-  Widget app(FakeHost fake, rust.SongDto song) => MaterialApp(
+  Widget app(
+    FakeHost fake,
+    rust.SongDto song, {
+    SongActionSource source = SongActionSource.other,
+  }) => MaterialApp(
     home: Scaffold(
       body: AppActions(
         host: fake.host,
-        child: SongOverflowButton(song: song),
+        child: SongOverflowButton(song: song, source: source),
       ),
     ),
   );
@@ -150,7 +154,11 @@ void main() {
       home: Scaffold(
         body: AppActions(
           host: host,
-          child: SongOverflowButton(song: fakeSong()),
+          // "不感兴趣"只在日推/FM 来源显示
+          child: SongOverflowButton(
+            song: fakeSong(),
+            source: SongActionSource.dailyRecommend,
+          ),
         ),
       ),
     ));

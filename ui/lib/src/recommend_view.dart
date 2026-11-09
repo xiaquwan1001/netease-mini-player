@@ -7,6 +7,7 @@ import 'net_retry.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
+import 'song_actions.dart';
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -445,6 +446,7 @@ class _NewSongsSection extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      trailing: SongOverflowButton(song: s, size: 20),
                       onTap: s.playable
                           ? () {
                               final index =
@@ -748,7 +750,12 @@ class _DailySongsSection extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: preview[i].playable
-                          ? null
+                          // 行尾 "..." 菜单(下一首播放/收藏/分享/不感兴趣等)
+                          ? SongOverflowButton(
+                              song: preview[i],
+                              size: 20,
+                              source: SongActionSource.dailyRecommend,
+                            )
                           : Text('无版权', style: Theme.of(context).textTheme.labelSmall),
                       onTap: preview[i].playable
                           ? () {
@@ -887,29 +894,38 @@ class _CoverRow extends StatelessWidget {
   final double height;
   final int rows;
 
+  /// 定高 height(=176)按 scale=1.0 设计: 封面 118 + 4 + 两行文字约 54.
+  /// 大字体(用户缩放到 1.3/1.625)下文字行高变大, 固定 176 会纵向溢出
+  /// (实测 300dp/1.625 溢出 5px); 只放大"两行文字"的部分, scale=1.0 时不变.
+  double _effectiveHeight(BuildContext context) {
+    final textLines = MediaQuery.textScalerOf(context).scale(27) * 2;
+    return height + (textLines - 54);
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (rows <= 1 || children.length < 2) return _row(children);
+    final h = _effectiveHeight(context);
+    if (rows <= 1 || children.length < 2) return _row(children, h);
     final half = (children.length + 1) ~/ 2;
     // 两排时内容高 = 2*height + 行间距(4): 外层高度必须把间距算进去,
     // 否则 Column 内容比外层高 4px, 触发 "RenderFlex overflowed by 4.0 pixels"(R1).
     return SizedBox(
-      height: height * 2 + 4,
+      height: h * 2 + 4,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _row(children.take(half).toList()),
+          _row(children.take(half).toList(), h),
           const SizedBox(height: 4),
-          _row(children.skip(half).toList()),
+          _row(children.skip(half).toList(), h),
         ],
       ),
     );
   }
 
-  Widget _row(List<Widget> items) {
-    if (items.isEmpty) return SizedBox(height: height);
+  Widget _row(List<Widget> items, double h) {
+    if (items.isEmpty) return SizedBox(height: h);
     return SizedBox(
-      height: height,
+      height: h,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: items.length,

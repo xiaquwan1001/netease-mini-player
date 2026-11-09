@@ -270,7 +270,11 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
             overflow: TextOverflow.ellipsis,
           ),
           enabled: s.playable,
-          trailing: SongOverflowButton(song: s, size: 20),
+          trailing: SongOverflowButton(
+            song: s,
+            size: 20,
+            source: SongActionSource.album,
+          ),
           onTap: s.playable
               ? () {
                   Navigator.pop(context);

@@ -39,6 +39,9 @@ mod user_playlist;
 // ---- 歌手相关 ----
 mod artist_album;
 mod artist_detail;
+mod artist_mv;
+mod artist_songs;
+mod artist_sub;
 mod artist_sublist;
 mod artist_top_song;
 

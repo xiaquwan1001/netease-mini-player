@@ -296,6 +296,73 @@ pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, String> {
     })
 }
 
+// ---------------- 歌手全部歌曲 / MV ----------------
+
+pub struct ArtistSongPageDto {
+    pub songs: Vec<SongDto>,
+    pub has_more: bool,
+}
+
+pub struct ArtistMvDto {
+    pub id: u64,
+    pub name: String,
+    pub duration_ms: u64,
+    pub play_count: u64,
+    pub publish_time: String,
+    pub cover_url: Option<String>,
+}
+
+pub struct ArtistMvPageDto {
+    pub mvs: Vec<ArtistMvDto>,
+    pub has_more: bool,
+}
+
+/// 歌手全部歌曲一页(artist_songs, offset/limit 分页)
+pub async fn artist_songs_page(artist_id: u64, offset: u32, limit: u32) -> Result<ArtistSongPageDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let page = provider
+        .artist_songs_page(artist_id, offset, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ArtistSongPageDto {
+        songs: page.songs.into_iter().map(song_dto).collect(),
+        has_more: page.has_more,
+    })
+}
+
+/// 歌手 MV 一页(artist_mv, offset/limit 分页)
+pub async fn artist_mvs_page(artist_id: u64, offset: u32, limit: u32) -> Result<ArtistMvPageDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let page = provider
+        .artist_mvs_page(artist_id, offset, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ArtistMvPageDto {
+        mvs: page
+            .mvs
+            .into_iter()
+            .map(|m| ArtistMvDto {
+                id: m.id,
+                name: m.name,
+                duration_ms: m.duration_ms,
+                play_count: m.play_count,
+                publish_time: m.publish_time,
+                cover_url: m.cover_url,
+            })
+            .collect(),
+        has_more: page.has_more,
+    })
+}
+
+/// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
+pub async fn artist_sub_toggle(artist_id: u64, sub: bool) -> Result<bool, String> {
+    let provider = with_provider(Capability::Artist)?;
+    provider
+        .toggle_artist_sub(artist_id, sub)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 // ---------------- 个人主页资料 ----------------
 
 /// 个人主页资料: 直接镜像 domain 类型 `ProfileDetail`.

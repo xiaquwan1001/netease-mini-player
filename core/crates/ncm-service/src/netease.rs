@@ -2,7 +2,7 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
-    Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, Comment, CommentPage,
+    Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMv, ArtistMvPage, ArtistSongPage, ChartSummary, Comment, CommentPage,
     CommentStats,
     DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
@@ -1712,6 +1712,69 @@ impl Provider for NeteaseProvider {
             let resp = client.simi_artist(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_similar_artists(&resp.body))
+        })
+    }
+
+    /// 歌手全部歌曲(artist_songs): offset/limit 分页, more=还有下一页
+    fn artist_songs_page<'a>(
+        &'a self,
+        artist_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistSongPage>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &artist_id.to_string())
+                .param("offset", &offset.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.artist_songs(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_artist_songs(&resp.body))
+        })
+    }
+
+    /// 关注/取消关注歌手(artist_sub: t=1 sub / t=0 unsub), 需要登录.
+    fn toggle_artist_sub<'a>(&'a self, artist_id: u64, sub: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("关注歌手需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &artist_id.to_string())
+                .param("t", if sub { "1" } else { "0" });
+            let resp = client.artist_sub(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
+    /// 歌手 MV(artist_mv): offset/limit 分页, hasMore=还有下一页
+    fn artist_mvs_page<'a>(
+        &'a self,
+        artist_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistMvPage>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &artist_id.to_string())
+                .param("offset", &offset.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.artist_mv(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_artist_mvs(&resp.body))
         })
     }
 
@@ -4118,6 +4181,47 @@ pub fn parse_song_bucket(body: &Value, key: &str) -> Vec<Song> {
         .unwrap_or_default()
 }
 
+/// 歌手全部歌曲: {code, more, songs:[...]}(artist_songs, 每首歌自带 privilege)
+pub fn parse_artist_songs(body: &Value) -> ArtistSongPage {
+    ArtistSongPage {
+        songs: parse_song_list(body),
+        has_more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+    }
+}
+
+/// 歌手 MV: {code, hasMore, mvs:[{id,name,duration,playCount,publishTime,imgurl16v9}]}
+pub fn parse_artist_mvs(body: &Value) -> ArtistMvPage {
+    let mvs = body
+        .get("mvs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| {
+                    let id = u64_of(v, "id")?;
+                    let name = str_of(v, "name").unwrap_or_default();
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(ArtistMv {
+                        id,
+                        name,
+                        duration_ms: u64_of(v, "duration").unwrap_or(0),
+                        play_count: u64_of(v, "playCount").unwrap_or(0),
+                        publish_time: str_of(v, "publishTime").unwrap_or_default(),
+                        cover_url: str_of(v, "imgurl16v9")
+                            .or_else(|| str_of(v, "imgurl"))
+                            .filter(|s| s.starts_with("http")),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ArtistMvPage {
+        mvs,
+        has_more: body.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+    }
+}
+
 /// 相似歌手: {code, artists:[{id,name,picUrl,img1v1Url}]}
 pub fn parse_similar_artists(body: &Value) -> Vec<Artist> {
     let arr = body
@@ -5158,6 +5262,151 @@ mod tests {
         assert!(parse_album_items(&json!({"code": 301})).is_empty());
         assert!(parse_album_items(&json!({"code": 200, "albums": null})).is_empty());
     }
+
+    /// artist_songs: 2026-11-22 实测形状(顶层 more + songs[], 歌曲为 NCM 歌曲 DTO).
+    #[test]
+    fn artist_songs_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "more": true,
+            "songs": [
+                {"id": 298317u64, "name": "屋顶", "dt": 319039u64, "fee": 0,
+                 "ar": [{"id": 9612u64, "name": "温岚"}, {"id": 6452u64, "name": "周杰伦"}],
+                 "al": {"id": 29597u64, "name": "有点野",
+                        "picUrl": "https://p4.music.126.net/t1KaAJmIphZKdPq8JfItbA==/109951170514287417.jpg"},
+                 "privilege": {"st": -53918, "dl": 999000}},
+                {"id": 210049u64, "name": "安静", "dt": 274573u64, "fee": 8,
+                 "ar": [{"id": 6452u64, "name": "周杰伦"}],
+                 "al": {"id": 18919u64, "name": "范特西", "picUrl": "https://p3.music.126.net/x.jpg"},
+                 "privilege": {"st": 0, "dl": 320000}}
+            ]
+        });
+        let page = parse_artist_songs(&body);
+        assert!(page.has_more);
+        assert_eq!(page.songs.len(), 2);
+        assert_eq!(page.songs[0].name, "屋顶");
+        assert_eq!(page.songs[0].artists.len(), 2);
+        assert_eq!(page.songs[0].artists[0].name, "温岚");
+        assert_eq!(page.songs[0].album.as_ref().unwrap().name, "有点野");
+        assert_eq!(page.songs[0].duration_ms, 319039);
+        assert_eq!(page.songs[0].fee, Some(0));
+    }
+
+    /// artist_songs: more=false 表示没有下一页(最后一页).
+    #[test]
+    fn artist_songs_more_flag_ends_paging() {
+        let body = json!({"code": 200, "more": false, "songs": [{"id": 1u64, "name": "a"}]});
+        let page = parse_artist_songs(&body);
+        assert!(!page.has_more);
+        assert_eq!(page.songs.len(), 1);
+    }
+
+    /// artist_songs: songs 缺失(code!=200)时空列表 + more 缺失按 false.
+    #[test]
+    fn artist_songs_missing_fields_is_empty_page() {
+        let page = parse_artist_songs(&json!({"code": 301}));
+        assert!(page.songs.is_empty());
+        assert!(!page.has_more);
+    }
+
+    /// artist_songs: privilege.st<0(无版权)时歌曲标记为不可播.
+    #[test]
+    fn artist_songs_privilege_marks_playable() {
+        let body = json!({
+            "code": 200, "more": true,
+            "songs": [
+                {"id": 1u64, "name": "无版权", "dt": 1000u64, "fee": 0,
+                 "ar": [], "al": null, "privilege": {"st": -200}},
+                {"id": 2u64, "name": "可播", "dt": 1000u64, "fee": 0,
+                 "ar": [], "al": null, "privilege": {"st": 0}}
+            ]
+        });
+        let page = parse_artist_songs(&body);
+        assert!(!page.songs[0].playable);
+        assert!(page.songs[1].playable);
+    }
+
+    /// artist_mv: 2026-11-22 实测形状(顶层 hasMore + mvs[], imgurl16v9 是 16:9 封面).
+    #[test]
+    fn artist_mvs_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "hasMore": true,
+            "mvs": [
+                {"id": 22695250u64, "name": "任性 (5525 Live版)", "artistName": "周杰伦",
+                 "duration": 266000u64, "playCount": 106722u64, "publishTime": "2025-02-23",
+                 "imgurl": "http://p3.music.126.net/a.jpg",
+                 "imgurl16v9": "http://p4.music.126.net/b.jpg", "status": 0, "subed": false}
+            ]
+        });
+        let page = parse_artist_mvs(&body);
+        assert!(page.has_more);
+        assert_eq!(page.mvs.len(), 1);
+        let mv = &page.mvs[0];
+        assert_eq!(mv.id, 22695250);
+        assert_eq!(mv.name, "任性 (5525 Live版)");
+        assert_eq!(mv.duration_ms, 266000);
+        assert_eq!(mv.play_count, 106722);
+        assert_eq!(mv.publish_time, "2025-02-23");
+        assert_eq!(mv.cover_url.as_deref(), Some("http://p4.music.126.net/b.jpg"));
+    }
+
+    /// artist_mv: imgurl16v9 缺失时回退 imgurl.
+    #[test]
+    fn artist_mvs_cover_fallback_imgurl() {
+        let body = json!({
+            "code": 200, "hasMore": false,
+            "mvs": [{"id": 1u64, "name": "mv", "duration": 1000u64,
+                     "imgurl": "http://p3.music.126.net/fallback.jpg"}]
+        });
+        let page = parse_artist_mvs(&body);
+        assert_eq!(page.mvs[0].cover_url.as_deref(), Some("http://p3.music.126.net/fallback.jpg"));
+        assert!(!page.has_more);
+    }
+
+    /// artist_mv: mvs 缺失(接口失败/变更)时空列表, 不 panic.
+    #[test]
+    fn artist_mvs_missing_mvs_is_empty_page() {
+        let page = parse_artist_mvs(&json!({"code": 301}));
+        assert!(page.mvs.is_empty());
+        assert!(!page.has_more);
+    }
+
+    /// artist_mv: name 缺失/为空的条目丢弃(脏数据防御).
+    #[test]
+    fn artist_mvs_drops_unnamed_entries() {
+        let body = json!({
+            "code": 200, "hasMore": true,
+            "mvs": [
+                {"id": 1u64, "name": "", "duration": 1u64},
+                {"id": 2u64, "duration": 2u64},
+                {"id": 3u64, "name": "正常", "duration": 3u64}
+            ]
+        });
+        let page = parse_artist_mvs(&body);
+        assert_eq!(page.mvs.len(), 1);
+        assert_eq!(page.mvs[0].id, 3);
+    }
+
+    /// artist_songs: 翻页语义 —— 解析器按 offset/limit 由调用方控制, 响应只带 more.
+    /// 这里验证两次响应合并不重叠由 id 区分(模拟 page1/page2 实测).
+    #[test]
+    fn artist_songs_page_ids_distinguishable() {
+        let p1 = parse_artist_songs(&json!({
+            "code": 200, "more": true,
+            "songs": [{"id": 298317u64, "name": "屋顶"}, {"id": 210049u64, "name": "安静"}]
+        }));
+        let p2 = parse_artist_songs(&json!({
+            "code": 200, "more": false,
+            "songs": [{"id": 1888354230u64, "name": "other"}]
+        }));
+        let mut ids: Vec<u64> = p1.songs.iter().chain(p2.songs.iter()).map(|s| s.id.0).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), 3);
+        assert!(!p2.has_more);
+    }
+
 
     /// toplist_detail_v2: 2026-11-09 实测形状(data[].categoryCode 分组 + list[] 榜单卡;
     /// 无 trackUpdateTime / "更新 N 首", 元素带 canPlay/targetType).

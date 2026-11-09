@@ -163,6 +163,8 @@ class _DailySongsTabState extends State<_DailySongsTab>
         return _SongRow(
           song: s,
           index: i + 1,
+          // 每日推荐 tab: "..."菜单同样允许"不感兴趣"
+          source: SongActionSource.dailyRecommend,
           trailing: widget.onDislike == null
               ? null
               : IconButton(
@@ -685,6 +687,7 @@ class _SongRow extends StatelessWidget {
     required this.index,
     required this.onTap,
     this.trailing,
+    this.source = SongActionSource.other,
   });
 
   final rust.SongDto song;
@@ -693,6 +696,9 @@ class _SongRow extends StatelessWidget {
 
   /// 行尾附加按钮(每日推荐的"不感兴趣")
   final Widget? trailing;
+
+  /// 菜单来源(决定"..."菜单里"不感兴趣"是否显示)
+  final SongActionSource source;
 
   @override
   Widget build(BuildContext context) {
@@ -726,7 +732,7 @@ class _SongRow extends StatelessWidget {
           if (trailing != null) trailing!,
           if (!song.playable)
             Text('无版权', style: Theme.of(context).textTheme.labelSmall),
-          SongOverflowButton(song: song, size: 20),
+          SongOverflowButton(song: song, size: 20, source: source),
         ],
       ),
       onTap: onTap,

@@ -23,6 +23,32 @@ Future<SearchBundleDto> searchAll({
 Future<ArtistDetailDto> artistDetail({required BigInt artistId}) =>
     RustLib.instance.api.crateApiArtistDetail(artistId: artistId);
 
+/// 歌手全部歌曲一页(artist_songs, offset/limit 分页)
+Future<ArtistSongPageDto> artistSongsPage({
+  required BigInt artistId,
+  required int offset,
+  required int limit,
+}) => RustLib.instance.api.crateApiArtistSongsPage(
+  artistId: artistId,
+  offset: offset,
+  limit: limit,
+);
+
+/// 歌手 MV 一页(artist_mv, offset/limit 分页)
+Future<ArtistMvPageDto> artistMvsPage({
+  required BigInt artistId,
+  required int offset,
+  required int limit,
+}) => RustLib.instance.api.crateApiArtistMvsPage(
+  artistId: artistId,
+  offset: offset,
+  limit: limit,
+);
+
+/// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
+Future<bool> artistSubToggle({required BigInt artistId, required bool sub}) =>
+    RustLib.instance.api.crateApiArtistSubToggle(artistId: artistId, sub: sub);
+
 /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
 Future<ProfileDetail> profileDetail() =>
     RustLib.instance.api.crateApiProfileDetail();
@@ -969,6 +995,81 @@ class ArtistDetailDto {
           musicCount == other.musicCount &&
           songs == other.songs &&
           albums == other.albums;
+}
+
+class ArtistMvDto {
+  final BigInt id;
+  final String name;
+  final BigInt durationMs;
+  final BigInt playCount;
+  final String publishTime;
+  final String? coverUrl;
+
+  const ArtistMvDto({
+    required this.id,
+    required this.name,
+    required this.durationMs,
+    required this.playCount,
+    required this.publishTime,
+    this.coverUrl,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      durationMs.hashCode ^
+      playCount.hashCode ^
+      publishTime.hashCode ^
+      coverUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistMvDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          durationMs == other.durationMs &&
+          playCount == other.playCount &&
+          publishTime == other.publishTime &&
+          coverUrl == other.coverUrl;
+}
+
+class ArtistMvPageDto {
+  final List<ArtistMvDto> mvs;
+  final bool hasMore;
+
+  const ArtistMvPageDto({required this.mvs, required this.hasMore});
+
+  @override
+  int get hashCode => mvs.hashCode ^ hasMore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistMvPageDto &&
+          runtimeType == other.runtimeType &&
+          mvs == other.mvs &&
+          hasMore == other.hasMore;
+}
+
+class ArtistSongPageDto {
+  final List<SongDto> songs;
+  final bool hasMore;
+
+  const ArtistSongPageDto({required this.songs, required this.hasMore});
+
+  @override
+  int get hashCode => songs.hashCode ^ hasMore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistSongPageDto &&
+          runtimeType == other.runtimeType &&
+          songs == other.songs &&
+          hasMore == other.hasMore;
 }
 
 /// 按上限收敛缓存(最久未修改优先), 返回删了多少

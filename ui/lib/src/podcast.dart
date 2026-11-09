@@ -365,7 +365,12 @@ class _ProgramListState extends State<_ProgramList> {
                               const BoxConstraints(minWidth: 32, minHeight: 32),
                           onPressed: () => _openProgramDetail(p),
                         ),
-                        if (song != null) SongOverflowButton(song: song, size: 20),
+                        if (song != null)
+                          SongOverflowButton(
+                            song: song,
+                            size: 20,
+                            source: SongActionSource.radio,
+                          ),
                       ],
                     ),
                     onTap: song == null

@@ -43,6 +43,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ArtistDetailDto dco_decode_artist_detail_dto(dynamic raw);
 
   @protected
+  ArtistMvDto dco_decode_artist_mv_dto(dynamic raw);
+
+  @protected
+  ArtistMvPageDto dco_decode_artist_mv_page_dto(dynamic raw);
+
+  @protected
+  ArtistSongPageDto dco_decode_artist_song_page_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -160,6 +169,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Artist> dco_decode_list_artist(dynamic raw);
+
+  @protected
+  List<ArtistMvDto> dco_decode_list_artist_mv_dto(dynamic raw);
 
   @protected
   List<ChartSummary> dco_decode_list_chart_summary(dynamic raw);
@@ -536,6 +548,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ArtistDetailDto sse_decode_artist_detail_dto(SseDeserializer deserializer);
 
   @protected
+  ArtistMvDto sse_decode_artist_mv_dto(SseDeserializer deserializer);
+
+  @protected
+  ArtistMvPageDto sse_decode_artist_mv_page_dto(SseDeserializer deserializer);
+
+  @protected
+  ArtistSongPageDto sse_decode_artist_song_page_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -667,6 +690,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Artist> sse_decode_list_artist(SseDeserializer deserializer);
+
+  @protected
+  List<ArtistMvDto> sse_decode_list_artist_mv_dto(SseDeserializer deserializer);
 
   @protected
   List<ChartSummary> sse_decode_list_chart_summary(
@@ -1127,6 +1153,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_artist_mv_dto(ArtistMvDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist_mv_page_dto(
+    ArtistMvPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_artist_song_page_dto(
+    ArtistSongPageDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -1287,6 +1328,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_artist(List<Artist> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_artist_mv_dto(
+    List<ArtistMvDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_chart_summary(

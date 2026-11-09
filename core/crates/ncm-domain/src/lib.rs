@@ -251,6 +251,42 @@ pub struct ArtistDetail {
     pub albums: Vec<AlbumBrief>,
 }
 
+/// 歌手全部歌曲一页(artist_songs: offset/limit 分页, more=还有下一页)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtistSongPage {
+    #[serde(default)]
+    pub songs: Vec<Song>,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+/// 歌手 MV 条目(artist_mv 的 mvs[] 子集)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtistMv {
+    pub id: u64,
+    pub name: String,
+    /// 时长(毫秒)
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub play_count: u64,
+    /// 发布日期字符串, 原样展示(如 "2025-02-23")
+    #[serde(default)]
+    pub publish_time: String,
+    /// 16:9 封面(imgurl16v9), 列表用
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+}
+
+/// 歌手 MV 一页(artist_mv: offset/limit 分页, hasMore=还有下一页)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ArtistMvPage {
+    #[serde(default)]
+    pub mvs: Vec<ArtistMv>,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
 /// 账号资料详情(个人主页: 背景图 + 头像 + 签名 + 关注数)
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileDetail {

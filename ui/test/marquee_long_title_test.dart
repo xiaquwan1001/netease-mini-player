@@ -65,6 +65,51 @@ void main() {
     expect(p2!, lessThan(p1 ?? 0), reason: '文本应向左滚动');
   });
 
+  testWidgets('textScaler 回归: 缩放后恰好放不下的文本必须滚动(测量须含 textScaler)', (tester) async {
+    // 视口 300 - 左右 padding 8 = 284; 文本未缩放宽 256(放得下),
+    // 1.25 缩放后 320(放不下). 旧实现 _measure 用 noScaling 测得 260,
+    // 误判 fits 不滚动 => 歌名被 ellipsis 截断且临界时撑破约束.
+    await tester.pumpWidget(_host('超长歌名' * 4));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(_marqueeTransform(tester), findsOneWidget, reason: '1.25 缩放下应启动跑马灯');
+  });
+
+  testWidgets('textScaler 回归: 同文本在 1.0 缩放下放得下, 不滚动', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: const Size(400, 600),
+            textScaler: TextScaler.noScaling,
+          ),
+          child: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 300,
+                child: InkWell(
+                  onTap: () {},
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: MarqueeText(
+                      '超长歌名' * 4,
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+    expect(_marqueeTransform(tester), findsNothing);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
   testWidgets('reduce motion: 不打动画, 单行不溢出', (tester) async {
     await tester.pumpWidget(
       _host('一首非常非常非常长的歌名' * 6, reduceMotion: true),

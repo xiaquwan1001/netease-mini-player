@@ -6,7 +6,7 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, AlbumItem, Artist, ArtistDetail, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
+    AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, SearchExact, ToplistCatalogGroup,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     WordLyric,
@@ -538,6 +538,31 @@ pub trait Provider: Send + Sync {
     /// 歌手详情(头像/简介/热门歌曲/专辑)
     fn artist_detail(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<ArtistDetail>> {
         Box::pin(async { Err(ProviderError::unsupported("no artist detail")) })
+    }
+
+    /// 歌手全部歌曲一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_songs_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistSongPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist songs")) })
+    }
+
+    /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
+    fn toggle_artist_sub<'a>(&'a self, _artist_id: u64, _sub: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist sub")) })
+    }
+
+    /// 歌手 MV 一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_mvs_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistMvPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist mvs")) })
     }
 
     /// 当前账号资料详情(个人主页背景图/头像/签名/关注数)

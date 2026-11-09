@@ -2336,7 +2336,15 @@ class _HomePageState extends State<HomePage> {
                 onPressed: _toggleLyricTranslation,
               ),
             // "..." 从播放条挪到详情页里(播放条只留播放控制)
-            if (current != null) SongOverflowButton(song: current, size: 22),
+            if (current != null)
+              SongOverflowButton(
+                song: current,
+                size: 22,
+                // 正在播放的队列来自 FM 时走 fm_trash, 否则不显示"不感兴趣"
+                source: _fmActive
+                    ? SongActionSource.personalFm
+                    : SongActionSource.other,
+              ),
             IconButton(
               icon: const Icon(Icons.share),
               tooltip: '分享这首歌',
@@ -2493,7 +2501,13 @@ class _HomePageState extends State<HomePage> {
       onOpenAlbum: _openSearchAlbum,
       onOpenPlaylist: _openSearchPlaylist,
       onOpenPodcast: _openSearchPodcast,
-      onMenu: (song) => showSongActionsSheet(context, song, _buildActionsHost()),
+      onMenu: (song) => showSongActionsSheet(
+        context,
+        song,
+        _buildActionsHost(),
+        // 综合搜索结果里的单曲
+        source: SongActionSource.search,
+      ),
     );
   }
 
@@ -2576,7 +2590,13 @@ class _HomePageState extends State<HomePage> {
               _notifyUnplayable(s);
             }
           },
-          onMenu: () => showSongActionsSheet(context, s, _buildActionsHost()),
+          onMenu: () => showSongActionsSheet(
+            context,
+            s,
+            _buildActionsHost(),
+            // 库内歌单/列表详情
+            source: SongActionSource.playlist,
+          ),
         );
       },
     );

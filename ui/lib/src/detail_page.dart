@@ -1274,7 +1274,11 @@ class _SongRow extends StatelessWidget {
               ),
               onPressed: onToggleLike,
             ),
-            SongOverflowButton(song: song, size: 20),
+            SongOverflowButton(
+              song: song,
+              size: 20,
+              source: SongActionSource.playlist,
+            ),
           ],
         ),
       ),
@@ -1338,7 +1342,12 @@ class _ProgramRow extends StatelessWidget {
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 onPressed: onInfo,
               ),
-            if (song != null) SongOverflowButton(song: song, size: 20),
+            if (song != null)
+              SongOverflowButton(
+                song: song,
+                size: 20,
+                source: SongActionSource.radio,
+              ),
           ],
         ),
       ),

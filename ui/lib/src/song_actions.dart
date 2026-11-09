@@ -5,6 +5,23 @@ import 'net_retry.dart';
 import 'toast.dart' show showToastWith;
 import 'rust/api.dart' as rust;
 
+/// 歌曲菜单打开时所处的"来源"场景。
+/// 只有 [SongActionSource.dailyRecommend] 与 [SongActionSource.personalFm]
+/// 允许显示"不感兴趣"(后端只有这两个入口接受该写操作, 其它来源会报错)。
+enum SongActionSource {
+  search,
+  dailyRecommend,
+  personalFm,
+  playlist,
+  album,
+  artist,
+  radio,
+  other;
+
+  /// 该来源是否允许"不感兴趣"
+  bool get allowsDislike => this == dailyRecommend || this == personalFm;
+}
+
 /// 动作回调集合(由 main.dart 组装, 行组件通过 AppActions 取)
 class SongActionHost {
   const SongActionHost({
@@ -84,6 +101,7 @@ class SongOverflowButton extends StatelessWidget {
     required this.song,
     this.host,
     this.size = 20,
+    this.source = SongActionSource.other,
   });
 
   final rust.SongDto song;
@@ -91,6 +109,9 @@ class SongOverflowButton extends StatelessWidget {
   /// 显式传入时优先于 InheritedWidget
   final SongActionHost? host;
   final double size;
+
+  /// 菜单来源(决定"不感兴趣"是否显示), 各调用点必须传真实来源
+  final SongActionSource source;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +121,7 @@ class SongOverflowButton extends StatelessWidget {
     return IconButton(
       icon: Icon(Icons.more_vert, size: size),
       tooltip: '更多操作',
-      onPressed: () => showSongActionsSheet(context, song, h),
+      onPressed: () => showSongActionsSheet(context, song, h, source: source),
     );
   }
 }
@@ -109,8 +130,9 @@ class SongOverflowButton extends StatelessWidget {
 Future<void> showSongActionsSheet(
   BuildContext context,
   rust.SongDto song,
-  SongActionHost host,
-) {
+  SongActionHost host, {
+  SongActionSource source = SongActionSource.other,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -124,7 +146,7 @@ Future<void> showSongActionsSheet(
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _menu(sheetContext, song, host),
+            children: _menu(sheetContext, song, host, source),
           ),
         ),
       ),
@@ -137,6 +159,7 @@ List<Widget> _menu(
   BuildContext context,
   rust.SongDto song,
   SongActionHost host,
+  SongActionSource source,
 ) {
   final colorScheme = Theme.of(context).colorScheme;
   final liked = host.isLiked(song.id);
@@ -200,7 +223,9 @@ List<Widget> _menu(
       ),
       onTap: artistEnabled ? () => run(() => host.openArtist(song)) : null,
     ),
-    if (host.dislike != null)
+    // 后门保留: host.dislike == null 时任何来源都不显示;
+    // 来源不是日推/FM 时也不显示(后端只接受这两个来源的写操作)。
+    if (host.dislike != null && source.allowsDislike)
       ListTile(
         leading: const Icon(Icons.do_not_disturb_on_outlined),
         title: const Text('不感兴趣'),
