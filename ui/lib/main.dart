@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'src/marquee_text.dart';
 import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
@@ -2098,22 +2100,18 @@ class _HomePageState extends State<HomePage> {
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
       // 标题固定用 titleMedium, 让品牌字至少完整显示
+      // 详情页(歌词页)标题用 titleLarge 级别; 之前钉在 titleMedium 导致字号特别小
       titleTextStyle: Theme.of(context)
           .textTheme
-          .titleMedium
+          .titleLarge
           ?.copyWith(fontWeight: FontWeight.w600),
-      // 大字号设备会把标题挤成 "轻音 MiniN…", 用 FittedBox 缩排而不是截断
-      title: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Text(
-          _showLyrics
-              ? (_lyricSelecting
-                  ? '已选 ${_selectedLyricLines.length} 句'
-                  : (current?.name ?? '歌词'))
-              : (_libraryTitle ?? '轻音 MiniNCM'),
-          maxLines: 1,
-        ),
+      // 长歌名横向滚动播放(marquee); 放不下不再 FittedBox 缩成小字
+      title: MarqueeText(
+        _showLyrics
+            ? (_lyricSelecting
+                ? '已选 ${_selectedLyricLines.length} 句'
+                : (current?.name ?? '歌词'))
+            : (_libraryTitle ?? '轻音 MiniNCM'),
       ),
       leading: _showLyrics
           ? IconButton(
@@ -2590,10 +2588,8 @@ class _HomePageState extends State<HomePage> {
                             Row(
                               children: [
                                 Flexible(
-                                  child: Text(
+                                  child: MarqueeText(
                                     current?.name ?? '未在播放',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
                                     style: Theme.of(context).textTheme.titleSmall,
                                   ),
                                 ),

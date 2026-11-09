@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'marquee_text.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
@@ -146,9 +147,10 @@ class SongTile extends StatelessWidget {
       title: Row(
         children: [
           Flexible(
-            child: Text(
+            // 必须 maxLines:1/marquee: 之前只有 ellipsis 没有 maxLines,
+            // 宽度不足时逐字换行(歌名竖排且超界)就是这里.
+            child: MarqueeText(
               song.name,
-              overflow: TextOverflow.ellipsis,
               style: playable ? null : grey,
             ),
           ),

@@ -2,6 +2,8 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
+import 'marquee_text.dart';
+
 
 /// 当前播放队列面板(播放条上的 Icons.queue_music 打开)。
 ///
@@ -158,10 +160,8 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                                     ),
                             ),
                           ),
-                          title: Text(
+                          title: MarqueeText(
                             song.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style: current
                                 ? TextStyle(
                                     color: scheme.primary,

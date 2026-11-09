@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
+import 'marquee_text.dart';
 import 'cover_art.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
@@ -612,11 +613,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      // 标题用 headlineSmall 级别(之前 titleMedium 显得特别小);
+                      // 长标题单行横向滚动播放, 不再截断/竖排
+                      MarqueeText(
                         d?.name ?? widget.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
+                        style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
                       ),
