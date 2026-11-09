@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'rust/api.dart' as rust;
 
 /// 搜索页的"落地内容": 历史 + 猜你想搜 + 热门榜.
@@ -63,6 +64,10 @@ class SearchLanding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // 开关即时生效: 设置页改值会 notifyListeners, main 的 SettingsScope 重建整棵树,
+    // 这里每次 build 读取最新值即可, 无需自己监听.
+    final showHot = AppSettings.instance.showHotSearch;
+    final hasRecommended = recommended != null && recommended!.isNotEmpty;
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       children: [
@@ -98,7 +103,7 @@ class SearchLanding extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (recommended != null && recommended!.isNotEmpty) ...[
+        if (hasRecommended) ...[
           const _SectionTitle(title: '猜你想搜'),
           Card(
             margin: EdgeInsets.zero,
@@ -122,9 +127,20 @@ class SearchLanding extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        _SectionTitle(
-          title: '热门搜索',
-          trailing: hotLoading
+        if (!showHot && history.isEmpty && !hasRecommended)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: Text(
+                '在设置里开启「显示热搜建议」可看热门榜',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+        if (showHot)
+          _SectionTitle(
+            title: '热门搜索',
+            trailing: hotLoading
               ? const SizedBox(
                   width: 16,
                   height: 16,
@@ -132,7 +148,7 @@ class SearchLanding extends StatelessWidget {
                 )
               : null,
         ),
-        if (hotError != null)
+        if (showHot && hotError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
@@ -155,7 +171,7 @@ class SearchLanding extends StatelessWidget {
               ],
             ),
           )
-        else if (!hotLoading && hot.isEmpty)
+        else if (showHot && !hotLoading && hot.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -163,7 +179,7 @@ class SearchLanding extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           )
-        else
+        else if (showHot)
           Card(
             margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,

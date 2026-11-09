@@ -1,0 +1,103 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/app_settings.dart';
+import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/search_landing.dart';
+
+rust.HotSearchTerm hot(int rank, String keyword) =>
+    rust.HotSearchTerm(rank: rank, keyword: keyword);
+
+// 与 main.dart 的 SettingsScope 等价: notifyListeners 时重建子树.
+// builder 里要重新构造 child —— 复用同一 widget 实例会被
+// updateChild 的 identical 短路跳过, 不会重跑 build.
+Widget host(SearchLanding Function() make) => MaterialApp(
+      home: AnimatedBuilder(
+        animation: AppSettings.instance,
+        builder: (_, _) => Scaffold(body: make()),
+      ),
+    );
+
+SearchLanding landing() => SearchLanding(
+  history: const ['七里香'],
+  hot: [hot(1, '晴天'), hot(2, '稻香')],
+  recommended: '周杰伦',
+  onSelected: (_) {},
+  onClearHistory: () {},
+);
+
+void main() {
+  setUp(() {
+    // 每例恢复默认, 避免用例间串状态(单例)
+    AppSettings.instance.showHotSearch = true;
+  });
+
+  testWidgets('默认(未设置)可见热门搜索', (tester) async {
+    await tester.pumpWidget(host(landing));
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.text('晴天'), findsOneWidget);
+  });
+
+  testWidgets('showHotSearch=false 时不渲染热门区块, 历史/猜你想搜仍在', (tester) async {
+    AppSettings.instance.showHotSearch = false;
+    await tester.pumpWidget(host(landing));
+    expect(find.text('热门搜索'), findsNothing);
+    expect(find.text('晴天'), findsNothing);
+    expect(find.text('稻香'), findsNothing);
+    expect(find.text('搜索历史'), findsOneWidget);
+    expect(find.text('七里香'), findsOneWidget);
+    expect(find.text('猜你想搜'), findsOneWidget);
+    expect(find.text('周杰伦'), findsOneWidget);
+  });
+
+  testWidgets('隐藏后无历史无猜你想搜时显示占位提示; 打开开关后立即出现', (tester) async {
+    AppSettings.instance.showHotSearch = false;
+    await tester.pumpWidget(
+      host(
+        () => SearchLanding(
+          history: const [],
+          hot: [hot(1, '晴天')],
+          recommended: null,
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
+    expect(find.textContaining('显示热搜建议'), findsOneWidget);
+    expect(find.text('热门搜索'), findsNothing);
+
+    // 模拟设置页切换: notifyListeners 驱动重建, build 内读取最新值
+    AppSettings.instance.showHotSearch = true;
+    AppSettings.instance.notifyListeners();
+    await tester.pump();
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.text('晴天'), findsOneWidget);
+    expect(find.textContaining('显示热搜建议'), findsNothing);
+  });
+
+  // 真 IO(落盘/读回)在 testWidgets 的 FakeAsync 里不会完成, 用普通 test
+  test('设置项持久化: update 落盘, 旧 settings.json 缺字段默认 true', () async {
+    final dir = await Directory.systemTemp.createTemp('hot_search_settings');
+    addTearDown(() => dir.delete(recursive: true));
+    final settings = AppSettings.instance;
+    await settings.load(dir.path);
+
+    expect(settings.showHotSearch, isTrue, reason: '新字段缺省为 true');
+    await settings.update(showHotSearch: false);
+    final saved = jsonDecode(
+      File('${dir.path}/settings.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    expect(saved['showHotSearch'], isFalse);
+
+    // 旧配置(缺字段)读进来应回落 true —— 先复位字段模拟新进程默认值
+    settings.showHotSearch = true;
+    File(
+      '${dir.path}/settings.json',
+    ).writeAsStringSync(jsonEncode({'themeMode': 'system', 'textScale': 1.0}));
+    await settings.load(dir.path);
+    expect(settings.showHotSearch, isTrue);
+    expect(settings.clearSearchOnTabSwitch, isTrue);
+  });
+}

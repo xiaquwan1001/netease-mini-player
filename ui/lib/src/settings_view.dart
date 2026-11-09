@@ -131,6 +131,15 @@ class SettingsView extends StatelessWidget {
                   },
                 ),
                 const Divider(height: 1),
+                SwitchListTile(
+                  title: const Text('显示热搜建议'),
+                  subtitle: const Text('关闭后搜索页不再显示热门搜索榜, 只留搜索历史与猜你想搜'),
+                  value: settings.showHotSearch,
+                  onChanged: (value) {
+                    settings.update(showHotSearch: value);
+                  },
+                ),
+                const Divider(height: 1),
                 ListTile(
                   title: const Text('取链音质'),
                   subtitle: Text(

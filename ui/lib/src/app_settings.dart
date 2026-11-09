@@ -27,6 +27,9 @@ class AppSettings extends ChangeNotifier {
   /// 切回"搜索"底部 tab 时是否丢弃上一次的输入/结果(默认丢弃, 避免残留)
   bool clearSearchOnTabSwitch = true;
 
+  /// 搜索页是否展示「热门搜索」榜(默认展示; 关闭后只留历史与猜你想搜)
+  bool showHotSearch = true;
+
   // ---------------- 播放与外观(2026-11 任务书 docs/plan-2026-11-09-settings-and-player.md) ----------------
   // 原则: 默认值一律等于"不改变现状", 老配置读进来行为不变.
 
@@ -122,6 +125,8 @@ class AppSettings extends ChangeNotifier {
           }
           final clearOnSwitch = raw['clearSearchOnTabSwitch'];
           if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
+          final hotSearch = raw['showHotSearch'];
+          if (hotSearch is bool) showHotSearch = hotSearch;
 
           if (raw['oledDark'] is bool) oledDark = raw['oledDark'] as bool;
           volumeGainDb = _doubleOf(raw['volumeGainDb'], 0.0).clamp(-40.0, 0.0);
@@ -168,6 +173,7 @@ class AppSettings extends ChangeNotifier {
     String? audioLevel,
     int? coverRows,
     bool? clearSearchOnTabSwitch,
+    bool? showHotSearch,
     bool? oledDark,
     double? volumeGainDb,
     bool? loudnessNormalize,
@@ -192,6 +198,7 @@ class AppSettings extends ChangeNotifier {
     if (clearSearchOnTabSwitch != null) {
       this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
     }
+    if (showHotSearch != null) this.showHotSearch = showHotSearch;
     if (oledDark != null) this.oledDark = oledDark;
     if (volumeGainDb != null) {
       this.volumeGainDb = volumeGainDb.clamp(-40.0, 0.0);
@@ -225,6 +232,7 @@ class AppSettings extends ChangeNotifier {
         'audioLevel': audioLevel,
         'coverRows': coverRows,
         'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
+        'showHotSearch': showHotSearch,
         'oledDark': oledDark,
         'volumeGainDb': volumeGainDb,
         'loudnessNormalize': loudnessNormalize,
