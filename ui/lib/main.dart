@@ -6,6 +6,8 @@ import 'src/marquee_text.dart';
 import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
+import 'src/cover_backdrop.dart';
+import 'src/cover_palette.dart';
 import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
@@ -422,6 +424,8 @@ class _HomePageState extends State<HomePage> {
     final playingId = state.trackId?.toInt();
     if (playingId != _loudnessAppliedTrackId) {
       _loudnessAppliedTrackId = playingId;
+      // 歌词页背景跟随封面主色(node-vibrant 思路, 纯 Dart; 同 URL 有 LRU 缓存)
+      unawaited(_syncCoverPalette());
       // 通知栏红心按钮跟当前曲目走
       unawaited(_syncActionState());
       if (playingId != null) {
@@ -1107,10 +1111,11 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _syncLyricIndex(PlayerView state) {
+  void _syncLyricIndex(PlayerView state, {bool force = false}) {
     if (!_showLyrics || _lyricTimes.isEmpty) return;
     final idx = lyricIndexAt(_lyricTimes, state.positionMs);
-    if (idx == _lyricIndex) return;
+    // force=true: seek(拖/点进度条、切歌)后即使落在同一句也要把列表滚回当前句
+    if (idx == _lyricIndex && !force) return;
     setState(() => _lyricIndex = idx);
     _scrollLyricTo(idx);
   }
@@ -1924,6 +1929,26 @@ class _HomePageState extends State<HomePage> {
   /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
   bool get _heartActive => _libraryTitle == '心动模式';
 
+  /// 当前曲目封面主色(歌词页背景用); null = 回退主题色
+  CoverPalette? _coverPalette;
+
+  /// 上一次取色对应的封面 URL, 避免同一封面重复触发
+  String? _coverPaletteUrl;
+
+  /// 曲目切换后重算封面主色. 同 URL 命中 cover_palette 的 LRU 缓存, 不会重复计算.
+  Future<void> _syncCoverPalette() async {
+    final url = _current?.coverUrl;
+    if (url == _coverPaletteUrl) return;
+    _coverPaletteUrl = url;
+    if (url == null || url.isEmpty) {
+      if (mounted && _coverPalette != null) setState(() => _coverPalette = null);
+      return;
+    }
+    final palette = await paletteFromUrl(url);
+    if (!mounted || _coverPaletteUrl != url) return; // 期间又换曲, 丢弃旧结果
+    setState(() => _coverPalette = palette);
+  }
+
   /// 把当前红心/模式状态回传给原生, 刷新通知自定义按钮图标
   Future<void> _syncActionState() async {
     await _playback.setActionState(
@@ -1957,14 +1982,17 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _seekTo(double ms) async {
     final target = ms.round();
+    // seek 是用户的明确意图: 无论之前是否拖过歌词, seek 后都恢复自动跟随,
+    // 否则一次误触/拖动歌词后, 歌词从此不再跟着播放滚动(拖/点进度条都算 seek).
     setState(() {
       _dragMs = null;
       _dragMax = null;
+      _autoFollowLyric = true;
     });
     final state = await _playback.seek(BigInt.from(target));
     if (!mounted) return;
     setState(() => _player = state);
-    _syncLyricIndex(state);
+    _syncLyricIndex(state, force: true);
   }
 
   // ---------------- UI ----------------
@@ -2074,7 +2102,14 @@ class _HomePageState extends State<HomePage> {
                 Positioned.fill(
                   child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
                 ),
-                if (_showLyrics) Positioned.fill(child: _buildLyrics()),
+                if (_showLyrics)
+                  // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
+                  Positioned.fill(
+                    child: CoverBackdrop(
+                      palette: _coverPalette,
+                      child: _buildLyrics(),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -2520,9 +2555,13 @@ class _HomePageState extends State<HomePage> {
       children: [
         Expanded(
           child: NotificationListener<ScrollNotification>(
-            // 只认"手指拖动"(dragDetails != null): 自动跟随用的 animateTo 不会误判
             onNotification: (n) {
-              if (n is ScrollUpdateNotification && n.dragDetails != null) {
+              // 只认"手指拖动启动"(ScrollStartNotification.dragDetails != null):
+              // - 这个 NotificationListener 只包住歌词列表, 子树里能带 dragDetails 的
+              //   ScrollStart 只可能来自列表自身的拖动(播放条/进度条在子树外);
+              // - 自动跟随的 animateTo 发出的 ScrollStart/ScrollUpdate 都没有
+              //   dragDetails, 不会被误判成用户滑动.
+              if (n is ScrollStartNotification && n.dragDetails != null) {
                 _pauseLyricFollow();
               }
               return false;

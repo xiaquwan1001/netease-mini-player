@@ -168,6 +168,10 @@ class _WordLyricViewState extends State<WordLyricView> {
       _activeIndex.value = -1;
       _onPosition();
     }
+    // 恢复跟随(定位按钮/seek): 位置可能停在原句没变, 也要立刻把列表滚回当前行
+    if (!old.autoScroll && widget.autoScroll) {
+      _scrollTo(_activeIndex.value);
+    }
   }
 
   @override
