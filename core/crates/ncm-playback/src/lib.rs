@@ -361,7 +361,9 @@ mod backend {
 
 }
 
-#[cfg(not(target_os = "linux"))]
+// 非桌面(Android 等): 没有本地音频引擎, 播放交给平台层(Media3), 这里只保留同名 API 的桩.
+// 注意必须与上面的 `any(linux, windows)` 互斥, 否则 Windows 上会同时命中两个 backend(E0428).
+#[cfg(not(any(target_os = "linux", target_os = "windows")))]
 mod backend {
     use super::*;
 
