@@ -17,6 +17,30 @@ v0.1.0 之后无法升级到 v0.1.1, 只能卸载重装。
 
 ## 2. 本地正式签名
 
+### 2.0 当前生效的 keystore(2026-11-10 起)
+
+| 项 | 值 |
+|---|---|
+| 路径 | `~/release.keystore`(PKCS12, 仓库外) |
+| 别名 | `mykey` |
+| 算法 | RSA 2048 / SHA384withRSA, 有效期至 **2054-03-27** |
+| 证书 DN | `CN=Xu Qianhui, OU=Dev, O=Personal, L=City, ST=State, C=CN` |
+| 序列号 | `c5d929c5b0c3e951` |
+| SHA-1 | `05:62:B7:81:24:99:58:74:3B:18:B5:EE:AB:89:7D:E0:7E:C6:36:96` |
+| **SHA-256** | `A40FEFB9F10C0EAE91E786ECB9CCFE2F0699731A3F5B4EA7834F71CCA5CBCDEe2` |
+| 口令存放 | GNOME keyring: `secret-tool lookup app android-release type {storepass,keypass}` |
+
+> **口令不入库、不进记忆**。重建 `key.properties` 的两条命令写在下面, 口令只从 keyring 读取:
+> ```bash
+> SP=$(secret-tool lookup app android-release type storepass)
+> KP=$(secret-tool lookup app android-release type keypass)
+> umask 077
+> printf 'storeFile=%s/release.keystore\nstorePassword=%s\nkeyAlias=mykey\nkeyPassword=%s\n' "$HOME" "$SP" "$KP" > ui/android/key.properties
+> ```
+> 校验(应打印与上表一致的 SHA-256): `bash tools/build-android.sh release` 末尾有 apksigner 自检。
+
+### 2.1 从零生成一套(原始配方, 保留备查)
+
 ```bash
 # 1) 一次性生成 keystore(放到仓库外, 不要提交; 密码自己保管)
 mkdir -p ~/.android/keys
@@ -33,6 +57,8 @@ keyPassword=<key 密码>
 EOF
 ```
 
+本地出包: `bash tools/build-android.sh`(debug, 包名 `…minincm.dev`) / `bash tools/build-android.sh release`(正式签名, 包里带 apksigner 指纹自检)。
+
 缺失 `key.properties` 时 Gradle 回落到 debug 签名并打印警告 —— 新克隆的仓库仍然能构建,
 但**不要**把那产物当正式发布包。
 
@@ -44,10 +70,10 @@ EOF
 
 | Secret | 内容 |
 | --- | --- |
-| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 ~/.android/keys/minincm-release.jks` |
-| `ANDROID_KEYSTORE_PASSWORD` | keystore 密码 |
-| `ANDROID_KEY_ALIAS` | 例如 `minincm` |
-| `ANDROID_KEY_PASSWORD` | key 密码 |
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 ~/release.keystore` |
+| `ANDROID_KEYSTORE_PASSWORD` | `secret-tool lookup app android-release type storepass` |
+| `ANDROID_KEY_ALIAS` | `mykey` |
+| `ANDROID_KEY_PASSWORD` | `secret-tool lookup app android-release type keypass` |
 
 `.github/workflows/release.yml` 会在构建前把 keystore 落成 `ui/android/release.jks` +
 `key.properties`; 没配 Secret 时打印 `::warning::` 并回落到 debug 签名。
