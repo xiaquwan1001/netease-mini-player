@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_settings.dart';
+import 'eq_curve_chart.dart';
 import 'eq_profile.dart';
 import 'toast.dart';
 
@@ -214,6 +215,16 @@ class AudioSettingsPage extends StatelessWidget {
           leading: const Icon(Icons.graphic_eq),
           title: const Text('生效曲线'),
           subtitle: Text(settings.eqProfileName ?? '未启用'),
+        ),
+        SizedBox(
+          height: 232,
+          child: EqCurvePanel(
+            text: settings.eqProfileText,
+            onChanged: (text) => settings.update(
+              eqProfileText: text,
+              eqProfileName: '自定义曲线',
+            ),
+          ),
         ),
         const Divider(height: 1),
         Row(
