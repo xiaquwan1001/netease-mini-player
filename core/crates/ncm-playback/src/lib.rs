@@ -181,7 +181,7 @@ fn effective_volume_db(user_volume: f32, gain_db: f32) -> f32 {
     (user_volume * biquad::db_to_linear(gain_db.clamp(-40.0, 12.0))).clamp(0.0, 1.0)
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 mod backend {
     use super::*;
     use rodio::{ChannelCount, Decoder, DeviceSinkBuilder, Player as RodioPlayer, Sample, SampleRate, Source};

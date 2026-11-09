@@ -71,8 +71,14 @@ class SongShare {
       });
       return saved ?? '系统图库';
     }
-    final home = Platform.environment['HOME'] ?? '.';
-    final dir = Directory('$home/Pictures/MiniNCM');
+    // 桌面: Linux ~/Pictures, Windows %USERPROFILE%\Pictures
+    final env = Platform.environment;
+    final home = Platform.isWindows
+        ? (env['USERPROFILE'] ?? '.')
+        : (env['HOME'] ?? '.');
+    final dir = Directory(Platform.isWindows
+        ? '$home\\Pictures\\MiniNCM'
+        : '$home/Pictures/MiniNCM');
     await dir.create(recursive: true);
     final path = '${dir.path}/$filename';
     await File(path).writeAsBytes(png, flush: true);
