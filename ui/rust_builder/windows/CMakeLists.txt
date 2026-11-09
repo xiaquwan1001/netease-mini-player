@@ -9,7 +9,11 @@ set(PROJECT_NAME "rust_lib_minincm")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 include("../cargokit/cmake/cargokit.cmake")
-apply_cargokit(${PROJECT_NAME} ../../../../../../../core/crates/ncm-ffi rust_lib_minincm "")
+# manifest_dir: 以 rust_builder/windows 为基准 -> rust_builder -> ui -> 仓库根 -> core/crates/ncm-ffi
+#   (frb 模板默认是 ../../../../../../../ 因为它的 rust crate 在别的层级; 本仓库拷贝时没改, 导致构建工具找不到 Cargo.toml)
+# lib_name: **cargo 包名** ncm_ffi, 不是插件名 rust_lib_minincm —— Dart 侧 frb_generated.dart 里 stem: 'ncm_ffi'
+#   决定了产物必须是 ncm_ffi.dll, 否则运行时加载失败。
+apply_cargokit(${PROJECT_NAME} ../../../core/crates/ncm-ffi ncm_ffi "")
 
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
