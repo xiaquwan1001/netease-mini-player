@@ -5,11 +5,39 @@
 > (`release.yml` 重构为 verify → build+build-windows → publish), 已发布 **v0.3.2 六种资产**;
 > ③ **歌单写接口 + 队列「存为歌单」**; ④ **MV 播放 + 自动更新检查 + Windows 桌面版合入**, 并修好一次
 > **.git 对象库损坏**(64 个 0 字节 loose object) + 队列面板拖拽排序/清空。
-> 当前门禁: `cargo test --offline --workspace` **248** / `flutter test --exclude-tags network` **522** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 140)。
+> 当前门禁: `cargo test --offline --workspace` **249** / `flutter test --exclude-tags network` **532** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 142)。
+> 最新一批(同日五): **桌面端官方扫码登录 + deb 门面元数据(AppStream) + 账号隐私修复**(见下方最新小节)。
 > **下一轮做什么**: 见 `docs/remaining-batches.md` **§11 待办(2026-11-10 收尾版)**。
 > 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
+## 进度总览(2026-11-10, 面向新读者的速览)
+
+**当前门禁**: `cargo test --offline --workspace` **249** / `flutter test --exclude-tags network` **532** /
+`dart analyze` 0 error / 0 warning(42 info) / 接口覆盖 **123/123**(FFI 导出 142, 其中 4 个无 UI 入口)。
+
+**版本时间线**:
+
+| 版本 | 日期 | 里程碑 |
+|---|---|---|
+| v0.1.0 | 2026-11-08 | 首个公开预览版(Android APK + Linux tar.gz, MIT LICENSE, 第三方许可盘点) |
+| v0.2.x | 2026-11-09~10 | 设置项扩充 R1–R7、UI/UX 走查批 A–C、播放体验修复、**Windows 桌面版合入**、v0.2.2 三端发布 |
+| v0.3.x | 2026-11-10 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布** |
+
+**各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
+
+- **M0**(基建): Rust workspace 五 crate + FRB 桥 + headless CLI, 双端能启动、协议库真实取到直链。✅
+- **vendor 裁剪 P1+P2**: 删 264 个未接 endpoint, vendor 12k→4.1k LOC, 冷编 1.40→0.65s。✅
+- **FFI 清理 D1/D2/D5/D7**: 死导出删除、转发宏收敛、frb 直透 domain(57/57), 车道已关闭。✅
+- **功能批次 B1–B4/B8/B10/B12**(S 级只读): 消息增强/评论统计/会员只读/搜索增强/等级勋章/电台/数字专辑全部落地并实测。✅
+- **B5+B13 逐字歌词**: yrc 契约层 + AMLL TTML 第二来源 + 打分择优(偏好三态可调)。✅
+- **B7 歌单写接口**: create/批量加曲 + 队列「存为歌单」, 服务端复核通过。✅
+- **UI 批 A–C**: 速修/评论输入/队列面板/信息架构重排全部完成;D 批技术债与 C 视觉人工过目仍开放。✅(D ⏳)
+- **播放质量**: 精细音量、响度均衡(R128→ReplayGain)、AutoEQ、逐字歌词、封面取色、歌词跟随。✅
+- **三端与打包**: Windows 合入, 六种分发物由 Release 流水线统一产出。✅
+- **真机听感验收**: EQ 削波/淡入手感/响度 A/B/硬解, 2026-11-10 通过。✅
+- **下一步**: `docs/remaining-batches.md` §11(评论发送写操作走查为发布前硬门)。
+
 > 更早: 接口覆盖 123/123、FFI 140 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
@@ -32,6 +60,28 @@
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## v2 · 2026-11-10(五): 桌面端官方扫码登录 · deb 门面元数据 · 账号隐私修复
+
+三个用户报的真问题, 一个文档整理批。**根因都不是"界面不好看", 而是缺一层能力/元数据。**
+
+| 问题 | 根因 | 落点 | 证据 |
+|---|---|---|---|
+| **桌面端点「登录」没法唤起官方网页登录**, 只能 `ncm login-cookie` 粘 cookie | 桌面没有 Android 那套 WebView + `CookieManager`, 读不到浏览器里 **HttpOnly** 的 `MUSIC_U`; 旧代码 `Auth.loginWeb()` 在非 Android 直接抛 `UnsupportedError`, 命令行成了唯一入口 | 走**官方网页登录的扫码通道**(与"原生登录族/8821"无关): 新增 `Provider::login_qr_create/login_qr_check` → `/api/login/qrcode/unikey`(weapi, type=1) 取 unikey, 二维码内容 `https://music.163.com/login?codekey=<unikey>`, 轮询 `/api/login/qrcode/client/login`; **803 的凭据在 Set-Cookie 不在 body**。FFI `loginQrCreate/loginQrCheck`(142), Dart 新弹层 `login_sheet.dart`(二维码 + 状态 + 刷新 + 导入 Cookie + 打开官方登录页), `main.dart::_login` 桌面分支改走它, 账号页未登录也给出「登录」按钮 | `ncm login-qr` 宿主实测: 拿到 unikey、轮询回 `801 Pending`(无 8821); Rust 单测 `qr_login_check_states_and_cookie`(800/801/802/803/400 + 803 缺 MUSIC_U 必须报错); widget 测试 6 例(状态机/过期停轮询/导入成功/无 MUSIC_U/空输入/申请失败重试) |
+| **下载的 deb 预览显示 `minincm` 且没有图标**, 装完才变成「轻音 MiniNCM」+图标 | 包里只有 `.desktop`(安装后才被读), **缺 AppStream 元数据**; 文件管理器/软件中心预览非安装态包时读的就是它 | 新增 `packaging/linux/io.github.xiaquwan1001.MiniNCM.metainfo.xml`(中文名/英文名/summary/描述/launchable/icon/categories/releases) 与 `/usr/share/pixmaps/minincm.png` 兜底; `.desktop` 补 `Name[zh_CN]`/`Comment[en]`/`Keywords[zh_CN]`; AppImage 也带上同一份 metainfo | `appstreamcli validate --no-net` **通过**(只剩 3 条 info); `dpkg-deb -c` 可见 metainfo+pixmaps+hicolor; 包重打后 11 MB |
+| **没登录的空账号占位显示成上次登录的昵称 + VIP 标**(疑隐私泄露) | 账号页把账号簿(accounts.json)里的缓存**无脑当当前账号渲染**: 头部 VIP 标只看 `active` 不看登录态; 另有一份过期登录态(cookie 字符串还在但服务端已失效)会一直显示"已登录 + 缓存昵称/VIP" | ① 未登录时头部/账号簿**一律不显示 VIP 标**, 行内文案改成「上次登录的账号(当前未登录)」; ② 桌面/移动都给出「清除本机登录凭据」(退出 + 删每个账号的 `MUSIC_U`, 二次确认, 保留 device_id); ③ 启动时 `accountSyncActive` 兼作登录态校验: **只有服务端明确回 `[auth]` 才清登录态**, 网络/风控失败不动 | `ui/test/account_page_privacy_test.dart` 4 例(未登录零 VIP 标/已登录 2 个/空账号簿无清除入口/清除需二次确认); 迁移前本地 `accounts.json` 实测确为明文 `MUSIC_U`(0600) |
+
+**文档整理批**(子代理, 未改代码): `docs/README.md` 新建文档索引(活跃/归档)、`docs/PROGRESS.md` 加「进度总览」、
+README/README.en 门面重排(三端口径 + 功能分组 + Releases 下载表 + 英文版过时门禁 170/351 订正为 249/532);
+GitHub 仓库 description 改为三端口径、topics 补 `windows`/`desktop`/`third-party-client`(共 10 个)。
+报告见 `docs/DOCS-REPORT-2026-11-10.md`。
+
+门禁(编排者独立重跑): `cargo test --offline --workspace` **249 通过 / 0 失败**(vendor 4 例匿名联网 smoke 需清空代理变量才绿, 与 ci.sh 口径一致) ·
+`flutter test --exclude-tags network` **532 通过 / 0 失败**(+10) · `dart analyze` **0 error / 0 warning**(42 info) ·
+`flutter build linux --release` 通过 · `tools/api-coverage.sh` vendor **123/123**, FFI **142**。
+
+**未做/留给下一轮**: 真机/模拟器上的扫码确认(需用户拿手机扫一次)、Windows 端同一条链路的冒烟(本机编不了)、
+`ncm login-qr` 之外的 `login_qr_check` 803 端到端(等真实扫码)。
 
 ## v2 · 2026-11-10(四): 封面清晰度按设备分辨率取图 + 档位可调 + 看大图保存原图
 

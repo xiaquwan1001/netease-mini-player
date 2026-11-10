@@ -26,8 +26,8 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 一个**极简、可长期维护**的网易云音乐客户端:播放条只有一行、点开就是歌词详情页,
 不喜欢的歌一律不推;协议、加解密、风控与身份都在 Rust 里,UI 只负责"好看好用"。
 
-- **一份 UI 跑两个平台**:`ui/` 的 Dart 代码同时构建 Android APK 与 Linux 桌面;
-  平台差异只出现在 `playback.dart` / `platform.dart` 两个文件。
+- **一份 UI 跑三个平台**:`ui/` 的 Dart 代码同时构建 Android APK、Linux 桌面与 Windows x64;
+  平台差异收敛在 `playback.dart` / `platform.dart` 与播放后端两个 `cfg`。
 - **协议不自研**:加解密/风控/接口形态全部来自 `core/vendor/ncm-api`(api-enhanced 的 Rust 移植,
   锁定 commit),我们只做身份注入、DTO 转换与缓存。
 - **身份纪律**:`device_id` 首启生成后永久复用,设备 cookie(`_ntes_nuid/_ntes_nnid/NMTID/WNMCID`)
@@ -67,14 +67,18 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 
 ## 功能一览
 
-| 模块 | 已实现 |
+| 分组 | 已实现 |
 |---|---|
-| 发现 | 搜索(历史/联想/热词榜)、每日推荐(歌曲·歌单·播客)、每日私人 FM、心动模式、排行榜、新碟上架、风格推荐、关注动态、私信与评论 |
-| 播放 | 播放条(一行)、播放队列(可跳可删)、播放模式、歌曲详情页(歌词/翻译/多选分享/定位当前句)、逐字歌词 |
-| 播放质量 | 精细音量(-40..0 dB)、响度均衡(EBU R128/BS.1770-4 测量 + ReplayGain 2.0 静态增益,可选动态 AGC ≤3 dB/s)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、优先硬解/仅软解、边听边存 + 缓存上限 LRU |
-| 账号 | 网页登录(Android WebView,只回传 cookie)、多账号账号簿、我喜欢/歌单/播客/关注 |
-| 外观 | 主题(浅色/深色/OLED 纯黑)、界面字号、推荐卡片一排/两排、封面清晰度档位(省流/标准/超清, 按设备分辨率取图) |
-| 图片 | 封面/配图按屏幕像素取缩略图; 全屏看图支持缩放与**保存原图**(Android 入系统图库, 桌面落 ~/Pictures/MiniNCM) |
+| 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU |
+| 歌词 | 行级滚动高亮、逐字歌词(yrc + AMLL TTML 双来源自动择优)、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
+| 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、我喜欢按收藏时间排序、最近播放四分类 |
+| 社区 | 评论(热门/全部/楼层回复/点赞/删除/IP 归属)、私信与 @我(只读)、关注动态、关注/粉丝列表、签到 |
+| 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB |
+| 会员只读 | 黑胶会员卡/成长值/本周签到/任务、数字专辑已购、云贝签到(只读展示, 不碰支付) |
+| 搜索与发现 | 搜索(历史/联想/热词榜/多板块)、每日推荐、私人 FM、心动模式、新歌新碟分地区、风格推荐 |
+| 音质 | 响度均衡(EBU R128 + ReplayGain 2.0)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、硬解/软解、封面清晰度三档 |
+
+> 会员/签到/评论等写操作均只做经实测验证的子集, 支付与兑换明确不做(见 `docs/remaining-batches.md` §11 E)。
 
 ## 架构
 
@@ -100,6 +104,19 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
   `ProviderError{kind, retryable, detail}`,UI 按 `kind` 决策。
 - Linux 与 Windows 端**零系统播放器依赖**(不用 mpv/MPRIS,同一套 rodio:Linux 走 ALSA、Windows 走 WASAPI),
   Linux 桌面包解压即用,Windows 包解压后运行 `minincm.exe`。
+
+## 下载(三端)
+
+从 [**GitHub Releases**](https://github.com/xiaquwan1001/netease-mini-player/releases/latest) 获取:
+
+| 平台 | 资产 | 安装方式 |
+|---|---|---|
+| Android arm64 | `MiniNCM-<ver>-android-arm64.apk` | 直接安装(固定正式签名, 可覆盖升级) |
+| Linux | `*.tar.gz` / `.deb` / `*.AppImage` | 解压运行 / `apt install ./minincm_*.deb` / chmod +x 直接跑 |
+| Windows x64 | `*-setup.exe` / `*-x64.zip` | 安装向导 / 解压运行 `minincm.exe` |
+| 校验 | `SHA256SUMS.txt` | `sha256sum -c SHA256SUMS.txt` |
+
+每次打 tag 由 Release 流水线统一产出六种资产(v0.3.2 实测: APK 28.5 MB / tar.gz 15.0 MB / AppImage 14.6 MB / deb 11.1 MB / Windows zip 17.0 MB / setup.exe 13.7 MB)。
 
 ## 快速开始
 

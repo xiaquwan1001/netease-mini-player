@@ -1,17 +1,19 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-10 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **123** / service 已调用 **123**(100%) / 未接入 **0**; FFI 导出 **140** 个里 4 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(此三者是给未来设置项留的宿主口) + `word_lyric_with_fallback`(Rust 内部择优链入口, 只被 ncm-service 调用, Dart 侧走 `wordLyricAuto`)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-10 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **123** / service 已调用 **123**(100%) / 未接入 **0**; FFI 导出 **142** 个里 4 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(此三者是给未来设置项留的宿主口) + `word_lyric_with_fallback`(Rust 内部择优链入口, 只被 ncm-service 调用, Dart 侧走 `wordLyricAuto`)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
-| vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **382** |
-| `ncm-service`(provider)实际调用的 | **118(31%)** |
-| 未接入 | **264** |
-| FFI 导出给 Dart 的函数 | 123 |
-| 其中 UI 还没有入口的 | 3(`lyric_lines` `lyric_lines_i18n` `search`) |
+| vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **123**(P1 裁剪后, 原 382) |
+| `ncm-service`(provider)实际调用的 | **123(100%)** |
+| 未接入 | **0** |
+| FFI 导出给 Dart 的函数 | **142**(2026-11-10 扫码登录 +2) |
+| 其中 UI 还没有入口的 | 4(`cache_stats` `eq_profile_normalize` `player_tuning` `word_lyric_with_fallback`) |
+
+> 表内数字以 `bash tools/api-coverage.sh` 的实时输出为准(上面这行是 2026-11-10 收尾版实测)。
 
 复算:
 

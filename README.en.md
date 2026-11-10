@@ -27,8 +27,8 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 A deliberately small, long-lived NetEase Cloud Music client: a **one-row** player bar, tap it and you land on
 lyrics; no recommendation spam. Protocol, crypto, anti-bot and identity live in Rust — the UI only has to look good.
 
-- **One UI, two platforms** — the same Dart code builds an Android APK and a Linux desktop bundle;
-  platform differences are confined to `playback.dart` / `platform.dart`.
+- **One UI, three platforms** — the same Dart code builds an Android APK, a Linux desktop bundle and a
+  Windows x64 app; platform differences are confined to `playback.dart` / `platform.dart` and two `cfg` playback backends.
 - **No home-made protocol** — crypto / request shapes come from `core/vendor/ncm-api` (a Rust port of
   *api-enhanced*, pinned commit). We add identity injection, DTO conversion and caching.
 - **Identity discipline** — `device_id` is generated once and reused forever; device cookies
@@ -70,11 +70,14 @@ lyrics and a QR code pointing at the official song page (`music.163.com/song?id=
 
 | Area | What works |
 |---|---|
-| Discover | Search (history / suggestions / hot queries), daily picks (songs·playlists·podcasts), personal FM, heart mode, charts, new releases, styles, follows feed, private messages, comments |
-| Playback | One-row player bar, queue (jump/remove), play modes, song detail page (lyrics / translation / multi-select share / jump to current line), word-by-word lyrics |
-| Audio quality | Fine volume (-40..0 dB), loudness normalisation (EBU R128 / BS.1770-4 + ReplayGain 2.0, optional AGC ≤3 dB/s), AutoEQ curve import (PK·LS·HS), fade in/out, hardware/software decode, stream cache with LRU limit |
-| Account | Web login on Android (WebView returns the cookie only), multi-account book, liked songs / playlists / podcasts / follows |
-| Appearance | Theme (light / dark / OLED pure black), text scale, 1- or 2-row cover grids |
+| Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), play modes, MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
+| Lyrics | Synced highlight, word-by-word lyrics (yrc + AMLL TTML dual source with auto scoring), translation toggle, lyric multi-select → share card, cover-colour backdrop |
+| Playlists | Playlist square & charts, subscribe / create / edit / delete, batch add, liked-songs ordering, recent-play four tabs |
+| Community | Comments (hot / all / replies / like / delete / IP location), private messages & mentions (read-only), follows feed, follow/fan lists, sign-in |
+| Desktop | Linux (deb/AppImage/tar.gz) and Windows (setup.exe/zip) share one rodio backend (ALSA/WASAPI), OLED pure-black theme, fine volume -40..0 dB |
+| VIP (read-only) | VIP card / growth / weekly sign-in / tasks, purchased digital albums (no payments) |
+| Search & discover | Search (history / suggestions / hot queries / typed sections), daily picks, personal FM, heart mode, new songs & albums by region, style picks |
+| Audio quality | Loudness normalisation (EBU R128 + ReplayGain 2.0), AutoEQ curve import (PK·LS·HS), fade in/out, hardware/software decode, cover quality presets |
 
 ## Architecture
 
@@ -120,8 +123,9 @@ bash packaging/linux/build-appimage.sh   # -> dist/MiniNCM-<ver>-linux-x86_64.Ap
 # Windows installer (Inno Setup), on Windows: iscc /DAppVersion=<ver> /Odist packaging\windows\installer.iss
 ```
 
-Every tagged release ships: APK (arm64) · Linux tar.gz · `.deb` · AppImage · Windows
-`setup.exe` · Windows portable zip · `SHA256SUMS.txt`.
+Every tagged release ships via [**GitHub Releases**](https://github.com/xiaquwan1001/netease-mini-player/releases/latest):
+APK (arm64) · Linux tar.gz · `.deb` · AppImage · Windows `setup.exe` · Windows portable zip · `SHA256SUMS.txt`
+(v0.3.2 measured: APK 28.5 MB / tar.gz 15.0 MB / AppImage 14.6 MB / deb 11.1 MB / Windows zip 17.0 MB / setup.exe 13.7 MB).
 
 Windows desktop **must be built on Windows** (Flutter desktop does not cross-compile), so there is no local
 script: [`.github/workflows/windows.yml`](.github/workflows/windows.yml) produces
@@ -141,9 +145,9 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --workspace` (vendor network smoke excluded) | **170** passing (domain 32 / playback 31 / service 106 / provider 1) |
-| `flutter test --exclude-tags network` | **351** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
-| `dart analyze` | 0 error / 0 warning |
+| `cargo test --offline --workspace` | **248** passing (224 when the 4 vendor network smokes are excluded) |
+| `flutter test --exclude-tags network` | **522** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `dart analyze` | 0 error / 0 warning (41 info hints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
 
