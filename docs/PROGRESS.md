@@ -1,9 +1,13 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-10(**MV 播放 + 自动更新检查 + Windows 桌面版合入**, 提交 `8a3f9a2`;
-> 同轮补完**队列面板拖拽排序与清空**; 并修复了一次 **.git 对象库损坏**(64 个 0 字节 loose object, 见本节末)。
-> 当前门禁: `cargo test --offline --workspace` **248** / `flutter test --exclude-tags network` **510** / `dart analyze` 0 error 0 warning(41 info)。
-> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`)。
+> 最近更新: **2026-11-10 收尾**(当日四批, 下面倒序):
+> ① **封面清晰度按设备分辨率 + 三档设置 + 看大图保存原图**; ② **桌面打包** deb / AppImage / Windows setup.exe
+> (`release.yml` 重构为 verify → build+build-windows → publish), 已发布 **v0.3.2 六种资产**;
+> ③ **歌单写接口 + 队列「存为歌单」**; ④ **MV 播放 + 自动更新检查 + Windows 桌面版合入**, 并修好一次
+> **.git 对象库损坏**(64 个 0 字节 loose object) + 队列面板拖拽排序/清空。
+> 当前门禁: `cargo test --offline --workspace` **248** / `flutter test --exclude-tags network` **522** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 140)。
+> **下一轮做什么**: 见 `docs/remaining-batches.md` **§11 待办(2026-11-10 收尾版)**。
+> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
 > 更早: 接口覆盖 123/123、FFI 140 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。

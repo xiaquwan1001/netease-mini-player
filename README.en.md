@@ -157,7 +157,7 @@ cargo run -p ncm-cli -- lyric 186016
 | Playback | Media3 (Android) / rodio (Linux ALSA · Windows WASAPI), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
 | Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
-| TODO | release size numbers, pluggable audio sources | planned |
+| TODO | release size numbers, pluggable audio sources, refactor debt, subscriber profile routing — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
 
 See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 
@@ -170,6 +170,8 @@ See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 | [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | dual-platform testing, semantics-driven automation, gotchas |
 | [`docs/api-channel.md`](docs/api-channel.md) | API channel (interface / interface3) measurements |
+| [`docs/remaining-batches.md`](docs/remaining-batches.md) | backlog & batching plan (latest in §11) |
+| [`packaging/`](packaging/) | deb / AppImage / Windows installer scripts |
 | [`tools/devui/`](tools/devui/README.md) | headless emulator automation helpers |
 
 ## License

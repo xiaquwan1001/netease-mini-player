@@ -7,21 +7,11 @@
 > (`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`) ——
 > 数字一律跑 `bash tools/api-coverage.sh` 复算, 本文件不再维护历史快照(历史数字见 `docs/PROGRESS.md`)。
 >
-> **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
-> 已 a36 走查与 ci.sh 收口, 覆盖 94/382)**; 见 `docs/PROGRESS.md` 对应小节。
-> **Wave 3 完成(B4 搜索增强)**; **Wave 4 完成(B8 等级/勋章: 我的页入口 + 勋章墙, 覆盖 98/382)**;
-> **Wave 5 完成(B2 评论统计: 评论区统计条, 覆盖 99/382)**;
-> **Wave 6 完成(B12 数字专辑只读 + 纯 Dart 车道: 播客单集详情/错误文案统一, 覆盖 103/382)**;
-> **Wave 7 完成(B10 电台只读 + 设置页通道自检, 覆盖 113/382)**;
-> **Wave 8 完成(B5 逐字歌词: 契约层 + UI 车道 + 列表页空态/窄屏统一, 覆盖 114/382)**。
-> **Wave 9 完成(收尾: album_newest/toplist_detail_v2/MV+视频评论 + 电台节目榜/听众页 + 后端形态调研, 覆盖 118/382)**；
-> `simi_user` 实测恒空已判定不做。
-> **2026-11-09 尾声: D7(frb 直透 domain)车道关闭 57/57** —— `docs/d7-frb-domain.md`；
-> **设置项扩充 + 播放体验修复(R1–R7)全部落地** —— `docs/plan-2026-11-09-settings-and-player.md`。
-> **2026-11-10: B2 遗留(队列面板拖拽排序 + 清空)已补完**；「真机听感验收」(EQ/淡入/响度均衡/硬解, 见任务书 §5) **已通过**(2026-11-10 用户真机验收)
-> ;「队列存为歌单」也已于 2026-11-10 补完(见 §10 B2 行与 PROGRESS 第三批)。
-> 若还要继续做功能: 主播/听众 → 用户主页路由(`radio_subscribers_page` 里目前只显示用户行) ｜ D 批技术债(见 §10)。
-> `newest_albums`/`toplist_catalog` 的 UI 已接上(`ui/lib/src/new_release_page.dart` / `all_charts_page.dart`)。
+> **当前状态(2026-11-10 收尾)**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、
+> 设置项扩充 R1–R7 落地、真机听感验收通过; 发布链路已出**六种分发物**(APK / deb / AppImage / tar.gz / windows setup.exe / windows zip)。
+> 历史波次与每批验收证据不再堆在这里 —— 见 `docs/PROGRESS.md`(按日期分小节)与 `docs/archive/`(已完工车道的执行记录)。
+>
+> **下一轮从哪挑**: 见本文件末尾 **§11 · 待办(2026-11-10 收尾版)**。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -241,3 +231,48 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` 的半死入口(实测非整文件: 仅 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行零生产调用, 且被 10 处测试当宿主, 需同步改写 ⇒ 未做)、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
 
 **与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
+
+
+## 11. 待办(2026-11-10 收尾版)
+
+> 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
+> 当前基线: 覆盖率 123/123 · FFI 140(4 个无 UI 入口) · `cargo test --offline --workspace` 248 ·
+> `flutter test --exclude-tags network` **522** · `dart analyze` 0 error / 0 warning。
+
+### A. 最近三批已完成(供对照, 不要重做)
+
+| 批次 | 内容 | 证据 |
+|---|---|---|
+| v0.3.x 桌面打包 | deb / AppImage / Windows setup.exe + `release.yml` 四 job 收口(verify → build + build-windows → publish) | Release v0.3.2 六种资产; `packaging/` |
+| 歌单写接口 | `create_playlist(name,privacy)` + 批量 `playlist_tracks_add` + 队列「存为歌单」 | `docs/b7-playlist-write-notes.md`; 模拟器服务端复核 |
+| 图片清晰度 | 按设备像素取图 + 三档设置 + 看大图保存原图 | `ui/test/cover_quality_test.dart` 12 例; 模拟器落盘核对 |
+
+### B. 纯 Dart 车道(可与任何 Rust 批并行)
+
+| 序 | 项 | 说明 | 成本 |
+|---|---|---|---|
+| 1 | **主播/听众 → 用户主页路由** | `radio_subscribers_page.dart` 目前只显示用户行, 点击无处可去; 复用已有用户页 | S |
+| 2 | **D 批技术债** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口(≈88 行, 被 10 处测试当宿主)、300dp+1.25 回归补到剩余 30 个测试文件 | M |
+| 3 | 视觉待人工过目 | C 批遗留: 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 | S(需人眼) |
+| 4 | 发布包体积实测 | 六种产物已齐 ⇒ 可以真测"每 ABI/每平台下载体积 + 首装体积", 结论写进 `docs/backend-service-options.md` 附录 | S |
+
+### C. 发布/打包跟进(小改, 可攒一起发)
+
+| 序 | 项 | 说明 |
+|---|---|---|
+| 1 | **评论发送写操作走查(发布前硬门)** | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
+| 2 | Windows 安装向导中文化 | 需要把官方 `ChineseSimplified.isl` 一起放进 `packaging/windows/`(Inno 安装包不自带, v0.3.1 因此编译失败过) |
+| 3 | deb 依赖收紧 | 目前 `libgtk-3-0/liblzma5/libasound2`, 未在最小系统(纯 server + desktop 环境)验证过; 有条件时用容器验一次 |
+| 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |
+
+### D. 需要新能力的 L 级(单独立项, 不要混批)
+
+B9 视频/最近播放页签(需视频播放器) · B11 听歌识曲(录音 + 指纹) · B13 云盘(分片上传) ·
+B14 MV 列表页/视频详情(播放器已有) · B15 一起听(房间 + 心跳, 需双端联调) · B16 动态发送(发包 + 审核语义) ·
+B17 云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/architecture-restart.md`)。
+
+### E. 明确不做
+
+原生登录族(8821 风控) · 埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 ·
+`simi_user`(实测恒空)。
+

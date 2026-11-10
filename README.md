@@ -168,7 +168,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
 | 真机验收 | 听感项(EQ 削波 / 淡入手感 / 响度均衡 A/B / 硬解)与 MV 播放均已于 2026-11-10 在真机通过 | ✅ |
-| 待办 | 发布包体积实测、音源插件化(设计已留边界) | ⏳ |
+| 待办 | 发布包体积实测、音源插件化(设计已留边界)、D 批技术债、主播/听众主页路由 —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
 
 进度明细与每批验收证据见 `docs/PROGRESS.md`。
 
@@ -178,9 +178,12 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(v1/v2 历史 + 每批验收) |
 | [`docs/architecture-restart.md`](docs/architecture-restart.md) | 架构选型、决策记录、插件边界 |
-| [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | 播放条合并 / 歌曲详情页 / 分享卡片与通道契约 |
+| [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |
 | [`docs/api-channel.md`](docs/api-channel.md) | 接口通道(interface / interface3)实测 |
+| [`docs/remaining-batches.md`](docs/remaining-batches.md) | **待办与分批规划(最新在 §11)** |
+| [`docs/b7-playlist-write-notes.md`](docs/b7-playlist-write-notes.md) | 歌单写接口的真实响应形状与踩坑 |
+| [`packaging/`](packaging/) | deb / AppImage / Windows 安装包的打包脚本 |
 | [`tools/devui/`](tools/devui/README.md) | 无窗口模拟器自测脚本(按语义树点击/截图/像素核对) |
 
 ## 许可
