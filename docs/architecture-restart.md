@@ -1,5 +1,10 @@
-# 架构重启: 双端(Android + Linux) + 长期维护 + 低资源
+# 架构重启: 多端(Android + Linux + Windows) + 长期维护 + 低资源
 
+> **2026-11-10 追加**: 本文写于 2026-11-03, 当时目标平台是 Android + Linux。
+> **Windows 桌面版已于 2026-11-09 合入**(`feat/windows`, PR #1): 同一份 Flutter UI + 同一份 Rust core,
+> 播放后端与 Linux 共用 `ncm-playback`(rodio + CPAL, **Linux=ALSA / Windows=WASAPI**),
+> 产物由 `.github/workflows/windows.yml` 在 `windows-latest` 上构建。下文凡出现「双端」均按**三端**阅读。
+>
 > 2026-11-03 立项分析。目标不是继续给 v1 加功能,而是重定架构。
 > 依据: 本仓 `docs/build-vs-fork.md` 的真机实测、社区 benchmark(见各节引用)、
 > 以及 Flutter/Tauri 官方文档现状(2026-11)。
@@ -97,8 +102,9 @@
 1. **真相只有一份**: 队列/播放状态/登录态在 core,UI 只订阅。否则双端行为漂移 + 状态 bug。
 2. **播放后端不统一**: Android 必须走 Media3(MediaSession、通知、音频焦点、车机、厂商适配都在这一层);
    Linux 走 mpv(格式全、gapless、硬解)。
-   > **实现现状(2026-11-09 校正)**: Linux **没有用 mpv/MPRIS**,实际是 `ncm-playback` 里的
+   > **实现现状(2026-11-09 校正, 2026-11-10 补 Windows)**: Linux **没有用 mpv/MPRIS**,实际是 `ncm-playback` 里的
    > **rodio 0.23 + symphonia**(纯 Rust, 无系统依赖;见 `core/crates/ncm-playback/Cargo.toml`)。
+   > 同一份代码也服务 **Windows**(WASAPI);桩 backend 的 `cfg` 与桌面 backend 互斥。
    > 下文凡提 "mpv" 均按此替换阅读;MPRIS 未实现。
    core 只定义 `PlaybackBackend` trait,两端各实现,
    事件统一成 `PlaybackEvent`。
@@ -162,7 +168,7 @@ netease-mini-player/
 │   ├── crates/ncm-net    # HTTP 客户端、cookie jar、身份注入
 │   ├── crates/ncm-plugin # QuickJS 宿主 + lx 兼容层
 │   └── crates/ncm-cli    # headless CLI: search/url/lyric —— 无 UI 也能验证全链路
-├── ui/                    # Flutter app(Android + Linux 一份)
+├── ui/                    # Flutter app(Android + Linux + Windows 一份)
 ├── platform/
 │   ├── android/           # Kotlin: Media3、MediaSession、登录 WebView、前台服务
 │   └── linux/             # Rust/GTK: mpv、MPRIS、WebKitGTK 登录 helper、托盘

@@ -2,19 +2,21 @@
 
 # MiniNCM · 轻音
 
-**An unofficial NetEase Cloud Music client — Android + Linux**
+**An unofficial NetEase Cloud Music client — Android · Linux · Windows**
 
 [中文](README.md) · **English**
 
-Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, two platforms)
+Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, three platforms)
++ platform layer (Android Media3 / Linux·Windows rodio+CPAL)
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Rust](https://img.shields.io/badge/Rust-core-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)](#)
 [![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
+[![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20351%20%2B%20Rust%20170-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%20504%20%2B%20Rust%20242-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 
@@ -95,7 +97,8 @@ lyrics and a QR code pointing at the official song page (`music.163.com/song?id=
 
 - Only serialisable `ncm-domain` types cross the FFI boundary; provider errors are normalised to
   `ProviderError{kind, retryable, detail}` and the UI branches on `kind`.
-- The Linux build has **no system player dependency** (no mpv / MPRIS): unzip and run.
+- Linux and Windows builds have **no system player dependency** (no mpv / MPRIS) — same rodio backend,
+  ALSA on Linux and WASAPI on Windows: unzip and run (`bundle/minincm`, `minincm.exe`).
 
 ## Build & run
 
@@ -106,8 +109,13 @@ source tools/env.sh          # JDK 21 / Flutter / Android SDK / Rust (edit for y
 
 bash tools/build-linux.sh    # -> ui/build/linux/x64/debug/bundle/minincm
 bash tools/build-android.sh  # -> ui/build/app/outputs/flutter-apk/app-debug.apk
-bash tools/ci.sh             # tests + bridge smoke + both builds
+bash tools/ci.sh             # tests + bridge smoke + Linux/Android builds
 ```
+
+Windows desktop **must be built on Windows** (Flutter desktop does not cross-compile), so there is no local
+script: [`.github/workflows/windows.yml`](.github/workflows/windows.yml) produces
+`MiniNCM-<version>-windows-x64.zip` (~17 MB, verified) on `windows-latest`. Locally on Windows:
+`flutter config --enable-windows-desktop` then `flutter build windows --release` (cargokit builds the Rust `ncm_ffi`).
 
 Headless verification (no UI):
 
@@ -125,8 +133,8 @@ cargo run -p ncm-cli -- lyric 186016
 | `cargo test --workspace` (vendor network smoke excluded) | **170** passing (domain 32 / playback 31 / service 106 / provider 1) |
 | `flutter test --exclude-tags network` | **351** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | 0 error / 0 warning |
-| Builds | Linux bundle + Android debug APK |
-| Device run-through | emulator a34 (API 34) — see `docs/testing-dual-platform.md` |
+| Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
+| Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
 
 ## Roadmap
 
@@ -134,8 +142,8 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|---|
 | M0 | Rust workspace layering, provider abstraction, headless CLI | done |
 | Protocol | vendored port + prune (382 -> 118 endpoints, 12k -> 4k LOC) | done |
-| Shell | Flutter Android/Linux, FRB 2.13 bridge, both builds | done |
-| Playback | Media3 (Android) / rodio (Linux), loudness, AutoEQ, cache | done |
+| Shell | Flutter Android/Linux/Windows, FRB 2.13 bridge, all builds (Windows via CI) | done |
+| Playback | Media3 (Android) / rodio (Linux ALSA · Windows WASAPI), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
 | Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
 | TODO | release size numbers, pluggable audio sources | planned |

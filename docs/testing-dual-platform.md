@@ -1,4 +1,8 @@
-# 双端测试记录(Linux + Android 模拟器)
+# 多端测试记录(Android 模拟器 · Linux · Windows)
+
+> **2026-11-10 补 Windows**: 第三端 Windows 桌面版已合入, 但**本机是 Linux, 无法本地构建/运行 Windows 版** ——
+> Windows 侧的验证口径只有两条: ①`.github/workflows/windows.yml` 在 `windows-latest` 上编出 zip 并成功(实测 ~17 MB);
+> ②用户在有 Windows 的机器上解压运行冒烟。本文件其余流程仍以 Android 模拟器 + Linux 为主。
 
 > 最近验证: **2026-11-08**(播放条合并 / 歌曲详情页 / 分享, 详见 `docs/archive/ui-song-detail-share.md`)。
 > 日常功能回归优先 Android 模拟器(**本项目默认 a34; a36 常被另一项目借走**);

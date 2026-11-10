@@ -2,19 +2,20 @@
 
 # 轻音 MiniNCM
 
-**网易云音乐第三方客户端 · Android + Linux 双端**
+**网易云音乐第三方客户端 · Android · Linux · Windows**
 
 [**中文**](README.md) · [English](README.en.md)
 
-Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平台层(Android Media3 / Linux rodio)
+Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平台层(Android Media3 / Linux·Windows rodio+CPAL)
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.47-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Rust](https://img.shields.io/badge/Rust-core-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![Android](https://img.shields.io/badge/Android-14%2B-3DDC84?logo=android&logoColor=white)](#)
 [![Linux](https://img.shields.io/badge/Linux-desktop-FCC624?logo=linux&logoColor=black)](#)
+[![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20351%20%2B%20Rust%20170-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%20504%20%2B%20Rust%20242-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -77,7 +78,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平
 ## 架构
 
 ```text
-┌──────────────── Flutter UI(ui/, 一份双端)────────────────┐
+┌─────────────── Flutter UI(ui/, 一份 UI 跑三端)───────────────┐
 │  页面/组件 · 播放条 · 歌曲详情页 · 分享卡片                 │
 └───────────┬───────────────────────────────┬──────────────┘
             │ flutter_rust_bridge 2.13        │ ncm/player (MethodChannel)
@@ -88,14 +89,16 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑双端) + 平
 │  ncm-service  身份 + 网易云  │      │  登录 WebView / 分享    │
 │  ncm-ffi      Flutter 桥    │      └────────────────────────┘
 │  ncm-cli      headless 验证 │      ┌────────────────────────┐
-│  vendor/ncm-api 协议(锁定)  │      │ Linux 平台层(纯 Rust)   │
+│  vendor/ncm-api 协议(锁定)  │      │ 桌面平台层(纯 Rust)     │
 └────────────────────────────┘      │  rodio + CPAL + symphonia│
+                                     │  Linux=ALSA / Win=WASAPI │
                                      └────────────────────────┘
 ```
 
 - 跨层只传 `ncm-domain` 里可序列化的类型;provider 错误统一转
   `ProviderError{kind, retryable, detail}`,UI 按 `kind` 决策。
-- Linux 端**零系统播放器依赖**(不用 mpv/MPRIS),桌面包解压即用。
+- Linux 与 Windows 端**零系统播放器依赖**(不用 mpv/MPRIS,同一套 rodio:Linux 走 ALSA、Windows 走 WASAPI),
+  Linux 桌面包解压即用,Windows 包解压后运行 `minincm.exe`。
 
 ## 快速开始
 
@@ -106,8 +109,13 @@ source tools/env.sh          # 用户级 JDK21 / Flutter / Android SDK / Rust(�
 
 bash tools/build-linux.sh    # → ui/build/linux/x64/debug/bundle/minincm
 bash tools/build-android.sh  # → ui/build/app/outputs/flutter-apk/app-debug.apk
-bash tools/ci.sh             # 单测 + 桥接测试 + 双端构建
+bash tools/ci.sh             # 单测 + 桥接测试 + Linux/Android 构建
 ```
+
+Windows 桌面版**只能在 Windows 上构建**(Flutter 桌面端不支持交叉编译),因此没有本地脚本;
+由 [`.github/workflows/windows.yml`](.github/workflows/windows.yml) 在 `windows-latest` 上产出
+`MiniNCM-<version>-windows-x64.zip`(已验证约 17 MB)。在 Windows 上手工构建则是:
+`flutter config --enable-windows-desktop` → `flutter build windows --release`(cargokit 会自动编 Rust 侧 `ncm_ffi`)。
 
 无 UI 也能验证链路(headless CLI):
 
@@ -122,11 +130,11 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --workspace`(排除 vendor 联网 smoke) | **170** 通过(domain 32 / playback 31 / service 106 / provider 1) |
-| `flutter test --exclude-tags network` | **351** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
-| `dart analyze` | 0 error / 0 warning |
-| 构建 | Linux bundle + Android debug APK 均通过 |
-| 设备走查 | a34 模拟器(API 34)全流程;记录见 `docs/testing-dual-platform.md` |
+| `cargo test --offline --workspace` | **242** 通过(含 vendor 4 例联网 smoke; 只跑离线 crate 时为 238) |
+| `flutter test --exclude-tags network` | **504** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `dart analyze` | 0 error / 0 warning(41 info 风格提示) |
+| 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
+| 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
 
 ## 项目进度
 
@@ -134,8 +142,8 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|---|
 | M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
 | 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,LOC 12k → 4k) | ✅ |
-| 双端壳 | Flutter Android/Linux、FRB 2.13 桥、双端构建链路 | ✅ |
-| 播放 | Media3(Android)/ rodio(Linux)、响度均衡、AutoEQ、缓存 | ✅ |
+| 三端壳 | Flutter Android/Linux/Windows、FRB 2.13 桥、三端构建链路(Windows 走 CI) | ✅ |
+| 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
 | 真机验收 | 听感项(EQ 削波 / 淡入手感 / 响度均衡 A/B / 硬解)与 MV 播放均已于 2026-11-10 在真机通过 | ✅ |
 | 待办 | 发布包体积实测、音源插件化(设计已留边界) | ⏳ |
@@ -149,7 +157,7 @@ cargo run -p ncm-cli -- lyric 186016
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(v1/v2 历史 + 每批验收) |
 | [`docs/architecture-restart.md`](docs/architecture-restart.md) | 架构选型、决策记录、插件边界 |
 | [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | 播放条合并 / 歌曲详情页 / 分享卡片与通道契约 |
-| [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 双端测试流程、语义驱动自测法、踩坑速查 |
+| [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |
 | [`docs/api-channel.md`](docs/api-channel.md) | 接口通道(interface / interface3)实测 |
 | [`tools/devui/`](tools/devui/README.md) | 无窗口模拟器自测脚本(按语义树点击/截图/像素核对) |
 

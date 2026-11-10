@@ -21,7 +21,7 @@ bash tools/build-android.sh  # Android debug APK
 | Rust 单测 | `cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs` |
 | Dart 静态检查 | `cd ui && dart analyze`(0 error / 0 warning) |
 | Flutter 单测 | `cd ui && flutter test --exclude-tags network` |
-| 双端构建 | `bash tools/build-linux.sh` + `bash tools/build-android.sh` |
+| 多端构建 | `bash tools/build-linux.sh` + `bash tools/build-android.sh`(Windows 只能在 Windows 上编, 见 `.github/workflows/windows.yml`) |
 
 - 真实联网 smoke 打了 `network` 标签(上游风控会抖),本地可跑 `flutter test`,
   CI 默认跳过。

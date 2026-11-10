@@ -1,6 +1,7 @@
 # netease-mini-player — 项目说明
 
-轻音 MiniNCM —— 网易云音乐第三方客户端,**Android + Linux 双端**。
+轻音 MiniNCM —— 网易云音乐第三方客户端,**Android + Linux + Windows 三端**
+(Windows 桌面版 2026-11-09 合入,产物只在 Windows 上构建)。
 
 ## 架构(2026-11 重启后)
 
@@ -8,9 +9,13 @@
   `ncm-service`(身份 + 网易云 provider) / `ncm-ffi`(Flutter 桥) / `ncm-cli`(headless 验证)。
 - `core/vendor/ncm-api`: api-enhanced 的 Rust 移植,**锁定 commit**(见 `vendor/UPSTREAM.txt`),
   协议/加解密/风控细节都在这里,不要自己重写加密。
-- `ui/` Flutter(android + linux 一份 UI),桥接用 flutter_rust_bridge 2.13,
-  由 `ui/rust_builder`(cargokit)在构建时编译 Rust。
-- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),Linux 用 **rodio/CPAL**(纯 Rust + symphonia, 无系统依赖)。
+- `ui/` Flutter(android + linux + **windows** 一份 UI),桥接用 flutter_rust_bridge 2.13,
+  由 `ui/rust_builder`(cargokit)在构建时编译 Rust;`ui/windows/**` 是 `flutter create` 产物,
+  只有 `runner/main.cpp`(窗口标题/尺寸)与 `rust_builder/windows/CMakeLists.txt`(manifest 路径 + 库名
+  `ncm_ffi`)是手改过的,别整体重新生成。
+- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),桌面(Linux/Windows)用 **rodio/CPAL**
+  (纯 Rust + symphonia, 无系统依赖;Linux=ALSA、Windows=WASAPI,同一份代码两个 `cfg`)。
+  MV 播放: Android 有独立 `MvPlayerActivity`(VideoView),桌面用系统播放器打开直链。
   早期设计写的 mpv + MPRIS **未实现**(见 `docs/architecture-restart.md` §3 的现状注记),不要再按 mpv 规划。
 - `legacy/` 是 v1 的 WebView 实现,只读存档,不要再往里加功能。
 
@@ -21,6 +26,8 @@
 - Rust 1.99 + 三个 Android target 已装。
 - 统一入口: `source tools/env.sh`(会配好 PATH 与国内镜像)。
 - 构建: `bash tools/build-linux.sh` / `bash tools/build-android.sh` / `bash tools/ci.sh`。
+  **Windows 本机(本 Linux 机)编不了**(Flutter 桌面不支持交叉编译): 产物由 `.github/workflows/windows.yml`
+  在 `windows-latest` 上出 `MiniNCM-<ver>-windows-x64.zip`(已验证 ~17 MB),别试图在 Linux 上 `flutter build windows`。
 
 ## 规则
 
