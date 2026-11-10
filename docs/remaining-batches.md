@@ -236,8 +236,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 ## 11. 待办(2026-11-10 收尾版)
 
 > 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
-> 当前基线: 覆盖率 123/123 · FFI **142**(4 个无 UI 入口) · `cargo test --offline --workspace` **249** ·
-> `flutter test --exclude-tags network` **532** · `dart analyze` 0 error / 0 warning。
+> 当前基线: 覆盖率 123/123 · FFI **144**(4 个无 UI 入口) · `cargo test --offline --workspace` **249** ·
+> `flutter test --exclude-tags network` **536** · `dart analyze` 0 error / 0 warning。
 >
 > **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
 > ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
@@ -256,10 +256,10 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
-| 1 | **主播/听众 → 用户主页路由** | `radio_subscribers_page.dart` 目前只显示用户行, 点击无处可去; 复用已有用户页 | S |
+| ~~1~~ | ~~**主播/听众 → 用户主页路由**~~ ✅ **已完成**(2026-11-10 六) | 新增 `user_page.dart`(资料卡 + 公开歌单, 点歌单可播) + `Provider::user_profile`/`user_playlists_of`(匿名可用) + 听众/粉丝行接通; 见 `docs/PROGRESS.md` 最新小节 | ~~S~~ 已做 |
 | 2 | **D 批技术债** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口(≈88 行, 被 10 处测试当宿主)、300dp+1.25 回归补到剩余 30 个测试文件 | M |
 | 3 | 视觉待人工过目 | C 批遗留: 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 | S(需人眼) |
-| 4 | 发布包体积实测 | 六种产物已齐 ⇒ 可以真测"每 ABI/每平台下载体积 + 首装体积", 结论写进 `docs/backend-service-options.md` 附录 | S |
+| ~~4~~ | ~~发布包体积实测~~ ✅ **已完成**(2026-11-10 六) | 结论在 `docs/backend-service-options.md` **附录 B**: 下载 vs 首装体积 + bundle 逐文件拆解 + strip 机会(15→9 MB) | ~~S~~ 已做 |
 
 ### C. 发布/打包跟进(小改, 可攒一起发)
 

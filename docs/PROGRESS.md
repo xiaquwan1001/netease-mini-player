@@ -61,6 +61,18 @@
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
+## v2 · 2026-11-10(六): 他人主页路由(听众/粉丝 → 用户页) · 发布包体积实测
+
+| 项 | 落点 | 证据 |
+|---|---|---|
+| **他人主页** | 新 `ui/lib/src/user_page.dart`: 资料卡(背景/头像/昵称/签名/关注·粉丝·等级) + 「TA 的歌单」列表, 点歌单进已有歌单详情页(带播放回调). 数据面新增 `Provider::user_profile`(user/detail) 与 `Provider::user_playlists_of`(user/playlist) —— 都**不需要登录**, 与只读当前账号的 `profile_detail` 分开; FFI `userProfile`/`userPlaylistsOf`(142→**144**) | `ncm user <uid>` 宿主实测(匿名): 下去玩 uid=1822714196 → 关注 44/粉丝 11/公开歌单 12 个, 与网页端一致 |
+| 路由接通 | `radio_subscribers_page` 的听众行、`user_list_page` 的粉丝/关注行都能点进主页(`onOpenUser` 仍可覆盖); 播放回调从 `_PodcastDetailPage`/`main._openFollows` 一路带下去, 否则"点进主页点歌单不能播" | `ui/test/user_page_test.dart` 4 例(资料+歌单渲染/空态/失败重试/无播放回调只提示) |
+| 发布包体积实测(§11 B4) | `docs/backend-service-options.md` **附录 B**: 六种产物的下载体积 vs 首装体积 + 40 MB bundle 的逐文件拆解 | deb 11 MB→40 MB 安装; AppImage 14.6 MB; bundle 里 `libncm_ffi.so` **15 MB 未 strip**, strip 后 9 MB(本轮只测不改) |
+
+门禁: `cargo test --offline --workspace` **249** · `flutter test --exclude-tags network` **536**(+4) · `dart analyze` 0 error / 0 warning · 接口覆盖 123/123, FFI **144**。
+
+**已明确不改**: Rust cdylib strip(省 6 MB/产物)会丢 release 崩溃栈符号, 暂不动; Flutter 引擎 19 MB 是"一份 UI 三端"的代价。
+
 ## v2 · 2026-11-10(五): 桌面端官方扫码登录 · deb 门面元数据 · 账号隐私修复
 
 三个用户报的真问题, 一个文档整理批。**根因都不是"界面不好看", 而是缺一层能力/元数据。**

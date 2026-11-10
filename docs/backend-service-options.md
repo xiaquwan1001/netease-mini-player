@@ -186,3 +186,35 @@ APK(debug, 4 ABI 全打)构成 top:
 4. 本项目用到的 75 个无同步封装的接口能否全部走 `raw_*`(参数形状逐个验证)。
 
 任一条不过 → 维持现状 + 只做 §3 的 P1/P2 裁剪。
+
+## 附录 B: 发布包体积实测(2026-11-10 收尾, §11 B4)
+
+口径: 下载体积 = 发布产物本身; 首装体积 = 解包/安装后落到磁盘的大小。Linux 数据来自本机
+`bash packaging/linux/build-deb.sh` / `build-appimage.sh` 实跑; Android/Windows 数字引用
+Release v0.3.2 的 CI 产物(本机无法编 Windows)。
+
+| 产物 | 下载体积 | 首装体积 | 说明 |
+|---|---|---|---|
+| `minincm_0.3.2_amd64.deb` | **11 MB** | **40 MB**(dpkg `Installed-Size` 40852 KB) | 装到 `/opt/minincm`, 内容 = Flutter bundle 原样 |
+| `MiniNCM-0.3.2-linux-x86_64.AppImage` | **14.6 MB** | 运行时自解压 ≈40 MB(不落盘安装) | squashfs 压缩率低于 deb 的 xz |
+| Linux `tar.gz` | 15.0 MB(CI) | 40 MB | 同一 bundle |
+| Android `apk`(arm64) | 28.5 MB(CI) | ≈90 MB | 含 Media3/WebView 宿主侧代码 |
+| Windows `zip` | 17.0 MB(CI) | ≈45 MB | |
+| Windows `setup.exe` | 13.7 MB(CI) | ≈45 MB | LZMA2 压缩 |
+
+**40 MB 花在哪(linux release bundle, `du -sh`)**:
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `lib/libflutter_linux_gtk.so` | 17 MB | Flutter 引擎(Impeller + Skia), 无法裁剪 |
+| `lib/libncm_ffi.so` | **15 MB** | 我们的 Rust 核心。**未 strip**; `strip --strip-unneeded` 后 **9.0 MB**(省 6 MB/每个 Linux 产物) |
+| `lib/libapp.so` | 7.9 MB | Dart AOT(已 stripped, 由 Flutter 工具链处理) |
+| `data/icudtl.dat` + `flutter_assets` | 1.8 MB | ICU 数据 + 资源 |
+
+**结论/可做未做**:
+
+1. **Rust cdylib 未 strip 是最大单点**(15→9 MB)。可选做法: `core/Cargo.toml` 的
+   `[profile.release] strip = true`, 或打包脚本里对 staging 副本 strip。代价是 release 崩溃
+   栈只剩地址(可用 `RUST_BACKTRACE=full` + 单独保留的符号文件弥补)。需要时再动, 本轮**只测不改**。
+2. Flutter 引擎 17 MB 是硬成本; 想再小只能换自绘后端(如 `flutter build linux --release --no-impeller` 或换 GTK 原生壳), 与本项目"一份 UI 三端"的取向冲突, 不建议。
+3. deb 与 AppImage 体积差(11 vs 14.6 MB)来自压缩算法(xz vs squashfs), 不是内容差。选 deb 安装更省下载, 选 AppImage 免安装。
