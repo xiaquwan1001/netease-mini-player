@@ -56,3 +56,22 @@
 | .pi/plans/2026-11-05-ui-restructure.md | 6 项需求已全部落地(playlist_detail/feed_view/评论/分享等均存在于 ui/lib/src) | 移 .pi/plans/archive/ 或文首加「已完成」 |
 | .pi/plans/2026-11-06-feature-pack.md | 文件内自标「2026-11-06 完成·7 项已落地」 | 移 .pi/plans/archive/ |
 | .pi/trash/{files,info} | 回收站积压(含 116MB 二进制) | 用户确认后清空 |
+
+## 复核(2026-11-10 第二轮, 主线会话手工核对)
+
+主线已把下列项**实际改掉并提交**(不是建议): A2/A5/A6/A7/A8/A9/A10/A11/A12/A13/A14/A17/A18 以及 B8 的过时横幅;
+数字口径统一跑 `bash tools/api-coverage.sh` 复算为 **123/123, FFI 139, 无 UI 入口 4**(新增 `word_lyric_with_fallback`);
+测试基线更新为 `cargo test --offline --workspace` **242** / `flutter test --exclude-tags network` **504**(证据 `.pi/artifacts/gates-2026-11-10.md`)。
+另补完 B2 遗留(队列面板拖拽排序 + 清空, 提交 `b34bb00`), 并把 `.git` 对象库损坏的恢复过程写进 `.pi/memory/FAILURES.md`。
+
+### 仍待用户确认(不动手删)
+| 路径 | 实测 | 建议 |
+|---|---|---|
+| `dist/MiniNCM-0.1.1-release-signed.apk` | 55 MB, git 未追踪 | 删(Release 已托管正式产物; 但 0.1.1 未发 Release? → 需要你确认是否还留作本地装机包) |
+| `docs/ui-batch-{a,b,b2,c,d,d6,d6b}.md` + `ui-song-detail-share.md` + `ffi-cleanup-d1d2d5.md` | 共 ~780 行, 事实与 PROGRESS.md 双写 | 并入 PROGRESS 后移 `docs/archive/`(README/CONTRIBUTING 有 2 处引用需同步改链) |
+| `docs/b8-dumps/` | 120 KB(README + 2 个 json 样例) | 保留(是勋章接口形状的唯一留痕, 无测试引用) |
+| `~/netease-mini-player-git-bak-20261110` | 26 MB, 仓外 | 确认仓库无恙后删 |
+| `.pi/trash/` | 4 KB | 空壳, 可删 |
+
+`screenshots/`(B4)与 `.pi/trash` 里 116 MB 旧产物(B1/B2/B3)在本轮之前已被清掉, 无需再处理。
+

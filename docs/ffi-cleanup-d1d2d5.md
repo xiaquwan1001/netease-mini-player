@@ -1,6 +1,8 @@
 # FFI 清理 D1+D2+D5 执行记录
 
 > 车道日期 2026-11-07。只删 FFI 导出与收敛样板，不动 provider/service 层。未 git commit。
+> ⚠ **本文数字是当时快照**(FFI 导出 123 / 测试 119)。现值(2026-11-10 复核): FFI 导出 **132**、
+> `cargo test --offline --workspace` **242**、`flutter test --exclude-tags network` **504** —— 以 `docs/api-coverage.md` 与 `docs/PROGRESS.md` 为准。
 
 ## 前置核实（grep 证据）
 

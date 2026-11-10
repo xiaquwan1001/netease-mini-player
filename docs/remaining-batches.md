@@ -3,7 +3,8 @@
 > 用途: 后续每轮开工前先在这里选批次, 按「并行矩阵」决定能不能同时派。
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`.pi/memory/`(踩坑)。
-> 口径日期: 2026-11-10。**当前覆盖率 118/118(100%), FFI 导出 132 个其中 3 个无 UI 入口** ——
+> 口径日期: 2026-11-10。**当前覆盖率 123/123(100%), FFI 导出 139 个其中 4 个无 UI 入口**
+> (`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`) ——
 > 数字一律跑 `bash tools/api-coverage.sh` 复算, 本文件不再维护历史快照(历史数字见 `docs/PROGRESS.md`)。
 >
 > **进度**: Wave 1 完成(B1 消息增强 + B0 收尾); **Wave 2 完成(B3 黑胶会员只读: Rust 契约 + FFI + Dart 页 + 设置入口,
@@ -67,7 +68,7 @@
 
 | 批次 | 目标 | 接口 | 风险点 |
 |---|---|---|---|
-| ~~**B5 逐字歌词**~~ 🔄进行中 | 歌词页逐字高亮 | `lyric_new`(已接) `song_lyrics_mark*`(只读 dump, 写不接) | 契约层已合入；**ytlrc/yromalrc 实测恒空** ⇒ 翻译只能行级; 老歌无 yrc 必须回落 |
+| ~~**B5 逐字歌词**~~ ✅ 已完成(契约层+UI 车道) | 歌词页逐字高亮 | `lyric_new`(已接) `song_lyrics_mark*`(只读 dump, 写不接) | 契约层已合入；**ytlrc/yromalrc 实测恒空** ⇒ 翻译只能行级; 老歌无 yrc 必须回落 |
 | **B6 榜单 v2** | 「更新 N 首」/歌手榜细分 | `toplist` `toplist_detail_v2` `toplist_artist` | ROI 低, 现有 detail 已够用 |
 | **B7 歌单细分编辑** | 私密切换/标签/排序/换封面 | `playlist_privacy` `playlist_order_update` `playlist_tags_update` `playlist_cover_update` | **vendor 把 privacy 写死 0**; 其余要自己拼请求或上传 |
 | ~~**B10 电台补充**~~ ✅已做(只读) | 电台榜单/分类/推荐/主播 | `dj_toplist*` `dj_catelist` `dj_category_*` `dj_recommend_type` `dj_program_toplist` `dj_subscriber` | 12 DTO + 6 parse + FFI 4 + `radio_explore_page.dart`(新); **`dj_sub` 订阅与 `dj_difm_*`(6) 不做**(写/语义未验证) |
@@ -218,7 +219,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 - **契约要求**: domain 类型需实现 frb 可见的形态(字段 `pub` + `#[frb]`/mirror 宏策略二选一, 开工前先做 10 行 spike 决定走 mirror 还是直接注注解)。
 - **门禁(编排者自己跑, 不信 worker)**: `cargo build --offline --workspace` 0 error;
   `cargo test -p ncm-domain -p ncm-service` 全绿; `dart analyze` 0 error;
-  `flutter test` 全量绿(离线口径当时 235+, 现 351); `bash tools/api-coverage.sh` = 118/0、无 UI 入口 3(`cache_stats`/`eq_profile_normalize`/`player_tuning`);
+  `flutter test` 全量绿(离线口径当时 235+, 2026-11-10 复核 **504**); `bash tools/api-coverage.sh` = 118/0、无 UI 入口 3(`cache_stats`/`eq_profile_normalize`/`player_tuning`);
   双端构建 + 模拟器走查(空态/未登录各一次)。
 - **回滚**: `git restore --staged --worktree core/crates/ncm-domain core/crates/ncm-ffi ui/lib/src/rust` 一键还原。
 - **收益**: 合计约 1400–1800 行(含保守项), 且以后新增接口不再重复定义三层 DTO。

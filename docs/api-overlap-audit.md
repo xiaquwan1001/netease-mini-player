@@ -2,6 +2,7 @@
 
 > 只读静态审计：阅读 + rg 计数，**未跑 cargo / flutter**（避开 `core/target` 锁）。口径复算 `bash tools/api-coverage.sh`。
 > 权威基线（脚本输出）：vendor endpoint **382** / service 已调用 **118(30%)** / FFI 导出 **125** / 脚本判"无 UI 入口" **3**。
+> ⚠ 数字为 2026-11-07 快照；P1 裁剪与 D1/D2/D5/D7 落地后(2026-11-10 复核)FFI 导出为 **132**, endpoint **118**, 无 UI 入口仍 **3**。以 `docs/api-coverage.md` 为准。
 > **本审计推翻了其中 1 个：`lyric_lines_i18n` 其实有 UI 调用，是口径脚本 camel 误判（见 §4/附录）。真死导出 = 2。**
 
 ---
