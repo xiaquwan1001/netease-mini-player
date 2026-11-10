@@ -139,6 +139,20 @@ jobs:
         working-directory: ui
         run: flutter build linux --release
 
+      # 回归门(issue #2): 构建机 GLib 头文件 >= 2.80 时, G_DEFINE_TYPE 会展开成
+      # g_once_init_enter_pointer(Since 2.80), 产物在 Ubuntu 22.04(GLib 2.72)上启动即
+      # symbol lookup error。ui/linux/CMakeLists.txt 把 GLib 基线钉到 2.72,
+      # 这里再在产物上验一遍, 防止哪天被模板更新/别的构建改动带回来。
+      - name: Verify GLib baseline (Ubuntu 22.04 compatibility)
+        run: |
+          BUNDLE=ui/build/linux/x64/release/bundle
+          BAD=$(nm -D --undefined-only "$BUNDLE/minincm" | grep -oE 'g_once_init_(enter|leave)_pointer' | sort -u || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::minincm 引用了 GLib 2.80 才有的符号: $BAD —— Ubuntu 22.04 会起不来"
+            exit 1
+          fi
+          echo "GLib 符号基线 OK: runner 只用 <= 2.72 的 GLib 符号"
+
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"

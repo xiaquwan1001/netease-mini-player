@@ -156,6 +156,11 @@ Windows 桌面版**只能在 Windows 上构建**(Flutter 桌面端不支持交�
 | Windows 免安装 | `MiniNCM-<ver>-windows-x64.zip` | 解压运行 `minincm.exe` |
 | 校验 | `SHA256SUMS.txt` | `sha256sum -c SHA256SUMS.txt` |
 
+Linux 产物运行时基线(glibc ≥ 2.34、GLib ≥ 2.72、GTK 3): Ubuntu 22.04 jammy 及更新的发行版都能直接跑。
+构建机头文件再新也不会把 GLib 2.80 的符号带进产物 —— `ui/linux/CMakeLists.txt` 把
+`GLIB_VERSION_{MIN,MAX}_ALLOWED` 钉在 2.72, CI 与 `packaging/linux/build-deb.sh` 各有一道符号回归门
+(见 issue #2)。
+
 无 UI 也能验证链路(headless CLI):
 
 ```bash

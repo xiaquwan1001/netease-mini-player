@@ -16,6 +16,18 @@ cmake_policy(SET CMP0063 NEW)
 # Load bundled libraries from the lib/ directory relative to the binary.
 set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
 
+# 构建期 GLib 基线: Ubuntu 22.04(jammy) 只带 GLib 2.72, 而 CI(ubuntu-24.04) / 开发机的
+# 头文件是 2.80+, 此时 gobject/gtype.h 里的 G_DEFINE_TYPE(见 runner/my_application.cc)
+# 会展开成 g_once_init_enter_pointer —— 该符号 Since: 2.80, 产物在 22.04 上启动即
+# "symbol lookup error: undefined symbol: g_once_init_enter_pointer"(issue #2)。
+# 把允许的最高 GLib 版本钉到 2.72, GObject 宏就会回退到 g_once_init_enter,
+# 运行时只要求 libglib-2.0.so.0 >= 2.72, deb 与 AppImage 都能在 jammy 上跑。
+# 注意: 这里改的是"引用的符号", 与新 glib 打印的 deprecation 无关。
+# MIN 也要一起钉: 新版 glib 头文件把默认 MIN_REQUIRED 抬到了 2.74+,
+# 只钉 MAX 会直接报 "GLIB_VERSION_MAX_ALLOWED must be >= GLIB_VERSION_MIN_REQUIRED"。
+add_compile_definitions(GLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_72
+                        GLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_72)
+
 # Root filesystem for cross-building.
 if(FLUTTER_TARGET_PLATFORM_SYSROOT)
   set(CMAKE_SYSROOT ${FLUTTER_TARGET_PLATFORM_SYSROOT})

@@ -12,6 +12,14 @@ OUT=${1:-$ROOT/dist}
 BUNDLE="$ROOT/ui/build/linux/x64/release/bundle"
 [ -x "$BUNDLE/minincm" ] || { echo "缺少 $BUNDLE/minincm, 先跑 flutter build linux --release" >&2; exit 1; }
 
+# Ubuntu 22.04(jammy) 只有 GLib 2.72: runner 若引用了 g_once_init_*_pointer(Since 2.80)
+# 则装上就是 "symbol lookup error"(issue #2)。CMake 里已把 GLib 基线钉到 2.72,
+# 这里在打包含前再验一遍, 免得抱着坏 bundle 出包。
+if command -v nm >/dev/null 2>&1; then
+  BAD=$(nm -D --undefined-only "$BUNDLE/minincm" | grep -oE 'g_once_init_(enter|leave)_pointer' | sort -u || true)
+  [ -z "$BAD" ] || { echo "ERROR: minincm 引用了 GLib 2.80 符号($BAD), Ubuntu 22.04 起不来" >&2; exit 1; }
+fi
+
 VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
 [ -n "$VER" ] || { echo "读不到 ui/pubspec.yaml 的 version" >&2; exit 1; }
 ARCH=${ARCH:-amd64}
