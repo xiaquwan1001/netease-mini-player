@@ -65,6 +65,38 @@ void main() {
     });
   });
 
+  group('CoverArt 组件级: 真正请求的 URL 像素', () {
+    Future<String?> renderedUrl(WidgetTester tester, double dpr) async {
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(devicePixelRatio: dpr),
+          child: const Center(
+              child: CoverArt(url: 'https://p3.music.126.net/a/b.jpg', size: 44)),
+        ),
+      ));
+      final images = find.byType(Image).evaluate().toList();
+      if (images.isEmpty) return null;
+      return (images.first.widget as Image).image.toString();
+    }
+
+    testWidgets('44dp @3x 标准档 -> 请求 132px', (tester) async {
+      AppSettings.instance.coverQuality = CoverQuality.standard;
+      final url = await renderedUrl(tester, 3);
+      expect(url, isNotNull);
+      expect(url!, contains('param=132y132'));
+    });
+
+    testWidgets('切到超清后同一个封面改请求 264px(不重启)', (tester) async {
+      AppSettings.instance.coverQuality = CoverQuality.standard;
+      await renderedUrl(tester, 3);
+      AppSettings.instance.coverQuality = CoverQuality.ultra;
+      await tester.pump();
+      final images = find.byType(Image).evaluate().toList();
+      final url = (images.first.widget as Image).image.toString();
+      expect(url, contains('param=264y264'));
+    });
+  });
+
   group('档位持久化', () {
     test('id 往返 + 未知值回落标准', () {
       for (final tier in CoverQuality.values) {
