@@ -18,6 +18,7 @@ class PlayQueueSheet extends StatefulWidget {
     required this.onRemove,
     this.onMove,
     this.onClear,
+    this.onSaveAsPlaylist,
   });
 
   final List<rust.SongDto> items;
@@ -38,6 +39,10 @@ class PlayQueueSheet extends StatefulWidget {
   /// 「清空队列」(面板头部): 宿主负责清 PlayQueue 并在需要时停播。
   final void Function()? onClear;
 
+  /// 「存为歌单」(面板头部): 面板只把**去重后**的队列快照交给宿主,
+  /// 选歌单/新建/调 Rust/toast 都在宿主 —— 面板保持可脱机单测。
+  final Future<void> Function(List<rust.SongDto> songs)? onSaveAsPlaylist;
+
   @override
   State<PlayQueueSheet> createState() => _PlayQueueSheetState();
 }
@@ -52,6 +57,27 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
   ];
 
   late int _index = widget.index;
+
+  /// 「存为歌单」进行中: 防重复提交(回调未完成时按钮置灰)
+  bool _busy = false;
+
+  /// 存为歌单: 交给宿主处理。同一首歌可能在队列里出现多次,
+  /// 服务端对重复 id 只收一次 —— 这里按 id 去重后传快照。
+  Future<void> _saveAsPlaylist() async {
+    if (_busy || _items.isEmpty) return;
+    final save = widget.onSaveAsPlaylist;
+    if (save == null) return;
+    final seen = <BigInt>{};
+    final songs = [for (final s in _items) if (seen.add(s.id)) s];
+    setState(() => _busy = true);
+    try {
+      await save(songs);
+    } catch (_) {
+      // 失败反馈(toast)由宿主负责; 面板只保证按钮回到可用状态。
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   /// 拖拽排序: 本地先动(面板即时反馈), 下标修正规则与 PlayQueue.moveTo 保持一致
   void _move(int from, int to) {
@@ -172,6 +198,12 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
+                if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
+                  IconButton(
+                    icon: const Icon(Icons.playlist_add),
+                    tooltip: '存为歌单',
+                    onPressed: _busy ? null : _saveAsPlaylist,
+                  ),
                 if (_items.isNotEmpty && widget.onClear != null)
                   IconButton(
                     icon: const Icon(Icons.delete_sweep_outlined),

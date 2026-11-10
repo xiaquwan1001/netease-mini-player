@@ -590,6 +590,44 @@ pub fn parse_user_medals(body: &Value) -> MedalWall {
     MedalWall { medal_num, medals }
 }
 
+/// 新建歌单响应 → (id, name). id 在顶层, 老形态回退 playlist.id(2026-11-10 实测,
+/// 样例见 docs/b7-playlist-write-notes.md). 拿不到 id 视为解析失败.
+pub fn parse_created_playlist(body: &Value) -> Option<ncm_domain::CreatedPlaylist> {
+    let playlist = body.get("playlist");
+    let id = body
+        .get("id")
+        .and_then(Value::as_u64)
+        .or_else(|| playlist.and_then(|p| p.get("id")).and_then(Value::as_u64))
+        .unwrap_or(0);
+    if id == 0 {
+        return None;
+    }
+    let name = playlist
+        .and_then(|p| p.get("name"))
+        .and_then(Value::as_str)
+        .or_else(|| body.get("name").and_then(Value::as_str))
+        .unwrap_or_default()
+        .to_string();
+    Some(ncm_domain::CreatedPlaylist { id, name })
+}
+
+/// 歌单写操作(tracks add / delete)通用结果. 成功判定 = code==200;
+/// add 成功时 count=接受数, 无 message; 失败给 msg/message.
+pub fn parse_playlist_edit_result(body: &Value) -> ncm_domain::PlaylistEditResult {
+    let code = body.get("code").and_then(Value::as_i64).unwrap_or(0);
+    let message = ["message", "msg"]
+        .iter()
+        .find_map(|k| body.get(*k).and_then(Value::as_str))
+        .map(str::to_string);
+    let count = body.get("count").and_then(Value::as_u64);
+    ncm_domain::PlaylistEditResult {
+        code,
+        message,
+        count,
+        ok: code == 200,
+    }
+}
+
 fn u64_of(v: &Value, key: &str) -> Option<u64> {
     v.get(key).and_then(|x| x.as_u64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
 }
@@ -1365,8 +1403,8 @@ impl Provider for NeteaseProvider {
         })
     }
 
-    /// 新建歌单: 响应 {code, id, playlist:{id,...}}
-    fn create_playlist<'a>(&'a self, name: &'a str) -> BoxFuture<'a, ProviderResult<u64>> {
+    /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/b7-playlist-write-notes.md)
+    fn create_playlist<'a>(&'a self, name: &'a str, privacy: u8) -> BoxFuture<'a, ProviderResult<u64>> {
         Box::pin(async move {
             let name = name.trim();
             if name.is_empty() {
@@ -1376,13 +1414,48 @@ impl Provider for NeteaseProvider {
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("新建歌单需要登录"));
             }
-            let q = make_query(&cookie, &domain, &ua).param("name", name);
+            let q = make_query(&cookie, &domain, &ua)
+                .param("name", name)
+                .param("privacy", &privacy.to_string());
             let resp = client.playlist_create(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
-            let body = &resp.body;
-            u64_of(body, "id")
-                .or_else(|| body.get("playlist").and_then(|p| u64_of(p, "id")))
+            parse_created_playlist(&resp.body)
+                .map(|created| created.id)
                 .ok_or_else(|| ProviderError::internal("新建歌单: 响应里没有 id"))
+        })
+    }
+
+    /// 批量把曲目加入歌单(op=add). vendor 把逗号分隔 id 序列化成字符串数组进 trackIds;
+    /// 响应 {"code":200,"count":N,...}, count 可小于提交数(重复曲目服务端跳过).
+    fn playlist_tracks_add<'a>(
+        &'a self,
+        playlist_id: u64,
+        song_ids: &'a [u64],
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async move {
+            if playlist_id == 0 {
+                return Err(ProviderError::not_found("playlist id 为空"));
+            }
+            if song_ids.is_empty() {
+                return Err(ProviderError::internal("没有可加入的曲目"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("收藏到歌单需要登录"));
+            }
+            let tracks = song_ids
+                .iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let q = make_query(&cookie, &domain, &ua)
+                .param("op", "add")
+                .param("pid", &playlist_id.to_string())
+                .param("tracks", &tracks)
+                .param("imme", "true");
+            let resp = client.playlist_tracks(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_playlist_edit_result(&resp.body).ok)
         })
     }
 
@@ -5340,6 +5413,65 @@ mod tests {
     fn album_newest_missing_albums_is_empty() {
         assert!(parse_album_items(&json!({"code": 301})).is_empty());
         assert!(parse_album_items(&json!({"code": 200, "albums": null})).is_empty());
+    }
+
+    /// ---- 歌单写接口 parse(2026-11-10 实测样例, 见 docs/b7-playlist-write-notes.md) ----
+
+    #[test]
+    fn created_playlist_from_top_level_id() {
+        let body = json!({"code":200,"id":18580697682u64,"playlist":{"adType":0,"anonimous":false,
+            "id":18580697682u64,"name":"B7抓包临时歌单 20261110-023344","privacy":0,
+            "trackCount":0,"userId":1822714196u64,"subscribedCount":0,"tags":[]}});
+        let p = parse_created_playlist(&body).expect("应能解析");
+        assert_eq!(p.id, 18580697682);
+        assert_eq!(p.name, "B7抓包临时歌单 20261110-023344");
+    }
+
+    #[test]
+    fn created_playlist_falls_back_to_playlist_id() {
+        // 防御老形态: 顶层缺 id 时回退 playlist.id
+        let p = parse_created_playlist(&json!({"code":200,"playlist":{"id":12345678901u64,"name":"X"}}))
+            .expect("应能解析");
+        assert_eq!(p.id, 12345678901);
+        assert_eq!(p.name, "X");
+    }
+
+    #[test]
+    fn created_playlist_none_when_no_id() {
+        assert!(parse_created_playlist(&json!({"code":500,"msg":"请求异常"})).is_none());
+        assert!(parse_created_playlist(&json!({"code":200,"id":0})).is_none());
+    }
+
+    #[test]
+    fn playlist_edit_add_ok_track_ids_is_string_not_array() {
+        // 实测原文: trackIds 是数组 JSON 文本(字符串), count=2; 成功无 message
+        let body = json!({"cloudCount":0,"code":200,"count":2,
+            "coverImgId":"109951167894836691",
+            "coverImgUrl":"http://p3.music.126.net/Pz4sEpA7nsiyIdIrswTx9A==/109951167894836691.jpg",
+            "trackIds":"[186016,26305527]"});
+        let r = parse_playlist_edit_result(&body);
+        assert!(r.ok);
+        assert_eq!(r.code, 200);
+        assert_eq!(r.count, Some(2));
+        assert_eq!(r.message, None);
+    }
+
+    #[test]
+    fn playlist_edit_delete_ok_without_message() {
+        let r = parse_playlist_edit_result(&json!({"code":200,"data":null,"message":null,"msg":null}));
+        assert!(r.ok);
+        assert_eq!(r.code, 200);
+        assert_eq!(r.count, None);
+        assert_eq!(r.message, None);
+    }
+
+    #[test]
+    fn playlist_edit_failure_extracts_msg() {
+        // 实测: UA/身份形态不配套时服务端回 500「请求异常」
+        let r = parse_playlist_edit_result(&json!({"code":500,"msg":"请求异常，请稍后重试"}));
+        assert!(!r.ok);
+        assert_eq!(r.code, 500);
+        assert_eq!(r.message.as_deref(), Some("请求异常，请稍后重试"));
     }
 
     /// artist_songs: 2026-11-22 实测形状(顶层 more + songs[], 歌曲为 NCM 歌曲 DTO).

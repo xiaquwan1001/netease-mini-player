@@ -16,7 +16,7 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20504%20%2B%20Rust%20242-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%20510%20%2B%20Rust%20248-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 

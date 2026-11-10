@@ -45,6 +45,7 @@ import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
 import 'src/theme.dart';
 import 'src/vip_page.dart';
+import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -1801,7 +1802,7 @@ class _HomePageState extends State<HomePage> {
     controller.dispose();
     if (name == null || name.isEmpty || !mounted) return;
     try {
-      final id = await rust.createPlaylist(name: name);
+      final id = await rust.createPlaylist(name: name, privacy: 0);
       final ok = await rust.addToPlaylist(playlistId: id, trackId: song.id);
       if (!mounted) return;
       _toast(ok ? '已新建《$name》并收藏' : '歌单已建, 收藏未生效');
@@ -2115,6 +2116,7 @@ class _HomePageState extends State<HomePage> {
           onRemove: _removeFromQueue,
           onMove: _moveInQueue,
           onClear: _clearQueue,
+          onSaveAsPlaylist: _saveQueueAsPlaylist,
         ),
       ),
     );
@@ -2131,6 +2133,155 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     setState(() => _queue.clear());
     await _stopAfterQueueEmpty();
+  }
+
+  /// 队列面板「存为歌单」: 选已有歌单或新建, 把队列(面板已按 id 去重)整批加进去.
+  /// 批量走 playlistTracksAdd(vendor /playlist/manipulate/tracks 原生支持多 id);
+  /// 「我喜欢的音乐」(special)在官方网页端也走同一接口, 不再单独走红心.
+  Future<void> _saveQueueAsPlaylist(List<rust.SongDto> songs) async {
+    if (songs.isEmpty || !mounted) return;
+    if (_info?.loggedIn != true) {
+      _toast('存为歌单需要先登录');
+      return;
+    }
+    List<rust.Playlist> lists;
+    try {
+      lists = await retryNetwork(rust.myPlaylists);
+    } catch (e) {
+      if (!mounted) return;
+      _toast('存为歌单失败: ${friendlyError(e)}');
+      return;
+    }
+    if (!mounted) return;
+    final picked = await showModalBottomSheet<Object>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.6,
+          child: Column(
+            children: [
+              ListTile(
+                dense: true,
+                title: const Text('存为歌单'),
+                subtitle: Text('把队列里的 ${songs.length} 首歌存进去'),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                dense: true,
+                leading: CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  child: const Icon(Icons.add, size: 20),
+                ),
+                title: const Text('新建歌单'),
+                subtitle: const Text('创建后把队列加进去'),
+                onTap: () => Navigator.pop(sheetContext, 'create'),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: lists.length,
+                  itemBuilder: (context, i) {
+                    final pl = lists[i];
+                    return ListTile(
+                      dense: true,
+                      leading: CoverArt(url: pl.coverUrl, size: 40, radius: 4),
+                      title: Text(
+                        pl.special ? '我喜欢的音乐' : pl.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text('${pl.trackCount} 首'),
+                      onTap: () => Navigator.pop(sheetContext, pl),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked is String) {
+      await _createPlaylistFromQueue(songs);
+      return;
+    }
+    final pl = picked as rust.Playlist;
+    await _addQueueToPlaylist(pl, songs);
+  }
+
+  /// 新建歌单并把整个队列存进去(默认名: 来自播放队列 M-D HH:mm)
+  Future<void> _createPlaylistFromQueue(List<rust.SongDto> songs) async {
+    final controller = TextEditingController(text: _queuePlaylistDefaultName());
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('新建歌单'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: '歌单名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (name == null || name.isEmpty || !mounted) return;
+    try {
+      final id = await rust.createPlaylist(name: name, privacy: 0);
+      final ok = await rust.playlistTracksAdd(
+        playlistId: id,
+        songIds: _queueSongIds(songs),
+      );
+      if (!mounted) return;
+      _toast(ok ? '已存入《$name》, ${songs.length} 首' : '歌单已建, 加入未生效');
+    } catch (e) {
+      if (!mounted) return;
+      _toast('存为歌单失败: ${friendlyError(e)}');
+    }
+  }
+
+  /// 把队列存进已有歌单
+  Future<void> _addQueueToPlaylist(
+    rust.Playlist pl,
+    List<rust.SongDto> songs,
+  ) async {
+    try {
+      final ok = await rust.playlistTracksAdd(
+        playlistId: pl.id,
+        songIds: _queueSongIds(songs),
+      );
+      if (!mounted) return;
+      final shown = pl.special ? '我喜欢的音乐' : pl.name;
+      _toast(ok ? '已存入《$shown》, ${songs.length} 首' : '加入未生效, 请稍后重试');
+    } catch (e) {
+      if (!mounted) return;
+      _toast('存为歌单失败: ${friendlyError(e)}');
+    }
+  }
+
+  Uint64List _queueSongIds(List<rust.SongDto> songs) => Uint64List.fromList(
+        [for (final s in songs) s.id.toInt()],
+      );
+
+  /// 「存为歌单」的默认歌单名
+  String _queuePlaylistDefaultName() {
+    final now = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '来自播放队列 ${now.month}-${now.day} ${two(now.hour)}:${two(now.minute)}';
   }
 
   /// 队列面板里点某一首: 定位到它再播(曲目可能已被别处挪过, 重新查下标)

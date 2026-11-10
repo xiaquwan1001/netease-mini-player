@@ -2010,9 +2010,14 @@ pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<boo
     ffi_forward!(Capability::AlbumSub, provider.set_album_subscribed(album_id, subscribed))
 }
 
-/// 新建歌单(需登录), 返回新歌单 id
-pub async fn create_playlist(name: String) -> Result<u64, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.create_playlist(&name))
+/// 新建歌单(需登录), 返回新歌单 id. privacy: 0=公开 10=私密
+pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, String> {
+    ffi_forward!(Capability::PlaylistEdit, provider.create_playlist(&name, privacy as u8))
+}
+
+/// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
+pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result<bool, String> {
+    ffi_forward!(Capability::PlaylistEdit, provider.playlist_tracks_add(playlist_id, &song_ids))
 }
 
 /// 删除歌单(需登录, 且只能删自己的)

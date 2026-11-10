@@ -679,9 +679,19 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no album subscribe")) })
     }
 
-    /// 新建歌单(需要登录), 返回新歌单 id
-    fn create_playlist<'a>(&'a self, _name: &'a str) -> BoxFuture<'a, ProviderResult<u64>> {
+    /// 新建歌单(需要登录), 返回新歌单 id. privacy: 0=公开 10=私密
+    fn create_playlist<'a>(&'a self, _name: &'a str, _privacy: u8) -> BoxFuture<'a, ProviderResult<u64>> {
         Box::pin(async { Err(ProviderError::unsupported("no playlist create")) })
+    }
+
+    /// 批量把曲目加入歌单(需要登录). song_ids 应由调用方去重;
+    /// 服务端对已存在的曲目会跳过(count 可小于提交数), 返回 true 表示接口接受.
+    fn playlist_tracks_add<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _song_ids: &'a [u64],
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist tracks add")) })
     }
 
     /// 删除歌单(需要登录)

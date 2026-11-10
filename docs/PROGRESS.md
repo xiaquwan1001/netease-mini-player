@@ -2,14 +2,40 @@
 
 > 最近更新: 2026-11-10(**MV 播放 + 自动更新检查 + Windows 桌面版合入**, 提交 `8a3f9a2`;
 > 同轮补完**队列面板拖拽排序与清空**; 并修复了一次 **.git 对象库损坏**(64 个 0 字节 loose object, 见本节末)。
-> 当前门禁: `cargo test --offline --workspace` **242** / `flutter test --exclude-tags network` **504** / `dart analyze` 0 error 0 warning(41 info)。
+> 当前门禁: `cargo test --offline --workspace` **248** / `flutter test --exclude-tags network` **510** / `dart analyze` 0 error 0 warning(41 info)。
 > 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`)。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
-> 更早: 接口覆盖 123/123、FFI 139 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
+> 更早: 接口覆盖 123/123、FFI 140 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 2026-11-10(三): 歌单写接口 + 队列「存为歌单」 · v0.2.2 三端发布
+
+| 项 | 落点 | 证据 |
+|---|---|---|
+| 歌单写接口(provider) | `create_playlist(name, privacy)` 补 `privacy`(0 公开 / 10 私密); 新增 **批量** `playlist_tracks_add(playlist_id, &[u64])`(vendor `/playlist/manipulate/tracks` 原生支持多 id), 默认实现 `unsupported`, 能力键沿用 `PlaylistEdit` | `ncm-service` **+6** parse 单测(`parse_created_playlist` / `parse_playlist_edit_result`, 用真实响应片段) |
+| 响应形状(实测) | `create`: id 在顶层, `playlist.id` 冗余兜底; `tracks add`: `{"code":200,"count":N,"trackIds":"[1,2]"}` —— **trackIds 是字符串**不是数组, `count` = 服务端接受数(重复曲目跳过); 失败 `{"code":500,"msg":...}` | `docs/b7-playlist-write-notes.md` |
+| FFI + codegen | `createPlaylist(name, privacy)` / `playlistTracksAdd(playlistId, songIds)`; frb 把 `Vec<u64>` 映射成 frb 自带 **`Uint64List`**(不是 `dart:typed_data`) | FFI 导出 139→**140** |
+| UI | `PlayQueueSheet` 头部「存为歌单」(`playlist_add`, 空队列不渲染), 快照**按 id 去重**后经 `onSaveAsPlaylist` 回调交宿主(面板仍可脱机单测); 宿主 `_saveQueueAsPlaylist` = 选「新建歌单」(默认名「来自播放队列 M-D HH:mm」)或我的歌单列表 → 批量加入 → toast; 未登录先提示 | `ui/test/queue_sheet_save_test.dart` **+6** 例(空队列无按钮/出现/回调快照/去重/防重复点击/失败不崩) |
+| 模拟器实测(emulator-5554) | 队列 2 首 → 「存为歌单」→ 新建 → **服务端复核**: 歌单「来自播放队列 11-10 11:52」出现在我的歌单且正好 2 首(After Hours / Hong Kong); 选已有歌单重复添加幂等(仍 2 首); logcat 0 崩溃 | 截图 `.pi/artifacts/b7/01..05*.png`; `ncm-cli playlists` 复核 |
+| 实测发现并修 | `myPlaylists` 网络失败原先被**静默吞掉**(面板一片空白) → 补 try/catch + toast | — |
+| 协议坑(入笔记) | 抓包时遇到「`code=500` 但服务端半成功入库」—— 写接口不能只看 code, 要回头查 `user/playlist` 确认, 否则会留下孤儿歌单; 本次两处孤儿已 `playlist_delete` 清掉 | `docs/b7-playlist-write-notes.md` |
+
+门禁(本批实测, 编排者独立重跑): `cargo test --offline --workspace` **248 通过 / 0 失败**(不含 vendor 联网 smoke 时 224) ·
+`dart analyze` **0 error / 0 warning**(41 info) · `flutter test --exclude-tags network` **510 通过 / 0 失败** ·
+`tools/api-coverage.sh` vendor **123/123**, FFI **140**, 无 UI 入口 4。
+
+### v0.2.2 发布(三端)
+
+- `release.yml` 重构: 新增 `build-windows` job(`windows-latest` 上 `flutter build windows --release` → `MiniNCM-<ver>-windows-x64.zip`),
+  原来的 Android/Linux job 只上传 artifact, 新增 `publish` job 统一 `download-artifact` + 算 `SHA256SUMS` + 创建 Release
+  ⇒ 消除两个 job 并发抢建 Release 的竞态, 且 checksum 覆盖三端; `overwrite_files: true` 支持重跑同一 tag。
+- 已发布 **v0.2.2**: `MiniNCM-0.2.2-android-arm64.apk`(28.5 MB) / `MiniNCM-0.2.2-linux-x64.tar.gz`(15.0 MB) /
+  **`MiniNCM-0.2.2-windows-x64.zip`(17.0 MB)** / `SHA256SUMS.txt`; tag 上 Release 流水线 4 个 job(verify / Android+Linux / Windows / publish)全绿。
+- 文档同步: README 与 README.en 改为三端描述(副标题/徽章/架构图/构建说明/进度表/门禁表), 项目 AGENTS.md 与
+  `docs/architecture-restart.md`、`docs/testing-dual-platform.md` 补 Windows 口径(本机 Linux 编不了 Windows, 只能靠 CI + 用户机器冒烟)。
 
 ## v2 · 2026-11-10(续): 队列面板拖拽排序/清空 · .git 损坏修复 · 门禁复核
 

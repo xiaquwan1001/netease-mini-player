@@ -538,9 +538,18 @@ Future<bool> setAlbumSubscribed({
   subscribed: subscribed,
 );
 
-/// 新建歌单(需登录), 返回新歌单 id
-Future<BigInt> createPlaylist({required String name}) =>
-    RustLib.instance.api.crateApiCreatePlaylist(name: name);
+/// 新建歌单(需登录), 返回新歌单 id. privacy: 0=公开 10=私密
+Future<BigInt> createPlaylist({required String name, required int privacy}) =>
+    RustLib.instance.api.crateApiCreatePlaylist(name: name, privacy: privacy);
+
+/// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
+Future<bool> playlistTracksAdd({
+  required BigInt playlistId,
+  required Uint64List songIds,
+}) => RustLib.instance.api.crateApiPlaylistTracksAdd(
+  playlistId: playlistId,
+  songIds: songIds,
+);
 
 /// 删除歌单(需登录, 且只能删自己的)
 Future<bool> deletePlaylist({required BigInt playlistId}) =>
