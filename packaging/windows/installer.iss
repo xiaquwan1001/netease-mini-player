@@ -38,7 +38,9 @@ UninstallDisplayIcon={app}\{#AppExe}
 LicenseFile=..\..\LICENSE
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; 只用内置的英文语言包: Inno Setup 官方安装包**不包含** ChineseSimplified.isl(那是社区翻译,
+; 6.7.1 里没有 ⇒ CI 上 "Couldn't open include file ... ChineseSimplified.isl" 直接编译失败)。
+; 应用名/组名保持中文, 界面按钮为英文即可; 真要中文向导就把官方 .isl 一起放进 packaging/windows/。
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
