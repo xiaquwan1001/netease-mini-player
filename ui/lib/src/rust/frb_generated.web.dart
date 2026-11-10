@@ -230,6 +230,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PodcastRadio> dco_decode_list_podcast_radio(dynamic raw);
 
   @protected
+  Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
+
+  @protected
   Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
   @protected
@@ -329,6 +332,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MessageCountsDto dco_decode_message_counts_dto(dynamic raw);
+
+  @protected
+  MvDetailDto dco_decode_mv_detail_dto(dynamic raw);
+
+  @protected
+  MvUrlDto dco_decode_mv_url_dto(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
@@ -769,6 +778,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
+
+  @protected
   Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
 
   @protected
@@ -898,6 +910,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MessageCountsDto sse_decode_message_counts_dto(SseDeserializer deserializer);
+
+  @protected
+  MvDetailDto sse_decode_mv_detail_dto(SseDeserializer deserializer);
+
+  @protected
+  MvUrlDto sse_decode_mv_url_dto(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -1431,6 +1449,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_u_32_strict(
+    Uint32List self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_64_strict(
     Uint64List self,
     SseSerializer serializer,
@@ -1606,6 +1630,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     MessageCountsDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_mv_detail_dto(MvDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_mv_url_dto(MvUrlDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);

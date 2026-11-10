@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app_meta.dart';
@@ -6,6 +8,8 @@ import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
+import 'toast.dart';
+import 'update_checker.dart';
 
 /// 设置页(审查 P1-7.9 瘦身后): 只剩「App 怎么表现」的偏好开关 + 分组入口。
 ///
@@ -140,6 +144,15 @@ class SettingsView extends StatelessWidget {
                   },
                 ),
                 const Divider(height: 1),
+                SwitchListTile(
+                  title: const Text('启动时检查更新'),
+                  subtitle: const Text('连接 GitHub 检查新版本; 关闭后仍可在「关于」里手动检查'),
+                  value: settings.updateCheckOnStartup,
+                  onChanged: (value) {
+                    settings.update(updateCheckOnStartup: value);
+                  },
+                ),
+                const Divider(height: 1),
                 ListTile(
                   title: const Text('取链音质'),
                   subtitle: Text(
@@ -200,6 +213,8 @@ class SettingsView extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                const Divider(height: 1),
+                const _CheckUpdateTile(),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.monitor_heart_outlined),
@@ -287,6 +302,111 @@ class _SegmentedSettingTile<T> extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 「检查更新」项: 点击手动检查(loading), 有新版本弹窗引导下载;
+/// 启动静默检查发现新版本时在 trailing 显示红点(不弹窗打扰)。
+class _CheckUpdateTile extends StatefulWidget {
+  const _CheckUpdateTile();
+
+  @override
+  State<_CheckUpdateTile> createState() => _CheckUpdateTileState();
+}
+
+class _CheckUpdateTileState extends State<_CheckUpdateTile> {
+  bool _checking = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<UpdateInfo?>(
+      valueListenable: UpdateCheckHost.pendingUpdate,
+      builder: (context, pending, _) {
+        final newer = pending != null && pending.isNewer;
+        return ListTile(
+          leading: const Icon(Icons.system_update_outlined),
+          title: Row(children: [
+            const Text('检查更新'),
+            if (newer) ...[
+              const SizedBox(width: 8),
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.error,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ]),
+          subtitle: Text(newer ? '发现新版本 ${pending.latest}' : '当前 v$kAppVersion'),
+          trailing: _checking
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.refresh),
+          onTap: _checking ? null : _check,
+        );
+      },
+    );
+  }
+
+  Future<void> _check() async {
+    setState(() => _checking = true);
+    UpdateInfo? info;
+    try {
+      info = await UpdateCheckHost.check(kAppVersion);
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+    if (!mounted) return;
+    if (info == null) {
+      showToast(context, '检查更新失败, 请检查网络后重试', isError: true);
+      return;
+    }
+    if (!info.isNewer) {
+      showToast(context, '已是最新版本 v${info.current}');
+      return;
+    }
+    UpdateCheckHost.pendingUpdate.value = info;
+    // 捕获成非空局部变量: 闭包里不能靠 info 的类型提升(它是可变局部变量), 之前那种 info! 只是绕过去
+    final upd = info;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('发现新版本 ${upd.latest}'),
+        content: Text(_trimNotes(upd.notes)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop('later'),
+            child: const Text('稍后'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop('download'),
+            child: const Text('前往下载'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'later') {
+      AppSettings.instance.skipUpdate(info.latest);
+      return;
+    }
+    final url = info.downloadUrl;
+    if (url != null && url.isNotEmpty) {
+      await UpdateCheckHost.openUrl(url);
+    } else {
+      await UpdateCheckHost.openUrl(kGithubUrl);
+    }
+  }
+
+  static String _trimNotes(String? notes) {
+    if (notes == null) return '';
+    final one = notes.trim();
+    return one.length > 200 ? '${one.substring(0, 200)}…' : one;
   }
 }
 

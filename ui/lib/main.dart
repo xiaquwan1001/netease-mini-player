@@ -38,6 +38,7 @@ import 'src/search_results.dart';
 import 'src/search_suggest.dart';
 import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
+import 'src/update_checker.dart';
 import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
@@ -553,6 +554,8 @@ class _HomePageState extends State<HomePage> {
       final info = await rust.init(dataDir: dir);
       await AppSettings.instance.load(info.dataDir);
       // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
+      // 首帧后 3s 后台静默检查更新(节流/开关在 update_checker 内, 失败静默)
+      unawaited(runStartupUpdateCheck(AppSettings.instance));
       unawaited(applyAudioTuning());
       unawaited(enforceCacheLimit());
       if (!mounted) return;

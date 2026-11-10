@@ -7,7 +7,7 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
-    HotSearchDetailItem, SearchExact, ToplistCatalogGroup,
+    HotSearchDetailItem, MvDetail, MvUrl, SearchExact, ToplistCatalogGroup,
     FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
@@ -563,6 +563,16 @@ pub trait Provider: Send + Sync {
         _limit: u32,
     ) -> BoxFuture<'a, ProviderResult<ArtistMvPage>> {
         Box::pin(async { Err(ProviderError::unsupported("no artist mvs")) })
+    }
+
+    /// MV 详情(mv_detail)
+    fn mv_detail<'a>(&'a self, _mv_id: u64) -> BoxFuture<'a, ProviderResult<MvDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no mv detail")) })
+    }
+
+    /// MV 播放链接(mv_url, r=清晰度档位如 1080)
+    fn mv_url<'a>(&'a self, _mv_id: u64, _r: u32) -> BoxFuture<'a, ProviderResult<MvUrl>> {
+        Box::pin(async { Err(ProviderError::unsupported("no mv url")) })
     }
 
     /// 当前账号资料详情(个人主页背景图/头像/签名/关注数)

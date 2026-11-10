@@ -45,6 +45,14 @@ Future<ArtistMvPageDto> artistMvsPage({
   limit: limit,
 );
 
+/// MV 详情(mv_detail)
+Future<MvDetailDto> mvDetail({required BigInt mvId}) =>
+    RustLib.instance.api.crateApiMvDetail(mvId: mvId);
+
+/// MV 播放链接(mv_url, r=清晰度档位, 0 表示请求最高)
+Future<MvUrlDto> mvUrl({required BigInt mvId, required int r}) =>
+    RustLib.instance.api.crateApiMvUrl(mvId: mvId, r: r);
+
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
 Future<bool> artistSubToggle({required BigInt artistId, required bool sub}) =>
     RustLib.instance.api.crateApiArtistSubToggle(artistId: artistId, sub: sub);
@@ -1990,6 +1998,81 @@ class MessageCountsDto {
           comments == other.comments &&
           forwards == other.forwards &&
           total == other.total;
+}
+
+class MvDetailDto {
+  final BigInt id;
+  final String name;
+  final String artistName;
+  final BigInt durationMs;
+  final BigInt playCount;
+  final String publishTime;
+  final String? coverUrl;
+  final int maxBr;
+  final Uint32List brs;
+  final String? desc;
+
+  const MvDetailDto({
+    required this.id,
+    required this.name,
+    required this.artistName,
+    required this.durationMs,
+    required this.playCount,
+    required this.publishTime,
+    this.coverUrl,
+    required this.maxBr,
+    required this.brs,
+    this.desc,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      artistName.hashCode ^
+      durationMs.hashCode ^
+      playCount.hashCode ^
+      publishTime.hashCode ^
+      coverUrl.hashCode ^
+      maxBr.hashCode ^
+      brs.hashCode ^
+      desc.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MvDetailDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          artistName == other.artistName &&
+          durationMs == other.durationMs &&
+          playCount == other.playCount &&
+          publishTime == other.publishTime &&
+          coverUrl == other.coverUrl &&
+          maxBr == other.maxBr &&
+          brs == other.brs &&
+          desc == other.desc;
+}
+
+class MvUrlDto {
+  final String? url;
+  final int r;
+  final BigInt size;
+
+  const MvUrlDto({this.url, required this.r, required this.size});
+
+  @override
+  int get hashCode => url.hashCode ^ r.hashCode ^ size.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MvUrlDto &&
+          runtimeType == other.runtimeType &&
+          url == other.url &&
+          r == other.r &&
+          size == other.size;
 }
 
 class PlayRankEntryDto {

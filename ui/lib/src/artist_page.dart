@@ -6,6 +6,7 @@ import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 import 'format.dart' show formatDurationMs;
+import 'mv_page.dart' show showMvPage;
 
 /// 歌手详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
 /// (热门歌曲 / 全部歌曲 / 专辑 / MV(有才显示)) + 页内搜索(过滤歌曲类 tab)。
@@ -864,6 +865,7 @@ class _MvsTab extends StatelessWidget {
             }
           : (_) async => PagedPage(firstPage, hasMore: false),
       itemBuilder: (context, mv, index, items) => ListTile(
+        onTap: () => showMvPage(context, mvId: mv.id, name: mv.name),
         leading: mv.coverUrl != null
             ? ClipRRect(
                 borderRadius: BorderRadius.circular(4),

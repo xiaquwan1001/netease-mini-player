@@ -11,5 +11,7 @@ serde.workspace = true
 # rodio 内部也用它, 因此离线 registry 里就有, 不需要联网。
 symphonia = { version = "0.5", default-features = false, features = ["mp3", "flac", "isomp4", "aac", "pcm", "ogg", "vorbis"] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+# 桌面播放引擎: Linux 用 ALSA/CPAL, Windows 用 WASAPI/CPAL —— 同一套 rodio 代码.
+# 采集不到设备时统一报错, 不做平台特判.
+[target.'cfg(any(target_os = "linux", target_os = "windows"))'.dependencies]
 rodio = { version = "0.23", default-features = false, features = ["playback", "symphonia-all"] }

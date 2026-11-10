@@ -179,6 +179,17 @@ class AppSettings extends ChangeNotifier {
           if (srcPref is String && lyricSourceOptions.containsKey(srcPref)) {
             lyricSourcePreference = srcPref;
           }
+          // 自动更新检查(2026-11): 开关 + 节流/跳过记录
+          if (raw['updateCheckOnStartup'] is bool) {
+            updateCheckOnStartup = raw['updateCheckOnStartup'] as bool;
+          }
+          if (raw['lastUpdateCheckMs'] is int) {
+            lastUpdateCheckMs = raw['lastUpdateCheckMs'] as int;
+          }
+          final skipped = raw['skippedUpdateVersion'];
+          if (skipped is String && skipped.isNotEmpty) {
+            skippedUpdateVersion = skipped;
+          }
         }
       }
     } catch (_) {
@@ -208,7 +219,11 @@ class AppSettings extends ChangeNotifier {
     int? cacheLimitMb,
     bool? lyricTranslation,
     String? lyricSourcePreference,
+    bool? updateCheckOnStartup,
   }) async {
+    if (updateCheckOnStartup != null) {
+      this.updateCheckOnStartup = updateCheckOnStartup;
+    }
     if (themeMode != null) this.themeMode = themeMode;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
     if (audioLevel != null && audioLevels.containsKey(audioLevel)) {
@@ -272,6 +287,9 @@ class AppSettings extends ChangeNotifier {
         'cacheLimitMb': cacheLimitMb,
         'lyricTranslation': lyricTranslation,
         'lyricSourcePreference': lyricSourcePreference,
+        'updateCheckOnStartup': updateCheckOnStartup,
+        'lastUpdateCheckMs': lastUpdateCheckMs,
+        'skippedUpdateVersion': skippedUpdateVersion,
       }));
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效
@@ -289,6 +307,31 @@ class AppSettings extends ChangeNotifier {
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
       };
+
+  // ---------------- 自动更新检查(2026-11) ----------------
+
+  /// 启动时是否后台静默检查更新(关掉后仍可手动「检查更新」)
+  bool updateCheckOnStartup = true;
+
+  /// 上次启动检查的 epoch ms(24h 节流用; 手动检查不写)
+  int? lastUpdateCheckMs;
+
+  /// 用户点「稍后」跳过的版本 tag, 启动静默检查不再提示该版本
+  String? skippedUpdateVersion;
+
+  void recordUpdateCheck(int nowMs) {
+    lastUpdateCheckMs = nowMs;
+    // 节流记录走独立小落盘, 不 notifyListeners(避免无谓全页重建)
+    _persist();
+  }
+
+  /// 「稍后」: 记住该版本, 启动检查不再提示
+  void skipUpdate(String versionTag) {
+    skippedUpdateVersion = versionTag;
+    _persist();
+  }
+
+  Future<void> _persist() => _save();
 
   static double _doubleOf(Object? value, double fallback) =>
       value is num ? value.toDouble() : fallback;

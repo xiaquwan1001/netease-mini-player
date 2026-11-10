@@ -1346,6 +1346,8 @@ async fn run() -> Result<(), BoxErr> {
                 }
             }
             let resp = match method.as_str() {
+                "mv_detail" => client.mv_detail(&q).await?,
+                "mv_url" => client.mv_url(&q).await?,
                 "cloudsearch" => client.cloudsearch(&q).await?,
                 "artist_detail" => client.artist_detail(&q).await?,
                 "artist_album" => client.artist_album(&q).await?,

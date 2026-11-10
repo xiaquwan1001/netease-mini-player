@@ -312,6 +312,25 @@ pub struct ArtistMvDto {
     pub cover_url: Option<String>,
 }
 
+pub struct MvDetailDto {
+    pub id: u64,
+    pub name: String,
+    pub artist_name: String,
+    pub duration_ms: u64,
+    pub play_count: u64,
+    pub publish_time: String,
+    pub cover_url: Option<String>,
+    pub max_br: u32,
+    pub brs: Vec<u32>,
+    pub desc: Option<String>,
+}
+
+pub struct MvUrlDto {
+    pub url: Option<String>,
+    pub r: u32,
+    pub size: u64,
+}
+
 pub struct ArtistMvPageDto {
     pub mvs: Vec<ArtistMvDto>,
     pub has_more: bool,
@@ -352,6 +371,31 @@ pub async fn artist_mvs_page(artist_id: u64, offset: u32, limit: u32) -> Result<
             .collect(),
         has_more: page.has_more,
     })
+}
+
+/// MV 详情(mv_detail)
+pub async fn mv_detail(mv_id: u64) -> Result<MvDetailDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let d = provider.mv_detail(mv_id).await.map_err(|e| e.to_string())?;
+    Ok(MvDetailDto {
+        id: d.id,
+        name: d.name,
+        artist_name: d.artist_name,
+        duration_ms: d.duration_ms,
+        play_count: d.play_count,
+        publish_time: d.publish_time,
+        cover_url: d.cover_url,
+        max_br: d.max_br,
+        brs: d.brs,
+        desc: d.desc,
+    })
+}
+
+/// MV 播放链接(mv_url, r=清晰度档位, 0 表示请求最高)
+pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let u = provider.mv_url(mv_id, r).await.map_err(|e| e.to_string())?;
+    Ok(MvUrlDto { url: u.url, r: u.r, size: u.size })
 }
 
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.

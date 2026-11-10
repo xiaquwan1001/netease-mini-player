@@ -86,6 +86,32 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // MV 播放: 起独立 VideoView Activity, 不进 Media3 歌曲队列
+        val mv = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/mv")
+        mv.setMethodCallHandler { call, result ->
+            val args = call.arguments as? Map<*, *>
+            when (call.method) {
+                "play" -> {
+                    val url = args?.get("url") as? String
+                    val title = args?.get("title") as? String ?: "MV"
+                    if (url.isNullOrBlank()) {
+                        result.error("bad_args", "url missing", null)
+                    } else {
+                        try {
+                            val intent = Intent(this, MvPlayerActivity::class.java)
+                                .putExtra(MvPlayerActivity.EXTRA_URL, url)
+                                .putExtra(MvPlayerActivity.EXTRA_TITLE, title)
+                            startActivity(intent)
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("mv_error", e.message, null)
+                        }
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         // 打开外部链接 / 下载: 不引第三方插件, 用系统 Intent + DownloadManager
         val open = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/open")
         open.setMethodCallHandler { call, result ->

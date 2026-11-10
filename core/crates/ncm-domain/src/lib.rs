@@ -287,6 +287,48 @@ pub struct ArtistMvPage {
     pub has_more: bool,
 }
 
+/// MV 详情(mv_detail 的 data 子集)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MvDetail {
+    pub id: u64,
+    pub name: String,
+    #[serde(default)]
+    pub artist_name: String,
+    /// 时长(毫秒)
+    #[serde(default)]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub play_count: u64,
+    /// 发布日期字符串, 原样展示(如 "1997-10-01")
+    #[serde(default)]
+    pub publish_time: String,
+    /// 封面(data.cover)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// 可用最高清晰度(brs[] 里最大的 br, 如 240/480/720/1080)
+    #[serde(default)]
+    pub max_br: u32,
+    /// 可用清晰度列表(brs[].br 升序)
+    #[serde(default)]
+    pub brs: Vec<u32>,
+    /// 简介(可空)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+}
+
+/// MV 播放链接(mv_url 的 data 子集)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MvUrl {
+    /// 签名直链(http/https mp4, expi=3600 秒)
+    pub url: Option<String>,
+    /// 实际返回的清晰度档位
+    #[serde(default)]
+    pub r: u32,
+    /// 文件字节数
+    #[serde(default)]
+    pub size: u64,
+}
+
 /// 账号资料详情(个人主页: 背景图 + 头像 + 签名 + 关注数)
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileDetail {

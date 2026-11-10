@@ -3,6 +3,7 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, NcmError, Query};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMv, ArtistMvPage, ArtistSongPage, ChartSummary, Comment, CommentPage,
+    MvDetail, MvUrl,
     CommentStats,
     DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
     PlayRankEntry,
@@ -1775,6 +1776,47 @@ impl Provider for NeteaseProvider {
             let resp = client.artist_mv(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_artist_mvs(&resp.body))
+        })
+    }
+
+    /// MV 详情(mv_detail)
+    fn mv_detail<'a>(&'a self, mv_id: u64) -> BoxFuture<'a, ProviderResult<MvDetail>> {
+        Box::pin(async move {
+            if mv_id == 0 {
+                return Err(ProviderError::not_found("mv id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("mvid", &mv_id.to_string());
+            let resp = client.mv_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let detail = parse_mv_detail(&resp.body);
+            if detail.id == 0 || detail.name.is_empty() {
+                return Err(ProviderError::not_found("MV 不存在"));
+            }
+            Ok(detail)
+        })
+    }
+
+    /// MV 播放链接(mv_url, r=清晰度档位如 1080)
+    fn mv_url<'a>(&'a self, mv_id: u64, r: u32) -> BoxFuture<'a, ProviderResult<MvUrl>> {
+        Box::pin(async move {
+            if mv_id == 0 {
+                return Err(ProviderError::not_found("mv id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let r_str = if r == 0 { "1080".to_string() } else { r.to_string() };
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &mv_id.to_string())
+                .param("r", &r_str);
+            let resp = client.mv_url(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let u = parse_mv_url(&resp.body);
+            if u.url.is_none() {
+                return Err(ProviderError::unsupported(
+                    "该 MV 无可播放链接(可能需要 VIP 或已下架)",
+                ));
+            }
+            Ok(u)
         })
     }
 
@@ -4222,6 +4264,43 @@ pub fn parse_artist_mvs(body: &Value) -> ArtistMvPage {
     }
 }
 
+/// MV 详情: {code, data:{id,name,artistName,duration,playCount,publishTime,cover,brs:[{br,size}],desc}}
+pub fn parse_mv_detail(body: &Value) -> MvDetail {
+    let d = body.get("data").cloned().unwrap_or(Value::Null);
+    let mut brs: Vec<u32> = d
+        .get("brs")
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(|v| v.get("br").and_then(Value::as_u64).map(|b| b as u32)).collect())
+        .unwrap_or_default();
+    brs.sort_unstable();
+    brs.dedup();
+    let name = str_of(&d, "name").unwrap_or_default();
+    let id = u64_of(&d, "id").unwrap_or(0);
+    MvDetail {
+        id,
+        name,
+        artist_name: str_of(&d, "artistName").unwrap_or_default(),
+        duration_ms: u64_of(&d, "duration").unwrap_or(0),
+        play_count: u64_of(&d, "playCount").unwrap_or(0),
+        publish_time: str_of(&d, "publishTime").unwrap_or_default(),
+        cover_url: str_of(&d, "cover").filter(|s| s.starts_with("http")),
+        max_br: brs.last().copied().unwrap_or(0),
+        brs,
+        desc: str_of(&d, "desc").or_else(|| str_of(&d, "briefDesc")).filter(|s| !s.is_empty()),
+    }
+}
+
+/// MV 播放链接: {code, data:{url,r,size,expi,...}} (data 是对象, video 版才是数组)
+pub fn parse_mv_url(body: &Value) -> MvUrl {
+    let d = body.get("data").cloned().unwrap_or(Value::Null);
+    let url = str_of(&d, "url").filter(|s| s.starts_with("http"));
+    MvUrl {
+        url,
+        r: u64_of(&d, "r").unwrap_or(0) as u32,
+        size: u64_of(&d, "size").unwrap_or(0),
+    }
+}
+
 /// 相似歌手: {code, artists:[{id,name,picUrl,img1v1Url}]}
 pub fn parse_similar_artists(body: &Value) -> Vec<Artist> {
     let arr = body
@@ -5290,6 +5369,93 @@ mod tests {
         assert_eq!(page.songs[0].album.as_ref().unwrap().name, "有点野");
         assert_eq!(page.songs[0].duration_ms, 319039);
         assert_eq!(page.songs[0].fee, Some(0));
+    }
+
+    /// mv_detail: 2026-11-22 实测形状(id=5436712 广岛之恋, brs 数组).
+    #[test]
+    fn mv_detail_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "id": 5436712u64, "name": "广岛之恋", "artistName": "莫文蔚",
+                "duration": 378040u64, "playCount": 852564u64,
+                "publishTime": "1997-10-01",
+                "cover": "http://p4.music.126.net/abc.jpg",
+                "brs": [{"br": 480, "point": 0, "size": 31157772.0}, {"br": 240, "point": 0, "size": 17639436.0}],
+                "desc": null, "commentCount": 689u64
+            },
+            "subed": false
+        });
+        let d = parse_mv_detail(&body);
+        assert_eq!(d.id, 5436712);
+        assert_eq!(d.name, "广岛之恋");
+        assert_eq!(d.artist_name, "莫文蔚");
+        assert_eq!(d.duration_ms, 378040);
+        assert_eq!(d.publish_time, "1997-10-01");
+        assert_eq!(d.cover_url.as_deref(), Some("http://p4.music.126.net/abc.jpg"));
+        assert_eq!(d.brs, vec![240, 480]);
+        assert_eq!(d.max_br, 480);
+        assert!(d.desc.is_none());
+    }
+
+    /// mv_detail: desc 非空时保留.
+    #[test]
+    fn mv_detail_keeps_desc() {
+        let body = json!({"code": 200, "data": {"id": 1u64, "name": "mv", "desc": "简介文本"}});
+        assert_eq!(parse_mv_detail(&body).desc.as_deref(), Some("简介文本"));
+    }
+
+    /// mv_detail: data 缺失时空默认值(id=0).
+    #[test]
+    fn mv_detail_missing_data_is_default() {
+        let d = parse_mv_detail(&json!({"code": 301}));
+        assert_eq!(d.id, 0);
+        assert!(d.name.is_empty());
+        assert!(d.brs.is_empty());
+        assert_eq!(d.max_br, 0);
+    }
+
+    /// mv_url: 2026-11-22 实测形状(data 单对象, 签名直链 + 实际档位).
+    #[test]
+    fn mv_url_parses_real_shape() {
+        let body = json!({
+            "code": 200,
+            "data": {
+                "code": 200, "expi": 3600u64, "fee": 0, "id": 5436712u64, "md5": "",
+                "r": 480, "size": 31157772u64,
+                "url": "http://vodkgeyttp8.vod.126.net/cloudmusic/a.mp4?wsSecret=x&wsTime=1"
+            }
+        });
+        let u = parse_mv_url(&body);
+        assert!(u.url.as_deref().unwrap().starts_with("http://vodkgeyttp8"));
+        assert_eq!(u.r, 480);
+        assert_eq!(u.size, 31157772);
+    }
+
+    /// mv_url: url 为 null(需要 VIP / 下架)时 url=None.
+    #[test]
+    fn mv_url_null_url_is_none() {
+        let body = json!({"code": 200, "data": {"code": 200, "url": null, "r": 1080}});
+        assert!(parse_mv_url(&body).url.is_none());
+    }
+
+    /// mv_url: data 缺失时全默认.
+    #[test]
+    fn mv_url_missing_data_is_default() {
+        let u = parse_mv_url(&json!({"code": 404}));
+        assert!(u.url.is_none());
+        assert_eq!(u.r, 0);
+        assert_eq!(u.size, 0);
+    }
+
+    /// mv_detail: brs 乱序/重复时升序去重, max_br 取最大.
+    #[test]
+    fn mv_detail_brs_sorted_deduped() {
+        let body = json!({"code": 200, "data": {"id": 2u64, "name": "m",
+            "brs": [{"br": 1080}, {"br": 480}, {"br": 1080}, {"br": 720}]}});
+        let d = parse_mv_detail(&body);
+        assert_eq!(d.brs, vec![480, 720, 1080]);
+        assert_eq!(d.max_br, 1080);
     }
 
     /// artist_songs: more=false 表示没有下一页(最后一页).

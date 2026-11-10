@@ -855,3 +855,28 @@ TTML 探测经 `TtmlProbe` trait 注入, 测试不联网。
 `ui/lib/main.dart`(解析与标注, 9 新单测)、真实抽样 `docs/c2-lyric-source-quality.md`
 (AMLL 覆盖 6/17, 纯比较 AMLL 6/6 胜, 真实 auto 口径 AMLL 2/17)。
 
+
+## 自动更新检查(2026-11)
+
+启动/手动检查 GitHub Releases(`xiaquwan1001/netease-mini-player` 的 latest release)是否有新版本, 并引导下载。
+
+- 纯 Dart 无新依赖: `ui/lib/src/update_checker.dart`。
+  - `compareVersions(a,b)` 逐段数字比较, 支持 `v` 前缀、`+N` build 段、semver 预发布规则; 非法输入返回 0 不抛。
+  - `checkForUpdate`: 请求 latest API(Accept `application/vnd.github+json`, 8s 超时), 按平台选资产(android ⇒ `-android-*.apk`, linux ⇒ `-linux-*.tar.gz`), 无匹配资产回退 `html_url`; 任何错误(网络/404/坏 JSON/超时)返回 null 不抛。
+  - `checkForUpdate` 可注入 `client`/`apiBase`/`fetch`/`preferAndroid`; **测试全走假 HttpClient/假 fetcher, 绝不真联网**。
+  - 本地验证: 把 `apiBase` 指到本地假 JSON(如 `python3 -m http.server` 起一个 release JSON, 传 `apiBase: 'http://127.0.0.1:8000/latest.json'`)即可离线复现解析与资产选择; 测试已覆盖同样路径。
+- UI: 设置 →「关于」新增「检查更新」项(检查中 loading; 有新版本弹窗: 版本号 + notes 前 200 字 + 「前往下载」走 `PlatformBridge.openUrl` + 「稍后」; 无新版 toast「已是最新版本」); 启动静默检查发现新版本只在「检查更新」项上点亮红点, 不弹窗。
+- 设置: `updateCheckOnStartup` 开关(默认开); `AppSettings` 落盘 `lastUpdateCheckMs`(24h 节流)与 `skippedUpdateVersion`(点「稍后」跳过的版本, 启动检查不再提示)。
+- main.dart 仅在 `_bootstrap` 后追加一行 `unawaited(runStartupUpdateCheck(AppSettings.instance))`(首帧后 3s 后台检查)。
+- 测试: `ui/test/update_checker_test.dart` 25 例(版本比较/资产选择/错误路径/假 HttpClient/节流与跳过/关于项 UI)。
+
+## C3 — MV 播放(2026-11-09)
+
+- vendor: 恢复 `mv_detail.rs` / `mv_url.rs`(git show 5cfc301^), mod.rs 重新注册。
+- Rust: `MvDetail`/`MvUrl` DTO; provider trait 默认 unsupported + netease 实现(`parse_mv_detail`/`parse_mv_url`, 7 个 parse 单测用真实响应形状); FFI `mvDetail`/`mvUrl`; frb codegen 一次。
+- 接口实测(`ncm raw`, 见 docs/c3-mv-playback-notes.md): mv_url data 是单对象, 签名直链 expi=3600s, http/https 都通, 请求 1080 实回 r=480(按实际档位返回)。
+- UI: 新增 `mv_page.dart`(封面+标题/歌手/播放量/发布时间/最高清晰度/简介 + 播放按钮, FutureBuilder 错误态可重试) + `mv_playback.dart`(MvPlayback: Android 走 `ncm/mv` MethodChannel, 桌面走 openUrl 外链并明示无内嵌播放; 直链 http→https); artist_page MV 卡片 onTap 接 showMvPage(仅接线)。
+- Android: 新增 `MvPlayerActivity.kt`(独立 VideoView + MediaController, 刻意不进 Media3 歌曲队列; 16:9 居中适配, keep screen on, onPause/onDestroy stopPlayback, 解析失败可读 toast), MainActivity 注册 `ncm/mv` play, Manifest 注册 Activity(Theme.Material.NoActionBar)。
+- 模拟器实测(emulator-5554, x64 debug 包): 搜索→歌手信息→MV tab→点 MV→播放: NuPlayer state=started(video/avc + audio/mp4a-latm), 双截图帧变化, 暂停/返回键回 MV 详情页, logcat 0 FATAL, 退出后无残留解码器。截图 .pi/artifacts/c3/。
+- 测试: test/mv_page_test.dart 6 例(详情渲染/加载失败重试/无链接错误态/播放调用+https 转换/桌面外链分支/取链异常错误态)。门禁: cargo test 46+31+1+140 全绿; dart analyze 0 error/warning(41 info 均在他人文件); flutter test --exclude-tags network 501 全绿; build-android.sh OK。
+- 注: settings_view.dart 曾有另一车道的空安全编译错误挡构建, 已做最小 `info!.latest` 修复(仅此一行)。

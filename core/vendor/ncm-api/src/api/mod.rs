@@ -40,6 +40,8 @@ mod user_playlist;
 mod artist_album;
 mod artist_detail;
 mod artist_mv;
+mod mv_detail;
+mod mv_url;
 mod artist_songs;
 mod artist_sub;
 mod artist_sublist;
