@@ -14,6 +14,7 @@
 //!   ncm comment-info <song|playlist|album|podcast|mv|video> <id>  评论统计(评论数/分享数/点赞数)
 //!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
+//!   ncm login-qr                    官方网页扫码登录(打印二维码链接并等待扫码确认)
 //!   ncm digital <albumId>            数字专辑详情(价格/标签/是否已购)
 //!   ncm digital-purchased [limit] [offset]   我的已购数字专辑(需登录)
 //!   ncm purchased-songs [limit] [offset]     我的已购单曲(需登录)
@@ -114,6 +115,48 @@ async fn run() -> Result<(), BoxErr> {
             core.apply_session(next)?;
             println!("cookie saved -> {}", core.store.path().display());
             println!("logged_in = {}", core.session.is_logged_in());
+            Ok(())
+        }
+        "login-qr" => {
+            // 桌面端的官方网页登录通道: 不用 WebView, 也没有 HttpOnly cookie 的读取问题.
+            announce(&core);
+            let p = provider(&core, Capability::Login)?;
+            let key = p.login_qr_create().await?;
+            println!("用手机网易云 App 扫描: {}", key.url);
+            println!("(二维码内容同上; 有效期约 {}s, 过期请重跑)", key.expires_in);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(210);
+            let mut last = String::new();
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                let check = p.login_qr_check(&key.key).await?;
+                let now = format!("{:?}", check.state);
+                if now != last {
+                    println!("状态: {now} (code={})", check.code);
+                    last = now;
+                }
+                match check.state {
+                    ncm_domain::QrLoginState::Confirmed => {
+                        let cookie = check.cookie.ok_or("confirmed 但没有 cookie")?;
+                        core.apply_login_cookie(&cookie)?;
+                        println!("登录成功 logged_in = {}", core.session.is_logged_in());
+                        println!("cookie saved -> {}", core.store.path().display());
+                        break;
+                    }
+                    ncm_domain::QrLoginState::Expired => {
+                        println!("二维码已过期, 请重跑 ncm login-qr");
+                        break;
+                    }
+                    ncm_domain::QrLoginState::Failed => {
+                        println!("扫码失败 code={}", check.code);
+                        break;
+                    }
+                    _ => {}
+                }
+                if std::time::Instant::now() > deadline {
+                    println!("等待超时, 请重跑 ncm login-qr");
+                    break;
+                }
+            }
             Ok(())
         }
         "search" => {

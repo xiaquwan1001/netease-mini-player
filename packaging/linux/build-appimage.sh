@@ -35,13 +35,18 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 APPDIR="$WORK/MiniNCM.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" \
-         "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+         "$APPDIR/usr/share/icons/hicolor/256x256/apps" \
+         "$APPDIR/usr/share/metainfo"
 
 # Flutter bundle 原样放 usr/bin(二进制靠 /proc/self/exe 找同级 data/ 与 lib/)
 cp -a "$BUNDLE"/. "$APPDIR/usr/bin/"
 install -m644 "$ROOT/packaging/linux/minincm.png" \
   "$APPDIR/usr/share/icons/hicolor/256x256/apps/minincm.png"
 cp "$ROOT/packaging/linux/minincm.png" "$APPDIR/minincm.png"
+# AppStream 一起打进 AppDir(与 deb 同一份): 有的桌面集成工具会读它
+METAINFO="$APPDIR/usr/share/metainfo/io.github.xiaquwan1001.MiniNCM.metainfo.xml"
+install -m644 "$ROOT/packaging/linux/io.github.xiaquwan1001.MiniNCM.metainfo.xml" "$METAINFO"
+sed -i "s|<release version=\"[^\"]*\"|<release version=\"$VER\"|" "$METAINFO"
 
 cat > "$APPDIR/minincm.desktop" <<'DESKTOP'
 [Desktop Entry]

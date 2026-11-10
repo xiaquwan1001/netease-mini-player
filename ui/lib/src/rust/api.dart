@@ -81,6 +81,17 @@ Future<String> lyric({required BigInt trackId}) =>
 /// 返回 true 表示现在已经不是登录态.
 Future<bool> logout() => RustLib.instance.api.crateApiLogout();
 
+/// 扫码登录 ①(桌面端官方网页登录通道): 申请二维码.
+///
+/// 桌面端没有 WebView, 也就无法读浏览器里 HttpOnly 的 MUSIC_U; 官方扫码通道把凭据
+/// 放在轮询响应的 Set-Cookie 里, 因此 Linux/Windows 共用这一条实现, 不需要平台代码.
+Future<QrLoginKey> loginQrCreate() =>
+    RustLib.instance.api.crateApiLoginQrCreate();
+
+/// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
+Future<QrLoginCheck> loginQrCheck({required String key}) =>
+    RustLib.instance.api.crateApiLoginQrCheck(key: key);
+
 /// 已记住的账号列表(只含凭据, 指纹共享)
 Future<List<AccountDto>> accounts() => RustLib.instance.api.crateApiAccounts();
 
@@ -2604,6 +2615,76 @@ class PurchasedSongEntry {
           coverUrl == other.coverUrl &&
           paidTimeMs == other.paidTimeMs;
 }
+
+/// 扫码登录: 一次轮询的结果(Confirmed 时 cookie 非空, 且已落盘)
+class QrLoginCheck {
+  final QrLoginState state;
+
+  /// 官方原始 code(801/802/803/800), 排障用
+  final PlatformInt64 code;
+  final String? cookie;
+  final String nickname;
+  final String? avatarUrl;
+
+  const QrLoginCheck({
+    required this.state,
+    required this.code,
+    this.cookie,
+    required this.nickname,
+    this.avatarUrl,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^
+      code.hashCode ^
+      cookie.hashCode ^
+      nickname.hashCode ^
+      avatarUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QrLoginCheck &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          code == other.code &&
+          cookie == other.cookie &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl;
+}
+
+/// 扫码登录: 二维码会话(Dart 侧渲染 QR + 轮询)
+class QrLoginKey {
+  final String key;
+
+  /// 二维码内容(App 直接扫)
+  final String url;
+
+  /// 有效期(秒)
+  final BigInt expiresIn;
+
+  const QrLoginKey({
+    required this.key,
+    required this.url,
+    required this.expiresIn,
+  });
+
+  @override
+  int get hashCode => key.hashCode ^ url.hashCode ^ expiresIn.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QrLoginKey &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          url == other.url &&
+          expiresIn == other.expiresIn;
+}
+
+/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期)
+enum QrLoginState { pending, scanned, confirmed, expired, failed }
 
 class RadioCategory {
   final BigInt id;

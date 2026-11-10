@@ -8,7 +8,7 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, MvDetail, MvUrl, SearchExact, ToplistCatalogGroup,
-    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, QrLoginCheck, QrLoginKey,
     WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
@@ -299,6 +299,18 @@ pub trait Provider: Send + Sync {
     /// 当前登录账号的资料(uid/昵称/VIP). 未登录或不支持时返回 Unsupported.
     fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Profile>> {
         Box::pin(async { Err(ProviderError::unsupported("no profile")) })
+    }
+
+    /// 申请一个扫码登录二维码(官方网页登录同一套通道). 默认不支持.
+    ///
+    /// 桌面端用它替代 WebView: 不必读取浏览器的 HttpOnly cookie, 凭据由轮询响应下发.
+    fn login_qr_create<'a>(&'a self) -> BoxFuture<'a, ProviderResult<QrLoginKey>> {
+        Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
+    }
+
+    /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
+    fn login_qr_check<'a>(&'a self, _key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginCheck>> {
+        Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
     }
 
     /// "我喜欢的音乐"里的曲目 id(用于红心状态)

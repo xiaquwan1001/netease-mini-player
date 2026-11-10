@@ -26,6 +26,9 @@ Future<void> showAccountPage(
   Future<void> Function(rust.AccountDto account)? onSwitchAccount,
   /// 忘记账号(缺省只调 rust.accountRemove)
   Future<void> Function(rust.AccountDto account)? onRemoveAccount,
+  /// 清除本机全部登录凭据(退出登录 + 忘掉账号簿里所有账号).
+  /// 不传则不显示该入口(测试/无凭据时保持页面简洁).
+  Future<void> Function()? onPurgeLocal,
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -38,6 +41,7 @@ Future<void> showAccountPage(
         loadAccounts: loadAccounts,
         onSwitchAccount: onSwitchAccount,
         onRemoveAccount: onRemoveAccount,
+        onPurgeLocal: onPurgeLocal,
       ),
     ),
   );
@@ -54,6 +58,7 @@ class AccountPage extends StatefulWidget {
     this.loadAccounts,
     this.onSwitchAccount,
     this.onRemoveAccount,
+    this.onPurgeLocal,
   });
 
   final rust.InitInfo? info;
@@ -64,6 +69,7 @@ class AccountPage extends StatefulWidget {
   final Future<List<rust.AccountDto>> Function()? loadAccounts;
   final Future<void> Function(rust.AccountDto account)? onSwitchAccount;
   final Future<void> Function(rust.AccountDto account)? onRemoveAccount;
+  final Future<void> Function()? onPurgeLocal;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -138,6 +144,44 @@ class _AccountPageState extends State<AccountPage> {
     setState(() => _loggedIn = false);
   }
 
+  /// 清除本机凭据(隐私用途): 退出登录 + 忘掉账号簿里的每个账号.
+  /// 二次确认, 因为不可撤销(要重新扫码).
+  Future<void> _purge() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('清除本机登录凭据?'),
+        content: const Text(
+          '会退出登录并删除本机保存的全部账号凭据(MUSIC_U), 之后需要重新扫码。\n'
+          '设备指纹(device_id)会保留, 以免下次登录看起来像换了一台设备。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('清除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final handler = widget.onPurgeLocal;
+    if (handler != null) {
+      await handler();
+    } else {
+      if (_loggedIn) await widget.onLogout();
+      for (final a in List<rust.AccountDto>.of(_accounts)) {
+        await rust.accountRemove(userId: a.userId);
+      }
+    }
+    if (!mounted) return;
+    setState(() => _loggedIn = false);
+    await _loadAccounts();
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = _active;
@@ -173,7 +217,10 @@ class _AccountPageState extends State<AccountPage> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (active?.vip == true) const VipBadge(small: true),
+                  // 未登录时绝不显示账号簿里的会员标识: 那是上一个登录态留下的缓存,
+                  // 会被误读成"当前账号是会员"(2026-11-10 用户报的占位泄露问题).
+                  if (_loggedIn && active?.vip == true)
+                    const VipBadge(small: true),
                 ],
               ),
               subtitle: Text(
@@ -182,7 +229,7 @@ class _AccountPageState extends State<AccountPage> {
                     : '登录后可同步收藏/歌单/推荐',
                 style: theme.textTheme.bodySmall,
               ),
-              trailing: _loggedIn || !widget.isAndroid
+              trailing: _loggedIn
                   ? null
                   : FilledButton(
                       onPressed: widget.onLogin,
@@ -194,9 +241,9 @@ class _AccountPageState extends State<AccountPage> {
             const Card(
               margin: EdgeInsets.only(top: 8),
               child: ListTile(
-                leading: Icon(Icons.info_outline),
-                title: Text('桌面端暂不支持内嵌登录'),
-                subtitle: Text('可用 ncm login-cookie "MUSIC_U=..." 导入登录凭据'),
+                leading: Icon(Icons.qr_code_2),
+                title: Text('桌面端用官方扫码登录'),
+                subtitle: Text('点「登录」用手机网易云 App 扫码; 也可以导入浏览器里的 MUSIC_U'),
               ),
             ),
           if (widget.onOpenVip != null) ...[
@@ -243,10 +290,16 @@ class _AccountPageState extends State<AccountPage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (account.vip) const VipBadge(small: true),
+                        // 只有"已登录 + 当前账号"才显示会员标, 否则是过期的缓存
+                        if (_loggedIn && account.active && account.vip)
+                          const VipBadge(small: true),
                       ],
                     ),
-                    subtitle: Text(account.active ? '当前账号' : '点击切换'),
+                    subtitle: Text(
+                      account.active
+                          ? (_loggedIn ? '当前账号' : '上次登录的账号(当前未登录)')
+                          : '点击切换',
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_outline),
                       tooltip: '忘记这个账号',
@@ -273,6 +326,22 @@ class _AccountPageState extends State<AccountPage> {
                 title: const Text('退出登录'),
                 subtitle: const Text('账号仍留在账号簿, 下次可一键切回'),
                 onTap: _logout,
+              ),
+            ),
+          ],
+          if (_accounts.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const _SectionTitle('隐私'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: Icon(
+                  Icons.delete_forever_outlined,
+                  color: theme.colorScheme.error,
+                ),
+                title: const Text('清除本机登录凭据'),
+                subtitle: const Text('退出登录并删掉账号簿里的 MUSIC_U(共用电脑/出二手前用)'),
+                onTap: _purge,
               ),
             ),
           ],

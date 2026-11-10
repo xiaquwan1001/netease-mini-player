@@ -95,6 +95,15 @@ impl Core {
             .map(|_| true)
     }
 
+    /// 把外部拿到的登录凭据(网页/扫码登录)合并进会话并落盘: 设备指纹保留.
+    pub fn apply_login_cookie(&mut self, incoming: &str) -> std::io::Result<()> {
+        let merged =
+            identity::merge_device_cookie(&self.session.cookie, incoming, &self.session.device_id);
+        let mut next = self.session.clone();
+        next.cookie = merged;
+        self.apply_session(next)
+    }
+
     /// 从账号簿移除(不改变当前登录态, 只是忘掉这个账号的凭据)
     pub fn forget_account(&mut self, user_id: u64) -> std::io::Result<AccountBook> {
         let mut book = self.store.load_accounts()?;

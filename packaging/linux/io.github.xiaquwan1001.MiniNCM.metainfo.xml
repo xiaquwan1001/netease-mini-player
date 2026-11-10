@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream 元数据.
+  本地 .deb 在文件管理器/软件中心"预览"时显示的名字与图标就来自这份文件:
+  没有它, 预览只能显示包名 minincm + 通用图标, 安装后才靠 .desktop 变成"轻音 MiniNCM".
+-->
+<component type="desktop-application">
+  <id>io.github.xiaquwan1001.MiniNCM</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>轻音 MiniNCM</name>
+  <name xml:lang="en">MiniNCM</name>
+  <summary>网易云音乐第三方客户端</summary>
+  <summary xml:lang="en">A third-party NetEase Cloud Music client</summary>
+  <description>
+    <p>
+      轻音 MiniNCM 是跨平台(Android / Linux / Windows)的网易云音乐第三方客户端:
+      Rust 核心 + Flutter 界面, 播放引擎为纯 Rust(rodio/CPAL + symphonia), 不依赖 mpv/MPRIS。
+    </p>
+    <p>功能概览:</p>
+    <ul>
+      <li>播放: 逐字歌词、队列拖拽排序、响度均衡、音质档位</li>
+      <li>歌单: 我喜欢的音乐、歌单广场、歌单写操作(新建/加歌)</li>
+      <li>社区: 评论、消息、关注动态、电台、数字专辑(只读)</li>
+      <li>登录: 官方网页扫码登录(零风控路径), 不上传埋点</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">minincm.desktop</launchable>
+  <icon type="stock">minincm</icon>
+  <url type="homepage">https://github.com/xiaquwan1001/netease-mini-player</url>
+  <url type="bugtracker">https://github.com/xiaquwan1001/netease-mini-player/issues</url>
+  <url type="vcs-browser">https://github.com/xiaquwan1001/netease-mini-player</url>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+    <category>Player</category>
+  </categories>
+  <keywords>
+    <keyword>music</keyword>
+    <keyword>netease</keyword>
+    <keyword>网易云</keyword>
+    <keyword>player</keyword>
+  </keywords>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.3.2" date="2026-11-10"/>
+  </releases>
+</component>

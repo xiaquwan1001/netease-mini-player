@@ -1026,6 +1026,46 @@ impl Session {
     }
 }
 
+/// 桌面端官方网页扫码登录的二维码会话.
+///
+/// 桌面端没有 Android 那套 WebView(CookieManager 能读 HttpOnly 的 MUSIC_U),
+/// 也不该让用户在命令行里粘贴 cookie —— 改用官方网页登录同一套扫码通道:
+/// 我们只申请一个 key, 用户用手机网易云 App 扫, 凭据由服务端在轮询响应里下发.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QrLoginKey {
+    /// 轮询用的 key(服务端 unikey)
+    pub key: String,
+    /// 二维码内容, 手机 App 直接扫这个 URL
+    pub url: String,
+    /// 有效期(秒), 过期后必须重新申请
+    pub expires_in: u64,
+}
+
+/// 扫码轮询状态. 对齐官方 code: 801 待扫 / 802 已扫待确认 / 803 成功 / 800 过期.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QrLoginState {
+    #[default]
+    Pending,
+    Scanned,
+    Confirmed,
+    Expired,
+    Failed,
+}
+
+/// 一次轮询的结果. Confirmed 时 [QrLoginCheck::cookie] 里是登录凭据(MUSIC_U/__csrf).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QrLoginCheck {
+    pub state: QrLoginState,
+    /// 官方原始 code(801/802/803/800), 排障用
+    pub code: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cookie: Option<String>,
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
 /// 黑胶会员等级(vip_info_v2 的 data: associator + redVipLevel).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VipMembership {

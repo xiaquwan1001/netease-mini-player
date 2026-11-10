@@ -1,6 +1,6 @@
 use std::sync::RwLock;
 
-use ncm_api_rs::{ApiClient, NcmError, Query};
+use ncm_api_rs::{ApiClient, CryptoType, NcmError, Query, RequestOption};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMv, ArtistMvPage, ArtistSongPage, ChartSummary, Comment, CommentPage,
     MvDetail, MvUrl,
@@ -12,7 +12,7 @@ use ncm_domain::{
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     WordLyric,
-    MedalWall, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
+    MedalWall, QrLoginCheck, QrLoginKey, QrLoginState, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
     VipTask, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     PurchasedSongEntry, SongPurchasedPage,
@@ -3283,6 +3283,110 @@ impl Provider for NeteaseProvider {
             parse_profile(&resp.body)
         })
     }
+
+    /// 扫码登录 ①: 申请二维码 key(官方网页登录页同一通道, weapi)
+    fn login_qr_create<'a>(&'a self) -> BoxFuture<'a, ProviderResult<QrLoginKey>> {
+        Box::pin(async move {
+            let (client, domain, _ua, _cookie) = self.snapshot();
+            let resp = client
+                .request(
+                    "/api/login/qrcode/unikey",
+                    serde_json::json!({ "type": 1 }),
+                    qr_option(domain),
+                )
+                .await
+                .map_err(map_error)?;
+            check_body(&resp.body)?;
+            let key = resp
+                .body
+                .get("unikey")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            if key.is_empty() {
+                return Err(ProviderError::internal("qr login: 响应里没有 unikey"));
+            }
+            Ok(QrLoginKey {
+                url: format!("https://music.163.com/login?codekey={key}"),
+                key,
+                // 官方 key 有效期约 3 分钟; 过期由服务端回 800 决定, 这里只给 UI 提示用
+                expires_in: 180,
+            })
+        })
+    }
+
+    /// 扫码登录 ②: 轮询. 803 时的登录凭据在 Set-Cookie 里(不在 body).
+    fn login_qr_check<'a>(&'a self, key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginCheck>> {
+        Box::pin(async move {
+            let (client, domain, _ua, _cookie) = self.snapshot();
+            let resp = client
+                .request(
+                    "/api/login/qrcode/client/login",
+                    serde_json::json!({ "key": key, "type": 1 }),
+                    qr_option(domain),
+                )
+                .await
+                .map_err(map_error)?;
+            parse_qr_check(&resp.body, &resp.cookie)
+        })
+    }
+}
+
+/// 轮询响应的解析(抽出来便于单测).
+///
+/// 官方 code: 800 过期 / 801 待扫 / 802 已扫待确认 / 803 成功.
+/// **803 的登录凭据不在 body 里, 而在响应的 Set-Cookie 中** —— 这是整个桌面端登录
+/// 能绕开 WebView 的关键(见 docs 与 .pi/memory/HINDSIGHT.md).
+fn parse_qr_check(body: &Value, set_cookies: &[String]) -> ProviderResult<QrLoginCheck> {
+    let code = body.get("code").and_then(Value::as_i64).unwrap_or(-1);
+    let state = match code {
+        803 => QrLoginState::Confirmed,
+        802 => QrLoginState::Scanned,
+        801 => QrLoginState::Pending,
+        800 => QrLoginState::Expired,
+        _ => QrLoginState::Failed,
+    };
+    let cookie = if state == QrLoginState::Confirmed {
+        // 只留登录凭据键: 设备指纹(deviceId/_ntes_nuid/WNMCID...)由本地会话提供
+        let raw = set_cookies
+            .iter()
+            .map(|c| c.split(';').next().unwrap_or("").trim())
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("; ");
+        let login_only = crate::identity::extract_login_cookie(&raw);
+        if !login_only.contains("MUSIC_U=") {
+            return Err(ProviderError::internal(
+                "qr login: 已确认但没有拿到 MUSIC_U(检查 Set-Cookie)",
+            ));
+        }
+        Some(login_only)
+    } else {
+        None
+    };
+    let nickname = body
+        .get("nickname")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let avatar_url = body
+        .get("avatarUrl")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    Ok(QrLoginCheck { state, code, cookie, nickname, avatar_url })
+}
+
+/// 扫码登录走 weapi(官方网页登录页的通道).
+///
+/// UA 故意不传业务侧的 NeteaseMusicDesktop: weapi 由 vendor 选 PC 浏览器 UA,
+/// 与"网页登录"这个动作自洽; 混用客户端 UA 反而是风控特征.
+fn qr_option(domain: Option<String>) -> RequestOption {
+    RequestOption {
+        crypto: CryptoType::Weapi,
+        domain,
+        ..Default::default()
+    }
 }
 
 /// `/api/nuser/account/get` 的响应形如
@@ -5384,6 +5488,51 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// 扫码登录轮询: 实测 code 语义 + 803 时凭据只在 Set-Cookie 里.
+    #[test]
+    fn qr_login_check_states_and_cookie() {
+        // 801: 待扫
+        let r = parse_qr_check(&json!({"code":801}), &[]).unwrap();
+        assert_eq!(r.state, QrLoginState::Pending);
+        assert!(r.cookie.is_none());
+        // 802: 已扫待确认
+        let r = parse_qr_check(&json!({"code":802}), &[]).unwrap();
+        assert_eq!(r.state, QrLoginState::Scanned);
+        // 800: 过期
+        let r = parse_qr_check(&json!({"code":800}), &[]).unwrap();
+        assert_eq!(r.state, QrLoginState::Expired);
+        // 其它(如 400/风控): Failed, 不 panic
+        let r = parse_qr_check(&json!({"code":400,"message":"x"}), &[]).unwrap();
+        assert_eq!(r.state, QrLoginState::Failed);
+
+        // 803: body 里带昵称/头像, 凭据在 Set-Cookie(只保留登录键, 设备指纹键丢掉)
+        let cookies = vec![
+            "MUSIC_U=abc123; Path=/; Domain=.music.163.com; HttpOnly".to_string(),
+            "JSESSIONID-WYYY=xyz; Path=/".to_string(),
+            "__csrf=csrf456; Path=/".to_string(),
+            "NMTID=devfingerprint; Path=/".to_string(),
+        ];
+        let r = parse_qr_check(
+            &json!({"code":803,"nickname":"下去玩","avatarUrl":"https://x/y.jpg"}),
+            &cookies,
+        )
+        .unwrap();
+        assert_eq!(r.state, QrLoginState::Confirmed);
+        assert_eq!(r.code, 803);
+        assert_eq!(r.nickname, "下去玩");
+        assert_eq!(r.avatar_url.as_deref(), Some("https://x/y.jpg"));
+        let cookie = r.cookie.unwrap();
+        assert!(cookie.contains("MUSIC_U=abc123"));
+        assert!(cookie.contains("__csrf=csrf456"));
+        // JSESSIONID-WYYY 是 weapi 会话的一部分, 保留; 设备指纹键不进账号簿
+        assert!(cookie.contains("JSESSIONID-WYYY=xyz"));
+        assert!(!cookie.contains("NMTID"));
+
+        // 803 但没有 MUSIC_U: 必须报错, 不能当成登录成功
+        let err = parse_qr_check(&json!({"code":803}), &[]).unwrap_err();
+        assert_eq!(err.kind, ProviderErrorKind::Internal);
+    }
 
     /// album_newest: 2026-11-09 实测形状(顶层 albums, 固定 12 张, 专辑对象同 album_new).
     #[test]

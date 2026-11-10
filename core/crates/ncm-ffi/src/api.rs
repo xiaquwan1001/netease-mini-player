@@ -13,7 +13,7 @@ pub use ncm_domain::{
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
     Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession,
-    ProfileDetail, PurchasedSongEntry, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
+    ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
     RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RecentContact, SearchAlbum,
     SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus,
     SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
@@ -485,6 +485,37 @@ pub struct AccountDto {
     pub vip: bool,
 }
 
+/// 扫码登录: 二维码会话(Dart 侧渲染 QR + 轮询)
+#[frb(mirror(QrLoginKey))]
+pub struct _QrLoginKey {
+    pub key: String,
+    /// 二维码内容(App 直接扫)
+    pub url: String,
+    /// 有效期(秒)
+    pub expires_in: u64,
+}
+
+/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期)
+#[frb(mirror(QrLoginState))]
+pub enum _QrLoginState {
+    Pending,
+    Scanned,
+    Confirmed,
+    Expired,
+    Failed,
+}
+
+/// 扫码登录: 一次轮询的结果(Confirmed 时 cookie 非空, 且已落盘)
+#[frb(mirror(QrLoginCheck))]
+pub struct _QrLoginCheck {
+    pub state: QrLoginState,
+    /// 官方原始 code(801/802/803/800), 排障用
+    pub code: i64,
+    pub cookie: Option<String>,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+}
+
 fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
     let book = guard.accounts().map_err(|e| e.to_string())?;
     Ok(book
@@ -498,6 +529,39 @@ fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
             vip: a.vip,
         })
         .collect())
+}
+
+/// 扫码登录 ①(桌面端官方网页登录通道): 申请二维码.
+///
+/// 桌面端没有 WebView, 也就无法读浏览器里 HttpOnly 的 MUSIC_U; 官方扫码通道把凭据
+/// 放在轮询响应的 Set-Cookie 里, 因此 Linux/Windows 共用这一条实现, 不需要平台代码.
+pub async fn login_qr_create() -> Result<QrLoginKey, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard.netease.clone()
+    };
+    use ncm_provider::Provider;
+    provider.login_qr_create().await.map_err(|e| e.to_string())
+}
+
+/// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
+pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard.netease.clone()
+    };
+    use ncm_provider::Provider;
+    let check = provider
+        .login_qr_check(&key)
+        .await
+        .map_err(|e| e.to_string())?;
+    if let Some(cookie) = check.cookie.as_deref() {
+        let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard
+            .apply_login_cookie(cookie)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(check)
 }
 
 /// 已记住的账号列表(只含凭据, 指纹共享)

@@ -22,6 +22,7 @@ import 'src/feed_view.dart';
 import 'src/lyric.dart';
 import 'src/word_lyric_view.dart';
 import 'src/library_view.dart';
+import 'src/login_sheet.dart';
 import 'src/medal_wall.dart';
 import 'src/messages_page.dart';
 import 'src/new_release_page.dart';
@@ -1514,6 +1515,20 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openVip() => showVipPage(context, onLogin: _login);
 
   Future<void> _login() async {
+    // 桌面端: 官方网页登录的**扫码通道**(纯 Rust, 不依赖 WebView/系统 cookie).
+    // 之前桌面端只能 ncm login-cookie, 等于把登录这一步踢给命令行, 体验断档.
+    if (!_auth.isAndroid) {
+      await showLoginSheet(
+        context,
+        onLoggedIn: () async {
+          await _syncAccount();
+          await _refreshInfo();
+        },
+        openWebLogin: () =>
+            PlatformBridge.openUrl('https://music.163.com/#/login'),
+      );
+      return;
+    }
     try {
       final cookie = await _auth.loginWeb();
       if (cookie == null) {
@@ -1558,6 +1573,18 @@ class _HomePageState extends State<HomePage> {
           const SnackBar(content: Text('已从账号簿移除')),
         );
       },
+      // 隐私: 退出登录 + 删掉本机所有账号凭据(设备指纹保留).
+      onPurgeLocal: () async {
+        await _auth.logout();
+        for (final account in await rust.accounts()) {
+          await rust.accountRemove(userId: account.userId);
+        }
+        await _refreshInfo();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已清除本机登录凭据')),
+        );
+      },
     );
   }
 
@@ -1594,11 +1621,22 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 记账号资料(昵称/uid/会员)进账号簿; 离线拉不到只是没名字, 不影响登录态
+  /// 记账号资料(昵称/uid/会员)进账号簿; 离线拉不到只是没名字, 不影响登录态.
+  ///
+  /// 同时兼作**登录态校验**: 本地有 MUSIC_U 字符串不代表凭据还有效(过期/被踢/从别处
+  /// 拷了数据目录). 只有服务端明确回 auth 错才清登录态 —— 网络/风控失败不动, 免得
+  /// 一次网络抖动就把人踢下线.
   Future<void> _syncAccount() async {
     try {
       await rust.accountSyncActive();
-    } catch (_) {}
+    } catch (e) {
+      if (!e.toString().contains('[auth]')) return;
+      try {
+        await rust.logout();
+        await _refreshInfo();
+        _toast('登录状态已失效, 请重新登录');
+      } catch (_) {}
+    }
   }
 
   /// 退出登录; thenLogin=true 表示切换账号(退出后立刻再开授权页)

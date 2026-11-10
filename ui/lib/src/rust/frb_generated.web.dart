@@ -409,6 +409,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PurchasedSongEntry dco_decode_purchased_song_entry(dynamic raw);
 
   @protected
+  QrLoginCheck dco_decode_qr_login_check(dynamic raw);
+
+  @protected
+  QrLoginKey dco_decode_qr_login_key(dynamic raw);
+
+  @protected
+  QrLoginState dco_decode_qr_login_state(dynamic raw);
+
+  @protected
   RadioCategory dco_decode_radio_category(dynamic raw);
 
   @protected
@@ -1001,6 +1010,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PurchasedSongEntry sse_decode_purchased_song_entry(
     SseDeserializer deserializer,
   );
+
+  @protected
+  QrLoginCheck sse_decode_qr_login_check(SseDeserializer deserializer);
+
+  @protected
+  QrLoginKey sse_decode_qr_login_key(SseDeserializer deserializer);
+
+  @protected
+  QrLoginState sse_decode_qr_login_state(SseDeserializer deserializer);
 
   @protected
   RadioCategory sse_decode_radio_category(SseDeserializer deserializer);
@@ -1753,6 +1771,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PurchasedSongEntry self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_qr_login_check(QrLoginCheck self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_qr_login_key(QrLoginKey self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_qr_login_state(QrLoginState self, SseSerializer serializer);
 
   @protected
   void sse_encode_radio_category(RadioCategory self, SseSerializer serializer);
