@@ -3,12 +3,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source tools/env.sh
-# 代理洁癖: 本机代理端口(7890)常常没起, 死代理会让 reqwest 报
-# "error sending request for url (...)", 与"接口挂了/风控"极像。
-# 默认在测试阶段清掉代理; 确实要靠代理上网时用 NCM_KEEP_PROXY=1 保留。
-if [ "${NCM_KEEP_PROXY:-0}" != "1" ]; then
-  unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
-fi
 echo "== rust tests (本地: domain/provider/service/ffi/cli)"
 # vendor(ncm-api-rs) 的 tests/integration.rs 是 4 例**匿名真实联网 smoke**(P1 裁剪前 8 例,
     # 4 例打在已删的未接入 endpoint 上, 随模块一起删),
