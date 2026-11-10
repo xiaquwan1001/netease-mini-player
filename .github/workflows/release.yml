@@ -49,8 +49,9 @@ jobs:
           dart analyze
           flutter test --exclude-tags network
 
+  # ---- Android(arm64) + Linux(x64) ----
   build:
-    name: Build release assets
+    name: Build Android + Linux assets
     runs-on: ubuntu-24.04
     needs: [verify]
     steps:
@@ -95,9 +96,7 @@ jobs:
         run: flutter pub get
 
       # 正式签名: 在仓库 Secrets 里配置(见 docs/android-signing.md)
-      #   ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
       # 注意: secrets 上下文不能用在 `if:` 里(workflow 会解析失败), 只能经 env 传入后在 shell 里判断。
-      # 没配置时回落 debug 签名(能出包, 但签名不固定, 老用户无法覆盖升级)。
       - name: Release keystore
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -122,7 +121,7 @@ jobs:
         working-directory: ui
         run: flutter build apk --release --target-platform android-arm64
 
-      # 自检: 配了正式 keystore 就不许产出 debug 签名的包(debug 签名会让老用户无法覆盖升级)
+      # 自检: 配了正式 keystore 就不许产出 debug 签名的包
       - name: Verify APK signature
         run: |
           APK=ui/build/app/outputs/flutter-apk/app-release.apk
@@ -147,18 +146,87 @@ jobs:
           mkdir -p dist
           cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-${VERSION}-android-arm64.apk"
           tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-${VERSION}-linux-x64.tar.gz" bundle
-          (cd dist && sha256sum * > SHA256SUMS.txt)
           ls -lh dist
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-android-linux
+          path: dist/*
+
+  # ---- Windows(x64) ----
+  # Flutter 桌面不支持交叉编译 ⇒ 必须在 windows-latest 上出包。
+  build-windows:
+    name: Build Windows x64 asset
+    runs-on: windows-latest
+    needs: [verify]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Enable Windows desktop + pub get
+        working-directory: ui
+        run: |
+          flutter config --enable-windows-desktop
+          flutter pub get
+
+      - name: Build Windows (release)
+        working-directory: ui
+        run: flutter build windows --release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path ui/pubspec.yaml -Pattern '^version: ([0-9.]+)' | Select-Object -First 1).Matches[0].Groups[1].Value
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $ver = $env:GITHUB_REF_NAME -replace '^v','' }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path ui/build/windows/x64/runner/Release/* -DestinationPath "dist/MiniNCM-$ver-windows-x64.zip"
+          Get-ChildItem dist | Format-Table Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-windows
+          path: dist/*
+
+  # ---- 统一发布: 收齐三端产物 + 一份 SHA256SUMS, 只在这里创建/更新 Release ----
+  publish:
+    name: Publish release
+    runs-on: ubuntu-24.04
+    needs: [build, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          ls -lh
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
       - name: Attach assets to release
-        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.apk
             dist/*.tar.gz
+            dist/*.zip
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
+          overwrite_files: true
 
       - uses: actions/upload-artifact@v4
         with:
