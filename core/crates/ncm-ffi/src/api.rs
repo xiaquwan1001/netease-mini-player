@@ -428,6 +428,17 @@ pub async fn profile_detail() -> Result<ProfileDetail, String> {
     ffi_forward!(Capability::ProfileDetail, provider.profile_detail())
 }
 
+/// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.
+pub async fn user_profile(user_id: u64) -> Result<ProfileDetail, String> {
+    ffi_forward!(Capability::ProfileDetail, provider.user_profile(user_id))
+}
+
+/// 任意用户的公开歌单(他人主页; 不需要登录).
+/// 口径: 未登录时服务端只回公开歌单, 不含对方的"我喜欢的音乐".
+pub async fn user_playlists_of(user_id: u64, limit: u32) -> Result<Vec<Playlist>, String> {
+    ffi_forward!(Capability::Playlist, provider.user_playlists_of(user_id, limit))
+}
+
 /// 收藏曲目到指定歌单(需登录)
 pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
     let provider = with_provider(Capability::PlaylistEdit)?;

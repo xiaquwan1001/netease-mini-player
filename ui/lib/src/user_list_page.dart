@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'user_page.dart';
 
 /// 关注/粉丝列表: 两个 tab, 每行可关注/取关.
 ///
@@ -20,6 +21,7 @@ Future<void> showUserList(
   UserListLoader? loadFolloweds,
   FollowHook? setFollow,
   void Function(BigInt userId)? onOpenUser,
+  void Function(List<rust.SongDto> songs, int index)? onPlaySongs,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -32,6 +34,7 @@ Future<void> showUserList(
           loadFolloweds: loadFolloweds,
           setFollow: setFollow,
           onOpenUser: onOpenUser,
+          onPlaySongs: onPlaySongs,
         ),
       ),
     ),
@@ -47,6 +50,7 @@ class UserListView extends StatefulWidget {
     this.loadFolloweds,
     this.setFollow,
     this.onOpenUser,
+    this.onPlaySongs,
   });
 
   final BigInt uid;
@@ -55,6 +59,9 @@ class UserListView extends StatefulWidget {
   final UserListLoader? loadFolloweds;
   final FollowHook? setFollow;
   final void Function(BigInt userId)? onOpenUser;
+
+  /// 进他人主页后点歌单要能播(宿主注入); 不传则歌单只展示
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   State<UserListView> createState() => _UserListViewState();
@@ -157,9 +164,15 @@ class _UserListViewState extends State<UserListView> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                onTap: widget.onOpenUser == null
-                    ? null
-                    : () => widget.onOpenUser!(u.id),
+                // 默认进他人主页(宿主注入 onOpenUser 可覆盖, 测试也走这条)
+                onTap: () => widget.onOpenUser != null
+                    ? widget.onOpenUser!(u.id)
+                    : showUserPage(
+                        context,
+                        userId: u.id,
+                        fallbackNickname: u.name,
+                        onPlaySongs: widget.onPlaySongs,
+                      ),
                 trailing: OutlinedButton(
                   onPressed: () => _toggleFollow(u),
                   child: Text(

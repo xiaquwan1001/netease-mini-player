@@ -159,6 +159,28 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "user" => {
+            // 他人主页(匿名可用): 资料 + 公开歌单. 用来验证 B1「听众/粉丝 -> 用户主页」的数据面.
+            let uid: u64 = args
+                .positional
+                .first()
+                .ok_or("usage: ncm user <uid>")?
+                .parse()?;
+            announce(&core);
+            let p = provider(&core, Capability::ProfileDetail)?;
+            let d = p.user_profile(uid).await?;
+            println!(
+                "{} (uid={}) Lv.{} 关注 {} / 粉丝 {} 签名: {}",
+                d.nickname, d.user_id, d.level, d.follows, d.followeds, short_line(&d.signature, 40)
+            );
+            let pl = provider(&core, Capability::Playlist)?;
+            let lists = pl.user_playlists_of(uid, 30).await?;
+            println!("公开歌单 {} 个", lists.len());
+            for l in lists.iter().take(10) {
+                println!("  - [{}] {} ({} 首)", l.id, short_line(&l.name, 24), l.track_count);
+            }
+            Ok(())
+        }
         "search" => {
             let kw = args
                 .positional

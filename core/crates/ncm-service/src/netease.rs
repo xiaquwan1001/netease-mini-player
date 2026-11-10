@@ -3026,6 +3026,47 @@ impl Provider for NeteaseProvider {
         })
     }
 
+    /// 任意用户的公开资料(user/detail, 不需要登录)
+    fn user_profile<'a>(&'a self, uid: u64) -> BoxFuture<'a, ProviderResult<ProfileDetail>> {
+        Box::pin(async move {
+            if uid == 0 {
+                return Err(ProviderError::not_found("用户 id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
+            let resp = client.user_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_profile_detail(&resp.body))
+        })
+    }
+
+    /// 任意用户的公开歌单(user/playlist). 注意: 未登录时服务端只回公开歌单,
+    /// 且**不含**该用户的"我喜欢的音乐"(它是私密歌单).
+    fn user_playlists_of<'a>(
+        &'a self,
+        uid: u64,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async move {
+            if uid == 0 {
+                return Err(ProviderError::not_found("用户 id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", &limit.max(1).to_string());
+            let resp = client.user_playlist(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            let list = resp
+                .body
+                .get("playlist")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            Ok(list.iter().filter_map(parse_playlist).collect())
+        })
+    }
+
     /// 收藏曲目到歌单(需要登录)
     fn add_to_playlist(
         &self,

@@ -61,6 +61,18 @@ Future<bool> artistSubToggle({required BigInt artistId, required bool sub}) =>
 Future<ProfileDetail> profileDetail() =>
     RustLib.instance.api.crateApiProfileDetail();
 
+/// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.
+Future<ProfileDetail> userProfile({required BigInt userId}) =>
+    RustLib.instance.api.crateApiUserProfile(userId: userId);
+
+/// 任意用户的公开歌单(他人主页; 不需要登录).
+/// 口径: 未登录时服务端只回公开歌单, 不含对方的"我喜欢的音乐".
+Future<List<Playlist>> userPlaylistsOf({
+  required BigInt userId,
+  required int limit,
+}) =>
+    RustLib.instance.api.crateApiUserPlaylistsOf(userId: userId, limit: limit);
+
 /// 收藏曲目到指定歌单(需登录)
 Future<bool> addToPlaylist({
   required BigInt playlistId,

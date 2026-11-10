@@ -2010,7 +2010,11 @@ class _HomePageState extends State<HomePage> {
       _toast('登录后才能查看关注与粉丝');
       return;
     }
-    await showUserList(context, startOnFans: startOnFans);
+    await showUserList(
+      context,
+      startOnFans: startOnFans,
+      onPlaySongs: (songs, i) => _playSongsList(songs, i),
+    );
   }
 
   /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,

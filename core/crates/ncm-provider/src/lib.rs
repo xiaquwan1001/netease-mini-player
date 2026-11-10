@@ -592,6 +592,22 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no profile detail")) })
     }
 
+    /// 任意用户的公开资料(不需要登录). 用于"他人主页"(听众/粉丝列表点进去).
+    ///
+    /// 与 [Provider::profile_detail](只读当前登录账号)分开: 那个要先 `uid()`, 未登录直接报错.
+    fn user_profile<'a>(&'a self, _uid: u64) -> BoxFuture<'a, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user profile")) })
+    }
+
+    /// 任意用户的公开歌单(不需要登录).
+    fn user_playlists_of<'a>(
+        &'a self,
+        _uid: u64,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user playlists")) })
+    }
+
     /// 收藏曲目到指定歌单(需要登录). 返回 true 表示接口接受.
     fn add_to_playlist(
         &self,

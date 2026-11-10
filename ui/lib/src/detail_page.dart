@@ -949,6 +949,8 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
               context,
               radioId: radio.id,
               radioName: radio.name,
+              // 听众 -> 他人主页 -> 歌单, 这条链上要把播放回调带下去
+              onPlaySongs: widget.onPlaySongs,
             ),
           ),
           IconButton(

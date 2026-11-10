@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'user_page.dart';
 
 /// 订阅者/听众列表加载器(测试用 mock). timeMs 是分页游标(上一页最后一条的
 /// subscribeTimeMs, 首屏传 -1). 注意: 当前 FFI radioSubscribers 只有
@@ -10,12 +11,15 @@ import 'rust/api.dart' as rust;
 typedef LoadRadioSubscribers =
     Future<rust.RadioSubscriberPage?> Function(BigInt radioId, BigInt timeMs);
 
-/// 打开某电台的订阅者/听众列表页(只读, 不做关注/跳转用户主页)
+/// 打开某电台的订阅者/听众列表页(只读, 不做关注)
+///
+/// 每行可点进**他人主页**(user_page.dart): 之前只显示用户行, 点击无处可去.
 Future<void> showRadioSubscribers(
   BuildContext context, {
   required BigInt radioId,
   String radioName = '',
   LoadRadioSubscribers? loadSubscribers,
+  void Function(List<rust.SongDto> songs, int index)? onPlaySongs,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -23,6 +27,7 @@ Future<void> showRadioSubscribers(
         radioId: radioId,
         radioName: radioName,
         loadSubscribers: loadSubscribers,
+        onPlaySongs: onPlaySongs,
       ),
     ),
   );
@@ -34,6 +39,7 @@ class RadioSubscribersPage extends StatefulWidget {
     required this.radioId,
     this.radioName = '',
     this.loadSubscribers,
+    this.onPlaySongs,
   });
 
   final BigInt radioId;
@@ -41,6 +47,9 @@ class RadioSubscribersPage extends StatefulWidget {
 
   /// 注入加载器(测试用 mock); 不传走 FFI radioSubscribers
   final LoadRadioSubscribers? loadSubscribers;
+
+  /// 进他人主页后点歌单要能播(宿主注入)
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   State<RadioSubscribersPage> createState() => _RadioSubscribersPageState();
@@ -195,7 +204,16 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
               ),
             );
           }
-          return _SubscriberRow(subscriber: _items[i]);
+          final s = _items[i];
+          return _SubscriberRow(
+            subscriber: s,
+            onOpen: () => showUserPage(
+              context,
+              userId: s.userId,
+              fallbackNickname: s.nickname,
+              onPlaySongs: widget.onPlaySongs,
+            ),
+          );
         },
       ),
     );
@@ -203,9 +221,12 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
 }
 
 class _SubscriberRow extends StatelessWidget {
-  const _SubscriberRow({required this.subscriber});
+  const _SubscriberRow({required this.subscriber, this.onOpen});
 
   final rust.RadioSubscriber subscriber;
+
+  /// 点进他人主页(不传则不可点, 供测试/无路由场景)
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -215,8 +236,7 @@ class _SubscriberRow extends StatelessWidget {
       leading: CoverArt(url: subscriber.avatarUrl, size: 40, radius: 20),
       title: Text(subscriber.nickname, overflow: TextOverflow.ellipsis, maxLines: 1),
       subtitle: Text(subtitle, overflow: TextOverflow.ellipsis, maxLines: 1),
-      // TODO(跳转): 现有 UI 无用户主页路由, 点击暂不跳转, 后续接入后补 onOpenUser
-      onTap: null,
+      onTap: onOpen,
     );
   }
 }

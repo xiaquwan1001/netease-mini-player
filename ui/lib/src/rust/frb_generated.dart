@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => 1492061074;
+  int get rustContentHash => 1449209901;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -536,6 +536,13 @@ abstract class RustLibApi extends BaseApi {
   Future<UserLevel> crateApiUserLevel();
 
   Future<List<UserMedal>> crateApiUserMedals();
+
+  Future<List<Playlist>> crateApiUserPlaylistsOf({
+    required BigInt userId,
+    required int limit,
+  });
+
+  Future<ProfileDetail> crateApiUserProfile({required BigInt userId});
 
   Future<VipOverview> crateApiVipOverview();
 
@@ -4810,6 +4817,68 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "user_medals", argNames: []);
 
   @override
+  Future<List<Playlist>> crateApiUserPlaylistsOf({
+    required BigInt userId,
+    required int limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(userId, serializer);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 140,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_playlist,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiUserPlaylistsOfConstMeta,
+        argValues: [userId, limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUserPlaylistsOfConstMeta => const TaskConstMeta(
+    debugName: "user_playlists_of",
+    argNames: ["userId", "limit"],
+  );
+
+  @override
+  Future<ProfileDetail> crateApiUserProfile({required BigInt userId}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(userId, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 141,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_profile_detail,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiUserProfileConstMeta,
+        argValues: [userId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiUserProfileConstMeta =>
+      const TaskConstMeta(debugName: "user_profile", argNames: ["userId"]);
+
+  @override
   Future<VipOverview> crateApiVipOverview() {
     return handler.executeNormal(
       NormalTask(
@@ -4818,7 +4887,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 140,
+            funcId: 142,
             port: port_,
           );
         },
@@ -4846,7 +4915,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 141,
+            funcId: 143,
             port: port_,
           );
         },
@@ -4878,7 +4947,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 142,
+            funcId: 144,
             port: port_,
           );
         },
