@@ -27,4 +27,4 @@ flutter build linux --debug           # 或 ../tools/build-linux.sh
 
 - 平台差异只允许出现在 `lib/src/playback.dart`(`Playback`)与 `lib/src/platform.dart`(`PlatformBridge`)两处。
 - 不引第三方平台插件:外部链接/下载/分享都用自建 MethodChannel(`ncm/open`、`ncm/share`)。
-- 分享相关的卡片排版见 `lib/src/song_share.dart`,通道契约见 `docs/ui-song-detail-share.md`。
+- 分享相关的卡片排版见 `lib/src/song_share.dart`,通道契约见 `docs/archive/ui-song-detail-share.md`。
