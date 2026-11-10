@@ -8,7 +8,8 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, MvDetail, MvUrl, SearchExact, ToplistCatalogGroup,
-    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, QrLoginCheck, QrLoginKey,
+    FollowCount, HotSearchTerm, Lyric, PhoneLoginResult, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    QrLoginCheck, QrLoginKey, SmsCodeSent,
     WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
@@ -311,6 +312,28 @@ pub trait Provider: Send + Sync {
     /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
     fn login_qr_check<'a>(&'a self, _key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginCheck>> {
         Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
+    }
+
+    /// 手机号+验证码登录 ①: 给手机号发短信验证码. 默认不支持.
+    ///
+    /// 走网页登录通道(weapi /api/sms/captcha/sent); 命中交互式风控时返回
+    /// `ProviderErrorKind::RiskControl`(官方 code 8821), 调用方应引导用户改用扫码登录.
+    fn login_sms_send<'a>(
+        &'a self,
+        _phone: &'a str,
+        _country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<SmsCodeSent>> {
+        Box::pin(async { Err(ProviderError::unsupported("no sms login")) })
+    }
+
+    /// 手机号+验证码登录 ②: 校验验证码. 成功时带登录凭据, 由调用方合并落盘.
+    fn login_sms_verify<'a>(
+        &'a self,
+        _phone: &'a str,
+        _code: &'a str,
+        _country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<PhoneLoginResult>> {
+        Box::pin(async { Err(ProviderError::unsupported("no sms login")) })
     }
 
     /// "我喜欢的音乐"里的曲目 id(用于红心状态)

@@ -12,7 +12,8 @@ use ncm_domain::{
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     WordLyric,
-    MedalWall, QrLoginCheck, QrLoginKey, QrLoginState, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
+    MedalWall, PhoneLoginResult, QrLoginCheck, QrLoginKey, QrLoginState, SmsCodeSent, UserItem, UserLevel, UserMedal, VipGrowth,
+    VipMembership, VipOverview, VipSign, VipSignDay,
     VipTask, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     PurchasedSongEntry, SongPurchasedPage,
@@ -20,8 +21,8 @@ use ncm_domain::{
     RadioSubscriber, RadioSubscriberPage, RadioToplist,
 };
 use ncm_provider::{
-    BoxFuture, Capability, Provider, ProviderError, ProviderResult, RankingPeriod, SearchQuery,
-    SongUrlRequest,
+    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult, RankingPeriod,
+    SearchQuery, SongUrlRequest,
 };
 use serde_json::Value;
 
@@ -357,6 +358,11 @@ fn map_code(code: i64, msg: String) -> ProviderError {
 
 /// 业务 code 校验: 网易云常在 HTTP 200 里返回 code != 200
 fn check_body(body: &Value) -> ProviderResult<()> {
+    check_body_with(body, map_code)
+}
+
+/// 同上, 但业务码到错误的映射可换(见 [`map_login_code`]).
+fn check_body_with(body: &Value, map: fn(i64, String) -> ProviderError) -> ProviderResult<()> {
     match body.get("code").and_then(Value::as_i64) {
         None => Ok(()),
         Some(200) | Some(0) => Ok(()),
@@ -367,8 +373,26 @@ fn check_body(body: &Value) -> ProviderResult<()> {
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string();
-            Err(map_code(code, msg))
+            Err(map(code, msg))
         }
+    }
+}
+
+/// 手机号登录两条接口的业务码补充.
+///
+/// 全局 `map_code` 把 400/503 都归成 Internal, 但登录场景这两个码是**用户能当场处理**的:
+/// 400(号码/区号/验证码不合法)算输入错误(Auth), 503(发码太频繁)标成可重试.
+/// 只作用于 sms/captcha/sent 与 login/cellphone, 不动全局语义.
+fn map_login_code(code: i64, msg: String) -> ProviderError {
+    let detail = if msg.is_empty() {
+        format!("code={code}")
+    } else {
+        format!("code={code}: {msg}")
+    };
+    match code {
+        400 => ProviderError::new(ProviderErrorKind::Auth, false, detail),
+        503 => ProviderError::new(ProviderErrorKind::Internal, true, detail),
+        _ => map_code(code, msg),
     }
 }
 
@@ -3371,6 +3395,62 @@ impl Provider for NeteaseProvider {
             parse_qr_check(&resp.body, &resp.cookie)
         })
     }
+
+    /// 手机号登录 ①: 发短信验证码(网页登录通道 weapi, 与扫码同一族).
+    ///
+    /// 不用 App 原生登录族(eapi): 那条路在交互式风控下回 8821, 而网页登录是已知稳路径.
+    fn login_sms_send<'a>(
+        &'a self,
+        phone: &'a str,
+        country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<SmsCodeSent>> {
+        Box::pin(async move {
+            let (client, domain, _ua, _cookie) = self.snapshot();
+            let (phone, ctcode) = normalize_phone(phone, country_code)?;
+            let resp = client
+                .request(
+                    "/api/sms/captcha/sent",
+                    serde_json::json!({ "cellphone": phone, "ctcode": ctcode }),
+                    qr_option(domain),
+                )
+                .await
+                .map_err(map_error)?;
+            check_body_with(&resp.body, map_login_code)?;
+            Ok(parse_sms_sent(&resp.body))
+        })
+    }
+
+    /// 手机号登录 ②: 校验验证码. 成功时凭据在 Set-Cookie(与扫码 803 一样不在 body).
+    fn login_sms_verify<'a>(
+        &'a self,
+        phone: &'a str,
+        code: &'a str,
+        country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<PhoneLoginResult>> {
+        Box::pin(async move {
+            let (client, domain, _ua, _cookie) = self.snapshot();
+            let (phone, countrycode) = normalize_phone(phone, country_code)?;
+            let code = code.trim();
+            if code.is_empty() {
+                return Err(ProviderError::auth("验证码不能为空"));
+            }
+            let resp = client
+                .request(
+                    "/api/login/cellphone",
+                    serde_json::json!({
+                        "phone": phone,
+                        "countrycode": countrycode,
+                        "captcha": code,
+                        "rememberLogin": "true",
+                    }),
+                    qr_option(domain),
+                )
+                .await
+                .map_err(map_error)?;
+            check_body_with(&resp.body, map_login_code)?;
+            parse_phone_login(&resp.body, &resp.cookie)
+        })
+    }
 }
 
 /// 轮询响应的解析(抽出来便于单测).
@@ -3416,6 +3496,78 @@ fn parse_qr_check(body: &Value, set_cookies: &[String]) -> ProviderResult<QrLogi
         .filter(|s| !s.is_empty())
         .map(str::to_string);
     Ok(QrLoginCheck { state, code, cookie, nickname, avatar_url })
+}
+
+/// 手机号规范化: 去掉空白/连字符/括号与可选的前缀 '+', 只留数字.
+///
+/// 返回 (手机号, 区号): 区号缺省 86; 手机号 6~15 位, 区号 1~4 位.
+fn normalize_phone(phone: &str, country_code: &str) -> ProviderResult<(String, String)> {
+    let clean = |s: &str| -> String {
+        s.chars()
+            .filter(|c| !c.is_whitespace() && *c != '-' && *c != '(' && *c != ')' && *c != '+')
+            .collect()
+    };
+    let phone = clean(phone);
+    if !phone.chars().all(|c| c.is_ascii_digit()) || !(6..=15).contains(&phone.len()) {
+        return Err(ProviderError::auth("手机号看起来不对(只填号码本身, 区号另填)"));
+    }
+    let cc = clean(country_code);
+    let cc = if cc.is_empty() { "86".to_string() } else { cc };
+    if !cc.chars().all(|c| c.is_ascii_digit()) || !(1..=4).contains(&cc.len()) {
+        return Err(ProviderError::auth("国家/地区区号看起来不对(例如 86)"));
+    }
+    Ok((phone, cc))
+}
+
+/// `/api/sms/captcha/sent` 的响应(抽出来便于单测).
+///
+/// 成功形如 `{code:200, data:true}`; 命中风控回 8821(由 check_body 转成 RiskControl),
+/// 号码/区号不合法回 400, 频率限制回 503.
+fn parse_sms_sent(body: &Value) -> SmsCodeSent {
+    let code = body.get("code").and_then(Value::as_i64).unwrap_or(200);
+    let message = body
+        .get("message")
+        .or_else(|| body.get("msg"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let expires_in = body
+        .get("expiresIn")
+        .or_else(|| body.get("expire"))
+        .and_then(Value::as_u64)
+        .filter(|v| *v > 0)
+        .unwrap_or(300) as u32;
+    SmsCodeSent { code, message, expires_in }
+}
+
+/// `/api/login/cellphone` 的响应解析.
+///
+/// 与扫码 803 一致: **登录凭据不在 body, 而在 Set-Cookie**; body 里只有 account/profile.
+fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<PhoneLoginResult> {
+    let raw = set_cookies
+        .iter()
+        .map(|c| c.split(';').next().unwrap_or("").trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let cookie = crate::identity::extract_login_cookie(&raw);
+    if !cookie.contains("MUSIC_U=") {
+        return Err(ProviderError::internal(
+            "手机号登录: 校验通过但没有拿到 MUSIC_U(检查 Set-Cookie)",
+        ));
+    }
+    let profile = body.get("profile").filter(|v| !v.is_null());
+    let nickname = profile
+        .and_then(|p| p.get("nickname"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let avatar_url = profile
+        .and_then(|p| p.get("avatarUrl"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    Ok(PhoneLoginResult { cookie, nickname, avatar_url })
 }
 
 /// 扫码登录走 weapi(官方网页登录页的通道).
@@ -5529,6 +5681,76 @@ mod tests {
     use super::*;
     use ncm_provider::ProviderErrorKind;
     use serde_json::json;
+
+    /// 登录类业务码归类: 400 是用户可改的输入错(Auth), 503 是「太频繁」可重试;
+    /// 8821 仍走全局 -> RiskControl. 实测(2026-11-11)非法号码回 400 手机号码不符合规范.
+    #[test]
+    fn login_code_mapping() {
+        let e = map_login_code(400, "手机号码不符合规范".into());
+        assert_eq!(e.kind, ProviderErrorKind::Auth);
+        assert!(!e.retryable);
+        let e = map_login_code(503, String::new());
+        assert_eq!(e.kind, ProviderErrorKind::Internal);
+        assert!(e.retryable);
+        assert_eq!(map_login_code(8821, "安全环境风险".into()).kind, ProviderErrorKind::RiskControl);
+        // 其它码仍按全局口径(400 以外的未知码 = internal 不可重试)
+        let e = map_login_code(250, String::new());
+        assert_eq!(e.kind, ProviderErrorKind::Internal);
+        assert!(!e.retryable);
+    }
+
+    /// 手机号规范化: 容忍空白/连字符/前缀 '+', 拒绝明显不合法输入.
+    #[test]
+    fn normalize_phone_accepts_common_input() {
+        assert_eq!(normalize_phone("138 0013 8000", "86").unwrap(), ("13800138000".into(), "86".into()));
+        assert_eq!(normalize_phone("+8613800138000", "+86").unwrap(), ("8613800138000".into(), "86".into()));
+        // 区号留空默认 86
+        assert_eq!(normalize_phone("13800138000", "").unwrap().1, "86");
+        // 号码里混入字母 / 太短 / 区号非数字都要报错
+        assert!(normalize_phone("1380013800a", "86").is_err());
+        assert!(normalize_phone("12345", "86").is_err());
+        assert!(normalize_phone("13800138000", "8a").is_err());
+    }
+
+    /// 发验证码的响应: 成功按 data:true 处理, expire 缺省 300.
+    #[test]
+    fn parse_sms_sent_fields() {
+        let r = parse_sms_sent(&json!({"code":200,"data":true}));
+        assert_eq!(r.code, 200);
+        assert_eq!(r.expires_in, 300);
+        let r = parse_sms_sent(&json!({"code":200,"expire":60,"message":"已发送"}));
+        assert_eq!(r.expires_in, 60);
+        assert_eq!(r.message, "已发送");
+    }
+
+    /// 手机号登录成功: 凭据同样只在 Set-Cookie; 缺 MUSIC_U 必须报错而不是"假成功".
+    #[test]
+    fn parse_phone_login_requires_cookie() {
+        let cookies = vec![
+            "MUSIC_U=phone_u; Path=/; HttpOnly".to_string(),
+            "__csrf=csrf789; Path=/".to_string(),
+            "NMTID=fingerprint; Path=/".to_string(),
+        ];
+        let r = parse_phone_login(
+            &json!({"code":200,"profile":{"nickname":"下去玩","avatarUrl":"https://x/a.jpg"}}),
+            &cookies,
+        )
+        .unwrap();
+        assert!(r.cookie.contains("MUSIC_U=phone_u"));
+        assert!(r.cookie.contains("__csrf=csrf789"));
+        assert!(!r.cookie.contains("NMTID"));
+        assert_eq!(r.nickname, "下去玩");
+        assert_eq!(r.avatar_url.as_deref(), Some("https://x/a.jpg"));
+
+        let err = parse_phone_login(&json!({"code":200}), &["JSESSIONID-WYYY=x; Path=/".to_string()])
+            .unwrap_err();
+        assert_eq!(err.kind, ProviderErrorKind::Internal);
+        assert!(err.detail.contains("MUSIC_U"));
+
+        // 风控/验证码错误的 code 由 check_body 转成 RiskControl / Auth, 这里只验解析不 panic
+        let err = parse_phone_login(&json!({"code":503}), &[]).unwrap_err();
+        assert_eq!(err.kind, ProviderErrorKind::Internal);
+    }
 
     /// 扫码登录轮询: 实测 code 语义 + 803 时凭据只在 Set-Cookie 里.
     #[test]

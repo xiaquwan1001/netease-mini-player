@@ -15,6 +15,7 @@
 //!   ncm podcast-radio <id>         播客/电台详情(标题/主播/节目数)
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
 //!   ncm login-qr                    官方网页扫码登录(打印二维码链接并等待扫码确认)
+//!   ncm login-sms <手机号> [验证码] [--country 86]   手机号+短信验证码登录(不带验证码会先发送然后等待输入)
 //!   ncm digital <albumId>            数字专辑详情(价格/标签/是否已购)
 //!   ncm digital-purchased [limit] [offset]   我的已购数字专辑(需登录)
 //!   ncm purchased-songs [limit] [offset]     我的已购单曲(需登录)
@@ -26,6 +27,7 @@
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
 
+use std::io::Write as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -157,6 +159,49 @@ async fn run() -> Result<(), BoxErr> {
                     break;
                 }
             }
+            Ok(())
+        }
+        "login-sms" => {
+            // 手机号+短信验证码: 与扫码同属"网页登录"通道(weapi), 不是 App 原生登录族.
+            let phone = args
+                .positional
+                .first()
+                .ok_or("usage: ncm login-sms <手机号> [验证码] [--country 86]")?
+                .clone();
+            let country = args.value("country").unwrap_or_else(|| "86".to_string());
+            announce(&core);
+            let p = provider(&core, Capability::Login)?;
+            let code = match args.positional.get(1) {
+                Some(c) => c.clone(),
+                None => {
+                    let sent = p.login_sms_send(&phone, &country).await?;
+                    println!(
+                        "验证码已发送(code={}, {}s 内有效){}",
+                        sent.code,
+                        sent.expires_in,
+                        if sent.message.is_empty() {
+                            String::new()
+                        } else {
+                            format!(": {}", sent.message)
+                        }
+                    );
+                    print!("输入收到的验证码: ");
+                    std::io::stderr().flush().ok();
+                    let mut line = String::new();
+                    std::io::stdin().read_line(&mut line)?;
+                    line.trim().to_string()
+                }
+            };
+            if code.is_empty() {
+                return Err("没有输入验证码".into());
+            }
+            let r = p.login_sms_verify(&phone, &code, &country).await?;
+            core.apply_login_cookie(&r.cookie)?;
+            println!("登录成功 logged_in = {}", core.session.is_logged_in());
+            if !r.nickname.is_empty() {
+                println!("昵称: {}", r.nickname);
+            }
+            println!("cookie saved -> {}", core.store.path().display());
             Ok(())
         }
         "user" => {

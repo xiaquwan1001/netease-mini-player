@@ -13,7 +13,8 @@ pub use ncm_domain::{
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
     Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession,
-    ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
+    PhoneLoginResult, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState, RadioCategory, RadioExploreHome,
+    RadioPick, RadioRankedDj, SmsCodeSent,
     RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RecentContact, SearchAlbum,
     SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus,
     SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
@@ -527,6 +528,24 @@ pub struct _QrLoginCheck {
     pub avatar_url: Option<String>,
 }
 
+#[frb(mirror(SmsCodeSent))]
+pub struct _SmsCodeSent {
+    /// 服务端原始 code(200 已发送 / 8821 风控 / 400 号码不合法 / 503 频率限制)
+    pub code: i64,
+    pub message: String,
+    /// 声明有效期(秒)
+    pub expires_in: u32,
+}
+
+/// 手机号+验证码登录成功后的结果(凭据已落盘)
+#[frb(mirror(PhoneLoginResult))]
+pub struct _PhoneLoginResult {
+    /// 只含登录凭据键(MUSIC_U/__csrf)
+    pub cookie: String,
+    pub nickname: String,
+    pub avatar_url: Option<String>,
+}
+
 fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
     let book = guard.accounts().map_err(|e| e.to_string())?;
     Ok(book
@@ -573,6 +592,44 @@ pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, String> {
             .map_err(|e| e.to_string())?;
     }
     Ok(check)
+}
+
+/// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
+///
+/// 与扫码同一族(网页登录), 不走 App 原生登录族; 命中交互式风控时错误带
+/// `[riskControl]` 前缀(官方 code 8821), UI 应引导改用扫码.
+pub async fn login_sms_send(phone: String, country_code: String) -> Result<SmsCodeSent, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard.netease.clone()
+    };
+    use ncm_provider::Provider;
+    provider
+        .login_sms_send(&phone, &country_code)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 手机号+验证码登录 ②: 校验验证码. 成功时顺带把凭据合并落盘, Dart 侧再同步账号资料.
+pub async fn login_sms_verify(
+    phone: String,
+    code: String,
+    country_code: String,
+) -> Result<PhoneLoginResult, String> {
+    let provider = {
+        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        guard.netease.clone()
+    };
+    use ncm_provider::Provider;
+    let result = provider
+        .login_sms_verify(&phone, &code, &country_code)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    guard
+        .apply_login_cookie(&result.cookie)
+        .map_err(|e| e.to_string())?;
+    Ok(result)
 }
 
 /// 已记住的账号列表(只含凭据, 指纹共享)

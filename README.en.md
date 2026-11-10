@@ -145,8 +145,8 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace` | **249** passing (224 when the 4 vendor network smokes are excluded) |
-| `flutter test --exclude-tags network` | **536** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `cargo test --offline --workspace` | **253** passing (229 when the vendor crate is excluded) |
+| `flutter test --exclude-tags network` | **540** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | 0 error / 0 warning (41 info hints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
@@ -156,12 +156,12 @@ cargo run -p ncm-cli -- lyric 186016
 | Stage | Content | Status |
 |---|---|---|
 | M0 | Rust workspace layering, provider abstraction, headless CLI | done |
-| Protocol | vendored port + prune (382 -> 118 endpoints, 12k -> 4k LOC) | done |
+| Protocol | vendored port + prune (382 -> 118 endpoints, 123 now covered, 12k -> 4k LOC) | done |
 | Shell | Flutter Android/Linux/Windows, FRB 2.13 bridge, all builds (Windows via CI) | done |
 | Playback | Media3 (Android) / rodio (Linux ALSA · Windows WASAPI), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
 | Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
-| TODO | release size numbers, pluggable audio sources, refactor debt, subscriber profile routing — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
+| TODO | pluggable audio sources, refactor debt, phone-SMS login real-device check — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
 
 See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 

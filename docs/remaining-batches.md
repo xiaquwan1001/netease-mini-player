@@ -3,7 +3,7 @@
 > 用途: 后续每轮开工前先在这里选批次, 按「并行矩阵」决定能不能同时派。
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`.pi/memory/`(踩坑)。
-> 口径日期: 2026-11-10。**当前覆盖率 123/123(100%), FFI 导出 140 个其中 4 个无 UI 入口**
+> 口径日期: 2026-11-11。**当前覆盖率 123/123(100%), FFI 导出 146 个其中 4 个无 UI 入口**
 > (`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`) ——
 > 数字一律跑 `bash tools/api-coverage.sh` 复算, 本文件不再维护历史快照(历史数字见 `docs/PROGRESS.md`)。
 >
@@ -236,8 +236,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 ## 11. 待办(2026-11-10 收尾版)
 
 > 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
-> 当前基线: 覆盖率 123/123 · FFI **144**(4 个无 UI 入口) · `cargo test --offline --workspace` **249** ·
-> `flutter test --exclude-tags network` **536** · `dart analyze` 0 error / 0 warning。
+> 当前基线: 覆盖率 123/123 · FFI **146**(4 个无 UI 入口) · `cargo test --offline --workspace` **253** ·
+> `flutter test --exclude-tags network` **540** · `dart analyze` 0 error / 0 warning(41 info)。
 >
 > **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
 > ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
@@ -273,6 +273,13 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 3 | deb 依赖收紧 | 目前 `libgtk-3-0/liblzma5/libasound2`, 未在最小系统(纯 server + desktop 环境)验证过; 有条件时用容器验一次 |
 | 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |
 
+### C'. 2026-11-11 已完成
+
+| 项 | 说明 | 证据 |
+|---|---|---|
+| **手机号 + 短信验证码登录** | 登录弹层第 2 个 tab + `ncm login-sms`; 走**网页登录通道**(weapi `sms/captcha/sent` + `login/cellphone`), 凭据取自 Set-Cookie; 命中 8821 时提示改回扫码; 400→Auth、503→可重试 | `ui/test/login_sheet_phone_test.dart` 4 例; 宿主实测非法号码 `code=400: 手机号码不符合规范`; FFI 144→146 |
+| **待真机验(唯一残留)** | 真实手机号收短信走完正常登录链路(本机只验到通道可达与错误映射) | 需用户用自己的号码操作一次 |
+
 ### D. 需要新能力的 L 级(单独立项, 不要混批)
 
 B9 视频/最近播放页签(需视频播放器) · B11 听歌识曲(录音 + 指纹) · B13 云盘(分片上传) ·
@@ -281,6 +288,6 @@ B17 云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容�
 
 ### E. 明确不做
 
-原生登录族(8821 风控) · 埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 ·
+App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+验证码登录已在 2026-11-11 落地, 两者不是一回事 · 埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 ·
 `simi_user`(实测恒空)。
 

@@ -14,10 +14,12 @@ import 'toast.dart';
 /// HttpOnly, 读不出来; 而官方网页登录的**扫码通道**会把登录凭据放在轮询响应的
 /// Set-Cookie 里, 所以纯 Rust 就能完成整个登录, 也不需要平台代码/系统依赖.
 ///
-/// 三种入口(都在同一弹层里, 不逼用户去命令行):
+/// 四种入口(都在同一弹层里, 不逼用户去命令行):
 /// 1. 扫码登录(默认): 手机网易云 App 扫二维码 → 自动轮询 → 成功即落盘;
-/// 2. 导入 Cookie: 浏览器 F12 复制 MUSIC_U(老用户/排查用);
-/// 3. 在浏览器打开官方登录页(只是给要手工复制 cookie 的人一个入口).
+/// 2. 手机号 + 短信验证码: 走**网页登录**通道(weapi /api/sms/captcha/sent + login/cellphone),
+///    与扫码同一族, 不是 App 原生登录族; 命中交互式风控(8821)时提示改回扫码;
+/// 3. 导入 Cookie: 浏览器 F12 复制 MUSIC_U(老用户/排查用);
+/// 4. 在浏览器打开官方登录页(只是给要手工复制 cookie 的人一个入口).
 ///
 /// 依赖全部注入, 便于 widget 测试(不联网、不碰 FFI).
 class LoginSheet extends StatefulWidget {
@@ -25,9 +27,12 @@ class LoginSheet extends StatefulWidget {
     super.key,
     this.createQr,
     this.checkQr,
+    this.sendSms,
+    this.verifySms,
     this.commitCookie,
     this.onLoggedIn,
     this.pollInterval = const Duration(seconds: 2),
+    this.resendCooldownSeconds = 60,
     this.openWebLogin,
   });
 
@@ -36,6 +41,13 @@ class LoginSheet extends StatefulWidget {
 
   /// 轮询一次(默认 rust.loginQrCheck)
   final Future<rust.QrLoginCheck> Function(String key)? checkQr;
+
+  /// 发短信验证码(默认 rust.loginSmsSend)
+  final Future<rust.SmsCodeSent> Function(String phone, String countryCode)? sendSms;
+
+  /// 校验验证码并登录(默认 rust.loginSmsVerify)
+  final Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)?
+      verifySms;
 
   /// 导入 cookie(默认 rust.loginWithCookie)
   final Future<bool> Function(String cookie)? commitCookie;
@@ -46,6 +58,9 @@ class LoginSheet extends StatefulWidget {
   /// 轮询间隔(测试可缩短)
   final Duration pollInterval;
 
+  /// 短信重发冷却秒数(测试可设为 0)
+  final int resendCooldownSeconds;
+
   /// 用系统浏览器打开官方登录页(可空: 测试/无实现时不显示按钮)
   final Future<void> Function()? openWebLogin;
 
@@ -54,7 +69,7 @@ class LoginSheet extends StatefulWidget {
 }
 
 class LoginSheetState extends State<LoginSheet> {
-  // 0 = 扫码, 1 = 导入 cookie
+  // 0 = 扫码, 1 = 手机号验证码, 2 = 导入 cookie
   int _tab = 0;
 
   rust.QrLoginKey? _qr;
@@ -64,6 +79,13 @@ class LoginSheetState extends State<LoginSheet> {
   bool _committing = false;
   Timer? _timer;
   final _cookieCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _ccCtrl = TextEditingController(text: '86');
+  final _codeCtrl = TextEditingController();
+  bool _sending = false;
+  bool _verifying = false;
+  int _cooldown = 0;
+  Timer? _cooldownTimer;
 
   @override
   void initState() {
@@ -74,7 +96,11 @@ class LoginSheetState extends State<LoginSheet> {
   @override
   void dispose() {
     _timer?.cancel();
+    _cooldownTimer?.cancel();
     _cookieCtrl.dispose();
+    _phoneCtrl.dispose();
+    _ccCtrl.dispose();
+    _codeCtrl.dispose();
     super.dispose();
   }
 
@@ -110,8 +136,8 @@ class LoginSheetState extends State<LoginSheet> {
 
   Future<void> _tick() async {
     final key = _qr;
-    // 弹层已关闭或还没拿到 key 就不再轮询
-    if (key == null || !mounted) return;
+    // 弹层已关闭 / 还没拿到 key / 用户切到别的登录方式时不再轮询
+    if (key == null || !mounted || _tab != 0) return;
     try {
       final check = await _checkQr(key.key);
       if (!mounted) return;
@@ -149,6 +175,86 @@ class LoginSheetState extends State<LoginSheet> {
     Navigator.of(context).pop(true);
     if (messenger != null) {
       showToastWith(messenger, '登录成功');
+    }
+  }
+
+  Future<rust.SmsCodeSent> Function(String phone, String countryCode) get _sendSms =>
+      widget.sendSms ??
+      (phone, cc) => rust.loginSmsSend(phone: phone, countryCode: cc);
+
+  Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)
+      get _verifySms =>
+          widget.verifySms ??
+          (phone, code, cc) =>
+              rust.loginSmsVerify(phone: phone, code: code, countryCode: cc);
+
+  void _startCooldown(int seconds) {
+    _cooldownTimer?.cancel();
+    if (seconds <= 0) return;
+    setState(() => _cooldown = seconds);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() => _cooldown -= 1);
+      if (_cooldown <= 0) t.cancel();
+    });
+  }
+
+  Future<void> _sendCode() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = '先填手机号');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      final sent = await _sendSms(phone, _ccCtrl.text.trim());
+      if (!mounted) return;
+      setState(() => _sending = false);
+      // 服务端说多久有效就按多久冷却, 下限用 resendCooldownSeconds(默认 60s,
+      // 免得连点把号码打进频率限制; 测试传 0 时关掉冷却)
+      final min = widget.resendCooldownSeconds;
+      _startCooldown(min <= 0 ? 0 : (sent.expiresIn >= min ? sent.expiresIn : min));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = '发送验证码失败: $e';
+      });
+    }
+  }
+
+  Future<void> _phoneLogin() async {
+    final phone = _phoneCtrl.text.trim();
+    final code = _codeCtrl.text.trim();
+    if (phone.isEmpty) {
+      setState(() => _error = '先填手机号');
+      return;
+    }
+    if (code.isEmpty) {
+      setState(() => _error = '先填收到的短信验证码');
+      return;
+    }
+    setState(() {
+      _verifying = true;
+      _error = null;
+    });
+    try {
+      await _verifySms(phone, code, _ccCtrl.text.trim());
+      if (!mounted) return;
+      setState(() => _verifying = false);
+      await _finishLogin();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _verifying = false;
+        _error = '登录失败: $e';
+      });
     }
   }
 
@@ -217,14 +323,20 @@ class LoginSheetState extends State<LoginSheet> {
               SegmentedButton<int>(
                 segments: const [
                   ButtonSegment(value: 0, label: Text('扫码登录')),
-                  ButtonSegment(value: 1, label: Text('导入 Cookie')),
+                  ButtonSegment(value: 1, label: Text('手机号登录')),
+                  ButtonSegment(value: 2, label: Text('导入 Cookie')),
                 ],
                 selected: {_tab},
                 showSelectedIcon: false,
                 onSelectionChanged: (v) => setState(() => _tab = v.first),
               ),
               const SizedBox(height: 16),
-              if (_tab == 0) ..._qrTab(theme) else ..._cookieTab(theme),
+              if (_tab == 0)
+                ..._qrTab(theme)
+              else if (_tab == 1)
+                ..._phoneTab(theme)
+              else
+                ..._cookieTab(theme),
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -304,6 +416,115 @@ class LoginSheetState extends State<LoginSheet> {
     ];
   }
 
+  List<Widget> _phoneTab(ThemeData theme) {
+    final busy = _sending || _verifying;
+    final hint = theme.textTheme.bodySmall
+        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    // 命中风控(8821)时不要只甩一个 code, 直接把用户引回已知稳路径
+    final risk = (_error ?? '').contains('riskControl');
+    return [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: TextField(
+              controller: _ccCtrl,
+              enabled: !busy,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
+              decoration: const InputDecoration(
+                labelText: '区号',
+                prefixText: '+',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _phoneCtrl,
+              enabled: !busy,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(15),
+              ],
+              decoration: const InputDecoration(
+                labelText: '手机号',
+                hintText: '13800138000',
+                helperText: '区号 + 号码, 只填数字',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _codeCtrl,
+              enabled: !busy,
+              keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(8),
+              ],
+              onSubmitted: (_) => _phoneLogin(),
+              decoration: const InputDecoration(
+                labelText: '短信验证码',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 56,
+            child: OutlinedButton(
+              onPressed: (_sending || _cooldown > 0 || _verifying) ? null : _sendCode,
+              child: Text(
+                _cooldown > 0
+                    ? '${_cooldown}s 后重发'
+                    : (_sending ? '发送中…' : '获取验证码'),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      FilledButton(
+        onPressed: _verifying ? null : _phoneLogin,
+        child: _verifying
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Text('登录'),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        '验证码由网易云下发, 本机不保存密码; 走的是官方网页登录通道(与扫码同一族), 不是 App 原生登录.',
+        textAlign: TextAlign.center,
+        style: hint,
+      ),
+      if (risk) ...[
+        const SizedBox(height: 6),
+        Text(
+          '这次命中网易云的安全风控(8821), 手机号登录暂时走不通 —— 请改用「扫码登录」, 那条路是已知稳路径.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+        ),
+      ],
+    ];
+  }
+
   List<Widget> _cookieTab(ThemeData theme) {
     return [
       TextField(
@@ -344,10 +565,14 @@ Future<bool> showLoginSheet(
   BuildContext context, {
   Future<rust.QrLoginKey> Function()? createQr,
   Future<rust.QrLoginCheck> Function(String key)? checkQr,
+  Future<rust.SmsCodeSent> Function(String phone, String countryCode)? sendSms,
+  Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)?
+      verifySms,
   Future<bool> Function(String cookie)? commitCookie,
   Future<void> Function()? onLoggedIn,
   Future<void> Function()? openWebLogin,
   Duration pollInterval = const Duration(seconds: 2),
+  int resendCooldownSeconds = 60,
 }) async {
   final ok = await showModalBottomSheet<bool>(
     context: context,
@@ -356,10 +581,13 @@ Future<bool> showLoginSheet(
     builder: (_) => LoginSheet(
       createQr: createQr,
       checkQr: checkQr,
+      sendSms: sendSms,
+      verifySms: verifySms,
       commitCookie: commitCookie,
       onLoggedIn: onLoggedIn,
       openWebLogin: openWebLogin,
       pollInterval: pollInterval,
+      resendCooldownSeconds: resendCooldownSeconds,
     ),
   );
   return ok == true;

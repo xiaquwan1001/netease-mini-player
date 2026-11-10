@@ -368,6 +368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricDto? dco_decode_opt_box_autoadd_word_lyric_dto(dynamic raw);
 
   @protected
+  PhoneLoginResult dco_decode_phone_login_result(dynamic raw);
+
+  @protected
   PlayRankEntryDto dco_decode_play_rank_entry_dto(dynamic raw);
 
   @protected
@@ -468,6 +471,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SigninStatus dco_decode_signin_status(dynamic raw);
+
+  @protected
+  SmsCodeSent dco_decode_sms_code_sent(dynamic raw);
 
   @protected
   SongDto dco_decode_song_dto(dynamic raw);
@@ -965,6 +971,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  PhoneLoginResult sse_decode_phone_login_result(SseDeserializer deserializer);
+
+  @protected
   PlayRankEntryDto sse_decode_play_rank_entry_dto(SseDeserializer deserializer);
 
   @protected
@@ -1077,6 +1086,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SigninStatus sse_decode_signin_status(SseDeserializer deserializer);
+
+  @protected
+  SmsCodeSent sse_decode_sms_code_sent(SseDeserializer deserializer);
 
   @protected
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
@@ -1705,6 +1717,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_phone_login_result(
+    PhoneLoginResult self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_play_rank_entry_dto(
     PlayRankEntryDto self,
     SseSerializer serializer,
@@ -1856,6 +1874,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_signin_status(SigninStatus self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_sms_code_sent(SmsCodeSent self, SseSerializer serializer);
 
   @protected
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);

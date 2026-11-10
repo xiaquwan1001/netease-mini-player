@@ -1066,6 +1066,31 @@ pub struct QrLoginCheck {
     pub avatar_url: Option<String>,
 }
 
+/// 手机号 + 短信验证码登录: 发送验证码的结果.
+///
+/// 走的是**网页登录**那套通道(weapi `/api/sms/captcha/sent`), 不是 App 原生登录族 ——
+/// 后者在交互式风控下会回 8821 安全环境风险.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SmsCodeSent {
+    /// 服务端原始 code(200 已发送; 8821 风控; 400 号码/区号不合法; 503 频率限制)
+    pub code: i64,
+    /// 服务端提示文案(可能为空)
+    pub message: String,
+    /// 服务端声明的剩余有效秒数(缺省按 300 显示)
+    pub expires_in: u32,
+}
+
+/// 手机号 + 短信验证码登录成功后的结果.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhoneLoginResult {
+    /// 只含登录凭据键(MUSIC_U/__csrf); 设备指纹由本地会话提供
+    pub cookie: String,
+    #[serde(default)]
+    pub nickname: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_url: Option<String>,
+}
+
 /// 黑胶会员等级(vip_info_v2 的 data: associator + redVipLevel).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VipMembership {

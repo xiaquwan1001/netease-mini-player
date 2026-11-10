@@ -1,11 +1,15 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-10 收尾**(当日四批, 下面倒序):
+> 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
+> `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
+> 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
+> 当前门禁: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **540** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 146)。
+>
+> **2026-11-10 收尾**(当日四批, 下面倒序):
 > ① **封面清晰度按设备分辨率 + 三档设置 + 看大图保存原图**; ② **桌面打包** deb / AppImage / Windows setup.exe
 > (`release.yml` 重构为 verify → build+build-windows → publish), 已发布 **v0.3.2 六种资产**;
 > ③ **歌单写接口 + 队列「存为歌单」**; ④ **MV 播放 + 自动更新检查 + Windows 桌面版合入**, 并修好一次
 > **.git 对象库损坏**(64 个 0 字节 loose object) + 队列面板拖拽排序/清空。
-> 当前门禁: `cargo test --offline --workspace` **249** / `flutter test --exclude-tags network` **532** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 142)。
 > 最新一批(同日五): **桌面端官方扫码登录 + deb 门面元数据(AppStream) + 账号隐私修复**(见下方最新小节)。
 > **下一轮做什么**: 见 `docs/remaining-batches.md` **§11 待办(2026-11-10 收尾版)**。
 > 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`。
@@ -13,8 +17,8 @@
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
 ## 进度总览(2026-11-10, 面向新读者的速览)
 
-**当前门禁**: `cargo test --offline --workspace` **249** / `flutter test --exclude-tags network` **532** /
-`dart analyze` 0 error / 0 warning(42 info) / 接口覆盖 **123/123**(FFI 导出 142, 其中 4 个无 UI 入口)。
+**当前门禁**: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **540** /
+`dart analyze` 0 error / 0 warning(41 info) / 接口覆盖 **123/123**(FFI 导出 146, 其中 4 个无 UI 入口)。
 
 **版本时间线**:
 
@@ -60,6 +64,25 @@
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## v2 · 2026-11-11: 手机号 + 短信验证码登录(网页登录通道)
+
+扫码登录之外的第二条官方路径。**关键判断: 只做网页登录族(weapi), 不碰 App 原生登录族(eapi)** ——
+后者在交互式风控下稳定回 8821, 前者与扫码同族、已知可走。
+
+| 项 | 落点 | 证据 |
+|---|---|---|
+| 数据面 | `Provider::login_sms_send`(weapi `/api/sms/captcha/sent`) + `login_sms_verify`(`/api/login/cellphone`); 新 domain `SmsCodeSent{code,message,expires_in}` / `PhoneLoginResult{cookie,nickname,avatar_url}` | 凭据与扫码 803 一致**只在 Set-Cookie**, body 只有 account/profile; 缺 `MUSIC_U` 直接报 Internal 不"假成功" |
+| 错误归类 | 新增 `check_body_with(body, map)` + `map_login_code`: 400(号码/验证码不合法)→`Auth` 不可重试, 503(发码太频繁)→`Internal` **可重试**, 8821 仍走全局 →`RiskControl` | 宿主实测非法号码 `ncm login-sms 1000000`: `code=400: 手机号码不符合规范`(通道可达、错误映射生效) |
+| 输入规范化 | `normalize_phone`: 容忍空白/连字符/括号/`+`, 区号缺省 86, 号码 6–15 位、区号 1–4 位, 非法直接 `Auth` | `normalize_phone_accepts_common_input` |
+| 登录弹层(UI) | `login_sheet.dart` 第 2 个 tab「手机号登录」: 区号+号码、获取验证码(按服务端 `expires_in` 冷却, 下限 60s)、填码登录; 命中 8821 时**显式提示改用扫码**; 切到该 tab 后停止二维码轮询(`_tab != 0` 短路) | `ui/test/login_sheet_phone_test.dart` 4 例(发码→冷却→登录成功关弹层/风控引导/空输入不打接口/切 tab 停轮询) |
+| CLI | `ncm login-sms <手机号> [验证码] [--country 86]`: 不带验证码时先发码再读 stdin, 成功后 `apply_login_cookie` 落盘 | `--help` 头注释 + 宿主烟测 |
+
+FFI: `loginSmsSend`/`loginSmsVerify`(144→**146**)。门禁: `cargo test --offline --workspace` **253**(+4) ·
+`flutter test --exclude-tags network` **540**(+4) · `dart analyze` 0 error / 0 warning(41 info) · 接口覆盖 123/123。
+
+> **待真机验**: 需要用户用真实手机号收一条短信走完 8821 之外的正常链路(本机只能验到通道可达与错误映射);
+> 桌面/安卓共用同一份 Rust 链路, 弹层同源, 三端行为一致。
 
 ## v2 · 2026-11-10(六): 他人主页路由(听众/粉丝 → 用户页) · 发布包体积实测
 

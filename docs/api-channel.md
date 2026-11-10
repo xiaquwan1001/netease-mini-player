@@ -29,7 +29,7 @@ UA、以及网页入口的版式必须成套, 混着用会得到"假通过"(静�
 | 平台 | os / appver / osver / channel | API UA | 网页入口 |
 |---|---|---|---|
 | Android | `android / 8.20.20.231215173437 / 14 / xiaomi` | `NeteaseMusic/9.1.65...(9001065);Dalvik/2.1.0 (Linux; U; Android 14; ...)` | 移动版: 设备默认移动 UA + `music.163.com/login`(302 → `y.music.163.com/m/login`) |
-| Linux/PC | `pc / 3.1.17.204416 / Microsoft-Windows-10-...-64bit / netease` | `... N GM/3.0.18.203152`(官方 PC 客户端 UA) | **Android 已有 WebView 登录**(Kotlin `LoginActivity`);Linux 桌面**未做内嵌登录**, 只能导入 cookie |
+| Linux/PC | `pc / 3.1.17.204416 / Microsoft-Windows-10-...-64bit / netease` | `... N GM/3.0.18.203152`(官方 PC 客户端 UA) | Android 走 Kotlin `LoginActivity`(WebView);桌面/统一弹层走**官方网页登录的扫码 + 手机号验证码通道**(weapi, 见 `docs/PROGRESS.md` 2026-11-11),不需要内嵌 WebView;导入 cookie 仍作为兜底 |
 
 实现位置:
 

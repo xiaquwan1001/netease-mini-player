@@ -104,6 +104,29 @@ Future<QrLoginKey> loginQrCreate() =>
 Future<QrLoginCheck> loginQrCheck({required String key}) =>
     RustLib.instance.api.crateApiLoginQrCheck(key: key);
 
+/// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
+///
+/// 与扫码同一族(网页登录), 不走 App 原生登录族; 命中交互式风控时错误带
+/// `[riskControl]` 前缀(官方 code 8821), UI 应引导改用扫码.
+Future<SmsCodeSent> loginSmsSend({
+  required String phone,
+  required String countryCode,
+}) => RustLib.instance.api.crateApiLoginSmsSend(
+  phone: phone,
+  countryCode: countryCode,
+);
+
+/// 手机号+验证码登录 ②: 校验验证码. 成功时顺带把凭据合并落盘, Dart 侧再同步账号资料.
+Future<PhoneLoginResult> loginSmsVerify({
+  required String phone,
+  required String code,
+  required String countryCode,
+}) => RustLib.instance.api.crateApiLoginSmsVerify(
+  phone: phone,
+  code: code,
+  countryCode: countryCode,
+);
+
 /// 已记住的账号列表(只含凭据, 指纹共享)
 Future<List<AccountDto>> accounts() => RustLib.instance.api.crateApiAccounts();
 
@@ -2107,6 +2130,32 @@ class MvUrlDto {
           size == other.size;
 }
 
+/// 手机号+验证码登录成功后的结果(凭据已落盘)
+class PhoneLoginResult {
+  /// 只含登录凭据键(MUSIC_U/__csrf)
+  final String cookie;
+  final String nickname;
+  final String? avatarUrl;
+
+  const PhoneLoginResult({
+    required this.cookie,
+    required this.nickname,
+    this.avatarUrl,
+  });
+
+  @override
+  int get hashCode => cookie.hashCode ^ nickname.hashCode ^ avatarUrl.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PhoneLoginResult &&
+          runtimeType == other.runtimeType &&
+          cookie == other.cookie &&
+          nickname == other.nickname &&
+          avatarUrl == other.avatarUrl;
+}
+
 class PlayRankEntryDto {
   final SongDto song;
 
@@ -3315,6 +3364,33 @@ class SigninStatus {
           weekDays == other.weekDays &&
           recent == other.recent &&
           todayPoint == other.todayPoint;
+}
+
+class SmsCodeSent {
+  /// 服务端原始 code(200 已发送 / 8821 风控 / 400 号码不合法 / 503 频率限制)
+  final PlatformInt64 code;
+  final String message;
+
+  /// 声明有效期(秒)
+  final int expiresIn;
+
+  const SmsCodeSent({
+    required this.code,
+    required this.message,
+    required this.expiresIn,
+  });
+
+  @override
+  int get hashCode => code.hashCode ^ message.hashCode ^ expiresIn.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SmsCodeSent &&
+          runtimeType == other.runtimeType &&
+          code == other.code &&
+          message == other.message &&
+          expiresIn == other.expiresIn;
 }
 
 class SongDto {

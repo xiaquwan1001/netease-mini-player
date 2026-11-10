@@ -174,8 +174,8 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace` | **249** 通过(含 vendor 4 例联网 smoke; 只跑离线 crate 时为 224) |
-| `flutter test --exclude-tags network` | **536** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `cargo test --offline --workspace` | **253** 通过(含 vendor 4 例联网 smoke; 排除 vendor 后 229) |
+| `flutter test --exclude-tags network` | **540** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | 0 error / 0 warning(41 info 风格提示) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
@@ -185,12 +185,12 @@ cargo run -p ncm-cli -- lyric 186016
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
-| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,LOC 12k → 4k) | ✅ |
+| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 123,LOC 12k → 4k) | ✅ |
 | 三端壳 | Flutter Android/Linux/Windows、FRB 2.13 桥、三端构建链路(Windows 走 CI) | ✅ |
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
 | 真机验收 | 听感项(EQ 削波 / 淡入手感 / 响度均衡 A/B / 硬解)与 MV 播放均已于 2026-11-10 在真机通过 | ✅ |
-| 待办 | 发布包体积实测、音源插件化(设计已留边界)、D 批技术债、主播/听众主页路由 —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
+| 待办 | 音源插件化(设计已留边界)、D 批技术债、手机号验证码登录真机验 —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
 
 进度明细与每批验收证据见 `docs/PROGRESS.md`。
 
