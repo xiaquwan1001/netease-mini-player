@@ -22,6 +22,10 @@
 `release.yml` 现在是 4 个 job: `verify`(测试门) → `build`(Android+Linux, 含 deb/AppImage) + `build-windows`(zip + setup.exe) → `publish`
 (统一 `download-artifact` + 一份 `SHA256SUMS` + 创建 Release), 消除了两个 job 抢建 Release 的竞态。
 
+> **CI 实测(2026-11-10 v0.3.2)**: 四个 job 全绿, Release 产出 **6 种资产** —— apk 28.5 MB / tar.gz 15.0 MB /
+> AppImage 14.6 MB / deb 11.1 MB / windows zip 17.0 MB / windows setup.exe 13.7 MB + SHA256SUMS。
+> 期间修掉一处真错误: Inno Setup 官方安装包**不含** `ChineseSimplified.isl` ⇒ v0.3.1 的 Windows job 编译失败; 改为只用内置英文语言包(应用名/快捷方式仍是中文)。
+
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
@@ -35,7 +39,9 @@
 | 看大图**保存原图** | 全屏看图(动态配图/专辑封面)改 `_ImageViewer`: 双指缩放 + 左右翻页 + 序号 + 关闭; 右上角「保存原图」下载 **CDN 原图字节**(不是屏幕上的缩略图)后落盘 —— Android 走 `ncm/share` 的 MediaStore(`Pictures/MiniNCM`), Linux/Windows 落 `~/Pictures/MiniNCM` | 用例: 取图 URL 升级 https / 存的是原图字节 / 文件名带扩展名 / 失败 toast 不崩 |
 | 解耦 | 保存字节抽到新文件 `image_io.dart`(`saveImageBytes`), `song_share.dart` 改为委托它 —— 否则 `cover_art.dart`(要看大图保存)与 `song_share.dart`(已 import cover_art)会成环 | `dart analyze` 0 error / 0 warning |
 
-门禁: `flutter test --exclude-tags network` **510 → 520**(+10 例), `dart analyze` 0 error / 0 warning(41 info)。
+门禁: `flutter test --exclude-tags network` **510 → 522**(+12 例; 其中 2 例是**组件级**断言 —— 44dp@3x 真正请求 `param=132y132`, 切超清后同一封面变 `param=264y264`),
+`dart analyze` 0 error / 0 warning(41 info)。
+模拟器(emulator-5554)实测: 设置 →「封面与图片清晰度」三档面板可开、选「超清」后 `files/ncm/settings.json` 落盘 `"coverQuality":"ultra"`、设置项副标题同步。
 
 ## v2 · 2026-11-10(三): 歌单写接口 + 队列「存为歌单」 · v0.2.2 三端发布
 
