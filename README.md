@@ -112,10 +112,31 @@ bash tools/build-android.sh  # → ui/build/app/outputs/flutter-apk/app-debug.ap
 bash tools/ci.sh             # 单测 + 桥接测试 + Linux/Android 构建
 ```
 
+**桌面分发物**(本地也能打, 脚本在 [`packaging/`](packaging/)):
+
+```bash
+bash packaging/linux/build-deb.sh       # → dist/minincm_<ver>_amd64.deb(装到 /opt/minincm + /usr/bin/minincm)
+bash packaging/linux/build-appimage.sh   # → dist/MiniNCM-<ver>-linux-x86_64.AppImage(免安装单文件)
+# Windows 安装包(Inno Setup)只能在 Windows 上编:
+#   iscc /DAppVersion=<ver> /Odist packaging\windows\installer.iss
+```
+
 Windows 桌面版**只能在 Windows 上构建**(Flutter 桌面端不支持交叉编译),因此没有本地脚本;
 由 [`.github/workflows/windows.yml`](.github/workflows/windows.yml) 在 `windows-latest` 上产出
 `MiniNCM-<version>-windows-x64.zip`(已验证约 17 MB)。在 Windows 上手工构建则是:
 `flutter config --enable-windows-desktop` → `flutter build windows --release`(cargokit 会自动编 Rust 侧 `ncm_ffi`)。
+
+### 发布产物(每次打 tag 由 Release 流水线产出)
+
+| 平台 | 文件 | 安装方式 |
+|---|---|---|
+| Android arm64 | `MiniNCM-<ver>-android-arm64.apk` | 直接安装(固定正式签名, 可覆盖升级) |
+| Linux 通用 | `MiniNCM-<ver>-linux-x64.tar.gz` | 解压运行 `bundle/minincm` |
+| Debian/Ubuntu | `minincm_<ver>_amd64.deb` | `sudo apt install ./minincm_*_amd64.deb` |
+| Linux 免安装 | `MiniNCM-<ver>-linux-x86_64.AppImage` | `chmod +x` 后直接运行(无 FUSE 时加 `--appimage-extract-and-run`) |
+| Windows x64 | `MiniNCM-<ver>-windows-x64-setup.exe` | 安装包(开始菜单/桌面快捷方式 + 卸载项) |
+| Windows 免安装 | `MiniNCM-<ver>-windows-x64.zip` | 解压运行 `minincm.exe` |
+| 校验 | `SHA256SUMS.txt` | `sha256sum -c SHA256SUMS.txt` |
 
 无 UI 也能验证链路(headless CLI):
 

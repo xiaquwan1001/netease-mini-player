@@ -112,6 +112,17 @@ bash tools/build-android.sh  # -> ui/build/app/outputs/flutter-apk/app-debug.apk
 bash tools/ci.sh             # tests + bridge smoke + Linux/Android builds
 ```
 
+Desktop packages (local scripts in [`packaging/`](packaging/)):
+
+```bash
+bash packaging/linux/build-deb.sh        # -> dist/minincm_<ver>_amd64.deb
+bash packaging/linux/build-appimage.sh   # -> dist/MiniNCM-<ver>-linux-x86_64.AppImage
+# Windows installer (Inno Setup), on Windows: iscc /DAppVersion=<ver> /Odist packaging\windows\installer.iss
+```
+
+Every tagged release ships: APK (arm64) · Linux tar.gz · `.deb` · AppImage · Windows
+`setup.exe` · Windows portable zip · `SHA256SUMS.txt`.
+
 Windows desktop **must be built on Windows** (Flutter desktop does not cross-compile), so there is no local
 script: [`.github/workflows/windows.yml`](.github/workflows/windows.yml) produces
 `MiniNCM-<version>-windows-x64.zip` (~17 MB, verified) on `windows-latest`. Locally on Windows:

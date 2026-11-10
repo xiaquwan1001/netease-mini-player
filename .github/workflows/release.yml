@@ -146,6 +146,12 @@ jobs:
           mkdir -p dist
           cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-${VERSION}-android-arm64.apk"
           tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-${VERSION}-linux-x64.tar.gz" bundle
+
+      # 桌面分发: deb(apt 安装) + AppImage(免安装单文件)。同一套脚本本地也能跑, 见 packaging/linux/。
+      - name: Package Linux (deb + AppImage)
+        run: |
+          bash packaging/linux/build-deb.sh "$PWD/dist"
+          bash packaging/linux/build-appimage.sh "$PWD/dist"
           ls -lh dist
 
       - uses: actions/upload-artifact@v4
@@ -191,6 +197,22 @@ jobs:
           if ($env:GITHUB_REF -like 'refs/tags/v*') { $ver = $env:GITHUB_REF_NAME -replace '^v','' }
           New-Item -ItemType Directory -Force dist | Out-Null
           Compress-Archive -Path ui/build/windows/x64/runner/Release/* -DestinationPath "dist/MiniNCM-$ver-windows-x64.zip"
+          "APP_VER=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Get-ChildItem dist | Format-Table Name, Length
+
+      # 安装包(Inno Setup): 开始菜单/桌面快捷方式 + 卸载项; 免安装 zip 仍然保留。
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer (exe)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "找不到 ISCC.exe" }
+          New-Item -ItemType Directory -Force dist | Out-Null
+          & $iscc "/DAppVersion=$env:APP_VER" "/O$PWD\dist" "packaging\windows\installer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC 失败: $LASTEXITCODE" }
           Get-ChildItem dist | Format-Table Name, Length
 
       - uses: actions/upload-artifact@v4
@@ -223,7 +245,10 @@ jobs:
           files: |
             dist/*.apk
             dist/*.tar.gz
+            dist/*.deb
+            dist/*.AppImage
             dist/*.zip
+            dist/*.exe
             dist/SHA256SUMS.txt
           fail_on_unmatched_files: true
           overwrite_files: true

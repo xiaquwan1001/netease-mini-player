@@ -12,15 +12,17 @@ import 'package:minincm/src/settings_view.dart';
 import 'package:minincm/src/update_checker.dart';
 
 /// 构造 latest release 的 GitHub JSON(与真实 API 同构的最小子集)。
+/// 默认 tag 故意取得比任何真实版本都高(v9.9.9): 这些用例断言的是"有更新",
+/// 若跟着发版改成当前版本号, 每次 bump 版本后这条断言就会变成 "同一版本不算更新" 而挂。
 String releaseJson({
-  String tag = 'v0.3.0',
-  String? name = 'MiniNCM 0.3.0',
+  String tag = 'v9.9.9',
+  String? name = 'MiniNCM 9.9.9',
   String? body = '修复若干问题',
   List<Map<String, String>> assets = const [
     {'name': 'MiniNCM-0.3.0-android-arm64.apk', 'browser_download_url': 'https://example.com/apk'},
     {'name': 'MiniNCM-0.3.0-linux-x64.tar.gz', 'browser_download_url': 'https://example.com/tgz'},
   ],
-  String htmlUrl = 'https://github.com/xiaquwan1001/netease-mini-player/releases/tag/v0.3.0',
+  String htmlUrl = 'https://github.com/xiaquwan1001/netease-mini-player/releases/tag/v9.9.9',
 }) {
   return jsonEncode({
     'tag_name': tag,
@@ -181,7 +183,7 @@ void main() {
       expect(
           info!.downloadUrl,
           'https://github.com/xiaquwan1001/netease-mini-player'
-          '/releases/tag/v0.3.0');
+          '/releases/tag/v9.9.9');
     });
 
     test('旧版本/同版本 isNewer 为 false', () {
@@ -304,7 +306,7 @@ void main() {
       expect(calls, 0, reason: '关闭开关就不后台检查');
 
       settings.updateCheckOnStartup = true;
-      settings.skippedUpdateVersion = 'v0.3.0';
+      settings.skippedUpdateVersion = 'v9.9.9';
       await runStartupUpdateCheck(settings,
           startupDelay: Duration.zero, now: () => now);
       expect(calls, 1);

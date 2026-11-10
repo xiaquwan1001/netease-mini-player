@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# 用 `flutter build linux --release` 的 bundle 打 AppImage.
+# 用法: bash packaging/linux/build-appimage.sh [输出目录, 默认 dist]
+#
+# 需要 appimagetool: 优先 PATH, 其次 $APPIMAGETOOL, 最后自动下载到 ~/.cache/minincm-packaging.
+# CI/无 FUSE 环境自动用 --appimage-extract-and-run(等效 APPIMAGE_EXTRACT_AND_RUN=1).
+set -euo pipefail
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+OUT=${1:-$ROOT/dist}
+BUNDLE="$ROOT/ui/build/linux/x64/release/bundle"
+[ -x "$BUNDLE/minincm" ] || { echo "缺少 $BUNDLE/minincm, 先跑 flutter build linux --release" >&2; exit 1; }
+
+VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
+ARCH=${APPIMAGE_ARCH:-x86_64}
+
+TOOL=${APPIMAGETOOL:-}
+if [ -z "$TOOL" ]; then
+  if command -v appimagetool >/dev/null 2>&1; then
+    TOOL=$(command -v appimagetool)
+  else
+    CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/minincm-packaging
+    mkdir -p "$CACHE"
+    TOOL="$CACHE/appimagetool-$ARCH.AppImage"
+    if [ ! -x "$TOOL" ]; then
+      echo "下载 appimagetool 到 $TOOL" >&2
+      curl -fsSL -o "$TOOL" \
+        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
+      chmod +x "$TOOL"
+    fi
+  fi
+fi
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+APPDIR="$WORK/MiniNCM.AppDir"
+mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" \
+         "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+
+# Flutter bundle 原样放 usr/bin(二进制靠 /proc/self/exe 找同级 data/ 与 lib/)
+cp -a "$BUNDLE"/. "$APPDIR/usr/bin/"
+install -m644 "$ROOT/packaging/linux/minincm.png" \
+  "$APPDIR/usr/share/icons/hicolor/256x256/apps/minincm.png"
+cp "$ROOT/packaging/linux/minincm.png" "$APPDIR/minincm.png"
+
+cat > "$APPDIR/minincm.desktop" <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Name=轻音 MiniNCM
+Name[en]=MiniNCM
+Comment=网易云音乐第三方客户端
+Exec=minincm %U
+Icon=minincm
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+X-AppImage-Version=APPIMAGE_VERSION
+DESKTOP
+sed -i "s/APPIMAGE_VERSION/$VER/" "$APPDIR/minincm.desktop"
+cp "$APPDIR/minincm.desktop" "$APPDIR/usr/share/applications/minincm.desktop"
+
+cat > "$APPDIR/AppRun" <<'APPRUN'
+#!/bin/sh
+# AppImage 入口: 用 AppDir 内的 bundle 启动(不依赖系统装 Flutter 运行时)
+HERE=$(dirname "$(readlink -f "$0")")
+exec "$HERE/usr/bin/minincm" "$@"
+APPRUN
+chmod +x "$APPDIR/AppRun"
+
+mkdir -p "$OUT"
+OUTFILE="$OUT/MiniNCM-${VER}-linux-${ARCH}.AppImage"
+# 无 FUSE 的环境(容器/CI)必须 extract-and-run
+ARCH=$ARCH "$TOOL" --appimage-extract-and-run --no-appstream "$APPDIR" "$OUTFILE" >/dev/null 2>&1 \
+  || ARCH=$ARCH "$TOOL" --no-appstream "$APPDIR" "$OUTFILE"
+chmod +x "$OUTFILE"
+ls -lh "$OUTFILE"
+echo "appimage: $OUTFILE"
