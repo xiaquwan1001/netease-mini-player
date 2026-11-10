@@ -3,7 +3,7 @@
 > 最近更新: 2026-11-10(**MV 播放 + 自动更新检查 + Windows 桌面版合入**, 提交 `8a3f9a2`;
 > 同轮补完**队列面板拖拽排序与清空**; 并修复了一次 **.git 对象库损坏**(64 个 0 字节 loose object, 见本节末)。
 > 当前门禁: `cargo test --offline --workspace` **242** / `flutter test --exclude-tags network` **504** / `dart analyze` 0 error 0 warning(41 info)。
-> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/ui-song-detail-share.md`)。
+> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`)。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
 > 更早: 接口覆盖 123/123、FFI 139 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
@@ -70,7 +70,7 @@ symphonia = MPL-2.0 未修改;symphonia/qr_flutter 等 BSD-3)并附关键许可�
 
 ## v2 · 播放条合并 + 歌曲详情页(2026-11-08)
 
-用户三条要求一次落地, 详见 `docs/ui-song-detail-share.md`:
+用户三条要求一次落地, 详见 `docs/archive/ui-song-detail-share.md`:
 
 1. **播放条两排合并成一排**: 封面 + 曲名/进度 + 喜欢/上一首/播放/下一首(40dp 紧凑点击区);
    播放模式/心动/队列移到详情页底部横条, 行尾 "..." 移进详情页 AppBar。
@@ -135,7 +135,9 @@ FFI 车道: `docs/d7-frb-domain.md`(车道已关闭)。
 | `cd ui && flutter test` | **351 passed + 1 skip**(起点 309 + 1) |
 | `bash tools/build-android.sh` | 0 error, a36 安装启动、五 tab 切换无崩溃 |
 
-### 5. 剩余(仅真机听感验收)
+### 5. ~~剩余(仅真机听感验收)~~ → ✅ 2026-11-10 真机全部通过
+
+> 用户 2026-11-10 在真机上把下列 5 条听感项全部走查通过(MV 播放也在真机验过)。原清单保留作验收口径:
 
 1. 动态响度(`loudnessDynamic`)开关下增益应按 <=3 dB/s 平滑过渡而非瞬跳;
 2. EQ 极端正增益曲线是否可听出削波(只做样本级 [-1,1] 限幅, 无 makeup gain);
@@ -190,7 +192,7 @@ Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
 | **D** 技术债收敛 | ✅ | 新增 `format.dart`(时长, 收编 4 份实现/6 调用点)、`error_views.dart`(3 页 7 处)、`toast.dart`(收编 10 处 SnackBar); 弹层 8 处补 `showDragHandle` + podcast 自绘头部改走 `SheetHeader`(新增 trailing 槽); 5 页补底部 SafeArea; 净 **−98 行**; 新增 7 用例。**勘误**: 审计"podcast.dart ~300 行死代码"为误判(整文件非死代码, 真死点是 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行且被 10 处测试占用) |
 | **B2** 键盘遮挡 | ✅ | `showCommentsSheet` 根节点补 `viewInsets.bottom` padding + 高度 `max(200, 75%屏高−insets)`(只加 padding 不改高度会留白), 收起自动回弹; 顺带给该弹层加可选 hook 注入以便离线测键盘; 新增 4 用例 |
 | **D6b** 继续迁移 | ✅ | `new_release`(4 页签)/`all_charts`/`digital_album` 迁到 `PagedListView`, 净 **−271 行**, 未改被锁定的组件; `radio_explore`/`style_page` 因「多 section 内嵌三态」需先给组件加能力, 已列建议 |
-| **C** 信息架构重排 | ✅ | 设置瘦身为 3 组 + 2 个二级页(`settings_account_page`/`settings_diagnostics_page`); 账号入口 **3→1**(统一到「我的」, 未登录显示引导); 推荐页首屏 **8→5 区块**(合并日推歌曲+歌单/新歌+新碟, 风格推荐下沉榜单 chips); 专辑详情 **Dialog→全页**、日推/最近听过 **sheet→全页**; 新增 11 条可达性用例, 6 处断言随结构调整改写(0 删除); 视觉待人工过目清单见 `docs/ui-batch-c.md` §7 |
+| **C** 信息架构重排 | ✅ | 设置瘦身为 3 组 + 2 个二级页(`settings_account_page`/`settings_diagnostics_page`); 账号入口 **3→1**(统一到「我的」, 未登录显示引导); 推荐页首屏 **8→5 区块**(合并日推歌曲+歌单/新歌+新碟, 风格推荐下沉榜单 chips); 专辑详情 **Dialog→全页**、日推/最近听过 **sheet→全页**; 新增 11 条可达性用例, 6 处断言随结构调整改写(0 删除); 视觉待人工过目清单见 `docs/archive/ui-batch-c.md` §7 |
 | 收口门(编排者重跑) | ✅ | 全量 `flutter test` **305 passed + 1 skip**(skip 为既有网络 smoke); 用例声明 **235→289 只增不减**(改写 3 处断言语义: playlist_square 触底自动加载、recommend_view 更多→全部、frb smoke search→searchAll); `dart analyze` **error/warning = 0**; `cargo build --workspace --all-targets` 0 error; 119 Rust 测试全绿 |
 
 ## v2 · 功能包: 收尾 Wave9(§4 接口 + 电台缺口 + 后端形态调研)(2026-11-09)

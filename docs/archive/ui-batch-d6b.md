@@ -1,6 +1,6 @@
 # UI 批次 D6b：继续迁移到 PagedListView
 
-日期：2026-11-30。承接 `docs/ui-batch-d6.md` 的"后续可迁移页清单"。本轮迁移 3 页
+日期：2026-11-30。承接 `docs/archive/ui-batch-d6.md` 的"后续可迁移页清单"。本轮迁移 3 页
 （new_release / all_charts / digital_album），**未改动 `paged_list_view.dart`**。
 
 ## 迁移页面（3 个，file:line 前后对比）

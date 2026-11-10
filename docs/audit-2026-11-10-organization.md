@@ -17,7 +17,7 @@
 | A3 | docs/remaining-batches.md:6,9-13 | 头部口径 90/94/98/99/103/113/114/382 一串历史数字, 与文末 196 行及 api-coverage.md 的 118/382 不一致 | 头部只保留一句「当前 118/382, 见 docs/api-coverage.md」, 历史数字留在执行记录里 |
 | A4 | docs/backend-service-options.md:16,24,30,31,35,105,141,145,162 | 全文按旧基线 **114/382、删 268 模块、382 个 endpoint 文件**写; 实际 P1+P2 裁剪已落地(2026-11-09): 118/118/0, vendor 12k→4.1k LOC | 顶部加「⚠ 本文写于裁剪前(基线 114/382), 裁剪已于 2026-11-09 落地, 见 backend-prune.md」; §g 候选里的 118/43 落差数字同步复核 |
 | A5 | docs/api-coverage.md:3 | 「FFI 125 个里仅剩 3 个无 UI 入口」— 实测 FFI 导出已 **132** | 更新为 132 |
-| A6 | docs/ffi-cleanup-d1d2d5.md:45 | 「FFI 导出 123(125→123)」— 实测 132 | 归档说明或在文首标注「数字为当时快照, 现值见 api-coverage.md」 |
+| A6 | docs/archive/ffi-cleanup-d1d2d5.md:45 | 「FFI 导出 123(125→123)」— 实测 132 | 归档说明或在文首标注「数字为当时快照, 现值见 api-coverage.md」 |
 | A7 | docs/api-overlap-audit.md:4 | 「FFI 导出 125」同上 | 同 A6 |
 | A8 | README.md:17,126 / README.en.md:17,126 / docs/PROGRESS.md:4,46 | 宣称 flutter test **362+1skip**; 实测 `flutter test --exclude-tags network` = **351 passed**(362 只有把 network 标签用例算入才可能, 且离线跑不了) | 改为「351 离线 + N 网络用例(标签 network)」并写明口径; 或本地全量跑一次拿真实数字再填 |
 
@@ -41,9 +41,9 @@
 | B2 | .pi/trash/files/.dartServer.1794037664/ | 缓存目录 | 删 | dart analyzer 缓存无价值 |
 | B3 | .pi/trash/files/{_*probe_test,dbg_test}.dart.*、user_medal.json.* | ~4KB ×4 | 删 | 一次性调试探针 |
 | B4 | screenshots/ 全部 4 张 | 2.2 MB | 归档或删 | 全仓 0 引用(README 只用 docs/images/): all-charts-detail/all-charts-page/gui-a36-01/newest-albums-tab |
-| B5 | docs/ui-batch-b2.md | 31 行 | 合并进 PROGRESS 后删 | 日期占位「2026-xx」没填的一次性修复记录 |
-| B6 | docs/ffi-cleanup-d1d2d5.md | 64 行 | 归档 | 车道已收口, 数字已过期(A6) |
-| B7 | docs/ui-batch-{a,b,c,d,d6,d6b}.md + ui-song-detail-share.md | ~800 行 | 末尾状态并入 PROGRESS.md 后移 docs/archive/ | 已执行完的车道记录, 与 PROGRESS.md 同事实双写 |
+| B5 | docs/archive/ui-batch-b2.md | 31 行 | 合并进 PROGRESS 后删 | 日期占位「2026-xx」没填的一次性修复记录 |
+| B6 | docs/archive/ffi-cleanup-d1d2d5.md | 64 行 | 归档 | 车道已收口, 数字已过期(A6) |
+| B7 | docs/ui-batch-{a,b,c,d,d6,d6b}.md + archive/ui-song-detail-share.md | ~800 行 | 末尾状态并入 PROGRESS.md 后移 docs/archive/ | 已执行完的车道记录, 与 PROGRESS.md 同事实双写 |
 | B8 | docs/backend-service-options.md | 184 行 | 顶部加过时横幅 | 决策已定(不切库、裁剪已落地), 只剩 §6 复测清单有价值 |
 | B9 | docs/b8-dumps/*.json | 小 | 保留或移测试 fixture | 若无单测引用, 归入 ui/test/fixtures 更合理 |
 | B10 | dist/*.apk + *.tar.gz | 41 MB | 本地可删 | git 不追踪, GitHub Release 已托管正式产物(SHA256SUMS) |
@@ -68,7 +68,7 @@
 | 路径 | 实测 | 建议 |
 |---|---|---|
 | `dist/MiniNCM-0.1.1-release-signed.apk` | 55 MB, git 未追踪 | 删(Release 已托管正式产物; 但 0.1.1 未发 Release? → 需要你确认是否还留作本地装机包) |
-| `docs/ui-batch-{a,b,b2,c,d,d6,d6b}.md` + `ui-song-detail-share.md` + `ffi-cleanup-d1d2d5.md` | 共 ~780 行, 事实与 PROGRESS.md 双写 | 并入 PROGRESS 后移 `docs/archive/`(README/CONTRIBUTING 有 2 处引用需同步改链) |
+| `docs/ui-batch-{a,b,b2,c,d,d6,d6b}.md` + `archive/ui-song-detail-share.md` + `archive/ffi-cleanup-d1d2d5.md` | 共 ~780 行, 事实与 PROGRESS.md 双写 | 并入 PROGRESS 后移 `docs/archive/`(README/CONTRIBUTING 有 2 处引用需同步改链) |
 | `docs/b8-dumps/` | 120 KB(README + 2 个 json 样例) | 保留(是勋章接口形状的唯一留痕, 无测试引用) |
 | `~/netease-mini-player-git-bak-20261110` | 26 MB, 仓外 | 确认仓库无恙后删 |
 | `.pi/trash/` | 4 KB | 空壳, 可删 |

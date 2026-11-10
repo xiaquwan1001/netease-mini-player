@@ -137,7 +137,8 @@ cargo run -p ncm-cli -- lyric 186016
 | Shell | Flutter Android/Linux, FRB 2.13 bridge, both builds | done |
 | Playback | Media3 (Android) / rodio (Linux), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
-| TODO | release size numbers, real-device listening checks, pluggable audio sources | planned |
+| Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
+| TODO | release size numbers, pluggable audio sources | planned |
 
 See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 
@@ -147,7 +148,7 @@ See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 |---|---|
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | progress log with acceptance evidence |
 | [`docs/architecture-restart.md`](docs/architecture-restart.md) | architecture decisions, plugin boundaries |
-| [`docs/ui-song-detail-share.md`](docs/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
+| [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | dual-platform testing, semantics-driven automation, gotchas |
 | [`docs/api-channel.md`](docs/api-channel.md) | API channel (interface / interface3) measurements |
 | [`tools/devui/`](tools/devui/README.md) | headless emulator automation helpers |
