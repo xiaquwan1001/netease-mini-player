@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_meta.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/settings_view.dart';
-import 'package:minincm/src/toast.dart';
 import 'package:minincm/src/update_checker.dart';
 
 /// 构造 latest release 的 GitHub JSON(与真实 API 同构的最小子集)。

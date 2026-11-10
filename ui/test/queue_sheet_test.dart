@@ -38,8 +38,14 @@ class QueueHarnessState extends State<QueueHarness> {
   /// "换歌"记录(点项跳播 / 删当前项后自动播下一首)
   final List<String> played = [];
 
-  /// 队列被删空 → 停播
+  /// 队列被删空 / 被清空 → 停播
   final List<String> stopped = [];
+
+  /// 拖拽排序回调记录
+  final List<(int, int)> moved = [];
+
+  /// 「清空」回调次数
+  int cleared = 0;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -50,6 +56,15 @@ class QueueHarnessState extends State<QueueHarness> {
             queue.jumpToItem(s);
             played.add(s.name);
             setState(() {});
+          },
+          onMove: (from, to) {
+            moved.add((from, to));
+            setState(() => queue.moveTo(from, to));
+          },
+          onClear: () {
+            cleared += 1;
+            setState(() => queue.clear());
+            stopped.add('stop');
           },
           onRemove: (s, wasCurrent) {
             final i = queue.items.indexOf(s);
@@ -174,6 +189,72 @@ void main() {
     expect(harness(tester).queue.current, isNull);
     expect(find.textContaining('播放队列是空的'), findsOneWidget);
     expect(find.text('共 0 首'), findsOneWidget);
+  });
+
+  testWidgets('拖拽手柄排序: 顺序改变, 当前曲目不变且不换歌', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
+    ));
+    await tester.pumpAndSettle();
+    expect(currentTitle(tester), '第二首');
+
+    // 把第一首拖到队列末尾
+    final handle = find.descendant(
+      of: find.widgetWithText(ListTile, '第一首'),
+      matching: find.byIcon(Icons.drag_handle),
+    );
+    expect(handle, findsOneWidget, reason: '每行都要有拖拽手柄');
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 50));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump(const Duration(milliseconds: 50));
+    await gesture.moveBy(const Offset(0, 60));
+    await tester.pump(const Duration(milliseconds: 50));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(harness(tester).queue.items.map((s) => s.name).toList(),
+        ['第二首', '第三首', '第一首']);
+    expect(harness(tester).moved, isNotEmpty);
+    expect(harness(tester).played, isEmpty, reason: '只排序不换歌');
+    expect(harness(tester).queue.current!.name, '第二首');
+    expect(currentTitle(tester), '第二首');
+    expect(harness(tester).queue.index, 0, reason: '当前下标跟着左移到 0');
+  });
+
+  testWidgets('清空队列: 二次确认后清空并停播', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: QueueHarness(names: ['第一首', '第二首'], startAt: 0),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.delete_sweep_outlined));
+    await tester.pumpAndSettle();
+    expect(find.text('清空播放队列?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(TextButton, '清空'));
+    await tester.pumpAndSettle();
+
+    expect(harness(tester).cleared, 1);
+    expect(harness(tester).queue.isEmpty, isTrue);
+    expect(harness(tester).stopped, ['stop']);
+    expect(find.text('共 0 首'), findsOneWidget);
+    expect(find.textContaining('播放队列是空的'), findsOneWidget);
+  });
+
+  testWidgets('清空队列: 点取消什么都不做', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: QueueHarness(names: ['第一首', '第二首'], startAt: 0),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.delete_sweep_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(TextButton, '取消'));
+    await tester.pumpAndSettle();
+
+    expect(harness(tester).cleared, 0);
+    expect(harness(tester).queue.items.length, 2);
+    expect(find.text('共 2 首'), findsOneWidget);
   });
 
   testWidgets('空队列: 直接显示空态文案, 不渲染列表', (tester) async {

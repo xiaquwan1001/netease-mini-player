@@ -1,14 +1,35 @@
 # 进度记录(Progress)
 
-> 最近更新: 2026-11-08 晚(**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)**;
-> 门禁 `flutter test --exclude-tags network` 351 通过(离线口径, 网络 smoke 单列) / `cargo test` 32+31+106+1 / `dart analyze` 0 error 0 warning /
-> Linux+Android 双端构建通过。详见 `docs/ui-song-detail-share.md`)。
+> 最近更新: 2026-11-10(**MV 播放 + 自动更新检查 + Windows 桌面版合入**, 提交 `8a3f9a2`;
+> 同轮补完**队列面板拖拽排序与清空**; 并修复了一次 **.git 对象库损坏**(64 个 0 字节 loose object, 见本节末)。
+> 当前门禁: `cargo test --offline --workspace` **242** / `flutter test --exclude-tags network` **504** / `dart analyze` 0 error 0 warning(41 info)。
+> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/ui-song-detail-share.md`)。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
 > 更早: 接口覆盖 118/118、FFI 132 个里 3 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
 > 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
+
+## v2 · 2026-11-10(续): 队列面板拖拽排序/清空 · .git 损坏修复 · 门禁复核
+
+| 项 | 落点 | 证据 |
+|---|---|---|
+| 播放队列拖拽排序(B2②) | `play_queue_sheet.dart` 由 `ListView` 换成 `ReorderableListView` + 行尾 `ReorderableDragStartListener` 拖拽手柄(`buildDefaultDragHandles:false`, 整行长按仍留给"移除"); 行的 key 换成与 items 平行的稳定 key 列表(同一首歌可在队列里出现多次, 且下标会随排序变化); 宿主 `main.dart::_moveInQueue` → `PlayQueue.moveTo`(纯逻辑早已就绪) | `ui/test/queue_sheet_test.dart` 新增 1 例: 把第一首拖到队尾 ⇒ 顺序变、当前曲目不变(`index` 2→0)、**不触发换歌**; 文件内 9 例全绿 |
+| 播放队列「清空」(B2④) | 面板头部 `delete_sweep_outlined` + 二次确认对话框(`共 N 首, 清空后当前播放会停止`); 宿主 `_clearQueue` 清 `PlayQueue` 并走既有的 `_stopAfterQueueEmpty`(停播 + toast) | 2 例: 确认后队列空/停播/空态文案; 取消则一首不少 |
+| 「存为歌单」⛔ 未做 | FFI 里**没有任何歌单写接口**(`rg 'playlist_create|tracks_add|playlist_edit' core/crates/ncm-ffi/src/api.rs` = 0), 要做需新开 Rust 车道(codegen) + 真实登录态写验证 | 阻塞原因记在 `docs/remaining-batches.md` §10 B2 行 |
+| 顺带修掉上一提交的告警 | `ui/test/update_checker_test.dart` 未使用的 `toast.dart` import ⇒ `dart analyze` 由 1 warning 回 0 | `dart analyze` 0 error / 0 warning |
+| `.git` 对象库损坏修复 | `main` 指向的提交(927b929)连同 64 个 loose object 一起变成 0 字节, `git status/log` 全挂 `bad object HEAD`; 同时工作树里 `ui/windows/**` 等 24 个文件被清零。用索引重建 blob(先删空对象文件, 否则 `hash-object -w`/`write-tree` **静默跳过**)→ `write-tree` → `commit-tree -p 7eab656` → `update-ref`; 工作树用 `git checkout --` 从索引还原 | 索引里 25 个缺失 blob 的 sha 与工作树 `git hash-object` **逐条相符**(内容无损), 重建提交 `8a3f9a2`; `git fsck --connectivity-only` 仅剩悬空 commit; 备份在 `~/netease-mini-player-git-bak-20261110` |
+
+门禁(独立子代理复核, 报告 `.pi/artifacts/gates-2026-11-10.md` + 原始日志 `.pi/artifacts/logs/`):
+
+| 命令 | 结果 |
+|---|---|
+| `cargo test --offline --workspace` | **242 通过 / 0 失败**(含 vendor 4 例联网 smoke, 校园网直连网易域名可达, 真 PASS 非 WARN) |
+| `dart analyze` | **0 error / 0 warning**(41 info 风格提示) |
+| `flutter test --exclude-tags network` | **504 通过 / 0 失败 / 0 skip** |
+
+`flutter` 工具链顺带更新的两个生成/配置文件(`ui/analysis_options.yaml` 排除 `windows/**`、`ui/windows/flutter/generated_plugins.cmake` 补 `rust_lib_minincm` FFI 注册)一并提交。
 
 ## v2 · 2026-11-10: 通知栏快捷按钮 / 响度曲线 GUI / 歌词跟随 / 封面取色 / 热搜开关
 

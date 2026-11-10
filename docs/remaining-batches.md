@@ -17,7 +17,8 @@
 > `simi_user` 实测恒空已判定不做。
 > **2026-11-09 尾声: D7(frb 直透 domain)车道关闭 57/57** —— `docs/d7-frb-domain.md`；
 > **设置项扩充 + 播放体验修复(R1–R7)全部落地** —— `docs/plan-2026-11-09-settings-and-player.md`。
-> 当前**没有待开工的批次**; 唯一未完成项是「真机听感验收」(EQ/淡入/响度均衡/硬解, 见任务书 §5)。
+> **2026-11-10: B2 遗留(队列面板拖拽排序 + 清空)已补完**; 仍未完成的是「真机听感验收」(EQ/淡入/响度均衡/硬解, 见任务书 §5)
+> 与「队列存为歌单」(缺歌单写接口, 见 §10 B2 行)。
 > 若还要继续做功能: 主播/听众 → 用户主页路由(`radio_subscribers_page` 里目前只显示用户行) ｜ D 批技术债(见 §10)。
 > `newest_albums`/`toplist_catalog` 的 UI 已接上(`ui/lib/src/new_release_page.dart` / `all_charts_page.dart`)。
 
@@ -232,7 +233,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 |---|---|---|---|---|
 | ~~**A · S 速修**~~ ✅ **已完成**(2026-11-09) | 返回键 `PopScope` 三级语义 + `formatSongDuration` + 红心可点 + 6 类控件 48dp + 出口文案统一「全部」; 新增 22 用例 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | ~~S~~ 已做 | 见 `docs/ui-batch-a.md` |
 | ~~**B · 两个新面板**~~ ✅ **已完成**(2026-11-09) | 评论输入(`_ComposeSheet` + `viewInsets` 避让 + 失败保草稿)、队列面板(`PlayQueueSheet` + `removeAt`/`moveTo` + 8 条单测); 新增 18 用例 | P0-7.2 / P0-7.3 | ~~M~~ 已做 | 见 `docs/ui-batch-b.md` |
-| **B2 · B 的遗留** | ①~~`showCommentsSheet` 缺 `viewInsets` padding~~ ✅ 已修(76c3399 + `ui_batch_b2_keyboard_test.dart`) ②`moveTo` 已就绪未接拖拽排序 UI ③~~`PlayQueueSheet` 拆到独立文件~~ ✅ 已拆(`ui/lib/src/play_queue_sheet.dart`) ④面板「清空/存为歌单」 | B 遗留 | S | 剩 ②④ |
+| ~~**B2 · B 的遗留**~~ ✅ 已完成(2026-11-10) | ①~~`showCommentsSheet` 缺 `viewInsets` padding~~ ✅ 已修(76c3399 + `ui_batch_b2_keyboard_test.dart`) ②~~`moveTo` 已就绪未接拖拽排序 UI~~ ✅ 已接(`PlayQueueSheet` 改 `ReorderableListView` + 拖拽手柄, 宿主 `_moveInQueue`) ③~~`PlayQueueSheet` 拆到独立文件~~ ✅ 已拆 ④~~面板「清空」~~ ✅ 已做(`delete_sweep` + 二次确认 + 清空即停播); **「存为歌单」⛔ 阻塞**: FFI 里没有任何歌单写接口(`rg playlist_create\|tracks_add\|playlist_edit core/crates/ncm-ffi` = 0), 要新开 Rust 车道 + 真实登录写验证 | B 遗留 | ~~S~~ 已做 | 见 `docs/PROGRESS.md` 末节; 新增 3 例 widget 测试 |
 | **⚠ 发布前硬门(写接口)** | 评论发送走 `rust.replyComment`(commentId=0)是**真实写操作**: 必须用测试号 + a34/a36 走查一次(发送/失败/回滚), 且确认不在 CI 里触网 | 安全 | S | 不做不得发版 |
 | ~~**C · 信息架构重排**~~ ✅ **已完成**(2026-11-09) | 设置瘦身 + 2 个二级页、账号入口 3→1、推荐页首屏 8→5、专辑 Dialog→全页、日推/最近听过 sheet→全页; 新增 11 条可达性用例 | 见 `docs/ui-batch-c.md` | ~~M~~ 已做 | **视觉待人工过目**: 账号页层级/新歌新碟合并块/风格 chips 归属/全页 AppBar+TabBar 高度/设置页密度/我的页会员行位置 |
 | **C2 · C 的遗留** | ①~~清空搜索历史缺二次确认~~ ✅ 已修(`search_landing.dart:35-43` AlertDialog + `ui/test/c2_clear_history_confirm_test.dart`) ②若要全局账号入口恢复, 加一行即可 ③推荐播客仍在第 2 屏(审计 §5.5 有意保留) | C 遗留 | S | ①已完成 |

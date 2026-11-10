@@ -2113,9 +2113,24 @@ class _HomePageState extends State<HomePage> {
             _jumpToQueueSong(song);
           },
           onRemove: _removeFromQueue,
+          onMove: _moveInQueue,
+          onClear: _clearQueue,
         ),
       ),
     );
+  }
+
+  /// 队列面板拖拽排序: PlayQueue 自己修下标, 当前曲目不变 ⇒ 不需要重播/换歌
+  void _moveInQueue(int from, int to) {
+    if (!mounted) return;
+    setState(() => _queue.moveTo(from, to));
+  }
+
+  /// 队列面板「清空」: 面板已经做过二次确认, 这里只负责清队列 + 停播
+  Future<void> _clearQueue() async {
+    if (!mounted) return;
+    setState(() => _queue.clear());
+    await _stopAfterQueueEmpty();
   }
 
   /// 队列面板里点某一首: 定位到它再播(曲目可能已被别处挪过, 重新查下标)
