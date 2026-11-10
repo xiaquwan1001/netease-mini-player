@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_meta.dart';
 import 'app_settings.dart';
+import 'cover_quality_sheet.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'settings_audio_page.dart';
@@ -151,6 +152,17 @@ class SettingsView extends StatelessWidget {
                   onChanged: (value) {
                     settings.update(updateCheckOnStartup: value);
                   },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('封面与图片清晰度'),
+                  subtitle: Text(
+                    '${settings.coverQuality.label} · ${settings.coverQuality.hint}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => showCoverQualitySheet(context),
                 ),
                 const Divider(height: 1),
                 ListTile(

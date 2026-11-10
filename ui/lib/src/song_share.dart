@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'cover_art.dart';
+import 'image_io.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart';
 
@@ -38,6 +39,9 @@ List<String> shareableLyricLines(Iterable<String> lines, {int max = 6}) {
 }
 
 /// 平台分享桥. Android: `ncm/share` 通道; 其它平台: 写文件.
+///
+/// 「保存字节到图库/图片目录」已抽到 [saveImageBytes](见 `image_io.dart`),
+/// 因为看大图的"保存原图"也要用, 而 `song_share.dart` 依赖 `cover_art.dart`(反向依赖会成环).
 class SongShare {
   static const MethodChannel _channel = MethodChannel('ncm/share');
 
@@ -63,27 +67,8 @@ class SongShare {
 
   /// 保存 PNG. Android 落系统图库(MiniNCM/), 桌面落 ~/Pictures/MiniNCM.
   /// 返回保存位置(给提示文案用).
-  static Future<String> saveImage(Uint8List png, {required String filename}) async {
-    if (_android) {
-      final saved = await _channel.invokeMethod<String>('saveImage', {
-        'bytes': png,
-        'filename': filename,
-      });
-      return saved ?? '系统图库';
-    }
-    // 桌面: Linux ~/Pictures, Windows %USERPROFILE%\Pictures
-    final env = Platform.environment;
-    final home = Platform.isWindows
-        ? (env['USERPROFILE'] ?? '.')
-        : (env['HOME'] ?? '.');
-    final dir = Directory(Platform.isWindows
-        ? '$home\\Pictures\\MiniNCM'
-        : '$home/Pictures/MiniNCM');
-    await dir.create(recursive: true);
-    final path = '${dir.path}/$filename';
-    await File(path).writeAsBytes(png, flush: true);
-    return path;
-  }
+  static Future<String> saveImage(Uint8List png, {required String filename}) =>
+      saveImageBytes(png, filename: filename);
 }
 
 /// 把 [boundaryKey] 对应的 RepaintBoundary 导出成 PNG 字节.

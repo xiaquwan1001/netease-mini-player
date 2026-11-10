@@ -15,7 +15,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20510%20%2B%20Rust%20248-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%20520%20%2B%20Rust%20248-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -73,7 +73,8 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 | 播放 | 播放条(一行)、播放队列(可跳可删)、播放模式、歌曲详情页(歌词/翻译/多选分享/定位当前句)、逐字歌词 |
 | 播放质量 | 精细音量(-40..0 dB)、响度均衡(EBU R128/BS.1770-4 测量 + ReplayGain 2.0 静态增益,可选动态 AGC ≤3 dB/s)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、优先硬解/仅软解、边听边存 + 缓存上限 LRU |
 | 账号 | 网页登录(Android WebView,只回传 cookie)、多账号账号簿、我喜欢/歌单/播客/关注 |
-| 外观 | 主题(浅色/深色/OLED 纯黑)、界面字号、推荐卡片一排/两排 |
+| 外观 | 主题(浅色/深色/OLED 纯黑)、界面字号、推荐卡片一排/两排、封面清晰度档位(省流/标准/超清, 按设备分辨率取图) |
+| 图片 | 封面/配图按屏幕像素取缩略图; 全屏看图支持缩放与**保存原图**(Android 入系统图库, 桌面落 ~/Pictures/MiniNCM) |
 
 ## 架构
 
@@ -152,7 +153,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 门禁 | 现状 |
 |---|---|
 | `cargo test --offline --workspace` | **248** 通过(含 vendor 4 例联网 smoke; 只跑离线 crate 时为 224) |
-| `flutter test --exclude-tags network` | **510** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network` | **520** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | 0 error / 0 warning(41 info 风格提示) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |

@@ -8,6 +8,49 @@ import 'package:flutter/material.dart';
 ///
 /// 设置项刻意保持"少而稳定": 主题模式、界面字号、取链音质。
 /// 账号/凭据不在这里(由 Rust 的 identity.json + 账号簿负责)。
+/// 封面/图片清晰度档位.
+///
+/// 语义: 向网易云 CDN 请求缩略图时, 边长 = 显示逻辑尺寸 x 设备像素比 x 该档位倍数.
+/// - [dataSaver] 0.75x: 省流, 视觉略软(移动网络/小内存机器)
+/// - [standard] 1.0x: 屏幕 1:1 —— **默认**, 相当于"不再把 44dp 的图当 44px 用"
+/// - [ultra] 2.0x: 缩放到非整数倍也锐利, 流量/内存换清晰度
+enum CoverQuality { dataSaver, standard, ultra }
+
+extension CoverQualityX on CoverQuality {
+  /// 持久化用的稳定名字(不要改: 改了老配置读不回来)
+  String get id => switch (this) {
+        CoverQuality.dataSaver => 'dataSaver',
+        CoverQuality.standard => 'standard',
+        CoverQuality.ultra => 'ultra',
+      };
+
+  /// 设置界面的档位名
+  String get label => switch (this) {
+        CoverQuality.dataSaver => '省流',
+        CoverQuality.standard => '标准',
+        CoverQuality.ultra => '超清',
+      };
+
+  /// 一句话说明(设置项副标题)
+  String get hint => switch (this) {
+        CoverQuality.dataSaver => '按 0.75 倍屏幕像素取图, 流量最省',
+        CoverQuality.standard => '按屏幕像素 1:1 取图, 与设备分辨率一致(推荐)',
+        CoverQuality.ultra => '按 2 倍屏幕像素取图, 放大也锐利, 流量更大',
+      };
+
+  double get multiplier => switch (this) {
+        CoverQuality.dataSaver => 0.75,
+        CoverQuality.standard => 1.0,
+        CoverQuality.ultra => 2.0,
+      };
+
+  static CoverQuality fromId(String? raw) => switch (raw) {
+        'dataSaver' => CoverQuality.dataSaver,
+        'ultra' => CoverQuality.ultra,
+        _ => CoverQuality.standard,
+      };
+}
+
 class AppSettings extends ChangeNotifier {
   AppSettings._();
 
@@ -29,6 +72,21 @@ class AppSettings extends ChangeNotifier {
 
   /// 搜索页是否展示「热门搜索」榜(默认展示; 关闭后只留历史与猜你想搜)
   bool showHotSearch = true;
+
+  /// 封面/图片清晰度档位(见 [CoverQuality]). 默认 [CoverQuality.standard] = 按设备像素 1:1.
+  ///
+  /// 单独用 [ValueNotifier] 通知: 界面上封面可能有上百个, 不该让"音量滑块拖动"这类
+  /// 高频 `notifyListeners()` 把所有图片都重建一遍。
+  final ValueNotifier<CoverQuality> coverQualityListenable =
+      ValueNotifier<CoverQuality>(CoverQuality.standard);
+
+  CoverQuality get coverQuality => coverQualityListenable.value;
+
+  set coverQuality(CoverQuality value) {
+    if (coverQualityListenable.value != value) {
+      coverQualityListenable.value = value;
+    }
+  }
 
   // ---------------- 播放与外观(2026-11 任务书 docs/plan-2026-11-09-settings-and-player.md) ----------------
   // 原则: 默认值一律等于"不改变现状", 老配置读进来行为不变.
@@ -144,6 +202,10 @@ class AppSettings extends ChangeNotifier {
           if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
           final hotSearch = raw['showHotSearch'];
           if (hotSearch is bool) showHotSearch = hotSearch;
+          final coverQualityRaw = raw['coverQuality'];
+          if (coverQualityRaw is String) {
+            coverQuality = CoverQualityX.fromId(coverQualityRaw);
+          }
 
           if (raw['oledDark'] is bool) oledDark = raw['oledDark'] as bool;
           volumeGainDb = _doubleOf(raw['volumeGainDb'], 0.0).clamp(-40.0, 0.0);
@@ -206,6 +268,7 @@ class AppSettings extends ChangeNotifier {
     int? coverRows,
     bool? clearSearchOnTabSwitch,
     bool? showHotSearch,
+    CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
     bool? loudnessNormalize,
@@ -236,6 +299,7 @@ class AppSettings extends ChangeNotifier {
       this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
     }
     if (showHotSearch != null) this.showHotSearch = showHotSearch;
+    if (coverQuality != null) this.coverQuality = coverQuality;
     if (oledDark != null) this.oledDark = oledDark;
     if (volumeGainDb != null) {
       this.volumeGainDb = volumeGainDb.clamp(-40.0, 0.0);
@@ -274,6 +338,7 @@ class AppSettings extends ChangeNotifier {
         'coverRows': coverRows,
         'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
         'showHotSearch': showHotSearch,
+        'coverQuality': coverQuality.id,
         'oledDark': oledDark,
         'volumeGainDb': volumeGainDb,
         'loudnessNormalize': loudnessNormalize,

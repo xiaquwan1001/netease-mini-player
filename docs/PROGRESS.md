@@ -11,6 +11,18 @@
 > 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
 > 通道实测见 `docs/api-channel.md`。
 
+## v2 · 2026-11-10(四): 封面清晰度按设备分辨率取图 + 档位可调 + 看大图保存原图
+
+| 项 | 落点 | 证据 |
+|---|---|---|
+| 缩略图按**真实像素**请求 | 之前直接把逻辑尺寸当像素数(44dp 的封面向 CDN 要 44px 的图, 在 2~3 倍 DPR 的手机上被放大显示 ⇒ 肉眼可见的糊)。新增 `coverRequestPx(context, logicalSize)` = 显示尺寸 × 设备像素比 × 档位倍数, 下限 60 / 上限 1600; `CoverArt` 用它算 `?param=NxN` | `ui/test/cover_quality_test.dart`: dpr 1/2/3/2.75 与三档的像素断言(44dp@3x = 132px) |
+| 清晰度档位(设置项) | `AppSettings.coverQuality` = `CoverQuality{dataSaver 0.75x / standard 1.0x(默认) / ultra 2.0x}`, 持久化到 `settings.json` 的 `coverQuality`; 设置 → 通用 → 「封面与图片清晰度」打开选择面板, **三档各带一张同一张图、不同请求像素的真实预览**(能直接看出差别), 选完立即生效 | 面板三档文案 + 点「超清」写设置并关面板; 持久化读回用例 |
+| 改动只通知图片 | 档位用独立的 `ValueNotifier<CoverQuality>`, 不让"音量滑块拖动"这类高频 `notifyListeners()` 把上百个封面全部重建 | `CoverArt` 的 `AnimatedBuilder` 监听该 notifier |
+| 看大图**保存原图** | 全屏看图(动态配图/专辑封面)改 `_ImageViewer`: 双指缩放 + 左右翻页 + 序号 + 关闭; 右上角「保存原图」下载 **CDN 原图字节**(不是屏幕上的缩略图)后落盘 —— Android 走 `ncm/share` 的 MediaStore(`Pictures/MiniNCM`), Linux/Windows 落 `~/Pictures/MiniNCM` | 用例: 取图 URL 升级 https / 存的是原图字节 / 文件名带扩展名 / 失败 toast 不崩 |
+| 解耦 | 保存字节抽到新文件 `image_io.dart`(`saveImageBytes`), `song_share.dart` 改为委托它 —— 否则 `cover_art.dart`(要看大图保存)与 `song_share.dart`(已 import cover_art)会成环 | `dart analyze` 0 error / 0 warning |
+
+门禁: `flutter test --exclude-tags network` **510 → 520**(+10 例), `dart analyze` 0 error / 0 warning(41 info)。
+
 ## v2 · 2026-11-10(三): 歌单写接口 + 队列「存为歌单」 · v0.2.2 三端发布
 
 | 项 | 落点 | 证据 |
