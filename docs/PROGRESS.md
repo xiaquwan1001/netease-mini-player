@@ -1237,3 +1237,36 @@ v0.4.0 已有 arm64 的 tar.gz + deb CI, 但 AppImage 只有 x64 进了 release 
 2. `bash packaging/linux/build-appimage.sh dist` → `file dist/MiniNCM-*-linux-aarch64.AppImage` 应显示 aarch64, 直接运行应能启动;
 3. 反例: `APPIMAGE_ARCH=x86_64 bash packaging/linux/build-appimage.sh /dev/null/dist`(输出目录不存在即可) 应报架构不匹配退出;
 4. 通过后参照 `packaging/linux/README.md` 的 CI 资产表补 workflow job。
+
+## 主题色(视觉风格)切换(2026-11-11 二)
+
+用户要求: 提供视觉风格切换(绿/蓝/橘/粉), 且每个颜色都能配深色/浅色。
+
+- 做法: 色板只是 `colorSchemeSeed`, "浅色/深色" 仍由既有「主题模式」(跟随/浅色/深色)决定
+  ⇒ 两者正交组合出 5 色 × 2 亮度, 不是 10 个独立配置; 同一 seed 生成两套配色, 语义一致。
+- `theme.dart`: `enum AccentPalette`(neteaseRed/green/blue/orange/pink) 带稳定 id(持久化)、label、seed,
+  `fromId` 未知值回落默认; `buildLightTheme/buildDarkTheme` 增加 `accent` 参数(默认 = 与改造前完全一致)。
+  OLED 纯黑与色板正交。
+- `app_settings.dart`: `accent` 字段 + `settings.json` 的 `accent` 键 + `update(accent:)`。
+- `settings_view.dart`: 「界面」区块新增「主题色」一行色点(Wrap, 36dp 圆点, 选中带对勾+描边);
+  不用 SegmentedButton: 5 个色板在 300dp+1.25 下会挤爆分段控件。
+- 测试 `ui/test/theme_accent_test.dart` 7 例: 五色板浅/深 primary 各不相同、默认等价改造前、
+  OLED×色板正交、fromId 回落、settings.json 往返、点色点即切换、300dp+1.625 不溢出。
+
+## 批次 1 子代理三路产出(2026-11-11 二)
+
+- **W1 播放条数据层**: 新增 `ui/lib/src/player_bar.dart`(`PlayerBarData`/`PlayerBarActions`/`MiniPlayerBar`),
+  `playerBarHost` 改为监听 `playerBarData`+`playerBarActions`+`playerBarSlot` 三槽自建播放条;
+  不再"每帧投递整棵 Widget", 数据相等时不通知。`main.dart` 少了约 280 行。
+- **W2 打包**: `build-appimage.sh` 加架构交叉校验(readelf Machine vs APPIMAGE_ARCH)+ `packaging/linux/README.md`;
+  x64 端到端复验通过(AppImage 14MB / deb amd64 / 反例正确报错)。arm64 AppImage 仍待 aarch64 机器验证。
+- **W3 窄屏回归**: `player_bar_narrow_test`(改成用真实 `MiniPlayerBar` 组件) + `style_tiles_narrow_test` 共 10 例。
+- 合并纪律: 每路一个 git worktree(`~/ncm-wt/w*`)+ 独立分支, 合并前丢掉 lane 里的 `.lane-notes.md`,
+  合并后由编排者独立重跑 `dart analyze` + 全量 `flutter test`(最终 641 例全绿)。
+
+## CI: arm64 腿换掉 subosito/flutter-action(2026-11-11 二)
+
+v0.4.0 / v0.5.0 两次 Release 都在 `build-linux-arm64` 的 flutter-action 步骤挂掉(
+`Unable to determine Flutter version ... architecture: arm64`, 显式 `flutter-version` 也一样) ⇒ publish 被 skip、整版没资产。
+改成 arm64 腿从官方 git 源直装 Flutter(`git clone --depth 1 -b 3.47.9` + `precache --linux`), x64 腿保留 action;
+CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重发。
