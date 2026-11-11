@@ -80,10 +80,12 @@ Future<void> pumpThread(
 }
 
 void main() {
-  testWidgets('楼层里的回复显示「回复 @某人」, 顶层评论不显示', (tester) async {
+  testWidgets('主评论不在本页的回复显示「回复 @某人」, 顶层评论不显示', (tester) async {
+    // 注意: 主评论在本页时, 回复会被 _absorbOrphanReplies 收进行内预览(见
+    // comment_orphan_reply_test.dart); 这里取 parentId 指向不在本页的主评论。
     await pumpThread(tester, [
       c(1, '顶层评论'),
-      c(2, '这是回复', repliedTo: '楼主', parentId: 1),
+      c(2, '这是回复', repliedTo: '楼主', parentId: 99),
     ]);
 
     expect(find.textContaining('回复 @楼主'), findsOneWidget);

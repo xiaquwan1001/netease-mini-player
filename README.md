@@ -175,7 +175,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 门禁 | 现状 |
 |---|---|
 | `cargo test --offline --workspace` | **254** 通过(含 vendor 4 例联网 smoke; 排除 vendor 后 230) |
-| `flutter test --exclude-tags network` | **567** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network` | **570** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | 0 error / 0 warning(41 info 风格提示) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |

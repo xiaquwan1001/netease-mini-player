@@ -237,6 +237,7 @@ class CommentThreadState extends State<CommentThread> {
         // 列表换了就丢掉旧项的 key, 免得 _tileKeys 无限增长
         final ids = _items.map((c) => c.id).toSet();
         _tileKeys.removeWhere((k, _) => !ids.contains(k));
+        _absorbOrphanReplies();
         _loading = false;
       });
       _loadStats();
@@ -288,6 +289,7 @@ class CommentThreadState extends State<CommentThread> {
         _total = page.total;
         _hasMore = page.hasMore;
         _loadingMore = false;
+        _absorbOrphanReplies();
       });
       _schedulePreviews();
     } catch (e) {
@@ -331,7 +333,12 @@ class CommentThreadState extends State<CommentThread> {
       final page = await _loadReplies(parentId, _previewLimit);
       if (!mounted || gen != _previewGen) return;
       setState(() {
-        _replyPreviews[parentId] = page.comments;
+        // 合并而不是覆盖: 主列表里"吸收"进来的回复(parentId 指向本楼层)不能被顶掉
+        final merged = <rust.Comment>[...?_replyPreviews[parentId]];
+        for (final r in page.comments) {
+          if (!merged.any((x) => x.id == r.id)) merged.add(r);
+        }
+        _replyPreviews[parentId] = merged;
         _previewFailed.remove(parentId);
       });
     } catch (_) {
@@ -360,6 +367,33 @@ class CommentThreadState extends State<CommentThread> {
     _replyPreviews.remove(parentId);
     _previewQueue.add(parentId);
     _pumpPreviews();
+  }
+
+  /// 把「被接口当顶层返回的回复」收进它所属楼层。
+  ///
+  /// 动态评论接口(`/api/v1/resource/comments/<threadId>`)会把一部分回复直接放在顶层
+  /// 列表里返回, 它们带 `parentCommentId`(主评论 id) 与 `beReplied`。以前这些就和主评论
+  /// 并排显示 —— 也就是用户说的"裸的单独成条"。这里按 parentId 归位:
+  /// - 主评论在本页 → 从顶层列表摘掉, 塞进 `_replyPreviews[parentId]`, 由行内预览/展开入口展示;
+  /// - 主评论不在本页(翻页边界或已删) → 留在顶层, 至少还有「回复 @某人」标识, 不做静默丢弃。
+  void _absorbOrphanReplies() {
+    if (_items.isEmpty) return;
+    final ids = <BigInt>{for (final c in _items) c.id};
+    final orphans = <BigInt, List<rust.Comment>>{};
+    _items.removeWhere((c) {
+      if (c.parentId == BigInt.zero) return false;
+      final parentId = c.parentId;
+      if (!ids.contains(parentId)) return false;
+      orphans.putIfAbsent(parentId, () => <rust.Comment>[]).add(c);
+      return true;
+    });
+    for (final entry in orphans.entries) {
+      final merged = <rust.Comment>[...?_replyPreviews[entry.key]];
+      for (final o in entry.value) {
+        if (!merged.any((r) => r.id == o.id)) merged.add(o);
+      }
+      _replyPreviews[entry.key] = merged;
+    }
   }
 
   /// 行内预览选取规则(简单可解释, 单测 comment_reply_preview_test.dart 固化):
@@ -852,6 +886,12 @@ class _CommentTile extends StatelessWidget {
   /// 只有自己发的评论才给(别人的评论官方也不允许删)
   final VoidCallback? onDelete;
 
+  /// 「展开全部 N 条回复」里的 N: 服务端计数与本地已拿到条数取大
+  BigInt get _replyTotal {
+    final local = BigInt.from(previewReplies.length);
+    return comment.replyCount > local ? comment.replyCount : local;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -959,15 +999,17 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                // 独立的展开入口: 只要楼层有回复就给, 预览失败也能从这进详情
-                if (comment.replyCount > BigInt.zero)
+                // 独立的展开入口: 只要楼层有回复就给, 预览失败也能从这进详情。
+                // 条数取 max(服务端 replyCount, 已拿到的条数) —— 接口有时 replyCount 为 0,
+                // 却把回复当顶层返回, 被 _absorbOrphanReplies 收进来后总量以本地为准
+                if (_replyTotal > BigInt.zero)
                   InkWell(
                     onTap: onExpandReplies,
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Text(
-                        '展开全部 ${comment.replyCount} 条回复',
+                        '展开全部 $_replyTotal 条回复',
                         style: theme.textTheme.labelSmall
                             ?.copyWith(color: scheme.primary),
                       ),

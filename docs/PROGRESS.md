@@ -3,7 +3,7 @@
 > 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
 > `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
 > 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **567** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
+> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **570** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
 > 同日第三批: **楼层回复行内预览 + ��态流行内操作(赞/评论/分享) + 发表后回填定位**(见下方「评论区批 2」)。
 > 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
 >
@@ -77,7 +77,13 @@
 | 动态流只有数量标识, 每次都要进详情 | 卡片操作行可点化: **点赞**(乐观翻转 + 失败回滚 + snackbar)、**评论**(进详情并定位到评论区, 不自动弹输入框; 详情页 `ListView`→`SingleChildScrollView` 以便视口外锚点可定位)、**分享**(面板: 转发动态 / 复制链接) | `ui/test/feed_row_actions_test.dart` 8 例 |
 | 发评论后不刷新: 头像空白、昵称「我」, 且不聚焦到新评论 | 发表成功后**静默重取第一页**(不显示整页 loading, 失败保留乐观项不打成错误页), 用服务端的真实昵称/头像/时间替换乐观项, 并把这条**滚进视野 + 高亮 1.8s**; 服务端偶尔还没带回新评论时保留乐观项(不让它凭空消失) | `ui/test/comment_post_refresh_test.dart` 2 例(回填替换 / 静默失败保留) |
 
-门禁: `flutter test --exclude-tags network` **567**(+17) · `dart analyze` 0 error / 0 warning(42 info) · `cargo test --offline --workspace` 254。
+门禁: `flutter test --exclude-tags network` **570**(+20) · `dart analyze` 0 error / 0 warning(42 info) · `cargo test --offline --workspace` 254。
+
+**同日晚补一条(真机反馈"回复混合新旧两种情况")**: 动态评论接口会把**一部分回复直接放在顶层列表**返回
+(带 `parentCommentId` + `beReplied`), 于是同一屏里既有被收进楼层的、也有"裸的单独成条"的。
+新增 `_absorbOrphanReplies()`: 按 parentId 把这类回复从顶层摘掉、塞进所属楼层的行内预览(主评论不在本页时
+保留在顶层并显示「回复 @某人」, 不静默丢弃); 「展开全部 N 条回复」的 N 改取 max(服务端计数, 本地条数),
+因为接口有时 replyCount=0 却仍返回回复。`ui/test/comment_orphan_reply_test.dart` 3 例。
 
 > 顺手记一笔环境坑: 本轮 `cargo test` 一次链接失败 `rust-lld: error: invalid symbol index`(增量对象损坏),
 > `cargo clean -p ncm_ffi` 后一次通过 —— 不要为此清整个 `core/target`(会删掉 12 GB 且重编很久)。
