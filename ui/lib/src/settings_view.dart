@@ -9,6 +9,7 @@ import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
+import 'theme.dart' show AccentPalette;
 import 'toast.dart';
 import 'update_checker.dart';
 
@@ -57,6 +58,12 @@ class SettingsView extends StatelessWidget {
                   onSelectionChanged: (value) {
                     settings.update(themeMode: value);
                   },
+                ),
+                const Divider(height: 1),
+                // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)
+                _AccentSettingTile(
+                  selected: settings.accent,
+                  onSelected: (value) => settings.update(accent: value),
                 ),
                 const Divider(height: 1),
                 // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
@@ -419,6 +426,74 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
     if (notes == null) return '';
     final one = notes.trim();
     return one.length > 200 ? '${one.substring(0, 200)}…' : one;
+  }
+}
+
+/// 主题色(视觉风格)选择器: 一行色点, 选中项带对勾与描边.
+///
+/// 不塞进 SegmentedButton: 5 个色板在 300dp + 1.25 字号下会把分段控件挤爆
+/// (与「界面字号」同样的窄屏约束, 见 test/settings_narrow_overflow_test.dart),
+/// 这里用 Wrap + 纯色圆点, 换行即可, 不依赖文字宽度。
+class _AccentSettingTile extends StatelessWidget {
+  const _AccentSettingTile({required this.selected, required this.onSelected});
+
+  final AccentPalette selected;
+  final ValueChanged<AccentPalette> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('主题色', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 2),
+          Text(
+            '${selected.label} · 浅色/深色通用',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              for (final palette in AccentPalette.values)
+                _dot(context, palette),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(BuildContext context, AccentPalette palette) {
+    final theme = Theme.of(context);
+    final isSelected = palette == selected;
+    return Tooltip(
+      message: palette.label,
+      child: InkWell(
+        key: ValueKey('accent-${palette.id}'),
+        borderRadius: BorderRadius.circular(22),
+        onTap: () => onSelected(palette),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: palette.seed,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isSelected ? theme.colorScheme.onSurface : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          child: isSelected
+              ? const Icon(Icons.check, size: 20, color: Colors.white)
+              : null,
+        ),
+      ),
+    );
   }
 }
 

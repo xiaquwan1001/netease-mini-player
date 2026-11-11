@@ -443,9 +443,11 @@ class MiniNcmApp extends StatelessWidget {
           title: '轻音 MiniNCM',
           // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
           debugShowCheckedModeBanner: false,
-          theme: buildLightTheme(),
+          // 视觉风格(主题色): 同一色板同时决定浅色/深色两套配色的 seed
+          theme: buildLightTheme(accent: settings.accent),
           // R6: 深色 + OLED 开关 ⇒ 纯黑基底(见 src/theme.dart)
-          darkTheme: buildDarkTheme(oled: settings.oledDark),
+          darkTheme:
+              buildDarkTheme(oled: settings.oledDark, accent: settings.accent),
           themeMode: settings.themeMode,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),

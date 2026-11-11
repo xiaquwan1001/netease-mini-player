@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import 'theme.dart' show AccentPalette;
+
 /// 全局 UI/播放偏好. 只存轻量 JSON, 放在 Rust 用的同一个 dataDir 下,
 /// 双端(Android/Linux)都不依赖平台插件.
 ///
@@ -57,6 +59,9 @@ class AppSettings extends ChangeNotifier {
   static final AppSettings instance = AppSettings._();
 
   ThemeMode themeMode = ThemeMode.system;
+
+  /// 视觉风格(主题色). 默认网易云红 = 与改造前完全一致; 浅色/深色共用同一个色板。
+  AccentPalette accent = AccentPalette.neteaseRed;
 
   /// 1.0 = 跟随系统; 0.85/1.15/1.3 = 小/大/特大
   double textScale = 1.0;
@@ -189,6 +194,7 @@ class AppSettings extends ChangeNotifier {
         final raw = jsonDecode(await _file!.readAsString());
         if (raw is Map) {
           themeMode = _themeFrom(raw['themeMode']);
+          accent = AccentPalette.fromId(raw['accent'] as String?);
           textScale = _doubleOf(raw['textScale'], 1.0).clamp(0.8, 1.5);
           final level = raw['audioLevel'];
           if (level is String && audioLevels.containsKey(level)) {
@@ -263,6 +269,7 @@ class AppSettings extends ChangeNotifier {
 
   Future<void> update({
     ThemeMode? themeMode,
+    AccentPalette? accent,
     double? textScale,
     String? audioLevel,
     int? coverRows,
@@ -288,6 +295,7 @@ class AppSettings extends ChangeNotifier {
       this.updateCheckOnStartup = updateCheckOnStartup;
     }
     if (themeMode != null) this.themeMode = themeMode;
+    if (accent != null) this.accent = accent;
     if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
     if (audioLevel != null && audioLevels.containsKey(audioLevel)) {
       this.audioLevel = audioLevel;
@@ -333,6 +341,7 @@ class AppSettings extends ChangeNotifier {
       await file.parent.create(recursive: true);
       await file.writeAsString(jsonEncode({
         'themeMode': _themeName(themeMode),
+        'accent': accent.id,
         'textScale': textScale,
         'audioLevel': audioLevel,
         'coverRows': coverRows,
