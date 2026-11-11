@@ -6,12 +6,15 @@ import 'package:flutter/material.dart';
 /// [id] 是持久化用的稳定名字(不要改: 改了老配置读不回来), [label] 是设置页文案。
 /// 新增色板只加一项: 设置页选择器与主题构建都遍历 values, 会自动跟上。
 enum AccentPalette {
-  /// 品牌色(网易云红) —— 默认, 与改造前完全一致
-  neteaseRed('neteaseRed', '网易云红', Color(0xFFE60026)),
+  /// 品牌红 —— 默认. seed 用纯红(见 kAccentSchemeVariant 的说明):
+  /// 旧的 0xFFE60026 在 fidelity 下会偏一点紫, 和「樱粉」拉不开差距(用户实测反馈)
+  neteaseRed('neteaseRed', '网易云红', Color(0xFFF40000)),
   green('green', '森林绿', Color(0xFF2E7D32)),
   blue('blue', '天空蓝', Color(0xFF1565C0)),
   orange('orange', '暖橘', Color(0xFFEF6C00)),
-  pink('pink', '樱粉', Color(0xFFD81B60));
+  /// 樱粉取"洋红偏粉"一侧(0xFFE5007E): 旧的 0xFFD81B60 落在红与粉之间,
+  /// 与品牌红只差一次色调压缩, 视觉上几乎分不出来
+  pink('pink', '樱粉', Color(0xFFE5007E));
 
   const AccentPalette(this.id, this.label, this.seed);
 
@@ -28,8 +31,27 @@ enum AccentPalette {
   }
 }
 
-/// 默认品牌色(网易云红), 保留旧名字: 老调用点与测试仍在引用。
-const Color kBrandSeed = Color(0xFFE60026);
+/// 默认品牌色(网易云红 seed), 保留旧名字: 老调用点与测试仍在引用。
+///
+/// 2026-11-11 从 0xFFE60026 改成纯红 0xFFF40000: 旧值在 M3 默认策略下被压成灰玫瑰
+/// (#904A46), 与「樱粉」几乎同色(用户实测反馈)。配合 [kAccentSchemeVariant] 的
+/// fidelity 策略, primary 现在是 #BC0100(纯红、100% 饱和度)。
+const Color kBrandSeed = Color(0xFFF40000);
+
+/// 色板的取色策略: M3 的 [DynamicSchemeVariant.fidelity] 会尽量保留 seed 的彩度,
+/// 而不是像默认的 tonalSpot 那样把鲜艳色压成低饱和的灰玫瑰色 ——
+/// 实测默认策略下 brandRed(#E60026) 的 primary 是 #904A46、樱粉是 #8E4958,
+/// 两者几乎一样(用户反馈"红色和粉色差距不大, 只比粉色略紫");
+/// 换成 fidelity 后分别是 #BC0100 / #B80064, 红色回到纯红、粉色落在洋红一侧。
+const DynamicSchemeVariant kAccentSchemeVariant = DynamicSchemeVariant.fidelity;
+
+/// 用色板 seed 生成一套 ColorScheme(浅/深各一次, 同一 seed 保证两套语义一致).
+ColorScheme accentScheme(AccentPalette accent, Brightness brightness) =>
+    ColorScheme.fromSeed(
+      seedColor: accent.seed,
+      brightness: brightness,
+      dynamicSchemeVariant: kAccentSchemeVariant,
+    );
 
 /// OLED 纯黑(R6): 深色模式下用 #000000 取代 Material 默认的 #121212,
 /// 在 OLED 屏上不发光的像素真正熄灭(省电 + 无灰边).
@@ -39,7 +61,7 @@ const Color kOledBlack = Color(0xFF000000);
 /// 换主题色只是换 seed, 其余语义不变)
 ThemeData buildLightTheme({AccentPalette accent = AccentPalette.neteaseRed}) =>
     ThemeData(
-      colorSchemeSeed: accent.seed,
+      colorScheme: accentScheme(accent, Brightness.light),
       useMaterial3: true,
     );
 
@@ -54,8 +76,7 @@ ThemeData buildDarkTheme({
   AccentPalette accent = AccentPalette.neteaseRed,
 }) {
   final base = ThemeData(
-    colorSchemeSeed: accent.seed,
-    brightness: Brightness.dark,
+    colorScheme: accentScheme(accent, Brightness.dark),
     useMaterial3: true,
   );
   if (!oled) return base;

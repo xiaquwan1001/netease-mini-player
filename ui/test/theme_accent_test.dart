@@ -34,6 +34,22 @@ void main() {
         reason: '每个色板的深色主题必须是不同配色');
   });
 
+
+  test('红色要够"红": 高彩度 + 与樱粉的色相拉开(用户实测反馈的回归)', () {
+    final red = HSLColor.fromColor(buildLightTheme().colorScheme.primary);
+    final pink = HSLColor.fromColor(
+        buildLightTheme(accent: AccentPalette.pink).colorScheme.primary);
+    // 旧实现(tonalSpot + 0xFFE60026)的 primary 是 #904A46: 饱和度约 28%,
+    // 与樱粉 #8E4958 视觉上几乎一致 —— 这里把口径固定下来。
+    expect(red.saturation, greaterThan(0.85), reason: '品牌红必须高彩度(不能是灰玫瑰)');
+    expect(red.hue, lessThan(15.0), reason: '品牌红应落在正红区(0 度附近)');
+    expect(pink.saturation, greaterThan(0.85), reason: '樱粉也要有彩度');
+    expect(pink.hue, greaterThan(300.0), reason: '樱粉落在洋红一侧');
+    final gap = (pink.hue - red.hue).abs();
+    expect(gap, greaterThan(25.0),
+        reason: '红与粉的色相差要够大, 否则用户分不出来(旧实现只有约 7 度)');
+  });
+
   test('默认色板 = 改造前的品牌红(不传 accent 与传 neteaseRed 等价)', () {
     expect(AccentPalette.neteaseRed.seed, kBrandSeed);
     expect(buildLightTheme().colorScheme.primary,
