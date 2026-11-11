@@ -397,13 +397,14 @@ class CommentThreadState extends State<CommentThread> {
   }
 
   /// 行内预览选取规则(简单可解释, 单测 comment_reply_preview_test.dart 固化):
-  /// - 名额 K = replyCount >= 3 ? 2 : 1 —— 楼层厚给 2 条, 薄楼层只给 1 条;
-  /// - 候选按点赞数降序取前 K(互动优先), 同赞保持接口返回的时间序;
-  /// - 行宽放不下ellipsis截断, 全量走「展开全部 N 条回复」入口。
+  /// - 行内最多缩进展示 **3 条**: 回复 ≤3 条时全部展示, 不出现「展开」按钮;
+  /// - 超过 3 条时按点赞数降序取前 3(互动优先), 同赞保持接口返回的时间序,
+  ///   其余走「展开全部 N 条回复」入口;
+  /// - 行宽放不下用 ellipsis 截断。
   List<rust.Comment> _previewFor(rust.Comment parent) {
     final replies = _replyPreviews[parent.id];
     if (replies == null || replies.isEmpty) return const [];
-    final k = parent.replyCount >= BigInt.from(3) ? 2 : 1;
+    const k = 3;
     final order = List<int>.generate(replies.length, (i) => i)
       ..sort((a, b) {
         final byLikes = replies[b].likedCount.compareTo(replies[a].likedCount);
@@ -983,26 +984,58 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(comment.content, style: theme.textTheme.bodyMedium),
-                // 行内回复预览: 点任意一条 → 打开楼层详情(与「回复」动作分离见下)
-                for (final r in previewReplies)
-                  InkWell(
-                    onTap: onExpandReplies,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '${r.userName.isEmpty ? '匿名用户' : r.userName}：${r.content}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                // 行内回复预览: 缩进 + 小头像, 跟楼层里的排布一致(一眼看出是"对话"而不是
+                // 平铺的一段文字); 点任意一条 → 打开楼层详情(与「回复」动作分离见下)
+                if (previewReplies.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4, left: 4),
+                    padding: const EdgeInsets.only(left: 8),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: BorderSide(color: scheme.outlineVariant, width: 2),
                       ),
                     ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final r in previewReplies)
+                          InkWell(
+                            onTap: onExpandReplies,
+                            borderRadius: BorderRadius.circular(6),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleCover(
+                                    url: r.avatarUrl,
+                                    size: 18,
+                                    icon: Icons.person_outline,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      // 有被回复者就带上, 没写就是直接回主评论
+                                      (r.repliedTo ?? '').isEmpty
+                                          ? '${r.userName.isEmpty ? '匿名用户' : r.userName}：${r.content}'
+                                          : '${r.userName.isEmpty ? '匿名用户' : r.userName} 回复 @${r.repliedTo}：${r.content}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(color: scheme.onSurfaceVariant),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                // 独立的展开入口: 只要楼层有回复就给, 预览失败也能从这进详情。
-                // 条数取 max(服务端 replyCount, 已拿到的条数) —— 接口有时 replyCount 为 0,
-                // 却把回复当顶层返回, 被 _absorbOrphanReplies 收进来后总量以本地为准
-                if (_replyTotal > BigInt.zero)
+                // 展开入口只在"行内放不下"时出现: 回复 ≤3 条已经全部缩进展示, 再给按钮就是
+                // 冗余(用户实测: 1 条回复也顶着「展开全部 1 条回复」)。N 取
+                // max(服务端 replyCount, 本地条数) —— 接口有时 replyCount 为 0 却仍返回回复。
+                if (_replyTotal > BigInt.from(previewReplies.length))
                   InkWell(
                     onTap: onExpandReplies,
                     borderRadius: BorderRadius.circular(6),

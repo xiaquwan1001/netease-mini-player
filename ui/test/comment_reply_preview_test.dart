@@ -42,7 +42,7 @@ rust.CommentPage page(List<rust.Comment> items,
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
-  testWidgets('预览: replyCount>=3 行内展示点赞最高的 2 条, 其余不露', (tester) async {
+  testWidgets('预览: 回复 >3 条时行内展示点赞最高的 3 条, 其余靠展开入口', (tester) async {
     await tester.pumpWidget(host(CommentThread(
       kind: 'song',
       resourceId: BigInt.one,
@@ -63,11 +63,12 @@ void main() {
 
     expect(find.text('用户3：赞多一'), findsOneWidget);
     expect(find.text('用户4：赞多二'), findsOneWidget);
-    expect(find.text('用户2：赞少'), findsNothing);
-    expect(find.text('用户5：赞中'), findsNothing);
+    expect(find.text('用户5：赞中'), findsOneWidget); // 第 3 名也算"主要回复"
+    expect(find.text('用户2：赞少'), findsNothing); // 第 4 名不露
+    expect(find.text('展开全部 5 条回复'), findsOneWidget);
   });
 
-  testWidgets('预览: replyCount<3 只展示 1 条(同赞保持时间序取首条)', (tester) async {
+  testWidgets('预览: 回复 ≤3 条全部展示, 且不给「展开」按钮(冗余)', (tester) async {
     await tester.pumpWidget(host(CommentThread(
       kind: 'song',
       resourceId: BigInt.one,
@@ -85,7 +86,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('用户2：回复甲'), findsOneWidget);
-    expect(find.text('用户3：回复乙'), findsNothing);
+    expect(find.text('用户3：回复乙'), findsOneWidget);
+    expect(find.textContaining('展开全部'), findsNothing);
   });
 
   testWidgets('点预览里的某条回复 = 展开楼层详情(与写回复分离)', (tester) async {
@@ -216,9 +218,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    // ≤3 条: 全部缩进展示, 新旧都在, 不用再点「展开」
     expect(find.text('用户3：刚发的回复'), findsOneWidget);
-    expect(find.text('用户2：已有旧回复'), findsNothing);
-    expect(find.text('展开全部 2 条回复'), findsOneWidget);
+    expect(find.text('用户2：已有旧回复'), findsOneWidget);
+    expect(find.textContaining('展开全部'), findsNothing);
   });
 
   testWidgets('300dp + 1.25 字号: 预览行截断不溢出', (tester) async {

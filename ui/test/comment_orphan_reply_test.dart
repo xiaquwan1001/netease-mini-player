@@ -69,11 +69,12 @@ void main() {
 
     // 顶层只剩主评论
     expect(find.text('主评论'), findsOneWidget);
-    // 回复被收进预览(以「昵称：内容」形式出现)
-    expect(find.text('回复者：这是回复'), findsOneWidget);
-    // 不再有单独的 tile: 昵称行不该出现「回复者」这个作者名 + 回复 @楼主 那行
+    // 回复被收进预览(缩进行: 「昵称：内容」, 有被回复者时带 回复 @某人)
+    expect(find.text('回复者 回复 @楼主：这是回复'), findsOneWidget);
+    // 不再有单独的 tile: 昵称行不该出现「回复 @楼主」那个独立标记
     expect(find.text('回复 @楼主'), findsNothing);
-    expect(find.text('展开全部 1 条回复'), findsOneWidget);
+    // 只有 1 条回复 → 已全部展示, 不再给冗余的「展开全部 1 条回复」
+    expect(find.textContaining('展开全部'), findsNothing);
   });
 
   testWidgets('主评论不在本页时留在顶层并保留「回复 @某人」', (tester) async {
@@ -84,11 +85,27 @@ void main() {
     expect(find.text('孤儿回复'), findsOneWidget);
   });
 
-  testWidgets('replyCount 为 0 但被收进回复时也给展开入口', (tester) async {
+  testWidgets('replyCount 为 0 但被收进回复时也缩进展示', (tester) async {
     await pump(tester, [
       c(1, '主评论', name: '楼主'),
       c(2, '这是回复', name: '回复者', parentId: 1, repliedTo: '楼主'),
     ]);
-    expect(find.text('展开全部 1 条回复'), findsOneWidget);
+    expect(find.text('回复者 回复 @楼主：这是回复'), findsOneWidget);
+    expect(find.textContaining('展开全部'), findsNothing);
+  });
+
+  testWidgets('超过 3 条: 缩进展示 3 条 + 展开全部 N 条回复', (tester) async {
+    await pump(tester, [
+      c(1, '主评论', name: '楼主', replyCount: 5),
+      c(2, '回复一', name: '甲', parentId: 1, repliedTo: '楼主'),
+      c(3, '回复二', name: '乙', parentId: 1, repliedTo: '楼主'),
+      c(4, '回复三', name: '丙', parentId: 1, repliedTo: '楼主'),
+      c(5, '回复四', name: '丁', parentId: 1, repliedTo: '楼主'),
+    ]);
+    // 本地只吸收了 4 条: 展示 3 条 + 展开(服务端说 5 条)
+    expect(find.text('甲 回复 @楼主：回复一'), findsOneWidget);
+    expect(find.text('丙 回复 @楼主：回复三'), findsOneWidget);
+    expect(find.text('丁 回复 @楼主：回复四'), findsNothing);
+    expect(find.text('展开全部 5 条回复'), findsOneWidget);
   });
 }
