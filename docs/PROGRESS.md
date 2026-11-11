@@ -1155,3 +1155,56 @@ TTML 探测经 `TtmlProbe` trait 注入, 测试不联网。
 - 模拟器实测(emulator-5554, x64 debug 包): 搜索→歌手信息→MV tab→点 MV→播放: NuPlayer state=started(video/avc + audio/mp4a-latm), 双截图帧变化, 暂停/返回键回 MV 详情页, logcat 0 FATAL, 退出后无残留解码器。截图 .pi/artifacts/c3/。
 - 测试: test/mv_page_test.dart 6 例(详情渲染/加载失败重试/无链接错误态/播放调用+https 转换/桌面外链分支/取链异常错误态)。门禁: cargo test 46+31+1+140 全绿; dart analyze 0 error/warning(41 info 均在他人文件); flutter test --exclude-tags network 501 全绿; build-android.sh OK。
 - 注: settings_view.dart 曾有另一车道的空安全编译错误挡构建, 已做最小 `info!.latest` 修复(仅此一行)。
+
+## UI: 播放条常驻(2026-11-11 二)
+
+用户反馈: 推荐 → 每日推荐「全部」等二级页一压上来, 底部的歌曲播放条就没了。
+要求是"除了打字上屏(键盘)时被挡, 播放条任何时候都该在"。
+
+- 结构: 播放条与底部导航从 `HomePage.bottomNavigationBar` 上移到根布局
+  `PlayerBarHost`(`MaterialApp.builder` 内, 渲染在 Navigator **之下**的 Column 兄弟位),
+  因此任何压在首页上的路由(日推全部/歌单广场/风格详情/搜索页…)都能看到它;
+  是"占位"不是"覆盖": 二级页自己的底部面板/滚动区都落在它上方, 弹层也不会被它压住。
+- 播放条本身抽成 `_MiniPlayerBar`(纯展示 + 回调), 状态/队列仍在 `_HomePageState`
+  (只有一份); 每次 HomePage 构建后**帧后**把底部条投递到 `playerBarSlot`
+  (同步写会在 build 阶段 markNeedsBuild 祖先)。
+- 壳里自带一个全屏 Overlay: 播放条的 Slider/Tooltip 用 OverlayPortal 画气泡, 必须有
+  Overlay 祖先, 而它又在 Navigator 之外。条目内容用 ValueNotifier 更新(否则卡在旧 Navigator)。
+- 让位规则: 键盘弹出(`viewInsets.bottom > 0`)时整条不占位; 底部 tab 只在首页处于栈顶时
+  出现 —— 用 `_PageDepthObserver` 数"非弹层路由"层数(用 ModalRoute.isCurrent 会让
+  弹一个底部面板就丢掉导航栏)。二级页上点曲名: 先 popUntil 回首页再展开歌词。
+- 测试: `ui/test/player_bar_host_test.dart` 3 例(二级路由压上来/弹出仍在、键盘弹出让位、
+  无曲目不占位); `top_bar_no_duplicate_test`/`ui_batch_a_back_nav_test` 的 HomePage 宿主
+  改成同一个 `PlayerBarHost` 壳(否则 NavigationBar 不再出现)。
+
+## UI: 风格推荐直接显示配图窗格(2026-11-11 二)
+
+用户反馈: 推荐 → 风格推荐原本只有关键词 chips, 配图要点进风格详情才看得到, 要求把配图
+窗格上移到推荐页直接可见。
+
+- `_StyleChips`(ActionChip + 钢琴图标) → `_StyleTiles`: 一行横滑的「配图 + 名字」窗格
+  (88dp, 与详情页头部同一张 `tag.coverUrl`), 点开仍进 `showStyleDetail`; 无名配图时退回
+  同尺寸钢琴图标占位。位置语义不变(仍在排行榜区块内、榜单之后)。
+- 数据侧确认: 登录态 `/api/tag/my/preference/get` 的 `tagPreferenceVos[].picUrl` 是**绝对地址**
+  (实测 5 个曲风全有图); 未登录走 `style_list`, picUrl 是 `yyimgs/...` 相对路径,
+  Rust 侧本来就丢掉了 → 匿名用户看到的是图标占位(与改动前一致)。
+- 测试: `ui/test/style_tiles_test.dart` 2 例(有配图渲染 CoverArt / 无配图退回图标; 300dp+1.625 不溢出)。
+
+## CI: Linux arm64(2026-11-11 二)
+
+- 现实约束: **Flutter 桌面不支持交叉编译** ⇒ arm64 只能在 arm64 runner 上原生构建。
+- `ci.yml` 的 `build-linux` 改成 matrix(`ubuntu-24.04`/x64 + `ubuntu-24.04-arm`/arm64),
+  产物名 `linux-debug-bundle-<arch>`。
+- `release.yml` 新增 `build-linux-arm64` job: 原生构建 → `file` 校验 aarch64 + GLib 符号基线 →
+  出 `MiniNCM-<ver>-linux-arm64.tar.gz` + `minincm_<ver>_arm64.deb`; publish 的 needs 带上它。
+  arm64 暂不出 AppImage(appimagetool 的 aarch64 产物本机没验过)。
+- 打包脚本按 `uname -m` 推断 bundle 目录(x64/arm64)与发行架构名(deb: amd64/arm64;
+  AppImage: x86_64/aarch64), 可用 `ARCH=`/`BUNDLE=`/`APPIMAGE_ARCH=` 覆盖。
+
+## 结论: Linux 桌面"启动 3s"是 debug 模式的 JIT 成本(2026-11-11 二)
+
+里程碑实测(debug bundle, 见 `.pi/memory/notes-build.md`): 进程→Dart main 0.38s;
+FRB `RustLib.init` 21ms; `dlopen` 237MB 的 debug `libncm_ffi.so` 1ms; HomePage 首帧 build 仅 2ms;
+**首帧 layout/paint 3.4~4.2s**。同一台机空项目首帧≈1.2s(环境地板), `home:` 换成一行 Text
+后立刻回到 1.1s; 软件渲染同样 3.36s ⇒ 与 Rust/网络/图片/GPU 无关, 是 debug JIT 首次执行
+首页那一大坨代码的成本。要秒开用 release/profile 包, 不必再往 Rust 侧查。
