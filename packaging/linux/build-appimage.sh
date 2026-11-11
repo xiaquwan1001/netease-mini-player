@@ -20,6 +20,30 @@ esac
 BUNDLE=${BUNDLE:-$ROOT/ui/build/linux/$FLUTTER_ARCH/release/bundle}
 [ -x "$BUNDLE/minincm" ] || { echo "缺少 $BUNDLE/minincm, 先跑 flutter build linux --release" >&2; exit 1; }
 
+# 架构交叉校验: bundle 里 minincm 的 ELF 架构必须与目标 AppImage 架构一致。
+# (APPIMAGE_ARCH/BUNDLE 可被覆盖, 组合错了会打出"x86_64 内容的 aarch64.AppImage"。)
+# 用 readelf -h 的 Machine 字段判断, bash 3.2 兼容(不用关联数组)。
+if command -v readelf >/dev/null 2>&1; then
+  # LC_ALL=C: 本地化的 readelf 字段名(如"系统架构")不可解析
+  ELF_MACHINE=$(LC_ALL=C readelf -h "$BUNDLE/minincm" | sed -n 's/^ *Machine: *//p' | head -1)
+  if [ -z "$ELF_MACHINE" ] && command -v file >/dev/null 2>&1; then
+    # 兜底: file -b 输出含 "x86-64" / "ARM aarch64"
+    FOUT=$(LC_ALL=C file -b "$BUNDLE/minincm")
+    case "$FOUT" in
+      *x86-64*)    ELF_MACHINE="Advanced Micro Devices X86-64" ;;
+      *aarch64*) ELF_MACHINE="AArch64" ;;
+    esac
+  fi
+  case "$ELF_MACHINE:${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}" in
+    "Advanced Micro Devices X86-64:x86_64") ;;   # x64 bundle + x86_64 AppImage
+    "AArch64:aarch64") ;;                        # arm64 bundle + aarch64 AppImage
+    *)
+      echo "ERROR: 架构不匹配: $BUNDLE/minincm 是 ELF Machine=\"$ELF_MACHINE\", 而 APPIMAGE_ARCH=${APPIMAGE_ARCH:-}" >&2
+      echo "       目标 AppImage 架构=${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}; 用 BUNDLE=<对应架构的 bundle> 修正, 或不设 APPIMAGE_ARCH 让脚本按主机推断" >&2
+      exit 1 ;;
+  esac
+fi
+
 VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
 ARCH=${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}
 
