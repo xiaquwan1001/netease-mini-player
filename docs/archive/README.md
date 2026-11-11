@@ -12,4 +12,5 @@
 | [ui-batch-d.md](ui-batch-d.md) | D 批：技术债收敛的一部分 | ✅ |
 | [ui-batch-d6.md](ui-batch-d6.md) / [ui-batch-d6b.md](ui-batch-d6b.md) | D6：PagedListView 抽取与迁移 | ✅ |
 | [ui-song-detail-share.md](ui-song-detail-share.md) | 播放条合并 + 歌曲详情页 + 分享卡片 | ✅ |
+| [DOCS-REPORT-2026-11-10.md](DOCS-REPORT-2026-11-10.md) | 文档整理子代理的一次性报告（**数字为当时快照**：248/522，现值见 PROGRESS 头部） | 📦 归档(2026-11-11) |
 | [ffi-cleanup-d1d2d5.md](ffi-cleanup-d1d2d5.md) | D1/D2/D5：删死导出 + `ffi_forward!` 宏收敛（**数字为当时快照**：导出 123；现值见 api-coverage.md） | ✅ |
