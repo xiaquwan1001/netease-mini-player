@@ -15,7 +15,12 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
+    // 底部导航/播放条现在由根布局的 PlayerBarHost 渲染(见 main.dart),
+    // 测试也走同一条壳, 否则 NavigationBar 不会出现。
+    addTearDown(() => playerBarSlot.value = null);
     await tester.pumpWidget(MaterialApp(
+      builder: (context, child) =>
+          PlayerBarHost(content: child ?? const SizedBox.shrink()),
       home: MediaQuery(
         data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
         child: const HomePage(),

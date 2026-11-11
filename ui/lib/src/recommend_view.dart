@@ -106,7 +106,7 @@ class _RecommendViewState extends State<RecommendView> {
         // 审查 P1-7.8 / §5.5: 首屏平级模块 8 个 + 1 个游离按钮 → 5 个。
         //  - 每日推荐歌曲 + 每日推荐歌单      → 合并为「每日推荐」(歌单在落地页第二个 tab)
         //  - 新歌速递 + 新碟上架              → 合并为「新歌新碟」(同一个「全部」)
-        //  - 风格推荐                        → 下沉为排行榜区块内一行 chips(不再独占区块)
+        //  - 风格推荐                        → 排行榜区块内一行配图窗格(不再独占区块)
         //  - 歌单广场(游离按钮)              → 提升为「推荐歌单」标题右侧的「全部」
         //  - 推荐播客                        → 保留, 降到最底(第 2 屏)
         // 每个模块的落地页/回调都保持原样, 可达性零损失(见 test/ui_batch_c_ia_test.dart)。
@@ -635,20 +635,23 @@ class _ChartSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        _StyleChips(load: loadStyles, onPlaySongs: onPlaySongs, onOpenPlaylist: onOpen),
+        _StyleTiles(load: loadStyles, onPlaySongs: onPlaySongs, onOpenPlaylist: onOpen),
       ],
     );
   }
 }
 
-// ---------------- 风格推荐(下沉为排行榜区块内的一行 chips) ----------------
+// ---------------- 风格推荐(排行榜区块内的一行配图窗格) ----------------
 
 /// 系统按听歌口味算出来的曲风(网易云"风格推荐").
 /// 点一个风格进风格详情页: 该曲风下的歌单 + 歌曲.
-/// 审查 §5.5: 不再单独占一个平级区块, 改为排行榜下方的次级 chips;
-/// 可达性不变(每枚 chip 仍进 showStyleDetail)。
-class _StyleChips extends StatelessWidget {
-  const _StyleChips({
+///
+/// 历史: 审查 §5.5 把它从平级区块压成一行纯文字 chips(只留关键词),
+/// 配图只在点进详情页后才看得到; 现在把配图搬回推荐页 ——
+/// 每个风格是一块「配图 + 名字」的窗格(与详情页头部的同一张图),
+/// 仍然是排行榜下方的次级内容, 不新起平级区块。
+class _StyleTiles extends StatelessWidget {
+  const _StyleTiles({
     required this.load,
     required this.onPlaySongs,
     required this.onOpenPlaylist,
@@ -658,9 +661,11 @@ class _StyleChips extends StatelessWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
+  /// 窗格边长: 比歌单封面(118)小一档, 一行能看 3~4 个, 不把排行榜区块撑太高。
+  static const double _tileSize = 88;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -668,31 +673,66 @@ class _StyleChips extends StatelessWidget {
         _AsyncSection<List<rust.StyleTag>>(
           load: load,
           emptyText: '暂时没有风格推荐',
-          builder: (context, tags, reload) => Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              for (final tag in tags)
-                ActionChip(
-                  // 风格的图都是小图标(yyimgs 相对路径), 不一定要拉图;
-                  // 统一用钢琴图标, 保证离线/图挂了也有可点的入口
-                  avatar: Icon(
-                    Icons.piano,
-                    size: 18,
-                    color: theme.colorScheme.primary,
-                  ),
-                  label: Text(tag.name),
-                  onPressed: () => showStyleDetail(
-                    context,
-                    tag: tag,
-                    onPlaySongs: onPlaySongs,
-                    onOpenPlaylist: onOpenPlaylist,
-                  ),
-                ),
-            ],
+          // 横滑而不是 Wrap: 窗格高度(图 + 名字)本来就不固定, 交给 Row 自己撑,
+          // 大字号下不会像定高列表那样溢出。
+          builder: (context, tags, reload) => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < tags.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  SizedBox(width: _tileSize, child: _tile(context, tags[i])),
+                ],
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  /// 一块风格窗格: 配图(没有就退回钢琴图标占位) + 名字, 点开进风格详情。
+  Widget _tile(BuildContext context, rust.StyleTag tag) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final cover = tag.coverUrl;
+    return InkWell(
+      onTap: () => showStyleDetail(
+        context,
+        tag: tag,
+        onPlaySongs: onPlaySongs,
+        onOpenPlaylist: onOpenPlaylist,
+      ),
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (cover == null || cover.isEmpty)
+            // 匿名/旧版本接口的 picUrl 是 yyimgs 相对路径(Rust 侧已丢掉),
+            // 这时退回钢琴图标占位: 保证离线/图挂了也有同样大小的可点入口。
+            Container(
+              width: _tileSize,
+              height: _tileSize,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.piano, size: 30, color: scheme.primary),
+            )
+          else
+            CoverArt(url: cover, size: _tileSize, radius: 8),
+          const SizedBox(height: 4),
+          Text(
+            tag.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
     );
   }
 }

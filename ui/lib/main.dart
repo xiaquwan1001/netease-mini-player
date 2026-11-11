@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'src/marquee_text.dart';
@@ -314,6 +315,121 @@ String notificationModeIcon(PlayMode mode, {required bool heartActive}) {
 final ValueNotifier<SongActionHost?> _actionsHost =
     ValueNotifier<SongActionHost?>(null);
 
+/// 根导航栈里"全屏页"的层数(弹层/对话框不算一层): 1 = 只有首页.
+///
+/// 底部 tab 属于首页, 有全屏页压上来时让位; 若按 [ModalRoute.isCurrent] 判断,
+/// 弹一个底部面板(PopupRoute)也会让底部导航消失, 所以这里只数非弹层路由。
+///
+/// 初值 0 而不是 1: 首页这条路由本身也会走 didPush(变成 1); 而手工 pump HomePage
+/// 的单测里没有观察者, 值停在 0 —— 两者都满足 "<= 1 就是首页在栈顶"。
+final ValueNotifier<int> _pageDepth = ValueNotifier<int>(0);
+
+/// NavigatorObserver: 维护 [_pageDepth](栈里非弹层路由的层数).
+class _PageDepthObserver extends NavigatorObserver {
+  static void _up() {
+    if (_pageDepth.value < 1) {
+      _pageDepth.value = 1;
+    } else {
+      _pageDepth.value = _pageDepth.value + 1;
+    }
+  }
+
+  static void _down() {
+    _pageDepth.value = _pageDepth.value > 1 ? _pageDepth.value - 1 : 1;
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) return;
+    _up();
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) return;
+    _down();
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PopupRoute) return;
+    _down();
+  }
+}
+
+/// 常驻底部条(播放条 + 首页底部导航)的投递槽位。
+///
+/// 播放条原先在 HomePage.bottomNavigationBar 里, 只有首页看得到; 二级页(日推"全部"、
+/// 歌单广场、风格详情、搜索页…)一压上来就没了。这里改由根布局 [PlayerBarHost] 渲染,
+/// 位置在 Navigator **之下**(Column 的兄弟, 不是覆盖层): 二级页自己的底部面板/滚动区
+/// 都落在它上方, 不会被它压住。唯一让位时机是键盘弹出 —— 那时它本来就被键盘挡住,
+/// 留着只会白占内容高度。
+final ValueNotifier<Widget?> playerBarSlot = ValueNotifier<Widget?>(null);
+
+/// 投递底部条(每次 HomePage 构建投一次, 内容变了才通知)。
+///
+/// 必须在帧后投递: 槽位的监听者是 Navigator 的祖先, 在 HomePage.build 里同步写
+/// ValueNotifier 等于在 build 阶段 markNeedsBuild 祖先 → "setState() called during build"。
+void _publishBottomBar(Widget? bar) {
+  WidgetsBinding.instance.addPostFrameCallback((_) => playerBarSlot.value = bar);
+}
+
+/// 应用外壳: Navigator 与常驻底部条一起放进一个全屏 Overlay。
+///
+/// 为什么要有这层 Overlay: 播放条里的 Slider/Tooltip 用 OverlayPortal 画气泡,
+/// 必须有 Overlay 祖先; 而它又必须活在 Navigator 之外才能穿透二级路由。
+/// 条目内容通过 [_content] 更新(Overlay.initialEntries 只在首次生效, 每次塞新
+/// Widget 会卡在旧的 Navigator 上, 主题/字号设置改了不生效)。
+class PlayerBarHost extends StatefulWidget {
+  const PlayerBarHost({super.key, required this.content});
+
+  final Widget content;
+
+  @override
+  State<PlayerBarHost> createState() => _PlayerBarHostState();
+}
+
+class _PlayerBarHostState extends State<PlayerBarHost> {
+  late final ValueNotifier<Widget> _content =
+      ValueNotifier<Widget>(widget.content);
+  late final OverlayEntry _entry =
+      OverlayEntry(builder: (_) => _PlayerBarChrome(content: _content));
+
+  @override
+  void didUpdateWidget(covariant PlayerBarHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 监听者在条目内部(后代), 不是祖先, 在 build 之外通知更稳
+    _content.value = widget.content;
+  }
+
+  @override
+  Widget build(BuildContext context) => Overlay(initialEntries: [_entry]);
+}
+
+class _PlayerBarChrome extends StatelessWidget {
+  const _PlayerBarChrome({required this.content});
+
+  final ValueListenable<Widget> content;
+
+  @override
+  Widget build(BuildContext context) {
+    // 键盘弹出时底部条不占位: 反正会被键盘挡住, 留着只会把内容区白压一条
+    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return ValueListenableBuilder<Widget?>(
+      valueListenable: playerBarSlot,
+      builder: (context, bar, _) => ValueListenableBuilder<Widget>(
+        valueListenable: content,
+        builder: (context, body, _) => Column(
+          children: [
+            Expanded(child: body),
+            if (!keyboardUp) ?bar,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class MiniNcmApp extends StatelessWidget {
   const MiniNcmApp({super.key});
 
@@ -338,9 +454,11 @@ class MiniNcmApp extends StatelessWidget {
               valueListenable: _actionsHost,
               builder: (_, host, inner) =>
                   host == null ? inner! : AppActions(host: host, child: inner!),
-              child: child ?? const SizedBox.shrink(),
+              child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
             ),
           ),
+          // 只用来数"有没有全屏页压在首页上"(决定底部 tab 是否让位)
+          navigatorObservers: [_PageDepthObserver()],
           home: const HomePage(),
         );
       },
@@ -534,6 +652,8 @@ class _HomePageState extends State<HomePage> {
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
     _actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
+    // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
+    _pageDepth.addListener(_onPageDepthChanged);
     _bootstrap();
     _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
   }
@@ -544,11 +664,16 @@ class _HomePageState extends State<HomePage> {
     _ticker?.cancel();
     _suggestDebounce?.cancel();
     _searchFocus.removeListener(_onSearchFocusChanged);
+    _pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
     _lyricTicker?.cancel();
     _lyricScroll.dispose();
     _wordPositionMs.dispose();
     super.dispose();
+  }
+
+  void _onPageDepthChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _bootstrap() async {
@@ -2487,6 +2612,9 @@ class _HomePageState extends State<HomePage> {
     final player = _player;
     final current = _current;
     final topBar = _buildTopBar(context, current);
+    // 播放条 + 底部导航由根布局渲染(MaterialApp.builder 的 PlayerBarHost):
+    // 二级路由压上来时播放条仍然在场, 这里只负责把当前构建结果投递过去.
+    _publishBottomBar(_buildBottomBar(context, player, current));
     return Scaffold(
       appBar: topBar,
       // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
@@ -2567,46 +2695,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
         ),
-      ),
-      // 播放条 + 底部导航: 没有曲目时播放条不占位置(Media3 连接后拿到的是一份空状态)
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (player != null && (player.trackId != null || current != null))
-            _buildPlayerBar(context, player, current),
-          NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: _onTabSelected,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.search_outlined),
-                selectedIcon: Icon(Icons.search),
-                label: '搜索',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.explore_outlined),
-                selectedIcon: Icon(Icons.explore),
-                label: '推荐',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.dynamic_feed_outlined),
-                selectedIcon: Icon(Icons.dynamic_feed),
-                label: '关注',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                selectedIcon: Icon(Icons.person),
-                label: '我的',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.settings_outlined),
-                selectedIcon: Icon(Icons.settings),
-                label: '设置',
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
@@ -3116,6 +3204,142 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 底部条(常驻播放条 + 首页底部导航)的构建结果, 由根布局渲染(见 [playerBarSlot])。
+  ///
+  /// - 没有曲目时不给播放条(Media3 连接前拿到的是一份空状态, 空态不占位置);
+  /// - 底部 tab 属于首页: 有全屏页压在首页之上时只留播放条, 弹层/对话框不算;
+  /// - 没有底部导航时播放条自己吃掉系统手势区, 否则会被系统导航条压住一条。
+  Widget? _buildBottomBar(
+    BuildContext context,
+    PlayerView? player,
+    rust.SongDto? current,
+  ) {
+    final isHomeTop = _pageDepth.value <= 1;
+    final showBar = player != null && (player.trackId != null || current != null);
+    final bar = !showBar
+        ? null
+        : _MiniPlayerBar(
+            player: player,
+            current: current,
+            liked: _isLiked(current?.id),
+            queueIndex: _queue.isEmpty ? 1 : _queue.index + 1,
+            queueLength: _queue.items.length,
+            dragMax: _dragMax,
+            dragMs: _dragMs,
+            absorbBottomInset: !isHomeTop,
+            onSeekStart: (v) => setState(() {
+              _dragMax = player.durationMs.toDouble();
+              _dragMs = v;
+            }),
+            onSeekChanging: (v) => setState(() => _dragMs = v),
+            onSeekEnd: _seekTo,
+            // 首页被压住时先回首页再展开歌词: 否则切换的是看不见的那一页,
+            // 用户只会觉得"点了没反应"
+            onToggleLyrics: () {
+              if (!isHomeTop) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
+              _toggleLyrics();
+            },
+            onOpenAlbum: () => _openAlbumPreview(current),
+            onToggleLike: _toggleLike,
+            onPrevious: _previous,
+            onToggle: _toggle,
+            onNext: _next,
+          );
+    if (bar == null && !isHomeTop) return null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ?bar,
+        if (isHomeTop)
+          NavigationBar(
+            selectedIndex: _tab,
+            onDestinationSelected: _onTabSelected,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.search_outlined),
+                selectedIcon: Icon(Icons.search),
+                label: '搜索',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.explore_outlined),
+                selectedIcon: Icon(Icons.explore),
+                label: '推荐',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.dynamic_feed_outlined),
+                selectedIcon: Icon(Icons.dynamic_feed),
+                label: '关注',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                selectedIcon: Icon(Icons.person),
+                label: '我的',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.settings_outlined),
+                selectedIcon: Icon(Icons.settings),
+                label: '设置',
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+/// 常驻播放条: 从 HomePage.bottomNavigationBar 上移到根布局(见 [PlayerBarHost])。
+///
+/// 数据与回调全部由 _HomePageState 注入(播放状态与队列只有一份, 在那边),
+/// 这里只负责排版, 方便被根布局在任意路由之上渲染。
+class _MiniPlayerBar extends StatelessWidget {
+  const _MiniPlayerBar({
+    required this.player,
+    required this.current,
+    required this.liked,
+    required this.queueIndex,
+    required this.queueLength,
+    required this.dragMax,
+    required this.dragMs,
+    required this.absorbBottomInset,
+    required this.onSeekStart,
+    required this.onSeekChanging,
+    required this.onSeekEnd,
+    required this.onToggleLyrics,
+    required this.onOpenAlbum,
+    required this.onToggleLike,
+    required this.onPrevious,
+    required this.onToggle,
+    required this.onNext,
+  });
+
+  final PlayerView player;
+  final rust.SongDto? current;
+  final bool liked;
+
+  /// 当前曲在队列里的序号(1 起)与队列长度
+  final int queueIndex;
+  final int queueLength;
+
+  /// 拖动中冻结的量程与位置(null = 跟随播放状态)
+  final double? dragMax;
+  final double? dragMs;
+
+  /// 没有底部导航时自己吃掉系统手势区(有导航时由 NavigationBar 的 SafeArea 负责)
+  final bool absorbBottomInset;
+
+  final void Function(double ms) onSeekStart;
+  final void Function(double ms) onSeekChanging;
+  final void Function(double ms) onSeekEnd;
+  final VoidCallback onToggleLyrics;
+  final VoidCallback onOpenAlbum;
+  final VoidCallback onToggleLike;
+  final VoidCallback onPrevious;
+  final VoidCallback onToggle;
+  final VoidCallback onNext;
+
   /// 播放条上的紧凑图标按钮: 40dp 点击区 + 无内边距.
   ///
   /// 合并成一行后总宽 = 封面 52 + 4×40 = 212dp, 300dp 窄屏上文本仍有 ~90dp,
@@ -3135,18 +3359,19 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildPlayerBar(BuildContext context, PlayerView player, rust.SongDto? current) {
+  @override
+  Widget build(BuildContext context) {
     final dur = player.durationMs.toDouble();
     // 拖动中冻结量程: 自动续播会让 duration 突跳
-    final maxMs = _dragMax ?? (dur <= 0 ? 1.0 : dur);
-    final pos = (_dragMs ?? player.positionMs.toDouble()).clamp(0.0, maxMs);
-    final inQueue = _queue.isEmpty ? 1 : _queue.index + 1;
+    final maxMs = dragMax ?? (dur <= 0 ? 1.0 : dur);
+    final pos = (dragMs ?? player.positionMs.toDouble()).clamp(0.0, maxMs);
     return Material(
       elevation: 8,
-      // 播放条贴在 NavigationBar 之上, 底部的系统安全区由 NavigationBar 自己的 SafeArea
-      // 负责; 这里若再吃一次 bottom inset, 就会在播放条与底栏之间留出一条空白(R4).
+      // 有底部导航时, 底部的系统安全区由 NavigationBar 自己的 SafeArea 负责,
+      // 这里再吃一次 bottom inset 会在播放条与底栏之间留出一条空白(R4);
+      // 二级页上没有导航栏, 就得自己吃掉这块(否则被系统手势条压住一条)。
       child: SafeArea(
-        bottom: false,
+        bottom: absorbBottomInset,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Column(
@@ -3155,9 +3380,9 @@ class _HomePageState extends State<HomePage> {
               Slider(
                 value: pos,
                 max: maxMs,
-                onChangeStart: dur <= 0 ? null : (v) => setState(() { _dragMax = dur; _dragMs = v; }),
-                onChanged: dur <= 0 ? null : (v) => setState(() => _dragMs = v),
-                onChangeEnd: dur <= 0 ? null : (v) => _seekTo(v),
+                onChangeStart: dur <= 0 ? null : onSeekStart,
+                onChanged: dur <= 0 ? null : onSeekChanging,
+                onChangeEnd: dur <= 0 ? null : onSeekEnd,
               ),
               // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
               // 窄屏/大字号下只会变短不会溢出.
@@ -3165,7 +3390,7 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   // 封面: 点开看专辑大图 + 曲目
                   GestureDetector(
-                    onTap: () => _openAlbumPreview(current),
+                    onTap: onOpenAlbum,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 8, right: 4),
                       child: CoverArt(url: current?.coverUrl, size: 40, radius: 6),
@@ -3173,7 +3398,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   Expanded(
                     child: InkWell(
-                      onTap: _toggleLyrics,
+                      onTap: onToggleLyrics,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(12, 0, 8, 4),
                         child: Column(
@@ -3195,7 +3420,7 @@ class _HomePageState extends State<HomePage> {
                             Text(
                               '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
                               '  ${current?.artist ?? ''}'
-                              '  $inQueue/${_queue.items.length}',
+                              '  $queueIndex/$queueLength',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: Theme.of(context).textTheme.bodySmall,
@@ -3208,20 +3433,18 @@ class _HomePageState extends State<HomePage> {
                   // 红心 + 上一首/播放/下一首: 与歌曲信息挤在同一行(用户要求把两排合并),
                   // 紧凑点击区 40dp; 播放模式/心动/队列挪到详情页底部, 低频动作不占播放条.
                   _barIcon(
-                    tooltip: _isLiked(current?.id) ? '取消喜欢' : '喜欢',
+                    tooltip: liked ? '取消喜欢' : '喜欢',
                     icon: Icon(
-                      _isLiked(current?.id) ? Icons.favorite : Icons.favorite_border,
+                      liked ? Icons.favorite : Icons.favorite_border,
                       size: 22,
-                      color: _isLiked(current?.id)
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                      color: liked ? Theme.of(context).colorScheme.primary : null,
                     ),
-                    onPressed: _toggleLike,
+                    onPressed: onToggleLike,
                   ),
                   _barIcon(
                     tooltip: '上一首',
                     icon: const Icon(Icons.skip_previous, size: 26),
-                    onPressed: _previous,
+                    onPressed: onPrevious,
                   ),
                   _barIcon(
                     tooltip: player.playing ? '暂停' : '播放',
@@ -3229,12 +3452,12 @@ class _HomePageState extends State<HomePage> {
                       player.playing ? Icons.pause_circle : Icons.play_circle,
                       size: 38,
                     ),
-                    onPressed: _toggle,
+                    onPressed: onToggle,
                   ),
                   _barIcon(
                     tooltip: '下一首',
                     icon: const Icon(Icons.skip_next, size: 26),
-                    onPressed: _next,
+                    onPressed: onNext,
                   ),
                 ],
               ),
