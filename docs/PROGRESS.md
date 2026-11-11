@@ -29,7 +29,7 @@
 | v0.1.0 | 2026-11-08 | 首个公开预览版(Android APK + Linux tar.gz, MIT LICENSE, 第三方许可盘点) |
 | v0.2.x | 2026-11-09~10 | 设置项扩充 R1–R7、UI/UX 走查批 A–C、播放体验修复、**Windows 桌面版合入**、v0.2.2 三端发布 |
 | v0.3.x | 2026-11-10 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布**;v0.3.3 修 Ubuntu 22.04 GLib 基线 |
-| **v0.3.5** | **2026-11-11** | **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
+| **v0.3.5** | **2026-11-11** | **CI 实测**: CI + Release 两组流水线全绿, 6 种资产; **Windows 向导中文化首个真验证** —— ISCC 6.7.1 在 CI 上读到随包 Languages\ChineseSimplified.isl 并 Successful compile; write-guard 在 CI 与发版 verify 两个 job 都实际执行。内容: **技术债 D 批收敛** **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | **v0.3.4** | **2026-11-11** | **CI 实测(2026-11-11): 四个 job 全绿, Release 产出 6 种资产** —— apk 27.4 / linux tar.gz 14.4 / AppImage 14.0 / deb 10.6 / windows zip 16.3 / setup.exe 13.2 MB + SHA256SUMS(+ 下方功能)**手机号+短信验证码登录(网页通道)**、动态评论写入改 eapi(修 404)、评论区对话化(回复归属/楼层预览/动态评论归位)、动态流行内赞·评论·分享、发表后回填定位 |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
