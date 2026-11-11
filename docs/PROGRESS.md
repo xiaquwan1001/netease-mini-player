@@ -1284,3 +1284,24 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
   - `--report`: 把 --env/--run 拼成可直接贴 issue/PR 的 markdown。
 - 约束: 脚本不联网、不写 /tmp(日志在 `~/.cache/minincm-smoke/`); 未接入 release workflow
   (不动 .github/**), 后续建议发布后手动触发人工冒烟 checklist issue, 仅文档建议。
+
+## Android Keystore 凭据后端(通道层)(2026-11-11)
+
+- 新增 `KeystoreChannel.kt`(通道 `ncm/keystore`) + `ui/lib/src/keystore.dart` + 单测,
+  对应调研报告 §2c 的凭据后端通道层。
+- **存的是什么**: 原生侧把 value 用 Android Keystore 的 AES-256-GCM 密钥加密后,
+  以 `iv(12B) + 密文` 落盘到 `filesDir/cred/<key>.bin`(先写 .tmp 再 rename 原子替换);
+  Dart 侧只见 String, 不落任何明文。
+- **key alias**: `minincm-cred-v1`, 不设 setUserAuthenticationRequired(后台可无感读取)。
+- **失败语义**: 清数据/备份恢复导致密钥丢失或解密失败(AEADBadTag)时, 原生删掉旧密文
+  并返回 null/false, `KeyPermanentlyInvalidatedException` 已捕获, 不抛到 Dart;
+  非 Android 上 `available()==false`、`put()` 返回 false, 不偷写明文。
+- **尚未接线到 Rust identity**: 本 lane 只交付通道与 Dart 封装, 未接 main.dart 业务流程,
+  也未实现 Rust 侧 trait(由另一 lane 接入)。
+- **模拟器 a34 手动验**:
+  ```bash
+  ~/bin/avd headless a34   # 启动模拟器后装 debug 包并打开 app
+  adb shell run-as com.minincm.minincm.dev ls files/cred        # 看密文文件
+  adb shell run-as com.minincm.minincm.dev cat files/cred/<key>.bin | xxd | head  # 应为 iv+密文
+  adb logcat -s flutter | grep -iv music_u   # 确认无明文泄漏
+  ```
