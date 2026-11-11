@@ -21,9 +21,8 @@ pub use netease::{thread_id_for, NeteaseProvider};
 pub use ttml_source::{fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource};
 
 use ncm_provider::{Capability, ProviderRegistry};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::Mutex;
 
 pub const PROVIDER_NETEASE: &str = "netease";
 
