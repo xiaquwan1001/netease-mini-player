@@ -3,7 +3,8 @@
 > 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
 > `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
 > 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **550** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
+> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **567** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
+> 同日第三批: **楼层回复行内预览 + ��态流行内操作(赞/评论/分享) + 发表后回填定位**(见下方「评论区批 2」)。
 > 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
 >
 > **2026-11-10 收尾**(当日四批, 下面倒序):
@@ -65,6 +66,21 @@
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## v2 · 2026-11-11(三): 楼层预览 · 动态流行内操作 · 发表后回填定位
+
+三条都是用户真机反馈的使用摩擦, 落点全在 UI 层(无新 FFI):
+
+| 需求 | 做法 | 证据 |
+|---|---|---|
+| 回复默认折叠, 每次都要点开 | 顶层评论行内**直接预览**前 K 条回复: K = `replyCount>=3 ? 2 : 1`, 候选按点赞降序稳定排序; 每个父评论只拉 1 页(limit 4)、并发上限 2、失败静默; 单独给「展开全部 N 条回复」入口(不依赖预览成功); **「回复」按钮改成直接写回复与展开拆开** | `ui/test/comment_reply_preview_test.dart` 8 例 |
+| 动态流只有数量标识, 每次都要进详情 | 卡片操作行可点化: **点赞**(乐观翻转 + 失败回滚 + snackbar)、**评论**(进详情并定位到评论区, 不自动弹输入框; 详情页 `ListView`→`SingleChildScrollView` 以便视口外锚点可定位)、**分享**(面板: 转发动态 / 复制链接) | `ui/test/feed_row_actions_test.dart` 8 例 |
+| 发评论后不刷新: 头像空白、昵称「我」, 且不聚焦到新评论 | 发表成功后**静默重取第一页**(不显示整页 loading, 失败保留乐观项不打成错误页), 用服务端的真实昵称/头像/时间替换乐观项, 并把这条**滚进视野 + 高亮 1.8s**; 服务端偶尔还没带回新评论时保留乐观项(不让它凭空消失) | `ui/test/comment_post_refresh_test.dart` 2 例(回填替换 / 静默失败保留) |
+
+门禁: `flutter test --exclude-tags network` **567**(+17) · `dart analyze` 0 error / 0 warning(42 info) · `cargo test --offline --workspace` 254。
+
+> 顺手记一笔环境坑: 本轮 `cargo test` 一次链接失败 `rust-lld: error: invalid symbol index`(增量对象损坏),
+> `cargo clean -p ncm_ffi` 后一次通过 —— 不要为此清整个 `core/target`(会删掉 12 GB 且重编很久)。
 
 ## v2 · 2026-11-11(二): 评论区两处修复(真机反馈)
 

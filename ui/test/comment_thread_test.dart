@@ -57,7 +57,9 @@ void main() {
 
     expect(find.text('好听'), findsOneWidget);
     expect(find.text('3'), findsOneWidget);
-    expect(find.text('回复 2'), findsOneWidget);
+    // 「回复」只代表写回复动作; 浏览全量回复由独立的展开入口承担
+    expect(find.text('回复'), findsOneWidget);
+    expect(find.textContaining('展开全部'), findsOneWidget);
 
     await tester.tap(find.text('3'));
     await tester.pumpAndSettle();
@@ -85,9 +87,10 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('回复 1'));
+    await tester.tap(find.text('回复'));
     await tester.pumpAndSettle();
-    expect(repliesLoaded, 1);
+    // 预览懒加载已消耗一次, 打开面板再拉一次全量
+    expect(repliesLoaded, 2);
     expect(find.text('已有回复'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '我也说一句');

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'comment_stats_bar.dart';
@@ -97,6 +99,39 @@ class CommentThreadState extends State<CommentThread> {
   /// 当前账号 uid(0 = 未登录): 只有自己发的评论才给"删除"
   BigInt _myUid = BigInt.zero;
 
+  // ---------------- 发表后定位 ----------------
+
+  /// 刚发表成功的评论 id: 高亮一下就褪(用户找不到自己的评论会以为没发出去)
+  BigInt? _highlightId;
+  Timer? _highlightTimer;
+  /// 每个列表项的 key: 发表后要把它滚进视野(ensureVisible 需要 context)
+  final Map<BigInt, GlobalKey> _tileKeys = <BigInt, GlobalKey>{};
+  /// 乐观项(id == 0)没有服务端 id, 单独给一个 key
+  final GlobalKey _draftKey = GlobalKey();
+
+  // ---------------- 楼层回复行内预览 ----------------
+
+  /// 每个父评论只预取 1 页(够按点赞选出前 K 条), 并发上限 [_previewMaxConcurrent],
+  /// 失败静默: 预览缺席不影响主列表, 「展开全部 N 条回复」仍可看全量。
+  static const _previewLimit = 4;
+  static const _previewMaxConcurrent = 2;
+
+  final Map<BigInt, List<rust.Comment>> _replyPreviews =
+      <BigInt, List<rust.Comment>>{};
+
+  /// 预览拉取失败的楼层: 静默跳过不再排队(整页重载后清空重来)
+  final Set<BigInt> _previewFailed = <BigInt>{};
+  final Set<BigInt> _previewActive = <BigInt>{};
+  final List<BigInt> _previewQueue = <BigInt>[];
+  int _previewInFlight = 0;
+
+  /// 整页重载时自增, 旧 gen 的在途预览响应直接作废
+  int _previewGen = 0;
+
+  /// 用户刚回复过的楼层: 预览兜底带上 timeMs 最新的一条(通常就是刚发的回复,
+  /// 避免"发了看不见"; 按赞排序时新回复是 0 赞会被挤掉)
+  final Set<BigInt> _justReplied = <BigInt>{};
+
   CommentPageLoader get _loadPage =>
       widget.loadPage ??
       (limit, offset) {
@@ -177,11 +212,17 @@ class CommentThreadState extends State<CommentThread> {
     }
   }
 
-  Future<void> _reload() async {
+  /// [silent] = 发表后回填用: 不显示整页 loading(列表不闪), 失败也不把列表打成错误页
+  Future<void> _reload({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
       _moreError = null;
+      // 整页重载: 预览缓存一并作废, 旧 gen 的在途响应会被丢弃
+      _previewGen++;
+      _replyPreviews.clear();
+      _previewFailed.clear();
+      _previewQueue.clear();
     });
     try {
       final page = await retryNetwork(() => _fetchPage(widget.pageSize, 0));
@@ -193,11 +234,17 @@ class CommentThreadState extends State<CommentThread> {
         _total = page.total;
         _hasMore = page.hasMore;
         if (page.threadId.isNotEmpty) _threadId = page.threadId;
+        // 列表换了就丢掉旧项的 key, 免得 _tileKeys 无限增长
+        final ids = _items.map((c) => c.id).toSet();
+        _tileKeys.removeWhere((k, _) => !ids.contains(k));
         _loading = false;
       });
       _loadStats();
+      _schedulePreviews();
     } catch (e) {
       if (!mounted) return;
+      // 静默重载失败: 保留现状(乐观项还在), 不要把整页打成错误
+      if (silent) return;
       setState(() {
         _error = friendlyError(e);
         _loading = false;
@@ -242,6 +289,7 @@ class CommentThreadState extends State<CommentThread> {
         _hasMore = page.hasMore;
         _loadingMore = false;
       });
+      _schedulePreviews();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -249,6 +297,99 @@ class CommentThreadState extends State<CommentThread> {
         _moreError = friendlyError(e);
       });
     }
+  }
+
+  /// 行内预览懒加载调度: 只给 replyCount > 0、还没数据、没在拉、没失败过的楼层排队。
+  void _schedulePreviews() {
+    for (final c in _items) {
+      if (c.replyCount <= BigInt.zero) continue;
+      if (_replyPreviews.containsKey(c.id) ||
+          _previewFailed.contains(c.id) ||
+          _previewActive.contains(c.id) ||
+          _previewQueue.contains(c.id)) {
+        continue;
+      }
+      _previewQueue.add(c.id);
+    }
+    _pumpPreviews();
+  }
+
+  void _pumpPreviews() {
+    while (_previewInFlight < _previewMaxConcurrent &&
+        _previewQueue.isNotEmpty) {
+      final id = _previewQueue.removeAt(0);
+      if (_previewActive.contains(id)) continue;
+      _previewInFlight++;
+      unawaited(_fetchPreview(id, _previewGen));
+    }
+  }
+
+  Future<void> _fetchPreview(BigInt parentId, int gen) async {
+    _previewActive.add(parentId);
+    try {
+      // 预览是 best-effort: 不套 retryNetwork, 失败直接静默
+      final page = await _loadReplies(parentId, _previewLimit);
+      if (!mounted || gen != _previewGen) return;
+      setState(() {
+        _replyPreviews[parentId] = page.comments;
+        _previewFailed.remove(parentId);
+      });
+    } catch (_) {
+      if (!mounted || gen != _previewGen) return;
+      setState(() => _previewFailed.add(parentId));
+    } finally {
+      _previewActive.remove(parentId);
+      _previewInFlight--;
+      if (mounted) {
+        if (gen != _previewGen) {
+          _schedulePreviews(); // 整页已重载, 给新 gen 重新排队
+        } else {
+          _pumpPreviews();
+        }
+      }
+    }
+  }
+
+  /// 楼层回复刚发成功: 丢掉旧预览重拉一次, 让新回复立刻出现在行内预览里。
+  void _refreshPreview(BigInt parentId) {
+    _previewFailed.remove(parentId);
+    _justReplied.add(parentId);
+    if (_previewActive.contains(parentId) || _previewQueue.contains(parentId)) {
+      return; // 在拉的话这页大概率不含新回复, 但兜底标记会让下一轮把它带上
+    }
+    _replyPreviews.remove(parentId);
+    _previewQueue.add(parentId);
+    _pumpPreviews();
+  }
+
+  /// 行内预览选取规则(简单可解释, 单测 comment_reply_preview_test.dart 固化):
+  /// - 名额 K = replyCount >= 3 ? 2 : 1 —— 楼层厚给 2 条, 薄楼层只给 1 条;
+  /// - 候选按点赞数降序取前 K(互动优先), 同赞保持接口返回的时间序;
+  /// - 行宽放不下ellipsis截断, 全量走「展开全部 N 条回复」入口。
+  List<rust.Comment> _previewFor(rust.Comment parent) {
+    final replies = _replyPreviews[parent.id];
+    if (replies == null || replies.isEmpty) return const [];
+    final k = parent.replyCount >= BigInt.from(3) ? 2 : 1;
+    final order = List<int>.generate(replies.length, (i) => i)
+      ..sort((a, b) {
+        final byLikes = replies[b].likedCount.compareTo(replies[a].likedCount);
+        return byLikes != 0 ? byLikes : a.compareTo(b);
+      });
+    final picked = [for (final i in order.take(k)) replies[i]];
+    if (_justReplied.contains(parent.id)) {
+      var newest = replies.first;
+      for (final r in replies) {
+        if (r.timeMs > newest.timeMs) newest = r;
+      }
+      if (!picked.any((r) => r.id == newest.id)) {
+        if (picked.length >= k) {
+          picked[picked.length - 1] = newest;
+        } else {
+          picked.add(newest);
+        }
+      }
+    }
+    return picked;
   }
 
   /// 点赞: 先本地乐观翻转, 失败回滚
@@ -293,7 +434,12 @@ class CommentThreadState extends State<CommentThread> {
     );
   }
 
-  Future<void> _openReplies(rust.Comment comment) async {
+  /// [focusComposer] = 直接进写回复(「回复」按钮): 面板打开即聚焦输入框。
+  /// 预览行/「展开全部」入口走默认 false = 浏览模式, 不抢输入框焦点。
+  Future<void> _openReplies(
+    rust.Comment comment, {
+    bool focusComposer = false,
+  }) async {
     final sent = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -302,6 +448,7 @@ class CommentThreadState extends State<CommentThread> {
         parent: comment,
         load: _loadReplies,
         reply: _reply,
+        focusComposer: focusComposer,
       ),
     );
     if (sent != true || !mounted) return;
@@ -325,6 +472,8 @@ class CommentThreadState extends State<CommentThread> {
         parentId: c.parentId,
       );
     });
+    // 刚发的回复要立刻出现在行内预览里: 丢缓存重拉一次并打上兜底标记
+    _refreshPreview(comment.id);
   }
 
   /// 删除自己发的评论: 先确认, 成功后本地移除(不整页刷新)
@@ -435,7 +584,52 @@ class CommentThreadState extends State<CommentThread> {
       rethrow; // 面板据此显示 friendlyError 并保留已输入文本
     }
     if (!mounted) return;
+    // 乐观项是「我 / 刚刚 / 无头像」: 发表成功后静默重取一页, 用服务端的真实
+    // 昵称/头像/时间/评论 id 替换掉, 并把这条滚进视野 + 高亮一下。
+    // 不做这一步, 用户看到的就是一条假头像的"我", 得退出重进才正常。
+    await _reload(silent: true);
+    if (!mounted) return;
+    final posted = _items.where((c) =>
+        c.id != BigInt.zero && c.userId == _myUid && c.content == content);
+    if (posted.isNotEmpty) {
+      // 同文案的旧评论可能有多条, 取最新发的那条
+      final newest = posted.reduce((a, b) => a.timeMs >= b.timeMs ? a : b);
+      _revealComment(newest.id);
+    } else {
+      // 服务端偶尔还没把新评论带进第一页(缓存/延迟): 保留乐观项,
+      // 否则用户会看到自己刚发的评论凭空消失
+      setState(() {
+        // 重载已经把列表换掉了(乐观项不在了)才补回去; 还在就别插第二次,
+        // 否则同一个 draft 会有两个 key → "Duplicate keys found"
+        if (!_items.any((c) => identical(c, draft))) {
+          _items.insert(at.clamp(0, _items.length), draft);
+          _total += BigInt.one;
+        }
+      });
+    }
     _snack('已发表');
+  }
+
+  /// 把某条评论滚进视野并高亮 ~1.8s.
+  ///
+  /// 用 Scrollable.ensureVisible(不假设外层是哪种滚动容器), 对齐到视口上部 1/4;
+  /// 高亮用列表项的 key 定位, 拿不到 context(被虚拟化/已销毁)时静默跳过。
+  void _revealComment(BigInt id) {
+    setState(() => _highlightId = id);
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (mounted) setState(() => _highlightId = null);
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _tileKeys[id]?.currentContext;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.25,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   /// 只有资源类评论(歌曲/歌单/专辑/播客)能查热门; 动态评论的 threadId 带 uid, 接口不认
@@ -453,6 +647,12 @@ class CommentThreadState extends State<CommentThread> {
       _hasMore = false;
     });
     _reload();
+  }
+
+  @override
+  void dispose() {
+    _highlightTimer?.cancel();
+    super.dispose();
   }
 
   void _snack(String message) {
@@ -565,10 +765,19 @@ class CommentThreadState extends State<CommentThread> {
           else
             for (var i = 0; i < _items.length; i++)
               _CommentTile(
+                // 乐观项(id == 0)没有服务端 id, 共用一个 key; 其余按 id 缓存
+                key: _items[i].id == BigInt.zero
+                    ? _draftKey
+                    : _tileKeys.putIfAbsent(
+                        _items[i].id, () => GlobalKey()),
+                highlight: _highlightId != null &&
+                    _highlightId == _items[i].id,
                 comment: _items[i],
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
-                onOpenReplies: () => _openReplies(_items[i]),
+                previewReplies: _previewFor(_items[i]),
+                onExpandReplies: () => _openReplies(_items[i]),
+                onReply: () => _openReplies(_items[i], focusComposer: true),
                 // 刚发表的乐观项(id == 0)还没有服务端 id, 不给删除入口
                 onDelete: _myUid != BigInt.zero &&
                         _items[i].userId == _myUid &&
@@ -613,17 +822,32 @@ class CommentThreadState extends State<CommentThread> {
 
 class _CommentTile extends StatelessWidget {
   const _CommentTile({
+    super.key,
     required this.comment,
     required this.timeText,
     required this.onToggleLike,
-    required this.onOpenReplies,
+    required this.onExpandReplies,
+    required this.onReply,
+    this.previewReplies = const [],
     this.onDelete,
+    this.highlight = false,
   });
+
+  /// 刚发表的那条: 短暂高亮底色, 让人一眼看到自己发的评论
+  final bool highlight;
 
   final rust.Comment comment;
   final String timeText;
   final VoidCallback onToggleLike;
-  final VoidCallback onOpenReplies;
+
+  /// 看全部回复: 预览行与「展开全部 N 条回复」入口共用
+  final VoidCallback onExpandReplies;
+
+  /// 直接进写回复(面板打开即聚焦输入框)
+  final VoidCallback onReply;
+
+  /// 行内预览的前 K 条回复(顶层 tile 专用; 楼层预览失败时为空)
+  final List<rust.Comment> previewReplies;
 
   /// 只有自己发的评论才给(别人的评论官方也不允许删)
   final VoidCallback? onDelete;
@@ -632,8 +856,16 @@ class _CommentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      // 刚发表的那条淡出一层底色, 1.8s 后由父级把 highlight 置回 false
+      decoration: BoxDecoration(
+        color: highlight
+            ? scheme.primaryContainer.withValues(alpha: 0.45)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      padding: const EdgeInsets.only(bottom: 12, top: 2, left: 2, right: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -711,6 +943,36 @@ class _CommentTile extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(comment.content, style: theme.textTheme.bodyMedium),
+                // 行内回复预览: 点任意一条 → 打开楼层详情(与「回复」动作分离见下)
+                for (final r in previewReplies)
+                  InkWell(
+                    onTap: onExpandReplies,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '${r.userName.isEmpty ? '匿名用户' : r.userName}：${r.content}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ),
+                  ),
+                // 独立的展开入口: 只要楼层有回复就给, 预览失败也能从这进详情
+                if (comment.replyCount > BigInt.zero)
+                  InkWell(
+                    onTap: onExpandReplies,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '展开全部 ${comment.replyCount} 条回复',
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: scheme.primary),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
@@ -746,8 +1008,10 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 10),
+                    // 「回复」= 写回复动作本体(打开面板并聚焦输入框);
+                    // 数量与浏览全量回复由预览行/「展开全部」承担, 不再混在一个按钮里。
                     InkWell(
-                      onTap: onOpenReplies,
+                      onTap: onReply,
                       borderRadius: BorderRadius.circular(6),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -760,9 +1024,7 @@ class _CommentTile extends StatelessWidget {
                                 size: 14, color: scheme.outline),
                             const SizedBox(width: 3),
                             Text(
-                              comment.replyCount > BigInt.zero
-                                  ? '回复 ${comment.replyCount}'
-                                  : '回复',
+                              '回复',
                               style: theme.textTheme.labelSmall
                                   ?.copyWith(color: scheme.outline),
                             ),
@@ -812,11 +1074,15 @@ class _RepliesSheet extends StatefulWidget {
     required this.parent,
     required this.load,
     required this.reply,
+    this.focusComposer = false,
   });
 
   final rust.Comment parent;
   final CommentRepliesLoader load;
   final CommentReplyHook reply;
+
+  /// true = 「回复」动作打开: 直接聚焦输入框进写回复
+  final bool focusComposer;
 
   @override
   State<_RepliesSheet> createState() => _RepliesSheetState();
@@ -957,6 +1223,7 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
+                        autofocus: widget.focusComposer,
                         textInputAction: TextInputAction.send,
                         onSubmitted: (_) => _send(),
                         decoration: const InputDecoration(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
@@ -16,6 +17,11 @@ Future<void> showFeedDetail(
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required Future<void> Function(String url) onOpenUrl,
   void Function(BigInt eventId, bool liked, BigInt likedCount)? onLikeChanged,
+
+  /// true = 打开后直接滚到评论区(列表页点"评论"数字进来)。
+  /// 只滚动定位, 不自动弹写评论面板 —— 用户点的是"看评论";
+  /// 想要"滚过去 + 聚焦输入框"仍走页面内评论按钮(focusComposer)。
+  bool focusComments = false,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -24,6 +30,7 @@ Future<void> showFeedDetail(
         onPlaySongs: onPlaySongs,
         onOpenUrl: onOpenUrl,
         onLikeChanged: onLikeChanged,
+        focusComments: focusComments,
       ),
     ),
   );
@@ -56,12 +63,16 @@ class _FeedDetailPage extends StatefulWidget {
     required this.onPlaySongs,
     required this.onOpenUrl,
     this.onLikeChanged,
+    this.focusComments = false,
   });
 
   final rust.FeedEventDto event;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final void Function(BigInt eventId, bool liked, BigInt likedCount)? onLikeChanged;
+
+  /// 打开后直接滚到评论区(列表页"评论"入口), 不弹写评论面板
+  final bool focusComments;
 
   @override
   State<_FeedDetailPage> createState() => _FeedDetailPageState();
@@ -75,6 +86,39 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
   /// 评论区句柄: 「评论」按钮经它触发聚焦输入框(见 CommentThread.focusComposer)
   final GlobalKey<CommentThreadState> _commentThreadKey =
       GlobalKey<CommentThreadState>();
+
+  /// 评论区锚点: focusComments 进来时经它把评论区滚进视口(不弹输入框)
+  final GlobalKey _commentsAnchorKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.focusComments && widget.event.threadId.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revealComments());
+    }
+  }
+
+  /// 把评论区顶部对齐到视口顶(直达到位, 不做"最小可见"滚动)。
+  /// 不用 Scrollable.ensureVisible: 它只保证目标可见(尾对齐视口尾),
+  /// 用户语义是"看评论区", 应该让评论区从顶部开始。
+  void _revealComments() {
+    if (!mounted) return;
+    final anchor = _commentsAnchorKey.currentContext;
+    if (anchor == null) return;
+    final renderObject = anchor.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final viewport = RenderAbstractViewport.maybeOf(renderObject);
+    final position = Scrollable.maybeOf(anchor)?.position;
+    if (viewport == null || position == null || !position.hasContentDimensions) {
+      return;
+    }
+    final target =
+        viewport.getOffsetToReveal(renderObject, 0.0).offset.clamp(
+              position.minScrollExtent,
+              position.maxScrollExtent,
+            );
+    position.jumpTo(target);
+  }
 
   Future<void> _toggleLike() async {
     final threadId = widget.event.threadId;
@@ -168,9 +212,14 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
     final hasThread = event.threadId.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('动态')),
-      body: ListView(
+      // SingleChildScrollView(非懒构建): 内容节点固定且少, 且"定位到评论区"
+      // 依赖评论区锚点常在树上 —— 懒构建的 ListView 会让视口外锚点拿不到
+      // context(focusComments 直达失效), 这里必须全量构建。
+      body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           Row(
             children: [
               CircleCover(url: event.avatarUrl, size: 40),
@@ -290,10 +339,13 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
           ),
           const Divider(),
           if (hasThread)
-            CommentThread(
-              key: _commentThreadKey,
-              threadId: event.threadId,
-              totalHint: event.commentCount.toInt(),
+            KeyedSubtree(
+              key: _commentsAnchorKey,
+              child: CommentThread(
+                key: _commentThreadKey,
+                threadId: event.threadId,
+                totalHint: event.commentCount.toInt(),
+              ),
             )
           else
             Padding(
@@ -303,7 +355,8 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
                 style: theme.textTheme.bodySmall,
               ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }

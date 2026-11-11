@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'cover_art.dart';
 import 'feed_detail_page.dart';
@@ -19,6 +20,8 @@ class FeedView extends StatefulWidget {
     required this.onOpenUrl, // Future<void> Function(String url) —— 视频交给系统打开
     this.loadFeed, // 测试注入
     this.loadSubscribedArtists, // 测试注入(关注艺人, 用于"全部艺人"面板)
+    this.likeEvent, // 测试注入(列表行点赞, 默认 rust.likeEvent)
+    this.forwardEvent, // 测试注入(列表行转发, 默认 rust.forwardEvent)
   });
 
   final bool loggedIn;
@@ -28,6 +31,16 @@ class FeedView extends StatefulWidget {
   final Future<List<rust.FeedEventDto>> Function()? loadFeed;
   final Future<List<rust.Artist>> Function()? loadSubscribedArtists;
 
+  /// 列表行"点赞"动作: 直接走 FFI(不必进详情页), 失败在列表上提示并回滚
+  final Future<bool> Function({required String threadId, required bool liked})? likeEvent;
+
+  /// 列表行"转发"动作(分享面板里选"转发动态"时用)
+  final Future<bool> Function({
+    required BigInt eventId,
+    required BigInt userId,
+    required String msg,
+  })? forwardEvent;
+
   @override
   State<FeedView> createState() => _FeedViewState();
 }
@@ -35,6 +48,9 @@ class FeedView extends StatefulWidget {
 class _FeedViewState extends State<FeedView> {
   List<rust.FeedEventDto>? _events;
   String? _error;
+
+  /// 正在列表行点赞中的动态 id(防抖: 同一条一次只允许一个在途请求)
+  final Set<BigInt> _likeBusy = {};
 
   /// 当前选中的艺人(按 userId 过滤), null = 全部
   BigInt? _authorFilter;
@@ -214,6 +230,8 @@ class _FeedViewState extends State<FeedView> {
                       onPlaySongs: widget.onPlaySongs,
                       onOpenUrl: widget.onOpenUrl,
                       onOpenChanged: _replace,
+                      onLike: () => _toggleLike(events[i]),
+                      forwardEvent: widget.forwardEvent,
                     ),
                   ),
           ),
@@ -230,7 +248,76 @@ class _FeedViewState extends State<FeedView> {
     if (index < 0) return;
     setState(() => list[index] = updated);
   }
+
+  /// 列表行直接点赞: 乐观翻转(立即变色/变数), 失败回滚并提示
+  Future<void> _toggleLike(rust.FeedEventDto event) async {
+    if (event.threadId.isEmpty) {
+      _snack('这条动态不支持点赞');
+      return;
+    }
+    if (_likeBusy.contains(event.id)) return;
+    _likeBusy.add(event.id);
+    final target = !event.liked;
+    final before = event.likedCount;
+    var after = target ? before + BigInt.one : before - BigInt.one;
+    if (after < BigInt.zero) after = BigInt.zero;
+    _patchLike(event.id, liked: target, likedCount: after);
+    try {
+      final like = widget.likeEvent ?? rust.likeEvent;
+      await like(threadId: event.threadId, liked: target);
+    } catch (e) {
+      if (!mounted) return;
+      _patchLike(event.id, liked: !target, likedCount: before);
+      _snack('点赞失败: ${friendlyError(e)}');
+    } finally {
+      _likeBusy.remove(event.id);
+    }
+  }
+
+  void _patchLike(BigInt id, {required bool liked, required BigInt likedCount}) {
+    final list = _events;
+    if (list == null) return;
+    final index = list.indexWhere((e) => e.id == id);
+    if (index < 0) return;
+    setState(() {
+      list[index] =
+          _copyEventWith(list[index], liked: liked, likedCount: likedCount);
+    });
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
 }
+
+/// 复制一条动态并替换点赞状态(列表行乐观更新 / 详情页点赞回传共用)
+rust.FeedEventDto _copyEventWith(
+  rust.FeedEventDto e, {
+  required bool liked,
+  required BigInt likedCount,
+}) =>
+    rust.FeedEventDto(
+      id: e.id,
+      threadId: e.threadId,
+      userId: e.userId,
+      kind: e.kind,
+      userName: e.userName,
+      avatarUrl: e.avatarUrl,
+      text: e.text,
+      song: e.song,
+      coverUrl: e.coverUrl,
+      images: e.images,
+      videoUrl: e.videoUrl,
+      title: e.title,
+      timeMs: e.timeMs,
+      liked: liked,
+      likedCount: likedCount,
+      shareCount: e.shareCount,
+      commentCount: e.commentCount,
+    );
 
 class _Author {
   const _Author({
@@ -424,6 +511,8 @@ class _FeedCard extends StatelessWidget {
     required this.onPlaySongs,
     required this.onOpenUrl,
     required this.onOpenChanged,
+    required this.onLike,
+    this.forwardEvent,
   });
 
   final rust.FeedEventDto event;
@@ -431,33 +520,111 @@ class _FeedCard extends StatelessWidget {
   final Future<void> Function(String url) onOpenUrl;
   final void Function(rust.FeedEventDto updated) onOpenChanged;
 
-  Future<void> _openDetail(BuildContext context) async {
+  /// 列表行点赞(乐观更新/回滚在 FeedView 的列表状态里做)
+  final VoidCallback onLike;
+
+  /// 转发动作(分享面板"转发动态"), 默认 rust.forwardEvent
+  final Future<bool> Function({
+    required BigInt eventId,
+    required BigInt userId,
+    required String msg,
+  })? forwardEvent;
+
+  /// 分享动作面板: 转发(带转发语, 走 forwardEvent) / 复制链接(剪贴板)。
+  /// 与详情页同源(链接/文案一致), 只是入口在列表行上, 不必进详情页。
+  Future<void> _openShareSheet(BuildContext context) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.autorenew),
+              title: const Text('转发动态'),
+              onTap: () => Navigator.pop(sheetContext, 'forward'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('复制链接'),
+              onTap: () => Navigator.pop(sheetContext, 'copy'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !context.mounted) return;
+    if (action == 'copy') {
+      await Clipboard.setData(
+        ClipboardData(text: 'https://music.163.com/#/event?id=${event.id}'),
+      );
+      if (!context.mounted) return;
+      _snack(context, '链接已复制');
+      return;
+    }
+    // 转发: 与详情页一致, 先填转发语(可留空)
+    final message = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('转发动态'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: 3,
+            decoration: const InputDecoration(hintText: '说点什么(可留空)'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('转发'),
+            ),
+          ],
+        );
+      },
+    );
+    if (message == null || !context.mounted) return;
+    try {
+      final forward = forwardEvent ?? rust.forwardEvent;
+      final ok = await forward(
+        eventId: event.id,
+        userId: event.userId,
+        msg: message,
+      );
+      if (!context.mounted) return;
+      _snack(context, ok ? '已转发' : '转发未生效');
+    } catch (e) {
+      if (!context.mounted) return;
+      _snack(context, '转发失败: ${friendlyError(e)}');
+    }
+  }
+
+  void _snack(BuildContext context, String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openDetail(
+    BuildContext context, {
+    bool focusComments = false,
+  }) async {
     await showFeedDetail(
       context,
       event: event,
       onPlaySongs: onPlaySongs,
       onOpenUrl: onOpenUrl,
-      onLikeChanged: (id, liked, likedCount) => onOpenChanged(
-        rust.FeedEventDto(
-          id: event.id,
-          threadId: event.threadId,
-          userId: event.userId,
-          kind: event.kind,
-          userName: event.userName,
-          avatarUrl: event.avatarUrl,
-          text: event.text,
-          song: event.song,
-          coverUrl: event.coverUrl,
-          images: event.images,
-          videoUrl: event.videoUrl,
-          title: event.title,
-          timeMs: event.timeMs,
-          liked: liked,
-          likedCount: likedCount,
-          shareCount: event.shareCount,
-          commentCount: event.commentCount,
-        ),
-      ),
+      // 从"评论"数字/图标进来时直接定位到评论区(不弹输入框)
+      focusComments: focusComments,
+      onLikeChanged: (id, liked, likedCount) =>
+          onOpenChanged(_copyEventWith(event, liked: liked, likedCount: likedCount)),
     );
   }
 
@@ -576,37 +743,118 @@ class _FeedCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: [
-                    Icon(
-                      event.liked ? Icons.favorite : Icons.favorite_border,
-                      size: 14,
-                      color: event.liked ? scheme.primary : scheme.outline,
-                    ),
-                    if (event.likedCount > BigInt.zero) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        '${event.likedCount}',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.outline),
+                    // 点赞: 可点, 乐观翻转(变色/变数), 失败由 FeedView 回滚
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: onLike,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              event.liked
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              size: 14,
+                              color: event.liked
+                                  ? scheme.primary
+                                  : scheme.outline,
+                            ),
+                            if (event.likedCount > BigInt.zero) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '${event.likedCount}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: event.liked
+                                      ? scheme.primary
+                                      : scheme.outline,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ],
+                    ),
                     const SizedBox(width: 14),
-                    Icon(Icons.mode_comment_outlined,
-                        size: 14, color: scheme.outline),
-                    if (event.commentCount > BigInt.zero) ...[
-                      const SizedBox(width: 4),
-                      Text(
-                        '${event.commentCount}',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.outline),
+                    // 评论: 点数字/图标进详情并直接滚到评论区
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _openDetail(context, focusComments: true),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.mode_comment_outlined,
+                                size: 14, color: scheme.outline),
+                            if (event.commentCount > BigInt.zero) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '${event.commentCount}',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(color: scheme.outline),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ],
-                    const Spacer(),
-                    Text(
-                      '查看详情',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.outline),
                     ),
-                    Icon(Icons.chevron_right, size: 16, color: scheme.outline),
+                    const SizedBox(width: 12),
+                    // 分享: 动作面板(转发 / 复制链接)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(6),
+                      onTap: () => _openShareSheet(context),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.autorenew,
+                                size: 14, color: scheme.outline),
+                            if (event.shareCount > BigInt.zero) ...[
+                              const SizedBox(width: 4),
+                              Text(
+                                '${event.shareCount}',
+                                style: theme.textTheme.labelSmall
+                                    ?.copyWith(color: scheme.outline),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    // 空间紧张(300dp+1.25)时"查看详情"缩放让位, 不溢出
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '查看详情',
+                              style: theme.textTheme.labelSmall
+                                  ?.copyWith(color: scheme.outline),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 16,
+                              color: scheme.outline,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ],
