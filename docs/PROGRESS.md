@@ -3,7 +3,7 @@
 > 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
 > `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
 > 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **571** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
+> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **617** / `dart analyze` 0 error 0 warning(38 info) / 接口覆盖 **123/123**(FFI 146)。
 > 同日第三批: **楼层回复行内预览 + ��态流行内操作(赞/评论/分享) + 发表后回填定位**(见下方「评论区批 2」)。
 > 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
 >
@@ -77,7 +77,7 @@
 | **底部弹层统一** | 21 处 `showModalBottomSheet`, 仅 4 处用 `SheetHeader` | 21/21 全部 `showDragHandle: true` + `SheetHeader`; `SheetHeader` 扩出 `subtitle/leading/trailing`(旧调用方零改动) | `ui/test/song_actions_test.dart` 等 15 文件 +90 例 |
 | **时长/日期格式化去重** | 8 处各写一份 | 收敛进 `lib/src/format.dart`(新增 `formatDurationShort` m:ss / `formatDateYmd`); `song_tile` 的定长口径保留同名导出并委托共享实现 | `ui/test/format_test.dart` +5 例 |
 | **podcast.dart 半死入口** | 658 行, `showPodcastSheet`+`_PodcastBrowser*` ≈88 行零生产调用 | **658 → 190 行**; 生产链路(`showPodcastDetail`→`ProgramDetailSheet`)未动; 两个测试改直测存活组件 | `podcast_test` 256→77 行 · `program_detail_test` 206→154 行 |
-| **窄屏 + 1.25 字号回归** | 43 个渲染型测试文件缺这条 | 本轮补 **35 + 10 个文件**(分 3 个子代理), 覆盖 12 组尺寸组合的 `narrow_width_audit` 仍为基线 | 逐文件新增用例; 详见 `.pi/artifacts/debt-narrow-*.md` |
+| **窄屏 + 1.25 字号回归** | 43 个渲染型测试文件缺这条 | 本轮补 **45 个文件**(3 个子代理 + 主会话收口 10 个), 渲染型测试缺口归零(剩余的 `adaptive_text_row_page_test` 本身就是 300/320/360 × 1.0/1.25/1.625 审计) | 逐文件新增用例; 详见 `.pi/artifacts/debt-narrow-*.md` |
 | **Windows 安装向导中文化** | 只有内置英文(缺 `ChineseSimplified.isl`, v0.3.1 因此挂过) | 随包 `packaging/windows/ChineseSimplified.isl`(21.5 KB, is-7_1_1 官方内置版) + `[Languages]` 双语言; CI 加兜底拷贝(choco innosetup 仍 6.7.1 不自带) | `packaging/windows/README.md` 记来源/许可; .iss 引用静态核查通过(本机无 ISCC, 真验证待 CI) |
 | **deb 依赖闭包** | 未验证 | 见上一节: 68 个外部库 100% 被现 Depends 覆盖 | ldd→dpkg→闭包比对 |
 
@@ -88,7 +88,7 @@
 2. `lib/src/play_queue_sheet.dart`: 统一表头后标题变两行, 矮视口纵向溢出 2px → 队列面板改单行标题
    (计数移到 trailing), `narrow_width_audit_test` 12 组组合恢复全绿。
 
-门禁: `cargo test --offline --workspace` **254** · `flutter test --exclude-tags network` **607** ·
+门禁: `cargo test --offline --workspace` **254** · `flutter test --exclude-tags network` **617**(+46) ·
 `dart analyze` **0 error / 0 warning(38 info, 比开工前少 4 条)**。
 
 ## 2026-11-11(四): deb 依赖闭包核查(无容器环境下的替代验证)

@@ -66,4 +66,35 @@ void main() {
     expect(find.text('相似一'), findsNothing);
     expect(opened, isNull, reason: '点歌不该顺手打开歌单');
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => TextButton(
+            onPressed: () => showSimilarSongs(
+              ctx,
+              song: song(1, '种子歌名字也很长很长很长很长'),
+              onPlay: (_, _) {},
+              onOpenPlaylist: (_) {},
+              loadSongs: (id, limit) async => [song(2, '相似一'), song(3, '相似二')],
+              loadPlaylists: (id, limit) async => const [],
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

@@ -85,4 +85,27 @@ void main() {
     expect(find.text('付费'), findsOneWidget);
     expect(find.text('VIP'), findsNothing);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: SongTile(
+          song: song(name: '一个特别长的歌曲名字用来挤窄屏布局'),
+          active: true,
+          liked: true,
+          onTap: () {},
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

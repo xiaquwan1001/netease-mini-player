@@ -181,4 +181,32 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('还没有评论'), findsOneWidget);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([
+            comment(1, '一条很长很长很长很长很长很长很长很长的评论', replyCount: 2),
+          ]),
+          like: (_, _) async => true,
+          loadReplies: (parentId, limit) async => page([comment(2, '回复也很长很长很长很长')]),
+          reply: (_, _) async => true,
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

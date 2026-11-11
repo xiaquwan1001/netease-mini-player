@@ -108,4 +108,35 @@ void main() {
     expect(find.text('丁 回复 @楼主：回复四'), findsNothing);
     expect(find.text('展开全部 5 条回复'), findsOneWidget);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: CommentThread(
+            threadId: 'A_EV_2_1_2',
+            loadPage: (limit, offset) async => pageOf([
+              c(1, '主评论名字也很长很长很长很长', name: '楼主', replyCount: 4),
+              c(2, '这是回复内容也很长很长', name: '回复者', parentId: 1, repliedTo: '楼主'),
+            ]),
+            loadReplies: (parentId, limit) async => pageOf(const []),
+            like: (commentId, liked) async => true,
+            reply: (commentId, content) async => true,
+            myUid: BigInt.from(999),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

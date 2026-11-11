@@ -146,4 +146,34 @@ void main() {
     // 让高亮计时器/动画走完, 不留 pending timer
     await tester.pump(const Duration(seconds: 2));
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: CommentThread(
+            kind: 'song',
+            resourceId: BigInt.one,
+            loadPage: (limit, offset) async => pageOf([serverComment(7, '我发的一条很长很长很长很长的评论')]),
+            loadHot: (limit, offset) async => pageOf(const []),
+            like: (commentId, liked) async => true,
+            loadReplies: (parentId, limit) async => pageOf(const []),
+            reply: (commentId, content) async => true,
+            myUid: BigInt.from(_myUid),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 }

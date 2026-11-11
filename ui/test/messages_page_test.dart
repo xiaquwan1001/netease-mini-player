@@ -266,4 +266,30 @@ void main() {
     expect(find.text('你好'), findsOneWidget);
     expect(find.text('加载更早'), findsNothing);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: MessagesPage(
+          loadCounts: () async => counts(private: 3, notices: 1, comments: 2),
+          loadSessions: (limit, offset) async => [
+            session(7, '云音乐VIP名字特别长那种', '本月等级权益已更新还有好长一段话', 3),
+          ],
+          loadHistory: (uid, limit, before) async => [message(1, '你好')],
+          loadNotices: () async => [inbox(1, 'notice', '小明', '赞了你的主页背景')],
+          loadComments: () async => [inbox(2, 'comment', '小红', '来了来了')],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

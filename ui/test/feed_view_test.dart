@@ -96,4 +96,29 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('ta 最近没有动态'), findsOneWidget);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: FeedView(
+          loggedIn: true,
+          onLogin: () {},
+          onPlaySongs: (_, _) {},
+          onOpenUrl: (_) async {},
+          loadFeed: () async => const [],
+          loadSubscribedArtists: () async => const [],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }

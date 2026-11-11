@@ -165,6 +165,8 @@ void main() {
     await tester.tap(find.byType(SongOverflowButton));
     await tester.pumpAndSettle();
     expect(find.text('不感兴趣'), findsOneWidget);
+    // 统一标题栏占 52px 后, 末项在默认视口折叠线下; 与日推用例同样先 ensureVisible
+    await tester.ensureVisible(find.text('不感兴趣'));
     await tester.tap(find.text('不感兴趣'));
     await tester.pumpAndSettle();
     expect(disliked, 1);
@@ -186,5 +188,28 @@ void main() {
     );
     expect(find.byType(SongOverflowButton), findsOneWidget);
     expect(find.byIcon(Icons.more_vert), findsNothing);
+  });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final fake = FakeHost();
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: AppActions(
+          host: fake.host,
+          child: SongOverflowButton(song: fakeSong()),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 }

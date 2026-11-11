@@ -78,4 +78,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('暂时没有精选新碟'), findsOneWidget);
   });
+
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: NewReleasePage(
+          onPlaySongs: (_, _) {},
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          loadSongs: (area) async => <rust.SongDto>[],
+          loadNewestAlbums: () async => <rust.AlbumItem>[],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 }
