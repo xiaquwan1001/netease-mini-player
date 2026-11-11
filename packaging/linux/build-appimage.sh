@@ -8,11 +8,20 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:-$ROOT/dist}
-BUNDLE="$ROOT/ui/build/linux/x64/release/bundle"
+
+# 架构: bundle 目录用 Flutter 的命名(x64 / arm64), AppImage 用发行名(x86_64 / aarch64)。
+# 默认按本机推断(arm64 包必须在 arm64 机器上原生构建); 需要时用 APPIMAGE_ARCH / BUNDLE 覆盖。
+HOST_ARCH=$(uname -m)
+case "$HOST_ARCH" in
+  x86_64)  FLUTTER_ARCH=x64;   DEFAULT_APPIMAGE_ARCH=x86_64 ;;
+  aarch64|arm64) FLUTTER_ARCH=arm64; DEFAULT_APPIMAGE_ARCH=aarch64 ;;
+  *) echo "不支持的架构: $HOST_ARCH" >&2; exit 1 ;;
+esac
+BUNDLE=${BUNDLE:-$ROOT/ui/build/linux/$FLUTTER_ARCH/release/bundle}
 [ -x "$BUNDLE/minincm" ] || { echo "缺少 $BUNDLE/minincm, 先跑 flutter build linux --release" >&2; exit 1; }
 
 VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
-ARCH=${APPIMAGE_ARCH:-x86_64}
+ARCH=${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}
 
 TOOL=${APPIMAGETOOL:-}
 if [ -z "$TOOL" ]; then

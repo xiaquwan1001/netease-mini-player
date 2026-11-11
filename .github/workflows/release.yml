@@ -175,6 +175,68 @@ jobs:
           name: assets-android-linux
           path: dist/*
 
+  # ---- Linux(arm64) ----
+  # Flutter 桌面不支持交叉编译 ⇒ arm64 包必须在 arm64 runner 上原生构建。
+  # 与 x64 的 build job 分开: Android 那套 SDK/keystore 步骤在 arm64 上不需要也不该跑。
+  # 暂不出 arm64 的 AppImage(appimagetool 的 aarch64 产物本机没验过, 先只发 tar.gz + deb)。
+  build-linux-arm64:
+    name: Build Linux arm64 assets
+    runs-on: ubuntu-24.04-arm
+    needs: [verify]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System deps (Linux build + alsa for cpal)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev \
+            libasound2-dev liblzma-dev libstdc++-12-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: linux-arm64
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: pub get
+        working-directory: ui
+        run: flutter pub get
+
+      - name: Build Linux bundle (release, arm64)
+        working-directory: ui
+        run: flutter build linux --release
+
+      - name: Verify arch + GLib baseline
+        run: |
+          BUNDLE=ui/build/linux/arm64/release/bundle
+          file "$BUNDLE/minincm"
+          file "$BUNDLE/minincm" | grep -q 'ARM aarch64' || { echo "::error::产物不是 aarch64"; exit 1; }
+          BAD=$(nm -D --undefined-only "$BUNDLE/minincm" | grep -oE 'g_once_init_(enter|leave)_pointer' | sort -u || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::minincm 引用了 GLib 2.80 才有的符号: $BAD —— Ubuntu 22.04 会起不来"
+            exit 1
+          fi
+          echo "arm64 产物与 GLib 基线 OK"
+
+      - name: Package (tar.gz + deb)
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          case "$GITHUB_REF_NAME" in v*) ;; *) VERSION=$(sed -n 's/^version: \([0-9.]*\).*/\1/p' ui/pubspec.yaml);; esac
+          mkdir -p dist
+          tar -C ui/build/linux/arm64/release -czf "dist/MiniNCM-${VERSION}-linux-arm64.tar.gz" bundle
+          bash packaging/linux/build-deb.sh "$PWD/dist"
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-linux-arm64
+          path: dist/*
+
   # ---- Windows(x64) ----
   # Flutter 桌面不支持交叉编译 ⇒ 必须在 windows-latest 上出包。
   build-windows:
@@ -256,7 +318,7 @@ jobs:
   publish:
     name: Publish release
     runs-on: ubuntu-24.04
-    needs: [build, build-windows]
+    needs: [build, build-windows, build-linux-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/download-artifact@v4

@@ -9,7 +9,17 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:-$ROOT/dist}
-BUNDLE="$ROOT/ui/build/linux/x64/release/bundle"
+
+# 架构: Flutter 的构建目录按主机架构命名(x64 / arm64), deb 的架构名是 amd64 / arm64。
+# 默认按本机推断; 需要复用别的架构产物时用 ARCH=<deb 架构> BUNDLE=<bundle 目录> 覆盖
+# (arm64 包在 ubuntu-24.04-arm runner 上原生构建 —— Flutter 桌面不支持交叉编译)。
+HOST_ARCH=$(uname -m)
+case "$HOST_ARCH" in
+  x86_64)  FLUTTER_ARCH=x64;   DEB_ARCH=amd64 ;;
+  aarch64|arm64) FLUTTER_ARCH=arm64; DEB_ARCH=arm64 ;;
+  *) echo "不支持的架构: $HOST_ARCH" >&2; exit 1 ;;
+esac
+BUNDLE=${BUNDLE:-$ROOT/ui/build/linux/$FLUTTER_ARCH/release/bundle}
 [ -x "$BUNDLE/minincm" ] || { echo "缺少 $BUNDLE/minincm, 先跑 flutter build linux --release" >&2; exit 1; }
 
 # Ubuntu 22.04(jammy) 只有 GLib 2.72: runner 若引用了 g_once_init_*_pointer(Since 2.80)
@@ -22,7 +32,7 @@ fi
 
 VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
 [ -n "$VER" ] || { echo "读不到 ui/pubspec.yaml 的 version" >&2; exit 1; }
-ARCH=${ARCH:-amd64}
+ARCH=${ARCH:-$DEB_ARCH}
 PKGNAME=minincm
 MAINTAINER=${MAINTAINER:-"MiniNCM <noreply@localhost>"}
 

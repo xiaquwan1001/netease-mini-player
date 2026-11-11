@@ -49,10 +49,20 @@ jobs:
         working-directory: ui
         run: flutter test --exclude-tags network
 
+  # Flutter 桌面不支持交叉编译 ⇒ arm64 只能在 arm64 runner 上原生构建。
+  # GitHub 托管的 arm64 标签是 ubuntu-24.04-arm(公开仓库免费)。
   build-linux:
-    name: Build Linux bundle
-    runs-on: ubuntu-24.04
+    name: Build Linux bundle (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: [rust, flutter]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
     steps:
       - uses: actions/checkout@v4
       - name: System deps
@@ -63,6 +73,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+          key: linux-${{ matrix.arch }}
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -70,8 +81,11 @@ jobs:
       - name: build
         working-directory: ui
         run: flutter pub get && flutter build linux --debug
+      - name: verify arch
+        run: |
+          file ui/build/linux/${{ matrix.arch }}/debug/bundle/minincm
       - uses: actions/upload-artifact@v4
         with:
-          name: linux-debug-bundle
-          path: ui/build/linux/x64/debug/bundle
+          name: linux-debug-bundle-${{ matrix.arch }}
+          path: ui/build/linux/${{ matrix.arch }}/debug/bundle
           if-no-files-found: error
