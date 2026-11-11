@@ -29,6 +29,7 @@
 | v0.1.0 | 2026-11-08 | 首个公开预览版(Android APK + Linux tar.gz, MIT LICENSE, 第三方许可盘点) |
 | v0.2.x | 2026-11-09~10 | 设置项扩充 R1–R7、UI/UX 走查批 A–C、播放体验修复、**Windows 桌面版合入**、v0.2.2 三端发布 |
 | v0.3.x | 2026-11-10 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布**;v0.3.3 修 Ubuntu 22.04 GLib 基线 |
+| **v0.3.5** | **2026-11-11** | **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | **v0.3.4** | **2026-11-11** | **CI 实测(2026-11-11): 四个 job 全绿, Release 产出 6 种资产** —— apk 27.4 / linux tar.gz 14.4 / AppImage 14.0 / deb 10.6 / windows zip 16.3 / setup.exe 13.2 MB + SHA256SUMS(+ 下方功能)**手机号+短信验证码登录(网页通道)**、动态评论写入改 eapi(修 404)、评论区对话化(回复归属/楼层预览/动态评论归位)、动态流行内赞·评论·分享、发表后回填定位 |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
@@ -67,6 +68,22 @@
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## 2026-11-11(六): 写接口静态门禁(§11.C1 收尾)
+
+评论发送是**真实写操作**, 发版走查要求「CI 不触网」。仓库的做法一直是把写接口全部
+经注入的假钩子(CommentSendHook / SongActionHost / likeEvent 参数…) 换成假实现, 但这条
+**只靠自觉**。本轮把它变成可执行的门禁:
+
+- 新增 `tools/check-write-guard.sh`: 扫 `ui/test/**`, 一旦出现对写接口
+  (`replyComment/deleteComment/likeComment/likeEvent/forwardEvent/forwardMessage/
+  shareResource/createPlaylist/playlistTracksAdd/reportComment/signin/logout`) 的**直连**调用就失败;
+  另外 `@Tags(['network'])` 的测试也不允许调写接口。读类接口不拦(离线 mock / network 白名单)。
+- 已接进 3 处: `.github/workflows/ci.yml` 的 flutter job、`release.yml` 的 verify job、`tools/ci.sh`。
+- 现状: 脚本对当前仓库 **0 命中**(评论/点赞/转发/分享/歌单写确实全在注入钩子里), 属于"防回归"型门禁。
+
+这样 §11.C1「评论发送写操作走查(发布前硬门)」的两半都齐了: 人工一侧由用户真机实测覆盖
+发送/失败/回滚(v0.3.4 前完成), 机器一侧由本门禁保证 CI/发版流水线不去写线上数据。
 
 ## 2026-11-11(五): 技术债 D 批收敛(6 路并行 + 主会话收口)
 

@@ -42,6 +42,8 @@ jobs:
           cache: true
       - name: cargo test (workspace, vendor 联网 smoke 排除)
         run: cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
+      - name: write-guard (测试不得直连写接口, 发版不触网)
+        run: bash tools/check-write-guard.sh
       - name: pub get + analyze + widget tests
         working-directory: ui
         run: |

@@ -43,6 +43,8 @@ jobs:
       - name: analyze
         working-directory: ui
         run: dart analyze
+      - name: write-guard (测试不得直连写接口, CI 不触网)
+        run: bash tools/check-write-guard.sh
       - name: widget/unit tests (offline)
         working-directory: ui
         run: flutter test --exclude-tags network

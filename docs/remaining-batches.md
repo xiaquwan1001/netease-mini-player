@@ -269,7 +269,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 0 | ~~桌面登录只能导 cookie~~ ✅ **已修**(2026-11-10 五) | 桌面端改走官方网页**扫码**登录(`Provider::login_qr_*` + `login_sheet.dart`), 不再需要命令行; 见 `docs/PROGRESS.md` 最新小节 |
 | 0 | ~~deb 预览显示 minincm 且无图标~~ ✅ **已修**(2026-11-10 五) | 补 AppStream `metainfo.xml` + `/usr/share/pixmaps` 图标, `appstreamcli validate` 通过 |
 | 0 | ~~未登录时占位显示上次账号的昵称/VIP~~ ✅ **已修**(2026-11-10 五) | 未登录一律不渲染 VIP 标 + 新增「清除本机登录凭据」+ 启动时按 `[auth]` 校验登录态 |
-| 1 | **评论发送写操作走查(发布前硬门)** —— 读数侧已备(回复归属 `replied_to`/`parent_id`, 2026-11-11), 只剩一次真实回复写操作确认服务端是否认 `commentId` | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
+| ~~1~~ | ~~**评论发送写操作走查(发布前硬门)**~~ ✅ **2026-11-11 完成** | 人工侧: 用户真机实测发送/失败/回滚通过(v0.3.4 前); 机器侧: 新增 `tools/check-write-guard.sh` 并接进 ci.yml / release.yml / tools/ci.sh —— 测试里直连写接口即失败, 保证 CI/发版不触网 | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
 | 2 | Windows 安装向导中文化 | 需要把官方 `ChineseSimplified.isl` 一起放进 `packaging/windows/`(Inno 安装包不自带, v0.3.1 因此编译失败过) |
 | 3 | ~~deb 依赖收紧~~ ✅ **2026-11-11 已静态核查** | 无容器环境, 改为 ldd→dpkg→Depends 传递闭包比对: 68 个外部库 **100% 被现有 Depends 覆盖**(24.04 的 t64 改名由 Provides 兜住); 运行期数据文件(字体/插件)仍需真最小桌面点一次, 见 `docs/PROGRESS.md` 2026-11-11(四) |
 | 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |

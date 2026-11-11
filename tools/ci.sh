@@ -27,6 +27,9 @@ if [ "$smoke_ok" != 1 ]; then
   echo "WARN: vendor 匿名联网 smoke 连续 3 次失败(已知上游风控/公网抖动, 不阻塞); 复核: NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh"
 fi
 
+echo "== write-guard (测试不得直连写接口)"
+bash tools/check-write-guard.sh
+
 echo "== flutter analyze"
 # 本机 flutter analyze 会稳定 SIGSEGV(analysis server 的 Dart VM 在并发标记 GC 崩,
 # 2026-11-09 实测: 清 build/.dart_tool/~/.dartServer 无效, 而 dart analyze/flutter test/构建全正常)。
