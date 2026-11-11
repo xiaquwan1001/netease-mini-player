@@ -24,6 +24,7 @@ rust.Comment comment(
       replyCount: BigInt.from(replyCount),
       ipLocation: ipLocation,
       hot: hot,
+      parentId: BigInt.zero,
     );
 
 rust.CommentPage page(List<rust.Comment> items,

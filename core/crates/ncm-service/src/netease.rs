@@ -3926,6 +3926,15 @@ fn parse_comment(v: &Value, hot: bool) -> Option<Comment> {
             .map(|s| s.trim().to_string())
             .unwrap_or_default(),
         hot,
+        // 楼层/回复: beReplied[0] 是被回复的那条(可能有多个, 取第一个即可满足展示)
+        replied_to: v
+            .get("beReplied")
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .and_then(|r| r.get("user"))
+            .and_then(|u| str_of(u, "nickname"))
+            .filter(|s| !s.trim().is_empty()),
+        parent_id: u64_of(v, "parentCommentId").unwrap_or(0),
     })
 }
 
@@ -7569,6 +7578,27 @@ mod tests {
         );
         assert!(split_thread_id("R_SO_4_").is_none());
         assert!(split_thread_id("garbage").is_none());
+    }
+
+    /// 楼层/回复的归属信息: `beReplied[0].user.nickname` → replied_to, `parentCommentId` → parent_id.
+    /// 少了这两个字段, 回复在列表里就长得跟独立评论一样(用户报的 bug).
+    #[test]
+    fn comment_reply_attribution() {
+        let floor = json!({"code": 200, "data": {"comments": [
+            {"commentId": 11, "content": "回复主评论", "user": {"userId": 9, "nickname": "A"},
+             "parentCommentId": 7, "beReplied": [{"user": {"userId": 3, "nickname": "楼主"},
+                                                 "content": "原评论", "status": 0}]},
+            // 顶层评论: 没有 parentCommentId/beReplied
+            {"commentId": 12, "content": "独立评论", "user": {"userId": 8, "nickname": "B"}},
+            // beReplied 里没有昵称: 不能报空字符串, 必须落到 None
+            {"commentId": 13, "content": "x", "user": {"userId": 8}, "beReplied": [{"user": {}}]}
+        ]}});
+        let page = parse_comment_floor(&floor).unwrap();
+        assert_eq!(page.comments[0].parent_id, 7);
+        assert_eq!(page.comments[0].replied_to.as_deref(), Some("楼主"));
+        assert_eq!(page.comments[1].parent_id, 0);
+        assert_eq!(page.comments[1].replied_to, None);
+        assert_eq!(page.comments[2].replied_to, None);
     }
 
     #[test]

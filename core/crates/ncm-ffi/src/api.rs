@@ -1460,6 +1460,10 @@ pub struct _Comment {
     pub ip_location: String,
     /// 是否精彩评论
     pub hot: bool,
+    /// 这条评论回复的是谁(被回复者昵称); None = 顶层评论. UI 据此显示"回复 @某人"
+    pub replied_to: Option<String>,
+    /// 所属主评论 id(0 = 没有父级)
+    pub parent_id: u64,
 }
 
 #[frb(mirror(CommentPage))]

@@ -5296,8 +5296,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Comment dco_decode_comment(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return Comment(
       id: dco_decode_u_64(arr[0]),
       userId: dco_decode_u_64(arr[1]),
@@ -5310,6 +5310,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       replyCount: dco_decode_u_64(arr[8]),
       ipLocation: dco_decode_String(arr[9]),
       hot: dco_decode_bool(arr[10]),
+      repliedTo: dco_decode_opt_String(arr[11]),
+      parentId: dco_decode_u_64(arr[12]),
     );
   }
 
@@ -7222,6 +7224,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_replyCount = sse_decode_u_64(deserializer);
     var var_ipLocation = sse_decode_String(deserializer);
     var var_hot = sse_decode_bool(deserializer);
+    var var_repliedTo = sse_decode_opt_String(deserializer);
+    var var_parentId = sse_decode_u_64(deserializer);
     return Comment(
       id: var_id,
       userId: var_userId,
@@ -7234,6 +7238,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       replyCount: var_replyCount,
       ipLocation: var_ipLocation,
       hot: var_hot,
+      repliedTo: var_repliedTo,
+      parentId: var_parentId,
     );
   }
 
@@ -9667,6 +9673,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.replyCount, serializer);
     sse_encode_String(self.ipLocation, serializer);
     sse_encode_bool(self.hot, serializer);
+    sse_encode_opt_String(self.repliedTo, serializer);
+    sse_encode_u_64(self.parentId, serializer);
   }
 
   @protected

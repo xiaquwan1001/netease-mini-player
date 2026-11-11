@@ -16,6 +16,7 @@ rust.Comment comment(int id, String content, BigInt userId) =>
       replyCount: BigInt.zero,
       ipLocation: '',
       hot: false,
+      parentId: BigInt.zero,
     );
 
 rust.CommentPage page(List<rust.Comment> items) => rust.CommentPage(

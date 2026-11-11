@@ -236,8 +236,8 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 ## 11. 待办(2026-11-10 收尾版)
 
 > 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
-> 当前基线: 覆盖率 123/123 · FFI **146**(4 个无 UI 入口) · `cargo test --offline --workspace` **253** ·
-> `flutter test --exclude-tags network` **544** · `dart analyze` 0 error / 0 warning(41 info)。
+> 当前基线: 覆盖率 123/123 · FFI **146**(4 个无 UI 入口) · `cargo test --offline --workspace` **254** ·
+> `flutter test --exclude-tags network` **550** · `dart analyze` 0 error / 0 warning(41 info)。
 >
 > **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
 > ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
@@ -268,7 +268,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 0 | ~~桌面登录只能导 cookie~~ ✅ **已修**(2026-11-10 五) | 桌面端改走官方网页**扫码**登录(`Provider::login_qr_*` + `login_sheet.dart`), 不再需要命令行; 见 `docs/PROGRESS.md` 最新小节 |
 | 0 | ~~deb 预览显示 minincm 且无图标~~ ✅ **已修**(2026-11-10 五) | 补 AppStream `metainfo.xml` + `/usr/share/pixmaps` 图标, `appstreamcli validate` 通过 |
 | 0 | ~~未登录时占位显示上次账号的昵称/VIP~~ ✅ **已修**(2026-11-10 五) | 未登录一律不渲染 VIP 标 + 新增「清除本机登录凭据」+ 启动时按 `[auth]` 校验登录态 |
-| 1 | **评论发送写操作走查(发布前硬门)** | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
+| 1 | **评论发送写操作走查(发布前硬门)** —— 读数侧已备(回复归属 `replied_to`/`parent_id`, 2026-11-11), 只剩一次真实回复写操作确认服务端是否认 `commentId` | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
 | 2 | Windows 安装向导中文化 | 需要把官方 `ChineseSimplified.isl` 一起放进 `packaging/windows/`(Inno 安装包不自带, v0.3.1 因此编译失败过) |
 | 3 | deb 依赖收紧 | 目前 `libgtk-3-0/liblzma5/libasound2`, 未在最小系统(纯 server + desktop 环境)验证过; 有条件时用容器验一次 |
 | 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |

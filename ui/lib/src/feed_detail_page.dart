@@ -72,6 +72,10 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
   late BigInt _likedCount = widget.event.likedCount;
   bool _likeBusy = false;
 
+  /// 评论区句柄: 「评论」按钮经它触发聚焦输入框(见 CommentThread.focusComposer)
+  final GlobalKey<CommentThreadState> _commentThreadKey =
+      GlobalKey<CommentThreadState>();
+
   Future<void> _toggleLike() async {
     final threadId = widget.event.threadId;
     if (threadId.isEmpty) {
@@ -266,7 +270,7 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
               ),
               TextButton.icon(
                 onPressed: hasThread
-                    ? () => Navigator.of(context).pop()
+                    ? () => _commentThreadKey.currentState?.focusComposer()
                     : null,
                 icon: const Icon(Icons.mode_comment_outlined, size: 18),
                 label: Text('${event.commentCount > BigInt.zero ? event.commentCount : '评论'}'),
@@ -287,6 +291,7 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
           const Divider(),
           if (hasThread)
             CommentThread(
+              key: _commentThreadKey,
               threadId: event.threadId,
               totalHint: event.commentCount.toInt(),
             )

@@ -5386,6 +5386,8 @@ const _: fn() = || {
         let _: u64 = Comment.reply_count;
         let _: String = Comment.ip_location;
         let _: bool = Comment.hot;
+        let _: Option<String> = Comment.replied_to;
+        let _: u64 = Comment.parent_id;
     }
     {
         let CommentPage = None::<crate::api::CommentPage>.unwrap();
@@ -6088,6 +6090,8 @@ impl SseDecode for crate::api::Comment {
         let mut var_replyCount = <u64>::sse_decode(deserializer);
         let mut var_ipLocation = <String>::sse_decode(deserializer);
         let mut var_hot = <bool>::sse_decode(deserializer);
+        let mut var_repliedTo = <Option<String>>::sse_decode(deserializer);
+        let mut var_parentId = <u64>::sse_decode(deserializer);
         return crate::api::Comment {
             id: var_id,
             user_id: var_userId,
@@ -6100,6 +6104,8 @@ impl SseDecode for crate::api::Comment {
             reply_count: var_replyCount,
             ip_location: var_ipLocation,
             hot: var_hot,
+            replied_to: var_repliedTo,
+            parent_id: var_parentId,
         };
     }
 }
@@ -8799,6 +8805,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::Comment> {
             self.0.reply_count.into_into_dart().into_dart(),
             self.0.ip_location.into_into_dart().into_dart(),
             self.0.hot.into_into_dart().into_dart(),
+            self.0.replied_to.into_into_dart().into_dart(),
+            self.0.parent_id.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -10769,6 +10777,8 @@ impl SseEncode for crate::api::Comment {
         <u64>::sse_encode(self.reply_count, serializer);
         <String>::sse_encode(self.ip_location, serializer);
         <bool>::sse_encode(self.hot, serializer);
+        <Option<String>>::sse_encode(self.replied_to, serializer);
+        <u64>::sse_encode(self.parent_id, serializer);
     }
 }
 

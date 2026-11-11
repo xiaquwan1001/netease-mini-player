@@ -656,6 +656,14 @@ pub struct Comment {
     /// 是否来自精彩评论(`hotComments`). 接口把精彩评论和最新评论混在一页返回, 靠它区分
     #[serde(default)]
     pub hot: bool,
+    /// 这条评论回复的是谁(被回复者昵称). 楼层/回复里 `beReplied[0].user.nickname`;
+    /// None = 直接评论资源本身(顶层评论). UI 靠它区分"回复 @某人"与独立评论.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replied_to: Option<String>,
+    /// 所属主评论 id(0 = 自己没有父级). 楼层接口给的 `parentCommentId`;
+    /// 回复自己的评论时父级就是这条评论自己.
+    #[serde(default)]
+    pub parent_id: u64,
 }
 
 /// 评论列表页. comments 里精彩评论在前(hotComments), 其后是最新评论, 按 commentId 去重.

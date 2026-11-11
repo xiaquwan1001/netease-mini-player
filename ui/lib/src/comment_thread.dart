@@ -72,10 +72,12 @@ class CommentThread extends StatefulWidget {
   final BigInt? myUid;
 
   @override
-  State<CommentThread> createState() => _CommentThreadState();
+  State<CommentThread> createState() => CommentThreadState();
 }
 
-class _CommentThreadState extends State<CommentThread> {
+/// State 对外公开: 详情页用 `GlobalKey<CommentThreadState>.focusComposer()`
+/// 触发「去写评论」(滚到评论区 + 聚焦输入框), 见 [focusComposer]。
+class CommentThreadState extends State<CommentThread> {
   final List<rust.Comment> _items = <rust.Comment>[];
   BigInt _total = BigInt.zero;
   bool _hasMore = false;
@@ -286,6 +288,8 @@ class _CommentThreadState extends State<CommentThread> {
       replyCount: c.replyCount,
       ipLocation: c.ipLocation,
       hot: c.hot,
+      repliedTo: c.repliedTo,
+      parentId: c.parentId,
     );
   }
 
@@ -317,6 +321,8 @@ class _CommentThreadState extends State<CommentThread> {
         replyCount: c.replyCount + BigInt.one,
         ipLocation: c.ipLocation,
         hot: c.hot,
+        repliedTo: c.repliedTo,
+        parentId: c.parentId,
       );
     });
   }
@@ -384,6 +390,14 @@ class _CommentThreadState extends State<CommentThread> {
     );
   }
 
+  /// 外部入口: 动态详情页的「评论」按钮经 `GlobalKey<CommentThreadState>` 调到这里。
+  /// 先把评论区滚到可见, 再打开写评论面板 —— 面板里的 TextField 自带 autofocus,
+  /// 所以「打开面板」就是「聚焦输入框」(本组件不常驻输入框, 见 _ComposerBar 注释)。
+  void focusComposer() {
+    Scrollable.ensureVisible(context);
+    _openCompose();
+  }
+
   /// 发顶层评论: 先乐观插入(无头像 / "刚刚"), 失败回滚并把异常抛回面板。
   /// 走 [CommentSendHook](= rust.replyComment + commentId 0), 没有新增 FFI。
   Future<void> _submitComment(String content) async {
@@ -401,6 +415,7 @@ class _CommentThreadState extends State<CommentThread> {
       replyCount: BigInt.zero,
       ipLocation: '',
       hot: false,
+      parentId: BigInt.zero,
     );
     setState(() {
       _items.insert(at, draft);
@@ -643,6 +658,19 @@ class _CommentTile extends StatelessWidget {
                             ?.copyWith(color: scheme.primary),
                       ),
                     ),
+                    // 楼层里的回复: 不显示"回复 @某人"就跟独立评论长得一样
+                    if ((comment.repliedTo ?? '').isNotEmpty) ...[
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          '回复 @${comment.repliedTo}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall
+                              ?.copyWith(color: scheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
                     if (comment.hot) ...[
                       const SizedBox(width: 6),
                       Container(
@@ -911,7 +939,11 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                                 style: theme.textTheme.labelMedium
                                     ?.copyWith(color: scheme.primary),
                               ),
-                              subtitle: Text(r.content),
+                              subtitle: Text(
+                                (r.repliedTo ?? '').isEmpty
+                                    ? r.content
+                                    : '回复 @${r.repliedTo}：${r.content}',
+                              ),
                             );
                           },
                         ),

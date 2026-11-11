@@ -1263,6 +1263,12 @@ class Comment {
   /// 是否精彩评论
   final bool hot;
 
+  /// 这条评论回复的是谁(被回复者昵称); None = 顶层评论. UI 据此显示"回复 @某人"
+  final String? repliedTo;
+
+  /// 所属主评论 id(0 = 没有父级)
+  final BigInt parentId;
+
   const Comment({
     required this.id,
     required this.userId,
@@ -1275,6 +1281,8 @@ class Comment {
     required this.replyCount,
     required this.ipLocation,
     required this.hot,
+    this.repliedTo,
+    required this.parentId,
   });
 
   @override
@@ -1289,7 +1297,9 @@ class Comment {
       liked.hashCode ^
       replyCount.hashCode ^
       ipLocation.hashCode ^
-      hot.hashCode;
+      hot.hashCode ^
+      repliedTo.hashCode ^
+      parentId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1306,7 +1316,9 @@ class Comment {
           liked == other.liked &&
           replyCount == other.replyCount &&
           ipLocation == other.ipLocation &&
-          hot == other.hot;
+          hot == other.hot &&
+          repliedTo == other.repliedTo &&
+          parentId == other.parentId;
 }
 
 class CommentPage {

@@ -3,7 +3,8 @@
 > 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
 > `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
 > 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **544** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 146)。
+> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **550** / `dart analyze` 0 error 0 warning(42 info) / 接口覆盖 **123/123**(FFI 146)。
+> 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
 >
 > **2026-11-10 收尾**(当日四批, 下面倒序):
 > ① **封面清晰度按设备分辨率 + 三档设置 + 看大图保存原图**; ② **桌面打包** deb / AppImage / Windows setup.exe
@@ -64,6 +65,22 @@
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## v2 · 2026-11-11(二): 评论区两处修复(真机反馈)
+
+用户真机反馈两个真 bug, 根因都不是"界面不好看":
+
+| 现象 | 根因 | 落点 | 证据 |
+|---|---|---|---|
+| 动态详情底部的「评论」按钮一点就**退出页面**, 不进输入模式 | `feed_detail_page.dart` 里写成了 `onPressed: () => Navigator.pop()`(把"回到评论区"误当导航) | `CommentThreadState` 公开 + `CommentThread.focusComposer()`(滚到评论区 + 打开写评论面板, 面板 TextField 自带 autofocus); 详情页改用 `GlobalKey<CommentThreadState>` 调它, 无评论区的动态保持禁用 | `ui/test/feed_detail_comment_entry_test.dart` 3 例(不 pop / 聚焦 / 禁用态 + 300dp·1.25 不溢出) |
+| 回复**不被归属到主评论**, 在下方像独立评论 | `parse_comment` 只取了 content/赞/楼层数, 把楼层接口里的 `parentCommentId` 与 `beReplied[0].user.nickname` 丢了 | domain `Comment` 新增 `replied_to`/`parent_id`; 解析补全; 列表行与楼层列表都展示「回复 @某人」 | `ncm-service` 单测 `comment_reply_attribution`(有归属/顶层/空昵称三种); `ui/test/comment_attribution_test.dart` 3 例 |
+
+FFI 未加函数(只是 `Comment` 镜像 +2 字段, codegen 重生成)。门禁: `cargo test --offline --workspace` **254**(+1) ·
+`flutter test --exclude-tags network` **550**(+6) · `dart analyze` 0 error / 0 warning(42 info)。
+
+> **待确认**: 写侧仍是 weapi `/api/v1/resource/comments/reply`(api-enhanced 新版走 xeapi v3、旧版 eapi v2)。
+> 服务端是否**忽略 commentId 把回复当顶层评论**还没实测 —— 需要一次真实回复写操作 + 读回楼层对比;
+> 读数侧已能区分(嵌套的回复只出现在楼层里, 顶层列表不会有它)。
 
 ## v2 · 2026-11-11: 手机号 + 短信验证码登录(网页登录通道)
 
