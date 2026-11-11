@@ -18,6 +18,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -260,7 +261,7 @@ impl CredentialStatus {
 /// - Windows: DPAPI 可用即用(P0); 不可用再走同意门.
 /// - 其它平台: 本 lane 没有钥匙串后端(P1 Android / P2 Linux 由后续 lane 接入),
 ///   走同意门 —— 同意了给 FileStore, 没同意给 None(identity.rs 走旧明文兼容路径).
-pub fn open_backend(dir: &Path) -> (Option<Box<dyn CredentialStore>>, CredentialStatus) {
+pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, CredentialStatus) {
     #[cfg(windows)]
     {
         let dpapi = DpapiStore::new(dir);
@@ -268,7 +269,7 @@ pub fn open_backend(dir: &Path) -> (Option<Box<dyn CredentialStore>>, Credential
             Ok(()) => {
                 let policy = CredentialPolicy::load(dir);
                 return (
-                    Some(Box::new(dpapi)),
+                    Some(Arc::new(dpapi)),
                     CredentialStatus::Secure { backend: BACKEND_DPAPI, migrated: policy.migrated },
                 );
             }
@@ -277,7 +278,7 @@ pub fn open_backend(dir: &Path) -> (Option<Box<dyn CredentialStore>>, Credential
                 let policy = CredentialPolicy::load(dir);
                 if policy.plaintext_consent {
                     return (
-                        Some(Box::new(FileStore::new(dir))),
+                        Some(Arc::new(FileStore::new(dir))),
                         CredentialStatus::PlaintextConsented { migrated: policy.migrated },
                     );
                 }
@@ -295,7 +296,7 @@ pub fn open_backend(dir: &Path) -> (Option<Box<dyn CredentialStore>>, Credential
         let policy = CredentialPolicy::load(dir);
         if policy.plaintext_consent {
             (
-                Some(Box::new(FileStore::new(dir))),
+                Some(Arc::new(FileStore::new(dir))),
                 CredentialStatus::PlaintextConsented { migrated: policy.migrated },
             )
         } else {
