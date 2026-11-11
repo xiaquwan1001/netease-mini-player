@@ -237,7 +237,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 > 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
 > 当前基线: 覆盖率 123/123 · FFI **146**(4 个无 UI 入口) · `cargo test --offline --workspace` **253** ·
-> `flutter test --exclude-tags network` **540** · `dart analyze` 0 error / 0 warning(41 info)。
+> `flutter test --exclude-tags network` **544** · `dart analyze` 0 error / 0 warning(41 info)。
 >
 > **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
 > ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
@@ -277,7 +277,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 | 项 | 说明 | 证据 |
 |---|---|---|
-| **手机号 + 短信验证码登录** | 登录弹层第 2 个 tab + `ncm login-sms`; 走**网页登录通道**(weapi `sms/captcha/sent` + `login/cellphone`), 凭据取自 Set-Cookie; 命中 8821 时提示改回扫码; 400→Auth、503→可重试 | `ui/test/login_sheet_phone_test.dart` 4 例; 宿主实测非法号码 `code=400: 手机号码不符合规范`; FFI 144→146 |
+| **手机号 + 短信验证码登录** | 登录弹层第 2 个 tab + `ncm login-sms`; 走**网页登录通道**(weapi `sms/captcha/sent` + `login/cellphone`), 凭据取自 Set-Cookie; 命中 8821 时提示改回扫码; 400→Auth、503→可重试 | `ui/test/login_sheet_phone_test.dart` 4 例 + `login_sheet_error_test.dart` 4 例(错误文案归一); 宿主实测非法号码 `code=400: 手机号码不符合规范`; FFI 144→146 |
 | **待真机验(唯一残留)** | 真实手机号收短信走完正常登录链路(本机只验到通道可达与错误映射) | 需用户用自己的号码操作一次 |
 
 ### D. 需要新能力的 L 级(单独立项, 不要混批)

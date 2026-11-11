@@ -146,7 +146,7 @@ cargo run -p ncm-cli -- lyric 186016
 | Gate | Status |
 |---|---|
 | `cargo test --offline --workspace` | **253** passing (229 when the vendor crate is excluded) |
-| `flutter test --exclude-tags network` | **540** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `flutter test --exclude-tags network` | **544** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | 0 error / 0 warning (41 info hints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |

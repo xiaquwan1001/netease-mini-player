@@ -22,6 +22,33 @@ import 'toast.dart';
 /// 4. 在浏览器打开官方登录页(只是给要手工复制 cookie 的人一个入口).
 ///
 /// 依赖全部注入, 便于 widget 测试(不联网、不碰 FFI).
+/// 把 Rust 侧 `ProviderError` 的 `[kind] detail` 文案转成用户能读的一句话.
+///
+/// 桥那边统一是 `[auth|riskControl|network|notFound|unsupported|internal] detail`,
+/// Dart 拿到的是 `Exception: [kind] ...`. 直接把方括号和类型名铺给用户很难看, 但
+/// **服务端原文必须留下**(例如「手机号码不符合规范」才是真信息), 所以只换标签、保留前缀
+/// (如「发送验证码失败:」)与 detail.
+String friendlyLoginError(String raw) {
+  const labels = <String, String>{
+    'auth': '信息有误',
+    'riskControl': '被网易云安全风控拦截',
+    'network': '网络不通',
+    'notFound': '接口不存在',
+    'unsupported': '当前版本不支持',
+    'internal': '服务端异常',
+  };
+  final m = RegExp(r'\[(\w+)\]\s*').firstMatch(raw);
+  if (m == null) return raw;
+  final label = labels[m.group(1)!];
+  if (label == null) return raw;
+  // 前缀里 Dart 的 `Exception: ` 是噪声, 去掉; 其余前缀(哪个动作失败)保留
+  final before = raw
+      .substring(0, m.start)
+      .replaceFirst(RegExp(r'Exception:\s*$'), '');
+  final detail = raw.substring(m.end).trim();
+  return detail.isEmpty ? '$before$label' : '$before$label: $detail';
+}
+
 class LoginSheet extends StatefulWidget {
   const LoginSheet({
     super.key,
@@ -340,7 +367,7 @@ class LoginSheetState extends State<LoginSheet> {
               if (_error != null) ...[
                 const SizedBox(height: 12),
                 Text(
-                  _error!,
+                  friendlyLoginError(_error!),
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.error),
                 ),

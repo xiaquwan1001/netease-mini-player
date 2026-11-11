@@ -3,7 +3,7 @@
 > 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
 > `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
 > 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **540** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 146)。
+> 当前门禁: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **544** / `dart analyze` 0 error 0 warning(41 info) / 接口覆盖 **123/123**(FFI 146)。
 >
 > **2026-11-10 收尾**(当日四批, 下面倒序):
 > ① **封面清晰度按设备分辨率 + 三档设置 + 看大图保存原图**; ② **桌面打包** deb / AppImage / Windows setup.exe
@@ -17,7 +17,7 @@
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
 ## 进度总览(2026-11-10, 面向新读者的速览)
 
-**当前门禁**: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **540** /
+**当前门禁**: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **544** /
 `dart analyze` 0 error / 0 warning(41 info) / 接口覆盖 **123/123**(FFI 导出 146, 其中 4 个无 UI 入口)。
 
 **版本时间线**:
@@ -78,8 +78,12 @@
 | 登录弹层(UI) | `login_sheet.dart` 第 2 个 tab「手机号登录」: 区号+号码、获取验证码(按服务端 `expires_in` 冷却, 下限 60s)、填码登录; 命中 8821 时**显式提示改用扫码**; 切到该 tab 后停止二维码轮询(`_tab != 0` 短路) | `ui/test/login_sheet_phone_test.dart` 4 例(发码→冷却→登录成功关弹层/风控引导/空输入不打接口/切 tab 停轮询) |
 | CLI | `ncm login-sms <手机号> [验证码] [--country 86]`: 不带验证码时先发码再读 stdin, 成功后 `apply_login_cookie` 落盘 | `--help` 头注释 + 宿主烟测 |
 
-FFI: `loginSmsSend`/`loginSmsVerify`(144→**146**)。门禁: `cargo test --offline --workspace` **253**(+4) ·
-`flutter test --exclude-tags network` **540**(+4) · `dart analyze` 0 error / 0 warning(41 info) · 接口覆盖 123/123。
+FFI: `loginSmsSend`/`loginSmsVerify`(144→**146**)。
+
+错误文案: 桥侧的 `[auth|riskControl|...] detail` 经 `friendlyLoginError` 换成人话(只换标签、
+保留「发送验证码失败:」这类动作前缀与服务端原文, Dart 的 `Exception:` 去掉); 弹层里风控引导仍按原始
+`_error` 判定, 不受文案影响。`ui/test/login_sheet_error_test.dart` 4 例。门禁: `cargo test --offline --workspace` **253**(+4) ·
+`flutter test --exclude-tags network` **544**(+8) · `dart analyze` 0 error / 0 warning(41 info) · 接口覆盖 123/123。
 
 > **待真机验**: 需要用户用真实手机号收一条短信走完 8821 之外的正常链路(本机只能验到通道可达与错误映射);
 > 桌面/安卓共用同一份 Rust 链路, 弹层同源, 三端行为一致。
