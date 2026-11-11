@@ -198,8 +198,12 @@ jobs:
           workspaces: core
           key: linux-arm64
 
+      # 钉死版本: subosito/flutter-action 在 linux-arm64 上解析不了 "channel: stable"
+      # ("Unable to determine Flutter version for channel: stable ... architecture: arm64"),
+      # 显式给 flutter-version 才走"按版本下载对应架构 SDK"的分支。
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
 

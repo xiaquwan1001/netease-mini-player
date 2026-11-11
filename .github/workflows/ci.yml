@@ -74,8 +74,11 @@ jobs:
         with:
           workspaces: core
           key: linux-${{ matrix.arch }}
+      # 与 release 对齐并钉死版本: arm64 上 "channel: stable" 解析不出 SDK
+      # (subosito/flutter-action 报 unable to determine Flutter version architecture: arm64)
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.9'
           channel: stable
           cache: true
       - name: build
