@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'toast.dart' show showToastWith;
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 
 /// 歌曲菜单打开时所处的"来源"场景。
 /// 只有 [SongActionSource.dailyRecommend] 与 [SongActionSource.personalFm]
@@ -143,11 +144,19 @@ Future<void> showSongActionsSheet(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
         ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: _menu(sheetContext, song, host, source),
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SheetHeader(title: '歌曲操作'),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: _menu(sheetContext, song, host, source),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     ),

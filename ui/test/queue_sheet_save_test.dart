@@ -139,4 +139,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, 2);
   });
+
+  testWidgets('300dp + 1.25 字号: 面板不溢出且「存为歌单」可用', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: PlayQueueSheet(
+          items: [
+            song(1, '一首名字特别特别长的歌用于窄屏回归测试'),
+            song(2, '江南'),
+          ],
+          index: 0,
+          onSelect: (_) {},
+          onRemove: (_, _) {},
+          onSaveAsPlaylist: (_) async {},
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('存为歌单'), findsOneWidget);
+    expect(find.text('一首名字特别特别长的歌用于窄屏回归测试'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

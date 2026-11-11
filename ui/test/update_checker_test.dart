@@ -337,16 +337,36 @@ void main() {
   });
 
   group('设置页「检查更新」项 UI(假 host, 不联网)', () {
-    Future<void> pumpSettings(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1000, 2800);
+    Future<void> pumpSettings(WidgetTester tester,
+        {Size size = const Size(1000, 2800), TextScaler? scaler}) async {
+      tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: SettingsView(info: null)),
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+          child: const Scaffold(body: SettingsView(info: null)),
+        ),
       ));
       await tester.pumpAndSettle();
     }
+
+    testWidgets('300dp + 1.25 字号: 关于项不溢出', (tester) async {
+      stubOpenUrl();
+      UpdateCheckHost.check = (v) async => null;
+      UpdateCheckHost.pendingUpdate.value = UpdateInfo(
+        latest: 'v0.3.0',
+        current: kAppVersion,
+        isNewer: true,
+        downloadUrl: 'https://example.com/tgz',
+      );
+      await pumpSettings(tester,
+          size: const Size(300, 2800), scaler: const TextScaler.linear(1.25));
+      expect(tester.takeException(), isNull);
+      expect(find.text('检查更新'), findsOneWidget);
+      expect(find.text('发现新版本 v0.3.0'), findsOneWidget);
+    });
 
     testWidgets('有新版本: 点击弹窗含版本号与下载按钮, 点下载走 openUrl',
         (tester) async {

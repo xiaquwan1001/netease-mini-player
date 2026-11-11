@@ -38,6 +38,19 @@ rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
+void narrow(WidgetTester tester) {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+}
+
+Widget scaled(Widget child) => MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(body: child),
+      ),
+    );
+
 void main() {
   testWidgets('推荐页展示每日推荐/歌单/播客/榜单/新碟, 点歌回调整批曲目', (tester) async {
     // 页面很长(榜单/风格/每日推荐/新歌/歌单/新碟/播客), 用高视口一次构建,
@@ -147,6 +160,53 @@ void main() {
     // 心动模式快捷卡片
     await tester.tap(find.text('心动模式'));
     expect(heart, 1);
+  });
+
+  testWidgets('300dp + 1.25 字号不溢出(长名日推/歌单/播客/榜单)', (tester) async {
+    narrow(tester);
+    await tester.pumpWidget(scaled(RecommendView(
+      loggedIn: true,
+      loadDailySongs: () async =>
+          [song(1, '一首名字特别特别长的日推歌曲用于小屏回归测试')],
+      loadDailyPlaylists: () async =>
+          [playlist(10, '一个名字特别特别长的推荐歌单用于小屏回归测试')],
+      loadPodcasts: () async =>
+          [radio(20, '一个名字特别特别长的推荐播客用于小屏回归测试')],
+      loadFm: () async => [song(3, 'FM 曲')],
+      loadStyles: () async =>
+          const [rust.StyleTag(id: '1009', name: '粤语流行')],
+      loadCharts: () async => [
+        rust.ChartSummary(
+          id: BigInt.from(19723756),
+          name: '飙升榜',
+          coverUrl: null,
+          updateFrequency: '刚刚更新',
+          trackCount: BigInt.from(100),
+          playCount: BigInt.from(1000),
+        ),
+      ],
+      loadNewSongs: () async => [song(30, '新歌速递一')],
+      loadNewAlbums: () async => [
+        rust.AlbumItem(
+          id: BigInt.from(40),
+          name: '新碟A',
+          coverUrl: null,
+          artist: '歌手',
+          trackCount: BigInt.from(8),
+        ),
+      ],
+      onOpenAlbum: (_) {},
+      onOpenNewRelease: () {},
+      onPlaySongs: (_, _) {},
+      onOpenPlaylist: (_) {},
+      onOpenPodcast: (_) {},
+      onHeartMode: () {},
+      onOpenDaily: () {},
+    )));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('每日推荐'), findsWidgets);
+    expect(find.text('飙升榜'), findsOneWidget);
   });
 
   testWidgets('私人 FM 播放按钮加载后回调曲目', (tester) async {

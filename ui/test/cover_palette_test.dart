@@ -268,7 +268,50 @@ void main() {
       await tester.pump(const Duration(milliseconds: 150));
       await tester.pumpAndSettle();
     });
+
+    testWidgets('300dp + 1.25 字号: 渐变背景正常渲染不溢出', (tester) async {
+      tester.view.physicalSize = const Size(300, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: CoverBackdrop(
+              palette: palette,
+              child: Center(
+                child: Text(
+                  '一首名字特别特别长的歌名用于窄屏回归测试',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('窄屏回归测试'), findsOneWidget);
+    });
   });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }
 
 // Color → 0..255 通道助手(测试里也要避开弃用的 .red/.green/.blue)

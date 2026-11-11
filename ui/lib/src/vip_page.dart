@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
@@ -597,13 +598,10 @@ VipPageData mapVipOverview(
   );
 }
 
-/// 毫秒时间戳 -> yyyy-MM-dd(本地时区); 0/非法返回 null.
+/// 毫秒时间戳 -> yyyy-MM-dd; 0/非法返回 null(格式化统一走 format.dart).
 String? _dateOf(int ms) {
   if (ms <= 0) return null;
-  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
-  final mm = dt.month.toString().padLeft(2, '0');
-  final dd = dt.day.toString().padLeft(2, '0');
-  return '${dt.year}-$mm-$dd';
+  return formatDateYmd(BigInt.from(ms));
 }
 
 /// "2026-11-07" -> "六"; 解析失败退回日期尾部(如 "07")

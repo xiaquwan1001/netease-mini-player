@@ -52,6 +52,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: const AudioSettingsPage(),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('不变'), findsOneWidget);
+  });
+
   testWidgets('精细音量: 0 dB 显示不变, 拖动写回 volumeGainDb 并显示 dB', (tester) async {
     await pumpPage(tester);
     expect(find.text('不变'), findsOneWidget);

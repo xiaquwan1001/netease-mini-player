@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
 typedef SessionsPageLoader = Future<List<rust.PrivateSession>> Function(
@@ -327,22 +328,20 @@ Future<void> showPrivateChat(
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
     builder: (_) => SafeArea(
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.7,
         child: Column(
           children: [
-            ListTile(
+            SheetHeader(
+              title: session.nickname,
               leading: CircleCover(
                 url: session.avatarUrl,
                 size: 36,
                 icon: Icons.person_outline,
               ),
-              title: Text(session.nickname),
-              trailing: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(context),
-              ),
+              onClose: () => Navigator.pop(context),
             ),
             const Divider(height: 1),
             Expanded(

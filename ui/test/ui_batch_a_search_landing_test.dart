@@ -42,6 +42,31 @@ void main() {
     expect(chosen, '七里香');
   });
 
+  testWidgets('300dp + 1.25 字号不溢出, 命中区约束仍成立', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: SearchLanding(
+            history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
+            hot: const [],
+            recommended: '周杰伦',
+            onSelected: (_) {},
+            onClearHistory: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final clearSize = tester.getSize(find.widgetWithText(TextButton, '清空'));
+    expect(clearSize.height, greaterThanOrEqualTo(48));
+    expect(clearSize.width, greaterThanOrEqualTo(48));
+  });
+
   testWidgets('热词重试按钮命中区 ≥48dp', (tester) async {
     await tester.pumpWidget(host(SearchLanding(
       history: const [],

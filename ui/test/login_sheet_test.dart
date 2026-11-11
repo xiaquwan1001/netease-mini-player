@@ -242,4 +242,38 @@ void main() {
     expect(attempts, 2);
     await tester.pumpWidget(const SizedBox());
   });
+
+  testWidgets('300dp + 1.25 字号: 扫码面板不溢出', (tester) async {
+    // 面板比 300x800 视口矮不了多少, 沿用本文件的 setSurfaceSize 放大画布
+    await tester.binding.setSurfaceSize(const Size(300, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => TextButton(
+            onPressed: () {
+              showLoginSheet(
+                ctx,
+                createQr: () async => key(),
+                checkQr: (_) async => check(rust.QrLoginState.pending),
+                pollInterval: const Duration(milliseconds: 100),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await openSheet(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('等待扫码…'), findsOneWidget);
+    // 卸载弹层, 停掉轮询 Timer, 避免 timersPending
+    await tester.pumpWidget(const SizedBox());
+  });
 }

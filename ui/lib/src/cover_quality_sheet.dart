@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'cover_art.dart';
+import 'sheet_header.dart';
 
 /// 档位预览用的真实 CDN 封面(取自用户自己的歌单封面, 官方 CDN 直链).
 /// 只在设置页里作对比样本; 换一张也不影响功能。
@@ -27,19 +28,10 @@ Future<void> showCoverQualitySheet(BuildContext context) {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Text(
-                '封面与图片清晰度',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text(
-                '按「显示尺寸 x 设备像素比 x 档位」向 CDN 取缩略图; 全屏看图与保存始终用原图。',
-                style: TextStyle(fontSize: 12),
-              ),
+            const SheetHeader(
+              title: '封面与图片清晰度',
+              subtitle:
+                  '按「显示尺寸 x 设备像素比 x 档位」向 CDN 取缩略图; 全屏看图与保存始终用原图。',
             ),
             for (final tier in CoverQuality.values)
               _tierRow(

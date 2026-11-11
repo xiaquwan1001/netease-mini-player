@@ -3,6 +3,7 @@ import 'rust/api.dart' as rust;
 import 'package:flutter/material.dart';
 
 import 'marquee_text.dart';
+import 'sheet_header.dart';
 
 
 /// 当前播放队列面板(播放条上的 Icons.queue_music 打开)。
@@ -183,34 +184,33 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '当前播放队列',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: SheetHeader(
+              // 单行标题(不放 subtitle): 队列面板在 300dp/矮视口下高度很紧,
+              // 双行标题会顶出 2px 纵向溢出(见 narrow_width_audit_test)
+              title: '当前播放队列',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _items.isEmpty ? '共 0 首' : '共 ${_items.length} 首',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
-                ),
-                Text(
-                  _items.isEmpty ? '共 0 首' : '共 ${_items.length} 首',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-                if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
-                  IconButton(
-                    icon: const Icon(Icons.playlist_add),
-                    tooltip: '存为歌单',
-                    onPressed: _busy ? null : _saveAsPlaylist,
-                  ),
-                if (_items.isNotEmpty && widget.onClear != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                    tooltip: '清空队列',
-                    onPressed: _confirmClear,
-                  ),
-              ],
+                  if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
+                    IconButton(
+                      icon: const Icon(Icons.playlist_add),
+                      tooltip: '存为歌单',
+                      onPressed: _busy ? null : _saveAsPlaylist,
+                    ),
+                  if (_items.isNotEmpty && widget.onClear != null)
+                    IconButton(
+                      icon: const Icon(Icons.delete_sweep_outlined),
+                      tooltip: '清空队列',
+                      onPressed: _confirmClear,
+                    ),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1),

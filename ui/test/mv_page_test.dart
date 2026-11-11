@@ -72,9 +72,22 @@ Future<void> pumpMv(
   rust.MvUrlDto? url,
   Future<rust.MvDetailDto> Function(BigInt)? loadDetail,
   MvPlayback? playback,
+  bool narrow = false,
 }) async {
+  if (narrow) {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+  }
   await tester.pumpWidget(
     MaterialApp(
+      builder: narrow
+          ? (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: const TextScaler.linear(1.25)),
+                child: child!,
+              )
+          : null,
       home: MvPage(
         mvId: BigInt.from(5436712),
         name: '主角',
@@ -159,4 +172,31 @@ void main() {
     expect(find.textContaining('403 expired'), findsOneWidget);
     expect(calls, isEmpty);
   });
+
+  testWidgets('300dp + 1.25 字号: 详情页不溢出且关键文案可见', (tester) async {
+    await pumpMv(
+      tester,
+      narrow: true,
+      detail: mvDetail(desc: '一段特别特别长的简介文本用于窄屏回归测试超出单行不少字'),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('王菲'), findsOneWidget);
+    expect(find.textContaining('最高 1080P'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

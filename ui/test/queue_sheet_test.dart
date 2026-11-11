@@ -267,4 +267,43 @@ void main() {
     expect(find.text('共 0 首'), findsOneWidget);
     expect(find.byType(ListTile), findsNothing);
   });
+
+  testWidgets('300dp + 1.25 字号: 队列面板不溢出且当前项高亮', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: const QueueHarness(
+        names: ['第一首', '一首名字特别特别长的歌用于窄屏回归测试', '第三首'],
+        startAt: 0,
+      ),
+    ));
+    // 长歌名会触发 marquee 无限滚动, 不能 pumpAndSettle, 分步 pump
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('当前播放队列'), findsOneWidget);
+    expect(currentTitle(tester), '第一首');
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

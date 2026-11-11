@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
+import 'format.dart' show formatDurationMs;
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
@@ -93,16 +94,11 @@ class UnplayableBadge extends StatelessWidget {
 ///
 /// 纯函数(便于单测): 歌曲行以前显示原始秒数(如 `245s`), 与播放条/歌单详情的
 /// `mm:ss` 不一致; 这里是全 App 歌曲行的唯一口径.
+/// 实现统一走 format.dart 的 formatDurationMs(非负区间输出完全一致);
+/// 口径差异只剩负值: 共享实现回绕(→59:55), 歌曲行钳 0(→00:00), 测试锁定.
 String formatSongDuration(BigInt durationMs) {
-  final total =
-      durationMs.isNegative ? 0 : (durationMs ~/ BigInt.from(1000)).toInt();
-  String two(int v) => v.toString().padLeft(2, '0');
-  final hours = total ~/ 3600;
-  final minutes = (total % 3600) ~/ 60;
-  final seconds = total % 60;
-  // 超过 1 小时才带小时位(小时不补零, 与歌单详情 h:mm:ss 一致)
-  if (hours > 0) return '$hours:${two(minutes)}:${two(seconds)}';
-  return '${two(minutes)}:${two(seconds)}';
+  if (durationMs.isNegative) return formatDurationMs(BigInt.zero);
+  return formatDurationMs(durationMs);
 }
 
 /// 列表里的一行曲目: 红心 / VIP / 付费 / 无版权 的形态都收在这里

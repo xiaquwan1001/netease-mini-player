@@ -53,6 +53,28 @@ void main() {
     expect(find.text('国语'), findsOneWidget);
   });
 
+  testWidgets('300dp + 1.25 字号: 弹窗长值不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(host());
+    showSongWiki(
+      tester.element(find.text('open')),
+      song: song(),
+      load: (_) async => const [
+        rust.WikiFact(
+          label: '曲风',
+          value: '流行-华语流行 / 原声带-动画片原声-一段很长很长的曲风值用于小屏回归测试',
+        ),
+        rust.WikiFact(label: '语种', value: '国语'),
+      ],
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('歌曲百科'), findsOneWidget);
+    expect(find.text('国语'), findsOneWidget);
+  });
+
   testWidgets('歌曲百科: 空列表给提示', (tester) async {
     await tester.pumpWidget(host());
     final ctx = tester.element(find.text('open'));

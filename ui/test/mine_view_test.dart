@@ -134,4 +134,26 @@ void main() {
     expect(find.text('本周常听'), findsOneWidget);
     expect(find.text('最常听'), findsNothing);
   });
+
+  testWidgets('300dp + 1.25 字号: 未登录引导不溢出', (tester) async {
+    await pumpNarrow(tester, Scaffold(body: buildMine(loggedIn: false)));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('登录后查看'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

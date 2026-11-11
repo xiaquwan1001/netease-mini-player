@@ -193,4 +193,40 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     expect(polls, before);
   });
+
+  testWidgets('300dp + 1.25 字号: 手机号登录面板不溢出', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(300, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => TextButton(
+            onPressed: () {
+              showLoginSheet(
+                ctx,
+                createQr: () async => qrKey(),
+                checkQr: (_) async => pending(),
+                sendSms: (phone, cc) async =>
+                    const rust.SmsCodeSent(code: 200, message: '', expiresIn: 60),
+                verifySms: (phone, code, cc) async => okLogin(),
+                pollInterval: const Duration(seconds: 30),
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await openPhoneTab(tester);
+
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(TextField, '手机号'), findsOneWidget);
+    // 卸载弹层, 停掉轮询/冷却 Timer, 避免 timersPending
+    await tester.pumpWidget(const SizedBox());
+  });
 }

@@ -20,12 +20,18 @@ List<String> recordSystemCalls(WidgetTester tester) {
 
 /// HomePage 的 bootstrap 会去打平台通道/Rust(测试里必然失败 → 进错误态),
 /// 同时启动 500ms 轮询 Timer, 所以只 pump 不 pumpAndSettle, 退出时把树换掉停 Timer.
-Future<void> pumpHome(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(1200, 2400);
+Future<void> pumpHome(WidgetTester tester,
+    {Size size = const Size(1200, 2400), TextScaler? scaler}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
-  await tester.pumpWidget(const MaterialApp(home: HomePage()));
+  await tester.pumpWidget(MaterialApp(
+    home: MediaQuery(
+      data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+      child: const HomePage(),
+    ),
+  ));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 16));
   addTearDown(() async {
@@ -156,5 +162,19 @@ void main() {
     expect(handled, isFalse, reason: '栈底无二级态 = 交给系统');
     expect(calls, contains('SystemNavigator.pop'));
     expect(find.byType(HomePage), findsOneWidget, reason: 'Dart 侧不该自己 pop 根路由');
+  });
+
+  testWidgets('300dp + 1.25 字号: 首页壳不溢出, 栈底返回仍交还系统', (tester) async {
+    final calls = recordSystemCalls(tester);
+    await pumpHome(tester,
+        size: const Size(300, 640), scaler: const TextScaler.linear(1.25));
+    expect(tester.takeException(), isNull);
+
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(handled, isFalse, reason: '栈底无二级态 = 交给系统');
+    expect(calls, contains('SystemNavigator.pop'));
   });
 }

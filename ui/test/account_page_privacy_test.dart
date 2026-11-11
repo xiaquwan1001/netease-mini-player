@@ -110,4 +110,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(purged, 1);
   });
+
+  testWidgets('300dp + 1.25 字号: 长昵称账号簿不溢出', (tester) async {
+    await pumpNarrow(
+      tester,
+      AccountPage(
+        info: info(loggedIn: true),
+        isAndroid: false,
+        onLogin: () {},
+        onLogout: () async {},
+        loadAccounts: () async => [
+          account(1, '一个昵称特别特别长用于窄屏回归测试的账号', active: true),
+        ],
+        onPurgeLocal: () async {},
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    // 头部当前账号 + 账号簿行: 同一昵称出现两次
+    expect(find.text('一个昵称特别特别长用于窄屏回归测试的账号'), findsNWidgets(2));
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

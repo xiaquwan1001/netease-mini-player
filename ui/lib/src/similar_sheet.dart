@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 import 'song_actions.dart';
 
 /// 相似歌曲面板: 上半是相似歌曲(点击整批起播), 下半是相似歌单.
@@ -97,34 +98,10 @@ class _SimilarSheetState extends State<_SimilarSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: [
-              CoverArt(url: widget.song.coverUrl, size: 40, radius: 4),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '和《${widget.song.name}》相似',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                    Text(
-                      widget.song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+        SheetHeader(
+          title: '和《${widget.song.name}》相似',
+          subtitle: widget.song.artist,
+          leading: CoverArt(url: widget.song.coverUrl, size: 40, radius: 4),
         ),
         const Divider(height: 1),
         if (_error != null)

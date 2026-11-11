@@ -9,12 +9,18 @@ import 'package:minincm/main.dart';
 /// - 五个 tab 的首页都**没有** AppBar;
 /// - 歌词展开 / 歌单浏览态才有顶部栏(曲名·列表名 + 收起·返回按钮)。
 void main() {
-  Future<void> pumpHome(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 2400);
+  Future<void> pumpHome(WidgetTester tester,
+      {Size size = const Size(1200, 2400), TextScaler? scaler}) async {
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const MaterialApp(home: HomePage()));
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+        child: const HomePage(),
+      ),
+    ));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     addTearDown(() async {
@@ -45,5 +51,17 @@ void main() {
       expect(find.byType(AppBar), findsNothing, reason: '$label tab 不该有顶部栏');
       expect(find.text(label), findsOneWidget, reason: '$label 只应出现在底部导航里');
     }
+  });
+
+  testWidgets('300dp + 1.25 字号: 壳不溢出, 顶部栏规则不变', (tester) async {
+    await pumpHome(tester,
+        size: const Size(300, 640), scaler: const TextScaler.linear(1.25));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(AppBar), findsNothing);
+    expect(
+      find.descendant(
+          of: find.byType(NavigationBar), matching: find.text('搜索')),
+      findsOneWidget,
+    );
   });
 }

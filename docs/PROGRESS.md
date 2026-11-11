@@ -68,6 +68,45 @@
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
+## 2026-11-11(五): 技术债 D 批收敛(6 路并行 + 主会话收口)
+
+按 `docs/remaining-batches.md` §11.B2 派了 6 个子代理并行, 每个只碰自己那份文件; 全量门禁由主会话统一跑。
+
+| 项 | 开工前实测 | 结果 | 证据 |
+|---|---|---|---|
+| **底部弹层统一** | 21 处 `showModalBottomSheet`, 仅 4 处用 `SheetHeader` | 21/21 全部 `showDragHandle: true` + `SheetHeader`; `SheetHeader` 扩出 `subtitle/leading/trailing`(旧调用方零改动) | `ui/test/song_actions_test.dart` 等 15 文件 +90 例 |
+| **时长/日期格式化去重** | 8 处各写一份 | 收敛进 `lib/src/format.dart`(新增 `formatDurationShort` m:ss / `formatDateYmd`); `song_tile` 的定长口径保留同名导出并委托共享实现 | `ui/test/format_test.dart` +5 例 |
+| **podcast.dart 半死入口** | 658 行, `showPodcastSheet`+`_PodcastBrowser*` ≈88 行零生产调用 | **658 → 190 行**; 生产链路(`showPodcastDetail`→`ProgramDetailSheet`)未动; 两个测试改直测存活组件 | `podcast_test` 256→77 行 · `program_detail_test` 206→154 行 |
+| **窄屏 + 1.25 字号回归** | 43 个渲染型测试文件缺这条 | 本轮补 **35 + 10 个文件**(分 3 个子代理), 覆盖 12 组尺寸组合的 `narrow_width_audit` 仍为基线 | 逐文件新增用例; 详见 `.pi/artifacts/debt-narrow-*.md` |
+| **Windows 安装向导中文化** | 只有内置英文(缺 `ChineseSimplified.isl`, v0.3.1 因此挂过) | 随包 `packaging/windows/ChineseSimplified.isl`(21.5 KB, is-7_1_1 官方内置版) + `[Languages]` 双语言; CI 加兜底拷贝(choco innosetup 仍 6.7.1 不自带) | `packaging/windows/README.md` 记来源/许可; .iss 引用静态核查通过(本机无 ISCC, 真验证待 CI) |
+| **deb 依赖闭包** | 未验证 | 见上一节: 68 个外部库 100% 被现 Depends 覆盖 | ldd→dpkg→闭包比对 |
+
+**顺手修掉的真缺陷(都是补窄屏回归时才暴露的)**:
+1. `lib/src/settings_audio_page.dart`: 「目标电平」`DropdownButton` 的 trailing 在 300dp+1.25 下触发框架断言
+   *Trailing widget consumes the entire tile width* → `ConstrainedBox(maxWidth:124)` + `isDense` + **`isExpanded`**
+   (缺 `isExpanded` 时选中项拿到松约束、ellipsis 不生效, 反而任意宽度溢出 94px —— 这一版先踩再修)。
+2. `lib/src/play_queue_sheet.dart`: 统一表头后标题变两行, 矮视口纵向溢出 2px → 队列面板改单行标题
+   (计数移到 trailing), `narrow_width_audit_test` 12 组组合恢复全绿。
+
+门禁: `cargo test --offline --workspace` **254** · `flutter test --exclude-tags network` **607** ·
+`dart analyze` **0 error / 0 warning(38 info, 比开工前少 4 条)**。
+
+## 2026-11-11(四): deb 依赖闭包核查(无容器环境下的替代验证)
+
+§11.C3「deb 依赖收紧/最小系统验证」本机没有 docker/podman(拉镜像也不现实), 改用**依赖闭包静态核查**,
+结论可量化且可复跑:
+
+| 项 | 方法 | 结果 |
+|---|---|---|
+| 二进制真实需要的共享库 | 解包 `dist/minincm_0.3.2_amd64.deb` 后对 `minincm` 与 `lib/libncm_ffi.so` 做 `ldd`, 取并集 | **70** 个(含 bundle 自带 2 个: `libflutter_linux_gtk.so`/`libncm_ffi.so`) |
+| 每个库的提供者 | `dpkg -S /lib/x86_64-linux-gnu/<lib>`(排除 `*-cross` 误判) | 68 个外部库全部映射到具体 deb, 无 UNKNOWN |
+| 声明依赖是否够 | 从 `Depends` 根包出发按 `PreDepends/Depends` 做 BFS 求传递闭包(`LC_ALL=C apt-cache depends`, 137 个包) | **68/68 全被覆盖**, 缺口 0 |
+| Ubuntu 24.04 命名 | `apt-cache show` 查 Provides | 声明的 `libgtk-3-0`/`libasound2` 在 24.04 由 **`libgtk-3-0t64`/`libasound2t64` Provides**, 装机不会因改名失败; 22.04 仍是原名 |
+
+脚本与中间产物: `/tmp/debchk/{analyze.sh,closure3.sh,final.sh}`(一次性验证, 不入库)。
+判据说明: 闭包覆盖 = 最小系统上 apt 装得齐所有 `.so` 的直接依赖; 但**运行期数据文件**(字体、
+GStreamer 插件等)不在 Depends 语义内, 仍需一台真最小桌面环境点开跑一次(本轮未做)。
+
 ## v2 · 2026-11-11(三): 楼层预览 · 动态流行内操作 · 发表后回填定位
 
 三条都是用户真机反馈的使用摩擦, 落点全在 UI 层(无新 FFI):

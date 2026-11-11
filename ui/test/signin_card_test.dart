@@ -45,6 +45,26 @@ void main() {
     expect(find.textContaining('云贝 +2'), findsOneWidget);
   });
 
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: SigninCard(
+            load: () async => status(signed: false),
+            sign: () async => status(signed: true, total: 14, point: 2),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('今天还没签到'), findsOneWidget);
+  });
+
   testWidgets('签到卡片: 已签到不显示按钮', (tester) async {
     await tester.pumpWidget(host(SigninCard(
       load: () async => status(signed: true),

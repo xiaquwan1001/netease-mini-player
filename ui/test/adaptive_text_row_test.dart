@@ -154,4 +154,44 @@ void main() {
     final box = tester.renderObject<RenderBox>(find.byType(MarqueeText));
     expect(box.size.width, greaterThan(0));
   });
+
+  testWidgets('300dp 视口 + 1.25 字号: 徽标与长标题不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: AdaptiveTextRow(title: _longName, badges: [Text('VIP')]),
+          ),
+        ),
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('VIP'), findsOneWidget, reason: '300dp 高于默认阈值 120, 徽标保留');
+    final box = tester.renderObject<RenderBox>(find.byType(MarqueeText));
+    expect(box.size.width, greaterThan(0));
+    expect(box.size.width, lessThanOrEqualTo(300));
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

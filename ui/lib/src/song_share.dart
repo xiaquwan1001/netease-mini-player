@@ -11,6 +11,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'cover_art.dart';
 import 'image_io.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 import 'toast.dart';
 
 /// 歌曲分享: 生成一张带封面 + 歌词 + 二维码的分享卡片, 再交给系统分享/保存.
@@ -303,15 +304,13 @@ class _SongShareSheetState extends State<_SongShareSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('分享歌曲', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 12),
+            SheetHeader(title: '分享歌曲'),
             Flexible(
               child: SingleChildScrollView(
                 // 卡片宽度跟着面板走: 300dp 窄屏上按面板宽缩, 宽屏封顶 340

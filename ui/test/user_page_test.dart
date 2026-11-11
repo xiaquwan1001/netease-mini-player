@@ -84,6 +84,27 @@ void main() {
     expect(find.text('加载失败'), findsNothing);
   });
 
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: UserPage(
+          userId: BigInt.from(1822714196),
+          loadProfile: (_) async =>
+              detail(signature: '一段很长很长的签名用于小屏回归测试'),
+          loadPlaylists: (_) async =>
+              [playlist(1, '一个名字特别特别长的歌单用于小屏回归测试', count: 89)],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('下去玩'), findsWidgets);
+  });
+
   testWidgets('没有播放回调时点歌单只提示, 不崩', (tester) async {
     await tester.pumpWidget(host(UserPage(
       userId: BigInt.from(1),

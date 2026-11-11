@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'format.dart' show formatDurationShort;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -195,7 +196,7 @@ class _NewSongsTabState extends State<_NewSongsTab> {
                 overflow: TextOverflow.ellipsis,
               ),
               trailing: Text(
-                _duration(s.durationMs),
+                formatDurationShort(s.durationMs),
                 style: Theme.of(context).textTheme.labelSmall,
               ),
               onTap: s.playable ? () => widget.onPlay(songs, i) : null,
@@ -206,11 +207,6 @@ class _NewSongsTabState extends State<_NewSongsTab> {
     );
   }
 
-  String _duration(BigInt ms) {
-    if (ms <= BigInt.zero) return '';
-    final total = ms.toInt() ~/ 1000;
-    return '${total ~/ 60}:${(total % 60).toString().padLeft(2, '0')}';
-  }
 }
 
 class _NewAlbumsTab extends StatefulWidget {

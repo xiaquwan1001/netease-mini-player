@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
 import 'cover_art.dart';
+import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
@@ -44,8 +45,8 @@ String feedRelativeTime(BigInt timeMs) {
   if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
   if (diff.inHours < 24) return '${diff.inHours} 小时前';
   if (diff.inDays < 30) return '${diff.inDays} 天前';
-  return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-      '${dt.day.toString().padLeft(2, '0')}';
+  // 超过 30 天退回日期, 统一走 format.dart 的 yyyy-MM-dd 口径
+  return formatDateYmd(timeMs);
 }
 
 const Map<String, String> feedKindLabels = {

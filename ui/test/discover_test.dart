@@ -266,4 +266,62 @@ void main() {
     await tester.pumpAndSettle();
     expect(played?.single.id, BigInt.from(7));
   });
+
+  testWidgets('最近听过: 300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (ctx) => TextButton(
+            onPressed: () => showRecentPage(
+              ctx,
+              onPlay: (_, _) {},
+              loadRecent: () async => [
+                song(3, '一首名字特别特别长的歌用于窄屏回归测试'),
+              ],
+              loadAlbums: () async => [
+                rust.AlbumItem(
+                  id: BigInt.from(11),
+                  name: '一张名字特别特别长的专辑用于窄屏回归测试',
+                  coverUrl: null,
+                  artist: '一个名字特别特别长的歌手用于窄屏回归测试',
+                  trackCount: BigInt.from(7),
+                ),
+              ],
+              loadPlaylists: () async => const [],
+              loadPodcasts: () async => const [],
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('最近听过'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

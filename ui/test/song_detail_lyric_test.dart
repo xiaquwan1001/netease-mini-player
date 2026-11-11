@@ -58,6 +58,34 @@ void main() {
       expect(find.text('第一句'), findsOneWidget);
     });
 
+    testWidgets('300dp + 1.25 字号: 长行+翻译不溢出', (tester) async {
+      tester.view.physicalSize = const Size(300, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: TimedLyricView(
+              lines: [
+                _line(
+                  '一句很长很长很长的歌词用于小屏回归测试一句很长很长很长的歌词用于小屏回归测试',
+                  sub: 'a very long translation line for the narrow screen regression',
+                  ms: 0,
+                ),
+                _line('第二句', ms: 5000),
+              ],
+              activeIndex: 0,
+              showTranslation: true,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.textContaining('一句很长很长'), findsOneWidget);
+    });
+
     testWidgets('空列表显示空态', (tester) async {
       await tester.pumpWidget(_host(const TimedLyricView(
         lines: [],

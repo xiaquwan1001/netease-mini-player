@@ -25,36 +25,40 @@ rust.CommentPage page(List<rust.Comment> items) => rust.CommentPage(
   hasMore: false,
 );
 
-Widget host() => MaterialApp(
-  home: Scaffold(
-    body: Center(
-      child: Builder(
-        builder: (context) => FilledButton(
-          onPressed: () => showCommentsSheet(
-            context,
-            kind: 'song',
-            resourceId: BigInt.one,
-            loadPage: (limit, offset) async =>
-                page(List.generate(12, (i) => comment(i + 1, '评论${i + 1}'))),
-            like: (_, _) async => true,
-            loadReplies: (_, _) async => page(const []),
-            send: (_, _) async => true,
+Widget host({TextScaler? textScaler}) => MaterialApp(
+  home: MediaQuery(
+    data: MediaQueryData(textScaler: textScaler ?? TextScaler.noScaling),
+    child: Scaffold(
+      body: Center(
+        child: Builder(
+          builder: (context) => FilledButton(
+            onPressed: () => showCommentsSheet(
+              context,
+              kind: 'song',
+              resourceId: BigInt.one,
+              loadPage: (limit, offset) async =>
+                  page(List.generate(12, (i) => comment(i + 1, '评论${i + 1}'))),
+              like: (_, _) async => true,
+              loadReplies: (_, _) async => page(const []),
+              send: (_, _) async => true,
+            ),
+            child: const Text('open'),
           ),
-          child: const Text('open'),
         ),
       ),
     ),
   ),
 );
 
-Future<void> openSheet(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(400, 800);
+Future<void> openSheet(WidgetTester tester,
+    {Size size = const Size(400, 800), TextScaler? scaler}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   addTearDown(tester.view.resetViewInsets);
 
-  await tester.pumpWidget(host());
+  await tester.pumpWidget(host(textScaler: scaler));
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
 }
@@ -114,6 +118,18 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('评论12'), findsOneWidget);
+  });
+
+  testWidgets('300dp + 1.25 字号: 弹层不溢出, 键盘避让 padding 正常', (tester) async {
+    await openSheet(tester,
+        size: const Size(300, 800), scaler: const TextScaler.linear(1.25));
+    expect(sheetPadding(tester).bottom, 0.0);
+    expect(tester.takeException(), isNull);
+
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pump();
+    expect(sheetPadding(tester).bottom, 300.0, reason: '根节点要按键盘高度抬升');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('键盘收起后无多余底部空白: padding 归零, 弹层回到底部', (tester) async {

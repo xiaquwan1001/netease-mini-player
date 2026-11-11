@@ -90,6 +90,13 @@ void big(WidgetTester tester) {
   addTearDown(tester.view.reset);
 }
 
+void narrow(WidgetTester tester) {
+  tester.view.devicePixelRatio = 1.0;
+  // 高度沿用本文件 big() 的高画布惯例, 让所有区块都参与布局; 宽度压到 300dp。
+  tester.view.physicalSize = const Size(300, 3200);
+  addTearDown(tester.view.reset);
+}
+
 void main() {
   setUpAll(() {
     RustLib.initMock(api: _FakeRustApi());
@@ -139,6 +146,54 @@ void main() {
     expect(find.text('/tmp/minincm'), findsOneWidget);
   });
 
+  testWidgets('设置首页: 300dp + 1.25 不溢出', (tester) async {
+    narrow(tester);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(body: SettingsView(info: info())),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('界面'), findsOneWidget);
+    expect(find.text('诊断与数据'), findsOneWidget);
+    expect(find.text('切到搜索时清空上次结果'), findsOneWidget);
+  });
+
+  testWidgets('专辑详情全页: 300dp + 1.25 不溢出', (tester) async {
+    narrow(tester);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () => showAlbumPreview(
+                ctx,
+                albumId: BigInt.from(9),
+                onPlay: (_, _) {},
+                loadAlbum: (_) async => rust.AlbumDetailDto(
+                  id: BigInt.from(9),
+                  name: '叶惠美',
+                  coverUrl: null,
+                  artist: '周杰伦',
+                  description: '经典',
+                  songs: [song(1, '以父之名'), song(2, '晴天')],
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('晴天'), findsOneWidget);
+  });
+
   // ---------------- 2) 账号入口 3→1 + 会员搬到「我的」 ----------------
 
   testWidgets('我的页: 资料头是账号入口, 黑胶会员入口也可达', (tester) async {
@@ -150,7 +205,7 @@ void main() {
       onLogin: () {},
       onOpenAccounts: () => accounts++,
       onOpenVip: () => vip++,
-      onPlaySongs: (_, __) {},
+      onPlaySongs: (_, _) {},
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
       onOpenAlbum: (_) {},
@@ -267,7 +322,7 @@ void main() {
         ],
         onOpenAlbum: (_) {},
         onOpenNewRelease: onOpenNewRelease,
-        onPlaySongs: (_, __) {},
+        onPlaySongs: (_, _) {},
         onOpenPlaylist: (_) {},
         onOpenPodcast: (_) {},
         onHeartMode: () {},
@@ -394,7 +449,7 @@ void main() {
     await tester.pumpWidget(pushHost('open', () {
       showDiscoverPage(
         tester.element(find.text('open')),
-        onPlaySongs: (_, __) {},
+        onPlaySongs: (_, _) {},
         onOpenPlaylist: (_) {},
         loadSongs: () async => [song(1, '晴天')],
         loadPlaylists: () async => const [],
@@ -429,7 +484,7 @@ void main() {
     await tester.pumpWidget(pushHost('open', () {
       showRecentPage(
         tester.element(find.text('open')),
-        onPlay: (_, __) {},
+        onPlay: (_, _) {},
         loadRecent: () async => [song(3, '最近一首')],
         loadAlbums: () async => const [],
         loadPlaylists: () async => const [],

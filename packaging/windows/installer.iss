@@ -38,10 +38,12 @@ UninstallDisplayIcon={app}\{#AppExe}
 LicenseFile=..\..\LICENSE
 
 [Languages]
-; 只用内置的英文语言包: Inno Setup 官方安装包**不包含** ChineseSimplified.isl(那是社区翻译,
-; 6.7.1 里没有 ⇒ CI 上 "Couldn't open include file ... ChineseSimplified.isl" 直接编译失败)。
-; 应用名/组名保持中文, 界面按钮为英文即可; 真要中文向导就把官方 .isl 一起放进 packaging/windows/。
+; 英文 = 编译器内置; 简中 = 随包的 packaging/windows/ChineseSimplified.isl
+; (来源 issrc tag is-7_1_1 的官方语言文件, 文件头标注 6.5.0+ 兼容;
+;  choco 的 innosetup 仍是 6.7.1 不自带, issrc 7.x 起才内置该文件)。
+; 编译前 release.yml 会把它拷进编译器 Languages\ 目录(已存在则跳过), 本地编译见 README.md。
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "zh_cn"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"

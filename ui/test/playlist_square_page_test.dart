@@ -78,4 +78,49 @@ void main() {
     // 第 31 个歌单由第二页(offset=30)返回
     expect(offsets, contains(30));
   });
+
+  testWidgets('300dp + 1.25 字号: 分类与歌单卡不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: PlaylistSquareView(
+          loadCategories: () async => const [
+            rust.PlaylistCategory(group: '语种', subs: ['华语', '欧美', '日语', '韩语']),
+            rust.PlaylistCategory(group: '风格', subs: ['流行', '摇滚', '民谣', '电子']),
+          ],
+          loadPage: (cat, limit, offset) async => [
+            playlist(1, '一个名字特别特别长的歌单名称用于窄屏回归测试'),
+          ],
+          loadHighQuality: (cat, limit) async => [playlist(9, '精品歌单')],
+          onOpenPlaylist: (_) {},
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('一个名字特别特别长的歌单名称用于窄屏回归测试'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

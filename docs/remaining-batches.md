@@ -271,7 +271,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 0 | ~~未登录时占位显示上次账号的昵称/VIP~~ ✅ **已修**(2026-11-10 五) | 未登录一律不渲染 VIP 标 + 新增「清除本机登录凭据」+ 启动时按 `[auth]` 校验登录态 |
 | 1 | **评论发送写操作走查(发布前硬门)** —— 读数侧已备(回复归属 `replied_to`/`parent_id`, 2026-11-11), 只剩一次真实回复写操作确认服务端是否认 `commentId` | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
 | 2 | Windows 安装向导中文化 | 需要把官方 `ChineseSimplified.isl` 一起放进 `packaging/windows/`(Inno 安装包不自带, v0.3.1 因此编译失败过) |
-| 3 | deb 依赖收紧 | 目前 `libgtk-3-0/liblzma5/libasound2`, 未在最小系统(纯 server + desktop 环境)验证过; 有条件时用容器验一次 |
+| 3 | ~~deb 依赖收紧~~ ✅ **2026-11-11 已静态核查** | 无容器环境, 改为 ldd→dpkg→Depends 传递闭包比对: 68 个外部库 **100% 被现有 Depends 覆盖**(24.04 的 t64 改名由 Provides 兜住); 运行期数据文件(字体/插件)仍需真最小桌面点一次, 见 `docs/PROGRESS.md` 2026-11-11(四) |
 | 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |
 
 ### C'. 2026-11-11 已完成

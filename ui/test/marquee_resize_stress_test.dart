@@ -147,4 +147,46 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
+
+  testWidgets('300dp 视口 + 1.25 字号: 长文本不溢出且最终滚动', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    Widget narrowHost() => MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+            child: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: MarqueeText(_longText,
+                      style: const TextStyle(fontSize: 16)),
+                ),
+              ),
+            ),
+          ),
+        );
+    await tester.pumpWidget(narrowHost());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(tester.takeException(), isNull, reason: '窄视口建 marquee 不应抛断言');
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(scrolling(tester), isTrue, reason: '284px 视口下长文本应继续滚动');
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

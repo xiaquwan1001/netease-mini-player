@@ -218,6 +218,22 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
+      # 简中向导语言包: choco 的 innosetup(6.7.1)官方安装包不带 ChineseSimplified.isl,
+      # issrc 7.x 起才内置。把随包语言包拷进编译器 Languages\ 目录; 编译器已有(7.x)则不覆盖。
+      - name: Install Chinese Simplified language for Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
+          if (-not (Test-Path $iscc)) { throw "找不到 ISCC.exe" }
+          $target = Join-Path (Join-Path (Split-Path $iscc -Parent) 'Languages') 'ChineseSimplified.isl'
+          if (Test-Path $target) {
+            Write-Host "编译器已自带 $target, 跳过拷贝"
+          } else {
+            Copy-Item "packaging\windows\ChineseSimplified.isl" $target
+            Write-Host "已拷贝随包语言包到 $target"
+          }
+
       - name: Build installer (exe)
         shell: pwsh
         run: |

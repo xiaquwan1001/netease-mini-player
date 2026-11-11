@@ -10,27 +10,38 @@ import 'package:minincm/src/theme.dart';
 /// 深色 + OLED ⇒ Scaffold / NavigationBar / 播放条(Material canvas) 背景严格 #000000,
 /// 关掉 ⇒ 回到 Material 默认深色(不是纯黑).
 void main() {
-  Future<void> pumpShell(WidgetTester tester, {required bool oled}) async {
+  Future<void> pumpShell(WidgetTester tester, {required bool oled, bool narrow = false}) async {
+    if (narrow) {
+      tester.view.physicalSize = const Size(300, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
     await tester.pumpWidget(MaterialApp(
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(oled: oled),
       themeMode: ThemeMode.dark,
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Column(
-            children: [
-              // 播放条外壳: Material(elevation) 取 canvasColor
-              const Material(elevation: 8, child: SizedBox(height: 48)),
-              const Expanded(child: Card(child: SizedBox.expand())),
-            ],
-          ),
-          bottomNavigationBar: NavigationBar(
-            selectedIndex: 0,
-            onDestinationSelected: (_) {},
-            destinations: const [
-              NavigationDestination(icon: Icon(Icons.search), label: '搜索'),
-              NavigationDestination(icon: Icon(Icons.person), label: '我的'),
-            ],
+      home: MediaQuery(
+        data: MediaQueryData(
+          textScaler:
+              narrow ? const TextScaler.linear(1.25) : TextScaler.noScaling,
+        ),
+        child: Builder(
+          builder: (context) => Scaffold(
+            body: Column(
+              children: [
+                // 播放条外壳: Material(elevation) 取 canvasColor
+                const Material(elevation: 8, child: SizedBox(height: 48)),
+                const Expanded(child: Card(child: SizedBox.expand())),
+              ],
+            ),
+            bottomNavigationBar: NavigationBar(
+              selectedIndex: 0,
+              onDestinationSelected: (_) {},
+              destinations: const [
+                NavigationDestination(icon: Icon(Icons.search), label: '搜索'),
+                NavigationDestination(icon: Icon(Icons.person), label: '我的'),
+              ],
+            ),
           ),
         ),
       ),
@@ -69,6 +80,13 @@ void main() {
     expect(scaffoldColor(tester), isNot(kOledBlack));
     expect(Theme.of(tester.element(find.byType(Scaffold))).scaffoldBackgroundColor,
         isNot(kOledBlack));
+  });
+
+  testWidgets('窄屏 300dp + 1.25 字号: 壳层不溢出且仍是 OLED 纯黑', (tester) async {
+    await pumpShell(tester, oled: true, narrow: true);
+    expect(tester.takeException(), isNull);
+    expect(scaffoldColor(tester), kOledBlack);
+    expect(find.text('搜索'), findsOneWidget);
   });
 
   test('OLED 只影响深色: 浅色主题底色不是纯黑', () {

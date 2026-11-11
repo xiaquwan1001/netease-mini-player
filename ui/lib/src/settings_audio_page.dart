@@ -169,17 +169,34 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         ListTile(
           title: const Text('目标电平'),
           subtitle: const Text('默认静态 ReplayGain 2.0, 无 pumping'),
-          trailing: DropdownButton<double>(
-            key: const Key('loudnessTargetDropdown'),
-            value: target,
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final entry in AppSettings.loudnessTargets.entries)
-                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-            ],
-            onChanged: (v) {
-              if (v != null) settings.update(loudnessTargetLufs: v);
-            },
+          // 窄屏(300dp + 1.25 字号)下不约束宽度会触发
+          // "Trailing widget consumes the entire tile width": DropdownButton 默认按最宽
+          // 菜单项撑开, 而 ListTile 的 trailing 必须给标题留位置。限宽 + 单行省略即可。
+          trailing: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 124),
+            child: DropdownButton<double>(
+              key: const Key('loudnessTargetDropdown'),
+              value: target,
+              isDense: true,
+              // 必须 isExpanded: 否则选中项拿到的是松约束, maxLines/ellipsis 不生效,
+              // DropdownButton 内部 Row 在限宽后会溢出(实测 94px)
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              items: [
+                for (final entry in AppSettings.loudnessTargets.entries)
+                  DropdownMenuItem(
+                    value: entry.key,
+                    child: Text(
+                      entry.value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) settings.update(loudnessTargetLufs: v);
+              },
+            ),
           ),
         ),
         const Divider(height: 1),

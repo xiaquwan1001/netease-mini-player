@@ -52,6 +52,30 @@ void main() {
     expect(cleared, 1);
   });
 
+  testWidgets('300dp + 1.25 字号不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: SearchLanding(
+            history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
+            hot: [hot(1, '晴天'), hot(2, '稻香')],
+            recommended: '周杰伦',
+            onSelected: (_) {},
+            onClearHistory: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.text('晴天'), findsOneWidget);
+  });
+
   testWidgets('热词加载失败显示重试', (tester) async {
     var retried = 0;
     await tester.pumpWidget(host(SearchLanding(

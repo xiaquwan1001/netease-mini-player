@@ -99,6 +99,8 @@ void main() {
     final fake = FakeHost();
     await openMenu(tester, fake, source: SongActionSource.personalFm);
     expect(find.text('不感兴趣'), findsOneWidget);
+    // 统一标题栏占 52px 后, 末项在默认视口折叠线下; 与日推用例同样先 ensureVisible
+    await tester.ensureVisible(find.text('不感兴趣'));
     await tester.tap(find.text('不感兴趣'));
     await tester.pumpAndSettle();
     expect(fake.dislikeCalls, 1);
@@ -113,6 +115,32 @@ void main() {
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('300dp + 1.25 字号: 菜单不溢出(日推来源)', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final fake = FakeHost();
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: AppActions(
+            host: fake.host,
+            child: SongOverflowButton(
+              song: fakeSong(),
+              source: SongActionSource.dailyRecommend,
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('下一首播放'), findsOneWidget);
+    expect(find.text('不感兴趣'), findsOneWidget);
   });
 
   testWidgets('推荐页每日推荐条目有行尾"...", 菜单可打开', (tester) async {

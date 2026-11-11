@@ -8,12 +8,20 @@ class SheetHeader extends StatelessWidget {
   const SheetHeader({
     super.key,
     required this.title,
+    this.subtitle,
+    this.leading,
     this.onBack,
     this.onClose,
     this.trailing,
   });
 
   final String title;
+
+  /// 标题下的一行补充说明(如封面档位说明); 有则标题区两行排版.
+  final String? subtitle;
+
+  /// 标题左侧小件(封面/头像); 与 onBack 同时给时返回键优先.
+  final Widget? leading;
   final VoidCallback? onBack;
   final VoidCallback? onClose;
 
@@ -23,6 +31,34 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final titleStyle = theme.textTheme.titleMedium
+        ?.copyWith(fontWeight: FontWeight.w600);
+    final Widget titleArea = subtitle == null
+        ? Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: titleStyle,
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: titleStyle,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          );
     return SizedBox(
       height: 52,
       child: Row(
@@ -33,17 +69,12 @@ class SheetHeader extends StatelessWidget {
               tooltip: '返回',
               onPressed: onBack,
             )
-          else
+          else if (leading != null) ...[
+            leading!,
+            const SizedBox(width: 10),
+          ] else
             const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
+          Expanded(child: titleArea),
           if (trailing != null) ...[
             trailing!,
             const SizedBox(width: 8),

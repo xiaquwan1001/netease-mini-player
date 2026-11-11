@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'comment_stats_bar.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'sheet_header.dart';
 import 'rust/api.dart' as rust;
 
 /// 评论线程: 列表 + 点赞 + 楼层回复 + 发回复.
@@ -1227,25 +1228,13 @@ class _RepliesSheetState extends State<_RepliesSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // 标题统一走 SheetHeader(与其它弹层一致): 楼层面板把被回复的内容当副标题
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '回复',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SheetHeader(
+                title: '回复',
+                subtitle:
                     '${widget.parent.userName}: ${widget.parent.content}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
-                  ),
-                ],
               ),
             ),
             const Divider(height: 1),
@@ -1441,11 +1430,7 @@ class _ComposeSheetState extends State<_ComposeSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '写评论',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
+              const SheetHeader(title: '写评论'),
               const SizedBox(height: 8),
               TextField(
                 controller: _controller,

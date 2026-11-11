@@ -1372,6 +1372,7 @@ void _showResourceShareSheet(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          SheetHeader(title: '分享'),
           ListTile(
             leading: const Icon(Icons.share_outlined),
             title: const Text('分享到动态'),

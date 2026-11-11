@@ -6,6 +6,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 
 /// 可注入的加载器(测试用 mock)
 typedef LoadPurchasedAlbums = Future<rust.DigitalAlbumPurchased?> Function();
@@ -200,31 +201,22 @@ class _DetailSheetState extends State<_DetailSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CoverArt(url: album.coverUrl, size: 88, radius: 8),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(album.albumName,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 4),
-                      Text(album.artistName, overflow: TextOverflow.ellipsis),
-                      if (_detail != null) ...[
-                        const SizedBox(height: 4),
-                        Text('价格: ¥${_detail!.price} · ${_fmtTags(_detail!.tags)}'),
-                      ],
-                      if (salesNum != null)
-                        Text('销量: ${_fmtCompact(salesNum)}'),
-                    ],
-                  ),
-                ),
-              ],
+            SheetHeader(
+              title: album.albumName,
+              subtitle: album.artistName,
+              leading: CoverArt(url: album.coverUrl, size: 40, radius: 6),
             ),
+            if (_detail != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child:
+                    Text('价格: ¥${_detail!.price} · ${_fmtTags(_detail!.tags)}'),
+              ),
+            if (salesNum != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                child: Text('销量: ${_fmtCompact(salesNum)}'),
+              ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text('详情加载失败: $_error'),

@@ -152,4 +152,49 @@ void main() {
     expect(state.controller.offset, _targetOffset(22, 400),
         reason: '连续 seek 每次都要重新定位');
   });
+
+  testWidgets('300dp + 1.25 字号: seek 后跟随不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final position = ValueNotifier<int>(500);
+    addTearDown(position.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: Center(
+            child: SizedBox(
+              height: 400,
+              child: FollowHarness(lines: lines, position: position),
+            ),
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    final state = tester.state<FollowHarnessState>(find.byType(FollowHarness));
+    state.seek(20000);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(state.follow, isTrue);
+    expect(state.controller.offset, _targetOffset(20, 400));
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

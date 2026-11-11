@@ -5,6 +5,7 @@ import 'cover_art.dart';
 import 'feed_detail_page.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'sheet_header.dart';
 
 /// 关注动态流: 未登录引导 + 登录后的动态列表.
 ///
@@ -540,6 +541,7 @@ class _FeedCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            SheetHeader(title: '分享'),
             ListTile(
               leading: const Icon(Icons.autorenew),
               title: const Text('转发动态'),
@@ -1064,23 +1066,12 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '全部艺人',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                Text(
-                  '共 ${widget.authors.length + others.length} 位',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: scheme.outline),
-                ),
-              ],
+          SheetHeader(
+            title: '全部艺人',
+            trailing: Text(
+              '共 ${widget.authors.length + others.length} 位',
+              style: theme.textTheme.labelSmall
+                  ?.copyWith(color: scheme.outline),
             ),
           ),
           const Divider(height: 1),

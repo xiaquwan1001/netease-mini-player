@@ -9,6 +9,7 @@ import 'src/adaptive_text_row.dart';
 import 'src/album_preview.dart';
 import 'src/cover_backdrop.dart';
 import 'src/cover_palette.dart';
+import 'src/sheet_header.dart';
 import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
@@ -1745,15 +1746,15 @@ class _HomePageState extends State<HomePage> {
     // 返回 PlaylistDto(选已有歌单) 或 'create'(新建歌单)
     final picked = await showModalBottomSheet<Object>(
       context: context,
+      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.6,
           child: Column(
             children: [
-              ListTile(
-                dense: true,
-                title: const Text('收藏到歌单'),
-                subtitle: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              SheetHeader(
+                title: '收藏到歌单',
+                subtitle: song.name,
               ),
               const Divider(height: 1),
               ListTile(
@@ -1854,10 +1855,12 @@ class _HomePageState extends State<HomePage> {
     final link = 'https://music.163.com/#/song?id=${song.id}';
     await showModalBottomSheet<void>(
       context: context,
+      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const SheetHeader(title: '分享'),
             ListTile(
               leading: const Icon(Icons.share_outlined),
               title: const Text('分享到动态'),
@@ -2197,15 +2200,15 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     final picked = await showModalBottomSheet<Object>(
       context: context,
+      showDragHandle: true,
       builder: (sheetContext) => SafeArea(
         child: SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.6,
           child: Column(
             children: [
-              ListTile(
-                dense: true,
-                title: const Text('存为歌单'),
-                subtitle: Text('把队列里的 ${songs.length} 首歌存进去'),
+              SheetHeader(
+                title: '存为歌单',
+                subtitle: '把队列里的 ${songs.length} 首歌存进去',
               ),
               const Divider(height: 1),
               ListTile(

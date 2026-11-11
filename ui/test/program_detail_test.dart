@@ -18,16 +18,6 @@ rust.SongDto song(int id, String name) => rust.SongDto(
       playable: true,
     );
 
-rust.PodcastRadio radio([String name = '深夜电台']) => rust.PodcastRadio(
-      id: BigInt.from(5),
-      name: name,
-      coverUrl: null,
-      description: 'desc',
-      djName: '主播A',
-      programCount: BigInt.from(33),
-      playCount: BigInt.from(100),
-    );
-
 rust.PodcastProgramDto program(
   int id,
   String name, {
@@ -44,24 +34,6 @@ rust.PodcastProgramDto program(
       radioName: '深夜电台',
       description: description,
       song: withSong ? song(1000 + id, name) : null,
-    );
-
-Widget host(VoidCallback onOpen, {bool narrow = false}) => MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler:
-              narrow ? const TextScaler.linear(1.25) : TextScaler.noScaling,
-        ),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: onOpen,
-            child: const Text('open'),
-          ),
-        ),
-      ),
     );
 
 Widget sheetHost(Widget child, {bool narrow = false}) => MaterialApp(
@@ -150,55 +122,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('节目列表: 每行有详情入口, 点击打开详情弹层', (tester) async {
-    await tester.pumpWidget(host(() {
-      showPodcastSheet(
-        tester.element(find.text('open')),
-        onPlay: (_, _) {},
-        loadRadios: (_) async => [radio()],
-        loadPrograms: (_, _, _) async => [
-          program(11, '第一期', withSong: false),
-          program(12, '第二期'),
-        ],
-        loadRadioDetail: (_) async => radio(),
-        loadProgramDetail: (id) async =>
-            program(11, '第一期', description: '第一期的完整简介', withSong: false),
-      );
-    }));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('深夜电台'));
+  testWidgets('节目详情: 没有音频的单集也能看完整简介', (tester) async {
+    await tester.pumpWidget(sheetHost(ProgramDetailSheet(
+      program: program(11, '第一期', withSong: false),
+      loadDetail: (id) async =>
+          program(11, '第一期', description: '第一期的完整简介', withSong: false),
+    )));
     await tester.pumpAndSettle();
 
-    // 没有音频的那一集也能看详情
-    expect(find.byTooltip('节目详情'), findsNWidgets(2));
-    await tester.tap(find.byTooltip('节目详情').first);
-    await tester.pumpAndSettle();
+    // 没有音频的那一集也能看详情: 完整简介正常展示, 播放按钮置灰
     expect(find.text('第一期的完整简介'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
   });
 
-  testWidgets('节目列表: 有音频时详情里可以直接播放本集', (tester) async {
-    var played = -1;
-    await tester.pumpWidget(host(() {
-      showPodcastSheet(
-        tester.element(find.text('open')),
-        onPlay: (songs, index) => played = index,
-        loadRadios: (_) async => [radio()],
-        loadPrograms: (_, _, _) async => [
-          program(11, '第一期'),
-          program(12, '第二期'),
-        ],
-        loadRadioDetail: (_) async => radio(),
-        loadProgramDetail: (id) async => program(12, '第二期'),
-      );
-    }));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('深夜电台'));
+  testWidgets('节目详情: 有音频时点播放本集触发回调', (tester) async {
+    var played = 0;
+    await tester.pumpWidget(sheetHost(ProgramDetailSheet(
+      program: program(11, '第一期'),
+      loadDetail: (id) async => program(11, '第一期'),
+      onPlay: () => played++,
+    )));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('节目详情').last);
-    await tester.pumpAndSettle();
     await tester.tap(find.text('播放本集'));
     await tester.pumpAndSettle();
     expect(played, 1);

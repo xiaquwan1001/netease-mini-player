@@ -100,4 +100,40 @@ void main() {
     expect(settings.showHotSearch, isTrue);
     expect(settings.clearSearchOnTabSwitch, isTrue);
   });
+
+  testWidgets('300dp + 1.25 字号: 长热词/长推荐不溢出', (tester) async {
+    AppSettings.instance.showHotSearch = true;
+    await pumpNarrow(
+      tester,
+      Scaffold(
+        body: SearchLanding(
+          history: const ['一条特别特别长的历史搜索词用于窄屏回归测试'],
+          hot: [hot(1, '一个特别特别长不会有人搜的热词窄屏回归'), hot(2, '稻香')],
+          recommended: '一个特别特别长的推荐歌手名用于窄屏回归测试',
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.text('稻香'), findsOneWidget);
+  });
+}
+
+/// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
+Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
+  tester.view.physicalSize = const Size(300, 640);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(MaterialApp(
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(context)
+          .copyWith(textScaler: const TextScaler.linear(1.25)),
+      child: child!,
+    ),
+    home: home,
+  ));
 }

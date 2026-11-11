@@ -51,6 +51,45 @@ void main() {
     expect(cleared, 1);
   });
 
+  testWidgets('300dp + 1.25 字号不溢出(建议面板 + 历史 chips)', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final scaled = const MediaQueryData(textScaler: TextScaler.linear(1.25));
+
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: scaled,
+        child: Scaffold(
+          body: SuggestionPanel(
+            items: [
+              item('song', '一首名字特别特别长的歌曲用于小屏回归测试'),
+              item('artist', '一个名字特别特别长的歌手用于小屏回归测试'),
+            ],
+            onSelected: (_) {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(MaterialApp(
+      home: MediaQuery(
+        data: scaled,
+        child: Scaffold(
+          body: SearchHistoryBar(
+            history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
+            onSelected: (_) {},
+            onClear: () {},
+          ),
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('无历史时不显示', (tester) async {
     await tester.pumpWidget(host(SearchHistoryBar(
       history: const [],
