@@ -86,6 +86,10 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // 凭据存储: Android Keystore 后端(通道层, 见 KeystoreChannel.kt)
+        // Rust identity 侧尚未接线, 这里先把通道挂上, 便于 Dart/手工验证.
+        KeystoreChannel.register(flutterEngine, this)
+
         // MV 播放: 起独立 VideoView Activity, 不进 Media3 歌曲队列
         val mv = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/mv")
         mv.setMethodCallHandler { call, result ->
