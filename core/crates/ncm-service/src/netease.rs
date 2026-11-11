@@ -1627,12 +1627,52 @@ impl Provider for NeteaseProvider {
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("回复评论需要登录"));
             }
-            let q = make_query(&cookie, &domain, &ua)
-                .param("threadId", thread_id)
-                .param("commentId", &comment_id.to_string())
-                .param("content", content);
-            let resp = client.comment_reply(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
+            // 主路: eapi 的老写接口(/api/resource/comments/{add,reply}), 与 api-enhanced
+            // 旧版一致; 实测 weapi 的 /api/v1/resource/comments/reply 在**动态**(A_EV_2_*)
+            // 上回 code=404, 而动态的评论读接口就在 /api/v1/resource/comments/{threadId}。
+            let (path, data) = if comment_id == 0 {
+                ("/api/resource/comments/add", serde_json::json!({
+                    "threadId": thread_id,
+                    "content": content,
+                    "resourceType": "0",
+                }))
+            } else {
+                ("/api/resource/comments/reply", serde_json::json!({
+                    "threadId": thread_id,
+                    "commentId": comment_id.to_string(),
+                    "content": content,
+                    "resourceType": "0",
+                }))
+            };
+            let resp = client
+                .request(path, data.clone(), write_option(&cookie, &domain, &ua))
+                .await
+                .map_err(map_error)?;
+            // 老路不认这条资源(实测动态回 404)时回退 weapi 新版路径; 只有 404 才回退,
+            // 其它错误(频率/内容)回退也发不出去, 反而可能重复发
+            if resp.body.get("code").and_then(Value::as_i64) == Some(404) {
+                let q = make_query(&cookie, &domain, &ua)
+                    .param("threadId", thread_id)
+                    .param("commentId", &comment_id.to_string())
+                    .param("content", content);
+                let retry = client.comment_reply(&q).await.map_err(map_error)?;
+                if let Err(mut e) = check_body(&retry.body) {
+                    // 带上请求上下文: 评论写失败只报 code 没法定位是哪条资源/哪一层
+                    e.detail = format!(
+                        "{}(eapi {path} 与 weapi 回退均失败, threadId={thread_id}, commentId={comment_id})",
+                        e.detail
+                    );
+                    return Err(e);
+                }
+                return Ok(true);
+            }
+            if let Err(mut e) = check_body(&resp.body) {
+                e.detail = format!(
+                    "{}(写评论 {path}, threadId={thread_id}, commentId={comment_id})",
+                    e.detail
+                );
+                return Err(e);
+            }
             Ok(true)
         })
     }
@@ -3574,6 +3614,17 @@ fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<Pho
 ///
 /// UA 故意不传业务侧的 NeteaseMusicDesktop: weapi 由 vendor 选 PC 浏览器 UA,
 /// 与"网页登录"这个动作自洽; 混用客户端 UA 反而是风控特征.
+/// 评论写接口要 eapi(客户端形态), 不能沿用 weapi: 动态评论的写入走 eapi 才认。
+fn write_option(cookie: &str, domain: &Option<String>, ua: &Option<String>) -> RequestOption {
+    RequestOption {
+        crypto: CryptoType::Eapi,
+        cookie: if cookie.is_empty() { None } else { Some(cookie.to_string()) },
+        ua: ua.clone(),
+        domain: domain.clone(),
+        ..Default::default()
+    }
+}
+
 fn qr_option(domain: Option<String>) -> RequestOption {
     RequestOption {
         crypto: CryptoType::Weapi,

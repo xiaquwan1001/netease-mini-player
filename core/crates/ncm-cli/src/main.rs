@@ -16,6 +16,7 @@
 //!   ncm login-cookie "MUSIC_U=...; __csrf=..."
 //!   ncm login-qr                    官方网页扫码登录(打印二维码链接并等待扫码确认)
 //!   ncm login-sms <手机号> [验证码] [--country 86]   手机号+短信验证码登录(不带验证码会先发送然后等待输入)
+//!   ncm reply <threadId> [commentId] <content>   发评论(commentId 省略/0 = 顶层评论; 写操作!)
 //!   ncm digital <albumId>            数字专辑详情(价格/标签/是否已购)
 //!   ncm digital-purchased [limit] [offset]   我的已购数字专辑(需登录)
 //!   ncm purchased-songs [limit] [offset]     我的已购单曲(需登录)
@@ -204,7 +205,33 @@ async fn run() -> Result<(), BoxErr> {
             println!("cookie saved -> {}", core.store.path().display());
             Ok(())
         }
+        "reply" => {
+            // 评论写操作(会真的发出去): 排障用, 打印服务端 code 与请求上下文.
+            // threadId 形如 R_SO_4_<songId>(歌曲) / A_EV_2_<eventId>_<uid>(动态) / R_AL_3_<id>(专辑).
+            let thread = args
+                .positional
+                .first()
+                .ok_or("usage: ncm reply <threadId> [commentId] <content>")?
+                .clone();
+            let (comment_id, content) = match (args.positional.get(1), args.positional.get(2)) {
+                (Some(a), Some(b)) => (
+                    a.parse::<u64>()
+                        .map_err(|_| format!("commentId 不是数字: {a}"))?,
+                    b.clone(),
+                ),
+                (Some(b), None) => (0u64, b.clone()),
+                _ => return Err("usage: ncm reply <threadId> [commentId] <content>".into()),
+            };
+            announce(&core);
+            let p = provider(&core, Capability::Comment)?;
+            p.reply_comment(&thread, comment_id, &content).await?;
+            println!(
+                "已发表(threadId={thread}, commentId={comment_id}) -> 资源页/详情页刷新可见"
+            );
+            Ok(())
+        }
         "user" => {
+
             // 他人主页(匿名可用): 资料 + 公开歌单. 用来验证 B1「听众/粉丝 -> 用户主页」的数据面.
             let uid: u64 = args
                 .positional
