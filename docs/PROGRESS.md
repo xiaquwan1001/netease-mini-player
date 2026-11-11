@@ -1270,3 +1270,17 @@ v0.4.0 / v0.5.0 两次 Release 都在 `build-linux-arm64` 的 flutter-action 步
 `Unable to determine Flutter version ... architecture: arm64`, 显式 `flutter-version` 也一样) ⇒ publish 被 skip、整版没资产。
 改成 arm64 腿从官方 git 源直装 Flutter(`git clone --depth 1 -b 3.47.9` + `precache --linux`), x64 腿保留 action;
 CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重发。
+
+## 桌面冒烟清单与脚本骨架(2026-11-11)
+
+- 新增 `docs/smoke-desktop.md`: 桌面端发布前冒烟共 31 条可勾选清单(安装 deb/AppImage/tar.gz、
+  启动与外观、登录、播放、我的/设置/账号、退出重开、已知受限项), 每条带通过判据(看什么、跑什么命令)。
+  人工 28 条 / 脚本自动 3 条, 目标全程 ≤ 10 分钟。
+- 新增 `tools/smoke-desktop.sh`(可执行, bash 3.2 兼容, 外部命令缺失一律 SKIP 不 fail):
+  - `--env`: 发行版/GLib/图形会话(Wayland-X11)/音频后端 + bundle 架构与 GLib 符号基线
+    (思路同 build-deb.sh 的 nm 检查) + `~/.local/share/ncm` 存在性与权限;
+  - `--run BUNDLE=<路径> [--wait-window]`: 启动 bundle 里的 minincm 采 15 秒启动耗时, 结束打印日志尾部;
+    无图形会话(容器/SSH)时优雅 SKIP; debug 包首帧慢是 debug JIT 成本, 数值仅 release 包作数;
+  - `--report`: 把 --env/--run 拼成可直接贴 issue/PR 的 markdown。
+- 约束: 脚本不联网、不写 /tmp(日志在 `~/.cache/minincm-smoke/`); 未接入 release workflow
+  (不动 .github/**), 后续建议发布后手动触发人工冒烟 checklist issue, 仅文档建议。
