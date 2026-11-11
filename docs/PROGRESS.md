@@ -1208,3 +1208,32 @@ FRB `RustLib.init` 21ms; `dlopen` 237MB 的 debug `libncm_ffi.so` 1ms; HomePage 
 **首帧 layout/paint 3.4~4.2s**。同一台机空项目首帧≈1.2s(环境地板), `home:` 换成一行 Text
 后立刻回到 1.1s; 软件渲染同样 3.36s ⇒ 与 Rust/网络/图片/GPU 无关, 是 debug JIT 首次执行
 首页那一大坨代码的成本。要秒开用 release/profile 包, 不必再往 Rust 侧查。
+
+## Linux arm64 分发(AppImage + 文档)(2026-11-11)
+
+v0.4.0 已有 arm64 的 tar.gz + deb CI, 但 AppImage 只有 x64 进了 release workflow, 也没有本地打包文档。
+
+**做了什么**
+- `packaging/linux/build-appimage.sh` 增加架构交叉校验: 用 `readelf -h` 读 bundle 里 minincm 的
+  ELF Machine 字段, 与目标 AppImage 架构比对(x86-64↔x86_64 / AArch64↔aarch64), 不匹配直接报错退出,
+  杜绝"x86_64 内容的 aarch64.AppImage"。
+- 新建 `packaging/linux/README.md`: 本地构建 deb/AppImage/tar.gz 完整命令、ARCH/BUNDLE/APPIMAGE_ARCH
+  覆盖、aarch64 注意事项、CI job→资产表。
+- 未发现 x64 硬编码(目录与架构名均按 uname -m 推断), 脚本保持 bash 3.2 兼容。
+
+**x64 端到端验证**(复用主工作区 x64 release bundle, 产物写本 worktree dist/)
+- AppImage: `MiniNCM-0.4.0-linux-x86_64.AppImage` 生成, `file` 显示 ELF 64-bit x86-64;
+- deb: `minincm_0.4.0_amd64.deb` 生成, `dpkg-deb -I` 显示 Architecture: amd64;
+- 校验反例: `APPIMAGE_ARCH=aarch64` + x64 bundle ⇒ 脚本报"架构不匹配"并以非零退出, 校验有效。
+
+**arm64 未验证的部分**
+- aarch64 机器上跑 `build-appimage.sh` 端到端(含 `appimagetool-aarch64.AppImage` 下载后能否运行);
+- 打出的 aarch64 AppImage 能否直接启动;
+- 架构校验分支在 arm64 上的正例。**因此 arm64 AppImage 不进 release workflow**(`.github/workflows/**`
+  未改), 验证通过后再加 CI job。
+
+**arm64 上怎么验**
+1. `cd ui && flutter build linux --release`
+2. `bash packaging/linux/build-appimage.sh dist` → `file dist/MiniNCM-*-linux-aarch64.AppImage` 应显示 aarch64, 直接运行应能启动;
+3. 反例: `APPIMAGE_ARCH=x86_64 bash packaging/linux/build-appimage.sh /dev/null/dist`(输出目录不存在即可) 应报架构不匹配退出;
+4. 通过后参照 `packaging/linux/README.md` 的 CI 资产表补 workflow job。
