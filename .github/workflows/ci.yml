@@ -74,13 +74,23 @@ jobs:
         with:
           workspaces: core
           key: linux-${{ matrix.arch }}
-      # 与 release 对齐并钉死版本: arm64 上 "channel: stable" 解析不出 SDK
-      # (subosito/flutter-action 报 unable to determine Flutter version architecture: arm64)
-      - uses: subosito/flutter-action@v2
+      # x64 腿用 action(带缓存); arm64 腿改用官方 git 源直装 ——
+      # subosito/flutter-action 在 linux-arm64 上固定解析失败
+      # ("Unable to determine Flutter version ... architecture: arm64")
+      - name: Install Flutter (x64, via action)
+        if: matrix.arch == 'x64'
+        uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.9'
           channel: stable
           cache: true
+      - name: Install Flutter 3.47.9 (arm64)
+        if: matrix.arch == 'arm64'
+        run: |
+          git clone --depth 1 -b 3.47.9 https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/flutter/bin/flutter" --version
+          "$RUNNER_TEMP/flutter/bin/flutter" config --no-analytics >/dev/null
+          "$RUNNER_TEMP/flutter/bin/flutter" precache --linux
       - name: build
         working-directory: ui
         run: flutter pub get && flutter build linux --debug
