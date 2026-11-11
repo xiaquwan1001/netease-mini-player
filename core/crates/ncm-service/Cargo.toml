@@ -13,3 +13,10 @@ serde_json.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+# P0 Windows DPAPI 后端(credential_store.rs 的 dpapi 模块). windows-sys 0.61 已在
+# 依赖树里(Cargo.lock), 选 0.61 与树中多数一致; 只开 Cryptography 所需的两个
+# feature(近零增量, 且 windows-sys 是 link-only crate, 不引入编译期依赖).
+# 仅 cfg(windows) 生效, Linux/Android 构建完全不受影响.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }

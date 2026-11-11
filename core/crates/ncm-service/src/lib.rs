@@ -5,6 +5,7 @@
 //! 2. 把 vendor 的 ncm-api-rs 包成我们的 Provider
 
 pub mod cache;
+pub mod credential_store;
 pub mod history;
 pub mod identity;
 pub mod loudness_store;
