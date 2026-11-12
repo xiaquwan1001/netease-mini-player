@@ -24,7 +24,7 @@ flutter:
   script:
     - flutter --version
     - flutter config --no-analytics >/dev/null
-    - cd ui && flutter pub get
-    - cd ui && dart analyze
+    - (cd ui && flutter pub get)
+    - (cd ui && dart analyze)
     - bash tools/check-write-guard.sh
-    - cd ui && flutter test --exclude-tags network
+    - (cd ui && flutter test --exclude-tags network)
