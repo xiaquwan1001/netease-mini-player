@@ -1320,3 +1320,17 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
   adb shell run-as com.minincm.minincm.dev cat files/cred/<key>.bin | xxd | head  # 应为 iv+密文
   adb logcat -s flutter | grep -iv music_u   # 确认无明文泄漏
   ```
+
+## Linux secret-service 后端(2026-11-12, lane p2)
+
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 实现 | ✅ | `core/crates/ncm-service/src/credential_keyring.rs`: `SecretServiceStore`(`#[cfg(target_os="linux")]`), keyring 3.6.3 + `sync-secret-service`, service=`com.minincm.minincm`, account=`CredentialKey::id()` |
+| 探测 | ✅ | `available()` 只构造不存在的 entry 读一次(不写探针 secret), 结果 OnceLock 缓存; 无 D-Bus → `Unavailable`, 不 panic |
+| 错误映射 | ✅ | NoEntry→Unavailable; NoStorageAccess/PlatformFailure→Unavailable(语义=未登录); 其余→Backend; 绝不 panic |
+| open_backend | ✅ | linux 分支: keyring 可用→`Secure{backend:"secret-service"}`; 不可用→原同意门/回退(语义不变), fallback reason 提及 secret-service 不可用 |
+| 依赖 | ✅ | `[target.'cfg(target_os="linux")'.dependencies]` — Android/Windows 不编译; Cargo.lock 3195→3251 行(+56) |
+| 测试 | ✅ | 默认(CI 无 D-Bus) 242 passed 0 failed; 真实 D-Bus 会话(`NCM_KEYRING_TEST=1`) keyring 5 测试全绿: available 缓存/真实 put-get-remove/spike/open_backend 报 secret-service/降级子进程回落同意门(未同意写被拒) |
+| 回退语义 | ✅ | 无 D-Bus(zbus 进程内缓存连接, 用子进程重执行模拟): open_backend → None + PlaintextFallback; 同意后 FileStore, 未同意写 → AccessDenied |
+
+降级配方(锁屏/无桌面): `NCM_KEYRING_TEST=1 cargo test -p ncm-service keyring` 内含子进程模拟无 D-Bus; 无头 spike 配方见 credential_keyring.rs 注释(须 `gnome-keyring-daemon --unlock` 空密码解锁, 否则 gcr-prompter 卡死)。

@@ -75,7 +75,7 @@ pub enum CredentialError { Unavailable(String), AccessDenied(String), Backend(St
 1. **P0 Windows DPAPI**(已落地): `#[cfg(windows)] DpapiStore`, `open_backend` 在 Windows 上 DPAPI 可用即用;
    Linux/Android 走同意门。
 2. **P1 Android Keystore**: Kotlin `ncm/keystore` 通道(存/取/删 blob), 通道里只传 secret 本身, 不新增持久化副本; 迁移见下。模拟器 a34 手测。
-3. **P2 Linux secret-service**: `keyring` crate; 无 D-Bus 时按 §5 决策回退。
+3. **P2 Linux secret-service**(已落地, 2026-11-12): `keyring` 3.6.3 + `sync-secret-service`(`credential_keyring.rs`, 仅 `cfg(target_os="linux")`); keyring 可用 → `Secure{backend:"secret-service"}`; 无 D-Bus/锁屏 → 原同意门回退, 未同意写仍被拒。真实 D-Bus 会话验证: `NCM_KEYRING_TEST=1 cargo test -p ncm-service keyring`(5 测试: 探测缓存/真实 roundtrip/open_backend 选型/降级回落)。§4 的 CI spike 已验证 dbus-run-session + gnome-keyring 可行, 但须 `--unlock` 空密码解锁默认 collection。
 
 迁移兼容(各端一致): 启动时在 `IdentityStore::load_or_create` 前探测旧明文文件 → 读入 → 写 CredentialStore → **旧文件字段清零(identity.json 写回只剩设备指纹; accounts.json 删 cookie 只留 uid/nickname 元数据)** → 一次性迁移标记进 settings。写 keychain 失败则保留明文原样 + UI 提示, 不阻塞启动。
 

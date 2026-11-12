@@ -92,6 +92,7 @@ pub trait CredentialStore: Send + Sync {
 /// 后端名(写进策略文件, 便于以后换后端时识别旧数据是谁写的)
 pub const BACKEND_FILE: &str = "file";
 pub const BACKEND_DPAPI: &str = "dpapi";
+pub const BACKEND_SECRET_SERVICE: &str = "secret-service";
 
 // ---------------- 策略文件(同意标记 + 迁移标记) ----------------
 
@@ -293,6 +294,22 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
     }
     #[cfg(not(windows))]
     {
+        // P2 Linux: secret-service(keyring crate) 可用即用; 不可用走同意门(语义不变).
+        // Android/其它非 Windows 平台跳过探测(P1 Android Keystore 待接入).
+        #[cfg(target_os = "linux")]
+        {
+            let store = crate::credential_keyring::SecretServiceStore::new();
+            if store.available().is_ok() {
+                let policy = CredentialPolicy::load(dir);
+                return (
+                    Some(Arc::new(store)),
+                    CredentialStatus::Secure {
+                        backend: BACKEND_SECRET_SERVICE,
+                        migrated: policy.migrated,
+                    },
+                );
+            }
+        }
         let policy = CredentialPolicy::load(dir);
         if policy.plaintext_consent {
             (
@@ -303,7 +320,7 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
             (
                 None,
                 CredentialStatus::PlaintextFallback {
-                    reason: "无系统钥匙串后端(P1/P2 待接入)且用户未同意 0600 明文回退".into(),
+                    reason: "无系统钥匙串后端(不可用或 P1 待接入)且用户未同意 0600 明文回退".into(),
                 },
             )
         }
