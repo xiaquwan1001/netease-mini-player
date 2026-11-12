@@ -138,7 +138,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 ## 7. 派发工单模板(fabric_exec)
 
 > 只派 **1 个批次/1 个子代理**; 用 `agents.spawn` 异步, 不要在一个程序里 `Promise.allSettled` 等全部。
-> 模型写真实 `provider/id`(如 `ustc-pool/ustc-worker`), 不用别名; `tools` 必须显式列出。
+> 模型写真实 `provider/id`(如 `custom.ustc-pool/ustc-worker`, **必须带 `custom.` 前缀**), 不用别名; `tools` 必须显式列出。
 
 ```text
 【批次】B1 消息增强
@@ -233,16 +233,18 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 **与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
 
 
-## 11. 待办(2026-11-10 收尾版)
+## 11. 待办(2026-11-12 更新)
 
 > 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
-> 当前基线: 覆盖率 123/123 · FFI **146**(4 个无 UI 入口) · `cargo test --offline --workspace` **254** ·
-> `flutter test --exclude-tags network` **617** · `dart analyze` 0 error / 0 warning(38 info)。
+> 当前基线(2026-11-12): 覆盖率 123/123 · `cargo test` **247** ·
+> `flutter test --exclude-tags network` **656** · `dart analyze` 0 error / 0 warning(38 info) · write-guard OK。
 >
 > **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
 > ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
 > KDE Discover 实机看一眼(元数据已通过 `appstreamcli validate`); ④账号隐私再收一步: `accounts.json` 里的
 > `MUSIC_U` 仍是**明文 0600**, 若要上"系统钥匙串"(Linux secret-service / Windows DPAPI)需单独立项。
+> —— ④ **已完成**(2026-11-12, v0.5.5): Android Keystore + Linux secret-service + Windows DPAPI 三端落地; 残留:
+> Android Keystore 模拟器实测(`~/bin/avd headless a34`)与桌面 keyring 冒烟(.deb/AppImage 装)未做。
 
 ### A. 最近三批已完成(供对照, 不要重做)
 
@@ -259,7 +261,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | ~~1~~ | ~~**主播/听众 → 用户主页路由**~~ ✅ **已完成**(2026-11-10 六) | 新增 `user_page.dart`(资料卡 + 公开歌单, 点歌单可播) + `Provider::user_profile`/`user_playlists_of`(匿名可用) + 听众/粉丝行接通; 见 `docs/PROGRESS.md` 最新小节 | ~~S~~ 已做 |
 | ~~2~~ | ~~**D 批技术债**~~ ✅ **2026-11-11 完成** | 由本轮 `refactor(debt)` 落地(详见下方第二行原描述) | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口(≈88 行, 被 10 处测试当宿主)、300dp+1.25 回归补到剩余 30 个测试文件 | M |
 | ~~3~~ | ~~视觉待人工过目~~ → 2026-11-11 已按反馈改掉: 楼层内联预览 + 动态流行内赞/评论/分享 + 发评论后回填定位 | 需求已实现, 视觉仍可人眼扫一眼 |
-| 3 | 视觉待人工过目 | C 批遗留: 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 | S(需人眼) |
+| 3 | 视觉待人工过目 | C 批遗留(同 §10 C 行备注): 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 | S(需人眼) |
 | ~~4~~ | ~~发布包体积实测~~ ✅ **已完成**(2026-11-10 六) | 结论在 `docs/backend-service-options.md` **附录 B**: 下载 vs 首装体积 + bundle 逐文件拆解 + strip 机会(15→9 MB) | ~~S~~ 已做 |
 
 ### C. 发布/打包跟进(小改, 可攒一起发)
@@ -270,7 +272,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 0 | ~~deb 预览显示 minincm 且无图标~~ ✅ **已修**(2026-11-10 五) | 补 AppStream `metainfo.xml` + `/usr/share/pixmaps` 图标, `appstreamcli validate` 通过 |
 | 0 | ~~未登录时占位显示上次账号的昵称/VIP~~ ✅ **已修**(2026-11-10 五) | 未登录一律不渲染 VIP 标 + 新增「清除本机登录凭据」+ 启动时按 `[auth]` 校验登录态 |
 | ~~1~~ | ~~**评论发送写操作走查(发布前硬门)**~~ ✅ **2026-11-11 完成** | 人工侧: 用户真机实测发送/失败/回滚通过(v0.3.4 前); 机器侧: 新增 `tools/check-write-guard.sh` 并接进 ci.yml / release.yml / tools/ci.sh —— 测试里直连写接口即失败, 保证 CI/发版不触网 | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
-| 2 | Windows 安装向导中文化 | 需要把官方 `ChineseSimplified.isl` 一起放进 `packaging/windows/`(Inno 安装包不自带, v0.3.1 因此编译失败过) |
+| ~~2~~ | ~~Windows 安装向导中文化~~ ✅ 已完成(v0.3.5, 随包 `packaging/windows/ChineseSimplified.isl`, CI 实测 Successful compile) | |
 | 3 | ~~deb 依赖收紧~~ ✅ **2026-11-11 已静态核查** | 无容器环境, 改为 ldd→dpkg→Depends 传递闭包比对: 68 个外部库 **100% 被现有 Depends 覆盖**(24.04 的 t64 改名由 Provides 兜住); 运行期数据文件(字体/插件)仍需真最小桌面点一次, 见 `docs/PROGRESS.md` 2026-11-11(四) |
 | 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |
 
@@ -279,7 +281,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | 项 | 说明 | 证据 |
 |---|---|---|
 | **手机号 + 短信验证码登录** | 登录弹层第 2 个 tab + `ncm login-sms`; 走**网页登录通道**(weapi `sms/captcha/sent` + `login/cellphone`), 凭据取自 Set-Cookie; 命中 8821 时提示改回扫码; 400→Auth、503→可重试 | `ui/test/login_sheet_phone_test.dart` 4 例 + `login_sheet_error_test.dart` 4 例(错误文案归一); 宿主实测非法号码 `code=400: 手机号码不符合规范`; FFI 144→146 |
-| **待真机验(唯一残留)** | 真实手机号收短信走完正常登录链路(本机只验到通道可达与错误映射) | 需用户用自己的号码操作一次 |
+| ~~待真机验~~ ✅ 用户真机验证通过(2026-11-11, 收到 4 位验证码并登录成功) | | |
 
 ### D. 需要新能力的 L 级(单独立项, 不要混批)
 

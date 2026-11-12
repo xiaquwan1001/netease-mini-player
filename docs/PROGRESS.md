@@ -1,9 +1,10 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-11**: **手机号 + 短信验证码登录**(登录弹层第 2 个 tab, 走**网页登录通道** weapi
-> `/api/sms/captcha/sent` + `/api/login/cellphone`, 不是 App 原生登录族; 命中 8821 时引导回扫码) + `ncm login-sms` CLI;
-> 另把 400/503 在登录场景归成「输入错 / 可重试」而非 Internal。*真机待验: 需要真实手机号收一条短信*。
-> 当前门禁: `cargo test --offline --workspace` **254** / `flutter test --exclude-tags network` **617** / `dart analyze` 0 error 0 warning(38 info) / 接口覆盖 **123/123**(FFI 146)。
+> 最近更新: **2026-11-12**: **v0.5.5 发布**(GitHub Release 全绿, 6+2 分发物含 arm64) + **凭据后端三端落地**
+> (P1 Android Keystore / P2 Linux secret-service / Windows DPAPI, 方案见 `docs/android-keystore-wiring-design.md`)
+> + 凭据不再过 FFI 回传 Dart + USTC GitLab CI 加 build 阶段(本机 runner 出 Linux/Android 产物, #9134 四 job 全绿)。
+> 短信登录已于 2026-11-11 由用户真机验证通过。
+> 当前门禁(2026-11-12 合并后): `cargo test` **247** / `flutter test --exclude-tags network` **656** / `dart analyze` 0 error 0 warning(38 info) / write-guard OK。
 > 同日第三批: **楼层回复行内预览 + ��态流行内操作(赞/评论/分享) + 发表后回填定位**(见下方「评论区批 2」)。
 > 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
 >
@@ -17,10 +18,10 @@
 > 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`。
 > 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
 > + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
-## 进度总览(2026-11-10, 面向新读者的速览)
+## 进度总览(2026-11-12, 面向新读者的速览)
 
-**当前门禁**: `cargo test --offline --workspace` **253** / `flutter test --exclude-tags network` **544** /
-`dart analyze` 0 error / 0 warning(41 info) / 接口覆盖 **123/123**(FFI 导出 146, 其中 4 个无 UI 入口)。
+**当前门禁**: `cargo test` **247** / `flutter test --exclude-tags network` **656** /
+`dart analyze` 0 error / 0 warning(38 info) / 接口覆盖 **123/123**; 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
 **版本时间线**:
 
@@ -29,8 +30,10 @@
 | v0.1.0 | 2026-11-08 | 首个公开预览版(Android APK + Linux tar.gz, MIT LICENSE, 第三方许可盘点) |
 | v0.2.x | 2026-11-09~10 | 设置项扩充 R1–R7、UI/UX 走查批 A–C、播放体验修复、**Windows 桌面版合入**、v0.2.2 三端发布 |
 | v0.3.x | 2026-11-10 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布**;v0.3.3 修 Ubuntu 22.04 GLib 基线 |
-| **v0.3.5** | **2026-11-11** | **CI 实测**: CI + Release 两组流水线全绿, 6 种资产; **Windows 向导中文化首个真验证** —— ISCC 6.7.1 在 CI 上读到随包 Languages\ChineseSimplified.isl 并 Successful compile; write-guard 在 CI 与发版 verify 两个 job 都实际执行。内容: **技术债 D 批收敛** **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | **v0.3.4** | **2026-11-11** | **CI 实测(2026-11-11): 四个 job 全绿, Release 产出 6 种资产** —— apk 27.4 / linux tar.gz 14.4 / AppImage 14.0 / deb 10.6 / windows zip 16.3 / setup.exe 13.2 MB + SHA256SUMS(+ 下方功能)**手机号+短信验证码登录(网页通道)**、动态评论写入改 eapi(修 404)、评论区对话化(回复归属/楼层预览/动态评论归位)、动态流行内赞·评论·分享、发表后回填定位 |
+| **v0.3.5** | **2026-11-11** | **CI 实测**: CI + Release 两组流水线全绿, 6 种资产; **Windows 向导中文化首个真验证** —— ISCC 6.7.1 在 CI 上读到随包 Languages\ChineseSimplified.isl 并 Successful compile; write-guard 在 CI 与发版 verify 两个 job 都实际执行。内容: **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
+| **v0.4.x** | 2026-11-11~12 | 凭据地基 lane L1 合入(0600 文件骨架 + 同意门 + 明文迁移)、DPAPI P0 |
+| **v0.5.5** | **2026-11-12** | 凭据后端三端落地(Android Keystore / Linux secret-service / Windows DPAPI) + 凭据不再过 FFI + USTC GitLab CI build 阶段; Release 6+2 分发物(含 arm64 apk/deb/tar.gz) + SHA256SUMS |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 

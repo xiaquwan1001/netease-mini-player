@@ -13,6 +13,9 @@
 | testing-dual-platform.md | Android/Linux/Windows 三端测试记录与自测方法。**活跃** |
 | architecture-restart.md | 架构选型与决策记录(含 Windows 合入后的现状注记)。**归档(决策留痕)** |
 | android-signing.md | Android 签名与 versionCode 纪律, 发版必读。**活跃** |
+| android-keystore-wiring-design.md | 凭据后端接线设计(Keystore/secret-service/DPAPI 三端)。**活跃** |
+| smoke-desktop.md | 桌面端冒烟测试清单。**活跃** |
+| credential-storage-options.md | 凭据存储方案调研与决策留痕。**归档(已选型落地)** |
 
 ## 批次接口实测笔记(真实响应形状 / 协议坑)
 
