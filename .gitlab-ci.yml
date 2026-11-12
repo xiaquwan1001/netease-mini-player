@@ -1,0 +1,30 @@
+# USTC GitLab CI（与 GitHub Actions .github/workflows/ci.yml 的 rust / flutter 两个检查 job 对齐）
+# 本机 runner：宿主工具链直跑，不建 Linux bundle、不做 arm64 交叉（GitHub 侧仍负责产物）。
+stages: [test]
+
+default:
+  interruptible: true
+
+before_script:
+  - export PATH="$HOME/android-dev/flutter/bin:$HOME/.cargo/bin:$HOME/bin:$PATH"
+
+variables:
+  CARGO_TERM_COLOR: always
+  FLUTTER_ROOT: /home/xuqianhui/android-dev/flutter
+
+rust:
+  stage: test
+  timeout: 40m
+  script:
+    - cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
+
+flutter:
+  stage: test
+  timeout: 40m
+  script:
+    - flutter --version
+    - flutter config --no-analytics >/dev/null
+    - cd ui && flutter pub get
+    - cd ui && dart analyze
+    - bash tools/check-write-guard.sh
+    - cd ui && flutter test --exclude-tags network
