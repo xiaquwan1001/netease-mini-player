@@ -136,8 +136,14 @@ void main() {
     expect(appBarBlock.contains('titleLarge'), isTrue);
     expect(appBarBlock.contains('titleMedium'), isFalse);
     // 歌单详情头卡标题不允许退回 titleMedium
+    // 不写死缩进: dart format 会重排缩进, 用正则定位 MarqueeText( ... d?.name
+    final headerMatch =
+        RegExp(r'MarqueeText\(\s*d\?\.name').firstMatch(detailSrc);
+    expect(headerMatch, isNotNull, reason: '详情页头卡 MarqueeText 不见了');
+    final headerStart = headerMatch!.start;
     final headerBlock = detailSrc.substring(
-      detailSrc.indexOf('MarqueeText(\n                        d?.name'),
+      headerStart,
+      (headerStart + 800).clamp(0, detailSrc.length),
     );
     expect(headerBlock.contains('headlineSmall'), isTrue);
   });
