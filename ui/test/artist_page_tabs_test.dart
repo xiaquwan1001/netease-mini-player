@@ -87,12 +87,26 @@ Future<void> pump(
         loadArtist:
             loadArtist ?? (_) async => detailData ?? detail(brief: '简介'),
         loadSimilar: loadSimilar,
-        loadSongsPage: loadSongsPage,
+        // 「全部歌曲」现在是初始 tab, 测试默认给空 loader, 避免误触真实 rust API
+        loadSongsPage:
+            loadSongsPage ?? (_, _) async =>
+                const rust.ArtistSongPageDto(songs: [], hasMore: false),
         loadMvsPage: loadMvsPage ?? (_, _) async =>
             const rust.ArtistMvPageDto(mvs: [], hasMore: false),
         toggleFollow: toggleFollow,
       ),
     ),
+  );
+  await tester.pumpAndSettle();
+}
+
+/// 区块变多后 TabBar 初始可能在视口外(sliver 懒构建, 不滚不进树);
+/// 需要点 tab 的测试先把它滚进来。
+Future<void> revealTabs(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.text('全部歌曲'),
+    200,
+    scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
 }
@@ -105,7 +119,8 @@ void main() {
       loadSongsPage: (_, _) async =>
           const rust.ArtistSongPageDto(songs: [], hasMore: false),
     );
-    expect(find.text('热门歌曲'), findsOneWidget);
+    // 「热门歌曲」tab 已移除, 改为顶部「推荐单曲」区块
+    expect(find.text('推荐单曲'), findsOneWidget);
     expect(find.text('全部歌曲'), findsOneWidget);
     expect(find.text('专辑'), findsNothing);
     expect(find.text('MV'), findsNothing);
@@ -123,6 +138,7 @@ void main() {
       loadSongsPage: (_, _) async =>
           const rust.ArtistSongPageDto(songs: [], hasMore: false),
     );
+    await revealTabs(tester);
     expect(find.text('MV'), findsOneWidget);
 
     // 探测失败(抛异常) → 不显示 MV tab
@@ -150,6 +166,7 @@ void main() {
       },
     );
     expect(find.text('歌曲0'), findsOneWidget);
+    await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(allSongsCalls, greaterThanOrEqualTo(1));
@@ -172,6 +189,7 @@ void main() {
         return rust.ArtistMvPageDto(mvs: [mv(999)], hasMore: false);
       },
     );
+    await revealTabs(tester);
     await tester.tap(find.text('MV'));
     await tester.pumpAndSettle();
     expect(mvCalls, [0]); // 探测已调过 offset 0
@@ -224,36 +242,25 @@ void main() {
     }
   });
 
-  testWidgets('页内搜索: 过滤热门歌曲 tab, 无匹配给空态', (tester) async {
-    await pump(tester, detailData: detail(songs: 3));
-    await tester.tap(find.byIcon(Icons.search));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '歌曲1');
-    await tester.pumpAndSettle();
-    // 歌名同时出现在搜索框与列表行, 只断言列表里的那一行
-    expect(
-      find.descendant(of: find.byType(ListView), matching: find.text('歌曲1')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: find.byType(ListView), matching: find.text('歌曲0')),
-      findsNothing,
-    );
-    // 清空再搜不存在的
-    await tester.enterText(find.byType(TextField), '不存在的歌');
-    await tester.pumpAndSettle();
-    expect(find.textContaining('没有匹配'), findsOneWidget);
-  });
-
-  testWidgets('页内搜索: 全部歌曲 tab 过滤(聚合后本地过滤)', (tester) async {
+  testWidgets('页内搜索: 只过滤全部歌曲 tab(聚合后本地过滤), 无匹配给空态', (tester) async {
     await pump(
       tester,
-      detailData: detail(songs: 1),
+      detailData: detail(songs: 2),
       loadSongsPage: (_, _) async => rust.ArtistSongPageDto(
         songs: [song(0, name: '晴天'), song(1, name: '七里香')],
         hasMore: false,
       ),
     );
+    await revealTabs(tester);
+    // 先滚回推荐单曲区块(此时在视口上方, 需向上滚): detail.songs 已被展示
+    await tester.scrollUntilVisible(
+      find.text('推荐单曲'),
+      -100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('歌曲0'), findsOneWidget);
+    await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('晴天0'), findsOneWidget);
@@ -263,6 +270,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('七里香1'), findsOneWidget);
     expect(find.text('晴天0'), findsNothing);
+    // (推荐单曲区块此时在视口上方, sliver 懒构建不保留; 搜索只作用于全部歌曲 tab)
+    // 搜不存在的 → 空态
+    await tester.enterText(find.byType(TextField), '不存在的歌');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('没有匹配'), findsOneWidget);
   });
 
   testWidgets('空态: 全部歌曲无数据给空态文案', (tester) async {
@@ -272,6 +284,7 @@ void main() {
       loadSongsPage: (_, _) async =>
           const rust.ArtistSongPageDto(songs: [], hasMore: false),
     );
+    await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('暂无歌曲'), findsOneWidget);
@@ -337,6 +350,7 @@ void main() {
         );
       },
     );
+    await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     // 触底前: 只有第一页

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
+import 'marquee_text.dart';
 import 'format.dart' show formatDurationMs;
 import 'layout.dart' show kSongRowPadding;
 import 'rust/api.dart' as rust;
@@ -108,6 +109,64 @@ String formatSongDuration(BigInt durationMs) {
   return formatDurationMs(durationMs);
 }
 
+/// 行内「VIP / 付费 / 无版权」标记组(紧凑, 不参与窄宽收起).
+///
+/// 用于自带排版、不走 [SongTile] 的曲目行(专辑预览/播放队列/相似歌曲/推荐预览等):
+/// 与歌名同一行, 歌名 Expanded + ellipsis, 标记固定宽度 ⇒ 标记永远可见。
+class SongFeeBadges extends StatelessWidget {
+  const SongFeeBadges({super.key, required this.song, this.small = true});
+
+  final rust.SongDto song;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (song.playable && song.vip) VipBadge(small: small),
+        if (song.playable && !song.vip && song.paid) const PaidBadge(),
+        if (!song.playable) const UnplayableBadge(),
+      ],
+    );
+  }
+}
+
+/// 「歌名 + VIP/付费/无版权标记」的整行标题(供 ListTile.title 等窄位使用).
+///
+/// 歌名 Expanded + 单行 ellipsis, 标记固定宽度: 空间再紧也不会把标记挤掉
+/// (用户反馈"歌曲没有是否为 VIP 的标记")。需要跑马灯时传 marquee: true。
+class SongTitleWithBadges extends StatelessWidget {
+  const SongTitleWithBadges({
+    super.key,
+    required this.song,
+    this.style,
+    this.marquee = false,
+  });
+
+  final rust.SongDto song;
+  final TextStyle? style;
+  final bool marquee;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget title = marquee
+        ? MarqueeText(song.name, style: style)
+        : Text(
+            song.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: style,
+          );
+    return Row(
+      children: [
+        Expanded(child: title),
+        SongFeeBadges(song: song),
+      ],
+    );
+  }
+}
+
 /// 列表里的一行曲目: 红心 / VIP / 付费 / 无版权 的形态都收在这里
 class SongTile extends StatelessWidget {
   const SongTile({
@@ -142,6 +201,10 @@ class SongTile extends StatelessWidget {
     final host = onToggleLike == null ? AppActions.maybeOf(context) : null;
     final onLike =
         onToggleLike ?? (host == null ? null : () => host.toggleLike(song));
+    // 极窄屏(用户的 vivo 逻辑宽仅 300dp): 行尾「时长 + 红心 + ...」会把标题区
+    // 压到 ~49dp, 连一个 VIP 徽标都放不下。此时先牺牲时长(菜单/详情页仍有),
+    // 把横向空间让给歌名与徽标 —— 徽标优先于时长。
+    final narrow = MediaQuery.sizeOf(context).width < 340;
     return ListTile(
       dense: true,
       selected: active,
@@ -149,8 +212,10 @@ class SongTile extends StatelessWidget {
       contentPadding: kSongRowPadding,
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
-      // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee;
-      // 标题区 <120px 时整组隐藏装饰性徽标, 绝不把歌名压到 0 宽).
+      // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee).
+      // VIP/付费/无版权徽标不放这里：标题区在 300dp 手机上只有 ~49dp，
+      // 徽标要么把歌名压没、要么被整组收起（用户反馈"歌曲没有 VIP 标记"）。
+      // 改放副标题行（整行 250dp+），任何宽度都能看见。
       title: AdaptiveTextRow(
         title: song.name,
         style: playable ? null : grey,
@@ -159,25 +224,32 @@ class SongTile extends StatelessWidget {
           // 可点红心统一放行尾, 与歌单详情页的位置/行为一致
           if (onLike == null && liked)
             Icon(Icons.favorite, size: 13, color: scheme.primary),
+        ],
+      ),
+      subtitle: Row(
+        children: [
           if (playable && song.vip) const VipBadge(small: true),
           if (playable && !song.vip && song.paid) const PaidBadge(),
           if (!playable) const UnplayableBadge(),
+          Expanded(
+            child: Text(
+              '${song.artist} · ${song.album}',
+              // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: playable ? null : grey,
+            ),
+          ),
         ],
-      ),
-      subtitle: Text(
-        '${song.artist} · ${song.album}',
-        // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: playable ? null : grey,
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            formatSongDuration(song.durationMs),
-            style: playable ? null : grey,
-          ),
+          if (!narrow)
+            Text(
+              formatSongDuration(song.durationMs),
+              style: playable ? null : grey,
+            ),
           // 命中区 ≥48dp: compact 密度 + iconSize 20 只有 40dp, 换成显式 constraints
           if (onLike != null)
             IconButton(

@@ -11,8 +11,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
-import 'package:minincm/src/adaptive_text_row.dart';
 import 'package:minincm/src/cover_art.dart';
+import 'package:minincm/src/marquee_text.dart';
 import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/player_bar.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
@@ -50,11 +50,12 @@ PlayerBarActions _actions() => PlayerBarActions(
   onSeekChanging: (_) {},
   onSeekEnd: (_) {},
   onToggleLyrics: () {},
-  onOpenAlbum: () {},
+  onOpenDetail: () {},
   onToggleLike: () {},
   onCycleMode: () {},
   onOpenQueue: () {},
   onToggle: () {},
+  onPrevious: () {},
   onNext: () {},
 );
 
@@ -116,13 +117,15 @@ void main() {
       expect(find.byType(MiniPlayerBar), findsOneWidget);
       expect(find.byType(Slider), findsOneWidget);
       expect(find.byType(CoverArt), findsOneWidget);
-      expect(find.byType(AdaptiveTextRow), findsOneWidget);
+      // 标题行(AdaptiveTextRow)已被移除, 信息行仍在
+      expect(find.textContaining('3/12'), findsOneWidget);
       // 每个操作按钮都有 tooltip(→ Semantics label), 窄屏下也不能被裁掉
       expect(find.byTooltip('喜欢'), findsOneWidget);
       // 数据里 playing=true, 播放键的 tooltip 就是「暂停」(状态文案回归)
       expect(find.byTooltip('暂停'), findsOneWidget);
-      // 上一首按钮已移除; 原位置换成播放顺序, 行尾加队列入口
-      expect(find.byTooltip('上一首'), findsNothing);
+      // 用户要求把"滚动歌名"去掉、腾出的空间给「上一首」
+      expect(find.byTooltip('上一首'), findsOneWidget);
+      expect(find.byType(MarqueeText), findsNothing, reason: '播放条不再有滚动歌名');
       expect(find.byTooltip('播放顺序: 列表循环'), findsOneWidget);
       expect(find.byTooltip('播放队列'), findsOneWidget);
       expect(find.byTooltip('下一首'), findsOneWidget);

@@ -139,16 +139,16 @@ Future<void> showSongActionsSheet(
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
-      // 8 个动作 + 头部在矮屏会超过半屏, 用可滚动面板兜住
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(sheetContext).size.height * 0.8,
-        ),
+      // 固定 0.6 屏高(与"收藏到歌单"/播放队列面板一致): 之前是 maxHeight 0.8,
+      // 内容多的歌单会把面板顶到接近状态栏, 顶部拖拽条几乎贴着手机顶边,
+      // 想下拉收起容易误触成系统状态栏(用户反馈)。内容超过高度就在面板内滚动。
+      child: SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.6,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
             const SheetHeader(title: '歌曲操作'),
-            Flexible(
+            const Divider(height: 1),
+            Expanded(
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

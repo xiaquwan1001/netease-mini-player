@@ -11,6 +11,7 @@ import 'ranking_view.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show InlineError;
 import 'song_actions.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过 / 听歌排行.
@@ -516,11 +517,7 @@ class _LikedSection extends StatelessWidget {
                         size: 40,
                         radius: 4,
                       ),
-                      title: Text(
-                        preview[i].name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: SongTitleWithBadges(song: preview[i]),
                       subtitle: Text(
                         preview[i].artist,
                         maxLines: 1,
@@ -804,11 +801,7 @@ class _RecentSection extends StatelessWidget {
                         size: 40,
                         radius: 4,
                       ),
-                      title: Text(
-                        preview[i].name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: SongTitleWithBadges(song: preview[i]),
                       subtitle: Text(
                         preview[i].artist,
                         maxLines: 1,

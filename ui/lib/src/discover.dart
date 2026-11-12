@@ -5,6 +5,7 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show FullError;
 import 'song_actions.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToastWith;
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
@@ -25,6 +26,7 @@ Future<void> showDiscoverPage(
   PlaylistListLoader? loadPlaylists,
   DateListLoader? loadHistoryDates,
   HistorySongsLoader? loadHistorySongs,
+
   /// 每日推荐里"不感兴趣"(不传就不显示那个按钮)
   Future<void> Function(rust.SongDto song)? onDislike,
 }) {
@@ -36,7 +38,8 @@ Future<void> showDiscoverPage(
         loadSongs: songs,
         loadPlaylists: playlists,
         loadHistoryDates: loadHistoryDates ?? rust.historyRecommendDates,
-        loadHistorySongs: loadHistorySongs ??
+        loadHistorySongs:
+            loadHistorySongs ??
             (date) => rust.historyRecommendSongs(date: date),
         onPlaySongs: onPlaySongs,
         onOpenPlaylist: onOpenPlaylist,
@@ -222,6 +225,7 @@ class _HistoryTabState extends State<_HistoryTab>
     with AutomaticKeepAliveClientMixin {
   List<String>? _dates;
   String? _error;
+
   /// 选中的日期(非空时展示那一天的歌单)
   String? _date;
   List<rust.SongDto>? _songs;
@@ -412,10 +416,7 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
     super.build(context);
     final lists = _lists;
     if (_error != null) {
-      return FullError(
-        message: '推荐歌单需要登录后才能获取\n$_error',
-        onRetry: _load,
-      );
+      return FullError(message: '推荐歌单需要登录后才能获取\n$_error', onRetry: _load);
     }
     if (lists == null) {
       return const Center(child: CircularProgressIndicator());
@@ -525,89 +526,89 @@ class RecentPlayedPage extends StatelessWidget {
         body: TabBarView(
           children: [
             _RecentBucketTab<rust.SongDto>(
-                      load: loadRecent,
-                      emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
-                      itemBuilder: (context, s, i, list) => _SongRow(
-                        song: s,
-                        index: i + 1,
-                        onTap: s.playable
-                            ? () {
-                                Navigator.pop(context);
-                                onPlay(list.cast<rust.SongDto>(), i);
-                              }
-                            : null,
-                      ),
-                    ),
-                    _RecentBucketTab<rust.AlbumItem>(
-                      load: loadAlbums,
-                      emptyText: '还没有最近听过的专辑',
-                      itemBuilder: (context, a, i, _) => ListTile(
-                        leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
-                        title: Text(
-                          a.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          a.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: openAlbum == null
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                openAlbum(a);
-                              },
-                      ),
-                    ),
-                    _RecentBucketTab<rust.Playlist>(
-                      load: loadPlaylists,
-                      emptyText: '还没有最近听过的歌单',
-                      itemBuilder: (context, pl, i, _) => ListTile(
-                        leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
-                        title: Text(
-                          pl.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: pl.trackCount > BigInt.zero
-                            ? Text('${pl.trackCount} 首')
-                            : null,
-                        onTap: openPlaylist == null
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                openPlaylist(pl);
-                              },
-                      ),
-                    ),
-                    _RecentBucketTab<rust.PodcastRadio>(
-                      load: loadPodcasts,
-                      emptyText: '还没有最近听过的播客',
-                      itemBuilder: (context, r, i, _) => ListTile(
-                        leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
-                        title: Text(
-                          r.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          [
-                            if (r.djName.isNotEmpty) r.djName,
-                            if (r.programCount > BigInt.zero) '${r.programCount} 集',
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: openPodcast == null
-                            ? null
-                            : () {
-                                Navigator.pop(context);
-                                openPodcast(r);
-                              },
-                      ),
-                    ),
+              load: loadRecent,
+              emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
+              itemBuilder: (context, s, i, list) => _SongRow(
+                song: s,
+                index: i + 1,
+                onTap: s.playable
+                    ? () {
+                        Navigator.pop(context);
+                        onPlay(list.cast<rust.SongDto>(), i);
+                      }
+                    : null,
+              ),
+            ),
+            _RecentBucketTab<rust.AlbumItem>(
+              load: loadAlbums,
+              emptyText: '还没有最近听过的专辑',
+              itemBuilder: (context, a, i, _) => ListTile(
+                leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
+                title: Text(
+                  a.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  a.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: openAlbum == null
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        openAlbum(a);
+                      },
+              ),
+            ),
+            _RecentBucketTab<rust.Playlist>(
+              load: loadPlaylists,
+              emptyText: '还没有最近听过的歌单',
+              itemBuilder: (context, pl, i, _) => ListTile(
+                leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
+                title: Text(
+                  pl.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: pl.trackCount > BigInt.zero
+                    ? Text('${pl.trackCount} 首')
+                    : null,
+                onTap: openPlaylist == null
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        openPlaylist(pl);
+                      },
+              ),
+            ),
+            _RecentBucketTab<rust.PodcastRadio>(
+              load: loadPodcasts,
+              emptyText: '还没有最近听过的播客',
+              itemBuilder: (context, r, i, _) => ListTile(
+                leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
+                title: Text(
+                  r.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  [
+                    if (r.djName.isNotEmpty) r.djName,
+                    if (r.programCount > BigInt.zero) '${r.programCount} 集',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: openPodcast == null
+                    ? null
+                    : () {
+                        Navigator.pop(context);
+                        openPodcast(r);
+                      },
+              ),
+            ),
           ],
         ),
       ),
@@ -628,7 +629,7 @@ class _RecentBucketTab<T> extends StatefulWidget {
 
   /// 第四个参数是整份列表(点播单曲需要用它重置队列)
   final Widget Function(BuildContext context, T item, int index, List<T> list)
-      itemBuilder;
+  itemBuilder;
 
   @override
   State<_RecentBucketTab<T>> createState() => _RecentBucketTabState<T>();
@@ -715,23 +716,16 @@ class _SongRow extends StatelessWidget {
           CoverArt(url: song.coverUrl, size: 40, radius: 4),
         ],
       ),
-      title: Text(
-        song.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      // 歌名 + VIP/付费/无版权标记(标记固定宽度, 不会被歌名挤掉)
+      title: SongTitleWithBadges(
+        song: song,
         style: song.playable ? null : TextStyle(color: scheme.outline),
       ),
-      subtitle: Text(
-        song.artist,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailing != null) trailing!,
-          if (!song.playable)
-            Text('无版权', style: Theme.of(context).textTheme.labelSmall),
           SongOverflowButton(song: song, size: 20, source: source),
         ],
       ),

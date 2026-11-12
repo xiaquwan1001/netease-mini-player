@@ -7,6 +7,7 @@ import 'cover_art.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToast;
 import 'user_nav.dart';
 
@@ -372,6 +373,9 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
                   key: _commentThreadKey,
                   threadId: event.threadId,
                   totalHint: event.commentCount.toInt(),
+                  // 页面本身已有 16dp 左右边距, 评论区不再自己加 12dp,
+                  // 让每条评论与正文左对齐(用户反馈行首空白).
+                  inset: const EdgeInsets.fromLTRB(0, 16, 0, 8),
                 ),
               )
             else
@@ -456,10 +460,8 @@ class _SongCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    song.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  SongTitleWithBadges(
+                    song: song,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   Text(

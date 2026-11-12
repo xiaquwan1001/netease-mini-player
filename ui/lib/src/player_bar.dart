@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api.dart' as rust;
-import 'song_tile.dart';
 
 /// 常驻播放条的不可变数据快照。
 ///
@@ -87,9 +85,10 @@ class PlayerBarActions {
     required this.onSeekChanging,
     required this.onSeekEnd,
     required this.onToggleLyrics,
-    required this.onOpenAlbum,
+    required this.onOpenDetail,
     required this.onToggleLike,
     required this.onToggle,
+    required this.onPrevious,
     required this.onNext,
     required this.onCycleMode,
     required this.onOpenQueue,
@@ -99,9 +98,15 @@ class PlayerBarActions {
   final void Function(double ms) onSeekChanging;
   final void Function(double ms) onSeekEnd;
   final VoidCallback onToggleLyrics;
-  final VoidCallback onOpenAlbum;
+
+  /// 点封面 = 进入播放详情(歌词页). 之前是打开专辑预览, 用户要求改为详情页;
+  /// 专辑仍然可以从歌曲"..."菜单里的「专辑信息」进.
+  final VoidCallback onOpenDetail;
   final VoidCallback onToggleLike;
   final VoidCallback onToggle;
+
+  /// 上一首(播放条左侧控制组的一员)
+  final VoidCallback onPrevious;
   final VoidCallback onNext;
 
   /// 播放顺序轮转(列表循环→单曲→顺序→随机→心动, 心动不可用时跳过)
@@ -154,14 +159,15 @@ class MiniPlayerBar extends StatelessWidget {
   /// 没有底部导航时自己吃掉系统手势区(有导航时由 NavigationBar 的 SafeArea 负责)
   final bool absorbBottomInset;
 
-  /// 播放条上的紧凑图标按钮: 40dp 点击区 + 无内边距.
+  /// 播放条上的紧凑图标按钮: 34dp 点击区(播放键 38) + 无内边距.
   ///
-  /// 合并成一行后总宽 = 封面 52 + 4×40 = 212dp, 300dp 窄屏上文本仍有 ~90dp,
-  /// 配合 Expanded + ellipsis 不会溢出.
+  /// 加入「上一首」后一排有 6 个按钮: 封面 48 + 5×34 + 38 = 256dp,
+  /// 300dp 窄屏上信息行仍有 ~44dp; 按 40dp 排会只剩 8dp, 等于没有文字.
   Widget _barIcon({
     required String tooltip,
     required Widget icon,
     required VoidCallback? onPressed,
+    double size = 34,
   }) {
     return IconButton(
       tooltip: tooltip,
@@ -169,7 +175,7 @@ class MiniPlayerBar extends StatelessWidget {
       onPressed: onPressed,
       padding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      constraints: BoxConstraints(minWidth: size, minHeight: size),
     );
   }
 
@@ -226,9 +232,9 @@ class MiniPlayerBar extends StatelessWidget {
               // 窄屏/大字号下只会变短不会溢出.
               Row(
                 children: [
-                  // 封面: 点开看专辑大图 + 曲目
+                  // 封面: 点开播放详情(歌词页)。专辑入口在歌曲"..."菜单里
                   GestureDetector(
-                    onTap: actions.onOpenAlbum,
+                    onTap: actions.onOpenDetail,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 8, right: 4),
                       child: CoverArt(
@@ -242,39 +248,53 @@ class MiniPlayerBar extends StatelessWidget {
                     child: InkWell(
                       onTap: actions.onToggleLyrics,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 8, 4),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 播放条曲名行: 共享的窄宽降级组件(Expanded + 单行
-                            // marquee; 300dp/1.25 下徽标整组收起, 不挤标题).
-                            AdaptiveTextRow(
-                              title: current?.name ?? '未在播放',
-                              style: Theme.of(context).textTheme.titleSmall,
-                              badges: [
-                                if (current?.vip == true)
-                                  const VipBadge(small: true),
-                                if (current?.paid == true &&
-                                    current?.vip != true)
-                                  const PaidBadge(),
-                              ],
-                            ),
-                            Text(
-                              '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                              '  ${current?.artist ?? ''}'
-                              '  ${data.queueIndex}/${data.queueLength}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
+                        padding: const EdgeInsets.fromLTRB(12, 0, 6, 2),
+                        // 滚动歌名(marquee)按用户要求从播放条移除: 横向空间让给
+                        // 「上一首」。曲名仍在播放详情页 AppBar 与队列面板里。
+                        //
+                        // 信息行在 300dp 手机上只有 ~45dp 宽, 独立徽标(≈54dp)会直接
+                        // 溢出; 这里把 VIP/付费做成行首彩色前缀, 单行 ellipsis 天然
+                        // 不溢出, 且前缀永远先显示(用户反馈"歌曲没有 VIP 标记")。
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              if (current?.vip == true)
+                                TextSpan(
+                                  text: 'VIP  ',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              if (current?.paid == true && current?.vip != true)
+                                TextSpan(
+                                  text: '付费  ',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .tertiary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              TextSpan(
+                                text:
+                                    '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                                    '  ${current?.artist ?? ''}'
+                                    '  ${data.queueIndex}/${data.queueLength}',
+                              ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
                     ),
                   ),
-                  // 红心 + 上一首/播放/下一首: 与歌曲信息挤在同一行(用户要求把两排合并),
-                  // 紧凑点击区 40dp; 播放模式/心动/队列挪到详情页底部, 低频动作不占播放条.
+                  // 红心 + 播放顺序 + 上一首/播放/下一首 + 队列: 与信息行同一排.
+                  // 紧凑点击区 34dp(见 _barIcon 注释), 保证 6 个按钮 + 封面在 300dp 内.
                   _barIcon(
                     tooltip: liked ? '取消喜欢' : '喜欢',
                     icon: Icon(
@@ -300,12 +320,18 @@ class MiniPlayerBar extends StatelessWidget {
                     onPressed: actions.onCycleMode,
                   ),
                   _barIcon(
+                    tooltip: '上一首',
+                    icon: const Icon(Icons.skip_previous, size: 26),
+                    onPressed: actions.onPrevious,
+                  ),
+                  _barIcon(
                     tooltip: player.playing ? '暂停' : '播放',
                     icon: Icon(
                       player.playing ? Icons.pause_circle : Icons.play_circle,
                       size: 38,
                     ),
                     onPressed: actions.onToggle,
+                    size: 38,
                   ),
                   _barIcon(
                     tooltip: '下一首',
@@ -320,8 +346,9 @@ class MiniPlayerBar extends StatelessWidget {
                   ),
                 ],
               ),
-              // 手势导航条会吞掉最底部约 20dp 的点击, 留一点安全边距
-              const SizedBox(height: 8),
+              // 播放条与底部导航之间只留 2dp: 之前 8dp 加上导航栏自带内边距,
+              // 视觉上是一条明显的空缝(用户要求把播放条/进度条往下挪、收掉缝隙).
+              const SizedBox(height: 2),
             ],
           ),
         ),

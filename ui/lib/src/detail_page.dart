@@ -1256,30 +1256,34 @@ class _SongRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 窄宽降级走共享组件 AdaptiveTextRow(Expanded + 单行;
-                  // 标题区 <120px 时整组收起装饰性徽标, 不再把曲名压到 0 宽).
-                  // 原 Flexible(Text) 在徽标挤压下可把曲名压到 0 宽(同 song_tile 竖排 bug 根因).
+                  // 窄宽降级走共享组件 AdaptiveTextRow(Expanded + 单行).
+                  // 徽标不放标题行: 300dp 手机上标题区只剩 ~100dp, 徽标会被整组收起
+                  // (用户反馈"歌曲没有 VIP 标记"); 挪到副标题行, 任何宽度都可见.
                   AdaptiveTextRow(
                     title: song.name,
                     style: titleStyle,
                     // 保持原行为: 单行 ellipsis, 不跑马灯.
                     marquee: false,
-                    badges: [
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
                       if (song.playable && song.vip)
                         const VipBadge(small: true),
                       if (song.playable && !song.vip && song.paid)
                         const PaidBadge(),
                       if (!song.playable) const UnplayableBadge(),
+                      Expanded(
+                        child: Text(
+                          '${song.artist} · ${song.album}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.labelSmall?.copyWith(
+                            color: song.playable ? null : scheme.outline,
+                          ),
+                        ),
+                      ),
                     ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${song.artist} · ${song.album}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.labelSmall?.copyWith(
-                      color: song.playable ? null : scheme.outline,
-                    ),
                   ),
                 ],
               ),

@@ -152,7 +152,11 @@ void main() {
     }
   });
 
-  testWidgets('300dp + 1.25 字号: 时长/红心/"..." 三者并排不溢出', (tester) async {
+  // 300dp(用户的 vivo 逻辑宽)+1.25 字号下, 行尾「时长 + 红心 + ...」占满 146dp,
+  // 标题区只剩 ~49dp —— 连 VIP 徽标都放不下。现在的取舍: 窄屏先隐藏时长
+  // (时长在歌曲"..."菜单/详情页/播放队列里都还有), 把宽度让给歌名与 VIP/无版权徽标。
+  // 红心与"..."仍然必须在。
+  testWidgets('300dp + 1.25 字号: 窄屏让位给徽标 —— 红心/"..." 在, 时长收起, 不溢出', (tester) async {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -176,7 +180,7 @@ void main() {
       ),
     ));
     expect(tester.takeException(), isNull);
-    expect(find.text('1:01:01'), findsOneWidget);
+    expect(find.text('1:01:01'), findsNothing, reason: '窄屏时长让位给标题/徽标');
     expect(find.byTooltip('取消喜欢'), findsOneWidget);
     expect(find.byTooltip('更多操作'), findsOneWidget);
   });

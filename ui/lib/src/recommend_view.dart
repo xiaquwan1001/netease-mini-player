@@ -10,6 +10,7 @@ import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -768,11 +769,7 @@ class _DailySongsSection extends StatelessWidget {
                         size: 40,
                         radius: 4,
                       ),
-                      title: Text(
-                        preview[i].name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      title: SongTitleWithBadges(song: preview[i]),
                       subtitle: Text(
                         preview[i].artist,
                         maxLines: 1,

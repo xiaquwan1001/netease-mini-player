@@ -8,10 +8,17 @@ import 'toast.dart';
 import 'song_actions.dart';
 import 'format.dart' show formatDurationMs;
 import 'mv_page.dart' show showMvPage;
+import 'song_tile.dart' show SongTitleWithBadges;
+import 'artist_sections.dart'
+    show
+        ArtistAlbumsSection,
+        ArtistRecommendedSongsSection,
+        showArtistInfoSheet;
 
 /// 歌手详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
-/// (热门歌曲 / 全部歌曲 / 专辑 / MV(有才显示)) + 页内搜索(过滤歌曲类 tab)。
-/// 相似歌手在信息区尾部(胶囊 Wrap, 防溢出)。
+/// (全部歌曲 / 专辑(有才显示) / MV(有才显示)) + 页内搜索(只过滤「全部歌曲」)。
+/// 与用户个人主页区分的丰富区块: 简介 / 推荐单曲(top5) / 专辑横滑 / 详细艺人弹层。
+/// 相似歌手在信息区尾部(胶囊 Wrap, 防溢出), 弹层里也有一份。
 /// 动态 tab 未实现: vendor 没有"歌手动态"接口(见 docs/c1-artist-page-notes.md)。
 /// 打开方式: [showArtistDetail], 全屏 MaterialPageRoute。
 Future<void> showArtistDetail(
@@ -162,8 +169,16 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     );
   }
 
+  /// 切到指定 tab(推荐单曲/专辑区块的「查看全部」入口用);
+  /// 目标 tab 可能因数据未到而不存在, 此时静默不动。
+  void _switchToTab(_TabKind kind) {
+    final index = _tabs.indexOf(kind);
+    if (index >= 0 && _tabController.index != index) {
+      _tabController.index = index;
+    }
+  }
+
   List<_TabKind> get _tabs => [
-    _TabKind.hotSongs,
     _TabKind.allSongs,
     if (_detail?.albums.isNotEmpty ?? false) _TabKind.albums,
     if (_mvsFirstPage?.isNotEmpty ?? false) _TabKind.mvs,
@@ -319,12 +334,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     rust.ArtistDetailDto detail,
   ) {
     switch (kind) {
-      case _TabKind.hotSongs:
-        return _HotSongsTab(
-          songs: detail.songs,
-          query: _query,
-          onPlaySongs: widget.onPlaySongs,
-        );
       case _TabKind.allSongs:
         return _AllSongsTab(
           artistId: widget.artistId,
@@ -454,10 +463,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
               ),
             ],
           ),
-          if (detail.briefDesc.trim().isNotEmpty) ...[
-            const SizedBox(height: 4),
-            _ExpandableText(text: detail.briefDesc),
-          ],
           if (_similar.isNotEmpty) ...[
             const Divider(height: 24),
             Text('相似歌手', style: theme.textTheme.titleMedium),
@@ -465,6 +470,50 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
             _buildSimilarArtists(theme),
           ],
           const Divider(height: 24),
+          // 与用户个人主页区分的核心区块: 简介/推荐单曲/专辑横滑/详细艺人
+          if (detail.briefDesc.trim().isNotEmpty) ...[
+            Text('简介', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            _ExpandableText(text: detail.briefDesc),
+            const SizedBox(height: 8),
+          ],
+          if (detail.songs.isNotEmpty) ...[
+            ArtistRecommendedSongsSection(
+              songs: detail.songs.take(5).toList(),
+              totalCount: detail.musicCount,
+              onPlaySongs: widget.onPlaySongs,
+              onSeeAll: () => _switchToTab(_TabKind.allSongs),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (detail.albums.isNotEmpty) ...[
+            ArtistAlbumsSection(
+              albums: detail.albums.take(6).toList(),
+              totalCount: detail.albumCount,
+              onOpenAlbum: widget.onOpenAlbum,
+              onSeeAll: () => _switchToTab(_TabKind.albums),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Text('详细艺人', style: theme.textTheme.titleMedium),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('详细艺人资料'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => showArtistInfoSheet(
+              context,
+              detail: detail,
+              similar: _similar,
+              onOpenArtist: (a) => showArtistDetail(
+                context,
+                artistId: a.id,
+                name: a.name,
+                onPlaySongs: widget.onPlaySongs,
+                onOpenAlbum: widget.onOpenAlbum,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -496,7 +545,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
 }
 
 enum _TabKind {
-  hotSongs('热门歌曲'),
   allSongs('全部歌曲'),
   albums('专辑'),
   mvs('MV');
@@ -568,48 +616,6 @@ class _TabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_TabBarDelegate oldDelegate) => true;
-}
-
-/// 热门歌曲 tab: 详情接口带来的 top songs + 页内过滤(不发请求)
-class _HotSongsTab extends StatelessWidget {
-  const _HotSongsTab({
-    required this.songs,
-    required this.query,
-    required this.onPlaySongs,
-  });
-
-  final List<rust.SongDto> songs;
-  final String query;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-
-  List<rust.SongDto> get _filtered => query.isEmpty
-      ? songs
-      : songs
-            .where(
-              (s) =>
-                  s.name.toLowerCase().contains(query.toLowerCase()) ||
-                  s.artist.toLowerCase().contains(query.toLowerCase()),
-            )
-            .toList();
-
-  @override
-  Widget build(BuildContext context) {
-    final list = _filtered;
-    if (list.isEmpty) {
-      return Center(child: Text(query.isEmpty ? '暂无热门歌曲' : '没有匹配「$query」的歌曲'));
-    }
-    return ListView.builder(
-      padding: EdgeInsets.only(
-        bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      itemCount: list.length,
-      itemBuilder: (context, i) => _ArtistSongRow(
-        song: list[i],
-        index: i,
-        onTap: () => onPlaySongs(list, i),
-      ),
-    );
-  }
 }
 
 /// 全部歌曲 tab: offset/limit 分页(PagedListView); 有搜索词时改为
@@ -924,10 +930,9 @@ class _ArtistSongRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    song.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  // 歌名 + VIP/付费/无版权标记(标记固定宽度, 不会被歌名挤掉)
+                  SongTitleWithBadges(
+                    song: song,
                     style: song.playable ? theme.textTheme.bodyMedium : grey,
                   ),
                   const SizedBox(height: 2),

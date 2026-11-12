@@ -10,33 +10,36 @@ rust.SongDto song({
   bool vip = false,
   bool paid = false,
   bool playable = true,
-}) =>
-    rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '周杰伦',
-      artistId: BigInt.one,
-      album: '叶惠美',
-      albumId: BigInt.from(1),
-      coverUrl: null,
-      durationMs: BigInt.from(269000),
-      fee: fee,
-      vip: vip,
-      paid: paid,
-      playable: playable,
-    );
+}) => rust.SongDto(
+  id: BigInt.from(id),
+  name: name,
+  artist: '周杰伦',
+  artistId: BigInt.one,
+  album: '叶惠美',
+  albumId: BigInt.from(1),
+  coverUrl: null,
+  durationMs: BigInt.from(269000),
+  fee: fee,
+  vip: vip,
+  paid: paid,
+  playable: playable,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('无版权曲目: 灰显 + 无版权标, 点击仍回调(由调用方弹提示)', (tester) async {
     var taps = 0;
-    await tester.pumpWidget(host(SongTile(
-      song: song(playable: false),
-      active: false,
-      liked: false,
-      onTap: () => taps++,
-    )));
+    await tester.pumpWidget(
+      host(
+        SongTile(
+          song: song(playable: false),
+          active: false,
+          liked: false,
+          onTap: () => taps++,
+        ),
+      ),
+    );
 
     expect(find.text('无版权'), findsOneWidget);
     expect(find.text('VIP'), findsNothing);
@@ -48,24 +51,42 @@ void main() {
   });
 
   testWidgets('VIP 曲目带 VIP 标, 可播曲目不显示无版权', (tester) async {
-    await tester.pumpWidget(host(SongTile(
-      song: song(fee: 1, vip: true),
-      active: true,
-      liked: true,
-      onTap: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SongTile(
+          song: song(fee: 1, vip: true),
+          active: true,
+          liked: true,
+          onTap: () {},
+        ),
+      ),
+    );
     expect(find.text('VIP'), findsOneWidget);
     expect(find.text('无版权'), findsNothing);
     expect(find.byIcon(Icons.favorite), findsOneWidget);
   });
 
   testWidgets('红心跟在歌名后面(不做 leading, 保证歌名左对齐)', (tester) async {
-    await tester.pumpWidget(host(Column(
-      children: [
-        SongTile(song: song(id: 1, name: '普通歌曲'), active: false, liked: false, onTap: () {}),
-        SongTile(song: song(id: 2, name: '已收藏歌曲'), active: false, liked: true, onTap: () {}),
-      ],
-    )));
+    await tester.pumpWidget(
+      host(
+        Column(
+          children: [
+            SongTile(
+              song: song(id: 1, name: '普通歌曲'),
+              active: false,
+              liked: false,
+              onTap: () {},
+            ),
+            SongTile(
+              song: song(id: 2, name: '已收藏歌曲'),
+              active: false,
+              liked: true,
+              onTap: () {},
+            ),
+          ],
+        ),
+      ),
+    );
     final plain = tester.getTopLeft(find.text('普通歌曲'));
     final likedName = tester.getTopLeft(find.text('已收藏歌曲'));
     // 两行歌名左边界一致(红心不再是 leading)
@@ -76,14 +97,46 @@ void main() {
   });
 
   testWidgets('付费专辑显示 付费, 会员与非会员标不重复', (tester) async {
-    await tester.pumpWidget(host(SongTile(
-      song: song(fee: 4, paid: true),
-      active: false,
-      liked: false,
-      onTap: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SongTile(
+          song: song(fee: 4, paid: true),
+          active: false,
+          liked: false,
+          onTap: () {},
+        ),
+      ),
+    );
     expect(find.text('付费'), findsOneWidget);
     expect(find.text('VIP'), findsNothing);
+  });
+
+  testWidgets('300dp 窄屏: VIP 标必须可见(徽标在副标题行, 不再被窄宽整组收起)', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SongTile(
+            song: song(fee: 1, vip: true),
+            active: false,
+            liked: true,
+            onTap: () {},
+            onToggleLike: () {},
+            onMenu: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('VIP'), findsOneWidget, reason: '用户反馈歌曲行看不到 VIP 标记');
   });
 
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {
@@ -91,32 +144,38 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: SongTile(
-          song: song(name: '一个特别长的歌曲名字用来挤窄屏布局'),
-          active: true,
-          liked: true,
-          onTap: () {},
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SongTile(
+            song: song(name: '一个特别长的歌曲名字用来挤窄屏布局'),
+            active: true,
+            liked: true,
+            onTap: () {},
+          ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('歌曲行左右留白收到最小(把横向空间让给文字)', (tester) async {
-    await tester.pumpWidget(host(SongTile(
-      song: song(name: '需要更多横向空间的歌名'),
-      active: false,
-      liked: false,
-      onTap: () {},
-      onMenu: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SongTile(
+          song: song(name: '需要更多横向空间的歌名'),
+          active: false,
+          liked: false,
+          onTap: () {},
+          onMenu: () {},
+        ),
+      ),
+    );
     final tile = tester.widget<ListTile>(find.byType(ListTile));
     expect(
       tile.contentPadding,

@@ -2,9 +2,8 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
-import 'marquee_text.dart';
 import 'sheet_header.dart';
-
+import 'song_tile.dart' show SongTitleWithBadges;
 
 /// 当前播放队列面板(播放条上的 Icons.queue_music 打开)。
 ///
@@ -69,7 +68,10 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
     final save = widget.onSaveAsPlaylist;
     if (save == null) return;
     final seen = <BigInt>{};
-    final songs = [for (final s in _items) if (seen.add(s.id)) s];
+    final songs = [
+      for (final s in _items)
+        if (seen.add(s.id)) s,
+    ];
     setState(() => _busy = true);
     try {
       await save(songs);
@@ -125,11 +127,7 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('从播放队列移除?'),
-        content: Text(
-          song.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-        ),
+        content: Text(song.name, maxLines: 2, overflow: TextOverflow.ellipsis),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -194,8 +192,9 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                 children: [
                   Text(
                     _items.isEmpty ? '共 0 首' : '共 ${_items.length} 首',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
                     IconButton(
@@ -222,8 +221,9 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                       child: Text(
                         '播放队列是空的\n在列表里点一首歌就会入队',
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium
-                            ?.copyWith(color: scheme.onSurfaceVariant),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   )
@@ -259,8 +259,11 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                             width: 28,
                             child: Center(
                               child: current
-                                  ? Icon(Icons.volume_up,
-                                      size: 18, color: scheme.primary)
+                                  ? Icon(
+                                      Icons.volume_up,
+                                      size: 18,
+                                      color: scheme.primary,
+                                    )
                                   : Text(
                                       '${i + 1}',
                                       style: theme.textTheme.labelSmall
@@ -268,8 +271,10 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                                     ),
                             ),
                           ),
-                          title: MarqueeText(
-                            song.name,
+                          // 歌名 + VIP/付费/无版权标记(VIP 之前在这里完全看不到)
+                          title: SongTitleWithBadges(
+                            song: song,
+                            marquee: true,
                             style: current
                                 ? TextStyle(
                                     color: scheme.primary,
@@ -286,7 +291,10 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.delete_outline, size: 20),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 20,
+                                ),
                                 tooltip: '从队列移除',
                                 onPressed: () => _confirmRemove(i),
                               ),
@@ -294,7 +302,9 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                                 index: i,
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 12),
+                                    horizontal: 8,
+                                    vertical: 12,
+                                  ),
                                   child: Icon(
                                     Icons.drag_handle,
                                     size: 20,

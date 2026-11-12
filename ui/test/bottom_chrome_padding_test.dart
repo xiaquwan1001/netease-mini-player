@@ -22,11 +22,12 @@ void main() {
       onSeekChanging: (_) {},
       onSeekEnd: (_) {},
       onToggleLyrics: () {},
-      onOpenAlbum: () {},
+      onOpenDetail: () {},
       onToggleLike: () {},
       onCycleMode: () {},
       onOpenQueue: () {},
       onToggle: () {},
+      onPrevious: () {},
       onNext: () {},
     );
     playerBarData.value = PlayerBarData(
@@ -86,11 +87,12 @@ void main() {
     final nav = tester.getRect(find.byType(NavigationBar));
     final slider = tester.getRect(find.byType(Slider));
 
-    // 导航栏 = 内容 80 + 手势区 24, 多出来的就是状态栏空白带
+    // 导航栏 = 内容 80 + 手势区安全边距(现在夹到 8dp, 用户要求整体下移、
+    // 收掉底部多余空白; 状态栏 inset 仍然为 0)
     expect(
       nav.height,
-      navContentHeight + gestureInset,
-      reason: '导航栏高度被状态栏 inset 撑大了(顶部空白带)',
+      navContentHeight + 8,
+      reason: '导航栏高度被状态栏 inset 撑大了, 或底部手势区没有按 8dp 夹住',
     );
     expect(nav.top - bar.bottom, 0, reason: '播放条与导航栏之间不允许有空隙');
     // 播放条顶部第一块内容(Slider)必须紧贴播放条顶部, 不允许状态栏空白

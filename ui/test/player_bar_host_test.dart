@@ -48,11 +48,12 @@ void _publishStubBar() {
     onSeekChanging: (_) {},
     onSeekEnd: (_) {},
     onToggleLyrics: () {},
-    onOpenAlbum: () {},
+    onOpenDetail: () {},
     onToggleLike: () {},
     onCycleMode: () {},
     onOpenQueue: () {},
     onToggle: () {},
+    onPrevious: () {},
     onNext: () {},
   );
 }

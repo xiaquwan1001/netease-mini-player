@@ -5,14 +5,19 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_actions.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 
 /// 相似歌曲面板: 上半是相似歌曲(点击整批起播), 下半是相似歌单.
 ///
 /// 数据: simi_song / simi_playlist(都以 song id 为种子)
 typedef SimilarSongsLoader = Future<List<rust.SongDto>> Function(
-    BigInt songId, int limit);
+  BigInt songId,
+  int limit,
+);
 typedef SimilarPlaylistsLoader = Future<List<rust.Playlist>> Function(
-    BigInt songId, int limit);
+  BigInt songId,
+  int limit,
+);
 
 Future<void> showSimilarSongs(
   BuildContext context, {
@@ -33,9 +38,12 @@ Future<void> showSimilarSongs(
           song: song,
           onPlay: onPlay,
           onOpenPlaylist: onOpenPlaylist,
-          loadSongs: loadSongs ?? (id, limit) => rust.similarSongs(songId: id, limit: limit),
+          loadSongs:
+              loadSongs ??
+              (id, limit) => rust.similarSongs(songId: id, limit: limit),
           loadPlaylists:
-              loadPlaylists ?? (id, limit) => rust.similarPlaylists(songId: id, limit: limit),
+              loadPlaylists ??
+              (id, limit) => rust.similarPlaylists(songId: id, limit: limit),
         ),
       ),
     ),
@@ -138,12 +146,12 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: CoverArt(url: songs[i].coverUrl, size: 40, radius: 4),
-                    title: Text(
-                      songs[i].name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    leading: CoverArt(
+                      url: songs[i].coverUrl,
+                      size: 40,
+                      radius: 4,
                     ),
+                    title: SongTitleWithBadges(song: songs[i]),
                     subtitle: Text(
                       songs[i].artist,
                       maxLines: 1,
@@ -163,8 +171,9 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
                     child: Text(
                       '相似歌单',
-                      style: theme.textTheme.labelLarge
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   SizedBox(
@@ -187,7 +196,11 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CoverArt(url: pl.coverUrl, size: 100, radius: 8),
+                                CoverArt(
+                                  url: pl.coverUrl,
+                                  size: 100,
+                                  radius: 8,
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   pl.name,

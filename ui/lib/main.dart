@@ -486,11 +486,24 @@ class _PlayerBarChrome extends StatelessWidget {
               // ⇒ padding.top 仍是状态栏高度。NavigationBar 内部的 SafeArea 没关 top
               // (它默认同时吃 top), 不剥掉就会在导航栏顶部多出一条状态栏高的空白,
               // 表现为"播放条与底部导航之间有一段空", 同时整块底栏变高挤压内容区。
+              //
+              // 2026-11-13: 底部手势区原样(~24dp)全部被导航栏吃掉, 视觉上底部留白过大
+              // (用户反馈"略微下移底部导航栏, 减少到底部的空白")。这里把 bottom inset
+              // 夹到 8dp(仍高于手势条本体, 不挡点击), 导航栏整体下移约 16dp。
+              final mq = MediaQuery.of(context);
               final nav = navBar == null
                   ? null
-                  : MediaQuery.removePadding(
-                      context: context,
-                      removeTop: true,
+                  : MediaQuery(
+                      data: mq.copyWith(
+                        padding: mq.padding.copyWith(
+                          top: 0,
+                          bottom: mq.padding.bottom.clamp(0.0, 8.0),
+                        ),
+                        viewPadding: mq.viewPadding.copyWith(
+                          top: 0,
+                          bottom: mq.viewPadding.bottom.clamp(0.0, 8.0),
+                        ),
+                      ),
                       child: navBar,
                     );
               return Column(
@@ -630,7 +643,14 @@ class _HomePageState extends State<HomePage> {
   bool _advancing = false;
 
   // ---- 歌词 ----
-  static const double _lyricItemExtent = 56;
+  /// 歌词行高: 基准 56dp, 随系统字号等比放大。
+  /// 固定 56dp 在 textScale≥1.4 时装不下「18sp 主词 + 12sp 翻译」两行,
+  /// 行内容被 ListView 的 itemExtent 从下方裁掉(用户反馈"顶部歌词只显示上半段").
+  double get _lyricItemExtent {
+    final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+    return 56 * scale;
+  }
+
   List<ParsedLyricLine> _lyricLines = const [];
   List<BigInt> _lyricTimes = const [];
 
@@ -748,9 +768,16 @@ class _HomePageState extends State<HomePage> {
         }
         _toggleLyrics();
       },
-      onOpenAlbum: () => _openAlbumPreview(_current),
+      // 播放条封面点击 = 进入播放详情(不是专辑预览, 用户要求)
+      onOpenDetail: () {
+        if (_pageDepth.value > 1) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+        if (!_showLyrics) _toggleLyrics();
+      },
       onToggleLike: _toggleLike,
       onToggle: _toggle,
+      onPrevious: _previous,
       onNext: _next,
       onCycleMode: _cycleMode,
       onOpenQueue: _openQueueSheet,
@@ -1354,17 +1381,6 @@ class _HomePageState extends State<HomePage> {
         coverUrl: album.coverUrl,
         onPlay: (songs, index) => _playSongsList(songs, index),
       ),
-    );
-  }
-
-  void _openAlbumPreview(rust.SongDto? song) {
-    if (song == null) return;
-    showAlbumPreview(
-      context,
-      albumId: song.albumId,
-      albumName: song.album,
-      coverUrl: song.coverUrl,
-      onPlay: (songs, index) => _playSongsList(songs, index),
     );
   }
 
@@ -2428,31 +2444,48 @@ class _HomePageState extends State<HomePage> {
     await _playSong(prev);
   }
 
+  /// 队列面板是否已展开.
+  ///
+  /// 播放条挂在根 Overlay(Navigator 之外), 队列面板打开后播放条仍然可点 ——
+  /// 之前每点一次队列按钮就再压一层面板, 能无限叠加(用户反馈)。
+  /// 现在已展开时再点 = 收起。
+  bool _queueSheetOpen = false;
+
   /// 播放队列面板: 看队列 / 点项跳播 / 滑删或长按删(原来只有 "$inQueue/$total" 文本, 完全黑箱)
   Future<void> _openQueueSheet() async {
+    if (_queueSheetOpen) {
+      // 面板在栈顶; pop 掉它即"收起"
+      Navigator.of(context).pop();
+      return;
+    }
     if (_queue.items.isEmpty) {
       _toast('播放队列是空的');
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: PlayQueueSheet(
-          items: _queue.items,
-          index: _queue.index,
-          onSelect: (song) {
-            Navigator.of(sheetContext).pop();
-            _jumpToQueueSong(song);
-          },
-          onRemove: _removeFromQueue,
-          onMove: _moveInQueue,
-          onClear: _clearQueue,
-          onSaveAsPlaylist: _saveQueueAsPlaylist,
+    _queueSheetOpen = true;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (sheetContext) => SafeArea(
+          child: PlayQueueSheet(
+            items: _queue.items,
+            index: _queue.index,
+            onSelect: (song) {
+              Navigator.of(sheetContext).pop();
+              _jumpToQueueSong(song);
+            },
+            onRemove: _removeFromQueue,
+            onMove: _moveInQueue,
+            onClear: _clearQueue,
+            onSaveAsPlaylist: _saveQueueAsPlaylist,
+          ),
         ),
-      ),
-    );
+      );
+    } finally {
+      _queueSheetOpen = false;
+    }
   }
 
   /// 队列面板拖拽排序: PlayQueue 自己修下标, 当前曲目不变 ⇒ 不需要重播/换歌
@@ -3008,19 +3041,7 @@ class _HomePageState extends State<HomePage> {
               onPressed: _clearLyricSelection,
             ),
           ] else ...[
-            if (_hasLyricTranslation)
-              IconButton(
-                icon: Icon(
-                  Icons.translate,
-                  color: AppSettings.instance.lyricTranslation
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                tooltip: AppSettings.instance.lyricTranslation
-                    ? '关闭翻译'
-                    : '显示翻译',
-                onPressed: _toggleLyricTranslation,
-              ),
+            // 翻译开关已挪到歌词右下角(「定位当前歌词」上方), 见 _buildLyrics.
             // "..." 从播放条挪到详情页里(播放条只留播放控制)
             if (current != null)
               SongOverflowButton(
@@ -3386,13 +3407,35 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
+                // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
+                // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.
                 Positioned(
                   right: 8,
                   bottom: 8,
-                  child: IconButton.filledTonal(
-                    tooltip: '定位到当前歌词',
-                    icon: const Icon(Icons.my_location, size: 20),
-                    onPressed: _locateCurrentLyric,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_hasLyricTranslation)
+                        IconButton.filledTonal(
+                          tooltip: AppSettings.instance.lyricTranslation
+                              ? '关闭翻译'
+                              : '显示翻译',
+                          icon: Icon(
+                            Icons.translate,
+                            size: 20,
+                            color: AppSettings.instance.lyricTranslation
+                                ? Theme.of(context).colorScheme.primary
+                                : null,
+                          ),
+                          onPressed: _toggleLyricTranslation,
+                        ),
+                      if (_hasLyricTranslation) const SizedBox(height: 8),
+                      IconButton.filledTonal(
+                        tooltip: '定位到当前歌词',
+                        icon: const Icon(Icons.my_location, size: 20),
+                        onPressed: _locateCurrentLyric,
+                      ),
+                    ],
                   ),
                 ),
               ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'cover_art.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -712,8 +713,10 @@ class _FeedCard extends StatelessWidget {
               // 正文(最多 4 行, 详情页看全文)
               if (event.text.trim().isNotEmpty)
                 Padding(
-                  // 与用户名同列(头像 40 + 间距 10), 不再顶格错位
-                  padding: const EdgeInsets.only(top: 8, left: 50),
+                  // 顶格(与卡片左缘对齐): 之前 left:50 想对齐用户名, 但头像 40 +
+                  // 间距 10 的那一列在窄屏上会明显内缩, 正文每行前面多一段空白
+                  // (用户反馈"动态文字左边有空白缩进, 应该取消").
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     event.text.trim(),
                     maxLines: 4,
@@ -933,10 +936,8 @@ class _MiniSongCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      song.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    SongTitleWithBadges(
+                      song: song,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: song.playable ? null : scheme.outline,
                       ),

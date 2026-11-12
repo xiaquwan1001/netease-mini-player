@@ -5,6 +5,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
+import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToast;
 
 typedef AlbumLoader = Future<rust.AlbumDetailDto> Function(BigInt albumId);
@@ -363,10 +364,8 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
         return ListTile(
           dense: true,
           leading: Text('${i + 1}'),
-          title: Text(
-            s.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          title: SongTitleWithBadges(
+            song: s,
             style: s.playable
                 ? null
                 : TextStyle(color: Theme.of(context).colorScheme.outline),

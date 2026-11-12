@@ -12,26 +12,27 @@ import 'package:minincm/src/adaptive_text_row.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_tile.dart';
 
-const _longName =
-    '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
-const _longSub =
-    '一条超级超级长的艺人名组合名称 · 一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版';
+const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
+const _longSub = '一条超级超级长的艺人名组合名称 · 一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版';
 
-rust.SongDto song({required bool vip, required bool paid, required bool playable}) =>
-    rust.SongDto(
-      id: BigInt.one,
-      name: _longName,
-      artist: '某艺人',
-      artistId: BigInt.from(9),
-      album: '某专辑',
-      albumId: BigInt.from(8),
-      coverUrl: null,
-      durationMs: BigInt.from(269000),
-      fee: vip ? 1 : 0,
-      vip: vip,
-      paid: paid,
-      playable: playable,
-    );
+rust.SongDto song({
+  required bool vip,
+  required bool paid,
+  required bool playable,
+}) => rust.SongDto(
+  id: BigInt.one,
+  name: _longName,
+  artist: '某艺人',
+  artistId: BigInt.from(9),
+  album: '某专辑',
+  albumId: BigInt.from(8),
+  coverUrl: null,
+  durationMs: BigInt.from(269000),
+  fee: vip ? 1 : 0,
+  vip: vip,
+  paid: paid,
+  playable: playable,
+);
 
 /// 与 detail_page.dart _SongRow 同构的行(修复后的 AdaptiveTextRow 版本).
 Widget rowOf(rust.SongDto song) {
@@ -44,17 +45,23 @@ Widget rowOf(rust.SongDto song) {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AdaptiveTextRow(
-              title: song.name,
-              marquee: false,
-              badges: [
+            AdaptiveTextRow(title: song.name, marquee: false),
+            const SizedBox(height: 2),
+            // 徽标在副标题行(与 detail_page.dart _SongRow 同构): 300dp 下也可见
+            Row(
+              children: [
                 if (song.playable && song.vip) const VipBadge(small: true),
                 if (song.playable && !song.vip && song.paid) const PaidBadge(),
                 if (!song.playable) const UnplayableBadge(),
+                const Expanded(
+                  child: Text(
+                    _longSub,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 2),
-            const Text(_longSub, maxLines: 1, overflow: TextOverflow.ellipsis),
           ],
         ),
       ),
@@ -113,10 +120,19 @@ void main() {
       final box = tester.renderObject<RenderBox>(title);
       expect(box.size.width, greaterThan(0), reason: '曲名被徽标压到 0 宽(竖排根因)');
       expect(box.size.height, lessThan(30), reason: '曲名必须单行(竖排会远高于行高)');
-      // 徽标区宽 < 120px: 整组收起, 不允许出现任何徽标
-      expect(find.byType(VipBadge), findsNothing);
-      expect(find.byType(PaidBadge), findsNothing);
-      expect(find.byType(UnplayableBadge), findsNothing);
+      // 徽标在副标题行: 300dp 窄屏也必须看得见(用户反馈"歌曲没有 VIP 标记")
+      expect(
+        find.byType(VipBadge),
+        label == 'VIP' ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.byType(PaidBadge),
+        label == '付费' ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.byType(UnplayableBadge),
+        label == '无版权' ? findsOneWidget : findsNothing,
+      );
     });
   }
 

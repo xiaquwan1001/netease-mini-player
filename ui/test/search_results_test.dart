@@ -5,9 +5,8 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_results.dart';
 
 void main() {
-  testWidgets('综合搜索结果渲染五个分区并触发回调', (tester) async {
-    // 五个分区在小屏需要滚动才构建, 测试直接给个高一点的画布
-    tester.view.physicalSize = const Size(1000, 2800);
+  testWidgets('综合搜索结果: 分类横向排列(单曲/歌手/专辑/歌单/播客), 切换后看对应内容', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -89,20 +88,25 @@ void main() {
       ),
     );
 
-    // 五个分区标题都在
-    expect(find.text('单曲'), findsOneWidget);
-    expect(find.text('歌手'), findsOneWidget);
-    expect(find.text('专辑'), findsOneWidget);
-    expect(find.text('歌单'), findsOneWidget);
-    expect(find.text('播客'), findsOneWidget);
+    // 五个分类 chip 同时(横向)可见 —— 不需要向下翻就能选分类
+    for (final label in ['单曲', '歌手', '专辑', '歌单', '播客']) {
+      expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+    }
+    // 默认显示「单曲」分类: 歌曲行在, 专辑卡片还没渲染
+    expect(find.text('测试歌曲'), findsWidgets);
+    expect(find.text('测试专辑'), findsNothing);
 
-    // 歌手名出现(分区卡片)
-    expect(find.text('测试歌手'), findsWidgets);
-
-    // 点专辑卡片触发回调
+    // 点「专辑」chip 切到专辑分类, 点卡片触发回调
+    await tester.tap(find.widgetWithText(ChoiceChip, '专辑'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('测试专辑'));
     expect(openedAlbum, isNotNull);
     expect(openedAlbum!.id, BigInt.from(8));
+
+    // 点「歌手」chip 能看到歌手卡片
+    await tester.tap(find.widgetWithText(ChoiceChip, '歌手'));
+    await tester.pumpAndSettle();
+    expect(find.text('测试歌手'), findsWidgets);
   });
 
   testWidgets('300dp + 1.25 字号不溢出(五分区长文案)', (tester) async {
@@ -189,7 +193,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(tester.takeException(), isNull);
-    expect(find.text('单曲'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, '单曲'), findsOneWidget);
   });
 
   testWidgets('全空时显示空提示', (tester) async {
