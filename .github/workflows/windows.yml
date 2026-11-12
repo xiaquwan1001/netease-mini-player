@@ -53,6 +53,11 @@ jobs:
         working-directory: core
         run: cargo build --release -p ncm_ffi --target x86_64-pc-windows-msvc
 
+      # DPAPI 代码只有 windows 目标才编译, 主 CI 跑不到; 在这条腿上把对应单测真正执行一次。
+      - name: cargo test (ncm-service dpapi, windows)
+        working-directory: core
+        run: cargo test --release -p ncm-service dpapi --target x86_64-pc-windows-msvc
+
       - name: build windows (release)
         working-directory: ui
         run: flutter build windows --release -v
