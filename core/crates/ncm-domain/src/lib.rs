@@ -1060,14 +1060,17 @@ pub enum QrLoginState {
     Failed,
 }
 
-/// 一次轮询的结果. Confirmed 时 [QrLoginCheck::cookie] 里是登录凭据(MUSIC_U/__csrf).
+/// 一次轮询的结果(交给 UI 的那半边: 只有元数据, 凭据不进 UI 层).
+///
+/// 登录凭据见 [QrLoginOutcome] —— 它只在 Rust 侧(provider → service → ffi)流动。
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QrLoginCheck {
     pub state: QrLoginState,
     /// 官方原始 code(801/802/803/800), 排障用
     pub code: i64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cookie: Option<String>,
+    /// Confirmed 且登录凭据已落盘(Rust 侧完成, UI 只需据此推进)
+    #[serde(default)]
+    pub logged_in: bool,
     #[serde(default)]
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1088,15 +1091,36 @@ pub struct SmsCodeSent {
     pub expires_in: u32,
 }
 
-/// 手机号 + 短信验证码登录成功后的结果.
+/// 手机号 + 短信验证码登录成功后的结果(交给 UI 的那半边: 只有元数据).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PhoneLoginResult {
-    /// 只含登录凭据键(MUSIC_U/__csrf); 设备指纹由本地会话提供
-    pub cookie: String,
+    /// 校验通过且登录凭据已落盘
+    #[serde(default)]
+    pub logged_in: bool,
     #[serde(default)]
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+}
+
+/// 内部通道结果: 扫码轮询的元数据 + 登录凭据.
+///
+/// **凭据只在 Rust 侧传递**(ncm-provider → ncm-service → ncm-ffi 落盘),
+/// 不 derive Serialize, 也不 mirror 到 Dart —— 凭据不得回传 UI 层。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct QrLoginOutcome {
+    /// 给 UI 的元数据(logged_in 由凭据是否拿到决定)
+    pub check: QrLoginCheck,
+    /// 只含登录凭据键(MUSIC_U/__csrf); 设备指纹由本地会话提供
+    pub cookie: Option<String>,
+}
+
+/// 内部通道结果: 手机号登录的元数据 + 登录凭据(同 [QrLoginOutcome], 不回传 UI)。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PhoneLoginOutcome {
+    pub result: PhoneLoginResult,
+    /// 只含登录凭据键(MUSIC_U/__csrf)
+    pub cookie: String,
 }
 
 /// 黑胶会员等级(vip_info_v2 的 data: associator + redVipLevel).

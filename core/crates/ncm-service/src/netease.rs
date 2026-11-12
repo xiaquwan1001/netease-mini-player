@@ -12,7 +12,8 @@ use ncm_domain::{
     PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
     WordLyric,
-    MedalWall, PhoneLoginResult, QrLoginCheck, QrLoginKey, QrLoginState, SmsCodeSent, UserItem, UserLevel, UserMedal, VipGrowth,
+    MedalWall, PhoneLoginOutcome, PhoneLoginResult, QrLoginCheck, QrLoginKey, QrLoginOutcome, QrLoginState, SmsCodeSent,
+    UserItem, UserLevel, UserMedal, VipGrowth,
     VipMembership, VipOverview, VipSign, VipSignDay,
     VipTask, WikiFact,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
@@ -3421,7 +3422,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 扫码登录 ②: 轮询. 803 时的登录凭据在 Set-Cookie 里(不在 body).
-    fn login_qr_check<'a>(&'a self, key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginCheck>> {
+    fn login_qr_check<'a>(&'a self, key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
         Box::pin(async move {
             let (client, domain, _ua, _cookie) = self.snapshot();
             let resp = client
@@ -3466,7 +3467,7 @@ impl Provider for NeteaseProvider {
         phone: &'a str,
         code: &'a str,
         country_code: &'a str,
-    ) -> BoxFuture<'a, ProviderResult<PhoneLoginResult>> {
+    ) -> BoxFuture<'a, ProviderResult<PhoneLoginOutcome>> {
         Box::pin(async move {
             let (client, domain, _ua, _cookie) = self.snapshot();
             let (phone, countrycode) = normalize_phone(phone, country_code)?;
@@ -3498,7 +3499,7 @@ impl Provider for NeteaseProvider {
 /// 官方 code: 800 过期 / 801 待扫 / 802 已扫待确认 / 803 成功.
 /// **803 的登录凭据不在 body 里, 而在响应的 Set-Cookie 中** —— 这是整个桌面端登录
 /// 能绕开 WebView 的关键(见 docs 与 .pi/memory/HINDSIGHT.md).
-fn parse_qr_check(body: &Value, set_cookies: &[String]) -> ProviderResult<QrLoginCheck> {
+fn parse_qr_check(body: &Value, set_cookies: &[String]) -> ProviderResult<QrLoginOutcome> {
     let code = body.get("code").and_then(Value::as_i64).unwrap_or(-1);
     let state = match code {
         803 => QrLoginState::Confirmed,
@@ -3535,7 +3536,14 @@ fn parse_qr_check(body: &Value, set_cookies: &[String]) -> ProviderResult<QrLogi
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    Ok(QrLoginCheck { state, code, cookie, nickname, avatar_url })
+    let check = QrLoginCheck {
+        state,
+        code,
+        logged_in: cookie.is_some(),
+        nickname,
+        avatar_url,
+    };
+    Ok(QrLoginOutcome { check, cookie })
 }
 
 /// 手机号规范化: 去掉空白/连字符/括号与可选的前缀 '+', 只留数字.
@@ -3583,7 +3591,7 @@ fn parse_sms_sent(body: &Value) -> SmsCodeSent {
 /// `/api/login/cellphone` 的响应解析.
 ///
 /// 与扫码 803 一致: **登录凭据不在 body, 而在 Set-Cookie**; body 里只有 account/profile.
-fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<PhoneLoginResult> {
+fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<PhoneLoginOutcome> {
     let raw = set_cookies
         .iter()
         .map(|c| c.split(';').next().unwrap_or("").trim())
@@ -3607,7 +3615,10 @@ fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<Pho
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    Ok(PhoneLoginResult { cookie, nickname, avatar_url })
+    Ok(PhoneLoginOutcome {
+        result: PhoneLoginResult { logged_in: true, nickname, avatar_url },
+        cookie,
+    })
 }
 
 /// 扫码登录走 weapi(官方网页登录页的通道).
@@ -5799,8 +5810,9 @@ mod tests {
         assert!(r.cookie.contains("MUSIC_U=phone_u"));
         assert!(r.cookie.contains("__csrf=csrf789"));
         assert!(!r.cookie.contains("NMTID"));
-        assert_eq!(r.nickname, "下去玩");
-        assert_eq!(r.avatar_url.as_deref(), Some("https://x/a.jpg"));
+        assert!(r.result.logged_in);
+        assert_eq!(r.result.nickname, "下去玩");
+        assert_eq!(r.result.avatar_url.as_deref(), Some("https://x/a.jpg"));
 
         let err = parse_phone_login(&json!({"code":200}), &["JSESSIONID-WYYY=x; Path=/".to_string()])
             .unwrap_err();
@@ -5817,17 +5829,18 @@ mod tests {
     fn qr_login_check_states_and_cookie() {
         // 801: 待扫
         let r = parse_qr_check(&json!({"code":801}), &[]).unwrap();
-        assert_eq!(r.state, QrLoginState::Pending);
+        assert_eq!(r.check.state, QrLoginState::Pending);
         assert!(r.cookie.is_none());
+        assert!(!r.check.logged_in);
         // 802: 已扫待确认
         let r = parse_qr_check(&json!({"code":802}), &[]).unwrap();
-        assert_eq!(r.state, QrLoginState::Scanned);
+        assert_eq!(r.check.state, QrLoginState::Scanned);
         // 800: 过期
         let r = parse_qr_check(&json!({"code":800}), &[]).unwrap();
-        assert_eq!(r.state, QrLoginState::Expired);
+        assert_eq!(r.check.state, QrLoginState::Expired);
         // 其它(如 400/风控): Failed, 不 panic
         let r = parse_qr_check(&json!({"code":400,"message":"x"}), &[]).unwrap();
-        assert_eq!(r.state, QrLoginState::Failed);
+        assert_eq!(r.check.state, QrLoginState::Failed);
 
         // 803: body 里带昵称/头像, 凭据在 Set-Cookie(只保留登录键, 设备指纹键丢掉)
         let cookies = vec![
@@ -5841,10 +5854,11 @@ mod tests {
             &cookies,
         )
         .unwrap();
-        assert_eq!(r.state, QrLoginState::Confirmed);
-        assert_eq!(r.code, 803);
-        assert_eq!(r.nickname, "下去玩");
-        assert_eq!(r.avatar_url.as_deref(), Some("https://x/y.jpg"));
+        assert_eq!(r.check.state, QrLoginState::Confirmed);
+        assert_eq!(r.check.code, 803);
+        assert!(r.check.logged_in);
+        assert_eq!(r.check.nickname, "下去玩");
+        assert_eq!(r.check.avatar_url.as_deref(), Some("https://x/y.jpg"));
         let cookie = r.cookie.unwrap();
         assert!(cookie.contains("MUSIC_U=abc123"));
         assert!(cookie.contains("__csrf=csrf456"));

@@ -131,7 +131,8 @@ async fn run() -> Result<(), BoxErr> {
             let mut last = String::new();
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                let check = p.login_qr_check(&key.key).await?;
+                let outcome = p.login_qr_check(&key.key).await?;
+                let check = outcome.check;
                 let now = format!("{:?}", check.state);
                 if now != last {
                     println!("状态: {now} (code={})", check.code);
@@ -139,7 +140,7 @@ async fn run() -> Result<(), BoxErr> {
                 }
                 match check.state {
                     ncm_domain::QrLoginState::Confirmed => {
-                        let cookie = check.cookie.ok_or("confirmed 但没有 cookie")?;
+                        let cookie = outcome.cookie.ok_or("confirmed 但没有 cookie")?;
                         core.apply_login_cookie(&cookie)?;
                         println!("登录成功 logged_in = {}", core.session.is_logged_in());
                         println!("cookie saved -> {}", core.store.path().display());
@@ -196,11 +197,11 @@ async fn run() -> Result<(), BoxErr> {
             if code.is_empty() {
                 return Err("没有输入验证码".into());
             }
-            let r = p.login_sms_verify(&phone, &code, &country).await?;
-            core.apply_login_cookie(&r.cookie)?;
+            let outcome = p.login_sms_verify(&phone, &code, &country).await?;
+            core.apply_login_cookie(&outcome.cookie)?;
             println!("登录成功 logged_in = {}", core.session.is_logged_in());
-            if !r.nickname.is_empty() {
-                println!("昵称: {}", r.nickname);
+            if !outcome.result.nickname.is_empty() {
+                println!("昵称: {}", outcome.result.nickname);
             }
             println!("cookie saved -> {}", core.store.path().display());
             Ok(())

@@ -517,13 +517,17 @@ pub enum _QrLoginState {
     Failed,
 }
 
-/// 扫码登录: 一次轮询的结果(Confirmed 时 cookie 非空, 且已落盘)
+/// 扫码登录: 一次轮询的结果(Confirmed 时凭据已由 Rust 落盘, UI 只看 loggedIn).
+///
+/// 注意: **凭据不进 Dart** —— cookie 在 ncm-provider 的 QrLoginOutcome 里,
+/// 由本模块落盘后丢弃, 只回元数据。
 #[frb(mirror(QrLoginCheck))]
 pub struct _QrLoginCheck {
     pub state: QrLoginState,
     /// 官方原始 code(801/802/803/800), 排障用
     pub code: i64,
-    pub cookie: Option<String>,
+    /// Confirmed 且凭据已落盘
+    pub logged_in: bool,
     pub nickname: String,
     pub avatar_url: Option<String>,
 }
@@ -537,13 +541,25 @@ pub struct _SmsCodeSent {
     pub expires_in: u32,
 }
 
-/// 手机号+验证码登录成功后的结果(凭据已落盘)
+/// 手机号+验证码登录成功后的结果(凭据已落盘, 不回传 Dart)
 #[frb(mirror(PhoneLoginResult))]
 pub struct _PhoneLoginResult {
-    /// 只含登录凭据键(MUSIC_U/__csrf)
-    pub cookie: String,
+    /// 校验通过且凭据已落盘
+    pub logged_in: bool,
     pub nickname: String,
     pub avatar_url: Option<String>,
+}
+
+/// 凭据后端状态(设置页展示用). 不含任何凭据内容.
+pub struct CredentialStatusDto {
+    /// secure / plaintext_consented / plaintext_fallback
+    pub kind: String,
+    /// dpapi / file / none
+    pub backend: String,
+    /// 旧明文是否已迁移进后端
+    pub migrated: bool,
+    /// 面向用户的说明文案
+    pub note: String,
 }
 
 fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
@@ -581,17 +597,51 @@ pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, String> {
         guard.netease.clone()
     };
     use ncm_provider::Provider;
-    let check = provider
+    let outcome = provider
         .login_qr_check(&key)
         .await
         .map_err(|e| e.to_string())?;
-    if let Some(cookie) = check.cookie.as_deref() {
+    if let Some(cookie) = outcome.cookie.as_deref() {
         let mut guard = core()?.lock().map_err(|e| e.to_string())?;
         guard
             .apply_login_cookie(cookie)
             .map_err(|e| e.to_string())?;
     }
-    Ok(check)
+    // 凭据到此为止: 只把元数据交给 Dart
+    Ok(outcome.check)
+}
+
+fn credential_status_dto(status: ncm_service::credential_store::CredentialStatus) -> CredentialStatusDto {
+    use ncm_service::credential_store::CredentialStatus as S;
+    let kind = match &status {
+        S::Secure { .. } => "secure",
+        S::PlaintextConsented { .. } => "plaintext_consented",
+        S::PlaintextFallback { .. } => "plaintext_fallback",
+    };
+    CredentialStatusDto {
+        kind: kind.to_string(),
+        backend: status.backend_name().to_string(),
+        migrated: status.migrated(),
+        note: status.note(),
+    }
+}
+
+/// 当前凭据后端状态(设置页/排障用): 是否有安全后端、旧明文是否已迁移.
+pub fn credential_status() -> Result<CredentialStatusDto, String> {
+    let guard = core()?.lock().map_err(|e| e.to_string())?;
+    Ok(credential_status_dto(guard.credential_status()))
+}
+
+/// 用户明确同意/撤销"0600 明文回退". 同意后立刻重建后端并补跑迁移.
+///
+/// 只在没有系统钥匙串的平台(Android/Linux 的 P1/P2 未落地前)才有意义;
+/// Windows 走 DPAPI, 不需要这个开关。
+pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, String> {
+    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    guard
+        .set_plaintext_consent(consent)
+        .map_err(|e| e.to_string())?;
+    Ok(credential_status_dto(guard.credential_status()))
 }
 
 /// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
@@ -621,15 +671,15 @@ pub async fn login_sms_verify(
         guard.netease.clone()
     };
     use ncm_provider::Provider;
-    let result = provider
+    let outcome = provider
         .login_sms_verify(&phone, &code, &country_code)
         .await
         .map_err(|e| e.to_string())?;
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;
     guard
-        .apply_login_cookie(&result.cookie)
+        .apply_login_cookie(&outcome.cookie)
         .map_err(|e| e.to_string())?;
-    Ok(result)
+    Ok(outcome.result)
 }
 
 /// 已记住的账号列表(只含凭据, 指纹共享)

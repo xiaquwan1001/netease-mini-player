@@ -8,8 +8,8 @@
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
     HotSearchDetailItem, MvDetail, MvUrl, SearchExact, ToplistCatalogGroup,
-    FollowCount, HotSearchTerm, Lyric, PhoneLoginResult, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    QrLoginCheck, QrLoginKey, SmsCodeSent,
+    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    PhoneLoginOutcome, QrLoginKey, QrLoginOutcome, SmsCodeSent,
     WordLyric,
     ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
     Profile, RecentContact,
@@ -310,7 +310,7 @@ pub trait Provider: Send + Sync {
     }
 
     /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
-    fn login_qr_check<'a>(&'a self, _key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginCheck>> {
+    fn login_qr_check<'a>(&'a self, _key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
         Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
     }
 
@@ -332,7 +332,7 @@ pub trait Provider: Send + Sync {
         _phone: &'a str,
         _code: &'a str,
         _country_code: &'a str,
-    ) -> BoxFuture<'a, ProviderResult<PhoneLoginResult>> {
+    ) -> BoxFuture<'a, ProviderResult<PhoneLoginOutcome>> {
         Box::pin(async { Err(ProviderError::unsupported("no sms login")) })
     }
 
