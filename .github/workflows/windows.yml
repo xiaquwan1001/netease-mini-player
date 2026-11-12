@@ -37,6 +37,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本, 与本地/其它 workflow 一致
           cache: true
 
       - name: Enable Windows desktop
