@@ -148,10 +148,11 @@ impl Core {
     /// 用户明确同意/撤销"0600 明文回退"(设置页入口). 同意后立即重建后端并
     /// 补跑一次迁移(把仍在明文里的凭据搬走); 撤销只写标记, 不删已有明文.
     pub fn set_plaintext_consent(&mut self, consent: bool) -> std::io::Result<()> {
-        let mut policy = credential_store::CredentialPolicy::load(self.store_dir());
+        let dir = self.store_dir();
+        let mut policy = credential_store::CredentialPolicy::load(&dir);
         policy.plaintext_consent = consent;
-        policy.save(self.store_dir())?;
-        let (creds, status) = credential_store::open_backend(self.store_dir());
+        policy.save(&dir)?;
+        let (creds, status) = credential_store::open_backend(&dir);
         self.store.set_credential_backend(creds, status);
         let _ = self.store.migrate_legacy_cleartext();
         Ok(())

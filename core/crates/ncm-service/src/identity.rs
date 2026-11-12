@@ -192,8 +192,11 @@ impl IdentityStore {
         if policy.migrated {
             return Ok(false);
         }
-        let creds_guard = self.creds.lock().unwrap();
-        let creds = creds_guard.as_ref();
+        // 注意: 只克隆 Arc, 不能在整个迁移期间持有 self.creds 锁 ——
+        // 下面会调 load_accounts(), 它自己要拿同一把锁(非重入 Mutex),
+        // 持锁调用会自锁死(2026-11-12 实测: 测试挂在 futex_do_wait)。
+        let creds = self.creds.lock().unwrap().clone();
+        let creds = creds.as_ref();
         let mut migrated_any = false;
         let mut failure: Option<String> = None;
 
@@ -746,6 +749,96 @@ mod tests {
         assert_eq!(a.device_id, b.device_id);
         assert_eq!(a.device_id.len(), 52);
         assert!(!a.is_logged_in());
+    }
+
+    /// 迁移: 同意明文回退(有后端)时, 旧明文凭据搬进 store, 旧文件清零留骨架.
+    #[test]
+    fn migration_moves_cleartext_into_store_and_keeps_skeleton() {
+        let dir = tmpdir("migrate-consent");
+        let store = IdentityStore::open(&dir).unwrap();
+        // 造旧明文数据(v0.5.3 形态): identity.json 全量 cookie + accounts.json
+        let legacy = Session {
+            cookie: "MUSIC_U=old_secret; __csrf=c9; deviceId=DEV; _ntes_nuid=aa; os=pc".into(),
+            device_id: "DEV".into(),
+            profile: None,
+        };
+        store.save(&legacy).unwrap();
+        let mut book = AccountBook::default();
+        book.upsert(StoredAccount {
+            user_id: 1001,
+            nickname: "A".into(),
+            avatar_url: None,
+            vip: false,
+            cookie: "MUSIC_U=acct_secret; __csrf=a1".into(),
+        });
+        store.save_accounts(&book).unwrap();
+
+        // 同意明文回退 → FileStore 可用
+        let mut policy = credential_store::CredentialPolicy::load(&dir);
+        policy.plaintext_consent = true;
+        policy.save(&dir).unwrap();
+        store.set_credential_backend(
+            Some(std::sync::Arc::new(credential_store::FileStore::new(&dir))),
+            CredentialStatus::PlaintextConsented { migrated: false },
+        );
+        let migrated = store.migrate_legacy_cleartext().unwrap();
+        assert!(migrated);
+
+        // 后端里是凭据
+        let creds = store.credential_backend().unwrap();
+        assert_eq!(creds.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=old_secret; __csrf=c9"));
+        assert_eq!(creds.get(CredentialKey::Account(1001)).unwrap().as_deref(), Some("MUSIC_U=acct_secret; __csrf=a1"));
+
+        // identity.json 只剩设备指纹(骨架), 不再含登录键
+        let on_disk = fs::read_to_string(store.path()).unwrap();
+        assert!(!on_disk.contains("old_secret"), "{on_disk}");
+        assert!(!on_disk.contains("MUSIC_U"), "{on_disk}");
+        assert!(on_disk.contains("deviceId"), "{on_disk}");
+
+        // accounts.json 元数据保留、cookie 清空
+        let book_raw = fs::read_to_string(dir.join("accounts.json")).unwrap();
+        assert!(!book_raw.contains("acct_secret"), "{book_raw}");
+        assert!(book_raw.contains("\"user_id\": 1001"), "{book_raw}");
+        assert!(book_raw.contains("A"), "{book_raw}");
+
+        // 迁移标记已写
+        assert!(credential_store::CredentialPolicy::load(&dir).migrated);
+        // 二次调用幂等
+        assert!(!store.migrate_legacy_cleartext().unwrap());
+
+        // 加载回路: 会话/账号簿凭据从 store 回填, 登录态完整
+        let reloaded = store.load_or_create().unwrap();
+        assert!(reloaded.is_logged_in());
+        assert!(reloaded.cookie.contains("MUSIC_U=old_secret"));
+        assert!(reloaded.cookie.contains("deviceId=DEV"));
+        let book2 = store.load_accounts().unwrap();
+        assert_eq!(book2.accounts[0].cookie, "MUSIC_U=acct_secret; __csrf=a1");
+    }
+
+    /// 迁移: 无后端且未同意 → 保留明文原样, 不阻塞, 状态可上报.
+    #[test]
+    fn migration_without_backend_keeps_cleartext_and_reports() {
+        let dir = tmpdir("migrate-none");
+        let store = IdentityStore::open(&dir).unwrap();
+        let legacy = Session {
+            cookie: "MUSIC_U=keepme; deviceId=DEV".into(),
+            device_id: "DEV".into(),
+            profile: None,
+        };
+        store.save(&legacy).unwrap();
+        store.set_credential_backend(
+            None,
+            CredentialStatus::PlaintextFallback { reason: "测试: 未同意".into() },
+        );
+        let migrated = store.migrate_legacy_cleartext().unwrap();
+        assert!(!migrated);
+        // 明文原样
+        let raw = fs::read_to_string(store.path()).unwrap();
+        assert!(raw.contains("MUSIC_U=keepme"), "{raw}");
+        assert!(matches!(
+            store.credential_status(),
+            CredentialStatus::PlaintextFallback { .. }
+        ));
     }
 
     #[test]
