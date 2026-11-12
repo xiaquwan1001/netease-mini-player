@@ -156,6 +156,11 @@ class MiniPlayerBar extends StatelessWidget {
       // 这里再吃一次 bottom inset 会在播放条与底栏之间留出一条空白(R4);
       // 二级页上没有导航栏, 就得自己吃掉这块(否则被系统手势条压住一条)。
       child: SafeArea(
+        // top: false —— 这一条是回归根因: 播放条现在挂根布局上(Navigator 之外),
+        // 根 MediaQuery.padding.top 还是状态栏高度; 若 SafeArea 默认 top: true,
+        // 播放条顶部会多出一条等于状态栏高度的空白带(bar 变高 ⇒ 挤压内容区)。
+        // 状态栏安全区由页面自己的 AppBar/body Padding 负责。
+        top: false,
         bottom: absorbBottomInset,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),

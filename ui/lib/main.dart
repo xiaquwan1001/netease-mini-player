@@ -434,11 +434,22 @@ class _PlayerBarChrome extends StatelessWidget {
                       actions: actions,
                       absorbBottomInset: navBar == null,
                     );
+              // 底部条与底部导航都挂在 Navigator 之外(根布局), 看到的是根 MediaQuery
+              // ⇒ padding.top 仍是状态栏高度。NavigationBar 内部的 SafeArea 没关 top
+              // (它默认同时吃 top), 不剥掉就会在导航栏顶部多出一条状态栏高的空白,
+              // 表现为"播放条与底部导航之间有一段空", 同时整块底栏变高挤压内容区。
+              final nav = navBar == null
+                  ? null
+                  : MediaQuery.removePadding(
+                      context: context,
+                      removeTop: true,
+                      child: navBar,
+                    );
               return Column(
                 children: [
                   Expanded(child: body),
                   ?bar,
-                  ?navBar,
+                  ?nav,
                 ],
               );
             },
