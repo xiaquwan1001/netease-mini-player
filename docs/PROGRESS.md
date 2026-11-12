@@ -21,7 +21,9 @@
 ## 进度总览(2026-11-12, 面向新读者的速览)
 
 **当前门禁**: `cargo test` **247** / `flutter test --exclude-tags network` **656** /
-`dart analyze` 0 error / 0 warning(38 info) / 接口覆盖 **123/123**; 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
+`dart analyze` 0 error / 0 warning(38 info) / 接口覆盖 **123/123**(FFI 导出 150, 其中 5 个无 UI 入口:
+cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / word_lyric_with_fallback);
+凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
 **版本时间线**:
 

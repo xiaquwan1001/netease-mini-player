@@ -60,7 +60,7 @@
 |---|---|---|---|
 | ~~**B5 逐字歌词**~~ ✅ 已完成(契约层+UI 车道) | 歌词页逐字高亮 | `lyric_new`(已接) `song_lyrics_mark*`(只读 dump, 写不接) | 契约层已合入；**ytlrc/yromalrc 实测恒空** ⇒ 翻译只能行级; 老歌无 yrc 必须回落 |
 | **B6 榜单 v2** | 「更新 N 首」/歌手榜细分 | `toplist` `toplist_detail_v2` `toplist_artist` | ROI 低, 现有 detail 已够用 |
-| **B7 歌单细分编辑** | 私密切换/标签/排序/换封面 | `playlist_privacy` `playlist_order_update` `playlist_tags_update` `playlist_cover_update` | **vendor 把 privacy 写死 0**; 其余要自己拼请求或上传 |
+| **B7b 歌单细分编辑**(与已完成的 B7a 写接口 create/加曲是两回事, 见 §11.A) | 私密切换/标签/排序/换封面 | `playlist_privacy` `playlist_order_update` `playlist_tags_update` `playlist_cover_update` | **vendor 把 privacy 写死 0**; 其余要自己拼请求或上传 |
 | ~~**B10 电台补充**~~ ✅已做(只读) | 电台榜单/分类/推荐/主播 | `dj_toplist*` `dj_catelist` `dj_category_*` `dj_recommend_type` `dj_program_toplist` `dj_subscriber` | 12 DTO + 6 parse + FFI 4 + `radio_explore_page.dart`(新); **`dj_sub` 订阅与 `dj_difm_*`(6) 不做**(写/语义未验证) |
 | ~~**B12 数字专辑只读**~~ ✅已做 | 已购/销量/详情 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` | 6 DTO + 4 parse + FFI 4 + `digital_album_page.dart`(新) + 我的页入口; 下单不碰 |
 
@@ -228,7 +228,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | **⚠ 发布前硬门(写接口)** | 评论发送走 `rust.replyComment`(commentId=0)是**真实写操作**: 必须用测试号 + a34/a36 走查一次(发送/失败/回滚), 且确认不在 CI 里触网 | 安全 | S | 不做不得发版 |
 | ~~**C · 信息架构重排**~~ ✅ **已完成**(2026-11-09) | 设置瘦身 + 2 个二级页、账号入口 3→1、推荐页首屏 8→5、专辑 Dialog→全页、日推/最近听过 sheet→全页; 新增 11 条可达性用例 | 见 `docs/archive/ui-batch-c.md` | ~~M~~ 已做 | **视觉待人工过目**: 账号页层级/新歌新碟合并块/风格 chips 归属/全页 AppBar+TabBar 高度/设置页密度/我的页会员行位置 |
 | **C2 · C 的遗留** | ①~~清空搜索历史缺二次确认~~ ✅ 已修(`search_landing.dart:35-43` AlertDialog + `ui/test/c2_clear_history_confirm_test.dart`) ②若要全局账号入口恢复, 加一行即可 ③推荐播客仍在第 2 屏(审计 §5.5 有意保留) | C 遗留 | S | ①已完成 |
-| **D · 技术债收敛** | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、删 `podcast.dart` 的半死入口(实测非整文件: 仅 `showPodcastSheet`+`_PodcastBrowser*` ≈88 行零生产调用, 且被 10 处测试当宿主, 需同步改写 ⇒ 未做)、补 300dp+1.25 回归到剩余 30 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | M | 纯重构, 可与 C 并行但**不要同时改同一文件** |
+| ~~**D · 技术债收敛**~~ ✅ **已完成**(2026-11-11, 见 §11.B2) | 抽 `fmtDuration`/`formatDurationShort`/日期格式化进 `format.dart`、弹层 21/21 统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口已删(658→190 行, 存活组件测试同步改写)、窄屏+1.25 回归补到 45 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | ~~M~~ 已做 | — |
 
 **与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
 
