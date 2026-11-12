@@ -17,6 +17,16 @@ if [ $# -eq 0 ]; then
   exit 2
 fi
 
+# 参数清洗: YAML 折叠/续行符会送出带前导空格的包名(" libasound2-dev"),
+# apt 报 'Unable to locate package  libasound2-dev'(双空格即此坑), 这里统一 trim。
+args=()
+for a in "$@"; do
+  a="${a#"${a%%[![:space:]]*}"}"
+  a="${a%"${a##*[![:space:]]}"}"
+  [ -n "$a" ] && args+=("$a")
+done
+set -- "${args[@]}"
+
 RETRIES=${APT_RETRIES:-6}
 FALLBACK_SOURCES=${APT_FALLBACK_SOURCES:-/etc/apt/sources.list.d/minincm-fallback.list}
 CODENAME=${APT_CODENAME:-noble}
