@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'all_charts_page.dart';
 import 'app_settings.dart';
-import 'cover_art.dart';
+import 'cover_row.dart';
 import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -16,11 +16,7 @@ typedef ChartListLoader = Future<List<rust.ChartSummary>> Function();
 /// 这里把原来 recommend_view 里的私有实现抽出来, 推荐页不再渲染;
 /// 搜索落地页(SearchLanding)直接复用, 不要再复制第三份。
 class ChartSection extends StatefulWidget {
-  const ChartSection({
-    super.key,
-    required this.onOpen,
-    this.load,
-  });
+  const ChartSection({super.key, required this.onOpen, this.load});
 
   /// 点某个榜单: 榜单本身就是歌单, 交给上层打开歌单详情。
   final void Function(rust.Playlist playlist) onOpen;
@@ -66,10 +62,8 @@ class _ChartSectionState extends State<ChartSection> {
           _Header(
             title: '排行榜',
             trailing: TextButton(
-              onPressed: () => showAllChartsPage(
-                context,
-                onOpenPlaylist: widget.onOpen,
-              ),
+              onPressed: () =>
+                  showAllChartsPage(context, onOpenPlaylist: widget.onOpen),
               child: const Text('全部'),
             ),
           ),
@@ -104,24 +98,26 @@ class _ChartSectionState extends State<ChartSection> {
                   ),
                 );
               }
-              return _CoverRow(
+              return CoverRow(
                 height: 176,
                 rows: AppSettings.instance.coverRows,
                 children: [
                   for (final chart in charts)
-                    _CoverCard(
+                    CoverCard(
                       coverUrl: chart.coverUrl,
                       title: chart.name,
                       subtitle: chart.updateFrequency.isEmpty
                           ? '${chart.trackCount} 首'
                           : chart.updateFrequency,
-                      onTap: () => widget.onOpen(rust.Playlist(
-                        id: chart.id,
-                        name: chart.name,
-                        coverUrl: chart.coverUrl,
-                        trackCount: chart.trackCount,
-                        special: false,
-                      )),
+                      onTap: () => widget.onOpen(
+                        rust.Playlist(
+                          id: chart.id,
+                          name: chart.name,
+                          coverUrl: chart.coverUrl,
+                          trackCount: chart.trackCount,
+                          special: false,
+                        ),
+                      ),
                     ),
                 ],
               );
@@ -149,102 +145,11 @@ class _Header extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
+              style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
           if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
-}
-
-class _CoverRow extends StatelessWidget {
-  const _CoverRow({required this.children, required this.height, this.rows = 1});
-
-  final List<Widget> children;
-  final double height;
-  final int rows;
-
-  /// 定高 height(=176)按 scale=1.0 设计: 封面 118 + 4 + 两行文字约 54.
-  /// 大字体(1.3/1.625)下文字行高变大, 固定 176 会纵向溢出;
-  /// 只放大"两行文字"的部分, scale=1.0 时不变。
-  double _effectiveHeight(BuildContext context) {
-    final textLines = MediaQuery.textScalerOf(context).scale(27) * 2;
-    return height + (textLines - 54);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final h = _effectiveHeight(context);
-    if (rows <= 1 || children.length < 2) return _row(children, h);
-    final half = (children.length + 1) ~/ 2;
-    // 两排时内容高 = 2*height + 行间距(4), 外层必须把间距算进去(R1 溢出回归)。
-    return SizedBox(
-      height: h * 2 + 4,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _row(children.take(half).toList(), h),
-          const SizedBox(height: 4),
-          _row(children.skip(half).toList(), h),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(List<Widget> items, double h) {
-    if (items.isEmpty) return SizedBox(height: h);
-    return SizedBox(
-      height: h,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => SizedBox(width: 118, child: items[i]),
-      ),
-    );
-  }
-}
-
-class _CoverCard extends StatelessWidget {
-  const _CoverCard({
-    required this.coverUrl,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String? coverUrl;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CoverArt(url: coverUrl, size: 118, radius: 8),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
         ],
       ),
     );

@@ -14,20 +14,19 @@ import 'package:minincm/src/rust/api.dart' as rust;
 const _longName = '一个很长很长的曲风名字用来验证省略号';
 
 Widget _recommend(List<rust.StyleTag> tags) => RecommendView(
-      loggedIn: true,
-      onPlaySongs: (_, _) {},
-      onOpenPlaylist: (_) {},
-      onOpenPodcast: (_) {},
-      onHeartMode: () {},
-      onOpenDaily: () {},
-      loadDailySongs: () async => const [],
-      loadDailyPlaylists: () async => const [],
-      loadPodcasts: () async => const [],
-      loadFm: () async => const [],
-      loadCharts: () async => const [],
-      loadStyles: () async => tags,
-      loadNewSongs: () async => const [],
-    );
+  loggedIn: true,
+  onPlaySongs: (_, _) {},
+  onOpenPlaylist: (_) {},
+  onOpenPodcast: (_) {},
+  onHeartMode: () {},
+  onOpenDaily: () {},
+  loadDailySongs: () async => const [],
+  loadDailyPlaylists: () async => const [],
+  loadPodcasts: () async => const [],
+  loadFm: () async => const [],
+  loadStyles: () async => tags,
+  loadNewSongs: () async => const [],
+);
 
 final _tags = const [
   rust.StyleTag(
@@ -48,22 +47,27 @@ Future<void> _pump(WidgetTester tester, {required double textScale}) async {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
 
-  await tester.pumpWidget(MaterialApp(
-    home: MediaQuery(
-      data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-      child: Scaffold(body: _recommend(_tags)),
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
+        child: Scaffold(body: _recommend(_tags)),
+      ),
     ),
-  ));
+  );
   // CoverArt 的离线加载失败回退到占位, 等 settle 会一直等网络超时, 用固定 pump.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 300));
 }
 
 /// 页面上所有横向滚动的 Scrollable(风格窗格那一行).
-Iterable<ScrollableState> _horizontalScrollables(WidgetTester tester) =>
-    tester.stateList<ScrollableState>(find.byType(Scrollable)).where(
-        (s) => s.widget.axisDirection == AxisDirection.left ||
-            s.widget.axisDirection == AxisDirection.right);
+Iterable<ScrollableState> _horizontalScrollables(WidgetTester tester) => tester
+    .stateList<ScrollableState>(find.byType(Scrollable))
+    .where(
+      (s) =>
+          s.widget.axisDirection == AxisDirection.left ||
+          s.widget.axisDirection == AxisDirection.right,
+    );
 
 void main() {
   for (final scale in const [1.0, 1.25, 1.625]) {
@@ -82,8 +86,11 @@ void main() {
       await tester.drag(find.text('爵士'), const Offset(-200, 0));
       await tester.pump(const Duration(milliseconds: 300));
       expect(tester.takeException(), isNull);
-      expect(_horizontalScrollables(tester).first.position.pixels,
-          greaterThan(before), reason: '窄屏上窗格行应能横向滚到后面的风格');
+      expect(
+        _horizontalScrollables(tester).first.position.pixels,
+        greaterThan(before),
+        reason: '窄屏上窗格行应能横向滚到后面的风格',
+      );
     });
   }
 
@@ -92,12 +99,17 @@ void main() {
 
     // 风格窗格里: 1 个有 coverUrl 的标签 → 恰好 1 个带 url 的 CoverArt;
     // 其余 4 个无 coverUrl → 4 个钢琴占位.
-    final covers =
-        tester.widgetList<CoverArt>(find.byType(CoverArt)).toList();
-    expect(covers.where((c) => c.url != null && c.url!.isNotEmpty).length, 1,
-        reason: '有配图的曲风用 CoverArt 渲染');
-    expect(find.byIcon(Icons.piano), findsNWidgets(4),
-        reason: '没有配图的曲风退回同尺寸钢琴图标占位');
+    final covers = tester.widgetList<CoverArt>(find.byType(CoverArt)).toList();
+    expect(
+      covers.where((c) => c.url != null && c.url!.isNotEmpty).length,
+      1,
+      reason: '有配图的曲风用 CoverArt 渲染',
+    );
+    expect(
+      find.byIcon(Icons.piano),
+      findsNWidgets(4),
+      reason: '没有配图的曲风退回同尺寸钢琴图标占位',
+    );
   });
 
   testWidgets('窄屏下窗格名字单行 + 省略号截断', (tester) async {
@@ -105,7 +117,10 @@ void main() {
 
     final nameText = tester.widget<Text>(find.text(_longName).first);
     expect(nameText.maxLines, 1, reason: '窗格名字不能折行把窗格撑高');
-    expect(nameText.overflow, TextOverflow.ellipsis,
-        reason: '窄屏 + 大字号下超长曲风名要省略号截断');
+    expect(
+      nameText.overflow,
+      TextOverflow.ellipsis,
+      reason: '窄屏 + 大字号下超长曲风名要省略号截断',
+    );
   });
 }

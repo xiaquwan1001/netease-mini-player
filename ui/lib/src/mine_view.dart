@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'cover_row.dart';
 import 'digital_album_page.dart';
+import 'layout.dart' show kSongRowPadding;
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
@@ -106,6 +108,7 @@ class _MineViewState extends State<MineView> {
       widget.loadPodcasts ?? (() => rust.subscribedPodcasts(limit: 50));
   Future<List<rust.AlbumItem>> Function() get _albums =>
       widget.loadAlbums ?? (() => rust.subscribedAlbums(limit: 50));
+
   /// 播放历史: 云端拉不到(未登录/网络差)时回落到本地播放记录
   Future<List<rust.SongDto>> _loadRecent() async {
     try {
@@ -126,7 +129,11 @@ class _MineViewState extends State<MineView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.account_circle, size: 56, color: Theme.of(context).colorScheme.outline),
+              Icon(
+                Icons.account_circle,
+                size: 56,
+                color: Theme.of(context).colorScheme.outline,
+              ),
               const SizedBox(height: 12),
               const Text('登录后查看我喜欢的音乐、收藏歌单/播客和关注艺人'),
               const SizedBox(height: 16),
@@ -142,128 +149,137 @@ class _MineViewState extends State<MineView> {
     }
     return RefreshIndicator(
       onRefresh: () async => setState(() => _dataGeneration += 1),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        children: [
-          _ProfileSection(
-            key: ValueKey('mine-profile-$_dataGeneration'),
-            loggedIn: widget.loggedIn,
-            onOpenAccounts: widget.onOpenAccounts,
-            onLogin: widget.onLogin,
-            load: widget.loadProfile,
-            onOpenFollows: widget.onOpenFollows,
-            onOpenFolloweds: widget.onOpenFolloweds,
-          ),
-          if (widget.onOpenMessages != null) ...[
-            const SizedBox(height: 4),
-            MessageEntryCard(
-              onOpen: widget.onOpenMessages!,
-              load: widget.loadMessageCounts,
+      // 账户页整页被用户点名"左右空隙大": 页面 12 + ListTile 默认 16 = 28dp。
+      // 列表行统一收到 12(叠后 24), 歌曲行仍走 SongTile 的 kSongRowPadding。
+      child: ListTileTheme(
+        data: const ListTileThemeData(
+          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          children: [
+            _ProfileSection(
+              key: ValueKey('mine-profile-$_dataGeneration'),
+              loggedIn: widget.loggedIn,
+              onOpenAccounts: widget.onOpenAccounts,
+              onLogin: widget.onLogin,
+              load: widget.loadProfile,
+              onOpenFollows: widget.onOpenFollows,
+              onOpenFolloweds: widget.onOpenFolloweds,
             ),
-          ],
-          if (widget.onOpenVip != null) ...[
-            const SizedBox(height: 4),
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: const Text('黑胶会员'),
-                subtitle: const Text('签到 / 任务 / 成长值(只读)'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: widget.onOpenVip,
+            if (widget.onOpenMessages != null) ...[
+              const SizedBox(height: 4),
+              MessageEntryCard(
+                onOpen: widget.onOpenMessages!,
+                load: widget.loadMessageCounts,
               ),
-            ),
-          ],
-          if (widget.loggedIn) ...[
-            const SizedBox(height: 4),
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.album_outlined),
-                title: const Text('数字专辑(只读)'),
-                subtitle: const Text('已购专辑 / 已购单曲 / 详情销量'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(builder: (_) => const DigitalAlbumPage()),
+            ],
+            if (widget.onOpenVip != null) ...[
+              const SizedBox(height: 4),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(Icons.workspace_premium_outlined),
+                  title: const Text('黑胶会员'),
+                  subtitle: const Text('签到 / 任务 / 成长值(只读)'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: widget.onOpenVip,
                 ),
               ),
-            ),
-          ],
-          if (widget.loggedIn && widget.onOpenMedals != null) ...[
+            ],
+            if (widget.loggedIn) ...[
+              const SizedBox(height: 4),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(Icons.album_outlined),
+                  title: const Text('数字专辑(只读)'),
+                  subtitle: const Text('已购专辑 / 已购单曲 / 详情销量'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const DigitalAlbumPage(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (widget.loggedIn && widget.onOpenMedals != null) ...[
+              const SizedBox(height: 4),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(Icons.military_tech_outlined),
+                  title: const Text('等级与勋章'),
+                  subtitle: const Text('等级进度 / 勋章墙(只读)'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: widget.onOpenMedals,
+                ),
+              ),
+            ],
             const SizedBox(height: 4),
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.military_tech_outlined),
-                title: const Text('等级与勋章'),
-                subtitle: const Text('等级进度 / 勋章墙(只读)'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: widget.onOpenMedals,
+            const SigninCard(),
+            const SizedBox(height: 4),
+            _LikedSection(
+              key: ValueKey('mine-liked-$_dataGeneration'),
+              load: _liked,
+              onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
+              onOpenAll: widget.onOpenLiked,
+            ),
+            const SizedBox(height: 16),
+            _PlaylistsSection(
+              key: ValueKey('mine-playlists-$_dataGeneration'),
+              load: _playlists,
+              onOpen: widget.onOpenPlaylist,
+              onOpenAll: () => showMyPlaylistsPage(
+                context,
+                load: _playlists,
+                onOpen: widget.onOpenPlaylist,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _PodcastsSection(
+              key: ValueKey('mine-podcasts-$_dataGeneration'),
+              load: _podcasts,
+              onOpen: widget.onOpenPodcast,
+              onOpenAll: () => showMyPodcastsPage(
+                context,
+                load: _podcasts,
+                onOpen: widget.onOpenPodcast,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _AlbumsSection(
+              key: ValueKey('mine-albums-$_dataGeneration'),
+              load: _albums,
+              onOpen: widget.onOpenAlbum,
+              onOpenAll: () => showMyAlbumsPage(
+                context,
+                load: _albums,
+                onOpen: widget.onOpenAlbum,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _RecentSection(
+              key: ValueKey('mine-recent-$_dataGeneration'),
+              load: _loadRecent,
+              onOpenAll: widget.onOpenRecent,
+              onPlay: widget.onPlaySongs,
+            ),
+            const SizedBox(height: 16),
+            _RankingSection(
+              key: ValueKey('mine-ranking-$_dataGeneration'),
+              load: widget.loadRanking,
+              onPlay: widget.onPlaySongs,
+              onOpenAll: () => showPlayRanking(
+                context,
+                onPlaySongs: widget.onPlaySongs,
+                load: widget.loadRanking,
               ),
             ),
           ],
-          const SizedBox(height: 4),
-          const SigninCard(),
-          const SizedBox(height: 4),
-          _LikedSection(
-            key: ValueKey('mine-liked-$_dataGeneration'),
-            load: _liked,
-            onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
-            onOpenAll: widget.onOpenLiked,
-          ),
-          const SizedBox(height: 16),
-          _PlaylistsSection(
-            key: ValueKey('mine-playlists-$_dataGeneration'),
-            load: _playlists,
-            onOpen: widget.onOpenPlaylist,
-            onOpenAll: () => showMyPlaylistsPage(
-              context,
-              load: _playlists,
-              onOpen: widget.onOpenPlaylist,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _PodcastsSection(
-            key: ValueKey('mine-podcasts-$_dataGeneration'),
-            load: _podcasts,
-            onOpen: widget.onOpenPodcast,
-            onOpenAll: () => showMyPodcastsPage(
-              context,
-              load: _podcasts,
-              onOpen: widget.onOpenPodcast,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _AlbumsSection(
-            key: ValueKey('mine-albums-$_dataGeneration'),
-            load: _albums,
-            onOpen: widget.onOpenAlbum,
-            onOpenAll: () => showMyAlbumsPage(
-              context,
-              load: _albums,
-              onOpen: widget.onOpenAlbum,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _RecentSection(
-            key: ValueKey('mine-recent-$_dataGeneration'),
-            load: _loadRecent,
-            onOpenAll: widget.onOpenRecent,
-            onPlay: widget.onPlaySongs,
-          ),
-          const SizedBox(height: 16),
-          _RankingSection(
-            key: ValueKey('mine-ranking-$_dataGeneration'),
-            load: widget.loadRanking,
-            onPlay: widget.onPlaySongs,
-            onOpenAll: () => showPlayRanking(
-              context,
-              onPlaySongs: widget.onPlaySongs,
-              load: widget.loadRanking,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -287,9 +303,7 @@ class _SectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
+              style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -308,7 +322,8 @@ class _AsyncSection<T> extends StatefulWidget {
   });
 
   final Future<T> Function() load;
-  final Widget Function(BuildContext context, T data, VoidCallback reload) builder;
+  final Widget Function(BuildContext context, T data, VoidCallback reload)
+  builder;
   final String emptyText;
 
   @override
@@ -480,7 +495,10 @@ class _LikedSection extends StatelessWidget {
           load: load,
           emptyText: '还没有喜欢的歌曲',
           builder: (context, songs, reload) {
-            final playable = [for (final s in songs) if (s.playable) s];
+            final playable = [
+              for (final s in songs)
+                if (s.playable) s,
+            ];
             final preview = songs.take(8).toList();
             return Card(
               margin: EdgeInsets.zero,
@@ -492,7 +510,12 @@ class _LikedSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      leading: CoverArt(url: preview[i].coverUrl, size: 40, radius: 4),
+                      contentPadding: kSongRowPadding,
+                      leading: CoverArt(
+                        url: preview[i].coverUrl,
+                        size: 40,
+                        radius: 4,
+                      ),
                       title: Text(
                         preview[i].name,
                         maxLines: 1,
@@ -506,9 +529,12 @@ class _LikedSection extends StatelessWidget {
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (songs.length > preview.length && i == preview.length - 1)
-                            Text('共 ${songs.length} 首',
-                                style: Theme.of(context).textTheme.labelSmall),
+                          if (songs.length > preview.length &&
+                              i == preview.length - 1)
+                            Text(
+                              '共 ${songs.length} 首',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
                           SongOverflowButton(
                             song: preview[i],
                             size: 20,
@@ -518,8 +544,9 @@ class _LikedSection extends StatelessWidget {
                       ),
                       onTap: preview[i].playable
                           ? () {
-                              final index =
-                                  playable.indexWhere((s) => s.id == preview[i].id);
+                              final index = playable.indexWhere(
+                                (s) => s.id == preview[i].id,
+                              );
                               onPlay(playable, index < 0 ? 0 : index);
                             }
                           : null,
@@ -572,7 +599,7 @@ class _PlaylistsSection extends StatelessWidget {
                 final pl = lists[i];
                 return SizedBox(
                   width: 118,
-                  child: _CoverCard(
+                  child: CoverCard(
                     coverUrl: pl.coverUrl,
                     title: pl.special ? '我喜欢的音乐' : pl.name,
                     subtitle: '${pl.trackCount} 首',
@@ -624,7 +651,7 @@ class _PodcastsSection extends StatelessWidget {
                 final r = radios[i];
                 return SizedBox(
                   width: 118,
-                  child: _CoverCard(
+                  child: CoverCard(
                     coverUrl: r.coverUrl,
                     title: r.name,
                     subtitle: [
@@ -639,47 +666,6 @@ class _PodcastsSection extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _CoverCard extends StatelessWidget {
-  const _CoverCard({
-    required this.coverUrl,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String? coverUrl;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CoverArt(url: coverUrl, size: 118, radius: 8),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
     );
   }
 }
@@ -722,7 +708,7 @@ class _AlbumsSection extends StatelessWidget {
                 final a = albums[i];
                 return SizedBox(
                   width: 118,
-                  child: _CoverCard(
+                  child: CoverCard(
                     coverUrl: a.coverUrl,
                     title: a.name,
                     subtitle: [
@@ -811,7 +797,12 @@ class _RecentSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      leading: CoverArt(url: preview[i].coverUrl, size: 40, radius: 4),
+                      contentPadding: kSongRowPadding,
+                      leading: CoverArt(
+                        url: preview[i].coverUrl,
+                        size: 40,
+                        radius: 4,
+                      ),
                       title: Text(
                         preview[i].name,
                         maxLines: 1,

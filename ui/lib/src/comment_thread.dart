@@ -15,12 +15,18 @@ import 'rust/api.dart' as rust;
 /// - 动态: 传 [threadId](内部走 rust.eventComments)
 /// 点赞/回复统一用 CommentPage.threadId。
 typedef CommentPageLoader = Future<rust.CommentPage> Function(
-    int limit, int offset);
+  int limit,
+  int offset,
+);
 typedef CommentLikeHook = Future<bool> Function(BigInt commentId, bool liked);
 typedef CommentRepliesLoader = Future<rust.CommentPage> Function(
-    BigInt parentId, int limit);
+  BigInt parentId,
+  int limit,
+);
 typedef CommentReplyHook = Future<bool> Function(
-    BigInt commentId, String content);
+  BigInt commentId,
+  String content,
+);
 typedef CommentDeleteHook = Future<bool> Function(BigInt commentId);
 
 /// 发表顶层评论: 完全复用 [CommentReplyHook] 的形态 —— commentId 传
@@ -91,6 +97,7 @@ class CommentThreadState extends State<CommentThread> {
 
   /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
+
   /// 评论/分享/点赞统计(comment_info_list; 动态评论接口不支持, 保持 null)
   rust.CommentStats? _stats;
 
@@ -105,8 +112,10 @@ class CommentThreadState extends State<CommentThread> {
   /// 刚发表成功的评论 id: 高亮一下就褪(用户找不到自己的评论会以为没发出去)
   BigInt? _highlightId;
   Timer? _highlightTimer;
+
   /// 每个列表项的 key: 发表后要把它滚进视野(ensureVisible 需要 context)
   final Map<BigInt, GlobalKey> _tileKeys = <BigInt, GlobalKey>{};
+
   /// 乐观项(id == 0)没有服务端 id, 单独给一个 key
   final GlobalKey _draftKey = GlobalKey();
 
@@ -129,6 +138,9 @@ class CommentThreadState extends State<CommentThread> {
   /// 整页重载时自增, 旧 gen 的在途预览响应直接作废
   int _previewGen = 0;
 
+  /// 列表代际: 整页重载 ++, 丢弃仍在飞行的旧 _loadMore 结果
+  int _listGen = 0;
+
   /// 用户刚回复过的楼层: 预览兜底带上 timeMs 最新的一条(通常就是刚发的回复,
   /// 避免"发了看不见"; 按赞排序时新回复是 0 赞会被挤掉)
   final Set<BigInt> _justReplied = <BigInt>{};
@@ -138,7 +150,11 @@ class CommentThreadState extends State<CommentThread> {
       (limit, offset) {
         final tid = widget.threadId;
         if (tid != null) {
-          return rust.eventComments(threadId: tid, limit: limit, offset: offset);
+          return rust.eventComments(
+            threadId: tid,
+            limit: limit,
+            offset: offset,
+          );
         }
         return rust.comments(
           kind: widget.kind!,
@@ -150,48 +166,42 @@ class CommentThreadState extends State<CommentThread> {
 
   CommentPageLoader get _loadHotPage =>
       widget.loadHot ??
-      (limit, offset) => rust.hotComments(
-            threadId: _threadId,
-            limit: limit,
-            offset: offset,
-          );
+      (limit, offset) =>
+          rust.hotComments(threadId: _threadId, limit: limit, offset: offset);
 
   /// 当前页签对应的加载器: 全部走默认页, 热门走 comment_hot
-  CommentPageLoader get _fetchPage =>
-      _hot ? _loadHotPage : _loadPage;
+  CommentPageLoader get _fetchPage => _hot ? _loadHotPage : _loadPage;
 
   CommentLikeHook get _like =>
       widget.like ??
       (commentId, liked) => rust.likeComment(
-            threadId: _threadId,
-            commentId: commentId,
-            liked: liked,
-          );
+        threadId: _threadId,
+        commentId: commentId,
+        liked: liked,
+      );
 
   CommentRepliesLoader get _loadReplies =>
       widget.loadReplies ??
       (parentId, limit) => rust.commentReplies(
-            threadId: _threadId,
-            parentCommentId: parentId,
-            limit: limit,
-          );
+        threadId: _threadId,
+        parentCommentId: parentId,
+        limit: limit,
+      );
 
   CommentReplyHook get _reply =>
       widget.reply ??
       (commentId, content) => rust.replyComment(
-            threadId: _threadId,
-            commentId: commentId,
-            content: content,
-          );
+        threadId: _threadId,
+        commentId: commentId,
+        content: content,
+      );
 
   CommentSendHook get _send => widget.send ?? _reply;
 
   CommentDeleteHook get _delete =>
       widget.delete ??
-      (commentId) => rust.deleteComment(
-            threadId: _threadId,
-            commentId: commentId,
-          );
+      (commentId) =>
+          rust.deleteComment(threadId: _threadId, commentId: commentId);
 
   @override
   void initState() {
@@ -215,6 +225,7 @@ class CommentThreadState extends State<CommentThread> {
 
   /// [silent] = 发表后回填用: 不显示整页 loading(列表不闪), 失败也不把列表打成错误页
   Future<void> _reload({bool silent = false}) async {
+    final gen = ++_listGen;
     setState(() {
       if (!silent) _loading = true;
       _error = null;
@@ -227,7 +238,7 @@ class CommentThreadState extends State<CommentThread> {
     });
     try {
       final page = await retryNetwork(() => _fetchPage(widget.pageSize, 0));
-      if (!mounted) return;
+      if (!mounted || gen != _listGen) return;
       setState(() {
         _items
           ..clear()
@@ -244,7 +255,7 @@ class CommentThreadState extends State<CommentThread> {
       _loadStats();
       _schedulePreviews();
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _listGen) return;
       // 静默重载失败: 保留现状(乐观项还在), 不要把整页打成错误
       if (silent) return;
       setState(() {
@@ -274,6 +285,7 @@ class CommentThreadState extends State<CommentThread> {
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
+    final gen = _listGen;
     setState(() {
       _loadingMore = true;
       _moreError = null;
@@ -282,7 +294,7 @@ class CommentThreadState extends State<CommentThread> {
       final page = await retryNetwork(
         () => _fetchPage(widget.pageSize, _nextOffset),
       );
-      if (!mounted) return;
+      if (!mounted || gen != _listGen) return;
       setState(() {
         // 兜底去重: 同一页里热评可能再次出现
         final seen = _items.map((c) => c.id).toSet();
@@ -294,7 +306,7 @@ class CommentThreadState extends State<CommentThread> {
       });
       _schedulePreviews();
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _listGen) return;
       setState(() {
         _loadingMore = false;
         _moreError = friendlyError(e);
@@ -625,8 +637,9 @@ class CommentThreadState extends State<CommentThread> {
     // 不做这一步, 用户看到的就是一条假头像的"我", 得退出重进才正常。
     await _reload(silent: true);
     if (!mounted) return;
-    final posted = _items.where((c) =>
-        c.id != BigInt.zero && c.userId == _myUid && c.content == content);
+    final posted = _items.where(
+      (c) => c.id != BigInt.zero && c.userId == _myUid && c.content == content,
+    );
     if (posted.isNotEmpty) {
       // 同文案的旧评论可能有多条, 取最新发的那条
       final newest = posted.reduce((a, b) => a.timeMs >= b.timeMs ? a : b);
@@ -727,16 +740,18 @@ class CommentThreadState extends State<CommentThread> {
             children: [
               Text(
                 widget.title,
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               // 有统计条时不再重复显示裸评论数(统计条里已是紧凑格式)
               if (count > BigInt.zero && _stats == null) ...[
                 const SizedBox(width: 6),
                 Text(
                   '$count',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ],
@@ -804,10 +819,8 @@ class CommentThreadState extends State<CommentThread> {
                 // 乐观项(id == 0)没有服务端 id, 共用一个 key; 其余按 id 缓存
                 key: _items[i].id == BigInt.zero
                     ? _draftKey
-                    : _tileKeys.putIfAbsent(
-                        _items[i].id, () => GlobalKey()),
-                highlight: _highlightId != null &&
-                    _highlightId == _items[i].id,
+                    : _tileKeys.putIfAbsent(_items[i].id, () => GlobalKey()),
+                highlight: _highlightId != null && _highlightId == _items[i].id,
                 comment: _items[i],
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
@@ -815,7 +828,8 @@ class CommentThreadState extends State<CommentThread> {
                 onExpandReplies: () => _openReplies(_items[i]),
                 onReply: () => _openReplies(_items[i], focusComposer: true),
                 // 刚发表的乐观项(id == 0)还没有服务端 id, 不给删除入口
-                onDelete: _myUid != BigInt.zero &&
+                onDelete:
+                    _myUid != BigInt.zero &&
                         _items[i].userId == _myUid &&
                         _items[i].id != BigInt.zero
                     ? () => _deleteComment(i)
@@ -928,8 +942,9 @@ class _CommentTile extends StatelessWidget {
                         comment.userName.isEmpty ? '匿名用户' : comment.userName,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium
-                            ?.copyWith(color: scheme.primary),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.primary,
+                        ),
                       ),
                     ),
                     // 楼层里的回复: 不显示"回复 @某人"就跟独立评论长得一样
@@ -940,8 +955,9 @@ class _CommentTile extends StatelessWidget {
                           '回复 @${comment.repliedTo}',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],
@@ -969,16 +985,18 @@ class _CommentTile extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         timeText,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.outline),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.outline,
+                        ),
                       ),
                     ],
                     if (comment.ipLocation.isNotEmpty) ...[
                       const SizedBox(width: 6),
                       Text(
                         comment.ipLocation,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.outline),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.outline,
+                        ),
                       ),
                     ],
                   ],
@@ -993,7 +1011,10 @@ class _CommentTile extends StatelessWidget {
                     padding: const EdgeInsets.only(left: 8),
                     decoration: BoxDecoration(
                       border: Border(
-                        left: BorderSide(color: scheme.outlineVariant, width: 2),
+                        left: BorderSide(
+                          color: scheme.outlineVariant,
+                          width: 2,
+                        ),
                       ),
                     ),
                     child: Column(
@@ -1023,7 +1044,9 @@ class _CommentTile extends StatelessWidget {
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.bodySmall
-                                          ?.copyWith(color: scheme.onSurfaceVariant),
+                                          ?.copyWith(
+                                            color: scheme.onSurfaceVariant,
+                                          ),
                                     ),
                                   ),
                                 ],
@@ -1044,8 +1067,9 @@ class _CommentTile extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 2),
                       child: Text(
                         '展开全部 $_replyTotal 条回复',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: scheme.primary),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                        ),
                       ),
                     ),
                   ),
@@ -1075,8 +1099,9 @@ class _CommentTile extends StatelessWidget {
                               const SizedBox(width: 3),
                               Text(
                                 '${comment.likedCount}',
-                                style: theme.textTheme.labelSmall
-                                    ?.copyWith(color: scheme.outline),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline,
+                                ),
                               ),
                             ],
                           ],
@@ -1096,13 +1121,17 @@ class _CommentTile extends StatelessWidget {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.mode_comment_outlined,
-                                size: 14, color: scheme.outline),
+                            Icon(
+                              Icons.mode_comment_outlined,
+                              size: 14,
+                              color: scheme.outline,
+                            ),
                             const SizedBox(width: 3),
                             Text(
                               '回复',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: scheme.outline),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.outline,
+                              ),
                             ),
                           ],
                         ),
@@ -1120,13 +1149,17 @@ class _CommentTile extends StatelessWidget {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.delete_outline,
-                                  size: 14, color: scheme.outline),
+                              Icon(
+                                Icons.delete_outline,
+                                size: 14,
+                                color: scheme.outline,
+                              ),
                               const SizedBox(width: 3),
                               Text(
                                 '删除',
-                                style: theme.textTheme.labelSmall
-                                    ?.copyWith(color: scheme.outline),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline,
+                                ),
                               ),
                             ],
                           ),
@@ -1185,7 +1218,9 @@ class _RepliesSheetState extends State<_RepliesSheet> {
 
   Future<void> _load() async {
     try {
-      final page = await retryNetwork(() => widget.load(widget.parent.id, _limit));
+      final page = await retryNetwork(
+        () => widget.load(widget.parent.id, _limit),
+      );
       if (!mounted) return;
       setState(() => _replies = page.comments);
     } catch (e) {
@@ -1233,50 +1268,53 @@ class _RepliesSheetState extends State<_RepliesSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: SheetHeader(
                 title: '回复',
-                subtitle:
-                    '${widget.parent.userName}: ${widget.parent.content}',
+                subtitle: '${widget.parent.userName}: ${widget.parent.content}',
               ),
             ),
             const Divider(height: 1),
             Expanded(
               child: replies == null
                   ? (_error == null
-                      ? const Center(child: CircularProgressIndicator())
-                      : Center(
-                          child: Text(
-                            _error!,
-                            style: TextStyle(color: scheme.error, fontSize: 12),
-                          ),
-                        ))
+                        ? const Center(child: CircularProgressIndicator())
+                        : Center(
+                            child: Text(
+                              _error!,
+                              style: TextStyle(
+                                color: scheme.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ))
                   : replies.isEmpty
-                      ? Center(
-                          child: Text('还没有回复', style: theme.textTheme.bodySmall),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: replies.length,
-                          itemBuilder: (context, i) {
-                            final r = replies[i];
-                            return ListTile(
-                              dense: true,
-                              leading: CircleCover(
-                                url: r.avatarUrl,
-                                size: 28,
-                                icon: Icons.person_outline,
-                              ),
-                              title: Text(
-                                r.userName.isEmpty ? '匿名用户' : r.userName,
-                                style: theme.textTheme.labelMedium
-                                    ?.copyWith(color: scheme.primary),
-                              ),
-                              subtitle: Text(
-                                (r.repliedTo ?? '').isEmpty
-                                    ? r.content
-                                    : '回复 @${r.repliedTo}：${r.content}',
-                              ),
-                            );
-                          },
-                        ),
+                  ? Center(
+                      child: Text('还没有回复', style: theme.textTheme.bodySmall),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: replies.length,
+                      itemBuilder: (context, i) {
+                        final r = replies[i];
+                        return ListTile(
+                          dense: true,
+                          leading: CircleCover(
+                            url: r.avatarUrl,
+                            size: 28,
+                            icon: Icons.person_outline,
+                          ),
+                          title: Text(
+                            r.userName.isEmpty ? '匿名用户' : r.userName,
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: scheme.primary,
+                            ),
+                          ),
+                          subtitle: Text(
+                            (r.repliedTo ?? '').isEmpty
+                                ? r.content
+                                : '回复 @${r.repliedTo}：${r.content}',
+                          ),
+                        );
+                      },
+                    ),
             ),
             SafeArea(
               top: false,
@@ -1342,19 +1380,25 @@ class _ComposerBar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.edit_outlined,
-                    size: 18, color: scheme.onSurfaceVariant),
+                Icon(
+                  Icons.edit_outlined,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     enabled ? '写评论…' : '评论暂时不可用',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
-                Icon(Icons.send,
-                    size: 18,
-                    color: enabled ? scheme.primary : scheme.outline),
+                Icon(
+                  Icons.send,
+                  size: 18,
+                  color: enabled ? scheme.primary : scheme.outline,
+                ),
               ],
             ),
           ),
@@ -1421,7 +1465,9 @@ class _ComposeSheetState extends State<_ComposeSheet> {
     final scheme = theme.colorScheme;
     return Padding(
       // 键盘避让(弹层内打开同样生效)
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
@@ -1458,8 +1504,9 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed:
-                        _sending ? null : () => Navigator.of(context).pop(),
+                    onPressed: _sending
+                        ? null
+                        : () => Navigator.of(context).pop(),
                     child: const Text('取消'),
                   ),
                   const SizedBox(width: 8),

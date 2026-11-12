@@ -19,10 +19,17 @@ String releaseJson({
   String? name = 'MiniNCM 9.9.9',
   String? body = '修复若干问题',
   List<Map<String, String>> assets = const [
-    {'name': 'MiniNCM-0.3.0-android-arm64.apk', 'browser_download_url': 'https://example.com/apk'},
-    {'name': 'MiniNCM-0.3.0-linux-x64.tar.gz', 'browser_download_url': 'https://example.com/tgz'},
+    {
+      'name': 'MiniNCM-0.3.0-android-arm64.apk',
+      'browser_download_url': 'https://example.com/apk',
+    },
+    {
+      'name': 'MiniNCM-0.3.0-linux-x64.tar.gz',
+      'browser_download_url': 'https://example.com/tgz',
+    },
   ],
-  String htmlUrl = 'https://github.com/xiaquwan1001/netease-mini-player/releases/tag/v9.9.9',
+  String htmlUrl =
+      'https://github.com/xiaquwan1001/netease-mini-player/releases/tag/v9.9.9',
 }) {
   return jsonEncode({
     'tag_name': tag,
@@ -105,9 +112,12 @@ class FakeHttpClientResponse extends Stream<List<int>>
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      Stream<List<int>>.value(utf8.encode(body)).listen(onData,
-          onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+  }) => Stream<List<int>>.value(utf8.encode(body)).listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -157,46 +167,60 @@ void main() {
 
   group('parseReleaseResponse / 资产选择', () {
     test('android 资产: 选中 -android-*.apk', () {
-      final info = parseReleaseResponse(releaseJson(),
-          currentVersion: '0.2.1', preferAndroid: true);
+      final info = parseReleaseResponse(
+        releaseJson(),
+        currentVersion: '0.2.1',
+        preferAndroid: true,
+      );
       expect(info, isNotNull);
       expect(info!.isNewer, isTrue);
       expect(info.downloadUrl, 'https://example.com/apk');
     });
 
     test('linux 资产: 选中 -linux-*.tar.gz', () {
-      final info = parseReleaseResponse(releaseJson(),
-          currentVersion: '0.2.1', preferAndroid: false);
+      final info = parseReleaseResponse(
+        releaseJson(),
+        currentVersion: '0.2.1',
+        preferAndroid: false,
+      );
       expect(info!.downloadUrl, 'https://example.com/tgz');
     });
 
     test('无匹配资产时 downloadUrl 回退 html_url', () {
       final info = parseReleaseResponse(
-          releaseJson(assets: const [
+        releaseJson(
+          assets: const [
             {
               'name': 'MiniNCM-0.3.0-win-x64.zip',
               'browser_download_url': 'https://example.com/zip',
-            }
-          ]),
-          currentVersion: '0.2.1',
-          preferAndroid: true);
+            },
+          ],
+        ),
+        currentVersion: '0.2.1',
+        preferAndroid: true,
+      );
       expect(
-          info!.downloadUrl,
-          'https://github.com/xiaquwan1001/netease-mini-player'
-          '/releases/tag/v9.9.9');
+        info!.downloadUrl,
+        'https://github.com/xiaquwan1001/netease-mini-player'
+        '/releases/tag/v9.9.9',
+      );
     });
 
     test('旧版本/同版本 isNewer 为 false', () {
       expect(
-          parseReleaseResponse(releaseJson(tag: 'v0.2.1'),
-                  currentVersion: '0.2.1')!
-              .isNewer,
-          isFalse);
+        parseReleaseResponse(
+          releaseJson(tag: 'v0.2.1'),
+          currentVersion: '0.2.1',
+        )!.isNewer,
+        isFalse,
+      );
       expect(
-          parseReleaseResponse(releaseJson(tag: 'v0.2.0'),
-                  currentVersion: '0.2.1')!
-              .isNewer,
-          isFalse);
+        parseReleaseResponse(
+          releaseJson(tag: 'v0.2.0'),
+          currentVersion: '0.2.1',
+        )!.isNewer,
+        isFalse,
+      );
     });
   });
 
@@ -213,8 +237,11 @@ void main() {
       Future<({int statusCode, String body})> slow(Uri _) async {
         throw TimeoutException('timed out');
       }
-      final info =
-          await checkForUpdate(currentVersion: kAppVersion, fetch: slow);
+
+      final info = await checkForUpdate(
+        currentVersion: kAppVersion,
+        fetch: slow,
+      );
       expect(info, isNull);
     });
 
@@ -230,8 +257,11 @@ void main() {
       Future<({int statusCode, String body})> fail(Uri _) async {
         throw const SocketException('Network is unreachable');
       }
-      final info =
-          await checkForUpdate(currentVersion: kAppVersion, fetch: fail);
+
+      final info = await checkForUpdate(
+        currentVersion: kAppVersion,
+        fetch: fail,
+      );
       expect(info, isNull);
     });
 
@@ -264,29 +294,44 @@ void main() {
       var calls = 0;
       UpdateCheckHost.check = (v) async {
         calls++;
-        return parseReleaseResponse(releaseJson(),
-            currentVersion: v, preferAndroid: false);
+        return parseReleaseResponse(
+          releaseJson(),
+          currentVersion: v,
+          preferAndroid: false,
+        );
       };
       final settings = AppSettings.instance;
-      settings.updateCheckOnStartup = true;
+      settings.updateCheckInterval = UpdateCheckInterval.daily;
       settings.lastUpdateCheckMs = null;
       settings.skippedUpdateVersion = null;
       var now = 1000000;
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(calls, 1);
       expect(settings.lastUpdateCheckMs, 1000000);
       expect(UpdateCheckHost.pendingUpdate.value, isNotNull);
+      // 启动检查要自动弹窗(设置页手动检查不写 pendingPrompt)
+      expect(UpdateCheckHost.pendingPrompt.value, isNotNull);
 
       UpdateCheckHost.pendingUpdate.value = null;
+      UpdateCheckHost.pendingPrompt.value = null;
       now += const Duration(hours: 23).inMilliseconds;
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(calls, 1, reason: '24h 内不重复请求');
 
       now += const Duration(hours: 2).inMilliseconds;
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(calls, 2, reason: '超过 24h 后重新检查');
     });
 
@@ -294,61 +339,104 @@ void main() {
       var calls = 0;
       UpdateCheckHost.check = (v) async {
         calls++;
-        return parseReleaseResponse(releaseJson(),
-            currentVersion: v, preferAndroid: false);
+        return parseReleaseResponse(
+          releaseJson(),
+          currentVersion: v,
+          preferAndroid: false,
+        );
       };
       final settings = AppSettings.instance;
       settings.lastUpdateCheckMs = null;
-      settings.updateCheckOnStartup = false;
+      settings.updateCheckInterval = UpdateCheckInterval.off;
       var now = 2000000;
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(calls, 0, reason: '关闭开关就不后台检查');
 
-      settings.updateCheckOnStartup = true;
+      settings.updateCheckInterval = UpdateCheckInterval.daily;
       settings.skippedUpdateVersion = 'v9.9.9';
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(calls, 1);
-      expect(UpdateCheckHost.pendingUpdate.value, isNull,
-          reason: '用户点「稍后」跳过的版本不再提示');
+      expect(
+        UpdateCheckHost.pendingUpdate.value,
+        isNull,
+        reason: '用户点「稍后」跳过的版本不再提示',
+      );
 
       // 换一个新版本则照常点亮(重置节流时间)
       settings.skippedUpdateVersion = null;
       settings.lastUpdateCheckMs = null;
       UpdateCheckHost.pendingUpdate.value = null;
-      await runStartupUpdateCheck(settings,
-          startupDelay: Duration.zero, now: () => now);
+      await runStartupUpdateCheck(
+        settings,
+        startupDelay: Duration.zero,
+        now: () => now,
+      );
       expect(UpdateCheckHost.pendingUpdate.value, isNotNull);
     });
 
+    test('周期: off 永不检查, 每周/每月按各自周期', () {
+      final s = AppSettings.instance;
+      int ms(int days) => Duration(days: days).inMilliseconds;
+      s.lastUpdateCheckMs = 0;
+      s.updateCheckInterval = UpdateCheckInterval.off;
+      expect(shouldStartupCheck(settings: s, nowMs: ms(365)), isFalse);
+      s.updateCheckInterval = UpdateCheckInterval.weekly;
+      expect(shouldStartupCheck(settings: s, nowMs: ms(7) - 1), isFalse);
+      expect(shouldStartupCheck(settings: s, nowMs: ms(7)), isTrue);
+      s.updateCheckInterval = UpdateCheckInterval.monthly;
+      expect(shouldStartupCheck(settings: s, nowMs: ms(29)), isFalse);
+      expect(shouldStartupCheck(settings: s, nowMs: ms(30)), isTrue);
+      s.updateCheckInterval = UpdateCheckInterval.daily;
+      s.lastUpdateCheckMs = null;
+    });
+
     test('shouldStartupCheck 纯函数边界: 恰好 24h', () {
-      final s = AppSettings.instance..updateCheckOnStartup = true;
+      final s = AppSettings.instance
+        ..updateCheckInterval = UpdateCheckInterval.daily;
       s.lastUpdateCheckMs = 0;
       expect(
-          shouldStartupCheck(
-              settings: s, nowMs: const Duration(hours: 24).inMilliseconds),
-          isTrue);
+        shouldStartupCheck(
+          settings: s,
+          nowMs: const Duration(hours: 24).inMilliseconds,
+        ),
+        isTrue,
+      );
       expect(
-          shouldStartupCheck(
-              settings: s, nowMs: const Duration(hours: 24).inMilliseconds - 1),
-          isFalse);
+        shouldStartupCheck(
+          settings: s,
+          nowMs: const Duration(hours: 24).inMilliseconds - 1,
+        ),
+        isFalse,
+      );
     });
   });
 
   group('设置页「检查更新」项 UI(假 host, 不联网)', () {
-    Future<void> pumpSettings(WidgetTester tester,
-        {Size size = const Size(1000, 2800), TextScaler? scaler}) async {
+    Future<void> pumpSettings(
+      WidgetTester tester, {
+      Size size = const Size(1000, 2800),
+      TextScaler? scaler,
+    }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      await tester.pumpWidget(MaterialApp(
-        home: MediaQuery(
-          data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
-          child: const Scaffold(body: SettingsView(info: null)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+            child: const Scaffold(body: SettingsView(info: null)),
+          ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
     }
 
@@ -361,23 +449,25 @@ void main() {
         isNewer: true,
         downloadUrl: 'https://example.com/tgz',
       );
-      await pumpSettings(tester,
-          size: const Size(300, 2800), scaler: const TextScaler.linear(1.25));
+      await pumpSettings(
+        tester,
+        size: const Size(300, 2800),
+        scaler: const TextScaler.linear(1.25),
+      );
       expect(tester.takeException(), isNull);
       expect(find.text('检查更新'), findsOneWidget);
       expect(find.text('发现新版本 v0.3.0'), findsOneWidget);
     });
 
-    testWidgets('有新版本: 点击弹窗含版本号与下载按钮, 点下载走 openUrl',
-        (tester) async {
+    testWidgets('有新版本: 点击弹窗含版本号与下载按钮, 点下载走 openUrl', (tester) async {
       final opened = stubOpenUrl();
       UpdateCheckHost.check = (v) async => UpdateInfo(
-            latest: 'v0.3.0',
-            current: v,
-            isNewer: true,
-            notes: '新版本说明',
-            downloadUrl: 'https://example.com/tgz',
-          );
+        latest: 'v0.3.0',
+        current: v,
+        isNewer: true,
+        notes: '新版本说明',
+        downloadUrl: 'https://example.com/tgz',
+      );
       await pumpSettings(tester);
       expect(find.text('检查更新'), findsOneWidget);
       // 初始无红点(先点亮 pendingUpdate 才有角标)
@@ -397,8 +487,8 @@ void main() {
 
     testWidgets('无新版本: toast「已是最新版本」, 不弹窗', (tester) async {
       stubOpenUrl();
-      UpdateCheckHost.check =
-          (v) async => UpdateInfo(latest: v, current: v, isNewer: false);
+      UpdateCheckHost.check = (v) async =>
+          UpdateInfo(latest: v, current: v, isNewer: false);
       await pumpSettings(tester);
       await tester.tap(find.text('检查更新'));
       await tester.pump();
@@ -417,8 +507,7 @@ void main() {
         downloadUrl: 'https://example.com/tgz',
       );
       await pumpSettings(tester);
-      expect(find.text('发现新版本 v0.3.0'), findsOneWidget,
-          reason: '红点项副标题展示新版本号');
+      expect(find.text('发现新版本 v0.3.0'), findsOneWidget, reason: '红点项副标题展示新版本号');
     });
 
     testWidgets('检查失败: 错误 toast, 不弹窗', (tester) async {
@@ -436,12 +525,12 @@ void main() {
       stubOpenUrl();
       final settings = AppSettings.instance..skippedUpdateVersion = null;
       UpdateCheckHost.check = (v) async => UpdateInfo(
-            latest: 'v0.4.0',
-            current: v,
-            isNewer: true,
-            notes: 'n',
-            downloadUrl: 'https://example.com/tgz',
-          );
+        latest: 'v0.4.0',
+        current: v,
+        isNewer: true,
+        notes: 'n',
+        downloadUrl: 'https://example.com/tgz',
+      );
       await pumpSettings(tester);
       await tester.tap(find.text('检查更新'));
       await tester.pumpAndSettle();
@@ -450,18 +539,28 @@ void main() {
       expect(settings.skippedUpdateVersion, 'v0.4.0');
     });
 
-    testWidgets('启动时检查更新开关存在且可切换', (tester) async {
+    testWidgets('自动检查更新: 默认每天, 可通过列表改为每周/不自动', (tester) async {
       stubOpenUrl();
-      final settings = AppSettings.instance..updateCheckOnStartup = true;
+      final settings = AppSettings.instance
+        ..updateCheckInterval = UpdateCheckInterval.daily;
       await pumpSettings(tester);
-      final tile = find.widgetWithText(SwitchListTile, '启动时检查更新');
+      final tile = find.widgetWithText(ListTile, '自动检查更新');
       expect(tile, findsOneWidget);
-      final sw = tester.widget<SwitchListTile>(tile);
-      expect(sw.value, isTrue);
+      expect(find.textContaining('每天'), findsOneWidget);
+
       await tester.tap(tile);
       await tester.pumpAndSettle();
-      expect(settings.updateCheckOnStartup, isFalse);
-      settings.updateCheckOnStartup = true;
+      expect(find.text('每周'), findsOneWidget);
+      await tester.tap(find.text('每周'));
+      await tester.pumpAndSettle();
+      expect(settings.updateCheckInterval, UpdateCheckInterval.weekly);
+
+      await tester.tap(find.widgetWithText(ListTile, '自动检查更新'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('不自动检查'));
+      await tester.pumpAndSettle();
+      expect(settings.updateCheckInterval, UpdateCheckInterval.off);
+      settings.updateCheckInterval = UpdateCheckInterval.daily;
     });
   });
 }

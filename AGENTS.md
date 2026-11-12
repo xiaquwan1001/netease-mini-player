@@ -44,7 +44,7 @@
 
 - 改 Rust API 固定三步：`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust` → `cargo build -p ncm_ffi` → `flutter test`；漏第二步报 `Content hash on Dart side ... different from Rust side`。codegen 需 rustfmt。
 - 静态检查门固定 `cd ui && dart analyze`（`flutter analyze` 本机会偶发 SIGSEGV，别重试或重装 Flutter）。
-- `tools/ci.sh` 默认清代理；手工跑 `cargo test` 前必须 unset 全部代理变量。vendor 匿名 smoke 偶发风控失败不算回归，严格核验用 `NCM_VENDOR_SMOKE_STRICT=1`。
+- 代理/镜像：`tools/env.sh|ci.sh` 都不碰代理变量（2026-11-12 复核）；手工跑 vendor 联网测试前 unset 全部代理变量（原因与判据见 `.pi/memory/FAILURES.md`「手工跑 cargo test」条）。vendor 匿名 smoke 偶发风控失败不算回归，严格核验用 `NCM_VENDOR_SMOKE_STRICT=1`。
 - cargokit 用 Rust package 名当产物名 ⇒ package 名必须是 `ncm_ffi`（下划线），不能带 `-`。
 - 设备验证统一用模拟器 **a34**（`~/bin/avd headless a34`），别用 `-gpu host`。
 - 细节**不放这里**：构建/工具链/CI/体积基线见 `.pi/memory/notes-build.md`；登录、取链、歌词、评论的协议语义见 `.pi/memory/notes-api.md`；失败教训见 `.pi/memory/FAILURES.md`。

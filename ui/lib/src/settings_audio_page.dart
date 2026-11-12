@@ -88,11 +88,11 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: Text('逐字歌词来源', style: theme.textTheme.titleMedium),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
           child: SegmentedButton<String>(
             key: const Key('lyricSourcePrefSegmented'),
             segments: [
@@ -105,7 +105,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: Text(
             AppSettings.lyricSourceDescription(settings.lyricSourcePreference),
             style: theme.textTheme.bodySmall,
@@ -123,7 +123,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -142,7 +142,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           onChanged: (v) => settings.update(volumeGainDb: v),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: Text(
             '与系统音量相乘, 不影响系统音量本身。',
             style: Theme.of(context).textTheme.bodySmall,
@@ -299,7 +299,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(

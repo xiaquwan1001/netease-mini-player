@@ -12,6 +12,7 @@ import 'settings_diagnostics_page.dart';
 import 'theme.dart' show AccentPalette;
 import 'toast.dart';
 import 'update_checker.dart';
+import 'update_dialog.dart';
 
 /// 设置页(审查 P1-7.9 瘦身后): 只剩「App 怎么表现」的偏好开关 + 分组入口。
 ///
@@ -33,219 +34,226 @@ class SettingsView extends StatelessWidget {
     final settings = AppSettings.instance;
     return AnimatedBuilder(
       animation: settings,
-      builder: (context, _) => ListView(
-        padding: EdgeInsets.fromLTRB(
-          12,
-          8,
-          12,
-          24 + MediaQuery.viewPaddingOf(context).bottom,
+      // 页面本身已有 12dp 横向留白; ListTile 默认再吃 16dp → 文字距屏 28dp。
+      // 统一收紧到 12(叠后 24), 与列表类内容的基线一致(2026-11 布局审计 #1)。
+      builder: (context, _) => ListTileTheme(
+        data: const ListTileThemeData(
+          contentPadding: EdgeInsets.symmetric(horizontal: 12),
         ),
-        children: [
-          const _SectionTitle('界面'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Column(
-              children: [
-                _SegmentedSettingTile<ThemeMode>(
-                  title: '主题模式',
-                  subtitle: _themeLabel(settings.themeMode),
-                  segments: const [
-                    ButtonSegment(value: ThemeMode.system, label: Text('跟随')),
-                    ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
-                    ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
-                  ],
-                  selected: settings.themeMode,
-                  onSelectionChanged: (value) {
-                    settings.update(themeMode: value);
-                  },
-                ),
-                const Divider(height: 1),
-                // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)
-                _AccentSettingTile(
-                  selected: settings.accent,
-                  onSelected: (value) => settings.update(accent: value),
-                ),
-                const Divider(height: 1),
-                // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
-                // 只在深色/跟随系统时才有意义, 所以浅色态下用文案说明.
-                SwitchListTile(
-                  title: const Text('OLED 纯黑'),
-                  subtitle: Text(
-                    settings.themeMode == ThemeMode.light
-                        ? '当前是浅色主题, 切到深色后生效'
-                        : '深色下用 #000000 取代 #121212(OLED 屏更省电, 无灰边)',
-                  ),
-                  value: settings.oledDark,
-                  onChanged: (value) => settings.update(oledDark: value),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('界面字号'),
-                  subtitle: Text(_scaleLabel(settings.textScale)),
-                  trailing: DropdownButton<double>(
-                    value: settings.textScale,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (final entry in AppSettings.textScales.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
+        child: ListView(
+          padding: EdgeInsets.fromLTRB(
+            12,
+            8,
+            12,
+            24 + MediaQuery.viewPaddingOf(context).bottom,
+          ),
+          children: [
+            const _SectionTitle('界面'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _SegmentedSettingTile<ThemeMode>(
+                    title: '主题模式',
+                    subtitle: _themeLabel(settings.themeMode),
+                    segments: const [
+                      ButtonSegment(value: ThemeMode.system, label: Text('跟随')),
+                      ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
+                      ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
                     ],
-                    onChanged: (value) {
-                      if (value != null) settings.update(textScale: value);
+                    selected: settings.themeMode,
+                    onSelectionChanged: (value) {
+                      settings.update(themeMode: value);
                     },
                   ),
-                ),
-                const Divider(height: 1),
-                _SegmentedSettingTile<int>(
-                  title: '推荐卡片排列',
-                  subtitle: settings.coverRows == 1
-                      ? '一排: 横向滑动, 一屏看得更多'
-                      : '两排: 网格平铺, 少滑动多浏览',
-                  segments: const [
-                    ButtonSegment(value: 1, label: Text('一排')),
-                    ButtonSegment(value: 2, label: Text('两排')),
-                  ],
-                  selected: settings.coverRows,
-                  onSelectionChanged: (value) {
-                    settings.update(coverRows: value);
-                  },
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              leading: const Icon(Icons.graphic_eq),
-              title: const Text('播放与音质'),
-              subtitle: const Text('精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => showAudioSettingsPage(context),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // 「行为」类开关: 搜索/播放原本是两个一级分组, 各只有一个开关时
-          // 不必各占一个分区(审查 §5.3 建议并入「通用」)
-          const _SectionTitle('通用'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('切到搜索时清空上次结果'),
-                  subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
-                  value: settings.clearSearchOnTabSwitch,
-                  onChanged: (value) {
-                    settings.update(clearSearchOnTabSwitch: value);
-                  },
-                ),
-                const Divider(height: 1),
-                SwitchListTile(
-                  title: const Text('显示热搜建议'),
-                  subtitle: const Text('关闭后搜索页不再显示热门搜索榜, 只留搜索历史与猜你想搜'),
-                  value: settings.showHotSearch,
-                  onChanged: (value) {
-                    settings.update(showHotSearch: value);
-                  },
-                ),
-                const Divider(height: 1),
-                SwitchListTile(
-                  title: const Text('启动时检查更新'),
-                  subtitle: const Text('连接 GitHub 检查新版本; 关闭后仍可在「关于」里手动检查'),
-                  value: settings.updateCheckOnStartup,
-                  onChanged: (value) {
-                    settings.update(updateCheckOnStartup: value);
-                  },
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('封面与图片清晰度'),
-                  subtitle: Text(
-                    '${settings.coverQuality.label} · ${settings.coverQuality.hint}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  const Divider(height: 1),
+                  // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)
+                  _AccentSettingTile(
+                    selected: settings.accent,
+                    onSelected: (value) => settings.update(accent: value),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showCoverQualitySheet(context),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  title: const Text('取链音质'),
-                  subtitle: Text(
-                    '${AppSettings.audioLevels[settings.audioLevel] ?? settings.audioLevel}'
-                    ' · 需要会员的音质会自动回落到可用档位',
+                  const Divider(height: 1),
+                  // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
+                  // 只在深色/跟随系统时才有意义, 所以浅色态下用文案说明.
+                  SwitchListTile(
+                    title: const Text('OLED 纯黑'),
+                    subtitle: Text(
+                      settings.themeMode == ThemeMode.light
+                          ? '当前是浅色主题, 切到深色后生效'
+                          : '深色下用 #000000 取代 #121212(OLED 屏更省电, 无灰边)',
+                    ),
+                    value: settings.oledDark,
+                    onChanged: (value) => settings.update(oledDark: value),
                   ),
-                  trailing: DropdownButton<String>(
-                    value: settings.audioLevel,
-                    underline: const SizedBox.shrink(),
-                    items: [
-                      for (final entry in AppSettings.audioLevels.entries)
-                        DropdownMenuItem(
-                          value: entry.key,
-                          child: Text(entry.value),
-                        ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('界面字号'),
+                    subtitle: Text(_scaleLabel(settings.textScale)),
+                    trailing: DropdownButton<double>(
+                      value: settings.textScale,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (final entry in AppSettings.textScales.entries)
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) settings.update(textScale: value);
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  _SegmentedSettingTile<int>(
+                    title: '推荐卡片排列',
+                    subtitle: settings.coverRows == 1
+                        ? '一排: 横向滑动, 一屏看得更多'
+                        : '两排: 网格平铺, 少滑动多浏览',
+                    segments: const [
+                      ButtonSegment(value: 1, label: Text('一排')),
+                      ButtonSegment(value: 2, label: Text('两排')),
                     ],
-                    onChanged: (value) {
-                      if (value != null) settings.update(audioLevel: value);
+                    selected: settings.coverRows,
+                    onSelectionChanged: (value) {
+                      settings.update(coverRows: value);
                     },
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const _SectionTitle('关于'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: Column(
-              children: [
-                const ListTile(
-                  leading: Icon(Icons.info_outline),
-                  title: Text('轻音 MiniNCM'),
-                  subtitle: Text(
-                    'Rust core + Flutter UI · 协议/加解密由 vendor 库负责\n'
-                    '登录凭据与设备指纹只保存在本机数据目录',
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.code),
-                  title: const Text('开源仓库'),
-                  subtitle: const Text(
-                    kGithubUrl,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: const Icon(Icons.open_in_new),
-                  onTap: () => PlatformBridge.openUrl(kGithubUrl),
-                ),
-                const Divider(height: 1),
-                const ListTile(
-                  leading: Icon(Icons.description_outlined),
-                  title: Text('版本与许可'),
-                  subtitle: Text(
-                    'v$kAppVersion · $kLicenseSummary',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const Divider(height: 1),
-                const _CheckUpdateTile(),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.monitor_heart_outlined),
-                  title: const Text('诊断与数据'),
-                  subtitle: const Text('Rust 通道自检 / 设备 ID / 数据目录'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => showDiagnosticsPage(context, info: info),
-                ),
-              ],
+            const SizedBox(height: 16),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: const Icon(Icons.graphic_eq),
+                title: const Text('播放与音质'),
+                subtitle: const Text('精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => showAudioSettingsPage(context),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            // 「行为」类开关: 搜索/播放原本是两个一级分组, 各只有一个开关时
+            // 不必各占一个分区(审查 §5.3 建议并入「通用」)
+            const _SectionTitle('通用'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('切到搜索时清空上次结果'),
+                    subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
+                    value: settings.clearSearchOnTabSwitch,
+                    onChanged: (value) {
+                      settings.update(clearSearchOnTabSwitch: value);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    title: const Text('显示热搜建议'),
+                    subtitle: const Text('关闭后搜索页不再显示热门搜索榜, 只留搜索历史与猜你想搜'),
+                    value: settings.showHotSearch,
+                    onChanged: (value) {
+                      settings.update(showHotSearch: value);
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('自动检查更新'),
+                    subtitle: Text(
+                      '${settings.updateCheckInterval.label} · 发现新版本时弹窗提示',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showUpdateIntervalSheet(context),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('封面与图片清晰度'),
+                    subtitle: Text(
+                      '${settings.coverQuality.label} · ${settings.coverQuality.hint}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showCoverQualitySheet(context),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('取链音质'),
+                    subtitle: Text(
+                      '${AppSettings.audioLevels[settings.audioLevel] ?? settings.audioLevel}'
+                      ' · 需要会员的音质会自动回落到可用档位',
+                    ),
+                    trailing: DropdownButton<String>(
+                      value: settings.audioLevel,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (final entry in AppSettings.audioLevels.entries)
+                          DropdownMenuItem(
+                            value: entry.key,
+                            child: Text(entry.value),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) settings.update(audioLevel: value);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const _SectionTitle('关于'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  const ListTile(
+                    leading: Icon(Icons.info_outline),
+                    title: Text('轻音 MiniNCM'),
+                    subtitle: Text(
+                      'Rust core + Flutter UI · 协议/加解密由 vendor 库负责\n'
+                      '登录凭据与设备指纹只保存在本机数据目录',
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.code),
+                    title: const Text('开源仓库'),
+                    subtitle: const Text(
+                      kGithubUrl,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.open_in_new),
+                    onTap: () => PlatformBridge.openUrl(kGithubUrl),
+                  ),
+                  const Divider(height: 1),
+                  const ListTile(
+                    leading: Icon(Icons.description_outlined),
+                    title: Text('版本与许可'),
+                    subtitle: Text(
+                      'v$kAppVersion · $kLicenseSummary',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  const _CheckUpdateTile(),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.monitor_heart_outlined),
+                    title: const Text('诊断与数据'),
+                    subtitle: const Text('Rust 通道自检 / 设备 ID / 数据目录'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showDiagnosticsPage(context, info: info),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -295,7 +303,7 @@ class _SegmentedSettingTile<T> extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -344,21 +352,25 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
         final newer = pending != null && pending.isNewer;
         return ListTile(
           leading: const Icon(Icons.system_update_outlined),
-          title: Row(children: [
-            const Text('检查更新'),
-            if (newer) ...[
-              const SizedBox(width: 8),
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.error,
-                  shape: BoxShape.circle,
+          title: Row(
+            children: [
+              const Text('检查更新'),
+              if (newer) ...[
+                const SizedBox(width: 8),
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error,
+                    shape: BoxShape.circle,
+                  ),
                 ),
-              ),
+              ],
             ],
-          ]),
-          subtitle: Text(newer ? '发现新版本 ${pending.latest}' : '当前 v$kAppVersion'),
+          ),
+          subtitle: Text(
+            newer ? '发现新版本 ${pending.latest}' : '当前 v$kAppVersion',
+          ),
           trailing: _checking
               ? const SizedBox(
                   width: 20,
@@ -390,43 +402,44 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
       return;
     }
     UpdateCheckHost.pendingUpdate.value = info;
-    // 捕获成非空局部变量: 闭包里不能靠 info 的类型提升(它是可变局部变量), 之前那种 info! 只是绕过去
-    final upd = info;
-    final choice = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('发现新版本 ${upd.latest}'),
-        content: Text(_trimNotes(upd.notes)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop('later'),
-            child: const Text('稍后'),
+    // 弹窗与启动自动检查共用一份实现(见 update_dialog.dart)
+    await showUpdateDialog(context, info);
+  }
+}
+
+/// 「自动检查更新」频率选择: 不自动检查 / 每天 / 每周 / 每月。
+Future<void> showUpdateIntervalSheet(BuildContext context) async {
+  final settings = AppSettings.instance;
+  final current = settings.updateCheckInterval;
+  final picked = await showModalBottomSheet<UpdateCheckInterval>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              '自动检查更新',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop('download'),
-            child: const Text('前往下载'),
-          ),
+          for (final value in UpdateCheckInterval.values)
+            ListTile(
+              title: Text(value.label),
+              subtitle: Text(value.hint),
+              trailing: value == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(ctx).pop(value),
+            ),
+          const SizedBox(height: 8),
         ],
       ),
-    );
-    if (!mounted) return;
-    if (choice == 'later') {
-      AppSettings.instance.skipUpdate(info.latest);
-      return;
-    }
-    final url = info.downloadUrl;
-    if (url != null && url.isNotEmpty) {
-      await UpdateCheckHost.openUrl(url);
-    } else {
-      await UpdateCheckHost.openUrl(kGithubUrl);
-    }
-  }
-
-  static String _trimNotes(String? notes) {
-    if (notes == null) return '';
-    final one = notes.trim();
-    return one.length > 200 ? '${one.substring(0, 200)}…' : one;
-  }
+    ),
+  );
+  if (picked == null) return;
+  settings.update(updateCheckInterval: picked);
 }
 
 /// 主题色(视觉风格)选择器: 一行色点, 选中项带对勾与描边.
@@ -444,16 +457,13 @@ class _AccentSettingTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('主题色', style: theme.textTheme.titleMedium),
           const SizedBox(height: 2),
-          Text(
-            '${selected.label} · 浅色/深色通用',
-            style: theme.textTheme.bodySmall,
-          ),
+          Text('${selected.label} · 浅色/深色通用', style: theme.textTheme.bodySmall),
           const SizedBox(height: 10),
           Wrap(
             spacing: 12,
@@ -484,7 +494,9 @@ class _AccentSettingTile extends StatelessWidget {
             color: palette.seed,
             shape: BoxShape.circle,
             border: Border.all(
-              color: isSelected ? theme.colorScheme.onSurface : Colors.transparent,
+              color: isSelected
+                  ? theme.colorScheme.onSurface
+                  : Colors.transparent,
               width: 2,
             ),
           ),

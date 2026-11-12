@@ -11,13 +11,17 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('搜索历史: 「清空」与历史 chip 命中区都 ≥48dp', (tester) async {
-    await tester.pumpWidget(host(SearchLanding(
-      history: const ['七里香', '稻香'],
-      hot: const [],
-      recommended: null,
-      onSelected: (_) {},
-      onClearHistory: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const ['七里香', '稻香'],
+          hot: const [],
+          recommended: null,
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
 
     final clearSize = tester.getSize(find.widgetWithText(TextButton, '清空'));
     expect(clearSize.height, greaterThanOrEqualTo(48));
@@ -31,13 +35,17 @@ void main() {
 
   testWidgets('历史 chip 点击仍然只做搜索', (tester) async {
     String? chosen;
-    await tester.pumpWidget(host(SearchLanding(
-      history: const ['七里香'],
-      hot: const [],
-      recommended: null,
-      onSelected: (k) => chosen = k,
-      onClearHistory: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const ['七里香'],
+          hot: const [],
+          recommended: null,
+          onSelected: (k) => chosen = k,
+          onClearHistory: () {},
+        ),
+      ),
+    );
     await tester.tap(find.text('七里香'));
     expect(chosen, '七里香');
   });
@@ -46,20 +54,22 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: SearchLanding(
-            history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
-            hot: const [],
-            recommended: '周杰伦',
-            onSelected: (_) {},
-            onClearHistory: () {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: SearchLanding(
+              history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
+              hot: const [],
+              recommended: '周杰伦',
+              onSelected: (_) {},
+              onClearHistory: () {},
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     final clearSize = tester.getSize(find.widgetWithText(TextButton, '清空'));
@@ -68,15 +78,19 @@ void main() {
   });
 
   testWidgets('热词重试按钮命中区 ≥48dp', (tester) async {
-    await tester.pumpWidget(host(SearchLanding(
-      history: const [],
-      hot: const [],
-      recommended: null,
-      onSelected: (_) {},
-      onClearHistory: () {},
-      hotError: '网络不稳定',
-      onRetryHot: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const [],
+          hot: const [],
+          recommended: null,
+          onSelected: (_) {},
+          onClearHistory: () {},
+          hotError: '网络不稳定',
+          onRetryHot: () {},
+        ),
+      ),
+    );
     final size = tester.getSize(find.widgetWithText(TextButton, '重试'));
     expect(size.height, greaterThanOrEqualTo(48));
   });
@@ -87,24 +101,27 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(host(RecommendView(
-      loggedIn: true,
-      loadDailySongs: () async => const [],
-      loadDailyPlaylists: () async => const [],
-      loadPodcasts: () async => const [],
-      loadFm: () async => const [],
-      loadStyles: () async => const [],
-      loadCharts: () async => const [],
-      loadNewSongs: () async => const [],
-      loadNewAlbums: () async => const [],
-      onOpenAlbum: (_) {},
-      onOpenNewRelease: () {},
-      onPlaySongs: (_, _) {},
-      onOpenPlaylist: (_) {},
-      onOpenPodcast: (_) {},
-      onHeartMode: () {},
-      onOpenDaily: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        RecommendView(
+          loggedIn: true,
+          loadDailySongs: () async => const [],
+          loadDailyPlaylists: () async => const [],
+          loadPodcasts: () async => const [],
+          loadFm: () async => const [],
+          loadStyles: () async => const [],
+          loadNewSongs: () async => const [],
+          loadNewAlbums: () async => const [],
+          onOpenAlbum: (_) {},
+          onOpenNewRelease: () {},
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          onOpenPodcast: (_) {},
+          onHeartMode: () {},
+          onOpenDaily: () {},
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('更多'), findsNothing);

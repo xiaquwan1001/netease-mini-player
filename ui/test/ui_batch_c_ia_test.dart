@@ -28,24 +28,22 @@ class _FakeRustApi implements RustLibApi {
     required String cat,
     required int limit,
     required int offset,
-  }) async =>
-      const [];
+  }) async => const [];
 
   @override
   Future<List<rust.Playlist>> crateApiHighQualityPlaylists({
     required String cat,
     required int limit,
-  }) async =>
-      const [];
+  }) async => const [];
 }
 
 rust.InitInfo info({bool loggedIn = true}) => rust.InitInfo(
-      dataDir: '/tmp/minincm',
-      deviceId: 'dev-1',
-      loggedIn: loggedIn,
-      vip: false,
-      providers: const [],
-    );
+  dataDir: '/tmp/minincm',
+  deviceId: 'dev-1',
+  loggedIn: loggedIn,
+  vip: false,
+  providers: const [],
+);
 
 rust.AccountDto account(int id, String nickname, {bool active = false}) =>
     rust.AccountDto(
@@ -56,33 +54,31 @@ rust.AccountDto account(int id, String nickname, {bool active = false}) =>
     );
 
 rust.SongDto song(int id, String name) => rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '歌手',
-      artistId: BigInt.one,
-      album: '专辑',
-      albumId: BigInt.from(9),
-      coverUrl: null,
-      durationMs: BigInt.from(1000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: name,
+  artist: '歌手',
+  artistId: BigInt.one,
+  album: '专辑',
+  albumId: BigInt.from(9),
+  coverUrl: null,
+  durationMs: BigInt.from(1000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
-Widget host(Widget child) =>
-    MaterialApp(home: Scaffold(body: Builder(builder: (_) => child)));
+Widget host(Widget child) => MaterialApp(
+  home: Scaffold(body: Builder(builder: (_) => child)),
+);
 
 Widget pushHost(String label, VoidCallback onTap) => MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: onTap,
-            child: Text(label),
-          ),
-        ),
-      ),
-    );
+  home: Scaffold(
+    body: Builder(
+      builder: (ctx) => TextButton(onPressed: onTap, child: Text(label)),
+    ),
+  ),
+);
 
 void big(WidgetTester tester) {
   tester.view.devicePixelRatio = 1.0;
@@ -104,11 +100,12 @@ void main() {
 
   // ---------------- 1) 设置瘦身 ----------------
 
-  testWidgets('设置首页: 账号/会员/诊断/清空搜索历史已搬走, 只留分组入口+开关',
-      (tester) async {
+  testWidgets('设置首页: 账号/会员/诊断/清空搜索历史已搬走, 只留分组入口+开关', (tester) async {
     big(tester);
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: SettingsView(info: info()))),
+      MaterialApp(
+        home: Scaffold(body: SettingsView(info: info())),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -128,11 +125,12 @@ void main() {
     expect(find.text('取链音质'), findsOneWidget);
   });
 
-  testWidgets('设置 → 关于 → 诊断与数据: 二级页可达(自检/设备ID/数据目录)',
-      (tester) async {
+  testWidgets('设置 → 关于 → 诊断与数据: 二级页可达(自检/设备ID/数据目录)', (tester) async {
     big(tester);
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: SettingsView(info: info()))),
+      MaterialApp(
+        home: Scaffold(body: SettingsView(info: info())),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -148,12 +146,14 @@ void main() {
 
   testWidgets('设置首页: 300dp + 1.25 不溢出', (tester) async {
     narrow(tester);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(body: SettingsView(info: info())),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(body: SettingsView(info: info())),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('界面'), findsOneWidget);
@@ -163,31 +163,33 @@ void main() {
 
   testWidgets('专辑详情全页: 300dp + 1.25 不溢出', (tester) async {
     narrow(tester);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: Builder(
-            builder: (ctx) => TextButton(
-              onPressed: () => showAlbumPreview(
-                ctx,
-                albumId: BigInt.from(9),
-                onPlay: (_, _) {},
-                loadAlbum: (_) async => rust.AlbumDetailDto(
-                  id: BigInt.from(9),
-                  name: '叶惠美',
-                  coverUrl: null,
-                  artist: '周杰伦',
-                  description: '经典',
-                  songs: [song(1, '以父之名'), song(2, '晴天')],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () => showAlbumPreview(
+                  ctx,
+                  albumId: BigInt.from(9),
+                  onPlay: (_, _) {},
+                  loadAlbum: (_) async => rust.AlbumDetailDto(
+                    id: BigInt.from(9),
+                    name: '叶惠美',
+                    coverUrl: null,
+                    artist: '周杰伦',
+                    description: '经典',
+                    songs: [song(1, '以父之名'), song(2, '晴天')],
+                  ),
                 ),
+                child: const Text('open'),
               ),
-              child: const Text('open'),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -200,26 +202,30 @@ void main() {
     big(tester);
     var accounts = 0;
     var vip = 0;
-    await tester.pumpWidget(host(MineView(
-      loggedIn: true,
-      onLogin: () {},
-      onOpenAccounts: () => accounts++,
-      onOpenVip: () => vip++,
-      onPlaySongs: (_, _) {},
-      onOpenPlaylist: (_) {},
-      onOpenPodcast: (_) {},
-      onOpenAlbum: (_) {},
-      onOpenRecent: () {},
-      onOpenFollows: () async {},
-      onOpenFolloweds: () async {},
-      onOpenLiked: () {},
-      loadLiked: () async => const [],
-      loadPlaylists: () async => const [],
-      loadPodcasts: () async => const [],
-      loadAlbums: () async => const [],
-      loadRecent: () async => const [],
-      loadRanking: (_) async => const [],
-    )));
+    await tester.pumpWidget(
+      host(
+        MineView(
+          loggedIn: true,
+          onLogin: () {},
+          onOpenAccounts: () => accounts++,
+          onOpenVip: () => vip++,
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          onOpenPodcast: (_) {},
+          onOpenAlbum: (_) {},
+          onOpenRecent: () {},
+          onOpenFollows: () async {},
+          onOpenFolloweds: () async {},
+          onOpenLiked: () {},
+          loadLiked: () async => const [],
+          loadPlaylists: () async => const [],
+          loadPodcasts: () async => const [],
+          loadAlbums: () async => const [],
+          loadRecent: () async => const [],
+          loadRanking: (_) async => const [],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 资料头右上角药丸 → 账号页
@@ -232,30 +238,31 @@ void main() {
     expect(vip, 1);
   });
 
-  testWidgets('账号与会员页: 账号簿/切换/忘记/添加/退出登录/会员 全部可达',
-      (tester) async {
+  testWidgets('账号与会员页: 账号簿/切换/忘记/添加/退出登录/会员 全部可达', (tester) async {
     big(tester);
     var logins = 0;
     var logouts = 0;
     var vip = 0;
     rust.AccountDto? switched;
     rust.AccountDto? removed;
-    await tester.pumpWidget(pushHost('open', () {
-      showAccountPage(
-        tester.element(find.text('open')),
-        info: info(),
-        isAndroid: true,
-        onLogin: () => logins++,
-        onLogout: () async => logouts++,
-        onOpenVip: () => vip++,
-        loadAccounts: () async => [
-          account(1, '小明', active: true),
-          account(2, '小红'),
-        ],
-        onSwitchAccount: (a) async => switched = a,
-        onRemoveAccount: (a) async => removed = a,
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showAccountPage(
+          tester.element(find.text('open')),
+          info: info(),
+          isAndroid: true,
+          onLogin: () => logins++,
+          onLogout: () async => logouts++,
+          onOpenVip: () => vip++,
+          loadAccounts: () async => [
+            account(1, '小明', active: true),
+            account(2, '小红'),
+          ],
+          onSwitchAccount: (a) async => switched = a,
+          onRemoveAccount: (a) async => removed = a,
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -290,47 +297,35 @@ void main() {
   Widget recommend({
     void Function()? onOpenNewRelease,
     void Function()? onOpenDaily,
-  }) =>
-      host(RecommendView(
-        loggedIn: true,
-        loadDailySongs: () async => [song(1, '每日一歌')],
-        loadDailyPlaylists: () async => const [],
-        loadPodcasts: () async => const [],
-        loadFm: () async => const [],
-        loadStyles: () async => const [
-          rust.StyleTag(id: '1009', name: '粤语流行'),
-        ],
-        loadCharts: () async => [
-          rust.ChartSummary(
-            id: BigInt.from(19723756),
-            name: '飙升榜',
-            coverUrl: null,
-            updateFrequency: '刚刚更新',
-            trackCount: BigInt.from(100),
-            playCount: BigInt.from(1000),
-          ),
-        ],
-        loadNewSongs: () async => [song(30, '新歌速递一')],
-        loadNewAlbums: () async => [
-          rust.AlbumItem(
-            id: BigInt.from(40),
-            name: '新碟A',
-            coverUrl: null,
-            artist: '歌手',
-            trackCount: BigInt.from(8),
-          ),
-        ],
-        onOpenAlbum: (_) {},
-        onOpenNewRelease: onOpenNewRelease,
-        onPlaySongs: (_, _) {},
-        onOpenPlaylist: (_) {},
-        onOpenPodcast: (_) {},
-        onHeartMode: () {},
-        onOpenDaily: onOpenDaily ?? () {},
-      ));
+  }) => host(
+    RecommendView(
+      loggedIn: true,
+      loadDailySongs: () async => [song(1, '每日一歌')],
+      loadDailyPlaylists: () async => const [],
+      loadPodcasts: () async => const [],
+      loadFm: () async => const [],
+      loadStyles: () async => const [rust.StyleTag(id: '1009', name: '粤语流行')],
+      loadNewSongs: () async => [song(30, '新歌速递一')],
+      loadNewAlbums: () async => [
+        rust.AlbumItem(
+          id: BigInt.from(40),
+          name: '新碟A',
+          coverUrl: null,
+          artist: '歌手',
+          trackCount: BigInt.from(8),
+        ),
+      ],
+      onOpenAlbum: (_) {},
+      onOpenNewRelease: onOpenNewRelease,
+      onPlaySongs: (_, _) {},
+      onOpenPlaylist: (_) {},
+      onOpenPodcast: (_) {},
+      onHeartMode: () {},
+      onOpenDaily: onOpenDaily ?? () {},
+    ),
+  );
 
-  testWidgets('推荐页: 平级区块 5 个(每日推荐/风格推荐/推荐歌单/新歌新碟/推荐播客)',
-      (tester) async {
+  testWidgets('推荐页: 平级区块 5 个(每日推荐/风格推荐/推荐歌单/新歌新碟/推荐播客)', (tester) async {
     big(tester);
     await tester.pumpWidget(recommend());
     await tester.pumpAndSettle();
@@ -355,8 +350,7 @@ void main() {
     expect(find.text('新碟A'), findsOneWidget);
   });
 
-  testWidgets('推荐页: 排行榜搬走后风格推荐仍是独立区块, 且顺序稳定',
-      (tester) async {
+  testWidgets('推荐页: 排行榜搬走后风格推荐仍是独立区块, 且顺序稳定', (tester) async {
     big(tester);
     await tester.pumpWidget(recommend());
     await tester.pumpAndSettle();
@@ -384,8 +378,7 @@ void main() {
     expect(more, 1);
   });
 
-  testWidgets('推荐页: 推荐歌单 标题右侧「全部」进歌单广场(原游离按钮的功能)',
-      (tester) async {
+  testWidgets('推荐页: 推荐歌单 标题右侧「全部」进歌单广场(原游离按钮的功能)', (tester) async {
     big(tester);
     await tester.pumpWidget(recommend());
     await tester.pumpAndSettle();
@@ -401,24 +394,26 @@ void main() {
     big(tester);
     List<rust.SongDto>? played;
     int? playedIndex;
-    await tester.pumpWidget(pushHost('open', () {
-      showAlbumPreview(
-        tester.element(find.text('open')),
-        albumId: BigInt.from(9),
-        onPlay: (songs, i) {
-          played = songs;
-          playedIndex = i;
-        },
-        loadAlbum: (_) async => rust.AlbumDetailDto(
-          id: BigInt.from(9),
-          name: '叶惠美',
-          coverUrl: null,
-          artist: '周杰伦',
-          description: '经典',
-          songs: [song(1, '以父之名'), song(2, '晴天')],
-        ),
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showAlbumPreview(
+          tester.element(find.text('open')),
+          albumId: BigInt.from(9),
+          onPlay: (songs, i) {
+            played = songs;
+            playedIndex = i;
+          },
+          loadAlbum: (_) async => rust.AlbumDetailDto(
+            id: BigInt.from(9),
+            name: '叶惠美',
+            coverUrl: null,
+            artist: '周杰伦',
+            description: '经典',
+            songs: [song(1, '以父之名'), song(2, '晴天')],
+          ),
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -447,17 +442,19 @@ void main() {
 
   testWidgets('每日推荐是全页(不是 sheet); 历史日推用返回键退回日期列表', (tester) async {
     big(tester);
-    await tester.pumpWidget(pushHost('open', () {
-      showDiscoverPage(
-        tester.element(find.text('open')),
-        onPlaySongs: (_, _) {},
-        onOpenPlaylist: (_) {},
-        loadSongs: () async => [song(1, '晴天')],
-        loadPlaylists: () async => const [],
-        loadHistoryDates: () async => ['2024-06-20', '2024-06-19'],
-        loadHistorySongs: (date) async => [song(7, '$date 的歌')],
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => [song(1, '晴天')],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => ['2024-06-20', '2024-06-19'],
+          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -482,16 +479,18 @@ void main() {
 
   testWidgets('最近听过是全页(4 个 tab), 不再是 72% 高的 sheet', (tester) async {
     big(tester);
-    await tester.pumpWidget(pushHost('open', () {
-      showRecentPage(
-        tester.element(find.text('open')),
-        onPlay: (_, _) {},
-        loadRecent: () async => [song(3, '最近一首')],
-        loadAlbums: () async => const [],
-        loadPlaylists: () async => const [],
-        loadPodcasts: () async => const [],
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showRecentPage(
+          tester.element(find.text('open')),
+          onPlay: (_, _) {},
+          loadRecent: () async => [song(3, '最近一首')],
+          loadAlbums: () async => const [],
+          loadPlaylists: () async => const [],
+          loadPodcasts: () async => const [],
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 

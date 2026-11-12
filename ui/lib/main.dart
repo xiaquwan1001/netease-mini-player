@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'src/marquee_text.dart';
+
 import 'package:flutter/services.dart';
 
 import 'src/album_preview.dart';
@@ -44,13 +45,16 @@ import 'src/search_suggest.dart';
 import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/update_checker.dart';
+import 'src/update_dialog.dart';
 import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
 import 'src/theme.dart';
 import 'src/vip_page.dart';
+
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
+
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
 
@@ -61,7 +65,11 @@ class LyricSourceLoaders {
   final Future<rust.WordLyricDto?> Function(BigInt trackId) yrc;
   final Future<rust.WordLyricDto?> Function(BigInt trackId) ttml;
   final Future<List<rust.LyricLineDto>?> Function(BigInt trackId) lineLevel;
-  const LyricSourceLoaders({required this.yrc, required this.ttml, required this.lineLevel});
+  const LyricSourceLoaders({
+    required this.yrc,
+    required this.ttml,
+    required this.lineLevel,
+  });
 }
 
 /// 解析结果: word = 逐字数据(来源 yrc/ttml), line = 行级兜底, source 给小字标注,
@@ -71,9 +79,16 @@ class ResolvedLyric {
   final List<rust.LyricLineDto>? line;
   final String source;
   final String? reason;
-  const ResolvedLyric.word_(this.word, {this.reason}) : line = null, source = 'yrc';
-  const ResolvedLyric.ttml_(this.word, {this.reason}) : line = null, source = 'ttml';
-  const ResolvedLyric.line_(this.line) : word = null, source = 'line', reason = null;
+  const ResolvedLyric.word_(this.word, {this.reason})
+    : line = null,
+      source = 'yrc';
+  const ResolvedLyric.ttml_(this.word, {this.reason})
+    : line = null,
+      source = 'ttml';
+  const ResolvedLyric.line_(this.line)
+    : word = null,
+      source = 'line',
+      reason = null;
 }
 
 /// yrc 逐字行覆盖率: 有词级时间(end > start)的行占比. 与 Rust
@@ -82,7 +97,9 @@ const double kYrcWordCoverageThreshold = 0.6;
 
 bool yrcWordGoodEnough(rust.WordLyricDto? wl) {
   if (wl == null || wl.lines.isEmpty || !wl.hasWordTiming) return false;
-  final covered = wl.lines.where((l) => l.words.any((w) => w.endMs > w.startMs)).length;
+  final covered = wl.lines
+      .where((l) => l.words.any((w) => w.endMs > w.startMs))
+      .length;
   return covered / wl.lines.length >= kYrcWordCoverageThreshold;
 }
 
@@ -90,6 +107,7 @@ bool yrcWordGoodEnough(rust.WordLyricDto? wl) {
 
 /// auto 模式 yrc 得分 >= 此值即直接用, 不再探测 TTML(省一次网络)。
 const double kAutoSkipTtmlScore = 0.9;
+
 /// 打分权重: 覆盖率/时间单调/首字贴行首/每行粒度/与行级 LRC 一致性(和为 1)。
 const List<double> kScoreWeights = [0.3, 0.2, 0.15, 0.15, 0.2];
 const int _kMonotonicToleranceMs = 50;
@@ -99,20 +117,30 @@ const int _kLineConsistencyMs = 250;
 /// 打分分项与总分(全部 0..1)。与 Rust score_word_lyric 保持同一口径。
 class WordLyricScore {
   final double coverage, monotonic, firstWord, spans, consistency, score;
-  const WordLyricScore(this.coverage, this.monotonic, this.firstWord, this.spans,
-      this.consistency, this.score);
+  const WordLyricScore(
+    this.coverage,
+    this.monotonic,
+    this.firstWord,
+    this.spans,
+    this.consistency,
+    this.score,
+  );
 }
 
 /// 逐字歌词质量打分(纯函数). lineStarts 为行级 LRC 各行起始 ms, 无参照时一致性记 1(中性)。
 WordLyricScore scoreWordLyric(rust.WordLyricDto? wl, {List<int>? lineStarts}) {
-  if (wl == null || wl.lines.isEmpty) return const WordLyricScore(0, 0, 0, 0, 0, 0);
-  final timed = wl.lines.where((l) => l.words.any((w) => w.endMs > w.startMs)).toList();
+  if (wl == null || wl.lines.isEmpty)
+    return const WordLyricScore(0, 0, 0, 0, 0, 0);
+  final timed = wl.lines
+      .where((l) => l.words.any((w) => w.endMs > w.startMs))
+      .toList();
   final coverage = timed.length / wl.lines.length;
   double monotonicOf() {
     if (timed.length <= 1) return 1.0;
     var ok = 0;
     for (var i = 1; i < timed.length; i++) {
-      if (timed[i].startMs >= timed[i - 1].startMs - _kMonotonicToleranceMs) ok++;
+      if (timed[i].startMs >= timed[i - 1].startMs - _kMonotonicToleranceMs)
+        ok++;
     }
     return ok / (timed.length - 1);
   }
@@ -120,22 +148,45 @@ WordLyricScore scoreWordLyric(rust.WordLyricDto? wl, {List<int>? lineStarts}) {
   final monotonic = monotonicOf();
   final firstWord = timed.isEmpty
       ? 0.0
-      : timed.where((l) => (l.words.first.startMs - l.startMs).abs() <= _kFirstWordToleranceMs).length /
-          timed.length;
+      : timed
+                .where(
+                  (l) =>
+                      (l.words.first.startMs - l.startMs).abs() <=
+                      _kFirstWordToleranceMs,
+                )
+                .length /
+            timed.length;
   final spans = timed.isEmpty
       ? 0.0
-      : (timed.map((l) => l.words.length).reduce((a, b) => a + b) / timed.length / 2.0)
-          .clamp(0.0, 1.0);
+      : (timed.map((l) => l.words.length).reduce((a, b) => a + b) /
+                timed.length /
+                2.0)
+            .clamp(0.0, 1.0);
   final consistency = (lineStarts == null || lineStarts.isEmpty)
       ? 1.0
       : wl.lines
-              .where((l) => lineStarts.any((s) => (l.startMs - s).abs() < _kLineConsistencyMs))
-              .length /
-          wl.lines.length;
+                .where(
+                  (l) => lineStarts.any(
+                    (s) => (l.startMs - s).abs() < _kLineConsistencyMs,
+                  ),
+                )
+                .length /
+            wl.lines.length;
   final w = kScoreWeights;
   final score =
-      w[0] * coverage + w[1] * monotonic + w[2] * firstWord + w[3] * spans + w[4] * consistency;
-  return WordLyricScore(coverage, monotonic, firstWord, spans, consistency, score);
+      w[0] * coverage +
+      w[1] * monotonic +
+      w[2] * firstWord +
+      w[3] * spans +
+      w[4] * consistency;
+  return WordLyricScore(
+    coverage,
+    monotonic,
+    firstWord,
+    spans,
+    consistency,
+    score,
+  );
 }
 
 /// auto 择优纯函数: 两来源都在时选高分者并给出短理由; 只有一方直接选它(理由 null)。
@@ -254,7 +305,10 @@ Future<ResolvedLyric?> resolveLyricSource(
   return _lineLevel(trackId, loaders);
 }
 
-Future<ResolvedLyric?> _lineLevel(BigInt trackId, LyricSourceLoaders loaders) async {
+Future<ResolvedLyric?> _lineLevel(
+  BigInt trackId,
+  LyricSourceLoaders loaders,
+) async {
   try {
     final line = await loaders.lineLevel(trackId);
     if (line != null && line.isNotEmpty) return ResolvedLyric.line_(line);
@@ -363,7 +417,8 @@ final ValueNotifier<Widget?> playerBarSlot = ValueNotifier<Widget?>(null);
 
 /// 常驻播放条的数据快照槽位: HomePage 每帧投一份 [PlayerBarData](帧后),
 /// 与上一份相等时 ValueNotifier 不通知 → 播放条只在数据真变时才重建。
-final ValueNotifier<PlayerBarData?> playerBarData = ValueNotifier<PlayerBarData?>(null);
+final ValueNotifier<PlayerBarData?> playerBarData =
+    ValueNotifier<PlayerBarData?>(null);
 
 /// 常驻播放条的回调集合槽位: HomePage 在 initState 里建一次, 之后不再变。
 final ValueNotifier<PlayerBarActions?> playerBarActions =
@@ -374,7 +429,9 @@ final ValueNotifier<PlayerBarActions?> playerBarActions =
 /// 必须在帧后投递: 槽位的监听者是 Navigator 的祖先, 在 HomePage.build 里同步写
 /// ValueNotifier 等于在 build 阶段 markNeedsBuild 祖先 → "setState() called during build"。
 void _publishBottomBar(Widget? bar) {
-  WidgetsBinding.instance.addPostFrameCallback((_) => playerBarSlot.value = bar);
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => playerBarSlot.value = bar,
+  );
 }
 
 /// 应用外壳: Navigator 与常驻底部条一起放进一个全屏 Overlay。
@@ -393,10 +450,12 @@ class PlayerBarHost extends StatefulWidget {
 }
 
 class _PlayerBarHostState extends State<PlayerBarHost> {
-  late final ValueNotifier<Widget> _content =
-      ValueNotifier<Widget>(widget.content);
-  late final OverlayEntry _entry =
-      OverlayEntry(builder: (_) => _PlayerBarChrome(content: _content));
+  late final ValueNotifier<Widget> _content = ValueNotifier<Widget>(
+    widget.content,
+  );
+  late final OverlayEntry _entry = OverlayEntry(
+    builder: (_) => _PlayerBarChrome(content: _content),
+  );
 
   @override
   void didUpdateWidget(covariant PlayerBarHost oldWidget) {
@@ -477,8 +536,10 @@ class MiniNcmApp extends StatelessWidget {
           // 视觉风格(主题色): 同一色板同时决定浅色/深色两套配色的 seed
           theme: buildLightTheme(accent: settings.accent),
           // R6: 深色 + OLED 开关 ⇒ 纯黑基底(见 src/theme.dart)
-          darkTheme:
-              buildDarkTheme(oled: settings.oledDark, accent: settings.accent),
+          darkTheme: buildDarkTheme(
+            oled: settings.oledDark,
+            accent: settings.accent,
+          ),
           themeMode: settings.themeMode,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
@@ -504,12 +565,7 @@ class MiniNcmApp extends StatelessWidget {
 /// 都没有(栈底 + 无二级态) → 交还系统, 由系统退出 App.
 ///
 /// 纯函数, 便于单测(返回键的分支比 UI 更容易出错).
-enum HomeBackAction {
-  collapseLyrics,
-  resetTab,
-  closeLibrary,
-  exitApp,
-}
+enum HomeBackAction { collapseLyrics, resetTab, closeLibrary, exitApp }
 
 HomeBackAction resolveHomeBackAction({
   required bool showLyrics,
@@ -589,12 +645,15 @@ class _HomePageState extends State<HomePage> {
   static const double _lyricItemExtent = 56;
   List<ParsedLyricLine> _lyricLines = const [];
   List<BigInt> _lyricTimes = const [];
+
   /// 纯文本歌词兜底(无时间轴): 逐行接口失败/返回空时用 [parseLrc] 从原始 LRC 里取。
   List<String>? _lyricPlain;
   BigInt? _lyricTrackId;
   String? _lyricError;
+
   /// 逐字/行级歌词来源标记("yrc"/"ttml"/"line"), 歌词页底部小字展示。
   String? _lyricSource;
+
   /// auto 择优理由(短文案, 如 "yrc 时间错乱"), 与来源一起展示。
   String? _lyricReason;
   int _lyricIndex = -1;
@@ -647,14 +706,17 @@ class _HomePageState extends State<HomePage> {
   final _searchFocus = FocusNode();
   Timer? _suggestDebounce;
   List<rust.SuggestItem> _suggestions = const [];
+
   /// 精确实体命中(search_multimatch; orders 为空 = 无命中)
   rust.SearchExact? _exact;
+
   /// 纯关键词联想(mobile search_suggest; 卡片/实体都空时的兜底)
   List<String> _keywordSuggestions = const [];
   List<String> _searchHistory = const [];
 
   // ---- 搜索落地页(热词/推荐词) ----
   List<rust.HotSearchTerm> _hotTerms = const [];
+
   /// "猜你想搜": keyword 是真正要搜的词, reason 是官方给的推荐理由(只展示)
   String? _recommendedKeyword;
   String? _recommendedReason;
@@ -664,8 +726,9 @@ class _HomePageState extends State<HomePage> {
   rust.SongDto? get _current => _queue.current;
 
   /// 当前列表的原始曲目(歌单浏览优先)
-  List<rust.SongDto> get _sourceSongs =>
-      _libraryTitle != null ? _library : (_bundle?.songs ?? const <rust.SongDto>[]);
+  List<rust.SongDto> get _sourceSongs => _libraryTitle != null
+      ? _library
+      : (_bundle?.songs ?? const <rust.SongDto>[]);
 
   /// 真正要显示/入队的曲目: 无版权且没收藏的直接不显示(与官方一致)
   List<rust.SongDto> get _visibleSongs => visibleSongs(_sourceSongs, _liked);
@@ -675,6 +738,9 @@ class _HomePageState extends State<HomePage> {
 
   /// 播放条回调集合: 建一次跨帧复用(回调内部读 State 字段, 不持有任何快照)。
   late final PlayerBarActions _playerBarActions;
+
+  /// 已经弹过更新提示的版本 tag(同一次运行只弹一次, 避免重复打扰)
+  String? _promptedUpdateTag;
 
   @override
   void initState() {
@@ -702,20 +768,30 @@ class _HomePageState extends State<HomePage> {
     );
     // 播放条回调槽位只赋这一次(同一实例, 之后不再变)
     WidgetsBinding.instance.addPostFrameCallback(
-        (_) => playerBarActions.value = playerBarActions.value ?? _playerBarActions);
+      (_) =>
+          playerBarActions.value = playerBarActions.value ?? _playerBarActions,
+    );
     // 通知栏/耳机键的上一首·下一首 → Dart 队列
     Playback.setSkipHandlers(onNext: _next, onPrevious: _previous);
     // 通知栏自定义按钮(喜欢/播放顺序): 原生只发意图, 状态与副作用都在 Dart
-    Playback.setActionHandlers(onToggleLike: _toggleLike, onCycleMode: _cycleModeFromNotification);
+    Playback.setActionHandlers(
+      onToggleLike: _toggleLike,
+      onCycleMode: _cycleModeFromNotification,
+    );
     // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
     AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
     _actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
+    // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
+    UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
     // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
     _pageDepth.addListener(_onPageDepthChanged);
     _bootstrap();
-    _ticker = Timer.periodic(const Duration(milliseconds: 500), (_) => _pollPlayer());
+    _ticker = Timer.periodic(
+      const Duration(milliseconds: 500),
+      (_) => _pollPlayer(),
+    );
   }
 
   @override
@@ -724,6 +800,7 @@ class _HomePageState extends State<HomePage> {
     _ticker?.cancel();
     _suggestDebounce?.cancel();
     _searchFocus.removeListener(_onSearchFocusChanged);
+    UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     _pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
     _lyricTicker?.cancel();
@@ -734,6 +811,21 @@ class _HomePageState extends State<HomePage> {
 
   void _onPageDepthChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// 启动自动检查发现新版本时的弹窗(每天/每周/每月由 AppSettings 决定)。
+  void _onUpdatePrompt() {
+    final info = UpdateCheckHost.pendingPrompt.value;
+    if (info == null || !info.isNewer) return;
+    if (info.latest == _promptedUpdateTag) return;
+    _promptedUpdateTag = info.latest;
+    // 立即清掉, 避免同一次通知重入; 红点仍由 pendingUpdate 维护。
+    UpdateCheckHost.pendingPrompt.value = null;
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showUpdateDialog(context, info);
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -773,6 +865,7 @@ class _HomePageState extends State<HomePage> {
   int? _lastCacheLimitMb;
   bool? _lastLoudnessNormalize;
   double? _lastLoudnessTarget;
+
   /// 已经为哪首曲目应用过响度增益(避免每 500ms 轮询都重算)
   int? _loudnessAppliedTrackId;
 
@@ -785,7 +878,8 @@ class _HomePageState extends State<HomePage> {
   void _onAudioSettingsChanged() {
     final settings = AppSettings.instance;
     // 响度均衡的开关/目标电平变化 ⇒ 已算好的每曲增益全部作废, 当前曲目重算
-    final loudnessChanged = settings.loudnessNormalize != _lastLoudnessNormalize ||
+    final loudnessChanged =
+        settings.loudnessNormalize != _lastLoudnessNormalize ||
         settings.loudnessTargetLufs != _lastLoudnessTarget;
     _lastLoudnessNormalize = settings.loudnessNormalize;
     _lastLoudnessTarget = settings.loudnessTargetLufs;
@@ -838,10 +932,12 @@ class _HomePageState extends State<HomePage> {
       // 通知栏红心按钮跟当前曲目走
       unawaited(_syncActionState());
       if (playingId != null) {
-        unawaited(applyLoudnessForTrack(
-          playingId,
-          streamUrl: _streamUrlByTrack[playingId],
-        ));
+        unawaited(
+          applyLoudnessForTrack(
+            playingId,
+            streamUrl: _streamUrlByTrack[playingId],
+          ),
+        );
         unawaited(enforceCacheLimit(keepTrackId: playingId));
       }
     }
@@ -853,10 +949,12 @@ class _HomePageState extends State<HomePage> {
       final last = _lastLoudnessRetry;
       if (last == null || now.difference(last) > const Duration(seconds: 20)) {
         _lastLoudnessRetry = now;
-        unawaited(applyLoudnessForTrack(
-          playingId,
-          streamUrl: _streamUrlByTrack[playingId],
-        ));
+        unawaited(
+          applyLoudnessForTrack(
+            playingId,
+            streamUrl: _streamUrlByTrack[playingId],
+          ),
+        );
       }
     }
     if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
@@ -871,7 +969,12 @@ class _HomePageState extends State<HomePage> {
   /// 播完判定: 从播放态落到非播放态, 且位置已在末尾附近.
   /// Media3/rodio 都不保证把 "ENDED" 送到 UI 层, 所以用轮询兜底.
   bool _looksEnded(bool wasPlaying, PlayerView s) {
-    if (_userStopped || _advancing || _dragMs != null || !wasPlaying || s.playing) return false;
+    if (_userStopped ||
+        _advancing ||
+        _dragMs != null ||
+        !wasPlaying ||
+        s.playing)
+      return false;
     if (s.durationMs == BigInt.zero) return false;
     return s.positionMs + BigInt.from(800) >= s.durationMs;
   }
@@ -1070,31 +1173,35 @@ class _HomePageState extends State<HomePage> {
 
   /// DTO -> 精确实体条视图(空命中由 SearchExactBar 自己隐藏)
   SearchExactView _exactView(rust.SearchExact e) => SearchExactView(
-        orders: e.orders,
-        artists: [
-          for (final a in e.artists)
-            SearchExactArtist(id: a.id.toInt(), name: a.name, avatarUrl: a.avatarUrl),
-        ],
-        playlists: [
-          for (final p in e.playlists)
-            SearchExactPlaylist(
-              id: p.id.toInt(),
-              name: p.name,
-              coverUrl: p.coverUrl,
-              trackCount: p.trackCount.toInt(),
-            ),
-        ],
-        podcasts: [
-          for (final r in e.podcasts)
-            SearchExactRadio(
-              id: r.id.toInt(),
-              name: r.name,
-              coverUrl: r.coverUrl,
-              djName: r.djName,
-              programCount: r.programCount.toInt(),
-            ),
-        ],
-      );
+    orders: e.orders,
+    artists: [
+      for (final a in e.artists)
+        SearchExactArtist(
+          id: a.id.toInt(),
+          name: a.name,
+          avatarUrl: a.avatarUrl,
+        ),
+    ],
+    playlists: [
+      for (final p in e.playlists)
+        SearchExactPlaylist(
+          id: p.id.toInt(),
+          name: p.name,
+          coverUrl: p.coverUrl,
+          trackCount: p.trackCount.toInt(),
+        ),
+    ],
+    podcasts: [
+      for (final r in e.podcasts)
+        SearchExactRadio(
+          id: r.id.toInt(),
+          name: r.name,
+          coverUrl: r.coverUrl,
+          djName: r.djName,
+          programCount: r.programCount.toInt(),
+        ),
+    ],
+  );
 
   Future<void> _openExactArtist(int id) async {
     for (final a in _exact?.artists ?? const <rust.Artist>[]) {
@@ -1138,10 +1245,10 @@ class _HomePageState extends State<HomePage> {
     _controller.text = keyword;
     _controller.selection = TextSelection.collapsed(offset: keyword.length);
     setState(() {
-        _suggestions = const [];
-        _exact = null;
-        _keywordSuggestions = const [];
-      });
+      _suggestions = const [];
+      _exact = null;
+      _keywordSuggestions = const [];
+    });
     await _search();
   }
 
@@ -1284,7 +1391,10 @@ class _HomePageState extends State<HomePage> {
 
   /// 搜索结果里点单曲: 用"可见单曲"重置队列(跳过无版权), 并定位到这首
   Future<void> _playFromSearch(rust.SongDto song) async {
-    final songs = visibleSongs(_bundle?.songs ?? const <rust.SongDto>[], _liked);
+    final songs = visibleSongs(
+      _bundle?.songs ?? const <rust.SongDto>[],
+      _liked,
+    );
     final start = songs.indexWhere((s) => s.id == song.id);
     if (songs.isEmpty) return;
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
@@ -1558,7 +1668,9 @@ class _HomePageState extends State<HomePage> {
     if (!_autoFollowLyric) return;
     if (!_lyricScroll.hasClients || idx < 0) return;
     final position = _lyricScroll.position;
-    final target = idx * _lyricItemExtent - (position.viewportDimension - _lyricItemExtent) / 2;
+    final target =
+        idx * _lyricItemExtent -
+        (position.viewportDimension - _lyricItemExtent) / 2;
     final clamped = target.clamp(0.0, position.maxScrollExtent);
     _lyricScroll.animateTo(
       clamped,
@@ -1590,7 +1702,6 @@ class _HomePageState extends State<HomePage> {
       _lyricTicker = null;
     }
   }
-
 
   // ---------------- 详情页: 翻译 / 多选 / 分享 / 定位 ----------------
 
@@ -1664,10 +1775,9 @@ class _HomePageState extends State<HomePage> {
   /// 选中行的文本(按行号排序, 最多 8 行 —— 分享卡片放不下更多)
   List<String> _selectedLyricTexts() {
     final indexes = _selectedLyricLines.toList()..sort();
-    return shareableLyricLines(
-      [for (final i in indexes) _lyricTextAt(i)],
-      max: 8,
-    );
+    return shareableLyricLines([
+      for (final i in indexes) _lyricTextAt(i),
+    ], max: 8);
   }
 
   void _toggleLyricTranslation() {
@@ -1724,7 +1834,8 @@ class _HomePageState extends State<HomePage> {
       final cookie = await _auth.loginWeb();
       if (cookie == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('未获取到登录态')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('未获取到登录态')));
         return;
       }
       final ok = await _auth.commitCookie(cookie);
@@ -1735,12 +1846,14 @@ class _HomePageState extends State<HomePage> {
       await _refreshInfo();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效')),
+        SnackBar(
+          content: Text(ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效'),
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('登录失败: ${friendlyError(e)}')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('登录失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1760,9 +1873,8 @@ class _HomePageState extends State<HomePage> {
         await rust.accountRemove(userId: account.userId);
         await _refreshInfo();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已从账号簿移除')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已从账号簿移除')));
       },
       // 隐私: 退出登录 + 删掉本机所有账号凭据(设备指纹保留).
       onPurgeLocal: () async {
@@ -1772,15 +1884,16 @@ class _HomePageState extends State<HomePage> {
         }
         await _refreshInfo();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已清除本机登录凭据')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('已清除本机登录凭据')));
       },
     );
   }
 
   Future<void> _switchAccount(rust.AccountDto account) async {
-    final name = account.nickname.isEmpty ? account.userId.toString() : account.nickname;
+    final name = account.nickname.isEmpty
+        ? account.userId.toString()
+        : account.nickname;
     try {
       final ok = await rust.accountSwitch(userId: account.userId);
       await _refreshInfo();
@@ -1790,8 +1903,8 @@ class _HomePageState extends State<HomePage> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('切换账号失败: ${friendlyError(e)}')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('切换账号失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1846,8 +1959,8 @@ class _HomePageState extends State<HomePage> {
       if (thenLogin) await _login();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('退出登录失败: ${friendlyError(e)}')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('退出登录失败: ${friendlyError(e)}')));
     }
   }
 
@@ -1944,17 +2057,15 @@ class _HomePageState extends State<HomePage> {
           height: MediaQuery.of(sheetContext).size.height * 0.6,
           child: Column(
             children: [
-              SheetHeader(
-                title: '收藏到歌单',
-                subtitle: song.name,
-              ),
+              SheetHeader(title: '收藏到歌单', subtitle: song.name),
               const Divider(height: 1),
               ListTile(
                 dense: true,
                 leading: CircleAvatar(
                   radius: 20,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  backgroundColor: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest,
                   child: const Icon(Icons.add, size: 20),
                 ),
                 title: const Text('新建歌单'),
@@ -2407,8 +2518,9 @@ class _HomePageState extends State<HomePage> {
                 dense: true,
                 leading: CircleAvatar(
                   radius: 20,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  backgroundColor: Theme.of(context)
+                      .colorScheme
+                      .surfaceContainerHighest,
                   child: const Icon(Icons.add, size: 20),
                 ),
                 title: const Text('新建歌单'),
@@ -2510,9 +2622,8 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Uint64List _queueSongIds(List<rust.SongDto> songs) => Uint64List.fromList(
-        [for (final s in songs) s.id.toInt()],
-      );
+  Uint64List _queueSongIds(List<rust.SongDto> songs) =>
+      Uint64List.fromList([for (final s in songs) s.id.toInt()]);
 
   /// 「存为歌单」的默认歌单名
   String _queuePlaylistDefaultName() {
@@ -2562,10 +2673,12 @@ class _HomePageState extends State<HomePage> {
       _queue.mode = modes[i];
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(_modeLabels[_queue.mode]!),
-          duration: const Duration(milliseconds: 900),
-        ));
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_modeLabels[_queue.mode]!),
+            duration: const Duration(milliseconds: 900),
+          ),
+        );
     });
     unawaited(_syncActionState());
   }
@@ -2585,7 +2698,8 @@ class _HomePageState extends State<HomePage> {
     if (url == _coverPaletteUrl) return;
     _coverPaletteUrl = url;
     if (url == null || url.isEmpty) {
-      if (mounted && _coverPalette != null) setState(() => _coverPalette = null);
+      if (mounted && _coverPalette != null)
+        setState(() => _coverPalette = null);
       return;
     }
     final palette = await paletteFromUrl(url);
@@ -2691,77 +2805,82 @@ class _HomePageState extends State<HomePage> {
           top: topBar == null ? MediaQuery.paddingOf(context).top : 0,
         ),
         child: Column(
-        children: [
-          if (!_showLyrics && _tab == 0) _buildSearchBar(),
-          // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
-          if (!_showLyrics && _tab == 0 && _exact != null)
-            SearchExactBar(
-              view: _exactView(_exact!),
-              onPickArtist: _openExactArtist,
-              onPickPlaylist: _openExactPlaylist,
-              onPickRadio: _openExactRadio,
-            ),
-          if (!_showLyrics &&
-              _tab == 0 &&
-              _suggestions.isEmpty &&
-              _exact == null &&
-              _keywordSuggestions.isNotEmpty)
-            KeywordSuggestBar(
-              keywords: _keywordSuggestions,
-              onSelected: _searchKeyword,
-            ),
-          if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 280),
-              child: SingleChildScrollView(
-                child: SuggestionPanel(
-                  items: _suggestions,
-                  onSelected: (item) => _searchKeyword(item.title),
+          children: [
+            if (!_showLyrics && _tab == 0) _buildSearchBar(),
+            // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
+            if (!_showLyrics && _tab == 0 && _exact != null)
+              SearchExactBar(
+                view: _exactView(_exact!),
+                onPickArtist: _openExactArtist,
+                onPickPlaylist: _openExactPlaylist,
+                onPickRadio: _openExactRadio,
+              ),
+            if (!_showLyrics &&
+                _tab == 0 &&
+                _suggestions.isEmpty &&
+                _exact == null &&
+                _keywordSuggestions.isNotEmpty)
+              KeywordSuggestBar(
+                keywords: _keywordSuggestions,
+                onSelected: _searchKeyword,
+              ),
+            if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: SingleChildScrollView(
+                  child: SuggestionPanel(
+                    items: _suggestions,
+                    onSelected: (item) => _searchKeyword(item.title),
+                  ),
                 ),
               ),
-            ),
-          if (!_showLyrics && _tab == 0 && _error != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-              child: Row(
+            if (!_showLyrics && _tab == 0 && _error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _error!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                    if (_retryLast != null)
+                      TextButton(
+                        onPressed: () {
+                          final retry = _retryLast;
+                          setState(() => _error = null);
+                          retry?.call();
+                        },
+                        child: const Text('重试'),
+                      ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: Stack(
                 children: [
-                  Expanded(
-                    child: Text(
-                      _error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
+                  Positioned.fill(
+                    child: Offstage(
+                      offstage: _showLyrics,
+                      child: _buildTabPages(),
                     ),
                   ),
-                  if (_retryLast != null)
-                    TextButton(
-                      onPressed: () {
-                        final retry = _retryLast;
-                        setState(() => _error = null);
-                        retry?.call();
-                      },
-                      child: const Text('重试'),
+                  if (_showLyrics)
+                    // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
+                    Positioned.fill(
+                      child: CoverBackdrop(
+                        palette: _coverPalette,
+                        child: _buildLyrics(),
+                      ),
                     ),
                 ],
               ),
             ),
-          Expanded(
-            child: Stack(
-              children: [
-                // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
-                Positioned.fill(
-                  child: Offstage(offstage: _showLyrics, child: _buildTabPages()),
-                ),
-                if (_showLyrics)
-                  // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
-                  Positioned.fill(
-                    child: CoverBackdrop(
-                      palette: _coverPalette,
-                      child: _buildLyrics(),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -2804,23 +2923,24 @@ class _HomePageState extends State<HomePage> {
   ///   ②搜索页顶部的品牌横幅只是装饰, 用户明确要求去掉 —— 省下的 56dp 全给内容。
   ///   没有 AppBar 时也不再有顶部「登录」动作: 未登录引导在「我的」页(mine_view 的登录按钮)
   ///   与资料头点击(审查 P1-7.10 已定: 账号入口 3→1)。
-  PreferredSizeWidget? _buildTopBar(BuildContext context, rust.SongDto? current) {
+  PreferredSizeWidget? _buildTopBar(
+    BuildContext context,
+    rust.SongDto? current,
+  ) {
     final showBar = _showLyrics || _libraryTitle != null;
     if (!showBar) return null;
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
       // 标题固定用 titleMedium, 让品牌字至少完整显示
       // 详情页(歌词页)标题用 titleLarge 级别; 之前钉在 titleMedium 导致字号特别小
-      titleTextStyle: Theme.of(context)
-          .textTheme
-          .titleLarge
+      titleTextStyle: Theme.of(context).textTheme.titleLarge
           ?.copyWith(fontWeight: FontWeight.w600),
       // 长歌名横向滚动播放(marquee); 放不下不再 FittedBox 缩成小字
       title: MarqueeText(
         _showLyrics
             ? (_lyricSelecting
-                ? '已选 ${_selectedLyricLines.length} 句'
-                : (current?.name ?? '歌词'))
+                  ? '已选 ${_selectedLyricLines.length} 句'
+                  : (current?.name ?? '歌词'))
             : (_libraryTitle ?? '轻音 MiniNCM'),
       ),
       leading: _showLyrics
@@ -2830,12 +2950,12 @@ class _HomePageState extends State<HomePage> {
               onPressed: _toggleLyrics,
             )
           : (_libraryTitle != null
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back),
-                  tooltip: '返回搜索',
-                  onPressed: _closeLibrary,
-                )
-              : null),
+                ? IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    tooltip: '返回搜索',
+                    onPressed: _closeLibrary,
+                  )
+                : null),
       actions: [
         // 歌曲详情页(歌词页)的右上角: 分享 / 翻译开关 / "..." 菜单
         if (_showLyrics) ...[
@@ -3223,11 +3343,9 @@ class _HomePageState extends State<HomePage> {
                       child: Text(
                         lyricSourceLabel(_lyricSource, _lyricReason),
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withValues(alpha: 0.35),
-                            ),
+                          color: Theme.of(context).colorScheme.onSurface
+                              .withValues(alpha: 0.35),
+                        ),
                       ),
                     ),
                   ),
@@ -3306,8 +3424,9 @@ class _HomePageState extends State<HomePage> {
             dragMax: _dragMax,
             dragMs: _dragMs,
           );
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => playerBarData.value = data);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => playerBarData.value = data,
+    );
   }
 
   /// 首页底部导航栏的构建结果, 由根布局渲染(见 [playerBarSlot])。
@@ -3350,4 +3469,3 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
-

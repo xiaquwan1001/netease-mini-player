@@ -21,36 +21,36 @@ enum CoverQuality { dataSaver, standard, ultra }
 extension CoverQualityX on CoverQuality {
   /// 持久化用的稳定名字(不要改: 改了老配置读不回来)
   String get id => switch (this) {
-        CoverQuality.dataSaver => 'dataSaver',
-        CoverQuality.standard => 'standard',
-        CoverQuality.ultra => 'ultra',
-      };
+    CoverQuality.dataSaver => 'dataSaver',
+    CoverQuality.standard => 'standard',
+    CoverQuality.ultra => 'ultra',
+  };
 
   /// 设置界面的档位名
   String get label => switch (this) {
-        CoverQuality.dataSaver => '省流',
-        CoverQuality.standard => '标准',
-        CoverQuality.ultra => '超清',
-      };
+    CoverQuality.dataSaver => '省流',
+    CoverQuality.standard => '标准',
+    CoverQuality.ultra => '超清',
+  };
 
   /// 一句话说明(设置项副标题)
   String get hint => switch (this) {
-        CoverQuality.dataSaver => '按 0.75 倍屏幕像素取图, 流量最省',
-        CoverQuality.standard => '按屏幕像素 1:1 取图, 与设备分辨率一致(推荐)',
-        CoverQuality.ultra => '按 2 倍屏幕像素取图, 放大也锐利, 流量更大',
-      };
+    CoverQuality.dataSaver => '按 0.75 倍屏幕像素取图, 流量最省',
+    CoverQuality.standard => '按屏幕像素 1:1 取图, 与设备分辨率一致(推荐)',
+    CoverQuality.ultra => '按 2 倍屏幕像素取图, 放大也锐利, 流量更大',
+  };
 
   double get multiplier => switch (this) {
-        CoverQuality.dataSaver => 0.75,
-        CoverQuality.standard => 1.0,
-        CoverQuality.ultra => 2.0,
-      };
+    CoverQuality.dataSaver => 0.75,
+    CoverQuality.standard => 1.0,
+    CoverQuality.ultra => 2.0,
+  };
 
   static CoverQuality fromId(String? raw) => switch (raw) {
-        'dataSaver' => CoverQuality.dataSaver,
-        'ultra' => CoverQuality.ultra,
-        _ => CoverQuality.standard,
-      };
+    'dataSaver' => CoverQuality.dataSaver,
+    'ultra' => CoverQuality.ultra,
+    _ => CoverQuality.standard,
+  };
 }
 
 class AppSettings extends ChangeNotifier {
@@ -145,10 +145,10 @@ class AppSettings extends ChangeNotifier {
 
   /// 各偏好的一句语义说明(设置页副标题).
   static String lyricSourceDescription(String pref) => switch (pref) {
-        'netease' => '只用网易云 yrc, 缺失才用 AMLL TTML',
-        'amll' => '优先 AMLL TTML, 失败再用网易云 yrc',
-        _ => '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',
-      };
+    'netease' => '只用网易云 yrc, 缺失才用 AMLL TTML',
+    'amll' => '优先 AMLL TTML, 失败再用网易云 yrc',
+    _ => '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',
+  };
 
   // 注意: double 作 key 不能用 const map(Dart 常量 map 的 key 必须原始相等语义)
   static final loudnessTargets = <double, String>{
@@ -218,8 +218,10 @@ class AppSettings extends ChangeNotifier {
           if (raw['loudnessNormalize'] is bool) {
             loudnessNormalize = raw['loudnessNormalize'] as bool;
           }
-          loudnessTargetLufs =
-              _doubleOf(raw['loudnessTargetLufs'], -16.0).clamp(-30.0, -5.0);
+          loudnessTargetLufs = _doubleOf(
+            raw['loudnessTargetLufs'],
+            -16.0,
+          ).clamp(-30.0, -5.0);
           if (raw['loudnessDynamic'] is bool) {
             loudnessDynamic = raw['loudnessDynamic'] as bool;
           }
@@ -236,7 +238,8 @@ class AppSettings extends ChangeNotifier {
           if (raw['hardwareDecode'] is bool) {
             hardwareDecode = raw['hardwareDecode'] as bool;
           }
-          if (raw['streamCache'] is bool) streamCache = raw['streamCache'] as bool;
+          if (raw['streamCache'] is bool)
+            streamCache = raw['streamCache'] as bool;
           final limit = raw['cacheLimitMb'];
           if (limit is num && cacheLimits.contains(limit.toInt())) {
             cacheLimitMb = limit.toInt();
@@ -247,9 +250,18 @@ class AppSettings extends ChangeNotifier {
           if (srcPref is String && lyricSourceOptions.containsKey(srcPref)) {
             lyricSourcePreference = srcPref;
           }
-          // 自动更新检查(2026-11): 开关 + 节流/跳过记录
-          if (raw['updateCheckOnStartup'] is bool) {
-            updateCheckOnStartup = raw['updateCheckOnStartup'] as bool;
+          // 自动更新检查(2026-11): 频率 + 节流/跳过记录
+          // 兼容旧版布尔开关: true -> 每天, false -> 不自动检查。
+          final intervalRaw = raw['updateCheckInterval'];
+          if (intervalRaw is String) {
+            updateCheckInterval = UpdateCheckInterval.values.firstWhere(
+              (v) => v.name == intervalRaw,
+              orElse: () => UpdateCheckInterval.daily,
+            );
+          } else if (raw['updateCheckOnStartup'] is bool) {
+            updateCheckInterval = raw['updateCheckOnStartup'] as bool
+                ? UpdateCheckInterval.daily
+                : UpdateCheckInterval.off;
           }
           if (raw['lastUpdateCheckMs'] is int) {
             lastUpdateCheckMs = raw['lastUpdateCheckMs'] as int;
@@ -289,10 +301,10 @@ class AppSettings extends ChangeNotifier {
     int? cacheLimitMb,
     bool? lyricTranslation,
     String? lyricSourcePreference,
-    bool? updateCheckOnStartup,
+    UpdateCheckInterval? updateCheckInterval,
   }) async {
-    if (updateCheckOnStartup != null) {
-      this.updateCheckOnStartup = updateCheckOnStartup;
+    if (updateCheckInterval != null) {
+      this.updateCheckInterval = updateCheckInterval;
     }
     if (themeMode != null) this.themeMode = themeMode;
     if (accent != null) this.accent = accent;
@@ -339,55 +351,57 @@ class AppSettings extends ChangeNotifier {
     if (file == null) return;
     try {
       await file.parent.create(recursive: true);
-      await file.writeAsString(jsonEncode({
-        'themeMode': _themeName(themeMode),
-        'accent': accent.id,
-        'textScale': textScale,
-        'audioLevel': audioLevel,
-        'coverRows': coverRows,
-        'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
-        'showHotSearch': showHotSearch,
-        'coverQuality': coverQuality.id,
-        'oledDark': oledDark,
-        'volumeGainDb': volumeGainDb,
-        'loudnessNormalize': loudnessNormalize,
-        'loudnessTargetLufs': loudnessTargetLufs,
-        'loudnessDynamic': loudnessDynamic,
-        'eqProfileName': eqProfileName,
-        'eqProfileText': eqProfileText,
-        'fadeMs': fadeMs,
-        'hardwareDecode': hardwareDecode,
-        'streamCache': streamCache,
-        'cacheLimitMb': cacheLimitMb,
-        'lyricTranslation': lyricTranslation,
-        'lyricSourcePreference': lyricSourcePreference,
-        'updateCheckOnStartup': updateCheckOnStartup,
-        'lastUpdateCheckMs': lastUpdateCheckMs,
-        'skippedUpdateVersion': skippedUpdateVersion,
-      }));
+      await file.writeAsString(
+        jsonEncode({
+          'themeMode': _themeName(themeMode),
+          'accent': accent.id,
+          'textScale': textScale,
+          'audioLevel': audioLevel,
+          'coverRows': coverRows,
+          'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
+          'showHotSearch': showHotSearch,
+          'coverQuality': coverQuality.id,
+          'oledDark': oledDark,
+          'volumeGainDb': volumeGainDb,
+          'loudnessNormalize': loudnessNormalize,
+          'loudnessTargetLufs': loudnessTargetLufs,
+          'loudnessDynamic': loudnessDynamic,
+          'eqProfileName': eqProfileName,
+          'eqProfileText': eqProfileText,
+          'fadeMs': fadeMs,
+          'hardwareDecode': hardwareDecode,
+          'streamCache': streamCache,
+          'cacheLimitMb': cacheLimitMb,
+          'lyricTranslation': lyricTranslation,
+          'lyricSourcePreference': lyricSourcePreference,
+          'updateCheckInterval': updateCheckInterval.name,
+          'lastUpdateCheckMs': lastUpdateCheckMs,
+          'skippedUpdateVersion': skippedUpdateVersion,
+        }),
+      );
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效
     }
   }
 
   static String _themeName(ThemeMode mode) => switch (mode) {
-        ThemeMode.light => 'light',
-        ThemeMode.dark => 'dark',
-        ThemeMode.system => 'system',
-      };
+    ThemeMode.light => 'light',
+    ThemeMode.dark => 'dark',
+    ThemeMode.system => 'system',
+  };
 
   static ThemeMode _themeFrom(Object? value) => switch (value) {
-        'light' => ThemeMode.light,
-        'dark' => ThemeMode.dark,
-        _ => ThemeMode.system,
-      };
+    'light' => ThemeMode.light,
+    'dark' => ThemeMode.dark,
+    _ => ThemeMode.system,
+  };
 
   // ---------------- 自动更新检查(2026-11) ----------------
 
-  /// 启动时是否后台静默检查更新(关掉后仍可手动「检查更新」)
-  bool updateCheckOnStartup = true;
+  /// 自动检查更新频率(默认每天; off 时仍可手动「检查更新」)
+  UpdateCheckInterval updateCheckInterval = UpdateCheckInterval.daily;
 
-  /// 上次启动检查的 epoch ms(24h 节流用; 手动检查不写)
+  /// 上次启动检查的 epoch ms(按 [updateCheckInterval] 的周期节流; 手动检查不写)
   int? lastUpdateCheckMs;
 
   /// 用户点「稍后」跳过的版本 tag, 启动静默检查不再提示该版本
@@ -409,6 +423,27 @@ class AppSettings extends ChangeNotifier {
 
   static double _doubleOf(Object? value, double fallback) =>
       value is num ? value.toDouble() : fallback;
+}
+
+/// 自动更新检查频率(2026-11 用户要求: 默认每天检查; 可关/每周/每月)。
+/// [period] 为 null 表示不自动检查(手动「检查更新」仍然可用)。
+enum UpdateCheckInterval {
+  off('不自动检查', '只在你点「检查更新」时联网'),
+  daily('每天', '启动后静默检查一次, 发现新版本弹窗提示'),
+  weekly('每周', '每周最多检查一次'),
+  monthly('每月', '每月最多检查一次');
+
+  const UpdateCheckInterval(this.label, this.hint);
+
+  final String label;
+  final String hint;
+
+  Duration? get period => switch (this) {
+    off => null,
+    daily => const Duration(days: 1),
+    weekly => const Duration(days: 7),
+    monthly => const Duration(days: 30),
+  };
 }
 
 /// 让 MaterialApp 跟随 AppSettings 重建(主题/字号即时生效)

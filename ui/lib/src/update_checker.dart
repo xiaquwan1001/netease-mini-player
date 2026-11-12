@@ -22,9 +22,6 @@ const String kLatestReleaseApi =
 
 const Duration kUpdateCheckTimeout = Duration(seconds: 8);
 
-/// 启动静默检查的节流窗口: 24h 内不重复请求。
-const Duration kUpdateCheckThrottle = Duration(hours: 24);
-
 /// 检查结果。latest 为 tag(去掉 v 前缀保留原样展示), isNewer 由
 /// [compareVersions] 判断; downloadUrl 为当前平台资产, 无匹配时回退 html_url。
 class UpdateInfo {
@@ -45,19 +42,26 @@ class UpdateInfo {
 
 /// fetch 注入点: 单测全部走假 fetcher / 假 HttpClient, 绝不真联网。
 typedef UpdateFetcher = Future<({int statusCode, String body})> Function(
-    Uri url);
+  Uri url,
+);
 
 /// UI 注入点: 设置页与启动检查通过这里发起检查 / 打开链接,
 /// 测试替换成假实现断言调用(见 update_checker_test.dart)。
 class UpdateCheckHost {
   /// 生产默认走真实 GitHub API。
-  static Future<UpdateInfo?> Function(String currentVersion) check =
-      (currentVersion) => checkForUpdate(currentVersion: currentVersion);
+  static Future<UpdateInfo?> Function(String currentVersion) check = (
+    currentVersion,
+  ) => checkForUpdate(currentVersion: currentVersion);
 
   static Future<void> Function(String url) openUrl = PlatformBridge.openUrl;
 
   /// 启动静默检查发现的新版本(有值时「检查更新」项显示红点)。
   static final ValueNotifier<UpdateInfo?> pendingUpdate =
+      ValueNotifier<UpdateInfo?>(null);
+
+  /// 需要**自动弹窗**的新版本(只由启动检查写入; 设置页手动检查不写,
+  /// 否则会手动弹一个、主界面再叠一个)。主界面监听它弹更新对话框。
+  static final ValueNotifier<UpdateInfo?> pendingPrompt =
       ValueNotifier<UpdateInfo?>(null);
 }
 
@@ -118,8 +122,7 @@ _ParsedVersion? _parseVersion(String input) {
   if (core.isEmpty || core.any((p) => p.isEmpty || int.tryParse(p) == null)) {
     return null;
   }
-  return _ParsedVersion(
-      core.map(int.parse).toList(), pre, build);
+  return _ParsedVersion(core.map(int.parse).toList(), pre, build);
 }
 
 int _compareNumList(List<int> a, List<int> b) {
@@ -146,12 +149,13 @@ int _comparePreId(String a, String b) {
 /// 从 release JSON 里挑当前平台资产: android => `-android-*.apk`,
 /// linux => `-linux-*.tar.gz`; 没有匹配资产时回退 `html_url`。
 /// [preferAndroid] 供测试注入平台(生产按 Platform.isAndroid)。
-String? pickDownloadUrl(
-  Map<Object?, Object?> release, {
-  bool? preferAndroid,
-}) {
-  final android = preferAndroid ??
-      (!kIsWeb && !Platform.isWindows && !Platform.isMacOS && Platform.isAndroid);
+String? pickDownloadUrl(Map<Object?, Object?> release, {bool? preferAndroid}) {
+  final android =
+      preferAndroid ??
+      (!kIsWeb &&
+          !Platform.isWindows &&
+          !Platform.isMacOS &&
+          Platform.isAndroid);
   final suffix = android ? '.apk' : '.tar.gz';
   final marker = android ? '-android-' : '-linux-';
   final assets = release['assets'];
@@ -245,11 +249,12 @@ Future<UpdateInfo?> checkForUpdate({
 // ---------------- 启动静默检查 + 节流 ----------------
 
 /// 是否允许启动静默检查(纯函数, 注入 nowMs 便于测试):
-/// 开关打开且距上次检查 >= 24h。
+/// 频率不是 off, 且距上次检查已满该周期(每天/每周/每月)。
 bool shouldStartupCheck({required AppSettings settings, required int nowMs}) {
-  if (!settings.updateCheckOnStartup) return false;
+  final period = settings.updateCheckInterval.period;
+  if (period == null) return false;
   final last = settings.lastUpdateCheckMs;
-  return last == null || nowMs - last >= kUpdateCheckThrottle.inMilliseconds;
+  return last == null || nowMs - last >= period.inMilliseconds;
 }
 
 /// 首帧后 3s 后台静默检查一次(不阻塞 UI, 失败静默):
@@ -271,4 +276,6 @@ Future<void> runStartupUpdateCheck(
   if (!info.isNewer) return;
   if (info.latest == settings.skippedUpdateVersion) return;
   UpdateCheckHost.pendingUpdate.value = info;
+  // 只有启动检查会自动弹窗; 设置页手动检查只点亮红点。
+  UpdateCheckHost.pendingPrompt.value = info;
 }

@@ -33,14 +33,16 @@ class FeedView extends StatefulWidget {
   final Future<List<rust.Artist>> Function()? loadSubscribedArtists;
 
   /// 列表行"点赞"动作: 直接走 FFI(不必进详情页), 失败在列表上提示并回滚
-  final Future<bool> Function({required String threadId, required bool liked})? likeEvent;
+  final Future<bool> Function({required String threadId, required bool liked})?
+  likeEvent;
 
   /// 列表行"转发"动作(分享面板里选"转发动态"时用)
   final Future<bool> Function({
     required BigInt eventId,
     required BigInt userId,
     required String msg,
-  })? forwardEvent;
+  })?
+  forwardEvent;
 
   @override
   State<FeedView> createState() => _FeedViewState();
@@ -101,7 +103,9 @@ class _FeedViewState extends State<FeedView> {
     final byKey = <BigInt, _Author>{};
     var firstSeen = 0;
     for (final e in _events ?? const <rust.FeedEventDto>[]) {
-      final key = e.userId != BigInt.zero ? e.userId : BigInt.from(-e.id.toInt());
+      final key = e.userId != BigInt.zero
+          ? e.userId
+          : BigInt.from(-e.id.toInt());
       final existing = byKey[key];
       if (existing == null) {
         byKey[key] = _Author(
@@ -134,7 +138,8 @@ class _FeedViewState extends State<FeedView> {
       builder: (_) => _AllArtistsSheet(
         authors: _authors,
         selected: _authorFilter,
-        loadSubscribed: widget.loadSubscribedArtists ??
+        loadSubscribed:
+            widget.loadSubscribedArtists ??
             () => rust.subscribedArtists(limit: 100),
       ),
     );
@@ -147,7 +152,10 @@ class _FeedViewState extends State<FeedView> {
     final all = _events ?? const <rust.FeedEventDto>[];
     final filter = _authorFilter;
     if (filter == null) return all;
-    return [for (final e in all) if (e.userId == filter) e];
+    return [
+      for (final e in all)
+        if (e.userId == filter) e,
+    ];
   }
 
   @override
@@ -275,14 +283,21 @@ class _FeedViewState extends State<FeedView> {
     }
   }
 
-  void _patchLike(BigInt id, {required bool liked, required BigInt likedCount}) {
+  void _patchLike(
+    BigInt id, {
+    required bool liked,
+    required BigInt likedCount,
+  }) {
     final list = _events;
     if (list == null) return;
     final index = list.indexWhere((e) => e.id == id);
     if (index < 0) return;
     setState(() {
-      list[index] =
-          _copyEventWith(list[index], liked: liked, likedCount: likedCount);
+      list[index] = _copyEventWith(
+        list[index],
+        liked: liked,
+        likedCount: likedCount,
+      );
     });
   }
 
@@ -299,26 +314,25 @@ rust.FeedEventDto _copyEventWith(
   rust.FeedEventDto e, {
   required bool liked,
   required BigInt likedCount,
-}) =>
-    rust.FeedEventDto(
-      id: e.id,
-      threadId: e.threadId,
-      userId: e.userId,
-      kind: e.kind,
-      userName: e.userName,
-      avatarUrl: e.avatarUrl,
-      text: e.text,
-      song: e.song,
-      coverUrl: e.coverUrl,
-      images: e.images,
-      videoUrl: e.videoUrl,
-      title: e.title,
-      timeMs: e.timeMs,
-      liked: liked,
-      likedCount: likedCount,
-      shareCount: e.shareCount,
-      commentCount: e.commentCount,
-    );
+}) => rust.FeedEventDto(
+  id: e.id,
+  threadId: e.threadId,
+  userId: e.userId,
+  kind: e.kind,
+  userName: e.userName,
+  avatarUrl: e.avatarUrl,
+  text: e.text,
+  song: e.song,
+  coverUrl: e.coverUrl,
+  images: e.images,
+  videoUrl: e.videoUrl,
+  title: e.title,
+  timeMs: e.timeMs,
+  liked: liked,
+  likedCount: likedCount,
+  shareCount: e.shareCount,
+  commentCount: e.commentCount,
+);
 
 class _Author {
   const _Author({
@@ -351,15 +365,15 @@ class _Author {
   int get score => postCount * 6 + likes + comments * 2 + shares * 2;
 
   _Author addEvent(rust.FeedEventDto e) => _Author(
-        userId: userId,
-        name: name,
-        avatarUrl: avatarUrl ?? e.avatarUrl,
-        firstSeen: firstSeen,
-        postCount: postCount + 1,
-        likes: likes + e.likedCount.toInt(),
-        comments: comments + e.commentCount.toInt(),
-        shares: shares + e.shareCount.toInt(),
-      );
+    userId: userId,
+    name: name,
+    avatarUrl: avatarUrl ?? e.avatarUrl,
+    firstSeen: firstSeen,
+    postCount: postCount + 1,
+    likes: likes + e.likedCount.toInt(),
+    comments: comments + e.commentCount.toInt(),
+    shares: shares + e.shareCount.toInt(),
+  );
 
   /// "3 条动态 · 120 互动"
   String get subtitle {
@@ -529,7 +543,8 @@ class _FeedCard extends StatelessWidget {
     required BigInt eventId,
     required BigInt userId,
     required String msg,
-  })? forwardEvent;
+  })?
+  forwardEvent;
 
   /// 分享动作面板: 转发(带转发语, 走 forwardEvent) / 复制链接(剪贴板)。
   /// 与详情页同源(链接/文案一致), 只是入口在列表行上, 不必进详情页。
@@ -625,8 +640,9 @@ class _FeedCard extends StatelessWidget {
       onOpenUrl: onOpenUrl,
       // 从"评论"数字/图标进来时直接定位到评论区(不弹输入框)
       focusComments: focusComments,
-      onLikeChanged: (id, liked, likedCount) =>
-          onOpenChanged(_copyEventWith(event, liked: liked, likedCount: likedCount)),
+      onLikeChanged: (id, liked, likedCount) => onOpenChanged(
+        _copyEventWith(event, liked: liked, likedCount: likedCount),
+      ),
     );
   }
 
@@ -634,7 +650,8 @@ class _FeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final hasBody = event.text.trim().isNotEmpty ||
+    final hasBody =
+        event.text.trim().isNotEmpty ||
         event.title.trim().isNotEmpty ||
         event.song != null ||
         event.images.isNotEmpty ||
@@ -645,7 +662,8 @@ class _FeedCard extends StatelessWidget {
       child: InkWell(
         onTap: () => _openDetail(context),
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          // 页面 12 + 卡片 8 = 20dp/侧: 动态是正文流, 太宽会明显浪费横向空间
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -794,14 +812,18 @@ class _FeedCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.mode_comment_outlined,
-                                size: 14, color: scheme.outline),
+                            Icon(
+                              Icons.mode_comment_outlined,
+                              size: 14,
+                              color: scheme.outline,
+                            ),
                             if (event.commentCount > BigInt.zero) ...[
                               const SizedBox(width: 4),
                               Text(
                                 '${event.commentCount}',
-                                style: theme.textTheme.labelSmall
-                                    ?.copyWith(color: scheme.outline),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline,
+                                ),
                               ),
                             ],
                           ],
@@ -821,14 +843,18 @@ class _FeedCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.autorenew,
-                                size: 14, color: scheme.outline),
+                            Icon(
+                              Icons.autorenew,
+                              size: 14,
+                              color: scheme.outline,
+                            ),
                             if (event.shareCount > BigInt.zero) ...[
                               const SizedBox(width: 4),
                               Text(
                                 '${event.shareCount}',
-                                style: theme.textTheme.labelSmall
-                                    ?.copyWith(color: scheme.outline),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: scheme.outline,
+                                ),
                               ),
                             ],
                           ],
@@ -845,8 +871,9 @@ class _FeedCard extends StatelessWidget {
                           children: [
                             Text(
                               '查看详情',
-                              style: theme.textTheme.labelSmall
-                                  ?.copyWith(color: scheme.outline),
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: scheme.outline,
+                              ),
                             ),
                             Icon(
                               Icons.chevron_right,
@@ -1004,6 +1031,7 @@ class _VideoThumb extends StatelessWidget {
     );
   }
 }
+
 /// "进入全部": 本页发布者(按互动频率) + 已关注但本页没发动态的艺人.
 /// 选中后把 userId 回传给 FeedView, 由它设置分类筛选.
 class _AllArtistsSheet extends StatefulWidget {
@@ -1070,8 +1098,9 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
             title: '全部艺人',
             trailing: Text(
               '共 ${widget.authors.length + others.length} 位',
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: scheme.outline),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.outline,
+              ),
             ),
           ),
           const Divider(height: 1),
@@ -1081,7 +1110,9 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
               children: [
                 // 点这一行 = 取消筛选, 回到全部动态
                 ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.all_inclusive, size: 18)),
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.all_inclusive, size: 18),
+                  ),
                   title: const Text('全部动态'),
                   subtitle: const Text('不按艺人筛选'),
                   trailing: widget.selected == null
@@ -1095,8 +1126,9 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Text(
                       '本页动态 · 按互动频率排序',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.outline),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.outline,
+                      ),
                     ),
                   ),
                 for (final a in widget.authors)
@@ -1130,8 +1162,9 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                     child: Text(
                       '已关注 · 本页暂无动态',
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.outline),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.outline,
+                      ),
                     ),
                   ),
                   for (final a in others)

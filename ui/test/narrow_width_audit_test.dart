@@ -1,4 +1,3 @@
-
 // 窄屏排版专项审计回归: 300dp/大字体下不再竖排、不再溢出。
 // 覆盖矩阵: 逻辑宽 {300,320,360} × textScale {1.0,1.25,1.3,1.625},
 // 全部用假数据, 不联网。断言: ①无 overflow 错误 ②关键文本单行 ③右边界不出屏。
@@ -23,19 +22,19 @@ const _widths = [300.0, 320.0, 360.0];
 const _scales = [1.0, 1.25, 1.3, 1.625];
 
 rust.SongDto song({int id = 1, bool vip = false}) => rust.SongDto(
-      id: BigInt.from(id),
-      name: _longName,
-      artist: _longArtist,
-      artistId: BigInt.from(9),
-      album: _longAlbum,
-      albumId: BigInt.from(8),
-      coverUrl: null,
-      durationMs: BigInt.from(269000),
-      fee: vip ? 1 : 0,
-      vip: vip,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: _longName,
+  artist: _longArtist,
+  artistId: BigInt.from(9),
+  album: _longAlbum,
+  albumId: BigInt.from(8),
+  coverUrl: null,
+  durationMs: BigInt.from(269000),
+  fee: vip ? 1 : 0,
+  vip: vip,
+  paid: false,
+  playable: true,
+);
 
 /// 在指定逻辑宽度/字体缩放下 pump, 返回捕获到的错误文案列表.
 Future<List<String>> pumpAudited(
@@ -62,7 +61,8 @@ Future<List<String>> pumpAudited(
   return [for (final e in errors) e.exception.toString()];
 }
 
-String _tag(String page, double width, double scale) => '$page w=$width s=$scale';
+String _tag(String page, double width, double scale) =>
+    '$page w=$width s=$scale';
 
 void expectNoOverflow(List<String> errors, String tag) {
   final overflows = errors.where((e) => e.contains('overflowed')).toList();
@@ -70,8 +70,12 @@ void expectNoOverflow(List<String> errors, String tag) {
 }
 
 /// 关键文本块必须是单行: 高度不超过两倍行高(竖排会远超).
-void expectSingleLine(WidgetTester tester, Finder finder, String tag,
-    {double maxLineHeight = 40}) {
+void expectSingleLine(
+  WidgetTester tester,
+  Finder finder,
+  String tag, {
+  double maxLineHeight = 40,
+}) {
   final boxes = tester.renderObjectList<RenderBox>(finder);
   expect(boxes, isNotEmpty, reason: tag);
   for (final box in boxes) {
@@ -234,16 +238,6 @@ void main() {
             loadStyles: () async => const [
               rust.StyleTag(id: '1009', name: '粤语流行'),
             ],
-            loadCharts: () async => [
-              rust.ChartSummary(
-                id: BigInt.from(19723756),
-                name: _longName,
-                coverUrl: null,
-                updateFrequency: '每天更新',
-                trackCount: BigInt.from(30),
-                playCount: BigInt.from(999),
-              ),
-            ],
             loadNewAlbums: () async => [
               rust.AlbumItem(
                 id: BigInt.from(30),
@@ -323,8 +317,9 @@ void main() {
     }
   });
 
-  testWidgets('歌单详情头卡(同构排版: MarqueeText 在 Expanded 内): 12 组合无溢出/单行/不出屏',
-      (tester) async {
+  testWidgets('歌单详情头卡(同构排版: MarqueeText 在 Expanded 内): 12 组合无溢出/单行/不出屏', (
+    tester,
+  ) async {
     // 真实 _PlaylistDetailPage 依赖 Rust FFI 取数, 测试无法注入假 loader;
     // 这里按 detail_page 头卡的同一排版结构(Row > Expanded > Column > MarqueeText
     // + 创建者行)做结构等价回归, 防止该组合再退化.
@@ -400,7 +395,12 @@ void main() {
           scale: scale,
         );
         expectNoOverflow(errors, tag);
-        expectSingleLine(tester, find.byType(MarqueeText), tag, maxLineHeight: 30);
+        expectSingleLine(
+          tester,
+          find.byType(MarqueeText),
+          tag,
+          maxLineHeight: 30,
+        );
         await tester.pumpWidget(const SizedBox.shrink());
       }
     }

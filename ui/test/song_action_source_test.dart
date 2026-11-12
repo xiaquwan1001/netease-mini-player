@@ -5,18 +5,18 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_actions.dart';
 
 rust.SongDto fakeSong({String name = '测试歌曲'}) => rust.SongDto(
-      id: BigInt.from(42),
-      name: name,
-      artist: '测试歌手',
-      artistId: BigInt.one,
-      album: '测试专辑',
-      albumId: BigInt.one,
-      durationMs: BigInt.from(200000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(42),
+  name: name,
+  artist: '测试歌手',
+  artistId: BigInt.one,
+  album: '测试专辑',
+  albumId: BigInt.one,
+  durationMs: BigInt.from(200000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
 /// 带 dislike 记录的假 host
 class FakeHost {
@@ -42,19 +42,21 @@ class FakeHost {
   );
 }
 
-Future<void> openMenu(WidgetTester tester, FakeHost fake,
-    {SongActionSource source = SongActionSource.other}) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: AppActions(
-        host: fake.host,
-        child: SongOverflowButton(
-          song: fakeSong(),
-          source: source,
+Future<void> openMenu(
+  WidgetTester tester,
+  FakeHost fake, {
+  SongActionSource source = SongActionSource.other,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: AppActions(
+          host: fake.host,
+          child: SongOverflowButton(song: fakeSong(), source: source),
         ),
       ),
     ),
-  ));
+  );
   await tester.tap(find.byType(SongOverflowButton));
   await tester.pumpAndSettle();
 }
@@ -77,8 +79,7 @@ void main() {
     ]) {
       final fake = FakeHost();
       await openMenu(tester, fake, source: source);
-      expect(find.text('不感兴趣'), findsNothing,
-          reason: '$source 不应显示不感兴趣');
+      expect(find.text('不感兴趣'), findsNothing, reason: '$source 不应显示不感兴趣');
       // 关掉面板(点屏障), 供下一轮循环复用
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
@@ -110,8 +111,11 @@ void main() {
     for (final source in SongActionSource.values) {
       final fake = FakeHost(withDislike: false);
       await openMenu(tester, fake, source: source);
-      expect(find.text('不感兴趣'), findsNothing,
-          reason: 'dislike=null 时 $source 不应显示不感兴趣');
+      expect(
+        find.text('不感兴趣'),
+        findsNothing,
+        reason: 'dislike=null 时 $source 不应显示不感兴趣',
+      );
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
     }
@@ -122,20 +126,22 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     final fake = FakeHost();
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: AppActions(
-            host: fake.host,
-            child: SongOverflowButton(
-              song: fakeSong(),
-              source: SongActionSource.dailyRecommend,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: AppActions(
+              host: fake.host,
+              child: SongOverflowButton(
+                song: fakeSong(),
+                source: SongActionSource.dailyRecommend,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.byType(SongOverflowButton));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
@@ -150,29 +156,30 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final fake = FakeHost();
-    await tester.pumpWidget(MaterialApp(
-      home: AppActions(
-        host: fake.host,
-        child: Scaffold(
-          body: RecommendView(
-            loggedIn: true,
-            onPlaySongs: (_, _) {},
-            onOpenPlaylist: (_) {},
-            onOpenPodcast: (_) {},
-            onHeartMode: () {},
-            onOpenDaily: () {},
-            loadDailySongs: () async => [fakeSong(name: '每日一歌')],
-            loadDailyPlaylists: () async => [],
-            loadPodcasts: () async => [],
-            loadFm: () async => [],
-            loadStyles: () async => const [],
-            loadCharts: () async => [],
-            loadNewSongs: () async => [],
-            loadNewAlbums: () async => [],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppActions(
+          host: fake.host,
+          child: Scaffold(
+            body: RecommendView(
+              loggedIn: true,
+              onPlaySongs: (_, _) {},
+              onOpenPlaylist: (_) {},
+              onOpenPodcast: (_) {},
+              onHeartMode: () {},
+              onOpenDaily: () {},
+              loadDailySongs: () async => [fakeSong(name: '每日一歌')],
+              loadDailyPlaylists: () async => [],
+              loadPodcasts: () async => [],
+              loadFm: () async => [],
+              loadStyles: () async => const [],
+              loadNewSongs: () async => [],
+              loadNewAlbums: () async => [],
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('更多操作'), findsWidgets);
@@ -188,29 +195,30 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final fake = FakeHost();
-    await tester.pumpWidget(MaterialApp(
-      home: AppActions(
-        host: fake.host,
-        child: Scaffold(
-          body: RecommendView(
-            loggedIn: true,
-            onPlaySongs: (_, _) {},
-            onOpenPlaylist: (_) {},
-            onOpenPodcast: (_) {},
-            onHeartMode: () {},
-            onOpenDaily: () {},
-            loadDailySongs: () async => [fakeSong(name: '每日一歌')],
-            loadDailyPlaylists: () async => [],
-            loadPodcasts: () async => [],
-            loadFm: () async => [],
-            loadStyles: () async => const [],
-            loadCharts: () async => [],
-            loadNewSongs: () async => [],
-            loadNewAlbums: () async => [],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppActions(
+          host: fake.host,
+          child: Scaffold(
+            body: RecommendView(
+              loggedIn: true,
+              onPlaySongs: (_, _) {},
+              onOpenPlaylist: (_) {},
+              onOpenPodcast: (_) {},
+              onHeartMode: () {},
+              onOpenDaily: () {},
+              loadDailySongs: () async => [fakeSong(name: '每日一歌')],
+              loadDailyPlaylists: () async => [],
+              loadPodcasts: () async => [],
+              loadFm: () async => [],
+              loadStyles: () async => const [],
+              loadNewSongs: () async => [],
+              loadNewAlbums: () async => [],
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('更多操作').first);

@@ -22,7 +22,11 @@ typedef PagedLoader<T> = Future<PagedPage<T>> Function(int cursor);
 
 /// 条目构建器: 同时给出当前已加载的全量条目, 供"点一首播整批"类交互使用。
 typedef PagedItemBuilder<T> = Widget Function(
-    BuildContext context, T item, int index, List<T> items);
+  BuildContext context,
+  T item,
+  int index,
+  List<T> items,
+);
 
 /// 「分页 + 空态 + 错误重试」三件套公共列表。
 ///
@@ -98,6 +102,10 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   int _cursor = 0;
   String? _error;
 
+  /// 代际: 下拉刷新会 ++, 让仍在飞行的旧页/旧 _loadMore 结果直接丢弃
+  /// (否则刷新后旧 cursor 的下一页会拼进新列表)。
+  int _generation = 0;
+
   @override
   void initState() {
     super.initState();
@@ -105,15 +113,17 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   }
 
   Future<void> _reload() async {
+    final gen = ++_generation;
     setState(() {
       _loading = true;
+      _loadingMore = false;
       _error = null;
       _cursor = 0;
       _items.clear();
     });
     try {
       final page = await widget.loader(0);
-      if (!mounted) return;
+      if (!mounted || gen != _generation) return;
       setState(() {
         _items.addAll(_dedupe(page.items, <Object?>{}));
         _hasMore = page.hasMore;
@@ -121,7 +131,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _generation) return;
       setState(() {
         _error = friendlyError(e);
         _loading = false;
@@ -144,16 +154,17 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   }
 
   Set<Object?> get _knownKeys => {
-        if (widget.keyOf != null)
-          for (final item in _items) widget.keyOf!(item),
-      };
+    if (widget.keyOf != null)
+      for (final item in _items) widget.keyOf!(item),
+  };
 
   Future<void> _loadMore() async {
     if (_loading || _loadingMore || !_hasMore) return;
+    final gen = _generation;
     setState(() => _loadingMore = true);
     try {
       final page = await widget.loader(_cursor);
-      if (!mounted) return;
+      if (!mounted || gen != _generation) return;
       setState(() {
         _items.addAll(_dedupe(page.items, _knownKeys));
         _hasMore = page.hasMore;
@@ -161,7 +172,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
         _loadingMore = false;
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || gen != _generation) return;
       setState(() => _loadingMore = false);
       // 加载更多失败: 保留旧数据, 只弹 SnackBar 提示
       ScaffoldMessenger.of(context)

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
+import 'layout.dart' show kSongRowPadding;
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
@@ -17,11 +18,17 @@ class VipBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(left: 6),
-      padding: EdgeInsets.symmetric(horizontal: small ? 4 : 6, vertical: small ? 1 : 2),
+      padding: EdgeInsets.symmetric(
+        horizontal: small ? 4 : 6,
+        vertical: small ? 1 : 2,
+      ),
       decoration: BoxDecoration(
         color: scheme.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.5), width: 0.8),
+        border: Border.all(
+          color: scheme.primary.withValues(alpha: 0.5),
+          width: 0.8,
+        ),
       ),
       child: Text(
         'VIP',
@@ -133,14 +140,13 @@ class SongTile extends StatelessWidget {
     final grey = TextStyle(color: scheme.outline);
     // 红心可点: 显式回调 > 全局动作宿主 > 无(退回只读指示器)
     final host = onToggleLike == null ? AppActions.maybeOf(context) : null;
-    final onLike = onToggleLike ??
-        (host == null ? null : () => host.toggleLike(song));
+    final onLike =
+        onToggleLike ?? (host == null ? null : () => host.toggleLike(song));
     return ListTile(
       dense: true,
       selected: active,
-      // 行左右留白收到最小: 用户反馈歌曲行"左右没占满", 文字横向空间不足。
-      // 原来 ListTile 默认 16+16 的 contentPadding 白白吃掉 32dp。
-      contentPadding: const EdgeInsets.fromLTRB(8, 0, 4, 0),
+      // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp)
+      contentPadding: kSongRowPadding,
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
       // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee;

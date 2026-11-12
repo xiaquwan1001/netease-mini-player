@@ -63,9 +63,10 @@ void main() {
       expect(board.height, lessThan(64));
 
       // 左边界要和同卡里的普通 ListTile 行对齐
-      // (12dp ListView padding + 16dp 内容 padding = 28dp),
+      // (12dp ListView padding + 12dp 内容 padding = 24dp; 2026-11 布局审计把
+      // ListTile 默认 16 收到 12, 与页面 12 叠后共 24),
       // 否则整行会被外层 Column 的居中挤成"缩进"的样子。
-      double contentLeft = 12 + 16;
+      double contentLeft = 12 + 12;
       expect(tester.getRect(find.text('主题模式')).left, moreOrLessEquals(contentLeft, epsilon: 0.5));
       expect(board.left, moreOrLessEquals(contentLeft, epsilon: 0.5));
       expect(tester.getRect(find.text('OLED 纯黑')).left, moreOrLessEquals(contentLeft, epsilon: 0.5));

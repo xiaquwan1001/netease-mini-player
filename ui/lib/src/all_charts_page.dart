@@ -5,22 +5,23 @@ import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 
-typedef ToplistCatalogLoader = Future<List<rust.ToplistCatalogGroup>> Function();
+typedef ToplistCatalogLoader =
+    Future<List<rust.ToplistCatalogGroup>> Function();
 
 /// toplist_catalog 的 categoryCode → 中文小标题.
 /// 实测 7 组(顺序按服务端返回): TOPPING(置顶推广) / OFFICIAL(官方榜) /
 /// FEATURE(特色榜) / MUSIC_STYLE(曲风榜) / GLOBAL(全球榜) / LANGUAGE(语种榜) /
 /// MORE(更多). 未知 code 原样展示, 不吞组.
 String toplistGroupTitle(String code) => switch (code) {
-      'TOPPING' => '置顶',
-      'OFFICIAL' => '官方榜',
-      'FEATURE' => '特色榜',
-      'MUSIC_STYLE' => '曲风榜',
-      'GLOBAL' => '全球榜',
-      'LANGUAGE' => '语种榜',
-      'MORE' => '更多',
-      _ => code,
-    };
+  'TOPPING' => '置顶',
+  'OFFICIAL' => '官方榜',
+  'FEATURE' => '特色榜',
+  'MUSIC_STYLE' => '曲风榜',
+  'GLOBAL' => '全球榜',
+  'LANGUAGE' => '语种榜',
+  'MORE' => '更多',
+  _ => code,
+};
 
 /// 打开"全部榜单"页(榜单即歌单, 点可播条目走上层歌单详情回调).
 Future<void> showAllChartsPage(
@@ -39,7 +40,11 @@ Future<void> showAllChartsPage(
 }
 
 class AllChartsPage extends StatefulWidget {
-  const AllChartsPage({super.key, required this.onOpenPlaylist, this.loadCatalog});
+  const AllChartsPage({
+    super.key,
+    required this.onOpenPlaylist,
+    this.loadCatalog,
+  });
 
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
@@ -63,10 +68,8 @@ class _AllChartsPageState extends State<AllChartsPage> {
           await retryNetwork(widget.loadCatalog ?? rust.toplistCatalog),
           hasMore: false,
         ),
-        itemBuilder: (context, g, i, groups) => _GroupSection(
-          group: g,
-          onOpenPlaylist: widget.onOpenPlaylist,
-        ),
+        itemBuilder: (context, g, i, groups) =>
+            _GroupSection(group: g, onOpenPlaylist: widget.onOpenPlaylist),
       ),
     );
   }
@@ -85,12 +88,10 @@ class _GroupSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 4),
           child: Text(
             toplistGroupTitle(group.code),
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
+            style: Theme.of(context).textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
         ),
@@ -113,13 +114,15 @@ class _GroupSection extends StatelessWidget {
             ),
             // canPlay=false 的条目灰显不可点(榜单即歌单, 传 id 走歌单详情)
             onTap: item.canPlay
-                ? () => onOpenPlaylist(rust.Playlist(
+                ? () => onOpenPlaylist(
+                    rust.Playlist(
                       id: item.id,
                       name: item.name,
                       coverUrl: item.coverUrl,
                       trackCount: BigInt.zero,
                       special: false,
-                    ))
+                    ),
+                  )
                 : null,
             enabled: item.canPlay,
           ),
@@ -127,4 +130,3 @@ class _GroupSection extends StatelessWidget {
     );
   }
 }
-

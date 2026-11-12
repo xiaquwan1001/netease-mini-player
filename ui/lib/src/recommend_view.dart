@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'cover_art.dart';
+import 'cover_row.dart';
+import 'layout.dart' show kSongRowPadding;
 import 'net_retry.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
@@ -26,7 +28,6 @@ class RecommendView extends StatefulWidget {
     this.loadPodcasts,
     this.loadFm,
     this.loadStyles,
-    this.loadCharts,
     this.loadNewSongs,
     this.loadNewAlbums,
     this.onOpenAlbum,
@@ -48,10 +49,6 @@ class RecommendView extends StatefulWidget {
 
   /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
   final Future<List<rust.StyleTag>> Function()? loadStyles;
-
-  /// 旧参数: 排行榜已移到搜索页(SearchLanding), 推荐页不再渲染它。
-  /// 保留字段只为不打断既有调用方/测试的命名参数, 新代码不要再传。
-  final Future<List<rust.ChartSummary>> Function()? loadCharts;
 
   /// 新歌速递 / 新碟上架
   final Future<List<rust.SongDto>> Function()? loadNewSongs;
@@ -211,9 +208,7 @@ class _SectionHeader extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
+              style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -233,7 +228,8 @@ class _AsyncSection<T> extends StatefulWidget {
   });
 
   final Future<T> Function() load;
-  final Widget Function(BuildContext context, T data, VoidCallback reload) builder;
+  final Widget Function(BuildContext context, T data, VoidCallback reload)
+  builder;
   final String emptyText;
 
   @override
@@ -352,11 +348,7 @@ class _QuickActions extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _ActionCard(
-            icon: Icons.radio,
-            label: '私人FM',
-            onTap: onPlayFm,
-          ),
+          child: _ActionCard(icon: Icons.radio, label: '私人FM', onTap: onPlayFm),
         ),
       ],
     );
@@ -364,7 +356,11 @@ class _QuickActions extends StatelessWidget {
 }
 
 class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.icon, required this.label, required this.onTap});
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String label;
@@ -434,6 +430,7 @@ class _NewSongsSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
+                      contentPadding: kSongRowPadding,
                       leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
                       title: Text(
                         s.name,
@@ -448,8 +445,9 @@ class _NewSongsSection extends StatelessWidget {
                       trailing: SongOverflowButton(song: s, size: 20),
                       onTap: s.playable
                           ? () {
-                              final index =
-                                  playable.indexWhere((x) => x.id == s.id);
+                              final index = playable.indexWhere(
+                                (x) => x.id == s.id,
+                              );
                               onPlay(playable, index < 0 ? 0 : index);
                             }
                           : null,
@@ -486,12 +484,12 @@ class _NewAlbumsSection extends StatelessWidget {
         _AsyncSection<List<rust.AlbumItem>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
-          builder: (context, albums, reload) => _CoverRow(
+          builder: (context, albums, reload) => CoverRow(
             height: 176,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final a in albums)
-                _CoverCard(
+                CoverCard(
                   coverUrl: a.coverUrl,
                   title: a.name,
                   subtitle: [
@@ -521,8 +519,9 @@ class _Caption extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6, top: 2),
       child: Text(
         text,
-        style: theme.textTheme.labelMedium
-            ?.copyWith(color: theme.colorScheme.outline),
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: theme.colorScheme.outline,
+        ),
       ),
     );
   }
@@ -729,7 +728,10 @@ class _DailySongsSection extends StatelessWidget {
           load: load,
           emptyText: '今天没有推荐歌曲',
           builder: (context, songs, reload) {
-            final playable = [for (final s in songs) if (s.playable) s];
+            final playable = [
+              for (final s in songs)
+                if (s.playable) s,
+            ];
             final preview = songs.take(6).toList();
             return Card(
               margin: EdgeInsets.zero,
@@ -741,7 +743,12 @@ class _DailySongsSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      leading: CoverArt(url: preview[i].coverUrl, size: 40, radius: 4),
+                      contentPadding: kSongRowPadding,
+                      leading: CoverArt(
+                        url: preview[i].coverUrl,
+                        size: 40,
+                        radius: 4,
+                      ),
                       title: Text(
                         preview[i].name,
                         maxLines: 1,
@@ -759,11 +766,15 @@ class _DailySongsSection extends StatelessWidget {
                               size: 20,
                               source: SongActionSource.dailyRecommend,
                             )
-                          : Text('无版权', style: Theme.of(context).textTheme.labelSmall),
+                          : Text(
+                              '无版权',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
                       onTap: preview[i].playable
                           ? () {
-                              final index =
-                                  playable.indexWhere((s) => s.id == preview[i].id);
+                              final index = playable.indexWhere(
+                                (s) => s.id == preview[i].id,
+                              );
                               onPlay(playable, index < 0 ? 0 : index);
                             }
                           : null,
@@ -810,12 +821,12 @@ class _DailyPlaylistsSection extends StatelessWidget {
         _AsyncSection<List<rust.Playlist>>(
           load: load,
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
-          builder: (context, lists, reload) => _CoverRow(
+          builder: (context, lists, reload) => CoverRow(
             height: 176,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final pl in lists)
-                _CoverCard(
+                CoverCard(
                   coverUrl: pl.coverUrl,
                   title: pl.name,
                   subtitle: '${pl.trackCount} 首',
@@ -855,7 +866,9 @@ class _PodcastSection extends StatelessWidget {
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (_) => RadioExplorePage(
-                  onOpenRadio: (ctx, radio) { onOpen(radio); },
+                  onOpenRadio: (ctx, radio) {
+                    onOpen(radio);
+                  },
                   onPlaySongs: onPlaySongs,
                 ),
               ),
@@ -866,17 +879,18 @@ class _PodcastSection extends StatelessWidget {
         _AsyncSection<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '暂无推荐播客',
-          builder: (context, radios, reload) => _CoverRow(
+          builder: (context, radios, reload) => CoverRow(
             height: 176,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final radio in radios)
-                _CoverCard(
+                CoverCard(
                   coverUrl: radio.coverUrl,
                   title: radio.name,
                   subtitle: [
                     if (radio.djName.isNotEmpty) radio.djName,
-                    if (radio.programCount > BigInt.zero) '${radio.programCount} 集',
+                    if (radio.programCount > BigInt.zero)
+                      '${radio.programCount} 集',
                   ].join(' · '),
                   onTap: () => onOpen(radio),
                 ),
@@ -890,92 +904,3 @@ class _PodcastSection extends StatelessWidget {
 
 /// 歌单/播客卡片行. rows=1 是单行横向滑动, rows=2 拆成两行横滑
 /// (每行仍横滑, 只是把内容对半分, 一屏能多看到一倍).
-class _CoverRow extends StatelessWidget {
-  const _CoverRow({required this.children, required this.height, this.rows = 1});
-
-  final List<Widget> children;
-  final double height;
-  final int rows;
-
-  /// 定高 height(=176)按 scale=1.0 设计: 封面 118 + 4 + 两行文字约 54.
-  /// 大字体(用户缩放到 1.3/1.625)下文字行高变大, 固定 176 会纵向溢出
-  /// (实测 300dp/1.625 溢出 5px); 只放大"两行文字"的部分, scale=1.0 时不变.
-  double _effectiveHeight(BuildContext context) {
-    final textLines = MediaQuery.textScalerOf(context).scale(27) * 2;
-    return height + (textLines - 54);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final h = _effectiveHeight(context);
-    if (rows <= 1 || children.length < 2) return _row(children, h);
-    final half = (children.length + 1) ~/ 2;
-    // 两排时内容高 = 2*height + 行间距(4): 外层高度必须把间距算进去,
-    // 否则 Column 内容比外层高 4px, 触发 "RenderFlex overflowed by 4.0 pixels"(R1).
-    return SizedBox(
-      height: h * 2 + 4,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _row(children.take(half).toList(), h),
-          const SizedBox(height: 4),
-          _row(children.skip(half).toList(), h),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(List<Widget> items, double h) {
-    if (items.isEmpty) return SizedBox(height: h);
-    return SizedBox(
-      height: h,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => SizedBox(width: 118, child: items[i]),
-      ),
-    );
-  }
-}
-
-class _CoverCard extends StatelessWidget {
-  const _CoverCard({
-    required this.coverUrl,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final String? coverUrl;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CoverArt(url: coverUrl, size: 118, radius: 8),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}

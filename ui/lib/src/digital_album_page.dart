@@ -11,11 +11,21 @@ import 'sheet_header.dart';
 /// 可注入的加载器(测试用 mock)
 typedef LoadPurchasedAlbums = Future<rust.DigitalAlbumPurchased?> Function();
 typedef LoadPurchasedSongs = Future<rust.SongPurchasedPage?> Function();
-typedef LoadAlbumSales = Future<List<rust.DigitalAlbumSalesEntry>?> Function(String albumIds);
-typedef LoadAlbumDetail = Future<rust.DigitalAlbumDetail?> Function(BigInt albumId);
+typedef LoadAlbumSales = Future<List<rust.DigitalAlbumSalesEntry>?> Function(
+  String albumIds,
+);
+typedef LoadAlbumDetail = Future<rust.DigitalAlbumDetail?> Function(
+  BigInt albumId,
+);
 
 class DigitalAlbumPage extends StatefulWidget {
-  const DigitalAlbumPage({super.key, this.loadAlbums, this.loadSongs, this.loadSales, this.loadDetail});
+  const DigitalAlbumPage({
+    super.key,
+    this.loadAlbums,
+    this.loadSongs,
+    this.loadSales,
+    this.loadDetail,
+  });
 
   final LoadPurchasedAlbums? loadAlbums;
   final LoadPurchasedSongs? loadSongs;
@@ -53,15 +63,21 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
   // PagedListView 非分页模式: 专辑+单曲合并为一个列表, 恒 hasMore:false;
   // 任一加载失败 → 组件整页错误视图(friendlyError) + 重试, 与旧版一致。
   PagedLoader<_Entry> get _entryLoader {
-    final loadA = widget.loadAlbums ??
-        () => retryNetwork(() => rust.digitalAlbumPurchased(limit: 30, offset: 0));
-    final loadS = widget.loadSongs ??
+    final loadA =
+        widget.loadAlbums ??
+        () => retryNetwork(
+          () => rust.digitalAlbumPurchased(limit: 30, offset: 0),
+        );
+    final loadS =
+        widget.loadSongs ??
         () => retryNetwork(() => rust.songPurchased(limit: 20, offset: 0));
     return (cursor) async {
       final results = await Future.wait<Object?>([loadA(), loadS()]);
-      final albums = (results[0] as rust.DigitalAlbumPurchased?)?.albums ??
+      final albums =
+          (results[0] as rust.DigitalAlbumPurchased?)?.albums ??
           const <rust.DigitalAlbumPurchasedEntry>[];
-      final songs = (results[1] as rust.SongPurchasedPage?)?.songs ??
+      final songs =
+          (results[1] as rust.SongPurchasedPage?)?.songs ??
           const <rust.PurchasedSongEntry>[];
       return PagedPage<_Entry>([
         if (albums.isNotEmpty) ...[
@@ -77,8 +93,11 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
   }
 
   Future<void> _openDetail(rust.DigitalAlbumPurchasedEntry album) async {
-    final detailLoader = widget.loadDetail ?? (BigInt id) => rust.digitalAlbumDetail(albumId: id);
-    final salesLoader = widget.loadSales ?? (ids) => rust.digitalAlbumSales(albumIds: ids);
+    final detailLoader =
+        widget.loadDetail ??
+        (BigInt id) => rust.digitalAlbumDetail(albumId: id);
+    final salesLoader =
+        widget.loadSales ?? (ids) => rust.digitalAlbumSales(albumIds: ids);
     await showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -97,7 +116,11 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
       body: PagedListView<_Entry>(
         loader: _entryLoader,
         padding: EdgeInsets.fromLTRB(
-            12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
+          12,
+          8,
+          12,
+          24 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         emptyBuilder: (context, items) => ListView(
           children: const [
             SizedBox(height: 96),
@@ -109,30 +132,30 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
         ),
         itemBuilder: (context, e, i, items) => switch (e) {
           _SectionHead() => Padding(
-              padding: EdgeInsets.only(top: e.gapAbove ? 12 : 0, bottom: 4),
-              child: Text(e.title, style: Theme.of(context).textTheme.titleSmall),
-            ),
+            padding: EdgeInsets.only(top: e.gapAbove ? 12 : 0, bottom: 4),
+            child: Text(e.title, style: Theme.of(context).textTheme.titleSmall),
+          ),
           _AlbumEntry() => Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: ListTile(
-                leading: CoverArt(url: e.album.coverUrl, size: 48, radius: 6),
-                title: Text(e.album.albumName, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  '${e.album.artistName} · x${e.album.boughtCount} · ${_fmtDate(e.album.paidTimeMs)}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openDetail(e.album),
-              ),
-            ),
-          _SongEntry() => ListTile(
-              leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
-              title: Text(e.song.name, overflow: TextOverflow.ellipsis),
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: ListTile(
+              leading: CoverArt(url: e.album.coverUrl, size: 48, radius: 6),
+              title: Text(e.album.albumName, overflow: TextOverflow.ellipsis),
               subtitle: Text(
-                '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
+                '${e.album.artistName} · x${e.album.boughtCount} · ${_fmtDate(e.album.paidTimeMs)}',
                 overflow: TextOverflow.ellipsis,
               ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => _openDetail(e.album),
             ),
+          ),
+          _SongEntry() => ListTile(
+            leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
+            title: Text(e.song.name, overflow: TextOverflow.ellipsis),
+            subtitle: Text(
+              '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         },
       ),
     );
@@ -192,11 +215,16 @@ class _DetailSheetState extends State<_DetailSheet> {
   @override
   Widget build(BuildContext context) {
     final album = widget.album;
-    final sales = _sales?.where((e) => e.albumId == album.albumId.toString()).toList();
-    final salesNum = (sales == null || sales.isEmpty) ? null : sales.first.sales;
+    final sales = _sales
+        ?.where((e) => e.albumId == album.albumId.toString())
+        .toList();
+    final salesNum = (sales == null || sales.isEmpty)
+        ? null
+        : sales.first.sales;
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        // 双层留白 20+16 曾是全仓库最宽(36dp/侧); 外层收到 12, 正文保留 16
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -209,8 +237,9 @@ class _DetailSheetState extends State<_DetailSheet> {
             if (_detail != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child:
-                    Text('价格: ¥${_detail!.price} · ${_fmtTags(_detail!.tags)}'),
+                child: Text(
+                  '价格: ¥${_detail!.price} · ${_fmtTags(_detail!.tags)}',
+                ),
               ),
             if (salesNum != null)
               Padding(

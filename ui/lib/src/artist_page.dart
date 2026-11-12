@@ -22,8 +22,10 @@ Future<void> showArtistDetail(
   onOpenAlbum,
   Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist, // 测试注入
   Future<List<rust.Artist>> Function(BigInt)? loadSimilar, // 测试注入
-  Future<rust.ArtistSongPageDto> Function(BigInt, int offset)? loadSongsPage, // 测试注入
-  Future<rust.ArtistMvPageDto> Function(BigInt, int offset)? loadMvsPage, // 测试注入
+  Future<rust.ArtistSongPageDto> Function(BigInt, int offset)?
+  loadSongsPage, // 测试注入
+  Future<rust.ArtistMvPageDto> Function(BigInt, int offset)?
+  loadMvsPage, // 测试注入
   Future<bool> Function(BigInt, bool sub)? toggleFollow, // 测试注入
 }) async {
   await Navigator.of(context).push(
@@ -117,12 +119,10 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     if (collapsed != _collapsed) setState(() => _collapsed = collapsed);
   }
 
-  Future<rust.ArtistSongPageDto> _defaultSongsPage(
-    BigInt id,
-    int offset,
-  ) => retryNetwork(
-      () => rust.artistSongsPage(artistId: id, offset: offset, limit: 60),
-    );
+  Future<rust.ArtistSongPageDto> _defaultSongsPage(BigInt id, int offset) =>
+      retryNetwork(
+        () => rust.artistSongsPage(artistId: id, offset: offset, limit: 60),
+      );
 
   Future<rust.ArtistMvPageDto> _defaultMvsPage(BigInt id, int offset) =>
       retryNetwork(
@@ -302,9 +302,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           ],
           body: TabBarView(
             controller: _tabController,
-            children: [
-              for (final t in tabs) _buildTab(t, theme, detail),
-            ],
+            children: [for (final t in tabs) _buildTab(t, theme, detail)],
           ),
         ),
       ),
@@ -479,11 +477,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
             avatar: CircleCover(url: a.avatarUrl, size: 24),
             // 单行 + ellipsis: 300dp + textScale 1.25 也不溢出
             // (MarqueeText 正在被另一车道修测量 bug, 这里不用)
-            label: Text(
-              a.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            label: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
             onPressed: () => showArtistDetail(
               context,
               artistId: a.id,
@@ -527,19 +521,15 @@ class _SearchBarDelegate extends SliverPersistentHeaderDelegate {
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: TextField(
         autofocus: true,
-        controller: TextEditingController(text: query)
-          ..selection = TextSelection(
-            baseOffset: 0,
-            extentOffset: query.length,
-          ),
+        controller: TextEditingController(
+          text: query,
+        )..selection = TextSelection(baseOffset: 0, extentOffset: query.length),
         onChanged: onChanged,
         decoration: InputDecoration(
           isDense: true,
           hintText: '搜索该歌手的歌曲',
           prefixIcon: const Icon(Icons.search, size: 20),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
         ),
         style: theme.textTheme.bodyMedium,
@@ -602,9 +592,7 @@ class _HotSongsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final list = _filtered;
     if (list.isEmpty) {
-      return Center(
-        child: Text(query.isEmpty ? '暂无热门歌曲' : '没有匹配「$query」的歌曲'),
-      );
+      return Center(child: Text(query.isEmpty ? '暂无热门歌曲' : '没有匹配「$query」的歌曲'));
     }
     return ListView.builder(
       padding: EdgeInsets.only(
@@ -715,9 +703,9 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         pageSize: _pageSize,
         keyOf: (s) => s.id,
         emptyText: '暂无歌曲',
-        loader: (cursor) => widget.loader(widget.artistId, cursor).then(
-              (p) => PagedPage(p.songs, hasMore: p.hasMore),
-            ),
+        loader: (cursor) => widget
+            .loader(widget.artistId, cursor)
+            .then((p) => PagedPage(p.songs, hasMore: p.hasMore)),
         itemBuilder: (context, song, index, items) => _ArtistSongRow(
           song: song,
           index: index,
@@ -733,7 +721,10 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(_searchError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _searchError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
             const SizedBox(height: 8),
             FilledButton.tonal(onPressed: _runQuery, child: const Text('重试')),
           ],
@@ -789,9 +780,8 @@ class _AlbumsTab extends StatelessWidget {
       itemBuilder: (context, i) {
         final album = albums[i];
         final year = album.publishTime > BigInt.zero
-            ? DateTime.fromMillisecondsSinceEpoch(
-                album.publishTime.toInt(),
-              ).year
+            ? DateTime.fromMillisecondsSinceEpoch(album.publishTime.toInt())
+                  .year
             : null;
         return InkWell(
           borderRadius: BorderRadius.circular(6),
@@ -877,11 +867,7 @@ class _MvsTab extends StatelessWidget {
                 ),
               )
             : const SizedBox(width: 96, height: 54),
-        title: Text(
-          mv.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(mv.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
           '${formatDurationMs(mv.durationMs)} · 播放 ${mv.playCount} · ${mv.publishTime}',
           maxLines: 1,
@@ -915,7 +901,8 @@ class _ArtistSongRow extends StatelessWidget {
     return InkWell(
       onTap: song.playable ? onTap : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        // 与同页其它区块的 12dp 对齐(布局审计 #7)
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
             SizedBox(
