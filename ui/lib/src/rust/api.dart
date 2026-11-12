@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `credential_status_dto`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -103,6 +103,17 @@ Future<QrLoginKey> loginQrCreate() =>
 /// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
 Future<QrLoginCheck> loginQrCheck({required String key}) =>
     RustLib.instance.api.crateApiLoginQrCheck(key: key);
+
+/// 当前凭据后端状态(设置页/排障用): 是否有安全后端、旧明文是否已迁移.
+Future<CredentialStatusDto> credentialStatus() =>
+    RustLib.instance.api.crateApiCredentialStatus();
+
+/// 用户明确同意/撤销"0600 明文回退". 同意后立刻重建后端并补跑迁移.
+///
+/// 只在没有系统钥匙串的平台(Android/Linux 的 P1/P2 未落地前)才有意义;
+/// Windows 走 DPAPI, 不需要这个开关。
+Future<CredentialStatusDto> consentPlaintextStorage({required bool consent}) =>
+    RustLib.instance.api.crateApiConsentPlaintextStorage(consent: consent);
 
 /// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
 ///
@@ -1422,6 +1433,42 @@ class CommentStats {
           commentUpgraded == other.commentUpgraded;
 }
 
+/// 凭据后端状态(设置页展示用). 不含任何凭据内容.
+class CredentialStatusDto {
+  /// secure / plaintext_consented / plaintext_fallback
+  final String kind;
+
+  /// dpapi / file / none
+  final String backend;
+
+  /// 旧明文是否已迁移进后端
+  final bool migrated;
+
+  /// 面向用户的说明文案
+  final String note;
+
+  const CredentialStatusDto({
+    required this.kind,
+    required this.backend,
+    required this.migrated,
+    required this.note,
+  });
+
+  @override
+  int get hashCode =>
+      kind.hashCode ^ backend.hashCode ^ migrated.hashCode ^ note.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CredentialStatusDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          backend == other.backend &&
+          migrated == other.migrated &&
+          note == other.note;
+}
+
 class DefaultSearch {
   /// 真正要搜索的关键词(不含推荐理由)
   final String keyword;
@@ -2142,28 +2189,29 @@ class MvUrlDto {
           size == other.size;
 }
 
-/// 手机号+验证码登录成功后的结果(凭据已落盘)
+/// 手机号+验证码登录成功后的结果(凭据已落盘, 不回传 Dart)
 class PhoneLoginResult {
-  /// 只含登录凭据键(MUSIC_U/__csrf)
-  final String cookie;
+  /// 校验通过且凭据已落盘
+  final bool loggedIn;
   final String nickname;
   final String? avatarUrl;
 
   const PhoneLoginResult({
-    required this.cookie,
+    required this.loggedIn,
     required this.nickname,
     this.avatarUrl,
   });
 
   @override
-  int get hashCode => cookie.hashCode ^ nickname.hashCode ^ avatarUrl.hashCode;
+  int get hashCode =>
+      loggedIn.hashCode ^ nickname.hashCode ^ avatarUrl.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is PhoneLoginResult &&
           runtimeType == other.runtimeType &&
-          cookie == other.cookie &&
+          loggedIn == other.loggedIn &&
           nickname == other.nickname &&
           avatarUrl == other.avatarUrl;
 }
@@ -2689,20 +2737,25 @@ class PurchasedSongEntry {
           paidTimeMs == other.paidTimeMs;
 }
 
-/// 扫码登录: 一次轮询的结果(Confirmed 时 cookie 非空, 且已落盘)
+/// 扫码登录: 一次轮询的结果(Confirmed 时凭据已由 Rust 落盘, UI 只看 loggedIn).
+///
+/// 注意: **凭据不进 Dart** —— cookie 在 ncm-provider 的 QrLoginOutcome 里,
+/// 由本模块落盘后丢弃, 只回元数据。
 class QrLoginCheck {
   final QrLoginState state;
 
   /// 官方原始 code(801/802/803/800), 排障用
   final PlatformInt64 code;
-  final String? cookie;
+
+  /// Confirmed 且凭据已落盘
+  final bool loggedIn;
   final String nickname;
   final String? avatarUrl;
 
   const QrLoginCheck({
     required this.state,
     required this.code,
-    this.cookie,
+    required this.loggedIn,
     required this.nickname,
     this.avatarUrl,
   });
@@ -2711,7 +2764,7 @@ class QrLoginCheck {
   int get hashCode =>
       state.hashCode ^
       code.hashCode ^
-      cookie.hashCode ^
+      loggedIn.hashCode ^
       nickname.hashCode ^
       avatarUrl.hashCode;
 
@@ -2722,7 +2775,7 @@ class QrLoginCheck {
           runtimeType == other.runtimeType &&
           state == other.state &&
           code == other.code &&
-          cookie == other.cookie &&
+          loggedIn == other.loggedIn &&
           nickname == other.nickname &&
           avatarUrl == other.avatarUrl;
 }

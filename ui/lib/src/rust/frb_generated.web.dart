@@ -102,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CommentStats dco_decode_comment_stats(dynamic raw);
 
   @protected
+  CredentialStatusDto dco_decode_credential_status_dto(dynamic raw);
+
+  @protected
   DefaultSearch dco_decode_default_search(dynamic raw);
 
   @protected
@@ -637,6 +640,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CommentStats sse_decode_comment_stats(SseDeserializer deserializer);
+
+  @protected
+  CredentialStatusDto sse_decode_credential_status_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   DefaultSearch sse_decode_default_search(SseDeserializer deserializer);
@@ -1282,6 +1290,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_comment_stats(CommentStats self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_credential_status_dto(
+    CredentialStatusDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_default_search(DefaultSearch self, SseSerializer serializer);

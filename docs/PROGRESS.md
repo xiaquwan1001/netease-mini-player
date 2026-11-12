@@ -69,6 +69,21 @@
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
+## 2026-11-12: 凭据地基合入 + 凭据不再过 FFI + apt 兜底按架构选源
+
+- **凭据存储地基(lane L1)合入**: `ncm-service/src/credential_store.rs`(trait/`FileStore` 0600+同意门/
+  `CredentialPolicy`/`CredentialStatus`/Windows DPAPI P0)、`IdentityStore` 接入(会话与账号凭据入 store,
+  落盘文件只留骨架)、旧明文一次性迁移(best-effort, 失败保留明文不阻塞)。合并前修了一个**自锁死**:
+  `migrate_legacy_cleartext` 在整段迁移里持有 `self.creds` 锁又调 `load_accounts()` 拿同一把非重入 Mutex,
+  门禁复现为测试挂死(`futex_do_wait`);改为只克隆 `Arc`。
+- **凭据不再回传 Dart**(决策点 4 执行): `QrLoginCheck`/`PhoneLoginResult` 去 `cookie` 换 `logged_in`,
+  凭据改走内部 `QrLoginOutcome`/`PhoneLoginOutcome`(provider → service → ffi 之间流动, FFI 落盘后丢弃);
+  新增 FFI `credential_status()` / `consent_plaintext_storage(bool)`。codegen 三步已跑,Dart fixture 同步。
+- **CI apt 兜底修**: arm64 runner 的归档在 `ubuntu-ports`(之前给 `/ubuntu` ⇒ `Unable to locate package`),
+  且兜底源生效后 apt 仍会挑 runner 自带 azure 源下载 ⇒ 改为一律 `-o Dir::Etc::sourcelist=<兜底>` 只信兜底源。
+- 门禁: `cargo test --workspace --exclude ncm-api-rs` **237 passed** / `flutter test --exclude-tags network` **642** /
+  `dart analyze` 0 error 0 warning(38 info, 与 main 基线一致) / write-guard OK / `cargo build -p ncm_ffi` OK。
+
 ## 2026-11-11(六): 写接口静态门禁(§11.C1 收尾)
 
 评论发送是**真实写操作**, 发版走查要求「CI 不触网」。仓库的做法一直是把写接口全部

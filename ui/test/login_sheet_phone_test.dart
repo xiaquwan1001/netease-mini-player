@@ -18,13 +18,13 @@ rust.QrLoginKey qrKey() => rust.QrLoginKey(
 rust.QrLoginCheck pending() => const rust.QrLoginCheck(
       state: rust.QrLoginState.pending,
       code: 801,
-      cookie: null,
+      loggedIn: false,
       nickname: '',
       avatarUrl: null,
     );
 
 rust.PhoneLoginResult okLogin() => const rust.PhoneLoginResult(
-      cookie: 'MUSIC_U=u; __csrf=c',
+      loggedIn: true,
       nickname: '下去玩',
       avatarUrl: null,
     );

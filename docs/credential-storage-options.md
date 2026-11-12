@@ -61,8 +61,19 @@ pub enum CredentialKey { Session, Account(u64) }
 pub enum CredentialError { Unavailable(String), AccessDenied(String), Backend(String) }
 ```
 
+**落地状态(2026-11-12 更新)**:
+- trait + `FileStore`(0600 + 同意门) + `CredentialPolicy`(`credential_policy.json`) + `CredentialStatus` 已落地于
+  `core/crates/ncm-service/src/credential_store.rs`, `IdentityStore` 已接入(会话/账号凭据入 store,
+  identity.json/accounts.json 写回**骨架**: 只留 deviceId/uid/nickname, 不再含 MUSIC_U);旧明文迁移
+  `migrate_legacy_cleartext` 一次性幂等、失败保留明文不阻塞启动。
+- 决策点 4 已执行: **凭据不再过 FFI 回 Dart**。`QrLoginCheck`/`PhoneLoginResult` 去掉 `cookie`, 换 `logged_in`;
+  凭据改走内部类型 `QrLoginOutcome`/`PhoneLoginOutcome`(在 ncm-provider → ncm-service → ncm-ffi 之间流动,
+  由 FFI 落盘后丢弃)。设置页可用 `credential_status()` / `consent_plaintext_storage(bool)`。
+- 决策点 3 已执行: 迁移后旧明文文件"清零置空保留骨架"(可回读设备指纹与账号元数据)。
+
 分阶段(最小改动优先):
-1. **P0 Windows DPAPI**: `#[cfg(windows)]` impl 包住 identity.rs 的 `write_private`; Linux/Android 暂维持现状。CI: windows.yml 编译 + 单测(roundtrip、密文非明文)。改动面 ≈ identity.rs + 新文件, 无 FFI 变化。
+1. **P0 Windows DPAPI**(已落地): `#[cfg(windows)] DpapiStore`, `open_backend` 在 Windows 上 DPAPI 可用即用;
+   Linux/Android 走同意门。
 2. **P1 Android Keystore**: Kotlin `ncm/keystore` 通道(存/取/删 blob), 通道里只传 secret 本身, 不新增持久化副本; 迁移见下。模拟器 a34 手测。
 3. **P2 Linux secret-service**: `keyring` crate; 无 D-Bus 时按 §5 决策回退。
 

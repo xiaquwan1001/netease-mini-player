@@ -21,7 +21,8 @@ rust.QrLoginCheck check(rust.QrLoginState state, {int code = 801}) =>
     rust.QrLoginCheck(
       state: state,
       code: code,
-      cookie: null,
+      // Confirmed 的登录凭据由 Rust 侧落盘, Dart 只拿到 loggedIn
+      loggedIn: state == rust.QrLoginState.confirmed,
       nickname: '',
       avatarUrl: null,
     );
