@@ -72,6 +72,17 @@
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
+## 2026-11-12(下午): 凭据三端验证收口 + 主题色提亮
+
+- **Android Keystore 模拟器实测通过**: a34(x86_64) debug 包(须 `--target-platform android-x64`)登录测试小号后
+  `run-as` 见 `files/cred/{account_*.bin, session.bin}` 均为**密文 0600**; 期间修掉 Gradle 缓存 kotlin-reflect jar
+  损坏(ClassFormatError Illegal UTF8)导致的 debug 构建失败(删 `~/.gradle/caches/modules-2` 的 kotlin-reflect 即愈)。
+- **Linux secret-service**: D-Bus 探针 set/get/delete OK; AppImage xvfb 启动渲染正常; 用户真机登录 + 颜色验收通过。
+- **Windows dpapi 单测接进 CI**: windows.yml 加 `cargo test -p ncm-service dpapi`, dispatch run 43173625885 success(首次真编真测)。
+- **主题色五 seed 提亮**(用户"整体偏暗淡的棕色"反馈): 旧 seed 是 Material 600/700/800 深色调, 换 500 级高饱和并拉开
+  色相 —— 绿 16A34A / 蓝 2196F3 / 橘 FF9100(红 F40000 / 粉 E5007E 不变); theme_accent_test 8/8, 用户视觉验收通过。
+- Release v0.5.5 补正文; 资产/Latest 指向此前已正确, 应用内更新检查走 /releases/latest 不需改。
+
 ## 2026-11-12: 凭据地基合入 + 凭据不再过 FFI + apt 兜底按架构选源
 
 - **凭据存储地基(lane L1)合入**: `ncm-service/src/credential_store.rs`(trait/`FileStore` 0600+同意门/
