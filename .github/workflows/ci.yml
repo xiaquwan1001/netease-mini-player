@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: System deps (alsa for cpal)
-        run: bash tools/apt-install.sh libasound2-dev pkg-config
+        run: bash tools/apt-install.sh libasound2-dev libdbus-1-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -70,7 +70,7 @@ jobs:
         # 一行写完: YAML 普通标量会把行尾 \\ 折叠成 " \\ ", bash 解析出带前导空格的
         # " libasound2-dev" 参数 ⇒ apt 报 'Unable to locate package  libasound2-dev'
         # (2026-11-12 定位: 双空格就是这个 bug 的指纹)。
-        run: bash tools/apt-install.sh clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev liblzma-dev libstdc++-12-dev
+        run: bash tools/apt-install.sh clang cmake ninja-build pkg-config libgtk-3-dev libasound2-dev libdbus-1-dev liblzma-dev libstdc++-12-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

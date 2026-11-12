@@ -77,7 +77,7 @@ Keywords[zh_CN]=音乐;网易云;播放器;
 StartupWMClass=minincm
 DESKTOP
 
-# 依赖: Flutter Linux 桌面壳 + 音频(ALSA) + 压缩解码
+# 依赖: Flutter Linux 桌面壳 + 音频(ALSA) + 压缩解码 + D-Bus(secret-service 凭据后端, keyring)
 INSTALLED_KB=$(du -sk --apparent-size "$PKG" | cut -f1)
 cat > "$PKG/DEBIAN/control" <<CONTROL
 Package: ${PKGNAME}
@@ -85,7 +85,7 @@ Version: ${VER}
 Section: sound
 Priority: optional
 Architecture: ${ARCH}
-Depends: libgtk-3-0, libasound2, liblzma5, libstdc++6, libc6 (>= 2.31)
+Depends: libgtk-3-0, libasound2, libdbus-1-3, liblzma5, libstdc++6, libc6 (>= 2.31)
 Recommends: libnotify4
 Installed-Size: ${INSTALLED_KB}
 Maintainer: ${MAINTAINER}
