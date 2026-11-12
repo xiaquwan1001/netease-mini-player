@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'all_charts_page.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
@@ -50,7 +49,8 @@ class RecommendView extends StatefulWidget {
   /// 系统推荐的曲风(我的曲风偏好; 未登录时后端退化成通用曲风表)
   final Future<List<rust.StyleTag>> Function()? loadStyles;
 
-  /// 排行榜(榜单就是歌单)
+  /// 旧参数: 排行榜已移到搜索页(SearchLanding), 推荐页不再渲染它。
+  /// 保留字段只为不打断既有调用方/测试的命名参数, 新代码不要再传。
   final Future<List<rust.ChartSummary>> Function()? loadCharts;
 
   /// 新歌速递 / 新碟上架
@@ -82,8 +82,6 @@ class _RecommendViewState extends State<RecommendView> {
       widget.loadFm ?? (() => rust.personalFm(limit: 30));
   Future<List<rust.StyleTag>> Function() get _styles =>
       widget.loadStyles ?? rust.stylePreference;
-  Future<List<rust.ChartSummary>> Function() get _charts =>
-      widget.loadCharts ?? rust.chartList;
   Future<List<rust.SongDto>> Function() get _newSongs =>
       widget.loadNewSongs ?? (() => rust.newSongs(limit: 20));
   Future<List<rust.AlbumItem>> Function() get _newAlbums =>
@@ -123,11 +121,12 @@ class _RecommendViewState extends State<RecommendView> {
             onOpenAll: widget.onOpenDaily,
           ),
           const SizedBox(height: 16),
-          _ChartSection(
-            load: _charts,
-            onOpen: widget.onOpenPlaylist,
-            loadStyles: _styles,
+          // 排行榜(含「全部榜单」)已按用户要求移到搜索页;
+          // 风格推荐留在推荐页, 现在是排行榜搬走后的独立单元。
+          _StylesSection(
+            load: _styles,
             onPlaySongs: widget.onPlaySongs,
+            onOpenPlaylist: widget.onOpenPlaylist,
           ),
           const SizedBox(height: 16),
           _DailyPlaylistsSection(
@@ -576,66 +575,31 @@ class _NewReleaseSection extends StatelessWidget {
   }
 }
 
-// ---------------- 排行榜 ----------------
+// ---------------- 风格推荐 ----------------
 
-/// 排行榜入口: 飙升榜/新歌榜/热歌榜…(榜单本身就是歌单, 点开走歌单详情页)
-class _ChartSection extends StatelessWidget {
-  const _ChartSection({
+/// 风格推荐区块(排行榜搬到搜索页之后独立成块)。
+class _StylesSection extends StatelessWidget {
+  const _StylesSection({
     required this.load,
-    required this.onOpen,
-    required this.loadStyles,
     required this.onPlaySongs,
+    required this.onOpenPlaylist,
   });
 
-  final Future<List<rust.ChartSummary>> Function() load;
-  final void Function(rust.Playlist playlist) onOpen;
-
-  /// 风格推荐下沉到这里: 一行 chips, 不再独占一个平级区块(审查 §5.5)
-  final Future<List<rust.StyleTag>> Function() loadStyles;
+  final Future<List<rust.StyleTag>> Function() load;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
-          title: '排行榜',
-          trailing: TextButton(
-            onPressed: () => showAllChartsPage(
-              context,
-              onOpenPlaylist: onOpen,
-            ),
-            child: const Text('全部'),
-          ),
-        ),
-        _AsyncSection<List<rust.ChartSummary>>(
+        const _SectionHeader(title: '风格推荐'),
+        _StyleTiles(
           load: load,
-          emptyText: '暂时没有榜单',
-          builder: (context, charts, reload) => _CoverRow(
-            height: 176,
-            rows: AppSettings.instance.coverRows,
-            children: [
-              for (final chart in charts)
-                _CoverCard(
-                  coverUrl: chart.coverUrl,
-                  title: chart.name,
-                  subtitle: chart.updateFrequency.isEmpty
-                      ? '${chart.trackCount} 首'
-                      : chart.updateFrequency,
-                  onTap: () => onOpen(rust.Playlist(
-                    id: chart.id,
-                    name: chart.name,
-                    coverUrl: chart.coverUrl,
-                    trackCount: chart.trackCount,
-                    special: false,
-                  )),
-                ),
-            ],
-          ),
+          onPlaySongs: onPlaySongs,
+          onOpenPlaylist: onOpenPlaylist,
         ),
-        const SizedBox(height: 8),
-        _StyleTiles(load: loadStyles, onPlaySongs: onPlaySongs, onOpenPlaylist: onOpen),
       ],
     );
   }
@@ -669,7 +633,6 @@ class _StyleTiles extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Caption('风格推荐'),
         _AsyncSection<List<rust.StyleTag>>(
           load: load,
           emptyText: '暂时没有风格推荐',

@@ -55,7 +55,8 @@ class PlayRankingView extends StatefulWidget {
   State<PlayRankingView> createState() => _PlayRankingViewState();
 }
 
-class _PlayRankingViewState extends State<PlayRankingView> {
+class _PlayRankingViewState extends State<PlayRankingView>
+    with AutomaticKeepAliveClientMixin<PlayRankingView> {
   /// "all" = 全部时间(总量) / "week" = 最近一周
   String _period = 'all';
   late Future<List<rust.PlayRankEntryDto>> _future;
@@ -122,7 +123,11 @@ class _PlayRankingViewState extends State<PlayRankingView> {
   }
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
     final theme = Theme.of(context);
     if (!widget.compact) {
       return Column(

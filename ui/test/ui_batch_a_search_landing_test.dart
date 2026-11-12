@@ -109,7 +109,7 @@ void main() {
 
     expect(find.text('更多'), findsNothing);
     expect(find.text('查看全部'), findsNothing);
-    // 排行榜 / 每日推荐 / 新歌速递 / 新碟上架 / 推荐播客 各一个
-    expect(find.text('全部'), findsNWidgets(5));
+    // 每日推荐 / 推荐歌单 / 新歌新碟 / 推荐播客 各一个(排行榜已移到搜索页)
+    expect(find.text('全部'), findsNWidgets(4));
   });
 }

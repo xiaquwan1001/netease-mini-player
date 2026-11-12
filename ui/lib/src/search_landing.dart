@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'chart_section.dart';
 import 'rust/api.dart' as rust;
 
 /// 搜索页的"落地内容": 历史 + 猜你想搜 + 热门榜.
@@ -17,6 +18,8 @@ class SearchLanding extends StatelessWidget {
     this.hotLoading = false,
     this.hotError,
     this.onRetryHot,
+    this.loadCharts,
+    this.onOpenChartPlaylist,
   });
 
   final List<String> history;
@@ -32,6 +35,11 @@ class SearchLanding extends StatelessWidget {
   final bool hotLoading;
   final String? hotError;
   final VoidCallback? onRetryHot;
+
+  /// 排行榜(2026-11 从「推荐」页搬到这里)。
+  /// [onOpenChartPlaylist] 为 null 时不渲染该区块(纯搜索落地页测试/嵌入场景)。
+  final ChartListLoader? loadCharts;
+  final void Function(rust.Playlist playlist)? onOpenChartPlaylist;
 
   /// 清空历史前的二次确认(C2): 一次误触就不可恢复, 且这是页面上唯一的破坏性操作.
   /// 先把回调取出来再 await, 避免 "use_build_context_synchronously".
@@ -68,6 +76,8 @@ class SearchLanding extends StatelessWidget {
     // 这里每次 build 读取最新值即可, 无需自己监听.
     final showHot = AppSettings.instance.showHotSearch;
     final hasRecommended = recommended != null && recommended!.isNotEmpty;
+    // 字段是 public 的, 先提成本地变量才能做 null 提升
+    final chartOpen = onOpenChartPlaylist;
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       children: [
@@ -202,6 +212,14 @@ class SearchLanding extends StatelessWidget {
               ],
             ),
           ),
+        // 排行榜: 2026-11 用户要求从「推荐」搬来。放最后, 不抢搜索历史/热词的首屏位置。
+        if (chartOpen != null) ...[
+          const SizedBox(height: 12),
+          ChartSection(
+            load: loadCharts,
+            onOpen: chartOpen,
+          ),
+        ],
       ],
     );
   }

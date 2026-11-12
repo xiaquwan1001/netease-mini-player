@@ -6,6 +6,15 @@ import 'package:minincm/src/search_landing.dart';
 rust.HotSearchTerm hot(int rank, String keyword) =>
     rust.HotSearchTerm(rank: rank, keyword: keyword);
 
+rust.ChartSummary chart(int id, String name) => rust.ChartSummary(
+      id: BigInt.from(id),
+      name: name,
+      coverUrl: null,
+      updateFrequency: '刚刚更新',
+      trackCount: BigInt.from(100),
+      playCount: BigInt.from(1000),
+    );
+
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
@@ -90,6 +99,28 @@ void main() {
     expect(find.textContaining('热词获取失败'), findsOneWidget);
     await tester.tap(find.text('重试'));
     expect(retried, 1);
+  });
+
+  testWidgets('排行榜区块: 从推荐页搬来, 点榜单打开歌单', (tester) async {
+    rust.Playlist? opened;
+    await tester.pumpWidget(host(SearchLanding(
+      history: const [],
+      hot: const [],
+      recommended: null,
+      onSelected: (_) {},
+      onClearHistory: () {},
+      loadCharts: () async => [chart(19723756, '飙升榜'), chart(3779629, '新歌榜')],
+      onOpenChartPlaylist: (p) => opened = p,
+    )));
+    await tester.pumpAndSettle();
+
+    expect(find.text('排行榜'), findsOneWidget);
+    expect(find.text('飙升榜'), findsOneWidget);
+    expect(find.text('新歌榜'), findsOneWidget);
+    expect(find.text('全部'), findsOneWidget);
+
+    await tester.tap(find.text('飙升榜'));
+    expect(opened?.id, BigInt.from(19723756));
   });
 
   testWidgets('无热词且不在加载时显示空态', (tester) async {

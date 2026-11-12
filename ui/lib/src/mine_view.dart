@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'digital_album_page.dart';
 import 'messages_page.dart';
+import 'my_collections_page.dart';
 import 'net_retry.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
@@ -93,6 +94,10 @@ class MineView extends StatefulWidget {
 }
 
 class _MineViewState extends State<MineView> {
+  /// 下拉刷新代际: 变一次就让各区块换 key 重挂载(= 真正重拉数据)。
+  /// 区块本身开了 keepAlive, 不换 key 的话 setState 只会复用旧数据。
+  int _dataGeneration = 0;
+
   Future<List<rust.SongDto>> Function() get _liked =>
       widget.loadLiked ?? rust.likedSongs;
   Future<List<rust.Playlist>> Function() get _playlists =>
@@ -136,11 +141,12 @@ class _MineViewState extends State<MineView> {
       );
     }
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      onRefresh: () async => setState(() => _dataGeneration += 1),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
         children: [
           _ProfileSection(
+            key: ValueKey('mine-profile-$_dataGeneration'),
             loggedIn: widget.loggedIn,
             onOpenAccounts: widget.onOpenAccounts,
             onLogin: widget.onLogin,
@@ -201,24 +207,54 @@ class _MineViewState extends State<MineView> {
           const SigninCard(),
           const SizedBox(height: 4),
           _LikedSection(
+            key: ValueKey('mine-liked-$_dataGeneration'),
             load: _liked,
             onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
             onOpenAll: widget.onOpenLiked,
           ),
           const SizedBox(height: 16),
-          _PlaylistsSection(load: _playlists, onOpen: widget.onOpenPlaylist),
+          _PlaylistsSection(
+            key: ValueKey('mine-playlists-$_dataGeneration'),
+            load: _playlists,
+            onOpen: widget.onOpenPlaylist,
+            onOpenAll: () => showMyPlaylistsPage(
+              context,
+              load: _playlists,
+              onOpen: widget.onOpenPlaylist,
+            ),
+          ),
           const SizedBox(height: 16),
-          _PodcastsSection(load: _podcasts, onOpen: widget.onOpenPodcast),
+          _PodcastsSection(
+            key: ValueKey('mine-podcasts-$_dataGeneration'),
+            load: _podcasts,
+            onOpen: widget.onOpenPodcast,
+            onOpenAll: () => showMyPodcastsPage(
+              context,
+              load: _podcasts,
+              onOpen: widget.onOpenPodcast,
+            ),
+          ),
           const SizedBox(height: 16),
-          _AlbumsSection(load: _albums, onOpen: widget.onOpenAlbum),
+          _AlbumsSection(
+            key: ValueKey('mine-albums-$_dataGeneration'),
+            load: _albums,
+            onOpen: widget.onOpenAlbum,
+            onOpenAll: () => showMyAlbumsPage(
+              context,
+              load: _albums,
+              onOpen: widget.onOpenAlbum,
+            ),
+          ),
           const SizedBox(height: 16),
           _RecentSection(
+            key: ValueKey('mine-recent-$_dataGeneration'),
             load: _loadRecent,
             onOpenAll: widget.onOpenRecent,
             onPlay: widget.onPlaySongs,
           ),
           const SizedBox(height: 16),
           _RankingSection(
+            key: ValueKey('mine-ranking-$_dataGeneration'),
             load: widget.loadRanking,
             onPlay: widget.onPlaySongs,
             onOpenAll: () => showPlayRanking(
@@ -279,8 +315,14 @@ class _AsyncSection<T> extends StatefulWidget {
   State<_AsyncSection<T>> createState() => _AsyncSectionState<T>();
 }
 
-class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
+class _AsyncSectionState<T> extends State<_AsyncSection<T>>
+    with AutomaticKeepAliveClientMixin<_AsyncSection<T>> {
   late Future<T> _future;
+
+  // 用户反馈: 区块一移出视野就被 ListView 回收, 回来时重新转圈 -> 我的页上下抽搐。
+  // 保持存活后数据/高度都不再重置(下拉刷新仍通过 key 换代重拉)。
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -292,6 +334,7 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return FutureBuilder<T>(
       future: _future,
       builder: (context, snap) {
@@ -333,6 +376,7 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
 
 class _ProfileSection extends StatefulWidget {
   const _ProfileSection({
+    super.key,
     required this.loggedIn,
     required this.onOpenAccounts,
     required this.onLogin,
@@ -352,8 +396,12 @@ class _ProfileSection extends StatefulWidget {
   State<_ProfileSection> createState() => _ProfileSectionState();
 }
 
-class _ProfileSectionState extends State<_ProfileSection> {
+class _ProfileSectionState extends State<_ProfileSection>
+    with AutomaticKeepAliveClientMixin<_ProfileSection> {
   rust.ProfileDetail? _detail;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -389,6 +437,7 @@ class _ProfileSectionState extends State<_ProfileSection> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return ProfileHeader(
       detail: _detail,
       fallbackNickname: widget.loggedIn ? '我的账号' : null,
@@ -408,6 +457,7 @@ class _ProfileSectionState extends State<_ProfileSection> {
 
 class _LikedSection extends StatelessWidget {
   const _LikedSection({
+    super.key,
     required this.load,
     required this.onPlay,
     required this.onOpenAll,
@@ -487,17 +537,28 @@ class _LikedSection extends StatelessWidget {
 // ---------------- 歌单 / 播客 ----------------
 
 class _PlaylistsSection extends StatelessWidget {
-  const _PlaylistsSection({required this.load, required this.onOpen});
+  const _PlaylistsSection({
+    super.key,
+    required this.load,
+    required this.onOpen,
+    required this.onOpenAll,
+  });
 
   final Future<List<rust.Playlist>> Function() load;
   final void Function(rust.Playlist playlist) onOpen;
+
+  /// 二级整页("查看全部")
+  final VoidCallback onOpenAll;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '收藏的歌单'),
+        _SectionHeader(
+          title: '收藏的歌单',
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+        ),
         _AsyncSection<List<rust.Playlist>>(
           load: load,
           emptyText: '还没有收藏歌单',
@@ -528,17 +589,28 @@ class _PlaylistsSection extends StatelessWidget {
 }
 
 class _PodcastsSection extends StatelessWidget {
-  const _PodcastsSection({required this.load, required this.onOpen});
+  const _PodcastsSection({
+    super.key,
+    required this.load,
+    required this.onOpen,
+    required this.onOpenAll,
+  });
 
   final Future<List<rust.PodcastRadio>> Function() load;
   final void Function(rust.PodcastRadio radio) onOpen;
+
+  /// 二级整页("查看全部")
+  final VoidCallback onOpenAll;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '收藏的播客'),
+        _SectionHeader(
+          title: '收藏的播客',
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+        ),
         _AsyncSection<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '还没有收藏播客',
@@ -615,17 +687,28 @@ class _CoverCard extends StatelessWidget {
 // ---------------- 收藏的专辑 ----------------
 
 class _AlbumsSection extends StatelessWidget {
-  const _AlbumsSection({required this.load, required this.onOpen});
+  const _AlbumsSection({
+    super.key,
+    required this.load,
+    required this.onOpen,
+    required this.onOpenAll,
+  });
 
   final Future<List<rust.AlbumItem>> Function() load;
   final void Function(rust.AlbumItem album) onOpen;
+
+  /// 二级整页("查看全部")
+  final VoidCallback onOpenAll;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '收藏的专辑'),
+        _SectionHeader(
+          title: '收藏的专辑',
+          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+        ),
         _AsyncSection<List<rust.AlbumItem>>(
           load: load,
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
@@ -663,6 +746,7 @@ class _AlbumsSection extends StatelessWidget {
 /// "我的"页下方的听歌排行: 总排行/当周切换 + 前 5 条 + 查看全部.
 class _RankingSection extends StatelessWidget {
   const _RankingSection({
+    super.key,
     required this.load,
     required this.onPlay,
     required this.onOpenAll,
@@ -693,6 +777,7 @@ class _RankingSection extends StatelessWidget {
 
 class _RecentSection extends StatelessWidget {
   const _RecentSection({
+    super.key,
     required this.load,
     required this.onOpenAll,
     required this.onPlay,
@@ -768,8 +853,12 @@ class MessageEntryCard extends StatefulWidget {
   State<MessageEntryCard> createState() => _MessageEntryCardState();
 }
 
-class _MessageEntryCardState extends State<MessageEntryCard> {
+class _MessageEntryCardState extends State<MessageEntryCard>
+    with AutomaticKeepAliveClientMixin<MessageEntryCard> {
   rust.MessageCountsDto? _counts;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -789,6 +878,7 @@ class _MessageEntryCardState extends State<MessageEntryCard> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final counts = _counts;
     final theme = Theme.of(context);
     final detail = counts == null
@@ -835,8 +925,12 @@ class SigninCard extends StatefulWidget {
   State<SigninCard> createState() => _SigninCardState();
 }
 
-class _SigninCardState extends State<SigninCard> {
+class _SigninCardState extends State<SigninCard>
+    with AutomaticKeepAliveClientMixin<SigninCard> {
   rust.SigninStatus? _status;
+
+  @override
+  bool get wantKeepAlive => true;
   bool _busy = false;
 
   @override
@@ -881,6 +975,7 @@ class _SigninCardState extends State<SigninCard> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final status = _status;
     if (status == null) return const SizedBox.shrink();
     final theme = Theme.of(context);

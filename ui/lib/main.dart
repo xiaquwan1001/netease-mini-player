@@ -38,6 +38,7 @@ import 'src/platform.dart';
 import 'src/recommend_view.dart';
 import 'src/search_landing.dart';
 import 'src/search_exact_bar.dart';
+import 'src/search_loading.dart';
 import 'src/search_results.dart';
 import 'src/search_suggest.dart';
 import 'src/settings_account_page.dart';
@@ -3013,6 +3014,8 @@ class _HomePageState extends State<HomePage> {
         hotLoading: _hotLoading,
         hotError: _hotError,
         onRetryHot: _loadSearchLanding,
+        // 排行榜从「推荐」搬到这里(2026-11 用户要求)
+        onOpenChartPlaylist: _openPlaylist,
       );
     }
     return _buildList();
@@ -3081,7 +3084,22 @@ class _HomePageState extends State<HomePage> {
   Widget _buildList() {
     final current = _current;
     if (_libraryTitle == null) {
-      return const Center(child: Text('输入关键词后搜索'));
+      // 搜索请求还没回来时给加载占位: 原来的"输入关键词后搜索"会让用户
+      // 以为断网或没有结果(本次回归修复)。错误由顶部横幅展示(带重试)。
+      if (_busy) return SearchLoading(_controller.text.trim());
+      if (_error != null) return const SizedBox.shrink();
+      final typed = _controller.text.trim();
+      if (typed.isEmpty) {
+        return const Center(child: Text('输入关键词后搜索'));
+      }
+      // 已经输入但还没提交: 上方是联想面板, 这里给一句明确的操作提示
+      return Center(
+        child: Text(
+          '点「搜索」查看「$typed」的结果',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
     }
     final songs = _visibleSongs;
     final hidden = _hiddenUnplayable;
@@ -3332,3 +3350,4 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+

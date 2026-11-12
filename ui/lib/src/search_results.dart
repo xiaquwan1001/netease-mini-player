@@ -66,7 +66,7 @@ class SearchResultsView extends StatelessWidget {
       if (hidden > 0) {
         children.add(
           Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 4),
+            padding: const EdgeInsets.fromLTRB(12, 2, 12, 4),
             child: Text(
               '已隐藏 $hidden 首无版权曲目',
               style: Theme.of(context).textTheme.bodySmall
@@ -95,7 +95,7 @@ class SearchResultsView extends StatelessWidget {
           height: 150,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             itemCount: bundle.artists.length,
             separatorBuilder: (_, _) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
@@ -178,8 +178,10 @@ class SearchResultsView extends StatelessWidget {
       );
     }
 
+    // 单曲行要"左右占满"(用户反馈文字横向空间不足): 外层不再加 12dp 左右留白,
+    // 标题/提示/横滑卡片各自补回自己的水平内边距。
     return ListView(
-      padding: const EdgeInsets.only(left: 12, right: 12, bottom: 24),
+      padding: const EdgeInsets.only(bottom: 24),
       children: children,
     );
   }
@@ -188,7 +190,7 @@ class SearchResultsView extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
@@ -218,7 +220,7 @@ class SearchResultsView extends StatelessWidget {
       height: 176,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 10),
         itemBuilder: (context, i) => items[i],

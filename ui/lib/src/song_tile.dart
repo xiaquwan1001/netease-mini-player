@@ -138,6 +138,9 @@ class SongTile extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: active,
+      // 行左右留白收到最小: 用户反馈歌曲行"左右没占满", 文字横向空间不足。
+      // 原来 ListTile 默认 16+16 的 contentPadding 白白吃掉 32dp。
+      contentPadding: const EdgeInsets.fromLTRB(8, 0, 4, 0),
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
       // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee;

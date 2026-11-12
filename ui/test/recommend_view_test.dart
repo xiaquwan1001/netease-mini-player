@@ -111,10 +111,9 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
-    // 排行榜(榜单就是歌单)
-    expect(find.text('排行榜'), findsOneWidget);
-    expect(find.text('飙升榜'), findsOneWidget);
-    expect(find.text('刚刚更新'), findsOneWidget);
+    // 排行榜已按用户要求从推荐页移到搜索页(这里不再渲染)
+    expect(find.text('排行榜'), findsNothing);
+    expect(find.text('飙升榜'), findsNothing);
 
     // 风格推荐
     expect(find.text('风格推荐'), findsOneWidget);
@@ -132,13 +131,13 @@ void main() {
     // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
-    // 文案统一后所有区块出口都叫「全部」, 合并后仍是 5 个:
-    // 每日推荐 / 排行榜 / 推荐歌单 / 新歌新碟 / 推荐播客
+    // 排行榜搬走后剩 4 个「全部」:
+    // 每日推荐 / 推荐歌单 / 新歌新碟 / 推荐播客
     expect(find.text('更多'), findsNothing);
     expect(find.text('查看全部'), findsNothing);
-    expect(find.text('全部'), findsNWidgets(5));
-    // at(3) = 新歌新碟 标题右侧那个(顺序: 每日推荐, 排行榜, 推荐歌单, 新歌新碟, 播客)
-    await tester.tap(find.text('全部').at(3));
+    expect(find.text('全部'), findsNWidgets(4));
+    // at(2) = 新歌新碟 标题右侧那个(顺序: 每日推荐, 推荐歌单, 新歌新碟, 播客)
+    await tester.tap(find.text('全部').at(2));
     await tester.pumpAndSettle();
     expect(moreTaps, 1);
 
@@ -206,7 +205,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('每日推荐'), findsWidgets);
-    expect(find.text('飙升榜'), findsOneWidget);
+    // 排行榜已搬到搜索页, 窄屏下这里只校验页面本身不溢出
+    expect(find.text('风格推荐'), findsOneWidget);
   });
 
   testWidgets('私人 FM 播放按钮加载后回调曲目', (tester) async {

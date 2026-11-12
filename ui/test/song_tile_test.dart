@@ -108,4 +108,23 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('歌曲行左右留白收到最小(把横向空间让给文字)', (tester) async {
+    await tester.pumpWidget(host(SongTile(
+      song: song(name: '需要更多横向空间的歌名'),
+      active: false,
+      liked: false,
+      onTap: () {},
+      onMenu: () {},
+    )));
+    final tile = tester.widget<ListTile>(find.byType(ListTile));
+    expect(
+      tile.contentPadding,
+      const EdgeInsets.fromLTRB(8, 0, 4, 0),
+      reason: '默认 16+16 会白白吃掉 32dp; 用户反馈歌曲行左右没占满',
+    );
+    // 歌名那块文字区域必须占到行宽的绝大部分
+    final nameBox = tester.renderObject<RenderBox>(find.text('需要更多横向空间的歌名'));
+    expect(nameBox.size.width, greaterThan(120));
+  });
 }

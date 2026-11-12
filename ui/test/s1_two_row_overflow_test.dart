@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/cover_art.dart';
-import 'package:minincm/src/recommend_view.dart';
+import 'package:minincm/src/chart_section.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int id, String name) => rust.SongDto(
@@ -83,40 +83,18 @@ void main() {
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     }
 
-    await tester.pumpWidget(host(RecommendView(
-      loggedIn: true,
-      loadDailySongs: () async => [song(1, '每日一歌'), song(2, '每日二歌')],
-      loadDailyPlaylists: () async => [
-        playlist(10, '推荐歌单A'),
-        playlist(11, '推荐歌单B'),
-        playlist(12, '推荐歌单C'),
-      ],
-      loadPodcasts: () async => [
-        radio(20, '推荐播客A'),
-        radio(21, '推荐播客B'),
-        radio(22, '推荐播客C'),
-      ],
-      loadFm: () async => [song(3, 'FM 曲')],
-      loadStyles: () async => const [],
-      loadCharts: () async => [
-        chart(19723756, '飙升榜', '刚刚更新'),
-        chart(3779629, '新歌榜', '每天更新'),
-        chart(2884035, '热歌榜', '每天更新'),
-        chart(19723757, '原创榜', '每周更新'),
-      ],
-      loadNewSongs: () async => [song(30, '新歌速递一')],
-      loadNewAlbums: () async => [
-        album(40, '新碟A'),
-        album(41, '新碟B'),
-        album(42, '新碟C'),
-      ],
-      onOpenAlbum: (_) {},
-      onOpenNewRelease: () {},
-      onPlaySongs: (_, _) {},
-      onOpenPlaylist: (_) {},
-      onOpenPodcast: (_) {},
-      onHeartMode: () {},
-      onOpenDaily: () {},
+    // 排行榜现已挂在搜索落地页; 两排封面溢出的回归直接测 ChartSection。
+    await tester.pumpWidget(host(Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: ChartSection(
+        onOpen: (_) {},
+        load: () async => [
+          chart(19723756, '飙升榜', '刚刚更新'),
+          chart(3779629, '新歌榜', '每天更新'),
+          chart(2884035, '热歌榜', '每天更新'),
+          chart(19723757, '原创榜', '每周更新'),
+        ],
+      ),
     )));
     await tester.pumpAndSettle();
   }

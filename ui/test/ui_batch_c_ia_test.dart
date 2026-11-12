@@ -329,7 +329,7 @@ void main() {
         onOpenDaily: onOpenDaily ?? () {},
       ));
 
-  testWidgets('推荐页: 平级区块 8→5(每日推荐/排行榜/推荐歌单/新歌新碟/推荐播客)',
+  testWidgets('推荐页: 平级区块 5 个(每日推荐/风格推荐/推荐歌单/新歌新碟/推荐播客)',
       (tester) async {
     big(tester);
     await tester.pumpWidget(recommend());
@@ -337,7 +337,9 @@ void main() {
 
     // 合并后的 5 个区块标题(快捷区是三张卡, 没有标题)
     expect(find.text('每日推荐'), findsNWidgets(2)); // 快捷卡 + 区块标题
-    expect(find.text('排行榜'), findsOneWidget);
+    // 排行榜已按用户要求移到搜索页
+    expect(find.text('排行榜'), findsNothing);
+    expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('推荐歌单'), findsOneWidget);
     expect(find.text('新歌新碟'), findsOneWidget);
     expect(find.text('推荐播客'), findsOneWidget);
@@ -353,7 +355,7 @@ void main() {
     expect(find.text('新碟A'), findsOneWidget);
   });
 
-  testWidgets('推荐页: 风格推荐下沉为排行榜区块内的 chips, 仍在榜单元块之后',
+  testWidgets('推荐页: 排行榜搬走后风格推荐仍是独立区块, 且顺序稳定',
       (tester) async {
     big(tester);
     await tester.pumpWidget(recommend());
@@ -361,13 +363,12 @@ void main() {
 
     expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('粤语流行'), findsOneWidget);
-    // 下沉: 风格 chip 排在榜单封面之后(同一区块内次级内容)
-    final chartDy = tester.getTopLeft(find.text('飙升榜')).dy;
-    final styleDy = tester.getTopLeft(find.text('粤语流行')).dy;
-    expect(styleDy, greaterThan(chartDy));
-    // 且不再位于「每日推荐」区块之前(区块顺序: 每日推荐 → 排行榜+风格)
+    // 区块顺序: 每日推荐 → 风格推荐 → 推荐歌单
     final dailyDy = tester.getTopLeft(find.text('每日一歌')).dy;
-    expect(chartDy, greaterThan(dailyDy));
+    final styleDy = tester.getTopLeft(find.text('粤语流行')).dy;
+    final playlistTitleDy = tester.getTopLeft(find.text('推荐歌单')).dy;
+    expect(styleDy, greaterThan(dailyDy));
+    expect(styleDy, lessThan(playlistTitleDy));
   });
 
   testWidgets('推荐页: 新歌新碟 合并后唯一的「全部」仍进分类页', (tester) async {
@@ -376,9 +377,9 @@ void main() {
     await tester.pumpWidget(recommend(onOpenNewRelease: () => more++));
     await tester.pumpAndSettle();
 
-    // 5 个「全部」: 每日推荐 / 排行榜 / 推荐歌单 / 新歌新碟 / 推荐播客
-    expect(find.text('全部'), findsNWidgets(5));
-    await tester.tap(find.text('全部').at(3));
+    // 4 个「全部」: 每日推荐 / 推荐歌单 / 新歌新碟 / 推荐播客(排行榜已搬走)
+    expect(find.text('全部'), findsNWidgets(4));
+    await tester.tap(find.text('全部').at(2));
     await tester.pumpAndSettle();
     expect(more, 1);
   });
@@ -389,7 +390,7 @@ void main() {
     await tester.pumpWidget(recommend());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('全部').at(2));
+    await tester.tap(find.text('全部').at(1));
     await tester.pumpAndSettle();
     expect(find.text('歌单广场'), findsOneWidget);
   });
