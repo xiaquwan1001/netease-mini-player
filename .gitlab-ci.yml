@@ -30,7 +30,7 @@ flutter:
     - bash tools/check-write-guard.sh
     - (cd ui && flutter test --exclude-tags network)
 
-# ---------- 产物：只在 tag 上跑（或手动触发），产物可直接从 GitLab 下载 ----------
+# ---------- 产物：tag 上自动跑；分支上手动触发（GitLab 页面/glab ci run 的 play） ----------
 
 .build_rules: &build_rules
   - if: $CI_COMMIT_TAG
@@ -43,19 +43,25 @@ build-linux-x64:
   timeout: 60m
   rules: *build_rules
   script:
-    - VERSION="${CI_COMMIT_TAG#v}"
-    - if [ -z "$VERSION" ]; then VERSION=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' ui/pubspec.yaml); fi
-    - echo "building v$VERSION"
-    - (cd ui && flutter pub get && flutter build linux --release)
-    # GLib 2.80 基线回归门（同 GitHub release.yml）
-    - BUNDLE=ui/build/linux/x64/release/bundle
-    - BAD=$(nm -D --undefined-only "$BUNDLE/minincm" | grep -oE 'g_once_init_(enter|leave)_pointer' | sort -u || true)
-    - if [ -n "$BAD" ]; then echo "minincm 引用了 GLib 2.80 才有的符号: $BAD"; exit 1; fi
-    - mkdir -p dist
-    - tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-${VERSION}-linux-x64.tar.gz" bundle
-    - bash packaging/linux/build-deb.sh "$PWD/dist"
-    - bash packaging/linux/build-appimage.sh "$PWD/dist"
-    - ls -lh dist
+    - |
+      set -e
+      VERSION="${CI_COMMIT_TAG#v}"
+      if [ -z "$VERSION" ]; then
+        VERSION=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' ui/pubspec.yaml | head -1)
+      fi
+      echo "building v$VERSION"
+      cd ui && flutter pub get && flutter build linux --release && cd ..
+      BUNDLE=ui/build/linux/x64/release/bundle
+      BAD=$(nm -D --undefined-only "$BUNDLE/minincm" | grep -oE 'g_once_init_(enter|leave)_pointer' | sort -u || true)
+      if [ -n "$BAD" ]; then
+        echo "ERROR: minincm 引用了 GLib 2.80 才有的符号: $BAD"
+        exit 1
+      fi
+      mkdir -p dist
+      tar -C ui/build/linux/x64/release -czf "dist/MiniNCM-$VERSION-linux-x64.tar.gz" bundle
+      bash packaging/linux/build-deb.sh "$PWD/dist"
+      bash packaging/linux/build-appimage.sh "$PWD/dist"
+      ls -lh dist
   artifacts:
     name: "MiniNCM-${CI_COMMIT_TAG:-manual}-linux-x64"
     paths: [dist/*]
@@ -66,13 +72,17 @@ build-android-arm64:
   timeout: 60m
   rules: *build_rules
   script:
-    - export ANDROID_HOME="$HOME/android-dev/sdk" ANDROID_SDK_ROOT="$HOME/android-dev/sdk"
-    - export JAVA_HOME="$HOME/android-dev/jdk"
-    - VERSION="${CI_COMMIT_TAG#v}"
-    - if [ -z "$VERSION" ]; then VERSION=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' ui/pubspec.yaml); fi
-    # 正式签名材料放在仓库外（$HOME/.config/minincm-android/key.properties，600 权限）；
-    # 没有就退回 debug 签名并在产物名里标出来，绝不冒充正式包。
     - |
+      set -e
+      export ANDROID_HOME="$HOME/android-dev/sdk"
+      export ANDROID_SDK_ROOT="$ANDROID_HOME"
+      export JAVA_HOME="$HOME/android-dev/jdk"
+      VERSION="${CI_COMMIT_TAG#v}"
+      if [ -z "$VERSION" ]; then
+        VERSION=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' ui/pubspec.yaml | head -1)
+      fi
+      # 正式签名材料放仓库外（$HOME/.config/minincm-android/key.properties, 600）；
+      # 没有就退回 debug 签名并在产物名里标出来，绝不冒充正式包。
       SIGN=release
       if [ -f "$HOME/.config/minincm-android/key.properties" ]; then
         cp "$HOME/.config/minincm-android/key.properties" ui/android/key.properties
@@ -80,9 +90,9 @@ build-android-arm64:
         SIGN=debug-signed
         echo "WARN: 无 key.properties, 本次 APK 用 debug 签名"
       fi
-      (cd ui && flutter pub get && flutter build apk --release --target-platform android-arm64)
+      cd ui && flutter pub get && flutter build apk --release --target-platform android-arm64 && cd ..
       mkdir -p dist
-      cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-${VERSION}-android-arm64-${SIGN}.apk"
+      cp ui/build/app/outputs/flutter-apk/app-release.apk "dist/MiniNCM-$VERSION-android-arm64-$SIGN.apk"
       ls -lh dist
   artifacts:
     name: "MiniNCM-${CI_COMMIT_TAG:-manual}-android-arm64"
