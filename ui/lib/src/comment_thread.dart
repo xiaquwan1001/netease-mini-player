@@ -7,6 +7,8 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'sheet_header.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
+import 'user_nav.dart';
 
 /// 评论线程: 列表 + 点赞 + 楼层回复 + 发回复.
 ///
@@ -706,9 +708,7 @@ class CommentThreadState extends State<CommentThread> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   String _relative(BigInt timeMs) {
@@ -925,10 +925,14 @@ class _CommentTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleCover(
-            url: comment.avatarUrl,
-            size: 32,
-            icon: Icons.person_outline,
+          UserAvatarTap(
+            userId: comment.userId,
+            nickname: comment.userName,
+            child: CircleCover(
+              url: comment.avatarUrl,
+              size: 32,
+              icon: Icons.person_outline,
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1029,10 +1033,14 @@ class _CommentTile extends StatelessWidget {
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  CircleCover(
-                                    url: r.avatarUrl,
-                                    size: 18,
-                                    icon: Icons.person_outline,
+                                  UserAvatarTap(
+                                    userId: r.userId,
+                                    nickname: r.userName,
+                                    child: CircleCover(
+                                      url: r.avatarUrl,
+                                      size: 18,
+                                      icon: Icons.person_outline,
+                                    ),
                                   ),
                                   const SizedBox(width: 6),
                                   Expanded(
@@ -1296,10 +1304,25 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                         final r = replies[i];
                         return ListTile(
                           dense: true,
-                          leading: CircleCover(
-                            url: r.avatarUrl,
-                            size: 28,
-                            icon: Icons.person_outline,
+                          // 与主楼评论(12+2+32+8)对齐: 收窄 contentPadding,
+                          // leading 固定 32 槽, 避免楼层面板文字比主楼右移一截。
+                          contentPadding: const EdgeInsets.fromLTRB(
+                            4,
+                            0,
+                            12,
+                            0,
+                          ),
+                          leading: SizedBox(
+                            width: 32,
+                            child: UserAvatarTap(
+                              userId: r.userId,
+                              nickname: r.userName,
+                              child: CircleCover(
+                                url: r.avatarUrl,
+                                size: 28,
+                                icon: Icons.person_outline,
+                              ),
+                            ),
                           ),
                           title: Text(
                             r.userName.isEmpty ? '匿名用户' : r.userName,

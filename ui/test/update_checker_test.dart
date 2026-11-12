@@ -539,6 +539,26 @@ void main() {
       expect(settings.skippedUpdateVersion, 'v0.4.0');
     });
 
+    testWidgets('歌单内搜索后点歌: 默认完整列表, 可改为只添加当前歌', (tester) async {
+      stubOpenUrl();
+      final settings = AppSettings.instance
+        ..librarySearchPlayAction = LibrarySearchPlayAction.fullList;
+      await pumpSettings(tester);
+      final tile = find.widgetWithText(ListTile, '歌单内搜索后点歌');
+      expect(tile, findsOneWidget);
+      expect(find.textContaining('切到完整列表'), findsOneWidget);
+
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('只添加当前歌'));
+      await tester.pumpAndSettle();
+      expect(
+        settings.librarySearchPlayAction,
+        LibrarySearchPlayAction.appendCurrent,
+      );
+      settings.librarySearchPlayAction = LibrarySearchPlayAction.fullList;
+    });
+
     testWidgets('自动检查更新: 默认每天, 可通过列表改为每周/不自动', (tester) async {
       stubOpenUrl();
       final settings = AppSettings.instance

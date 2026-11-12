@@ -8,6 +8,7 @@ import 'net_retry.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
 import 'song_actions.dart';
 import 'style_page.dart';
 
@@ -68,6 +69,10 @@ class RecommendView extends StatefulWidget {
   State<RecommendView> createState() => _RecommendViewState();
 }
 
+/// 页面横向留白 0 之后, 非歌曲类区块自己补回的 12dp。
+Widget _hPad(Widget child) =>
+    Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: child);
+
 class _RecommendViewState extends State<RecommendView> {
   Future<List<rust.SongDto>> Function() get _dailySongs =>
       widget.loadDailySongs ?? rust.dailyRecommendSongs;
@@ -96,8 +101,10 @@ class _RecommendViewState extends State<RecommendView> {
   Widget _buildBody() {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
+      // 2026-11 用户反馈: 推荐页歌曲行左右仍有空隙。页面横向留白改为 0,
+      // 歌曲卡片直接铺满屏宽(行内只留 kSongRowPadding); 其它区块各自补 12dp。
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+        padding: const EdgeInsets.only(top: 8, bottom: 24),
         // 审查 P1-7.8 / §5.5: 首屏平级模块 8 个 + 1 个游离按钮 → 5 个。
         //  - 每日推荐歌曲 + 每日推荐歌单      → 合并为「每日推荐」(歌单在落地页第二个 tab)
         //  - 新歌速递 + 新碟上架              → 合并为「新歌新碟」(同一个「全部」)
@@ -106,10 +113,12 @@ class _RecommendViewState extends State<RecommendView> {
         //  - 推荐播客                        → 保留, 降到最底(第 2 屏)
         // 每个模块的落地页/回调都保持原样, 可达性零损失(见 test/ui_batch_c_ia_test.dart)。
         children: [
-          _QuickActions(
-            onOpenDaily: widget.onOpenDaily,
-            onPlayFm: _playFm,
-            onHeartMode: widget.onHeartMode,
+          _hPad(
+            _QuickActions(
+              onOpenDaily: widget.onOpenDaily,
+              onPlayFm: _playFm,
+              onHeartMode: widget.onHeartMode,
+            ),
           ),
           const SizedBox(height: 16),
           _DailySongsSection(
@@ -120,19 +129,23 @@ class _RecommendViewState extends State<RecommendView> {
           const SizedBox(height: 16),
           // 排行榜(含「全部榜单」)已按用户要求移到搜索页;
           // 风格推荐留在推荐页, 现在是排行榜搬走后的独立单元。
-          _StylesSection(
-            load: _styles,
-            onPlaySongs: widget.onPlaySongs,
-            onOpenPlaylist: widget.onOpenPlaylist,
+          _hPad(
+            _StylesSection(
+              load: _styles,
+              onPlaySongs: widget.onPlaySongs,
+              onOpenPlaylist: widget.onOpenPlaylist,
+            ),
           ),
           const SizedBox(height: 16),
-          _DailyPlaylistsSection(
-            load: _dailyPlaylists,
-            loggedIn: widget.loggedIn,
-            onOpen: widget.onOpenPlaylist,
-            onOpenAll: () => showPlaylistSquare(
-              context,
-              onOpenPlaylist: widget.onOpenPlaylist,
+          _hPad(
+            _DailyPlaylistsSection(
+              load: _dailyPlaylists,
+              loggedIn: widget.loggedIn,
+              onOpen: widget.onOpenPlaylist,
+              onOpenAll: () => showPlaylistSquare(
+                context,
+                onOpenPlaylist: widget.onOpenPlaylist,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -145,11 +158,13 @@ class _RecommendViewState extends State<RecommendView> {
             onMore: widget.onOpenNewRelease,
           ),
           const SizedBox(height: 16),
-          _PodcastSection(
-            load: _podcasts,
-            loggedIn: widget.loggedIn,
-            onOpen: widget.onOpenPodcast,
-            onPlaySongs: widget.onPlaySongs,
+          _hPad(
+            _PodcastSection(
+              load: _podcasts,
+              loggedIn: widget.loggedIn,
+              onOpen: widget.onOpenPodcast,
+              onPlaySongs: widget.onPlaySongs,
+            ),
           ),
         ],
       ),
@@ -184,9 +199,7 @@ class _RecommendViewState extends State<RecommendView> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 }
 
@@ -410,7 +423,7 @@ class _NewSongsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
-        const _Caption('新歌速递'),
+        _hPad(const _Caption('新歌速递')),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
           emptyText: '暂时没有新歌',
@@ -558,16 +571,20 @@ class _NewReleaseSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
-          title: '新歌新碟',
-          trailing: onMore == null
-              ? null
-              : TextButton(onPressed: onMore, child: const Text('全部')),
+        _hPad(
+          _SectionHeader(
+            title: '新歌新碟',
+            trailing: onMore == null
+                ? null
+                : TextButton(onPressed: onMore, child: const Text('全部')),
+          ),
         ),
         _NewSongsSection(load: loadSongs, onPlay: onPlay),
         if (albums != null && open != null) ...[
           const SizedBox(height: 10),
-          _NewAlbumsSection(load: albums, onOpen: open, loggedIn: loggedIn),
+          _hPad(
+            _NewAlbumsSection(load: albums, onOpen: open, loggedIn: loggedIn),
+          ),
         ],
       ],
     );
@@ -719,10 +736,12 @@ class _DailySongsSection extends StatelessWidget {
       children: [
         // 审查 §5.5: 「每日推荐歌曲」+「每日推荐歌单」合并成一格「每日推荐」,
         // 歌单落在落地页的第二个 tab; 同屏不再出现第二个「查看全部」。
-        _SectionHeader(
-          title: '每日推荐',
-          // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
+        _hPad(
+          _SectionHeader(
+            title: '每日推荐',
+            // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
+            trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
+          ),
         ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,

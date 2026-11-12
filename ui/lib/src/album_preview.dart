@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'artist_page.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
+import 'toast.dart' show showToast;
 
 typedef AlbumLoader = Future<rust.AlbumDetailDto> Function(BigInt albumId);
 
@@ -21,10 +23,18 @@ Future<void> showAlbumPreview(
   String? coverUrl,
   required void Function(List<rust.SongDto> songs, int index) onPlay,
   AlbumLoader? loadAlbum,
+
   /// 从"收藏的专辑"进来时已知已收藏, 直接显示"已收藏"
   bool initiallySubscribed = false,
+
   /// 测试注入: 收藏/取消收藏
   Future<bool> Function(BigInt albumId, bool subscribed)? setSubscribed,
+
+  /// 测试注入: 按艺人名解析 id(默认走 searchExact)
+  Future<BigInt> Function(String name)? resolveArtistId,
+
+  /// 测试注入: 打开艺人主页(默认 showArtistDetail)
+  void Function(BigInt artistId, String name)? onOpenArtist,
 }) {
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -35,11 +45,12 @@ Future<void> showAlbumPreview(
         onPlay: onPlay,
         load: loadAlbum ?? (id) => rust.albumDetail(albumId: id),
         initiallySubscribed: initiallySubscribed,
-        setSubscribed: setSubscribed ??
-            (id, subscribed) => rust.setAlbumSubscribed(
-                  albumId: id,
-                  subscribed: subscribed,
-                ),
+        setSubscribed:
+            setSubscribed ??
+            (id, subscribed) =>
+                rust.setAlbumSubscribed(albumId: id, subscribed: subscribed),
+        resolveArtistId: resolveArtistId,
+        onOpenArtist: onOpenArtist,
       ),
     ),
   );
@@ -56,6 +67,8 @@ class AlbumPreviewPage extends StatefulWidget {
     required this.load,
     required this.initiallySubscribed,
     required this.setSubscribed,
+    this.resolveArtistId,
+    this.onOpenArtist,
   });
 
   final BigInt albumId;
@@ -65,6 +78,12 @@ class AlbumPreviewPage extends StatefulWidget {
   final AlbumLoader load;
   final bool initiallySubscribed;
   final Future<bool> Function(BigInt albumId, bool subscribed) setSubscribed;
+
+  /// 按艺人名解析 id(测试注入; 默认 searchExact)
+  final Future<BigInt> Function(String name)? resolveArtistId;
+
+  /// 打开艺人主页(测试注入; 默认 showArtistDetail)
+  final void Function(BigInt artistId, String name)? onOpenArtist;
 
   @override
   State<AlbumPreviewPage> createState() => _AlbumPreviewPageState();
@@ -121,6 +140,85 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
     }
   }
 
+  /// 多艺人分隔符: "A / B"、"A、B"、"A & B" 都拆开
+  List<String> _artistNames(rust.AlbumDetailDto album) => album.artist
+      .split(RegExp(r'\s*(?:/|、|,|，|&|＆)\s*'))
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+
+  Future<void> _openArtist(
+    BuildContext context,
+    rust.AlbumDetailDto album,
+  ) async {
+    final names = _artistNames(album);
+    if (names.isEmpty) return;
+    var name = names.first;
+    if (names.length > 1) {
+      final picked = await showDialog<String>(
+        context: context,
+        builder: (ctx) => SimpleDialog(
+          title: const Text('选择艺人'),
+          children: [
+            for (final n in names)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, n),
+                child: Text(n),
+              ),
+          ],
+        ),
+      );
+      if (picked == null || !context.mounted) return;
+      name = picked;
+    }
+    // 单艺人且曲目里有 artistId: 不用联网解析
+    var id = BigInt.zero;
+    if (names.length == 1) {
+      for (final s in album.songs) {
+        if (s.artistId > BigInt.zero &&
+            (s.artist == name || s.artist.contains(name))) {
+          id = s.artistId;
+          break;
+        }
+      }
+    }
+    if (id == BigInt.zero) {
+      final resolve = widget.resolveArtistId;
+      try {
+        id = resolve != null
+            ? await resolve(name)
+            : await _searchArtistId(name);
+      } catch (_) {
+        id = BigInt.zero;
+      }
+    }
+    if (!context.mounted) return;
+    if (id == BigInt.zero) {
+      showToast(context, '没有找到艺人「$name」');
+      return;
+    }
+    final open = widget.onOpenArtist;
+    if (open != null) {
+      open(id, name);
+      return;
+    }
+    await showArtistDetail(
+      context,
+      artistId: id,
+      name: name,
+      onPlaySongs: widget.onPlay,
+    );
+  }
+
+  /// 按名字解析艺人 id(默认走精确搜索; 取同名或第一个命中)
+  Future<BigInt> _searchArtistId(String name) async {
+    final exact = await rust.searchExact(keywords: name);
+    for (final a in exact.artists) {
+      if (a.name == name) return a.id;
+    }
+    return exact.artists.isEmpty ? BigInt.zero : exact.artists.first.id;
+  }
+
   @override
   Widget build(BuildContext context) {
     final album = _album;
@@ -130,11 +228,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
     return Scaffold(
       // 全页骨架对齐歌单详情: AppBar 自带返回键, 破坏性/长内容不再挤在 Dialog 圈里
       appBar: AppBar(
-        title: Text(
-          name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,11 +245,23 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // 专辑名只在 AppBar 出现一次(全页后正文不再重复标题)
-                      Text(
-                        album?.artist ?? '未知歌手',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      // 艺人可点: 单艺人直接进主页, 多艺人先弹窗选择(用户要求)
+                      InkWell(
+                        onTap: album == null
+                            ? null
+                            : () => _openArtist(context, album),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Text(
+                          album?.artist ?? '未知歌手',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: album == null
+                                    ? null
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       if (songs.isNotEmpty)
                         Text(
@@ -191,8 +297,9 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
                               const SizedBox(
                                 width: 14,
                                 height: 14,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               ),
                           ],
                         ),

@@ -46,10 +46,12 @@ import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/update_checker.dart';
 import 'src/update_dialog.dart';
+import 'src/user_nav.dart';
 import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
+import 'src/toast.dart' show showToast;
 import 'src/theme.dart';
 import 'src/vip_page.dart';
 
@@ -320,20 +322,6 @@ Future<void> main() async {
   await RustLib.init();
   runApp(const MiniNcmApp());
 }
-
-const _modeIcons = {
-  PlayMode.repeatAll: Icons.repeat,
-  PlayMode.repeatOne: Icons.repeat_one,
-  PlayMode.sequence: Icons.playlist_play,
-  PlayMode.shuffle: Icons.shuffle,
-};
-
-const _modeLabels = {
-  PlayMode.repeatAll: '列表循环',
-  PlayMode.repeatOne: '单曲循环',
-  PlayMode.sequence: '顺序播放',
-  PlayMode.shuffle: '随机播放',
-};
 
 /// 通知栏「播放顺序」按钮的轮转顺序(列表循环→单曲循环→顺序播放→随机播放→心动模式).
 /// 心动模式不是 PlayMode, 用返回 null 表示「下一步应进入心动模式」. 纯函数, 便于单测.
@@ -762,9 +750,10 @@ class _HomePageState extends State<HomePage> {
       },
       onOpenAlbum: () => _openAlbumPreview(_current),
       onToggleLike: _toggleLike,
-      onPrevious: _previous,
       onToggle: _toggle,
       onNext: _next,
+      onCycleMode: _cycleMode,
+      onOpenQueue: _openQueueSheet,
     );
     // 播放条回调槽位只赋这一次(同一实例, 之后不再变)
     WidgetsBinding.instance.addPostFrameCallback(
@@ -783,6 +772,8 @@ class _HomePageState extends State<HomePage> {
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
     _actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
+    // 头像点击进入用户主页时, 主页里点歌仍要能播(共享同一份播放回调)
+    UserNav.onPlaySongs = _playSongsList;
     // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
     UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
     // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
@@ -1329,9 +1320,7 @@ class _HomePageState extends State<HomePage> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   void _openDiscover() {
@@ -1490,9 +1479,7 @@ class _HomePageState extends State<HomePage> {
       final url = stream.url;
       if (url == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('《${song.name}》没有可用直链(会员曲目需先登录), 已跳过')),
-          );
+          showToast(context, '《${song.name}》没有可用直链(会员曲目需先登录), 已跳过');
         }
         return false;
       }
@@ -1522,8 +1509,7 @@ class _HomePageState extends State<HomePage> {
       return true;
     } catch (e) {
       if (!mounted) return false;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      showToast(context, friendlyError(e), isError: true);
       return false;
     }
   }
@@ -1834,8 +1820,7 @@ class _HomePageState extends State<HomePage> {
       final cookie = await _auth.loginWeb();
       if (cookie == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('未获取到登录态')));
+        showToast(context, '未获取到登录态', isError: true);
         return;
       }
       final ok = await _auth.commitCookie(cookie);
@@ -1845,15 +1830,10 @@ class _HomePageState extends State<HomePage> {
       }
       await _refreshInfo();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效'),
-        ),
-      );
+      showToast(context, ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('登录失败: ${friendlyError(e)}')));
+      showToast(context, '登录失败: ${friendlyError(e)}', isError: true);
     }
   }
 
@@ -1873,8 +1853,7 @@ class _HomePageState extends State<HomePage> {
         await rust.accountRemove(userId: account.userId);
         await _refreshInfo();
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已从账号簿移除')));
+        showToast(context, '已从账号簿移除');
       },
       // 隐私: 退出登录 + 删掉本机所有账号凭据(设备指纹保留).
       onPurgeLocal: () async {
@@ -1884,8 +1863,7 @@ class _HomePageState extends State<HomePage> {
         }
         await _refreshInfo();
         if (!mounted) return;
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('已清除本机登录凭据')));
+        showToast(context, '已清除本机登录凭据');
       },
     );
   }
@@ -1898,13 +1876,10 @@ class _HomePageState extends State<HomePage> {
       final ok = await rust.accountSwitch(userId: account.userId);
       await _refreshInfo();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录')),
-      );
+      showToast(context, ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('切换账号失败: ${friendlyError(e)}')));
+      showToast(context, '切换账号失败: ${friendlyError(e)}', isError: true);
     }
   }
 
@@ -1951,16 +1926,11 @@ class _HomePageState extends State<HomePage> {
       await _auth.logout();
       await _refreshInfo();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(thenLogin ? '已退出, 请登录另一个账号' : '已退出登录(账号仍留在账号簿)'),
-        ),
-      );
+      showToast(context, thenLogin ? '已退出, 请登录另一个账号' : '已退出登录(账号仍留在账号簿)');
       if (thenLogin) await _login();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('退出登录失败: ${friendlyError(e)}')));
+      showToast(context, '退出登录失败: ${friendlyError(e)}', isError: true);
     }
   }
 
@@ -2030,6 +2000,19 @@ class _HomePageState extends State<HomePage> {
       if (id == _current?.id) unawaited(_syncActionState());
       rethrow;
     }
+  }
+
+  /// 歌单内搜索后"只添加当前歌": 保留现有队列, 追加到队尾(已在队列则不重复)
+  Future<void> _appendSongToQueue(rust.SongDto song) async {
+    if (_queue.isEmpty) {
+      await _playSongsList([song], 0);
+      return;
+    }
+    final existed = _queue.items.any((s) => s.id == song.id);
+    _queue.append(song);
+    if (!mounted) return;
+    setState(() {});
+    _toast(existed ? '这首歌已在播放队列中' : '已添加到播放队列');
   }
 
   Future<void> _playNextSong(rust.SongDto song) async {
@@ -2337,6 +2320,7 @@ class _HomePageState extends State<HomePage> {
       currentTrackId: _current?.id,
       currentPlaylistId: _queuePlaylistId,
       onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: pl.id),
+      onAppendSong: _appendSongToQueue,
       onLikeChanged: (id, liked) => setState(() {
         if (liked) {
           _liked.add(id);
@@ -2397,6 +2381,7 @@ class _HomePageState extends State<HomePage> {
         currentTrackId: _current?.id,
         currentPlaylistId: _queuePlaylistId,
         onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: sp.id),
+        onAppendSong: _appendSongToQueue,
         onLikeChanged: (id, liked) => setState(() {
           if (liked) {
             _liked.add(id);
@@ -2666,21 +2651,73 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _cycleMode() {
-    setState(() {
-      final modes = PlayMode.values;
-      final i = (modes.indexOf(_queue.mode) + 1) % modes.length;
-      _queue.mode = modes[i];
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(
-          SnackBar(
-            content: Text(_modeLabels[_queue.mode]!),
-            duration: const Duration(milliseconds: 900),
-          ),
-        );
-    });
+  /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 心动 → 列表循环。
+  ///
+  /// 心动模式是否可用由 _heartMode 自己判断(未登录/无种子时会给提示并回落),
+  /// 切换成功/失败的反馈用顶部浮层, 不挡播放条上那个按钮(用户反馈)。
+  Future<void> _cycleMode() async {
+    if (_heartActive) {
+      setState(() => _queue.mode = PlayMode.repeatAll);
+      _toastTop(playModeLabels[PlayMode.repeatAll]!);
+      unawaited(_syncActionState());
+      return;
+    }
+    final next = nextNotificationMode(_queue.mode);
+    if (next == null) {
+      await _heartMode();
+      if (_heartActive) {
+        _toastTop('心动模式');
+      } else {
+        setState(() => _queue.mode = PlayMode.repeatAll);
+        _toastTop(playModeLabels[PlayMode.repeatAll]!);
+      }
+    } else {
+      setState(() => _queue.mode = next);
+      _toastTop(playModeLabels[next]!);
+    }
     unawaited(_syncActionState());
+  }
+
+  /// 顶部短浮层: 只做"模式切换"这类即时反馈, 不拦截点击、不遮播放条按钮。
+  void _toastTop(String message) {
+    if (!mounted) return;
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) return;
+    final scheme = Theme.of(context).colorScheme;
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (ctx) => Positioned(
+        top: MediaQuery.paddingOf(ctx).top + 12,
+        left: 0,
+        right: 0,
+        child: IgnorePointer(
+          child: Center(
+            child: Material(
+              color: scheme.inverseSurface,
+              elevation: 4,
+              borderRadius: BorderRadius.circular(20),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: scheme.onInverseSurface,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    Timer(const Duration(milliseconds: 900), () {
+      if (entry.mounted) entry.remove();
+    });
   }
 
   /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
@@ -2732,7 +2769,7 @@ class _HomePageState extends State<HomePage> {
         }
       } else {
         setState(() => _queue.mode = next);
-        _toast(_modeLabels[next]!);
+        _toastTop(playModeLabels[next]!);
       }
     }
     await _syncActionState();
@@ -3362,48 +3399,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
-        _buildDetailActionStrip(context),
       ],
-    );
-  }
-
-  /// 详情页底部的次要控制: 播放模式 / 心动模式 / 播放队列.
-  ///
-  /// 播放条合并成一行后只留"喜欢 + 上一首/播放/下一首", 这三个低频动作挪到这里,
-  /// 保证详情页里也够得着(不用先收起详情页).
-  Widget _buildDetailActionStrip(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.4)),
-        ),
-      ),
-      // 300dp 窄屏 + 大字号会把三个带文字的按钮挤爆, 横向可滚更稳
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            TextButton.icon(
-              onPressed: _cycleMode,
-              icon: Icon(_modeIcons[_queue.mode], size: 20),
-              label: Text(_modeLabels[_queue.mode]!),
-            ),
-            TextButton.icon(
-              onPressed: _busy ? null : _heartMode,
-              icon: const Icon(Icons.auto_awesome, size: 20),
-              label: const Text('心动'),
-            ),
-            TextButton.icon(
-              onPressed: _openQueueSheet,
-              icon: const Icon(Icons.queue_music, size: 20),
-              label: Text('队列 ${_queue.items.length}'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -3423,6 +3419,8 @@ class _HomePageState extends State<HomePage> {
             queueLength: _queue.items.length,
             dragMax: _dragMax,
             dragMs: _dragMs,
+            mode: _queue.mode,
+            heartActive: _heartActive,
           );
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => playerBarData.value = data,

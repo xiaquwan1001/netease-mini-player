@@ -3,14 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/radio_subscribers_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.RadioSubscriber _sub(int id, String nick, {String sig = '签名', BigInt? timeMs}) =>
-    rust.RadioSubscriber(
-      userId: BigInt.from(id),
-      nickname: nick,
-      avatarUrl: '',
-      signature: sig,
-      subscribeTimeMs: timeMs ?? BigInt.from(1793611157940),
-    );
+rust.RadioSubscriber _sub(
+  int id,
+  String nick, {
+  String sig = '签名',
+  BigInt? timeMs,
+}) => rust.RadioSubscriber(
+  userId: BigInt.from(id),
+  nickname: nick,
+  avatarUrl: '',
+  signature: sig,
+  subscribeTimeMs: timeMs ?? BigInt.from(1793611157940),
+);
 
 Future<void> _pump(
   WidgetTester tester, {
@@ -73,7 +77,8 @@ void main() {
       },
     );
     await tester.pumpAndSettle();
-    expect(find.textContaining('加载失败'), findsOneWidget);
+    // PagedListView 统一错误态: friendlyError 文案 + 重试
+    expect(find.textContaining('网络'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
     fail = false;
     await tester.tap(find.text('重试'));
@@ -105,7 +110,10 @@ void main() {
     expect(find.text('加载更多'), findsOneWidget);
     await tester.tap(find.text('加载更多'));
     await tester.pumpAndSettle();
-    expect(calls, [BigInt.from(-1), BigInt.from(1111)]); // 游标 = 上一页最后 subscribeTime
+    expect(calls, [
+      BigInt.from(-1),
+      BigInt.from(1111),
+    ]); // 游标 = 上一页最后 subscribeTime
     expect(find.text('听众乙'), findsOneWidget);
     expect(find.text('加载更多'), findsNothing); // hasMore=false
   });
@@ -127,8 +135,10 @@ void main() {
     await tester.tap(find.text('加载更多'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('加载更多失败'), findsOneWidget);
-    expect(find.text('加载更多'), findsNothing);
+    // PagedListView: 失败保留旧数据 + toast 提示, 加载更多入口仍在(可重试)
+    expect(find.textContaining('网络'), findsOneWidget);
+    expect(find.text('听众甲'), findsOneWidget);
+    expect(find.text('加载更多'), findsOneWidget);
   });
 
   testWidgets('窄屏 300dp + 1.25 字号不溢出', (tester) async {
@@ -144,7 +154,8 @@ void main() {
         hasMore: true,
         subscribers: List.generate(
           8,
-          (i) => _sub(100 + i, '很长很长很长的听众昵称$i', sig: '很长很长很长的个性签名很长很长很长的个性签名$i'),
+          (i) =>
+              _sub(100 + i, '很长很长很长的听众昵称$i', sig: '很长很长很长的个性签名很长很长很长的个性签名$i'),
         ),
       ),
     );

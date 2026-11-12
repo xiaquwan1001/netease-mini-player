@@ -160,6 +160,17 @@ class SettingsView extends StatelessWidget {
                   ),
                   const Divider(height: 1),
                   ListTile(
+                    title: const Text('歌单内搜索后点歌'),
+                    subtitle: Text(
+                      '${settings.librarySearchPlayAction.label} · ${settings.librarySearchPlayAction.hint}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showLibrarySearchPlaySheet(context),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
                     title: const Text('自动检查更新'),
                     subtitle: Text(
                       '${settings.updateCheckInterval.label} · 发现新版本时弹窗提示',
@@ -405,6 +416,41 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
     // 弹窗与启动自动检查共用一份实现(见 update_dialog.dart)
     await showUpdateDialog(context, info);
   }
+}
+
+/// 「歌单内搜索后点歌」行为选择。
+Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
+  final settings = AppSettings.instance;
+  final current = settings.librarySearchPlayAction;
+  final picked = await showModalBottomSheet<LibrarySearchPlayAction>(
+    context: context,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              '歌单内搜索后点歌',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          for (final value in LibrarySearchPlayAction.values)
+            ListTile(
+              title: Text(value.label),
+              subtitle: Text(value.hint),
+              trailing: value == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(ctx).pop(value),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+  if (picked == null) return;
+  settings.update(librarySearchPlayAction: picked);
 }
 
 /// 「自动检查更新」频率选择: 不自动检查 / 每天 / 每周 / 每月。

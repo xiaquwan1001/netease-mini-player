@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 import 'package:flutter/services.dart';
 
+import 'app_settings.dart';
 import 'comment_thread.dart';
 import 'cover_backdrop.dart';
 import 'cover_palette.dart';
@@ -103,6 +104,9 @@ Future<void> showPlaylistDetail(
   BigInt? currentPlaylistId,
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   void Function(BigInt id, bool liked)? onLikeChanged,
+
+  /// 歌单内搜索后"只添加当前歌"用(不传则退化为按筛选列表播放)
+  void Function(rust.SongDto song)? onAppendSong,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -117,6 +121,7 @@ Future<void> showPlaylistDetail(
         currentPlaylistId: currentPlaylistId,
         onPlaySongs: onPlaySongs,
         onLikeChanged: onLikeChanged,
+        onAppendSong: onAppendSong,
       ),
     ),
   );
@@ -134,6 +139,7 @@ class _PlaylistDetailPage extends StatefulWidget {
     this.currentTrackId,
     this.currentPlaylistId,
     this.onLikeChanged,
+    this.onAppendSong,
   });
 
   final BigInt playlistId;
@@ -146,6 +152,9 @@ class _PlaylistDetailPage extends StatefulWidget {
   final BigInt? currentPlaylistId;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(BigInt id, bool liked)? onLikeChanged;
+
+  /// 设置里选"只添加当前歌"时用: 保留现有队列, 把歌追加到末尾
+  final void Function(rust.SongDto song)? onAppendSong;
 
   @override
   State<_PlaylistDetailPage> createState() => _PlaylistDetailPageState();
@@ -614,84 +623,84 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     return CoverBackdrop(
       palette: _palette,
       child: Card(
-      color: theme.colorScheme.surface.withValues(alpha: 0.82),
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 标题用 headlineSmall 级别(之前 titleMedium 显得特别小);
-                      // 长标题单行横向滚动播放, 不再截断/竖排
-                      MarqueeText(
-                        d?.name ?? widget.name,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (d != null && d.creatorName.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            '创建者: ${d.creatorName}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
+        color: theme.colorScheme.surface.withValues(alpha: 0.82),
+        margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 标题用 headlineSmall 级别(之前 titleMedium 显得特别小);
+                        // 长标题单行横向滚动播放, 不再截断/竖排
+                        MarqueeText(
+                          d?.name ?? widget.name,
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      if (d != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            '${d.trackCount} 首 · 播放 ${d.playCount} 次',
-                            style: theme.textTheme.bodySmall,
+                        if (d != null && d.creatorName.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '创建者: ${d.creatorName}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
-                        ),
-                      if (d != null && d.tags.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Wrap(
-                            spacing: 6,
-                            runSpacing: 4,
-                            children: [
-                              for (final t in d.tags) _buildTagChip(t),
-                            ],
+                        if (d != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${d.trackCount} 首 · 播放 ${d.playCount} 次',
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
-                        ),
-                    ],
+                        if (d != null && d.tags.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                for (final t in d.tags) _buildTagChip(t),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                CoverArt(
-                  url: d?.coverUrl ?? widget.coverUrl,
-                  size: 120,
-                  radius: 8,
-                ),
-              ],
-            ),
-            if (_detailError != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: _loadDetail,
-                  child: Text(
-                    '详情加载失败, 点击重试',
-                    style: theme.textTheme.labelSmall,
+                  const SizedBox(width: 12),
+                  CoverArt(
+                    url: d?.coverUrl ?? widget.coverUrl,
+                    size: 120,
+                    radius: 8,
                   ),
-                ),
-              )
-            else if (d != null && d.description.trim().isNotEmpty)
-              _ExpandableText(text: d.description),
-          ],
+                ],
+              ),
+              if (_detailError != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _loadDetail,
+                    child: Text(
+                      '详情加载失败, 点击重试',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                )
+              else if (d != null && d.description.trim().isNotEmpty)
+                _ExpandableText(text: d.description),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -813,7 +822,22 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
               _removeTrack(song);
               return;
             }
-            widget.onPlaySongs(display, i);
+            // 用户设置: 歌单内搜索后点歌, 是"只加当前歌"还是"切回完整列表"。
+            // 没在筛选(或没有追加回调)时保持原行为: 按当前展示的列表起播。
+            final filtering = _filter.trim().isNotEmpty;
+            final action = AppSettings.instance.librarySearchPlayAction;
+            if (filtering &&
+                action == LibrarySearchPlayAction.appendCurrent &&
+                widget.onAppendSong != null) {
+              widget.onAppendSong!(song);
+            } else if (filtering &&
+                action == LibrarySearchPlayAction.fullList) {
+              final all = _visible;
+              final idx = all.indexWhere((s) => s.id == song.id);
+              widget.onPlaySongs(all, idx < 0 ? 0 : idx);
+            } else {
+              widget.onPlaySongs(display, i);
+            }
             setState(() => _localTrackId = song.id);
           },
         );

@@ -24,7 +24,8 @@ void main() {
       onToggleLyrics: () {},
       onOpenAlbum: () {},
       onToggleLike: () {},
-      onPrevious: () {},
+      onCycleMode: () {},
+      onOpenQueue: () {},
       onToggle: () {},
       onNext: () {},
     );
@@ -53,28 +54,30 @@ void main() {
   Future<void> pumpShell(WidgetTester tester, {Widget? navBar}) async {
     playerBarSlot.value = navBar;
     const padding = EdgeInsets.only(top: statusBar, bottom: gestureInset);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(
-          size: Size(400, 800),
-          padding: padding,
-          viewPadding: padding,
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(
+            size: Size(400, 800),
+            padding: padding,
+            viewPadding: padding,
+          ),
+          child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
         ),
-        child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
+        home: const Scaffold(body: Center(child: Text('body'))),
       ),
-      home: const Scaffold(body: Center(child: Text('body'))),
-    ));
+    );
     await tester.pumpAndSettle();
   }
 
   Widget navBar() => NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (_) {},
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.search), label: '搜索'),
-          NavigationDestination(icon: Icon(Icons.person), label: '我的'),
-        ],
-      );
+    selectedIndex: 0,
+    onDestinationSelected: (_) {},
+    destinations: const [
+      NavigationDestination(icon: Icon(Icons.search), label: '搜索'),
+      NavigationDestination(icon: Icon(Icons.person), label: '我的'),
+    ],
+  );
 
   testWidgets('有底部导航: 导航栏不吃状态栏 inset, 且与播放条零缝隙', (tester) async {
     await pumpShell(tester, navBar: navBar());
@@ -84,12 +87,18 @@ void main() {
     final slider = tester.getRect(find.byType(Slider));
 
     // 导航栏 = 内容 80 + 手势区 24, 多出来的就是状态栏空白带
-    expect(nav.height, navContentHeight + gestureInset,
-        reason: '导航栏高度被状态栏 inset 撑大了(顶部空白带)');
+    expect(
+      nav.height,
+      navContentHeight + gestureInset,
+      reason: '导航栏高度被状态栏 inset 撑大了(顶部空白带)',
+    );
     expect(nav.top - bar.bottom, 0, reason: '播放条与导航栏之间不允许有空隙');
     // 播放条顶部第一块内容(Slider)必须紧贴播放条顶部, 不允许状态栏空白
-    expect(slider.top - bar.top, lessThan(1),
-        reason: '播放条顶部多出空白带(状态栏 inset 被吃了两次)');
+    expect(
+      slider.top - bar.top,
+      lessThan(1),
+      reason: '播放条顶部多出空白带(状态栏 inset 被吃了两次)',
+    );
     // 播放条自身高度只由内容决定(Slider 48 + 信息行 + 8 安全边距)
     expect(bar.height, lessThan(120), reason: '播放条被撑高了, 会挤压页面内容');
   });
@@ -105,7 +114,6 @@ void main() {
     final slider = tester.getRect(find.byType(Slider));
     expect(slider.top - bar.top, lessThan(1), reason: '播放条顶部多出空白带');
     // 没有导航栏时播放条自己吃掉手势区 ⇒ 只比有导航时高出手势区那一条
-    expect(withoutNav - withNav, gestureInset,
-        reason: '无导航时播放条的底部手势区安全边距不对');
+    expect(withoutNav - withNav, gestureInset, reason: '无导航时播放条的底部手势区安全边距不对');
   });
 }

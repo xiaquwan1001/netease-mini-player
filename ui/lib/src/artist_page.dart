@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart';
 import 'song_actions.dart';
 import 'format.dart' show formatDurationMs;
 import 'mv_page.dart' show showMvPage;
@@ -150,10 +151,15 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
 
   void _rebuildTabs() {
     final old = _tabController.index;
-    _tabController.dispose();
+    final oldController = _tabController;
     _tabController = TabController(length: _tabs.length, vsync: this)
       ..addListener(() => setState(() {}));
     if (old < _tabs.length) _tabController.index = old;
+    // 旧 controller 还被当前帧的 TabBar/TabBarView 引用, 立刻 dispose 会撞
+    // "A TabController was used after being disposed"; 等这一帧结束再释放。
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => oldController.dispose(),
+    );
   }
 
   List<_TabKind> get _tabs => [
@@ -210,9 +216,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      showToast(context, friendlyError(e));
     }
   }
 

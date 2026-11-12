@@ -50,7 +50,8 @@ void _publishStubBar() {
     onToggleLyrics: () {},
     onOpenAlbum: () {},
     onToggleLike: () {},
-    onPrevious: () {},
+    onCycleMode: () {},
+    onOpenQueue: () {},
     onToggle: () {},
     onNext: () {},
   );
@@ -72,8 +73,11 @@ void main() {
     await tester.tap(find.text('进二级页'));
     await tester.pumpAndSettle();
     expect(find.text('二级页'), findsOneWidget);
-    expect(find.byType(MiniPlayerBar), findsOneWidget,
-        reason: '二级页(日推全部/歌单广场等)压上来后播放条不该消失');
+    expect(
+      find.byType(MiniPlayerBar),
+      findsOneWidget,
+      reason: '二级页(日推全部/歌单广场等)压上来后播放条不该消失',
+    );
 
     // 退回首页也还在
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
@@ -94,6 +98,9 @@ void main() {
     expect(find.text('进二级页'), findsOneWidget);
     final scaffoldBox = tester.getSize(find.byType(Scaffold));
     // 首页 Scaffold 拿到屏幕的全高(Navigator 区域 = 整屏)
-    expect(scaffoldBox.height, tester.view.physicalSize.height / tester.view.devicePixelRatio);
+    expect(
+      scaffoldBox.height,
+      tester.view.physicalSize.height / tester.view.devicePixelRatio,
+    );
   });
 }

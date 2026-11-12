@@ -4,13 +4,17 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
 import 'user_page.dart';
 
 /// 关注/粉丝列表: 两个 tab, 每行可关注/取关.
 ///
 /// uid = 0 时后端用当前登录账号(我的资料卡点进来就是这种)。
 typedef UserListLoader = Future<List<rust.UserItem>> Function(
-    BigInt uid, int limit, int offset);
+  BigInt uid,
+  int limit,
+  int offset,
+);
 typedef FollowHook = Future<bool> Function(BigInt uid, bool follow);
 
 Future<void> showUserList(
@@ -77,11 +81,11 @@ class _UserListViewState extends State<UserListView> {
 
   UserListLoader get _rawLoader => _fans
       ? (widget.loadFolloweds ??
-          (uid, limit, offset) =>
-              rust.userFolloweds(uid: uid, limit: limit, offset: offset))
+            (uid, limit, offset) =>
+                rust.userFolloweds(uid: uid, limit: limit, offset: offset))
       : (widget.loadFollows ??
-          (uid, limit, offset) =>
-              rust.userFollows(uid: uid, limit: limit, offset: offset));
+            (uid, limit, offset) =>
+                rust.userFollows(uid: uid, limit: limit, offset: offset));
 
   FollowHook get _setFollow =>
       widget.setFollow ??
@@ -95,12 +99,15 @@ class _UserListViewState extends State<UserListView> {
     return (cursor) async {
       final page = await retryNetwork(() => raw(uid, _pageSize, cursor));
       consumed = cursor + page.length;
-      return PagedPage(page, hasMore: page.length >= _pageSize, nextCursor: consumed);
+      return PagedPage(
+        page,
+        hasMore: page.length >= _pageSize,
+        nextCursor: consumed,
+      );
     };
   }
 
-  bool _followed(rust.UserItem u) =>
-      _followOverrides[u.id] ?? u.followed;
+  bool _followed(rust.UserItem u) => _followOverrides[u.id] ?? u.followed;
 
   Future<void> _toggleFollow(rust.UserItem u) async {
     final target = !_followed(u);
@@ -116,9 +123,7 @@ class _UserListViewState extends State<UserListView> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   @override
@@ -192,9 +197,7 @@ class _UserListViewState extends State<UserListView> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _fans
-                        ? '多发动态、被点赞后粉丝会慢慢多起来'
-                        : '去发现页找找感兴趣的人并关注吧',
+                    _fans ? '多发动态、被点赞后粉丝会慢慢多起来' : '去发现页找找感兴趣的人并关注吧',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                     ),

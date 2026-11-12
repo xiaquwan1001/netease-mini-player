@@ -118,6 +118,8 @@ void main() {
     // 「每日推荐」文案同时出现在快捷卡与区块标题上, 所以是 findsNWidgets(2))
     expect(find.text('每日推荐'), findsNWidgets(2));
     expect(find.text('每日一歌'), findsOneWidget);
+    // 推荐页歌曲卡铺满屏宽(页面横向 padding=0), 歌名文字不再被额外内缩
+    expect(tester.getRect(find.text('每日一歌')).left, lessThan(70));
     await tester.tap(find.text('每日二歌'));
     expect(played?.length, 2);
     expect(playedIndex, 1);

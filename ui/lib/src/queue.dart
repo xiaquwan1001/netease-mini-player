@@ -22,7 +22,7 @@ enum PlayMode {
 
 class PlayQueue<T> {
   PlayQueue({this.mode = PlayMode.repeatAll, Random? random})
-      : _random = random ?? Random();
+    : _random = random ?? Random();
 
   final List<T> _items = [];
   final Random _random;
@@ -35,7 +35,8 @@ class PlayQueue<T> {
   int get index => _index;
   bool get isEmpty => _items.isEmpty;
 
-  T? get current => (_index >= 0 && _index < _items.length) ? _items[_index] : null;
+  T? get current =>
+      (_index >= 0 && _index < _items.length) ? _items[_index] : null;
   bool get hasNext => _items.isNotEmpty;
 
   /// 随机播放时挑一个「不等于当前」的下标; 队列只有一首/空队列时原地不动。
@@ -108,6 +109,15 @@ class PlayQueue<T> {
     if (i < 0 || i >= _items.length) return null;
     _index = i;
     return current;
+  }
+
+  /// 追加到队尾(已在队列里则不重复添加), 不切歌。返回最终下标.
+  int append(T item) {
+    final existing = _items.indexOf(item);
+    if (existing >= 0) return existing;
+    _items.add(item);
+    if (_index < 0) _index = 0;
+    return _items.length - 1;
   }
 
   /// "下一首播放": 插到当前曲目之后(没有当前曲目时插到队首), 不切歌.

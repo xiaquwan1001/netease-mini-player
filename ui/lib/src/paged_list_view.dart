@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'net_retry.dart';
+import 'toast.dart' show showToast;
 
 /// 一页分页结果。
 ///
@@ -174,10 +175,8 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
     } catch (e) {
       if (!mounted || gen != _generation) return;
       setState(() => _loadingMore = false);
-      // 加载更多失败: 保留旧数据, 只弹 SnackBar 提示
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      // 加载更多失败: 保留旧数据, 只弹统一 toast 提示
+      showToast(context, friendlyError(e), isError: true);
     }
   }
 

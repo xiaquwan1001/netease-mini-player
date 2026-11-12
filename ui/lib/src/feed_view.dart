@@ -5,6 +5,8 @@ import 'cover_art.dart';
 import 'feed_detail_page.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
+import 'user_nav.dart';
 import 'sheet_header.dart';
 
 /// 关注动态流: 未登录引导 + 登录后的动态列表.
@@ -303,9 +305,7 @@ class _FeedViewState extends State<FeedView> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 }
 
@@ -624,9 +624,7 @@ class _FeedCard extends StatelessWidget {
   }
 
   void _snack(BuildContext context, String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+    showToast(context, message);
   }
 
   Future<void> _openDetail(
@@ -670,7 +668,11 @@ class _FeedCard extends StatelessWidget {
               // 头部: 头像 + 用户名 + kind 标签 + 相对时间
               Row(
                 children: [
-                  CircleCover(url: event.avatarUrl, size: 40),
+                  UserAvatarTap(
+                    userId: event.userId,
+                    nickname: event.userName,
+                    child: CircleCover(url: event.avatarUrl, size: 40),
+                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -710,7 +712,8 @@ class _FeedCard extends StatelessWidget {
               // 正文(最多 4 行, 详情页看全文)
               if (event.text.trim().isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8),
+                  // 与用户名同列(头像 40 + 间距 10), 不再顶格错位
+                  padding: const EdgeInsets.only(top: 8, left: 50),
                   child: Text(
                     event.text.trim(),
                     maxLines: 4,

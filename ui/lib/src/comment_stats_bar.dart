@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'format.dart' show formatOneDecimal;
+
 /// 评论统计条的视图模型(纯数据, 不依赖 Rust/网络).
 ///
 /// 三个计数都可能缺数据: 调用方拿不到时就传 0, 组件会照常显示 0.
@@ -26,14 +28,8 @@ class CommentStatsView {
       other.hotCount == hotCount;
 
   @override
-  int get hashCode => Object.hash(commentCount, shareCount, likedCount, hotCount);
-}
-
-String _oneDecimal(double value, String unit) {
-  final text = value.toStringAsFixed(1);
-  final trimmed =
-      text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
-  return trimmed + unit;
+  int get hashCode =>
+      Object.hash(commentCount, shareCount, likedCount, hotCount);
 }
 
 /// 紧凑数字: <1000 原样; 1000..9999 -> "x.x千"; >=10000 -> "x.x万";
@@ -41,12 +37,13 @@ String _oneDecimal(double value, String unit) {
 String formatCompactCount(int n) {
   if (n <= 0) return '0';
   if (n < 1000) return n.toString();
-  if (n < 10000) return _oneDecimal(n / 1000, '千');
-  return _oneDecimal(n / 10000, '万');
+  if (n < 10000) return formatOneDecimal(n / 1000, '千');
+  return formatOneDecimal(n / 10000, '万');
 }
 
 /// 热评角标文案"(热评 N)".
 String formatHotBadge(int hotCount) => '(热评 ${formatCompactCount(hotCount)})';
+
 /// 评论统计条: 一行三项「评论 / 分享 / 点赞」, 高度 <= 40dp.
 ///
 /// - 三项都是 [InkWell] 包着的点击区; 对应回调为 null 时不渲染 InkWell(无点击、无水波纹).
@@ -128,6 +125,7 @@ class CommentStatsBar extends StatelessWidget {
     );
   }
 }
+
 class _StatsItem extends StatelessWidget {
   const _StatsItem({
     super.key,

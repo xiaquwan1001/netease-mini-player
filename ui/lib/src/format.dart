@@ -38,6 +38,18 @@ String formatDurationShort(BigInt ms) {
 /// `vip_page._dateOf`(会员到期日, 上层再包"≤0 → null"语义)与
 /// `feed_detail_page.feedRelativeTime`(动态超 30 天的日期兜底)
 /// 原各复制一份的同一口径.
+/// 一位小数 + 单位, 去掉多余的 `.0`(如 1690.8万 / 3千).
+///
+/// 原先 `comment_stats_bar._oneDecimal` 与 new_release_page 的粉丝数各写一份,
+/// 统一到这里。
+String formatOneDecimal(double value, String unit) {
+  final text = value.toStringAsFixed(1);
+  final trimmed = text.endsWith('.0')
+      ? text.substring(0, text.length - 2)
+      : text;
+  return trimmed + unit;
+}
+
 String formatDateYmd(BigInt ms) {
   final dt = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
   final mm = dt.month.toString().padLeft(2, '0');

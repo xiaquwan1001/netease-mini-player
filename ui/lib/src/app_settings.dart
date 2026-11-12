@@ -252,6 +252,13 @@ class AppSettings extends ChangeNotifier {
           }
           // 自动更新检查(2026-11): 频率 + 节流/跳过记录
           // 兼容旧版布尔开关: true -> 每天, false -> 不自动检查。
+          final playRaw = raw['librarySearchPlayAction'];
+          if (playRaw is String) {
+            librarySearchPlayAction = LibrarySearchPlayAction.values.firstWhere(
+              (v) => v.name == playRaw,
+              orElse: () => LibrarySearchPlayAction.fullList,
+            );
+          }
           final intervalRaw = raw['updateCheckInterval'];
           if (intervalRaw is String) {
             updateCheckInterval = UpdateCheckInterval.values.firstWhere(
@@ -302,7 +309,11 @@ class AppSettings extends ChangeNotifier {
     bool? lyricTranslation,
     String? lyricSourcePreference,
     UpdateCheckInterval? updateCheckInterval,
+    LibrarySearchPlayAction? librarySearchPlayAction,
   }) async {
+    if (librarySearchPlayAction != null) {
+      this.librarySearchPlayAction = librarySearchPlayAction;
+    }
     if (updateCheckInterval != null) {
       this.updateCheckInterval = updateCheckInterval;
     }
@@ -375,6 +386,7 @@ class AppSettings extends ChangeNotifier {
           'lyricTranslation': lyricTranslation,
           'lyricSourcePreference': lyricSourcePreference,
           'updateCheckInterval': updateCheckInterval.name,
+          'librarySearchPlayAction': librarySearchPlayAction.name,
           'lastUpdateCheckMs': lastUpdateCheckMs,
           'skippedUpdateVersion': skippedUpdateVersion,
         }),
@@ -397,6 +409,10 @@ class AppSettings extends ChangeNotifier {
   };
 
   // ---------------- 自动更新检查(2026-11) ----------------
+
+  /// 歌单内搜索后点歌: 默认切回完整列表(不会只播筛出来的几首)
+  LibrarySearchPlayAction librarySearchPlayAction =
+      LibrarySearchPlayAction.fullList;
 
   /// 自动检查更新频率(默认每天; off 时仍可手动「检查更新」)
   UpdateCheckInterval updateCheckInterval = UpdateCheckInterval.daily;
@@ -444,6 +460,17 @@ enum UpdateCheckInterval {
     weekly => const Duration(days: 7),
     monthly => const Duration(days: 30),
   };
+}
+
+/// 歌单/专辑详情里"筛选本页曲目"后点歌的行为。
+enum LibrarySearchPlayAction {
+  fullList('切到完整列表', '按整个歌单重建播放队列, 从目标歌曲开始'),
+  appendCurrent('只添加当前歌', '保留现有播放队列, 把这歌加到队列末尾');
+
+  const LibrarySearchPlayAction(this.label, this.hint);
+
+  final String label;
+  final String hint;
 }
 
 /// 让 MaterialApp 跟随 AppSettings 重建(主题/字号即时生效)

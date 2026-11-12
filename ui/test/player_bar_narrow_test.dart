@@ -18,44 +18,45 @@ import 'package:minincm/src/player_bar.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 PlayerBarData _data() => PlayerBarData(
-      player: PlayerView(
-        playing: true,
-        positionMs: BigInt.from(30 * 1000),
-        durationMs: BigInt.from(200 * 1000),
-        volume: 1.0,
-      ),
-      current: rust.SongDto(
-        id: BigInt.one,
-        name: '一首很长很长的歌名用来验证窄屏降级不溢出',
-        artist: '某位名字也不短的歌手',
-        artistId: BigInt.one,
-        album: '专辑',
-        albumId: BigInt.one,
-        coverUrl: null,
-        durationMs: BigInt.from(200 * 1000),
-        fee: 0,
-        vip: true,
-        paid: false,
-        playable: true,
-      ),
-      liked: false,
-      queueIndex: 3,
-      queueLength: 12,
-      dragMax: null,
-      dragMs: null,
-    );
+  player: PlayerView(
+    playing: true,
+    positionMs: BigInt.from(30 * 1000),
+    durationMs: BigInt.from(200 * 1000),
+    volume: 1.0,
+  ),
+  current: rust.SongDto(
+    id: BigInt.one,
+    name: '一首很长很长的歌名用来验证窄屏降级不溢出',
+    artist: '某位名字也不短的歌手',
+    artistId: BigInt.one,
+    album: '专辑',
+    albumId: BigInt.one,
+    coverUrl: null,
+    durationMs: BigInt.from(200 * 1000),
+    fee: 0,
+    vip: true,
+    paid: false,
+    playable: true,
+  ),
+  liked: false,
+  queueIndex: 3,
+  queueLength: 12,
+  dragMax: null,
+  dragMs: null,
+);
 
 PlayerBarActions _actions() => PlayerBarActions(
-      onSeekStart: (_) {},
-      onSeekChanging: (_) {},
-      onSeekEnd: (_) {},
-      onToggleLyrics: () {},
-      onOpenAlbum: () {},
-      onToggleLike: () {},
-      onPrevious: () {},
-      onToggle: () {},
-      onNext: () {},
-    );
+  onSeekStart: (_) {},
+  onSeekChanging: (_) {},
+  onSeekEnd: (_) {},
+  onToggleLyrics: () {},
+  onOpenAlbum: () {},
+  onToggleLike: () {},
+  onCycleMode: () {},
+  onOpenQueue: () {},
+  onToggle: () {},
+  onNext: () {},
+);
 
 Widget _app({
   double keyboardInset = 0,
@@ -74,7 +75,10 @@ Widget _app({
     // 隔离出播放条占位对内容区高度的贡献(键盘让位语义只看 PlayerBarHost).
     home: Scaffold(
       resizeToAvoidBottomInset: false,
-      body: SizedBox.expand(key: contentKey, child: const ColoredBox(color: Colors.teal)),
+      body: SizedBox.expand(
+        key: contentKey,
+        child: const ColoredBox(color: Colors.teal),
+      ),
     ),
   );
 }
@@ -104,8 +108,11 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
-      expect(tester.takeException(), isNull,
-          reason: '300dp × $scale 下播放条(进度条/封面/标题/4 按钮)不能溢出');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '300dp × $scale 下播放条(进度条/封面/标题/4 按钮)不能溢出',
+      );
       expect(find.byType(MiniPlayerBar), findsOneWidget);
       expect(find.byType(Slider), findsOneWidget);
       expect(find.byType(CoverArt), findsOneWidget);
@@ -114,7 +121,10 @@ void main() {
       expect(find.byTooltip('喜欢'), findsOneWidget);
       // 数据里 playing=true, 播放键的 tooltip 就是「暂停」(状态文案回归)
       expect(find.byTooltip('暂停'), findsOneWidget);
-      expect(find.byTooltip('上一首'), findsOneWidget);
+      // 上一首按钮已移除; 原位置换成播放顺序, 行尾加队列入口
+      expect(find.byTooltip('上一首'), findsNothing);
+      expect(find.byTooltip('播放顺序: 列表循环'), findsOneWidget);
+      expect(find.byTooltip('播放队列'), findsOneWidget);
       expect(find.byTooltip('下一首'), findsOneWidget);
     });
   }
@@ -133,8 +143,11 @@ void main() {
 
     final contentBottom = tester.getBottomLeft(find.byKey(contentKey)).dy;
     final barTop = tester.getTopLeft(find.byType(MiniPlayerBar)).dy;
-    expect(barTop, greaterThanOrEqualTo(contentBottom - 0.5),
-        reason: '播放条由 Column 排在内容区之下, 不能盖在内容上面');
+    expect(
+      barTop,
+      greaterThanOrEqualTo(contentBottom - 0.5),
+      reason: '播放条由 Column 排在内容区之下, 不能盖在内容上面',
+    );
     expect(contentBottom, lessThanOrEqualTo(800));
   });
 
@@ -147,7 +160,8 @@ void main() {
     const contentKey = Key('content');
     _pumpBar();
     await tester.pumpWidget(
-        _app(keyboardInset: 320, textScale: 1.25, contentKey: contentKey));
+      _app(keyboardInset: 320, textScale: 1.25, contentKey: contentKey),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'playback.dart';
+import 'queue.dart' show PlayMode;
 import 'rust/api.dart' as rust;
 import 'song_tile.dart';
 
@@ -19,6 +20,8 @@ class PlayerBarData {
     required this.queueLength,
     required this.dragMax,
     required this.dragMs,
+    this.mode = PlayMode.repeatAll,
+    this.heartActive = false,
   });
 
   final PlayerView player;
@@ -33,6 +36,10 @@ class PlayerBarData {
   final double? dragMax;
   final double? dragMs;
 
+  /// 播放顺序(含"心动模式"这一虚拟档, 用 [heartActive] 表示)
+  final PlayMode mode;
+  final bool heartActive;
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -42,24 +49,28 @@ class PlayerBarData {
         other.queueLength == queueLength &&
         other.dragMax == dragMax &&
         other.dragMs == dragMs &&
+        other.mode == mode &&
+        other.heartActive == heartActive &&
         _playerEquals(other.player, player) &&
         identical(other.current, current);
   }
 
   @override
   int get hashCode => Object.hash(
-        liked,
-        queueIndex,
-        queueLength,
-        dragMax,
-        dragMs,
-        player.trackId,
-        player.playing,
-        player.positionMs,
-        player.durationMs,
-        player.volume,
-        identityHashCode(current),
-      );
+    liked,
+    queueIndex,
+    queueLength,
+    dragMax,
+    dragMs,
+    mode,
+    heartActive,
+    player.trackId,
+    player.playing,
+    player.positionMs,
+    player.durationMs,
+    player.volume,
+    identityHashCode(current),
+  );
 
   static bool _playerEquals(PlayerView a, PlayerView b) =>
       a.trackId == b.trackId &&
@@ -78,9 +89,10 @@ class PlayerBarActions {
     required this.onToggleLyrics,
     required this.onOpenAlbum,
     required this.onToggleLike,
-    required this.onPrevious,
     required this.onToggle,
     required this.onNext,
+    required this.onCycleMode,
+    required this.onOpenQueue,
   });
 
   final void Function(double ms) onSeekStart;
@@ -89,9 +101,14 @@ class PlayerBarActions {
   final VoidCallback onToggleLyrics;
   final VoidCallback onOpenAlbum;
   final VoidCallback onToggleLike;
-  final VoidCallback onPrevious;
   final VoidCallback onToggle;
   final VoidCallback onNext;
+
+  /// 播放顺序轮转(列表循环→单曲→顺序→随机→心动, 心动不可用时跳过)
+  final VoidCallback onCycleMode;
+
+  /// 打开播放队列面板(播放条最右侧)
+  final VoidCallback onOpenQueue;
 }
 
 /// 毫秒时长 → `mm:ss`(分钟补零; 超 60 分钟继续累计, 与原 main.dart `_fmt` 同口径,
@@ -102,6 +119,21 @@ String _fmt(BigInt ms) {
   final s = (total % 60).toString().padLeft(2, '0');
   return '$m:$s';
 }
+
+/// 播放顺序图标/文案: 通知栏、播放条、详情页共用一份口径。
+const Map<PlayMode, IconData> playModeIcons = {
+  PlayMode.repeatAll: Icons.repeat,
+  PlayMode.repeatOne: Icons.repeat_one,
+  PlayMode.sequence: Icons.playlist_play,
+  PlayMode.shuffle: Icons.shuffle,
+};
+
+const Map<PlayMode, String> playModeLabels = {
+  PlayMode.repeatAll: '列表循环',
+  PlayMode.repeatOne: '单曲循环',
+  PlayMode.sequence: '顺序播放',
+  PlayMode.shuffle: '随机播放',
+};
 
 /// 常驻播放条: 从 HomePage.bottomNavigationBar 上移到根布局(见 [PlayerBarHost])。
 ///
@@ -167,12 +199,28 @@ class MiniPlayerBar extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Slider(
-                value: pos,
-                max: maxMs,
-                onChangeStart: dur <= 0 ? null : actions.onSeekStart,
-                onChanged: dur <= 0 ? null : actions.onSeekChanging,
-                onChangeEnd: dur <= 0 ? null : actions.onSeekEnd,
+              // 进度条: 用户反馈"占的高度远大于视觉高度"。收掉 Material 默认的
+              // 48dp 触摸留白/大圆点, 只留 2dp 轨道 + 10dp 拇指, 并整体左移贴边。
+              SizedBox(
+                height: 20,
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 5,
+                    ),
+                    overlayShape: SliderComponentShape.noOverlay,
+                    showValueIndicator: ShowValueIndicator.never,
+                  ),
+                  child: Slider(
+                    padding: const EdgeInsets.only(left: 8, right: 8),
+                    value: pos,
+                    max: maxMs,
+                    onChangeStart: dur <= 0 ? null : actions.onSeekStart,
+                    onChanged: dur <= 0 ? null : actions.onSeekChanging,
+                    onChangeEnd: dur <= 0 ? null : actions.onSeekEnd,
+                  ),
+                ),
               ),
               // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
               // 窄屏/大字号下只会变短不会溢出.
@@ -183,7 +231,11 @@ class MiniPlayerBar extends StatelessWidget {
                     onTap: actions.onOpenAlbum,
                     child: Padding(
                       padding: const EdgeInsets.only(left: 8, right: 4),
-                      child: CoverArt(url: current?.coverUrl, size: 40, radius: 6),
+                      child: CoverArt(
+                        url: current?.coverUrl,
+                        size: 40,
+                        radius: 6,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -203,7 +255,8 @@ class MiniPlayerBar extends StatelessWidget {
                               badges: [
                                 if (current?.vip == true)
                                   const VipBadge(small: true),
-                                if (current?.paid == true && current?.vip != true)
+                                if (current?.paid == true &&
+                                    current?.vip != true)
                                   const PaidBadge(),
                               ],
                             ),
@@ -227,14 +280,24 @@ class MiniPlayerBar extends StatelessWidget {
                     icon: Icon(
                       liked ? Icons.favorite : Icons.favorite_border,
                       size: 22,
-                      color: liked ? Theme.of(context).colorScheme.primary : null,
+                      color: liked
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
                     ),
                     onPressed: actions.onToggleLike,
                   ),
+                  // 播放顺序: 取代原来的"上一首"位置(用户要求); 心动模式也在这里轮转.
                   _barIcon(
-                    tooltip: '上一首',
-                    icon: const Icon(Icons.skip_previous, size: 26),
-                    onPressed: actions.onPrevious,
+                    tooltip: data.heartActive
+                        ? '心动模式(点击返回列表循环)'
+                        : '播放顺序: ${playModeLabels[data.mode] ?? ''}',
+                    icon: Icon(
+                      data.heartActive
+                          ? Icons.auto_awesome
+                          : (playModeIcons[data.mode] ?? Icons.repeat),
+                      size: 22,
+                    ),
+                    onPressed: actions.onCycleMode,
                   ),
                   _barIcon(
                     tooltip: player.playing ? '暂停' : '播放',
@@ -248,6 +311,12 @@ class MiniPlayerBar extends StatelessWidget {
                     tooltip: '下一首',
                     icon: const Icon(Icons.skip_next, size: 26),
                     onPressed: actions.onNext,
+                  ),
+                  // 队列入口与歌曲信息同一行右侧(用户要求)
+                  _barIcon(
+                    tooltip: '播放队列',
+                    icon: const Icon(Icons.queue_music, size: 22),
+                    onPressed: actions.onOpenQueue,
                   ),
                 ],
               ),

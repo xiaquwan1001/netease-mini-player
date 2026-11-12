@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
-import 'layout.dart' show kSongRowPadding;
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
@@ -510,7 +509,8 @@ class _LikedSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      contentPadding: kSongRowPadding,
+                      // 与同页带图标入口行同一栅格(12), 文字不再左右跳
+                      contentPadding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
                       leading: CoverArt(
                         url: preview[i].coverUrl,
                         size: 40,
@@ -797,7 +797,8 @@ class _RecentSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      contentPadding: kSongRowPadding,
+                      // 与同页带图标入口行同一栅格(12), 文字不再左右跳
+                      contentPadding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
                       leading: CoverArt(
                         url: preview[i].coverUrl,
                         size: 40,
