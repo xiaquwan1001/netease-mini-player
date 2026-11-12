@@ -60,6 +60,7 @@ object KeystoreChannel {
                             result.success(remove(context, key))
                         }
                     }
+                    "list" -> result.success(listKeys(context))
                     "available" -> result.success(available())
                     else -> result.notImplemented()
                 }
@@ -76,6 +77,18 @@ object KeystoreChannel {
         // key 来自 Dart, 只允许文件名安全字符, 其余替换成 _ 防路径穿越
         val safe = key.replace(Regex("[^A-Za-z0-9._-]"), "_")
         return File(credDir(context), "$safe.bin")
+    }
+
+    /// 现存凭据 key 列表(去 .bin 后缀), 供启动 restore 拉全量.
+    /// 只回文件名, 不含任何明文.
+    @Synchronized
+    private fun listKeys(context: Context): List<String> = try {
+        val dir = credDir(context)
+        (dir.listFiles() ?: emptyArray())
+            .filter { it.isFile && it.name.endsWith(".bin") }
+            .map { it.name.removeSuffix(".bin") }
+    } catch (e: Exception) {
+        emptyList()
     }
 
     @Synchronized

@@ -8,6 +8,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `credential_status_dto`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -114,6 +115,17 @@ Future<CredentialStatusDto> credentialStatus() =>
 /// Windows 走 DPAPI, 不需要这个开关。
 Future<CredentialStatusDto> consentPlaintextStorage({required bool consent}) =>
     RustLib.instance.api.crateApiConsentPlaintextStorage(consent: consent);
+
+/// Android 启动时、rust.init 之前调用: 用 Keystore 现存条目激活凭据桥.
+/// 幂等(重复调用合并); 未激活时 open_backend 的 android 分支走既有同意门.
+/// 见 docs/android-keystore-wiring-design.md.
+Future<void> credentialRestore({required List<CredentialEntryDto> entries}) =>
+    RustLib.instance.api.crateApiCredentialRestore(entries: entries);
+
+/// Dart drain: 拉走(并清空)待落 Keystore 的操作. 同 key 只剩最终态.
+/// 拉取失败 = 丢该条凭据(下次启动重登), 不影响本会话内存态.
+Future<List<CredentialOpDto>> credentialPendingWrites() =>
+    RustLib.instance.api.crateApiCredentialPendingWrites();
 
 /// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
 ///
@@ -1431,6 +1443,51 @@ class CommentStats {
           liked == other.liked &&
           musicianSaidCount == other.musicianSaidCount &&
           commentUpgraded == other.commentUpgraded;
+}
+
+/// Android Keystore 桥(lane p1, 方案 B): Keystore 里的一条凭据.
+/// key 为 CredentialKey::id() 形式("session" / "account:uid").
+class CredentialEntryDto {
+  final String key;
+  final String value;
+
+  const CredentialEntryDto({required this.key, required this.value});
+
+  @override
+  int get hashCode => key.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CredentialEntryDto &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          value == other.value;
+}
+
+/// 一条待 Dart 落 Keystore 的操作: op = "put"(带 value) | "remove".
+class CredentialOpDto {
+  final String op;
+  final String key;
+  final String value;
+
+  const CredentialOpDto({
+    required this.op,
+    required this.key,
+    required this.value,
+  });
+
+  @override
+  int get hashCode => op.hashCode ^ key.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CredentialOpDto &&
+          runtimeType == other.runtimeType &&
+          op == other.op &&
+          key == other.key &&
+          value == other.value;
 }
 
 /// 凭据后端状态(设置页展示用). 不含任何凭据内容.

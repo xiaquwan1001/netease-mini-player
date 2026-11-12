@@ -92,6 +92,8 @@ pub trait CredentialStore: Send + Sync {
 /// 后端名(写进策略文件, 便于以后换后端时识别旧数据是谁写的)
 pub const BACKEND_FILE: &str = "file";
 pub const BACKEND_DPAPI: &str = "dpapi";
+/// Android Keystore 经 Dart 通道桥接(credential_channel::ChannelStore)
+pub const BACKEND_KEYSTORE: &str = "android-keystore";
 
 // ---------------- 策略文件(同意标记 + 迁移标记) ----------------
 
@@ -289,6 +291,22 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
                     },
                 );
             }
+        }
+    }
+    #[cfg(target_os = "android")]
+    {
+        // P1: Dart 启动时已探测 Keystore 并 credential_restore 激活桥.
+        // 未激活(Keystore 不可用/通道缺) → 与其它平台一样走同意门,
+        // 绝不新增明文落盘路径.
+        if let Some(store) = super::credential_channel::channel_backend() {
+            let policy = CredentialPolicy::load(dir);
+            return (
+                Some(store),
+                CredentialStatus::Secure {
+                    backend: BACKEND_KEYSTORE,
+                    migrated: policy.migrated,
+                },
+            );
         }
     }
     #[cfg(not(windows))]

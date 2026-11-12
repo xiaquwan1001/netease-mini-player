@@ -77,6 +77,7 @@ class AccountPage extends StatefulWidget {
 
 class _AccountPageState extends State<AccountPage> {
   List<rust.AccountDto> _accounts = const [];
+  rust.CredentialStatusDto? _credStatus;
 
   /// 登录态以入参为初值, 页面内退出后就地翻转(父层 push 时捕获的是快照)
   late bool _loggedIn = widget.info?.loggedIn == true;
@@ -86,6 +87,16 @@ class _AccountPageState extends State<AccountPage> {
   void initState() {
     super.initState();
     _loadAccounts();
+    _loadCredentialStatus();
+  }
+
+  /// 凭据后端状态(lane p1): Android 应显示 android-keystore; 失败静默(仅展示用).
+  Future<void> _loadCredentialStatus() async {
+    try {
+      final status = await rust.credentialStatus();
+      if (!mounted) return;
+      setState(() => _credStatus = status);
+    } catch (_) {}
   }
 
   Future<void> _loadAccounts() async {
@@ -329,6 +340,16 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           ],
+          const SizedBox(height: 16),
+          const _SectionTitle('凭据存储'),
+          Card(
+            margin: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.enhanced_encryption_outlined),
+              title: Text(_credStatus?.backend ?? '...'),
+              subtitle: Text(_credStatus?.note ?? '凭据后端状态不可用'),
+            ),
+          ),
           if (_accounts.isNotEmpty) ...[
             const SizedBox(height: 16),
             const _SectionTitle('隐私'),

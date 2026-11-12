@@ -644,6 +644,49 @@ pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, S
     Ok(credential_status_dto(guard.credential_status()))
 }
 
+/// Android Keystore 桥(lane p1, 方案 B): Keystore 里的一条凭据.
+/// key 为 CredentialKey::id() 形式("session" / "account:uid").
+#[derive(Debug, Clone)]
+pub struct CredentialEntryDto {
+    pub key: String,
+    pub value: String,
+}
+
+/// 一条待 Dart 落 Keystore 的操作: op = "put"(带 value) | "remove".
+#[derive(Debug, Clone)]
+pub struct CredentialOpDto {
+    pub op: String,
+    pub key: String,
+    pub value: String,
+}
+
+/// Android 启动时、rust.init 之前调用: 用 Keystore 现存条目激活凭据桥.
+/// 幂等(重复调用合并); 未激活时 open_backend 的 android 分支走既有同意门.
+/// 见 docs/android-keystore-wiring-design.md.
+pub fn credential_restore(entries: Vec<CredentialEntryDto>) -> Result<(), String> {
+    let converted: Vec<(String, String)> =
+        entries.into_iter().map(|e| (e.key, e.value)).collect();
+    ncm_service::credential_channel::activate(converted);
+    Ok(())
+}
+
+/// Dart drain: 拉走(并清空)待落 Keystore 的操作. 同 key 只剩最终态.
+/// 拉取失败 = 丢该条凭据(下次启动重登), 不影响本会话内存态.
+pub fn credential_pending_writes() -> Result<Vec<CredentialOpDto>, String> {
+    use ncm_service::credential_channel::CredOp;
+    Ok(ncm_service::credential_channel::take_pending()
+        .into_iter()
+        .map(|op| match op {
+            CredOp::Put { key, value } => {
+                CredentialOpDto { op: "put".into(), key, value }
+            }
+            CredOp::Remove { key } => {
+                CredentialOpDto { op: "remove".into(), key, value: String::new() }
+            }
+        })
+        .collect())
+}
+
 /// 手机号+验证码登录 ①(网页登录通道 weapi): 发短信验证码.
 ///
 /// 与扫码同一族(网页登录), 不走 App 原生登录族; 命中交互式风控时错误带
