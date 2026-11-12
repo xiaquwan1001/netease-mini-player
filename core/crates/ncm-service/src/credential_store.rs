@@ -94,6 +94,7 @@ pub const BACKEND_FILE: &str = "file";
 pub const BACKEND_DPAPI: &str = "dpapi";
 /// Android Keystore 经 Dart 通道桥接(credential_channel::ChannelStore)
 pub const BACKEND_KEYSTORE: &str = "android-keystore";
+pub const BACKEND_SECRET_SERVICE: &str = "secret-service";
 
 // ---------------- 策略文件(同意标记 + 迁移标记) ----------------
 
@@ -311,6 +312,22 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
     }
     #[cfg(not(windows))]
     {
+        // P2 Linux: secret-service(keyring crate) 可用即用; 不可用走同意门(语义不变).
+        // 仅 Linux 探测; Windows 走上一个分支, Android 走上一个 cfg 分支(Keystore 桥).
+        #[cfg(target_os = "linux")]
+        {
+            let store = crate::credential_keyring::SecretServiceStore::new();
+            if store.available().is_ok() {
+                let policy = CredentialPolicy::load(dir);
+                return (
+                    Some(Arc::new(store)),
+                    CredentialStatus::Secure {
+                        backend: BACKEND_SECRET_SERVICE,
+                        migrated: policy.migrated,
+                    },
+                );
+            }
+        }
         let policy = CredentialPolicy::load(dir);
         if policy.plaintext_consent {
             (
@@ -321,7 +338,7 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
             (
                 None,
                 CredentialStatus::PlaintextFallback {
-                    reason: "无系统钥匙串后端(P1/P2 待接入)且用户未同意 0600 明文回退".into(),
+                    reason: "无系统钥匙串后端(不可用)且用户未同意 0600 明文回退".into(),
                 },
             )
         }

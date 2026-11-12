@@ -7,6 +7,8 @@
 pub mod cache;
 pub mod credential_channel;
 pub mod credential_store;
+#[cfg(target_os = "linux")]
+pub mod credential_keyring;
 pub mod history;
 
 pub use credential_store::{CredentialStatus, CredentialStore};
