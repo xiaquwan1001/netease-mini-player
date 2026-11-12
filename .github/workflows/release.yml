@@ -40,6 +40,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50(要求 AGP>=9.1.1/Gradle>=9.5), 与本地 3.47.9 不一致
           cache: true
       - name: cargo test (workspace, vendor 联网 smoke 排除)
         run: cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
@@ -92,6 +93,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50(要求 AGP>=9.1.1/Gradle>=9.5), 与本地 3.47.9 不一致
           cache: true
 
       - name: pub get
@@ -267,6 +269,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50(要求 AGP>=9.1.1/Gradle>=9.5), 与本地 3.47.9 不一致
           cache: true
 
       - name: Enable Windows desktop + pub get
@@ -274,6 +277,12 @@ jobs:
         run: |
           flutter config --enable-windows-desktop
           flutter pub get
+
+      # cargokit 的 custom build 失败时 MSBuild 只报 MSB8066, 真正的 rustc 报错被吞
+      # (v0.5.4 实测: 日志里只有 MSB8066 + exited with code -1); 先单独跑一次 cargo。
+      - name: cargo build (ncm_ffi, windows)
+        working-directory: core
+        run: cargo build --release -p ncm_ffi --target x86_64-pc-windows-msvc
 
       - name: Build Windows (release)
         working-directory: ui

@@ -36,6 +36,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50, 要求 AGP>=9.1.1/Gradle>=9.5, 与本地 3.47.9 不一致
           cache: true
       - name: pub get
         working-directory: ui
@@ -83,6 +84,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50, 要求 AGP>=9.1.1/Gradle>=9.5, 与本地 3.47.9 不一致
           cache: true
       - name: Install Flutter 3.47.9 (arm64)
         if: matrix.arch == 'arm64'
