@@ -385,29 +385,36 @@ pub mod dpapi {
             if raw.len() < MAGIC.len() || &raw[..MAGIC.len()] != MAGIC {
                 return Err(io::Error::new(io::ErrorKind::InvalidData, "bad dpapi magic"));
             }
-            let mut cur = MAGIC.len();
-            let mut take = |n: usize| -> Option<Vec<u8>> {
-                if cur + n > raw.len() {
-                    return None;
+            // 用结构体而不是两个互相捕获的闭包: 闭包版在 Windows 上 borrow 冲突(E0499,
+            // 2026-11-12 首次真正在 windows-latest 编译时暴露)。
+            struct Reader<'a> {
+                raw: &'a [u8],
+                cur: usize,
+            }
+            impl<'a> Reader<'a> {
+                fn take(&mut self, n: usize) -> Option<&'a [u8]> {
+                    if self.cur + n > self.raw.len() {
+                        return None;
+                    }
+                    let out = &self.raw[self.cur..self.cur + n];
+                    self.cur += n;
+                    Some(out)
                 }
-                let out = raw[cur..cur + n].to_vec();
-                cur += n;
-                Some(out)
-            };
-            let mut u32le = || {
-                let b = take(4)?;
-                Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
-            };
-            let count = u32le().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated"))?;
+                fn u32le(&mut self) -> Option<usize> {
+                    let b = self.take(4)?;
+                    Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+                }
+            }
+            let mut rd = Reader { raw: &raw, cur: MAGIC.len() };
+            let truncated = || io::Error::new(io::ErrorKind::InvalidData, "truncated");
+            let count = rd.u32le().ok_or_else(truncated)?;
             let mut out = Vec::with_capacity(count);
             for _ in 0..count {
-                let klen = u32le().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated"))?;
-                let key = String::from_utf8(
-                    take(klen).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated"))?,
-                )
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "bad key"))?;
-                let blen = u32le().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated"))?;
-                let blob = take(blen).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "truncated"))?;
+                let klen = rd.u32le().ok_or_else(truncated)?;
+                let key = String::from_utf8(rd.take(klen).ok_or_else(truncated)?.to_vec())
+                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "bad key"))?;
+                let blen = rd.u32le().ok_or_else(truncated)?;
+                let blob = rd.take(blen).ok_or_else(truncated)?.to_vec();
                 out.push((key, blob));
             }
             Ok(out)
