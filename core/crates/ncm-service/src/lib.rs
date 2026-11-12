@@ -5,7 +5,10 @@
 //! 2. 把 vendor 的 ncm-api-rs 包成我们的 Provider
 
 pub mod cache;
+pub mod credential_store;
 pub mod history;
+
+pub use credential_store::{CredentialStatus, CredentialStore};
 pub mod identity;
 pub mod loudness_store;
 pub mod netease;
@@ -18,7 +21,7 @@ pub use netease::{thread_id_for, NeteaseProvider};
 pub use ttml_source::{fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource};
 
 use ncm_provider::{Capability, ProviderRegistry};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub const PROVIDER_NETEASE: &str = "netease";
@@ -33,8 +36,13 @@ pub struct Core {
 
 impl Core {
     /// 打开数据目录, 加载或创建身份, 注册内置 provider.
+    ///
+    /// 凭据链: 选后端 → 旧明文迁移(best-effort, 失败保留明文并上报) → 加载会话.
     pub fn open(data_dir: &Path) -> std::io::Result<Self> {
         let store = IdentityStore::open(data_dir)?;
+        let (creds, status) = credential_store::open_backend(data_dir);
+        store.set_credential_backend(creds, status);
+        let _ = store.migrate_legacy_cleartext();
         let session = store.load_or_create()?;
         let netease = Arc::new(NeteaseProvider::new(session.clone()));
         let mut providers = ProviderRegistry::new();
@@ -108,6 +116,10 @@ impl Core {
     pub fn forget_account(&mut self, user_id: u64) -> std::io::Result<AccountBook> {
         let mut book = self.store.load_accounts()?;
         book.remove(user_id);
+        // 凭据后端里的副本一并清掉(失败不阻塞, 下次迁移不会找回它)
+        if let Some(creds) = self.store.credential_backend() {
+            let _ = creds.remove(credential_store::CredentialKey::Account(user_id));
+        }
         self.store.save_accounts(&book)?;
         Ok(book)
     }
@@ -126,5 +138,28 @@ impl Core {
 
     pub fn capabilities(&self, provider_id: &str) -> Option<&'static [Capability]> {
         self.providers.get(provider_id).map(|p| p.capabilities())
+    }
+
+    /// 凭据后端状态(给 FFI/UI 上报: 是否安全后端 / 明文回退原因)
+    pub fn credential_status(&self) -> CredentialStatus {
+        self.store.credential_status()
+    }
+
+    /// 用户明确同意/撤销"0600 明文回退"(设置页入口). 同意后立即重建后端并
+    /// 补跑一次迁移(把仍在明文里的凭据搬走); 撤销只写标记, 不删已有明文.
+    pub fn set_plaintext_consent(&mut self, consent: bool) -> std::io::Result<()> {
+        let dir = self.store_dir();
+        let mut policy = credential_store::CredentialPolicy::load(&dir);
+        policy.plaintext_consent = consent;
+        policy.save(&dir)?;
+        let (creds, status) = credential_store::open_backend(&dir);
+        self.store.set_credential_backend(creds, status);
+        let _ = self.store.migrate_legacy_cleartext();
+        Ok(())
+    }
+
+    fn store_dir(&self) -> PathBuf {
+        // IdentityStore 没暴露 dir; 借 path() 的 parent 足够(同一数据目录)
+        self.store.path().parent().map(Path::to_path_buf).unwrap_or_default()
     }
 }

@@ -6,9 +6,11 @@
 
 pub use ncm_domain::Session;
 
+use crate::credential_store::{self, CredentialKey, CredentialStatus, CredentialStore};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 const IDENTITY_FILE: &str = "identity.json";
 
@@ -142,12 +144,129 @@ impl AccountBook {
 
 pub struct IdentityStore {
     dir: PathBuf,
+    /// 凭据后端(启动时由 Core::open 经 credential_store::open_backend 注入).
+    /// None = 无后端且未同意明文回退: 读写走旧明文兼容路径, 不阻塞, 状态可上报.
+    creds: Mutex<Option<Arc<dyn CredentialStore>>>,
+    /// 最近一次后端选择/迁移/降级的状态(给 FFI credential_status 上报用)
+    cred_status: Mutex<CredentialStatus>,
 }
 
 impl IdentityStore {
     pub fn open(dir: &Path) -> io::Result<Self> {
         fs::create_dir_all(dir)?;
-        Ok(Self { dir: dir.to_path_buf() })
+        Ok(Self {
+            dir: dir.to_path_buf(),
+            creds: Mutex::new(None),
+            cred_status: Mutex::new(CredentialStatus::PlaintextFallback {
+                reason: "尚未选择后端(直接 open, 未经 Core::open)".into(),
+            }),
+        })
+    }
+
+    /// 注入凭据后端(Core::open / 用户同意明文后调用)
+    pub fn set_credential_backend(
+        &self,
+        creds: Option<Arc<dyn CredentialStore>>,
+        status: CredentialStatus,
+    ) {
+        *self.creds.lock().unwrap() = creds;
+        *self.cred_status.lock().unwrap() = status;
+    }
+
+    pub fn credential_status(&self) -> CredentialStatus {
+        self.cred_status.lock().unwrap().clone()
+    }
+
+    /// 共享句柄(Core::forget_account 用来删账号凭据)
+    pub fn credential_backend(&self) -> Option<Arc<dyn CredentialStore>> {
+        self.creds.lock().unwrap().clone()
+    }
+
+    /// 旧明文 → CredentialStore 的一次性迁移(best-effort):
+    /// - 后端就绪: 凭据搬进 store, 旧文件**清零但保留骨架**(identity.json 只剩
+    ///   设备指纹字段, accounts.json 的 cookie 字段清空、元数据保留), 写迁移标记.
+    /// - 后端不可用/未同意: 保留明文原样, 记录可上报状态, 不阻塞启动.
+    /// 返回是否完成了迁移.
+    pub fn migrate_legacy_cleartext(&self) -> io::Result<bool> {
+        let mut policy = credential_store::CredentialPolicy::load(&self.dir);
+        if policy.migrated {
+            return Ok(false);
+        }
+        // 注意: 只克隆 Arc, 不能在整个迁移期间持有 self.creds 锁 ——
+        // 下面会调 load_accounts(), 它自己要拿同一把锁(非重入 Mutex),
+        // 持锁调用会自锁死(2026-11-12 实测: 测试挂在 futex_do_wait)。
+        let creds = self.creds.lock().unwrap().clone();
+        let creds = creds.as_ref();
+        let mut migrated_any = false;
+        let mut failure: Option<String> = None;
+
+        // 1) 会话凭据: identity.json 里 cookie 的登录键部分
+        if let Ok(bytes) = fs::read(self.path()) {
+            if let Ok(mut session) = serde_json::from_slice::<Session>(&bytes) {
+                let login = extract_login_cookie(&session.cookie);
+                if !login.is_empty() {
+                    match creds {
+                        Some(c) => match c.put(CredentialKey::Session, &login) {
+                            Ok(()) => {
+                                // 清零留骨架: cookie 只留设备指纹键, device_id/profile 保留
+                                session.cookie = clear_login_cookie(&session.cookie);
+                                self.save_skeleton(&session)?;
+                                migrated_any = true;
+                            }
+                            Err(e) => failure = Some(format!("会话凭据迁移失败: {e}")),
+                        },
+                        None => {
+                            failure = failure.or(Some(self.credential_status().note()));
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2) 账号簿凭据: 每条 StoredAccount.cookie
+        let mut book = self.load_accounts().unwrap_or_default();
+        let mut book_dirty = false;
+        for a in &mut book.accounts {
+            if a.cookie.is_empty() {
+                continue;
+            }
+            match creds {
+                Some(c) => match c.put(CredentialKey::Account(a.user_id), &a.cookie) {
+                    Ok(()) => {
+                        a.cookie = String::new(); // 骨架保留(uid/nickname/avatar/vip)
+                        book_dirty = true;
+                        migrated_any = true;
+                    }
+                    Err(e) => failure = failure.or(Some(format!("账号凭据迁移失败: {e}"))),
+                },
+                None => {
+                    failure = failure.or(Some(self.credential_status().note()));
+                    break;
+                }
+            }
+        }
+        if book_dirty {
+            self.write_accounts_skeleton(&book)?;
+        }
+
+        if migrated_any {
+            policy.migrated = true;
+            policy.backend = self.credential_status().backend_name().to_string();
+            policy.save(&self.dir)?;
+            *self.cred_status.lock().unwrap() = match self.credential_status() {
+                CredentialStatus::Secure { backend, .. } => {
+                    CredentialStatus::Secure { backend, migrated: true }
+                }
+                CredentialStatus::PlaintextConsented { .. } => {
+                    CredentialStatus::PlaintextConsented { migrated: true }
+                }
+                other => other,
+            };
+        } else if let Some(reason) = failure {
+            // 保留明文原样, 只上报 —— 不阻塞启动
+            *self.cred_status.lock().unwrap() = CredentialStatus::PlaintextFallback { reason };
+        }
+        Ok(migrated_any)
     }
 
     pub fn path(&self) -> PathBuf {
@@ -155,6 +274,9 @@ impl IdentityStore {
     }
 
     /// 读已有身份; 不存在则生成 device_id 并落盘.
+    ///
+    /// identity.json 里的 cookie 是"设备指纹骨架"(迁移后)或旧明文全量(未迁移);
+    /// 登录凭据部分从 CredentialStore 回填合并.
     pub fn load_or_create(&self) -> io::Result<Session> {
         match fs::read(self.path()) {
             Ok(bytes) => {
@@ -164,6 +286,17 @@ impl IdentityStore {
                 if session.device_id.is_empty() {
                     session.device_id = new_device_id();
                     dirty = true;
+                }
+                // 从凭据后端回填登录键(后端里没有/读取失败 = 按未登录继续)
+                if let Some(creds) = self.creds.lock().unwrap().as_ref() {
+                    if let Ok(Some(login)) = creds.get(CredentialKey::Session) {
+                        let merged =
+                            merge_device_cookie(&session.cookie, &login, &session.device_id);
+                        if merged != session.cookie {
+                            session.cookie = merged;
+                            dirty = true;
+                        }
+                    }
                 }
                 let normalized = merge_device_cookie(&session.cookie, "", &session.device_id);
                 if normalized != session.cookie {
@@ -189,27 +322,120 @@ impl IdentityStore {
         }
     }
 
-    /// 读取已保存的账号簿(不存在则空)
+    /// 读取已保存的账号簿(不存在则空). 文件里 cookie 是骨架(空), 从凭据后端回填.
     pub fn load_accounts(&self) -> io::Result<AccountBook> {
-        match fs::read(self.dir.join(ACCOUNTS_FILE)) {
-            Ok(bytes) => Ok(serde_json::from_slice(&bytes)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(AccountBook::default()),
-            Err(e) => Err(e),
+        let mut book: AccountBook = match fs::read(self.dir.join(ACCOUNTS_FILE)) {
+            Ok(bytes) => serde_json::from_slice(&bytes)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(AccountBook::default()),
+            Err(e) => return Err(e),
+        };
+        let creds = self.creds.lock().unwrap();
+        if let Some(c) = creds.as_ref() {
+            for a in &mut book.accounts {
+                if a.cookie.is_empty() {
+                    if let Ok(Some(secret)) = c.get(CredentialKey::Account(a.user_id)) {
+                        a.cookie = secret;
+                    }
+                }
+            }
         }
+        Ok(book)
     }
 
     pub fn save_accounts(&self, book: &AccountBook) -> io::Result<()> {
+        let mut persisted = book.clone();
+        let creds = self.creds.lock().unwrap();
+        let mut fallback = false;
+        for a in &mut persisted.accounts {
+            if a.cookie.is_empty() {
+                continue;
+            }
+            match creds.as_ref() {
+                Some(c) => match c.put(CredentialKey::Account(a.user_id), &a.cookie) {
+                    // 凭据进 store, 文件里只留元数据骨架
+                    Ok(()) => a.cookie = String::new(),
+                    Err(_) => fallback = true, // store 不可用: 旧明文兼容路径
+                },
+                None => fallback = true,
+            }
+        }
+        drop(creds);
+        if fallback {
+            // 保留完整明文(旧行为), 并上报状态
+            self.note_fallback();
+        }
+        let data = serde_json::to_vec_pretty(&persisted)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        self.write_private(&self.dir.join(ACCOUNTS_FILE), &data)
+    }
+
+    /// 账号簿骨架落盘(迁移路径专用: 凭据已进 store, 文件只写元数据)
+    fn write_accounts_skeleton(&self, book: &AccountBook) -> io::Result<()> {
         let data = serde_json::to_vec_pretty(book)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         self.write_private(&self.dir.join(ACCOUNTS_FILE), &data)
     }
 
     /// 原子写 + 0600 权限(Linux). 敏感文件不进日志.
+    ///
+    /// 凭据拆分: 登录键 → CredentialStore; identity.json 只写设备指纹骨架.
+    /// 后端不可用/未同意时退回旧明文兼容路径(整包明文落 identity.json),
+    /// 保证登录不被策略卡死, 状态由 [credential_status] 上报.
     pub fn save(&self, session: &Session) -> io::Result<()> {
+        let login = extract_login_cookie(&session.cookie);
+        let creds = self.creds.lock().unwrap();
+        match creds.as_ref() {
+            Some(c) => {
+                let put_result = if login.is_empty() {
+                    // 登出/无凭据: 顺手把后端里的会话凭据也清掉
+                    c.remove(CredentialKey::Session).map(|_| ())
+                } else {
+                    c.put(CredentialKey::Session, &login)
+                };
+                match put_result {
+                    Ok(()) => {
+                        drop(creds);
+                        let mut skeleton = session.clone();
+                        skeleton.cookie = clear_login_cookie(&session.cookie);
+                        let data = serde_json::to_vec_pretty(&skeleton)
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+                        return self.write_private(&self.path(), &data);
+                    }
+                    Err(_) => {
+                        drop(creds);
+                        self.note_fallback();
+                        // fallthrough: 旧明文兼容路径
+                    }
+                }
+            }
+            None => {
+                drop(creds);
+                if !login.is_empty() {
+                    self.note_fallback();
+                }
+                // fallthrough: 旧明文兼容路径
+            }
+        }
         let data = serde_json::to_vec_pretty(session)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         self.write_private(&self.path(), &data)
+    }
+
+    /// 迁移成功后 identity.json 骨架写回(凭据已搬走)
+    fn save_skeleton(&self, session: &Session) -> io::Result<()> {
+        let data = serde_json::to_vec_pretty(session)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        self.write_private(&self.path(), &data)
+    }
+
+    fn note_fallback(&self) {
+        let mut st = self.cred_status.lock().unwrap();
+        if !matches!(&*st, CredentialStatus::PlaintextFallback { .. }) {
+            *st = CredentialStatus::PlaintextFallback {
+                reason: "凭据后端不可用或未获明文回退同意, 已按旧明文兼容路径落盘".into(),
+            };
+        }
     }
 
     fn write_private(&self, path: &Path, data: &[u8]) -> io::Result<()> {
@@ -523,6 +749,96 @@ mod tests {
         assert_eq!(a.device_id, b.device_id);
         assert_eq!(a.device_id.len(), 52);
         assert!(!a.is_logged_in());
+    }
+
+    /// 迁移: 同意明文回退(有后端)时, 旧明文凭据搬进 store, 旧文件清零留骨架.
+    #[test]
+    fn migration_moves_cleartext_into_store_and_keeps_skeleton() {
+        let dir = tmpdir("migrate-consent");
+        let store = IdentityStore::open(&dir).unwrap();
+        // 造旧明文数据(v0.5.3 形态): identity.json 全量 cookie + accounts.json
+        let legacy = Session {
+            cookie: "MUSIC_U=old_secret; __csrf=c9; deviceId=DEV; _ntes_nuid=aa; os=pc".into(),
+            device_id: "DEV".into(),
+            profile: None,
+        };
+        store.save(&legacy).unwrap();
+        let mut book = AccountBook::default();
+        book.upsert(StoredAccount {
+            user_id: 1001,
+            nickname: "A".into(),
+            avatar_url: None,
+            vip: false,
+            cookie: "MUSIC_U=acct_secret; __csrf=a1".into(),
+        });
+        store.save_accounts(&book).unwrap();
+
+        // 同意明文回退 → FileStore 可用
+        let mut policy = credential_store::CredentialPolicy::load(&dir);
+        policy.plaintext_consent = true;
+        policy.save(&dir).unwrap();
+        store.set_credential_backend(
+            Some(std::sync::Arc::new(credential_store::FileStore::new(&dir))),
+            CredentialStatus::PlaintextConsented { migrated: false },
+        );
+        let migrated = store.migrate_legacy_cleartext().unwrap();
+        assert!(migrated);
+
+        // 后端里是凭据
+        let creds = store.credential_backend().unwrap();
+        assert_eq!(creds.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=old_secret; __csrf=c9"));
+        assert_eq!(creds.get(CredentialKey::Account(1001)).unwrap().as_deref(), Some("MUSIC_U=acct_secret; __csrf=a1"));
+
+        // identity.json 只剩设备指纹(骨架), 不再含登录键
+        let on_disk = fs::read_to_string(store.path()).unwrap();
+        assert!(!on_disk.contains("old_secret"), "{on_disk}");
+        assert!(!on_disk.contains("MUSIC_U"), "{on_disk}");
+        assert!(on_disk.contains("deviceId"), "{on_disk}");
+
+        // accounts.json 元数据保留、cookie 清空
+        let book_raw = fs::read_to_string(dir.join("accounts.json")).unwrap();
+        assert!(!book_raw.contains("acct_secret"), "{book_raw}");
+        assert!(book_raw.contains("\"user_id\": 1001"), "{book_raw}");
+        assert!(book_raw.contains("A"), "{book_raw}");
+
+        // 迁移标记已写
+        assert!(credential_store::CredentialPolicy::load(&dir).migrated);
+        // 二次调用幂等
+        assert!(!store.migrate_legacy_cleartext().unwrap());
+
+        // 加载回路: 会话/账号簿凭据从 store 回填, 登录态完整
+        let reloaded = store.load_or_create().unwrap();
+        assert!(reloaded.is_logged_in());
+        assert!(reloaded.cookie.contains("MUSIC_U=old_secret"));
+        assert!(reloaded.cookie.contains("deviceId=DEV"));
+        let book2 = store.load_accounts().unwrap();
+        assert_eq!(book2.accounts[0].cookie, "MUSIC_U=acct_secret; __csrf=a1");
+    }
+
+    /// 迁移: 无后端且未同意 → 保留明文原样, 不阻塞, 状态可上报.
+    #[test]
+    fn migration_without_backend_keeps_cleartext_and_reports() {
+        let dir = tmpdir("migrate-none");
+        let store = IdentityStore::open(&dir).unwrap();
+        let legacy = Session {
+            cookie: "MUSIC_U=keepme; deviceId=DEV".into(),
+            device_id: "DEV".into(),
+            profile: None,
+        };
+        store.save(&legacy).unwrap();
+        store.set_credential_backend(
+            None,
+            CredentialStatus::PlaintextFallback { reason: "测试: 未同意".into() },
+        );
+        let migrated = store.migrate_legacy_cleartext().unwrap();
+        assert!(!migrated);
+        // 明文原样
+        let raw = fs::read_to_string(store.path()).unwrap();
+        assert!(raw.contains("MUSIC_U=keepme"), "{raw}");
+        assert!(matches!(
+            store.credential_status(),
+            CredentialStatus::PlaintextFallback { .. }
+        ));
     }
 
     #[test]
