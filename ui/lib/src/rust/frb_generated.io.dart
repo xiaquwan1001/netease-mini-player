@@ -100,6 +100,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CommentStats dco_decode_comment_stats(dynamic raw);
 
   @protected
+  CredentialEntryDto dco_decode_credential_entry_dto(dynamic raw);
+
+  @protected
+  CredentialOpDto dco_decode_credential_op_dto(dynamic raw);
+
+  @protected
   CredentialStatusDto dco_decode_credential_status_dto(dynamic raw);
 
   @protected
@@ -181,6 +187,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Comment> dco_decode_list_comment(dynamic raw);
+
+  @protected
+  List<CredentialEntryDto> dco_decode_list_credential_entry_dto(dynamic raw);
+
+  @protected
+  List<CredentialOpDto> dco_decode_list_credential_op_dto(dynamic raw);
 
   @protected
   List<DigitalAlbumPurchasedEntry>
@@ -640,6 +652,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CommentStats sse_decode_comment_stats(SseDeserializer deserializer);
 
   @protected
+  CredentialEntryDto sse_decode_credential_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  CredentialOpDto sse_decode_credential_op_dto(SseDeserializer deserializer);
+
+  @protected
   CredentialStatusDto sse_decode_credential_status_dto(
     SseDeserializer deserializer,
   );
@@ -733,6 +753,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<Comment> sse_decode_list_comment(SseDeserializer deserializer);
+
+  @protected
+  List<CredentialEntryDto> sse_decode_list_credential_entry_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<CredentialOpDto> sse_decode_list_credential_op_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   List<DigitalAlbumPurchasedEntry>
@@ -1290,6 +1320,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_comment_stats(CommentStats self, SseSerializer serializer);
 
   @protected
+  void sse_encode_credential_entry_dto(
+    CredentialEntryDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_credential_op_dto(
+    CredentialOpDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_credential_status_dto(
     CredentialStatusDto self,
     SseSerializer serializer,
@@ -1405,6 +1447,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_list_comment(List<Comment> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_credential_entry_dto(
+    List<CredentialEntryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_credential_op_dto(
+    List<CredentialOpDto> self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_list_digital_album_purchased_entry(

@@ -30,6 +30,7 @@ import 'src/new_release_page.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/play_queue_sheet.dart';
+import 'src/keystore.dart';
 import 'src/player_bar.dart';
 import 'src/playback.dart';
 import 'src/queue.dart';
@@ -726,8 +727,13 @@ class _HomePageState extends State<HomePage> {
   Future<void> _bootstrap() async {
     try {
       final dir = await _playback.dataDir();
+      // Android Keystore 凭据桥: 先 restore(幂等, 非 Android/不可用则跳过)再开 Core,
+      // 否则 Core::open 选不到后端(见 docs/android-keystore-wiring-design.md).
+      await credentialSync.ensureRestored();
       final info = await rust.init(dataDir: dir);
       await AppSettings.instance.load(info.dataDir);
+      // 登录期可能产生 pending, 启动点落一次 Keystore
+      unawaited(credentialSync.drainPending());
       // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
       // 首帧后 3s 后台静默检查更新(节流/开关在 update_checker 内, 失败静默)
       unawaited(runStartupUpdateCheck(AppSettings.instance));
@@ -1783,6 +1789,8 @@ class _HomePageState extends State<HomePage> {
       final dir = await _playback.dataDir();
       final info = await rust.init(dataDir: dir);
       if (mounted) setState(() => _info = info);
+      // 登录/登出/切号都汇到 _refreshInfo, 在这里统一 drain Keystore 桥的 pending
+      unawaited(credentialSync.drainPending());
       _actionsHost.value = _buildActionsHost();
       if (info.loggedIn) {
         await _loadLiked();
