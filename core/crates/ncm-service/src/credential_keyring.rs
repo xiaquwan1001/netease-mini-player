@@ -126,12 +126,23 @@ mod tests {
         let _ = store.remove(CredentialKey::Session);
     }
 
+    /// 写入真实 keyring 的测试必须挂这个守卫: 无论正常结束还是 panic,
+    /// Drop 都会删掉测试 key, 不把 com.minincm.* 残留留在用户真实钥匙串里.
+    struct CleanupOnDrop;
+    impl Drop for CleanupOnDrop {
+        fn drop(&mut self) {
+            let store = SecretServiceStore::new();
+            let _ = store.remove(CredentialKey::Session);
+        }
+    }
+
     /// 无 D-Bus 时: available() 返回 Unavailable(而非 panic / Backend),
     /// 且 get/put 不 panic. 有 D-Bus 时: available() 为 Ok.
     #[test]
     fn available_is_cached_and_never_panics() {
         let gated = std::env::var("NCM_KEYRING_TEST").ok().as_deref() == Some("1");
         let _guard = gated.then(lock_dbus);
+        let _cleanup = gated.then(|| CleanupOnDrop);
         let store = SecretServiceStore::new();
         if gated {
             clean_test_entries(&store);
@@ -170,6 +181,7 @@ mod tests {
         let _guard = lock_dbus();
         let store = SecretServiceStore::new();
         clean_test_entries(&store);
+        let _cleanup = CleanupOnDrop;
         store.available().expect("secret-service 应可用");
         store.put(CredentialKey::Session, "MUSIC_U=spike").unwrap();
         assert_eq!(store.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=spike"));
@@ -193,6 +205,7 @@ mod tests {
             "有 D-Bus 时应选 secret-service: {:?}", status.note());
         assert!(matches!(status, crate::credential_store::CredentialStatus::Secure { .. }));
         let creds = creds.expect("Secure 状态必须带回后端");
+        let _cleanup = CleanupOnDrop;
         creds.available().unwrap();
         creds.put(CredentialKey::Session, "MUSIC_U=real-bus").unwrap();
         assert_eq!(creds.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=real-bus"));
