@@ -499,6 +499,17 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no feed")) })
     }
 
+    /// 指定用户的动态(他人主页): vendor 的 event 只支持 pagesize/lasttime,
+    /// provider 侧自己拼 uid. 对方没公开/没有动态时返回**空列表**.
+    fn user_events(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user events")) })
+    }
+
     /// 动态的评论列表(threadId 来自 FeedEvent.thread_id)
     fn event_comments<'a>(
         &'a self,

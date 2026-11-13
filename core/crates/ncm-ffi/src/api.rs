@@ -2133,28 +2133,44 @@ pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>
         .feed_events(limit, last_time)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(list
-        .into_iter()
-        .map(|e| FeedEventDto {
-            id: e.id,
-            thread_id: e.thread_id,
-            user_id: e.user_id,
-            kind: e.kind,
-            user_name: e.user_name,
-            avatar_url: e.avatar_url,
-            text: e.text,
-            song: e.song.map(song_dto),
-            cover_url: e.cover_url,
-            images: e.images,
-            video_url: e.video_url,
-            title: e.title,
-            time_ms: e.time_ms,
-            liked: e.liked,
-            liked_count: e.liked_count,
-            share_count: e.share_count,
-            comment_count: e.comment_count,
-        })
-        .collect())
+    Ok(list.into_iter().map(feed_event_dto).collect())
+}
+
+fn feed_event_dto(e: ncm_domain::FeedEvent) -> FeedEventDto {
+    FeedEventDto {
+        id: e.id,
+        thread_id: e.thread_id,
+        user_id: e.user_id,
+        kind: e.kind,
+        user_name: e.user_name,
+        avatar_url: e.avatar_url,
+        text: e.text,
+        song: e.song.map(song_dto),
+        cover_url: e.cover_url,
+        images: e.images,
+        video_url: e.video_url,
+        title: e.title,
+        time_ms: e.time_ms,
+        liked: e.liked,
+        liked_count: e.liked_count,
+        share_count: e.share_count,
+        comment_count: e.comment_count,
+    }
+}
+
+/// 指定用户的动态(用户主页): uid = 目标用户, limit = 条数, last_time = 翻页游标(-1 = 第一页).
+/// 对方没公开/没有动态时返回**空列表**(不是错误).
+pub async fn user_events(
+    uid: u64,
+    limit: u32,
+    last_time: i64,
+) -> Result<Vec<FeedEventDto>, String> {
+    let provider = with_provider(Capability::Feed)?;
+    let list = provider
+        .user_events(uid, limit, last_time)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list.into_iter().map(feed_event_dto).collect())
 }
 
 /// 动态评论区(threadId 来自 FeedEvent.thread_id)

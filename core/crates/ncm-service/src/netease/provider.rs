@@ -787,6 +787,16 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::feed_events(self, limit, last_time)
     }
 
+    /// 指定用户的动态(他人主页): 同 /api/v1/event/get, 但带 uid(拿不到数据时返回空列表).
+    fn user_events(
+        &self,
+        uid: u64,
+        limit: u32,
+        last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        NeteaseProvider::user_events(self, uid, limit, last_time)
+    }
+
     /// 动态评论: vendor 走 /api/v1/resource/comments/<threadId>.
     fn event_comments<'a>(
         &'a self,

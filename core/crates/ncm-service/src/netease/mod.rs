@@ -168,6 +168,26 @@ impl NeteaseProvider {
         )
     }
 }
+/// weapi 通道 + 继承登录态的 RequestOption: vendor 的 `Query::to_option` 是 pub(crate),
+/// 我们只能自己拼一份等价的(写操作外的直连请求用它).
+pub(super) fn weapi_option(
+    cookie: &str,
+    domain: &Option<String>,
+    ua: &Option<String>,
+) -> RequestOption {
+    RequestOption {
+        crypto: CryptoType::Weapi,
+        cookie: if cookie.is_empty() {
+            None
+        } else {
+            Some(cookie.to_string())
+        },
+        ua: ua.clone(),
+        domain: domain.clone(),
+        ..Default::default()
+    }
+}
+
 pub(super) fn make_query(cookie: &str, domain: &Option<String>, ua: &Option<String>) -> Query {
     let mut q = Query::new();
     if !cookie.is_empty() {
