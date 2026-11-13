@@ -37,6 +37,7 @@
 - 身份纪律:device_id 首启生成后**永久复用**;设备 cookie(`_ntes_nuid/_ntes_nnid/NMTID/WNMCID`)
   必须持久化,禁止每进程随机。
 - 用户操作设备(扫码/点应用);助手准备资产、给精确步骤、盯 `adb logcat`。
+- 第二份工作副本 `~/ncm-wt/ldata`(分支 `lane/data-profile`,checkout 落后于 main):**记忆唯一权威仍是本仓 `.pi/memory/`**,不要在 ldata 里另建/维护记忆;它的 `AGENTS.md` 随分支落后属正常,动手前先 `git merge main` 或按本仓 AGENTS.md 为准。
 - 项目记忆: `.pi/memory/`;项目技能: `.pi/skills/`。
   **`.pi/` 只在本地工作区, 已在 `.gitignore` 排除、不进公开仓库**(2026-11-10 起)。
 
