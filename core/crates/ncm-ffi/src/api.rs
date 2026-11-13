@@ -16,9 +16,9 @@ pub use ncm_domain::{
     PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState,
     RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedRadio, RadioSubscriber,
     RadioSubscriberPage, RecentContact, SearchAlbum, SearchArtist, SearchExact, SearchPlaylistItem,
-    SearchPodcast, SigninDay, SigninStatus, SmsCodeSent, SongPurchasedPage, StreamUrl, StyleTag,
-    SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel, UserMedal,
-    VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
+    SearchPodcast, SigninDay, SigninStatus, SmsCodeSent, SongLikeState, SongPurchasedPage,
+    StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel,
+    UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -1119,16 +1119,56 @@ fn state_dto() -> PlayerStateDto {
     }
 }
 
-/// 下载(带缓存)后交给平台播放后端. 直链有时效, 所以先落盘再播.
-pub async fn play_track(track_id: u64, url: String) -> Result<PlayerStateDto, String> {
+/// 桌面播放: 已缓存直接播, 否则**边下边播**(乐观加载).
+///
+/// 之前的实现是 `fetch()` 等整首歌下载完再播 —— 一首 320kbps 的歌在慢网下
+/// 要等好几秒才出声(用户反馈"等加载完才开始播放"). 现在:
+/// 1. 命中缓存 → 直接播(秒开);
+/// 2. 未命中 → 建空 `.part` → 立刻把播放句柄交给音频线程(读到 EOF 时阻塞等),
+///    同时后台流式下载, 第一个数据块到达就能出声;
+/// 3. 下完原子 rename 成正式缓存文件, 下次命中缓存。
+///
+/// 平台差异: Windows 不允许 rename 一个被打开的文件, 且 rename 失败会让缓存失效,
+/// 所以 Windows 仍保留"下完再播"; Android 走 Media3(本来就是流式), 不经过这里。
+/// [duration_ms] 是接口给的时长: 边下边播时解码器算不出总时长, 进度条先用它。
+pub async fn play_track(
+    track_id: u64,
+    url: String,
+    duration_ms: Option<u64>,
+) -> Result<PlayerStateDto, String> {
     let dir = DATA_DIR
         .get()
         .ok_or_else(|| "core not initialized".to_string())?
         .join("audio");
     let cache = ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())?;
-    let path = cache.fetch(track_id, &url).await?;
-    player().play_file(track_id, path.to_string_lossy().to_string());
-    Ok(state_dto())
+    if let Some(path) = cache.cached(track_id, &url) {
+        player().play_file(track_id, path.to_string_lossy().to_string());
+        return Ok(state_dto());
+    }
+    #[cfg(windows)]
+    {
+        let _ = duration_ms;
+        let path = cache.fetch(track_id, &url).await?;
+        player().play_file(track_id, path.to_string_lossy().to_string());
+        Ok(state_dto())
+    }
+    #[cfg(not(windows))]
+    {
+        let progressive = cache.start_progressive(track_id, &url)?;
+        let part = progressive.part_path.to_string_lossy().to_string();
+        player().play_stream(
+            track_id,
+            part,
+            std::sync::Arc::clone(&progressive.done),
+            duration_ms,
+        );
+        tokio::spawn(async move {
+            if let Err(e) = cache.download_progressive(&url, progressive).await {
+                eprintln!("[play] progressive download failed: {e}");
+            }
+        });
+        Ok(state_dto())
+    }
 }
 
 pub fn player_state() -> PlayerStateDto {
@@ -1651,6 +1691,16 @@ pub struct _CommentStats {
     pub comment_upgraded: bool,
 }
 
+/// 单曲喜欢状态 + 喜欢总数(官方 App 的 /api/song/like/get; 需要登录).
+/// 与 CommentStats.likedCount 区分: 那个是评论线程被点赞数, 这里是歌曲喜欢人数.
+#[frb(mirror(SongLikeState))]
+pub struct _SongLikeState {
+    /// 当前账号是否喜欢了这首歌
+    pub liked: bool,
+    /// 喜欢这首歌的人数
+    pub liked_count: u64,
+}
+
 /// 已购数字专辑的一项(实测形状见 ncm_domain::DigitalAlbumPurchasedEntry 注释)
 #[frb(mirror(DigitalAlbumPurchasedEntry))]
 pub struct _DigitalAlbumPurchasedEntry {
@@ -1768,6 +1818,13 @@ pub async fn comments(
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
 pub async fn comment_stats(thread_id: String) -> Result<CommentStats, String> {
     ffi_forward!(Capability::Comment, provider.comment_stats(&thread_id))
+}
+
+/// 单曲喜欢状态 + 喜欢总数(需要登录; 官方 App 的 /api/song/like/get).
+///
+/// 匿名调用会得到 auth 错误(上游回 301), UI 侧当作"不显示数量"处理即可。
+pub async fn song_like_state(track_id: u64) -> Result<SongLikeState, String> {
+    ffi_forward!(Capability::SongLike, provider.song_like_state(track_id))
 }
 
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回

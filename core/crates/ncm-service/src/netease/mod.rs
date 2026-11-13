@@ -13,9 +13,9 @@ use ncm_domain::{
     RadioRankedProgram, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RadioToplist,
     RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchExact, SearchPage,
     SearchPlaylistItem, SearchPodcast, Session, SigninDay, SigninStatus, SmsCodeSent, Song,
-    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
-    TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign,
-    VipSignDay, VipTask, WikiFact, WordLyric,
+    SongLikeState, SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup,
+    ToplistCatalogItem, TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership,
+    VipOverview, VipSign, VipSignDay, VipTask, WikiFact, WordLyric,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,
@@ -25,6 +25,7 @@ use serde_json::Value;
 pub const CAPABILITIES: &[Capability] = &[
     Capability::Search,
     Capability::SongUrl,
+    Capability::SongLike,
     Capability::Lyric,
     Capability::Login,
     Capability::Profile,

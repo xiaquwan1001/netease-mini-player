@@ -315,6 +315,27 @@ impl NeteaseProvider {
         })
     }
 
+    /// 单曲喜欢状态 + 喜欢总数(需要登录).
+    ///
+    /// 走官方 App 的 `/api/song/like/get`(vendor 里补的模块, 见该文件注释):
+    /// api-enhanced 没有这个读接口, `song/detail` 也不带 likedCount。
+    /// 匿名请求会被服务端回 301 → 映射成 auth 错误, 由 UI 决定"不显示数量"。
+    pub(super) fn song_like_state<'a>(
+        &'a self,
+        track: TrackId,
+    ) -> BoxFuture<'a, ProviderResult<SongLikeState>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("未登录不能查看喜欢数"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
+            let resp = client.song_like_get(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_song_like_state(&resp.body))
+        })
+    }
+
     /// 批量曲目详情(红心列表要靠它补全元数据)
     pub(super) fn songs_detail<'a>(
         &'a self,

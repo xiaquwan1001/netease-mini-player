@@ -109,6 +109,16 @@ pub(super) fn parse_song_with(
 }
 
 /// 详情类接口(body 里 songs[] + privileges[])统一走这个
+/// 单曲喜欢状态 + 喜欢总数(`/api/song/like/get`): `{code, liked, likedCount}`.
+///
+/// 字段缺失一律按"没喜欢/0 人"兜底, 不报错 —— 计数是装饰信息, 缺了不该让菜单失败.
+pub(super) fn parse_song_like_state(body: &Value) -> SongLikeState {
+    SongLikeState {
+        liked: body.get("liked").and_then(Value::as_bool).unwrap_or(false),
+        liked_count: u64_of(body, "likedCount").unwrap_or(0),
+    }
+}
+
 pub(super) fn parse_song_list(body: &Value) -> Vec<Song> {
     let privileges = parse_privileges(body);
     body.get("songs")

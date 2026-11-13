@@ -343,3 +343,30 @@ fn capabilities_include_new_apis() {
     assert!(CAPABILITIES.contains(&Capability::Share));
     assert!(CAPABILITIES.contains(&Capability::PodcastDetail));
 }
+
+/// 喜欢总数(/api/song/like/get): 正常回包 + 字段缺失两种形状
+#[test]
+fn song_like_state_parsing() {
+    let ok = json!({"code": 200, "liked": true, "likedCount": 352});
+    let st = parse_song_like_state(&ok);
+    assert!(st.liked);
+    assert_eq!(st.liked_count, 352);
+
+    // 字段缺失/类型不对: 一律按"没喜欢/0 人"兜底, 不报错
+    let empty = json!({"code": 200});
+    let st = parse_song_like_state(&empty);
+    assert!(!st.liked);
+    assert_eq!(st.liked_count, 0);
+
+    let weird = json!({"liked": "true", "likedCount": "1.2万"});
+    let st = parse_song_like_state(&weird);
+    assert!(!st.liked);
+    assert_eq!(st.liked_count, 0);
+}
+
+#[test]
+fn capabilities_include_song_like() {
+    // 漏加就会 "no provider supports songLike", 菜单里的喜欢数直接消失
+    assert!(CAPABILITIES.contains(&Capability::SongLike));
+    assert_eq!(Capability::SongLike.as_str(), "songLike");
+}

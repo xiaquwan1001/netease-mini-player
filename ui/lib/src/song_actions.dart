@@ -23,6 +23,24 @@ enum SongActionSource {
   bool get allowsDislike => this == dailyRecommend || this == personalFm;
 }
 
+/// 歌曲的三项社区计数(喜欢人数 / 评论数 / 分享数), 已格式化成量级文案
+/// ("999"/"3k+"/"1w+")。null = 这一项没取到或不该显示。
+///
+/// 为什么由 UI 层格式化: 上游对同一件事给了两套数据(评论有官方文案
+/// `commentCountDesc`="100w+", 喜欢数只有裸数字), 展示口径必须在一处统一。
+class SongActionCounts {
+  const SongActionCounts({this.liked, this.comments, this.shares});
+
+  final String? liked;
+  final String? comments;
+  final String? shares;
+
+  bool get isEmpty => liked == null && comments == null && shares == null;
+}
+
+/// 计数加载器(生产实现由 main.dart 注入; 单测可传假的, 不联网)
+typedef SongCountsLoader = Future<SongActionCounts> Function(rust.SongDto song);
+
 /// 动作回调集合(由 main.dart 组装, 行组件通过 AppActions 取)
 class SongActionHost {
   const SongActionHost({
@@ -39,6 +57,7 @@ class SongActionHost {
     this.similarSongs,
     this.dislike,
     this.songWiki,
+    this.counts,
   });
 
   /// 是否已登录(收藏/喜欢仍会回调, 未登录由调用方提示)
@@ -79,6 +98,9 @@ class SongActionHost {
 
   /// 歌曲百科(曲风/语种/BPM/获奖; 不传就不显示这一项)
   final Future<void> Function(rust.SongDto song)? songWiki;
+
+  /// 喜欢/评论/分享的数量级(不传 = 菜单里不显示计数)
+  final SongCountsLoader? counts;
 }
 
 /// InheritedWidget: 任一子树里的 SongOverflowButton 自动拿到 host
@@ -138,12 +160,56 @@ Future<void> showSongActionsSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
+    builder: (sheetContext) =>
+        _SongActionsSheet(song: song, host: host, source: source),
+  );
+}
+
+/// 面板本体: 打开时异步补上"喜欢/评论/分享"的数量级(与原版行为对齐),
+/// 取不到就保持没有计数, 不影响任何菜单项可用性。
+class _SongActionsSheet extends StatefulWidget {
+  const _SongActionsSheet({
+    required this.song,
+    required this.host,
+    required this.source,
+  });
+
+  final rust.SongDto song;
+  final SongActionHost host;
+  final SongActionSource source;
+
+  @override
+  State<_SongActionsSheet> createState() => _SongActionsSheetState();
+}
+
+class _SongActionsSheetState extends State<_SongActionsSheet> {
+  SongActionCounts? _counts;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final loader = widget.host.counts;
+    if (loader == null) return;
+    try {
+      final counts = await loader(widget.song);
+      if (mounted) setState(() => _counts = counts);
+    } catch (_) {
+      // 计数是装饰信息: 失败就静默不显示(不能因此让菜单报错)
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
       // 固定 0.6 屏高(与"收藏到歌单"/播放队列面板一致): 之前是 maxHeight 0.8,
       // 内容多的歌单会把面板顶到接近状态栏, 顶部拖拽条几乎贴着手机顶边,
       // 想下拉收起容易误触成系统状态栏(用户反馈)。内容超过高度就在面板内滚动。
       child: SizedBox(
-        height: MediaQuery.of(sheetContext).size.height * 0.6,
+        height: MediaQuery.of(context).size.height * 0.6,
         child: Column(
           children: [
             const SheetHeader(title: '歌曲操作'),
@@ -152,14 +218,30 @@ Future<void> showSongActionsSheet(
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: _menu(sheetContext, song, host, source),
+                  children: _menu(
+                    context,
+                    widget.song,
+                    widget.host,
+                    widget.source,
+                    _counts,
+                  ),
                 ),
               ),
             ),
           ],
         ),
       ),
-    ),
+    );
+  }
+}
+
+/// 计数文案(量级). null 时不渲染, 保持行内空间不变。
+Widget? _countLabel(BuildContext context, String? text) {
+  if (text == null || text.isEmpty) return null;
+  return Text(
+    text,
+    style: Theme.of(context).textTheme.labelMedium
+        ?.copyWith(color: Theme.of(context).colorScheme.outline),
   );
 }
 
@@ -169,6 +251,7 @@ List<Widget> _menu(
   rust.SongDto song,
   SongActionHost host,
   SongActionSource source,
+  SongActionCounts? counts,
 ) {
   final colorScheme = Theme.of(context).colorScheme;
   final liked = host.isLiked(song.id);
@@ -206,6 +289,8 @@ List<Widget> _menu(
     ListTile(
       leading: Icon(liked ? Icons.favorite : Icons.favorite_border),
       title: Text(liked ? '取消喜欢' : '喜欢'),
+      // 喜欢人数(与原版对齐): 未登录/接口不可用时为 null, 行照常可点
+      trailing: _countLabel(context, counts?.liked),
       // 未登录也显示, 由 host 回调方提示登录
       onTap: () => run(() => host.toggleLike(song)),
     ),
@@ -217,11 +302,13 @@ List<Widget> _menu(
     ListTile(
       leading: const Icon(Icons.share_outlined),
       title: const Text('分享'),
+      trailing: _countLabel(context, counts?.shares),
       onTap: () => run(() => host.share(song)),
     ),
     ListTile(
       leading: const Icon(Icons.comment_outlined),
       title: const Text('查看评论'),
+      trailing: _countLabel(context, counts?.comments),
       onTap: () => run(() => host.comments(song)),
     ),
     ListTile(

@@ -68,4 +68,21 @@ void main() {
       );
     });
   });
+
+  group('formatCountMagnitude', () {
+    test('千以下给准确值, 千/万/亿给下界 + 加号', () {
+      expect(formatCountMagnitude(0), '0');
+      expect(formatCountMagnitude(1), '1');
+      expect(formatCountMagnitude(999), '999');
+      expect(formatCountMagnitude(1000), '1k+');
+      expect(formatCountMagnitude(3999), '3k+');
+      expect(formatCountMagnitude(9999), '9k+');
+      expect(formatCountMagnitude(10000), '1w+');
+      expect(formatCountMagnitude(12345), '1w+');
+      expect(formatCountMagnitude(99999999), '9999w+');
+      expect(formatCountMagnitude(100000000), '1亿+');
+      // 负值(接口异常)按 0 处理, 不抛也不显示 "-1"
+      expect(formatCountMagnitude(-5), '0');
+    });
+  });
 }

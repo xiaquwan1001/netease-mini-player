@@ -216,4 +216,74 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('菜单打开后补上 喜欢/评论/分享 的数量级(与原版对齐)', (tester) async {
+    final host = SongActionHost(
+      loggedIn: true,
+      isLiked: (_) => false,
+      toggleLike: (_) async {},
+      playNext: (_) async {},
+      addToPlaylist: (_) async {},
+      share: (_) async {},
+      comments: (_) async {},
+      openArtist: (_) async {},
+      openAlbum: (_) async {},
+      download: (_) async {},
+      counts: (_) async => const SongActionCounts(
+        liked: '1w+',
+        comments: '100w+',
+        shares: '3k+',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppActions(
+            host: host,
+            child: SongOverflowButton(song: fakeSong()),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('1w+'), findsOneWidget);
+    expect(find.text('100w+'), findsOneWidget);
+    expect(find.text('3k+'), findsOneWidget);
+    // 计数是装饰: 原有菜单项一个都不能少
+    expect(find.text('喜欢'), findsOneWidget);
+    expect(find.text('查看评论'), findsOneWidget);
+  });
+
+  testWidgets('计数加载失败时菜单照常可用(不显示计数, 不报错)', (tester) async {
+    final host = SongActionHost(
+      loggedIn: true,
+      isLiked: (_) => false,
+      toggleLike: (_) async {},
+      playNext: (_) async {},
+      addToPlaylist: (_) async {},
+      share: (_) async {},
+      comments: (_) async {},
+      openArtist: (_) async {},
+      openAlbum: (_) async {},
+      download: (_) async {},
+      counts: (_) async => throw Exception('boom'),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppActions(
+            host: host,
+            child: SongOverflowButton(song: fakeSong()),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.byType(SongOverflowButton));
+    await tester.pumpAndSettle();
+
+    expect(find.text('喜欢'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

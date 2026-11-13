@@ -21,7 +21,7 @@ import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart';
 import 'format.dart' show formatDurationMs;
-import 'toast.dart' show showToast;
+import 'toast.dart' show showToast, showUndoToast;
 
 /// 歌单/播客(电台)详情页: 全屏路由, AppBar 以下单滚动(CustomScrollView),
 /// 曲目/节目行定高 56。曲目可见性沿用 library_view 的统一规则
@@ -328,6 +328,14 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         }
       });
       widget.onLikeChanged?.call(song.id, !liked);
+      // 取消喜欢给 5 秒撤销; 撤销就是再切一次(状态已翻转, _toggleLike 会喜欢回去)
+      if (liked) {
+        showUndoToast(
+          context,
+          message: '已取消喜欢《${song.name}》',
+          onUndo: () => _toggleLike(song),
+        );
+      }
     } catch (e) {
       _toast('收藏失败: ${friendlyError(e)}');
     }
@@ -345,7 +353,16 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       if (!mounted) return;
       if (ok) {
         setState(() => _subscribed = target);
-        _toast(target ? '已收藏歌单' : '已取消收藏');
+        if (target) {
+          _toast('已收藏歌单');
+        } else {
+          // 取消收藏歌单给 5 秒撤销(公众号召力最大的一次误触)
+          showUndoToast(
+            context,
+            message: '已取消收藏歌单',
+            onUndo: () => _toggleSubscribe(),
+          );
+        }
       } else {
         _toast('操作未生效, 请稍后重试');
       }

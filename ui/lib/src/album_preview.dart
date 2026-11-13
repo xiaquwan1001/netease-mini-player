@@ -388,12 +388,8 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
             size: 20,
             source: SongActionSource.album,
           ),
-          onTap: s.playable
-              ? () {
-                  Navigator.pop(context);
-                  widget.onPlay(songs, i);
-                }
-              : null,
+          // 点播不退出专辑页(与歌单详情/日推一致): 换队列, 页面留在原地
+          onTap: s.playable ? () => widget.onPlay(songs, i) : null,
         );
       },
     );

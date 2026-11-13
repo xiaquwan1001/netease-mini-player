@@ -751,6 +751,21 @@ pub struct CommentStats {
     pub comment_upgraded: bool,
 }
 
+/// 单曲"喜欢"状态 + 喜欢总数(官方 App 的 `/api/song/like/get`).
+///
+/// 响应形如 `{code:200, liked:false, likedCount:352}`; **需要登录**, 匿名回 301。
+/// 注意与 [`CommentStats::liked_count`] 区分: 那个是**评论线程**被点赞数,
+/// 这里是**歌曲**被多少人喜欢(播放页 ♥ 旁边的那个数字)。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SongLikeState {
+    /// 当前账号是否喜欢了这首歌
+    #[serde(default)]
+    pub liked: bool,
+    /// 喜欢这首歌的人数
+    #[serde(default)]
+    pub liked_count: u64,
+}
+
 /// 听歌排行的一项. 总量榜与周榜共用同一结构, 顺序即名次(接口已排好序).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PlayRankEntry {

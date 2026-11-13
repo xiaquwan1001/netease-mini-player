@@ -477,6 +477,11 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::song_wiki(self, song_id)
     }
 
+    /// 单曲喜欢状态 + 喜欢总数(官方 App 的 /api/song/like/get; 需要登录)
+    fn song_like_state(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<SongLikeState>> {
+        NeteaseProvider::song_like_state(self, TrackId::new(song_id))
+    }
+
     /// 新歌速递(按地区). area → areaId 是服务端的枚举: 0 全部 / 7 华语 / 8 日语 / 16 韩语 / 96 欧美
     fn new_songs_by_area<'a>(
         &'a self,

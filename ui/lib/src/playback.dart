@@ -118,11 +118,14 @@ class Playback {
     return _channel.invokeMethod<String>('dataDir');
   }
 
+  /// 开始播放. [durationMs] 是接口给的歌曲时长: 桌面端"边下边播"时
+  /// 解码器一开始算不出总时长(文件还在增长), 进度条先用这个值, 否则会一直显示 0.
   Future<PlayerView> play({
     required BigInt trackId,
     required String url,
     required String title,
     required String artist,
+    BigInt? durationMs,
   }) async {
     if (isAndroid) {
       final map = await _channel.invokeMapMethod<String, Object?>('play', {
@@ -133,7 +136,11 @@ class Playback {
       });
       return _fromMap(map);
     }
-    final state = await rust.playTrack(trackId: trackId, url: url);
+    final state = await rust.playTrack(
+      trackId: trackId,
+      url: url,
+      durationMs: durationMs,
+    );
     return _fromRust(state);
   }
 

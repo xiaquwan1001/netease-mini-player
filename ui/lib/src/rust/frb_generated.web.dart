@@ -499,6 +499,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   SongDto dco_decode_song_dto(dynamic raw);
 
   @protected
+  SongLikeState dco_decode_song_like_state(dynamic raw);
+
+  @protected
   SongPurchasedPage dco_decode_song_purchased_page(dynamic raw);
 
   @protected
@@ -1137,6 +1140,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   SongDto sse_decode_song_dto(SseDeserializer deserializer);
+
+  @protected
+  SongLikeState sse_decode_song_like_state(SseDeserializer deserializer);
 
   @protected
   SongPurchasedPage sse_decode_song_purchased_page(
@@ -1956,6 +1962,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_song_dto(SongDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_song_like_state(SongLikeState self, SseSerializer serializer);
 
   @protected
   void sse_encode_song_purchased_page(

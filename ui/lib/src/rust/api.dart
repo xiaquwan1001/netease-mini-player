@@ -216,11 +216,27 @@ Future<bool> loginWithCookie({required String cookie}) =>
 Future<String> ping({required String name}) =>
     RustLib.instance.api.crateApiPing(name: name);
 
-/// 下载(带缓存)后交给平台播放后端. 直链有时效, 所以先落盘再播.
+/// 桌面播放: 已缓存直接播, 否则**边下边播**(乐观加载).
+///
+/// 之前的实现是 `fetch()` 等整首歌下载完再播 —— 一首 320kbps 的歌在慢网下
+/// 要等好几秒才出声(用户反馈"等加载完才开始播放"). 现在:
+/// 1. 命中缓存 → 直接播(秒开);
+/// 2. 未命中 → 建空 `.part` → 立刻把播放句柄交给音频线程(读到 EOF 时阻塞等),
+///    同时后台流式下载, 第一个数据块到达就能出声;
+/// 3. 下完原子 rename 成正式缓存文件, 下次命中缓存。
+///
+/// 平台差异: Windows 不允许 rename 一个被打开的文件, 且 rename 失败会让缓存失效,
+/// 所以 Windows 仍保留"下完再播"; Android 走 Media3(本来就是流式), 不经过这里。
+/// [duration_ms] 是接口给的时长: 边下边播时解码器算不出总时长, 进度条先用它。
 Future<PlayerStateDto> playTrack({
   required BigInt trackId,
   required String url,
-}) => RustLib.instance.api.crateApiPlayTrack(trackId: trackId, url: url);
+  BigInt? durationMs,
+}) => RustLib.instance.api.crateApiPlayTrack(
+  trackId: trackId,
+  url: url,
+  durationMs: durationMs,
+);
 
 Future<PlayerStateDto> playerState() =>
     RustLib.instance.api.crateApiPlayerState();
@@ -411,6 +427,12 @@ Future<CommentPage> comments({
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
 Future<CommentStats> commentStats({required String threadId}) =>
     RustLib.instance.api.crateApiCommentStats(threadId: threadId);
+
+/// 单曲喜欢状态 + 喜欢总数(需要登录; 官方 App 的 /api/song/like/get).
+///
+/// 匿名调用会得到 auth 错误(上游回 301), UI 侧当作"不显示数量"处理即可。
+Future<SongLikeState> songLikeState({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiSongLikeState(trackId: trackId);
 
 /// 精彩评论(可单独翻页): threadId 来自 comments() 的返回
 Future<CommentPage> hotComments({
@@ -3661,6 +3683,29 @@ class SongDto {
           vip == other.vip &&
           paid == other.paid &&
           playable == other.playable;
+}
+
+/// 单曲喜欢状态 + 喜欢总数(官方 App 的 /api/song/like/get; 需要登录).
+/// 与 CommentStats.likedCount 区分: 那个是评论线程被点赞数, 这里是歌曲喜欢人数.
+class SongLikeState {
+  /// 当前账号是否喜欢了这首歌
+  final bool liked;
+
+  /// 喜欢这首歌的人数
+  final BigInt likedCount;
+
+  const SongLikeState({required this.liked, required this.likedCount});
+
+  @override
+  int get hashCode => liked.hashCode ^ likedCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SongLikeState &&
+          runtimeType == other.runtimeType &&
+          liked == other.liked &&
+          likedCount == other.likedCount;
 }
 
 class SongPurchasedPage {

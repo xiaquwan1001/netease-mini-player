@@ -23,6 +23,7 @@ import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
+import 'src/format.dart' show formatCountMagnitude;
 import 'src/lyric.dart';
 import 'src/word_lyric_view.dart';
 import 'src/library_view.dart';
@@ -54,7 +55,7 @@ import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
-import 'src/toast.dart' show showToast;
+import 'src/toast.dart' show showToast, showUndoToast;
 import 'src/theme.dart';
 import 'src/vip_page.dart';
 
@@ -664,11 +665,8 @@ class _HomePageState extends State<HomePage> {
   BigInt? _lyricTrackId;
   String? _lyricError;
 
-  /// 逐字/行级歌词来源标记("yrc"/"ttml"/"line"), 歌词页底部小字展示。
-  String? _lyricSource;
-
-  /// auto 择优理由(短文案, 如 "yrc 时间错乱"), 与来源一起展示。
-  String? _lyricReason;
+  // 歌词来源("yrc"/"ttml"/"line")与择优理由不再上屏(左下角那条像水印的
+  // 小字已按用户要求去掉), 决策逻辑与文案生成仍留在 lyricSourceLabel / scoreWordLyric.
   int _lyricIndex = -1;
   bool _showLyrics = false;
 
@@ -1304,10 +1302,12 @@ class _HomePageState extends State<HomePage> {
     List<rust.SongDto> songs,
     int index, {
     BigInt? playlistId,
+    SongActionSource source = SongActionSource.other,
   }) async {
     if (songs.isEmpty) return;
     final start = index.clamp(0, songs.length - 1);
     _queue.setAll(songs, startAt: start);
+    _playSource = source;
     _userStopped = false;
     setState(() {
       _library = songs;
@@ -1349,6 +1349,7 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       _queue.setAll(list, startAt: 0);
+      _playSource = SongActionSource.other;
       _userStopped = false;
       setState(() {
         _library = list;
@@ -1387,7 +1388,9 @@ class _HomePageState extends State<HomePage> {
   void _openDiscover() {
     showDiscoverPage(
       context,
-      onPlaySongs: (songs, index) => _playSongsList(songs, index),
+      // 日推队列: 详情页"..."里要能继续"不感兴趣"
+      onPlaySongs: (songs, index) =>
+          _playSongsList(songs, index, source: SongActionSource.dailyRecommend),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
       loadPlaylists: _dailyPlaylists,
     );
@@ -1431,6 +1434,7 @@ class _HomePageState extends State<HomePage> {
     final songs = _visibleSongs;
     final start = songs.indexWhere((s) => s.id == song.id);
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
+    _playSource = SongActionSource.other;
     _userStopped = false;
     _queuePlaylistId = null; // 搜索列表点播不算歌单队列
     await _playSong(song);
@@ -1445,6 +1449,7 @@ class _HomePageState extends State<HomePage> {
     final start = songs.indexWhere((s) => s.id == song.id);
     if (songs.isEmpty) return;
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
+    _playSource = SongActionSource.other;
     _userStopped = false;
     _queuePlaylistId = null;
     await _playSong(song);
@@ -1578,6 +1583,8 @@ class _HomePageState extends State<HomePage> {
         url: url,
         title: song.name,
         artist: song.artist,
+        // 边下边播(桌面)时解码器拿不到总时长, 进度条用接口时长兜底
+        durationMs: song.durationMs,
       );
       if (!mounted) return true;
       setState(() => _player = state);
@@ -1607,8 +1614,6 @@ class _HomePageState extends State<HomePage> {
         _lyricPlain = null;
         _lyricIndex = -1;
         _lyricError = null;
-        _lyricSource = null;
-        _lyricReason = null;
         _wordLines = const [];
       });
       _wordPositionMs.value = 0;
@@ -1629,8 +1634,6 @@ class _HomePageState extends State<HomePage> {
         setState(() {
           _lyricError = null;
           _lyricPlain = null;
-          _lyricSource = resolved.source;
-          _lyricReason = resolved.reason;
           _wordLines = [
             for (var i = 0; i < word.lines.length; i++)
               WordLyricLineData(
@@ -1658,7 +1661,6 @@ class _HomePageState extends State<HomePage> {
       if (lines != null && lines.isNotEmpty) {
         setState(() {
           _lyricError = null;
-          _lyricSource = resolved.source;
           _lyricLines = [
             for (final l in lines)
               ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
@@ -1674,7 +1676,6 @@ class _HomePageState extends State<HomePage> {
       if (!mounted || _lyricTrackId != trackId) return;
       if (lines.isNotEmpty) {
         setState(() {
-          _lyricSource = 'line';
           _lyricLines = [
             for (final l in lines)
               ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
@@ -2046,6 +2047,7 @@ class _HomePageState extends State<HomePage> {
     download: _downloadSong,
     dislike: _dislikeSong,
     songWiki: (song) => showSongWiki(context, song: song),
+    counts: _loadSongCounts,
     similarSongs: (song) => showSimilarSongs(
       context,
       song: song,
@@ -2053,6 +2055,52 @@ class _HomePageState extends State<HomePage> {
       onOpenPlaylist: _openPlaylist,
     ),
   );
+
+  /// 歌曲菜单里的三项数量级: 喜欢人数 / 评论数 / 分享数(与原版对齐).
+  ///
+  /// 数据来源:
+  /// - 评论数 + 分享数: 评论线程统计 `R_SO_4_<id>`(我们本来就有这接口);
+  /// - 喜欢人数: 官方 App 的 `/api/song/like/get`(`likedCount`), api-enhanced
+  ///   里没有这个模块, 从官方客户端抓到的路径, 已按 vendor 规则加到 vendor 侧。
+  ///   该接口**需要登录**, 匿名返回 301 —— 未登录时不显示, 菜单其余项不受影响。
+  ///
+  /// 任何一项失败都只是"这一项不显示", 绝不让菜单报错。
+  Future<SongActionCounts> _loadSongCounts(rust.SongDto song) async {
+    final id = song.id;
+    Future<String?> likedLabel() async {
+      if (_info?.loggedIn != true) return null;
+      try {
+        final state = await rust.songLikeState(trackId: id);
+        return formatCountMagnitude(state.likedCount.toInt());
+      } catch (_) {
+        return null;
+      }
+    }
+
+    Future<rust.CommentStats?> stats() async {
+      try {
+        return await rust.commentStats(threadId: 'R_SO_4_$id');
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final results = await Future.wait<Object?>([likedLabel(), stats()]);
+    final liked = results[0] as String?;
+    final s = results[1] as rust.CommentStats?;
+    String? comments;
+    if (s != null) {
+      // 上游自带官方文案("100w+"/"999+")优先, 没有才用我们的量级口径
+      final desc = s.commentCountDesc.trim();
+      comments = desc.isNotEmpty
+          ? desc
+          : formatCountMagnitude(s.commentCount.toInt());
+    }
+    final shares = s == null
+        ? null
+        : formatCountMagnitude(s.shareCount.toInt());
+    return SongActionCounts(liked: liked, comments: comments, shares: shares);
+  }
 
   /// 任意曲目的红心切换(列表/播放条共用; 先乐观更新, 失败回滚)
   Future<void> _toggleLikeFor(rust.SongDto song) async {
@@ -2073,6 +2121,14 @@ class _HomePageState extends State<HomePage> {
       await rust.setLiked(trackId: id, liked: !wasLiked);
       // 通知栏红心按钮同步(当前曲目才影响通知图标, _syncActionState 里已取 _current)
       if (id == _current?.id) unawaited(_syncActionState());
+      // 取消喜欢给 5 秒撤销(误触红心很常见); 喜欢方向不需要撤销
+      if (wasLiked && mounted) {
+        showUndoToast(
+          context,
+          message: '已取消喜欢《${song.name}》',
+          onUndo: () => unawaited(_toggleLikeFor(song)),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -2353,8 +2409,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 当前队列是否来自私人FM(决定"不感兴趣"走 fm_trash 还是日推 dislike)
-  bool _fmActive = false;
+  /// 当前播放队列的来源(决定歌曲详情页"..."里能否出现"不感兴趣":
+  /// 后端只接受每日推荐(dislike_recommend_song)与私人FM(fm_trash)这两个来源)。
+  ///
+  /// 之前这里是个粘性的 `_fmActive` 布尔: 播过一次 FM 就永远为 true, 之后从
+  /// 每日推荐播的歌也走 fm_trash; 详情页的菜单来源又硬编码成 other,
+  /// 所以日推歌曲在详情页里根本看不到"不感兴趣"(用户回归反馈)。
+  /// 现在每次开始播放都显式记来源, 详情页菜单直接读这个字段。
+  SongActionSource _playSource = SongActionSource.other;
 
   /// 不感兴趣: FM 队列里走"不再播放", 其它场景走"少推这类歌"
   Future<void> _dislikeSong(rust.SongDto song) async {
@@ -2363,7 +2425,7 @@ class _HomePageState extends State<HomePage> {
       return;
     }
     try {
-      if (_fmActive) {
+      if (_playSource == SongActionSource.personalFm) {
         await rust.trashFmSong(songId: song.id);
         if (!mounted) return;
         _toast('已从私人FM里去掉《${song.name}》');
@@ -3120,10 +3182,8 @@ class _HomePageState extends State<HomePage> {
               SongOverflowButton(
                 song: current,
                 size: 22,
-                // 正在播放的队列来自 FM 时走 fm_trash, 否则不显示"不感兴趣"
-                source: _fmActive
-                    ? SongActionSource.personalFm
-                    : SongActionSource.other,
+                // 队列来源即菜单来源: 日推/FM 才显示"不感兴趣"
+                source: _playSource,
               ),
             IconButton(
               icon: const Icon(Icons.share),
@@ -3169,10 +3229,8 @@ class _HomePageState extends State<HomePage> {
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
-          onPlayFm: (songs, index) {
-            _fmActive = true;
-            _playSongsList(songs, index);
-          },
+          onPlayFm: (songs, index) =>
+              _playSongsList(songs, index, source: SongActionSource.personalFm),
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,
@@ -3468,21 +3526,10 @@ class _HomePageState extends State<HomePage> {
             child: Stack(
               children: [
                 Positioned.fill(child: body),
-                // 来源小字(yrc/ttml/line): 歌词页左下角常驻一行浅色标注, 不打扰。
-                if (_lyricSource != null)
-                  Positioned(
-                    left: 12,
-                    bottom: 8,
-                    child: IgnorePointer(
-                      child: Text(
-                        lyricSourceLabel(_lyricSource, _lyricReason),
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurface
-                              .withValues(alpha: 0.35),
-                        ),
-                      ),
-                    ),
-                  ),
+                // 曾经在这里常驻一行"逐字歌词 · 网易云"来源小字(左下角),
+                // 用户反馈那是一条像水印的文本框, 已去掉(2026-11)。
+                // 打分/择优的实现与单测仍在 lyricSourceLabel / scoreWordLyric.
+
                 // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
                 // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.
                 Positioned(

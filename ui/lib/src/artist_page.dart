@@ -275,6 +275,15 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       if (!mounted) return;
       if (ok) {
         setState(() => _followed = next);
+        // 取消关注给 5 秒撤销; 关注方向不给(与官方一致)
+        if (!next) {
+          final name = widget.name ?? _detail?.name ?? '';
+          showUndoToast(
+            context,
+            message: '已取消关注${name.isEmpty ? '' : ' $name'}',
+            onUndo: () => _toggleFollow(),
+          );
+        }
       }
     } catch (e) {
       if (!mounted) return;

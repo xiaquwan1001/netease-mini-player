@@ -160,12 +160,10 @@ class _DailySongsTabState extends State<_DailySongsTab>
           // 行尾不再放"不感兴趣"按钮: 它占掉 ~48dp 横向空间, 而同一动作
           // 已经在行尾「...」菜单里(SongActionSource.dailyRecommend 决定显示)。
           source: SongActionSource.dailyRecommend,
-          onTap: s.playable
-              ? () {
-                  Navigator.pop(context);
-                  widget.onPlay(songs, i);
-                }
-              : null,
+          // 点歌只开始播放, **不退出日推页**: 之前 `Navigator.pop` 会直接
+          // 把整页弹掉, 用户想接着挑下一首还得重新进来(用户反馈)。与歌单详情页
+          // (detail_page)一致: 列表页点播 = 换队列, 页面留在原地。
+          onTap: s.playable ? () => widget.onPlay(songs, i) : null,
         );
       },
     );
@@ -296,11 +294,9 @@ class _HistoryTabState extends State<_HistoryTab>
                       return _SongRow(
                         song: s,
                         index: i + 1,
+                        // 同「推荐歌曲」页签: 点播不退出历史日推列表
                         onTap: s.playable
-                            ? () {
-                                Navigator.pop(context);
-                                widget.onPlay(songs, i);
-                              }
+                            ? () => widget.onPlay(songs, i)
                             : null,
                       );
                     },
@@ -496,11 +492,9 @@ class RecentPlayedPage extends StatelessWidget {
               itemBuilder: (context, s, i, list) => _SongRow(
                 song: s,
                 index: i + 1,
+                // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable
-                    ? () {
-                        Navigator.pop(context);
-                        onPlay(list.cast<rust.SongDto>(), i);
-                      }
+                    ? () => onPlay(list.cast<rust.SongDto>(), i)
                     : null,
               ),
             ),

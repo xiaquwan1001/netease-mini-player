@@ -83,10 +83,28 @@ impl From<std::io::Error> for PlaybackError {
     }
 }
 
+/// 播放数据的来源(桌面端).
+#[derive(Debug, Clone)]
+pub enum PlaySource {
+    /// 已完整落盘的文件(可以精确 seek, 时长可靠)
+    File(String),
+    /// 边下边播: `.part` 文件会持续增长, [`done`] 置位后不再有新字节.
+    ///
+    /// 为什么不直接喂 HTTP 流: rodio 0.23 的 Decoder 要求 `Read + Seek`, 纯流没有
+    /// seek 能力; 而"下完再播"要等整首歌(用户反馈切歌/开播太慢). 折中方案是下载
+    /// 线程写本地文件、播放线程读同一个文件, 读到 EOF 时阻塞等下一块.
+    Growing {
+        path: String,
+        done: Arc<std::sync::atomic::AtomicBool>,
+    },
+}
+
 enum Cmd {
     Play {
         track_id: u64,
-        path: String,
+        source: PlaySource,
+        /// 接口给的预期时长(边下边播时解码器还不知道时长, 先用它撑进度条)
+        expected_duration_ms: Option<u64>,
     },
     Pause,
     Resume,
@@ -139,7 +157,26 @@ impl Player {
     pub fn play_file(&self, track_id: u64, path: impl Into<String>) {
         let _ = self.tx.send(Cmd::Play {
             track_id,
-            path: path.into(),
+            source: PlaySource::File(path.into()),
+            expected_duration_ms: None,
+        });
+    }
+
+    /// 边下边播: 立即开始解码已经到达的字节, 剩余部分由下载线程继续追加.
+    pub fn play_stream(
+        &self,
+        track_id: u64,
+        path: impl Into<String>,
+        done: Arc<std::sync::atomic::AtomicBool>,
+        expected_duration_ms: Option<u64>,
+    ) {
+        let _ = self.tx.send(Cmd::Play {
+            track_id,
+            source: PlaySource::Growing {
+                path: path.into(),
+                done,
+            },
+            expected_duration_ms,
         });
     }
 
@@ -264,6 +301,89 @@ mod backend {
         }
     }
 
+    /// 增长中的本地文件: 下载线程还在追加字节时, 读到 EOF **阻塞等待**而不是返回 0.
+    ///
+    /// 这是"边下边播"的关键: rodio/symphonia 只认 `Read + Seek`, 看到 EOF 就会
+    /// 认为曲子播完了. 这里把"暂时没有数据"和"真的没有数据"区分开 ——
+    /// 只有 `done` 置位(下载成功/失败都会置位)才返回 EOF.
+    struct GrowingFile {
+        file: File,
+        done: Arc<std::sync::atomic::AtomicBool>,
+        /// 无新字节的忍耐上限: 超时按结束处理, 避免下载线程挂死时把音频线程卡住
+        since: Instant,
+    }
+
+    impl GrowingFile {
+        fn open(path: &str, done: Arc<std::sync::atomic::AtomicBool>) -> std::io::Result<Self> {
+            Ok(Self {
+                file: File::open(path)?,
+                done,
+                since: Instant::now(),
+            })
+        }
+    }
+
+    impl std::io::Read for GrowingFile {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            // File 的 Read 实现直接可用(方法解析走 std::fs::File 的 inherent trait 导入链)
+            loop {
+                let n = self.file.read(buf)?;
+                if n > 0 {
+                    return Ok(n);
+                }
+                if self.done.load(std::sync::atomic::Ordering::Acquire) {
+                    return Ok(0);
+                }
+                if self.since.elapsed() > Duration::from_secs(90) {
+                    eprintln!("[playback] growing file stalled > 90s, stop reading");
+                    return Ok(0);
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    impl std::io::Seek for GrowingFile {
+        fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+            self.file.seek(pos)
+        }
+    }
+
+    /// 两条来源(落盘文件 / 增长中文件)共用的一段: 套 EQ + 淡入后开始播, 并写回状态.
+    fn start_source<I>(
+        player: &RodioPlayer,
+        input: I,
+        local: &PlaybackTuning,
+        track_id: u64,
+        expected_duration_ms: Option<u64>,
+        state: &Arc<Mutex<PlayerState>>,
+    ) where
+        I: Source<Item = Sample> + Send + 'static,
+    {
+        // 边下边播时解码器还不知道总时长(非 seekable, 不扫全文件), 用接口给的时长兜底
+        let duration = input
+            .total_duration()
+            .or_else(|| expected_duration_ms.map(Duration::from_millis));
+        // EQ 链: 没有曲线时构造一条空链(纯旁路), 保持源类型固定
+        let empty = ncm_domain::EqProfile::default();
+        let profile = local.eq.as_ref().unwrap_or(&empty);
+        let chain = biquad::EqChain::new(
+            profile,
+            input.sample_rate().get() as f32,
+            input.channels().get() as usize,
+        );
+        // 淡入: 0 ms 时用 1 ms 近似"立即"(避免除零, 也顺手消除切歌爆音)
+        let fade = Duration::from_millis(local.fade_ms.max(1) as u64);
+        player.append(EqSource::new(input, chain).fade_in(fade));
+        player.play();
+        if let Ok(mut st) = state.lock() {
+            st.track_id = Some(track_id);
+            st.duration_ms = duration.map(|d| d.as_millis() as u64).unwrap_or(0);
+            st.position_ms = 0;
+            st.playing = true;
+        }
+    }
+
     pub fn run(
         rx: mpsc::Receiver<Cmd>,
         state: Arc<Mutex<PlayerState>>,
@@ -291,39 +411,56 @@ mod backend {
 
         loop {
             match rx.recv_timeout(Duration::from_millis(200)) {
-                Ok(Cmd::Play { track_id, path }) => {
+                Ok(Cmd::Play {
+                    track_id,
+                    source,
+                    expected_duration_ms,
+                }) => {
                     // stop() 之后不可复用,换曲用 clear()
                     player.clear();
                     // 换曲: 增益立即对齐到当前目标, 不带着上一曲半截斜坡的残留、也不从 0 慢慢爬
                     limiter.reset_to(local.gain_db);
                     player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
-                    match File::open(&path) {
-                        Ok(file) => match Decoder::try_from(file) {
-                            Ok(decoder) => {
-                                let duration = decoder.total_duration();
-                                // EQ 链: 没有曲线时构造一条空链(纯旁路), 保持源类型固定
-                                let empty = ncm_domain::EqProfile::default();
-                                let profile = local.eq.as_ref().unwrap_or(&empty);
-                                let chain = biquad::EqChain::new(
-                                    profile,
-                                    decoder.sample_rate().get() as f32,
-                                    decoder.channels().get() as usize,
-                                );
-                                // 淡入: 0 ms 时用 1 ms 近似"立即"(避免除零, 也顺手消除切歌爆音)
-                                let fade = Duration::from_millis(local.fade_ms.max(1) as u64);
-                                player.append(EqSource::new(decoder, chain).fade_in(fade));
-                                player.play();
-                                if let Ok(mut st) = state.lock() {
-                                    st.track_id = Some(track_id);
-                                    st.duration_ms =
-                                        duration.map(|d| d.as_millis() as u64).unwrap_or(0);
-                                    st.position_ms = 0;
-                                    st.playing = true;
-                                }
-                            }
-                            Err(e) => eprintln!("[playback] decode failed: {e}"),
+                    match source {
+                        PlaySource::File(path) => match File::open(&path) {
+                            Ok(file) => match Decoder::try_from(file) {
+                                Ok(decoder) => start_source(
+                                    &player,
+                                    decoder,
+                                    &local,
+                                    track_id,
+                                    expected_duration_ms,
+                                    &state,
+                                ),
+                                Err(e) => eprintln!("[playback] decode failed: {e}"),
+                            },
+                            Err(e) => eprintln!("[playback] open {path} failed: {e}"),
                         },
-                        Err(e) => eprintln!("[playback] open {path} failed: {e}"),
+                        // 边下边播: 文件还在增长, 报告"不可 seek"以免 symphonia 为算时长扫全文件
+                        PlaySource::Growing { path, done } => {
+                            match GrowingFile::open(&path, done) {
+                                Ok(file) => {
+                                    match Decoder::builder()
+                                        .with_data(file)
+                                        .with_seekable(false)
+                                        .build()
+                                    {
+                                        Ok(decoder) => start_source(
+                                            &player,
+                                            decoder,
+                                            &local,
+                                            track_id,
+                                            expected_duration_ms,
+                                            &state,
+                                        ),
+                                        Err(e) => {
+                                            eprintln!("[playback] stream decode failed: {e}")
+                                        }
+                                    }
+                                }
+                                Err(e) => eprintln!("[playback] open {path} failed: {e}"),
+                            }
+                        }
                     }
                 }
                 Ok(Cmd::Pause) => player.pause(),
@@ -377,6 +514,112 @@ mod backend {
                     st.playing = !paused && !empty;
                 }
             }
+        }
+    }
+
+    #[cfg(test)]
+    mod growing_tests {
+        use super::*;
+        use std::io::{Read, Write};
+
+        /// 造一个 16bit/mono/8kHz 的 WAV(只剩 header, data 由调用方按块追加).
+        fn wav_header(samples: usize) -> Vec<u8> {
+            let data_len = (samples * 2) as u32;
+            let mut out = Vec::with_capacity(44);
+            out.extend_from_slice(b"RIFF");
+            out.extend_from_slice(&(36 + data_len).to_le_bytes());
+            out.extend_from_slice(b"WAVEfmt ");
+            out.extend_from_slice(&16u32.to_le_bytes()); // fmt chunk size
+            out.extend_from_slice(&1u16.to_le_bytes()); // PCM
+            out.extend_from_slice(&1u16.to_le_bytes()); // mono
+            out.extend_from_slice(&8000u32.to_le_bytes()); // sample rate
+            out.extend_from_slice(&16000u32.to_le_bytes()); // byte rate
+            out.extend_from_slice(&2u16.to_le_bytes()); // block align
+            out.extend_from_slice(&16u16.to_le_bytes()); // bits
+            out.extend_from_slice(b"data");
+            out.extend_from_slice(&data_len.to_le_bytes());
+            out
+        }
+
+        fn temp_wav(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+            let dir = std::env::temp_dir().join(format!(
+                "ncm-growing-{tag}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            ));
+            std::fs::create_dir_all(&dir).unwrap();
+            let path = dir.join("t.wav");
+            (dir, path)
+        }
+
+        /// 边下边播的核心性质: 读到 EOF 时**阻塞**等新字节, 而不是当作播放结束.
+        ///
+        /// 场景: 文件先只有 header + 一半样本, 解码开始; 50ms 后另一个线程追加剩余
+        /// 样本并置 done。断言的样本数必须是"全部"而不是"先到的一半".
+        #[test]
+        fn blocks_at_eof_until_more_bytes_arrive() {
+            let (dir, path) = temp_wav("grow");
+            let total_samples = 4000usize;
+            let half = total_samples / 2;
+            let mut f = std::fs::File::create(&path).unwrap();
+            f.write_all(&wav_header(total_samples)).unwrap();
+            f.write_all(&vec![0u8; half * 2]).unwrap();
+            f.flush().unwrap();
+            drop(f);
+
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let file = GrowingFile::open(path.to_str().unwrap(), Arc::clone(&done)).unwrap();
+            let writer = {
+                let path = path.clone();
+                let done = Arc::clone(&done);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(50));
+                    let mut f = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .unwrap();
+                    f.write_all(&vec![0u8; (total_samples - half) * 2]).unwrap();
+                    f.flush().unwrap();
+                    done.store(true, std::sync::atomic::Ordering::Release);
+                })
+            };
+
+            let mut decoder = Decoder::builder()
+                .with_data(file)
+                .with_seekable(false)
+                .build()
+                .expect("wav 应该能解");
+            let mut got = 0usize;
+            while decoder.next().is_some() {
+                got += 1;
+                assert!(got <= total_samples, "解出的样本数不应超过文件里的样本数");
+            }
+            writer.join().unwrap();
+            assert_eq!(got, total_samples, "下载线程后来追加的半段也必须能播到");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// done 置位后立刻返回 EOF(下载结束/失败时不能把音频线程晾住)
+        #[test]
+        fn returns_eof_once_done() {
+            let (dir, path) = temp_wav("done");
+            std::fs::write(&path, wav_header(8)).unwrap();
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(true));
+            let mut f = GrowingFile::open(path.to_str().unwrap(), done).unwrap();
+            let mut buf = [0u8; 16];
+            let mut total = 0usize;
+            loop {
+                let n = f.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                total += n;
+            }
+            assert_eq!(total, 44, "只有 header 时读到 44 字节就该结束");
+            let _ = std::fs::remove_dir_all(&dir);
         }
     }
 }

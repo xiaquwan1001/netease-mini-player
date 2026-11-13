@@ -50,6 +50,19 @@ String formatOneDecimal(double value, String unit) {
   return trimmed + unit;
 }
 
+/// 数量级文案(喜欢人数/分享数这类"量级"展示): `999` / `3k+` / `1w+` / `2亿+`.
+///
+/// 口径与官方三档一致 —— 千以下给准确值, 千/万/亿三档只给**下界 + 加号**
+/// (不四舍五入也不给小数), 因为它表达的是"这个数量级", 不是精确计数。
+/// 评论数优先用上游自带文案 `CommentStats.commentCountDesc`("100w+"), 没有再走这里。
+String formatCountMagnitude(int n) {
+  if (n < 0) return '0';
+  if (n < 1000) return '$n';
+  if (n < 10000) return '${n ~/ 1000}k+';
+  if (n < 100000000) return '${n ~/ 10000}w+';
+  return '${n ~/ 100000000}亿+';
+}
+
 String formatDateYmd(BigInt ms) {
   final dt = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
   final mm = dt.month.toString().padLeft(2, '0');

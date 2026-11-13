@@ -11,6 +11,7 @@ mod likelist;
 mod lyric;
 mod lyric_new;
 mod song_detail;
+mod song_like_get;
 mod song_purchased;
 mod song_url_v1;
 mod song_wiki_summary;

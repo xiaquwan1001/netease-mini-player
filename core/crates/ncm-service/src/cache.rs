@@ -1,6 +1,8 @@
 //! 音频缓存: 直链有时效, 播完即缓存文件, 复播不再走网络.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 pub struct AudioCache {
     dir: PathBuf,
@@ -33,6 +35,75 @@ impl AudioCache {
         }
     }
 
+    /// 准备"边下边播": 清掉旧 `.part`、创建空文件, 立刻返回可读路径。
+    ///
+    /// 真正的字节由 [`Self::download_progressive`] 在后台写入。
+    /// 先创建空文件是必须的: 播放线程可能在第一个字节到达前就 open。
+    pub fn start_progressive(&self, track_id: u64, url: &str) -> Result<ProgressiveFetch, String> {
+        let final_path = self.path_for(track_id, url);
+        let part_path = final_path.with_extension("part");
+        // 上一轮中断留下的残片会让播放器从旧数据开始解码, 必须先删
+        let _ = std::fs::remove_file(&part_path);
+        std::fs::File::create(&part_path).map_err(|e| e.to_string())?;
+        Ok(ProgressiveFetch {
+            part_path,
+            final_path,
+            done: Arc::new(AtomicBool::new(false)),
+        })
+    }
+
+    /// 流式下载到 `.part`, 完成后原子 rename 成正式缓存文件。
+    ///
+    /// 无论成功失败都置位 `done`: 失败时删掉残片, 播放线程立刻结束阻塞而不是挂死。
+    pub async fn download_progressive(
+        &self,
+        url: &str,
+        fetch: ProgressiveFetch,
+    ) -> Result<PathBuf, String> {
+        let result = Self::stream_to_part(url, &fetch.part_path).await;
+        // 注意: 此时播放线程**正开着** .part。Linux/macOS 允许 rename 打开中的文件;
+        // Windows 不允许, 所以桌面 Windows 仍走"下完再播"的旧通道(见 ncm-ffi)。
+        let outcome = match result {
+            Ok(size) if size >= 64 * 1024 => std::fs::rename(&fetch.part_path, &fetch.final_path)
+                .map(|()| fetch.final_path.clone())
+                .map_err(|e| e.to_string()),
+            Ok(size) => {
+                let _ = std::fs::remove_file(&fetch.part_path);
+                Err(format!("suspiciously small audio: {size} bytes"))
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(&fetch.part_path);
+                Err(e)
+            }
+        };
+        fetch.done.store(true, Ordering::Release);
+        outcome
+    }
+
+    /// 按块把响应体写进本地文件(每块都 flush: 播放线程按文件长度感知"有新数据")
+    async fn stream_to_part(url: &str, part: &Path) -> Result<u64, String> {
+        use futures::StreamExt;
+        use std::io::Write;
+        let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
+        if !resp.status().is_success() {
+            return Err(format!("http {}", resp.status()));
+        }
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(part)
+            .map_err(|e| e.to_string())?;
+        let mut stream = resp.bytes_stream();
+        let mut total = 0u64;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            file.write_all(&chunk).map_err(|e| e.to_string())?;
+            file.flush().map_err(|e| e.to_string())?;
+            total += chunk.len() as u64;
+        }
+        Ok(total)
+    }
+
     /// 下载到临时文件后原子改名; 已存在则直接返回.
     pub async fn fetch(&self, track_id: u64, url: &str) -> Result<PathBuf, String> {
         if let Some(p) = self.cached(track_id, url) {
@@ -52,6 +123,20 @@ impl AudioCache {
         std::fs::rename(&tmp, &final_path).map_err(|e| e.to_string())?;
         Ok(final_path)
     }
+}
+
+/// 边下边播的句柄.
+///
+/// [`Self::part_path`] 是**会持续增长的临时文件**: 播放器一开始就 open 它,
+/// 读到"暂时没有新字节"时阻塞等待; 下载结束后 [`Self::done`] 置位, 读取才返回 EOF。
+/// 全部下完再原子 rename 成正式缓存文件(下次直接命中 [`AudioCache::cached_path`])。
+pub struct ProgressiveFetch {
+    /// 播放器读取的临时文件(增长中)
+    pub part_path: PathBuf,
+    /// 下载完成后的正式缓存路径
+    pub final_path: PathBuf,
+    /// 不会再产生新字节了(成功/失败都会置位, 否则播放线程永远阻塞)
+    pub done: Arc<AtomicBool>,
 }
 
 /// 一次容量收敛的结果(R5: 缓存占用上限)

@@ -438,14 +438,17 @@ void main() {
     expect(find.text('open'), findsOneWidget);
     expect(find.text('以父之名'), findsNothing);
 
-    // 再进一次, 点曲目 → 回调整张专辑(语义不变)
+    // 再进一次, 点曲目 → 回调整张专辑, 且**留在专辑页**(2026-11 行为变更)
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('晴天'));
     await tester.pumpAndSettle();
     expect(played?.length, 2);
     expect(playedIndex, 1);
-    expect(find.text('open'), findsOneWidget);
+    // 之前点曲目会 Navigator.pop 掉整页; 现在只换队列, 与歌单详情页一致
+    expect(find.text('open'), findsNothing);
+    expect(find.text('晴天'), findsOneWidget);
+    expect(find.byType(AppBar), findsOneWidget);
   });
 
   // ---------------- 5) 日推 / 最近听过 sheet → 全页 ----------------
@@ -471,6 +474,12 @@ void main() {
     // 全页: 没有 BottomSheet, 有 AppBar
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.byType(AppBar), findsOneWidget);
+    expect(find.text('每日推荐'), findsOneWidget);
+
+    // 点日推里的歌: 只开始播放, 页面留在日推(修复"点一首就被弹回首页")
+    await tester.tap(find.text('晴天'));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsNothing);
     expect(find.text('每日推荐'), findsOneWidget);
 
     await tester.tap(find.text('历史日推'));

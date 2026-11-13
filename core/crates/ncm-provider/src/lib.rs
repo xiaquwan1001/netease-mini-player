@@ -13,9 +13,9 @@ use ncm_domain::{
     MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile, ProfileDetail,
     QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact,
-    SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent, Song, SongPurchasedPage,
-    StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, TrackId, UserItem, UserLevel,
-    VipOverview, WikiFact, WordLyric,
+    SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent, Song, SongLikeState,
+    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, TrackId, UserItem,
+    UserLevel, VipOverview, WikiFact, WordLyric,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -68,6 +68,8 @@ pub enum Capability {
     Signin,
     /// 歌曲百科(曲风/语种/BPM/获奖)
     Wiki,
+    /// 单曲喜欢状态 + 喜欢总数(需要登录; 官方 App 的 /api/song/like/get)
+    SongLike,
     /// 消息中心(私信/通知/评论)
     Message,
     /// 黑胶会员只读(等级/成长值/签到/任务)
@@ -112,6 +114,7 @@ impl Capability {
             Capability::Similar => "similar",
             Capability::Signin => "signin",
             Capability::Wiki => "wiki",
+            Capability::SongLike => "songLike",
             Capability::Message => "message",
             Capability::Vip => "vip",
             Capability::DigitalAlbum => "digitalAlbum",
@@ -1074,6 +1077,11 @@ pub trait Provider: Send + Sync {
     /// 歌曲百科(曲风/语种/BPM/获奖成就...). 没有百科时返回空列表.
     fn song_wiki(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
         Box::pin(async { Err(ProviderError::unsupported("no song wiki")) })
+    }
+
+    /// 单曲喜欢状态 + 喜欢总数(需要登录; 老 provider 不支持时报 unsupported).
+    fn song_like_state(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<SongLikeState>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song like state")) })
     }
 
     /// 未读消息计数(需登录)
