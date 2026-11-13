@@ -8,7 +8,7 @@ import os, re, sys
 from pathlib import Path
 
 VENDOR = "core/vendor/ncm-api/src/api"
-# provider 实现 2026-11-2x 起按能力域拆成模块目录(netease/mod.rs + netease/*.rs);
+# provider 实现 2026-11-13 起按能力域拆成模块目录(netease/mod.rs + netease/*.rs);
 # 单文件时代遗留路径仍兼容, 便于对老 tag 跑同一份统计.
 SERVICE = Path("core/crates/ncm-service/src/netease.rs")
 FFI = "core/crates/ncm-ffi/src/api.rs"
