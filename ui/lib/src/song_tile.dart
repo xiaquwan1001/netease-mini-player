@@ -254,6 +254,9 @@ class SongTile extends StatelessWidget {
               tooltip: liked ? '取消喜欢' : '喜欢',
               iconSize: 20,
               padding: EdgeInsets.zero,
+              // tapTargetSize 默认 padded 会强行把命中区撑到 48x48(压掉 constraints),
+              // 这正是"改了 minWidth 却仍占 48dp"的原因。shrinkWrap 后宽度才真的是 40。
+              style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
               constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
               icon: Icon(
                 liked ? Icons.favorite : Icons.favorite_border,
@@ -267,6 +270,9 @@ class SongTile extends StatelessWidget {
               tooltip: '更多操作',
               iconSize: 20,
               padding: EdgeInsets.zero,
+              // tapTargetSize 默认 padded 会强行把命中区撑到 48x48(压掉 constraints),
+              // 这正是"改了 minWidth 却仍占 48dp"的原因。shrinkWrap 后宽度才真的是 40。
+              style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
               constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
               icon: const Icon(Icons.more_vert),
               onPressed: onMenu,

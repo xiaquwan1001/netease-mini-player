@@ -165,11 +165,13 @@ void main() {
     var totalWidth = 0.0;
     for (final tooltip in ['取消喜欢', '更多操作']) {
       final size = tester.getSize(find.byTooltip(tooltip));
-      expect(size.width, greaterThanOrEqualTo(40), reason: tooltip);
+      // 40 是硬口径: IconButton 默认 tapTargetSize.padded 会把命中区撑到 48,
+      // 必须显式 shrinkWrap 才能真的让出横向空间(已踩过)。
+      expect(size.width, closeTo(40, 0.5), reason: tooltip);
       expect(size.height, greaterThanOrEqualTo(48), reason: tooltip);
       totalWidth += size.width;
     }
-    expect(totalWidth, lessThanOrEqualTo(88));
+    expect(totalWidth, lessThanOrEqualTo(82));
   });
 
   // 300dp(用户的 vivo 逻辑宽)+1.25 字号下, 行尾「时长 + 红心 + ...」占满 146dp,
