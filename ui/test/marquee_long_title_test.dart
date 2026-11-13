@@ -31,6 +31,38 @@ Widget _host(String text, {bool reduceMotion = false}) {
   );
 }
 
+/// 不给 MarqueeText 传 style、只靠 DefaultTextStyle 提供字号(与 AppBar 标题同款).
+Widget _hostInherited(
+  String text, {
+  double fontSize = 20,
+  double width = 200,
+  String Function(String text)? rebuildWith,
+}) {
+  Widget build(String t) => MaterialApp(
+    home: MediaQuery(
+      data: const MediaQueryData(
+        size: Size(600, 600),
+        textScaler: TextScaler.linear(1.25),
+      ),
+      // 注意: DefaultTextStyle 必须放在 Scaffold/Material 之内 —— Material 会用自己的
+      // DefaultTextStyle 覆盖外层, 放在外面测的就不是"继承字号"场景了.
+      child: Scaffold(
+        body: DefaultTextStyle(
+          style: TextStyle(fontSize: fontSize),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(width: width, child: MarqueeText(t)),
+          ),
+        ),
+      ),
+    ),
+  );
+  if (rebuildWith == null) return build(text);
+  return StatefulBuilder(
+    builder: (context, setState) => build(rebuildWith(text)),
+  );
+}
+
 void main() {
   testWidgets('超长歌名: textScale 1.25 下单行渲染, 不溢出不抛错', (tester) async {
     await tester.pumpWidget(_host('一首非常非常非常长的歌名' * 6));
@@ -170,6 +202,49 @@ void main() {
       }
     }
     expect(jumps, greaterThanOrEqualTo(1), reason: '6s 窗口内应至少循环一次(证明会回到起点)');
+  });
+
+  // v0.7.2 根因修复: 测量没合并 DefaultTextStyle。AppBar 标题不传 style、靠继承 20sp,
+  // 而 TextPainter 默认按 14sp 量 => 判成"放得下"但真实渲染溢出, 被 ellipsis 截掉。
+  testWidgets('继承字号(DefaultTextStyle 20sp): 真实溢出必须滚(旧实现按 14sp 误判放得下)', (
+    tester,
+  ) async {
+    // 10 个汉字 * 20sp * 1.25 = 250px > 200px 视口; 按 14sp 量只有 175px(会误判放得下)
+    await tester.pumpWidget(_hostInherited('一二三四五六七八九十'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(_marqueeTransform(tester), findsOneWidget);
+  });
+
+  testWidgets('继承字号: 真的放得下时仍不滚', (tester) async {
+    await tester.pumpWidget(_hostInherited('一二三四五六七八九十', width: 400));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(_marqueeTransform(tester), findsNothing);
+  });
+
+  // 溢出死区: 溢出 4px < minMarqueeOverflow(8) 不该滚(否则"明明放得下却在动")
+  testWidgets('溢出小于死区(8px): 不滚', (tester) async {
+    await tester.pumpWidget(_hostInherited('一二三四五六七八九十', width: 246));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(_marqueeTransform(tester), findsNothing);
+  });
+
+  // 父级每帧重建(文本用插值字符串 => 每帧新实例)时, 动画 key 不能跟着变,
+  // 否则 _start 会反复把 offset 拉回 0 —— 视觉是"一直在滚但总停在开头"。
+  testWidgets('父级每帧重建: 滚动位置继续前进, 不回到起点', (tester) async {
+    await tester.pumpWidget(
+      _hostInherited('长歌名占位', width: 120, rebuildWith: (t) => '一首非常非常长的歌名' * 3),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1200));
+    final p1 = _marqueeOffset(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    final p2 = _marqueeOffset(tester);
+    expect(p1, isNotNull);
+    expect(p2, isNotNull);
+    expect(p2!, lessThan(p1!), reason: '滚动应当继续向左, 不应被重建重置回起点');
   });
 
   testWidgets('reduce motion: 不打动画, 单行不溢出', (tester) async {

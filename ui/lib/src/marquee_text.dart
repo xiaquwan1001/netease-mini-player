@@ -9,7 +9,13 @@ import 'package:flutter/material.dart';
 /// - 系统开启 reduce motion(MediaQuery.disableAnimations)时退化为 ellipsis,
 ///   不打任何动画.
 class MarqueeText extends StatefulWidget {
-  const MarqueeText(this.text, {super.key, this.style, this.maxLines = 1});
+  const MarqueeText(
+    this.text, {
+    super.key,
+    this.style,
+    this.maxLines = 1,
+    this.minMarqueeOverflow = 8,
+  });
 
   final String text;
 
@@ -18,6 +24,12 @@ class MarqueeText extends StatefulWidget {
 
   /// 仅供语义/退化路径使用; 跑马灯本体永远单行.
   final int maxLines;
+
+  /// 触发滚动的最小溢出量(px).
+  ///
+  /// 溢出几像素就滚一整轮会显得"明明放得下却在动"(用户反馈), 因此留一条死区;
+  /// 落在死区里的文本按 ellipsis 静止显示.
+  final double minMarqueeOverflow;
 
   @override
   State<MarqueeText> createState() => _MarqueeTextState();
@@ -46,7 +58,7 @@ class _MarqueeTextState extends State<MarqueeText>
   /// TweenSequence(AnimationController.duration 可变), 彻底避免二次 createTicker。
 
   /// 标识当前动画对应的 (文本, 视口宽) 组合; 变了就要重建.
-  String? _animKey;
+  int? _animKey;
 
   @override
   void dispose() {
@@ -56,9 +68,22 @@ class _MarqueeTextState extends State<MarqueeText>
     super.dispose();
   }
 
-  /// 用与真实渲染一致的 textScaler 测量单行宽度与行高.
-  /// 之前漏传 textScaler(默认 1.0), 用户开大字体(如 1.25)时测得宽度偏小 25%,
-  /// 导致"放得下"误判不滚动, 或临界时真实文本撑破父约束(Right overflowed by 8.6px).
+  /// 用与真实渲染一致的 style + textScaler 测量单行宽度与行高.
+  ///
+  /// 两个历史 bug 都因"测量口径 != 渲染口径":
+  /// 1. 漏传 textScaler(默认 1.0): 用户开大字体(如 1.25)时测得宽度偏小 25%,
+  ///    导致"放得下"误判不滚动, 或临界时真实文本撑破父约束(Right overflowed by 8.6px);
+  /// 2. 漏合并 DefaultTextStyle: [Text] 是按 DefaultTextStyle.style.merge(style) 渲染的,
+  ///    只拿 widget.style 测量会偏小(典型: AppBar 标题不传 style, 继承 20sp, 而测量按
+  ///    TextPainter 默认 14sp), 于是"放得下"误判、滚动距离也算短. 见 [effectiveStyle].
+  /// 与 [Text] 内部一致的有效样式: DefaultTextStyle.style.merge(widget.style).
+  /// 测量与渲染必须都用这一份, 否则宽度对不上(见 [_measure] 注释).
+  TextStyle effectiveStyle(BuildContext context) {
+    final base = DefaultTextStyle.of(context).style;
+    final style = widget.style;
+    return style == null ? base : base.merge(style);
+  }
+
   (double width, double height) _measure(
     String text,
     TextStyle? style,
@@ -75,7 +100,7 @@ class _MarqueeTextState extends State<MarqueeText>
     return size;
   }
 
-  void _start(double distance, String key) {
+  void _start(double distance, int key) {
     // 无论 key 是否仍有效都先消费在途标志, 否则失效回调会让后续重排永远无法再调度。
     _startScheduled = false;
     if (!mounted || _animKey != key) return;
@@ -128,24 +153,26 @@ class _MarqueeTextState extends State<MarqueeText>
       builder: (context, constraints) {
         final maxWidth = constraints.maxWidth;
         final scaler = MediaQuery.textScalerOf(context);
+        // 测量与渲染共用同一份有效样式(DefaultTextStyle.merge(style)),
+        // 否则 AppBar 这类「不传 style、靠继承」的场景宽度会算错(见 _measure 注释).
+        final effective = effectiveStyle(context);
         final (textWidth, textHeight) = _measure(
           widget.text,
-          widget.style,
+          effective,
           scaler,
         );
         final plain = Text(
           widget.text,
-          style: widget.style,
+          style: effective,
           maxLines: 1,
           softWrap: false,
           overflow: TextOverflow.ellipsis,
         );
         // 宽度无界(如 UnconstrainedBox 里): 退化为 ellipsis, 不测量不滚动.
         if (!maxWidth.isFinite) return plain;
-        // 容差 1px: 文本宽度与视口宽度在亚像素级相等时(常见于 Expanded 恰好撑满),
-        // 之前会被判成"放不下", 于是为了 24px 的尾部空隙白白滚动起来(用户反馈:
-        // 明明能一次性展示的歌名也在滚)。真的溢出 >1px 才进入跑马灯。
-        final fits = textWidth <= maxWidth + 1.0;
+        // 是否值得滚: 溢出必须超过死区 minMarqueeOverflow(默认 8px).
+        // 之前用的是一条 1px 容差, 溢出 2px 也会滚一整轮 -> 看起来"明明放得下却在动".
+        final fits = textWidth - maxWidth <= widget.minMarqueeOverflow;
         if (fits || reduceMotion) {
           if (_offset != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -156,8 +183,10 @@ class _MarqueeTextState extends State<MarqueeText>
         }
         // 需要滚动: 单行 + ClipRect + 位移.
         final distance = textWidth - maxWidth + _tailGap;
-        final key =
-            '${identityHashCode(widget.text)}|$maxWidth|${scaler.hashCode}';
+        // key 必须按「内容」而不是 identityHashCode(String): 父级每次重建都会产生
+        // 新的 String 实例(如 '已选 $n 句'), 用实例身份会让 key 每帧变化 -> _start 反复
+        // 从 0 重播, 视觉上是"一直在滚但总停在开头".
+        final key = Object.hash(widget.text, maxWidth, scaler, effective);
         if (!_startScheduled && (_offset == null || _animKey != key)) {
           _animKey = key;
           _startScheduled = true;
@@ -176,33 +205,37 @@ class _MarqueeTextState extends State<MarqueeText>
                     heightFactor: 1,
                     child: plain,
                   )
-                : AnimatedBuilder(
-                    animation: _offset!,
-                    builder: (context, _) {
+                : RepaintBoundary(
+                    child: AnimatedBuilder(
+                      animation: _offset!,
                       // 滚动中的文本必须按"测量出的全文宽"自由排版:
                       // 若仍吃 SizedBox 的 maxWidth, 会先被 ellipsis/clip 截到
                       // 视口宽再整体平移 => "滚的只是被截断的那一截".
                       // OverflowBox 把子项约束放宽到全文宽(高度钉在实测行高),
                       // 配合外层 ClipRect 裁切.
-                      return OverflowBox(
+                      //
+                      // child 只在这里构造一次: 之前把它写在 builder 里, 等于每帧
+                      // 新建一个 Text => 每帧重排整段 paragraph(跑马灯丢帧/耗电的真源).
+                      child: OverflowBox(
                         alignment: Alignment.centerLeft,
                         minWidth: textWidth,
                         maxWidth: textWidth,
                         minHeight: textHeight,
                         maxHeight: textHeight,
-                        child: Transform.translate(
-                          offset: Offset(-_offset!.value, 0),
-                          child: Text(
-                            widget.text,
-                            style: widget.style,
-                            maxLines: 1,
-                            softWrap: false,
-                            overflow: TextOverflow.visible,
-                            textScaler: scaler,
-                          ),
+                        child: Text(
+                          widget.text,
+                          style: effective,
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
+                          textScaler: scaler,
                         ),
-                      );
-                    },
+                      ),
+                      builder: (context, child) => Transform.translate(
+                        offset: Offset(-_offset!.value, 0),
+                        child: child,
+                      ),
+                    ),
                   ),
           ),
         );
