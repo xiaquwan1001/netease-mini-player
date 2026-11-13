@@ -530,11 +530,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 发送私信(需登录)
-    fn private_send(
-        &self,
-        user_id: u64,
-        content: String,
-    ) -> BoxFuture<'_, ProviderResult<bool>> {
+    fn private_send(&self, user_id: u64, content: String) -> BoxFuture<'_, ProviderResult<bool>> {
         NeteaseProvider::private_send(self, user_id, content)
     }
 

@@ -74,26 +74,18 @@ impl NeteaseProvider {
             let kw = query.keywords.as_str();
             let song_limit = query.limit.max(1);
             let side_limit = 10u32;
-            let (
-                (
-                    song_body,
-                    artist_body,
-                    album_body,
-                    playlist_body,
-                    podcast_body,
-                ),
-                user_body,
-            ) = futures::future::join(
-                futures::future::join5(
-                    self.cloudsearch_body(kw, 1, song_limit, query.offset),
-                    self.cloudsearch_body(kw, 100, side_limit, 0),
-                    self.cloudsearch_body(kw, 10, side_limit, 0),
-                    self.cloudsearch_body(kw, 1000, side_limit, 0),
-                    self.cloudsearch_body(kw, 1009, side_limit, 0),
-                ),
-                self.cloudsearch_body(kw, 1002, side_limit, 0),
-            )
-            .await;
+            let ((song_body, artist_body, album_body, playlist_body, podcast_body), user_body) =
+                futures::future::join(
+                    futures::future::join5(
+                        self.cloudsearch_body(kw, 1, song_limit, query.offset),
+                        self.cloudsearch_body(kw, 100, side_limit, 0),
+                        self.cloudsearch_body(kw, 10, side_limit, 0),
+                        self.cloudsearch_body(kw, 1000, side_limit, 0),
+                        self.cloudsearch_body(kw, 1009, side_limit, 0),
+                    ),
+                    self.cloudsearch_body(kw, 1002, side_limit, 0),
+                )
+                .await;
             let song_body = song_body?;
             let page = parse_search(&song_body)?;
             let result_of = |b: ProviderResult<Value>| -> Option<Value> {
@@ -400,10 +392,7 @@ pub fn parse_search_users(result: &Value) -> Vec<UserItem> {
                             .or_else(|| str_of(u, "picUrl"))
                             .filter(|s| s.starts_with("http")),
                         signature: str_of(u, "signature").unwrap_or_default(),
-                        followed: u
-                            .get("followed")
-                            .and_then(Value::as_bool)
-                            .unwrap_or(false),
+                        followed: u.get("followed").and_then(Value::as_bool).unwrap_or(false),
                     })
                 })
                 .collect()

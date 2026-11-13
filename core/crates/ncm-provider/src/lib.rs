@@ -7,16 +7,15 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMvPage, ArtistSongPage,
-    ChartSummary,
-    CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
-    DigitalAlbumSalesEntry, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchDetailItem,
-    HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome,
-    PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio,
-    PrivateMessage, PrivateSession, Profile, ProfileDetail, QrLoginKey, QrLoginOutcome,
-    RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact, SearchBundle, SearchExact,
-    SearchPage, SigninStatus, SmsCodeSent, Song, SongPurchasedPage, StreamUrl, StyleTag,
-    SuggestItem, ToplistCatalogGroup, TrackId, UserItem, UserLevel, VipOverview, WikiFact,
-    WordLyric,
+    ChartSummary, CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail,
+    DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FollowCount, ForwardItem, HotArtist,
+    HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts, MvDetail,
+    MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile, ProfileDetail,
+    QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact,
+    SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent, Song, SongPurchasedPage,
+    StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, TrackId, UserItem, UserLevel,
+    VipOverview, WikiFact, WordLyric,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -1102,11 +1101,7 @@ pub trait Provider: Send + Sync {
     }
 
     /// 发送私信(需登录). 上游 /api/msg/private/send, 纯文本.
-    fn private_send(
-        &self,
-        _user_id: u64,
-        _content: String,
-    ) -> BoxFuture<'_, ProviderResult<bool>> {
+    fn private_send(&self, _user_id: u64, _content: String) -> BoxFuture<'_, ProviderResult<bool>> {
         Box::pin(async { Err(ProviderError::unsupported("no private send")) })
     }
 

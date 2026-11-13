@@ -2733,10 +2733,7 @@ pub async fn private_history(
 
 /// 发送私信(需登录). 纯文本, 成功后应重拉 [private_history] 刷新会话.
 pub async fn private_send(user_id: u64, content: String) -> Result<bool, String> {
-    ffi_forward!(
-        Capability::Message,
-        provider.private_send(user_id, content)
-    )
+    ffi_forward!(Capability::Message, provider.private_send(user_id, content))
 }
 
 #[frb(mirror(InboxItem))]
