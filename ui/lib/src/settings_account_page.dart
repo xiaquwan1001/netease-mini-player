@@ -4,11 +4,14 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart' show VipBadge;
 
-/// 账号与会员二级页 —— 全 App **唯一**的账号面(审查 P1-7.9 / P1-7.10)。
+/// 账号页 —— 全 App **唯一**的账号面(账号簿/切换/添加/退出登录/清除凭据)。
 ///
-/// 从设置页搬出来的原因: 「退出登录/切换账号/黑胶会员」都是"我的东西",
-/// 用户的心理模型在「我的」而不是「设置」。入口只剩「我的」页资料头
-/// (ProfileHeader 整块点击 + 右上角药丸), 见 mine_view.dart。
+/// 入口只有一处: 设置 → 账号与会员(2026-11 用户反馈: 「我的」页曾经同时有
+/// 资料头整块点击 + 右上角「账号管理」药丸 + 未登录时的「账号管理」按钮,
+/// 三处指向同一页, 且资料头下面还漏出一条可点的横条)。现在「我的」页只展示
+/// 资料, 账号管理统一放在设置里。
+///
+/// 会员/签到不在这里: 它已经在「我的」页直接展示, 二级页再放一份就是重复。
 ///
 /// 账号簿列表、切换、忘记账号的行为与原 main.dart 的 _showAccountSheet
 /// 一致; 网络/FFI 失败不阻塞页面(只影响列表)。
@@ -19,14 +22,12 @@ Future<void> showAccountPage(
   required VoidCallback onLogin,
   required Future<void> Function() onLogout,
 
-  /// 打开黑胶会员页(不传则不显示入口)
-  VoidCallback? onOpenVip,
-
   /// 测试注入: 账号簿
   Future<List<rust.AccountDto>> Function()? loadAccounts,
 
-  /// 切换账号(缺省只调 rust.accountSwitch)
-  Future<void> Function(rust.AccountDto account)? onSwitchAccount,
+  /// 切换账号(缺省只调 rust.accountSwitch). 返回值 = 是否真的切成功
+  /// (账号簿里没存凭据时是 false, 页面据此决定要不要把登录态翻成"已登录")
+  Future<bool> Function(rust.AccountDto account)? onSwitchAccount,
 
   /// 忘记账号(缺省只调 rust.accountRemove)
   Future<void> Function(rust.AccountDto account)? onRemoveAccount,
@@ -42,7 +43,6 @@ Future<void> showAccountPage(
         isAndroid: isAndroid,
         onLogin: onLogin,
         onLogout: onLogout,
-        onOpenVip: onOpenVip,
         loadAccounts: loadAccounts,
         onSwitchAccount: onSwitchAccount,
         onRemoveAccount: onRemoveAccount,
@@ -59,7 +59,6 @@ class AccountPage extends StatefulWidget {
     required this.isAndroid,
     required this.onLogin,
     required this.onLogout,
-    this.onOpenVip,
     this.loadAccounts,
     this.onSwitchAccount,
     this.onRemoveAccount,
@@ -70,9 +69,8 @@ class AccountPage extends StatefulWidget {
   final bool isAndroid;
   final VoidCallback onLogin;
   final Future<void> Function() onLogout;
-  final VoidCallback? onOpenVip;
   final Future<List<rust.AccountDto>> Function()? loadAccounts;
-  final Future<void> Function(rust.AccountDto account)? onSwitchAccount;
+  final Future<bool> Function(rust.AccountDto account)? onSwitchAccount;
   final Future<void> Function(rust.AccountDto account)? onRemoveAccount;
   final Future<void> Function()? onPurgeLocal;
 
@@ -82,9 +80,8 @@ class AccountPage extends StatefulWidget {
 
 class _AccountPageState extends State<AccountPage> {
   List<rust.AccountDto> _accounts = const [];
-  rust.CredentialStatusDto? _credStatus;
 
-  /// 登录态以入参为初值, 页面内退出后就地翻转(父层 push 时捕获的是快照)
+  /// 登录态以入参为初值, 页面内退出/切号后就地翻转(父层 push 时捕获的是快照)
   late bool _loggedIn = widget.info?.loggedIn == true;
   bool _busy = false;
 
@@ -92,16 +89,6 @@ class _AccountPageState extends State<AccountPage> {
   void initState() {
     super.initState();
     _loadAccounts();
-    _loadCredentialStatus();
-  }
-
-  /// 凭据后端状态(lane p1): Android 应显示 android-keystore; 失败静默(仅展示用).
-  Future<void> _loadCredentialStatus() async {
-    try {
-      final status = await rust.credentialStatus();
-      if (!mounted) return;
-      setState(() => _credStatus = status);
-    } catch (_) {}
   }
 
   Future<void> _loadAccounts() async {
@@ -121,21 +108,28 @@ class _AccountPageState extends State<AccountPage> {
     return null;
   }
 
+  /// 点账号簿里的一行 = 切过去(未登录时就是"用这个账号重新登录")。
   Future<void> _switch(rust.AccountDto account) async {
     if (_busy) return;
     setState(() => _busy = true);
+    var ok = false;
     try {
       final handler = widget.onSwitchAccount;
       if (handler != null) {
-        await handler(account);
+        ok = await handler(account);
       } else {
-        await rust.accountSwitch(userId: account.userId);
+        ok = await rust.accountSwitch(userId: account.userId);
       }
     } catch (_) {
       // 上层已 toast; 这里只保证 UI 不卡
     }
     if (!mounted) return;
-    setState(() => _busy = false);
+    setState(() {
+      _busy = false;
+      // 切号成功(账号簿里有可用的 MUSIC_U)就是把登录态翻回"已登录",
+      // 这才是用户点一行的预期; 失败时保持原登录态不变。
+      if (ok) _loggedIn = true;
+    });
     await _loadAccounts();
   }
 
@@ -161,7 +155,7 @@ class _AccountPageState extends State<AccountPage> {
   }
 
   /// 清除本机凭据(隐私用途): 退出登录 + 忘掉账号簿里的每个账号.
-  /// 二次确认, 因为不可撤销(要重新扫码).
+  /// 二次确认, 因为不可撤销(要重新登录).
   Future<void> _purge() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -204,7 +198,7 @@ class _AccountPageState extends State<AccountPage> {
     final nickname = active?.nickname;
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('账号与会员')),
+      appBar: AppBar(title: const Text('账号管理')),
       body: ListView(
         // 手势条留白(审查 P1-7.15)
         padding: EdgeInsets.fromLTRB(
@@ -260,20 +254,6 @@ class _AccountPageState extends State<AccountPage> {
                 subtitle: Text('点「登录」用手机网易云 App 扫码; 也可以导入浏览器里的 MUSIC_U'),
               ),
             ),
-          if (widget.onOpenVip != null) ...[
-            const SizedBox(height: 16),
-            const _SectionTitle('会员'),
-            Card(
-              margin: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.workspace_premium_outlined),
-                title: const Text('黑胶会员'),
-                subtitle: const Text('签到/任务/成长值(只读)'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: widget.onOpenVip,
-              ),
-            ),
-          ],
           const SizedBox(height: 16),
           const _SectionTitle('账号簿'),
           Card(
@@ -311,7 +291,7 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                     subtitle: Text(
                       account.active
-                          ? (_loggedIn ? '当前账号' : '上次登录的账号(当前未登录)')
+                          ? (_loggedIn ? '当前账号' : '上次登录 · 点击重新登录')
                           : '点击切换',
                     ),
                     trailing: IconButton(
@@ -319,7 +299,11 @@ class _AccountPageState extends State<AccountPage> {
                       tooltip: '忘记这个账号',
                       onPressed: () => _remove(account),
                     ),
-                    onTap: account.active ? null : () => _switch(account),
+                    // 未登录时"当前账号"这一行也必须可点: 账号簿里存着 MUSIC_U,
+                    // 点一下就能登回去(以前 active 行永远是 null ⇒ 只能重新扫码)。
+                    onTap: (account.active && _loggedIn)
+                        ? null
+                        : () => _switch(account),
                   ),
                 const Divider(height: 1),
                 ListTile(
@@ -343,16 +327,6 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
-          const _SectionTitle('凭据存储'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              leading: const Icon(Icons.enhanced_encryption_outlined),
-              title: Text(_credStatus?.backend ?? '...'),
-              subtitle: Text(_credStatus?.note ?? '凭据后端状态不可用'),
-            ),
-          ),
           if (_accounts.isNotEmpty) ...[
             const SizedBox(height: 16),
             const _SectionTitle('隐私'),
@@ -364,7 +338,7 @@ class _AccountPageState extends State<AccountPage> {
                   color: theme.colorScheme.error,
                 ),
                 title: const Text('清除本机登录凭据'),
-                subtitle: const Text('退出登录并删掉账号簿里的 MUSIC_U(共用电脑/出二手前用)'),
+                subtitle: const Text('退出登录并删除本机保存的全部账号凭据, 之后需要重新登录'),
                 onTap: _purge,
               ),
             ),

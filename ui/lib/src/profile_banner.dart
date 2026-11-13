@@ -340,19 +340,27 @@ class ProfileBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    // 身份卡「压在」图下沿 kProfileIdentityLift: 用 Stack 让两者真正重叠。
+    //
+    // 之前是 Transform.translate(-12) + 一条 12dp 的 surface 补色条: transform 不改
+    // 布局占位, 于是卡片底下**多出**一条 12dp 纯色横条(用户报「昵称/关注数下面还遮了
+    // 一条横条, 点漏出来的部分也进账号管理」)。Stack 不产生额外高度, 也不用补色条。
+    return Stack(
       children: [
-        ProfileBannerImage(
-          url: imageUrl,
-          height: height,
-          overlay: overlay,
-          fetchOverride: fetchOverride,
-          saveOverride: saveOverride,
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: ProfileBannerImage(
+            url: imageUrl,
+            height: height,
+            overlay: overlay,
+            fetchOverride: fetchOverride,
+            saveOverride: saveOverride,
+          ),
         ),
-        Transform.translate(
-          offset: const Offset(0, -kProfileIdentityLift),
+        Padding(
+          padding: EdgeInsets.only(top: height - kProfileIdentityLift),
           child: ProfileIdentity(
             title: title,
             subtitle: subtitle,
@@ -364,8 +372,6 @@ class ProfileBanner extends StatelessWidget {
             footer: footer,
           ),
         ),
-        // 上浮留出的空档: 用身份卡同色补齐, 免得露出一条卡片底色
-        Container(height: kProfileIdentityLift, color: scheme.surface),
       ],
     );
   }

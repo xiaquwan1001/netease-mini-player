@@ -64,15 +64,21 @@ class MainActivity : FlutterActivity() {
         val auth = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/auth")
         auth.setMethodCallHandler { call, result ->
             when (call.method) {
+                // 每次打开登录页前清掉 WebView cookie: 已登录时打开的登录页会读到旧
+                // MUSIC_U, 直接判定"已登录"并原地返回 ⇒ 无法添加第二个账号(2026-11 用户报).
+                // 账号簿(Rust 侧)不受影响, 这里清的是 WebView 自己的 cookie 仓库。
                 "loginWeb" -> {
                     if (pendingLogin != null) {
                         result.error("login_busy", "登录页已经打开了", null)
                     } else {
                         pendingLogin = result
-                        startActivityForResult(
-                            Intent(this, LoginActivity::class.java),
-                            LoginActivity.REQUEST_CODE,
-                        )
+                        CookieManager.getInstance().removeAllCookies {
+                            CookieManager.getInstance().flush()
+                            startActivityForResult(
+                                Intent(this, LoginActivity::class.java),
+                                LoginActivity.REQUEST_CODE,
+                            )
+                        }
                     }
                 }
                 // 退出/切换账号时必须清掉 WebView 的 cookie, 否则再开登录页会以旧账号自动登录

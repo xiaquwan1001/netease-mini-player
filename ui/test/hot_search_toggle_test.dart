@@ -55,18 +55,21 @@ void main() {
     expect(find.text('周杰伦'), findsOneWidget);
   });
 
-  testWidgets('点「开启」/「关闭」按钮直接改设置, 无需跳设置页', (tester) async {
+  testWidgets('只有一个开关按钮: 「开启」/「关闭」直接改设置, 不再有重复的 ❌', (tester) async {
     AppSettings.instance.showHotSearch = false;
     await tester.pumpWidget(host(landing));
+    expect(find.byIcon(Icons.close), findsNothing, reason: '右侧 ❌ 与开关功能重复, 已删除');
     await tester.tap(find.text('开启'));
     await tester.pumpAndSettle();
     expect(AppSettings.instance.showHotSearch, isTrue);
     expect(find.text('晴天'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('关闭热门搜索'));
+    // 关闭 = 收起内容 + 记住(落盘), 一个按钮完成
+    await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
     expect(AppSettings.instance.showHotSearch, isFalse);
     expect(find.text('晴天'), findsNothing);
+    expect(find.textContaining('热门搜索已关闭'), findsOneWidget);
   });
 
   testWidgets('隐藏后无历史无猜你想搜时显示占位提示; 打开开关后立即出现', (tester) async {

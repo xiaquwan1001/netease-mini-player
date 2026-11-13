@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/album_preview.dart';
 import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/mine_view.dart';
+import 'package:minincm/src/profile_header.dart';
 import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
@@ -100,16 +101,24 @@ void main() {
 
   // ---------------- 1) 设置瘦身 ----------------
 
-  testWidgets('设置首页: 账号/会员/诊断/清空搜索历史已搬走, 只留分组入口+开关', (tester) async {
+  testWidgets('设置首页: 账号管理入口在这里, 会员/诊断/清空搜索历史仍是二级页', (tester) async {
     big(tester);
+    var accounts = 0;
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(body: SettingsView(info: info())),
+        home: Scaffold(
+          body: SettingsView(info: info(), onOpenAccounts: () => accounts++),
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
-    // 搬走的三组(审查 P1-7.9 / P1-7.11)
+    // 2026-11 用户要求: 账号管理统一在设置里(「我的」页不再有账号控件)
+    expect(find.text('账号管理'), findsOneWidget);
+    await tester.tap(find.text('账号管理'));
+    expect(accounts, 1);
+
+    // 仍不作为一级项出现(审查 P1-7.9 / P1-7.11)
     expect(find.text('账号'), findsNothing);
     expect(find.text('会员'), findsNothing);
     expect(find.text('诊断'), findsNothing);
@@ -228,8 +237,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 资料头右上角药丸 → 账号页
-    await tester.tap(find.text('账号管理'));
+    // 资料头整块点击 → 账号页(右上角药丸已删除, 避免与设置里的入口重复)
+    expect(find.text('账号管理'), findsNothing);
+    await tester.tap(find.byType(ProfileHeader));
     await tester.pumpAndSettle();
     expect(accounts, 1);
 
@@ -238,11 +248,10 @@ void main() {
     expect(vip, 1);
   });
 
-  testWidgets('账号与会员页: 账号簿/切换/忘记/添加/退出登录/会员 全部可达', (tester) async {
+  testWidgets('账号管理页: 账号簿/切换/忘记/添加/退出登录 全部可达(无会员重复栏)', (tester) async {
     big(tester);
     var logins = 0;
     var logouts = 0;
-    var vip = 0;
     rust.AccountDto? switched;
     rust.AccountDto? removed;
     await tester.pumpWidget(
@@ -253,12 +262,14 @@ void main() {
           isAndroid: true,
           onLogin: () => logins++,
           onLogout: () async => logouts++,
-          onOpenVip: () => vip++,
           loadAccounts: () async => [
             account(1, '小明', active: true),
             account(2, '小红'),
           ],
-          onSwitchAccount: (a) async => switched = a,
+          onSwitchAccount: (a) async {
+            switched = a;
+            return true;
+          },
           onRemoveAccount: (a) async => removed = a,
         );
       }),
@@ -266,7 +277,10 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('账号与会员'), findsOneWidget);
+    expect(find.text('账号管理'), findsOneWidget);
+    // 会员/签到已经在「我的」页直接展示, 二级页不再重复一份
+    expect(find.text('会员'), findsNothing);
+    expect(find.text('黑胶会员'), findsNothing);
 
     // 账号簿: 切换
     await tester.tap(find.text('小红'));
@@ -281,10 +295,6 @@ void main() {
     // 添加账号
     await tester.tap(find.text('添加账号'));
     expect(logins, 1);
-
-    // 黑胶会员
-    await tester.tap(find.text('黑胶会员'));
-    expect(vip, 1);
 
     // 退出登录在账号页底部(原先在设置里, 审查 P1-7.10)
     await tester.tap(find.text('退出登录'));

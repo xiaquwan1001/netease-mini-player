@@ -1864,9 +1864,8 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 账号与会员页 —— 全 App 唯一账号面(账号簿/切换/添加/退出登录/黑胶会员).
-  /// 审查 P1-7.10: 原先账号入口 3 处(AppBar / 我的页 / 设置页), 而「退出登录」
-  /// 只在设置里; 现在入口只剩「我的」页资料头, 退出登录在账号页底部。
+  /// 账号管理页 —— 全 App 唯一账号面(账号簿/切换/添加/退出登录/清除凭据).
+  /// 入口: 设置 → 账号管理 + 「我的」页资料头(资料本身可点进账号页)。
   Future<void> _openAccountPage() {
     return showAccountPage(
       context,
@@ -1874,7 +1873,6 @@ class _HomePageState extends State<HomePage> {
       isAndroid: _auth.isAndroid,
       onLogin: _login,
       onLogout: () => _logout(),
-      onOpenVip: _openVip,
       onSwitchAccount: _switchAccount,
       onRemoveAccount: (account) async {
         await rust.accountRemove(userId: account.userId);
@@ -1895,18 +1893,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Future<void> _switchAccount(rust.AccountDto account) async {
+  /// 切换/重新登录账号(未登录时点账号簿里的一行也走这里).
+  /// 返回是否真的切成功, 账号页据此把登录态翻成"已登录"。
+  Future<bool> _switchAccount(rust.AccountDto account) async {
     final name = account.nickname.isEmpty
         ? account.userId.toString()
         : account.nickname;
     try {
       final ok = await rust.accountSwitch(userId: account.userId);
       await _refreshInfo();
-      if (!mounted) return;
+      if (!mounted) return ok;
       showToast(context, ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录');
+      return ok;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       showToast(context, '切换账号失败: ${friendlyError(e)}', isError: true);
+      return false;
     }
   }
 
@@ -3180,9 +3182,9 @@ class _HomePageState extends State<HomePage> {
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
         );
       case 4:
-        // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口(审查 P1-7.9):
-        // 账号/会员在「我的」, 诊断与数据是设置 → 关于里的二级页。
-        return SettingsView(info: _info);
+        // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口:
+        // 账号管理、诊断与数据都是这里的二级页(账号入口 2026-11 统一收在这里)。
+        return SettingsView(info: _info, onOpenAccounts: _openAccountPage);
       default:
         return _buildSearchTab();
     }

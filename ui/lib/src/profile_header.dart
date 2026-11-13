@@ -110,9 +110,6 @@ class ProfileHeaderState extends State<ProfileHeader> {
           title: nickname,
           subtitle: signature.trim().isEmpty ? null : signature.trim(),
           vip: widget.loggedIn && (d?.vip ?? false),
-          overlay: widget.onTap == null
-              ? null
-              : _AccountChip(onTap: widget.onTap!),
           footer: widget.loggedIn
               ? Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -145,40 +142,6 @@ class ProfileHeaderState extends State<ProfileHeader> {
                     color: scheme.onSurfaceVariant,
                   ),
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 横幅右上角「账号管理」药丸(进账号簿/切换/退出)
-class _AccountChip extends StatelessWidget {
-  const _AccountChip({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black38,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.manage_accounts_outlined,
-                size: 14,
-                color: Colors.white,
-              ),
-              SizedBox(width: 4),
-              Text('账号管理', style: TextStyle(color: Colors.white, fontSize: 12)),
-            ],
-          ),
         ),
       ),
     );

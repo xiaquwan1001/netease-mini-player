@@ -141,10 +141,6 @@ class _MineViewState extends State<MineView> {
               const Text('登录后查看我喜欢的音乐、收藏歌单/播客和关注艺人'),
               const SizedBox(height: kSectionGap),
               FilledButton(onPressed: widget.onLogin, child: const Text('登录')),
-              TextButton(
-                onPressed: widget.onOpenAccounts,
-                child: const Text('账号管理'),
-              ),
             ],
           ),
         ),

@@ -15,20 +15,23 @@ import 'toast.dart';
 import 'update_checker.dart';
 import 'update_dialog.dart';
 
-/// 设置页(审查 P1-7.9 瘦身后): 只剩「App 怎么表现」的偏好开关 + 分组入口。
+/// 设置页: 「App 怎么表现」的偏好开关 + 分组入口。
 ///
-/// 搬走的内容:
-/// - 账号 / 切换 / 退出登录 → 账号与会员二级页(settings_account_page.dart),
-///   入口在「我的」页资料头(全 App 唯一账号面)。
-/// - 黑胶会员 → 同上(会员是账号资产)。
+/// 二级页:
+/// - 账号管理(账号簿/切换/添加/退出登录/清除凭据)→ settings_account_page.dart。
+///   2026-11 用户反馈: 账号入口曾在「我的」页资料头/药丸/按钮三处重复,
+///   现在统一收在这里(唯一入口)。
 /// - Rust 自检 / 设备 ID / 数据目录 → 诊断与数据二级页
 ///   (settings_diagnostics_page.dart), 从「关于」进入。
 /// - 「清空搜索历史」→ 只保留动作发生处(搜索落地页, 审查 P1-7.11)。
 class SettingsView extends StatelessWidget {
-  const SettingsView({super.key, required this.info});
+  const SettingsView({super.key, required this.info, this.onOpenAccounts});
 
   /// 诊断二级页要展示设备 ID / 数据目录
   final rust.InitInfo? info;
+
+  /// 打开账号管理二级页(不传则不显示入口, 测试/无宿主时用)
+  final VoidCallback? onOpenAccounts;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +52,23 @@ class SettingsView extends StatelessWidget {
             24 + MediaQuery.viewPaddingOf(context).bottom,
           ),
           children: [
+            if (onOpenAccounts != null) ...[
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(Icons.manage_accounts_outlined),
+                  title: const Text('账号管理'),
+                  subtitle: Text(
+                    info?.loggedIn == true
+                        ? '已登录 · 切换账号 / 添加账号 / 退出登录'
+                        : '未登录 · 登录后可同步收藏与歌单',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: onOpenAccounts,
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             const _SectionTitle('界面'),
             Card(
               margin: EdgeInsets.zero,
@@ -259,6 +279,11 @@ class SettingsView extends StatelessWidget {
                   const Divider(height: 1),
                   const _CheckUpdateTile(),
                   const Divider(height: 1),
+                  const Divider(height: 1),
+                  // 凭据后端(Android Keystore / Windows DPAPI / 明文回退)属于
+                  // "这台机器怎么存东西", 从账号页的隐私栏搬到这里展示(2026-11 需求)。
+                  const _CredentialStorageTile(),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.monitor_heart_outlined),
                     title: const Text('诊断与数据'),
@@ -286,6 +311,60 @@ class SettingsView extends StatelessWidget {
       if ((entry.key - scale).abs() < 0.01) return entry.value;
     }
     return scale.toStringAsFixed(2);
+  }
+}
+
+/// 凭据后端状态行(Android Keystore / Windows DPAPI / 明文回退).
+///
+/// 2026-11 用户要求: 「隐私」栏目里的 Android Keystore 加密说明搬到设置 → 关于。
+/// 只读展示, 失败不影响设置页其余部分(点一下可重试)。
+class _CredentialStorageTile extends StatefulWidget {
+  const _CredentialStorageTile();
+
+  @override
+  State<_CredentialStorageTile> createState() => _CredentialStorageTileState();
+}
+
+class _CredentialStorageTileState extends State<_CredentialStorageTile> {
+  rust.CredentialStatusDto? _status;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final status = await rust.credentialStatus();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _failed = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _failed = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    return ListTile(
+      leading: const Icon(Icons.enhanced_encryption_outlined),
+      title: const Text('凭据存储'),
+      subtitle: Text(
+        status?.note ?? (_failed ? '凭据后端状态不可用, 点击重试' : '正在读取…'),
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: status == null
+          ? null
+          : Text(status.backend, style: Theme.of(context).textTheme.labelSmall),
+      onTap: _failed ? _load : null,
+    );
   }
 }
 

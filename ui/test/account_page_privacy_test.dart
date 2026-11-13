@@ -51,7 +51,7 @@ void main() {
     expect(find.text('未登录'), findsOneWidget);
     // 账号簿里仍能看到那个账号(它就是一本地址簿), 但标成"上次登录"
     expect(find.text('下去玩'), findsOneWidget);
-    expect(find.text('上次登录的账号(当前未登录)'), findsOneWidget);
+    expect(find.text('上次登录 · 点击重新登录'), findsOneWidget);
     // 关键断言: 一个 VIP 标都不许有
     expect(find.text('VIP'), findsNothing);
     // 未登录必须给出登录入口(桌面端以前这里是空的, 只能去命令行导 cookie)
@@ -76,6 +76,54 @@ void main() {
     expect(find.text('小明'), findsNWidgets(2));
     // 头部 + 账号簿行: 2 个 VIP 标
     expect(find.text('VIP'), findsNWidgets(2));
+  });
+
+  // 2026-11 用户报: 退出账号后账号簿里的那行点不动, 只能重新扫码。
+  testWidgets('未登录: 点账号簿里的账号即可重新登录, 登录态就地翻转', (tester) async {
+    rust.AccountDto? switched;
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: false),
+          isAndroid: false,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => [account(1822714196, '下去玩', active: true)],
+          onSwitchAccount: (a) async {
+            switched = a;
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('未登录'), findsOneWidget);
+    await tester.tap(find.text('下去玩'));
+    await tester.pumpAndSettle();
+
+    expect(switched?.nickname, '下去玩');
+    // 切号成功 = 已登录: 头部不再显示「未登录」, 账号行变成「当前账号」
+    expect(find.text('未登录'), findsNothing);
+    expect(find.text('当前账号'), findsOneWidget);
+  });
+
+  testWidgets('账号页不再展示凭据存储(已挪到设置 → 关于)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: true),
+          isAndroid: true,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => [account(1, '小明', active: true)],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('凭据存储'), findsNothing);
+    // 清除凭据的说明不再出现「出二手」这类让人不知所云的文案
+    expect(find.textContaining('出二手'), findsNothing);
   });
 
   testWidgets('账号簿为空时没有"清除本机凭据"入口', (tester) async {

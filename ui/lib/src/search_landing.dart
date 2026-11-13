@@ -159,10 +159,12 @@ class SearchLanding extends StatelessWidget {
   }
 }
 
-/// 热门搜索: 栏目本身常驻, 内容由右侧按钮控制(展开 / 收起 / 关闭 / 重新开启)。
+/// 热门搜索: 栏目本身常驻, 内容由右侧**一个**按钮控制(关闭 / 开启)。
 ///
 /// 2026-11 需求: 原来「显示热搜建议」开关在设置页, 搜索页被关掉后只剩一句
 /// 「去设置里开启」; 现在开关搬到这里, 且栏目标题永远显示, 不再整块消失。
+/// 另: 之前「收起」+ 右侧的 ❌ 是两个做同一件事的控件(用户报"功能重复"),
+/// 现在只留一个: 关闭 = 收起并记住(落盘), 再点开启恢复。
 class _HotSection extends StatefulWidget {
   const _HotSection({
     required this.hot,
@@ -183,24 +185,20 @@ class _HotSection extends StatefulWidget {
 }
 
 class _HotSectionState extends State<_HotSection> {
-  /// 展开态只在本次会话内有效(不落盘): 属于临时浏览状态, 不是长期偏好。
-  bool _expanded = true;
-
+  /// 唯一的状态: 设置里的持久开关(关 = 收起且下次进来仍然是关)。
   void _toggle() {
-    // 关闭状态下点按钮 = 重新开启(直接写设置, 不跳设置页)
-    if (!AppSettings.instance.showHotSearch) {
-      AppSettings.instance.update(showHotSearch: true);
-      setState(() => _expanded = true);
-      return;
-    }
-    setState(() => _expanded = !_expanded);
+    setState(() {
+      AppSettings.instance.update(
+        showHotSearch: !AppSettings.instance.showHotSearch,
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final enabled = AppSettings.instance.showHotSearch;
-    final expanded = enabled && _expanded;
+    final expanded = enabled;
     final hot = widget.hot;
     final retry = widget.onRetry;
     return Column(
@@ -220,24 +218,16 @@ class _HotSectionState extends State<_HotSection> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
+              // 一个按钮即可: 关闭时同时收起内容并记住, 再点开启恢复。
+              // (原来这里还有一枚 ❌, 与「关闭」完全重合, 2026-11 用户要求删掉。)
               TextButton(
                 onPressed: _toggle,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(48, 40),
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
-                child: Text(!enabled ? '开启' : (_expanded ? '收起' : '展开')),
+                child: Text(enabled ? '关闭' : '开启'),
               ),
-              if (enabled)
-                IconButton(
-                  tooltip: '关闭热门搜索',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () {
-                    AppSettings.instance.update(showHotSearch: false);
-                    setState(() {});
-                  },
-                  icon: const Icon(Icons.close, size: 18),
-                ),
             ],
           ),
         ),

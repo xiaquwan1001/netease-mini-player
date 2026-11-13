@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-13**。当前版本 **v0.7.1**(2026-11-12 发布, GitHub Release 全绿)。
+> 最近更新: **2026-11-13**。当前版本 **v0.8.1**(2026-11-13)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
@@ -11,10 +11,10 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace` | **272** 通过 / 0 失败 |
+| `cargo test --offline --workspace` | **277** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network` | **746** 通过 / 0 失败 |
+| `flutter test --exclude-tags network` | **752** 通过 / 0 失败 |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -40,6 +40,7 @@
 | **v0.7.0** | **2026-11-12** | 播放条重排(播放顺序归位/队列入口移到行尾/删除详情页底部控制条)、歌单内搜索播放策略(全列表/追加队列)、艺人跳转、对齐与低优先审计收口 |
 | **v0.7.1** | **2026-11-12** | 用户反馈 10 项:VIP 标记/播放条上一首/歌词截断/长字滚动/队列叠加/搜索横向分类/艺人主页分区/缩进收口 |
 | **v0.8.0** | **2026-11-13** | 用户反馈 10 项 UI 收口(徽标位置/行尾按钮/每日推荐/歌词标题字号/跑马灯内核重写+全仓统一/逐字字内进度/动态标记/背景高清+全屏保存/横向留白栅格) + **艺人/用户主页统一骨架** + 数据面 3 个 FFI(`Playlist.subscribed` / `userPlayRanking` / `userEvents`) |
+| **v0.8.1** | **2026-11-13** | 用户反馈 8 项: 账号入口收敛到设置(删「我的」页药丸/未登录按钮/底部多余横条)、账号页去会员重复栏、登录 WebView 清 cookie(可加第二个账号)+ 顶栏关闭(可返回)、退出后账号簿可点即登录、热搜单一开关(删 ❌)、清除凭据文案去歧义、Keystore 说明搬到设置→关于、**风格推荐配图修复**(yyimgs 相对路径补 CDN 绝对地址) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -73,6 +74,26 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13(三): 用户反馈 8 项 UI 修复(v0.8.1)
+
+第一批"上一轮未提交"的工作先归档成 `feat:` 提交(歌手专辑分页 / 私信 / 消息页重做 / 搜索页热搜开关与排行榜 /
+方格列数 / debug APK CI), 随后按 8 条反馈逐项修。
+
+| # | 反馈 | 根因 | 处置 |
+|---|---|---|---|
+| 1 | 「我的」昵称/关注数**下面还遮着一条横条**, 点漏出的部分也进账号管理; 背景右上角还有「账号管理」 | `ProfileBanner` 用 `Transform.translate(-12)` 上浮身份卡 —— transform **不改布局占位**, 后面再补一条 12dp `surface` 色块 ⇒ 卡片底部实际多出 12dp 且整块在 `InkWell` 内 | 改成 `Stack`(图 `Positioned` + 身份卡 `Padding(top: height-lift)`), 不再有补色条; 删掉右上角药丸与未登录时的「账号管理」按钮, 账号入口统一收进 **设置 → 账号管理** |
+| 2 | 账号与会员二级页的会员栏与「我的」页会员/签到重复 | 会员是「我的」页资产, 二级页又放一份 | 删二级页「会员」分组(+ 去 `onOpenVip` 参数), 页面标题改「账号管理」 |
+| 3 | 已登录时想加第二个账号, 跳转 Web 立刻返回 | WebView 的 cookie 仓库里还留着上一个账号的 `MUSIC_U` ⇒ 登录页判定"已登录"原地结束 | `MainActivity` 打开登录页前 + `LoginActivity.onCreate` 各清一次 WebView cookie(账号簿在 Rust 侧, 不受影响) |
+| 4 | 登录 Web 页无法返回 | 官方登录页是 SPA, 页内 history 很深, 系统返回键只会一页页退网页; 没有可见的关闭入口 | `LoginActivity` 加顶栏「关闭」, 系统返回键直接 `finishCancelled()`(放弃登录并把 cookie 交回) |
+| 5 | 退出账号后账号簿里的行点不动, 只能重新扫码 | 行 `onTap: account.active ? null : ...` —— 未登录时"上次登录的账号"正好是 active 行 | 只在"已登录 + 当前账号"时禁用; 切号成功(`onSwitchAccount` 改为返回 bool)就地翻转成已登录态 |
+| 6 | 热搜关键词的关闭按钮与右边 ❌ 功能重复 | 「收起」+ ❌ 两枚控件做同一件事 | 只留一个按钮: 关闭 = 收起 + 落盘, 再点开启; 删 ❌ |
+| 7 | 清除凭据弹窗文案「出二手可用」不知所云; 安卓 KeyStore 加密说明应在设置 | 文案带场景推销; 凭据后端状态放在账号页隐私栏 | 文案改为「退出登录并删除本机保存的全部账号凭据, 之后需要重新登录」; 「凭据存储」行搬到 **设置 → 关于**(`_CredentialStorageTile`) |
+| 8 | **回归**: 风格推荐每个方框都是占位符 | `style_list` / `style_preference` 的 `picUrl` 是 `yyimgs/<hash>/<id>` **相对路径**, 过去一律 `filter(starts_with("http"))` 丢弃 | 新增 `parse::image_url`: 相对路径补成 `https://p1.music.126.net/<hash>/<id>.jpg`(实测 200 image/jpg), 绝对地址原样保留 |
+
+回归用例: `profile_banner_test`(身份卡底部 = 卡片底部)、`account_page_privacy_test`(未登录点账号即登录 / 凭据行已搬走)、
+`hot_search_toggle_test`(只剩一个开关、无 ❌)、`ui_batch_c_ia_test`(设置页账号入口 / 账号页无会员栏)、
+`ncm-service` 的 `style_preference_mapping`(相对图解析成 CDN 绝对地址)。
 
 ## 2026-11-13(二): 用户反馈 10 项 UI 收口 + 艺人/用户主页统一(v0.8.0)
 

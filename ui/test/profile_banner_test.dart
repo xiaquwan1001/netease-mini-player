@@ -160,4 +160,46 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   });
+
+  // 2026-11 用户报: 「我的」页昵称/关注数的横条下面还遮着一条横条, 点漏出来的
+  // 部分也进账号管理。根因是身份卡用 Transform.translate 上浮(不改布局占位)后,
+  // 又补了一条 12dp 的 surface 色块 ⇒ 卡片底部实际多出 12dp, 且整块都在 InkWell 里。
+  group('ProfileBanner 叠层: 底部不得多出可点横条', () {
+    testWidgets('身份卡底部 = 卡片底部, 高度 = 图 - 上浮 + 身份卡高', (tester) async {
+      setView(tester);
+      await tester.pumpWidget(
+        host(
+          const ProfileBanner(
+            title: '小明',
+            subtitle: '签名',
+            imageUrl: null,
+            footer: Text('关注 1 · 粉丝 2'),
+          ),
+        ),
+      );
+      final banner = tester.getRect(find.byType(ProfileBanner));
+      final identity = tester.getRect(find.byType(ProfileIdentity));
+
+      expect(
+        identity.top,
+        moreOrLessEquals(
+          banner.top + kProfileBannerHeight - kProfileIdentityLift,
+          epsilon: 0.5,
+        ),
+        reason: '身份卡要压在图下沿 12dp 上',
+      );
+      expect(
+        identity.bottom,
+        moreOrLessEquals(banner.bottom, epsilon: 0.5),
+        reason: '身份卡下方不许再有补色横条',
+      );
+      expect(
+        banner.height,
+        moreOrLessEquals(
+          kProfileBannerHeight - kProfileIdentityLift + identity.height,
+          epsilon: 0.5,
+        ),
+      );
+    });
+  });
 }

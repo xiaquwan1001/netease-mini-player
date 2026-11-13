@@ -232,6 +232,37 @@ pub fn parse_album_item(v: &Value) -> Option<AlbumItem> {
     })
 }
 
+/// 图片地址归一: 绝对 http(s) 原样返回, `yyimgs/<hash>/<id>` 这类**相对路径**
+/// 补成 CDN 绝对地址(实测 `https://p1.music.126.net/<hash>/<id>.jpg` 200)。
+///
+/// `style_list` / `style_preference` 的 `picUrl` 就是这种相对路径; 以前一律丢弃,
+/// 于是推荐页的「风格推荐」全是钢琴占位图标(2026-11 用户报的回归)。
+pub(super) fn image_url(raw: Option<&str>) -> Option<String> {
+    let s = raw?.trim();
+    if s.is_empty() {
+        return None;
+    }
+    if s.starts_with("http://") || s.starts_with("https://") {
+        return Some(s.to_string());
+    }
+    // CDN 上真正的路径不含 "yyimgs/" 这一层, 也不带扩展名(默认 .jpg)
+    let path = s.trim_start_matches('/');
+    let path = path.strip_prefix("yyimgs/").unwrap_or(path);
+    if path.is_empty() {
+        return None;
+    }
+    let has_ext = path
+        .rsplit('/')
+        .next()
+        .map(|name| name.contains('.'))
+        .unwrap_or(false);
+    Some(if has_ext {
+        format!("https://p1.music.126.net/{path}")
+    } else {
+        format!("https://p1.music.126.net/{path}.jpg")
+    })
+}
+
 /// 最近播放(专辑/歌单/电台)的响应形状: {code, data:{list:[{data:{...}}]}}
 /// 只留下每条记录的 data 对象, 由各类型的解析器处理.
 pub fn recent_items(body: &Value) -> Vec<Value> {

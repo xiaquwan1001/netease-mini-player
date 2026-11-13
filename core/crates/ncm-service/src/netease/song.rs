@@ -1009,12 +1009,14 @@ pub(super) fn parse_style_tag(v: &Value) -> Option<StyleTag> {
     if id.is_empty() || name.is_empty() {
         return None;
     }
-    // style_list 的 picUrl 是相对路径(yyimgs/<hash>), 没有 host, 直接用会报
-    // "No host specified in URI"; 只保留绝对地址, 其余交给 UI 用默认图标.
-    let cover_url = str_of(v, "picUrl")
-        .or_else(|| str_of(v, "coverUrl"))
-        .or_else(|| str_of(v, "imageUrl"))
-        .filter(|s| s.starts_with("http"));
+    // style_list 的 picUrl 是相对路径(yyimgs/<hash>/<id>), 没有 host, 直接用会报
+    // "No host specified in URI"; 这里补成 CDN 绝对地址, 别再丢成占位图标.
+    let cover_url = image_url(
+        str_of(v, "picUrl")
+            .or_else(|| str_of(v, "coverUrl"))
+            .or_else(|| str_of(v, "imageUrl"))
+            .as_deref(),
+    );
     Some(StyleTag {
         id,
         name,

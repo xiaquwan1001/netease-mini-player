@@ -260,8 +260,12 @@ fn style_preference_mapping() {
     }});
     let tags = parse_style_preference(&body);
     assert_eq!(tags.len(), 3);
-    // 相对路径(无 host)的 picUrl 要丢掉, 否则 UI 报 No host specified in URI
-    assert!(tags[2].cover_url.is_none());
+    // 相对路径(yyimgs/<hash>/<id>)要补成 CDN 绝对地址: 丢掉的话推荐页永远是占位图
+    assert_eq!(
+        tags[2].cover_url.as_deref(),
+        Some("https://p1.music.126.net/abc==/123.jpg")
+    );
+
     assert_eq!(tags[0].id, "1009");
     assert_eq!(tags[1].name, "华语流行");
     assert_eq!(tags[1].cover_url.as_deref(), Some("http://p/a.jpg"));

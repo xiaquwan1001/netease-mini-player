@@ -13,7 +13,9 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.TextView
 
 /**
  * 官方网页登录页(移动端授权页).
@@ -44,6 +46,11 @@ class LoginActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
+        // 进来先清一次 cookie: 已登录状态下 WebView 里还留着上一个账号的 MUSIC_U,
+        // 页面会直接判定"已登录"并原地返回 —— 那就是"想加第二个账号却立刻跳回来"的根因。
+        // 账号簿保存在 Rust 侧, 清 WebView cookie 不影响已记住的账号。
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
 
         loadingBar = ProgressBar(this).apply { visibility = ProgressBar.GONE }
 
@@ -67,13 +74,43 @@ class LoginActivity : Activity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
-        val root = FrameLayout(this).apply {
+        // 顶栏: 官方登录页是个 SPA, 页内 history 很深, 系统返回键只会一页页退网页,
+        // 用户永远退不出去(2026-11 用户报"登录页无法返回")。这里给一条明确的「关闭」,
+        // 系统返回键也直接关闭本页(放弃登录)。
+        val web = FrameLayout(this).apply {
             addView(webView, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             addView(
                 loadingBar,
                 FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER),
             )
         }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), 0, dp(4), 0)
+            setBackgroundColor(HEADER_BG)
+        }
+        header.addView(
+            TextView(this).apply {
+                text = "登录网易云音乐"
+                textSize = 16f
+                setTextColor(HEADER_FG)
+                layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            },
+        )
+        header.addView(
+            TextView(this).apply {
+                text = "关闭"
+                textSize = 16f
+                setTextColor(HEADER_FG)
+                gravity = Gravity.CENTER
+                setPadding(dp(16), dp(14), dp(16), dp(14))
+                setOnClickListener { finishCancelled() }
+            },
+        )
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        root.addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         setContentView(root)
         handler.postDelayed(cookiePoll, POLL_MS)
     }
@@ -101,15 +138,21 @@ class LoginActivity : Activity() {
         return parts.joinToString("; ")
     }
 
-    override fun onBackPressed() {
-        if (::webView.isInitialized && webView.canGoBack()) {
-            webView.goBack()
-            return
-        }
-        // 用户放弃登录也要把已拿到的 cookie 交回去(可能已经登录成功但页面还没跳)
+    /** 用户主动关闭登录页(顶栏「关闭」/系统返回键): 放弃登录, 把已拿到的 cookie 交回去 */
+    private fun finishCancelled() {
+        if (finishedWithCookie) return
+        finishedWithCookie = true
         setResult(RESULT_CANCELED, Intent().putExtra(EXTRA_COOKIE, collectCookies()))
-        super.onBackPressed()
+        finish()
     }
+
+    override fun onBackPressed() {
+        // 不再在网页 history 里逐页回退: 那是"退不出去"的根源。
+        finishCancelled()
+    }
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
@@ -127,6 +170,10 @@ class LoginActivity : Activity() {
 
         /** 移动端授权页(官方 302 目标); 不要用带 #/login 的桌面路由 */
         private const val LOGIN_URL = "https://music.163.com/login"
+
+        /** 顶栏配色(不引主题依赖, 深浅色下都够用) */
+        private val HEADER_BG = 0xFFF5F5F5.toInt()
+        private val HEADER_FG = 0xFF1A1A1A.toInt()
         private const val POLL_MS = 1500L
         private val COOKIE_URLS = listOf("https://music.163.com", "https://163.com")
     }
