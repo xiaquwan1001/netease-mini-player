@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 import 'format.dart' show formatDurationMs;
 
 /// 可注入加载器(测试用 mock)
@@ -147,7 +148,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const LoadingView();
     if (_error != null) {
       return ListView(
         children: [
@@ -211,7 +212,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     if (picks.isEmpty) {
       return const [
         SizedBox(height: 32),
-        Center(child: Text('暂无精选电台')),
+        EmptyView(padding: EdgeInsets.zero, icon: Icons.radio, title: '暂无精选电台'),
         SizedBox(height: 32),
       ];
     }
@@ -254,19 +255,16 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     }
     final list = _recommend;
     if (list == null) {
-      return const [
-        Center(
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: CircularProgressIndicator(),
-          ),
-        ),
-      ];
+      return const [LoadingView(padding: EdgeInsets.all(24))];
     }
     if (list.isEmpty) {
       return const [
         SizedBox(height: 32),
-        Center(child: Text('该分类暂无推荐电台')),
+        EmptyView(
+          padding: EdgeInsets.zero,
+          icon: Icons.radio,
+          title: '该分类暂无推荐电台',
+        ),
         SizedBox(height: 32),
       ];
     }
@@ -425,12 +423,7 @@ class _ToplistTabs extends StatelessWidget {
             ),
           )
         else if (toplist == null)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(16),
-              child: CircularProgressIndicator(),
-            ),
-          )
+          const LoadingView(padding: EdgeInsets.all(16))
         else
           ..._buildEntries(context, toplist!),
       ],
@@ -463,7 +456,7 @@ class _ToplistTabs extends StatelessWidget {
     if (t.radios.isEmpty && t.djs.isEmpty && t.programs.isEmpty) {
       return const [
         SizedBox(height: 24),
-        Center(child: Text('该榜单暂无数据')),
+        EmptyView(padding: EdgeInsets.zero, title: '该榜单暂无数据'),
         SizedBox(height: 24),
       ];
     }

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'image_io.dart';
+import 'state_views.dart';
 import 'toast.dart';
 
 /// 网易云封面/图片直链常是明文 http; CDN 同路径支持 https(证书覆盖 *.music.126.net)。
@@ -520,14 +521,7 @@ class _ImageViewerState extends State<_ImageViewer> {
               // 保存原图: 下载中禁用并转圈, 避免重复点
               IconButton(
                 icon: _saving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
+                    ? const LoadingView.inline(size: 18, color: Colors.white)
                     : const Icon(Icons.download, color: Colors.white),
                 tooltip: '保存原图',
                 onPressed: _saving ? null : _save,

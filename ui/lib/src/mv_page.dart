@@ -5,6 +5,7 @@ import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
 import 'error_views.dart';
 import 'net_retry.dart';
+import 'state_views.dart';
 import 'rust/api.dart' as rust;
 
 /// MV 详情/播放页(C3): 封面大图 + 标题/歌手/播放量/发布时间/简介 + 播放按钮。
@@ -103,7 +104,7 @@ class _MvPageState extends State<MvPage> {
         future: _loadDetail(widget.mvId),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const LoadingView();
           }
           if (snap.hasError) {
             return FullError(

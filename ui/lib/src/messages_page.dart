@@ -5,6 +5,7 @@ import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'state_views.dart';
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
 typedef SessionsPageLoader = Future<List<rust.PrivateSession>> Function(
@@ -456,12 +457,13 @@ class _ChatBodyState extends State<_ChatBody> {
     }
     final items = _items;
     if (items == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (items.isEmpty) {
-      return const Center(child: Text('还没有消息'));
+      return const EmptyView(icon: Icons.notifications_none, title: '还没有消息');
     }
     final scheme = Theme.of(context).colorScheme;
+    // 非分页: 私信按时间倒序锚底 + 向上"加载更早"(reverse + prepend), PagedListView 不支持该形态
     // reverse: 列表锚在底部(最新消息在下), 顶部是"加载更早"
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -473,11 +475,7 @@ class _ChatBodyState extends State<_ChatBody> {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Center(
               child: _loadingOlder
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const LoadingView.inline(size: 18)
                   : TextButton(
                       onPressed: _loadOlder,
                       child: const Text('加载更早'),
@@ -558,11 +556,12 @@ class _InboxTabState extends State<_InboxTab> {
     }
     final items = _items;
     if (items == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (items.isEmpty) {
-      return Center(child: Text(widget.emptyText));
+      return EmptyView(title: widget.emptyText);
     }
+    // 非分页: 评论消息一次全量返回, 无更多页
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),
@@ -638,11 +637,12 @@ class _ForwardsTabState extends State<_ForwardsTab> {
     }
     final items = _items;
     if (items == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (items.isEmpty) {
-      return const Center(child: Text('还没有@我'));
+      return const EmptyView(icon: Icons.alternate_email, title: '还没有@我');
     }
+    // 非分页: @我 一次全量返回, 无更多页
     return ListView.separated(
       itemCount: items.length,
       separatorBuilder: (_, _) => const Divider(height: 1, indent: 68),

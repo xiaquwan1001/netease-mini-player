@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'detail_page.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 import 'toast.dart';
 
 /// 他人主页(只读): 资料卡 + 公开歌单.
@@ -248,22 +249,14 @@ class _UserPageState extends State<UserPage> {
     }
     final lists = _playlists;
     if (lists == null) {
-      return const [
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ];
+      return const [LoadingView(padding: EdgeInsets.symmetric(vertical: 24))];
     }
     if (lists.isEmpty) {
       return const [
-        Card(
-          margin: EdgeInsets.zero,
-          child: ListTile(
-            leading: Icon(Icons.queue_music),
-            title: Text('没有公开歌单'),
-            subtitle: Text('对方可能没建过歌单, 或歌单都设为私密'),
-          ),
+        EmptyView(
+          icon: Icons.queue_music,
+          title: '没有公开歌单',
+          hint: '对方可能没建过歌单, 或歌单都设为私密',
         ),
       ];
     }

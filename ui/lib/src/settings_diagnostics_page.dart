@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 诊断与数据二级页(审查 P1-7.9: 原是设置页里的「诊断」+「数据」两个一级分组).
 ///
@@ -133,11 +134,7 @@ class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
         : '调用 Rust FFI ping 验证 Dart⇄Rust 通道';
     return ListTile(
       leading: _running
-          ? const SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+          ? const LoadingView.inline(size: 22)
           : Icon(
               _result != null
                   ? Icons.check_circle_outline

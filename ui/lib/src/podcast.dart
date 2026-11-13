@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'state_views.dart';
 import 'format.dart' show formatDurationMs;
 
 /// 单集详情加载器. 节目列表里的 description 往往被截断甚至为空,
@@ -94,13 +95,7 @@ class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
               SheetHeader(
                 title: '节目详情',
                 onClose: () => Navigator.pop(context),
-                trailing: _loading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : null,
+                trailing: _loading ? const LoadingView.inline(size: 14) : null,
               ),
               if (_error != null)
                 Padding(

@@ -9,6 +9,7 @@ import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'user_nav.dart';
 import 'sheet_header.dart';
+import 'state_views.dart';
 
 /// 关注动态流: 未登录引导 + 登录后的动态列表.
 ///
@@ -183,7 +184,7 @@ class _FeedViewState extends State<FeedView> {
       );
     }
     if (_events == null && _error == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (_error != null) {
       return Center(
@@ -215,6 +216,7 @@ class _FeedViewState extends State<FeedView> {
           onSelected: (id) => setState(() => _authorFilter = id),
           onOpenAll: _openAllArtists,
         ),
+        // 非分页: 动态流一次全量返回(接口无游标), 服务端不支持翻页
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
@@ -224,11 +226,9 @@ class _FeedViewState extends State<FeedView> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 64),
-                        child: Center(
-                          child: Text(
-                            _authorFilter == null ? '还没有动态' : 'ta 最近没有动态',
-                            style: theme.textTheme.bodySmall,
-                          ),
+                        child: EmptyView(
+                          padding: EdgeInsets.zero,
+                          title: _authorFilter == null ? '还没有动态' : 'ta 最近没有动态',
                         ),
                       ),
                     ],
@@ -1150,15 +1150,9 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                     onTap: () => Navigator.of(context).pop(a.userId),
                   ),
                 if (_subscribed == null && _error == null)
-                  const Padding(
+                  const LoadingView(
+                    size: 20,
                     padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
                   ),
                 if (others.isNotEmpty) ...[
                   const Divider(height: 24),

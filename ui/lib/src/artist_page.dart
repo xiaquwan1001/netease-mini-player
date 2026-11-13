@@ -9,6 +9,7 @@ import 'song_actions.dart';
 import 'format.dart' show formatDurationMs;
 import 'mv_page.dart' show showMvPage;
 import 'song_tile.dart' show SongTitleWithBadges;
+import 'state_views.dart';
 import 'artist_sections.dart'
     show
         ArtistAlbumsSection,
@@ -239,7 +240,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     if (_detail == null && _error == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: LoadingView());
     }
     if (_error != null) {
       return Scaffold(
@@ -724,7 +725,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
       );
     }
     if (_searching) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (_searchError != null) {
       return Center(
@@ -745,6 +746,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
     if (results.isEmpty) {
       return Center(child: Text('没有匹配「$_ranQuery」的歌曲'));
     }
+    // 非分页: 搜索结果在本地按 offset 累积到上限(进入即取全), 无游标
     return ListView.builder(
       padding: EdgeInsets.only(
         bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
@@ -770,9 +772,10 @@ class _AlbumsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (albums.isEmpty) {
-      return const Center(child: Text('暂无专辑'));
+      return const EmptyView(icon: Icons.album_outlined, title: '暂无专辑');
     }
     final theme = Theme.of(context);
+    // 非分页: 专辑网格随歌手详情一次全量返回
     return GridView.builder(
       padding: EdgeInsets.fromLTRB(
         12,
@@ -844,7 +847,7 @@ class _MvsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (firstPage.isEmpty) {
-      return const Center(child: Text('暂无 MV'));
+      return const EmptyView(icon: Icons.movie_outlined, title: '暂无 MV');
     }
     final theme = Theme.of(context);
     return PagedListView<rust.ArtistMvDto>(

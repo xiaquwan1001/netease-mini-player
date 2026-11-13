@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 等级 / 勋章墙 · 纯 Dart 视图模型(不依赖 Rust 绑定)。
 ///
@@ -378,7 +379,7 @@ class _MedalWallPageState extends State<MedalWallPage> {
       );
     }
     if (_data == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
 
     final data = _data!;
@@ -395,18 +396,17 @@ class _MedalWallPageState extends State<MedalWallPage> {
           if (level != null) _LevelCard(view: level),
           if (level != null) const SizedBox(height: 16),
           if (medals.isEmpty)
-            const _EmptyMedals()
+            const EmptyView(
+              padding: EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+              icon: Icons.military_tech_outlined,
+              title: '还没有勋章',
+              hint: '多听多分享, 徽章会陆续点亮',
+            )
           else
             _MedalGrid(medals: medals, medalSize: _medalSize),
           if (_loading) ...[
             const SizedBox(height: 12),
-            const Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
+            const LoadingView(size: 18),
           ],
         ],
       ),
@@ -628,38 +628,5 @@ class _MedalTile extends StatelessWidget {
     if (obtained) return withTooltip;
     // 未获得: 灰显但仍显示(不隐藏), 用 Opacity 便于测试断言差异。
     return Opacity(opacity: unearnedOpacity, child: withTooltip);
-  }
-}
-
-/// 空勋章态: 等级卡仍在(由外层决定), 这里只说"还没有勋章"。
-class _EmptyMedals extends StatelessWidget {
-  const _EmptyMedals();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      child: Column(
-        children: [
-          Icon(Icons.military_tech_outlined, size: 44, color: scheme.outline),
-          const SizedBox(height: 10),
-          Text(
-            '还没有勋章',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '多听多分享, 徽章会陆续点亮',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
-          ),
-        ],
-      ),
-    );
   }
 }

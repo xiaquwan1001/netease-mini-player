@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'net_retry.dart';
+import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 /// 一页分页结果。
@@ -191,7 +192,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (_error != null) {
       return Center(
@@ -218,7 +219,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
     if (_items.isEmpty) {
       final builder = widget.emptyBuilder;
       if (builder != null) return builder(context, _items);
-      return Center(child: Text(widget.emptyText));
+      return EmptyView(title: widget.emptyText);
     }
 
     Widget body;
@@ -293,11 +294,7 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(
         child: _loadingMore
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const LoadingView.inline(size: 20)
             : TextButton(onPressed: _loadMore, child: Text(widget.moreText)),
       ),
     );

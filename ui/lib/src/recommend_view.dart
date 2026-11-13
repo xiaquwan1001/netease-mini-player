@@ -11,6 +11,7 @@ import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
+import 'state_views.dart';
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -269,15 +270,9 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
       future: _future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
+          return const LoadingView(
+            size: 22,
             padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
           );
         }
         if (snap.hasError) {
