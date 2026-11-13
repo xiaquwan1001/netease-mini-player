@@ -414,6 +414,10 @@ pub struct Playlist {
     /// 是否是"我喜欢的音乐"(网易云用 specialType=5 标记)
     #[serde(default)]
     pub special: bool,
+    /// 是否是"我收藏的"(true)/ "我创建的"(false). 接口字段 subscribed;
+    /// 缺失(部分端点不给)按 false 处理, 即归到"创建"侧.
+    #[serde(default)]
+    pub subscribed: bool,
 }
 
 /// 歌单详情(歌单页头部信息)

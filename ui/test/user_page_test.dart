@@ -27,6 +27,7 @@ rust.Playlist playlist(int id, String name, {int count = 2}) => rust.Playlist(
   coverUrl: null,
   trackCount: BigInt.from(count),
   special: false,
+  subscribed: false,
 );
 
 Widget host(Widget child) => MaterialApp(home: child);

@@ -6311,14 +6311,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Playlist dco_decode_playlist(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return Playlist(
       id: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
       coverUrl: dco_decode_opt_String(arr[2]),
       trackCount: dco_decode_u_64(arr[3]),
       special: dco_decode_bool(arr[4]),
+      subscribed: dco_decode_bool(arr[5]),
     );
   }
 
@@ -8768,12 +8769,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_coverUrl = sse_decode_opt_String(deserializer);
     var var_trackCount = sse_decode_u_64(deserializer);
     var var_special = sse_decode_bool(deserializer);
+    var var_subscribed = sse_decode_bool(deserializer);
     return Playlist(
       id: var_id,
       name: var_name,
       coverUrl: var_coverUrl,
       trackCount: var_trackCount,
       special: var_special,
+      subscribed: var_subscribed,
     );
   }
 
@@ -11051,6 +11054,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.coverUrl, serializer);
     sse_encode_u_64(self.trackCount, serializer);
     sse_encode_bool(self.special, serializer);
+    sse_encode_bool(self.subscribed, serializer);
   }
 
   @protected

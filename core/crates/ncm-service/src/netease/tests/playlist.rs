@@ -166,3 +166,16 @@ fn recent_bucket_unwraps_item_data() {
     assert_eq!(album.track_count, 7);
     assert!(parse_album_item(&items[1]).is_none(), "空名称的专辑要跳过");
 }
+
+/// ---- 拆"创建 / 收藏": Playlist.subscribed(2026-11 车道 F) ----
+#[test]
+fn parse_playlist_reads_subscribed() {
+    // 接口给的 `subscribed: true` = 我收藏的; false = 我创建的
+    let sub = json!({"id": 11, "name": "收藏的", "trackCount": 3, "subscribed": true});
+    assert!(parse_playlist(&sub).expect("应能解析").subscribed);
+    let own = json!({"id": 12, "name": "创建的", "trackCount": 4, "subscribed": false});
+    assert!(!parse_playlist(&own).expect("应能解析").subscribed);
+    // 缺字段(部分端点不给)按创建侧处理, 不能当收藏
+    let bare = json!({"id": 13, "name": "没给字段", "trackCount": 5});
+    assert!(!parse_playlist(&bare).expect("应能解析").subscribed);
+}

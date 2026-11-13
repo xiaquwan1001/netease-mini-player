@@ -221,6 +221,7 @@ void main() {
                 coverUrl: null,
                 trackCount: BigInt.from(3),
                 special: false,
+                subscribed: false,
               ),
             ],
             loadPodcasts: () async => [
@@ -298,6 +299,7 @@ void main() {
               coverUrl: null,
               trackCount: BigInt.from(12),
               special: false,
+              subscribed: false,
             ),
           ],
         );

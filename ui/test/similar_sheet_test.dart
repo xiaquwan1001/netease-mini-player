@@ -46,6 +46,7 @@ void main() {
                   coverUrl: null,
                   trackCount: BigInt.from(20),
                   special: false,
+                  subscribed: false,
                 ),
               ],
             ),

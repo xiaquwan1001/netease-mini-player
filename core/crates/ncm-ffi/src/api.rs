@@ -826,6 +826,8 @@ pub struct _Playlist {
     pub track_count: u64,
     /// 是否"我喜欢的音乐"
     pub special: bool,
+    /// 是否"我收藏的"(true = 收藏, false = 创建)
+    pub subscribed: bool,
 }
 
 fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, String> {

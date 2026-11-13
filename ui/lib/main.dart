@@ -1452,6 +1452,7 @@ class _HomePageState extends State<HomePage> {
         coverUrl: item.coverUrl,
         trackCount: item.trackCount,
         special: false,
+        subscribed: false,
       ),
     );
   }

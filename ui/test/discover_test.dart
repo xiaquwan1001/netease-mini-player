@@ -24,6 +24,7 @@ rust.Playlist playlist(int id, String name, int count) => rust.Playlist(
   coverUrl: null,
   trackCount: BigInt.from(count),
   special: false,
+  subscribed: false,
 );
 
 Widget host(VoidCallback onTap) => MaterialApp(

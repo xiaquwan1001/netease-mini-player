@@ -529,6 +529,10 @@ pub fn parse_search_exact(body: &Value) -> SearchExact {
                 cover_url: str_of(v, "coverImgUrl").filter(|s| !s.is_empty()),
                 track_count: u64_of(v, "trackCount").unwrap_or(0),
                 special: u64_of(v, "specialType").map(|t| t == 5).unwrap_or(false),
+                subscribed: v
+                    .get("subscribed")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             })
         })
         .collect();

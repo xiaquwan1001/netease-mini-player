@@ -59,6 +59,7 @@ Widget _mine() => MineView(
       coverUrl: null,
       trackCount: BigInt.from(5),
       special: false,
+      subscribed: false,
     ),
   ],
   loadPodcasts: () async => [],

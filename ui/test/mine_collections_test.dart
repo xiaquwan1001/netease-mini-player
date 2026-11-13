@@ -25,6 +25,7 @@ rust.Playlist playlist(int id, String name) => rust.Playlist(
   coverUrl: null,
   trackCount: BigInt.from(5),
   special: false,
+  subscribed: false,
 );
 
 rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(

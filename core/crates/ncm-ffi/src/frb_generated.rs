@@ -5637,6 +5637,7 @@ const _: fn() = || {
         let _: Option<String> = Playlist.cover_url;
         let _: u64 = Playlist.track_count;
         let _: bool = Playlist.special;
+        let _: bool = Playlist.subscribed;
     }
     {
         let PlaylistCategory = None::<crate::api::PlaylistCategory>.unwrap();
@@ -7573,12 +7574,14 @@ impl SseDecode for crate::api::Playlist {
         let mut var_coverUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_trackCount = <u64>::sse_decode(deserializer);
         let mut var_special = <bool>::sse_decode(deserializer);
+        let mut var_subscribed = <bool>::sse_decode(deserializer);
         return crate::api::Playlist {
             id: var_id,
             name: var_name,
             cover_url: var_coverUrl,
             track_count: var_trackCount,
             special: var_special,
+            subscribed: var_subscribed,
         };
     }
 }
@@ -9653,6 +9656,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::Playlist> {
             self.0.cover_url.into_into_dart().into_dart(),
             self.0.track_count.into_into_dart().into_dart(),
             self.0.special.into_into_dart().into_dart(),
+            self.0.subscribed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12051,6 +12055,7 @@ impl SseEncode for crate::api::Playlist {
         <Option<String>>::sse_encode(self.cover_url, serializer);
         <u64>::sse_encode(self.track_count, serializer);
         <bool>::sse_encode(self.special, serializer);
+        <bool>::sse_encode(self.subscribed, serializer);
     }
 }
 

@@ -132,6 +132,11 @@ pub(super) fn parse_playlist(v: &Value) -> Option<Playlist> {
             .or_else(|| str_of(v, "picUrl")),
         track_count: u64_of(v, "trackCount").unwrap_or(0),
         special: v.get("specialType").and_then(Value::as_i64) == Some(5),
+        // "创建 / 收藏" 的区分: 接口字段 subscribed(true = 收藏的). 部分端点不给, 按创建侧处理.
+        subscribed: v
+            .get("subscribed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 

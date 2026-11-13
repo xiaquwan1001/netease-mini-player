@@ -1034,5 +1034,9 @@ pub(super) fn parse_style_playlist(v: &Value) -> Option<Playlist> {
             .or_else(|| u64_of(v, "trackCount"))
             .unwrap_or(0),
         special: false,
+        subscribed: v
+            .get("subscribed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }

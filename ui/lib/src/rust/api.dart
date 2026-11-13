@@ -2385,12 +2385,16 @@ class Playlist {
   /// 是否"我喜欢的音乐"
   final bool special;
 
+  /// 是否"我收藏的"(true = 收藏, false = 创建)
+  final bool subscribed;
+
   const Playlist({
     required this.id,
     required this.name,
     this.coverUrl,
     required this.trackCount,
     required this.special,
+    required this.subscribed,
   });
 
   @override
@@ -2399,7 +2403,8 @@ class Playlist {
       name.hashCode ^
       coverUrl.hashCode ^
       trackCount.hashCode ^
-      special.hashCode;
+      special.hashCode ^
+      subscribed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2410,7 +2415,8 @@ class Playlist {
           name == other.name &&
           coverUrl == other.coverUrl &&
           trackCount == other.trackCount &&
-          special == other.special;
+          special == other.special &&
+          subscribed == other.subscribed;
 }
 
 class PlaylistCategory {
