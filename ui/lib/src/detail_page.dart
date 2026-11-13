@@ -624,7 +624,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       palette: _palette,
       child: Card(
         color: theme.colorScheme.surface.withValues(alpha: 0.82),
-        margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        margin: const EdgeInsets.fromLTRB(0, 12, 0, 0),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -1001,7 +1001,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   Widget _buildHeaderCard(rust.PodcastRadio radio) {
     final theme = Theme.of(context);
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+      margin: const EdgeInsets.fromLTRB(0, 12, 0, 0),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
