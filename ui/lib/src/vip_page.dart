@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 黑胶会员只读页 · 视图模型(纯 Dart, 不依赖 Rust 绑定)
 /// 数据由注入的 loader 提供, Rust 接入时在外层做 DTO 到 View 的转换。
@@ -192,7 +193,7 @@ class _VipPageState extends State<VipPage> {
 
   Widget _buildBody(BuildContext context) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     final error = _error;
     if (error != null) {
@@ -200,7 +201,7 @@ class _VipPageState extends State<VipPage> {
     }
     final data = _data;
     if (data == null) {
-      return const Center(child: Text('暂无数据'));
+      return const EmptyView(title: '暂无数据');
     }
     if (!data.isLoggedIn) {
       return _NotLoggedInView(onLogin: widget.onLogin);

@@ -6,6 +6,7 @@ import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
+import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 typedef AlbumLoader = Future<rust.AlbumDetailDto> Function(BigInt albumId);
@@ -294,14 +295,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
                               ),
                               label: Text(_subscribed ? '已收藏' : '收藏专辑'),
                             ),
-                            if (_subBusy)
-                              const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
+                            if (_subBusy) const LoadingView.inline(size: 14),
                           ],
                         ),
                     ],
@@ -332,7 +326,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
 
   Widget _buildSongs(BuildContext context, List<rust.SongDto> songs) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (_error != null) {
       return Padding(
@@ -351,8 +345,12 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
       );
     }
     if (songs.isEmpty) {
-      return const Center(child: Text('这张专辑暂无曲目, 先去听听别的吧'));
+      return const EmptyView(
+        icon: Icons.music_note_outlined,
+        title: '这张专辑暂无曲目, 先去听听别的吧',
+      );
     }
+    // 非分页: 专辑曲目随专辑详情一次全量返回
     return ListView.builder(
       // 手势条留白(审查 P1-7.15: 全页列表要算底部 inset)
       padding: EdgeInsets.only(

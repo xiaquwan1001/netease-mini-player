@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'state_views.dart';
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 
@@ -131,16 +132,16 @@ class _SimilarSheetState extends State<_SimilarSheet> {
             ),
           )
         else if (songs == null)
-          const Expanded(child: Center(child: CircularProgressIndicator()))
+          const Expanded(child: LoadingView())
         else
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(bottom: 16),
               children: [
                 if (songs.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('没有找到相似歌曲', style: theme.textTheme.bodySmall),
+                  const EmptyView(
+                    padding: EdgeInsets.all(16),
+                    title: '没有找到相似歌曲',
                   ),
                 for (var i = 0; i < songs.length; i++)
                   ListTile(

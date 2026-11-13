@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'app_settings.dart';
 import 'chart_section.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 搜索页的"落地内容": 历史 + 猜你想搜 + 热门榜.
 /// 没有输入时展示, 和搜索结果共用一个滚动区, 避免列表套列表.
@@ -155,13 +156,7 @@ class SearchLanding extends StatelessWidget {
         if (showHot)
           _SectionTitle(
             title: '热门搜索',
-            trailing: hotLoading
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : null,
+            trailing: hotLoading ? const LoadingView.inline(size: 16) : null,
           ),
         if (showHot && hotError != null)
           Padding(
@@ -187,9 +182,9 @@ class SearchLanding extends StatelessWidget {
             ),
           )
         else if (showHot && !hotLoading && hot.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text('暂无热词', style: Theme.of(context).textTheme.bodySmall),
+          const EmptyView(
+            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            title: '暂无热词',
           )
         else if (showHot)
           Card(

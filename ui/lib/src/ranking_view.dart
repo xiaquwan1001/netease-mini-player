@@ -5,6 +5,7 @@ import 'layout.dart' show kSongRowPadding;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 听歌排行(需登录): 总量排行 + 当周排行.
 ///
@@ -136,15 +137,12 @@ class _PlayRankingViewState extends State<PlayRankingView>
               key: ValueKey(_period),
               loader: _pagedLoader,
               refreshable: false,
-              emptyBuilder: (context, _) => Padding(
+              emptyBuilder: (context, _) => EmptyView(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 10,
                 ),
-                child: Text(
-                  _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
-                  style: theme.textTheme.bodySmall,
-                ),
+                title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
               ),
               itemBuilder: (context, e, i, items) {
                 final playable = [
@@ -177,15 +175,9 @@ class _PlayRankingViewState extends State<PlayRankingView>
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
-              return const Padding(
+              return const LoadingView(
+                size: 22,
                 padding: EdgeInsets.symmetric(vertical: 20),
-                child: Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
               );
             }
             if (snap.hasError) {
@@ -240,15 +232,12 @@ class _PlayRankingViewState extends State<PlayRankingView>
             }
             final entries = snap.data ?? const <rust.PlayRankEntryDto>[];
             if (entries.isEmpty) {
-              return Padding(
+              return EmptyView(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 10,
                 ),
-                child: Text(
-                  _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
-                  style: theme.textTheme.bodySmall,
-                ),
+                title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
               );
             }
             final shown = widget.compact ? entries.take(5).toList() : entries;

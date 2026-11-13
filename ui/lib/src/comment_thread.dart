@@ -8,6 +8,7 @@ import 'net_retry.dart';
 import 'sheet_header.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
+import 'state_views.dart';
 import 'user_nav.dart';
 
 /// 评论线程: 列表 + 点赞 + 楼层回复 + 发回复.
@@ -791,16 +792,11 @@ class CommentThreadState extends State<CommentThread> {
             ),
           ],
           const SizedBox(height: 8),
+          // 非分页: 评论面板嵌在详情页滚动体内(Column + 触底加载更多评论), 换 PagedListView 需整页重构
           if (_loading)
-            const Padding(
+            const LoadingView(
+              size: 22,
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(
-                child: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
             )
           else if (_error != null)
             Row(
@@ -815,9 +811,9 @@ class CommentThreadState extends State<CommentThread> {
               ],
             )
           else if (_items.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('还没有评论', style: theme.textTheme.bodySmall),
+            const EmptyView(
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              title: '还没有评论',
             )
           else
             for (var i = 0; i < _items.length; i++)
@@ -847,11 +843,7 @@ class CommentThreadState extends State<CommentThread> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (_loadingMore)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                  const LoadingView.inline(size: 20)
                 else if (_moreError != null)
                   TextButton(
                     onPressed: _loadMore,
@@ -1286,10 +1278,11 @@ class _RepliesSheetState extends State<_RepliesSheet> {
               ),
             ),
             const Divider(height: 1),
+            // 非分页: 楼层回复一次全量返回, 无游标
             Expanded(
               child: replies == null
                   ? (_error == null
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const LoadingView()
                         : Center(
                             child: Text(
                               _error!,
@@ -1300,9 +1293,7 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                             ),
                           ))
                   : replies.isEmpty
-                  ? Center(
-                      child: Text('还没有回复', style: theme.textTheme.bodySmall),
-                    )
+                  ? const EmptyView(title: '还没有回复')
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       itemCount: replies.length,
@@ -1368,11 +1359,7 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                     FilledButton(
                       onPressed: _sending ? null : _send,
                       child: _sending
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const LoadingView.inline(size: 16)
                           : const Text('发送'),
                     ),
                   ],
@@ -1542,11 +1529,7 @@ class _ComposeSheetState extends State<_ComposeSheet> {
                   FilledButton(
                     onPressed: _canSend ? _send : null,
                     child: _sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                        ? const LoadingView.inline(size: 16)
                         : const Text('发送'),
                   ),
                 ],

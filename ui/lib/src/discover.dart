@@ -6,6 +6,7 @@ import 'rust/api.dart' as rust;
 import 'error_views.dart' show FullError;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
+import 'state_views.dart';
 import 'toast.dart' show showToastWith;
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
@@ -154,11 +155,15 @@ class _DailySongsTabState extends State<_DailySongsTab>
       return FullError(message: _error!, onRetry: _load);
     }
     if (songs == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (songs.isEmpty) {
-      return const Center(child: Text('今天没有推荐歌曲'));
+      return const EmptyView(
+        icon: Icons.music_note_outlined,
+        title: '今天没有推荐歌曲',
+      );
     }
+    // 非分页: 每日推荐歌曲一次全量返回, 接口无分页
     return ListView.builder(
       itemCount: songs.length,
       itemBuilder: (context, i) {
@@ -291,7 +296,6 @@ class _HistoryTabState extends State<_HistoryTab>
   }
 
   Widget _buildBody(BuildContext context) {
-    final theme = Theme.of(context);
     if (_error != null) {
       final retry = _retry;
       return retry == null
@@ -302,7 +306,7 @@ class _HistoryTabState extends State<_HistoryTab>
     if (_date != null) {
       final songs = _songs;
       if (songs == null) {
-        return const Center(child: CircularProgressIndicator());
+        return const LoadingView();
       }
       return Column(
         children: [
@@ -320,6 +324,7 @@ class _HistoryTabState extends State<_HistoryTab>
             subtitle: Text('${songs.length} 首'),
           ),
           const Divider(height: 1),
+          // 非分页: 某日日推歌曲一次全量返回, 接口无分页
           Expanded(
             child: songs.isEmpty
                 ? const Center(child: Text('这一天没有记录'))
@@ -345,20 +350,15 @@ class _HistoryTabState extends State<_HistoryTab>
     }
     final dates = _dates;
     if (dates == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (dates.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(
-            '最近 5 次日推仅黑胶 VIP 可见\n(开通后明天再来就会出现在这里)',
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
+      return const EmptyView(
+        icon: Icons.vpn_key_outlined,
+        title: '最近 5 次日推仅黑胶 VIP 可见\n(开通后明天再来就会出现在这里)',
       );
     }
+    // 非分页: 最近 5 次日推, 固定条数
     return ListView.separated(
       itemCount: dates.length,
       separatorBuilder: (_, _) => const Divider(height: 1),
@@ -419,11 +419,15 @@ class _DailyPlaylistsTabState extends State<_DailyPlaylistsTab>
       return FullError(message: '推荐歌单需要登录后才能获取\n$_error', onRetry: _load);
     }
     if (lists == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (lists.isEmpty) {
-      return const Center(child: Text('今天没有推荐歌单'));
+      return const EmptyView(
+        icon: Icons.queue_music_outlined,
+        title: '今天没有推荐歌单',
+      );
     }
+    // 非分页: 推荐歌单随一次请求全量返回, 接口无分页
     return ListView.builder(
       itemCount: lists.length,
       itemBuilder: (context, i) {
@@ -669,11 +673,12 @@ class _RecentBucketTabState<T> extends State<_RecentBucketTab<T>>
     }
     final items = _items;
     if (items == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const LoadingView();
     }
     if (items.isEmpty) {
-      return Center(child: Text(widget.emptyText));
+      return EmptyView(title: widget.emptyText);
     }
+    // 非分页: 单次取全(load 一次拿完), 无更多页
     return ListView.builder(
       itemCount: items.length,
       itemBuilder: (context, i) =>
