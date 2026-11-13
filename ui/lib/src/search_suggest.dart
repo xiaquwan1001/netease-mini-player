@@ -34,6 +34,9 @@ String suggestKindLabel(String kind) {
 }
 
 /// 输入联想面板: 点条目 → 用它做一次搜索(与原版一致: 先给建议, 再出结果).
+///
+/// 2026-11 需求: 联想结果要**按分类纵向分组**(单曲 / 歌手 / 专辑 / 歌单 / 其他),
+/// 之前是平铺列表 + 每行尾部一个小 tag, 看不出分类边界, 也无法按类筛选。
 class SuggestionPanel extends StatelessWidget {
   const SuggestionPanel({
     super.key,
@@ -44,39 +47,104 @@ class SuggestionPanel extends StatelessWidget {
   final List<rust.SuggestItem> items;
   final void Function(rust.SuggestItem) onSelected;
 
+  /// 固定优先顺序; 未知分类按返回顺序补在最后。
+  static const List<String> _kindOrder = [
+    'song',
+    'artist',
+    'album',
+    'playlist',
+  ];
+
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) return const SizedBox.shrink();
+    final groups = <String, List<rust.SuggestItem>>{};
+    for (final item in items) {
+      groups.putIfAbsent(item.kind, () => <rust.SuggestItem>[]).add(item);
+    }
+    final orderedKinds = <String>[
+      for (final kind in _kindOrder)
+        if (groups.containsKey(kind)) kind,
+      for (final kind in groups.keys)
+        if (!_kindOrder.contains(kind)) kind,
+    ];
     return Card(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
       clipBehavior: Clip.antiAlias,
       child: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final item in items)
-            ListTile(
-              dense: true,
-              leading: item.coverUrl == null
-                  ? Icon(suggestIcon(item.kind), size: 20)
-                  : CoverArt(url: item.coverUrl, size: 32, radius: 4),
-              title: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+          for (final kind in orderedKinds) ...[
+            _SuggestGroupHeader(kind: kind, count: groups[kind]!.length),
+            for (final item in groups[kind]!)
+              ListTile(
+                dense: true,
+                leading: item.coverUrl == null
+                    ? Icon(_iconOf(kind), size: 20)
+                    : CoverArt(url: item.coverUrl, size: 32, radius: 4),
+                title: Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: item.subtitle.isEmpty
+                    ? null
+                    : Text(
+                        item.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                onTap: () => onSelected(item),
               ),
-              subtitle: item.subtitle.isEmpty
-                  ? null
-                  : Text(
-                      item.subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-              trailing: Text(
-                suggestKindLabel(item.kind),
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              onTap: () => onSelected(item),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 联想条目自带的 kind 与结果页的分类名对齐(kind 可能为空/未知)。
+  static String _labelOf(String kind) {
+    final label = suggestKindLabel(kind);
+    return label.isEmpty ? '其他' : label;
+  }
+
+  static IconData _iconOf(String kind) =>
+      kind.isEmpty ? Icons.search : suggestIcon(kind);
+}
+
+/// 分组标题(单曲 / 歌手 / …  右侧组内条数), 与结果页的区块标题同一视觉语言。
+class _SuggestGroupHeader extends StatelessWidget {
+  const _SuggestGroupHeader({required this.kind, required this.count});
+
+  final String kind;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final label = SuggestionPanel._labelOf(kind);
+    return Container(
+      width: double.infinity,
+      color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+      child: Row(
+        children: [
+          Icon(SuggestionPanel._iconOf(kind), size: 14, color: scheme.outline),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurfaceVariant,
             ),
+          ),
+          const Spacer(),
+          Text(
+            '$count',
+            style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
+          ),
         ],
       ),
     );

@@ -74,9 +74,6 @@ class SearchLanding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // 开关即时生效: 设置页改值会 notifyListeners, main 的 SettingsScope 重建整棵树,
-    // 这里每次 build 读取最新值即可, 无需自己监听.
-    final showHot = AppSettings.instance.showHotSearch;
     final hasRecommended = recommended != null && recommended!.isNotEmpty;
     // 字段是 public 的, 先提成本地变量才能做 null 提升
     final chartOpen = onOpenChartPlaylist;
@@ -143,35 +140,132 @@ class SearchLanding extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (!showHot && history.isEmpty && !hasRecommended)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Center(
-              child: Text(
-                '在设置里开启「显示热搜建议」可看热门榜',
-                style: Theme.of(context).textTheme.bodySmall,
+        // 热门搜索: 栏目常驻(不再整块被设置项隐藏), 展开/收起 + 开关都在这一行,
+        // 用户不必再跳设置页(2026-11 需求 7)。
+        _HotSection(
+          hot: hot,
+          loading: hotLoading,
+          error: hotError,
+          onRetry: onRetryHot,
+          onSelected: onSelected,
+        ),
+        // 排行榜: 2026-11 用户要求从「推荐」搬来。放最后, 不抢搜索历史/热词的首屏位置。
+        if (chartOpen != null) ...[
+          const SizedBox(height: 12),
+          ChartSection(load: loadCharts, onOpen: chartOpen),
+        ],
+      ],
+    );
+  }
+}
+
+/// 热门搜索: 栏目本身常驻, 内容由右侧按钮控制(展开 / 收起 / 关闭 / 重新开启)。
+///
+/// 2026-11 需求: 原来「显示热搜建议」开关在设置页, 搜索页被关掉后只剩一句
+/// 「去设置里开启」; 现在开关搬到这里, 且栏目标题永远显示, 不再整块消失。
+class _HotSection extends StatefulWidget {
+  const _HotSection({
+    required this.hot,
+    required this.loading,
+    required this.error,
+    required this.onRetry,
+    required this.onSelected,
+  });
+
+  final List<rust.HotSearchTerm> hot;
+  final bool loading;
+  final String? error;
+  final VoidCallback? onRetry;
+  final void Function(String keyword) onSelected;
+
+  @override
+  State<_HotSection> createState() => _HotSectionState();
+}
+
+class _HotSectionState extends State<_HotSection> {
+  /// 展开态只在本次会话内有效(不落盘): 属于临时浏览状态, 不是长期偏好。
+  bool _expanded = true;
+
+  void _toggle() {
+    // 关闭状态下点按钮 = 重新开启(直接写设置, 不跳设置页)
+    if (!AppSettings.instance.showHotSearch) {
+      AppSettings.instance.update(showHotSearch: true);
+      setState(() => _expanded = true);
+      return;
+    }
+    setState(() => _expanded = !_expanded);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = AppSettings.instance.showHotSearch;
+    final expanded = enabled && _expanded;
+    final hot = widget.hot;
+    final retry = widget.onRetry;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(
+          title: '热门搜索',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (expanded && widget.loading)
+                const Padding(
+                  padding: EdgeInsets.only(right: 4),
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              TextButton(
+                onPressed: _toggle,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(48, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                ),
+                child: Text(!enabled ? '开启' : (_expanded ? '收起' : '展开')),
               ),
+              if (enabled)
+                IconButton(
+                  tooltip: '关闭热门搜索',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    AppSettings.instance.update(showHotSearch: false);
+                    setState(() {});
+                  },
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+            ],
+          ),
+        ),
+        if (!enabled)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              '热门搜索已关闭, 点「开启」恢复',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: scheme.onSurfaceVariant),
             ),
-          ),
-        if (showHot)
-          _SectionTitle(
-            title: '热门搜索',
-            trailing: hotLoading ? const LoadingView.inline(size: 16) : null,
-          ),
-        if (showHot && hotError != null)
+          )
+        else if (!expanded)
+          const SizedBox.shrink()
+        else if (widget.error != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
-                    '热词获取失败: $hotError',
+                    '热词获取失败: ${widget.error}',
                     style: TextStyle(color: scheme.error, fontSize: 12),
                   ),
                 ),
-                if (onRetryHot != null)
+                if (retry != null)
                   TextButton(
-                    onPressed: onRetryHot,
+                    onPressed: retry,
                     style: TextButton.styleFrom(
                       minimumSize: const Size(48, 48),
                       tapTargetSize: MaterialTapTargetSize.padded,
@@ -181,12 +275,17 @@ class SearchLanding extends StatelessWidget {
               ],
             ),
           )
-        else if (showHot && !hotLoading && hot.isEmpty)
+        else if (widget.loading && hot.isEmpty)
+          const EmptyView(
+            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            title: '正在加载热词…',
+          )
+        else if (hot.isEmpty)
           const EmptyView(
             padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
             title: '暂无热词',
           )
-        else if (showHot)
+        else
           Card(
             margin: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
@@ -204,16 +303,11 @@ class SearchLanding extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     trailing: const Icon(Icons.chevron_right, size: 18),
-                    onTap: () => onSelected(term.keyword),
+                    onTap: () => widget.onSelected(term.keyword),
                   ),
               ],
             ),
           ),
-        // 排行榜: 2026-11 用户要求从「推荐」搬来。放最后, 不抢搜索历史/热词的首屏位置。
-        if (chartOpen != null) ...[
-          const SizedBox(height: 12),
-          ChartSection(load: loadCharts, onOpen: chartOpen),
-        ],
       ],
     );
   }

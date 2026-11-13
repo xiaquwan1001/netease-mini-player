@@ -146,6 +146,36 @@ impl NeteaseProvider {
         })
     }
 
+    /// 发送私信(需登录). 上游 /api/msg/private/send: type=text + msg + userIds=[uid].
+    ///
+    /// 这是 api-enhanced 的 send_text 模块(公开接口), 属于"发送"类能力:
+    /// 失败一律按 ProviderError 上抛, 风控/未登录由 check_body/map_error 归类。
+    pub(super) fn private_send(
+        &self,
+        user_id: u64,
+        content: String,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            if user_id == 0 {
+                return Err(ProviderError::not_found("用户 id 为空"));
+            }
+            let text = content.trim();
+            if text.is_empty() {
+                return Err(ProviderError::unsupported("私信内容不能为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("发送私信需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("user_ids", &user_id.to_string())
+                .param("msg", text);
+            let resp = client.send_text(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
     /// 通知(需登录)
     pub(super) fn message_notices(
         &self,
@@ -512,11 +542,59 @@ pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
                         text,
                         detail,
                         time_ms: u64_of(n, "time").unwrap_or(0),
+                        // 通知里只有一部分(评论/赞)带 user 和资源, 其余自然为 None
+                        user_id: user.and_then(|u| u64_of(u, "userId")),
+                        thread_id: general.and_then(thread_from_resource),
+                        comment_id: general.and_then(|g| u64_of(g, "commentId")),
                     }
                 })
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// 从消息里的资源描述推出评论线程 id。
+///
+/// 不同版本的上游在 resourceJson / generalNotice 里给的字段名不一致
+/// (type/resourceType + id/resourceId, 或者直接给 threadId), 这里按"先直给、
+/// 再按 type 映射"的顺序兜底; 推不出就返回 None ⇒ UI 退化成不可跳转(不报错)。
+fn thread_from_resource(v: &Value) -> Option<String> {
+    if let Some(t) = str_of(v, "threadId").filter(|s| !s.is_empty()) {
+        return Some(t);
+    }
+    let id = u64_of(v, "id")
+        .or_else(|| u64_of(v, "resourceId"))
+        .or_else(|| u64_of(v, "resourceid"))?;
+    let ty = v
+        .get("type")
+        .or_else(|| v.get("resourceType"))
+        .or_else(|| v.get("resource_type"));
+    let kind = match ty {
+        // 数字形态(网易云资源码)
+        Some(Value::Number(n)) => match n.as_i64() {
+            Some(3) => "album",
+            Some(4) => "song",
+            Some(5) => "mv",
+            Some(13) => "playlist",
+            Some(19) => "djradio",
+            Some(62) => "video",
+            Some(2) => "event",
+            _ => return None,
+        },
+        // 字符串形态(个别接口给 "song"/"album"…)
+        Some(Value::String(s)) => match s.as_str() {
+            "song" => "song",
+            "album" => "album",
+            "mv" => "mv",
+            "playlist" => "playlist",
+            "djradio" | "podcast" | "radio" => "djradio",
+            "video" => "video",
+            "event" => "event",
+            _ => return None,
+        },
+        _ => return None,
+    };
+    thread_id_for(kind, id)
 }
 
 /// 评论/回复消息: {code, comments:[{commentId, content, beRepliedContent, time,
@@ -543,6 +621,8 @@ pub fn parse_comment_messages(body: &Value) -> Vec<InboxItem> {
                     } else {
                         replied
                     };
+                    let resource_json = str_of(c, "resourceJson")
+                        .and_then(|s| serde_json::from_str::<Value>(&s).ok());
                     Some(InboxItem {
                         id: u64_of(c, "commentId").unwrap_or(0),
                         kind: "comment".to_string(),
@@ -551,6 +631,13 @@ pub fn parse_comment_messages(body: &Value) -> Vec<InboxItem> {
                         text,
                         detail,
                         time_ms: u64_of(c, "time").unwrap_or(0),
+                        // 2026-11: 补三字段, 让消息中心能「点头像进主页 / 点条目进评论线程回复」
+                        user_id: user.and_then(|u| u64_of(u, "userId")),
+                        thread_id: resource_json
+                            .as_ref()
+                            .and_then(thread_from_resource)
+                            .or_else(|| str_of(c, "threadId").filter(|s| !s.is_empty())),
+                        comment_id: u64_of(c, "commentId"),
                     })
                 })
                 .collect()
@@ -827,4 +914,36 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
         });
     }
     out
+}
+#[cfg(test)]
+mod inbox_tests {
+    use super::thread_from_resource;
+    use serde_json::json;
+
+    #[test]
+    fn thread_prefers_explicit_thread_id() {
+        assert_eq!(
+            thread_from_resource(&json!({"threadId": "R_SO_4_1"})).as_deref(),
+            Some("R_SO_4_1")
+        );
+    }
+
+    #[test]
+    fn thread_maps_numeric_type_and_id() {
+        assert_eq!(
+            thread_from_resource(&json!({"type": 4, "id": 186016})).as_deref(),
+            Some("R_SO_4_186016")
+        );
+        assert_eq!(
+            thread_from_resource(&json!({"resourceType": "album", "resourceId": 3})).as_deref(),
+            Some("R_AL_3_3")
+        );
+    }
+
+    #[test]
+    fn thread_returns_none_when_unmappable() {
+        assert_eq!(thread_from_resource(&json!({"type": 999, "id": 1})), None);
+        assert_eq!(thread_from_resource(&json!({"id": 1})), None);
+        assert_eq!(thread_from_resource(&json!({})), None);
+    }
 }

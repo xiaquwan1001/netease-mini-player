@@ -40,6 +40,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Artist dco_decode_artist(dynamic raw);
 
   @protected
+  ArtistAlbumPageDto dco_decode_artist_album_page_dto(dynamic raw);
+
+  @protected
   ArtistDetailDto dco_decode_artist_detail_dto(dynamic raw);
 
   @protected
@@ -563,9 +566,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto dco_decode_word_lyric_line_dto(dynamic raw);
 
   @protected
-  WordLyricWithSourceDto dco_decode_word_lyric_with_source_dto(dynamic raw);
-
-  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -582,6 +582,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   Artist sse_decode_artist(SseDeserializer deserializer);
+
+  @protected
+  ArtistAlbumPageDto sse_decode_artist_album_page_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   ArtistDetailDto sse_decode_artist_detail_dto(SseDeserializer deserializer);
@@ -1207,11 +1212,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto sse_decode_word_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
-  WordLyricWithSourceDto sse_decode_word_lyric_with_source_dto(
-    SseDeserializer deserializer,
-  );
-
-  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -1231,6 +1231,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_artist(Artist self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_artist_album_page_dto(
+    ArtistAlbumPageDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_artist_detail_dto(
@@ -2027,12 +2033,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_word_lyric_line_dto(
     WordLyricLineDto self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_word_lyric_with_source_dto(
-    WordLyricWithSourceDto self,
     SseSerializer serializer,
   );
 }

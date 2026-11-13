@@ -128,9 +128,14 @@ cd netease-mini-player
 source tools/env.sh          # 用户级 JDK21 / Flutter / Android SDK / Rust(按需改成本机路径)
 
 bash tools/build-linux.sh    # → ui/build/linux/x64/debug/bundle/minincm
-bash tools/build-android.sh  # → ui/build/app/outputs/flutter-apk/app-debug.apk
+bash tools/build-android.sh  # → ui/build/app/outputs/flutter-apk/app-x86_64-debug.apk(模拟器)
+                             #   ui/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk(真机)
 bash tools/ci.sh             # 单测 + 桥接测试 + Linux/Android 构建
 ```
+
+不想本地编译? CI 每次 push 都产可直接安装的调试包:
+**Actions → CI → 最新一次运行 → Artifacts → `minincm-debug-apk`**
+(内含 `MiniNCM-debug-x86_64.apk` 给模拟器、`MiniNCM-debug-arm64.apk` 给真机; 包名带 `.dev` 后缀, 可与正式包并存)。
 
 **桌面分发物**(本地也能打, 脚本在 [`packaging/`](packaging/)):
 

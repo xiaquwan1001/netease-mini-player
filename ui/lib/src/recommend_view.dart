@@ -324,7 +324,8 @@ class _QuickActions extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _ActionCard(
-            icon: Icons.bolt,
+            // 与播放条心动档同一图标(local_fire_department), 全 App 唯一
+            icon: Icons.local_fire_department,
             label: '心动模式',
             onTap: onHeartMode,
           ),

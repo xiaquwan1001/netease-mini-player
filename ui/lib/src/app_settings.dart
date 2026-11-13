@@ -72,6 +72,12 @@ class AppSettings extends ChangeNotifier {
   /// 推荐页歌单/播客卡片每屏展示几排(1 排 = 横向滑动, 2 排 = 网格)
   int coverRows = 1;
 
+  /// 方格网格(艺人专辑 / 新碟 / 歌单广场)每行列数, 2-4。
+  ///
+  /// 之前用 maxCrossAxisExtent 拍死列宽: 列数随屏幕漂移、格子末端留白。
+  /// 改为显式列数 + 均分(见 [coverGridDelegate])。
+  int gridColumns = 3;
+
   /// 切回"搜索"底部 tab 时是否丢弃上一次的输入/结果(默认丢弃, 避免残留)
   bool clearSearchOnTabSwitch = true;
 
@@ -204,6 +210,10 @@ class AppSettings extends ChangeNotifier {
           if (rows is num && (rows.toInt() == 1 || rows.toInt() == 2)) {
             coverRows = rows.toInt();
           }
+          final cols = raw['gridColumns'];
+          if (cols is num && cols.toInt() >= 2 && cols.toInt() <= 4) {
+            gridColumns = cols.toInt();
+          }
           final clearOnSwitch = raw['clearSearchOnTabSwitch'];
           if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
           final hotSearch = raw['showHotSearch'];
@@ -293,6 +303,7 @@ class AppSettings extends ChangeNotifier {
     double? textScale,
     String? audioLevel,
     int? coverRows,
+    int? gridColumns,
     bool? clearSearchOnTabSwitch,
     bool? showHotSearch,
     CoverQuality? coverQuality,
@@ -326,6 +337,9 @@ class AppSettings extends ChangeNotifier {
     }
     if (coverRows != null && (coverRows == 1 || coverRows == 2)) {
       this.coverRows = coverRows;
+    }
+    if (gridColumns != null && gridColumns >= 2 && gridColumns <= 4) {
+      this.gridColumns = gridColumns;
     }
     if (clearSearchOnTabSwitch != null) {
       this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
@@ -370,6 +384,7 @@ class AppSettings extends ChangeNotifier {
           'textScale': textScale,
           'audioLevel': audioLevel,
           'coverRows': coverRows,
+          'gridColumns': gridColumns,
           'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
           'showHotSearch': showHotSearch,
           'coverQuality': coverQuality.id,

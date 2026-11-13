@@ -313,7 +313,9 @@ class MiniPlayerBar extends StatelessWidget {
                         : '播放顺序: ${playModeLabels[data.mode] ?? ''}',
                     icon: Icon(
                       data.heartActive
-                          ? Icons.auto_awesome
+                          // 全 App 统一: 心动 = local_fire_department(与推荐页入口同图)。
+                          // auto_awesome 归「每日推荐」独占, 不再两种语义共用一个图标。
+                          ? Icons.local_fire_department
                           : (playModeIcons[data.mode] ?? Icons.repeat),
                       size: 22,
                     ),

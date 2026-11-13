@@ -285,6 +285,16 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::artist_songs_page(self, artist_id, offset, limit)
     }
 
+    /// 歌手专辑(artist_album): offset/limit 分页, more=还有下一页
+    fn artist_albums_page<'a>(
+        &'a self,
+        artist_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistAlbumPage>> {
+        NeteaseProvider::artist_albums_page(self, artist_id, offset, limit)
+    }
+
     /// 关注/取消关注歌手(artist_sub: t=1 sub / t=0 unsub), 需要登录.
     fn toggle_artist_sub<'a>(
         &'a self,
@@ -517,6 +527,15 @@ impl Provider for NeteaseProvider {
         before_ms: u64,
     ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
         NeteaseProvider::private_history(self, user_id, limit, before_ms)
+    }
+
+    /// 发送私信(需登录)
+    fn private_send(
+        &self,
+        user_id: u64,
+        content: String,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        NeteaseProvider::private_send(self, user_id, content)
     }
 
     /// 通知(需登录)

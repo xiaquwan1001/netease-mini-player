@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'library_view.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart';
+import 'user_nav.dart';
 
 /// 综合搜索结果: 单曲 / 歌手 / 专辑 / 歌单 / 播客.
 ///
@@ -43,7 +44,7 @@ class SearchResultsView extends StatefulWidget {
 }
 
 /// 五个分类(顺序即 chip 顺序)
-enum _Section { songs, artists, albums, playlists, podcasts }
+enum _Section { songs, artists, albums, playlists, podcasts, users }
 
 extension on _Section {
   String get label => switch (this) {
@@ -52,6 +53,7 @@ extension on _Section {
     _Section.albums => '专辑',
     _Section.playlists => '歌单',
     _Section.podcasts => '播客',
+    _Section.users => '用户',
   };
 }
 
@@ -66,14 +68,11 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     final visible = visibleSongs(bundle.songs, widget.liked);
     final hidden = hiddenUnplayableCount(bundle.songs, widget.liked);
 
-    final available = <_Section>[
-      if (visible.isNotEmpty) _Section.songs,
-      if (bundle.artists.isNotEmpty) _Section.artists,
-      if (bundle.albums.isNotEmpty) _Section.albums,
-      if (bundle.playlists.isNotEmpty) _Section.playlists,
-      if (bundle.podcasts.isNotEmpty) _Section.podcasts,
-    ];
-    if (available.isEmpty) {
+    // 分类条**始终显示全部 5 个分类**: 以前空分类直接隐藏 chip, 用户会以为
+    // 「艺人/专辑分类被删了」或「被横向滚动裁掉看不见」(2026-11 反馈)。
+    // 空分类点进去给明确提示, 而不是让分类自己消失。
+    final available = _Section.values;
+    if (!available.any((s) => _hasData(s, visible))) {
       return Center(
         child: Text(
           '没有找到相关内容',
@@ -81,10 +80,9 @@ class _SearchResultsViewState extends State<SearchResultsView> {
         ),
       );
     }
-    // 结果包变了以后旧选择可能已经不存在(比如新搜索没有专辑) ⇒ 回落到第一个
-    final selected = available.contains(_selected)
-        ? _selected!
-        : available.first;
+    // 旧选择永远有效; 默认落在第一个有数据的分类上(通常是单曲)
+    final selected =
+        _selected ?? available.firstWhere((s) => _hasData(s, visible));
 
     return Column(
       children: [
@@ -94,31 +92,71 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     );
   }
 
-  /// 横向分类条: 可横滑, 窄屏(300dp)+大字也不会挤成两行/溢出
+  /// 分类条: `Wrap` 换行铺开(不再横向滚动)。
+  ///
+  /// 横滑版在窄屏上把后两个分类藏在屏幕外, 用户/测试都当成「分类丢了」;
+  /// 换行后 5 个 chip 一定全部看得见, 大字模式最多占两行。
   Widget _sectionBar(
     BuildContext context,
     List<_Section> available,
     _Section selected,
   ) {
-    return SizedBox(
-      height: 48,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        itemCount: available.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final s = available[i];
-          return ChoiceChip(
-            label: Text(s.label),
-            selected: s == selected,
-            // 已选中时再点不做事(避免重建丢滚动位置)
-            onSelected: (_) {
-              if (_selected != s) setState(() => _selected = s);
-            },
-            visualDensity: VisualDensity.compact,
-          );
-        },
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: [
+          for (final s in available)
+            ChoiceChip(
+              label: Text(s.label),
+              selected: s == selected,
+              // 已选中时再点不做事(避免重建丢滚动位置)
+              onSelected: (_) {
+                if (_selected != s) setState(() => _selected = s);
+              },
+              visualDensity: VisualDensity.compact,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// 该分类当前是否有数据(单曲看的是「可见单曲」, 与列表一致)
+  bool _hasData(_Section section, List<rust.SongDto> visible) {
+    final bundle = widget.bundle;
+    return switch (section) {
+      _Section.songs => visible.isNotEmpty,
+      _Section.artists => bundle.artists.isNotEmpty,
+      _Section.albums => bundle.albums.isNotEmpty,
+      _Section.playlists => bundle.playlists.isNotEmpty,
+      _Section.podcasts => bundle.podcasts.isNotEmpty,
+      _Section.users => bundle.users.isNotEmpty,
+    };
+  }
+
+  /// 空分类的占位: 说清「分类在, 只是这次没结果」, 而不是静默隐藏。
+  Widget _emptySectionHint(BuildContext context, _Section section) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '「${section.label}」没有匹配结果',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '这一类仍然可用: 换更长/更准的关键词再搜一次',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: scheme.outline),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -131,6 +169,9 @@ class _SearchResultsViewState extends State<SearchResultsView> {
   ) {
     final scheme = Theme.of(context).colorScheme;
     final bundle = widget.bundle;
+    if (!_hasData(section, visible)) {
+      return _emptySectionHint(context, section);
+    }
     switch (section) {
       case _Section.songs:
         return ListView(
@@ -202,6 +243,20 @@ class _SearchResultsViewState extends State<SearchResultsView> {
               cover: CoverArt(url: p.coverUrl, size: 118, radius: 8),
               name: p.name,
               subtitle: '${p.djName} · ${p.programCount} 集',
+            ),
+        ]);
+      case _Section.users:
+        // 用户(cloudsearch type=1002): 点卡片直接进个人主页, 走全局 UserNav
+        // (与评论/动态同一个入口), 不再单独接一层回调。
+        return _cardWrap(context, [
+          for (final u in bundle.users)
+            _card(
+              context,
+              width: 92,
+              onTap: () => UserNav.open(context, u.id, nickname: u.name),
+              cover: CircleCover(url: u.avatarUrl, size: 72),
+              name: u.name,
+              subtitle: u.signature.isEmpty ? '@${u.id}' : u.signature,
             ),
         ]);
     }

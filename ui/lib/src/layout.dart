@@ -75,3 +75,54 @@ const double kSectionGap = 16;
 
 /// 相邻卡片之间的紧凑垂直间距。
 const double kCardGap = 4;
+
+// ───────────────────────────────────────────────────────────────────────────
+// 方格网格(专辑 / 猜你喜欢 / 新碟 / 歌单广场)统一 delegate
+//
+// 之前三处各写一份 `SliverGridDelegateWithMaxCrossAxisExtent(max:160/180,
+// childAspectRatio:0.72)`:
+//   · 列数随屏宽漂移, 用户无法决定每行几张;
+//   · 0.72 这个 aspect 是按 160dp 列宽手算的估值, 真实列宽变了以后高度不再贴合,
+//     于是封面下方留出一条随屏幕宽度变化的空隙;
+//   · 艺人页还用 `Expanded(CoverArt)` 去填这块高度, 结果方图被压成细长条。
+// 现在: 列数由设置项 [AppSettings.gridColumns] 决定(2-4), 高度 = 正方形封面 +
+// 间距 + 两行文字实测高(按 textScaler 放大), 末端不再有空隙。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 单个网格格子的宽度(整页铺满的场景: 屏宽 - 左右 padding - 列间距)。
+double coverTileWidth(
+  BuildContext context,
+  int columns, {
+  double crossAxisSpacing = 10,
+}) {
+  final width = MediaQuery.sizeOf(context).width;
+  final usable = width - 2 * kPagePadding - (columns - 1) * crossAxisSpacing;
+  return usable <= 0 ? 0 : usable / columns;
+}
+
+/// 方块网格 delegate: 列数固定、格子高 = 封面 + 两行文字(不再拍死 aspect)。
+SliverGridDelegate coverGridDelegate(
+  BuildContext context, {
+  required int columns,
+  double crossAxisSpacing = 10,
+  double mainAxisSpacing = 12,
+}) {
+  final cols = columns < 1 ? 1 : columns;
+  final tileWidth = coverTileWidth(
+    context,
+    cols,
+    crossAxisSpacing: crossAxisSpacing,
+  );
+  final scaler = MediaQuery.textScalerOf(context);
+  // 封面下的两行文字: 名字(labelMedium 12) + 副标题(labelSmall 11)。
+  // 行高按 1.5 估 + 2dp 余量: 实测 1.4 时 300dp/大字下会溢出 3.8px
+  // (GridView 的格子是硬约束, 溢出就是黄黑条), 宁可多留 2dp。
+  final textHeight = 4 + scaler.scale(12) * 1.5 + scaler.scale(11) * 1.5 + 2;
+  final tileHeight = tileWidth + textHeight;
+  return SliverGridDelegateWithFixedCrossAxisCount(
+    crossAxisCount: cols,
+    mainAxisSpacing: mainAxisSpacing,
+    crossAxisSpacing: crossAxisSpacing,
+    childAspectRatio: tileHeight <= 0 ? 1 : tileWidth / tileHeight,
+  );
+}

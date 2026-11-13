@@ -120,6 +120,20 @@ class SettingsView extends StatelessWidget {
                       settings.update(coverRows: value);
                     },
                   ),
+                  const Divider(height: 1),
+                  _SegmentedSettingTile<int>(
+                    title: '方格网格列数',
+                    subtitle: '艺人专辑 / 精选新碟 / 歌单广场每行几张(均分, 不留空隙)',
+                    segments: const [
+                      ButtonSegment(value: 2, label: Text('2')),
+                      ButtonSegment(value: 3, label: Text('3')),
+                      ButtonSegment(value: 4, label: Text('4')),
+                    ],
+                    selected: settings.gridColumns,
+                    onSelectionChanged: (value) {
+                      settings.update(gridColumns: value);
+                    },
+                  ),
                 ],
               ),
             ),
@@ -148,15 +162,6 @@ class SettingsView extends StatelessWidget {
                     value: settings.clearSearchOnTabSwitch,
                     onChanged: (value) {
                       settings.update(clearSearchOnTabSwitch: value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  SwitchListTile(
-                    title: const Text('显示热搜建议'),
-                    subtitle: const Text('关闭后搜索页不再显示热门搜索榜, 只留搜索历史与猜你想搜'),
-                    value: settings.showHotSearch,
-                    onChanged: (value) {
-                      settings.update(showHotSearch: value);
                     },
                   ),
                   const Divider(height: 1),

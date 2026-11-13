@@ -118,7 +118,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('你好'), findsOneWidget);
     expect(find.text('在的'), findsOneWidget);
-    expect(find.text('这里只读: 回复请到官方客户端'), findsOneWidget);
+    // 2026-11: 私信改为可回复, 底部换成输入框(不再有"只读"提示)
+    expect(find.text('这里只读: 回复请到官方客户端'), findsNothing);
+    expect(find.text('发私信…'), findsOneWidget);
+    expect(find.byTooltip('发送'), findsOneWidget);
+  });
+
+  testWidgets('消息页: 私信可发送(注入 sender 后调用并重拉历史)', (tester) async {
+    final sent = <String>[];
+    var reloads = 0;
+    await tester.pumpWidget(
+      host(
+        MessagesPage(
+          loadCounts: () async => counts(),
+          loadSessions: (limit, offset) async => [
+            session(7, '云音乐VIP', 'hi', 0),
+          ],
+          loadHistory: (uid, limit, before) async {
+            reloads++;
+            return [message(1, '你好')];
+          },
+          loadNotices: () async => const [],
+          loadComments: () async => const [],
+          sendPrivate: (uid, content) async {
+            sent.add(content);
+            return true;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('云音乐VIP'));
+    await tester.pumpAndSettle();
+
+    final before = reloads;
+    await tester.enterText(find.byType(TextField), '收到, 谢谢');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pumpAndSettle();
+
+    expect(sent, ['收到, 谢谢']);
+    expect(reloads, greaterThan(before), reason: '发送成功后应重拉最新一页');
   });
 
   testWidgets('消息页: 通知/评论页签各渲染一行', (tester) async {
@@ -223,6 +262,11 @@ void main() {
     expect(find.text('老王'), findsOneWidget, reason: '有备注名时显示备注');
     expect(find.text('好友本名'), findsNothing);
     expect(find.text('云音乐VIP'), findsNWidgets(2), reason: '联系人与会话各一处');
+
+    // 点联系人名字(非头像) → 直接开聊天面板(头像才进个人主页)
+    await tester.tap(find.text('老王'));
+    await tester.pumpAndSettle();
+    expect(find.text('发私信…'), findsOneWidget, reason: '联系人条点名字应打开聊天面板');
   });
 
   testWidgets('消息页: 会话列表加载更多(按 user id 去重, 返回 < limit 到底)', (tester) async {

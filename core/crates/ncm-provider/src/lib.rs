@@ -6,7 +6,8 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary,
+    AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMvPage, ArtistSongPage,
+    ChartSummary,
     CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
     DigitalAlbumSalesEntry, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchDetailItem,
     HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome,
@@ -613,6 +614,16 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no artist songs")) })
     }
 
+    /// 歌手专辑一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_albums_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistAlbumPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist albums")) })
+    }
+
     /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
     fn toggle_artist_sub<'a>(
         &'a self,
@@ -1088,6 +1099,15 @@ pub trait Provider: Send + Sync {
         _before_ms: u64,
     ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
         Box::pin(async { Err(ProviderError::unsupported("no private history")) })
+    }
+
+    /// 发送私信(需登录). 上游 /api/msg/private/send, 纯文本.
+    fn private_send(
+        &self,
+        _user_id: u64,
+        _content: String,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private send")) })
     }
 
     /// 新歌速递(按地区; area = all|zh|ea|jp|kr)

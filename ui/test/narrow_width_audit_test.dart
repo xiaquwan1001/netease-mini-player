@@ -148,6 +148,15 @@ void main() {
         ),
       ],
       podcasts: [],
+      users: [
+        rust.UserItem(
+          id: BigInt.from(7),
+          name: _longArtist,
+          avatarUrl: null,
+          signature: _longName,
+          followed: false,
+        ),
+      ],
     );
     for (final width in _widths) {
       for (final scale in _scales) {

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # 构建 Android APK. 需要 NDK 28.2.13676358(Flutter 3.47 默认)
-#   用法: bash tools/build-android.sh            # debug(默认)
+#   用法: bash tools/build-android.sh            # debug(默认, 按 ABI 分包)
 #         bash tools/build-android.sh release    # 正式签名 release(需要 ui/android/key.properties)
+#
+# debug 用 --split-per-abi 产两个小包(不再出 170MB 的 universal 包):
+#   app-x86_64-debug.apk    模拟器(a34)用, ≈88MB
+#   app-arm64-v8a-debug.apk 真机用, ≈99MB
+# 装到模拟器: adb -s emulator-5554 install -r ui/build/app/outputs/flutter-apk/app-x86_64-debug.apk
 #
 # release 签名来自 ui/android/key.properties(git 忽略, 600):
 #   storeFile / storePassword / keyAlias / keyPassword
@@ -33,8 +38,10 @@ if [ "$MODE" = "release" ]; then
   flutter build apk --release --target-platform android-arm64,android-x64
   APK=build/app/outputs/flutter-apk/app-release.apk
 else
-  flutter build apk --debug --target-platform android-arm64,android-x64
-  APK=build/app/outputs/flutter-apk/app-debug.apk
+  flutter build apk --debug --split-per-abi --target-platform android-arm64,android-x64
+  echo "OK -> ui/build/app/outputs/flutter-apk/app-x86_64-debug.apk    (模拟器 x86_64)"
+  echo "OK -> ui/build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk  (真机 arm64)"
+  APK=build/app/outputs/flutter-apk/app-x86_64-debug.apk
 fi
 echo "OK -> ui/$APK"
 # 签名自检: 打印实际签名证书指纹(便于和 keytool -list 对账)

@@ -339,8 +339,8 @@ async fn run() -> Result<(), BoxErr> {
             if args.has("--json") {
                 println!("{}", serde_json::to_string_pretty(&b)?);
             } else {
-                println!("songs={} (total {}) artists={} albums={} playlists={} podcasts={}",
-                    b.songs.len(), b.song_total, b.artists.len(), b.albums.len(), b.playlists.len(), b.podcasts.len());
+                println!("songs={} (total {}) artists={} albums={} playlists={} podcasts={} users={}",
+                    b.songs.len(), b.song_total, b.artists.len(), b.albums.len(), b.playlists.len(), b.podcasts.len(), b.users.len());
                 for a in b.artists.iter().take(5) {
                     println!("  artist [{}] {} {}", a.id, a.name, a.alias);
                 }
@@ -352,6 +352,9 @@ async fn run() -> Result<(), BoxErr> {
                 }
                 for a in b.podcasts.iter().take(5) {
                     println!("  podcast[{}] {} — {} ({} 集)", a.id, a.name, a.dj_name, a.program_count);
+                }
+                for u in b.users.iter().take(5) {
+                    println!("  user   [{}] {} {}", u.id, u.name, u.signature);
                 }
             }
             Ok(())

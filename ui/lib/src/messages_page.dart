@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 
+import 'comment_page.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
+import 'toast.dart' show showToast;
+import 'user_nav.dart';
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
 typedef SessionsPageLoader = Future<List<rust.PrivateSession>> Function(
@@ -20,8 +23,13 @@ typedef HistoryPageLoader = Future<List<rust.PrivateMessage>> Function(
   BigInt beforeMs,
 );
 typedef InboxLoader = Future<List<rust.InboxItem>> Function();
+typedef PrivateSender = Future<bool> Function(BigInt userId, String content);
 
-/// 消息中心: 私信 / 通知 / 评论 / @我 四个页签(全部只读, 不在本 App 内回复).
+/// 消息中心: 私信 / 通知 / 评论 / @我 四个页签.
+///
+/// 私信**可回复**(2026-11): 上游 /api/msg/private/send(api-enhanced send_text),
+/// 见 ncm-ffi 的 privateSend。通知/评论/@我 仍是只读(缺 thread_id/comment_id,
+/// 见 .pi/analysis/2026-11-13/msg.md)。
 /// 未登录时每个页签各自给一句登录提示, 不整页报错.
 /// 私信会话与聊天记录支持分页: 触底或按钮触发, 返回条数 < limit 视为到底.
 Future<void> showMessagesPage(
@@ -33,6 +41,7 @@ Future<void> showMessagesPage(
   InboxLoader? loadNotices,
   InboxLoader? loadComments,
   ForwardsLoader? loadForwards,
+  PrivateSender? sendPrivate,
   int pageSize = 30,
 }) {
   return Navigator.of(context).push(
@@ -42,6 +51,7 @@ Future<void> showMessagesPage(
         loadSessions: loadSessions,
         loadContacts: loadContacts,
         loadHistory: loadHistory,
+        sendPrivate: sendPrivate,
         loadNotices: loadNotices,
         loadComments: loadComments,
         loadForwards: loadForwards,
@@ -58,6 +68,7 @@ class MessagesPage extends StatefulWidget {
     this.loadSessions,
     this.loadContacts,
     this.loadHistory,
+    this.sendPrivate,
     this.loadNotices,
     this.loadComments,
     this.loadForwards,
@@ -68,6 +79,7 @@ class MessagesPage extends StatefulWidget {
   final SessionsPageLoader? loadSessions;
   final ContactsLoader? loadContacts;
   final HistoryPageLoader? loadHistory;
+  final PrivateSender? sendPrivate;
   final InboxLoader? loadNotices;
   final InboxLoader? loadComments;
   final ForwardsLoader? loadForwards;
@@ -140,6 +152,7 @@ class _MessagesPageState extends State<MessagesPage> {
             _SessionsTab(
               load: _sessions,
               loadHistory: _history,
+              send: widget.sendPrivate,
               loadContacts: _contacts,
               pageSize: widget.pageSize,
             ),
@@ -185,12 +198,14 @@ class _SessionsTab extends StatefulWidget {
   const _SessionsTab({
     required this.load,
     required this.loadHistory,
+    this.send,
     required this.loadContacts,
     required this.pageSize,
   });
 
   final SessionsPageLoader load;
   final HistoryPageLoader loadHistory;
+  final PrivateSender? send;
   final ContactsLoader loadContacts;
   final int pageSize;
 
@@ -240,12 +255,38 @@ class _SessionsTabState extends State<_SessionsTab> {
       emptyText: '还没有私信',
       endText: '没有更多了',
       separator: const Divider(height: 1, indent: 68),
-      header: contacts.isEmpty ? null : _ContactsStrip(contacts: contacts),
+      header: contacts.isEmpty
+          ? null
+          : _ContactsStrip(
+              contacts: contacts,
+              // 联系人条: 头像进主页, 其余区域(名字)直接开聊天
+              onOpenChat: (c) => showPrivateChat(
+                context,
+                session: rust.PrivateSession(
+                  userId: c.userId,
+                  nickname: (c.remarkName != null && c.remarkName!.isNotEmpty)
+                      ? c.remarkName!
+                      : c.nickname,
+                  avatarUrl: c.avatarUrl,
+                  lastMessage: '',
+                  lastTimeMs: BigInt.zero,
+                  unread: 0,
+                ),
+                load: widget.loadHistory,
+                send: widget.send,
+                pageSize: widget.pageSize,
+              ),
+            ),
       itemBuilder: (context, s, index, items) => ListTile(
-        leading: CircleCover(
-          url: s.avatarUrl,
-          size: 44,
-          icon: Icons.person_outline,
+        // 头像点进用户主页, 整行仍然弹聊天面板
+        leading: UserAvatarTap(
+          userId: s.userId,
+          nickname: s.nickname,
+          child: CircleCover(
+            url: s.avatarUrl,
+            size: 44,
+            icon: Icons.person_outline,
+          ),
         ),
         title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(
@@ -271,6 +312,7 @@ class _SessionsTabState extends State<_SessionsTab> {
           context,
           session: s,
           load: widget.loadHistory,
+          send: widget.send,
           pageSize: widget.pageSize,
         ),
       ),
@@ -280,9 +322,12 @@ class _SessionsTabState extends State<_SessionsTab> {
 
 /// 私信页顶部"最近联系人"横滑条(顺序 = 服务端顺序, 前端不重排; 备注名优先)
 class _ContactsStrip extends StatelessWidget {
-  const _ContactsStrip({required this.contacts});
+  const _ContactsStrip({required this.contacts, required this.onOpenChat});
 
   final List<rust.RecentContact> contacts;
+
+  /// 点名字/空白处 → 打开聊天面板(头像另有主页跳转, 见 [UserAvatarTap])
+  final void Function(rust.RecentContact) onOpenChat;
 
   @override
   Widget build(BuildContext context) {
@@ -300,24 +345,32 @@ class _ContactsStrip extends StatelessWidget {
               : c.nickname;
           return SizedBox(
             width: 68,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircleCover(
-                    url: c.avatarUrl,
-                    size: 44,
-                    icon: Icons.person_outline,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => onOpenChat(c),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    UserAvatarTap(
+                      userId: c.userId,
+                      nickname: name,
+                      child: CircleCover(
+                        url: c.avatarUrl,
+                        size: 44,
+                        icon: Icons.person_outline,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
               ),
             ),
           );
@@ -332,6 +385,7 @@ Future<void> showPrivateChat(
   BuildContext context, {
   required rust.PrivateSession session,
   required HistoryPageLoader load,
+  PrivateSender? send,
   int pageSize = 30,
 }) {
   return showModalBottomSheet<void>(
@@ -357,14 +411,8 @@ Future<void> showPrivateChat(
               child: _ChatBody(
                 session: session,
                 load: load,
+                send: send,
                 pageSize: pageSize,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Text(
-                '这里只读: 回复请到官方客户端',
-                style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
           ],
@@ -379,11 +427,15 @@ class _ChatBody extends StatefulWidget {
     required this.session,
     required this.load,
     required this.pageSize,
+    this.send,
   });
 
   final rust.PrivateSession session;
   final HistoryPageLoader load;
   final int pageSize;
+
+  /// 发送私信(为 null 时退回只读: 测试/宿主未注入时不显示输入框)
+  final PrivateSender? send;
 
   @override
   State<_ChatBody> createState() => _ChatBodyState();
@@ -394,11 +446,44 @@ class _ChatBodyState extends State<_ChatBody> {
   String? _error;
   bool _loadingOlder = false;
   bool _noMore = false;
+  bool _sending = false;
+  final TextEditingController _input = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    super.dispose();
+  }
+
+  PrivateSender get _sender => widget.send ?? _rustSend;
+
+  Future<bool> _rustSend(BigInt userId, String content) =>
+      rust.privateSend(userId: userId, content: content);
+
+  /// 发送一条私信: 成功后重拉最新一页(服务端回显才算数, 不做本地乐观插入)
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final ok = await _sender(widget.session.userId, text);
+      if (!mounted) return;
+      if (ok) {
+        _input.clear();
+        await _load();
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _load() async {
@@ -452,6 +537,76 @@ class _ChatBodyState extends State<_ChatBody> {
 
   @override
   Widget build(BuildContext context) {
+    // 列表 + 底部输入框: 输入框只在有真实 uid 时出现(缺 uid 的会话给一句提示)
+    return Column(
+      children: [
+        Expanded(child: _buildList(context)),
+        if (UserNav.canOpen(widget.session.userId))
+          _buildComposer(context)
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              '这个会话无法回复(缺少用户 id)',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 底部发送框: 空内容/发送中禁用; 成功后重拉最新一页(不做本地乐观插入)
+  Widget _buildComposer(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 4, 8, 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _input,
+                minLines: 1,
+                maxLines: 4,
+                textInputAction: TextInputAction.newline,
+                onSubmitted: (_) => _send(),
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: '发私信…',
+                  filled: true,
+                  fillColor: scheme.surfaceContainerHighest,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '发送',
+              onPressed: _sending ? null : _send,
+              icon: _sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext context) {
     if (_error != null) {
       return _ErrorRow(message: _error!, onRetry: _load);
     }
@@ -464,6 +619,7 @@ class _ChatBodyState extends State<_ChatBody> {
     }
     final scheme = Theme.of(context).colorScheme;
     // 非分页: 私信按时间倒序锚底 + 向上"加载更早"(reverse + prepend), PagedListView 不支持该形态
+    // 注意: 这个方法只负责列表本身, 外层 build 负责「列表 + 底部输入框」的 Column
     // reverse: 列表锚在底部(最新消息在下), 顶部是"加载更早"
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -571,11 +727,19 @@ class _InboxTabState extends State<_InboxTab> {
         final subtitle = item.detail.isEmpty
             ? item.text
             : '${item.text}  ·  ${item.detail}';
+        // 2026-11: InboxItem 补出 user_id / thread_id 后, 头像可点进主页,
+        // 条目本身(有线程时)可点进对应评论区并直接回复。
+        final threadId = item.threadId;
+        final openable = threadId != null && threadId.isNotEmpty;
         return ListTile(
-          leading: CircleCover(
-            url: item.avatarUrl,
-            size: 44,
-            icon: widget.icon,
+          leading: UserAvatarTap(
+            userId: item.userId ?? BigInt.zero,
+            nickname: item.actor.isEmpty ? null : item.actor,
+            child: CircleCover(
+              url: item.avatarUrl,
+              size: 44,
+              icon: widget.icon,
+            ),
           ),
           title: Text(
             item.actor.isEmpty ? item.text : item.actor,
@@ -587,10 +751,23 @@ class _InboxTabState extends State<_InboxTab> {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: Text(
-            relativeTime(item.timeMs),
-            style: theme.textTheme.labelSmall,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                relativeTime(item.timeMs),
+                style: theme.textTheme.labelSmall,
+              ),
+              if (openable) const Icon(Icons.chevron_right, size: 18),
+            ],
           ),
+          onTap: openable
+              ? () => showCommentThreadPage(
+                  context,
+                  threadId: threadId,
+                  title: item.kind == 'comment' ? '评论' : '相关评论',
+                )
+              : null,
         );
       },
     );
@@ -654,10 +831,14 @@ class _ForwardsTabState extends State<_ForwardsTab> {
             ? '云音乐用户'
             : nickname;
         return ListTile(
-          leading: CircleCover(
-            url: f.avatarUrl,
-            size: 44,
-            icon: Icons.alternate_email,
+          leading: UserAvatarTap(
+            userId: f.userId ?? BigInt.zero,
+            nickname: actor,
+            child: CircleCover(
+              url: f.avatarUrl,
+              size: 44,
+              icon: Icons.alternate_email,
+            ),
           ),
           title: Text(actor, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: comment.isEmpty

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'cover_art.dart';
+import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -130,11 +132,10 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
     return PagedListView<rust.Playlist>(
       key: ValueKey('$_highQuality|$_cat'),
       loader: _pageLoader,
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 180,
-        mainAxisSpacing: 12,
+      gridDelegate: coverGridDelegate(
+        context,
+        columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 10,
-        childAspectRatio: 0.72,
       ),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       emptyText: '这个分类下暂时没有歌单',

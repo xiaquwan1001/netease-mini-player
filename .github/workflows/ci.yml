@@ -57,6 +57,85 @@ jobs:
         working-directory: ui
         run: flutter test --exclude-tags network
 
+  # 可直接安装的 **debug APK**(给模拟器/真机做视觉与回归验收)。
+  #
+  # 为什么单独出一个: release 流水线只产 arm64 正式签名包, 模拟器(x86_64)装不上;
+  # 本地每改一行都要 `bash tools/build-android.sh` + adb install 才能验收, 太慢。
+  #
+  # 用 --split-per-abi: 不分割时 debug 是 170MB 的 universal 包(四套 ABI 全塞);
+  # 分割后 x86_64≈88MB / arm64≈99MB, 且每个包只含自己的 libncm_ffi.so。
+  # 下载: Actions 运行页 → Artifacts → minincm-debug-apk
+  build-android-debug:
+    name: Debug APK (x86_64 + arm64)
+    runs-on: ubuntu-24.04
+    needs: [rust, flutter]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 与 release.yml 同一套: 镜像自带 SDK 但没有 NDK 28.2;
+      # 不能用 android-actions/setup-android(GitHub 已移除 'tools' 包)。
+      - name: Android SDK components (NDK 28.2)
+        run: |
+          SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
+          echo "sdkmanager=$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      # 四个 Android target 全装: 产物只留 arm64 + x86_64(--target-platform 限制),
+      # 但 cargokit 在构建期会按它认得的 ABI 列表逐个编, 缺 target 会直接报错。
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+          key: android-debug
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50(要求 AGP>=9.1.1/Gradle>=9.5)
+          cache: true
+
+      - name: build debug APKs (split per ABI)
+        working-directory: ui
+        run: |
+          flutter pub get
+          # 必须带 --target-platform, 否则 --split-per-abi 会试图编 32 位包而失败
+          flutter build apk --debug --split-per-abi --target-platform android-arm64,android-x64
+
+      - name: collect + verify ABI
+        run: |
+          SRC=ui/build/app/outputs/flutter-apk
+          mkdir -p dist
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | tail -1)
+          check() {  # $1=源文件 $2=目标文件名 $3=必须存在的 so 路径 $4=不得出现的 so 路径
+            cp "$SRC/$1" "dist/$2"
+            "$AAPT" dump badging "dist/$2" | grep -E '^package:|application-label:'
+            unzip -l "dist/$2" | grep -q "$3" || { echo "::error::$2 缺少 $3"; exit 1; }
+            if [ -n "$4" ] && unzip -l "dist/$2" | grep -q "$4"; then
+              echo "::error::$2 混入了其他 ABI 的 native 库($4)"; exit 1
+            fi
+            ls -lh "dist/$2"
+          }
+          check app-x86_64-debug.apk    MiniNCM-debug-x86_64.apk lib/x86_64/libncm_ffi.so        lib/arm64-v8a/libncm_ffi.so
+          check app-arm64-v8a-debug.apk MiniNCM-debug-arm64.apk  lib/arm64-v8a/libncm_ffi.so     lib/x86_64/libncm_ffi.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minincm-debug-apk
+          path: |
+            dist/MiniNCM-debug-x86_64.apk
+            dist/MiniNCM-debug-arm64.apk
+          if-no-files-found: error
+
   # Flutter 桌面不支持交叉编译 ⇒ arm64 只能在 arm64 runner 上原生构建。
   # GitHub 托管的 arm64 标签是 ubuntu-24.04-arm(公开仓库免费)。
   build-linux:

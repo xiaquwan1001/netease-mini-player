@@ -11,6 +11,7 @@ import 'cover_palette.dart';
 import 'marquee_text.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
+import 'expandable_text.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
 import 'radio_subscribers_page.dart';
@@ -697,7 +698,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
                   ),
                 )
               else if (d != null && d.description.trim().isNotEmpty)
-                _ExpandableText(text: d.description),
+                ExpandableText(text: d.description),
             ],
           ),
         ),
@@ -1047,7 +1048,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
               ],
             ),
             if (radio.description.trim().isNotEmpty)
-              _ExpandableText(text: radio.description),
+              ExpandableText(text: radio.description, topPadding: 8),
           ],
         ),
       ),
@@ -1153,56 +1154,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 // ---------------- 共用件 ----------------
 
 /// 简介: 默认 3 行 + 展开/收起(歌单/播客头部共用)
-class _ExpandableText extends StatefulWidget {
-  const _ExpandableText({required this.text});
-
-  final String text;
-
-  @override
-  State<_ExpandableText> createState() => _ExpandableTextState();
-}
-
-class _ExpandableTextState extends State<_ExpandableText> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final expanded = _expanded;
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          GestureDetector(
-            onTap: () => setState(() => _expanded = !expanded),
-            child: Text(
-              widget.text.trim(),
-              maxLines: expanded ? null : 3,
-              overflow: expanded ? null : TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: () => setState(() => _expanded = !expanded),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Text(
-                  expanded ? '收起' : '展开',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// 长文本展开/收起已收敛到 expandable_text.dart(与 artist_page 合并为一份)
 
 /// 定高 56 的曲目行: 序号(正在播换 volume_up) + 歌名 + 歌手·专辑 + 时长 + 红心
 class _SongRow extends StatelessWidget {

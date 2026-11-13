@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'cover_art.dart';
+import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'profile_banner.dart';
@@ -13,10 +15,8 @@ import 'mv_page.dart' show showMvPage;
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
 import 'artist_sections.dart'
-    show
-        ArtistAlbumsSection,
-        ArtistRecommendedSongsSection,
-        showArtistInfoSheet;
+    show ArtistAlbumsSection, ArtistRecommendedSongsSection;
+import 'expandable_text.dart';
 
 /// 歌手详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
 /// (全部歌曲 / 专辑(有才显示) / MV(有才显示)) + 页内搜索(只过滤「全部歌曲」)。
@@ -67,6 +67,7 @@ class ArtistDetailPage extends StatefulWidget {
     this.loadSimilar,
     this.loadSongsPage,
     this.loadMvsPage,
+    this.loadAlbumsPage,
     this.toggleFollow,
   });
 
@@ -80,6 +81,15 @@ class ArtistDetailPage extends StatefulWidget {
   final Future<rust.ArtistSongPageDto> Function(BigInt, int offset)?
   loadSongsPage;
   final Future<rust.ArtistMvPageDto> Function(BigInt, int offset)? loadMvsPage;
+
+  /// 专辑分页(offset/limit)。缺省走 artist_albums_page: 详情只带 20 张,
+  /// 头部 albumSize 才是真实总数, 专辑 tab 必须能翻完。
+  final Future<rust.ArtistAlbumPageDto> Function(
+    BigInt artistId,
+    int offset,
+    int limit,
+  )?
+  loadAlbumsPage;
   final Future<bool> Function(BigInt, bool sub)? toggleFollow;
 
   @override
@@ -140,6 +150,17 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
         () => rust.artistMvsPage(artistId: id, offset: offset, limit: 20),
       );
 
+  Future<rust.ArtistAlbumPageDto> _defaultAlbumsPage(
+    BigInt id,
+    int offset,
+    int limit,
+  ) => retryNetwork(
+    () => rust.artistAlbumsPage(artistId: id, offset: offset, limit: limit),
+  );
+
+  Future<rust.ArtistAlbumPageDto> Function(BigInt, int, int)
+  get _albumsLoader => widget.loadAlbumsPage ?? _defaultAlbumsPage;
+
   Future<rust.ArtistSongPageDto> Function(BigInt, int) get _songsLoader =>
       widget.loadSongsPage ?? _defaultSongsPage;
   Future<rust.ArtistMvPageDto> Function(BigInt, int) get _mvsLoader =>
@@ -183,8 +204,23 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   /// 目标 tab 可能因数据未到而不存在, 此时静默不动。
   void _switchToTab(_TabKind kind) {
     final index = _tabs.indexOf(kind);
-    if (index >= 0 && _tabController.index != index) {
+    if (index < 0) return;
+    // 注意: 「查看全部歌曲」的目标 tab 恒为 index 0, 常常**就是当前 tab**,
+    // 旧实现里 `index != _tabController.index` 的 guard 会直接吞掉这次点击
+    // ⇒ 用户点了没反应。这里改成: 先切 index, 再无条件滚到 TabBar 之后的内容区。
+    if (_tabController.index != index) {
       _tabController.index = index;
+    }
+    // 只改 index 不滚动: 用户停在「信息区」时 TabBarView 的内容在折线以下,
+    // 视觉上同样是「点了没反应」。收起横幅, 露出 tab 内容。
+    final scroll = _scroll;
+    if (scroll.hasClients &&
+        scroll.offset < scroll.position.maxScrollExtent - 1) {
+      scroll.animateTo(
+        scroll.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -315,7 +351,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
         );
       case _TabKind.albums:
         return _AlbumsTab(
-          albums: detail.albums,
+          artistId: widget.artistId,
+          load: _albumsLoader,
           onOpenAlbum: widget.onOpenAlbum,
         );
       case _TabKind.mvs:
@@ -407,7 +444,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       if (detail.briefDesc.trim().isNotEmpty) ...[
         Text('简介', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
-        _ExpandableText(text: detail.briefDesc),
+        ExpandableText(text: detail.briefDesc),
         const SizedBox(height: 8),
       ],
       if (detail.songs.isNotEmpty) ...[
@@ -428,25 +465,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
         ),
         const SizedBox(height: 16),
       ],
-      Text('详细艺人', style: theme.textTheme.titleMedium),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-        title: const Text('详细艺人资料'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => showArtistInfoSheet(
-          context,
-          detail: detail,
-          similar: _similar,
-          onOpenArtist: (a) => showArtistDetail(
-            context,
-            artistId: a.id,
-            name: a.name,
-            onPlaySongs: widget.onPlaySongs,
-            onOpenAlbum: widget.onOpenAlbum,
-          ),
-        ),
-      ),
+      // 「详细艺人资料」入口已移除: 弹层里只有统计/简介/相似歌手三块,
+      // 而这三块在本页上方都已各自渲染, 用户反馈"不知所云"(见 analysis/artist.md §5)。
     ];
   }
 
@@ -628,35 +648,54 @@ class _AllSongsTabState extends State<_AllSongsTab> {
 
 /// 专辑 tab: 单页网格(封面 + 名字 + 年份)
 class _AlbumsTab extends StatelessWidget {
-  const _AlbumsTab({required this.albums, required this.onOpenAlbum});
+  const _AlbumsTab({
+    required this.artistId,
+    required this.load,
+    required this.onOpenAlbum,
+  });
 
-  final List<rust.AlbumBrief> albums;
+  final BigInt artistId;
+
+  /// 专辑分页加载(offset/limit)。详情只带前 20 张, 头部 albumSize 才是真实总数,
+  /// 过去「全部 N 张」点进来永远只有 20 张(假承诺), 现在滚到底自动续页。
+  final Future<rust.ArtistAlbumPageDto> Function(
+    BigInt artistId,
+    int offset,
+    int limit,
+  )
+  load;
+
   final void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum;
 
   @override
   Widget build(BuildContext context) {
-    if (albums.isEmpty) {
-      return const EmptyView(icon: Icons.album_outlined, title: '暂无专辑');
-    }
     final theme = Theme.of(context);
-    // 非分页: 专辑网格随歌手详情一次全量返回
-    return GridView.builder(
+    return PagedListView<rust.AlbumBrief>(
+      key: ValueKey('artist-albums-$artistId'),
+      emptyText: '暂无专辑',
       padding: EdgeInsets.fromLTRB(
+        kPagePadding,
         12,
-        12,
-        12,
+        kPagePadding,
         24 + MediaQuery.viewPaddingOf(context).bottom,
       ),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 160,
-        mainAxisSpacing: 12,
+      loader: (cursor) async {
+        final page = await load(artistId, cursor, 30);
+        return PagedPage(
+          page.albums,
+          hasMore: page.hasMore,
+          nextCursor: cursor + page.albums.length,
+        );
+      },
+      keyOf: (a) => a.id,
+      // 列数由设置决定 + 高度按内容算(见 coverGridDelegate), 末端不再留空隙
+      gridDelegate: coverGridDelegate(
+        context,
+        columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 10,
-        childAspectRatio: 0.72,
       ),
-      itemCount: albums.length,
-      itemBuilder: (context, i) {
-        final album = albums[i];
+      itemBuilder: (context, album, i, items) {
         final year = album.publishTime > BigInt.zero
             ? DateTime.fromMillisecondsSinceEpoch(album.publishTime.toInt())
                   .year
@@ -669,7 +708,12 @@ class _AlbumsTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: CoverArt(url: album.coverUrl, radius: 6)),
+              // 封面恒为正方形: 之前是 Expanded(CoverArt), 网格高度富余时
+              // 会把方图拉成细长条(用户反馈「专辑图片只有细长一条」)。
+              AspectRatio(
+                aspectRatio: 1,
+                child: CoverArt(url: album.coverUrl, radius: 6),
+              ),
               const SizedBox(height: 4),
               Text(
                 album.name,
@@ -833,50 +877,4 @@ class _ArtistSongRow extends StatelessWidget {
   }
 }
 
-/// 简介: 默认 3 行 + 展开/收起(与 detail_page 的 _ExpandableText 同思路)
-class _ExpandableText extends StatefulWidget {
-  const _ExpandableText({required this.text});
-
-  final String text;
-
-  @override
-  State<_ExpandableText> createState() => _ExpandableTextState();
-}
-
-class _ExpandableTextState extends State<_ExpandableText> {
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Text(
-            widget.text.trim(),
-            maxLines: _expanded ? null : 3,
-            overflow: _expanded ? null : TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Text(
-                _expanded ? '收起' : '展开',
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// 长文本展开/收起已收敛到 expandable_text.dart(两份私有实现合并)

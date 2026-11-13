@@ -111,7 +111,7 @@ cd netease-mini-player
 source tools/env.sh          # JDK 21 / Flutter / Android SDK / Rust (edit for your machine)
 
 bash tools/build-linux.sh    # -> ui/build/linux/x64/debug/bundle/minincm
-bash tools/build-android.sh  # -> ui/build/app/outputs/flutter-apk/app-debug.apk
+bash tools/build-android.sh  # -> .../app-x86_64-debug.apk (emulator) + app-arm64-v8a-debug.apk (device)
 bash tools/ci.sh             # tests + bridge smoke + Linux/Android builds
 ```
 

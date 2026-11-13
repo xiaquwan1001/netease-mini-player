@@ -74,32 +74,85 @@ impl NeteaseProvider {
             let kw = query.keywords.as_str();
             let song_limit = query.limit.max(1);
             let side_limit = 10u32;
-            let (song_body, artist_body, album_body, playlist_body, podcast_body) =
+            let (
+                (
+                    song_body,
+                    artist_body,
+                    album_body,
+                    playlist_body,
+                    podcast_body,
+                ),
+                user_body,
+            ) = futures::future::join(
                 futures::future::join5(
                     self.cloudsearch_body(kw, 1, song_limit, query.offset),
                     self.cloudsearch_body(kw, 100, side_limit, 0),
                     self.cloudsearch_body(kw, 10, side_limit, 0),
                     self.cloudsearch_body(kw, 1000, side_limit, 0),
                     self.cloudsearch_body(kw, 1009, side_limit, 0),
-                )
-                .await;
+                ),
+                self.cloudsearch_body(kw, 1002, side_limit, 0),
+            )
+            .await;
             let song_body = song_body?;
             let page = parse_search(&song_body)?;
             let result_of = |b: ProviderResult<Value>| -> Option<Value> {
                 b.ok().and_then(|v| v.get("result").cloned())
             };
-            let artists = result_of(artist_body)
+            let mut artists = result_of(artist_body)
                 .map(|r| parse_search_artists(&r))
                 .unwrap_or_default();
-            let albums = result_of(album_body)
+            let mut albums = result_of(album_body)
                 .map(|r| parse_search_albums(&r))
                 .unwrap_or_default();
-            let playlists = result_of(playlist_body)
+            let mut playlists = result_of(playlist_body)
                 .map(|r| parse_search_playlists(&r))
                 .unwrap_or_default();
+
+            // 空分类兜底(2026-11 反馈): 关键词拼错一个字时 cloudsearch 对歌手/专辑
+            // 直接返回 0 条, UI 于是只剩「单曲」一个分类。这里按「最长匹配」把关键词
+            // 从尾部逐字截短重试(至少 2 字, 最多 3 次), 谁先出结果就用谁:
+            // 搜「大树王容」→ 回退到「大树王」→ 命中歌手「大树王荣」及其专辑。
+            if artists.is_empty() || albums.is_empty() || playlists.is_empty() {
+                for cand in prefix_candidates(kw) {
+                    if !artists.is_empty() && !albums.is_empty() && !playlists.is_empty() {
+                        break;
+                    }
+                    if artists.is_empty() {
+                        if let Some(r) = self.cloudsearch_result(&cand, 100, side_limit).await {
+                            artists = parse_search_artists(&r);
+                        }
+                    }
+                    if albums.is_empty() {
+                        if let Some(r) = self.cloudsearch_result(&cand, 10, side_limit).await {
+                            albums = parse_search_albums(&r);
+                        }
+                    }
+                    if playlists.is_empty() {
+                        if let Some(r) = self.cloudsearch_result(&cand, 1000, side_limit).await {
+                            playlists = parse_search_playlists(&r);
+                        }
+                    }
+                }
+            }
             let podcasts = result_of(podcast_body)
                 .map(|r| parse_search_podcasts(&r))
                 .unwrap_or_default();
+            let mut users = result_of(user_body)
+                .map(|r| parse_search_users(&r))
+                .unwrap_or_default();
+            // 用户分类也走同一套最长匹配兜底(空结果时按前缀重试)
+            if users.is_empty() {
+                for cand in prefix_candidates(kw) {
+                    if let Some(r) = self.cloudsearch_result(&cand, 1002, side_limit).await {
+                        users = parse_search_users(&r);
+                        if !users.is_empty() {
+                            break;
+                        }
+                    }
+                }
+            }
+
             Ok(SearchBundle {
                 songs: page.songs,
                 song_total: page.total,
@@ -107,6 +160,7 @@ impl NeteaseProvider {
                 albums,
                 playlists,
                 podcasts,
+                users,
             })
         })
     }
@@ -164,6 +218,29 @@ impl NeteaseProvider {
         check_body(&resp.body)?;
         Ok(resp.body)
     }
+
+    /// 取某一个 type 的 result 节点(失败/无命中都给 None, 供「最长匹配」兜底用)
+    async fn cloudsearch_result(&self, keywords: &str, kind: u32, limit: u32) -> Option<Value> {
+        let body = self.cloudsearch_body(keywords, kind, limit, 0).await.ok()?;
+        body.get("result").cloned()
+    }
+}
+
+/// 「最长匹配」候选词: 从尾部逐字截短(至少保留 2 字), 最多 3 个候选。
+///
+/// 用于空分类兜底: cloudsearch 对一字之差的拼写没有纠错, 但前缀搜索通常能命中
+/// (「大树王容」→「大树王」→ 歌手「大树王荣」)。全部失败时分类仍为空, UI 显示
+/// 「该分类没有匹配结果」而不是隐藏分类。
+pub fn prefix_candidates(keywords: &str) -> Vec<String> {
+    let chars: Vec<char> = keywords.chars().collect();
+    let mut out = Vec::new();
+    for drop in 1..=3usize {
+        if chars.len() < drop + 2 {
+            break;
+        }
+        out.push(chars[..chars.len() - drop].iter().collect());
+    }
+    out
 }
 
 pub fn parse_search(body: &Value) -> ProviderResult<SearchPage> {
@@ -293,6 +370,40 @@ pub fn parse_search_playlists(result: &Value) -> Vec<SearchPlaylistItem> {
                             .unwrap_or_default(),
                         track_count: u64_of(p, "trackCount").unwrap_or(0),
                         play_count: u64_of(p, "playCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 搜索「用户」: result.userprofiles[{userId,nickname,avatarUrl,signature}]
+pub fn parse_search_users(result: &Value) -> Vec<UserItem> {
+    result
+        .get("userprofiles")
+        .or_else(|| result.get("users"))
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|u| {
+                    let id = u64_of(u, "userId").or_else(|| u64_of(u, "id"))?;
+                    let name = str_of(u, "nickname")
+                        .or_else(|| str_of(u, "name"))
+                        .unwrap_or_default();
+                    if name.is_empty() {
+                        return None;
+                    }
+                    Some(UserItem {
+                        id,
+                        name,
+                        avatar_url: str_of(u, "avatarUrl")
+                            .or_else(|| str_of(u, "picUrl"))
+                            .filter(|s| s.starts_with("http")),
+                        signature: str_of(u, "signature").unwrap_or_default(),
+                        followed: u
+                            .get("followed")
+                            .and_then(Value::as_bool)
+                            .unwrap_or(false),
                     })
                 })
                 .collect()
@@ -604,4 +715,39 @@ pub fn parse_default_search(body: &Value) -> Option<DefaultSearch> {
         keyword,
         image_url: str_of(data, "imageUrl").filter(|s| !s.is_empty()),
     })
+}
+#[cfg(test)]
+mod tests {
+    use super::prefix_candidates;
+
+    #[test]
+    fn prefix_candidates_trims_tail_down_to_two_chars() {
+        // 「大树王容」拼错一个字: 依次试「大树王」「大树王」再往前 —— 最长匹配优先
+        assert_eq!(prefix_candidates("大树王容"), vec!["大树王", "大树"]);
+        // 两字词没有可截短的候选(至少保留 2 字)
+        assert!(prefix_candidates("发").is_empty());
+        assert!(prefix_candidates("晴天").is_empty());
+        // 英文/emoji 也按字符(不是字节)截断, 不会切坏 UTF-8
+        assert_eq!(prefix_candidates("abcd"), vec!["abc", "ab"]);
+    }
+}
+#[cfg(test)]
+mod user_search_tests {
+    use super::parse_search_users;
+    use serde_json::json;
+
+    #[test]
+    fn parse_search_users_reads_userprofiles() {
+        let body = json!({
+            "userprofiles": [
+                {"userId": 7, "nickname": "小明", "avatarUrl": "https://x/y.jpg", "signature": "hi"},
+                {"userId": 0, "nickname": ""}
+            ]
+        });
+        let users = parse_search_users(&body);
+        assert_eq!(users.len(), 1);
+        assert_eq!(users[0].id, 7);
+        assert_eq!(users[0].name, "小明");
+        assert_eq!(users[0].signature, "hi");
+    }
 }

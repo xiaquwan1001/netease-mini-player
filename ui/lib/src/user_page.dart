@@ -4,6 +4,7 @@ import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
+import 'expandable_text.dart';
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -211,19 +212,36 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       collapsedTitle: _collapsed ? nickname : null,
       banner: ProfileBannerImage(url: _detail?.backgroundUrl),
       identity: _buildIdentity(theme, nickname),
+      // 与艺人页同一骨架的同一批「可选区块」: 有数据才渲染, 缺数据整块不出现
+      sections: _buildInfoSections(theme),
       tabs: _tabSpecs(),
       controller: _tabController,
     );
   }
 
+  /// 信息区(横幅与 TabBar 之间): 目前只有「简介」。
+  ///
+  /// 艺人页在这里放 相似歌手/简介/推荐单曲/专辑, 用户页没有对应数据 ⇒ 只剩简介;
+  /// 机制是同一套: 返回一组 widget, 空列表 = 不出区块, 骨架完全相同。
+  List<Widget> _buildInfoSections(ThemeData theme) {
+    final signature = _detail?.signature.trim() ?? '';
+    if (signature.isEmpty) return const <Widget>[];
+    return [
+      Text('简介', style: theme.textTheme.titleMedium),
+      const SizedBox(height: 4),
+      ExpandableText(text: signature),
+      const SizedBox(height: 16),
+    ];
+  }
+
   /// 身份卡: 头像/昵称/VIP/签名 + 统一统计 chip(关注/粉丝可点, 等级只展示)
   Widget _buildIdentity(ThemeData theme, String nickname) {
     final d = _detail;
-    final signature = d?.signature.trim() ?? '';
     final loading = _loading && d == null;
     return ProfileIdentity(
       title: nickname,
-      subtitle: signature.isEmpty ? null : signature,
+      // 签名移到「简介」区块(与艺人页一致): 身份卡副标题只放次要身份信息
+      subtitle: null,
       avatarUrl: d?.avatarUrl,
       vip: d?.vip ?? false,
       avatarSize: 56,

@@ -44,10 +44,10 @@ class SectionHeader extends StatelessWidget {
       padding: padding,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 尾部最多吃掉 45% 宽度: 300dp + 1.625 字号下按钮组放不下时就地等比缩小,
-          // 而不是把标题挤没或整行溢出(标题至少能拿 55%)。
+          // 尾部最多吃掉 60% 宽度(原来 45% 会逼着「播放全部 + 查看全部 n 首 ›」
+          // 被 FittedBox 等比缩小, 用户反馈按钮字太小)。标题至少保留 40%。
           final maxActionWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth * 0.45
+              ? constraints.maxWidth * 0.6
               : double.infinity;
           return Row(
             crossAxisAlignment: CrossAxisAlignment.center,

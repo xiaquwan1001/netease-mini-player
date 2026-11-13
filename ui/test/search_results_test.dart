@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_results.dart';
+import 'package:minincm/src/user_nav.dart';
 
 void main() {
   testWidgets('综合搜索结果: 分类横向排列(单曲/歌手/专辑/歌单/播客), 切换后看对应内容', (tester) async {
@@ -69,6 +70,15 @@ void main() {
           playCount: BigInt.from(200),
         ),
       ],
+      users: [
+        rust.UserItem(
+          id: BigInt.from(7),
+          name: '测试用户',
+          avatarUrl: null,
+          signature: '签名',
+          followed: false,
+        ),
+      ],
     );
 
     await tester.pumpWidget(
@@ -88,8 +98,8 @@ void main() {
       ),
     );
 
-    // 五个分类 chip 同时(横向)可见 —— 不需要向下翻就能选分类
-    for (final label in ['单曲', '歌手', '专辑', '歌单', '播客']) {
+    // 六个分类 chip 同时可见(Wrap 换行, 不再横向滚动把后两个藏起来)
+    for (final label in ['单曲', '歌手', '专辑', '歌单', '播客', '用户']) {
       expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
     }
     // 默认显示「单曲」分类: 歌曲行在, 专辑卡片还没渲染
@@ -176,6 +186,7 @@ void main() {
                     playCount: BigInt.from(200),
                   ),
                 ],
+                users: const [],
               ),
               liked: <BigInt>{},
               currentTrackId: null,
@@ -208,6 +219,7 @@ void main() {
               albums: [],
               playlists: [],
               podcasts: [],
+              users: const [],
             ),
             liked: const {},
             currentTrackId: null,
@@ -221,5 +233,60 @@ void main() {
       ),
     );
     expect(find.text('没有找到相关内容'), findsOneWidget);
+  });
+
+  testWidgets('用户分类: 点卡片进个人主页(统一走 UserNav)', (tester) async {
+    BigInt? opened;
+    final prev = UserNav.opener;
+    UserNav.opener =
+        (BuildContext context, BigInt userId, {String? nickname}) async {
+          opened = userId;
+        };
+    addTearDown(() => UserNav.opener = prev);
+
+    final bundle = rust.SearchBundleDto(
+      songs: const [],
+      songTotal: BigInt.zero,
+      artists: const [],
+      albums: const [],
+      playlists: const [],
+      podcasts: const [],
+      users: [
+        rust.UserItem(
+          id: BigInt.from(42),
+          name: '小明',
+          avatarUrl: null,
+          signature: 'hi',
+          followed: false,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SearchResultsView(
+            bundle: bundle,
+            liked: const <BigInt>{},
+            currentTrackId: null,
+            onPlaySong: (_) {},
+            onOpenArtist: (_) {},
+            onOpenAlbum: (_) {},
+            onOpenPlaylist: (_) {},
+            onOpenPodcast: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(ChoiceChip, '用户'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, '用户'));
+    await tester.pumpAndSettle();
+    expect(find.text('小明'), findsOneWidget);
+
+    await tester.tap(find.text('小明'));
+    await tester.pumpAndSettle();
+    expect(opened, BigInt.from(42));
   });
 }

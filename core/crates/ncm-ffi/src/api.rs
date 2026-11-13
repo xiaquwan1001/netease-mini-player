@@ -239,6 +239,8 @@ pub struct SearchBundleDto {
     pub albums: Vec<SearchAlbum>,
     pub playlists: Vec<SearchPlaylistItem>,
     pub podcasts: Vec<SearchPodcast>,
+    /// 用户(type=1002)
+    pub users: Vec<UserItem>,
 }
 
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
@@ -259,6 +261,7 @@ pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto,
         artists: bundle.artists,
         albums: bundle.albums,
         playlists: bundle.playlists,
+        users: bundle.users,
         podcasts: bundle.podcasts,
     })
 }
@@ -361,6 +364,29 @@ pub async fn artist_songs_page(
         .map_err(|e| e.to_string())?;
     Ok(ArtistSongPageDto {
         songs: page.songs.into_iter().map(song_dto).collect(),
+        has_more: page.has_more,
+    })
+}
+
+pub struct ArtistAlbumPageDto {
+    pub albums: Vec<AlbumBrief>,
+    pub has_more: bool,
+}
+
+/// 歌手专辑一页(artist_album, offset/limit 分页). 头部 albumSize 是真实总数,
+/// 详情只带前 20 张, 专辑 tab 用这个接口翻完.
+pub async fn artist_albums_page(
+    artist_id: u64,
+    offset: u32,
+    limit: u32,
+) -> Result<ArtistAlbumPageDto, String> {
+    let provider = with_provider(Capability::Artist)?;
+    let page = provider
+        .artist_albums_page(artist_id, offset, limit)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(ArtistAlbumPageDto {
+        albums: page.albums,
         has_more: page.has_more,
     })
 }
@@ -1039,51 +1065,13 @@ pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, Str
     }
 }
 
-/// 逐字歌词 + 来源标记("yrc" / "ttml" / "line"), UI 只用小字展示, 不打扰.
-/// reason 为 auto 择优时的短理由(如 "yrc 时间错乱"), 其它路径为 null.
-pub struct WordLyricWithSourceDto {
-    pub lyric: WordLyricDto,
-    pub source: String,
-    pub reason: Option<String>,
-}
-
-/// B13/C2: 聚合逐字歌词, 按偏好(auto 打分择优 / netease yrc 优先 / amll TTML 优先).
-/// TTML 带磁盘缓存; 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级.
-pub async fn word_lyric_with_fallback(
-    track_id: u64,
-    preference: String,
-) -> Result<WordLyricWithSourceDto, String> {
-    let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
-        guard
-            .providers
-            .first_with(Capability::Lyric)
-            .ok_or_else(|| "no provider supports lyric".to_string())?
-    };
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| "core not initialized".to_string())?
-        .clone();
-    let pref = ncm_service::ttml_source::LyricSourcePreference::parse(&preference);
-    let r = ncm_service::ttml_source::word_lyric_with_fallback(
-        provider.as_ref(),
-        &ncm_service::ttml_source::CachedTtmlProbe,
-        &dir,
-        track_id,
-        pref,
-    )
-    .await?;
-    let source = match r.source {
-        ncm_service::ttml_source::LyricSource::Yrc => "yrc",
-        ncm_service::ttml_source::LyricSource::Ttml => "ttml",
-        ncm_service::ttml_source::LyricSource::LineLevel => "line",
-    };
-    Ok(WordLyricWithSourceDto {
-        source: source.to_string(),
-        reason: r.reason,
-        lyric: word_lyric_dto(r.lyric),
-    })
-}
+// 说明(2026-11 去重): 这里原本还有一个 `word_lyric_with_fallback` 导出, 与
+// Dart 侧 main.dart 的 `resolveLyricSource` 是同一套"yrc → TTML → 行级"择优
+// 策略的两份实现 —— 而 UI 实际走的是 Dart 那份(可注入 loader, 有单测覆盖),
+// 这个导出从来没有人调用。已删除, 只保留原子能力:
+//   word_lyric_lines / ttml_lyric_lines / lyric_lines_i18n(UI 自己组合)。
+// Rust 侧 ncm_service::ttml_source::word_lyric_with_fallback 保留并由其单测覆盖,
+// 供 CLI / 未来宿主使用; 若要恢复 UI 走它, 只需把 Dart 的 loaders 换成一次调用。
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
@@ -2743,6 +2731,14 @@ pub async fn private_history(
     )
 }
 
+/// 发送私信(需登录). 纯文本, 成功后应重拉 [private_history] 刷新会话.
+pub async fn private_send(user_id: u64, content: String) -> Result<bool, String> {
+    ffi_forward!(
+        Capability::Message,
+        provider.private_send(user_id, content)
+    )
+}
+
 #[frb(mirror(InboxItem))]
 pub struct _InboxItem {
     pub id: u64,
@@ -2753,6 +2749,12 @@ pub struct _InboxItem {
     pub text: String,
     pub detail: String,
     pub time_ms: u64,
+    /// 触发人 uid(未知为 None)
+    pub user_id: Option<u64>,
+    /// 评论线程 id(R_SO_4_x 一类; 通知类一般为 None)
+    pub thread_id: Option<String>,
+    /// 评论 id(用于定位/回复)
+    pub comment_id: Option<u64>,
 }
 
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)

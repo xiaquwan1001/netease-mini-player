@@ -16,8 +16,8 @@ void main() {
             private: 3,
             notices: 1,
             comments: 2,
-            forwards: 0,
-            total: 6,
+            forwards: 4,
+            total: 10,
           ),
         ),
       ),
@@ -25,8 +25,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('消息中心'), findsOneWidget);
-    expect(find.text('私信 3 · 通知 1 · 评论 2'), findsOneWidget);
-    expect(find.text('6'), findsOneWidget, reason: '角标显示合计');
+    // 未读数改为文字展示(不再有红色数字角标): 分项写进副标题, @我 也算一项
+    expect(find.text('私信 3 · 通知 1 · 评论 2 · @我 4'), findsOneWidget);
+    expect(find.text('10'), findsNothing, reason: '不再显示数字角标');
 
     await tester.tap(find.text('消息中心'));
     await tester.pumpAndSettle();
@@ -46,7 +47,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('消息中心'), findsOneWidget);
-    expect(find.text('私信 / 通知 / 评论'), findsOneWidget);
+    expect(find.text('私信 / 通知 / 评论 / @我'), findsOneWidget);
 
     await tester.tap(find.text('消息中心'));
     await tester.pumpAndSettle();
@@ -72,7 +73,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('消息中心'), findsOneWidget);
-    expect(find.text('6'), findsOneWidget, reason: '角标显示合计');
+    expect(find.text('私信 3 · 通知 1 · 评论 2'), findsOneWidget);
   });
 }
 

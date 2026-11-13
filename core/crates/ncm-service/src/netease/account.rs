@@ -28,16 +28,32 @@ impl NeteaseProvider {
         })
     }
 
-    /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
-    pub(super) fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+    /// 个人主页资料的**唯一实现**: 同一个 user/detail 端点 + 同一个 parse。
+    ///
+    /// 之前 `profile_detail`(自己) 与 `user_profile`(他人) 是两份逐字相同的
+    /// 抓取/解析代码, 差别只有"uid 从哪来"; 现在收敛到这里, 两个 trait 方法都转发。
+    /// `uid = None` 表示当前登录账号(需要登录), `Some(0)` 是非法 id。
+    pub(super) fn user_detail_raw(
+        &self,
+        uid: Option<u64>,
+    ) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
         Box::pin(async move {
-            let uid = self.uid().await?;
+            let target = match uid {
+                Some(0) => return Err(ProviderError::not_found("用户 id 为空")),
+                Some(id) => id,
+                None => self.uid().await?,
+            };
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
+            let q = make_query(&cookie, &domain, &ua).param("uid", &target.to_string());
             let resp = client.user_detail(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_profile_detail(&resp.body))
         })
+    }
+
+    /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
+    pub(super) fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async move { self.user_detail_raw(None).await })
     }
 
     /// 任意用户的公开资料(user/detail, 不需要登录)
@@ -45,16 +61,7 @@ impl NeteaseProvider {
         &'a self,
         uid: u64,
     ) -> BoxFuture<'a, ProviderResult<ProfileDetail>> {
-        Box::pin(async move {
-            if uid == 0 {
-                return Err(ProviderError::not_found("用户 id 为空"));
-            }
-            let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("uid", &uid.to_string());
-            let resp = client.user_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_profile_detail(&resp.body))
-        })
+        Box::pin(async move { self.user_detail_raw(Some(uid)).await })
     }
 
     /// 当前登录账号资料(用于多账号记忆: 登录成功后记住 uid/昵称)

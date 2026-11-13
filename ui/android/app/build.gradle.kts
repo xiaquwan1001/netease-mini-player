@@ -44,6 +44,9 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // 应用名走资源: release=「轻音 MiniNCM」, debug 额外加 (dev) 后缀,
+        // 避免桌面上和正式包同名 —— 视觉验收时点错旧版本(曾把 0.5.5 当成新包)。
+        resValue("string", "app_name", "轻音 MiniNCM")
     }
 
     signingConfigs {
@@ -63,6 +66,7 @@ android {
             // 也不会因签名不同而 INSTALL_FAILED_UPDATE_INCOMPATIBLE。
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
+            resValue("string", "app_name", "轻音 MiniNCM dev")
         }
         release {
             signingConfig = if (hasReleaseKeystore) {

@@ -9,7 +9,7 @@
 ```bash
 source tools/env.sh          # JDK 21 / Flutter / Android SDK / Rust
 bash tools/build-linux.sh    # Linux bundle
-bash tools/build-android.sh  # Android debug APK
+bash tools/build-android.sh  # Android debug APK(按 ABI 分包: x86_64 = 模拟器, arm64-v8a = 真机)
 ```
 
 细节见 `docs/architecture-restart.md` 与 `docs/testing-dual-platform.md`。

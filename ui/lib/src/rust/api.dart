@@ -35,6 +35,18 @@ Future<ArtistSongPageDto> artistSongsPage({
   limit: limit,
 );
 
+/// 歌手专辑一页(artist_album, offset/limit 分页). 头部 albumSize 是真实总数,
+/// 详情只带前 20 张, 专辑 tab 用这个接口翻完.
+Future<ArtistAlbumPageDto> artistAlbumsPage({
+  required BigInt artistId,
+  required int offset,
+  required int limit,
+}) => RustLib.instance.api.crateApiArtistAlbumsPage(
+  artistId: artistId,
+  offset: offset,
+  limit: limit,
+);
+
 /// 歌手 MV 一页(artist_mv, offset/limit 分页)
 Future<ArtistMvPageDto> artistMvsPage({
   required BigInt artistId,
@@ -196,16 +208,6 @@ Future<WordLyricDto> wordLyricLines({required BigInt trackId}) =>
 /// 无数据/解析失败返回 Ok(None), 网络错误返回 Err —— 调用方(或 Dart 侧)静默回退.
 Future<WordLyricDto?> ttmlLyricLines({required BigInt trackId}) =>
     RustLib.instance.api.crateApiTtmlLyricLines(trackId: trackId);
-
-/// B13/C2: 聚合逐字歌词, 按偏好(auto 打分择优 / netease yrc 优先 / amll TTML 优先).
-/// TTML 带磁盘缓存; 失败返回 Err(无任何歌词); TTML 抓取/解析失败只静默降级.
-Future<WordLyricWithSourceDto> wordLyricWithFallback({
-  required BigInt trackId,
-  required String preference,
-}) => RustLib.instance.api.crateApiWordLyricWithFallback(
-  trackId: trackId,
-  preference: preference,
-);
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
 Future<bool> loginWithCookie({required String cookie}) =>
@@ -844,6 +846,10 @@ Future<List<PrivateMessage>> privateHistory({
   beforeMs: beforeMs,
 );
 
+/// 发送私信(需登录). 纯文本, 成功后应重拉 [private_history] 刷新会话.
+Future<bool> privateSend({required BigInt userId, required String content}) =>
+    RustLib.instance.api.crateApiPrivateSend(userId: userId, content: content);
+
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
 Future<List<InboxItem>> messageNotices({
   required int limit,
@@ -1048,6 +1054,24 @@ class Artist {
           id == other.id &&
           name == other.name &&
           avatarUrl == other.avatarUrl;
+}
+
+class ArtistAlbumPageDto {
+  final List<AlbumBrief> albums;
+  final bool hasMore;
+
+  const ArtistAlbumPageDto({required this.albums, required this.hasMore});
+
+  @override
+  int get hashCode => albums.hashCode ^ hasMore.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ArtistAlbumPageDto &&
+          runtimeType == other.runtimeType &&
+          albums == other.albums &&
+          hasMore == other.hasMore;
 }
 
 class ArtistDetailDto {
@@ -2023,6 +2047,15 @@ class InboxItem {
   final String detail;
   final BigInt timeMs;
 
+  /// 触发人 uid(未知为 None)
+  final BigInt? userId;
+
+  /// 评论线程 id(R_SO_4_x 一类; 通知类一般为 None)
+  final String? threadId;
+
+  /// 评论 id(用于定位/回复)
+  final BigInt? commentId;
+
   const InboxItem({
     required this.id,
     required this.kind,
@@ -2031,6 +2064,9 @@ class InboxItem {
     required this.text,
     required this.detail,
     required this.timeMs,
+    this.userId,
+    this.threadId,
+    this.commentId,
   });
 
   @override
@@ -2041,7 +2077,10 @@ class InboxItem {
       avatarUrl.hashCode ^
       text.hashCode ^
       detail.hashCode ^
-      timeMs.hashCode;
+      timeMs.hashCode ^
+      userId.hashCode ^
+      threadId.hashCode ^
+      commentId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2054,7 +2093,10 @@ class InboxItem {
           avatarUrl == other.avatarUrl &&
           text == other.text &&
           detail == other.detail &&
-          timeMs == other.timeMs;
+          timeMs == other.timeMs &&
+          userId == other.userId &&
+          threadId == other.threadId &&
+          commentId == other.commentId;
 }
 
 class InitInfo {
@@ -3302,6 +3344,9 @@ class SearchBundleDto {
   final List<SearchPlaylistItem> playlists;
   final List<SearchPodcast> podcasts;
 
+  /// 用户(type=1002)
+  final List<UserItem> users;
+
   const SearchBundleDto({
     required this.songs,
     required this.songTotal,
@@ -3309,6 +3354,7 @@ class SearchBundleDto {
     required this.albums,
     required this.playlists,
     required this.podcasts,
+    required this.users,
   });
 
   @override
@@ -3318,7 +3364,8 @@ class SearchBundleDto {
       artists.hashCode ^
       albums.hashCode ^
       playlists.hashCode ^
-      podcasts.hashCode;
+      podcasts.hashCode ^
+      users.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3330,7 +3377,8 @@ class SearchBundleDto {
           artists == other.artists &&
           albums == other.albums &&
           playlists == other.playlists &&
-          podcasts == other.podcasts;
+          podcasts == other.podcasts &&
+          users == other.users;
 }
 
 /// 精确实体改写的结果: 直接镜像 domain SearchExact.
@@ -4295,30 +4343,4 @@ class WordLyricLineDto {
           startMs == other.startMs &&
           endMs == other.endMs &&
           words == other.words;
-}
-
-/// 逐字歌词 + 来源标记("yrc" / "ttml" / "line"), UI 只用小字展示, 不打扰.
-/// reason 为 auto 择优时的短理由(如 "yrc 时间错乱"), 其它路径为 null.
-class WordLyricWithSourceDto {
-  final WordLyricDto lyric;
-  final String source;
-  final String? reason;
-
-  const WordLyricWithSourceDto({
-    required this.lyric,
-    required this.source,
-    this.reason,
-  });
-
-  @override
-  int get hashCode => lyric.hashCode ^ source.hashCode ^ reason.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is WordLyricWithSourceDto &&
-          runtimeType == other.runtimeType &&
-          lyric == other.lyric &&
-          source == other.source &&
-          reason == other.reason;
 }

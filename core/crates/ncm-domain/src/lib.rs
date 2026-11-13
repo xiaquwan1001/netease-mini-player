@@ -206,6 +206,9 @@ pub struct SearchBundle {
     pub playlists: Vec<SearchPlaylistItem>,
     #[serde(default)]
     pub podcasts: Vec<SearchPodcast>,
+    /// 用户(type=1002 的 userprofiles)
+    #[serde(default)]
+    pub users: Vec<UserItem>,
 }
 
 impl SearchBundle {
@@ -260,6 +263,18 @@ pub struct ArtistDetail {
 pub struct ArtistSongPage {
     #[serde(default)]
     pub songs: Vec<Song>,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+/// 歌手专辑一页(artist_album: offset/limit 分页, more=还有下一页)
+///
+/// 之前「全部 N 张」只有 artist_detail 带的固定 20 张(limit=20 且无分页),
+/// 与头部 albumSize 对不上; 现在专辑 tab 走这个分页接口。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ArtistAlbumPage {
+    #[serde(default)]
+    pub albums: Vec<AlbumBrief>,
     #[serde(default)]
     pub has_more: bool,
 }
@@ -933,6 +948,16 @@ pub struct InboxItem {
     pub detail: String,
     #[serde(default)]
     pub time_ms: u64,
+    /// 触发人 uid(取不到就是 None; UI 用它决定头像能否点进个人主页)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<u64>,
+    /// 评论线程 id(评论消息由 resourceJson 的 type+id 推得, 形如 R_SO_4_186016)。
+    /// 有它就能从消息直接跳到评论区并回复; 通知类一般是 None。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_id: Option<String>,
+    /// 评论 id(评论消息的 commentId), 用于定位/直接回复该条
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment_id: Option<u64>,
 }
 
 /// 消息中心"@我"页签里的一行(转发/提到我的动态).

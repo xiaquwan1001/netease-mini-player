@@ -45,6 +45,29 @@ impl NeteaseProvider {
         })
     }
 
+    /// 歌手专辑分页(artist_album): 头部 albumSize 是真实总数, 详情只带前 20 张,
+    /// 专辑 tab 用这个接口翻完, 不再"全部 N 张"点进去只有 20 张。
+    pub(super) fn artist_albums_page<'a>(
+        &'a self,
+        artist_id: u64,
+        offset: u32,
+        limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistAlbumPage>> {
+        Box::pin(async move {
+            if artist_id == 0 {
+                return Err(ProviderError::not_found("artist id 为空"));
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("id", &artist_id.to_string())
+                .param("offset", &offset.to_string())
+                .param("limit", &limit.to_string());
+            let resp = client.artist_album(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_artist_albums(&resp.body))
+        })
+    }
+
     /// 关注/取消关注歌手(artist_sub: t=1 sub / t=0 unsub), 需要登录.
     pub(super) fn toggle_artist_sub<'a>(
         &'a self,
@@ -239,20 +262,7 @@ pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> Artis
         .get("hotAlbums")
         .or_else(|| albums.get("albums"))
         .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|a| {
-                    let id = u64_of(a, "id")?;
-                    Some(AlbumBrief {
-                        id,
-                        name: str_of(a, "name").unwrap_or_default(),
-                        cover_url: str_of(a, "picUrl").filter(|s| !s.is_empty()),
-                        track_count: u64_of(a, "size").unwrap_or(0),
-                        publish_time: u64_of(a, "publishTime").unwrap_or(0),
-                    })
-                })
-                .collect()
-        })
+        .map(|arr| arr.iter().filter_map(parse_album_brief).collect())
         .unwrap_or_default();
     ArtistDetail {
         id,
@@ -304,6 +314,32 @@ pub fn parse_subscribed_artists(body: &Value) -> Vec<Artist> {
 }
 
 /// 歌手全部歌曲: {code, more, songs:[...]}(artist_songs, 每首歌自带 privilege)
+/// 专辑简项(hotAlbums[] / albums[] 共用): id + name + 封面 + 曲目数 + 发行时间
+pub fn parse_album_brief(a: &Value) -> Option<AlbumBrief> {
+    let id = u64_of(a, "id")?;
+    Some(AlbumBrief {
+        id,
+        name: str_of(a, "name").unwrap_or_default(),
+        cover_url: str_of(a, "picUrl").filter(|s| !s.is_empty()),
+        track_count: u64_of(a, "size").unwrap_or(0),
+        publish_time: u64_of(a, "publishTime").unwrap_or(0),
+    })
+}
+
+/// 歌手专辑一页: {code, hotAlbums|albums, more}
+pub fn parse_artist_albums(body: &Value) -> ArtistAlbumPage {
+    let albums = body
+        .get("hotAlbums")
+        .or_else(|| body.get("albums"))
+        .and_then(Value::as_array)
+        .map(|arr| arr.iter().filter_map(parse_album_brief).collect())
+        .unwrap_or_default();
+    ArtistAlbumPage {
+        albums,
+        has_more: body.get("more").and_then(Value::as_bool).unwrap_or(false),
+    }
+}
+
 pub fn parse_artist_songs(body: &Value) -> ArtistSongPage {
     ArtistSongPage {
         songs: parse_song_list(body),

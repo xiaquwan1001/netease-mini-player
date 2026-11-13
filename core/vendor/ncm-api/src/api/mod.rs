@@ -134,6 +134,7 @@ mod msg_notices;
 mod msg_private;
 mod msg_private_history;
 mod msg_recentcontact;
+mod send_text;
 
 // ---- 动态 ----
 mod event;

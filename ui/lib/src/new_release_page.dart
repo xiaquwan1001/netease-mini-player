@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
+import 'app_settings.dart';
 import 'cover_art.dart';
+import 'layout.dart';
 import 'format.dart' show formatDurationShort;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -315,11 +317,10 @@ class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
       refreshable: false,
       emptyText: '暂时没有精选新碟',
       padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 160,
-        mainAxisSpacing: 12,
+      gridDelegate: coverGridDelegate(
+        context,
+        columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 12,
-        childAspectRatio: 0.72,
       ),
       loader: (cursor) async =>
           PagedPage(await retryNetwork(widget.load), hasMore: false),

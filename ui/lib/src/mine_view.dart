@@ -813,22 +813,26 @@ class _MessageEntryCardState extends State<MessageEntryCard>
     super.build(context);
     final counts = _counts;
     final theme = Theme.of(context);
+    // 未读数改成「文字展示」: 不再用红色数字角标压在图标上(用户要求),
+    // 分项计数直接写进副标题, @我 也算一项。
     final detail = counts == null
-        ? '私信 / 通知 / 评论'
+        ? '私信 / 通知 / 评论 / @我'
         : [
             if (counts.private > 0) '私信 ${counts.private}',
             if (counts.notices > 0) '通知 ${counts.notices}',
             if (counts.comments > 0) '评论 ${counts.comments}',
+            if (counts.forwards > 0) '@我 ${counts.forwards}',
           ].join(' · ');
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: ListTile(
         dense: true,
-        leading: Badge(
-          isLabelVisible: (counts?.total ?? 0) > 0,
-          label: Text('${counts?.total ?? 0}'),
-          child: const Icon(Icons.forum_outlined),
+        leading: Icon(
+          Icons.forum_outlined,
+          color: (counts?.total ?? 0) > 0
+              ? Theme.of(context).colorScheme.primary
+              : null,
         ),
         title: const Text('消息中心'),
         subtitle: Text(

@@ -40,16 +40,33 @@ void main() {
     expect(find.text('晴天'), findsOneWidget);
   });
 
-  testWidgets('showHotSearch=false 时不渲染热门区块, 历史/猜你想搜仍在', (tester) async {
+  testWidgets('showHotSearch=false: 栏目标题常驻, 只收起内容, 历史/猜你想搜仍在', (tester) async {
     AppSettings.instance.showHotSearch = false;
     await tester.pumpWidget(host(landing));
-    expect(find.text('热门搜索'), findsNothing);
+    // 开关从设置页搬到搜索页后: 栏目不再整块消失, 而是显示「已关闭 + 开启」
+    expect(find.text('热门搜索'), findsOneWidget);
     expect(find.text('晴天'), findsNothing);
     expect(find.text('稻香'), findsNothing);
+    expect(find.textContaining('热门搜索已关闭'), findsOneWidget);
+    expect(find.text('开启'), findsOneWidget);
     expect(find.text('搜索历史'), findsOneWidget);
     expect(find.text('七里香'), findsOneWidget);
     expect(find.text('猜你想搜'), findsOneWidget);
     expect(find.text('周杰伦'), findsOneWidget);
+  });
+
+  testWidgets('点「开启」/「关闭」按钮直接改设置, 无需跳设置页', (tester) async {
+    AppSettings.instance.showHotSearch = false;
+    await tester.pumpWidget(host(landing));
+    await tester.tap(find.text('开启'));
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.showHotSearch, isTrue);
+    expect(find.text('晴天'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('关闭热门搜索'));
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.showHotSearch, isFalse);
+    expect(find.text('晴天'), findsNothing);
   });
 
   testWidgets('隐藏后无历史无猜你想搜时显示占位提示; 打开开关后立即出现', (tester) async {
@@ -65,16 +82,16 @@ void main() {
         ),
       ),
     );
-    expect(find.textContaining('显示热搜建议'), findsOneWidget);
-    expect(find.text('热门搜索'), findsNothing);
+    // 空历史 + 无推荐 + 热词关闭: 仍是「栏目 + 关闭提示」, 不再有设置页文案
+    expect(find.text('热门搜索'), findsOneWidget);
+    expect(find.textContaining('热门搜索已关闭'), findsOneWidget);
+    expect(find.textContaining('显示热搜建议'), findsNothing);
 
-    // 模拟设置页切换: notifyListeners 驱动重建, build 内读取最新值
-    AppSettings.instance.showHotSearch = true;
-    AppSettings.instance.notifyListeners();
-    await tester.pump();
+    // 页内按钮开启: notifyListeners 驱动重建, build 内读取最新值
+    await tester.tap(find.text('开启'));
+    await tester.pumpAndSettle();
     expect(find.text('热门搜索'), findsOneWidget);
     expect(find.text('晴天'), findsOneWidget);
-    expect(find.textContaining('显示热搜建议'), findsNothing);
   });
 
   // 真 IO(落盘/读回)在 testWidgets 的 FakeAsync 里不会完成, 用普通 test

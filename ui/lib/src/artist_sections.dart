@@ -40,14 +40,15 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextButton.icon(
+              // 「播放全部」用图标按钮: 文字版与「查看全部 n 首 ›」并排会把
+              // 标题行撑爆, SectionHeader 只好整体缩小(字太小的根因)。
+              IconButton(
                 onPressed: () => onPlaySongs(songs, 0),
-                icon: const Icon(Icons.play_arrow, size: 18),
-                label: const Text('播放全部'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                ),
+                icon: const Icon(Icons.play_arrow, size: 20),
+                tooltip: '播放全部',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
               SectionSeeAllButton(
                 label: '查看全部 $totalCount 首 ›',
