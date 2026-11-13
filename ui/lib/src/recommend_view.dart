@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'layout.dart';
@@ -12,7 +13,6 @@ import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
-import 'state_views.dart';
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -206,97 +206,6 @@ class _RecommendViewState extends State<RecommendView> {
   }
 }
 
-// ---------------- 区块骨架 ----------------
-
-/// 独立加载的区块: loading / error / empty 都不影响兄弟区块
-class _AsyncSection<T> extends StatefulWidget {
-  const _AsyncSection({
-    required this.load,
-    required this.builder,
-    required this.emptyText,
-  });
-
-  final Future<T> Function() load;
-  final Widget Function(BuildContext context, T data, VoidCallback reload)
-  builder;
-  final String emptyText;
-
-  @override
-  State<_AsyncSection<T>> createState() => _AsyncSectionState<T>();
-}
-
-class _AsyncSectionState<T> extends State<_AsyncSection<T>> {
-  late Future<T> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  Future<T> _load() => retryNetwork(widget.load);
-
-  void _reload() => setState(() => _future = _load());
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<T>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const LoadingView(
-            size: 22,
-            padding: EdgeInsets.symmetric(vertical: 24),
-          );
-        }
-        if (snap.hasError) {
-          return _InlineError(
-            message: friendlyError(snap.error!),
-            onRetry: _reload,
-          );
-        }
-        final data = snap.data;
-        if (data == null || (data is List && data.isEmpty)) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              widget.emptyText,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          );
-        }
-        return widget.builder(context, data as T, _reload);
-      },
-    );
-  }
-}
-
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(color: scheme.error, fontSize: 12),
-            ),
-          ),
-          TextButton(onPressed: onRetry, child: const Text('重试')),
-        ],
-      ),
-    );
-  }
-}
-
 // ---------------- 快捷入口 ----------------
 
 class _QuickActions extends StatelessWidget {
@@ -395,9 +304,12 @@ class _NewSongsSection extends StatelessWidget {
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
         _hPad(const _Caption('新歌速递')),
-        _AsyncSection<List<rust.SongDto>>(
+        AsyncView<List<rust.SongDto>>(
           load: load,
           emptyText: '暂时没有新歌',
+          // 收敛: 原来这里有一份私有 _AsyncSection + _InlineError, 现统一到 AsyncView。
+          // 加载留白沿用它原来的 24(「我的」页那份是 20)。
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, songs, reload) {
             final playable = [
               for (final s in songs)
@@ -465,9 +377,10 @@ class _NewAlbumsSection extends StatelessWidget {
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
         const _Caption('新碟上架'),
-        _AsyncSection<List<rust.AlbumItem>>(
+        AsyncView<List<rust.AlbumItem>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, albums, reload) => CoverRow(
             height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,
@@ -620,9 +533,10 @@ class _StyleTiles extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _AsyncSection<List<rust.StyleTag>>(
+        AsyncView<List<rust.StyleTag>>(
           load: load,
           emptyText: '暂时没有风格推荐',
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           // 横滑而不是 Wrap: 窗格高度(图 + 名字)本来就不固定, 交给 Row 自己撑,
           // 大字号下不会像定高列表那样溢出。
           builder: (context, tags, reload) => SingleChildScrollView(
@@ -714,9 +628,10 @@ class _DailySongsSection extends StatelessWidget {
             trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
           ),
         ),
-        _AsyncSection<List<rust.SongDto>>(
+        AsyncView<List<rust.SongDto>>(
           load: load,
           emptyText: '今天没有推荐歌曲',
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, songs, reload) {
             final playable = [
               for (final s in songs)
@@ -804,9 +719,10 @@ class _DailyPlaylistsSection extends StatelessWidget {
               ? null
               : TextButton(onPressed: onOpenAll, child: const Text('全部')),
         ),
-        _AsyncSection<List<rust.Playlist>>(
+        AsyncView<List<rust.Playlist>>(
           load: load,
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, lists, reload) => CoverRow(
             height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,
@@ -862,9 +778,10 @@ class _PodcastSection extends StatelessWidget {
             child: const Text('全部'),
           ),
         ),
-        _AsyncSection<List<rust.PodcastRadio>>(
+        AsyncView<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '暂无推荐播客',
+          loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, radios, reload) => CoverRow(
             height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
@@ -10,7 +11,6 @@ import 'net_retry.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'rust/api.dart' as rust;
-import 'error_views.dart' show InlineError;
 import 'section_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
@@ -286,75 +286,6 @@ class _MineViewState extends State<MineView> {
   }
 }
 
-// ---------------- 区块骨架 ----------------
-
-class _AsyncSection<T> extends StatefulWidget {
-  const _AsyncSection({
-    required this.load,
-    required this.builder,
-    required this.emptyText,
-  });
-
-  final Future<T> Function() load;
-  final Widget Function(BuildContext context, T data, VoidCallback reload)
-  builder;
-  final String emptyText;
-
-  @override
-  State<_AsyncSection<T>> createState() => _AsyncSectionState<T>();
-}
-
-class _AsyncSectionState<T> extends State<_AsyncSection<T>>
-    with AutomaticKeepAliveClientMixin<_AsyncSection<T>> {
-  late Future<T> _future;
-
-  // 用户反馈: 区块一移出视野就被 ListView 回收, 回来时重新转圈 -> 我的页上下抽搐。
-  // 保持存活后数据/高度都不再重置(下拉刷新仍通过 key 换代重拉)。
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = retryNetwork(widget.load);
-  }
-
-  void _reload() => setState(() => _future = retryNetwork(widget.load));
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return FutureBuilder<T>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const LoadingView(
-            size: 22,
-            padding: EdgeInsets.symmetric(vertical: 20),
-          );
-        }
-        if (snap.hasError) {
-          return InlineError(
-            message: friendlyError(snap.error!),
-            onRetry: _reload,
-          );
-        }
-        final data = snap.data;
-        if (data == null || (data is List && data.isEmpty)) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              widget.emptyText,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          );
-        }
-        return widget.builder(context, data as T, _reload);
-      },
-    );
-  }
-}
-
 // ---------------- 个人资料卡(背景图/头像) ----------------
 
 class _ProfileSection extends StatefulWidget {
@@ -459,9 +390,11 @@ class _LikedSection extends StatelessWidget {
           title: '我喜欢的音乐',
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
-        _AsyncSection<List<rust.SongDto>>(
+        AsyncView<List<rust.SongDto>>(
           load: load,
           emptyText: '还没有喜欢的歌曲',
+          // 收敛: 四态(加载/错误/空/数据)统一交给 AsyncView, 不再各页一份私有实现。
+          keepAlive: true,
           builder: (context, songs, reload) {
             final playable = [
               for (final s in songs)
@@ -551,9 +484,10 @@ class _PlaylistsSection extends StatelessWidget {
           title: '收藏的歌单',
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
-        _AsyncSection<List<rust.Playlist>>(
+        AsyncView<List<rust.Playlist>>(
           load: load,
           emptyText: '还没有收藏歌单',
+          keepAlive: true,
           // 高度交给 CoverRow(按系统字号自适应), 不再写死 176 ——
           // 1.625 字号下两行文字会顶出固定的 176 高度。
           builder: (context, lists, reload) => CoverRow(
@@ -596,9 +530,10 @@ class _PodcastsSection extends StatelessWidget {
           title: '收藏的播客',
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
-        _AsyncSection<List<rust.PodcastRadio>>(
+        AsyncView<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '还没有收藏播客',
+          keepAlive: true,
           builder: (context, radios, reload) => CoverRow(
             children: [
               for (final r in radios)
@@ -644,9 +579,10 @@ class _AlbumsSection extends StatelessWidget {
           title: '收藏的专辑',
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
-        _AsyncSection<List<rust.AlbumItem>>(
+        AsyncView<List<rust.AlbumItem>>(
           load: load,
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
+          keepAlive: true,
           builder: (context, albums, reload) => CoverRow(
             children: [
               for (final a in albums)
@@ -722,9 +658,10 @@ class _RecentSection extends StatelessWidget {
           title: '最近听过',
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
-        _AsyncSection<List<rust.SongDto>>(
+        AsyncView<List<rust.SongDto>>(
           load: load,
           emptyText: '还没有播放记录',
+          keepAlive: true,
           builder: (context, songs, reload) {
             final preview = songs.take(5).toList();
             return Card(

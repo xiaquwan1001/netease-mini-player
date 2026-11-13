@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
-import 'error_views.dart' show InlineError;
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
-import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 /// 曲风详情页: 系统推荐给"我"的风格下面有哪些歌单和歌.
@@ -202,31 +201,13 @@ class _PlaylistRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<rust.Playlist>>(
+    // future 由父层持有(下拉刷新换 Future.value 不闪加载态) ⇒ 走 AsyncView 的
+    // future 分支, 四态判定仍然只有 async_view.dart 一份实现。
+    return AsyncView<List<rust.Playlist>>(
       future: future,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const LoadingView(
-            size: 22,
-            padding: EdgeInsets.symmetric(vertical: 20),
-          );
-        }
-        if (snap.hasError) {
-          return InlineError(
-            message: friendlyError(snap.error!),
-            onRetry: onRetry,
-          );
-        }
-        final lists = snap.data ?? const <rust.Playlist>[];
-        if (lists.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              '这个风格暂时没有歌单',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          );
-        }
+      onRetry: onRetry,
+      emptyText: '这个风格暂时没有歌单',
+      builder: (context, lists, _) {
         return SizedBox(
           height: 176,
           child: ListView.separated(
@@ -281,31 +262,12 @@ class _SongList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<rust.SongDto>>(
+    return AsyncView<List<rust.SongDto>>(
       future: future,
-      builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
-          return const LoadingView(
-            size: 22,
-            padding: EdgeInsets.symmetric(vertical: 20),
-          );
-        }
-        if (snap.hasError) {
-          return InlineError(
-            message: friendlyError(snap.error!),
-            onRetry: onRetry,
-          );
-        }
-        final songs = snap.data ?? const <rust.SongDto>[];
-        if (songs.isEmpty) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              '这个风格暂时没有歌曲',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          );
-        }
+      onRetry: onRetry,
+      emptyText: '这个风格暂时没有歌曲',
+      builder: (context, songs, _) {
+        // 空态已由 AsyncView 统一处理(emptyText), 这里不再重复判定
         final playable = [
           for (final s in songs)
             if (s.playable) s,

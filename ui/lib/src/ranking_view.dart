@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'layout.dart';
 import 'net_retry.dart';
@@ -61,27 +62,20 @@ class _PlayRankingViewState extends State<PlayRankingView>
     with AutomaticKeepAliveClientMixin<PlayRankingView> {
   /// "all" = 全部时间(总量) / "week" = 最近一周
   String _period = 'all';
-  late Future<List<rust.PlayRankEntryDto>> _future;
 
   RankingLoader get _loader =>
       widget.load ?? (period) => rust.playRanking(period: period);
 
-  @override
-  void initState() {
-    super.initState();
-    // 整页模式由 PagedListView 负责加载, 只有 compact 内嵌模式走 FutureBuilder
-    if (widget.compact) _future = _load();
-  }
-
-  Future<List<rust.PlayRankEntryDto>> _load() =>
-      retryNetwork(() => _loader(_period));
+  /// compact 内嵌模式的取数(重试由 AsyncView 内部套 retryNetwork);
+  /// 整页模式由 PagedListView 负责加载。
+  Future<List<rust.PlayRankEntryDto>> _load() => _loader(_period);
 
   void _switchPeriod(String period) {
     if (period == _period) return;
     setState(() {
       _period = period;
-      // compact 模式走 FutureBuilder; 整页模式由 PagedListView 的 key 重挂载触发
-      if (widget.compact) _future = _load();
+      // compact 模式靠 AsyncView 的 ValueKey(_period) 换代重挂载重新取数;
+      // 整页模式由 PagedListView 的 key 重挂载触发
     });
   }
 
@@ -139,7 +133,6 @@ class _PlayRankingViewState extends State<PlayRankingView>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final theme = Theme.of(context);
     if (!widget.compact) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,76 +177,20 @@ class _PlayRankingViewState extends State<PlayRankingView>
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildControls(),
-        FutureBuilder<List<rust.PlayRankEntryDto>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState != ConnectionState.done) {
-              return const LoadingView(
-                size: 22,
-                padding: EdgeInsets.symmetric(vertical: 20),
-              );
-            }
-            if (snap.hasError) {
-              final message = friendlyError(snap.error!);
-              void retry() => setState(() {
-                _future = _load();
-              });
-              // 整页(compact=false)首屏失败 → 居中错误视图 + 重试;
-              // compact 内嵌时保持行内错误条, 不撑坏父布局。
-              if (!widget.compact) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          message,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: theme.colorScheme.error),
-                        ),
-                        const SizedBox(height: 8),
-                        FilledButton.tonal(
-                          onPressed: retry,
-                          child: const Text('重试'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              return Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        message,
-                        style: TextStyle(
-                          color: theme.colorScheme.error,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    TextButton(onPressed: retry, child: const Text('重试')),
-                  ],
-                ),
-              );
-            }
-            final entries = snap.data ?? const <rust.PlayRankEntryDto>[];
-            if (entries.isEmpty) {
-              return EmptyView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
-              );
-            }
-            final shown = widget.compact ? entries.take(5).toList() : entries;
+        AsyncView<List<rust.PlayRankEntryDto>>(
+          // 收敛: 四态(加载/错误/空/数据)统一到 async_view.dart, 原来这里手写 FutureBuilder。
+          // 换区间(总排行/当周)靠 key 换代重挂载 = 重新取数。
+          key: ValueKey(_period),
+          load: _load,
+          keepAlive: true,
+          emptyText: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
+          // 空态沿用原来的 EmptyView 视觉, 文案一字未改。
+          emptyBuilder: (context) => EmptyView(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
+          ),
+          builder: (context, entries, reload) {
+            final shown = entries.take(5).toList();
             final playable = [
               for (final e in entries)
                 if (e.song.playable) e.song,
@@ -320,11 +257,13 @@ class _RankRow extends StatelessWidget {
       contentPadding: padding,
       leading: SizedBox(
         // 名次(22) + 间距(4) + 封面(40), 给足宽度否则 ListTile 的 leading 会溢出
+        // token-ok: 68 = 列宽 22 + 间距 4 + 封面 40, 是组合尺寸不是布局 token
         width: 68,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
+              // token-ok: 名次列宽按 "两位数" 内容宽度定
               width: 22,
               child: Text(
                 '$rank',

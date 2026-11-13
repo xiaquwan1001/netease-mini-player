@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
+import 'async_view.dart';
 import 'cover_art.dart';
+import 'error_views.dart' show FullError;
+import 'net_retry.dart' show friendlyError;
+import 'state_views.dart' show LoadingView;
 import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
-import 'error_views.dart';
-import 'net_retry.dart';
-import 'state_views.dart';
 import 'rust/api.dart' as rust;
 
 /// MV 详情/播放页(C3): 封面大图 + 标题/歌手/播放量/发布时间/简介 + 播放按钮。
@@ -101,19 +102,17 @@ class _MvPageState extends State<MvPage> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.name ?? 'MV')),
-      body: FutureBuilder<rust.MvDetailDto>(
-        future: _loadDetail(widget.mvId),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const LoadingView();
-          }
-          if (snap.hasError) {
-            return FullError(
-              message: friendlyError(snap.error!),
-              onRetry: () => setState(() {}), // FutureBuilder 重新取数
-            );
-          }
-          final d = snap.data!;
+      body: AsyncView<rust.MvDetailDto>(
+        // 收敛: 四态(加载/错误/空/数据)统一到 async_view.dart, 原来这里手写
+        // FutureBuilder; 重试与首载现在走同一条 load(内部套 retryNetwork)。
+        load: () => _loadDetail(widget.mvId),
+        emptyText: '没有取到 MV 详情',
+        // 整页错误/加载视觉沿用改前: 全尺寸 LoadingView + 居中 FullError,
+        // 而不是区块级的行内四态(MV 页整页只有这一块内容)。
+        loadingBuilder: (_) => const LoadingView(),
+        errorBuilder: (_, error, retry) =>
+            FullError(message: friendlyError(error), onRetry: retry),
+        builder: (context, d, reload) {
           _detail = d;
           return ListView(
             padding: const EdgeInsets.all(16),

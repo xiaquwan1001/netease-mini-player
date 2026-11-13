@@ -2,11 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'all_charts_page.dart';
 import 'app_settings.dart';
+import 'async_view.dart';
 import 'cover_row.dart';
-import 'error_views.dart' show InlineError;
-import 'net_retry.dart';
 import 'rust/api.dart' as rust;
-import 'state_views.dart';
 
 /// 榜单列表加载器(可注入, 测试用)。缺省走 FFI chartList。
 typedef ChartListLoader = Future<List<rust.ChartSummary>> Function();
@@ -16,7 +14,7 @@ typedef ChartListLoader = Future<List<rust.ChartSummary>> Function();
 /// 2026-11 用户要求: 排行榜从「推荐」移到「搜索」页的落地内容。
 /// 这里把原来 recommend_view 里的私有实现抽出来, 推荐页不再渲染;
 /// 搜索落地页(SearchLanding)直接复用, 不要再复制第三份。
-class ChartSection extends StatefulWidget {
+class ChartSection extends StatelessWidget {
   const ChartSection({super.key, required this.onOpen, this.load});
 
   /// 点某个榜单: 榜单本身就是歌单, 交给上层打开歌单详情。
@@ -24,33 +22,6 @@ class ChartSection extends StatefulWidget {
 
   /// 可注入(测试用); 缺省 rust.chartList。
   final ChartListLoader? load;
-
-  @override
-  State<ChartSection> createState() => _ChartSectionState();
-}
-
-class _ChartSectionState extends State<ChartSection> {
-  late Future<List<rust.ChartSummary>> _future;
-
-  ChartListLoader get _loader => widget.load ?? rust.chartList;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = retryNetwork(_loader);
-  }
-
-  @override
-  void didUpdateWidget(covariant ChartSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 注入的 loader 换了(测试/账号切换)才重拉, 普通重建复用同一个 future,
-    // 避免像「我的」页那样一离开视野就重新转圈。
-    if (oldWidget.load != widget.load) {
-      _future = retryNetwork(_loader);
-    }
-  }
-
-  void _reload() => setState(() => _future = retryNetwork(_loader));
 
   @override
   Widget build(BuildContext context) {
@@ -64,60 +35,41 @@ class _ChartSectionState extends State<ChartSection> {
             title: '排行榜',
             trailing: TextButton(
               onPressed: () =>
-                  showAllChartsPage(context, onOpenPlaylist: widget.onOpen),
+                  showAllChartsPage(context, onOpenPlaylist: onOpen),
               child: const Text('全部'),
             ),
           ),
-          FutureBuilder<List<rust.ChartSummary>>(
-            future: _future,
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const LoadingView(
-                  size: 22,
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                );
-              }
-              if (snap.hasError) {
-                return InlineError(
-                  message: friendlyError(snap.error!),
-                  onRetry: _reload,
-                );
-              }
-              final charts = snap.data ?? const <rust.ChartSummary>[];
-              if (charts.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Text(
-                    '暂时没有榜单',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                );
-              }
-              return CoverRow(
-                height: kCoverCardHeight,
-                rows: AppSettings.instance.coverRows,
-                children: [
-                  for (final chart in charts)
-                    CoverCard(
-                      coverUrl: chart.coverUrl,
-                      title: chart.name,
-                      subtitle: chart.updateFrequency.isEmpty
-                          ? '${chart.trackCount} 首'
-                          : chart.updateFrequency,
-                      onTap: () => widget.onOpen(
-                        rust.Playlist(
-                          id: chart.id,
-                          name: chart.name,
-                          coverUrl: chart.coverUrl,
-                          trackCount: chart.trackCount,
-                          special: false,
-                          subscribed: false,
-                        ),
+          AsyncView<List<rust.ChartSummary>>(
+            // 收敛: 原来这里手写 FutureBuilder 四态, 现统一到 async_view.dart。
+            // 注入的 loader 换了(测试/账号切换)才重新取数: 用 key 换代重挂载;
+            // 普通重建复用同一个 future, 避免一离开视野就重新转圈。
+            key: ValueKey(load),
+            load: load ?? rust.chartList,
+            emptyText: '暂时没有榜单',
+            builder: (context, charts, reload) => CoverRow(
+              height: kCoverCardHeight,
+              rows: AppSettings.instance.coverRows,
+              children: [
+                for (final chart in charts)
+                  CoverCard(
+                    coverUrl: chart.coverUrl,
+                    title: chart.name,
+                    subtitle: chart.updateFrequency.isEmpty
+                        ? '${chart.trackCount} 首'
+                        : chart.updateFrequency,
+                    onTap: () => onOpen(
+                      rust.Playlist(
+                        id: chart.id,
+                        name: chart.name,
+                        coverUrl: chart.coverUrl,
+                        trackCount: chart.trackCount,
+                        special: false,
+                        subscribed: false,
                       ),
                     ),
-                ],
-              );
-            },
+                  ),
+              ],
+            ),
           ),
         ],
       ),
