@@ -5,15 +5,21 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 - "$@" <<'PY'
 import os, re, sys
+from pathlib import Path
 
 VENDOR = "core/vendor/ncm-api/src/api"
-SERVICE = "core/crates/ncm-service/src/netease.rs"
+# provider 实现 2026-11-13 起按能力域拆成模块目录(netease/mod.rs + netease/*.rs);
+# 单文件时代遗留路径仍兼容, 便于对老 tag 跑同一份统计.
+SERVICE = Path("core/crates/ncm-service/src/netease.rs")
 FFI = "core/crates/ncm-ffi/src/api.rs"
 UI = "ui/lib"
 
 # mod.rs 是模块清单本身, 不是 endpoint, 不计入统计
 all_endpoints = sorted(f[:-3] for f in os.listdir(VENDOR) if f.endswith(".rs") and f != "mod.rs")
-src = open(SERVICE).read()
+if SERVICE.is_file():
+    src = SERVICE.read_text()
+else:
+    src = "".join(p.read_text() for p in sorted(SERVICE.with_suffix("").rglob("*.rs")))
 # 跨行也认: client \n  .method(
 used = sorted(set(re.findall(r"client\s*\.\s*([a-z0-9_]+)\s*\(", src)))
 used = [m for m in used if m in all_endpoints]
