@@ -105,6 +105,59 @@ List<WordSpanStyle> wordStylesAt(WordLyricLineData line, int positionMs) {
   ];
 }
 
+/// 纯逻辑: 「每词状态+进度」+「每词矩形」→ 需要裁切的矩形列表。
+///
+/// - [WordHighlightState.upcoming]: 不裁(底层全行色已经覆盖);
+/// - [WordHighlightState.sung]: 整词矩形;
+/// - [WordHighlightState.current]: 左边 `progress × 词宽`(progress<=0 不产生矩形);
+/// - 相邻且竖直对齐(容差 0.5px)的矩形会合并成一个, 避免逐词 clip 留下接缝、
+///   也让"已唱并集"在一次 clipPath 里连续。
+///
+/// [boxes] 与 [styles] 一一对应; `null`/空矩形(被 ellipsis 截掉的词)跳过。
+List<Rect> karaokeClipRects(List<WordSpanStyle> styles, List<Rect?> boxes) {
+  final raw = <Rect>[];
+  final n = styles.length < boxes.length ? styles.length : boxes.length;
+  for (var i = 0; i < n; i++) {
+    final box = boxes[i];
+    if (box == null || box.width <= 0 || box.height <= 0) continue;
+    final s = styles[i];
+    switch (s.state) {
+      case WordHighlightState.upcoming:
+        break;
+      case WordHighlightState.sung:
+        raw.add(box);
+      case WordHighlightState.current:
+        final p = s.progress.isFinite ? s.progress.clamp(0.0, 1.0) : 0.0;
+        final w = box.width * p;
+        if (w > 0) raw.add(Rect.fromLTWH(box.left, box.top, w, box.height));
+    }
+  }
+  return _mergeAdjacent(raw);
+}
+
+/// 把水平相邻(且上下对齐)的矩形合并; 输入按整行从左到右的顺序给出。
+List<Rect> _mergeAdjacent(List<Rect> rects) {
+  if (rects.length < 2) return rects;
+  final out = <Rect>[rects.first];
+  for (final r in rects.skip(1)) {
+    final last = out.last;
+    final aligned =
+        (r.top - last.top).abs() <= 0.5 &&
+        (r.height - last.height).abs() <= 0.5;
+    if (aligned && r.left <= last.right + 0.5) {
+      out[out.length - 1] = Rect.fromLTRB(
+        last.left,
+        last.top,
+        r.right > last.right ? r.right : last.right,
+        last.bottom,
+      );
+    } else {
+      out.add(r);
+    }
+  }
+  return out;
+}
+
 /// 逐字歌词视图。固定 itemExtent 的行级列表 + 当前行逐字着色 + 行级自动滚动。
 class WordLyricView extends StatefulWidget {
   const WordLyricView({
