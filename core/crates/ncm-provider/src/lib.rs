@@ -674,6 +674,16 @@ pub trait Provider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no play ranking")) })
     }
 
+    /// 他人常听排行: 与 [`play_ranking`](Self::play_ranking) 同一端点, 但 uid 由调用方给.
+    /// 对方没公开/没有记录时返回**空列表**(不报错), 让 UI 显示"暂无数据".
+    fn play_ranking_of(
+        &self,
+        _uid: u64,
+        _period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user play ranking")) })
+    }
+
     /// 我的曲风偏好(系统按听歌口味算出来的风格, 需要登录; 未登录可退化成通用曲风表).
     fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {
         Box::pin(async { Err(ProviderError::unsupported("no style preference")) })

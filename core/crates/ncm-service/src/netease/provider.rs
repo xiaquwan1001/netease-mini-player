@@ -48,6 +48,15 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::play_ranking(self, period)
     }
 
+    /// 他人常听排行: 同 /api/v1/play/record, uid 由调用方给(拿不到数据时返回空列表).
+    fn play_ranking_of(
+        &self,
+        uid: u64,
+        period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        NeteaseProvider::play_ranking_of(self, uid, period)
+    }
+
     /// 我的曲风偏好: 系统按听歌口味算出来的风格(登录才有).
     /// 未登录/接口给空时退化成通用曲风表(style_list 的二级标签), 保证推荐页总有入口.
     fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {

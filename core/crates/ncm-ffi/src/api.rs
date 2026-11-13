@@ -2209,6 +2209,25 @@ pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, Strin
         .collect())
 }
 
+/// 他人常听排行(用户主页): uid = 目标用户, period = "all" | "week".
+/// 对方没公开/没有记录时返回**空列表**(不是错误).
+pub async fn user_play_ranking(uid: u64, period: String) -> Result<Vec<PlayRankEntryDto>, String> {
+    let provider = with_provider(Capability::ListeningRank)?;
+    let period = RankingPeriod::parse(&period).unwrap_or_default();
+    let list = provider
+        .play_ranking_of(uid, period)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(list
+        .into_iter()
+        .map(|e| PlayRankEntryDto {
+            song: song_dto(e.song),
+            play_count: e.play_count,
+            score: e.score,
+        })
+        .collect())
+}
+
 /// 曲风标签: 直接镜像 domain 类型(D7 spike), Dart 侧靠 dart_code 的 typedef 保持旧名.
 #[frb(mirror(StyleTag))]
 pub struct _StyleTag {

@@ -67,6 +67,32 @@ impl NeteaseProvider {
         })
     }
 
+    /// 他人常听排行: 与 [`play_ranking`](Self::play_ranking) 同一个端点, 只是 uid 由参数给
+    /// (vendor 的 /api/v1/play/record 是公开通道, 别人的 uid 也能查).
+    /// 拿不到数据(对方隐私/无记录/接口回非 200)一律返回空列表, 不报错:
+    /// 这是"看别人的资料"场景, 空列表是合法状态, 报错会让 UI 弹错。
+    pub(super) fn play_ranking_of(
+        &self,
+        uid: u64,
+        period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async move {
+            if uid == 0 {
+                return Ok(Vec::new());
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("type", period.type_param());
+            let resp = client.user_record(&q).await.map_err(map_error)?;
+            // 非 200(未登录/风控/隐私)按"没数据"处理
+            if check_body(&resp.body).is_err() {
+                return Ok(Vec::new());
+            }
+            Ok(parse_play_ranking(&resp.body, period))
+        })
+    }
+
     /// 我的曲风偏好: 系统按听歌口味算出来的风格(登录才有).
     /// 未登录/接口给空时退化成通用曲风表(style_list 的二级标签), 保证推荐页总有入口.
     pub(super) fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {
