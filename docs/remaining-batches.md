@@ -151,8 +151,9 @@
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次)。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
-> 当前基线(2026-11-13 本机实测, 离线口径): 覆盖率 **123/123**(FFI 152, 7 个无 UI 入口) · `cargo test` **272** ·
-> `cargo clippy` **0 warning** · `flutter test --exclude-tags network` **746** · `dart analyze` 0 issue · write-guard OK。
+> 当前基线(2026-11-13 v0.9.0 实测, 离线口径): 覆盖率 **123/123**(FFI 152, 7 个无 UI 入口) · `cargo test` **277** ·
+> `cargo clippy` **0 warning** · `flutter test --exclude-tags network` **816**(804 离线 + 12 golden) · `dart analyze` 0 issue ·
+> write-guard OK · `check-tokens --strict` OK。
 
 ### A. 只剩这些没做(按成本排序)
 
@@ -164,6 +165,11 @@
 | 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
 | 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
+| 6 | **诊断 Worker 落地**(用户手动) | 代码与 8 步部署说明已在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
+| 7 | **行高统一: `itemExtent`/`_kRowHeight` 按 textScaler 缩放** | v0.9.0 A 级修复时实测: `detail_page` 曲目行在 `itemExtent: 56` 里, 1.625 字号下标题+副标题竖溢 12dp; 全仓 **7 处**同款(歌词那次只修了歌词)。改法: 行高 = `base * textScaler.clamp(1, 2)`(与 `main.dart: _lyricItemExtent` 同一口径) | S~M |
+| 8 | `feed_view` `_AuthorChip` 定高 84 在 1.625 字号下竖溢 4dp | 改 `SizedBox(height: 84)` 按 `textScalerOf` 补高, 或改「横向 SingleChildScrollView + Row」让高度自适应 | S |
+| 9 | 列表行 B/C 级收敛(审计已出清单) | `docs/ui-row-audit.md`: A 级已在 v0.9.0 清零; 剩 B 潜在 12 / C 一致性 18(歌曲行 6 种留白并存)。改造顺序见报告第 7 条起, 含 `ListRow` API 草案 | M |
+| 10 | golden 接入 CI | 现在标 `@Tags(['golden'])` 且 CI 用 `--exclude-tags 'network \|\| golden'` 跳过(缺 CJK 字体必假失败)。要接得先容器化渲染环境(固定字体 + Flutter 版本) | M |
 
 ### B. 已完成(供对照, 不要重做)
 

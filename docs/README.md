@@ -58,6 +58,8 @@
 |---|---|
 | archive/ | 已完工车道执行记录 + `PROGRESS-v1.md`(v1 WebView 时代进度) + `remaining-batches-history.md`(历史分批口径)。**归档** |
 | audits/ | 代码/UI 审计报告(`2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md`)。**活跃** |
+| `ui-row-audit.md` | 列表行/溢出全仓审计(49 处骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案与改造顺序。A 级已在 v0.9.0 清零, 剩 B/C 待收敛。**活跃** |
+| `../tools/diag-worker/README.md` | 匿名诊断「一键提交」的 Worker 部署说明(8 步, 含 fine-grained PAT 手动创建、绑自定义域、限流/幂等口径、已知不稳定点与兜底)。**活跃** |
 | images/ | README 截图素材 |
 | spikes/ · b8-dumps/ | 零散 spike 产物与原始接口 dump |
 
