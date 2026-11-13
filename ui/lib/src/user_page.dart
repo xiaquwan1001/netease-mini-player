@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'detail_page.dart';
 import 'net_retry.dart';
+import 'profile_banner.dart';
 import 'rust/api.dart' as rust;
 import 'state_views.dart';
 import 'toast.dart';
@@ -138,97 +139,23 @@ class _UserPageState extends State<UserPage> {
     return Card(
       clipBehavior: Clip.antiAlias,
       margin: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            height: 120,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (d?.backgroundUrl != null)
-                  NetImage(
-                    url: d!.backgroundUrl,
-                    width: double.infinity,
-                    height: 120,
-                    fit: BoxFit.cover,
-                  )
-                else
-                  ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black26,
-                        Colors.transparent,
-                        Colors.black54,
-                      ],
-                      stops: [0, 0.4, 1],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 12,
-                  bottom: 10,
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: CircleCover(url: d?.avatarUrl, size: 52),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            nickname,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (signature.isNotEmpty)
-                            SizedBox(
-                              width: 200,
-                              child: Text(
-                                signature,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: Colors.white70,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+      // 背景横幅 + 身份卡收敛到 ProfileBanner: 取图按真实像素矩形 + 清晰度档位,
+      // 点图看全屏原图; 名字/签名落在图片**下方**的 surface 卡片里(不再压图).
+      child: ProfileBanner(
+        imageUrl: d?.backgroundUrl,
+        avatarUrl: d?.avatarUrl,
+        title: nickname,
+        subtitle: signature.isEmpty ? null : signature,
+        avatarSize: 56,
+        footer: Text(
+          _loading && d == null
+              ? '加载中…'
+              : '关注 ${d?.follows ?? BigInt.zero} · 粉丝 ${d?.followeds ?? BigInt.zero}'
+                    ' · Lv.${d?.level ?? BigInt.zero}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Text(
-              _loading && d == null
-                  ? '加载中…'
-                  : '关注 ${d?.follows ?? BigInt.zero} · 粉丝 ${d?.followeds ?? BigInt.zero}'
-                        ' · Lv.${d?.level ?? BigInt.zero}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
