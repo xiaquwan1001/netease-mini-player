@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'profile_banner.dart';
+import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart';
 import 'song_actions.dart';
@@ -158,18 +159,25 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
   }
 
+  /// tab 集合变了就换新 controller(旧的一律延到帧末 dispose, 见
+  /// [syncProfileTabs] —— 立刻 dispose 会抛 used-after-dispose)。
   void _rebuildTabs() {
-    final old = _tabController.index;
-    final oldController = _tabController;
-    _tabController = TabController(length: _tabs.length, vsync: this)
-      ..addListener(() => setState(() {}));
-    if (old < _tabs.length) _tabController.index = old;
-    // 旧 controller 还被当前帧的 TabBar/TabBarView 引用, 立刻 dispose 会撞
-    // "A TabController was used after being disposed"; 等这一帧结束再释放。
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => oldController.dispose(),
+    _tabController = syncProfileTabs(
+      vsync: this,
+      current: _tabController,
+      length: _tabs.length,
+      onChanged: () => setState(() {}),
     );
   }
+
+  /// 声明式 tab: 每个 [_TabKind] 对应一条 [ProfileTabSpec], 内容懒构建。
+  List<ProfileTabSpec> _tabSpecs(rust.ArtistDetailDto detail) => [
+    for (final kind in _tabs)
+      ProfileTabSpec(
+        kind.label,
+        builder: (context) => _buildTab(kind, context, detail),
+      ),
+  ];
 
   /// 切到指定 tab(推荐单曲/专辑区块的「查看全部」入口用);
   /// 目标 tab 可能因数据未到而不存在, 此时静默不动。
@@ -267,74 +275,34 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
     final detail = _detail!;
     final artistName = widget.name ?? detail.name;
-    final tabs = _tabs;
-    return DefaultTabController(
-      length: tabs.length,
-      child: Scaffold(
-        body: NestedScrollView(
-          controller: _scroll,
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            SliverAppBar(
-              pinned: true,
-              expandedHeight: kProfileBannerHeight,
-              // 收起时顶栏保留歌手名; 展开时横幅里已有名字, 顶栏不重复
-              title: _collapsed
-                  ? Text(
-                      artistName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  : null,
-              actions: [
-                IconButton(
-                  icon: Icon(_searching ? Icons.close : Icons.search),
-                  tooltip: '搜索该歌手歌曲',
-                  onPressed: () => setState(() {
-                    _searching = !_searching;
-                    if (!_searching) _query = '';
-                  }),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: _buildBanner(theme, detail),
-              ),
-            ),
-            // 身份卡(头像/名字/别名): 横幅之下, 不压图
-            SliverToBoxAdapter(child: _buildIdentity(theme, detail)),
-            // 共享信息区: 统计/关注/简介/相似歌手(随页面滚动, TabBar 之上)
-            SliverToBoxAdapter(child: _buildInfoSection(theme, detail)),
-            if (_searching)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _SearchBarDelegate(
-                  query: _query,
-                  onChanged: (v) => setState(() => _query = v),
-                ),
-              ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _TabBarDelegate(
-                TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  tabs: [for (final t in tabs) Tab(text: t.label)],
-                ),
-              ),
-            ),
-          ],
-          body: TabBarView(
-            controller: _tabController,
-            children: [for (final t in tabs) _buildTab(t, theme, detail)],
-          ),
+    return ProfileScaffold(
+      scrollController: _scroll,
+      // 收起时顶栏保留歌手名; 展开时横幅里已有名字, 顶栏不重复
+      collapsedTitle: _collapsed ? artistName : null,
+      actions: [
+        IconButton(
+          icon: Icon(_searching ? Icons.close : Icons.search),
+          tooltip: '搜索该歌手歌曲',
+          onPressed: () => setState(() {
+            _searching = !_searching;
+            if (!_searching) _query = '';
+          }),
         ),
-      ),
+      ],
+      banner: _buildBanner(theme, detail),
+      // 身份卡(头像/名字/别名/统计 chip): 横幅之下, 不压图
+      identity: _buildIdentity(theme, detail),
+      // 共享信息区: 简介/推荐单曲/专辑/相似歌手/详细艺人(TabBar 之上)
+      sections: _buildInfoSections(theme, detail),
+      searchBar: _searching ? _buildSearchBar(theme) : null,
+      tabs: _tabSpecs(detail),
+      controller: _tabController,
     );
   }
 
   Widget _buildTab(
     _TabKind kind,
-    ThemeData theme,
+    BuildContext context,
     rust.ArtistDetailDto detail,
   ) {
     switch (kind) {
@@ -365,8 +333,36 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     return ProfileBannerImage(url: detail.coverUrl);
   }
 
-  /// 身份卡: 头像/名字/别名(落在横幅下方, 白字不再叠在图上)
+  /// pinned 页内搜索条(只过滤「全部歌曲」tab, 不发请求; 高度由骨架定)。
+  Widget _buildSearchBar(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: TextField(
+        autofocus: true,
+        controller: TextEditingController(text: _query)
+          ..selection = TextSelection(
+            baseOffset: 0,
+            extentOffset: _query.length,
+          ),
+        onChanged: (v) => setState(() => _query = v),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: '搜索该歌手的歌曲',
+          prefixIcon: const Icon(Icons.search, size: 20),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
+          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+        ),
+        style: theme.textTheme.bodyMedium,
+      ),
+    );
+  }
+
+  /// 身份卡: 头像/名字/别名 + 统一统计 chip(作品数 / 关注)
+  ///
+  /// 统计行走 [ProfileIdentity.footer] 槽位(与用户页同一套 chip), 不再自己
+  /// 手写一行 Row: 关注从 TextButton 变成可点 chip, 300dp 大字号下换行而不是挤压.
   Widget _buildIdentity(ThemeData theme, rust.ArtistDetailDto detail) {
+    final followed = _followed ?? false;
     return ProfileIdentity(
       title: detail.name,
       subtitle: detail.alias.isEmpty ? null : detail.alias.join(' / '),
@@ -374,98 +370,84 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       titleStyle: theme.textTheme.headlineSmall?.copyWith(
         fontWeight: FontWeight.w600,
       ),
-    );
-  }
-
-  /// 信息区(横幅之下、TabBar 之上的共享内容): 统计行/关注/简介/相似歌手
-  Widget _buildInfoSection(ThemeData theme, rust.ArtistDetailDto detail) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${detail.albumCount} 个专辑 · ${detail.musicCount} 首歌曲',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // 关注按钮: 状态为乐观更新(接口成功才翻转)
-              TextButton.icon(
-                onPressed: _toggleFollow,
-                icon: Icon(
-                  (_followed ?? false) ? Icons.check : Icons.person_add_alt_1,
-                  size: 16,
-                ),
-                label: Text((_followed ?? false) ? '已关注' : '关注'),
-                style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                ),
-              ),
-            ],
+      footer: ProfileStatRow(
+        chips: [
+          ProfileWorksStatChip(
+            albumCount: detail.albumCount,
+            songCount: detail.musicCount,
           ),
-          if (_similar.isNotEmpty) ...[
-            const Divider(height: 24),
-            Text('相似歌手', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            _buildSimilarArtists(theme),
-          ],
-          const Divider(height: 24),
-          // 与用户个人主页区分的核心区块: 简介/推荐单曲/专辑横滑/详细艺人
-          if (detail.briefDesc.trim().isNotEmpty) ...[
-            Text('简介', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            _ExpandableText(text: detail.briefDesc),
-            const SizedBox(height: 8),
-          ],
-          if (detail.songs.isNotEmpty) ...[
-            ArtistRecommendedSongsSection(
-              songs: detail.songs.take(5).toList(),
-              totalCount: detail.musicCount,
-              onPlaySongs: widget.onPlaySongs,
-              onSeeAll: () => _switchToTab(_TabKind.allSongs),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (detail.albums.isNotEmpty) ...[
-            ArtistAlbumsSection(
-              albums: detail.albums.take(6).toList(),
-              totalCount: detail.albumCount,
-              onOpenAlbum: widget.onOpenAlbum,
-              onSeeAll: () => _switchToTab(_TabKind.albums),
-            ),
-            const SizedBox(height: 16),
-          ],
-          Text('详细艺人', style: theme.textTheme.titleMedium),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('详细艺人资料'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => showArtistInfoSheet(
-              context,
-              detail: detail,
-              similar: _similar,
-              onOpenArtist: (a) => showArtistDetail(
-                context,
-                artistId: a.id,
-                name: a.name,
-                onPlaySongs: widget.onPlaySongs,
-                onOpenAlbum: widget.onOpenAlbum,
-              ),
-            ),
+          // 关注状态为乐观更新(接口成功才翻转)
+          ProfileStatChip(
+            icon: followed ? Icons.check : Icons.person_add_alt_1,
+            label: followed ? '已关注' : '关注',
+            onTap: _toggleFollow,
           ),
         ],
       ),
     );
+  }
+
+  /// 信息区(横幅之下、TabBar 之上的共享内容): 简介/推荐单曲/专辑/相似歌手
+  ///
+  /// 统计行已上移到身份卡的 footer 槽位; 这里返回 sliver 里的分区列表,
+  /// 空分区整块不渲染(不塞空态卡).
+  List<Widget> _buildInfoSections(
+    ThemeData theme,
+    rust.ArtistDetailDto detail,
+  ) {
+    return [
+      // 相似歌手(未登录/接口不支持时整块不渲染)
+      if (_similar.isNotEmpty) ...[
+        Text('相似歌手', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 8),
+        _buildSimilarArtists(theme),
+        const SizedBox(height: 16),
+      ],
+      // 与用户个人主页区分的核心区块: 简介/推荐单曲/专辑横滑/详细艺人
+      if (detail.briefDesc.trim().isNotEmpty) ...[
+        Text('简介', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        _ExpandableText(text: detail.briefDesc),
+        const SizedBox(height: 8),
+      ],
+      if (detail.songs.isNotEmpty) ...[
+        ArtistRecommendedSongsSection(
+          songs: detail.songs.take(5).toList(),
+          totalCount: detail.musicCount,
+          onPlaySongs: widget.onPlaySongs,
+          onSeeAll: () => _switchToTab(_TabKind.allSongs),
+        ),
+        const SizedBox(height: 16),
+      ],
+      if (detail.albums.isNotEmpty) ...[
+        ArtistAlbumsSection(
+          albums: detail.albums.take(6).toList(),
+          totalCount: detail.albumCount,
+          onOpenAlbum: widget.onOpenAlbum,
+          onSeeAll: () => _switchToTab(_TabKind.albums),
+        ),
+        const SizedBox(height: 16),
+      ],
+      Text('详细艺人', style: theme.textTheme.titleMedium),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        dense: true,
+        title: const Text('详细艺人资料'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showArtistInfoSheet(
+          context,
+          detail: detail,
+          similar: _similar,
+          onOpenArtist: (a) => showArtistDetail(
+            context,
+            artistId: a.id,
+            name: a.name,
+            onPlaySongs: widget.onPlaySongs,
+            onOpenAlbum: widget.onOpenAlbum,
+          ),
+        ),
+      ),
+    ];
   }
 
   /// 相似歌手: 头像 + 名字的小胶囊(Wrap 防溢出, 名字单行省略)
@@ -500,71 +482,6 @@ enum _TabKind {
 
   const _TabKind(this.label);
   final String label;
-}
-
-/// pinned 的搜索条
-class _SearchBarDelegate extends SliverPersistentHeaderDelegate {
-  const _SearchBarDelegate({required this.query, required this.onChanged});
-
-  final String query;
-  final ValueChanged<String> onChanged;
-
-  @override
-  double get minExtent => 56;
-
-  @override
-  double get maxExtent => 56;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: TextField(
-        autofocus: true,
-        controller: TextEditingController(
-          text: query,
-        )..selection = TextSelection(baseOffset: 0, extentOffset: query.length),
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: '搜索该歌手的歌曲',
-          prefixIcon: const Icon(Icons.search, size: 20),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0),
-        ),
-        style: theme.textTheme.bodyMedium,
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(_SearchBarDelegate oldDelegate) =>
-      oldDelegate.query != query;
-}
-
-/// pinned 的 TabBar
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  const _TabBarDelegate(this.tabBar);
-
-  final TabBar tabBar;
-
-  @override
-  double get minExtent => tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
-    return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
-      child: tabBar,
-    );
-  }
-
-  @override
-  bool shouldRebuild(_TabBarDelegate oldDelegate) => true;
 }
 
 /// 全部歌曲 tab: offset/limit 分页(PagedListView); 有搜索词时改为
