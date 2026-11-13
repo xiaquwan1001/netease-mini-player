@@ -137,6 +137,29 @@ double coverRequestPx(
   return px.clamp(60, 1600).roundToDouble();
 }
 
+/// 按**真实像素矩形**请求: 输出 `?param=WxH`(不是 [neteaseThumbUrl] 的方图).
+///
+/// 背景横幅是"宽而矮"的矩形(如 1080x510), 而 [neteaseThumbUrl] 取 max(w,h) 做方图,
+/// 于是 `height=170` 的横幅只能拿到 `param=170y170` —— 一张 ~170px 的方图被放大
+/// 6 倍铺满整屏, 糊到看不清。这里把宽高分别写进 param, 让 CDN 按矩形裁.
+///
+/// 非有限/非正的边长会被忽略; 两边都无效时原样返回(不加 param).
+String neteaseSizedUrl(String url, {num? widthPx, num? heightPx}) {
+  if (url.isEmpty) return url;
+  final w = (widthPx != null && widthPx.isFinite && widthPx > 0)
+      ? widthPx.round()
+      : 0;
+  final h = (heightPx != null && heightPx.isFinite && heightPx > 0)
+      ? heightPx.round()
+      : 0;
+  if (w <= 0 && h <= 0) return url;
+  // 单边有效时就按正方形补另一条边(CDN 不接受 0)
+  final pw = w > 0 ? w : h;
+  final ph = h > 0 ? h : w;
+  final sep = url.contains('?') ? '&' : '?';
+  return '$url${sep}param=${pw}y$ph';
+}
+
 /// 缩略图: 网易云 CDN 支持 `?param=NxN` 服务端裁剪.
 /// 列表里直接拉 1~2MB 原图会很慢(模拟器/移动网络尤其明显), 统一按显示尺寸取缩略图。
 String neteaseThumbUrl(String url, {num? width, num? height}) {
@@ -153,6 +176,37 @@ String neteaseThumbUrl(String url, {num? width, num? height}) {
   return '$url${sep}param=${px}y$px';
 }
 
+/// 背景横幅/大图要按"显示区域 x DPR x 档位"取图, 而不是按逻辑尺寸当像素数.
+///
+/// 与 [coverRequestPx] 同一套档位算子, 区别只在:
+/// - 返回**矩形**(宽高分别算), 宽高比跟控件一致;
+/// - 上限 1080: 背景图铺满屏宽, CDN 再大也没意义(手机屏物理宽通常 < 1080).
+({int widthPx, int heightPx}) bannerRequestPx(
+  BuildContext context, {
+  required double logicalWidth,
+  required double logicalHeight,
+  CoverQuality? quality,
+  double maxPx = 1080,
+}) {
+  final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+  final mult = (quality ?? AppSettings.instance.coverQuality).multiplier;
+  var w = logicalWidth.isFinite ? logicalWidth * dpr * mult : 0.0;
+  var h = logicalHeight.isFinite ? logicalHeight * dpr * mult : 0.0;
+  if (w <= 0 || h <= 0) return (widthPx: 0, heightPx: 0);
+  // 等比缩到上限内, 别为了压宽把高拉成方图
+  if (w > maxPx) {
+    final k = maxPx / w;
+    w = maxPx;
+    h *= k;
+  }
+  if (h > maxPx) {
+    final k = maxPx / h;
+    h = maxPx;
+    w *= k;
+  }
+  return (widthPx: w.round(), heightPx: h.round());
+}
+
 /// 一张图的多级候选地址(按顺序尝试, 前一个失败就换下一个):
 /// 1. https + 缩略图  2. https 原图  3. http 原图
 /// 网易云 CDN 偶发对某个 host/尺寸回 403 或空 body(换尺寸/协议通常就好),
@@ -167,6 +221,32 @@ List<String> imageCandidates(String? url, {num? width, num? height}) {
   }
 
   add(neteaseThumbUrl(src, width: width, height: height));
+  add(src);
+  add(raw);
+  if (raw.startsWith('https://')) add(raw.replaceFirst('https://', 'http://'));
+  return out;
+}
+
+/// 按**像素矩形**取图的多级候选(给背景横幅用): 1. https + `param=WxH`
+/// 2. https 原图 3. http 原图 —— 降级链与 [imageCandidates] 一致, 只是第一级
+/// 从"方图缩略"换成了"矩形缩略".
+List<String> sizedImageCandidates(
+  String? url, {
+  required int widthPx,
+  required int heightPx,
+}) {
+  final src = httpsImageUrl(url);
+  if (src.isEmpty) return const [];
+  if (widthPx <= 0 || heightPx <= 0) {
+    return imageCandidates(url, width: widthPx, height: heightPx);
+  }
+  final raw = url!.trim();
+  final out = <String>[];
+  void add(String u) {
+    if (u.isNotEmpty && !out.contains(u)) out.add(u);
+  }
+
+  add(neteaseSizedUrl(src, widthPx: widthPx, heightPx: heightPx));
   add(src);
   add(raw);
   if (raw.startsWith('https://')) add(raw.replaceFirst('https://', 'http://'));
@@ -301,6 +381,7 @@ class NetImage extends StatelessWidget {
     this.radius = 0,
     this.placeholder,
     this.icon = Icons.music_note,
+    this.useQualityTier = false,
   });
 
   final String? url;
@@ -311,10 +392,38 @@ class NetImage extends StatelessWidget {
   final Widget? placeholder;
   final IconData icon;
 
+  /// 是否按设置的清晰度档位(省流 0.75 / 标准 1.0 / 超清 2.0)x 设备像素比
+  /// 取 **矩形** 尺寸的图(见 [bannerRequestPx])。
+  ///
+  /// 默认 false: 其余几十个调用点(封面/头像/小图)的行为保持不变 —— 它们本来就该
+  /// 按逻辑尺寸取小图, 走 [imageCandidates] 的方图缩略就够。
+  final bool useQualityTier;
+
   @override
   Widget build(BuildContext context) {
+    if (!useQualityTier) return _buildWith(context, null);
+    // 档位可调 ⇒ 监听设置: 用户改完清晰度立刻按新尺寸重取(URL 变了 provider 也变了)
+    return AnimatedBuilder(
+      animation: AppSettings.instance.coverQualityListenable,
+      builder: (context, _) => _buildWith(
+        context,
+        bannerRequestPx(
+          context,
+          logicalWidth: (width?.isFinite ?? false)
+              ? width!
+              : MediaQuery.sizeOf(context).width,
+          logicalHeight: (height?.isFinite ?? false) ? height! : 220,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWith(BuildContext context, ({int widthPx, int heightPx})? px) {
     final scheme = Theme.of(context).colorScheme;
-    final size = width ?? height ?? 48;
+    // width 可能是 double.infinity(整宽横幅), 不能拿去算图标尺寸(Infinity*0.42 = NaN)
+    final size = (width?.isFinite ?? false)
+        ? width!
+        : ((height?.isFinite ?? false) ? height! : 48);
     final fallback =
         placeholder ??
         Container(
@@ -324,7 +433,9 @@ class NetImage extends StatelessWidget {
           alignment: Alignment.center,
           child: Icon(icon, size: size * 0.42, color: scheme.outline),
         );
-    final candidates = imageCandidates(url, width: width, height: height);
+    final candidates = px == null
+        ? imageCandidates(url, width: width, height: height)
+        : sizedImageCandidates(url, widthPx: px.widthPx, heightPx: px.heightPx);
     if (candidates.isEmpty) return fallback;
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),

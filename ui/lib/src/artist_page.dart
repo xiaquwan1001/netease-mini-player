@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
+import 'profile_banner.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart';
 import 'song_actions.dart';
@@ -275,7 +276,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           headerSliverBuilder: (context, innerBoxIsScrolled) => [
             SliverAppBar(
               pinned: true,
-              expandedHeight: 170,
+              expandedHeight: kProfileBannerHeight,
               // 收起时顶栏保留歌手名; 展开时横幅里已有名字, 顶栏不重复
               title: _collapsed
                   ? Text(
@@ -298,6 +299,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
                 background: _buildBanner(theme, detail),
               ),
             ),
+            // 身份卡(头像/名字/别名): 横幅之下, 不压图
+            SliverToBoxAdapter(child: _buildIdentity(theme, detail)),
             // 共享信息区: 统计/关注/简介/相似歌手(随页面滚动, TabBar 之上)
             SliverToBoxAdapter(child: _buildInfoSection(theme, detail)),
             if (_searching)
@@ -357,74 +360,19 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
   }
 
-  /// 横幅: 封面 + 底部渐变, 叠加头像/名字/别名/关注按钮
+  /// 横幅: 只有封面图 + 底部轻渐变(文字已移到图下方的身份卡, 不再压图)
   Widget _buildBanner(ThemeData theme, rust.ArtistDetailDto detail) {
-    const bannerHeight = 170.0;
-    return SizedBox(
-      height: bannerHeight,
-      width: double.infinity,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // 空 url 时不给 NetImage(占位 Icon 尺寸会随 width=infinity 变 NaN)
-          if (detail.coverUrl != null && detail.coverUrl!.isNotEmpty)
-            NetImage(
-              url: detail.coverUrl,
-              height: bannerHeight,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            )
-          else
-            ColoredBox(color: theme.colorScheme.surfaceContainerHighest),
-          // 底部渐变保证白字可读
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.transparent, Colors.black54],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            bottom: 12,
-            right: 16,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                CircleCover(url: detail.avatarUrl, size: 64),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        detail.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (detail.alias.isNotEmpty)
-                        Text(
-                          detail.alias.join(' / '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.white70,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return ProfileBannerImage(url: detail.coverUrl);
+  }
+
+  /// 身份卡: 头像/名字/别名(落在横幅下方, 白字不再叠在图上)
+  Widget _buildIdentity(ThemeData theme, rust.ArtistDetailDto detail) {
+    return ProfileIdentity(
+      title: detail.name,
+      subtitle: detail.alias.isEmpty ? null : detail.alias.join(' / '),
+      avatarUrl: detail.avatarUrl,
+      titleStyle: theme.textTheme.headlineSmall?.copyWith(
+        fontWeight: FontWeight.w600,
       ),
     );
   }

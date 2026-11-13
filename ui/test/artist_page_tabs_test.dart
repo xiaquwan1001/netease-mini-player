@@ -123,6 +123,8 @@ void main() {
     );
     // 「热门歌曲」tab 已移除, 改为顶部「推荐单曲」区块
     expect(find.text('推荐单曲'), findsOneWidget);
+    // 横幅改成 220 高 + 身份卡, 初始视口内看不到 TabBar, 先滚进来
+    await revealTabs(tester);
     expect(find.text('全部歌曲'), findsOneWidget);
     expect(find.text('专辑'), findsNothing);
     expect(find.text('MV'), findsNothing);
