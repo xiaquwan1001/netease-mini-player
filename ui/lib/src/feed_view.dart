@@ -5,6 +5,7 @@ import 'artist_nav.dart';
 import 'cover_art.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
+import 'layout.dart' show avatarStripHeightFor;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
@@ -410,7 +411,8 @@ class _ArtistFilterBar extends StatelessWidget {
     if (authors.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 84,
+      // 定高横滑条: 头像/内边距固定, 只有 11sp 标签随字号涨(写死 84 时 1.625 下竖溢 4dp)
+      height: avatarStripHeightFor(context),
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),

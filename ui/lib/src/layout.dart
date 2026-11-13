@@ -107,6 +107,24 @@ double rowExtentFor(BuildContext context, [double base = kRowExtent]) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// 定高横滑条(艺人筛选条 / 最近联系人条)
+//
+// 两条都是 `SizedBox(height: 84)` + 横滑 `ListView`, 结构相同: 头像(40/44) +
+// 间距 + 一行 11sp 标签。写死 84 时 1.625 字号下标签行高变高, 整条**竖向溢出 4dp**;
+// 所以只放大文字那一段, 头像与内边距保持原值。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 头像横滑条的基准高度(textScaler = 1.0 时的值)。
+const double kAvatarStripHeight = 84;
+
+/// 头像横滑条的实际高度: 固定部分(头像/内边距/间距) + 按字号放大的 11sp 标签行。
+double avatarStripHeightFor(BuildContext context) {
+  final label = MediaQuery.textScalerOf(context).scale(11) * 1.45;
+  // -16 = 1.0 时的单行标签高, 保证 1.0 下仍是 84(既有几何不动)
+  return kAvatarStripHeight - 16 + label;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // 方格网格(专辑 / 猜你喜欢 / 新碟 / 歌单广场)统一 delegate
 //
 // 之前三处各写一份 `SliverGridDelegateWithMaxCrossAxisExtent(max:160/180,

@@ -216,9 +216,8 @@ void main() {
       userName: '一个名字特别特别长的动态发布者昵称用于窄屏回归测试再加长一点',
       text: '正文',
     );
-    // 只收集错误、不改 FlutterError.onError 之外的任何东西: 1.625 下顶部横向
-    // 艺人筛选条(_AuthorChip, SizedBox(height: 84) 定高)另有 4dp 的**竖向**溢出,
-    // 属本次 A 级清单外(pre-existing), 这里只断言横向不溢出(头行溢出的形态)。
+    // 顶部横向艺人筛选条曾定高 84(SizedBox), 1.625 字号下**竖向**溢出 4dp;
+    // 现在条高按 textScaler 放大(见 feed_view.dart::_stripHeight), 两向都不许溢出。
     final errors = <String>[];
     final previous = FlutterError.onError;
     FlutterError.onError = (d) => errors.add(d.exceptionAsString());
@@ -243,6 +242,11 @@ void main() {
       errors.where((m) => m.contains('Axis.horizontal')),
       isEmpty,
       reason: '动态头行不允许横向 overflow',
+    );
+    expect(
+      errors.where((m) => m.contains('overflowed')),
+      isEmpty,
+      reason: '1.625 字号下头行与艺人筛选条都不许 overflow(竖向/横向)',
     );
     final time = find.text(feedRelativeTime(e.timeMs));
     expect(time, findsOneWidget);

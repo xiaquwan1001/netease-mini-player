@@ -359,6 +359,42 @@ void main() {
     expect(find.text('加载更早'), findsNothing);
   });
 
+  // 顶栏「最近联系人」横滑条是 SizedBox(height: 84) 定高(头像 44 + 4 + 11sp 标签),
+  // 1.625 字号下标签行高变高会**竖向**溢出; 条高必须按 textScaler 放大。
+  testWidgets('300dp x1.625: 最近联系人横滑条不竖向溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    final errors = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (d) => errors.add(d.exceptionAsString());
+    try {
+      await tester.pumpWidget(
+        host(
+          MessagesPage(
+            loadCounts: () async => counts(),
+            loadSessions: (limit, offset) async => [
+              session(7, '云音乐VIP', 'hi', 0),
+            ],
+            loadHistory: (uid, limit, before) async => const [],
+            loadContacts: () async => [
+              contact(1, '好友本名特别长的一个昵称用来压条高', remark: '老王本名更长'),
+              contact(2, '云音乐VIP'),
+            ],
+            loadNotices: () async => const [],
+            loadComments: () async => const [],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    } finally {
+      FlutterError.onError = previous;
+    }
+    expect(errors, isEmpty, reason: '1.625 字号下联系人条不许 overflow');
+  });
+
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {
     tester.view.physicalSize = const Size(300, 900);
     tester.view.devicePixelRatio = 1.0;

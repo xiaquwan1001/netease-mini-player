@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'comment_page.dart';
 import 'cover_art.dart';
+import 'layout.dart' show avatarStripHeightFor;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -332,7 +333,8 @@ class _ContactsStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 84,
+      // 头像 44 + 间距 4 + 11sp 标签: 定 84 在 1.625 字号下竖向溢出(与艺人筛选条同款)
+      height: avatarStripHeightFor(context),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
