@@ -14,7 +14,7 @@
 | `cargo test --offline --workspace` | **277** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network` | **752** 通过 / 0 失败 |
+| `flutter test --exclude-tags network` | **785** 通过 / 0 失败(含 12 张 golden) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -75,6 +75,21 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13(五): 设置三项 + 主页统一 + golden 网 + 术语(v0.9.0)
+
+| # | 需求 | 落地 |
+|---|---|---|
+| 1 | 设置里能「播放跳过 VIP 歌曲」 | 规则抽成纯函数 `playback_policy.dart`(只跳 fee=1 的会员曲目, 不碰 fee=4 数字专辑、不碰无版权); `_playSong` 的续播循环里静默跳过、整轮结束提示一次(否则自动续播会连环弹窗) |
+| 2 | 每日推荐歌单本地缓存 + 可选跨度 + 清理日期 | `daily_cache.dart`: `<dataDir>/cache/daily-playlists/YYYY-MM-DD.json`, 同日命中不再联网、离线可兜底、损坏自动丢弃; 设置 → **缓存** 分组: 保留 0/3/7/30 天 + 立即清理 + 上次清理时间(下拉即清, 免得 30→3 天的旧文件要等下次手动清) |
+| 3 | 凭据存储右边重复的 android-keystore 文本框 | `_CredentialStorageTile` 删掉 `trailing: Text(status.backend)`(与 subtitle 的说明重复) |
+| 4 | 诊断与数据里默认可匿名发送 debug 数据 | 开关 + 「生成匿名诊断包」(`debug_report.dart`): 只导环境/设置/provider id/凭据后端 kind, **不含**昵称/uid/cookie, deviceId 只留 FNV 摘要; 无自建端点 ⇒ 不自动上传, 落盘到 `debug/` 由用户自己决定发哪里 |
+| 5 | 关注页点头像进主页, 且与搜索进入的个人主页同一份排版 | 新增 `artist_nav.dart`(与 `user_nav.dart` 同形): 关注页横向艺人 chip 与「全部艺人」面板**只把 40dp 头像**包成入口, 整块仍是筛选; 主页侧统一 8 处口径(主标题字号/头像 64/统计行复用 `ProfileStatChip`/新增 `ProfileSection` 统一分区几何/分区顺序 简介→作品→相似/首屏错误态 `ProfileLoadError`/缺条目直接不渲染) |
+| 6 | 「歌手」→「艺人」 | 48 个前端文件(含测试与注释)统一替换; codegen(`lib/src/rust/`)不动 |
+| 附加 | golden 视觉回归网 | 6 页 × 2 视口(360×800 / 300×640@1.25)= 12 张; 用 `FontLoader` 加载系统 Noto CJK(否则渲染方块), 只在本机 Linux 生成/校验, CI 暂不接 |
+| 附加 | 列表行审计 | `docs/ui-row-audit.md`: 49 处行骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18(歌曲行 6 种留白); 给出 `ListRow` API 草案与 10 条改造顺序 |
+
+坑(已记进 `.pi/memory/notes-ui-rules.md`): 真 IO 在 `testWidgets` 的 FakeAsync 里**永远不完成**(本次 `debug_report_test` 卡了 7 分钟才发现) ⇒ 落盘类用例一律用普通 `test()` + `TestWidgetsFlutterBinding.ensureInitialized()`。
 
 ## 2026-11-13(四): 规则层收口(唯一 AsyncView / SectionTitle / token 门)
 
