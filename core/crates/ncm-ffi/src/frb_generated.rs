@@ -39,7 +39,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.13.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1002997814;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 567569648;
 
 // Section: executor
 
@@ -5135,6 +5135,45 @@ fn wire__crate__api__update_playlist_desc_impl(
         },
     )
 }
+fn wire__crate__api__user_events_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "user_events",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_uid = <u64>::sse_decode(&mut deserializer);
+            let api_limit = <u32>::sse_decode(&mut deserializer);
+            let api_last_time = <i64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok =
+                            crate::api::user_events(api_uid, api_limit, api_last_time).await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__user_followeds_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -5275,6 +5314,43 @@ fn wire__crate__api__user_medals_impl(
                 transform_result_sse::<_, String>(
                     (move || async move {
                         let output_ok = crate::api::user_medals().await?;
+                        std::result::Result::Ok(output_ok)
+                    })()
+                    .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__user_play_ranking_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "user_play_ranking",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_uid = <u64>::sse_decode(&mut deserializer);
+            let api_period = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, String>(
+                    (move || async move {
+                        let output_ok = crate::api::user_play_ranking(api_uid, api_period).await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -8715,15 +8791,17 @@ fn pde_ffi_dispatcher_primary_impl(
         139 => wire__crate__api__trash_fm_song_impl(port, ptr, rust_vec_len, data_len),
         140 => wire__crate__api__ttml_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
         141 => wire__crate__api__update_playlist_desc_impl(port, ptr, rust_vec_len, data_len),
-        142 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
-        143 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
-        144 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
-        145 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
-        146 => wire__crate__api__user_playlists_of_impl(port, ptr, rust_vec_len, data_len),
-        147 => wire__crate__api__user_profile_impl(port, ptr, rust_vec_len, data_len),
-        148 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
-        149 => wire__crate__api__word_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
-        150 => wire__crate__api__word_lyric_with_fallback_impl(port, ptr, rust_vec_len, data_len),
+        142 => wire__crate__api__user_events_impl(port, ptr, rust_vec_len, data_len),
+        143 => wire__crate__api__user_followeds_impl(port, ptr, rust_vec_len, data_len),
+        144 => wire__crate__api__user_follows_impl(port, ptr, rust_vec_len, data_len),
+        145 => wire__crate__api__user_level_impl(port, ptr, rust_vec_len, data_len),
+        146 => wire__crate__api__user_medals_impl(port, ptr, rust_vec_len, data_len),
+        147 => wire__crate__api__user_play_ranking_impl(port, ptr, rust_vec_len, data_len),
+        148 => wire__crate__api__user_playlists_of_impl(port, ptr, rust_vec_len, data_len),
+        149 => wire__crate__api__user_profile_impl(port, ptr, rust_vec_len, data_len),
+        150 => wire__crate__api__vip_overview_impl(port, ptr, rust_vec_len, data_len),
+        151 => wire__crate__api__word_lyric_lines_impl(port, ptr, rust_vec_len, data_len),
+        152 => wire__crate__api__word_lyric_with_fallback_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
