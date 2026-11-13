@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
-import 'layout.dart' show kSongRowPadding;
+import 'layout.dart';
+import 'section_header.dart';
 import 'net_retry.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
@@ -206,33 +207,6 @@ class _RecommendViewState extends State<RecommendView> {
 }
 
 // ---------------- 区块骨架 ----------------
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}
 
 /// 独立加载的区块: loading / error / empty 都不影响兄弟区块
 class _AsyncSection<T> extends StatefulWidget {
@@ -568,7 +542,7 @@ class _NewReleaseSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _hPad(
-          _SectionHeader(
+          SectionHeader(
             title: '新歌新碟',
             trailing: onMore == null
                 ? null
@@ -606,7 +580,7 @@ class _StylesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '风格推荐'),
+        const SectionHeader(title: '风格推荐'),
         _StyleTiles(
           load: load,
           onPlaySongs: onPlaySongs,
@@ -733,7 +707,7 @@ class _DailySongsSection extends StatelessWidget {
         // 审查 §5.5: 「每日推荐歌曲」+「每日推荐歌单」合并成一格「每日推荐」,
         // 歌单落在落地页的第二个 tab; 同屏不再出现第二个「查看全部」。
         _hPad(
-          _SectionHeader(
+          SectionHeader(
             title: '每日推荐',
             // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
             trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
@@ -823,7 +797,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '推荐歌单',
           trailing: onOpenAll == null
               ? null
@@ -871,7 +845,7 @@ class _PodcastSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '推荐播客',
           trailing: TextButton(
             onPressed: () => Navigator.of(context).push(

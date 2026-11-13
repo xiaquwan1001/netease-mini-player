@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart';
 import 'rust/api.dart' as rust;
 
 /// 个人主页头部卡片: 背景图 + 头像/昵称/VIP/签名 + 关注/粉丝/等级一行。
@@ -96,7 +97,8 @@ class ProfileHeaderState extends State<ProfileHeader> {
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.all(12),
+      // 卡片外边距归零: 页面已有 kPagePadding(12), 再叠 all(12) 会把卡片推到距屏 24
+      margin: kCardMargin,
       child: InkWell(
         onTap: widget.onTap,
         child: Column(
@@ -255,9 +257,12 @@ class ProfileHeaderState extends State<ProfileHeader> {
               ),
             ),
             // 底部统计行: 关注 X · 粉丝 Y · Lv.Z(缺失显示 0)
-            // 关注/粉丝可点, 进去看列表
+            // 关注/粉丝可点, 进去看列表。左右 12 与卡片内行同一栅格(见 layout.dart)。
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: kPagePadding,
+                vertical: 8,
+              ),
               child: widget.loggedIn
                   ? Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
