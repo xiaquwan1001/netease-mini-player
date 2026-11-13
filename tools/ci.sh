@@ -27,6 +27,11 @@ if [ "$smoke_ok" != 1 ]; then
   echo "WARN: vendor 匿名联网 smoke 连续 3 次失败(已知上游风控/公网抖动, 不阻塞); 复核: NCM_VENDOR_SMOKE_STRICT=1 tools/ci.sh"
 fi
 
+echo "== 格式与 lint 门 (与 CI 同口径)"
+cargo fmt --manifest-path core/Cargo.toml --all -- --check
+cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
+(cd ui && dart format --output=none --set-exit-if-changed lib test)
+
 echo "== write-guard (测试不得直连写接口)"
 bash tools/check-write-guard.sh
 

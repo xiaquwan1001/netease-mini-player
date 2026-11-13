@@ -17,6 +17,8 @@ rust:
   stage: test
   timeout: 40m
   script:
+    - cargo fmt --manifest-path core/Cargo.toml --all -- --check
+    - cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
     - cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
 
 flutter:
@@ -27,6 +29,7 @@ flutter:
     - flutter config --no-analytics >/dev/null
     - (cd ui && flutter pub get)
     - (cd ui && dart analyze)
+    - (cd ui && dart format --output=none --set-exit-if-changed lib test)
     - bash tools/check-write-guard.sh
     - (cd ui && flutter test --exclude-tags network)
 

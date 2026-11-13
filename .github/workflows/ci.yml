@@ -25,6 +25,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path core/Cargo.toml --all -- --check
+      - name: cargo clippy (-D warnings)
+        run: cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
       - name: cargo test (workspace, vendor network smoke excluded)
         run: cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
 
@@ -44,6 +48,9 @@ jobs:
       - name: analyze
         working-directory: ui
         run: dart analyze
+      - name: format check (dart format, 只读不写)
+        working-directory: ui
+        run: dart format --output=none --set-exit-if-changed lib test
       - name: write-guard (测试不得直连写接口, CI 不触网)
         run: bash tools/check-write-guard.sh
       - name: widget/unit tests (offline)
