@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
-import 'layout.dart' show kSongRowPadding;
+import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -96,23 +96,35 @@ class _PlayRankingViewState extends State<PlayRankingView>
 
   Widget _buildControls() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // compact 内嵌在「我的」页时, 页面已有 kPagePadding, 这里不再叠一层
+      padding: EdgeInsets.symmetric(
+        horizontal: widget.compact ? 0 : kPagePadding,
+      ),
+      // 300dp + 1.625 字号下「三个分段 + 查看全部」会横向溢出 9.5px(实测)。
+      // 分段控件改成 Flexible + FittedBox(scaleDown): 放不下时整组等比缩小,
+      // 「查看全部」保持可点, 标题区不被挤没; 用 spaceBetween 顶到两端。
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<String>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                segments: [
+                  for (final (value, label) in rankingPeriods)
+                    ButtonSegment<String>(value: value, label: Text(label)),
+                ],
+                selected: {_period},
+                onSelectionChanged: (s) => _switchPeriod(s.first),
+              ),
             ),
-            segments: [
-              for (final (value, label) in rankingPeriods)
-                ButtonSegment<String>(value: value, label: Text(label)),
-            ],
-            selected: {_period},
-            onSelectionChanged: (s) => _switchPeriod(s.first),
           ),
-          const Spacer(),
           if (widget.compact && widget.onOpenAll != null)
             TextButton(onPressed: widget.onOpenAll, child: const Text('查看全部')),
         ],
@@ -255,6 +267,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
                     _RankRow(
                       rank: i + 1,
                       entry: shown[i],
+                      padding: kCardRowPadding,
                       onTap: shown[i].song.playable
                           ? () {
                               final index = playable.indexWhere(
@@ -278,10 +291,19 @@ class _PlayRankingViewState extends State<PlayRankingView>
 }
 
 class _RankRow extends StatelessWidget {
-  const _RankRow({required this.rank, required this.entry, this.onTap});
+  const _RankRow({
+    required this.rank,
+    required this.entry,
+    this.onTap,
+    this.padding = kSongRowPadding,
+  });
 
   final int rank;
   final rust.PlayRankEntryDto entry;
+
+  /// 行留白: 整页排行用 kSongRowPadding(8/4);
+  /// 「我的」页里嵌在卡片里时传 kCardRowPadding, 与同页入口行同一栅格。
+  final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
 
   @override
@@ -294,7 +316,7 @@ class _RankRow extends StatelessWidget {
       dense: true,
       visualDensity: VisualDensity.compact,
       // 用户反馈听歌排行左右有空隙: 默认 16+16 收到歌曲行统一留白
-      contentPadding: kSongRowPadding,
+      contentPadding: padding,
       leading: SizedBox(
         // 名次(22) + 间距(4) + 封面(40), 给足宽度否则 ListTile 的 leading 会溢出
         width: 68,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
+import 'section_header.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_tile.dart' show VipBadge, PaidBadge, UnplayableBadge;
@@ -9,56 +10,6 @@ import 'song_tile.dart' show VipBadge, PaidBadge, UnplayableBadge;
 /// 艺人主页的「区块」组件(与用户个人主页区分的核心):
 /// 推荐单曲 / 专辑横滑 / 详细艺人弹层。只吃 DTO, 不发请求,
 /// 数据与回调全部由 artist_page 注入(可测试)。
-
-/// 区块标题 + 可选的尾部动作(如「查看全部 ›」)
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium,
-          ),
-        ),
-        // 300dp 大字号下按钮组放不下时等比缩小, 而不是溢出
-        if (trailing != null)
-          Flexible(
-            child: FittedBox(fit: BoxFit.scaleDown, child: trailing),
-          ),
-      ],
-    );
-  }
-}
-
-/// 「查看全部 N ›」文字按钮: 300dp 大字号下只留文字, 不撑爆头部行
-class _SeeAllButton extends StatelessWidget {
-  const _SeeAllButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-      ),
-      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-    );
-  }
-}
 
 /// 推荐单曲区块: 详情接口带来的 top 5 首。
 /// 徽标直接放在标题行(不放 AdaptiveTextRow.badges —— 窄屏下那组会被整组收起)。
@@ -83,7 +34,7 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '推荐单曲',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -97,11 +48,13 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                 ),
               ),
-              _SeeAllButton(label: '查看全部 $totalCount 首 ›', onTap: onSeeAll),
+              SectionSeeAllButton(
+                label: '查看全部 $totalCount 首 ›',
+                onTap: onSeeAll,
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 4),
         for (var i = 0; i < songs.length; i++)
           _ArtistRecommendSongRow(
             song: songs[i],
@@ -221,11 +174,13 @@ class ArtistAlbumsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '专辑',
-          trailing: _SeeAllButton(label: '全部 $totalCount 张 ›', onTap: onSeeAll),
+          trailing: SectionSeeAllButton(
+            label: '全部 $totalCount 张 ›',
+            onTap: onSeeAll,
+          ),
         ),
-        const SizedBox(height: 8),
         // 横向 ListView: 300dp 下天然可滚, 不参与竖向溢出
         SizedBox(
           // 卡片高 = 封面 108 + 名字/年份两行(textScale 1.25 约 40px)

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
+import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
@@ -10,6 +11,7 @@ import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show InlineError;
+import 'section_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
@@ -137,7 +139,7 @@ class _MineViewState extends State<MineView> {
               ),
               const SizedBox(height: 12),
               const Text('登录后查看我喜欢的音乐、收藏歌单/播客和关注艺人'),
-              const SizedBox(height: 16),
+              const SizedBox(height: kSectionGap),
               FilledButton(onPressed: widget.onLogin, child: const Text('登录')),
               TextButton(
                 onPressed: widget.onOpenAccounts,
@@ -150,14 +152,16 @@ class _MineViewState extends State<MineView> {
     }
     return RefreshIndicator(
       onRefresh: () async => setState(() => _dataGeneration += 1),
-      // 账户页整页被用户点名"左右空隙大": 页面 12 + ListTile 默认 16 = 28dp。
-      // 列表行统一收到 12(叠后 24), 歌曲行仍走 SongTile 的 kSongRowPadding。
+      // 横向栅格见 layout.dart: 卡片外边缘距屏 12, 卡片内行内容 12+4 = 16。
+      // 之前是「页面 12 + 行 12 = 24 起步」, 再叠 leading 后文字被推到 1/4 屏宽外。
+      // 标题与 leading 的间距从 Material 默认 16 收到 kRowTitleGap(8)。
       child: ListTileTheme(
         data: const ListTileThemeData(
-          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+          contentPadding: kCardRowPadding,
+          horizontalTitleGap: kRowTitleGap,
         ),
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          padding: kPageInsets,
           children: [
             _ProfileSection(
               key: ValueKey('mine-profile-$_dataGeneration'),
@@ -169,14 +173,14 @@ class _MineViewState extends State<MineView> {
               onOpenFolloweds: widget.onOpenFolloweds,
             ),
             if (widget.onOpenMessages != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: kCardGap),
               MessageEntryCard(
                 onOpen: widget.onOpenMessages!,
                 load: widget.loadMessageCounts,
               ),
             ],
             if (widget.onOpenVip != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: kCardGap),
               Card(
                 margin: EdgeInsets.zero,
                 child: ListTile(
@@ -189,7 +193,7 @@ class _MineViewState extends State<MineView> {
               ),
             ],
             if (widget.loggedIn) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: kCardGap),
               Card(
                 margin: EdgeInsets.zero,
                 child: ListTile(
@@ -207,7 +211,7 @@ class _MineViewState extends State<MineView> {
               ),
             ],
             if (widget.loggedIn && widget.onOpenMedals != null) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: kCardGap),
               Card(
                 margin: EdgeInsets.zero,
                 child: ListTile(
@@ -219,16 +223,16 @@ class _MineViewState extends State<MineView> {
                 ),
               ),
             ],
-            const SizedBox(height: 4),
+            const SizedBox(height: kCardGap),
             const SigninCard(),
-            const SizedBox(height: 4),
+            const SizedBox(height: kCardGap),
             _LikedSection(
               key: ValueKey('mine-liked-$_dataGeneration'),
               load: _liked,
               onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
               onOpenAll: widget.onOpenLiked,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: kSectionGap),
             _PlaylistsSection(
               key: ValueKey('mine-playlists-$_dataGeneration'),
               load: _playlists,
@@ -239,7 +243,7 @@ class _MineViewState extends State<MineView> {
                 onOpen: widget.onOpenPlaylist,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: kSectionGap),
             _PodcastsSection(
               key: ValueKey('mine-podcasts-$_dataGeneration'),
               load: _podcasts,
@@ -250,7 +254,7 @@ class _MineViewState extends State<MineView> {
                 onOpen: widget.onOpenPodcast,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: kSectionGap),
             _AlbumsSection(
               key: ValueKey('mine-albums-$_dataGeneration'),
               load: _albums,
@@ -261,14 +265,14 @@ class _MineViewState extends State<MineView> {
                 onOpen: widget.onOpenAlbum,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: kSectionGap),
             _RecentSection(
               key: ValueKey('mine-recent-$_dataGeneration'),
               load: _loadRecent,
               onOpenAll: widget.onOpenRecent,
               onPlay: widget.onPlaySongs,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: kSectionGap),
             _RankingSection(
               key: ValueKey('mine-ranking-$_dataGeneration'),
               load: widget.loadRanking,
@@ -287,33 +291,6 @@ class _MineViewState extends State<MineView> {
 }
 
 // ---------------- 区块骨架 ----------------
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}
 
 class _AsyncSection<T> extends StatefulWidget {
   const _AsyncSection({
@@ -482,9 +459,9 @@ class _LikedSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '我喜欢的音乐',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
@@ -505,8 +482,8 @@ class _LikedSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      // 与同页带图标入口行同一栅格(12), 文字不再左右跳
-                      contentPadding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                      contentPadding: kCardRowPadding,
                       leading: CoverArt(
                         url: preview[i].coverUrl,
                         size: 40,
@@ -574,32 +551,25 @@ class _PlaylistsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '收藏的歌单',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         _AsyncSection<List<rust.Playlist>>(
           load: load,
           emptyText: '还没有收藏歌单',
-          builder: (context, lists, reload) => SizedBox(
-            height: 176,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: lists.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final pl = lists[i];
-                return SizedBox(
-                  width: 118,
-                  child: CoverCard(
-                    coverUrl: pl.coverUrl,
-                    title: pl.special ? '我喜欢的音乐' : pl.name,
-                    subtitle: '${pl.trackCount} 首',
-                    onTap: () => onOpen(pl),
-                  ),
-                );
-              },
-            ),
+          // 高度交给 CoverRow(按系统字号自适应), 不再写死 176 ——
+          // 1.625 字号下两行文字会顶出固定的 176 高度。
+          builder: (context, lists, reload) => CoverRow(
+            children: [
+              for (final pl in lists)
+                CoverCard(
+                  coverUrl: pl.coverUrl,
+                  title: pl.special ? '我喜欢的音乐' : pl.name,
+                  subtitle: '${pl.trackCount} 首',
+                  onTap: () => onOpen(pl),
+                ),
+            ],
           ),
         ),
       ],
@@ -626,35 +596,26 @@ class _PodcastsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '收藏的播客',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         _AsyncSection<List<rust.PodcastRadio>>(
           load: load,
           emptyText: '还没有收藏播客',
-          builder: (context, radios, reload) => SizedBox(
-            height: 176,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: radios.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final r = radios[i];
-                return SizedBox(
-                  width: 118,
-                  child: CoverCard(
-                    coverUrl: r.coverUrl,
-                    title: r.name,
-                    subtitle: [
-                      if (r.djName.isNotEmpty) r.djName,
-                      if (r.programCount > BigInt.zero) '${r.programCount} 集',
-                    ].join(' · '),
-                    onTap: () => onOpen(r),
-                  ),
-                );
-              },
-            ),
+          builder: (context, radios, reload) => CoverRow(
+            children: [
+              for (final r in radios)
+                CoverCard(
+                  coverUrl: r.coverUrl,
+                  title: r.name,
+                  subtitle: [
+                    if (r.djName.isNotEmpty) r.djName,
+                    if (r.programCount > BigInt.zero) '${r.programCount} 集',
+                  ].join(' · '),
+                  onTap: () => onOpen(r),
+                ),
+            ],
           ),
         ),
       ],
@@ -683,35 +644,26 @@ class _AlbumsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '收藏的专辑',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         _AsyncSection<List<rust.AlbumItem>>(
           load: load,
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
-          builder: (context, albums, reload) => SizedBox(
-            height: 176,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: albums.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
-              itemBuilder: (_, i) {
-                final a = albums[i];
-                return SizedBox(
-                  width: 118,
-                  child: CoverCard(
-                    coverUrl: a.coverUrl,
-                    title: a.name,
-                    subtitle: [
-                      if (a.artist.isNotEmpty) a.artist,
-                      if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
-                    ].join(' · '),
-                    onTap: () => onOpen(a),
-                  ),
-                );
-              },
-            ),
+          builder: (context, albums, reload) => CoverRow(
+            children: [
+              for (final a in albums)
+                CoverCard(
+                  coverUrl: a.coverUrl,
+                  title: a.name,
+                  subtitle: [
+                    if (a.artist.isNotEmpty) a.artist,
+                    if (a.trackCount > BigInt.zero) '${a.trackCount} 首',
+                  ].join(' · '),
+                  onTap: () => onOpen(a),
+                ),
+            ],
           ),
         ),
       ],
@@ -739,7 +691,7 @@ class _RankingSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionHeader(title: '听歌排行'),
+        const SectionHeader(title: '听歌排行'),
         PlayRankingView(
           load: load,
           onPlaySongs: onPlay,
@@ -770,9 +722,9 @@ class _RecentSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionHeader(
+        SectionHeader(
           title: '最近听过',
-          trailing: TextButton(onPressed: onOpenAll, child: const Text('查看全部')),
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         _AsyncSection<List<rust.SongDto>>(
           load: load,
@@ -789,8 +741,8 @@ class _RecentSection extends StatelessWidget {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      // 与同页带图标入口行同一栅格(12), 文字不再左右跳
-                      contentPadding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                      contentPadding: kCardRowPadding,
                       leading: CoverArt(
                         url: preview[i].coverUrl,
                         size: 40,

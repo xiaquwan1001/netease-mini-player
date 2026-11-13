@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'layout.dart';
 import 'profile_banner.dart';
 import 'rust/api.dart' as rust;
 
@@ -96,7 +97,8 @@ class ProfileHeaderState extends State<ProfileHeader> {
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      margin: const EdgeInsets.all(12),
+      // 页面本身已有 12dp 留白, 卡片再加 12 会变成距屏 24(用户反馈"个人背景左右有缝")。
+      margin: kCardMargin,
       child: InkWell(
         onTap: widget.onTap,
         // 背景横幅 + 身份卡统一走 ProfileBanner: 取图按真实像素矩形 x 清晰度档位,
