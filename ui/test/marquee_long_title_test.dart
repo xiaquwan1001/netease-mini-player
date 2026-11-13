@@ -121,28 +121,61 @@ void main() {
   });
 
   // 防回退: 详情页(歌词页)标题必须是 titleLarge 级别,
+  // 防回退: 详情页(歌词页)标题必须是 titleLarge 级别,
   // 歌单详情头卡标题必须是 headlineSmall 级别(之前被钉在 titleMedium 导致字号特别小).
+  //
+  // 这里读源码而不是 pump 页面: 两处标题都在 AppBar / 头卡里, 起一个完整页面成本太高.
+  // 为了不被 dart format 的重排(缩进/换行/声明顺序)打挂, 一律用正则定位 + 窗口断言,
+  // 不再用 indexOf(...) 之间的 substring 切片(上一次 CI RangeError 就是这么来的).
   test('详情页标题字号防回退: main 用 titleLarge, detail_page 用 headlineSmall', () {
+    String window(
+      String src,
+      RegExp anchor, {
+      int before = 1200,
+      int after = 400,
+    }) {
+      final m = anchor.firstMatch(src);
+      expect(m, isNotNull, reason: '锚点 ${anchor.pattern} 不见了');
+      final start = (m!.start - before).clamp(0, src.length);
+      final end = (m.start + after).clamp(0, src.length);
+      return src.substring(start, end);
+    }
+
+    // 源码注释里也会出现 "之前 titleMedium 显得特别小" 这类关键字, 断言前先剥掉行注释.
+    String stripComments(String block) => block
+        .split('\n')
+        .where((l) => !l.trimLeft().startsWith('//'))
+        .join('\n');
+
     final mainSrc = File('lib/main.dart').readAsStringSync();
     final detailSrc = File('lib/src/detail_page.dart').readAsStringSync();
-    // 歌词页 AppBar titleTextStyle 不允许退回 titleMedium
-    final appBarBlock = mainSrc.substring(
-      mainSrc.indexOf('titleTextStyle:'),
-      mainSrc.indexOf('title: MarqueeText'),
+
+    // 歌词页 AppBar: 取「紧挨着 title: MarqueeText 之前的那个 titleTextStyle:」到 MarqueeText
+    // 之间的一小段, 既不看别的组件的样式, 也不依赖两者之间的行数.
+    final titleAnchor = RegExp(r'title:\s*MarqueeText\(').firstMatch(mainSrc);
+    expect(titleAnchor, isNotNull, reason: '歌词页 AppBar 的 MarqueeText 标题不见了');
+    final styleIdx = mainSrc.lastIndexOf('titleTextStyle:', titleAnchor!.start);
+    expect(styleIdx, isNonNegative, reason: '歌词页 AppBar 的 titleTextStyle 不见了');
+    final appBarBlock = stripComments(
+      mainSrc.substring(
+        styleIdx,
+        (titleAnchor.start + 60).clamp(0, mainSrc.length),
+      ),
     );
     expect(appBarBlock.contains('titleLarge'), isTrue);
     expect(appBarBlock.contains('titleMedium'), isFalse);
-    // 歌单详情头卡标题不允许退回 titleMedium
-    // 不写死缩进: dart format 会重排缩进, 用正则定位 MarqueeText( ... d?.name
-    final headerMatch = RegExp(r'MarqueeText\(\s*d\?\.name')
-        .firstMatch(detailSrc);
-    expect(headerMatch, isNotNull, reason: '详情页头卡 MarqueeText 不见了');
-    final headerStart = headerMatch!.start;
-    final headerBlock = detailSrc.substring(
-      headerStart,
-      (headerStart + 800).clamp(0, detailSrc.length),
+
+    // 歌单详情头卡: MarqueeText(d?.name ...) 窗口里必须是 headlineSmall, 不能是 titleMedium
+    final headerBlock = stripComments(
+      window(
+        detailSrc,
+        RegExp(r'MarqueeText\(\s*d\?\.name'),
+        before: 200,
+        after: 320,
+      ),
     );
     expect(headerBlock.contains('headlineSmall'), isTrue);
+    expect(headerBlock.contains('titleMedium'), isFalse);
   });
 }
 
