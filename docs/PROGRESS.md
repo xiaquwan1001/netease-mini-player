@@ -11,14 +11,14 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace` | **271** 通过 / 0 失败 |
+| `cargo test --offline --workspace` | **272** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network` | **679** 通过 / 0 失败 |
+| `flutter test --exclude-tags network` | **746** 通过 / 0 失败 |
 | `dart format --set-exit-if-changed lib test` | 干净 |
-| `dart analyze` | 0 error / 0 warning(仅 info 级风格提示) |
+| `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
-| 接口覆盖 | **123/123**(FFI 导出 150, 其中 5 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / word_lyric_with_fallback) |
+| 接口覆盖 | **123/123**(FFI 导出 152, 其中 7 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_events / user_play_ranking / word_lyric_with_fallback) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
@@ -39,6 +39,7 @@
 | **v0.6.1** | **2026-11-12** | 自动更新频率(off/daily/weekly/monthly)+ 启动发现新版本弹窗、全站横向留白统一、代码审计整改(CoverCard/CoverRow 合并、死参数删除、分页代际守卫) |
 | **v0.7.0** | **2026-11-12** | 播放条重排(播放顺序归位/队列入口移到行尾/删除详情页底部控制条)、歌单内搜索播放策略(全列表/追加队列)、艺人跳转、对齐与低优先审计收口 |
 | **v0.7.1** | **2026-11-12** | 用户反馈 10 项:VIP 标记/播放条上一首/歌词截断/长字滚动/队列叠加/搜索横向分类/艺人主页分区/缩进收口 |
+| **v0.8.0** | **2026-11-13** | 用户反馈 10 项 UI 收口(徽标位置/行尾按钮/每日推荐/歌词标题字号/跑马灯内核重写+全仓统一/逐字字内进度/动态标记/背景高清+全屏保存/横向留白栅格) + **艺人/用户主页统一骨架** + 数据面 3 个 FFI(`Playlist.subscribed` / `userPlayRanking` / `userEvents`) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -72,6 +73,63 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13(二): 用户反馈 10 项 UI 收口 + 艺人/用户主页统一(v0.8.0)
+
+用户一次性提了 10 条 UI 反馈。除了直接改, 还先派了三路**只读分析**(布局栅格 / 跑马灯+逐字歌词 /
+主页结构), 因为若干问题看起来是调样式, 实际是口径或测量 bug。
+
+### 真 bug, 不是观感问题
+
+| 现象 | 根因 |
+|---|---|
+| "明明放得下却还在滚" | `MarqueeText._measure` 只拿 `widget.style`, **没合并 `DefaultTextStyle`** —— AppBar 标题不传 style(继承 20sp), 测量却按 TextPainter 默认 14sp, 宽度偏小 ~30%: 既误判"放得下"(ellipsis 截断, 该滚不滚), 也算短 distance(滚一小段就到头) |
+| 跑马灯左右双向晃 | `TweenSequence` 第 4 段是 `Tween(distance→0)` 反向回滚 |
+| 行尾按钮"缩了却没变窄" | `IconButton` 默认 `tapTargetSize.padded` 把命中区强行撑到 48x48, **覆盖 constraints.minWidth** |
+| 艺人背景像马赛克 | 横幅传 `width: double.infinity, height: 170` → `imageCandidates` 丢掉非有限宽 → 实际只请求 `param=170y170` 方图, 再放大 6 倍铺满 1080x510;而且 `NetImage` **从未接清晰度档位** |
+| 逐字歌词一字一字亮 | `wordStylesAt` 早就算出每词 `progress`, 但渲染只读 `state`;同时位置只有 120ms 一次采样(300ms 的词只有 2~3 个台阶) |
+| 「查看全部」与标题不在同一水平线 | `_SectionHeader` 有 **三份私有副本**, 两份用 `CrossAxisAlignment.end` + 40dp TextButton |
+| 歌单/专辑/艺人长名字不滚动 | 全仓只有 4 处用跑马灯, 其余一律 `maxLines:1 ellipsis` |
+
+### 落地(按反馈编号)
+
+1. **VIP/付费/无版权标**从"歌手之前"移到**歌名之后**, 与推荐/歌单/队列统一(`SongTitleWithBadges`)。
+2. 行尾「喜欢」+「…」宽度 48→**40dp**(高度仍 48), 两枚合计 96→80dp。
+3. 每日推荐全页去掉行尾「不感兴趣」(同一动作在「…」菜单), 整条 `onDislike` 注入链一并删除。
+4. 歌词页 AppBar 标题 22sp→显式 **20sp + height 1.25**(22sp 默认行高下中文歌名下半段被工具条裁掉)。
+5. **跑马灯内核重写**: 测量与渲染共用 `DefaultTextStyle.merge(style)`;溢出死区 8px;动画 key 改用内容 hash
+   (原先 `identityHashCode(String)` 会在父级重建时每帧变 → 反复从 0 重播);单向循环(尾部停 1s 瞬跳回起点);
+   `AnimatedBuilder` 的 child 提到 builder 外 + `RepaintBoundary`(原先**每帧重排整段 paragraph**)。
+   再做**统一迁移**: 新增 `AdaptiveText(mode: ellipsis|marquee|wrap)`, A 类 30 处开滚动、B 类 2 处多行、
+   C 类(副标题/时长/创建者/播放条)明确不动;徽标口径改成"标题可用宽 = 行宽 − 实测Σ徽标宽"。
+6. **逐字歌词字内进度**: `KaraokeLine` + `CustomPainter`(两份 TextPainter 共用几何 + `getBoxesForSelection` +
+   双层裁剪 + 8px 渐变软边), 行内 `Ticker` 本地插值到 60fps(只刷 repaint notifier, 不 setState);
+   活动行字号 18→15 与静态行统一, 消除换行重排抖动。
+7. 动态行去掉用户名后的「单曲/动态」标记(不提供额外信息)。
+8. **背景图**: 新增 `neteaseSizedUrl`(矩形 param)/`bannerRequestPx`(档位内核算子, 上限 1080)/
+   `sizedImageCandidates`;新增 `ProfileBanner`(高清图 + 右上角全屏药丸 + 点击进 `showImageViewer` 保存**原图**) +
+   `ProfileIdentity`(身份卡上浮 12px 移出图外, 不再压图)。360dp@3x: 省流 540y330 / 标准 720y440 / 超清 1080y660。
+9. **艺人/用户主页统一**: 共用 `ProfileScaffold`(SliverAppBar + 身份卡 + 统计 chip + 声明式 tab);
+   用户页从"只有 1 个歌单分区"变成 歌单(横滑卡片, 标题 2 行)+ 关注 + 粉丝 三个 tab, 空分区不渲染;
+   艺人页原有 6 分区与动态 tab 规则不变。数据面新增 `Playlist.subscribed` / `userPlayRanking(uid)` /
+   `userEvents(uid)` 三个 FFI(实测: 他人听歌排行匿名态恒空;`event/get` 匿名 301 需登录;
+   `/api/user/playlist` 的 `subscribed` 恒 null ⇒ 该端点只能表达"创建", 拆创建/收藏需换 `playlist_detail`)。
+10. **横向留白栅格**: `layout.dart` 建常量(kPagePadding 12 / kCardRowInset 4 / kSongRowPadding / kCardMargin / kSectionGap),
+    唯一 `SectionHeader` 取代三份副本;我的页实测距屏 消息中心 64→48、我喜欢/最近听过 76→60、听歌排行 100→88,
+    资料卡绘制面 24/276→12/288, 标题与「查看全部」中心线差 12dp→**0**。
+
+### 这一轮挖出来、但不属于 10 条的三个额外缺陷(都已修)
+
+- `ranking_view.dart` 表头 Row 在 300dp×1.625 下**溢出 9.5px** —— 它一直在首屏外, 加了"高视口"用例后才暴露;
+  `SegmentedButton` 改 `Flexible + FittedBox(scaleDown)`。
+- mine_view 三处写死 `SizedBox(height:176)` → `CoverRow`(1.625 字号下原本纵向溢出 5px)。
+- `artist_sections` 专辑卡片固定 160 高同样在 1.625 下溢出 4px → 按 `textScaler` 算高。
+
+### 过程纪律
+
+所有车道都在独立 `git worktree` 里跑, **编排者独立重跑全量门禁后才合并**(不采信 worker 自报);
+每轮合并后再跑一遍。合并时处理了 4 处冲突(mine_view / artist_page / profile_header / user_page_test),
+原则是"取重构后的结构 + 保住语义"。格式门还当场抓住我自己的失误(手插一行超宽, CI format 报红)。
 
 ## 2026-11-13: 结构性债务第 1 波(门禁 + 两个大文件拆分)
 

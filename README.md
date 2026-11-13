@@ -70,10 +70,12 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 | 分组 | 已实现 |
 |---|---|
 | 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式(含心动档)、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU、自动检查更新(off/每日/每周/每月) |
-| 歌词 | 行级滚动高亮、逐字歌词(yrc + AMLL TTML 双来源自动择优)、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
+| 长文字 | 统一 `AdaptiveText`:歌名/歌单名/专辑名/艺人名放不下时**单向跑马灯**(放得下不动),副标题走 ellipsis,封面卡标题 2 行 |
+| 歌词 | 行级滚动高亮、**逐字歌词带字内进度渐变**(双层裁剪 + 行内 60fps 插值)、yrc + AMLL TTML 双来源自动择优、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
 | 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、歌单内搜索点歌策略(全列表/追加队列)、我喜欢按收藏时间排序、最近播放四分类 |
 | 社区 | 评论(热门/全部/楼层回复/点赞/删除/IP 归属)、私信与 @我(只读)、关注动态、关注/粉丝列表、签到 |
 | 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB |
+| 主页 | 艺人与用户共用同一套主页骨架:高清横幅(按屏宽×DPR×清晰度档位取图, 点开全屏可保存原图)、身份卡、统计行、声明式 tab(歌曲/专辑/MV · 歌单/关注/粉丝) |
 | 会员只读 | 黑胶会员卡/成长值/本周签到/任务、数字专辑已购、云贝签到(只读展示, 不碰支付) |
 | 搜索与发现 | 搜索(历史/联想/热词榜/多板块)、每日推荐、私人 FM、心动模式、新歌新碟分地区、风格推荐 |
 | 音质 | 响度均衡(EBU R128 + ReplayGain 2.0)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、硬解/软解、封面清晰度三档 |
@@ -174,15 +176,15 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace` | **271** 通过(不含 vendor 247;vendor 24 例里 4 例联网 smoke 离线自跳过) |
+| `cargo test --offline --workspace` | **272** 通过(不含 vendor 248;vendor 24 例里 4 例联网 smoke 离线自跳过) |
 | `cargo clippy --workspace --all-targets` | **0 warning** |
-| `flutter test --exclude-tags network` | **674** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network` | **746** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
 
-## 项目进度(当前版本 v0.7.1)
+## 项目进度(当前版本 v0.8.0)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|

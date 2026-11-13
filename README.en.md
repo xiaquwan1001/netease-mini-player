@@ -145,15 +145,15 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace` | **271** passing (247 excluding the vendor crate; 4 network smoke tests there skip themselves offline) |
+| `cargo test --offline --workspace` | **272** passing (248 excluding the vendor crate; 4 network smoke tests there skip themselves offline) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test --exclude-tags network` | **674** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `flutter test --exclude-tags network` | **746** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
 
-## Roadmap (current version v0.7.1)
+## Roadmap (current version v0.8.0)
 
 | Stage | Content | Status |
 |---|---|---|

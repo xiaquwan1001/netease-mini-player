@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 
 /// 背景横幅高度: 艺人页 / 他人主页 / 「我的」页共用同一个值(不再各写 120/130/170).
@@ -242,10 +243,9 @@ class ProfileIdentity extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
+                          // 昵称/艺人名走统一长文字组件: 放不下才单向跑马灯(需求 5/9)。
+                          child: AdaptiveText(
                             title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                             style:
                                 titleStyle ??
                                 theme.textTheme.titleMedium?.copyWith(

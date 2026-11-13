@@ -151,14 +151,15 @@
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次)。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
-> 当前基线(2026-11-13 本机实测, 离线口径): 覆盖率 **123/123** · `cargo test` **271** · `cargo clippy` **0 warning** ·
-> `flutter test --exclude-tags network` **674** · `dart analyze` 0 error / 0 warning · write-guard OK。
+> 当前基线(2026-11-13 本机实测, 离线口径): 覆盖率 **123/123**(FFI 152, 7 个无 UI 入口) · `cargo test` **272** ·
+> `cargo clippy` **0 warning** · `flutter test --exclude-tags network` **746** · `dart analyze` 0 issue · write-guard OK。
 
 ### A. 只剩这些没做(按成本排序)
 
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
-| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— v0.7.0–v0.7.1 已按反馈改过一轮, 仍需人眼确认 | S(需人眼) |
+| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— v0.7.1/v0.8.0 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
+| 1b | 主页新数据面接页面 | `userPlayRanking` / `userEvents` 已有 FFI 但无 UI 入口(FFI 152 里 7 个无入口);实测他人听歌排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再决定是否做「常听/动态」tab。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
 | 2 | AppImage 桌面集成 | 首启提示「是否集成到应用菜单」(`desktop-file-install` 逻辑, 可选) | S |
 | 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
