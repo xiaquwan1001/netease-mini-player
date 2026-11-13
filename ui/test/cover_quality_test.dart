@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/cover_art.dart';
 import 'package:minincm/src/cover_quality_sheet.dart';
+import 'package:minincm/src/profile_banner.dart';
 
 /// 在指定 devicePixelRatio 下取 coverRequestPx 的结果
 Future<double> pxAt(
@@ -284,6 +285,45 @@ void main() {
       await tester.tap(find.byTooltip('关闭'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('保存原图'), findsNothing);
+    });
+  });
+
+  group('banner 跟随档位(不再是固定 170y170)', () {
+    Future<String?> bannerUrl(WidgetTester tester, double dpr) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(devicePixelRatio: dpr),
+            child: const Center(
+              child: SizedBox(
+                width: 360,
+                child: ProfileBannerImage(
+                  url: 'https://p3.music.126.net/a/b.jpg',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      final images = find.byType(Image).evaluate().toList();
+      if (images.isEmpty) return null;
+      return (images.first.widget as Image).image.toString();
+    }
+
+    testWidgets('省流 540y330 / 标准 720y440 / 超清 1080y660(等比 clamp)', (
+      tester,
+    ) async {
+      for (final (tier, expected) in [
+        (CoverQuality.dataSaver, 'param=540y330'),
+        (CoverQuality.standard, 'param=720y440'),
+        (CoverQuality.ultra, 'param=1080y660'),
+      ]) {
+        AppSettings.instance.coverQuality = tier;
+        final url = await bannerUrl(tester, 2);
+        expect(url, isNotNull, reason: tier.label);
+        expect(url!, contains(expected), reason: tier.label);
+        expect(url, isNot(contains('170y170')), reason: '旧 bug: 方图 170px');
+      }
     });
   });
 
