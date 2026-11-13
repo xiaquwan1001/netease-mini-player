@@ -166,8 +166,8 @@
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
 | 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
 | 6 | **诊断 Worker 落地**(用户手动) | 代码与 8 步部署说明已在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
-| 7 | **行高统一: `itemExtent`/`_kRowHeight` 按 textScaler 缩放** | v0.9.0 A 级修复时实测: `detail_page` 曲目行在 `itemExtent: 56` 里, 1.625 字号下标题+副标题竖溢 12dp; 全仓 **7 处**同款(歌词那次只修了歌词)。改法: 行高 = `base * textScaler.clamp(1, 2)`(与 `main.dart: _lyricItemExtent` 同一口径) | S~M |
-| 8 | `feed_view` `_AuthorChip` 定高 84 在 1.625 字号下竖溢 4dp | 改 `SizedBox(height: 84)` 按 `textScalerOf` 补高, 或改「横向 SingleChildScrollView + Row」让高度自适应 | S |
+| 7 | ✅ **行高统一: `itemExtent`/`_kRowHeight` 按 textScaler 缩放**(2026-11-14, `6cf0645`) | 落地 `layout.dart: kRowExtent/rowExtentFor`(基准 × clamp(1,2), 全仓唯一实现); `detail_page` 两个 `SliverFixedExtentList` 与「定位正在播放」偏移改用它, `_kRowHeight` 删除; `lyric.dart`/`word_lyric_view.dart` 的 `itemExtent` 改可空、缺省按字号缩放; `main.dart: _lyricItemExtent` 收敛到同一函数。**勘误: 原记「全仓 7 处」实际是 4 处**(`rg -n 'itemExtent' ui/lib --glob '!src/rust/**'`: detail_page 2 + lyric.dart/word_lyric_view.dart 缺省参数各 1; main.dart 2 处早在 v0.7.1 就按字号算)——原数字把歌词调用点与缺省参数重复计了。回归: `ui/test/row_extent_test.dart` 8 例(含「56dp 在 1.625 下确实溢出」的负向对照) | — |
+| 8 | ✅ `_AuthorChip` 筛选条定高 84 竖溢(2026-11-14, `2932dcc`) | `layout.dart: kAvatarStripHeight/avatarStripHeightFor`(只放大 16dp 文字段, 1.0 下仍是 84); 同一形态的 `messages_page` 最近联系人条一并修掉。测试: `feed_view_test` 1.625 用例升级为「两向都不许 overflow」+ `messages_page_test` 新增 1.625 用例(修复前实测失败) | — |
 | 9 | 列表行 B/C 级收敛(审计已出清单) | `docs/ui-row-audit.md`: A 级已在 v0.9.0 清零; 剩 B 潜在 12 / C 一致性 18(歌曲行 6 种留白并存)。改造顺序见报告第 7 条起, 含 `ListRow` API 草案 | M |
 | 10 | golden 接入 CI | 现在标 `@Tags(['golden'])` 且 CI 用 `--exclude-tags 'network \|\| golden'` 跳过(缺 CJK 字体必假失败)。要接得先容器化渲染环境(固定字体 + Flutter 版本) | M |
 
