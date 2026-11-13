@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'state_views.dart';
 import 'toast.dart';
 
 /// 桌面端登录弹层(Linux / Windows 共用).
@@ -403,11 +404,7 @@ class LoginSheetState extends State<LoginSheet> {
             borderRadius: BorderRadius.circular(12),
           ),
           child: _creating || qr == null
-              ? const SizedBox(
-                  width: 200,
-                  height: 200,
-                  child: Center(child: CircularProgressIndicator()),
-                )
+              ? const SizedBox(width: 200, height: 200, child: LoadingView())
               : Opacity(
                   // 过期/失败时灰掉二维码, 避免用户扫一个无效码
                   opacity:
@@ -546,11 +543,7 @@ class LoginSheetState extends State<LoginSheet> {
       FilledButton(
         onPressed: _verifying ? null : _phoneLogin,
         child: _verifying
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const LoadingView.inline(size: 18)
             : const Text('登录'),
       ),
       const SizedBox(height: 8),
@@ -597,11 +590,7 @@ class LoginSheetState extends State<LoginSheet> {
       FilledButton(
         onPressed: _committing ? null : _importCookie,
         child: _committing
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+            ? const LoadingView.inline(size: 18)
             : const Text('导入并登录'),
       ),
     ];

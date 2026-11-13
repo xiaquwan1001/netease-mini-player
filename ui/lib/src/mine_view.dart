@@ -12,6 +12,7 @@ import 'rust/api.dart' as rust;
 import 'error_views.dart' show InlineError;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
+import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过 / 听歌排行.
@@ -354,15 +355,9 @@ class _AsyncSectionState<T> extends State<_AsyncSection<T>>
       future: _future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
+          return const LoadingView(
+            size: 22,
             padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
           );
         }
         if (snap.hasError) {
@@ -985,11 +980,7 @@ class _SigninCardState extends State<SigninCard>
             : FilledButton.tonal(
                 onPressed: _busy ? null : _sign,
                 child: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const LoadingView.inline(size: 16)
                     : const Text('签到'),
               ),
       ),

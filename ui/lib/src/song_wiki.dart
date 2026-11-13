@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
+import 'state_views.dart';
 
 typedef WikiLoader = Future<List<rust.WikiFact>> Function(BigInt songId);
 
@@ -123,23 +124,15 @@ class _WikiBodyState extends State<_WikiBody> {
     }
     final facts = _facts;
     if (facts == null) {
-      return const Padding(
+      return const LoadingView(
+        size: 22,
         padding: EdgeInsets.symmetric(vertical: 24),
-        child: Center(
-          child: SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-        ),
       );
     }
     if (facts.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text('这首歌还没有百科信息', style: theme.textTheme.bodySmall),
-      );
+      return const EmptyView(title: '这首歌还没有百科信息');
     }
+    // 非分页: 百科条目随详情一次全量返回
     return ListView.separated(
       shrinkWrap: true,
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

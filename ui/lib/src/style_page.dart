@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'error_views.dart' show InlineError;
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 /// 曲风详情页: 系统推荐给"我"的风格下面有哪些歌单和歌.
@@ -229,15 +230,9 @@ class _PlaylistRow extends StatelessWidget {
       future: future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
+          return const LoadingView(
+            size: 22,
             padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
           );
         }
         if (snap.hasError) {
@@ -314,15 +309,9 @@ class _SongList extends StatelessWidget {
       future: future,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Padding(
+          return const LoadingView(
+            size: 22,
             padding: EdgeInsets.symmetric(vertical: 20),
-            child: Center(
-              child: SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-            ),
           );
         }
         if (snap.hasError) {

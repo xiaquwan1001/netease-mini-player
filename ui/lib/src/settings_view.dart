@@ -9,6 +9,7 @@ import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
+import 'state_views.dart';
 import 'theme.dart' show AccentPalette;
 import 'toast.dart';
 import 'update_checker.dart';
@@ -383,11 +384,7 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
             newer ? '发现新版本 ${pending.latest}' : '当前 v$kAppVersion',
           ),
           trailing: _checking
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+              ? const LoadingView.inline(size: 20)
               : const Icon(Icons.refresh),
           onTap: _checking ? null : _check,
         );

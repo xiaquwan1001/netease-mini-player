@@ -6,6 +6,7 @@ import 'cover_row.dart';
 import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'state_views.dart';
 
 /// 榜单列表加载器(可注入, 测试用)。缺省走 FFI chartList。
 typedef ChartListLoader = Future<List<rust.ChartSummary>> Function();
@@ -71,15 +72,9 @@ class _ChartSectionState extends State<ChartSection> {
             future: _future,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const Padding(
+                return const LoadingView(
+                  size: 22,
                   padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Center(
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
                 );
               }
               if (snap.hasError) {
