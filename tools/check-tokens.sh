@@ -7,7 +7,7 @@
 #
 # 用法:
 #   tools/check-tokens.sh            # 报告模式: 打印越界清单 + 统计, 永远退出 0
-#   tools/check-tokens.sh --strict   # 门禁模式: 有越界则退出 1
+#   tools/check-tokens.sh --strict   # 门禁模式: 有越界则退出 1(ci.sh 用这个)
 #   tools/check-tokens.sh --top 20   # 只显示前 N 条(默认 40)
 #
 # 口径:
@@ -16,6 +16,9 @@
 #   · fontSize: N                → 字号集合
 #   · SizedBox(height|width: N) 且 N <= 32 → 间距集合(>32 视为组件尺寸, 不管)
 #   · 文件范围: ui/lib/**(排除 ui/lib/src/rust/ 的 codegen 产物)
+#   · 显式例外: 命中的那一行(或上一行)带 `// token-ok: 理由` 就跳过 ——
+#     例外必须写清"为什么这个数值不能用 token 表达"(如名次列宽 26 是内容宽度,
+#     不是间距)。没有理由的 token-ok 视同没有。
 set -uo pipefail
 
 strict=0
@@ -74,11 +77,15 @@ for root, _dirs, files in os.walk(lib):
                             continue
                     except ValueError:
                         continue
+                line_no = text.count("\n", 0, m.start()) + 1
+                # 显式例外: 本行或上一行声明了 token-ok(且带理由)
+                window = " ".join(lines[max(0, line_no - 2) : line_no])
+                if "token-ok:" in window:
+                    continue
                 for tok in num_re.findall(raw):
                     val = float(tok)
                     if val in allowed:
                         continue
-                    line_no = text.count("\n", 0, m.start()) + 1
                     snippet = lines[line_no - 1].strip()[:88]
                     hits.append((kind, os.path.relpath(path, os.path.dirname(lib)), line_no, snippet))
                     by_kind[kind] += 1

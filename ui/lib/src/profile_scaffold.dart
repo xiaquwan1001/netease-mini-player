@@ -49,6 +49,7 @@ class ProfileTabBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
+      // token-ok: 小号身份徽标内边距与 10~12sp 字高配套, 不是布局间距
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
         color: theme.colorScheme.surfaceContainerHighest,

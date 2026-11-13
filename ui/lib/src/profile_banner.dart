@@ -256,6 +256,7 @@ class ProfileIdentity extends StatelessWidget {
                         if (vip) ...[
                           const SizedBox(width: 6),
                           Container(
+                            // token-ok: VIP 徽标内边距与 10sp 字高配套, 放大到 6/2 会把行高顶起来
                             padding: const EdgeInsets.symmetric(
                               horizontal: 5,
                               vertical: 1,

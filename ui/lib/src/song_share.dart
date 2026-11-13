@@ -117,7 +117,7 @@ class SongShareCard extends StatelessWidget {
     const accent = Color(0xFFEC4141);
     return Container(
       width: width,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: const BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.all(Radius.circular(20)),
@@ -133,7 +133,7 @@ class SongShareCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 child: CoverArt(url: song.coverUrl, size: 88, radius: 12),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

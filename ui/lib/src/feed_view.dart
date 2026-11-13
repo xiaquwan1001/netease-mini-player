@@ -791,7 +791,7 @@ class _FeedCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 16),
                     // 评论: 点数字/图标进详情并直接滚到评论区
                     InkWell(
                       borderRadius: BorderRadius.circular(6),

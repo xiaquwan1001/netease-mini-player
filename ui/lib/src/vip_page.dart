@@ -667,7 +667,7 @@ class _TaskTile extends StatelessWidget {
                         child: LinearProgressIndicator(
                           value: task.fraction,
                           minHeight: 6,
-                          borderRadius: BorderRadius.circular(3),
+                          borderRadius: BorderRadius.circular(4),
                         ),
                       ),
                       const SizedBox(width: 8),

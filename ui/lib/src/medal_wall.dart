@@ -429,7 +429,7 @@ class _LevelCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         child: LayoutBuilder(
           builder: (context, constraints) {
             // LevelBadge 定高 32dp, 放大版靠 Transform.scale 而不是放开高度约束,
@@ -537,7 +537,7 @@ class _MedalGrid extends StatelessWidget {
           ],
         ),
       );
-      if (end < medals.length) rows.add(const SizedBox(height: 14));
+      if (end < medals.length) rows.add(const SizedBox(height: 16));
     }
     return Column(children: rows);
   }

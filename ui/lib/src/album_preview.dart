@@ -241,7 +241,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 CoverArt(url: cover, size: 120, radius: 10),
-                const SizedBox(width: 14),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

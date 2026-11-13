@@ -1393,7 +1393,7 @@ class _ComposerBar extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(22),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
                 Icon(

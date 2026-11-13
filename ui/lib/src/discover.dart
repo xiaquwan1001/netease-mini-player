@@ -664,6 +664,7 @@ class _SongRow extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
+            // token-ok: 序号列宽按 "两位数" 内容宽度定, 不是间距 token
             width: 22,
             child: Text('$index', style: Theme.of(context).textTheme.bodySmall),
           ),

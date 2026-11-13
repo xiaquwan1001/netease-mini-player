@@ -1193,6 +1193,7 @@ class _SongRow extends StatelessWidget {
         child: Row(
           children: [
             SizedBox(
+              // token-ok: 名次列宽由 "两位数字 + 右对齐" 的内容宽度决定, 不是间距
               width: 26,
               child: playing
                   ? Icon(Icons.volume_up, size: 16, color: scheme.primary)

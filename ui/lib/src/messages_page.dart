@@ -582,8 +582,8 @@ class _ChatBodyState extends State<_ChatBody> {
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                    horizontal: 12,
+                    vertical: 8,
                   ),
                 ),
               ),
@@ -594,6 +594,7 @@ class _ChatBodyState extends State<_ChatBody> {
               onPressed: _sending ? null : _send,
               icon: _sending
                   ? const SizedBox(
+                      // token-ok: 行内 spinner 的方形尺寸(与 Material 默认 18 一致), 不是间距
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),

@@ -748,6 +748,7 @@ class _BarPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
+        // token-ok: 曲线刻度是图表内最小标注(8sp), 再大就会压到曲线本体
         style: TextStyle(fontSize: 8, color: labelColor),
       ),
       textDirection: TextDirection.ltr,

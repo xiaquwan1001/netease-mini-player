@@ -35,10 +35,10 @@ cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked 
 echo "== write-guard (测试不得直连写接口)"
 bash tools/check-write-guard.sh
 
-echo "== design token 越界清单 (报告模式, 不阻塞)"
-# 间距/圆角/字号只允许有限集合: 集合外的数值(14/18/circular(3)/fontSize: 8)是
-# "说不上来但不协调"的主要来源。当前只报告并计数, 清空后把本行改成 --strict。
-bash tools/check-tokens.sh --top 40 || true
+echo "== design token 门 (间距/圆角/字号只允许有限集合)"
+# 集合外的数值(14/18/circular(3)/fontSize: 8)是"说不上来但不协调"的主要来源。
+# 2026-11-13 基线已清零(20 处全部收敛或按 `// token-ok: 理由` 显式例外), 现在阻塞。
+bash tools/check-tokens.sh --strict
 
 echo "== flutter analyze"
 # 本机 flutter analyze 会稳定 SIGSEGV(analysis server 的 Dart VM 在并发标记 GC 崩,

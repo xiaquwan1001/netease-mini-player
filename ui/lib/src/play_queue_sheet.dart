@@ -255,6 +255,7 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                           dense: true,
                           selected: current,
                           leading: SizedBox(
+                            // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
                             width: 28,
                             child: Center(
                               child: current
