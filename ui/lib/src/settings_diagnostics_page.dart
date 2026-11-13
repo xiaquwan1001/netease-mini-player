@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'section_header.dart';
 import 'state_views.dart';
 
 /// 诊断与数据二级页(审查 P1-7.9: 原是设置页里的「诊断」+「数据」两个一级分组).
@@ -41,13 +42,13 @@ class DiagnosticsPage extends StatelessWidget {
           24 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          const _SectionTitle('诊断'),
+          const SectionTitle('诊断'),
           Card(
             margin: EdgeInsets.zero,
             child: ChannelSelfCheckTile(ping: ping),
           ),
           const SizedBox(height: 16),
-          const _SectionTitle('数据'),
+          const SectionTitle('数据'),
           Card(
             margin: EdgeInsets.zero,
             child: Column(
@@ -150,24 +151,6 @@ class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
       title: const Text('Rust 通道自检'),
       subtitle: Text(subtitle),
       onTap: _running ? null : _run,
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
-      ),
     );
   }
 }

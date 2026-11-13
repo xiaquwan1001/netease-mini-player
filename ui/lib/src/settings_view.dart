@@ -7,6 +7,7 @@ import 'app_settings.dart';
 import 'cover_quality_sheet.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
+import 'section_header.dart';
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
 import 'state_views.dart';
@@ -69,7 +70,7 @@ class SettingsView extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            const _SectionTitle('界面'),
+            const SectionTitle('界面'),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -171,7 +172,7 @@ class SettingsView extends StatelessWidget {
             const SizedBox(height: 16),
             // 「行为」类开关: 搜索/播放原本是两个一级分组, 各只有一个开关时
             // 不必各占一个分区(审查 §5.3 建议并入「通用」)
-            const _SectionTitle('通用'),
+            const SectionTitle('通用'),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -241,7 +242,7 @@ class SettingsView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            const _SectionTitle('关于'),
+            const SectionTitle('关于'),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -631,24 +632,6 @@ class _AccentSettingTile extends StatelessWidget {
               ? const Icon(Icons.check, size: 20, color: Colors.white)
               : null,
         ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }

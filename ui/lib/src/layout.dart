@@ -70,6 +70,14 @@ const EdgeInsets kSectionHeaderPadding = EdgeInsets.only(
   bottom: kSectionHeaderGap,
 );
 
+/// 小组标题与下文内容的垂直间距; 历史上散落 6/8 两种, 统一到 8。
+const double kSectionTitleGap = 8;
+
+/// 小组标题行自身的 padding(只保留下方间距)。
+const EdgeInsets kSectionTitlePadding = EdgeInsets.only(
+  bottom: kSectionTitleGap,
+);
+
 /// 区块与区块之间的垂直间距(「我的」页里两块卡片/两个区块之间)。
 const double kSectionGap = 16;
 

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'chart_section.dart';
+import 'layout.dart';
 import 'rust/api.dart' as rust;
+import 'section_header.dart';
 import 'state_views.dart';
 
 /// 搜索页的"落地内容": 历史 + 猜你想搜 + 热门榜.
@@ -81,8 +83,10 @@ class SearchLanding extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
       children: [
         if (history.isNotEmpty) ...[
-          _SectionTitle(
-            title: '搜索历史',
+          SectionTitle(
+            '搜索历史',
+            // 列表顶部没有额外留白, 这里保留 4dp 上呼吸; 下方统一 kSectionTitleGap。
+            padding: const EdgeInsets.only(top: 4, bottom: kSectionTitleGap),
             // 命中区 ≥48dp(审查 P1-7.12): 原来 minimumSize 高 32, 是大字号下最难点的控件
             trailing: TextButton(
               onPressed: () => _confirmClear(context),
@@ -116,7 +120,7 @@ class SearchLanding extends StatelessWidget {
           const SizedBox(height: 12),
         ],
         if (hasRecommended) ...[
-          const _SectionTitle(title: '猜你想搜'),
+          const SectionTitle('猜你想搜'),
           Card(
             margin: EdgeInsets.zero,
             child: ListTile(
@@ -204,8 +208,8 @@ class _HotSectionState extends State<_HotSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
-          title: '热门搜索',
+        SectionTitle(
+          '热门搜索',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -299,31 +303,6 @@ class _HotSectionState extends State<_HotSection> {
             ),
           ),
       ],
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 6),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall
-                ?.copyWith(fontWeight: FontWeight.w600),
-          ),
-          const Spacer(),
-          ?trailing,
-        ],
-      ),
     );
   }
 }

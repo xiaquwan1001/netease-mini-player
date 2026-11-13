@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'app_settings.dart';
 import 'eq_curve_chart.dart';
 import 'eq_profile.dart';
+import 'section_header.dart';
 import 'toast.dart';
 
 /// 设置二级页: 播放与音质(R2 / R2b / R5 / R7 的设置 UI 部分).
@@ -59,25 +60,25 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             24 + MediaQuery.viewPaddingOf(context).bottom,
           ),
           children: [
-            const _SectionTitle('精细音量'),
+            const SectionTitle('精细音量'),
             Card(
               margin: EdgeInsets.zero,
               child: _volumeCard(context, settings),
             ),
             const SizedBox(height: 16),
-            const _SectionTitle('响度均衡'),
+            const SectionTitle('响度均衡'),
             Card(margin: EdgeInsets.zero, child: _loudnessCard(settings)),
             const SizedBox(height: 16),
-            const _SectionTitle('播放过渡'),
+            const SectionTitle('播放过渡'),
             Card(margin: EdgeInsets.zero, child: _fadeCard(settings)),
             const SizedBox(height: 16),
-            const _SectionTitle('解码与缓存'),
+            const SectionTitle('解码与缓存'),
             Card(margin: EdgeInsets.zero, child: _decodeCacheCard(settings)),
             const SizedBox(height: 16),
-            const _SectionTitle('歌词来源'),
+            const SectionTitle('歌词来源'),
             Card(margin: EdgeInsets.zero, child: _lyricSourceCard(settings)),
             const SizedBox(height: 16),
-            const _SectionTitle('自定义响度曲线'),
+            const SectionTitle('自定义响度曲线'),
             Card(margin: EdgeInsets.zero, child: _eqCard(context, settings)),
           ],
         ),
@@ -388,24 +389,6 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
 double _snapHalf(double v) {
   final clamped = v.clamp(-40.0, 0.0);
   return (clamped * 2).roundToDouble() / 2.0;
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
-      ),
-    );
-  }
 }
 
 class _ImportEqDialog extends StatefulWidget {

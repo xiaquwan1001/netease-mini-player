@@ -30,41 +30,92 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final titleWidget = Text(
-      title,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-    );
-    final action = trailing;
-    if (action == null) {
-      return Padding(padding: padding, child: titleWidget);
-    }
-    return Padding(
+    return _titleRow(
       padding: padding,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // 尾部最多吃掉 60% 宽度(原来 45% 会逼着「播放全部 + 查看全部 n 首 ›」
-          // 被 FittedBox 等比缩小, 用户反馈按钮字太小)。标题至少保留 40%。
-          final maxActionWidth = constraints.maxWidth.isFinite
-              ? constraints.maxWidth * 0.6
-              : double.infinity;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: titleWidget),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxActionWidth),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: action,
-                ),
-              ),
-            ],
-          );
-        },
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
       ),
+      trailing: trailing,
+    );
+  }
+}
+
+/// 「标题 + 可选尾部动作」的公共布局(区块标题与小组标题共用)。
+///
+/// 尾部最多吃掉 60% 宽度(原来 45% 会逼着「播放全部 + 查看全部 n 首 ›」
+/// 被 FittedBox 等比缩小, 用户反馈按钮字太小)。标题至少保留 40%。
+/// 无 trailing 时退化成纯 [Padding], 与历史渲染结果一致。
+Widget _titleRow({
+  required EdgeInsetsGeometry padding,
+  required Widget title,
+  required Widget? trailing,
+}) {
+  if (trailing == null) {
+    return Padding(padding: padding, child: title);
+  }
+  return Padding(
+    padding: padding,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final maxActionWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.6
+            : double.infinity;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: title),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: maxActionWidth),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: trailing,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+/// 小组标题(卡片/分组内部的一级, 如「界面」「通用」「关于」「账号簿」).
+///
+/// 与 [SectionHeader](区块标题, titleMedium)区分: 这里是 titleSmall + w600。
+/// 之前 6 个页面各有一份私有 `_SectionTitle`, padding 却有 6/8 两种,
+/// 于是同一套「标题 + 卡片」在不同页面里间距不一致。
+class SectionTitle extends StatelessWidget {
+  const SectionTitle(
+    this.title, {
+    super.key,
+    this.trailing,
+    this.padding = kSectionTitlePadding,
+  });
+
+  final String title;
+
+  /// 尾部动作(计数文字、开关按钮等); 垂直方向与标题居中对齐。
+  final Widget? trailing;
+
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return _titleRow(
+      padding: padding,
+      title: Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      trailing: trailing,
     );
   }
 }

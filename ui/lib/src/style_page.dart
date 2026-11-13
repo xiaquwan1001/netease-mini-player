@@ -4,6 +4,7 @@ import 'cover_art.dart';
 import 'net_retry.dart';
 import 'error_views.dart' show InlineError;
 import 'rust/api.dart' as rust;
+import 'section_header.dart';
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 
@@ -107,7 +108,9 @@ class _StyleDetailViewState extends State<StyleDetailView> {
         children: [
           _StyleHeader(tag: widget.tag),
           const SizedBox(height: 12),
-          _SectionTitle(
+          // 风格歌单/风格歌曲是**页面级区块标题**(原来是 titleMedium + 底 8dp),
+          // 用 SectionHeader 而不是 SectionTitle(小组标题 titleSmall), 保持原字号。
+          SectionHeader(
             title: '风格歌单',
             trailing: widget.tag.songCount == null
                 ? null
@@ -122,7 +125,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
             onRetry: () => setState(_reload),
           ),
           const SizedBox(height: 16),
-          const _SectionTitle(title: '风格歌曲'),
+          const SectionHeader(title: '风格歌曲'),
           _SongList(
             future: _songsFuture,
             onPlay: widget.onPlaySongs,
@@ -181,33 +184,6 @@ class _StyleHeader extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({required this.title, this.trailing});
-
-  final String title;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          ?trailing,
-        ],
       ),
     );
   }

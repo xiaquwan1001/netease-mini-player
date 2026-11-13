@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'section_header.dart';
 import 'song_tile.dart' show VipBadge;
 
 /// 账号页 —— 全 App **唯一**的账号面(账号簿/切换/添加/退出登录/清除凭据)。
@@ -255,7 +256,7 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           const SizedBox(height: 16),
-          const _SectionTitle('账号簿'),
+          const SectionTitle('账号簿'),
           Card(
             margin: EdgeInsets.zero,
             child: Column(
@@ -329,7 +330,7 @@ class _AccountPageState extends State<AccountPage> {
           ],
           if (_accounts.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const _SectionTitle('隐私'),
+            const SectionTitle('隐私'),
             Card(
               margin: EdgeInsets.zero,
               child: ListTile(
@@ -344,24 +345,6 @@ class _AccountPageState extends State<AccountPage> {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        title,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
