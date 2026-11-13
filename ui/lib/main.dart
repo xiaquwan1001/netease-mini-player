@@ -681,6 +681,10 @@ class _HomePageState extends State<HomePage> {
   /// 播放位置(毫秒)注入给 [WordLyricView]: 刷新只重建当前行, 不整页 setState。
   final ValueNotifier<int> _wordPositionMs = ValueNotifier<int>(0);
 
+  /// 播放中标志注入给 [WordLyricView]/[KaraokeLine]: 播放时才在行内插值到 60fps,
+  /// 暂停/default 场景不排帧(省电, 也让 pumpAndSettle 能收敛)。
+  final ValueNotifier<bool> _playing = ValueNotifier<bool>(false);
+
   /// 展开歌词时的高频位置刷新(~120ms); 收起必须停掉, 避免后台耗电。
   Timer? _lyricTicker;
 
@@ -826,6 +830,7 @@ class _HomePageState extends State<HomePage> {
     _lyricTicker?.cancel();
     _lyricScroll.dispose();
     _wordPositionMs.dispose();
+    _playing.dispose();
     super.dispose();
   }
 
@@ -980,6 +985,7 @@ class _HomePageState extends State<HomePage> {
     if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
       _wordPositionMs.value = state.positionMs.toInt();
     }
+    if (_playing.value != state.playing) _playing.value = state.playing;
     _syncLyricIndex(state);
     if (_looksEnded(wasPlaying, state)) {
       await _onTrackEnded();
@@ -1588,6 +1594,7 @@ class _HomePageState extends State<HomePage> {
           ];
         });
         _wordPositionMs.value = _player?.positionMs.toInt() ?? 0;
+        _playing.value = _player?.playing ?? false;
         return;
       }
       final lines = resolved.line;
@@ -1700,6 +1707,7 @@ class _HomePageState extends State<HomePage> {
       if (_player != null) {
         _syncLyricIndex(_player!);
         _wordPositionMs.value = _player!.positionMs.toInt();
+        _playing.value = _player!.playing;
       }
     } else {
       _lyricTicker?.cancel();
@@ -3343,6 +3351,7 @@ class _HomePageState extends State<HomePage> {
       body = WordLyricView(
         lines: _wordLines,
         positionMs: _wordPositionMs,
+        playing: _playing,
         controller: _lyricScroll,
         itemExtent: _lyricItemExtent,
         showTranslation: showTranslation,
