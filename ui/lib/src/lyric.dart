@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'layout.dart' show rowExtentFor;
+
 /// 歌词时间轴的小工具(纯逻辑, 便于单测).
 ///
 /// UI 只需要两个问题的答案: 当前该高亮哪一行、下一行在哪 —— 都在这里。
@@ -196,7 +198,10 @@ class TimedLyricView extends StatelessWidget {
     required this.lines,
     required this.activeIndex,
     this.controller,
-    this.itemExtent = 56,
+    /// 行高; 不传 = [kRowExtent] × 系统字号(见 [rowExtentFor]).
+    /// 歌词是 18sp 主词 + 12sp 翻译两行, 写死 56 在 1.625 字号下会被 itemExtent
+    /// 从下方裁掉(用户报过"顶部歌词只显示上半段").
+    this.itemExtent,
     this.showTranslation = true,
     this.selected = const <int>{},
     this.onLineTap,
@@ -212,7 +217,7 @@ class TimedLyricView extends StatelessWidget {
   final int activeIndex;
 
   final ScrollController? controller;
-  final double itemExtent;
+  final double? itemExtent;
 
   /// 关掉时整块不渲染翻译行(歌词本身没有翻译时开关也不该出现)
   final bool showTranslation;
@@ -235,7 +240,7 @@ class TimedLyricView extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return ListView.builder(
       controller: controller,
-      itemExtent: itemExtent,
+      itemExtent: itemExtent ?? rowExtentFor(context),
       padding: padding,
       itemCount: lines.length,
       itemBuilder: (context, i) {

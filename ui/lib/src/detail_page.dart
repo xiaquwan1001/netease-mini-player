@@ -21,14 +21,13 @@ import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart';
 import 'format.dart' show formatDurationMs;
+import 'layout.dart' show kRowExtent, rowExtentFor;
 import 'toast.dart' show showToast, showUndoToast;
 
 /// 歌单/播客(电台)详情页: 全屏路由, AppBar 以下单滚动(CustomScrollView),
-/// 曲目/节目行定高 56。曲目可见性沿用 library_view 的统一规则
-/// (无版权且没收藏 → 隐藏, 顶部提示条数)。评论区独立加载, 失败不拖垮曲目列表。
-
-/// 曲目/节目行统一行高, "定位正在播放"的滚动偏移按它算
-const double _kRowHeight = 56.0;
+/// 曲目/节目行定高(基准 [kRowExtent] = 56, 按系统字号放大)。曲目可见性沿用
+/// library_view 的统一规则(无版权且没收藏 → 隐藏, 顶部提示条数)。
+/// 评论区独立加载, 失败不拖垮曲目列表。
 
 /// 评论底部面板(歌曲/歌单/专辑/播客通用): "..." 菜单里的"查看评论"走这里
 Future<void> showCommentsSheet(
@@ -505,8 +504,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   }
 
   /// "定位正在播放": 把正在播放的曲目滚进可视区。
-  /// 行高恒定 56, 实际偏移 = 曲目列表起点 + 行数 × 56 (起点用 getOffsetToReveal
-  /// 现场量, 因为头部/搜索框高度是动态的); 量不到就只保留行内高亮。
+  /// 行高恒定(= 列表的 itemExtent, 即 [rowExtentFor]), 实际偏移 = 曲目列表起点 +
+  /// 行数 × 行高 (起点用 getOffsetToReveal 现场量, 因为头部/搜索框高度是动态的);
+  /// 量不到就只保留行内高亮。
   void _locateCurrent() {
     final trackId = _playingId;
     if (trackId == null) return;
@@ -524,7 +524,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         base = viewport.getOffsetToReveal(listRo, 0).offset;
       }
     }
-    final target = (base + index * _kRowHeight).clamp(
+    final target = (base + index * rowExtentFor(context)).clamp(
       0.0,
       _scroll.position.maxScrollExtent,
     );
@@ -825,7 +825,8 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     }
     return SliverFixedExtentList(
       key: _listKey,
-      itemExtent: _kRowHeight,
+      // 行高随系统字号放大: 定 56 时 1.625 字号下「标题 + 副标题」竖溢 12dp
+      itemExtent: rowExtentFor(context),
       delegate: SliverChildBuilderDelegate((context, i) {
         final song = display[i];
         return _SongRow(
@@ -1155,7 +1156,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       );
     }
     return SliverFixedExtentList(
-      itemExtent: _kRowHeight,
+      itemExtent: rowExtentFor(context),
       delegate: SliverChildBuilderDelegate((context, i) {
         final p = display[i];
         return _ProgramRow(
@@ -1173,7 +1174,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 /// 简介: 默认 3 行 + 展开/收起(歌单/播客头部共用)
 // 长文本展开/收起已收敛到 expandable_text.dart(与 artist_page 合并为一份)
 
-/// 定高 56 的曲目行: 序号(正在播换 volume_up) + 歌名 + 艺人·专辑 + 时长 + 红心
+/// 固定行高(基准 56, 随字号放大)的曲目行: 序号(正在播换 volume_up) + 歌名 + 艺人·专辑 + 时长 + 红心
 class _SongRow extends StatelessWidget {
   const _SongRow({
     required this.song,
@@ -1325,7 +1326,7 @@ class _SongRow extends StatelessWidget {
   }
 }
 
-/// 定高 56 的节目行: 节目名 + DJ · 时长
+/// 固定行高(基准 56, 随字号放大)的节目行: 节目名 + DJ · 时长
 class _ProgramRow extends StatelessWidget {
   const _ProgramRow({required this.program, required this.onTap, this.onInfo});
 

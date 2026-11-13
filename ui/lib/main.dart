@@ -26,6 +26,7 @@ import 'src/feed_view.dart';
 import 'src/format.dart' show formatCountMagnitude;
 import 'src/lyric.dart';
 import 'src/word_lyric_view.dart';
+import 'src/layout.dart' show rowExtentFor;
 import 'src/library_view.dart';
 import 'src/login_sheet.dart';
 import 'src/medal_wall.dart';
@@ -652,10 +653,7 @@ class _HomePageState extends State<HomePage> {
   /// 歌词行高: 基准 56dp, 随系统字号等比放大。
   /// 固定 56dp 在 textScale≥1.4 时装不下「18sp 主词 + 12sp 翻译」两行,
   /// 行内容被 ListView 的 itemExtent 从下方裁掉(用户反馈"顶部歌词只显示上半段").
-  double get _lyricItemExtent {
-    final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
-    return 56 * scale;
-  }
+  double get _lyricItemExtent => rowExtentFor(context);
 
   List<ParsedLyricLine> _lyricLines = const [];
   List<BigInt> _lyricTimes = const [];

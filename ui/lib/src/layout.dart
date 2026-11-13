@@ -85,6 +85,28 @@ const double kSectionGap = 16;
 const double kCardGap = 4;
 
 // ───────────────────────────────────────────────────────────────────────────
+// 固定行高列表(itemExtent)
+//
+// `SliverFixedExtentList` / `ListView(itemExtent:)` 的行高是**硬约束**: 内容比它高
+// 就会被从下方裁掉并抛 RenderFlex vertical overflow。1.625 字号(系统 1.25 ×
+// 应用"特大" 1.3)下「标题 + 2 + 副标题」自然高约 68dp, 塞进 56dp 就竖溢 12dp。
+// 所以行高必须随系统字号等比放大, 与 `main.dart` 的歌词行高(`_lyricItemExtent`)
+// 同一口径: 基准 × textScaler, 上限 2 倍(再大的字号靠系统层另行处理)。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 列表行基准行高(曲目/节目行, 即 textScaler = 1.0 时的值)。
+const double kRowExtent = 56;
+
+/// 固定行高列表的实际行高: [base] × 系统字号, 上限 2 倍。
+///
+/// 只在 `itemExtent` / 需要按行数算滚动偏移的地方用; 普通 `ListView`(不设
+/// itemExtent)让行自己撑高即可, 不需要缩放。
+double rowExtentFor(BuildContext context, [double base = kRowExtent]) {
+  final scale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+  return base * scale;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 // 方格网格(专辑 / 猜你喜欢 / 新碟 / 歌单广场)统一 delegate
 //
 // 之前三处各写一份 `SliverGridDelegateWithMaxCrossAxisExtent(max:160/180,

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'layout.dart' show rowExtentFor;
+
 /// 逐字(karaoke)歌词的纯展示组件。
 ///
 /// 设计约束:
@@ -177,7 +179,8 @@ class WordLyricView extends StatefulWidget {
     required this.positionMs,
     this.playing,
     this.controller,
-    this.itemExtent = 56,
+    /// 行高; 不传 = [kRowExtent] × 系统字号(见 [rowExtentFor])。
+    this.itemExtent,
     this.emptyText = '暂无歌词',
     this.padding,
     this.showTranslation = true,
@@ -198,7 +201,7 @@ class WordLyricView extends StatefulWidget {
   final ValueListenable<bool>? playing;
 
   final ScrollController? controller;
-  final double itemExtent;
+  final double? itemExtent;
   final String emptyText;
   final EdgeInsetsGeometry? padding;
 
@@ -266,9 +269,8 @@ class _WordLyricViewState extends State<WordLyricView> {
     final controller = widget.controller;
     if (controller == null || !controller.hasClients || idx < 0) return;
     final position = controller.position;
-    final target =
-        idx * widget.itemExtent -
-        (position.viewportDimension - widget.itemExtent) / 2;
+    final extent = widget.itemExtent ?? rowExtentFor(context);
+    final target = idx * extent - (position.viewportDimension - extent) / 2;
     final clamped = target.clamp(0.0, position.maxScrollExtent);
     controller.animateTo(
       clamped,
@@ -287,7 +289,7 @@ class _WordLyricViewState extends State<WordLyricView> {
       valueListenable: _activeIndex,
       builder: (context, activeIndex, _) => ListView.builder(
         controller: widget.controller,
-        itemExtent: widget.itemExtent,
+        itemExtent: widget.itemExtent ?? rowExtentFor(context),
         padding:
             widget.padding ??
             const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
