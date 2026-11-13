@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `credential_status_dto`, `data_dir_default`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `credential_status_dto`, `data_dir_default`, `feed_event_dto`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
@@ -516,6 +516,18 @@ Future<List<FeedEventDto>> feedEvents({
   required PlatformInt64 lastTime,
 }) => RustLib.instance.api.crateApiFeedEvents(limit: limit, lastTime: lastTime);
 
+/// 指定用户的动态(用户主页): uid = 目标用户, limit = 条数, last_time = 翻页游标(-1 = 第一页).
+/// 对方没公开/没有动态时返回**空列表**(不是错误).
+Future<List<FeedEventDto>> userEvents({
+  required BigInt uid,
+  required int limit,
+  required PlatformInt64 lastTime,
+}) => RustLib.instance.api.crateApiUserEvents(
+  uid: uid,
+  limit: limit,
+  lastTime: lastTime,
+);
+
 /// 动态评论区(threadId 来自 FeedEvent.thread_id)
 Future<CommentPage> eventComments({
   required String threadId,
@@ -546,6 +558,13 @@ Future<bool> forwardEvent({
 /// 返回顺序即名次(1 开始由 UI 用下标表达).
 Future<List<PlayRankEntryDto>> playRanking({required String period}) =>
     RustLib.instance.api.crateApiPlayRanking(period: period);
+
+/// 他人常听排行(用户主页): uid = 目标用户, period = "all" | "week".
+/// 对方没公开/没有记录时返回**空列表**(不是错误).
+Future<List<PlayRankEntryDto>> userPlayRanking({
+  required BigInt uid,
+  required String period,
+}) => RustLib.instance.api.crateApiUserPlayRanking(uid: uid, period: period);
 
 /// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
 Future<List<StyleTag>> stylePreference() =>
@@ -2385,12 +2404,16 @@ class Playlist {
   /// 是否"我喜欢的音乐"
   final bool special;
 
+  /// 是否"我收藏的"(true = 收藏, false = 创建)
+  final bool subscribed;
+
   const Playlist({
     required this.id,
     required this.name,
     this.coverUrl,
     required this.trackCount,
     required this.special,
+    required this.subscribed,
   });
 
   @override
@@ -2399,7 +2422,8 @@ class Playlist {
       name.hashCode ^
       coverUrl.hashCode ^
       trackCount.hashCode ^
-      special.hashCode;
+      special.hashCode ^
+      subscribed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2410,7 +2434,8 @@ class Playlist {
           name == other.name &&
           coverUrl == other.coverUrl &&
           trackCount == other.trackCount &&
-          special == other.special;
+          special == other.special &&
+          subscribed == other.subscribed;
 }
 
 class PlaylistCategory {

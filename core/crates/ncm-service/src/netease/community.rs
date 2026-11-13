@@ -254,6 +254,45 @@ impl NeteaseProvider {
         })
     }
 
+    /// 指定用户的动态(他人主页/好友主页): vendor 的 event 只支持 pagesize/lasttime,
+    /// 这里在 service 侧直接请求同一端点(/api/v1/event/get)并带 uid.
+    /// 拿不到数据(隐私设置/无动态/接口非 200)一律返回空列表, 不报错.
+    pub(super) fn user_events(
+        &self,
+        uid: u64,
+        limit: u32,
+        last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async move {
+            if uid == 0 {
+                return Ok(Vec::new());
+            }
+            let (client, domain, ua, cookie) = self.snapshot();
+            let body = serde_json::json!({
+                "uid": uid,
+                "limit": limit.clamp(1, 100),
+                "lasttime": last_time,
+            });
+            let resp = client
+                .request(
+                    "/api/v1/event/get",
+                    body,
+                    weapi_option(&cookie, &domain, &ua),
+                )
+                .await
+                .map_err(map_error)?;
+            // 非 200(隐私/未登录/风控)按"没数据"处理
+            if check_body(&resp.body).is_err() {
+                return Ok(Vec::new());
+            }
+            let mut list = parse_feed_events(&resp.body);
+            if (limit as usize) < list.len() {
+                list.truncate(limit as usize);
+            }
+            Ok(list)
+        })
+    }
+
     /// 动态评论: vendor 走 /api/v1/resource/comments/<threadId>.
     pub(super) fn event_comments<'a>(
         &'a self,

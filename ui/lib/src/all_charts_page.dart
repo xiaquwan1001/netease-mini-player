@@ -120,6 +120,7 @@ class _GroupSection extends StatelessWidget {
                       coverUrl: item.coverUrl,
                       trackCount: BigInt.zero,
                       special: false,
+                      subscribed: false,
                     ),
                   )
                 : null,

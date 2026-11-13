@@ -25,6 +25,8 @@
 //!   ncm radio-rec <cateId>         某分类推荐电台
 //!   ncm radio-top <hot|new|pay|hours|newcomer|popular|program>  电台榜单
 //!   ncm radio-sub <radioId> [limit]  电台订阅者列表(只读)
+//!   ncm user-ranking <uid> [--period week]   他人常听排行(对方没公开则空)
+//!   ncm user-events <uid> [limit] [lasttime] 指定用户的动态(需登录)
 //!
 //! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
 
@@ -33,7 +35,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use ncm_domain::TrackId;
-use ncm_provider::{AudioLevel, Capability, Provider, SearchQuery, SongUrlRequest};
+use ncm_provider::{AudioLevel, Capability, Provider, RankingPeriod, SearchQuery, SongUrlRequest};
 use ncm_service::identity::merge_device_cookie;
 use ncm_service::Core;
 
@@ -257,6 +259,37 @@ async fn run() -> Result<(), BoxErr> {
             println!("公开歌单 {} 个", lists.len());
             for l in lists.iter().take(10) {
                 println!("  - [{}] {} ({} 首)", l.id, short_line(&l.name, 24), l.track_count);
+            }
+            Ok(())
+        }
+        // 他人常听排行: 与 play_ranking 同端点, uid 由参数给(对方没公开 -> 空列表)
+        "user-ranking" => {
+            let uid: u64 = args.positional.first().ok_or("usage: ncm user-ranking <uid> [--period week]")?.parse()?;
+            let period = if args.value("--period").as_deref() == Some("week") {
+                RankingPeriod::Week
+            } else {
+                RankingPeriod::All
+            };
+            let p = provider(&core, Capability::ListeningRank)?;
+            announce(&core);
+            let list = p.play_ranking_of(uid, period).await?;
+            println!("uid={uid} period={:?} count={}", period, list.len());
+            for (i, e) in list.iter().take(10).enumerate() {
+                println!("{:>3}. play={} score={} [{}] {}", i + 1, e.play_count, e.score, e.song.id, e.song.name);
+            }
+            Ok(())
+        }
+        // 指定用户的动态(他人主页): 需登录, 对方隐私设置下可能为空
+        "user-events" => {
+            let uid: u64 = args.positional.first().ok_or("usage: ncm user-events <uid> [limit] [lasttime]")?.parse()?;
+            let limit: u32 = args.positional.get(1).map(|s| s.parse()).transpose()?.unwrap_or(20);
+            let last: i64 = args.positional.get(2).map(|s| s.parse()).transpose()?.unwrap_or(-1);
+            let p = provider(&core, Capability::Feed)?;
+            announce(&core);
+            let list = p.user_events(uid, limit, last).await?;
+            println!("uid={uid} limit={limit} lasttime={last} count={}", list.len());
+            for e in list.iter().take(10) {
+                println!("  [{}] kind={} user={} time={} text={}", e.id, e.kind, e.user_name, e.time_ms, short_line(&e.text, 30));
             }
             Ok(())
         }

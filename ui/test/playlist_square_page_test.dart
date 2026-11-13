@@ -9,6 +9,7 @@ rust.Playlist playlist(int id, String name) => rust.Playlist(
   coverUrl: null,
   trackCount: BigInt.from(30),
   special: false,
+  subscribed: false,
 );
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));

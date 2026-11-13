@@ -111,6 +111,7 @@ class _ChartSectionState extends State<ChartSection> {
                           coverUrl: chart.coverUrl,
                           trackCount: chart.trackCount,
                           special: false,
+                          subscribed: false,
                         ),
                       ),
                     ),
