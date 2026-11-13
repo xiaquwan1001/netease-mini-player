@@ -49,4 +49,5 @@
 - cargokit 用 Rust package 名当产物名 ⇒ package 名必须是 `ncm_ffi`（下划线），不能带 `-`。
 - 设备验证统一用模拟器 **a34**（`~/bin/avd headless a34`），别用 `-gpu host`。
 - 细节**不放这里**：构建/工具链/CI/体积基线见 `.pi/memory/notes-build.md`；登录、取链、歌词、评论的协议语义见 `.pi/memory/notes-api.md`；**UI 规则层(数值/容器/四态/门禁)见 `.pi/memory/notes-ui-rules.md`**；失败教训见 `.pi/memory/FAILURES.md`。
+- 记忆索引（`.pi/memory/`，`mem -t project` 会自动搜；`history/` 被跳过）：`FAILURES.md` 失败教训｜`notes-build.md` 构建/工具链/CI/体积基线｜`notes-api.md` 登录/取链/歌词/评论协议｜`notes-ui-rules.md` UI 规则层｜`notes-credentials.md` 凭据存储决策｜`notes-wip.md` 在飞状态与门禁基线｜`USER.md` 项目专属口径｜`history/HINDSIGHT.md` 2026-10~11-04 历史 hindsight 日志（存量事实，按需查）。
 - UI 新代码固定入口：四态走 `AsyncView`；小组标题走 `SectionTitle`、区块标题走 `SectionHeader`；长文本/徽标走 `AdaptiveText`/`AdaptiveTextRow`；间距圆角字号只允许 `layout.dart` 与 `tools/check-tokens.sh` 的有限集合(例外写 `// token-ok: 理由`)。
