@@ -31,7 +31,7 @@ flutter:
     - (cd ui && dart analyze)
     - (cd ui && dart format --output=none --set-exit-if-changed lib test)
     - bash tools/check-write-guard.sh
-    - (cd ui && flutter test --exclude-tags network)
+    - (cd ui && flutter test --exclude-tags 'network || golden')
 
 # ---------- 产物：tag 上自动跑；分支上手动触发（GitLab 页面/glab ci run 的 play） ----------
 

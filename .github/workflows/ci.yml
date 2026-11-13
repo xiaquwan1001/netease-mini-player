@@ -55,7 +55,7 @@ jobs:
         run: bash tools/check-write-guard.sh
       - name: widget/unit tests (offline)
         working-directory: ui
-        run: flutter test --exclude-tags network
+        run: flutter test --exclude-tags 'network || golden'
 
   # 可直接安装的 **debug APK**(给模拟器/真机做视觉与回归验收)。
   #

@@ -21,6 +21,13 @@
 //
 // 稳定性: 所有页面数据都走注入的假 loader(0 网络); 封面/头像一律 coverUrl: null
 // 走占位图; 无限动画(跑马灯/加载圈)用固定帧数推进代替 pumpAndSettle, 见 _pumpFrames。
+//
+// 门禁口径: 标 @Tags(['golden']), CI 用 `--exclude-tags 'network || golden'` 跳过
+// (GitHub runner 没有 fonts-noto-cjk, 渲染差异会假失败); 本机没有 CJK 字体时用例
+// 自动 skip 并给出安装提示, 不会红。
+@Tags(['golden'])
+library;
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -413,6 +420,12 @@ final List<_GoldenPage> _goldenPages = <_GoldenPage>[
   _GoldenPage('messages', _messagesPage),
 ];
 
+/// 本机是否装了可用于 golden 的 CJK 字体(`.ttc`/`.otf` 存在即算)。
+/// 没装就整组 skip: 用方块字生成的"基准"没有意义, 也不该在别人的机器上红。
+final bool _cjkAvailable = _cjkFontCandidates.any(
+  (path) => File(path).existsSync(),
+);
+
 void main() {
   setUpAll(() async {
     final path = await _loadGoldenFont();
@@ -427,19 +440,29 @@ void main() {
   });
 
   for (final page in _goldenPages) {
-    testWidgets('${page.name}: 360x800 @1.0', (tester) async {
-      await _pumpPage(tester, page.build(), size: const Size(360, 800));
-      await _expectGolden(tester, '${page.name}_360x800');
-    });
+    testWidgets(
+      '${page.name}: 360x800 @1.0',
+      // 本机没有 CJK 字体就跳过(方块字生成的基准没有意义)
+      skip: !_cjkAvailable,
+      (tester) async {
+        await _pumpPage(tester, page.build(), size: const Size(360, 800));
+        await _expectGolden(tester, '${page.name}_360x800');
+      },
+    );
 
-    testWidgets('${page.name}: 300x640 @1.25 字号', (tester) async {
-      await _pumpPage(
-        tester,
-        page.build(),
-        size: const Size(300, 640),
-        textScale: 1.25,
-      );
-      await _expectGolden(tester, '${page.name}_300x640_s125');
-    });
+    testWidgets(
+      '${page.name}: 300x640 @1.25 字号',
+      // 本机没有 CJK 字体就跳过(方块字生成的基准没有意义)
+      skip: !_cjkAvailable,
+      (tester) async {
+        await _pumpPage(
+          tester,
+          page.build(),
+          size: const Size(300, 640),
+          textScale: 1.25,
+        );
+        await _expectGolden(tester, '${page.name}_300x640_s125');
+      },
+    );
   }
 }

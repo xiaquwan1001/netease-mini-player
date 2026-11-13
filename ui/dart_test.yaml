@@ -3,3 +3,9 @@
 tags:
   network:
     description: 真实联网 smoke(上游风控/公网抖动会抖动, CI 默认跳过)
+
+  golden:
+    description: >-
+      整屏像素基准(视觉回归)。只在本机 Linux 生成与校验(依赖系统 CJK 字体与
+      Skia 版本), CI 用 --exclude-tags 'network || golden' 跳过; 本机没有 CJK
+      字体时用例自动 skip。
