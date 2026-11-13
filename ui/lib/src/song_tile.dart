@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'marquee_text.dart';
 import 'format.dart' show formatDurationMs;
@@ -142,11 +141,15 @@ class SongTitleWithBadges extends StatelessWidget {
     required this.song,
     this.style,
     this.marquee = false,
+    this.extraBadges = const [],
   });
 
   final rust.SongDto song;
   final TextStyle? style;
   final bool marquee;
+
+  /// 歌名之后、VIP/付费标记之前的额外装饰徽标(如"只读红心")。
+  final List<Widget> extraBadges;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +164,7 @@ class SongTitleWithBadges extends StatelessWidget {
     return Row(
       children: [
         Expanded(child: title),
+        for (final badge in extraBadges) badge,
         SongFeeBadges(song: song),
       ],
     );
@@ -212,35 +216,28 @@ class SongTile extends StatelessWidget {
       contentPadding: kSongRowPadding,
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
-      // 窄宽降级已收敛到共享组件 AdaptiveTextRow(Expanded + 单行 marquee).
-      // VIP/付费/无版权徽标不放这里：标题区在 300dp 手机上只有 ~49dp，
-      // 徽标要么把歌名压没、要么被整组收起（用户反馈"歌曲没有 VIP 标记"）。
-      // 改放副标题行（整行 250dp+），任何宽度都能看见。
-      title: AdaptiveTextRow(
-        title: song.name,
+      // 徽标位置统一到歌名之后(与推荐/歌单/队列里的 SongTitleWithBadges 一致):
+      // 用户反馈"搜索结果里 VIP 标在歌手前面, 和推荐页不一致"。
+      // 徽标是固定宽度, 只有歌名 Expanded 会被压缩, 再窄也不会把徽标挤掉。
+      title: SongTitleWithBadges(
+        song: song,
         style: playable ? null : grey,
-        badges: [
+        marquee: true,
+        extraBadges: [
           // 没有可点路径时才在这里画只读红心(不要做 leading, 否则歌名缩进不齐);
           // 可点红心统一放行尾, 与歌单详情页的位置/行为一致
-          if (onLike == null && liked)
+          if (onLike == null && liked) ...[
+            const SizedBox(width: 4),
             Icon(Icons.favorite, size: 13, color: scheme.primary),
+          ],
         ],
       ),
-      subtitle: Row(
-        children: [
-          if (playable && song.vip) const VipBadge(small: true),
-          if (playable && !song.vip && song.paid) const PaidBadge(),
-          if (!playable) const UnplayableBadge(),
-          Expanded(
-            child: Text(
-              '${song.artist} · ${song.album}',
-              // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: playable ? null : grey,
-            ),
-          ),
-        ],
+      subtitle: Text(
+        '${song.artist} · ${song.album}',
+        // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: playable ? null : grey,
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -250,13 +247,14 @@ class SongTile extends StatelessWidget {
               formatSongDuration(song.durationMs),
               style: playable ? null : grey,
             ),
-          // 命中区 ≥48dp: compact 密度 + iconSize 20 只有 40dp, 换成显式 constraints
+          // 命中区: 高度保持 48dp, 宽度收到 40dp(两枚按钮省下 16dp 给歌名)。
+          // visualDensity.compact 同时压掉 IconButton 的默认内边距。
           if (onLike != null)
             IconButton(
               tooltip: liked ? '取消喜欢' : '喜欢',
               iconSize: 20,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
               icon: Icon(
                 liked ? Icons.favorite : Icons.favorite_border,
                 size: 20,
@@ -269,7 +267,7 @@ class SongTile extends StatelessWidget {
               tooltip: '更多操作',
               iconSize: 20,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 48),
               icon: const Icon(Icons.more_vert),
               onPressed: onMenu,
             ),

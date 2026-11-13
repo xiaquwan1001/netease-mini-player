@@ -1358,7 +1358,6 @@ class _HomePageState extends State<HomePage> {
       context,
       onPlaySongs: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
-      onDislike: (song) => rust.dislikeRecommendSong(songId: song.id),
     );
   }
 
@@ -3006,9 +3005,11 @@ class _HomePageState extends State<HomePage> {
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
       // 标题固定用 titleMedium, 让品牌字至少完整显示
-      // 详情页(歌词页)标题用 titleLarge 级别; 之前钉在 titleMedium 导致字号特别小
+      // 详情页(歌词页)标题: 保留 titleLarge 的字重观感, 但显式 20sp + height 1.25。
+      // 22sp 默认行高下中文歌名在 56dp AppBar 里下半段会被裁掉(用户反馈);
+      // 20sp 仍明显大于 titleMedium(16sp), 不会退回"字号特别小"。
       titleTextStyle: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w600),
+          ?.copyWith(fontSize: 20, height: 1.25, fontWeight: FontWeight.w600),
       // 长歌名横向滚动播放(marquee); 放不下不再 FittedBox 缩成小字
       title: MarqueeText(
         _showLyrics

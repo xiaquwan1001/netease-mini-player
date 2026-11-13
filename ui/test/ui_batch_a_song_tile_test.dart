@@ -145,7 +145,10 @@ void main() {
     expect(liked.single.id, s.id, reason: '红心应走全局 toggleLike');
   });
 
-  testWidgets('行尾按钮命中区 ≥48dp(红心 + "...")', (tester) async {
+  // v0.7.2: 用户要求"行尾按钮向右移动、缩小间隔给歌名腾空间"。
+  // 取舍: 高度仍 48dp(纵向滑动/点按不易误触), 宽度收到 40dp —— Material 3 的
+  // dense 列表最小值, 两枚按钮合计 80dp(原 96dp), 省下的 16dp 给歌名。
+  testWidgets('行尾按钮命中区 ≥40x48dp 且两枚合计 ≤88dp(给歌名腾空间)', (tester) async {
     await tester.pumpWidget(
       host(
         SongTile(
@@ -159,11 +162,14 @@ void main() {
       ),
     );
 
+    var totalWidth = 0.0;
     for (final tooltip in ['取消喜欢', '更多操作']) {
       final size = tester.getSize(find.byTooltip(tooltip));
-      expect(size.width, greaterThanOrEqualTo(48), reason: tooltip);
+      expect(size.width, greaterThanOrEqualTo(40), reason: tooltip);
       expect(size.height, greaterThanOrEqualTo(48), reason: tooltip);
+      totalWidth += size.width;
     }
+    expect(totalWidth, lessThanOrEqualTo(88));
   });
 
   // 300dp(用户的 vivo 逻辑宽)+1.25 字号下, 行尾「时长 + 红心 + ...」占满 146dp,

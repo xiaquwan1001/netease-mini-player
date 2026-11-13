@@ -7,7 +7,6 @@ import 'error_views.dart' show FullError;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
-import 'toast.dart' show showToastWith;
 
 typedef SongListLoader = Future<List<rust.SongDto>> Function();
 typedef PlaylistListLoader = Future<List<rust.Playlist>> Function();
@@ -27,9 +26,6 @@ Future<void> showDiscoverPage(
   PlaylistListLoader? loadPlaylists,
   DateListLoader? loadHistoryDates,
   HistorySongsLoader? loadHistorySongs,
-
-  /// 每日推荐里"不感兴趣"(不传就不显示那个按钮)
-  Future<void> Function(rust.SongDto song)? onDislike,
 }) {
   final songs = loadSongs ?? rust.dailyRecommendSongs;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
@@ -44,7 +40,6 @@ Future<void> showDiscoverPage(
             (date) => rust.historyRecommendSongs(date: date),
         onPlaySongs: onPlaySongs,
         onOpenPlaylist: onOpenPlaylist,
-        onDislike: onDislike,
       ),
     ),
   );
@@ -60,7 +55,6 @@ class DailyRecommendPage extends StatelessWidget {
     required this.loadHistorySongs,
     required this.onPlaySongs,
     required this.onOpenPlaylist,
-    this.onDislike,
   });
 
   final SongListLoader loadSongs;
@@ -69,7 +63,6 @@ class DailyRecommendPage extends StatelessWidget {
   final HistorySongsLoader loadHistorySongs;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
-  final Future<void> Function(rust.SongDto song)? onDislike;
 
   @override
   Widget build(BuildContext context) {
@@ -88,11 +81,7 @@ class DailyRecommendPage extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            _DailySongsTab(
-              load: loadSongs,
-              onPlay: onPlaySongs,
-              onDislike: onDislike,
-            ),
+            _DailySongsTab(load: loadSongs, onPlay: onPlaySongs),
             _DailyPlaylistsTab(load: loadPlaylists, onOpen: onOpenPlaylist),
             _HistoryTab(
               loadDates: loadHistoryDates,
@@ -107,15 +96,10 @@ class DailyRecommendPage extends StatelessWidget {
 }
 
 class _DailySongsTab extends StatefulWidget {
-  const _DailySongsTab({
-    required this.load,
-    required this.onPlay,
-    this.onDislike,
-  });
+  const _DailySongsTab({required this.load, required this.onPlay});
 
   final SongListLoader load;
   final void Function(List<rust.SongDto> songs, int index) onPlay;
-  final Future<void> Function(rust.SongDto song)? onDislike;
 
   @override
   State<_DailySongsTab> createState() => _DailySongsTabState();
@@ -172,14 +156,9 @@ class _DailySongsTabState extends State<_DailySongsTab>
           song: s,
           index: i + 1,
           // 每日推荐 tab: "..."菜单同样允许"不感兴趣"
+          // 行尾不再放"不感兴趣"按钮: 它占掉 ~48dp 横向空间, 而同一动作
+          // 已经在行尾「...」菜单里(SongActionSource.dailyRecommend 决定显示)。
           source: SongActionSource.dailyRecommend,
-          trailing: widget.onDislike == null
-              ? null
-              : IconButton(
-                  tooltip: '不感兴趣',
-                  icon: const Icon(Icons.do_not_disturb_on_outlined, size: 20),
-                  onPressed: () => _dislike(s),
-                ),
           onTap: s.playable
               ? () {
                   Navigator.pop(context);
@@ -189,25 +168,6 @@ class _DailySongsTabState extends State<_DailySongsTab>
         );
       },
     );
-  }
-
-  /// 不感兴趣: 调接口成功后从本地列表里去掉(以后不会再被推)
-  Future<void> _dislike(rust.SongDto song) async {
-    final handler = widget.onDislike;
-    if (handler == null) return;
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    try {
-      await handler(song);
-      if (!mounted) return;
-      setState(() => _songs?.removeWhere((s) => s.id == song.id));
-      if (messenger != null) {
-        showToastWith(messenger, '已减少《${song.name}》这类推荐');
-      }
-    } catch (e) {
-      if (messenger != null) {
-        showToastWith(messenger, '操作失败: ${friendlyError(e)}', isError: true);
-      }
-    }
   }
 }
 
@@ -692,16 +652,12 @@ class _SongRow extends StatelessWidget {
     required this.song,
     required this.index,
     required this.onTap,
-    this.trailing,
     this.source = SongActionSource.other,
   });
 
   final rust.SongDto song;
   final int index;
   final VoidCallback? onTap;
-
-  /// 行尾附加按钮(每日推荐的"不感兴趣")
-  final Widget? trailing;
 
   /// 菜单来源(决定"..."菜单里"不感兴趣"是否显示)
   final SongActionSource source;
@@ -727,13 +683,7 @@ class _SongRow extends StatelessWidget {
         style: song.playable ? null : TextStyle(color: scheme.outline),
       ),
       subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ?trailing,
-          SongOverflowButton(song: song, size: 20, source: source),
-        ],
-      ),
+      trailing: SongOverflowButton(song: song, size: 20, source: source),
       onTap: onTap,
     );
   }

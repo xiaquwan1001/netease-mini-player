@@ -221,8 +221,9 @@ void main() {
     expect(openedPodcast?.name, '最近播客');
   });
 
-  testWidgets('每日推荐: 不感兴趣把歌从列表里去掉', (tester) async {
-    final disliked = <String>[];
+  // v0.7.2: 行尾的"不感兴趣"按钮已去掉(它白吃 ~48dp 横向空间, 同一动作在
+  // 行尾「...」菜单里, 由 SongActionSource.dailyRecommend 决定是否显示)。
+  testWidgets('每日推荐: 行尾不再有不感兴趣按钮, 横向空间让给歌名', (tester) async {
     await tester.pumpWidget(
       host(() {
         showDiscoverPage(
@@ -231,19 +232,15 @@ void main() {
           onOpenPlaylist: (_) {},
           loadSongs: () async => [song(1, '晴天'), song(2, '七里香')],
           loadPlaylists: () async => const [],
-          onDislike: (s) async => disliked.add(s.name),
         );
       }),
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('不感兴趣'), findsNWidgets(2));
-    await tester.tap(find.byTooltip('不感兴趣').first);
-    await tester.pumpAndSettle();
-
-    expect(disliked, ['晴天']);
-    expect(find.text('晴天'), findsNothing);
+    expect(find.byTooltip('不感兴趣'), findsNothing);
+    // 每行只留一个行尾按钮(「...」更多操作)
+    expect(find.text('晴天'), findsOneWidget);
     expect(find.text('七里香'), findsOneWidget);
   });
 

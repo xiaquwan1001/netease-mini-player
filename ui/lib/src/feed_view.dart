@@ -685,22 +685,8 @@ class _FeedCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: scheme.secondaryContainer,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      feedKindLabels[event.kind] ?? '动态',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSecondaryContainer,
-                      ),
-                    ),
-                  ),
+                  // 原先这里有个「单曲 / 动态」kind 徽标: 用户反馈它不提供额外信息
+                  // (点进详情就能看出来), 已去掉, 横向空间让给用户名与时间。
                   const SizedBox(width: 8),
                   Text(
                     feedRelativeTime(event.timeMs),

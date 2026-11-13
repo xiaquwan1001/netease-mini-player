@@ -164,6 +164,9 @@ void main() {
     );
     expect(appBarBlock.contains('titleLarge'), isTrue);
     expect(appBarBlock.contains('titleMedium'), isFalse);
+    // 22sp 默认行高在 56dp AppBar 里会裁掉中文歌名下半段(用户反馈), 显式 20sp+height
+    expect(appBarBlock.contains('fontSize: 20'), isTrue);
+    expect(appBarBlock.contains('height: 1.25'), isTrue);
 
     // 歌单详情头卡: MarqueeText(d?.name ...) 窗口里必须是 headlineSmall, 不能是 titleMedium
     final headerBlock = stripComments(

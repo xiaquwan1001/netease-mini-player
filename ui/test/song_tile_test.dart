@@ -111,7 +111,7 @@ void main() {
     expect(find.text('VIP'), findsNothing);
   });
 
-  testWidgets('300dp 窄屏: VIP 标必须可见(徽标在副标题行, 不再被窄宽整组收起)', (tester) async {
+  testWidgets('300dp 窄屏: VIP 标必须可见(徽标固定宽度, 不会被歌名挤掉)', (tester) async {
     tester.view.physicalSize = const Size(300, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -162,6 +162,36 @@ void main() {
     );
     await tester.pump();
     expect(tester.takeException(), isNull);
+  });
+
+  // v0.7.2: 用户要求徽标位置与推荐页/歌单页统一 —— 在歌名之后, 不在歌手之前。
+  testWidgets('VIP 标在歌名之后(与推荐页一致), 不在歌手行', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SongTile(
+          song: song(fee: 1, vip: true),
+          active: false,
+          liked: true,
+          onTap: () {},
+          onToggleLike: () {},
+          onMenu: () {},
+        ),
+      ),
+    );
+    final nameRect = tester.getRect(find.text('晴天'));
+    final vipRect = tester.getRect(find.text('VIP'));
+    final artistRect = tester.getRect(find.text('周杰伦 · 叶惠美'));
+    expect(vipRect.left, greaterThan(nameRect.left), reason: 'VIP 标应在歌名右侧');
+    expect(
+      (vipRect.center.dy - nameRect.center.dy).abs(),
+      lessThan(8),
+      reason: 'VIP 标应与歌名同一行',
+    );
+    expect(
+      (vipRect.center.dy - artistRect.center.dy).abs(),
+      greaterThan(4),
+      reason: 'VIP 标不应再出现在歌手那一行',
+    );
   });
 
   testWidgets('歌曲行左右留白收到最小(把横向空间让给文字)', (tester) async {
