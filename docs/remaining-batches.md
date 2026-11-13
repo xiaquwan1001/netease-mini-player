@@ -210,9 +210,13 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
 验收: CI 三个新 step 全绿;`cargo test` / `flutter test` 数字不变。
 **并行性: 独占** —— 格式提交会和任何在飞车道撞车, 必须先落地再开别的。
 
-### 12.1 `netease.rs` 按能力域拆模块(M · 1~2 天)
+### 12.1 `netease.rs` 按能力域拆模块 ✅ **已完成(2026-11-13)**
 
-现状: **8110 行 / 126 个顶层 fn**,全部 provider 方法与 parse 混在一个文件(改任意接口都必冲突)。
+结果: 8110 行 → `netease/{mod,provider,parse,song,search,community,vip,playlist,radio,account,comment,artist,album,lyric}.rs`
+(最大 1038 行);`provider.rs` 保留唯一 `impl Provider`(116 个方法一行转发,零逻辑);111 个 `#[test]` 拆 9 文件。
+函数名单前后各 371 个完全一致、`cargo test` 271 不变、`api-coverage` 123/123。
+
+原状(留档): 8110 行 / 126 个顶层 fn,全部 provider 方法与 parse 混在一个文件(改任意接口都必冲突)。
 
 目标: 拆成 `netease/{mod,parse,song,lyric,playlist,comment,community,account,radio,vip}.rs` ——
 **先拆纯 parse 函数**(无状态、已有单测覆盖), 再拆 `impl Provider for NeteaseProvider` 的方法块。
@@ -231,7 +235,13 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 验收: `cargo test` 全绿、FFI 与 Dart 零变化; 新增的 mock provider(测试)可按能力只实现需要的那部分。
 **并行性: 与 12.1 互斥**(两者都要大改 `netease.rs` 的 impl 头)。
 
-### 12.3 UI 载入 / 空态 / 错误 / 分页统一(M · 1~2 天)
+### 12.3 UI 载入 / 空态 / 错误 / 分页统一 ✅ **已完成(2026-11-13)**
+
+结果: `state_views.dart`(`LoadingView` / `LoadingView.inline` / `EmptyView`);
+`CircularProgressIndicator` **48 处 / 26 文件 → 5 处 / 1 文件**,页面级 LoadingView 34 处、inline 14 处、EmptyView 25 处 / 15 文件;
+文案一字未改;15 处裸 `ListView.builder` 只加 `// 非分页: <理由>`;新增 5 例测试。
+
+原状(留档):
 
 | 现状 | 数字 |
 |---|---|
@@ -253,7 +263,9 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 验收: 全量测试绿;release 包冷启动时间不变(用 `tools/devui` 的 `--run` 取数)。
 **并行性: 与 12.3 冲突**(同批页面), 二选一先做。
 
-### 12.5 去掉最后一处源码 grep 断言(S · 1 小时)
+### 12.5 去掉最后一处源码 grep 断言 ✅ **已完成(2026-11-13)**
+
+结果: 改成「正则锚点 + 窗口 + 断言前剥行注释」,并做负向验证(titleLarge→titleMedium 立刻失败)。原状(留档):
 
 `ui/test/marquee_long_title_test.dart` 仍 `readAsStringSync('lib/main.dart')` 做 substring 断言 ——
 上一次 CI 挂(RangeError)就是它写死缩进。改成 geometry / widget 树断言(项目里已有大量同类写法可照抄)。
@@ -276,7 +288,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | 波次 | 车道 | 说明 |
 |---|---|---|
 | 第 0 波(独占) | 12.0 格式 + 门禁 | 一个人一条车道, 落地后再开别的 |
-| 第 1 波(2 条) | 12.1 Rust 拆分 ∥ 12.3 UI 统一 | Rust 车道独占 codegen;UI 车道只改 `ui/lib/src` + `ui/test` |
+| ~~第 1 波~~ ✅ **已完成 2026-11-13** | 12.1 Rust 拆分 ∥ 12.3 UI 统一 | 两个 worktree 并行,编排者独立重跑门禁后合并 |
 | 第 2 波(2 条) | 12.2 能力 trait ∥ 12.4 main 拆分 | 12.2 依赖 12.1 落地;12.4 依赖 12.3 落地 |
 | 零散 | 12.5 / 12.6 | 随时可搭车, 都是一天内 |
 

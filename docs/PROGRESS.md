@@ -12,8 +12,10 @@
 | 门 | 结果 |
 |---|---|
 | `cargo test --offline --workspace` | **271** 通过 / 0 失败 |
-| `cargo clippy --workspace --all-targets` | **0 warning** |
-| `flutter test --exclude-tags network` | **674** 通过 / 0 失败 |
+| `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
+| `cargo fmt --all -- --check` | 干净 |
+| `flutter test --exclude-tags network` | **679** 通过 / 0 失败 |
+| `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | 0 error / 0 warning(仅 info 级风格提示) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | 接口覆盖 | **123/123**(FFI 导出 150, 其中 5 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / word_lyric_with_fallback) |
@@ -70,6 +72,33 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13: 结构性债务第 1 波(门禁 + 两个大文件拆分)
+
+**先说门禁**:仓库此前没有格式门也没有 clippy 门,`cargo fmt --check` 有 368 处差异、
+`dart format` 会重排 143 文件。本轮先做纯格式提交,再把三道门加进 CI(本地 / GitHub / USTC 三处同口径),
+之后任何改动都必须过 `cargo fmt --check` · `cargo clippy -D warnings` · `dart format --set-exit-if-changed`。
+
+- **纯格式提交**:`cargo fmt --all` + `dart format lib test`;顺带补 3 处折行后触发 `curly_braces` 的花括号(不改语义)。
+- **CI 门**:`.github/workflows/ci.yml` / `.gitlab-ci.yml` / `tools/ci.sh` 三处同步;CI 实测 Rust 与 Flutter 两个 job 全绿。
+
+**UI 状态件统一(`state_views.dart`)**:`CircularProgressIndicator` 48 处 / 26 文件 → 5 处 / 1 文件;
+页面级 `LoadingView` 34 处、按钮/行尾 `LoadingView.inline` 14 处、`EmptyView` 25 处 / 15 文件;
+空态文案一字未改;15 处裸 `ListView.builder` 只加 `// 非分页: <理由>`(私信 reverse 锚底、固定条数榜单、
+嵌在详情页滚动体内等),不强改结构;`search_loading.dart` 收敛成 `LoadingView` 薄封装。新增 5 例测试(含 18dp 矮槽位 overflow 回归)。
+
+**`netease.rs` 按能力域拆分**:8110 行单文件 → `netease/{mod,provider,parse,song,search,community,vip,playlist,radio,account,comment,artist,album,lyric}.rs`
+(最大 1038 行);`provider.rs` 保留唯一的 `impl Provider`(116 个方法各一行转发到各域固有方法,零逻辑);
+111 个 `#[test]` 按域拆 9 个文件。**核验方式**:拆分前后函数名单各 371 个完全一致(无丢无增)、`#[test]` 111=111、
+`cargo test` 271 不变、`api-coverage` 123/123。
+
+**唯一一处源码 grep 断言加固**:`marquee_long_title_test` 原来用 `indexOf(...)` 之间的 substring 读源码
+(上次 CI RangeError 的根因),改成「正则锚点 + 窗口 + 断言前剥行注释」;负向验证:把 `titleLarge` 改成
+`titleMedium` 后该测试立刻失败,还原即绿。
+
+> 两个车道都在独立 worktree 里跑,编排者独立重跑全量门禁后才合并(不采信 worker 自报)。
+> 剩余债务(能力 trait / main 拆壳 / AppSettings)见 `docs/remaining-batches.md` §12。
+
 
 ## 2026-11-12(晚): v0.6.0 → v0.7.1 四连发(用户回归驱动)
 
