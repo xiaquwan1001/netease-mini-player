@@ -74,7 +74,7 @@ void main() {
     expect(box.size.width, greaterThan(100));
   });
 
-  testWidgets('自定义阈值: badgeCollapseBelow=200 时 150 隐藏', (tester) async {
+  testWidgets('自定义阈值: badgeCollapseBelow=200 时 150 隐藏, 300 显示', (tester) async {
     await pump(
       tester,
       const AdaptiveTextRow(
@@ -86,6 +86,9 @@ void main() {
     );
     expect(find.text('VIP'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
+    // 口径(本车道修正): 判据是「标题实际可用宽」= 行宽 - Σ徽标宽, 不是整行宽.
+    // 测试字体每个字符宽 = fontSize(14), 'VIP' = 42 + 4 间距 = 46:
+    //   行宽 240 ⇒ 标题可用 194 < 200 ⇒ 仍然收起(旧口径按整行 240 会误判"够宽");
     await pump(
       tester,
       const AdaptiveTextRow(
@@ -94,6 +97,18 @@ void main() {
         badgeCollapseBelow: 200,
       ),
       width: 240,
+    );
+    expect(find.text('VIP'), findsNothing, reason: '标题可用宽 194 < 阈值 200');
+    await tester.pumpWidget(const SizedBox.shrink());
+    // 行宽 300 ⇒ 标题可用 254 >= 200 ⇒ 显示
+    await pump(
+      tester,
+      const AdaptiveTextRow(
+        title: _longName,
+        badges: [Text('VIP')],
+        badgeCollapseBelow: 200,
+      ),
+      width: 300,
     );
     expect(find.text('VIP'), findsOneWidget);
   });

@@ -582,7 +582,7 @@ class _PlaylistsSection extends StatelessWidget {
           load: load,
           emptyText: '还没有收藏歌单',
           builder: (context, lists, reload) => SizedBox(
-            height: 176,
+            height: kCoverCardHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: lists.length,
@@ -634,7 +634,7 @@ class _PodcastsSection extends StatelessWidget {
           load: load,
           emptyText: '还没有收藏播客',
           builder: (context, radios, reload) => SizedBox(
-            height: 176,
+            height: kCoverCardHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: radios.length,
@@ -691,7 +691,7 @@ class _AlbumsSection extends StatelessWidget {
           load: load,
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
           builder: (context, albums, reload) => SizedBox(
-            height: 176,
+            height: kCoverCardHeight,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: albums.length,

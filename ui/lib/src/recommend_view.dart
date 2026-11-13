@@ -494,7 +494,7 @@ class _NewAlbumsSection extends StatelessWidget {
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
           builder: (context, albums, reload) => CoverRow(
-            height: 176,
+            height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final a in albums)
@@ -833,7 +833,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
           load: load,
           emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
           builder: (context, lists, reload) => CoverRow(
-            height: 176,
+            height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final pl in lists)
@@ -891,7 +891,7 @@ class _PodcastSection extends StatelessWidget {
           load: load,
           emptyText: '暂无推荐播客',
           builder: (context, radios, reload) => CoverRow(
-            height: 176,
+            height: kCoverCardHeight,
             rows: AppSettings.instance.coverRows,
             children: [
               for (final radio in radios)

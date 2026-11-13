@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
+
+/// 封面卡片在 textScale=1.0 下的标准高度: 封面 118 + 4 间距 + 标题两行 + 副标题一行。
+///
+/// 卡片固定高度的容器(横向 [CoverRow] / 「我的」页各横滑区块)都用它,
+/// 否则标题允许两行后会纵向溢出(RenderFlex overflowed).
+const double kCoverCardHeight = 203;
 
 /// 封面卡片(封面 + 标题 + 副标题) —— 推荐页/搜索页/我的页共用。
 ///
@@ -34,10 +41,11 @@ class CoverCard extends StatelessWidget {
         children: [
           CoverArt(url: coverUrl, size: size, radius: 8),
           const SizedBox(height: 4),
-          Text(
+          // 封面卡片标题允许两行(用户反馈: 榜单/歌单长名字被截成一行, 认不出来)
+          AdaptiveText(
             title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            mode: AdaptiveTextMode.wrap,
+            maxLines: 2,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           Text(
@@ -60,7 +68,7 @@ class CoverRow extends StatelessWidget {
   const CoverRow({
     super.key,
     required this.children,
-    this.height = 176,
+    this.height = kCoverCardHeight,
     this.rows = 1,
     this.cardWidth = 118,
   });
@@ -71,8 +79,9 @@ class CoverRow extends StatelessWidget {
   final double cardWidth;
 
   double _effectiveHeight(BuildContext context) {
-    final textLines = MediaQuery.textScalerOf(context).scale(27) * 2;
-    return height + (textLines - 54);
+    // 文字区三行(标题最多两行 + 副标题一行), 按字号等比放大.
+    final textLines = MediaQuery.textScalerOf(context).scale(27) * 3;
+    return height + (textLines - 81);
   }
 
   @override
