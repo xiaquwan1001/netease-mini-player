@@ -25,7 +25,7 @@
 代码层面的**真实缺陷**只有一处配置不一致:`core/Cargo.toml` 的 `workspace.dependencies` 列了 `ncm-playback`,
 但 `members` 漏了它(靠 path 依赖被自动纳入,`cargo -p ncm-playback` 语义不稳),已补进 members。
 
-### 结构性债(本次不动, 记录风险)
+### 结构性债(本次不动;已拆成可派发的 §12, 见 `docs/remaining-batches.md`)
 
 | 文件 | 行数 | 说明 |
 |---|---|---|
@@ -88,6 +88,18 @@
 
 合计约 **45 GB**,全部可由 `bash tools/build-*.sh` / `flutter test` 重建(首次重编约 5~10 分钟)。
 当前磁盘余量 263 GB,不急着清;要清就跑 `rm -rf ui/build core/target ui/.dart_tool`。
+
+### 结构性债务清单(摘要 · 详情与派发波次见 `docs/remaining-batches.md` §12)
+
+| # | 债务 | 现状数字 | 成本 |
+|---|---|---|---|
+| 12.0 | 无格式门 / 无 clippy 门 | `cargo fmt --check` 368 处差异;`dart format` 重排 143 文件 | S(半天, 独占) |
+| 12.1 | `netease.rs` 单文件 | 8110 行 / 126 顶层 fn | M |
+| 12.2 | `Provider` god trait | 一个 trait **120 个方法** | M |
+| 12.3 | UI 载入/空态/分页各写一套 | 26 文件手写 spinner, 空态散 9 文件, 仅 11 处用 `PagedListView` | M |
+| 12.4 | `main.dart` 单文件 | 3512 行 | S |
+| 12.5 | 最后一处源码 grep 断言 | 1 个测试文件 | S(1 小时) |
+| 12.6 | `AppSettings` 单例形状 | 498 行 / 单可变单例 | M(可选) |
 
 ## 5. 收尾门禁(本次实测)
 

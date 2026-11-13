@@ -149,8 +149,8 @@
 
 ## 11. 待办(2026-11-13 更新)
 
-> 这一节是「下一轮从哪挑」的**唯一入口**; §2–§3、§6–§8 是批次目录与派发流程, 历史口径见
-> `docs/archive/remaining-batches-history.md`。
+> 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次)。
+> §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
 > 当前基线(2026-11-13 本机实测, 离线口径): 覆盖率 **123/123** · `cargo test` **271** · `cargo clippy` **0 warning** ·
 > `flutter test --exclude-tags network` **674** · `dart analyze` 0 error / 0 warning · write-guard OK。
 
@@ -185,3 +185,99 @@ MV 列表页/视频详情(播放器已有) · 一起听(房间 + 心跳, 需双�
 
 App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+验证码登录已在 2026-11-11 落地, 两者不是一回事 ·
 埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 · `simi_user`(实测恒空)。
+
+## 12. 结构性债务(2026-11-13 审计产出 · 单独立项, 不要和功能批混)
+
+> 都是「改形状不改行为」, 每项**一个 commit 一条车道**; 先做 12.0 把门禁补齐, 再动后面的。
+> 现状数据均为 2026-11-13 本机实测。
+
+### 12.0 门禁补齐(S · 半天 · **必须第一个做**)
+
+CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, **没有格式门也没有 clippy 门**。
+
+| 现状 | 数字 |
+|---|---|
+| `cargo fmt --all -- --check` | **368 处差异**(netease.rs 125 / api.rs 63 / ttml_source.rs 32 / credential_store.rs 23 …) |
+| `dart format lib test` | 会重排 **143 文件**,+5846 −4405(已实测并回退, 不要顺手跑) |
+| `cargo clippy --workspace --all-targets` | 0 warning(2026-11-13 已清零, 需要门来锁住) |
+
+做法:
+1. **纯格式提交**:`cargo fmt --all` + `dart format lib test`,**同一个 commit 里不放任何逻辑改动**(用 `git diff -w` 自检只看格式)。
+2. 同 commit 给 `.github/workflows/ci.yml` / `.gitlab-ci.yml` / `tools/ci.sh` 加三个 step:
+   `cargo fmt --all -- --check` · `cargo clippy --workspace --all-targets -- -D warnings` · `dart format --set-exit-if-changed lib test`。
+3. 之后任何改动都必须过格式门(否则 CI 红)。
+
+验收: CI 三个新 step 全绿;`cargo test` / `flutter test` 数字不变。
+**并行性: 独占** —— 格式提交会和任何在飞车道撞车, 必须先落地再开别的。
+
+### 12.1 `netease.rs` 按能力域拆模块(M · 1~2 天)
+
+现状: **8110 行 / 126 个顶层 fn**,全部 provider 方法与 parse 混在一个文件(改任意接口都必冲突)。
+
+目标: 拆成 `netease/{mod,parse,song,lyric,playlist,comment,community,account,radio,vip}.rs` ——
+**先拆纯 parse 函数**(无状态、已有单测覆盖), 再拆 `impl Provider for NeteaseProvider` 的方法块。
+
+验收: `cargo test` 全绿、public API 与 FFI 零变化(`api-coverage.sh` 仍 123/123)、单文件 ≤1200 行。
+**并行性: 与 12.2 互斥**(同文件);与 12.3/12.4/12.5 可并行。
+
+### 12.2 `Provider` 拆成能力 trait(M · 1~2 天)
+
+现状: `pub trait Provider` **一个 trait 120 个方法**(god trait),任何新实现都要空实现一大片。
+
+目标: 切 `ReadProvider / LyricProvider / PlaylistReadProvider / PlaylistWriteProvider / CommentProvider /
+AccountProvider / RadioProvider / CommunityProvider`,再用
+`pub trait Provider: ReadProvider + LyricProvider + … {}` 保持现有调用点(超 trait 自动提供全部方法)。
+
+验收: `cargo test` 全绿、FFI 与 Dart 零变化; 新增的 mock provider(测试)可按能力只实现需要的那部分。
+**并行性: 与 12.1 互斥**(两者都要大改 `netease.rs` 的 impl 头)。
+
+### 12.3 UI 载入 / 空态 / 错误 / 分页统一(M · 1~2 天)
+
+| 现状 | 数字 |
+|---|---|
+| 手写 `CircularProgressIndicator` 的文件 | **26 个**(已有 `search_loading.dart` 但只覆盖搜索) |
+| 空态文案散落 | 9 个文件各自写「暂无 / 还没有 …」 |
+| 用 `PagedListView` 的页面 | 11 处(其余用裸 `ListView.builder`, 分页语义不一致) |
+
+目标: 抽 `LoadingView` / `EmptyView`(文案集中) / `ErrorView`(扩 `error_views.dart`),分页统一走 `PagedListView`
+(不用的地方必须写明理由, 例如固定 10 条的榜单)。
+
+验收: `rg -c CircularProgressIndicator ui/lib/src` ≤ 3(只剩共享组件); 全量测试绿; 300dp + 1.25 字号回归不退化。
+**并行性: 纯 Dart 车道**, 可与 12.1 并行;但与 12.4 改同一批页面时要错开。
+
+### 12.4 `main.dart` 拆壳(S · 半天)
+
+现状 **3512 行**, 扇出为: app shell / 路由与导航 / 播放器胶水 / 设置宿主。
+目标 ≤1200 行, 其余进 `ui/lib/src/app/`。
+
+验收: 全量测试绿;release 包冷启动时间不变(用 `tools/devui` 的 `--run` 取数)。
+**并行性: 与 12.3 冲突**(同批页面), 二选一先做。
+
+### 12.5 去掉最后一处源码 grep 断言(S · 1 小时)
+
+`ui/test/marquee_long_title_test.dart` 仍 `readAsStringSync('lib/main.dart')` 做 substring 断言 ——
+上一次 CI 挂(RangeError)就是它写死缩进。改成 geometry / widget 树断言(项目里已有大量同类写法可照抄)。
+
+验收: `rg 'readAsStringSync' ui/test` 只剩读 `settings.json` / `pubspec.yaml` 的用例; 该测试文件仍能拦住回退。
+
+### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做)
+
+498 行单一可变单例(字段多、通知靠 notifier 手工发)。若还要继续加设置项, 先按域拆
+(`playback` / `ui` / `network` / `update`)或改不可变快照 + 统一 diff 通知。
+**并行性: 与 12.3 冲突**(设置页)。
+
+### 12.7 FFI 逐接口样板(低优先 · 暂不做)
+
+`api.rs` 2757 行里大部分是 `ffi_forward!` 样板(加一个接口 = FFI 一处 + Dart 一处 + 测试一处)。
+接口数不翻倍就不动;若真要动, 方向是「按能力域批量生成 + 一份导出清单」, 不是继续手抄。
+
+### 12.8 派发建议
+
+| 波次 | 车道 | 说明 |
+|---|---|---|
+| 第 0 波(独占) | 12.0 格式 + 门禁 | 一个人一条车道, 落地后再开别的 |
+| 第 1 波(2 条) | 12.1 Rust 拆分 ∥ 12.3 UI 统一 | Rust 车道独占 codegen;UI 车道只改 `ui/lib/src` + `ui/test` |
+| 第 2 波(2 条) | 12.2 能力 trait ∥ 12.4 main 拆分 | 12.2 依赖 12.1 落地;12.4 依赖 12.3 落地 |
+| 零散 | 12.5 / 12.6 | 随时可搭车, 都是一天内 |
+
+每波收口由编排者**独立重跑**: `cargo test` 271 · `cargo clippy` 0 · `dart analyze` 0 · `flutter test` 674 · `api-coverage` 123/123 · `write-guard` OK。
