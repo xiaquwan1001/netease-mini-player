@@ -163,12 +163,12 @@ impl EqChain {
     #[inline]
     pub fn process_frame(&mut self, frame: &mut [f32]) {
         let ch = self.channels.min(frame.len()).max(1);
-        for c in 0..ch {
-            let mut v = frame[c] * self.preamp_gain;
+        for (c, sample) in frame.iter_mut().take(ch).enumerate() {
+            let mut v = *sample * self.preamp_gain;
             for (i, stage) in self.stages.iter().enumerate() {
                 v = stage.process(&mut self.states[c][i], v);
             }
-            frame[c] = clamp_sample(v);
+            *sample = clamp_sample(v);
         }
     }
 }

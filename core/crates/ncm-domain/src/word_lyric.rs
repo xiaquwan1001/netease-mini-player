@@ -298,7 +298,8 @@ mod tests {
         assert_eq!(wl.lines.len(), 3);
         assert_eq!(wl.lines[0].words[0].text, "这不是 yrc");
         assert_eq!(wl.lines[1].words[0].text, "[abc,def](x,y)坏行");
-        assert!(!wl.has_word_timing == false || wl.has_word_timing);
+        // 第三行有合法词级头, 因此整体仍算"有词级时间"
+        assert!(wl.has_word_timing);
         assert_eq!(wl.lines[2].words[0].text, "好");
     }
 

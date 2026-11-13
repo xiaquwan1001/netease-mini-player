@@ -232,10 +232,9 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                     // 拖拽手柄只在自己的行上(整行长按留给"移除"), 见下面的 drag_handle
                     buildDefaultDragHandles: false,
                     itemCount: _items.length,
-                    onReorder: (from, to) {
-                      // ReorderableListView 的 to 是"插入到该下标之前"的语义
-                      _move(from, to > from ? to - 1 : to);
-                    },
+                    // onReorderItem 已按"移除后"修正过 newIndex, 直接用;
+                    // (旧的 onReorder 是"插入到该下标之前", 需自己 to>from ? to-1 : to)
+                    onReorderItem: _move,
                     itemBuilder: (context, i) {
                       final song = _items[i];
                       final current = i == _index;

@@ -50,7 +50,7 @@ void main() {
     await tester.pumpWidget(host(FeedView(
       loggedIn: true,
       onLogin: () {},
-      onPlaySongs: (_, __) {},
+      onPlaySongs: (_, _) {},
       onOpenUrl: (_) async {},
       loadFeed: () async => events,
       loadSubscribedArtists: () async => const [],
@@ -72,7 +72,7 @@ void main() {
     await tester.pumpWidget(host(FeedView(
       loggedIn: true,
       onLogin: () {},
-      onPlaySongs: (_, __) {},
+      onPlaySongs: (_, _) {},
       onOpenUrl: (_) async {},
       loadFeed: () async => events,
       loadSubscribedArtists: () async => [

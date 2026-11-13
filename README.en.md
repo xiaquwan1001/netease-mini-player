@@ -70,9 +70,9 @@ lyrics and a QR code pointing at the official song page (`music.163.com/song?id=
 
 | Area | What works |
 |---|---|
-| Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), play modes, MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
+| Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), play modes (incl. heart mode), auto update check (off / daily / weekly / monthly), MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
 | Lyrics | Synced highlight, word-by-word lyrics (yrc + AMLL TTML dual source with auto scoring), translation toggle, lyric multi-select → share card, cover-colour backdrop |
-| Playlists | Playlist square & charts, subscribe / create / edit / delete, batch add, liked-songs ordering, recent-play four tabs |
+| Playlists | Playlist square & charts, subscribe / create / edit / delete, batch add, in-playlist search play action (whole list / append to queue), liked-songs ordering, recent-play four tabs |
 | Community | Comments (hot / all / replies / like / delete / IP location), private messages & mentions (read-only), follows feed, follow/fan lists, sign-in |
 | Desktop | Linux (deb/AppImage/tar.gz) and Windows (setup.exe/zip) share one rodio backend (ALSA/WASAPI), OLED pure-black theme, fine volume -40..0 dB |
 | VIP (read-only) | VIP card / growth / weekly sign-in / tasks, purchased digital albums (no payments) |
@@ -145,13 +145,15 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace` | **254** passing (230 when the vendor crate is excluded) |
-| `flutter test --exclude-tags network` | **617** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
-| `dart analyze` | 0 error / 0 warning (38 info hints) |
+| `cargo test --offline --workspace` | **271** passing (247 excluding the vendor crate; 4 network smoke tests there skip themselves offline) |
+| `cargo clippy --workspace --all-targets` | **0 warnings** |
+| `flutter test --exclude-tags network` | **674** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `dart analyze` | **0 issues** (errors / warnings / infos) |
+| `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
 
-## Roadmap
+## Roadmap (current version v0.7.1)
 
 | Stage | Content | Status |
 |---|---|---|
@@ -161,7 +163,7 @@ cargo run -p ncm-cli -- lyric 186016
 | Playback | Media3 (Android) / rodio (Linux ALSA · Windows WASAPI), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
 | Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
-| TODO | pluggable audio sources, refactor debt, phone-SMS login real-device check — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
+| TODO | visual review pass, AppImage desktop integration, post-install smoke (deb / keyring), L-sized features (cloud drive / listen together / audio recognition) — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
 
 See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 
@@ -169,7 +171,8 @@ See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 
 | Doc | Content |
 |---|---|
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | progress log with acceptance evidence |
+| [`docs/README.md`](docs/README.md) | **documentation index** (one line per file, with status) |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | progress log: version timeline + per-batch evidence (Chinese) |
 | [`docs/architecture-restart.md`](docs/architecture-restart.md) | architecture decisions, plugin boundaries |
 | [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | dual-platform testing, semantics-driven automation, gotchas |

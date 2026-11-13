@@ -2397,13 +2397,13 @@ impl Provider for NeteaseProvider {
     fn song_wiki(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let mut opt = ncm_api_rs::RequestOption::default();
-            opt.crypto = ncm_api_rs::CryptoType::Weapi;
-            if !cookie.is_empty() {
-                opt.cookie = Some(cookie.clone());
-            }
-            opt.ua = ua.clone();
-            opt.domain = domain.clone();
+            let opt = ncm_api_rs::RequestOption {
+                crypto: ncm_api_rs::CryptoType::Weapi,
+                cookie: (!cookie.is_empty()).then(|| cookie.clone()),
+                ua: ua.clone(),
+                domain: domain.clone(),
+                ..Default::default()
+            };
             let body = serde_json::json!({ "songId": song_id.to_string() });
             let weapi = client
                 .request("/api/song/play/about/block/page", body, opt)
@@ -3187,7 +3187,7 @@ impl Provider for NeteaseProvider {
                 return Ok(Vec::new());
             }
             // at 大 = 更晚收藏; at 缺失(0) 保持服务端顺序
-            entries.sort_by(|a, b| b.1.cmp(&a.1));
+            entries.sort_by_key(|e| std::cmp::Reverse(e.1));
             let ids: Vec<u64> = entries.into_iter().map(|(id, _)| id).collect();
             let mut by_id: std::collections::HashMap<u64, Song> =
                 std::collections::HashMap::new();
@@ -5066,7 +5066,7 @@ pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
         .and_then(Value::as_array)
         .map(|arr| {
             arr.iter()
-                .filter_map(|n| {
+                .map(|n| {
                     let raw = str_of(n, "notice").unwrap_or_default();
                     let inner: Value = serde_json::from_str(&raw).unwrap_or(Value::Null);
                     let general = inner.get("generalNotice");
@@ -5083,7 +5083,7 @@ pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
                             .filter(|s| !s.trim().is_empty())
                             .unwrap_or_else(|| "系统通知".to_string());
                     }
-                    Some(InboxItem {
+                    InboxItem {
                         id: u64_of(n, "id").unwrap_or(0),
                         kind: "notice".to_string(),
                         actor: user
@@ -5093,7 +5093,7 @@ pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
                         text,
                         detail,
                         time_ms: u64_of(n, "time").unwrap_or(0),
-                    })
+                    }
                 })
                 .collect()
         })
@@ -6672,7 +6672,7 @@ mod tests {
         let s = parse_vip_sign(&body);
         assert_eq!(s.days.len(), 3);
         assert_eq!(s.week_signed, 2);
-        assert!(s.days[0].signed == false);
+        assert!(!s.days[0].signed);
         assert!(s.days[1].signed);
         assert!(s.signed_today);
         assert!(s.days[2].today);

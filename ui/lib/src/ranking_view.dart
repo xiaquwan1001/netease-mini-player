@@ -190,7 +190,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
             }
             if (snap.hasError) {
               final message = friendlyError(snap.error!);
-              final retry = () => setState(() {
+              void retry() => setState(() {
                 _future = _load();
               });
               // 整页(compact=false)首屏失败 → 居中错误视图 + 重试;

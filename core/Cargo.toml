@@ -1,6 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["crates/ncm-domain", "crates/ncm-provider", "crates/ncm-service", "crates/ncm-cli", "crates/ncm-ffi", "vendor/ncm-api"]
+members = [
+    "crates/ncm-domain",
+    "crates/ncm-provider",
+    "crates/ncm-service",
+    "crates/ncm-playback",
+    "crates/ncm-cli",
+    "crates/ncm-ffi",
+    "vendor/ncm-api",
+]
 
 [workspace.package]
 version = "0.1.0"

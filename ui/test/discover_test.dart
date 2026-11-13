@@ -217,7 +217,7 @@ void main() {
     await tester.pumpWidget(host(() {
       showDiscoverPage(
         tester.element(find.text('open')),
-        onPlaySongs: (_, __) {},
+        onPlaySongs: (_, _) {},
         onOpenPlaylist: (_) {},
         loadSongs: () async => [song(1, '晴天'), song(2, '七里香')],
         loadPlaylists: () async => const [],

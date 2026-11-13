@@ -1,2 +1,0 @@
-int drawable ic_launcher 0x7f010000
-int xml network_security_config 0x7f020000

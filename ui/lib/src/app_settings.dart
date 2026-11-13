@@ -238,8 +238,9 @@ class AppSettings extends ChangeNotifier {
           if (raw['hardwareDecode'] is bool) {
             hardwareDecode = raw['hardwareDecode'] as bool;
           }
-          if (raw['streamCache'] is bool)
+          if (raw['streamCache'] is bool) {
             streamCache = raw['streamCache'] as bool;
+          }
           final limit = raw['cacheLimitMb'];
           if (limit is num && cacheLimits.contains(limit.toInt())) {
             cacheLimitMb = limit.toInt();

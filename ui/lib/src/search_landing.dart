@@ -245,7 +245,7 @@ class _SectionTitle extends StatelessWidget {
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const Spacer(),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );

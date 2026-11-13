@@ -1,28 +1,23 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-12**: **v0.5.5 发布**(GitHub Release 全绿, 6+2 分发物含 arm64) + **凭据后端三端落地**
-> (P1 Android Keystore / P2 Linux secret-service / Windows DPAPI, 方案见 `docs/android-keystore-wiring-design.md`)
-> + 凭据不再过 FFI 回传 Dart + USTC GitLab CI 加 build 阶段(本机 runner 出 Linux/Android 产物, #9134 四 job 全绿)。
-> 短信登录已于 2026-11-11 由用户真机验证通过。
-> 当前门禁(2026-11-12 合并后): `cargo test` **247** / `flutter test --exclude-tags network` **656** / `dart analyze` 0 error 0 warning(38 info) / write-guard OK。
-> 同日第三批: **楼层回复行内预览 + ��态流行内操作(赞/评论/分享) + 发表后回填定位**(见下方「评论区批 2」)。
-> 同日第二批: **评论区两处修复**(动态详情「评论」按钮不再 pop 页面、回复显示「回复 @某人」),见下方最新小节;手机号登录已由用户真机验证通过(Linux 收到 4 位验证码并登录成功)。
->
-> **2026-11-10 收尾**(当日四批, 下面倒序):
-> ① **封面清晰度按设备分辨率 + 三档设置 + 看大图保存原图**; ② **桌面打包** deb / AppImage / Windows setup.exe
-> (`release.yml` 重构为 verify → build+build-windows → publish), 已发布 **v0.3.2 六种资产**;
-> ③ **歌单写接口 + 队列「存为歌单」**; ④ **MV 播放 + 自动更新检查 + Windows 桌面版合入**, 并修好一次
-> **.git 对象库损坏**(64 个 0 字节 loose object) + 队列面板拖拽排序/清空。
-> 最新一批(同日五): **桌面端官方扫码登录 + deb 门面元数据(AppStream) + 账号隐私修复**(见下方最新小节)。
-> **下一轮做什么**: 见 `docs/remaining-batches.md` **§11 待办(2026-11-10 收尾版)**。
-> 前一日:**播放条合并成一行 + 歌曲详情页(分享卡片/翻译开关/歌词多选/定位当前句)** —— `docs/archive/ui-song-detail-share.md`。
-> 同日前序: **设置项扩充 R1–R7 全部落地**(精细音量/响度均衡/OLED 纯黑/GitHub 关于页/淡入淡出·硬解·边听边存·缓存上限/AutoEQ 曲线/播放条贴底栏)
-> + **D7 frb 直透 domain 车道关闭(57/57)** + 顶部栏去重(任务书按计划日期命名 `docs/plan-2026-11-09-settings-and-player.md`)。
-## 进度总览(2026-11-12, 面向新读者的速览)
+> 最近更新: **2026-11-13**。当前版本 **v0.7.1**(2026-11-12 发布, GitHub Release 全绿)。
+> 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
+> 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
+> 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
 
-**当前门禁**: `cargo test` **247** / `flutter test --exclude-tags network` **656** /
-`dart analyze` 0 error / 0 warning(38 info) / 接口覆盖 **123/123**(FFI 导出 150, 其中 5 个无 UI 入口:
-cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / word_lyric_with_fallback);
+## 进度总览(2026-11-13 核实)
+
+**当前门禁**(本机实测, 离线口径):
+
+| 门 | 结果 |
+|---|---|
+| `cargo test --offline --workspace` | **271** 通过 / 0 失败 |
+| `cargo clippy --workspace --all-targets` | **0 warning** |
+| `flutter test --exclude-tags network` | **674** 通过 / 0 失败 |
+| `dart analyze` | 0 error / 0 warning(仅 info 级风格提示) |
+| `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
+| 接口覆盖 | **123/123**(FFI 导出 150, 其中 5 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / word_lyric_with_fallback) |
+
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
 **版本时间线**:
@@ -30,12 +25,18 @@ cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning /
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
 | v0.1.0 | 2026-11-08 | 首个公开预览版(Android APK + Linux tar.gz, MIT LICENSE, 第三方许可盘点) |
-| v0.2.x | 2026-11-09~10 | 设置项扩充 R1–R7、UI/UX 走查批 A–C、播放体验修复、**Windows 桌面版合入**、v0.2.2 三端发布 |
-| v0.3.x | 2026-11-10 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布**;v0.3.3 修 Ubuntu 22.04 GLib 基线 |
-| **v0.3.4** | **2026-11-11** | **CI 实测(2026-11-11): 四个 job 全绿, Release 产出 6 种资产** —— apk 27.4 / linux tar.gz 14.4 / AppImage 14.0 / deb 10.6 / windows zip 16.3 / setup.exe 13.2 MB + SHA256SUMS(+ 下方功能)**手机号+短信验证码登录(网页通道)**、动态评论写入改 eapi(修 404)、评论区对话化(回复归属/楼层预览/动态评论归位)、动态流行内赞·评论·分享、发表后回填定位 |
-| **v0.3.5** | **2026-11-11** | **CI 实测**: CI + Release 两组流水线全绿, 6 种资产; **Windows 向导中文化首个真验证** —— ISCC 6.7.1 在 CI 上读到随包 Languages\ChineseSimplified.isl 并 Successful compile; write-guard 在 CI 与发版 verify 两个 job 都实际执行。内容: **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + **Windows 安装向导中文化**(随包 isl) + **写接口静态门禁** `tools/check-write-guard.sh`(测试里不许直连评论/点赞/转发/分享/歌单写, CI 不触网) |
-| **v0.4.x** | 2026-11-11~12 | 凭据地基 lane L1 合入(0600 文件骨架 + 同意门 + 明文迁移)、DPAPI P0 |
-| **v0.5.5** | **2026-11-12** | 凭据后端三端落地(Android Keystore / Linux secret-service / Windows DPAPI) + 凭据不再过 FFI + USTC GitLab CI build 阶段; Release 6+2 分发物(含 arm64 apk/deb/tar.gz) + SHA256SUMS |
+| v0.1.1 / v0.2.x | 2026-11-09~10 | 窄屏修复 + 正式签名/版本号纪律;设置项扩充 R1–R7、UI/UX 走查批 A–C、**Windows 桌面版合入**、v0.2.2 三端发布 |
+| v0.3.x | 2026-11-10~11 | 桌面打包(deb/AppImage/setup.exe)、歌单写接口、图片清晰度三档、**v0.3.2 六种资产发布**;v0.3.3 修 Ubuntu 22.04 GLib 基线 |
+| **v0.3.4** | **2026-11-11** | **手机号+短信验证码登录(网页通道)**、动态评论写入改 eapi(修 404)、评论区对话化、动态流行内赞·评论·分享、发表后回填定位;Release 6 种资产 |
+| **v0.3.5** | **2026-11-11** | **技术债 D 批收敛**(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零) + Windows 向导中文化 + 写接口静态门禁 `tools/check-write-guard.sh` |
+| **v0.4.0** | **2026-11-11** | 播放条常驻二级页 + 风格推荐配图窗格 + Linux **arm64** 原生 CI 腿 |
+| **v0.5.0 / v0.5.1 / v0.5.2** | 2026-11-11~12 | 主题色切换(五 seed)+ 播放条数据层重构;v0.5.1 重发修 arm64 CI;v0.5.2 红色改 M3 fidelity 策略 |
+| **v0.5.3 / v0.5.4** | 2026-11-12 | 凭据调研 + 桌面冒烟脚本 + CI apt 重试;凭据地基(FileStore 0600 + 同意门 + 明文迁移 + DPAPI P0) + 凭据不再过 FFI 回 Dart。**两者 CI 未出全套产物, 由 v0.5.5 取代** |
+| **v0.5.5** | **2026-11-12** | 凭据后端三端落地(Android Keystore / Linux secret-service / Windows DPAPI) + USTC GitLab CI build 阶段;Release 6+2 分发物(含 arm64) + SHA256SUMS |
+| **v0.6.0** | **2026-11-12** | 排行榜移到搜索落地页、我的收藏歌单/播客/专辑二级页、我的页区块 keepAlive、歌曲行留白收紧、搜索加载占位 |
+| **v0.6.1** | **2026-11-12** | 自动更新频率(off/daily/weekly/monthly)+ 启动发现新版本弹窗、全站横向留白统一、代码审计整改(CoverCard/CoverRow 合并、死参数删除、分页代际守卫) |
+| **v0.7.0** | **2026-11-12** | 播放条重排(播放顺序归位/队列入口移到行尾/删除详情页底部控制条)、歌单内搜索播放策略(全列表/追加队列)、艺人跳转、对齐与低优先审计收口 |
+| **v0.7.1** | **2026-11-12** | 用户反馈 10 项:VIP 标记/播放条上一首/歌词截断/长字滚动/队列叠加/搜索横向分类/艺人主页分区/缩进收口 |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -45,17 +46,11 @@ cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning /
 - **功能批次 B1–B4/B8/B10/B12**(S 级只读): 消息增强/评论统计/会员只读/搜索增强/等级勋章/电台/数字专辑全部落地并实测。✅
 - **B5+B13 逐字歌词**: yrc 契约层 + AMLL TTML 第二来源 + 打分择优(偏好三态可调)。✅
 - **B7 歌单写接口**: create/批量加曲 + 队列「存为歌单」, 服务端复核通过。✅
-- **UI 批 A–C**: 速修/评论输入/队列面板/信息架构重排全部完成;D 批技术债与 C 视觉人工过目仍开放。✅(D ⏳)
+- **UI 批 A–D**: 速修/评论输入/队列面板/信息架构重排 + D 批技术债(弹层统一/格式化去重/死码清理/窄屏回归归零)全部完成。✅
 - **播放质量**: 精细音量、响度均衡(R128→ReplayGain)、AutoEQ、逐字歌词、封面取色、歌词跟随。✅
-- **三端与打包**: Windows 合入, 六种分发物由 Release 流水线统一产出。✅
+- **三端与打包**: Windows 合入, 六种分发物由 Release 流水线统一产出(另 USTC GitLab CI 出 Linux/Android 腿)。✅
 - **真机听感验收**: EQ 削波/淡入手感/响度 A/B/硬解, 2026-11-10 通过。✅
-- **下一步**: `docs/remaining-batches.md` §11(评论发送写操作走查为发布前硬门)。
-
-> 更早: 接口覆盖 123/123、FFI 140 个里 4 个无 UI 入口(`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`)、后端轻量化调研、逐字歌词契约、电台/数字专辑/评论统计/等级勋章/搜索增强/黑胶会员/消息增强等。
-> 协议细节见 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`;
-> 架构决策见 `docs/architecture-restart.md` §11;M0 清单见 `docs/m0-plan.md`;
-> 通道实测见 `docs/api-channel.md`。
-
+- **下一步**: `docs/remaining-batches.md` §11(视觉人工过目、AppImage 桌面集成、L 级立项)。
 ### 桌面分发打包(v0.3.1 起)
 
 | 产物 | 做法 | 本地实测 |
@@ -73,6 +68,29 @@ cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning /
 
 > 顺带修掉一处**版本耦合的测试**: `update_checker_test.dart` 里 `releaseJson()` 的默认 tag 原本写死 `v0.3.0`,
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
+
+## 批次时间线(倒序, 最新在上)
+
+## 2026-11-12(晚): v0.6.0 → v0.7.1 四连发(用户回归驱动)
+
+一晚连发四个版本, 全部 GitHub Release 全绿(8 资产 + SHA256SUMS), 另 USTC GitLab tag pipeline 同步通过。
+
+- **v0.6.0**(18:21): 排行榜移到搜索落地页(`chart_section.dart`);我的收藏歌单/播客/专辑加「查看全部」二级页
+  (`my_collections_page.dart`);我的页区块 keepAlive(滚出视野不再重载, 下拉刷新按 generation 换代);
+  SongTile 留白 16+16→8+4 且搜索结果满宽;搜索中显示 `SearchLoading` 占位。
+- **v0.6.1**: 自动更新频率枚举 `UpdateCheckInterval`(off/daily/weekly/monthly, 默认 daily) + 启动发现新版本
+  由主界面 pendingPrompt 弹窗(`update_dialog.dart`, 与设置页手动检查共用弹窗);横向留白统一
+  (settings/mine `ListTileTheme contentPadding=12`、歌曲行 `layout.dart:kSongRowPadding`);审计整改:
+  `cover_row.dart` 合并三份 CoverCard/CoverRow、删 `RecommendView.loadCharts` 死参数、PagedListView/comment_thread
+  加代际守卫防刷新后旧分页拼入(报告: `docs/audits/2026-11-12-*.md`)。
+- **v0.7.0**: 播放条重排(Slider 2dp、播放顺序归位含心动档、队列入口移到行尾、详情页底部控制条整条删除、
+  模式切换反馈改顶部浮层);歌单内搜索播放策略 `AppSettings.librarySearchPlayAction`(fullList/appendCurrent);
+  专辑详情艺人可点、动态/评论头像 → 用户主页;低优先审计收口(radio 听众页 PagedListView、SnackBar→showToast、
+  TabController 延帧 dispose、formatOneDecimal 合并、推荐页歌曲卡满宽、听歌排行 8/4、我的页 12 栅格)。
+- **v0.7.1**: 用户反馈 10 项(VIP 标记/播放条上一首/歌词截断/长字滚动/队列叠加/搜索横向分类/艺人主页分区/缩进收口)。
+- **踩坑(已写进 CODE 断言)**: `marquee_long_title_test` 曾用写死缩进的源码 substring 定位控件, 被 `dart format`
+  重排后 CI 抛 RangeError ⇒ 源码 grep 类断言必须用正则, 且跑过 format 后必须重跑全量。
+- **门禁**: 本轮收尾实测 `cargo test` 271 / `flutter test --exclude-tags network` 674 / `dart analyze` 0e0w / clippy 0 warning。
 
 ## 2026-11-12(下午): 凭据三端验证收口 + 主题色提亮
 
@@ -998,136 +1016,10 @@ cd ui && flutter test                                            # 3. 否则报 
 - 未连真机(adb devices 为空),Android 端尚未做安装/冷启动/PSS 实测。
 
 
-# 进度记录(Progress)
+## 专题小节(按主题, 非时间序)
 
-> 最近更新: 2026-11-02。里程碑式记录 "做到了什么 / 怎么验证的 / 下一步",
-> 协议细节放 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`,
-> LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/lx-plugin.md`,
-> 社区项目与路线选择见 `docs/community-projects.md`,
-> fork/PR/自建对比见 `docs/build-vs-fork.md`,
-> 给 Melodia 提 PR 的分支/构建/真机验证/截图流程见 `docs/melodia-pr-workflow.md`。
-
-## 当前状态: v1 全链路可用(真机验证)
-
-| 环节 | 状态 | 验证方式 |
-|---|---|---|
-| 构建环境 | ✅ | `bash tools/setup-android-env.sh` 一键装 JDK21 + Gradle8.9 + SDK34 |
-| 构建 | ✅ | `bash tools/build.sh` → `app-debug.apk`,**96 KB** |
-| 真机安装 | ✅ vivo X200 Ultra / Android 16 / WebView 138 | 冷启动 242ms,空闲 PSS 126MB |
-| 登录 | ✅ 官方**移动端**网页授权(手机号/QQ/微信/扫码都在页内) | 抓到 `MUSIC_U` 自动落地并回主界面 |
-| 搜索 | ✅ eapi `interface3` `/api/cloudsearch/pc` | 真机搜索 "jay" 返回列表 |
-| 播放 | ✅ 原生 MediaPlayer | 免费歌与(VIP 登录后)会员歌均出直链并出声 |
-| 歌词 | ⏳ provider 已实现 `lyric()`,UI 未接 | — |
-
-## 本轮踩过并解决的坑(都已写进代码注释/技能)
-
-1. **JDK 17.0.2 不能用于 AGP 8.5.2**:`validateSigningDebug` 抛
-   `CgroupInfo.getMountPoint() ... anyController is null`(cgroup v2 探测 NPE)。换 **Temurin 21.0.9** 通过。
-2. **下载源**:`api.adoptium.net`/github releases/cdn.azul.com 直连超时 → Temurin 走 USTC 镜像;
-   `services.gradle.org` 仅 KB/s → Gradle 走腾讯云镜像;sdkmanager 要求 proxy 变量 **unset**(非空值)。
-3. **vivo 装包**:`adb install` 被拒(`INSTALL_FAILED_ABORTED: User rejected permissions`)→
-   `adb push /data/local/tmp/` + `adb shell pm install -r -t`;锁屏状态下必失败(需唤醒解锁)。
-4. **登录按钮无响应**:`bridge.js` 没暴露 `Native.loginWeb` → JS 抛 TypeError。桥的每个 Native.*
-   都要有 JS 包装 + try/catch + toast。
-5. **二维码区是死 UI**:`#qr` 无 JS 驱动 → 永远"加载中"。
-6. **播放地址 400 参数错误**:`/eapi/song/enhance/player/url/v1` 必须带 `encodeType:'flac'`。
-7. **"数据非 json"**:该接口报错时返回**两个拼接 JSON**(`{..}{..}`),需容错解析;`-110` = 会员/版权受限。
-8. **原生扫码被 8821 拦死**:eapi 与 weapi 两条通道都在用户确认后返回
-   `8821 安全环境风险`。根因是**交互式风控挑战**,验证结果绑在"完成验证的那个客户端"的设备 cookie 上,
-   不是 IP(与 Ncrust `spec/api/login.md` 的独立调研一致)。→ 登录改用官方网页。
-9. **网页登录不能伪造桌面 UA**:`music.163.com/#/login` + Windows Chrome UA = 桌面 SPA(重、二维码小、
-   手机号/QQ/微信二级页加载不出来)。**设备默认移动 UA + 无 hash 的 `/login`** → 302 到
-   `https://y.music.163.com/m/login` = 官方移动端授权页(已修复 `LoginActivity`)。
-10. **fetch 与原生桥的分工**:带 `Cookie` 头是 fetch 的 forbidden header,必抛 → `bridge.post`
-    自动回退 `Native.httpPost`(OkHttp 风格 cipher);而登录成功后 `MUSIC_U` 只能从
-    WebView CookieManager 读(fetch 对 JS 隐藏 Set-Cookie)。
-
-## 关键协议事实(详细见技能文档)
-
-- 播放地址: `/eapi/song/enhance/player/url/v1`,`ids` + `level` + **`encodeType`**;匿名下 VIP 歌 `-110`。
-- 私人FM `/api/v1/radio/get`、每日推荐 `/api/v3/discovery/recommend/songs`:api-enhanced 标 weapi,
-  但**实测 eapi 封装同样 200**(匿名 FM 返回 1 首,登录后为批量)。
-- 心动模式 `/api/playmode/intelligence/list` 接受 eapi,需登录态(301)。
-- 客户端身份 cookie 决定很多静默行为(见 `docs/build-vs-fork.md` 第 3 节):
-  `os`/`appver`/`osver` 缺失会静默封顶音质,写操作会被 `403 illegal request!`。
-
-## 待办(按优先级)
-
-1. **设备身份持久化**(最高优先,影响所有请求的风控评级):
-   首次启动生成一套 `deviceId` / `NMTID` / `_ntes_nuid` / `_ntes_nnid` / `WNMCID` / `WEVNSM`,
-   **永久复用、登出也不换**。当前 `loadCookie()` 里 `genDeviceId()` 每次随机 = 每次"换一台新设备"。
-2. **身份 cookie 规范化**:注入 `os=pc` / `appver=3.0.6` / `osver=10.0.19045`(对齐官方 PC 客户端),
-   避免静默降音质与写操作 403。
-3. **插件能力声明 v2**:`capabilities: ['login','search','songUrl','lyric','personalFm','heartMode','dailyRecommend']`,
-   宿主只调声明过的能力。
-4. **私人FM / 每日推荐**(eapi 已验证,只需加能力键 + 列表页)。
-5. ~~**内存优化**:登录 WebView 复用、`setRendererPriorityPolicy` 降级、SPA 懒加载(目标 ≤ 90MB idle)。~~
-   降级为低优先:实验台形态不追求 idle 指标(Melodia 的 `LxPluginEngine` 已有按需创建+空闲回收的现成做法)。
-6. 心动模式(依赖 playlistId 上下文,放队列重构之后)、歌词滚动、seek/进度条。
-
-
-## 对外贡献(Melodia,2026-10-31)
-
-| 类型 | 编号 | 内容 | 状态 |
-|---|---|---|---|
-| Issue | [#134](https://github.com/rinchao0721/Melodia/issues/134) | 社区源插件应可优先于官方直链(VIP 账号下插件完全不可达);附探针实测 | 待回应 |
-| PR | [#135](https://github.com/rinchao0721/Melodia/pull/135) | `docs/netease-playurl-identity.md`:播放直链接口身份/音质实测语义 | 待合并 |
-| PR | [#136](https://github.com/rinchao0721/Melodia/pull/136) | 修复 #128 心动模式 400:未指定上下文时挑选红心歌单(`specialType==5`),附 3 例单测 | 待合并 |
-| 评论 | [#133](https://github.com/rinchao0721/Melodia/issues/133#issuecomment-6544358387) | 社区源 VIP 歌听不了的实测定位(12s 超时偏紧、kg 平台脚本自身报错、四类失败形态) | 已发 |
-| PR | [#137](https://github.com/rinchao0721/Melodia/pull/137) | 社区源解析超时可配置(12s/30s)+ 各平台失败原因汇总回传 | 待合并 |
-| PR | [#139](https://github.com/rinchao0721/Melodia/pull/139) | 播放器级增益(0~-40 dB,逐档 0.4 dB):与系统音量/音量平衡相乘,压低蓝牙耳机最小档;已在真机验证 | 待合并 |
-| PR | [#140](https://github.com/rinchao0721/Melodia/pull/140) | 音乐库顶栏常驻设置入口:设置与账号解耦,未登录也能进设置(真机验证:未登录可达「播放与下载」) | 待合并 |
-| PR | [#141](https://github.com/rinchao0721/Melodia/pull/141) | 修复 #132 相似歌曲漫游循环:续接改追加(不再 `appendAfter` 截断队尾)+ 相似曲目去重;5 例单测 + 真机队列 6→8 增长验证 | 待合并 |
-| PR | [#142](https://github.com/rinchao0721/Melodia/pull/142) | #127 歌单/推荐歌曲列表显示序号(复用 `SongRow.index`);真机截图存 fork 的 `pr-assets` release | 待合并 |
-| 评论 | [#138](https://github.com/rinchao0721/Melodia/issues/138#issuecomment-6558443320) | 云盘 .m4a 不能播:追问 matchType/日志/mp3 对照/官方客户端行为 | 等回复 |
-| PR | [#144](https://github.com/rinchao0721/Melodia/pull/144) | 新增顺序播放(`SEQUENCE`) + 播放模式并入控制行等距五键(模式/上一首/播放/下一首/队列),分享与输出设备移到封面右上角;真机验证四态轮转、300dp 五键对称、队尾自然播完停止 | 待合并 |
-
-#136 的根因实测(同一登录态只换 `playlistId`):红心歌单 200;自建/收藏歌单 400
-「不支持该歌单类型」;`0` 400「歌单不存在」。原实现取歌单列表**首项**当上下文,
-红心歌单不置顶的账号必挂 —— 这解释了 #128「换账号就正常」。
-
-
-## 收尾状态(2026-11-01)
-
-**本地可复现的最小验证**(不需要设备):
-
-```bash
-node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / 试听拒绝,全 PASS
-```
-
-**对外产出**(全部在 Melodia 上游,非本仓库):
-
-| 编号 | 内容 | 状态 |
-|---|---|---|
-| issue #134 | 社区源插件应可优先于官方直链(VIP 账号下不可达) | 待回应 |
-| PR #135 | 播放直链身份/音质实测语义(文档) | MERGEABLE |
-| PR #136 | 修复 #128 心动模式 400(红心歌单 `specialType==5`)+ 3 单测 | MERGEABLE |
-| PR #137 | 社区源超时可配置(12s/30s)+ 失败原因汇总回传 | 待合并 |
-| #133 评论 | 社区源 VIP 歌听不了的实测定位 | 已发 |
-| PR #139 | 播放器级增益(0~-40 dB,逐档 0.4 dB),与系统音量/音量平衡相乘;真机蓝牙耳机验证 | 待合并 |
-| PR #140 | 设置入口与登录态解耦(音乐库顶栏常驻);真机未登录状态验证可达「播放与下载」 | 待合并 |
-
-**下次接着做**(按价值排序):
-
-0. #144 已补完验证并更新 PR:顺序播放自然播完停在队尾(`state=STOPPED`,位置=时长)、
-   300dp 下五键等距、截图已进 PR 正文;等上游 review。
-   下一件可做「UI 控件展示项」(#126:侧边栏/首页板块自定义;底栏的 `BottomBarLayout` + 拖拽弹层可直接复用)。
-   vivo 锁屏歌词已定位为厂商白名单私有通道(见 `.pi/memory/HINDSIGHT.md`),应用侧无解,最多补设置页说明。
-1. 等上游 review #139 / #140:若维护者更希望用「guest 侧边栏」而不是顶栏齿轮,
-   改 `ProfileSidebar + MelodiaApp` 的 nullable 化即可(已在 `docs/melodia-pr-workflow.md` 记录现状)。
-2. #139 的两个可选延伸(都还没做):音量键细调(拦截 `KEYCODE_VOLUME_*`,1/4 档虚拟音量梯)、
-   桌面端(桌面已有 mpv 0~100,不需要)。
-3. 等上游对 #134 表态 → 决定是否补沙盒契约缺口(见 `docs/lx-plugin.md` 第 6 节:
-   `utils.crypto.aesEncrypt/rsaEncrypt/randomBytes`、`utils.buffer` 正确语义、`statusCode` 透传)。
-4. 若 #137 被接受,同款诊断可推广到 UNM 分支(目前只汇总了社区源侧)。
-5. 本仓库的 MiniNCM 保持「协议实验台」定位:新协议结论先在这里测,再以 issue/PR 形式回流上游。
-
-## 未决问题(需要决策)
-
-- ~~**路线**:继续 WebView 插件化(96KB APK / 126MB RAM)还是转向原生(= fork Ncrust 3.9MB / 87MB)。~~
-  **已定(2026-11):PR 为主,只对 Melodia;不 fork 任何一方。** MiniNCM 降级为协议/风控实验台
-  + LX 插件脚本工坊,Ncrust 仅作低资源参照。见 `docs/build-vs-fork.md` 第 6 节。
-- 原生扫码是否还值得保留:目前保留为"快捷尝试",命中 8821 时提示改用官方网页登录。
+> 接口/凭据/CI/主题等按主题沉淀的细节小节, 不属于时间序批次记录。
+> 新增批次请写进上面的倒序时间线, 不要追加到文件末尾。
 
 ---
 

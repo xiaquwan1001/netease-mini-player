@@ -183,9 +183,10 @@ impl IdentityStore {
     }
 
     /// 旧明文 → CredentialStore 的一次性迁移(best-effort):
-    /// - 后端就绪: 凭据搬进 store, 旧文件**清零但保留骨架**(identity.json 只剩
-    ///   设备指纹字段, accounts.json 的 cookie 字段清空、元数据保留), 写迁移标记.
+    /// - 后端就绪: 凭据搬进 store, 旧文件**清零但保留骨架**
+    ///   (identity.json 只剩设备指纹字段, accounts.json 的 cookie 字段清空、元数据保留), 写迁移标记.
     /// - 后端不可用/未同意: 保留明文原样, 记录可上报状态, 不阻塞启动.
+    ///
     /// 返回是否完成了迁移.
     pub fn migrate_legacy_cleartext(&self) -> io::Result<bool> {
         let mut policy = credential_store::CredentialPolicy::load(&self.dir);

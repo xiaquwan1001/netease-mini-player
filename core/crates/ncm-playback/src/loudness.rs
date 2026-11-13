@@ -53,10 +53,10 @@ impl KWeighting {
     pub fn new(sample_rate: f32) -> Self {
         let fs = sample_rate.max(8_000.0);
         // 预滤波(高架): BS.1770-4 给出的固定参数
-        let (f0, gain_db, q) = (1681.974_450_955_533, 3.999_843_853_973_347, 0.707_175_236_955_419_6);
+        let (f0, gain_db, q) = (1_681.974_5, 3.999_843_8, 0.707_175_25);
         let k = (std::f32::consts::PI * f0 / fs).tan();
         let vh = 10f32.powf(gain_db / 20.0);
-        let vb = vh.powf(0.499_666_774_154_541_6);
+        let vb = vh.powf(0.499_666_78);
         let a0 = 1.0 + k / q + k * k;
         let pre = Biquad {
             b0: (vh + vb * k / q + k * k) / a0,
@@ -66,7 +66,7 @@ impl KWeighting {
             a2: (1.0 - k / q + k * k) / a0,
         };
         // RLB 高通
-        let (f0, q) = (38.135_470_876_024_44, 0.500_327_037_323_877_3);
+        let (f0, q) = (38.135_47, 0.500_327_05);
         let k = (std::f32::consts::PI * f0 / fs).tan();
         let a0 = 1.0 + k / q + k * k;
         let rlb = Biquad {
@@ -230,12 +230,8 @@ pub fn measure_file_with_hint(
 
     let mut meter: Option<LoudnessMeter> = None;
     let mut buffer: Option<SampleBuffer<f32>> = None;
-    loop {
-        let packet = match format.next_packet() {
-            Ok(p) => p,
-            // 正常结束(EOF)与损坏尾部都按"测到哪算哪"处理
-            Err(_) => break,
-        };
+    // 正常结束(EOF)与损坏尾部都按"测到哪算哪"处理
+    while let Ok(packet) = format.next_packet() {
         if packet.track_id() != track_id {
             continue;
         }
@@ -349,7 +345,7 @@ mod tests {
         let samples = sine(0.2, 440.0, 48_000, 2.0, 2);
         let slice = measure(&samples, 2, 48_000).unwrap();
         let mut meter = LoudnessMeter::new(2, 48_000);
-        for frame in samples.chunks_exact(2) {
+        for frame in samples.as_chunks::<2>().0 {
             meter.push_frame(frame);
         }
         let streamed = meter.finish().unwrap();

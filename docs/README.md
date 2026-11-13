@@ -6,8 +6,8 @@
 
 | 文件 | 用途 · 状态 |
 |---|---|
-| PROGRESS.md | 进度总览 + 按日期的批次记录(每批"做了什么/怎么验证的")。**活跃** |
-| remaining-batches.md | 待办与分批规划, 下一轮从 §11 挑活。**活跃** |
+| PROGRESS.md | 进度记录:门禁基线 + 版本时间线 + 按日期批次(倒序)+ 专题小节;v1 历史已拆到 `archive/PROGRESS-v1.md`。**活跃** |
+| remaining-batches.md | 待办与分批规划, **下一轮从 §11 挑活**(§4/§5/§9/§10 已完成, 已移入 `archive/remaining-batches-history.md`)。**活跃** |
 | api-coverage.md | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** |
 | README.md | 本文件: 文档索引。**活跃** |
 | testing-dual-platform.md | Android/Linux/Windows 三端测试记录与自测方法。**活跃** |
@@ -56,7 +56,8 @@
 
 | 目录 | 内容 |
 |---|---|
-| archive/ | 已完工车道执行记录(索引见其 README)。**归档** |
+| archive/ | 已完工车道执行记录 + `PROGRESS-v1.md`(v1 WebView 时代进度) + `remaining-batches-history.md`(历史分批口径)。**归档** |
+| audits/ | 代码/UI 审计报告(`2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md`)。**活跃** |
 | images/ | README 截图素材 |
 | spikes/ · b8-dumps/ | 零散 spike 产物与原始接口 dump |
 

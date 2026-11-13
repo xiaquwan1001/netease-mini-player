@@ -9,7 +9,6 @@ use ncm_service::ttml_source::{
     LyricSourcePreference,
 };
 use ncm_service::Core;
-use ncm_provider::Provider;
 
 const SAMPLES: &[(u64, &str)] = &[
     (186016, "晴天(周杰伦, 老歌)"),

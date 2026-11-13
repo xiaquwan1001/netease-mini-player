@@ -5,8 +5,8 @@
 //!   yrc 得分 >= AUTO_SKIP_TTML_SCORE 时直接用 yrc, 不发 TTML 探测请求(省网络).
 //! - netease: 只用 yrc, 缺失/退化(覆盖率 < 0.6)才 TTML.
 //! - amll: 优先 TTML, 失败再 yrc.
-//! TTML 原文落盘缓存 dataDir/ttml/<id>.ttml, 无数据/解析失败写 <id>.none 标记
-//! 避免反复打 API. 探测经 TtmlProbe trait 走, 测试可注入假实现(不联网).
+//! - 落盘缓存: TTML 原文 dataDir/ttml/<id>.ttml, 无数据/解析失败写 <id>.none 标记,
+//!   避免反复打 API; 探测经 TtmlProbe trait 走, 测试可注入假实现(不联网).
 use std::error::Error as _;
 use std::path::{Path, PathBuf};
 
@@ -168,7 +168,7 @@ pub fn score_word_lyric(wl: &WordLyric, line_starts: Option<&[i64]>) -> WordLyri
 
     let consistency = match line_starts {
         None => 1.0, // 无参照 = 中性, 不奖不罚
-        Some(starts) if starts.is_empty() => 1.0,
+        Some([]) => 1.0,
         Some(starts) => {
             let hits = wl
                 .lines

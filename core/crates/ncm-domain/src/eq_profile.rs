@@ -316,7 +316,7 @@ mod tests {
         assert_eq!(p.filters.len(), 3);
         assert_eq!(p.filters[0].kind, EqFilterKind::Pk);
         assert!((p.filters[0].freq_hz - 105.0).abs() < 1e-3);
-        assert_eq!(p.filters[2].enabled, false);
+        assert!(!p.filters[2].enabled);
         assert_eq!(p.active_filters().count(), 2);
     }
 

@@ -257,7 +257,7 @@ mod backend {
                 return;
             }
         };
-        let player = RodioPlayer::connect_new(&sink_handle.mixer());
+        let player = RodioPlayer::connect_new(sink_handle.mixer());
         // user_volume 是"系统音量"(0..1), 精细音量(R2)/响度增益作为独立增益乘上去
         let mut user_volume = 1.0f32;
         let mut local = tuning.lock().map(|t| t.clone()).unwrap_or_default();

@@ -113,8 +113,8 @@ void main() {
         return page([comment(3, '热门页评论', hot: true)]);
       },
       like: (_, _) async => true,
-      loadReplies: (_, __) async => page([]),
-      reply: (_, __) async => true,
+      loadReplies: (_, _) async => page([]),
+      reply: (_, _) async => true,
     )));
     await tester.pumpAndSettle();
 
@@ -157,8 +157,8 @@ void main() {
         );
       },
       like: (_, _) async => true,
-      loadReplies: (_, __) async => page([]),
-      reply: (_, __) async => true,
+      loadReplies: (_, _) async => page([]),
+      reply: (_, _) async => true,
     )));
     await tester.pumpAndSettle();
 
@@ -175,8 +175,8 @@ void main() {
       threadId: 'A_EV_2_1_2',
       loadPage: (limit, offset) async => page([]),
       like: (_, _) async => true,
-      loadReplies: (_, __) async => page([]),
-      reply: (_, __) async => true,
+      loadReplies: (_, _) async => page([]),
+      reply: (_, _) async => true,
     )));
     await tester.pumpAndSettle();
     expect(find.text('还没有评论'), findsOneWidget);

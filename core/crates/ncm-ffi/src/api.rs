@@ -35,7 +35,7 @@ fn core() -> Result<&'static Mutex<Core>, String> {
 /// - ffi_forward!(Capability::X, provider.method(args))             返回值直接透传
 /// - ffi_forward!(Capability::X, provider.method(args), map conv)     末步转 Dto(conv 为普通 fn/闭包)
 /// - ffi_forward!(Capability::X, provider.method(args), map_each conv) Vec 转 Vec<Dto>
-/// 错误映射统一 |e| e.to_string(), 与手写导出一致; frb 只看函数签名, 宏只生成函数体。
+///   错误映射统一 |e| e.to_string(), 与手写导出一致; frb 只看函数签名, 宏只生成函数体。
 macro_rules! ffi_forward {
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map $conv:expr) => {{
         let $p = with_provider($cap)?;
@@ -800,7 +800,6 @@ fn with_provider(
         .providers
         .first_with(cap)
         .ok_or_else(|| format!("no provider supports {}", cap.as_str()))
-        .map(|p| p.clone())
 }
 
 /// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)

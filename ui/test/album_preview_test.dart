@@ -76,7 +76,7 @@ void main() {
           onPlay: (_, _) {},
           loadAlbum: (_) async => album(),
           setSubscribed: (id, subscribed) async {
-            calls.add('${id}:$subscribed');
+            calls.add('$id:$subscribed');
             return true;
           },
         );

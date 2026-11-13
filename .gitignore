@@ -8,6 +8,7 @@ ui/.flutter-plugins*
 ui/.packages
 references/
 legacy/android/.gradle/
+legacy/android/app/build/
 legacy/android/local.properties
 **/*.iml
 

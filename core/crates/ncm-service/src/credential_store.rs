@@ -64,7 +64,7 @@ impl CredentialError {
 
     /// IdentityStore 的现有方法签名都是 io::Result, 提供无损转换.
     pub fn into_io(self) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, self.message().to_string())
+        io::Error::other(self.message().to_string())
     }
 }
 

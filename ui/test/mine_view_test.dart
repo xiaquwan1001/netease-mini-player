@@ -50,7 +50,7 @@ MineView buildMine({
           playCount: BigInt.zero,
         ),
       ],
-      onPlaySongs: onPlay ?? (_, __) {},
+      onPlaySongs: onPlay ?? (_, _) {},
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
       onOpenLiked: () {},

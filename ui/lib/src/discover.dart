@@ -361,7 +361,7 @@ class _HistoryTabState extends State<_HistoryTab>
     }
     return ListView.separated(
       itemCount: dates.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final d = dates[i];
         return ListTile(
@@ -725,7 +725,7 @@ class _SongRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (trailing != null) trailing!,
+          ?trailing,
           SongOverflowButton(song: song, size: 20, source: source),
         ],
       ),

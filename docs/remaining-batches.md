@@ -2,16 +2,16 @@
 
 > 用途: 后续每轮开工前先在这里选批次, 按「并行矩阵」决定能不能同时派。
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
-> `docs/PROGRESS.md`(已落地功能与协议事实)、`.pi/memory/`(踩坑)。
-> 口径日期: 2026-11-11。**当前覆盖率 123/123(100%), FFI 导出 146 个其中 4 个无 UI 入口**
-> (`cache_stats`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`) ——
-> 数字一律跑 `bash tools/api-coverage.sh` 复算, 本文件不再维护历史快照(历史数字见 `docs/PROGRESS.md`)。
+> `docs/PROGRESS.md`(已落地功能与协议事实)、`docs/archive/remaining-batches-history.md`(历史分批口径)。
 >
-> **当前状态(2026-11-10 收尾)**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、
-> 设置项扩充 R1–R7 落地、真机听感验收通过; 发布链路已出**六种分发物**(APK / deb / AppImage / tar.gz / windows setup.exe / windows zip)。
-> 历史波次与每批验收证据不再堆在这里 —— 见 `docs/PROGRESS.md`(按日期分小节)与 `docs/archive/`(已完工车道的执行记录)。
+> 口径日期: **2026-11-13**。覆盖率 **123/123(100%)**, FFI 导出 **150** 个, 其中 5 个无 UI 入口
+> (`cache_stats`/`consent_plaintext_storage`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`);
+> 数字一律跑 `bash tools/api-coverage.sh` 复算。
 >
-> **下一轮从哪挑**: 见本文件末尾 **§11 · 待办(2026-11-10 收尾版)**。
+> **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
+> 设置项扩充 R1–R7 落地、真机听感验收通过; 三端分发六种产物 + arm64 腿, 当前版本 **v0.7.1**。
+>
+> **下一轮从哪挑**: 见本文件末尾 **§11 · 待办(2026-11-13 更新)**。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -37,22 +37,9 @@
 | ~~**B2 评论统计**~~ ✅已做 | 评论/分享/点赞计数(无收藏数/热评数) | `comment_info_list` | `CommentStats` DTO + parse + FFI 1 个 | `comment_stats_bar.dart`(新) + `comment_thread.dart` | 已验 |
 | ~~**B3 会员只读**~~ ✅已做 | 黑胶会员卡/成长值/本周签到/任务(不碰支付) | `vip_info_v2` `vip_growthpoint` `vip_sign_info` `vip_tasks` | `vip_overview` 1 个聚合方法(内部 join4) + FFI 1 个 | `vip_page.dart` + `settings_view.dart` 入口 | 已验(a36 登录/未登录) |
 | ~~**B4 搜索增强**~~ ✅已做 | 精确实体条/关键词联想/热搜榜 | `search_multimatch` `search_suggest`(web/mobile) `search_hot_detail` | parse 3 + FFI 3 | `search_exact_bar.dart`(新) + `search_suggest.dart` + 落地页热榜 | 已验(a36) |
-
-## B4 搜索增强 · 预研结论(2026-11-07, 实测)
-
-完整实测记录与响应样例见 [`docs/b4-search-notes.md`](b4-search-notes.md)。要点:
-
-- **`search_multimatch` 不是多类型匹配的数据源**: 它只回 1 条"精确实体改写"(歌手/歌单/电台),
-  且 `晴天`/`Taylor`/`Chinese Football` 全返回 `{"code":200,"result":{"orders":[]}}` ——
-  **空命中伪装成成功**, 必须按 `orders.is_empty()` 判空; `type` 参数实测无效。
-- **多类型联想用 `search_suggest`**: web 版(`/api/search/suggest/web`)返回 songs/artists/albums/playlists
-  实体卡片(现有 `parse_suggest` 已经在吃这个); mobile 版(`type=mobile`)只回 6 条纯关键词串, 适合下拉候选。
-- **`search_hot_detail` / `search_match` 无法实测**: CLI 的 raw 分支没有对应 arm(会落 `unknown raw method`),
-  vendor 里实现都在; 要用先给 CLI 加接线。`search_match` 语义是"本地文件→线上歌曲匹配", 与 B4 无关, 建议排除。
-- `search_hot` 固定 10 条、无 rank/score; `search_default`(`/api/search/defaultkeyword/get`)顶层用 `data` 而非 `result`。
-- CLI 的 raw 子命令参数是**位置参数 `key=value`**, 不是 `--param key=value`。
-
 | ~~**B8 等级/勋章**~~ ✅已做 | 等级进度 + 勋章墙 | `user_level` `user_medal` | parse 2 + FFI 2(勋章接口有界重试) | `medal_wall.dart`(新) + `mine_view.dart` 入口 | 已验(a36) |
+
+> B4 搜索增强的实测细节(`search_multimatch` 空命中伪装成功、`type` 参数无效、CLI raw 用位置参数 `k=v`)全部在 [`docs/b4-search-notes.md`](b4-search-notes.md), 本文件不再复述。
 
 ### M 级 · 要新交互/新页面/vendor 有限制(1 轮 1 个, 1~2 天量)
 
@@ -93,33 +80,9 @@
 | 两条设备实测 | ✅(上限 2) | 各绑一台模拟器(a34/a36), 用 `adb -s emulator-5554/5556` 区分; 写操作(点赞/签到/歌单编辑)不要两台同时用同一账号 |
 | 两次 `flutter build` / `cargo build` | ❌ | 构建锁, 由编排者最后跑一次 `bash tools/ci.sh` |
 
-## 4. B0 · 纯 Dart 收尾批(任何轮次都能搭车)
+> 「4. B0 · 纯 Dart 收尾批(任何轮次都能搭车)」是已完成/历史口径, 原文见 [`docs/archive/remaining-batches-history.md`](archive/remaining-batches-history.md)。
 
-不新增接口, 只把「已接后端但 UI 没入口」补齐, 是唯一可以随时和 Rust 批并行的车道:
-
-- `lyric_lines` / `lyric` 纯文本歌词的备用展示;
-- `podcast_program` / `podcast_radio` 详情刷新(列表已有数据, 详情页未刷新);
-- `follow_counts` 关注/取关后的资料卡数字刷新;
-- 删除 `search` 导出(需 codegen → 归到下一次 Rust 批的 codegen 窗口, 不单独做);
-- 纯 UI/测试打磨: 窄屏(vivo 768dpi)+大字号回归、空态/错误态文案、`ui/test` 补例。
-
-文件白名单: `ui/lib/src/{lyric,podcast,profile_header,detail_page}.dart` + `ui/test/*`。
-禁止碰: `netease.rs` `ncm-provider` `ncm-ffi` `ui/lib/src/rust/*`。
-
-## 5. 推荐波次(pipeline)
-
-```
-Wave 1:  [Rust] B1 消息增强            ｜ [Dart] B0 收尾(lyric/podcast/profile_header)
-Wave 2:  [Rust] B3 会员只读            ｜ [Dart] B1 的 UI 集成与测试(等 codegen 合入)
-Wave 3:  [Rust] B4 搜索增强            ｜ [Dart] B3 的 UI 集成
-Wave 4:  [Rust] B5 逐字歌词(可选)      ｜ [Dart] B4 的 UI 集成
-Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
-```
-
-规则:
-1. 每波结束由**编排者**收口: `bash tools/ci.sh` → 模拟器走查(a34/a36 可分工并行, 同一功能只需一台) → 更新 docs + memory → commit。
-2. 同一波内 Rust 批先落 **DTO + provider + FFI + codegen**(schema 先行), Dart 批只依赖已定稿 DTO。
-3. 不允许 Dart 批直接改 `ui/lib/src/rust/*`(那是生成物, 会被下次 codegen 覆盖)。
+> 「5. 推荐波次(pipeline)」是已完成/历史口径, 原文见 [`docs/archive/remaining-batches-history.md`](archive/remaining-batches-history.md)。
 
 ## 6. 单批固定流程(所有批次共用)
 
@@ -180,117 +143,45 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 - **两台模拟器都只跑 debug 包**: a34/a36 可并行分担批次, 但端口(5554/5556)与账号写入要错开; vivo 只在 release 冒烟, 且会被用户拿走。
 - **长跑任务设时间盒**: 子代理单批 15 分钟无进展就落盘卡点收尾, 换直连模型重派。
 
-## 9. 精简项排队(2026-11-09 审计产出, 按依赖顺序)
+> 「9. 精简项排队(2026-11-09 审计产出, 按依赖顺序)」是已完成/历史口径, 原文见 [`docs/archive/remaining-batches-history.md`](archive/remaining-batches-history.md)。
 
-> 来源: `docs/api-overlap-audit.md`(D1–D7) + `docs/backend-service-options.md` §3/§5.5(P1/P2)。
-> 硬约束: **codegen 是全局串行点, cargo 共用 `core/target`** ⇒ 下列批次互斥, 一律串行。
+> 「10. UI/UX 走查批次(A–D, 2026-11-09 审计产出)」是已完成/历史口径, 原文见 [`docs/archive/remaining-batches-history.md`](archive/remaining-batches-history.md)。
 
-| 序 | 批次 | 内容 | 触碰面 | 前提 |
-|---|---|---|---|---|
-| 1 | ~~**P1+P2 vendor 裁剪**~~ ✅ **已完成**(2026-11-09) | 删 264 个未接 endpoint + `api/mod.rs` 清单 + tokio 移除 + 死特性 `server` 删除; 382→118/12k→4.1k 行/冷编 1.40→0.65 s/119 测试全绿 | `core/vendor` | 见 `docs/backend-prune.md` |
-| 2+3 | ~~**D1+D2 删死导出 + D5 转发宏**~~ ✅ **已完成**(2026-11-09) | 导出 125→123、「UI 无入口」3→0; `ffi_forward!` 宏收敛 22 封装, 净 −80 行 | `ncm-ffi` + codegen(已用一次) | 见 `docs/archive/ffi-cleanup-d1d2d5.md` |
-| 4 | ~~**D6 PagedListView**~~ ✅ **已完成**(2026-11-09, 后续又补迁 3 页) | 新组件 + 迁移 7 页(messages/user_list/playlist_square/ranking/new_release/all_charts/digital_album); **仍可迁**: `radio_explore_page`、`style_page`(均未用组件) | 纯 Dart | 见 `docs/archive/ui-batch-d6.md` |
-| 5 | ~~**D7 frb 透传 domain**~~ ✅ **已完成**(2026-11-09, 57/57) | 删 74 个 Dto struct(`api.rs`)≈646 行 + 内联转换 ~400 行 | `ncm-domain` + `ncm-ffi` + Dart | 见 `docs/d7-frb-domain.md`; 车道已关闭 |
-| — | ~~方案 c: 换 `netease-music`~~ | ⛔ 已裁决不切 | — | 见 `docs/backend-service-options.md` §6 门槛 |
+## 11. 待办(2026-11-13 更新)
 
-**决策记录(2026-11-09, 用户已批准)**:
-- **D7 批准做, 记为待办**(不做前置条件, 但要等 1–4 收口, 单独一波), 验收口径见下 §9.1。
-- **D1/D2 直接删, 不留 release 周期**(两个都是零调用死导出, provider/CLI 侧不受影响)。
-- 顺序不变: 1 → 2+3(含 D1/D2) → 4(可与 2+3 同波) → 5(D7)。
+> 这一节是「下一轮从哪挑」的**唯一入口**; §2–§3、§6–§8 是批次目录与派发流程, 历史口径见
+> `docs/archive/remaining-batches-history.md`。
+> 当前基线(2026-11-13 本机实测, 离线口径): 覆盖率 **123/123** · `cargo test` **271** · `cargo clippy` **0 warning** ·
+> `flutter test --exclude-tags network` **674** · `dart analyze` 0 error / 0 warning · write-guard OK。
 
-### 9.1 D7 待办卡(frb 直接透传 domain DTO) —— ✅ 已完成(2026-11-09, 57/57 直透)
-
-> 以下保留为验收口径留痕; 实际收口记录见 `docs/d7-frb-domain.md`。
-
-- **目标**: 删掉 `ncm-ffi/src/api.rs` 里 74 个重复的 `*Dto` struct(≈646 行)及其内联转换(~400 行),
-  让 frb 直接暴露 `ncm-domain` 类型; `ui/lib/src/rust/` 由 codegen 重新生成。
-- **前置**: ①P1 vendor 裁剪已合; ②D1/D2/D5 已合(减少 codegen 冲突面);
-  ③`ncm-domain` 加 frb 注解前先确认它仍是**纯数据 crate**(不得引入 flutter_rust_bridge 之外的运行时依赖)。
-- **契约要求**: domain 类型需实现 frb 可见的形态(字段 `pub` + `#[frb]`/mirror 宏策略二选一, 开工前先做 10 行 spike 决定走 mirror 还是直接注注解)。
-- **门禁(编排者自己跑, 不信 worker)**: `cargo build --offline --workspace` 0 error;
-  `cargo test -p ncm-domain -p ncm-service` 全绿; `dart analyze` 0 error;
-  `flutter test` 全量绿(离线口径当时 235+, 2026-11-10 复核 **504**); `bash tools/api-coverage.sh` = 118/0、无 UI 入口 3(`cache_stats`/`eq_profile_normalize`/`player_tuning`);
-  双端构建 + 模拟器走查(空态/未登录各一次)。
-- **回滚**: `git restore --staged --worktree core/crates/ncm-domain core/crates/ncm-ffi ui/lib/src/rust` 一键还原。
-- **收益**: 合计约 1400–1800 行(含保守项), 且以后新增接口不再重复定义三层 DTO。
-
-## 10. UI/UX 走查批次(A–D, 2026-11-09 审计产出)
-
-> 来源 `docs/ui-ux-audit.md`(506 行, 每条带 file:line)。P0=3 / P1=15 / P2=13。
-> **验证口径**: 这些批次**不要**用 `build-android`/`ci.sh` 验证 UI —— 用 `flutter test test/xxx.dart` 单文件
-> + 设备走查; 且 A 批的 `PopScope` 改动**必须配一条 widget 测试**(返回键三次: 歌词→tab→退出), 否则后续易回退。
-
-| 批次 | 内容 | 对应条目 | 成本 | 并行性 |
-|---|---|---|---|---|
-| ~~**A · S 速修**~~ ✅ **已完成**(2026-11-09) | 返回键 `PopScope` 三级语义 + `formatSongDuration` + 红心可点 + 6 类控件 48dp + 出口文案统一「全部」; 新增 22 用例 | P0-7.1 + P1-7.4/7.6/7.7/7.12/7.13/7.17 | ~~S~~ 已做 | 见 `docs/archive/ui-batch-a.md` |
-| ~~**B · 两个新面板**~~ ✅ **已完成**(2026-11-09) | 评论输入(`_ComposeSheet` + `viewInsets` 避让 + 失败保草稿)、队列面板(`PlayQueueSheet` + `removeAt`/`moveTo` + 8 条单测); 新增 18 用例 | P0-7.2 / P0-7.3 | ~~M~~ 已做 | 见 `docs/archive/ui-batch-b.md` |
-| ~~**B2 · B 的遗留**~~ ✅ 已完成(2026-11-10) | ①~~`showCommentsSheet` 缺 `viewInsets` padding~~ ✅ 已修(76c3399 + `ui_batch_b2_keyboard_test.dart`) ②~~`moveTo` 已就绪未接拖拽排序 UI~~ ✅ 已接(`PlayQueueSheet` 改 `ReorderableListView` + 拖拽手柄, 宿主 `_moveInQueue`) ③~~`PlayQueueSheet` 拆到独立文件~~ ✅ 已拆 ④~~面板「清空」~~ ✅ 已做(`delete_sweep` + 二次确认 + 清空即停播); ④~~面板「存为歌单」~~ ✅ 已做(2026-11-10 第三批: `create_playlist(name,privacy)` + 批量 `playlist_tracks_add` + 选歌单/新建对话框, 模拟器服务端复核 2 首) | B 遗留 | ~~S~~ 已做 | 见 `docs/PROGRESS.md` 末节; 新增 3 例 widget 测试 |
-| **⚠ 发布前硬门(写接口)** | 评论发送走 `rust.replyComment`(commentId=0)是**真实写操作**: 必须用测试号 + a34/a36 走查一次(发送/失败/回滚), 且确认不在 CI 里触网 | 安全 | S | 不做不得发版 |
-| ~~**C · 信息架构重排**~~ ✅ **已完成**(2026-11-09) | 设置瘦身 + 2 个二级页、账号入口 3→1、推荐页首屏 8→5、专辑 Dialog→全页、日推/最近听过 sheet→全页; 新增 11 条可达性用例 | 见 `docs/archive/ui-batch-c.md` | ~~M~~ 已做 | **视觉待人工过目**: 账号页层级/新歌新碟合并块/风格 chips 归属/全页 AppBar+TabBar 高度/设置页密度/我的页会员行位置 |
-| **C2 · C 的遗留** | ①~~清空搜索历史缺二次确认~~ ✅ 已修(`search_landing.dart:35-43` AlertDialog + `ui/test/c2_clear_history_confirm_test.dart`) ②若要全局账号入口恢复, 加一行即可 ③推荐播客仍在第 2 屏(审计 §5.5 有意保留) | C 遗留 | S | ①已完成 |
-| ~~**D · 技术债收敛**~~ ✅ **已完成**(2026-11-11, 见 §11.B2) | 抽 `fmtDuration`/`formatDurationShort`/日期格式化进 `format.dart`、弹层 21/21 统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口已删(658→190 行, 存活组件测试同步改写)、窄屏+1.25 回归补到 45 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | ~~M~~ 已做 | — |
-
-**与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
-
-
-## 11. 待办(2026-11-12 更新)
-
-> 这一节是"下一轮从哪挑"的唯一入口; 上面 §2–§10 是历史分批口径, 已完成项保留作决策留痕。
-> 当前基线(2026-11-12): 覆盖率 123/123 · `cargo test` **247** ·
-> `flutter test --exclude-tags network` **656** · `dart analyze` 0 error / 0 warning(38 info) · write-guard OK。
->
-> **新增待办(2026-11-10 五批产出)**: ①桌面扫码登录需**真机扫一次**确认(803 端到端, 现在只验到 801 与单测);
-> ②Windows 端扫码登录冒烟(同一份 Rust 链路, 本机编不了); ③deb 的 AppStream 预览需在 GNOME Software /
-> KDE Discover 实机看一眼(元数据已通过 `appstreamcli validate`); ④账号隐私再收一步: `accounts.json` 里的
-> `MUSIC_U` 仍是**明文 0600**, 若要上"系统钥匙串"(Linux secret-service / Windows DPAPI)需单独立项。
-> —— ④ **已完成**(2026-11-12, v0.5.5): Android Keystore + Linux secret-service + Windows DPAPI 三端落地; 残留:
-> Android Keystore 模拟器实测(`~/bin/avd headless a34`)与桌面 keyring 冒烟(.deb/AppImage 装)未做。
-
-### A. 最近三批已完成(供对照, 不要重做)
-
-| 批次 | 内容 | 证据 |
-|---|---|---|
-| v0.3.x 桌面打包 | deb / AppImage / Windows setup.exe + `release.yml` 四 job 收口(verify → build + build-windows → publish) | Release v0.3.2 六种资产; `packaging/` |
-| 歌单写接口 | `create_playlist(name,privacy)` + 批量 `playlist_tracks_add` + 队列「存为歌单」 | `docs/b7-playlist-write-notes.md`; 模拟器服务端复核 |
-| 图片清晰度 | 按设备像素取图 + 三档设置 + 看大图保存原图 | `ui/test/cover_quality_test.dart` 12 例; 模拟器落盘核对 |
-
-### B. 纯 Dart 车道(可与任何 Rust 批并行)
+### A. 只剩这些没做(按成本排序)
 
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
-| ~~1~~ | ~~**主播/听众 → 用户主页路由**~~ ✅ **已完成**(2026-11-10 六) | 新增 `user_page.dart`(资料卡 + 公开歌单, 点歌单可播) + `Provider::user_profile`/`user_playlists_of`(匿名可用) + 听众/粉丝行接通; 见 `docs/PROGRESS.md` 最新小节 | ~~S~~ 已做 |
-| ~~2~~ | ~~**D 批技术债**~~ ✅ **2026-11-11 完成** | 由本轮 `refactor(debt)` 落地(详见下方第二行原描述) | 抽 `fmtDuration`/`error_views`/`showToast`、弹层统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口(≈88 行, 被 10 处测试当宿主)、300dp+1.25 回归补到剩余 30 个测试文件 | M |
-| ~~3~~ | ~~视觉待人工过目~~ → 2026-11-11 已按反馈改掉: 楼层内联预览 + 动态流行内赞/评论/分享 + 发评论后回填定位 | 需求已实现, 视觉仍可人眼扫一眼 |
-| 3 | 视觉待人工过目 | C 批遗留(同 §10 C 行备注): 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 | S(需人眼) |
-| ~~4~~ | ~~发布包体积实测~~ ✅ **已完成**(2026-11-10 六) | 结论在 `docs/backend-service-options.md` **附录 B**: 下载 vs 首装体积 + bundle 逐文件拆解 + strip 机会(15→9 MB) | ~~S~~ 已做 |
+| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— v0.7.0–v0.7.1 已按反馈改过一轮, 仍需人眼确认 | S(需人眼) |
+| 2 | AppImage 桌面集成 | 首启提示「是否集成到应用菜单」(`desktop-file-install` 逻辑, 可选) | S |
+| 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
+| 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
+| 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
 
-### C. 发布/打包跟进(小改, 可攒一起发)
+### B. 已完成(供对照, 不要重做)
 
-| 序 | 项 | 说明 |
-|---|---|---|
-| 0 | ~~桌面登录只能导 cookie~~ ✅ **已修**(2026-11-10 五) | 桌面端改走官方网页**扫码**登录(`Provider::login_qr_*` + `login_sheet.dart`), 不再需要命令行; 见 `docs/PROGRESS.md` 最新小节 |
-| 0 | ~~deb 预览显示 minincm 且无图标~~ ✅ **已修**(2026-11-10 五) | 补 AppStream `metainfo.xml` + `/usr/share/pixmaps` 图标, `appstreamcli validate` 通过 |
-| 0 | ~~未登录时占位显示上次账号的昵称/VIP~~ ✅ **已修**(2026-11-10 五) | 未登录一律不渲染 VIP 标 + 新增「清除本机登录凭据」+ 启动时按 `[auth]` 校验登录态 |
-| ~~1~~ | ~~**评论发送写操作走查(发布前硬门)**~~ ✅ **2026-11-11 完成** | 人工侧: 用户真机实测发送/失败/回滚通过(v0.3.4 前); 机器侧: 新增 `tools/check-write-guard.sh` 并接进 ci.yml / release.yml / tools/ci.sh —— 测试里直连写接口即失败, 保证 CI/发版不触网 | `rust.replyComment`(commentId=0) 是真实写操作: 测试号 + 模拟器各走一次发送/失败/回滚; 确认 CI 不触网 |
-| ~~2~~ | ~~Windows 安装向导中文化~~ ✅ 已完成(v0.3.5, 随包 `packaging/windows/ChineseSimplified.isl`, CI 实测 Successful compile) | |
-| 3 | ~~deb 依赖收紧~~ ✅ **2026-11-11 已静态核查** | 无容器环境, 改为 ldd→dpkg→Depends 传递闭包比对: 68 个外部库 **100% 被现有 Depends 覆盖**(24.04 的 t64 改名由 Provides 兜住); 运行期数据文件(字体/插件)仍需真最小桌面点一次, 见 `docs/PROGRESS.md` 2026-11-11(四) |
-| 4 | AppImage 桌面集成 | 首启提示"是否集成到应用菜单"(需 `desktop-file-install` 逻辑, 可选) |
+详细验收证据见 `docs/PROGRESS.md` 对应日期小节; 已完工车道的执行记录见 `docs/archive/`:
 
-### C'. 2026-11-11 已完成
+- 只读批次 B1–B5 / B8 / B10 / B12 / B13(TTML) 与写接口 B7a(歌单 create / 批量加曲); FFI 清理 D1/D2/D5/D7(frb 直透 domain 57/57)。
+- 技术债 D 批(弹层 21/21 统一、格式化去重、podcast 658→190 行、45 文件窄屏回归归零)与视觉批 A–C。
+- 手机号+短信验证码登录(用户真机验过)、评论发送写操作走查 + `tools/check-write-guard.sh`。
+- 桌面打包四态(deb / AppImage / tar.gz / setup.exe)、Linux arm64 腿、Windows 向导中文化、AppStream 元数据。
+- 凭据三端(Android Keystore / Linux secret-service / Windows DPAPI) + 凭据不再过 FFI 回传 Dart。
+- v0.6.0–v0.7.1 用户回归四连发(见 `docs/PROGRESS.md`「2026-11-12(晚)」)。
 
-| 项 | 说明 | 证据 |
-|---|---|---|
-| **手机号 + 短信验证码登录** | 登录弹层第 2 个 tab + `ncm login-sms`; 走**网页登录通道**(weapi `sms/captcha/sent` + `login/cellphone`), 凭据取自 Set-Cookie; 命中 8821 时提示改回扫码; 400→Auth、503→可重试 | `ui/test/login_sheet_phone_test.dart` 4 例 + `login_sheet_error_test.dart` 4 例(错误文案归一); 宿主实测非法号码 `code=400: 手机号码不符合规范`; FFI 144→146 |
-| ~~待真机验~~ ✅ 用户真机验证通过(2026-11-11, 收到 4 位验证码并登录成功) | | |
+### C. 需要新能力的 L 级(单独立项, 不要混批)
 
-### D. 需要新能力的 L 级(单独立项, 不要混批)
+视频/最近播放页页签(需视频播放器) · 听歌识曲(录音 + 指纹) · **云盘**(分片上传; 旧编号 B13 与「B13 逐字歌词 TTML」撞号, 以后只称「云盘」) ·
+MV 列表页/视频详情(播放器已有) · 一起听(房间 + 心跳, 需双端联调) · 动态发送(发包 + 审核语义) ·
+云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/architecture-restart.md`)。
 
-B9 视频/最近播放页签(需视频播放器) · B11 听歌识曲(录音 + 指纹) · B13 云盘(分片上传) ·
-B14 MV 列表页/视频详情(播放器已有) · B15 一起听(房间 + 心跳, 需双端联调) · B16 动态发送(发包 + 审核语义) ·
-B17 云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/architecture-restart.md`)。
+### D. 明确不做
 
-### E. 明确不做
-
-App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+验证码登录已在 2026-11-11 落地, 两者不是一回事 · 埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 ·
-`simi_user`(实测恒空)。
-
+App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+验证码登录已在 2026-11-11 落地, 两者不是一回事 ·
+埋点上报 · 内部灰度与算法向量 · 支付与兑换 · 创作者中心与粉丝中心 · 账号安全改绑 · `simi_user`(实测恒空)。

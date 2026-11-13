@@ -32,7 +32,7 @@ Future<void> openDetail(
         onPressed: () => showFeedDetail(
           context,
           event: ev,
-          onPlaySongs: (_, __) {},
+          onPlaySongs: (_, _) {},
           onOpenUrl: (_) async {},
         ),
         child: const Text('open'),

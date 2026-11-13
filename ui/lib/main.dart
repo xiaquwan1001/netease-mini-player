@@ -131,8 +131,9 @@ class WordLyricScore {
 
 /// 逐字歌词质量打分(纯函数). lineStarts 为行级 LRC 各行起始 ms, 无参照时一致性记 1(中性)。
 WordLyricScore scoreWordLyric(rust.WordLyricDto? wl, {List<int>? lineStarts}) {
-  if (wl == null || wl.lines.isEmpty)
+  if (wl == null || wl.lines.isEmpty) {
     return const WordLyricScore(0, 0, 0, 0, 0, 0);
+  }
   final timed = wl.lines
       .where((l) => l.words.any((w) => w.endMs > w.startMs))
       .toList();
@@ -141,8 +142,9 @@ WordLyricScore scoreWordLyric(rust.WordLyricDto? wl, {List<int>? lineStarts}) {
     if (timed.length <= 1) return 1.0;
     var ok = 0;
     for (var i = 1; i < timed.length; i++) {
-      if (timed[i].startMs >= timed[i - 1].startMs - _kMonotonicToleranceMs)
+      if (timed[i].startMs >= timed[i - 1].startMs - _kMonotonicToleranceMs) {
         ok++;
+      }
     }
     return ok / (timed.length - 1);
   }
@@ -991,8 +993,9 @@ class _HomePageState extends State<HomePage> {
         _advancing ||
         _dragMs != null ||
         !wasPlaying ||
-        s.playing)
+        s.playing) {
       return false;
+    }
     if (s.durationMs == BigInt.zero) return false;
     return s.positionMs + BigInt.from(800) >= s.durationMs;
   }
@@ -2768,8 +2771,9 @@ class _HomePageState extends State<HomePage> {
     if (url == _coverPaletteUrl) return;
     _coverPaletteUrl = url;
     if (url == null || url.isEmpty) {
-      if (mounted && _coverPalette != null)
+      if (mounted && _coverPalette != null) {
         setState(() => _coverPalette = null);
+      }
       return;
     }
     final palette = await paletteFromUrl(url);

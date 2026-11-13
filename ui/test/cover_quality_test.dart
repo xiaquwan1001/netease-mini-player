@@ -60,7 +60,7 @@ void main() {
     test('neteaseThumbUrl 把像素写进 param', () {
       const url = 'https://p1.music.126.net/a/b.jpg';
       expect(neteaseThumbUrl(url, width: 132, height: 132), '$url?param=132y132');
-      expect(neteaseThumbUrl('${url}?x=1', width: 60, height: 60), '$url?x=1&param=60y60');
+      expect(neteaseThumbUrl('$url?x=1', width: 60, height: 60), '$url?x=1&param=60y60');
       expect(neteaseThumbUrl(url, width: double.infinity), url, reason: '全宽不算 param');
     });
   });

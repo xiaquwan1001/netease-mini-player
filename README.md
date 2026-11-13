@@ -69,9 +69,9 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 
 | 分组 | 已实现 |
 |---|---|
-| 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU |
+| 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式(含心动档)、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU、自动检查更新(off/每日/每周/每月) |
 | 歌词 | 行级滚动高亮、逐字歌词(yrc + AMLL TTML 双来源自动择优)、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
-| 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、我喜欢按收藏时间排序、最近播放四分类 |
+| 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、歌单内搜索点歌策略(全列表/追加队列)、我喜欢按收藏时间排序、最近播放四分类 |
 | 社区 | 评论(热门/全部/楼层回复/点赞/删除/IP 归属)、私信与 @我(只读)、关注动态、关注/粉丝列表、签到 |
 | 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB |
 | 会员只读 | 黑胶会员卡/成长值/本周签到/任务、数字专辑已购、云贝签到(只读展示, 不碰支付) |
@@ -174,13 +174,15 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace` | **254** 通过(含 vendor 4 例联网 smoke; 排除 vendor 后 230) |
-| `flutter test --exclude-tags network` | **617** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
-| `dart analyze` | 0 error / 0 warning(38 info 风格提示) |
+| `cargo test --offline --workspace` | **271** 通过(不含 vendor 247;vendor 24 例里 4 例联网 smoke 离线自跳过) |
+| `cargo clippy --workspace --all-targets` | **0 warning** |
+| `flutter test --exclude-tags network` | **674** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `dart analyze` | **0 issue**(error / warning / info 全清) |
+| `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
 
-## 项目进度
+## 项目进度(当前版本 v0.7.1)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -190,7 +192,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
 | 真机验收 | 听感项(EQ 削波 / 淡入手感 / 响度均衡 A/B / 硬解)与 MV 播放均已于 2026-11-10 在真机通过 | ✅ |
-| 待办 | 音源插件化(设计已留边界)、D 批技术债、手机号验证码登录真机验 —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
+| 待办 | 视觉人工过目、AppImage 桌面集成、打包后冒烟(deb/keyring)、L 级立项(云盘/一起听/听歌识曲) —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
 
 进度明细与每批验收证据见 `docs/PROGRESS.md`。
 
@@ -198,7 +200,8 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(v1/v2 历史 + 每批验收) |
+| [`docs/README.md`](docs/README.md) | **文档总索引**(每个文件一行用途与状态) |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次 + 专题小节;v1 历史在 `docs/archive/`) |
 | [`docs/architecture-restart.md`](docs/architecture-restart.md) | 架构选型、决策记录、插件边界 |
 | [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |

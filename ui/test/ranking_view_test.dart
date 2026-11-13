@@ -84,7 +84,7 @@ void main() {
           load: (_) async => [
             for (var i = 1; i <= 8; i++) entry(i, '歌曲$i', 100 - i),
           ],
-          onPlaySongs: (_, __) {},
+          onPlaySongs: (_, _) {},
         ),
       ),
     );
@@ -100,7 +100,7 @@ void main() {
   testWidgets('空排行显示提示', (tester) async {
     await tester.pumpWidget(
       host(
-        PlayRankingView(load: (_) async => const [], onPlaySongs: (_, __) {}),
+        PlayRankingView(load: (_) async => const [], onPlaySongs: (_, _) {}),
       ),
     );
     await tester.pumpAndSettle();

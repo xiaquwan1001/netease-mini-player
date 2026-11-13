@@ -1,2 +1,0 @@
-com.minincm.app:xml/network_security_config = 0x7f020000
-com.minincm.app:drawable/ic_launcher = 0x7f010000

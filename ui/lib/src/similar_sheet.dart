@@ -182,7 +182,7 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       itemCount: playlists.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 10),
+                      separatorBuilder: (_, _) => const SizedBox(width: 10),
                       itemBuilder: (context, i) {
                         final pl = playlists[i];
                         return SizedBox(
