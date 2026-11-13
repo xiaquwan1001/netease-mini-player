@@ -8,11 +8,16 @@ import 'sheet_header.dart';
 
 typedef MessageCountsLoader = Future<rust.MessageCountsDto> Function();
 typedef SessionsPageLoader = Future<List<rust.PrivateSession>> Function(
-    int limit, int offset);
+  int limit,
+  int offset,
+);
 typedef ContactsLoader = Future<List<rust.RecentContact>> Function();
 typedef ForwardsLoader = Future<List<rust.ForwardItem>> Function();
 typedef HistoryPageLoader = Future<List<rust.PrivateMessage>> Function(
-    BigInt userId, int limit, BigInt beforeMs);
+  BigInt userId,
+  int limit,
+  BigInt beforeMs,
+);
 typedef InboxLoader = Future<List<rust.InboxItem>> Function();
 
 /// 消息中心: 私信 / 通知 / 评论 / @我 四个页签(全部只读, 不在本 App 内回复).
@@ -81,17 +86,20 @@ class _MessagesPageState extends State<MessagesPage> {
       (limit, offset) => rust.privateSessions(limit: limit, offset: offset);
   ContactsLoader get _contacts =>
       widget.loadContacts ?? () => rust.recentContacts(limit: widget.pageSize);
-  HistoryPageLoader get _history => widget.loadHistory ??
+  HistoryPageLoader get _history =>
+      widget.loadHistory ??
       (uid, limit, before) =>
           rust.privateHistory(userId: uid, limit: limit, beforeMs: before);
   InboxLoader get _notices =>
       widget.loadNotices ??
-      () => rust.messageNotices(limit: widget.pageSize, lastTimeMs: BigInt.zero);
+      () =>
+          rust.messageNotices(limit: widget.pageSize, lastTimeMs: BigInt.zero);
   InboxLoader get _comments =>
       widget.loadComments ?? () => rust.commentMessages(limit: widget.pageSize);
   ForwardsLoader get _forwards =>
       widget.loadForwards ??
-      () => rust.forwardMessages(limit: widget.pageSize, lastTimeMs: BigInt.zero);
+      () =>
+          rust.forwardMessages(limit: widget.pageSize, lastTimeMs: BigInt.zero);
 
   @override
   void initState() {
@@ -231,9 +239,7 @@ class _SessionsTabState extends State<_SessionsTab> {
       emptyText: '还没有私信',
       endText: '没有更多了',
       separator: const Divider(height: 1, indent: 68),
-      header: contacts.isEmpty
-          ? null
-          : _ContactsStrip(contacts: contacts),
+      header: contacts.isEmpty ? null : _ContactsStrip(contacts: contacts),
       itemBuilder: (context, s, index, items) => ListTile(
         leading: CircleCover(
           url: s.avatarUrl,
@@ -288,7 +294,9 @@ class _ContactsStrip extends StatelessWidget {
         itemBuilder: (context, i) {
           final c = contacts[i];
           final remark = c.remarkName;
-          final name = (remark != null && remark.isNotEmpty) ? remark : c.nickname;
+          final name = (remark != null && remark.isNotEmpty)
+              ? remark
+              : c.nickname;
           return SizedBox(
             width: 68,
             child: Padding(
@@ -345,7 +353,11 @@ Future<void> showPrivateChat(
             ),
             const Divider(height: 1),
             Expanded(
-              child: _ChatBody(session: session, load: load, pageSize: pageSize),
+              child: _ChatBody(
+                session: session,
+                load: load,
+                pageSize: pageSize,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -466,7 +478,10 @@ class _ChatBodyState extends State<_ChatBody> {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : TextButton(onPressed: _loadOlder, child: const Text('加载更早')),
+                  : TextButton(
+                      onPressed: _loadOlder,
+                      child: const Text('加载更早'),
+                    ),
             ),
           );
         }
@@ -486,7 +501,10 @@ class _ChatBodyState extends State<_ChatBody> {
                   : scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(m.content, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(
+              m.content,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ),
         );
       },
@@ -551,7 +569,9 @@ class _InboxTabState extends State<_InboxTab> {
       itemBuilder: (context, i) {
         final item = items[i];
         final theme = Theme.of(context);
-        final subtitle = item.detail.isEmpty ? item.text : '${item.text}  ·  ${item.detail}';
+        final subtitle = item.detail.isEmpty
+            ? item.text
+            : '${item.text}  ·  ${item.detail}';
         return ListTile(
           leading: CircleCover(
             url: item.avatarUrl,
@@ -630,7 +650,9 @@ class _ForwardsTabState extends State<_ForwardsTab> {
         final f = items[i];
         final nickname = f.nickname;
         final comment = f.comment ?? '';
-        final actor = (nickname == null || nickname.isEmpty) ? '云音乐用户' : nickname;
+        final actor = (nickname == null || nickname.isEmpty)
+            ? '云音乐用户'
+            : nickname;
         return ListTile(
           leading: CircleCover(
             url: f.avatarUrl,

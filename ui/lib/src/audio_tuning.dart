@@ -33,7 +33,10 @@ class AudioTuningRequest {
   ///
   /// [loudnessGainDb] 由 [applyLoudnessForTrack] 从测量结果算好传进来:
   /// 未开响度均衡 / 未测到 / 关闭时一律为 0(即"不改变现状")。
-  factory AudioTuningRequest.fromSettings(AppSettings s, {double loudnessGainDb = 0.0}) {
+  factory AudioTuningRequest.fromSettings(
+    AppSettings s, {
+    double loudnessGainDb = 0.0,
+  }) {
     final text = s.eqProfileText?.trim();
     final loudness = s.loudnessNormalize ? loudnessGainDb : 0.0;
     return AudioTuningRequest(

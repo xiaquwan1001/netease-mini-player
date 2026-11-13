@@ -11,9 +11,8 @@ Future<void> pumpPlain(WidgetTester tester, List<String> lines) async {
   await tester.pumpWidget(
     MaterialApp(
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: const TextScaler.linear(1.25),
-        ),
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
         child: child!,
       ),
       home: const Scaffold(body: PlainLyricView(lines: [])),
@@ -51,10 +50,12 @@ void main() {
 
   group('parseLrc', () {
     test('标准 LRC: 时间轴升序 + 多标签展开 + 两种小数位', () {
-      final doc = parseLrc('[ti:标题]\n'
-          '[00:02.50]第二句\n'
-          '[00:01][00:04]重复句\n'
-          '[00:03.250]第三句\n');
+      final doc = parseLrc(
+        '[ti:标题]\n'
+        '[00:02.50]第二句\n'
+        '[00:01][00:04]重复句\n'
+        '[00:03.250]第三句\n',
+      );
       expect(doc.hasTimeline, isTrue);
       expect(doc.plain, isEmpty);
       final times = [for (final l in doc.timed) l.timeMs];
@@ -82,7 +83,8 @@ void main() {
 
     test('格式异常不抛异常, 文字尽量保留', () {
       // 坏时间标签 + 元数据 + 截断标签 + 普通文本混排
-      const raw = '[00:xx]坏标签行\n'
+      const raw =
+          '[00:xx]坏标签行\n'
           '[ti:这是元数据]\n'
           '[01:0截断的标签\n'
           '[abc]未知标签行\n'
@@ -97,10 +99,10 @@ void main() {
       const raw = '[00:01.00]一句\n[00:02.00]二句\n';
       final missing = parseLrc(raw);
       expect(missing.timed.every((l) => l.sub == null), isTrue);
-      final merged = parseLrc(raw, translations: {
-        _ms(1000): 'one line',
-        _ms(9999): '对不上的翻译',
-      });
+      final merged = parseLrc(
+        raw,
+        translations: {_ms(1000): 'one line', _ms(9999): '对不上的翻译'},
+      );
       expect(merged.timed[0].sub, 'one line');
       expect(merged.timed[1].sub, isNull); // 缺失不崩
     });
@@ -108,25 +110,31 @@ void main() {
 
   group('PlainLyricView', () {
     testWidgets('纯文本按行展示', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: PlainLyricView(lines: ['第一行', '第二行'])),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: PlainLyricView(lines: ['第一行', '第二行'])),
+        ),
+      );
       expect(find.text('第一行'), findsOneWidget);
       expect(find.text('第二行'), findsOneWidget);
     });
 
     testWidgets('空内容显示空态文案', (tester) async {
-      await tester.pumpWidget(const MaterialApp(
-        home: Scaffold(body: PlainLyricView(lines: [])),
-      ));
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: PlainLyricView(lines: [])),
+        ),
+      );
       expect(find.text('暂无歌词'), findsOneWidget);
     });
 
     testWidgets('格式异常解析出的纯文本也能显示', (tester) async {
       final doc = parseLrc('[00:xx]坏标签行\n[ti:元数据]\n正常行\n');
-      await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: PlainLyricView(lines: doc.plain)),
-      ));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: PlainLyricView(lines: doc.plain)),
+        ),
+      );
       expect(find.text('坏标签行'), findsOneWidget);
       expect(find.text('正常行'), findsOneWidget);
       expect(find.text('元数据'), findsNothing);
@@ -136,20 +144,20 @@ void main() {
       tester.view.devicePixelRatio = 1.0;
       tester.view.physicalSize = const Size(300, 700);
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(1.25)),
-          child: child!,
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(1.25)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: PlainLyricView(
+              lines: ['这是一段特别特别特别长的纯文本歌词, 用来验证窄屏大字号下软换行不溢出', '', '短行'],
+            ),
+          ),
         ),
-        home: Scaffold(
-          body: PlainLyricView(lines: [
-            '这是一段特别特别特别长的纯文本歌词, 用来验证窄屏大字号下软换行不溢出',
-            '',
-            '短行',
-          ]),
-        ),
-      ));
+      );
       expect(tester.takeException(), isNull);
     });
   });

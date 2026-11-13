@@ -37,7 +37,10 @@ pub struct ChannelStore {
 
 impl ChannelStore {
     fn new() -> Self {
-        Self { entries: Mutex::new(BTreeMap::new()), pending: Mutex::new(VecDeque::new()) }
+        Self {
+            entries: Mutex::new(BTreeMap::new()),
+            pending: Mutex::new(VecDeque::new()),
+        }
     }
 
     /// 合并条目(幂等): 已存在的 key 以 restore 值覆盖(Keystore 是上次进程的最终态).
@@ -59,8 +62,14 @@ impl ChannelStore {
 impl CredentialStore for ChannelStore {
     fn put(&self, key: CredentialKey, secret: &str) -> Result<(), CredentialError> {
         let id = key.id();
-        self.entries.lock().unwrap().insert(id.clone(), secret.to_string());
-        self.push_pending(CredOp::Put { key: id, value: secret.to_string() });
+        self.entries
+            .lock()
+            .unwrap()
+            .insert(id.clone(), secret.to_string());
+        self.push_pending(CredOp::Put {
+            key: id,
+            value: secret.to_string(),
+        });
         Ok(())
     }
 
@@ -141,13 +150,22 @@ mod tests {
         let s = fresh(&[]);
         s.put(CredentialKey::Session, "MUSIC_U=abc").unwrap();
         s.put(CredentialKey::Account(7), "MUSIC_U=def").unwrap();
-        assert_eq!(s.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=abc"));
-        assert_eq!(s.get(CredentialKey::Account(7)).unwrap().as_deref(), Some("MUSIC_U=def"));
+        assert_eq!(
+            s.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("MUSIC_U=abc")
+        );
+        assert_eq!(
+            s.get(CredentialKey::Account(7)).unwrap().as_deref(),
+            Some("MUSIC_U=def")
+        );
         assert_eq!(s.get(CredentialKey::Account(8)).unwrap(), None);
         s.remove(CredentialKey::Session).unwrap();
         assert_eq!(s.get(CredentialKey::Session).unwrap(), None);
         // remove 后账号凭据不受影响
-        assert_eq!(s.get(CredentialKey::Account(7)).unwrap().as_deref(), Some("MUSIC_U=def"));
+        assert_eq!(
+            s.get(CredentialKey::Account(7)).unwrap().as_deref(),
+            Some("MUSIC_U=def")
+        );
     }
 
     #[test]
@@ -162,8 +180,14 @@ mod tests {
         assert_eq!(
             q,
             vec![
-                CredOp::Put { key: "session".into(), value: "v2".into() },
-                CredOp::Put { key: "account:7".into(), value: "v3".into() },
+                CredOp::Put {
+                    key: "session".into(),
+                    value: "v2".into()
+                },
+                CredOp::Put {
+                    key: "account:7".into(),
+                    value: "v3".into()
+                },
             ]
         );
     }
@@ -171,10 +195,19 @@ mod tests {
     #[test]
     fn merge_is_idempotent_and_overwrites() {
         let s = fresh(&[("session".into(), "old".into())]);
-        s.merge(&[("session".into(), "new".into()), ("account:1".into(), "a".into())]);
+        s.merge(&[
+            ("session".into(), "new".into()),
+            ("account:1".into(), "a".into()),
+        ]);
         s.merge(&[("account:1".into(), "a".into())]);
-        assert_eq!(s.get(CredentialKey::Session).unwrap().as_deref(), Some("new"));
-        assert_eq!(s.get(CredentialKey::Account(1)).unwrap().as_deref(), Some("a"));
+        assert_eq!(
+            s.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("new")
+        );
+        assert_eq!(
+            s.get(CredentialKey::Account(1)).unwrap().as_deref(),
+            Some("a")
+        );
     }
 
     #[test]
@@ -187,7 +220,10 @@ mod tests {
         activate(vec![("session".into(), "restored".into())]);
         let backend = channel_backend().expect("激活后应有桥");
         assert!(backend.available().is_ok());
-        assert_eq!(backend.get(CredentialKey::Session).unwrap().as_deref(), Some("restored"));
+        assert_eq!(
+            backend.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("restored")
+        );
 
         backend.put(CredentialKey::Session, "after-login").unwrap();
         backend.remove(CredentialKey::Account(9)).unwrap();
@@ -195,8 +231,13 @@ mod tests {
         assert_eq!(
             ops,
             vec![
-                CredOp::Put { key: "session".into(), value: "after-login".into() },
-                CredOp::Remove { key: "account:9".into() },
+                CredOp::Put {
+                    key: "session".into(),
+                    value: "after-login".into()
+                },
+                CredOp::Remove {
+                    key: "account:9".into()
+                },
             ]
         );
         // drain 是取走语义: 再拉为空
@@ -204,8 +245,14 @@ mod tests {
         // 重复 activate 合并, 不重建(内存态保留)
         activate(vec![("account:2".into(), "b".into())]);
         let backend = channel_backend().unwrap();
-        assert_eq!(backend.get(CredentialKey::Session).unwrap().as_deref(), Some("after-login"));
-        assert_eq!(backend.get(CredentialKey::Account(2)).unwrap().as_deref(), Some("b"));
+        assert_eq!(
+            backend.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("after-login")
+        );
+        assert_eq!(
+            backend.get(CredentialKey::Account(2)).unwrap().as_deref(),
+            Some("b")
+        );
         deactivate_for_test();
         assert!(channel_backend().is_none());
     }

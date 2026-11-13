@@ -4,22 +4,26 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_suggest.dart';
 
 rust.SuggestItem item(String kind, String title) => rust.SuggestItem(
-      kind: kind,
-      id: BigInt.one,
-      title: title,
-      subtitle: 'sub',
-      coverUrl: null,
-    );
+  kind: kind,
+  id: BigInt.one,
+  title: title,
+  subtitle: 'sub',
+  coverUrl: null,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('建议面板展示条目并回调', (tester) async {
     rust.SuggestItem? tapped;
-    await tester.pumpWidget(host(SuggestionPanel(
-      items: [item('song', '晴天'), item('artist', '周杰伦')],
-      onSelected: (v) => tapped = v,
-    )));
+    await tester.pumpWidget(
+      host(
+        SuggestionPanel(
+          items: [item('song', '晴天'), item('artist', '周杰伦')],
+          onSelected: (v) => tapped = v,
+        ),
+      ),
+    );
     expect(find.text('晴天'), findsOneWidget);
     expect(find.text('周杰伦'), findsOneWidget);
     expect(find.text('单曲'), findsOneWidget);
@@ -29,21 +33,24 @@ void main() {
   });
 
   testWidgets('空建议不占位', (tester) async {
-    await tester.pumpWidget(host(SuggestionPanel(
-      items: const [],
-      onSelected: (_) {},
-    )));
+    await tester.pumpWidget(
+      host(SuggestionPanel(items: const [], onSelected: (_) {})),
+    );
     expect(find.byType(ListTile), findsNothing);
   });
 
   testWidgets('搜索历史 chip 可点击与清空', (tester) async {
     String? chosen;
     var cleared = 0;
-    await tester.pumpWidget(host(SearchHistoryBar(
-      history: const ['晴天', '七里香'],
-      onSelected: (k) => chosen = k,
-      onClear: () => cleared++,
-    )));
+    await tester.pumpWidget(
+      host(
+        SearchHistoryBar(
+          history: const ['晴天', '七里香'],
+          onSelected: (k) => chosen = k,
+          onClear: () => cleared++,
+        ),
+      ),
+    );
     expect(find.text('搜索历史'), findsOneWidget);
     await tester.tap(find.text('七里香'));
     expect(chosen, '七里香');
@@ -57,45 +64,49 @@ void main() {
     addTearDown(tester.view.reset);
     final scaled = const MediaQueryData(textScaler: TextScaler.linear(1.25));
 
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: scaled,
-        child: Scaffold(
-          body: SuggestionPanel(
-            items: [
-              item('song', '一首名字特别特别长的歌曲用于小屏回归测试'),
-              item('artist', '一个名字特别特别长的歌手用于小屏回归测试'),
-            ],
-            onSelected: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: scaled,
+          child: Scaffold(
+            body: SuggestionPanel(
+              items: [
+                item('song', '一首名字特别特别长的歌曲用于小屏回归测试'),
+                item('artist', '一个名字特别特别长的歌手用于小屏回归测试'),
+              ],
+              onSelected: (_) {},
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: scaled,
-        child: Scaffold(
-          body: SearchHistoryBar(
-            history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
-            onSelected: (_) {},
-            onClear: () {},
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: scaled,
+          child: Scaffold(
+            body: SearchHistoryBar(
+              history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
+              onSelected: (_) {},
+              onClear: () {},
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('无历史时不显示', (tester) async {
-    await tester.pumpWidget(host(SearchHistoryBar(
-      history: const [],
-      onSelected: (_) {},
-      onClear: () {},
-    )));
+    await tester.pumpWidget(
+      host(
+        SearchHistoryBar(history: const [], onSelected: (_) {}, onClear: () {}),
+      ),
+    );
     expect(find.text('搜索历史'), findsNothing);
   });
 }

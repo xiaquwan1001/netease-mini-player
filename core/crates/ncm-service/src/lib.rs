@@ -6,9 +6,9 @@
 
 pub mod cache;
 pub mod credential_channel;
-pub mod credential_store;
 #[cfg(target_os = "linux")]
 pub mod credential_keyring;
+pub mod credential_store;
 pub mod history;
 
 pub use credential_store::{CredentialStatus, CredentialStore};
@@ -21,7 +21,9 @@ pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
-pub use ttml_source::{fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource};
+pub use ttml_source::{
+    fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource,
+};
 
 use ncm_provider::{Capability, ProviderRegistry};
 use std::path::{Path, PathBuf};
@@ -50,7 +52,12 @@ impl Core {
         let netease = Arc::new(NeteaseProvider::new(session.clone()));
         let mut providers = ProviderRegistry::new();
         providers.register(netease.clone());
-        Ok(Self { store, session, providers, netease })
+        Ok(Self {
+            store,
+            session,
+            providers,
+            netease,
+        })
     }
 
     /// 登录成功后调用: 持久化并热更新 provider
@@ -68,7 +75,10 @@ impl Core {
     }
 
     /// 登录成功后记住这个账号(只存登录凭据, 指纹共享), 并设为当前账号
-    pub fn remember_account(&mut self, profile: &ncm_domain::Profile) -> std::io::Result<AccountBook> {
+    pub fn remember_account(
+        &mut self,
+        profile: &ncm_domain::Profile,
+    ) -> std::io::Result<AccountBook> {
         let mut book = self.store.load_accounts()?;
         book.upsert(StoredAccount {
             user_id: profile.user_id,
@@ -92,7 +102,8 @@ impl Core {
         };
         // 设备指纹取自当前会话(与账号无关), 登录凭据换成目标账号的
         let device_only = identity::clear_login_cookie(&self.session.cookie);
-        let cookie = identity::merge_device_cookie(&device_only, &account.cookie, &self.session.device_id);
+        let cookie =
+            identity::merge_device_cookie(&device_only, &account.cookie, &self.session.device_id);
         let mut next = self.session.clone();
         next.cookie = cookie;
         next.profile = Some(ncm_domain::Profile {
@@ -102,8 +113,7 @@ impl Core {
             vip: account.vip,
         });
         self.apply_session(next)?;
-        self.store.save_accounts(&book)
-            .map(|_| true)
+        self.store.save_accounts(&book).map(|_| true)
     }
 
     /// 把外部拿到的登录凭据(网页/扫码登录)合并进会话并落盘: 设备指纹保留.
@@ -163,6 +173,10 @@ impl Core {
 
     fn store_dir(&self) -> PathBuf {
         // IdentityStore 没暴露 dir; 借 path() 的 parent 足够(同一数据目录)
-        self.store.path().parent().map(Path::to_path_buf).unwrap_or_default()
+        self.store
+            .path()
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default()
     }
 }

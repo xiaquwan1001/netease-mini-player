@@ -88,7 +88,11 @@ impl Args {
             }
             i += 1;
         }
-        Self { cmd, positional, flags }
+        Self {
+            cmd,
+            positional,
+            flags,
+        }
     }
 
     fn has(&self, name: &str) -> bool {
@@ -97,7 +101,9 @@ impl Args {
 
     fn value(&self, name: &str) -> Option<String> {
         let p = format!("{name}=");
-        self.flags.iter().find_map(|f| f.strip_prefix(&p).map(str::to_string))
+        self.flags
+            .iter()
+            .find_map(|f| f.strip_prefix(&p).map(str::to_string))
     }
 }
 
@@ -1608,7 +1614,8 @@ fn whoami(core: &Core) -> Result<(), BoxErr> {
         Some(p) => println!("account    = #{} {} vip={}", p.user_id, p.nickname, p.vip),
         None => println!("account    = (尚未同步资料)"),
     }
-    println!("cookie_keys= {}",
+    println!(
+        "cookie_keys= {}",
         core.session
             .cookie
             .split(';')
@@ -1617,7 +1624,12 @@ fn whoami(core: &Core) -> Result<(), BoxErr> {
             .join(",")
     );
     for p in core.providers.all() {
-        println!("provider   = {} ({}) caps={:?}", p.id(), p.name(), p.capabilities());
+        println!(
+            "provider   = {} ({}) caps={:?}",
+            p.id(),
+            p.name(),
+            p.capabilities()
+        );
     }
     Ok(())
 }
@@ -1640,7 +1652,11 @@ fn short_line(s: &str, max_chars: usize) -> String {
 }
 
 fn announce(core: &Core) {
-    let state = if core.session.is_logged_in() { "logged-in" } else { "anonymous" };
+    let state = if core.session.is_logged_in() {
+        "logged-in"
+    } else {
+        "anonymous"
+    };
     eprintln!("[{state}] device={}", &core.session.device_id[..8]);
 }
 

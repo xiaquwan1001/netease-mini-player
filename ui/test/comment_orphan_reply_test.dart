@@ -12,48 +12,49 @@ rust.Comment c(
   int parentId = 0,
   String? repliedTo,
   int replyCount = 0,
-}) =>
-    rust.Comment(
-      id: BigInt.from(id),
-      userId: BigInt.from(100 + id),
-      userName: name ?? '用户$id',
-      avatarUrl: null,
-      content: content,
-      timeMs: BigInt.from(1700000000000 + id),
-      likedCount: BigInt.zero,
-      liked: false,
-      replyCount: BigInt.from(replyCount),
-      ipLocation: '',
-      hot: false,
-      repliedTo: repliedTo,
-      parentId: BigInt.from(parentId),
-    );
+}) => rust.Comment(
+  id: BigInt.from(id),
+  userId: BigInt.from(100 + id),
+  userName: name ?? '用户$id',
+  avatarUrl: null,
+  content: content,
+  timeMs: BigInt.from(1700000000000 + id),
+  likedCount: BigInt.zero,
+  liked: false,
+  replyCount: BigInt.from(replyCount),
+  ipLocation: '',
+  hot: false,
+  repliedTo: repliedTo,
+  parentId: BigInt.from(parentId),
+);
 
 rust.CommentPage pageOf(List<rust.Comment> items) => rust.CommentPage(
-      threadId: 'A_EV_2_1_2',
-      comments: items,
-      total: BigInt.from(items.length),
-      hasMore: false,
-    );
+  threadId: 'A_EV_2_1_2',
+  comments: items,
+  total: BigInt.from(items.length),
+  hasMore: false,
+);
 
 Future<void> pump(WidgetTester tester, List<rust.Comment> page) async {
   await tester.binding.setSurfaceSize(const Size(900, 1600));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: CommentThread(
-          threadId: 'A_EV_2_1_2',
-          loadPage: (limit, offset) async => pageOf(page),
-          // 楼层接口不返回东西: 只验"归位"这一步, 不依赖网络预览
-          loadReplies: (parentId, limit) async => pageOf(const []),
-          like: (commentId, liked) async => true,
-          reply: (commentId, content) async => true,
-          myUid: BigInt.from(999),
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: CommentThread(
+            threadId: 'A_EV_2_1_2',
+            loadPage: (limit, offset) async => pageOf(page),
+            // 楼层接口不返回东西: 只验"归位"这一步, 不依赖网络预览
+            loadReplies: (parentId, limit) async => pageOf(const []),
+            like: (commentId, liked) async => true,
+            reply: (commentId, content) async => true,
+            myUid: BigInt.from(999),
+          ),
         ),
       ),
     ),
-  ));
+  );
   await tester.pump();
   await tester.pump();
   await tester.pump();
@@ -114,27 +115,29 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CommentThread(
-            threadId: 'A_EV_2_1_2',
-            loadPage: (limit, offset) async => pageOf([
-              c(1, '主评论名字也很长很长很长很长', name: '楼主', replyCount: 4),
-              c(2, '这是回复内容也很长很长', name: '回复者', parentId: 1, repliedTo: '楼主'),
-            ]),
-            loadReplies: (parentId, limit) async => pageOf(const []),
-            like: (commentId, liked) async => true,
-            reply: (commentId, content) async => true,
-            myUid: BigInt.from(999),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CommentThread(
+              threadId: 'A_EV_2_1_2',
+              loadPage: (limit, offset) async => pageOf([
+                c(1, '主评论名字也很长很长很长很长', name: '楼主', replyCount: 4),
+                c(2, '这是回复内容也很长很长', name: '回复者', parentId: 1, repliedTo: '楼主'),
+              ]),
+              loadReplies: (parentId, limit) async => pageOf(const []),
+              like: (commentId, liked) async => true,
+              reply: (commentId, content) async => true,
+              myUid: BigInt.from(999),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump();
     expect(tester.takeException(), isNull);

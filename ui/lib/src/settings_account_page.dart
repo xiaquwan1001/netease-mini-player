@@ -18,14 +18,19 @@ Future<void> showAccountPage(
   required bool isAndroid,
   required VoidCallback onLogin,
   required Future<void> Function() onLogout,
+
   /// 打开黑胶会员页(不传则不显示入口)
   VoidCallback? onOpenVip,
+
   /// 测试注入: 账号簿
   Future<List<rust.AccountDto>> Function()? loadAccounts,
+
   /// 切换账号(缺省只调 rust.accountSwitch)
   Future<void> Function(rust.AccountDto account)? onSwitchAccount,
+
   /// 忘记账号(缺省只调 rust.accountRemove)
   Future<void> Function(rust.AccountDto account)? onRemoveAccount,
+
   /// 清除本机全部登录凭据(退出登录 + 忘掉账号簿里所有账号).
   /// 不传则不显示该入口(测试/无凭据时保持页面简洁).
   Future<void> Function()? onPurgeLocal,
@@ -221,8 +226,8 @@ class _AccountPageState extends State<AccountPage> {
                     child: Text(
                       _loggedIn
                           ? (nickname == null || nickname.isEmpty
-                              ? '已登录'
-                              : nickname)
+                                ? '已登录'
+                                : nickname)
                           : '未登录',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -235,9 +240,7 @@ class _AccountPageState extends State<AccountPage> {
                 ],
               ),
               subtitle: Text(
-                _loggedIn
-                    ? '账号与登录凭据保存在本机, 可随时切换'
-                    : '登录后可同步收藏/歌单/推荐',
+                _loggedIn ? '账号与登录凭据保存在本机, 可随时切换' : '登录后可同步收藏/歌单/推荐',
                 style: theme.textTheme.bodySmall,
               ),
               trailing: _loggedIn
@@ -383,9 +386,7 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         title,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
+        style: Theme.of(context).textTheme.titleSmall
             ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );

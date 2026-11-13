@@ -31,8 +31,9 @@ class SheetHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final titleStyle = theme.textTheme.titleMedium
-        ?.copyWith(fontWeight: FontWeight.w600);
+    final titleStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
     final Widget titleArea = subtitle == null
         ? Text(
             title,
@@ -75,10 +76,7 @@ class SheetHeader extends StatelessWidget {
           ] else
             const SizedBox(width: 12),
           Expanded(child: titleArea),
-          if (trailing != null) ...[
-            trailing!,
-            const SizedBox(width: 8),
-          ],
+          if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
           if (onClose != null)
             IconButton(
               icon: const Icon(Icons.close),

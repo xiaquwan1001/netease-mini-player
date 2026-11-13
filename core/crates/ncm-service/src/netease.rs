@@ -2,28 +2,24 @@ use std::sync::RwLock;
 
 use ncm_api_rs::{ApiClient, CryptoType, NcmError, Query, RequestOption};
 use ncm_domain::{
-    Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMv, ArtistMvPage, ArtistSongPage, ChartSummary, Comment, CommentPage,
-    MvDetail, MvUrl,
-    CommentStats,
-    DefaultSearch, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchTerm, InboxItem, Lyric, MessageCounts,
-    PlayRankEntry,
-    HotSearchDetailItem, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
-    SearchExact, ToplistCatalogGroup, ToplistCatalogItem,
-    PrivateSession, ProfileDetail, RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchPage, SearchPlaylistItem,
-    SearchPodcast, Session, SigninDay, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    WordLyric,
-    MedalWall, PhoneLoginOutcome, PhoneLoginResult, QrLoginCheck, QrLoginKey, QrLoginOutcome, QrLoginState, SmsCodeSent,
-    UserItem, UserLevel, UserMedal, VipGrowth,
-    VipMembership, VipOverview, VipSign, VipSignDay,
-    VipTask, WikiFact,
+    Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMv, ArtistMvPage,
+    ArtistSongPage, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
-    PurchasedSongEntry, SongPurchasedPage,
-    RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedProgram, RadioRankedRadio,
-    RadioSubscriber, RadioSubscriberPage, RadioToplist,
+    FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
+    Lyric, MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome, PhoneLoginResult,
+    PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio,
+    PrivateMessage, PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey,
+    QrLoginOutcome, QrLoginState, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
+    RadioRankedProgram, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RadioToplist,
+    RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchExact, SearchPage,
+    SearchPlaylistItem, SearchPodcast, Session, SigninDay, SigninStatus, SmsCodeSent, Song,
+    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
+    TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign,
+    VipSignDay, VipTask, WikiFact, WordLyric,
 };
 use ncm_provider::{
-    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult, RankingPeriod,
-    SearchQuery, SongUrlRequest,
+    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,
+    RankingPeriod, SearchQuery, SongUrlRequest,
 };
 use serde_json::Value;
 
@@ -97,7 +93,12 @@ impl Inner {
         if !session.device_id.is_empty() {
             client.set_device_id(session.device_id.clone());
         }
-        Self { client, session, domain, ua }
+        Self {
+            client,
+            session,
+            domain,
+            ua,
+        }
     }
 
     fn query(&self) -> Query {
@@ -119,12 +120,16 @@ impl NeteaseProvider {
             .ok()
             .filter(|s| !s.is_empty())
             .or_else(|| Some(crate::identity::platform_profile().ua.to_string()));
-        Self { inner: RwLock::new(Inner::new(session, domain, ua)) }
+        Self {
+            inner: RwLock::new(Inner::new(session, domain, ua)),
+        }
     }
 
     /// 覆盖域名/UA (风控实验用): 例如切 interface3 + 网页 UA
     pub fn with_channel(session: Session, domain: Option<String>, ua: Option<String>) -> Self {
-        Self { inner: RwLock::new(Inner::new(session, domain, ua)) }
+        Self {
+            inner: RwLock::new(Inner::new(session, domain, ua)),
+        }
     }
 
     pub fn update_session(&self, session: Session) {
@@ -233,7 +238,10 @@ impl NeteaseProvider {
         ua: &Option<String>,
         cookie: &str,
     ) -> Option<u64> {
-        let resp = client.user_level(&make_query(cookie, domain, ua)).await.ok()?;
+        let resp = client
+            .user_level(&make_query(cookie, domain, ua))
+            .await
+            .ok()?;
         if check_body(&resp.body).is_err() {
             return self.uid_cached();
         }
@@ -245,11 +253,7 @@ impl NeteaseProvider {
     }
 
     /// 最近播放三类(专辑/歌单/电台)共用的取数: 响应都是 {code, data:{list:[{data:{...}}]}}
-    async fn recent_bucket(
-        &self,
-        bucket: RecentBucket,
-        limit: u32,
-    ) -> ProviderResult<Vec<Value>> {
+    async fn recent_bucket(&self, bucket: RecentBucket, limit: u32) -> ProviderResult<Vec<Value>> {
         let (client, domain, ua, cookie) = self.snapshot();
         if !cookie.contains("MUSIC_U=") {
             return Err(ProviderError::auth("最近播放需要登录"));
@@ -282,7 +286,12 @@ impl NeteaseProvider {
         let guard = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let mut q = guard.query();
         q.cookie = None;
-        (guard.client.clone(), guard.domain.clone(), guard.ua.clone(), guard.session.cookie.clone())
+        (
+            guard.client.clone(),
+            guard.domain.clone(),
+            guard.ua.clone(),
+            guard.session.cookie.clone(),
+        )
     }
 }
 
@@ -300,7 +309,14 @@ fn make_query(cookie: &str, domain: &Option<String>, ua: &Option<String>) -> Que
 /// 报错却是笼统的 "error sending request for url (...)", 看起来像"接口挂了/设备风控"。
 /// 这里附一句提示, 省掉一次误判。
 fn proxy_hint() -> String {
-    for key in ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "HTTP_PROXY", "http_proxy"] {
+    for key in [
+        "HTTPS_PROXY",
+        "https_proxy",
+        "ALL_PROXY",
+        "all_proxy",
+        "HTTP_PROXY",
+        "http_proxy",
+    ] {
         if let Ok(v) = std::env::var(key) {
             if !v.trim().is_empty() {
                 return format!(" (提示: 检测到 {key}={v}, 若代理未运行请 unset 后再试)");
@@ -468,7 +484,10 @@ pub fn parse_vip_growth(body: &Value) -> Option<VipGrowth> {
         level_name,
         growth_point: user.get("growthPoint").and_then(Value::as_i64).unwrap_or(0),
         today_score,
-        max_level: user.get("maxLevel").and_then(Value::as_bool).unwrap_or(false),
+        max_level: user
+            .get("maxLevel")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -527,7 +546,10 @@ pub fn parse_vip_tasks(body: &Value) -> (Vec<VipTask>, i64) {
                     Some(Value::Array(a)) => a.len() as i64,
                     _ => 0,
                 };
-                let progress = it.get("currentProgress").and_then(Value::as_i64).unwrap_or(0);
+                let progress = it
+                    .get("currentProgress")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
                 let status = it.get("status").and_then(Value::as_i64).unwrap_or(0);
                 out.push(VipTask {
                     title,
@@ -565,7 +587,10 @@ pub fn parse_user_level(body: &Value) -> Option<UserLevel> {
         // progress 实测是 f64(0.19175), 但防御性兼容字符串形态
         progress: data
             .get("progress")
-            .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+            .and_then(|v| {
+                v.as_f64()
+                    .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+            })
             .unwrap_or(0.0),
         privileges: str_of(data, "info").unwrap_or_default(),
     })
@@ -654,7 +679,10 @@ pub fn parse_playlist_edit_result(body: &Value) -> ncm_domain::PlaylistEditResul
 }
 
 fn u64_of(v: &Value, key: &str) -> Option<u64> {
-    v.get(key).and_then(|x| x.as_u64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
+    v.get(key).and_then(|x| {
+        x.as_u64()
+            .or_else(|| x.as_str().and_then(|s| s.parse().ok()))
+    })
 }
 
 fn str_of(v: &Value, key: &str) -> Option<String> {
@@ -668,7 +696,10 @@ fn u32_of(v: &Value, key: &str) -> Option<u32> {
 /// lastRank 是 i32(服务器用 -1 表示新上榜), 与其它计数不同
 fn i32_of(v: &Value, key: &str) -> Option<i32> {
     v.get(key)
-        .and_then(|x| x.as_i64().or_else(|| x.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|x| {
+            x.as_i64()
+                .or_else(|| x.as_str().and_then(|s| s.parse().ok()))
+        })
         .and_then(|n| i32::try_from(n).ok())
 }
 
@@ -722,7 +753,10 @@ pub fn parse_comment_floor(body: &Value) -> ProviderResult<CommentPage> {
     Ok(CommentPage {
         comments: arr.iter().filter_map(|v| parse_comment(v, false)).collect(),
         total: u64_of(data, "total").unwrap_or(0),
-        has_more: data.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+        has_more: data
+            .get("hasMore")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         thread_id: String::new(),
     })
 }
@@ -795,10 +829,7 @@ fn privilege_playable(p: &Value) -> bool {
     }
 }
 
-fn parse_song_with(
-    v: &Value,
-    privileges: &std::collections::HashMap<u64, bool>,
-) -> Option<Song> {
+fn parse_song_with(v: &Value, privileges: &std::collections::HashMap<u64, bool>) -> Option<Song> {
     let id = u64_of(v, "id")?;
     // 优先级: song 自带的 privilege > 响应级 privileges[] > 默认可播
     let playable = v
@@ -832,7 +863,9 @@ fn parse_song_with(
         name: str_of(v, "name").unwrap_or_default(),
         artists,
         album,
-        duration_ms: u64_of(v, "dt").or_else(|| u64_of(v, "duration")).unwrap_or(0),
+        duration_ms: u64_of(v, "dt")
+            .or_else(|| u64_of(v, "duration"))
+            .unwrap_or(0),
         fee: v.get("fee").and_then(Value::as_i64),
         playable,
     })
@@ -1016,13 +1049,21 @@ pub fn parse_search_podcasts(result: &Value) -> Vec<SearchPodcast> {
 
 /// 歌手详情: 头部(data.artist) + 热门歌曲(songs) + 专辑(hotAlbums)
 pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> ArtistDetail {
-    let info = detail.get("data").and_then(|d| d.get("artist")).or_else(|| detail.get("artist"));
+    let info = detail
+        .get("data")
+        .and_then(|d| d.get("artist"))
+        .or_else(|| detail.get("artist"));
     let id = info.and_then(|a| u64_of(a, "id")).unwrap_or(0);
     let name = info.and_then(|a| str_of(a, "name")).unwrap_or_default();
     let alias = info
         .and_then(|a| a.get("alias"))
         .and_then(Value::as_array)
-        .map(|x| x.iter().filter_map(Value::as_str).map(str::to_string).collect())
+        .map(|x| {
+            x.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
         .unwrap_or_default();
     let privileges = parse_privileges(top);
     let songs = top
@@ -1065,7 +1106,9 @@ pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> Artis
             .or_else(|| info.and_then(|a| str_of(a, "coverUrl")))
             .filter(|s| !s.is_empty()),
         alias,
-        brief_desc: info.and_then(|a| str_of(a, "briefDesc")).unwrap_or_default(),
+        brief_desc: info
+            .and_then(|a| str_of(a, "briefDesc"))
+            .unwrap_or_default(),
         album_count: info.and_then(|a| u64_of(a, "albumSize")).unwrap_or(0),
         music_count: info.and_then(|a| u64_of(a, "musicSize")).unwrap_or(0),
         songs,
@@ -1161,7 +1204,9 @@ pub fn parse_word_lyric_body(body: &Value) -> ProviderResult<WordLyric> {
                 .and_then(Value::as_str)
                 .filter(|s| !s.is_empty())
         });
-    Ok(ncm_domain::parse_word_lyric_with_translation(&yrc, translated))
+    Ok(ncm_domain::parse_word_lyric_with_translation(
+        &yrc, translated,
+    ))
 }
 
 impl Provider for NeteaseProvider {
@@ -1236,7 +1281,12 @@ impl Provider for NeteaseProvider {
                 .body
                 .get("ids")
                 .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(Value::as_u64).map(TrackId::new).collect())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(Value::as_u64)
+                        .map(TrackId::new)
+                        .collect()
+                })
                 .unwrap_or_default())
         })
     }
@@ -1386,7 +1436,10 @@ impl Provider for NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua)
                 .param("cat", if cat.is_empty() { "全部" } else { cat })
                 .param("limit", &limit.to_string());
-            let resp = client.top_playlist_highquality(&q).await.map_err(map_error)?;
+            let resp = client
+                .top_playlist_highquality(&q)
+                .await
+                .map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_playlist_bucket(&resp.body, "playlists"))
         })
@@ -1429,7 +1482,11 @@ impl Provider for NeteaseProvider {
     }
 
     /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/b7-playlist-write-notes.md)
-    fn create_playlist<'a>(&'a self, name: &'a str, privacy: u8) -> BoxFuture<'a, ProviderResult<u64>> {
+    fn create_playlist<'a>(
+        &'a self,
+        name: &'a str,
+        privacy: u8,
+    ) -> BoxFuture<'a, ProviderResult<u64>> {
         Box::pin(async move {
             let name = name.trim();
             if name.is_empty() {
@@ -1571,8 +1628,9 @@ impl Provider for NeteaseProvider {
         liked: bool,
     ) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async move {
-            let (resource_type, owner) = split_thread_id(thread_id)
-                .ok_or_else(|| ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}")))?;
+            let (resource_type, owner) = split_thread_id(thread_id).ok_or_else(|| {
+                ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}"))
+            })?;
             let (client, domain, ua, cookie) = self.snapshot();
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("点赞评论需要登录"));
@@ -1596,8 +1654,9 @@ impl Provider for NeteaseProvider {
         limit: u32,
     ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
         Box::pin(async move {
-            let (resource_type, owner) = split_thread_id(thread_id)
-                .ok_or_else(|| ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}")))?;
+            let (resource_type, owner) = split_thread_id(thread_id).ok_or_else(|| {
+                ProviderError::unsupported(format!("无法识别的 threadId: {thread_id}"))
+            })?;
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua)
                 .param("type", resource_type)
@@ -1632,18 +1691,24 @@ impl Provider for NeteaseProvider {
             // 旧版一致; 实测 weapi 的 /api/v1/resource/comments/reply 在**动态**(A_EV_2_*)
             // 上回 code=404, 而动态的评论读接口就在 /api/v1/resource/comments/{threadId}。
             let (path, data) = if comment_id == 0 {
-                ("/api/resource/comments/add", serde_json::json!({
-                    "threadId": thread_id,
-                    "content": content,
-                    "resourceType": "0",
-                }))
+                (
+                    "/api/resource/comments/add",
+                    serde_json::json!({
+                        "threadId": thread_id,
+                        "content": content,
+                        "resourceType": "0",
+                    }),
+                )
             } else {
-                ("/api/resource/comments/reply", serde_json::json!({
-                    "threadId": thread_id,
-                    "commentId": comment_id.to_string(),
-                    "content": content,
-                    "resourceType": "0",
-                }))
+                (
+                    "/api/resource/comments/reply",
+                    serde_json::json!({
+                        "threadId": thread_id,
+                        "commentId": comment_id.to_string(),
+                        "content": content,
+                        "resourceType": "0",
+                    }),
+                )
             };
             let resp = client
                 .request(path, data.clone(), write_option(&cookie, &domain, &ua))
@@ -1768,11 +1833,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 新碟上架: {code, albums:[{id,name,picUrl,artist:{name},size}]}
-    fn new_albums(
-        &self,
-        limit: u32,
-        offset: u32,
-    ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+    fn new_albums(&self, limit: u32, offset: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua)
@@ -1798,11 +1859,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 相似歌曲: {code, songs:[完整歌曲]}
-    fn similar_songs(
-        &self,
-        song_id: u64,
-        limit: u32,
-    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+    fn similar_songs(&self, song_id: u64, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
             if song_id == 0 {
                 return Err(ProviderError::not_found("song id 为空"));
@@ -1877,7 +1934,11 @@ impl Provider for NeteaseProvider {
     }
 
     /// 关注/取消关注歌手(artist_sub: t=1 sub / t=0 unsub), 需要登录.
-    fn toggle_artist_sub<'a>(&'a self, artist_id: u64, sub: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+    fn toggle_artist_sub<'a>(
+        &'a self,
+        artist_id: u64,
+        sub: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async move {
             if artist_id == 0 {
                 return Err(ProviderError::not_found("artist id 为空"));
@@ -1942,7 +2003,11 @@ impl Provider for NeteaseProvider {
                 return Err(ProviderError::not_found("mv id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let r_str = if r == 0 { "1080".to_string() } else { r.to_string() };
+            let r_str = if r == 0 {
+                "1080".to_string()
+            } else {
+                r.to_string()
+            };
             let q = make_query(&cookie, &domain, &ua)
                 .param("id", &mv_id.to_string())
                 .param("r", &r_str);
@@ -1969,7 +2034,10 @@ impl Provider for NeteaseProvider {
                 return Err(ProviderError::auth("不感兴趣需要登录"));
             }
             let q = make_query(&cookie, &domain, &ua).param("id", &song_id.to_string());
-            let resp = client.recommend_songs_dislike(&q).await.map_err(map_error)?;
+            let resp = client
+                .recommend_songs_dislike(&q)
+                .await
+                .map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(true)
         })
@@ -2001,14 +2069,20 @@ impl Provider for NeteaseProvider {
                 return Err(ProviderError::auth("历史日推需要登录"));
             }
             let q = make_query(&cookie, &domain, &ua);
-            let resp = client.history_recommend_songs(&q).await.map_err(map_error)?;
+            let resp = client
+                .history_recommend_songs(&q)
+                .await
+                .map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_history_dates(&resp.body))
         })
     }
 
     /// 某个日期的历史日推: {code, data:{songs:[...]}}
-    fn history_recommend_songs<'a>(&'a self, date: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+    fn history_recommend_songs<'a>(
+        &'a self,
+        date: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
             if date.trim().is_empty() {
                 return Err(ProviderError::not_found("日期为空"));
@@ -2018,7 +2092,10 @@ impl Provider for NeteaseProvider {
                 return Err(ProviderError::auth("历史日推需要登录"));
             }
             let q = make_query(&cookie, &domain, &ua).param("date", date);
-            let resp = client.history_recommend_songs_detail(&q).await.map_err(map_error)?;
+            let resp = client
+                .history_recommend_songs_detail(&q)
+                .await
+                .map_err(map_error)?;
             check_body(&resp.body)?;
             Ok(parse_song_bucket(
                 resp.body.get("data").unwrap_or(&resp.body),
@@ -2133,7 +2210,10 @@ impl Provider for NeteaseProvider {
                     .param("pid", &pid.to_string())
                     .param("sid", &song_id.to_string())
                     .param("count", &count.to_string());
-                let resp = client.playmode_intelligence_list(&q).await.map_err(map_error)?;
+                let resp = client
+                    .playmode_intelligence_list(&q)
+                    .await
+                    .map_err(map_error)?;
                 match check_body(&resp.body) {
                     Ok(()) => {
                         let mut songs = parse_intelligence(&resp.body);
@@ -2256,11 +2336,7 @@ impl Provider for NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua).param("type", "1");
             let resp = client.daily_signin(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
-            let point = resp
-                .body
-                .get("point")
-                .and_then(Value::as_u64)
-                .unwrap_or(0) as u32;
+            let point = resp.body.get("point").and_then(Value::as_u64).unwrap_or(0) as u32;
             let mut status = self.fetch_signin_progress().await?;
             status.signed_today = true;
             status.today_point = point;
@@ -2431,8 +2507,8 @@ impl Provider for NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("type", &song_area_id(area).to_string());
+            let q =
+                make_query(&cookie, &domain, &ua).param("type", &song_area_id(area).to_string());
             let resp = client.top_song(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
             let mut songs = parse_top_songs(&resp.body);
@@ -2553,7 +2629,11 @@ impl Provider for NeteaseProvider {
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("通知需要登录"));
             }
-            let before = if last_time_ms == 0 { -1 } else { last_time_ms as i64 };
+            let before = if last_time_ms == 0 {
+                -1
+            } else {
+                last_time_ms as i64
+            };
             let q = make_query(&cookie, &domain, &ua)
                 .param("limit", &limit.to_string())
                 .param("lasttime", &before.to_string());
@@ -2758,7 +2838,9 @@ impl Provider for NeteaseProvider {
                 ProviderError::unsupported(format!("hot_comments: 无法识别的 threadId {thread_id}"))
             })?;
             if ty == "6" {
-                return Err(ProviderError::unsupported("hot_comments: 动态暂不支持热门评论"));
+                return Err(ProviderError::unsupported(
+                    "hot_comments: 动态暂不支持热门评论",
+                ));
             }
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua)
@@ -2784,10 +2866,14 @@ impl Provider for NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<CommentStats>> {
         Box::pin(async move {
             let (ty, rid) = split_thread_id(thread_id).ok_or_else(|| {
-                ProviderError::unsupported(format!("comment_stats: 无法识别的 threadId {thread_id}"))
+                ProviderError::unsupported(format!(
+                    "comment_stats: 无法识别的 threadId {thread_id}"
+                ))
             })?;
             if ty == "6" {
-                return Err(ProviderError::unsupported("comment_stats: 动态暂不支持评论统计"));
+                return Err(ProviderError::unsupported(
+                    "comment_stats: 动态暂不支持评论统计",
+                ));
             }
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua)
@@ -2836,7 +2922,10 @@ impl Provider for NeteaseProvider {
                 .param("limit", &limit.to_string())
                 .param("offset", &offset.to_string())
                 .param("total", "true");
-            let resp = client.digital_album_purchased(&q).await.map_err(map_error)?;
+            let resp = client
+                .digital_album_purchased(&q)
+                .await
+                .map_err(map_error)?;
             check_body(&resp.body)?;
             parse_digital_album_purchased(&resp.body)
         })
@@ -2863,7 +2952,10 @@ impl Provider for NeteaseProvider {
     }
 
     /// 数字专辑详情(vipmall/albumproduct/detail, weapi, 入参 id).
-    fn digital_album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
+    fn digital_album_detail(
+        &self,
+        album_id: u64,
+    ) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua).param("id", &album_id.to_string());
@@ -2894,20 +2986,24 @@ impl Provider for NeteaseProvider {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua);
-            let (cats, picks) = futures::future::join(
-                client.dj_catelist(&q),
-                client.dj_category_recommend(&q),
-            )
-            .await;
+            let (cats, picks) =
+                futures::future::join(client.dj_catelist(&q), client.dj_category_recommend(&q))
+                    .await;
             let categories = parse_radio_categories(&cats.map_err(map_error)?.body);
             let picks_body = picks.map_err(map_error)?;
             check_body(&picks_body.body)?;
-            Ok(RadioExploreHome { categories, picks: parse_radio_picks(&picks_body.body) })
+            Ok(RadioExploreHome {
+                categories,
+                picks: parse_radio_picks(&picks_body.body),
+            })
         })
     }
 
     /// 某分类推荐电台(dj_recommend_type). cate_id=0 服务端返回空 djRadios, 原样透传空列表.
-    fn radio_recommend<'a>(&'a self, cate_id: u64) -> BoxFuture<'a, ProviderResult<Vec<PodcastRadio>>> {
+    fn radio_recommend<'a>(
+        &'a self,
+        cate_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<Vec<PodcastRadio>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua).param("type", &cate_id.to_string());
@@ -2976,7 +3072,12 @@ impl Provider for NeteaseProvider {
                 .param("id", &radio_id.to_string())
                 .param("limit", &limit.to_string())
                 // 游标是"上一页最后一条的 subscribeTime"(ms), 首页传 -1
-                .param("time", &time_ms.map(|t| t.to_string()).unwrap_or_else(|| "-1".to_string()))
+                .param(
+                    "time",
+                    &time_ms
+                        .map(|t| t.to_string())
+                        .unwrap_or_else(|| "-1".to_string()),
+                )
                 .param("total", "true");
             let resp = client.dj_subscriber(&q).await.map_err(map_error)?;
             check_body(&resp.body)?;
@@ -3052,9 +3153,7 @@ impl Provider for NeteaseProvider {
                 return Err(ProviderError::not_found("artist id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let base = || {
-                make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string())
-            };
+            let base = || make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
             let (detail, top, albums) = futures::future::join3(
                 async { client.artist_detail(&base()).await.map_err(map_error) },
                 async { client.artist_top_song(&base()).await.map_err(map_error) },
@@ -3189,8 +3288,7 @@ impl Provider for NeteaseProvider {
             // at 大 = 更晚收藏; at 缺失(0) 保持服务端顺序
             entries.sort_by_key(|e| std::cmp::Reverse(e.1));
             let ids: Vec<u64> = entries.into_iter().map(|(id, _)| id).collect();
-            let mut by_id: std::collections::HashMap<u64, Song> =
-                std::collections::HashMap::new();
+            let mut by_id: std::collections::HashMap<u64, Song> = std::collections::HashMap::new();
             for chunk in ids.chunks(500) {
                 let joined = chunk
                     .iter()
@@ -3258,10 +3356,7 @@ impl Provider for NeteaseProvider {
     }
 
     /// 已订阅的播客/电台
-    fn subscribed_podcasts(
-        &self,
-        limit: u32,
-    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+    fn subscribed_podcasts(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             if !cookie.contains("MUSIC_U=") {
@@ -3557,7 +3652,9 @@ fn normalize_phone(phone: &str, country_code: &str) -> ProviderResult<(String, S
     };
     let phone = clean(phone);
     if !phone.chars().all(|c| c.is_ascii_digit()) || !(6..=15).contains(&phone.len()) {
-        return Err(ProviderError::auth("手机号看起来不对(只填号码本身, 区号另填)"));
+        return Err(ProviderError::auth(
+            "手机号看起来不对(只填号码本身, 区号另填)",
+        ));
     }
     let cc = clean(country_code);
     let cc = if cc.is_empty() { "86".to_string() } else { cc };
@@ -3585,7 +3682,11 @@ fn parse_sms_sent(body: &Value) -> SmsCodeSent {
         .and_then(Value::as_u64)
         .filter(|v| *v > 0)
         .unwrap_or(300) as u32;
-    SmsCodeSent { code, message, expires_in }
+    SmsCodeSent {
+        code,
+        message,
+        expires_in,
+    }
 }
 
 /// `/api/login/cellphone` 的响应解析.
@@ -3616,7 +3717,11 @@ fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<Pho
         .filter(|s| !s.is_empty())
         .map(str::to_string);
     Ok(PhoneLoginOutcome {
-        result: PhoneLoginResult { logged_in: true, nickname, avatar_url },
+        result: PhoneLoginResult {
+            logged_in: true,
+            nickname,
+            avatar_url,
+        },
         cookie,
     })
 }
@@ -3629,7 +3734,11 @@ fn parse_phone_login(body: &Value, set_cookies: &[String]) -> ProviderResult<Pho
 fn write_option(cookie: &str, domain: &Option<String>, ua: &Option<String>) -> RequestOption {
     RequestOption {
         crypto: CryptoType::Eapi,
-        cookie: if cookie.is_empty() { None } else { Some(cookie.to_string()) },
+        cookie: if cookie.is_empty() {
+            None
+        } else {
+            Some(cookie.to_string())
+        },
         ua: ua.clone(),
         domain: domain.clone(),
         ..Default::default()
@@ -3666,7 +3775,12 @@ fn parse_profile(body: &Value) -> ProviderResult<ncm_domain::Profile> {
         .and_then(|p| p.get("vipType").and_then(Value::as_i64))
         .or_else(|| account.and_then(|a| a.get("vipType").and_then(Value::as_i64)))
         .unwrap_or(0);
-    Ok(ncm_domain::Profile { user_id, nickname, avatar_url, vip: vip_type > 0 })
+    Ok(ncm_domain::Profile {
+        user_id,
+        nickname,
+        avatar_url,
+        vip: vip_type > 0,
+    })
 }
 
 /// 用户歌单列表里的一项. specialType=5 是"我喜欢的音乐"。
@@ -3951,14 +4065,22 @@ pub fn parse_playlist_detail(body: &Value) -> ProviderResult<PlaylistDetail> {
             .unwrap_or(0),
         track_count: u64_of(pl, "trackCount").unwrap_or(0),
         play_count: u64_of(pl, "playCount").unwrap_or(0),
-        subscribed: pl.get("subscribed").and_then(Value::as_bool).unwrap_or(false),
+        subscribed: pl
+            .get("subscribed")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         subscribed_count: u64_of(pl, "subscribedCount").unwrap_or(0),
         share_count: u64_of(pl, "shareCount").unwrap_or(0),
         comment_count: u64_of(pl, "commentCount").unwrap_or(0),
         tags: pl
             .get("tags")
             .and_then(Value::as_array)
-            .map(|arr| arr.iter().filter_map(Value::as_str).map(str::to_string).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
             .unwrap_or_default(),
     })
 }
@@ -4010,7 +4132,9 @@ pub fn parse_comments(body: &Value) -> ProviderResult<CommentPage> {
             continue;
         };
         for v in arr {
-            let Some(c) = parse_comment(v, hot) else { continue };
+            let Some(c) = parse_comment(v, hot) else {
+                continue;
+            };
             match seen.get(&c.id).copied() {
                 Some(idx) => {
                     // 同一条评论在热评和最新里各出现一次: 保留先到的(hot 版),
@@ -4059,7 +4183,10 @@ pub fn parse_comment_stats(body: &Value, thread_id: &str) -> ProviderResult<Comm
         })
         .filter(|v| v.is_object());
     let Some(v) = first else {
-        return Ok(CommentStats { thread_id: thread_id.to_string(), ..Default::default() });
+        return Ok(CommentStats {
+            thread_id: thread_id.to_string(),
+            ..Default::default()
+        });
     };
     Ok(CommentStats {
         thread_id: str_of(v, "threadId")
@@ -4072,7 +4199,10 @@ pub fn parse_comment_stats(body: &Value, thread_id: &str) -> ProviderResult<Comm
         liked_count: u64_of(v, "likedCount").unwrap_or(0),
         liked: v.get("liked").and_then(Value::as_bool).unwrap_or(false),
         musician_said_count: u64_of(v, "musicianSaidCount").unwrap_or(0),
-        comment_upgraded: v.get("commentUpgraded").and_then(Value::as_bool).unwrap_or(false),
+        comment_upgraded: v
+            .get("commentUpgraded")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     })
 }
 
@@ -4106,7 +4236,10 @@ pub fn parse_digital_album_purchased(body: &Value) -> ProviderResult<DigitalAlbu
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    Ok(DigitalAlbumPurchased { total: u64_of(body, "total").unwrap_or(0), albums })
+    Ok(DigitalAlbumPurchased {
+        total: u64_of(body, "total").unwrap_or(0),
+        albums,
+    })
 }
 
 /// 已购单曲(song/purchased)的响应形如
@@ -4122,7 +4255,9 @@ pub fn parse_song_purchased(body: &Value) -> ProviderResult<SongPurchasedPage> {
                 .filter_map(|s| {
                     Some(PurchasedSongEntry {
                         song_id: u64_of(s, "id").or_else(|| u64_of(s, "songId"))?,
-                        name: str_of(s, "name").or_else(|| str_of(s, "songName")).unwrap_or_default(),
+                        name: str_of(s, "name")
+                            .or_else(|| str_of(s, "songName"))
+                            .unwrap_or_default(),
                         artist_name: s
                             .get("artist")
                             .and_then(|x| str_of(x, "name"))
@@ -4141,7 +4276,10 @@ pub fn parse_song_purchased(body: &Value) -> ProviderResult<SongPurchasedPage> {
         .unwrap_or_default();
     Ok(SongPurchasedPage {
         count: data.and_then(|d| u64_of(d, "count")).unwrap_or(0),
-        has_more: data.and_then(|d| d.get("hasMore")).and_then(Value::as_bool).unwrap_or(false),
+        has_more: data
+            .and_then(|d| d.get("hasMore"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         songs,
     })
 }
@@ -4214,7 +4352,10 @@ pub fn parse_radio_toplist_radios(body: &Value) -> RadioToplist {
         .and_then(Value::as_array)
         .map(|arr| arr.iter().filter_map(ranked_radio).collect())
         .unwrap_or_default();
-    RadioToplist { radios, ..RadioToplist::default() }
+    RadioToplist {
+        radios,
+        ..RadioToplist::default()
+    }
 }
 
 /// 主播榜(hours/newcomer/popular): data.list, 元素是用户(nickName 驼峰).
@@ -4239,7 +4380,10 @@ pub fn parse_radio_toplist_djs(body: &Value) -> RadioToplist {
                 .collect()
         })
         .unwrap_or_default();
-    RadioToplist { djs, ..RadioToplist::default() }
+    RadioToplist {
+        djs,
+        ..RadioToplist::default()
+    }
 }
 
 /// 节目榜(dj_program_toplist): 顶层 toplist, 元素 = {rank,lastRank,program}.
@@ -4259,7 +4403,10 @@ pub fn parse_radio_toplist_programs(body: &Value) -> RadioToplist {
                 .collect()
         })
         .unwrap_or_default();
-    RadioToplist { programs, ..RadioToplist::default() }
+    RadioToplist {
+        programs,
+        ..RadioToplist::default()
+    }
 }
 
 /// 电台订阅者(dj_subscriber): 顶层 hasMore + subscribers(完整 user 对象).
@@ -4282,7 +4429,10 @@ pub fn parse_radio_subscribers(body: &Value) -> ProviderResult<RadioSubscriberPa
         })
         .unwrap_or_default();
     Ok(RadioSubscriberPage {
-        has_more: body.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+        has_more: body
+            .get("hasMore")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         subscribers: subs,
     })
 }
@@ -4293,12 +4443,19 @@ pub fn parse_radio_subscribers(body: &Value) -> ProviderResult<RadioSubscriberPa
 ///    product:{price:22.0, pubTime, saleNum, tags:[…], descr:[{resource,type}], …}}
 /// 实测要点: 专辑字段在 album, 价格/上架/标签在 product; descr 的 `</br>` 是分隔占位要过滤.
 pub fn parse_digital_album_detail(body: &Value) -> ProviderResult<DigitalAlbumDetail> {
-    let album = body.get("album").ok_or_else(|| ProviderError::not_found("digital_album_detail: missing album"))?;
+    let album = body
+        .get("album")
+        .ok_or_else(|| ProviderError::not_found("digital_album_detail: missing album"))?;
     let product = body.get("product");
     let tags = product
         .and_then(|p| p.get("tags"))
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
         .unwrap_or_default();
     let description = product
         .and_then(|p| p.get("descr"))
@@ -4317,8 +4474,14 @@ pub fn parse_digital_album_detail(body: &Value) -> ProviderResult<DigitalAlbumDe
         artist_id: u64_of(album, "artistId").unwrap_or(0),
         artist_name: str_of(album, "artistName").unwrap_or_default(),
         cover_url: str_of(album, "coverUrl").unwrap_or_default(),
-        has_album: body.get("hasAlbum").and_then(Value::as_bool).unwrap_or(false),
-        price: product.and_then(|p| p.get("price")).and_then(Value::as_f64).unwrap_or(0.0),
+        has_album: body
+            .get("hasAlbum")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        price: product
+            .and_then(|p| p.get("price"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0),
         pub_time_ms: product.and_then(|p| u64_of(p, "pubTime")).unwrap_or(0),
         sale_num: product.and_then(|p| u64_of(p, "saleNum")).unwrap_or(0),
         tags,
@@ -4334,7 +4497,12 @@ pub fn parse_digital_album_sales(body: &Value) -> Vec<DigitalAlbumSalesEntry> {
         .and_then(Value::as_object)
         .map(|m| {
             m.iter()
-                .filter_map(|(k, v)| Some(DigitalAlbumSalesEntry { album_id: k.clone(), sales: v.as_u64()? }))
+                .filter_map(|(k, v)| {
+                    Some(DigitalAlbumSalesEntry {
+                        album_id: k.clone(),
+                        sales: v.as_u64()?,
+                    })
+                })
                 .collect()
         })
         .unwrap_or_default()
@@ -4369,7 +4537,10 @@ pub fn parse_hot_search(body: &Value) -> Vec<HotSearchTerm> {
         if keyword.is_empty() {
             continue;
         }
-        out.push(HotSearchTerm { rank: out.len() as u32 + 1, keyword });
+        out.push(HotSearchTerm {
+            rank: out.len() as u32 + 1,
+            keyword,
+        });
     }
     out
 }
@@ -4393,7 +4564,9 @@ pub fn parse_suggest_keywords(body: &Value) -> Vec<String> {
     };
     let mut out: Vec<String> = Vec::new();
     for v in arr {
-        let Some(kw) = str_of(v, "keyword") else { continue };
+        let Some(kw) = str_of(v, "keyword") else {
+            continue;
+        };
         let kw = kw.trim().to_string();
         if kw.is_empty() || out.iter().any(|x| x == &kw) {
             continue;
@@ -4466,8 +4639,16 @@ pub fn parse_search_exact(body: &Value) -> SearchExact {
             })
         })
         .collect();
-    let podcasts = arr_of("voice").iter().filter_map(parse_voice_radio).collect();
-    SearchExact { orders, artists, playlists, podcasts }
+    let podcasts = arr_of("voice")
+        .iter()
+        .filter_map(parse_voice_radio)
+        .collect();
+    SearchExact {
+        orders,
+        artists,
+        playlists,
+        podcasts,
+    }
 }
 
 /// multimatch 的 `voice` 是"播客节目"对象, 结构与 dj_detail 完全不同:
@@ -4568,7 +4749,10 @@ pub fn parse_fm_songs(body: &Value) -> Vec<Song> {
         .map(|arr| {
             arr.iter()
                 .filter_map(|item| {
-                    let song = item.get("songInfo").or_else(|| item.get("song")).unwrap_or(item);
+                    let song = item
+                        .get("songInfo")
+                        .or_else(|| item.get("song"))
+                        .unwrap_or(item);
                     parse_song_with(song, &privileges)
                 })
                 .collect()
@@ -4701,7 +4885,10 @@ pub fn parse_artist_mvs(body: &Value) -> ArtistMvPage {
         .unwrap_or_default();
     ArtistMvPage {
         mvs,
-        has_more: body.get("hasMore").and_then(Value::as_bool).unwrap_or(false),
+        has_more: body
+            .get("hasMore")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
     }
 }
 
@@ -4711,7 +4898,11 @@ pub fn parse_mv_detail(body: &Value) -> MvDetail {
     let mut brs: Vec<u32> = d
         .get("brs")
         .and_then(Value::as_array)
-        .map(|arr| arr.iter().filter_map(|v| v.get("br").and_then(Value::as_u64).map(|b| b as u32)).collect())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.get("br").and_then(Value::as_u64).map(|b| b as u32))
+                .collect()
+        })
         .unwrap_or_default();
     brs.sort_unstable();
     brs.dedup();
@@ -4727,7 +4918,9 @@ pub fn parse_mv_detail(body: &Value) -> MvDetail {
         cover_url: str_of(&d, "cover").filter(|s| s.starts_with("http")),
         max_br: brs.last().copied().unwrap_or(0),
         brs,
-        desc: str_of(&d, "desc").or_else(|| str_of(&d, "briefDesc")).filter(|s| !s.is_empty()),
+        desc: str_of(&d, "desc")
+            .or_else(|| str_of(&d, "briefDesc"))
+            .filter(|s| !s.is_empty()),
     }
 }
 
@@ -4824,7 +5017,10 @@ pub fn parse_toplist_catalog(body: &Value) -> Vec<ToplistCatalogGroup> {
                                         update_frequency: str_of(v, "updateFrequency")
                                             .unwrap_or_default(),
                                         target_type: str_of(v, "targetType").unwrap_or_default(),
-                                        can_play: v.get("canPlay").and_then(Value::as_bool).unwrap_or(false),
+                                        can_play: v
+                                            .get("canPlay")
+                                            .and_then(Value::as_bool)
+                                            .unwrap_or(false),
                                     })
                                 })
                                 .collect()
@@ -5044,9 +5240,7 @@ pub fn parse_private_history(body: &Value, my_uid: u64) -> Vec<PrivateMessage> {
                     Some(PrivateMessage {
                         id: u64_of(m, "id").unwrap_or(0),
                         from_me: my_uid != 0 && from_user == my_uid,
-                        nickname: from
-                            .and_then(|u| str_of(u, "nickname"))
-                            .unwrap_or_default(),
+                        nickname: from.and_then(|u| str_of(u, "nickname")).unwrap_or_default(),
                         avatar_url: from.and_then(|u| str_of(u, "avatarUrl")),
                         content,
                         time_ms: u64_of(m, "time").unwrap_or(0),
@@ -5086,9 +5280,7 @@ pub fn parse_notices(body: &Value) -> Vec<InboxItem> {
                     InboxItem {
                         id: u64_of(n, "id").unwrap_or(0),
                         kind: "notice".to_string(),
-                        actor: user
-                            .and_then(|u| str_of(u, "nickname"))
-                            .unwrap_or_default(),
+                        actor: user.and_then(|u| str_of(u, "nickname")).unwrap_or_default(),
                         avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
                         text,
                         detail,
@@ -5119,13 +5311,15 @@ pub fn parse_comment_messages(body: &Value) -> Vec<InboxItem> {
                         .and_then(|v| str_of(&v, "name"))
                         .unwrap_or_default();
                     let replied = str_of(c, "beRepliedContent").unwrap_or_default();
-                    let detail = if !resource.is_empty() { resource } else { replied };
+                    let detail = if !resource.is_empty() {
+                        resource
+                    } else {
+                        replied
+                    };
                     Some(InboxItem {
                         id: u64_of(c, "commentId").unwrap_or(0),
                         kind: "comment".to_string(),
-                        actor: user
-                            .and_then(|u| str_of(u, "nickname"))
-                            .unwrap_or_default(),
+                        actor: user.and_then(|u| str_of(u, "nickname")).unwrap_or_default(),
                         avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
                         text,
                         detail,
@@ -5179,7 +5373,11 @@ pub fn parse_forwards(body: &Value) -> Vec<ForwardItem> {
                         user_id: user.and_then(|u| u64_of(u, "userId")),
                         nickname: user.and_then(|u| str_of(u, "nickname")),
                         avatar_url: user.and_then(|u| str_of(u, "avatarUrl")),
-                        comment: if comment.is_empty() { None } else { Some(comment) },
+                        comment: if comment.is_empty() {
+                            None
+                        } else {
+                            Some(comment)
+                        },
                         time_ms: u64_of(f, "time")
                             .or_else(|| u64_of(f, "forwardTime"))
                             .map(normalize_ms),
@@ -5304,9 +5502,8 @@ pub fn parse_signin_progress(body: &Value) -> SigninStatus {
     let progress_of = |id: i64| -> u32 {
         stats
             .and_then(|arr| {
-                arr.iter().find(|s| {
-                    s.get("id").and_then(Value::as_i64) == Some(id)
-                })
+                arr.iter()
+                    .find(|s| s.get("id").and_then(Value::as_i64) == Some(id))
             })
             .and_then(|s| s.get("currentProgress").and_then(Value::as_u64))
             .unwrap_or(0) as u32
@@ -5366,7 +5563,10 @@ pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
                 continue;
             }
             let mut values: Vec<String> = Vec::new();
-            if let Some(texts) = ui.and_then(|u| u.get("textLinks")).and_then(Value::as_array) {
+            if let Some(texts) = ui
+                .and_then(|u| u.get("textLinks"))
+                .and_then(Value::as_array)
+            {
                 for text in texts {
                     if let Some(t) = str_of(text, "text").filter(|s| !s.is_empty()) {
                         values.push(t);
@@ -5384,7 +5584,9 @@ pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
                     if !title.is_empty() {
                         parts.push(title);
                     }
-                    if let Some(subs) = rui.and_then(|u| u.get("subTitles")).and_then(Value::as_array)
+                    if let Some(subs) = rui
+                        .and_then(|u| u.get("subTitles"))
+                        .and_then(Value::as_array)
                     {
                         for sub in subs {
                             if let Some(t) = str_of(sub, "title").filter(|s| !s.is_empty()) {
@@ -5400,7 +5602,10 @@ pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
             if values.is_empty() {
                 continue;
             }
-            out.push(WikiFact { label, value: values.join(" / ") });
+            out.push(WikiFact {
+                label,
+                value: values.join(" / "),
+            });
         }
     }
     out
@@ -5565,7 +5770,9 @@ fn parse_style_playlist(v: &Value) -> Option<Playlist> {
             .or_else(|| str_of(v, "coverImgUrl"))
             .or_else(|| str_of(v, "picUrl"))
             .filter(|s| !s.is_empty()),
-        track_count: u64_of(v, "songCount").or_else(|| u64_of(v, "trackCount")).unwrap_or(0),
+        track_count: u64_of(v, "songCount")
+            .or_else(|| u64_of(v, "trackCount"))
+            .unwrap_or(0),
         special: false,
     })
 }
@@ -5639,7 +5846,9 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
     let privileges = parse_privileges(body);
     let mut out = Vec::new();
     for event in arr {
-        let Some(id) = u64_of(event, "id") else { continue };
+        let Some(id) = u64_of(event, "id") else {
+            continue;
+        };
         // 线上字段是 type, 老接口叫 eventType
         let event_type = event
             .get("type")
@@ -5688,17 +5897,23 @@ pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
             .unwrap_or_default()
             .trim()
             .to_string();
-        let cover_url = song.as_ref().and_then(Song::cover_url).or_else(|| {
-            payload.and_then(|p| {
-                str_of(p, "coverUrl")
-                    .or_else(|| str_of(p, "coverImgUrl"))
-                    .or_else(|| p.get("album").and_then(|a| str_of(a, "picUrl")))
-                    .or_else(|| p.get("playlist").and_then(|x| str_of(x, "coverImgUrl")))
+        let cover_url = song
+            .as_ref()
+            .and_then(Song::cover_url)
+            .or_else(|| {
+                payload.and_then(|p| {
+                    str_of(p, "coverUrl")
+                        .or_else(|| str_of(p, "coverImgUrl"))
+                        .or_else(|| p.get("album").and_then(|a| str_of(a, "picUrl")))
+                        .or_else(|| p.get("playlist").and_then(|x| str_of(x, "coverImgUrl")))
+                })
             })
-        }).or_else(|| images.first().cloned()).or_else(|| {
-            video.and_then(|v| str_of(v, "coverUrl").or_else(|| str_of(v, "cover")))
-                .filter(|s| !s.is_empty())
-        });
+            .or_else(|| images.first().cloned())
+            .or_else(|| {
+                video
+                    .and_then(|v| str_of(v, "coverUrl").or_else(|| str_of(v, "cover")))
+                    .filter(|s| !s.is_empty())
+            });
         let user = event.get("user");
         let user_name = user
             .and_then(|u| str_of(u, "nickname"))
@@ -5763,7 +5978,10 @@ mod tests {
         let e = map_login_code(503, String::new());
         assert_eq!(e.kind, ProviderErrorKind::Internal);
         assert!(e.retryable);
-        assert_eq!(map_login_code(8821, "安全环境风险".into()).kind, ProviderErrorKind::RiskControl);
+        assert_eq!(
+            map_login_code(8821, "安全环境风险".into()).kind,
+            ProviderErrorKind::RiskControl
+        );
         // 其它码仍按全局口径(400 以外的未知码 = internal 不可重试)
         let e = map_login_code(250, String::new());
         assert_eq!(e.kind, ProviderErrorKind::Internal);
@@ -5773,8 +5991,14 @@ mod tests {
     /// 手机号规范化: 容忍空白/连字符/前缀 '+', 拒绝明显不合法输入.
     #[test]
     fn normalize_phone_accepts_common_input() {
-        assert_eq!(normalize_phone("138 0013 8000", "86").unwrap(), ("13800138000".into(), "86".into()));
-        assert_eq!(normalize_phone("+8613800138000", "+86").unwrap(), ("8613800138000".into(), "86".into()));
+        assert_eq!(
+            normalize_phone("138 0013 8000", "86").unwrap(),
+            ("13800138000".into(), "86".into())
+        );
+        assert_eq!(
+            normalize_phone("+8613800138000", "+86").unwrap(),
+            ("8613800138000".into(), "86".into())
+        );
         // 区号留空默认 86
         assert_eq!(normalize_phone("13800138000", "").unwrap().1, "86");
         // 号码里混入字母 / 太短 / 区号非数字都要报错
@@ -5814,8 +6038,11 @@ mod tests {
         assert_eq!(r.result.nickname, "下去玩");
         assert_eq!(r.result.avatar_url.as_deref(), Some("https://x/a.jpg"));
 
-        let err = parse_phone_login(&json!({"code":200}), &["JSESSIONID-WYYY=x; Path=/".to_string()])
-            .unwrap_err();
+        let err = parse_phone_login(
+            &json!({"code":200}),
+            &["JSESSIONID-WYYY=x; Path=/".to_string()],
+        )
+        .unwrap_err();
         assert_eq!(err.kind, ProviderErrorKind::Internal);
         assert!(err.detail.contains("MUSIC_U"));
 
@@ -5891,7 +6118,11 @@ mod tests {
         assert_eq!(albums[0].id, 404764114);
         assert_eq!(albums[0].artist, "王以太");
         assert_eq!(albums[0].track_count, 10);
-        assert!(albums[0].cover_url.as_deref().unwrap_or("").starts_with("https://"));
+        assert!(albums[0]
+            .cover_url
+            .as_deref()
+            .unwrap_or("")
+            .starts_with("https://"));
     }
 
     /// album_newest: albums 缺失(code!=200 / 接口变更)时给空列表, 不 panic.
@@ -5916,8 +6147,10 @@ mod tests {
     #[test]
     fn created_playlist_falls_back_to_playlist_id() {
         // 防御老形态: 顶层缺 id 时回退 playlist.id
-        let p = parse_created_playlist(&json!({"code":200,"playlist":{"id":12345678901u64,"name":"X"}}))
-            .expect("应能解析");
+        let p = parse_created_playlist(
+            &json!({"code":200,"playlist":{"id":12345678901u64,"name":"X"}}),
+        )
+        .expect("应能解析");
         assert_eq!(p.id, 12345678901);
         assert_eq!(p.name, "X");
     }
@@ -5944,7 +6177,8 @@ mod tests {
 
     #[test]
     fn playlist_edit_delete_ok_without_message() {
-        let r = parse_playlist_edit_result(&json!({"code":200,"data":null,"message":null,"msg":null}));
+        let r =
+            parse_playlist_edit_result(&json!({"code":200,"data":null,"message":null,"msg":null}));
         assert!(r.ok);
         assert_eq!(r.code, 200);
         assert_eq!(r.count, None);
@@ -6010,7 +6244,10 @@ mod tests {
         assert_eq!(d.artist_name, "莫文蔚");
         assert_eq!(d.duration_ms, 378040);
         assert_eq!(d.publish_time, "1997-10-01");
-        assert_eq!(d.cover_url.as_deref(), Some("http://p4.music.126.net/abc.jpg"));
+        assert_eq!(
+            d.cover_url.as_deref(),
+            Some("http://p4.music.126.net/abc.jpg")
+        );
         assert_eq!(d.brs, vec![240, 480]);
         assert_eq!(d.max_br, 480);
         assert!(d.desc.is_none());
@@ -6132,7 +6369,10 @@ mod tests {
         assert_eq!(mv.duration_ms, 266000);
         assert_eq!(mv.play_count, 106722);
         assert_eq!(mv.publish_time, "2025-02-23");
-        assert_eq!(mv.cover_url.as_deref(), Some("http://p4.music.126.net/b.jpg"));
+        assert_eq!(
+            mv.cover_url.as_deref(),
+            Some("http://p4.music.126.net/b.jpg")
+        );
     }
 
     /// artist_mv: imgurl16v9 缺失时回退 imgurl.
@@ -6144,7 +6384,10 @@ mod tests {
                      "imgurl": "http://p3.music.126.net/fallback.jpg"}]
         });
         let page = parse_artist_mvs(&body);
-        assert_eq!(page.mvs[0].cover_url.as_deref(), Some("http://p3.music.126.net/fallback.jpg"));
+        assert_eq!(
+            page.mvs[0].cover_url.as_deref(),
+            Some("http://p3.music.126.net/fallback.jpg")
+        );
         assert!(!page.has_more);
     }
 
@@ -6184,13 +6427,17 @@ mod tests {
             "code": 200, "more": false,
             "songs": [{"id": 1888354230u64, "name": "other"}]
         }));
-        let mut ids: Vec<u64> = p1.songs.iter().chain(p2.songs.iter()).map(|s| s.id.0).collect();
+        let mut ids: Vec<u64> = p1
+            .songs
+            .iter()
+            .chain(p2.songs.iter())
+            .map(|s| s.id.0)
+            .collect();
         ids.sort();
         ids.dedup();
         assert_eq!(ids.len(), 3);
         assert!(!p2.has_more);
     }
-
 
     /// toplist_detail_v2: 2026-11-09 实测形状(data[].categoryCode 分组 + list[] 榜单卡;
     /// 无 trackUpdateTime / "更新 N 首", 元素带 canPlay/targetType).
@@ -6251,8 +6498,14 @@ mod tests {
         assert!(page.comments[0].hot);
         assert!(!page.comments[1].hot);
         // kind → threadId 前缀映射早已存在
-        assert_eq!(thread_id_for("mv", 5436712).as_deref(), Some("R_MV_5_5436712"));
-        assert_eq!(thread_id_for("video", 144634).as_deref(), Some("R_VI_62_144634"));
+        assert_eq!(
+            thread_id_for("mv", 5436712).as_deref(),
+            Some("R_MV_5_5436712")
+        );
+        assert_eq!(
+            thread_id_for("video", 144634).as_deref(),
+            Some("R_VI_62_144634")
+        );
     }
 
     /// digitalAlbum/purchased: 2026-11-09 实测形状(顶层 paidAlbums + total, 封面叫 cover)
@@ -6314,7 +6567,8 @@ mod tests {
     /// song_purchased: 实测(无已购单曲)为 data.{count,hasMore,list:[]}; list 元素宽松兼容两种命名
     #[test]
     fn song_purchased_parses_pagination_and_empty() {
-        let empty = json!({"code": 200, "data": {"count": 0, "hasMore": false, "list": []}, "message": ""});
+        let empty =
+            json!({"code": 200, "data": {"count": 0, "hasMore": false, "list": []}, "message": ""});
         let p = parse_song_purchased(&empty).expect("purchased");
         assert_eq!(p.count, 0);
         assert!(!p.has_more);
@@ -6381,7 +6635,10 @@ mod tests {
         let body = json!({"code": 200, "data": {"120605500": 1300052u64, "162008967": 7u64}});
         let s = parse_digital_album_sales(&body);
         assert_eq!(s.len(), 2);
-        assert!(s.contains(&DigitalAlbumSalesEntry { album_id: "120605500".into(), sales: 1300052 }));
+        assert!(s.contains(&DigitalAlbumSalesEntry {
+            album_id: "120605500".into(),
+            sales: 1300052
+        }));
         // data 缺失/非对象 → 空列表, 不报错
         assert!(parse_digital_album_sales(&json!({"code": 200})).is_empty());
         assert!(parse_digital_album_sales(&json!({"code": 200, "data": []})).is_empty());
@@ -6458,7 +6715,9 @@ mod tests {
         assert_eq!(t.radios[0].last_rank, -1);
         assert_eq!(t.radios[0].program_count, 0);
         // 缺 toplist → 空
-        assert!(parse_radio_toplist_radios(&json!({"code": 200})).radios.is_empty());
+        assert!(parse_radio_toplist_radios(&json!({"code": 200}))
+            .radios
+            .is_empty());
     }
 
     /// 主播榜(hours/newcomer/popular): data.list 是用户, 字段 nickName(驼峰)
@@ -6477,8 +6736,12 @@ mod tests {
         assert_eq!(d.nickname, "开心锤锤");
         assert_eq!(d.followed_count, 79757);
         // data.list 缺失 → 空
-        assert!(parse_radio_toplist_djs(&json!({"code": 200})).djs.is_empty());
-        assert!(parse_radio_toplist_djs(&json!({"code": 200, "data": {}})).djs.is_empty());
+        assert!(parse_radio_toplist_djs(&json!({"code": 200}))
+            .djs
+            .is_empty());
+        assert!(parse_radio_toplist_djs(&json!({"code": 200, "data": {}}))
+            .djs
+            .is_empty());
     }
 
     /// 节目榜: toplist 元素 = {rank,lastRank,program}; program 与 dj_program 同形状
@@ -6518,7 +6781,8 @@ mod tests {
         assert_eq!(p.subscribers[0].user_id, 1594251132);
         assert_eq!(p.subscribers[0].subscribe_time_ms, 1793611157940);
         // subscribers 缺失/为空 → 空页不报错
-        let empty = parse_radio_subscribers(&json!({"code": 200, "hasMore": false})).expect("empty");
+        let empty =
+            parse_radio_subscribers(&json!({"code": 200, "hasMore": false})).expect("empty");
         assert!(!empty.has_more);
         assert!(empty.subscribers.is_empty());
     }
@@ -6828,7 +7092,6 @@ mod tests {
         assert_eq!(facts[2].value, "第30届东方风云榜 获 动感101年度金曲");
     }
 
-
     /// 私信里的 msg/lastMsg 是 JSON 字符串, 富消息要退到 generalMsg 的标题/摘要
     #[test]
     fn msg_text_unwraps_json_and_rich_payload() {
@@ -6907,11 +7170,11 @@ mod tests {
         assert_eq!(list[0].detail, "我喜欢的音乐", "优先显示被评论的资源名");
     }
 
-
     /// @我: 真实空响应(2026-11 实测, 本账号没有 @我 消息) — 顶层 forwards/lasttime/more/newCount
     #[test]
     fn forwards_empty_real_response() {
-        let body = json!({"code": 200, "forwards": [], "lasttime": 0, "more": false, "newCount": 0});
+        let body =
+            json!({"code": 200, "forwards": [], "lasttime": 0, "more": false, "newCount": 0});
         assert!(parse_forwards(&body).is_empty());
         // 缺 forwards 键 / 条目不是对象都不炸
         assert!(parse_forwards(&json!({"code": 301})).is_empty());
@@ -6946,7 +7209,11 @@ mod tests {
         assert_eq!(list[0].nickname.as_deref(), Some("小明"));
         assert_eq!(list[0].comment.as_deref(), Some("转发一句话"));
         assert_eq!(list[0].forward_type, Some(2));
-        assert_eq!(list[0].time_ms, Some(1_700_000_000_000), "秒级时间戳归一成毫秒");
+        assert_eq!(
+            list[0].time_ms,
+            Some(1_700_000_000_000),
+            "秒级时间戳归一成毫秒"
+        );
         assert_eq!(list[1].id, Some(9002));
         assert_eq!(list[1].event_id, Some(43));
         assert_eq!(list[1].user_id, Some(8));
@@ -7041,7 +7308,6 @@ mod tests {
         assert_eq!(list[0].avatar_url.as_deref(), Some("http://p/1.jpg"));
     }
 
-
     #[test]
     fn search_mapping() {
         let body = json!({
@@ -7121,7 +7387,8 @@ mod tests {
 
     #[test]
     fn stream_vip_without_login_has_no_url() {
-        let body = json!({"code": 200, "data": [{"id": 1, "url": null, "code": 200, "expi": 1200}]});
+        let body =
+            json!({"code": 200, "data": [{"id": 1, "url": null, "code": 200, "expi": 1200}]});
         let s = parse_stream(&body, "exhigh").unwrap();
         assert!(!s.is_playable());
     }
@@ -7372,7 +7639,10 @@ mod tests {
         let ids: Vec<u64> = page.comments.iter().map(|c| c.id).collect();
         assert_eq!(ids, vec![1, 2, 3]);
         assert_eq!(page.comments[0].user_name, "A");
-        assert_eq!(page.comments[0].avatar_url.as_deref(), Some("http://p/a.jpg"));
+        assert_eq!(
+            page.comments[0].avatar_url.as_deref(),
+            Some("http://p/a.jpg")
+        );
         assert_eq!(page.comments[0].time_ms, 1700000000000);
         assert_eq!(page.comments[0].liked_count, 10);
         assert!(page.comments[0].liked);
@@ -7459,7 +7729,10 @@ mod tests {
         // 只有 showKeyword 时退化成"用它当关键词"
         let only_show = json!({"code": 200, "data": {"showKeyword": "周杰伦"}});
         assert_eq!(parse_default_search(&only_show).unwrap().keyword, "周杰伦");
-        assert_eq!(parse_default_search(&json!({"code": 200, "data": {}})), None);
+        assert_eq!(
+            parse_default_search(&json!({"code": 200, "data": {}})),
+            None
+        );
     }
 
     #[test]
@@ -7552,7 +7825,10 @@ mod tests {
         assert_eq!(e.user_id, 1373758224);
         assert_eq!(e.thread_id, "A_EV_2_38024377972_1373758224");
         assert_eq!(e.title, "标题一句");
-        assert_eq!(e.images, vec!["http://p/1.jpg".to_string(), "http://p/2.jpg".to_string()]);
+        assert_eq!(
+            e.images,
+            vec!["http://p/1.jpg".to_string(), "http://p/2.jpg".to_string()]
+        );
         assert_eq!(e.video_url.as_deref(), Some("http://v/2.mp4"));
         assert!(e.liked);
         assert_eq!(e.liked_count, 30);
@@ -7628,14 +7904,8 @@ mod tests {
         assert_eq!(thread_id_for("playlist", 7).as_deref(), Some("A_PL_0_7"));
         assert!(thread_id_for("unknown", 1).is_none());
 
-        assert_eq!(
-            split_thread_id("R_SO_4_42"),
-            Some(("0", "42".to_string()))
-        );
-        assert_eq!(
-            split_thread_id("A_PL_0_7"),
-            Some(("2", "7".to_string()))
-        );
+        assert_eq!(split_thread_id("R_SO_4_42"), Some(("0", "42".to_string())));
+        assert_eq!(split_thread_id("A_PL_0_7"), Some(("2", "7".to_string())));
         // 动态的 id 段要保留 eventId_userId
         assert_eq!(
             split_thread_id("A_EV_2_38024377972_1373758224"),
@@ -7766,13 +8036,13 @@ mod tests {
     #[test]
     fn playlist_categories_mapping() {
         let body = json!({"code": 200,
-            "categories": {"0": "语种", "1": "风格", "4": "主题"},
-            "sub": [
-                {"category": 1, "name": "流行"},
-                {"category": 0, "name": "华语"},
-                {"category": 4, "name": "综艺"},
-                {"category": 0, "name": "欧美"}
-            ]});
+        "categories": {"0": "语种", "1": "风格", "4": "主题"},
+        "sub": [
+            {"category": 1, "name": "流行"},
+            {"category": 0, "name": "华语"},
+            {"category": 4, "name": "综艺"},
+            {"category": 0, "name": "欧美"}
+        ]});
         let groups = parse_playlist_categories(&body);
         // 按 categories 的数字 key 排序: 语种 → 风格 → 主题, 空组被过滤
         assert_eq!(groups.len(), 3);
@@ -7857,7 +8127,9 @@ mod tests {
         assert!(parse_suggest_keywords(&json!({"code": 200, "result": {}})).is_empty());
         // 无 result / allMatch 不是数组 / 缺 keyword 或 keyword 非字符串
         assert!(parse_suggest_keywords(&json!({"code": 200})).is_empty());
-        assert!(parse_suggest_keywords(&json!({"code": 200, "result": {"allMatch": "x"}})).is_empty());
+        assert!(
+            parse_suggest_keywords(&json!({"code": 200, "result": {"allMatch": "x"}})).is_empty()
+        );
         let body = json!({"code": 200, "result": {"allMatch": [
             {"type": 1, "alg": "no-keyword"},
             {"keyword": null},
@@ -7866,7 +8138,9 @@ mod tests {
         ]}});
         assert_eq!(parse_suggest_keywords(&body), vec!["唯一有效".to_string()]);
         // 超过 6 条时截断
-        let many: Vec<Value> = (0..9).map(|i| json!({"keyword": format!("k{i}")})).collect();
+        let many: Vec<Value> = (0..9)
+            .map(|i| json!({"keyword": format!("k{i}")}))
+            .collect();
         let body = json!({"code": 200, "result": {"allMatch": many}});
         assert_eq!(parse_suggest_keywords(&body).len(), 6);
     }
@@ -7894,11 +8168,17 @@ mod tests {
         assert_eq!(ex.artists.len(), 1);
         assert_eq!(ex.artists[0].id, 6452);
         assert_eq!(ex.artists[0].name, "周杰伦");
-        assert_eq!(ex.artists[0].avatar_url.as_deref(), Some("http://p4/head.jpg"));
+        assert_eq!(
+            ex.artists[0].avatar_url.as_deref(),
+            Some("http://p4/head.jpg")
+        );
         assert_eq!(ex.playlists.len(), 1);
         assert_eq!(ex.playlists[0].id, 8181670003);
         assert_eq!(ex.playlists[0].track_count, 40);
-        assert_eq!(ex.playlists[0].cover_url.as_deref(), Some("http://p1/cover.jpg"));
+        assert_eq!(
+            ex.playlists[0].cover_url.as_deref(),
+            Some("http://p1/cover.jpg")
+        );
         assert!(!ex.playlists[0].special);
         assert_eq!(ex.podcasts.len(), 1);
         assert_eq!(ex.podcasts[0].id, 2543533915);
@@ -7987,7 +8267,8 @@ mod tests {
         assert!(parse_user_level(&json!({"code": 200, "data": null})).is_none());
         assert!(parse_user_level(&json!({"code": 200, "data": []})).is_none());
         assert!(parse_user_level(&json!({})).is_none());
-        let empty = parse_user_level(&json!({"code": 200, "data": {}})).expect("空对象也要有默认值");
+        let empty =
+            parse_user_level(&json!({"code": 200, "data": {}})).expect("空对象也要有默认值");
         assert_eq!(empty.level, 0);
         assert_eq!(empty.now_play_count, 0);
         assert_eq!(empty.progress, 0.0);
@@ -8000,7 +8281,10 @@ mod tests {
     #[test]
     fn user_medals_empty() {
         // 空账号/空分类: 不 panic, medal_num 落 0
-        assert_eq!(parse_user_medals(&json!({"code": 200})), MedalWall::default());
+        assert_eq!(
+            parse_user_medals(&json!({"code": 200})),
+            MedalWall::default()
+        );
         let wall = parse_user_medals(&json!({"code": 200, "data": {
             "medalNum": 0, "categoryMedalBlockVos": []
         }}));
@@ -8063,9 +8347,17 @@ mod tests {
         assert_eq!(will.status, "WILL_OBTAIN");
         assert!(!will.obtained);
         assert_eq!(will.obtain_time_ms, None);
-        assert_eq!(will.pic_url.as_deref(), Some("http://p5.music.126.net/obj/a.png"));
-        assert_eq!(will.wear_pic_url.as_deref(), Some("http://p5.music.126.net/obj/a_wear.png"));
-        assert!(will.progress_text.is_none() && will.rank_text.is_none() && will.level_title.is_none());
+        assert_eq!(
+            will.pic_url.as_deref(),
+            Some("http://p5.music.126.net/obj/a.png")
+        );
+        assert_eq!(
+            will.wear_pic_url.as_deref(),
+            Some("http://p5.music.126.net/obj/a_wear.png")
+        );
+        assert!(
+            will.progress_text.is_none() && will.rank_text.is_none() && will.level_title.is_none()
+        );
 
         let busy = &wall.medals[1];
         assert_eq!(busy.code, "21298503");

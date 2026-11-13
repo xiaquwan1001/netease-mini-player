@@ -171,10 +171,9 @@ class Playback {
 
   Future<PlayerView> seek(BigInt positionMs) async {
     if (isAndroid) {
-      final map = await _channel.invokeMapMethod<String, Object?>(
-        'seek',
-        {'positionMs': positionMs.toInt()},
-      );
+      final map = await _channel.invokeMapMethod<String, Object?>('seek', {
+        'positionMs': positionMs.toInt(),
+      });
       return _fromMap(map);
     }
     return _fromRust(await rust.playerSeek(positionMs: positionMs));
@@ -211,7 +210,9 @@ class Playback {
   Future<String?> cachedAudioFile(String url) async {
     if (!isAndroid) return null;
     try {
-      return await _channel.invokeMethod<String>('cachedAudioFile', {'url': url});
+      return await _channel.invokeMethod<String>('cachedAudioFile', {
+        'url': url,
+      });
     } catch (_) {
       return null;
     }
@@ -219,22 +220,21 @@ class Playback {
 
   Future<PlayerView> setVolume(double volume) async {
     if (isAndroid) {
-      final map = await _channel.invokeMapMethod<String, Object?>(
-        'volume',
-        {'volume': volume},
-      );
+      final map = await _channel.invokeMapMethod<String, Object?>('volume', {
+        'volume': volume,
+      });
       return _fromMap(map);
     }
     return _fromRust(await rust.playerSetVolume(volume: volume));
   }
 
   PlayerView _fromRust(rust.PlayerStateDto s) => PlayerView(
-        trackId: s.trackId,
-        playing: s.playing,
-        positionMs: s.positionMs,
-        durationMs: s.durationMs,
-        volume: s.volume,
-      );
+    trackId: s.trackId,
+    playing: s.playing,
+    positionMs: s.positionMs,
+    durationMs: s.durationMs,
+    volume: s.volume,
+  );
 
   PlayerView _fromMap(Map<String, Object?>? map) {
     if (map == null) return PlayerView.empty;

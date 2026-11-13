@@ -9,7 +9,7 @@ import 'platform.dart';
 /// 其他平台(Linux 桌面)没有内嵌视频能力, 用系统播放器/浏览器打开直链。
 class MvPlayback {
   MvPlayback({MethodChannel? channel, this.playOverride})
-      : _channel = channel ?? const MethodChannel('ncm/mv');
+    : _channel = channel ?? const MethodChannel('ncm/mv');
 
   final MethodChannel _channel;
 

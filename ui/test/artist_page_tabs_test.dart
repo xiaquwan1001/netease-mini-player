@@ -23,35 +23,35 @@ rust.ArtistDetailDto detail({
   int albums = 1,
   String brief = '',
 }) => rust.ArtistDetailDto(
-      id: BigInt.from(6452),
-      name: '周杰伦',
-      avatarUrl: null,
+  id: BigInt.from(6452),
+  name: '周杰伦',
+  avatarUrl: null,
+  coverUrl: null,
+  alias: const [],
+  briefDesc: brief,
+  albumCount: BigInt.from(albums),
+  musicCount: BigInt.from(songs),
+  songs: List.generate(songs, (i) => song(i)),
+  albums: List.generate(
+    albums,
+    (i) => rust.AlbumBrief(
+      id: BigInt.from(10 + i),
+      name: '专辑$i',
       coverUrl: null,
-      alias: const [],
-      briefDesc: brief,
-      albumCount: BigInt.from(albums),
-      musicCount: BigInt.from(songs),
-      songs: List.generate(songs, (i) => song(i)),
-      albums: List.generate(
-        albums,
-        (i) => rust.AlbumBrief(
-          id: BigInt.from(10 + i),
-          name: '专辑$i',
-          coverUrl: null,
-          trackCount: BigInt.from(10),
-          publishTime: BigInt.zero,
-        ),
-      ),
-    );
+      trackCount: BigInt.from(10),
+      publishTime: BigInt.zero,
+    ),
+  ),
+);
 
 rust.ArtistMvDto mv(int i) => rust.ArtistMvDto(
-      id: BigInt.from(5000 + i),
-      name: 'MV$i',
-      durationMs: BigInt.from(200000),
-      playCount: BigInt.from(1000),
-      publishTime: '2025-02-23',
-      coverUrl: null,
-    );
+  id: BigInt.from(5000 + i),
+  name: 'MV$i',
+  durationMs: BigInt.from(200000),
+  playCount: BigInt.from(1000),
+  publishTime: '2025-02-23',
+  coverUrl: null,
+);
 
 var pumpSeq = 0;
 
@@ -89,10 +89,12 @@ Future<void> pump(
         loadSimilar: loadSimilar,
         // 「全部歌曲」现在是初始 tab, 测试默认给空 loader, 避免误触真实 rust API
         loadSongsPage:
-            loadSongsPage ?? (_, _) async =>
+            loadSongsPage ??
+            (_, _) async =>
                 const rust.ArtistSongPageDto(songs: [], hasMore: false),
-        loadMvsPage: loadMvsPage ?? (_, _) async =>
-            const rust.ArtistMvPageDto(mvs: [], hasMore: false),
+        loadMvsPage:
+            loadMvsPage ??
+            (_, _) async => const rust.ArtistMvPageDto(mvs: [], hasMore: false),
         toggleFollow: toggleFollow,
       ),
     ),
@@ -131,10 +133,8 @@ void main() {
     await pump(
       tester,
       detailData: detail(songs: 2),
-      loadMvsPage: (_, _) async => rust.ArtistMvPageDto(
-        mvs: [mv(0)],
-        hasMore: false,
-      ),
+      loadMvsPage: (_, _) async =>
+          rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
       loadSongsPage: (_, _) async =>
           const rust.ArtistSongPageDto(songs: [], hasMore: false),
     );
@@ -206,21 +206,13 @@ void main() {
     expect(find.text('MV999'), findsOneWidget);
   });
 
-    testWidgets('相似歌手胶囊横排(Wrap 水平方向), 300dp 大字号下不溢出', (tester) async {
+  testWidgets('相似歌手胶囊横排(Wrap 水平方向), 300dp 大字号下不溢出', (tester) async {
     await pump(
       tester,
       detailData: detail(songs: 2, brief: '简介'),
       loadSimilar: (_) async => [
-        rust.Artist(
-          id: BigInt.from(1),
-          name: '相似歌手甲',
-          avatarUrl: null,
-        ),
-        rust.Artist(
-          id: BigInt.from(2),
-          name: '相似歌手乙',
-          avatarUrl: null,
-        ),
+        rust.Artist(id: BigInt.from(1), name: '相似歌手甲', avatarUrl: null),
+        rust.Artist(id: BigInt.from(2), name: '相似歌手乙', avatarUrl: null),
       ],
       textScaleBig: true,
     );
@@ -235,7 +227,8 @@ void main() {
       expect(w.direction, Axis.horizontal);
     }
     // 每个胶囊都不超出屏幕宽度(无溢出)
-    final screenW = tester.view.physicalSize.width / tester.view.devicePixelRatio;
+    final screenW =
+        tester.view.physicalSize.width / tester.view.devicePixelRatio;
     for (final name in ['相似歌手甲', '相似歌手乙']) {
       final rect = tester.getRect(find.text(name));
       expect(rect.right, lessThanOrEqualTo(screenW));
@@ -247,7 +240,10 @@ void main() {
       tester,
       detailData: detail(songs: 2),
       loadSongsPage: (_, _) async => rust.ArtistSongPageDto(
-        songs: [song(0, name: '晴天'), song(1, name: '七里香')],
+        songs: [
+          song(0, name: '晴天'),
+          song(1, name: '七里香'),
+        ],
         hasMore: false,
       ),
     );
@@ -290,8 +286,7 @@ void main() {
     expect(find.text('暂无歌曲'), findsOneWidget);
   });
 
-  testWidgets('300dp + textScale 1.25: 头部信息区与相似歌手胶囊不溢出',
-      (tester) async {
+  testWidgets('300dp + textScale 1.25: 头部信息区与相似歌手胶囊不溢出', (tester) async {
     await pump(
       tester,
       detailData: detail(songs: 2, brief: '一句话简介'),

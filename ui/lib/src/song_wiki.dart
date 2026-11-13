@@ -154,7 +154,9 @@ class _WikiBodyState extends State<_WikiBody> {
               width: 72,
               child: Text(
                 f.label,
-                style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.outline,
+                ),
               ),
             ),
             const SizedBox(width: 8),

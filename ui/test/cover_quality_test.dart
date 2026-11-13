@@ -17,15 +17,19 @@ Future<double> pxAt(
   CoverQuality? quality,
 }) async {
   late double px;
-  await tester.pumpWidget(MaterialApp(
-    home: MediaQuery(
-      data: MediaQueryData(devicePixelRatio: dpr),
-      child: Builder(builder: (context) {
-        px = coverRequestPx(context, size, quality: quality);
-        return const SizedBox.shrink();
-      }),
+  await tester.pumpWidget(
+    MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(devicePixelRatio: dpr),
+        child: Builder(
+          builder: (context) {
+            px = coverRequestPx(context, size, quality: quality);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
     ),
-  ));
+  );
   return px;
 }
 
@@ -43,9 +47,24 @@ void main() {
     });
 
     testWidgets('省流 0.75x / 超清 2x, 相对标准单调', (tester) async {
-      final saver = await pxAt(tester, dpr: 3, size: 100, quality: CoverQuality.dataSaver);
-      final std = await pxAt(tester, dpr: 3, size: 100, quality: CoverQuality.standard);
-      final ultra = await pxAt(tester, dpr: 3, size: 100, quality: CoverQuality.ultra);
+      final saver = await pxAt(
+        tester,
+        dpr: 3,
+        size: 100,
+        quality: CoverQuality.dataSaver,
+      );
+      final std = await pxAt(
+        tester,
+        dpr: 3,
+        size: 100,
+        quality: CoverQuality.standard,
+      );
+      final ultra = await pxAt(
+        tester,
+        dpr: 3,
+        size: 100,
+        quality: CoverQuality.ultra,
+      );
       expect(saver, 225);
       expect(std, 300);
       expect(ultra, 600);
@@ -54,26 +73,45 @@ void main() {
 
     testWidgets('上下限: 最小 60, 最大 1600', (tester) async {
       expect(await pxAt(tester, dpr: 1, size: 8), 60);
-      expect(await pxAt(tester, dpr: 4, size: 1200, quality: CoverQuality.ultra), 1600);
+      expect(
+        await pxAt(tester, dpr: 4, size: 1200, quality: CoverQuality.ultra),
+        1600,
+      );
     });
 
     test('neteaseThumbUrl 把像素写进 param', () {
       const url = 'https://p1.music.126.net/a/b.jpg';
-      expect(neteaseThumbUrl(url, width: 132, height: 132), '$url?param=132y132');
-      expect(neteaseThumbUrl('$url?x=1', width: 60, height: 60), '$url?x=1&param=60y60');
-      expect(neteaseThumbUrl(url, width: double.infinity), url, reason: '全宽不算 param');
+      expect(
+        neteaseThumbUrl(url, width: 132, height: 132),
+        '$url?param=132y132',
+      );
+      expect(
+        neteaseThumbUrl('$url?x=1', width: 60, height: 60),
+        '$url?x=1&param=60y60',
+      );
+      expect(
+        neteaseThumbUrl(url, width: double.infinity),
+        url,
+        reason: '全宽不算 param',
+      );
     });
   });
 
   group('CoverArt 组件级: 真正请求的 URL 像素', () {
     Future<String?> renderedUrl(WidgetTester tester, double dpr) async {
-      await tester.pumpWidget(MaterialApp(
-        home: MediaQuery(
-          data: MediaQueryData(devicePixelRatio: dpr),
-          child: const Center(
-              child: CoverArt(url: 'https://p3.music.126.net/a/b.jpg', size: 44)),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(devicePixelRatio: dpr),
+            child: const Center(
+              child: CoverArt(
+                url: 'https://p3.music.126.net/a/b.jpg',
+                size: 44,
+              ),
+            ),
+          ),
         ),
-      ));
+      );
       final images = find.byType(Image).evaluate().toList();
       if (images.isEmpty) return null;
       return (images.first.widget as Image).image.toString();
@@ -111,9 +149,13 @@ void main() {
       addTearDown(() => dir.deleteSync(recursive: true));
       final settings = AppSettings.instance;
       await settings.load(dir.path);
-      await settings.update(coverQuality: CoverQuality.ultra, showHotSearch: true);
+      await settings.update(
+        coverQuality: CoverQuality.ultra,
+        showHotSearch: true,
+      );
       final raw = jsonDecode(
-          File('${dir.path}/settings.json').readAsStringSync()) as Map;
+        File('${dir.path}/settings.json').readAsStringSync(),
+      ) as Map;
       expect(raw['coverQuality'], 'ultra');
 
       // 读回(同一个 dataDir)
@@ -126,18 +168,20 @@ void main() {
   group('设置面板 UI', () {
     testWidgets('三档都列出来, 点「超清」写设置并关闭面板', (tester) async {
       AppSettings.instance.coverQuality = CoverQuality.standard;
-      await tester.pumpWidget(MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () => showCoverQualitySheet(context),
-                child: const Text('open'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => showCoverQualitySheet(context),
+                  child: const Text('open'),
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
@@ -160,19 +204,25 @@ void main() {
       required Future<String> Function(Uint8List, String) save,
       List<String> urls = const ['http://p3.music.126.net/a/cover.jpg'],
     }) async {
-      await tester.pumpWidget(MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: Center(
-              child: ElevatedButton(
-                onPressed: () => showImageViewer(context,
-                    urls: urls, fetchOverride: fetch, saveOverride: save),
-                child: const Text('view'),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () => showImageViewer(
+                    context,
+                    urls: urls,
+                    fetchOverride: fetch,
+                    saveOverride: save,
+                  ),
+                  child: const Text('view'),
+                ),
               ),
             ),
           ),
         ),
-      ));
+      );
       await tester.tap(find.text('view'));
       await tester.pump();
     }
@@ -197,8 +247,9 @@ void main() {
       await tester.tap(find.byTooltip('保存原图'));
       await tester.pumpAndSettle();
 
-      expect(fetched, ['https://p3.music.126.net/a/cover.jpg'],
-          reason: 'http 直链要升级成 https');
+      expect(fetched, [
+        'https://p3.music.126.net/a/cover.jpg',
+      ], reason: 'http 直链要升级成 https');
       expect(saved.length, 1);
       final name = saved.keys.first;
       expect(name.endsWith('.jpg'), isTrue);
@@ -241,23 +292,25 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     AppSettings.instance.coverQuality = CoverQuality.standard;
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              onPressed: () => showCoverQualitySheet(context),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () => showCoverQualitySheet(context),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -273,12 +326,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

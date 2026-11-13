@@ -19,22 +19,22 @@ rust.MvDetailDto mvDetail({
   int playCount = 377308,
   String publishTime = '2026-05-07',
   int durationMs = 284000,
-}) =>
-    rust.MvDetailDto(
-      id: id ?? BigInt.from(5436712),
-      name: name,
-      artistName: artist,
-      durationMs: BigInt.from(durationMs),
-      playCount: BigInt.from(playCount),
-      publishTime: publishTime,
-      coverUrl: coverUrl,
-      maxBr: maxBr,
-      brs: Uint32List.fromList([240, 480, 1080]),
-      desc: desc,
-    );
+}) => rust.MvDetailDto(
+  id: id ?? BigInt.from(5436712),
+  name: name,
+  artistName: artist,
+  durationMs: BigInt.from(durationMs),
+  playCount: BigInt.from(playCount),
+  publishTime: publishTime,
+  coverUrl: coverUrl,
+  maxBr: maxBr,
+  brs: Uint32List.fromList([240, 480, 1080]),
+  desc: desc,
+);
 
-rust.MvUrlDto mvUrl({String? url = 'http://vod.example.com/a.mp4?wsSecret=x'}) =>
-    rust.MvUrlDto(url: url, r: 480, size: BigInt.from(31157772));
+rust.MvUrlDto mvUrl({
+  String? url = 'http://vod.example.com/a.mp4?wsSecret=x',
+}) => rust.MvUrlDto(url: url, r: 480, size: BigInt.from(31157772));
 
 /// 记录通过 ncm/mv 通道发起的播放调用
 List<Map<Object?, Object?>> recordMvCalls(WidgetTester tester) {
@@ -50,8 +50,10 @@ List<Map<Object?, Object?>> recordMvCalls(WidgetTester tester) {
     },
   );
   addTearDown(
-    () => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('ncm/mv'), null),
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('ncm/mv'),
+      null,
+    ),
   );
   return calls;
 }
@@ -83,10 +85,10 @@ Future<void> pumpMv(
     MaterialApp(
       builder: narrow
           ? (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: const TextScaler.linear(1.25)),
-                child: child!,
-              )
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: const TextScaler.linear(1.25)),
+              child: child!,
+            )
           : null,
       home: MvPage(
         mvId: BigInt.from(5436712),
@@ -191,12 +193,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

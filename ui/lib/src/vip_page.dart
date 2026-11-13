@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import 'format.dart' show formatDateYmd;
@@ -137,12 +136,7 @@ class VipPageData {
 
 /// 黑胶会员只读页(纯展示层, loader 由调用方注入)。
 class VipPage extends StatefulWidget {
-  const VipPage({
-    super.key,
-    required this.load,
-    this.onBack,
-    this.onLogin,
-  });
+  const VipPage({super.key, required this.load, this.onBack, this.onLogin});
 
   final Future<VipPageData> Function() load;
   final VoidCallback? onBack;
@@ -302,7 +296,9 @@ class _VipCard extends StatelessWidget {
         ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl))
         : CircleAvatar(
             child: Text(
-              (p != null && p.nickname.isNotEmpty) ? p.nickname.characters.first : '?',
+              (p != null && p.nickname.isNotEmpty)
+                  ? p.nickname.characters.first
+                  : '?',
             ),
           );
     final metaParts = <String>[
@@ -406,7 +402,8 @@ class _SignBar extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final days = sign.days;
-    final summary = '本周已签 ${sign.weekSignedDays}/7 天'
+    final summary =
+        '本周已签 ${sign.weekSignedDays}/7 天'
         '${sign.signedToday ? ' · 今日已签' : ' · 今日未签'}';
     return Card(
       margin: EdgeInsets.zero,
@@ -422,7 +419,9 @@ class _SignBar extends StatelessWidget {
                 for (final d in days)
                   Expanded(
                     child: _SignDay(
-                      label: weekdayLabel(d.date).isEmpty ? d.date : weekdayLabel(d.date),
+                      label: weekdayLabel(d.date).isEmpty
+                          ? d.date
+                          : weekdayLabel(d.date),
                       signed: d.signed,
                       isToday: d.today,
                       colorScheme: colorScheme,
@@ -505,7 +504,6 @@ class _TaskList extends StatelessWidget {
     );
   }
 }
-
 
 /// 打开黑胶会员页(只读). 默认走真实 Rust 数据; 测试可传 load 覆盖.
 Future<void> showVipPage(
@@ -649,8 +647,9 @@ class _TaskTile extends StatelessWidget {
                       Flexible(
                         child: Text(
                           task.rewardText,
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: colorScheme.outline),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.outline,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

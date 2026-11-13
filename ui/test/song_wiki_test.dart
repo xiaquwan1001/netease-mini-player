@@ -4,30 +4,27 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_wiki.dart';
 
 rust.SongDto song() => rust.SongDto(
-      id: BigInt.from(1901371647),
-      name: '孤勇者',
-      artist: '陈奕迅',
-      artistId: BigInt.one,
-      album: '孤勇者',
-      albumId: BigInt.one,
-      coverUrl: null,
-      durationMs: BigInt.from(255000),
-      fee: 1,
-      vip: true,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(1901371647),
+  name: '孤勇者',
+  artist: '陈奕迅',
+  artistId: BigInt.one,
+  album: '孤勇者',
+  albumId: BigInt.one,
+  coverUrl: null,
+  durationMs: BigInt.from(255000),
+  fee: 1,
+  vip: true,
+  paid: false,
+  playable: true,
+);
 
 Widget host() => MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: () {},
-            child: const Text('open'),
-          ),
-        ),
-      ),
-    );
+  home: Scaffold(
+    body: Builder(
+      builder: (ctx) => TextButton(onPressed: () {}, child: const Text('open')),
+    ),
+  ),
+);
 
 void main() {
   testWidgets('歌曲百科: 两列展示 label/value', (tester) async {

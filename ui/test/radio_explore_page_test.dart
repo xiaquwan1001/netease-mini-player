@@ -6,18 +6,24 @@ import 'package:minincm/src/rust/api.dart' as rust;
 rust.RadioCategory _cat(int id, String name) =>
     rust.RadioCategory(id: BigInt.from(id), name: name, coverUrl: '');
 
-rust.PodcastRadio _radio(int id, String name, {String dj = '主播', int progs = 12, BigInt? plays}) =>
-    rust.PodcastRadio(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: '',
-      description: '',
-      djName: dj,
-      programCount: BigInt.from(progs),
-      playCount: plays ?? BigInt.from(6555956),
-    );
+rust.PodcastRadio _radio(
+  int id,
+  String name, {
+  String dj = '主播',
+  int progs = 12,
+  BigInt? plays,
+}) => rust.PodcastRadio(
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: '',
+  description: '',
+  djName: dj,
+  programCount: BigInt.from(progs),
+  playCount: plays ?? BigInt.from(6555956),
+);
 
-rust.RadioExploreHome _home({int cats = 3, int picks = 2}) => rust.RadioExploreHome(
+rust.RadioExploreHome _home({int cats = 3, int picks = 2}) =>
+    rust.RadioExploreHome(
       categories: List.generate(cats, (i) => _cat(2001 + i, '分类$i')),
       picks: List.generate(
         picks,
@@ -30,59 +36,56 @@ rust.RadioExploreHome _home({int cats = 3, int picks = 2}) => rust.RadioExploreH
     );
 
 rust.RadioToplistDto _top(String kind) => rust.RadioToplistDto(
-      kind: kind,
-      radios: kind == 'hot' || kind == 'pay'
-          ? [
-              rust.RadioRankedRadio(
-                rank: 1,
-                lastRank: 3,
-                radioId: BigInt.from(792868378),
-                name: '榜单电台0',
-                coverUrl: '',
-                djName: '一条小团团OvO',
-                category: '创作翻唱',
-                playCount: BigInt.from(131838544),
-                programCount: BigInt.from(56),
-                subCount: BigInt.from(456521),
-                score: BigInt.from(116563),
-                rcmdText: '可神经可温柔的宝藏女声',
-              ),
-            ]
-          : const [],
-      djs: kind == 'popular'
-          ? [
-              rust.RadioRankedDj(
-                rank: 1,
-                lastRank: 3,
-                userId: BigInt.from(97137413),
-                nickname: '薛之谦',
-                avatarUrl: '',
-                score: BigInt.from(2591496),
-                followedCount: BigInt.from(21579876),
-              ),
-            ]
-          : const [],
-      programs: kind == 'program'
-          ? [
-              rust.RadioRankedProgramDto(
-                rank: 1,
-                lastRank: 3,
-                program: _program(9001, '深夜电台第 100 期', hasSong: true),
-              ),
-              rust.RadioRankedProgramDto(
-                rank: 2,
-                lastRank: -1,
-                program: _program(9002, '无音频的节目', hasSong: false),
-              ),
-            ]
-          : const [],
-    );
+  kind: kind,
+  radios: kind == 'hot' || kind == 'pay'
+      ? [
+          rust.RadioRankedRadio(
+            rank: 1,
+            lastRank: 3,
+            radioId: BigInt.from(792868378),
+            name: '榜单电台0',
+            coverUrl: '',
+            djName: '一条小团团OvO',
+            category: '创作翻唱',
+            playCount: BigInt.from(131838544),
+            programCount: BigInt.from(56),
+            subCount: BigInt.from(456521),
+            score: BigInt.from(116563),
+            rcmdText: '可神经可温柔的宝藏女声',
+          ),
+        ]
+      : const [],
+  djs: kind == 'popular'
+      ? [
+          rust.RadioRankedDj(
+            rank: 1,
+            lastRank: 3,
+            userId: BigInt.from(97137413),
+            nickname: '薛之谦',
+            avatarUrl: '',
+            score: BigInt.from(2591496),
+            followedCount: BigInt.from(21579876),
+          ),
+        ]
+      : const [],
+  programs: kind == 'program'
+      ? [
+          rust.RadioRankedProgramDto(
+            rank: 1,
+            lastRank: 3,
+            program: _program(9001, '深夜电台第 100 期', hasSong: true),
+          ),
+          rust.RadioRankedProgramDto(
+            rank: 2,
+            lastRank: -1,
+            program: _program(9002, '无音频的节目', hasSong: false),
+          ),
+        ]
+      : const [],
+);
 
-rust.PodcastProgramDto _program(
-  int id,
-  String name, {
-  required bool hasSong,
-}) => rust.PodcastProgramDto(
+rust.PodcastProgramDto _program(int id, String name, {required bool hasSong}) =>
+    rust.PodcastProgramDto(
       id: BigInt.from(id),
       name: name,
       coverUrl: '',

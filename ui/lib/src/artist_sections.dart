@@ -4,8 +4,7 @@ import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
-import 'song_tile.dart'
-    show VipBadge, PaidBadge, UnplayableBadge;
+import 'song_tile.dart' show VipBadge, PaidBadge, UnplayableBadge;
 
 /// 艺人主页的「区块」组件(与用户个人主页区分的核心):
 /// 推荐单曲 / 专辑横滑 / 详细艺人弹层。只吃 DTO, 不发请求,
@@ -145,7 +144,9 @@ class _ArtistRecommendSongRow extends StatelessWidget {
               child: Text(
                 '${index + 1}',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.outline,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -178,7 +179,9 @@ class _ArtistRecommendSongRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: playable ? scheme.onSurfaceVariant : scheme.outline,
+                      color: playable
+                          ? scheme.onSurfaceVariant
+                          : scheme.outline,
                     ),
                   ),
                 ],
@@ -244,7 +247,8 @@ class ArtistAlbumsSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                   onTap: onOpenAlbum == null
                       ? null
-                      : () => onOpenAlbum!(album.id, album.name, album.coverUrl),
+                      : () =>
+                            onOpenAlbum!(album.id, album.name, album.coverUrl),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -319,7 +323,10 @@ Future<void> showArtistInfoSheet(
                       ),
                       if (detail.briefDesc.trim().isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        Text(detail.briefDesc.trim(), style: theme.textTheme.bodySmall),
+                        Text(
+                          detail.briefDesc.trim(),
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ],
                       if (similar.isNotEmpty) ...[
                         const SizedBox(height: 16),

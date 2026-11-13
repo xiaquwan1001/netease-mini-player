@@ -48,4 +48,3 @@ async fn test_search_hot_detail() {
     let resp = result.unwrap();
     assert_eq!(resp.status, 200);
 }
-

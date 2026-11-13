@@ -18,7 +18,10 @@ class InlineError extends StatelessWidget {
         Expanded(
           child: Text(
             message,
-            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
           ),
         ),
         TextButton(onPressed: onRetry, child: const Text('重试')),

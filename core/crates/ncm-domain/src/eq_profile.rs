@@ -161,7 +161,10 @@ impl EqProfile {
 }
 
 fn err(line: usize, message: &str) -> EqProfileError {
-    EqProfileError { line, message: message.to_string() }
+    EqProfileError {
+        line,
+        message: message.to_string(),
+    }
 }
 
 fn check_gain(v: f32, line: usize, what: &str) -> Result<(), EqProfileError> {
@@ -189,16 +192,22 @@ fn parse_number_db(token: &str, line: usize, what: &str) -> Result<f32, EqProfil
     if let Some(unit) = parts.next() {
         let u = unit.to_ascii_lowercase();
         if u != "db" {
-            return Err(err(line, &format!("{what} 的单位应为 dB, 实际是 \"{unit}\"")));
+            return Err(err(
+                line,
+                &format!("{what} 的单位应为 dB, 实际是 \"{unit}\""),
+            ));
         }
     }
     Ok(value)
 }
 
 fn parse_filter_line(line: &str, line_no: usize) -> Result<EqFilter, EqProfileError> {
-    let (head, rest) = line
-        .split_once(':')
-        .ok_or_else(|| err(line_no, "Filter 行缺少冒号, 形如 Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71"))?;
+    let (head, rest) = line.split_once(':').ok_or_else(|| {
+        err(
+            line_no,
+            "Filter 行缺少冒号, 形如 Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71",
+        )
+    })?;
     // head = "Filter 1"
     let mut head_parts = head.split_whitespace();
     let keyword = head_parts.next().unwrap_or_default();
@@ -214,15 +223,20 @@ fn parse_filter_line(line: &str, line_no: usize) -> Result<EqFilter, EqProfileEr
 
     let tokens: Vec<&str> = rest.split_whitespace().collect();
     let mut it = tokens.into_iter();
-    let state = it
-        .next()
-        .ok_or_else(|| err(line_no, "缺少 ON/OFF"))?;
+    let state = it.next().ok_or_else(|| err(line_no, "缺少 ON/OFF"))?;
     let enabled = match state.to_ascii_uppercase().as_str() {
         "ON" => true,
         "OFF" => false,
-        other => return Err(err(line_no, &format!("过滤开关应为 ON/OFF, 实际是 \"{other}\""))),
+        other => {
+            return Err(err(
+                line_no,
+                &format!("过滤开关应为 ON/OFF, 实际是 \"{other}\""),
+            ))
+        }
     };
-    let kind_token = it.next().ok_or_else(|| err(line_no, "缺少滤波器类型(PK/LS/HS)"))?;
+    let kind_token = it
+        .next()
+        .ok_or_else(|| err(line_no, "缺少滤波器类型(PK/LS/HS)"))?;
     let kind = match kind_token.to_ascii_uppercase().as_str() {
         "PK" => EqFilterKind::Pk,
         "LS" => EqFilterKind::Ls,
@@ -276,7 +290,10 @@ fn parse_filter_line(line: &str, line_no: usize) -> Result<EqFilter, EqProfileEr
 
     let freq = freq.ok_or_else(|| err(line_no, "缺少 Fc(中心/转折频率)"))?;
     if !(freq.is_finite() && freq > 0.0 && freq <= MAX_FREQ_HZ) {
-        return Err(err(line_no, &format!("Fc 必须在 0 < Fc <= {MAX_FREQ_HZ} Hz")));
+        return Err(err(
+            line_no,
+            &format!("Fc 必须在 0 < Fc <= {MAX_FREQ_HZ} Hz"),
+        ));
     }
     let gain = gain.ok_or_else(|| err(line_no, "缺少 Gain"))?;
     check_gain(gain, line_no, "Gain")?;
@@ -285,7 +302,13 @@ fn parse_filter_line(line: &str, line_no: usize) -> Result<EqFilter, EqProfileEr
         return Err(err(line_no, "Q 必须 > 0"));
     }
 
-    Ok(EqFilter { kind, enabled, freq_hz: freq, gain_db: gain, q })
+    Ok(EqFilter {
+        kind,
+        enabled,
+        freq_hz: freq,
+        gain_db: gain,
+        q,
+    })
 }
 
 /// 数字格式化: 最多两位小数且去掉尾随 0, 保证 `parse(to_text(x)) == x`

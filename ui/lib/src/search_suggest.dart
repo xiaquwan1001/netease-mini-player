@@ -59,7 +59,11 @@ class SuggestionPanel extends StatelessWidget {
               leading: item.coverUrl == null
                   ? Icon(suggestIcon(item.kind), size: 20)
                   : CoverArt(url: item.coverUrl, size: 32, radius: 4),
-              title: Text(item.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: item.subtitle.isEmpty
                   ? null
                   : Text(
@@ -124,7 +128,10 @@ class SearchHistoryBar extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   label: Text(
                     keyword,
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   onPressed: () => onSelected(keyword),
                 ),

@@ -30,67 +30,71 @@ void main() {
     expect(result, isNull);
   });
 
-  test('Android 走 configure 通道, 参数 map 形状正确且透传 eqText/gainSlewDbPerSec', () async {
-    Playback.debugForceAndroid = true;
+  test(
+    'Android 走 configure 通道, 参数 map 形状正确且透传 eqText/gainSlewDbPerSec',
+    () async {
+      Playback.debugForceAndroid = true;
 
-    MethodCall? captured;
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      captured = call;
-      return <String, Object?>{
-        'gainDb': -6.0,
-        'fadeMs': 500,
-        'hardwareDecode': false,
-        'streamCache': true,
-        'cacheLimitMb': 1024,
-        'gainSlewDbPerSec': 3.0,
-        'eqApplied': true,
-        'eqError': null,
-        'eqFilters': 1,
-      };
-    });
+      MethodCall? captured;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        captured = call;
+        return <String, Object?>{
+          'gainDb': -6.0,
+          'fadeMs': 500,
+          'hardwareDecode': false,
+          'streamCache': true,
+          'cacheLimitMb': 1024,
+          'gainSlewDbPerSec': 3.0,
+          'eqApplied': true,
+          'eqError': null,
+          'eqFilters': 1,
+        };
+      });
 
-    const eqText = 'Preamp: -6.0 dB\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n';
-    final result = await Playback().applyTuning(
-      gainDb: -6.0,
-      fadeMs: 500,
-      hardwareDecode: false,
-      streamCache: true,
-      cacheLimitMb: 1024,
-      eqText: eqText,
-      gainSlewDbPerSec: 3.0,
-    );
+      const eqText =
+          'Preamp: -6.0 dB\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n';
+      final result = await Playback().applyTuning(
+        gainDb: -6.0,
+        fadeMs: 500,
+        hardwareDecode: false,
+        streamCache: true,
+        cacheLimitMb: 1024,
+        eqText: eqText,
+        gainSlewDbPerSec: 3.0,
+      );
 
-    final call = captured;
-    if (call == null) fail('configure 通道未被调用');
-    expect(call.method, 'configure');
+      final call = captured;
+      if (call == null) fail('configure 通道未被调用');
+      expect(call.method, 'configure');
 
-    final args = call.arguments;
-    if (args is! Map) fail('configure 参数应为 Map');
-    expect(args.keys.toSet(), {
-      'gainDb',
-      'fadeMs',
-      'hardwareDecode',
-      'streamCache',
-      'cacheLimitMb',
-      'eqText',
-      'gainSlewDbPerSec',
-    });
-    expect(args['gainDb'], -6.0);
-    expect(args['fadeMs'], 500);
-    expect(args['hardwareDecode'], false);
-    expect(args['streamCache'], true);
-    expect(args['cacheLimitMb'], 1024);
-    expect(args['eqText'], eqText);
-    expect(args['gainSlewDbPerSec'], 3.0);
+      final args = call.arguments;
+      if (args is! Map) fail('configure 参数应为 Map');
+      expect(args.keys.toSet(), {
+        'gainDb',
+        'fadeMs',
+        'hardwareDecode',
+        'streamCache',
+        'cacheLimitMb',
+        'eqText',
+        'gainSlewDbPerSec',
+      });
+      expect(args['gainDb'], -6.0);
+      expect(args['fadeMs'], 500);
+      expect(args['hardwareDecode'], false);
+      expect(args['streamCache'], true);
+      expect(args['cacheLimitMb'], 1024);
+      expect(args['eqText'], eqText);
+      expect(args['gainSlewDbPerSec'], 3.0);
 
-    // 回显透传(便于 Dart 侧断言配置真的落地)
-    final echo = result;
-    if (echo == null) fail('applyTuning 应返回回显 map');
-    expect(echo['eqApplied'], true);
-    expect(echo['eqFilters'], 1);
-    expect(echo['gainDb'], -6.0);
-    expect(echo['gainSlewDbPerSec'], 3.0);
-  });
+      // 回显透传(便于 Dart 侧断言配置真的落地)
+      final echo = result;
+      if (echo == null) fail('applyTuning 应返回回显 map');
+      expect(echo['eqApplied'], true);
+      expect(echo['eqFilters'], 1);
+      expect(echo['gainDb'], -6.0);
+      expect(echo['gainSlewDbPerSec'], 3.0);
+    },
+  );
 
   test('eqText 为 null 时照常发送(旁路 EQ)', () async {
     Playback.debugForceAndroid = true;

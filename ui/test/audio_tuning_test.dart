@@ -47,9 +47,15 @@ void main() {
   test('R2b: 安静曲目的正增益可以超过 0, 但封顶 +12 dB', () {
     settings.loudnessNormalize = true;
     settings.volumeGainDb = 0.0;
-    final boost = AudioTuningRequest.fromSettings(settings, loudnessGainDb: 6.0);
+    final boost = AudioTuningRequest.fromSettings(
+      settings,
+      loudnessGainDb: 6.0,
+    );
     expect(boost.gainDb, 6.0);
-    final capped = AudioTuningRequest.fromSettings(settings, loudnessGainDb: 30.0);
+    final capped = AudioTuningRequest.fromSettings(
+      settings,
+      loudnessGainDb: 30.0,
+    );
     expect(capped.gainDb, 12.0);
   });
 
@@ -83,7 +89,8 @@ void main() {
     settings.eqProfileText = '   \n  ';
     expect(AudioTuningRequest.fromSettings(settings).eqText, isNull);
 
-    const curve = 'Preamp: -6.0 dB\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n';
+    const curve =
+        'Preamp: -6.0 dB\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n';
     settings.eqProfileText = curve;
     expect(AudioTuningRequest.fromSettings(settings).eqText, curve);
   });

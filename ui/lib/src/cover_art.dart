@@ -67,7 +67,10 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
     if (resp.statusCode != HttpStatus.ok) {
       // 把 body 丢掉, 否则连接不会复用
       await resp.drain<void>();
-      throw NetworkImageLoadException(statusCode: resp.statusCode, uri: Uri.parse(url));
+      throw NetworkImageLoadException(
+        statusCode: resp.statusCode,
+        uri: Uri.parse(url),
+      );
     }
     final bytes = await consolidateHttpClientResponseBytes(resp);
     if (_bytes.length >= 200) _bytes.remove(_bytes.keys.first);
@@ -80,14 +83,20 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
       SynchronousFuture<_UaNetworkImage>(this);
 
   @override
-  ImageStreamCompleter loadImage(_UaNetworkImage key, ImageDecoderCallback decode) {
+  ImageStreamCompleter loadImage(
+    _UaNetworkImage key,
+    ImageDecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key, decode),
       scale: scale,
     );
   }
 
-  Future<ui.Codec> _loadAsync(_UaNetworkImage key, ImageDecoderCallback decode) async {
+  Future<ui.Codec> _loadAsync(
+    _UaNetworkImage key,
+    ImageDecoderCallback decode,
+  ) async {
     final bytes = await _fetch(key.url);
     return decode(await ui.ImmutableBuffer.fromUint8List(bytes));
   }
@@ -305,7 +314,8 @@ class NetImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final size = width ?? height ?? 48;
-    final fallback = placeholder ??
+    final fallback =
+        placeholder ??
         Container(
           width: width,
           height: height,
@@ -330,7 +340,12 @@ class NetImage extends StatelessWidget {
 
 /// 圆形头像(歌手/评论/动态共用)
 class CircleCover extends StatelessWidget {
-  const CircleCover({super.key, required this.url, this.size = 40, this.icon = Icons.person});
+  const CircleCover({
+    super.key,
+    required this.url,
+    this.size = 40,
+    this.icon = Icons.person,
+  });
 
   final String? url;
   final double size;
@@ -342,7 +357,10 @@ class CircleCover extends StatelessWidget {
     final fallback = Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: scheme.surfaceContainerHighest, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        shape: BoxShape.circle,
+      ),
       child: Icon(icon, size: size * 0.5, color: scheme.outline),
     );
     final candidates = imageCandidates(url, width: size, height: size);
@@ -363,12 +381,17 @@ Future<void> showImageViewer(
   BuildContext context, {
   required List<String> urls,
   int initialIndex = 0,
+
   /// 保存实现可注入(测试用假实现, 不落盘)
   Future<String> Function(Uint8List bytes, String filename)? saveOverride,
+
   /// 取图字节实现可注入(测试断言"保存的是原图字节"用, 免联网)
   Future<Uint8List> Function(String url)? fetchOverride,
 }) {
-  final images = [for (final u in urls) if (httpsImageUrl(u).isNotEmpty) httpsImageUrl(u)];
+  final images = [
+    for (final u in urls)
+      if (httpsImageUrl(u).isNotEmpty) httpsImageUrl(u),
+  ];
   if (images.isEmpty) return Future.value();
   final start = initialIndex.clamp(0, images.length - 1);
   return showDialog<void>(
@@ -405,8 +428,9 @@ class _ImageViewer extends StatefulWidget {
 }
 
 class _ImageViewerState extends State<_ImageViewer> {
-  late final PageController _controller =
-      PageController(initialPage: widget.initialIndex);
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
   late int _index = widget.initialIndex;
   bool _saving = false;
 
@@ -421,7 +445,10 @@ class _ImageViewerState extends State<_ImageViewer> {
   /// 从 URL 猜扩展名(网易云 CDN 基本都是 .jpg; 少数 png/无后缀)
   String get _filename {
     final path = Uri.tryParse(_currentUrl)?.path ?? '';
-    final m = RegExp(r'\.(jpe?g|png|webp|gif)$', caseSensitive: false).firstMatch(path);
+    final m = RegExp(
+      r'\.(jpe?g|png|webp|gif)$',
+      caseSensitive: false,
+    ).firstMatch(path);
     final ext = (m?.group(1) ?? 'jpg').toLowerCase();
     final stamp = DateTime.now().millisecondsSinceEpoch;
     return 'MiniNCM_$stamp.$ext';
@@ -431,7 +458,9 @@ class _ImageViewerState extends State<_ImageViewer> {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      final bytes = await (widget.fetchOverride ?? fetchImageBytes)(_currentUrl);
+      final bytes = await (widget.fetchOverride ?? fetchImageBytes)(
+        _currentUrl,
+      );
       final save = widget.saveOverride ?? saveImageBytes;
       final where = await save(bytes, _filename);
       if (!mounted) return;
@@ -459,8 +488,11 @@ class _ImageViewerState extends State<_ImageViewer> {
                 child: Center(
                   child: _FallbackImage(
                     candidates: imageCandidates(widget.images[i]),
-                    placeholder: const Icon(Icons.broken_image,
-                        color: Colors.white54, size: 48),
+                    placeholder: const Icon(
+                      Icons.broken_image,
+                      color: Colors.white54,
+                      size: 48,
+                    ),
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -492,7 +524,9 @@ class _ImageViewerState extends State<_ImageViewer> {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.download, color: Colors.white),
                 tooltip: '保存原图',

@@ -56,14 +56,16 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: const AudioSettingsPage(),
       ),
-      home: const AudioSettingsPage(),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('不变'), findsOneWidget);
@@ -74,7 +76,9 @@ void main() {
     expect(find.text('不变'), findsOneWidget);
     expect(find.text('与系统音量相乘, 不影响系统音量本身。'), findsOneWidget);
 
-    final slider = tester.widget<Slider>(find.byKey(const Key('volumeGainSlider')));
+    final slider = tester.widget<Slider>(
+      find.byKey(const Key('volumeGainSlider')),
+    );
     slider.onChanged!(-12.5);
     await tester.pump();
     expect(settings.volumeGainDb, -12.5);
@@ -84,7 +88,11 @@ void main() {
   testWidgets('响度均衡: 开关写回 loudnessNormalize 并解锁动态 AGC', (tester) async {
     await pumpPage(tester);
     expect(
-      tester.widget<SwitchListTile>(find.byKey(const Key('loudnessDynamicSwitch'))).onChanged,
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('loudnessDynamicSwitch')),
+          )
+          .onChanged,
       isNull,
     );
 
@@ -92,7 +100,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(settings.loudnessNormalize, isTrue);
     expect(
-      tester.widget<SwitchListTile>(find.byKey(const Key('loudnessDynamicSwitch'))).onChanged,
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const Key('loudnessDynamicSwitch')),
+          )
+          .onChanged,
       isNotNull,
     );
 
@@ -113,7 +125,9 @@ void main() {
 
   testWidgets('淡入淡出下拉写回 fadeMs', (tester) async {
     await pumpPage(tester);
-    final dd = tester.widget<DropdownButton<int>>(find.byKey(const Key('fadeDropdown')));
+    final dd = tester.widget<DropdownButton<int>>(
+      find.byKey(const Key('fadeDropdown')),
+    );
     dd.onChanged!(500);
     await tester.pump();
     expect(settings.fadeMs, 500);
@@ -125,7 +139,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(settings.streamCache, isFalse);
 
-    final dd = tester.widget<DropdownButton<int>>(find.byKey(const Key('cacheLimitDropdown')));
+    final dd = tester.widget<DropdownButton<int>>(
+      find.byKey(const Key('cacheLimitDropdown')),
+    );
     dd.onChanged!(2048);
     await tester.pump();
     expect(settings.cacheLimitMb, 2048);
@@ -163,7 +179,8 @@ void main() {
     await tester.tap(find.text('导入曲线'));
     await tester.pumpAndSettle();
 
-    const text = 'Preamp: -6.0 dB\n'
+    const text =
+        'Preamp: -6.0 dB\n'
         'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n'
         'Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70';
     await tester.enterText(find.byType(TextField), text);
@@ -177,7 +194,8 @@ void main() {
 
   testWidgets('导出: 复制原文并提示行数(与导入往返一致)', (tester) async {
     settings.eqProfileName = '自定义曲线';
-    settings.eqProfileText = 'Preamp: -6.0 dB\n'
+    settings.eqProfileText =
+        'Preamp: -6.0 dB\n'
         'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71';
     settings.notifyListeners();
 
@@ -192,8 +210,10 @@ void main() {
       },
     );
     addTearDown(() {
-      tester.binding.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      );
     });
 
     await pumpPage(tester);
@@ -206,7 +226,8 @@ void main() {
 
   testWidgets('重置为默认: 文本回 10 段全 0, 名称变为默认曲线', (tester) async {
     settings.eqProfileName = '自定义曲线';
-    settings.eqProfileText = 'Preamp: 0.0 dB\n'
+    settings.eqProfileText =
+        'Preamp: 0.0 dB\n'
         'Filter 1: ON PK Fc 100 Hz Gain -1.0 dB Q 0.7';
     settings.notifyListeners();
 

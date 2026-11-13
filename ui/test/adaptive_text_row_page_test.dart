@@ -74,10 +74,22 @@ Widget playerBar({required String title, required List<Widget> badges}) {
                     ),
                   ),
                 ),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.favorite_border, size: 22)),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.skip_previous, size: 26)),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.play_circle, size: 38)),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.skip_next, size: 26)),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.favorite_border, size: 22),
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.skip_previous, size: 26),
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.play_circle, size: 38),
+                ),
+                IconButton(
+                  onPressed: () {},
+                  icon: const Icon(Icons.skip_next, size: 26),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -148,8 +160,9 @@ void main() {
     }
   });
 
-  testWidgets('顶栏(歌词页态: 标题+收起+分享/翻译/菜单; 歌单浏览态: 标题+返回): 9 组合无溢出, 标题单行',
-      (tester) async {
+  testWidgets('顶栏(歌词页态: 标题+收起+分享/翻译/菜单; 歌单浏览态: 标题+返回): 9 组合无溢出, 标题单行', (
+    tester,
+  ) async {
     final actions = [
       IconButton(onPressed: () {}, icon: const Icon(Icons.share)),
       IconButton(onPressed: () {}, icon: const Icon(Icons.translate)),
@@ -157,17 +170,27 @@ void main() {
     ];
     for (final width in _widths) {
       for (final scale in _scales) {
-        for (final entry in {'lyrics': actions, 'library': <Widget>[]}.entries) {
+        for (final entry in {
+          'lyrics': actions,
+          'library': <Widget>[],
+        }.entries) {
           final tag = 'TopBar-${entry.key} w=$width s=$scale';
           final errors = await pumpAudited(
             tester,
             Scaffold(
               appBar: AppBar(
-                titleTextStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+                titleTextStyle: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                ),
                 title: MarqueeText(_longName),
                 leading: IconButton(
                   onPressed: () {},
-                  icon: Icon(entry.key == 'lyrics' ? Icons.expand_more : Icons.arrow_back),
+                  icon: Icon(
+                    entry.key == 'lyrics'
+                        ? Icons.expand_more
+                        : Icons.arrow_back,
+                  ),
                 ),
                 actions: entry.value,
               ),
@@ -181,8 +204,14 @@ void main() {
           expect(box.size.height, lessThan(60), reason: tag);
           expect(box.size.width, greaterThan(0), reason: tag);
           // 返回/收起按钮必须仍在
-          expect(find.byIcon(Icons.expand_more), entry.key == 'lyrics' ? findsOneWidget : findsNothing);
-          expect(find.byIcon(Icons.arrow_back), entry.key == 'library' ? findsOneWidget : findsNothing);
+          expect(
+            find.byIcon(Icons.expand_more),
+            entry.key == 'lyrics' ? findsOneWidget : findsNothing,
+          );
+          expect(
+            find.byIcon(Icons.arrow_back),
+            entry.key == 'library' ? findsOneWidget : findsNothing,
+          );
           await tester.pumpWidget(const SizedBox.shrink());
         }
       }

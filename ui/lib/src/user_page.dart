@@ -119,9 +119,7 @@ class _UserPageState extends State<UserPage> {
             const SizedBox(height: 16),
             Text(
               'TA 的歌单',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
+              style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
@@ -161,7 +159,11 @@ class _UserPageState extends State<UserPage> {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Colors.black26, Colors.transparent, Colors.black54],
+                      colors: [
+                        Colors.black26,
+                        Colors.transparent,
+                        Colors.black54,
+                      ],
                       stops: [0, 0.4, 1],
                     ),
                   ),
@@ -200,8 +202,9 @@ class _UserPageState extends State<UserPage> {
                                 signature,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: Colors.white70),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: Colors.white70,
+                                ),
                               ),
                             ),
                         ],
@@ -218,9 +221,10 @@ class _UserPageState extends State<UserPage> {
               _loading && d == null
                   ? '加载中…'
                   : '关注 ${d?.follows ?? BigInt.zero} · 粉丝 ${d?.followeds ?? BigInt.zero}'
-                      ' · Lv.${d?.level ?? BigInt.zero}',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        ' · Lv.${d?.level ?? BigInt.zero}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -271,7 +275,11 @@ class _UserPageState extends State<UserPage> {
             for (final p in lists.take(30))
               ListTile(
                 leading: CoverArt(url: p.coverUrl, size: 44, radius: 6),
-                title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  p.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Text('${p.trackCount} 首'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _openPlaylist(p),

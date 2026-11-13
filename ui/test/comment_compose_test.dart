@@ -20,17 +20,15 @@ rust.Comment comment(int id, String content, {bool hot = false}) =>
     );
 
 rust.CommentPage page(List<rust.Comment> items) => rust.CommentPage(
-      threadId: 'R_SO_4_1',
-      comments: items,
-      total: BigInt.from(items.length),
-      hasMore: false,
-    );
+  threadId: 'R_SO_4_1',
+  comments: items,
+  total: BigInt.from(items.length),
+  hasMore: false,
+);
 
 Widget host(Widget child) => MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: child),
-      ),
-    );
+  home: Scaffold(body: SingleChildScrollView(child: child)),
+);
 
 /// 评论输入是"点开才出现"的面板(楼层回复面板里已有一个 TextField, 常驻会歧义)
 Future<void> openComposer(WidgetTester tester) async {
@@ -44,17 +42,21 @@ FilledButton sendButton(WidgetTester tester) =>
 void main() {
   testWidgets('空文本不可发送: 按钮禁用, 空白也不发', (tester) async {
     final sent = <String>[];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      send: (commentId, content) async {
-        sent.add('$commentId:$content');
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          send: (commentId, content) async {
+            sent.add('$commentId:$content');
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await openComposer(tester);
@@ -66,7 +68,10 @@ void main() {
     await tester.pump();
     expect(sendButton(tester).onPressed, isNull);
 
-    await tester.tap(find.widgetWithText(FilledButton, '发送'), warnIfMissed: false);
+    await tester.tap(
+      find.widgetWithText(FilledButton, '发送'),
+      warnIfMissed: false,
+    );
     await tester.pumpAndSettle();
     expect(sent, isEmpty);
     expect(find.text('已有评论'), findsOneWidget);
@@ -74,20 +79,22 @@ void main() {
 
   testWidgets('发送成功: 本地插入新评论(无头像 / "刚刚"), 面板关闭', (tester) async {
     final sent = <String>[];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async => page([
-        comment(1, '热评', hot: true),
-        comment(2, '最新评论'),
-      ]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      send: (commentId, content) async {
-        sent.add('$commentId:$content');
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '热评', hot: true), comment(2, '最新评论')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          send: (commentId, content) async {
+            sent.add('$commentId:$content');
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await openComposer(tester);
@@ -111,19 +118,23 @@ void main() {
   testWidgets('发送失败: 显示错误文案 + 保留文本, 重试成功后插入', (tester) async {
     var calls = 0;
     final sent = <String>[];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      send: (commentId, content) async {
-        calls++;
-        if (calls == 1) throw Exception('boom');
-        sent.add('$commentId:$content');
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          send: (commentId, content) async {
+            calls++;
+            if (calls == 1) throw Exception('boom');
+            sent.add('$commentId:$content');
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await openComposer(tester);
@@ -132,7 +143,11 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '发送'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('boom'), findsOneWidget, reason: 'friendlyError 文案');
+    expect(
+      find.textContaining('boom'),
+      findsOneWidget,
+      reason: 'friendlyError 文案',
+    );
     // 文本保留在输入框里, 面板没关
     expect(
       tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -159,14 +174,18 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetViewInsets);
 
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      send: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([comment(1, '已有评论')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          send: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await openComposer(tester);

@@ -5,30 +5,33 @@ import 'package:minincm/main.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.WordLyricDto _good(int lines, {int offsetMs = 0, int firstWordShiftMs = 0}) =>
-    rust.WordLyricDto(
-      lines: [
-        for (var i = 0; i < lines; i++)
-          rust.WordLyricLineDto(
-            startMs: offsetMs + i * 1000,
-            endMs: offsetMs + i * 1000 + 900,
-            words: [
-              rust.WordItemDto(
-                startMs: offsetMs + i * 1000 + firstWordShiftMs,
-                endMs: offsetMs + i * 1000 + 400,
-                text: '你',
-              ),
-              rust.WordItemDto(
-                startMs: offsetMs + i * 1000 + 400,
-                endMs: offsetMs + i * 1000 + 900,
-                text: '好',
-              ),
-            ],
+rust.WordLyricDto _good(
+  int lines, {
+  int offsetMs = 0,
+  int firstWordShiftMs = 0,
+}) => rust.WordLyricDto(
+  lines: [
+    for (var i = 0; i < lines; i++)
+      rust.WordLyricLineDto(
+        startMs: offsetMs + i * 1000,
+        endMs: offsetMs + i * 1000 + 900,
+        words: [
+          rust.WordItemDto(
+            startMs: offsetMs + i * 1000 + firstWordShiftMs,
+            endMs: offsetMs + i * 1000 + 400,
+            text: '你',
           ),
-      ],
-      translationLines: const [],
-      hasWordTiming: true,
-    );
+          rust.WordItemDto(
+            startMs: offsetMs + i * 1000 + 400,
+            endMs: offsetMs + i * 1000 + 900,
+            text: '好',
+          ),
+        ],
+      ),
+  ],
+  translationLines: const [],
+  hasWordTiming: true,
+);
 
 rust.WordLyricDto _scrambled(int lines) {
   final starts = [9000, 2000, 7000, 4000];
@@ -39,7 +42,11 @@ rust.WordLyricDto _scrambled(int lines) {
           startMs: starts[i],
           endMs: starts[i] + 900,
           words: [
-            rust.WordItemDto(startMs: starts[i], endMs: starts[i] + 400, text: '你'),
+            rust.WordItemDto(
+              startMs: starts[i],
+              endMs: starts[i] + 400,
+              text: '你',
+            ),
           ],
         ),
     ],
@@ -180,7 +187,11 @@ void main() {
 
   test('AppSettings: 歌词来源偏好三态 + 副标题语义', () {
     expect(AppSettings.instance.lyricSourcePreference, 'auto'); // 默认值
-    expect(AppSettings.lyricSourceOptions.keys.toSet(), {'auto', 'netease', 'amll'});
+    expect(AppSettings.lyricSourceOptions.keys.toSet(), {
+      'auto',
+      'netease',
+      'amll',
+    });
     expect(
       AppSettings.lyricSourceDescription('auto'),
       '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',

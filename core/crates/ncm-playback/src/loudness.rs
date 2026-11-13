@@ -76,7 +76,12 @@ impl KWeighting {
             a1: 2.0 * (k * k - 1.0) / a0,
             a2: (1.0 - k / q + k * k) / a0,
         };
-        Self { pre, rlb, state_pre: BiquadState::default(), state_rlb: BiquadState::default() }
+        Self {
+            pre,
+            rlb,
+            state_pre: BiquadState::default(),
+            state_rlb: BiquadState::default(),
+        }
     }
 
     #[inline]
@@ -135,7 +140,9 @@ impl LoudnessMeter {
             self.acc_len = 0;
             if self.hop_energies.len() >= self.hops_per_block {
                 let window_len = self.hops_per_block.min(self.hop_energies.len());
-                let sum: f32 = self.hop_energies[self.hop_energies.len() - window_len..].iter().sum();
+                let sum: f32 = self.hop_energies[self.hop_energies.len() - window_len..]
+                    .iter()
+                    .sum();
                 self.block_energies.push(sum / window_len as f32);
             }
         }
@@ -143,35 +150,46 @@ impl LoudnessMeter {
 
     /// 收尾: 应用绝对/相对门限并给出 integrated loudness
     pub fn finish(self) -> Option<LoudnessMeasurement> {
-        let LoudnessMeter { block_energies, sample_peak, .. } = self;
+        let LoudnessMeter {
+            block_energies,
+            sample_peak,
+            ..
+        } = self;
         if block_energies.is_empty() {
             return None;
         }
         let abs_energy = lufs_to_energy(ABSOLUTE_GATE_LUFS);
-        let above_abs: Vec<f32> =
-            block_energies.iter().copied().filter(|e| *e > abs_energy).collect();
+        let above_abs: Vec<f32> = block_energies
+            .iter()
+            .copied()
+            .filter(|e| *e > abs_energy)
+            .collect();
         if above_abs.is_empty() {
             return None;
         }
         let mean_abs = above_abs.iter().sum::<f32>() / above_abs.len() as f32;
         // 相对门限 = 平均能量低 10 LU(RELATIVE_GATE_LU 本身是负数: -10)
         let rel_gate = mean_abs * 10f32.powf(RELATIVE_GATE_LU / 10.0);
-        let gated: Vec<f32> = above_abs.iter().copied().filter(|e| *e >= rel_gate).collect();
+        let gated: Vec<f32> = above_abs
+            .iter()
+            .copied()
+            .filter(|e| *e >= rel_gate)
+            .collect();
         if gated.is_empty() {
             return None;
         }
         let mean = gated.iter().sum::<f32>() / gated.len() as f32;
         let lufs = -0.691 + 10.0 * mean.log10();
-        Some(LoudnessMeasurement { lufs, sample_peak, blocks: gated.len() })
+        Some(LoudnessMeasurement {
+            lufs,
+            sample_peak,
+            blocks: gated.len(),
+        })
     }
 }
 
 /// 测量一段交错 PCM 的 integrated loudness。样本不足 400 ms 时返回 `None`。
-pub fn measure(
-    samples: &[f32],
-    channels: usize,
-    sample_rate: u32,
-) -> Option<LoudnessMeasurement> {
+pub fn measure(samples: &[f32], channels: usize, sample_rate: u32) -> Option<LoudnessMeasurement> {
     let mut meter = LoudnessMeter::new(channels, sample_rate);
     let channels = channels.max(1);
     for frame in samples.chunks_exact(channels) {
@@ -215,7 +233,12 @@ pub fn measure_file_with_hint(
         hint.with_extension(ext);
     }
     let probed = symphonia::default::get_probe()
-        .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
+        .format(
+            &hint,
+            stream,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
         .map_err(|e| format!("probe {}: {e}", path.display()))?;
     let mut format = probed.format;
     let track = format
@@ -246,9 +269,8 @@ pub fn measure_file_with_hint(
             continue;
         }
         let meter = meter.get_or_insert_with(|| LoudnessMeter::new(channels, spec.rate));
-        let buf = buffer.get_or_insert_with(|| {
-            SampleBuffer::<f32>::new(decoded.capacity() as u64, spec)
-        });
+        let buf =
+            buffer.get_or_insert_with(|| SampleBuffer::<f32>::new(decoded.capacity() as u64, spec));
         if buf.capacity() < decoded.frames() as usize * channels {
             *buf = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
         }
@@ -300,14 +322,22 @@ mod tests {
     fn mono_measurement_is_3lu_quieter_than_stereo() {
         let mono = measure(&sine(0.1, 1000.0, 48_000, 3.0, 1), 1, 48_000).unwrap();
         let stereo = measure(&sine(0.1, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
-        assert!((stereo.lufs - mono.lufs - 3.0).abs() < 0.4, "差 {}", stereo.lufs - mono.lufs);
+        assert!(
+            (stereo.lufs - mono.lufs - 3.0).abs() < 0.4,
+            "差 {}",
+            stereo.lufs - mono.lufs
+        );
     }
 
     #[test]
     fn louder_signal_measures_louder() {
         let quiet = measure(&sine(0.05, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
         let loud = measure(&sine(0.5, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
-        assert!((loud.lufs - quiet.lufs - 20.0).abs() < 0.6, "差 {}", loud.lufs - quiet.lufs);
+        assert!(
+            (loud.lufs - quiet.lufs - 20.0).abs() < 0.6,
+            "差 {}",
+            loud.lufs - quiet.lufs
+        );
         assert!(loud.sample_peak > quiet.sample_peak);
     }
 
@@ -337,7 +367,12 @@ mod tests {
         // 50 Hz 在 K 加权里应被明显衰减(RLB 高通)
         let low = measure(&sine(0.5, 50.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
         let mid = measure(&sine(0.5, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
-        assert!(mid.lufs - low.lufs > 3.0, "低频应低于中频: {} vs {}", low.lufs, mid.lufs);
+        assert!(
+            mid.lufs - low.lufs > 3.0,
+            "低频应低于中频: {} vs {}",
+            low.lufs,
+            mid.lufs
+        );
     }
 
     #[test]
@@ -392,12 +427,19 @@ mod tests {
                 .unwrap_or(0)
         ));
         write_wav(&path, 0.1, 1000.0, 48_000, 3.0, 2);
-        let m = measure_file(&path).expect("解码+测量应成功").expect("应有测量结果");
+        let m = measure_file(&path)
+            .expect("解码+测量应成功")
+            .expect("应有测量结果");
         assert!((m.lufs + 20.0).abs() < 1.5, "实测 {} LUFS", m.lufs);
         assert!(m.sample_peak > 0.09 && m.sample_peak < 0.11);
         // 与等价的浮点切片测量结果一致(差异只来自 16-bit 量化)
         let reference = measure(&sine(0.1, 1000.0, 48_000, 3.0, 2), 2, 48_000).unwrap();
-        assert!((m.lufs - reference.lufs).abs() < 0.2, "{} vs {}", m.lufs, reference.lufs);
+        assert!(
+            (m.lufs - reference.lufs).abs() < 0.2,
+            "{} vs {}",
+            m.lufs,
+            reference.lufs
+        );
         let _ = std::fs::remove_file(&path);
     }
 

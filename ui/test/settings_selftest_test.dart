@@ -9,12 +9,12 @@ import 'package:minincm/src/settings_diagnostics_page.dart';
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 rust.InitInfo fakeInfo() => rust.InitInfo(
-      dataDir: '/tmp/minincm',
-      deviceId: 'dev-1',
-      loggedIn: false,
-      vip: false,
-      providers: const [],
-    );
+  dataDir: '/tmp/minincm',
+  deviceId: 'dev-1',
+  loggedIn: false,
+  vip: false,
+  providers: const [],
+);
 
 /// 只覆盖 SettingsView 在测试里会碰到的方法, 其余走 noSuchMethod.
 class _FakeRustApi implements RustLibApi {
@@ -35,8 +35,9 @@ Finder tile() => find.byType(ChannelSelfCheckTile);
 void main() {
   testWidgets('成功路径: 显示返回值与耗时', (tester) async {
     final gate = Completer<String>();
-    await tester
-        .pumpWidget(host(ChannelSelfCheckTile(ping: () => gate.future)));
+    await tester.pumpWidget(
+      host(ChannelSelfCheckTile(ping: () => gate.future)),
+    );
 
     await tester.tap(tile());
     await tester.pump();
@@ -57,8 +58,7 @@ void main() {
       return 'pong:selftest';
     }
 
-    await tester
-        .pumpWidget(host(ChannelSelfCheckTile(ping: failOnce)));
+    await tester.pumpWidget(host(ChannelSelfCheckTile(ping: failOnce)));
     await tester.tap(tile());
     await tester.pumpAndSettle();
     expect(find.textContaining('通道异常'), findsOneWidget);
@@ -74,10 +74,16 @@ void main() {
   testWidgets('防重入: 连点两次只跑一次', (tester) async {
     var calls = 0;
     final gate = Completer<String>();
-    await tester.pumpWidget(host(ChannelSelfCheckTile(ping: () {
-      calls++;
-      return gate.future;
-    })));
+    await tester.pumpWidget(
+      host(
+        ChannelSelfCheckTile(
+          ping: () {
+            calls++;
+            return gate.future;
+          },
+        ),
+      ),
+    );
     await tester.tap(tile());
     await tester.pump();
     expect(find.textContaining('正在自检'), findsOneWidget);
@@ -98,8 +104,9 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAllTestValues);
 
     final gate = Completer<String>();
-    await tester
-        .pumpWidget(host(ChannelSelfCheckTile(ping: () => gate.future)));
+    await tester.pumpWidget(
+      host(ChannelSelfCheckTile(ping: () => gate.future)),
+    );
     await tester.tap(tile());
     await tester.pump();
     expect(tester.takeException(), isNull);
@@ -111,8 +118,9 @@ void main() {
 
     // 失败态文案也不溢出
     final gate2 = Completer<String>();
-    await tester
-        .pumpWidget(host(ChannelSelfCheckTile(ping: () => gate2.future)));
+    await tester.pumpWidget(
+      host(ChannelSelfCheckTile(ping: () => gate2.future)),
+    );
     await tester.tap(tile());
     await tester.pump();
     gate2.completeError(Exception('network unreachable after retries'));

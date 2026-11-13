@@ -50,17 +50,20 @@ void main() {
     test('补零与跨月边界', () {
       expect(
         formatDateYmd(
-            BigInt.from(DateTime(2026, 1, 5, 12).millisecondsSinceEpoch)),
+          BigInt.from(DateTime(2026, 1, 5, 12).millisecondsSinceEpoch),
+        ),
         '2026-01-05',
       );
       expect(
         formatDateYmd(
-            BigInt.from(DateTime(2026, 2, 1, 12).millisecondsSinceEpoch)),
+          BigInt.from(DateTime(2026, 2, 1, 12).millisecondsSinceEpoch),
+        ),
         '2026-02-01',
       );
       expect(
         formatDateYmd(
-            BigInt.from(DateTime(2026, 11, 23, 12).millisecondsSinceEpoch)),
+          BigInt.from(DateTime(2026, 11, 23, 12).millisecondsSinceEpoch),
+        ),
         '2026-11-23',
       );
     });

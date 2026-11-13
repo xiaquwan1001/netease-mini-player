@@ -10,7 +10,10 @@ import 'package:minincm/src/rust/frb_generated.dart';
 
 const _libPath = String.fromEnvironment('NCM_LIB', defaultValue: '');
 const _audioTest = bool.fromEnvironment('NCM_AUDIO_TEST');
-const _dataDir = String.fromEnvironment('NCM_DATA_DIR', defaultValue: '/tmp/ncm-frb');
+const _dataDir = String.fromEnvironment(
+  'NCM_DATA_DIR',
+  defaultValue: '/tmp/ncm-frb',
+);
 
 /// 真实联网 smoke: 上游风控/公网抖动会让单个断言偶发失败(实测与 ci.sh 里
 /// vendor 匿名 smoke 连续跑有关), 统一给 3 次退避重试, 与 ci.sh 的口径一致。
@@ -63,7 +66,9 @@ void main() {
 
   test('play a free track and watch position advance', () async {
     if (!_audioTest) {
-      markTestSkipped('set --dart-define=NCM_AUDIO_TEST=true to run (needs audio device)');
+      markTestSkipped(
+        'set --dart-define=NCM_AUDIO_TEST=true to run (needs audio device)',
+      );
       return;
     }
     final page = await _net(() => rust.searchAll(keywords: '晴天', limit: 10));
@@ -81,7 +86,9 @@ void main() {
 
   test('lyric lines are parsed and sorted', () async {
     // 周杰伦 - 晴天(免费, 歌词必有)
-    final lines = await _net(() => rust.lyricLinesI18N(trackId: BigInt.from(186016)));
+    final lines = await _net(
+      () => rust.lyricLinesI18N(trackId: BigInt.from(186016)),
+    );
     expect(lines, isNotEmpty);
     for (var i = 1; i < lines.length; i++) {
       expect(lines[i].timeMs >= lines[i - 1].timeMs, true, reason: '歌词必须按时间升序');
@@ -92,7 +99,9 @@ void main() {
 
   test('english song lyric carries translation', () async {
     // Ed Sheeran - Shape of You: 有 tlyric, 用来守住"按时间戳合并翻译"
-    final lines = await _net(() => rust.lyricLinesI18N(trackId: BigInt.from(451703096)));
+    final lines = await _net(
+      () => rust.lyricLinesI18N(trackId: BigInt.from(451703096)),
+    );
     expect(lines, isNotEmpty);
     expect(lines.where((l) => l.sub != null), isNotEmpty);
   }, timeout: const Timeout(Duration(seconds: 60)));
@@ -120,7 +129,9 @@ void main() {
   }, timeout: const Timeout(Duration(seconds: 60)));
 
   test('album detail carries cover and songs', () async {
-    final album = await _net(() => rust.albumDetail(albumId: BigInt.from(255723258)));
+    final album = await _net(
+      () => rust.albumDetail(albumId: BigInt.from(255723258)),
+    );
     expect(album.name, isNotEmpty);
     expect(album.coverUrl, isNotNull);
     expect(album.songs, isNotEmpty);

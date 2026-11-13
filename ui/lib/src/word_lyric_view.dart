@@ -86,10 +86,12 @@ List<WordSpanStyle> wordStylesAt(WordLyricLineData line, int positionMs) {
   }
   return [
     for (final w in line.words)
-      if (positionMs >= w.startMs && (w.endMs <= w.startMs || positionMs < w.endMs))
+      if (positionMs >= w.startMs &&
+          (w.endMs <= w.startMs || positionMs < w.endMs))
         WordSpanStyle(
           w.endMs <= w.startMs
-              ? WordHighlightState.sung // 零时长词: 到点即视为已唱
+              ? WordHighlightState
+                    .sung // 零时长词: 到点即视为已唱
               : WordHighlightState.current,
           w.endMs <= w.startMs
               ? 1
@@ -196,7 +198,8 @@ class _WordLyricViewState extends State<WordLyricView> {
     if (controller == null || !controller.hasClients || idx < 0) return;
     final position = controller.position;
     final target =
-        idx * widget.itemExtent - (position.viewportDimension - widget.itemExtent) / 2;
+        idx * widget.itemExtent -
+        (position.viewportDimension - widget.itemExtent) / 2;
     final clamped = target.clamp(0.0, position.maxScrollExtent);
     controller.animateTo(
       clamped,
@@ -216,7 +219,9 @@ class _WordLyricViewState extends State<WordLyricView> {
       builder: (context, activeIndex, _) => ListView.builder(
         controller: widget.controller,
         itemExtent: widget.itemExtent,
-        padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+        padding:
+            widget.padding ??
+            const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
         itemCount: widget.lines.length,
         itemBuilder: (context, i) {
           final line = widget.lines[i];
@@ -339,7 +344,11 @@ class _ActiveWordLine extends StatelessWidget {
 }
 
 class _LineBody extends StatelessWidget {
-  const _LineBody({required this.main, required this.sub, required this.subColor});
+  const _LineBody({
+    required this.main,
+    required this.sub,
+    required this.subColor,
+  });
 
   final InlineSpan main;
   final String? sub;

@@ -24,6 +24,7 @@ class SearchLanding extends StatelessWidget {
 
   final List<String> history;
   final List<rust.HotSearchTerm> hot;
+
   /// "猜你想搜"的关键词(真正要搜的词)
   final String? recommended;
 
@@ -105,7 +106,10 @@ class SearchLanding extends StatelessWidget {
                   materialTapTargetSize: MaterialTapTargetSize.padded,
                   label: Text(
                     keyword,
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   onPressed: () => onSelected(keyword),
                 ),
@@ -122,7 +126,8 @@ class SearchLanding extends StatelessWidget {
               leading: Icon(Icons.auto_awesome, color: scheme.primary),
               // 关键词和推荐理由必须分开: 点一下只搜关键词, 理由只是说明
               title: Text(recommended!),
-              subtitle: (recommendedReason == null ||
+              subtitle:
+                  (recommendedReason == null ||
                       recommendedReason!.isEmpty ||
                       recommendedReason == recommended)
                   ? null
@@ -151,13 +156,13 @@ class SearchLanding extends StatelessWidget {
           _SectionTitle(
             title: '热门搜索',
             trailing: hotLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : null,
-        ),
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : null,
+          ),
         if (showHot && hotError != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -184,10 +189,7 @@ class SearchLanding extends StatelessWidget {
         else if (showHot && !hotLoading && hot.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '暂无热词',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            child: Text('暂无热词', style: Theme.of(context).textTheme.bodySmall),
           )
         else if (showHot)
           Card(
@@ -215,10 +217,7 @@ class SearchLanding extends StatelessWidget {
         // 排行榜: 2026-11 用户要求从「推荐」搬来。放最后, 不抢搜索历史/热词的首屏位置。
         if (chartOpen != null) ...[
           const SizedBox(height: 12),
-          ChartSection(
-            load: loadCharts,
-            onOpen: chartOpen,
-          ),
+          ChartSection(load: loadCharts, onOpen: chartOpen),
         ],
       ],
     );
@@ -239,9 +238,7 @@ class _SectionTitle extends StatelessWidget {
         children: [
           Text(
             title,
-            style: Theme.of(context)
-                .textTheme
-                .titleSmall
+            style: Theme.of(context).textTheme.titleSmall
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
           const Spacer(),

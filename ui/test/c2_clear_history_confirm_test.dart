@@ -4,14 +4,16 @@ import 'package:minincm/src/search_landing.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-SearchLanding landing({List<String> history = const ['七里香', '稻香'], VoidCallback? onClear}) =>
-    SearchLanding(
-      history: history,
-      hot: const [],
-      recommended: null,
-      onSelected: (_) {},
-      onClearHistory: onClear ?? () {},
-    );
+SearchLanding landing({
+  List<String> history = const ['七里香', '稻香'],
+  VoidCallback? onClear,
+}) => SearchLanding(
+  history: history,
+  hot: const [],
+  recommended: null,
+  onSelected: (_) {},
+  onClearHistory: onClear ?? () {},
+);
 
 void main() {
   // C2: 清空搜索历史是不可恢复的破坏性操作, 必须有二次确认.
@@ -50,10 +52,12 @@ void main() {
     await tester.pumpWidget(host(landing(onClear: () => cleared++)));
     await tester.tap(find.text('清空'));
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(
-      of: find.byType(AlertDialog),
-      matching: find.widgetWithText(TextButton, '清空'),
-    ));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, '清空'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(cleared, 1);
@@ -71,12 +75,9 @@ void main() {
     await pumpNarrow(
       tester,
       Scaffold(
-        body: landing(history: const [
-          '七里香',
-          '稻香',
-          '晴天',
-          '一条特别特别长的历史搜索词用于窄屏回归测试',
-        ]),
+        body: landing(
+          history: const ['七里香', '稻香', '晴天', '一条特别特别长的历史搜索词用于窄屏回归测试'],
+        ),
       ),
     );
     await tester.tap(find.text('清空'));
@@ -92,12 +93,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

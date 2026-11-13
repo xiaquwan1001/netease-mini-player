@@ -28,10 +28,14 @@ void main() {
   test('一直失败时按次数上限放弃', () async {
     var calls = 0;
     await expectLater(
-      retryNetwork<int>(() async {
-        calls += 1;
-        throw Exception('[network] os error 104');
-      }, attempts: 3, sleep: (_) async {}),
+      retryNetwork<int>(
+        () async {
+          calls += 1;
+          throw Exception('[network] os error 104');
+        },
+        attempts: 3,
+        sleep: (_) async {},
+      ),
       throwsA(isA<Exception>()),
     );
     expect(calls, 3);

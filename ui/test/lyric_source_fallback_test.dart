@@ -9,22 +9,26 @@ rust.WordLyricDto _wordLyric({
   required bool wordTiming,
   List<bool>? perLineTimed,
 }) => rust.WordLyricDto(
-      lines: [
-        for (var i = 0; i < lines; i++)
-          rust.WordLyricLineDto(
-            startMs: i * 1000,
-            endMs: i * 1000 + 900,
-            words: [
-              if (wordTiming || (perLineTimed?[i] ?? false))
-                rust.WordItemDto(startMs: i * 1000, endMs: i * 1000 + 900, text: 'w$i')
-              else
-                rust.WordItemDto(startMs: 0, endMs: 0, text: '整行词 $i'),
-            ],
-          ),
-      ],
-      translationLines: const [],
-      hasWordTiming: wordTiming || (perLineTimed?.any((t) => t) ?? false),
-    );
+  lines: [
+    for (var i = 0; i < lines; i++)
+      rust.WordLyricLineDto(
+        startMs: i * 1000,
+        endMs: i * 1000 + 900,
+        words: [
+          if (wordTiming || (perLineTimed?[i] ?? false))
+            rust.WordItemDto(
+              startMs: i * 1000,
+              endMs: i * 1000 + 900,
+              text: 'w$i',
+            )
+          else
+            rust.WordItemDto(startMs: 0, endMs: 0, text: '整行词 $i'),
+        ],
+      ),
+  ],
+  translationLines: const [],
+  hasWordTiming: wordTiming || (perLineTimed?.any((t) => t) ?? false),
+);
 
 void main() {
   test('有合格 yrc 时不调 TTML(也不调行级)', () async {
@@ -54,7 +58,11 @@ void main() {
     final r = await resolveLyricSource(
       BigInt.from(2),
       LyricSourceLoaders(
-        yrc: (_) async => _wordLyric(lines: 2, wordTiming: false, perLineTimed: [true, false]),
+        yrc: (_) async => _wordLyric(
+          lines: 2,
+          wordTiming: false,
+          perLineTimed: [true, false],
+        ),
         ttml: (_) async => _wordLyric(lines: 3, wordTiming: true),
         lineLevel: (_) async => throw StateError('不应到行级'),
       ),
@@ -124,14 +132,22 @@ void main() {
     // 3 行只有 2 行逐字 => 0.667 >= 0.6
     expect(
       yrcWordGoodEnough(
-        _wordLyric(lines: 3, wordTiming: false, perLineTimed: [true, true, false]),
+        _wordLyric(
+          lines: 3,
+          wordTiming: false,
+          perLineTimed: [true, true, false],
+        ),
       ),
       true,
     );
     // 3 行只有 1 行逐字 => 0.333 < 0.6
     expect(
       yrcWordGoodEnough(
-        _wordLyric(lines: 3, wordTiming: false, perLineTimed: [true, false, false]),
+        _wordLyric(
+          lines: 3,
+          wordTiming: false,
+          perLineTimed: [true, false, false],
+        ),
       ),
       false,
     );

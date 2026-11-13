@@ -17,22 +17,21 @@ rust.FeedEventDto event({
   int likedCount = 0,
   int commentCount = 0,
   int shareCount = 0,
-}) =>
-    rust.FeedEventDto(
-      id: BigInt.from(id),
-      threadId: threadId,
-      userId: BigInt.from(userId),
-      kind: 'text',
-      userName: userName,
-      text: text,
-      images: const [],
-      title: '',
-      timeMs: BigInt.from(1700000000000),
-      liked: liked,
-      likedCount: BigInt.from(likedCount),
-      shareCount: BigInt.from(shareCount),
-      commentCount: BigInt.from(commentCount),
-    );
+}) => rust.FeedEventDto(
+  id: BigInt.from(id),
+  threadId: threadId,
+  userId: BigInt.from(userId),
+  kind: 'text',
+  userName: userName,
+  text: text,
+  images: const [],
+  title: '',
+  timeMs: BigInt.from(1700000000000),
+  liked: liked,
+  likedCount: BigInt.from(likedCount),
+  shareCount: BigInt.from(shareCount),
+  commentCount: BigInt.from(commentCount),
+);
 
 /// FFI 替身: 记录调用, 可注入失败
 class _Hooks {
@@ -89,11 +88,7 @@ Future<void> _pumpFeed(
 void main() {
   testWidgets('列表行点赞: FFI 调一次(threadId+取反), 图标数字乐观翻转', (tester) async {
     final hooks = _Hooks();
-    await _pumpFeed(
-      tester,
-      events: [event(likedCount: 5)],
-      hooks: hooks,
-    );
+    await _pumpFeed(tester, events: [event(likedCount: 5)], hooks: hooks);
 
     expect(find.byIcon(Icons.favorite), findsNothing);
     await tester.tap(find.byIcon(Icons.favorite_border));
@@ -109,11 +104,7 @@ void main() {
 
   testWidgets('列表行点赞失败: 回滚图标与数字并提示', (tester) async {
     final hooks = _Hooks()..likeError = Exception('boom');
-    await _pumpFeed(
-      tester,
-      events: [event(likedCount: 5)],
-      hooks: hooks,
-    );
+    await _pumpFeed(tester, events: [event(likedCount: 5)], hooks: hooks);
 
     await tester.tap(find.byIcon(Icons.favorite_border));
     await tester.pumpAndSettle();
@@ -194,8 +185,12 @@ void main() {
         return null;
       },
     );
-    addTearDown(() => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, null));
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
 
     await _pumpFeed(tester, events: [event(shareCount: 7)], hooks: hooks);
 

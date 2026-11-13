@@ -25,7 +25,8 @@ import 'toast.dart';
 ///   不依赖本 App 的深链 scheme.
 
 /// 分享卡片里的二维码内容(官方网页, 任何扫码器都能打开)
-String songShareUrl(BigInt trackId) => 'https://music.163.com/song?id=${trackId.toString()}';
+String songShareUrl(BigInt trackId) =>
+    'https://music.163.com/song?id=${trackId.toString()}';
 
 /// 卡片标题行里的一行歌词: 去掉首尾空白, 空行丢弃
 List<String> shareableLyricLines(Iterable<String> lines, {int max = 6}) {
@@ -75,7 +76,10 @@ class SongShare {
 /// 把 [boundaryKey] 对应的 RepaintBoundary 导出成 PNG 字节.
 ///
 /// 调用前必须已经完成一帧布局和绘制(面板里预览过就满足); 未挂载/未绘制时返回 null.
-Future<Uint8List?> capturePng(GlobalKey boundaryKey, {double pixelRatio = 2}) async {
+Future<Uint8List?> capturePng(
+  GlobalKey boundaryKey, {
+  double pixelRatio = 2,
+}) async {
   final object = boundaryKey.currentContext?.findRenderObject();
   if (object is! RenderRepaintBoundary) return null;
   // 卡片可能被预览容器缩小过, 用 2x 采样保证文字清晰
@@ -175,9 +179,7 @@ class SongShareCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: const Color(0xFF1E2129),
                 borderRadius: BorderRadius.circular(12),
-                border: const Border(
-                  left: BorderSide(color: accent, width: 3),
-                ),
+                border: const Border(left: BorderSide(color: accent, width: 3)),
               ),
               child: Text(
                 lyricLines.join('\n'),
@@ -205,10 +207,7 @@ class SongShareCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '网易云音乐',
-                      style: TextStyle(color: muted, fontSize: 11),
-                    ),
+                    Text('网易云音乐', style: TextStyle(color: muted, fontSize: 11)),
                     const SizedBox(height: 10),
                     Text(
                       '轻音 MiniNCM',
@@ -262,7 +261,8 @@ Future<void> showSongShareSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) => _SongShareSheet(song: song, lyricLines: lyricLines),
+    builder: (sheetContext) =>
+        _SongShareSheet(song: song, lyricLines: lyricLines),
   );
 }
 
@@ -294,7 +294,9 @@ class _SongShareSheetState extends State<_SongShareSheet> {
       final msg = await action();
       if (messenger != null) showToastWith(messenger, msg);
     } catch (e) {
-      if (messenger != null) showToastWith(messenger, '分享失败: $e', isError: true);
+      if (messenger != null) {
+        showToastWith(messenger, '分享失败: $e', isError: true);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -341,14 +343,15 @@ class _SongShareSheetState extends State<_SongShareSheet> {
                     onPressed: _busy
                         ? null
                         : () => _run(() async {
-                              final png = await _png();
-                              if (png == null) return '生成图片失败';
-                              return SongShare.shareImage(
-                                png,
-                                filename: _filename,
-                                text: '${widget.song.artist} - ${widget.song.name}',
-                              );
-                            }),
+                            final png = await _png();
+                            if (png == null) return '生成图片失败';
+                            return SongShare.shareImage(
+                              png,
+                              filename: _filename,
+                              text:
+                                  '${widget.song.artist} - ${widget.song.name}',
+                            );
+                          }),
                     icon: const Icon(Icons.share),
                     label: const Text('分享'),
                   ),
@@ -359,12 +362,14 @@ class _SongShareSheetState extends State<_SongShareSheet> {
                     onPressed: _busy
                         ? null
                         : () => _run(() async {
-                              final png = await _png();
-                              if (png == null) return '生成图片失败';
-                              final path =
-                                  await SongShare.saveImage(png, filename: _filename);
-                              return '已保存到 $path';
-                            }),
+                            final png = await _png();
+                            if (png == null) return '生成图片失败';
+                            final path = await SongShare.saveImage(
+                              png,
+                              filename: _filename,
+                            );
+                            return '已保存到 $path';
+                          }),
                     icon: const Icon(Icons.download_outlined),
                     label: const Text('保存'),
                   ),
@@ -374,7 +379,9 @@ class _SongShareSheetState extends State<_SongShareSheet> {
             const SizedBox(height: 6),
             TextButton.icon(
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: songShareUrl(widget.song.id)));
+                Clipboard.setData(
+                  ClipboardData(text: songShareUrl(widget.song.id)),
+                );
                 showToast(context, '已复制分享链接');
               },
               icon: const Icon(Icons.link, size: 18),

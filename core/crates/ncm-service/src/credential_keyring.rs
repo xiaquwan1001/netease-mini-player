@@ -19,7 +19,9 @@ pub struct SecretServiceStore {
 
 impl SecretServiceStore {
     pub fn new() -> Self {
-        Self { probe: std::sync::OnceLock::new() }
+        Self {
+            probe: std::sync::OnceLock::new(),
+        }
     }
 
     /// 轻量探测(缓存): 构造一个不存在的 entry 并 get —— 只打一次 D-Bus,
@@ -28,7 +30,9 @@ impl SecretServiceStore {
         self.probe
             .get_or_init(|| {
                 let entry = keyring::Entry::new(SECRET_SERVICE, &CredentialKey::Session.id())
-                    .map_err(|e| CredentialError::Unavailable(format!("keyring 初始化失败: {e}")))?;
+                    .map_err(|e| {
+                        CredentialError::Unavailable(format!("keyring 初始化失败: {e}"))
+                    })?;
                 match entry.get_password() {
                     // 不存在 = 服务在, 探测通过
                     Err(keyring::Error::NoEntry) => Ok(()),
@@ -155,16 +159,31 @@ mod tests {
             Ok(()) => {
                 // 真有 D-Bus: 做一次真实 roundtrip(登录态 cookie 样例)
                 store.put(CredentialKey::Session, "MUSIC_U=probe").unwrap();
-                assert_eq!(store.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=probe"));
+                assert_eq!(
+                    store.get(CredentialKey::Session).unwrap().as_deref(),
+                    Some("MUSIC_U=probe")
+                );
                 store.remove(CredentialKey::Session).unwrap();
                 assert_eq!(store.get(CredentialKey::Session).unwrap(), None);
             }
             Err(e) => {
-                assert!(matches!(e, CredentialError::Unavailable(_)), "无 D-Bus 应是 Unavailable: {e:?}");
+                assert!(
+                    matches!(e, CredentialError::Unavailable(_)),
+                    "无 D-Bus 应是 Unavailable: {e:?}"
+                );
                 // IO 路径也不 panic, 返回 Unavailable
-                assert!(matches!(store.get(CredentialKey::Session), Err(CredentialError::Unavailable(_))));
-                assert!(matches!(store.put(CredentialKey::Session, "x"), Err(CredentialError::Unavailable(_))));
-                assert!(matches!(store.remove(CredentialKey::Session), Err(CredentialError::Unavailable(_))));
+                assert!(matches!(
+                    store.get(CredentialKey::Session),
+                    Err(CredentialError::Unavailable(_))
+                ));
+                assert!(matches!(
+                    store.put(CredentialKey::Session, "x"),
+                    Err(CredentialError::Unavailable(_))
+                ));
+                assert!(matches!(
+                    store.remove(CredentialKey::Session),
+                    Err(CredentialError::Unavailable(_))
+                ));
             }
         }
     }
@@ -184,7 +203,10 @@ mod tests {
         let _cleanup = CleanupOnDrop;
         store.available().expect("secret-service 应可用");
         store.put(CredentialKey::Session, "MUSIC_U=spike").unwrap();
-        assert_eq!(store.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=spike"));
+        assert_eq!(
+            store.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("MUSIC_U=spike")
+        );
         store.remove(CredentialKey::Session).unwrap();
         assert_eq!(store.get(CredentialKey::Session).unwrap(), None);
     }
@@ -201,14 +223,26 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let (creds, status) = crate::credential_store::open_backend(&dir);
-        assert_eq!(status.backend_name(), crate::credential_store::BACKEND_SECRET_SERVICE,
-            "有 D-Bus 时应选 secret-service: {:?}", status.note());
-        assert!(matches!(status, crate::credential_store::CredentialStatus::Secure { .. }));
+        assert_eq!(
+            status.backend_name(),
+            crate::credential_store::BACKEND_SECRET_SERVICE,
+            "有 D-Bus 时应选 secret-service: {:?}",
+            status.note()
+        );
+        assert!(matches!(
+            status,
+            crate::credential_store::CredentialStatus::Secure { .. }
+        ));
         let creds = creds.expect("Secure 状态必须带回后端");
         let _cleanup = CleanupOnDrop;
         creds.available().unwrap();
-        creds.put(CredentialKey::Session, "MUSIC_U=real-bus").unwrap();
-        assert_eq!(creds.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=real-bus"));
+        creds
+            .put(CredentialKey::Session, "MUSIC_U=real-bus")
+            .unwrap();
+        assert_eq!(
+            creds.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("MUSIC_U=real-bus")
+        );
         creds.remove(CredentialKey::Session).unwrap();
         assert_eq!(creds.get(CredentialKey::Session).unwrap(), None);
         let _ = std::fs::remove_dir_all(&dir);
@@ -223,8 +257,16 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let (creds, status) = crate::credential_store::open_backend(&dir);
-        assert_eq!(status.backend_name(), "none", "无 D-Bus 未同意应为 none: {:?}", status.note());
-        assert!(matches!(status, crate::credential_store::CredentialStatus::PlaintextFallback { .. }));
+        assert_eq!(
+            status.backend_name(),
+            "none",
+            "无 D-Bus 未同意应为 none: {:?}",
+            status.note()
+        );
+        assert!(matches!(
+            status,
+            crate::credential_store::CredentialStatus::PlaintextFallback { .. }
+        ));
         assert!(creds.is_none());
         // 未同意: FileStore 同意门拒绝写入
         assert!(matches!(
@@ -246,9 +288,17 @@ mod tests {
         let _guard = lock_dbus();
         let exe = std::env::current_exe().expect("current_exe");
         let out = std::process::Command::new(exe)
-            .args(["keyring", "--exact", "open_backend_falls_back_when_bus_missing", "--nocapture"])
+            .args([
+                "keyring",
+                "--exact",
+                "open_backend_falls_back_when_bus_missing",
+                "--nocapture",
+            ])
             .env(FB_CHILD_ENV, "1")
-            .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent-ncm-test-bus")
+            .env(
+                "DBUS_SESSION_BUS_ADDRESS",
+                "unix:path=/nonexistent-ncm-test-bus",
+            )
             .output()
             .expect("重执行测试子进程");
         assert!(

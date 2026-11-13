@@ -8,16 +8,20 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 void main() {
   testWidgets('消息入口: 未读分项摘要 + 角标 + 点击回调', (tester) async {
     var opened = 0;
-    await tester.pumpWidget(host(MessageEntryCard(
-      onOpen: () => opened++,
-      load: () async => const rust.MessageCountsDto(
-        private: 3,
-        notices: 1,
-        comments: 2,
-        forwards: 0,
-        total: 6,
+    await tester.pumpWidget(
+      host(
+        MessageEntryCard(
+          onOpen: () => opened++,
+          load: () async => const rust.MessageCountsDto(
+            private: 3,
+            notices: 1,
+            comments: 2,
+            forwards: 0,
+            total: 6,
+          ),
+        ),
       ),
-    )));
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('消息中心'), findsOneWidget);
@@ -31,10 +35,14 @@ void main() {
 
   testWidgets('消息入口: 计数失败仍可点开', (tester) async {
     var opened = 0;
-    await tester.pumpWidget(host(MessageEntryCard(
-      onOpen: () => opened++,
-      load: () async => throw Exception('[auth] 未登录'),
-    )));
+    await tester.pumpWidget(
+      host(
+        MessageEntryCard(
+          onOpen: () => opened++,
+          load: () async => throw Exception('[auth] 未登录'),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('消息中心'), findsOneWidget);
@@ -73,12 +81,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

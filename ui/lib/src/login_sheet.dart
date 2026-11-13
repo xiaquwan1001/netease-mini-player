@@ -70,11 +70,16 @@ class LoginSheet extends StatefulWidget {
   final Future<rust.QrLoginCheck> Function(String key)? checkQr;
 
   /// 发短信验证码(默认 rust.loginSmsSend)
-  final Future<rust.SmsCodeSent> Function(String phone, String countryCode)? sendSms;
+  final Future<rust.SmsCodeSent> Function(String phone, String countryCode)?
+  sendSms;
 
   /// 校验验证码并登录(默认 rust.loginSmsVerify)
-  final Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)?
-      verifySms;
+  final Future<rust.PhoneLoginResult> Function(
+    String phone,
+    String code,
+    String countryCode,
+  )?
+  verifySms;
 
   /// 导入 cookie(默认 rust.loginWithCookie)
   final Future<bool> Function(String cookie)? commitCookie;
@@ -205,15 +210,20 @@ class LoginSheetState extends State<LoginSheet> {
     }
   }
 
-  Future<rust.SmsCodeSent> Function(String phone, String countryCode) get _sendSms =>
+  Future<rust.SmsCodeSent> Function(String phone, String countryCode)
+  get _sendSms =>
       widget.sendSms ??
       (phone, cc) => rust.loginSmsSend(phone: phone, countryCode: cc);
 
-  Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)
-      get _verifySms =>
-          widget.verifySms ??
-          (phone, code, cc) =>
-              rust.loginSmsVerify(phone: phone, code: code, countryCode: cc);
+  Future<rust.PhoneLoginResult> Function(
+    String phone,
+    String code,
+    String countryCode,
+  )
+  get _verifySms =>
+      widget.verifySms ??
+      (phone, code, cc) =>
+          rust.loginSmsVerify(phone: phone, code: code, countryCode: cc);
 
   void _startCooldown(int seconds) {
     _cooldownTimer?.cancel();
@@ -246,7 +256,9 @@ class LoginSheetState extends State<LoginSheet> {
       // 服务端说多久有效就按多久冷却, 下限用 resendCooldownSeconds(默认 60s,
       // 免得连点把号码打进频率限制; 测试传 0 时关掉冷却)
       final min = widget.resendCooldownSeconds;
-      _startCooldown(min <= 0 ? 0 : (sent.expiresIn >= min ? sent.expiresIn : min));
+      _startCooldown(
+        min <= 0 ? 0 : (sent.expiresIn >= min ? sent.expiresIn : min),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -368,8 +380,9 @@ class LoginSheetState extends State<LoginSheet> {
                 const SizedBox(height: 12),
                 Text(
                   friendlyLoginError(_error!),
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
                 ),
               ],
             ],
@@ -397,7 +410,8 @@ class LoginSheetState extends State<LoginSheet> {
                 )
               : Opacity(
                   // 过期/失败时灰掉二维码, 避免用户扫一个无效码
-                  opacity: (_state == rust.QrLoginState.expired ||
+                  opacity:
+                      (_state == rust.QrLoginState.expired ||
                           _state == rust.QrLoginState.failed)
                       ? 0.25
                       : 1,
@@ -420,8 +434,9 @@ class LoginSheetState extends State<LoginSheet> {
       Text(
         '手机打开网易云音乐 → 右上角「扫一扫」. 这是官方网页登录通道, 不在本机保存密码.',
         textAlign: TextAlign.center,
-        style: theme.textTheme.bodySmall
-            ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       ),
       const SizedBox(height: 12),
       Row(
@@ -445,8 +460,9 @@ class LoginSheetState extends State<LoginSheet> {
 
   List<Widget> _phoneTab(ThemeData theme) {
     final busy = _sending || _verifying;
-    final hint = theme.textTheme.bodySmall
-        ?.copyWith(color: theme.colorScheme.onSurfaceVariant);
+    final hint = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     // 命中风控(8821)时不要只甩一个 code, 直接把用户引回已知稳路径
     final risk = (_error ?? '').contains('riskControl');
     return [
@@ -514,7 +530,9 @@ class LoginSheetState extends State<LoginSheet> {
           SizedBox(
             height: 56,
             child: OutlinedButton(
-              onPressed: (_sending || _cooldown > 0 || _verifying) ? null : _sendCode,
+              onPressed: (_sending || _cooldown > 0 || _verifying)
+                  ? null
+                  : _sendCode,
               child: Text(
                 _cooldown > 0
                     ? '${_cooldown}s 后重发'
@@ -546,7 +564,9 @@ class LoginSheetState extends State<LoginSheet> {
         Text(
           '这次命中网易云的安全风控(8821), 手机号登录暂时走不通 —— 请改用「扫码登录」, 那条路是已知稳路径.',
           textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.error,
+          ),
         ),
       ],
     ];
@@ -568,7 +588,8 @@ class LoginSheetState extends State<LoginSheet> {
           labelText: 'Cookie',
           hintText: 'MUSIC_U=...; __csrf=...',
           border: OutlineInputBorder(),
-          helperText: '浏览器登录 music.163.com 后, F12 → Application → Cookies 复制 MUSIC_U',
+          helperText:
+              '浏览器登录 music.163.com 后, F12 → Application → Cookies 复制 MUSIC_U',
           helperMaxLines: 2,
         ),
       ),
@@ -593,8 +614,12 @@ Future<bool> showLoginSheet(
   Future<rust.QrLoginKey> Function()? createQr,
   Future<rust.QrLoginCheck> Function(String key)? checkQr,
   Future<rust.SmsCodeSent> Function(String phone, String countryCode)? sendSms,
-  Future<rust.PhoneLoginResult> Function(String phone, String code, String countryCode)?
-      verifySms,
+  Future<rust.PhoneLoginResult> Function(
+    String phone,
+    String code,
+    String countryCode,
+  )?
+  verifySms,
   Future<bool> Function(String cookie)? commitCookie,
   Future<void> Function()? onLoggedIn,
   Future<void> Function()? openWebLogin,

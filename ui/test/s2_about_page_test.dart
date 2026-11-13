@@ -22,8 +22,12 @@ List<Map<Object?, Object?>> recordOpenUrlCalls(WidgetTester tester) {
       return null;
     },
   );
-  addTearDown(() => tester.binding.defaultBinaryMessenger
-      .setMockMethodCallHandler(const MethodChannel('ncm/open'), null));
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('ncm/open'),
+      null,
+    ),
+  );
   return calls;
 }
 
@@ -64,10 +68,7 @@ void main() {
       // (会真实拉起浏览器, 测试不该触发该副作用), 不经过 ncm/open 通道。
       // 这里校验 tile 已接上 onTap 且 subtitle 即仓库地址, 通道契约由 Android 分支覆盖。
       final tile = tester.widget<ListTile>(
-        find.ancestor(
-          of: find.text('开源仓库'),
-          matching: find.byType(ListTile),
-        ),
+        find.ancestor(of: find.text('开源仓库'), matching: find.byType(ListTile)),
       );
       expect(tile.onTap, isNotNull);
       expect((tile.subtitle! as Text).data, kGithubUrl);
@@ -81,8 +82,9 @@ void main() {
     expect(urlSub.maxLines, 2);
     expect(urlSub.overflow, TextOverflow.ellipsis);
 
-    final verSub =
-        tester.widget<Text>(find.text('v$kAppVersion · $kLicenseSummary'));
+    final verSub = tester.widget<Text>(
+      find.text('v$kAppVersion · $kLicenseSummary'),
+    );
     expect(verSub.maxLines, 2);
     expect(verSub.overflow, TextOverflow.ellipsis);
   });

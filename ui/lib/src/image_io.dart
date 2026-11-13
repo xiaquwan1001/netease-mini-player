@@ -26,11 +26,12 @@ Future<String> saveImageBytes(
     return saved ?? '系统图库';
   }
   final env = Platform.environment;
-  final home =
-      Platform.isWindows ? (env['USERPROFILE'] ?? '.') : (env['HOME'] ?? '.');
-  final dir = Directory(Platform.isWindows
-      ? '$home\\Pictures\\MiniNCM'
-      : '$home/Pictures/MiniNCM');
+  final home = Platform.isWindows
+      ? (env['USERPROFILE'] ?? '.')
+      : (env['HOME'] ?? '.');
+  final dir = Directory(
+    Platform.isWindows ? '$home\\Pictures\\MiniNCM' : '$home/Pictures/MiniNCM',
+  );
   await dir.create(recursive: true);
   final path = '${dir.path}/$filename';
   await File(path).writeAsBytes(bytes, flush: true);

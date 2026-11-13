@@ -17,7 +17,11 @@ pub struct LyricLine {
 
 impl LyricLine {
     pub fn new(time_ms: u64, text: impl Into<String>) -> Self {
-        Self { time_ms, text: text.into(), sub: None }
+        Self {
+            time_ms,
+            text: text.into(),
+            sub: None,
+        }
     }
 }
 
@@ -56,7 +60,9 @@ fn parse_single(src: &str) -> Vec<LyricLine> {
 
         // 逐个吃掉开头的 [..] 标签
         while let Some(after_open) = rest.strip_prefix('[') {
-            let Some(close) = after_open.find(']') else { break };
+            let Some(close) = after_open.find(']') else {
+                break;
+            };
             let tag = &after_open[..close];
             rest = &after_open[close + 1..];
             if let Some(ms) = parse_time_tag(tag) {
@@ -140,7 +146,10 @@ mod tests {
     fn supports_multiple_stamps_and_sorts() {
         let src = "[00:20.00][00:10.50]副歌\n[00:05.00]开头";
         let lines = parse_lrc(src);
-        assert_eq!(lines.iter().map(|l| l.time_ms).collect::<Vec<_>>(), vec![5_000, 10_500, 20_000]);
+        assert_eq!(
+            lines.iter().map(|l| l.time_ms).collect::<Vec<_>>(),
+            vec![5_000, 10_500, 20_000]
+        );
         assert_eq!(lines[2].text, "副歌");
     }
 

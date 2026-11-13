@@ -18,25 +18,27 @@ void main() {
     final store = <String, String>{};
     final calls = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('ncm/keystore'),
-            (call) async {
-      calls.add(call.method);
-      switch (call.method) {
-        case 'available':
-          return true;
-        case 'list':
-          return store.keys.toList();
-        case 'put':
-          store[call.arguments['key'] as String] = call.arguments['value'] as String;
-          return true;
-        case 'get':
-          return store[call.arguments['key'] as String];
-        case 'remove':
-          store.remove(call.arguments['key'] as String);
-          return true; // 删除幂等: 不存在也算成功
-      }
-      return null;
-    });
+        .setMockMethodCallHandler(const MethodChannel('ncm/keystore'), (
+          call,
+        ) async {
+          calls.add(call.method);
+          switch (call.method) {
+            case 'available':
+              return true;
+            case 'list':
+              return store.keys.toList();
+            case 'put':
+              store[call.arguments['key'] as String] =
+                  call.arguments['value'] as String;
+              return true;
+            case 'get':
+              return store[call.arguments['key'] as String];
+            case 'remove':
+              store.remove(call.arguments['key'] as String);
+              return true; // 删除幂等: 不存在也算成功
+          }
+          return null;
+        });
     return (store: store, calls: calls);
   }
 

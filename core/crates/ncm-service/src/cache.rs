@@ -9,7 +9,9 @@ pub struct AudioCache {
 impl AudioCache {
     pub fn open(dir: &Path) -> std::io::Result<Self> {
         std::fs::create_dir_all(dir)?;
-        Ok(Self { dir: dir.to_path_buf() })
+        Ok(Self {
+            dir: dir.to_path_buf(),
+        })
     }
 
     pub fn path_for(&self, track_id: u64, url: &str) -> PathBuf {
@@ -67,7 +69,9 @@ impl AudioCache {
     /// 缓存目录里所有已完成文件(不含 `.part`)的 (路径, 大小, 修改时间)
     fn entries(&self) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
         let mut out = Vec::new();
-        let Ok(dir) = std::fs::read_dir(&self.dir) else { return out };
+        let Ok(dir) = std::fs::read_dir(&self.dir) else {
+            return out;
+        };
         for entry in dir.flatten() {
             let path = entry.path();
             if path.extension().and_then(|e| e.to_str()) == Some("part") {
@@ -120,7 +124,11 @@ impl AudioCache {
         let mut entries = self.entries();
         let mut total: u64 = entries.iter().map(|(_, size, _)| *size).sum();
         if limit_bytes == 0 || total <= limit_bytes {
-            return Ok(CacheEviction { removed: 0, freed_bytes: 0, total_bytes: total });
+            return Ok(CacheEviction {
+                removed: 0,
+                freed_bytes: 0,
+                total_bytes: total,
+            });
         }
         entries.sort_by_key(|(_, _, mtime)| *mtime);
 
@@ -147,7 +155,11 @@ impl AudioCache {
                 Err(e) => eprintln!("[cache] evict {} failed: {e}", path.display()),
             }
         }
-        Ok(CacheEviction { removed, freed_bytes: freed, total_bytes: total })
+        Ok(CacheEviction {
+            removed,
+            freed_bytes: freed,
+            total_bytes: total,
+        })
     }
 }
 

@@ -11,9 +11,14 @@ import 'rust/api.dart' as rust;
 /// + high_quality_playlists(精品歌单)。点卡片走歌单详情页。
 typedef CategoryLoader = Future<List<rust.PlaylistCategory>> Function();
 typedef CategoryPageLoader = Future<List<rust.Playlist>> Function(
-    String cat, int limit, int offset);
+  String cat,
+  int limit,
+  int offset,
+);
 typedef HighQualityLoader = Future<List<rust.Playlist>> Function(
-    String cat, int limit);
+  String cat,
+  int limit,
+);
 
 Future<void> showPlaylistSquare(
   BuildContext context, {
@@ -69,11 +74,8 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
       widget.loadCategories ?? rust.playlistCategories;
   CategoryPageLoader get _loadPage =>
       widget.loadPage ??
-      (cat, limit, offset) => rust.playlistsByCategory(
-            cat: cat,
-            limit: limit,
-            offset: offset,
-          );
+      (cat, limit, offset) =>
+          rust.playlistsByCategory(cat: cat, limit: limit, offset: offset);
   HighQualityLoader get _loadHighQuality =>
       widget.loadHighQuality ??
       (cat, limit) => rust.highQualityPlaylists(cat: cat, limit: limit);
@@ -108,8 +110,7 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
     }
     final loadPage = _loadPage;
     return (cursor) async {
-      final page =
-          await retryNetwork(() => loadPage(cat, _pageSize, cursor));
+      final page = await retryNetwork(() => loadPage(cat, _pageSize, cursor));
       return PagedPage(page, hasMore: page.length >= _pageSize);
     };
   }
@@ -138,10 +139,8 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       emptyText: '这个分类下暂时没有歌单',
       header: _buildFilterBar(theme),
-      itemBuilder: (context, pl, i, items) => _PlaylistCard(
-        playlist: pl,
-        onTap: () => widget.onOpenPlaylist(pl),
-      ),
+      itemBuilder: (context, pl, i, items) =>
+          _PlaylistCard(playlist: pl, onTap: () => widget.onOpenPlaylist(pl)),
     );
   }
 
@@ -169,8 +168,9 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
                 const SizedBox(width: 8),
                 Text(
                   '分类加载失败',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: scheme.error),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.error,
+                  ),
                 ),
               ],
             ],
@@ -185,8 +185,9 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
                     width: 44,
                     child: Text(
                       group.group,
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.outline),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.outline,
+                      ),
                     ),
                   ),
                   Expanded(
@@ -235,15 +236,17 @@ class _CatChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
-          color: selected ? scheme.primaryContainer : scheme.surfaceContainerHighest,
+          color: selected
+              ? scheme.primaryContainer
+              : scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
           label,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: selected ? scheme.onPrimaryContainer : null,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-              ),
+            color: selected ? scheme.onPrimaryContainer : null,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+          ),
         ),
       ),
     );
@@ -283,8 +286,9 @@ class _PlaylistCard extends StatelessWidget {
           ),
           Text(
             '${playlist.trackCount} 首',
-            style: theme.textTheme.labelSmall
-                ?.copyWith(color: theme.colorScheme.outline),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
         ],
       ),

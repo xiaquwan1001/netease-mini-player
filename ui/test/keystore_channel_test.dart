@@ -16,7 +16,8 @@ void main() {
       case 'available':
         return nativeAvailable;
       case 'put':
-        stored[call.arguments['key'] as String] = call.arguments['value'] as String;
+        stored[call.arguments['key'] as String] =
+            call.arguments['value'] as String;
         return true;
       case 'get':
         return stored[call.arguments['key'] as String];
@@ -66,7 +67,10 @@ void main() {
   });
 
   test('PlatformException 不崩溃, 按约定返回', () async {
-    nativeError = PlatformException(code: 'keystore_error', message: 'invalidated');
+    nativeError = PlatformException(
+      code: 'keystore_error',
+      message: 'invalidated',
+    );
     expect(await ks.available(), isFalse);
     expect(await ks.put('k', 'v'), isFalse);
     expect(await ks.get('k'), isNull);

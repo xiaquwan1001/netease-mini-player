@@ -90,9 +90,15 @@ impl Biquad {
     /// 由 domain 的 filter 描述构造(采样率相关)
     pub fn from_filter(filter: &EqFilter, sample_rate: f32) -> Self {
         match filter.kind {
-            EqFilterKind::Pk => Self::peaking(sample_rate, filter.freq_hz, filter.gain_db, filter.q),
-            EqFilterKind::Ls => Self::low_shelf(sample_rate, filter.freq_hz, filter.gain_db, filter.q),
-            EqFilterKind::Hs => Self::high_shelf(sample_rate, filter.freq_hz, filter.gain_db, filter.q),
+            EqFilterKind::Pk => {
+                Self::peaking(sample_rate, filter.freq_hz, filter.gain_db, filter.q)
+            }
+            EqFilterKind::Ls => {
+                Self::low_shelf(sample_rate, filter.freq_hz, filter.gain_db, filter.q)
+            }
+            EqFilterKind::Hs => {
+                Self::high_shelf(sample_rate, filter.freq_hz, filter.gain_db, filter.q)
+            }
         }
     }
 
@@ -151,7 +157,11 @@ impl EqChain {
     /// 处理单个样本(流式逐样本路径: 调用方自己按声道轮转 channel)
     #[inline]
     pub fn process_sample(&mut self, channel: usize, x: f32) -> f32 {
-        let c = if self.channels == 0 { 0 } else { channel % self.channels };
+        let c = if self.channels == 0 {
+            0
+        } else {
+            channel % self.channels
+        };
         let mut v = x * self.preamp_gain;
         for (i, stage) in self.stages.iter().enumerate() {
             v = stage.process(&mut self.states[c][i], v);
@@ -225,8 +235,11 @@ mod tests {
 
     #[test]
     fn peaking_boost_at_center_freq() {
-        let profile = EqProfile::parse("Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1.0
-").unwrap();
+        let profile = EqProfile::parse(
+            "Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1.0
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 1);
         let (i, o) = sine_through(&mut chain, 1000.0, 48_000.0, 1.0);
         let db = 20.0 * (o / i).log10();
@@ -235,8 +248,11 @@ mod tests {
 
     #[test]
     fn peaking_cut_at_center_freq() {
-        let profile = EqProfile::parse("Filter 1: ON PK Fc 1000 Hz Gain -9 dB Q 1.0
-").unwrap();
+        let profile = EqProfile::parse(
+            "Filter 1: ON PK Fc 1000 Hz Gain -9 dB Q 1.0
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 1);
         let (i, o) = sine_through(&mut chain, 1000.0, 48_000.0, 1.0);
         let db = 20.0 * (o / i).log10();
@@ -258,8 +274,11 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
 
     #[test]
     fn preamp_scales_output() {
-        let profile = EqProfile::parse("Preamp: -6 dB
-").unwrap();
+        let profile = EqProfile::parse(
+            "Preamp: -6 dB
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 1);
         let mut frame = [0.5];
         chain.process_frame(&mut frame);
@@ -268,8 +287,11 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
 
     #[test]
     fn low_shelf_boosts_bass_only() {
-        let profile = EqProfile::parse("Filter 1: ON LS Fc 200 Hz Gain 6 dB Q 0.7
-").unwrap();
+        let profile = EqProfile::parse(
+            "Filter 1: ON LS Fc 200 Hz Gain 6 dB Q 0.7
+",
+        )
+        .unwrap();
         let mut low = EqChain::new(&profile, 48_000.0, 1);
         let mut high = EqChain::new(&profile, 48_000.0, 1);
         let (li, lo) = sine_through(&mut low, 60.0, 48_000.0, 1.0);
@@ -282,8 +304,11 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
 
     #[test]
     fn high_shelf_lifts_treble() {
-        let profile = EqProfile::parse("Filter 1: ON HS Fc 4000 Hz Gain -6 dB Q 0.7
-").unwrap();
+        let profile = EqProfile::parse(
+            "Filter 1: ON HS Fc 4000 Hz Gain -6 dB Q 0.7
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 1);
         let (i, o) = sine_through(&mut chain, 12_000.0, 48_000.0, 1.0);
         let db = 20.0 * (o / i).log10();
@@ -292,8 +317,11 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
 
     #[test]
     fn stereo_channels_have_independent_state() {
-        let profile = EqProfile::parse("Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1
-").unwrap();
+        let profile = EqProfile::parse(
+            "Filter 1: ON PK Fc 1000 Hz Gain 6 dB Q 1
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 2);
         // 左声道给信号, 右声道静音: 右声道必须保持 0(状态不串)
         for _ in 0..4800 {
@@ -305,8 +333,11 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
 
     #[test]
     fn output_is_clamped() {
-        let profile = EqProfile::parse("Preamp: 20 dB
-").unwrap();
+        let profile = EqProfile::parse(
+            "Preamp: 20 dB
+",
+        )
+        .unwrap();
         let mut chain = EqChain::new(&profile, 48_000.0, 1);
         let mut frame = [0.9];
         chain.process_frame(&mut frame);

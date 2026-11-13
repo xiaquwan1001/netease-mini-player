@@ -104,11 +104,13 @@ class LevelBadge extends StatelessWidget {
     final scheme = theme.colorScheme;
     final vip = view.isVip;
 
-    final background =
-        vip ? scheme.primaryContainer : scheme.surfaceContainerHighest;
+    final background = vip
+        ? scheme.primaryContainer
+        : scheme.surfaceContainerHighest;
     final border = vip ? scheme.primary : scheme.outlineVariant;
-    final foreground =
-        vip ? scheme.onPrimaryContainer : scheme.onSurfaceVariant;
+    final foreground = vip
+        ? scheme.onPrimaryContainer
+        : scheme.onSurfaceVariant;
 
     final label = Flexible(
       child: Text(
@@ -138,10 +140,7 @@ class LevelBadge extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         label,
-        if (view.levelName.isNotEmpty) ...[
-          const SizedBox(width: 4),
-          name,
-        ],
+        if (view.levelName.isNotEmpty) ...[const SizedBox(width: 4), name],
       ],
     );
 
@@ -459,8 +458,9 @@ class _LevelCard extends StatelessWidget {
                       : 'Lv.${view.level}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -469,8 +469,9 @@ class _LevelCard extends StatelessWidget {
                       : '已达当前最高等级',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             );
@@ -478,11 +479,7 @@ class _LevelCard extends StatelessWidget {
             if (constraints.maxWidth < 240) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  badge,
-                  const SizedBox(height: 6),
-                  title,
-                ],
+                children: [badge, const SizedBox(height: 6), title],
               );
             }
             return Row(
@@ -522,8 +519,9 @@ class _MedalGrid extends StatelessWidget {
     // shrinkWrap + 固定宽高比, 窄屏/大字号下容易溢出。
     final rows = <Widget>[];
     for (var i = 0; i < medals.length; i += _columns) {
-      final end =
-          (i + _columns) > medals.length ? medals.length : (i + _columns);
+      final end = (i + _columns) > medals.length
+          ? medals.length
+          : (i + _columns);
       final slice = medals.sublist(i, end);
       rows.add(
         Row(
@@ -650,8 +648,9 @@ class _EmptyMedals extends StatelessWidget {
           Text(
             '还没有勋章',
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: scheme.onSurfaceVariant),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 4),
           Text(

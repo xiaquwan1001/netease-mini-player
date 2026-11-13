@@ -93,8 +93,7 @@ List<Offset> computeCurve(
   final freqs = <double>[
     for (var i = 0; i < points; i++)
       minFreqHz *
-          math.pow(
-              maxFreqHz / minFreqHz, i / (points - 1).clamp(1, 1 << 30)),
+          math.pow(maxFreqHz / minFreqHz, i / (points - 1).clamp(1, 1 << 30)),
   ];
   final dbs = evaluateEqDb(eq, freqs);
   return [
@@ -107,15 +106,23 @@ List<Offset> computeCurve(
 }
 
 /// 对数频率 → x 像素.
-double eqCurveX(double freqHz, double width,
-    [double minFreqHz = 20, double maxFreqHz = 20000]) {
-  final t = math.log(freqHz / minFreqHz) /
-      math.log(maxFreqHz / minFreqHz);
+double eqCurveX(
+  double freqHz,
+  double width, [
+  double minFreqHz = 20,
+  double maxFreqHz = 20000,
+]) {
+  final t = math.log(freqHz / minFreqHz) / math.log(maxFreqHz / minFreqHz);
   return t.clamp(0.0, 1.0) * width;
 }
 
 /// dB → y 像素(0dB 在中间).
-double eqCurveY(double db, double height, [double minDb = -24, double maxDb = 24]) {
+double eqCurveY(
+  double db,
+  double height, [
+  double minDb = -24,
+  double maxDb = 24,
+]) {
   final t = (maxDb - db.clamp(minDb, maxDb)) / (maxDb - minDb);
   return t * height;
 }
@@ -124,7 +131,9 @@ double eqCurveY(double db, double height, [double minDb = -24, double maxDb = 24
 String eqFreqLabel(double freqHz) {
   if (freqHz >= 1000) {
     final k = freqHz / 1000;
-    return k == k.roundToDouble() ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
+    return k == k.roundToDouble()
+        ? '${k.round()}k'
+        : '${k.toStringAsFixed(1)}k';
   }
   return freqHz == freqHz.roundToDouble()
       ? freqHz.round().toString()
@@ -149,8 +158,10 @@ String rewriteEqFilterGain(ParametricEq eq, int filterIndex, double newGain) {
       else
         f,
   ];
-  return ParametricEq(preampDb: eq.preampDb, filters: filters)
-      .toParametricEqText();
+  return ParametricEq(
+    preampDb: eq.preampDb,
+    filters: filters,
+  ).toParametricEqText();
 }
 
 // ---------------------------------------------------------------- 面板
@@ -190,11 +201,11 @@ class _EqCurvePanelState extends State<EqCurvePanel> {
           ? _CurveChart(eq: eq)
           : _BarChart(eq: eq, onGainCommitted: _commitGain);
     } on EqProfileException catch (e) {
-        body = _EmptyMessage(
-          icon: Icons.error_outline,
-          message: '曲线解析失败\n${e.message}',
-          isError: true,
-        );
+      body = _EmptyMessage(
+        icon: Icons.error_outline,
+        message: '曲线解析失败\n${e.message}',
+        isError: true,
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -244,7 +255,9 @@ class _EmptyMessage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = isError ? theme.colorScheme.error : theme.colorScheme.onSurfaceVariant;
+    final color = isError
+        ? theme.colorScheme.error
+        : theme.colorScheme.onSurfaceVariant;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -276,7 +289,16 @@ class _CurveChart extends StatefulWidget {
 class _CurveChartState extends State<_CurveChart> {
   double? _probeFreq;
 
-  static const _axisLabels = [20.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0, 20000.0];
+  static const _axisLabels = [
+    20.0,
+    50.0,
+    100.0,
+    500.0,
+    1000.0,
+    5000.0,
+    10000.0,
+    20000.0,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -285,7 +307,10 @@ class _CurveChartState extends State<_CurveChart> {
       builder: (context, constraints) {
         final size = Size(constraints.maxWidth, constraints.maxHeight);
         final labelH = 14.0;
-        final chartSize = Size(size.width, (size.height - labelH).clamp(1.0, size.height));
+        final chartSize = Size(
+          size.width,
+          (size.height - labelH).clamp(1.0, size.height),
+        );
         double? probeDb;
         final probe = _probeFreq;
         if (probe != null) {
@@ -307,7 +332,9 @@ class _CurveChartState extends State<_CurveChart> {
               probeDb: probeDb,
               axisLabels: _axisLabels,
               curveColor: theme.colorScheme.primary,
-              gridColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.25),
+              gridColor: theme.colorScheme.onSurfaceVariant.withValues(
+                alpha: 0.25,
+              ),
               labelColor: theme.colorScheme.onSurfaceVariant,
               probeColor: theme.colorScheme.secondary,
               errorColor: theme.colorScheme.error,
@@ -367,16 +394,25 @@ class _CurvePainter extends CustomPainter {
     for (final p in points.skip(1)) {
       path.lineTo(p.dx, p.dy);
     }
-    canvas.drawPath(path, Paint()
-      ..color = curveColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = curveColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
 
     // 频轴标注.
     for (final f in axisLabels) {
-      _drawLabel(canvas, eqFreqLabel(f), eqCurveX(f, chartSize.width),
-          chartSize.height + 1, labelColor, align: TextAlign.center);
+      _drawLabel(
+        canvas,
+        eqFreqLabel(f),
+        eqCurveX(f, chartSize.width),
+        chartSize.height + 1,
+        labelColor,
+        align: TextAlign.center,
+      );
     }
 
     // 触摸读数.
@@ -384,10 +420,15 @@ class _CurvePainter extends CustomPainter {
     final db = probeDb;
     if (freq != null && db != null) {
       final x = eqCurveX(freq, chartSize.width);
-      canvas.drawLine(Offset(x, 0), Offset(x, chartSize.height), Paint()
-        ..color = probeColor
-        ..strokeWidth = 1);
-      final text = '${eqFreqLabel(freq)} Hz  ${db >= 0 ? '+' : ''}${db.toStringAsFixed(1)} dB';
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, chartSize.height),
+        Paint()
+          ..color = probeColor
+          ..strokeWidth = 1,
+      );
+      final text =
+          '${eqFreqLabel(freq)} Hz  ${db >= 0 ? '+' : ''}${db.toStringAsFixed(1)} dB';
       final tw = _textWidth(text, labelColor);
       var lx = x + 4;
       if (lx + tw > chartSize.width) lx = chartSize.width - tw - 2;
@@ -412,22 +453,37 @@ class _CurvePainter extends CustomPainter {
 
   double _textWidth(String text, Color color) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(fontSize: 9, color: color)),
+      text: TextSpan(
+        text: text,
+        style: TextStyle(fontSize: 9, color: color),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     return tp.width;
   }
 
-  void _drawLabel(Canvas canvas, String text, double x, double y, Color color,
-      {TextAlign align = TextAlign.left}) {
+  void _drawLabel(
+    Canvas canvas,
+    String text,
+    double x,
+    double y,
+    Color color, {
+    TextAlign align = TextAlign.left,
+  }) {
     final tp = TextPainter(
-      text: TextSpan(text: text, style: TextStyle(fontSize: 9, color: color)),
+      text: TextSpan(
+        text: text,
+        style: TextStyle(fontSize: 9, color: color),
+      ),
       textDirection: TextDirection.ltr,
       textAlign: align,
     )..layout();
     var dx = x;
     if (align == TextAlign.center) dx -= tp.width / 2;
-    dx = dx.clamp(0.0, (chartSize.width - tp.width).clamp(0.0, 1 << 20).toDouble());
+    dx = dx.clamp(
+      0.0,
+      (chartSize.width - tp.width).clamp(0.0, 1 << 20).toDouble(),
+    );
     tp.paint(canvas, Offset(dx, y));
   }
 
@@ -458,7 +514,8 @@ class _BarChartState extends State<_BarChart> {
 
   /// 按 Fc 排序的柱位(含 OFF, OFF 不响应拖动).
   List<EqFilter> get _sorted {
-    final list = [...widget.eq.filters]..sort((a, b) => a.freqHz.compareTo(b.freqHz));
+    final list = [...widget.eq.filters]
+      ..sort((a, b) => a.freqHz.compareTo(b.freqHz));
     return list;
   }
 
@@ -516,10 +573,10 @@ class _BarChartState extends State<_BarChart> {
         : null;
     instance.onCancel = enabled
         ? () => setState(() {
-              _dragColumn = null;
-              _dragStartDy = null;
-              _previewGain = null;
-            })
+            _dragColumn = null;
+            _dragStartDy = null;
+            _previewGain = null;
+          })
         : null;
   }
 
@@ -528,7 +585,10 @@ class _BarChartState extends State<_BarChart> {
     final theme = Theme.of(context);
     final bars = _sorted;
     if (bars.isEmpty) {
-      return const _EmptyMessage(icon: Icons.graphic_eq, message: '曲线中没有任何 filter');
+      return const _EmptyMessage(
+        icon: Icons.graphic_eq,
+        message: '曲线中没有任何 filter',
+      );
     }
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -543,13 +603,19 @@ class _BarChartState extends State<_BarChart> {
                 painter: _BarPainter(
                   eq: widget.eq,
                   bars: bars,
-                  previewIndex: _dragColumn == null ? null : bars[_dragColumn!].index,
+                  previewIndex: _dragColumn == null
+                      ? null
+                      : bars[_dragColumn!].index,
                   previewGain: _previewGain,
                   topPad: _topPad,
                   bottomPad: _bottomPad,
                   barColor: theme.colorScheme.primary,
-                  offColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.35),
-                  gridColor: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.25),
+                  offColor: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.35,
+                  ),
+                  gridColor: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.25,
+                  ),
                   labelColor: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -567,10 +633,11 @@ class _BarChartState extends State<_BarChart> {
                   gestures: <Type, GestureRecognizerFactory>{
                     _EagerVerticalDragGestureRecognizer:
                         GestureRecognizerFactoryWithHandlers<
-                            _EagerVerticalDragGestureRecognizer>(
-                      () => _EagerVerticalDragGestureRecognizer(),
-                      (instance) => _bindColumnGestures(instance, i, plotH),
-                    ),
+                          _EagerVerticalDragGestureRecognizer
+                        >(
+                          () => _EagerVerticalDragGestureRecognizer(),
+                          (instance) => _bindColumnGestures(instance, i, plotH),
+                        ),
                   },
                 ),
               ),
@@ -586,7 +653,8 @@ class _BarChartState extends State<_BarChart> {
 /// 默认的 GestureDetector 垂直拖动在外层 ListView/滚动容器里会输给滚动手势
 /// (arena 竞争), 导致柱状图在设置页里拖不动. 在 pointer down 时立刻 accept,
 /// 图表区域的垂直拖动优先于页面滚动.
-class _EagerVerticalDragGestureRecognizer extends VerticalDragGestureRecognizer {
+class _EagerVerticalDragGestureRecognizer
+    extends VerticalDragGestureRecognizer {
   @override
   void addPointer(PointerDownEvent event) {
     super.addPointer(event);
@@ -657,12 +725,25 @@ class _BarPainter extends CustomPainter {
       _text(canvas, gain.toStringAsFixed(1), i * colW, colW, 2, center: true);
       // Fc/Q/类型 标注.
       final tag = '${f.type.name.toUpperCase()} ${eqFreqLabel(f.freqHz)}';
-      _text(canvas, tag, i * colW, colW, size.height - bottomPad + 3, center: true);
+      _text(
+        canvas,
+        tag,
+        i * colW,
+        colW,
+        size.height - bottomPad + 3,
+        center: true,
+      );
     }
   }
 
-  void _text(Canvas canvas, String text, double x, double colW, double y,
-      {bool center = false}) {
+  void _text(
+    Canvas canvas,
+    String text,
+    double x,
+    double colW,
+    double y, {
+    bool center = false,
+  }) {
     final size = canvasSize;
     final tp = TextPainter(
       text: TextSpan(

@@ -144,13 +144,14 @@ class _MvPageState extends State<MvPage> {
               FilledButton.icon(
                 onPressed: _starting ? null : _startPlayback,
                 icon: Icon(
-                    _android ? Icons.play_circle_fill : Icons.open_in_new),
+                  _android ? Icons.play_circle_fill : Icons.open_in_new,
+                ),
                 label: Text(
                   _starting
                       ? '正在取链…'
                       : _android
-                          ? '播放'
-                          : '用系统播放器打开(桌面无内嵌视频)',
+                      ? '播放'
+                      : '用系统播放器打开(桌面无内嵌视频)',
                 ),
               ),
               if (!_android) ...[
@@ -166,8 +167,9 @@ class _MvPageState extends State<MvPage> {
                 const SizedBox(height: 12),
                 Text(
                   _startError!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.error),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
                 ),
               ],
             ],

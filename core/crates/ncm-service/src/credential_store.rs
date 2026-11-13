@@ -18,10 +18,10 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::sync::Arc;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// 凭据的逻辑键. Account 按 uid 隔离, 换账号不互相覆盖.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +144,9 @@ pub struct FileStore {
 
 impl FileStore {
     pub fn new(dir: &Path) -> Self {
-        Self { dir: dir.to_path_buf() }
+        Self {
+            dir: dir.to_path_buf(),
+        }
     }
 
     fn path(&self) -> PathBuf {
@@ -162,8 +164,8 @@ impl FileStore {
     }
 
     fn save_map(&self, map: &BTreeMap<String, String>) -> Result<(), CredentialError> {
-        let data = serde_json::to_vec_pretty(map)
-            .map_err(|e| CredentialError::Backend(e.to_string()))?;
+        let data =
+            serde_json::to_vec_pretty(map).map_err(|e| CredentialError::Backend(e.to_string()))?;
         write_private(&self.path(), &data).map_err(|e| CredentialError::Backend(e.to_string()))
     }
 
@@ -182,20 +184,26 @@ impl FileStore {
 impl CredentialStore for FileStore {
     fn put(&self, key: CredentialKey, secret: &str) -> Result<(), CredentialError> {
         self.consent()?;
-        let mut map = self.load_map().map_err(|e| CredentialError::Backend(e.to_string()))?;
+        let mut map = self
+            .load_map()
+            .map_err(|e| CredentialError::Backend(e.to_string()))?;
         map.insert(key.id(), secret.to_string());
         self.save_map(&map)
     }
 
     fn get(&self, key: CredentialKey) -> Result<Option<String>, CredentialError> {
         self.consent()?;
-        let map = self.load_map().map_err(|e| CredentialError::Backend(e.to_string()))?;
+        let map = self
+            .load_map()
+            .map_err(|e| CredentialError::Backend(e.to_string()))?;
         Ok(map.get(&key.id()).cloned())
     }
 
     fn remove(&self, key: CredentialKey) -> Result<(), CredentialError> {
         self.consent()?;
-        let mut map = self.load_map().map_err(|e| CredentialError::Backend(e.to_string()))?;
+        let mut map = self
+            .load_map()
+            .map_err(|e| CredentialError::Backend(e.to_string()))?;
         map.remove(&key.id());
         self.save_map(&map)
     }
@@ -225,7 +233,10 @@ pub(crate) fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CredentialStatus {
     /// 安全后端就绪, 凭据不入明文
-    Secure { backend: &'static str, migrated: bool },
+    Secure {
+        backend: &'static str,
+        migrated: bool,
+    },
     /// 用户已同意, 0600 明文后端在用
     PlaintextConsented { migrated: bool },
     /// 无安全后端且未同意: 旧明文原样保留 / 新凭据走旧明文兼容路径, 可上报提示
@@ -273,7 +284,10 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
                 let policy = CredentialPolicy::load(dir);
                 return (
                     Some(Arc::new(dpapi)),
-                    CredentialStatus::Secure { backend: BACKEND_DPAPI, migrated: policy.migrated },
+                    CredentialStatus::Secure {
+                        backend: BACKEND_DPAPI,
+                        migrated: policy.migrated,
+                    },
                 );
             }
             Err(e) => {
@@ -282,7 +296,9 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
                 if policy.plaintext_consent {
                     return (
                         Some(Arc::new(FileStore::new(dir))),
-                        CredentialStatus::PlaintextConsented { migrated: policy.migrated },
+                        CredentialStatus::PlaintextConsented {
+                            migrated: policy.migrated,
+                        },
                     );
                 }
                 return (
@@ -332,7 +348,9 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
         if policy.plaintext_consent {
             (
                 Some(Arc::new(FileStore::new(dir))),
-                CredentialStatus::PlaintextConsented { migrated: policy.migrated },
+                CredentialStatus::PlaintextConsented {
+                    migrated: policy.migrated,
+                },
             )
         } else {
             (
@@ -355,7 +373,7 @@ pub fn open_backend(dir: &Path) -> (Option<Arc<dyn CredentialStore>>, Credential
 /// 解密失败(换 Windows 账户/换机器) = Unavailable, 当未登录处理, 不 panic.
 #[cfg(windows)]
 pub mod dpapi {
-    use super::{BACKEND_DPAPI, CredentialError, CredentialKey, CredentialStore};
+    use super::{CredentialError, CredentialKey, CredentialStore, BACKEND_DPAPI};
     use std::fs;
     use std::io;
     use std::path::{Path, PathBuf};
@@ -369,7 +387,9 @@ pub mod dpapi {
 
     impl DpapiStore {
         pub fn new(dir: &Path) -> Self {
-            Self { dir: dir.to_path_buf() }
+            Self {
+                dir: dir.to_path_buf(),
+            }
         }
 
         fn path(&self) -> PathBuf {
@@ -383,7 +403,10 @@ pub mod dpapi {
                 Err(e) => return Err(e),
             };
             if raw.len() < MAGIC.len() || &raw[..MAGIC.len()] != MAGIC {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "bad dpapi magic"));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "bad dpapi magic",
+                ));
             }
             // 用结构体而不是两个互相捕获的闭包: 闭包版在 Windows 上 borrow 冲突(E0499,
             // 2026-11-12 首次真正在 windows-latest 编译时暴露)。
@@ -405,7 +428,10 @@ pub mod dpapi {
                     Some(u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
                 }
             }
-            let mut rd = Reader { raw: &raw, cur: MAGIC.len() };
+            let mut rd = Reader {
+                raw: &raw,
+                cur: MAGIC.len(),
+            };
             let truncated = || io::Error::new(io::ErrorKind::InvalidData, "truncated");
             let count = rd.u32le().ok_or_else(truncated)?;
             let mut out = Vec::with_capacity(count);
@@ -482,7 +508,9 @@ pub mod dpapi {
             if back.as_slice() == PROBE {
                 Ok(())
             } else {
-                Err(CredentialError::Unavailable("DPAPI roundtrip 内容不符".into()))
+                Err(CredentialError::Unavailable(
+                    "DPAPI roundtrip 内容不符".into(),
+                ))
             }
         }
     }
@@ -501,7 +529,10 @@ pub mod dpapi {
                 cbData: plain.len() as u32,
                 pbData: plain.as_ptr() as *mut u8,
             };
-            let mut output = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+            let mut output = CRYPT_INTEGER_BLOB {
+                cbData: 0,
+                pbData: std::ptr::null_mut(),
+            };
             let ok = CryptProtectData(
                 &input,
                 std::ptr::null(),
@@ -530,7 +561,10 @@ pub mod dpapi {
                 cbData: blob.len() as u32,
                 pbData: blob.as_ptr() as *mut u8,
             };
-            let mut output = CRYPT_INTEGER_BLOB { cbData: 0, pbData: std::ptr::null_mut() };
+            let mut output = CRYPT_INTEGER_BLOB {
+                cbData: 0,
+                pbData: std::ptr::null_mut(),
+            };
             let ok = CryptUnprotectData(
                 &input,
                 std::ptr::null_mut(),
@@ -594,7 +628,10 @@ mod tests {
         let dir = tmpdir("no-consent");
         let store = FileStore::new(&dir);
         // 未同意: available 拒绝, put/get/remove 都被门禁挡住
-        assert!(matches!(store.available(), Err(CredentialError::AccessDenied(_))));
+        assert!(matches!(
+            store.available(),
+            Err(CredentialError::AccessDenied(_))
+        ));
         assert!(matches!(
             store.put(CredentialKey::Session, "MUSIC_U=x"),
             Err(CredentialError::AccessDenied(_))
@@ -619,14 +656,23 @@ mod tests {
 
         store.put(CredentialKey::Session, "MUSIC_U=a").unwrap();
         store.put(CredentialKey::Account(42), "MUSIC_U=b").unwrap();
-        assert_eq!(store.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=a"));
-        assert_eq!(store.get(CredentialKey::Account(42)).unwrap().as_deref(), Some("MUSIC_U=b"));
+        assert_eq!(
+            store.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("MUSIC_U=a")
+        );
+        assert_eq!(
+            store.get(CredentialKey::Account(42)).unwrap().as_deref(),
+            Some("MUSIC_U=b")
+        );
         // key 互不覆盖
         assert_eq!(store.get(CredentialKey::Account(43)).unwrap(), None);
 
         store.remove(CredentialKey::Session).unwrap();
         assert_eq!(store.get(CredentialKey::Session).unwrap(), None);
-        assert_eq!(store.get(CredentialKey::Account(42)).unwrap().as_deref(), Some("MUSIC_U=b"));
+        assert_eq!(
+            store.get(CredentialKey::Account(42)).unwrap().as_deref(),
+            Some("MUSIC_U=b")
+        );
 
         // 撤销同意后写入再次被拒(每次写前重读标记)
         policy.plaintext_consent = false;
@@ -639,9 +685,17 @@ mod tests {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mode = fs::metadata(dir.join(CREDS_FILE)).unwrap().permissions().mode() & 0o777;
+            let mode = fs::metadata(dir.join(CREDS_FILE))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(mode, 0o600, "credentials.json 必须 0600");
-            let pm = fs::metadata(CredentialPolicy::path(&dir)).unwrap().permissions().mode() & 0o777;
+            let pm = fs::metadata(CredentialPolicy::path(&dir))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777;
             assert_eq!(pm, 0o600, "策略文件也 0600");
         }
     }
@@ -680,7 +734,11 @@ mod tests {
         let p = CredentialPolicy::load(&dir);
         assert!(!p.plaintext_consent);
         assert!(!p.migrated);
-        let p = CredentialPolicy { plaintext_consent: true, backend: "file".into(), migrated: true };
+        let p = CredentialPolicy {
+            plaintext_consent: true,
+            backend: "file".into(),
+            migrated: true,
+        };
         p.save(&dir).unwrap();
         assert_eq!(CredentialPolicy::load(&dir), p);
         // 坏内容回落默认, 不 panic

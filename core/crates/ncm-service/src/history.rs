@@ -28,7 +28,9 @@ pub struct HistoryStore {
 impl HistoryStore {
     pub fn open(dir: &Path) -> io::Result<Self> {
         std::fs::create_dir_all(dir)?;
-        Ok(Self { path: dir.join("history.json") })
+        Ok(Self {
+            path: dir.join("history.json"),
+        })
     }
 
     pub fn path(&self) -> &Path {
@@ -120,10 +122,8 @@ mod tests {
     }
 
     fn temp_store(tag: &str) -> HistoryStore {
-        let dir = std::env::temp_dir().join(format!(
-            "ncm-history-test-{tag}-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("ncm-history-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         HistoryStore::open(&dir).unwrap()
     }
@@ -134,7 +134,10 @@ mod tests {
         s.record_search("晴天").unwrap();
         s.record_search("七里香").unwrap();
         s.record_search("晴天").unwrap();
-        assert_eq!(s.search_history(), vec!["晴天".to_string(), "七里香".to_string()]);
+        assert_eq!(
+            s.search_history(),
+            vec!["晴天".to_string(), "七里香".to_string()]
+        );
         s.clear_search().unwrap();
         assert!(s.search_history().is_empty());
     }

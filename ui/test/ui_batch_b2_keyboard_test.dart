@@ -50,8 +50,11 @@ Widget host({TextScaler? textScaler}) => MaterialApp(
   ),
 );
 
-Future<void> openSheet(WidgetTester tester,
-    {Size size = const Size(400, 800), TextScaler? scaler}) async {
+Future<void> openSheet(
+  WidgetTester tester, {
+  Size size = const Size(400, 800),
+  TextScaler? scaler,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -121,8 +124,11 @@ void main() {
   });
 
   testWidgets('300dp + 1.25 字号: 弹层不溢出, 键盘避让 padding 正常', (tester) async {
-    await openSheet(tester,
-        size: const Size(300, 800), scaler: const TextScaler.linear(1.25));
+    await openSheet(
+      tester,
+      size: const Size(300, 800),
+      scaler: const TextScaler.linear(1.25),
+    );
     expect(sheetPadding(tester).bottom, 0.0);
     expect(tester.takeException(), isNull);
 

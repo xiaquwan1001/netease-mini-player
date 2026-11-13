@@ -15,7 +15,7 @@ import 'rust/api.dart' as rust;
 /// 绝不在非 Android 平台偷偷写明文; 上层据此决定回退方案.
 class KeystoreChannel {
   KeystoreChannel({MethodChannel? channel})
-      : _channel = channel ?? const MethodChannel('ncm/keystore');
+    : _channel = channel ?? const MethodChannel('ncm/keystore');
 
   final MethodChannel _channel;
 
@@ -43,10 +43,10 @@ class KeystoreChannel {
   Future<bool> put(String key, String value) async {
     if (!_isAndroid) return false;
     try {
-      return await _channel.invokeMethod<bool>(
-            'put',
-            {'key': key, 'value': value},
-          ) ??
+      return await _channel.invokeMethod<bool>('put', {
+            'key': key,
+            'value': value,
+          }) ??
           false;
     } on PlatformException {
       return false;
@@ -105,9 +105,10 @@ class KeystoreChannel {
 /// rust 调用点做成可注入, 单测不碰 FFI。
 class CredentialSync {
   CredentialSync({KeystoreChannel? keystore, this.restore, this.fetchPending})
-      : _keystore = keystore ?? KeystoreChannel();
+    : _keystore = keystore ?? KeystoreChannel();
 
   final KeystoreChannel _keystore;
+
   /// 测试注入点: 不传则走 rust.credentialRestore / rust.credentialPendingWrites.
   final Future<void> Function(List<CredEntry> entries)? restore;
   final Future<List<CredOp>> Function()? fetchPending;
@@ -162,7 +163,9 @@ class CredentialSync {
     final fetch = fetchPending;
     if (fetch != null) return fetch();
     final dtos = await rust.credentialPendingWrites();
-    return dtos.map((d) => CredOp(d.op, d.key, d.value)).toList(growable: false);
+    return dtos
+        .map((d) => CredOp(d.op, d.key, d.value))
+        .toList(growable: false);
   }
 }
 

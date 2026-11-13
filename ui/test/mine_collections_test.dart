@@ -5,93 +5,89 @@ import 'package:minincm/src/my_collections_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int id, String name) => rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '歌手',
-      artistId: BigInt.one,
-      album: '专辑',
-      albumId: BigInt.one,
-      coverUrl: null,
-      durationMs: BigInt.from(1000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: name,
+  artist: '歌手',
+  artistId: BigInt.one,
+  album: '专辑',
+  albumId: BigInt.one,
+  coverUrl: null,
+  durationMs: BigInt.from(1000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
 rust.Playlist playlist(int id, String name) => rust.Playlist(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      trackCount: BigInt.from(5),
-      special: false,
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  trackCount: BigInt.from(5),
+  special: false,
+);
 
 rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      description: '',
-      djName: '主播',
-      programCount: BigInt.from(2),
-      playCount: BigInt.zero,
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  description: '',
+  djName: '主播',
+  programCount: BigInt.from(2),
+  playCount: BigInt.zero,
+);
 
 rust.AlbumItem album(int id, String name) => rust.AlbumItem(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      artist: '歌手',
-      trackCount: BigInt.from(10),
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  artist: '歌手',
+  trackCount: BigInt.from(10),
+);
 
 Widget pushHost(String label, VoidCallback onTap) => MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: onTap,
-            child: Text(label),
-          ),
-        ),
-      ),
-    );
+  home: Scaffold(
+    body: Builder(
+      builder: (ctx) => TextButton(onPressed: onTap, child: Text(label)),
+    ),
+  ),
+);
 
-Widget buildMine({
-  required int Function() onLikedLoad,
-}) =>
-    MineView(
-      loggedIn: true,
-      onLogin: () {},
-      onOpenAccounts: () {},
-      onPlaySongs: (_, _) {},
-      onOpenPlaylist: (_) {},
-      onOpenPodcast: (_) {},
-      onOpenAlbum: (_) {},
-      onOpenRecent: () {},
-      onOpenFollows: () async {},
-      onOpenFolloweds: () async {},
-      onOpenLiked: () {},
-      loadLiked: () async {
-        onLikedLoad();
-        return [song(1, '喜欢的歌')];
-      },
-      loadPlaylists: () async => [playlist(2, '收藏歌单A'), playlist(3, '收藏歌单B')],
-      loadPodcasts: () async => [radio(4, '收藏播客A')],
-      loadAlbums: () async => [album(5, '收藏专辑A')],
-      loadRecent: () async => [song(6, '最近听的歌')],
-      loadRanking: (_) async => const [],
-    );
+Widget buildMine({required int Function() onLikedLoad}) => MineView(
+  loggedIn: true,
+  onLogin: () {},
+  onOpenAccounts: () {},
+  onPlaySongs: (_, _) {},
+  onOpenPlaylist: (_) {},
+  onOpenPodcast: (_) {},
+  onOpenAlbum: (_) {},
+  onOpenRecent: () {},
+  onOpenFollows: () async {},
+  onOpenFolloweds: () async {},
+  onOpenLiked: () {},
+  loadLiked: () async {
+    onLikedLoad();
+    return [song(1, '喜欢的歌')];
+  },
+  loadPlaylists: () async => [playlist(2, '收藏歌单A'), playlist(3, '收藏歌单B')],
+  loadPodcasts: () async => [radio(4, '收藏播客A')],
+  loadAlbums: () async => [album(5, '收藏专辑A')],
+  loadRecent: () async => [song(6, '最近听的歌')],
+  loadRanking: (_) async => const [],
+);
 
 void main() {
   testWidgets('收藏歌单"查看全部"打开整页列表, 点条目回调', (tester) async {
     rust.Playlist? opened;
-    await tester.pumpWidget(pushHost('open', () {
-      showMyPlaylistsPage(
-        tester.element(find.text('open')),
-        load: () async => [playlist(2, '收藏歌单A'), playlist(3, '收藏歌单B')],
-        onOpen: (p) => opened = p,
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showMyPlaylistsPage(
+          tester.element(find.text('open')),
+          load: () async => [playlist(2, '收藏歌单A'), playlist(3, '收藏歌单B')],
+          onOpen: (p) => opened = p,
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -106,13 +102,15 @@ void main() {
 
   testWidgets('收藏播客"查看全部"打开整页列表', (tester) async {
     rust.PodcastRadio? opened;
-    await tester.pumpWidget(pushHost('open', () {
-      showMyPodcastsPage(
-        tester.element(find.text('open')),
-        load: () async => [radio(4, '收藏播客A')],
-        onOpen: (r) => opened = r,
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showMyPodcastsPage(
+          tester.element(find.text('open')),
+          load: () async => [radio(4, '收藏播客A')],
+          onOpen: (r) => opened = r,
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -124,13 +122,15 @@ void main() {
 
   testWidgets('收藏专辑"查看全部"打开整页列表', (tester) async {
     rust.AlbumItem? opened;
-    await tester.pumpWidget(pushHost('open', () {
-      showMyAlbumsPage(
-        tester.element(find.text('open')),
-        load: () async => [album(5, '收藏专辑A')],
-        onOpen: (a) => opened = a,
-      );
-    }));
+    await tester.pumpWidget(
+      pushHost('open', () {
+        showMyAlbumsPage(
+          tester.element(find.text('open')),
+          load: () async => [album(5, '收藏专辑A')],
+          onOpen: (a) => opened = a,
+        );
+      }),
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
@@ -142,9 +142,11 @@ void main() {
 
   testWidgets('区块滚出视野再回来不重新加载(修"上下抽搐")', (tester) async {
     var likedLoads = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: buildMine(onLikedLoad: () => likedLoads++)),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: buildMine(onLikedLoad: () => likedLoads++)),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(likedLoads, 1);
 
@@ -159,9 +161,11 @@ void main() {
   });
 
   testWidgets('三个收藏区块都有"查看全部"入口, 点开是二级整页', (tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(body: buildMine(onLikedLoad: () => 0)),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: buildMine(onLikedLoad: () => 0)),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
     await tester.pumpAndSettle();

@@ -277,7 +277,8 @@ mod tests {
 
     #[test]
     fn negative_times_clamped() {
-        let wl = parse_word_lyric("{\"t\":-1000,\"c\":[{\"tx\":\"作词\"}]}\n[-500,100](  -500,0,0)x");
+        let wl =
+            parse_word_lyric("{\"t\":-1000,\"c\":[{\"tx\":\"作词\"}]}\n[-500,100](  -500,0,0)x");
         assert_eq!(wl.lines[0].start_ms, 0);
         assert_eq!(wl.lines[1].start_ms, 0);
         assert_eq!(wl.lines[1].words[0].start_ms, 0);
@@ -330,7 +331,8 @@ mod tests {
 
     #[test]
     fn translation_without_match_is_none() {
-        let wl = parse_word_lyric_with_translation("[1000,500](1000,500,0)hi", Some("[00:09.00]没有"));
+        let wl =
+            parse_word_lyric_with_translation("[1000,500](1000,500,0)hi", Some("[00:09.00]没有"));
         assert_eq!(wl.translation_lines, vec![None]);
     }
 }

@@ -5,19 +5,19 @@ import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int id, String name) => rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '歌手$id',
-      artistId: BigInt.from(900 + id),
-      album: '专辑$id',
-      albumId: BigInt.from(800 + id),
-      coverUrl: null,
-      durationMs: BigInt.from(200000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: name,
+  artist: '歌手$id',
+  artistId: BigInt.from(900 + id),
+  album: '专辑$id',
+  albumId: BigInt.from(800 + id),
+  coverUrl: null,
+  durationMs: BigInt.from(200000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
 /// 模拟 HomePage 的接线: 面板 + 真 PlayQueue, 记录"跳播/删当前项"的副作用
 class QueueHarness extends StatefulWidget {
@@ -32,8 +32,10 @@ class QueueHarness extends StatefulWidget {
 
 class QueueHarnessState extends State<QueueHarness> {
   late final PlayQueue<rust.SongDto> queue = PlayQueue<rust.SongDto>()
-    ..setAll([for (var i = 0; i < widget.names.length; i++) song(i + 1, widget.names[i])],
-        startAt: widget.startAt);
+    ..setAll([
+      for (var i = 0; i < widget.names.length; i++)
+        song(i + 1, widget.names[i]),
+    ], startAt: widget.startAt);
 
   /// "换歌"记录(点项跳播 / 删当前项后自动播下一首)
   final List<String> played = [];
@@ -49,38 +51,38 @@ class QueueHarnessState extends State<QueueHarness> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        body: PlayQueueSheet(
-          items: queue.items,
-          index: queue.index,
-          onSelect: (s) {
-            queue.jumpToItem(s);
-            played.add(s.name);
-            setState(() {});
-          },
-          onMove: (from, to) {
-            moved.add((from, to));
-            setState(() => queue.moveTo(from, to));
-          },
-          onClear: () {
-            cleared += 1;
-            setState(() => queue.clear());
-            stopped.add('stop');
-          },
-          onRemove: (s, wasCurrent) {
-            final i = queue.items.indexOf(s);
-            if (i < 0) return;
-            setState(() => queue.removeAt(i));
-            if (!wasCurrent) return;
-            final next = queue.current;
-            if (next == null) {
-              stopped.add('stop');
-            } else {
-              played.add(next.name);
-            }
-            setState(() {});
-          },
-        ),
-      );
+    body: PlayQueueSheet(
+      items: queue.items,
+      index: queue.index,
+      onSelect: (s) {
+        queue.jumpToItem(s);
+        played.add(s.name);
+        setState(() {});
+      },
+      onMove: (from, to) {
+        moved.add((from, to));
+        setState(() => queue.moveTo(from, to));
+      },
+      onClear: () {
+        cleared += 1;
+        setState(() => queue.clear());
+        stopped.add('stop');
+      },
+      onRemove: (s, wasCurrent) {
+        final i = queue.items.indexOf(s);
+        if (i < 0) return;
+        setState(() => queue.removeAt(i));
+        if (!wasCurrent) return;
+        final next = queue.current;
+        if (next == null) {
+          stopped.add('stop');
+        } else {
+          played.add(next.name);
+        }
+        setState(() {});
+      },
+    ),
+  );
 }
 
 QueueHarnessState harness(WidgetTester tester) =>
@@ -97,9 +99,11 @@ String? currentTitle(WidgetTester tester) {
 
 void main() {
   testWidgets('打开面板渲染当前项: 高亮当前项 + 曲目数 + 顺序', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('当前播放队列'), findsOneWidget);
@@ -110,9 +114,7 @@ void main() {
 
     // 当前项(index=1)高亮且有 playing 图标
     expect(currentTitle(tester), '第二首');
-    final tile = tester.widget<ListTile>(
-      find.widgetWithText(ListTile, '第二首'),
-    );
+    final tile = tester.widget<ListTile>(find.widgetWithText(ListTile, '第二首'));
     expect(tile.selected, isTrue);
     expect(
       tester.widget<ListTile>(find.widgetWithText(ListTile, '第一首')).selected,
@@ -121,9 +123,11 @@ void main() {
   });
 
   testWidgets('点项切歌: 回调选中曲目并成为当前项', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 0),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 0),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(currentTitle(tester), '第一首');
 
@@ -136,9 +140,11 @@ void main() {
   });
 
   testWidgets('删除非当前项: 列表移除且不换歌, 当前项下标跟着修正', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 滑删(左滑)第一条
@@ -154,9 +160,11 @@ void main() {
   });
 
   testWidgets('删除当前项: 顶上来的下一首成为当前并开始播放', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 长按当前项 → 确认移除
@@ -174,9 +182,9 @@ void main() {
   });
 
   testWidgets('删光队列: 空态文案 + 停播', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['唯一一首'], startAt: 0),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(home: QueueHarness(names: ['唯一一首'], startAt: 0)),
+    );
     await tester.pumpAndSettle();
 
     await tester.longPress(find.text('唯一一首'));
@@ -192,9 +200,11 @@ void main() {
   });
 
   testWidgets('拖拽手柄排序: 顺序改变, 当前曲目不变且不换歌', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 1),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(currentTitle(tester), '第二首');
 
@@ -213,8 +223,11 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(harness(tester).queue.items.map((s) => s.name).toList(),
-        ['第二首', '第三首', '第一首']);
+    expect(harness(tester).queue.items.map((s) => s.name).toList(), [
+      '第二首',
+      '第三首',
+      '第一首',
+    ]);
     expect(harness(tester).moved, isNotEmpty);
     expect(harness(tester).played, isEmpty, reason: '只排序不换歌');
     expect(harness(tester).queue.current!.name, '第二首');
@@ -223,9 +236,9 @@ void main() {
   });
 
   testWidgets('清空队列: 二次确认后清空并停播', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首'], startAt: 0),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(home: QueueHarness(names: ['第一首', '第二首'], startAt: 0)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.delete_sweep_outlined));
@@ -242,9 +255,9 @@ void main() {
   });
 
   testWidgets('清空队列: 点取消什么都不做', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: ['第一首', '第二首'], startAt: 0),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(home: QueueHarness(names: ['第一首', '第二首'], startAt: 0)),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.byIcon(Icons.delete_sweep_outlined));
@@ -258,9 +271,9 @@ void main() {
   });
 
   testWidgets('空队列: 直接显示空态文案, 不渲染列表', (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: QueueHarness(names: [], startAt: 0),
-    ));
+    await tester.pumpWidget(
+      const MaterialApp(home: QueueHarness(names: [], startAt: 0)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('播放队列是空的'), findsOneWidget);
@@ -272,17 +285,19 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: const QueueHarness(
+          names: ['第一首', '一首名字特别特别长的歌用于窄屏回归测试', '第三首'],
+          startAt: 0,
+        ),
       ),
-      home: const QueueHarness(
-        names: ['第一首', '一首名字特别特别长的歌用于窄屏回归测试', '第三首'],
-        startAt: 0,
-      ),
-    ));
+    );
     // 长歌名会触发 marquee 无限滚动, 不能 pumpAndSettle, 分步 pump
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -298,12 +313,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

@@ -62,8 +62,11 @@ impl LoudnessStore {
     }
 
     fn save(&self) -> Result<(), String> {
-        let raw: BTreeMap<String, &TrackLoudness> =
-            self.entries.iter().map(|(k, v)| (k.to_string(), v)).collect();
+        let raw: BTreeMap<String, &TrackLoudness> = self
+            .entries
+            .iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
         let text = serde_json::to_string_pretty(&raw).map_err(|e| e.to_string())?;
         let tmp = self.path.with_extension("json.tmp");
         if let Some(parent) = self.path.parent() {
@@ -92,7 +95,11 @@ mod tests {
     }
 
     fn entry(lufs: f32) -> TrackLoudness {
-        TrackLoudness { lufs, sample_peak: 0.98, measured_at_ms: 1_700_000_000_000 }
+        TrackLoudness {
+            lufs,
+            sample_peak: 0.98,
+            measured_at_ms: 1_700_000_000_000,
+        }
     }
 
     #[test]

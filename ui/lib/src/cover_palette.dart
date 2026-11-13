@@ -159,16 +159,14 @@ class PaletteSwatch {
 /// 纯函数, 便于单测。
 Color? selectPrimary(List<PaletteSwatch> swatches) {
   if (swatches.isEmpty) return null;
-  final maxPop = swatches
-      .map((s) => s.population)
-      .reduce(math.max);
+  final maxPop = swatches.map((s) => s.population).reduce(math.max);
 
   double scoreOf(PaletteSwatch s) => swatchScore(
-        population: s.population,
-        maxPopulation: maxPop,
-        saturation: rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$2,
-        value: rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$3,
-      );
+    population: s.population,
+    maxPopulation: maxPop,
+    saturation: rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$2,
+    value: rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$3,
+  );
 
   PaletteSwatch? best;
   double bestScore = -1;
@@ -183,16 +181,20 @@ Color? selectPrimary(List<PaletteSwatch> swatches) {
   }
   // 回退 1: 暗彩/柔和(放宽亮度, 保留饱和度下限)
   best ??= _bestWhere(
-      swatches,
-      (s) => rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$2 >=
-          kFallbackMaxSaturation);
+    swatches,
+    (s) =>
+        rgbToHsv(_r(s.color), _g(s.color), _b(s.color)).$2 >=
+        kFallbackMaxSaturation,
+  );
   // 回退 2: 任意最高频色
   best ??= swatches.reduce((a, b) => a.population >= b.population ? a : b);
   return best.color;
 }
 
 PaletteSwatch? _bestWhere(
-    List<PaletteSwatch> swatches, bool Function(PaletteSwatch) test) {
+  List<PaletteSwatch> swatches,
+  bool Function(PaletteSwatch) test,
+) {
   PaletteSwatch? best;
   double bestScore = -1;
   final maxPop = swatches.isEmpty
@@ -245,7 +247,11 @@ Color _hslToColor(double h, double s, double l) {
     bf = _hueToRgb(p, q, h - 120);
   }
   return Color.fromARGB(
-      255, (rf * 255).round().clamp(0, 255), (gf * 255).round().clamp(0, 255), (bf * 255).round().clamp(0, 255));
+    255,
+    (rf * 255).round().clamp(0, 255),
+    (gf * 255).round().clamp(0, 255),
+    (bf * 255).round().clamp(0, 255),
+  );
 }
 
 double _hueToRgb(double p, double q, double t) {
@@ -278,7 +284,8 @@ CoverPalette? paletteFromBytes(Uint8List rgba, int width, int height) {
         final i = (y * width + x) * 4;
         if (rgba[i + 3] < 128) continue;
         final r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
-        final key = (r >> (8 - kQuantBits)) << (kQuantBits * 2) |
+        final key =
+            (r >> (8 - kQuantBits)) << (kQuantBits * 2) |
             (g >> (8 - kQuantBits)) << kQuantBits |
             (b >> (8 - kQuantBits));
         final acc = buckets.putIfAbsent(key, () => [0, 0, 0, 0]);
@@ -291,18 +298,23 @@ CoverPalette? paletteFromBytes(Uint8List rgba, int width, int height) {
     if (buckets.isEmpty) return null;
 
     final swatches = buckets.values
-        .map((acc) => PaletteSwatch(
-              Color.fromARGB(255, acc[0] ~/ acc[3], acc[1] ~/ acc[3],
-                  acc[2] ~/ acc[3]),
-              acc[3],
-            ))
+        .map(
+          (acc) => PaletteSwatch(
+            Color.fromARGB(
+              255,
+              acc[0] ~/ acc[3],
+              acc[1] ~/ acc[3],
+              acc[2] ~/ acc[3],
+            ),
+            acc[3],
+          ),
+        )
         .toList();
 
     final primary = selectPrimary(swatches);
     if (primary == null) return null;
 
-    final primaryHsv =
-        rgbToHsv(_r(primary), _g(primary), _b(primary));
+    final primaryHsv = rgbToHsv(_r(primary), _g(primary), _b(primary));
     final isFallback = primaryHsv.$2 < kFallbackMaxSaturation;
 
     // secondary: 与 primary 色相距离最大的高分桶
@@ -338,11 +350,11 @@ CoverPalette? paletteFromBytes(Uint8List rgba, int width, int height) {
 /// 因此没有引入 isolate/compute(纯 Dart 同步函数无法跨 isolate 传 ui.Image)。
 Future<CoverPalette?> paletteFromImage(ui.Image image) async {
   try {
-    final bd =
-        await image.toByteData(format: ui.ImageByteFormat.rawStraightRgba);
+    final bd = await image.toByteData(
+      format: ui.ImageByteFormat.rawStraightRgba,
+    );
     if (bd == null) return null;
-    return paletteFromBytes(
-        bd.buffer.asUint8List(), image.width, image.height);
+    return paletteFromBytes(bd.buffer.asUint8List(), image.width, image.height);
   } catch (_) {
     return null;
   }
@@ -379,7 +391,9 @@ Future<CoverPalette?> paletteFromUrl(
 }
 
 Future<CoverPalette?> _computeForUrl(
-    String url, ImageProvider<Object> provider) async {
+  String url,
+  ImageProvider<Object> provider,
+) async {
   try {
     final image = await _resolveImage(provider);
     return await paletteFromImage(image);

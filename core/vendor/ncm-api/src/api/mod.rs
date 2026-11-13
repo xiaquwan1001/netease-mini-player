@@ -40,12 +40,12 @@ mod user_playlist;
 mod artist_album;
 mod artist_detail;
 mod artist_mv;
-mod mv_detail;
-mod mv_url;
 mod artist_songs;
 mod artist_sub;
 mod artist_sublist;
 mod artist_top_song;
+mod mv_detail;
+mod mv_url;
 
 // ---- 专辑相关 ----
 mod album;
@@ -65,8 +65,8 @@ mod comment_info_list;
 mod comment_like;
 mod comment_music;
 mod comment_mv;
-mod comment_reply;
 mod comment_playlist;
+mod comment_reply;
 mod comment_video;
 
 // ---- 推荐相关 ----

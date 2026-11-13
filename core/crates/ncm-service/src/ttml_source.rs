@@ -173,7 +173,11 @@ pub fn score_word_lyric(wl: &WordLyric, line_starts: Option<&[i64]>) -> WordLyri
             let hits = wl
                 .lines
                 .iter()
-                .filter(|l| starts.iter().any(|s| (l.start_ms - *s).abs() < LINE_CONSISTENCY_MS))
+                .filter(|l| {
+                    starts
+                        .iter()
+                        .any(|s| (l.start_ms - *s).abs() < LINE_CONSISTENCY_MS)
+                })
                 .count();
             hits as f64 / wl.lines.len() as f64
         }
@@ -184,7 +188,14 @@ pub fn score_word_lyric(wl: &WordLyric, line_starts: Option<&[i64]>) -> WordLyri
         + w_first * first_word
         + w_spans * spans
         + w_cons * consistency;
-    WordLyricScore { coverage, monotonic, first_word, spans, consistency, score }
+    WordLyricScore {
+        coverage,
+        monotonic,
+        first_word,
+        spans,
+        consistency,
+        score,
+    }
 }
 
 /// auto 择优结果: 选中来源 + 短理由(只有两来源比较后才给出).
@@ -202,13 +213,24 @@ pub fn choose_word_source(
     line_starts: Option<&[i64]>,
 ) -> SourceChoice {
     match (yrc, ttml) {
-        (None, None) => SourceChoice { source: None, reason: None },
+        (None, None) => SourceChoice {
+            source: None,
+            reason: None,
+        },
         (Some(y), None) => SourceChoice {
-            source: if y.is_empty() { None } else { Some(LyricSource::Yrc) },
+            source: if y.is_empty() {
+                None
+            } else {
+                Some(LyricSource::Yrc)
+            },
             reason: None,
         },
         (None, Some(t)) => SourceChoice {
-            source: if t.is_empty() { None } else { Some(LyricSource::Ttml) },
+            source: if t.is_empty() {
+                None
+            } else {
+                Some(LyricSource::Ttml)
+            },
             reason: None,
         },
         (Some(y), Some(t)) => {
@@ -231,7 +253,10 @@ pub fn choose_word_source(
                 } else {
                     "TTML 得分更高"
                 };
-                SourceChoice { source: Some(LyricSource::Ttml), reason: Some(reason.into()) }
+                SourceChoice {
+                    source: Some(LyricSource::Ttml),
+                    reason: Some(reason.into()),
+                }
             }
         }
     }
@@ -245,7 +270,9 @@ pub struct TtmlDoc {
 
 impl TtmlDoc {
     pub fn parse(src: &str) -> Result<Self, String> {
-        Ok(Self { lines: parse_ttml(src)? })
+        Ok(Self {
+            lines: parse_ttml(src)?,
+        })
     }
 
     pub fn is_empty(&self) -> bool {
@@ -306,7 +333,11 @@ pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<Ttm
         .timeout(FETCH_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;
-    let resp = client.get(&url).send().await.map_err(|e| reqwest_chain(&e))?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| reqwest_chain(&e))?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         let _ = std::fs::write(ttml_none_path(data_dir, ncm_music_id), "");
         return Ok(None);
@@ -392,7 +423,9 @@ pub async fn word_lyric_with_fallback(
     preference: LyricSourcePreference,
 ) -> Result<WordLyricWithSource, String> {
     match preference {
-        LyricSourcePreference::Amll => return amll_first(provider, probe, data_dir, track_id).await,
+        LyricSourcePreference::Amll => {
+            return amll_first(provider, probe, data_dir, track_id).await
+        }
         LyricSourcePreference::Netease => {
             return netease_first(provider, probe, data_dir, track_id).await
         }
@@ -415,7 +448,11 @@ pub async fn word_lyric_with_fallback(
     let ttml = match probe.probe(data_dir, track_id).await {
         Ok(Some(doc)) => {
             let wl = ttml_to_word_lyric(&doc);
-            if wl.is_empty() { None } else { Some(wl) }
+            if wl.is_empty() {
+                None
+            } else {
+                Some(wl)
+            }
         }
         _ => None,
     };
@@ -432,14 +469,22 @@ pub async fn word_lyric_with_fallback(
                 LyricSource::LineLevel => None,
             };
             if let Some(lyric) = lyric {
-                return Ok(WordLyricWithSource { lyric, source, reason: choice.reason });
+                return Ok(WordLyricWithSource {
+                    lyric,
+                    source,
+                    reason: choice.reason,
+                });
             }
         }
     }
     // 3) 兜底: yrc 差但非空就用它; 否则行级 LRC
     if let Some(wl) = yrc {
         if !wl.is_empty() {
-            return Ok(WordLyricWithSource { lyric: wl, source: LyricSource::Yrc, reason: None });
+            return Ok(WordLyricWithSource {
+                lyric: wl,
+                source: LyricSource::Yrc,
+                reason: None,
+            });
         }
     }
     line_level_fallback(provider, track_id).await
@@ -463,11 +508,19 @@ async fn netease_first(
         }
     }
     if let Some(wl) = ttml_word_lyric(probe, data_dir, track_id).await {
-        return Ok(WordLyricWithSource { lyric: wl, source: LyricSource::Ttml, reason: None });
+        return Ok(WordLyricWithSource {
+            lyric: wl,
+            source: LyricSource::Ttml,
+            reason: None,
+        });
     }
     if let Some(wl) = yrc {
         if !wl.is_empty() {
-            return Ok(WordLyricWithSource { lyric: wl, source: LyricSource::Yrc, reason: None });
+            return Ok(WordLyricWithSource {
+                lyric: wl,
+                source: LyricSource::Yrc,
+                reason: None,
+            });
         }
     }
     line_level_fallback(provider, track_id).await
@@ -481,11 +534,19 @@ async fn amll_first(
     track_id: u64,
 ) -> Result<WordLyricWithSource, String> {
     if let Some(wl) = ttml_word_lyric(probe, data_dir, track_id).await {
-        return Ok(WordLyricWithSource { lyric: wl, source: LyricSource::Ttml, reason: None });
+        return Ok(WordLyricWithSource {
+            lyric: wl,
+            source: LyricSource::Ttml,
+            reason: None,
+        });
     }
     if let Ok(wl) = provider.word_lyric(TrackId::new(track_id)).await {
         if !wl.is_empty() {
-            return Ok(WordLyricWithSource { lyric: wl, source: LyricSource::Yrc, reason: None });
+            return Ok(WordLyricWithSource {
+                lyric: wl,
+                source: LyricSource::Yrc,
+                reason: None,
+            });
         }
     }
     line_level_fallback(provider, track_id).await
@@ -499,7 +560,11 @@ async fn ttml_word_lyric(
 ) -> Option<WordLyric> {
     let doc = probe.probe(data_dir, track_id).await.ok()??;
     let wl = ttml_to_word_lyric(&doc);
-    if wl.is_empty() { None } else { Some(wl) }
+    if wl.is_empty() {
+        None
+    } else {
+        Some(wl)
+    }
 }
 
 /// 行级 LRC 兜底(与原实现一致).
@@ -602,7 +667,9 @@ mod tests {
         // 端口 1 必然不可达(离线安全). 走系统代理时可能被代理转成响应,
         // 所以只要求: 不 panic, 且没有数据(Ok(None) 或 Err 都算回退路径)
         let dir = tmpdir("neterr");
-        let r = tokio::runtime::Runtime::new().unwrap().block_on(fetch_ttml(&dir, 1));
+        let r = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(fetch_ttml(&dir, 1));
         assert!(matches!(r, Ok(None) | Err(_)), "got: {r:?}");
     }
 
@@ -614,12 +681,20 @@ mod tests {
                 WordLyricLine {
                     start_ms: 0,
                     end_ms: 1000,
-                    words: vec![WordItem { start_ms: 0, end_ms: 1000, text: "逐".into() }],
+                    words: vec![WordItem {
+                        start_ms: 0,
+                        end_ms: 1000,
+                        text: "逐".into(),
+                    }],
                 },
                 WordLyricLine {
                     start_ms: 1000,
                     end_ms: 1000,
-                    words: vec![WordItem { start_ms: 0, end_ms: 0, text: "退化行".into() }],
+                    words: vec![WordItem {
+                        start_ms: 0,
+                        end_ms: 0,
+                        text: "退化行".into(),
+                    }],
                 },
             ],
             translation_lines: vec![],
@@ -647,16 +722,31 @@ mod tests {
         use ncm_provider::{BoxFuture, ProviderResult, SongUrlRequest};
         struct P;
         impl Provider for P {
-            fn id(&self) -> &'static str { "dummy" }
-            fn name(&self) -> &'static str { "dummy" }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] { &[] }
-            fn search<'a>(&'a self, _q: &'a ncm_provider::SearchQuery) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
+            fn id(&self) -> &'static str {
+                "dummy"
+            }
+            fn name(&self) -> &'static str {
+                "dummy"
+            }
+            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
+                &[]
+            }
+            fn search<'a>(
+                &'a self,
+                _q: &'a ncm_provider::SearchQuery,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
+            fn song_url<'a>(
+                &'a self,
+                _r: &'a SongUrlRequest,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+            fn lyric<'a>(
+                &'a self,
+                _t: TrackId,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
                 Box::pin(async {
                     Ok(ncm_domain::Lyric {
                         lrc: Some("[00:01.00]第一行\n[00:02.00]第二行".into()),
@@ -687,27 +777,44 @@ mod tests {
         use ncm_provider::{BoxFuture, ProviderError, ProviderResult, SongUrlRequest};
         struct P;
         impl Provider for P {
-            fn id(&self) -> &'static str { "dummy" }
-            fn name(&self) -> &'static str { "dummy" }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] { &[] }
-            fn search<'a>(&'a self, _q: &'a ncm_provider::SearchQuery) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
+            fn id(&self) -> &'static str {
+                "dummy"
+            }
+            fn name(&self) -> &'static str {
+                "dummy"
+            }
+            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
+                &[]
+            }
+            fn search<'a>(
+                &'a self,
+                _q: &'a ncm_provider::SearchQuery,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
                 Box::pin(async { Err(ProviderError::unsupported("x")) })
             }
-            fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
+            fn song_url<'a>(
+                &'a self,
+                _r: &'a SongUrlRequest,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
                 Box::pin(async { Err(ProviderError::unsupported("x")) })
             }
-            fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+            fn lyric<'a>(
+                &'a self,
+                _t: TrackId,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
                 Box::pin(async { Ok(ncm_domain::Lyric::default()) })
             }
         }
         let dir = tmpdir("nothing");
-        let r = tokio::runtime::Runtime::new().unwrap().block_on(word_lyric_with_fallback(
-            &P,
-            &CachedTtmlProbe,
-            &dir,
-            1,
-            LyricSourcePreference::Auto,
-        ));
+        let r = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(word_lyric_with_fallback(
+                &P,
+                &CachedTtmlProbe,
+                &dir,
+                1,
+                LyricSourcePreference::Auto,
+            ));
         assert!(r.is_err());
     }
 
@@ -720,8 +827,16 @@ mod tests {
                     start_ms: (i * 1000) as i64,
                     end_ms: (i * 1000 + 900) as i64,
                     words: vec![
-                        WordItem { start_ms: (i * 1000) as i64, end_ms: (i * 1000 + 400) as i64, text: "你".into() },
-                        WordItem { start_ms: (i * 1000 + 400) as i64, end_ms: (i * 1000 + 900) as i64, text: "好".into() },
+                        WordItem {
+                            start_ms: (i * 1000) as i64,
+                            end_ms: (i * 1000 + 400) as i64,
+                            text: "你".into(),
+                        },
+                        WordItem {
+                            start_ms: (i * 1000 + 400) as i64,
+                            end_ms: (i * 1000 + 900) as i64,
+                            text: "好".into(),
+                        },
                     ],
                 })
                 .collect(),
@@ -737,7 +852,11 @@ mod tests {
                 .map(|i| WordLyricLine {
                     start_ms: (i * 1000) as i64,
                     end_ms: (i * 1000) as i64,
-                    words: vec![WordItem { start_ms: 0, end_ms: 0, text: format!("整行{i}") }],
+                    words: vec![WordItem {
+                        start_ms: 0,
+                        end_ms: 0,
+                        text: format!("整行{i}"),
+                    }],
                 })
                 .collect(),
             translation_lines: vec![],
@@ -794,12 +913,20 @@ mod tests {
         yrc.lines[2] = WordLyricLine {
             start_ms: 2000,
             end_ms: 2000,
-            words: vec![WordItem { start_ms: 0, end_ms: 0, text: "退化2".into() }],
+            words: vec![WordItem {
+                start_ms: 0,
+                end_ms: 0,
+                text: "退化2".into(),
+            }],
         };
         yrc.lines[3] = WordLyricLine {
             start_ms: 3000,
             end_ms: 3000,
-            words: vec![WordItem { start_ms: 0, end_ms: 0, text: "退化".into() }],
+            words: vec![WordItem {
+                start_ms: 0,
+                end_ms: 0,
+                text: "退化".into(),
+            }],
         };
         let ttml = good_word_lyric(4);
         let choice = choose_word_source(Some(&yrc), Some(&ttml), None);
@@ -828,7 +955,10 @@ mod tests {
         assert!(c1.reason.is_none());
         assert_eq!(choose_word_source(None, None, None).source, None);
         // 空的 yrc 不该被选中
-        assert_eq!(choose_word_source(Some(&WordLyric::default()), None, None).source, None);
+        assert_eq!(
+            choose_word_source(Some(&WordLyric::default()), None, None).source,
+            None
+        );
     }
 
     #[test]
@@ -847,16 +977,31 @@ mod tests {
         use ncm_provider::{ProviderResult, SongUrlRequest};
         struct P;
         impl Provider for P {
-            fn id(&self) -> &'static str { "dummy" }
-            fn name(&self) -> &'static str { "dummy" }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] { &[] }
-            fn search<'a>(&'a self, _q: &'a ncm_provider::SearchQuery) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
+            fn id(&self) -> &'static str {
+                "dummy"
+            }
+            fn name(&self) -> &'static str {
+                "dummy"
+            }
+            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
+                &[]
+            }
+            fn search<'a>(
+                &'a self,
+                _q: &'a ncm_provider::SearchQuery,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
+            fn song_url<'a>(
+                &'a self,
+                _r: &'a SongUrlRequest,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+            fn lyric<'a>(
+                &'a self,
+                _t: TrackId,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
                 Box::pin(async { Ok(ncm_domain::Lyric::default()) })
             }
             fn word_lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<WordLyric>> {
@@ -865,7 +1010,11 @@ mod tests {
         }
         struct NoProbe;
         impl TtmlProbe for NoProbe {
-            fn probe<'a>(&'a self, _: &'a Path, _: u64) -> BoxFuture<'a, Result<Option<TtmlDoc>, String>> {
+            fn probe<'a>(
+                &'a self,
+                _: &'a Path,
+                _: u64,
+            ) -> BoxFuture<'a, Result<Option<TtmlDoc>, String>> {
                 Box::pin(async { panic!("不应探测 TTML") })
             }
         }
@@ -885,31 +1034,62 @@ mod tests {
 
     #[test]
     fn preference_parse_and_netease_path() {
-        assert_eq!(LyricSourcePreference::parse("netease"), LyricSourcePreference::Netease);
-        assert_eq!(LyricSourcePreference::parse("amll"), LyricSourcePreference::Amll);
-        assert_eq!(LyricSourcePreference::parse("bogus"), LyricSourcePreference::Auto);
-        assert_eq!(LyricSourcePreference::default(), LyricSourcePreference::Auto);
+        assert_eq!(
+            LyricSourcePreference::parse("netease"),
+            LyricSourcePreference::Netease
+        );
+        assert_eq!(
+            LyricSourcePreference::parse("amll"),
+            LyricSourcePreference::Amll
+        );
+        assert_eq!(
+            LyricSourcePreference::parse("bogus"),
+            LyricSourcePreference::Auto
+        );
+        assert_eq!(
+            LyricSourcePreference::default(),
+            LyricSourcePreference::Auto
+        );
 
         use ncm_provider::{ProviderResult, SongUrlRequest};
         struct P;
         impl Provider for P {
-            fn id(&self) -> &'static str { "dummy" }
-            fn name(&self) -> &'static str { "dummy" }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] { &[] }
-            fn search<'a>(&'a self, _q: &'a ncm_provider::SearchQuery) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
+            fn id(&self) -> &'static str {
+                "dummy"
+            }
+            fn name(&self) -> &'static str {
+                "dummy"
+            }
+            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
+                &[]
+            }
+            fn search<'a>(
+                &'a self,
+                _q: &'a ncm_provider::SearchQuery,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
+            fn song_url<'a>(
+                &'a self,
+                _r: &'a SongUrlRequest,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
                 Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
             }
-            fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+            fn lyric<'a>(
+                &'a self,
+                _t: TrackId,
+            ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
                 Box::pin(async { Ok(ncm_domain::Lyric::default()) })
             }
         }
         // 探测返回空 doc(等价无数据); yrc 完好 => netease 直接用 yrc, 不回退行级
         struct EmptyProbe;
         impl TtmlProbe for EmptyProbe {
-            fn probe<'a>(&'a self, _: &'a Path, _: u64) -> BoxFuture<'a, Result<Option<TtmlDoc>, String>> {
+            fn probe<'a>(
+                &'a self,
+                _: &'a Path,
+                _: u64,
+            ) -> BoxFuture<'a, Result<Option<TtmlDoc>, String>> {
                 Box::pin(async { Ok(Some(TtmlDoc { lines: vec![] })) })
             }
         }

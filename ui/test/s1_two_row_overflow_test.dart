@@ -6,37 +6,37 @@ import 'package:minincm/src/chart_section.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int id, String name) => rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '歌手',
-      artistId: BigInt.one,
-      album: '专辑',
-      albumId: BigInt.one,
-      coverUrl: null,
-      durationMs: BigInt.from(1000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: name,
+  artist: '歌手',
+  artistId: BigInt.one,
+  album: '专辑',
+  albumId: BigInt.one,
+  coverUrl: null,
+  durationMs: BigInt.from(1000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
 rust.Playlist playlist(int id, String name) => rust.Playlist(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      trackCount: BigInt.from(3),
-      special: false,
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  trackCount: BigInt.from(3),
+  special: false,
+);
 
 rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      description: '',
-      djName: '主播',
-      programCount: BigInt.from(2),
-      playCount: BigInt.zero,
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  description: '',
+  djName: '主播',
+  programCount: BigInt.from(2),
+  playCount: BigInt.zero,
+);
 
 rust.ChartSummary chart(int id, String name, String updateFrequency) =>
     rust.ChartSummary(
@@ -49,12 +49,12 @@ rust.ChartSummary chart(int id, String name, String updateFrequency) =>
     );
 
 rust.AlbumItem album(int id, String name) => rust.AlbumItem(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      artist: '歌手',
-      trackCount: BigInt.from(8),
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  artist: '歌手',
+  trackCount: BigInt.from(8),
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -84,18 +84,22 @@ void main() {
     }
 
     // 排行榜现已挂在搜索落地页; 两排封面溢出的回归直接测 ChartSection。
-    await tester.pumpWidget(host(Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: ChartSection(
-        onOpen: (_) {},
-        load: () async => [
-          chart(19723756, '飙升榜', '刚刚更新'),
-          chart(3779629, '新歌榜', '每天更新'),
-          chart(2884035, '热歌榜', '每天更新'),
-          chart(19723757, '原创榜', '每周更新'),
-        ],
+    await tester.pumpWidget(
+      host(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: ChartSection(
+            onOpen: (_) {},
+            load: () async => [
+              chart(19723756, '飙升榜', '刚刚更新'),
+              chart(3779629, '新歌榜', '每天更新'),
+              chart(2884035, '热歌榜', '每天更新'),
+              chart(19723757, '原创榜', '每周更新'),
+            ],
+          ),
+        ),
       ),
-    )));
+    );
     await tester.pumpAndSettle();
   }
 

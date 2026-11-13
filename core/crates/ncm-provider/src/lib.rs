@@ -6,17 +6,16 @@
 //! - 未来加 QuickJS 时, 只需新增一个 ScriptProvider 实现本 trait
 
 use ncm_domain::{
-    AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary, CommentPage, CommentStats, DefaultSearch, FeedEvent,
-    HotSearchDetailItem, MvDetail, MvUrl, SearchExact, ToplistCatalogGroup,
-    FollowCount, HotSearchTerm, Lyric, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    PhoneLoginOutcome, QrLoginKey, QrLoginOutcome, SmsCodeSent,
+    AlbumDetail, AlbumItem, Artist, ArtistDetail, ArtistMvPage, ArtistSongPage, ChartSummary,
+    CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
+    DigitalAlbumSalesEntry, FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchDetailItem,
+    HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome,
+    PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio,
+    PrivateMessage, PrivateSession, Profile, ProfileDetail, QrLoginKey, QrLoginOutcome,
+    RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact, SearchBundle, SearchExact,
+    SearchPage, SigninStatus, SmsCodeSent, Song, SongPurchasedPage, StreamUrl, StyleTag,
+    SuggestItem, ToplistCatalogGroup, TrackId, UserItem, UserLevel, VipOverview, WikiFact,
     WordLyric,
-    ForwardItem, HotArtist, InboxItem, MessageCounts, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
-    Profile, RecentContact,
-    ProfileDetail, SearchBundle, SearchPage, SigninStatus, Song, StreamUrl, StyleTag, SuggestItem, TrackId,
-    MedalWall, UserItem, UserLevel, VipOverview, WikiFact,
-    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumSalesEntry, SongPurchasedPage,
-    RadioExploreHome, RadioSubscriberPage, RadioToplist,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -164,7 +163,11 @@ pub struct SearchQuery {
 
 impl SearchQuery {
     pub fn new(keywords: impl Into<String>) -> Self {
-        Self { keywords: keywords.into(), limit: 30, offset: 0 }
+        Self {
+            keywords: keywords.into(),
+            limit: 30,
+            offset: 0,
+        }
     }
 
     pub fn limit(mut self, v: u32) -> Self {
@@ -186,7 +189,10 @@ pub struct SongUrlRequest {
 
 impl SongUrlRequest {
     pub fn new(track: TrackId) -> Self {
-        Self { track, level: AudioLevel::default() }
+        Self {
+            track,
+            level: AudioLevel::default(),
+        }
     }
 }
 
@@ -223,7 +229,11 @@ pub struct ProviderError {
 
 impl ProviderError {
     pub fn new(kind: ProviderErrorKind, retryable: bool, detail: impl Into<String>) -> Self {
-        Self { kind, retryable, detail: detail.into() }
+        Self {
+            kind,
+            retryable,
+            detail: detail.into(),
+        }
     }
 
     pub fn network(detail: impl Into<String>) -> Self {
@@ -310,7 +320,10 @@ pub trait Provider: Send + Sync {
     }
 
     /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
-    fn login_qr_check<'a>(&'a self, _key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
+    fn login_qr_check<'a>(
+        &'a self,
+        _key: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
         Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
     }
 
@@ -342,7 +355,11 @@ pub trait Provider: Send + Sync {
     }
 
     /// 红心/取消红心. 返回 true 表示操作被接受.
-    fn set_like<'a>(&'a self, _track: TrackId, _liked: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+    fn set_like<'a>(
+        &'a self,
+        _track: TrackId,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async { Err(ProviderError::unsupported("no like")) })
     }
 
@@ -405,7 +422,10 @@ pub trait Provider: Send + Sync {
     ///
     /// 注意**空命中伪装成功**: provider 侧必须把 orders 为空的结果翻成 [`SearchExact::default()`],
     /// 不要当错误抛. 能力声明复用 [`Capability::SearchSuggest`].
-    fn search_exact<'a>(&'a self, _keywords: &'a str) -> BoxFuture<'a, ProviderResult<SearchExact>> {
+    fn search_exact<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<SearchExact>> {
         Box::pin(async { Err(ProviderError::unsupported("no search exact")) })
     }
 
@@ -461,10 +481,7 @@ pub trait Provider: Send + Sync {
     }
 
     /// 已订阅的播客/电台(需要登录)
-    fn subscribed_podcasts(
-        &self,
-        _limit: u32,
-    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+    fn subscribed_podcasts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
         Box::pin(async { Err(ProviderError::unsupported("no subscribed podcasts")) })
     }
 
@@ -586,7 +603,11 @@ pub trait Provider: Send + Sync {
     }
 
     /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
-    fn toggle_artist_sub<'a>(&'a self, _artist_id: u64, _sub: bool) -> BoxFuture<'a, ProviderResult<bool>> {
+    fn toggle_artist_sub<'a>(
+        &'a self,
+        _artist_id: u64,
+        _sub: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
         Box::pin(async { Err(ProviderError::unsupported("no artist sub")) })
     }
 
@@ -731,7 +752,11 @@ pub trait Provider: Send + Sync {
     }
 
     /// 新建歌单(需要登录), 返回新歌单 id. privacy: 0=公开 10=私密
-    fn create_playlist<'a>(&'a self, _name: &'a str, _privacy: u8) -> BoxFuture<'a, ProviderResult<u64>> {
+    fn create_playlist<'a>(
+        &'a self,
+        _name: &'a str,
+        _privacy: u8,
+    ) -> BoxFuture<'a, ProviderResult<u64>> {
         Box::pin(async { Err(ProviderError::unsupported("no playlist create")) })
     }
 
@@ -960,7 +985,10 @@ pub trait Provider: Send + Sync {
     }
 
     /// 数字专辑详情(vipmall/albumproduct/detail, 只读).
-    fn digital_album_detail(&self, _album_id: u64) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
+    fn digital_album_detail(
+        &self,
+        _album_id: u64,
+    ) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
         Box::pin(async { Err(ProviderError::unsupported("no digital album detail")) })
     }
 
@@ -988,10 +1016,7 @@ pub trait Provider: Send + Sync {
     }
 
     /// 电台榜单(kind: "hot"|"new"|"pay"|"hours"|"newcomer"|"popular"|"program").
-    fn radio_toplist<'a>(
-        &'a self,
-        _kind: &'a str,
-    ) -> BoxFuture<'a, ProviderResult<RadioToplist>> {
+    fn radio_toplist<'a>(&'a self, _kind: &'a str) -> BoxFuture<'a, ProviderResult<RadioToplist>> {
         Box::pin(async { Err(ProviderError::unsupported("no radio toplist")) })
     }
 
@@ -1152,7 +1177,10 @@ impl ProviderRegistry {
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn Provider>> {
-        self.by_id.get(id).and_then(|i| self.providers.get(*i)).cloned()
+        self.by_id
+            .get(id)
+            .and_then(|i| self.providers.get(*i))
+            .cloned()
     }
 
     pub fn all(&self) -> &[Arc<dyn Provider>] {
@@ -1185,7 +1213,10 @@ mod tests {
         fn search<'a>(&'a self, _q: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>> {
             Box::pin(async { Ok(SearchPage::default()) })
         }
-        fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
+        fn song_url<'a>(
+            &'a self,
+            _r: &'a SongUrlRequest,
+        ) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
             Box::pin(async { Err(ProviderError::unsupported("no songUrl")) })
         }
         fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {

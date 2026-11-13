@@ -28,17 +28,23 @@ void main() {
       darkPrimaries.add(dark.colorScheme.primary);
     }
     expect(AccentPalette.values.length, 5);
-    expect(lightPrimaries.length, AccentPalette.values.length,
-        reason: '每个色板的浅色主题必须是不同配色');
-    expect(darkPrimaries.length, AccentPalette.values.length,
-        reason: '每个色板的深色主题必须是不同配色');
+    expect(
+      lightPrimaries.length,
+      AccentPalette.values.length,
+      reason: '每个色板的浅色主题必须是不同配色',
+    );
+    expect(
+      darkPrimaries.length,
+      AccentPalette.values.length,
+      reason: '每个色板的深色主题必须是不同配色',
+    );
   });
-
 
   test('红色要够"红": 高彩度 + 与樱粉的色相拉开(用户实测反馈的回归)', () {
     final red = HSLColor.fromColor(buildLightTheme().colorScheme.primary);
     final pink = HSLColor.fromColor(
-        buildLightTheme(accent: AccentPalette.pink).colorScheme.primary);
+      buildLightTheme(accent: AccentPalette.pink).colorScheme.primary,
+    );
     // 旧实现(tonalSpot + 0xFFE60026)的 primary 是 #904A46: 饱和度约 28%,
     // 与樱粉 #8E4958 视觉上几乎一致 —— 这里把口径固定下来。
     expect(red.saturation, greaterThan(0.85), reason: '品牌红必须高彩度(不能是灰玫瑰)');
@@ -46,16 +52,19 @@ void main() {
     expect(pink.saturation, greaterThan(0.85), reason: '樱粉也要有彩度');
     expect(pink.hue, greaterThan(300.0), reason: '樱粉落在洋红一侧');
     final gap = (pink.hue - red.hue).abs();
-    expect(gap, greaterThan(25.0),
-        reason: '红与粉的色相差要够大, 否则用户分不出来(旧实现只有约 7 度)');
+    expect(gap, greaterThan(25.0), reason: '红与粉的色相差要够大, 否则用户分不出来(旧实现只有约 7 度)');
   });
 
   test('默认色板 = 改造前的品牌红(不传 accent 与传 neteaseRed 等价)', () {
     expect(AccentPalette.neteaseRed.seed, kBrandSeed);
-    expect(buildLightTheme().colorScheme.primary,
-        buildLightTheme(accent: AccentPalette.neteaseRed).colorScheme.primary);
-    expect(buildDarkTheme().colorScheme.primary,
-        buildDarkTheme(accent: AccentPalette.neteaseRed).colorScheme.primary);
+    expect(
+      buildLightTheme().colorScheme.primary,
+      buildLightTheme(accent: AccentPalette.neteaseRed).colorScheme.primary,
+    );
+    expect(
+      buildDarkTheme().colorScheme.primary,
+      buildDarkTheme(accent: AccentPalette.neteaseRed).colorScheme.primary,
+    );
   });
 
   test('OLED 纯黑与色板正交: 非红主题色下底色仍严格 #000000', () {
@@ -64,8 +73,10 @@ void main() {
     expect(theme.canvasColor, kOledBlack);
     expect(theme.colorScheme.surface, kOledBlack);
     // 主色仍来自所选色板(没被 OLDE 覆盖)
-    expect(theme.colorScheme.primary,
-        buildDarkTheme(accent: AccentPalette.blue).colorScheme.primary);
+    expect(
+      theme.colorScheme.primary,
+      buildDarkTheme(accent: AccentPalette.blue).colorScheme.primary,
+    );
   });
 
   test('AccentPalette.fromId: 已知 id 往返, 未知/空回落默认', () {
@@ -83,7 +94,9 @@ void main() {
     addTearDown(() => settings.update(accent: before));
     await settings.update(accent: AccentPalette.neteaseRed);
 
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsView(info: null))));
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
+    );
     await tester.pumpAndSettle();
 
     // 五个色点都在(键名 = accent-<id>)
@@ -105,12 +118,14 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.625)),
-        child: const Scaffold(body: SettingsView(info: null)),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.625)),
+          child: const Scaffold(body: SettingsView(info: null)),
+        ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('主题色'), findsOneWidget);
@@ -127,7 +142,9 @@ void main() {
 
     await settings.load(dir.path);
     await settings.update(accent: AccentPalette.orange);
-    final raw = jsonDecode(await File('${dir.path}/settings.json').readAsString());
+    final raw = jsonDecode(
+      await File('${dir.path}/settings.json').readAsString(),
+    );
     expect(raw['accent'], 'orange');
 
     // 模拟重启: 用同一份目录重新 load
@@ -135,5 +152,4 @@ void main() {
     await settings.load(dir.path);
     expect(settings.accent, AccentPalette.orange);
   });
-
 }

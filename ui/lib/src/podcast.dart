@@ -9,7 +9,8 @@ import 'format.dart' show formatDurationMs;
 /// 单集详情加载器. 节目列表里的 description 往往被截断甚至为空,
 /// 点开"节目详情"时用 podcast_program 再拉一次完整数据(简介/时长/音频本体).
 typedef ProgramDetailLoader = Future<rust.PodcastProgramDto> Function(
-    BigInt programId);
+  BigInt programId,
+);
 
 /// 单集详情弹层(podcast_program).
 ///
@@ -157,7 +158,9 @@ class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
                       const SizedBox(height: 16),
                       Text(
                         desc.isEmpty ? '这一集没有文字简介' : desc,
-                        style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: 1.5,
+                        ),
                       ),
                     ],
                   ),
@@ -177,8 +180,9 @@ class _ProgramDetailSheetState extends State<ProgramDetailSheet> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     '这一集没有可播放的音频',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: scheme.onSurfaceVariant),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
             ],

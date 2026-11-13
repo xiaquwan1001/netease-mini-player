@@ -92,24 +92,27 @@ class NewReleasePage extends StatelessWidget {
           top: false,
           child: TabBarView(
             children: [
-            _NewSongsTab(
-              load: loadSongs ??
-                  (area) => rust.newSongsByArea(area: area, limit: 50),
-              onPlay: onPlaySongs,
-            ),
-            _NewAlbumsTab(
-              load: loadAlbums ??
-                  (area) => rust.newAlbumsByArea(area: area, limit: 30),
-              onOpen: onOpenAlbum,
-            ),
-            _HotArtistsTab(
-              load: loadArtists ?? () => rust.hotArtists(limit: 50, offset: 0),
-              onOpen: onOpenArtist,
-            ),
-            _NewestAlbumsTab(
-              load: loadNewestAlbums ?? () => rust.newestAlbums(limit: 12),
-              onOpen: onOpenAlbum,
-            ),
+              _NewSongsTab(
+                load:
+                    loadSongs ??
+                    (area) => rust.newSongsByArea(area: area, limit: 50),
+                onPlay: onPlaySongs,
+              ),
+              _NewAlbumsTab(
+                load:
+                    loadAlbums ??
+                    (area) => rust.newAlbumsByArea(area: area, limit: 30),
+                onOpen: onOpenAlbum,
+              ),
+              _HotArtistsTab(
+                load:
+                    loadArtists ?? () => rust.hotArtists(limit: 50, offset: 0),
+                onOpen: onOpenArtist,
+              ),
+              _NewestAlbumsTab(
+                load: loadNewestAlbums ?? () => rust.newestAlbums(limit: 12),
+                onOpen: onOpenAlbum,
+              ),
             ],
           ),
         ),
@@ -185,11 +188,7 @@ class _NewSongsTabState extends State<_NewSongsTab> {
             itemBuilder: (context, s, i, songs) => ListTile(
               dense: true,
               leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
-              title: Text(
-                s.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
               subtitle: Text(
                 s.artist,
                 maxLines: 1,
@@ -206,7 +205,6 @@ class _NewSongsTabState extends State<_NewSongsTab> {
       ],
     );
   }
-
 }
 
 class _NewAlbumsTab extends StatefulWidget {
@@ -244,11 +242,7 @@ class _NewAlbumsTabState extends State<_NewAlbumsTab> {
             ),
             itemBuilder: (context, a, i, albums) => ListTile(
               leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
-              title: Text(
-                a.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              title: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
               subtitle: Text(
                 [
                   if (a.artist.isNotEmpty) a.artist,
@@ -285,11 +279,7 @@ class _HotArtistsTab extends StatelessWidget {
           size: 44,
           icon: Icons.person_outline,
         ),
-        title: Text(
-          a.name,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
+        title: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Text(formatFans(a.fans)),
         onTap: () => onOpen(a),
       ),

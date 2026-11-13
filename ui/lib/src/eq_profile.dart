@@ -83,7 +83,9 @@ class ParametricEq {
       final freq = _fmtFreq(f.freqHz);
       final gain = _fmtDb(f.gainDb);
       final q = _fmtQ(f.q);
-      buf.writeln('Filter $index: $onOff $typeName Fc $freq Hz Gain $gain dB Q $q');
+      buf.writeln(
+        'Filter $index: $onOff $typeName Fc $freq Hz Gain $gain dB Q $q',
+      );
     }
     return buf.toString();
   }
@@ -134,14 +136,16 @@ ParametricEq parseParametricEq(String text) {
         throw EqProfileException(lineNo, 'Gain $gain 超出 ±$maxEqGainDb dB');
       }
       if (q <= 0) throw EqProfileException(lineNo, 'Q 必须大于 0');
-      filters.add(EqFilter(
-        index: int.parse(filter.group(1)!),
-        enabled: filter.group(2)!.toUpperCase() == 'ON',
-        type: type,
-        freqHz: freq,
-        gainDb: gain,
-        q: q,
-      ));
+      filters.add(
+        EqFilter(
+          index: int.parse(filter.group(1)!),
+          enabled: filter.group(2)!.toUpperCase() == 'ON',
+          type: type,
+          freqHz: freq,
+          gainDb: gain,
+          q: q,
+        ),
+      );
       continue;
     }
 
@@ -196,7 +200,16 @@ String _fmtQ(double v) =>
 
 /// 默认 EQ 段中心频率(10 段 PK).
 const List<double> defaultEqBandFrequencies = [
-  20, 60, 125, 250, 500, 1000, 2000, 4000, 8000, 16000,
+  20,
+  60,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000,
 ];
 
 /// 默认曲线文本: Preamp 0.0 dB + 10 段 PK(Gain 全 0.0, Q 1.0).
@@ -205,7 +218,9 @@ String defaultEqProfileText() {
   final buf = StringBuffer()..writeln('Preamp: 0.0 dB');
   for (var i = 0; i < defaultEqBandFrequencies.length; i++) {
     final f = defaultEqBandFrequencies[i];
-    buf.writeln('Filter ${i + 1}: ON PK Fc ${_fmtFreq(f)} Hz Gain 0.0 dB Q 1.0');
+    buf.writeln(
+      'Filter ${i + 1}: ON PK Fc ${_fmtFreq(f)} Hz Gain 0.0 dB Q 1.0',
+    );
   }
   return buf.toString();
 }

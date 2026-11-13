@@ -11,22 +11,21 @@ rust.FeedEventDto event({
   int likedCount = 0,
   int commentCount = 0,
   int shareCount = 0,
-}) =>
-    rust.FeedEventDto(
-      id: BigInt.from(id),
-      threadId: 'A_EV_2_${id}_$userId',
-      userId: BigInt.from(userId),
-      kind: 'text',
-      userName: userName,
-      text: text,
-      images: const [],
-      title: '',
-      timeMs: BigInt.from(1700000000000 - id * 1000),
-      liked: false,
-      likedCount: BigInt.from(likedCount),
-      shareCount: BigInt.from(shareCount),
-      commentCount: BigInt.from(commentCount),
-    );
+}) => rust.FeedEventDto(
+  id: BigInt.from(id),
+  threadId: 'A_EV_2_${id}_$userId',
+  userId: BigInt.from(userId),
+  kind: 'text',
+  userName: userName,
+  text: text,
+  images: const [],
+  title: '',
+  timeMs: BigInt.from(1700000000000 - id * 1000),
+  liked: false,
+  likedCount: BigInt.from(likedCount),
+  shareCount: BigInt.from(shareCount),
+  commentCount: BigInt.from(commentCount),
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -47,14 +46,18 @@ void main() {
       ),
     ];
 
-    await tester.pumpWidget(host(FeedView(
-      loggedIn: true,
-      onLogin: () {},
-      onPlaySongs: (_, _) {},
-      onOpenUrl: (_) async {},
-      loadFeed: () async => events,
-      loadSubscribedArtists: () async => const [],
-    )));
+    await tester.pumpWidget(
+      host(
+        FeedView(
+          loggedIn: true,
+          onLogin: () {},
+          onPlaySongs: (_, _) {},
+          onOpenUrl: (_) async {},
+          loadFeed: () async => events,
+          loadSubscribedArtists: () async => const [],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // .first = 分类行里的那个(它在动态列表上方, 树序在前)
@@ -69,17 +72,21 @@ void main() {
       event(id: 1, userId: 10, userName: '本页艺人', likedCount: 5),
     ];
 
-    await tester.pumpWidget(host(FeedView(
-      loggedIn: true,
-      onLogin: () {},
-      onPlaySongs: (_, _) {},
-      onOpenUrl: (_) async {},
-      loadFeed: () async => events,
-      loadSubscribedArtists: () async => [
-        rust.Artist(id: BigInt.from(10), name: '本页艺人'),
-        rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
-      ],
-    )));
+    await tester.pumpWidget(
+      host(
+        FeedView(
+          loggedIn: true,
+          onLogin: () {},
+          onPlaySongs: (_, _) {},
+          onOpenUrl: (_) async {},
+          loadFeed: () async => events,
+          loadSubscribedArtists: () async => [
+            rust.Artist(id: BigInt.from(10), name: '本页艺人'),
+            rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
+          ],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('进入全部'));
@@ -102,22 +109,24 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: FeedView(
-          loggedIn: true,
-          onLogin: () {},
-          onPlaySongs: (_, _) {},
-          onOpenUrl: (_) async {},
-          loadFeed: () async => const [],
-          loadSubscribedArtists: () async => const [],
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: FeedView(
+            loggedIn: true,
+            onLogin: () {},
+            onPlaySongs: (_, _) {},
+            onOpenUrl: (_) async {},
+            loadFeed: () async => const [],
+            loadSubscribedArtists: () async => const [],
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

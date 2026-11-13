@@ -11,37 +11,40 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/settings_account_page.dart';
 
 rust.InitInfo info({required bool loggedIn}) => rust.InitInfo(
-      dataDir: '/tmp/minincm',
-      deviceId: 'dev-1',
-      loggedIn: loggedIn,
-      vip: false,
-      providers: const [],
-    );
+  dataDir: '/tmp/minincm',
+  deviceId: 'dev-1',
+  loggedIn: loggedIn,
+  vip: false,
+  providers: const [],
+);
 
 rust.AccountDto account(
   int id,
   String nickname, {
   bool active = false,
   bool vip = true,
-}) =>
-    rust.AccountDto(
-      userId: BigInt.from(id),
-      nickname: nickname,
-      active: active,
-      vip: vip,
-    );
+}) => rust.AccountDto(
+  userId: BigInt.from(id),
+  nickname: nickname,
+  active: active,
+  vip: vip,
+);
 
 Widget host(Widget child) => MaterialApp(home: child);
 
 void main() {
   testWidgets('未登录: 账号簿里的昵称/会员标不得冒充当前账号', (tester) async {
-    await tester.pumpWidget(host(AccountPage(
-      info: info(loggedIn: false),
-      isAndroid: false,
-      onLogin: () {},
-      onLogout: () async {},
-      loadAccounts: () async => [account(1822714196, '下去玩', active: true)],
-    )));
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: false),
+          isAndroid: false,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => [account(1822714196, '下去玩', active: true)],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 头部: 未登录
@@ -56,13 +59,17 @@ void main() {
   });
 
   testWidgets('已登录: 当前账号才显示 VIP 标', (tester) async {
-    await tester.pumpWidget(host(AccountPage(
-      info: info(loggedIn: true),
-      isAndroid: false,
-      onLogin: () {},
-      onLogout: () async {},
-      loadAccounts: () async => [account(1, '小明', active: true)],
-    )));
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: true),
+          isAndroid: false,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => [account(1, '小明', active: true)],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // 头部与账号簿行都会显示昵称
@@ -72,27 +79,35 @@ void main() {
   });
 
   testWidgets('账号簿为空时没有"清除本机凭据"入口', (tester) async {
-    await tester.pumpWidget(host(AccountPage(
-      info: info(loggedIn: false),
-      isAndroid: false,
-      onLogin: () {},
-      onLogout: () async {},
-      loadAccounts: () async => const [],
-    )));
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: false),
+          isAndroid: false,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => const [],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('清除本机登录凭据'), findsNothing);
   });
 
   testWidgets('清除本机凭据: 二次确认后才调用回调', (tester) async {
     var purged = 0;
-    await tester.pumpWidget(host(AccountPage(
-      info: info(loggedIn: true),
-      isAndroid: false,
-      onLogin: () {},
-      onLogout: () async {},
-      loadAccounts: () async => [account(1, '小明', active: true)],
-      onPurgeLocal: () async => purged++,
-    )));
+    await tester.pumpWidget(
+      host(
+        AccountPage(
+          info: info(loggedIn: true),
+          isAndroid: false,
+          onLogin: () {},
+          onLogout: () async {},
+          loadAccounts: () async => [account(1, '小明', active: true)],
+          onPurgeLocal: () async => purged++,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('清除本机登录凭据'));
@@ -137,12 +152,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

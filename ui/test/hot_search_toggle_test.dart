@@ -14,11 +14,11 @@ rust.HotSearchTerm hot(int rank, String keyword) =>
 // builder 里要重新构造 child —— 复用同一 widget 实例会被
 // updateChild 的 identical 短路跳过, 不会重跑 build.
 Widget host(SearchLanding Function() make) => MaterialApp(
-      home: AnimatedBuilder(
-        animation: AppSettings.instance,
-        builder: (_, _) => Scaffold(body: make()),
-      ),
-    );
+  home: AnimatedBuilder(
+    animation: AppSettings.instance,
+    builder: (_, _) => Scaffold(body: make()),
+  ),
+);
 
 SearchLanding landing() => SearchLanding(
   history: const ['七里香'],
@@ -128,12 +128,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

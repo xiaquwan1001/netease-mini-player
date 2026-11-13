@@ -6,19 +6,19 @@ import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int id, String name) => rust.SongDto(
-      id: BigInt.from(id),
-      name: name,
-      artist: '歌手$id',
-      artistId: BigInt.from(900 + id),
-      album: '专辑$id',
-      albumId: BigInt.from(800 + id),
-      coverUrl: null,
-      durationMs: BigInt.from(200000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
-    );
+  id: BigInt.from(id),
+  name: name,
+  artist: '歌手$id',
+  artistId: BigInt.from(900 + id),
+  album: '专辑$id',
+  albumId: BigInt.from(800 + id),
+  coverUrl: null,
+  durationMs: BigInt.from(200000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
+);
 
 /// 「存为歌单」面板行为测试: 全部注入假 onSaveAsPlaylist, 不联网。
 /// 宿主(main.dart)负责选歌单 sheet / 调 Rust / toast; 面板只管意图+去重+防重复。
@@ -39,17 +39,16 @@ class _SaveHarnessState extends State<SaveHarness> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        home: Scaffold(
-          body: PlayQueueSheet(
-            items: items,
-            index: items.isEmpty ? -1 : 0,
-            onSelect: (_) {},
-            onRemove: (_, _) {},
-            onSaveAsPlaylist:
-                widget.onSave ?? (songs) async => saved.add(songs),
-          ),
-        ),
-      );
+    home: Scaffold(
+      body: PlayQueueSheet(
+        items: items,
+        index: items.isEmpty ? -1 : 0,
+        onSelect: (_) {},
+        onRemove: (_, _) {},
+        onSaveAsPlaylist: widget.onSave ?? (songs) async => saved.add(songs),
+      ),
+    ),
+  );
 }
 
 Future<void> _pump(WidgetTester tester, SaveHarness harness) async {
@@ -58,14 +57,19 @@ Future<void> _pump(WidgetTester tester, SaveHarness harness) async {
 }
 
 void main() {
-  testWidgets('空队列: 不出现「存为歌单」按钮(禁用语义由不渲染表达)',
-      (tester) async {
-    await _pump(tester, SaveHarness(key: const ValueKey('empty'), songs: const []));
+  testWidgets('空队列: 不出现「存为歌单」按钮(禁用语义由不渲染表达)', (tester) async {
+    await _pump(
+      tester,
+      SaveHarness(key: const ValueKey('empty'), songs: const []),
+    );
     expect(find.byTooltip('存为歌单'), findsNothing);
   });
 
   testWidgets('非空队列: 「存为歌单」按钮出现', (tester) async {
-    await _pump(tester, SaveHarness(key: const ValueKey('nonempty'), songs: [song(1, '晴天')]));
+    await _pump(
+      tester,
+      SaveHarness(key: const ValueKey('nonempty'), songs: [song(1, '晴天')]),
+    );
     expect(find.byTooltip('存为歌单'), findsOneWidget);
   });
 
@@ -74,15 +78,13 @@ void main() {
     await _pump(tester, SaveHarness(songs: songs));
     await tester.tap(find.byTooltip('存为歌单'));
     await tester.pumpAndSettle();
-    final savedSongs = (tester.state(find.byType(SaveHarness))
-            as _SaveHarnessState)
-        .saved;
+    final savedSongs =
+        (tester.state(find.byType(SaveHarness)) as _SaveHarnessState).saved;
     expect(savedSongs, hasLength(1));
-    expect([for (final s in savedSongs.single) s.id], [
-      BigInt.one,
-      BigInt.two,
-      BigInt.from(3),
-    ]);
+    expect(
+      [for (final s in savedSongs.single) s.id],
+      [BigInt.one, BigInt.two, BigInt.from(3)],
+    );
   });
 
   testWidgets('去重: 同一首歌多次入队只传一份', (tester) async {
@@ -100,11 +102,13 @@ void main() {
     var calls = 0;
     await _pump(
       tester,
-      SaveHarness(songs: [song(1, '晴天'), song(2, '江南')],
-          onSave: (songs) async {
-        calls += 1;
-        await completer.future;
-      }),
+      SaveHarness(
+        songs: [song(1, '晴天'), song(2, '江南')],
+        onSave: (songs) async {
+          calls += 1;
+          await completer.future;
+        },
+      ),
     );
     await tester.tap(find.byTooltip('存为歌单'));
     await tester.pump();
@@ -125,10 +129,13 @@ void main() {
     var calls = 0;
     await _pump(
       tester,
-      SaveHarness(songs: [song(1, '晴天')], onSave: (songs) async {
-        calls += 1;
-        throw Exception('boom');
-      }),
+      SaveHarness(
+        songs: [song(1, '晴天')],
+        onSave: (songs) async {
+          calls += 1;
+          throw Exception('boom');
+        },
+      ),
     );
     await tester.tap(find.byTooltip('存为歌单'));
     await tester.pumpAndSettle();
@@ -144,25 +151,24 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: PlayQueueSheet(
-          items: [
-            song(1, '一首名字特别特别长的歌用于窄屏回归测试'),
-            song(2, '江南'),
-          ],
-          index: 0,
-          onSelect: (_) {},
-          onRemove: (_, _) {},
-          onSaveAsPlaylist: (_) async {},
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: PlayQueueSheet(
+            items: [song(1, '一首名字特别特别长的歌用于窄屏回归测试'), song(2, '江南')],
+            index: 0,
+            onSelect: (_) {},
+            onRemove: (_, _) {},
+            onSaveAsPlaylist: (_) async {},
+          ),
         ),
       ),
-    ));
+    );
 
     expect(tester.takeException(), isNull);
     expect(find.byTooltip('存为歌单'), findsOneWidget);
@@ -175,12 +181,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

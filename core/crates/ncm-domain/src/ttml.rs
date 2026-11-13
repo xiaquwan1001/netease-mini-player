@@ -153,10 +153,15 @@ pub fn parse_ttml(src: &str) -> Result<Vec<TtmlLine>, String> {
 
     // 收尾: 缺 end 的行/词用"下一个已知 begin"兜底(行内取下一 span begin 或行 begin)
     for i in 0..lines.len() {
-        let next_begin = lines
-            .get(i + 1)
-            .map(|l| l.start_ms)
-            .unwrap_or(lines[i].start_ms + lines[i].words.iter().map(|w| w.text.chars().count() as i64 * 200).max().unwrap_or(0));
+        let next_begin = lines.get(i + 1).map(|l| l.start_ms).unwrap_or(
+            lines[i].start_ms
+                + lines[i]
+                    .words
+                    .iter()
+                    .map(|w| w.text.chars().count() as i64 * 200)
+                    .max()
+                    .unwrap_or(0),
+        );
         if lines[i].end_ms == i64::MIN || lines[i].end_ms < lines[i].start_ms {
             lines[i].end_ms = next_begin.max(lines[i].start_ms);
         }
@@ -198,7 +203,10 @@ pub fn parse_ttml_time(s: &str) -> Option<i64> {
     let (secs, ms) = match rest.split_once('.') {
         Some((sec, frac)) => {
             // 小数部分右补零到毫秒: "5"->500, "54"->540, "541"->541
-            let mut digits = frac.chars().take_while(|c| c.is_ascii_digit()).collect::<String>();
+            let mut digits = frac
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>();
             let negative_ok = digits.len() <= 3;
             if !negative_ok {
                 digits.truncate(3);
@@ -221,7 +229,10 @@ fn find_tag(src: &str, from: usize, name: &str) -> Option<usize> {
         let idx = src[pos..].find(&needle)? + pos;
         // 排除 <pfoo> 之类: 后一个字符必须是空白/'>'/'/'
         let after = src[idx + needle.len()..].chars().next();
-        if matches!(after, Some(' ') | Some('\t') | Some('\n') | Some('\r') | Some('>') | Some('/')) {
+        if matches!(
+            after,
+            Some(' ') | Some('\t') | Some('\n') | Some('\r') | Some('>') | Some('/')
+        ) {
             return Some(idx);
         }
         pos = idx + needle.len();
@@ -391,7 +402,11 @@ mod tests {
     #[test]
     fn empty_body_ok() {
         assert!(parse_ttml(r#"<tt><body></body></tt>"#).unwrap().is_empty());
-        assert!(parse_ttml(r#"<tt><body><p begin="1" end="2"/></body></tt>"#).unwrap().is_empty());
+        assert!(
+            parse_ttml(r#"<tt><body><p begin="1" end="2"/></body></tt>"#)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -402,20 +417,24 @@ mod tests {
 
     #[test]
     fn missing_begin_attribute_errors() {
-        let e = parse_ttml("<tt><body>\n<p end=\"2.0\"><span end=\"2\">x</span></p>\n</body></tt>").unwrap_err();
+        let e = parse_ttml("<tt><body>\n<p end=\"2.0\"><span end=\"2\">x</span></p>\n</body></tt>")
+            .unwrap_err();
         assert!(e.contains("missing begin"), "got: {e}");
         assert!(e.contains("line"), "got: {e}");
     }
 
     #[test]
     fn bad_time_value_errors() {
-        let e = parse_ttml("<tt><body>\n<p begin=\"xx\" end=\"2.0\"><span>x</span></p>\n</body></tt>").unwrap_err();
+        let e =
+            parse_ttml("<tt><body>\n<p begin=\"xx\" end=\"2.0\"><span>x</span></p>\n</body></tt>")
+                .unwrap_err();
         assert!(e.contains("bad begin time"), "got: {e}");
     }
 
     #[test]
     fn unclosed_p_errors() {
-        let e = parse_ttml("<tt><body>\n<p begin=\"1.0\" end=\"2.0\"><span>x</span>\n</body></tt>").unwrap_err();
+        let e = parse_ttml("<tt><body>\n<p begin=\"1.0\" end=\"2.0\"><span>x</span>\n</body></tt>")
+            .unwrap_err();
         assert!(e.contains("missing </p>"), "got: {e}");
     }
 

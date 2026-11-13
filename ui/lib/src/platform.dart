@@ -59,7 +59,14 @@ class PlatformBridge {
     final dir = Directory(_downloadDir());
     await dir.create(recursive: true);
     final path = '${dir.path}/$safe';
-    final args = <String>['-L', '--fail', '--silent', '--show-error', '-o', path];
+    final args = <String>[
+      '-L',
+      '--fail',
+      '--silent',
+      '--show-error',
+      '-o',
+      path,
+    ];
     if (userAgent != null && userAgent.isNotEmpty) {
       args.addAll(['-A', userAgent]);
     }

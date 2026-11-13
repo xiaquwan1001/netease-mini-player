@@ -13,28 +13,27 @@ rust.Comment serverComment(
   String name = '下去玩',
   String? avatar = 'https://p1.music.126.net/a.jpg',
   int uid = _myUid,
-}) =>
-    rust.Comment(
-      id: BigInt.from(id),
-      userId: BigInt.from(uid),
-      userName: name,
-      avatarUrl: avatar,
-      content: content,
-      timeMs: BigInt.from(1700000000000),
-      likedCount: BigInt.zero,
-      liked: false,
-      replyCount: BigInt.zero,
-      ipLocation: '安徽',
-      hot: false,
-      parentId: BigInt.zero,
-    );
+}) => rust.Comment(
+  id: BigInt.from(id),
+  userId: BigInt.from(uid),
+  userName: name,
+  avatarUrl: avatar,
+  content: content,
+  timeMs: BigInt.from(1700000000000),
+  likedCount: BigInt.zero,
+  liked: false,
+  replyCount: BigInt.zero,
+  ipLocation: '安徽',
+  hot: false,
+  parentId: BigInt.zero,
+);
 
 rust.CommentPage pageOf(List<rust.Comment> items) => rust.CommentPage(
-      threadId: 'R_SO_4_1',
-      comments: items,
-      total: BigInt.from(items.length),
-      hasMore: false,
-    );
+  threadId: 'R_SO_4_1',
+  comments: items,
+  total: BigInt.from(items.length),
+  hasMore: false,
+);
 
 void main() {
   testWidgets('发表成功: 乐观项被服务端真实昵称/头像替换, 且不重复', (tester) async {
@@ -43,29 +42,31 @@ void main() {
 
     var sends = 0;
     var loads = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CommentThread(
-            kind: 'song',
-            resourceId: BigInt.one,
-            loadPage: (limit, offset) async {
-              loads++;
-              // 第一次什么都没有; 发表后的静默重取才有那条评论
-              return pageOf(sends == 0 ? const [] : [serverComment(7, '早')]);
-            },
-            loadHot: (limit, offset) async => pageOf(const []),
-            like: (commentId, liked) async => true,
-            loadReplies: (parentId, limit) async => pageOf(const []),
-            reply: (commentId, content) async {
-              sends++;
-              return true;
-            },
-            myUid: BigInt.from(_myUid),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CommentThread(
+              kind: 'song',
+              resourceId: BigInt.one,
+              loadPage: (limit, offset) async {
+                loads++;
+                // 第一次什么都没有; 发表后的静默重取才有那条评论
+                return pageOf(sends == 0 ? const [] : [serverComment(7, '早')]);
+              },
+              loadHot: (limit, offset) async => pageOf(const []),
+              like: (commentId, liked) async => true,
+              loadReplies: (parentId, limit) async => pageOf(const []),
+              reply: (commentId, content) async {
+                sends++;
+                return true;
+              },
+              myUid: BigInt.from(_myUid),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump(); // 首帧
     await tester.pump(); // 第一页(空)
 
@@ -100,30 +101,32 @@ void main() {
 
     var sends = 0;
     var loads = 0;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CommentThread(
-            kind: 'song',
-            resourceId: BigInt.one,
-            loadPage: (limit, offset) async {
-              loads++;
-              if (loads == 1) return pageOf(const []);
-              // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer
-              throw Exception('[internal] boom');
-            },
-            loadHot: (limit, offset) async => pageOf(const []),
-            like: (commentId, liked) async => true,
-            loadReplies: (parentId, limit) async => pageOf(const []),
-            reply: (commentId, content) async {
-              sends++;
-              return true;
-            },
-            myUid: BigInt.from(_myUid),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CommentThread(
+              kind: 'song',
+              resourceId: BigInt.one,
+              loadPage: (limit, offset) async {
+                loads++;
+                if (loads == 1) return pageOf(const []);
+                // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer
+                throw Exception('[internal] boom');
+              },
+              loadHot: (limit, offset) async => pageOf(const []),
+              like: (commentId, liked) async => true,
+              loadReplies: (parentId, limit) async => pageOf(const []),
+              reply: (commentId, content) async {
+                sends++;
+                return true;
+              },
+              myUid: BigInt.from(_myUid),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump();
 
@@ -152,26 +155,29 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CommentThread(
-            kind: 'song',
-            resourceId: BigInt.one,
-            loadPage: (limit, offset) async => pageOf([serverComment(7, '我发的一条很长很长很长很长的评论')]),
-            loadHot: (limit, offset) async => pageOf(const []),
-            like: (commentId, liked) async => true,
-            loadReplies: (parentId, limit) async => pageOf(const []),
-            reply: (commentId, content) async => true,
-            myUid: BigInt.from(_myUid),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: CommentThread(
+              kind: 'song',
+              resourceId: BigInt.one,
+              loadPage: (limit, offset) async =>
+                  pageOf([serverComment(7, '我发的一条很长很长很长很长的评论')]),
+              loadHot: (limit, offset) async => pageOf(const []),
+              like: (commentId, liked) async => true,
+              loadReplies: (parentId, limit) async => pageOf(const []),
+              reply: (commentId, content) async => true,
+              myUid: BigInt.from(_myUid),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump();
     expect(tester.takeException(), isNull);

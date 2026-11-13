@@ -18,7 +18,10 @@ pub struct GainLimiter {
 
 impl Default for GainLimiter {
     fn default() -> Self {
-        Self { current_db: 0.0, max_slew_db_per_sec: DEFAULT_MAX_SLEW_DB_PER_SEC }
+        Self {
+            current_db: 0.0,
+            max_slew_db_per_sec: DEFAULT_MAX_SLEW_DB_PER_SEC,
+        }
     }
 }
 
@@ -50,7 +53,11 @@ impl GainLimiter {
     /// 推进 [dt_secs] 秒, 返回这一帧应施加的增益(dB)
     pub fn step(&mut self, target_db: f32, dt_secs: f32) -> f32 {
         let target = sanitize(target_db);
-        let dt = if dt_secs.is_finite() && dt_secs > 0.0 { dt_secs } else { 0.0 };
+        let dt = if dt_secs.is_finite() && dt_secs > 0.0 {
+            dt_secs
+        } else {
+            0.0
+        };
         let max_step = self.max_slew_db_per_sec * dt;
         let delta = (target - self.current_db).clamp(-max_step, max_step);
         self.current_db = sanitize(self.current_db + delta);
@@ -127,8 +134,14 @@ mod tests {
 
     #[test]
     fn invalid_slew_falls_back_to_default() {
-        assert_eq!(GainLimiter::with_slew(0.0).max_slew_db_per_sec, DEFAULT_MAX_SLEW_DB_PER_SEC);
-        assert_eq!(GainLimiter::with_slew(-5.0).max_slew_db_per_sec, DEFAULT_MAX_SLEW_DB_PER_SEC);
+        assert_eq!(
+            GainLimiter::with_slew(0.0).max_slew_db_per_sec,
+            DEFAULT_MAX_SLEW_DB_PER_SEC
+        );
+        assert_eq!(
+            GainLimiter::with_slew(-5.0).max_slew_db_per_sec,
+            DEFAULT_MAX_SLEW_DB_PER_SEC
+        );
         assert_eq!(GainLimiter::with_slew(10.0).max_slew_db_per_sec, 10.0);
     }
 }

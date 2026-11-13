@@ -35,54 +35,59 @@ VipPageData fakeData({
   bool isVip = true,
   String? avatarUrl,
   List<VipTaskView>? tasks,
-}) =>
-    VipPageData(
-      isLoggedIn: loggedIn,
-      profile: loggedIn
-          ? VipProfileView(
-              nickname: '测试用户',
-              avatarUrl: avatarUrl,
-              level: 3,
-              levelName: '黑胶·叁',
-              isVip: isVip,
-              expireDate: '2026-11-10',
-              growthValue: 2195,
-              todayGrowthValue: 6,
-            )
-          : null,
-      sign: loggedIn
-          ? VipSignView(days: sampleDays(signedToday: signedToday), signedToday: signedToday)
-          : null,
-      tasks: tasks ??
-          const [
-            VipTaskView(
-              title: '浏览黑胶时光机',
-              rewardText: '成长值+3',
-              progress: 0,
-              total: 0,
-              showProgress: true,
-            ),
-            VipTaskView(
-              title: '每日听歌 30 分钟',
-              rewardText: '成长值+2',
-              progress: 30,
-              total: 60,
-            ),
-            VipTaskView(
-              title: '已完成任务',
-              rewardText: '云贝+10',
-              progress: 3,
-              total: 3,
-              done: true,
-            ),
-          ],
-    );
+}) => VipPageData(
+  isLoggedIn: loggedIn,
+  profile: loggedIn
+      ? VipProfileView(
+          nickname: '测试用户',
+          avatarUrl: avatarUrl,
+          level: 3,
+          levelName: '黑胶·叁',
+          isVip: isVip,
+          expireDate: '2026-11-10',
+          growthValue: 2195,
+          todayGrowthValue: 6,
+        )
+      : null,
+  sign: loggedIn
+      ? VipSignView(
+          days: sampleDays(signedToday: signedToday),
+          signedToday: signedToday,
+        )
+      : null,
+  tasks:
+      tasks ??
+      const [
+        VipTaskView(
+          title: '浏览黑胶时光机',
+          rewardText: '成长值+3',
+          progress: 0,
+          total: 0,
+          showProgress: true,
+        ),
+        VipTaskView(
+          title: '每日听歌 30 分钟',
+          rewardText: '成长值+2',
+          progress: 30,
+          total: 60,
+        ),
+        VipTaskView(
+          title: '已完成任务',
+          rewardText: '云贝+10',
+          progress: 3,
+          total: 3,
+          done: true,
+        ),
+      ],
+);
 
 /// 签到卡片里的圆点(28x28), 用来数渲染了几格
-Finder signDots() => find.byWidgetPredicate((w) =>
-    w is Container &&
-    w.constraints?.maxWidth == 28 &&
-    w.constraints?.maxHeight == 28);
+Finder signDots() => find.byWidgetPredicate(
+  (w) =>
+      w is Container &&
+      w.constraints?.maxWidth == 28 &&
+      w.constraints?.maxHeight == 28,
+);
 
 /// 不发起任何真实请求的 HttpClient 桩
 class _NoopHttpOverrides extends HttpOverrides {
@@ -123,12 +128,73 @@ class _NoopRequest implements HttpClientRequest {
 
 /// 1x1 透明 PNG
 final List<int> _tinyPng = <int>[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-  0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-  0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0A,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ];
 
 class _NoopResponse extends Stream<List<int>> implements HttpClientResponse {
@@ -147,13 +213,12 @@ class _NoopResponse extends Stream<List<int>> implements HttpClientResponse {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      Stream<List<int>>.value(_tinyPng).listen(
-        onData,
-        onError: onError,
-        onDone: onDone,
-        cancelOnError: cancelOnError,
-      );
+  }) => Stream<List<int>>.value(_tinyPng).listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
@@ -181,12 +246,16 @@ Widget host(VipPage page, {Size? size, double textScale = 1.0}) {
 void main() {
   testWidgets('正常态: 会员卡/签到/任务全部渲染', (tester) async {
     var calls = 0;
-    await tester.pumpWidget(host(VipPage(
-      load: () async {
-        calls++;
-        return fakeData();
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async {
+            calls++;
+            return fakeData();
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(calls, 1);
@@ -208,9 +277,9 @@ void main() {
   });
 
   testWidgets('签到文案: 今天已签 / 今天未签两种', (tester) async {
-    await tester.pumpWidget(host(VipPage(
-      load: () async => fakeData(signedToday: true),
-    )));
+    await tester.pumpWidget(
+      host(VipPage(load: () async => fakeData(signedToday: true))),
+    );
     await tester.pumpAndSettle();
 
     // 前 3 天 + 今天 = 4 天已签
@@ -222,10 +291,14 @@ void main() {
     expect(signDots(), findsNWidgets(7));
 
     // 换 key 强制重建 State, 否则 initState 不会重跑(loader 不换)
-    await tester.pumpWidget(host(VipPage(
-      key: const ValueKey('un-signed'),
-      load: () async => fakeData(signedToday: false),
-    )));
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          key: const ValueKey('un-signed'),
+          load: () async => fakeData(signedToday: false),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('本周已签 3/7 天'), findsOneWidget);
@@ -237,10 +310,14 @@ void main() {
 
   testWidgets('未登录空态: 文案 + 登录按钮回调', (tester) async {
     var loginCalls = 0;
-    await tester.pumpWidget(host(VipPage(
-      load: () async => fakeData(loggedIn: false),
-      onLogin: () => loginCalls++,
-    )));
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async => fakeData(loggedIn: false),
+          onLogin: () => loginCalls++,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('登录后可查看会员信息'), findsOneWidget);
@@ -252,13 +329,17 @@ void main() {
 
   testWidgets('错误态: friendlyError 文案 + 点重试再次调用 loader', (tester) async {
     var calls = 0;
-    await tester.pumpWidget(host(VipPage(
-      load: () async {
-        calls++;
-        if (calls == 1) throw Exception('network boom');
-        return fakeData();
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async {
+            calls++;
+            if (calls == 1) throw Exception('network boom');
+            return fakeData();
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(calls, 1);
@@ -273,27 +354,33 @@ void main() {
   });
 
   testWidgets('任务条: total 为 0 / showProgress 为 false 时不渲染进度条', (tester) async {
-    await tester.pumpWidget(host(VipPage(
-      load: () async => fakeData(tasks: const [
-        // targets == null -> total 0: 无进度条
-        VipTaskView(title: '浏览黑胶时光机', rewardText: '成长值+3'),
-        // showProgress == false: 无进度条
-        VipTaskView(
-          title: '看好礼',
-          rewardText: '成长值+1',
-          progress: 1,
-          total: 5,
-          showProgress: false,
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async => fakeData(
+            tasks: const [
+              // targets == null -> total 0: 无进度条
+              VipTaskView(title: '浏览黑胶时光机', rewardText: '成长值+3'),
+              // showProgress == false: 无进度条
+              VipTaskView(
+                title: '看好礼',
+                rewardText: '成长值+1',
+                progress: 1,
+                total: 5,
+                showProgress: false,
+              ),
+              // 有 total: 有进度条
+              VipTaskView(
+                title: '每日听歌',
+                rewardText: '成长值+2',
+                progress: 30,
+                total: 60,
+              ),
+            ],
+          ),
         ),
-        // 有 total: 有进度条
-        VipTaskView(
-          title: '每日听歌',
-          rewardText: '成长值+2',
-          progress: 30,
-          total: 60,
-        ),
-      ]),
-    )));
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('浏览黑胶时光机'), findsOneWidget);
@@ -309,26 +396,35 @@ void main() {
     final saved = HttpOverrides.current;
     HttpOverrides.global = _NoopHttpOverrides();
     addTearDown(() => HttpOverrides.global = saved);
-    await tester.pumpWidget(host(VipPage(
-      load: () async => fakeData(avatarUrl: 'https://p1.music.126.net/a.jpg'),
-    )));
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async =>
+              fakeData(avatarUrl: 'https://p1.music.126.net/a.jpg'),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar).first);
     expect(avatar.backgroundImage, isA<NetworkImage>());
-    expect((avatar.backgroundImage! as NetworkImage).url,
-        'https://p1.music.126.net/a.jpg');
+    expect(
+      (avatar.backgroundImage! as NetworkImage).url,
+      'https://p1.music.126.net/a.jpg',
+    );
     expect((avatar.backgroundImage! as NetworkImage).headers, isNull);
   });
 
   testWidgets('300dp 窄屏 + 1.25 倍字号不溢出', (tester) async {
     await tester.binding.setSurfaceSize(const Size(300, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(host(
-      VipPage(load: () async => fakeData()),
-      size: const Size(300, 600),
-      textScale: 1.25,
-    ));
+    await tester.pumpWidget(
+      host(
+        VipPage(load: () async => fakeData()),
+        size: const Size(300, 600),
+        textScale: 1.25,
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);

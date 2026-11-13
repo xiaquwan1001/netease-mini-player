@@ -13,15 +13,22 @@ List<String> recordSystemCalls(WidgetTester tester) {
       return null;
     },
   );
-  addTearDown(() => tester.binding.defaultBinaryMessenger
-      .setMockMethodCallHandler(SystemChannels.platform, null));
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
   return calls;
 }
 
 /// HomePage 的 bootstrap 会去打平台通道/Rust(测试里必然失败 → 进错误态),
 /// 同时启动 500ms 轮询 Timer, 所以只 pump 不 pumpAndSettle, 退出时把树换掉停 Timer.
-Future<void> pumpHome(WidgetTester tester,
-    {Size size = const Size(1200, 2400), TextScaler? scaler}) async {
+Future<void> pumpHome(
+  WidgetTester tester, {
+  Size size = const Size(1200, 2400),
+  TextScaler? scaler,
+}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
@@ -29,14 +36,16 @@ Future<void> pumpHome(WidgetTester tester,
   // 底部导航/播放条现在由根布局的 PlayerBarHost 渲染(见 main.dart),
   // 测试也走同一条壳, 否则 NavigationBar 不会出现。
   addTearDown(() => playerBarSlot.value = null);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) =>
-        PlayerBarHost(content: child ?? const SizedBox.shrink()),
-    home: MediaQuery(
-      data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
-      child: const HomePage(),
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) =>
+          PlayerBarHost(content: child ?? const SizedBox.shrink()),
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+        child: const HomePage(),
+      ),
     ),
-  ));
+  );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 16));
   addTearDown(() async {
@@ -124,7 +133,11 @@ void main() {
     expect(state.lyrics, isFalse);
     expect(state.backs, 1);
     expect(find.text('搜索页'), findsOneWidget);
-    expect(calls, isNot(contains('SystemNavigator.pop')), reason: '收歌词不该退出 App');
+    expect(
+      calls,
+      isNot(contains('SystemNavigator.pop')),
+      reason: '收歌词不该退出 App',
+    );
 
     // 二级态退干净后再按一次才交还系统
     await tester.binding.handlePopRoute();
@@ -141,7 +154,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     // 2026-11-09: 顶部栏不再重复底部导航的关键词 —— 非首 tab 干脆没有 AppBar, 高度让给内容
     expect(find.byType(AppBar), findsNothing);
-    final navOnRecommend = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    final navOnRecommend = tester.widget<NavigationBar>(
+      find.byType(NavigationBar),
+    );
     expect(navOnRecommend.selectedIndex, 1);
 
     final handled = await tester.binding.handlePopRoute();
@@ -171,8 +186,11 @@ void main() {
 
   testWidgets('300dp + 1.25 字号: 首页壳不溢出, 栈底返回仍交还系统', (tester) async {
     final calls = recordSystemCalls(tester);
-    await pumpHome(tester,
-        size: const Size(300, 640), scaler: const TextScaler.linear(1.25));
+    await pumpHome(
+      tester,
+      size: const Size(300, 640),
+      scaler: const TextScaler.linear(1.25),
+    );
     expect(tester.takeException(), isNull);
 
     final handled = await tester.binding.handlePopRoute();

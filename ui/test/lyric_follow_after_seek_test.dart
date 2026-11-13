@@ -11,19 +11,28 @@ import 'package:minincm/src/word_lyric_view.dart';
 /// 3. follow 恢复(false -> true)时, 即使当前句没变也要立刻滚回当前行
 ///    (WordLyricView.didUpdateWidget), 不用等下一句.
 
-Widget _host(Widget child) =>
-    MaterialApp(home: Scaffold(body: Center(child: SizedBox(height: 400, child: child))));
+Widget _host(Widget child) => MaterialApp(
+  home: Scaffold(
+    body: Center(child: SizedBox(height: 400, child: child)),
+  ),
+);
 
 const double _extent = 56;
 
 List<WordLyricLineData> _lines(int n) => [
-      for (var i = 0; i < n; i++)
-        WordLyricLineData(
+  for (var i = 0; i < n; i++)
+    WordLyricLineData(
+      startMs: i * 1000,
+      endMs: i * 1000 + 900,
+      words: [
+        WordLyricWord(
           startMs: i * 1000,
           endMs: i * 1000 + 900,
-          words: [WordLyricWord(startMs: i * 1000, endMs: i * 1000 + 900, text: 'line-$i')],
+          text: 'line-$i',
         ),
-    ];
+      ],
+    ),
+];
 
 /// 复刻 main.dart 的歌词跟随骨架: NotificationListener 判拖动暂停 +
 /// WordLyricView(autoScroll) 自动滚动; seek()/locate() 对应主界面同名路径.
@@ -83,7 +92,9 @@ void main() {
 
   Future<FollowHarnessState> pump(WidgetTester tester, int initialMs) async {
     final position = ValueNotifier<int>(initialMs);
-    await tester.pumpWidget(_host(FollowHarness(lines: lines, position: position)));
+    await tester.pumpWidget(
+      _host(FollowHarness(lines: lines, position: position)),
+    );
     await tester.pumpAndSettle();
     return tester.state<FollowHarnessState>(find.byType(FollowHarness));
   }
@@ -97,8 +108,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(state.follow, isTrue, reason: 'seek 之后必须恢复自动跟随');
-    expect(state.controller.offset, _targetOffset(20, 400),
-        reason: 'seek 后列表要滚到新当前句');
+    expect(
+      state.controller.offset,
+      _targetOffset(20, 400),
+      reason: 'seek 后列表要滚到新当前句',
+    );
   });
 
   testWidgets('歌词区自身拖动后 follow 暂停, 下一句不抢滚动', (tester) async {
@@ -133,8 +147,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(state.follow, isTrue);
-    expect(state.controller.offset, _targetOffset(25, 400),
-        reason: '定位要恢复跟随并滚回当前句(即使句号没变过)');
+    expect(
+      state.controller.offset,
+      _targetOffset(25, 400),
+      reason: '定位要恢复跟随并滚回当前句(即使句号没变过)',
+    );
   });
 
   testWidgets('连续两次 seek 都能定位, 不回退成只定位一次', (tester) async {
@@ -149,8 +166,11 @@ void main() {
     state.seek(22000);
     await tester.pumpAndSettle();
     expect(state.follow, isTrue, reason: '第二次 seek 后跟随仍在');
-    expect(state.controller.offset, _targetOffset(22, 400),
-        reason: '连续 seek 每次都要重新定位');
+    expect(
+      state.controller.offset,
+      _targetOffset(22, 400),
+      reason: '连续 seek 每次都要重新定位',
+    );
   });
 
   testWidgets('300dp + 1.25 字号: seek 后跟随不溢出', (tester) async {
@@ -159,19 +179,21 @@ void main() {
     addTearDown(tester.view.reset);
     final position = ValueNotifier<int>(500);
     addTearDown(position.dispose);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: Center(
-            child: SizedBox(
-              height: 400,
-              child: FollowHarness(lines: lines, position: position),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: Center(
+              child: SizedBox(
+                height: 400,
+                child: FollowHarness(lines: lines, position: position),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     final state = tester.state<FollowHarnessState>(find.byType(FollowHarness));
@@ -189,12 +211,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

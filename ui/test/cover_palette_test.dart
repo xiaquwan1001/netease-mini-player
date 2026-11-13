@@ -31,8 +31,16 @@ Future<List<int>> _imageBytes(ui.Image image) async {
 }
 
 /// 纯色/双色合成封面
-Future<ui.Image> _solidImage(int r, int g, int b,
-    {int w = 32, int h = 32, int? r2, int? g2, int? b2}) async {
+Future<ui.Image> _solidImage(
+  int r,
+  int g,
+  int b, {
+  int w = 32,
+  int h = 32,
+  int? r2,
+  int? g2,
+  int? b2,
+}) async {
   final rgba = <int>[];
   for (var y = 0; y < h; y++) {
     for (var x = 0; x < w; x++) {
@@ -71,15 +79,13 @@ class _CountingImageProvider extends ImageProvider<_CountingImageProvider> {
     ImageDecoderCallback decode,
   ) {
     resolveCount++;
-    return MultiFrameImageStreamCompleter(
-      codec: _codec(),
-      scale: 1.0,
-    );
+    return MultiFrameImageStreamCompleter(codec: _codec(), scale: 1.0);
   }
 
   Future<ui.Codec> _codec() async {
     final buffer = await ui.ImmutableBuffer.fromUint8List(
-        Uint8List.fromList(_rgba));
+      Uint8List.fromList(_rgba),
+    );
     final descriptor = ui.ImageDescriptor.raw(
       buffer,
       width: _w,
@@ -179,8 +185,10 @@ void main() {
     test('坏数据不抛异常: 空字节 / 长度不符 / 尺寸非法 → null', () {
       expect(paletteFromBytes(Uint8List(0), 0, 0), isNull);
       expect(paletteFromBytes(Uint8List.fromList([1, 2, 3]), 4, 4), isNull);
-      expect(paletteFromBytes(Uint8List.fromList([255, 0, 0, 255]), -1, 1),
-          isNull);
+      expect(
+        paletteFromBytes(Uint8List.fromList([255, 0, 0, 255]), -1, 1),
+        isNull,
+      );
     });
   });
 
@@ -190,8 +198,14 @@ void main() {
       final rgba = await _imageBytes(img);
       final provider = _CountingImageProvider(rgba, 32, 32);
 
-      final p1 = await paletteFromUrl('file://test-red-blue', provider: provider);
-      final p2 = await paletteFromUrl('file://test-red-blue', provider: provider);
+      final p1 = await paletteFromUrl(
+        'file://test-red-blue',
+        provider: provider,
+      );
+      final p2 = await paletteFromUrl(
+        'file://test-red-blue',
+        provider: provider,
+      );
       expect(p1, isNotNull);
       expect(p2, isNotNull);
       expect(provider.resolveCount, 1, reason: '第二次调用应命中缓存');
@@ -228,42 +242,51 @@ void main() {
     }
 
     testWidgets('palette=null: 不改变背景(decoration 为 null, 透明直通)', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: CoverBackdrop(
-          palette: null,
-          child: const SizedBox(key: Key('inner'), width: 50, height: 50),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CoverBackdrop(
+            palette: null,
+            child: const SizedBox(key: Key('inner'), width: 50, height: 50),
+          ),
         ),
-      ));
+      );
       expect(decorationOf(tester, const Key('inner')), isNull);
     });
 
     testWidgets('palette=isFallback: 同样透明直通回退主题', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: CoverBackdrop(
-          palette: const CoverPalette(
-            primary: Color(0xFF888888),
-            secondary: Color(0xFF888888),
-            onPrimary: Color(0xFF111111),
-            backgroundGradient: [Color(0xFF222222), Color(0xFF333333)],
-            isFallback: true,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CoverBackdrop(
+            palette: const CoverPalette(
+              primary: Color(0xFF888888),
+              secondary: Color(0xFF888888),
+              onPrimary: Color(0xFF111111),
+              backgroundGradient: [Color(0xFF222222), Color(0xFF333333)],
+              isFallback: true,
+            ),
+            child: const SizedBox(key: Key('inner'), width: 50, height: 50),
           ),
-          child: const SizedBox(key: Key('inner'), width: 50, height: 50),
         ),
-      ));
+      );
       expect(decorationOf(tester, const Key('inner')), isNull);
     });
 
     testWidgets('有 palette: 背景与默认不同(渐变 decoration), 300ms 过渡', (tester) async {
-      await tester.pumpWidget(MaterialApp(
-        home: CoverBackdrop(
-          palette: palette,
-          child: const SizedBox(key: Key('inner'), width: 50, height: 50),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CoverBackdrop(
+            palette: palette,
+            child: const SizedBox(key: Key('inner'), width: 50, height: 50),
+          ),
         ),
-      ));
+      );
       final deco = decorationOf(tester, const Key('inner'));
       expect(deco, isNotNull);
       expect(deco!.gradient, isA<LinearGradient>());
-      expect((deco.gradient! as LinearGradient).colors, palette.backgroundGradient);
+      expect(
+        (deco.gradient! as LinearGradient).colors,
+        palette.backgroundGradient,
+      );
       // 过渡动画: 先未到 300ms 再 pump 到结束, 不抛异常
       await tester.pump(const Duration(milliseconds: 150));
       await tester.pumpAndSettle();
@@ -273,24 +296,26 @@ void main() {
       tester.view.physicalSize = const Size(300, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.reset);
-      await tester.pumpWidget(MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-          child: Scaffold(
-            body: CoverBackdrop(
-              palette: palette,
-              child: Center(
-                child: Text(
-                  '一首名字特别特别长的歌名用于窄屏回归测试',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+            child: Scaffold(
+              body: CoverBackdrop(
+                palette: palette,
+                child: Center(
+                  child: Text(
+                    '一首名字特别特别长的歌名用于窄屏回归测试',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ));
+      );
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -304,14 +329,16 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }
 
 // Color → 0..255 通道助手(测试里也要避开弃用的 .red/.green/.blue)

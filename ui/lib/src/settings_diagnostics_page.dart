@@ -10,6 +10,7 @@ import 'rust/api.dart' as rust;
 Future<void> showDiagnosticsPage(
   BuildContext context, {
   rust.InitInfo? info,
+
   /// 测试注入: FFI ping
   Future<String> Function()? ping,
 }) {
@@ -126,10 +127,10 @@ class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
     final subtitle = _running
         ? '正在自检…'
         : _result != null
-            ? '通道正常 ($_elapsedMs ms): $_result'
-            : _error != null
-                ? '通道异常 ($_elapsedMs ms): $_error'
-                : '调用 Rust FFI ping 验证 Dart⇄Rust 通道';
+        ? '通道正常 ($_elapsedMs ms): $_result'
+        : _error != null
+        ? '通道异常 ($_elapsedMs ms): $_error'
+        : '调用 Rust FFI ping 验证 Dart⇄Rust 通道';
     return ListTile(
       leading: _running
           ? const SizedBox(
@@ -141,13 +142,13 @@ class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
               _result != null
                   ? Icons.check_circle_outline
                   : _error != null
-                      ? Icons.error_outline
-                      : Icons.monitor_heart_outlined,
+                  ? Icons.error_outline
+                  : Icons.monitor_heart_outlined,
               color: _result != null
                   ? Theme.of(context).colorScheme.primary
                   : _error != null
-                      ? Theme.of(context).colorScheme.error
-                      : null,
+                  ? Theme.of(context).colorScheme.error
+                  : null,
             ),
       title: const Text('Rust 通道自检'),
       subtitle: Text(subtitle),
@@ -167,9 +168,7 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         title,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
+        style: Theme.of(context).textTheme.titleSmall
             ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );

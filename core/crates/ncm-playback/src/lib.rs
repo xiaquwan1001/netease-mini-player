@@ -33,7 +33,11 @@ impl PlaybackTuning {
     /// 收敛到合法范围(设置页与 FFI 都可能传越界值, 防御性处理)
     pub fn sanitized(self) -> Self {
         Self {
-            gain_db: if self.gain_db.is_finite() { self.gain_db.clamp(-40.0, 12.0) } else { 0.0 },
+            gain_db: if self.gain_db.is_finite() {
+                self.gain_db.clamp(-40.0, 12.0)
+            } else {
+                0.0
+            },
             fade_ms: self.fade_ms.min(5_000),
             eq: self.eq,
         }
@@ -80,7 +84,10 @@ impl From<std::io::Error> for PlaybackError {
 }
 
 enum Cmd {
-    Play { track_id: u64, path: String },
+    Play {
+        track_id: u64,
+        path: String,
+    },
     Pause,
     Resume,
     Stop,
@@ -101,7 +108,10 @@ pub struct Player {
 impl Player {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::channel::<Cmd>();
-        let state = Arc::new(Mutex::new(PlayerState { volume: 1.0, ..Default::default() }));
+        let state = Arc::new(Mutex::new(PlayerState {
+            volume: 1.0,
+            ..Default::default()
+        }));
         let tuning = Arc::new(Mutex::new(PlaybackTuning::default()));
         let thread_state = Arc::clone(&state);
         let thread_tuning = Arc::clone(&tuning);
@@ -127,7 +137,10 @@ impl Player {
     }
 
     pub fn play_file(&self, track_id: u64, path: impl Into<String>) {
-        let _ = self.tx.send(Cmd::Play { track_id, path: path.into() });
+        let _ = self.tx.send(Cmd::Play {
+            track_id,
+            path: path.into(),
+        });
     }
 
     pub fn pause(&self) {
@@ -184,7 +197,9 @@ fn effective_volume_db(user_volume: f32, gain_db: f32) -> f32 {
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod backend {
     use super::*;
-    use rodio::{ChannelCount, Decoder, DeviceSinkBuilder, Player as RodioPlayer, Sample, SampleRate, Source};
+    use rodio::{
+        ChannelCount, Decoder, DeviceSinkBuilder, Player as RodioPlayer, Sample, SampleRate, Source,
+    };
     use std::fs::File;
 
     /// EQ 包装源: 逐样本处理, 不缓冲(因此 span/时长与原始 decoder 完全对齐)
@@ -201,7 +216,12 @@ mod backend {
     {
         fn new(input: I, chain: biquad::EqChain) -> Self {
             let channels = input.channels().get() as usize;
-            Self { input, chain, channel: 0, channels }
+            Self {
+                input,
+                chain,
+                channel: 0,
+                channels,
+            }
         }
     }
 
@@ -295,7 +315,8 @@ mod backend {
                                 player.play();
                                 if let Ok(mut st) = state.lock() {
                                     st.track_id = Some(track_id);
-                                    st.duration_ms = duration.map(|d| d.as_millis() as u64).unwrap_or(0);
+                                    st.duration_ms =
+                                        duration.map(|d| d.as_millis() as u64).unwrap_or(0);
                                     st.position_ms = 0;
                                     st.playing = true;
                                 }
@@ -358,7 +379,6 @@ mod backend {
             }
         }
     }
-
 }
 
 // 非桌面(Android 等): 没有本地音频引擎, 播放交给平台层(Media3), 这里只保留同名 API 的桩.
@@ -392,12 +412,24 @@ mod tests {
     #[test]
     fn tuning_allows_loudness_boost_but_clamps_both_ends() {
         let p = Player::new();
-        p.configure(PlaybackTuning { gain_db: 30.0, fade_ms: 0, eq: None });
+        p.configure(PlaybackTuning {
+            gain_db: 30.0,
+            fade_ms: 0,
+            eq: None,
+        });
         assert_eq!(p.tuning().gain_db, 12.0);
         assert!((p.tuning().gain_linear() - 3.981).abs() < 0.01);
-        p.configure(PlaybackTuning { gain_db: -99.0, fade_ms: 0, eq: None });
+        p.configure(PlaybackTuning {
+            gain_db: -99.0,
+            fade_ms: 0,
+            eq: None,
+        });
         assert_eq!(p.tuning().gain_db, -40.0);
-        p.configure(PlaybackTuning { gain_db: f32::NAN, fade_ms: 0, eq: None });
+        p.configure(PlaybackTuning {
+            gain_db: f32::NAN,
+            fade_ms: 0,
+            eq: None,
+        });
         assert_eq!(p.tuning().gain_db, 0.0);
     }
 
@@ -418,8 +450,14 @@ mod tests {
         // 正增益在系统音量满格时被钳到 1, 不引入额外削波
         assert_eq!(effective_volume_db(1.0, 12.0), 1.0);
         // 越界增益先钳再算, 与 PlaybackTuning::sanitized 口径一致
-        assert_eq!(effective_volume_db(1.0, 99.0), effective_volume_db(1.0, 12.0));
-        assert_eq!(effective_volume_db(1.0, -99.0), effective_volume_db(1.0, -40.0));
+        assert_eq!(
+            effective_volume_db(1.0, 99.0),
+            effective_volume_db(1.0, 12.0)
+        );
+        assert_eq!(
+            effective_volume_db(1.0, -99.0),
+            effective_volume_db(1.0, -40.0)
+        );
     }
 
     /// 后端接线的策略回归: Configure 用 step(限速逼近), Play 用 reset_to(立即到位),
@@ -432,7 +470,10 @@ mod tests {
         for _ in 0..5 {
             applied = limiter.step(9.0, 0.2);
         }
-        assert!((applied - 3.0).abs() < 1e-3, "1 秒后只应走 3 dB, 实测 {applied}");
+        assert!(
+            (applied - 3.0).abs() < 1e-3,
+            "1 秒后只应走 3 dB, 实测 {applied}"
+        );
         // Play: 换曲立即对齐目标, 不从当前值(3 dB)慢慢爬
         limiter.reset_to(9.0);
         assert_eq!(limiter.current_db(), 9.0);

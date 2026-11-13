@@ -42,7 +42,10 @@ fn data_dir() -> PathBuf {
 async fn main() {
     let dir = data_dir();
     let core = Core::open(&dir).expect("open core");
-    let p = core.providers.first_with(ncm_provider::Capability::Lyric).expect("lyric provider");
+    let p = core
+        .providers
+        .first_with(ncm_provider::Capability::Lyric)
+        .expect("lyric provider");
     let mut amll_wins = 0;
     let mut yrc_wins = 0;
     let mut compared = 0;
@@ -65,8 +68,15 @@ async fn main() {
             })
             .unwrap_or_default();
         let ttml = fetch_ttml(&dir, *id).await.ok().flatten();
-        let ttml_wl = ttml.as_ref().map(ttml_to_word_lyric).filter(|wl| !wl.is_empty());
-        let ls = if line_starts.is_empty() { None } else { Some(&line_starts[..]) };
+        let ttml_wl = ttml
+            .as_ref()
+            .map(ttml_to_word_lyric)
+            .filter(|wl| !wl.is_empty());
+        let ls = if line_starts.is_empty() {
+            None
+        } else {
+            Some(&line_starts[..])
+        };
         let sy = yrc.as_ref().map(|wl| score_word_lyric(wl, ls));
         let st = ttml_wl.as_ref().map(|wl| score_word_lyric(wl, ls));
         let choice = choose_word_source(
@@ -75,8 +85,10 @@ async fn main() {
             ls,
         );
         let (sy_f, st_f) = (
-            sy.as_ref().map_or("-".into(), |s| format!("{:.3}", s.score)),
-            st.as_ref().map_or("-".into(), |s| format!("{:.3}", s.score)),
+            sy.as_ref()
+                .map_or("-".into(), |s| format!("{:.3}", s.score)),
+            st.as_ref()
+                .map_or("-".into(), |s| format!("{:.3}", s.score)),
         );
         let src = match choice.source {
             Some(ncm_service::ttml_source::LyricSource::Yrc) => "yrc",

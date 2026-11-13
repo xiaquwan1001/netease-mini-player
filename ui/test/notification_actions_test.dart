@@ -22,10 +22,22 @@ void main() {
       );
     });
     test('四种 PlayMode 的映射与 Kotlin modeIconRes 对齐', () {
-      expect(notificationModeIcon(PlayMode.repeatAll, heartActive: false), 'repeat');
-      expect(notificationModeIcon(PlayMode.repeatOne, heartActive: false), 'repeatOne');
-      expect(notificationModeIcon(PlayMode.sequence, heartActive: false), 'sequence');
-      expect(notificationModeIcon(PlayMode.shuffle, heartActive: false), 'shuffle');
+      expect(
+        notificationModeIcon(PlayMode.repeatAll, heartActive: false),
+        'repeat',
+      );
+      expect(
+        notificationModeIcon(PlayMode.repeatOne, heartActive: false),
+        'repeatOne',
+      );
+      expect(
+        notificationModeIcon(PlayMode.sequence, heartActive: false),
+        'sequence',
+      );
+      expect(
+        notificationModeIcon(PlayMode.shuffle, heartActive: false),
+        'shuffle',
+      );
     });
   });
 }

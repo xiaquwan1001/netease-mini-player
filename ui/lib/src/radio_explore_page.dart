@@ -12,11 +12,16 @@ import 'format.dart' show formatDurationMs;
 
 /// 可注入加载器(测试用 mock)
 typedef LoadRadioHome = Future<rust.RadioExploreHome?> Function();
-typedef LoadRadioRecommend = Future<List<rust.PodcastRadio>> Function(BigInt cateId);
+typedef LoadRadioRecommend = Future<List<rust.PodcastRadio>> Function(
+  BigInt cateId,
+);
 typedef LoadRadioToplist = Future<rust.RadioToplistDto?> Function(String kind);
 
 /// 点电台行(调用方接 showPodcastDetail + 播放回调)
-typedef OnOpenRadio = void Function(BuildContext context, rust.PodcastRadio radio);
+typedef OnOpenRadio = void Function(
+  BuildContext context,
+  rust.PodcastRadio radio,
+);
 
 /// 播放回调链(与详情页 onPlaySongs 同一签名): 节目榜点行直接播放该节目
 typedef OnPlaySongs = void Function(List<rust.SongDto> songs, int index);
@@ -97,7 +102,8 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       _recommendError = null;
     });
     if (cat == null) return; // 精选用 home.picks, 不再请求
-    final loader = widget.loadRecommend ??
+    final loader =
+        widget.loadRecommend ??
         (BigInt id) => retryNetwork(() => rust.radioRecommend(cateId: id));
     try {
       final list = await loader(cat.id);
@@ -116,7 +122,8 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       _toplistError = null;
     });
     final loader =
-        widget.loadToplist ?? (String k) => retryNetwork(() => rust.radioToplist(kind: k));
+        widget.loadToplist ??
+        (String k) => retryNetwork(() => rust.radioToplist(kind: k));
     try {
       final t = await loader(kind);
       if (!mounted || kind != _topKind) return;
@@ -145,14 +152,20 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       return ListView(
         children: [
           const SizedBox(height: 80),
-          Icon(Icons.cloud_off, size: 48, color: Theme.of(context).colorScheme.outline),
+          Icon(
+            Icons.cloud_off,
+            size: 48,
+            color: Theme.of(context).colorScheme.outline,
+          ),
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Text('加载失败: $_error', textAlign: TextAlign.center),
           ),
           const SizedBox(height: 12),
-          Center(child: FilledButton(onPressed: _load, child: const Text('重试'))),
+          Center(
+            child: FilledButton(onPressed: _load, child: const Text('重试')),
+          ),
         ],
       );
     }
@@ -161,7 +174,12 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(12, 8, 12, 24 + MediaQuery.viewPaddingOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(
+          12,
+          8,
+          12,
+          24 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
         children: [
           _CategoryChips(
             categories: categories,
@@ -169,7 +187,10 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
             onSelected: _selectCategory,
           ),
           const SizedBox(height: 12),
-          if (_selected == null) ..._buildPicks(context, home) else ..._buildRecommend(context),
+          if (_selected == null)
+            ..._buildPicks(context, home)
+          else
+            ..._buildRecommend(context),
           const SizedBox(height: 16),
           _ToplistTabs(
             kind: _topKind,
@@ -198,7 +219,10 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       for (final g in picks) ...[
         Padding(
           padding: const EdgeInsets.only(top: 4, bottom: 4),
-          child: Text(g.categoryName, style: Theme.of(context).textTheme.titleSmall),
+          child: Text(
+            g.categoryName,
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
         ),
         for (final r in g.radios)
           _RadioRow(
@@ -219,7 +243,10 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
             children: [
               Text('加载失败: $_recommendError', textAlign: TextAlign.center),
               const SizedBox(height: 8),
-              FilledButton(onPressed: () => _selectCategory(_selected), child: const Text('重试')),
+              FilledButton(
+                onPressed: () => _selectCategory(_selected),
+                child: const Text('重试'),
+              ),
             ],
           ),
         ),
@@ -227,7 +254,14 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     }
     final list = _recommend;
     if (list == null) {
-      return const [Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))];
+      return const [
+        Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      ];
     }
     if (list.isEmpty) {
       return const [
@@ -239,7 +273,10 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     return [
       Padding(
         padding: const EdgeInsets.only(top: 4, bottom: 4),
-        child: Text('「${_selected!.name}」推荐电台', style: Theme.of(context).textTheme.titleSmall),
+        child: Text(
+          '「${_selected!.name}」推荐电台',
+          style: Theme.of(context).textTheme.titleSmall,
+        ),
       ),
       for (final r in list)
         _RadioRow(
@@ -254,7 +291,11 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
 // ---------------- 分类胶囊 ----------------
 
 class _CategoryChips extends StatelessWidget {
-  const _CategoryChips({required this.categories, required this.selectedId, required this.onSelected});
+  const _CategoryChips({
+    required this.categories,
+    required this.selectedId,
+    required this.onSelected,
+  });
 
   final List<rust.RadioCategory> categories;
   final BigInt? selectedId;
@@ -310,7 +351,9 @@ class _RadioRow extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: CoverArt(url: radio.coverUrl, size: 48, radius: 6),
       title: Text(radio.name, overflow: TextOverflow.ellipsis, maxLines: 1),
-      subtitle: subtitle.isEmpty ? null : Text(subtitle, overflow: TextOverflow.ellipsis, maxLines: 1),
+      subtitle: subtitle.isEmpty
+          ? null
+          : Text(subtitle, overflow: TextOverflow.ellipsis, maxLines: 1),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
@@ -382,8 +425,14 @@ class _ToplistTabs extends StatelessWidget {
             ),
           )
         else if (toplist == null)
-          const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))
-        else ..._buildEntries(context, toplist!),
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
+            ),
+          )
+        else
+          ..._buildEntries(context, toplist!),
       ],
     );
   }
@@ -424,7 +473,11 @@ class _ToplistTabs extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(pr.rank, pr.program.coverUrl ?? ''),
-          title: Text(pr.program.name, overflow: TextOverflow.ellipsis, maxLines: 1),
+          title: Text(
+            pr.program.name,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
           subtitle: Text(
             [
               if (pr.program.radioName.isNotEmpty) pr.program.radioName,
@@ -445,9 +498,11 @@ class _ToplistTabs extends StatelessWidget {
           leading: _rankBadge(r.rank, r.coverUrl),
           title: Text(r.name, overflow: TextOverflow.ellipsis, maxLines: 1),
           subtitle: Text(
-            [r.djName, if (r.programCount > BigInt.zero) '${r.programCount} 集', _fmtCount(r.playCount)]
-                .where((s) => s.isNotEmpty)
-                .join(' · '),
+            [
+              r.djName,
+              if (r.programCount > BigInt.zero) '${r.programCount} 集',
+              _fmtCount(r.playCount),
+            ].where((s) => s.isNotEmpty).join(' · '),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
@@ -494,11 +549,17 @@ class _ToplistTabs extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
               decoration: BoxDecoration(
                 color: rank <= 3 ? Colors.deepOrange : Colors.black54,
-                borderRadius: const BorderRadius.only(bottomRight: Radius.circular(6)),
+                borderRadius: const BorderRadius.only(
+                  bottomRight: Radius.circular(6),
+                ),
               ),
               child: Text(
                 '$rank',
-                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -508,11 +569,12 @@ class _ToplistTabs extends StatelessWidget {
   }
 }
 
-
 String _fmtCount(BigInt n) {
   final v = n.toInt();
   if (v < 10000) return '$v';
   final w = v / 10000;
-  final s = w >= 100 ? w.round().toString() : w.toStringAsFixed(1).replaceAll('.0', '');
+  final s = w >= 100
+      ? w.round().toString()
+      : w.toStringAsFixed(1).replaceAll('.0', '');
   return '$s万';
 }

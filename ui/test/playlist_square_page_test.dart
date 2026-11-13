@@ -4,12 +4,12 @@ import 'package:minincm/src/playlist_square_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.Playlist playlist(int id, String name) => rust.Playlist(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      trackCount: BigInt.from(30),
-      special: false,
-    );
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  trackCount: BigInt.from(30),
+  special: false,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -18,18 +18,22 @@ void main() {
     final calls = <String>[];
     rust.Playlist? opened;
 
-    await tester.pumpWidget(host(PlaylistSquareView(
-      loadCategories: () async => const [
-        rust.PlaylistCategory(group: '语种', subs: ['华语', '欧美']),
-        rust.PlaylistCategory(group: '风格', subs: ['流行']),
-      ],
-      loadPage: (cat, limit, offset) async {
-        calls.add('$cat@$offset');
-        return [playlist(1, cat.isEmpty ? '全部歌单' : '$cat歌单')];
-      },
-      loadHighQuality: (cat, limit) async => [playlist(9, '精品歌单')],
-      onOpenPlaylist: (pl) => opened = pl,
-    )));
+    await tester.pumpWidget(
+      host(
+        PlaylistSquareView(
+          loadCategories: () async => const [
+            rust.PlaylistCategory(group: '语种', subs: ['华语', '欧美']),
+            rust.PlaylistCategory(group: '风格', subs: ['流行']),
+          ],
+          loadPage: (cat, limit, offset) async {
+            calls.add('$cat@$offset');
+            return [playlist(1, cat.isEmpty ? '全部歌单' : '$cat歌单')];
+          },
+          loadHighQuality: (cat, limit) async => [playlist(9, '精品歌单')],
+          onOpenPlaylist: (pl) => opened = pl,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('语种'), findsOneWidget);
@@ -53,18 +57,22 @@ void main() {
 
   testWidgets('加载更多按 offset 追加', (tester) async {
     final offsets = <int>[];
-    await tester.pumpWidget(host(PlaylistSquareView(
-      loadCategories: () async => const [],
-      loadPage: (cat, limit, offset) async {
-        offsets.add(offset);
-        return [
-          for (var i = 0; i < limit; i++)
-            playlist(offset + i + 1, '歌单${offset + i + 1}'),
-        ];
-      },
-      loadHighQuality: (cat, limit) async => const [],
-      onOpenPlaylist: (_) {},
-    )));
+    await tester.pumpWidget(
+      host(
+        PlaylistSquareView(
+          loadCategories: () async => const [],
+          loadPage: (cat, limit, offset) async {
+            offsets.add(offset);
+            return [
+              for (var i = 0; i < limit; i++)
+                playlist(offset + i + 1, '歌单${offset + i + 1}'),
+            ];
+          },
+          loadHighQuality: (cat, limit) async => const [],
+          onOpenPlaylist: (_) {},
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(offsets, [0]);
 
@@ -83,26 +91,34 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: PlaylistSquareView(
-          loadCategories: () async => const [
-            rust.PlaylistCategory(group: '语种', subs: ['华语', '欧美', '日语', '韩语']),
-            rust.PlaylistCategory(group: '风格', subs: ['流行', '摇滚', '民谣', '电子']),
-          ],
-          loadPage: (cat, limit, offset) async => [
-            playlist(1, '一个名字特别特别长的歌单名称用于窄屏回归测试'),
-          ],
-          loadHighQuality: (cat, limit) async => [playlist(9, '精品歌单')],
-          onOpenPlaylist: (_) {},
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: PlaylistSquareView(
+            loadCategories: () async => const [
+              rust.PlaylistCategory(
+                group: '语种',
+                subs: ['华语', '欧美', '日语', '韩语'],
+              ),
+              rust.PlaylistCategory(
+                group: '风格',
+                subs: ['流行', '摇滚', '民谣', '电子'],
+              ),
+            ],
+            loadPage: (cat, limit, offset) async => [
+              playlist(1, '一个名字特别特别长的歌单名称用于窄屏回归测试'),
+            ],
+            loadHighQuality: (cat, limit) async => [playlist(9, '精品歌单')],
+            onOpenPlaylist: (_) {},
+          ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -115,12 +131,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

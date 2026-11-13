@@ -97,7 +97,9 @@ LyricDoc parseLrc(String raw, {Map<BigInt, String>? translations}) {
     if (rest.isEmpty) continue; // 纯标签行(元数据/间奏)或剥完什么都不剩
     if (times.isNotEmpty) {
       for (final t in times) {
-        timed.add(ParsedLyricLine(timeMs: t, text: rest, sub: translations?[t]));
+        timed.add(
+          ParsedLyricLine(timeMs: t, text: rest, sub: translations?[t]),
+        );
       }
     } else {
       plain.add(rest);
@@ -143,7 +145,8 @@ class PlainLyricView extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return ListView.builder(
       controller: controller,
-      padding: padding ?? const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      padding:
+          padding ?? const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       itemCount: lines.length,
       itemBuilder: (context, i) {
         final line = lines[i];
@@ -152,8 +155,9 @@ class PlainLyricView extends StatelessWidget {
           key: ValueKey('plain-lyric-line-$i'),
           behavior: HitTestBehavior.opaque,
           onTap: onLineTap == null ? null : () => onLineTap!(i),
-          onLongPress:
-              onLineLongPress == null ? null : () => onLineLongPress!(i),
+          onLongPress: onLineLongPress == null
+              ? null
+              : () => onLineLongPress!(i),
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -169,7 +173,9 @@ class PlainLyricView extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 15,
                   height: 1.4,
-                  color: isSelected ? scheme.onSurface : scheme.onSurfaceVariant,
+                  color: isSelected
+                      ? scheme.onSurface
+                      : scheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -273,8 +279,9 @@ class TimedLyricView extends StatelessWidget {
           key: ValueKey('lyric-line-$i'),
           behavior: HitTestBehavior.opaque,
           onTap: onLineTap == null ? null : () => onLineTap!(i),
-          onLongPress:
-              onLineLongPress == null ? null : () => onLineLongPress!(i),
+          onLongPress: onLineLongPress == null
+              ? null
+              : () => onLineLongPress!(i),
           child: Container(
             decoration: isSelected
                 ? BoxDecoration(
@@ -289,4 +296,3 @@ class TimedLyricView extends StatelessWidget {
     );
   }
 }
-

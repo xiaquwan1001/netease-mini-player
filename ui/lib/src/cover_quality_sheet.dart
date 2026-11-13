@@ -30,8 +30,7 @@ Future<void> showCoverQualitySheet(BuildContext context) {
           children: [
             const SheetHeader(
               title: '封面与图片清晰度',
-              subtitle:
-                  '按「显示尺寸 x 设备像素比 x 档位」向 CDN 取缩略图; 全屏看图与保存始终用原图。',
+              subtitle: '按「显示尺寸 x 设备像素比 x 档位」向 CDN 取缩略图; 全屏看图与保存始终用原图。',
             ),
             for (final tier in CoverQuality.values)
               _tierRow(
@@ -87,7 +86,10 @@ Widget _tierRow(
                 const SizedBox(height: 2),
                 Text(
                   tier.hint,
-                  style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),

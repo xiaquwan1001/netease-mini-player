@@ -15,7 +15,8 @@ void main() {
 
   group('parseParametricEq', () {
     test('合法样例: 字段解析正确且往返一致(幂等)', () {
-      const text = 'Preamp: -6.0 dB\n'
+      const text =
+          'Preamp: -6.0 dB\n'
           'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n'
           'Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70\n';
       final eq = parseParametricEq(text);
@@ -50,7 +51,9 @@ void main() {
     });
 
     test('Preamp 可选: 缺省 0 dB; OFF 保留并可往返', () {
-      final eq = parseParametricEq('Filter 1: OFF HS Fc 1000 Hz Gain -1.0 dB Q 0.5\n');
+      final eq = parseParametricEq(
+        'Filter 1: OFF HS Fc 1000 Hz Gain -1.0 dB Q 0.5\n',
+      );
       expect(eq.preampDb, 0.0);
       expect(eq.filters.single.enabled, isFalse);
       expect(eq.toParametricEqText(), contains('Preamp: 0.0 dB'));
@@ -61,11 +64,19 @@ void main() {
     });
 
     test('Q 缺失报错(行号正确)', () {
-      expectEqError('Filter 1: ON PK Fc 105 Hz Gain -3.2 dB', line: 1, containsText: 'Q');
+      expectEqError(
+        'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB',
+        line: 1,
+        containsText: 'Q',
+      );
     });
 
     test('Gain 超 ±24 dB 报错(不静默裁剪)', () {
-      expectEqError('Filter 1: ON PK Fc 105 Hz Gain 25.0 dB Q 0.71', line: 1, containsText: '24');
+      expectEqError(
+        'Filter 1: ON PK Fc 105 Hz Gain 25.0 dB Q 0.71',
+        line: 1,
+        containsText: '24',
+      );
     });
 
     test('第 21 个 filter 报错', () {
@@ -78,23 +89,41 @@ void main() {
     });
 
     test('未知类型(LP)明确报不支持', () {
-      expectEqError('Filter 1: ON LP Fc 105 Hz Gain -3.2 dB Q 0.71', line: 1, containsText: '不支持');
+      expectEqError(
+        'Filter 1: ON LP Fc 105 Hz Gain -3.2 dB Q 0.71',
+        line: 1,
+        containsText: '不支持',
+      );
     });
 
     test('非数字 Gain 报错(行号正确)', () {
-      expectEqError('Filter 1: ON PK Fc 105 Hz Gain -x.2 dB Q 0.71', line: 1, containsText: 'Gain');
+      expectEqError(
+        'Filter 1: ON PK Fc 105 Hz Gain -x.2 dB Q 0.71',
+        line: 1,
+        containsText: 'Gain',
+      );
     });
 
     test('Q 非正数报错', () {
-      expectEqError('Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0', line: 1, containsText: 'Q');
+      expectEqError(
+        'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0',
+        line: 1,
+        containsText: 'Q',
+      );
     });
 
     test('空行不占位, 行号按原文计算', () {
-      expectEqError('\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB', line: 2, containsText: 'Q');
+      expectEqError(
+        '\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB',
+        line: 2,
+        containsText: 'Q',
+      );
     });
 
     test('注释行(# 与 //)忽略', () {
-      final eq = parseParametricEq('# AutoEQ\n// note\nFilter 1: ON PK Fc 100 Hz Gain 2.0 dB Q 1.0\n');
+      final eq = parseParametricEq(
+        '# AutoEQ\n// note\nFilter 1: ON PK Fc 100 Hz Gain 2.0 dB Q 1.0\n',
+      );
       expect(eq.filters.length, 1);
       expect(eq.preampDb, 0.0);
       expect(eq.filters.single.freqHz, 100.0);

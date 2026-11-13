@@ -9,12 +9,14 @@ enum AccentPalette {
   /// 品牌红 —— 默认. seed 用纯红(见 kAccentSchemeVariant 的说明):
   /// 旧的 0xFFE60026 在 fidelity 下会偏一点紫, 和「樱粉」拉不开差距(用户实测反馈)
   neteaseRed('neteaseRed', '网易云红', Color(0xFFF40000)),
+
   /// 2026-11-12 用户反馈五个色板"整体偏暗淡的棕色": 旧 seed 选的是 Material 600/700/800
   /// 深色调(2E7D32/1565C0/EF6C00), 经 M3 tonal 压缩后彼此更接近。统一换成 500 级高饱和
   /// seed, 拉开色相距离(0°红 / 36°橘 / 145°绿 / 210°蓝 / 330°粉)。
   green('green', '森林绿', Color(0xFF16A34A)),
   blue('blue', '天空蓝', Color(0xFF2196F3)),
   orange('orange', '暖橘', Color(0xFFFF9100)),
+
   /// 樱粉取"洋红偏粉"一侧(0xFFE5007E): 旧的 0xFFD81B60 落在红与粉之间,
   /// 与品牌红只差一次色调压缩, 视觉上几乎分不出来
   pink('pink', '樱粉', Color(0xFFE5007E));
@@ -99,7 +101,9 @@ ThemeData buildDarkTheme({
     // Material(type: canvas) 的缺省底色(播放条外壳走这条)
     canvasColor: kOledBlack,
     scaffoldBackgroundColor: kOledBlack,
-    dialogTheme: base.dialogTheme.copyWith(backgroundColor: scheme.surfaceContainerHigh),
+    dialogTheme: base.dialogTheme.copyWith(
+      backgroundColor: scheme.surfaceContainerHigh,
+    ),
     bottomSheetTheme: base.bottomSheetTheme.copyWith(
       backgroundColor: scheme.surfaceContainerHigh,
       surfaceTintColor: Colors.transparent,

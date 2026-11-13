@@ -9,13 +9,12 @@ SearchExactView view({
   List<SearchExactArtist> artists = const <SearchExactArtist>[],
   List<SearchExactPlaylist> playlists = const <SearchExactPlaylist>[],
   List<SearchExactRadio> podcasts = const <SearchExactRadio>[],
-}) =>
-    SearchExactView(
-      orders: orders,
-      artists: artists,
-      playlists: playlists,
-      podcasts: podcasts,
-    );
+}) => SearchExactView(
+  orders: orders,
+  artists: artists,
+  playlists: playlists,
+  podcasts: podcasts,
+);
 
 Widget host(Widget child, {double width = 400, double scale = 1.0}) =>
     MaterialApp(
@@ -63,16 +62,20 @@ void main() {
 
   testWidgets('artist 命中: 显示名字 + 点击回传 id', (tester) async {
     int? picked;
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        orders: const ['artist'],
-        artists: const [
-          SearchExactArtist(id: 6452, name: '周杰伦', subtitle: '华语男歌手'),
-          SearchExactArtist(id: 9621, name: '许嵩'),
-        ],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['artist'],
+            artists: const [
+              SearchExactArtist(id: 6452, name: '周杰伦', subtitle: '华语男歌手'),
+              SearchExactArtist(id: 9621, name: '许嵩'),
+            ],
+          ),
+          onPickArtist: (id) => picked = id,
+        ),
       ),
-      onPickArtist: (id) => picked = id,
-    )));
+    );
 
     expect(find.text(kSearchExactTitle), findsOneWidget);
     expect(find.text('周杰伦'), findsOneWidget);
@@ -88,13 +91,17 @@ void main() {
   });
 
   testWidgets('orders 顺序生效: playlist 在前则歌单分区在前', (tester) async {
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        orders: const ['playlist', 'artist'],
-        artists: const [SearchExactArtist(id: 1, name: '周杰伦')],
-        playlists: const [SearchExactPlaylist(id: 2, name: '周杰伦歌单')],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['playlist', 'artist'],
+            artists: const [SearchExactArtist(id: 1, name: '周杰伦')],
+            playlists: const [SearchExactPlaylist(id: 2, name: '周杰伦歌单')],
+          ),
+        ),
       ),
-    )));
+    );
 
     final texts = visibleTexts(tester);
     expect(texts, contains('歌单'));
@@ -105,24 +112,32 @@ void main() {
     expect(texts.indexOf('周杰伦歌单'), lessThan(texts.indexOf('周杰伦')));
 
     // 反向 orders 时顺序颠倒
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        orders: const ['artist', 'playlist'],
-        artists: const [SearchExactArtist(id: 1, name: '周杰伦')],
-        playlists: const [SearchExactPlaylist(id: 2, name: '周杰伦歌单')],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['artist', 'playlist'],
+            artists: const [SearchExactArtist(id: 1, name: '周杰伦')],
+            playlists: const [SearchExactPlaylist(id: 2, name: '周杰伦歌单')],
+          ),
+        ),
       ),
-    )));
+    );
     final texts2 = visibleTexts(tester);
     expect(texts2.indexOf('歌手'), lessThan(texts2.indexOf('歌单')));
   });
 
   testWidgets('orders 里的未知类型被忽略', (tester) async {
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        orders: const ['song', 'zzz', 'artist'],
-        artists: const [SearchExactArtist(id: 7, name: '陈奕迅')],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['song', 'zzz', 'artist'],
+            artists: const [SearchExactArtist(id: 7, name: '陈奕迅')],
+          ),
+        ),
       ),
-    )));
+    );
 
     expect(find.text('陈奕迅'), findsOneWidget);
     expect(find.text('song'), findsNothing);
@@ -132,20 +147,24 @@ void main() {
 
   testWidgets('voice 命中渲染 + 回调', (tester) async {
     int? picked;
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        orders: const ['voice'],
-        podcasts: const [
-          SearchExactRadio(
-            id: 3321,
-            name: 'Taylor Swift 电台',
-            djName: '小宇宙',
-            programCount: 24,
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['voice'],
+            podcasts: const [
+              SearchExactRadio(
+                id: 3321,
+                name: 'Taylor Swift 电台',
+                djName: '小宇宙',
+                programCount: 24,
+              ),
+            ],
           ),
-        ],
+          onPickRadio: (id) => picked = id,
+        ),
       ),
-      onPickRadio: (id) => picked = id,
-    )));
+    );
 
     expect(find.text('电台'), findsOneWidget);
     expect(find.text('Taylor Swift 电台'), findsOneWidget);
@@ -156,13 +175,17 @@ void main() {
   });
 
   testWidgets('orders 为空但列表非空时走兜底顺序 artist/playlist/voice', (tester) async {
-    await tester.pumpWidget(host(SearchExactBar(
-      view: view(
-        artists: const [SearchExactArtist(id: 1, name: '薛之谦')],
-        playlists: const [SearchExactPlaylist(id: 2, name: '薛之谦精选')],
-        podcasts: const [SearchExactRadio(id: 3, name: '薛之谦电台')],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            artists: const [SearchExactArtist(id: 1, name: '薛之谦')],
+            playlists: const [SearchExactPlaylist(id: 2, name: '薛之谦精选')],
+            podcasts: const [SearchExactRadio(id: 3, name: '薛之谦电台')],
+          ),
+        ),
       ),
-    )));
+    );
 
     final texts = visibleTexts(tester);
     expect(texts.indexOf(kSearchExactTitle), 0);
@@ -173,39 +196,41 @@ void main() {
   });
 
   testWidgets('300dp 宽 + 1.25 字号不溢出', (tester) async {
-    await tester.pumpWidget(host(
-      SearchExactBar(
-        view: view(
-          orders: const ['artist', 'playlist', 'voice'],
-          artists: const [
-            SearchExactArtist(
-              id: 1,
-              name: '一个特别特别长的歌手名字用来测试省略号',
-              subtitle: '歌手 / 音乐人 / 制作人',
-            ),
-          ],
-          playlists: const [
-            SearchExactPlaylist(
-              id: 2,
-              name: '超长歌单标题也不能把 300dp 的窄屏撑爆',
-              creatorName: '某位创作者名字也很长',
-              trackCount: 999,
-              playCount: 123456789,
-            ),
-          ],
-          podcasts: const [
-            SearchExactRadio(
-              id: 3,
-              name: '超长电台名字超长电台名字超长电台名字',
-              djName: '主播名字同样超长',
-              programCount: 1024,
-            ),
-          ],
+    await tester.pumpWidget(
+      host(
+        SearchExactBar(
+          view: view(
+            orders: const ['artist', 'playlist', 'voice'],
+            artists: const [
+              SearchExactArtist(
+                id: 1,
+                name: '一个特别特别长的歌手名字用来测试省略号',
+                subtitle: '歌手 / 音乐人 / 制作人',
+              ),
+            ],
+            playlists: const [
+              SearchExactPlaylist(
+                id: 2,
+                name: '超长歌单标题也不能把 300dp 的窄屏撑爆',
+                creatorName: '某位创作者名字也很长',
+                trackCount: 999,
+                playCount: 123456789,
+              ),
+            ],
+            podcasts: const [
+              SearchExactRadio(
+                id: 3,
+                name: '超长电台名字超长电台名字超长电台名字',
+                djName: '主播名字同样超长',
+                programCount: 1024,
+              ),
+            ],
+          ),
         ),
+        width: 300,
+        scale: 1.25,
       ),
-      width: 300,
-      scale: 1.25,
-    ));
+    );
     await tester.pump();
 
     expect(tester.takeException(), isNull);
@@ -221,19 +246,23 @@ void main() {
 
   testWidgets('关键词兜底条: 空列表不渲染, 点击回传关键词', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: KeywordSuggestBar(keywords: []))),
+      const MaterialApp(
+        home: Scaffold(body: KeywordSuggestBar(keywords: [])),
+      ),
     );
     expect(find.text('猜你想搜'), findsNothing);
 
     String? picked;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: KeywordSuggestBar(
-          keywords: const ['晴天周杰伦', '晴天娃娃'],
-          onSelected: (k) => picked = k,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: KeywordSuggestBar(
+            keywords: const ['晴天周杰伦', '晴天娃娃'],
+            onSelected: (k) => picked = k,
+          ),
         ),
       ),
-    ));
+    );
     expect(find.text('猜你想搜'), findsOneWidget);
     await tester.tap(find.text('晴天娃娃'));
     expect(picked, '晴天娃娃');

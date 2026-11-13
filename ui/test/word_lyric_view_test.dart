@@ -8,15 +8,14 @@ WordLyricLineData _line(
   int end,
   List<(int, int, String)> words, {
   String? sub,
-}) =>
-    WordLyricLineData(
-      startMs: start,
-      endMs: end,
-      words: [
-        for (final (s, e, t) in words) WordLyricWord(startMs: s, endMs: e, text: t),
-      ],
-      sub: sub,
-    );
+}) => WordLyricLineData(
+  startMs: start,
+  endMs: end,
+  words: [
+    for (final (s, e, t) in words) WordLyricWord(startMs: s, endMs: e, text: t),
+  ],
+  sub: sub,
+);
 
 final _lines = [
   _line(1000, 3000, [(1000, 1500, '你'), (1500, 2000, '陪'), (2000, 3000, '我')]),
@@ -29,25 +28,23 @@ Widget _host(
   List<WordLyricLineData>? lines,
   ScrollController? controller,
   double textScale = 1.0,
-}) =>
-    MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(
-          textScaler: TextScaler.linear(textScale),
-        ),
-        child: child!,
+}) => MaterialApp(
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(context)
+        .copyWith(textScaler: TextScaler.linear(textScale)),
+    child: child!,
+  ),
+  home: Scaffold(
+    body: SizedBox(
+      width: 300,
+      child: WordLyricView(
+        lines: lines ?? _lines,
+        positionMs: pos,
+        controller: controller,
       ),
-      home: Scaffold(
-        body: SizedBox(
-          width: 300,
-          child: WordLyricView(
-            lines: lines ?? _lines,
-            positionMs: pos,
-            controller: controller,
-          ),
-        ),
-      ),
-    );
+    ),
+  ),
+);
 
 /// 收集树里所有逐字行 TextSpan(带词文本), 按文本查颜色。
 Map<String, TextStyle> _spanStyles(WidgetTester tester) {

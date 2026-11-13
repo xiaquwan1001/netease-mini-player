@@ -3,28 +3,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.Comment comment(int id, String content, BigInt userId) =>
-    rust.Comment(
-      id: BigInt.from(id),
-      userId: userId,
-      userName: '用户$id',
-      avatarUrl: null,
-      content: content,
-      timeMs: BigInt.from(1700000000000),
-      likedCount: BigInt.zero,
-      liked: false,
-      replyCount: BigInt.zero,
-      ipLocation: '',
-      hot: false,
-      parentId: BigInt.zero,
-    );
+rust.Comment comment(int id, String content, BigInt userId) => rust.Comment(
+  id: BigInt.from(id),
+  userId: userId,
+  userName: '用户$id',
+  avatarUrl: null,
+  content: content,
+  timeMs: BigInt.from(1700000000000),
+  likedCount: BigInt.zero,
+  liked: false,
+  replyCount: BigInt.zero,
+  ipLocation: '',
+  hot: false,
+  parentId: BigInt.zero,
+);
 
 rust.CommentPage page(List<rust.Comment> items) => rust.CommentPage(
-      threadId: 'R_SO_4_1',
-      comments: items,
-      total: BigInt.from(items.length),
-      hasMore: false,
-    );
+  threadId: 'R_SO_4_1',
+  comments: items,
+  total: BigInt.from(items.length),
+  hasMore: false,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -33,22 +32,26 @@ void main() {
 
   testWidgets('只有自己发的评论显示删除, 确认后回调并移除', (tester) async {
     final deleted = <String>[];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      myUid: me,
-      loadPage: (limit, offset) async => page([
-        comment(1, '我的评论', me),
-        comment(2, '别人的评论', BigInt.from(7)),
-      ]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      reply: (_, _) async => true,
-      delete: (commentId) async {
-        deleted.add('$commentId');
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          myUid: me,
+          loadPage: (limit, offset) async => page([
+            comment(1, '我的评论', me),
+            comment(2, '别人的评论', BigInt.from(7)),
+          ]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          reply: (_, _) async => true,
+          delete: (commentId) async {
+            deleted.add('$commentId');
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('删除'), findsOneWidget, reason: '别人的评论不能删');
@@ -66,19 +69,23 @@ void main() {
 
   testWidgets('取消删除不发请求', (tester) async {
     final deleted = <String>[];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      myUid: me,
-      loadPage: (limit, offset) async => page([comment(1, '我的评论', me)]),
-      like: (_, _) async => true,
-      loadReplies: (_, _) async => page(const []),
-      reply: (_, _) async => true,
-      delete: (commentId) async {
-        deleted.add('$commentId');
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          myUid: me,
+          loadPage: (limit, offset) async => page([comment(1, '我的评论', me)]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page(const []),
+          reply: (_, _) async => true,
+          delete: (commentId) async {
+            deleted.add('$commentId');
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('删除'));
@@ -120,12 +127,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

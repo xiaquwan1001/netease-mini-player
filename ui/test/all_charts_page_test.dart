@@ -8,31 +8,37 @@ rust.ToplistCatalogItem item(
   String name, {
   bool canPlay = true,
   String freq = '每天更新',
-}) =>
-    rust.ToplistCatalogItem(
-      id: BigInt.from(id),
-      name: name,
-      coverUrl: null,
-      updateFrequency: freq,
-      targetType: 'PLAYLIST',
-      canPlay: canPlay,
-    );
+}) => rust.ToplistCatalogItem(
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: null,
+  updateFrequency: freq,
+  targetType: 'PLAYLIST',
+  canPlay: canPlay,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('按分组渲染, 中文小标题, 点可播条目回调歌单', (tester) async {
     rust.Playlist? opened;
-    await tester.pumpWidget(host(AllChartsPage(
-      onOpenPlaylist: (p) => opened = p,
-      loadCatalog: () async => [
-        rust.ToplistCatalogGroup(
-          code: 'OFFICIAL',
-          items: [item(1, '飙升榜'), item(2, '新歌榜', freq: '每周五更新')],
+    await tester.pumpWidget(
+      host(
+        AllChartsPage(
+          onOpenPlaylist: (p) => opened = p,
+          loadCatalog: () async => [
+            rust.ToplistCatalogGroup(
+              code: 'OFFICIAL',
+              items: [
+                item(1, '飙升榜'),
+                item(2, '新歌榜', freq: '每周五更新'),
+              ],
+            ),
+            rust.ToplistCatalogGroup(code: 'GLOBAL', items: []),
+          ],
         ),
-        rust.ToplistCatalogGroup(code: 'GLOBAL', items: []),
-      ],
-    )));
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('官方榜'), findsOneWidget); // GLOBAL 组空, 不渲染标题
@@ -47,15 +53,19 @@ void main() {
 
   testWidgets('canPlay=false 灰显不可点', (tester) async {
     rust.Playlist? opened;
-    await tester.pumpWidget(host(AllChartsPage(
-      onOpenPlaylist: (p) => opened = p,
-      loadCatalog: () async => [
-        rust.ToplistCatalogGroup(
-          code: 'MORE',
-          items: [item(3, '云音乐古典榜', canPlay: false), item(4, 'ACG 榜')],
+    await tester.pumpWidget(
+      host(
+        AllChartsPage(
+          onOpenPlaylist: (p) => opened = p,
+          loadCatalog: () async => [
+            rust.ToplistCatalogGroup(
+              code: 'MORE',
+              items: [item(3, '云音乐古典榜', canPlay: false), item(4, 'ACG 榜')],
+            ),
+          ],
         ),
-      ],
-    )));
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('更多'), findsOneWidget);
@@ -66,25 +76,31 @@ void main() {
   });
 
   testWidgets('空态', (tester) async {
-    await tester.pumpWidget(host(AllChartsPage(
-      onOpenPlaylist: (_) {},
-      loadCatalog: () async => [],
-    )));
+    await tester.pumpWidget(
+      host(AllChartsPage(onOpenPlaylist: (_) {}, loadCatalog: () async => [])),
+    );
     await tester.pumpAndSettle();
     expect(find.text('暂时没有榜单'), findsOneWidget);
   });
 
   testWidgets('错误 + 重试', (tester) async {
     var fail = true;
-    await tester.pumpWidget(host(AllChartsPage(
-      onOpenPlaylist: (_) {},
-      loadCatalog: () async {
-        if (fail) throw Exception('[network] boom');
-        return [
-          rust.ToplistCatalogGroup(code: 'OFFICIAL', items: [item(9, '热歌榜')]),
-        ];
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        AllChartsPage(
+          onOpenPlaylist: (_) {},
+          loadCatalog: () async {
+            if (fail) throw Exception('[network] boom');
+            return [
+              rust.ToplistCatalogGroup(
+                code: 'OFFICIAL',
+                items: [item(9, '热歌榜')],
+              ),
+            ];
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('网络不稳定'), findsOneWidget);
     expect(find.text('重试'), findsOneWidget);
@@ -100,18 +116,22 @@ void main() {
     tester.view.devicePixelRatio = 1.25;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(host(AllChartsPage(
-      onOpenPlaylist: (_) {},
-      loadCatalog: () async => [
-        rust.ToplistCatalogGroup(
-          code: 'LANGUAGE',
-          items: [
-            item(11, '华语速爆新歌超长榜单名字测试测试', freq: '每天更新'),
-            item(12, '欧美热歌榜', canPlay: false),
+    await tester.pumpWidget(
+      host(
+        AllChartsPage(
+          onOpenPlaylist: (_) {},
+          loadCatalog: () async => [
+            rust.ToplistCatalogGroup(
+              code: 'LANGUAGE',
+              items: [
+                item(11, '华语速爆新歌超长榜单名字测试测试', freq: '每天更新'),
+                item(12, '欧美热歌榜', canPlay: false),
+              ],
+            ),
           ],
         ),
-      ],
-    )));
+      ),
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });

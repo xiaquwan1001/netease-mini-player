@@ -60,7 +60,10 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           ),
           children: [
             const _SectionTitle('精细音量'),
-            Card(margin: EdgeInsets.zero, child: _volumeCard(context, settings)),
+            Card(
+              margin: EdgeInsets.zero,
+              child: _volumeCard(context, settings),
+            ),
             const SizedBox(height: 16),
             const _SectionTitle('响度均衡'),
             Card(margin: EdgeInsets.zero, child: _loudnessCard(settings)),
@@ -153,7 +156,8 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   }
 
   Widget _loudnessCard(AppSettings settings) {
-    final target = AppSettings.loudnessTargets.containsKey(settings.loudnessTargetLufs)
+    final target =
+        AppSettings.loudnessTargets.containsKey(settings.loudnessTargetLufs)
         ? settings.loudnessTargetLufs
         : -16.0;
     return Column(
@@ -286,7 +290,8 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
 
   Widget _eqCard(BuildContext context, AppSettings settings) {
     final theme = Theme.of(context);
-    final isDefault = settings.eqProfileText?.trim() == defaultEqProfileText().trim();
+    final isDefault =
+        settings.eqProfileText?.trim() == defaultEqProfileText().trim();
     return Column(
       children: [
         ListTile(
@@ -302,10 +307,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: Text(
-              '拖动柱子即可调整, 无需导入',
-              style: theme.textTheme.bodySmall,
-            ),
+            child: Text('拖动柱子即可调整, 无需导入', style: theme.textTheme.bodySmall),
           ),
         ),
         SizedBox(
@@ -314,8 +316,9 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             text: settings.eqProfileText,
             onChanged: (text) => settings.update(
               eqProfileText: text,
-              eqProfileName:
-                  text.trim() == defaultEqProfileText().trim() ? '默认曲线' : '自定义曲线',
+              eqProfileName: text.trim() == defaultEqProfileText().trim()
+                  ? '默认曲线'
+                  : '自定义曲线',
             ),
           ),
         ),
@@ -352,8 +355,10 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       builder: (_) => const _ImportEqDialog(),
     );
     if (text == null || !context.mounted) return;
-    await AppSettings.instance
-        .update(eqProfileText: text, eqProfileName: '自定义曲线');
+    await AppSettings.instance.update(
+      eqProfileText: text,
+      eqProfileName: '自定义曲线',
+    );
     if (context.mounted) showToast(context, '已导入自定义响度曲线');
   }
 
@@ -396,9 +401,7 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         title,
-        style: Theme.of(context)
-            .textTheme
-            .titleSmall
+        style: Theme.of(context).textTheme.titleSmall
             ?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
@@ -456,7 +459,8 @@ class _ImportEqDialogState extends State<_ImportEqDialog> {
             minLines: 4,
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
-              hintText: 'Preamp: -6.0 dB\n'
+              hintText:
+                  'Preamp: -6.0 dB\n'
                   'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71',
             ),
           ),

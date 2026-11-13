@@ -31,23 +31,24 @@ Widget host(String text, double width) {
 
 /// 长文本是否处于滚动态(存在位移 Transform)
 bool scrolling(WidgetTester tester) => find
-    .descendant(
-      of: find.byType(MarqueeText),
-      matching: find.byType(Transform),
-    )
+    .descendant(of: find.byType(MarqueeText), matching: find.byType(Transform))
     .evaluate()
     .isNotEmpty;
 
 double? offsetX(WidgetTester tester) {
-  final transforms = find
-      .descendant(of: find.byType(MarqueeText), matching: find.byType(Transform));
+  final transforms = find.descendant(
+    of: find.byType(MarqueeText),
+    matching: find.byType(Transform),
+  );
   if (transforms.evaluate().isEmpty) return null;
   final t = tester.widget<Transform>(transforms.first);
   return t.transform.getTranslation().x;
 }
 
 void main() {
-  testWidgets('长文本: 宽度连续 300→200→150→120→80 不抛 multiple tickers, 最终仍滚动', (tester) async {
+  testWidgets('长文本: 宽度连续 300→200→150→120→80 不抛 multiple tickers, 最终仍滚动', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(_longText, 300));
     await tester.pump();
     for (final w in const [200.0, 150.0, 120.0, 80.0]) {
@@ -94,7 +95,11 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(host(_longText, 150));
       await tester.pump();
-      expect(tester.takeException(), isNull, reason: '第 $i 轮抖动不应抛 multiple tickers');
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '第 $i 轮抖动不应抛 multiple tickers',
+      );
     }
     await tester.pump(const Duration(milliseconds: 1100));
     expect(scrolling(tester), isTrue, reason: '抖动后长文本仍应滚动');
@@ -117,25 +122,28 @@ void main() {
 
   testWidgets('reduce motion: 宽度连续变化不建动画也不抛断言', (tester) async {
     Widget rmHost(double width) => MaterialApp(
-          home: MediaQuery(
-            data: const MediaQueryData(
-              size: Size(400, 600),
-              disableAnimations: true,
-            ),
-            child: Scaffold(
-              body: Align(
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  width: width,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: MarqueeText(_longText, style: const TextStyle(fontSize: 16)),
-                  ),
+      home: MediaQuery(
+        data: const MediaQueryData(
+          size: Size(400, 600),
+          disableAnimations: true,
+        ),
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: width,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: MarqueeText(
+                  _longText,
+                  style: const TextStyle(fontSize: 16),
                 ),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
     await tester.pumpWidget(rmHost(300));
     await tester.pump();
     for (final w in const [200.0, 150.0, 120.0, 80.0]) {
@@ -153,20 +161,22 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     Widget narrowHost() => MaterialApp(
-          home: MediaQuery(
-            data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-            child: Scaffold(
-              body: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: MarqueeText(_longText,
-                      style: const TextStyle(fontSize: 16)),
-                ),
+      home: MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: MarqueeText(
+                _longText,
+                style: const TextStyle(fontSize: 16),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
     await tester.pumpWidget(narrowHost());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 30));
@@ -181,12 +191,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

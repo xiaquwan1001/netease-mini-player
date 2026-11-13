@@ -7,13 +7,12 @@ CommentStatsView view({
   int shareCount = 0,
   int likedCount = 0,
   int hotCount = 0,
-}) =>
-    CommentStatsView(
-      commentCount: commentCount,
-      shareCount: shareCount,
-      likedCount: likedCount,
-      hotCount: hotCount,
-    );
+}) => CommentStatsView(
+  commentCount: commentCount,
+  shareCount: shareCount,
+  likedCount: likedCount,
+  hotCount: hotCount,
+);
 
 Widget host(Widget child, {double width = 300, double scale = 1.0}) =>
     MaterialApp(
@@ -43,12 +42,16 @@ void main() {
     var comments = 0;
     var share = 0;
     var likes = 0;
-    await tester.pumpWidget(host(CommentStatsBar(
-      view: view(commentCount: 3, shareCount: 4, likedCount: 5),
-      onComments: () => comments = comments + 1,
-      onShare: () => share = share + 1,
-      onLikes: () => likes = likes + 1,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentStatsBar(
+          view: view(commentCount: 3, shareCount: 4, likedCount: 5),
+          onComments: () => comments = comments + 1,
+          onShare: () => share = share + 1,
+          onLikes: () => likes = likes + 1,
+        ),
+      ),
+    );
 
     expect(find.byType(InkWell), findsNWidgets(3));
 
@@ -68,9 +71,13 @@ void main() {
   });
 
   testWidgets('三项文案都渲染出来', (tester) async {
-    await tester.pumpWidget(host(CommentStatsBar(
-      view: view(commentCount: 12345, shareCount: 342, likedCount: 87),
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentStatsBar(
+          view: view(commentCount: 12345, shareCount: 342, likedCount: 87),
+        ),
+      ),
+    );
     expect(find.text('评论 1.2万'), findsOneWidget);
     expect(find.text('分享 342'), findsOneWidget);
     expect(find.text('点赞 87'), findsOneWidget);
@@ -80,17 +87,17 @@ void main() {
   });
 
   testWidgets('hotCount > 0 显示热评角标', (tester) async {
-    await tester.pumpWidget(host(CommentStatsBar(
-      view: view(commentCount: 100, hotCount: 7),
-    )));
+    await tester.pumpWidget(
+      host(CommentStatsBar(view: view(commentCount: 100, hotCount: 7))),
+    );
     expect(find.text('评论 100'), findsOneWidget);
     expect(find.text('(热评 7)'), findsOneWidget);
   });
 
   testWidgets('hotCount == 0 不显示热评角标', (tester) async {
-    await tester.pumpWidget(host(CommentStatsBar(
-      view: view(commentCount: 100, hotCount: 0),
-    )));
+    await tester.pumpWidget(
+      host(CommentStatsBar(view: view(commentCount: 100, hotCount: 0))),
+    );
     expect(find.text('评论 100'), findsOneWidget);
     expect(find.textContaining('热评'), findsNothing);
   });
@@ -104,11 +111,13 @@ void main() {
   });
 
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {
-    await tester.pumpWidget(host(
-      CommentStatsBar(view: view(commentCount: 123456, shareCount: 9876)),
-      width: 300,
-      scale: 1.25,
-    ));
+    await tester.pumpWidget(
+      host(
+        CommentStatsBar(view: view(commentCount: 123456, shareCount: 9876)),
+        width: 300,
+        scale: 1.25,
+      ),
+    );
     expect(tester.takeException(), isNull);
     final bar = tester.getSize(find.byType(CommentStatsBar));
     expect(bar.width, lessThanOrEqualTo(300));

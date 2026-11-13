@@ -22,8 +22,9 @@ void showToastWith(
     ..showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor:
-            isError ? Theme.of(messenger.context).colorScheme.error : null,
+        backgroundColor: isError
+            ? Theme.of(messenger.context).colorScheme.error
+            : null,
       ),
     );
 }

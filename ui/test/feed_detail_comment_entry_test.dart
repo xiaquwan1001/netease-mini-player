@@ -7,20 +7,20 @@ import 'package:minincm/src/rust/api.dart' as rust;
 /// 写评论面板聚焦输入框), 不能把详情页 pop 掉(曾经误写成 Navigator.pop)。
 
 rust.FeedEventDto event({bool withThread = true}) => rust.FeedEventDto(
-      id: BigInt.one,
-      threadId: withThread ? 'A_EV_2_1_1' : '',
-      userId: BigInt.one,
-      kind: 'text',
-      userName: '发动态的用户',
-      text: '一条用于评论入口回归测试的动态正文',
-      images: const [],
-      title: '',
-      timeMs: BigInt.from(1700000000000),
-      liked: false,
-      likedCount: BigInt.zero,
-      shareCount: BigInt.zero,
-      commentCount: BigInt.zero,
-    );
+  id: BigInt.one,
+  threadId: withThread ? 'A_EV_2_1_1' : '',
+  userId: BigInt.one,
+  kind: 'text',
+  userName: '发动态的用户',
+  text: '一条用于评论入口回归测试的动态正文',
+  images: const [],
+  title: '',
+  timeMs: BigInt.from(1700000000000),
+  liked: false,
+  likedCount: BigInt.zero,
+  shareCount: BigInt.zero,
+  commentCount: BigInt.zero,
+);
 
 Future<void> openDetail(
   WidgetTester tester, {
@@ -29,15 +29,17 @@ Future<void> openDetail(
 }) async {
   final ev = event(withThread: withThread);
   Widget page(BuildContext context) => TextButton(
-        onPressed: () => showFeedDetail(
-          context,
-          event: ev,
-          onPlaySongs: (_, _) {},
-          onOpenUrl: (_) async {},
-        ),
-        child: const Text('open'),
-      );
-  Widget tree = MaterialApp(home: Scaffold(body: Builder(builder: page)));
+    onPressed: () => showFeedDetail(
+      context,
+      event: ev,
+      onPlaySongs: (_, _) {},
+      onOpenUrl: (_) async {},
+    ),
+    child: const Text('open'),
+  );
+  Widget tree = MaterialApp(
+    home: Scaffold(body: Builder(builder: page)),
+  );
   if (narrow) {
     tree = MediaQuery(
       data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),

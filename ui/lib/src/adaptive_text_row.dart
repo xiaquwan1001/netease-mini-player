@@ -8,8 +8,10 @@ const double kBadgeCollapseBelowDefault = 120;
 
 /// 纯函数(便于单测): 标题区可用 [availableWidth] px 时, 徽标组是否还能显示.
 /// 判定口径: 宽度不足阈值 => 整组装饰性徽标收起, 绝不允许把标题压到 0 宽.
-bool shouldShowBadges(double availableWidth,
-    {double threshold = kBadgeCollapseBelowDefault}) {
+bool shouldShowBadges(
+  double availableWidth, {
+  double threshold = kBadgeCollapseBelowDefault,
+}) {
   return availableWidth >= threshold;
 }
 
@@ -77,7 +79,10 @@ class AdaptiveTextRow extends StatelessWidget {
             Expanded(child: titleWidget),
             if (showBadges)
               for (final badge in badges)
-                Padding(padding: EdgeInsets.only(left: badgeGap), child: badge),
+                Padding(
+                  padding: EdgeInsets.only(left: badgeGap),
+                  child: badge,
+                ),
           ],
         );
       },

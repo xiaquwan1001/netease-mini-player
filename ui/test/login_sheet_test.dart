@@ -12,10 +12,10 @@ import 'package:minincm/src/login_sheet.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.QrLoginKey key() => rust.QrLoginKey(
-      key: 'k-1',
-      url: 'https://music.163.com/login?codekey=k-1',
-      expiresIn: BigInt.from(180),
-    );
+  key: 'k-1',
+  url: 'https://music.163.com/login?codekey=k-1',
+  expiresIn: BigInt.from(180),
+);
 
 rust.QrLoginCheck check(rust.QrLoginState state, {int code = 801}) =>
     rust.QrLoginCheck(
@@ -49,15 +49,13 @@ Future<void> openSheet(
 }
 
 Widget host(void Function(BuildContext ctx) onOpen) => MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: () => onOpen(ctx),
-            child: const Text('open'),
-          ),
-        ),
-      ),
-    );
+  home: Scaffold(
+    body: Builder(
+      builder: (ctx) =>
+          TextButton(onPressed: () => onOpen(ctx), child: const Text('open')),
+    ),
+  ),
+);
 
 void main() {
   testWidgets('扫码: 待扫 → 已扫 → 确认, 弹层关闭并回调宿主', (tester) async {
@@ -71,19 +69,21 @@ void main() {
     var calls = 0;
     bool? result;
 
-    await tester.pumpWidget(host((ctx) async {
-      result = await showLoginSheet(
-        ctx,
-        createQr: () async => key(),
-        checkQr: (_) async {
-          final i = calls < states.length - 1 ? calls : states.length - 1;
-          calls++;
-          return states[i];
-        },
-        onLoggedIn: () async => loggedIn++,
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) async {
+        result = await showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_) async {
+            final i = calls < states.length - 1 ? calls : states.length - 1;
+            calls++;
+            return states[i];
+          },
+          onLoggedIn: () async => loggedIn++,
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     // 不推进动画(否则 300ms 里会连着跑掉好几次轮询)
     await openSheet(tester, animate: Duration.zero);
     expect(find.text('等待扫码…'), findsOneWidget);
@@ -110,17 +110,19 @@ void main() {
   testWidgets('二维码过期: 停轮询并提示刷新', (tester) async {
     await bigSurface(tester);
     var calls = 0;
-    await tester.pumpWidget(host((ctx) {
-      showLoginSheet(
-        ctx,
-        createQr: () async => key(),
-        checkQr: (_) async {
-          calls++;
-          return check(rust.QrLoginState.expired, code: 800);
-        },
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_) async {
+            calls++;
+            return check(rust.QrLoginState.expired, code: 800);
+          },
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     await openSheet(tester);
     await tester.pump(const Duration(milliseconds: 120));
     await tester.pump();
@@ -144,19 +146,21 @@ void main() {
     var committed = '';
     var loggedIn = 0;
     bool? result;
-    await tester.pumpWidget(host((ctx) async {
-      result = await showLoginSheet(
-        ctx,
-        createQr: () async => key(),
-        checkQr: (_) async => check(rust.QrLoginState.pending),
-        commitCookie: (cookie) async {
-          committed = cookie;
-          return true;
-        },
-        onLoggedIn: () async => loggedIn++,
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) async {
+        result = await showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_) async => check(rust.QrLoginState.pending),
+          commitCookie: (cookie) async {
+            committed = cookie;
+            return true;
+          },
+          onLoggedIn: () async => loggedIn++,
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     await openSheet(tester);
 
     await tester.tap(find.text('导入 Cookie'));
@@ -173,15 +177,17 @@ void main() {
 
   testWidgets('导入 Cookie: 没有 MUSIC_U 时报错且不关闭', (tester) async {
     await bigSurface(tester);
-    await tester.pumpWidget(host((ctx) {
-      showLoginSheet(
-        ctx,
-        createQr: () async => key(),
-        checkQr: (_) async => check(rust.QrLoginState.pending),
-        commitCookie: (_) async => false,
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_) async => check(rust.QrLoginState.pending),
+          commitCookie: (_) async => false,
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     await openSheet(tester);
 
     await tester.tap(find.text('导入 Cookie'));
@@ -197,18 +203,20 @@ void main() {
   testWidgets('导入 Cookie: 空输入直接提示', (tester) async {
     await bigSurface(tester);
     var called = 0;
-    await tester.pumpWidget(host((ctx) {
-      showLoginSheet(
-        ctx,
-        createQr: () async => key(),
-        checkQr: (_) async => check(rust.QrLoginState.pending),
-        commitCookie: (_) async {
-          called++;
-          return true;
-        },
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_) async => check(rust.QrLoginState.pending),
+          commitCookie: (_) async {
+            called++;
+            return true;
+          },
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     await openSheet(tester);
     await tester.tap(find.text('导入 Cookie'));
     await tester.pump(const Duration(milliseconds: 120));
@@ -222,18 +230,20 @@ void main() {
   testWidgets('申请二维码失败: 给出错误并能重试', (tester) async {
     await bigSurface(tester);
     var attempts = 0;
-    await tester.pumpWidget(host((ctx) {
-      showLoginSheet(
-        ctx,
-        createQr: () async {
-          attempts++;
-          if (attempts == 1) throw Exception('[network] boom');
-          return key();
-        },
-        checkQr: (_) async => check(rust.QrLoginState.pending),
-        pollInterval: const Duration(milliseconds: 100),
-      );
-    }));
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async {
+            attempts++;
+            if (attempts == 1) throw Exception('[network] boom');
+            return key();
+          },
+          checkQr: (_) async => check(rust.QrLoginState.pending),
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
     await openSheet(tester);
     expect(find.textContaining('申请二维码失败'), findsOneWidget);
 
@@ -248,28 +258,30 @@ void main() {
     // 面板比 300x800 视口矮不了多少, 沿用本文件的 setSurfaceSize 放大画布
     await tester.binding.setSurfaceSize(const Size(300, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context)
-            .copyWith(textScaler: const TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: Builder(
-          builder: (ctx) => TextButton(
-            onPressed: () {
-              showLoginSheet(
-                ctx,
-                createQr: () async => key(),
-                checkQr: (_) async => check(rust.QrLoginState.pending),
-                pollInterval: const Duration(milliseconds: 100),
-              );
-            },
-            child: const Text('open'),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Builder(
+            builder: (ctx) => TextButton(
+              onPressed: () {
+                showLoginSheet(
+                  ctx,
+                  createQr: () async => key(),
+                  checkQr: (_) async => check(rust.QrLoginState.pending),
+                  pollInterval: const Duration(milliseconds: 100),
+                );
+              },
+              child: const Text('open'),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await openSheet(tester);
 
     expect(tester.takeException(), isNull);

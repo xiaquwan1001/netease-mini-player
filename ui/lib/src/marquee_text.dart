@@ -9,12 +9,7 @@ import 'package:flutter/material.dart';
 /// - 系统开启 reduce motion(MediaQuery.disableAnimations)时退化为 ellipsis,
 ///   不打任何动画.
 class MarqueeText extends StatefulWidget {
-  const MarqueeText(
-    this.text, {
-    super.key,
-    this.style,
-    this.maxLines = 1,
-  });
+  const MarqueeText(this.text, {super.key, this.style, this.maxLines = 1});
 
   final String text;
 
@@ -93,7 +88,10 @@ class _MarqueeTextState extends State<MarqueeText>
     _offset = controller.drive(
       TweenSequence<double>([
         // 起点停 1s
-        TweenSequenceItem(tween: ConstantTween(0.0), weight: _pauseMs.toDouble()),
+        TweenSequenceItem(
+          tween: ConstantTween(0.0),
+          weight: _pauseMs.toDouble(),
+        ),
         TweenSequenceItem(
           tween: Tween(begin: 0.0, end: distance),
           weight: scrollMs.toDouble(),
@@ -159,11 +157,14 @@ class _MarqueeTextState extends State<MarqueeText>
         }
         // 需要滚动: 单行 + ClipRect + 位移.
         final distance = textWidth - maxWidth + _tailGap;
-        final key = '${identityHashCode(widget.text)}|$maxWidth|${scaler.hashCode}';
+        final key =
+            '${identityHashCode(widget.text)}|$maxWidth|${scaler.hashCode}';
         if (!_startScheduled && (_offset == null || _animKey != key)) {
           _animKey = key;
           _startScheduled = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) => _start(distance, key));
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _start(distance, key),
+          );
         }
         return ClipRect(
           child: SizedBox(

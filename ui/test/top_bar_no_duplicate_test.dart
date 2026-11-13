@@ -9,8 +9,11 @@ import 'package:minincm/main.dart';
 /// - 五个 tab 的首页都**没有** AppBar;
 /// - 歌词展开 / 歌单浏览态才有顶部栏(曲名·列表名 + 收起·返回按钮)。
 void main() {
-  Future<void> pumpHome(WidgetTester tester,
-      {Size size = const Size(1200, 2400), TextScaler? scaler}) async {
+  Future<void> pumpHome(
+    WidgetTester tester, {
+    Size size = const Size(1200, 2400),
+    TextScaler? scaler,
+  }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -18,14 +21,16 @@ void main() {
     // 底部导航/播放条现在由根布局的 PlayerBarHost 渲染(见 main.dart),
     // 测试也走同一条壳, 否则 NavigationBar 不会出现。
     addTearDown(() => playerBarSlot.value = null);
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) =>
-          PlayerBarHost(content: child ?? const SizedBox.shrink()),
-      home: MediaQuery(
-        data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
-        child: const HomePage(),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            PlayerBarHost(content: child ?? const SizedBox.shrink()),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
+          child: const HomePage(),
+        ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     addTearDown(() async {
@@ -42,7 +47,10 @@ void main() {
     expect(find.text('轻音 MiniNCM'), findsNothing);
     // 搜索框自身也有"搜索"字样, 这里只保证顶部不再有重复的标题区(无 AppBar 即无标题)
     expect(
-      find.descendant(of: find.byType(NavigationBar), matching: find.text('搜索')),
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('搜索'),
+      ),
       findsOneWidget,
     );
   });
@@ -59,13 +67,18 @@ void main() {
   });
 
   testWidgets('300dp + 1.25 字号: 壳不溢出, 顶部栏规则不变', (tester) async {
-    await pumpHome(tester,
-        size: const Size(300, 640), scaler: const TextScaler.linear(1.25));
+    await pumpHome(
+      tester,
+      size: const Size(300, 640),
+      scaler: const TextScaler.linear(1.25),
+    );
     expect(tester.takeException(), isNull);
     expect(find.byType(AppBar), findsNothing);
     expect(
       find.descendant(
-          of: find.byType(NavigationBar), matching: find.text('搜索')),
+        of: find.byType(NavigationBar),
+        matching: find.text('搜索'),
+      ),
       findsOneWidget,
     );
   });

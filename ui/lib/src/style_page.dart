@@ -12,7 +12,8 @@ import 'toast.dart' show showToast;
 /// /api/style-tag/home/{song,playlist}(见 ncm-service)。
 typedef StyleSongsLoader = Future<List<rust.SongDto>> Function(String tagId);
 typedef StylePlaylistsLoader = Future<List<rust.Playlist>> Function(
-    String tagId);
+  String tagId,
+);
 
 Future<void> showStyleDetail(
   BuildContext context, {
@@ -60,8 +61,7 @@ class StyleDetailView extends StatefulWidget {
 
 class _StyleDetailViewState extends State<StyleDetailView> {
   StyleSongsLoader get _songs =>
-      widget.loadSongs ??
-      (tagId) => rust.styleSongs(tagId: tagId, limit: 50);
+      widget.loadSongs ?? (tagId) => rust.styleSongs(tagId: tagId, limit: 50);
   StylePlaylistsLoader get _playlists =>
       widget.loadPlaylists ??
       (tagId) => rust.stylePlaylists(tagId: tagId, limit: 20);
@@ -164,14 +164,16 @@ class _StyleHeader extends StatelessWidget {
                 children: [
                   Text(
                     tag.name,
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '系统按你的听歌口味推荐',
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: scheme.outline),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.outline,
+                    ),
                   ),
                 ],
               ),
@@ -199,9 +201,7 @@ class _SectionTitle extends StatelessWidget {
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
+              style: Theme.of(context).textTheme.titleMedium
                   ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -368,8 +368,9 @@ class _SongList extends StatelessWidget {
                   ),
                   onTap: s.playable
                       ? () {
-                          final index =
-                              playable.indexWhere((x) => x.id == s.id);
+                          final index = playable.indexWhere(
+                            (x) => x.id == s.id,
+                          );
                           onPlay(playable, index < 0 ? 0 : index);
                         }
                       : null,

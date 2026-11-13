@@ -8,10 +8,10 @@ import 'package:minincm/src/marquee_text.dart';
 const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
 
 Widget host(Widget child) => MaterialApp(
-      home: Scaffold(
-        body: Align(alignment: Alignment.topLeft, child: child),
-      ),
-    );
+  home: Scaffold(
+    body: Align(alignment: Alignment.topLeft, child: child),
+  ),
+);
 
 Future<void> pump(WidgetTester tester, Widget child, {double? width}) async {
   if (width != null) {
@@ -44,10 +44,7 @@ void main() {
   testWidgets('宽度 60: 徽标隐藏, 标题占满且单行(宽>0, 不竖排)', (tester) async {
     await pump(
       tester,
-      const AdaptiveTextRow(
-        title: _longName,
-        badges: [Text('VIP')],
-      ),
+      const AdaptiveTextRow(title: _longName, badges: [Text('VIP')]),
       width: 60,
     );
     expect(find.text('VIP'), findsNothing);
@@ -101,13 +98,8 @@ void main() {
     expect(find.text('VIP'), findsOneWidget);
   });
 
-  testWidgets('超长标题走 marquee; marquee:false 退化为单行 ellipsis',
-      (tester) async {
-    await pump(
-      tester,
-      const AdaptiveTextRow(title: _longName),
-      width: 200,
-    );
+  testWidgets('超长标题走 marquee; marquee:false 退化为单行 ellipsis', (tester) async {
+    await pump(tester, const AdaptiveTextRow(title: _longName), width: 200);
     // MarqueeText 在, 且测量出需要滚动(动画 controller 已挂)
     expect(find.byType(MarqueeText), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
@@ -123,8 +115,7 @@ void main() {
     expect(box.size.height, lessThan(40));
   });
 
-  testWidgets('SongTile 用的组件路径: 窄宽 60 下多徽标整组隐藏且标题不 0 宽',
-      (tester) async {
+  testWidgets('SongTile 用的组件路径: 窄宽 60 下多徽标整组隐藏且标题不 0 宽', (tester) async {
     await pump(
       tester,
       const AdaptiveTextRow(
@@ -159,17 +150,19 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: AdaptiveTextRow(title: _longName, badges: [Text('VIP')]),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: AdaptiveTextRow(title: _longName, badges: [Text('VIP')]),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
@@ -186,12 +179,14 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
   tester.view.physicalSize = const Size(300, 640);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(MaterialApp(
-    builder: (context, child) => MediaQuery(
-      data: MediaQuery.of(context)
-          .copyWith(textScaler: const TextScaler.linear(1.25)),
-      child: child!,
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: const TextScaler.linear(1.25)),
+        child: child!,
+      ),
+      home: home,
     ),
-    home: home,
-  ));
+  );
 }

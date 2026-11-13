@@ -8,15 +8,15 @@ import 'package:minincm/src/login_sheet.dart';
 void main() {
   test('auth: 去掉 Exception/[auth], 保留动作前缀与服务端原文', () {
     expect(
-      friendlyLoginError(
-          '发送验证码失败: Exception: [auth] code=400: 手机号码不符合规范'),
+      friendlyLoginError('发送验证码失败: Exception: [auth] code=400: 手机号码不符合规范'),
       '发送验证码失败: 信息有误: code=400: 手机号码不符合规范',
     );
   });
 
   test('riskControl: 标签可读, 且原文仍在(便于判断是不是 8821)', () {
     final s = friendlyLoginError(
-        'Exception: [riskControl] code=8821: 安全环境风险, 请切换其他登录方式');
+      'Exception: [riskControl] code=8821: 安全环境风险, 请切换其他登录方式',
+    );
     expect(s, contains('被网易云安全风控拦截'));
     expect(s, contains('8821'));
     expect(s, isNot(contains('[riskControl]')));

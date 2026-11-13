@@ -3,19 +3,19 @@ import 'package:minincm/src/library_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto s(int id, {bool playable = true}) => rust.SongDto(
-      id: BigInt.from(id),
-      name: 'song$id',
-      artist: 'a',
-      artistId: BigInt.one,
-      album: 'b',
-      albumId: BigInt.zero,
-      coverUrl: null,
-      durationMs: BigInt.from(1000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: playable,
-    );
+  id: BigInt.from(id),
+  name: 'song$id',
+  artist: 'a',
+  artistId: BigInt.one,
+  album: 'b',
+  albumId: BigInt.zero,
+  coverUrl: null,
+  durationMs: BigInt.from(1000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: playable,
+);
 
 void main() {
   final all = [s(1), s(2, playable: false), s(3, playable: false), s(4)];

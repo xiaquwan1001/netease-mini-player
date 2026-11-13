@@ -268,8 +268,9 @@ class ProfileHeaderState extends State<ProfileHeader> {
                         ),
                         Text(
                           ' · ',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                         _StatEntry(
                           label: '粉丝 ${d?.followeds ?? BigInt.zero}',
@@ -277,15 +278,17 @@ class ProfileHeaderState extends State<ProfileHeader> {
                         ),
                         Text(
                           ' · Lv.${d?.level ?? BigInt.zero}',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: scheme.onSurfaceVariant),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     )
                   : Text(
                       '点击登录后同步账号资料',
-                      style: theme.textTheme.bodySmall
-                          ?.copyWith(color: scheme.onSurfaceVariant),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
             ),
           ],
@@ -305,10 +308,10 @@ class _StatEntry extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: onTap == null
-              ? Theme.of(context).colorScheme.onSurfaceVariant
-              : Theme.of(context).colorScheme.primary,
-        );
+      color: onTap == null
+          ? Theme.of(context).colorScheme.onSurfaceVariant
+          : Theme.of(context).colorScheme.primary,
+    );
     if (onTap == null) return Text(label, style: style);
     return InkWell(
       onTap: onTap,

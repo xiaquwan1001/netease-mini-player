@@ -32,7 +32,9 @@ pub use eq_profile::{
 pub use lrc::{parse_lrc, parse_lrc_with_translation, LyricLine};
 pub use playlist_edit::{CreatedPlaylist, PlaylistEditResult};
 pub use ttml::{parse_ttml, parse_ttml_time, TtmlLine, TtmlWord};
-pub use word_lyric::{parse_word_lyric, parse_word_lyric_with_translation, WordItem, WordLyric, WordLyricLine};
+pub use word_lyric::{
+    parse_word_lyric, parse_word_lyric_with_translation, WordItem, WordLyric, WordLyricLine,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TrackId(pub u64);
@@ -1589,8 +1591,16 @@ mod tests {
             id: TrackId::new(1),
             name: "n".into(),
             artists: vec![
-                Artist { id: 1, name: "A".into(), avatar_url: None },
-                Artist { id: 2, name: "B".into(), avatar_url: None },
+                Artist {
+                    id: 1,
+                    name: "A".into(),
+                    avatar_url: None,
+                },
+                Artist {
+                    id: 2,
+                    name: "B".into(),
+                    avatar_url: None,
+                },
             ],
             album: None,
             duration_ms: 0,

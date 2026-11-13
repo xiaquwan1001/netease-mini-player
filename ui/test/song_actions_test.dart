@@ -150,18 +150,20 @@ void main() {
       download: (_) async {},
       dislike: (_) async => disliked++,
     );
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: AppActions(
-          host: host,
-          // "不感兴趣"只在日推/FM 来源显示
-          child: SongOverflowButton(
-            song: fakeSong(),
-            source: SongActionSource.dailyRecommend,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppActions(
+            host: host,
+            // "不感兴趣"只在日推/FM 来源显示
+            child: SongOverflowButton(
+              song: fakeSong(),
+              source: SongActionSource.dailyRecommend,
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.byType(SongOverflowButton));
     await tester.pumpAndSettle();
     expect(find.text('不感兴趣'), findsOneWidget);
@@ -196,18 +198,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final fake = FakeHost();
-    await tester.pumpWidget(MaterialApp(
-      builder: (context, child) => MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: child!,
-      ),
-      home: Scaffold(
-        body: AppActions(
-          host: fake.host,
-          child: SongOverflowButton(song: fakeSong()),
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: AppActions(
+            host: fake.host,
+            child: SongOverflowButton(song: fakeSong()),
+          ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.byType(SongOverflowButton));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

@@ -40,9 +40,13 @@ void main() {
       await tester.pumpAndSettle();
       FlutterError.onError = previousOnError;
 
-      expect(errors, isEmpty,
-          reason: 'textScale=$scale 时布局应无异常: '
-              '${errors.isEmpty ? '' : errors.first.exceptionAsString()}');
+      expect(
+        errors,
+        isEmpty,
+        reason:
+            'textScale=$scale 时布局应无异常: '
+            '${errors.isEmpty ? '' : errors.first.exceptionAsString()}',
+      );
       // 「主题模式」三段都在, 且都能点(不被挤成竖排/裁掉)
       expect(find.text('跟随'), findsOneWidget);
       expect(find.text('浅色'), findsOneWidget);
@@ -67,9 +71,15 @@ void main() {
       // ListTile 默认 16 收到 12, 与页面 12 叠后共 24),
       // 否则整行会被外层 Column 的居中挤成"缩进"的样子。
       double contentLeft = 12 + 12;
-      expect(tester.getRect(find.text('主题模式')).left, moreOrLessEquals(contentLeft, epsilon: 0.5));
+      expect(
+        tester.getRect(find.text('主题模式')).left,
+        moreOrLessEquals(contentLeft, epsilon: 0.5),
+      );
       expect(board.left, moreOrLessEquals(contentLeft, epsilon: 0.5));
-      expect(tester.getRect(find.text('OLED 纯黑')).left, moreOrLessEquals(contentLeft, epsilon: 0.5));
+      expect(
+        tester.getRect(find.text('OLED 纯黑')).left,
+        moreOrLessEquals(contentLeft, epsilon: 0.5),
+      );
     }
 
     await tester.tap(find.text('深色'));

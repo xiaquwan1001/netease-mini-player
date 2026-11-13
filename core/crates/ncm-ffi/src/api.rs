@@ -12,15 +12,13 @@ pub use ncm_domain::{
     AlbumBrief, AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
     DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
     FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
-    Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession,
-    PhoneLoginResult, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState, RadioCategory, RadioExploreHome,
-    RadioPick, RadioRankedDj, SmsCodeSent,
-    RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RecentContact, SearchAlbum,
-    SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast, SigninDay, SigninStatus,
-    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
-    UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay,
-    VipTask,
-    WikiFact,
+    PhoneLoginResult, Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage,
+    PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState,
+    RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedRadio, RadioSubscriber,
+    RadioSubscriberPage, RecentContact, SearchAlbum, SearchArtist, SearchExact, SearchPlaylistItem,
+    SearchPodcast, SigninDay, SigninStatus, SmsCodeSent, SongPurchasedPage, StreamUrl, StyleTag,
+    SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel, UserMedal,
+    VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -74,7 +72,12 @@ pub fn init(data_dir: Option<String>) -> Result<InitInfo, String> {
         data_dir: dir,
         device_id: guard.session.device_id.clone(),
         logged_in: guard.session.is_logged_in(),
-        vip: guard.session.profile.as_ref().map(|p| p.vip).unwrap_or(false),
+        vip: guard
+            .session
+            .profile
+            .as_ref()
+            .map(|p| p.vip)
+            .unwrap_or(false),
         providers: guard
             .providers
             .all()
@@ -82,7 +85,11 @@ pub fn init(data_dir: Option<String>) -> Result<InitInfo, String> {
             .map(|p| ProviderInfo {
                 id: p.id().to_string(),
                 name: p.name().to_string(),
-                capabilities: p.capabilities().iter().map(|c| c.as_str().to_string()).collect(),
+                capabilities: p
+                    .capabilities()
+                    .iter()
+                    .map(|c| c.as_str().to_string())
+                    .collect(),
             })
             .collect(),
     })
@@ -237,7 +244,11 @@ pub struct SearchBundleDto {
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
 pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto, String> {
     let provider = with_provider(Capability::SearchAll)?;
-    let query = SearchQuery { keywords, limit, offset: 0 };
+    let query = SearchQuery {
+        keywords,
+        limit,
+        offset: 0,
+    };
     let bundle = provider
         .search_all(&query)
         .await
@@ -338,7 +349,11 @@ pub struct ArtistMvPageDto {
 }
 
 /// 歌手全部歌曲一页(artist_songs, offset/limit 分页)
-pub async fn artist_songs_page(artist_id: u64, offset: u32, limit: u32) -> Result<ArtistSongPageDto, String> {
+pub async fn artist_songs_page(
+    artist_id: u64,
+    offset: u32,
+    limit: u32,
+) -> Result<ArtistSongPageDto, String> {
     let provider = with_provider(Capability::Artist)?;
     let page = provider
         .artist_songs_page(artist_id, offset, limit)
@@ -351,7 +366,11 @@ pub async fn artist_songs_page(artist_id: u64, offset: u32, limit: u32) -> Resul
 }
 
 /// 歌手 MV 一页(artist_mv, offset/limit 分页)
-pub async fn artist_mvs_page(artist_id: u64, offset: u32, limit: u32) -> Result<ArtistMvPageDto, String> {
+pub async fn artist_mvs_page(
+    artist_id: u64,
+    offset: u32,
+    limit: u32,
+) -> Result<ArtistMvPageDto, String> {
     let provider = with_provider(Capability::Artist)?;
     let page = provider
         .artist_mvs_page(artist_id, offset, limit)
@@ -396,7 +415,11 @@ pub async fn mv_detail(mv_id: u64) -> Result<MvDetailDto, String> {
 pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, String> {
     let provider = with_provider(Capability::Artist)?;
     let u = provider.mv_url(mv_id, r).await.map_err(|e| e.to_string())?;
-    Ok(MvUrlDto { url: u.url, r: u.r, size: u.size })
+    Ok(MvUrlDto {
+        url: u.url,
+        r: u.r,
+        size: u.size,
+    })
 }
 
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
@@ -437,7 +460,10 @@ pub async fn user_profile(user_id: u64) -> Result<ProfileDetail, String> {
 /// 任意用户的公开歌单(他人主页; 不需要登录).
 /// 口径: 未登录时服务端只回公开歌单, 不含对方的"我喜欢的音乐".
 pub async fn user_playlists_of(user_id: u64, limit: u32) -> Result<Vec<Playlist>, String> {
-    ffi_forward!(Capability::Playlist, provider.user_playlists_of(user_id, limit))
+    ffi_forward!(
+        Capability::Playlist,
+        provider.user_playlists_of(user_id, limit)
+    )
 }
 
 /// 收藏曲目到指定歌单(需登录)
@@ -458,7 +484,10 @@ pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, String>
             .ok_or_else(|| "no provider supports songUrl".to_string())?
     };
     let level = ncm_provider::AudioLevel::parse(&level).unwrap_or_default();
-    let req = ncm_provider::SongUrlRequest { track: ncm_domain::TrackId::new(track_id), level };
+    let req = ncm_provider::SongUrlRequest {
+        track: ncm_domain::TrackId::new(track_id),
+        level,
+    };
     let stream = provider.song_url(&req).await.map_err(|e| e.to_string())?;
     Ok(stream)
 }
@@ -611,7 +640,9 @@ pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, String> {
     Ok(outcome.check)
 }
 
-fn credential_status_dto(status: ncm_service::credential_store::CredentialStatus) -> CredentialStatusDto {
+fn credential_status_dto(
+    status: ncm_service::credential_store::CredentialStatus,
+) -> CredentialStatusDto {
     use ncm_service::credential_store::CredentialStatus as S;
     let kind = match &status {
         S::Secure { .. } => "secure",
@@ -664,8 +695,7 @@ pub struct CredentialOpDto {
 /// 幂等(重复调用合并); 未激活时 open_backend 的 android 分支走既有同意门.
 /// 见 docs/android-keystore-wiring-design.md.
 pub fn credential_restore(entries: Vec<CredentialEntryDto>) -> Result<(), String> {
-    let converted: Vec<(String, String)> =
-        entries.into_iter().map(|e| (e.key, e.value)).collect();
+    let converted: Vec<(String, String)> = entries.into_iter().map(|e| (e.key, e.value)).collect();
     ncm_service::credential_channel::activate(converted);
     Ok(())
 }
@@ -677,12 +707,16 @@ pub fn credential_pending_writes() -> Result<Vec<CredentialOpDto>, String> {
     Ok(ncm_service::credential_channel::take_pending()
         .into_iter()
         .map(|op| match op {
-            CredOp::Put { key, value } => {
-                CredentialOpDto { op: "put".into(), key, value }
-            }
-            CredOp::Remove { key } => {
-                CredentialOpDto { op: "remove".into(), key, value: String::new() }
-            }
+            CredOp::Put { key, value } => CredentialOpDto {
+                op: "put".into(),
+                key,
+                value,
+            },
+            CredOp::Remove { key } => CredentialOpDto {
+                op: "remove".into(),
+                key,
+                value: String::new(),
+            },
         })
         .collect())
 }
@@ -748,7 +782,9 @@ pub async fn account_sync_active() -> Result<AccountDto, String> {
     debug_assert!(logged_in);
     let profile = provider.profile().await.map_err(|e| e.to_string())?;
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-    guard.remember_account(&profile).map_err(|e| e.to_string())?;
+    guard
+        .remember_account(&profile)
+        .map_err(|e| e.to_string())?;
     Ok(AccountDto {
         user_id: profile.user_id,
         nickname: profile.nickname,
@@ -792,9 +828,7 @@ pub struct _Playlist {
     pub special: bool,
 }
 
-fn with_provider(
-    cap: Capability,
-) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, String> {
+fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, String> {
     let guard = core()?.lock().map_err(|e| e.to_string())?;
     guard
         .providers
@@ -811,7 +845,10 @@ pub async fn liked_ids() -> Result<Vec<u64>, String> {
 
 /// 红心/取消红心(需登录)
 pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, String> {
-    ffi_forward!(Capability::Playlist, provider.set_like(ncm_domain::TrackId::new(track_id), liked))
+    ffi_forward!(
+        Capability::Playlist,
+        provider.set_like(ncm_domain::TrackId::new(track_id), liked)
+    )
 }
 
 /// 我的歌单(含"我喜欢的音乐")
@@ -847,7 +884,11 @@ pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
     let mut by_id: std::collections::HashMap<u64, ncm_domain::Song> =
         std::collections::HashMap::new();
     for chunk in ids.chunks(500) {
-        let joined = chunk.iter().map(|t| t.0.to_string()).collect::<Vec<_>>().join(",");
+        let joined = chunk
+            .iter()
+            .map(|t| t.0.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
         let detail = provider
             .songs_detail(&joined)
             .await
@@ -856,7 +897,11 @@ pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
             by_id.insert(s.id.0, s);
         }
     }
-    Ok(ids.iter().filter_map(|t| by_id.remove(&t.0)).map(song_dto).collect())
+    Ok(ids
+        .iter()
+        .filter_map(|t| by_id.remove(&t.0))
+        .map(song_dto)
+        .collect())
 }
 
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)
@@ -884,7 +929,11 @@ pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, String
         lyric.translated.as_deref(),
     )
     .into_iter()
-    .map(|l| LyricLineDto { time_ms: l.time_ms, text: l.text, sub: l.sub })
+    .map(|l| LyricLineDto {
+        time_ms: l.time_ms,
+        text: l.text,
+        sub: l.sub,
+    })
     .collect())
 }
 
@@ -980,9 +1029,9 @@ pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, Str
         .ok_or_else(|| "core not initialized".to_string())?
         .clone();
     match ncm_service::ttml_source::fetch_ttml(&dir, track_id).await {
-        Ok(Some(doc)) => Ok(Some(word_lyric_dto(ncm_service::ttml_source::ttml_to_word_lyric(
-            &doc,
-        )))),
+        Ok(Some(doc)) => Ok(Some(word_lyric_dto(
+            ncm_service::ttml_source::ttml_to_word_lyric(&doc),
+        ))),
         Ok(None) => Ok(None),
         Err(e) => Err(e),
     }
@@ -1121,7 +1170,6 @@ pub fn player_set_volume(volume: f32) -> PlayerStateDto {
     state_dto()
 }
 
-
 // ---------------- 播放参数: 精细音量 / 淡入 / 自定义曲线 (R2/R5/R7) ----------------
 
 /// 当前生效的播放参数(回显给 UI, 便于确认设置真的落地了)
@@ -1138,10 +1186,18 @@ pub struct PlaybackTuningDto {
 
 fn tuning_dto(t: &ncm_playback::PlaybackTuning) -> PlaybackTuningDto {
     let (filters, preamp) = match &t.eq {
-        Some(profile) => (profile.active_filters().count() as u32, profile.preamp_db as f64),
+        Some(profile) => (
+            profile.active_filters().count() as u32,
+            profile.preamp_db as f64,
+        ),
         None => (0, 0.0),
     };
-    PlaybackTuningDto { gain_db: t.gain_db as f64, fade_ms: t.fade_ms, eq_filters: filters, eq_preamp_db: preamp }
+    PlaybackTuningDto {
+        gain_db: t.gain_db as f64,
+        fade_ms: t.fade_ms,
+        eq_filters: filters,
+        eq_preamp_db: preamp,
+    }
 }
 
 /// 曲线校验结果(导入时给 UI 显示"生效了 N 个滤波器 / 前级 -6 dB / 峰值抬升 +2.5 dB")
@@ -1276,14 +1332,18 @@ fn loudness_dto(track_id: u64, l: ncm_domain::TrackLoudness, target_lufs: f64) -
 }
 
 fn loudness_store() -> Result<ncm_service::LoudnessStore, String> {
-    let dir = DATA_DIR.get().ok_or_else(|| "core not initialized".to_string())?;
+    let dir = DATA_DIR
+        .get()
+        .ok_or_else(|| "core not initialized".to_string())?;
     Ok(ncm_service::LoudnessStore::open(dir))
 }
 
 /// 读缓存的响度(没测过就是 None, 播放时按 0 dB 处理)
 pub fn loudness_cached(track_id: u64, target_lufs: f64) -> Result<Option<LoudnessDto>, String> {
     let store = loudness_store()?;
-    Ok(store.get(track_id).map(|l| loudness_dto(track_id, *l, target_lufs)))
+    Ok(store
+        .get(track_id)
+        .map(|l| loudness_dto(track_id, *l, target_lufs)))
 }
 
 /// 测量已缓存音频文件的响度并写入 `loudness.json`。未缓存该曲目时返回 None(不下载)。
@@ -1305,9 +1365,10 @@ pub async fn loudness_measure_cached(
         return Ok(None);
     };
     let path_for_task = path.clone();
-    let measured = tokio::task::spawn_blocking(move || ncm_playback::loudness::measure_file(&path_for_task))
-        .await
-        .map_err(|e| e.to_string())??;
+    let measured =
+        tokio::task::spawn_blocking(move || ncm_playback::loudness::measure_file(&path_for_task))
+            .await
+            .map_err(|e| e.to_string())??;
     let Some(m) = measured else {
         return Ok(None);
     };
@@ -1320,7 +1381,6 @@ pub async fn loudness_measure_cached(
     store.put(track_id, entry)?;
     Ok(Some(loudness_dto(track_id, entry, target_lufs)))
 }
-
 
 /// 测量任意音频文件路径的响度并写入 `loudness.json`(Android 侧 Media3 的 SimpleCache 文件用)。
 pub async fn loudness_measure_path(
@@ -1369,7 +1429,10 @@ pub async fn daily_recommend_songs() -> Result<Vec<SongDto>, String> {
 
 /// 每日推荐歌单(原版推荐歌单, 需要登录)
 pub async fn daily_recommend_playlists() -> Result<Vec<Playlist>, String> {
-    ffi_forward!(Capability::DailyRecommend, provider.daily_recommend_playlists())
+    ffi_forward!(
+        Capability::DailyRecommend,
+        provider.daily_recommend_playlists()
+    )
 }
 
 /// 心动模式: 以当前曲目为种子, 在 playlist_id(0 = 不限定)里续播 count 首
@@ -1404,7 +1467,10 @@ pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, String
     if keywords.trim().is_empty() {
         return Ok(Vec::new());
     }
-    ffi_forward!(Capability::SearchSuggest, provider.search_suggest(keywords.trim()))
+    ffi_forward!(
+        Capability::SearchSuggest,
+        provider.search_suggest(keywords.trim())
+    )
 }
 
 fn history_store() -> Result<ncm_service::HistoryStore, String> {
@@ -1521,7 +1587,10 @@ pub struct _PlaylistDetail {
 
 /// 歌单详情(歌单页头部信息)
 pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetail, String> {
-    ffi_forward!(Capability::PlaylistDetail, provider.playlist_detail(playlist_id))
+    ffi_forward!(
+        Capability::PlaylistDetail,
+        provider.playlist_detail(playlist_id)
+    )
 }
 
 /// 收藏/取消收藏歌单(需登录)
@@ -1662,24 +1731,34 @@ pub async fn digital_album_purchased(
     limit: u32,
     offset: u32,
 ) -> Result<DigitalAlbumPurchased, String> {
-    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_purchased(limit, offset))
+    ffi_forward!(
+        Capability::DigitalAlbum,
+        provider.digital_album_purchased(limit, offset)
+    )
 }
 
 /// 已购单曲(需登录; limit/offset 分页)
 pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedPage, String> {
-    ffi_forward!(Capability::DigitalAlbum, provider.song_purchased(limit, offset))
+    ffi_forward!(
+        Capability::DigitalAlbum,
+        provider.song_purchased(limit, offset)
+    )
 }
 
 /// 数字专辑详情(只读; 不提供下单)
 pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, String> {
-    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_detail(album_id))
+    ffi_forward!(
+        Capability::DigitalAlbum,
+        provider.digital_album_detail(album_id)
+    )
 }
 
 /// 数字专辑销量(album_ids 逗号分隔)
-pub async fn digital_album_sales(
-    album_ids: String,
-) -> Result<Vec<DigitalAlbumSalesEntry>, String> {
-    ffi_forward!(Capability::DigitalAlbum, provider.digital_album_sales(&album_ids))
+pub async fn digital_album_sales(album_ids: String) -> Result<Vec<DigitalAlbumSalesEntry>, String> {
+    ffi_forward!(
+        Capability::DigitalAlbum,
+        provider.digital_album_sales(&album_ids)
+    )
 }
 
 /// 评论列表: kind = song | playlist | album | podcast
@@ -1689,7 +1768,10 @@ pub async fn comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, String> {
-    ffi_forward!(Capability::Comment, provider.comments(&kind, resource_id, limit, offset))
+    ffi_forward!(
+        Capability::Comment,
+        provider.comments(&kind, resource_id, limit, offset)
+    )
 }
 
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
@@ -1704,7 +1786,10 @@ pub async fn hot_comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, String> {
-    ffi_forward!(Capability::Comment, provider.hot_comments(&thread_id, limit, offset))
+    ffi_forward!(
+        Capability::Comment,
+        provider.hot_comments(&thread_id, limit, offset)
+    )
 }
 
 /// 分享资源到动态(需登录). kind = song | playlist | album | podcast
@@ -1881,7 +1966,10 @@ pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadio>, String> 
 /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
 pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, String> {
     let provider = with_provider(Capability::RadioExplore)?;
-    let r = provider.radio_toplist(&kind).await.map_err(|e| e.to_string())?;
+    let r = provider
+        .radio_toplist(&kind)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(RadioToplistDto {
         kind,
         radios: r.radios,
@@ -1904,7 +1992,10 @@ pub async fn radio_subscribers(
     limit: u32,
     time_ms: Option<u64>,
 ) -> Result<RadioSubscriberPage, String> {
-    ffi_forward!(Capability::RadioExplore, provider.radio_subscribers(radio_id, limit, time_ms))
+    ffi_forward!(
+        Capability::RadioExplore,
+        provider.radio_subscribers(radio_id, limit, time_ms)
+    )
 }
 
 // ---------------- 搜索页(热词/推荐词) ----------------
@@ -1936,7 +2027,10 @@ pub struct _SearchExact {
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
 pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, String> {
-    ffi_forward!(Capability::SearchSuggest, provider.search_suggest_keywords(&keywords))
+    ffi_forward!(
+        Capability::SearchSuggest,
+        provider.search_suggest_keywords(&keywords)
+    )
 }
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
@@ -2067,7 +2161,10 @@ pub async fn event_comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, String> {
-    ffi_forward!(Capability::Feed, provider.event_comments(&thread_id, limit, offset))
+    ffi_forward!(
+        Capability::Feed,
+        provider.event_comments(&thread_id, limit, offset)
+    )
 }
 
 /// 点赞/取消点赞一条动态
@@ -2077,7 +2174,10 @@ pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, String> 
 
 /// 转发一条动态(附转发语)
 pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, String> {
-    ffi_forward!(Capability::Feed, provider.forward_event(event_id, user_id, &msg))
+    ffi_forward!(
+        Capability::Feed,
+        provider.forward_event(event_id, user_id, &msg)
+    )
 }
 
 pub struct PlayRankEntryDto {
@@ -2093,7 +2193,10 @@ pub struct PlayRankEntryDto {
 pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, String> {
     let provider = with_provider(Capability::ListeningRank)?;
     let period = RankingPeriod::parse(&period).unwrap_or_default();
-    let list = provider.play_ranking(period).await.map_err(|e| e.to_string())?;
+    let list = provider
+        .play_ranking(period)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(list
         .into_iter()
         .map(|e| PlayRankEntryDto {
@@ -2131,7 +2234,10 @@ pub async fn style_songs(tag_id: String, limit: u32) -> Result<Vec<SongDto>, Str
 
 /// 某个曲风下的歌单
 pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<Playlist>, String> {
-    ffi_forward!(Capability::StyleRecommend, provider.style_playlists(&tag_id, limit))
+    ffi_forward!(
+        Capability::StyleRecommend,
+        provider.style_playlists(&tag_id, limit)
+    )
 }
 
 #[frb(mirror(ChartSummary))]
@@ -2235,42 +2341,66 @@ pub async fn subscribed_albums(limit: u32) -> Result<Vec<AlbumItem>, String> {
 
 /// 收藏/取消收藏专辑(需登录)
 pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<bool, String> {
-    ffi_forward!(Capability::AlbumSub, provider.set_album_subscribed(album_id, subscribed))
+    ffi_forward!(
+        Capability::AlbumSub,
+        provider.set_album_subscribed(album_id, subscribed)
+    )
 }
 
 /// 新建歌单(需登录), 返回新歌单 id. privacy: 0=公开 10=私密
 pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.create_playlist(&name, privacy as u8))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.create_playlist(&name, privacy as u8)
+    )
 }
 
 /// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
 pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result<bool, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.playlist_tracks_add(playlist_id, &song_ids))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.playlist_tracks_add(playlist_id, &song_ids)
+    )
 }
 
 /// 删除歌单(需登录, 且只能删自己的)
 pub async fn delete_playlist(playlist_id: u64) -> Result<bool, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.delete_playlist(playlist_id))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.delete_playlist(playlist_id)
+    )
 }
 
 /// 改歌单名
 pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.rename_playlist(playlist_id, &name))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.rename_playlist(playlist_id, &name)
+    )
 }
 
 /// 改歌单简介
 pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.update_playlist_desc(playlist_id, &desc))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.update_playlist_desc(playlist_id, &desc)
+    )
 }
 
 /// 把一首歌移出歌单(需登录)
 pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
-    ffi_forward!(Capability::PlaylistEdit, provider.remove_track(playlist_id, ncm_domain::TrackId::new(track_id)))
+    ffi_forward!(
+        Capability::PlaylistEdit,
+        provider.remove_track(playlist_id, ncm_domain::TrackId::new(track_id))
+    )
 }
 
 /// 每日推荐"不感兴趣"(需登录)
 pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, String> {
-    ffi_forward!(Capability::DailyRecommend, provider.dislike_recommend_song(song_id))
+    ffi_forward!(
+        Capability::DailyRecommend,
+        provider.dislike_recommend_song(song_id)
+    )
 }
 
 /// 私人 FM"不再播放"(需登录)
@@ -2280,7 +2410,10 @@ pub async fn trash_fm_song(song_id: u64) -> Result<bool, String> {
 
 /// 历史日推可用日期(黑胶 VIP; 新的在前)
 pub async fn history_recommend_dates() -> Result<Vec<String>, String> {
-    ffi_forward!(Capability::DailyRecommend, provider.history_recommend_dates())
+    ffi_forward!(
+        Capability::DailyRecommend,
+        provider.history_recommend_dates()
+    )
 }
 
 /// 某个日期的历史日推曲目
@@ -2324,11 +2457,7 @@ pub async fn similar_artists(artist_id: u64) -> Result<Vec<Artist>, String> {
 }
 
 /// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
-pub async fn like_comment(
-    thread_id: String,
-    comment_id: u64,
-    liked: bool,
-) -> Result<bool, String> {
+pub async fn like_comment(thread_id: String, comment_id: u64, liked: bool) -> Result<bool, String> {
     let provider = with_provider(Capability::Comment)?;
     provider
         .like_comment(&thread_id, comment_id, liked)
@@ -2342,7 +2471,10 @@ pub async fn comment_replies(
     parent_comment_id: u64,
     limit: u32,
 ) -> Result<CommentPage, String> {
-    ffi_forward!(Capability::Comment, provider.comment_replies(&thread_id, parent_comment_id, limit))
+    ffi_forward!(
+        Capability::Comment,
+        provider.comment_replies(&thread_id, parent_comment_id, limit)
+    )
 }
 
 /// 回复某条评论(需登录)
@@ -2371,18 +2503,27 @@ pub struct _UserItem {
 
 /// 某人关注的人(uid = 0 用当前账号)
 pub async fn user_follows(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, String> {
-    ffi_forward!(Capability::Follow, provider.user_follows(uid, limit, offset))
+    ffi_forward!(
+        Capability::Follow,
+        provider.user_follows(uid, limit, offset)
+    )
 }
 
 /// 某人的粉丝(uid = 0 用当前账号)
 pub async fn user_followeds(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, String> {
-    ffi_forward!(Capability::Follow, provider.user_followeds(uid, limit, offset))
+    ffi_forward!(
+        Capability::Follow,
+        provider.user_followeds(uid, limit, offset)
+    )
 }
 
 /// 关注/取关某人(需登录)
 pub async fn set_follow(uid: u64, follow: bool) -> Result<bool, String> {
     let provider = with_provider(Capability::Follow)?;
-    provider.set_follow(uid, follow).await.map_err(|e| e.to_string())
+    provider
+        .set_follow(uid, follow)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 关注/粉丝数: 直接镜像 domain 类型 `FollowCount`.
@@ -2451,7 +2592,10 @@ pub async fn sign_in() -> Result<SigninStatus, String> {
 
 /// 删除自己的评论(需登录)
 pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, String> {
-    ffi_forward!(Capability::Comment, provider.delete_comment(&thread_id, comment_id))
+    ffi_forward!(
+        Capability::Comment,
+        provider.delete_comment(&thread_id, comment_id)
+    )
 }
 
 #[frb(mirror(WikiFact))]
@@ -2479,7 +2623,10 @@ pub async fn new_songs_by_area(area: String, limit: u32) -> Result<Vec<SongDto>,
 
 /// 新碟上架(按地区)
 pub async fn new_albums_by_area(area: String, limit: u32) -> Result<Vec<AlbumItem>, String> {
-    ffi_forward!(Capability::NewRelease, provider.new_albums_by_area(&area, limit))
+    ffi_forward!(
+        Capability::NewRelease,
+        provider.new_albums_by_area(&area, limit)
+    )
 }
 
 /// 热门歌手: 直接镜像 domain 类型 `HotArtist`.
@@ -2530,11 +2677,11 @@ pub struct _PrivateSession {
 }
 
 /// 私信会话列表(需登录)
-pub async fn private_sessions(
-    limit: u32,
-    offset: u32,
-) -> Result<Vec<PrivateSession>, String> {
-    ffi_forward!(Capability::Message, provider.private_sessions(limit, offset))
+pub async fn private_sessions(limit: u32, offset: u32) -> Result<Vec<PrivateSession>, String> {
+    ffi_forward!(
+        Capability::Message,
+        provider.private_sessions(limit, offset)
+    )
 }
 
 #[frb(mirror(PrivateMessage))]
@@ -2553,7 +2700,10 @@ pub async fn private_history(
     limit: u32,
     before_ms: u64,
 ) -> Result<Vec<PrivateMessage>, String> {
-    ffi_forward!(Capability::Message, provider.private_history(user_id, limit, before_ms))
+    ffi_forward!(
+        Capability::Message,
+        provider.private_history(user_id, limit, before_ms)
+    )
 }
 
 #[frb(mirror(InboxItem))]
@@ -2568,13 +2718,12 @@ pub struct _InboxItem {
     pub time_ms: u64,
 }
 
-
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
-pub async fn message_notices(
-    limit: u32,
-    last_time_ms: u64,
-) -> Result<Vec<InboxItem>, String> {
-    ffi_forward!(Capability::Message, provider.message_notices(limit, last_time_ms))
+pub async fn message_notices(limit: u32, last_time_ms: u64) -> Result<Vec<InboxItem>, String> {
+    ffi_forward!(
+        Capability::Message,
+        provider.message_notices(limit, last_time_ms)
+    )
 }
 
 /// 评论/回复消息(需登录, 新的在前)
@@ -2597,7 +2746,10 @@ pub struct _ForwardItem {
 
 /// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
 pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItem>, String> {
-    ffi_forward!(Capability::Message, provider.forward_messages(limit, last_time_ms))
+    ffi_forward!(
+        Capability::Message,
+        provider.forward_messages(limit, last_time_ms)
+    )
 }
 
 #[frb(mirror(RecentContact))]
@@ -2619,7 +2771,12 @@ pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContact>, String> {
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 pub fn my_uid() -> Result<u64, String> {
     let guard = core()?.lock().map_err(|e| e.to_string())?;
-    Ok(guard.session.profile.as_ref().map(|p| p.user_id).unwrap_or(0))
+    Ok(guard
+        .session
+        .profile
+        .as_ref()
+        .map(|p| p.user_id)
+        .unwrap_or(0))
 }
 
 /// 黑胶会员等级
@@ -2751,6 +2908,3 @@ pub async fn user_medals() -> Result<Vec<UserMedal>, String> {
     let wall = provider.user_medals().await.map_err(|e| e.to_string())?;
     Ok(wall.medals)
 }
-
-
-

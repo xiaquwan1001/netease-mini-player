@@ -13,22 +13,21 @@ rust.Comment c(
   String? repliedTo,
   int parentId = 0,
   int replyCount = 0,
-}) =>
-    rust.Comment(
-      id: BigInt.from(id),
-      userId: BigInt.from(100 + id),
-      userName: '用户$id',
-      avatarUrl: null,
-      content: content,
-      timeMs: BigInt.from(1700000000000),
-      likedCount: BigInt.zero,
-      liked: false,
-      replyCount: BigInt.from(replyCount),
-      ipLocation: '',
-      hot: false,
-      repliedTo: repliedTo,
-      parentId: BigInt.from(parentId),
-    );
+}) => rust.Comment(
+  id: BigInt.from(id),
+  userId: BigInt.from(100 + id),
+  userName: '用户$id',
+  avatarUrl: null,
+  content: content,
+  timeMs: BigInt.from(1700000000000),
+  likedCount: BigInt.zero,
+  liked: false,
+  replyCount: BigInt.from(replyCount),
+  ipLocation: '',
+  hot: false,
+  repliedTo: repliedTo,
+  parentId: BigInt.from(parentId),
+);
 
 Future<void> pumpThread(
   WidgetTester tester,

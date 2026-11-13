@@ -115,7 +115,11 @@ impl AccountBook {
     /// 新增或更新(同一个 uid 只留一条), 并设为当前账号
     pub fn upsert(&mut self, account: StoredAccount) {
         self.active = Some(account.user_id);
-        match self.accounts.iter_mut().find(|a| a.user_id == account.user_id) {
+        match self
+            .accounts
+            .iter_mut()
+            .find(|a| a.user_id == account.user_id)
+        {
             Some(slot) => *slot = account,
             None => self.accounts.push(account),
         }
@@ -255,9 +259,10 @@ impl IdentityStore {
             policy.backend = self.credential_status().backend_name().to_string();
             policy.save(&self.dir)?;
             *self.cred_status.lock().unwrap() = match self.credential_status() {
-                CredentialStatus::Secure { backend, .. } => {
-                    CredentialStatus::Secure { backend, migrated: true }
-                }
+                CredentialStatus::Secure { backend, .. } => CredentialStatus::Secure {
+                    backend,
+                    migrated: true,
+                },
                 CredentialStatus::PlaintextConsented { .. } => {
                     CredentialStatus::PlaintextConsented { migrated: true }
                 }
@@ -546,8 +551,7 @@ pub fn merge_device_cookie_with(
         .or_insert_with(|| format!("{nuid},{now_ms}"));
     map.entry("WNMCID".into())
         .or_insert_with(|| format!("{}.{}.01.0", random_alpha(6), now_ms));
-    map.entry("NMTID".into())
-        .or_insert_with(|| random_hex(8));
+    map.entry("NMTID".into()).or_insert_with(|| random_hex(8));
 
     map.iter()
         .map(|(k, v)| format!("{k}={v}"))
@@ -690,7 +694,14 @@ mod tests {
         for gone in ["MUSIC_U", "__csrf", "JSESSIONID-WYYY"] {
             assert!(!out.contains(gone), "{gone} 还在: {out}");
         }
-        for kept in ["deviceId=DEV", "_ntes_nuid=aa", "_ntes_nnid=aa,1", "WNMCID=w", "NMTID=n", "os=android"] {
+        for kept in [
+            "deviceId=DEV",
+            "_ntes_nuid=aa",
+            "_ntes_nnid=aa,1",
+            "WNMCID=w",
+            "NMTID=n",
+            "os=android",
+        ] {
             assert!(out.contains(kept), "{kept} 丢了: {out}");
         }
         // 清完之后再合并一次(等价于 App 重启加载), 指纹不能变
@@ -723,7 +734,10 @@ mod tests {
         let migrated = merge_device_cookie_with(existing, "", "DEV", &ANDROID_PROFILE);
         assert!(migrated.contains("os=android"), "{migrated}");
         assert!(!migrated.contains("os=pc"), "{migrated}");
-        assert!(migrated.contains("appver=8.20.20.231215173437"), "{migrated}");
+        assert!(
+            migrated.contains("appver=8.20.20.231215173437"),
+            "{migrated}"
+        );
         // 指纹与凭据原样保留
         assert!(migrated.contains("_ntes_nuid=aa"), "{migrated}");
         assert!(migrated.contains("WNMCID=w"), "{migrated}");
@@ -787,8 +801,14 @@ mod tests {
 
         // 后端里是凭据
         let creds = store.credential_backend().unwrap();
-        assert_eq!(creds.get(CredentialKey::Session).unwrap().as_deref(), Some("MUSIC_U=old_secret; __csrf=c9"));
-        assert_eq!(creds.get(CredentialKey::Account(1001)).unwrap().as_deref(), Some("MUSIC_U=acct_secret; __csrf=a1"));
+        assert_eq!(
+            creds.get(CredentialKey::Session).unwrap().as_deref(),
+            Some("MUSIC_U=old_secret; __csrf=c9")
+        );
+        assert_eq!(
+            creds.get(CredentialKey::Account(1001)).unwrap().as_deref(),
+            Some("MUSIC_U=acct_secret; __csrf=a1")
+        );
 
         // identity.json 只剩设备指纹(骨架), 不再含登录键
         let on_disk = fs::read_to_string(store.path()).unwrap();
@@ -829,7 +849,9 @@ mod tests {
         store.save(&legacy).unwrap();
         store.set_credential_backend(
             None,
-            CredentialStatus::PlaintextFallback { reason: "测试: 未同意".into() },
+            CredentialStatus::PlaintextFallback {
+                reason: "测试: 未同意".into(),
+            },
         );
         let migrated = store.migrate_legacy_cleartext().unwrap();
         assert!(!migrated);

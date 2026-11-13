@@ -14,49 +14,53 @@ rust.Comment comment(
   int likedCount = 0,
   int replyCount = 0,
   bool hot = false,
-}) =>
-    rust.Comment(
-      id: BigInt.from(id),
-      userId: BigInt.from(100 + id),
-      userName: '用户$id',
-      avatarUrl: null,
-      content: content,
-      timeMs: BigInt.from(1700000000000 + id),
-      likedCount: BigInt.from(likedCount),
-      liked: false,
-      replyCount: BigInt.from(replyCount),
-      ipLocation: '',
-      hot: hot,
-      parentId: BigInt.zero,
-    );
+}) => rust.Comment(
+  id: BigInt.from(id),
+  userId: BigInt.from(100 + id),
+  userName: '用户$id',
+  avatarUrl: null,
+  content: content,
+  timeMs: BigInt.from(1700000000000 + id),
+  likedCount: BigInt.from(likedCount),
+  liked: false,
+  replyCount: BigInt.from(replyCount),
+  ipLocation: '',
+  hot: hot,
+  parentId: BigInt.zero,
+);
 
-rust.CommentPage page(List<rust.Comment> items,
-        {String threadId = 'R_SO_4_1'}) =>
-    rust.CommentPage(
-      threadId: threadId,
-      comments: items,
-      total: BigInt.from(items.length),
-      hasMore: false,
-    );
+rust.CommentPage page(
+  List<rust.Comment> items, {
+  String threadId = 'R_SO_4_1',
+}) => rust.CommentPage(
+  threadId: threadId,
+  comments: items,
+  total: BigInt.from(items.length),
+  hasMore: false,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('预览: 回复 >3 条时行内展示点赞最高的 3 条, 其余靠展开入口', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 5, likedCount: 10)]),
-      loadReplies: (parentId, limit) async => page([
-        comment(2, '赞少', likedCount: 1),
-        comment(3, '赞多一', likedCount: 9),
-        comment(4, '赞多二', likedCount: 8),
-        comment(5, '赞中', likedCount: 5),
-      ]),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 5, likedCount: 10)]),
+          loadReplies: (parentId, limit) async => page([
+            comment(2, '赞少', likedCount: 1),
+            comment(3, '赞多一', likedCount: 9),
+            comment(4, '赞多二', likedCount: 8),
+            comment(5, '赞中', likedCount: 5),
+          ]),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump(); // 首页到位 + 排队
     await tester.pump(); // 预览响应落地
     await tester.pump();
@@ -69,18 +73,22 @@ void main() {
   });
 
   testWidgets('预览: 回复 ≤3 条全部展示, 且不给「展开」按钮(冗余)', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 2)]),
-      loadReplies: (parentId, limit) async => page([
-        comment(2, '回复甲', likedCount: 4),
-        comment(3, '回复乙', likedCount: 4),
-      ]),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 2)]),
+          loadReplies: (parentId, limit) async => page([
+            comment(2, '回复甲', likedCount: 4),
+            comment(3, '回复乙', likedCount: 4),
+          ]),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -91,16 +99,20 @@ void main() {
   });
 
   testWidgets('点预览里的某条回复 = 展开楼层详情(与写回复分离)', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 5)]),
-      loadReplies: (parentId, limit) async =>
-          page([comment(2, '深层回复甲'), comment(3, '深层回复乙')]),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 5)]),
+          loadReplies: (parentId, limit) async =>
+              page([comment(2, '深层回复甲'), comment(3, '深层回复乙')]),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -115,16 +127,20 @@ void main() {
   });
 
   testWidgets('「展开全部 N 条回复」入口: 独立可见, 点击打开楼层详情', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 5)]),
-      loadReplies: (parentId, limit) async =>
-          page([comment(2, '深层回复甲'), comment(3, '深层回复乙')]),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 5)]),
+          loadReplies: (parentId, limit) async =>
+              page([comment(2, '深层回复甲'), comment(3, '深层回复乙')]),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -140,16 +156,20 @@ void main() {
   });
 
   testWidgets('「回复」按钮: 直接打开面板并聚焦写回复输入框', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 3)]),
-      loadReplies: (parentId, limit) async =>
-          page([comment(2, '旧回复', likedCount: 9)]),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 3)]),
+          loadReplies: (parentId, limit) async =>
+              page([comment(2, '旧回复', likedCount: 9)]),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -160,21 +180,27 @@ void main() {
 
     expect(find.text('回复这条评论…'), findsOneWidget);
     // 直接进写回复: 输入框已获得焦点(浏览模式不抢焦点)
-    final focusNode =
-        tester.widget<EditableText>(find.byType(EditableText)).focusNode;
+    final focusNode = tester
+        .widget<EditableText>(find.byType(EditableText))
+        .focusNode;
     expect(FocusManager.instance.primaryFocus, same(focusNode));
   });
 
   testWidgets('预览加载失败: 静默, 主列表与展开入口不受影响', (tester) async {
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: 2)]),
-      loadReplies: (parentId, limit) async => throw Exception('preview boom'),
-      like: (_, _) async => true,
-      reply: (_, _) async => true,
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: 2)]),
+          loadReplies: (parentId, limit) async =>
+              throw Exception('preview boom'),
+          like: (_, _) async => true,
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -188,19 +214,23 @@ void main() {
   testWidgets('发回复后: 预览立刻带上刚发的回复(发了看得见)', (tester) async {
     var replyCount = 1;
     final replies = <rust.Comment>[comment(2, '已有旧回复', likedCount: 5)];
-    await tester.pumpWidget(host(CommentThread(
-      kind: 'song',
-      resourceId: BigInt.one,
-      loadPage: (limit, offset) async =>
-          page([comment(1, '父评论', replyCount: replyCount)]),
-      loadReplies: (parentId, limit) async => page(List.of(replies)),
-      like: (_, _) async => true,
-      reply: (commentId, content) async {
-        replyCount++;
-        replies.add(comment(3, '刚发的回复'));
-        return true;
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '父评论', replyCount: replyCount)]),
+          loadReplies: (parentId, limit) async => page(List.of(replies)),
+          like: (_, _) async => true,
+          reply: (commentId, content) async {
+            replyCount++;
+            replies.add(comment(3, '刚发的回复'));
+            return true;
+          },
+        ),
+      ),
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -228,32 +258,31 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: SingleChildScrollView(
-            child: CommentThread(
-              kind: 'song',
-              resourceId: BigInt.one,
-              loadPage: (limit, offset) async => page([
-                comment(1, '这是一条非常长的父评论内容用来挤压行宽确认不会横向溢出',
-                    replyCount: 5),
-              ]),
-              loadReplies: (parentId, limit) async => page([
-                comment(2, '非常长的预览回复内容之一非常长的预览回复内容之一非常长',
-                    likedCount: 9),
-                comment(3, '非常长的预览回复内容之二非常长的预览回复内容之二非常长',
-                    likedCount: 8),
-                comment(4, '短回复', likedCount: 1),
-              ]),
-              like: (_, _) async => true,
-              reply: (_, _) async => true,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: CommentThread(
+                kind: 'song',
+                resourceId: BigInt.one,
+                loadPage: (limit, offset) async => page([
+                  comment(1, '这是一条非常长的父评论内容用来挤压行宽确认不会横向溢出', replyCount: 5),
+                ]),
+                loadReplies: (parentId, limit) async => page([
+                  comment(2, '非常长的预览回复内容之一非常长的预览回复内容之一非常长', likedCount: 9),
+                  comment(3, '非常长的预览回复内容之二非常长的预览回复内容之二非常长', likedCount: 8),
+                  comment(4, '短回复', likedCount: 1),
+                ]),
+                like: (_, _) async => true,
+                reply: (_, _) async => true,
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pump();
     await tester.pump();
     await tester.pump();

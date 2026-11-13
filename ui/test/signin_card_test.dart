@@ -9,28 +9,31 @@ rust.SigninStatus status({
   int continuous = 1,
   int week = 5,
   int point = 0,
-}) =>
-    rust.SigninStatus(
-      signedToday: signed,
-      totalDays: total,
-      continuousDays: continuous,
-      weekDays: week,
-      recent: const [],
-      todayPoint: point,
-    );
+}) => rust.SigninStatus(
+  signedToday: signed,
+  totalDays: total,
+  continuousDays: continuous,
+  weekDays: week,
+  recent: const [],
+  todayPoint: point,
+);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('签到卡片: 未签到显示按钮, 点签到后变已签到并提示云贝', (tester) async {
     var signed = 0;
-    await tester.pumpWidget(host(SigninCard(
-      load: () async => status(signed: false),
-      sign: () async {
-        signed++;
-        return status(signed: true, total: 14, point: 2);
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        SigninCard(
+          load: () async => status(signed: false),
+          sign: () async {
+            signed++;
+            return status(signed: true, total: 14, point: 2);
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('今天还没签到'), findsOneWidget);
@@ -49,26 +52,28 @@ void main() {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-        child: Scaffold(
-          body: SigninCard(
-            load: () async => status(signed: false),
-            sign: () async => status(signed: true, total: 14, point: 2),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+          child: Scaffold(
+            body: SigninCard(
+              load: () async => status(signed: false),
+              sign: () async => status(signed: true, total: 14, point: 2),
+            ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('今天还没签到'), findsOneWidget);
   });
 
   testWidgets('签到卡片: 已签到不显示按钮', (tester) async {
-    await tester.pumpWidget(host(SigninCard(
-      load: () async => status(signed: true),
-    )));
+    await tester.pumpWidget(
+      host(SigninCard(load: () async => status(signed: true))),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('今日已签到'), findsOneWidget);
@@ -76,9 +81,9 @@ void main() {
   });
 
   testWidgets('签到卡片: 载入失败整块不显示', (tester) async {
-    await tester.pumpWidget(host(SigninCard(
-      load: () async => throw Exception('[auth] 未登录'),
-    )));
+    await tester.pumpWidget(
+      host(SigninCard(load: () async => throw Exception('[auth] 未登录'))),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('今天还没签到'), findsNothing);

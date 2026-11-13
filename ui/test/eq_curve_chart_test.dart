@@ -8,7 +8,8 @@ import 'package:minincm/src/eq_curve_chart.dart';
 import 'package:minincm/src/eq_profile.dart';
 import 'package:minincm/src/settings_audio_page.dart';
 
-const sampleText = 'Preamp: -6.0 dB\n'
+const sampleText =
+    'Preamp: -6.0 dB\n'
     'Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\n'
     'Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70\n'
     'Filter 3: ON HS Fc 8000 Hz Gain 1.5 dB Q 0.70';
@@ -114,10 +115,8 @@ void main() {
               height: size.height,
               child: EqCurvePanel(
                 text: text,
-                onChanged: (t) => settings.update(
-                  eqProfileText: t,
-                  eqProfileName: '自定义曲线',
-                ),
+                onChanged: (t) =>
+                    settings.update(eqProfileText: t, eqProfileName: '自定义曲线'),
               ),
             ),
           ),
@@ -160,7 +159,10 @@ void main() {
   });
 
   testWidgets('非法曲线: 显示带行号错误, 不崩', (tester) async {
-    await pumpPanel(tester, text: 'Preamp: -6.0 dB\nFilter 1: ON LP Fc 100 Hz Gain 1 dB Q 0.7');
+    await pumpPanel(
+      tester,
+      text: 'Preamp: -6.0 dB\nFilter 1: ON LP Fc 100 Hz Gain 1 dB Q 0.7',
+    );
     expect(find.textContaining('第 2 行'), findsOneWidget);
     expect(find.textContaining('不支持'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -198,7 +200,8 @@ void main() {
   });
 
   testWidgets('柱状图: 拖到 0 不删除 filter, 序列化仍在', (tester) async {
-    settings.eqProfileText = 'Preamp: 0.0 dB\nFilter 1: ON PK Fc 100 Hz Gain 4.0 dB Q 0.7';
+    settings.eqProfileText =
+        'Preamp: 0.0 dB\nFilter 1: ON PK Fc 100 Hz Gain 4.0 dB Q 0.7';
     settings.notifyListeners();
     await pumpPanel(tester, text: settings.eqProfileText);
     await tester.tap(find.text('柱状'));
@@ -221,7 +224,9 @@ void main() {
   testWidgets('曲线触摸读数: 拖动不崩且画布保持', (tester) async {
     await pumpPanel(tester, text: sampleText);
     final size = tester.getSize(find.byType(EqCurvePanel));
-    final gesture = await tester.startGesture(Offset(size.width / 2, size.height / 2));
+    final gesture = await tester.startGesture(
+      Offset(size.width / 2, size.height / 2),
+    );
     await tester.pump();
     await gesture.moveBy(const Offset(30, 0));
     await tester.pump();
@@ -322,14 +327,16 @@ void main() {
       await tester.ensureVisible(find.byType(EqCurvePanel));
       await tester.pumpAndSettle();
       final origin2 = tester.getTopLeft(find.byType(EqCurvePanel));
-      final gesture = await tester.startGesture(origin2 + Offset(colW * 6.5, 232 / 2));
+      final gesture = await tester.startGesture(
+        origin2 + Offset(colW * 6.5, 232 / 2),
+      );
       await tester.pump(const Duration(milliseconds: 100));
       await gesture.moveBy(const Offset(0, -60));
       await tester.pump(const Duration(milliseconds: 100));
       await gesture.up();
       await tester.pumpAndSettle();
 
-            final eq = parseOk(settings.eqProfileText!);
+      final eq = parseOk(settings.eqProfileText!);
       final nonZero = eq.filters.where((f) => f.gainDb != 0).toList();
       expect(nonZero.length, 1);
       expect(nonZero.first.freqHz, 2000);
@@ -384,8 +391,10 @@ void main() {
         },
       );
       addTearDown(() {
-        tester.binding.defaultBinaryMessenger
-            .setMockMethodCallHandler(SystemChannels.platform, null);
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        );
       });
       settings.eqProfileText = sampleText;
       settings.eqProfileName = '自定义曲线';

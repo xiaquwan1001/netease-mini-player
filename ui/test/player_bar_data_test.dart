@@ -9,22 +9,22 @@ import 'package:minincm/src/player_bar.dart';
 import 'package:minincm/src/playback.dart';
 
 PlayerView _view({BigInt? position, bool playing = false}) => PlayerView(
-      trackId: BigInt.from(1),
-      playing: playing,
-      positionMs: position ?? BigInt.zero,
-      durationMs: BigInt.from(200000),
-      volume: 1.0,
-    );
+  trackId: BigInt.from(1),
+  playing: playing,
+  positionMs: position ?? BigInt.zero,
+  durationMs: BigInt.from(200000),
+  volume: 1.0,
+);
 
 PlayerBarData _data({PlayerView? player, double? dragMs}) => PlayerBarData(
-      player: player ?? _view(),
-      current: null,
-      liked: false,
-      queueIndex: 1,
-      queueLength: 10,
-      dragMax: null,
-      dragMs: dragMs,
-    );
+  player: player ?? _view(),
+  current: null,
+  liked: false,
+  queueIndex: 1,
+  queueLength: 10,
+  dragMax: null,
+  dragMs: dragMs,
+);
 
 void main() {
   test('字段全等 ⇒ == 为真; 任意字段不同 ⇒ 不等(含 hashCode 一致性)', () {

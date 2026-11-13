@@ -79,8 +79,7 @@ class SearchExactView {
   final List<SearchExactPlaylist> playlists;
   final List<SearchExactRadio> podcasts;
 
-  bool get isEmpty =>
-      artists.isEmpty && playlists.isEmpty && podcasts.isEmpty;
+  bool get isEmpty => artists.isEmpty && playlists.isEmpty && podcasts.isEmpty;
 }
 
 /// orders 缺失时的兜底展示顺序.
@@ -144,7 +143,10 @@ class KeywordSuggestBar extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   label: Text(
                     k,
-                    style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                   onPressed: onSelected == null ? null : () => onSelected!(k),
                 ),

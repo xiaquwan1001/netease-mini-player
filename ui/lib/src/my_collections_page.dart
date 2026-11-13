@@ -103,10 +103,8 @@ class _MyCollectionPage<T> extends StatelessWidget {
       body: PagedListView<T>(
         emptyText: emptyText,
         endText: null,
-        loader: (cursor) async => PagedPage(
-          await retryNetwork(load),
-          hasMore: false,
-        ),
+        loader: (cursor) async =>
+            PagedPage(await retryNetwork(load), hasMore: false),
         itemBuilder: (context, item, i, items) => ListTile(
           leading: leading(item),
           title: Text(

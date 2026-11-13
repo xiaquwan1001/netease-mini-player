@@ -9,16 +9,19 @@ import 'package:minincm/src/app_meta.dart';
 void main() {
   test('kAppVersion 与 pubspec.yaml version 的 versionName 一致', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    final match =
-        RegExp(r'^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$', multiLine: true)
-            .firstMatch(pubspec);
-    expect(match, isNotNull,
-        reason: 'pubspec.yaml 的 version 必须是 X.Y.Z+N 形式');
+    final match = RegExp(
+      r'^version:\s*(\d+\.\d+\.\d+)\+(\d+)\s*$',
+      multiLine: true,
+    ).firstMatch(pubspec);
+    expect(match, isNotNull, reason: 'pubspec.yaml 的 version 必须是 X.Y.Z+N 形式');
     final versionName = match!.group(1)!;
     final versionCode = int.parse(match.group(2)!);
 
-    expect(kAppVersion, versionName,
-        reason: 'kAppVersion 落后/领先于 pubspec.yaml, 用 tools/bump-version.sh 同步');
+    expect(
+      kAppVersion,
+      versionName,
+      reason: 'kAppVersion 落后/领先于 pubspec.yaml, 用 tools/bump-version.sh 同步',
+    );
     // Android 覆盖安装要求 versionCode 严格递增, 0 或负数不可能合法
     expect(versionCode, greaterThan(0));
   });

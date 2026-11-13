@@ -4,41 +4,43 @@ import 'package:minincm/src/digital_album_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.DigitalAlbumPurchased _albums({int n = 2}) => rust.DigitalAlbumPurchased(
-      total: BigInt.from(n),
-      albums: List.generate(
-        n,
-        (i) => rust.DigitalAlbumPurchasedEntry(
-          albumId: BigInt.from(120605500 + i),
-          albumName: '专辑$i',
-          artistId: BigInt.one,
-          artistName: '歌手$i',
-          coverUrl: '',
-          paidTimeMs: BigInt.from(1638063971559),
-          boughtCount: BigInt.one,
-        ),
-      ),
-    );
+  total: BigInt.from(n),
+  albums: List.generate(
+    n,
+    (i) => rust.DigitalAlbumPurchasedEntry(
+      albumId: BigInt.from(120605500 + i),
+      albumName: '专辑$i',
+      artistId: BigInt.one,
+      artistName: '歌手$i',
+      coverUrl: '',
+      paidTimeMs: BigInt.from(1638063971559),
+      boughtCount: BigInt.one,
+    ),
+  ),
+);
 
 rust.SongPurchasedPage _songs({int n = 1}) => rust.SongPurchasedPage(
-      count: BigInt.from(n),
-      hasMore: false,
-      songs: List.generate(
-        n,
-        (i) => rust.PurchasedSongEntry(
-          songId: BigInt.from(186016 + i),
-          name: '歌曲$i',
-          artistName: '歌手$i',
-          coverUrl: '',
-          paidTimeMs: BigInt.from(1638063971559),
-        ),
-      ),
-    );
+  count: BigInt.from(n),
+  hasMore: false,
+  songs: List.generate(
+    n,
+    (i) => rust.PurchasedSongEntry(
+      songId: BigInt.from(186016 + i),
+      name: '歌曲$i',
+      artistName: '歌手$i',
+      coverUrl: '',
+      paidTimeMs: BigInt.from(1638063971559),
+    ),
+  ),
+);
 
-Future<void> _pump(WidgetTester tester,
-    {Future<rust.DigitalAlbumPurchased?> Function()? albums,
-    Future<rust.SongPurchasedPage?> Function()? songs,
-    Future<rust.DigitalAlbumDetail?> Function(BigInt)? detail,
-    Future<List<rust.DigitalAlbumSalesEntry>?> Function(String)? sales}) async {
+Future<void> _pump(
+  WidgetTester tester, {
+  Future<rust.DigitalAlbumPurchased?> Function()? albums,
+  Future<rust.SongPurchasedPage?> Function()? songs,
+  Future<rust.DigitalAlbumDetail?> Function(BigInt)? detail,
+  Future<List<rust.DigitalAlbumSalesEntry>?> Function(String)? sales,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       home: DigitalAlbumPage(
@@ -56,15 +58,24 @@ void main() {
   testWidgets('空态: 无已购专辑/单曲时给空态文案', (tester) async {
     await _pump(
       tester,
-      albums: () async => rust.DigitalAlbumPurchased(total: BigInt.zero, albums: const []),
-      songs: () async => rust.SongPurchasedPage(count: BigInt.zero, hasMore: false, songs: const []),
+      albums: () async =>
+          rust.DigitalAlbumPurchased(total: BigInt.zero, albums: const []),
+      songs: () async => rust.SongPurchasedPage(
+        count: BigInt.zero,
+        hasMore: false,
+        songs: const [],
+      ),
     );
     expect(find.textContaining('还没有已购'), findsOneWidget);
     expect(find.byType(ListTile), findsNothing);
   });
 
   testWidgets('列表渲染: 已购专辑 + 单曲, 行含标题/歌手/日期', (tester) async {
-    await _pump(tester, albums: () async => _albums(n: 2), songs: () async => _songs(n: 1));
+    await _pump(
+      tester,
+      albums: () async => _albums(n: 2),
+      songs: () async => _songs(n: 1),
+    );
     expect(find.text('已购数字专辑(2)'), findsOneWidget);
     expect(find.text('专辑0'), findsOneWidget);
     expect(find.text('专辑1'), findsOneWidget);
@@ -102,7 +113,9 @@ void main() {
         tags: const ['独家'],
         description: '简介内容',
       ),
-      sales: (ids) async => [rust.DigitalAlbumSalesEntry(albumId: ids, sales: BigInt.from(1300052))],
+      sales: (ids) async => [
+        rust.DigitalAlbumSalesEntry(albumId: ids, sales: BigInt.from(1300052)),
+      ],
     );
     await tester.tap(find.text('专辑0'));
     await tester.pumpAndSettle();

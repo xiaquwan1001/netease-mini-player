@@ -21,10 +21,7 @@ Widget _host(String text, {bool reduceMotion = false}) {
               onTap: () {},
               child: Padding(
                 padding: const EdgeInsets.all(8),
-                child: MarqueeText(
-                  text,
-                  style: const TextStyle(fontSize: 16),
-                ),
+                child: MarqueeText(text, style: const TextStyle(fontSize: 16)),
               ),
             ),
           ),
@@ -65,7 +62,9 @@ void main() {
     expect(p2!, lessThan(p1 ?? 0), reason: '文本应向左滚动');
   });
 
-  testWidgets('textScaler 回归: 缩放后恰好放不下的文本必须滚动(测量须含 textScaler)', (tester) async {
+  testWidgets('textScaler 回归: 缩放后恰好放不下的文本必须滚动(测量须含 textScaler)', (
+    tester,
+  ) async {
     // 视口 300 - 左右 padding 8 = 284; 文本未缩放宽 256(放得下),
     // 1.25 缩放后 320(放不下). 旧实现 _measure 用 noScaling 测得 260,
     // 误判 fits 不滚动 => 歌名被 ellipsis 截断且临界时撑破约束.
@@ -111,9 +110,7 @@ void main() {
   });
 
   testWidgets('reduce motion: 不打动画, 单行不溢出', (tester) async {
-    await tester.pumpWidget(
-      _host('一首非常非常非常长的歌名' * 6, reduceMotion: true),
-    );
+    await tester.pumpWidget(_host('一首非常非常非常长的歌名' * 6, reduceMotion: true));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(_marqueeTransform(tester), findsNothing);
@@ -137,8 +134,8 @@ void main() {
     expect(appBarBlock.contains('titleMedium'), isFalse);
     // 歌单详情头卡标题不允许退回 titleMedium
     // 不写死缩进: dart format 会重排缩进, 用正则定位 MarqueeText( ... d?.name
-    final headerMatch =
-        RegExp(r'MarqueeText\(\s*d\?\.name').firstMatch(detailSrc);
+    final headerMatch = RegExp(r'MarqueeText\(\s*d\?\.name')
+        .firstMatch(detailSrc);
     expect(headerMatch, isNotNull, reason: '详情页头卡 MarqueeText 不见了');
     final headerStart = headerMatch!.start;
     final headerBlock = detailSrc.substring(
@@ -151,9 +148,9 @@ void main() {
 
 /// 只看 MarqueeText 子树里的 Transform(框架其它地方也可能有 Transform).
 Finder _marqueeTransform(WidgetTester tester) => find.descendant(
-      of: find.byType(MarqueeText),
-      matching: find.byType(Transform),
-    );
+  of: find.byType(MarqueeText),
+  matching: find.byType(Transform),
+);
 
 double? _marqueeOffset(WidgetTester tester) {
   final transforms = tester.widgetList<Transform>(_marqueeTransform(tester));
