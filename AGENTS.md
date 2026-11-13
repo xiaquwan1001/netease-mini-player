@@ -48,4 +48,5 @@
 - 代理/镜像：`tools/env.sh|ci.sh` 都不碰代理变量（2026-11-12 复核）；手工跑 vendor 联网测试前 unset 全部代理变量（原因与判据见 `.pi/memory/FAILURES.md`「手工跑 cargo test」条）。vendor 匿名 smoke 偶发风控失败不算回归，严格核验用 `NCM_VENDOR_SMOKE_STRICT=1`。
 - cargokit 用 Rust package 名当产物名 ⇒ package 名必须是 `ncm_ffi`（下划线），不能带 `-`。
 - 设备验证统一用模拟器 **a34**（`~/bin/avd headless a34`），别用 `-gpu host`。
-- 细节**不放这里**：构建/工具链/CI/体积基线见 `.pi/memory/notes-build.md`；登录、取链、歌词、评论的协议语义见 `.pi/memory/notes-api.md`；失败教训见 `.pi/memory/FAILURES.md`。
+- 细节**不放这里**：构建/工具链/CI/体积基线见 `.pi/memory/notes-build.md`；登录、取链、歌词、评论的协议语义见 `.pi/memory/notes-api.md`；**UI 规则层(数值/容器/四态/门禁)见 `.pi/memory/notes-ui-rules.md`**；失败教训见 `.pi/memory/FAILURES.md`。
+- UI 新代码固定入口：四态走 `AsyncView`；小组标题走 `SectionTitle`、区块标题走 `SectionHeader`；长文本/徽标走 `AdaptiveText`/`AdaptiveTextRow`；间距圆角字号只允许 `layout.dart` 与 `tools/check-tokens.sh` 的有限集合(例外写 `// token-ok: 理由`)。

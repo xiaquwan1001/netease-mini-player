@@ -18,6 +18,7 @@
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
+| `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
 | 接口覆盖 | **123/123**(FFI 导出 152, 其中 7 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_events / user_play_ranking / word_lyric_with_fallback) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
@@ -74,6 +75,30 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13(四): 规则层收口(唯一 AsyncView / SectionTitle / token 门)
+
+起因是一句判断: "能感知问题, 但说不出规范, 只能逐个打补丁, 越修越慢"。对照检查后
+发现本项目**已有**规则层骨架(layout.dart 栅格、AdaptiveText、LoadingView/InlineError、
+118 个 widget test), 缺的是三处收敛 + 一张网。
+
+| 缺口(量化) | 落地 |
+|---|---|
+| 异步四态有 **5 份实现**: 2 份私有 `_AsyncSection`(mine/recommend) + ranking/chart/mv 各手写 `FutureBuilder` + style_page 2 处 | 收敛成唯一 `lib/src/async_view.dart`; `grep -rn 'FutureBuilder<' ui/lib/` 现在只剩它内部 1 处。顺带修掉一个潜伏 bug: 箭头体 `setState(() => _future = ...)` 会把 Future 当返回值, mv_page 一按「重试」就断言失败 |
+| 同一小组标题实现 **6 遍**(padding 有 top:4/bottom:6、bottom:6、bottom:8 三种) | `SectionTitle`(titleSmall) + `kSectionTitleGap`; `SectionHeader`(titleMedium) 与它共用私有 `_titleRow`(尾部 60% + FittedBox 规则只留一份)。`grep 'class _SectionTitle'` = 0 |
+| 间距/圆角/字号散写: 175 处 `SizedBox(height: 字面量)`、圆角 7 种值、`fontSize` 直写 49 处 | `tools/check-tokens.sh`: 集合外数值必须消除或写 `// token-ok: 理由` 显式例外。基线 20 处已清零, ci.sh 切成 `--strict` |
+| golden test = 0, custom_lint 无 | **未做**(下一轮 P2); 结论: golden 只在本机 Linux 生成/只在 Linux CI 跑, 选 6 个高价值页 × 2 档 |
+
+两条纪律(写进 review 口径):
+1. **改页面 vs 改契约**: 契约件是 `layout.dart` / `adaptive_text.dart` / `section_header.dart` /
+   `song_tile.dart` / `cover_art.dart`, 动之前必须数影响面 + 跑 `layout_metrics_test`、
+   `narrow_width_audit_test`;
+2. **一个动作只允许一个控件**: v0.8.1 的 5 条反馈(账号管理 3 个入口、热搜「关闭」+ ❌、
+   相对图地址被静默丢弃、active 行 onTap 恒 null、cookie 残留误判已登录)都属于契约缺失,
+   不是手滑。
+
+验收: cargo test 277 / clippy 0 / fmt 干净; flutter test **752** / `dart analyze` 0 /
+`dart format` 干净 / `check-tokens --strict` OK。
 
 ## 2026-11-13(三): 用户反馈 8 项 UI 修复(v0.8.1)
 
