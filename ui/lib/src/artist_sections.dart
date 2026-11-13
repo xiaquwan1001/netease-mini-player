@@ -170,6 +170,12 @@ class ArtistAlbumsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // 卡片高 = 封面 108 + 间距 4 + 名字/年份两行文字 + 底部 4。
+    // 文字块必须按 textScaler 放大(固定 160 在 1.625 字号下纵向溢出 4px):
+    // 名字 labelMedium(12) + 年份 labelSmall(11), 行高约 1.4。
+    final scaler = MediaQuery.textScalerOf(context);
+    final cardHeight =
+        108 + 4 + scaler.scale(12) * 1.4 + scaler.scale(11) * 1.4 + 4;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -182,8 +188,7 @@ class ArtistAlbumsSection extends StatelessWidget {
         ),
         // 横向 ListView: 300dp 下天然可滚, 不参与竖向溢出
         SizedBox(
-          // 卡片高 = 封面 108 + 名字/年份两行(textScale 1.25 约 40px)
-          height: 160,
+          height: cardHeight,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: albums.length,

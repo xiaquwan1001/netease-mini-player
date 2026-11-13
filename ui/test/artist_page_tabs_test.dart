@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
@@ -64,11 +66,12 @@ Future<void> pump(
   Future<rust.ArtistMvPageDto> Function(BigInt, int)? loadMvsPage,
   Future<bool> Function(BigInt, bool)? toggleFollow,
   bool textScaleBig = false,
+  double textScale = 1.25,
 }) async {
   if (textScaleBig) {
     tester.view.physicalSize = const Size(300, 700);
     tester.view.devicePixelRatio = 1.0;
-    tester.view.platformDispatcher.textScaleFactorTestValue = 1.25;
+    tester.view.platformDispatcher.textScaleFactorTestValue = textScale;
     addTearDown(() {
       tester.view.platformDispatcher.clearTextScaleFactorTestValue();
       tester.view.resetPhysicalSize();
@@ -326,6 +329,71 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, [true]);
     expect(find.text('已关注'), findsOneWidget);
+  });
+
+  testWidgets('tab 生成规则: 专辑/MV 可用性决定 tab 集合', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 2, albums: 1),
+      loadMvsPage: (_, _) async =>
+          rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
+    );
+    await revealTabs(tester);
+    // 全部歌曲 / 专辑 / MV
+    expect(find.byType(Tab), findsNWidgets(3));
+    expect(find.text('全部歌曲'), findsOneWidget);
+    expect(find.text('专辑'), findsOneWidget);
+    expect(find.text('MV'), findsOneWidget);
+
+    // 专辑数为 0 + 无 MV: 只剩全部歌曲
+    await pump(tester, detailData: detail(songs: 2, albums: 0));
+    await revealTabs(tester);
+    expect(find.byType(Tab), findsNWidgets(1));
+    expect(find.text('专辑'), findsNothing);
+    expect(find.text('MV'), findsNothing);
+  });
+
+  testWidgets('动态 tab: MV 探测晚到后 tab 增加, 当前 tab 与内容不重置', (tester) async {
+    final mvsProbe = Completer<rust.ArtistMvPageDto>();
+    await pump(
+      tester,
+      detailData: detail(songs: 2, albums: 1),
+      loadSongsPage: (_, _) async =>
+          rust.ArtistSongPageDto(songs: [song(7, name: '冷门')], hasMore: false),
+      loadMvsPage: (_, _) => mvsProbe.future,
+    );
+    await revealTabs(tester);
+    expect(find.byType(Tab), findsNWidgets(2)); // 全部歌曲 / 专辑
+    await tester.tap(find.text('全部歌曲'));
+    await tester.pumpAndSettle();
+    expect(find.text('冷门7'), findsOneWidget);
+
+    // MV 探测回来: tab 由 2 -> 3(旧 controller 必须帧末 dispose, 见 syncProfileTabs)
+    mvsProbe.complete(rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(Tab), findsNWidgets(3));
+    expect(find.text('MV'), findsOneWidget);
+    // 当前 tab 仍是「全部歌曲」, 内容没被重建回别的 tab
+    expect(find.text('冷门7'), findsOneWidget);
+  });
+
+  testWidgets('300dp + textScale 1.625: 头部统计 chip 不溢出', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 2, albums: 2, brief: '一句话简介'),
+      loadSimilar: (_) async => [
+        rust.Artist(
+          id: BigInt.from(1),
+          name: '一个名字特别特别特别特别特别长的歌手',
+          avatarUrl: null,
+        ),
+      ],
+      textScaleBig: true,
+      textScale: 1.625,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('个专辑'), findsOneWidget);
   });
 
   testWidgets('分页: 全部歌曲 tab 触底加载更多(第二页)', (tester) async {
