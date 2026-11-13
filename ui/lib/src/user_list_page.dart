@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -159,11 +160,7 @@ class _UserListViewState extends State<UserListView> {
                   size: 40,
                   icon: Icons.person_outline,
                 ),
-                title: Text(
-                  u.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                title: AdaptiveText(u.name),
                 subtitle: Text(
                   u.signature.isEmpty ? '暂无签名' : u.signature,
                   maxLines: 1,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'adaptive_text.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show FullError;
@@ -531,11 +532,7 @@ class RecentPlayedPage extends StatelessWidget {
               emptyText: '还没有最近听过的歌单',
               itemBuilder: (context, pl, i, _) => ListTile(
                 leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
-                title: Text(
-                  pl.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                title: AdaptiveText(pl.name),
                 subtitle: pl.trackCount > BigInt.zero
                     ? Text('${pl.trackCount} 首')
                     : null,
@@ -552,11 +549,7 @@ class RecentPlayedPage extends StatelessWidget {
               emptyText: '还没有最近听过的播客',
               itemBuilder: (context, r, i, _) => ListTile(
                 leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
-                title: Text(
-                  r.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                title: AdaptiveText(r.name),
                 subtitle: Text(
                   [
                     if (r.djName.isNotEmpty) r.djName,

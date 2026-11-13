@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
@@ -123,7 +124,13 @@ class _MvPageState extends State<MvPage> {
                   child: NetImage(url: d.coverUrl, fit: BoxFit.cover),
                 ),
               const SizedBox(height: 16),
-              Text(d.name, style: theme.textTheme.titleLarge),
+              // MV 名允许两行(长标题一行放不下时不再硬截断)
+              AdaptiveText(
+                d.name,
+                mode: AdaptiveTextMode.wrap,
+                maxLines: 2,
+                style: theme.textTheme.titleLarge,
+              ),
               const SizedBox(height: 8),
               Text(
                 [

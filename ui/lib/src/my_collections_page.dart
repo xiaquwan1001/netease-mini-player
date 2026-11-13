@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -107,11 +108,7 @@ class _MyCollectionPage<T> extends StatelessWidget {
             PagedPage(await retryNetwork(load), hasMore: false),
         itemBuilder: (context, item, i, items) => ListTile(
           leading: leading(item),
-          title: Text(
-            titleOf(item),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
+          title: AdaptiveText(titleOf(item)),
           subtitle: Text(
             subtitleOf(item),
             maxLines: 1,

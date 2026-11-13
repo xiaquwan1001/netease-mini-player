@@ -94,7 +94,7 @@ class _ChartSectionState extends State<ChartSection> {
                 );
               }
               return CoverRow(
-                height: 176,
+                height: kCoverCardHeight,
                 rows: AppSettings.instance.coverRows,
                 children: [
                   for (final chart in charts)

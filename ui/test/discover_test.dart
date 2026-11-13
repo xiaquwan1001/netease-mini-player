@@ -34,6 +34,14 @@ Widget host(VoidCallback onTap) => MaterialApp(
   ),
 );
 
+/// 长标题走跑马灯(无限循环动画)时 pumpAndSettle 永不收敛, 固定推进若干帧
+/// 让 FutureBuilder/布局稳定即可(与 queue_sheet_test 同款处理).
+Future<void> pumpFrames(WidgetTester tester, {int frames = 6}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
+}
+
 void main() {
   testWidgets('每日推荐: 歌曲列表可点, 回调整批曲目与下标', (tester) async {
     List<rust.SongDto>? played;
@@ -314,7 +322,8 @@ void main() {
       ),
     );
     await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
+    // 长歌名/歌单名走跑马灯(无限动画), pumpAndSettle 永不收敛 → 固定帧推进.
+    await pumpFrames(tester);
 
     expect(tester.takeException(), isNull);
     expect(find.text('最近听过'), findsOneWidget);

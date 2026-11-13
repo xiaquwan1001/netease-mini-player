@@ -19,6 +19,14 @@ rust.ToplistCatalogItem item(
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
+/// 长标题走跑马灯(无限循环动画)时 pumpAndSettle 永不收敛, 固定推进若干帧
+/// 让 FutureBuilder/布局稳定即可(与 queue_sheet_test 同款处理).
+Future<void> pumpFrames(WidgetTester tester, {int frames = 6}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
+}
+
 void main() {
   testWidgets('按分组渲染, 中文小标题, 点可播条目回调歌单', (tester) async {
     rust.Playlist? opened;
@@ -132,7 +140,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 榜单名允许两行(不滚), 但同页可能挂长标题跑马灯 → 固定帧推进.
+    await pumpFrames(tester);
     expect(tester.takeException(), isNull);
   });
 }

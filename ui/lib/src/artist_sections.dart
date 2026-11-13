@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
 import 'section_header.dart';
@@ -114,10 +115,8 @@ class _ArtistRecommendSongRow extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
+                        child: AdaptiveText(
                           song.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: playable ? theme.textTheme.bodyMedium : grey,
                         ),
                       ),
