@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'artist_page.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
@@ -38,6 +41,12 @@ Future<void> showAlbumPreview(
   /// 测试注入: 打开艺人主页(默认 showArtistDetail)
   void Function(BigInt artistId, String name)? onOpenArtist,
 }) {
+  // 记录"最近一次交互"(我的页收藏专辑按它排序; 见 recent_order.dart)。
+  // 放在入口处而不是各调用点: 专辑入口有 10 处(推荐/我的/搜索/艺人页…),
+  // 漏一个就会出现"我明明刚点过却排后面"。
+  if (albumId > BigInt.zero) {
+    unawaited(AppSettings.instance.touchInteraction('album', albumId));
+  }
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
       builder: (_) => AlbumPreviewPage(

@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/marquee_text.dart';
 import 'package:minincm/src/play_queue_sheet.dart';
+import 'package:minincm/src/radio_subscribers_page.dart';
 import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/search_landing.dart';
@@ -384,6 +385,48 @@ void main() {
         final box = tester.renderObject<RenderBox>(find.byType(MarqueeText));
         final right = box.localToGlobal(Offset(box.size.width, 0)).dx;
         expect(right, lessThanOrEqualTo(width + 0.5), reason: tag);
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    }
+  });
+
+  // 电台听众页: AppBar 标题写了 ellipsis 却没 maxLines(先换行再省略, 标题栏被撑高),
+  // 行内昵称/签名同款问题。这里锁「AppBar 标题单行 + 12 组合无溢出」。
+  testWidgets('电台听众页(超长电台名/昵称/签名): 12 组合无溢出, 标题单行', (tester) async {
+    final longRadio = '一个特别特别长的电台名称用于窄屏回归测试还要再长一点点';
+    for (final width in _widths) {
+      for (final scale in _scales) {
+        final tag = _tag('RadioSubscribers', width, scale);
+        final errors = await pumpAudited(
+          tester,
+          RadioSubscribersPage(
+            radioId: BigInt.one,
+            radioName: longRadio,
+            loadSubscribers: (id, timeMs) async => rust.RadioSubscriberPage(
+              hasMore: false,
+              subscribers: [
+                rust.RadioSubscriber(
+                  userId: BigInt.from(7),
+                  nickname: _longArtist,
+                  avatarUrl: '',
+                  signature: _longName,
+                  subscribeTimeMs: BigInt.from(1700000000000),
+                ),
+              ],
+            ),
+          ),
+          width: width,
+          scale: scale,
+        );
+        expectNoOverflow(errors, tag);
+        final title = tester.widget<Text>(find.text('「$longRadio」的听众'));
+        expect(title.maxLines, 1, reason: '$tag 缺 maxLines 会先换行再省略');
+        expectSingleLine(
+          tester,
+          find.text('「$longRadio」的听众'),
+          tag,
+          maxLineHeight: 30,
+        );
         await tester.pumpWidget(const SizedBox.shrink());
       }
     }

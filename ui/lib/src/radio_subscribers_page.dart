@@ -92,6 +92,9 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
       appBar: AppBar(
         title: Text(
           widget.radioName.isEmpty ? '听众' : '「${widget.radioName}」的听众',
+          // 只有 ellipsis 没有 maxLines 会先换行再省略: 电台名较长时 AppBar 标题
+          // 逐字竖排, 标题栏被撑高.
+          maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
       ),

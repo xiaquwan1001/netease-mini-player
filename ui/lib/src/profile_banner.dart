@@ -217,86 +217,102 @@ class ProfileIdentity extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 头像: 主题色描边圈(原来固定白边, 浅色主题下与卡片糊在一起)
-              Container(
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: scheme.surface,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: scheme.surfaceContainerHighest),
-                ),
-                child: CircleCover(
-                  url: avatarUrl,
-                  size: avatarSize,
-                  icon: Icons.person,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+          // trailing(关注/编辑按钮)由调用方给, 宽度不受本卡片控制: 不封顶时窄屏会
+          // 把昵称区挤到 0 宽再溢出。与 _titleRow/SectionHeader 同一口径 ——
+          // 行尾最多吃掉版面的 40%, 其余留给昵称与副标题。
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final maxTrailingWidth = constraints.maxWidth.isFinite
+                  ? constraints.maxWidth * 0.4
+                  : double.infinity;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 头像: 主题色描边圈(原来固定白边, 浅色主题下与卡片糊在一起)
+                  Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: scheme.surfaceContainerHighest),
+                    ),
+                    child: CircleCover(
+                      url: avatarUrl,
+                      size: avatarSize,
+                      icon: Icons.person,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Flexible(
-                          // 昵称/艺人名走统一长文字组件: 放不下才单向跑马灯(需求 5/9)。
-                          child: AdaptiveText(
-                            title,
-                            // 默认 titleMedium w600: 艺人名与用户昵称**同一档字号**
-                            // (此前艺人页自己塞 headlineSmall, 从关注进主页与从搜索进
-                            // 主页看到的标题大小不一样), 也留出身份卡右上角动作的位置。
-                            style:
-                                titleStyle ??
-                                theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
+                        Row(
+                          children: [
+                            Flexible(
+                              // 昵称/艺人名走统一长文字组件: 放不下才单向跑马灯(需求 5/9)。
+                              child: AdaptiveText(
+                                title,
+                                // 默认 titleMedium w600: 艺人名与用户昵称**同一档字号**
+                                // (此前艺人页自己塞 headlineSmall, 从关注进主页与从搜索进
+                                // 主页看到的标题大小不一样), 也留出身份卡右上角动作的位置。
+                                style:
+                                    titleStyle ??
+                                    theme.textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ),
+                            if (vip) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                // token-ok: VIP 徽标内边距与 10sp 字高配套, 放大到 6/2 会把行高顶起来
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 1,
                                 ),
-                          ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE0342C),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'VIP',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
-                        if (vip) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            // token-ok: VIP 徽标内边距与 10sp 字高配套, 放大到 6/2 会把行高顶起来
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 5,
-                              vertical: 1,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0342C),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'VIP',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                        if (sub.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              sub,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ),
-                        ],
                       ],
                     ),
-                    if (sub.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3),
-                        child: Text(
-                          sub,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
+                  ),
+                  if (trailing != null) ...[
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: maxTrailingWidth),
+                      child: trailing!,
+                    ),
                   ],
-                ),
-              ),
-              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
-            ],
+                ],
+              );
+            },
           ),
           if (footer != null)
             Padding(padding: const EdgeInsets.only(top: 8), child: footer!),

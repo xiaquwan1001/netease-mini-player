@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_nav.dart';
+import 'package:minincm/src/feed_detail_page.dart' show feedRelativeTime;
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -199,6 +200,56 @@ void main() {
     await tester.pumpAndSettle();
     expect(calls, hasLength(1), reason: '点整行不该进主页');
     expect(find.text('ta 最近没有动态'), findsOneWidget);
+  });
+
+  // A3 回归: 头行 = 头像 + 用户名(Expanded) + 相对时间(固定宽度尾部元素)。
+  // 修复前时间是裸 Text, 300dp x1.625 下会被挤出屏幕/撑破整行。
+  testWidgets('300dp x1.625: 超长用户名 + 相对时间不溢出, 时间单行且在屏内', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    final e = event(
+      id: 1,
+      userId: 10,
+      userName: '一个名字特别特别长的动态发布者昵称用于窄屏回归测试再加长一点',
+      text: '正文',
+    );
+    // 只收集错误、不改 FlutterError.onError 之外的任何东西: 1.625 下顶部横向
+    // 艺人筛选条(_AuthorChip, SizedBox(height: 84) 定高)另有 4dp 的**竖向**溢出,
+    // 属本次 A 级清单外(pre-existing), 这里只断言横向不溢出(头行溢出的形态)。
+    final errors = <String>[];
+    final previous = FlutterError.onError;
+    FlutterError.onError = (d) => errors.add(d.exceptionAsString());
+    try {
+      await tester.pumpWidget(
+        host(
+          FeedView(
+            loggedIn: true,
+            onLogin: () {},
+            onPlaySongs: (_, _) {},
+            onOpenUrl: (_) async {},
+            loadFeed: () async => [e],
+            loadSubscribedArtists: () async => const [],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    } finally {
+      FlutterError.onError = previous;
+    }
+    expect(
+      errors.where((m) => m.contains('Axis.horizontal')),
+      isEmpty,
+      reason: '动态头行不允许横向 overflow',
+    );
+    final time = find.text(feedRelativeTime(e.timeMs));
+    expect(time, findsOneWidget);
+    final box = tester.renderObject<RenderBox>(time);
+    expect(box.size.height, lessThan(40), reason: '相对时间不许竖排');
+    final right = box.localToGlobal(Offset(box.size.width, 0)).dx;
+    expect(right, lessThanOrEqualTo(300.5), reason: '相对时间被挤出屏幕');
   });
 
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {

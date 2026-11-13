@@ -33,7 +33,28 @@ class DebugReport {
       throw StateError('数据目录未知, 先让 App 完成初始化');
     }
     final at = (now ?? DateTime.now)();
-    final payload = <String, Object?>{
+    final payload = await build(
+      info: info,
+      now: () => at,
+      credential: credential,
+    );
+    final file = File('$dir/debug/anonymous-report-${_stamp(at)}.json');
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(payload),
+    );
+    return file.path;
+  }
+
+  /// 只组装 JSON 不落盘: 「一键匿名提交」与「生成诊断包」共用同一份口径,
+  /// 避免两条路径的字段集合漂移(客户端脱敏口径只写一次)。
+  static Future<Map<String, Object?>> build({
+    rust.InitInfo? info,
+    DateTime Function()? now,
+    Future<rust.CredentialStatusDto> Function()? credential,
+  }) async {
+    final at = (now ?? DateTime.now)();
+    return <String, Object?>{
       'schema': 1,
       'app': kAppVersion,
       'generatedAt': at.toIso8601String(),
@@ -54,12 +75,6 @@ class DebugReport {
       'credential': await _credential(credential),
       'note': '本文件不含账号昵称/uid/cookie, 设备 ID 只保留不可逆摘要。',
     };
-    final file = File('$dir/debug/anonymous-report-${_stamp(at)}.json');
-    await file.parent.create(recursive: true);
-    await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(payload),
-    );
-    return file.path;
   }
 
   static Future<Map<String, Object?>> _env() async {

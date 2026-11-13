@@ -312,6 +312,17 @@ class AppSettings extends ChangeNotifier {
           if (skipped is String && skipped.isNotEmpty) {
             skippedUpdateVersion = skipped;
           }
+          // 交互记录: 旧配置没有这个字段 ⇒ 保持空 map, 不报错。
+          // 先清空再读, 让 load() 幂等(重复 load 不叠加旧的会话内记录)
+          _interactions.clear();
+          final interactions = raw['interactions'];
+          if (interactions is Map) {
+            for (final entry in interactions.entries) {
+              final key = entry.key;
+              final value = entry.value;
+              if (key is String && value is int) _interactions[key] = value;
+            }
+          }
         }
       }
     } catch (_) {
@@ -440,6 +451,7 @@ class AppSettings extends ChangeNotifier {
           'librarySearchPlayAction': librarySearchPlayAction.name,
           'lastUpdateCheckMs': lastUpdateCheckMs,
           'skippedUpdateVersion': skippedUpdateVersion,
+          'interactions': _interactions,
         }),
       );
     } catch (_) {
@@ -479,6 +491,41 @@ class AppSettings extends ChangeNotifier {
 
   /// 用户点「稍后」跳过的版本 tag, 启动静默检查不再提示该版本
   String? skippedUpdateVersion;
+
+  // ---------------- 最近交互记录(2026-11「我的」页按最近交互排序) ----------------
+
+  /// 各类条目("打开/播放")最近一次交互的时间戳(epoch ms).
+  ///
+  /// key 形如 `album:123` / `podcast:45` / `playlist:67`; 只存在 settings.json
+  /// 的 `interactions` 字段里 —— 排序是纯本地偏好, 不必新开文件/新依赖。
+  final Map<String, int> _interactions = <String, int>{};
+
+  /// 记录条数上限: 超出丢最旧的, 防止 settings.json 长年累加无限变长。
+  static const int interactionLimit = 200;
+
+  static String _interactionKey(String kind, BigInt id) => '$kind:$id';
+
+  /// 最近一次"打开/播放"某类条目的时间(epoch ms); 无记录返回 null。
+  int? lastInteractionMs(String kind, BigInt id) =>
+      _interactions[_interactionKey(kind, id)];
+
+  /// 记录一次"打开/播放", 落盘并通知监听者(「我的」页据此重排区块与条目)。
+  ///
+  /// [nowMs] 仅供测试注入, 生产路径用当前时间。
+  Future<void> touchInteraction(String kind, BigInt id, {int? nowMs}) async {
+    _interactions[_interactionKey(kind, id)] =
+        nowMs ?? DateTime.now().millisecondsSinceEpoch;
+    if (_interactions.length > interactionLimit) {
+      // 丢最旧: 按时间升序删到上限。量级只有 200, 排一次不心疼。
+      final byAge = _interactions.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      for (final e in byAge.take(_interactions.length - interactionLimit)) {
+        _interactions.remove(e.key);
+      }
+    }
+    notifyListeners();
+    await _save();
+  }
 
   void recordUpdateCheck(int nowMs) {
     lastUpdateCheckMs = nowMs;

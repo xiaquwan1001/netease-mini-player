@@ -290,10 +290,23 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
+                              // 默认 IconButton 命中区 48dp, 与 leading 序号列叠加后
+                              // 标题被压到个位数宽度。宽度收到 40dp(高度仍 48 保命中),
+                              // 与 SongTile 行尾口径一致。
                               IconButton(
                                 icon: const Icon(
                                   Icons.delete_outline,
                                   size: 20,
+                                ),
+                                iconSize: 20,
+                                padding: EdgeInsets.zero,
+                                style: const ButtonStyle(
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 40,
+                                  minHeight: 48,
                                 ),
                                 tooltip: '从队列移除',
                                 onPressed: () => _confirmRemove(i),

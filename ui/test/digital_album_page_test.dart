@@ -123,6 +123,61 @@ void main() {
     expect(find.textContaining('价格'), findsOneWidget);
   });
 
+  // B1 回归: 写了 overflow: TextOverflow.ellipsis 却没写 maxLines, 长专辑名会
+  // 先换行再省略(逐字竖排, 行高翻倍). 这里锁「单行 + 不溢出」。
+  testWidgets('300dp x1.625: 超长专辑名/曲名单行省略, 不竖排', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(300, 700);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    const longAlbum = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长专辑名继续加长再加长一点';
+    const longSong = '一张同样很长的已购单曲名称Magia Album Deluxe Edition 豪华版再长一点';
+    await _pump(
+      tester,
+      albums: () async => rust.DigitalAlbumPurchased(
+        total: BigInt.one,
+        albums: [
+          rust.DigitalAlbumPurchasedEntry(
+            albumId: BigInt.from(120605500),
+            albumName: longAlbum,
+            artistId: BigInt.one,
+            artistName: '一条超级超级长的艺人名组合名称竖排回归测试用艺人名',
+            coverUrl: '',
+            paidTimeMs: BigInt.from(1638063971559),
+            boughtCount: BigInt.one,
+          ),
+        ],
+      ),
+      songs: () async => rust.SongPurchasedPage(
+        count: BigInt.one,
+        hasMore: false,
+        songs: [
+          rust.PurchasedSongEntry(
+            songId: BigInt.from(186016),
+            name: longSong,
+            artistName: '一条超级超级长的艺人名组合名称竖排回归测试用艺人名',
+            coverUrl: '',
+            paidTimeMs: BigInt.from(1638063971559),
+          ),
+        ],
+      ),
+    );
+
+    expect(tester.takeException(), isNull, reason: '已购列表不允许 overflow');
+    for (final text in [longAlbum, longSong]) {
+      // 直接锁 maxLines: 缺它时先换行再省略, 行高翻倍; 单看像素高度在不同档位
+      // 会漂(1.625 下 titleMedium 单行本身就 39dp), maxLines 才是根因
+      final widget = tester.widget<Text>(find.text(text));
+      expect(widget.maxLines, 1, reason: '「$text」缺 maxLines 会竖排');
+      expect(
+        tester.getSize(find.text(text)).height,
+        lessThan(48),
+        reason: '「$text」行高翻倍 = 竖排',
+      );
+    }
+  });
+
   testWidgets('窄屏 300dp + 1.25 字号不溢出', (tester) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(300, 700);

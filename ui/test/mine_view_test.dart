@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -24,32 +25,41 @@ MineView buildMine({
   required bool loggedIn,
   void Function(List<rust.SongDto>, int)? onPlay,
   VoidCallback? onLogin,
+
+  /// 覆盖收藏歌单/专辑/播客的返回数据(排序用例用)
+  List<rust.Playlist>? playlists,
+  List<rust.AlbumItem>? albums,
+  List<rust.PodcastRadio>? podcasts,
 }) => MineView(
   loggedIn: loggedIn,
   onLogin: onLogin ?? () {},
   onOpenAccounts: () {},
   loadLiked: () async => [song(1, '喜欢的歌')],
-  loadPlaylists: () async => [
-    rust.Playlist(
-      id: BigInt.from(2),
-      name: '收藏歌单',
-      coverUrl: null,
-      trackCount: BigInt.from(5),
-      special: false,
-      subscribed: false,
-    ),
-  ],
-  loadPodcasts: () async => [
-    rust.PodcastRadio(
-      id: BigInt.from(3),
-      name: '收藏播客',
-      coverUrl: null,
-      description: '',
-      djName: '主播',
-      programCount: BigInt.from(2),
-      playCount: BigInt.zero,
-    ),
-  ],
+  loadPlaylists: () async =>
+      playlists ??
+      [
+        rust.Playlist(
+          id: BigInt.from(2),
+          name: '收藏歌单',
+          coverUrl: null,
+          trackCount: BigInt.from(5),
+          special: false,
+          subscribed: false,
+        ),
+      ],
+  loadPodcasts: () async =>
+      podcasts ??
+      [
+        rust.PodcastRadio(
+          id: BigInt.from(3),
+          name: '收藏播客',
+          coverUrl: null,
+          description: '',
+          djName: '主播',
+          programCount: BigInt.from(2),
+          playCount: BigInt.zero,
+        ),
+      ],
   onPlaySongs: onPlay ?? (_, _) {},
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
@@ -58,15 +68,17 @@ MineView buildMine({
   onOpenFollows: () async {},
   onOpenFolloweds: () async {},
   onOpenAlbum: (_) {},
-  loadAlbums: () async => [
-    rust.AlbumItem(
-      id: BigInt.from(4),
-      name: '收藏专辑',
-      coverUrl: null,
-      artist: '艺人',
-      trackCount: BigInt.from(10),
-    ),
-  ],
+  loadAlbums: () async =>
+      albums ??
+      [
+        rust.AlbumItem(
+          id: BigInt.from(4),
+          name: '收藏专辑',
+          coverUrl: null,
+          artist: '艺人',
+          trackCount: BigInt.from(10),
+        ),
+      ],
   loadRecent: () async => [song(7, '最近听的歌')],
   loadRanking: (period) async => [
     rust.PlayRankEntryDto(
@@ -139,6 +151,89 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('本周常听'), findsOneWidget);
     expect(find.text('最常听'), findsNothing);
+  });
+
+  testWidgets('收藏专辑默认在收藏播客前; 播客最近交互后换到前面', (tester) async {
+    await tester.pumpWidget(host(buildMine(loggedIn: true)));
+    await tester.pumpAndSettle();
+
+    // 两个区块在页面下半部分, 滚到它们同时可见
+    await tester.drag(find.byType(ListView).first, const Offset(0, -1400));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('收藏的专辑')).dy,
+      lessThan(tester.getTopLeft(find.text('收藏的播客')).dy),
+      reason: '两边都没有交互记录时按默认顺序: 专辑 → 播客',
+    );
+
+    // 专辑记一条更早的、播客记一条更晚的 ⇒ 播客应排到前面
+    final settings = AppSettings.instance;
+    await settings.touchInteraction('album', BigInt.from(4), nowMs: 1000);
+    await settings.touchInteraction('podcast', BigInt.from(3), nowMs: 2000);
+    await tester.pumpAndSettle();
+
+    expect(find.text('收藏的播客'), findsOneWidget);
+    expect(find.text('收藏的专辑'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('收藏的播客')).dy,
+      lessThan(tester.getTopLeft(find.text('收藏的专辑')).dy),
+      reason: '播客最近被打开过, 应换到专辑之前',
+    );
+  });
+
+  testWidgets('收藏歌单按最近交互倒序, 无记录时保持后端顺序', (tester) async {
+    await tester.pumpWidget(
+      host(
+        buildMine(
+          loggedIn: true,
+          playlists: [
+            rust.Playlist(
+              id: BigInt.from(20),
+              name: '歌单A',
+              coverUrl: null,
+              trackCount: BigInt.from(1),
+              special: false,
+              subscribed: false,
+            ),
+            rust.Playlist(
+              id: BigInt.from(21),
+              name: '歌单B',
+              coverUrl: null,
+              trackCount: BigInt.from(2),
+              special: false,
+              subscribed: false,
+            ),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('收藏的歌单'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('歌单A')).dx,
+      lessThan(tester.getTopLeft(find.text('歌单B')).dx),
+      reason: '没有交互记录时保持后端返回顺序',
+    );
+
+    await AppSettings.instance.touchInteraction(
+      'playlist',
+      BigInt.from(21),
+      nowMs: 5000,
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getTopLeft(find.text('歌单B')).dx,
+      lessThan(tester.getTopLeft(find.text('歌单A')).dx),
+      reason: '最近打开过的歌单排到最前',
+    );
   });
 
   testWidgets('300dp + 1.25 字号: 未登录引导不溢出', (tester) async {

@@ -14,7 +14,7 @@
 | `cargo test --offline --workspace` | **277** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network` | **785** 通过 / 0 失败(含 12 张 golden) |
+| `flutter test --exclude-tags network` | **816** 通过 / 0 失败(含 12 张 golden) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -75,6 +75,21 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-13(六): 匿名诊断一键提交 + 列表行 A 级修复 + 我的页排序(v0.9.0)
+
+| # | 需求 | 落地 |
+|---|---|---|
+| 1 | 「一键传」但小白无 GitHub 账号、不自建服务器 | **Cloudflare Worker 代理建 issue**: `tools/diag-worker/`(白名单二次脱敏 + PII 兜底 + KV 限流 10/h + `clientId` 幂等 + GitHub 3 次退避重试/8s 超时); 客户端 `diag_upload.dart`(15s 超时、0.5/1/2s 退避、4xx 不重试、错误带 `retryable`)。**token 由用户部署时手动创建**(fine-grained PAT 只勾 Issues: write + 单仓库, `wrangler secret put`), 仓库/客户端零 token、端点默认空 |
+| 2 | 我的页: 收藏专辑放到收藏播客前 + 两栏目按最近交互优先 | `recent_order.dart` 三个纯函数; `AppSettings.touchInteraction/lastInteractionMs`(settings.json 里存 `kind:id → ms`, 上限 200 条); 栏目顺序: 默认专辑在前, 谁最近被交互过谁前移; 栏目内条目按最近交互倒序、无记录保持后端顺序; 交互打点在 `_openPlaylist`/`_openPodcastRadio`/`showAlbumPreview`(专辑入口 10 处, 收在入口一处) |
+| 3 | 列表行 A 级(必坏)7 处 + 2 处真 bug | 见 `docs/ui-row-audit.md`: comment 时间/IP 与动作行、feed 相对时间、profile 横幅 overlay、歌单广场 chip 行、曲目行行尾、队列行尾两个 48dp 按钮全部加 flex/封顶; `digital_album_page` 与 `radio_subscribers_page` 的"有 ellipsis 没 maxLines"(先换行再省略, 行高翻倍)补 `maxLines: 1` |
+
+**诊断上传的三层不稳定与兜底**(写在 `tools/diag-worker/README.md`): `*.workers.dev` 在国内连通性差
+⇒ 绑自定义域; GitHub 5xx ⇒ Worker 内退避重试 + 幂等键(重发不建重复单); 用户网络差 ⇒ 客户端重试,
+且**无论成败都先落盘本地 JSON**, 失败提示里直接给本地路径。端上端点为空时整行禁用, 不会静默失败。
+
+坑: 诊断页的开关没有外层 `AnimatedBuilder`, 点开关视觉不动(值其实已变) ⇒ 该分组自己监听 `AppSettings`;
+新加用例 `test/one_click_diag_test.dart` 锁住"未配置端点时必须禁用"。
 
 ## 2026-11-13(五): 设置三项 + 主页统一 + golden 网 + 术语(v0.9.0)
 

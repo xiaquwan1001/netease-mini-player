@@ -1,7 +1,12 @@
-import 'package:flutter/material.dart';
+import 'dart:math';
 
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+
+import 'app_meta.dart';
 import 'app_settings.dart';
 import 'debug_report.dart';
+import 'diag_upload.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
@@ -56,17 +61,24 @@ class DiagnosticsPage extends StatelessWidget {
             margin: EdgeInsets.zero,
             child: Column(
               children: [
-                SwitchListTile(
-                  title: const Text('允许匿名发送 debug 数据'),
-                  subtitle: const Text(
-                    '只收环境与设置(版本/系统/屏幕/开关), 不含昵称、uid、cookie; '
-                    '打开后仍需手动点下面一行才会生成',
+                // AppSettings 是单例; 本页没有外层 AnimatedBuilder,
+                // 不监听的话点了开关视觉不动(设置值其实已变)。
+                AnimatedBuilder(
+                  animation: AppSettings.instance,
+                  builder: (context, _) => SwitchListTile(
+                    title: const Text('允许匿名发送 debug 数据'),
+                    subtitle: const Text(
+                      '只收环境与设置(版本/系统/屏幕/开关), 不含昵称、uid、cookie; '
+                      '打开后仍需手动点下面一行才会生成',
+                    ),
+                    value: AppSettings.instance.anonymousDebug,
+                    onChanged: (value) {
+                      AppSettings.instance.update(anonymousDebug: value);
+                    },
                   ),
-                  value: AppSettings.instance.anonymousDebug,
-                  onChanged: (value) {
-                    AppSettings.instance.update(anonymousDebug: value);
-                  },
                 ),
+                const Divider(height: 1),
+                _OneClickDiagTile(dataDir: info?.dataDir, info: info),
                 const Divider(height: 1),
                 _AnonymousReportTile(dataDir: info?.dataDir, info: info),
               ],
@@ -100,6 +112,130 @@ class DiagnosticsPage extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 「一键匿名提交」: 小白点一下 → Worker 代理建 issue → 回一个编号/链接。
+///
+/// 设计约束(见 tools/diag-worker/README.md):
+/// - 用户主动点才发, 开关默认关;
+/// - 端点未配置(作者还没部署 Worker)时整行禁用, 只保留本地生成;
+/// - GitHub token 只在 Worker 侧, 客户端拿不到, issue 作者也不暴露用户;
+/// - 上传失败**一定**留一份本地文件: 小白不会两手空空(`retryable` 只决定提示口径)。
+class _OneClickDiagTile extends StatefulWidget {
+  const _OneClickDiagTile({required this.dataDir, this.info});
+
+  final String? dataDir;
+  final rust.InitInfo? info;
+
+  @override
+  State<_OneClickDiagTile> createState() => _OneClickDiagTileState();
+}
+
+class _OneClickDiagTileState extends State<_OneClickDiagTile> {
+  bool _busy = false;
+
+  bool get _configured => kDiagUploadEndpoint.trim().isNotEmpty;
+
+  /// UUIDv4(幂等键): 不引 uuid 依赖, 用 Random.secure 拼 16 字节。
+  /// 同一次点击内复用同一个 id, Worker 据此不会重复建单。
+  static String _clientId() {
+    final rnd = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant 10
+    String hex(int b) => b.toRadixString(16).padLeft(2, '0');
+    final h = bytes.map(hex).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-'
+        '${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    if (!AppSettings.instance.anonymousDebug) {
+      showToast(context, '先在上面打开「允许匿名发送 debug 数据」', isError: true);
+      return;
+    }
+    setState(() => _busy = true);
+    // 先落盘: 无论上传成败, 用户手里都有那份 JSON(失败时这就是兜底)
+    String? localPath;
+    try {
+      localPath = await DebugReport.write(
+        dataDir: widget.dataDir,
+        info: widget.info,
+      );
+      final payload = await DebugReport.build(info: widget.info);
+      final result = await DiagUploader(endpoint: kDiagUploadEndpoint)
+          .upload(payload, clientId: _clientId());
+      if (!mounted) return;
+      await _showSubmitted(result);
+    } on DiagUploadError catch (e) {
+      if (!mounted) return;
+      showToast(
+        context,
+        e.retryable
+            ? '上传失败(${e.code}), 诊断包已存本地: ${localPath ?? '-'}'
+            : '提交被拒绝(${e.code}): ${e.message}',
+        isError: true,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, '生成失败: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// 提交成功后给"编号 + 链接 + 复制"三件套: 用户不需要知道 GitHub 存在。
+  Future<void> _showSubmitted(DiagUploadResult result) async {
+    final url = result.url;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('已提交'),
+        content: Text(
+          '诊断编号 #${result.number}\n\n'
+          '作者会在 GitHub 上处理这条反馈; 想跟踪进度可以复制下面的链接:\n$url',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('关闭'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await Clipboard.setData(
+                ClipboardData(text: '#${result.number} $url'),
+              );
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (mounted) showToast(context, '已复制编号与链接');
+            },
+            child: const Text('复制'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = _configured && !_busy;
+    return ListTile(
+      leading: _busy
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_upload_outlined),
+      title: const Text('一键匿名提交'),
+      subtitle: Text(
+        _configured ? '不用账号、不用填表: 点一下就提交给作者(失败会留在本地)' : '作者还没配置接收端, 先只支持本地生成',
+      ),
+      trailing: const Icon(Icons.chevron_right),
+      enabled: enabled,
+      onTap: enabled ? _submit : null,
     );
   }
 }

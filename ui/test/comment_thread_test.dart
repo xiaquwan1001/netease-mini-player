@@ -11,10 +11,13 @@ rust.Comment comment(
   int replyCount = 0,
   String ipLocation = '',
   bool hot = false,
+  String? userName,
+  String? repliedTo,
 }) => rust.Comment(
   id: BigInt.from(id),
   userId: BigInt.from(100 + id),
-  userName: '用户$id',
+  userName: userName ?? '用户$id',
+  repliedTo: repliedTo,
   avatarUrl: null,
   content: content,
   timeMs: BigInt.from(1700000000000),
@@ -200,6 +203,55 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('还没有评论'), findsOneWidget);
+  });
+
+  // A1/A2 回归: 头行(昵称/回复@/热门/时间/IP)与动作行(赞/回复/删除)原先都没有
+  // flex, 300dp x1.625 下必溢出 —— 时间/IP 现在参与宽度分配(Flexible),
+  // 动作行改 Wrap 换行。
+  testWidgets('300dp x1.625: 头行五段 + 含删除的动作行都不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 900);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          // myUid 与评论作者一致 => 动作行多出「删除」, 这是动作最多的形态
+          myUid: BigInt.from(101),
+          loadPage: (limit, offset) async => page([
+            comment(
+              1,
+              '一条很长很长很长很长很长很长很长很长的评论正文',
+              likedCount: 12345,
+              hot: true,
+              ipLocation: '广东',
+              userName: '一个名字特别特别长的用户昵称用于窄屏回归测试',
+              repliedTo: '被回复的人名字也很长很长很长',
+            ),
+          ]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page([]),
+          reply: (_, _) async => true,
+          delete: (_) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '头行/动作行不允许 overflow');
+    // 动作行最多 4 个动作(赞/回复/删除 + 计数): 换行后每个动作仍必须在屏内
+    for (final label in ['回复', '删除']) {
+      final box = tester.renderObject<RenderBox>(find.text(label).first);
+      final right = box.localToGlobal(Offset(box.size.width, 0)).dx;
+      expect(right, lessThanOrEqualTo(300.5), reason: '「$label」被挤出屏幕');
+    }
+    // IP 归属必须单行(先换行再省略会让行高翻倍)
+    final ip = tester.renderObject<RenderBox>(find.text('广东'));
+    expect(ip.size.height, lessThan(40), reason: 'IP 归属不许竖排');
+    expect(ip.size.width, greaterThan(0), reason: 'IP 归属被压到 0 宽');
   });
 
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {

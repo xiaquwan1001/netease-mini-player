@@ -983,21 +983,32 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                     ],
+                    // 时间/IP 是裸 Text 时占满自身宽度且不可压缩: 昵称与「回复 @x」
+                    // 已被压到最小后, 这两段相加仍会撑破整行(300dp x1.625 必现)。
+                    // 包 Flexible 让它们参与同一套宽度分配, 极端窄屏才截断。
                     if (timeText.isNotEmpty) ...[
                       const SizedBox(width: 6),
-                      Text(
-                        timeText,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.outline,
+                      Flexible(
+                        child: Text(
+                          timeText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.outline,
+                          ),
                         ),
                       ),
                     ],
                     if (comment.ipLocation.isNotEmpty) ...[
                       const SizedBox(width: 6),
-                      Text(
-                        comment.ipLocation,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.outline,
+                      Flexible(
+                        child: Text(
+                          comment.ipLocation,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.outline,
+                          ),
                         ),
                       ),
                     ],
@@ -1080,7 +1091,13 @@ class _CommentTile extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(height: 2),
-                Row(
+                // 动作数量随权限变化(「删除」只有自己发的评论才有),
+                // 4 个图标+文字+间距在 300dp x1.625 下必然超出卡片宽度。
+                // 用 Wrap 让多出的动作换到下一行: 不做横向滚动, 否则「删除」会被
+                // 推到屏幕外且没有任何可滚动提示。
+                Wrap(
+                  spacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     InkWell(
                       onTap: onToggleLike,
@@ -1114,7 +1131,6 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 10),
                     // 「回复」= 写回复动作本体(打开面板并聚焦输入框);
                     // 数量与浏览全量回复由预览行/「展开全部」承担, 不再混在一个按钮里。
                     InkWell(
@@ -1143,8 +1159,7 @@ class _CommentTile extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (onDelete != null) ...[
-                      const SizedBox(width: 10),
+                    if (onDelete != null)
                       InkWell(
                         onTap: onDelete,
                         borderRadius: BorderRadius.circular(6),
@@ -1171,7 +1186,6 @@ class _CommentTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ],
                   ],
                 ),
               ],

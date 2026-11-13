@@ -161,6 +161,45 @@ void main() {
     });
   });
 
+  // A4 回归: 身份卡右上角的 trailing(关注/编辑按钮)由调用方给, 宽度不受卡片控制。
+  // 原先直接塞进 Row, 300dp x1.625 下昵称区被压到 0 宽后按钮挤出屏幕。
+  group('ProfileIdentity 行尾 trailing 封顶', () {
+    testWidgets('300dp x1.625: 宽按钮被限制在版面 40% 内, 不溢出', (tester) async {
+      setView(tester, width: 300, height: 900);
+      tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(
+        host(
+          ProfileBanner(
+            title: '一个名字特别特别长的用户昵称用于窄屏回归测试再加长',
+            subtitle: '一条同样很长的签名, 用来把副标题行也顶满',
+            imageUrl: null,
+            trailing: OutlinedButton(
+              onPressed: () {},
+              child: const Text('关注该艺人'),
+            ),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull, reason: '身份卡头行不允许 overflow');
+
+      final identity = tester.getRect(find.byType(ProfileIdentity));
+      // 卡片内容区 = 卡宽 - 左右各 16dp padding; 行尾上限 = 内容区的 40%
+      final contentWidth = identity.width - 32;
+      final button = tester.getRect(find.byType(OutlinedButton));
+      expect(
+        button.width,
+        lessThanOrEqualTo(contentWidth * 0.4 + 0.5),
+        reason: 'trailing 超出版面 40% 上限',
+      );
+      expect(
+        button.right,
+        lessThanOrEqualTo(identity.right - 16 + 0.5),
+        reason: 'trailing 被挤出卡片右边界',
+      );
+    });
+  });
+
   // 2026-11 用户报: 「我的」页昵称/关注数的横条下面还遮着一条横条, 点漏出来的
   // 部分也进账号管理。根因是身份卡用 Transform.translate 上浮(不改布局占位)后,
   // 又补了一条 12dp 的 surface 色块 ⇒ 卡片底部实际多出 12dp, 且整块都在 InkWell 里。

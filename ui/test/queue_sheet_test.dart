@@ -306,6 +306,34 @@ void main() {
     expect(find.text('当前播放队列'), findsOneWidget);
     expect(currentTitle(tester), '第一首');
   });
+
+  // A7 回归: 行尾「移除」原先用默认 IconButton(命中区 48dp), 与 leading 序号列
+  // 叠加后 300dp 下标题被压到个位数宽度。现在宽度收到 40dp, 高度仍 48 保命中区。
+  testWidgets('300dp x1.625: 行尾移除按钮宽 40dp(高仍 48), 不横向溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(
+          names: ['第一首', '一首名字特别特别长的歌用于窄屏回归测试', '第三首'],
+          startAt: 0,
+        ),
+      ),
+    );
+    // 长歌名会触发 marquee 无限滚动, 不能 pumpAndSettle
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(tester.takeException(), isNull, reason: '队列行不允许 overflow');
+    final button = tester.getSize(
+      find.widgetWithIcon(IconButton, Icons.delete_outline).first,
+    );
+    expect(button.width, 40, reason: '默认 48dp 会吃掉标题区, 必须收到 40dp');
+    expect(button.height, greaterThanOrEqualTo(48), reason: '命中区高度不能缩');
+  });
 }
 
 /// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).

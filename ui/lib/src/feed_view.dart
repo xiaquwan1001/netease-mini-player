@@ -701,8 +701,13 @@ class _FeedCard extends StatelessWidget {
                   // 原先这里有个「单曲 / 动态」kind 徽标: 用户反馈它不提供额外信息
                   // (点进详情就能看出来), 已去掉, 横向空间让给用户名与时间。
                   const SizedBox(width: 8),
+                  // 时间是不可收缩的定宽尾部元素(与「我的」/消息页一致):
+                  // 横向空间不足时先让用户名(Expanded)截断, 时间保持完整可读。
+                  // maxLines/overflow 只兜底"时间本身比整行还宽"的极端字号。
                   Text(
                     feedRelativeTime(event.timeMs),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.outline,
                     ),

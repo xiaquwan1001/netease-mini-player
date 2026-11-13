@@ -152,29 +152,35 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _CatChip(
-                label: '热门',
-                selected: !_highQuality && _cat.isEmpty,
-                onTap: () => _select('', highQuality: false),
-              ),
-              const SizedBox(width: 8),
-              _CatChip(
-                label: '精品',
-                selected: _highQuality && _cat.isEmpty,
-                onTap: () => _select('', highQuality: true),
-              ),
-              if (_categoriesError != null) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '分类加载失败',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.error,
-                  ),
+          // 窄屏 + 大字号下「热门 + 精品 + 分类加载失败」会超出 300dp:
+          // 这里必须横向滚动而不是 Wrap —— 用 Wrap 换行会让筛选栏高度随错误文案
+          // 跳动, 上方的歌单网格跟着上下位移(用户滚动位置被顶掉)。
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _CatChip(
+                  label: '热门',
+                  selected: !_highQuality && _cat.isEmpty,
+                  onTap: () => _select('', highQuality: false),
                 ),
+                const SizedBox(width: 8),
+                _CatChip(
+                  label: '精品',
+                  selected: _highQuality && _cat.isEmpty,
+                  onTap: () => _select('', highQuality: true),
+                ),
+                if (_categoriesError != null) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    '分类加载失败',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.error,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           for (final group in _categories) ...[
             const SizedBox(height: 6),

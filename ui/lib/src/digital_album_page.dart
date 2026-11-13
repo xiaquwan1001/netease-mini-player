@@ -141,9 +141,16 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               leading: CoverArt(url: e.album.coverUrl, size: 48, radius: 6),
-              title: Text(e.album.albumName, overflow: TextOverflow.ellipsis),
+              // 只有 ellipsis 没有 maxLines 会先换行再省略: 长专辑名逐字竖排,
+              // 行高翻倍(实测 378px, 见 song_tile.dart 同条注释)。
+              title: Text(
+                e.album.albumName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text(
                 '${e.album.artistName} · x${e.album.boughtCount} · ${_fmtDate(e.album.paidTimeMs)}',
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               trailing: const Icon(Icons.chevron_right),
@@ -152,9 +159,14 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
           ),
           _SongEntry() => ListTile(
             leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
-            title: Text(e.song.name, overflow: TextOverflow.ellipsis),
+            title: Text(
+              e.song.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Text(
               '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),

@@ -1394,7 +1394,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
+  /// 记录"最近一次交互"(我的页收藏栏按它排序, 见 recent_order.dart)。
+  /// 打开动作是唯一可靠的信号: 收藏列表本身没有"最近使用"字段。
+  void _touchInteraction(String kind, BigInt id) {
+    if (id <= BigInt.zero) return;
+    unawaited(AppSettings.instance.touchInteraction(kind, id));
+  }
+
   void _openPodcastRadio(rust.PodcastRadio radio) {
+    _touchInteraction('podcast', radio.id);
     showPodcastDetail(
       context,
       radio: radio,
@@ -2386,6 +2394,7 @@ class _HomePageState extends State<HomePage> {
   /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
   /// 不再把曲目塞进搜索页列表。
   Future<void> _openPlaylist(rust.Playlist pl) async {
+    _touchInteraction('playlist', pl.id);
     await showPlaylistDetail(
       context,
       playlistId: pl.id,

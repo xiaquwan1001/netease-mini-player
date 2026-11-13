@@ -1,0 +1,25 @@
+# 部署前必读本目录 README.md 的 8 步(给非专业读者的版本)。
+# 常见踩坑: 忘了填 KV id / 忘了 wrangler secret put GH_TOKEN。
+
+name = "minincm-diag"
+main = "worker.js"
+compatibility_date = "2026-01-15"
+
+# 端上只在用户点了"上传"时才请求一次, 不需要 Workers 预发布/静态资源
+workers_dev = true
+
+# KV 存两类键: done:<clientId>(幂等结果) 与 rl:<ip>:<小时桶>(限流计数)。
+# 创建步骤(在本目录执行, 需要先 wrangler login):
+#   wrangler kv namespace create DIAG
+# 它打印的 id 复制到下面; 留 REPLACE_ME 时 deploy 会报错或运行时 KV 不可用。
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_ME"
+
+# 下面这些**不是凭据**, 可以进仓库; 换成真实仓库后即可部署。
+[vars]
+GH_REPO = "REPLACE_ME/netease-mini-player"
+
+# GH_TOKEN 必须用下面的命令单独注入(不进仓库、不进 git 历史):
+#   wrangler secret put GH_TOKEN
+# fine-grained PAT: 权限只勾 Issues: write, 仓库只选目标仓库, 有效期给最短。

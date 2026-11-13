@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
@@ -10,6 +13,7 @@ import 'my_collections_page.dart';
 import 'net_retry.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
+import 'recent_order.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'song_actions.dart';
@@ -17,9 +21,13 @@ import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 
-/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏播客 / 最近听过 / 听歌排行.
+/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏专辑 / 收藏播客 / 最近听过 / 听歌排行.
 /// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
 /// 所有区块独立加载; 未登录时只显示登录引导.
+///
+/// 排序口径(用户 2026-11): 最近有交互的优先展示 ——
+/// 收藏专辑默认在收藏播客之前, 但两个区块谁最近被打开/播放过谁在前;
+/// 区块内条目(歌单/专辑/播客)也按最近一次交互倒序(规则见 [sortByRecentInteraction])。
 class MineView extends StatefulWidget {
   const MineView({
     super.key,
@@ -240,25 +248,21 @@ class _MineViewState extends State<MineView> {
               ),
             ),
             const SizedBox(height: kSectionGap),
-            _PodcastsSection(
-              key: ValueKey('mine-podcasts-$_dataGeneration'),
-              load: _podcasts,
-              onOpen: widget.onOpenPodcast,
-              onOpenAll: () => showMyPodcastsPage(
-                context,
-                load: _podcasts,
-                onOpen: widget.onOpenPodcast,
-              ),
-            ),
-            const SizedBox(height: kSectionGap),
-            _AlbumsSection(
-              key: ValueKey('mine-albums-$_dataGeneration'),
-              load: _albums,
-              onOpen: widget.onOpenAlbum,
-              onOpenAll: () => showMyAlbumsPage(
+            _AlbumPodcastSections(
+              key: ValueKey('mine-album-podcast-$_dataGeneration'),
+              loadAlbums: _albums,
+              loadPodcasts: _podcasts,
+              onOpenAlbum: widget.onOpenAlbum,
+              onOpenPodcast: widget.onOpenPodcast,
+              onOpenAllAlbums: () => showMyAlbumsPage(
                 context,
                 load: _albums,
                 onOpen: widget.onOpenAlbum,
+              ),
+              onOpenAllPodcasts: () => showMyPodcastsPage(
+                context,
+                load: _podcasts,
+                onOpen: widget.onOpenPodcast,
               ),
             ),
             const SizedBox(height: kSectionGap),
@@ -477,32 +481,42 @@ class _PlaylistsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '收藏的歌单',
-          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
-        ),
-        AsyncView<List<rust.Playlist>>(
-          load: load,
-          emptyText: '还没有收藏歌单',
-          keepAlive: true,
-          // 高度交给 CoverRow(按系统字号自适应), 不再写死 176 ——
-          // 1.625 字号下两行文字会顶出固定的 176 高度。
-          builder: (context, lists, reload) => CoverRow(
-            children: [
-              for (final pl in lists)
-                CoverCard(
-                  coverUrl: pl.coverUrl,
-                  title: pl.special ? '我喜欢的音乐' : pl.name,
-                  subtitle: '${pl.trackCount} 首',
-                  onTap: () => onOpen(pl),
-                ),
-            ],
+    // 交互记录变了要重排, 所以挂在 AppSettings 上重建(数据由 AsyncView 持有,
+    // rebuild 只重算顺序, 不会重新取数)。
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: '收藏的歌单',
+            trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
           ),
-        ),
-      ],
+          AsyncView<List<rust.Playlist>>(
+            load: load,
+            emptyText: '还没有收藏歌单',
+            keepAlive: true,
+            // 高度交给 CoverRow(按系统字号自适应), 不再写死 176 ——
+            // 1.625 字号下两行文字会顶出固定的 176 高度。
+            builder: (context, lists, reload) => CoverRow(
+              children: [
+                for (final pl in sortByRecentInteraction(
+                  lists,
+                  (pl) => pl.id,
+                  (id) =>
+                      AppSettings.instance.lastInteractionMs('playlist', id),
+                ))
+                  CoverCard(
+                    coverUrl: pl.coverUrl,
+                    title: pl.special ? '我喜欢的音乐' : pl.name,
+                    subtitle: '${pl.trackCount} 首',
+                    onTap: () => onOpen(pl),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -536,7 +550,12 @@ class _PodcastsSection extends StatelessWidget {
           keepAlive: true,
           builder: (context, radios, reload) => CoverRow(
             children: [
-              for (final r in radios)
+              // 最近播放/打开过的播客排在前面(无记录保持后端顺序)
+              for (final r in sortByRecentInteraction(
+                radios,
+                (r) => r.id,
+                (id) => AppSettings.instance.lastInteractionMs('podcast', id),
+              ))
                 CoverCard(
                   coverUrl: r.coverUrl,
                   title: r.name,
@@ -585,7 +604,12 @@ class _AlbumsSection extends StatelessWidget {
           keepAlive: true,
           builder: (context, albums, reload) => CoverRow(
             children: [
-              for (final a in albums)
+              // 最近播放/打开过的专辑排在前面(无记录保持后端顺序)
+              for (final a in sortByRecentInteraction(
+                albums,
+                (a) => a.id,
+                (id) => AppSettings.instance.lastInteractionMs('album', id),
+              ))
                 CoverCard(
                   coverUrl: a.coverUrl,
                   title: a.name,
@@ -599,6 +623,116 @@ class _AlbumsSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ---------------- 收藏的专辑 / 收藏的播客(按最近交互互换前后) ----------------
+
+/// 把"收藏的专辑"和"收藏的播客"两个区块按最近交互决定前后位置.
+///
+/// 口径(见 [compareSectionsByRecent]):
+/// - 默认顺序: 收藏专辑 → 收藏播客;
+/// - 谁最近被交互过(取该区块内最新一条的时间戳)谁在前, 持平时按默认顺序.
+///
+/// 为什么由本组件(父层)持有数据: 区块间次序要同时拿到两边的列表才能算, 单个区块
+/// 自己的 AsyncView 拿不到对方. 这里统一发起一次请求(仍用调用方注入的 loader),
+/// 再把同一个 future 交给下面的 AsyncView 去渲染四态 —— 不会重复取数;
+/// 取数失败时只影响排序(按默认顺序), 错误态仍由 AsyncView 展示。
+class _AlbumPodcastSections extends StatefulWidget {
+  const _AlbumPodcastSections({
+    super.key,
+    required this.loadAlbums,
+    required this.loadPodcasts,
+    required this.onOpenAlbum,
+    required this.onOpenPodcast,
+    required this.onOpenAllAlbums,
+    required this.onOpenAllPodcasts,
+  });
+
+  final Future<List<rust.AlbumItem>> Function() loadAlbums;
+  final Future<List<rust.PodcastRadio>> Function() loadPodcasts;
+  final void Function(rust.AlbumItem album) onOpenAlbum;
+  final void Function(rust.PodcastRadio radio) onOpenPodcast;
+  final VoidCallback onOpenAllAlbums;
+  final VoidCallback onOpenAllPodcasts;
+
+  @override
+  State<_AlbumPodcastSections> createState() => _AlbumPodcastSectionsState();
+}
+
+class _AlbumPodcastSectionsState extends State<_AlbumPodcastSections> {
+  /// 已取到的数据, 只用来算区块间次序; 未完成/失败时保持 null(= 按默认顺序)。
+  List<rust.AlbumItem>? _albums;
+  List<rust.PodcastRadio>? _podcasts;
+
+  Future<List<rust.AlbumItem>> _loadAlbums() {
+    final future = widget.loadAlbums();
+    unawaited(
+      future.then(
+        (list) {
+          if (!mounted) return;
+          setState(() => _albums = list);
+        },
+        onError: (Object _) {
+          // 错误态由 AsyncView 渲染, 这里只需要"没有数据可排序"
+        },
+      ),
+    );
+    return future;
+  }
+
+  Future<List<rust.PodcastRadio>> _loadPodcasts() {
+    final future = widget.loadPodcasts();
+    unawaited(
+      future.then((list) {
+        if (!mounted) return;
+        setState(() => _podcasts = list);
+      }, onError: (Object _) {}),
+    );
+    return future;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 交互记录变化(打开过某个专辑/播客)要立刻换位置: 挂在 AppSettings 上重建。
+    return AnimatedBuilder(
+      animation: AppSettings.instance,
+      builder: (context, _) {
+        final settings = AppSettings.instance;
+        final albumLatest = latestInteractionMs(
+          _albums,
+          (a) => a.id,
+          (id) => settings.lastInteractionMs('album', id),
+        );
+        final podcastLatest = latestInteractionMs(
+          _podcasts,
+          (r) => r.id,
+          (id) => settings.lastInteractionMs('podcast', id),
+        );
+        // >= 0 时专辑在前: 也包括"两边一样新/都没有记录"时的默认顺序
+        final albumFirst =
+            compareSectionsByRecent(albumLatest, podcastLatest) >= 0;
+        final albums = _AlbumsSection(
+          key: const ValueKey('mine-albums'),
+          load: _loadAlbums,
+          onOpen: widget.onOpenAlbum,
+          onOpenAll: widget.onOpenAllAlbums,
+        );
+        final podcasts = _PodcastsSection(
+          key: const ValueKey('mine-podcasts'),
+          load: _loadPodcasts,
+          onOpen: widget.onOpenPodcast,
+          onOpenAll: widget.onOpenAllPodcasts,
+        );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: albumFirst
+              ? [albums, const SizedBox(height: kSectionGap), podcasts]
+              : [podcasts, const SizedBox(height: kSectionGap), albums],
+        );
+      },
     );
   }
 }

@@ -23,3 +23,12 @@ dist/
 
 # 子代理 lane 的临时笔记(不入库)
 .lane-notes.md
+
+# Cloudflare Worker 的本地密钥/缓存(tools/diag-worker)
+# GH_TOKEN 只用 `wrangler secret put GH_TOKEN` 存到 Cloudflare, 绝不落仓库;
+# 下面几条防的是 wrangler 本地开发时可能生成的凭据文件。
+tools/diag-worker/.dev.vars
+tools/diag-worker/.dev.vars.*
+tools/diag-worker/.wrangler/
+tools/diag-worker/node_modules/
+tools/diag-worker/*.secret

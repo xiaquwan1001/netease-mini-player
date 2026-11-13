@@ -131,6 +131,46 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('一个名字特别特别长的歌单名称用于窄屏回归测试'), findsOneWidget);
   });
+
+  // A5 回归: 「热门/精品 + 分类加载失败」在 300dp x1.625 下超出屏宽。
+  // 修法是横向滚动(而不是 Wrap 换行 —— 换行会让筛选栏高度随错误文案跳动,
+  // 下方歌单网格跟着位移)。
+  testWidgets('300dp x1.625: 分类加载失败时筛选行可横向滚动, 不溢出', (tester) async {
+    tester.view.physicalSize = const Size(300, 640);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      host(
+        PlaylistSquareView(
+          // 不用 [network] 前缀: 那会走 retryNetwork 的退避重试, 错误要 1.5s 后才
+          // 冒出来(pumpAndSettle 在等待 timer 时会提前结束), 本用例只想拿错误态
+          loadCategories: () async => throw Exception('boom'),
+          loadPage: (cat, limit, offset) async => [playlist(1, '歌单1')],
+          loadHighQuality: (cat, limit) async => const [],
+          onOpenPlaylist: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull, reason: '筛选行不允许 overflow');
+    expect(find.text('分类加载失败'), findsOneWidget);
+    // 筛选行必须是横向滚动容器: 它是「热门」chip 的祖先
+    expect(
+      find.ancestor(
+        of: find.text('热门'),
+        matching: find.byWidgetPredicate(
+          (w) =>
+              w is SingleChildScrollView &&
+              w.scrollDirection == Axis.horizontal,
+        ),
+      ),
+      findsOneWidget,
+      reason: '分类快捷行必须能横向滚动(不许 Wrap 换行)',
+    );
+  });
 }
 
 /// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).
