@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/artist_nav.dart';
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -101,6 +102,102 @@ void main() {
     // 选中后筛选生效: 这位艺人本页没有动态
     await tester.tap(find.text('没发动态的艺人'));
     await tester.pumpAndSettle();
+    expect(find.text('ta 最近没有动态'), findsOneWidget);
+  });
+
+  testWidgets('横向艺人 chip: 点头像进艺人主页, 点整块仍是筛选', (tester) async {
+    final calls = <(BigInt, String?)>[];
+    ArtistNav.opener = (context, artistId, {name}) async {
+      calls.add((artistId, name));
+    };
+    addTearDown(() => ArtistNav.opener = null);
+
+    await tester.pumpWidget(
+      host(
+        FeedView(
+          loggedIn: true,
+          onLogin: () {},
+          onPlaySongs: (_, _) {},
+          onOpenUrl: (_) async {},
+          loadFeed: () async => [
+            event(id: 1, userId: 10, userName: '低互动艺人', text: '低互动正文'),
+            event(
+              id: 2,
+              userId: 20,
+              userName: '高互动艺人',
+              text: '高互动正文',
+              likedCount: 100,
+            ),
+          ],
+          loadSubscribedArtists: () async => const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 头像(40dp)是主页入口: 命中区只覆盖头像本身
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) => w is ArtistAvatarTap && w.artistId == BigInt.from(20),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(calls, [(BigInt.from(20), '高互动艺人')]);
+    // 筛选没被顺手触发: 两位的动态都还在
+    expect(find.text('低互动正文'), findsOneWidget);
+    expect(find.text('高互动正文'), findsOneWidget);
+
+    // 整块(chip 文字)仍是筛选: 选中后只显示这一位的动态
+    await tester.tap(find.text('低互动艺人').first);
+    await tester.pumpAndSettle();
+    expect(calls, hasLength(1), reason: '点整块不该进主页');
+    expect(find.text('低互动正文'), findsOneWidget);
+    expect(find.text('高互动正文'), findsNothing);
+  });
+
+  testWidgets('「全部艺人」面板: 点头像进主页, 点整行仍是筛选', (tester) async {
+    final calls = <(BigInt, String?)>[];
+    ArtistNav.opener = (context, artistId, {name}) async {
+      calls.add((artistId, name));
+    };
+    addTearDown(() => ArtistNav.opener = null);
+
+    await tester.pumpWidget(
+      host(
+        FeedView(
+          loggedIn: true,
+          onLogin: () {},
+          onPlaySongs: (_, _) {},
+          onOpenUrl: (_) async {},
+          loadFeed: () async => [event(id: 1, userId: 10, userName: '本页艺人')],
+          loadSubscribedArtists: () async => [
+            rust.Artist(id: BigInt.from(10), name: '本页艺人'),
+            rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('进入全部'));
+    await tester.pumpAndSettle();
+    expect(find.text('全部艺人'), findsOneWidget);
+
+    // 已关注块的这一行: 头像用的是 rust.Artist.id
+    await tester.tap(
+      find.byWidgetPredicate(
+        (w) => w is ArtistAvatarTap && w.artistId == BigInt.from(99),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(calls, [(BigInt.from(99), '没发动态的艺人')]);
+    // 面板没关、筛选没生效(点头像只是打开主页)
+    expect(find.text('全部艺人'), findsOneWidget);
+
+    // 整行仍是筛选: 选中后弹回并只显示这位(本页没他的动态)
+    await tester.tap(find.text('没发动态的艺人'));
+    await tester.pumpAndSettle();
+    expect(calls, hasLength(1), reason: '点整行不该进主页');
     expect(find.text('ta 最近没有动态'), findsOneWidget);
   });
 

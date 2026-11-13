@@ -164,8 +164,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // v0.7.2: 用户要求徽标位置与推荐页/歌单页统一 —— 在歌名之后, 不在歌手之前。
-  testWidgets('VIP 标在歌名之后(与推荐页一致), 不在歌手行', (tester) async {
+  // v0.7.2: 用户要求徽标位置与推荐页/歌单页统一 —— 在歌名之后, 不在艺人之前。
+  testWidgets('VIP 标在歌名之后(与推荐页一致), 不在艺人行', (tester) async {
     await tester.pumpWidget(
       host(
         SongTile(
@@ -190,7 +190,7 @@ void main() {
     expect(
       (vipRect.center.dy - artistRect.center.dy).abs(),
       greaterThan(4),
-      reason: 'VIP 标不应再出现在歌手那一行',
+      reason: 'VIP 标不应再出现在艺人那一行',
     );
   });
 

@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# golden 测试失败时 flutter_test 会往这里写真/假/差异三张图, 只用于肉眼对比
+/test/failures/
+
 # Symbolication related
 app.*.symbols
 

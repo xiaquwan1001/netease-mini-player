@@ -103,7 +103,7 @@ Future<void> pumpMv(
 }
 
 void main() {
-  testWidgets('MV 详情渲染: 标题/歌手/播放量/发布时间/最高清晰度', (tester) async {
+  testWidgets('MV 详情渲染: 标题/艺人/播放量/发布时间/最高清晰度', (tester) async {
     await pumpMv(tester, detail: mvDetail(desc: '简介文本'));
     expect(find.text('主角'), findsWidgets);
     expect(find.textContaining('王菲'), findsOneWidget);

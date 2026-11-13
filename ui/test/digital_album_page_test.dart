@@ -11,7 +11,7 @@ rust.DigitalAlbumPurchased _albums({int n = 2}) => rust.DigitalAlbumPurchased(
       albumId: BigInt.from(120605500 + i),
       albumName: '专辑$i',
       artistId: BigInt.one,
-      artistName: '歌手$i',
+      artistName: '艺人$i',
       coverUrl: '',
       paidTimeMs: BigInt.from(1638063971559),
       boughtCount: BigInt.one,
@@ -27,7 +27,7 @@ rust.SongPurchasedPage _songs({int n = 1}) => rust.SongPurchasedPage(
     (i) => rust.PurchasedSongEntry(
       songId: BigInt.from(186016 + i),
       name: '歌曲$i',
-      artistName: '歌手$i',
+      artistName: '艺人$i',
       coverUrl: '',
       paidTimeMs: BigInt.from(1638063971559),
     ),
@@ -70,7 +70,7 @@ void main() {
     expect(find.byType(ListTile), findsNothing);
   });
 
-  testWidgets('列表渲染: 已购专辑 + 单曲, 行含标题/歌手/日期', (tester) async {
+  testWidgets('列表渲染: 已购专辑 + 单曲, 行含标题/艺人/日期', (tester) async {
     await _pump(
       tester,
       albums: () async => _albums(n: 2),
@@ -80,7 +80,7 @@ void main() {
     expect(find.text('专辑0'), findsOneWidget);
     expect(find.text('专辑1'), findsOneWidget);
     expect(find.text('歌曲0'), findsOneWidget);
-    expect(find.textContaining('歌手0'), findsWidgets);
+    expect(find.textContaining('艺人0'), findsWidgets);
     expect(find.textContaining('2021-11-28'), findsWidgets);
   });
 
@@ -104,7 +104,7 @@ void main() {
         albumId: id,
         name: '专辑0',
         artistId: BigInt.one,
-        artistName: '歌手0',
+        artistName: '艺人0',
         coverUrl: '',
         hasAlbum: true,
         price: 22.0,

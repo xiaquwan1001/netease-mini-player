@@ -26,7 +26,7 @@ Widget scaled(Widget child) => MaterialApp(
 rust.SongDto song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '一个名字特别特别长的歌手用于小屏回归测试',
+  artist: '一个名字特别特别长的艺人用于小屏回归测试',
   artistId: BigInt.one,
   album: '一张名字特别特别特别长的专辑用于小屏回归测试',
   albumId: BigInt.one,
@@ -94,7 +94,7 @@ void main() {
                 albumId: BigInt.one,
                 albumName: '一张名字特别特别特别长的已购专辑用于小屏回归测试',
                 artistId: BigInt.one,
-                artistName: '一个名字特别特别长的歌手用于小屏回归测试',
+                artistName: '一个名字特别特别长的艺人用于小屏回归测试',
                 coverUrl: '',
                 paidTimeMs: BigInt.from(1638063971559),
                 boughtCount: BigInt.one,
@@ -108,7 +108,7 @@ void main() {
               rust.PurchasedSongEntry(
                 songId: BigInt.one,
                 name: '一首名字特别特别特别长的已购单曲用于小屏回归测试',
-                artistName: '一个名字特别特别长的歌手用于小屏回归测试',
+                artistName: '一个名字特别特别长的艺人用于小屏回归测试',
                 coverUrl: '',
                 paidTimeMs: BigInt.from(1638063971559),
               ),

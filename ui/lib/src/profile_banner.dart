@@ -184,7 +184,7 @@ class ProfileIdentity extends StatelessWidget {
   final bool vip;
   final double avatarSize;
 
-  /// 主标题样式(艺人页用大一号的)
+  /// 主标题样式; 默认 titleMedium w600(艺人名/昵称同一档, 页面不再各自指定)
   final TextStyle? titleStyle;
 
   /// 名字右侧的追加操作(如关注按钮)
@@ -246,6 +246,9 @@ class ProfileIdentity extends StatelessWidget {
                           // 昵称/艺人名走统一长文字组件: 放不下才单向跑马灯(需求 5/9)。
                           child: AdaptiveText(
                             title,
+                            // 默认 titleMedium w600: 艺人名与用户昵称**同一档字号**
+                            // (此前艺人页自己塞 headlineSmall, 从关注进主页与从搜索进
+                            // 主页看到的标题大小不一样), 也留出身份卡右上角动作的位置。
                             style:
                                 titleStyle ??
                                 theme.textTheme.titleMedium?.copyWith(

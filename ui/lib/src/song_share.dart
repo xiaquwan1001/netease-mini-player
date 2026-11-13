@@ -92,7 +92,7 @@ Future<Uint8List?> capturePng(
   }
 }
 
-/// 分享卡片(纯展示, 不含交互): 封面 + 曲名/歌手 + 可选歌词 + 二维码.
+/// 分享卡片(纯展示, 不含交互): 封面 + 曲名/艺人 + 可选歌词 + 二维码.
 ///
 /// 尺寸固定 [width] x 自适应高度, 由外层 RepaintBoundary 截图.
 class SongShareCard extends StatelessWidget {

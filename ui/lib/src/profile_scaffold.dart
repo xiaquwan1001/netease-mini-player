@@ -13,10 +13,21 @@ import 'profile_banner.dart';
 //
 //   SliverAppBar(pinned, expandedHeight = kProfileBannerHeight, 背景横幅)
 //   ├─ ProfileIdentity(身份卡, 在横幅下沿; 这里身份卡是 sliver 子节点, 不上浮)
-//   ├─ sections(统计行之外的分区: 简介/推荐单曲/专辑/相似歌手 …)
+//   ├─ sections(统计行之外的分区: 简介/推荐单曲/专辑/相似艺人 …)
 //   ├─ 可选 pinned 搜索条(页内过滤)
 //   └─ pinned TabBar(由 ProfileTabSpec 列表生成)
 //   body = TabBarView(每个 spec 自己构建内容)
+//
+// 两页的**内容口径**也一起收敛在这里(2026-11「个人主页统一」):
+//
+//   · 身份卡: 头像 64 / 标题 headlineSmall w600 / 副标题 bodySmall 单行省略
+//     (见 profile_banner.dart 的默认值, 页面不再各传一套);
+//   · 统计行: [ProfileStatChip] 只放**统计与入口**(关注/粉丝/作品数/等级),
+//     主操作(如艺人页的「关注」)放 [ProfileIdentity.trailing], 两种页面同一语义;
+//   · 分区顺序: 简介 → 作品(推荐单曲/专辑) → 相似艺人(纯跳转入口放最后);
+//   · 分区几何: [ProfileSection](标题 8 / 内容 / 块间 16), 不再各页手写 SizedBox;
+//   · 缺数据: 整块不渲染(不生成空 tab、不留占位文案), tab 内容为空才由内容自己
+//     给 [EmptyView] 空态 —— 「没有这条数据」与「有数据但列表为空」是两种状态。
 // ───────────────────────────────────────────────────────────────────────────
 
 /// pinned 页内搜索条的高度(与 artist_page 原实现一致)。
@@ -67,6 +78,10 @@ class ProfileTabBadge extends StatelessWidget {
 }
 
 /// 统一统计 chip: 关注 / 粉丝(可点) / 等级 / `N 专辑 · M 首歌曲`。
+///
+/// 只表达**统计与入口**(点关注/粉丝是去看列表)。写操作(艺人页的「关注」按钮)
+/// 一律放 [ProfileIdentity.trailing]: 长得一样的 chip 一个切列表一个发请求,
+/// 用户没法从外观预判后果。
 ///
 /// 放在 [ProfileIdentity.footer] 槽位里, 两页共用同一套尺寸与节奏;
 /// 可点的 chip 额外带 chevron 且包一层 InkWell(300dp + 1.625 字号仍不溢出:
@@ -162,6 +177,106 @@ class ProfileWorksStatChip extends StatelessWidget {
     );
   }
 }
+
+/// 信息区的一个分区: 标题(可选) + 内容 + 块间 16。
+///
+/// 两页此前各写一份 `Text('简介', titleMedium)` + `SizedBox(height: 4|8)` +
+/// `SizedBox(height: 16)`: 同样的区块在不同页里标题字重与间距都不同。
+/// 现在标题风格(与 [SectionHeader] 同款 titleMedium w600)与块间节奏只在这里定义。
+///
+/// 自带标题行的区块(推荐单曲/专辑: 头部还有「查看全部」动作)整个当 [child] 传,
+/// 不要再叠一个 [title], 否则会出现两条标题。
+class ProfileSection extends StatelessWidget {
+  const ProfileSection({super.key, required this.child, this.title});
+
+  /// 纯文本标题(简介/相似艺人这类没有尾部动作的区块); 为空则不占位。
+  final String? title;
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = this.title;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        child,
+        // 块间统一 16(最后一节也留, 与 TabBar 的分隔一致)
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+/// 首屏失败(整页错误): 顶栏返回 + 居中「加载失败」+ 原因 + 重试。
+///
+/// 之前艺人页是一行红字 + 重试按钮, 用户页是 Card/ListTile「加载失败」,
+/// 同一类失败两种视觉; 两页现在都走这一份。
+class ProfileLoadError extends StatelessWidget {
+  const ProfileLoadError({
+    super.key,
+    required this.title,
+    required this.message,
+    required this.onRetry,
+  });
+
+  /// 顶栏标题(已知的艺人名/昵称)。
+  final String title;
+
+  /// 失败原因(已转成人话)。
+  final String message;
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(title, maxLines: 1)),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('加载失败', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.tonal(onPressed: onRetry, child: const Text('重试')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 横幅收起(顶栏改用纯标题)的滚动阈值; 两页共用, 不再各写一个魔法数。
+const double kProfileCollapseOffset = 90;
+
+/// 当前是否已收起横幅。两页的 ScrollController 监听都用它判定。
+bool profileCollapsedAt(ScrollController controller) =>
+    controller.hasClients && controller.offset > kProfileCollapseOffset;
 
 /// 统一页面骨架(见文件头注释)。
 class ProfileScaffold extends StatelessWidget {

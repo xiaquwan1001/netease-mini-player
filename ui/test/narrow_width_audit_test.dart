@@ -14,7 +14,7 @@ import 'package:minincm/src/search_results.dart';
 import 'package:minincm/src/song_tile.dart';
 
 const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
-const _longArtist = '一条超级超级长的艺人名组合名称竖排回归测试用歌手名还有更长';
+const _longArtist = '一条超级超级长的艺人名组合名称竖排回归测试用艺人名还有更长';
 const _creatorLine = '创建者: $_longArtist';
 const _longAlbum = '一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版再长一点';
 

@@ -84,6 +84,21 @@ class AppSettings extends ChangeNotifier {
   /// 搜索页是否展示「热门搜索」榜(默认展示; 关闭后只留历史与猜你想搜)
   bool showHotSearch = true;
 
+  /// 播放时跳过 VIP 歌曲(默认关 = 保持现状: VIP 曲目仍然尝试取链, 取决于账号是否会员).
+  ///
+  /// 跳的是"需要黑胶会员"的曲目(fee=1 ⇒ SongDto.vip), 不是无版权曲目
+  /// (后者本来就由 `playable == false` 处理)。列表里仍会显示, 只是切歌/续播时跳过。
+  bool skipVipSongs = false;
+
+  /// 每日推荐歌单的本地缓存天数: 0 = 关闭, 3/7/30 = 保留天数.
+  ///
+  /// 缓存的是歌单列表本身(不含歌曲/凭据), 关掉后下次进推荐页就要联网拉。
+  int dailyCacheDays = 7;
+
+  /// 是否允许生成匿名诊断数据(见 debug_report.dart).
+  /// 默认 false; 打开后只在用户主动点「生成匿名诊断包」时产出文件, 不会自动上传。
+  bool anonymousDebug = false;
+
   /// 封面/图片清晰度档位(见 [CoverQuality]). 默认 [CoverQuality.standard] = 按设备像素 1:1.
   ///
   /// 单独用 [ValueNotifier] 通知: 界面上封面可能有上百个, 不该让"音量滑块拖动"这类
@@ -218,6 +233,15 @@ class AppSettings extends ChangeNotifier {
           if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
           final hotSearch = raw['showHotSearch'];
           if (hotSearch is bool) showHotSearch = hotSearch;
+          final skipVip = raw['skipVipSongs'];
+          if (skipVip is bool) skipVipSongs = skipVip;
+          final cacheDays = raw['dailyCacheDays'];
+          if (cacheDays is num &&
+              dailyCacheOptions.contains(cacheDays.toInt())) {
+            dailyCacheDays = cacheDays.toInt();
+          }
+          final anonDebug = raw['anonymousDebug'];
+          if (anonDebug is bool) anonymousDebug = anonDebug;
           final coverQualityRaw = raw['coverQuality'];
           if (coverQualityRaw is String) {
             coverQuality = CoverQualityX.fromId(coverQualityRaw);
@@ -306,6 +330,9 @@ class AppSettings extends ChangeNotifier {
     int? gridColumns,
     bool? clearSearchOnTabSwitch,
     bool? showHotSearch,
+    bool? skipVipSongs,
+    int? dailyCacheDays,
+    bool? anonymousDebug,
     CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
@@ -345,6 +372,11 @@ class AppSettings extends ChangeNotifier {
       this.clearSearchOnTabSwitch = clearSearchOnTabSwitch;
     }
     if (showHotSearch != null) this.showHotSearch = showHotSearch;
+    if (skipVipSongs != null) this.skipVipSongs = skipVipSongs;
+    if (dailyCacheDays != null && dailyCacheOptions.contains(dailyCacheDays)) {
+      this.dailyCacheDays = dailyCacheDays;
+    }
+    if (anonymousDebug != null) this.anonymousDebug = anonymousDebug;
     if (coverQuality != null) this.coverQuality = coverQuality;
     if (oledDark != null) this.oledDark = oledDark;
     if (volumeGainDb != null) {
@@ -387,6 +419,9 @@ class AppSettings extends ChangeNotifier {
           'gridColumns': gridColumns,
           'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
           'showHotSearch': showHotSearch,
+          'skipVipSongs': skipVipSongs,
+          'dailyCacheDays': dailyCacheDays,
+          'anonymousDebug': anonymousDebug,
           'coverQuality': coverQuality.id,
           'oledDark': oledDark,
           'volumeGainDb': volumeGainDb,
@@ -411,6 +446,12 @@ class AppSettings extends ChangeNotifier {
       // 落盘失败只影响下次启动, 当前会话仍生效
     }
   }
+
+  /// 每日推荐歌单缓存的可选天数(0 = 关闭)。
+  /// 放在 AppSettings 里而不是缓存模块里: 设置页与缓存模块都要用同一组口径。
+  static const List<int> dailyCacheOptions = [0, 3, 7, 30];
+
+  static String dailyCacheLabel(int days) => days <= 0 ? '关闭' : '保留 $days 天';
 
   static String _themeName(ThemeMode mode) => switch (mode) {
     ThemeMode.light => 'light',

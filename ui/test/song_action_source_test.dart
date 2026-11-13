@@ -7,7 +7,7 @@ import 'package:minincm/src/song_actions.dart';
 rust.SongDto fakeSong({String name = '测试歌曲'}) => rust.SongDto(
   id: BigInt.from(42),
   name: name,
-  artist: '测试歌手',
+  artist: '测试艺人',
   artistId: BigInt.one,
   album: '测试专辑',
   albumId: BigInt.one,
@@ -69,7 +69,7 @@ void main() {
     expect(find.text('下一首播放'), findsOneWidget);
   });
 
-  testWidgets('歌单/专辑/歌手/电台来源同样不含"不感兴趣"', (tester) async {
+  testWidgets('歌单/专辑/艺人/电台来源同样不含"不感兴趣"', (tester) async {
     for (final source in [
       SongActionSource.playlist,
       SongActionSource.album,

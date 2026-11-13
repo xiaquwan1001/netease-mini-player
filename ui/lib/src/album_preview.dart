@@ -254,7 +254,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
                             : () => _openArtist(context, album),
                         borderRadius: BorderRadius.circular(4),
                         child: Text(
-                          album?.artist ?? '未知歌手',
+                          album?.artist ?? '未知艺人',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: album == null

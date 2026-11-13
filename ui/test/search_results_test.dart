@@ -6,7 +6,7 @@ import 'package:minincm/src/search_results.dart';
 import 'package:minincm/src/user_nav.dart';
 
 void main() {
-  testWidgets('综合搜索结果: 分类横向排列(单曲/歌手/专辑/歌单/播客), 切换后看对应内容', (tester) async {
+  testWidgets('综合搜索结果: 分类横向排列(单曲/艺人/专辑/歌单/播客), 切换后看对应内容', (tester) async {
     tester.view.physicalSize = const Size(1000, 1400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -16,7 +16,7 @@ void main() {
     final song = rust.SongDto(
       id: BigInt.from(1),
       name: '测试歌曲',
-      artist: '测试歌手',
+      artist: '测试艺人',
       artistId: BigInt.from(9),
       album: '测试专辑',
       albumId: BigInt.from(8),
@@ -34,7 +34,7 @@ void main() {
       artists: [
         rust.SearchArtist(
           id: BigInt.from(9),
-          name: '测试歌手',
+          name: '测试艺人',
           avatarUrl: null,
           alias: '',
           albumCount: BigInt.from(3),
@@ -46,7 +46,7 @@ void main() {
           id: BigInt.from(8),
           name: '测试专辑',
           coverUrl: null,
-          artist: '测试歌手',
+          artist: '测试艺人',
           trackCount: BigInt.from(10),
         ),
       ],
@@ -99,7 +99,7 @@ void main() {
     );
 
     // 六个分类 chip 同时可见(Wrap 换行, 不再横向滚动把后两个藏起来)
-    for (final label in ['单曲', '歌手', '专辑', '歌单', '播客', '用户']) {
+    for (final label in ['单曲', '艺人', '专辑', '歌单', '播客', '用户']) {
       expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
     }
     // 默认显示「单曲」分类: 歌曲行在, 专辑卡片还没渲染
@@ -113,10 +113,10 @@ void main() {
     expect(openedAlbum, isNotNull);
     expect(openedAlbum!.id, BigInt.from(8));
 
-    // 点「歌手」chip 能看到歌手卡片
-    await tester.tap(find.widgetWithText(ChoiceChip, '歌手'));
+    // 点「艺人」chip 能看到艺人卡片
+    await tester.tap(find.widgetWithText(ChoiceChip, '艺人'));
     await tester.pumpAndSettle();
-    expect(find.text('测试歌手'), findsWidgets);
+    expect(find.text('测试艺人'), findsWidgets);
   });
 
   testWidgets('300dp + 1.25 字号不溢出(五分区长文案)', (tester) async {
@@ -134,7 +134,7 @@ void main() {
                   rust.SongDto(
                     id: BigInt.from(1),
                     name: '一首名字特别特别长的歌曲用于小屏回归测试',
-                    artist: '一个名字特别特别长的歌手用于小屏回归测试',
+                    artist: '一个名字特别特别长的艺人用于小屏回归测试',
                     artistId: BigInt.from(9),
                     album: '一张名字特别特别长的专辑用于小屏回归测试',
                     albumId: BigInt.from(8),
@@ -150,7 +150,7 @@ void main() {
                 artists: [
                   rust.SearchArtist(
                     id: BigInt.from(9),
-                    name: '一个名字特别特别长的歌手用于小屏回归测试',
+                    name: '一个名字特别特别长的艺人用于小屏回归测试',
                     avatarUrl: null,
                     alias: '',
                     albumCount: BigInt.from(3),
@@ -162,7 +162,7 @@ void main() {
                     id: BigInt.from(8),
                     name: '一张名字特别特别长的专辑用于小屏回归测试',
                     coverUrl: null,
-                    artist: '测试歌手',
+                    artist: '测试艺人',
                     trackCount: BigInt.from(10),
                   ),
                 ],

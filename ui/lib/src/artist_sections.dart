@@ -68,7 +68,7 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
   }
 }
 
-/// 推荐单曲的一行: 封面 + (歌名+徽标 / 歌手·专辑) + 时长。
+/// 推荐单曲的一行: 封面 + (歌名+徽标 / 艺人·专辑) + 时长。
 /// 标题/副标题都是 Expanded + ellipsis, 300dp 大字号不溢出。
 class _ArtistRecommendSongRow extends StatelessWidget {
   const _ArtistRecommendSongRow({
@@ -243,7 +243,7 @@ class ArtistAlbumsSection extends StatelessWidget {
   }
 }
 
-/// 「详细艺人」弹层: 完整简介(可滚) + 统计 + 相似歌手胶囊。
+/// 「详细艺人」弹层: 完整简介(可滚) + 统计 + 相似艺人胶囊。
 /// 用 SheetHeader 而不是 AppBar(sheet 内容高度无界, AppBar 的 flex 会抛异常)。
 Future<void> showArtistInfoSheet(
   BuildContext context, {
@@ -290,7 +290,7 @@ Future<void> showArtistInfoSheet(
                       ],
                       if (similar.isNotEmpty) ...[
                         const SizedBox(height: 16),
-                        Text('相似歌手', style: theme.textTheme.titleMedium),
+                        Text('相似艺人', style: theme.textTheme.titleMedium),
                         const SizedBox(height: 8),
                         // 胶囊 Wrap: 横排放不下自动换行, 名字单行省略
                         Wrap(

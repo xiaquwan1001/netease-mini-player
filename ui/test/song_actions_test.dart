@@ -41,7 +41,7 @@ class FakeHost {
 rust.SongDto fakeSong({BigInt? artistId, BigInt? albumId}) => rust.SongDto(
   id: BigInt.from(42),
   name: '测试歌曲',
-  artist: '测试歌手',
+  artist: '测试艺人',
   artistId: artistId ?? BigInt.one,
   album: '测试专辑',
   albumId: albumId ?? BigInt.one,
@@ -77,7 +77,7 @@ void main() {
     expect(find.text('收藏到歌单'), findsOneWidget);
     expect(find.text('分享'), findsOneWidget);
     expect(find.text('查看评论'), findsOneWidget);
-    expect(find.text('歌手信息'), findsOneWidget);
+    expect(find.text('艺人信息'), findsOneWidget);
     expect(find.text('专辑信息'), findsOneWidget);
     expect(find.text('下载'), findsOneWidget);
   });
@@ -95,7 +95,7 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
   });
 
-  testWidgets('artistId/albumId 为 0 时歌手/专辑入口禁用', (tester) async {
+  testWidgets('artistId/albumId 为 0 时艺人/专辑入口禁用', (tester) async {
     final host = FakeHost();
     final song = fakeSong(artistId: BigInt.zero, albumId: BigInt.zero);
     await tester.pumpWidget(app(host, song));
@@ -103,7 +103,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<ListTile>(find.widgetWithText(ListTile, '歌手信息')).onTap,
+      tester.widget<ListTile>(find.widgetWithText(ListTile, '艺人信息')).onTap,
       isNull,
     );
     expect(
@@ -111,8 +111,8 @@ void main() {
       isNull,
     );
 
-    await tester.ensureVisible(find.text('歌手信息'));
-    await tester.tap(find.text('歌手信息'));
+    await tester.ensureVisible(find.text('艺人信息'));
+    await tester.tap(find.text('艺人信息'));
     await tester.pumpAndSettle();
     expect(host.openArtistCalls, 0);
   });

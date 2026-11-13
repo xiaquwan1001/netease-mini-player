@@ -65,7 +65,7 @@ class RecommendView extends StatefulWidget {
   /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
   final void Function(List<rust.SongDto> songs, int index)? onPlayFm;
 
-  /// 打开"新歌 / 新碟 / 歌手"分类页(不传就不显示"全部"入口)
+  /// 打开"新歌 / 新碟 / 艺人"分类页(不传就不显示"全部"入口)
   final VoidCallback? onOpenNewRelease;
 
   @override
@@ -445,7 +445,7 @@ class _NewReleaseSection extends StatelessWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.AlbumItem album)? onOpenAlbum;
 
-  /// "全部"入口(新歌/新碟/歌手分类页)
+  /// "全部"入口(新歌/新碟/艺人分类页)
   final VoidCallback? onMore;
 
   @override

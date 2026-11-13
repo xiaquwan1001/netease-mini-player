@@ -450,7 +450,7 @@ class NetImage extends StatelessWidget {
   }
 }
 
-/// 圆形头像(歌手/评论/动态共用)
+/// 圆形头像(艺人/评论/动态共用)
 class CircleCover extends StatelessWidget {
   const CircleCover({
     super.key,

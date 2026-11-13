@@ -6,7 +6,7 @@ import 'package:minincm/src/rust/api.dart' as rust;
 rust.SongDto song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '歌手',
+  artist: '艺人',
   artistId: BigInt.one,
   album: '专辑',
   albumId: BigInt.one,
@@ -95,7 +95,7 @@ void main() {
               id: BigInt.from(40),
               name: '新碟A',
               coverUrl: null,
-              artist: '歌手',
+              artist: '艺人',
               trackCount: BigInt.from(8),
             ),
           ],
@@ -133,7 +133,7 @@ void main() {
     expect(played?.length, 2);
     expect(playedIndex, 1);
 
-    // 新歌速递(带"更多"入口 → 新歌/新碟/歌手分类页)
+    // 新歌速递(带"更多"入口 → 新歌/新碟/艺人分类页)
     expect(find.text('新歌速递'), findsOneWidget);
     expect(find.text('新歌速递一'), findsOneWidget);
     // 排行榜搬走后剩 4 个「全部」:
@@ -187,7 +187,7 @@ void main() {
               id: BigInt.from(40),
               name: '新碟A',
               coverUrl: null,
-              artist: '歌手',
+              artist: '艺人',
               trackCount: BigInt.from(8),
             ),
           ],

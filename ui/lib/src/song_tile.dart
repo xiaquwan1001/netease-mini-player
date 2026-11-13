@@ -186,7 +186,7 @@ class SongTile extends StatelessWidget {
   final bool liked;
   final VoidCallback onTap;
 
-  /// 行尾的"..."更多操作(下一首/喜欢/收藏到歌单/分享/评论/歌手/专辑/下载)
+  /// 行尾的"..."更多操作(下一首/喜欢/收藏到歌单/分享/评论/艺人/专辑/下载)
   final VoidCallback? onMenu;
 
   /// 点红心 = 喜欢/取消喜欢(与歌单详情页 _SongRow 同款行为).
@@ -215,7 +215,7 @@ class SongTile extends StatelessWidget {
       // 每首歌展示封面(搜索结果/歌单/最近听过统一)
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
       // 徽标位置统一到歌名之后(与推荐/歌单/队列里的 SongTitleWithBadges 一致):
-      // 用户反馈"搜索结果里 VIP 标在歌手前面, 和推荐页不一致"。
+      // 用户反馈"搜索结果里 VIP 标在艺人前面, 和推荐页不一致"。
       // 徽标是固定宽度, 只有歌名 Expanded 会被压缩, 再窄也不会把徽标挤掉。
       title: SongTitleWithBadges(
         song: song,

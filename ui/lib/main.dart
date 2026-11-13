@@ -15,9 +15,11 @@ import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/audio_tuning.dart';
+import 'src/artist_nav.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/cover_art.dart';
+import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
@@ -34,6 +36,7 @@ import 'src/play_queue_sheet.dart';
 import 'src/keystore.dart';
 import 'src/player_bar.dart';
 import 'src/playback.dart';
+import 'src/playback_policy.dart';
 import 'src/queue.dart';
 import 'src/platform.dart';
 import 'src/recommend_view.dart';
@@ -807,6 +810,15 @@ class _HomePageState extends State<HomePage> {
     _searchFocus.addListener(_onSearchFocusChanged);
     // 头像点击进入用户主页时, 主页里点歌仍要能播(共享同一份播放回调)
     UserNav.onPlaySongs = _playSongsList;
+    // 艺人主页同理(关注流里的艺人头像 → 艺人主页, 与搜索进的是同一份页面)
+    ArtistNav.onPlaySongs = _playSongsList;
+    ArtistNav.onOpenAlbum = (albumId, albumName, coverUrl) => showAlbumPreview(
+      context,
+      albumId: albumId,
+      albumName: albumName,
+      coverUrl: coverUrl,
+      onPlay: _playSongsList,
+    );
     // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
     UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
     // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
@@ -1359,11 +1371,25 @@ class _HomePageState extends State<HomePage> {
     showToast(context, message);
   }
 
+  /// 每日推荐歌单(带本地缓存): 同一天第二次进页面直接读缓存, 离线也能出内容。
+  ///
+  /// 缓存口径见 `daily_cache.dart` 与 设置 → 缓存(保留天数 / 立即清理)。
+  /// 未初始化(dataDir 未知)或用户关掉缓存时原样透传, 行为与没有缓存一致。
+  Future<List<rust.Playlist>> _dailyPlaylists() {
+    final dir = _info?.dataDir;
+    if (dir == null || dir.isEmpty) return rust.dailyRecommendPlaylists();
+    return DailyPlaylistCache(dataDir: dir).load(
+      fetch: rust.dailyRecommendPlaylists,
+      keepDays: AppSettings.instance.dailyCacheDays,
+    );
+  }
+
   void _openDiscover() {
     showDiscoverPage(
       context,
       onPlaySongs: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
+      loadPlaylists: _dailyPlaylists,
     );
   }
 
@@ -1416,7 +1442,7 @@ class _HomePageState extends State<HomePage> {
     await _playSong(song);
   }
 
-  /// 搜索结果: 歌手卡片 → 歌手页
+  /// 搜索结果: 艺人卡片 → 艺人页
   Future<void> _openSearchArtist(rust.SearchArtist artist) async {
     await showArtistDetail(
       context,
@@ -1472,16 +1498,38 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// 跳过取不到直链的曲目(会员/版权限制), 最多绕队列一圈
+  /// 当前设置下这首歌要不要跳过(口径见 playback_policy.dart, 已单测)。
+  bool _skipVip(rust.SongDto song) => shouldSkipVipSong(
+    song,
+    skipVipEnabled: AppSettings.instance.skipVipSongs,
+  );
+
+  /// 跳过取不到直链的曲目(会员/版权限制)与设置里要求跳过的 VIP 曲目, 最多绕队列一圈。
+  ///
+  /// VIP 跳过是用户自己开的策略, 所以静默跳过、整轮结束才提示一次 —— 否则自动续播
+  /// 会连环弹窗(与无版权曲目的处理口径一致)。
   Future<void> _playSong(rust.SongDto song) async {
     _userStopped = false;
     var attempts = 0;
+    var skippedVip = 0;
+    void reportSkipped() {
+      if (skippedVip > 0 && mounted) {
+        _toast('已跳过 $skippedVip 首 VIP 歌曲(可在设置里关闭)');
+      }
+    }
+
     var target = song;
     while (true) {
-      if (await _resolveAndPlay(target)) return;
+      if (_skipVip(target)) {
+        skippedVip += 1;
+      } else if (await _resolveAndPlay(target)) {
+        reportSkipped();
+        return;
+      }
       attempts += 1;
       if (attempts >= _queue.items.length) {
         if (mounted) setState(() {});
+        reportSkipped();
         return;
       }
       final next = _queue.next();
@@ -2219,7 +2267,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openSongArtist(rust.SongDto song) async {
     if (song.artistId == BigInt.zero) {
-      _toast('这首歌没有关联歌手信息');
+      _toast('这首歌没有关联艺人信息');
       return;
     }
     await showArtistDetail(
@@ -3105,6 +3153,8 @@ class _HomePageState extends State<HomePage> {
         return RecommendView(
           key: ValueKey('recommend-${_info?.loggedIn}-${_info?.vip}'),
           loggedIn: _info?.loggedIn == true,
+          // 每日推荐歌单走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
+          loadDailyPlaylists: _dailyPlaylists,
           onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
@@ -3215,7 +3265,7 @@ class _HomePageState extends State<HomePage> {
     return _buildList();
   }
 
-  /// 综合搜索结果: 单曲/歌手/专辑/歌单/播客分区
+  /// 综合搜索结果: 单曲/艺人/专辑/歌单/播客分区
   Widget _buildSearchResults() {
     return SearchResultsView(
       bundle: _bundle!,

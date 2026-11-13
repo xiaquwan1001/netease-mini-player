@@ -41,7 +41,7 @@ void main() {
   });
 
   group('SongShareCard', () {
-    testWidgets('渲染曲名/歌手/歌词/二维码', (tester) async {
+    testWidgets('渲染曲名/艺人/歌词/二维码', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

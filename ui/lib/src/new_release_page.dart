@@ -23,8 +23,8 @@ const List<({String key, String label})> releaseAreas = [
   (key: 'kr', label: '韩国'),
 ];
 
-/// 新歌 / 新碟 / 热门歌手 三个页签的"更多"页.
-/// 新歌=top_song(按地区 areaId), 新碟=top_album(weekData+monthData 合并), 歌手=top_artists.
+/// 新歌 / 新碟 / 热门艺人 三个页签的"更多"页.
+/// 新歌=top_song(按地区 areaId), 新碟=top_album(weekData+monthData 合并), 艺人=top_artists.
 Future<void> showNewReleasePage(
   BuildContext context, {
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
@@ -78,14 +78,14 @@ class NewReleasePage extends StatelessWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('新歌 · 新碟 · 歌手'),
+          title: const Text('新歌 · 新碟 · 艺人'),
           bottom: const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
             tabs: [
               Tab(text: '新歌'),
               Tab(text: '新碟'),
-              Tab(text: '歌手'),
+              Tab(text: '艺人'),
               Tab(text: '精选新碟'),
             ],
           ),
@@ -273,7 +273,7 @@ class _HotArtistsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return PagedListView<rust.HotArtist>(
       refreshable: false,
-      emptyText: '暂时没有歌手榜',
+      emptyText: '暂时没有艺人榜',
       loader: (cursor) async =>
           PagedPage(await retryNetwork(load), hasMore: false),
       itemBuilder: (context, a, i, artists) => ListTile(

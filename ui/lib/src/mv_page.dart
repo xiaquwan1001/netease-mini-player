@@ -10,7 +10,7 @@ import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
 import 'rust/api.dart' as rust;
 
-/// MV 详情/播放页(C3): 封面大图 + 标题/歌手/播放量/发布时间/简介 + 播放按钮。
+/// MV 详情/播放页(C3): 封面大图 + 标题/艺人/播放量/发布时间/简介 + 播放按钮。
 /// Android 内嵌 VideoView(独立 Activity, 不进歌曲队列); 桌面无视频能力,
 /// 按钮为「用系统播放器打开」。打开方式: [showMvPage]。
 Future<void> showMvPage(

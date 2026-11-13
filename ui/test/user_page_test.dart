@@ -5,6 +5,9 @@
 // 这里用注入 loader 覆盖渲染/空态/失败重试, 不联网、不碰 FFI.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/artist_page.dart';
+import 'package:minincm/src/profile_banner.dart';
+import 'package:minincm/src/profile_scaffold.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/user_page.dart';
 
@@ -272,6 +275,90 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('下去玩'), findsWidgets);
     expect(find.text('关注 44'), findsOneWidget);
+  });
+
+  // 「从不同入口进入的个人主页应该调起同一份信息与排版」: 两页共用 ProfileScaffold,
+  // 且**缺数据整块不出现**(不生成空 tab、不留占位文案)。
+  // 这里用同一份"最小数据形状"分别渲两页, 断言骨架同构 + 缺项 findsNothing。
+  testWidgets('同一份数据形状: 两页骨架同构, 缺失条目不渲染', (tester) async {
+    setTallView(tester);
+
+    rust.ArtistDetailDto bareArtist() => rust.ArtistDetailDto(
+      id: BigInt.from(6452),
+      name: '某艺人',
+      avatarUrl: null,
+      coverUrl: null,
+      alias: const [],
+      briefDesc: '',
+      albumCount: BigInt.zero,
+      musicCount: BigInt.zero,
+      songs: const [],
+      albums: const [],
+    );
+
+    await tester.pumpWidget(
+      host(
+        ArtistDetailPage(
+          artistId: BigInt.from(6452),
+          name: '某艺人',
+          onPlaySongs: (_, _) {},
+          loadArtist: (_) async => bareArtist(),
+          loadSimilar: (_) async => const [],
+          loadSongsPage: (_, _) async =>
+              const rust.ArtistSongPageDto(songs: [], hasMore: false),
+          loadMvsPage: (_, _) async =>
+              const rust.ArtistMvPageDto(mvs: [], hasMore: false),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final artistIdentity = tester.getRect(find.byType(ProfileIdentity));
+    expect(find.byType(ProfileScaffold), findsOneWidget);
+    expect(find.byType(ProfileBannerImage), findsOneWidget);
+    // 艺人: 无简介/无作品/无专辑/无 MV → 对应区块与 tab 一个都不出现
+    expect(find.text('简介'), findsNothing);
+    expect(find.text('推荐单曲'), findsNothing);
+    expect(find.text('相似艺人'), findsNothing);
+    expect(find.textContaining('个专辑'), findsNothing, reason: '作品数为 0 不留统计行');
+    expect(find.text('专辑'), findsNothing);
+    expect(find.text('MV'), findsNothing);
+
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1),
+          loadProfile: (_) async => rust.ProfileDetail(
+            userId: BigInt.from(1),
+            nickname: '小红',
+            avatarUrl: null,
+            backgroundUrl: null,
+            signature: '',
+            vip: false,
+            follows: BigInt.zero,
+            followeds: BigInt.zero,
+            level: BigInt.zero,
+          ),
+          loadPlaylists: (_) async => const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ProfileScaffold), findsOneWidget);
+    expect(find.byType(ProfileBannerImage), findsOneWidget);
+    // 用户: 同一份骨架, 缺的条目同样不渲染(无简介区块、不生成关注/粉丝 tab)
+    expect(find.text('简介'), findsNothing);
+    expect(find.text('TA 的歌单'), findsNothing);
+    expect(find.text('关注'), findsNothing);
+    expect(find.text('粉丝'), findsNothing);
+    expect(find.byType(Tab), findsOneWidget);
+
+    // 骨架几何一致: 身份卡左右边缘与上沿都在同一条线上
+    final userIdentity = tester.getRect(find.byType(ProfileIdentity));
+    expect(userIdentity.left, artistIdentity.left);
+    expect(userIdentity.width, artistIdentity.width);
+    expect(userIdentity.top, artistIdentity.top);
   });
 
   testWidgets('没有播放回调时点歌单只提示, 不崩', (tester) async {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'layout.dart';
 import 'profile_banner.dart';
+import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 
 /// 个人主页头部卡片: 背景图 + 头像/昵称/VIP/签名 + 关注/粉丝/等级一行。
@@ -110,29 +111,24 @@ class ProfileHeaderState extends State<ProfileHeader> {
           title: nickname,
           subtitle: signature.trim().isEmpty ? null : signature.trim(),
           vip: widget.loggedIn && (d?.vip ?? false),
+          // 统计行与艺人页/他人主页同一套 chip: 之前这里是自己一份
+          // Wrap + Text(' · ') + _StatEntry, 「我的」页与别人主页的点缀/字号都不同
           footer: widget.loggedIn
-              ? Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _StatEntry(
+              ? ProfileStatRow(
+                  chips: [
+                    ProfileStatChip(
+                      icon: Icons.people_outline,
                       label: '关注 ${d?.follows ?? BigInt.zero}',
                       onTap: widget.onTapFollows,
                     ),
-                    Text(
-                      ' · ',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                    _StatEntry(
+                    ProfileStatChip(
+                      icon: Icons.person_outline,
                       label: '粉丝 ${d?.followeds ?? BigInt.zero}',
                       onTap: widget.onTapFolloweds,
                     ),
-                    Text(
-                      ' · Lv.${d?.level ?? BigInt.zero}',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    ProfileStatChip(
+                      icon: Icons.military_tech_outlined,
+                      label: 'Lv.${d?.level ?? BigInt.zero}',
                     ),
                   ],
                 )
@@ -143,32 +139,6 @@ class ProfileHeaderState extends State<ProfileHeader> {
                   ),
                 ),
         ),
-      ),
-    );
-  }
-}
-
-/// 可点的统计数字(关注/粉丝)
-class _StatEntry extends StatelessWidget {
-  const _StatEntry({required this.label, this.onTap});
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: onTap == null
-          ? Theme.of(context).colorScheme.onSurfaceVariant
-          : Theme.of(context).colorScheme.primary,
-    );
-    if (onTap == null) return Text(label, style: style);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Text(label, style: style),
       ),
     );
   }

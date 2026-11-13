@@ -23,7 +23,7 @@ const _scales = [1.0, 1.3, 1.625];
 rust.SongDto _song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '歌手',
+  artist: '艺人',
   artistId: BigInt.one,
   album: '专辑',
   albumId: BigInt.one,

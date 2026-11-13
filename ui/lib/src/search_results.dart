@@ -6,10 +6,10 @@ import 'rust/api.dart' as rust;
 import 'song_tile.dart';
 import 'user_nav.dart';
 
-/// 综合搜索结果: 单曲 / 歌手 / 专辑 / 歌单 / 播客.
+/// 综合搜索结果: 单曲 / 艺人 / 专辑 / 歌单 / 播客.
 ///
 /// 分类**横向**排(可横滑的 ChoiceChip 条), 一次只渲染一个分类:
-/// 之前五个分区纵向堆叠, 想找"歌手"要先划过整页单曲(用户反馈必须往下翻)。
+/// 之前五个分区纵向堆叠, 想找"艺人"要先划过整页单曲(用户反馈必须往下翻)。
 /// 空分类不出现; 全部为空时居中提示。
 class SearchResultsView extends StatefulWidget {
   const SearchResultsView({
@@ -49,7 +49,7 @@ enum _Section { songs, artists, albums, playlists, podcasts, users }
 extension on _Section {
   String get label => switch (this) {
     _Section.songs => '单曲',
-    _Section.artists => '歌手',
+    _Section.artists => '艺人',
     _Section.albums => '专辑',
     _Section.playlists => '歌单',
     _Section.podcasts => '播客',
@@ -270,7 +270,7 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     );
   }
 
-  /// 封面 + 名字 + 副标题 的竖排卡片(歌手/专辑/歌单/播客共用)
+  /// 封面 + 名字 + 副标题 的竖排卡片(艺人/专辑/歌单/播客共用)
   Widget _card(
     BuildContext context, {
     required double width,

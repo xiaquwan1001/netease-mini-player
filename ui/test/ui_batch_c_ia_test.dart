@@ -57,7 +57,7 @@ rust.AccountDto account(int id, String nickname, {bool active = false}) =>
 rust.SongDto song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '歌手',
+  artist: '艺人',
   artistId: BigInt.one,
   album: '专辑',
   albumId: BigInt.from(9),
@@ -321,7 +321,7 @@ void main() {
           id: BigInt.from(40),
           name: '新碟A',
           coverUrl: null,
-          artist: '歌手',
+          artist: '艺人',
           trackCount: BigInt.from(8),
         ),
       ],

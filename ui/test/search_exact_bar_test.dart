@@ -68,7 +68,7 @@ void main() {
           view: view(
             orders: const ['artist'],
             artists: const [
-              SearchExactArtist(id: 6452, name: '周杰伦', subtitle: '华语男歌手'),
+              SearchExactArtist(id: 6452, name: '周杰伦', subtitle: '华语男艺人'),
               SearchExactArtist(id: 9621, name: '许嵩'),
             ],
           ),
@@ -79,8 +79,8 @@ void main() {
 
     expect(find.text(kSearchExactTitle), findsOneWidget);
     expect(find.text('周杰伦'), findsOneWidget);
-    expect(find.text('歌手'), findsOneWidget); // 分区标题
-    expect(find.text('华语男歌手'), findsOneWidget); // 卡片副标题
+    expect(find.text('艺人'), findsOneWidget); // 分区标题
+    expect(find.text('华语男艺人'), findsOneWidget); // 卡片副标题
     expect(find.text('许嵩'), findsOneWidget);
 
     await tester.tap(find.text('周杰伦'));
@@ -105,9 +105,9 @@ void main() {
 
     final texts = visibleTexts(tester);
     expect(texts, contains('歌单'));
-    expect(texts, contains('歌手'));
+    expect(texts, contains('艺人'));
     expect(texts.indexOf(kSearchExactTitle), 0);
-    expect(texts.indexOf('歌单'), lessThan(texts.indexOf('歌手')));
+    expect(texts.indexOf('歌单'), lessThan(texts.indexOf('艺人')));
     // 分区内的内容也按顺序排在更下面
     expect(texts.indexOf('周杰伦歌单'), lessThan(texts.indexOf('周杰伦')));
 
@@ -124,7 +124,7 @@ void main() {
       ),
     );
     final texts2 = visibleTexts(tester);
-    expect(texts2.indexOf('歌手'), lessThan(texts2.indexOf('歌单')));
+    expect(texts2.indexOf('艺人'), lessThan(texts2.indexOf('歌单')));
   });
 
   testWidgets('orders 里的未知类型被忽略', (tester) async {
@@ -189,7 +189,7 @@ void main() {
 
     final texts = visibleTexts(tester);
     expect(texts.indexOf(kSearchExactTitle), 0);
-    expect(texts.indexOf('歌手'), lessThan(texts.indexOf('歌单')));
+    expect(texts.indexOf('艺人'), lessThan(texts.indexOf('歌单')));
     expect(texts.indexOf('歌单'), lessThan(texts.indexOf('电台')));
     expect(texts.indexOf('薛之谦'), lessThan(texts.indexOf('薛之谦精选')));
     expect(texts.indexOf('薛之谦精选'), lessThan(texts.indexOf('薛之谦电台')));
@@ -204,8 +204,8 @@ void main() {
             artists: const [
               SearchExactArtist(
                 id: 1,
-                name: '一个特别特别长的歌手名字用来测试省略号',
-                subtitle: '歌手 / 音乐人 / 制作人',
+                name: '一个特别特别长的艺人名字用来测试省略号',
+                subtitle: '艺人 / 音乐人 / 制作人',
               ),
             ],
             playlists: const [

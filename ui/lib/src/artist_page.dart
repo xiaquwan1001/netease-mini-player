@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'cover_art.dart';
+import 'error_views.dart';
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -18,11 +19,11 @@ import 'artist_sections.dart'
     show ArtistAlbumsSection, ArtistRecommendedSongsSection;
 import 'expandable_text.dart';
 
-/// 歌手详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
+/// 艺人详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
 /// (全部歌曲 / 专辑(有才显示) / MV(有才显示)) + 页内搜索(只过滤「全部歌曲」)。
 /// 与用户个人主页区分的丰富区块: 简介 / 推荐单曲(top5) / 专辑横滑 / 详细艺人弹层。
-/// 相似歌手在信息区尾部(胶囊 Wrap, 防溢出), 弹层里也有一份。
-/// 动态 tab 未实现: vendor 没有"歌手动态"接口(见 docs/c1-artist-page-notes.md)。
+/// 相似艺人在信息区尾部(胶囊 Wrap, 防溢出), 弹层里也有一份。
+/// 动态 tab 未实现: vendor 没有"艺人动态"接口(见 docs/c1-artist-page-notes.md)。
 /// 打开方式: [showArtistDetail], 全屏 MaterialPageRoute。
 Future<void> showArtistDetail(
   BuildContext context, {
@@ -101,7 +102,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   rust.ArtistDetailDto? _detail;
   String? _error;
 
-  /// 相似歌手(需要登录; 拿不到就整块不显示, 不打扰其它内容)
+  /// 相似艺人(需要登录; 拿不到就整块不显示, 不打扰其它内容)
   List<rust.Artist> _similar = const [];
 
   /// MV tab 数据可用性: 探测第一页, 非空才显示 tab(空 = 不显示)。
@@ -136,7 +137,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   }
 
   void _onScroll() {
-    final collapsed = _scroll.hasClients && _scroll.offset > 90;
+    final collapsed = profileCollapsedAt(_scroll);
     if (collapsed != _collapsed) setState(() => _collapsed = collapsed);
   }
 
@@ -288,37 +289,23 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       return const Scaffold(body: LoadingView());
     }
     if (_error != null) {
-      return Scaffold(
-        appBar: AppBar(title: Text(widget.name ?? _detail?.name ?? '歌手详情')),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: theme.colorScheme.error),
-                ),
-              ),
-              const SizedBox(height: 12),
-              FilledButton.tonal(onPressed: _load, child: const Text('重试')),
-            ],
-          ),
-        ),
+      // 与用户页同一份首屏错误形态(之前一边是红字 + 按钮, 一边是 Card/ListTile)
+      return ProfileLoadError(
+        title: widget.name ?? _detail?.name ?? '艺人详情',
+        message: _error!,
+        onRetry: _load,
       );
     }
     final detail = _detail!;
     final artistName = widget.name ?? detail.name;
     return ProfileScaffold(
       scrollController: _scroll,
-      // 收起时顶栏保留歌手名; 展开时横幅里已有名字, 顶栏不重复
+      // 收起时顶栏保留艺人名; 展开时横幅里已有名字, 顶栏不重复
       collapsedTitle: _collapsed ? artistName : null,
       actions: [
         IconButton(
           icon: Icon(_searching ? Icons.close : Icons.search),
-          tooltip: '搜索该歌手歌曲',
+          tooltip: '搜索该艺人歌曲',
           onPressed: () => setState(() {
             _searching = !_searching;
             if (!_searching) _query = '';
@@ -327,8 +314,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       ],
       banner: _buildBanner(theme, detail),
       // 身份卡(头像/名字/别名/统计 chip): 横幅之下, 不压图
-      identity: _buildIdentity(theme, detail),
-      // 共享信息区: 简介/推荐单曲/专辑/相似歌手/详细艺人(TabBar 之上)
+      identity: _buildIdentity(detail),
+      // 共享信息区: 简介/推荐单曲/专辑/相似艺人/详细艺人(TabBar 之上)
       sections: _buildInfoSections(theme, detail),
       searchBar: _searching ? _buildSearchBar(theme) : null,
       tabs: _tabSpecs(detail),
@@ -384,7 +371,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
         onChanged: (v) => setState(() => _query = v),
         decoration: InputDecoration(
           isDense: true,
-          hintText: '搜索该歌手的歌曲',
+          hintText: '搜索该艺人的歌曲',
           prefixIcon: const Icon(Icons.search, size: 20),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
@@ -394,83 +381,85 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     );
   }
 
-  /// 身份卡: 头像/名字/别名 + 统一统计 chip(作品数 / 关注)
+  /// 身份卡: 头像/名字/别名 + 统计 chip(作品数) + 关注按钮。
   ///
-  /// 统计行走 [ProfileIdentity.footer] 槽位(与用户页同一套 chip), 不再自己
-  /// 手写一行 Row: 关注从 TextButton 变成可点 chip, 300dp 大字号下换行而不是挤压.
-  Widget _buildIdentity(ThemeData theme, rust.ArtistDetailDto detail) {
+  /// 统计行(footer)只放**统计与入口**, 与用户页的 关注/粉丝/等级 同一套 chip;
+  /// 「关注」是写操作, 放 [ProfileIdentity.trailing]: 之前它和统计 chip 长得一样,
+  /// 用户无法从外观判断点了是"发请求关注"还是"打开关注列表"。
+  /// 作品数为 0 时整行不渲染(缺的条目不显示, 不留 "0 个专辑 · 0 首歌曲")。
+  Widget _buildIdentity(rust.ArtistDetailDto detail) {
     final followed = _followed ?? false;
+    final hasWorks =
+        detail.albumCount > BigInt.zero || detail.musicCount > BigInt.zero;
     return ProfileIdentity(
       title: detail.name,
       subtitle: detail.alias.isEmpty ? null : detail.alias.join(' / '),
       avatarUrl: detail.avatarUrl,
-      titleStyle: theme.textTheme.headlineSmall?.copyWith(
-        fontWeight: FontWeight.w600,
-      ),
-      footer: ProfileStatRow(
-        chips: [
-          ProfileWorksStatChip(
-            albumCount: detail.albumCount,
-            songCount: detail.musicCount,
-          ),
-          // 关注状态为乐观更新(接口成功才翻转)
-          ProfileStatChip(
-            icon: followed ? Icons.check : Icons.person_add_alt_1,
-            label: followed ? '已关注' : '关注',
-            onTap: _toggleFollow,
-          ),
-        ],
+      footer: hasWorks
+          ? ProfileStatRow(
+              chips: [
+                ProfileWorksStatChip(
+                  albumCount: detail.albumCount,
+                  songCount: detail.musicCount,
+                ),
+              ],
+            )
+          : null,
+      // 关注状态为乐观更新(接口成功才翻转)
+      trailing: FilledButton.tonal(
+        onPressed: _toggleFollow,
+        style: FilledButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: Text(followed ? '已关注' : '关注'),
       ),
     );
   }
 
-  /// 信息区(横幅之下、TabBar 之上的共享内容): 简介/推荐单曲/专辑/相似歌手
+  /// 信息区(横幅之下、TabBar 之上的共享内容)。
   ///
-  /// 统计行已上移到身份卡的 footer 槽位; 这里返回 sliver 里的分区列表,
-  /// 空分区整块不渲染(不塞空态卡).
+  /// 顺序与用户页同一口径(见 profile_scaffold.dart 文件头): 简介 → 作品
+  /// (推荐单曲/专辑) → 相似艺人。相似艺人是纯跳转入口, 放最后, 不挡作品。
+  /// 每块都走 [ProfileSection](标题风格/块间 16 只定义一次), 空分区整块不渲染。
   List<Widget> _buildInfoSections(
     ThemeData theme,
     rust.ArtistDetailDto detail,
   ) {
     return [
-      // 相似歌手(未登录/接口不支持时整块不渲染)
-      if (_similar.isNotEmpty) ...[
-        Text('相似歌手', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _buildSimilarArtists(theme),
-        const SizedBox(height: 16),
-      ],
-      // 与用户个人主页区分的核心区块: 简介/推荐单曲/专辑横滑/详细艺人
-      if (detail.briefDesc.trim().isNotEmpty) ...[
-        Text('简介', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 4),
-        ExpandableText(text: detail.briefDesc),
-        const SizedBox(height: 8),
-      ],
-      if (detail.songs.isNotEmpty) ...[
-        ArtistRecommendedSongsSection(
-          songs: detail.songs.take(5).toList(),
-          totalCount: detail.musicCount,
-          onPlaySongs: widget.onPlaySongs,
-          onSeeAll: () => _switchToTab(_TabKind.allSongs),
+      if (detail.briefDesc.trim().isNotEmpty)
+        ProfileSection(
+          title: '简介',
+          child: ExpandableText(text: detail.briefDesc),
         ),
-        const SizedBox(height: 16),
-      ],
-      if (detail.albums.isNotEmpty) ...[
-        ArtistAlbumsSection(
-          albums: detail.albums.take(6).toList(),
-          totalCount: detail.albumCount,
-          onOpenAlbum: widget.onOpenAlbum,
-          onSeeAll: () => _switchToTab(_TabKind.albums),
+      if (detail.songs.isNotEmpty)
+        ProfileSection(
+          child: ArtistRecommendedSongsSection(
+            songs: detail.songs.take(5).toList(),
+            totalCount: detail.musicCount,
+            onPlaySongs: widget.onPlaySongs,
+            onSeeAll: () => _switchToTab(_TabKind.allSongs),
+          ),
         ),
-        const SizedBox(height: 16),
-      ],
-      // 「详细艺人资料」入口已移除: 弹层里只有统计/简介/相似歌手三块,
+      if (detail.albums.isNotEmpty)
+        ProfileSection(
+          child: ArtistAlbumsSection(
+            albums: detail.albums.take(6).toList(),
+            totalCount: detail.albumCount,
+            onOpenAlbum: widget.onOpenAlbum,
+            onSeeAll: () => _switchToTab(_TabKind.albums),
+          ),
+        ),
+      // 相似艺人(未登录/接口不支持时整块不渲染)
+      if (_similar.isNotEmpty)
+        ProfileSection(title: '相似艺人', child: _buildSimilarArtists(theme)),
+      // 「详细艺人资料」入口已移除: 弹层里只有统计/简介/相似艺人三块,
       // 而这三块在本页上方都已各自渲染, 用户反馈"不知所云"(见 analysis/artist.md §5)。
     ];
   }
 
-  /// 相似歌手: 头像 + 名字的小胶囊(Wrap 防溢出, 名字单行省略)
+  /// 相似艺人: 头像 + 名字的小胶囊(Wrap 防溢出, 名字单行省略)
   Widget _buildSimilarArtists(ThemeData theme) {
     return Wrap(
       spacing: 8,
@@ -613,17 +602,11 @@ class _AllSongsTabState extends State<_AllSongsTab> {
       return const LoadingView();
     }
     if (_searchError != null) {
+      // 与用户页 tab 内错误同一形态(行内文案 + 重试)
       return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _searchError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            const SizedBox(height: 8),
-            FilledButton.tonal(onPressed: _runQuery, child: const Text('重试')),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: InlineError(message: _searchError!, onRetry: _runQuery),
         ),
       );
     }
@@ -803,7 +786,7 @@ class _MvsTab extends StatelessWidget {
   }
 }
 
-/// 热门歌曲行: 序号 + 歌名/歌手 + 时长 + SongOverflowButton。无版权灰显。
+/// 热门歌曲行: 序号 + 歌名/艺人 + 时长 + SongOverflowButton。无版权灰显。
 class _ArtistSongRow extends StatelessWidget {
   const _ArtistSongRow({
     required this.song,

@@ -27,7 +27,7 @@ void main() {
     expect(find.text('晴天'), findsOneWidget);
     expect(find.text('周杰伦'), findsOneWidget);
     expect(find.text('单曲'), findsOneWidget);
-    expect(find.text('歌手'), findsOneWidget);
+    expect(find.text('艺人'), findsOneWidget);
     await tester.tap(find.text('晴天'));
     expect(tapped?.title, '晴天');
   });
@@ -72,7 +72,7 @@ void main() {
             body: SuggestionPanel(
               items: [
                 item('song', '一首名字特别特别长的歌曲用于小屏回归测试'),
-                item('artist', '一个名字特别特别长的歌手用于小屏回归测试'),
+                item('artist', '一个名字特别特别长的艺人用于小屏回归测试'),
               ],
               onSelected: (_) {},
             ),

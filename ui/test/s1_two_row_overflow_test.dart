@@ -8,7 +8,7 @@ import 'package:minincm/src/rust/api.dart' as rust;
 rust.SongDto song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '歌手',
+  artist: '艺人',
   artistId: BigInt.one,
   album: '专辑',
   albumId: BigInt.one,
@@ -53,7 +53,7 @@ rust.AlbumItem album(int id, String name) => rust.AlbumItem(
   id: BigInt.from(id),
   name: name,
   coverUrl: null,
-  artist: '歌手',
+  artist: '艺人',
   trackCount: BigInt.from(8),
 );
 

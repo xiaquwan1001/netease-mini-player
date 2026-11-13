@@ -4,6 +4,7 @@ import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
+import 'error_views.dart';
 import 'expandable_text.dart';
 import 'layout.dart';
 import 'net_retry.dart';
@@ -95,15 +96,13 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   }
 
   void _onScroll() {
-    final collapsed = _scroll.hasClients && _scroll.offset > 90;
+    final collapsed = profileCollapsedAt(_scroll);
     if (collapsed != _collapsed) setState(() => _collapsed = collapsed);
   }
 
-  /// tab 集合按数据可用性生成: 歌单恒在, 关注/粉丝有计数才出现。
-  int get _tabCount =>
-      1 +
-      ((_detail?.follows ?? BigInt.zero) > BigInt.zero ? 1 : 0) +
-      ((_detail?.followeds ?? BigInt.zero) > BigInt.zero ? 1 : 0);
+  /// tab 数量以 [_tabSpecs] 为唯一来源(原来这里是第二份手写计数,
+  /// 加一条 tab 就得同时改两处, 漏改会让 controller 与 TabBar 长度不一致)。
+  int get _tabCount => _tabSpecs().length;
 
   void _rebuildTabs() {
     _tabController = syncProfileTabs(
@@ -192,19 +191,12 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final nickname = _nickname;
-    // 首屏失败(资料与歌单都拿不到): 整页错误 + 重试
+    // 首屏失败(资料与歌单都拿不到): 整页错误 + 重试(与艺人页同一形态)
     if (_detail == null && _error != null) {
-      return Scaffold(
-        appBar: AppBar(title: Text(nickname)),
-        body: ListView(
-          padding: EdgeInsets.fromLTRB(
-            kPagePadding,
-            8,
-            kPagePadding,
-            24 + MediaQuery.viewPaddingOf(context).bottom,
-          ),
-          children: [_errorCard(context)],
-        ),
+      return ProfileLoadError(
+        title: nickname,
+        message: _error!,
+        onRetry: _reload,
       );
     }
     return ProfileScaffold(
@@ -221,16 +213,17 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
 
   /// 信息区(横幅与 TabBar 之间): 目前只有「简介」。
   ///
-  /// 艺人页在这里放 相似歌手/简介/推荐单曲/专辑, 用户页没有对应数据 ⇒ 只剩简介;
+  /// 艺人页在这里放 相似艺人/简介/推荐单曲/专辑, 用户页没有对应数据 ⇒ 只剩简介;
   /// 机制是同一套: 返回一组 widget, 空列表 = 不出区块, 骨架完全相同。
   List<Widget> _buildInfoSections(ThemeData theme) {
     final signature = _detail?.signature.trim() ?? '';
     if (signature.isEmpty) return const <Widget>[];
+    // 与艺人页同一份分区几何(标题 8 / 内容 / 块间 16), 见 ProfileSection
     return [
-      Text('简介', style: theme.textTheme.titleMedium),
-      const SizedBox(height: 4),
-      ExpandableText(text: signature),
-      const SizedBox(height: 16),
+      ProfileSection(
+        title: '简介',
+        child: ExpandableText(text: signature),
+      ),
     ];
   }
 
@@ -244,11 +237,12 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       subtitle: null,
       avatarUrl: d?.avatarUrl,
       vip: d?.vip ?? false,
-      avatarSize: 56,
-      footer: ProfileStatRow(
-        chips: loading
-            ? const [ProfileStatChip(label: '加载中…')]
-            : [
+      // 加载中不塞「加载中…」占位 chip, 也不先给一套 0 值: 缺的条目不显示,
+      // 数据到了再出现(与艺人页"作品数为 0 不渲染统计行"同一口径)
+      footer: loading
+          ? null
+          : ProfileStatRow(
+              chips: [
                 ProfileStatChip(
                   icon: Icons.people_outline,
                   label: '关注 ${d?.follows ?? BigInt.zero}',
@@ -264,7 +258,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
                   label: 'Lv.${d?.level ?? BigInt.zero}',
                 ),
               ],
-      ),
+            ),
     );
   }
 
@@ -290,26 +284,15 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     ];
   }
 
-  Widget _errorCard(BuildContext context) {
-    return Card(
-      margin: kCardMargin,
-      child: ListTile(
-        leading: const Icon(Icons.error_outline),
-        title: const Text('加载失败'),
-        subtitle: Text(_error ?? ''),
-        trailing: TextButton(onPressed: _reload, child: const Text('重试')),
-      ),
-    );
-  }
-
   /// 歌单 tab: 横滑卡片(CoverRow/CoverCard), 标题允许 2 行。
   Widget _playlistsTab(BuildContext context) {
     final lists = _playlists;
     final bottom = 24 + MediaQuery.viewPaddingOf(context).bottom;
     if (_error != null && lists == null) {
+      // 与艺人页 tab 内错误同一形态(行内文案 + 重试), 不再塞一张 Card
       return ListView(
         padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
-        children: [_errorCard(context)],
+        children: [InlineError(message: _error!, onRetry: _reload)],
       );
     }
     if (lists == null) {

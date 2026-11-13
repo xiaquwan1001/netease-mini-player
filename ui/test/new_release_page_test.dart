@@ -7,7 +7,7 @@ rust.AlbumItem album(int id, String name) => rust.AlbumItem(
   id: BigInt.from(id),
   name: name,
   coverUrl: null,
-  artist: '歌手A',
+  artist: '艺人A',
   trackCount: BigInt.from(10),
 );
 
@@ -35,7 +35,7 @@ void main() {
 
     expect(find.text('精选新碟A'), findsOneWidget);
     expect(find.text('精选新碟B'), findsOneWidget);
-    expect(find.text('歌手A'), findsNWidgets(2));
+    expect(find.text('艺人A'), findsNWidgets(2));
 
     await tester.tap(find.text('精选新碟A'));
     expect(opened?.id, BigInt.one);

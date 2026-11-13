@@ -27,7 +27,7 @@ PlayerBarData _data() => PlayerBarData(
   current: rust.SongDto(
     id: BigInt.one,
     name: '一首很长很长的歌名用来验证窄屏降级不溢出',
-    artist: '某位名字也不短的歌手',
+    artist: '某位名字也不短的艺人',
     artistId: BigInt.one,
     album: '专辑',
     albumId: BigInt.one,

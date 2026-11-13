@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_meta.dart';
 import 'app_settings.dart';
+import 'daily_cache.dart';
 import 'cover_quality_sheet.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
@@ -186,6 +187,16 @@ class SettingsView extends StatelessWidget {
                     },
                   ),
                   const Divider(height: 1),
+                  // 播放策略(2026-11 用户需求): 不想听会员曲目时, 切歌/续播直接跳过。
+                  SwitchListTile(
+                    title: const Text('播放跳过 VIP 歌曲'),
+                    subtitle: const Text('切歌与自动续播时跳过需要黑胶会员的曲目(列表里仍然显示)'),
+                    value: settings.skipVipSongs,
+                    onChanged: (value) {
+                      settings.update(skipVipSongs: value);
+                    },
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     title: const Text('歌单内搜索后点歌'),
                     subtitle: Text(
@@ -240,6 +251,13 @@ class SettingsView extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 16),
+            // 每日推荐歌单缓存(2026-11 用户需求): 保留天数 + 立即清理 + 上次清理时间
+            const SectionTitle('缓存'),
+            Card(
+              margin: EdgeInsets.zero,
+              child: _DailyCacheTile(dataDir: info?.dataDir),
             ),
             const SizedBox(height: 16),
             const SectionTitle('关于'),
@@ -315,6 +333,121 @@ class SettingsView extends StatelessWidget {
   }
 }
 
+/// 每日推荐歌单缓存: 保留天数 + 立即清理 + 上次清理时间。
+///
+/// 缓存本身在 `daily_cache.dart`(按天明文件); 这里只做展示与"什么时候清"。
+/// 上次清理时间从缓存目录读, 所以点完「立即清理」要重读一次才好看见变化。
+class _DailyCacheTile extends StatefulWidget {
+  const _DailyCacheTile({required this.dataDir});
+
+  final String? dataDir;
+
+  @override
+  State<_DailyCacheTile> createState() => _DailyCacheTileState();
+}
+
+class _DailyCacheTileState extends State<_DailyCacheTile> {
+  DateTime? _lastCleanup;
+  bool _cleaning = false;
+
+  DailyPlaylistCache? get _cache {
+    final dir = widget.dataDir;
+    if (dir == null || dir.isEmpty) return null;
+    return DailyPlaylistCache(dataDir: dir);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLastCleanup();
+  }
+
+  Future<void> _loadLastCleanup() async {
+    final at = await _cache?.lastCleanup();
+    if (!mounted) return;
+    setState(() => _lastCleanup = at);
+  }
+
+  /// 保留天数一变就顺手按新口径清一次: 否则用户把 30 天改成 3 天,
+  /// 旧文件要等到下次手动清理才消失。
+  Future<void> _setDays(int days) async {
+    await AppSettings.instance.update(dailyCacheDays: days);
+    if (mounted) setState(() {});
+    await _cleanup();
+  }
+
+  Future<void> _cleanup() async {
+    final cache = _cache;
+    if (cache == null || _cleaning) return;
+    setState(() => _cleaning = true);
+    try {
+      final removed = await cache.cleanup(
+        keepDays: AppSettings.instance.dailyCacheDays,
+      );
+      await _loadLastCleanup();
+      if (!mounted) return;
+      showToast(context, removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 份旧缓存');
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, '清理失败: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _cleaning = false);
+    }
+  }
+
+  String get _cleanupLabel {
+    final at = _lastCleanup;
+    if (at == null) return '还没有清理过';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '上次清理: ${at.year}-${two(at.month)}-${two(at.day)} '
+        '${two(at.hour)}:${two(at.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettings.instance;
+    return Column(
+      children: [
+        ListTile(
+          title: const Text('每日推荐歌单缓存'),
+          subtitle: Text(
+            settings.dailyCacheDays <= 0
+                ? '已关闭: 每次进推荐页都联网拉取'
+                : '同一天只拉一次, 保留 ${settings.dailyCacheDays} 天',
+          ),
+          trailing: DropdownButton<int>(
+            value: settings.dailyCacheDays,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final days in AppSettings.dailyCacheOptions)
+                DropdownMenuItem(
+                  value: days,
+                  child: Text(AppSettings.dailyCacheLabel(days)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) _setDays(value);
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: _cleaning
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.cleaning_services_outlined),
+          title: const Text('立即清理'),
+          subtitle: Text(_cleanupLabel),
+          onTap: _cleaning ? null : _cleanup,
+        ),
+      ],
+    );
+  }
+}
+
 /// 凭据后端状态行(Android Keystore / Windows DPAPI / 明文回退).
 ///
 /// 2026-11 用户要求: 「隐私」栏目里的 Android Keystore 加密说明搬到设置 → 关于。
@@ -361,9 +494,8 @@ class _CredentialStorageTileState extends State<_CredentialStorageTile> {
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: status == null
-          ? null
-          : Text(status.backend, style: Theme.of(context).textTheme.labelSmall),
+      // 右侧原来还显示一遍后端名("android-keystore"), 与下方说明文案重复
+      // (用户反馈: 凭据存储右边有一个重复的 android keystore 文本框)。
       onTap: _failed ? _load : null,
     );
   }

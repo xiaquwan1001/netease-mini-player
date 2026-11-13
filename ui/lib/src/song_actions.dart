@@ -62,7 +62,7 @@ class SongActionHost {
   /// 查看评论
   final Future<void> Function(rust.SongDto song) comments;
 
-  /// 歌手信息
+  /// 艺人信息
   final Future<void> Function(rust.SongDto song) openArtist;
 
   /// 专辑信息
@@ -192,7 +192,7 @@ List<Widget> _menu(
   final albumEnabled = song.albumId != BigInt.zero;
 
   return [
-    // 顶部: 封面 + 歌名 + 歌手
+    // 顶部: 封面 + 歌名 + 艺人
     ListTile(
       leading: CoverArt(url: song.coverUrl, size: 40, radius: 4),
       title: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -227,7 +227,7 @@ List<Widget> _menu(
     ListTile(
       leading: const Icon(Icons.person_outline),
       title: Text(
-        '歌手信息',
+        '艺人信息',
         style: artistEnabled ? null : TextStyle(color: colorScheme.outline),
       ),
       onTap: artistEnabled ? () => run(() => host.openArtist(song)) : null,

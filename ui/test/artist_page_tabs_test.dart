@@ -211,20 +211,20 @@ void main() {
     expect(find.text('MV999'), findsOneWidget);
   });
 
-  testWidgets('相似歌手胶囊横排(Wrap 水平方向), 300dp 大字号下不溢出', (tester) async {
+  testWidgets('相似艺人胶囊横排(Wrap 水平方向), 300dp 大字号下不溢出', (tester) async {
     await pump(
       tester,
       detailData: detail(songs: 2, brief: '简介'),
       loadSimilar: (_) async => [
-        rust.Artist(id: BigInt.from(1), name: '相似歌手甲', avatarUrl: null),
-        rust.Artist(id: BigInt.from(2), name: '相似歌手乙', avatarUrl: null),
+        rust.Artist(id: BigInt.from(1), name: '相似艺人甲', avatarUrl: null),
+        rust.Artist(id: BigInt.from(2), name: '相似艺人乙', avatarUrl: null),
       ],
       textScaleBig: true,
     );
     expect(tester.takeException(), isNull);
     // 胶囊由水平方向的 Wrap 布局(横排, 放不下才换行)
     final wrap = find.ancestor(
-      of: find.text('相似歌手甲'),
+      of: find.text('相似艺人甲'),
       matching: find.byType(Wrap),
     );
     expect(wrap, findsWidgets);
@@ -234,7 +234,7 @@ void main() {
     // 每个胶囊都不超出屏幕宽度(无溢出)
     final screenW =
         tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    for (final name in ['相似歌手甲', '相似歌手乙']) {
+    for (final name in ['相似艺人甲', '相似艺人乙']) {
       final rect = tester.getRect(find.text(name));
       expect(rect.right, lessThanOrEqualTo(screenW));
     }
@@ -291,27 +291,43 @@ void main() {
     expect(find.text('暂无歌曲'), findsOneWidget);
   });
 
-  testWidgets('300dp + textScale 1.25: 头部信息区与相似歌手胶囊不溢出', (tester) async {
+  testWidgets('300dp + textScale 1.25: 头部信息区与相似艺人胶囊不溢出', (tester) async {
     await pump(
       tester,
       detailData: detail(songs: 2, brief: '一句话简介'),
       loadSimilar: (_) async => [
         rust.Artist(
           id: BigInt.from(1),
-          name: '一个名字特别特别特别特别特别长的歌手',
+          name: '一个名字特别特别特别特别特别长的艺人',
           avatarUrl: null,
         ),
         rust.Artist(
           id: BigInt.from(2),
-          name: '另一个名字同样特别特别特别特别长的歌手',
+          name: '另一个名字同样特别特别特别特别长的艺人',
           avatarUrl: null,
         ),
       ],
       textScaleBig: true,
     );
     expect(tester.takeException(), isNull);
-    expect(find.text('相似歌手'), findsOneWidget);
+    expect(find.text('相似艺人'), findsOneWidget);
     expect(find.textContaining('特别长'), findsWidgets);
+  });
+
+  testWidgets('信息区分区顺序: 简介 → 推荐单曲 → 相似艺人(与用户页同一口径)', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 2, brief: '一句话简介'),
+      loadSimilar: (_) async => [
+        rust.Artist(id: BigInt.from(1), name: '相似艺人甲', avatarUrl: null),
+      ],
+    );
+    final brief = tester.getRect(find.text('简介')).top;
+    final songs = tester.getRect(find.text('推荐单曲')).top;
+    final similar = tester.getRect(find.text('相似艺人')).top;
+    // 作品在前, 纯跳转入口(相似艺人)放最后: 两页共用同一顺序
+    expect(brief, lessThan(songs));
+    expect(songs, lessThan(similar));
   });
 
   testWidgets('关注按钮: 点击后乐观翻转为已关注', (tester) async {
@@ -385,7 +401,7 @@ void main() {
       loadSimilar: (_) async => [
         rust.Artist(
           id: BigInt.from(1),
-          name: '一个名字特别特别特别特别特别长的歌手',
+          name: '一个名字特别特别特别特别特别长的艺人',
           avatarUrl: null,
         ),
       ],

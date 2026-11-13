@@ -7,7 +7,7 @@ import 'package:minincm/src/rust/api.dart' as rust;
 rust.SongDto song(int id, String name) => rust.SongDto(
   id: BigInt.from(id),
   name: name,
-  artist: '歌手$id',
+  artist: '艺人$id',
   artistId: BigInt.from(900 + id),
   album: '专辑$id',
   albumId: BigInt.from(800 + id),

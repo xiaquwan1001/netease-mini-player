@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'artist_nav.dart';
 import 'cover_art.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
@@ -426,6 +427,8 @@ class _ArtistFilterBar extends StatelessWidget {
             _AuthorChip(
               label: a.name,
               avatarUrl: a.avatarUrl,
+              // 点头像进主页, 点整块仍是筛选(两者靠命中区区分, 见 _AuthorChip)
+              artistId: a.userId,
               selected: selected == a.userId,
               onTap: () => onSelected(a.userId),
               scheme: scheme,
@@ -456,11 +459,15 @@ class _AuthorChip extends StatelessWidget {
     required this.onTap,
     required this.scheme,
     this.icon,
+    this.artistId,
     this.wide = false,
   });
 
   final String label;
   final String? avatarUrl;
+
+  /// 有值 = 头像可点进艺人主页; 为空(「全部」「进入全部」这类纯筛选入口)不拦截点击。
+  final BigInt? artistId;
   final bool selected;
   final VoidCallback onTap;
   final ColorScheme scheme;
@@ -499,7 +506,13 @@ class _AuthorChip extends StatelessWidget {
                             : scheme.surfaceContainerHighest,
                         child: Icon(icon, size: 20, color: scheme.primary),
                       )
-                    : CircleCover(url: avatarUrl, size: 40),
+                    // 只把 40dp 的头像包进 ArtistAvatarTap: 整块的 InkWell 仍是筛选,
+                    // 命中区小才不会在点 chip 时误进主页。
+                    : ArtistAvatarTap(
+                        artistId: artistId ?? BigInt.zero,
+                        name: label,
+                        child: CircleCover(url: avatarUrl, size: 40),
+                      ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -887,7 +900,7 @@ class _FeedCard extends StatelessWidget {
   }
 }
 
-/// 单曲 mini 卡: CoverArt + 歌名/歌手 + play 图标, 点击播放这一首
+/// 单曲 mini 卡: CoverArt + 歌名/艺人 + play 图标, 点击播放这一首
 class _MiniSongCard extends StatelessWidget {
   const _MiniSongCard({
     required this.song,
@@ -1123,7 +1136,12 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                   ),
                 for (final a in widget.authors)
                   ListTile(
-                    leading: CircleCover(url: a.avatarUrl, size: 40),
+                    // 整行 = 筛选(把 userId 弹回 FeedView), 只有头像进艺人主页
+                    leading: ArtistAvatarTap(
+                      artistId: a.userId,
+                      name: a.name,
+                      child: CircleCover(url: a.avatarUrl, size: 40),
+                    ),
                     title: Text(
                       a.name,
                       maxLines: 1,
@@ -1153,7 +1171,11 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                   ),
                   for (final a in others)
                     ListTile(
-                      leading: CircleCover(url: a.avatarUrl, size: 40),
+                      leading: ArtistAvatarTap(
+                        artistId: a.id,
+                        name: a.name,
+                        child: CircleCover(url: a.avatarUrl, size: 40),
+                      ),
                       title: Text(
                         a.name,
                         maxLines: 1,

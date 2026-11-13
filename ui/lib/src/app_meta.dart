@@ -5,7 +5,7 @@
 library;
 
 /// 应用版本号, 与 `ui/pubspec.yaml` 的 `version` 保持一致。
-const String kAppVersion = '0.8.1';
+const String kAppVersion = '0.9.0';
 
 /// 项目 GitHub 仓库地址。
 const String kGithubUrl = 'https://github.com/xiaquwan1001/netease-mini-player';

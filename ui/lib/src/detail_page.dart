@@ -273,7 +273,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     return visibleSongs(songs, _liked);
   }
 
-  /// 搜索框本地过滤: 歌名或歌手 contains, 大小写不敏感
+  /// 搜索框本地过滤: 歌名或艺人 contains, 大小写不敏感
   List<rust.SongDto> get _display {
     final q = _filter.trim().toLowerCase();
     final visible = _visible;
@@ -1156,7 +1156,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 /// 简介: 默认 3 行 + 展开/收起(歌单/播客头部共用)
 // 长文本展开/收起已收敛到 expandable_text.dart(与 artist_page 合并为一份)
 
-/// 定高 56 的曲目行: 序号(正在播换 volume_up) + 歌名 + 歌手·专辑 + 时长 + 红心
+/// 定高 56 的曲目行: 序号(正在播换 volume_up) + 歌名 + 艺人·专辑 + 时长 + 红心
 class _SongRow extends StatelessWidget {
   const _SongRow({
     required this.song,

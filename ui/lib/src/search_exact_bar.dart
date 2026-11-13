@@ -8,7 +8,7 @@ import 'cover_art.dart';
 // 之后由上层把 Rust DTO 转成这些 view 类型.
 // ---------------------------------------------------------------------------
 
-/// 命中的歌手实体.
+/// 命中的艺人实体.
 class SearchExactArtist {
   const SearchExactArtist({
     required this.id,
@@ -21,7 +21,7 @@ class SearchExactArtist {
   final String name;
   final String? avatarUrl;
 
-  /// 副标题(通常是 occupation, 如「歌手」).
+  /// 副标题(通常是 occupation, 如「艺人」).
   final String? subtitle;
 }
 
@@ -93,7 +93,7 @@ const List<String> kSearchExactFallbackOrder = <String>[
 const String kSearchExactTitle = '精确匹配';
 
 const Map<String, String> _sectionTitles = <String, String>{
-  'artist': '歌手',
+  'artist': '艺人',
   'playlist': '歌单',
   'voice': '电台',
 };
@@ -107,7 +107,7 @@ String _compactCount(int n) {
   return '${s.endsWith('.0') ? s.substring(0, s.length - 2) : s}万';
 }
 
-/// 联想面板里的「精确实体」条: 直接进入歌手/歌单/电台.
+/// 联想面板里的「精确实体」条: 直接进入艺人/歌单/电台.
 ///
 /// 空命中([SearchExactView.isEmpty])整体 [SizedBox.shrink], 不占位 ——
 /// multimatch 的 `orders: []` 是常态. 各分区横向滚动, 卡片固定 96dp 宽,

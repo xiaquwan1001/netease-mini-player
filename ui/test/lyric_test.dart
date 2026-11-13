@@ -77,7 +77,7 @@ void main() {
     test('空内容: 空串/只有元数据/只有空时间标签行', () {
       expect(parseLrc('').isEmpty, isTrue);
       expect(parseLrc('\n\n').isEmpty, isTrue);
-      expect(parseLrc('[ti:歌名][ar:歌手]').isEmpty, isTrue);
+      expect(parseLrc('[ti:歌名][ar:艺人]').isEmpty, isTrue);
       expect(parseLrc('[00:01.00]\n[00:02.00]\n').isEmpty, isTrue);
     });
 

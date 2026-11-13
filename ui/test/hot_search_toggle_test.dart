@@ -129,7 +129,7 @@ void main() {
         body: SearchLanding(
           history: const ['一条特别特别长的历史搜索词用于窄屏回归测试'],
           hot: [hot(1, '一个特别特别长不会有人搜的热词窄屏回归'), hot(2, '稻香')],
-          recommended: '一个特别特别长的推荐歌手名用于窄屏回归测试',
+          recommended: '一个特别特别长的推荐艺人名用于窄屏回归测试',
           onSelected: (_) {},
           onClearHistory: () {},
         ),

@@ -23,7 +23,7 @@ String suggestKindLabel(String kind) {
     case 'song':
       return '单曲';
     case 'artist':
-      return '歌手';
+      return '艺人';
     case 'album':
       return '专辑';
     case 'playlist':
@@ -35,7 +35,7 @@ String suggestKindLabel(String kind) {
 
 /// 输入联想面板: 点条目 → 用它做一次搜索(与原版一致: 先给建议, 再出结果).
 ///
-/// 2026-11 需求: 联想结果要**按分类纵向分组**(单曲 / 歌手 / 专辑 / 歌单 / 其他),
+/// 2026-11 需求: 联想结果要**按分类纵向分组**(单曲 / 艺人 / 专辑 / 歌单 / 其他),
 /// 之前是平铺列表 + 每行尾部一个小 tag, 看不出分类边界, 也无法按类筛选。
 class SuggestionPanel extends StatelessWidget {
   const SuggestionPanel({
@@ -113,7 +113,7 @@ class SuggestionPanel extends StatelessWidget {
       kind.isEmpty ? Icons.search : suggestIcon(kind);
 }
 
-/// 分组标题(单曲 / 歌手 / …  右侧组内条数), 与结果页的区块标题同一视觉语言。
+/// 分组标题(单曲 / 艺人 / …  右侧组内条数), 与结果页的区块标题同一视觉语言。
 class _SuggestGroupHeader extends StatelessWidget {
   const _SuggestGroupHeader({required this.kind, required this.count});
 
