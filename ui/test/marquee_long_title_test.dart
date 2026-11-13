@@ -109,6 +109,69 @@ void main() {
     expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
+  // v0.7.2: 用户反馈"明明一次性放得下的歌名也在滚"。根因是 textWidth 与视口宽
+  // 亚像素级相等时被判成放不下, 于是为了 24px 尾部空隙白白滚起来。现在有 1px 容差。
+  testWidgets('恰好放得下(文本宽 == 视口宽): 不滚动', (tester) async {
+    const style = TextStyle(fontSize: 16);
+    const scaler = TextScaler.linear(1.25);
+    final tp = TextPainter(
+      text: const TextSpan(text: '刚好放得下的歌名', style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+      textScaler: scaler,
+    )..layout();
+    final textWidth = tp.width;
+    tp.dispose();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(400, 600), textScaler: scaler),
+          child: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                // 视口宽 = 文本宽(加 padding 16 抵消), 即"恰好放得下"
+                width: textWidth + 16,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: MarqueeText('刚好放得下的歌名', style: style),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(_marqueeTransform(tester), findsNothing, reason: '放得下就不该滚');
+  });
+
+  // 用户反馈原实现是"滚到底再反向滚回"的往复, 视觉上同时有向左/向右位移。
+  // 现在改成单向: 滚到尾部停一下 → 瞬跳回起点。断言: 采样窗口内所有"正向"位移
+  // 都必须是回跳(幅度大), 不允许出现连续小幅正向移动。
+  testWidgets('单向跑马灯: 只有回跳, 没有反向缓慢回滚', (tester) async {
+    await tester.pumpWidget(_host('一二三四五六七八九十一二三四五六七'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    final samples = <double>[];
+    for (var i = 0; i < 60; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      final o = _marqueeOffset(tester);
+      if (o != null) samples.add(o);
+    }
+    expect(samples.length, greaterThan(50), reason: '应当一直在滚动');
+    var jumps = 0;
+    for (var i = 1; i < samples.length; i++) {
+      final d = samples[i] - samples[i - 1];
+      if (d > 1.0) {
+        jumps++;
+        expect(d, greaterThan(20), reason: '正向位移只能是回跳(瞬跳), 不能是缓慢回滚');
+      }
+    }
+    expect(jumps, greaterThanOrEqualTo(1), reason: '6s 窗口内应至少循环一次(证明会回到起点)');
+  });
+
   testWidgets('reduce motion: 不打动画, 单行不溢出', (tester) async {
     await tester.pumpWidget(_host('一首非常非常非常长的歌名' * 6, reduceMotion: true));
     await tester.pump();

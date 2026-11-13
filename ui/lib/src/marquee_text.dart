@@ -82,9 +82,9 @@ class _MarqueeTextState extends State<MarqueeText>
     final scrollMs = (distance / _speed * 1000).round().clamp(120, 60000);
     final controller = _controller ??= AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: scrollMs * 2 + _pauseMs * 2),
+      duration: Duration(milliseconds: scrollMs + _pauseMs * 2),
     );
-    controller.duration = Duration(milliseconds: scrollMs * 2 + _pauseMs * 2);
+    controller.duration = Duration(milliseconds: scrollMs + _pauseMs * 2);
     _offset = controller.drive(
       TweenSequence<double>([
         // 起点停 1s
@@ -96,15 +96,11 @@ class _MarqueeTextState extends State<MarqueeText>
           tween: Tween(begin: 0.0, end: distance),
           weight: scrollMs.toDouble(),
         ),
-        // 尾部停 1s
+        // 尾部停 1s, 然后由 controller.repeat() 瞬跳回起点 —— 单向跑马灯。
+        // 不做反向回滚: 反向段会让画面同时存在向左/向右两种位移, 视觉很乱(用户反馈)。
         TweenSequenceItem(
           tween: ConstantTween(distance),
           weight: _pauseMs.toDouble(),
-        ),
-        // 往复拉回
-        TweenSequenceItem(
-          tween: Tween(begin: distance, end: 0.0),
-          weight: scrollMs.toDouble(),
         ),
       ]),
     );
@@ -146,7 +142,10 @@ class _MarqueeTextState extends State<MarqueeText>
         );
         // 宽度无界(如 UnconstrainedBox 里): 退化为 ellipsis, 不测量不滚动.
         if (!maxWidth.isFinite) return plain;
-        final fits = textWidth <= maxWidth;
+        // 容差 1px: 文本宽度与视口宽度在亚像素级相等时(常见于 Expanded 恰好撑满),
+        // 之前会被判成"放不下", 于是为了 24px 的尾部空隙白白滚动起来(用户反馈:
+        // 明明能一次性展示的歌名也在滚)。真的溢出 >1px 才进入跑马灯。
+        final fits = textWidth <= maxWidth + 1.0;
         if (fits || reduceMotion) {
           if (_offset != null) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
