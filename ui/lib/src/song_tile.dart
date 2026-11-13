@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
-import 'marquee_text.dart';
 import 'format.dart' show formatDurationMs;
 import 'layout.dart' show kSongRowPadding;
 import 'rust/api.dart' as rust;
@@ -133,14 +133,15 @@ class SongFeeBadges extends StatelessWidget {
 
 /// 「歌名 + VIP/付费/无版权标记」的整行标题(供 ListTile.title 等窄位使用).
 ///
-/// 歌名 Expanded + 单行 ellipsis, 标记固定宽度: 空间再紧也不会把标记挤掉
-/// (用户反馈"歌曲没有是否为 VIP 的标记")。需要跑马灯时传 marquee: true。
+/// 歌名部分走统一组件 [AdaptiveText](跑马灯形态, 放得下就不动); 徽标是语义信息
+/// (VIP/付费/无版权, 用户反馈"歌曲没有是否为 VIP 的标记"), 因此**永不按宽度收起**,
+/// 固定宽度排在歌名之后, 只有歌名 Expanded 会被压缩。
 class SongTitleWithBadges extends StatelessWidget {
   const SongTitleWithBadges({
     super.key,
     required this.song,
     this.style,
-    this.marquee = false,
+    this.marquee = true,
     this.extraBadges = const [],
   });
 
@@ -153,14 +154,11 @@ class SongTitleWithBadges extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Widget title = marquee
-        ? MarqueeText(song.name, style: style)
-        : Text(
-            song.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: style,
-          );
+    final Widget title = AdaptiveText(
+      song.name,
+      mode: marquee ? AdaptiveTextMode.marquee : AdaptiveTextMode.ellipsis,
+      style: style,
+    );
     return Row(
       children: [
         Expanded(child: title),

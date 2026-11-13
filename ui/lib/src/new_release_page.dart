@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationShort;
 import 'net_retry.dart';
@@ -188,7 +189,7 @@ class _NewSongsTabState extends State<_NewSongsTab> {
             itemBuilder: (context, s, i, songs) => ListTile(
               dense: true,
               leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
-              title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: AdaptiveText(s.name),
               subtitle: Text(
                 s.artist,
                 maxLines: 1,
@@ -242,7 +243,7 @@ class _NewAlbumsTabState extends State<_NewAlbumsTab> {
             ),
             itemBuilder: (context, a, i, albums) => ListTile(
               leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
-              title: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: AdaptiveText(a.name),
               subtitle: Text(
                 [
                   if (a.artist.isNotEmpty) a.artist,
@@ -279,7 +280,7 @@ class _HotArtistsTab extends StatelessWidget {
           size: 44,
           icon: Icons.person_outline,
         ),
-        title: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: AdaptiveText(a.name),
         subtitle: Text(formatFans(a.fans)),
         onTap: () => onOpen(a),
       ),

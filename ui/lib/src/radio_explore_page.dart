@@ -5,6 +5,7 @@
 // 只读, 不做订阅等写操作; 全部接口匿名可用.
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -348,7 +349,7 @@ class _RadioRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CoverArt(url: radio.coverUrl, size: 48, radius: 6),
-      title: Text(radio.name, overflow: TextOverflow.ellipsis, maxLines: 1),
+      title: AdaptiveText(radio.name),
       subtitle: subtitle.isEmpty
           ? null
           : Text(subtitle, overflow: TextOverflow.ellipsis, maxLines: 1),
@@ -466,11 +467,7 @@ class _ToplistTabs extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(pr.rank, pr.program.coverUrl ?? ''),
-          title: Text(
-            pr.program.name,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
+          title: AdaptiveText(pr.program.name),
           subtitle: Text(
             [
               if (pr.program.radioName.isNotEmpty) pr.program.radioName,
@@ -489,7 +486,7 @@ class _ToplistTabs extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(r.rank, r.coverUrl),
-          title: Text(r.name, overflow: TextOverflow.ellipsis, maxLines: 1),
+          title: AdaptiveText(r.name),
           subtitle: Text(
             [
               r.djName,
@@ -518,7 +515,7 @@ class _ToplistTabs extends StatelessWidget {
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(d.rank, d.avatarUrl),
-          title: Text(d.nickname, overflow: TextOverflow.ellipsis, maxLines: 1),
+          title: AdaptiveText(d.nickname),
           subtitle: Text(
             '热度 ${_fmtCount(d.score)} · 粉丝 ${_fmtCount(d.followedCount)}',
             overflow: TextOverflow.ellipsis,

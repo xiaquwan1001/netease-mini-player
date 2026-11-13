@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -99,10 +100,8 @@ class _GroupSection extends StatelessWidget {
           ListTile(
             dense: true,
             leading: CoverArt(url: item.coverUrl, size: 48, radius: 6),
-            title: Text(
+            title: AdaptiveText(
               item.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: item.canPlay
                   ? null
                   : TextStyle(color: Theme.of(context).disabledColor),

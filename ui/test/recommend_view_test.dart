@@ -51,6 +51,14 @@ Widget scaled(Widget child) => MaterialApp(
   ),
 );
 
+/// 长文本走跑马灯(无限循环动画)时 pumpAndSettle 永不收敛, 固定推进若干帧
+/// 让 FutureBuilder/布局稳定即可(与 queue_sheet_test 同款处理).
+Future<void> pumpFrames(WidgetTester tester, {int frames = 6}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
+}
+
 void main() {
   testWidgets('推荐页展示每日推荐/歌单/播客/榜单/新碟, 点歌回调整批曲目', (tester) async {
     // 页面很长(榜单/风格/每日推荐/新歌/歌单/新碟/播客), 用高视口一次构建,
@@ -192,7 +200,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 长名歌单/播客/日推标题走跑马灯(无限动画) → 固定帧推进
+    await pumpFrames(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('每日推荐'), findsWidgets);
     // 排行榜已搬到搜索页, 窄屏下这里只校验页面本身不溢出

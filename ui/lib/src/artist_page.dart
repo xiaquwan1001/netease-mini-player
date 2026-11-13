@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -400,10 +401,8 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
+                      AdaptiveText(
                         detail.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.headlineSmall?.copyWith(
                           color: Colors.white,
                           fontWeight: FontWeight.w600,

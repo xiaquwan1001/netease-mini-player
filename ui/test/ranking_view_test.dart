@@ -27,6 +27,14 @@ rust.PlayRankEntryDto entry(int id, String name, int playCount) =>
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
+/// 长标题走跑马灯(无限循环动画)时 pumpAndSettle 永不收敛, 固定推进若干帧
+/// 让 FutureBuilder/布局稳定即可(与 queue_sheet_test 同款处理).
+Future<void> pumpFrames(WidgetTester tester, {int frames = 6}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
+}
+
 void main() {
   testWidgets('总排行/当周切换各自取数, 点歌回调整批曲目', (tester) async {
     final periods = <String>[];
@@ -148,7 +156,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    // 排行行标题走跑马灯(无限动画), pumpAndSettle 永不收敛 → 固定帧推进.
+    await pumpFrames(tester);
     expect(find.text('小屏上的第一名歌曲名很长'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

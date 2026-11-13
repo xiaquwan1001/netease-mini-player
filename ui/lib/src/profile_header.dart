@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'rust/api.dart' as rust;
 
@@ -199,10 +200,8 @@ class ProfileHeaderState extends State<ProfileHeader> {
                               Row(
                                 children: [
                                   Flexible(
-                                    child: Text(
+                                    child: AdaptiveText(
                                       nickname,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
                                       style: theme.textTheme.titleMedium
                                           ?.copyWith(
                                             color: Colors.white,

@@ -134,6 +134,14 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
+/// 长标题走跑马灯(无限循环动画)时 pumpAndSettle 永不收敛, 固定推进若干帧
+/// 让 FutureBuilder/布局稳定即可(与 queue_sheet_test 同款处理).
+Future<void> pumpFrames(WidgetTester tester, {int frames = 6}) async {
+  for (var i = 0; i < frames; i++) {
+    await tester.pump(const Duration(milliseconds: 60));
+  }
+}
+
 void main() {
   testWidgets('首页: 分类胶囊 + 精选分组 + 榜单', (tester) async {
     await _pump(
@@ -281,9 +289,13 @@ void main() {
       toplist: (kind) async => _top(kind),
     );
     await tester.tap(find.text('分类0').first);
-    await tester.pumpAndSettle();
+    await pumpFrames(tester, frames: 12);
+    // 「主播」胶囊在 300dp 下被横向裁在右边缘, 先滚进可视区再点(否则 tap 会落空)
+    await tester.ensureVisible(find.text('主播'));
+    await pumpFrames(tester, frames: 2);
     await tester.tap(find.text('主播'));
-    await tester.pumpAndSettle();
+    // 长电台名走跑马灯(无限动画), pumpAndSettle 永不收敛 → 固定帧推进.
+    await pumpFrames(tester, frames: 12);
     expect(tester.takeException(), isNull);
   });
 }

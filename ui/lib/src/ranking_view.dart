@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'layout.dart' show kSongRowPadding;
 import 'net_retry.dart';
@@ -317,11 +318,7 @@ class _RankRow extends StatelessWidget {
           ],
         ),
       ),
-      title: Text(
-        entry.song.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      title: AdaptiveText(entry.song.name),
       subtitle: Text(
         entry.song.artist,
         maxLines: 1,
