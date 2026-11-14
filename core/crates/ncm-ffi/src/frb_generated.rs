@@ -5846,6 +5846,7 @@ const _: fn() = || {
     {
         let ProfileDetail = None::<crate::api::ProfileDetail>.unwrap();
         let _: u64 = ProfileDetail.user_id;
+        let _: Option<u64> = ProfileDetail.artist_id;
         let _: String = ProfileDetail.nickname;
         let _: Option<String> = ProfileDetail.avatar_url;
         let _: Option<String> = ProfileDetail.background_url;
@@ -7902,6 +7903,7 @@ impl SseDecode for crate::api::ProfileDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_userId = <u64>::sse_decode(deserializer);
+        let mut var_artistId = <Option<u64>>::sse_decode(deserializer);
         let mut var_nickname = <String>::sse_decode(deserializer);
         let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
         let mut var_backgroundUrl = <Option<String>>::sse_decode(deserializer);
@@ -7912,6 +7914,7 @@ impl SseDecode for crate::api::ProfileDetail {
         let mut var_level = <u64>::sse_decode(deserializer);
         return crate::api::ProfileDetail {
             user_id: var_userId,
+            artist_id: var_artistId,
             nickname: var_nickname,
             avatar_url: var_avatarUrl,
             background_url: var_backgroundUrl,
@@ -10035,6 +10038,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::ProfileDetail> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.0.user_id.into_into_dart().into_dart(),
+            self.0.artist_id.into_into_dart().into_dart(),
             self.0.nickname.into_into_dart().into_dart(),
             self.0.avatar_url.into_into_dart().into_dart(),
             self.0.background_url.into_into_dart().into_dart(),
@@ -12359,6 +12363,7 @@ impl SseEncode for crate::api::ProfileDetail {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <u64>::sse_encode(self.user_id, serializer);
+        <Option<u64>>::sse_encode(self.artist_id, serializer);
         <String>::sse_encode(self.nickname, serializer);
         <Option<String>>::sse_encode(self.avatar_url, serializer);
         <Option<String>>::sse_encode(self.background_url, serializer);

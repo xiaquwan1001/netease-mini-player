@@ -352,6 +352,11 @@ pub struct MvUrl {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProfileDetail {
     pub user_id: u64,
+    /// 音乐人身份对应的**艺人 id**(user_detail 的 profile.artistId);
+    /// 普通用户没有这个字段 ⇒ None。user id 与 artist id 是两个 id 空间,
+    /// 头像点击要靠它决定进用户主页还是艺人主页(见 ui/lib/src/user_nav.dart)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artist_id: Option<u64>,
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,

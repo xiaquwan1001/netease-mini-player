@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
+import 'artist_nav.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
@@ -231,6 +232,10 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   Widget _buildIdentity(ThemeData theme, String nickname) {
     final d = _detail;
     final loading = _loading && d == null;
+    // 有歌手身份(= user_detail 带回 artistId)才给「歌手页」入口:
+    // 音乐人的用户主页与艺人主页是两份数据, 这里补上另一个入口
+    // (动态头像点击则由 UserNav 直接进艺人页)。
+    final artistId = d?.artistId;
     return ProfileIdentity(
       title: nickname,
       // 签名移到「简介」区块(与艺人页一致): 身份卡副标题只放次要身份信息
@@ -257,6 +262,13 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
                   icon: Icons.military_tech_outlined,
                   label: 'Lv.${d?.level ?? BigInt.zero}',
                 ),
+                if (artistId != null)
+                  ProfileStatChip(
+                    icon: Icons.mic_none,
+                    label: '歌手页',
+                    onTap: () =>
+                        ArtistNav.open(context, artistId, name: nickname),
+                  ),
               ],
             ),
     );

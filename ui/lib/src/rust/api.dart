@@ -2774,6 +2774,9 @@ class PrivateSession {
 /// 个人主页资料: 直接镜像 domain 类型 `ProfileDetail`.
 class ProfileDetail {
   final BigInt userId;
+
+  /// 音乐人身份对应的艺人 id(普通用户为 None); Dart 侧据此决定头像点击落哪个主页
+  final BigInt? artistId;
   final String nickname;
   final String? avatarUrl;
   final String? backgroundUrl;
@@ -2785,6 +2788,7 @@ class ProfileDetail {
 
   const ProfileDetail({
     required this.userId,
+    this.artistId,
     required this.nickname,
     this.avatarUrl,
     this.backgroundUrl,
@@ -2798,6 +2802,7 @@ class ProfileDetail {
   @override
   int get hashCode =>
       userId.hashCode ^
+      artistId.hashCode ^
       nickname.hashCode ^
       avatarUrl.hashCode ^
       backgroundUrl.hashCode ^
@@ -2813,6 +2818,7 @@ class ProfileDetail {
       other is ProfileDetail &&
           runtimeType == other.runtimeType &&
           userId == other.userId &&
+          artistId == other.artistId &&
           nickname == other.nickname &&
           avatarUrl == other.avatarUrl &&
           backgroundUrl == other.backgroundUrl &&

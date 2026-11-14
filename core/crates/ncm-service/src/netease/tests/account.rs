@@ -330,3 +330,28 @@ fn user_medals_num_fallback_and_skip_bad() {
     // obtainTime = 0 视为未获得(null), 不能当 1970 年
     assert_eq!(wall.medals[1].obtain_time_ms, None);
 }
+/// 音乐人身份: user_detail 的 profile.artistId 是**艺人 id**(与 user id 不同空间),
+/// 普通用户整个字段缺失。头像点击靠它决定进艺人主页还是用户主页。
+///
+/// 实测(2026-11-14, 匿名 /api/v1/user/detail):
+///   uid=1373758224 OfficialXeuphoria → userType=2, artistId=1064078
+///   uid=32953014 binaryify(普通用户) → userType=0, 无 artistId
+#[test]
+fn profile_detail_artist_identity() {
+    let musician = json!({"code": 200, "profile": {
+        "userId": 1373758224u64, "nickname": "OfficialXeuphoria", "userType": 2, "artistId": 1064078u64
+    }});
+    let d = parse_profile_detail(&musician);
+    assert_eq!(d.artist_id, Some(1064078));
+    assert_eq!(d.user_id, 1373758224);
+
+    // 普通用户: 没有 artistId ⇒ None(UI 只能进用户主页)
+    let normal = json!({"code": 200, "profile": {
+        "userId": 32953014u64, "nickname": "binaryify", "userType": 0
+    }});
+    assert_eq!(parse_profile_detail(&normal).artist_id, None);
+
+    // 显式 0 也归 None: 免得 UI 拿 0 去请求艺人详情
+    let zero = json!({"profile": {"userId": 1, "nickname": "x", "artistId": 0}});
+    assert_eq!(parse_profile_detail(&zero).artist_id, None);
+}

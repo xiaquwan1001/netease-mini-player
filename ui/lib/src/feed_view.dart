@@ -429,8 +429,10 @@ class _ArtistFilterBar extends StatelessWidget {
             _AuthorChip(
               label: a.name,
               avatarUrl: a.avatarUrl,
-              // 点头像进主页, 点整块仍是筛选(两者靠命中区区分, 见 _AuthorChip)
-              artistId: a.userId,
+              // 点头像进主页, 点整块仍是筛选(两者靠命中区区分, 见 _AuthorChip)。
+              // 这里只有 feed 的 **user id**: 是艺人还是普通用户交给 UserNav 解析
+              // (以前直接当 artistId 传, 会拿用户 id 去请求艺人详情)。
+              userId: a.userId,
               selected: selected == a.userId,
               onTap: () => onSelected(a.userId),
               scheme: scheme,
@@ -461,15 +463,16 @@ class _AuthorChip extends StatelessWidget {
     required this.onTap,
     required this.scheme,
     this.icon,
-    this.artistId,
+    this.userId,
     this.wide = false,
   });
 
   final String label;
   final String? avatarUrl;
 
-  /// 有值 = 头像可点进艺人主页; 为空(「全部」「进入全部」这类纯筛选入口)不拦截点击。
-  final BigInt? artistId;
+  /// 有值 = 头像可点进这个人的主页(艺人页/用户页由 UserNav 解析);
+  /// 为空(「全部」「进入全部」这类纯筛选入口)不拦截点击。
+  final BigInt? userId;
   final bool selected;
   final VoidCallback onTap;
   final ColorScheme scheme;
@@ -508,11 +511,11 @@ class _AuthorChip extends StatelessWidget {
                             : scheme.surfaceContainerHighest,
                         child: Icon(icon, size: 20, color: scheme.primary),
                       )
-                    // 只把 40dp 的头像包进 ArtistAvatarTap: 整块的 InkWell 仍是筛选,
+                    // 只把 40dp 的头像包进 UserAvatarTap: 整块的 InkWell 仍是筛选,
                     // 命中区小才不会在点 chip 时误进主页。
-                    : ArtistAvatarTap(
-                        artistId: artistId ?? BigInt.zero,
-                        name: label,
+                    : UserAvatarTap(
+                        userId: userId ?? BigInt.zero,
+                        nickname: label,
                         child: CircleCover(url: avatarUrl, size: 40),
                       ),
               ),
@@ -1143,10 +1146,11 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                   ),
                 for (final a in widget.authors)
                   ListTile(
-                    // 整行 = 筛选(把 userId 弹回 FeedView), 只有头像进艺人主页
-                    leading: ArtistAvatarTap(
-                      artistId: a.userId,
-                      name: a.name,
+                    // 整行 = 筛选(把 userId 弹回 FeedView), 只有头像进主页。
+                    // 本页作者只有 user id(不是 artist id), 交给 UserNav 解析。
+                    leading: UserAvatarTap(
+                      userId: a.userId,
+                      nickname: a.name,
                       child: CircleCover(url: a.avatarUrl, size: 40),
                     ),
                     title: Text(

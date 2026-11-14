@@ -463,6 +463,8 @@ pub async fn artist_sub_toggle(artist_id: u64, sub: bool) -> Result<bool, String
 #[frb(mirror(ProfileDetail))]
 pub struct _ProfileDetail {
     pub user_id: u64,
+    /// 音乐人身份对应的艺人 id(普通用户为 None); Dart 侧据此决定头像点击落哪个主页
+    pub artist_id: Option<u64>,
     pub nickname: String,
     pub avatar_url: Option<String>,
     pub background_url: Option<String>,

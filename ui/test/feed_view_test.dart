@@ -4,6 +4,7 @@ import 'package:minincm/src/artist_nav.dart';
 import 'package:minincm/src/feed_detail_page.dart' show feedRelativeTime;
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/user_nav.dart';
 
 rust.FeedEventDto event({
   required int id,
@@ -111,7 +112,14 @@ void main() {
     ArtistNav.opener = (context, artistId, {name}) async {
       calls.add((artistId, name));
     };
-    addTearDown(() => ArtistNav.opener = null);
+    // chip 里只有 feed 的 user id: 是否有艺人身份由 UserNav 解析(这里注入 20 -> 2000)
+    UserNav.artistIdResolver = (uid) async =>
+        uid == BigInt.from(20) ? BigInt.from(2000) : BigInt.zero;
+    addTearDown(() {
+      ArtistNav.opener = null;
+      UserNav.artistIdResolver = null;
+      UserNav.clearCache();
+    });
 
     await tester.pumpWidget(
       host(
@@ -136,14 +144,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 头像(40dp)是主页入口: 命中区只覆盖头像本身
+    // 头像(40dp)是主页入口: 命中区只覆盖头像本身。
+    // .first = 分类行里的那个(它在动态列表上方, 树序在前); 卡片头像用的是同一个 id。
     await tester.tap(
-      find.byWidgetPredicate(
-        (w) => w is ArtistAvatarTap && w.artistId == BigInt.from(20),
-      ),
+      find
+          .byWidgetPredicate(
+            (w) => w is UserAvatarTap && w.userId == BigInt.from(20),
+          )
+          .first,
     );
     await tester.pumpAndSettle();
-    expect(calls, [(BigInt.from(20), '高互动艺人')]);
+    expect(calls, [(BigInt.from(2000), '高互动艺人')]);
     // 筛选没被顺手触发: 两位的动态都还在
     expect(find.text('低互动正文'), findsOneWidget);
     expect(find.text('高互动正文'), findsOneWidget);

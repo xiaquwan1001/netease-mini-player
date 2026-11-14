@@ -202,6 +202,9 @@ pub fn parse_profile_detail(body: &Value) -> ProfileDetail {
     let p = body.get("profile").unwrap_or(body);
     ProfileDetail {
         user_id: u64_of(p, "userId").unwrap_or(0),
+        // 音乐人才有 artistId(实测: userType=2/4 的音乐人账号带, 普通用户整个字段缺失);
+        // 0 也归 None —— 免得 UI 拿 0 去请求艺人详情.
+        artist_id: u64_of(p, "artistId").filter(|id| *id > 0),
         nickname: str_of(p, "nickname").unwrap_or_default(),
         avatar_url: str_of(p, "avatarUrl").filter(|s| !s.is_empty()),
         background_url: str_of(p, "backgroundUrl").filter(|s| !s.is_empty()),

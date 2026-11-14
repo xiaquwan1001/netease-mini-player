@@ -6600,18 +6600,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProfileDetail dco_decode_profile_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ProfileDetail(
       userId: dco_decode_u_64(arr[0]),
-      nickname: dco_decode_String(arr[1]),
-      avatarUrl: dco_decode_opt_String(arr[2]),
-      backgroundUrl: dco_decode_opt_String(arr[3]),
-      signature: dco_decode_String(arr[4]),
-      vip: dco_decode_bool(arr[5]),
-      follows: dco_decode_u_64(arr[6]),
-      followeds: dco_decode_u_64(arr[7]),
-      level: dco_decode_u_64(arr[8]),
+      artistId: dco_decode_opt_box_autoadd_u_64(arr[1]),
+      nickname: dco_decode_String(arr[2]),
+      avatarUrl: dco_decode_opt_String(arr[3]),
+      backgroundUrl: dco_decode_opt_String(arr[4]),
+      signature: dco_decode_String(arr[5]),
+      vip: dco_decode_bool(arr[6]),
+      follows: dco_decode_u_64(arr[7]),
+      followeds: dco_decode_u_64(arr[8]),
+      level: dco_decode_u_64(arr[9]),
     );
   }
 
@@ -9097,6 +9098,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ProfileDetail sse_decode_profile_detail(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_userId = sse_decode_u_64(deserializer);
+    var var_artistId = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_nickname = sse_decode_String(deserializer);
     var var_avatarUrl = sse_decode_opt_String(deserializer);
     var var_backgroundUrl = sse_decode_opt_String(deserializer);
@@ -9107,6 +9109,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_level = sse_decode_u_64(deserializer);
     return ProfileDetail(
       userId: var_userId,
+      artistId: var_artistId,
       nickname: var_nickname,
       avatarUrl: var_avatarUrl,
       backgroundUrl: var_backgroundUrl,
@@ -11343,6 +11346,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_profile_detail(ProfileDetail self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self.userId, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.artistId, serializer);
     sse_encode_String(self.nickname, serializer);
     sse_encode_opt_String(self.avatarUrl, serializer);
     sse_encode_opt_String(self.backgroundUrl, serializer);
