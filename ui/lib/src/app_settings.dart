@@ -63,7 +63,11 @@ class AppSettings extends ChangeNotifier {
   /// 视觉风格(主题色). 默认网易云红 = 与改造前完全一致; 浅色/深色共用同一个色板。
   AccentPalette accent = AccentPalette.neteaseRed;
 
-  /// 1.0 = 跟随系统; 0.85/1.15/1.3 = 小/大/特大
+  /// 界面字号倍率(叠在系统字号之上)。1.0 = 跟随系统; 0.85/1.15/1.3 = 小/大/特大。
+  ///
+  /// 可精细调节: [kTextScaleMin]..[kTextScaleMax] 步长 [kTextScaleStep](设置页滑块),
+  /// 永远落在 0.05 的格子上(见 [snapTextScale]), 避免 1.1500000000000001 这类浮点尾巴
+  /// 写进 settings.json 后与预设档位比对不上。
   double textScale = 1.0;
 
   /// ncm-provider 的音质字符串: standard / higher / exhigh / lossless / hires
@@ -201,12 +205,52 @@ class AppSettings extends ChangeNotifier {
     'hires': 'Hi-Res',
   };
 
+  /// 界面字号的可调区间(滑块两端)与步长。
+  ///
+  /// 下限 0.80 而不是更小: 再小正文会低于可读极限; 上限 1.50 与系统字号相乘后
+  /// 仍在布局的 2.0 上限内(layout.dart 的 rowExtentFor 等按 ≤2 倍设计)。
+  static const double kTextScaleMin = 0.80;
+  static const double kTextScaleMax = 1.50;
+  static const double kTextScaleStep = 0.05;
+
+  /// 滑块的格数(0.80..1.50 / 0.05 = 14)
+  static int get textScaleDivisions =>
+      ((kTextScaleMax - kTextScaleMin) / kTextScaleStep).round();
+
+  /// 预设档位(设置页排一排 chip; 也当"精细调节"的吸附点)。
   static final textScales = <double, String>{
     0.85: '小',
     1.0: '标准',
     1.15: '大',
     1.3: '特大',
   };
+
+  /// 把任意倍率吸附到 [kTextScaleStep] 的格子上并夹到区间内(纯函数)。
+  ///
+  /// 用"乘 20 取整再除 20"而不是反复加 0.05: 后者会累积浮点误差
+  /// (0.8 + 0.05 * 7 = 1.1500000000000001), 读回来与预设档位比对不上。
+  static double snapTextScale(double value) {
+    final clamped = value.clamp(kTextScaleMin, kTextScaleMax);
+    final steps = ((clamped - kTextScaleMin) / kTextScaleStep).round();
+    final snapped = kTextScaleMin + steps * kTextScaleStep;
+    return (snapped * 100).round() / 100;
+  }
+
+  /// 当前倍率的展示文案: 命中预设档位就说档位名, 否则给百分比(如「120%」)。
+  static String textScaleLabel(double scale) {
+    for (final entry in textScales.entries) {
+      if ((entry.key - scale).abs() < 0.005) return entry.value;
+    }
+    return '${(scale * 100).round()}%';
+  }
+
+  /// 设置页副标题: 档位名 + 百分比 + 一句"是否跟随系统"。
+  static String textScaleHint(double scale) {
+    final percent = '${(scale * 100).round()}%';
+    final name = textScaleLabel(scale);
+    final label = name == percent ? percent : '$name · $percent';
+    return '$label · 叠在系统字号之上(系统无障碍大字号仍然生效)';
+  }
 
   Future<void> load(String dataDir) async {
     _file = File('$dataDir/settings.json');
@@ -216,7 +260,7 @@ class AppSettings extends ChangeNotifier {
         if (raw is Map) {
           themeMode = _themeFrom(raw['themeMode']);
           accent = AccentPalette.fromId(raw['accent'] as String?);
-          textScale = _doubleOf(raw['textScale'], 1.0).clamp(0.8, 1.5);
+          textScale = snapTextScale(_doubleOf(raw['textScale'], 1.0));
           final level = raw['audioLevel'];
           if (level is String && audioLevels.containsKey(level)) {
             audioLevel = level;
@@ -326,7 +370,19 @@ class AppSettings extends ChangeNotifier {
         }
       }
     } catch (_) {
-      // 配置损坏就用默认值, 不阻塞启动
+      // 配置读不出来(半截文件/手工改坏/盘满): 用默认值不阻塞启动, 但把坏文件
+      // 改名留存 —— 否则下一次 _save() 会把它覆盖掉, 用户的所有偏好就永久丢了,
+      // 而且没有任何证据可查。
+      try {
+        final file = _file;
+        if (file != null && await file.exists()) {
+          final bad = File('${file.path}.bad');
+          if (await bad.exists()) await bad.delete();
+          await file.rename(bad.path);
+        }
+      } catch (_) {
+        // 保留坏文件失败也不影响启动
+      }
     }
     _loaded = true;
     notifyListeners();
@@ -369,7 +425,7 @@ class AppSettings extends ChangeNotifier {
     }
     if (themeMode != null) this.themeMode = themeMode;
     if (accent != null) this.accent = accent;
-    if (textScale != null) this.textScale = textScale.clamp(0.8, 1.5);
+    if (textScale != null) this.textScale = snapTextScale(textScale);
     if (audioLevel != null && audioLevels.containsKey(audioLevel)) {
       this.audioLevel = audioLevel;
     }
@@ -415,12 +471,33 @@ class AppSettings extends ChangeNotifier {
     await _save();
   }
 
-  Future<void> _save() async {
+  /// 正在进行的落盘(串行化用, 见 [_save])
+  Future<void>? _saving;
+
+  /// 落盘: **串行 + 原子替换**。
+  ///
+  /// 为什么必须串行: 每次 [update]/[touchInteraction] 都会整份重写 settings.json,
+  /// 而 `writeAsString` 是"先 truncate 再写"。两次写并发时后一个的 truncate 会插在
+  /// 前一个还没写完的位置, 结果是一个**空/半截文件**; 下次启动 jsonDecode 直接抛错,
+  /// 所有偏好静默回到默认值(用户看到的"字号没有记忆"就是这么来的)。
+  ///
+  /// 为什么必须原子: 写临时文件再 rename, 任何时刻磁盘上都有一份完整可解析的
+  /// settings.json(rename 在同一目录内是原子的), 进程被杀也不会留下半截文件。
+  Future<void> _save() {
+    final next = (_saving ?? Future<void>.value()).then(
+      (_) => _writeSettings(),
+    );
+    _saving = next;
+    return next;
+  }
+
+  Future<void> _writeSettings() async {
     final file = _file;
     if (file == null) return;
     try {
       await file.parent.create(recursive: true);
-      await file.writeAsString(
+      final tmp = File('${file.path}.tmp');
+      await tmp.writeAsString(
         jsonEncode({
           'themeMode': _themeName(themeMode),
           'accent': accent.id,
@@ -453,7 +530,16 @@ class AppSettings extends ChangeNotifier {
           'skippedUpdateVersion': skippedUpdateVersion,
           'interactions': _interactions,
         }),
+        flush: true,
       );
+      try {
+        await tmp.rename(file.path);
+      } on FileSystemException {
+        // Windows 上 rename 不能覆盖已存在的文件: 退化成"删旧再改名"。
+        // (移动端/桌面的主路径是上一行的原子 rename)
+        if (await file.exists()) await file.delete();
+        await tmp.rename(file.path);
+      }
     } catch (_) {
       // 落盘失败只影响下次启动, 当前会话仍生效
     }
