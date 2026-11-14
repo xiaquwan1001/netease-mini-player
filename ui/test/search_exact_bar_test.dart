@@ -166,7 +166,7 @@ void main() {
       ),
     );
 
-    expect(find.text('电台'), findsOneWidget);
+    expect(find.text('播客'), findsOneWidget);
     expect(find.text('Taylor Swift 电台'), findsOneWidget);
     expect(find.text('小宇宙 · 24期'), findsOneWidget);
 
@@ -190,7 +190,7 @@ void main() {
     final texts = visibleTexts(tester);
     expect(texts.indexOf(kSearchExactTitle), 0);
     expect(texts.indexOf('艺人'), lessThan(texts.indexOf('歌单')));
-    expect(texts.indexOf('歌单'), lessThan(texts.indexOf('电台')));
+    expect(texts.indexOf('歌单'), lessThan(texts.indexOf('播客')));
     expect(texts.indexOf('薛之谦'), lessThan(texts.indexOf('薛之谦精选')));
     expect(texts.indexOf('薛之谦精选'), lessThan(texts.indexOf('薛之谦电台')));
   });

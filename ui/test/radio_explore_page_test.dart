@@ -152,7 +152,7 @@ void main() {
     expect(find.text('精选'), findsOneWidget);
     expect(find.text('分类0'), findsWidgets); // 胶囊 + 分组标题
     expect(find.text('精选电台0'), findsOneWidget);
-    expect(find.text('电台榜单'), findsOneWidget);
+    expect(find.text('播客榜单'), findsOneWidget);
     expect(find.text('榜单电台0'), findsOneWidget); // hot 榜电台
   });
 
@@ -172,7 +172,7 @@ void main() {
     await tester.tap(find.text('分类0').first); // 胶囊
     await tester.pumpAndSettle();
     expect(recommendCalls, 1);
-    expect(find.text('「分类0」推荐电台'), findsOneWidget);
+    expect(find.text('「分类0」推荐播客'), findsOneWidget);
     expect(find.text('分类推荐电台'), findsOneWidget);
     // 切回精选
     await tester.tap(find.text('精选'));
@@ -190,7 +190,7 @@ void main() {
     );
     await tester.tap(find.text('分类1').first);
     await tester.pumpAndSettle();
-    expect(find.text('该分类暂无推荐电台'), findsOneWidget);
+    expect(find.text('该分类暂无推荐播客'), findsOneWidget);
     // 切主播榜: djs 行显示昵称与粉丝
     await tester.tap(find.text('主播'));
     await tester.pumpAndSettle();

@@ -269,6 +269,22 @@ pub struct ArtistDetail {
     pub album_count: u64,
     #[serde(default)]
     pub music_count: u64,
+    /// 粉丝数(artist/follow/count/get 的 fansCnt; 拿不到为 0 ⇒ UI 不渲染该 chip)
+    #[serde(default)]
+    pub fans_count: u64,
+    /// 当前账号是否已关注该歌手(匿名/接口失败 = false)
+    #[serde(default)]
+    pub followed: bool,
+    /// 该艺人绑定的**用户账号** id(artist/head/info/get 的 data.user.userId).
+    ///
+    /// artistId ≠ userId: 大多数主歌手条目(如周杰伦 6452)根本没有绑定账号,
+    /// 此时为 None —— 艺人页的「动态」tab 只有在这条存在时才有合法的数据来源
+    /// (用 artistId 当 uid 请求 /api/event/get/<id> 只会返回空列表)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<u64>,
+    /// 艺人动态条数(data.eventCount, 拿不到为 0): 仅用于判断"值不值得探测动态"
+    #[serde(default)]
+    pub event_count: u64,
     #[serde(default)]
     pub songs: Vec<Song>,
     #[serde(default)]

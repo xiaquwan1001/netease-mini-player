@@ -45,6 +45,7 @@ mod user_playlist;
 // ---- 歌手相关 ----
 mod artist_album;
 mod artist_detail;
+mod artist_follow_count;
 mod artist_mv;
 mod artist_songs;
 mod artist_sub;
@@ -87,6 +88,7 @@ mod recommend_songs_dislike;
 mod follow;
 mod user_account;
 mod user_detail;
+mod user_event;
 mod user_followeds;
 mod user_follows;
 mod user_level;

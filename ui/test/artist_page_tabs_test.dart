@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/artist_sections.dart';
 import 'package:minincm/src/cover_art.dart' show CircleCover;
-import 'package:minincm/src/profile_scaffold.dart' show ProfileWorksStatChip;
+import 'package:minincm/src/profile_scaffold.dart' show ProfileStatRow;
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int i, {String name = '歌曲', bool playable = true}) =>
@@ -27,6 +27,9 @@ rust.ArtistDetailDto detail({
   int songs = 3,
   int albums = 1,
   String brief = '',
+  int fans = 0,
+  int? userId,
+  int events = 0,
 }) => rust.ArtistDetailDto(
   id: BigInt.from(6452),
   name: '周杰伦',
@@ -36,6 +39,10 @@ rust.ArtistDetailDto detail({
   briefDesc: brief,
   albumCount: BigInt.from(albums),
   musicCount: BigInt.from(songs),
+  fansCount: BigInt.from(fans),
+  followed: false,
+  userId: userId == null ? null : BigInt.from(userId),
+  eventCount: BigInt.from(events),
   songs: List.generate(songs, (i) => song(i)),
   albums: List.generate(
     albums,
@@ -168,7 +175,8 @@ void main() {
   testWidgets('需求 13: tab 集合与顺序 = 推荐单曲/全部歌曲/专辑/MV/动态', (tester) async {
     await pump(
       tester,
-      detailData: detail(songs: 3, albums: 1),
+      // 艺人动态要求 artist 绑定账号(userId): artistId 不能当 uid 用
+      detailData: detail(songs: 3, albums: 1, userId: 6452, events: 1),
       loadMvsPage: (_, _) async =>
           rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
       loadDynamics: (_) async => [dynamicEvent(0)],
@@ -195,6 +203,7 @@ void main() {
   });
 
   testWidgets('需求 13: 推荐单曲 tab 渲染 top 曲目并可直接播放', (tester) async {
+    // 「共 N 首」已迁到「全部歌曲」tab(用户反馈 2), 这里不再断言它
     if (true) {
       tester.view.physicalSize = const Size(400, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -225,7 +234,7 @@ void main() {
     // 推荐单曲是首个 tab: 一进页面就是它
     expect(find.byType(ArtistRecommendedSongsSection), findsOneWidget);
     expect(find.text('歌曲0'), findsOneWidget);
-    expect(find.text('共 3 首'), findsOneWidget);
+    expect(find.text('共 3 首'), findsNothing, reason: '计数在全部歌曲 tab 里');
     await tester.tap(find.byTooltip('播放全部'));
     await tester.pumpAndSettle();
     expect(played, [0]);
@@ -287,7 +296,7 @@ void main() {
   testWidgets('需求 13: 动态 tab 有数据才出现, 点进动态详情', (tester) async {
     await pump(
       tester,
-      detailData: detail(songs: 1, albums: 0),
+      detailData: detail(songs: 1, albums: 0, userId: 6452, events: 1),
       loadDynamics: (_) async => [dynamicEvent(0)],
     );
     await revealTabs(tester);
@@ -345,19 +354,19 @@ void main() {
     expect(find.byType(SimilarArtistsRow), findsNothing);
   });
 
-  testWidgets('需求 11: 作品数标签在头像右侧/昵称下方, 独占行数 -1', (tester) async {
-    await pump(tester, detailData: detail(songs: 2, albums: 3));
+  testWidgets('需求 1: 作品数/粉丝统计行占整卡宽度(昵称下方, 不再被省略号截断)', (tester) async {
+    await pump(tester, detailData: detail(songs: 2, albums: 3, fans: 19227240));
+    // 作品数 + 粉丝数都在统计行里(ProfileStatRow 的 footer 槽位)
     expect(find.text('3 个专辑 · 2 首歌曲'), findsOneWidget);
-    // 量 chip 本身(文字在 chip 的内边距+图标之后)
-    final worksRect = tester.getRect(find.byType(ProfileWorksStatChip));
+    expect(find.text('粉丝 1922.7万'), findsOneWidget);
+    final rowRect = tester.getRect(find.byType(ProfileStatRow));
     final nameRect = tester.getRect(find.text('周杰伦').first);
     final avatarRect = tester.getRect(find.byType(CircleCover).first);
-    // 头像右侧: chip 在头像右边界之后
-    expect(worksRect.left, greaterThanOrEqualTo(avatarRect.right));
-    // 昵称下方(而不是身份卡底部独占一行)
-    expect(worksRect.top, greaterThanOrEqualTo(nameRect.bottom - 1));
-    // 与名字左对齐(同在头像右侧这一列)
-    expect((worksRect.left - nameRect.left).abs(), lessThan(2));
+    // 昵称下方
+    expect(rowRect.top, greaterThanOrEqualTo(nameRect.bottom - 1));
+    // 整卡宽: 左缘与头像左缘对齐, 宽度明显超过头像右侧剩下的文字列
+    expect((rowRect.left - avatarRect.left).abs(), lessThan(6));
+    expect(rowRect.width, greaterThan(avatarRect.width * 2));
   });
 
   testWidgets('300dp + textScale 1.625: 头部与相似艺人横排不溢出', (tester) async {
@@ -397,7 +406,12 @@ void main() {
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('晴天0'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.search));
+    // 搜索图标现在在「全部歌曲」tab 自己的头部(不再挂顶栏右上角);
+    // 该 tab 内容可能被 pinned TabBar 遮住, 直接触发按钮回调更稳。
+    final searchButton = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.search),
+    );
+    searchButton.onPressed!();
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '七里香');
     await tester.pumpAndSettle();

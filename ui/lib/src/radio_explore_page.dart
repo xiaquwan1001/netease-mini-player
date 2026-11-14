@@ -1,6 +1,10 @@
 // 电台发现页(只读): 顶部分类胶囊(dj_catelist) → 选中分类拉推荐电台(dj_recommend_type),
 // 「精选」分类显示 dj_category_recommend 的各分类精选.
-// 中部榜单页签: 热门/新晋/付费(电台榜) + 主播(最热主播榜).
+// 中部榜单页签: 热门/新晋/付费(播客榜) + 主播(最热主播榜).
+//
+// 命名口径(2026-11): 网易云 8.0 起「电台」在产品层已正式更名「播客」
+// (接口仍是 djradio/dj_program, 未迁移)。UI 文案统一叫「播客」，
+// 不再混用「电台」。
 // 点行打开已有 showPodcastDetail(由调用方注入 onOpenRadio, 以便复用上层播放回调).
 // 只读, 不做订阅等写操作; 全部接口匿名可用.
 import 'package:flutter/material.dart';
@@ -143,7 +147,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('电台广场')),
+      appBar: AppBar(title: const Text('播客广场')),
       body: _buildBody(context),
     );
   }
@@ -213,7 +217,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
     if (picks.isEmpty) {
       return const [
         SizedBox(height: 32),
-        EmptyView(padding: EdgeInsets.zero, icon: Icons.radio, title: '暂无精选电台'),
+        EmptyView(padding: EdgeInsets.zero, icon: Icons.radio, title: '暂无精选播客'),
         SizedBox(height: 32),
       ];
     }
@@ -264,7 +268,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
         EmptyView(
           padding: EdgeInsets.zero,
           icon: Icons.radio,
-          title: '该分类暂无推荐电台',
+          title: '该分类暂无推荐播客',
         ),
         SizedBox(height: 32),
       ];
@@ -273,7 +277,7 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
       Padding(
         padding: const EdgeInsets.only(top: 4, bottom: 4),
         child: Text(
-          '「${_selected!.name}」推荐电台',
+          '「${_selected!.name}」推荐播客',
           style: Theme.of(context).textTheme.titleSmall,
         ),
       ),
@@ -393,7 +397,7 @@ class _ToplistTabs extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('电台榜单', style: Theme.of(context).textTheme.titleSmall),
+        Text('播客榜单', style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         SizedBox(
           height: 40,

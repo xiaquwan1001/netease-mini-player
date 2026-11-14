@@ -441,3 +441,57 @@ fn top_songs_mapping() {
     assert!(!songs[1].playable, "privilege.st=-200 要标成不可播");
     assert!(songs[1].is_vip());
 }
+
+/// 歌手详情: 粉丝数/关注态/绑定账号 userId(2026-11 用户反馈 1/11).
+///
+/// 真实形状(2026-11 匿名实测 /api/artist/head/info/get + /api/artist/follow/count/get):
+/// - data.artist 里有 albumSize/musicSize, 但**没有** fansCount
+/// - data.user 只在艺人绑定了用户账号时出现(周杰伦主条目 6452 没有)
+/// - 粉丝数/关注态来自另一个端点, 形如 {data:{fansCnt, isFollow, followCnt}}
+#[test]
+fn artist_detail_parses_fans_followed_and_user_id() {
+    let detail = json!({
+        "code": 200,
+        "data": {
+            "artist": {
+                "id": 54526285u64,
+                "name": "杰伦",
+                "alias": ["Jay"],
+                "briefDesc": "简介",
+                "albumSize": 3,
+                "musicSize": 42,
+                "avatar": "https://p/a.jpg",
+                "cover": "https://p/c.jpg"
+            },
+            "user": {"userId": 131317247u64, "nickname": "杰伦"},
+            "eventCount": 7
+        }
+    });
+    let top = json!({"code": 200, "songs": []});
+    let albums = json!({"code": 200, "hotAlbums": []});
+    let follow = json!({
+        "code": 200,
+        "data": {"fansCnt": 19227240u64, "followCnt": 0, "isFollow": true}
+    });
+    let a = parse_artist_detail_with_follow(&detail, &top, &albums, &follow);
+    assert_eq!(a.id, 54526285);
+    assert_eq!(a.album_count, 3);
+    assert_eq!(a.music_count, 42);
+    assert_eq!(a.fans_count, 19227240);
+    assert!(a.followed);
+    assert_eq!(a.user_id, Some(131317247));
+    assert_eq!(a.event_count, 7);
+}
+
+/// 没有绑定账号的歌手: user_id 为 None(艺人页据此不生成「动态」tab), 粉丝接口失败时 0/false
+#[test]
+fn artist_detail_without_bound_user_has_no_user_id() {
+    let detail = json!({
+        "code": 200,
+        "data": {"artist": {"id": 6452u64, "name": "周杰伦", "albumSize": 48, "musicSize": 591}}
+    });
+    let a = parse_artist_detail(&detail, &json!({"songs": []}), &json!({"hotAlbums": []}));
+    assert_eq!(a.user_id, None);
+    assert_eq!(a.fans_count, 0);
+    assert!(!a.followed);
+}

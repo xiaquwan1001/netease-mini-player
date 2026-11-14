@@ -22,6 +22,7 @@ class ProfileHeader extends StatefulWidget {
     this.onTapFollows,
     this.onTapFolloweds,
     this.loadDetail,
+    this.onEditSignature,
   });
 
   final rust.ProfileDetail? detail;
@@ -36,6 +37,10 @@ class ProfileHeader extends StatefulWidget {
   /// 注入式详情 loader(refreshCounts 用, 测试可注入 mock);
   /// 未注入或未登录时 refreshCounts 是 no-op。
   final Future<rust.ProfileDetail?> Function()? loadDetail;
+
+  /// 「编辑简介」行内入口(「我的」页注入): 与简介同一行的小按钮,
+  /// 不再单独占一个「简介」区块(用户反馈 6)。
+  final VoidCallback? onEditSignature;
 
   @override
   ProfileHeaderState createState() => ProfileHeaderState();
@@ -95,6 +100,22 @@ class ProfileHeaderState extends State<ProfileHeader> {
               : (widget.fallbackNickname ?? '未命名用户'))
         : '未登录';
     final signature = widget.loggedIn ? (d?.signature ?? '') : '';
+    // 空简介时给一句可点的占位(「编辑简介」入口在右侧), 不再靠独立区块提示
+    final subtitle = !widget.loggedIn
+        ? null
+        : (signature.trim().isEmpty ? '还没有填写简介' : signature.trim());
+    final editAction = widget.onEditSignature == null
+        ? null
+        : TextButton(
+            onPressed: widget.onEditSignature,
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              minimumSize: Size.zero,
+            ),
+            child: const Text('编辑简介'),
+          );
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -109,7 +130,9 @@ class ProfileHeaderState extends State<ProfileHeader> {
           imageUrl: widget.loggedIn ? d?.backgroundUrl : null,
           avatarUrl: widget.loggedIn ? d?.avatarUrl : null,
           title: nickname,
-          subtitle: signature.trim().isEmpty ? null : signature.trim(),
+          subtitle: subtitle,
+          subtitleAction: editAction,
+          subtitleMaxLines: 3,
           vip: widget.loggedIn && (d?.vip ?? false),
           // 统计行与艺人页/他人主页同一套 chip: 之前这里是自己一份
           // Wrap + Text(' · ') + _StatEntry, 「我的」页与别人主页的点缀/字号都不同

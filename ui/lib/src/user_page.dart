@@ -7,17 +7,17 @@ import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
 import 'error_views.dart';
-import 'expandable_text.dart';
 import 'feed_detail_page.dart'
     show feedKindLabels, feedRelativeTime, showFeedDetail;
+import 'feed_media.dart' show FeedImageGrid, feedAttachedImages;
 import 'layout.dart';
 import 'net_retry.dart';
-import 'paged_list_view.dart';
 import 'platform.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
+import 'song_tile.dart' show SongTitleWithBadges, formatSongDuration;
 import 'state_views.dart';
 import 'toast.dart';
 import 'user_list_page.dart';
@@ -45,6 +45,7 @@ class UserPage extends StatefulWidget {
     this.onOpenFollows,
     this.onOpenFolloweds,
     this.loadEvents,
+    this.loadLikedSongs,
     this.onOpenUrl,
     this.initialTab,
   });
@@ -69,6 +70,9 @@ class UserPage extends StatefulWidget {
 
   /// 动态 loader(测试注入; 默认 rust.userEvents 取第一页 30 条)
   final Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadEvents;
+
+  /// 「我喜欢」栏的曲目 loader(测试注入; 默认 rust.playlistSongs)
+  final Future<List<rust.SongDto>> Function(BigInt playlistId)? loadLikedSongs;
 
   /// 动态详情里打开外链/视频(默认交给系统, 见 [PlatformBridge.openUrl])
   final Future<void> Function(String url)? onOpenUrl;
@@ -200,19 +204,14 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     );
   }
 
-  /// 关注/粉丝 chip 入口: 宿主有钩子就交给宿主; 本页有对应 tab 就切过去;
-  /// 否则(计数为 0 / 未知, tab 未生成)退到独立的关注与粉丝列表页。
+  /// 关注/粉丝 chip 入口: 宿主有钩子就交给宿主, 否则打开关注/粉丝列表页.
+  ///
+  /// 用户反馈 8 之后本页不再有「关注 / 粉丝」tab(chip 是唯一入口),
+  /// 所以这里不做 tab 跳转, 直接进列表页。
   Future<void> _openRelationship({required bool fans}) async {
     final hook = fans ? widget.onOpenFolloweds : widget.onOpenFollows;
     if (hook != null) {
       hook();
-      return;
-    }
-    final index = _tabSpecs().indexWhere(
-      (s) => s.label == (fans ? '粉丝' : '关注'),
-    );
-    if (index >= 0) {
-      _tabController.animateTo(index);
       return;
     }
     await showUserList(
@@ -255,30 +254,22 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     );
   }
 
-  /// 信息区(横幅与 TabBar 之间): 目前只有「简介」。
+  /// 信息区(横幅与 TabBar 之间): **不再放简介**。
   ///
-  /// 艺人页在这里放 相似艺人/简介/推荐单曲/专辑, 用户页没有对应数据 ⇒ 只剩简介;
-  /// 机制是同一套: 返回一组 widget, 空列表 = 不出区块, 骨架完全相同。
-  List<Widget> _buildInfoSections(ThemeData theme) {
-    final signature = _detail?.signature.trim() ?? '';
-    if (signature.isEmpty) return const <Widget>[];
-    // 与艺人页同一份分区几何(标题 8 / 内容 / 块间 16), 见 ProfileSection
-    return [
-      ProfileSection(
-        title: '简介',
-        child: ExpandableText(text: signature),
-      ),
-    ];
-  }
+  /// 用户反馈 6: 简介要并进身份卡(昵称下方、关注/粉丝/等级上方)做成普通文字,
+  /// 不要独立区块。艺人页的「简介」是长篇 briefDesc, 仍留在信息区。
+  List<Widget> _buildInfoSections(ThemeData theme) => const <Widget>[];
 
   /// 身份卡: 头像/昵称/VIP/签名 + 统一统计 chip(关注/粉丝可点, 等级只展示)
   Widget _buildIdentity(ThemeData theme, String nickname) {
     final d = _detail;
     final loading = _loading && d == null;
+    final signature = d?.signature.trim() ?? '';
     return ProfileIdentity(
       title: nickname,
-      // 签名移到「简介」区块(与艺人页一致): 身份卡副标题只放次要身份信息
-      subtitle: null,
+      // 简介在昵称下方、统计行上方(用户反馈 6), 3 行内不截断
+      subtitle: signature.isEmpty ? null : signature,
+      subtitleMaxLines: 3,
       avatarUrl: d?.avatarUrl,
       vip: d?.vip ?? false,
       // 需求 11: 关注/粉丝/等级**单独一行**, 落在头像右侧、昵称下方(meta 槽位),
@@ -343,33 +334,70 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
 
   /// 声明式 tab 集合(与艺人页同一机制: 按数据可用性生成)。
   ///
-  /// 「动态」固定第一条: 它是用户主页的主内容(网易云同款次序), 空/失败由
-  /// tab 内自己给空态 —— 不像关注/粉丝那样"计数为 0 就没有这条数据"。
+  /// 「动态」固定第一条(用户主页的主内容)。
+  ///
+  /// 用户反馈 8: **去掉「关注 / 粉丝」两个 tab** —— 身份卡上两个 chip 已经能点开
+  /// 列表, 纵向 tab 留给内容分类。
+  /// 用户反馈 9: 「我喜欢的音乐」(specialType=5) 单独一栏并展示最近喜欢的若干首,
+  /// 其余歌单放「歌单」栏。他人主页拿不到播客/专辑收藏(上游只允许取自己),
+  /// 因此不生成那两栏 —— 宁可没有, 也不给一个永远空的 tab。
   List<ProfileTabSpec> _tabSpecs() {
-    final d = _detail;
-    final follows = d?.follows ?? BigInt.zero;
-    final followeds = d?.followeds ?? BigInt.zero;
+    final liked = _likedPlaylist;
     return [
       ProfileTabSpec('动态', builder: _eventsTab),
-      ProfileTabSpec('歌单', builder: _playlistsTab),
-      if (follows > BigInt.zero)
-        ProfileTabSpec(
-          '关注',
-          badge: ProfileTabBadge('$follows'),
-          builder: (context) => _relationTab(context, fans: false),
-        ),
-      if (followeds > BigInt.zero)
-        ProfileTabSpec(
-          '粉丝',
-          badge: ProfileTabBadge('$followeds'),
-          builder: (context) => _relationTab(context, fans: true),
-        ),
+      if (liked != null)
+        ProfileTabSpec('我喜欢', builder: (context) => _likedTab(context, liked)),
+      // 歌单栏在资料加载完成后恒在(空时由 tab 内给空态): 「没有公开歌单」本身
+      // 是有用信息, 而不是"没有这条数据"。
+      if (_playlists != null) ProfileTabSpec('歌单', builder: _playlistsTab),
     ];
+  }
+
+  /// 「我喜欢的音乐」歌单(specialType=5, 上游 user/playlist 会带上)
+  rust.Playlist? get _likedPlaylist {
+    for (final p in _playlists ?? const <rust.Playlist>[]) {
+      if (p.special) return p;
+    }
+    return null;
+  }
+
+  /// 其余歌单/收藏(去掉「我喜欢的音乐」)
+  List<rust.Playlist> get _otherPlaylists => [
+    for (final p in _playlists ?? const <rust.Playlist>[])
+      if (!p.special) p,
+  ];
+
+  /// 「我喜欢」栏: 最近喜欢的若干首 + 查看全部(完整歌单页)
+  Widget _likedTab(BuildContext context, rust.Playlist liked) {
+    final theme = Theme.of(context);
+    final bottom = 24 + MediaQuery.viewPaddingOf(context).bottom;
+    return _LikedPreview(
+      playlist: liked,
+      load: widget.loadLikedSongs,
+      onPlaySongs: widget.onPlaySongs,
+      padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
+      header: Row(
+        children: [
+          Text(
+            '共 ${liked.trackCount} 首',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: () => _openPlaylist(liked),
+            icon: const Icon(Icons.queue_music, size: 18),
+            label: const Text('查看全部'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// 歌单 tab: 横滑卡片(CoverRow/CoverCard), 标题允许 2 行。
   Widget _playlistsTab(BuildContext context) {
-    final lists = _playlists;
+    final lists = _playlists == null ? null : _otherPlaylists;
     final bottom = 24 + MediaQuery.viewPaddingOf(context).bottom;
     if (_error != null && lists == null) {
       // 与艺人页 tab 内错误同一形态(行内文案 + 重试), 不再塞一张 Card
@@ -430,85 +458,145 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       ),
     );
   }
-
-  /// 关注/粉丝 tab: 只读列表(点行进对方主页)
-  Widget _relationTab(BuildContext context, {required bool fans}) {
-    final loader =
-        (fans ? widget.loadFolloweds : widget.loadFollows) ??
-        (fans
-            ? (uid, limit, offset) =>
-                  rust.userFolloweds(uid: uid, limit: limit, offset: offset)
-            : (uid, limit, offset) =>
-                  rust.userFollows(uid: uid, limit: limit, offset: offset));
-    return _RelationListView(
-      uid: widget.userId,
-      fans: fans,
-      loader: loader,
-      onPlaySongs: widget.onPlaySongs,
-    );
-  }
 }
 
-/// 关注/粉丝列表(带分页/空态/重试), 点行进对方主页。
-class _RelationListView extends StatelessWidget {
-  const _RelationListView({
-    required this.uid,
-    required this.fans,
-    required this.loader,
+/// 「我喜欢」预览: 最近喜欢的若干首(specialType=5 的歌单前 N 首).
+///
+/// 他人主页的「我喜欢的音乐」由用户歌单接口带回(对方公开时才有);
+/// 曲目按歌单顺序(上游是收藏时间从新到旧)取前 [maxItems] 首,
+/// 「查看全部」打开完整歌单页。
+class _LikedPreview extends StatelessWidget {
+  const _LikedPreview({
+    required this.playlist,
+    required this.header,
+    required this.padding,
     this.onPlaySongs,
+    this.load,
   });
 
-  final BigInt uid;
-  final bool fans;
-  final UserListLoader loader;
+  final rust.Playlist playlist;
+  final Widget header;
+  final EdgeInsetsGeometry padding;
   final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
+
+  /// 测试注入(默认 rust.playlistSongs)
+  final Future<List<rust.SongDto>> Function(BigInt playlistId)? load;
+
+  /// 预览条数(「最近喜欢的若干首」)
+  static const int maxItems = 20;
+
+  Future<List<rust.SongDto>> _loadSongs() async {
+    final fn = load ?? (id) => rust.playlistSongs(playlistId: id);
+    return fn(playlist.id);
+  }
 
   @override
   Widget build(BuildContext context) {
-    const pageSize = 30;
-    return PagedListView<rust.UserItem>(
-      key: ValueKey('user-relation-$fans'),
-      pageSize: pageSize,
-      keyOf: (u) => u.id,
-      emptyText: fans ? '还没有粉丝' : '还没有关注任何人',
-      padding: EdgeInsets.only(
-        bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      loader: (cursor) async {
-        final page = await retryNetwork(() => loader(uid, pageSize, cursor));
-        return PagedPage(
-          page,
-          hasMore: page.length >= pageSize,
-          nextCursor: cursor + page.length,
-        );
-      },
-      itemBuilder: (context, u, index, items) => ListTile(
-        leading: CircleCover(
-          url: u.avatarUrl,
-          size: 40,
-          icon: Icons.person_outline,
+    final play = onPlaySongs;
+    return ListView(
+      padding: padding,
+      children: [
+        header,
+        AsyncView<List<rust.SongDto>>(
+          load: _loadSongs,
+          emptyText: '还没有喜欢的歌曲',
+          builder: (context, all, reload) {
+            final songs = all.length > maxItems
+                ? all.sublist(0, maxItems)
+                : all;
+            if (songs.isEmpty) {
+              return const EmptyView(
+                icon: Icons.favorite_border,
+                title: '还没有喜欢的歌曲',
+                hint: '对方可能把「我喜欢的音乐」设为私密',
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < songs.length; i++)
+                  _LikedRow(
+                    song: songs[i],
+                    index: i,
+                    onTap: play == null ? null : () => play(songs, i),
+                  ),
+              ],
+            );
+          },
         ),
-        title: AdaptiveText(u.name),
-        subtitle: Text(
-          u.signature.isEmpty ? '暂无签名' : u.signature,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        onTap: () => showUserPage(
-          context,
-          userId: u.id,
-          fallbackNickname: u.name,
-          onPlaySongs: onPlaySongs,
+      ],
+    );
+  }
+}
+
+/// 「我喜欢」的一行: 序号 + 封面 + 歌名/艺人 + 时长
+class _LikedRow extends StatelessWidget {
+  const _LikedRow({required this.song, required this.index, this.onTap});
+
+  final rust.SongDto song;
+  final int index;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final playable = song.playable;
+    final grey = TextStyle(color: scheme.outline);
+    return InkWell(
+      onTap: playable ? onTap : null,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              child: Text(
+                '${index + 1}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.outline,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            CoverArt(url: song.coverUrl, size: 44, radius: 4),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SongTitleWithBadges(
+                    song: song,
+                    style: playable ? theme.textTheme.bodyMedium : grey,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${song.artist} · ${song.album}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: playable
+                          ? scheme.onSurfaceVariant
+                          : scheme.outline,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              formatSongDuration(song.durationMs),
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// 可下拉刷新的动态列表(用户主页「动态」tab 用)。
-///
-/// [UserEventsList] 自己不持有滚动容器(它同时被「我的」页嵌进整页 ListView),
-/// 所以"下拉刷新"由这里提供: 换 generation key 让 AsyncView 重新取数。
 class _RefreshableEvents extends StatefulWidget {
   const _RefreshableEvents({
     required this.load,
@@ -703,6 +791,13 @@ class _EventSummaryCard extends StatelessWidget {
                     mode: AdaptiveTextMode.wrap,
                     maxLines: 3,
                   ),
+                ),
+              // 附图预览(用户反馈 7: 他人主页的动态「无法加载图片」——
+              // 摘要卡此前根本没渲染图片; 现在与列表卡片/详情页共用同一份排版)
+              if (feedAttachedImages(event).isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: FeedImageGrid(images: feedAttachedImages(event)),
                 ),
               if (counts.isNotEmpty)
                 Padding(

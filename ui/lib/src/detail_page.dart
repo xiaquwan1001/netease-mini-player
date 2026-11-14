@@ -327,13 +327,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         }
       });
       widget.onLikeChanged?.call(song.id, !liked);
-      // 取消喜欢给 5 秒撤销; 撤销就是再切一次(状态已翻转, _toggleLike 会喜欢回去)
+      // 取消喜欢只给 3 秒提示(再点一次红心即可恢复), 不留常驻的撤销条
       if (liked) {
-        showUndoToast(
-          context,
-          message: '已取消喜欢《${song.name}》',
-          onUndo: () => _toggleLike(song),
-        );
+        showToast(context, '已取消喜欢《${song.name}》');
       }
     } catch (e) {
       _toast('收藏失败: ${friendlyError(e)}');
@@ -1155,7 +1151,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     if (display.isEmpty) {
       final message = _filter.trim().isNotEmpty
           ? '没有匹配 "${_filter.trim()}" 的节目'
-          : '这个电台还没有节目';
+          : '这个播客还没有节目';
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
 import 'cover_art.dart';
+import 'feed_media.dart';
 import 'feed_share.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
@@ -240,9 +241,11 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
                 style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
               ),
             ],
-            if (event.images.isNotEmpty) ...[
+            // 配图: 与列表卡片同一份排版(1 张大图 / 2 两列 / 3+ 三列),
+            // 且只放用户自己附的照片(分享单曲的动态不再重复附带专辑封面)
+            if (feedAttachedImages(event).isNotEmpty) ...[
               const SizedBox(height: 12),
-              _ImageGrid(urls: event.images),
+              FeedImageGrid(images: feedAttachedImages(event)),
             ],
             if (event.videoUrl != null) ...[
               const SizedBox(height: 12),
@@ -355,50 +358,6 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 配图网格: 1 张放大铺满, 多张按 3 列平铺(与官方动态一致的 9 宫格)
-class _ImageGrid extends StatelessWidget {
-  const _ImageGrid({required this.urls});
-
-  final List<String> urls;
-
-  @override
-  Widget build(BuildContext context) {
-    if (urls.length == 1) {
-      return GestureDetector(
-        onTap: () => showImageViewer(context, urls: urls),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 320),
-          child: NetImage(url: urls.first, width: double.infinity, radius: 8),
-        ),
-      );
-    }
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 6.0;
-        const columns = 3;
-        final size = (constraints.maxWidth - gap * (columns - 1)) / columns;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (var i = 0; i < urls.length; i++)
-              GestureDetector(
-                onTap: () =>
-                    showImageViewer(context, urls: urls, initialIndex: i),
-                child: NetImage(
-                  url: urls[i],
-                  width: size,
-                  height: size,
-                  radius: 6,
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

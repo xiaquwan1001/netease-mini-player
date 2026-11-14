@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-14**。当前版本 **v0.10.0**(2026-11-14 打包, 含用户 15 项反馈 + 编辑简介 + 云盘上传)。
+> 最近更新: **2026-11-14(三)**。当前版本 **v0.11.0**(2026-11-14 打包, 用户第二轮 15 项反馈 + API 语义纠偏)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
@@ -11,15 +11,15 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace` | **293** 通过 / 0 失败 |
+| `cargo test --offline --workspace` | **305** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags 'network\|\|golden'` | **834** 通过 / 0 失败(+ 12 张 golden 单跑全绿) |
+| `flutter test`(全量, 含 golden) | **928** 通过 / 1 跳过(golden 12 张) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
-| 接口覆盖 | **123/123**(FFI 导出 152, 其中 7 个无 UI 入口: cache_stats / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_events / user_play_ranking / word_lyric_with_fallback) |
+| 接口覆盖 | **136/136**(FFI 导出 160, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
@@ -42,7 +42,9 @@
 | **v0.7.1** | **2026-11-12** | 用户反馈 10 项:VIP 标记/播放条上一首/歌词截断/长字滚动/队列叠加/搜索横向分类/艺人主页分区/缩进收口 |
 | **v0.8.0** | **2026-11-13** | 用户反馈 10 项 UI 收口(徽标位置/行尾按钮/每日推荐/歌词标题字号/跑马灯内核重写+全仓统一/逐字字内进度/动态标记/背景高清+全屏保存/横向留白栅格) + **艺人/用户主页统一骨架** + 数据面 3 个 FFI(`Playlist.subscribed` / `userPlayRanking` / `userEvents`) |
 | **v0.8.1** | **2026-11-13** | 用户反馈 8 项: 账号入口收敛到设置(删「我的」页药丸/未登录按钮/底部多余横条)、账号页去会员重复栏、登录 WebView 清 cookie(可加第二个账号)+ 顶栏关闭(可返回)、退出后账号簿可点即登录、热搜单一开关(删 ❌)、清除凭据文案去歧义、Keystore 说明搬到设置→关于、**风格推荐配图修复**(yyimgs 相对路径补 CDN 绝对地址) |
-| **v0.9.0** | **2026-11-13** | **规则层收口**(唯一 `AsyncView` / `SectionTitle` / `check-tokens --strict`) + 用户 6 条(播放跳过 VIP / 每日推荐歌单本地缓存 / 凭据存储去重 / 匿名 debug 数据 / 关注页头像进主页且与搜索同一份排版 / 「歌手」→「艺人」) + **匿名诊断一键提交**(Cloudflare Worker 代理建 issue) + **我的页按最近交互排序** + 列表行 A 级 7 处修复 + **golden 视觉回归网**(6 页 × 2 视口) |
+| **v0.9.0** | **2026-11-13** | **规则层收口**(唯一 `AsyncView` / `SectionTitle` / `check-tokens --strict`) + 用户 6 条(播放跳过 VIP / 每日推荐歌单本地缓存 / 凭据存储去重 / 匿名 debug 数据 / 关注页头像进主页且与搜索同一份排版 / 「歌手」→「艺人」) + **匿名诊断一键提交**(Cloudflare Worker 代理建 issue) + **我的页按最近交互排序** + 列表行 A 级 7 处修复 + **golden 视觉回归网**(6 页 × 2 视口) || **v0.9.0** | **2026-11-13** | **规则层收口**(唯一 `AsyncView` / `SectionTitle` / `check-tokens --strict`) + 用户 6 条(播放跳过 VIP / 每日推荐歌单本地缓存 / 凭据存储去重 / 匿名 debug 数据 / 关注页头像进主页且与搜索同一份排版 / 「歌手」→「艺人」) + **匿名诊断一键提交**(Cloudflare Worker 代理建 issue) + **我的页按最近交互排序** + 列表行 A 级 7 处修复 + **golden 视觉回归网**(6 页 × 2 视口) |
+| **v0.10.0** | **2026-11-14** | 用户 15 项反馈(OLED 开关/我的页同构/动态分享卡片/转发面板/forbidden 文案/云盘列表/通知按钮顺序/网格列数/相似艺人横排/MV 搜索+评论区/动态游标补历史/等级 0/艺人页纵向 tab/联想面板/边缘留白) + 编辑简介 + 云盘上传 |
+| **v0.11.0** | **2026-11-14** | 用户第二轮 15 项 + API 语义纠偏:艺人页粉丝数与整卡宽统计行、播放全部顶格、共 N 首/搜索移入全部歌曲 tab、**登录假成功修复**、提示条 floating 3s、简介并入昵称下、**他人/艺人动态端点修复**(`/api/event/get/<uid>` + 绑定 userId)、去关注粉丝 tab、「我喜欢」单独成栏、电台→播客文案、仅分享歌曲不重复附图、图片按张数排版;新增 2 个 vendor 端点 |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -76,6 +78,40 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-14(三) 用户第二轮 15 项反馈(**v0.11.0 已发布**)
+
+用户看着真机截图提的第二轮 15 条, 逐条落地。门禁: `dart analyze` 0 issue;
+`flutter test` **928 passed / 1 skipped**(golden 里 mine 两张重建);
+`cargo test --offline --workspace` 全绿(service 200 / domain 46 / playback 33 / provider 1 / ffi 1);
+`cargo clippy --workspace --all-targets -D warnings` 0 warning; `cargo fmt --check` 干净;
+`tools/check-tokens.sh --strict` / `check-write-guard.sh` OK; debug APK(x86_64+arm64)出包成功。
+
+| # | 需求 | 落点 |
+|---|---|---|
+| 1 | 艺人页统计行加粉丝数、横条占满整卡宽(数字被截断) | vendor 新增 `artist/follow/count/get`(**参数名 `id`**) → `ArtistDetail.fans_count/followed` → 身份卡改 `footer` 放 `ProfileStatRow`(粉丝 + 作品数), 不再挤 meta 列; 关注按钮初始态用 `isFollow` |
+| 2 | 推荐单曲「播放全部」左顶格; 「共 N 首」移到全部歌曲 tab | `artist_sections` 改 InkWell+Row(去掉 IconButton 隐形内边距); 计数搬到 `_AllSongsTab` 头部 |
+| 3 | 搜索 🔍 从顶栏右上角移到全部歌曲 tab「共 N 首」右侧 | `_AllSongsTab` 自带 开/关搜索 + 输入框, 删除 `ProfileScaffold.searchBar` 用法与 top-right action |
+| 4 | 已有账号时添加账号, 关闭/失败登录页仍提示「登录成功」 | Rust `login_with_cookie` 只有在入参含非空 `MUSIC_U` 时才合并(`+单测`); Android `finishCancelled()` 不再回传 cookie, `onActivityResult` 仅 RESULT_OK 才取 |
+| 5 | 取关/取消喜欢的撤销弹窗不自动回落、遮挡内容 | SnackBar 统一 floating + 3s(撤销条 4s); 取消喜欢/取消关注去掉「撤销」按钮只留短提示; `showUndoToast` 仅留给取消收藏歌单 |
+| 6 | 简介并进昵称下方(关注/粉丝/等级之上), 不要独立条目; 他人同理 | `ProfileIdentity` 新增 `subtitleAction/subtitleMaxLines`; 「我的」页删 `_MySignatureSection`(改行内「编辑简介」); 他人主页删「简介」区块 |
+| 7 | 他人主页动态实际是自己的、且不显示图片 | 根因同 11(端点); 另 `_EventSummaryCard` 此前不渲染图片, 现补 `FeedImageGrid` |
+| 8 | 他人主页去掉 关注/粉丝 tab(交给 chip) | `_tabSpecs` 只留内容分类; chip 直接进关注/粉丝列表页 |
+| 9 | 他人主页「我喜欢」单独一栏 + 最近若干首, 其余歌单分栏 | `user/playlist` 的 `specialType=5` 单独成「我喜欢」栏(`_LikedPreview` 前 20 首 + 查看全部); 其余进「歌单」栏 |
+| 10 | 电台已并入播客, 检查文案 | UI 文案统一「播客」(广场/榜单/空态/搜索分区/详情空态); **接口仍是 djradio/dj_program, 未迁移** |
+| 11 | 艺人页动态接线错(显示自己的动态) | 根因: `/api/v1/event/get` 丢弃 uid + 拿 artistId 当 uid。改 `POST /api/event/get/<uid>` + 用 `artist/head/info/get.data.user.userId`, 无绑定账号不生成 tab |
+| 12 | 仅分享歌曲的动态不再重复附带专辑/歌曲图片 | `feed_media.feedAttachedImages()` 剔除与 `coverUrl`/`song.coverUrl` 相同的图 |
+| 13 | 图片预览太小, 按附图数量排版 | `FeedImageGrid`: 1 张铺满(4:3) / 2 张两列 / 3+ 三列; 列表卡 / 详情 / 摘要卡共用 |
+| 14 | 官方板块合并现状(电台/笔记/MV) | 见下「调研结论 A」 |
+| 15 | 我们的 API 理解偏差 | 见下「调研结论 B」 |
+
+**调研结论 A(板块合并/迁移)**: ①「电台」2020-11 起产品层更名「播客」, **接口未迁移**(djradio/dj/program 仍在用, 本仓 2026-11 实测 10 个端点匿名 200) ⇒ 只改 UI 文案;
+②「社区」2024-01 改名「动态」, 2024-11「笔记」上线并成为社区主形态(图文/带音乐), 但上游快照**没有按用户取笔记的端点** ⇒ 不新造「笔记」tab;
+③ MV 在数据层是艺人页独立分区(`artist/mvs`), 不属于动态; 艺人动态无专用 feed 端点(与旧结论一致);
+④ 云盘/数字专辑/排行榜/我的收藏名称与入口未变。
+
+**调研结论 B(API 语义偏差, 已全部修正)**: ①他人动态端点错(见 #11); ②艺人粉丝数/关注态来自 `artist/follow/count/get`(artist detail 不给); ③`artist/head/info/get` 的 `data.user` 才是艺人绑定账号, `data.eventCount` 可用于判断; ④他人主页的「我喜欢的音乐」= `specialType=5` 歌单(公开时匿名可取), 而他人听歌排行恒无权限;
+⑤`user/playlist` 只回公开歌单, 私密歌单只有自己登录可见。「普通用户 vs 音乐人」是两套独立数据, 页面互跳只走 `profile.artistId` / `data.user.userId`。
 
 ## 2026-11-14: 通知封面/下一首 + 播放现场记忆 + 乐观续播 + 主题四档(**v0.9.1 已发布**)
 

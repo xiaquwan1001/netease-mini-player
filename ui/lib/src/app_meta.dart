@@ -5,7 +5,7 @@
 library;
 
 /// 应用版本号, 与 `ui/pubspec.yaml` 的 `version` 保持一致。
-const String kAppVersion = '0.10.0';
+const String kAppVersion = '0.11.0';
 
 /// 匿名诊断「一键提交」的上传端点(Cloudflare Worker 代理建 GitHub issue)。
 ///

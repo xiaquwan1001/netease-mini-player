@@ -186,7 +186,7 @@ impl NeteaseProvider {
             }
             let (client, domain, ua, cookie) = self.snapshot();
             let base = || make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
-            let (detail, top, albums) = futures::future::join3(
+            let (detail, top, albums, follow_count) = futures::future::join4(
                 async { client.artist_detail(&base()).await.map_err(map_error) },
                 async { client.artist_top_song(&base()).await.map_err(map_error) },
                 async {
@@ -195,6 +195,7 @@ impl NeteaseProvider {
                         .await
                         .map_err(map_error)
                 },
+                async { client.artist_follow_count(&base()).await.map_err(map_error) },
             )
             .await;
             let detail = detail?;
@@ -206,7 +207,17 @@ impl NeteaseProvider {
                 Ok(resp) if check_body(&resp.body).is_ok() => resp.body,
                 _ => Value::Null,
             };
-            Ok(parse_artist_detail(&detail.body, &top.body, &albums_body))
+            // 粉丝数/关注态同理: 拿不到就 0/false, 不影响整页
+            let follow_body = match follow_count {
+                Ok(resp) if check_body(&resp.body).is_ok() => resp.body,
+                _ => Value::Null,
+            };
+            Ok(parse_artist_detail_with_follow(
+                &detail.body,
+                &top.body,
+                &albums_body,
+                &follow_body,
+            ))
         })
     }
 
@@ -232,6 +243,20 @@ impl NeteaseProvider {
 
 /// 歌手详情: 头部(data.artist) + 热门歌曲(songs) + 专辑(hotAlbums)
 pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> ArtistDetail {
+    parse_artist_detail_with_follow(detail, top, albums, &Value::Null)
+}
+
+/// 歌手详情 + 粉丝数/关注态(artist/follow/count/get 的 data)。
+///
+/// 该接口响应形如 `{code:200, data:{fansCnt, followCnt, isFollow, follow}}`:
+/// 粉丝数取 fansCnt, 关注态优先 isFollow、回退 follow。拿不到(Value::Null)时
+/// fans_count=0 / followed=false —— 与「没有这条数据」同一口径, UI 不渲染 0 粉丝。
+pub fn parse_artist_detail_with_follow(
+    detail: &Value,
+    top: &Value,
+    albums: &Value,
+    follow: &Value,
+) -> ArtistDetail {
     let info = detail
         .get("data")
         .and_then(|d| d.get("artist"))
@@ -281,6 +306,28 @@ pub fn parse_artist_detail(detail: &Value, top: &Value, albums: &Value) -> Artis
             .unwrap_or_default(),
         album_count: info.and_then(|a| u64_of(a, "albumSize")).unwrap_or(0),
         music_count: info.and_then(|a| u64_of(a, "musicSize")).unwrap_or(0),
+        fans_count: follow
+            .get("data")
+            .and_then(|d| u64_of(d, "fansCnt"))
+            .unwrap_or(0),
+        user_id: detail
+            .get("data")
+            .and_then(|d| d.get("user"))
+            .and_then(|u| u64_of(u, "userId"))
+            .filter(|id| *id > 0),
+        event_count: detail
+            .get("data")
+            .and_then(|d| u64_of(d, "eventCount"))
+            .unwrap_or(0),
+        followed: follow
+            .get("data")
+            .map(|d| {
+                d.get("isFollow")
+                    .and_then(Value::as_bool)
+                    .or_else(|| d.get("follow").and_then(Value::as_bool))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false),
         songs,
         albums: album_list,
     }

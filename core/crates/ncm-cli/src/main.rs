@@ -1598,6 +1598,7 @@ async fn run() -> Result<(), BoxErr> {
                 "dj_sublist" => client.dj_sublist(&q).await?,
                 "artist_sublist" => client.artist_sublist(&q).await?,
                 "event" => client.event(&q).await?,
+                "user_event" => client.user_event(&q).await?,
                 "dj_hot" => client.dj_hot(&q).await?,
                 "style_preference" => client.style_preference(&q).await?,
                 "style_song" => client.style_song(&q).await?,

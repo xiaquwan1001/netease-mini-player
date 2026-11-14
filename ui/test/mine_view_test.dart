@@ -335,7 +335,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('简介'), findsOneWidget);
+    // 用户反馈 6: 简介不再是独立区块, 而是昵称下方的普通文字 + 行内编辑入口
+    expect(find.text('简介'), findsNothing);
     expect(find.text('还没有填写简介'), findsOneWidget);
     expect(find.text('编辑简介'), findsOneWidget);
   });

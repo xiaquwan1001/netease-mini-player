@@ -14,7 +14,7 @@ import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart';
 import 'song_actions.dart';
-import 'format.dart' show formatDurationMs;
+import 'format.dart' show formatDurationMs, formatFanCount;
 import 'mv_page.dart' show showMvPage;
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
@@ -136,10 +136,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   /// 动态 tab 数据可用性: 探测第一页, 非空才显示 tab。
   List<rust.FeedEventDto>? _dynamics;
 
-  /// 页内搜索(就地过滤歌曲类 tab, 不发请求)
-  bool _searching = false;
-  String _query = '';
-
   late TabController _tabController = TabController(length: 0, vsync: this);
 
   /// 关注状态(接口不回传初始值, 本地乐观维护)
@@ -153,7 +149,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     _scroll.addListener(_onScroll);
     _load();
     _loadSimilar();
-    _loadDynamicsAvailability();
   }
 
   @override
@@ -210,13 +205,26 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   }
 
   /// 艺人动态探测: 拿不到/空列表就不生成「动态」tab(需求 13: 有数据才显示)。
-  /// 艺人动态没有专门的 FFI, 走 community 的 user_events(uid = artistId)尽力而为;
-  /// 未登录/风控/无动态一律视为"没数据", 静默不打任何错误文案。
-  Future<void> _loadDynamicsAvailability() async {
+  ///
+  /// **必须用艺人绑定的用户账号 id(userId), 不能用 artistId**:
+  /// artistId 与 userId 是两套 id(周杰伦主条目 6452 根本没有绑定账号),
+  /// 过去拿 artistId 当 uid 请求, 服务端要么忽略 uid 返回自己的关注流,
+  /// 要么返回空列表 —— 前者正是"艺人页动态内容是我自己的动态"的原因(用户反馈 11)。
+  /// 没有绑定账号 ⇒ 官方没有合法的动态来源, 直接不生成 tab。
+  Future<void> _loadDynamicsAvailability(rust.ArtistDetailDto detail) async {
+    final uid = detail.userId;
+    if (uid == null || uid == BigInt.zero) {
+      // 无绑定账号: 明确不显示动态 tab(而不是显示别人的动态)
+      if (_dynamics != null && mounted) {
+        setState(() => _dynamics = null);
+        _rebuildTabs();
+      }
+      return;
+    }
     try {
       final list = await (widget.loadDynamics != null
-          ? widget.loadDynamics!(widget.artistId)
-          : rust.userEvents(uid: widget.artistId, limit: 10, lastTime: -1));
+          ? widget.loadDynamics!(uid)
+          : rust.userEvents(uid: uid, limit: 10, lastTime: -1));
       if (!mounted) return;
       setState(() => _dynamics = list);
       _rebuildTabs();
@@ -278,9 +286,14 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
               () => rust.artistDetail(artistId: widget.artistId),
             );
       if (!mounted) return;
-      setState(() => _detail = detail);
+      setState(() {
+        _detail = detail;
+        // 关注态来自 artist/follow/count/get 的 isFollow: 不再"恒为未关注"
+        _followed = detail.followed;
+      });
       _rebuildTabs();
       _loadMvsAvailability();
+      _loadDynamicsAvailability(detail);
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
@@ -299,14 +312,11 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       if (!mounted) return;
       if (ok) {
         setState(() => _followed = next);
-        // 取消关注给 5 秒撤销; 关注方向不给(与官方一致)
+        // 取消关注只给 3 秒提示: 关注按钮就在旁边, 再点一次即可恢复
+        // (用户反馈撤销条常驻遮挡内容)
         if (!next) {
           final name = widget.name ?? _detail?.name ?? '';
-          showUndoToast(
-            context,
-            message: '已取消关注${name.isEmpty ? '' : ' $name'}',
-            onUndo: () => _toggleFollow(),
-          );
+          showToast(context, '已取消关注${name.isEmpty ? '' : ' $name'}');
         }
       }
     } catch (e) {
@@ -345,22 +355,11 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       scrollController: _scroll,
       // 收起时顶栏保留艺人名; 展开时横幅里已有名字, 顶栏不重复
       collapsedTitle: _collapsed ? artistName : null,
-      actions: [
-        IconButton(
-          icon: Icon(_searching ? Icons.close : Icons.search),
-          tooltip: '搜索该艺人歌曲',
-          onPressed: () => setState(() {
-            _searching = !_searching;
-            if (!_searching) _query = '';
-          }),
-        ),
-      ],
       banner: _buildBanner(theme, detail),
       // 身份卡(头像/名字/别名/作品数): 横幅之下, 不压图
       identity: _buildIdentity(detail),
       // 共享信息区: 简介 / 相似艺人(TabBar 之上); 推荐单曲与专辑横滑已下沉成 tab
       sections: _buildInfoSections(theme, detail),
-      searchBar: _searching ? _buildSearchBar(theme) : null,
       tabs: _tabSpecs(detail),
       controller: _tabController,
     );
@@ -383,7 +382,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           children: [
             ArtistRecommendedSongsSection(
               songs: detail.songs,
-              totalCount: detail.musicCount,
               onPlaySongs: widget.onPlaySongs,
             ),
           ],
@@ -391,7 +389,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       case _TabKind.allSongs:
         return _AllSongsTab(
           artistId: widget.artistId,
-          query: _query,
+          totalCount: detail.musicCount,
           loader: _songsLoader,
           onPlaySongs: widget.onPlaySongs,
         );
@@ -422,49 +420,34 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     return ProfileBannerImage(url: detail.coverUrl);
   }
 
-  /// pinned 页内搜索条(只过滤「全部歌曲」tab, 不发请求; 高度由骨架定)。
-  Widget _buildSearchBar(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: TextField(
-        autofocus: true,
-        controller: TextEditingController(text: _query)
-          ..selection = TextSelection(
-            baseOffset: 0,
-            extentOffset: _query.length,
-          ),
-        onChanged: (v) => setState(() => _query = v),
-        decoration: InputDecoration(
-          isDense: true,
-          hintText: '搜索该艺人的歌曲',
-          prefixIcon: const Icon(Icons.search, size: 20),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0),
-        ),
-        style: theme.textTheme.bodyMedium,
-      ),
-    );
-  }
-
-  /// 身份卡: 头像/名字/别名 + 作品数标签(头像右侧、昵称下方) + 关注按钮。
+  /// 身份卡: 头像/名字/别名 + 统计行(footer, 整卡宽) + 关注按钮。
   ///
-  /// 作品数从「独占一行」(footer)搬到 [ProfileIdentity.meta]: 与用户页同一口径,
-  /// 且不再额外吃一整行高度。文案在 [ProfileWorksStatChip] 里按参数生成, 不写死。
-  /// 作品数为 0 时整块不渲染(不留 "0 个专辑 · 0 首歌曲")。
+  /// 统计行放 [ProfileIdentity.footer] 而不是 [ProfileIdentity.meta]:
+  /// meta 在头像右侧的文字列里, 宽度被头像 + 关注按钮挤掉, 实测窄屏上
+  /// 「32 个专辑 · 379 首歌曲 · 1922.7万粉丝」会被省略号截断(用户反馈
+  /// 「横条左右宽度不够导致数字被遮挡」)。footer 占整卡宽度, 用 Wrap 换行,
+  /// 数字完整可读; 粉丝数来自 artist/follow/count/get 的 fansCnt(0 = 不渲染)。
   Widget _buildIdentity(rust.ArtistDetailDto detail) {
     final followed = _followed ?? false;
     final hasWorks =
         detail.albumCount > BigInt.zero || detail.musicCount > BigInt.zero;
+    final chips = <Widget>[
+      if (detail.fansCount > BigInt.zero)
+        ProfileStatChip(
+          icon: Icons.people_outline,
+          label: '粉丝 ${formatFanCount(detail.fansCount)}',
+        ),
+      if (hasWorks)
+        ProfileWorksStatChip(
+          albumCount: detail.albumCount,
+          songCount: detail.musicCount,
+        ),
+    ];
     return ProfileIdentity(
       title: detail.name,
       subtitle: detail.alias.isEmpty ? null : detail.alias.join(' / '),
       avatarUrl: detail.avatarUrl,
-      meta: hasWorks
-          ? ProfileWorksStatChip(
-              albumCount: detail.albumCount,
-              songCount: detail.musicCount,
-            )
-          : null,
+      footer: chips.isEmpty ? null : ProfileStatRow(chips: chips),
       // 关注状态为乐观更新(接口成功才翻转)
       trailing: FilledButton.tonal(
         onPressed: _toggleFollow,
@@ -599,18 +582,24 @@ class _DynamicsTab extends StatelessWidget {
   }
 }
 
-/// 全部歌曲 tab: offset/limit 分页(PagedListView); 有搜索词时改为
-/// 聚合拉取(最多 _searchCap 条)后本地过滤。
+/// 全部歌曲 tab: 头部「共 N 首 + 搜索」, 下面是 offset/limit 分页(PagedListView);
+/// 打开搜索后改为聚合拉取(最多 _searchCap 条)再本地过滤。
+///
+/// 搜索入口与「共 N 首」都落在**这一条 tab 自己的头部**里:
+/// 之前搜索图标挂在顶栏右上角(压在横幅图上, 容易被背景色吃掉), 「共 N 首」
+/// 挂在推荐单曲 tab 的标题行右侧 —— 两处都不属于它们表达的内容(用户反馈 2/3)。
 class _AllSongsTab extends StatefulWidget {
   const _AllSongsTab({
     required this.artistId,
-    required this.query,
+    required this.totalCount,
     required this.loader,
     required this.onPlaySongs,
   });
 
   final BigInt artistId;
-  final String query;
+
+  /// 全量歌曲数(artist detail 的 musicSize), 头部「共 N 首」用
+  final BigInt totalCount;
   final Future<rust.ArtistSongPageDto> Function(BigInt, int) loader;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
@@ -628,6 +617,11 @@ class _AllSongsTabState extends State<_AllSongsTab> {
   String? _searchError;
   String? _ranQuery;
 
+  /// 搜索框是否展开(搜索图标在「共 N 首」右侧, 点开才显示输入框)
+  bool _searchOpen = false;
+  String _query = '';
+  final TextEditingController _ctrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -635,13 +629,24 @@ class _AllSongsTabState extends State<_AllSongsTab> {
   }
 
   @override
-  void didUpdateWidget(covariant _AllSongsTab old) {
-    super.didUpdateWidget(old);
-    if (old.query != widget.query) _runQuery();
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchOpen = !_searchOpen;
+      if (!_searchOpen) {
+        _ctrl.clear();
+        _query = '';
+      }
+    });
+    _runQuery();
   }
 
   Future<void> _runQuery() async {
-    final q = widget.query.trim();
+    final q = _query.trim();
     if (q.isEmpty) {
       setState(() {
         _searchResults = null;
@@ -686,7 +691,64 @@ class _AllSongsTabState extends State<_AllSongsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final q = widget.query.trim();
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, 0),
+          child: Row(
+            children: [
+              Text(
+                '共 ${widget.totalCount} 首',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                tooltip: _searchOpen ? '关闭搜索' : '搜索该艺人的歌曲',
+                visualDensity: VisualDensity.compact,
+                onPressed: _toggleSearch,
+              ),
+            ],
+          ),
+        ),
+        if (_searchOpen)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              kPagePadding,
+              0,
+              kPagePadding,
+              8,
+            ),
+            child: TextField(
+              controller: _ctrl,
+              autofocus: true,
+              onChanged: (v) {
+                setState(() => _query = v);
+                _runQuery();
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '搜索该艺人的歌曲',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              ),
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        Expanded(child: _buildList()),
+      ],
+    );
+  }
+
+  Widget _buildList() {
+    final q = _query.trim();
     if (q.isEmpty) {
       // 无搜索词: 正常 offset/limit 分页(复用 PagedListView)
       return PagedListView<rust.SongDto>(

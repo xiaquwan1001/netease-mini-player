@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'artist_nav.dart';
 import 'cover_art.dart';
+import 'feed_media.dart';
 import 'feed_share.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
@@ -872,30 +873,10 @@ class _FeedCard extends StatelessWidget {
                   coverUrl: event.coverUrl,
                   onPlaySongs: onPlaySongs,
                 ),
-              // 配图(最多 3 张预览)
-              if (event.images.isNotEmpty) ...[
+              // 配图: 只放用户自己附的照片, 排版按张数(1 张大图 / 2 两列 / 3+ 三列)
+              if (feedAttachedImages(event).isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (var i = 0; i < event.images.length && i < 3; i++)
-                      Padding(
-                        padding: EdgeInsets.only(right: i == 2 ? 0 : 8),
-                        child: GestureDetector(
-                          onTap: () => showImageViewer(
-                            context,
-                            urls: event.images,
-                            initialIndex: i,
-                          ),
-                          child: NetImage(
-                            url: event.images[i],
-                            width: 64,
-                            height: 64,
-                            radius: 6,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                FeedImageGrid(images: feedAttachedImages(event)),
               ],
               // 视频: 16:9 封面 + 播放圆标 + 右上角标签, 点击交给系统打开
               if (event.videoUrl != null) ...[

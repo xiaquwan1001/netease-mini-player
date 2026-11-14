@@ -33,7 +33,7 @@ void main() {
     expect(undone, 1);
   });
 
-  testWidgets('默认给 5 秒撤销窗口(等用户反应)', (tester) async {
+  testWidgets('默认给 4 秒撤销窗口, 之后自动回落', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -51,9 +51,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('已取消收藏歌单'), findsOneWidget);
 
-    // 不依赖框架的定时器实现: 直接锁"横条给的时长是 5 秒"
+    // 不依赖框架的定时器实现: 直接锁"横条给的时长是 4 秒"(用户反馈
+    // 「弹窗不会自动回落, 遮挡内容」⇒ 从 5s 收紧, 且改成悬浮不贴底)
     final bar = tester.widget<SnackBar>(find.byType(SnackBar));
-    expect(bar.duration, const Duration(seconds: 5));
+    expect(bar.duration, const Duration(seconds: 4));
     expect(bar.action?.label, '撤销');
+    expect(bar.behavior, SnackBarBehavior.floating);
   });
 }

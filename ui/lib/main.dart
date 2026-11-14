@@ -57,7 +57,7 @@ import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
-import 'src/toast.dart' show showToast, showUndoToast;
+import 'src/toast.dart' show showToast;
 import 'src/theme.dart';
 import 'src/vip_page.dart';
 
@@ -2288,13 +2288,11 @@ class _HomePageState extends State<HomePage> {
       await rust.setLiked(trackId: id, liked: !wasLiked);
       // 通知栏红心按钮同步(当前曲目才影响通知图标, _syncActionState 里已取 _current)
       if (id == _current?.id) unawaited(_syncActionState());
-      // 取消喜欢给 5 秒撤销(误触红心很常见); 喜欢方向不需要撤销
+      // 取消喜欢只给一条 3 秒提示, 不给「撤销」按钮:
+      // 红心本身一点就回来(再点一次), 而带 action 的撤销条会在底部常驻更久、
+      // 压住播放条和内容(用户反馈"不会自动回落, 遮挡内容")。
       if (wasLiked && mounted) {
-        showUndoToast(
-          context,
-          message: '已取消喜欢《${song.name}》',
-          onUndo: () => unawaited(_toggleLikeFor(song)),
-        );
+        showToast(context, '已取消喜欢《${song.name}》');
       }
     } catch (e) {
       if (!mounted) return;

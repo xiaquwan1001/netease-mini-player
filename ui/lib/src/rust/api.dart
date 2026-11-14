@@ -224,6 +224,12 @@ Future<WordLyricDto?> ttmlLyricLines({required BigInt trackId}) =>
     RustLib.instance.api.crateApiTtmlLyricLines(trackId: trackId);
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
+///
+/// **必须先在传入的 cookie 里看到 MUSIC_U 才合并**:
+/// 之前无条件把 incoming 并进 existing 再问 is_logged_in —— 于是"已经有一个有效账号"
+/// 时, 用户在登录页直接关闭/登录失败(传回来的是空的或只有设备指纹的 cookie),
+/// 旧 MUSIC_U 仍在 session 里 ⇒ is_logged_in() 恒为 true ⇒ UI 弹「登录成功, 账号已记住」。
+/// 这是用户反馈的「关闭登录页也提示登录成功」的根因。
 Future<bool> loginWithCookie({required String cookie}) =>
     RustLib.instance.api.crateApiLoginWithCookie(cookie: cookie);
 
@@ -1138,6 +1144,18 @@ class ArtistDetailDto {
   final String briefDesc;
   final BigInt albumCount;
   final BigInt musicCount;
+
+  /// 粉丝数(0 = 上游没给, UI 不渲染该 chip)
+  final BigInt fansCount;
+
+  /// 当前账号是否已关注(匿名/失败 = false)
+  final bool followed;
+
+  /// 艺人绑定的用户账号 id(None = 该歌手没有绑定账号, 艺人页不显示动态 tab)
+  final BigInt? userId;
+
+  /// 艺人动态条数(0 = 未知/没有)
+  final BigInt eventCount;
   final List<SongDto> songs;
   final List<AlbumBrief> albums;
 
@@ -1150,6 +1168,10 @@ class ArtistDetailDto {
     required this.briefDesc,
     required this.albumCount,
     required this.musicCount,
+    required this.fansCount,
+    required this.followed,
+    this.userId,
+    required this.eventCount,
     required this.songs,
     required this.albums,
   });
@@ -1164,6 +1186,10 @@ class ArtistDetailDto {
       briefDesc.hashCode ^
       albumCount.hashCode ^
       musicCount.hashCode ^
+      fansCount.hashCode ^
+      followed.hashCode ^
+      userId.hashCode ^
+      eventCount.hashCode ^
       songs.hashCode ^
       albums.hashCode;
 
@@ -1180,6 +1206,10 @@ class ArtistDetailDto {
           briefDesc == other.briefDesc &&
           albumCount == other.albumCount &&
           musicCount == other.musicCount &&
+          fansCount == other.fansCount &&
+          followed == other.followed &&
+          userId == other.userId &&
+          eventCount == other.eventCount &&
           songs == other.songs &&
           albums == other.albums;
 }

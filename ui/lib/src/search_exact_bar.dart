@@ -96,7 +96,9 @@ const String kSearchExactTitle = '精确匹配';
 const Map<String, String> _sectionTitles = <String, String>{
   'artist': '艺人',
   'playlist': '歌单',
-  'voice': '电台',
+  // 官方 8.0 起把「电台」改名为「播客」；搜索侧 type=2000 官方文档叫
+  // 「声音」，这里沿用用户可理解的产品名「播客」。
+  'voice': '播客',
 };
 
 /// "12.3万" 这类紧凑数字.
@@ -108,7 +110,7 @@ String _compactCount(int n) {
   return '${s.endsWith('.0') ? s.substring(0, s.length - 2) : s}万';
 }
 
-/// 联想面板里的「精确实体」条: 直接进入艺人/歌单/电台.
+/// 联想面板里的「精确实体」条: 直接进入艺人/歌单/播客.
 ///
 /// 空命中([SearchExactView.isEmpty])整体 [SizedBox.shrink], 不占位 ——
 /// multimatch 的 `orders: []` 是常态. 各分区横向滚动, 卡片固定 96dp 宽,

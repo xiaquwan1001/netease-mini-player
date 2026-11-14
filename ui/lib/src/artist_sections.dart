@@ -20,14 +20,10 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
   const ArtistRecommendedSongsSection({
     super.key,
     required this.songs,
-    required this.totalCount,
     required this.onPlaySongs,
   });
 
   final List<rust.SongDto> songs;
-
-  /// 全量歌曲数(文案用, 来自 musicCount)
-  final BigInt totalCount;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
@@ -36,34 +32,38 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 「播放全部」必须左顶格: 之前是 IconButton(图标居中在 32dp 的盒子里,
+        // 再叠 left:4 的内边距), 视觉上左边空出一截(用户反馈)。这里改成
+        // InkWell + Row, 图标就是行首第一个像素, 不再有隐形留白。
         Padding(
-          padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
-          child: Row(
-            children: [
-              // 图标版「播放全部」: 文字按钮在 300dp 下会和右侧计数挤成一团
-              IconButton(
-                onPressed: () => onPlaySongs(songs, 0),
-                icon: const Icon(Icons.play_arrow, size: 20),
-                tooltip: '播放全部',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-              const SizedBox(width: 4),
-              Text('播放全部', style: theme.textTheme.labelMedium),
-              const Spacer(),
-              // 计数单行省略: 大字号下不会把「播放全部」挤出去
-              Flexible(
-                child: Text(
-                  '共 $totalCount 首',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Tooltip(
+              message: '播放全部',
+              child: InkWell(
+                borderRadius: BorderRadius.circular(6),
+                onTap: () => onPlaySongs(songs, 0),
+                child: Semantics(
+                  button: true,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.play_arrow,
+                          size: 20,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 2),
+                        Text('播放全部', style: theme.textTheme.labelMedium),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
         for (var i = 0; i < songs.length; i++)

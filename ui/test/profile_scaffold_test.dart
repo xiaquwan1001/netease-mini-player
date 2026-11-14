@@ -21,6 +21,9 @@ rust.ArtistDetailDto artistDetail() => rust.ArtistDetailDto(
   briefDesc: '一句话简介',
   albumCount: BigInt.zero,
   musicCount: BigInt.from(2),
+  fansCount: BigInt.zero,
+  followed: false,
+  eventCount: BigInt.zero,
   songs: [
     rust.SongDto(
       id: BigInt.from(1),
@@ -145,14 +148,14 @@ void main() {
     expect(user.tabBar.height, closeTo(artist.tabBar.height, 0.5));
   });
 
-  testWidgets('统计 chip 统一: 艺人作品数在昵称下方, 用户账号统计在 footer', (tester) async {
+  testWidgets('统计 chip 统一: 两页都走整卡宽的 ProfileStatRow', (tester) async {
     setView(tester);
     await tester.pumpWidget(artistPage());
     await tester.pumpAndSettle();
-    // 需求 11: 作品数标签不再独占一行(footer), 改放身份卡昵称下方(meta 槽位),
-    // 仍是同一套 ProfileStatChip 外观(ProfileWorksStatChip)。
+    // 用户反馈 1: 艺人页统计(粉丝/作品数)放进 footer 占整卡宽度,
+    // 不再挤在昵称右侧的 meta 列里被截断; 外观仍是同一套 ProfileStatChip.
     expect(find.byType(ProfileWorksStatChip), findsOneWidget);
-    expect(find.byType(ProfileStatRow), findsNothing);
+    expect(find.byType(ProfileStatRow), findsOneWidget);
     expect(find.text('0 个专辑 · 2 首歌曲'), findsOneWidget);
     expect(find.text('关注'), findsOneWidget);
 

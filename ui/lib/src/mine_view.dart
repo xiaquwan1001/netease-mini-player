@@ -8,7 +8,6 @@ import 'cloud_page.dart' show showCloudPage;
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
-import 'expandable_text.dart';
 import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
@@ -163,24 +162,8 @@ class _MineViewState extends State<MineView> {
     }
   }
 
-  /// 资料卡用的 detail: 简介已由下面的「简介」区块展示(与其他用户主页同一口径),
-  /// 这里把 signature 置空, 免得同一段文字在卡片副标题里再重复一遍。
-  rust.ProfileDetail? get _headerDetail {
-    final d = _profile;
-    if (d == null) return null;
-    return rust.ProfileDetail(
-      userId: d.userId,
-      artistId: d.artistId,
-      nickname: d.nickname,
-      avatarUrl: d.avatarUrl,
-      backgroundUrl: d.backgroundUrl,
-      signature: '',
-      vip: d.vip,
-      follows: d.follows,
-      followeds: d.followeds,
-      level: d.level,
-    );
-  }
+  /// 资料卡用的 detail: 简介就展示在昵称下方(用户反馈 6), 原样传。
+  rust.ProfileDetail? get _headerDetail => _profile;
 
   /// 关注/粉丝列表页里可能关注/取关了, 返回后重拉资料卡让数字立即更新。
   Future<void> _openFollowList(Future<void> Function() open) async {
@@ -305,6 +288,8 @@ class _MineViewState extends State<MineView> {
               onTapFolloweds: widget.loggedIn
                   ? () => _openFollowList(widget.onOpenFolloweds)
                   : null,
+              // 简介并进昵称下方(用户反馈 6): 行内「编辑简介」, 不再单独一个区块
+              onEditSignature: widget.loggedIn ? _editSignature : null,
             ),
             if (widget.loggedIn) ...[
               const SizedBox(height: kCardGap),
@@ -314,8 +299,6 @@ class _MineViewState extends State<MineView> {
                 enabled: _profile != null,
                 onOpen: () => _openSelfPage(),
               ),
-              const SizedBox(height: kSectionGap),
-              _MySignatureSection(detail: _profile, onEdit: _editSignature),
               const SizedBox(height: kSectionGap),
               _MyFeedSection(
                 key: ValueKey('mine-feed-$_dataGeneration'),
@@ -545,62 +528,6 @@ class _SelfPageEntry extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: enabled ? onOpen : null,
       ),
-    );
-  }
-}
-
-/// 「简介」区块: 与其他用户主页同一条内容(空时给明确文案), 再加编辑入口。
-///
-/// 之前「我的」页完全没有简介(資料卡只显示昵称), 用户看不见自己对外展示的签名,
-/// 也没有任何修改入口 —— 与别人主页的信息密度不一致(需求 1)。
-class _MySignatureSection extends StatelessWidget {
-  const _MySignatureSection({required this.detail, required this.onEdit});
-
-  final rust.ProfileDetail? detail;
-
-  /// 编辑动作; 后端接口未接入时由调用方提示"暂不生效"(见 [_MineViewState])
-  final VoidCallback onEdit;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final signature = detail?.signature.trim() ?? '';
-    final loaded = detail != null;
-    final Widget body;
-    if (!loaded) {
-      body = Text(
-        '正在加载资料…',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    } else if (signature.isEmpty) {
-      body = Text(
-        '还没有填写简介',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      );
-    } else {
-      // 与用户主页/艺人页同一条长文本组件(3 行截断 + 展开)
-      body = ExpandableText(text: signature);
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '简介',
-          trailing: SectionSeeAllButton(label: '编辑简介', onTap: onEdit),
-        ),
-        Card(
-          margin: kCardMargin,
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.all(kPagePadding),
-            child: body,
-          ),
-        ),
-      ],
     );
   }
 }

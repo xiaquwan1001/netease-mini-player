@@ -451,7 +451,12 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (requestCode == LoginActivity.REQUEST_CODE) {
-            val cookie = data?.getStringExtra(LoginActivity.EXTRA_COOKIE)
+            // 只有 RESULT_OK(真的拿到 MUSIC_U)才回传 cookie; 取消 = null(放弃登录)
+            val cookie = if (resultCode == RESULT_OK) {
+                data?.getStringExtra(LoginActivity.EXTRA_COOKIE)
+            } else {
+                null
+            }
             pendingLogin?.success(if (cookie.isNullOrBlank()) null else cookie)
             pendingLogin = null
             return

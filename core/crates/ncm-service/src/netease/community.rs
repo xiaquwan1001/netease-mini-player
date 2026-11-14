@@ -308,9 +308,17 @@ impl NeteaseProvider {
         })
     }
 
-    /// 指定用户的动态(他人主页/好友主页): vendor 的 event 只支持 pagesize/lasttime,
-    /// 这里在 service 侧直接请求同一端点(/api/v1/event/get)并带 uid.
-    /// 拿不到数据(隐私设置/无动态/接口非 200)一律返回空列表, 不报错.
+    /// 指定用户的动态(他人主页 / 艺人绑定账号的动态).
+    ///
+    /// 2026-11 修正(此前是"他人动态显示成自己动态"的根因):
+    /// `/api/v1/event/get` **没有 uid 参数** —— 上游 module/event.js 只发
+    /// `{pagesize,lasttime}`, 服务端按登录用户的关注关系返回; 我们过去把 uid
+    /// 塞进 body, 字段被直接丢弃 ⇒ 他人主页显示的永远是自己的关注流。
+    /// 正确端点是 `/api/event/get/{uid}`(路径参数, 见 vendor 的 user_event),
+    /// 匿名也能取(只要对方公开), 响应带 lasttime/more 真游标。
+    ///
+    /// 双重保险: 返回后按 `FeedEvent.user_id == uid` 过滤 —— 万一上游再变,
+    /// 也只会变成"空列表", 不会把别人的动态渲染进他人主页。
     pub(super) fn user_events(
         &self,
         uid: u64,
@@ -322,24 +330,18 @@ impl NeteaseProvider {
                 return Ok(Vec::new());
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let body = serde_json::json!({
-                "uid": uid,
-                "limit": limit.clamp(1, 100),
-                "lasttime": last_time,
-            });
-            let resp = client
-                .request(
-                    "/api/v1/event/get",
-                    body,
-                    weapi_option(&cookie, &domain, &ua),
-                )
-                .await
-                .map_err(map_error)?;
-            // 非 200(隐私/未登录/风控)按"没数据"处理
+            let q = make_query(&cookie, &domain, &ua)
+                .param("uid", &uid.to_string())
+                .param("limit", &limit.clamp(1, 100).to_string())
+                .param("lasttime", &last_time.to_string());
+            let resp = client.user_event(&q).await.map_err(map_error)?;
+            // 隐私/风控/参数不认 ⇒ 当作"没数据"(用户主页该 tab 显示空态)
             if check_body(&resp.body).is_err() {
                 return Ok(Vec::new());
             }
             let mut list = parse_feed_events(&resp.body);
+            // 兜底: 只留发布者就是请求 uid 的条目
+            list.retain(|e| e.user_id == uid);
             if (limit as usize) < list.len() {
                 list.truncate(limit as usize);
             }

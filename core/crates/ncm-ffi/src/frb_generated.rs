@@ -6514,6 +6514,10 @@ impl SseDecode for crate::api::ArtistDetailDto {
         let mut var_briefDesc = <String>::sse_decode(deserializer);
         let mut var_albumCount = <u64>::sse_decode(deserializer);
         let mut var_musicCount = <u64>::sse_decode(deserializer);
+        let mut var_fansCount = <u64>::sse_decode(deserializer);
+        let mut var_followed = <bool>::sse_decode(deserializer);
+        let mut var_userId = <Option<u64>>::sse_decode(deserializer);
+        let mut var_eventCount = <u64>::sse_decode(deserializer);
         let mut var_songs = <Vec<crate::api::SongDto>>::sse_decode(deserializer);
         let mut var_albums = <Vec<crate::api::AlbumBrief>>::sse_decode(deserializer);
         return crate::api::ArtistDetailDto {
@@ -6525,6 +6529,10 @@ impl SseDecode for crate::api::ArtistDetailDto {
             brief_desc: var_briefDesc,
             album_count: var_albumCount,
             music_count: var_musicCount,
+            fans_count: var_fansCount,
+            followed: var_followed,
+            user_id: var_userId,
+            event_count: var_eventCount,
             songs: var_songs,
             albums: var_albums,
         };
@@ -9441,6 +9449,10 @@ impl flutter_rust_bridge::IntoDart for crate::api::ArtistDetailDto {
             self.brief_desc.into_into_dart().into_dart(),
             self.album_count.into_into_dart().into_dart(),
             self.music_count.into_into_dart().into_dart(),
+            self.fans_count.into_into_dart().into_dart(),
+            self.followed.into_into_dart().into_dart(),
+            self.user_id.into_into_dart().into_dart(),
+            self.event_count.into_into_dart().into_dart(),
             self.songs.into_into_dart().into_dart(),
             self.albums.into_into_dart().into_dart(),
         ]
@@ -11665,6 +11677,10 @@ impl SseEncode for crate::api::ArtistDetailDto {
         <String>::sse_encode(self.brief_desc, serializer);
         <u64>::sse_encode(self.album_count, serializer);
         <u64>::sse_encode(self.music_count, serializer);
+        <u64>::sse_encode(self.fans_count, serializer);
+        <bool>::sse_encode(self.followed, serializer);
+        <Option<u64>>::sse_encode(self.user_id, serializer);
+        <u64>::sse_encode(self.event_count, serializer);
         <Vec<crate::api::SongDto>>::sse_encode(self.songs, serializer);
         <Vec<crate::api::AlbumBrief>>::sse_encode(self.albums, serializer);
     }

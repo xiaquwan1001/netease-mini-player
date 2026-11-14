@@ -26,13 +26,32 @@ rust.ProfileDetail detail({String nickname = '下去玩', String signature = ''}
       level: BigInt.from(8),
     );
 
-rust.Playlist playlist(int id, String name, {int count = 2}) => rust.Playlist(
+rust.Playlist playlist(
+  int id,
+  String name, {
+  int count = 2,
+  bool special = false,
+}) => rust.Playlist(
   id: BigInt.from(id),
   name: name,
   coverUrl: null,
   trackCount: BigInt.from(count),
-  special: false,
+  special: special,
   subscribed: false,
+);
+
+rust.SongDto likedSong(int i, String name) => rust.SongDto(
+  id: BigInt.from(900 + i),
+  name: name,
+  artist: '周杰伦',
+  artistId: BigInt.from(6452),
+  album: '叶惠美',
+  albumId: BigInt.from(1),
+  durationMs: BigInt.from(200000),
+  fee: 0,
+  vip: false,
+  paid: false,
+  playable: true,
 );
 
 rust.FeedEventDto feedEvent({String text = '一条动态'}) => rust.FeedEventDto(
@@ -91,6 +110,42 @@ void main() {
     expect(find.textContaining('关注 44'), findsOneWidget);
     expect(find.text('想学的指弹曲'), findsOneWidget);
     expect(find.textContaining('89 首'), findsOneWidget);
+  });
+
+  testWidgets('需求 9: 「我喜欢」单独成栏(最近 N 首), 歌单栏不含它', (tester) async {
+    setTallView(tester);
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1),
+          loadProfile: (_) async => detail(nickname: '小红'),
+          loadPlaylists: (_) async => [
+            playlist(5, '小红喜欢的音乐', count: 42, special: true),
+            playlist(2, '通勤向/日系R&B', count: 89),
+          ],
+          loadLikedSongs: (_) async => [
+            likedSong(0, '晴天'),
+            likedSong(1, '七里香'),
+          ],
+          initialTab: '我喜欢',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 纵向分类 tab: 动态 / 我喜欢 / 歌单(关注、粉丝已按反馈 8 移除)
+    final labels = tester.widgetList<Tab>(find.byType(Tab)).map((t) => t.text);
+    expect(labels, ['动态', '我喜欢', '歌单']);
+    // 我喜欢栏: 计数 + 最近喜欢的歌
+    expect(find.text('共 42 首'), findsOneWidget);
+    expect(find.text('晴天'), findsOneWidget);
+    expect(find.text('七里香'), findsOneWidget);
+
+    // 歌单栏只放其余歌单
+    await tester.tap(find.text('歌单'));
+    await tester.pumpAndSettle();
+    expect(find.text('通勤向/日系R&B'), findsOneWidget);
+    expect(find.text('小红喜欢的音乐'), findsNothing);
   });
 
   testWidgets('没有公开歌单时给明确空态', (tester) async {
@@ -322,6 +377,9 @@ void main() {
       briefDesc: '',
       albumCount: BigInt.zero,
       musicCount: BigInt.zero,
+      fansCount: BigInt.zero,
+      followed: false,
+      eventCount: BigInt.zero,
       songs: const [],
       albums: const [],
     );

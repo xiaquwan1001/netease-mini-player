@@ -138,11 +138,17 @@ class LoginActivity : Activity() {
         return parts.joinToString("; ")
     }
 
-    /** 用户主动关闭登录页(顶栏「关闭」/系统返回键): 放弃登录, 把已拿到的 cookie 交回去 */
+    /**
+     * 用户主动关闭登录页(顶栏「关闭」/系统返回键): 放弃登录。
+     *
+     * **不要回传 cookie**: 之前这里把 collectCookies() 塞进 RESULT_CANCELED 的返回里,
+     * 上层(Host)只取 extra 不看 resultCode, 于是"已有账号 + 打开登录页后直接关闭"
+     * 会把旧/半成品 cookie 当成一次登录提交(用户反馈的假成功提示)。
+     */
     private fun finishCancelled() {
         if (finishedWithCookie) return
         finishedWithCookie = true
-        setResult(RESULT_CANCELED, Intent().putExtra(EXTRA_COOKIE, collectCookies()))
+        setResult(RESULT_CANCELED)
         finish()
     }
 

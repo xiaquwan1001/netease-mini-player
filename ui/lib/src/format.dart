@@ -63,6 +63,17 @@ String formatCountMagnitude(int n) {
   return '${n ~/ 100000000}亿+';
 }
 
+/// 粉丝 / 关注数文案: 万以下原样, 万/亿 一位小数(1922.7万 / 1.9亿).
+///
+/// 与官方「1923.2万粉丝」同一口径; 与 [formatCountMagnitude] 的区别是
+/// 这里要的是**精确到一位小数的展示值**, 不是"量级下界"。
+String formatFanCount(BigInt n) {
+  final v = n.toInt();
+  if (v < 10000) return '$v';
+  if (v < 100000000) return formatOneDecimal(v / 10000, '万');
+  return formatOneDecimal(v / 100000000, '亿');
+}
+
 String formatDateYmd(BigInt ms) {
   final dt = DateTime.fromMillisecondsSinceEpoch(ms.toInt());
   final mm = dt.month.toString().padLeft(2, '0');

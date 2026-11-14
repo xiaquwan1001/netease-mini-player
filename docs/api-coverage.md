@@ -1,6 +1,6 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-14 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **134** / service 已调用 **134**(100%) / 未接入 **0**; FFI 导出 **160** 个里 6 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`consent_plaintext_storage`(凭据回退同意门)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用)、`user_play_ranking`(他人常听排行, 暂无入口)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-14(三) 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **136** / service 已调用 **136**(100%) / 未接入 **0**(本轮 +2: `user_event`、`artist_follow_count`); FFI 导出 **160** 个里 6 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`consent_plaintext_storage`(凭据回退同意门)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用)、`user_play_ranking`(他人常听排行, 暂无入口)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览

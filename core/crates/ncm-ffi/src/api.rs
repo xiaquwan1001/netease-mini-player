@@ -301,6 +301,14 @@ pub struct ArtistDetailDto {
     pub brief_desc: String,
     pub album_count: u64,
     pub music_count: u64,
+    /// 粉丝数(0 = 上游没给, UI 不渲染该 chip)
+    pub fans_count: u64,
+    /// 当前账号是否已关注(匿名/失败 = false)
+    pub followed: bool,
+    /// 艺人绑定的用户账号 id(None = 该歌手没有绑定账号, 艺人页不显示动态 tab)
+    pub user_id: Option<u64>,
+    /// 艺人动态条数(0 = 未知/没有)
+    pub event_count: u64,
     pub songs: Vec<SongDto>,
     pub albums: Vec<AlbumBrief>,
 }
@@ -321,6 +329,10 @@ pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, String> {
         brief_desc: a.brief_desc,
         album_count: a.album_count,
         music_count: a.music_count,
+        fans_count: a.fans_count,
+        followed: a.followed,
+        user_id: a.user_id,
+        event_count: a.event_count,
         songs: a.songs.into_iter().map(song_dto).collect(),
         albums: a.albums,
     })
@@ -1120,11 +1132,22 @@ pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, Str
 // 供 CLI / 未来宿主使用; 若要恢复 UI 走它, 只需把 Dart 的 loaders 换成一次调用。
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
+///
+/// **必须先在传入的 cookie 里看到 MUSIC_U 才合并**:
+/// 之前无条件把 incoming 并进 existing 再问 is_logged_in —— 于是"已经有一个有效账号"
+/// 时, 用户在登录页直接关闭/登录失败(传回来的是空的或只有设备指纹的 cookie),
+/// 旧 MUSIC_U 仍在 session 里 ⇒ is_logged_in() 恒为 true ⇒ UI 弹「登录成功, 账号已记住」。
+/// 这是用户反馈的「关闭登录页也提示登录成功」的根因。
 pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
+    let incoming = cookie.trim();
+    if !cookie_has_music_u(incoming) {
+        // 不合并、不改会话: 明确告诉 UI 这次没有登录态
+        return Ok(false);
+    }
     let mut guard = core()?.lock().map_err(|e| e.to_string())?;
     let merged = ncm_service::identity::merge_device_cookie(
         &guard.session.cookie,
-        &cookie,
+        incoming,
         &guard.session.device_id,
     );
     let mut next = guard.session.clone();
@@ -3131,4 +3154,31 @@ pub async fn cloud_song_url(song_id: u64) -> Result<Option<String>, String> {
         .cloud_song_url(song_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// 传入的 cookie 里是否真的有非空 MUSIC_U("MUSIC_U=xxx")。
+///
+/// 单独抽出来是为了有一处可单测的判据: 登录成功与否只看**这次**拿到的凭据,
+/// 不看会话里之前那个账号。
+fn cookie_has_music_u(cookie: &str) -> bool {
+    cookie.split(';').any(|pair| {
+        let pair = pair.trim();
+        pair.strip_prefix("MUSIC_U=")
+            .is_some_and(|v| !v.trim().is_empty())
+    })
+}
+
+#[cfg(test)]
+mod login_cookie_tests {
+    use super::cookie_has_music_u;
+
+    #[test]
+    fn only_real_music_u_counts() {
+        assert!(!cookie_has_music_u(""));
+        assert!(!cookie_has_music_u("MUSIC_A=abc; NMTID=x"));
+        // 空值不算登录(登录页关闭时常见: 只有设备指纹)
+        assert!(!cookie_has_music_u("MUSIC_U=; __csrf=1"));
+        assert!(cookie_has_music_u("MUSIC_U=abc123; __csrf=1"));
+        assert!(cookie_has_music_u("a=1; MUSIC_U=abc123"));
+    }
 }

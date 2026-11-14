@@ -168,6 +168,8 @@ class ProfileIdentity extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.subtitleAction,
+    this.subtitleMaxLines = 2,
     this.avatarUrl,
     this.vip = false,
     this.avatarSize = 64,
@@ -181,6 +183,13 @@ class ProfileIdentity extends StatelessWidget {
 
   /// 别名/签名(为 null 或空则不占位)
   final String? subtitle;
+
+  /// 简介右侧的行内小动作(「我的」页的「编辑简介」): 与简介同一行,
+  /// 不再单独占一个「简介」区块(用户反馈 6: 简介要并进昵称下方, 不要独立条目).
+  final Widget? subtitleAction;
+
+  /// 简介最多几行(默认 2; 他人主页/「我的」页用 3 行, 少一次"点开"操作)
+  final int subtitleMaxLines;
   final String? avatarUrl;
   final bool vip;
   final double avatarSize;
@@ -299,13 +308,29 @@ class ProfileIdentity extends StatelessWidget {
                         if (sub.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 3),
-                            child: Text(
-                              sub,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: scheme.onSurfaceVariant,
-                              ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    sub,
+                                    maxLines: subtitleMaxLines,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                                ?subtitleAction,
+                              ],
+                            ),
+                          )
+                        else if (subtitleAction != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: subtitleAction,
                             ),
                           ),
                         // 统计/作品数等补充信息: 紧跟昵称/别名, 仍在头像右侧这一列里
@@ -348,6 +373,8 @@ class ProfileBanner extends StatelessWidget {
     super.key,
     required this.title,
     this.subtitle,
+    this.subtitleAction,
+    this.subtitleMaxLines = 2,
     this.avatarUrl,
     this.imageUrl,
     this.vip = false,
@@ -364,6 +391,8 @@ class ProfileBanner extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final Widget? subtitleAction;
+  final int subtitleMaxLines;
   final String? avatarUrl;
   final String? imageUrl;
   final bool vip;
@@ -403,6 +432,8 @@ class ProfileBanner extends StatelessWidget {
           child: ProfileIdentity(
             title: title,
             subtitle: subtitle,
+            subtitleAction: subtitleAction,
+            subtitleMaxLines: subtitleMaxLines,
             avatarUrl: avatarUrl,
             vip: vip,
             avatarSize: avatarSize,

@@ -5631,8 +5631,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ArtistDetailDto dco_decode_artist_detail_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return ArtistDetailDto(
       id: dco_decode_u_64(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -5642,8 +5642,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       briefDesc: dco_decode_String(arr[5]),
       albumCount: dco_decode_u_64(arr[6]),
       musicCount: dco_decode_u_64(arr[7]),
-      songs: dco_decode_list_song_dto(arr[8]),
-      albums: dco_decode_list_album_brief(arr[9]),
+      fansCount: dco_decode_u_64(arr[8]),
+      followed: dco_decode_bool(arr[9]),
+      userId: dco_decode_opt_box_autoadd_u_64(arr[10]),
+      eventCount: dco_decode_u_64(arr[11]),
+      songs: dco_decode_list_song_dto(arr[12]),
+      albums: dco_decode_list_album_brief(arr[13]),
     );
   }
 
@@ -7694,6 +7698,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_briefDesc = sse_decode_String(deserializer);
     var var_albumCount = sse_decode_u_64(deserializer);
     var var_musicCount = sse_decode_u_64(deserializer);
+    var var_fansCount = sse_decode_u_64(deserializer);
+    var var_followed = sse_decode_bool(deserializer);
+    var var_userId = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_eventCount = sse_decode_u_64(deserializer);
     var var_songs = sse_decode_list_song_dto(deserializer);
     var var_albums = sse_decode_list_album_brief(deserializer);
     return ArtistDetailDto(
@@ -7705,6 +7713,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       briefDesc: var_briefDesc,
       albumCount: var_albumCount,
       musicCount: var_musicCount,
+      fansCount: var_fansCount,
+      followed: var_followed,
+      userId: var_userId,
+      eventCount: var_eventCount,
       songs: var_songs,
       albums: var_albums,
     );
@@ -10359,6 +10371,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.briefDesc, serializer);
     sse_encode_u_64(self.albumCount, serializer);
     sse_encode_u_64(self.musicCount, serializer);
+    sse_encode_u_64(self.fansCount, serializer);
+    sse_encode_bool(self.followed, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.userId, serializer);
+    sse_encode_u_64(self.eventCount, serializer);
     sse_encode_list_song_dto(self.songs, serializer);
     sse_encode_list_album_brief(self.albums, serializer);
   }
