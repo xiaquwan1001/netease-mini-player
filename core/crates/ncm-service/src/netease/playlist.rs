@@ -280,13 +280,17 @@ impl NeteaseProvider {
             );
             let body = self
                 .read_cache()
-                .get_or_load(crate::read_cache::endpoint::PLAYLIST_DETAIL, &key, || async {
-                    let q =
-                        make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
-                    let resp = client.playlist_detail(&q).await.map_err(map_error)?;
-                    check_body(&resp.body)?;
-                    Ok(resp.body)
-                })
+                .get_or_load(
+                    crate::read_cache::endpoint::PLAYLIST_DETAIL,
+                    &key,
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
+                        let resp = client.playlist_detail(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
                 .await?;
             parse_playlist_detail(&body)
         })

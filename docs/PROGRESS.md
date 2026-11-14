@@ -1,20 +1,20 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-13**。当前版本 **v0.9.0**(2026-11-13)。
+> 最近更新: **2026-11-14**。当前版本 **v0.9.0**(2026-11-13);2026-11-14 有一批未发版改动。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
 
-## 进度总览(2026-11-13 核实)
+## 进度总览(2026-11-14 核实)
 
 **当前门禁**(本机实测, 离线口径):
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace` | **277** 通过 / 0 失败 |
+| `cargo test --offline --workspace` | **293** 通过 / 0 失败 |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network` | **816** 通过 / 0 失败(含 12 张 golden) |
+| `flutter test --exclude-tags 'network\|\|golden'` | **834** 通过 / 0 失败(+ 12 张 golden 单跑全绿) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -76,6 +76,49 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-14: 通知封面/下一首 + 播放现场记忆 + 乐观续播 + 主题四档(未发版)
+
+用户报了一批 APK 侧的体验问题, 这一批先落"播放与通知"与"设置页主题"两块:
+
+**Android 通知栏**
+- 通知/锁屏/车载的封面改成**当前播放内容自己的图**(歌曲封面 / 播客封面, 都走 `SongDto.coverUrl`)。
+  Media3 按 URL 自己取图会用默认 UA, 被网易 CDN 回 403(通知上就是空白), 所以由 Dart 侧
+  `fetchImageBytes`(浏览器 UA + 已有字节 LRU)下好再经 `ncm/player#play` 的 `artwork` 传给 native。
+  取图带 300ms 超时: 拿不到就沿用上一张/空白, **绝不为了封面拖慢播放**。
+- 通知栏新增**「下一首」**自定义按钮(`CMD_NEXT=/ncm.NEXT`): 系统紧凑视图只放 3 个动作,
+  已有喜欢/播放顺序两个自定义按钮时"下一首"会被挤掉(用户实测下拉状态栏只剩「上一首/暂停」)。
+  点击仍只发意图, 换曲在 Dart 队列里做(与耳机键/锁屏同一条 `skipNext`)。
+
+**播放现场记忆(`ui/lib/src/playback_state.dart`)**
+- `<dataDir>/play_state.json`(先写 .tmp 再 rename): 队列 + 下标 + 位置 + 播放模式 + 列表标题。
+- 启动恢复播放条(封面/曲名/队列/进度), **不自动出声**; 点播放才取链并从上次位置续播。
+- 播放中每 5s 节流落盘, 换曲/暂停立刻落盘; 清空队列时抹掉现场。
+- 坏 JSON / 缺字段 / 越界下标 / 重复曲目全部容错(7 例单测, 见 `ui/test/playback_state_test.dart`)。
+
+**乐观续播(减少"每首之间卡一下")**
+- 原生 `STATE_ENDED` 立即回调 Dart(`trackEnded`), 不再等 500ms 轮询发现"位置到末尾"。
+- 播放起来后后台**预取下一首直链**(带 4 分钟时效, 随机/单曲循环不预取), 换曲时省掉数百毫秒取链。
+- 桌面端本来就是边下边播(`PlaySource::Growing`), 未改。
+
+**VIP 跳过语义修正(`playback_policy`)**
+- 「自动跳过 VIP 歌曲」只约束**自动续播/切歌**; 用户主动点选的歌必播(官方也是试听前 30s),
+  只有取链真的拿不到直链才继续往后跳。三处点播入口(列表/搜索/队列面板)传 `explicit: true`。
+
+**设置页: 主题模式合并 OLED 纯黑**
+- 主题模式从「跟随/浅色/深色 + 独立 OLED 开关」合成**四档**(跟随/浅色/深色/纯黑),
+  存储字段不变(`themeMode` + `oledDark`), 旧 `settings.json` 直接可读。
+  原设计在浅色态下那个开关是「开了但没效果」的无效状态, 合并后消失。
+- 「主题色」tile 改用 `SizedBox(width: infinity)` + `bodyLarge`/`bodyMedium`,
+  与同卡 ListTile 的左边界与字重对齐(之前被外层 Column 居中 ⇒ 多缩进一截 + 标题更粗)。
+
+**搜索限流(车道 lane/cache2, 已合入)**
+- 新增 `core/crates/ncm-service/src/read_cache.rs`: 进程内 TTL 300s + 200 条 LRU + 同 key 单飞。
+- 白名单只放与账号无关的只读接口(搜索族 / 歌单详情 / 专辑详情 / 歌词), user_*/每日推荐/收藏/
+  私信/喜欢状态/song_detail 一律不缓存; 会话变更清空缓存防串号。
+- 效果: 模拟 `search_all` 连搜 5 轮, 上游请求 30 → 6; 5 分钟内重复搜索上游 0 次。
+- 单测 11 条(`cargo test --offline -p ncm-service` 177 → 188), clippy 0 warning。
+
 
 ## 2026-11-13(六): 匿名诊断一键提交 + 列表行 A 级修复 + 我的页排序(v0.9.0)
 

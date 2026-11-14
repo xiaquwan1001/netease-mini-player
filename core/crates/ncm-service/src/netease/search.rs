@@ -27,7 +27,10 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<SuggestItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let key = cache_key(endpoint::SEARCH_SUGGEST, &[("keywords", keywords.to_string())]);
+            let key = cache_key(
+                endpoint::SEARCH_SUGGEST,
+                &[("keywords", keywords.to_string())],
+            );
             let body = self
                 .read_cache()
                 .get_or_load(endpoint::SEARCH_SUGGEST, &key, || async {

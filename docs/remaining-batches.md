@@ -171,6 +171,20 @@
 | 9 | 列表行 B/C 级收敛(审计已出清单) | `docs/ui-row-audit.md`: A 级已在 v0.9.0 清零; 剩 B 潜在 12 / C 一致性 18(歌曲行 6 种留白并存)。改造顺序见报告第 7 条起, 含 `ListRow` API 草案 | M |
 | 10 | golden 接入 CI | 现在标 `@Tags(['golden'])` 且 CI 用 `--exclude-tags 'network \|\| golden'` 跳过(缺 CJK 字体必假失败)。要接得先容器化渲染环境(固定字体 + Flutter 版本) | M |
 
+### A-1. 2026-11-14 用户反馈批(已落 main, 未发版)
+
+| 项 | 结论 / 提交 |
+|---|---|
+| 通知封面 = 当前播放内容 | `14c4265`:Dart 带浏览器 UA 下字节 → `ncm/player#play.artwork` → `setArtworkData`;设备实测 `largeIcon typ=BITMAP` |
+| 通知栏「下一首」 | 同上:`CMD_NEXT` 自定义按钮(系统紧凑视图会挤掉第 3 个系统动作);设备实测 custom actions 含「下一首」 |
+| VIP 跳过只约束自动续播 | 同上:`_playSong(explicit: true)` 三处点播入口 |
+| 播放现场记忆 | 同上:`play_state.json` + `playback_state.dart`(7 例单测);设备实测 force-stop 重开恢复播放条 |
+| 乐观续播 | 同上:原生 `STATE_ENDED` 即时报 + 下一首直链预取 |
+| 设置页主题模式合并 OLED | `65c12bb`:四档(跟随/浅色/深色/纯黑) + 主题色行缩进/字重对齐;settings golden 已更新 |
+| 搜索 405 限流 | `747b458`:只读响应缓存 TTL300s+LRU+单飞(11 例单测;连搜 5 轮上游 30→6) |
+| 网格列数不吃档位/第三列被裁 | `7e2669f`:delegate 改吃真实可用宽度;艺人区分列接入 `gridColumns` |
+| 动态头像与搜索艺人不一致 | `9606c96`:`ProfileDetail.artistId` → 有歌手身份进艺人页, 否则用户页;顺带修 chip 传错 id 空间 |
+
 ### B. 已完成(供对照, 不要重做)
 
 详细验收证据见 `docs/PROGRESS.md` 对应日期小节; 已完工车道的执行记录见 `docs/archive/`:
