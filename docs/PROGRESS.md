@@ -104,6 +104,10 @@
   `CategoryBar` = `SingleChildScrollView(horizontal) + Row`(chip 自然宽度, 间隔 6), 联想面板与搜索结果共用;
   条数少于一屏时表现与普通一行一致, 多于一屏时右侧 chip 天然露出一截提示可拖。回归用例改为
   "同一横排 / 可拖到最后一个 / 切换选中不改宽高", 屏外分类点击的用例先 `tester.ensureVisible`。
+- **分类顺序按日用查找频率从高到低**(同轮用户口径, 与"单横排"配套): 歌曲 → 艺人 → 专辑 → MV → 播客 → 歌单 → 用户。
+  顺序由调用方列表决定, `CategoryBar` 自身不重排 —— 搜索结果改 `_Section` 枚举顺序
+  (`songs, artists, albums, mvs, podcasts, playlists, users`), 联想面板改 `_kindOrder`
+  (`song, artist, album, mv, playlist`)。回归: 结果页断言 7 个 chip 的 `left` 严格递增、联想断言 5 个 chip 同排且顺序。
 - 门禁: `dart analyze` 0 issue · `flutter test` **941 通过 / 1 跳过**(golden `settings_360x800` 按新版重出) ·
   `dart format --set-exit-if-changed` 干净 · `check-tokens.sh --strict` OK。
 

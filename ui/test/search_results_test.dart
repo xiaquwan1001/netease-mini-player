@@ -99,9 +99,17 @@ void main() {
       ),
     );
 
-    // 六个分类 chip 同时可见(Wrap 换行, 不再横向滚动把后两个藏起来)
-    for (final label in ['单曲', '艺人', '专辑', '歌单', '播客', '用户']) {
+    // 七个分类都在树里(分类条是单横排, 装不下的靠横滑; 800dp 下都看得见)
+    for (final label in ['单曲', '艺人', '专辑', 'MV', '播客', '歌单', '用户']) {
       expect(find.widgetWithText(ChoiceChip, label), findsOneWidget);
+    }
+    // 顺序按日用查找频率从高到低: 歌曲 → 艺人 → 专辑 → MV → 播客 → 歌单 → 用户
+    final order = [
+      for (final label in ['单曲', '艺人', '专辑', 'MV', '播客', '歌单', '用户'])
+        tester.getRect(find.widgetWithText(ChoiceChip, label)).left,
+    ];
+    for (var i = 1; i < order.length; i++) {
+      expect(order[i], greaterThan(order[i - 1]), reason: '分类顺序 = 日用频率');
     }
     // 默认显示「单曲」分类: 歌曲行在, 专辑卡片还没渲染
     expect(find.text('测试歌曲'), findsWidgets);

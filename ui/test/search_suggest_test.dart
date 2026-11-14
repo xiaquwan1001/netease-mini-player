@@ -39,6 +39,35 @@ void main() {
     expect(tapped?.title, '周杰伦');
   });
 
+  testWidgets('联想分类顺序 = 日用频率(歌曲/艺人/专辑/MV/歌单), 单横排横滑', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SuggestionPanel(
+          items: [
+            item('song', '晴天'),
+            item('artist', '周杰伦'),
+            item('album', '叶惠美'),
+            item('mv', '晴天 MV'),
+            item('playlist', '我的歌单'),
+          ],
+          onSelected: (_) {},
+        ),
+      ),
+    );
+    final rects = {
+      for (final kind in ['单曲', '艺人', '专辑', 'MV', '歌单'])
+        kind: tester.getRect(find.widgetWithText(ChoiceChip, '$kind 1')),
+    };
+    // 同一横排(单排不换行)
+    final tops = rects.values.map((r) => r.top).toSet();
+    expect(tops.length, 1, reason: '联想分类必须排在一横排');
+    // 顺序: 歌曲 → 艺人 → 专辑 → MV → 歌单
+    expect(rects['单曲']!.left, lessThan(rects['艺人']!.left));
+    expect(rects['艺人']!.left, lessThan(rects['专辑']!.left));
+    expect(rects['专辑']!.left, lessThan(rects['MV']!.left));
+    expect(rects['MV']!.left, lessThan(rects['歌单']!.left));
+  });
+
   testWidgets('底部「看全部结果」回调', (tester) async {
     var all = 0;
     await tester.pumpWidget(

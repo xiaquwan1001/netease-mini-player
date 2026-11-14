@@ -75,13 +75,15 @@ class _SuggestionPanelState extends State<SuggestionPanel> {
   /// 当前分类(null = 跟随第一条所在的分类)
   String? _kind;
 
-  /// 固定优先顺序; 未知分类按返回顺序补在最后。
+  /// 固定优先顺序(= 日用查找频率, 与搜索结果页 `_Section` 对齐):
+  /// 歌曲 → 艺人 → 专辑 → MV → 歌单; 未知分类按返回顺序补在最后。
+  /// 分类条只有一排, 低频分类靠右、由用户横滑查看。
   static const List<String> _kindOrder = [
     'song',
     'artist',
     'album',
-    'playlist',
     'mv',
+    'playlist',
   ];
 
   @override

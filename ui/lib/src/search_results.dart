@@ -83,8 +83,9 @@ class SearchResultsView extends StatefulWidget {
   State<SearchResultsView> createState() => _SearchResultsViewState();
 }
 
-/// 七个分类(顺序即 chip 顺序)
-enum _Section { songs, artists, albums, playlists, podcasts, users, mvs }
+/// 七个分类。**顺序即 chip 顺序**, 按"日用查找频率从高到低"排(用户 2026-11-14 口径:
+/// 歌曲 → 艺人 → 专辑 → MV → 播客 → 歌单 → 用户), 分类条只有一排, 频率低的靠右、需要时横滑。
+enum _Section { songs, artists, albums, mvs, podcasts, playlists, users }
 
 extension on _Section {
   String get label => switch (this) {
@@ -133,11 +134,11 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     );
   }
 
-  /// 分类条: 与输入联想共用 [CategoryBar](换行铺开, 不做横向滚动)。
+  /// 分类条: 与输入联想共用 [CategoryBar](**单排横滑**, 不换行)。
   ///
-  /// 横滑版在窄屏上把后两个分类藏在屏幕外, 用户/测试都当成「分类丢了」;
-  /// 换行后 5 个 chip 一定全部看得见, 大字模式最多占两行。
-  /// 对齐/宽度的几何坑统一在 [CategoryBar] 里解决(见那里的注释)。
+  /// 2026-11-14 第四轮用户口径: 就一排, 装不下的往后放、由用户拖拽查看, 且顺序按日用
+  /// 查找频率从高到低(歌曲/艺人/专辑/MV 先露出来, 播客/歌单/用户靠右)。换行版会
+  /// 在最后一排右边留空缺, 已废弃; 对齐/宽度的几何坑统一在 [CategoryBar] 里解决。
   Widget _sectionBar(
     BuildContext context,
     List<_Section> available,
