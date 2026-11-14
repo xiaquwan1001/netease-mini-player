@@ -45,7 +45,6 @@ mod user_playlist;
 // ---- 歌手相关 ----
 mod artist_album;
 mod artist_detail;
-mod artist_detail_dynamic;
 mod artist_mv;
 mod artist_songs;
 mod artist_sub;
@@ -108,7 +107,6 @@ mod signin_progress;
 mod song_cloud_download;
 mod user_cloud;
 mod user_cloud_del;
-mod user_cloud_detail;
 
 // ---- 电台相关 ----
 mod dj_category_recommend;

@@ -1,17 +1,17 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-10 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **123** / service 已调用 **123**(100%) / 未接入 **0**; FFI 导出 **146** 个里 4 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(此三者是给未来设置项留的宿主口) + `word_lyric_with_fallback`(Rust 内部择优链入口, 只被 ncm-service 调用, Dart 侧走 `wordLyricAuto`)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: 2026-11-14 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **134** / service 已调用 **134**(100%) / 未接入 **0**; FFI 导出 **160** 个里 6 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`consent_plaintext_storage`(凭据回退同意门)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用)、`user_play_ranking`(他人常听排行, 暂无入口)。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
 
 | 指标 | 数值 |
 |---|---|
-| vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **123**(P1 裁剪后, 原 382) |
-| `ncm-service`(provider)实际调用的 | **123(100%)** |
+| vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **134**(2026-11-14: + 云盘上传 5 + 资料更新 1 + MV 搜索复用 cloudsearch) |
+| `ncm-service`(provider)实际调用的 | **134(100%)** |
 | 未接入 | **0** |
-| FFI 导出给 Dart 的函数 | **146**(2026-11-11 手机号登录 +2; 此前扫码 +2、他人主页 +2) |
-| 其中 UI 还没有入口的 | 4(`cache_stats` `eq_profile_normalize` `player_tuning` `word_lyric_with_fallback`) |
+| FFI 导出给 Dart 的函数 | **160**(+ 云盘上传/云盘列表/删除/直链/资料更新) |
+| 其中 UI 还没有入口的 | 6(`cache_stats` `cloud_song_url` `consent_plaintext_storage` `eq_profile_normalize` `player_tuning` `user_play_ranking`) |
 
 > 表内数字以 `bash tools/api-coverage.sh` 的实时输出为准(上面这行是 2026-11-10 收尾版实测)。
 
@@ -25,7 +25,8 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 结论先说: **播放链路(搜索/取链/歌词/歌单/专辑/歌手/播客/动态/听歌排行/风格/榜单/歌单广场/收藏专辑/歌单编辑)已经够用**,
 剩下的缺口集中在三块 —— ①"内容发现"类(排行榜/歌单广场/新歌新碟/相似推荐)、
 ②"社区互动"类(评论点赞/私信通知/转发)、③"账号周边"类(收藏专辑/关注粉丝/歌单编辑/签到)。
-④ MV/视频、云盘、一起听、创作者中心这类需要额外能力(视频解码、上传分片、长连接、权限)的, 建议先不做。
+④ MV/视频(评论已接)、一起听、创作者中心这类需要额外能力(视频解码、长连接、权限)的, 建议先不做;
+云盘已在 2026-11-14 接入(列表/删除/取链/上传, 上传走单请求 `complete=true`, 分片未做)。
 
 ## 2. 已接入(45 个 endpoint → 22 项 UI 能力)
 
@@ -73,6 +74,8 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 通道自检 | (FFI `ping`) | 设置页「诊断 → Rust 通道自检」: 点击显示耗时与返回值, 失败给 `friendlyError` 并允许重试(防重入) |
 | 评论统计 | `comment_info_list` | 评论区标题下统计条「评论 N · 分享 N · 点赞 N」(空/失败不显示); 歌曲/歌单/专辑/播客/视频共用, **动态评论接口不认**, 且**没有收藏数/热评数**(官方文档有但不回) |
 | 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
+| 音乐云盘 | `user_cloud` `user_cloud_del` `cloud_upload_check` `cloud_nos_token` `cloud_upload_info` `cloud_pub` `cloud_music_status` `song_cloud_download` | 「我的」→音乐云盘: 列表(容量/大小)、播放、删除、下拉/翻页; 右上角上传(选文件 → md5 查重/秒传 → NOS 上传 → 转码轮询 → 发布)。**分片上传未做**, 单请求路径与上游前端一致 |
+| 编辑资料 | `user_profile_update` | 「我的」→简介区块「编辑简介」: 保存签名(局部更新, 132 字符上限), 保存后回读资料; 头像上传(`avatar_upload`)未做 |
 | 消息增强 | `msg_forwards` `msg_recentcontact` | 消息中心第四页签"@我"(空账号, 防御式解析) + 私信页顶部"最近联系人"横滑条(data.follow, 服务端顺序) + 私信会话/聊天记录分页(触底预取/按钮, 返回 < limit 到底, 聊天用最早一条 time_ms 当游标) |
 
 ## 3. 未接入 · 建议优先做(P0, 都为纯 HTTP + 现有 DTO 能装下)
@@ -95,14 +98,14 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 |---|---|---|
 | MV / 视频 | `mv_all` `mv_detail` `mv_url` `mv_sub` `mv_sublist` `mv_first` `mv_exclusive_rcmd` `personalized_mv` `artist_mv` `artist_video` `simi_mv` `video_*`(9) `related_allvideo` `mlog_url` | 要视频播放器(Media3 ExoPlayer/mpv 已有, 但 UI 与对象存储/防盗链需处理) |
 | 动态增强 | `event_del` `send_song` `send_text` `send_playlist` `send_album` `topic_detail` `topic_sublist` `topic_detail_event_hot` `hot_topic` `hug_comment` `comment_hug_list` | 发动态/话题页/抱一抱 |
-| 云盘 | `user_cloud` `user_cloud_detail` `user_cloud_del` `cloud_upload_token` `cloud_upload_complete` `cloud_import` `cloud_match` `cloud_lyric_get` | 分片上传 + 文件选择 + 匹配库 |
+| 云盘补充 | `cloud_import` `cloud_match` `cloud_lyric_get` | 云盘主体已接入(见 §2); 剩下是"导入外部歌曲/匹配/歌词关联", 非播放必需 |
 | 声音/播客创作 | `voice_upload` `voice_delete` `voice_detail` `voice_lyric` `voicelist_*`(6) | 发布审核链路, 非听众功能 |
 | 电台补充 | `dj_radio_top` `dj_radio_hot` `dj_toplist*`(5) `dj_program_toplist*`(2) `dj_catelist` `dj_category_*`(2) `dj_recommend` `dj_recommend_type` `dj_personalize_recommend` `dj_sub` `dj_subscriber` `dj_today_perfered` `dj_paygift` `dj_banner` `dj_difm_*`(6) | 电台榜单/分类; `dj_difm_*` 是"电台私人FM", 语义未验证 |
 | 一起听 | `listentogether_*`(9) | 房间 + 心跳 + 指令同步, 工作量大且需双端联调 |
 | 云贝 / 会员 | `yunbei_*`(11) `vip_info` `vip_info_v2` `vip_tasks` `vip_growthpoint*`(3) `vip_timemachine` | 只读展示可做; 涉及兑换/支付的别碰 |
 | 数字专辑 / 已购 | `digital_album_detail` `digital_album_purchased` `digital_album_sales` `song_purchased` `song_downlist` `song_monthdownlist` `song_singledownlist` `album_songsaleboard` | `digital_album_ordering`(下单)不做; 其余只读 |
 | 创作者中心 | `musician_*`(8) `fanscenter_*`(5) `creator_authinfo_get` `ugc_*`(7) | 面向音乐人, 不是听众需求 |
-| 资料/账号安全 | `user_update` `avatar_upload` `nickname_check` `user_binding` `user_bindingcellphone` `user_replacephone` `rebind` `user_social_status*`(4) `setting` | 高风险, 建议跳官方网页 |
+| 资料/账号安全 | `avatar_upload` `nickname_check` `user_binding` `user_bindingcellphone` `user_replacephone` `rebind` `user_social_status*`(4) `setting` | 签名编辑已接入(`user_profile_update`); 头像/昵称/换绑等高风险项建议跳官方网页 |
 | 其它内容 | `related_playlist` `sheet_list` `sheet_preview`(乐谱) `style_detail` `style_album` `style_artist` `song_chorus`(高潮片段, 需音频切片) `song_dynamic_cover` `song_red_count` `personal_fm_mode` `personalized_privatecontent*`(2) `personalized_djprogram` `artists` `artist_songs` `artist_new_song` `artist_sub` `artist_desc` `artist_fans` `artist_follow_count` `artist_list` `artist_detail_dynamic` `artist_new_mv` `comment_info_list` `comment_new` `comment`(总入口) `recent_listen_list` `program_recommend` `mlog_music_rcmd` `mlog_to_video` `broadcast_*`(5) | 视需求挑 |
 
 ## 5. 明确不建议实现

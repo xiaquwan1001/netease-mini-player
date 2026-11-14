@@ -1581,7 +1581,6 @@ async fn run() -> Result<(), BoxErr> {
                 "mv_url" => client.mv_url(&q).await?,
                 "cloudsearch" => client.cloudsearch(&q).await?,
                 "artist_detail" => client.artist_detail(&q).await?,
-                "artist_detail_dynamic" => client.artist_detail_dynamic(&q).await?,
                 "artist_album" => client.artist_album(&q).await?,
                 "artist_top_song" => client.artist_top_song(&q).await?,
                 "recommend_songs" => client.recommend_songs(&q).await?,
