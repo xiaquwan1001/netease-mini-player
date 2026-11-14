@@ -3,16 +3,18 @@ import 'package:flutter/material.dart';
 import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
-import 'section_header.dart';
 import 'rust/api.dart' as rust;
-import 'sheet_header.dart';
 import 'song_tile.dart' show VipBadge, PaidBadge, UnplayableBadge;
 
-/// 艺人主页的「区块」组件(与用户个人主页区分的核心):
-/// 推荐单曲 / 专辑横滑 / 详细艺人弹层。只吃 DTO, 不发请求,
+/// 艺人主页的「区块」组件。只吃 DTO, 不发请求,
 /// 数据与回调全部由 artist_page 注入(可测试)。
+///
+/// 2026-11 需求 13/9 后本文件只剩两件东西:
+/// - [ArtistRecommendedSongsSection]: 「推荐单曲」**tab** 的内容(不再在信息区重复一份);
+/// - [SimilarArtistsRow]: 相似艺人横排(可拖拽, 不做自动滚动/轮播)。
+/// 信息区里的「专辑横滑」与「详细艺人」弹层已删除(与专辑 tab/简介区完全重复)。
 
-/// 推荐单曲区块: 详情接口带来的 top 5 首。
+/// 推荐单曲列表(艺人详情页「推荐单曲」tab 的内容): 播放全部 + top N 行。
 /// 徽标直接放在标题行(不放 AdaptiveTextRow.badges —— 窄屏下那组会被整组收起)。
 class ArtistRecommendedSongsSection extends StatelessWidget {
   const ArtistRecommendedSongsSection({
@@ -20,7 +22,6 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
     required this.songs,
     required this.totalCount,
     required this.onPlaySongs,
-    required this.onSeeAll,
   });
 
   final List<rust.SongDto> songs;
@@ -28,20 +29,18 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
   /// 全量歌曲数(文案用, 来自 musicCount)
   final BigInt totalCount;
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-  final VoidCallback onSeeAll;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SectionHeader(
-          title: '推荐单曲',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+        Padding(
+          padding: const EdgeInsets.only(left: 4, right: 4, bottom: 4),
+          child: Row(
             children: [
-              // 「播放全部」用图标按钮: 文字版与「查看全部 n 首 ›」并排会把
-              // 标题行撑爆, SectionHeader 只好整体缩小(字太小的根因)。
+              // 图标版「播放全部」: 文字按钮在 300dp 下会和右侧计数挤成一团
               IconButton(
                 onPressed: () => onPlaySongs(songs, 0),
                 icon: const Icon(Icons.play_arrow, size: 20),
@@ -50,9 +49,19 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
-              SectionSeeAllButton(
-                label: '查看全部 $totalCount 首 ›',
-                onTap: onSeeAll,
+              const SizedBox(width: 4),
+              Text('播放全部', style: theme.textTheme.labelMedium),
+              const Spacer(),
+              // 计数单行省略: 大字号下不会把「播放全部」挤出去
+              Flexible(
+                child: Text(
+                  '共 $totalCount 首',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ),
             ],
           ),
@@ -152,183 +161,70 @@ class _ArtistRecommendSongRow extends StatelessWidget {
   }
 }
 
-/// 专辑区块: 前 6 张横向滚动卡片。无专辑时整个区块不渲染(由调用方判断)。
-class ArtistAlbumsSection extends StatelessWidget {
-  const ArtistAlbumsSection({
+/// 相似艺人横排(需求 9): 头像在上 / 名字在下(单行省略), 横向 ListView 由**用户
+/// 手动拖拽**。禁止自动滚动、轮播、PageView —— 这里没有 Timer、没有 ScrollController
+/// 驱动、没有 animateTo, 静态 ListView 只在用户拖动时移动。
+///
+/// 未登录/接口失败时由调用方整块不渲染(空列表时本组件也返回 [SizedBox.shrink],
+/// 双保险: 少一层"空标题"的可能)。
+class SimilarArtistsRow extends StatelessWidget {
+  const SimilarArtistsRow({
     super.key,
-    required this.albums,
-    required this.totalCount,
-    required this.onOpenAlbum,
-    required this.onSeeAll,
+    required this.artists,
+    required this.onOpen,
   });
 
-  final List<rust.AlbumBrief> albums;
-  final BigInt totalCount;
-  final void Function(BigInt albumId, String albumName, String? coverUrl)?
-  onOpenAlbum;
-  final VoidCallback onSeeAll;
+  final List<rust.Artist> artists;
+  final void Function(rust.Artist artist) onOpen;
+
+  /// 单项宽度(需求: 72~80dp)。头像 48 居中, 名字与分量同宽。
+  static const double itemWidth = 72;
+
+  /// 头像直径(与 itemWidth 一起决定视觉节奏)
+  static const double avatarSize = 48;
 
   @override
   Widget build(BuildContext context) {
+    if (artists.isEmpty) return const SizedBox.shrink();
     final theme = Theme.of(context);
-    // 卡片高 = 封面 108 + 间距 4 + 名字/年份两行文字 + 底部 4。
-    // 文字块必须按 textScaler 放大(固定 160 在 1.625 字号下纵向溢出 4px):
-    // 名字 labelMedium(12) + 年份 labelSmall(11), 行高约 1.4。
     final scaler = MediaQuery.textScalerOf(context);
-    final cardHeight =
-        108 + 4 + scaler.scale(12) * 1.4 + scaler.scale(11) * 1.4 + 4;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '专辑',
-          trailing: SectionSeeAllButton(
-            label: '全部 $totalCount 张 ›',
-            onTap: onSeeAll,
-          ),
-        ),
-        // 横向 ListView: 300dp 下天然可滚, 不参与竖向溢出
-        SizedBox(
-          height: cardHeight,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: albums.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (context, i) {
-              final album = albums[i];
-              final year = album.publishTime > BigInt.zero
-                  ? DateTime.fromMillisecondsSinceEpoch(
-                      album.publishTime.toInt(),
-                    ).year
-                  : null;
-              return SizedBox(
-                width: 108,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: onOpenAlbum == null
-                      ? null
-                      : () =>
-                            onOpenAlbum!(album.id, album.name, album.coverUrl),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        height: 108,
-                        width: 108,
-                        child: CoverArt(url: album.coverUrl, radius: 6),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        album.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium,
-                      ),
-                      Text(
-                        year != null ? '$year' : ' ',
-                        maxLines: 1,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
+    // 高度 = 头像 + 间距 + 名字行(按 textScaler 放大)。名字只有一行,
+    // 行高按 1.5 估 + 2dp 余量(与 coverGridDelegate 同一口径: 1.45 实测在
+    // 300dp x1.625 下会竖溢 0.08px)。
+    final labelHeight = scaler.scale(11) * 1.5 + 2;
+    return SizedBox(
+      height: avatarSize + 4 + labelHeight,
+      child: ListView.separated(
+        // 横向 + 手动拖拽: 不设 controller/physics 抖动, 不做任何自动滚动
+        scrollDirection: Axis.horizontal,
+        itemCount: artists.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final a = artists[i];
+          return SizedBox(
+            width: itemWidth,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => onOpen(a),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleCover(url: a.avatarUrl, size: avatarSize),
+                  const SizedBox(height: 4),
+                  // 单行 + ellipsis: 300dp + textScale 1.625 也不溢出
+                  Text(
+                    a.name,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall,
                   ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
-}
-
-/// 「详细艺人」弹层: 完整简介(可滚) + 统计 + 相似艺人胶囊。
-/// 用 SheetHeader 而不是 AppBar(sheet 内容高度无界, AppBar 的 flex 会抛异常)。
-Future<void> showArtistInfoSheet(
-  BuildContext context, {
-  required rust.ArtistDetailDto detail,
-  required List<rust.Artist> similar,
-  required void Function(rust.Artist artist) onOpenArtist,
-}) {
-  final theme = Theme.of(context);
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    builder: (sheetContext) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SheetHeader(
-                title: '详细艺人资料',
-                onClose: () => Navigator.of(sheetContext).pop(),
-              ),
-              const SizedBox(height: 8),
-              // 简介可能很长: 弹层用 isScrollControlled + 固定高度上限后内部滚动
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${detail.albumCount} 个专辑 · ${detail.musicCount} 首歌曲',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      if (detail.briefDesc.trim().isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          detail.briefDesc.trim(),
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ],
-                      if (similar.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        Text('相似艺人', style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        // 胶囊 Wrap: 横排放不下自动换行, 名字单行省略
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            for (final a in similar)
-                              ActionChip(
-                                avatar: CircleCover(url: a.avatarUrl, size: 24),
-                                label: Text(
-                                  a.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                onPressed: () {
-                                  Navigator.of(sheetContext).pop();
-                                  onOpenArtist(a);
-                                },
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.tonal(
-                  onPressed: () => Navigator.of(sheetContext).pop(),
-                  child: const Text('关闭'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }
