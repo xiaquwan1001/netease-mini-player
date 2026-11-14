@@ -80,7 +80,7 @@
 
 ## 批次时间线(倒序, 最新在上)
 
-## 2026-11-14(四) 用户第三轮 16 项反馈(**v0.12.0**)
+## 2026-11-14(四) 用户第三轮 16 项反馈(**v0.12.0 已发布**)
 
 用户原话 16 条(搜索页 1-2 / 联想 3-6 / 动态与评论 7-10、13-14 / 我的与设置 11-12、15-16),
 外加追加需求「正在播放的歌曲要在同一个歌单里高亮」。
@@ -1586,6 +1586,18 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
 - 门禁: cargo fmt/clippy(0 warning)/test 全绿(service 198); `dart analyze` 0 issue; `flutter test` **923 passed / 1 skipped**;
   `check-tokens --strict` OK(上传图标固定尺寸已加 token-ok); debug APK 出包并装回前台模拟器。
 
+
+## 2026-11-14(四) 发布记录 v0.12.0
+
+- **GitHub**: CI(main) `43603964002` **success**;Release(tag) `43603963758` **success**, 9 个资产:
+  android-arm64 apk 29.6MB / linux x64 tar.gz 15.7MB / linux arm64 tar.gz 15.5MB / x86_64 AppImage 15.2MB /
+  windows setup.exe 14.0MB / windows zip 17.5MB / amd64 deb 11.5MB / arm64 deb 10.6MB / SHA256SUMS.txt。
+- **USTC GitLab**: pipeline **#9380**(tag v0.12.0) **success**;main #9355 的发布 job 为 manual(按需 play)。
+- 版本: `0.12.0+29`(`kAppVersion` 同步);tag `v0.12.0` 双推;两条流水线均一次全绿(交付前已对改动文件
+  跑 `dart format` + `cargo fmt --all`, 未触发前两轮的 formatter 门禁红点)。
+- 待人工验证(不阻塞发布): ①联想面板底部是否真的顶到键盘(需求 4/6);②分类 tab 两排在各种选中状态下的
+  对齐观感(需求 1/2);③播放态高亮的语汇(喇叭 + 主色歌名)在日推/歌单/播客单集里是否够醒目;
+  ④字号滑块拖到 1.15/1.35 后杀进程重进, 确认不再回默认(需求 11 的现场验证)。
 
 ## 2026-11-14(三) 发布记录 v0.11.0
 
