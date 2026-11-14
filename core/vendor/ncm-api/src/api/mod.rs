@@ -97,6 +97,12 @@ mod personal_fm;
 mod daily_signin;
 mod signin_progress;
 
+// ---- 云盘相关 ----
+mod song_cloud_download;
+mod user_cloud;
+mod user_cloud_del;
+mod user_cloud_detail;
+
 // ---- 电台相关 ----
 mod dj_category_recommend;
 mod dj_catelist;

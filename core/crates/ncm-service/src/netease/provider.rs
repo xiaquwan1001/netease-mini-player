@@ -807,6 +807,26 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::feed_events(self, limit, last_time)
     }
 
+    /// 关注动态的一页(带 lasttime/more 游标, 见 FeedPage)
+    fn feed_page(&self, limit: u32, last_time: i64) -> BoxFuture<'_, ProviderResult<FeedPage>> {
+        NeteaseProvider::feed_page(self, limit, last_time)
+    }
+
+    /// 音乐云盘列表(需要登录)
+    fn user_cloud(&self, limit: u32, offset: u32) -> BoxFuture<'_, ProviderResult<CloudPage>> {
+        NeteaseProvider::user_cloud(self, limit, offset)
+    }
+
+    /// 删除云盘歌曲(入参是 CloudSong::id)
+    fn cloud_delete(&self, ids: &[u64]) -> BoxFuture<'_, ProviderResult<bool>> {
+        NeteaseProvider::cloud_delete(self, ids)
+    }
+
+    /// 云盘歌曲下载直链
+    fn cloud_song_url(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+        NeteaseProvider::cloud_song_url(self, song_id)
+    }
+
     /// 指定用户的动态(他人主页): 同 /api/v1/event/get, 但带 uid(拿不到数据时返回空列表).
     fn user_events(
         &self,

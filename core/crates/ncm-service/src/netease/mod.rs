@@ -3,19 +3,20 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, CryptoType, NcmError, Query, RequestOption};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMv,
-    ArtistMvPage, ArtistSongPage, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
-    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
-    FeedEvent, FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
-    Lyric, MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome, PhoneLoginResult,
-    PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio,
-    PrivateMessage, PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey,
-    QrLoginOutcome, QrLoginState, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj,
-    RadioRankedProgram, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RadioToplist,
-    RecentContact, SearchAlbum, SearchArtist, SearchBundle, SearchExact, SearchPage,
-    SearchPlaylistItem, SearchPodcast, Session, SigninDay, SigninStatus, SmsCodeSent, Song,
-    SongLikeState, SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup,
-    ToplistCatalogItem, TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership,
-    VipOverview, VipSign, VipSignDay, VipTask, WikiFact, WordLyric,
+    ArtistMvPage, ArtistSongPage, ChartSummary, CloudPage, CloudSong, Comment, CommentPage,
+    CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
+    DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry, FeedEvent, FeedPage, FollowCount,
+    ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall,
+    MessageCounts, MvDetail, MvItem, MvUrl, PhoneLoginOutcome, PhoneLoginResult, PlayRankEntry,
+    Playlist, PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage,
+    PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginOutcome,
+    QrLoginState, RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedProgram,
+    RadioRankedRadio, RadioSubscriber, RadioSubscriberPage, RadioToplist, RecentContact,
+    SearchAlbum, SearchArtist, SearchBundle, SearchExact, SearchPage, SearchPlaylistItem,
+    SearchPodcast, Session, SigninDay, SigninStatus, SmsCodeSent, Song, SongLikeState,
+    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
+    TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign,
+    VipSignDay, VipTask, WikiFact, WordLyric,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,
@@ -59,6 +60,7 @@ pub const CAPABILITIES: &[Capability] = &[
     Capability::Vip,
     Capability::DigitalAlbum,
     Capability::RadioExplore,
+    Capability::Cloud,
 ];
 /// 内置网易云直连 provider.
 /// 协议与加解密全部委托给 vendor/ncm-api (api-enhanced 的 Rust 移植).
@@ -348,6 +350,7 @@ pub(super) fn take_body(
 pub use self::account::*;
 pub use self::album::*;
 pub use self::artist::*;
+pub use self::cloud::*;
 pub use self::comment::*;
 pub use self::community::*;
 pub use self::lyric::*;
@@ -361,6 +364,7 @@ pub use self::vip::*;
 mod account;
 mod album;
 mod artist;
+mod cloud;
 mod comment;
 mod community;
 mod lyric;

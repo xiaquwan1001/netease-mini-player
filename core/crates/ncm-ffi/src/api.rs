@@ -9,16 +9,17 @@ use std::sync::{Mutex, OnceLock};
 use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
-    AlbumBrief, AlbumItem, Artist, ChartSummary, Comment, CommentPage, CommentStats, DefaultSearch,
-    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry,
-    FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem,
-    PhoneLoginResult, Playlist, PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage,
-    PrivateSession, ProfileDetail, PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState,
-    RadioCategory, RadioExploreHome, RadioPick, RadioRankedDj, RadioRankedRadio, RadioSubscriber,
-    RadioSubscriberPage, RecentContact, SearchAlbum, SearchArtist, SearchExact, SearchPlaylistItem,
-    SearchPodcast, SigninDay, SigninStatus, SmsCodeSent, SongLikeState, SongPurchasedPage,
-    StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel,
-    UserMedal, VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
+    AlbumBrief, AlbumItem, Artist, ChartSummary, CloudPage, CloudSong, Comment, CommentPage,
+    CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
+    DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry, FollowCount, ForwardItem, HotArtist,
+    HotSearchDetailItem, HotSearchTerm, InboxItem, MvItem, PhoneLoginResult, Playlist,
+    PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession, ProfileDetail,
+    PurchasedSongEntry, QrLoginCheck, QrLoginKey, QrLoginState, RadioCategory, RadioExploreHome,
+    RadioPick, RadioRankedDj, RadioRankedRadio, RadioSubscriber, RadioSubscriberPage,
+    RecentContact, SearchAlbum, SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast,
+    SigninDay, SigninStatus, SmsCodeSent, SongLikeState, SongPurchasedPage, StreamUrl, StyleTag,
+    SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel, UserMedal,
+    VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -231,7 +232,18 @@ pub struct _SearchPodcast {
     pub play_count: u64,
 }
 
-/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客 各一个板块
+/// 搜索命中的 MV(镜像 domain 类型 MvItem)
+#[frb(mirror(MvItem))]
+pub struct _MvItem {
+    pub id: u64,
+    pub name: String,
+    pub cover_url: Option<String>,
+    /// 歌手名(多歌手已用 " / " 拼好)
+    pub artist_name: String,
+    pub play_count: u64,
+}
+
+/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客/MV/用户 各一个板块
 pub struct SearchBundleDto {
     pub songs: Vec<SongDto>,
     pub song_total: u64,
@@ -241,6 +253,8 @@ pub struct SearchBundleDto {
     pub podcasts: Vec<SearchPodcast>,
     /// 用户(type=1002)
     pub users: Vec<UserItem>,
+    /// MV(type=1004)
+    pub mvs: Vec<MvItem>,
 }
 
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
@@ -263,6 +277,7 @@ pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto,
         playlists: bundle.playlists,
         users: bundle.users,
         podcasts: bundle.podcasts,
+        mvs: bundle.mvs,
     })
 }
 
@@ -2183,6 +2198,30 @@ pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>
     Ok(list.into_iter().map(feed_event_dto).collect())
 }
 
+/// 关注动态的一页: 事件 + 真实翻页游标.
+pub struct FeedPageDto {
+    pub events: Vec<FeedEventDto>,
+    /// 下一页游标(把本页的 last_time 原样传回 feedPage; 0 = 不能翻页)
+    pub last_time: i64,
+    /// 是否还有下一页
+    pub more: bool,
+}
+
+/// 关注动态的一页(带游标). 与 feedEvents 并存:
+/// feedEvents 只给第一页(老调用方兼容), 需要"加载更多"的界面用这个.
+pub async fn feed_page(limit: u32, last_time: i64) -> Result<FeedPageDto, String> {
+    let provider = with_provider(Capability::Feed)?;
+    let page = provider
+        .feed_page(limit, last_time)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(FeedPageDto {
+        events: page.events.into_iter().map(feed_event_dto).collect(),
+        last_time: page.last_time,
+        more: page.more,
+    })
+}
+
 fn feed_event_dto(e: ncm_domain::FeedEvent) -> FeedEventDto {
     FeedEventDto {
         id: e.id,
@@ -3002,4 +3041,65 @@ pub async fn user_medals() -> Result<Vec<UserMedal>, String> {
     let provider = with_provider(Capability::ProfileDetail)?;
     let wall = provider.user_medals().await.map_err(|e| e.to_string())?;
     Ok(wall.medals)
+}
+
+// ---------------- 音乐云盘 ----------------
+// 说明: 云盘列表/删除/下载直链已接通上游; **上传(分片 NOS)本轮不做**。
+
+/// 云盘条目(镜像 domain 类型 CloudSong)
+#[frb(mirror(CloudSong))]
+pub struct _CloudSong {
+    /// 云盘条目 id(删除用这个, 不是 song_id)
+    pub id: u64,
+    /// 歌曲 id(播放/详情用)
+    pub song_id: u64,
+    pub name: String,
+    /// 歌手(多歌手已用 " / " 拼好)
+    pub artist: String,
+    pub album: String,
+    pub cover_url: Option<String>,
+    /// 文件字节数
+    pub size: u64,
+    /// 码率(bps)
+    pub bitrate: u64,
+    /// 上传时间(unix 毫秒)
+    pub add_time: u64,
+}
+
+/// 云盘列表页(镜像 domain 类型 CloudPage)
+#[frb(mirror(CloudPage))]
+pub struct _CloudPage {
+    pub songs: Vec<CloudSong>,
+    /// 云盘总曲目数
+    pub count: u64,
+    /// 已用容量(字节)
+    pub size: u64,
+    /// 容量上限(字节; 0 = 未知)
+    pub max_size: u64,
+    /// 本页之后是否还有(翻页靠 offset += songs.length)
+    pub more: bool,
+}
+
+/// 音乐云盘列表(需要登录). offset 翻页.
+pub async fn user_cloud(limit: u32, offset: u32) -> Result<CloudPage, String> {
+    let provider = with_provider(Capability::Cloud)?;
+    provider
+        .user_cloud(limit, offset)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// 删除云盘歌曲(需要登录). ids 是**云盘条目 id**(CloudSong.id).
+pub async fn cloud_delete(ids: Vec<u64>) -> Result<bool, String> {
+    let provider = with_provider(Capability::Cloud)?;
+    provider.cloud_delete(&ids).await.map_err(|e| e.to_string())
+}
+
+/// 云盘歌曲下载直链(需要登录; 签名 URL 约一小时过期).
+pub async fn cloud_song_url(song_id: u64) -> Result<Option<String>, String> {
+    let provider = with_provider(Capability::Cloud)?;
+    provider
+        .cloud_song_url(song_id)
+        .await
+        .map_err(|e| e.to_string())
 }

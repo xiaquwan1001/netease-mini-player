@@ -18,7 +18,7 @@ impl NeteaseProvider {
                 .param("limit", &limit.to_string())
                 .param("offset", &offset.to_string());
             let resp = client.user_follows(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
+            check_follow_list(&resp.body, "follow", "该用户已设置关注列表不可见")?;
             // 这个列表里的人都是我关注的
             Ok(parse_user_items(&resp.body, "follow", true))
         })
@@ -39,7 +39,7 @@ impl NeteaseProvider {
                 .param("limit", &limit.to_string())
                 .param("offset", &offset.to_string());
             let resp = client.user_followeds(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
+            check_follow_list(&resp.body, "followeds", "该用户已设置粉丝列表不可见")?;
             // 粉丝列表里接口不给"我有没有关注 ta", 在 UI 里按需点关注
             Ok(parse_user_items(&resp.body, "followeds", false))
         })
@@ -284,6 +284,30 @@ impl NeteaseProvider {
         })
     }
 
+    /// 关注动态的一页: 除事件外还带回**真实翻页游标**(lasttime/more).
+    ///
+    /// 旧接口 feed_events 只返回 Vec, 调用方拿不到 lasttime, 只能每次都请求
+    /// 最新一页("下拉刷新永远看到同一条"). 这里把上游的 lasttime/more 原样带出去,
+    /// UI 翻页时把 last_time 传回来即可.
+    pub(super) fn feed_page(
+        &self,
+        limit: u32,
+        last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<FeedPage>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("查看关注动态需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("pagesize", &limit.max(1).to_string())
+                .param("lasttime", &last_time.to_string());
+            let resp = client.event(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_feed_page(&resp.body))
+        })
+    }
+
     /// 指定用户的动态(他人主页/好友主页): vendor 的 event 只支持 pagesize/lasttime,
     /// 这里在 service 侧直接请求同一端点(/api/v1/event/get)并带 uid.
     /// 拿不到数据(隐私设置/无动态/接口非 200)一律返回空列表, 不报错.
@@ -386,6 +410,29 @@ impl NeteaseProvider {
             Ok(true)
         })
     }
+}
+
+/// 关注/粉丝列表的"对方不可见"判定.
+///
+/// 对方把关注/粉丝列表设成私密时, 上游返回 HTTP 200 + {code:400}(**没有**列表数组),
+/// 通用 map_code 会把 400 归成 Internal, 用户看到的是"服务端异常", 完全误导.
+/// 这里在通用 check_body 之前先认这个形状, 映射成 Forbidden + 用户能直接读的文案.
+/// 注意: 只要响应里**有**列表数组(哪怕是空数组), 就仍走通用映射 —— 空列表是正常的
+/// "没有关注/粉丝", 不是隐私限制.
+pub(super) fn check_follow_list(
+    body: &Value,
+    list_key: &str,
+    hidden_msg: &str,
+) -> ProviderResult<()> {
+    let code = body.get("code").and_then(Value::as_i64);
+    let has_list = body
+        .get(list_key)
+        .map(|v| v.is_array() || v.is_object())
+        .unwrap_or(false);
+    if code == Some(400) && !has_list {
+        return Err(ProviderError::forbidden(hidden_msg));
+    }
+    check_body(body)
 }
 
 /// 关注/粉丝列表: {code, follow:[{userId,nickname,avatarUrl,signature}]} /
@@ -787,6 +834,28 @@ pub(super) fn video_from_pics(value: &Value) -> Option<String> {
 ///                       json:{song:{...}, comment:"..."}|"...", pics:[...]}], lasttime}
 /// json 有时是字符串(需要再解析一次), 各种 eventType 的字段名也不统一,
 /// 这里只提取 UI 能直接展示的最小集合.
+/// 关注动态的一页: events + 真实游标.
+///
+/// 上游 event 响应的游标字段叫 lasttime(全小写), 少数包装给 lastTime;
+/// more 缺失时按"本页有事件且 lasttime 可用"推断, 免得一页翻不下去.
+pub fn parse_feed_page(body: &Value) -> FeedPage {
+    let events = parse_feed_events(body);
+    let last_time = body
+        .get("lasttime")
+        .and_then(Value::as_i64)
+        .or_else(|| body.get("lastTime").and_then(Value::as_i64))
+        .unwrap_or(0);
+    let more = body
+        .get("more")
+        .and_then(Value::as_bool)
+        .unwrap_or(!events.is_empty() && last_time != 0);
+    FeedPage {
+        events,
+        last_time,
+        more,
+    }
+}
+
 pub fn parse_feed_events(body: &Value) -> Vec<FeedEvent> {
     // 线上实测(2026-11-05, /api/v1/event/get)顶层字段叫 event(单数);
     // 旧包装/其它通道可能给 events, 两种都认.

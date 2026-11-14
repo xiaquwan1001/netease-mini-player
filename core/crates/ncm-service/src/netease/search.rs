@@ -108,18 +108,24 @@ impl NeteaseProvider {
             let kw = query.keywords.as_str();
             let song_limit = query.limit.max(1);
             let side_limit = 10u32;
-            let ((song_body, artist_body, album_body, playlist_body, podcast_body), user_body) =
+            let (
+                (song_body, artist_body, album_body, playlist_body, podcast_body),
+                (user_body, mv_body),
+            ) = futures::future::join(
+                futures::future::join5(
+                    self.cloudsearch_body(kw, 1, song_limit, query.offset),
+                    self.cloudsearch_body(kw, 100, side_limit, 0),
+                    self.cloudsearch_body(kw, 10, side_limit, 0),
+                    self.cloudsearch_body(kw, 1000, side_limit, 0),
+                    self.cloudsearch_body(kw, 1009, side_limit, 0),
+                ),
                 futures::future::join(
-                    futures::future::join5(
-                        self.cloudsearch_body(kw, 1, song_limit, query.offset),
-                        self.cloudsearch_body(kw, 100, side_limit, 0),
-                        self.cloudsearch_body(kw, 10, side_limit, 0),
-                        self.cloudsearch_body(kw, 1000, side_limit, 0),
-                        self.cloudsearch_body(kw, 1009, side_limit, 0),
-                    ),
                     self.cloudsearch_body(kw, 1002, side_limit, 0),
-                )
-                .await;
+                    // MV 只有 type=1004(视频/节目不支持), 与其它板块并发
+                    self.cloudsearch_body(kw, 1004, side_limit, 0),
+                ),
+            )
+            .await;
             let song_body = song_body?;
             let page = parse_search(&song_body)?;
             let result_of = |b: ProviderResult<Value>| -> Option<Value> {
@@ -179,6 +185,21 @@ impl NeteaseProvider {
                 }
             }
 
+            // MV 板块允许为空(很多关键词本来就没有 MV), 失败也不拖垮整页
+            let mut mvs = result_of(mv_body)
+                .map(|r| parse_search_mvs(&r))
+                .unwrap_or_default();
+            if mvs.is_empty() {
+                for cand in prefix_candidates(kw) {
+                    if let Some(r) = self.cloudsearch_result(&cand, 1004, side_limit).await {
+                        mvs = parse_search_mvs(&r);
+                        if !mvs.is_empty() {
+                            break;
+                        }
+                    }
+                }
+            }
+
             Ok(SearchBundle {
                 songs: page.songs,
                 song_total: page.total,
@@ -187,6 +208,7 @@ impl NeteaseProvider {
                 playlists,
                 podcasts,
                 users,
+                mvs,
             })
         })
     }
@@ -427,6 +449,47 @@ pub fn parse_search_playlists(result: &Value) -> Vec<SearchPlaylistItem> {
                             .unwrap_or_default(),
                         track_count: u64_of(p, "trackCount").unwrap_or(0),
                         play_count: u64_of(p, "playCount").unwrap_or(0),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// 搜索「MV」: result.mvs[{id,name,cover,artistName,artists[{name}],playCount}]
+pub fn parse_search_mvs(result: &Value) -> Vec<MvItem> {
+    result
+        .get("mvs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| {
+                    let id = u64_of(m, "id")?;
+                    let name = str_of(m, "name").unwrap_or_default();
+                    if id == 0 || name.is_empty() {
+                        return None;
+                    }
+                    let artist_name = str_of(m, "artistName")
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| {
+                            m.get("artists").and_then(Value::as_array).map(|x| {
+                                x.iter()
+                                    .filter_map(|v| str_of(v, "name"))
+                                    .filter(|n| !n.is_empty())
+                                    .collect::<Vec<_>>()
+                                    .join(" / ")
+                            })
+                        })
+                        .unwrap_or_default();
+                    Some(MvItem {
+                        id,
+                        name,
+                        cover_url: str_of(m, "cover")
+                            .or_else(|| str_of(m, "picUrl"))
+                            .or_else(|| str_of(m, "imgurl"))
+                            .filter(|s| !s.is_empty()),
+                        artist_name,
+                        play_count: u64_of(m, "playCount").unwrap_or(0),
                     })
                 })
                 .collect()

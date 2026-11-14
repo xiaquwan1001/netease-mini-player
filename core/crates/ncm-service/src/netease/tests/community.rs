@@ -231,3 +231,92 @@ fn feed_event_detail_fields() {
     assert_eq!(e.share_count, 4);
     assert_eq!(e.comment_count, 3);
 }
+
+/// 需求 5: 对方把关注/粉丝列表设成私密时上游给 code=400 且**没有列表数组**,
+/// 必须映射成 Forbidden(不可重试) + 用户能读的文案, 不能落成 internal.
+#[test]
+fn follow_list_hidden_maps_to_forbidden() {
+    let e = check_follow_list(
+        &json!({"code": 400}),
+        "follow",
+        "该用户已设置关注列表不可见",
+    )
+    .expect_err("code=400 且没有 follow 数组应报错");
+    assert_eq!(e.kind, ProviderErrorKind::Forbidden);
+    assert!(!e.retryable);
+    assert_eq!(e.detail, "该用户已设置关注列表不可见");
+
+    let e = check_follow_list(
+        &json!({"code": 400}),
+        "followeds",
+        "该用户已设置粉丝列表不可见",
+    )
+    .expect_err("code=400 且没有 followeds 数组应报错");
+    assert_eq!(e.kind, ProviderErrorKind::Forbidden);
+    assert_eq!(e.detail, "该用户已设置粉丝列表不可见");
+
+    // 正常/空列表: 不是隐私限制
+    assert!(check_follow_list(&json!({"code": 200, "follow": []}), "follow", "x").is_ok());
+    assert!(check_follow_list(
+        &json!({"code": 200, "follow": [{"userId": 1}]}),
+        "follow",
+        "x"
+    )
+    .is_ok());
+    // 没有 code 字段(老响应)也放行
+    assert!(check_follow_list(&json!({"follow": []}), "follow", "x").is_ok());
+
+    // 其它业务码仍走通用映射: 8821 -> RiskControl, 400 之外未知码 -> Internal
+    let e = check_follow_list(&json!({"code": 8821}), "follow", "x").unwrap_err();
+    assert_eq!(e.kind, ProviderErrorKind::RiskControl);
+    let e = check_follow_list(&json!({"code": 500}), "follow", "x").unwrap_err();
+    assert_eq!(e.kind, ProviderErrorKind::Internal);
+    // 关键回归: 「不可见」不能被误判成参数错误(Auth)
+    let e = check_follow_list(&json!({"code": 400}), "follow", "x").unwrap_err();
+    assert_ne!(e.kind, ProviderErrorKind::Auth);
+}
+
+/// 需求 11: 动态分页游标(lasttime/more)要被解析出来并原样回传
+#[test]
+fn feed_page_cursor_mapping() {
+    let body = json!({
+        "code": 200,
+        "lasttime": 1700000000000i64,
+        "more": true,
+        "event": [
+            {"id": 1, "type": 18, "eventTime": 1699999999000i64,
+             "user": {"userId": 9, "nickname": "好友", "avatarUrl": "http://a/1.jpg"},
+             "json": {"msg": "hi"}}
+        ]
+    });
+    let page = parse_feed_page(&body);
+    assert_eq!(page.events.len(), 1);
+    assert_eq!(page.events[0].id, 1);
+    assert_eq!(page.last_time, 1700000000000);
+    assert!(page.more);
+
+    // more 缺失: 有事件 + 有游标 ⇒ 推断还能翻
+    let page = parse_feed_page(&json!({
+        "code": 200,
+        "lasttime": 1700000000000i64,
+        "event": [{"id": 2, "type": 18, "eventTime": 1, "user": {"nickname": "x"}}]
+    }));
+    assert!(page.more);
+
+    // 到底了: 上游明确 more=false
+    let page = parse_feed_page(&json!({
+        "code": 200, "lasttime": 1690000000000i64, "more": false,
+        "event": [{"id": 3, "type": 18, "eventTime": 1, "user": {"nickname": "x"}}]
+    }));
+    assert!(!page.more);
+
+    // 空响应 / 没有游标: 不 panic, 游标 0 表示不能翻页
+    let page = parse_feed_page(&json!({"code": 200}));
+    assert!(page.events.is_empty());
+    assert_eq!(page.last_time, 0);
+    assert!(!page.more);
+
+    // lastTime 驼峰包装也要认
+    let page = parse_feed_page(&json!({"code": 200, "lastTime": 1690000000123i64}));
+    assert_eq!(page.last_time, 1690000000123);
+}

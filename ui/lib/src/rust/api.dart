@@ -540,6 +540,13 @@ Future<List<FeedEventDto>> feedEvents({
   required PlatformInt64 lastTime,
 }) => RustLib.instance.api.crateApiFeedEvents(limit: limit, lastTime: lastTime);
 
+/// 关注动态的一页(带游标). 与 feedEvents 并存:
+/// feedEvents 只给第一页(老调用方兼容), 需要"加载更多"的界面用这个.
+Future<FeedPageDto> feedPage({
+  required int limit,
+  required PlatformInt64 lastTime,
+}) => RustLib.instance.api.crateApiFeedPage(limit: limit, lastTime: lastTime);
+
 /// 指定用户的动态(用户主页): uid = 目标用户, limit = 条数, last_time = 翻页游标(-1 = 第一页).
 /// 对方没公开/没有动态时返回**空列表**(不是错误).
 Future<List<FeedEventDto>> userEvents({
@@ -911,6 +918,18 @@ Future<UserLevel> userLevel() => RustLib.instance.api.crateApiUserLevel();
 /// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
 Future<List<UserMedal>> userMedals() =>
     RustLib.instance.api.crateApiUserMedals();
+
+/// 音乐云盘列表(需要登录). offset 翻页.
+Future<CloudPage> userCloud({required int limit, required int offset}) =>
+    RustLib.instance.api.crateApiUserCloud(limit: limit, offset: offset);
+
+/// 删除云盘歌曲(需要登录). ids 是**云盘条目 id**(CloudSong.id).
+Future<bool> cloudDelete({required Uint64List ids}) =>
+    RustLib.instance.api.crateApiCloudDelete(ids: ids);
+
+/// 云盘歌曲下载直链(需要登录; 签名 URL 约一小时过期).
+Future<String?> cloudSongUrl({required BigInt songId}) =>
+    RustLib.instance.api.crateApiCloudSongUrl(songId: songId);
 
 class AccountDto {
   final BigInt userId;
@@ -1324,6 +1343,113 @@ class ChartSummary {
           updateFrequency == other.updateFrequency &&
           trackCount == other.trackCount &&
           playCount == other.playCount;
+}
+
+/// 云盘列表页(镜像 domain 类型 CloudPage)
+class CloudPage {
+  final List<CloudSong> songs;
+
+  /// 云盘总曲目数
+  final BigInt count;
+
+  /// 已用容量(字节)
+  final BigInt size;
+
+  /// 容量上限(字节; 0 = 未知)
+  final BigInt maxSize;
+
+  /// 本页之后是否还有(翻页靠 offset += songs.length)
+  final bool more;
+
+  const CloudPage({
+    required this.songs,
+    required this.count,
+    required this.size,
+    required this.maxSize,
+    required this.more,
+  });
+
+  @override
+  int get hashCode =>
+      songs.hashCode ^
+      count.hashCode ^
+      size.hashCode ^
+      maxSize.hashCode ^
+      more.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudPage &&
+          runtimeType == other.runtimeType &&
+          songs == other.songs &&
+          count == other.count &&
+          size == other.size &&
+          maxSize == other.maxSize &&
+          more == other.more;
+}
+
+/// 云盘条目(镜像 domain 类型 CloudSong)
+class CloudSong {
+  /// 云盘条目 id(删除用这个, 不是 song_id)
+  final BigInt id;
+
+  /// 歌曲 id(播放/详情用)
+  final BigInt songId;
+  final String name;
+
+  /// 歌手(多歌手已用 " / " 拼好)
+  final String artist;
+  final String album;
+  final String? coverUrl;
+
+  /// 文件字节数
+  final BigInt size;
+
+  /// 码率(bps)
+  final BigInt bitrate;
+
+  /// 上传时间(unix 毫秒)
+  final BigInt addTime;
+
+  const CloudSong({
+    required this.id,
+    required this.songId,
+    required this.name,
+    required this.artist,
+    required this.album,
+    this.coverUrl,
+    required this.size,
+    required this.bitrate,
+    required this.addTime,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      songId.hashCode ^
+      name.hashCode ^
+      artist.hashCode ^
+      album.hashCode ^
+      coverUrl.hashCode ^
+      size.hashCode ^
+      bitrate.hashCode ^
+      addTime.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudSong &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          songId == other.songId &&
+          name == other.name &&
+          artist == other.artist &&
+          album == other.album &&
+          coverUrl == other.coverUrl &&
+          size == other.size &&
+          bitrate == other.bitrate &&
+          addTime == other.addTime;
 }
 
 class Comment {
@@ -1905,6 +2031,35 @@ class FeedEventDto {
           commentCount == other.commentCount;
 }
 
+/// 关注动态的一页: 事件 + 真实翻页游标.
+class FeedPageDto {
+  final List<FeedEventDto> events;
+
+  /// 下一页游标(把本页的 last_time 原样传回 feedPage; 0 = 不能翻页)
+  final PlatformInt64 lastTime;
+
+  /// 是否还有下一页
+  final bool more;
+
+  const FeedPageDto({
+    required this.events,
+    required this.lastTime,
+    required this.more,
+  });
+
+  @override
+  int get hashCode => events.hashCode ^ lastTime.hashCode ^ more.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FeedPageDto &&
+          runtimeType == other.runtimeType &&
+          events == other.events &&
+          lastTime == other.lastTime &&
+          more == other.more;
+}
+
 /// 关注/粉丝数: 直接镜像 domain 类型 `FollowCount`.
 class FollowCount {
   final BigInt follows;
@@ -2307,6 +2462,44 @@ class MvDetailDto {
           maxBr == other.maxBr &&
           brs == other.brs &&
           desc == other.desc;
+}
+
+/// 搜索命中的 MV(镜像 domain 类型 MvItem)
+class MvItem {
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+
+  /// 歌手名(多歌手已用 " / " 拼好)
+  final String artistName;
+  final BigInt playCount;
+
+  const MvItem({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    required this.artistName,
+    required this.playCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      coverUrl.hashCode ^
+      artistName.hashCode ^
+      playCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MvItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          coverUrl == other.coverUrl &&
+          artistName == other.artistName &&
+          playCount == other.playCount;
 }
 
 class MvUrlDto {
@@ -3363,7 +3556,7 @@ class SearchArtist {
           musicCount == other.musicCount;
 }
 
-/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客 各一个板块
+/// 综合搜索结果: 单曲/歌手/专辑/歌单/播客/MV/用户 各一个板块
 class SearchBundleDto {
   final List<SongDto> songs;
   final BigInt songTotal;
@@ -3375,6 +3568,9 @@ class SearchBundleDto {
   /// 用户(type=1002)
   final List<UserItem> users;
 
+  /// MV(type=1004)
+  final List<MvItem> mvs;
+
   const SearchBundleDto({
     required this.songs,
     required this.songTotal,
@@ -3383,6 +3579,7 @@ class SearchBundleDto {
     required this.playlists,
     required this.podcasts,
     required this.users,
+    required this.mvs,
   });
 
   @override
@@ -3393,7 +3590,8 @@ class SearchBundleDto {
       albums.hashCode ^
       playlists.hashCode ^
       podcasts.hashCode ^
-      users.hashCode;
+      users.hashCode ^
+      mvs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -3406,7 +3604,8 @@ class SearchBundleDto {
           albums == other.albums &&
           playlists == other.playlists &&
           podcasts == other.podcasts &&
-          users == other.users;
+          users == other.users &&
+          mvs == other.mvs;
 }
 
 /// 精确实体改写的结果: 直接镜像 domain SearchExact.

@@ -212,7 +212,11 @@ pub fn parse_profile_detail(body: &Value) -> ProfileDetail {
         vip: p.get("vipType").and_then(Value::as_i64).unwrap_or(0) > 0,
         follows: u64_of(p, "follows").unwrap_or(0),
         followeds: u64_of(p, "followeds").unwrap_or(0),
-        level: u64_of(p, "level").unwrap_or(0),
+        // user/detail 的等级在**响应顶层**(body.level), 不在 profile 里; 只看 profile
+        // 会永远拿到 0(UI 上就是"Lv.0"). profile 里若也有 level 则以 profile 为准.
+        level: u64_of(p, "level")
+            .or_else(|| u64_of(body, "level"))
+            .unwrap_or(0),
     }
 }
 

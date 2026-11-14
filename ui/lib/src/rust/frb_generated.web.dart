@@ -96,6 +96,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChartSummary dco_decode_chart_summary(dynamic raw);
 
   @protected
+  CloudPage dco_decode_cloud_page(dynamic raw);
+
+  @protected
+  CloudSong dco_decode_cloud_song(dynamic raw);
+
+  @protected
   Comment dco_decode_comment(dynamic raw);
 
   @protected
@@ -141,6 +147,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FeedEventDto dco_decode_feed_event_dto(dynamic raw);
+
+  @protected
+  FeedPageDto dco_decode_feed_page_dto(dynamic raw);
 
   @protected
   FollowCount dco_decode_follow_count(dynamic raw);
@@ -191,6 +200,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ChartSummary> dco_decode_list_chart_summary(dynamic raw);
 
   @protected
+  List<CloudSong> dco_decode_list_cloud_song(dynamic raw);
+
+  @protected
   List<Comment> dco_decode_list_comment(dynamic raw);
 
   @protected
@@ -228,6 +240,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<LyricLineDto> dco_decode_list_lyric_line_dto(dynamic raw);
+
+  @protected
+  List<MvItem> dco_decode_list_mv_item(dynamic raw);
 
   @protected
   List<String?> dco_decode_list_opt_String(dynamic raw);
@@ -353,6 +368,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MvDetailDto dco_decode_mv_detail_dto(dynamic raw);
+
+  @protected
+  MvItem dco_decode_mv_item(dynamic raw);
 
   @protected
   MvUrlDto dco_decode_mv_url_dto(dynamic raw);
@@ -653,6 +671,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ChartSummary sse_decode_chart_summary(SseDeserializer deserializer);
 
   @protected
+  CloudPage sse_decode_cloud_page(SseDeserializer deserializer);
+
+  @protected
+  CloudSong sse_decode_cloud_song(SseDeserializer deserializer);
+
+  @protected
   Comment sse_decode_comment(SseDeserializer deserializer);
 
   @protected
@@ -710,6 +734,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FeedEventDto sse_decode_feed_event_dto(SseDeserializer deserializer);
 
   @protected
+  FeedPageDto sse_decode_feed_page_dto(SseDeserializer deserializer);
+
+  @protected
   FollowCount sse_decode_follow_count(SseDeserializer deserializer);
 
   @protected
@@ -762,6 +789,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<CloudSong> sse_decode_list_cloud_song(SseDeserializer deserializer);
+
+  @protected
   List<Comment> sse_decode_list_comment(SseDeserializer deserializer);
 
   @protected
@@ -811,6 +841,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<LyricLineDto> sse_decode_list_lyric_line_dto(
     SseDeserializer deserializer,
   );
+
+  @protected
+  List<MvItem> sse_decode_list_mv_item(SseDeserializer deserializer);
 
   @protected
   List<String?> sse_decode_list_opt_String(SseDeserializer deserializer);
@@ -974,6 +1007,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   MvDetailDto sse_decode_mv_detail_dto(SseDeserializer deserializer);
+
+  @protected
+  MvItem sse_decode_mv_item(SseDeserializer deserializer);
 
   @protected
   MvUrlDto sse_decode_mv_url_dto(SseDeserializer deserializer);
@@ -1325,6 +1361,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_chart_summary(ChartSummary self, SseSerializer serializer);
 
   @protected
+  void sse_encode_cloud_page(CloudPage self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_cloud_song(CloudSong self, SseSerializer serializer);
+
+  @protected
   void sse_encode_comment(Comment self, SseSerializer serializer);
 
   @protected
@@ -1394,6 +1436,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_feed_event_dto(FeedEventDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_feed_page_dto(FeedPageDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_follow_count(FollowCount self, SseSerializer serializer);
 
   @protected
@@ -1456,6 +1501,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_chart_summary(
     List<ChartSummary> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_cloud_song(
+    List<CloudSong> self,
     SseSerializer serializer,
   );
 
@@ -1527,6 +1578,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     List<LyricLineDto> self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_list_mv_item(List<MvItem> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_opt_String(List<String?> self, SseSerializer serializer);
@@ -1743,6 +1797,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_mv_detail_dto(MvDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_mv_item(MvItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_mv_url_dto(MvUrlDto self, SseSerializer serializer);

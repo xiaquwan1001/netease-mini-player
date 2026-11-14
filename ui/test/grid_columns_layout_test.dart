@@ -158,6 +158,7 @@ void main() {
       playlists: const [],
       podcasts: const [],
       users: const [],
+      mvs: const [],
     );
 
     await tester.pumpWidget(
