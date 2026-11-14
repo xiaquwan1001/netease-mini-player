@@ -80,7 +80,12 @@ class SearchLanding extends StatelessWidget {
     // 字段是 public 的, 先提成本地变量才能做 null 提升
     final chartOpen = onOpenChartPlaylist;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadding,
+        0,
+        kPagePadding,
+        16,
+      ),
       children: [
         if (history.isNotEmpty) ...[
           SectionTitle(

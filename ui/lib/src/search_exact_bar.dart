@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart';
 
 // ---------------------------------------------------------------------------
 // 视图模型 —— 纯 Dart, 语义对齐 Rust search_multimatch 的 DTO
@@ -128,7 +129,12 @@ class KeywordSuggestBar extends StatelessWidget {
     if (keywords.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadding,
+        4,
+        kPagePadding,
+        4,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -213,7 +219,12 @@ class SearchExactBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+            padding: const EdgeInsets.fromLTRB(
+              kPagePadding,
+              4,
+              kPagePadding,
+              2,
+            ),
             child: Text(
               kSearchExactTitle,
               maxLines: 1,
@@ -248,7 +259,12 @@ class SearchExactBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+          padding: const EdgeInsets.fromLTRB(
+              kPagePadding,
+              4,
+              kPagePadding,
+              2,
+            ),
           child: Text(
             caption,
             maxLines: 1,
@@ -270,9 +286,12 @@ class SearchExactBar extends StatelessWidget {
       height: _kArtistStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: kPagePadding,
+          vertical: 2,
+        ),
         itemCount: view.artists.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        separatorBuilder: (_, _) => const SizedBox(width: kSectionGap),
         itemBuilder: (context, i) {
           final a = view.artists[i];
           return _ExactCard(
@@ -293,9 +312,12 @@ class SearchExactBar extends StatelessWidget {
       height: _kCardStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: kPagePadding,
+          vertical: 2,
+        ),
         itemCount: view.playlists.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        separatorBuilder: (_, _) => const SizedBox(width: kSectionGap),
         itemBuilder: (context, i) {
           final p = view.playlists[i];
           return _ExactCard(
@@ -316,9 +338,12 @@ class SearchExactBar extends StatelessWidget {
       height: _kCardStripHeight,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        padding: const EdgeInsets.symmetric(
+          horizontal: kPagePadding,
+          vertical: 2,
+        ),
         itemCount: view.podcasts.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 16),
+        separatorBuilder: (_, _) => const SizedBox(width: kSectionGap),
         itemBuilder: (context, i) {
           final r = view.podcasts[i];
           return _ExactCard(

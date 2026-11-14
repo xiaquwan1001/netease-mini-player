@@ -21,7 +21,7 @@ import 'sheet_header.dart';
 import 'song_actions.dart';
 import 'song_tile.dart';
 import 'format.dart' show formatDurationMs;
-import 'layout.dart' show kRowExtent, rowExtentFor;
+import 'layout.dart' show kPagePadding, kRowExtent, rowExtentFor;
 import 'toast.dart' show showToast, showUndoToast;
 
 /// 歌单/播客(电台)详情页: 全屏路由, AppBar 以下单滚动(CustomScrollView),
@@ -775,7 +775,13 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   Widget _buildHiddenNote() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      // 与页面级水平留白一致(原来这里 16, 和上下列表/卡片 12 对不齐)
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadding,
+        4,
+        kPagePadding,
+        0,
+      ),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
@@ -793,7 +799,10 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     if (_songsError != null) {
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(
+            horizontal: kPagePadding,
+            vertical: 20,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -816,7 +825,10 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
                 : (widget.special ? '还没有喜欢的歌曲' : '这个歌单是空的'));
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          padding: const EdgeInsets.symmetric(
+            horizontal: kPagePadding,
+            vertical: 32,
+          ),
           child: Center(
             child: Text(message, style: Theme.of(context).textTheme.bodySmall),
           ),
@@ -1127,7 +1139,10 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     if (_programsError != null) {
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(
+            horizontal: kPagePadding,
+            vertical: 20,
+          ),
           child: Row(
             children: [
               Expanded(
@@ -1148,7 +1163,10 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
           : '这个电台还没有节目';
       return SliverToBoxAdapter(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+          padding: const EdgeInsets.symmetric(
+            horizontal: kPagePadding,
+            vertical: 32,
+          ),
           child: Center(
             child: Text(message, style: Theme.of(context).textTheme.bodySmall),
           ),

@@ -1,4 +1,6 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+
+import 'app_settings.dart';
 
 // ───────────────────────────────────────────────────────────────────────────
 // 横向留白栅格(lane/ui-layout / 需求 10)
@@ -137,6 +139,21 @@ double avatarStripHeightFor(BuildContext context) {
 // 间距 + 两行文字实测高(按 textScaler 放大), 末端不再有空隙。
 // ───────────────────────────────────────────────────────────────────────────
 
+/// 方格网格的横向间距(列与列之间)。全仓网格统一用它, 不再一处 10 一处 12。
+const double kGridCrossSpacing = 10;
+
+/// 方格网格的纵向间距(行与行之间)。
+const double kGridMainSpacing = 12;
+
+/// 搜索结果 / 收藏 / 网格页的统一内边距: 左 [kPagePadding] / 右 [kPagePadding],
+/// 顶部 4(紧接分类条), 底部 24(给底部播放条与安全区留量)。
+const EdgeInsets kGridInsets = EdgeInsets.fromLTRB(
+  kPagePadding,
+  4,
+  kPagePadding,
+  24,
+);
+
 /// 单个网格格子的宽度。
 ///
 /// [availableWidth] 是**网格真实能拿到的横向宽度**(视口/容器宽 - 页面左右 padding),
@@ -148,7 +165,7 @@ double avatarStripHeightFor(BuildContext context) {
 double coverTileWidth(
   double availableWidth,
   int columns, {
-  double crossAxisSpacing = 10,
+  double crossAxisSpacing = kGridCrossSpacing,
 }) {
   final cols = columns < 1 ? 1 : columns;
   final usable = availableWidth - (cols - 1) * crossAxisSpacing;
@@ -162,8 +179,8 @@ double coverTileWidth(
 SliverGridDelegate coverGridDelegate(
   double availableWidth, {
   required int columns,
-  double crossAxisSpacing = 10,
-  double mainAxisSpacing = 12,
+  double crossAxisSpacing = kGridCrossSpacing,
+  double mainAxisSpacing = kGridMainSpacing,
   TextScaler textScaler = TextScaler.noScaling,
 }) {
   final cols = columns < 1 ? 1 : columns;
@@ -184,4 +201,95 @@ SliverGridDelegate coverGridDelegate(
     crossAxisSpacing: crossAxisSpacing,
     childAspectRatio: tileHeight <= 0 ? 1 : tileWidth / tileHeight,
   );
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 共享方格网格构建器(需求 8: 列的 n 只部分生效 / 搜索结果右侧留白)
+//
+// 以前每处网格各自写一份: 搜索结果用「固定 118dp 卡片 + Wrap」(列数与设置项
+// AppSettings.gridColumns 无关, 窄屏排不下就右侧空一大片), 新碟/歌单广场用
+// maxCrossAxisExtent(列数随屏宽漂移)。现在统一走 [CoverGrid]:
+//   · 列数 = AppSettings.gridColumns(2-4, 设置一变立即重建);
+//   · 格子宽 = (真实可用宽度 - (n-1) × [crossAxisSpacing]) / n, 每行正好 n 个,
+//     右侧**没有**固定留白(只剩最后不足一行时右侧空白, 且末行左对齐);
+//   · 格子高 = 正方形封面 + 两行文字实测高(见 [coverGridDelegate])。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 等宽方格网格: 列数固定、格子宽均分、末行左对齐。
+///
+/// [itemBuilder] 会拿到**真实格子宽**([tileWidth]), 封面请直接用它当边长
+/// (不要写死 size: 118), 否则一改列数/字号就会溢出或右侧留白。
+///
+/// 默认是可滚动整页网格; 需要嵌在别的滚动容器里时传 [shrinkWrap]。
+class CoverGrid extends StatelessWidget {
+  const CoverGrid({
+    super.key,
+    required this.itemCount,
+    required this.itemBuilder,
+    this.padding = kGridInsets,
+    this.columns,
+    this.crossAxisSpacing = kGridCrossSpacing,
+    this.mainAxisSpacing = kGridMainSpacing,
+    this.shrinkWrap = false,
+    this.physics,
+    this.controller,
+  });
+
+  final int itemCount;
+
+  /// (context, index, 真实格子宽)
+  final Widget Function(BuildContext context, int index, double tileWidth)
+  itemBuilder;
+
+  final EdgeInsetsGeometry padding;
+
+  /// 列数; 传 null 用 [AppSettings.gridColumns](设置项改动实时生效)。
+  final int? columns;
+
+  final double crossAxisSpacing;
+  final double mainAxisSpacing;
+  final bool shrinkWrap;
+  final ScrollPhysics? physics;
+  final ScrollController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final cols = (columns ?? AppSettings.instance.gridColumns).clamp(1, 12);
+    return LayoutBuilder(
+      builder: (context, box) {
+        final horizontal = padding.resolve(Directionality.of(context)).horizontal;
+        // 嵌在横滑容器里时 maxWidth 是无限的, 退化成整屏宽(再减自身 padding)。
+        final width = box.maxWidth.isFinite
+            ? box.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final available = width - horizontal;
+        final tileWidth = coverTileWidth(
+          available,
+          cols,
+          crossAxisSpacing: crossAxisSpacing,
+        );
+        return GridView.builder(
+          controller: controller,
+          padding: padding,
+          // 末行左对齐是 GridView 的默认行为(不像 Wrap 里居中的 center 对齐);
+          // 这里显式用 start, 避免外层全局对齐方式把网格改成居中。
+          physics:
+              physics ??
+              (shrinkWrap
+                  ? const NeverScrollableScrollPhysics()
+                  : const AlwaysScrollableScrollPhysics()),
+          shrinkWrap: shrinkWrap,
+          gridDelegate: coverGridDelegate(
+            available,
+            columns: cols,
+            crossAxisSpacing: crossAxisSpacing,
+            mainAxisSpacing: mainAxisSpacing,
+            textScaler: MediaQuery.textScalerOf(context),
+          ),
+          itemCount: itemCount,
+          itemBuilder: (context, i) => itemBuilder(context, i, tileWidth),
+        );
+      },
+    );
+  }
 }

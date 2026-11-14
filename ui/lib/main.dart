@@ -3215,16 +3215,6 @@ class _HomePageState extends State<HomePage> {
                 keywords: _keywordSuggestions,
                 onSelected: _searchKeyword,
               ),
-            if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 280),
-                child: SingleChildScrollView(
-                  child: SuggestionPanel(
-                    items: _suggestions,
-                    onSelected: (item) => _searchKeyword(item.title),
-                  ),
-                ),
-              ),
             if (!_showLyrics && _tab == 0 && _error != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -3266,6 +3256,21 @@ class _HomePageState extends State<HomePage> {
                       child: CoverBackdrop(
                         palette: _coverPalette,
                         child: _buildLyrics(),
+                      ),
+                    ),
+                  // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
+                  // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,
+                  // 下面还露出半截结果页。tab 树仍然挂在 Offstage 里, 收起联想不重建。
+                  if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
+                    Positioned.fill(
+                      // 不透明底色: 联想面板铺满后, 下面的 tab 内容不该从卡片外边
+                      // 那 12dp 的缝里透出来。
+                      child: ColoredBox(
+                        color: Theme.of(context).colorScheme.surface,
+                        child: SuggestionPanel(
+                          items: _suggestions,
+                          onSelected: (item) => _searchKeyword(item.title),
+                        ),
                       ),
                     ),
                 ],
