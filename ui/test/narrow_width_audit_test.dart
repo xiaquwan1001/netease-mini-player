@@ -158,6 +158,7 @@ void main() {
           followed: false,
         ),
       ],
+      mvs: const [],
     );
     for (final width in _widths) {
       for (final scale in _scales) {

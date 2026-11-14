@@ -2,6 +2,7 @@
 
 mod account;
 mod album_artist;
+mod cloud;
 mod comment;
 mod community;
 mod playlist;

@@ -79,6 +79,7 @@ void main() {
           followed: false,
         ),
       ],
+      mvs: const [],
     );
 
     await tester.pumpWidget(
@@ -187,6 +188,7 @@ void main() {
                   ),
                 ],
                 users: const [],
+                mvs: const [],
               ),
               liked: <BigInt>{},
               currentTrackId: null,
@@ -220,6 +222,7 @@ void main() {
               playlists: [],
               podcasts: [],
               users: const [],
+              mvs: const [],
             ),
             liked: const {},
             currentTrackId: null,
@@ -260,6 +263,7 @@ void main() {
           followed: false,
         ),
       ],
+      mvs: const [],
     );
 
     await tester.pumpWidget(

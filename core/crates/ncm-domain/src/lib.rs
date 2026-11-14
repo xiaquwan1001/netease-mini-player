@@ -189,6 +189,19 @@ pub struct SearchPodcast {
     pub play_count: u64,
 }
 
+/// 搜索命中的 MV(cloudsearch type=1004 的 result.mvs)
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MvItem {
+    pub id: u64,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(default)]
+    pub artist_name: String,
+    #[serde(default)]
+    pub play_count: u64,
+}
+
 /// 一次"综合搜索"的结果: 每个类型一个板块.
 /// 网易云 cloudsearch 的 type: 1 单曲 / 10 专辑 / 100 歌手 / 1000 歌单 / 1009 播客.
 /// (type=2000 声音/节目实测返回空, 本接口不支持节目搜索.)
@@ -209,6 +222,9 @@ pub struct SearchBundle {
     /// 用户(type=1002 的 userprofiles)
     #[serde(default)]
     pub users: Vec<UserItem>,
+    /// MV(type=1004 的 mvs)
+    #[serde(default)]
+    pub mvs: Vec<MvItem>,
 }
 
 impl SearchBundle {
@@ -218,6 +234,7 @@ impl SearchBundle {
             && self.albums.is_empty()
             && self.playlists.is_empty()
             && self.podcasts.is_empty()
+            && self.mvs.is_empty()
     }
 }
 
@@ -643,6 +660,23 @@ pub struct FeedEvent {
     pub comment_count: u64,
 }
 
+/// 关注动态的一页: 事件列表 + 真实翻页游标.
+///
+/// 上游 /api/v1/event/get 的响应里带 `lasttime` 与 `more`: 把本页的 lasttime 原样
+/// 回传就能拿下一页(时间倒序), more=false 表示到底了. 之前忽略这两个字段,
+/// 每次都只能看到最新一页.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FeedPage {
+    #[serde(default)]
+    pub events: Vec<FeedEvent>,
+    /// 下一页游标(原样回传给 provider; 0 = 上游没给, 不能翻页)
+    #[serde(default)]
+    pub last_time: i64,
+    /// 是否还有下一页
+    #[serde(default)]
+    pub more: bool,
+}
+
 /// "猜你想搜": keyword 才是真正要搜的词, show 是官方给的推荐理由/文案
 /// (形如 "🔥The Weeknd 最近很火哦"), UI 必须把两者分开显示.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -873,6 +907,53 @@ pub struct FollowCount {
     pub follows: u64,
     #[serde(default)]
     pub fans: u64,
+}
+
+/// 一行云盘歌曲(音乐云盘: 用户自己上传的文件).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudSong {
+    /// 云盘条目 id(user_cloud 的 data[].id) —— 删除用的就是它, 不是 song_id
+    pub id: u64,
+    /// 歌曲 id(播放/详情用; 老数据可能只有 simpleSong.id)
+    #[serde(default)]
+    pub song_id: u64,
+    #[serde(default)]
+    pub name: String,
+    /// 歌手名(多歌手用 " / " 拼接, 展示用)
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub album: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    /// 文件字节数
+    #[serde(default)]
+    pub size: u64,
+    /// 码率(bps)
+    #[serde(default)]
+    pub bitrate: u64,
+    /// 上传时间(unix 毫秒)
+    #[serde(default)]
+    pub add_time: u64,
+}
+
+/// 云盘列表页: 分页游标就是 offset, 由调用方自己加.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudPage {
+    #[serde(default)]
+    pub songs: Vec<CloudSong>,
+    /// 云盘总曲目数(上游 count)
+    #[serde(default)]
+    pub count: u64,
+    /// 云盘已用字节(上游 size)
+    #[serde(default)]
+    pub size: u64,
+    /// 云盘容量上限字节(上游 maxSize; 0 = 未知)
+    #[serde(default)]
+    pub max_size: u64,
+    /// 同 CloudSong: 本页是否还有下一页(上游 more)
+    #[serde(default)]
+    pub more: bool,
 }
 
 /// 专辑条目: 收藏专辑列表/搜索结果共用(比 AlbumBrief 多歌手名)

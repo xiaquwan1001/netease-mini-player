@@ -355,3 +355,30 @@ fn profile_detail_artist_identity() {
     let zero = json!({"profile": {"userId": 1, "nickname": "x", "artistId": 0}});
     assert_eq!(parse_profile_detail(&zero).artist_id, None);
 }
+
+/// 需求 12: user/detail 的等级在**响应顶层**(body.level), 不在 profile 里.
+/// 之前只读 profile.level ⇒ 永远 0(UI 上恒为 "Lv.0").
+#[test]
+fn profile_detail_level_from_body_top() {
+    let body = json!({
+        "code": 200,
+        "level": 8,
+        "profile": {"userId": 42, "nickname": "我", "follows": 3, "followeds": 4}
+    });
+    let d = parse_profile_detail(&body);
+    assert_eq!(d.level, 8, "顶层 level 必须落到 ProfileDetail.level");
+    assert_eq!(d.user_id, 42);
+
+    // profile 里也带 level 时以 profile 为准(两种形状都见过)
+    let body = json!({
+        "code": 200,
+        "level": 3,
+        "profile": {"userId": 7, "nickname": "x", "level": 5}
+    });
+    assert_eq!(parse_profile_detail(&body).level, 5);
+
+    // 缺失(未登录/隐私) ⇒ 0, 不 panic
+    let body = json!({"code": 200, "profile": {"userId": 7, "nickname": "x"}});
+    assert_eq!(parse_profile_detail(&body).level, 0);
+    assert_eq!(parse_profile_detail(&json!({"code": 200})).level, 0);
+}

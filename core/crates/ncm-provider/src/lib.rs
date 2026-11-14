@@ -7,10 +7,10 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMvPage, ArtistSongPage,
-    ChartSummary, CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail,
-    DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FollowCount, ForwardItem, HotArtist,
-    HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts, MvDetail,
-    MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
+    ChartSummary, CloudPage, CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail,
+    DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FeedPage, FollowCount, ForwardItem,
+    HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts,
+    MvDetail, MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
     PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile, ProfileDetail,
     QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact,
     SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent, Song, SongLikeState,
@@ -78,6 +78,8 @@ pub enum Capability {
     DigitalAlbum,
     /// 电台发现(只读: 分类/精选/推荐/榜单/订阅者; 不含订阅写操作)
     RadioExplore,
+    /// 音乐云盘(列表/删除/下载直链; 不含上传)
+    Cloud,
 }
 
 impl Capability {
@@ -119,6 +121,7 @@ impl Capability {
             Capability::Vip => "vip",
             Capability::DigitalAlbum => "digitalAlbum",
             Capability::RadioExplore => "radioExplore",
+            Capability::Cloud => "cloud",
         }
     }
 }
@@ -207,6 +210,8 @@ pub enum ProviderErrorKind {
     RiskControl,
     NotFound,
     Unsupported,
+    /// 服务端明确拒绝(隐私设置/权限不足), 与 Internal 区分开: 重试也不会变
+    Forbidden,
     Internal,
 }
 
@@ -218,6 +223,7 @@ impl ProviderErrorKind {
             ProviderErrorKind::RiskControl => "riskControl",
             ProviderErrorKind::NotFound => "notFound",
             ProviderErrorKind::Unsupported => "unsupported",
+            ProviderErrorKind::Forbidden => "forbidden",
             ProviderErrorKind::Internal => "internal",
         }
     }
@@ -257,6 +263,11 @@ impl ProviderError {
 
     pub fn unsupported(detail: impl Into<String>) -> Self {
         Self::new(ProviderErrorKind::Unsupported, false, detail)
+    }
+
+    /// 服务端拒绝(隐私设置/无权限): 不可重试, detail 应当是用户能直接读的一句话
+    pub fn forbidden(detail: impl Into<String>) -> Self {
+        Self::new(ProviderErrorKind::Forbidden, false, detail)
     }
 
     pub fn internal(detail: impl Into<String>) -> Self {
@@ -500,6 +511,26 @@ pub trait Provider: Send + Sync {
         _last_time: i64,
     ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
         Box::pin(async { Err(ProviderError::unsupported("no feed")) })
+    }
+
+    /// 关注动态的一页(带真实游标, 见 FeedPage). 默认实现退化成一页无游标.
+    fn feed_page(&self, _limit: u32, _last_time: i64) -> BoxFuture<'_, ProviderResult<FeedPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no feed page")) })
+    }
+
+    /// 音乐云盘列表(需要登录). 不含上传。
+    fn user_cloud(&self, _limit: u32, _offset: u32) -> BoxFuture<'_, ProviderResult<CloudPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud")) })
+    }
+
+    /// 删除云盘歌曲(入参是云盘条目 id, 见 CloudSong::id)
+    fn cloud_delete(&self, _ids: &[u64]) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud delete")) })
+    }
+
+    /// 云盘歌曲下载直链(签名 URL, 约一小时过期)
+    fn cloud_song_url(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud song url")) })
     }
 
     /// 指定用户的动态(他人主页): vendor 的 event 只支持 pagesize/lasttime,

@@ -218,3 +218,34 @@ fn hot_search_detail_rank_and_fields() {
     assert!(parse_hot_search_detail(&json!({"code": 200})).is_empty());
     assert!(parse_hot_search_detail(&json!({"code": 200, "data": []})).is_empty());
 }
+
+/// 需求 10(后端): 搜索补 MV(type=1004, result.mvs)
+#[test]
+fn search_mvs_mapping() {
+    let result = json!({
+        "mvs": [
+            {"id": 11, "name": "晴天 (MV)", "cover": "http://p1/mv.jpg",
+             "artistName": "周杰伦", "playCount": 123456},
+            {"id": 12, "name": "没有 artistName", "picUrl": "http://p1/mv2.jpg",
+             "artists": [{"name": "A"}, {"name": "B"}]},
+            {"id": 13, "name": "缺封面"}
+        ]
+    });
+    let mvs = parse_search_mvs(&result);
+    assert_eq!(mvs.len(), 3);
+    assert_eq!(mvs[0].id, 11);
+    assert_eq!(mvs[0].cover_url.as_deref(), Some("http://p1/mv.jpg"));
+    assert_eq!(mvs[0].artist_name, "周杰伦");
+    assert_eq!(mvs[0].play_count, 123456);
+    // artistName 缺失时用 artists[].name 拼
+    assert_eq!(mvs[1].artist_name, "A / B");
+    assert_eq!(mvs[1].cover_url.as_deref(), Some("http://p1/mv2.jpg"));
+    assert_eq!(mvs[2].cover_url, None);
+    assert_eq!(mvs[2].play_count, 0);
+
+    // 没有 mvs / 空的 / id 为 0 或没名字的丢掉
+    assert!(parse_search_mvs(&json!({})).is_empty());
+    assert!(parse_search_mvs(&json!({"mvs": []})).is_empty());
+    let mvs = parse_search_mvs(&json!({"mvs": [{"id": 0, "name": "x"}, {"id": 2, "name": ""}]}));
+    assert!(mvs.is_empty());
+}

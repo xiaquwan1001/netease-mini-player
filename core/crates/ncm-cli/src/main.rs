@@ -293,6 +293,41 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        // 关注动态的一页: 打印真实游标(lasttime/more), 用于验证翻页
+        "feed-page" => {
+            let limit: u32 = args.positional.first().map(|s| s.parse()).transpose()?.unwrap_or(20);
+            let last: i64 = args.positional.get(1).map(|s| s.parse()).transpose()?.unwrap_or(-1);
+            let p = provider(&core, Capability::Feed)?;
+            announce(&core);
+            let page = p.feed_page(limit, last).await?;
+            println!(
+                "limit={limit} lasttime_in={last} count={} lasttime_out={} more={}",
+                page.events.len(), page.last_time, page.more
+            );
+            for e in page.events.iter().take(10) {
+                println!("  [{}] kind={} user={} time={} text={}", e.id, e.kind, e.user_name, e.time_ms, short_line(&e.text, 30));
+            }
+            Ok(())
+        }
+        // 音乐云盘列表: 需登录
+        "cloud" => {
+            let limit: u32 = args.positional.first().map(|s| s.parse()).transpose()?.unwrap_or(30);
+            let offset: u32 = args.positional.get(1).map(|s| s.parse()).transpose()?.unwrap_or(0);
+            let p = provider(&core, Capability::Cloud)?;
+            announce(&core);
+            let page = p.user_cloud(limit, offset).await?;
+            println!(
+                "limit={limit} offset={offset} count={} used={} max={} more={}",
+                page.count, page.size, page.max_size, page.more
+            );
+            for s in page.songs.iter().take(20) {
+                println!(
+                    "  [{}] song={} {} - {} ({} bytes, {} bps)",
+                    s.id, s.song_id, short_line(&s.name, 24), short_line(&s.artist, 16), s.size, s.bitrate
+                );
+            }
+            Ok(())
+        }
         "search" => {
             let kw = args
                 .positional
