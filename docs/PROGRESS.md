@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-14(三)**。当前版本 **v0.11.0**(2026-11-14 打包, 用户第二轮 15 项反馈 + API 语义纠偏)。
+> 最近更新: **2026-11-14(四)**。当前版本 **v0.12.0**(2026-11-14 打包, 用户第三轮 16 项反馈 + 正在播放高亮)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
@@ -11,10 +11,10 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace` | **305** 通过 / 0 失败 |
+| `cargo test --offline --workspace` | **284** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test`(全量, 含 golden) | **928** 通过 / 1 跳过(golden 12 张) |
+| `flutter test`(全量, 含 golden) | **940** 通过 / 1 跳过(golden 12 张) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -45,6 +45,7 @@
 | **v0.9.0** | **2026-11-13** | **规则层收口**(唯一 `AsyncView` / `SectionTitle` / `check-tokens --strict`) + 用户 6 条(播放跳过 VIP / 每日推荐歌单本地缓存 / 凭据存储去重 / 匿名 debug 数据 / 关注页头像进主页且与搜索同一份排版 / 「歌手」→「艺人」) + **匿名诊断一键提交**(Cloudflare Worker 代理建 issue) + **我的页按最近交互排序** + 列表行 A 级 7 处修复 + **golden 视觉回归网**(6 页 × 2 视口) || **v0.9.0** | **2026-11-13** | **规则层收口**(唯一 `AsyncView` / `SectionTitle` / `check-tokens --strict`) + 用户 6 条(播放跳过 VIP / 每日推荐歌单本地缓存 / 凭据存储去重 / 匿名 debug 数据 / 关注页头像进主页且与搜索同一份排版 / 「歌手」→「艺人」) + **匿名诊断一键提交**(Cloudflare Worker 代理建 issue) + **我的页按最近交互排序** + 列表行 A 级 7 处修复 + **golden 视觉回归网**(6 页 × 2 视口) |
 | **v0.10.0** | **2026-11-14** | 用户 15 项反馈(OLED 开关/我的页同构/动态分享卡片/转发面板/forbidden 文案/云盘列表/通知按钮顺序/网格列数/相似艺人横排/MV 搜索+评论区/动态游标补历史/等级 0/艺人页纵向 tab/联想面板/边缘留白) + 编辑简介 + 云盘上传 |
 | **v0.11.0** | **2026-11-14** | 用户第二轮 15 项 + API 语义纠偏:艺人页粉丝数与整卡宽统计行、播放全部顶格、共 N 首/搜索移入全部歌曲 tab、**登录假成功修复**、提示条 floating 3s、简介并入昵称下、**他人/艺人动态端点修复**(`/api/event/get/<uid>` + 绑定 userId)、去关注粉丝 tab、「我喜欢」单独成栏、电台→播客文案、仅分享歌曲不重复附图、图片按张数排版;新增 2 个 vendor 端点 |
+| **v0.12.0** | **2026-11-14** | 用户第三轮 16 项:分类 tab 对齐根因修复(居中缩进/checkmark 变宽)、联想改分类 tab + 关注艺人加权排序 + 封面补齐、键盘弹出导航栏让位、动态统一转发面板 + 评论选中态 + 评论卡片语境/计数 + 他人动态自动展示媒体、**字号落盘原子化**(根治"重启回默认")+ 精细滑块、关注行/作者栏点法统一、我的动态并入我的主页、一排/两排覆盖更多横滑;新增 **正在播放高亮**(全局 nowPlayingSongId) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -78,6 +79,49 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-14(四) 用户第三轮 16 项反馈(**v0.12.0**)
+
+用户原话 16 条(搜索页 1-2 / 联想 3-6 / 动态与评论 7-10、13-14 / 我的与设置 11-12、15-16),
+外加追加需求「正在播放的歌曲要在同一个歌单里高亮」。
+
+- **搜索分类 tab 的"奇怪缩进"是几何问题, 不是 padding 问题**: 分类条原来是 `Padding + Wrap`,
+  父级 `Column`(默认 `crossAxisAlignment.center`)给的是松约束 ⇒ Wrap 收缩到内容宽度后被**居中**;
+  再加上选中项默认 checkmark 会改变 chip 宽度, 于是"选中第二排时两排突然对齐、缩进消失"。
+  修法: 抽出 `ui/lib/src/category_bar.dart`(`SizedBox(width: infinity)` + `WrapAlignment.start`
+  + `showCheckmark: false`), 搜索结果与输入联想共用; `test/category_bar_layout_test.dart` 用
+  「两排首个 chip 的左边界 == kPagePadding」「切到第二排时每个 chip 位置/宽度不变」锁死。
+- **联想改成分类 tab**(需求 3/5): 一次只渲染一个分类(带条数), 默认打开"个性化排序后第一条"所属分类;
+  Rust 侧 `rank_suggest`: 按"是否与我关注的艺人相关"重排(类间 + 类内, 稳定), 关注列表 5 分钟缓存
+  (不打风控敏感的 sublist); 每类上限 3→10(服务端通常只给 2~6 条)。
+  封面: 专辑改用**专辑自己的** `picUrl`(以前先取 artist.picUrl ⇒ 联想专辑全是歌手头像),
+  歌曲缺图用一次 `song_detail` 批量补(按 id 缓存 500 条), 失败静默。
+- **键盘弹出与联想面板之间的空缺(需求 4/6)**: Scaffold 已按 `viewInsets.bottom` 收缩, 而根布局的底部
+  导航栏仍占 80dp ⇒ 内容底边 = 键盘顶 - 80dp。现在键盘在场时导航栏一并让位
+  (`test/bottom_chrome_padding_test.dart` 加断言)。
+- **动态/评论(7-10/13/14)**: 详情页显式分享/转发图标; 转发动态 / 分享卡片图 / 复制链接收敛到一个面板;
+  长按评论有与「回复」同源的 `primaryContainer` 选中底色(1.5s 褪去); 评论分享卡片补
+  「来自‹歌曲/歌单/专辑/播客/MV›《标题》」+ 点赞数/回复数(`commentSourceKindLabel`);
+  点赞从动作行上移到「用户名 + 发布时间」行并显示数量; 他人主页/艺人页「动态」tab 复用共享
+  `FeedSongMiniCard`/`FeedVideoThumb`, 图片与分享内容自动展示。
+- **字号"重启回默认"的真因(需求 11)**: `AppSettings._save()` 整份重写 settings.json, 而
+  `writeAsString` 是先 truncate 再写 ⇒ 两次写并发时产生半截文件, 下次启动 `jsonDecode` 失败被吞
+  ⇒ 所有偏好静默回默认。改为**串行 + 原子替换**(写 `.tmp` 再 rename)、坏文件改名 `.bad` 留存;
+  `_file == null` 时 `_save()` 直接返回(以前会串到上一个落盘任务的 Future, 那个 Future 可能属于
+  已结束的 zone ⇒ widget 测试假死 10 分钟)。UI 换成 0.80~1.50 步长 0.05 滑块 + 四个预设档位。
+- **点法统一(需求 12)**: 关注/粉丝列表整行(含头像/名字)进对方「动态」(默认 tab, 留在同一栈内);
+  关注动态流作者栏整行筛动态, 主页入口只留在动态卡片里。
+- **我的动态并入我的主页(需求 15)**: 删掉预览区块, 入口升格为整行按钮, golden 重出。
+- **一排/两排(需求 16)**: 我的与他人主页的歌单/播客/专辑横滑都走 `CoverRow(rows: coverRows)`。
+- **正在播放高亮(追加需求)**: 新增 `ui/lib/src/now_playing.dart`(`nowPlayingSongId` +
+  `NowPlayingHighlight`), HomePage `_publishPlayerBar` 帧后投递; 歌单/专辑 detail 曲目、日推与历史日推、
+  艺人全部歌曲、搜索结果(`SongTile` 不传 `active` 也读全局)、我的页两个预览、听歌排行、播客单集行
+  (按 `program.song.id`)统一「序号→喇叭 + 主色歌名 + selected 底色」, 切歌实时跟随。
+
+**门禁**: `flutter test` 940 通过 / 1 skip; `dart analyze` 0 issue; `dart format --set-exit-if-changed`
+干净; `check-tokens --strict` OK; `check-write-guard` OK; `cargo test` 284 通过、clippy 0 warning、fmt 干净;
+`flutter build apk --debug` 成功。两个子代理 lane(feed/comment、profile/settings)在独立 worktree 完成后
+由主代理独立重跑全量测试与门禁再合并。
 
 ## 2026-11-14(三) 用户第二轮 15 项反馈(**v0.11.0 已发布**)
 
