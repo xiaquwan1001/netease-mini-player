@@ -78,4 +78,4 @@ AGPL-3.0 与下列许可**兼容**（可作为 AGPL 作品的一部分）：
 ## 6. 不变的那条底线
 
 无论选哪个许可：**网易云接口/加解密仍只走 vendor 库（WTFPL/MIT），不复制网易官方代码**；歌词文本与封面版权不属于我们，
-TTML 数据源（amll-ttml-db 是 CC0）可缓存但**不要打包进发行物**——这条与许可选择无关，已在 `docs/research-2026-11-10-lyric-and-color.md` §5 记过。
+TTML 数据源（amll-ttml-db 是 CC0）可缓存但**不要打包进发行物**——这条与许可选择无关，已在 `research-2026-11-10-lyric-and-color.md` §5 记过。

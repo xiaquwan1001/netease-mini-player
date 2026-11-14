@@ -7,7 +7,6 @@ import 'app_meta.dart';
 import 'app_settings.dart';
 import 'cover_quality_sheet.dart';
 import 'daily_cache.dart';
-import 'layout.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
@@ -373,11 +372,12 @@ class SettingsView extends StatelessWidget {
   }
 }
 
-/// 「界面字号」设置项: 预设档位(一排放得下的 chip)+ 0.80~1.50 步长 0.05 的滑块。
+/// 「界面字号」设置项: 0.80~1.50 步长 0.05 的滑块。
 ///
 /// 为什么不再用 `DropdownButton<double>`: 它的 `value` 必须**恰好等于** items 里的
-/// 某一项(命中不了会 assert), 与"字号是可精细调节的连续值"天然冲突 —— 只要磁盘上
-/// 的倍率不是四个预设之一(改过配置/以后加了档位), 整行就变成红屏/空白。
+/// 某一项(命中不了会 assert), 与"字号是可精细调节的连续值"天然冲突。
+/// 为什么也没有「小/标准/大/特大」档位 chip: 滑块已经是唯一的可调入口, 档位 chip
+/// 只是重复入口, 用户 2026-11-14 反馈要求去掉(见 [AppSettings.textScaleLabel])。
 ///
 /// 实时预览: MaterialApp.builder 的 scaledMediaQuery 直接读 AppSettings, 所以拖动
 /// 滑块时**整页**(含本行)立刻按新倍率重排, 下面的预览行是同倍率的实例说明。
@@ -396,23 +396,6 @@ class _TextScaleSetting extends StatelessWidget {
         ListTile(
           title: const Text('界面字号'),
           subtitle: Text(AppSettings.textScaleHint(scale)),
-        ),
-        Padding(
-          // 与卡片内行内容同一条栅格(ListTile 已由 ListTileTheme 给 12)
-          padding: const EdgeInsets.symmetric(horizontal: kCardRowInset),
-          // Wrap: 320dp + 大字号下四个 chip 自动折行, 不溢出/不裁字
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final entry in AppSettings.textScales.entries)
-                ChoiceChip(
-                  label: Text(entry.value),
-                  selected: (entry.key - scale).abs() < 0.005,
-                  onSelected: (_) => settings.update(textScale: entry.key),
-                ),
-            ],
-          ),
         ),
         Row(
           children: [

@@ -2,7 +2,7 @@
 
 > ⚠ **本文写于 vendor 裁剪之前(基线 114/382、vendor 382 个 endpoint 文件、12k LOC)**;
 > 裁剪已于 2026-11-09 落地: 现为 **118/118 已接入, vendor 12k→4.1k LOC, 删除 264 个未接 endpoint**,
-> 见 [`docs/backend-prune.md`](backend-prune.md)。本文的体积/LOC 数字仅作决策留痕, 现值以该文为准。
+> 见 [`backend-prune.md`](backend-prune.md)。本文的体积/LOC 数字仅作决策留痕, 现值以该文为准。
 >
 > 2026-11 调研批次(只读, 未改任何代码)。基线 = vendor ncm-api(锁定 commit)全量 + 自写 ncm-service(provider/身份) + ncm-ffi(flutter_rust_bridge)。
 > 测量环境: 本仓 core/ workspace, dev profile, 热缓存(之前跑过构建), 网络已 unset 全部 proxy。

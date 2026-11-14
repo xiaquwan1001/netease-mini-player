@@ -3,7 +3,7 @@
 > 状态: ✅ **主体完成(2026-11-09)** —— 七项需求全部落地并在 a36 上做过数值/像素验证;
 > **「真机听感验收」已于 2026-11-10 通过**(用户口径: 听感项放最后上真机; 五项全部过)。逐批执行记录见 §10。
 > 后续从这里接着做的话: 先看 §10「下一波」之外的部分都已清空, 只剩 §5 里依赖人耳的 5 条。
-> 关联: 进度 `docs/PROGRESS.md`; 队列 `docs/remaining-batches.md`; 审计 `docs/ui-ux-audit.md`
+> 关联: 进度 `docs/PROGRESS.md`; 队列 `docs/remaining-batches.md`; 审计 `docs/archive/ui-ux-audit.md`
 > 基线: HEAD = `2d53b68`(C2 完成, 模拟器 a36 GUI 已装新包); 后台车道 `D7`(frb 透传 domain) 正在改 `core/crates/ncm-ffi/api.rs`, **独占 codegen 与 cargo**
 
 ## 0. 需求清单(用户原话归纳, 共 7 项)

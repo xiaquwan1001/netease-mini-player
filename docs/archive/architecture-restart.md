@@ -6,7 +6,7 @@
 > 产物由 `.github/workflows/windows.yml` 在 `windows-latest` 上构建。下文凡出现「双端」均按**三端**阅读。
 >
 > 2026-11-03 立项分析。目标不是继续给 v1 加功能,而是重定架构。
-> 依据: 本仓 `docs/build-vs-fork.md` 的真机实测、社区 benchmark(见各节引用)、
+> 依据: 本仓 `build-vs-fork.md` 的真机实测、社区 benchmark(见各节引用)、
 > 以及 Flutter/Tauri 官方文档现状(2026-11)。
 
 ## 0. 结论先行(TL;DR)
@@ -265,7 +265,7 @@ v1 的 `LoginActivity` 思路(移动 UA + `/login` + 抓 `MUSIC_U`)。
 
 | 库 | 形态 | 覆盖 | 加密 | TLS | 许可 | 维护 | 结论 |
 |---|---|---|---|---|---|---|---|
-| **SPlayer-Dev/ncm-api-rs** | Rust 库(axum 服务端特性已于 2026-11-09 裁剪删除) | **382 → 118 个 api 模块**(P1 裁剪, 见 `docs/backend-prune.md`) | weapi/eapi/linuxapi | **rustls**(Android 友好) | WTFPL | 2026-03 起,64★,SPlayer 作者维护 | **采用** |
+| **SPlayer-Dev/ncm-api-rs** | Rust 库(axum 服务端特性已于 2026-11-09 裁剪删除) | **382 → 118 个 api 模块**(P1 裁剪, 见 `backend-prune.md`) | weapi/eapi/linuxapi | **rustls**(Android 友好) | WTFPL | 2026-03 起,64★,SPlayer 作者维护 | **采用** |
 | two-mountains/ncmapi | Rust 库(强类型) | 搜索/曲库/账号/stream | eapi 等 | reqwest 默认 | MIT | 1.0 于 2026-08,17★ | 备选/类型设计参考 |
 | api-enhanced(Node) | 服务端 | 456 | 全套(含 xeapi) | Node | MIT | 活跃 | **只做本地对照 oracle,不进产物** |
 | SPlayer 本体 | Tauri 客户端 | — | — | — | — | 活跃 | 交互/功能参考 |

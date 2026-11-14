@@ -37,16 +37,16 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 ## 9. 精简项排队(2026-11-09 审计产出, 按依赖顺序)
 
-> 来源: `docs/api-overlap-audit.md`(D1–D7) + `docs/backend-service-options.md` §3/§5.5(P1/P2)。
+> 来源: `api-overlap-audit.md`(D1–D7) + `backend-service-options.md` §3/§5.5(P1/P2)。
 > 硬约束: **codegen 是全局串行点, cargo 共用 `core/target`** ⇒ 下列批次互斥, 一律串行。
 
 | 序 | 批次 | 内容 | 触碰面 | 前提 |
 |---|---|---|---|---|
-| 1 | ~~**P1+P2 vendor 裁剪**~~ ✅ **已完成**(2026-11-09) | 删 264 个未接 endpoint + `api/mod.rs` 清单 + tokio 移除 + 死特性 `server` 删除; 382→118/12k→4.1k 行/冷编 1.40→0.65 s/119 测试全绿 | `core/vendor` | 见 `docs/backend-prune.md` |
+| 1 | ~~**P1+P2 vendor 裁剪**~~ ✅ **已完成**(2026-11-09) | 删 264 个未接 endpoint + `api/mod.rs` 清单 + tokio 移除 + 死特性 `server` 删除; 382→118/12k→4.1k 行/冷编 1.40→0.65 s/119 测试全绿 | `core/vendor` | 见 `backend-prune.md` |
 | 2+3 | ~~**D1+D2 删死导出 + D5 转发宏**~~ ✅ **已完成**(2026-11-09) | 导出 125→123、「UI 无入口」3→0; `ffi_forward!` 宏收敛 22 封装, 净 −80 行 | `ncm-ffi` + codegen(已用一次) | 见 `docs/archive/ffi-cleanup-d1d2d5.md` |
 | 4 | ~~**D6 PagedListView**~~ ✅ **已完成**(2026-11-09, 后续又补迁 3 页) | 新组件 + 迁移 7 页(messages/user_list/playlist_square/ranking/new_release/all_charts/digital_album); **仍可迁**: `radio_explore_page`、`style_page`(均未用组件) | 纯 Dart | 见 `docs/archive/ui-batch-d6.md` |
-| 5 | ~~**D7 frb 透传 domain**~~ ✅ **已完成**(2026-11-09, 57/57) | 删 74 个 Dto struct(`api.rs`)≈646 行 + 内联转换 ~400 行 | `ncm-domain` + `ncm-ffi` + Dart | 见 `docs/d7-frb-domain.md`; 车道已关闭 |
-| — | ~~方案 c: 换 `netease-music`~~ | ⛔ 已裁决不切 | — | 见 `docs/backend-service-options.md` §6 门槛 |
+| 5 | ~~**D7 frb 透传 domain**~~ ✅ **已完成**(2026-11-09, 57/57) | 删 74 个 Dto struct(`api.rs`)≈646 行 + 内联转换 ~400 行 | `ncm-domain` + `ncm-ffi` + Dart | 见 `d7-frb-domain.md`; 车道已关闭 |
+| — | ~~方案 c: 换 `netease-music`~~ | ⛔ 已裁决不切 | — | 见 `backend-service-options.md` §6 门槛 |
 
 **决策记录(2026-11-09, 用户已批准)**:
 - **D7 批准做, 记为待办**(不做前置条件, 但要等 1–4 收口, 单独一波), 验收口径见下 §9.1。
@@ -55,7 +55,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 ### 9.1 D7 待办卡(frb 直接透传 domain DTO) —— ✅ 已完成(2026-11-09, 57/57 直透)
 
-> 以下保留为验收口径留痕; 实际收口记录见 `docs/d7-frb-domain.md`。
+> 以下保留为验收口径留痕; 实际收口记录见 `d7-frb-domain.md`。
 
 - **目标**: 删掉 `ncm-ffi/src/api.rs` 里 74 个重复的 `*Dto` struct(≈646 行)及其内联转换(~400 行),
   让 frb 直接暴露 `ncm-domain` 类型; `ui/lib/src/rust/` 由 codegen 重新生成。
@@ -73,7 +73,7 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 
 ## 10. UI/UX 走查批次(A–D, 2026-11-09 审计产出)
 
-> 来源 `docs/ui-ux-audit.md`(506 行, 每条带 file:line)。P0=3 / P1=15 / P2=13。
+> 来源 `ui-ux-audit.md`(506 行, 每条带 file:line)。P0=3 / P1=15 / P2=13。
 > **验证口径**: 这些批次**不要**用 `build-android`/`ci.sh` 验证 UI —— 用 `flutter test test/xxx.dart` 单文件
 > + 设备走查; 且 A 批的 `PopScope` 改动**必须配一条 widget 测试**(返回键三次: 歌词→tab→退出), 否则后续易回退。
 

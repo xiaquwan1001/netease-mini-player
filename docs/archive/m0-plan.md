@@ -1,6 +1,6 @@
 # M0 落地清单(基建周)
 
-> 前置: `docs/architecture-restart.md` §11 已拍板(方案 A / 暂不做脚本插件 / 用 ncm-api-rs)。
+> 前置: `architecture-restart.md` §11 已拍板(方案 A / 暂不做脚本插件 / 用 ncm-api-rs)。
 > M0 目标: **两端能启动 + 桥能往返 + 协议库在 Linux 真实取到直链**。不写业务 UI。
 
 ## 0. 环境(一次性)
@@ -43,7 +43,7 @@ netease-mini-player/
 | S2 | cargo workspace + 五个 crate 空壳 + `ncm-domain` 单测 | `cargo test -p ncm-domain` 绿 | 0.5d |
 | S3 | vendor `ncm-api`(pin commit),`ncm-cli` 接上: `search` | `cargo run -p ncm-cli -- search 晴天` 打印结构化结果 | 1d |
 | S4 | `ncm-cli url <id> --level exhigh` + 下载前 1MB 校验 | 抓到直链并 `curl` 到音频字节;记录 HTTP/域名/耗时 | 0.5d |
-| S5 | 通道 spike: 同一请求分别打 `interface` / `interface3`,记录 code/是否 403 | 出一张对照表写进 `docs/api-channel.md` | 0.5d |
+| S5 | 通道 spike: 同一请求分别打 `interface` / `interface3`,记录 code/是否 403 | 出一张对照表写进 `api-channel.md` | 0.5d |
 | S6 | `ncm-ffi` 暴露 `ping()` + `search()`;`flutter_rust_bridge` 生成绑定 | UI 按钮点击显示搜索结果条数 | 1d |
 | S7 | Android faceless 交叉编译验证: `cargo ndk -t arm64-v8a -o ui/android/app/src/main/jniLibs build -p ncm-ffi` | APK 里含 `libncm_ffi.so`,启动不崩 | 0.5d |
 | S8 | 构建脚本 + CI(ubuntu-latest: cargo test + flutter build linux + assembleDebug) | 一条 `bash tools/ci.sh` 本地全绿 | 0.5d |

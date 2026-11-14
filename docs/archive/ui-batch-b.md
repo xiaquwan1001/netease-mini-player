@@ -1,6 +1,6 @@
 # UI 批次 B：两个缺失面板（评论可发 + 队列可看）
 
-审计项：**P0-7.2**（评论区无「写评论」入口）、**P0-7.3**（播放队列零 UI），见 `docs/ui-ux-audit.md:467-468`（证据行：`comment_thread.dart` 无输入框、`queue.dart:3` 纯逻辑无 UI、`main.dart:2208` 只有 `$inQueue/$total` 文本）。
+审计项：**P0-7.2**（评论区无「写评论」入口）、**P0-7.3**（播放队列零 UI），见 `ui-ux-audit.md:467-468`（证据行：`comment_thread.dart` 无输入框、`queue.dart:3` 纯逻辑无 UI、`main.dart:2208` 只有 `$inQueue/$total` 文本）。
 
 - 车道范围：纯 Dart。**没有**碰 Rust / codegen / `core/**` / `ui/lib/src/rust/**`，也**没有**新增 FFI。
 - 改动文件：`ui/lib/src/comment_thread.dart`、`ui/lib/src/queue.dart`、`ui/lib/main.dart`（全部在白名单内）；

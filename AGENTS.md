@@ -16,7 +16,7 @@
 - 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),桌面(Linux/Windows)用 **rodio/CPAL**
   (纯 Rust + symphonia, 无系统依赖;Linux=ALSA、Windows=WASAPI,同一份代码两个 `cfg`)。
   MV 播放: Android 有独立 `MvPlayerActivity`(VideoView),桌面用系统播放器打开直链。
-  早期设计写的 mpv + MPRIS **未实现**(见 `docs/architecture-restart.md` §3 的现状注记),不要再按 mpv 规划。
+  早期设计写的 mpv + MPRIS **未实现**(见 `docs/archive/architecture-restart.md` §3 的现状注记),不要再按 mpv 规划。
 - `legacy/` 是 v1 的 WebView 实现,只读存档,不要再往里加功能。
 
 ## 环境(用户级, 已就绪)

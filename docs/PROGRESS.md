@@ -3,7 +3,7 @@
 > 最近更新: **2026-11-14(四)**。当前版本 **v0.12.0**(2026-11-14 打包, 用户第三轮 16 项反馈 + 正在播放高亮)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
-> 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
+> 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
 
 ## 进度总览(2026-11-14 核实)
 
@@ -79,6 +79,22 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-14(五) 用户第四轮两条反馈 + 文档收敛
+
+- **分类条末尾的空缺**: 用户截图里「胶囊分类条最后一排右边空一块」——`Wrap` 按 chip 自然宽度左对齐换行,
+  7 个分类在 3 列下排成 3/3/1, 最后一排只 1 个 chip。`CategoryBar` 改为**按最宽 chip 测算列数 → 均分条数
+  到各排(7 条 2 排 = 4+3)→ 每排 `Expanded` 等分整行**, 于是每排左右都贴页面留白, 不再有空缺;
+  新增 `category_bar_layout_test` 断言"每排最后一个 chip 贴右边距、同排等宽、间隔 6"。联想面板与搜索结果共用同一组件, 一起修好。
+  实图核对: 360dp/7 分类 = 4+3 两排, 5 分类(带条数)= 3+2。
+- **字号档位 chip 移除**: 设置页「界面字号」已有 0.80~1.50 步长 0.05 的滑块, 「小/标准/大/特大」chip 是重复入口,
+  删掉 `AppSettings.textScales`, `textScaleLabel` 一律给百分比(`textScaleHint` 同步), 只留滑块 + A/A 两端提示 + 预览行。
+- **文档收敛**(子代理执行, 主会话复核): `docs/` 根目录 13 份已完工专题 `git mv` 进 `docs/archive/`
+  (对照表见 `docs/archive/README.md`「2026-11-14 归档批次」), `docs/README.md` 重写为唯一索引(5 节 + 每行最后更新日期);
+  被代码注释引用的 `plan-2026-11-09-settings-and-player.md`/`credential-storage-options.md` 留原位并在 §4 写明解绑条件。
+  GitHub 仓库 description 同步改写为: 非官方三端客户端 + Rust 内核(协议/身份/加解密/播放) + Flutter 单份 UI + v1 WebView 已归档重写 + MIT。
+- 门禁: `dart analyze` 0 issue · `flutter test` **941 通过 / 1 跳过**(golden `settings_360x800` 按新版重出) ·
+  `dart format --set-exit-if-changed` 干净 · `check-tokens.sh --strict` OK。
 
 ## 2026-11-14(四) 用户第三轮 16 项反馈(**v0.12.0 已发布**)
 
@@ -540,7 +556,7 @@ FFI: `loginSmsSend`/`loginSmsVerify`(144→**146**)。
 |---|---|---|
 | **他人主页** | 新 `ui/lib/src/user_page.dart`: 资料卡(背景/头像/昵称/签名/关注·粉丝·等级) + 「TA 的歌单」列表, 点歌单进已有歌单详情页(带播放回调). 数据面新增 `Provider::user_profile`(user/detail) 与 `Provider::user_playlists_of`(user/playlist) —— 都**不需要登录**, 与只读当前账号的 `profile_detail` 分开; FFI `userProfile`/`userPlaylistsOf`(142→**144**) | `ncm user <uid>` 宿主实测(匿名): 下去玩 uid=1822714196 → 关注 44/粉丝 11/公开歌单 12 个, 与网页端一致 |
 | 路由接通 | `radio_subscribers_page` 的听众行、`user_list_page` 的粉丝/关注行都能点进主页(`onOpenUser` 仍可覆盖); 播放回调从 `_PodcastDetailPage`/`main._openFollows` 一路带下去, 否则"点进主页点歌单不能播" | `ui/test/user_page_test.dart` 4 例(资料+歌单渲染/空态/失败重试/无播放回调只提示) |
-| 发布包体积实测(§11 B4) | `docs/backend-service-options.md` **附录 B**: 六种产物的下载体积 vs 首装体积 + 40 MB bundle 的逐文件拆解 | deb 11 MB→40 MB 安装; AppImage 14.6 MB; bundle 里 `libncm_ffi.so` **15 MB 未 strip**, strip 后 9 MB(本轮只测不改) |
+| 发布包体积实测(§11 B4) | `docs/archive/backend-service-options.md` **附录 B**: 六种产物的下载体积 vs 首装体积 + 40 MB bundle 的逐文件拆解 | deb 11 MB→40 MB 安装; AppImage 14.6 MB; bundle 里 `libncm_ffi.so` **15 MB 未 strip**, strip 后 9 MB(本轮只测不改) |
 
 门禁: `cargo test --offline --workspace` **249** · `flutter test --exclude-tags network` **536**(+4) · `dart analyze` 0 error / 0 warning · 接口覆盖 123/123, FFI **144**。
 
@@ -606,7 +622,7 @@ GitHub 仓库 description 改为三端口径、topics 补 `windows`/`desktop`/`t
 - 已发布 **v0.2.2**: `MiniNCM-0.2.2-android-arm64.apk`(28.5 MB) / `MiniNCM-0.2.2-linux-x64.tar.gz`(15.0 MB) /
   **`MiniNCM-0.2.2-windows-x64.zip`(17.0 MB)** / `SHA256SUMS.txt`; tag 上 Release 流水线 4 个 job(verify / Android+Linux / Windows / publish)全绿。
 - 文档同步: README 与 README.en 改为三端描述(副标题/徽章/架构图/构建说明/进度表/门禁表), 项目 AGENTS.md 与
-  `docs/architecture-restart.md`、`docs/testing-dual-platform.md` 补 Windows 口径(本机 Linux 编不了 Windows, 只能靠 CI + 用户机器冒烟)。
+  `docs/archive/architecture-restart.md`、`docs/testing-dual-platform.md` 补 Windows 口径(本机 Linux 编不了 Windows, 只能靠 CI + 用户机器冒烟)。
 
 ## v2 · 2026-11-10(续): 队列面板拖拽排序/清空 · .git 损坏修复 · 门禁复核
 
@@ -640,7 +656,7 @@ GitHub 仓库 description 改为三端口径、topics 补 `windows`/`desktop`/`t
 | 背景色跟随封面 | `cover_palette.dart`(纯 Dart 复刻 node-vibrant: 5bit 直方图 + Vibrant/DarkVibrant/Muted 打分 + 无彩回退 + LRU) + `CoverBackdrop`(300ms 渐变) | 歌词页背景像素随封面变色(粉系封面 → (255,248,247) 而非主题默认); 16 例单测 |
 | 搜索「热搜建议」开关 | `showHotSearch`(默认 true) + 设置「通用」开关 + 搜索页不渲染热榜, 留历史/猜你想搜 | 4 例 |
 
-调研: [`docs/research-2026-11-10-lyric-and-color.md`](research-2026-11-10-lyric-and-color.md) —— SPlayer-Next/lyric-dom(AGPL, 只借鉴思路)、node-vibrant(MIT, 算法可移植)、Mei(ljyh223, Apache-2.0)、逐字歌词实现对照。
+调研: [`docs/archive/research-2026-11-10-lyric-and-color.md`](archive/research-2026-11-10-lyric-and-color.md) —— SPlayer-Next/lyric-dom(AGPL, 只借鉴思路)、node-vibrant(MIT, 算法可移植)、Mei(ljyh223, Apache-2.0)、逐字歌词实现对照。
 
 门禁: `dart analyze` 0 error / 0 warning(40 info) · `flutter test --exclude-tags network` **403 全绿** · `bash tools/build-android.sh` OK。
 
@@ -683,7 +699,7 @@ a34 模拟器实测通过(翻译开关 / 多选分享 / 保存 680x628 PNG / 系
 ## v2 · 设置项扩充 + 播放体验修复(R1–R7)与 D7 收尾(2026-11-09)
 
 任务书: `docs/plan-2026-11-09-settings-and-player.md`(§10 有逐批执行记录);
-FFI 车道: `docs/d7-frb-domain.md`(车道已关闭)。
+FFI 车道: `docs/archive/d7-frb-domain.md`(车道已关闭)。
 
 ### 1. 七项需求全部落地
 
@@ -750,13 +766,13 @@ FFI 车道: `docs/d7-frb-domain.md`(车道已关闭)。
 | 运行时占用 | 📄 已测 | Linux debug bundle(Xvfb, Impeller)首帧后 **RSS 555 MB / 84 线程**; Rust core release CLI 单次 search **峰值 8.7 MB**, wall 0.52 s ⇒ core 侧 MB 级, UI 侧大头是 debug 未 AOT |
 | 构建产物占地 | 📄 已测 | 仓库 27 GB 中 26.9 GB(99.6%)是产物: `ui/build` 18 GB(`rust_lib_minincm` 单目录 12 GB) + `core/target/debug` 8.9 GB; 源码+文档+参考仓 ≈55 MB |
 | §3 P3 门判定 | ✅ 已定 | 门槛「strip 后 vendor 相关代码 >5 MB 才考虑方案 c」——整个动态库也才 8.6 MiB ⇒ **门未通过, 自写最小客户端仍不推荐** |
-| 新候选 `netease-music` 0.1.1 | ⛔ spike 结论: 暂不切 | src **2,448 行**, 依赖 **132 包**(↓81), 搜索/歌词与现实现**完全一致**, Android 交叉编译配 NDK 即过; 但取链匿名态两端都被风控(ncm 404 / crate -460)、**身份每进程随机需自建回灌层**、appver 形态更粗、43/118 封装落差 ⇒ 净收益仅「少 2.4k 行加解密」。门槛与复测清单见 `docs/backend-service-options.md` §6 |
-| **P1+P2 裁剪** | ✅ 已做(2026-11-09) | vendor endpoint **382→118**(未接入 **0**, 100%)、LOC **12,035→4,069**(−66%)、体积 1.7 M→564 K、`api/mod.rs` 566→252 行; `tokio` 从 vendor 直接依赖**整体移除**(库本体不用), 死特性 `server`(axum/bin/5 个可选依赖)一并删除; 依赖数 **213/279/257 → 207/274/252**; 冷编 vendor **1.40→0.65 s**; release `.so` 14,246,736→**14,157,856**(strip 8,971,728→**8,918,104**); 门禁: `--all-targets` 0 error + **119** 测试全绿 + coverage 118/0。详见 `docs/backend-prune.md` |
+| 新候选 `netease-music` 0.1.1 | ⛔ spike 结论: 暂不切 | src **2,448 行**, 依赖 **132 包**(↓81), 搜索/歌词与现实现**完全一致**, Android 交叉编译配 NDK 即过; 但取链匿名态两端都被风控(ncm 404 / crate -460)、**身份每进程随机需自建回灌层**、appver 形态更粗、43/118 封装落差 ⇒ 净收益仅「少 2.4k 行加解密」。门槛与复测清单见 `docs/archive/backend-service-options.md` §6 |
+| **P1+P2 裁剪** | ✅ 已做(2026-11-09) | vendor endpoint **382→118**(未接入 **0**, 100%)、LOC **12,035→4,069**(−66%)、体积 1.7 M→564 K、`api/mod.rs` 566→252 行; `tokio` 从 vendor 直接依赖**整体移除**(库本体不用), 死特性 `server`(axum/bin/5 个可选依赖)一并删除; 依赖数 **213/279/257 → 207/274/252**; 冷编 vendor **1.40→0.65 s**; release `.so` 14,246,736→**14,157,856**(strip 8,971,728→**8,918,104**); 门禁: `--all-targets` 0 error + **119** 测试全绿 + coverage 118/0。详见 `docs/archive/backend-prune.md` |
 | 收益排序 | 📄 结论 | 打包配置(release + split-per-abi, 231 MB→约 30–40 MB/ABI) > Rust 依赖瘦身(~~P1 裁 vendor / P2 tokio~~ ✅已完成) > 方案 c |
 
-详细数据与测量命令: `docs/backend-service-options.md` §5–§6。
+详细数据与测量命令: `docs/archive/backend-service-options.md` §5–§6。
 
-### 附带: API/实现重叠审计(只读, `docs/api-overlap-audit.md`)
+### 附带: API/实现重叠审计(只读, `docs/archive/api-overlap-audit.md`)
 
 | 结论 | 证据 |
 |---|---|
@@ -765,7 +781,7 @@ FFI 车道: `docs/d7-frb-domain.md`(车道已关闭)。
 | 可精简收益 | 保守 ~430–670 行(FFI 死导出 + Dart 样板 + 文档); 激进 D7(frb 直接透传 domain DTO, 删 74 个 Dto ≈646 行 + 内联转换 ~400 行)可达 ~1400–1800 行, 但需给 domain 加 frb 注解 + 双端全量回归, **排在 vendor 裁剪之后另开车道** |
 | 无应删写接口 | follow/like/playlist_edit/comment_delete/reply/sign_in 全部有 UI 入口且在用 |
 
-### 附带: UI/UX 走查(只读, `docs/ui-ux-audit.md` 506 行)
+### 附带: UI/UX 走查(只读, `docs/archive/ui-ux-audit.md` 506 行)
 
 页面级质量不差(17 个二级页均有 AppBar 返回、删除类操作都有确认),但有三类结构性问题:
 
@@ -804,7 +820,7 @@ Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
 | 相似用户 | ⛔ 不做 | `simi_user` 登录态下 id/userId 两种参数、多个 uid 实测**恒回空数组**(`userprofiles: []`),无可解析形状,已记档 |
 | 电台节目榜 | ✅ | 电台广场新增「节目」页签(`radioToplist(kind:'program')`: 排名 badge + 节目名 + 电台·主播·时长);点行直接播放(无音频回落电台详情) |
 | 电台听众页 | ✅ | 新 `radio_subscribers_page.dart`: 电台详情 AppBar「听众」→ 列表(头像/昵称/签名), **时间游标真分页**(provider/FFI 新增 `time_ms`, 用上一页最后一条 subscribeTimeMs), 空态/错误重试/去重 |
-| 后端形态调研 | 📄 | `docs/backend-service-options.md`: 结论 **不换形态、只裁剪** —— vendor 12,035 LOC/382 endpoint 我们只用 118(31%),但 vendor 边际依赖为 **0**(213-crate 服务树差集为空)、单独重编译仅 1.3s ⇒ 不是编译/依赖瓶颈;延迟 search 中位 0.39s、detail 0.14s;体积大头是 reqwest/tokio/rustls 网络栈,换方案也省不掉 |
+| 后端形态调研 | 📄 | `docs/archive/backend-service-options.md`: 结论 **不换形态、只裁剪** —— vendor 12,035 LOC/382 endpoint 我们只用 118(31%),但 vendor 边际依赖为 **0**(213-crate 服务树差集为空)、单独重编译仅 1.3s ⇒ 不是编译/依赖瓶颈;延迟 search 中位 0.39s、detail 0.14s;体积大头是 reqwest/tokio/rustls 网络栈,换方案也省不掉 |
 | 回归 | ✅ | Rust service **102** 单测(收尾 +6, 游标改动后全绿); Flutter **231** 用例; `tools/ci.sh` → **CI OK**; a36 独立走查: 节目榜页签/节目播放/听众列表真实数据 |
 
 **协议/实测事实**:
@@ -813,7 +829,7 @@ Top5 速修与 A–D 批次切分见 `docs/remaining-batches.md` §10。
   分组顺序 TOPPING/OFFICIAL/FEATURE/MUSIC_STYLE/GLOBAL/LANGUAGE/MORE;个别条目 `id=0` 且 `canPlay=false`。
 - `comment_mv`/`comment_video` 与歌曲评论同形, 只有 thread 前缀不同; video 的测试 id 可能 200+空。
 - `dj_subscriber` 的 `time` 参数是**上一页最后一条 subscribeTime(ms)**, 首页传 -1。
-- 详细样例见 `docs/wave9-endpoint-notes.md`; 后端形态测算见 `docs/backend-service-options.md`。
+- 详细样例见 `docs/wave9-endpoint-notes.md`; 后端形态测算见 `docs/archive/backend-service-options.md`。
 
 ## v2 · 功能包: 逐字歌词契约 B5-1 + 列表页空态统一(2026-11-09)
 
@@ -1290,7 +1306,7 @@ cd ui && flutter test                                            # 3. 否则报 
 | S2 | cargo workspace 五 crate + ncm-domain 单测 | ✅ | `cargo test` 8 用例全绿 |
 | S3 | vendor `ncm-api` + CLI 搜索 | ✅ | `ncm search 晴天` 返回 336 条, 0.2s |
 | S4 | CLI 取链 + 下载 | ✅ | `ncm url 3455095614 --download` 得到 320k mp3, 5.7MB |
-| S5 | 通道 spike(interface vs interface3) | ✅ | 两条都通, 保持库默认; 见 `docs/api-channel.md` |
+| S5 | 通道 spike(interface vs interface3) | ✅ | 两条都通, 保持库默认; 见 `docs/archive/api-channel.md` |
 | S6 | FRB 桥 + 双端 UI smoke | ✅ | `flutter test` 4 用例(含真实网络搜索/取链) |
 | S7 | Android 交叉编译 | ✅ | debug APK 168MB(4 ABI, 带符号), **release arm64 APK 21.1MB** |
 | S8 | tools/CI 脚本 | ✅ | `tools/env.sh` / `build-linux.sh` / `build-android.sh` / `ci.sh` |

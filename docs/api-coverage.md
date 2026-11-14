@@ -217,7 +217,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 - 判定"UI 有没有入口": 在 `ui/lib`(排除 `src/rust/`)里找 `rust.<camelCase>` 调用。
   **匹配必须大小写不敏感**(2026-11-09 修正): frb 生成名不总是严格 camelCase, 实测
   `lyric_lines_i18n` → `lyricLinesI18N`(大写 N), 旧的 camel 精确匹配把它误判成"无 UI 入口"(3 个);
-  放宽后真实数字是 **2 个**: `search` / `lyric_lines`(见 `docs/api-overlap-audit.md` D1/D2)。
+  放宽后真实数字是 **2 个**: `search` / `lyric_lines`(见 `docs/archive/api-overlap-audit.md` D1/D2)。
 - 新增能力时跑一次 `bash tools/api-coverage.sh` 保持本文数字同步。
 
 ---

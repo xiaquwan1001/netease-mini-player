@@ -97,6 +97,56 @@ void main() {
     }
   });
 
+  testWidgets('每排都铺满整行宽度: 末尾不再留空缺', (tester) async {
+    useNarrowScreen(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              CategoryBar(labels: labels, selected: 0, onSelected: (_) {}),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final rects = chipRects(tester);
+    expect(rects.length, labels.length);
+
+    // 按 top 分组(同一排 y 相同), 每排两端都必须贴页面留白
+    final rows = <double, List<Rect>>{};
+    for (final rect in rects) {
+      final key = rows.keys.firstWhere(
+        (top) => (top - rect.top).abs() < 1,
+        orElse: () => rect.top,
+      );
+      rows.putIfAbsent(key, () => <Rect>[]).add(rect);
+    }
+    const pageRight = 400 - kPagePadding;
+    for (final row in rows.values) {
+      row.sort((a, b) => a.left.compareTo(b.left));
+      expect(
+        row.first.left,
+        closeTo(kPagePadding, 0.5),
+        reason: '每排第一个 chip 贴左边距',
+      );
+      expect(
+        row.last.right,
+        closeTo(pageRight, 0.5),
+        reason: '每排最后一个 chip 必须贴右边距(末尾没有空缺)',
+      );
+      // 同一排等宽且相邻间隔固定
+      for (var i = 1; i < row.length; i++) {
+        expect(row[i].width, closeTo(row.first.width, 0.01));
+        expect(row[i].left - row[i - 1].right, closeTo(6, 0.01));
+      }
+    }
+    // 7 个分类在 400dp 下是两排, 且均分成 4+3(不是 6+1)
+    expect(rows.length, 2);
+    expect(rows.values.map((r) => r.length).toList()..sort(), [3, 4]);
+  });
+
   testWidgets('带条数时 chip 文案包含数量', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

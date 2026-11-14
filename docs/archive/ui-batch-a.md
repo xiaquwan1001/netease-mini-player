@@ -1,6 +1,6 @@
 # UI 批次 A（S 成本速修）改动记录
 
-> 车道：UI 批次 A（只做 `docs/ui-ux-audit.md` 里 S 成本的 6 条）
+> 车道：UI 批次 A（只做 `ui-ux-audit.md` 里 S 成本的 6 条）
 > 本批次未 git commit，改动留给编排者审查。
 > 白名单：`ui/lib/main.dart`、`ui/lib/src/song_tile.dart`、`ui/lib/src/search_landing.dart`、
 > `ui/lib/src/recommend_view.dart` + 新建 `ui/test/ui_batch_a_*.dart`。

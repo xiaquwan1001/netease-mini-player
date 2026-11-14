@@ -1,6 +1,6 @@
 # UI 批次 D6：抽 `PagedListView` 公共组件
 
-日期：2026-11-30。对应 `docs/api-overlap-audit.md` 的 D6 条目（列表「分页 + 空态 + 错误重试」三件套在多页重复手写）。
+日期：2026-11-30。对应 `api-overlap-audit.md` 的 D6 条目（列表「分页 + 空态 + 错误重试」三件套在多页重复手写）。
 
 ## 组件 API 设计（`ui/lib/src/paged_list_view.dart`，纯 Dart，无 FFI/provider 依赖）
 

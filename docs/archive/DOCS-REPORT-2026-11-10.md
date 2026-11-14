@@ -26,9 +26,9 @@
 
 ## 四、发现的文档不一致(未越权修改, 留编排者定夺)
 
-1. `docs/api-coverage.md` 头部数字(123/123, FFI 140, 4 个无 UI 入口)与 PROGRESS/remaining-batches §11 一致 ✅, 但 `docs/api-overlap-audit.md` 头部还写着旧基线「118(30%) / FFI …」——属归档前快照, 建议在文中加一行「历史基线, 现状见 api-coverage.md」。
+1. `docs/api-coverage.md` 头部数字(123/123, FFI 140, 4 个无 UI 入口)与 PROGRESS/remaining-batches §11 一致 ✅, 但 `api-overlap-audit.md` 头部还写着旧基线「118(30%) / FFI …」——属归档前快照, 建议在文中加一行「历史基线, 现状见 api-coverage.md」。
 2. `docs/c1-artist-page-notes.md`、`c3-mv-playback-notes.md` 头部日期写 **2026-11-22**(晚于今天), 疑为笔误(2026-11-02?)。
-3. `docs/backend-service-options.md` 头部有 ⚠ 过时警告(已补救注记, 可读)。
+3. `backend-service-options.md` 头部有 ⚠ 过时警告(已补救注记, 可读)。
 4. `README.en.md` 的 Screens 段未包含 Windows 桌面截图(docs/images 下也未见), 三端门面三端截图不齐。
 5. `docs/archive/README.md` 索引已存在且完好, 未动。
 

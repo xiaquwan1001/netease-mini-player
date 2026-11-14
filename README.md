@@ -210,10 +210,10 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | [`docs/README.md`](docs/README.md) | **文档总索引**(每个文件一行用途与状态) |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次 + 专题小节;v1 历史在 `docs/archive/`) |
-| [`docs/architecture-restart.md`](docs/architecture-restart.md) | 架构选型、决策记录、插件边界 |
+| [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | 架构选型、决策记录、插件边界(已归档) |
 | [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |
-| [`docs/api-channel.md`](docs/api-channel.md) | 接口通道(interface / interface3)实测 |
+| [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | 接口通道(interface / interface3)实测(已归档) |
 | [`docs/remaining-batches.md`](docs/remaining-batches.md) | **待办与分批规划(最新在 §11)** |
 | [`docs/b7-playlist-write-notes.md`](docs/b7-playlist-write-notes.md) | 歌单写接口的真实响应形状与踩坑 |
 | [`packaging/`](packaging/) | deb / AppImage / Windows 安装包的打包脚本 |

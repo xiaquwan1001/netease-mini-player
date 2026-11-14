@@ -63,11 +63,11 @@ class AppSettings extends ChangeNotifier {
   /// 视觉风格(主题色). 默认网易云红 = 与改造前完全一致; 浅色/深色共用同一个色板。
   AccentPalette accent = AccentPalette.neteaseRed;
 
-  /// 界面字号倍率(叠在系统字号之上)。1.0 = 跟随系统; 0.85/1.15/1.3 = 小/大/特大。
+  /// 界面字号倍率(叠在系统字号之上)。1.0 = 跟随系统。
   ///
-  /// 可精细调节: [kTextScaleMin]..[kTextScaleMax] 步长 [kTextScaleStep](设置页滑块),
-  /// 永远落在 0.05 的格子上(见 [snapTextScale]), 避免 1.1500000000000001 这类浮点尾巴
-  /// 写进 settings.json 后与预设档位比对不上。
+  /// 只有一个入口: 设置页滑块 [kTextScaleMin]..[kTextScaleMax] 步长 [kTextScaleStep],
+  /// 永远落在 0.05 的格子上(见 [snapTextScale])。2026-11-14 用户反馈: 滑块已经够用,
+  /// 「小/标准/大/特大」档位 chip 是重复的第二套入口, 已移除。
   double textScale = 1.0;
 
   /// ncm-provider 的音质字符串: standard / higher / exhigh / lossless / hires
@@ -217,13 +217,9 @@ class AppSettings extends ChangeNotifier {
   static int get textScaleDivisions =>
       ((kTextScaleMax - kTextScaleMin) / kTextScaleStep).round();
 
-  /// 预设档位(设置页排一排 chip; 也当"精细调节"的吸附点)。
-  static final textScales = <double, String>{
-    0.85: '小',
-    1.0: '标准',
-    1.15: '大',
-    1.3: '特大',
-  };
+  /// 展示文案: 一律给百分比(如「120%」)。以前命中「小/标准/大/特大」时给档位名,
+  /// 但档位 chip 已移除, 再叫"标准"只会让用户以为还有别的档位。
+  static String textScaleLabel(double scale) => '${(scale * 100).round()}%';
 
   /// 把任意倍率吸附到 [kTextScaleStep] 的格子上并夹到区间内(纯函数)。
   ///
@@ -236,21 +232,9 @@ class AppSettings extends ChangeNotifier {
     return (snapped * 100).round() / 100;
   }
 
-  /// 当前倍率的展示文案: 命中预设档位就说档位名, 否则给百分比(如「120%」)。
-  static String textScaleLabel(double scale) {
-    for (final entry in textScales.entries) {
-      if ((entry.key - scale).abs() < 0.005) return entry.value;
-    }
-    return '${(scale * 100).round()}%';
-  }
-
-  /// 设置页副标题: 档位名 + 百分比 + 一句"是否跟随系统"。
-  static String textScaleHint(double scale) {
-    final percent = '${(scale * 100).round()}%';
-    final name = textScaleLabel(scale);
-    final label = name == percent ? percent : '$name · $percent';
-    return '$label · 叠在系统字号之上(系统无障碍大字号仍然生效)';
-  }
+  /// 设置页副标题: 当前百分比 + 一句"是否跟随系统"。
+  static String textScaleHint(double scale) =>
+      '${textScaleLabel(scale)} · 叠在系统字号之上(系统无障碍大字号仍然生效)';
 
   Future<void> load(String dataDir) async {
     _file = File('$dataDir/settings.json');

@@ -7,8 +7,8 @@
 > 里程碑式记录 "做到了什么 / 怎么验证的 / 下一步",
 > 协议细节放 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`,
 > LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/lx-plugin.md`,
-> 社区项目与路线选择见 `docs/community-projects.md`,
-> fork/PR/自建对比见 `docs/build-vs-fork.md`,
+> 社区项目与路线选择见 `community-projects.md`,
+> fork/PR/自建对比见 `build-vs-fork.md`,
 > 给 Melodia 提 PR 的分支/构建/真机验证/截图流程见 `docs/melodia-pr-workflow.md`。
 
 ## 当前状态: v1 全链路可用(真机验证)
@@ -52,7 +52,7 @@
 - 私人FM `/api/v1/radio/get`、每日推荐 `/api/v3/discovery/recommend/songs`:api-enhanced 标 weapi,
   但**实测 eapi 封装同样 200**(匿名 FM 返回 1 首,登录后为批量)。
 - 心动模式 `/api/playmode/intelligence/list` 接受 eapi,需登录态(301)。
-- 客户端身份 cookie 决定很多静默行为(见 `docs/build-vs-fork.md` 第 3 节):
+- 客户端身份 cookie 决定很多静默行为(见 `build-vs-fork.md` 第 3 节):
   `os`/`appver`/`osver` 缺失会静默封顶音质,写操作会被 `403 illegal request!`。
 
 ## 待办(按优先级)
@@ -130,6 +130,6 @@ node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / �
 
 - ~~**路线**:继续 WebView 插件化(96KB APK / 126MB RAM)还是转向原生(= fork Ncrust 3.9MB / 87MB)。~~
   **已定(2026-11):PR 为主,只对 Melodia;不 fork 任何一方。** MiniNCM 降级为协议/风控实验台
-  + LX 插件脚本工坊,Ncrust 仅作低资源参照。见 `docs/build-vs-fork.md` 第 6 节。
+  + LX 插件脚本工坊,Ncrust 仅作低资源参照。见 `build-vs-fork.md` 第 6 节。
 - 原生扫码是否还值得保留:目前保留为"快捷尝试",命中 8821 时提示改用官方网页登录。
 

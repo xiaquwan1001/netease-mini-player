@@ -173,10 +173,10 @@ See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 |---|---|
 | [`docs/README.md`](docs/README.md) | **documentation index** (one line per file, with status) |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | progress log: version timeline + per-batch evidence (Chinese) |
-| [`docs/architecture-restart.md`](docs/architecture-restart.md) | architecture decisions, plugin boundaries |
+| [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | architecture decisions, plugin boundaries (archived) |
 | [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | dual-platform testing, semantics-driven automation, gotchas |
-| [`docs/api-channel.md`](docs/api-channel.md) | API channel (interface / interface3) measurements |
+| [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | API channel (interface / interface3) measurements (archived) |
 | [`docs/remaining-batches.md`](docs/remaining-batches.md) | backlog & batching plan (latest in §11) |
 | [`packaging/`](packaging/) | deb / AppImage / Windows installer scripts |
 | [`tools/devui/`](tools/devui/README.md) | headless emulator automation helpers |
