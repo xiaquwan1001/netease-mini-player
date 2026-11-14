@@ -100,6 +100,10 @@
   (对照表见 `docs/archive/README.md`「2026-11-14 归档批次」), `docs/README.md` 重写为唯一索引(5 节 + 每行最后更新日期);
   被代码注释引用的 `plan-2026-11-09-settings-and-player.md`/`credential-storage-options.md` 留原位并在 §4 写明解绑条件。
   GitHub 仓库 description 同步改写为: 非官方三端客户端 + Rust 内核(协议/身份/加解密/播放) + Flutter 单份 UI + v1 WebView 已归档重写 + MIT。
+- **分类条最终改回"单横排 + 横向拖拽"**(用户第五轮反馈, 拍板): 不换行就不存在"末尾空缺/两排对齐/宽度被拉伸"任何一类问题;
+  `CategoryBar` = `SingleChildScrollView(horizontal) + Row`(chip 自然宽度, 间隔 6), 联想面板与搜索结果共用;
+  条数少于一屏时表现与普通一行一致, 多于一屏时右侧 chip 天然露出一截提示可拖。回归用例改为
+  "同一横排 / 可拖到最后一个 / 切换选中不改宽高", 屏外分类点击的用例先 `tester.ensureVisible`。
 - 门禁: `dart analyze` 0 issue · `flutter test` **941 通过 / 1 跳过**(golden `settings_360x800` 按新版重出) ·
   `dart format --set-exit-if-changed` 干净 · `check-tokens.sh --strict` OK。
 

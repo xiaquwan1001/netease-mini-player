@@ -131,7 +131,12 @@ List<Rect> cardRects(WidgetTester tester, List<String> names) => [
 ];
 
 Future<void> openSection(WidgetTester tester, String label) async {
-  await tester.tap(find.widgetWithText(ChoiceChip, label));
+  // 分类条是「单横排 + 用户横向拖拽」: 400dp 下靠后的分类(MV/用户)在屏外,
+  // 真机上用户会先拖一下; 测试里用 ensureVisible 做同样的"先滚到可见再点"。
+  final chip = find.widgetWithText(ChoiceChip, label);
+  await tester.ensureVisible(chip);
+  await tester.pumpAndSettle();
+  await tester.tap(chip);
   await tester.pumpAndSettle();
 }
 

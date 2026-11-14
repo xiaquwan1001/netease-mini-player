@@ -3,14 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/category_bar.dart';
 import 'package:minincm/src/layout.dart';
 
-/// 回归 2026-11-14 用户反馈 1/2:
-/// 「搜索页面的分类前面有奇怪的缩进, 没有对齐, 也没利用显示宽度」
-/// 「当且仅当聚焦 tab 是第二排(用户/MV)时, 两排分类又突然对齐了, 缩进消失」
+/// 分类条回归(2026-11-14 用户四轮反馈后的最终口径):
+/// 「搜索结果的分类」与「输入联想的分类」共用 [CategoryBar], **永远只有一横排**,
+/// 放不下时靠用户横向拖拽 —— 不换行, 于是"末尾空缺/两排对齐/被拉伸"这些排版问题
+/// 在结构上就不存在了。
 ///
-/// 根因有两个, 这里都钉成断言:
-/// ① 分类条以前是 `Padding + Wrap`, 在 `Column`(crossAxisAlignment.center) 的松约束下
-///    收缩到内容宽度后被**居中**, 于是左边界随行宽漂移(选中排的宽度一变就跳);
-/// ② 选中项默认带 checkmark, chip 变宽 ⇒ 一次切换就让整条重新排版。
+/// 这里钉住三件事:
+/// ① 所有 chip 同一行(y 相同), 左边界递增, 第一个贴页面留白;
+/// ② 一屏放不下时可以横向拖动, 拖到底能看到最后一个分类;
+/// ③ 切换选中不改变任何 chip 的位置/宽度(没有 checkmark 撑宽)。
 void main() {
   const labels = ['单曲', '艺人', '专辑', '歌单', '播客', '用户', 'MV'];
 
@@ -28,12 +29,12 @@ void main() {
     ];
   }
 
-  testWidgets('分类条两排都贴齐页面左边距, 不被 Column 居中', (tester) async {
+  testWidgets('永远只有一横排: 所有 chip 同一行且从页面左边距开始', (tester) async {
     useNarrowScreen(tester);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          // 与搜索结果页一致: Column 默认 center, 正是"居中缩进"的触发条件
+          // 与搜索结果页一致: Column 默认 center(曾经导致"居中缩进"的触发条件)
           body: Column(
             children: [
               CategoryBar(labels: labels, selected: 0, onSelected: (_) {}),
@@ -42,19 +43,55 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
     final rects = chipRects(tester);
     expect(rects.length, labels.length);
-    // 真的排成了两排(400dp 宽放不下 7 个 chip)
-    final firstRowTop = rects.first.top;
-    final secondRow = rects.where((r) => r.top > firstRowTop + 1).toList();
-    expect(secondRow, isNotEmpty, reason: '400dp 宽应换行');
-    // 每一排的第一个 chip 都贴页面留白, 不该出现"被居中的缩进"
+    for (final rect in rects) {
+      expect(rect.top, closeTo(rects.first.top, 0.5), reason: '必须排在同一横排');
+      expect(rect.height, closeTo(rects.first.height, 0.5));
+    }
     expect(rects.first.left, closeTo(kPagePadding, 0.5));
-    expect(secondRow.first.left, closeTo(kPagePadding, 0.5));
+    for (var i = 1; i < rects.length; i++) {
+      expect(rects[i].left, greaterThan(rects[i - 1].right));
+    }
   });
 
-  testWidgets('选中第二排的分类不改变任何 chip 的位置/宽度(缩进不消失也不漂移)', (tester) async {
+  testWidgets('一屏放不下时可横向拖拽, 拖到底能看到最后一个分类', (tester) async {
+    useNarrowScreen(tester);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              CategoryBar(labels: labels, selected: 0, onSelected: (_) {}),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final before = chipRects(tester).last;
+    expect(
+      before.right,
+      greaterThan(400),
+      reason: '400dp 放不下 7 个 chip, 最后一个应在屏外(靠拖拽看到)',
+    );
+
+    await tester.drag(
+      find.byType(SingleChildScrollView),
+      const Offset(-600, 0),
+    );
+    await tester.pumpAndSettle();
+    final after = chipRects(tester).last;
+    expect(
+      after.right,
+      lessThanOrEqualTo(400.5),
+      reason: '拖到底后最后一个 chip 应完整可见',
+    );
+    expect(after.left, greaterThanOrEqualTo(-0.5));
+  });
+
+  testWidgets('切换选中的分类不改变任何 chip 的位置/宽度', (tester) async {
     useNarrowScreen(tester);
     var selected = 0;
     await tester.pumpWidget(
@@ -74,12 +111,11 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
     final before = chipRects(tester);
 
-    // 点第二排的「用户」
     await tester.tap(find.text('用户'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     final after = chipRects(tester);
 
     expect(selected, 5);
@@ -95,56 +131,6 @@ void main() {
         reason: 'chip $i 宽度不应随选中变化(没有 checkmark)',
       );
     }
-  });
-
-  testWidgets('每排都铺满整行宽度: 末尾不再留空缺', (tester) async {
-    useNarrowScreen(tester);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Column(
-            children: [
-              CategoryBar(labels: labels, selected: 0, onSelected: (_) {}),
-            ],
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final rects = chipRects(tester);
-    expect(rects.length, labels.length);
-
-    // 按 top 分组(同一排 y 相同), 每排两端都必须贴页面留白
-    final rows = <double, List<Rect>>{};
-    for (final rect in rects) {
-      final key = rows.keys.firstWhere(
-        (top) => (top - rect.top).abs() < 1,
-        orElse: () => rect.top,
-      );
-      rows.putIfAbsent(key, () => <Rect>[]).add(rect);
-    }
-    const pageRight = 400 - kPagePadding;
-    for (final row in rows.values) {
-      row.sort((a, b) => a.left.compareTo(b.left));
-      expect(
-        row.first.left,
-        closeTo(kPagePadding, 0.5),
-        reason: '每排第一个 chip 贴左边距',
-      );
-      expect(
-        row.last.right,
-        closeTo(pageRight, 0.5),
-        reason: '每排最后一个 chip 必须贴右边距(末尾没有空缺)',
-      );
-      // 同一排等宽且相邻间隔固定
-      for (var i = 1; i < row.length; i++) {
-        expect(row[i].width, closeTo(row.first.width, 0.01));
-        expect(row[i].left - row[i - 1].right, closeTo(6, 0.01));
-      }
-    }
-    // 7 个分类在 400dp 下是两排, 且均分成 4+3(不是 6+1)
-    expect(rows.length, 2);
-    expect(rows.values.map((r) => r.length).toList()..sort(), [3, 4]);
   });
 
   testWidgets('带条数时 chip 文案包含数量', (tester) async {
