@@ -484,6 +484,10 @@ class AppSettings extends ChangeNotifier {
   /// 为什么必须原子: 写临时文件再 rename, 任何时刻磁盘上都有一份完整可解析的
   /// settings.json(rename 在同一目录内是原子的), 进程被杀也不会留下半截文件。
   Future<void> _save() {
+    // 还没 load() 过(设置文件路径未知)时直接返回: 以前这里会顺手串到
+    // "上一个落盘任务"上, 而那个 Future 可能属于**已经结束的 zone**(widget 测试
+    // 每条用例一个 FakeAsync zone), 于是 await 永远不回来 —— 表现为整页用例卡死。
+    if (_file == null) return Future<void>.value();
     final next = (_saving ?? Future<void>.value()).then(
       (_) => _writeSettings(),
     );

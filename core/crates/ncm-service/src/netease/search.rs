@@ -21,6 +21,13 @@ impl NeteaseProvider {
     }
 
     /// 搜索建议(输入联想). 匿名可用.
+    ///
+    /// 2026-11-14 用户反馈三条, 都在这里收口:
+    /// - 「联想词应该结合用户关注内容」: 关注了 Chinese Football 的人搜 "Chinese"
+    ///   时它该排在冷门同名艺人前面 ⇒ 按「是否与我关注的人相关」重排;
+    /// - 「每类候选太少」: 服务端给几条就留几条(上限 SUGGEST_PER_KIND_MAX);
+    /// - 「单曲/专辑/艺人的图片很多只有占位符」: 专辑改用专辑自己的封面 URL,
+    ///   歌曲再用一次 song_detail 批量补专辑封面(按歌曲 id 缓存).
     pub(super) fn search_suggest<'a>(
         &'a self,
         keywords: &'a str,
@@ -40,8 +47,102 @@ impl NeteaseProvider {
                     Ok(resp.body)
                 })
                 .await?;
-            Ok(parse_suggest(&body))
+            let followed = self.suggest_followed_artist_ids().await;
+            let mut items = rank_suggest(parse_suggest_groups(&body), &followed);
+            self.fill_suggest_song_covers(&mut items).await;
+            Ok(items)
         })
+    }
+
+    /// 关注艺人 id(5 分钟缓存; 未登录/请求失败就是空集合, 排序退回服务端顺序).
+    ///
+    /// 联想是每按键一次请求, 不能每次都打 artist_sublist(风控敏感), 所以这里
+    /// 自己在 provider 里缓存一份; update_session(登录/登出/切号)会清掉它.
+    async fn suggest_followed_artist_ids(&self) -> std::collections::HashSet<u64> {
+        const TTL: std::time::Duration = std::time::Duration::from_secs(300);
+        let now = std::time::Instant::now();
+        {
+            let guard = self
+                .followed_artists
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some((at, ids)) = guard.as_ref() {
+                if now.duration_since(*at) < TTL {
+                    return ids.iter().copied().collect();
+                }
+            }
+        }
+        let ids: Vec<u64> = match self.subscribed_artists(500).await {
+            Ok(list) => list.into_iter().map(|a| a.id).collect(),
+            Err(_) => Vec::new(),
+        };
+        *self
+            .followed_artists
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = Some((now, ids.clone()));
+        ids.into_iter().collect()
+    }
+
+    /// 给联想里缺封面的单曲补专辑封面: 一次 song_detail 批量请求, 结果按 id 缓存.
+    ///
+    /// 失败一律静默(联想是输入路径上的可选增强, 不能因为补图失败就不出建议).
+    async fn fill_suggest_song_covers(&self, items: &mut [SuggestItem]) {
+        let mut missing: Vec<u64> = Vec::new();
+        for item in items.iter() {
+            if item.kind == "song" && item.cover_url.is_none() && !missing.contains(&item.id) {
+                missing.push(item.id);
+            }
+        }
+        if missing.is_empty() {
+            return;
+        }
+        let mut resolved: std::collections::HashMap<u64, String> = {
+            let cache = self
+                .suggest_covers
+                .read()
+                .unwrap_or_else(|e| e.into_inner());
+            missing
+                .iter()
+                .filter_map(|id| cache.get(id).map(|url| (*id, url.clone())))
+                .collect()
+        };
+        let fetch: Vec<u64> = missing
+            .iter()
+            .copied()
+            .filter(|id| !resolved.contains_key(id))
+            .take(10)
+            .collect();
+        if !fetch.is_empty() {
+            let ids = fetch
+                .iter()
+                .map(u64::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            if let Ok(songs) = self.songs_detail(&ids).await {
+                for song in songs {
+                    if let Some(url) = song.album.and_then(|a| a.pic_url) {
+                        resolved.insert(song.id.0, url);
+                    }
+                }
+            }
+            let mut cache = self
+                .suggest_covers
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            if cache.len() + resolved.len() > 500 {
+                cache.clear();
+            }
+            for (id, url) in resolved.iter() {
+                cache.insert(*id, url.clone());
+            }
+        }
+        for item in items.iter_mut() {
+            if item.kind == "song" && item.cover_url.is_none() {
+                if let Some(url) = resolved.get(&item.id) {
+                    item.cover_url = Some(url.clone());
+                }
+            }
+        }
     }
 
     /// 联想下拉的纯关键词候选(type=mobile 分支, /api/search/suggest/keyword).
@@ -557,10 +658,22 @@ pub fn parse_search_podcasts(result: &Value) -> Vec<SearchPodcast> {
         .unwrap_or_default()
 }
 
+/// 联想每类最多保留多少条(服务端一般只给 2~6 条, 这里只是防异常大的响应).
+const SUGGEST_PER_KIND_MAX: usize = 10;
+
+/// 一条联想候选 + 判断「是不是我关注的人」用的艺人 id.
+struct SuggestEntry {
+    item: SuggestItem,
+    /// 这首歌/专辑/MV 的艺人, 或艺人条目本身.
+    artist_ids: Vec<u64>,
+}
+
 /// 搜索建议的响应形如
 /// {code:200, result:{order:[songs,artists,albums,playlists], songs:[], artists:[], albums:[], playlists:[]}}
-/// 按 order 顺序扁平化成 UI 直接可渲染的条目.
-pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
+///
+/// 解析成**按 kind 分组**的结构(组内保持服务端顺序), 交给 rank_suggest 排序后
+/// 再扁平化 —— 分组信息是「相关的类提到前面」必须的, 扁平后就丢了.
+fn parse_suggest_groups(body: &Value) -> Vec<(String, Vec<SuggestEntry>)> {
     let Some(result) = body.get("result") else {
         return Vec::new();
     };
@@ -580,7 +693,7 @@ pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
                 "playlists".to_string(),
             ]
         });
-    let mut out = Vec::new();
+    let mut groups = Vec::new();
     for key in order {
         let kind = match key.as_str() {
             "songs" => "song",
@@ -595,27 +708,36 @@ pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
         let Some(arr) = result.get(&key).and_then(Value::as_array) else {
             continue;
         };
-        for v in arr.iter().take(3) {
+        let mut entries = Vec::new();
+        for v in arr.iter().take(SUGGEST_PER_KIND_MAX) {
             let Some(id) = u64_of(v, "id") else { continue };
             let title = str_of(v, "name").unwrap_or_default();
             if title.is_empty() {
                 continue;
             }
+            // 封面: 建议接口的专辑对象自己带 picUrl, 歌曲只带 album.picId(没有 URL),
+            // 所以歌曲这里拿不到就留 None, 由 fill_suggest_song_covers 批量补.
             let (subtitle, cover_url) = match kind {
                 "song" => (
                     artists_line_of(v),
                     v.get("album")
                         .and_then(|a| str_of(a, "picUrl"))
-                        .or_else(|| str_of(v, "picUrl")),
+                        .or_else(|| v.get("al").and_then(|a| str_of(a, "picUrl")))
+                        .or_else(|| str_of(v, "picUrl"))
+                        .filter(|s| !s.is_empty()),
                 ),
-                "artist" => ("歌手".to_string(), str_of(v, "picUrl")),
+                "artist" => (
+                    "歌手".to_string(),
+                    str_of(v, "picUrl").or_else(|| str_of(v, "img1v1Url")),
+                ),
                 "album" => (
                     v.get("artist")
                         .and_then(|a| str_of(a, "name"))
                         .unwrap_or_default(),
-                    v.get("artist")
-                        .and_then(|a| str_of(a, "picUrl"))
-                        .or_else(|| str_of(v, "picUrl")),
+                    // 专辑封面优先用**专辑自己的** picUrl: 以前先取 artist.picUrl,
+                    // 于是一整列联想专辑显示的都是歌手头像(用户反馈「图不对/像占位」).
+                    str_of(v, "picUrl")
+                        .or_else(|| v.get("artist").and_then(|a| str_of(a, "picUrl"))),
                 ),
                 "mv" => (
                     {
@@ -642,19 +764,104 @@ pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
                             .or_else(|| u64_of(v, "bookCount"))
                             .unwrap_or(0)
                     ),
-                    str_of(v, "coverImgUrl"),
+                    str_of(v, "coverImgUrl").or_else(|| str_of(v, "picUrl")),
                 ),
             };
-            out.push(SuggestItem {
-                kind: kind.to_string(),
-                id,
-                title,
-                subtitle,
-                cover_url,
+            entries.push(SuggestEntry {
+                artist_ids: suggest_artist_ids_of(v),
+                item: SuggestItem {
+                    kind: kind.to_string(),
+                    id,
+                    title,
+                    subtitle,
+                    cover_url: cover_url.filter(|s| !s.is_empty()),
+                },
             });
         }
+        if !entries.is_empty() {
+            groups.push((kind.to_string(), entries));
+        }
     }
+    groups
+}
+
+/// 一条联想条目涉及的艺人 id(歌曲的每位艺人 / 专辑的艺人 / 艺人自己 / MV 的艺人).
+fn suggest_artist_ids_of(v: &Value) -> Vec<u64> {
+    let mut out: Vec<u64> = Vec::new();
+    if let Some(id) = u64_of(v, "artistId") {
+        out.push(id);
+    }
+    for key in ["artists", "ar"] {
+        if let Some(arr) = v.get(key).and_then(Value::as_array) {
+            for a in arr {
+                if let Some(id) = u64_of(a, "id") {
+                    out.push(id);
+                }
+            }
+        }
+    }
+    if let Some(id) = v.get("artist").and_then(|a| u64_of(a, "id")) {
+        out.push(id);
+    }
+    if let Some(id) = v.get("creator").and_then(|c| u64_of(c, "userId")) {
+        out.push(id);
+    }
+    if let Some(id) = u64_of(v, "id") {
+        out.push(id);
+    }
+    out.sort_unstable();
+    out.dedup();
     out
+}
+
+/// 按「与我关注的人相关」重排联想:
+/// ① 相关的类比其它类整体提前(类内顺序不变);
+/// ② 类内相关的条目提到组内前面(同样保持原顺序).
+///
+/// 用户反馈: 搜 "Chinese" 时首屏被一个冷门同名艺人占住, 而自己关注的
+/// Chinese Football 排在后面 —— 关注就是最强的相关性信号, 应该先给出来.
+/// UI 侧取「扁平后第一条的 kind」作为默认选中的分类, 所以类级别的提前
+/// 同时决定了默认打开哪个分类页.
+fn rank_suggest(
+    groups: Vec<(String, Vec<SuggestEntry>)>,
+    followed: &std::collections::HashSet<u64>,
+) -> Vec<SuggestItem> {
+    let is_related = |e: &SuggestEntry| e.artist_ids.iter().any(|id| followed.contains(id));
+    let mut ranked: Vec<(bool, Vec<SuggestEntry>)> = groups
+        .into_iter()
+        .map(|(_, mut entries)| {
+            let related = entries.iter().filter(|e| is_related(e)).count();
+            // 稳定分区: related 在前, 各自保持服务端顺序
+            let mut hot = Vec::with_capacity(related);
+            let mut rest = Vec::with_capacity(entries.len() - related);
+            for e in entries.drain(..) {
+                if is_related(&e) {
+                    hot.push(e);
+                } else {
+                    rest.push(e);
+                }
+            }
+            hot.extend(rest);
+            (related > 0, hot)
+        })
+        .collect();
+    // 稳定排序: 相关的类在前
+    ranked.sort_by_key(|(related, _)| !*related);
+    ranked
+        .into_iter()
+        .flat_map(|(_, entries)| entries.into_iter().map(|e| e.item))
+        .collect()
+}
+
+/// 公开解析入口(单测/不关心个性化的调用方): 不做关注重排.
+pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
+    parse_suggest_with_followed(body, &[])
+}
+
+/// 带上「我关注的艺人 id」解析: 与 provider 生产路径同一条排序(便于单测/诊断).
+pub fn parse_suggest_with_followed(body: &Value, followed: &[u64]) -> Vec<SuggestItem> {
+    let followed: std::collections::HashSet<u64> = followed.iter().copied().collect();
+    rank_suggest(parse_suggest_groups(body), &followed)
 }
 
 /// 搜索热词榜的响应形如

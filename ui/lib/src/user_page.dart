@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
+import 'app_settings.dart';
 import 'artist_nav.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
@@ -445,6 +446,8 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
             ),
           ),
           CoverRow(
+            // 用户反馈 16: 设置里的「一排 / 两排」也作用于他人主页的歌单横滑
+            rows: AppSettings.instance.coverRows,
             children: [
               for (final p in lists.take(30))
                 CoverCard(

@@ -12,6 +12,7 @@ import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
+import 'now_playing.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'recent_order.dart';
@@ -583,46 +584,59 @@ class _LikedSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    ListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
-                      contentPadding: kCardRowPadding,
-                      leading: CoverArt(
-                        url: preview[i].coverUrl,
-                        size: 40,
-                        radius: 4,
-                      ),
-                      title: SongTitleWithBadges(song: preview[i]),
-                      subtitle: Text(
-                        preview[i].artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (songs.length > preview.length &&
-                              i == preview.length - 1)
-                            Text(
-                              '共 ${songs.length} 首',
-                              style: Theme.of(context).textTheme.labelSmall,
+                    NowPlayingHighlight(
+                      songId: preview[i].id,
+                      builder: (context, playing) => ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        // 正在播放的那首要高亮(用户反馈: 列表里认不出正在放的歌)
+                        selected: playing,
+                        // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                        contentPadding: kCardRowPadding,
+                        leading: CoverArt(
+                          url: preview[i].coverUrl,
+                          size: 40,
+                          radius: 4,
+                        ),
+                        title: SongTitleWithBadges(
+                          song: preview[i],
+                          style: playing
+                              ? TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : null,
+                        ),
+                        subtitle: Text(
+                          preview[i].artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (songs.length > preview.length &&
+                                i == preview.length - 1)
+                              Text(
+                                '共 ${songs.length} 首',
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            SongOverflowButton(
+                              song: preview[i],
+                              size: 20,
+                              source: SongActionSource.playlist,
                             ),
-                          SongOverflowButton(
-                            song: preview[i],
-                            size: 20,
-                            source: SongActionSource.playlist,
-                          ),
-                        ],
+                          ],
+                        ),
+                        onTap: preview[i].playable
+                            ? () {
+                                final index = playable.indexWhere(
+                                  (s) => s.id == preview[i].id,
+                                );
+                                onPlay(playable, index < 0 ? 0 : index);
+                              }
+                            : null,
                       ),
-                      onTap: preview[i].playable
-                          ? () {
-                              final index = playable.indexWhere(
-                                (s) => s.id == preview[i].id,
-                              );
-                              onPlay(playable, index < 0 ? 0 : index);
-                            }
-                          : null,
                     ),
                 ],
               ),
@@ -982,28 +996,41 @@ class _RecentSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    ListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
-                      contentPadding: kCardRowPadding,
-                      leading: CoverArt(
-                        url: preview[i].coverUrl,
-                        size: 40,
-                        radius: 4,
+                    NowPlayingHighlight(
+                      songId: preview[i].id,
+                      builder: (context, playing) => ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        // 正在播放的那首要高亮
+                        selected: playing,
+                        // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                        contentPadding: kCardRowPadding,
+                        leading: CoverArt(
+                          url: preview[i].coverUrl,
+                          size: 40,
+                          radius: 4,
+                        ),
+                        title: SongTitleWithBadges(
+                          song: preview[i],
+                          style: playing
+                              ? TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : null,
+                        ),
+                        subtitle: Text(
+                          preview[i].artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: SongOverflowButton(
+                          song: preview[i],
+                          size: 20,
+                          source: SongActionSource.playlist,
+                        ),
+                        onTap: () => onPlay(songs, i),
                       ),
-                      title: SongTitleWithBadges(song: preview[i]),
-                      subtitle: Text(
-                        preview[i].artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: SongOverflowButton(
-                        song: preview[i],
-                        size: 20,
-                        source: SongActionSource.playlist,
-                      ),
-                      onTap: () => onPlay(songs, i),
                     ),
                 ],
               ),

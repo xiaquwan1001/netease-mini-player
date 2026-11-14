@@ -332,18 +332,22 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    BoxDecoration tileDecoration() => tester
-        .widget<AnimatedContainer>(
-          find
-              .ancestor(
-                of: find.text('好听'),
-                matching: find.byType(AnimatedContainer),
-              )
-              .first,
-        )
-        .decoration! as BoxDecoration;
+    BoxDecoration tileDecoration() =>
+        tester
+                .widget<AnimatedContainer>(
+                  find
+                      .ancestor(
+                        of: find.text('好听'),
+                        matching: find.byType(AnimatedContainer),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
 
-    final gesture = await tester.startGesture(tester.getCenter(find.text('好听')));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('好听')),
+    );
     await tester.pump(const Duration(milliseconds: 600));
     expect(
       tileDecoration().color,
@@ -353,10 +357,6 @@ void main() {
     await gesture.up();
     // 选中态由 1.5s 自动褪色定时器收尾(分享面板弹出时框架会取消长按手势)
     await tester.pump(const Duration(milliseconds: 1600));
-    expect(
-      tileDecoration().color,
-      Colors.transparent,
-      reason: '松手后选中态褪去',
-    );
+    expect(tileDecoration().color, Colors.transparent, reason: '松手后选中态褪去');
   });
 }

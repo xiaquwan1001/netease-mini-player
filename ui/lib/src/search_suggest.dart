@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'category_bar.dart';
 import 'cover_art.dart';
 import 'layout.dart';
 import 'rust/api.dart' as rust;
@@ -40,17 +41,39 @@ String suggestKindLabel(String kind) {
 
 /// 输入联想面板: 点条目 → 用它做一次搜索(与原版一致: 先给建议, 再出结果).
 ///
-/// 2026-11 需求: 联想结果要**按分类纵向分组**(单曲 / 艺人 / 专辑 / 歌单 / 其他),
-/// 之前是平铺列表 + 每行尾部一个小 tag, 看不出分类边界, 也无法按类筛选。
-class SuggestionPanel extends StatelessWidget {
+/// 2026-11-14 用户反馈(需求 3): 联想以前是"分类标题 + 条目"从上到下堆着排,
+/// 想看后面的分类必须一直下滑, 而且和搜索结果页的分类 tab 完全两套交互。
+/// 现在改成**和搜索结果一样的纵向分类 tab**: 顶部一条 [CategoryBar]
+/// (单曲/艺人/专辑/歌单/MV, 带条数), 一次只渲染一个分类, 面板内部自滚动。
+///
+/// 默认打开的分类 = 后端个性化排序后的第一条所属分类(见 Rust 侧
+/// `rank_suggest`: 与我关注艺人相关的类会被提前), 所以"搜 Chinese 却先看到
+/// 冷门同名艺人"不会再把关注对象挤到后面。
+class SuggestionPanel extends StatefulWidget {
   const SuggestionPanel({
     super.key,
     required this.items,
     required this.onSelected,
+    this.keyword = '',
+    this.onSearchAll,
   });
 
   final List<rust.SuggestItem> items;
   final void Function(rust.SuggestItem) onSelected;
+
+  /// 当前输入词(底部「搜索全部结果」按钮用)
+  final String keyword;
+
+  /// 底部「看全部结果」回调; 不传就不渲染该入口
+  final VoidCallback? onSearchAll;
+
+  @override
+  State<SuggestionPanel> createState() => _SuggestionPanelState();
+}
+
+class _SuggestionPanelState extends State<SuggestionPanel> {
+  /// 当前分类(null = 跟随第一条所在的分类)
+  String? _kind;
 
   /// 固定优先顺序; 未知分类按返回顺序补在最后。
   static const List<String> _kindOrder = [
@@ -63,23 +86,25 @@ class SuggestionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
+    if (widget.items.isEmpty) return const SizedBox.shrink();
     final groups = <String, List<rust.SuggestItem>>{};
-    for (final item in items) {
+    for (final item in widget.items) {
       groups.putIfAbsent(item.kind, () => <rust.SuggestItem>[]).add(item);
     }
-    final orderedKinds = <String>[
+    final kinds = <String>[
       for (final kind in _kindOrder)
         if (groups.containsKey(kind)) kind,
       for (final kind in groups.keys)
         if (!_kindOrder.contains(kind)) kind,
     ];
-    // 面板**占满**父级给的剩余高度(需求 14): 以前调用方套了
-    // ConstrainedBox(maxHeight: 280) + SingleChildScrollView, 联想一多就只能在
-    // 一条 280dp 的小矩形里滚, 下面还露出半截结果页。现在内部自滚动,
-    // 条目一直排到页面底部(末端留出安全区/播放条的 [kPagePadding])。
+    // 旧选择仍然有效就保留(用户还在打字时不要每次跳回第一类)
+    final selectedKind = (_kind != null && groups.containsKey(_kind))
+        ? _kind!
+        : kinds.first;
+    final items = groups[selectedKind]!;
     // 底部让出系统手势/导航条安全区, 最后一条不会被系统条压住。
     final safeBottom = MediaQuery.paddingOf(context).bottom;
+    final scheme = Theme.of(context).colorScheme;
     return Card(
       margin: EdgeInsets.fromLTRB(
         kPagePadding,
@@ -88,32 +113,62 @@ class SuggestionPanel extends StatelessWidget {
         kPagePadding + safeBottom,
       ),
       clipBehavior: Clip.antiAlias,
-      child: ListView(
-        padding: const EdgeInsets.only(bottom: kSectionTitleGap),
+      child: Column(
         children: [
-          for (final kind in orderedKinds) ...[
-            _SuggestGroupHeader(kind: kind, count: groups[kind]!.length),
-            for (final item in groups[kind]!)
-              ListTile(
-                dense: true,
-                leading: item.coverUrl == null
-                    ? Icon(_iconOf(kind), size: 20)
-                    : CoverArt(url: item.coverUrl, size: 32, radius: 4),
-                title: Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: item.subtitle.isEmpty
-                    ? null
-                    : Text(
-                        item.subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+          CategoryBar(
+            labels: [for (final kind in kinds) _labelOf(kind)],
+            counts: [for (final kind in kinds) groups[kind]!.length],
+            selected: kinds.indexOf(selectedKind),
+            onSelected: (i) => setState(() => _kind = kinds[i]),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: kSectionTitleGap),
+              children: [
+                for (final item in items)
+                  ListTile(
+                    dense: true,
+                    leading: item.coverUrl == null
+                        ? Icon(_iconOf(item.kind), size: 22)
+                        : CoverArt(url: item.coverUrl, size: 36, radius: 4),
+                    title: Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: item.subtitle.isEmpty
+                        ? null
+                        : Text(
+                            item.subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                    onTap: () => widget.onSelected(item),
+                  ),
+                if (widget.onSearchAll != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: widget.onSearchAll,
+                        icon: const Icon(Icons.search, size: 18),
+                        label: Text(
+                          widget.keyword.isEmpty
+                              ? '查看全部搜索结果'
+                              : '在搜索结果里看全部「${widget.keyword}」',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: scheme.primary,
+                        ),
                       ),
-                onTap: () => onSelected(item),
-              ),
-          ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -127,44 +182,6 @@ class SuggestionPanel extends StatelessWidget {
 
   static IconData _iconOf(String kind) =>
       kind.isEmpty ? Icons.search : suggestIcon(kind);
-}
-
-/// 分组标题(单曲 / 艺人 / …  右侧组内条数), 与结果页的区块标题同一视觉语言。
-class _SuggestGroupHeader extends StatelessWidget {
-  const _SuggestGroupHeader({required this.kind, required this.count});
-
-  final String kind;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final label = SuggestionPanel._labelOf(kind);
-    return Container(
-      width: double.infinity,
-      color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-      padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
-      child: Row(
-        children: [
-          Icon(SuggestionPanel._iconOf(kind), size: 14, color: scheme.outline),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurfaceVariant,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '$count',
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// 搜索历史(没输入内容时展示): 点一下直接搜, 右侧可清空.

@@ -54,7 +54,7 @@ rust.FeedEventDto feedEvent(int id, {String text = '今天听了点什么'}) =>
       commentCount: BigInt.from(1),
     );
 
-/// 我的页现在顶部有「资料卡 + 我的主页 + 简介 + 我的动态」, 默认 800x600 视口
+/// 我的页现在顶部有「资料卡 + 我的主页(整行按钮) + 简介」, 默认 800x600 视口
 /// 放不下我喜欢; 需要看到下方区块的用例统一放大视口.
 void setTallView(
   WidgetTester tester, {
@@ -80,9 +80,6 @@ MineView buildMine({
 
   /// 我的资料(简介内容)
   rust.ProfileDetail? profile,
-
-  /// 我的动态(缺省一条文字动态)
-  List<rust.FeedEventDto>? events,
 
   /// 保存简介(不传 = 后端未接入, 只提示)
   Future<void> Function(String signature)? saveSignature,
@@ -136,7 +133,6 @@ MineView buildMine({
         ),
       ],
   loadProfile: () async => profile ?? profileDetail(),
-  loadMyEvents: (uid) async => events ?? [feedEvent(1)],
   saveSignature: saveSignature,
   loadRecent: () async => [song(7, '最近听的歌')],
   loadRanking: (period) async => [
@@ -176,7 +172,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 顶部现在是「资料卡 / 我的主页 / 简介 / 我的动态」(需求 1/2),
+    // 顶部现在是「资料卡 / 我的主页 / 简介」(需求 1/2),
     // 我喜欢被推到下面 —— 按真实用户路径滚过去。
     final scrollable = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
@@ -327,7 +323,7 @@ void main() {
   // ── 需求 1/2: 「我的」页与「其他用户主页」统一结构 ──────────────────
   //
   // 之前「我的」页看不到自己的简介、没有动态入口、也不能改简介; 现在:
-  // 资料卡 / 我的主页 / 简介(空也给文案 + 编辑) / 我的动态(可下拉刷新)。
+  // 资料卡 / 我的主页 / 简介(空也给文案 + 编辑)。
   testWidgets('简介区块: 空时给明确文案 + 编辑入口', (tester) async {
     setTallView(tester);
     await tester.pumpWidget(
@@ -405,24 +401,14 @@ void main() {
     expect(find.text('简介已保存'), findsOneWidget);
   });
 
-  testWidgets('我的动态: 区块可见并展示最近动态', (tester) async {
+  // 用户反馈 15: 「我的动态」区块已并入「我的主页」, 本页不再有动态预览。
+  testWidgets('我的动态不再是本页区块, 入口只剩「我的主页」', (tester) async {
     setTallView(tester);
-    await tester.pumpWidget(
-      host(buildMine(loggedIn: true, events: [feedEvent(1, text: '今天听了点什么')])),
-    );
+    await tester.pumpWidget(host(buildMine(loggedIn: true)));
     await tester.pumpAndSettle();
 
-    expect(find.text('我的动态'), findsOneWidget);
-    expect(find.text('今天听了点什么'), findsOneWidget);
-    expect(find.text('查看全部'), findsWidgets);
-  });
-
-  testWidgets('我的动态: 没有动态时给明确空态', (tester) async {
-    setTallView(tester);
-    await tester.pumpWidget(host(buildMine(loggedIn: true, events: const [])));
-    await tester.pumpAndSettle();
-
-    expect(find.text('还没有发布动态'), findsOneWidget);
+    expect(find.text('我的动态'), findsNothing);
+    expect(find.text('我的主页'), findsOneWidget);
   });
 
   // 需求 2: 能跳到自己对外的主页形态(复用 user_page, 不另写资料卡)

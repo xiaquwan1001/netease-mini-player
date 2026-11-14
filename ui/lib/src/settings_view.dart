@@ -371,7 +371,6 @@ class SettingsView extends StatelessWidget {
       ),
     );
   }
-
 }
 
 /// 「界面字号」设置项: 预设档位(一排放得下的 chip)+ 0.80~1.50 步长 0.05 的滑块。
@@ -429,8 +428,9 @@ class _TextScaleSetting extends StatelessWidget {
                 max: AppSettings.kTextScaleMax,
                 divisions: AppSettings.textScaleDivisions,
                 label: AppSettings.textScaleLabel(scale),
-                onChanged: (value) =>
-                    settings.update(textScale: AppSettings.snapTextScale(value)),
+                onChanged: (value) => settings.update(
+                  textScale: AppSettings.snapTextScale(value),
+                ),
               ),
             ),
             Padding(

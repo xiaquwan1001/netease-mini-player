@@ -118,4 +118,41 @@ void main() {
     // 没有导航栏时播放条自己吃掉手势区 ⇒ 只比有导航时高出手势区那一条
     expect(withoutNav - withNav, gestureInset, reason: '无导航时播放条的底部手势区安全边距不对');
   });
+
+  /// 回归 2026-11-14 用户反馈 4/6: 键盘一弹出, 联想面板与键盘之间就有一段
+  /// 高度随输入法出现的空缺。根因是 Scaffold 已经按 viewInsets.bottom 收缩过,
+  /// 而根布局里的底部导航栏仍然占着 80dp ⇒ 内容底边 = 键盘顶 - 80dp。
+  testWidgets('键盘弹出时底部导航让位, 不再留一条导航栏高的空缺', (tester) async {
+    const keyboard = 300.0;
+    playerBarSlot.value = navBar();
+    Widget shell(EdgeInsets insets) => MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQueryData(
+          size: const Size(400, 800),
+          padding: const EdgeInsets.only(top: statusBar, bottom: gestureInset),
+          viewPadding: const EdgeInsets.only(
+            top: statusBar,
+            bottom: gestureInset,
+          ),
+          viewInsets: insets,
+        ),
+        child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
+      ),
+      home: const Scaffold(body: Center(child: Text('body'))),
+    );
+
+    await tester.pumpWidget(shell(EdgeInsets.zero));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsOneWidget);
+
+    await tester.pumpWidget(shell(const EdgeInsets.only(bottom: keyboard)));
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(NavigationBar),
+      findsNothing,
+      reason: '键盘在场时导航栏必须让位, 否则内容区底部会空出一条导航栏高的缺口',
+    );
+    // 播放条同样让位(键盘挡住它, 留着只会白占高度)
+    expect(find.byType(MiniPlayerBar), findsNothing);
+  });
 }

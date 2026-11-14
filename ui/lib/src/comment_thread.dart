@@ -38,6 +38,19 @@ typedef CommentDeleteHook = Future<bool> Function(BigInt commentId);
 /// 所以这条链路不需要新增任何 FFI。
 typedef CommentSendHook = CommentReplyHook;
 
+/// 评论宿主类型 → 分享卡片上的类型词(用户反馈 10: 卡片要写清评论来自哪).
+///
+/// 与 [Comment.kind] 的取值同源: song / album / playlist / podcast / mv / dj,
+/// 动态(threadId)那条路不传 kind, 由 feed_detail_page 显式给「动态」。
+String commentSourceKindLabel(String kind) => switch (kind) {
+  'song' => '歌曲',
+  'album' => '专辑',
+  'playlist' => '歌单',
+  'podcast' || 'dj' => '播客',
+  'mv' => 'MV',
+  _ => '动态',
+};
+
 class CommentThread extends StatefulWidget {
   const CommentThread({
     super.key,
@@ -97,7 +110,7 @@ class CommentThread extends StatefulWidget {
   final String shareSourceTitle;
 
   /// 出处的类型词(歌曲/歌单/专辑/播客/动态)。分享卡片与「复制评论」里
-  /// 写成「来自<kind>《标题》」; 歌曲等宿主页面接线时传入, 动态保持默认。
+  /// 写成「来自{kind}《标题》」; 歌曲等宿主页面接线时传入, 动态保持默认。
   final String shareSourceKind;
 
   @override

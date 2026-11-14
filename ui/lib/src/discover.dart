@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'adaptive_text.dart';
 import 'net_retry.dart';
+import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'error_views.dart' show FullError;
 import 'song_actions.dart';
@@ -651,16 +652,30 @@ class _SongRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 用户反馈(2026-11-14): 完整日推歌单里正在播放的那首没有高亮。
+    // 现在统一读全局"正在播放"(src/now_playing.dart): 命中就把序号换成喇叭、
+    // 歌名换成主色, 与歌单详情页/搜索结果同一套播放态语汇。
+    return NowPlayingHighlight(
+      songId: song.id,
+      builder: (context, playing) => _buildRow(context, playing),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool playing) {
     final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context).textTheme;
     return ListTile(
       dense: true,
+      selected: playing,
       leading: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             // token-ok: 序号列宽按 "两位数" 内容宽度定, 不是间距 token
             width: 22,
-            child: Text('$index', style: Theme.of(context).textTheme.bodySmall),
+            child: playing
+                ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
+                : Text('$index', style: theme.bodySmall),
           ),
           CoverArt(url: song.coverUrl, size: 40, radius: 4),
         ],
@@ -668,7 +683,12 @@ class _SongRow extends StatelessWidget {
       // 歌名 + VIP/付费/无版权标记(标记固定宽度, 不会被歌名挤掉)
       title: SongTitleWithBadges(
         song: song,
-        style: song.playable ? null : TextStyle(color: scheme.outline),
+        style: playing
+            ? theme.bodyMedium?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w600,
+              )
+            : (song.playable ? null : TextStyle(color: scheme.outline)),
       ),
       subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
       trailing: SongOverflowButton(song: song, size: 20, source: source),

@@ -1115,13 +1115,11 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                   ),
                 for (final a in widget.authors)
                   ListTile(
-                    // 整行 = 筛选(把 userId 弹回 FeedView), 只有头像进主页。
-                    // 本页作者只有 user id(不是 artist id), 交给 UserNav 解析。
-                    leading: UserAvatarTap(
-                      userId: a.userId,
-                      nickname: a.name,
-                      child: CircleCover(url: a.avatarUrl, size: 40),
-                    ),
+                    // 整行(含头像与名字) = 筛选(把 userId 弹回 FeedView)。
+                    // 2026-11-14 用户反馈 12: 这一栏的用途是"看这个人的动态",
+                    // 以前头像是另一条路(进主页)、名字又是筛动态, 同一行两种结果;
+                    // 现在统一成筛动态, 主页入口只留在下方的动态卡片里。
+                    leading: CircleCover(url: a.avatarUrl, size: 40),
                     title: Text(
                       a.name,
                       maxLines: 1,

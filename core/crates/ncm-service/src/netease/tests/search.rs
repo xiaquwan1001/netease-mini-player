@@ -249,3 +249,56 @@ fn search_mvs_mapping() {
     let mvs = parse_search_mvs(&json!({"mvs": [{"id": 0, "name": "x"}, {"id": 2, "name": ""}]}));
     assert!(mvs.is_empty());
 }
+
+#[test]
+fn suggest_album_uses_own_cover_not_artist_avatar() {
+    // 建议接口的专辑对象自己带 picUrl; 以前先取 artist.picUrl, 联想列表里
+    // 一整列"专辑"显示的都是歌手头像(用户反馈"图不对/像没加载").
+    let body = json!({"code": 200, "result": {
+        "order": ["albums"],
+        "albums": [{"id": 3, "name": "叶惠美",
+                    "picUrl": "https://p1/album.jpg",
+                    "artist": {"id": 2, "name": "周杰伦", "picUrl": "https://p1/artist.jpg"}}]
+    }});
+    let items = parse_suggest(&body);
+    assert_eq!(items[0].cover_url.as_deref(), Some("https://p1/album.jpg"));
+}
+
+#[test]
+fn suggest_prefers_followed_artist() {
+    // 搜 "Chinese": 服务端把冷门同名艺人排前面, 但我关注的 Chinese Football
+    // 应该优先(用户反馈 5). 关注信号同时把"艺人"这一类提到最前, UI 会默认打开该分类.
+    let body = json!({"code": 200, "result": {
+        "order": ["songs", "artists", "albums"],
+        "songs": [{"id": 1, "name": "Chinese", "artists": [{"id": 999, "name": "路人"}],
+                   "album": {"picUrl": "https://p1/s.jpg"}}],
+        "artists": [
+            {"id": 100, "name": "CHINESE", "picUrl": "https://p1/x.jpg"},
+            {"id": 200, "name": "Chinese Football", "picUrl": "https://p1/cf.jpg"}
+        ],
+        "albums": [{"id": 3, "name": "Here comes a new challenger",
+                    "picUrl": "https://p1/al.jpg", "artist": {"id": 200, "name": "Chinese Football"}}]
+    }});
+    let items = parse_suggest_with_followed(&body, &[200]);
+    assert_eq!(items.len(), 4);
+    // 相关的类(artists)提到最前, 且关注的艺人在类内排第一
+    assert_eq!(items[0].kind, "artist");
+    assert_eq!(items[0].title, "Chinese Football");
+    assert_eq!(items[1].title, "CHINESE");
+    // 专辑的艺人是关注对象 ⇒ 专辑类也带着"相关"标记, 排在未相关的单曲前
+    assert_eq!(items[2].kind, "album");
+    assert_eq!(items[3].kind, "song");
+    // 没关注任何人时退回服务端顺序(单曲在前)
+    let plain = parse_suggest(&body);
+    assert_eq!(plain[0].kind, "song");
+}
+
+#[test]
+fn suggest_keeps_more_than_three_per_kind() {
+    // 用户反馈「每类候选太少」: 以前 take(3), 现在服务端给几条留几条(上限 10)
+    let songs: Vec<serde_json::Value> = (0..6)
+        .map(|i| json!({"id": i + 1, "name": format!("s{i}"), "artists": [{"id": 1, "name": "a"}]}))
+        .collect();
+    let body = json!({"code": 200, "result": {"order": ["songs"], "songs": songs}});
+    assert_eq!(parse_suggest(&body).len(), 6);
+}

@@ -4,6 +4,7 @@ import 'adaptive_text.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'layout.dart';
+import 'now_playing.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -246,11 +247,20 @@ class _RankRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 排行榜里正在播放的那首也要标出来(用户反馈: 列表里认不出正在放的歌)
+    return NowPlayingHighlight(
+      songId: entry.song.id,
+      builder: (context, playing) => _buildRow(context, playing),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool playing) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     // 前三名给主色, 其余用 outline, 一眼看出名次梯度
     final rankColor = rank <= 3 ? scheme.primary : scheme.outline;
     return ListTile(
+      selected: playing,
       dense: true,
       visualDensity: VisualDensity.compact,
       // 用户反馈听歌排行左右有空隙: 默认 16+16 收到歌曲行统一留白
@@ -265,21 +275,30 @@ class _RankRow extends StatelessWidget {
             SizedBox(
               // token-ok: 名次列宽按 "两位数" 内容宽度定
               width: 22,
-              child: Text(
-                '$rank',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: rankColor,
-                  fontWeight: rank <= 3 ? FontWeight.w700 : FontWeight.w400,
-                ),
-              ),
+              child: playing
+                  ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
+                  : Text(
+                      '$rank',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: rankColor,
+                        fontWeight: rank <= 3
+                            ? FontWeight.w700
+                            : FontWeight.w400,
+                      ),
+                    ),
             ),
             const SizedBox(width: 4),
             CoverArt(url: entry.song.coverUrl, size: 40, radius: 4),
           ],
         ),
       ),
-      title: AdaptiveText(entry.song.name),
+      title: AdaptiveText(
+        entry.song.name,
+        style: playing
+            ? TextStyle(color: scheme.primary, fontWeight: FontWeight.w600)
+            : null,
+      ),
       subtitle: Text(
         entry.song.artist,
         maxLines: 1,

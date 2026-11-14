@@ -18,6 +18,8 @@ import 'src/audio_tuning.dart';
 import 'src/artist_nav.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
+import 'src/comment_thread.dart' show commentSourceKindLabel;
+import 'src/now_playing.dart' show nowPlayingSongId;
 import 'src/cover_art.dart';
 import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
@@ -499,7 +501,12 @@ class _PlayerBarChrome extends StatelessWidget {
               // (用户反馈"略微下移底部导航栏, 减少到底部的空白")。这里把 bottom inset
               // 夹到 8dp(仍高于手势条本体, 不挡点击), 导航栏整体下移约 16dp。
               final mq = MediaQuery.of(context);
-              final nav = navBar == null
+              // 键盘弹出时底部导航也一起让位(2026-11-14 用户反馈 4/6):
+              // 搜索联想面板下方总有一段"跟随输入法出现"的空缺, 高度≈底部导航栏,
+              // 因为 HomePage 的 Scaffold 已经按 viewInsets.bottom 收缩过一次,
+              // 而导航栏还占着根 Column 的 80dp ⇒ 内容底边 = 键盘顶 - 80dp。
+              // 键盘在场时导航栏本来就被键盘挡住, 一并隐藏后缺口消失。
+              final nav = navBar == null || keyboardUp
                   ? null
                   : MediaQuery(
                       data: mq.copyWith(
@@ -2491,6 +2498,9 @@ class _HomePageState extends State<HomePage> {
       kind: 'song',
       resourceId: song.id,
       title: '《${song.name}》的评论',
+      // 评论分享卡片的语境(需求 10): 来自哪首歌
+      shareSourceTitle: song.name,
+      shareSourceKind: commentSourceKindLabel('song'),
     );
   }
 
@@ -3267,7 +3277,10 @@ class _HomePageState extends State<HomePage> {
                         color: Theme.of(context).colorScheme.surface,
                         child: SuggestionPanel(
                           items: _suggestions,
+                          // 分类 tab 与底部「看全部结果」都要知道当前输入词
+                          keyword: _controller.text.trim(),
                           onSelected: (item) => _searchKeyword(item.title),
+                          onSearchAll: _busy ? null : _search,
                         ),
                       ),
                     ),
@@ -3793,9 +3806,13 @@ class _HomePageState extends State<HomePage> {
             mode: _queue.mode,
             heartActive: _heartActive,
           );
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => playerBarData.value = data,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      playerBarData.value = data;
+      // 全局"正在播放"样本(见 src/now_playing.dart): 所有列表行的播放态高亮
+      // 都读它 —— 以前各页自己传 currentTrackId, 少接一处(如完整日推歌单)
+      // 就不高亮。帧后写, 避免在 build 期间通知下游 setState。
+      nowPlayingSongId.value = showBar ? (current?.id ?? player.trackId) : null;
+    });
   }
 
   /// 首页底部导航栏的构建结果, 由根布局渲染(见 [playerBarSlot])。

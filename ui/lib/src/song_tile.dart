@@ -4,6 +4,7 @@ import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
 import 'layout.dart' show kSongRowPadding;
+import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 
@@ -174,7 +175,7 @@ class SongTile extends StatelessWidget {
   const SongTile({
     super.key,
     required this.song,
-    required this.active,
+    this.active,
     required this.liked,
     required this.onTap,
     this.onMenu,
@@ -182,7 +183,10 @@ class SongTile extends StatelessWidget {
   });
 
   final rust.SongDto song;
-  final bool active;
+
+  /// 显式指定"是否是正在播放"; 不传(推荐)就读全局 [nowPlayingSongId],
+  /// 这样任何列表(搜索/最近听过/队列)都不用各自接线就能高亮(用户反馈)。
+  final bool? active;
   final bool liked;
   final VoidCallback onTap;
 
@@ -196,6 +200,15 @@ class SongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final explicit = active;
+    if (explicit != null) return _build(context, explicit);
+    return NowPlayingHighlight(
+      songId: song.id,
+      builder: (context, playing) => _build(context, playing),
+    );
+  }
+
+  Widget _build(BuildContext context, bool active) {
     final scheme = Theme.of(context).colorScheme;
     final playable = song.playable;
     final grey = TextStyle(color: scheme.outline);

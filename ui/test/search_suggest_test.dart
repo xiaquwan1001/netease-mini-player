@@ -14,7 +14,7 @@ rust.SuggestItem item(String kind, String title) => rust.SuggestItem(
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
-  testWidgets('建议面板展示条目并回调', (tester) async {
+  testWidgets('联想按分类 tab 展示, 一次只渲染一个分类', (tester) async {
     rust.SuggestItem? tapped;
     await tester.pumpWidget(
       host(
@@ -24,12 +24,36 @@ void main() {
         ),
       ),
     );
+    // 需求 3: 分类改成和搜索结果一样的 tab, 默认打开第一条所在分类(单曲)
+    expect(find.text('单曲 1'), findsOneWidget);
+    expect(find.text('艺人 1'), findsOneWidget);
     expect(find.text('晴天'), findsOneWidget);
+    expect(find.text('周杰伦'), findsNothing);
+
+    await tester.tap(find.text('艺人 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('晴天'), findsNothing);
     expect(find.text('周杰伦'), findsOneWidget);
-    expect(find.text('单曲'), findsOneWidget);
-    expect(find.text('艺人'), findsOneWidget);
-    await tester.tap(find.text('晴天'));
-    expect(tapped?.title, '晴天');
+
+    await tester.tap(find.text('周杰伦'));
+    expect(tapped?.title, '周杰伦');
+  });
+
+  testWidgets('底部「看全部结果」回调', (tester) async {
+    var all = 0;
+    await tester.pumpWidget(
+      host(
+        SuggestionPanel(
+          items: [item('song', '晴天')],
+          onSelected: (_) {},
+          keyword: '晴天',
+          onSearchAll: () => all++,
+        ),
+      ),
+    );
+    expect(find.textContaining('看全部'), findsOneWidget);
+    await tester.tap(find.textContaining('看全部'));
+    expect(all, 1);
   });
 
   testWidgets('空建议不占位', (tester) async {

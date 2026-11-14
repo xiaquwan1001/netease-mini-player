@@ -69,6 +69,18 @@ pub struct NeteaseProvider {
     /// 只读接口的进程内响应缓存(TTL 300s / 200 条 LRU / 同 key 单飞).
     /// 白名单与纪律见 crate::read_cache: 只放与账号无关的只读接口.
     cache: crate::read_cache::ReadCache,
+    /// 关注艺人 id 的进程内缓存(见 search::search_suggest).
+    ///
+    /// 输入联想要用「我关注的人」排序, 但联想是每按键一次请求, 不能每次都打
+    /// artist_sublist(那也是风控敏感接口). 这里按 TTL 缓存一次列表, 登录/切号
+    /// 时会随 update_session 一起清空.
+    followed_artists: RwLock<Option<(std::time::Instant, Vec<u64>)>>,
+    /// 联想单曲封面缓存(歌曲 id → 封面 URL).
+    ///
+    /// 建议接口的歌曲只回 album.picId(纯数字), 不回 picUrl, 所以 UI 上联想列表的
+    /// 单曲只能显示占位图标(用户反馈「图片没有真正加载」). 这里按 id 缓存一次
+    /// song_detail 里查到的专辑封面, 只补真正缺图的那几条.
+    suggest_covers: RwLock<std::collections::HashMap<u64, String>>,
 }
 
 struct Inner {
@@ -119,6 +131,8 @@ impl NeteaseProvider {
         Self {
             inner: RwLock::new(Inner::new(session, domain, ua)),
             cache: crate::read_cache::ReadCache::default(),
+            followed_artists: RwLock::new(None),
+            suggest_covers: RwLock::new(std::collections::HashMap::new()),
         }
     }
 
@@ -127,6 +141,8 @@ impl NeteaseProvider {
         Self {
             inner: RwLock::new(Inner::new(session, domain, ua)),
             cache: crate::read_cache::ReadCache::default(),
+            followed_artists: RwLock::new(None),
+            suggest_covers: RwLock::new(std::collections::HashMap::new()),
         }
     }
 
@@ -140,6 +156,11 @@ impl NeteaseProvider {
         // 但 body 里仍可能带账号侧字段(歌单的 subscribed、搜索结果的 privileges),
         // key 里没有 uid, 不清就可能把上一个账号的数据端给新账号.
         self.cache.clear();
+        // 关注列表是账号私有的, 必须一起清; 封面缓存与账号无关, 保留.
+        *self
+            .followed_artists
+            .write()
+            .unwrap_or_else(|e| e.into_inner()) = None;
     }
 
     /// 只读接口的响应缓存(各能力模块统一走这里).

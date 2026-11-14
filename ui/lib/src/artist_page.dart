@@ -10,6 +10,7 @@ import 'feed_detail_page.dart'
     show showFeedDetail, feedRelativeTime, feedKindLabels;
 import 'layout.dart';
 import 'net_retry.dart';
+import 'now_playing.dart';
 import 'paged_list_view.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
@@ -994,6 +995,14 @@ class _ArtistSongRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 正在播放的那首在"全部歌曲"里也要有标记(与歌单详情/搜索结果同一语汇)
+    return NowPlayingHighlight(
+      songId: song.id,
+      builder: (context, playing) => _buildRow(context, playing),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool playing) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final grey = TextStyle(color: scheme.outline);
@@ -1006,13 +1015,15 @@ class _ArtistSongRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 24,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.outline,
-                ),
-              ),
+              child: playing
+                  ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
+                  : Text(
+                      '${index + 1}',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.outline,
+                      ),
+                    ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -1022,7 +1033,12 @@ class _ArtistSongRow extends StatelessWidget {
                   // 歌名 + VIP/付费/无版权标记(标记固定宽度, 不会被歌名挤掉)
                   SongTitleWithBadges(
                     song: song,
-                    style: song.playable ? theme.textTheme.bodyMedium : grey,
+                    style: playing
+                        ? theme.textTheme.bodyMedium?.copyWith(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w600,
+                          )
+                        : (song.playable ? theme.textTheme.bodyMedium : grey),
                   ),
                   const SizedBox(height: 2),
                   Text(

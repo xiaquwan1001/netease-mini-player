@@ -275,7 +275,8 @@ void main() {
     // (Card 自己带 margin, 量它内部的滚动体才是面板真实高度)
     final panel = tester.getSize(find.byType(ListView));
     expect(panel.height, greaterThan(280.0));
-    expect(panel.height, closeTo(800 - kPagePadding, 1.0));
+    // 需求 3 之后分类 tab 占掉一条高度, 列表区 = 整页 - tab 条 - 卡片底 margin
+    expect(panel.height, greaterThan(800 - 120.0));
     expect(panel.width, closeTo(400 - 2 * kPagePadding, 1.0));
 
     // 内部自滚动: 最后一条要能滚到
@@ -292,7 +293,7 @@ void main() {
     expect(suggestIcon('mv'), Icons.play_circle_outline);
   });
 
-  testWidgets('联想面板按 MV 分类纵向分组', (tester) async {
+  testWidgets('联想面板用分类 tab 展示 MV', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -303,8 +304,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text('MV'), findsOneWidget);
-    expect(find.text('单曲'), findsOneWidget);
+    // 分类 tab 里两类的 chip 都在, 但正文只渲染当前分类(默认单曲)
+    expect(find.text('MV 1'), findsOneWidget);
+    expect(find.text('单曲 1'), findsOneWidget);
+    expect(find.text('晴天 (MV)'), findsNothing);
+    await tester.tap(find.text('MV 1'));
+    await tester.pumpAndSettle();
     expect(find.text('晴天 (MV)'), findsOneWidget);
   });
 

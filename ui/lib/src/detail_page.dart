@@ -14,6 +14,7 @@ import 'cover_art.dart';
 import 'expandable_text.dart';
 import 'library_view.dart';
 import 'net_retry.dart';
+import 'now_playing.dart';
 import 'radio_subscribers_page.dart';
 import 'podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import 'rust/api.dart' as rust;
@@ -30,12 +31,18 @@ import 'toast.dart' show showToast, showUndoToast;
 /// 评论区独立加载, 失败不拖垮曲目列表。
 
 /// 评论底部面板(歌曲/歌单/专辑/播客通用): "..." 菜单里的"查看评论"走这里
+///
+/// [shareSourceTitle] / [shareSourceKind]: 评论被长按分享成图片时的语境
+/// (用户反馈 10: 卡片只有用户+评论内容, 看不出这条评论来自哪首歌/专辑/播客/歌单)。
+/// 不传时按 [kind] 给一个类型词, 标题留空(卡片只写「来自歌曲」)。
 Future<void> showCommentsSheet(
   BuildContext context, {
   required String kind,
   required BigInt resourceId,
   String title = '评论',
   int totalHint = 0,
+  String shareSourceTitle = '',
+  String? shareSourceKind,
 
   // 测试注入(不传走 rust), 与 CommentThread 的可选 hook 一一对应
   CommentPageLoader? loadPage,
@@ -77,6 +84,9 @@ Future<void> showCommentsSheet(
                       like: like,
                       loadReplies: loadReplies,
                       send: send,
+                      shareSourceTitle: shareSourceTitle,
+                      shareSourceKind:
+                          shareSourceKind ?? commentSourceKindLabel(kind),
                     ),
                   ),
                 ),
@@ -622,6 +632,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
               kind: 'playlist',
               resourceId: widget.playlistId,
               totalHint: _detail?.commentCount.toInt() ?? 0,
+              // 评论分享卡片的语境(需求 10): 来自哪个歌单
+              shareSourceTitle: widget.name,
+              shareSourceKind: commentSourceKindLabel('playlist'),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -1012,7 +1025,13 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
           SliverToBoxAdapter(child: _buildToolbar()),
           _buildPrograms(_display),
           SliverToBoxAdapter(
-            child: CommentThread(kind: 'podcast', resourceId: radio.id),
+            child: CommentThread(
+              kind: 'podcast',
+              resourceId: radio.id,
+              // 评论分享卡片的语境(需求 10): 来自哪个播客
+              shareSourceTitle: radio.name,
+              shareSourceKind: commentSourceKindLabel('podcast'),
+            ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 24)),
         ],
@@ -1203,6 +1222,16 @@ class _SongRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 页面自己算出来的 playing(本地乐观态/进入页面时的当前曲目) 与全局"正在播放"
+    // 取并集: 在别处换了歌再回来看这个歌单, 高亮也要跟着走。
+    return NowPlayingHighlight(
+      songId: song.id,
+      builder: (context, nowPlaying) =>
+          _buildRow(context, playing || nowPlaying),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool playing) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context).textTheme;
     final grey = TextStyle(color: scheme.outline);
@@ -1347,6 +1376,15 @@ class _ProgramRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 用户反馈: 播客单集正在放的时候列表里要能认出来 —— 节目播放的其实是它
+    // 对应的曲目(mainSong), 所以按 program.song.id 判断"是不是正在播的这集"。
+    return NowPlayingHighlight(
+      songId: program.song?.id,
+      builder: (context, playing) => _buildRow(context, playing),
+    );
+  }
+
+  Widget _buildRow(BuildContext context, bool playing) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context).textTheme;
     final song = program.song;
@@ -1361,11 +1399,26 @@ class _ProgramRow extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    program.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.bodyMedium,
+                  Row(
+                    children: [
+                      if (playing) ...[
+                        Icon(Icons.volume_up, size: 14, color: scheme.primary),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          program.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: playing
+                              ? theme.bodyMedium?.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                )
+                              : theme.bodyMedium,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(

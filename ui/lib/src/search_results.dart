@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'category_bar.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatCountMagnitude;
 import 'layout.dart';
@@ -132,33 +133,23 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     );
   }
 
-  /// 分类条: `Wrap` 换行铺开(不再横向滚动)。
+  /// 分类条: 与输入联想共用 [CategoryBar](换行铺开, 不做横向滚动)。
   ///
   /// 横滑版在窄屏上把后两个分类藏在屏幕外, 用户/测试都当成「分类丢了」;
   /// 换行后 5 个 chip 一定全部看得见, 大字模式最多占两行。
+  /// 对齐/宽度的几何坑统一在 [CategoryBar] 里解决(见那里的注释)。
   Widget _sectionBar(
     BuildContext context,
     List<_Section> available,
     _Section selected,
   ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(kPagePadding, 6, kPagePadding, 6),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 4,
-        children: [
-          for (final s in available)
-            ChoiceChip(
-              label: Text(s.label),
-              selected: s == selected,
-              // 已选中时再点不做事(避免重建丢滚动位置)
-              onSelected: (_) {
-                if (_selected != s) setState(() => _selected = s);
-              },
-              visualDensity: VisualDensity.compact,
-            ),
-        ],
-      ),
+    return CategoryBar(
+      labels: [for (final s in available) s.label],
+      selected: available.indexOf(selected),
+      onSelected: (i) {
+        final next = available[i];
+        if (_selected != next) setState(() => _selected = next);
+      },
     );
   }
 

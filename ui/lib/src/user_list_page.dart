@@ -11,6 +11,10 @@ import 'user_page.dart';
 /// 关注/粉丝列表: 两个 tab, 每行可关注/取关.
 ///
 /// uid = 0 时后端用当前登录账号(我的资料卡点进来就是这种)。
+///
+/// 2026-11-14 用户反馈 12: 这一行(关注对象)点**头像或名字**都进 ta 的「动态」,
+/// 且留在本页(压一层用户主页, 默认「动态」tab); 只有在动态内容区里点作者头像/
+/// 名字才进 ta 的主页。以前整行进主页、点名字另跳动态, 同一行两种结果, 用户按不中。
 typedef UserListLoader = Future<List<rust.UserItem>> Function(
   BigInt uid,
   int limit,
@@ -166,7 +170,8 @@ class _UserListViewState extends State<UserListView> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                // 默认进他人主页(宿主注入 onOpenUser 可覆盖, 测试也走这条)
+                // 整行(含头像/名字)都进 ta 的「动态」: 关注列表的用途就是
+                // "他们最近发了什么"; 主页从动态卡片里的作者还能进。
                 onTap: () => widget.onOpenUser != null
                     ? widget.onOpenUser!(u.id)
                     : showUserPage(
@@ -174,6 +179,7 @@ class _UserListViewState extends State<UserListView> {
                         userId: u.id,
                         fallbackNickname: u.name,
                         onPlaySongs: widget.onPlaySongs,
+                        initialTab: '动态',
                       ),
                 trailing: OutlinedButton(
                   onPressed: () => _toggleFollow(u),

@@ -214,6 +214,9 @@ class _MvPageState extends State<MvPage> {
                 loadPage: widget.loadComments,
                 like: widget.likeComment,
                 reply: widget.replyComment,
+                // 评论分享卡片的语境(需求 10): 来自哪个 MV
+                shareSourceTitle: widget.name ?? '',
+                shareSourceKind: commentSourceKindLabel('mv'),
               ),
             ],
           );
