@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
 import 'cover_art.dart';
+import 'feed_share.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -158,46 +159,10 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
     }
   }
 
-  Future<void> _forward() async {
-    final message = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('转发动态'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLines: 3,
-            decoration: const InputDecoration(hintText: '说点什么(可留空)'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, controller.text.trim()),
-              child: const Text('转发'),
-            ),
-          ],
-        );
-      },
-    );
-    if (message == null) return;
-    try {
-      final ok = await rust.forwardEvent(
-        eventId: widget.event.id,
-        userId: widget.event.userId,
-        msg: message,
-      );
-      if (!mounted) return;
-      _snack(ok ? '已转发' : '转发未生效');
-    } catch (e) {
-      if (!mounted) return;
-      _snack('转发失败: ${friendlyError(e)}');
-    }
+  /// 转发: 独立转发面板(原动态预览 + 转发语可空 + 水印/保存图片/复制链接/转发)。
+  /// 原先只是个 AlertDialog, 转发界面本身缺失。
+  Future<void> _forward() {
+    return showFeedForwardSheet(context, event: widget.event);
   }
 
   Future<void> _copyLink() async {
@@ -373,6 +338,10 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
                   key: _commentThreadKey,
                   threadId: event.threadId,
                   totalHint: event.commentCount.toInt(),
+                  // 评论分享卡片上的"来自动态《...》": 标题优先, 没有就用正文摘要
+                  shareSourceTitle: event.title.trim().isNotEmpty
+                      ? event.title.trim()
+                      : event.text.trim(),
                   // 页面本身已有 16dp 左右边距, 评论区不再自己加 12dp,
                   // 让每条评论与正文左对齐(用户反馈行首空白).
                   inset: const EdgeInsets.fromLTRB(0, 16, 0, 8),

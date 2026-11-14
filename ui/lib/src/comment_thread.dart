@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'comment_stats_bar.dart';
 import 'cover_art.dart';
+import 'feed_share.dart' show showCommentShareSheet;
 import 'net_retry.dart';
 import 'sheet_header.dart';
 import 'rust/api.dart' as rust;
@@ -55,6 +56,7 @@ class CommentThread extends StatefulWidget {
     this.delete,
     this.myUid,
     this.inset = const EdgeInsets.fromLTRB(12, 16, 12, 8),
+    this.shareSourceTitle = '',
   });
 
   /// song | playlist | album | podcast
@@ -88,6 +90,10 @@ class CommentThread extends StatefulWidget {
   /// 嵌在已有 16dp 页面边距的页面里(如动态详情)时应传 0, 否则评论每行会
   /// 比正文多缩进 12dp(用户反馈"评论区每一行前面依然有空白").
   final EdgeInsetsGeometry inset;
+
+  /// 评论分享卡片上的出处(原动态标题, 没有标题就传正文摘要)。
+  /// 长按评论打开分享面板时写进卡片与「复制评论」的文本里。
+  final String shareSourceTitle;
 
   @override
   State<CommentThread> createState() => CommentThreadState();
@@ -824,6 +830,7 @@ class CommentThreadState extends State<CommentThread> {
                     : _tileKeys.putIfAbsent(_items[i].id, () => GlobalKey()),
                 highlight: _highlightId != null && _highlightId == _items[i].id,
                 comment: _items[i],
+                shareSourceTitle: widget.shareSourceTitle,
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
                 previewReplies: _previewFor(_items[i]),
@@ -872,6 +879,7 @@ class _CommentTile extends StatelessWidget {
   const _CommentTile({
     super.key,
     required this.comment,
+    this.shareSourceTitle = '',
     required this.timeText,
     required this.onToggleLike,
     required this.onExpandReplies,
@@ -885,6 +893,9 @@ class _CommentTile extends StatelessWidget {
   final bool highlight;
 
   final rust.Comment comment;
+
+  /// 长按分享时卡片底部的出处(原动态标题/正文摘要)
+  final String shareSourceTitle;
   final String timeText;
   final VoidCallback onToggleLike;
 
@@ -910,258 +921,207 @@ class _CommentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      // 刚发表的那条淡出一层底色, 1.8s 后由父级把 highlight 置回 false
-      decoration: BoxDecoration(
-        color: highlight
-            ? scheme.primaryContainer.withValues(alpha: 0.45)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
+    return GestureDetector(
+      // 长按评论 = 分享评论卡片(作者 + 正文 + 原动态标题)
+      onLongPress: () => showCommentShareSheet(
+        context,
+        comment: comment,
+        sourceTitle: shareSourceTitle,
       ),
-      padding: const EdgeInsets.only(bottom: 12, top: 2, left: 2, right: 2),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          UserAvatarTap(
-            userId: comment.userId,
-            nickname: comment.userName,
-            child: CircleCover(
-              url: comment.avatarUrl,
-              size: 32,
-              icon: Icons.person_outline,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        // 刚发表的那条淡出一层底色, 1.8s 后由父级把 highlight 置回 false
+        decoration: BoxDecoration(
+          color: highlight
+              ? scheme.primaryContainer.withValues(alpha: 0.45)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.only(bottom: 12, top: 2, left: 2, right: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            UserAvatarTap(
+              userId: comment.userId,
+              nickname: comment.userName,
+              child: CircleCover(
+                url: comment.avatarUrl,
+                size: 32,
+                icon: Icons.person_outline,
+              ),
             ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        comment.userName.isEmpty ? '匿名用户' : comment.userName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: scheme.primary,
-                        ),
-                      ),
-                    ),
-                    // 楼层里的回复: 不显示"回复 @某人"就跟独立评论长得一样
-                    if ((comment.repliedTo ?? '').isNotEmpty) ...[
-                      const SizedBox(width: 4),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
                       Flexible(
                         child: Text(
-                          '回复 @${comment.repliedTo}',
+                          comment.userName.isEmpty ? '匿名用户' : comment.userName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: scheme.primary,
                           ),
                         ),
                       ),
-                    ],
-                    if (comment.hot) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: scheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '热门',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.onPrimaryContainer,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ],
-                    // 时间/IP 是裸 Text 时占满自身宽度且不可压缩: 昵称与「回复 @x」
-                    // 已被压到最小后, 这两段相加仍会撑破整行(300dp x1.625 必现)。
-                    // 包 Flexible 让它们参与同一套宽度分配, 极端窄屏才截断。
-                    if (timeText.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          timeText,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.outline,
-                          ),
-                        ),
-                      ),
-                    ],
-                    if (comment.ipLocation.isNotEmpty) ...[
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          comment.ipLocation,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: scheme.outline,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(comment.content, style: theme.textTheme.bodyMedium),
-                // 行内回复预览: 缩进 + 小头像, 跟楼层里的排布一致(一眼看出是"对话"而不是
-                // 平铺的一段文字); 点任意一条 → 打开楼层详情(与「回复」动作分离见下)
-                if (previewReplies.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 4, left: 4),
-                    padding: const EdgeInsets.only(left: 8),
-                    decoration: BoxDecoration(
-                      border: Border(
-                        left: BorderSide(
-                          color: scheme.outlineVariant,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final r in previewReplies)
-                          InkWell(
-                            onTap: onExpandReplies,
-                            borderRadius: BorderRadius.circular(6),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  UserAvatarTap(
-                                    userId: r.userId,
-                                    nickname: r.userName,
-                                    child: CircleCover(
-                                      url: r.avatarUrl,
-                                      size: 18,
-                                      icon: Icons.person_outline,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      // 有被回复者就带上, 没写就是直接回主评论
-                                      (r.repliedTo ?? '').isEmpty
-                                          ? '${r.userName.isEmpty ? '匿名用户' : r.userName}：${r.content}'
-                                          : '${r.userName.isEmpty ? '匿名用户' : r.userName} 回复 @${r.repliedTo}：${r.content}',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: scheme.onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                      // 楼层里的回复: 不显示"回复 @某人"就跟独立评论长得一样
+                      if ((comment.repliedTo ?? '').isNotEmpty) ...[
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            '回复 @${comment.repliedTo}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
+                        ),
                       ],
-                    ),
-                  ),
-                // 展开入口只在"行内放不下"时出现: 回复 ≤3 条已经全部缩进展示, 再给按钮就是
-                // 冗余(用户实测: 1 条回复也顶着「展开全部 1 条回复」)。N 取
-                // max(服务端 replyCount, 本地条数) —— 接口有时 replyCount 为 0 却仍返回回复。
-                if (_replyTotal > BigInt.from(previewReplies.length))
-                  InkWell(
-                    onTap: onExpandReplies,
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '展开全部 $_replyTotal 条回复',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 2),
-                // 动作数量随权限变化(「删除」只有自己发的评论才有),
-                // 4 个图标+文字+间距在 300dp x1.625 下必然超出卡片宽度。
-                // 用 Wrap 让多出的动作换到下一行: 不做横向滚动, 否则「删除」会被
-                // 推到屏幕外且没有任何可滚动提示。
-                Wrap(
-                  spacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    InkWell(
-                      onTap: onToggleLike,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              comment.liked
-                                  ? Icons.favorite
-                                  : Icons.favorite_border,
-                              size: 14,
-                              color: comment.liked
-                                  ? scheme.primary
-                                  : scheme.outline,
+                      if (comment.hot) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: scheme.primaryContainer,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '热门',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.onPrimaryContainer,
+                              fontSize: 10,
                             ),
-                            if (comment.likedCount > BigInt.zero) ...[
-                              const SizedBox(width: 3),
-                              Text(
-                                '${comment.likedCount}',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: scheme.outline,
-                                ),
-                              ),
-                            ],
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    // 「回复」= 写回复动作本体(打开面板并聚焦输入框);
-                    // 数量与浏览全量回复由预览行/「展开全部」承担, 不再混在一个按钮里。
-                    InkWell(
-                      onTap: onReply,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.mode_comment_outlined,
-                              size: 14,
+                      ],
+                      // 时间/IP 是裸 Text 时占满自身宽度且不可压缩: 昵称与「回复 @x」
+                      // 已被压到最小后, 这两段相加仍会撑破整行(300dp x1.625 必现)。
+                      // 包 Flexible 让它们参与同一套宽度分配, 极端窄屏才截断。
+                      if (timeText.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            timeText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
                               color: scheme.outline,
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              '回复',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: scheme.outline,
+                          ),
+                        ),
+                      ],
+                      if (comment.ipLocation.isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            comment.ipLocation,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: scheme.outline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(comment.content, style: theme.textTheme.bodyMedium),
+                  // 行内回复预览: 缩进 + 小头像, 跟楼层里的排布一致(一眼看出是"对话"而不是
+                  // 平铺的一段文字); 点任意一条 → 打开楼层详情(与「回复」动作分离见下)
+                  if (previewReplies.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4, left: 4),
+                      padding: const EdgeInsets.only(left: 8),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(
+                            color: scheme.outlineVariant,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final r in previewReplies)
+                            InkWell(
+                              onTap: onExpandReplies,
+                              borderRadius: BorderRadius.circular(6),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    UserAvatarTap(
+                                      userId: r.userId,
+                                      nickname: r.userName,
+                                      child: CircleCover(
+                                        url: r.avatarUrl,
+                                        size: 18,
+                                        icon: Icons.person_outline,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        // 有被回复者就带上, 没写就是直接回主评论
+                                        (r.repliedTo ?? '').isEmpty
+                                            ? '${r.userName.isEmpty ? '匿名用户' : r.userName}：${r.content}'
+                                            : '${r.userName.isEmpty ? '匿名用户' : r.userName} 回复 @${r.repliedTo}：${r.content}',
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ],
+                        ],
+                      ),
+                    ),
+                  // 展开入口只在"行内放不下"时出现: 回复 ≤3 条已经全部缩进展示, 再给按钮就是
+                  // 冗余(用户实测: 1 条回复也顶着「展开全部 1 条回复」)。N 取
+                  // max(服务端 replyCount, 本地条数) —— 接口有时 replyCount 为 0 却仍返回回复。
+                  if (_replyTotal > BigInt.from(previewReplies.length))
+                    InkWell(
+                      onTap: onExpandReplies,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          '展开全部 $_replyTotal 条回复',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: scheme.primary,
+                          ),
                         ),
                       ),
                     ),
-                    if (onDelete != null)
+                  const SizedBox(height: 2),
+                  // 动作数量随权限变化(「删除」只有自己发的评论才有),
+                  // 4 个图标+文字+间距在 300dp x1.625 下必然超出卡片宽度。
+                  // 用 Wrap 让多出的动作换到下一行: 不做横向滚动, 否则「删除」会被
+                  // 推到屏幕外且没有任何可滚动提示。
+                  Wrap(
+                    spacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
                       InkWell(
-                        onTap: onDelete,
+                        onTap: onToggleLike,
                         borderRadius: BorderRadius.circular(6),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
@@ -1171,13 +1131,47 @@ class _CommentTile extends StatelessWidget {
                           child: Row(
                             children: [
                               Icon(
-                                Icons.delete_outline,
+                                comment.liked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                size: 14,
+                                color: comment.liked
+                                    ? scheme.primary
+                                    : scheme.outline,
+                              ),
+                              if (comment.likedCount > BigInt.zero) ...[
+                                const SizedBox(width: 3),
+                                Text(
+                                  '${comment.likedCount}',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.outline,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      // 「回复」= 写回复动作本体(打开面板并聚焦输入框);
+                      // 数量与浏览全量回复由预览行/「展开全部」承担, 不再混在一个按钮里。
+                      InkWell(
+                        onTap: onReply,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.mode_comment_outlined,
                                 size: 14,
                                 color: scheme.outline,
                               ),
                               const SizedBox(width: 3),
                               Text(
-                                '删除',
+                                '回复',
                                 style: theme.textTheme.labelSmall?.copyWith(
                                   color: scheme.outline,
                                 ),
@@ -1186,12 +1180,40 @@ class _CommentTile extends StatelessWidget {
                           ),
                         ),
                       ),
-                  ],
-                ),
-              ],
+                      if (onDelete != null)
+                        InkWell(
+                          onTap: onDelete,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                              vertical: 2,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.delete_outline,
+                                  size: 14,
+                                  color: scheme.outline,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '删除',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: scheme.outline,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
