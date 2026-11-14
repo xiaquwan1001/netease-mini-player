@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
 
 import 'adaptive_text.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
+import 'file_pick.dart' show pickAudioFile;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -51,11 +54,16 @@ String cloudSubtitle(rust.CloudSong song) {
 typedef CloudPageLoader = Future<rust.CloudPage> Function(int limit, int offset);
 typedef CloudDeleter = Future<bool> Function(Uint64List ids);
 
+/// 上传本地文件: 入参是本地绝对路径, 返回新歌 id/歌名(生产走 rust.cloudUpload)。
+typedef CloudUploader = Future<rust.CloudUploadResult> Function(String path);
+
 /// 打开音乐云盘页(入口只需一行).
 Future<void> showCloudPage(
   BuildContext context, {
   CloudPageLoader? loadPage,
   CloudDeleter? deleteSongs,
+  CloudUploader? upload,
+  Future<String?> Function()? pickFile,
   void Function(rust.CloudSong song)? onPlay,
 }) {
   return Navigator.of(context).push<void>(
@@ -63,6 +71,8 @@ Future<void> showCloudPage(
       builder: (_) => CloudPage(
         loadPage: loadPage,
         deleteSongs: deleteSongs,
+        upload: upload,
+        pickFile: pickFile,
         onPlay: onPlay,
       ),
     ),
@@ -70,10 +80,23 @@ Future<void> showCloudPage(
 }
 
 class CloudPage extends StatefulWidget {
-  const CloudPage({super.key, this.loadPage, this.deleteSongs, this.onPlay});
+  const CloudPage({
+    super.key,
+    this.loadPage,
+    this.deleteSongs,
+    this.upload,
+    this.pickFile,
+    this.onPlay,
+  });
 
   final CloudPageLoader? loadPage;
   final CloudDeleter? deleteSongs;
+
+  /// 上传实现(缺省 rust.cloudUpload)
+  final CloudUploader? upload;
+
+  /// 选文件实现(缺省跨平台 pickAudioFile); 测试注入固定路径
+  final Future<String?> Function()? pickFile;
   final void Function(rust.CloudSong song)? onPlay;
 
   @override
@@ -87,6 +110,7 @@ class _CloudPageState extends State<CloudPage> {
   bool _more = false;
   bool _loadingMore = false;
   bool _deleting = false;
+  bool _uploading = false;
 
   /// 云盘容量(第一页带回来的 count/size/maxSize, 只用于 AppBar 下的说明行)
   int _total = 0;
@@ -97,6 +121,8 @@ class _CloudPageState extends State<CloudPage> {
       widget.loadPage ?? (limit, offset) => rust.userCloud(limit: limit, offset: offset);
   CloudDeleter get _deleter =>
       widget.deleteSongs ?? (ids) => rust.cloudDelete(ids: ids);
+  CloudUploader get _uploader =>
+      widget.upload ?? (path) => rust.cloudUpload(filePath: path);
 
   @override
   void initState() {
@@ -156,6 +182,48 @@ class _CloudPageState extends State<CloudPage> {
     }
   }
 
+  /// 上传: 选文件 → 调 Rust 五步流程(查重/取 token/上传/转码/发布)。
+  /// Rust 是阻塞式一次调用(最长约 1 分钟), 所以这里用不可取消的进度对话框。
+  Future<void> _upload() async {
+    if (_uploading) return;
+    final String? path;
+    try {
+      path = await (widget.pickFile ?? pickAudioFile)();
+    } catch (e) {
+      if (mounted) showToast(context, '选择文件失败: ${friendlyError(e)}', isError: true);
+      return;
+    }
+    if (path == null || !mounted) return;
+    final upload = _uploader;
+    setState(() => _uploading = true);
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var dialogShown = true;
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _UploadingDialog(),
+      ).then((_) => dialogShown = false),
+    );
+    try {
+      final result = await upload(path);
+      if (dialogShown) navigator.pop();
+      if (!mounted) return;
+      showToast(
+        context,
+        result.instant
+            ? '云盘里已有同一文件, 已直接收录「${result.name}」'
+            : '已上传「${result.name}」, 正在刷新列表',
+      );
+      await _refresh();
+    } catch (e) {
+      if (dialogShown) navigator.pop();
+      if (mounted) showToast(context, '上传失败: ${friendlyError(e)}', isError: true);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Future<void> _delete(rust.CloudSong song) async {
     if (_deleting) return;
     final ok = await showDialog<bool>(
@@ -207,13 +275,29 @@ class _CloudPageState extends State<CloudPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('音乐云盘')),
+      appBar: AppBar(
+        title: const Text('音乐云盘'),
+        actions: [
+          IconButton(
+            tooltip: '上传音频到云盘',
+            icon: _uploading
+                // token-ok: 进度图标固定 18dp, 与 IconButton 图标同档
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.upload_file_outlined),
+            onPressed: _uploading ? null : _upload,
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: AsyncView<List<rust.CloudSong>>(
           future: _future,
           onRetry: _refresh,
-          emptyText: '云盘还没有歌曲(上传请在官方客户端进行)',
+          emptyText: '云盘还没有歌曲, 点右上角上传音频',
           builder: (context, songs, reload) => _list(context, songs, reload),
         ),
       ),
@@ -289,6 +373,34 @@ class _CloudPageState extends State<CloudPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: kSectionHeaderGap),
       child: Center(child: Text('已全部加载', style: style)),
+    );
+  }
+}
+
+/// 上传进度对话框: 上传+转码+发布是 Rust 里一次调用, 只能给不确定进度。
+class _UploadingDialog extends StatelessWidget {
+  const _UploadingDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      content: const Row(
+        children: [
+          // token-ok: 对话框内进度圈固定 22dp, 不参与页面栅格
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          SizedBox(width: kSectionGap),
+          Expanded(
+            child: Text(
+              '正在上传并等待云端转码…\n(大文件可能需要几十秒)',
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

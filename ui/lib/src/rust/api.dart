@@ -74,6 +74,20 @@ Future<bool> artistSubToggle({required BigInt artistId, required bool sub}) =>
 Future<ProfileDetail> profileDetail() =>
     RustLib.instance.api.crateApiProfileDetail();
 
+/// 上传本地音频文件到音乐云盘(需登录).
+///
+/// 同步阻塞直到上传+转码+发布完成(最长约 1 分钟), 调用方要显示"上传中"。
+/// 失败语义: 未登录 `[auth]`、文件读不到 `[unsupported]`、上传/转码失败 `[internal]`/`[network]`。
+Future<CloudUploadResult> cloudUpload({required String filePath}) =>
+    RustLib.instance.api.crateApiCloudUpload(filePath: filePath);
+
+/// 修改个人简介(签名). 需要登录; 返回更新后的资料(服务端可能做敏感词折中).
+///
+/// 上游 `module/user_update.js` → `POST /api/user/profile/update`; 局部更新, 只改签名。
+/// 失败语义: 未登录 `[auth]`、超过 132 字符 `[unsupported]`、风控 `[riskControl]`。
+Future<ProfileDetail> updateSignature({required String signature}) =>
+    RustLib.instance.api.crateApiUpdateSignature(signature: signature);
+
 /// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.
 Future<ProfileDetail> userProfile({required BigInt userId}) =>
     RustLib.instance.api.crateApiUserProfile(userId: userId);
@@ -1450,6 +1464,34 @@ class CloudSong {
           size == other.size &&
           bitrate == other.bitrate &&
           addTime == other.addTime;
+}
+
+/// 云盘上传结果: 直接镜像 domain 类型.
+class CloudUploadResult {
+  /// 新歌 id(云盘列表/播放用它)
+  final BigInt songId;
+  final String name;
+
+  /// 是否命中秒传(没有真正上传字节)
+  final bool instant;
+
+  const CloudUploadResult({
+    required this.songId,
+    required this.name,
+    required this.instant,
+  });
+
+  @override
+  int get hashCode => songId.hashCode ^ name.hashCode ^ instant.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CloudUploadResult &&
+          runtimeType == other.runtimeType &&
+          songId == other.songId &&
+          name == other.name &&
+          instant == other.instant;
 }
 
 class Comment {

@@ -310,6 +310,22 @@ async fn run() -> Result<(), BoxErr> {
             Ok(())
         }
         // 音乐云盘列表: 需登录
+        "cloud-upload" => {
+            // 云盘上传(写操作!): ncm cloud-upload <本地音频路径>
+            let path = args
+                .positional
+                .first()
+                .ok_or("usage: ncm cloud-upload <path>")?
+                .clone();
+            let p = provider(&core, Capability::Cloud)?;
+            announce(&core);
+            let r = p.cloud_upload(path).await?;
+            println!(
+                "uploaded song={} name={} instant={}",
+                r.song_id, r.name, r.instant
+            );
+            Ok(())
+        }
         "cloud" => {
             let limit: u32 = args.positional.first().map(|s| s.parse()).transpose()?.unwrap_or(30);
             let offset: u32 = args.positional.get(1).map(|s| s.parse()).transpose()?.unwrap_or(0);
@@ -1565,6 +1581,7 @@ async fn run() -> Result<(), BoxErr> {
                 "mv_url" => client.mv_url(&q).await?,
                 "cloudsearch" => client.cloudsearch(&q).await?,
                 "artist_detail" => client.artist_detail(&q).await?,
+                "artist_detail_dynamic" => client.artist_detail_dynamic(&q).await?,
                 "artist_album" => client.artist_album(&q).await?,
                 "artist_top_song" => client.artist_top_song(&q).await?,
                 "recommend_songs" => client.recommend_songs(&q).await?,

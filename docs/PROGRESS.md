@@ -1490,3 +1490,19 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
 ③艺人「动态」tab 用 `userEvents(artistId)` 尽力而为, 无专用接口; ④通知顺序仅 AOSP 14 模拟器验证;
 ⑤搜索结果之外的「我的收藏/艺人页」仍用 CoverRow, 未切 CoverGrid。
 
+
+### 2026-11-14(二) 追加: 编辑简介 + 云盘上传 + 艺人动态结论
+
+- **编辑简介已接通**: vendor `user_profile_update.rs` → `POST /api/user/profile/update`(weapi, 只发 signature 的局部更新);
+  service `update_signature`(登录校验 + 132 字符上限 `normalize_signature`) → FFI `updateSignature` → `main.dart` 注入
+  `MineView.saveSignature`, 「我的 → 编辑简介」现在是真保存并回读资料。
+- **云盘上传已实现**: vendor `cloud_upload_check / cloud_nos_token / cloud_upload_info / cloud_pub / cloud_music_status`;
+  service `cloud_upload` 按上游五步(md5 查重 → NOS token → 整文件 POST `complete=true` → info/v2 重试 → 状态轮询 → pub/v2);
+  FFI `cloudUpload(filePath)`; Android `ncm/upload#pickAudio`(ACTION_OPEN_DOCUMENT → cache 副本)、Linux zenity/kdialog、
+  Windows PowerShell 选文件; 云盘页右上角上传 + 进度对话框 + 秒传提示。**分片上传未做**(单请求路径与上游前端一致)。
+  新增依赖 `md-5 0.10`(本地 registry 已缓存); CLI 加 `ncm cloud-upload <path>` 便于真机/桌面自测。
+- **艺人动态结论(不可做)**: 上游 `/api/artist/detail/dynamic` 实测只返回 `concert/followed/videoNum`, 不是动态流;
+  Binaryify 快照里也没有 artist event 模块 ⇒ 艺人「动态」tab 继续用 `userEvents(artistId)` 尽力而为, 不要再去翻这个端点。
+- 门禁: cargo fmt/clippy(0 warning)/test 全绿(service 198); `dart analyze` 0 issue; `flutter test` **923 passed / 1 skipped**;
+  `check-tokens --strict` OK(上传图标固定尺寸已加 token-ok); debug APK 出包并装回前台模拟器。
+

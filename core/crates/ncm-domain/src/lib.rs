@@ -956,6 +956,19 @@ pub struct CloudPage {
     pub more: bool,
 }
 
+/// 云盘上传结果(cloud_upload): 新歌在云盘的 songId 与文件名, 供 UI 提示/定位.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CloudUploadResult {
+    /// 新歌曲 id(后续进云盘列表/播放都用它)
+    pub song_id: u64,
+    /// 歌名(云端按文件名给, 之后可在列表里改)
+    #[serde(default)]
+    pub name: String,
+    /// 是否命中秒传(云端已有同 md5 文件, 没有真正上传字节)
+    #[serde(default)]
+    pub instant: bool,
+}
+
 /// 专辑条目: 收藏专辑列表/搜索结果共用(比 AlbumBrief 多歌手名)
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AlbumItem {

@@ -1335,6 +1335,7 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "keyring",
+ "md-5",
  "ncm-api-rs",
  "ncm-domain",
  "ncm-provider",

@@ -102,6 +102,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CloudSong dco_decode_cloud_song(dynamic raw);
 
   @protected
+  CloudUploadResult dco_decode_cloud_upload_result(dynamic raw);
+
+  @protected
   Comment dco_decode_comment(dynamic raw);
 
   @protected
@@ -675,6 +678,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CloudSong sse_decode_cloud_song(SseDeserializer deserializer);
+
+  @protected
+  CloudUploadResult sse_decode_cloud_upload_result(
+    SseDeserializer deserializer,
+  );
 
   @protected
   Comment sse_decode_comment(SseDeserializer deserializer);
@@ -1365,6 +1373,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_cloud_song(CloudSong self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_cloud_upload_result(
+    CloudUploadResult self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_comment(Comment self, SseSerializer serializer);

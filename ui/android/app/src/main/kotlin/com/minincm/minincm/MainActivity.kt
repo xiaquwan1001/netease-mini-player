@@ -33,6 +33,13 @@ class MainActivity : FlutterActivity() {
     /** 官方网页登录: 页面结束后把 cookie 交回 Dart */
     private var pendingLogin: MethodChannel.Result? = null
 
+    /** 云盘上传选文件: ACTION_OPEN_DOCUMENT 结束后把本地副本路径交回 Dart */
+    private var pendingPick: MethodChannel.Result? = null
+
+    companion object {
+        private const val REQUEST_PICK_AUDIO = 4201
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -66,6 +73,27 @@ class MainActivity : FlutterActivity() {
         }
 
         // 登录通道: WebView 里完成官方授权页登录, 只回传 cookie, 不碰账号密码
+        // 云盘上传: 选一个音频文件, 复制到 cache 后把**绝对路径**交给 Dart/Rust 去传
+        // (Rust 侧只认本地路径; content:// 不能直接读, 所以这里先落盘)。
+        val uploadChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/upload")
+        uploadChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "pickAudio" -> {
+                    if (pendingPick != null) {
+                        result.error("pick_busy", "选文件窗口已经打开了", null)
+                    } else {
+                        pendingPick = result
+                        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                            addCategory(Intent.CATEGORY_OPENABLE)
+                            type = "audio/*"
+                        }
+                        startActivityForResult(intent, REQUEST_PICK_AUDIO)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         val auth = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ncm/auth")
         auth.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -400,6 +428,28 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == REQUEST_PICK_AUDIO) {
+            val result = pendingPick
+            pendingPick = null
+            val uri = data?.data
+            if (resultCode != RESULT_OK || uri == null) {
+                result?.success(null)
+                return
+            }
+            try {
+                // 复制到 cacheDir/cloud_upload/: Rust 侧按路径读文件做 md5 + 上传
+                val name = queryDisplayName(uri) ?: "upload.mp3"
+                val dir = File(cacheDir, "cloud_upload").apply { mkdirs() }
+                val out = File(dir, name)
+                contentResolver.openInputStream(uri)?.use { input ->
+                    out.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw IllegalStateException("openInputStream 返回 null")
+                result?.success(out.absolutePath)
+            } catch (e: Exception) {
+                result?.error("pick_failed", e.message, null)
+            }
+            return
+        }
         if (requestCode == LoginActivity.REQUEST_CODE) {
             val cookie = data?.getStringExtra(LoginActivity.EXTRA_COOKIE)
             pendingLogin?.success(if (cookie.isNullOrBlank()) null else cookie)
@@ -407,6 +457,18 @@ class MainActivity : FlutterActivity() {
             return
         }
         super.onActivityResult(requestCode, resultCode, data)
+    }
+
+    /** content:// 的显示名(用于上传文件名/歌名); 取不到就给 null 让调用方兜底 */
+    private fun queryDisplayName(uri: Uri): String? {
+        return try {
+            contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0 && cursor.moveToFirst()) cursor.getString(idx) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     override fun onDestroy() {

@@ -382,3 +382,22 @@ fn profile_detail_level_from_body_top() {
     assert_eq!(parse_profile_detail(&body).level, 0);
     assert_eq!(parse_profile_detail(&json!({"code": 200})).level, 0);
 }
+
+/// 简介规范化: 去空白、允许清空、超 132 字符报 unsupported.
+#[test]
+fn signature_normalization_rules() {
+    assert_eq!(normalize_signature("  你好  ").unwrap(), "你好");
+    assert_eq!(normalize_signature("").unwrap(), "");
+    assert_eq!(normalize_signature("   ").unwrap(), "");
+    let long: String = "字".repeat(MAX_SIGNATURE_CHARS + 1);
+    let e = normalize_signature(&long).unwrap_err();
+    assert_eq!(e.kind, ProviderErrorKind::Unsupported);
+    // 边界: 正好 132 字符允许
+    assert_eq!(
+        normalize_signature(&"字".repeat(MAX_SIGNATURE_CHARS))
+            .unwrap()
+            .chars()
+            .count(),
+        MAX_SIGNATURE_CHARS
+    );
+}

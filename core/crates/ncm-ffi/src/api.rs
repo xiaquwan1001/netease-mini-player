@@ -9,8 +9,8 @@ use std::sync::{Mutex, OnceLock};
 use flutter_rust_bridge::frb;
 
 pub use ncm_domain::{
-    AlbumBrief, AlbumItem, Artist, ChartSummary, CloudPage, CloudSong, Comment, CommentPage,
-    CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
+    AlbumBrief, AlbumItem, Artist, ChartSummary, CloudPage, CloudSong, CloudUploadResult, Comment,
+    CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
     DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry, FollowCount, ForwardItem, HotArtist,
     HotSearchDetailItem, HotSearchTerm, InboxItem, MvItem, PhoneLoginResult, Playlist,
     PlaylistCategory, PlaylistDetail, PodcastRadio, PrivateMessage, PrivateSession, ProfileDetail,
@@ -493,6 +493,35 @@ pub struct _ProfileDetail {
 /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
 pub async fn profile_detail() -> Result<ProfileDetail, String> {
     ffi_forward!(Capability::ProfileDetail, provider.profile_detail())
+}
+
+/// 云盘上传结果: 直接镜像 domain 类型.
+#[frb(mirror(CloudUploadResult))]
+pub struct _CloudUploadResult {
+    /// 新歌 id(云盘列表/播放用它)
+    pub song_id: u64,
+    pub name: String,
+    /// 是否命中秒传(没有真正上传字节)
+    pub instant: bool,
+}
+
+/// 上传本地音频文件到音乐云盘(需登录).
+///
+/// 同步阻塞直到上传+转码+发布完成(最长约 1 分钟), 调用方要显示"上传中"。
+/// 失败语义: 未登录 `[auth]`、文件读不到 `[unsupported]`、上传/转码失败 `[internal]`/`[network]`。
+pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, String> {
+    ffi_forward!(Capability::Cloud, provider.cloud_upload(file_path))
+}
+
+/// 修改个人简介(签名). 需要登录; 返回更新后的资料(服务端可能做敏感词折中).
+///
+/// 上游 `module/user_update.js` → `POST /api/user/profile/update`; 局部更新, 只改签名。
+/// 失败语义: 未登录 `[auth]`、超过 132 字符 `[unsupported]`、风控 `[riskControl]`。
+pub async fn update_signature(signature: String) -> Result<ProfileDetail, String> {
+    ffi_forward!(
+        Capability::ProfileDetail,
+        provider.update_signature(signature)
+    )
 }
 
 /// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.

@@ -17,6 +17,11 @@ mod song_url_v1;
 mod song_wiki_summary;
 
 // ---- 搜索相关 ----
+mod cloud_music_status;
+mod cloud_nos_token;
+mod cloud_pub;
+mod cloud_upload_check;
+mod cloud_upload_info;
 mod cloudsearch;
 mod search_default;
 mod search_hot;
@@ -40,6 +45,7 @@ mod user_playlist;
 // ---- 歌手相关 ----
 mod artist_album;
 mod artist_detail;
+mod artist_detail_dynamic;
 mod artist_mv;
 mod artist_songs;
 mod artist_sub;
@@ -86,6 +92,7 @@ mod user_followeds;
 mod user_follows;
 mod user_level;
 mod user_medal;
+mod user_profile_update;
 mod user_record;
 mod user_subcount;
 

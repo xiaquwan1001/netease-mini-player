@@ -738,6 +738,16 @@ impl Provider for NeteaseProvider {
         NeteaseProvider::profile_detail(self)
     }
 
+    /// 上传本地音频到云盘(需要登录)
+    fn cloud_upload(&self, file_path: String) -> BoxFuture<'_, ProviderResult<CloudUploadResult>> {
+        NeteaseProvider::cloud_upload(self, file_path)
+    }
+
+    /// 修改个人简介(签名, 需要登录)
+    fn update_signature(&self, signature: String) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        NeteaseProvider::update_signature(self, signature)
+    }
+
     /// 任意用户的公开资料(user/detail, 不需要登录)
     fn user_profile<'a>(&'a self, uid: u64) -> BoxFuture<'a, ProviderResult<ProfileDetail>> {
         NeteaseProvider::user_profile(self, uid)

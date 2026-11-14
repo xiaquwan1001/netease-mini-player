@@ -56,6 +56,29 @@ impl NeteaseProvider {
         Box::pin(async move { self.user_detail_raw(None).await })
     }
 
+    /// 修改个人简介(签名). 需要登录.
+    ///
+    /// 上游 `module/user_update.js` → `POST /api/user/profile/update` (weapi), 局部更新:
+    /// JS 里未提供的字段会被 JSON.stringify 丢掉, 所以只发 signature 不会清空昵称/生日等。
+    /// 网易云签名上限 140 字(客户端按 132 字符截), 这里按 Unicode 标量计长。
+    pub(super) fn update_signature(
+        &self,
+        signature: String,
+    ) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async move {
+            let text = normalize_signature(&signature)?;
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("修改简介需要登录"));
+            }
+            let q = make_query(&cookie, &domain, &ua).param("signature", &text);
+            let resp = client.user_profile_update(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            // 回调后重新拉一次详情: 让 UI 拿到服务端判定的最终文本(可能做敏感词折中)
+            self.user_detail_raw(None).await
+        })
+    }
+
     /// 任意用户的公开资料(user/detail, 不需要登录)
     pub(super) fn user_profile<'a>(
         &'a self,
@@ -468,4 +491,19 @@ pub fn parse_signin_progress(body: &Value) -> SigninStatus {
         recent,
         today_point: 0,
     }
+}
+
+/// 简介规范化: 去首尾空白; 超过 [MAX_SIGNATURE_CHARS] 个字符直接报错(不做静默截断,
+/// 让 UI 明确告诉用户删字), 与官方客户端"132 字符"口径接近但按字符而非字节。
+pub(super) const MAX_SIGNATURE_CHARS: usize = 132;
+
+pub(super) fn normalize_signature(raw: &str) -> ProviderResult<String> {
+    let text = raw.trim();
+    // 允许清空简介(空字符串是合法输入), 只限制长度
+    if text.chars().count() > MAX_SIGNATURE_CHARS {
+        return Err(ProviderError::unsupported(format!(
+            "简介最多 {MAX_SIGNATURE_CHARS} 个字符"
+        )));
+    }
+    Ok(text.to_string())
 }

@@ -3,8 +3,8 @@ use std::sync::RwLock;
 use ncm_api_rs::{ApiClient, CryptoType, NcmError, Query, RequestOption};
 use ncm_domain::{
     Album, AlbumBrief, AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMv,
-    ArtistMvPage, ArtistSongPage, ChartSummary, CloudPage, CloudSong, Comment, CommentPage,
-    CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
+    ArtistMvPage, ArtistSongPage, ChartSummary, CloudPage, CloudSong, CloudUploadResult, Comment,
+    CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail, DigitalAlbumPurchased,
     DigitalAlbumPurchasedEntry, DigitalAlbumSalesEntry, FeedEvent, FeedPage, FollowCount,
     ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall,
     MessageCounts, MvDetail, MvItem, MvUrl, PhoneLoginOutcome, PhoneLoginResult, PlayRankEntry,

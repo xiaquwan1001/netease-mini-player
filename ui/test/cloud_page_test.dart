@@ -41,6 +41,8 @@ Future<void> _pump(
   WidgetTester tester, {
   required CloudPageLoader loadPage,
   CloudDeleter? deleteSongs,
+  CloudUploader? upload,
+  Future<String?> Function()? pickFile,
   void Function(rust.CloudSong song)? onPlay,
 }) async {
   await tester.pumpWidget(
@@ -48,6 +50,8 @@ Future<void> _pump(
       home: CloudPage(
         loadPage: loadPage,
         deleteSongs: deleteSongs,
+        upload: upload,
+        pickFile: pickFile,
         onPlay: onPlay,
       ),
     ),
@@ -84,7 +88,7 @@ void main() {
 
   testWidgets('空态: 云盘没歌时给空态文案', (tester) async {
     await _pump(tester, loadPage: (limit, offset) async => _page(<rust.CloudSong>[]));
-    expect(find.text('云盘还没有歌曲(上传请在官方客户端进行)'), findsOneWidget);
+    expect(find.text('云盘还没有歌曲, 点右上角上传音频'), findsOneWidget);
   });
 
   testWidgets('错误态: 首屏失败给错误文案+重试, 重试成功后出列表', (tester) async {
@@ -215,4 +219,85 @@ void main() {
     expect(find.text('新歌'), findsOneWidget);
     expect(find.text('旧歌'), findsNothing);
   });
+
+  group('上传', () {
+    testWidgets('选文件 → 上传 → 刷新列表并提示', (tester) async {
+      var loads = 0;
+      String? pickedPath;
+      await _pump(
+        tester,
+        loadPage: (limit, offset) async {
+          loads += 1;
+          return _page([_song(1, name: '旧歌')]);
+        },
+        pickFile: () async => '/tmp/a.mp3',
+        upload: (path) async {
+          pickedPath = path;
+          return rust.CloudUploadResult(
+            songId: BigInt.from(42),
+            name: '新歌',
+            instant: false,
+          );
+        },
+      );
+      expect(loads, 1);
+      await tester.tap(find.byTooltip('上传音频到云盘'));
+      await tester.pumpAndSettle();
+      expect(pickedPath, '/tmp/a.mp3');
+      expect(loads, 2); // 上传成功后刷新
+      expect(find.textContaining('已上传'), findsOneWidget);
+    });
+
+    testWidgets('秒传: 提示"已有同一文件"', (tester) async {
+      await _pump(
+        tester,
+        loadPage: (limit, offset) async => _page([_song(1)]),
+        pickFile: () async => '/tmp/a.mp3',
+        upload: (_) async => rust.CloudUploadResult(
+          songId: BigInt.from(7),
+          name: '重复歌',
+          instant: true,
+        ),
+      );
+      await tester.tap(find.byTooltip('上传音频到云盘'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('已有同一文件'), findsOneWidget);
+    });
+
+    testWidgets('取消选文件: 不发上传、不提示失败', (tester) async {
+      var uploaded = false;
+      await _pump(
+        tester,
+        loadPage: (limit, offset) async => _page([_song(1)]),
+        pickFile: () async => null,
+        upload: (_) async {
+          uploaded = true;
+          return rust.CloudUploadResult(
+            songId: BigInt.zero,
+            name: '',
+            instant: false,
+          );
+        },
+      );
+      await tester.tap(find.byTooltip('上传音频到云盘'));
+      await tester.pumpAndSettle();
+      expect(uploaded, isFalse);
+      expect(find.textContaining('上传失败'), findsNothing);
+    });
+
+    testWidgets('上传失败: 关掉进度框并给错误文案', (tester) async {
+      await _pump(
+        tester,
+        loadPage: (limit, offset) async => _page([_song(1)]),
+        pickFile: () async => '/tmp/a.mp3',
+        upload: (_) async => throw Exception('[internal] 转码失败'),
+      );
+      await tester.tap(find.byTooltip('上传音频到云盘'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('上传失败'), findsOneWidget);
+      // 进度对话框必须已经关闭(否则 barrier 会一直挡住页面)
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+  });
 }
+

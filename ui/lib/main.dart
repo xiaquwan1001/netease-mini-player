@@ -3490,6 +3490,9 @@ class _HomePageState extends State<HomePage> {
           onOpenVip: _openVip,
           onPlayLiked: (songs, i) =>
               _playSongsList(songs, i, playlistId: _likedPlaylistId),
+          // 简介保存: POST /api/user/profile/update(局部更新, 只改 signature)
+          saveSignature: (signature) =>
+              rust.updateSignature(signature: signature),
         );
       case 4:
         // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口:

@@ -1,6 +1,7 @@
-//! 音乐云盘: 列表 / 删除 / 下载直链. 上传(NOS 分片)本轮不做.
+//! 音乐云盘: 列表 / 删除 / 下载直链 / 上传(NOS 单请求 complete=true).
 
 use super::*;
+use md5::Digest as _;
 
 impl NeteaseProvider {
     /// 云盘歌曲列表(分页). 需要登录.
@@ -152,4 +153,252 @@ pub fn parse_cloud_song_url(body: &Value) -> Option<String> {
         .or_else(|| str_of(body, "url"))
         .filter(|s| !s.is_empty());
     url
+}
+
+impl NeteaseProvider {
+    /// 上传一个本地音频文件到音乐云盘. 需要登录.
+    ///
+    /// 协议按上游 `module/cloud_upload_token.js` + 前端 `cloudLocalUpload.js` 的五步流程:
+    /// ① `/api/cloud/upload/check` 按 md5 查重(needUpload=false ⇒ 秒传)
+    /// ② `/api/nos/token/alloc` 拿 token/objectKey/resourceId
+    /// ③ 单次 POST 整文件到 LBS 节点(`?offset=0&complete=true&version=1.0`)
+    /// ④ `/api/upload/cloud/info/v2` 提交元信息(转码中会重试几次)
+    /// ⑤ `/api/v1/cloud/music/status` 轮询转码(status=9 就绪) → `/api/cloud/pub/v2` 发布
+    ///
+    /// 大文件一次读进内存(云盘单曲常见 5-60MB); 分片上传未做 —— 单次 complete=true
+    /// 是上游前端同款路径, 超过服务端单请求上限时才需要 offset 分片。
+    pub(super) fn cloud_upload(
+        &self,
+        file_path: String,
+    ) -> BoxFuture<'_, ProviderResult<CloudUploadResult>> {
+        Box::pin(async move {
+            let path = std::path::PathBuf::from(&file_path);
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("上传云盘需要登录"));
+            }
+            let bytes = tokio::fs::read(&path)
+                .await
+                .map_err(|e| ProviderError::unsupported(format!("读取文件失败: {e}")))?;
+            if bytes.is_empty() {
+                return Err(ProviderError::unsupported("文件是空的"));
+            }
+            let file_name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown.mp3")
+                .to_string();
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("mp3")
+                .to_ascii_lowercase();
+            let stem = file_name
+                .rsplit_once('.')
+                .map(|(a, _)| a)
+                .unwrap_or(&file_name)
+                .to_string();
+            let md5_hex = {
+                let mut hasher = md5::Md5::new();
+                hasher.update(&bytes);
+                format!("{:x}", hasher.finalize())
+            };
+            let size = bytes.len().to_string();
+
+            // ① 查重
+            let q = make_query(&cookie, &domain, &ua)
+                .param("md5", &md5_hex)
+                .param("length", &size);
+            let check = client.cloud_upload_check(&q).await.map_err(map_error)?;
+            check_body(&check.body)?;
+            let need_upload = check
+                .body
+                .get("needUpload")
+                .and_then(Value::as_bool)
+                .unwrap_or(true);
+            let cloud_song_id = u64_of(&check.body, "songId").unwrap_or(0);
+
+            // ② 申请 NOS token
+            let safe_stem: String = stem
+                .chars()
+                .filter(|c| !c.is_whitespace() && *c != '.')
+                .collect();
+            let safe_stem = if safe_stem.is_empty() {
+                "unknown".to_string()
+            } else {
+                safe_stem
+            };
+            let q = make_query(&cookie, &domain, &ua)
+                .param("filename", &safe_stem)
+                .param("ext", &ext)
+                .param("md5", &md5_hex);
+            let tok = client.cloud_nos_token(&q).await.map_err(map_error)?;
+            check_body(&tok.body)?;
+            let result = tok.body.get("result");
+            let token = result
+                .and_then(|r| str_of(r, "token"))
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| ProviderError::internal("nos token: 响应缺 token"))?;
+            let object_key = result
+                .and_then(|r| str_of(r, "objectKey"))
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| ProviderError::internal("nos token: 响应缺 objectKey"))?;
+            let resource_id = result
+                .and_then(|r| str_of(r, "resourceId"))
+                .unwrap_or_default();
+
+            // ③ 上传文件字节(秒传跳过)
+            if need_upload {
+                let ua_str = ua.as_deref().unwrap_or("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36");
+                upload_nos_bytes(ua_str, &token, &md5_hex, &object_key, bytes, &ext).await?;
+            }
+
+            // ④ 提交元信息(刚上传完可能还在转码, 按上游做法重试)
+            let mut new_song_id = 0u64;
+            for attempt in 0..5 {
+                let q = make_query(&cookie, &domain, &ua)
+                    .param("md5", &md5_hex)
+                    .param("songid", &cloud_song_id.to_string())
+                    .param("filename", &file_name)
+                    .param("song", &stem)
+                    .param("resourceId", &resource_id);
+                let info = client.cloud_upload_info(&q).await.map_err(map_error)?;
+                let code = info.body.get("code").and_then(Value::as_i64).unwrap_or(0);
+                if code == 200 {
+                    new_song_id = u64_of(&info.body, "songId").unwrap_or(0);
+                    break;
+                }
+                if attempt == 4 {
+                    return Err(ProviderError::internal(format!(
+                        "提交云盘信息失败: {}",
+                        compact_body(&info.body)
+                    )));
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            }
+            if new_song_id == 0 {
+                return Err(ProviderError::internal("提交云盘信息后没有拿到 songId"));
+            }
+
+            // ⑤ 轮询转码 + 发布
+            for _ in 0..30 {
+                let q =
+                    make_query(&cookie, &domain, &ua).param("song_ids", &new_song_id.to_string());
+                let st = client.cloud_music_status(&q).await.map_err(map_error)?;
+                let status = st
+                    .body
+                    .get("statuses")
+                    .and_then(|s| s.get(new_song_id.to_string()))
+                    .and_then(|v| v.get("status"))
+                    .and_then(Value::as_i64)
+                    .unwrap_or(0);
+                if status == 9 {
+                    break;
+                }
+                if status != 1 && status != 0 {
+                    // 未知状态: 仍然尝试发布, 失败由 pub 的 code 兜底
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            let q = make_query(&cookie, &domain, &ua).param("songid", &new_song_id.to_string());
+            let published = client.cloud_pub(&q).await.map_err(map_error)?;
+            let code = published
+                .body
+                .get("code")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            if code != 200 && code != 201 {
+                return Err(ProviderError::internal(format!(
+                    "发布云盘歌曲失败: {}",
+                    compact_body(&published.body)
+                )));
+            }
+            Ok(CloudUploadResult {
+                song_id: new_song_id,
+                name: stem,
+                instant: !need_upload,
+            })
+        })
+    }
+}
+
+/// 把整份文件 POST 到 NOS 上传节点(秒传判定为 false 时才会调用).
+///
+/// 与上游前端同款: `http://<lbs-node>/<bucket>/<objectKey>?offset=0&complete=true&version=1.0`,
+/// 头 `X-Nos-Token` + `Content-MD5`(hex) + 音频 Content-Type; 响应非 2xx 视为失败。
+async fn upload_nos_bytes(
+    ua: &str,
+    token: &str,
+    md5_hex: &str,
+    object_key: &str,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> ProviderResult<()> {
+    const BUCKET: &str = "jd-musicrep-privatecloud-audio-public";
+    let http = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(180))
+        .build()
+        .map_err(|e| ProviderError::internal(format!("创建上传客户端失败: {e}")))?;
+    let lbs = http
+        .get(format!(
+            "https://wanproxy.127.net/lbs?version=1.0&bucketname={BUCKET}"
+        ))
+        .header("Referer", "https://music.163.com")
+        .header("User-Agent", ua)
+        .send()
+        .await
+        .map_err(|e| ProviderError::network(format!("获取上传节点失败: {e}")))?;
+    let lbs: Value = lbs
+        .json()
+        .await
+        .map_err(|e| ProviderError::internal(format!("上传节点响应无法解析: {e}")))?;
+    let host = lbs
+        .get("upload")
+        .and_then(Value::as_array)
+        .and_then(|a| a.first())
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| ProviderError::network("上传节点列表为空"))?;
+    let encoded = object_key.replace('/', "%2F");
+    let url = format!("{host}/{BUCKET}/{encoded}?offset=0&complete=true&version=1.0");
+    let content_type = match ext {
+        "flac" => "audio/flac",
+        "m4a" | "aac" => "audio/mp4",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        _ => "audio/mpeg",
+    };
+    let resp = http
+        .post(&url)
+        .header("X-Nos-Token", token)
+        .header("Content-MD5", md5_hex)
+        .header("Content-Type", content_type)
+        .body(bytes)
+        .send()
+        .await
+        .map_err(|e| ProviderError::network(format!("上传文件失败: {e}")))?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(ProviderError::internal(format!(
+            "上传文件失败(HTTP {status}): {}",
+            compact_body_str(&body)
+        )));
+    }
+    Ok(())
+}
+
+/// 错误详情里别塞整段响应体: 只保留前 200 字符, 便于日志/提示。
+fn compact_body(body: &Value) -> String {
+    compact_body_str(&body.to_string())
+}
+
+fn compact_body_str(raw: &str) -> String {
+    let text: String = raw.chars().take(200).collect();
+    if raw.chars().count() > 200 {
+        format!("{text}…")
+    } else {
+        text
+    }
 }

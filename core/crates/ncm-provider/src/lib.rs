@@ -7,15 +7,15 @@
 
 use ncm_domain::{
     AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMvPage, ArtistSongPage,
-    ChartSummary, CloudPage, CommentPage, CommentStats, DefaultSearch, DigitalAlbumDetail,
-    DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FeedPage, FollowCount, ForwardItem,
-    HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric, MedalWall, MessageCounts,
-    MvDetail, MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist, PlaylistCategory, PlaylistDetail,
-    PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession, Profile, ProfileDetail,
-    QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage, RadioToplist, RecentContact,
-    SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent, Song, SongLikeState,
-    SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, TrackId, UserItem,
-    UserLevel, VipOverview, WikiFact, WordLyric,
+    ChartSummary, CloudPage, CloudUploadResult, CommentPage, CommentStats, DefaultSearch,
+    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FeedPage,
+    FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric,
+    MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist,
+    PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
+    Profile, ProfileDetail, QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage,
+    RadioToplist, RecentContact, SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent,
+    Song, SongLikeState, SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup,
+    TrackId, UserItem, UserLevel, VipOverview, WikiFact, WordLyric,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -689,6 +689,16 @@ pub trait Provider: Send + Sync {
     /// 当前账号资料详情(个人主页背景图/头像/签名/关注数)
     fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
         Box::pin(async { Err(ProviderError::unsupported("no profile detail")) })
+    }
+
+    /// 上传本地音频到音乐云盘(需登录); 返回新歌 id/歌名. 默认不支持.
+    fn cloud_upload(&self, _file_path: String) -> BoxFuture<'_, ProviderResult<CloudUploadResult>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud upload")) })
+    }
+
+    /// 修改个人简介(签名, 需登录); 返回更新后的资料. 默认不支持.
+    fn update_signature(&self, _signature: String) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no update signature")) })
     }
 
     /// 任意用户的公开资料(不需要登录). 用于"他人主页"(听众/粉丝列表点进去).
