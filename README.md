@@ -190,7 +190,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
 
-## 项目进度(当前版本 v0.9.1)
+## 项目进度(当前版本 v0.10.0)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|

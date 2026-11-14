@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-14**。当前版本 **v0.9.1**(2026-11-14 发布,GitHub Release 8 个资产全绿)。
+> 最近更新: **2026-11-14**。当前版本 **v0.10.0**(2026-11-14 打包, 含用户 15 项反馈 + 编辑简介 + 云盘上传)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
