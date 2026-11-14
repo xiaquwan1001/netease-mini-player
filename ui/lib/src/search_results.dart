@@ -1,18 +1,47 @@
 import 'package:flutter/material.dart';
 
-import 'app_settings.dart';
 import 'cover_art.dart';
+import 'format.dart' show formatCountMagnitude;
 import 'layout.dart';
 import 'library_view.dart';
+import 'mv_page.dart' show showMvPage;
 import 'rust/api.dart' as rust;
 import 'song_tile.dart';
 import 'user_nav.dart';
 
-/// 综合搜索结果: 单曲 / 艺人 / 专辑 / 歌单 / 播客.
+/// MV 分区条目(需求 10: 搜索结果与联想都要有 MV 分类)。
+///
+/// 契约与后端 lane 对齐 —— Rust 侧 `SearchBundleDto.mvs: List<MvItem>`,
+/// 字段 `{id, name, coverUrl, artistName, playCount}`(cloudsearch type=1004)。
+/// FFI 还没合入时由调用方传同构的 [SearchMv](main.dart 暂不传 ⇒ 分区为空,
+/// 但 UI 的分组/图标/点击进播放页已经就位, 后端一接上就有内容)。
+class SearchMv {
+  const SearchMv({
+    required this.id,
+    required this.name,
+    this.coverUrl,
+    this.artistName = '',
+    this.playCount,
+  });
+
+  final BigInt id;
+  final String name;
+  final String? coverUrl;
+  final String artistName;
+
+  /// 播放次数(Rust 侧 BigInt; 未知时 null)
+  final BigInt? playCount;
+}
+
+/// 综合搜索结果: 单曲 / 艺人 / 专辑 / 歌单 / 播客 / 用户 / MV.
 ///
 /// 分类**横向**排(可横滑的 ChoiceChip 条), 一次只渲染一个分类:
 /// 之前五个分区纵向堆叠, 想找"艺人"要先划过整页单曲(用户反馈必须往下翻)。
 /// 空分类不出现; 全部为空时居中提示。
+///
+/// 卡片型分区(艺人/专辑/歌单/播客/用户/MV)统一走 [CoverGrid]:
+/// 每行正好 `AppSettings.gridColumns` 个, 格子宽均分可用宽度, 末行左对齐、
+/// 右侧不再留一条固定空隙(需求 8/14)。
 class SearchResultsView extends StatefulWidget {
   const SearchResultsView({
     super.key,
@@ -24,6 +53,8 @@ class SearchResultsView extends StatefulWidget {
     required this.onOpenAlbum,
     required this.onOpenPlaylist,
     required this.onOpenPodcast,
+    this.onOpenMv,
+    this.mvs = const <SearchMv>[],
     this.onMenu,
   });
 
@@ -38,6 +69,12 @@ class SearchResultsView extends StatefulWidget {
   final void Function(rust.SearchPlaylistItem) onOpenPlaylist;
   final void Function(rust.SearchPodcast) onOpenPodcast;
 
+  /// MV 分区数据(FFI 合入后由 main.dart 从 `bundle.mvs` 转过来)
+  final List<SearchMv> mvs;
+
+  /// 点 MV 卡片; 不传时默认打开 MV 播放页([showMvPage])
+  final void Function(SearchMv mv)? onOpenMv;
+
   /// 行尾 "..." 菜单
   final void Function(rust.SongDto)? onMenu;
 
@@ -45,8 +82,8 @@ class SearchResultsView extends StatefulWidget {
   State<SearchResultsView> createState() => _SearchResultsViewState();
 }
 
-/// 五个分类(顺序即 chip 顺序)
-enum _Section { songs, artists, albums, playlists, podcasts, users }
+/// 七个分类(顺序即 chip 顺序)
+enum _Section { songs, artists, albums, playlists, podcasts, users, mvs }
 
 extension on _Section {
   String get label => switch (this) {
@@ -56,6 +93,7 @@ extension on _Section {
     _Section.playlists => '歌单',
     _Section.podcasts => '播客',
     _Section.users => '用户',
+    _Section.mvs => 'MV',
   };
 }
 
@@ -104,7 +142,12 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     _Section selected,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      padding: const EdgeInsets.fromLTRB(
+        kPagePadding,
+        6,
+        kPagePadding,
+        6,
+      ),
       child: Wrap(
         spacing: 8,
         runSpacing: 4,
@@ -134,6 +177,7 @@ class _SearchResultsViewState extends State<SearchResultsView> {
       _Section.playlists => bundle.playlists.isNotEmpty,
       _Section.podcasts => bundle.podcasts.isNotEmpty,
       _Section.users => bundle.users.isNotEmpty,
+      _Section.mvs => widget.mvs.isNotEmpty,
     };
   }
 
@@ -182,7 +226,12 @@ class _SearchResultsViewState extends State<SearchResultsView> {
             // 单曲行要"左右占满": 不额外加水平留白, 提示行自己补
             if (hidden > 0)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                padding: const EdgeInsets.fromLTRB(
+                  kPagePadding,
+                  4,
+                  kPagePadding,
+                  4,
+                ),
                 child: Text(
                   '已隐藏 $hidden 首无版权曲目',
                   style: Theme.of(context).textTheme.bodySmall
@@ -200,115 +249,142 @@ class _SearchResultsViewState extends State<SearchResultsView> {
           ],
         );
       case _Section.artists:
-        return _artistWrap(context, bundle.artists);
+        return _grid<rust.SearchArtist>(
+          bundle.artists,
+          (a, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () => widget.onOpenArtist(a),
+            cover: _roundCover(a.avatarUrl, w),
+            name: a.name,
+            subtitle: a.alias.isNotEmpty ? a.alias : '${a.albumCount} 张专辑',
+          ),
+        );
       case _Section.albums:
-        return _cardWrap(context, [
-          for (final al in bundle.albums)
-            _card(
-              context,
-              width: 118,
-              onTap: () => widget.onOpenAlbum(al),
-              cover: CoverArt(url: al.coverUrl, size: 118, radius: 8),
-              name: al.name,
-              subtitle: '${al.artist} · ${al.trackCount} 首',
-            ),
-        ]);
+        return _grid<rust.SearchAlbum>(
+          bundle.albums,
+          (al, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () => widget.onOpenAlbum(al),
+            cover: CoverArt(url: al.coverUrl, size: w, radius: 8),
+            name: al.name,
+            subtitle: '${al.artist} · ${al.trackCount} 首',
+          ),
+        );
       case _Section.playlists:
-        return _cardWrap(context, [
-          for (final p in bundle.playlists)
-            _card(
-              context,
-              width: 118,
-              onTap: () => widget.onOpenPlaylist(p),
-              cover: CoverArt(url: p.coverUrl, size: 118, radius: 8),
-              name: p.name,
-              subtitle: '${p.creatorName} · ${p.trackCount} 首',
-            ),
-        ]);
+        return _grid<rust.SearchPlaylistItem>(
+          bundle.playlists,
+          (p, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () => widget.onOpenPlaylist(p),
+            cover: CoverArt(url: p.coverUrl, size: w, radius: 8),
+            name: p.name,
+            subtitle: '${p.creatorName} · ${p.trackCount} 首',
+          ),
+        );
       case _Section.podcasts:
-        return _cardWrap(context, [
-          for (final p in bundle.podcasts)
-            _card(
-              context,
-              width: 118,
-              onTap: () => widget.onOpenPodcast(p),
-              cover: CoverArt(url: p.coverUrl, size: 118, radius: 8),
-              name: p.name,
-              subtitle: '${p.djName} · ${p.programCount} 集',
-            ),
-        ]);
+        return _grid<rust.SearchPodcast>(
+          bundle.podcasts,
+          (p, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () => widget.onOpenPodcast(p),
+            cover: CoverArt(url: p.coverUrl, size: w, radius: 8),
+            name: p.name,
+            subtitle: '${p.djName} · ${p.programCount} 集',
+          ),
+        );
       case _Section.users:
         // 用户(cloudsearch type=1002): 点卡片直接进个人主页, 走全局 UserNav
         // (与评论/动态同一个入口), 不再单独接一层回调。
-        return _cardWrap(context, [
-          for (final u in bundle.users)
-            _card(
-              context,
-              width: 92,
-              onTap: () => UserNav.open(context, u.id, nickname: u.name),
-              cover: CircleCover(url: u.avatarUrl, size: 72),
-              name: u.name,
-              subtitle: u.signature.isEmpty ? '@${u.id}' : u.signature,
-            ),
-        ]);
+        return _grid<rust.UserItem>(
+          bundle.users,
+          (u, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () => UserNav.open(context, u.id, nickname: u.name),
+            cover: _roundCover(u.avatarUrl, w),
+            name: u.name,
+            subtitle: u.signature.isEmpty ? '@${u.id}' : u.signature,
+          ),
+        );
+      case _Section.mvs:
+        // MV(cloudsearch type=1004): 点卡片进 MV 播放页(与 MV 页同一入口)
+        final open = widget.onOpenMv;
+        return _grid<SearchMv>(
+          widget.mvs,
+          (mv, w) => _gridCard(
+            context,
+            tileWidth: w,
+            onTap: () {
+              if (open != null) {
+                open(mv);
+              } else {
+                showMvPage(context, mvId: mv.id, name: mv.name);
+              }
+            },
+            cover: _mvCover(mv.coverUrl, w),
+            name: mv.name,
+            subtitle: _mvSubtitle(mv),
+          ),
+        );
     }
   }
 
-  /// 艺人网格: 与方格网格同一列数口径(设置项 [AppSettings.gridColumns]),
-  /// 卡片仍是 92dp 胶囊形态(CircleCover 72 + 两行文字)。
-  ///
-  /// 以前这里是「固定 92dp 卡片 + Wrap」: 每行几张只由屏宽决定, 和「方格网格列数」
-  /// 设置完全无关(用户改 2/4 没反应); 窄视口(≈300dp)下只排得下 2 张, 右侧空出一大片
-  /// —— 被当成「3 列只显示 2 列 / 第三列是空的」。
-  /// 现在按列数均分可用宽度: 每行正好 [AppSettings.gridColumns] 张, 右侧不留空隙;
-  /// 卡片变窄时圆形头像跟着收(不超过 72), 不会再溢出格子。
-  Widget _artistWrap(BuildContext context, List<rust.SearchArtist> artists) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      children: [
-        LayoutBuilder(
-          builder: (context, box) {
-            final cols = AppSettings.instance.gridColumns.clamp(1, 8);
-            // 减 0.5: Wrap 里 n 张等宽卡片 + (n-1) 个间距正好等于可用宽度,
-            // 浮点误差会让最后一张掉到下一行。
-            final width =
-                coverTileWidth(box.maxWidth, cols, crossAxisSpacing: 10) - 0.5;
-            final cover = width < 72 ? width : 72.0;
-            return Wrap(
-              spacing: 10,
-              runSpacing: 12,
-              children: [
-                for (final a in artists)
-                  _card(
-                    context,
-                    width: width,
-                    onTap: () => widget.onOpenArtist(a),
-                    cover: CircleCover(url: a.avatarUrl, size: cover),
-                    name: a.name,
-                    subtitle: a.alias.isNotEmpty
-                        ? a.alias
-                        : '${a.albumCount} 张专辑',
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
+  /// 卡片型分区共用网格: 每行正好 [AppSettings.gridColumns] 个,
+  /// 格子宽 = (可用宽度 - (n-1)×间距) / n, 末行左对齐、右侧无固定留白。
+  Widget _grid<T>(
+    List<T> items,
+    Widget Function(T item, double tileWidth) builder,
+  ) {
+    return CoverGrid(
+      itemCount: items.length,
+      padding: kGridInsets,
+      itemBuilder: (context, i, tileWidth) => builder(items[i], tileWidth),
     );
   }
 
-  /// 卡片网格: Wrap 自动换行, 单分类时横向铺满(比固定高度的横滑条更省纵向空间)
-  Widget _cardWrap(BuildContext context, List<Widget> items) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      children: [Wrap(spacing: 10, runSpacing: 12, children: items)],
+  /// 圆形封面(艺人/用户): 直径不超过 [kGridAvatarMax], 但占位宽高与格子一致,
+  /// 这样同一行卡片里的文字基线仍然对齐, 格子高度也不会和 delegate 算的差开。
+  Widget _roundCover(String? url, double tileWidth) {
+    final size = tileWidth < kGridAvatarMax ? tileWidth : kGridAvatarMax;
+    return SizedBox(
+      width: tileWidth,
+      height: tileWidth,
+      child: Center(child: CircleCover(url: url, size: size)),
     );
   }
 
-  /// 封面 + 名字 + 副标题 的竖排卡片(艺人/专辑/歌单/播客共用)
-  Widget _card(
+  /// MV 封面: 方形封面 + 右下角播放角标
+  Widget _mvCover(String? url, double tileWidth) {
+    return SizedBox(
+      width: tileWidth,
+      height: tileWidth,
+      child: Stack(
+        children: [
+          Positioned.fill(child: CoverArt(url: url, size: tileWidth, radius: 8)),
+          const Positioned(right: 4, bottom: 4, child: _MvPlayBadge()),
+        ],
+      ),
+    );
+  }
+
+  static String _mvSubtitle(SearchMv mv) {
+    final count = mv.playCount;
+    final parts = <String>[
+      if (mv.artistName.isNotEmpty) mv.artistName,
+      if (count != null && count > BigInt.zero)
+        '${formatCountMagnitude(count.toInt())} 次播放',
+    ];
+    return parts.join(' · ');
+  }
+
+  /// 封面 + 名字 + 副标题的竖排卡片(艺人/专辑/歌单/播客/用户/MV 共用)
+  Widget _gridCard(
     BuildContext context, {
-    required double width,
+    required double tileWidth,
     required VoidCallback onTap,
     required Widget cover,
     required String name,
@@ -317,15 +393,16 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     return SizedBox(
-      width: width,
+      width: tileWidth,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             cover,
-            const SizedBox(height: 4),
+            const SizedBox(height: kCardGap),
             Text(
               name,
               maxLines: 1,
@@ -336,13 +413,34 @@ class _SearchResultsViewState extends State<SearchResultsView> {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: scheme.onSurfaceVariant,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 圆形头像(艺人/用户)在网格里的直径上限: 再宽也不放大,
+/// 否则 2 列时一张头像就占满半屏。
+const double kGridAvatarMax = 96;
+
+/// MV 封面右下角的播放角标(深色半透明圆 + 白色三角)
+class _MvPlayBadge extends StatelessWidget {
+  const _MvPlayBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: const BoxDecoration(
+        color: Color(0x8A000000),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.play_arrow, size: 16, color: Color(0xFFFFFFFF)),
     );
   }
 }

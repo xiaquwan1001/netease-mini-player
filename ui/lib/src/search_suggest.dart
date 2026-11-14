@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart';
 import 'rust/api.dart' as rust;
 
 IconData suggestIcon(String kind) {
@@ -13,6 +14,8 @@ IconData suggestIcon(String kind) {
       return Icons.album_outlined;
     case 'playlist':
       return Icons.queue_music;
+    case 'mv':
+      return Icons.play_circle_outline;
     default:
       return Icons.search;
   }
@@ -28,6 +31,8 @@ String suggestKindLabel(String kind) {
       return '专辑';
     case 'playlist':
       return '歌单';
+    case 'mv':
+      return 'MV';
     default:
       return '';
   }
@@ -53,6 +58,7 @@ class SuggestionPanel extends StatelessWidget {
     'artist',
     'album',
     'playlist',
+    'mv',
   ];
 
   @override
@@ -68,12 +74,22 @@ class SuggestionPanel extends StatelessWidget {
       for (final kind in groups.keys)
         if (!_kindOrder.contains(kind)) kind,
     ];
+    // 面板**占满**父级给的剩余高度(需求 14): 以前调用方套了
+    // ConstrainedBox(maxHeight: 280) + SingleChildScrollView, 联想一多就只能在
+    // 一条 280dp 的小矩形里滚, 下面还露出半截结果页。现在内部自滚动,
+    // 条目一直排到页面底部(末端留出安全区/播放条的 [kPagePadding])。
+    // 底部让出系统手势/导航条安全区, 最后一条不会被系统条压住。
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
     return Card(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      margin: EdgeInsets.fromLTRB(
+        kPagePadding,
+        0,
+        kPagePadding,
+        kPagePadding + safeBottom,
+      ),
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: kSectionTitleGap),
         children: [
           for (final kind in orderedKinds) ...[
             _SuggestGroupHeader(kind: kind, count: groups[kind]!.length),
@@ -169,7 +185,7 @@ class SearchHistoryBar extends StatelessWidget {
     if (history.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      padding: const EdgeInsets.fromLTRB(kPagePadding, 0, kPagePadding, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
