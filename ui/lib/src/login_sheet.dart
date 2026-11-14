@@ -37,6 +37,7 @@ String friendlyLoginError(String raw) {
     'notFound': '接口不存在',
     'unsupported': '当前版本不支持',
     'internal': '服务端异常',
+    'forbidden': '对方设置了隐私限制',
   };
   final m = RegExp(r'\[(\w+)\]\s*').firstMatch(raw);
   if (m == null) return raw;

@@ -587,6 +587,9 @@ pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
             "artists" => "artist",
             "albums" => "album",
             "playlists" => "playlist",
+            // 联想响应若带 MV 分类(部分账号/版本会回 mvs), 映射成 UI 的 mv 分组.
+            // 主流账号目前不带该 key, 这里只是容错, 不改变其它分类.
+            "mvs" | "mv" => "mv",
             _ => continue,
         };
         let Some(arr) = result.get(&key).and_then(Value::as_array) else {
@@ -613,6 +616,24 @@ pub fn parse_suggest(body: &Value) -> Vec<SuggestItem> {
                     v.get("artist")
                         .and_then(|a| str_of(a, "picUrl"))
                         .or_else(|| str_of(v, "picUrl")),
+                ),
+                "mv" => (
+                    {
+                        let artist = v
+                            .get("artistName")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or_else(|| artists_line_of(v));
+                        if artist.is_empty() {
+                            "MV".to_string()
+                        } else {
+                            format!("MV · {artist}")
+                        }
+                    },
+                    str_of(v, "cover")
+                        .or_else(|| str_of(v, "picUrl"))
+                        .or_else(|| str_of(v, "imgurl")),
                 ),
                 _ => (
                     format!(

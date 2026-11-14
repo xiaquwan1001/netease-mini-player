@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'async_view.dart';
+import 'cloud_page.dart' show showCloudPage;
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
@@ -344,6 +345,35 @@ class _MineViewState extends State<MineView> {
               ),
             ],
             if (widget.loggedIn) ...[
+              const SizedBox(height: kCardGap),
+              Card(
+                margin: EdgeInsets.zero,
+                child: ListTile(
+                  leading: const Icon(Icons.cloud_outlined),
+                  title: const Text('音乐云盘'),
+                  subtitle: const Text('已上传的歌曲 · 播放 / 删除'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => showCloudPage(
+                    context,
+                    onPlay: (song) => widget.onPlaySongs([
+                      rust.SongDto(
+                        id: song.songId,
+                        name: song.name,
+                        artist: song.artist,
+                        artistId: BigInt.zero,
+                        album: song.album,
+                        albumId: BigInt.zero,
+                        coverUrl: song.coverUrl,
+                        durationMs: BigInt.zero,
+                        fee: 0,
+                        vip: false,
+                        paid: false,
+                        playable: true,
+                      ),
+                    ], 0),
+                  ),
+                ),
+              ),
               const SizedBox(height: kCardGap),
               Card(
                 margin: EdgeInsets.zero,

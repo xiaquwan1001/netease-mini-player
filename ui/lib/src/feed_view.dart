@@ -76,6 +76,10 @@ class _FeedViewState extends State<FeedView> {
 
   /// 是否还可能存在更早一页(上一页返回满页, 且确实有新条目)
   bool _hasMore = false;
+
+  /// 后端给的分页游标(`FeedPageDto.lastTime`); null = 还没翻过页,
+  /// 第一页之后的更早一页都用它, 不再拿条目 time_ms 猜。
+  int? _cursor;
   bool _loadingMore = false;
   String? _olderError;
 
@@ -107,17 +111,27 @@ class _FeedViewState extends State<FeedView> {
   Future<void> _load() async {
     setState(() => _error = null);
     try {
-      final load =
-          widget.loadFeed ??
-          () => rust.feedEvents(limit: _pageSize, lastTime: -1);
-      final events = await retryNetwork(load);
+      final List<rust.FeedEventDto> events;
+      var more = false;
+      if (widget.loadFeed != null) {
+        events = await retryNetwork(widget.loadFeed!);
+        more = events.length >= _pageSize;
+      } else {
+        // 真实游标分页: lastTime/more 由服务端给, 不再按"满页"猜
+        final page = await retryNetwork(
+          () => rust.feedPage(limit: _pageSize, lastTime: -1),
+        );
+        events = page.events;
+        more = page.more;
+        _cursor = page.lastTime;
+      }
       if (!mounted) return;
       final hadHistory = (_events?.isNotEmpty ?? false);
       setState(() {
         // 刷新: 最新页优先(同 id 用最新副本, 点赞数等状态跟手), 历史只在末尾追加未重复的
         _events = mergeFeedEvents(events, _events ?? const []);
-        // 首次加载才用本页长度决定"还有没有更早"; 刷新不动已翻出的历史
-        if (!hadHistory) _hasMore = events.length >= _pageSize;
+        // 首次加载才决定"还有没有更早"; 刷新不动已翻出的历史
+        if (!hadHistory) _hasMore = more;
         // 选中的艺人还在列表里就保留, 否则回到"全部"
         if (_authorFilter != null &&
             !_events!.any((e) => e.userId == _authorFilter)) {
@@ -139,22 +153,31 @@ class _FeedViewState extends State<FeedView> {
       _loadingMore = true;
       _olderError = null;
     });
-    final cursor = current.last.timeMs.toInt();
+    // 优先用服务端游标; 还没拿到(例如注入了 loadFeed)时退回最后一条的 time_ms
+    final cursor = _cursor ?? current.last.timeMs.toInt();
     try {
-      final load =
-          widget.loadOlder ??
-          ({required int limit, required int lastTime}) =>
-              rust.feedEvents(limit: limit, lastTime: lastTime);
-      final older = await retryNetwork(
-        () => load(limit: _pageSize, lastTime: cursor),
-      );
+      final List<rust.FeedEventDto> older;
+      var more = false;
+      if (widget.loadOlder != null) {
+        older = await retryNetwork(
+          () => widget.loadOlder!(limit: _pageSize, lastTime: cursor),
+        );
+        more = older.length >= _pageSize;
+      } else {
+        final page = await retryNetwork(
+          () => rust.feedPage(limit: _pageSize, lastTime: cursor),
+        );
+        older = page.events;
+        more = page.more;
+        _cursor = page.lastTime;
+      }
       if (!mounted) return;
       setState(() {
         final merged = mergeFeedEvents(current, older);
         // 没有新增(全是重复 id / 游标没前进)就停, 否则会无限请求同一页
         final added = merged.length > current.length;
         _events = merged;
-        _hasMore = added && older.length >= _pageSize;
+        _hasMore = added && more;
         _loadingMore = false;
       });
     } catch (e) {

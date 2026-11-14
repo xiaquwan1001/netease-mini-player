@@ -85,6 +85,7 @@ rust.SearchBundleDto bundleOf() {
           followed: false,
         ),
     ],
+    mvs: const [],
   );
 }
 

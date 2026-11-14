@@ -1458,3 +1458,35 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
 | 回退语义 | ✅ | 无 D-Bus(zbus 进程内缓存连接, 用子进程重执行模拟): open_backend → None + PlaintextFallback; 同意后 FileStore, 未同意写 → AccessDenied |
 
 降级配方(锁屏/无桌面): `NCM_KEYRING_TEST=1 cargo test -p ncm-service keyring` 内含子进程模拟无 D-Bus; 无头 spike 配方见 credential_keyring.rs 注释(须 `gnome-keyring-daemon --unlock` 空密码解锁, 否则 gcr-prompter 卡死)。
+
+## 2026-11-14(二) 用户反馈 15 项落地(7 lane 并行)
+
+一次性修完用户这一轮 15 条 UI 需求, 每路独立 worktree/分支, 编排者逐条重跑测试后合并。
+本机门禁: `dart analyze` 0 issue; 全量 `flutter test` **919 passed / 1 skipped**(含 12 张 golden,
+本轮重建 settings/mine 各两张); `cargo test --offline --workspace` 全绿
+(service 197 / ffi 46 / domain 33 / playback 7 / provider 7 / cli 6 / vendor 4);
+`cargo clippy --offline --workspace --all-targets` 0 warning; `cargo fmt --check` 干净;
+`tools/check-tokens.sh --strict` / `check-write-guard.sh` OK。
+
+| # | 需求 | 落点 |
+|---|---|---|
+| 1 | OLED 纯黑从「主题四档」拆回独立开关(跟随系统 + 纯黑可并存) | settings_view: 三档 + `SwitchListTile`, `isOledDarkEffective/oledDarkLabel` 只说明「仅在深色生效」, 不改 themeMode |
+| 2 | 「我的」可见简介/动态/编辑入口, 与用户主页同构 | mine_view 资料本层持有 + `_SelfPageEntry`/`_MySignatureSection`/`_MyFeedSection`(复用 UserEventsList); 编辑简介仅 UI 入口(后端缺 update 接口, 已验证 vendor 无该端点) |
+| 3 | 动态分享支持保存图片/转发 + 可选水印 | 新增 `feed_share.dart`: FeedShareCard/CommentShareCard + 分享/转发面板, 截图走 `capturePng`, 水印画进边界 |
+| 4 | 长按动态/评论弹出转发详情页 | FeedForwardSheet / CommentShareSheet; 详情页 `_forward` 从 AlertDialog 换成同一面板 |
+| 5 | 关注/粉丝不可见时别露 `[internal]code=400` | Rust `check_follow_list` → `ProviderErrorKind::Forbidden` + 中文文案; UI `friendlyError` 去掉 kind 前缀, 登录表补 forbidden |
+| 6 | 云盘后端 + 我的入口 | vendor 4 模块(`/api/v1/cloud/get`、`get/byids`、`/api/cloud/del`、`/api/cloud/dowonload`) + service `cloud.rs` + FFI `userCloud/cloudDelete/cloudSongUrl` + `cloud_page.dart`(列表/播放/删除/加载更多); 上传(NOS 分片)未做 |
+| 7 | 通知按钮顺序: 上一首→播放/暂停→下一首→喜欢→顺序 | PlaybackService 用 `setMediaButtonPreferences` + 显式槽位; a34 实测 actions=5 且无重复下一首 |
+| 8 | 网格列数对所有展示面生效 | `layout.dart::CoverGrid`(真实宽度均分 n 列、末行左对齐), 搜索各分区/新碟/广场统一; 我的收藏与艺人页沿用 CoverRow 口径 |
+| 9 | 相似艺人改横排可拖拽(头像在上) | `SimilarArtistsRow` 72dp 项宽、无自动滚动(测试钉住 3s 位移=0) |
+| 10 | 搜索联想/结果的 MV 分类 + MV 播放页评论区 | backend `cloudsearch type=1004` + `MvItem`; UI `_Section.mvs`/联想 mv 分组; `mv_page` 接 CommentThread(kind=mv) |
+| 11 | 动态下拉刷新补历史; 标签移到昵称下 | feed 改 `feedPage` 真游标(events/lastTime/more) + 触底加载更早 + 按 id 合并去重; 用户/艺人统计行进 `ProfileIdentity.meta`(头像右侧昵称下) |
+| 12 | 用户等级恒 0 | `parse_profile_detail` 回退读响应顶层 `level`(原来只读 profile.level); UI 不再 fallback 显示 Lv.0 |
+| 13 | 艺人页推荐单曲/专辑并入纵向 tab | tab: 推荐单曲(有)/全部歌曲/专辑/MV/动态(有); 删除信息区重复横滑区块与详细艺人弹层 |
+| 14 | 搜索联想过早截断 | 去掉 `ConstrainedBox(maxHeight:280)`, 改 `Positioned.fill` 覆盖层, 面板内部自滚动 |
+| 15 | 边缘空白/视图不满宽 | 抽 `kPagePadding/kGridInsets` 并统一搜索框/精确实体条/联想/落地页/详情页错误空态 |
+
+已知尾巴: ①编辑简介仍缺后端(需 `user/update` 类端点, vendor 未移植); ②云盘上传未做, 云盘 4 个端点未做真机抓包复核;
+③艺人「动态」tab 用 `userEvents(artistId)` 尽力而为, 无专用接口; ④通知顺序仅 AOSP 14 模拟器验证;
+⑤搜索结果之外的「我的收藏/艺人页」仍用 CoverRow, 未切 CoverGrid。
+

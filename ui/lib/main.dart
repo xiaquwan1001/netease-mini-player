@@ -3529,6 +3529,17 @@ class _HomePageState extends State<HomePage> {
   Widget _buildSearchResults() {
     return SearchResultsView(
       bundle: _bundle!,
+      // 后端 cloudsearch type=1004 的 MV 结果 → UI 的 SearchMv(同构映射)
+      mvs: [
+        for (final m in _bundle!.mvs)
+          SearchMv(
+            id: m.id,
+            name: m.name,
+            coverUrl: m.coverUrl,
+            artistName: m.artistName,
+            playCount: m.playCount,
+          ),
+      ],
       liked: _liked,
       currentTrackId: _current?.id,
       onPlaySong: _playFromSearch,

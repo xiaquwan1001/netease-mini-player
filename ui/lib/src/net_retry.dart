@@ -31,5 +31,13 @@ String friendlyError(Object e) {
   if (isNetworkError(e)) {
     return '网络不稳定, 已自动重试仍失败, 请稍后重试';
   }
-  return e.toString();
+  final raw = e.toString();
+  // [forbidden] 是"对方设置了隐私"(关注/粉丝列表不可见等): Rust 侧的 detail
+  // 已经是能直接读的中文, 不要把内部 kind 前缀露给用户(用户反馈看到的
+  // "[internal]code=400" 就是这类). 其它 kind 保持原样, 方便定位问题.
+  if (raw.contains('[forbidden]')) {
+    final detail = raw.split('[forbidden]').last.trim();
+    return detail.isEmpty ? '没有权限查看' : detail;
+  }
+  return raw;
 }
