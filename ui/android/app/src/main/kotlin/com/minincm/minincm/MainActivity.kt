@@ -16,6 +16,7 @@ import androidx.core.content.FileProvider
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
@@ -46,10 +47,14 @@ class MainActivity : FlutterActivity() {
         // 通知栏自定义按钮(喜欢/播放顺序): 同样只转发, 状态与副作用都在 Dart
         PlaybackService.actionListener = { cmd ->
             runOnUiThread {
-                channel.invokeMethod(
-                    if (cmd == PlaybackService.CMD_LIKE) "toggleLike" else "cycleMode",
-                    null,
-                )
+                val method = when (cmd) {
+                    PlaybackService.CMD_LIKE -> "toggleLike"
+                    PlaybackService.CMD_MODE -> "cycleMode"
+                    // 通知栏「下一首」: 与耳机键/锁屏的 skipNext 走同一条 Dart 队列
+                    PlaybackService.CMD_NEXT -> "skipNext"
+                    else -> null
+                }
+                if (method != null) channel.invokeMethod(method, null)
             }
         }
         channel.setMethodCallHandler { call, result ->
@@ -216,7 +221,17 @@ class MainActivity : FlutterActivity() {
         val token = SessionToken(this, ComponentName(this, PlaybackService::class.java))
         controllerFuture = MediaController.Builder(this, token).buildAsync().also { future ->
             future.addListener({
-                controller = runCatching { future.get() }.getOrNull()
+                val c = runCatching { future.get() }.getOrNull()
+                controller = c
+                // 播完立刻告诉 Dart(而不是等 500ms 轮询发现"位置到末尾了"):
+                // 自动续播的间隙就是这两步的延迟堆出来的, 用户听感上是"每首都卡一下"
+                c?.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_ENDED) {
+                            channel.invokeMethod("trackEnded", null)
+                        }
+                    }
+                })
             }, ContextCompat.getMainExecutor(this))
         }
 
@@ -315,15 +330,23 @@ class MainActivity : FlutterActivity() {
                 val title = args["title"] as? String ?: ""
                 val artist = args["artist"] as? String ?: ""
                 val trackId = (args["trackId"] as? Number)?.toLong() ?: 0L
+                // 通知/锁屏/车载的封面 = 当前播放内容的图(歌曲封面或播客封面)。
+                // 由 Dart 带正确 UA 下载好字节传进来: 让 Media3 自己按 URL 拉图会
+                // 用默认 UA 被网易 CDN 回 403, 通知上就是个空白方块。
+                val artwork = args?.get("artwork") as? ByteArray
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(title)
+                    .setArtist(artist)
+                if (artwork != null && artwork.isNotEmpty()) {
+                    metadata.setArtworkData(
+                        artwork,
+                        MediaMetadata.PICTURE_TYPE_FRONT_COVER,
+                    )
+                }
                 val item = MediaItem.Builder()
                     .setUri(url)
                     .setMediaId(trackId.toString())
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(title)
-                            .setArtist(artist)
-                            .build()
-                    )
+                    .setMediaMetadata(metadata.build())
                     .build()
                 c.setMediaItem(item)
                 c.prepare()

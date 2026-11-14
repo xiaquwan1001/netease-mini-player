@@ -57,15 +57,18 @@ class Playback {
   static void Function()? _onPrevious;
   static void Function()? _onToggleLike;
   static void Function()? _onCycleMode;
+  static void Function()? _onEnded;
 
   /// 通知栏/耳机键/蓝牙的上一首·下一首回调.
   /// 原生侧(ForwardingPlayer)只发意图, 真正的换曲在 Dart 队列里做 —— 队列只有一份.
   static void setSkipHandlers({
     void Function()? onNext,
     void Function()? onPrevious,
+    void Function()? onEnded,
   }) {
     _onNext = onNext;
     _onPrevious = onPrevious;
+    _onEnded = onEnded;
     _registerNativeHandler();
   }
 
@@ -90,6 +93,8 @@ class Playback {
           _onToggleLike?.call();
         case 'cycleMode':
           _onCycleMode?.call();
+        case 'trackEnded':
+          _onEnded?.call();
       }
       return null;
     });
@@ -120,12 +125,16 @@ class Playback {
 
   /// 开始播放. [durationMs] 是接口给的歌曲时长: 桌面端"边下边播"时
   /// 解码器一开始算不出总时长(文件还在增长), 进度条先用这个值, 否则会一直显示 0.
+  /// [artwork] = 当前播放内容的封面 PNG/JPEG 字节(通知/锁屏/车载的封面)。
+  /// Media3 自己按 URL 拉图会用默认 UA, 被网易 CDN 回 403(通知上就是空白),
+  /// 所以由 Dart 侧([fetchImageBytes])带正确 UA 下好再传过去; 传 null 就沿用上一张。
   Future<PlayerView> play({
     required BigInt trackId,
     required String url,
     required String title,
     required String artist,
     BigInt? durationMs,
+    Uint8List? artwork,
   }) async {
     if (isAndroid) {
       final map = await _channel.invokeMapMethod<String, Object?>('play', {
@@ -133,6 +142,7 @@ class Playback {
         'url': preferHttpsStreamUrl(url),
         'title': title,
         'artist': artist,
+        'artwork': artwork,
       });
       return _fromMap(map);
     }

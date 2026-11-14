@@ -86,7 +86,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.setCustomLayout(buildCustomLayout())
     }
 
-    // ---- 通知自定义按钮(喜欢 / 播放顺序): 只发意图, 队列/红心/模式状态全在 Dart ----
+    // ---- 通知自定义按钮(喜欢 / 播放顺序 / 下一首): 只发意图, 队列/红心/模式状态全在 Dart ----
     private var likedState = false
     private var modeIcon = "sequence"
 
@@ -99,6 +99,7 @@ class PlaybackService : MediaSessionService() {
                 .buildUpon()
                 .add(SessionCommand(CMD_LIKE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_MODE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_NEXT, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
@@ -123,6 +124,15 @@ class PlaybackService : MediaSessionService() {
         mediaSession?.setCustomLayout(buildCustomLayout())
     }
 
+    /**
+     * 通知栏按钮: 喜欢 / 播放顺序 / **下一首**。
+     *
+     * 为什么"下一首"要单独做一个自定义按钮, 而不是只靠 ForwardingPlayer 的
+     * seekToNext: 系统媒体卡片的紧凑视图只放 3 个动作(上一首 / 播放暂停 / 下一首),
+     * 而我们已经有 2 个自定义按钮占位, 各家 ROM(尤其国内)会把"下一首"挤掉,
+     * 用户实测下拉状态栏只剩「上一首 / 暂停」。做成自定义按钮后它和其它按钮
+     * 同权重, 一定可见; 点击仍然只发意图, 真正的换曲在 Dart 队列里做。
+     */
     private fun buildCustomLayout(): List<CommandButton> = listOf(
         CommandButton.Builder()
             .setDisplayName(if (likedState) "取消喜欢" else "喜欢")
@@ -136,6 +146,11 @@ class PlaybackService : MediaSessionService() {
             .setDisplayName("播放顺序")
             .setSessionCommand(SessionCommand(CMD_MODE, Bundle.EMPTY))
             .setIconResId(modeIconRes(modeIcon))
+            .build(),
+        CommandButton.Builder()
+            .setDisplayName("下一首")
+            .setSessionCommand(SessionCommand(CMD_NEXT, Bundle.EMPTY))
+            .setIconResId(R.drawable.ic_notif_next)
             .build(),
     )
 
@@ -502,6 +517,7 @@ class PlaybackService : MediaSessionService() {
 
         const val CMD_LIKE = "ncm.LIKE"
         const val CMD_MODE = "ncm.MODE"
+        const val CMD_NEXT = "ncm.NEXT"
 
         @Volatile
         var actionListener: ((String) -> Unit)? = null

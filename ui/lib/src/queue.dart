@@ -104,6 +104,14 @@ class PlayQueue<T> {
     }
   }
 
+  /// 预取用: 下一首会是谁, **不移动下标**。
+  /// 随机/单曲循环返回 null —— 下一首不可预知(原地重播), 预取没有意义。
+  T? peekNext() {
+    if (_items.isEmpty) return null;
+    if (mode == PlayMode.shuffle || mode == PlayMode.repeatOne) return null;
+    return _items[(_index + 1) % _items.length];
+  }
+
   /// 播到指定下标(点击列表里的某一首)
   T? jumpTo(int i) {
     if (i < 0 || i >= _items.length) return null;
