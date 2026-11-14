@@ -17,43 +17,59 @@ import 'toast.dart';
 import 'update_checker.dart';
 import 'update_dialog.dart';
 
-/// 「主题模式」的四档。
+/// 「主题模式」的三档(2026-11 用户需求 1: 从四档拆回)。
 ///
-/// 2026-11-14 之前是「跟随/浅色/深色」三段 + 独立的「OLED 纯黑」开关；
-/// 两者其实是同一个选择（纯黑只是深色基底的一种），合并成四档后
-/// 不再有「浅色态下开了纯黑但没效果」的无效状态。持久化字段不变
-/// （themeMode + oledDark），旧 settings.json 直接可读。
-enum ThemeChoice { system, light, dark, oledBlack }
+/// 历史: 最早是「跟随/浅色/深色」三档 + 独立的「OLED 纯黑」开关;
+/// 2026-11-14 一度把纯黑并成第四档(纯黑 = themeMode.dark + oledDark),
+/// 结果「跟随系统」与「纯黑」互斥 —— 跟随系统时想开纯黑只能被迫改成深色。
+/// 现在恢复三档 + 独立开关: 两者正交、可同时为真, 持久化字段仍是
+/// themeMode(跟随/浅色/深色) 与 oledDark(bool), 旧 settings.json 直接可读
+/// (oledDark=true 且 themeMode=dark ⇒ 显示为「深色 + 纯黑开」)。
+enum ThemeChoice { system, light, dark }
 
-/// 当前设置 → 四档里的哪一档（纯黑优先级高于深色，浅色优先于纯黑）。
-ThemeChoice themeChoiceOf(AppSettings settings) {
-  if (settings.themeMode == ThemeMode.light) return ThemeChoice.light;
-  if (settings.oledDark) return ThemeChoice.oledBlack;
-  if (settings.themeMode == ThemeMode.dark) return ThemeChoice.dark;
-  return ThemeChoice.system;
-}
+/// 当前设置 → 三档里的哪一档(只看 themeMode; 纯黑是独立开关, 不参与)。
+ThemeChoice themeChoiceOf(AppSettings settings) => switch (settings.themeMode) {
+  ThemeMode.light => ThemeChoice.light,
+  ThemeMode.dark => ThemeChoice.dark,
+  ThemeMode.system => ThemeChoice.system,
+};
 
-/// 四档 → 写回设置（纯黑 = 深色 + OLED 基底）。
+/// 三档 → 只写回 themeMode。不动 oledDark(纯黑开关独立保存, 可同时开启)。
 void applyThemeChoice(AppSettings settings, ThemeChoice choice) {
-  switch (choice) {
-    case ThemeChoice.system:
-      unawaited(settings.update(themeMode: ThemeMode.system, oledDark: false));
-    case ThemeChoice.light:
-      unawaited(settings.update(themeMode: ThemeMode.light, oledDark: false));
-    case ThemeChoice.dark:
-      unawaited(settings.update(themeMode: ThemeMode.dark, oledDark: false));
-    case ThemeChoice.oledBlack:
-      unawaited(settings.update(themeMode: ThemeMode.dark, oledDark: true));
-  }
+  unawaited(
+    settings.update(
+      themeMode: switch (choice) {
+        ThemeChoice.system => ThemeMode.system,
+        ThemeChoice.light => ThemeMode.light,
+        ThemeChoice.dark => ThemeMode.dark,
+      },
+    ),
+  );
 }
 
-/// 四档的副标题文案（与分段控件的选项一一对应）。
+/// 三档的副标题文案（与分段控件的选项一一对应）。
 String themeChoiceLabel(ThemeChoice choice) => switch (choice) {
   ThemeChoice.system => '跟随系统 · 系统深色时用 Material 深灰',
   ThemeChoice.light => '浅色',
   ThemeChoice.dark => '深色 · Material 深灰 #121212',
-  ThemeChoice.oledBlack => '纯黑 · #000000 取代 #121212(OLED 省电, 无灰边)',
 };
+
+/// 「纯黑 (OLED)」开关此刻是否真的生效: 纯黑只是深色基底的另一种底色,
+/// 浅色基底(浅色档, 或跟随系统且系统为浅色)下开关仍可操作但不改变外观。
+bool isOledDarkEffective({
+  required ThemeMode themeMode,
+  required Brightness platformBrightness,
+}) => switch (themeMode) {
+  ThemeMode.dark => true,
+  ThemeMode.light => false,
+  ThemeMode.system => platformBrightness == Brightness.dark,
+};
+
+/// 「纯黑 (OLED)」开关的副标题: 生效时说清效果, 不生效时说明「仅在深色时生效」
+/// (不静默改 themeMode, 也不把开关置灰 —— 用户可以提前开好等切深色)。
+String oledDarkLabel({required bool effective}) => effective
+    ? '深色基底用 #000000 取代 #121212(OLED 省电, 无灰边)'
+    : '仅在深色时生效 · 当前底色不变, 切到深色后自动变纯黑';
 
 /// 设置页: 「App 怎么表现」的偏好开关 + 分组入口。
 ///
@@ -114,9 +130,8 @@ class SettingsView extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Column(
                 children: [
-                  // 2026-11-14 用户要求: 把「OLED 纯黑」并进「主题模式」——
-                  // 二者本来就是同一件事(纯黑只是深色的一种基底), 拆两个控件时
-                  // 浅色态下还会出现「开了但没效果」的无效开关。
+                  // 2026-11 用户需求 1: 主题模式回到三档, 「纯黑 (OLED)」
+                  // 拆成下面的独立开关 —— 「跟随系统 + 纯黑」可以同时成立。
                   _SegmentedSettingTile<ThemeChoice>(
                     title: '主题模式',
                     subtitle: themeChoiceLabel(themeChoiceOf(settings)),
@@ -130,14 +145,28 @@ class SettingsView extends StatelessWidget {
                         label: Text('浅色'),
                       ),
                       ButtonSegment(value: ThemeChoice.dark, label: Text('深色')),
-                      ButtonSegment(
-                        value: ThemeChoice.oledBlack,
-                        label: Text('纯黑'),
-                      ),
                     ],
                     selected: themeChoiceOf(settings),
                     onSelectionChanged: (value) =>
                         applyThemeChoice(settings, value),
+                  ),
+                  const Divider(height: 1),
+                  // 纯黑是深色基底的底色选项(不是第四个主题档): 与三档正交,
+                  // 浅色/跟随浅色下开关仍可操作, 副标题说明「仅在深色时生效」。
+                  SwitchListTile(
+                    title: const Text('纯黑 (OLED)'),
+                    subtitle: Text(
+                      oledDarkLabel(
+                        effective: isOledDarkEffective(
+                          themeMode: settings.themeMode,
+                          platformBrightness: MediaQuery.platformBrightnessOf(
+                            context,
+                          ),
+                        ),
+                      ),
+                    ),
+                    value: settings.oledDark,
+                    onChanged: (value) => settings.update(oledDark: value),
                   ),
                   const Divider(height: 1),
                   // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)

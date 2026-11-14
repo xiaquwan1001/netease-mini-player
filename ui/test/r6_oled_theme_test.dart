@@ -107,24 +107,39 @@ void main() {
     expect(buildLightTheme().scaffoldBackgroundColor, isNot(kOledBlack));
   });
 
-  testWidgets('设置页「主题模式 → 纯黑」写回 AppSettings(深色 + OLED)并持久化', (tester) async {
+  testWidgets('设置页: 三档 + 独立「纯黑 (OLED)」开关互不覆写且持久化', (tester) async {
     final settings = AppSettings.instance;
     final beforeMode = settings.themeMode;
     final beforeOled = settings.oledDark;
     addTearDown(
       () => settings.update(themeMode: beforeMode, oledDark: beforeOled),
     );
+    settings.update(themeMode: ThemeMode.system, oledDark: false);
 
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
     );
     await tester.pumpAndSettle();
 
-    // 2026-11-14: OLED 纯黑不再单独一个开关, 并进「主题模式」的第四档
-    expect(find.text('纯黑'), findsOneWidget);
-    await tester.tap(find.text('纯黑'));
+    // 2026-11 用户需求 1: 主题模式回到三档(跟随/浅色/深色), 纯黑是独立子项
+    expect(find.text('纯黑'), findsNothing);
+    expect(find.text('纯黑 (OLED)'), findsOneWidget);
+
+    await tester.tap(find.text('深色'));
+    await tester.pumpAndSettle();
+    expect(settings.themeMode, ThemeMode.dark);
+    expect(settings.oledDark, isFalse);
+
+    await tester.tap(find.text('纯黑 (OLED)'));
     await tester.pumpAndSettle();
     expect(settings.oledDark, isTrue);
     expect(settings.themeMode, ThemeMode.dark);
+
+    // 切回「跟随系统」不关掉纯黑 ⇒ 跟随 + 纯黑可同时为真
+    await tester.tap(find.text('跟随'));
+    await tester.pumpAndSettle();
+    expect(settings.themeMode, ThemeMode.system);
+    expect(settings.oledDark, isTrue);
+    expect(themeChoiceOf(settings), ThemeChoice.system);
   });
 }

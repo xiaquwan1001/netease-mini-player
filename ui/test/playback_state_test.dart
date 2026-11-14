@@ -96,7 +96,7 @@ void main() {
     });
   });
 
-  group('设置: 主题模式四档(OLED 合并进主题模式)', () {
+  group('设置: 主题模式三档 + 独立「纯黑 (OLED)」开关', () {
     final settings = AppSettings.instance;
     late ThemeMode beforeMode;
     late bool beforeOled;
@@ -108,30 +108,76 @@ void main() {
       settings.update(themeMode: beforeMode, oledDark: beforeOled);
     });
 
-    test('四档 → (themeMode, oledDark) 的映射与回读一致', () {
+    test('三档 → themeMode 映射与回读一致, 且切档不覆写 oledDark', () {
+      settings.update(themeMode: ThemeMode.dark, oledDark: true);
+
       applyThemeChoice(settings, ThemeChoice.system);
       expect(settings.themeMode, ThemeMode.system);
-      expect(settings.oledDark, isFalse);
       expect(themeChoiceOf(settings), ThemeChoice.system);
+      // 关键回归: 切到「跟随系统」不得把纯黑关掉(二者正交)
+      expect(settings.oledDark, isTrue);
 
       applyThemeChoice(settings, ThemeChoice.light);
       expect(settings.themeMode, ThemeMode.light);
       expect(themeChoiceOf(settings), ThemeChoice.light);
+      expect(settings.oledDark, isTrue);
 
       applyThemeChoice(settings, ThemeChoice.dark);
       expect(settings.themeMode, ThemeMode.dark);
-      expect(settings.oledDark, isFalse);
       expect(themeChoiceOf(settings), ThemeChoice.dark);
-
-      applyThemeChoice(settings, ThemeChoice.oledBlack);
-      expect(settings.themeMode, ThemeMode.dark);
       expect(settings.oledDark, isTrue);
-      expect(themeChoiceOf(settings), ThemeChoice.oledBlack);
     });
 
-    test('浅色优先于 OLED: 浅色 + oledDark(旧配置)仍显示「浅色」', () {
+    test('跟随系统 + 纯黑可同时为真', () {
+      applyThemeChoice(settings, ThemeChoice.system);
+      settings.update(oledDark: true);
+      expect(themeChoiceOf(settings), ThemeChoice.system);
+      expect(settings.oledDark, isTrue);
+    });
+
+    test('旧配置(oledDark=true 且 themeMode=dark)显示为「深色 + 纯黑开」', () {
+      settings.update(themeMode: ThemeMode.dark, oledDark: true);
+      expect(themeChoiceOf(settings), ThemeChoice.dark);
+      expect(settings.oledDark, isTrue);
+    });
+
+    test('纯黑只在深色基底生效, 浅色档不改 themeMode', () {
+      // 深色基底(深色档 / 跟随系统且系统深色)才吃 oledDark
+      expect(
+        isOledDarkEffective(
+          themeMode: ThemeMode.dark,
+          platformBrightness: Brightness.light,
+        ),
+        isTrue,
+      );
+      expect(
+        isOledDarkEffective(
+          themeMode: ThemeMode.system,
+          platformBrightness: Brightness.dark,
+        ),
+        isTrue,
+      );
+      expect(
+        isOledDarkEffective(
+          themeMode: ThemeMode.system,
+          platformBrightness: Brightness.light,
+        ),
+        isFalse,
+      );
+      expect(
+        isOledDarkEffective(
+          themeMode: ThemeMode.light,
+          platformBrightness: Brightness.dark,
+        ),
+        isFalse,
+      );
+
+      // 浅色 + 纯黑: 开关保持开, 主题档仍是浅色(不静默改成深色)
       settings.update(themeMode: ThemeMode.light, oledDark: true);
       expect(themeChoiceOf(settings), ThemeChoice.light);
+      expect(settings.oledDark, isTrue);
+      expect(oledDarkLabel(effective: false), contains('仅在深色时生效'));
+      expect(oledDarkLabel(effective: true), contains('#000000'));
     });
   });
 }
