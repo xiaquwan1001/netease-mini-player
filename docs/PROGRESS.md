@@ -1506,3 +1506,16 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
 - 门禁: cargo fmt/clippy(0 warning)/test 全绿(service 198); `dart analyze` 0 issue; `flutter test` **923 passed / 1 skipped**;
   `check-tokens --strict` OK(上传图标固定尺寸已加 token-ok); debug APK 出包并装回前台模拟器。
 
+
+## 2026-11-14(二) 发布记录 v0.10.0
+
+- **GitHub**: CI(main) `43574520104` **success**;Release(tag) `43574524610` **success**,
+  9 个资产(android-arm64 apk / linux x64+arm64 tar.gz / x86_64 AppImage / windows setup.exe+zip / amd64+arm64 deb / SHA256SUMS.txt)。
+- **USTC GitLab**: pipeline **#9340**(tag v0.10.0) **success**;main #9339 的发布 job 为 manual(按需 play)。
+- 版本: `0.10.0+27`(`kAppVersion` 同步);tag `v0.10.0` 双推。
+- 首轮 CI 唯一红点 = **dart format 门禁**:本轮 lane 写入的 15 个文件没按 Dart 3.13 格式化
+  (tag 流水线同样有 `dart format --set-exit-if-changed lib test`)。处置:只格式化这 15 个文件 +
+  补 5 处 formatter 折叠后触发的 `curly_braces` ⇒ 删旧 tag/release 后按格式化提交重推, 全绿。
+  **教训**:lane 交付前应对自己改过的文件跑 `dart format <files>`(不要全仓), 否则 tag 流水线必红;
+  已发布的 tag 如需重指, 先 `gh release delete` 再删远端 tag, 否则 Release job 会撞已有资产。
+
