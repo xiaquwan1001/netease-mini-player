@@ -17,21 +17,24 @@ import 'ranking_view.dart';
 import 'recent_order.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
-import 'user_page.dart' show UserEventsList, showUserPage;
+import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 
-/// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) / 我的动态 /
+/// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) /
 /// 我喜欢 / 收藏歌单 / 收藏专辑 / 收藏播客 / 最近听过 / 听歌排行.
 /// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
 /// 所有区块独立加载; 未登录时只显示登录引导.
 ///
-/// 2026-11 需求 1/2: 资料卡下面这三块与「其他用户主页」对齐 —— 简介空时也给文案,
-/// 「我的动态」直接复用 [UserEventsList](与用户主页「动态」tab 同一份渲染),
+/// 2026-11 需求 1/2: 资料卡下面这几块与「其他用户主页」对齐 —— 简介空时也给文案,
 /// 「我的主页」跳到同一个 [UserPage], 不再为"自己"另写一份资料页。
-/// 整页下拉刷新会重拉资料并把各区块换 key 重挂载(含动态)。
+/// 整页下拉刷新会重拉资料并把各区块换 key 重挂载。
+///
+/// 用户反馈 15(2026-11): **本页不再单独展示「我的动态」** —— 动态只有一处入口,
+/// 就是「我的主页」的「动态」tab(资料卡下方那个整行按钮), 少一份预览就少一处
+/// 不一致(预览只显示 3 条、点进详情还要跳两层)。
 ///
 /// 排序口径(用户 2026-11): 最近有交互的优先展示 ——
 /// 收藏专辑默认在收藏播客之前, 但两个区块谁最近被打开/播放过谁在前;
@@ -62,8 +65,6 @@ class MineView extends StatefulWidget {
     this.loadRecent,
     this.loadRanking,
     this.loadAlbums,
-    this.loadMyEvents,
-    this.onOpenUrl,
     this.saveSignature,
   });
 
@@ -112,12 +113,6 @@ class MineView extends StatefulWidget {
 
   /// 收藏的专辑(需登录). 缺省走 rust.subscribedAlbums.
   final Future<List<rust.AlbumItem>> Function()? loadAlbums;
-
-  /// 我的动态(按 uid 取). 缺省走 rust.userEvents(第一页 3 条预览).
-  final Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadMyEvents;
-
-  /// 动态详情里打开外链/视频; 缺省 [UserEventsList] 走 PlatformBridge。
-  final Future<void> Function(String url)? onOpenUrl;
 
   /// 保存简介. **后端接口尚未接入**(见 [_MineViewState._editSignature]) ——
   /// 为空时只弹输入框并提示"还没接入", 不伪造成功。
@@ -173,8 +168,8 @@ class _MineViewState extends State<MineView> {
   }
 
   /// 打开「我对外的主页」—— 与「其他用户主页」是同一个组件([showUserPage]),
-  /// 不再另写一份资料卡; initialTab 可直达某条 tab(如从「我的动态」进「动态」)。
-  Future<void> _openSelfPage({String? initialTab}) async {
+  /// 不再另写一份资料卡; 默认落在「动态」tab(用户反馈 15: 动态只在那里看)。
+  Future<void> _openSelfPage({String initialTab = '动态'}) async {
     final uid = _profile?.userId;
     if (uid == null) return;
     await showUserPage(
@@ -182,7 +177,6 @@ class _MineViewState extends State<MineView> {
       userId: uid,
       fallbackNickname: _profile?.nickname,
       onPlaySongs: widget.onPlaySongs,
-      onOpenUrl: widget.onOpenUrl,
       initialTab: initialTab,
     );
   }
@@ -294,19 +288,13 @@ class _MineViewState extends State<MineView> {
             if (widget.loggedIn) ...[
               const SizedBox(height: kCardGap),
               // 需求 1/2: 「我的」页与「其他用户主页」统一结构 ——
-              // 简介(空也给文案 + 编辑入口) / 我的动态 / 跳到自己对外的主页形态。
+              // 简介(空也给文案 + 编辑入口) / 跳到自己对外的主页形态。
+              // 用户反馈 15: 动态并进「我的主页」的「动态」tab, 这里不再单列预览区块;
+              // 入口因此升格成整行主按钮(见 [_SelfPageEntry])。
               _SelfPageEntry(
+                key: ValueKey('mine-self-page-$_dataGeneration'),
                 enabled: _profile != null,
                 onOpen: () => _openSelfPage(),
-              ),
-              const SizedBox(height: kSectionGap),
-              _MyFeedSection(
-                key: ValueKey('mine-feed-$_dataGeneration'),
-                uid: _profile?.userId,
-                load: widget.loadMyEvents,
-                onOpenAll: () => _openSelfPage(initialTab: '动态'),
-                onPlaySongs: widget.onPlaySongs,
-                onOpenUrl: widget.onOpenUrl,
               ),
             ],
             if (widget.onOpenMessages != null) ...[
@@ -452,7 +440,7 @@ class _MineViewState extends State<MineView> {
   }
 }
 
-// ---------------- 我的主页 / 简介 / 我的动态 ----------------
+// ---------------- 我的主页 / 简介 ----------------
 
 /// 编辑简介的输入弹窗。
 ///
@@ -507,88 +495,49 @@ class _SignatureEditDialogState extends State<_SignatureEditDialog> {
 
 /// 「我的主页」入口: 我对外可见的那一版(与「其他用户主页」是同一个页面组件).
 ///
+/// 用户反馈 15: 本页的「我的动态」区块已删除, 动态统一在主页的「动态」tab 里看 ——
+/// 所以这个入口从"一行小字"升格成资料卡下方的**整行主按钮**(FilledButton.tonalIcon
+/// 铺满整行), 默认直达「动态」tab。
+///
 /// 资料还没落地(uid 未知)时禁用而不是隐藏 —— 用户能提前看到"这里有一扇门",
 /// 点击无效果比整块时有时无更不迷惑。
 class _SelfPageEntry extends StatelessWidget {
-  const _SelfPageEntry({required this.enabled, required this.onOpen});
+  const _SelfPageEntry({
+    super.key,
+    required this.enabled,
+    required this.onOpen,
+  });
 
   final bool enabled;
   final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Card(
       margin: kCardMargin,
       clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        dense: true,
-        leading: const Icon(Icons.badge_outlined),
-        title: const Text('我的主页'),
-        subtitle: const Text('别人看到的资料 / 动态 / 公开歌单'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: enabled ? onOpen : null,
-      ),
-    );
-  }
-}
-
-/// 「我的动态」区块: 复用用户主页的 [UserEventsList](同一份渲染/四态),
-/// 只放前 [maxItems] 条预览, 「查看全部」进自己的主页「动态」tab。
-class _MyFeedSection extends StatelessWidget {
-  const _MyFeedSection({
-    super.key,
-    required this.uid,
-    required this.load,
-    required this.onOpenAll,
-    this.onPlaySongs,
-    this.onOpenUrl,
-  });
-
-  final BigInt? uid;
-  final Future<List<rust.FeedEventDto>> Function(BigInt uid)? load;
-  final VoidCallback onOpenAll;
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
-  final Future<void> Function(String url)? onOpenUrl;
-
-  static const int maxItems = 3;
-
-  /// async: 让"FFI 同步抛错"变成 Future 错误, 交给 AsyncView 的四态(不整块炸掉)
-  Future<List<rust.FeedEventDto>> _load(BigInt uid) async =>
-      (load ?? _defaultEvents)(uid);
-
-  static Future<List<rust.FeedEventDto>> _defaultEvents(BigInt uid) async =>
-      rust.userEvents(uid: uid, limit: maxItems, lastTime: -1);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final uid = this.uid;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(
-          title: '我的动态',
-          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
-        ),
-        if (uid == null)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Text(
-              '正在加载资料…',
+      child: Padding(
+        padding: const EdgeInsets.all(kPagePadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FilledButton.tonalIcon(
+              onPressed: enabled ? onOpen : null,
+              icon: const Icon(Icons.badge_outlined),
+              label: const Text('我的主页'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '动态 / 公开歌单 / 资料都在这里(动态已并入主页的「动态」tab)',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          )
-        else
-          UserEventsList(
-            load: () => _load(uid),
-            maxItems: maxItems,
-            emptyText: '还没有发布动态',
-            onPlaySongs: onPlaySongs,
-            onOpenUrl: onOpenUrl,
-          ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -720,7 +669,9 @@ class _PlaylistsSection extends StatelessWidget {
             keepAlive: true,
             // 高度交给 CoverRow(按系统字号自适应), 不再写死 176 ——
             // 1.625 字号下两行文字会顶出固定的 176 高度。
+            // 用户反馈 16: 设置里的「一排 / 两排」也作用于这里(不只推荐页)。
             builder: (context, lists, reload) => CoverRow(
+              rows: AppSettings.instance.coverRows,
               children: [
                 for (final pl in sortByRecentInteraction(
                   lists,
@@ -771,6 +722,8 @@ class _PodcastsSection extends StatelessWidget {
           emptyText: '还没有收藏播客',
           keepAlive: true,
           builder: (context, radios, reload) => CoverRow(
+            // 用户反馈 16: 一排 / 两排同样作用于「收藏的播客」
+            rows: AppSettings.instance.coverRows,
             children: [
               // 最近播放/打开过的播客排在前面(无记录保持后端顺序)
               for (final r in sortByRecentInteraction(
@@ -825,6 +778,8 @@ class _AlbumsSection extends StatelessWidget {
           emptyText: '还没有收藏专辑(在专辑页点收藏)',
           keepAlive: true,
           builder: (context, albums, reload) => CoverRow(
+            // 用户反馈 16: 一排 / 两排同样作用于「收藏的专辑」
+            rows: AppSettings.instance.coverRows,
             children: [
               // 最近播放/打开过的专辑排在前面(无记录保持后端顺序)
               for (final a in sortByRecentInteraction(

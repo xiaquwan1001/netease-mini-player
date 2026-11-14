@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'app_meta.dart';
 import 'app_settings.dart';
-import 'daily_cache.dart';
 import 'cover_quality_sheet.dart';
+import 'daily_cache.dart';
+import 'layout.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
@@ -175,30 +177,15 @@ class SettingsView extends StatelessWidget {
                     onSelected: (value) => settings.update(accent: value),
                   ),
                   const Divider(height: 1),
-                  ListTile(
-                    title: const Text('界面字号'),
-                    subtitle: Text(_scaleLabel(settings.textScale)),
-                    trailing: DropdownButton<double>(
-                      value: settings.textScale,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final entry in AppSettings.textScales.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) settings.update(textScale: value);
-                      },
-                    ),
-                  ),
+                  _TextScaleSetting(settings: settings),
                   const Divider(height: 1),
                   _SegmentedSettingTile<int>(
-                    title: '推荐卡片排列',
+                    title: '卡片排列(一排 / 两排)',
+                    // 用户反馈 16: 这一项不只作用于推荐页 —— 我的页与他人主页的
+                    // 歌单/播客/专辑横滑区块同样跟着变(统一走 CoverRow(rows: ...))
                     subtitle: settings.coverRows == 1
-                        ? '一排: 横向滑动, 一屏看得更多'
-                        : '两排: 网格平铺, 少滑动多浏览',
+                        ? '一排: 横向滑动, 推荐/我的/他人主页的歌单播客都用'
+                        : '两排: 网格平铺, 推荐/我的/他人主页的歌单播客都用',
                     segments: const [
                       ButtonSegment(value: 1, label: Text('一排')),
                       ButtonSegment(value: 2, label: Text('两排')),
@@ -385,11 +372,85 @@ class SettingsView extends StatelessWidget {
     );
   }
 
-  static String _scaleLabel(double scale) {
-    for (final entry in AppSettings.textScales.entries) {
-      if ((entry.key - scale).abs() < 0.01) return entry.value;
-    }
-    return scale.toStringAsFixed(2);
+}
+
+/// 「界面字号」设置项: 预设档位(一排放得下的 chip)+ 0.80~1.50 步长 0.05 的滑块。
+///
+/// 为什么不再用 `DropdownButton<double>`: 它的 `value` 必须**恰好等于** items 里的
+/// 某一项(命中不了会 assert), 与"字号是可精细调节的连续值"天然冲突 —— 只要磁盘上
+/// 的倍率不是四个预设之一(改过配置/以后加了档位), 整行就变成红屏/空白。
+///
+/// 实时预览: MaterialApp.builder 的 scaledMediaQuery 直接读 AppSettings, 所以拖动
+/// 滑块时**整页**(含本行)立刻按新倍率重排, 下面的预览行是同倍率的实例说明。
+class _TextScaleSetting extends StatelessWidget {
+  const _TextScaleSetting({required this.settings});
+
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scale = settings.textScale;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          title: const Text('界面字号'),
+          subtitle: Text(AppSettings.textScaleHint(scale)),
+        ),
+        Padding(
+          // 与卡片内行内容同一条栅格(ListTile 已由 ListTileTheme 给 12)
+          padding: const EdgeInsets.symmetric(horizontal: kCardRowInset),
+          // Wrap: 320dp + 大字号下四个 chip 自动折行, 不溢出/不裁字
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final entry in AppSettings.textScales.entries)
+                ChoiceChip(
+                  label: Text(entry.value),
+                  selected: (entry.key - scale).abs() < 0.005,
+                  onSelected: (_) => settings.update(textScale: entry.key),
+                ),
+            ],
+          ),
+        ),
+        Row(
+          children: [
+            // 滑块两端的尺寸提示(A 小 / A 大); 走 bodySmall, 不直写 fontSize
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Text('A', style: theme.textTheme.bodySmall),
+            ),
+            Expanded(
+              child: Slider(
+                value: scale,
+                min: AppSettings.kTextScaleMin,
+                max: AppSettings.kTextScaleMax,
+                divisions: AppSettings.textScaleDivisions,
+                label: AppSettings.textScaleLabel(scale),
+                onChanged: (value) =>
+                    settings.update(textScale: AppSettings.snapTextScale(value)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Text('A', style: theme.textTheme.titleMedium),
+            ),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          // 预览行: 长文字走 AdaptiveText(2 行截断), 2.0 字号 + 320dp 也不溢出
+          child: AdaptiveText(
+            '预览: 歌单 · 播客 · 动态都会按这个字号显示',
+            mode: AdaptiveTextMode.wrap,
+            maxLines: 2,
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
   }
 }
 
