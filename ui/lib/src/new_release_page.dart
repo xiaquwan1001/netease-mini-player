@@ -338,11 +338,8 @@ class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
             AspectRatio(
               aspectRatio: 1,
               child: LayoutBuilder(
-                builder: (context, box) => CoverArt(
-                  url: a.coverUrl,
-                  size: box.maxWidth,
-                  radius: 8,
-                ),
+                builder: (context, box) =>
+                    CoverArt(url: a.coverUrl, size: box.maxWidth, radius: 8),
               ),
             ),
             const SizedBox(height: 4),

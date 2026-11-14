@@ -107,9 +107,7 @@ void main() {
     expect(buildLightTheme().scaffoldBackgroundColor, isNot(kOledBlack));
   });
 
-  testWidgets('设置页「主题模式 → 纯黑」写回 AppSettings(深色 + OLED)并持久化', (
-    tester,
-  ) async {
+  testWidgets('设置页「主题模式 → 纯黑」写回 AppSettings(深色 + OLED)并持久化', (tester) async {
     final settings = AppSettings.instance;
     final beforeMode = settings.themeMode;
     final beforeOled = settings.oledDark;

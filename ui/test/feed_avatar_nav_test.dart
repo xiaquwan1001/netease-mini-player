@@ -112,8 +112,9 @@ void main() {
           onLogin: () {},
           onPlaySongs: (_, _) {},
           onOpenUrl: (_) async {},
-          loadFeed: () async =>
-              [event(id: 1, userId: 42, userName: '普通用户', text: '普通动态')],
+          loadFeed: () async => [
+            event(id: 1, userId: 42, userName: '普通用户', text: '普通动态'),
+          ],
           loadSubscribedArtists: () async => const [],
         ),
       ),
@@ -137,8 +138,9 @@ void main() {
           onLogin: () {},
           onPlaySongs: (_, _) {},
           onOpenUrl: (_) async {},
-          loadFeed: () async =>
-              [event(id: 1, userId: 7, userName: '某人', text: '动态')],
+          loadFeed: () async => [
+            event(id: 1, userId: 7, userName: '某人', text: '动态'),
+          ],
           loadSubscribedArtists: () async => const [],
         ),
       ),

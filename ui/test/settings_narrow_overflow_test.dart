@@ -67,9 +67,7 @@ void main() {
 
       // 分段控件四档在 300dp 下会超出卡片宽度, 但外层是横向可滚动的
       // SingleChildScrollView(不裁切、不溢出报错), 这里只断言高度不失控。
-      final board = tester.getRect(
-        find.byType(SegmentedButton<ThemeChoice>),
-      );
+      final board = tester.getRect(find.byType(SegmentedButton<ThemeChoice>));
       expect(board.height, lessThan(64));
 
       // 左边界要和同卡里的普通 ListTile 行对齐

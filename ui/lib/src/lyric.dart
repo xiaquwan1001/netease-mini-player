@@ -198,6 +198,7 @@ class TimedLyricView extends StatelessWidget {
     required this.lines,
     required this.activeIndex,
     this.controller,
+
     /// 行高; 不传 = [kRowExtent] × 系统字号(见 [rowExtentFor]).
     /// 歌词是 18sp 主词 + 12sp 翻译两行, 写死 56 在 1.625 字号下会被 itemExtent
     /// 从下方裁掉(用户报过"顶部歌词只显示上半段").

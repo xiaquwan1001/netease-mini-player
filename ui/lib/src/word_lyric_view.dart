@@ -179,6 +179,7 @@ class WordLyricView extends StatefulWidget {
     required this.positionMs,
     this.playing,
     this.controller,
+
     /// 行高; 不传 = [kRowExtent] × 系统字号(见 [rowExtentFor])。
     this.itemExtent,
     this.emptyText = '暂无歌词',

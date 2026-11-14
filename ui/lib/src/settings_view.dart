@@ -121,13 +121,23 @@ class SettingsView extends StatelessWidget {
                     title: '主题模式',
                     subtitle: themeChoiceLabel(themeChoiceOf(settings)),
                     segments: const [
-                      ButtonSegment(value: ThemeChoice.system, label: Text('跟随')),
-                      ButtonSegment(value: ThemeChoice.light, label: Text('浅色')),
+                      ButtonSegment(
+                        value: ThemeChoice.system,
+                        label: Text('跟随'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeChoice.light,
+                        label: Text('浅色'),
+                      ),
                       ButtonSegment(value: ThemeChoice.dark, label: Text('深色')),
-                      ButtonSegment(value: ThemeChoice.oledBlack, label: Text('纯黑')),
+                      ButtonSegment(
+                        value: ThemeChoice.oledBlack,
+                        label: Text('纯黑'),
+                      ),
                     ],
                     selected: themeChoiceOf(settings),
-                    onSelectionChanged: (value) => applyThemeChoice(settings, value),
+                    onSelectionChanged: (value) =>
+                        applyThemeChoice(settings, value),
                   ),
                   const Divider(height: 1),
                   // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)

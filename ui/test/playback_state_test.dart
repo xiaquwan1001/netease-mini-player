@@ -27,7 +27,10 @@ void main() {
   group('状态记忆: 播放现场序列化', () {
     test('往返: 队列/下标/位置/模式/标题都保住', () {
       final state = SavedPlayback(
-        songs: [_song(1), _song(2, cover: 'http://p1.music.126.net/a.jpg')],
+        songs: [
+          _song(1),
+          _song(2, cover: 'http://p1.music.126.net/a.jpg'),
+        ],
         index: 1,
         positionMs: 42000,
         mode: PlayMode.shuffle,

@@ -964,7 +964,9 @@ class _HomePageState extends State<HomePage> {
     if (songs.isEmpty) return;
     final now = DateTime.now();
     final last = _lastStateSave;
-    if (!force && last != null && now.difference(last) < const Duration(seconds: 5)) {
+    if (!force &&
+        last != null &&
+        now.difference(last) < const Duration(seconds: 5)) {
       return;
     }
     _lastStateSave = now;
@@ -1673,11 +1675,7 @@ class _HomePageState extends State<HomePage> {
         final stream = await rust.songUrl(trackId: next.id, level: level);
         final url = stream.url;
         if (url == null || url.isEmpty) return;
-        _prefetchedUrls[id] = (
-          url: url,
-          level: level,
-          at: DateTime.now(),
-        );
+        _prefetchedUrls[id] = (url: url, level: level, at: DateTime.now());
         if (_prefetchedUrls.length > 8) {
           _prefetchedUrls.remove(_prefetchedUrls.keys.first);
         }
@@ -1702,9 +1700,8 @@ class _HomePageState extends State<HomePage> {
     final cached = _notificationArtwork[key];
     if (cached != null) return cached;
     try {
-      final bytes = await fetchImageBytes(
-        key,
-      ).timeout(const Duration(milliseconds: 300));
+      final bytes = await fetchImageBytes(key)
+          .timeout(const Duration(milliseconds: 300));
       if (_notificationArtwork.length >= 8) {
         _notificationArtwork.remove(_notificationArtwork.keys.first);
       }

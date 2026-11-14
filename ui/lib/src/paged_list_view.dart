@@ -90,7 +90,10 @@ class PagedListView<T> extends StatefulWidget {
   /// (见 layout.dart 的 [coverGridDelegate])必须用它, 不要用
   /// `MediaQuery.sizeOf(context).width` —— 整屏宽在窄视口/嵌在 tab 的页面里偏大,
   /// 会用算出过高的格子与溢出的固定尺寸封面。
-  final SliverGridDelegate Function(BuildContext context, double availableWidth)?
+  final SliverGridDelegate Function(
+    BuildContext context,
+    double availableWidth,
+  )?
   gridDelegateBuilder;
 
   final bool refreshable;

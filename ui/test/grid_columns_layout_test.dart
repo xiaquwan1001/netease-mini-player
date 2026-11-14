@@ -74,7 +74,9 @@ void main() {
     useScreen(tester, 360);
     settings.gridColumns = 3;
 
-    await tester.pumpWidget(gridHost(columns: settings.gridColumns, width: 360));
+    await tester.pumpWidget(
+      gridHost(columns: settings.gridColumns, width: 360),
+    );
     await tester.pumpAndSettle();
 
     final cells = firstRowCells(tester, 3);
@@ -98,7 +100,9 @@ void main() {
     useScreen(tester, 360);
     settings.gridColumns = 4;
 
-    await tester.pumpWidget(gridHost(columns: settings.gridColumns, width: 360));
+    await tester.pumpWidget(
+      gridHost(columns: settings.gridColumns, width: 360),
+    );
     await tester.pumpAndSettle();
 
     final cells = firstRowCells(tester, 4);
@@ -112,13 +116,13 @@ void main() {
     expect(cells.first.width, lessThan(360 / 4));
   });
 
-  testWidgets('窄视口/窄容器(300dp 屏里的 220dp 容器): 格子宽按真实可用宽度算', (
-    tester,
-  ) async {
+  testWidgets('窄视口/窄容器(300dp 屏里的 220dp 容器): 格子宽按真实可用宽度算', (tester) async {
     useScreen(tester, 300);
     settings.gridColumns = 3;
 
-    await tester.pumpWidget(gridHost(columns: settings.gridColumns, width: 220));
+    await tester.pumpWidget(
+      gridHost(columns: settings.gridColumns, width: 220),
+    );
     await tester.pumpAndSettle();
 
     final cells = firstRowCells(tester, 3);

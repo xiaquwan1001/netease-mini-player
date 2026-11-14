@@ -113,7 +113,9 @@ SavedPlayback? decodePlayback(String text) {
   }
   if (songs.isEmpty) return null;
   final rawIndex = root['index'];
-  final index = rawIndex is num ? rawIndex.toInt().clamp(0, songs.length - 1) : 0;
+  final index = rawIndex is num
+      ? rawIndex.toInt().clamp(0, songs.length - 1)
+      : 0;
   final rawPosition = root['positionMs'];
   final positionMs = rawPosition is num
       ? rawPosition.toInt().clamp(0, 1 << 40)
