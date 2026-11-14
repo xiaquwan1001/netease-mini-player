@@ -191,15 +191,15 @@ class ProfileIdentity extends StatelessWidget {
   /// 名字右侧的追加操作(如关注按钮)
   final Widget? trailing;
 
-  /// 昵称/别名**下方**的身份补充信息(如作品数标签)。
-  ///
-  /// 与 [footer] 的区别: footer 是卡片底部独占一行(Wrap 换行的统计 chip 组),
-  /// meta 属于"头像右侧的文字栈"第三行 —— 用户页「作品数」与艺人页同一口径都走这里,
-  /// 不再在两个位置各写一份文案。是否渲染由调用方决定(缺数据就不传)。
-  final Widget? meta;
-
-  /// 卡片底部附加行(统计/等级等)
+  /// 卡片底部附加行(统计/等级等), 占**整卡宽度**、在头像下方单独一行.
   final Widget? footer;
+
+  /// 头像**右侧**、昵称(与副标题)下方的附加行(需求 11: 关注/粉丝/等级/作品数).
+  ///
+  /// 与 [footer] 的区别只是位置: 这里落在昵称所在的文字列里, 宽度被头像与
+  /// trailing 让出的剩余空间约束, 窄屏靠 Wrap 换行, 而不是撑到整卡宽。
+  /// 用户页「关注/粉丝/等级」与艺人页「专辑/歌曲数」同一口径都走这里。
+  final Widget? meta;
 
   @override
   Widget build(BuildContext context) {
@@ -308,10 +308,10 @@ class ProfileIdentity extends StatelessWidget {
                               ),
                             ),
                           ),
-                        // 作品数等补充信息: 紧跟昵称/别名, 仍在头像右侧这一列里
+                        // 统计/作品数等补充信息: 紧跟昵称/别名, 仍在头像右侧这一列里
                         if (meta != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: const EdgeInsets.only(top: 6),
                             child: Align(
                               alignment: Alignment.centerLeft,
                               child: meta,

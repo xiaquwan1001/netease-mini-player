@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
 import 'artist_nav.dart';
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
 import 'error_views.dart';
 import 'expandable_text.dart';
+import 'feed_detail_page.dart' show feedKindLabels, feedRelativeTime, showFeedDetail;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
+import 'platform.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
@@ -40,6 +43,9 @@ class UserPage extends StatefulWidget {
     this.loadFolloweds,
     this.onOpenFollows,
     this.onOpenFolloweds,
+    this.loadEvents,
+    this.onOpenUrl,
+    this.initialTab,
   });
 
   final BigInt userId;
@@ -60,6 +66,15 @@ class UserPage extends StatefulWidget {
   final VoidCallback? onOpenFollows;
   final VoidCallback? onOpenFolloweds;
 
+  /// 动态 loader(测试注入; 默认 rust.userEvents 取第一页 30 条)
+  final Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadEvents;
+
+  /// 动态详情里打开外链/视频(默认交给系统, 见 [PlatformBridge.openUrl])
+  final Future<void> Function(String url)? onOpenUrl;
+
+  /// 打开时定位到哪条 tab(按 label 匹配, 如「动态」); 不存在则落在第一条
+  final String? initialTab;
+
   @override
   State<UserPage> createState() => _UserPageState();
 }
@@ -72,7 +87,9 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
 
   final ScrollController _scroll = ScrollController();
   bool _collapsed = false;
-  late TabController _tabController = TabController(length: 1, vsync: this);
+  /// 首帧就要与 [_tabSpecs] 的条数一致(「动态」是恒定 tab): 先用数据无关的
+  /// 条数建 controller, 资料回来后再由 [_rebuildTabs] 按关注/粉丝补齐。
+  late TabController _tabController;
 
   Future<rust.ProfileDetail> Function(BigInt uid) get _loadProfile =>
       widget.loadProfile ?? (uid) => rust.userProfile(userId: uid);
@@ -85,6 +102,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _tabController = TabController(length: _tabCount, vsync: this);
     _reload();
   }
 
@@ -105,13 +123,36 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   /// 加一条 tab 就得同时改两处, 漏改会让 controller 与 TabBar 长度不一致)。
   int get _tabCount => _tabSpecs().length;
 
+  /// [UserPage.initialTab] 只生效一次: 之后用户自己切 tab / 刷新重拉都不再抢回.
+  bool _appliedInitialTab = false;
+
+  int? _pendingTabIndex() {
+    if (_appliedInitialTab) return null;
+    final label = widget.initialTab;
+    if (label == null) return null;
+    final index = _tabSpecs().indexWhere((s) => s.label == label);
+    return index < 0 ? null : index;
+  }
+
   void _rebuildTabs() {
+    final target = _pendingTabIndex();
     _tabController = syncProfileTabs(
       vsync: this,
       current: _tabController,
       length: _tabCount,
       onChanged: () => setState(() {}),
+      initialIndex: target,
     );
+    if (target == null) return;
+    // syncProfileTabs 在页数没变时返回原 controller(不带 initialIndex) ⇒ 补一次跳转
+    if (_tabController.index != target) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _tabController.index != target) {
+          _tabController.animateTo(target);
+        }
+      });
+    }
+    _appliedInitialTab = true;
   }
 
   Future<void> _reload() async {
@@ -232,54 +273,85 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   Widget _buildIdentity(ThemeData theme, String nickname) {
     final d = _detail;
     final loading = _loading && d == null;
-    // 有歌手身份(= user_detail 带回 artistId)才给「歌手页」入口:
-    // 音乐人的用户主页与艺人主页是两份数据, 这里补上另一个入口
-    // (动态头像点击则由 UserNav 直接进艺人页)。
-    final artistId = d?.artistId;
     return ProfileIdentity(
       title: nickname,
       // 签名移到「简介」区块(与艺人页一致): 身份卡副标题只放次要身份信息
       subtitle: null,
       avatarUrl: d?.avatarUrl,
       vip: d?.vip ?? false,
+      // 需求 11: 关注/粉丝/等级**单独一行**, 落在头像右侧、昵称下方(meta 槽位),
+      // 不再占整卡底部的一行 —— 后者与头像左边缘对齐, 视觉上像另一段内容.
       // 加载中不塞「加载中…」占位 chip, 也不先给一套 0 值: 缺的条目不显示,
       // 数据到了再出现(与艺人页"作品数为 0 不渲染统计行"同一口径)
-      footer: loading
-          ? null
-          : ProfileStatRow(
-              chips: [
-                ProfileStatChip(
-                  icon: Icons.people_outline,
-                  label: '关注 ${d?.follows ?? BigInt.zero}',
-                  onTap: () => _openRelationship(fans: false),
-                ),
-                ProfileStatChip(
-                  icon: Icons.person_outline,
-                  label: '粉丝 ${d?.followeds ?? BigInt.zero}',
-                  onTap: () => _openRelationship(fans: true),
-                ),
-                ProfileStatChip(
-                  icon: Icons.military_tech_outlined,
-                  label: 'Lv.${d?.level ?? BigInt.zero}',
-                ),
-                if (artistId != null)
-                  ProfileStatChip(
-                    icon: Icons.mic_none,
-                    label: '歌手页',
-                    onTap: () =>
-                        ArtistNav.open(context, artistId, name: nickname),
-                  ),
-              ],
-            ),
+      meta: loading ? null : ProfileStatRow(chips: _statChips(d, nickname)),
+    );
+  }
+
+  /// 统计 chip 组: 关注 / 粉丝(可点) / 等级 / 歌手页入口。
+  ///
+  /// 需求 12: Lv 数值来自 rust.ProfileDetail.level(user/detail 的 level);
+  /// **0 / 缺失一律不渲染徽标** —— 之前缺数据时会掉出「Lv.0」, 比不显示更像 bug。
+  List<Widget> _statChips(rust.ProfileDetail? d, String nickname) {
+    final artistId = d?.artistId;
+    final level = d?.level ?? BigInt.zero;
+    return [
+      ProfileStatChip(
+        icon: Icons.people_outline,
+        label: '关注 ${d?.follows ?? BigInt.zero}',
+        onTap: () => _openRelationship(fans: false),
+      ),
+      ProfileStatChip(
+        icon: Icons.person_outline,
+        label: '粉丝 ${d?.followeds ?? BigInt.zero}',
+        onTap: () => _openRelationship(fans: true),
+      ),
+      if (level > BigInt.zero)
+        ProfileStatChip(
+          icon: Icons.military_tech_outlined,
+          label: 'Lv.$level',
+        ),
+      // 有歌手身份(= user_detail 带回 artistId)才给「歌手页」入口:
+      // 音乐人的用户主页与艺人主页是两份数据, 这里补上另一个入口
+      // (动态头像点击则由 UserNav 直接进艺人页)。
+      if (artistId != null)
+        ProfileStatChip(
+          icon: Icons.mic_none,
+          label: '歌手页',
+          onTap: () => ArtistNav.open(context, artistId, name: nickname),
+        ),
+    ];
+  }
+
+  Future<List<rust.FeedEventDto>> Function(BigInt uid) get _loadEvents =>
+      widget.loadEvents ?? _defaultEvents;
+
+  /// 默认 loader 必须是 async 函数: 直接写成箭头闭包时, FFI 缺失/同步抛错会在
+  /// AsyncView 的 initState 里同步冒出来(整棵子树建不出来), 而不是变成 Future 错误。
+  static Future<List<rust.FeedEventDto>> _defaultEvents(BigInt uid) async =>
+      rust.userEvents(uid: uid, limit: 30, lastTime: -1);
+
+  /// 动态 tab: 与「我的」页「我的动态」区块同一份列表(见 [UserEventsList]),
+  /// 自带下拉刷新 —— 动态是唯一会「新内容随时出现」的 tab。
+  Widget _eventsTab(BuildContext context) {
+    final bottom = 24 + MediaQuery.viewPaddingOf(context).bottom;
+    return _RefreshableEvents(
+      load: () => _loadEvents(widget.userId),
+      padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
+      onPlaySongs: widget.onPlaySongs,
+      onOpenUrl: widget.onOpenUrl,
     );
   }
 
   /// 声明式 tab 集合(与艺人页同一机制: 按数据可用性生成)。
+  ///
+  /// 「动态」固定第一条: 它是用户主页的主内容(网易云同款次序), 空/失败由
+  /// tab 内自己给空态 —— 不像关注/粉丝那样"计数为 0 就没有这条数据"。
   List<ProfileTabSpec> _tabSpecs() {
     final d = _detail;
     final follows = d?.follows ?? BigInt.zero;
     final followeds = d?.followeds ?? BigInt.zero;
     return [
+      ProfileTabSpec('动态', builder: _eventsTab),
       ProfileTabSpec('歌单', builder: _playlistsTab),
       if (follows > BigInt.zero)
         ProfileTabSpec(
@@ -434,6 +506,224 @@ class _RelationListView extends StatelessWidget {
   }
 }
 
+/// 可下拉刷新的动态列表(用户主页「动态」tab 用)。
+///
+/// [UserEventsList] 自己不持有滚动容器(它同时被「我的」页嵌进整页 ListView),
+/// 所以"下拉刷新"由这里提供: 换 generation key 让 AsyncView 重新取数。
+class _RefreshableEvents extends StatefulWidget {
+  const _RefreshableEvents({
+    required this.load,
+    required this.padding,
+    this.onPlaySongs,
+    this.onOpenUrl,
+  });
+
+  final Future<List<rust.FeedEventDto>> Function() load;
+  final EdgeInsetsGeometry padding;
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
+  final Future<void> Function(String url)? onOpenUrl;
+
+  @override
+  State<_RefreshableEvents> createState() => _RefreshableEventsState();
+}
+
+class _RefreshableEventsState extends State<_RefreshableEvents> {
+  int _generation = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () async => setState(() => _generation += 1),
+      // AlwaysScrollable: 只有一两张卡(或空态)时也要能下拉
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: widget.padding,
+        children: [
+          UserEventsList(
+            key: ValueKey('user-events-$_generation'),
+            load: widget.load,
+            onPlaySongs: widget.onPlaySongs,
+            onOpenUrl: widget.onOpenUrl,
+            emptyText: 'TA 还没有发布动态',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 用户动态列表(用户主页「动态」tab 与「我的」页「我的动态」区块**共用**)。
+///
+/// 只渲染"卡片 + 四态"(走 [AsyncView]), 不自带滚动容器:
+/// · tab 里外层是 [_RefreshableEvents](下拉刷新);
+/// · 「我的」页嵌在整页 ListView 里, 由整页的下拉刷新代际换 key 重拉。
+class UserEventsList extends StatelessWidget {
+  const UserEventsList({
+    super.key,
+    required this.load,
+    this.onPlaySongs,
+    this.onOpenUrl,
+    this.emptyText = '还没有发布动态',
+    this.maxItems,
+  });
+
+  /// 取数(不含重试, 重试由 [AsyncView] 套 retryNetwork)
+  final Future<List<rust.FeedEventDto>> Function() load;
+
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
+  final Future<void> Function(String url)? onOpenUrl;
+  final String emptyText;
+
+  /// 只展示前 N 条(「我的」页只放 3 条预览, 查看全部进用户主页)
+  final int? maxItems;
+
+  @override
+  Widget build(BuildContext context) {
+    return AsyncView<List<rust.FeedEventDto>>(
+      load: load,
+      emptyText: emptyText,
+      keepAlive: true,
+      builder: (context, events, reload) {
+        final limit = maxItems;
+        final shown = limit == null || events.length <= limit
+            ? events
+            : events.sublist(0, limit);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < shown.length; i++) ...[
+              if (i > 0) const SizedBox(height: 8),
+              _EventSummaryCard(
+                event: shown[i],
+                onPlaySongs: onPlaySongs,
+                onOpenUrl: onOpenUrl,
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// 一条动态的列表摘要(卡片): 类型 + 时间 / 正文或标题 / 互动计数.
+///
+/// 关注流里的完整卡片(feed_view 的 _FeedCard)带配图/视频/点赞按钮, 体量大且是
+/// 私有实现; 用户主页/「我的」页只要"看得见有什么动态 + 点进详情", 所以这里用一份
+/// 摘要版, 点击统一进 [showFeedDetail]。
+class _EventSummaryCard extends StatelessWidget {
+  const _EventSummaryCard({
+    required this.event,
+    this.onPlaySongs,
+    this.onOpenUrl,
+  });
+
+  final rust.FeedEventDto event;
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
+  final Future<void> Function(String url)? onOpenUrl;
+
+  static const Map<String, IconData> _kindIcons = {
+    'song': Icons.music_note,
+    'playlist': Icons.queue_music,
+    'album': Icons.album_outlined,
+    'program': Icons.podcasts,
+    'text': Icons.article_outlined,
+  };
+
+  String get _body {
+    final title = event.title.trim();
+    if (title.isNotEmpty) return title;
+    final text = event.text.trim();
+    if (text.isNotEmpty) return text;
+    return event.song?.name ?? '';
+  }
+
+  String get _counts => [
+    if (event.likedCount > BigInt.zero) '赞 ${event.likedCount}',
+    if (event.commentCount > BigInt.zero) '评论 ${event.commentCount}',
+    if (event.shareCount > BigInt.zero) '转发 ${event.shareCount}',
+  ].join(' · ');
+
+  Future<void> _openDetail(BuildContext context) {
+    final play = onPlaySongs;
+    return showFeedDetail(
+      context,
+      event: event,
+      onPlaySongs:
+          play ?? (_, _) => showToast(context, '当前页面不支持播放'),
+      onOpenUrl: onOpenUrl ?? PlatformBridge.openUrl,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final body = _body;
+    final counts = _counts;
+    return Card(
+      margin: kCardMargin,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openDetail(context),
+        child: Padding(
+          padding: const EdgeInsets.all(kPagePadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    _kindIcons[event.kind] ?? Icons.article_outlined,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    feedKindLabels[event.kind] ?? '动态',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    feedRelativeTime(event.timeMs),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              if (body.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  // 长正文走统一长文字组件(需求 5): 3 行截断, 详情页看全文
+                  child: AdaptiveText(
+                    body,
+                    mode: AdaptiveTextMode.wrap,
+                    maxLines: 3,
+                  ),
+                ),
+              if (counts.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    counts,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 打开他人主页(签名保持兼容: 只新增可选参数)。
 Future<void> showUserPage(
   BuildContext context, {
@@ -446,6 +736,9 @@ Future<void> showUserPage(
   UserListLoader? loadFolloweds,
   VoidCallback? onOpenFollows,
   VoidCallback? onOpenFolloweds,
+  Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadEvents,
+  Future<void> Function(String url)? onOpenUrl,
+  String? initialTab,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -459,6 +752,9 @@ Future<void> showUserPage(
         loadFolloweds: loadFolloweds,
         onOpenFollows: onOpenFollows,
         onOpenFolloweds: onOpenFolloweds,
+        loadEvents: loadEvents,
+        onOpenUrl: onOpenUrl,
+        initialTab: initialTab,
       ),
     ),
   );

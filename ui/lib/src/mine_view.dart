@@ -7,6 +7,7 @@ import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
+import 'expandable_text.dart';
 import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
@@ -16,14 +17,21 @@ import 'ranking_view.dart';
 import 'recent_order.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
+import 'user_page.dart' show UserEventsList, showUserPage;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 
-/// "我的": 个人资料卡 / 我喜欢 / 收藏歌单 / 收藏专辑 / 收藏播客 / 最近听过 / 听歌排行.
+/// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) / 我的动态 /
+/// 我喜欢 / 收藏歌单 / 收藏专辑 / 收藏播客 / 最近听过 / 听歌排行.
 /// 关注艺人 + 关注动态都在独立的"关注"底部 tab(艺人分类在那边横向展示)。
 /// 所有区块独立加载; 未登录时只显示登录引导.
+///
+/// 2026-11 需求 1/2: 资料卡下面这三块与「其他用户主页」对齐 —— 简介空时也给文案,
+/// 「我的动态」直接复用 [UserEventsList](与用户主页「动态」tab 同一份渲染),
+/// 「我的主页」跳到同一个 [UserPage], 不再为"自己"另写一份资料页。
+/// 整页下拉刷新会重拉资料并把各区块换 key 重挂载(含动态)。
 ///
 /// 排序口径(用户 2026-11): 最近有交互的优先展示 ——
 /// 收藏专辑默认在收藏播客之前, 但两个区块谁最近被打开/播放过谁在前;
@@ -54,6 +62,9 @@ class MineView extends StatefulWidget {
     this.loadRecent,
     this.loadRanking,
     this.loadAlbums,
+    this.loadMyEvents,
+    this.onOpenUrl,
+    this.saveSignature,
   });
 
   final bool loggedIn;
@@ -102,6 +113,16 @@ class MineView extends StatefulWidget {
   /// 收藏的专辑(需登录). 缺省走 rust.subscribedAlbums.
   final Future<List<rust.AlbumItem>> Function()? loadAlbums;
 
+  /// 我的动态(按 uid 取). 缺省走 rust.userEvents(第一页 3 条预览).
+  final Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadMyEvents;
+
+  /// 动态详情里打开外链/视频; 缺省 [UserEventsList] 走 PlatformBridge。
+  final Future<void> Function(String url)? onOpenUrl;
+
+  /// 保存简介. **后端接口尚未接入**(见 [_MineViewState._editSignature]) ——
+  /// 为空时只弹输入框并提示"还没接入", 不伪造成功。
+  final Future<void> Function(String signature)? saveSignature;
+
   @override
   State<MineView> createState() => _MineViewState();
 }
@@ -110,6 +131,106 @@ class _MineViewState extends State<MineView> {
   /// 下拉刷新代际: 变一次就让各区块换 key 重挂载(= 真正重拉数据)。
   /// 区块本身开了 keepAlive, 不换 key 的话 setState 只会复用旧数据。
   int _dataGeneration = 0;
+
+  /// 我的资料(简介/等级/uid)。由本层持有: 资料卡、简介区块、动态区块都要用,
+  /// 放在这里只发一次请求(之前资料卡自己拉一份, 再加两块就得拉三份)。
+  rust.ProfileDetail? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.loggedIn) unawaited(_loadProfile());
+  }
+
+  @override
+  void didUpdateWidget(covariant MineView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.loggedIn && !oldWidget.loggedIn) unawaited(_loadProfile());
+    if (!widget.loggedIn && _profile != null) _profile = null;
+  }
+
+  Future<void> _loadProfile() async {
+    if (!widget.loggedIn) return;
+    try {
+      final detail = await retryNetwork(widget.loadProfile ?? rust.profileDetail);
+      if (!mounted) return;
+      setState(() => _profile = detail);
+    } catch (_) {
+      // 资料是锦上添花: 失败只保留默认背景/昵称与「还没填写简介」的空态
+    }
+  }
+
+  /// 资料卡用的 detail: 简介已由下面的「简介」区块展示(与其他用户主页同一口径),
+  /// 这里把 signature 置空, 免得同一段文字在卡片副标题里再重复一遍。
+  rust.ProfileDetail? get _headerDetail {
+    final d = _profile;
+    if (d == null) return null;
+    return rust.ProfileDetail(
+      userId: d.userId,
+      artistId: d.artistId,
+      nickname: d.nickname,
+      avatarUrl: d.avatarUrl,
+      backgroundUrl: d.backgroundUrl,
+      signature: '',
+      vip: d.vip,
+      follows: d.follows,
+      followeds: d.followeds,
+      level: d.level,
+    );
+  }
+
+  /// 关注/粉丝列表页里可能关注/取关了, 返回后重拉资料卡让数字立即更新。
+  Future<void> _openFollowList(Future<void> Function() open) async {
+    await open();
+    if (!mounted || !widget.loggedIn) return;
+    await _loadProfile();
+  }
+
+  /// 打开「我对外的主页」—— 与「其他用户主页」是同一个组件([showUserPage]),
+  /// 不再另写一份资料卡; initialTab 可直达某条 tab(如从「我的动态」进「动态」)。
+  Future<void> _openSelfPage({String? initialTab}) async {
+    final uid = _profile?.userId;
+    if (uid == null) return;
+    await showUserPage(
+      context,
+      userId: uid,
+      fallbackNickname: _profile?.nickname,
+      onPlaySongs: widget.onPlaySongs,
+      onOpenUrl: widget.onOpenUrl,
+      initialTab: initialTab,
+    );
+  }
+
+  /// 编辑简介: **目前只有 UI 入口** —— core/vendor 没有任何「修改用户资料/签名」
+  /// 的端点(2026-11 核对: vendor/ncm-api 的 api/ 下只有 user_detail/user_playlist
+  /// 等只读接口, 没有 user/update), 所以这里弹输入框后如实提示「没接入」,
+  /// 不伪造成功、不自己造接口。
+  ///
+  /// 需要 Rust 侧补的能力(见交付报告): provider 新增 update_signature 能力
+  /// (网易云 /api/user/update, POST 表单 nickName/signature, 需带 csrf 与 device
+  /// cookie), FFI 暴露 updateSignature(signature: String); 注入
+  /// MineView.saveSignature 后这里自动变成真保存。
+  Future<void> _editSignature() async {
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => _SignatureEditDialog(initial: _profile?.signature ?? ''),
+    );
+    if (text == null || !mounted) return;
+    final save = widget.saveSignature;
+    if (save == null) {
+      showToast(context, '简介保存还没接入后端接口(user/update), 暂不生效');
+      return;
+    }
+    try {
+      await save(text);
+      if (!mounted) return;
+      showToast(context, '简介已保存');
+      await _loadProfile();
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, '保存失败: ${friendlyError(e)}', isError: true);
+    }
+  }
 
   Future<List<rust.SongDto>> Function() get _liked =>
       widget.loadLiked ?? rust.likedSongs;
@@ -155,7 +276,10 @@ class _MineViewState extends State<MineView> {
       );
     }
     return RefreshIndicator(
-      onRefresh: () async => setState(() => _dataGeneration += 1),
+      onRefresh: () async {
+        setState(() => _dataGeneration += 1);
+        await _loadProfile();
+      },
       // 横向栅格见 layout.dart: 卡片外边缘距屏 12, 卡片内行内容 12+4 = 16。
       // 之前是「页面 12 + 行 12 = 24 起步」, 再叠 leading 后文字被推到 1/4 屏宽外。
       // 标题与 leading 的间距从 Material 默认 16 收到 kRowTitleGap(8)。
@@ -167,15 +291,38 @@ class _MineViewState extends State<MineView> {
         child: ListView(
           padding: kPageInsets,
           children: [
-            _ProfileSection(
-              key: ValueKey('mine-profile-$_dataGeneration'),
+            ProfileHeader(
+              detail: _headerDetail,
+              fallbackNickname: widget.loggedIn ? '我的账号' : null,
               loggedIn: widget.loggedIn,
-              onOpenAccounts: widget.onOpenAccounts,
-              onLogin: widget.onLogin,
-              load: widget.loadProfile,
-              onOpenFollows: widget.onOpenFollows,
-              onOpenFolloweds: widget.onOpenFolloweds,
+              onTap: widget.loggedIn ? widget.onOpenAccounts : widget.onLogin,
+              onTapFollows: widget.loggedIn
+                  ? () => _openFollowList(widget.onOpenFollows)
+                  : null,
+              onTapFolloweds: widget.loggedIn
+                  ? () => _openFollowList(widget.onOpenFolloweds)
+                  : null,
             ),
+            if (widget.loggedIn) ...[
+              const SizedBox(height: kCardGap),
+              // 需求 1/2: 「我的」页与「其他用户主页」统一结构 ——
+              // 简介(空也给文案 + 编辑入口) / 我的动态 / 跳到自己对外的主页形态。
+              _SelfPageEntry(
+                enabled: _profile != null,
+                onOpen: () => _openSelfPage(),
+              ),
+              const SizedBox(height: kSectionGap),
+              _MySignatureSection(detail: _profile, onEdit: _editSignature),
+              const SizedBox(height: kSectionGap),
+              _MyFeedSection(
+                key: ValueKey('mine-feed-$_dataGeneration'),
+                uid: _profile?.userId,
+                load: widget.loadMyEvents,
+                onOpenAll: () => _openSelfPage(initialTab: '动态'),
+                onPlaySongs: widget.onPlaySongs,
+                onOpenUrl: widget.onOpenUrl,
+              ),
+            ],
             if (widget.onOpenMessages != null) ...[
               const SizedBox(height: kCardGap),
               MessageEntryCard(
@@ -290,83 +437,199 @@ class _MineViewState extends State<MineView> {
   }
 }
 
-// ---------------- 个人资料卡(背景图/头像) ----------------
+// ---------------- 我的主页 / 简介 / 我的动态 ----------------
 
-class _ProfileSection extends StatefulWidget {
-  const _ProfileSection({
-    super.key,
-    required this.loggedIn,
-    required this.onOpenAccounts,
-    required this.onLogin,
-    required this.onOpenFollows,
-    required this.onOpenFolloweds,
-    this.load,
-  });
+/// 编辑简介的输入弹窗。
+///
+/// controller 必须由**弹窗自己**持有并随 State 释放: 之前在调用方的 finally 里
+/// dispose, 此时弹窗路由还在做退出动画、TextField 仍在 build, 会抛
+/// "A TextEditingController was used after being disposed"。
+class _SignatureEditDialog extends StatefulWidget {
+  const _SignatureEditDialog({required this.initial});
 
-  final bool loggedIn;
-  final VoidCallback onOpenAccounts;
-  final VoidCallback onLogin;
-  final Future<void> Function() onOpenFollows;
-  final Future<void> Function() onOpenFolloweds;
-  final Future<rust.ProfileDetail> Function()? load;
+  /// 当前简介(预填到输入框)
+  final String initial;
 
   @override
-  State<_ProfileSection> createState() => _ProfileSectionState();
+  State<_SignatureEditDialog> createState() => _SignatureEditDialogState();
 }
 
-class _ProfileSectionState extends State<_ProfileSection>
-    with AutomaticKeepAliveClientMixin<_ProfileSection> {
-  rust.ProfileDetail? _detail;
+class _SignatureEditDialogState extends State<_SignatureEditDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.loggedIn) _load();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ProfileSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.loggedIn && !oldWidget.loggedIn) _load();
-    if (!widget.loggedIn && _detail != null) {
-      _detail = null;
-    }
-  }
-
-  Future<void> _load() async {
-    try {
-      final detail = await retryNetwork(widget.load ?? rust.profileDetail);
-      if (!mounted) return;
-      setState(() => _detail = detail);
-    } catch (_) {
-      // 资料卡是锦上添花: 失败只保留默认背景/昵称
-    }
-  }
-
-  /// 关注/粉丝列表页里可能关注/取关了, 返回后重拉资料卡让数字立即更新。
-  Future<void> _openFollowList(Future<void> Function() open) async {
-    await open();
-    if (!mounted || !widget.loggedIn) return;
-    await _load();
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    return ProfileHeader(
-      detail: _detail,
-      fallbackNickname: widget.loggedIn ? '我的账号' : null,
-      loggedIn: widget.loggedIn,
-      onTap: widget.loggedIn ? widget.onOpenAccounts : widget.onLogin,
-      onTapFollows: widget.loggedIn
-          ? () => _openFollowList(widget.onOpenFollows)
-          : null,
-      onTapFolloweds: widget.loggedIn
-          ? () => _openFollowList(widget.onOpenFolloweds)
-          : null,
+    return AlertDialog(
+      title: const Text('编辑简介'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLines: 3,
+        maxLength: 60,
+        decoration: const InputDecoration(hintText: '介绍一下自己(最多 60 字)'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「我的主页」入口: 我对外可见的那一版(与「其他用户主页」是同一个页面组件).
+///
+/// 资料还没落地(uid 未知)时禁用而不是隐藏 —— 用户能提前看到"这里有一扇门",
+/// 点击无效果比整块时有时无更不迷惑。
+class _SelfPageEntry extends StatelessWidget {
+  const _SelfPageEntry({required this.enabled, required this.onOpen});
+
+  final bool enabled;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: kCardMargin,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.badge_outlined),
+        title: const Text('我的主页'),
+        subtitle: const Text('别人看到的资料 / 动态 / 公开歌单'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: enabled ? onOpen : null,
+      ),
+    );
+  }
+}
+
+/// 「简介」区块: 与其他用户主页同一条内容(空时给明确文案), 再加编辑入口。
+///
+/// 之前「我的」页完全没有简介(資料卡只显示昵称), 用户看不见自己对外展示的签名,
+/// 也没有任何修改入口 —— 与别人主页的信息密度不一致(需求 1)。
+class _MySignatureSection extends StatelessWidget {
+  const _MySignatureSection({required this.detail, required this.onEdit});
+
+  final rust.ProfileDetail? detail;
+
+  /// 编辑动作; 后端接口未接入时由调用方提示"暂不生效"(见 [_MineViewState])
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final signature = detail?.signature.trim() ?? '';
+    final loaded = detail != null;
+    final Widget body;
+    if (!loaded) {
+      body = Text(
+        '正在加载资料…',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    } else if (signature.isEmpty) {
+      body = Text(
+        '还没有填写简介',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      );
+    } else {
+      // 与用户主页/艺人页同一条长文本组件(3 行截断 + 展开)
+      body = ExpandableText(text: signature);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: '简介',
+          trailing: SectionSeeAllButton(label: '编辑简介', onTap: onEdit),
+        ),
+        Card(
+          margin: kCardMargin,
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(kPagePadding),
+            child: body,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 「我的动态」区块: 复用用户主页的 [UserEventsList](同一份渲染/四态),
+/// 只放前 [maxItems] 条预览, 「查看全部」进自己的主页「动态」tab。
+class _MyFeedSection extends StatelessWidget {
+  const _MyFeedSection({
+    super.key,
+    required this.uid,
+    required this.load,
+    required this.onOpenAll,
+    this.onPlaySongs,
+    this.onOpenUrl,
+  });
+
+  final BigInt? uid;
+  final Future<List<rust.FeedEventDto>> Function(BigInt uid)? load;
+  final VoidCallback onOpenAll;
+  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
+  final Future<void> Function(String url)? onOpenUrl;
+
+  static const int maxItems = 3;
+
+  /// async: 让"FFI 同步抛错"变成 Future 错误, 交给 AsyncView 的四态(不整块炸掉)
+  Future<List<rust.FeedEventDto>> _load(BigInt uid) async =>
+      (load ?? _defaultEvents)(uid);
+
+  static Future<List<rust.FeedEventDto>> _defaultEvents(BigInt uid) async =>
+      rust.userEvents(uid: uid, limit: maxItems, lastTime: -1);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final uid = this.uid;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: '我的动态',
+          trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
+        ),
+        if (uid == null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              '正在加载资料…',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          )
+        else
+          UserEventsList(
+            load: () => _load(uid),
+            maxItems: maxItems,
+            emptyText: '还没有发布动态',
+            onPlaySongs: onPlaySongs,
+            onOpenUrl: onOpenUrl,
+          ),
+      ],
     );
   }
 }

@@ -211,7 +211,9 @@ void main() {
           _mine(),
           width: width,
           scale: scale,
-          height: 1700,
+          // 「我的」页顶部新增了「我的主页 / 简介 / 我的动态」(需求 1/2),
+          // 1.625 字号下整体更高, 视口给足才能一次性建出全部区块
+          height: 2600,
         );
         await tester.pump(const Duration(milliseconds: 200));
         _expectNoOverflow(errors, tag);
