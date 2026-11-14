@@ -145,13 +145,15 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace` | **272** passing (248 excluding the vendor crate; 4 network smoke tests there skip themselves offline) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **287** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test --exclude-tags network` | **746** passing (offline subset; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `flutter test` | **942** passing / 1 skipped (includes 12 golden pages; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
-| Device run-through | emulators a34/a36 (API 34/36) + real-device listening checks — see `docs/testing-dual-platform.md` |
+| `tools/check-tokens.sh --strict` | OK (spacing / radii / font sizes limited to `layout.dart`'s token set) |
+| API coverage | **136/136** (160 FFI exports, 6 without a UI entry point); recompute with `bash tools/api-coverage.sh` |
+| Device run-through | emulator **a34** (API 34) + real-device (vivo X200 Ultra) release smoke & listening checks — see `docs/testing-dual-platform.md` |
 
 ## Roadmap (current version v0.8.0)
 

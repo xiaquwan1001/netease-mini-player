@@ -10,7 +10,7 @@
 
 | 文件 | 用途 | 最后更新 |
 |---|---|---|
-| [PROGRESS.md](PROGRESS.md) | 进度总账:门禁基线 + 版本时间线 + 按日期批次(倒序)+ 专题结论;v1 历史见 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-14 |
+| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.8.0 起);更早的见 `archive/PROGRESS-v1.md` 与 `archive/PROGRESS-2026-11-03-11-12.md`。**活跃** | 2026-11-15 |
 | [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑活**。**活跃** | 2026-11-14 |
 | [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-14 |
 | [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-14 |
@@ -53,7 +53,7 @@
 
 | 路径 | 用途 | 最后更新 |
 |---|---|---|
-| [archive/](archive/README.md) | 已完工/已决策的专题文档 + `PROGRESS-v1.md`(v1 WebView 时代) + `remaining-batches-history.md`。**归档** | 2026-11-14 |
+| [archive/](archive/README.md) | 已完工/已决策的专题文档 + `PROGRESS-v1.md`(v1 WebView 时代) + `PROGRESS-2026-11-03-11-12.md`(v2 早期批次与专题小节) + `remaining-batches-history.md`。**归档** | 2026-11-15 |
 | [audits/](audits/) | 近期审计报告: `2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md` · `2026-11-13-asset-docs-audit.md`(数字为当时快照)。**活跃** | 2026-11-13 |
 | [ui-row-audit.md](ui-row-audit.md) | 列表行/溢出全仓审计(49 处骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案与改造顺序; A 级已在 v0.9.0 清零, 剩 B/C 待收敛。**活跃** | 2026-11-13 |
 | [melodia-pr-workflow.md](melodia-pr-workflow.md) | 给 Melodia 提 PR 的工作流。**活跃(提 PR 时用)** | 2026-11-02 |

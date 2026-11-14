@@ -182,20 +182,22 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace` | **272** 通过(不含 vendor 248;vendor 24 例里 4 例联网 smoke 离线自跳过) |
-| `cargo clippy --workspace --all-targets` | **0 warning** |
-| `flutter test --exclude-tags network` | **746** 通过(离线口径; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **287** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
+| `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
+| `flutter test` | **942** 通过 / 1 跳过(12 张 golden 含在内; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
-| 设备走查 | a34/a36 模拟器(API 34 / 36)全流程 + 真机听感验收;记录见 `docs/testing-dual-platform.md` |
+| `tools/check-tokens.sh --strict` | OK(间距/圆角/字号只允许 `layout.dart` 的有限集合) |
+| 接口覆盖 | **136/136**(FFI 导出 160, 6 个无 UI 入口); `bash tools/api-coverage.sh` 可复算 |
+| 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing-dual-platform.md` |
 
-## 项目进度(当前版本 v0.10.0)
+## 项目进度(当前版本 v0.12.2)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
-| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 123,LOC 12k → 4k) | ✅ |
+| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 136/136,LOC 12k → 4k) | ✅ |
 | 三端壳 | Flutter Android/Linux/Windows、FRB 2.13 桥、三端构建链路(Windows 走 CI) | ✅ |
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
@@ -209,7 +211,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 文档 | 内容 |
 |---|---|
 | [`docs/README.md`](docs/README.md) | **文档总索引**(每个文件一行用途与状态) |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次 + 专题小节;v1 历史在 `docs/archive/`) |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次, 只保留 v0.8.0 起; v1 与 2026-11-03~11-12 批次在 `docs/archive/`) |
 | [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | 架构选型、决策记录、插件边界(已归档) |
 | [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |

@@ -151,9 +151,8 @@
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次)。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
-> 当前基线(2026-11-13 v0.9.0 实测, 离线口径): 覆盖率 **123/123**(FFI 152, 7 个无 UI 入口) · `cargo test` **277** ·
-> `cargo clippy` **0 warning** · `flutter test --exclude-tags network` **816**(804 离线 + 12 golden) · `dart analyze` 0 issue ·
-> write-guard OK · `check-tokens --strict` OK。
+> **基线数字不在这里维护**(曾经 4 处各写一套 ⇒ 已实测分叉): 唯一权威是 [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
+> 本节只管「还剩什么没做」。
 
 ### A. 只剩这些没做(按成本排序)
 
@@ -199,7 +198,7 @@
 - 手机号+短信验证码登录(用户真机验过)、评论发送写操作走查 + `tools/check-write-guard.sh`。
 - 桌面打包四态(deb / AppImage / tar.gz / setup.exe)、Linux arm64 腿、Windows 向导中文化、AppStream 元数据。
 - 凭据三端(Android Keystore / Linux secret-service / Windows DPAPI) + 凭据不再过 FFI 回传 Dart。
-- v0.6.0–v0.7.1 用户回归四连发(见 `docs/PROGRESS.md`「2026-11-12(晚)」)。
+- v0.6.0–v0.7.1 用户回归四连发(见 `docs/archive/PROGRESS-2026-11-03-11-12.md`「2026-11-12(晚)」)。
 
 ### C. 需要新能力的 L 级(单独立项, 不要混批)
 
