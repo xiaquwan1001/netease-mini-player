@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import 'comment_thread.dart';
 import 'cover_art.dart';
@@ -166,12 +165,6 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
     return showFeedForwardSheet(context, event: widget.event);
   }
 
-  Future<void> _copyLink() async {
-    final link = 'https://music.163.com/#/event?id=${widget.event.id}';
-    await Clipboard.setData(ClipboardData(text: link));
-    if (mounted) _snack('链接已复制');
-  }
-
   void _snack(String message) {
     if (!mounted) return;
     showToast(context, message);
@@ -326,10 +319,12 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
                   ),
                 ),
                 const Spacer(),
+                // 统一分享面板(需求 7/8): 复制链接/系统分享/保存图片都在面板里,
+                // 左侧「转发」按钮是显式转发入口, 不再只有长按或菜单。
                 IconButton(
-                  tooltip: '复制链接',
-                  onPressed: _copyLink,
-                  icon: const Icon(Icons.link, size: 18),
+                  tooltip: '分享',
+                  onPressed: () => showFeedShareSheet(context, event: event),
+                  icon: const Icon(Icons.share_outlined, size: 18),
                 ),
               ],
             ),

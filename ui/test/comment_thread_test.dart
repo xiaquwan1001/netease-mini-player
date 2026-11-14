@@ -283,4 +283,80 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+  // 需求 13: 点赞从动作行上移到「用户名 + 发布时间」行(时间右侧), 并展示数量
+  // (0 也显示); 与「回复」按钮同一套颜色/描边 token。
+  testWidgets('点赞在用户名/时间行且显示数量(0 也显示)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([comment(1, '好听')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page([]),
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 0 赞也显示数字
+    expect(find.text('0'), findsOneWidget);
+    // 点赞图标与昵称同一行(纵向中心一致, 容差一行内)
+    final heart = tester.getCenter(find.byIcon(Icons.favorite_border));
+    final name = tester.getCenter(find.text('用户1'));
+    expect((heart.dy - name.dy).abs(), lessThan(12));
+
+    // 点赞仍可用: 乐观翻转 + 数字变化
+    await tester.tap(find.byIcon(Icons.favorite_border));
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    // 点赞数字 +1(可能同时存在其它"1"文案, 只要求点赞数字在)
+    expect(find.text('1'), findsWidgets);
+  });
+
+  // 需求 9: 长按评论(分享面板入口)时评论本身要有与「回复」/高亮同款的
+  // 选中底色, 松手褪去 —— 以前长按只有面板弹出, 评论无任何反馈。
+  testWidgets('长按评论出现选中底色, 松手褪去', (tester) async {
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async => page([comment(1, '好听')]),
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page([]),
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    BoxDecoration tileDecoration() => tester
+        .widget<AnimatedContainer>(
+          find
+              .ancestor(
+                of: find.text('好听'),
+                matching: find.byType(AnimatedContainer),
+              )
+              .first,
+        )
+        .decoration! as BoxDecoration;
+
+    final gesture = await tester.startGesture(tester.getCenter(find.text('好听')));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(
+      tileDecoration().color,
+      isNot(Colors.transparent),
+      reason: '长按期间整条评论要点亮(选中态)',
+    );
+    await gesture.up();
+    // 选中态由 1.5s 自动褪色定时器收尾(分享面板弹出时框架会取消长按手势)
+    await tester.pump(const Duration(milliseconds: 1600));
+    expect(
+      tileDecoration().color,
+      Colors.transparent,
+      reason: '松手后选中态褪去',
+    );
+  });
 }

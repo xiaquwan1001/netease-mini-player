@@ -4,7 +4,6 @@ import 'artist_nav.dart';
 import 'cover_art.dart';
 import 'feed_media.dart';
 import 'feed_share.dart';
-import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
 import 'layout.dart' show avatarStripHeightFor;
 import 'net_retry.dart';
@@ -768,15 +767,6 @@ class _FeedCard extends StatelessWidget {
     );
   }
 
-  /// 长按动态 = 直接进转发面板(原动态预览 + 转发语 + 分享选项)
-  Future<void> _openForwardSheet(BuildContext context) {
-    return showFeedForwardSheet(
-      context,
-      event: event,
-      forwardEvent: forwardEvent,
-    );
-  }
-
   Future<void> _openDetail(
     BuildContext context, {
     bool focusComments = false,
@@ -809,8 +799,9 @@ class _FeedCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openDetail(context),
-        // 长按直接进转发面板(不必先点进详情页)
-        onLongPress: () => _openForwardSheet(context),
+        // 长按与分享按钮走同一个统一分享面板(转发动态是面板里的一项动作,
+        // 不再单独弹转发面板, 与详情页动作区同源 —— 需求"统一转发 UI")
+        onLongPress: () => _openShareSheet(context),
         child: Padding(
           // 页面 12 + 卡片 8 = 20dp/侧: 动态是正文流, 太宽会明显浪费横向空间
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
@@ -868,7 +859,7 @@ class _FeedCard extends StatelessWidget {
                 ),
               // 单曲 mini 卡
               if (event.song != null)
-                _MiniSongCard(
+                FeedSongMiniCard(
                   song: event.song!,
                   coverUrl: event.coverUrl,
                   onPlaySongs: onPlaySongs,
@@ -881,7 +872,7 @@ class _FeedCard extends StatelessWidget {
               // 视频: 16:9 封面 + 播放圆标 + 右上角标签, 点击交给系统打开
               if (event.videoUrl != null) ...[
                 const SizedBox(height: 8),
-                _VideoThumb(
+                FeedVideoThumb(
                   url: event.videoUrl!,
                   coverUrl: event.coverUrl,
                   onOpenUrl: onOpenUrl,
@@ -1017,141 +1008,6 @@ class _FeedCard extends StatelessWidget {
               ],
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 单曲 mini 卡: CoverArt + 歌名/艺人 + play 图标, 点击播放这一首
-class _MiniSongCard extends StatelessWidget {
-  const _MiniSongCard({
-    required this.song,
-    required this.coverUrl,
-    required this.onPlaySongs,
-  });
-
-  final rust.SongDto song;
-  final String? coverUrl;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: song.playable ? () => onPlaySongs([song], 0) : null,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: scheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Row(
-            children: [
-              CoverArt(url: song.coverUrl ?? coverUrl, size: 40),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SongTitleWithBadges(
-                      song: song,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: song.playable ? null : scheme.outline,
-                      ),
-                    ),
-                    Text(
-                      song.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.play_arrow,
-                size: 24,
-                color: song.playable ? scheme.primary : scheme.outline,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 16:9 视频封面: NetImage(coverUrl 兜底) + 居中白色播放圆标 + 右上角"视频"标签
-class _VideoThumb extends StatelessWidget {
-  const _VideoThumb({
-    required this.url,
-    required this.coverUrl,
-    required this.onOpenUrl,
-  });
-
-  final String url;
-  final String? coverUrl;
-  final Future<void> Function(String url) onOpenUrl;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return AspectRatio(
-      aspectRatio: 16 / 9,
-      child: GestureDetector(
-        onTap: () => onOpenUrl(url),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            NetImage(
-              url: coverUrl,
-              width: double.infinity,
-              height: double.infinity,
-              fit: BoxFit.cover,
-              icon: Icons.videocam_outlined,
-            ),
-            // 半透明暗化, 突出播放按钮
-            const ColoredBox(color: Colors.black26),
-            Center(
-              child: Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  color: Colors.white54,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.play_arrow,
-                  color: Colors.white,
-                  size: 32,
-                ),
-              ),
-            ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  '视频',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
     );

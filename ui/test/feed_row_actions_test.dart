@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
+import 'package:minincm/src/feed_share.dart';
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -260,5 +261,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('复制链接'), findsOneWidget);
+  });
+  // 需求 8: 统一转发 UI —— 列表卡片长按与分享按钮走同一个面板
+  // (转发动态/分享卡片图片/复制链接/系统分享都在这一处)。
+  testWidgets('长按卡片: 打开统一分享面板(含转发动态与复制链接)', (tester) async {
+    final hooks = _Hooks();
+    await _pumpFeed(tester, events: [event()], hooks: hooks);
+
+    await tester.longPress(find.text('正文'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('分享动态'), findsOneWidget);
+    expect(find.text('转发动态'), findsOneWidget);
+    expect(find.text('复制链接'), findsOneWidget);
+    expect(find.byType(FeedShareCard), findsOneWidget);
   });
 }

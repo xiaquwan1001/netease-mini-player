@@ -57,6 +57,7 @@ class CommentThread extends StatefulWidget {
     this.myUid,
     this.inset = const EdgeInsets.fromLTRB(12, 16, 12, 8),
     this.shareSourceTitle = '',
+    this.shareSourceKind = '',
   });
 
   /// song | playlist | album | podcast
@@ -94,6 +95,10 @@ class CommentThread extends StatefulWidget {
   /// 评论分享卡片上的出处(原动态标题, 没有标题就传正文摘要)。
   /// 长按评论打开分享面板时写进卡片与「复制评论」的文本里。
   final String shareSourceTitle;
+
+  /// 出处的类型词(歌曲/歌单/专辑/播客/动态)。分享卡片与「复制评论」里
+  /// 写成「来自<kind>《标题》」; 歌曲等宿主页面接线时传入, 动态保持默认。
+  final String shareSourceKind;
 
   @override
   State<CommentThread> createState() => CommentThreadState();
@@ -831,6 +836,7 @@ class CommentThreadState extends State<CommentThread> {
                 highlight: _highlightId != null && _highlightId == _items[i].id,
                 comment: _items[i],
                 shareSourceTitle: widget.shareSourceTitle,
+                shareSourceKind: widget.shareSourceKind,
                 timeText: _relative(_items[i].timeMs),
                 onToggleLike: () => _toggleLike(i),
                 previewReplies: _previewFor(_items[i]),
@@ -875,11 +881,12 @@ class CommentThreadState extends State<CommentThread> {
   }
 }
 
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends StatefulWidget {
   const _CommentTile({
     super.key,
     required this.comment,
     this.shareSourceTitle = '',
+    this.shareSourceKind = '',
     required this.timeText,
     required this.onToggleLike,
     required this.onExpandReplies,
@@ -896,6 +903,9 @@ class _CommentTile extends StatelessWidget {
 
   /// 长按分享时卡片底部的出处(原动态标题/正文摘要)
   final String shareSourceTitle;
+
+  /// 出处的类型词(歌曲/歌单/专辑/播客/动态)
+  final String shareSourceKind;
   final String timeText;
   final VoidCallback onToggleLike;
 
@@ -911,29 +921,83 @@ class _CommentTile extends StatelessWidget {
   /// 只有自己发的评论才给(别人的评论官方也不允许删)
   final VoidCallback? onDelete;
 
+  @override
+  State<_CommentTile> createState() => _CommentTileState();
+}
+
+/// 长按评论要有与「回复」按钮同源的选中反馈(需求: 长按唤起转发时评论本身
+/// 没有"选中"动态效果): 用与刚发表评论高亮同一套 primaryContainer 底色,
+/// 长按期间点亮, 松手/定时褪去。
+class _CommentTileState extends State<_CommentTile> {
+  /// 长按进行中(分享面板打开前后的按压态)
+  bool _pressed = false;
+
+  /// 长按已触发分享面板(此时框架会立刻 cancel 掉本手势, 选中态交给定时器褪色)
+  bool _sheetOpened = false;
+  Timer? _pressedTimer;
+
+  void _setPressed(bool value) {
+    if (!mounted) return;
+    setState(() => _pressed = value);
+    _pressedTimer?.cancel();
+    _pressedTimer = value
+        ? Timer(const Duration(milliseconds: 1500), () {
+            if (mounted) setState(() => _pressed = false);
+          })
+        : null;
+  }
+
+  @override
+  void dispose() {
+    _pressedTimer?.cancel();
+    super.dispose();
+  }
+
   /// 「展开全部 N 条回复」里的 N: 服务端计数与本地已拿到条数取大
   BigInt get _replyTotal {
-    final local = BigInt.from(previewReplies.length);
-    return comment.replyCount > local ? comment.replyCount : local;
+    final local = BigInt.from(widget.previewReplies.length);
+    return widget.comment.replyCount > local
+        ? widget.comment.replyCount
+        : local;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final comment = widget.comment;
+    final highlight = widget.highlight;
+    final timeText = widget.timeText;
+    final onToggleLike = widget.onToggleLike;
+    final onExpandReplies = widget.onExpandReplies;
+    final onReply = widget.onReply;
+    final previewReplies = widget.previewReplies;
+    final onDelete = widget.onDelete;
     return GestureDetector(
-      // 长按评论 = 分享评论卡片(作者 + 正文 + 原动态标题)
-      onLongPress: () => showCommentShareSheet(
-        context,
-        comment: comment,
-        sourceTitle: shareSourceTitle,
-      ),
+      // 长按评论 = 分享评论卡片(作者 + 正文 + 出处语境 + 点赞/回复数)
+      onLongPress: () {
+        _sheetOpened = true;
+        showCommentShareSheet(
+          context,
+          comment: comment,
+          sourceTitle: widget.shareSourceTitle,
+          sourceKindLabel: widget.shareSourceKind,
+        );
+      },
+      // 长按期间点亮整条评论(与高亮同款底色 token), 松手/定时褪去
+      onLongPressStart: (_) => _setPressed(true),
+      onLongPressEnd: (_) => _setPressed(false),
+      // 分享面板弹出时框架会立刻取消本手势, 此时选中态正要展示, 不能清
+      onLongPressCancel: () {
+        if (!_sheetOpened) _setPressed(false);
+      },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        // 刚发表的那条淡出一层底色, 1.8s 后由父级把 highlight 置回 false
+        duration: const Duration(milliseconds: 150),
+        // 刚发表的那条淡出一层底色, 1.8s 后由父级把 highlight 置回 false;
+        // 长按分享时同一套底色作为"选中"态
         decoration: BoxDecoration(
-          color: highlight
+          color: highlight || _pressed
               ? scheme.primaryContainer.withValues(alpha: 0.45)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
@@ -1031,6 +1095,42 @@ class _CommentTile extends StatelessWidget {
                           ),
                         ),
                       ],
+                      // 点赞(需求: 与用户名/发布时间同行, 时间右侧, 展示数量,
+                      // 0 也显示): 与「回复」按钮同一套颜色/描边 token
+                      const Spacer(),
+                      InkWell(
+                        onTap: onToggleLike,
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                comment.liked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                size: 14,
+                                color: comment.liked
+                                    ? scheme.primary
+                                    : scheme.outline,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${comment.likedCount}',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: comment.liked
+                                      ? scheme.primary
+                                      : scheme.outline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 2),
@@ -1120,38 +1220,8 @@ class _CommentTile extends StatelessWidget {
                     spacing: 10,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      InkWell(
-                        onTap: onToggleLike,
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                comment.liked
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                size: 14,
-                                color: comment.liked
-                                    ? scheme.primary
-                                    : scheme.outline,
-                              ),
-                              if (comment.likedCount > BigInt.zero) ...[
-                                const SizedBox(width: 3),
-                                Text(
-                                  '${comment.likedCount}',
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: scheme.outline,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ),
+                      // 点赞已上移到「用户名 + 发布时间」行(见头行右端), 动作行
+                      // 只留回复/删除。
                       // 「回复」= 写回复动作本体(打开面板并聚焦输入框);
                       // 数量与浏览全量回复由预览行/「展开全部」承担, 不再混在一个按钮里。
                       InkWell(

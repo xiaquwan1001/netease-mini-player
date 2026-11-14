@@ -207,7 +207,8 @@ void main() {
     expect(find.text('说点什么(可留空)'), findsOneWidget);
   });
 
-  testWidgets('长按动态直接打开转发面板, 转发语可空并走 forwardEvent', (tester) async {
+  testWidgets('长按动态打开统一分享面板, 转发动态入口走 forwardEvent', (tester) async {
+    // 需求 8: 长按与分享按钮走同一个面板, 转发是面板里的一项动作
     final hooks = _ForwardHooks();
     await tester.pumpWidget(
       host(
@@ -226,9 +227,14 @@ void main() {
 
     await tester.longPress(find.text('今天发了一首新歌'));
     await tester.pumpAndSettle();
+    expect(find.byType(FeedShareSheet), findsOneWidget);
+    expect(find.text('分享动态'), findsOneWidget);
+    expect(find.text('转发动态'), findsOneWidget);
+
+    // 面板里选「转发动态」→ 转发语面板
+    await tester.tap(find.text('转发动态'));
+    await tester.pumpAndSettle();
     expect(find.byType(FeedForwardSheet), findsOneWidget);
-    // 原动态预览(卡片里也有昵称/正文) + 转发语输入框
-    expect(find.byType(FeedShareCard), findsOneWidget);
     expect(find.text('说点什么(可留空)'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), '好听');
@@ -332,5 +338,53 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     expect(find.text('来自动态《新歌上线后的第一条动态》'), findsOneWidget);
+  });
+  // 需求 10: 评论分享卡片补上语境 —— 出处类型词(歌曲/歌单/专辑/播客)与
+  // 点赞数、回复数, 不再只有"用户 + 评论内容"。
+  testWidgets('评论分享卡片: 出处类型 + 点赞/回复数量', (tester) async {
+    final c = rust.Comment(
+      id: BigInt.from(7),
+      userId: BigInt.from(100),
+      userName: '用户甲',
+      avatarUrl: null,
+      content: '这条动态真好听',
+      timeMs: BigInt.from(1700000000000),
+      likedCount: BigInt.from(23),
+      liked: false,
+      replyCount: BigInt.from(4),
+      ipLocation: '',
+      hot: false,
+      parentId: BigInt.zero,
+    );
+    await tester.pumpWidget(
+      host(
+        SizedBox(
+          width: 360,
+          child: CommentShareCard(
+            comment: c,
+            sourceTitle: '夜空中最亮的星',
+            sourceKindLabel: '歌曲',
+          ),
+        ),
+      ),
+    );
+
+    // 出处语境: 来自<宿主类型>《标题》
+    expect(find.text('来自歌曲《夜空中最亮的星》'), findsOneWidget);
+    // 点赞数与回复数都画在卡片上
+    expect(find.text('23'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+  });
+
+  test('复制评论文本: 出处类型词可定制', () {
+    expect(
+      commentShareText(
+        author: '用户甲',
+        content: '真好听',
+        sourceTitle: '夜空中最亮的星',
+        sourceKindLabel: '歌曲',
+      ),
+      '用户甲：真好听\n—— 来自歌曲《夜空中最亮的星》',
+    );
   });
 }

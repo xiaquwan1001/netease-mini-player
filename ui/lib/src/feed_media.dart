@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'rust/api.dart' as rust;
+import 'song_tile.dart' show SongTitleWithBadges;
 
 /// 动态配图: **只渲染用户自己附加的照片**, 并按数量决定排版.
 ///
@@ -104,6 +105,145 @@ class FeedImageGrid extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// 单曲 mini 卡(动态卡片/用户主页/艺人页共用): CoverArt + 歌名/艺人 + play 图标,
+/// 点击播放这一首(不可播放时置灰且不可点)。
+class FeedSongMiniCard extends StatelessWidget {
+  const FeedSongMiniCard({
+    super.key,
+    required this.song,
+    this.coverUrl,
+    required this.onPlaySongs,
+  });
+
+  final rust.SongDto song;
+  final String? coverUrl;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: song.playable ? () => onPlaySongs([song], 0) : null,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              CoverArt(url: song.coverUrl ?? coverUrl, size: 40),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SongTitleWithBadges(
+                      song: song,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: song.playable ? null : scheme.outline,
+                      ),
+                    ),
+                    Text(
+                      song.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.play_arrow,
+                size: 24,
+                color: song.playable ? scheme.primary : scheme.outline,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 16:9 视频封面: NetImage(coverUrl 兜底) + 居中白色播放圆标 + 右上角"视频"标签。
+/// 动态卡片/用户主页/艺人页共用(点击交给系统播放器打开直链)。
+class FeedVideoThumb extends StatelessWidget {
+  const FeedVideoThumb({
+    super.key,
+    required this.url,
+    this.coverUrl,
+    required this.onOpenUrl,
+  });
+
+  final String url;
+  final String? coverUrl;
+  final Future<void> Function(String url) onOpenUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: GestureDetector(
+        onTap: () => onOpenUrl(url),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            NetImage(
+              url: coverUrl,
+              width: double.infinity,
+              height: double.infinity,
+              fit: BoxFit.cover,
+              icon: Icons.videocam_outlined,
+            ),
+            // 半透明暗化, 突出播放按钮
+            const ColoredBox(color: Colors.black26),
+            Center(
+              child: Container(
+                width: 52,
+                height: 52,
+                decoration: const BoxDecoration(
+                  color: Colors.white54,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '视频',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -4,6 +4,8 @@ import 'adaptive_text.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'error_views.dart';
+import 'feed_media.dart'
+    show FeedImageGrid, FeedSongMiniCard, FeedVideoThumb, feedAttachedImages;
 import 'feed_detail_page.dart'
     show showFeedDetail, feedRelativeTime, feedKindLabels;
 import 'layout.dart';
@@ -559,6 +561,29 @@ class _DynamicsTab extends StatelessWidget {
                   maxLines: 3,
                   style: theme.textTheme.bodyMedium,
                 ),
+
+                // 需求: 艺人页「动态」tab 与关注动态流同一口径 —— 附图/分享的
+                // 单曲/视频都直接展示, 不必点进详情(与 feed_view/用户主页共用组件)
+                if (feedAttachedImages(e).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: FeedImageGrid(images: feedAttachedImages(e)),
+                  ),
+                if (e.song != null)
+                  FeedSongMiniCard(
+                    song: e.song!,
+                    coverUrl: e.coverUrl,
+                    onPlaySongs: onPlaySongs,
+                  ),
+                if (e.videoUrl != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: FeedVideoThumb(
+                      url: e.videoUrl!,
+                      coverUrl: e.coverUrl,
+                      onOpenUrl: onOpenUrl,
+                    ),
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   [

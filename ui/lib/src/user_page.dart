@@ -9,7 +9,8 @@ import 'detail_page.dart';
 import 'error_views.dart';
 import 'feed_detail_page.dart'
     show feedKindLabels, feedRelativeTime, showFeedDetail;
-import 'feed_media.dart' show FeedImageGrid, feedAttachedImages;
+import 'feed_media.dart'
+    show FeedImageGrid, FeedSongMiniCard, FeedVideoThumb, feedAttachedImages;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'platform.dart';
@@ -798,6 +799,23 @@ class _EventSummaryCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: FeedImageGrid(images: feedAttachedImages(event)),
+                ),
+              // 分享的单曲/视频(需求: 与关注动态流同一口径, 除文字外的内容
+              // 都自动展示, 不必点进详情): 与 feed_view 列表卡片共用同一份组件
+              if (event.song != null)
+                FeedSongMiniCard(
+                  song: event.song!,
+                  coverUrl: event.coverUrl,
+                  onPlaySongs: onPlaySongs ?? (_, _) {}, // 播放由详情页/播放器接管
+                ),
+              if (event.videoUrl != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: FeedVideoThumb(
+                    url: event.videoUrl!,
+                    coverUrl: event.coverUrl,
+                    onOpenUrl: onOpenUrl ?? PlatformBridge.openUrl,
+                  ),
                 ),
               if (counts.isNotEmpty)
                 Padding(

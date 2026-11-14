@@ -35,11 +35,13 @@ String commentShareText({
   required String author,
   required String content,
   String sourceTitle = '',
+  String sourceKindLabel = '动态',
 }) {
   final who = author.trim().isEmpty ? '网易云用户' : author.trim();
   final body = '$who：${content.trim()}';
   final source = sourceTitle.trim();
-  return source.isEmpty ? body : '$body\n—— 来自动态《$source》';
+  final kind = sourceKindLabel.trim().isEmpty ? '动态' : sourceKindLabel.trim();
+  return source.isEmpty ? body : '$body\n—— 来自$kind《$source》';
 }
 
 /// 把标题里的非法文件名字符替换掉, 统一 `.png` 后缀
@@ -284,20 +286,25 @@ class CommentShareCard extends StatelessWidget {
     super.key,
     required this.comment,
     this.sourceTitle = '',
+    this.sourceKindLabel = '动态',
     this.width = 340,
     this.watermark = false,
   });
 
   final rust.Comment comment;
 
-  /// 原动态标题/正文摘要(卡片底部"来自动态《...》")
+  /// 原动态标题/正文摘要(卡片底部"来自...《...》")
   final String sourceTitle;
+
+  /// 出处类型词(歌曲/歌单/专辑/播客/动态), 决定"来自 X《标题》"里的 X
+  final String sourceKindLabel;
   final double width;
   final bool watermark;
 
   @override
   Widget build(BuildContext context) {
     final source = sourceTitle.trim();
+    final kind = sourceKindLabel.trim().isEmpty ? '动态' : sourceKindLabel.trim();
     return Container(
       width: width,
       padding: const EdgeInsets.all(20),
@@ -334,6 +341,35 @@ class CommentShareCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: _cardFg, fontSize: 14, height: 1.6),
           ),
+          // 互动数据(需求: 补上语境 —— 点赞/回复量随卡片一起导出)
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Icon(
+                comment.liked ? Icons.favorite : Icons.favorite_border,
+                size: 13,
+                color: comment.liked ? _cardAccent : _cardMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${comment.likedCount}',
+                style: const TextStyle(color: _cardMuted, fontSize: 11),
+              ),
+              const SizedBox(
+                width: 12,
+              ), // token-ok: 卡片内部统计行同组间距, 12 是 layout.dart 允许集合
+              const Icon(
+                Icons.mode_comment_outlined,
+                size: 13,
+                color: _cardMuted,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${comment.replyCount}',
+                style: const TextStyle(color: _cardMuted, fontSize: 11),
+              ),
+            ],
+          ),
           if (source.isNotEmpty) ...[
             const SizedBox(height: 12),
             Container(
@@ -347,7 +383,7 @@ class CommentShareCard extends StatelessWidget {
                 ),
               ),
               child: Text(
-                '来自动态《$source》',
+                '来自$kind《$source》',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: _cardMuted, fontSize: 11),
@@ -477,13 +513,17 @@ Future<void> showCommentShareSheet(
   BuildContext context, {
   required rust.Comment comment,
   String sourceTitle = '',
+  String sourceKindLabel = '动态',
 }) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) =>
-        CommentShareSheet(comment: comment, sourceTitle: sourceTitle),
+    builder: (_) => CommentShareSheet(
+      comment: comment,
+      sourceTitle: sourceTitle,
+      sourceKindLabel: sourceKindLabel,
+    ),
   );
 }
 
@@ -781,10 +821,14 @@ class CommentShareSheet extends StatefulWidget {
     super.key,
     required this.comment,
     this.sourceTitle = '',
+    this.sourceKindLabel = '动态',
   });
 
   final rust.Comment comment;
   final String sourceTitle;
+
+  /// 出处类型词(歌曲/歌单/专辑/播客/动态)
+  final String sourceKindLabel;
 
   @override
   State<CommentShareSheet> createState() => _CommentShareSheetState();
@@ -821,6 +865,7 @@ class _CommentShareSheetState extends State<CommentShareSheet> {
           author: widget.comment.userName,
           content: widget.comment.content,
           sourceTitle: widget.sourceTitle,
+          sourceKindLabel: widget.sourceKindLabel,
         ),
       ),
     );
@@ -835,6 +880,7 @@ class _CommentShareSheetState extends State<CommentShareSheet> {
       cardBuilder: (width) => CommentShareCard(
         comment: widget.comment,
         sourceTitle: widget.sourceTitle,
+        sourceKindLabel: widget.sourceKindLabel,
         width: width,
         watermark: _watermark,
       ),
