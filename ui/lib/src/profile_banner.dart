@@ -173,6 +173,7 @@ class ProfileIdentity extends StatelessWidget {
     this.avatarSize = 64,
     this.titleStyle,
     this.trailing,
+    this.meta,
     this.footer,
   });
 
@@ -189,6 +190,13 @@ class ProfileIdentity extends StatelessWidget {
 
   /// 名字右侧的追加操作(如关注按钮)
   final Widget? trailing;
+
+  /// 昵称/别名**下方**的身份补充信息(如作品数标签)。
+  ///
+  /// 与 [footer] 的区别: footer 是卡片底部独占一行(Wrap 换行的统计 chip 组),
+  /// meta 属于"头像右侧的文字栈"第三行 —— 用户页「作品数」与艺人页同一口径都走这里,
+  /// 不再在两个位置各写一份文案。是否渲染由调用方决定(缺数据就不传)。
+  final Widget? meta;
 
   /// 卡片底部附加行(统计/等级等)
   final Widget? footer;
@@ -300,6 +308,15 @@ class ProfileIdentity extends StatelessWidget {
                               ),
                             ),
                           ),
+                        // 作品数等补充信息: 紧跟昵称/别名, 仍在头像右侧这一列里
+                        if (meta != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: meta,
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -338,6 +355,7 @@ class ProfileBanner extends StatelessWidget {
     this.titleStyle,
     this.overlay,
     this.trailing,
+    this.meta,
     this.footer,
     this.height = kProfileBannerHeight,
     this.fetchOverride,
@@ -353,6 +371,7 @@ class ProfileBanner extends StatelessWidget {
   final TextStyle? titleStyle;
   final Widget? overlay;
   final Widget? trailing;
+  final Widget? meta;
   final Widget? footer;
   final double height;
   final Future<Uint8List> Function(String url)? fetchOverride;
@@ -389,6 +408,7 @@ class ProfileBanner extends StatelessWidget {
             avatarSize: avatarSize,
             titleStyle: titleStyle,
             trailing: trailing,
+            meta: meta,
             footer: footer,
           ),
         ),

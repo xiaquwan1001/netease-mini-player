@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import 'adaptive_text.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'error_views.dart';
+import 'feed_detail_page.dart' show showFeedDetail, feedRelativeTime, feedKindLabels;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -16,14 +18,20 @@ import 'mv_page.dart' show showMvPage;
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'state_views.dart';
 import 'artist_sections.dart'
-    show ArtistAlbumsSection, ArtistRecommendedSongsSection;
+    show ArtistRecommendedSongsSection, SimilarArtistsRow;
 import 'expandable_text.dart';
 
-/// 艺人详情页(C1 重构): 顶部信息区(横幅/头像/姓名/统计/简介/关注) + Tab
-/// (全部歌曲 / 专辑(有才显示) / MV(有才显示)) + 页内搜索(只过滤「全部歌曲」)。
-/// 与用户个人主页区分的丰富区块: 简介 / 推荐单曲(top5) / 专辑横滑 / 详细艺人弹层。
-/// 相似艺人在信息区尾部(胶囊 Wrap, 防溢出), 弹层里也有一份。
-/// 动态 tab 未实现: vendor 没有"艺人动态"接口(见 docs/c1-artist-page-notes.md)。
+/// 艺人详情页(C1 重构): 顶部信息区(横幅/头像/姓名/作品数/简介/关注) + 纵向 tab。
+///
+/// 信息区(横幅之下、TabBar 之上)只剩两块, 其余全部下沉成 tab(需求 13):
+///   简介(有才显示) → 相似艺人(有才显示, 横排可拖拽)
+///
+/// tab 集合由**数据可用性**生成, 顺序固定:
+///   推荐单曲(有才显示) / 全部歌曲 / 专辑(有专辑) / MV(有 MV) / 动态(有动态)
+/// 每个 tab 是同一批数据**唯一**的渲染位置 —— 信息区不再重复渲染推荐单曲与专辑横滑,
+/// 因此也不再有「查看全部」跳 tab 的二次入口(点一次就到的内容不需要两次点击)。
+///
+/// 页内搜索只过滤「全部歌曲」tab。
 /// 打开方式: [showArtistDetail], 全屏 MaterialPageRoute。
 Future<void> showArtistDetail(
   BuildContext context, {
@@ -32,12 +40,15 @@ Future<void> showArtistDetail(
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum,
+  /// 动态 tab 里点视频/外链时用; 不注入则只提示(桌面/测试可省略)
+  Future<void> Function(String url)? onOpenUrl,
   Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist, // 测试注入
   Future<List<rust.Artist>> Function(BigInt)? loadSimilar, // 测试注入
   Future<rust.ArtistSongPageDto> Function(BigInt, int offset)?
   loadSongsPage, // 测试注入
   Future<rust.ArtistMvPageDto> Function(BigInt, int offset)?
   loadMvsPage, // 测试注入
+  Future<List<rust.FeedEventDto>> Function(BigInt)? loadDynamics, // 测试注入
   Future<bool> Function(BigInt, bool sub)? toggleFollow, // 测试注入
 }) async {
   await Navigator.of(context).push(
@@ -47,10 +58,12 @@ Future<void> showArtistDetail(
         name: name,
         onPlaySongs: onPlaySongs,
         onOpenAlbum: onOpenAlbum,
+        onOpenUrl: onOpenUrl,
         loadArtist: loadArtist,
         loadSimilar: loadSimilar,
         loadSongsPage: loadSongsPage,
         loadMvsPage: loadMvsPage,
+        loadDynamics: loadDynamics,
         toggleFollow: toggleFollow,
       ),
     ),
@@ -64,11 +77,13 @@ class ArtistDetailPage extends StatefulWidget {
     required this.onPlaySongs,
     this.name,
     this.onOpenAlbum,
+    this.onOpenUrl,
     this.loadArtist,
     this.loadSimilar,
     this.loadSongsPage,
     this.loadMvsPage,
     this.loadAlbumsPage,
+    this.loadDynamics,
     this.toggleFollow,
   });
 
@@ -77,6 +92,9 @@ class ArtistDetailPage extends StatefulWidget {
   final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum;
+
+  /// 动态 tab 里打开外链(视频直链等); 空则提示不支持
+  final Future<void> Function(String url)? onOpenUrl;
   final Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist;
   final Future<List<rust.Artist>> Function(BigInt)? loadSimilar;
   final Future<rust.ArtistSongPageDto> Function(BigInt, int offset)?
@@ -84,13 +102,17 @@ class ArtistDetailPage extends StatefulWidget {
   final Future<rust.ArtistMvPageDto> Function(BigInt, int offset)? loadMvsPage;
 
   /// 专辑分页(offset/limit)。缺省走 artist_albums_page: 详情只带 20 张,
-  /// 头部 albumSize 才是真实总数, 专辑 tab 必须能翻完。
+  /// 头部 albumCount 才是真实总数, 专辑 tab 必须能翻完。
   final Future<rust.ArtistAlbumPageDto> Function(
     BigInt artistId,
     int offset,
     int limit,
   )?
   loadAlbumsPage;
+
+  /// 艺人动态(需求 13 的「动态」tab): 非空列表才生成 tab。
+  /// 缺省走 rust.userEvents(尽力而为: 拿不到/空列表就不显示 tab, 不报错)。
+  final Future<List<rust.FeedEventDto>> Function(BigInt)? loadDynamics;
   final Future<bool> Function(BigInt, bool sub)? toggleFollow;
 
   @override
@@ -109,6 +131,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
   List<rust.ArtistMvDto>? _mvsFirstPage;
   bool _mvsHasMore = false;
 
+  /// 动态 tab 数据可用性: 探测第一页, 非空才显示 tab。
+  List<rust.FeedEventDto>? _dynamics;
+
   /// 页内搜索(就地过滤歌曲类 tab, 不发请求)
   bool _searching = false;
   String _query = '';
@@ -126,6 +151,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     _scroll.addListener(_onScroll);
     _load();
     _loadSimilar();
+    _loadDynamicsAvailability();
   }
 
   @override
@@ -181,6 +207,26 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
   }
 
+  /// 艺人动态探测: 拿不到/空列表就不生成「动态」tab(需求 13: 有数据才显示)。
+  /// 艺人动态没有专门的 FFI, 走 community 的 user_events(uid = artistId)尽力而为;
+  /// 未登录/风控/无动态一律视为"没数据", 静默不打任何错误文案。
+  Future<void> _loadDynamicsAvailability() async {
+    try {
+      final list = await (widget.loadDynamics != null
+          ? widget.loadDynamics!(widget.artistId)
+          : rust.userEvents(
+              uid: widget.artistId,
+              limit: 10,
+              lastTime: -1,
+            ));
+      if (!mounted) return;
+      setState(() => _dynamics = list);
+      _rebuildTabs();
+    } catch (_) {
+      // 没有动态(或接口不可用): 不显示 tab
+    }
+  }
+
   /// tab 集合变了就换新 controller(旧的一律延到帧末 dispose, 见
   /// [syncProfileTabs] —— 立刻 dispose 会抛 used-after-dispose)。
   void _rebuildTabs() {
@@ -201,34 +247,14 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       ),
   ];
 
-  /// 切到指定 tab(推荐单曲/专辑区块的「查看全部」入口用);
-  /// 目标 tab 可能因数据未到而不存在, 此时静默不动。
-  void _switchToTab(_TabKind kind) {
-    final index = _tabs.indexOf(kind);
-    if (index < 0) return;
-    // 注意: 「查看全部歌曲」的目标 tab 恒为 index 0, 常常**就是当前 tab**,
-    // 旧实现里 `index != _tabController.index` 的 guard 会直接吞掉这次点击
-    // ⇒ 用户点了没反应。这里改成: 先切 index, 再无条件滚到 TabBar 之后的内容区。
-    if (_tabController.index != index) {
-      _tabController.index = index;
-    }
-    // 只改 index 不滚动: 用户停在「信息区」时 TabBarView 的内容在折线以下,
-    // 视觉上同样是「点了没反应」。收起横幅, 露出 tab 内容。
-    final scroll = _scroll;
-    if (scroll.hasClients &&
-        scroll.offset < scroll.position.maxScrollExtent - 1) {
-      scroll.animateTo(
-        scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 260),
-        curve: Curves.easeOut,
-      );
-    }
-  }
-
+  /// tab 顺序固定(需求 13): 推荐单曲 → 全部歌曲 → 专辑 → MV → 动态。
+  /// 「全部歌曲」恒在(艺人一定可以查歌曲列表), 其余按数据可用性出现。
   List<_TabKind> get _tabs => [
+    if (_detail?.songs.isNotEmpty ?? false) _TabKind.recommended,
     _TabKind.allSongs,
     if (_detail?.albums.isNotEmpty ?? false) _TabKind.albums,
     if (_mvsFirstPage?.isNotEmpty ?? false) _TabKind.mvs,
+    if (_dynamics?.isNotEmpty ?? false) _TabKind.dynamics,
   ];
 
   Future<void> _loadSimilar() async {
@@ -291,6 +317,16 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
   }
 
+  /// 动态 tab 里的外链(视频直链): 注入方负责打开; 未注入时提示, 不静默吞掉点击
+  Future<void> _openUrl(String url) async {
+    final open = widget.onOpenUrl;
+    if (open == null) {
+      showToast(context, '暂不支持在当前版本打开动态外链');
+      return;
+    }
+    await open(url);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -322,9 +358,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
         ),
       ],
       banner: _buildBanner(theme, detail),
-      // 身份卡(头像/名字/别名/统计 chip): 横幅之下, 不压图
+      // 身份卡(头像/名字/别名/作品数): 横幅之下, 不压图
       identity: _buildIdentity(detail),
-      // 共享信息区: 简介/推荐单曲/专辑/相似艺人/详细艺人(TabBar 之上)
+      // 共享信息区: 简介 / 相似艺人(TabBar 之上); 推荐单曲与专辑横滑已下沉成 tab
       sections: _buildInfoSections(theme, detail),
       searchBar: _searching ? _buildSearchBar(theme) : null,
       tabs: _tabSpecs(detail),
@@ -338,6 +374,22 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     rust.ArtistDetailDto detail,
   ) {
     switch (kind) {
+      case _TabKind.recommended:
+        return ListView(
+          padding: EdgeInsets.fromLTRB(
+            kPagePadding,
+            12,
+            kPagePadding,
+            24 + MediaQuery.viewPaddingOf(context).bottom,
+          ),
+          children: [
+            ArtistRecommendedSongsSection(
+              songs: detail.songs,
+              totalCount: detail.musicCount,
+              onPlaySongs: widget.onPlaySongs,
+            ),
+          ],
+        );
       case _TabKind.allSongs:
         return _AllSongsTab(
           artistId: widget.artistId,
@@ -357,6 +409,12 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           firstPage: _mvsFirstPage ?? const [],
           firstPageHasMore: _mvsHasMore,
           loader: _mvsLoader,
+        );
+      case _TabKind.dynamics:
+        return _DynamicsTab(
+          events: _dynamics ?? const [],
+          onPlaySongs: widget.onPlaySongs,
+          onOpenUrl: _openUrl,
         );
     }
   }
@@ -390,12 +448,11 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     );
   }
 
-  /// 身份卡: 头像/名字/别名 + 统计 chip(作品数) + 关注按钮。
+  /// 身份卡: 头像/名字/别名 + 作品数标签(头像右侧、昵称下方) + 关注按钮。
   ///
-  /// 统计行(footer)只放**统计与入口**, 与用户页的 关注/粉丝/等级 同一套 chip;
-  /// 「关注」是写操作, 放 [ProfileIdentity.trailing]: 之前它和统计 chip 长得一样,
-  /// 用户无法从外观判断点了是"发请求关注"还是"打开关注列表"。
-  /// 作品数为 0 时整行不渲染(缺的条目不显示, 不留 "0 个专辑 · 0 首歌曲")。
+  /// 作品数从「独占一行」(footer)搬到 [ProfileIdentity.meta]: 与用户页同一口径,
+  /// 且不再额外吃一整行高度。文案在 [ProfileWorksStatChip] 里按参数生成, 不写死。
+  /// 作品数为 0 时整块不渲染(不留 "0 个专辑 · 0 首歌曲")。
   Widget _buildIdentity(rust.ArtistDetailDto detail) {
     final followed = _followed ?? false;
     final hasWorks =
@@ -404,14 +461,10 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
       title: detail.name,
       subtitle: detail.alias.isEmpty ? null : detail.alias.join(' / '),
       avatarUrl: detail.avatarUrl,
-      footer: hasWorks
-          ? ProfileStatRow(
-              chips: [
-                ProfileWorksStatChip(
-                  albumCount: detail.albumCount,
-                  songCount: detail.musicCount,
-                ),
-              ],
+      meta: hasWorks
+          ? ProfileWorksStatChip(
+              albumCount: detail.albumCount,
+              songCount: detail.musicCount,
             )
           : null,
       // 关注状态为乐观更新(接口成功才翻转)
@@ -429,9 +482,9 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
 
   /// 信息区(横幅之下、TabBar 之上的共享内容)。
   ///
-  /// 顺序与用户页同一口径(见 profile_scaffold.dart 文件头): 简介 → 作品
-  /// (推荐单曲/专辑) → 相似艺人。相似艺人是纯跳转入口, 放最后, 不挡作品。
-  /// 每块都走 [ProfileSection](标题风格/块间 16 只定义一次), 空分区整块不渲染。
+  /// 只剩两块(需求 13): 简介 → 相似艺人。推荐单曲/专辑横滑已下沉成 tab,
+  /// 信息区不再重复渲染同一批数据。每块都走 [ProfileSection](标题风格/块间 16),
+  /// 空分区整块不渲染。
   List<Widget> _buildInfoSections(
     ThemeData theme,
     rust.ArtistDetailDto detail,
@@ -442,64 +495,110 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           title: '简介',
           child: ExpandableText(text: detail.briefDesc),
         ),
-      if (detail.songs.isNotEmpty)
-        ProfileSection(
-          child: ArtistRecommendedSongsSection(
-            songs: detail.songs.take(5).toList(),
-            totalCount: detail.musicCount,
-            onPlaySongs: widget.onPlaySongs,
-            onSeeAll: () => _switchToTab(_TabKind.allSongs),
-          ),
-        ),
-      if (detail.albums.isNotEmpty)
-        ProfileSection(
-          child: ArtistAlbumsSection(
-            albums: detail.albums.take(6).toList(),
-            totalCount: detail.albumCount,
-            onOpenAlbum: widget.onOpenAlbum,
-            onSeeAll: () => _switchToTab(_TabKind.albums),
-          ),
-        ),
-      // 相似艺人(未登录/接口不支持时整块不渲染)
+      // 相似艺人(未登录/接口不支持时整块不渲染): 横排可拖拽, 不做自动滚动
       if (_similar.isNotEmpty)
-        ProfileSection(title: '相似艺人', child: _buildSimilarArtists(theme)),
-      // 「详细艺人资料」入口已移除: 弹层里只有统计/简介/相似艺人三块,
-      // 而这三块在本页上方都已各自渲染, 用户反馈"不知所云"(见 analysis/artist.md §5)。
-    ];
-  }
-
-  /// 相似艺人: 头像 + 名字的小胶囊(Wrap 防溢出, 名字单行省略)
-  Widget _buildSimilarArtists(ThemeData theme) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: [
-        for (final a in _similar)
-          ActionChip(
-            avatar: CircleCover(url: a.avatarUrl, size: 24),
-            // 单行 + ellipsis: 300dp + textScale 1.25 也不溢出
-            // (MarqueeText 正在被另一车道修测量 bug, 这里不用)
-            label: Text(a.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            onPressed: () => showArtistDetail(
+        ProfileSection(
+          title: '相似艺人',
+          child: SimilarArtistsRow(
+            artists: _similar,
+            onOpen: (a) => showArtistDetail(
               context,
               artistId: a.id,
               name: a.name,
               onPlaySongs: widget.onPlaySongs,
               onOpenAlbum: widget.onOpenAlbum,
+              onOpenUrl: widget.onOpenUrl,
+              loadDynamics: widget.loadDynamics,
             ),
           ),
-      ],
-    );
+        ),
+    ];
   }
 }
 
 enum _TabKind {
+  recommended('推荐单曲'),
   allSongs('全部歌曲'),
   albums('专辑'),
-  mvs('MV');
+  mvs('MV'),
+  dynamics('动态');
 
   const _TabKind(this.label);
   final String label;
+}
+
+/// 动态 tab: 艺人动态列表(只有拿到数据时这个 tab 才存在)。
+/// 点一行进动态详情页(正文/配图/视频/评论全部复用 feed_detail_page)。
+class _DynamicsTab extends StatelessWidget {
+  const _DynamicsTab({
+    required this.events,
+    required this.onPlaySongs,
+    required this.onOpenUrl,
+  });
+
+  final List<rust.FeedEventDto> events;
+  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
+  final Future<void> Function(String url) onOpenUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    if (events.isEmpty) {
+      return const EmptyView(icon: Icons.dynamic_feed_outlined, title: '暂无动态');
+    }
+    return ListView.builder(
+      padding: EdgeInsets.fromLTRB(
+        kPagePadding,
+        12,
+        kPagePadding,
+        24 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      itemCount: events.length,
+      itemBuilder: (context, i) {
+        final e = events[i];
+        final body = e.title.trim().isNotEmpty ? e.title.trim() : e.text.trim();
+        return InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => showFeedDetail(
+            context,
+            event: e,
+            onPlaySongs: onPlaySongs,
+            onOpenUrl: onOpenUrl,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 长文走 AdaptiveText(单行跑马灯); 这里允许 3 行换行
+                AdaptiveText(
+                  body.isEmpty ? '（无正文）' : body,
+                  mode: AdaptiveTextMode.wrap,
+                  maxLines: 3,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    feedRelativeTime(e.timeMs),
+                    feedKindLabels[e.kind] ?? '动态',
+                    if (e.commentCount > BigInt.zero) '${e.commentCount} 评论',
+                    if (e.likedCount > BigInt.zero) '${e.likedCount} 赞',
+                  ].where((s) => s.isNotEmpty).join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.outline,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// 全部歌曲 tab: offset/limit 分页(PagedListView); 有搜索词时改为

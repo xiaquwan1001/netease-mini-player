@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
+import 'package:minincm/src/artist_sections.dart';
+import 'package:minincm/src/cover_art.dart' show CircleCover;
+import 'package:minincm/src/profile_scaffold.dart' show ProfileWorksStatChip;
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.SongDto song(int i, {String name = '歌曲', bool playable = true}) =>
@@ -55,8 +58,31 @@ rust.ArtistMvDto mv(int i) => rust.ArtistMvDto(
   coverUrl: null,
 );
 
+rust.FeedEventDto dynamicEvent(int i, {String text = '新专辑预告'}) =>
+    rust.FeedEventDto(
+      id: BigInt.from(900 + i),
+      threadId: 'A_EV_2_${900 + i}_6452',
+      userId: BigInt.from(6452),
+      kind: 'text',
+      userName: '周杰伦',
+      avatarUrl: null,
+      text: '$text$i',
+      song: null,
+      coverUrl: null,
+      images: const [],
+      videoUrl: null,
+      title: '',
+      timeMs: BigInt.from(1700000000000),
+      liked: false,
+      likedCount: BigInt.from(3),
+      shareCount: BigInt.zero,
+      commentCount: BigInt.from(5),
+    );
+
 var pumpSeq = 0;
 
+/// 「动态」探测默认给空列表: 不注入时 rust.userEvents 会抛(测试环境无 RustLib),
+/// 静默后会留下一个 future 错误, 干扰其它断言。
 Future<void> pump(
   WidgetTester tester, {
   rust.ArtistDetailDto? detailData,
@@ -64,6 +90,7 @@ Future<void> pump(
   Future<List<rust.Artist>> Function(BigInt)? loadSimilar,
   Future<rust.ArtistSongPageDto> Function(BigInt, int)? loadSongsPage,
   Future<rust.ArtistMvPageDto> Function(BigInt, int)? loadMvsPage,
+  Future<List<rust.FeedEventDto>> Function(BigInt)? loadDynamics,
   Future<bool> Function(BigInt, bool)? toggleFollow,
   bool textScaleBig = false,
   double textScale = 1.25,
@@ -90,7 +117,7 @@ Future<void> pump(
         loadArtist:
             loadArtist ?? (_) async => detailData ?? detail(brief: '简介'),
         loadSimilar: loadSimilar,
-        // 「全部歌曲」现在是初始 tab, 测试默认给空 loader, 避免误触真实 rust API
+        // 歌曲/MV/动态默认给空 loader, 避免误触真实 rust API
         loadSongsPage:
             loadSongsPage ??
             (_, _) async =>
@@ -98,6 +125,7 @@ Future<void> pump(
         loadMvsPage:
             loadMvsPage ??
             (_, _) async => const rust.ArtistMvPageDto(mvs: [], hasMore: false),
+        loadDynamics: loadDynamics ?? (_) async => const <rust.FeedEventDto>[],
         toggleFollow: toggleFollow,
       ),
     ),
@@ -109,7 +137,7 @@ Future<void> pump(
 /// 需要点 tab 的测试先把它滚进来。
 Future<void> revealTabs(WidgetTester tester) async {
   await tester.scrollUntilVisible(
-    find.text('全部歌曲'),
+    find.byType(TabBar),
     200,
     scrollable: find.byType(Scrollable).first,
   );
@@ -117,52 +145,102 @@ Future<void> revealTabs(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('tab 数量: 无 MV 无专辑时只显示 热门歌曲/全部歌曲', (tester) async {
+  testWidgets('需求 13: 信息区不再有推荐单曲/专辑横滑两个重复区块', (tester) async {
     await pump(
       tester,
-      detailData: detail(songs: 2, albums: 0),
-      loadSongsPage: (_, _) async =>
-          const rust.ArtistSongPageDto(songs: [], hasMore: false),
+      detailData: detail(songs: 3, albums: 2, brief: '一句话简介'),
     );
-    // 「热门歌曲」tab 已移除, 改为顶部「推荐单曲」区块
-    expect(find.text('推荐单曲'), findsOneWidget);
-    // 横幅改成 220 高 + 身份卡, 初始视口内看不到 TabBar, 先滚进来
+    // 旧结构里这两块在 TabBar 之上; 现在推荐单曲只在首个 tab 里(在 TabBar 之下),
+    // 专辑横滑整块删除, 只剩「专辑」tab。
+    expect(find.text('简介'), findsOneWidget);
+    expect(find.text('相似艺人'), findsNothing);
+    expect(find.textContaining('全部 2 张'), findsNothing);
+    expect(find.textContaining('张 ›'), findsNothing);
+    expect(find.textContaining('首 ›'), findsNothing);
+    final tabBarBottom = tester.getRect(find.byType(TabBar)).bottom;
+    final recommended = tester.getRect(
+      find.byType(ArtistRecommendedSongsSection),
+    );
+    expect(
+      recommended.top,
+      greaterThanOrEqualTo(tabBarBottom - 1),
+      reason: '推荐单曲应是 tab 内容, 不在信息区(TabBar 之上)再渲染一份',
+    );
+  });
+
+  testWidgets('需求 13: tab 集合与顺序 = 推荐单曲/全部歌曲/专辑/MV/动态', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 3, albums: 1),
+      loadMvsPage: (_, _) async =>
+          rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
+      loadDynamics: (_) async => [dynamicEvent(0)],
+    );
     await revealTabs(tester);
+    expect(find.byType(Tab), findsNWidgets(5));
+    final labels = tester
+        .widgetList<Tab>(find.byType(Tab))
+        .map((t) => t.text)
+        .toList();
+    expect(labels, ['推荐单曲', '全部歌曲', '专辑', 'MV', '动态']);
+  });
+
+  testWidgets('需求 13: 没数据的 tab 不生成(推荐单曲/专辑/MV/动态)', (tester) async {
+    // 无歌曲、无专辑、MV 空、动态空 → 只剩「全部歌曲」
+    await pump(tester, detailData: detail(songs: 0, albums: 0));
+    await revealTabs(tester);
+    expect(find.byType(Tab), findsNWidgets(1));
     expect(find.text('全部歌曲'), findsOneWidget);
+    expect(find.text('推荐单曲'), findsNothing);
     expect(find.text('专辑'), findsNothing);
     expect(find.text('MV'), findsNothing);
     expect(find.text('动态'), findsNothing);
   });
 
-  testWidgets('tab 数量: 有 MV 时显示 MV tab, 探测失败时不显示', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 2),
-      loadMvsPage: (_, _) async =>
-          rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
-      loadSongsPage: (_, _) async =>
-          const rust.ArtistSongPageDto(songs: [], hasMore: false),
+  testWidgets('需求 13: 推荐单曲 tab 渲染 top 曲目并可直接播放', (tester) async {
+    if (true) {
+      tester.view.physicalSize = const Size(400, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+    }
+    final played = <int>[];
+    pumpSeq++;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ArtistDetailPage(
+          key: ValueKey('artist-play-$pumpSeq'),
+          artistId: BigInt.from(6452),
+          name: '周杰伦',
+          onPlaySongs: (songs, index) => played.add(index),
+          loadArtist: (_) async => detail(songs: 3, albums: 0),
+          loadSongsPage: (_, _) async =>
+              const rust.ArtistSongPageDto(songs: [], hasMore: false),
+          loadMvsPage: (_, _) async =>
+              const rust.ArtistMvPageDto(mvs: [], hasMore: false),
+          loadDynamics: (_) async => const <rust.FeedEventDto>[],
+        ),
+      ),
     );
-    await revealTabs(tester);
-    expect(find.text('MV'), findsOneWidget);
-
-    // 探测失败(抛异常) → 不显示 MV tab
-    await pump(
-      tester,
-      detailData: detail(songs: 2),
-      loadMvsPage: (_, _) async => throw Exception('mv 挂了'),
-      loadSongsPage: (_, _) async =>
-          const rust.ArtistSongPageDto(songs: [], hasMore: false),
-    );
-    expect(find.text('MV'), findsNothing);
+    await tester.pumpAndSettle();
+    // 推荐单曲是首个 tab: 一进页面就是它
+    expect(find.byType(ArtistRecommendedSongsSection), findsOneWidget);
+    expect(find.text('歌曲0'), findsOneWidget);
+    expect(find.text('共 3 首'), findsOneWidget);
+    await tester.tap(find.byTooltip('播放全部'));
+    await tester.pumpAndSettle();
+    expect(played, [0]);
   });
 
-  testWidgets('切换 tab: 全部歌曲 tab 用自己的 loader 加载', (tester) async {
+  testWidgets('全部歌曲 tab 用自己的 loader 加载; MV 探测失败不生成 tab', (tester) async {
     var allSongsCalls = 0;
     await pump(
       tester,
       detailData: detail(songs: 2),
-      loadSongsPage: (id, offset) async {
+      loadMvsPage: (_, _) async => throw Exception('mv 挂了'),
+      loadSongsPage: (_, _) async {
         allSongsCalls++;
         return rust.ArtistSongPageDto(
           songs: [song(90, name: '冷门')],
@@ -170,15 +248,15 @@ void main() {
         );
       },
     );
-    expect(find.text('歌曲0'), findsOneWidget);
     await revealTabs(tester);
+    expect(find.text('MV'), findsNothing);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(allSongsCalls, greaterThanOrEqualTo(1));
     expect(find.text('冷门90'), findsOneWidget);
   });
 
-  testWidgets('切换 tab: MV tab 用自己的 loader 加载, 分页追加不重复', (tester) async {
+  testWidgets('MV tab 分页追加不重复', (tester) async {
     final mvCalls = <int>[];
     await pump(
       tester,
@@ -199,45 +277,117 @@ void main() {
     await tester.pumpAndSettle();
     expect(mvCalls, [0]); // 探测已调过 offset 0
     expect(find.text('MV0'), findsOneWidget);
-    // 触底加载第二页
     await tester.scrollUntilVisible(
       find.text('MV999'),
       400,
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
-    // 触底只续下一页(offset 30), 不重拉第一页, 不重复
     expect(mvCalls, [0, 30]);
     expect(find.text('MV999'), findsOneWidget);
   });
 
-  testWidgets('相似艺人胶囊横排(Wrap 水平方向), 300dp 大字号下不溢出', (tester) async {
+  testWidgets('需求 13: 动态 tab 有数据才出现, 点进动态详情', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 1, albums: 0),
+      loadDynamics: (_) async => [dynamicEvent(0)],
+    );
+    await revealTabs(tester);
+    expect(find.text('动态'), findsOneWidget);
+    await tester.tap(find.text('动态'));
+    await tester.pumpAndSettle();
+    expect(find.text('新专辑预告0'), findsOneWidget);
+  });
+
+  testWidgets('需求 9: 相似艺人横排 ListView, 头像在上名字在下, 不自动滚动', (tester) async {
     await pump(
       tester,
       detailData: detail(songs: 2, brief: '简介'),
       loadSimilar: (_) async => [
-        rust.Artist(id: BigInt.from(1), name: '相似艺人甲', avatarUrl: null),
-        rust.Artist(id: BigInt.from(2), name: '相似艺人乙', avatarUrl: null),
+        // 数量要足够把横排撑出滚动范围, 否则「拖动」测不出来
+        for (var i = 0; i < 20; i++)
+          rust.Artist(
+            id: BigInt.from(i + 1),
+            name: '相似艺人$i',
+            avatarUrl: null,
+          ),
+      ],
+    );
+    final row = find.byType(SimilarArtistsRow);
+    expect(row, findsOneWidget);
+    // 横排: SimilarArtistsRow 内部是 Axis.horizontal 的 ListView
+    final list = find.descendant(of: row, matching: find.byType(ListView));
+    expect(list, findsOneWidget);
+    expect(tester.widget<ListView>(list).scrollDirection, Axis.horizontal);
+    // 头像在名字上方(同一项内)
+    final avatarRect = tester.getRect(
+      find.descendant(of: row, matching: find.byType(CircleCover)).first,
+    );
+    final nameRect = tester.getRect(find.text('相似艺人0'));
+    expect(avatarRect.bottom, lessThanOrEqualTo(nameRect.top + 1));
+    // 项宽 72dp(需求 72~80)
+    expect(tester.getSize(row).width, greaterThan(0));
+    // 禁止自动滚动/轮播: 静置 3 秒后滚动位置必须还是 0
+    await tester.pump(const Duration(seconds: 3));
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(of: list, matching: find.byType(Scrollable)),
+        )
+        .position;
+    expect(position.pixels, 0, reason: '相似艺人不允许自动滚动/轮播');
+    // 但用户可以手动拖: 拖动后位置变化
+    await tester.drag(list, const Offset(-120, 0));
+    await tester.pumpAndSettle();
+    expect(position.pixels, greaterThan(0));
+  });
+
+  testWidgets('需求 9: 相似艺人拿不到(未登录/失败)时整块不显示', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 2, brief: '简介'),
+      loadSimilar: (_) async => throw Exception('未登录'),
+    );
+    expect(find.text('相似艺人'), findsNothing);
+    expect(find.byType(SimilarArtistsRow), findsNothing);
+  });
+
+  testWidgets('需求 11: 作品数标签在头像右侧/昵称下方, 独占行数 -1', (tester) async {
+    await pump(tester, detailData: detail(songs: 2, albums: 3));
+    expect(find.text('3 个专辑 · 2 首歌曲'), findsOneWidget);
+    // 量 chip 本身(文字在 chip 的内边距+图标之后)
+    final worksRect = tester.getRect(find.byType(ProfileWorksStatChip));
+    final nameRect = tester.getRect(find.text('周杰伦').first);
+    final avatarRect = tester.getRect(
+      find.byType(CircleCover).first,
+    );
+    // 头像右侧: chip 在头像右边界之后
+    expect(worksRect.left, greaterThanOrEqualTo(avatarRect.right));
+    // 昵称下方(而不是身份卡底部独占一行)
+    expect(worksRect.top, greaterThanOrEqualTo(nameRect.bottom - 1));
+    // 与名字左对齐(同在头像右侧这一列)
+    expect((worksRect.left - nameRect.left).abs(), lessThan(2));
+  });
+
+  testWidgets('300dp + textScale 1.625: 头部与相似艺人横排不溢出', (tester) async {
+    await pump(
+      tester,
+      detailData: detail(songs: 2, albums: 2, brief: '一句话简介'),
+      loadSimilar: (_) async => [
+        rust.Artist(
+          id: BigInt.from(1),
+          name: '一个名字特别特别特别特别特别长的艺人',
+          avatarUrl: null,
+        ),
       ],
       textScaleBig: true,
+      textScale: 1.625,
     );
     expect(tester.takeException(), isNull);
-    // 胶囊由水平方向的 Wrap 布局(横排, 放不下才换行)
-    final wrap = find.ancestor(
-      of: find.text('相似艺人甲'),
-      matching: find.byType(Wrap),
-    );
-    expect(wrap, findsWidgets);
-    for (final w in tester.widgetList<Wrap>(wrap)) {
-      expect(w.direction, Axis.horizontal);
-    }
-    // 每个胶囊都不超出屏幕宽度(无溢出)
-    final screenW =
-        tester.view.physicalSize.width / tester.view.devicePixelRatio;
-    for (final name in ['相似艺人甲', '相似艺人乙']) {
-      final rect = tester.getRect(find.text(name));
-      expect(rect.right, lessThanOrEqualTo(screenW));
-    }
+    expect(find.text('3 个专辑 · 2 首歌曲'), findsNothing);
+    expect(find.textContaining('个专辑'), findsOneWidget);
+    expect(find.text('相似艺人'), findsOneWidget);
+    expect(find.textContaining('特别长'), findsWidgets);
   });
 
   testWidgets('页内搜索: 只过滤全部歌曲 tab(聚合后本地过滤), 无匹配给空态', (tester) async {
@@ -253,15 +403,6 @@ void main() {
       ),
     );
     await revealTabs(tester);
-    // 先滚回推荐单曲区块(此时在视口上方, 需向上滚): detail.songs 已被展示
-    await tester.scrollUntilVisible(
-      find.text('推荐单曲'),
-      -100,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('歌曲0'), findsOneWidget);
-    await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('晴天0'), findsOneWidget);
@@ -271,8 +412,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('七里香1'), findsOneWidget);
     expect(find.text('晴天0'), findsNothing);
-    // (推荐单曲区块此时在视口上方, sliver 懒构建不保留; 搜索只作用于全部歌曲 tab)
-    // 搜不存在的 → 空态
     await tester.enterText(find.byType(TextField), '不存在的歌');
     await tester.pumpAndSettle();
     expect(find.textContaining('没有匹配'), findsOneWidget);
@@ -289,45 +428,6 @@ void main() {
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('暂无歌曲'), findsOneWidget);
-  });
-
-  testWidgets('300dp + textScale 1.25: 头部信息区与相似艺人胶囊不溢出', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 2, brief: '一句话简介'),
-      loadSimilar: (_) async => [
-        rust.Artist(
-          id: BigInt.from(1),
-          name: '一个名字特别特别特别特别特别长的艺人',
-          avatarUrl: null,
-        ),
-        rust.Artist(
-          id: BigInt.from(2),
-          name: '另一个名字同样特别特别特别特别长的艺人',
-          avatarUrl: null,
-        ),
-      ],
-      textScaleBig: true,
-    );
-    expect(tester.takeException(), isNull);
-    expect(find.text('相似艺人'), findsOneWidget);
-    expect(find.textContaining('特别长'), findsWidgets);
-  });
-
-  testWidgets('信息区分区顺序: 简介 → 推荐单曲 → 相似艺人(与用户页同一口径)', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 2, brief: '一句话简介'),
-      loadSimilar: (_) async => [
-        rust.Artist(id: BigInt.from(1), name: '相似艺人甲', avatarUrl: null),
-      ],
-    );
-    final brief = tester.getRect(find.text('简介')).top;
-    final songs = tester.getRect(find.text('推荐单曲')).top;
-    final similar = tester.getRect(find.text('相似艺人')).top;
-    // 作品在前, 纯跳转入口(相似艺人)放最后: 两页共用同一顺序
-    expect(brief, lessThan(songs));
-    expect(songs, lessThan(similar));
   });
 
   testWidgets('关注按钮: 点击后乐观翻转为已关注', (tester) async {
@@ -347,29 +447,7 @@ void main() {
     expect(find.text('已关注'), findsOneWidget);
   });
 
-  testWidgets('tab 生成规则: 专辑/MV 可用性决定 tab 集合', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 2, albums: 1),
-      loadMvsPage: (_, _) async =>
-          rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false),
-    );
-    await revealTabs(tester);
-    // 全部歌曲 / 专辑 / MV
-    expect(find.byType(Tab), findsNWidgets(3));
-    expect(find.text('全部歌曲'), findsOneWidget);
-    expect(find.text('专辑'), findsOneWidget);
-    expect(find.text('MV'), findsOneWidget);
-
-    // 专辑数为 0 + 无 MV: 只剩全部歌曲
-    await pump(tester, detailData: detail(songs: 2, albums: 0));
-    await revealTabs(tester);
-    expect(find.byType(Tab), findsNWidgets(1));
-    expect(find.text('专辑'), findsNothing);
-    expect(find.text('MV'), findsNothing);
-  });
-
-  testWidgets('动态 tab: MV 探测晚到后 tab 增加, 当前 tab 与内容不重置', (tester) async {
+  testWidgets('MV 探测晚到后 tab 增加, 当前 tab 与内容不重置', (tester) async {
     final mvsProbe = Completer<rust.ArtistMvPageDto>();
     await pump(
       tester,
@@ -379,37 +457,18 @@ void main() {
       loadMvsPage: (_, _) => mvsProbe.future,
     );
     await revealTabs(tester);
-    expect(find.byType(Tab), findsNWidgets(2)); // 全部歌曲 / 专辑
+    expect(find.byType(Tab), findsNWidgets(3)); // 推荐单曲 / 全部歌曲 / 专辑
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
     expect(find.text('冷门7'), findsOneWidget);
 
-    // MV 探测回来: tab 由 2 -> 3(旧 controller 必须帧末 dispose, 见 syncProfileTabs)
     mvsProbe.complete(rust.ArtistMvPageDto(mvs: [mv(0)], hasMore: false));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.byType(Tab), findsNWidgets(3));
+    expect(find.byType(Tab), findsNWidgets(4));
     expect(find.text('MV'), findsOneWidget);
     // 当前 tab 仍是「全部歌曲」, 内容没被重建回别的 tab
     expect(find.text('冷门7'), findsOneWidget);
-  });
-
-  testWidgets('300dp + textScale 1.625: 头部统计 chip 不溢出', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 2, albums: 2, brief: '一句话简介'),
-      loadSimilar: (_) async => [
-        rust.Artist(
-          id: BigInt.from(1),
-          name: '一个名字特别特别特别特别特别长的艺人',
-          avatarUrl: null,
-        ),
-      ],
-      textScaleBig: true,
-      textScale: 1.625,
-    );
-    expect(tester.takeException(), isNull);
-    expect(find.textContaining('个专辑'), findsOneWidget);
   });
 
   testWidgets('分页: 全部歌曲 tab 触底加载更多(第二页)', (tester) async {
@@ -434,7 +493,6 @@ void main() {
     await revealTabs(tester);
     await tester.tap(find.text('全部歌曲'));
     await tester.pumpAndSettle();
-    // 触底前: 只有第一页
     expect(find.text('页二999'), findsNothing);
     await tester.scrollUntilVisible(
       find.text('页二999'),
