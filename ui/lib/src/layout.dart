@@ -137,31 +137,42 @@ double avatarStripHeightFor(BuildContext context) {
 // 间距 + 两行文字实测高(按 textScaler 放大), 末端不再有空隙。
 // ───────────────────────────────────────────────────────────────────────────
 
-/// 单个网格格子的宽度(整页铺满的场景: 屏宽 - 左右 padding - 列间距)。
+/// 单个网格格子的宽度。
+///
+/// [availableWidth] 是**网格真实能拿到的横向宽度**(视口/容器宽 - 页面左右 padding),
+/// 由 [LayoutBuilder]/SliverConstraints 给出。以前这里用
+/// `MediaQuery.sizeOf(context).width`(整屏宽)再减 2×[kPagePadding]:
+/// 只要网格不在「满屏 - 12/12」的位置(嵌在 tab/卡片里、容器自带 padding、
+/// 窄视口下还有固定尺寸的子组件), 格子宽就被高估, 格子高跟着偏大,
+/// 固定宽度的封面(CoverArt)还会溢出格子右边 —— 肉眼看就是「3 列只剩 2 列」。
 double coverTileWidth(
-  BuildContext context,
+  double availableWidth,
   int columns, {
   double crossAxisSpacing = 10,
 }) {
-  final width = MediaQuery.sizeOf(context).width;
-  final usable = width - 2 * kPagePadding - (columns - 1) * crossAxisSpacing;
-  return usable <= 0 ? 0 : usable / columns;
+  final cols = columns < 1 ? 1 : columns;
+  final usable = availableWidth - (cols - 1) * crossAxisSpacing;
+  return usable <= 0 ? 0 : usable / cols;
 }
 
 /// 方块网格 delegate: 列数固定、格子高 = 封面 + 两行文字(不再拍死 aspect)。
+///
+/// 调用方一律从 `PagedListView.gridDelegateBuilder` 拿 [availableWidth]
+/// (SliverConstraints.crossAxisExtent - 页面左右 padding), 不要自己用整屏宽算。
 SliverGridDelegate coverGridDelegate(
-  BuildContext context, {
+  double availableWidth, {
   required int columns,
   double crossAxisSpacing = 10,
   double mainAxisSpacing = 12,
+  TextScaler textScaler = TextScaler.noScaling,
 }) {
   final cols = columns < 1 ? 1 : columns;
   final tileWidth = coverTileWidth(
-    context,
+    availableWidth,
     cols,
     crossAxisSpacing: crossAxisSpacing,
   );
-  final scaler = MediaQuery.textScalerOf(context);
+  final scaler = textScaler;
   // 封面下的两行文字: 名字(labelMedium 12) + 副标题(labelSmall 11)。
   // 行高按 1.5 估 + 2dp 余量: 实测 1.4 时 300dp/大字下会溢出 3.8px
   // (GridView 的格子是硬约束, 溢出就是黄黑条), 宁可多留 2dp。

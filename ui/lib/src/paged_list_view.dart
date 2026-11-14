@@ -51,6 +51,7 @@ class PagedListView<T> extends StatefulWidget {
     this.separator,
     this.padding,
     this.gridDelegate,
+    this.gridDelegateBuilder,
     this.refreshable = true,
     this.endText,
     this.moreText = '加载更多',
@@ -81,6 +82,16 @@ class PagedListView<T> extends StatefulWidget {
 
   /// 传入则用网格排版(网格模式不支持 [separator])。
   final SliverGridDelegate? gridDelegate;
+
+  /// 网格 delegate 构建器: 传入则用网格排版, 并拿到**真实可用宽度**。
+  ///
+  /// [availableWidth] = SliverConstraints.crossAxisExtent - 水平 padding,
+  /// 即格子真正能铺开的宽度。需要按宽度算格子高/自适应封面的场景
+  /// (见 layout.dart 的 [coverGridDelegate])必须用它, 不要用
+  /// `MediaQuery.sizeOf(context).width` —— 整屏宽在窄视口/嵌在 tab 的页面里偏大,
+  /// 会用算出过高的格子与溢出的固定尺寸封面。
+  final SliverGridDelegate Function(BuildContext context, double availableWidth)?
+  gridDelegateBuilder;
 
   final bool refreshable;
 
@@ -223,19 +234,34 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
     }
 
     Widget body;
-    if (widget.gridDelegate != null) {
+    final delegateBuilder = widget.gridDelegateBuilder;
+    if (delegateBuilder != null || widget.gridDelegate != null) {
+      final padding = widget.padding ?? EdgeInsets.zero;
       body = CustomScrollView(
         physics: widget.physics,
         slivers: [
           if (widget.header != null) SliverToBoxAdapter(child: widget.header!),
-          SliverPadding(
-            padding: widget.padding ?? EdgeInsets.zero,
-            sliver: SliverGrid.builder(
-              gridDelegate: widget.gridDelegate!,
-              itemCount: _items.length,
-              itemBuilder: (context, i) =>
-                  widget.itemBuilder(context, _items[i], i, _items),
-            ),
+          // SliverLayoutBuilder 在 padding 之外: crossAxisExtent 是视口宽,
+          // 减掉水平 padding 才是网格真正能铺开的宽度(传给 gridDelegateBuilder)。
+          SliverLayoutBuilder(
+            builder: (context, constraints) {
+              final horizontal = padding
+                  .resolve(Directionality.of(context))
+                  .horizontal;
+              final available = constraints.crossAxisExtent - horizontal;
+              final delegate =
+                  delegateBuilder?.call(context, available) ??
+                  widget.gridDelegate!;
+              return SliverPadding(
+                padding: padding,
+                sliver: SliverGrid.builder(
+                  gridDelegate: delegate,
+                  itemCount: _items.length,
+                  itemBuilder: (context, i) =>
+                      widget.itemBuilder(context, _items[i], i, _items),
+                ),
+              );
+            },
           ),
           SliverToBoxAdapter(child: _buildFooter(context)),
         ],

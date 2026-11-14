@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'app_settings.dart';
 import 'cover_art.dart';
+import 'layout.dart';
 import 'library_view.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart';
@@ -198,17 +200,7 @@ class _SearchResultsViewState extends State<SearchResultsView> {
           ],
         );
       case _Section.artists:
-        return _cardWrap(context, [
-          for (final a in bundle.artists)
-            _card(
-              context,
-              width: 92,
-              onTap: () => widget.onOpenArtist(a),
-              cover: CircleCover(url: a.avatarUrl, size: 72),
-              name: a.name,
-              subtitle: a.alias.isNotEmpty ? a.alias : '${a.albumCount} 张专辑',
-            ),
-        ]);
+        return _artistWrap(context, bundle.artists);
       case _Section.albums:
         return _cardWrap(context, [
           for (final al in bundle.albums)
@@ -260,6 +252,49 @@ class _SearchResultsViewState extends State<SearchResultsView> {
             ),
         ]);
     }
+  }
+
+  /// 艺人网格: 与方格网格同一列数口径(设置项 [AppSettings.gridColumns]),
+  /// 卡片仍是 92dp 胶囊形态(CircleCover 72 + 两行文字)。
+  ///
+  /// 以前这里是「固定 92dp 卡片 + Wrap」: 每行几张只由屏宽决定, 和「方格网格列数」
+  /// 设置完全无关(用户改 2/4 没反应); 窄视口(≈300dp)下只排得下 2 张, 右侧空出一大片
+  /// —— 被当成「3 列只显示 2 列 / 第三列是空的」。
+  /// 现在按列数均分可用宽度: 每行正好 [AppSettings.gridColumns] 张, 右侧不留空隙;
+  /// 卡片变窄时圆形头像跟着收(不超过 72), 不会再溢出格子。
+  Widget _artistWrap(BuildContext context, List<rust.SearchArtist> artists) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+      children: [
+        LayoutBuilder(
+          builder: (context, box) {
+            final cols = AppSettings.instance.gridColumns.clamp(1, 8);
+            // 减 0.5: Wrap 里 n 张等宽卡片 + (n-1) 个间距正好等于可用宽度,
+            // 浮点误差会让最后一张掉到下一行。
+            final width =
+                coverTileWidth(box.maxWidth, cols, crossAxisSpacing: 10) - 0.5;
+            final cover = width < 72 ? width : 72.0;
+            return Wrap(
+              spacing: 10,
+              runSpacing: 12,
+              children: [
+                for (final a in artists)
+                  _card(
+                    context,
+                    width: width,
+                    onTap: () => widget.onOpenArtist(a),
+                    cover: CircleCover(url: a.avatarUrl, size: cover),
+                    name: a.name,
+                    subtitle: a.alias.isNotEmpty
+                        ? a.alias
+                        : '${a.albumCount} 张专辑',
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
   }
 
   /// 卡片网格: Wrap 自动换行, 单分类时横向铺满(比固定高度的横滑条更省纵向空间)

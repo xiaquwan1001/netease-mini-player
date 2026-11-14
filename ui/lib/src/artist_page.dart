@@ -682,10 +682,11 @@ class _AlbumsTab extends StatelessWidget {
       },
       keyOf: (a) => a.id,
       // 列数由设置决定 + 高度按内容算(见 coverGridDelegate), 末端不再留空隙
-      gridDelegate: coverGridDelegate(
-        context,
+      gridDelegateBuilder: (context, availableWidth) => coverGridDelegate(
+        availableWidth,
         columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 10,
+        textScaler: MediaQuery.textScalerOf(context),
       ),
       itemBuilder: (context, album, i, items) {
         final year = album.publishTime > BigInt.zero

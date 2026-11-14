@@ -132,10 +132,11 @@ class _PlaylistSquareViewState extends State<PlaylistSquareView> {
     return PagedListView<rust.Playlist>(
       key: ValueKey('$_highQuality|$_cat'),
       loader: _pageLoader,
-      gridDelegate: coverGridDelegate(
-        context,
+      gridDelegateBuilder: (context, availableWidth) => coverGridDelegate(
+        availableWidth,
         columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 10,
+        textScaler: MediaQuery.textScalerOf(context),
       ),
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
       emptyText: '这个分类下暂时没有歌单',

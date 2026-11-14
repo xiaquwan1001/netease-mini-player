@@ -317,10 +317,11 @@ class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
       refreshable: false,
       emptyText: '暂时没有精选新碟',
       padding: const EdgeInsets.all(12),
-      gridDelegate: coverGridDelegate(
-        context,
+      gridDelegateBuilder: (context, availableWidth) => coverGridDelegate(
+        availableWidth,
         columns: AppSettings.instance.gridColumns,
         crossAxisSpacing: 12,
+        textScaler: MediaQuery.textScalerOf(context),
       ),
       loader: (cursor) async =>
           PagedPage(await retryNetwork(widget.load), hasMore: false),
@@ -330,10 +331,19 @@ class _NewestAlbumsTabState extends State<_NewestAlbumsTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 封面随格子宽度伸缩(AspectRatio), 避免固定 size 溢出
+            // 封面随格子宽度伸缩(AspectRatio + LayoutBuilder 取实际宽):
+            // 写死 size: 100 与真实格子宽脱钩(窄视口 300dp 屏 3 列 ⇒ 格子 ≈ 84dp),
+            // 取图分辨率按 100dp 请求却只显示 84dp; 尺寸也靠上层约束夹,
+            // 一改列数/字号就得跟着调。按 box.maxWidth 取宽后两者自动一致。
             AspectRatio(
               aspectRatio: 1,
-              child: CoverArt(url: a.coverUrl, size: 100, radius: 8),
+              child: LayoutBuilder(
+                builder: (context, box) => CoverArt(
+                  url: a.coverUrl,
+                  size: box.maxWidth,
+                  radius: 8,
+                ),
+              ),
             ),
             const SizedBox(height: 4),
             Text(
