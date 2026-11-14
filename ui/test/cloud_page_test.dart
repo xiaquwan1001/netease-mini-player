@@ -87,7 +87,10 @@ void main() {
   });
 
   testWidgets('空态: 云盘没歌时给空态文案', (tester) async {
-    await _pump(tester, loadPage: (limit, offset) async => _page(<rust.CloudSong>[]));
+    await _pump(
+      tester,
+      loadPage: (limit, offset) async => _page(<rust.CloudSong>[]),
+    );
     expect(find.text('云盘还没有歌曲, 点右上角上传音频'), findsOneWidget);
   });
 
@@ -188,9 +191,8 @@ void main() {
     final played = <String>[];
     await _pump(
       tester,
-      loadPage: (limit, offset) async => _page(<rust.CloudSong>[
-        _song(11, name: '点我播放'),
-      ]),
+      loadPage: (limit, offset) async =>
+          _page(<rust.CloudSong>[_song(11, name: '点我播放')]),
       onPlay: (song) => played.add(song.name),
     );
 
@@ -300,4 +302,3 @@ void main() {
     });
   });
 }
-

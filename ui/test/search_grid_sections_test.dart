@@ -249,7 +249,11 @@ void main() {
     await _settings.update(gridColumns: 4);
     await tester.pumpAndSettle();
     rects = cardRects(tester, ['album0', 'album1', 'album2', 'album3']);
-    expect(rects.map((r) => r.top.round()).toSet().length, 1, reason: '4 列应在同一行');
+    expect(
+      rects.map((r) => r.top.round()).toSet().length,
+      1,
+      reason: '4 列应在同一行',
+    );
     expect(rects.last.right, closeTo(400 - kPagePadding, 0.5));
   });
 
@@ -257,9 +261,7 @@ void main() {
 
   testWidgets('联想面板占满可用高度并可滚动到最后一条', (tester) async {
     useScreen(tester, 400, height: 800);
-    final items = [
-      for (var i = 0; i < 40; i++) suggest('song', 'song$i'),
-    ];
+    final items = [for (var i = 0; i < 40; i++) suggest('song', 'song$i')];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

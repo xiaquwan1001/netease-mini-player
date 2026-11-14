@@ -137,10 +137,7 @@ void main() {
       loadComments: (_, _) async {
         calls++;
         // 第二次(发表后静默重载)把新评论带回来
-        return page([
-          comment(1, '好听'),
-          if (calls > 1) comment(9, '第一次看这个 MV'),
-        ]);
+        return page([comment(1, '好听'), if (calls > 1) comment(9, '第一次看这个 MV')]);
       },
       likeComment: (_, _) async => true,
       replyComment: (id, content) async {

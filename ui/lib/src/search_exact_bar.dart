@@ -129,12 +129,7 @@ class KeywordSuggestBar extends StatelessWidget {
     if (keywords.isEmpty) return const SizedBox.shrink();
     final scheme = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        kPagePadding,
-        4,
-        kPagePadding,
-        4,
-      ),
+      padding: const EdgeInsets.fromLTRB(kPagePadding, 4, kPagePadding, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -259,12 +254,7 @@ class SearchExactBar extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(
-              kPagePadding,
-              4,
-              kPagePadding,
-              2,
-            ),
+          padding: const EdgeInsets.fromLTRB(kPagePadding, 4, kPagePadding, 2),
           child: Text(
             caption,
             maxLines: 1,

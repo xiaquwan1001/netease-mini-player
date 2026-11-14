@@ -358,9 +358,7 @@ void main() {
   testWidgets('编辑简介: 点按钮弹输入框, 未接后端时如实提示', (tester) async {
     setTallView(tester);
     await tester.pumpWidget(
-      host(
-        buildMine(loggedIn: true, profile: profileDetail(signature: '旧签名')),
-      ),
+      host(buildMine(loggedIn: true, profile: profileDetail(signature: '旧签名'))),
     );
     await tester.pumpAndSettle();
 
@@ -369,7 +367,10 @@ void main() {
 
     // 输入框带出当前简介
     expect(find.byType(TextField), findsOneWidget);
-    expect(tester.widget<TextField>(find.byType(TextField)).controller?.text, '旧签名');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '旧签名',
+    );
 
     await tester.enterText(find.byType(TextField), '新签名');
     await tester.tap(find.text('保存'));
@@ -417,9 +418,7 @@ void main() {
 
   testWidgets('我的动态: 没有动态时给明确空态', (tester) async {
     setTallView(tester);
-    await tester.pumpWidget(
-      host(buildMine(loggedIn: true, events: const [])),
-    );
+    await tester.pumpWidget(host(buildMine(loggedIn: true, events: const [])));
     await tester.pumpAndSettle();
 
     expect(find.text('还没有发布动态'), findsOneWidget);

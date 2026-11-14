@@ -146,10 +146,7 @@ Future<void> revealTabs(WidgetTester tester) async {
 
 void main() {
   testWidgets('需求 13: 信息区不再有推荐单曲/专辑横滑两个重复区块', (tester) async {
-    await pump(
-      tester,
-      detailData: detail(songs: 3, albums: 2, brief: '一句话简介'),
-    );
+    await pump(tester, detailData: detail(songs: 3, albums: 2, brief: '一句话简介'));
     // 旧结构里这两块在 TabBar 之上; 现在推荐单曲只在首个 tab 里(在 TabBar 之下),
     // 专辑横滑整块删除, 只剩「专辑」tab。
     expect(find.text('简介'), findsOneWidget);
@@ -307,11 +304,7 @@ void main() {
       loadSimilar: (_) async => [
         // 数量要足够把横排撑出滚动范围, 否则「拖动」测不出来
         for (var i = 0; i < 20; i++)
-          rust.Artist(
-            id: BigInt.from(i + 1),
-            name: '相似艺人$i',
-            avatarUrl: null,
-          ),
+          rust.Artist(id: BigInt.from(i + 1), name: '相似艺人$i', avatarUrl: null),
       ],
     );
     final row = find.byType(SimilarArtistsRow);
@@ -358,9 +351,7 @@ void main() {
     // 量 chip 本身(文字在 chip 的内边距+图标之后)
     final worksRect = tester.getRect(find.byType(ProfileWorksStatChip));
     final nameRect = tester.getRect(find.text('周杰伦').first);
-    final avatarRect = tester.getRect(
-      find.byType(CircleCover).first,
-    );
+    final avatarRect = tester.getRect(find.byType(CircleCover).first);
     // 头像右侧: chip 在头像右边界之后
     expect(worksRect.left, greaterThanOrEqualTo(avatarRect.right));
     // 昵称下方(而不是身份卡底部独占一行)

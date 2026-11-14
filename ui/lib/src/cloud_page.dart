@@ -38,9 +38,7 @@ String formatBytes(int bytes) {
     unit += 1;
   }
   // 字节数不带小数(B 档没有意义), 其余档保留 1 位
-  final text = unit == 0
-      ? value.round().toString()
-      : value.toStringAsFixed(1);
+  final text = unit == 0 ? value.round().toString() : value.toStringAsFixed(1);
   return '$text ${units[unit]}';
 }
 
@@ -51,7 +49,10 @@ String cloudSubtitle(rust.CloudSong song) {
   return size.isEmpty ? song.artist : '${song.artist} · $size';
 }
 
-typedef CloudPageLoader = Future<rust.CloudPage> Function(int limit, int offset);
+typedef CloudPageLoader = Future<rust.CloudPage> Function(
+  int limit,
+  int offset,
+);
 typedef CloudDeleter = Future<bool> Function(Uint64List ids);
 
 /// 上传本地文件: 入参是本地绝对路径, 返回新歌 id/歌名(生产走 rust.cloudUpload)。
@@ -118,7 +119,8 @@ class _CloudPageState extends State<CloudPage> {
   int _capacity = 0;
 
   CloudPageLoader get _loader =>
-      widget.loadPage ?? (limit, offset) => rust.userCloud(limit: limit, offset: offset);
+      widget.loadPage ??
+      (limit, offset) => rust.userCloud(limit: limit, offset: offset);
   CloudDeleter get _deleter =>
       widget.deleteSongs ?? (ids) => rust.cloudDelete(ids: ids);
   CloudUploader get _uploader =>
@@ -172,7 +174,9 @@ class _CloudPageState extends State<CloudPage> {
         });
       }
     } catch (e) {
-      if (mounted) showToast(context, '加载更多失败: ${friendlyError(e)}', isError: true);
+      if (mounted) {
+        showToast(context, '加载更多失败: ${friendlyError(e)}', isError: true);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -190,7 +194,9 @@ class _CloudPageState extends State<CloudPage> {
     try {
       path = await (widget.pickFile ?? pickAudioFile)();
     } catch (e) {
-      if (mounted) showToast(context, '选择文件失败: ${friendlyError(e)}', isError: true);
+      if (mounted) {
+        showToast(context, '选择文件失败: ${friendlyError(e)}', isError: true);
+      }
       return;
     }
     if (path == null || !mounted) return;
@@ -218,7 +224,9 @@ class _CloudPageState extends State<CloudPage> {
       await _refresh();
     } catch (e) {
       if (dialogShown) navigator.pop();
-      if (mounted) showToast(context, '上传失败: ${friendlyError(e)}', isError: true);
+      if (mounted) {
+        showToast(context, '上传失败: ${friendlyError(e)}', isError: true);
+      }
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -262,7 +270,9 @@ class _CloudPageState extends State<CloudPage> {
       });
       showToast(context, '已从云盘删除');
     } catch (e) {
-      if (mounted) showToast(context, '删除失败: ${friendlyError(e)}', isError: true);
+      if (mounted) {
+        showToast(context, '删除失败: ${friendlyError(e)}', isError: true);
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -317,7 +327,9 @@ class _CloudPageState extends State<CloudPage> {
       itemCount: songs.length + 2,
       itemBuilder: (context, index) {
         if (index == 0) return _capacityLine(context, bodySmall);
-        if (index == songs.length + 1) return _footer(context, songs, bodySmall);
+        if (index == songs.length + 1) {
+          return _footer(context, songs, bodySmall);
+        }
         final song = songs[index - 1];
         return ListTile(
           contentPadding: kCardRowPadding,
@@ -393,12 +405,7 @@ class _UploadingDialog extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2.5),
           ),
           SizedBox(width: kSectionGap),
-          Expanded(
-            child: Text(
-              '正在上传并等待云端转码…\n(大文件可能需要几十秒)',
-              softWrap: true,
-            ),
-          ),
+          Expanded(child: Text('正在上传并等待云端转码…\n(大文件可能需要几十秒)', softWrap: true)),
         ],
       ),
     );

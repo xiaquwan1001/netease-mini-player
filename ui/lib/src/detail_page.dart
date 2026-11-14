@@ -776,12 +776,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   Widget _buildHiddenNote() {
     return Padding(
       // 与页面级水平留白一致(原来这里 16, 和上下列表/卡片 12 对不齐)
-      padding: const EdgeInsets.fromLTRB(
-        kPagePadding,
-        4,
-        kPagePadding,
-        0,
-      ),
+      padding: const EdgeInsets.fromLTRB(kPagePadding, 4, kPagePadding, 0),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(

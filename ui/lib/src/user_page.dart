@@ -8,7 +8,8 @@ import 'cover_row.dart';
 import 'detail_page.dart';
 import 'error_views.dart';
 import 'expandable_text.dart';
-import 'feed_detail_page.dart' show feedKindLabels, feedRelativeTime, showFeedDetail;
+import 'feed_detail_page.dart'
+    show feedKindLabels, feedRelativeTime, showFeedDetail;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -87,6 +88,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
 
   final ScrollController _scroll = ScrollController();
   bool _collapsed = false;
+
   /// 首帧就要与 [_tabSpecs] 的条数一致(「动态」是恒定 tab): 先用数据无关的
   /// 条数建 controller, 资料回来后再由 [_rebuildTabs] 按关注/粉丝补齐。
   late TabController _tabController;
@@ -306,10 +308,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
         onTap: () => _openRelationship(fans: true),
       ),
       if (level > BigInt.zero)
-        ProfileStatChip(
-          icon: Icons.military_tech_outlined,
-          label: 'Lv.$level',
-        ),
+        ProfileStatChip(icon: Icons.military_tech_outlined, label: 'Lv.$level'),
       // 有歌手身份(= user_detail 带回 artistId)才给「歌手页」入口:
       // 音乐人的用户主页与艺人主页是两份数据, 这里补上另一个入口
       // (动态头像点击则由 UserNav 直接进艺人页)。
@@ -650,8 +649,7 @@ class _EventSummaryCard extends StatelessWidget {
     return showFeedDetail(
       context,
       event: event,
-      onPlaySongs:
-          play ?? (_, _) => showToast(context, '当前页面不支持播放'),
+      onPlaySongs: play ?? (_, _) => showToast(context, '当前页面不支持播放'),
       onOpenUrl: onOpenUrl ?? PlatformBridge.openUrl,
     );
   }

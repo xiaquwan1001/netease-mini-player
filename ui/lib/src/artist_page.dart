@@ -4,7 +4,8 @@ import 'adaptive_text.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'error_views.dart';
-import 'feed_detail_page.dart' show showFeedDetail, feedRelativeTime, feedKindLabels;
+import 'feed_detail_page.dart'
+    show showFeedDetail, feedRelativeTime, feedKindLabels;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
@@ -40,6 +41,7 @@ Future<void> showArtistDetail(
   required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum,
+
   /// 动态 tab 里点视频/外链时用; 不注入则只提示(桌面/测试可省略)
   Future<void> Function(String url)? onOpenUrl,
   Future<rust.ArtistDetailDto> Function(BigInt)? loadArtist, // 测试注入
@@ -214,11 +216,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     try {
       final list = await (widget.loadDynamics != null
           ? widget.loadDynamics!(widget.artistId)
-          : rust.userEvents(
-              uid: widget.artistId,
-              limit: 10,
-              lastTime: -1,
-            ));
+          : rust.userEvents(uid: widget.artistId, limit: 10, lastTime: -1));
       if (!mounted) return;
       setState(() => _dynamics = list);
       _rebuildTabs();

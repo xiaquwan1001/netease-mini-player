@@ -257,7 +257,9 @@ class CoverGrid extends StatelessWidget {
     final cols = (columns ?? AppSettings.instance.gridColumns).clamp(1, 12);
     return LayoutBuilder(
       builder: (context, box) {
-        final horizontal = padding.resolve(Directionality.of(context)).horizontal;
+        final horizontal = padding
+            .resolve(Directionality.of(context))
+            .horizontal;
         // 嵌在横滑容器里时 maxWidth 是无限的, 退化成整屏宽(再减自身 padding)。
         final width = box.maxWidth.isFinite
             ? box.maxWidth

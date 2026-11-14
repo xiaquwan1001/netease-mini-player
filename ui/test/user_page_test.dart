@@ -511,9 +511,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: const TextScaler.linear(1.625),
-          ),
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.625)),
           child: child!,
         ),
         home: UserPage(
@@ -550,9 +549,7 @@ void main() {
           userId: BigInt.from(1822714196),
           loadProfile: (_) async => detail(nickname: '小红'),
           loadPlaylists: (_) async => const [],
-          loadEvents: (_) async => [
-            feedEvent(text: '这段文字会出现在动态摘要里'),
-          ],
+          loadEvents: (_) async => [feedEvent(text: '这段文字会出现在动态摘要里')],
         ),
       ),
     );

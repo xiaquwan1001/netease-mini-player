@@ -142,12 +142,7 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     _Section selected,
   ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        kPagePadding,
-        6,
-        kPagePadding,
-        6,
-      ),
+      padding: const EdgeInsets.fromLTRB(kPagePadding, 6, kPagePadding, 6),
       child: Wrap(
         spacing: 8,
         runSpacing: 4,
@@ -353,7 +348,9 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     return SizedBox(
       width: tileWidth,
       height: tileWidth,
-      child: Center(child: CircleCover(url: url, size: size)),
+      child: Center(
+        child: CircleCover(url: url, size: size),
+      ),
     );
   }
 
@@ -364,7 +361,9 @@ class _SearchResultsViewState extends State<SearchResultsView> {
       height: tileWidth,
       child: Stack(
         children: [
-          Positioned.fill(child: CoverArt(url: url, size: tileWidth, radius: 8)),
+          Positioned.fill(
+            child: CoverArt(url: url, size: tileWidth, radius: 8),
+          ),
           const Positioned(right: 4, bottom: 4, child: _MvPlayBadge()),
         ],
       ),

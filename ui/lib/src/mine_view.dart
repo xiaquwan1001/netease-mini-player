@@ -153,7 +153,9 @@ class _MineViewState extends State<MineView> {
   Future<void> _loadProfile() async {
     if (!widget.loggedIn) return;
     try {
-      final detail = await retryNetwork(widget.loadProfile ?? rust.profileDetail);
+      final detail = await retryNetwork(
+        widget.loadProfile ?? rust.profileDetail,
+      );
       if (!mounted) return;
       setState(() => _profile = detail);
     } catch (_) {
