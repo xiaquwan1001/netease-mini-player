@@ -1543,6 +1543,18 @@ CI 的 `Build Linux bundle (arm64)` 已由红转绿, v0.5.1 用这套配置重�
   `check-tokens --strict` OK(上传图标固定尺寸已加 token-ok); debug APK 出包并装回前台模拟器。
 
 
+## 2026-11-14(三) 发布记录 v0.11.0
+
+- **GitHub**: CI(main) `43581417264` **success**;Release(tag) `43581446131` **success**,
+  9 个资产(android-arm64 apk 28MB / linux x64+arm64 tar.gz 14MB ×2 / x86_64 AppImage 14MB /
+  windows setup.exe 13MB + zip 16MB / amd64+arm64 deb 10MB ×2 / SHA256SUMS.txt)。
+- **USTC GitLab**: pipeline **#9350**(tag v0.11.0) **success**;main #9349 的发布 job 为 manual(按需 play)。
+- 版本: `0.11.0+28`(`kAppVersion` 同步);tag `v0.11.0` 双推;接口覆盖 136/136。
+- 本轮 CI 一次全绿(交付前已对本轮改动文件跑 `dart format` + `cargo fmt --all`)。
+- 待人工验证(不阻塞发布): ①登录页「关闭/失败」不再提示登录成功(需真机点一次);
+  ②登录态下他人动态的隐私降级文案;③艺人页「动态」只在绑定账号的艺人上出现(周杰伦 6452 没有);
+  ④视觉过目: 艺人统计行整卡宽/播放全部顶格/全部歌曲 tab 头部「共 N 首 + 🔍」/动态配图 1-2-3 排版。
+
 ## 2026-11-14(二) 发布记录 v0.10.0
 
 - **GitHub**: CI(main) `43574520104` **success**;Release(tag) `43574524610` **success**,
