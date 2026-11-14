@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'artist_nav.dart';
 import 'cover_art.dart';
+import 'feed_share.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'feed_detail_page.dart';
 import 'layout.dart' show avatarStripHeightFor;
@@ -12,6 +12,13 @@ import 'toast.dart' show showToast;
 import 'user_nav.dart';
 import 'sheet_header.dart';
 import 'state_views.dart';
+
+/// 动态分页加载器: limit = 每页条数, lastTime = 上一页最后一条的 time_ms(unix 毫秒;
+/// -1 表示"最新一页", 见 ncm-api 的 lasttime 语义)。
+typedef FeedPageLoader = Future<List<rust.FeedEventDto>> Function({
+  required int limit,
+  required int lastTime,
+});
 
 /// 关注动态流: 未登录引导 + 登录后的动态列表.
 ///
@@ -29,6 +36,7 @@ class FeedView extends StatefulWidget {
     this.loadSubscribedArtists, // 测试注入(关注艺人, 用于"全部艺人"面板)
     this.likeEvent, // 测试注入(列表行点赞, 默认 rust.likeEvent)
     this.forwardEvent, // 测试注入(列表行转发, 默认 rust.forwardEvent)
+    this.loadOlder, // 测试注入(滚动到底加载更早一页, 默认 rust.feedEvents)
   });
 
   final bool loggedIn;
@@ -50,6 +58,11 @@ class FeedView extends StatefulWidget {
   })?
   forwardEvent;
 
+  /// 更早一页的加载器: lastTime = 当前列表最后一条的 time_ms(unix 毫秒)。
+  /// 不传就用现有 FFI 签名 rust.feedEvents(limit, lastTime) 当游标 ——
+  /// 后端提供专门的分页游标后只需替换这一处。
+  final FeedPageLoader? loadOlder;
+
   @override
   State<FeedView> createState() => _FeedViewState();
 }
@@ -57,6 +70,14 @@ class FeedView extends StatefulWidget {
 class _FeedViewState extends State<FeedView> {
   List<rust.FeedEventDto>? _events;
   String? _error;
+
+  /// 每页条数(与后端约定一致)
+  static const int _pageSize = 30;
+
+  /// 是否还可能存在更早一页(上一页返回满页, 且确实有新条目)
+  bool _hasMore = false;
+  bool _loadingMore = false;
+  String? _olderError;
 
   /// 正在列表行点赞中的动态 id(防抖: 同一条一次只允许一个在途请求)
   final Set<BigInt> _likeBusy = {};
@@ -82,24 +103,66 @@ class _FeedViewState extends State<FeedView> {
     }
   }
 
+  /// 拉最新一页并与已加载的历史**按 id 合并去重**(下拉刷新不清历史)。
   Future<void> _load() async {
     setState(() => _error = null);
     try {
       final load =
-          widget.loadFeed ?? () => rust.feedEvents(limit: 30, lastTime: -1);
+          widget.loadFeed ??
+          () => rust.feedEvents(limit: _pageSize, lastTime: -1);
       final events = await retryNetwork(load);
       if (!mounted) return;
+      final hadHistory = (_events?.isNotEmpty ?? false);
       setState(() {
-        _events = events;
-        // 选中的艺人还在本页就保留, 否则回到"全部"
+        // 刷新: 最新页优先(同 id 用最新副本, 点赞数等状态跟手), 历史只在末尾追加未重复的
+        _events = mergeFeedEvents(events, _events ?? const []);
+        // 首次加载才用本页长度决定"还有没有更早"; 刷新不动已翻出的历史
+        if (!hadHistory) _hasMore = events.length >= _pageSize;
+        // 选中的艺人还在列表里就保留, 否则回到"全部"
         if (_authorFilter != null &&
-            !events.any((e) => e.userId == _authorFilter)) {
+            !_events!.any((e) => e.userId == _authorFilter)) {
           _authorFilter = null;
         }
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// 滚动到底加载更早一页: 用当前列表最后一条的 time_ms 当游标。
+  Future<void> _loadOlder() async {
+    if (_loadingMore) return;
+    final current = _events;
+    if (current == null || current.isEmpty) return;
+    setState(() {
+      _loadingMore = true;
+      _olderError = null;
+    });
+    final cursor = current.last.timeMs.toInt();
+    try {
+      final load =
+          widget.loadOlder ??
+          ({required int limit, required int lastTime}) =>
+              rust.feedEvents(limit: limit, lastTime: lastTime);
+      final older = await retryNetwork(
+        () => load(limit: _pageSize, lastTime: cursor),
+      );
+      if (!mounted) return;
+      setState(() {
+        final merged = mergeFeedEvents(current, older);
+        // 没有新增(全是重复 id / 游标没前进)就停, 否则会无限请求同一页
+        final added = merged.length > current.length;
+        _events = merged;
+        _hasMore = added && older.length >= _pageSize;
+        _loadingMore = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMore = false;
+        _olderError = friendlyError(e);
+      });
     }
   }
 
@@ -218,7 +281,8 @@ class _FeedViewState extends State<FeedView> {
           onSelected: (id) => setState(() => _authorFilter = id),
           onOpenAll: _openAllArtists,
         ),
-        // 非分页: 动态流一次全量返回(接口无游标), 服务端不支持翻页
+        // 分页: 下拉刷新只重取最新页并与历史按 id 合并; 滚动到底(末尾 footer
+        // 被构建时)再按最后一条的 time_ms 拉更早一页。
         Expanded(
           child: RefreshIndicator(
             onRefresh: _load,
@@ -238,21 +302,35 @@ class _FeedViewState extends State<FeedView> {
                 : ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                    itemCount: events.length,
-                    itemBuilder: (context, i) => _FeedCard(
-                      event: events[i],
-                      onPlaySongs: widget.onPlaySongs,
-                      onOpenUrl: widget.onOpenUrl,
-                      onOpenChanged: _replace,
-                      onLike: () => _toggleLike(events[i]),
-                      forwardEvent: widget.forwardEvent,
-                    ),
+                    // 末尾多一格 footer: 懒构建的 ListView 只在滚到底时构建它,
+                    // footer 的 initState 就是"滚动到底加载更早"的触发器。
+                    itemCount: events.length + (_hasMoreFooter ? 1 : 0),
+                    itemBuilder: (context, i) {
+                      if (i >= events.length) {
+                        return _LoadOlderFooter(
+                          busy: _loadingMore,
+                          error: _olderError,
+                          onLoad: _loadOlder,
+                        );
+                      }
+                      return _FeedCard(
+                        event: events[i],
+                        onPlaySongs: widget.onPlaySongs,
+                        onOpenUrl: widget.onOpenUrl,
+                        onOpenChanged: _replace,
+                        onLike: () => _toggleLike(events[i]),
+                        forwardEvent: widget.forwardEvent,
+                      );
+                    },
                   ),
           ),
         ),
       ],
     );
   }
+
+  /// 末尾 footer 何时出现: 还有更早一页, 或正在拉, 或上一页失败(给重试入口)
+  bool get _hasMoreFooter => _hasMore || _loadingMore || _olderError != null;
 
   /// 详情页点赞回来后同步列表里的状态
   void _replace(rust.FeedEventDto updated) {
@@ -310,6 +388,25 @@ class _FeedViewState extends State<FeedView> {
     if (!mounted) return;
     showToast(context, message);
   }
+}
+
+/// 合并两页动态(刷新/加载更早共用): 按 id 去重, [first] 的副本优先(最新的
+/// 点赞/评论状态跟手), [second] 中未出现过的条目按原顺序追加到末尾。
+List<rust.FeedEventDto> mergeFeedEvents(
+  List<rust.FeedEventDto> first,
+  List<rust.FeedEventDto> second,
+) {
+  final seen = <BigInt>{};
+  final out = <rust.FeedEventDto>[];
+  void take(List<rust.FeedEventDto> src) {
+    for (final e in src) {
+      if (seen.add(e.id)) out.add(e);
+    }
+  }
+
+  take(first);
+  take(second);
+  return out;
 }
 
 /// 复制一条动态并替换点赞状态(列表行乐观更新 / 详情页点赞回传共用)
@@ -538,6 +635,78 @@ class _AuthorChip extends StatelessWidget {
   }
 }
 
+/// 列表末尾的"更早"footer: 懒构建的 ListView 只在滚到接近底部时构建它,
+/// 因此 initState 就是"滚动到底自动加载更早一页"的触发器; 失败时给重试按钮。
+class _LoadOlderFooter extends StatefulWidget {
+  const _LoadOlderFooter({
+    required this.busy,
+    required this.error,
+    required this.onLoad,
+  });
+
+  final bool busy;
+  final String? error;
+  final Future<void> Function() onLoad;
+
+  @override
+  State<_LoadOlderFooter> createState() => _LoadOlderFooterState();
+}
+
+class _LoadOlderFooterState extends State<_LoadOlderFooter> {
+  @override
+  void initState() {
+    super.initState();
+    _trigger();
+  }
+
+  @override
+  void didUpdateWidget(covariant _LoadOlderFooter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 上一页回来后又滚到底(或失败后重试成功): footer 还在树上时补一次触发
+    if (oldWidget.busy && !widget.busy && widget.error == null) _trigger();
+  }
+
+  void _trigger() {
+    if (widget.busy || widget.error != null) return;
+    // 不能在 build/initState 里直接 setState 父级: 推到微任务后再触发
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.busy || widget.error != null) return;
+      widget.onLoad();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (widget.error != null) {
+      return Center(
+        child: TextButton(
+          onPressed: () => widget.onLoad(),
+          child: Text('${widget.error!} (重试)'),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: widget.busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Text(
+                '加载更早的动态',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
 /// 一条动态卡片(摘要; 点整卡进详情页)
 class _FeedCard extends StatelessWidget {
   const _FeedCard({
@@ -565,85 +734,23 @@ class _FeedCard extends StatelessWidget {
   })?
   forwardEvent;
 
-  /// 分享动作面板: 转发(带转发语, 走 forwardEvent) / 复制链接(剪贴板)。
-  /// 与详情页同源(链接/文案一致), 只是入口在列表行上, 不必进详情页。
-  Future<void> _openShareSheet(BuildContext context) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SheetHeader(title: '分享'),
-            ListTile(
-              leading: const Icon(Icons.autorenew),
-              title: const Text('转发动态'),
-              onTap: () => Navigator.pop(sheetContext, 'forward'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('复制链接'),
-              onTap: () => Navigator.pop(sheetContext, 'copy'),
-            ),
-          ],
-        ),
-      ),
+  /// 分享面板(与详情页同源): 预览卡片 + 水印/二维码开关 + 系统分享/保存图片/
+  /// 复制链接/转发动态。转发走 forwardEvent 注入(默认 rust.forwardEvent)。
+  Future<void> _openShareSheet(BuildContext context) {
+    return showFeedShareSheet(
+      context,
+      event: event,
+      forwardEvent: forwardEvent,
     );
-    if (action == null || !context.mounted) return;
-    if (action == 'copy') {
-      await Clipboard.setData(
-        ClipboardData(text: 'https://music.163.com/#/event?id=${event.id}'),
-      );
-      if (!context.mounted) return;
-      _snack(context, '链接已复制');
-      return;
-    }
-    // 转发: 与详情页一致, 先填转发语(可留空)
-    final message = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('转发动态'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            maxLines: 3,
-            decoration: const InputDecoration(hintText: '说点什么(可留空)'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () =>
-                  Navigator.pop(dialogContext, controller.text.trim()),
-              child: const Text('转发'),
-            ),
-          ],
-        );
-      },
-    );
-    if (message == null || !context.mounted) return;
-    try {
-      final forward = forwardEvent ?? rust.forwardEvent;
-      final ok = await forward(
-        eventId: event.id,
-        userId: event.userId,
-        msg: message,
-      );
-      if (!context.mounted) return;
-      _snack(context, ok ? '已转发' : '转发未生效');
-    } catch (e) {
-      if (!context.mounted) return;
-      _snack(context, '转发失败: ${friendlyError(e)}');
-    }
   }
 
-  void _snack(BuildContext context, String message) {
-    showToast(context, message);
+  /// 长按动态 = 直接进转发面板(原动态预览 + 转发语 + 分享选项)
+  Future<void> _openForwardSheet(BuildContext context) {
+    return showFeedForwardSheet(
+      context,
+      event: event,
+      forwardEvent: forwardEvent,
+    );
   }
 
   Future<void> _openDetail(
@@ -678,6 +785,8 @@ class _FeedCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _openDetail(context),
+        // 长按直接进转发面板(不必先点进详情页)
+        onLongPress: () => _openForwardSheet(context),
         child: Padding(
           // 页面 12 + 卡片 8 = 20dp/侧: 动态是正文流, 太宽会明显浪费横向空间
           padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
