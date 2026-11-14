@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-14**。当前版本 **v0.9.0**(2026-11-13);2026-11-14 有一批未发版改动。
+> 最近更新: **2026-11-14**。当前版本 **v0.9.1**(2026-11-14 发布,GitHub Release 8 个资产全绿)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/architecture-restart.md`](architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
@@ -77,7 +77,7 @@
 
 ## 批次时间线(倒序, 最新在上)
 
-## 2026-11-14: 通知封面/下一首 + 播放现场记忆 + 乐观续播 + 主题四档(未发版)
+## 2026-11-14: 通知封面/下一首 + 播放现场记忆 + 乐观续播 + 主题四档(**v0.9.1 已发布**)
 
 用户报了一批 APK 侧的体验问题, 这一批先落"播放与通知"与"设置页主题"两块:
 
@@ -111,6 +111,15 @@
   原设计在浅色态下那个开关是「开了但没效果」的无效状态, 合并后消失。
 - 「主题色」tile 改用 `SizedBox(width: infinity)` + `bodyLarge`/`bodyMedium`,
   与同卡 ListTile 的左边界与字重对齐(之前被外层 Column 居中 ⇒ 多缩进一截 + 标题更粗)。
+
+**发布与 CI(v0.9.1)**
+- GitHub:CI(main)`43556951477` 绿(9m54s);Release(v0.9.1)`43556963532` 绿,8 个资产
+  (android-arm64 apk / linux x64+arm64 / AppImage / deb x64+arm64 / windows zip+setup / SHA256SUMS)。
+- USTC GitLab:pipeline 9334(tag v0.9.1) 5 个 job 里 4 绿,唯一失败是 **build-android-debug 的产物上传**:
+  两个 ABI 的 debug APK 合计 187MB,超过实例 artifact 上限 ⇒ `413 Request Entity Too Large`。
+  已修(`77d2b6a`):只上传 x86_64(模拟器验收用),arm64 真机包由 GitHub Release 出正式签名版;
+  main pipeline 9335 手动 play 该 job 实测 **success**。**v0.9.1 的 tag pipeline 无法回改**,下一版 tag 起生效。
+- `git-dual-push` 只推当前分支,不推 tag ⇒ tag 要单独 `git push <remote> vX.Y.Z`(本次已双推)。
 
 **搜索限流(车道 lane/cache2, 已合入)**
 - 新增 `core/crates/ncm-service/src/read_cache.rs`: 进程内 TTL 300s + 200 条 LRU + 同 key 单飞。
