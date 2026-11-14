@@ -4,13 +4,21 @@
 //!   account 用 `CredentialKey::id()`(与 FileStore/DpapiStore 同一套键).
 //! - `available()` 轻量探测: 只构造一个不存在条目的 Entry 并读一次(D-Bus 有无/服务可达
 //!   在这一步暴露), **不写探针 secret**; 结果缓存在实例里(OnceLock 语义), 避免每次 IO 打 D-Bus.
+//! - 探测**必须有超时**(`PROBE_TIMEOUT`): 钥匙串 collection 处于 locked 时, zbus 的
+//!   `get_password()` 会等解锁提示(无桌面会话时永远不返回, 实测 >70s 不返回 ⇒ 启动挂死);
+//!   超时按 `Unavailable` 处理, 上层照旧回落 0600 明文(同意门语义不变).
 //! - 所有错误映射到 `CredentialError::{Unavailable, AccessDenied, Backend}`, 绝不 panic.
 //! - 无 D-Bus / 无桌面会话时 `open_backend` 回落 FileStore(同意门语义不变), 见 credential_store.rs.
+
+use std::time::Duration;
 
 use crate::credential_store::{CredentialError, CredentialKey, CredentialStore};
 
 /// secret-service 里的 service(collection) 标识
 pub const SECRET_SERVICE: &str = "com.minincm.minincm";
+
+/// 探测上限(秒级: 正常 unlocked 机床上探测 <50ms, 锁住时不能把启动拖过这一档).
+pub const PROBE_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct SecretServiceStore {
     /// 探测结果缓存: Some(Ok) = 可用; Some(Err) = 不可用(原因). None = 还没探.
@@ -25,22 +33,10 @@ impl SecretServiceStore {
     }
 
     /// 轻量探测(缓存): 构造一个不存在的 entry 并 get —— 只打一次 D-Bus,
-    /// 不写任何探针 secret. 无 D-Bus 会话/服务未装都在这里失败.
+    /// 不写任何探针 secret. 无 D-Bus 会话/服务未装/collection 被锁(解锁提示没人点)都在这里失败.
     fn probe_once(&self) -> Result<(), CredentialError> {
         self.probe
-            .get_or_init(|| {
-                let entry = keyring::Entry::new(SECRET_SERVICE, &CredentialKey::Session.id())
-                    .map_err(|e| {
-                        CredentialError::Unavailable(format!("keyring 初始化失败: {e}"))
-                    })?;
-                match entry.get_password() {
-                    // 不存在 = 服务在, 探测通过
-                    Err(keyring::Error::NoEntry) => Ok(()),
-                    // 能读到(残留)也说明服务在
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(map_err(&e, "keyring 探测")),
-                }
-            })
+            .get_or_init(|| probe_with_timeout(PROBE_TIMEOUT, probe_secret_service))
             .clone()
     }
 
@@ -54,6 +50,44 @@ impl SecretServiceStore {
 impl Default for SecretServiceStore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// 真正打一次 D-Bus 的探测体(阻塞; 只在 `probe_with_timeout` 拉起的线程里跑).
+fn probe_secret_service() -> Result<(), CredentialError> {
+    let entry = keyring::Entry::new(SECRET_SERVICE, &CredentialKey::Session.id())
+        .map_err(|e| CredentialError::Unavailable(format!("keyring 初始化失败: {e}")))?;
+    match entry.get_password() {
+        // 不存在 = 服务在, 探测通过
+        Err(keyring::Error::NoEntry) => Ok(()),
+        // 能读到(残留)也说明服务在
+        Ok(_) => Ok(()),
+        Err(e) => Err(map_err(&e, "keyring 探测")),
+    }
+}
+
+/// 给阻塞探测加时间上限: 在独立线程里跑, 主线程 `recv_timeout`.
+///
+/// 为什么要线程: `keyring`/zbus 是同步阻塞 API, 内部没有可传的 deadline;
+/// collection locked 时会一直等解锁提示(无桌面会话 = 永远)。超时后**探测线程自己烂在后台**
+/// (结果丢弃), 但探测结果已进 `OnceLock`, 本进程不会再探测第二次。
+fn probe_with_timeout<F>(timeout: Duration, probe: F) -> Result<(), CredentialError>
+where
+    F: FnOnce() -> Result<(), CredentialError> + Send + 'static,
+{
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("keyring-probe".into())
+        .spawn(move || {
+            let _ = tx.send(probe());
+        })
+        .map_err(|e| CredentialError::Unavailable(format!("探测线程启动失败: {e}")))?;
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => Err(CredentialError::Unavailable(format!(
+            "secret-service 探测超时({}ms): 钥匙串被锁或无桌面会话可解锁, 本次运行按不可用处理",
+            timeout.as_millis()
+        ))),
     }
 }
 
@@ -138,6 +172,53 @@ mod tests {
             let store = SecretServiceStore::new();
             let _ = store.remove(CredentialKey::Session);
         }
+    }
+
+    /// 超时必须**真的**在时限内返回(探测体睡 600ms, 上限 30ms)。
+    #[test]
+    fn probe_with_timeout_is_bounded() {
+        let t0 = std::time::Instant::now();
+        let r = probe_with_timeout(Duration::from_millis(30), || {
+            std::thread::sleep(Duration::from_millis(600));
+            Ok(())
+        });
+        let elapsed = t0.elapsed();
+        assert!(
+            elapsed < Duration::from_millis(400),
+            "超时后必须立刻返回, 实测 {elapsed:?}"
+        );
+        match r {
+            Err(CredentialError::Unavailable(msg)) => assert!(msg.contains("探测超时"), "{msg}"),
+            other => panic!("应当超时为 Unavailable, 实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn probe_with_timeout_passes_result_through() {
+        let ok = probe_with_timeout(Duration::from_secs(1), || Ok(()));
+        assert!(ok.is_ok());
+        let err = probe_with_timeout(Duration::from_secs(1), || {
+            Err(CredentialError::Unavailable("no bus".into()))
+        });
+        match err {
+            Err(CredentialError::Unavailable(msg)) => assert_eq!(msg, "no bus"),
+            other => panic!("应当透传 Unavailable, 实际 {other:?}"),
+        }
+    }
+
+    /// 探测超时是**缓存**的: 同一实例不会重试(避免每次凭据 IO 再挂 2s)。
+    #[test]
+    fn probe_result_is_cached() {
+        let store = SecretServiceStore::new();
+        let first = store.available();
+        let t0 = std::time::Instant::now();
+        let second = store.available();
+        assert!(
+            t0.elapsed() < Duration::from_millis(100),
+            "第二次探测必须命中缓存, 实测 {:?}",
+            t0.elapsed()
+        );
+        assert_eq!(format!("{first:?}"), format!("{second:?}"));
     }
 
     /// 无 D-Bus 时: available() 返回 Unavailable(而非 panic / Backend),
