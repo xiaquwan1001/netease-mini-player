@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-14(四)**。当前版本 **v0.12.0**(2026-11-14 打包, 用户第三轮 16 项反馈 + 正在播放高亮)。
+> 最近更新: **2026-11-14(五)**。当前版本 **v0.12.1**(2026-11-14 打包, 分类条末尾空缺修复 + 字号档位精简 + docs 归档收敛)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);v1(WebView 版)历史已移入 [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md)。
@@ -80,7 +80,14 @@
 
 ## 批次时间线(倒序, 最新在上)
 
-## 2026-11-14(五) 用户第四轮两条反馈 + 文档收敛
+## 2026-11-14(五) 用户第四轮两条反馈 + 文档收敛(**v0.12.1 已发布**)
+
+> 发布记录(2026-11-14 23:30 核实): tag `v0.12.1`(versionCode 30)双推 GitHub + USTC GitLab;
+> GitHub Actions **Release #43609028858 全绿 14m46s / CI #43609028874 全绿 9m26s**, Release 9 资产
+> (android-arm64 apk 29.6 MB / linux-x64 tar.gz 15.7 MB / linux-arm64 tar.gz 15.5 MB / x86_64.AppImage 15.2 MB /
+> deb amd64 11.5 MB / deb arm64 10.6 MB / windows-x64.zip 17.5 MB / windows-x64-setup.exe 14.0 MB / SHA256SUMS);
+> USTC GitLab **#9390 全绿**(rust / flutter / build-linux-x64 / build-android-arm64 / build-android-debug)。
+> 待人工验证: 真机装 0.12.1 看分类条两排是否都贴满右边距、设置页字号只剩滑块。
 
 - **分类条末尾的空缺**: 用户截图里「胶囊分类条最后一排右边空一块」——`Wrap` 按 chip 自然宽度左对齐换行,
   7 个分类在 3 列下排成 3/3/1, 最后一排只 1 个 chip。`CategoryBar` 改为**按最宽 chip 测算列数 → 均分条数
