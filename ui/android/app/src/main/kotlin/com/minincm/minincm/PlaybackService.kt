@@ -83,10 +83,10 @@ class PlaybackService : MediaSessionService() {
             .setCallback(sessionCallback)
             .build()
         // 通知上的自定义按钮(喜欢/播放顺序): 只发意图, 状态由 Dart 经 setActionState 回推
-        mediaSession?.setCustomLayout(buildCustomLayout())
+        applyCustomLayout()
     }
 
-    // ---- 通知自定义按钮(喜欢 / 播放顺序 / 下一首): 只发意图, 队列/红心/模式状态全在 Dart ----
+    // ---- 通知自定义按钮(喜欢 / 播放顺序): 只发意图, 队列/红心/模式状态全在 Dart ----
     private var likedState = false
     private var modeIcon = "sequence"
 
@@ -99,6 +99,7 @@ class PlaybackService : MediaSessionService() {
                 .buildUpon()
                 .add(SessionCommand(CMD_LIKE, Bundle.EMPTY))
                 .add(SessionCommand(CMD_MODE, Bundle.EMPTY))
+                .add(SessionCommand(CMD_PREV, Bundle.EMPTY))
                 .add(SessionCommand(CMD_NEXT, Bundle.EMPTY))
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
@@ -112,8 +113,13 @@ class PlaybackService : MediaSessionService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            // 与 skipListener 同款: 只把点击转发给 Dart, 不碰 ExoPlayer
-            actionListener?.invoke(customCommand.customAction)
+            // 上一首/下一首: 与耳机键走同一条出口(同进程, 不经过 MethodChannel 的 actionListener)
+            when (customCommand.customAction) {
+                CMD_PREV -> requestSkip(false)
+                CMD_NEXT -> requestSkip(true)
+                // 喜欢/播放顺序: 只把点击转发给 Dart, 不碰 ExoPlayer
+                else -> actionListener?.invoke(customCommand.customAction)
+            }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
     }
@@ -121,19 +127,87 @@ class PlaybackService : MediaSessionService() {
     fun setActionState(liked: Boolean, icon: String) {
         likedState = liked
         modeIcon = icon
-        mediaSession?.setCustomLayout(buildCustomLayout())
+        applyCustomLayout()
     }
 
     /**
-     * 通知栏按钮: 喜欢 / 播放顺序 / **下一首**。
-     *
-     * 为什么"下一首"要单独做一个自定义按钮, 而不是只靠 ForwardingPlayer 的
-     * seekToNext: 系统媒体卡片的紧凑视图只放 3 个动作(上一首 / 播放暂停 / 下一首),
-     * 而我们已经有 2 个自定义按钮占位, 各家 ROM(尤其国内)会把"下一首"挤掉,
-     * 用户实测下拉状态栏只剩「上一首 / 暂停」。做成自定义按钮后它和其它按钮
-     * 同权重, 一定可见; 点击仍然只发意图, 真正的换曲在 Dart 队列里做。
+     * 把按钮偏好(media button preferences)推给会话, 并把**生效顺序与槽位**打进 logcat(NCM-PLAYER),
+     * 供 dumpsys / 回归核对(顺序契约见 [NOTIFICATION_BUTTON_ORDER])。
      */
+    @OptIn(UnstableApi::class)
+    private fun applyCustomLayout() {
+        val buttons = buildCustomLayout()
+        mediaSession?.setMediaButtonPreferences(buttons)
+        val cmds = mediaSession?.player?.availableCommands
+        Log.d(
+            "NCM-PLAYER",
+            "notification buttons = " + NOTIFICATION_BUTTON_ORDER.joinToString(" -> ") +
+                " / custom = [" +
+                buttons.joinToString(", ") {
+                    it.displayName.toString() + ":" + it.slots.toArray().joinToString("/")
+                } +
+                "] / playerSeekCommands prev=" +
+                cmds?.containsAny(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM) +
+                " next=" +
+                cmds?.containsAny(Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM),
+        )
+    }
+
+    /**
+     * 通知栏按钮**偏好**(media button preferences), 槽位写死:
+     * 上一首 = SLOT_BACK, 下一首 = SLOT_FORWARD, 喜欢/取消喜欢 = overflow, 播放顺序 = overflow。
+     *
+     * 顺序契约写死在 [NOTIFICATION_BUTTON_ORDER]:
+     * 上一首 -> 暂停/播放 -> 下一首 -> 喜欢/取消喜欢 -> 播放顺序。
+     *
+     * Media3 1.9.4 的 DefaultMediaNotificationProvider.getMediaButtons() 拼装规则是固定的:
+     * (1) BACK 槽按钮(没有就用系统 COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+     * (2) COMMAND_PLAY_PAUSE 系统按钮 —— 永远占中间位, 图标随播放态自动翻转, 自定义按钮挤不进去
+     * (3) FORWARD 槽按钮(没有就用系统 next)
+     * (4) 其余 overflow 按钮按声明顺序追加
+     * 所以只有"上一首/下一首显式钉 BACK/FORWARD 槽, 喜欢/播放顺序留在 overflow"才能得到目标顺序,
+     * 而且 5 个按钮一定齐(不依赖 player 当时是否有 seekToNext/Previous 命令)。
+     *
+     * 为什么不用"系统默认 3 个 + 自定义 [喜欢, 播放顺序]"(已实测否决): 用 setCustomLayout 时 Media3 会按
+     * hasDefaultBackCommand / hasDefaultForwardCommand(即 player 当场有没有 SEEK_TO_NEXT/PREVIOUS 命令)
+     * 把**自定义列表的第 1/2 个**自动塞进空缺的 BACK/FORWARD 槽。模拟器 a34 实测(dumpsys notification):
+     * 通知只剩 4 个 action = [上一首, 暂停, 喜欢, 播放顺序], "喜欢"被顶到 forward 槽第 3 位、"下一首"整个消失,
+     * 紧凑视图(int[]=3)变成 [上一首, 暂停, 喜欢]。=> 必须显式钉槽位, 不能靠 Media3 的默认推断。
+     *
+     * 为什么"暂停/播放"不做自定义按钮(需求原文的"5 个全部自定义"做不到): 见上 (2), Media3 无条件用系统按钮
+     * 占中间位; 我们再放一个自定义播放键只会掉到末尾 overflow 变成第 6 个按钮。系统按钮自带播放/暂停
+     * 图标翻转, 正好满足"图标随状态刷新", 比自定义更可靠。
+     *
+     * 为什么上一首/下一首用**自定义 session command**(CMD_PREV/CMD_NEXT)而不是
+     * setPlayerCommand(COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)(已实测否决): Media3 在把偏好发给 controller 前会调
+     * CommandButton.copyWithUnavailableButtonsDisabled(), 把"player 命令当前不可用"的按钮 isEnabled 置 false;
+     * 而 getCustomLayoutFromMediaButtonPreferences() 会整块跳过 isEnabled=false 的按钮。实测(a34): 用 player
+     * 命令做上一首/下一首时, 两个按钮都被判不可用而丢弃, 通知退化成系统 prev/Pause/next + 喜欢 + 播放顺序
+     * (顺序碰巧对, 但完全取决于 player 当时有没有 seekToNext 命令, 属不可控的巧合)。
+     * 自定义 session command 只要在 onConnect 里注册过就永远"可用", 槽位也不会被推断改写。
+     *
+     * 点击路径: 通知 action -> MediaSessionLegacyStub.onCustomAction -> [sessionCallback].onCustomCommand
+     * -> CMD_PREV/CMD_NEXT 直接 requestSkip(false/true)(与耳机键同一个 skipListener 出口,
+     * MainActivity -> Dart skipPrevious/skipNext); 喜欢/播放顺序仍走 actionListener -> toggleLike/cycleMode。
+     * 队列语义一点没动, 只改了通知按钮的槽位与去重。
+     */
+    @OptIn(UnstableApi::class)
     private fun buildCustomLayout(): List<CommandButton> = listOf(
+        // 上一首: 显式钉 SLOT_BACK(通知第 1 位)
+        CommandButton.Builder()
+            .setDisplayName("上一首")
+            .setSessionCommand(SessionCommand(CMD_PREV, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_BACK)
+            .setIconResId(R.drawable.ic_notif_prev)
+            .build(),
+        // 下一首: 显式钉 SLOT_FORWARD(通知第 3 位)
+        CommandButton.Builder()
+            .setDisplayName("下一首")
+            .setSessionCommand(SessionCommand(CMD_NEXT, Bundle.EMPTY))
+            .setSlots(CommandButton.SLOT_FORWARD)
+            .setIconResId(R.drawable.ic_notif_next)
+            .build(),
+        // 喜欢/取消喜欢: overflow(第 4 位)
         CommandButton.Builder()
             .setDisplayName(if (likedState) "取消喜欢" else "喜欢")
             .setSessionCommand(SessionCommand(CMD_LIKE, Bundle.EMPTY))
@@ -146,11 +220,6 @@ class PlaybackService : MediaSessionService() {
             .setDisplayName("播放顺序")
             .setSessionCommand(SessionCommand(CMD_MODE, Bundle.EMPTY))
             .setIconResId(modeIconRes(modeIcon))
-            .build(),
-        CommandButton.Builder()
-            .setDisplayName("下一首")
-            .setSessionCommand(SessionCommand(CMD_NEXT, Bundle.EMPTY))
-            .setIconResId(R.drawable.ic_notif_next)
             .build(),
     )
 
@@ -515,8 +584,24 @@ class PlaybackService : MediaSessionService() {
             skipListener?.invoke(next)
         }
 
+        /**
+         * 通知栏按钮顺序契约(需求 7): 上一首 -> 暂停/播放 -> 下一首 -> 喜欢/取消喜欢 -> 播放顺序。
+         *
+         * 仅供注释与 logcat 自检(NCM-PLAYER "notification buttons = ...")使用, 真正的顺序由 Media3
+         * 的槽位拼装决定(见 [buildCustomLayout] 的 KDoc); 只改这里不改布局 = 自欺, 别只改这一处。
+         */
+        val NOTIFICATION_BUTTON_ORDER = listOf("上一首", "暂停/播放", "下一首", "喜欢/取消喜欢", "播放顺序")
+
         const val CMD_LIKE = "ncm.LIKE"
         const val CMD_MODE = "ncm.MODE"
+
+        /** 通知栏「上一首」: 与耳机键同一条出口(skipListener -> skipPrevious), 不走 actionListener */
+        const val CMD_PREV = "ncm.PREV"
+
+        /**
+         * 通知栏「下一首」: onCustomCommand 里直接 requestSkip(true)(与耳机键同一条出口)。
+         * MainActivity 里那条 CMD_NEXT -> skipNext 的映射因此不再被使用(文件范围外, 未删, 留着也无副作用)。
+         */
         const val CMD_NEXT = "ncm.NEXT"
 
         @Volatile
