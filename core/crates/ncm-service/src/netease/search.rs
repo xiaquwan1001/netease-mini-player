@@ -1,6 +1,11 @@
 //! 搜索域: 综合搜索/建议/精确/热词/默认搜索词.
+//!
+//! 搜索族是 405(操作频繁)的直接来源, 本模块所有匿名只读请求都走
+//! `crate::read_cache` 的统一出口: TTL 缓存 + 同 key 单飞.
 
 use super::*;
+
+use crate::read_cache::{cache_key, endpoint};
 
 impl NeteaseProvider {
     pub(super) fn search<'a>(
@@ -8,15 +13,10 @@ impl NeteaseProvider {
         query: &'a SearchQuery,
     ) -> BoxFuture<'a, ProviderResult<SearchPage>> {
         Box::pin(async move {
-            let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("keywords", &query.keywords)
-                .param("limit", &query.limit.to_string())
-                .param("offset", &query.offset.to_string())
-                .param("type", "1");
-            let resp = client.cloudsearch(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_search(&resp.body)
+            let body = self
+                .cloudsearch_body(&query.keywords, 1, query.limit, query.offset)
+                .await?;
+            parse_search(&body)
         })
     }
 
@@ -27,10 +27,17 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<SuggestItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
-            let resp = client.search_suggest(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_suggest(&resp.body))
+            let key = cache_key(endpoint::SEARCH_SUGGEST, &[("keywords", keywords.to_string())]);
+            let body = self
+                .read_cache()
+                .get_or_load(endpoint::SEARCH_SUGGEST, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
+                    let resp = client.search_suggest(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_suggest(&body))
         })
     }
 
@@ -41,12 +48,26 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<String>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("type", "mobile")
-                .param("keywords", keywords);
-            let resp = client.search_suggest(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_suggest_keywords(&resp.body))
+            // type=mobile 与上面的 type=cloud 走同一个 endpoint, 必须把 type 拼进 key 才不撞.
+            let key = cache_key(
+                endpoint::SEARCH_SUGGEST,
+                &[
+                    ("keywords", keywords.to_string()),
+                    ("type", "mobile".to_string()),
+                ],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(endpoint::SEARCH_SUGGEST, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua)
+                        .param("type", "mobile")
+                        .param("keywords", keywords);
+                    let resp = client.search_suggest(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_suggest_keywords(&body))
         })
     }
 
@@ -57,10 +78,20 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<SearchExact>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
-            let resp = client.search_multimatch(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_search_exact(&resp.body))
+            let key = cache_key(
+                endpoint::SEARCH_MULTIMATCH,
+                &[("keywords", keywords.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(endpoint::SEARCH_MULTIMATCH, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua).param("keywords", keywords);
+                    let resp = client.search_multimatch(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_search_exact(&body))
         })
     }
 
@@ -161,10 +192,17 @@ impl NeteaseProvider {
     pub(super) fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.search_hot(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_hot_search(&resp.body))
+            let key = cache_key(endpoint::SEARCH_HOT, &[]);
+            let body = self
+                .read_cache()
+                .get_or_load(endpoint::SEARCH_HOT, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.search_hot(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_hot_search(&body))
         })
     }
 
@@ -174,10 +212,17 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<HotSearchDetailItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.search_hot_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_hot_search_detail(&resp.body))
+            let key = cache_key(endpoint::SEARCH_HOT_DETAIL, &[]);
+            let body = self
+                .read_cache()
+                .get_or_load(endpoint::SEARCH_HOT_DETAIL, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.search_hot_detail(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_hot_search_detail(&body))
         })
     }
 
@@ -193,6 +238,10 @@ impl NeteaseProvider {
     }
 
     /// cloudsearch 的通用调用: type = 1 单曲 / 10 专辑 / 100 歌手 / 1000 歌单 / 1009 播客
+    ///
+    /// 搜索族唯一的请求出口(单类型搜索 / 综合搜索 6 个板块 / 最长匹配兜底都走这里),
+    /// 所以缓存与单飞也放在这一层: 同一个 (keywords, type, limit, offset) 在 TTL 内
+    /// 只会真打一次上游。
     pub(super) async fn cloudsearch_body(
         &self,
         keywords: &str,
@@ -201,14 +250,27 @@ impl NeteaseProvider {
         offset: u32,
     ) -> ProviderResult<Value> {
         let (client, domain, ua, cookie) = self.snapshot();
-        let q = make_query(&cookie, &domain, &ua)
-            .param("keywords", keywords)
-            .param("limit", &limit.to_string())
-            .param("offset", &offset.to_string())
-            .param("type", &kind.to_string());
-        let resp = client.cloudsearch(&q).await.map_err(map_error)?;
-        check_body(&resp.body)?;
-        Ok(resp.body)
+        let key = cache_key(
+            endpoint::CLOUDSEARCH,
+            &[
+                ("keywords", keywords.to_string()),
+                ("type", kind.to_string()),
+                ("limit", limit.to_string()),
+                ("offset", offset.to_string()),
+            ],
+        );
+        self.read_cache()
+            .get_or_load(endpoint::CLOUDSEARCH, &key, || async {
+                let q = make_query(&cookie, &domain, &ua)
+                    .param("keywords", keywords)
+                    .param("limit", &limit.to_string())
+                    .param("offset", &offset.to_string())
+                    .param("type", &kind.to_string());
+                let resp = client.cloudsearch(&q).await.map_err(map_error)?;
+                check_body(&resp.body)?;
+                Ok(resp.body)
+            })
+            .await
     }
 
     /// 取某一个 type 的 result 节点(失败/无命中都给 None, 供「最长匹配」兜底用)

@@ -98,10 +98,21 @@ impl NeteaseProvider {
     pub(super) fn album_detail(&self, album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("id", &album_id.to_string());
-            let resp = client.album(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_album(&resp.body)
+            // 纯公开数据(封面/曲目/发行信息): 走只读缓存.
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::ALBUM_DETAIL,
+                &[("id", album_id.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(crate::read_cache::endpoint::ALBUM_DETAIL, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua).param("id", &album_id.to_string());
+                    let resp = client.album(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            parse_album(&body)
         })
     }
 }

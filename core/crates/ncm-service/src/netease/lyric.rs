@@ -6,10 +6,21 @@ impl NeteaseProvider {
     pub(super) fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
-            let resp = client.lyric(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_lyric(&resp.body)
+            // 歌词内容几乎不变, 播放页/滚动/切歌会反复取: 走只读缓存.
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::LYRIC,
+                &[("id", track.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(crate::read_cache::endpoint::LYRIC, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
+                    let resp = client.lyric(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            parse_lyric(&body)
         })
     }
 
@@ -19,10 +30,21 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<WordLyric>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
-            let resp = client.lyric_new(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_word_lyric_body(&resp.body)
+            // 同上(逐字歌词 yrc).
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::LYRIC_NEW,
+                &[("id", track.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(crate::read_cache::endpoint::LYRIC_NEW, &key, || async {
+                    let q = make_query(&cookie, &domain, &ua).param("id", &track.to_string());
+                    let resp = client.lyric_new(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            parse_word_lyric_body(&body)
         })
     }
 }

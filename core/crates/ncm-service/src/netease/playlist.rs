@@ -273,10 +273,22 @@ impl NeteaseProvider {
             if playlist_id == 0 {
                 return Err(ProviderError::not_found("playlist id 为空"));
             }
-            let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
-            let resp = client.playlist_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_playlist_detail(&resp.body)
+            // 公开歌单数据(封面/曲目/播放量), 点开再返回会反复打: 走只读缓存.
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::PLAYLIST_DETAIL,
+                &[("id", playlist_id.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(crate::read_cache::endpoint::PLAYLIST_DETAIL, &key, || async {
+                    let q =
+                        make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
+                    let resp = client.playlist_detail(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            parse_playlist_detail(&body)
         })
     }
 

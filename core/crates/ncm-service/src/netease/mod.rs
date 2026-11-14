@@ -64,6 +64,9 @@ pub const CAPABILITIES: &[Capability] = &[
 /// 协议与加解密全部委托给 vendor/ncm-api (api-enhanced 的 Rust 移植).
 pub struct NeteaseProvider {
     inner: RwLock<Inner>,
+    /// 只读接口的进程内响应缓存(TTL 300s / 200 条 LRU / 同 key 单飞).
+    /// 白名单与纪律见 crate::read_cache: 只放与账号无关的只读接口.
+    cache: crate::read_cache::ReadCache,
 }
 
 struct Inner {
@@ -113,6 +116,7 @@ impl NeteaseProvider {
             .or_else(|| Some(crate::identity::platform_profile().ua.to_string()));
         Self {
             inner: RwLock::new(Inner::new(session, domain, ua)),
+            cache: crate::read_cache::ReadCache::default(),
         }
     }
 
@@ -120,6 +124,7 @@ impl NeteaseProvider {
     pub fn with_channel(session: Session, domain: Option<String>, ua: Option<String>) -> Self {
         Self {
             inner: RwLock::new(Inner::new(session, domain, ua)),
+            cache: crate::read_cache::ReadCache::default(),
         }
     }
 
@@ -128,6 +133,16 @@ impl NeteaseProvider {
         let domain = guard.domain.clone();
         let ua = guard.ua.clone();
         *guard = Inner::new(session, domain, ua);
+        drop(guard);
+        // 会话变了(登录/登出/切账号)就整体清空只读缓存: 白名单里的接口虽然匿名可用,
+        // 但 body 里仍可能带账号侧字段(歌单的 subscribed、搜索结果的 privileges),
+        // key 里没有 uid, 不清就可能把上一个账号的数据端给新账号.
+        self.cache.clear();
+    }
+
+    /// 只读接口的响应缓存(各能力模块统一走这里).
+    pub(super) fn read_cache(&self) -> &crate::read_cache::ReadCache {
+        &self.cache
     }
 
     /// 传 0 表示"用当前账号"
