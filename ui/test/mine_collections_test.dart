@@ -46,6 +46,18 @@ rust.AlbumItem album(int id, String name) => rust.AlbumItem(
   trackCount: BigInt.from(10),
 );
 
+/// 「我的」页顶部现在有「资料卡 / 我的主页 / 简介 / 我的动态」(需求 1/2),
+/// 默认 800x600 视口下下方区块的位置全变了; 需要整体滚动的用例统一放大视口.
+void setTallView(
+  WidgetTester tester, {
+  double width = 420,
+  double height = 1400,
+}) {
+  tester.view.devicePixelRatio = 1.0;
+  tester.view.physicalSize = Size(width, height);
+  addTearDown(tester.view.reset);
+}
+
 Widget pushHost(String label, VoidCallback onTap) => MaterialApp(
   home: Scaffold(
     body: Builder(
@@ -142,6 +154,7 @@ void main() {
   });
 
   testWidgets('区块滚出视野再回来不重新加载(修"上下抽搐")', (tester) async {
+    setTallView(tester);
     var likedLoads = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -152,9 +165,9 @@ void main() {
     expect(likedLoads, 1);
 
     // 滚到下方让"我喜欢的音乐"离开视口(旧实现会 dispose + 重新 initState)
-    await tester.drag(find.byType(ListView).first, const Offset(0, -1600));
+    await tester.drag(find.byType(ListView).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, 1600));
+    await tester.drag(find.byType(ListView).first, const Offset(0, 2000));
     await tester.pumpAndSettle();
 
     expect(find.text('喜欢的歌'), findsOneWidget);
@@ -162,13 +175,19 @@ void main() {
   });
 
   testWidgets('三个收藏区块都有"查看全部"入口, 点开是二级整页', (tester) async {
+    setTallView(tester);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(body: buildMine(onLikedLoad: () => 0)),
       ),
     );
     await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView).first, const Offset(0, -900));
+    // 滚到收藏区块那一段(顶部还有资料卡/简介/我的动态)
+    await tester.scrollUntilVisible(
+      find.text('收藏的专辑'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.pumpAndSettle();
 
     // 我喜欢 / 收藏歌单 / 收藏播客 / 收藏专辑 / 最近听过 都应有入口

@@ -174,6 +174,7 @@ class ProfileIdentity extends StatelessWidget {
     this.titleStyle,
     this.trailing,
     this.footer,
+    this.meta,
   });
 
   final String title;
@@ -190,8 +191,14 @@ class ProfileIdentity extends StatelessWidget {
   /// 名字右侧的追加操作(如关注按钮)
   final Widget? trailing;
 
-  /// 卡片底部附加行(统计/等级等)
+  /// 卡片底部附加行(统计/等级等), 占**整卡宽度**、在头像下方单独一行.
   final Widget? footer;
+
+  /// 头像**右侧**、昵称(与副标题)下方的附加行(需求 11: 关注/粉丝/等级).
+  ///
+  /// 与 [footer] 的区别只是位置: 这里落在昵称所在的文字列里, 宽度被头像与
+  /// trailing 让出的剩余空间约束, 窄屏靠 Wrap 换行, 而不是撑到整卡宽.
+  final Widget? meta;
 
   @override
   Widget build(BuildContext context) {
@@ -300,6 +307,11 @@ class ProfileIdentity extends StatelessWidget {
                               ),
                             ),
                           ),
+                        if (meta != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: meta!,
+                          ),
                       ],
                     ),
                   ),
@@ -339,6 +351,7 @@ class ProfileBanner extends StatelessWidget {
     this.overlay,
     this.trailing,
     this.footer,
+    this.meta,
     this.height = kProfileBannerHeight,
     this.fetchOverride,
     this.saveOverride,
@@ -354,6 +367,9 @@ class ProfileBanner extends StatelessWidget {
   final Widget? overlay;
   final Widget? trailing;
   final Widget? footer;
+
+  /// 头像右侧、昵称下方的附加行(统计/等级), 见 [ProfileIdentity.meta]
+  final Widget? meta;
   final double height;
   final Future<Uint8List> Function(String url)? fetchOverride;
   final Future<String> Function(Uint8List bytes, String filename)? saveOverride;
@@ -390,6 +406,7 @@ class ProfileBanner extends StatelessWidget {
             titleStyle: titleStyle,
             trailing: trailing,
             footer: footer,
+            meta: meta,
           ),
         ),
       ],
