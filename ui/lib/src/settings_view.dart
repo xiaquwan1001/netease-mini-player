@@ -17,6 +17,44 @@ import 'toast.dart';
 import 'update_checker.dart';
 import 'update_dialog.dart';
 
+/// 「主题模式」的四档。
+///
+/// 2026-11-14 之前是「跟随/浅色/深色」三段 + 独立的「OLED 纯黑」开关；
+/// 两者其实是同一个选择（纯黑只是深色基底的一种），合并成四档后
+/// 不再有「浅色态下开了纯黑但没效果」的无效状态。持久化字段不变
+/// （themeMode + oledDark），旧 settings.json 直接可读。
+enum ThemeChoice { system, light, dark, oledBlack }
+
+/// 当前设置 → 四档里的哪一档（纯黑优先级高于深色，浅色优先于纯黑）。
+ThemeChoice themeChoiceOf(AppSettings settings) {
+  if (settings.themeMode == ThemeMode.light) return ThemeChoice.light;
+  if (settings.oledDark) return ThemeChoice.oledBlack;
+  if (settings.themeMode == ThemeMode.dark) return ThemeChoice.dark;
+  return ThemeChoice.system;
+}
+
+/// 四档 → 写回设置（纯黑 = 深色 + OLED 基底）。
+void applyThemeChoice(AppSettings settings, ThemeChoice choice) {
+  switch (choice) {
+    case ThemeChoice.system:
+      unawaited(settings.update(themeMode: ThemeMode.system, oledDark: false));
+    case ThemeChoice.light:
+      unawaited(settings.update(themeMode: ThemeMode.light, oledDark: false));
+    case ThemeChoice.dark:
+      unawaited(settings.update(themeMode: ThemeMode.dark, oledDark: false));
+    case ThemeChoice.oledBlack:
+      unawaited(settings.update(themeMode: ThemeMode.dark, oledDark: true));
+  }
+}
+
+/// 四档的副标题文案（与分段控件的选项一一对应）。
+String themeChoiceLabel(ThemeChoice choice) => switch (choice) {
+  ThemeChoice.system => '跟随系统 · 系统深色时用 Material 深灰',
+  ThemeChoice.light => '浅色',
+  ThemeChoice.dark => '深色 · Material 深灰 #121212',
+  ThemeChoice.oledBlack => '纯黑 · #000000 取代 #121212(OLED 省电, 无灰边)',
+};
+
 /// 设置页: 「App 怎么表现」的偏好开关 + 分组入口。
 ///
 /// 二级页:
@@ -76,37 +114,26 @@ class SettingsView extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _SegmentedSettingTile<ThemeMode>(
+                  // 2026-11-14 用户要求: 把「OLED 纯黑」并进「主题模式」——
+                  // 二者本来就是同一件事(纯黑只是深色的一种基底), 拆两个控件时
+                  // 浅色态下还会出现「开了但没效果」的无效开关。
+                  _SegmentedSettingTile<ThemeChoice>(
                     title: '主题模式',
-                    subtitle: _themeLabel(settings.themeMode),
+                    subtitle: themeChoiceLabel(themeChoiceOf(settings)),
                     segments: const [
-                      ButtonSegment(value: ThemeMode.system, label: Text('跟随')),
-                      ButtonSegment(value: ThemeMode.light, label: Text('浅色')),
-                      ButtonSegment(value: ThemeMode.dark, label: Text('深色')),
+                      ButtonSegment(value: ThemeChoice.system, label: Text('跟随')),
+                      ButtonSegment(value: ThemeChoice.light, label: Text('浅色')),
+                      ButtonSegment(value: ThemeChoice.dark, label: Text('深色')),
+                      ButtonSegment(value: ThemeChoice.oledBlack, label: Text('纯黑')),
                     ],
-                    selected: settings.themeMode,
-                    onSelectionChanged: (value) {
-                      settings.update(themeMode: value);
-                    },
+                    selected: themeChoiceOf(settings),
+                    onSelectionChanged: (value) => applyThemeChoice(settings, value),
                   ),
                   const Divider(height: 1),
                   // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)
                   _AccentSettingTile(
                     selected: settings.accent,
                     onSelected: (value) => settings.update(accent: value),
-                  ),
-                  const Divider(height: 1),
-                  // R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212.
-                  // 只在深色/跟随系统时才有意义, 所以浅色态下用文案说明.
-                  SwitchListTile(
-                    title: const Text('OLED 纯黑'),
-                    subtitle: Text(
-                      settings.themeMode == ThemeMode.light
-                          ? '当前是浅色主题, 切到深色后生效'
-                          : '深色下用 #000000 取代 #121212(OLED 屏更省电, 无灰边)',
-                    ),
-                    value: settings.oledDark,
-                    onChanged: (value) => settings.update(oledDark: value),
                   ),
                   const Divider(height: 1),
                   ListTile(
@@ -318,12 +345,6 @@ class SettingsView extends StatelessWidget {
       ),
     );
   }
-
-  static String _themeLabel(ThemeMode mode) => switch (mode) {
-    ThemeMode.light => '浅色',
-    ThemeMode.dark => '深色',
-    ThemeMode.system => '跟随系统',
-  };
 
   static String _scaleLabel(double scale) {
     for (final entry in AppSettings.textScales.entries) {
@@ -716,24 +737,37 @@ class _AccentSettingTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('主题色', style: theme.textTheme.titleMedium),
-          const SizedBox(height: 2),
-          Text('${selected.label} · 浅色/深色通用', style: theme.textTheme.bodySmall),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 12,
-            runSpacing: 10,
-            children: [
-              for (final palette in AccentPalette.values)
-                _dot(context, palette),
-            ],
-          ),
-        ],
+    // 缩进/字重与同卡的 _SegmentedSettingTile、ListTile 对齐(2026-11-14 用户反馈):
+    // - SizedBox(width: infinity): 外层 Card 的 Column 交叉轴是 center, 不铺满就会
+    //   整块被居中, 表现为「主题色」比上下行多缩进一截;
+    // - 标题 bodyLarge / 副标题 bodyMedium: 之前是 titleMedium + bodySmall,
+    //   比同卡其它行更粗更小, 层级看着乱。
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('主题色', style: theme.textTheme.bodyLarge),
+            const SizedBox(height: 2),
+            Text(
+              '${selected.label} · 浅色/深色通用',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                for (final palette in AccentPalette.values)
+                  _dot(context, palette),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -47,23 +47,29 @@ void main() {
             'textScale=$scale 时布局应无异常: '
             '${errors.isEmpty ? '' : errors.first.exceptionAsString()}',
       );
-      // 「主题模式」三段都在, 且都能点(不被挤成竖排/裁掉)
+      // 「主题模式」四档都在(2026-11-14 起 OLED 纯黑并入本档), 且都能点
       expect(find.text('跟随'), findsOneWidget);
       expect(find.text('浅色'), findsOneWidget);
       expect(find.text('深色'), findsOneWidget);
+      expect(find.text('纯黑'), findsOneWidget);
 
-      // 三段横向排开: 同一行(y 相同), x 递增 ⇒ 不是竖排
+      // 四档横向排开: 同一行(y 相同), x 递增 ⇒ 不是竖排
       final follow = tester.getCenter(find.text('跟随'));
       final light = tester.getCenter(find.text('浅色'));
       final dark = tester.getCenter(find.text('深色'));
+      final oled = tester.getCenter(find.text('纯黑'));
       expect(follow.dy, moreOrLessEquals(light.dy, epsilon: 1));
       expect(light.dy, moreOrLessEquals(dark.dy, epsilon: 1));
+      expect(dark.dy, moreOrLessEquals(oled.dy, epsilon: 1));
       expect(follow.dx, lessThan(light.dx));
       expect(light.dx, lessThan(dark.dx));
+      expect(dark.dx, lessThan(oled.dx));
 
-      // 分段控件整体不超出卡片内容区(300dp - ListView 12*2 padding)
-      final board = tester.getRect(find.byType(SegmentedButton<ThemeMode>));
-      expect(board.right, lessThanOrEqualTo(300 - 12));
+      // 分段控件四档在 300dp 下会超出卡片宽度, 但外层是横向可滚动的
+      // SingleChildScrollView(不裁切、不溢出报错), 这里只断言高度不失控。
+      final board = tester.getRect(
+        find.byType(SegmentedButton<ThemeChoice>),
+      );
       expect(board.height, lessThan(64));
 
       // 左边界要和同卡里的普通 ListTile 行对齐
@@ -76,8 +82,9 @@ void main() {
         moreOrLessEquals(contentLeft, epsilon: 0.5),
       );
       expect(board.left, moreOrLessEquals(contentLeft, epsilon: 0.5));
+      // 「主题色」行(曾经的独立 tile)与同级 ListTile 左边界必须一致
       expect(
-        tester.getRect(find.text('OLED 纯黑')).left,
+        tester.getRect(find.text('主题色')).left,
         moreOrLessEquals(contentLeft, epsilon: 0.5),
       );
     }

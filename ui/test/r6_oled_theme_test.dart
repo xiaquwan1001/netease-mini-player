@@ -107,21 +107,26 @@ void main() {
     expect(buildLightTheme().scaffoldBackgroundColor, isNot(kOledBlack));
   });
 
-  testWidgets('设置页「OLED 纯黑」开关写回 AppSettings 并持久到 settings.json', (
+  testWidgets('设置页「主题模式 → 纯黑」写回 AppSettings(深色 + OLED)并持久化', (
     tester,
   ) async {
     final settings = AppSettings.instance;
-    final before = settings.oledDark;
-    addTearDown(() => settings.update(oledDark: before));
+    final beforeMode = settings.themeMode;
+    final beforeOled = settings.oledDark;
+    addTearDown(
+      () => settings.update(themeMode: beforeMode, oledDark: beforeOled),
+    );
 
     await tester.pumpWidget(
       const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('OLED 纯黑'), findsOneWidget);
-    await tester.tap(find.text('OLED 纯黑'));
+    // 2026-11-14: OLED 纯黑不再单独一个开关, 并进「主题模式」的第四档
+    expect(find.text('纯黑'), findsOneWidget);
+    await tester.tap(find.text('纯黑'));
     await tester.pumpAndSettle();
     expect(settings.oledDark, isTrue);
+    expect(settings.themeMode, ThemeMode.dark);
   });
 }
