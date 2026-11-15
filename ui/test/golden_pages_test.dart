@@ -201,23 +201,15 @@ rust.SongDto _song(int id, String name, {String artist = '艺人'}) => fakeSong(
   durationMs: 269000,
 );
 
-rust.Playlist _playlist(int id, String name) => rust.Playlist(
-  id: BigInt.from(id),
-  name: name,
-  coverUrl: null,
-  trackCount: BigInt.from(12),
-  special: false,
-  subscribed: false,
-);
+/// 共享工厂 + golden 基准口径(12 首歌单 / 主播名 8 期电台)。
+rust.Playlist _playlist(int id, String name) =>
+    fakePlaylist(id: id, name: name, trackCount: 12);
 
-rust.PodcastRadio _radio(int id, String name) => rust.PodcastRadio(
-  id: BigInt.from(id),
+rust.PodcastRadio _radio(int id, String name) => fakeRadio(
+  id: id,
   name: name,
-  coverUrl: null,
-  description: '',
   djName: '主播名',
-  programCount: BigInt.from(8),
-  playCount: BigInt.zero,
+  programCount: 8,
 );
 
 rust.AlbumItem _album(int id, String name) => rust.AlbumItem(

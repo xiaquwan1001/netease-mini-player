@@ -28,19 +28,13 @@ rust.ProfileDetail detail({String nickname = '下去玩', String signature = ''}
       level: BigInt.from(8),
     );
 
+// 共享工厂 + 外人主页歌单口径(首数/是否"我喜欢"由调用方给)。
 rust.Playlist playlist(
   int id,
   String name, {
   int count = 2,
   bool special = false,
-}) => rust.Playlist(
-  id: BigInt.from(id),
-  name: name,
-  coverUrl: null,
-  trackCount: BigInt.from(count),
-  special: special,
-  subscribed: false,
-);
+}) => fakePlaylist(id: id, name: name, trackCount: count, special: special);
 
 // 共享工厂 + 外人主页喜欢列表口径(id 从 900 起)。
 rust.SongDto likedSong(int i, String name) => fakeSong(

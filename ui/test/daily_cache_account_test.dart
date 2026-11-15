@@ -5,13 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/daily_cache.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
+import 'support/fakes.dart';
+
 /// 造一个歌单(只需要渲染字段)。
-rust.Playlist _playlist(int id, String name) => rust.Playlist(
-  id: BigInt.from(id),
+// 共享工厂 + 缓存口径(每张歌单有自己的封面 URL、30 首、已收藏)。
+rust.Playlist _playlist(int id, String name) => fakePlaylist(
+  id: id,
   name: name,
   coverUrl: 'https://p1.music.126.net/$id.jpg',
-  trackCount: BigInt.from(30),
-  special: false,
+  trackCount: 30,
   subscribed: true,
 );
 
