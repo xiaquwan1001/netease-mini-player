@@ -4,7 +4,6 @@ import 'adaptive_text.dart';
 import 'app_settings.dart';
 import 'artist_nav.dart';
 import 'async_view.dart';
-import 'cover_art.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
 import 'error_views.dart';
@@ -19,7 +18,7 @@ import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
-import 'song_tile.dart' show SongTitleWithBadges, formatSongDuration;
+import 'song_tile.dart' show SongRow, SongRowSubtitle;
 import 'state_views.dart';
 import 'toast.dart';
 import 'user_list_page.dart';
@@ -519,9 +518,20 @@ class _LikedPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < songs.length; i++)
-                  _LikedRow(
+                  SongRow(
                     song: songs[i],
-                    index: i,
+                    indexText: '${i + 1}',
+                    indexWidth: 24,
+                    indexAlign: TextAlign.center,
+                    indexGap: 8,
+                    coverSize: 44,
+                    coverGap: 10,
+                    // 历史口径: 预览行没有"正在播放"语汇(序号不换喇叭/歌名不变色)
+                    highlightNowPlaying: false,
+                    subtitle: SongRowSubtitle.artistAlbum,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    durationGap: 8,
+                    tapOnlyWhenPlayable: true,
                     onTap: play == null ? null : () => play(songs, i),
                   ),
               ],
@@ -529,74 +539,6 @@ class _LikedPreview extends StatelessWidget {
           },
         ),
       ],
-    );
-  }
-}
-
-/// 「我喜欢」的一行: 序号 + 封面 + 歌名/艺人 + 时长
-class _LikedRow extends StatelessWidget {
-  const _LikedRow({required this.song, required this.index, this.onTap});
-
-  final rust.SongDto song;
-  final int index;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final playable = song.playable;
-    final grey = TextStyle(color: scheme.outline);
-    return InkWell(
-      onTap: playable ? onTap : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 24,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.outline,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            CoverArt(url: song.coverUrl, size: 44, radius: 4),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SongTitleWithBadges(
-                    song: song,
-                    style: playable ? theme.textTheme.bodyMedium : grey,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${song.artist} · ${song.album}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: playable
-                          ? scheme.onSurfaceVariant
-                          : scheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              formatSongDuration(song.durationMs),
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
