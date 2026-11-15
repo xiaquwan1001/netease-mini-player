@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
-import 'layout.dart' show kCardRowPadding;
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
@@ -328,10 +327,12 @@ class _NewSongsSection extends StatelessWidget {
                       layout: SongRowLayout.tile,
                       coverSize: 40,
                       subtitle: SongRowSubtitle.artist,
+                      // 卡片内的紧凑预览: 保留原来的 compact 行密度
+                      visualDensity: VisualDensity.compact,
                       // 预览行不给时长(整行更要紧的是歌名/艺人)
                       showDuration: false,
-                      // 卡片内行: 卡片边缘 4 + 页面 12 = 16 的同一栅格
-                      padding: kCardRowPadding,
+                      // 本页歌曲卡片铺满屏宽, 行内留白就是 SongRow 的默认
+                      // kSongRowPadding(页面横向留白为 0)
                       // 行尾 "..." = 统一歌曲菜单(本区块历史来源是 other)
                       menuSource: SongActionSource.other,
                       // 无版权曲目灰显且点了没反应
@@ -643,8 +644,8 @@ class _DailySongsSection extends StatelessWidget {
                       layout: SongRowLayout.tile,
                       coverSize: 40,
                       subtitle: SongRowSubtitle.artist,
+                      visualDensity: VisualDensity.compact,
                       showDuration: false,
-                      padding: kCardRowPadding,
                       // 行尾 "..." 菜单(下一首播放/收藏/分享/不感兴趣等);
                       // 无版权曲目不给菜单, 改由歌名后的「无版权」徽标说明
                       menuSource: s.playable

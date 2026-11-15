@@ -584,6 +584,7 @@ class _LikedSection extends StatelessWidget {
                       layout: SongRowLayout.tile,
                       coverSize: 40,
                       subtitle: SongRowSubtitle.artist,
+                      visualDensity: VisualDensity.compact,
                       showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
@@ -969,6 +970,7 @@ class _RecentSection extends StatelessWidget {
                       layout: SongRowLayout.tile,
                       coverSize: 40,
                       subtitle: SongRowSubtitle.artist,
+                      visualDensity: VisualDensity.compact,
                       showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,

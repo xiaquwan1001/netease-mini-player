@@ -205,6 +205,7 @@ class SongRow extends StatelessWidget {
     super.key,
     required this.song,
     this.layout = SongRowLayout.plain,
+    this.visualDensity,
     this.indexText,
     this.indexWidth = 24,
     this.indexAlign = TextAlign.center,
@@ -240,6 +241,10 @@ class SongRow extends StatelessWidget {
 
   /// 排版口径(见 [SongRowLayout]); 默认自绘臂。
   final SongRowLayout layout;
+
+  /// ListTile 臂的行密度(自绘臂无此概念); null = Material 默认。
+  /// 卡片里的紧凑预览列表传 [VisualDensity.compact] 保持原来的行高。
+  final VisualDensity? visualDensity;
 
   /// 序号列文案(如 `'1'` / `'01'`)。null = 没有序号列。
   /// 文案由调用方决定(歌单详情要两位右对齐, 艺人页/我喜欢 1 起居中)。
@@ -604,6 +609,7 @@ class SongRow extends StatelessWidget {
 
     return ListTile(
       dense: true,
+      visualDensity: visualDensity,
       selected: playing,
       // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
       // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)

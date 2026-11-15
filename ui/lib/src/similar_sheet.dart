@@ -149,6 +149,7 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                     layout: SongRowLayout.tile,
                     coverSize: 40,
                     subtitle: SongRowSubtitle.artist,
+                    visualDensity: VisualDensity.compact,
                     showDuration: false,
                     // 行尾 "..." = 统一歌曲菜单(相似歌曲没有专属来源, 用 other)
                     menuSource: SongActionSource.other,
