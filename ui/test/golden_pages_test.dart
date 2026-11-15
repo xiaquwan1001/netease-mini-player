@@ -762,6 +762,14 @@ void main() {
   });
 
   setUpAll(() async {
+    // 允许极小的像素差: 同一 Flutter 版本下, CI runner 与本地机器的 **CJK 字体文件
+    // 版本/回退链** 不同, 少数页面会有 ~0.03% 的抗锯齿差异(实测 messages/feed
+    // 84px/28.8万像素)。0.2% 容差能吸收这类字体光栅化噪声, 又远小于真实布局回归
+    // (挪一个按钮就是 >1%)。
+    goldenFileComparator = _TolerantGoldenFileComparator(
+      Uri.parse('test/golden_pages_test.dart'),
+      precisionTolerance: 0.002,
+    );
     // 歌单详情只有命令式入口且数据直连 FFI, 用 FRB 自带的 mock 通道垫数据(见
     // _GoldenRustApi)。只影响下面覆盖到的那 5 个方法, 其余照旧抛。
     RustLib.initMock(api: _GoldenRustApi());
@@ -807,5 +815,40 @@ void main() {
         await _expectGolden(tester, '${page.name}_300x640_s125');
       },
     );
+  }
+}
+
+/// 带极小容差的 golden 比较器(官方 LocalFileComparator 文档里的推荐写法)。
+///
+/// 为什么需要: 基准图在本地生成、CI 上校验。同一 Flutter 版本下引擎一致, 但 CJK
+/// 字体文件来源不同(Ubuntu fonts-noto-cjk vs 本地发行版字体), 个别页面的字形
+/// 抗锯齿会出现 <0.1% 的差异 —— 这种差异不是回归, 却会让门禁常年假红。
+/// 真实布局回归(多一行 / 挪一个按钮 / 字号变化)的差异远大于 0.2%。
+class _TolerantGoldenFileComparator extends LocalFileComparator {
+  _TolerantGoldenFileComparator(
+    super.testFile, {
+    required double precisionTolerance,
+  }) : assert(
+         precisionTolerance >= 0 && precisionTolerance <= 1,
+         'precisionTolerance must be between 0 and 1',
+       ),
+       _precisionTolerance = precisionTolerance;
+
+  final double _precisionTolerance;
+
+  @override
+  Future<bool> compare(Uint8List imageBytes, Uri golden) async {
+    final result = await GoldenFileComparator.compareLists(
+      imageBytes,
+      await getGoldenBytes(golden),
+    );
+    final passed = result.passed || result.diffPercent <= _precisionTolerance;
+    if (passed) {
+      result.dispose();
+      return true;
+    }
+    final error = await generateFailureOutput(result, golden, basedir);
+    result.dispose();
+    throw FlutterError(error);
   }
 }
