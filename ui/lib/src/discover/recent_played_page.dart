@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../adaptive_text.dart';
+import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart';
@@ -170,8 +171,11 @@ class RecentPlayedPage extends StatelessWidget {
   }
 }
 
-/// 一个分类的列表: 自己加载 + 自己保活, 切 tab 不重新请求.
-class _RecentBucketTab<T> extends StatefulWidget {
+/// 一个分类的列表: 四态交给 [AsyncView](整页 LoadingView / FullError /
+/// EmptyView + keepAlive), 自己只负责条目排版.
+///
+/// keepAlive 保住"切 tab 再回来不重新请求"的原语义(见 [AsyncView.keepAlive])。
+class _RecentBucketTab<T> extends StatelessWidget {
   const _RecentBucketTab({
     required this.load,
     required this.emptyText,
@@ -186,53 +190,20 @@ class _RecentBucketTab<T> extends StatefulWidget {
   itemBuilder;
 
   @override
-  State<_RecentBucketTab<T>> createState() => _RecentBucketTabState<T>();
-}
-
-class _RecentBucketTabState<T> extends State<_RecentBucketTab<T>>
-    with AutomaticKeepAliveClientMixin {
-  List<T>? _items;
-  String? _error;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _error = null);
-    try {
-      final items = await retryNetwork(widget.load);
-      if (!mounted) return;
-      setState(() => _items = items);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
-    if (_error != null) {
-      return FullError(message: _error!, onRetry: _load);
-    }
-    final items = _items;
-    if (items == null) {
-      return const LoadingView();
-    }
-    if (items.isEmpty) {
-      return EmptyView(title: widget.emptyText);
-    }
-    // 非分页: 单次取全(load 一次拿完), 无更多页
-    return ListView.builder(
-      itemCount: items.length,
-      itemBuilder: (context, i) =>
-          widget.itemBuilder(context, items[i], i, items),
+    return AsyncView<List<T>>(
+      load: load,
+      keepAlive: true,
+      emptyText: emptyText,
+      loadingBuilder: (_) => const LoadingView(),
+      emptyBuilder: (_) => EmptyView(title: emptyText),
+      errorBuilder: (_, error, retry) =>
+          FullError(message: friendlyError(error), onRetry: retry),
+      // 非分页: 单次取全(load 一次拿完), 无更多页
+      builder: (context, items, _) => ListView.builder(
+        itemCount: items.length,
+        itemBuilder: (context, i) => itemBuilder(context, items[i], i, items),
+      ),
     );
   }
 }
