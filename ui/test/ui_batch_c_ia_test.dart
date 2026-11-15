@@ -14,6 +14,8 @@ import 'package:minincm/src/rust/frb_generated.dart';
 import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
 
+import 'support/fakes.dart';
+
 /// 只覆盖测试里会碰到的 FFI 方法(歌单广场一进去就拉分类), 其余 noSuchMethod。
 class _FakeRustApi implements RustLibApi {
   @override
@@ -54,20 +56,8 @@ rust.AccountDto account(int id, String nickname, {bool active = false}) =>
       vip: false,
     );
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.from(9),
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+// 共享工厂 + 本文件特有默认值(albumId=9), 命名参数覆盖而不是再抄一份字面量。
+rust.SongDto song(int id, String name) => fakeSong(id: id, name: name, albumId: 9);
 
 Widget host(Widget child) => MaterialApp(
   home: Scaffold(body: Builder(builder: (_) => child)),

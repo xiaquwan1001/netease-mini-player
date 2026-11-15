@@ -5,21 +5,6 @@ import 'package:minincm/src/cover_art.dart';
 import 'package:minincm/src/chart_section.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
-
 rust.Playlist playlist(int id, String name) => rust.Playlist(
   id: BigInt.from(id),
   name: name,

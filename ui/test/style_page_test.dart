@@ -3,20 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/style_page.dart';
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -33,7 +20,7 @@ void main() {
             name: '粤语流行',
             songCount: BigInt.from(2046),
           ),
-          loadSongs: (_) async => [song(1, '风格单曲')],
+          loadSongs: (_) async => [fakeSong(id: 1, name: '风格单曲')],
           loadPlaylists: (_) async => [
             rust.Playlist(
               id: BigInt.from(22),
@@ -88,7 +75,7 @@ void main() {
           loadSongs: (_) async {
             attempts++;
             if (attempts <= 3) throw Exception('[network] reset');
-            return [song(1, '重试后的风格歌')];
+            return [fakeSong(id: 1, name: '重试后的风格歌')];
           },
           loadPlaylists: (_) async => const [],
           onPlaySongs: (_, _) {},
@@ -120,7 +107,7 @@ void main() {
                 name: '一个名字特别特别长的曲风用于小屏回归测试',
                 songCount: BigInt.from(2046),
               ),
-              loadSongs: (_) async => [song(1, '小屏风格歌')],
+              loadSongs: (_) async => [fakeSong(id: 1, name: '小屏风格歌')],
               loadPlaylists: (_) async => [
                 rust.Playlist(
                   id: BigInt.from(22),

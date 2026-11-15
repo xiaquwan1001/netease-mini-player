@@ -3,20 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/similar_sheet.dart';
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -32,13 +19,13 @@ void main() {
           builder: (ctx) => TextButton(
             onPressed: () => showSimilarSongs(
               ctx,
-              song: song(1, '种子歌'),
+              song: fakeSong(id: 1, name: '种子歌'),
               onPlay: (songs, index) {
                 played = songs;
                 playedIndex = index;
               },
               onOpenPlaylist: (pl) => opened = pl,
-              loadSongs: (id, limit) async => [song(2, '相似一'), song(3, '相似二')],
+              loadSongs: (id, limit) async => [fakeSong(id: 2, name: '相似一'), fakeSong(id: 3, name: '相似二')],
               loadPlaylists: (id, limit) async => [
                 rust.Playlist(
                   id: BigInt.from(9),
@@ -88,12 +75,12 @@ void main() {
             builder: (ctx) => TextButton(
               onPressed: () => showSimilarSongs(
                 ctx,
-                song: song(1, '种子歌名字也很长很长很长很长'),
+                song: fakeSong(id: 1, name: '种子歌名字也很长很长很长很长'),
                 onPlay: (_, _) {},
                 onOpenPlaylist: (_) {},
                 loadSongs: (id, limit) async => [
-                  song(2, '相似一'),
-                  song(3, '相似二'),
+                  fakeSong(id: 2, name: '相似一'),
+                  fakeSong(id: 3, name: '相似二'),
                 ],
                 loadPlaylists: (id, limit) async => const [],
               ),

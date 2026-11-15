@@ -7,6 +7,8 @@ import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/new_release_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
+import 'support/fakes.dart';
+
 /// 批次 D: 给此前未覆盖 300dp + 1.25 字号的页面补"不溢出"回归
 /// (审计 P2-7.31: 45 个测试文件仅 15 个覆盖窄屏回归).
 
@@ -23,19 +25,13 @@ Widget scaled(Widget child) => MaterialApp(
   ),
 );
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
+// 共享工厂 + 本文件的窄屏长文本 / 长时长口径。
+rust.SongDto song(int id, String name) => fakeSong(
+  id: id,
   name: name,
   artist: '一个名字特别特别长的艺人用于小屏回归测试',
-  artistId: BigInt.one,
   album: '一张名字特别特别特别长的专辑用于小屏回归测试',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(245000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  durationMs: 245000,
 );
 
 void main() {

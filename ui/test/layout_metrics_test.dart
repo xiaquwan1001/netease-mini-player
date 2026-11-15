@@ -17,23 +17,10 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/section_header.dart';
 import 'package:minincm/src/song_tile.dart';
 
+import 'support/fakes.dart';
+
 const _widths = [300.0, 320.0, 360.0, 412.0];
 const _scales = [1.0, 1.3, 1.625];
-
-rust.SongDto _song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
 
 /// 「我的」页: 全部 loader 注入假数据, 不碰 FFI/网络。
 Widget _mine() => MineView(
@@ -51,7 +38,7 @@ Widget _mine() => MineView(
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
   onPlaySongs: (_, _) {},
-  loadLiked: () async => [_song(1, '喜欢的歌')],
+  loadLiked: () async => [fakeSong(id: 1, name: '喜欢的歌')],
   loadPlaylists: () async => [
     rust.Playlist(
       id: BigInt.from(2),
@@ -64,7 +51,7 @@ Widget _mine() => MineView(
   ],
   loadPodcasts: () async => [],
   loadAlbums: () async => [],
-  loadRecent: () async => [_song(7, '最近听的歌')],
+  loadRecent: () async => [fakeSong(id: 7, name: '最近听的歌')],
   loadProfile: () async => rust.ProfileDetail(
     userId: BigInt.one,
     nickname: '测试用户',
@@ -85,7 +72,7 @@ Widget _mine() => MineView(
   ),
   loadRanking: (_) async => [
     rust.PlayRankEntryDto(
-      song: _song(8, '最常听'),
+      song: fakeSong(id: 8, name: '最常听'),
       playCount: BigInt.from(42),
       score: BigInt.from(420),
     ),
@@ -133,7 +120,7 @@ void main() {
       final errors = await _pump(
         tester,
         SongTile(
-          song: _song(1, '晴天'),
+          song: fakeSong(id: 1, name: '晴天'),
           active: false,
           liked: false,
           onTap: () {},
