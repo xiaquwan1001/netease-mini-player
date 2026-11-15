@@ -5,19 +5,15 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_share.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-rust.SongDto _song() => rust.SongDto(
-  id: BigInt.from(186016),
+import 'support/fakes.dart';
+
+// 共享工厂 + 分享卡片口径(周杰伦《晴天》, id 取官方曲目 id)。
+rust.SongDto _song() => fakeSong(
+  id: 186016,
   name: '晴天',
   artist: '周杰伦',
-  artistId: BigInt.one,
   album: '叶惠美',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(269000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  durationMs: 269000,
 );
 
 void main() {

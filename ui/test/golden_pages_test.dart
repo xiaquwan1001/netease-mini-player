@@ -43,6 +43,8 @@ import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
 import 'package:minincm/src/theme.dart';
 
+import 'support/fakes.dart';
+
 // ---------------------------------------------------------------- 字体
 
 /// FontLoader 注册用的家族名。页面自己的 fontFamily 是 null, 靠 theme 里的
@@ -190,19 +192,13 @@ rust.AccountDto _account(
 );
 
 /// 封面一律 null ⇒ 走占位图, 测试里不会发任何网络请求。
-rust.SongDto _song(int id, String name, {String artist = '艺人'}) => rust.SongDto(
-  id: BigInt.from(id),
+/// 共享工厂 + golden 基准口径(专辑名固定, 时长 4:29)。
+rust.SongDto _song(int id, String name, {String artist = '艺人'}) => fakeSong(
+  id: id,
   name: name,
   artist: artist,
-  artistId: BigInt.one,
   album: '专辑名',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(269000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  durationMs: 269000,
 );
 
 rust.Playlist _playlist(int id, String name) => rust.Playlist(

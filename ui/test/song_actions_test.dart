@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_actions.dart';
 
+import 'support/fakes.dart' as fakes;
+
 /// 假 host: 记录各回调的调用次数(通过 Host 闭包, 不再 implements)
 class FakeHost {
   FakeHost({this.loggedIn = true});
@@ -38,18 +40,15 @@ class FakeHost {
   );
 }
 
-rust.SongDto fakeSong({BigInt? artistId, BigInt? albumId}) => rust.SongDto(
-  id: BigInt.from(42),
+// 本文件沿用 fakeSong 这个名字(调用点很多), 具体构造委托共享工厂(fakes.fakeSong)。
+rust.SongDto fakeSong({BigInt? artistId, BigInt? albumId}) => fakes.fakeSong(
+  id: 42,
   name: '测试歌曲',
   artist: '测试艺人',
-  artistId: artistId ?? BigInt.one,
+  artistId: (artistId ?? BigInt.one).toInt(),
   album: '测试专辑',
-  albumId: albumId ?? BigInt.one,
-  durationMs: BigInt.from(200000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  albumId: (albumId ?? BigInt.one).toInt(),
+  durationMs: 200000,
 );
 
 void main() {
