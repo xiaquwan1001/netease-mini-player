@@ -5,24 +5,11 @@ import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
 
-rust.Playlist playlist(int id, String name) => rust.Playlist(
-  id: BigInt.from(id),
-  name: name,
-  coverUrl: null,
-  trackCount: BigInt.from(3),
-  special: false,
-  subscribed: false,
-);
+// 共享工厂 + 本文件口径(3 首推荐歌单 / 主播 2 期电台), 位置参数签名保持不变。
+rust.Playlist playlist(int id, String name) =>
+    fakePlaylist(id: id, name: name);
 
-rust.PodcastRadio radio(int id, String name) => rust.PodcastRadio(
-  id: BigInt.from(id),
-  name: name,
-  coverUrl: null,
-  description: '',
-  djName: '主播',
-  programCount: BigInt.from(2),
-  playCount: BigInt.zero,
-);
+rust.PodcastRadio radio(int id, String name) => fakeRadio(id: id, name: name);
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 

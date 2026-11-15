@@ -6,14 +6,9 @@ import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
 
-rust.Playlist playlist(int id, String name, int count) => rust.Playlist(
-  id: BigInt.from(id),
-  name: name,
-  coverUrl: null,
-  trackCount: BigInt.from(count),
-  special: false,
-  subscribed: false,
-);
+// 共享工厂 + 本文件口径(歌单首数由调用方给), 位置参数签名保持不变。
+rust.Playlist playlist(int id, String name, int count) =>
+    fakePlaylist(id: id, name: name, trackCount: count);
 
 Widget host(VoidCallback onTap) => MaterialApp(
   home: Scaffold(

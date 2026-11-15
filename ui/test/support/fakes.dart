@@ -1,5 +1,5 @@
 // 测试公共工厂: 只放"确实被多个测试文件重复定义"的 DTO 构造,
-// 避免每个测试文件再抄一份 12 个字段的 SongDto 字面量。
+// 避免每个测试文件再抄一份 SongDto / Playlist / PodcastRadio 字面量。
 //
 // 用法:
 //   import 'support/fakes.dart';
@@ -40,3 +40,44 @@ rust.SongDto fakeSong({
   paid: paid,
   playable: playable,
 );
+
+/// 歌单 DTO 假数据(7 个测试文件各自抄过一份同形状的 playlist())。
+///
+/// 默认: id=1, name='歌单', 3 首, 非"我喜欢"、非收藏。
+rust.Playlist fakePlaylist({
+  int id = 1,
+  String name = '歌单',
+  String? coverUrl,
+  int trackCount = 3,
+  bool special = false,
+  bool subscribed = false,
+}) => rust.Playlist(
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: coverUrl,
+  trackCount: BigInt.from(trackCount),
+  special: special,
+  subscribed: subscribed,
+);
+
+/// 电台 DTO 假数据(4 个测试文件各自抄过一份同形状的 radio())。
+///
+/// 默认: id=1, name='电台', 主播'主播', 2 期节目, 0 播放。
+rust.PodcastRadio fakeRadio({
+  int id = 1,
+  String name = '电台',
+  String? coverUrl,
+  String description = '',
+  String djName = '主播',
+  int programCount = 2,
+  int playCount = 0,
+}) => rust.PodcastRadio(
+  id: BigInt.from(id),
+  name: name,
+  coverUrl: coverUrl,
+  description: description,
+  djName: djName,
+  programCount: BigInt.from(programCount),
+  playCount: BigInt.from(playCount),
+);
+
