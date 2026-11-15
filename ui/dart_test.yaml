@@ -1,11 +1,34 @@
-# 测试标签声明。CI 用 `flutter test --exclude-tags network` 跳过真实联网 smoke
-# (GitHub 出口 IP 打网易接口不稳定, 与代码无关)。本地默认仍会跑。
+# 测试标签与默认运行参数(统一口径: CI 不再到处重复同一串 --exclude-tags)。
+#
+# 本地:
+#   flutter test                                 # 全量
+#   flutter test --tags golden                   # 只跑视觉基准(6 页 × 2 视口 = 12 张)
+#   flutter test --tags golden --update-goldens  # 重出基准(换机/升 Flutter/改设计后)
+# CI:
+#   flutter test --exclude-tags network          # 全量, 含 golden(CI 装了 fonts-noto-cjk)
+#
+# 约定: 标签只声明语义, 这里不设 skip —— 本地要能跑全量, CI 要能一眼看出自己
+# 跳了什么(排除项全部写在命令行上)。
+
+# 单条用例上限。默认 30s 对整屏像素(golden)与 stress 用例偏紧, runner 抖一下就
+# 假红; 放宽到 120s(真死循环照样会被截断)。
+timeout: 120s
+
+# 并发上限。package:test 默认是 CPU 核数的一半(本机 28 核 ⇒ 14, CI 2 vCPU ⇒ 1),
+# 两个极端都不合适: 14 路并发抢 CPU 会让整屏像素的固定帧推进不稳定, 1 路又把 CI
+# 拖成单线程。固定 6, 本机与 CI 同一口径。
+concurrency: 6
+
 tags:
   network:
-    description: 真实联网 smoke(上游风控/公网抖动会抖动, CI 默认跳过)
+    description: >-
+      真实联网 smoke(登录态/上游风控/公网抖动都会影响结果)。CI 没有出口网络与
+      凭据, 一律 --exclude-tags network 跳过; 本地要跑得自带凭据。
 
   golden:
     description: >-
-      整屏像素基准(视觉回归)。只在本机 Linux 生成与校验(依赖系统 CJK 字体与
-      Skia 版本), CI 用 --exclude-tags 'network || golden' 跳过; 本机没有 CJK
-      字体时用例自动 skip。
+      整屏像素基准(视觉回归), 图在 test/goldens/*.png。依赖系统 CJK 字体与 Skia
+      版本(CI 装 fonts-noto-cjk, Flutter 固定 3.47.9), 换机/升 Flutter/改设计后
+      必须 --update-goldens 重出, 否则大面积假失败。整组要推进固定帧数, 单条给
+      更长上限。
+    timeout: 180s
