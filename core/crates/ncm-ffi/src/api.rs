@@ -1,6 +1,6 @@
 //! 暴露给 Dart 的 API. 规则:
 //! - 只传可序列化 DTO, 不传引用/闭包
-//! - 错误统一成 String(带 kind 前缀), UI 按前缀决定文案
+//! - 错误统一成 [`FfiError`](kind + retryable + detail), UI 按 kind 决策文案
 //! - 全局单例 Core, 由 init() 建立
 
 use std::path::Path;
@@ -25,6 +25,59 @@ use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
 
 static CORE: OnceLock<Mutex<Core>> = OnceLock::new();
+
+/// 跨桥错误: 结构化的 provider 错误, 不再让 Dart 靠文本前缀猜.
+///
+/// 字段语义与 [`ncm_provider::ProviderError`] 一一对应:
+/// - `kind`: `network` / `auth` / `riskControl` / `notFound` /
+///   `unsupported` / `forbidden` / `internal`
+/// - `retryable`: 是否值得重试(网络抖动类为 true; 鉴权/风控/无版权 false)
+/// - `detail`: 原始细节, 网络类基本是 os error, forbidden 类是可读中文
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FfiError {
+    pub kind: String,
+    pub retryable: bool,
+    pub detail: String,
+}
+
+impl FfiError {
+    pub fn new(kind: impl Into<String>, retryable: bool, detail: impl Into<String>) -> Self {
+        Self {
+            kind: kind.into(),
+            retryable,
+            detail: detail.into(),
+        }
+    }
+
+    /// 桥接层自身的问题(未初始化/锁中毒/本地 io): 非 provider 错误, 不可重试
+    pub fn internal(detail: impl Into<String>) -> Self {
+        Self::new("internal", false, detail)
+    }
+
+    pub fn network(detail: impl Into<String>) -> Self {
+        Self::new("network", true, detail)
+    }
+}
+
+impl std::fmt::Display for FfiError {
+    /// 与 [`ncm_provider::ProviderError`] 的展示保持一致, 日志仍可读、旧的
+    /// "[kind] " 文本匹配路径(Dart 兜底/脚本 grep)继续有效.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] {}", self.kind, self.detail)
+    }
+}
+
+impl std::error::Error for FfiError {}
+
+impl From<ncm_provider::ProviderError> for FfiError {
+    fn from(e: ncm_provider::ProviderError) -> Self {
+        Self {
+            kind: e.kind.as_str().to_string(),
+            retryable: e.retryable,
+            detail: e.detail,
+        }
+    }
+}
 
 fn core() -> Result<&'static Mutex<Core>, String> {
     CORE.get().ok_or_else(|| "core not initialized".to_string())
