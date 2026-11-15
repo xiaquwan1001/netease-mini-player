@@ -27,8 +27,8 @@ import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/format.dart' show formatCountMagnitude;
+import 'src/home/lyric_controller.dart';
 import 'src/lyric.dart';
-import 'src/lyric_source.dart';
 import 'src/word_lyric_view.dart';
 import 'src/layout.dart' show rowExtentFor;
 import 'src/library_view.dart';
@@ -94,7 +94,6 @@ class _HomePageState extends State<HomePage> {
   final _playback = Playback();
   final _auth = Auth();
   final _queue = PlayQueue<rust.SongDto>();
-  final _lyricScroll = ScrollController();
   rust.InitInfo? _info;
   rust.SearchBundleDto? _bundle;
   PlayerView? _player;
@@ -127,42 +126,9 @@ class _HomePageState extends State<HomePage> {
   bool _advancing = false;
 
   // ---- 歌词 ----
-  /// 歌词行高: 基准 56dp, 随系统字号等比放大。
-  /// 固定 56dp 在 textScale≥1.4 时装不下「18sp 主词 + 12sp 翻译」两行,
-  /// 行内容被 ListView 的 itemExtent 从下方裁掉(用户反馈"顶部歌词只显示上半段").
-  double get _lyricItemExtent => rowExtentFor(context);
-
-  List<ParsedLyricLine> _lyricLines = const [];
-  List<BigInt> _lyricTimes = const [];
-
-  /// 纯文本歌词兜底(无时间轴): 逐行接口失败/返回空时用 [parseLrc] 从原始 LRC 里取。
-  List<String>? _lyricPlain;
-  BigInt? _lyricTrackId;
-  String? _lyricError;
-
-  // 歌词来源("yrc"/"ttml"/"line")与择优理由不再上屏(左下角那条像水印的
-  // 小字已按用户要求去掉), 决策逻辑与文案生成仍留在 lyricSourceLabel / scoreWordLyric.
-  int _lyricIndex = -1;
-  bool _showLyrics = false;
-
-  /// 歌词是否跟随播放自动滚动: 用户手动滑歌词时置 false, 点"定位"再置回 true
-  bool _autoFollowLyric = true;
-
-  /// 详情页歌词多选: 长按进入, 点行加/减选, 选中后右上角变成分享/取消
-  final Set<int> _selectedLyricLines = <int>{};
-
-  /// 逐字(karaoke)歌词数据; 有则优先用 [WordLyricView], 无则回落行级/纯文本链。
-  List<WordLyricLineData> _wordLines = const [];
-
-  /// 播放位置(毫秒)注入给 [WordLyricView]: 刷新只重建当前行, 不整页 setState。
-  final ValueNotifier<int> _wordPositionMs = ValueNotifier<int>(0);
-
-  /// 播放中标志注入给 [WordLyricView]/[KaraokeLine]: 播放时才在行内插值到 60fps,
-  /// 暂停/default 场景不排帧(省电, 也让 pumpAndSettle 能收敛)。
-  final ValueNotifier<bool> _playing = ValueNotifier<bool>(false);
-
-  /// 展开歌词时的高频位置刷新(~120ms); 收起必须停掉, 避免后台耗电。
-  Timer? _lyricTicker;
+  /// 歌词状态机(数据/索引计算/加载/跟随/多选/翻译开关)在拆壳 S2 搬到
+  /// [LyricController]; 这里只留最薄的接线与 [_buildLyrics] 渲染。
+  late final LyricController _lyric;
 
   /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
   Set<BigInt> _liked = <BigInt>{};
@@ -246,6 +212,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _lyric = LyricController(
+      player: () => _player,
+      pollPlayer: _pollPlayer,
+      // 行高跟随系统字号, 与拆分前 _lyric.itemExtent 同一口径(依赖 BuildContext)
+      itemExtentOf: () => rowExtentFor(context),
+      toast: _toast,
+    )..addListener(_onLyricChanged);
     _playerBarActions = PlayerBarActions(
       onSeekStart: (v) => setState(() {
         _dragMax = (_player?.durationMs ?? BigInt.zero).toDouble();
@@ -259,14 +232,14 @@ class _HomePageState extends State<HomePage> {
         if (pageDepth.value > 1) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
-        _toggleLyrics();
+        _lyric.toggle();
       },
       // 播放条封面点击 = 进入播放详情(不是专辑预览, 用户要求)
       onOpenDetail: () {
         if (pageDepth.value > 1) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
-        if (!_showLyrics) _toggleLyrics();
+        if (!_lyric.visible) _lyric.toggle();
       },
       onToggleLike: _toggleLike,
       onToggle: _toggle,
@@ -329,14 +302,16 @@ class _HomePageState extends State<HomePage> {
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
-    _lyricTicker?.cancel();
-    _lyricScroll.dispose();
-    _wordPositionMs.dispose();
-    _playing.dispose();
+    _lyric.dispose();
     super.dispose();
   }
 
   void _onPageDepthChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 歌词状态机有变更时重建(与拆分前每处 setState 一一对应: 一次通知 = 一次重建)。
+  void _onLyricChanged() {
     if (mounted) setState(() {});
   }
 
@@ -546,11 +521,8 @@ class _HomePageState extends State<HomePage> {
         );
       }
     }
-    if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
-      _wordPositionMs.value = state.positionMs.toInt();
-    }
-    if (_playing.value != state.playing) _playing.value = state.playing;
-    _syncLyricIndex(state);
+    // 位置/播放中两个高频 notifier + 高亮行(顺序与条件由控制器保持原样)
+    _lyric.followPlayer(state);
     // 状态记忆: 播放中每 5s 落一次盘(暂停/换曲时会另有 force 落盘)
     if (state.playing) _persistPlayback();
     if (_looksEnded(wasPlaying, state)) {
@@ -1261,7 +1233,7 @@ class _HomePageState extends State<HomePage> {
       unawaited(applyLoudnessForTrack(playingId, streamUrl: cacheKeyUrl));
       // 本地播放历史(未登录/离线时"最近听过"的来源); 失败不影响播放
       unawaited(rust.rememberPlay(song: song).catchError((_) => false));
-      unawaited(_loadLyric(song.id));
+      unawaited(_lyric.load(song.id));
       // 播放已经起来了, 顺手把下一首的直链拿到手(让连续播放不再每首卡一下)
       _prefetchNextTrack();
       return true;
@@ -1272,259 +1244,9 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ---------------- 歌词 ----------------
-
-  Future<void> _loadLyric(BigInt trackId) async {
-    if (_lyricTrackId == trackId) return;
-    _lyricTrackId = trackId;
-    if (mounted) {
-      setState(() {
-        _lyricLines = const [];
-        _lyricTimes = const [];
-        _lyricPlain = null;
-        _lyricIndex = -1;
-        _lyricError = null;
-        _wordLines = const [];
-      });
-      _wordPositionMs.value = 0;
-    }
-    // B13/C2: 逐字歌词来源决策(按用户偏好, auto 打分择优), loader 可注入(单测不联网)。
-    final resolved = await resolveLyricSource(
-      trackId,
-      LyricSourceLoaders(
-        yrc: (id) async => rust.wordLyricLines(trackId: id),
-        ttml: (id) async => rust.ttmlLyricLines(trackId: id),
-        lineLevel: (id) async => rust.lyricLinesI18N(trackId: id),
-      ),
-      preference: AppSettings.instance.lyricSourcePreference,
-    );
-    if (resolved != null && mounted && _lyricTrackId == trackId) {
-      final word = resolved.word;
-      if (word != null) {
-        setState(() {
-          _lyricError = null;
-          _lyricPlain = null;
-          _wordLines = [
-            for (var i = 0; i < word.lines.length; i++)
-              WordLyricLineData(
-                startMs: word.lines[i].startMs,
-                endMs: word.lines[i].endMs,
-                words: [
-                  for (final w in word.lines[i].words)
-                    WordLyricWord(
-                      startMs: w.startMs,
-                      endMs: w.endMs,
-                      text: w.text,
-                    ),
-                ],
-                sub: i < word.translationLines.length
-                    ? word.translationLines[i]
-                    : null,
-              ),
-          ];
-        });
-        _wordPositionMs.value = _player?.positionMs.toInt() ?? 0;
-        _playing.value = _player?.playing ?? false;
-        return;
-      }
-      final lines = resolved.line;
-      if (lines != null && lines.isNotEmpty) {
-        setState(() {
-          _lyricError = null;
-          _lyricLines = [
-            for (final l in lines)
-              ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
-          ];
-          _lyricTimes = [for (final l in lines) l.timeMs];
-        });
-        _syncLyricIndex(_player ?? PlayerView.empty);
-        return;
-      }
-    }
-    try {
-      final lines = await rust.lyricLinesI18N(trackId: trackId);
-      if (!mounted || _lyricTrackId != trackId) return;
-      if (lines.isNotEmpty) {
-        setState(() {
-          _lyricLines = [
-            for (final l in lines)
-              ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
-          ];
-          _lyricTimes = [for (final l in lines) l.timeMs];
-        });
-        _syncLyricIndex(_player ?? PlayerView.empty);
-        return;
-      }
-      // 逐行接口没有内容(纯文本/老格式歌词) → 退回原始 LRC
-      await _loadRawLyric(trackId);
-    } catch (e) {
-      if (!mounted || _lyricTrackId != trackId) return;
-      // 兜底: 原始 LRC 里往往还有纯文本可显示; 都没有才报错
-      final ok = await _loadRawLyric(trackId);
-      if (!ok && mounted && _lyricTrackId == trackId) {
-        setState(() => _lyricError = friendlyError(e));
-      }
-    }
-  }
-
-  /// 原始 LRC 兜底(逐行接口失败/为空时): 有时间轴就等价于逐行高亮,
-  /// 只有纯文本就走 [PlainLyricView]。返回是否有内容可用。
-  Future<bool> _loadRawLyric(BigInt trackId) async {
-    try {
-      final raw = await rust.lyric(trackId: trackId);
-      if (!mounted || _lyricTrackId != trackId) return false;
-      final doc = parseLrc(raw);
-      if (doc.isEmpty) return false;
-      setState(() {
-        _lyricError = null;
-        if (doc.hasTimeline) {
-          _lyricPlain = null;
-          _lyricLines = doc.timed;
-          _lyricTimes = [for (final l in doc.timed) l.timeMs];
-        } else {
-          _lyricLines = const [];
-          _lyricTimes = const [];
-          _lyricPlain = doc.plain;
-        }
-      });
-      if (doc.hasTimeline) _syncLyricIndex(_player ?? PlayerView.empty);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  void _syncLyricIndex(PlayerView state, {bool force = false}) {
-    if (!_showLyrics || _lyricTimes.isEmpty) return;
-    final idx = lyricIndexAt(_lyricTimes, state.positionMs);
-    // force=true: seek(拖/点进度条、切歌)后即使落在同一句也要把列表滚回当前句
-    if (idx == _lyricIndex && !force) return;
-    setState(() => _lyricIndex = idx);
-    _scrollLyricTo(idx);
-  }
-
-  void _scrollLyricTo(int idx) {
-    if (!_autoFollowLyric) return;
-    if (!_lyricScroll.hasClients || idx < 0) return;
-    final position = _lyricScroll.position;
-    final target =
-        idx * _lyricItemExtent -
-        (position.viewportDimension - _lyricItemExtent) / 2;
-    final clamped = target.clamp(0.0, position.maxScrollExtent);
-    _lyricScroll.animateTo(
-      clamped,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void _toggleLyrics() {
-    setState(() {
-      _showLyrics = !_showLyrics;
-      // 每次进入详情页都恢复"跟随 + 无选中", 避免上次留下的状态让人困惑
-      _autoFollowLyric = true;
-      _selectedLyricLines.clear();
-    });
-    if (_showLyrics) {
-      // 仅展开期间提高刷新频率; 收起/切 tab 时必须停掉。
-      _lyricTicker?.cancel();
-      _lyricTicker = Timer.periodic(
-        const Duration(milliseconds: 120),
-        (_) => _pollPlayer(),
-      );
-      if (_player != null) {
-        _syncLyricIndex(_player!);
-        _wordPositionMs.value = _player!.positionMs.toInt();
-        _playing.value = _player!.playing;
-      }
-    } else {
-      _lyricTicker?.cancel();
-      _lyricTicker = null;
-    }
-  }
-
-  // ---------------- 详情页: 翻译 / 多选 / 分享 / 定位 ----------------
-
-  /// 歌曲详情页(歌词页)是否可用: 就是歌词叠层本身, 从播放条点进来
-  bool get _lyricSelecting => _selectedLyricLines.isNotEmpty;
-
-  /// 歌词里有没有翻译(tlyric). 没有时整页不出现翻译开关, 免得点出个空开关
-  bool get _hasLyricTranslation =>
-      _wordLines.any((l) => (l.sub ?? '').trim().isNotEmpty) ||
-      _lyricLines.any((l) => (l.sub ?? '').trim().isNotEmpty);
-
-  /// 当前播放位置对应的歌词行(-1 = 还没唱到第一句)
-  int get _currentLyricIndex {
-    final pos = _player?.positionMs ?? BigInt.zero;
-    if (_wordLines.isNotEmpty) return wordLineIndexAt(_wordLines, pos.toInt());
-    if (_lyricTimes.isNotEmpty) return lyricIndexAt(_lyricTimes, pos);
-    return -1;
-  }
-
-  /// 取第 [i] 行歌词的纯文本(逐字歌词把词拼回整行)
-  String _lyricTextAt(int i) {
-    if (_wordLines.isNotEmpty) {
-      if (i < 0 || i >= _wordLines.length) return '';
-      return [for (final w in _wordLines[i].words) w.text].join();
-    }
-    if (_lyricLines.isNotEmpty) {
-      if (i < 0 || i >= _lyricLines.length) return '';
-      return _lyricLines[i].text;
-    }
-    final plain = _lyricPlain;
-    if (plain == null || i < 0 || i >= plain.length) return '';
-    return plain[i];
-  }
-
-  /// 一键回到当前唱到的那句(并恢复跟随)
-  void _locateCurrentLyric() {
-    final idx = _currentLyricIndex;
-    setState(() => _autoFollowLyric = true);
-    if (idx < 0) {
-      _toast('还没唱到第一句');
-      return;
-    }
-    _scrollLyricTo(idx);
-  }
-
-  /// 用户手动滑歌词: 停止自动跟随(否则下一句会把列表拽回去, 根本看不远)
-  void _pauseLyricFollow() {
-    if (!_autoFollowLyric) return;
-    setState(() => _autoFollowLyric = false);
-  }
-
-  /// 长按歌词行: 进入多选并选中该行; 之后点击任意行加/减选
-  void _selectLyricLine(int index, {bool longPress = false}) {
-    setState(() {
-      if (longPress) {
-        _selectedLyricLines.add(index);
-      } else if (!_selectedLyricLines.remove(index)) {
-        _selectedLyricLines.add(index);
-      }
-    });
-    if (longPress && _selectedLyricLines.length == 1) {
-      _toast('已选中 1 句歌词, 继续点击可多选');
-    }
-  }
-
-  void _clearLyricSelection() {
-    if (_selectedLyricLines.isEmpty) return;
-    setState(() => _selectedLyricLines.clear());
-  }
-
-  /// 选中行的文本(按行号排序, 最多 8 行 —— 分享卡片放不下更多)
-  List<String> _selectedLyricTexts() {
-    final indexes = _selectedLyricLines.toList()..sort();
-    return shareableLyricLines([
-      for (final i in indexes) _lyricTextAt(i),
-    ], max: 8);
-  }
-
-  void _toggleLyricTranslation() {
-    final next = !AppSettings.instance.lyricTranslation;
-    setState(() {});
-    unawaited(AppSettings.instance.update(lyricTranslation: next));
-  }
+  // ---------------- 详情页: 分享 ----------------
+  // 歌词多选/翻译开关/自动跟随/定位都在 LyricController(拆壳 S2), 这里只留
+  // 需要 BuildContext 的分享(sheet)。
 
   /// 分享(详情页右上角 / 选中歌词后的分享): 卡片带封面 + 歌词 + 二维码
   Future<void> _shareSong({List<String>? lyrics}) async {
@@ -1541,7 +1263,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _shareSelectedLyrics() async {
-    final lines = _selectedLyricTexts();
+    final lines = _lyric.selectedTexts();
     if (lines.isEmpty) {
       _toast('没有可分享的歌词');
       return;
@@ -2658,12 +2380,13 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _dragMs = null;
       _dragMax = null;
-      _autoFollowLyric = true;
+      // notify: false —— 这次 setState 已经会重建, 不重复通知
+      _lyric.resumeFollow(notify: false);
     });
     final state = await _playback.seek(BigInt.from(target));
     if (!mounted) return;
     setState(() => _player = state);
-    _syncLyricIndex(state, force: true);
+    _lyric.syncIndex(state, force: true);
   }
 
   // ---------------- UI ----------------
@@ -2671,7 +2394,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final backAction = resolveHomeBackAction(
-      showLyrics: _showLyrics,
+      showLyrics: _lyric.visible,
       tab: _tab,
       libraryOpen: _libraryTitle != null,
     );
@@ -2687,10 +2410,10 @@ class _HomePageState extends State<HomePage> {
     switch (action) {
       case HomeBackAction.collapseLyrics:
         // 详情页里正在多选歌词时, 返回键先退多选(与常见相册/文件选择一致)
-        if (_lyricSelecting) {
-          _clearLyricSelection();
+        if (_lyric.selecting) {
+          _lyric.clearSelection();
         } else {
-          _toggleLyrics();
+          _lyric.toggle();
         }
       case HomeBackAction.resetTab:
         _onTabSelected(0);
@@ -2719,16 +2442,16 @@ class _HomePageState extends State<HomePage> {
         ),
         child: Column(
           children: [
-            if (!_showLyrics && _tab == 0) _buildSearchBar(),
+            if (!_lyric.visible && _tab == 0) _buildSearchBar(),
             // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
-            if (!_showLyrics && _tab == 0 && _exact != null)
+            if (!_lyric.visible && _tab == 0 && _exact != null)
               SearchExactBar(
                 view: _exactView(_exact!),
                 onPickArtist: _openExactArtist,
                 onPickPlaylist: _openExactPlaylist,
                 onPickRadio: _openExactRadio,
               ),
-            if (!_showLyrics &&
+            if (!_lyric.visible &&
                 _tab == 0 &&
                 _suggestions.isEmpty &&
                 _exact == null &&
@@ -2737,7 +2460,7 @@ class _HomePageState extends State<HomePage> {
                 keywords: _keywordSuggestions,
                 onSelected: _searchKeyword,
               ),
-            if (!_showLyrics && _tab == 0 && _error != null)
+            if (!_lyric.visible && _tab == 0 && _error != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: Row(
@@ -2768,11 +2491,11 @@ class _HomePageState extends State<HomePage> {
                   // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
                   Positioned.fill(
                     child: Offstage(
-                      offstage: _showLyrics,
+                      offstage: _lyric.visible,
                       child: _buildTabPages(),
                     ),
                   ),
-                  if (_showLyrics)
+                  if (_lyric.visible)
                     // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
                     Positioned.fill(
                       child: CoverBackdrop(
@@ -2783,7 +2506,7 @@ class _HomePageState extends State<HomePage> {
                   // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
                   // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,
                   // 下面还露出半截结果页。tab 树仍然挂在 Offstage 里, 收起联想不重建。
-                  if (!_showLyrics && _tab == 0 && _suggestions.isNotEmpty)
+                  if (!_lyric.visible && _tab == 0 && _suggestions.isNotEmpty)
                     Positioned.fill(
                       // 不透明底色: 联想面板铺满后, 下面的 tab 内容不该从卡片外边
                       // 那 12dp 的缝里透出来。
@@ -2811,14 +2534,13 @@ class _HomePageState extends State<HomePage> {
     if (_tab == index) return;
     _tabVisited.add(index);
     // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
-    final wasLyrics = _showLyrics;
+    final wasLyrics = _lyric.visible;
     setState(() {
       _tab = index;
       _searchFocus.unfocus();
-      _showLyrics = false;
     });
-    _lyricTicker?.cancel();
-    _lyricTicker = null;
+    // 收起歌词 + 停掉展开期的高频刷新; 不额外通知 —— 上面的 setState 已经会重建
+    _lyric.collapse();
     // 回到搜索: 按设置决定是否丢弃上一次的输入/结果/错误
     if (index == 0) {
       if (AppSettings.instance.clearSearchOnTabSwitch &&
@@ -2848,7 +2570,7 @@ class _HomePageState extends State<HomePage> {
     BuildContext context,
     rust.SongDto? current,
   ) {
-    final showBar = _showLyrics || _libraryTitle != null;
+    final showBar = _lyric.visible || _libraryTitle != null;
     if (!showBar) return null;
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
@@ -2860,17 +2582,17 @@ class _HomePageState extends State<HomePage> {
           ?.copyWith(fontSize: 20, height: 1.25, fontWeight: FontWeight.w600),
       // 长歌名横向滚动播放(marquee); 放不下不再 FittedBox 缩成小字
       title: MarqueeText(
-        _showLyrics
-            ? (_lyricSelecting
-                  ? '已选 ${_selectedLyricLines.length} 句'
+        _lyric.visible
+            ? (_lyric.selecting
+                  ? '已选 ${_lyric.selected.length} 句'
                   : (current?.name ?? '歌词'))
             : (_libraryTitle ?? '轻音 MiniNCM'),
       ),
-      leading: _showLyrics
+      leading: _lyric.visible
           ? IconButton(
               icon: const Icon(Icons.expand_more),
               tooltip: '收起歌词',
-              onPressed: _toggleLyrics,
+              onPressed: _lyric.toggle,
             )
           : (_libraryTitle != null
                 ? IconButton(
@@ -2881,8 +2603,8 @@ class _HomePageState extends State<HomePage> {
                 : null),
       actions: [
         // 歌曲详情页(歌词页)的右上角: 分享 / 翻译开关 / "..." 菜单
-        if (_showLyrics) ...[
-          if (_lyricSelecting) ...[
+        if (_lyric.visible) ...[
+          if (_lyric.selecting) ...[
             IconButton(
               icon: const Icon(Icons.share),
               tooltip: '分享所选歌词',
@@ -2891,7 +2613,7 @@ class _HomePageState extends State<HomePage> {
             IconButton(
               icon: const Icon(Icons.close),
               tooltip: '取消选择',
-              onPressed: _clearLyricSelection,
+              onPressed: _lyric.clearSelection,
             ),
           ] else ...[
             // 翻译开关已挪到歌词右下角(「定位当前歌词」上方), 见 _buildLyrics.
@@ -3196,47 +2918,47 @@ class _HomePageState extends State<HomePage> {
   /// 歌曲详情页正文 = 歌词 + (定位当前句 / 底部次要控制)
   Widget _buildLyrics() {
     // 多选态: 点行 = 加/减选; 非多选态点击不做事(避免误改焦点)
-    final onTap = _lyricSelecting ? (int i) => _selectLyricLine(i) : null;
-    final onLong = _selectLyricLine;
+    final onTap = _lyric.selecting ? (int i) => _lyric.selectLine(i) : null;
+    final onLong = _lyric.selectLine;
     final showTranslation = AppSettings.instance.lyricTranslation;
 
     final Widget body;
-    if (_wordLines.isNotEmpty) {
+    if (_lyric.wordLines.isNotEmpty) {
       body = WordLyricView(
-        lines: _wordLines,
-        positionMs: _wordPositionMs,
-        playing: _playing,
-        controller: _lyricScroll,
-        itemExtent: _lyricItemExtent,
+        lines: _lyric.wordLines,
+        positionMs: _lyric.positionMs,
+        playing: _lyric.playing,
+        controller: _lyric.scroll,
+        itemExtent: _lyric.itemExtent,
         showTranslation: showTranslation,
-        selected: _selectedLyricLines,
+        selected: _lyric.selected,
         onLineTap: onTap,
         onLineLongPress: onLong,
-        autoScroll: _autoFollowLyric,
+        autoScroll: _lyric.autoFollow,
       );
-    } else if (_lyricPlain != null) {
+    } else if (_lyric.plain != null) {
       body = PlainLyricView(
-        lines: _lyricPlain!,
-        controller: _lyricScroll,
-        selected: _selectedLyricLines,
+        lines: _lyric.plain!,
+        controller: _lyric.scroll,
+        selected: _lyric.selected,
         onLineTap: onTap,
         onLineLongPress: onLong,
       );
-    } else if (_lyricError != null) {
+    } else if (_lyric.error != null) {
       body = Padding(
         padding: const EdgeInsets.all(24),
-        child: Center(child: Text(_lyricError!, textAlign: TextAlign.center)),
+        child: Center(child: Text(_lyric.error!, textAlign: TextAlign.center)),
       );
-    } else if (_lyricLines.isEmpty) {
+    } else if (_lyric.lines.isEmpty) {
       body = const Center(child: Text('暂无歌词'));
     } else {
       body = TimedLyricView(
-        lines: _lyricLines,
-        activeIndex: _lyricIndex,
-        controller: _lyricScroll,
-        itemExtent: _lyricItemExtent,
+        lines: _lyric.lines,
+        activeIndex: _lyric.activeIndex,
+        controller: _lyric.scroll,
+        itemExtent: _lyric.itemExtent,
         showTranslation: showTranslation,
-        selected: _selectedLyricLines,
+        selected: _lyric.selected,
         onLineTap: onTap,
         onLineLongPress: onLong,
       );
@@ -3253,7 +2975,7 @@ class _HomePageState extends State<HomePage> {
               // - 自动跟随的 animateTo 发出的 ScrollStart/ScrollUpdate 都没有
               //   dragDetails, 不会被误判成用户滑动.
               if (n is ScrollStartNotification && n.dragDetails != null) {
-                _pauseLyricFollow();
+                _lyric.pauseFollow();
               }
               return false;
             },
@@ -3272,7 +2994,7 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_hasLyricTranslation)
+                      if (_lyric.hasTranslation)
                         IconButton.filledTonal(
                           tooltip: AppSettings.instance.lyricTranslation
                               ? '关闭翻译'
@@ -3284,13 +3006,13 @@ class _HomePageState extends State<HomePage> {
                                 ? Theme.of(context).colorScheme.primary
                                 : null,
                           ),
-                          onPressed: _toggleLyricTranslation,
+                          onPressed: _lyric.toggleTranslation,
                         ),
-                      if (_hasLyricTranslation) const SizedBox(height: 8),
+                      if (_lyric.hasTranslation) const SizedBox(height: 8),
                       IconButton.filledTonal(
                         tooltip: '定位到当前歌词',
                         icon: const Icon(Icons.my_location, size: 20),
-                        onPressed: _locateCurrentLyric,
+                        onPressed: _lyric.locateCurrent,
                       ),
                     ],
                   ),
