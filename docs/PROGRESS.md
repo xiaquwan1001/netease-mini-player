@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-15(六)**。当前版本 **v0.12.5**(逐字歌词默认走 AMLL + 签到数据源纠偏)。
+> 最近更新: **2026-11-15(六)**。当前版本 **v0.13.0**(架构重构批: main.dart 拆壳 S0–S2 / 三个 P0 页面拆分 / 四态收口 / FfiError 跨桥)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -14,10 +14,10 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **286** 通过 / 0 失败(排除 vendor 联网 smoke) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **290** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test`(全量, 含 golden) | **946** 通过 / 1 跳过(golden 12 张) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **992** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.13.0** | **2026-11-15** | **架构重构批**(48 提交, 7 条并行 lane): main.dart **3917→3095**(S0 纯逻辑 / S1 全局壳 / S2 歌词控制器)、detail/messages/discover 三个 P0 页面按页拆分(1558/886/882 → 子树)、**SongRow 收敛 11 处**、四态全部收口到 AsyncView(16 个域)、`FfiError{kind,retryable,detail}` 跨桥(160 导出)、锁中毒容忍 + fsutil 原子写收敛、日推缓存按 uid 隔离 + 登出清理、golden **12→18** 且进 CI、测试工厂 `fakes.dart` 收敛 32 份；门禁 992 / 290 |
 | **v0.12.5** | **2026-11-15** | 逐字歌词**默认走 AMLL TTML**(设置可切回网易云/自动择优, 旧 `auto` 一次性迁移) + 黑胶会员页签到数据源从 `vip_sign_info` 改回 `signin_progress`(修「今日未签到/累计 0」与「我的」页签到卡自相矛盾) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
@@ -87,6 +88,41 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-15(六) 架构重构批(前后端 7 条并行 lane, **v0.13.0**)
+
+前置: 两份只读审计(`.pi/plans/arch-audit-frontend-2026-11-15.md` / `-backend-`), 按「收益÷成本」排序后分 3 波派发 16 条 lane(每条独立 git worktree + 分支, 主会话合并并独立复跑门禁)。
+
+### 前端结构
+
+| 项 | 结果 |
+|---|---|
+| main.dart 拆壳 | **3917 → 3095**(−822, −21%), 新增 `src/lyric_source.dart`(271) / `notification_mode.dart`(31) / `back_policy.dart`(54) / `app_shell.dart`(241) / `home/lyric_controller.dart`(403); 公开符号靠 `export` 保持, 既有测试零改动 |
+| P0 页面拆分 | `detail_page.dart` 1558→12(barrel, `src/detail/` 9 文件) / `messages_page.dart` 886→171(`src/messages/` 6) / `discover.dart` 882→13(`src/discover/` 7) |
+| 歌曲行统一 | `song_tile.dart` 收敛出唯一 `SongRow`, **11 处**私有歌曲行改用它(discover 3 / artist 2 / user 1 / album / recommend 2 / similar / mine 2), 删除 `discover_song_row.dart` |
+| 四态收口 | `AsyncView` 覆盖 **16 个域**: vip / 勋章墙 / 专辑页 / discover 全部页签 / messages 四个页签 / detail 头部与曲目 / 动态流 / 评论区与楼层回复 |
+| 测试 | 新增 `fakes.dart`(32 份 `song()` 工厂收敛)、`async_view_test`+`error_views_test`(30 例)、`comment_fourstate_test`、cache 账号隔离 4 例; golden **12→18**(补歌单详情/艺人页/动态流) |
+
+### 后端/Rust
+
+- **`FfiError{kind,retryable,detail}` 跨桥**: 160 个导出从 `Result<T, String>` 收口, `retryable` 首次跨桥; Dart 侧 `isNetworkError`/`friendlyError` 改按 `kind` 决策(不再 `contains('[network]')` 猜)。
+- 锁中毒容忍: `ncm-service` 25 处 `lock().unwrap()` → `lock_ignore_poison()`(中毒即续用)。
+- `fsutil::write_atomic` / `write_atomic_private`: 收 6 处 `create_dir_all→tmp→rename` 样板; 模块注释里落了 `<dataDir>` 子目录 owner 表。
+- 日推缓存按账号隔离(`<dataDir>/cache/daily-playlists/uid-<n>/`), 登出/切号/清凭据时清上一个账号 —— 修「切号后 A 的日推给 B 看」。
+
+### 试过但回退
+
+- `ncm-ffi/src/api.rs` 拆成 `api/mod.rs` + `api/dto.rs`(mirror 集中): FRB 2.13 **按 Rust 命名空间生成 Dart 文件**, codegen 后 64 个 class 搬到 `rust/api/dto.dart`, 88 文件/145 处 import 失联(`dart analyze` 928 issues)。**结论: api.rs 保持单文件命名空间**(判据已记入 `.pi/memory/notes-build.md`)。
+- Provider 拆 8 个 trait: 131 个方法里 123 个已有默认 `Unsupported` 体, 收益被高估 → 判定不做。
+
+### 门禁
+
+`cargo test` **290** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **992 通过 0 失败**(18 张 golden) / `dart analyze` 0 issue / `check-tokens --strict` + `check-write-guard` OK / 接口覆盖 135/136(FFI 160)。CI: golden 已进流水线(装 `fonts-noto-cjk`, 只排 `network` 标签), `ui/dart_test.yaml` 统一标签/超时/并发。
+
+### 过程
+
+- 16 条 lane 里 2 条被 **SIGSEGV** 杀掉、1 次系统异常重启打断 1 条 —— 证据已落 `~/hw-stability/evidence/inbox/`(2026-11-15 两条); 重派时把大任务拆小(先 commit 再继续), 无代码损失。
+
 
 ## 2026-11-15(六) 逐字歌词默认 AMLL + 签到数据源纠偏(**v0.12.5**)
 

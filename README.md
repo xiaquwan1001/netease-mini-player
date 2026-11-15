@@ -184,7 +184,7 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **287** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
 | `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
-| `flutter test` | **942** 通过 / 1 跳过(12 张 golden 含在内; 真实网络 smoke 单列 `@Tags(['network'])`, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network` | **992** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |

@@ -147,7 +147,7 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **287** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test` | **942** passing / 1 skipped (includes 12 golden pages; real-network smoke tests are tagged `@Tags(['network'])`, excluded locally and in CI) |
+| `flutter test --exclude-tags network` | **992** passing / 0 failing (includes **18** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
