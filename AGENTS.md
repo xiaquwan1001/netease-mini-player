@@ -42,8 +42,9 @@
   **`.pi/` 只在本地工作区, 已在 `.gitignore` 排除、不进公开仓库**(2026-11-10 起)。
   **明细不写进本文件**: 构建/工具链/CI/体积 → `notes-build.md`; 协议语义 → `notes-api.md`; UI 规则层(数值/容器/四态/门禁) → `notes-ui-rules.md`; 在飞状态与门禁基线 → `notes-wip.md`。
 
-## 三条硬纪律（其余细节都在上面那些 memory 文件里）
+## 四条硬纪律（其余细节都在上面那些 memory 文件里）
 
 - 改 Rust API 固定三步：`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust` → `cargo build -p ncm_ffi` → `flutter test`；漏第二步报 `Content hash on Dart side ... different from Rust side`。codegen 需 rustfmt。
 - 静态检查门固定 `cd ui && dart analyze`（`flutter analyze` 本机会偶发 SIGSEGV，别重试或重装 Flutter）；Rust 侧 `cargo clippy --workspace --all-targets` 必须 0 warning（2026-11-13 清零，别再引入）。`dart format` 用 Dart 3.13 tall style 会重排全仓（~10k 行 diff），**不要顺手跑**；要统一格式就单独立一次提交并同时加 CI 门。
+- **发布纪律（2026-11-15 用户口径）**：改完**总是推送到两个远端**（分支 + tag），**CI 与 Release 必须同时做**，不许「只跑 CI、release 不发」。版本号按工作量定：**≤5 个 bug 反馈只加最小号**（patch +1，如 0.12.2→0.12.3）；**≤15 个反馈、或含架构改动加 0.1**（minor，如 0.12.x→0.13.0）；**1.0 只在用户明确认可「可以真实发布」时才提**。流程：`tools/bump-version.sh` → 提交 `chore(release): vX.Y.Z` → `git-dual-push` → `git push origin vX && git push ustc vX` → 两侧流水线都绿才算发完。
 - UI 新代码固定入口：四态走 `AsyncView`；小组标题走 `SectionTitle`、区块标题走 `SectionHeader`；长文本/徽标走 `AdaptiveText`/`AdaptiveTextRow`；间距圆角字号只允许 `layout.dart` 与 `tools/check-tokens.sh` 的有限集合(例外写 `// token-ok: 理由`)。
