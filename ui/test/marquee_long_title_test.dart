@@ -286,7 +286,11 @@ void main() {
         .join('\n');
 
     final mainSrc = File('lib/main.dart').readAsStringSync();
-    final detailSrc = File('lib/src/detail_page.dart').readAsStringSync();
+    // 歌单详情按「一页一文件」拆到 src/detail/ 下后, 头卡源码在这个文件里
+    // (lib/src/detail_page.dart 只剩 export 入口)。
+    final detailSrc = File(
+      'lib/src/detail/playlist_detail_parts.dart',
+    ).readAsStringSync();
 
     // 歌词页 AppBar: 取「紧挨着 title: MarqueeText 之前的那个 titleTextStyle:」到 MarqueeText
     // 之间的一小段, 既不看别的组件的样式, 也不依赖两者之间的行数.
