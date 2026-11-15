@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 
+import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
-import '../net_retry.dart';
+import '../net_retry.dart' show friendlyError;
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
 import 'discover_types.dart';
 
 /// 「推荐歌单」页签: 一次全量返回, 点歌单先关本页再交给上层打开.
-class DailyPlaylistsTab extends StatefulWidget {
+///
+/// 整页四态收敛到 [AsyncView](与 VIP/勋章墙/专辑页同一口径);
+/// 出错文案保留"需要登录"的前缀(这一页最常见的原因就是未登录)。
+class DailyPlaylistsTab extends StatelessWidget {
   const DailyPlaylistsTab({
     super.key,
     required this.load,
@@ -19,66 +23,36 @@ class DailyPlaylistsTab extends StatefulWidget {
   final void Function(rust.Playlist playlist) onOpen;
 
   @override
-  State<DailyPlaylistsTab> createState() => DailyPlaylistsTabState();
-}
-
-class DailyPlaylistsTabState extends State<DailyPlaylistsTab>
-    with AutomaticKeepAliveClientMixin {
-  List<rust.Playlist>? _lists;
-  String? _error;
-
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _error = null);
-    try {
-      final lists = await retryNetwork(widget.load);
-      if (!mounted) return;
-      setState(() => _lists = lists);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    super.build(context);
-    final lists = _lists;
-    if (_error != null) {
-      return FullError(message: '推荐歌单需要登录后才能获取\n$_error', onRetry: _load);
-    }
-    if (lists == null) {
-      return const LoadingView();
-    }
-    if (lists.isEmpty) {
-      return const EmptyView(
+    return AsyncView<List<rust.Playlist>>(
+      load: load,
+      keepAlive: true,
+      emptyText: '今天没有推荐歌单',
+      loadingBuilder: (_) => const LoadingView(),
+      emptyBuilder: (_) => const EmptyView(
         icon: Icons.queue_music_outlined,
         title: '今天没有推荐歌单',
-      );
-    }
-    // 非分页: 推荐歌单随一次请求全量返回, 接口无分页
-    return ListView.builder(
-      itemCount: lists.length,
-      itemBuilder: (context, i) {
-        final pl = lists[i];
-        return ListTile(
-          leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
-          title: Text(pl.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text('${pl.trackCount} 首'),
-          onTap: () {
-            Navigator.pop(context);
-            widget.onOpen(pl);
-          },
-        );
-      },
+      ),
+      errorBuilder: (_, error, retry) => FullError(
+        message: '推荐歌单需要登录后才能获取\n${friendlyError(error)}',
+        onRetry: retry,
+      ),
+      // 非分页: 推荐歌单随一次请求全量返回, 接口无分页
+      builder: (context, lists, _) => ListView.builder(
+        itemCount: lists.length,
+        itemBuilder: (context, i) {
+          final pl = lists[i];
+          return ListTile(
+            leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
+            title: Text(pl.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text('${pl.trackCount} 首'),
+            onTap: () {
+              Navigator.pop(context);
+              onOpen(pl);
+            },
+          );
+        },
+      ),
     );
   }
 }
