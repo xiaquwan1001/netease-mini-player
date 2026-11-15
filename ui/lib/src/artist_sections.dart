@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'adaptive_text.dart';
 import 'cover_art.dart';
-import 'format.dart' show formatDurationMs;
 import 'rust/api.dart' as rust;
-import 'song_tile.dart' show VipBadge, PaidBadge, UnplayableBadge;
+import 'song_tile.dart' show SongRow, SongRowSubtitle;
 
 /// 艺人主页的「区块」组件。只吃 DTO, 不发请求,
 /// 数据与回调全部由 artist_page 注入(可测试)。
@@ -67,96 +65,23 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
           ),
         ),
         for (var i = 0; i < songs.length; i++)
-          _ArtistRecommendSongRow(
+          SongRow(
             song: songs[i],
-            index: i,
+            // 序号: 统一两位宽度, 大字号也不挤压标题
+            indexText: '${i + 1}',
+            indexWidth: 24,
+            indexAlign: TextAlign.center,
+            indexGap: 8,
+            coverSize: 44,
+            coverGap: 10,
+            // 历史口径: 这一块没有"正在播放"语汇(序号不换喇叭/歌名不变色)
+            highlightNowPlaying: false,
+            subtitle: SongRowSubtitle.artistAlbum,
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            durationGap: 8,
             onTap: songs[i].playable ? () => onPlaySongs(songs, i) : null,
           ),
       ],
-    );
-  }
-}
-
-/// 推荐单曲的一行: 封面 + (歌名+徽标 / 艺人·专辑) + 时长。
-/// 标题/副标题都是 Expanded + ellipsis, 300dp 大字号不溢出。
-class _ArtistRecommendSongRow extends StatelessWidget {
-  const _ArtistRecommendSongRow({
-    required this.song,
-    required this.index,
-    required this.onTap,
-  });
-
-  final rust.SongDto song;
-  final int index;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final playable = song.playable;
-    final grey = TextStyle(color: scheme.outline);
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
-          children: [
-            // 序号: 统一两位宽度, 大字号也不挤压标题
-            SizedBox(
-              width: 24,
-              child: Text(
-                '${index + 1}',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.outline,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            CoverArt(url: song.coverUrl, size: 44, radius: 4),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 徽标跟在歌名后面同一行, 各自完整显示(不被整组收起)
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AdaptiveText(
-                          song.name,
-                          style: playable ? theme.textTheme.bodyMedium : grey,
-                        ),
-                      ),
-                      if (playable && song.vip) const VipBadge(small: true),
-                      if (playable && !song.vip && song.paid) const PaidBadge(),
-                      if (!playable) const UnplayableBadge(),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${song.artist} · ${song.album}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: playable
-                          ? scheme.onSurfaceVariant
-                          : scheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              formatDurationMs(song.durationMs),
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
