@@ -57,6 +57,14 @@ impl FfiError {
     pub fn network(detail: impl Into<String>) -> Self {
         Self::new("network", true, detail)
     }
+
+    pub fn auth(detail: impl Into<String>) -> Self {
+        Self::new("auth", false, detail)
+    }
+
+    pub fn unsupported(detail: impl Into<String>) -> Self {
+        Self::new("unsupported", false, detail)
+    }
 }
 
 impl std::fmt::Display for FfiError {
@@ -79,29 +87,63 @@ impl From<ncm_provider::ProviderError> for FfiError {
     }
 }
 
-fn core() -> Result<&'static Mutex<Core>, String> {
-    CORE.get().ok_or_else(|| "core not initialized".to_string())
+// 下面这些不是 provider 错误, 一律归到 internal(不可重试), 但保留原始 detail ——
+// 目的是让导出函数里的 `?` 直接可用, 不必再写 map_err 手搓字符串.
+impl From<String> for FfiError {
+    fn from(e: String) -> Self {
+        Self::internal(e)
+    }
+}
+
+impl From<std::io::Error> for FfiError {
+    fn from(e: std::io::Error) -> Self {
+        Self::internal(e.to_string())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for FfiError {
+    fn from(e: std::sync::PoisonError<T>) -> Self {
+        Self::internal(e.to_string())
+    }
+}
+
+impl From<ncm_domain::EqProfileError> for FfiError {
+    fn from(e: ncm_domain::EqProfileError) -> Self {
+        Self::internal(e.to_string())
+    }
+}
+
+impl From<tokio::task::JoinError> for FfiError {
+    fn from(e: tokio::task::JoinError) -> Self {
+        Self::internal(e.to_string())
+    }
+}
+
+fn core() -> Result<&'static Mutex<Core>, FfiError> {
+    CORE.get()
+        .ok_or_else(|| FfiError::internal("core not initialized"))
 }
 
 /// D5: 纯 provider 转发型 FFI 封装统一 helper。
 /// - ffi_forward!(Capability::X, provider.method(args))             返回值直接透传
 /// - ffi_forward!(Capability::X, provider.method(args), map conv)     末步转 Dto(conv 为普通 fn/闭包)
 /// - ffi_forward!(Capability::X, provider.method(args), map_each conv) Vec 转 Vec<Dto>
-///   错误映射统一 |e| e.to_string(), 与手写导出一致; frb 只看函数签名, 宏只生成函数体。
+///   错误统一靠 `?` 走 `From<_> for FfiError`(ProviderError 保留 kind/retryable);
+///   frb 只看函数签名, 宏只生成函数体。
 macro_rules! ffi_forward {
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map $conv:expr) => {{
         let $p = with_provider($cap)?;
-        let v = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        let v = $p.$m($($arg),*).await?;
         Ok(($conv)(v))
     }};
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map_each $conv:expr) => {{
         let $p = with_provider($cap)?;
-        let list = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        let list = $p.$m($($arg),*).await?;
         Ok(list.into_iter().map($conv).collect())
     }};
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* )) => {{
         let $p = with_provider($cap)?;
-        let v = $p.$m($($arg),*).await.map_err(|e| e.to_string())?;
+        let v = $p.$m($($arg),*).await?;
         Ok(v)
     }};
 }
@@ -114,14 +156,14 @@ fn data_dir_default() -> String {
 }
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
-pub fn init(data_dir: Option<String>) -> Result<InitInfo, String> {
+pub fn init(data_dir: Option<String>) -> Result<InitInfo, FfiError> {
     let dir = data_dir.unwrap_or_else(data_dir_default);
     let _ = DATA_DIR.set(std::path::PathBuf::from(&dir));
     if CORE.get().is_none() {
-        let core = Core::open(Path::new(&dir)).map_err(|e| e.to_string())?;
+        let core = Core::open(Path::new(&dir)).map_err(FfiError::from)?;
         let _ = CORE.set(Mutex::new(core));
     }
-    let guard = core()?.lock().map_err(|e| e.to_string())?;
+    let guard = core()?.lock().map_err(FfiError::from)?;
     Ok(InitInfo {
         data_dir: dir,
         device_id: guard.session.device_id.clone(),
@@ -311,17 +353,14 @@ pub struct SearchBundleDto {
 }
 
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
-pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto, String> {
+pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto, FfiError> {
     let provider = with_provider(Capability::SearchAll)?;
     let query = SearchQuery {
         keywords,
         limit,
         offset: 0,
     };
-    let bundle = provider
-        .search_all(&query)
-        .await
-        .map_err(|e| e.to_string())?;
+    let bundle = provider.search_all(&query).await.map_err(FfiError::from)?;
     Ok(SearchBundleDto {
         songs: bundle.songs.into_iter().map(song_dto).collect(),
         song_total: bundle.song_total,
@@ -367,12 +406,12 @@ pub struct ArtistDetailDto {
 }
 
 /// 歌手详情(头像/简介/热门歌曲/专辑)
-pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, String> {
+pub async fn artist_detail(artist_id: u64) -> Result<ArtistDetailDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
     let a = provider
         .artist_detail(artist_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(ArtistDetailDto {
         id: a.id,
         name: a.name,
@@ -436,12 +475,12 @@ pub async fn artist_songs_page(
     artist_id: u64,
     offset: u32,
     limit: u32,
-) -> Result<ArtistSongPageDto, String> {
+) -> Result<ArtistSongPageDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
     let page = provider
         .artist_songs_page(artist_id, offset, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(ArtistSongPageDto {
         songs: page.songs.into_iter().map(song_dto).collect(),
         has_more: page.has_more,
@@ -459,12 +498,12 @@ pub async fn artist_albums_page(
     artist_id: u64,
     offset: u32,
     limit: u32,
-) -> Result<ArtistAlbumPageDto, String> {
+) -> Result<ArtistAlbumPageDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
     let page = provider
         .artist_albums_page(artist_id, offset, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(ArtistAlbumPageDto {
         albums: page.albums,
         has_more: page.has_more,
@@ -476,12 +515,12 @@ pub async fn artist_mvs_page(
     artist_id: u64,
     offset: u32,
     limit: u32,
-) -> Result<ArtistMvPageDto, String> {
+) -> Result<ArtistMvPageDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
     let page = provider
         .artist_mvs_page(artist_id, offset, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(ArtistMvPageDto {
         mvs: page
             .mvs
@@ -500,9 +539,9 @@ pub async fn artist_mvs_page(
 }
 
 /// MV 详情(mv_detail)
-pub async fn mv_detail(mv_id: u64) -> Result<MvDetailDto, String> {
+pub async fn mv_detail(mv_id: u64) -> Result<MvDetailDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
-    let d = provider.mv_detail(mv_id).await.map_err(|e| e.to_string())?;
+    let d = provider.mv_detail(mv_id).await.map_err(FfiError::from)?;
     Ok(MvDetailDto {
         id: d.id,
         name: d.name,
@@ -518,9 +557,9 @@ pub async fn mv_detail(mv_id: u64) -> Result<MvDetailDto, String> {
 }
 
 /// MV 播放链接(mv_url, r=清晰度档位, 0 表示请求最高)
-pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, String> {
+pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, FfiError> {
     let provider = with_provider(Capability::Artist)?;
-    let u = provider.mv_url(mv_id, r).await.map_err(|e| e.to_string())?;
+    let u = provider.mv_url(mv_id, r).await.map_err(FfiError::from)?;
     Ok(MvUrlDto {
         url: u.url,
         r: u.r,
@@ -529,12 +568,12 @@ pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, String> {
 }
 
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
-pub async fn artist_sub_toggle(artist_id: u64, sub: bool) -> Result<bool, String> {
+pub async fn artist_sub_toggle(artist_id: u64, sub: bool) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Artist)?;
     provider
         .toggle_artist_sub(artist_id, sub)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 // ---------------- 个人主页资料 ----------------
@@ -556,7 +595,7 @@ pub struct _ProfileDetail {
 }
 
 /// 个人主页资料(背景图/头像/签名/关注数). 需要登录.
-pub async fn profile_detail() -> Result<ProfileDetail, String> {
+pub async fn profile_detail() -> Result<ProfileDetail, FfiError> {
     ffi_forward!(Capability::ProfileDetail, provider.profile_detail())
 }
 
@@ -574,7 +613,7 @@ pub struct _CloudUploadResult {
 ///
 /// 同步阻塞直到上传+转码+发布完成(最长约 1 分钟), 调用方要显示"上传中"。
 /// 失败语义: 未登录 `[auth]`、文件读不到 `[unsupported]`、上传/转码失败 `[internal]`/`[network]`。
-pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, String> {
+pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, FfiError> {
     ffi_forward!(Capability::Cloud, provider.cloud_upload(file_path))
 }
 
@@ -582,7 +621,7 @@ pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, String
 ///
 /// 上游 `module/user_update.js` → `POST /api/user/profile/update`; 局部更新, 只改签名。
 /// 失败语义: 未登录 `[auth]`、超过 132 字符 `[unsupported]`、风控 `[riskControl]`。
-pub async fn update_signature(signature: String) -> Result<ProfileDetail, String> {
+pub async fn update_signature(signature: String) -> Result<ProfileDetail, FfiError> {
     ffi_forward!(
         Capability::ProfileDetail,
         provider.update_signature(signature)
@@ -590,13 +629,13 @@ pub async fn update_signature(signature: String) -> Result<ProfileDetail, String
 }
 
 /// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.
-pub async fn user_profile(user_id: u64) -> Result<ProfileDetail, String> {
+pub async fn user_profile(user_id: u64) -> Result<ProfileDetail, FfiError> {
     ffi_forward!(Capability::ProfileDetail, provider.user_profile(user_id))
 }
 
 /// 任意用户的公开歌单(他人主页; 不需要登录).
 /// 口径: 未登录时服务端只回公开歌单, 不含对方的"我喜欢的音乐".
-pub async fn user_playlists_of(user_id: u64, limit: u32) -> Result<Vec<Playlist>, String> {
+pub async fn user_playlists_of(user_id: u64, limit: u32) -> Result<Vec<Playlist>, FfiError> {
     ffi_forward!(
         Capability::Playlist,
         provider.user_playlists_of(user_id, limit)
@@ -604,52 +643,52 @@ pub async fn user_playlists_of(user_id: u64, limit: u32) -> Result<Vec<Playlist>
 }
 
 /// 收藏曲目到指定歌单(需登录)
-pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
+pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::PlaylistEdit)?;
     provider
         .add_to_playlist(playlist_id, ncm_domain::TrackId::new(track_id))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
-pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, String> {
+pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard
             .providers
             .first_with(Capability::SongUrl)
-            .ok_or_else(|| "no provider supports songUrl".to_string())?
+            .ok_or_else(|| FfiError::unsupported("no provider supports songUrl"))?
     };
     let level = ncm_provider::AudioLevel::parse(&level).unwrap_or_default();
     let req = ncm_provider::SongUrlRequest {
         track: ncm_domain::TrackId::new(track_id),
         level,
     };
-    let stream = provider.song_url(&req).await.map_err(|e| e.to_string())?;
+    let stream = provider.song_url(&req).await.map_err(FfiError::from)?;
     Ok(stream)
 }
 
-pub async fn lyric(track_id: u64) -> Result<String, String> {
+pub async fn lyric(track_id: u64) -> Result<String, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard
             .providers
             .first_with(Capability::Lyric)
-            .ok_or_else(|| "no provider supports lyric".to_string())?
+            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
     };
     let lyric = provider
         .lyric(ncm_domain::TrackId::new(track_id))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(lyric.lrc.unwrap_or_default())
 }
 
 /// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留.
 /// 账号本身留在账号簿里, 下次可以一键切回(不用重新扫码).
 /// 返回 true 表示现在已经不是登录态.
-pub fn logout() -> Result<bool, String> {
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-    guard.logout().map_err(|e| e.to_string())?;
+pub fn logout() -> Result<bool, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard.logout().map_err(FfiError::from)?;
     Ok(!guard.session.is_logged_in())
 }
 
@@ -728,8 +767,8 @@ pub struct CredentialStatusDto {
     pub note: String,
 }
 
-fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
-    let book = guard.accounts().map_err(|e| e.to_string())?;
+fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, FfiError> {
+    let book = guard.accounts().map_err(FfiError::from)?;
     Ok(book
         .accounts
         .into_iter()
@@ -747,31 +786,29 @@ fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, String> {
 ///
 /// 桌面端没有 WebView, 也就无法读浏览器里 HttpOnly 的 MUSIC_U; 官方扫码通道把凭据
 /// 放在轮询响应的 Set-Cookie 里, 因此 Linux/Windows 共用这一条实现, 不需要平台代码.
-pub async fn login_qr_create() -> Result<QrLoginKey, String> {
+pub async fn login_qr_create() -> Result<QrLoginKey, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
     use ncm_provider::Provider;
-    provider.login_qr_create().await.map_err(|e| e.to_string())
+    provider.login_qr_create().await.map_err(FfiError::from)
 }
 
 /// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
-pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, String> {
+pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
     use ncm_provider::Provider;
     let outcome = provider
         .login_qr_check(&key)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     if let Some(cookie) = outcome.cookie.as_deref() {
-        let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-        guard
-            .apply_login_cookie(cookie)
-            .map_err(|e| e.to_string())?;
+        let mut guard = core()?.lock().map_err(FfiError::from)?;
+        guard.apply_login_cookie(cookie).map_err(FfiError::from)?;
     }
     // 凭据到此为止: 只把元数据交给 Dart
     Ok(outcome.check)
@@ -795,8 +832,8 @@ fn credential_status_dto(
 }
 
 /// 当前凭据后端状态(设置页/排障用): 是否有安全后端、旧明文是否已迁移.
-pub fn credential_status() -> Result<CredentialStatusDto, String> {
-    let guard = core()?.lock().map_err(|e| e.to_string())?;
+pub fn credential_status() -> Result<CredentialStatusDto, FfiError> {
+    let guard = core()?.lock().map_err(FfiError::from)?;
     Ok(credential_status_dto(guard.credential_status()))
 }
 
@@ -804,11 +841,11 @@ pub fn credential_status() -> Result<CredentialStatusDto, String> {
 ///
 /// 只在没有系统钥匙串的平台(Android/Linux 的 P1/P2 未落地前)才有意义;
 /// Windows 走 DPAPI, 不需要这个开关。
-pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, String> {
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
     guard
         .set_plaintext_consent(consent)
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(credential_status_dto(guard.credential_status()))
 }
 
@@ -831,7 +868,7 @@ pub struct CredentialOpDto {
 /// Android 启动时、rust.init 之前调用: 用 Keystore 现存条目激活凭据桥.
 /// 幂等(重复调用合并); 未激活时 open_backend 的 android 分支走既有同意门.
 /// 见 docs/android-keystore-wiring-design.md.
-pub fn credential_restore(entries: Vec<CredentialEntryDto>) -> Result<(), String> {
+pub fn credential_restore(entries: Vec<CredentialEntryDto>) -> Result<(), FfiError> {
     let converted: Vec<(String, String)> = entries.into_iter().map(|e| (e.key, e.value)).collect();
     ncm_service::credential_channel::activate(converted);
     Ok(())
@@ -839,7 +876,7 @@ pub fn credential_restore(entries: Vec<CredentialEntryDto>) -> Result<(), String
 
 /// Dart drain: 拉走(并清空)待落 Keystore 的操作. 同 key 只剩最终态.
 /// 拉取失败 = 丢该条凭据(下次启动重登), 不影响本会话内存态.
-pub fn credential_pending_writes() -> Result<Vec<CredentialOpDto>, String> {
+pub fn credential_pending_writes() -> Result<Vec<CredentialOpDto>, FfiError> {
     use ncm_service::credential_channel::CredOp;
     Ok(ncm_service::credential_channel::take_pending()
         .into_iter()
@@ -862,16 +899,16 @@ pub fn credential_pending_writes() -> Result<Vec<CredentialOpDto>, String> {
 ///
 /// 与扫码同一族(网页登录), 不走 App 原生登录族; 命中交互式风控时错误带
 /// `[riskControl]` 前缀(官方 code 8821), UI 应引导改用扫码.
-pub async fn login_sms_send(phone: String, country_code: String) -> Result<SmsCodeSent, String> {
+pub async fn login_sms_send(phone: String, country_code: String) -> Result<SmsCodeSent, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
     use ncm_provider::Provider;
     provider
         .login_sms_send(&phone, &country_code)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 手机号+验证码登录 ②: 校验验证码. 成功时顺带把凭据合并落盘, Dart 侧再同步账号资料.
@@ -879,49 +916,47 @@ pub async fn login_sms_verify(
     phone: String,
     code: String,
     country_code: String,
-) -> Result<PhoneLoginResult, String> {
+) -> Result<PhoneLoginResult, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
     use ncm_provider::Provider;
     let outcome = provider
         .login_sms_verify(&phone, &code, &country_code)
         .await
-        .map_err(|e| e.to_string())?;
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
     guard
         .apply_login_cookie(&outcome.cookie)
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(outcome.result)
 }
 
 /// 已记住的账号列表(只含凭据, 指纹共享)
-pub fn accounts() -> Result<Vec<AccountDto>, String> {
-    let guard = core()?.lock().map_err(|e| e.to_string())?;
+pub fn accounts() -> Result<Vec<AccountDto>, FfiError> {
+    let guard = core()?.lock().map_err(FfiError::from)?;
     accounts_of(&guard)
 }
 
 /// 登录后/启动时调用: 拉一次账号资料并记进账号簿.
 /// 失败(离线/风控)不影响已登录状态, UI 只当作"没有昵称"。
-pub async fn account_sync_active() -> Result<AccountDto, String> {
+pub async fn account_sync_active() -> Result<AccountDto, FfiError> {
     let (logged_in, provider) = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         if !guard.session.is_logged_in() {
-            return Err("未登录".to_string());
+            return Err(FfiError::auth("未登录"));
         }
         let provider = guard
             .providers
             .first_with(Capability::Profile)
-            .ok_or_else(|| "no provider supports profile".to_string())?;
+            .ok_or_else(|| FfiError::unsupported("no provider supports profile"))?;
         (true, provider)
     };
     debug_assert!(logged_in);
-    let profile = provider.profile().await.map_err(|e| e.to_string())?;
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-    guard
-        .remember_account(&profile)
-        .map_err(|e| e.to_string())?;
+    let profile = provider.profile().await.map_err(FfiError::from)?;
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard.remember_account(&profile).map_err(FfiError::from)?;
     Ok(AccountDto {
         user_id: profile.user_id,
         nickname: profile.nickname,
@@ -932,10 +967,10 @@ pub async fn account_sync_active() -> Result<AccountDto, String> {
 }
 
 /// 切换到账号簿里的某个账号(不重新登录)
-pub async fn account_switch(user_id: u64) -> Result<bool, String> {
+pub async fn account_switch(user_id: u64) -> Result<bool, FfiError> {
     {
-        let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-        if !guard.switch_account(user_id).map_err(|e| e.to_string())? {
+        let mut guard = core()?.lock().map_err(FfiError::from)?;
+        if !guard.switch_account(user_id).map_err(FfiError::from)? {
             return Ok(false);
         }
     }
@@ -945,10 +980,10 @@ pub async fn account_switch(user_id: u64) -> Result<bool, String> {
 }
 
 /// 从账号簿移除某个账号(不影响当前登录态, 只是忘掉它的凭据)
-pub fn account_remove(user_id: u64) -> Result<bool, String> {
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
-    let before = guard.accounts().map_err(|e| e.to_string())?.accounts.len();
-    let book = guard.forget_account(user_id).map_err(|e| e.to_string())?;
+pub fn account_remove(user_id: u64) -> Result<bool, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let before = guard.accounts().map_err(FfiError::from)?.accounts.len();
+    let book = guard.forget_account(user_id).map_err(FfiError::from)?;
     Ok(book.accounts.len() < before)
 }
 
@@ -967,23 +1002,23 @@ pub struct _Playlist {
     pub subscribed: bool,
 }
 
-fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, String> {
-    let guard = core()?.lock().map_err(|e| e.to_string())?;
+fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, FfiError> {
+    let guard = core()?.lock().map_err(FfiError::from)?;
     guard
         .providers
         .first_with(cap)
-        .ok_or_else(|| format!("no provider supports {}", cap.as_str()))
+        .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
 }
 
 /// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
-pub async fn liked_ids() -> Result<Vec<u64>, String> {
+pub async fn liked_ids() -> Result<Vec<u64>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
-    let ids = provider.liked_ids().await.map_err(|e| e.to_string())?;
+    let ids = provider.liked_ids().await.map_err(FfiError::from)?;
     Ok(ids.into_iter().map(|t| t.0).collect())
 }
 
 /// 红心/取消红心(需登录)
-pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, String> {
+pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::Playlist,
         provider.set_like(ncm_domain::TrackId::new(track_id), liked)
@@ -991,22 +1026,22 @@ pub async fn set_liked(track_id: u64, liked: bool) -> Result<bool, String> {
 }
 
 /// 我的歌单(含"我喜欢的音乐")
-pub async fn my_playlists() -> Result<Vec<Playlist>, String> {
+pub async fn my_playlists() -> Result<Vec<Playlist>, FfiError> {
     ffi_forward!(Capability::Playlist, provider.user_playlists())
 }
 
 /// 某个歌单的曲目
-pub async fn playlist_songs(playlist_id: u64) -> Result<Vec<SongDto>, String> {
+pub async fn playlist_songs(playlist_id: u64) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
     let songs = provider
         .playlist_songs(playlist_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(songs.into_iter().map(song_dto).collect())
 }
 
 /// "我喜欢的音乐"曲目详情(按收藏时间从新到旧)
-pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
+pub async fn liked_songs() -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
     // 优先用歌单详情的 addTime(真实收藏时间)排序; 老 provider 回落到 likelist 顺序
     match provider.liked_songs_ordered().await {
@@ -1014,7 +1049,7 @@ pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
         Ok(_) => {}
         Err(_) => {}
     }
-    let ids = provider.liked_ids().await.map_err(|e| e.to_string())?;
+    let ids = provider.liked_ids().await.map_err(FfiError::from)?;
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -1031,7 +1066,7 @@ pub async fn liked_songs() -> Result<Vec<SongDto>, String> {
         let detail = provider
             .songs_detail(&joined)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(FfiError::from)?;
         for s in detail {
             by_id.insert(s.id.0, s);
         }
@@ -1051,18 +1086,18 @@ pub struct LyricLineDto {
 }
 
 /// 带翻译的歌词时间轴(网易云 tlyric). UI 只需要按 position 找当前行, 不再自己啃 LRC.
-pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, String> {
+pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard
             .providers
             .first_with(Capability::Lyric)
-            .ok_or_else(|| "no provider supports lyric".to_string())?
+            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
     };
     let lyric = provider
         .lyric(ncm_domain::TrackId::new(track_id))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(ncm_domain::parse_lrc_with_translation(
         lyric.lrc.as_deref().unwrap_or_default(),
         lyric.translated.as_deref(),
@@ -1091,18 +1126,18 @@ pub struct WordLyricLineDto {
 }
 
 /// 逐字歌词(YRC). 无逐字数据时 lines 为空, UI 应回落 lyric_lines_i18n.
-pub async fn word_lyric_lines(track_id: u64) -> Result<WordLyricDto, String> {
+pub async fn word_lyric_lines(track_id: u64) -> Result<WordLyricDto, FfiError> {
     let provider = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard
             .providers
             .first_with(Capability::Lyric)
-            .ok_or_else(|| "no provider supports lyric".to_string())?
+            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
     };
     let wl = provider
         .word_lyric(ncm_domain::TrackId::new(track_id))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(WordLyricDto {
         lines: wl
             .lines
@@ -1162,17 +1197,17 @@ fn word_lyric_dto(wl: ncm_domain::WordLyric) -> WordLyricDto {
 
 /// B13: 只取 TTML 第二来源(带磁盘缓存: `dataDir/ttml/<id>.ttml` / `<id>.none`).
 /// 无数据/解析失败返回 Ok(None), 网络错误返回 Err —— 调用方(或 Dart 侧)静默回退.
-pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, String> {
+pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, FfiError> {
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?
+        .ok_or_else(|| FfiError::internal("core not initialized"))?
         .clone();
     match ncm_service::ttml_source::fetch_ttml(&dir, track_id).await {
         Ok(Some(doc)) => Ok(Some(word_lyric_dto(
             ncm_service::ttml_source::ttml_to_word_lyric(&doc),
         ))),
         Ok(None) => Ok(None),
-        Err(e) => Err(e),
+        Err(e) => Err(e.into()),
     }
 }
 
@@ -1191,13 +1226,13 @@ pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, Str
 /// 时, 用户在登录页直接关闭/登录失败(传回来的是空的或只有设备指纹的 cookie),
 /// 旧 MUSIC_U 仍在 session 里 ⇒ is_logged_in() 恒为 true ⇒ UI 弹「登录成功, 账号已记住」。
 /// 这是用户反馈的「关闭登录页也提示登录成功」的根因。
-pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
+pub fn login_with_cookie(cookie: String) -> Result<bool, FfiError> {
     let incoming = cookie.trim();
     if !cookie_has_music_u(incoming) {
         // 不合并、不改会话: 明确告诉 UI 这次没有登录态
         return Ok(false);
     }
-    let mut guard = core()?.lock().map_err(|e| e.to_string())?;
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
     let merged = ncm_service::identity::merge_device_cookie(
         &guard.session.cookie,
         incoming,
@@ -1205,7 +1240,7 @@ pub fn login_with_cookie(cookie: String) -> Result<bool, String> {
     );
     let mut next = guard.session.clone();
     next.cookie = merged;
-    guard.apply_session(next).map_err(|e| e.to_string())?;
+    guard.apply_session(next).map_err(FfiError::from)?;
     Ok(guard.session.is_logged_in())
 }
 
@@ -1257,12 +1292,12 @@ pub async fn play_track(
     track_id: u64,
     url: String,
     duration_ms: Option<u64>,
-) -> Result<PlayerStateDto, String> {
+) -> Result<PlayerStateDto, FfiError> {
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?
+        .ok_or_else(|| FfiError::internal("core not initialized"))?
         .join("audio");
-    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())?;
+    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)?;
     if let Some(path) = cache.cached(track_id, &url) {
         player().play_file(track_id, path.to_string_lossy().to_string());
         return Ok(state_dto());
@@ -1364,8 +1399,8 @@ pub struct EqValidationDto {
 }
 
 /// 校验 AutoEQ ParametricEQ.txt 文本。错误消息已是 "第 N 行: 原因" 形式, UI 直接显示。
-pub fn eq_profile_validate(text: String) -> Result<EqValidationDto, String> {
-    let profile = ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?;
+pub fn eq_profile_validate(text: String) -> Result<EqValidationDto, FfiError> {
+    let profile = ncm_domain::EqProfile::parse(&text).map_err(FfiError::from)?;
     Ok(EqValidationDto {
         filters: profile.filters.len() as u32,
         active_filters: profile
@@ -1378,8 +1413,8 @@ pub fn eq_profile_validate(text: String) -> Result<EqValidationDto, String> {
 }
 
 /// 归一化曲线文本(统一成 Rust 侧的规范格式, 便于落盘与跨端一致)
-pub fn eq_profile_normalize(text: String) -> Result<String, String> {
-    let profile = ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?;
+pub fn eq_profile_normalize(text: String) -> Result<String, FfiError> {
+    let profile = ncm_domain::EqProfile::parse(&text).map_err(FfiError::from)?;
     Ok(profile.to_text())
 }
 
@@ -1390,10 +1425,10 @@ pub fn player_configure(
     gain_db: f64,
     fade_ms: u32,
     eq_text: Option<String>,
-) -> Result<PlaybackTuningDto, String> {
+) -> Result<PlaybackTuningDto, FfiError> {
     let eq = match eq_text {
         Some(text) if !text.trim().is_empty() => {
-            Some(ncm_domain::EqProfile::parse(&text).map_err(|e| e.to_string())?)
+            Some(ncm_domain::EqProfile::parse(&text).map_err(FfiError::from)?)
         }
         _ => None,
     };
@@ -1413,12 +1448,12 @@ pub fn player_tuning() -> PlaybackTuningDto {
 
 // ---------------- 音频缓存占用上限 (R5) ----------------
 
-fn audio_cache() -> Result<ncm_service::cache::AudioCache, String> {
+fn audio_cache() -> Result<ncm_service::cache::AudioCache, FfiError> {
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?
+        .ok_or_else(|| FfiError::internal("core not initialized"))?
         .join("audio");
-    ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())
+    ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)
 }
 
 /// 缓存占用(limit_mb = 0 表示不限制)
@@ -1429,7 +1464,7 @@ pub struct CacheStatsDto {
 }
 
 /// 只读统计, 不删任何文件
-pub fn cache_stats(limit_mb: u32) -> Result<CacheStatsDto, String> {
+pub fn cache_stats(limit_mb: u32) -> Result<CacheStatsDto, FfiError> {
     let cache = audio_cache()?;
     Ok(CacheStatsDto {
         total_bytes: cache.total_bytes(),
@@ -1449,7 +1484,7 @@ pub struct CacheEvictionDto {
 pub fn cache_enforce_limit(
     limit_mb: u32,
     keep_track_id: Option<u64>,
-) -> Result<CacheEvictionDto, String> {
+) -> Result<CacheEvictionDto, FfiError> {
     let cache = audio_cache()?;
     let limit = limit_mb as u64 * 1024 * 1024;
     let r = cache.enforce_limit(limit, keep_track_id)?;
@@ -1483,15 +1518,15 @@ fn loudness_dto(track_id: u64, l: ncm_domain::TrackLoudness, target_lufs: f64) -
     }
 }
 
-fn loudness_store() -> Result<ncm_service::LoudnessStore, String> {
+fn loudness_store() -> Result<ncm_service::LoudnessStore, FfiError> {
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?;
+        .ok_or_else(|| FfiError::internal("core not initialized"))?;
     Ok(ncm_service::LoudnessStore::open(dir))
 }
 
 /// 读缓存的响度(没测过就是 None, 播放时按 0 dB 处理)
-pub fn loudness_cached(track_id: u64, target_lufs: f64) -> Result<Option<LoudnessDto>, String> {
+pub fn loudness_cached(track_id: u64, target_lufs: f64) -> Result<Option<LoudnessDto>, FfiError> {
     let store = loudness_store()?;
     Ok(store
         .get(track_id)
@@ -1502,7 +1537,7 @@ pub fn loudness_cached(track_id: u64, target_lufs: f64) -> Result<Option<Loudnes
 pub async fn loudness_measure_cached(
     track_id: u64,
     target_lufs: f64,
-) -> Result<Option<LoudnessDto>, String> {
+) -> Result<Option<LoudnessDto>, FfiError> {
     if let Ok(store) = loudness_store() {
         if let Some(existing) = store.get(track_id) {
             return Ok(Some(loudness_dto(track_id, *existing, target_lufs)));
@@ -1510,9 +1545,9 @@ pub async fn loudness_measure_cached(
     }
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?
+        .ok_or_else(|| FfiError::internal("core not initialized"))?
         .join("audio");
-    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(|e| e.to_string())?;
+    let cache = ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)?;
     let Some(path) = cache.cached_path(track_id) else {
         return Ok(None);
     };
@@ -1520,7 +1555,7 @@ pub async fn loudness_measure_cached(
     let measured =
         tokio::task::spawn_blocking(move || ncm_playback::loudness::measure_file(&path_for_task))
             .await
-            .map_err(|e| e.to_string())??;
+            .map_err(FfiError::from)??;
     let Some(m) = measured else {
         return Ok(None);
     };
@@ -1540,13 +1575,13 @@ pub async fn loudness_measure_path(
     path: String,
     target_lufs: f64,
     format_hint: Option<String>,
-) -> Result<Option<LoudnessDto>, String> {
+) -> Result<Option<LoudnessDto>, FfiError> {
     let path_buf = std::path::PathBuf::from(&path);
     let measured = tokio::task::spawn_blocking(move || {
         ncm_playback::loudness::measure_file_with_hint(&path_buf, format_hint.as_deref())
     })
     .await
-    .map_err(|e| e.to_string())??;
+    .map_err(FfiError::from)??;
     let Some(m) = measured else {
         return Ok(None);
     };
@@ -1570,17 +1605,17 @@ fn now_ms() -> u64 {
 // ---------------- 每日推荐 / 心动模式 ----------------
 
 /// 每日推荐歌曲(原版每日推荐)
-pub async fn daily_recommend_songs() -> Result<Vec<SongDto>, String> {
+pub async fn daily_recommend_songs() -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::DailyRecommend)?;
     let songs = provider
         .daily_recommend_songs()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(songs.into_iter().map(song_dto).collect())
 }
 
 /// 每日推荐歌单(原版推荐歌单, 需要登录)
-pub async fn daily_recommend_playlists() -> Result<Vec<Playlist>, String> {
+pub async fn daily_recommend_playlists() -> Result<Vec<Playlist>, FfiError> {
     ffi_forward!(
         Capability::DailyRecommend,
         provider.daily_recommend_playlists()
@@ -1592,12 +1627,12 @@ pub async fn heart_mode_songs(
     song_id: u64,
     playlist_id: u64,
     count: u32,
-) -> Result<Vec<SongDto>, String> {
+) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::DailyRecommend)?;
     let songs = provider
         .intelligence_songs(song_id, playlist_id, count)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(songs.into_iter().map(song_dto).collect())
 }
 
@@ -1615,7 +1650,7 @@ pub struct _SuggestItem {
 }
 
 /// 搜索建议(输入联想)
-pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, String> {
+pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, FfiError> {
     if keywords.trim().is_empty() {
         return Ok(Vec::new());
     }
@@ -1625,41 +1660,41 @@ pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, String
     )
 }
 
-fn history_store() -> Result<ncm_service::HistoryStore, String> {
+fn history_store() -> Result<ncm_service::HistoryStore, FfiError> {
     let dir = DATA_DIR
         .get()
-        .ok_or_else(|| "core not initialized".to_string())?;
-    ncm_service::HistoryStore::open(dir).map_err(|e| e.to_string())
+        .ok_or_else(|| FfiError::internal("core not initialized"))?;
+    ncm_service::HistoryStore::open(dir).map_err(FfiError::from)
 }
 
 /// 搜索历史(最近在前)
-pub fn search_history() -> Result<Vec<String>, String> {
+pub fn search_history() -> Result<Vec<String>, FfiError> {
     Ok(history_store()?.search_history())
 }
 
 /// 记一条搜索(去重, 最近在前), 返回新的历史列表
-pub fn record_search(keyword: String) -> Result<Vec<String>, String> {
+pub fn record_search(keyword: String) -> Result<Vec<String>, FfiError> {
     history_store()?
         .record_search(&keyword)
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
-pub fn clear_search_history() -> Result<bool, String> {
-    history_store()?.clear_search().map_err(|e| e.to_string())?;
+pub fn clear_search_history() -> Result<bool, FfiError> {
+    history_store()?.clear_search().map_err(FfiError::from)?;
     Ok(true)
 }
 
 /// 记一次播放到本地历史(未登录/离线时的"最近听过"来源)
-pub fn remember_play(song: SongDto) -> Result<bool, String> {
+pub fn remember_play(song: SongDto) -> Result<bool, FfiError> {
     let domain = song_from_dto(&song);
     history_store()?
         .record_play(&domain)
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(true)
 }
 
 /// 本地播放历史
-pub fn local_recent_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+pub fn local_recent_songs(limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let n = limit.max(1) as usize;
     Ok(history_store()?
         .played()
@@ -1670,9 +1705,9 @@ pub fn local_recent_songs(limit: u32) -> Result<Vec<SongDto>, String> {
 }
 
 /// 最近听过: 登录时优先服务端记录, 失败/未登录回落到本地历史
-pub async fn recent_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn recent_songs(limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let logged_in = {
-        let guard = core()?.lock().map_err(|e| e.to_string())?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
         guard.session.is_logged_in()
     };
     if logged_in {
@@ -1698,12 +1733,12 @@ pub struct AlbumDetailDto {
     pub songs: Vec<SongDto>,
 }
 
-pub async fn album_detail(album_id: u64) -> Result<AlbumDetailDto, String> {
+pub async fn album_detail(album_id: u64) -> Result<AlbumDetailDto, FfiError> {
     let provider = with_provider(Capability::Album)?;
     let album = provider
         .album_detail(album_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(AlbumDetailDto {
         id: album.id,
         name: album.name,
@@ -1738,7 +1773,7 @@ pub struct _PlaylistDetail {
 }
 
 /// 歌单详情(歌单页头部信息)
-pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetail, String> {
+pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetail, FfiError> {
     ffi_forward!(
         Capability::PlaylistDetail,
         provider.playlist_detail(playlist_id)
@@ -1746,12 +1781,12 @@ pub async fn playlist_detail(playlist_id: u64) -> Result<PlaylistDetail, String>
 }
 
 /// 收藏/取消收藏歌单(需登录)
-pub async fn set_playlist_subscribed(playlist_id: u64, subscribed: bool) -> Result<bool, String> {
+pub async fn set_playlist_subscribed(playlist_id: u64, subscribed: bool) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::PlaylistDetail)?;
     provider
         .set_playlist_subscribed(playlist_id, subscribed)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 #[frb(mirror(Comment))]
@@ -1892,7 +1927,7 @@ pub struct _DigitalAlbumSalesEntry {
 pub async fn digital_album_purchased(
     limit: u32,
     offset: u32,
-) -> Result<DigitalAlbumPurchased, String> {
+) -> Result<DigitalAlbumPurchased, FfiError> {
     ffi_forward!(
         Capability::DigitalAlbum,
         provider.digital_album_purchased(limit, offset)
@@ -1900,7 +1935,7 @@ pub async fn digital_album_purchased(
 }
 
 /// 已购单曲(需登录; limit/offset 分页)
-pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedPage, String> {
+pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedPage, FfiError> {
     ffi_forward!(
         Capability::DigitalAlbum,
         provider.song_purchased(limit, offset)
@@ -1908,7 +1943,7 @@ pub async fn song_purchased(limit: u32, offset: u32) -> Result<SongPurchasedPage
 }
 
 /// 数字专辑详情(只读; 不提供下单)
-pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, String> {
+pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, FfiError> {
     ffi_forward!(
         Capability::DigitalAlbum,
         provider.digital_album_detail(album_id)
@@ -1916,7 +1951,9 @@ pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, S
 }
 
 /// 数字专辑销量(album_ids 逗号分隔)
-pub async fn digital_album_sales(album_ids: String) -> Result<Vec<DigitalAlbumSalesEntry>, String> {
+pub async fn digital_album_sales(
+    album_ids: String,
+) -> Result<Vec<DigitalAlbumSalesEntry>, FfiError> {
     ffi_forward!(
         Capability::DigitalAlbum,
         provider.digital_album_sales(&album_ids)
@@ -1929,7 +1966,7 @@ pub async fn comments(
     resource_id: u64,
     limit: u32,
     offset: u32,
-) -> Result<CommentPage, String> {
+) -> Result<CommentPage, FfiError> {
     ffi_forward!(
         Capability::Comment,
         provider.comments(&kind, resource_id, limit, offset)
@@ -1938,14 +1975,14 @@ pub async fn comments(
 
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
-pub async fn comment_stats(thread_id: String) -> Result<CommentStats, String> {
+pub async fn comment_stats(thread_id: String) -> Result<CommentStats, FfiError> {
     ffi_forward!(Capability::Comment, provider.comment_stats(&thread_id))
 }
 
 /// 单曲喜欢状态 + 喜欢总数(需要登录; 官方 App 的 /api/song/like/get).
 ///
 /// 匿名调用会得到 auth 错误(上游回 301), UI 侧当作"不显示数量"处理即可。
-pub async fn song_like_state(track_id: u64) -> Result<SongLikeState, String> {
+pub async fn song_like_state(track_id: u64) -> Result<SongLikeState, FfiError> {
     ffi_forward!(Capability::SongLike, provider.song_like_state(track_id))
 }
 
@@ -1954,7 +1991,7 @@ pub async fn hot_comments(
     thread_id: String,
     limit: u32,
     offset: u32,
-) -> Result<CommentPage, String> {
+) -> Result<CommentPage, FfiError> {
     ffi_forward!(
         Capability::Comment,
         provider.hot_comments(&thread_id, limit, offset)
@@ -1962,12 +1999,12 @@ pub async fn hot_comments(
 }
 
 /// 分享资源到动态(需登录). kind = song | playlist | album | podcast
-pub async fn share_resource(kind: String, resource_id: u64, msg: String) -> Result<bool, String> {
+pub async fn share_resource(kind: String, resource_id: u64, msg: String) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Share)?;
     provider
         .share_resource(&kind, resource_id, &msg)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 // ---------------- 播客 ----------------
@@ -2011,7 +2048,7 @@ fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
 }
 
 /// 热门播客/电台
-pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadio>, FfiError> {
     ffi_forward!(Capability::Podcast, provider.podcast_hot(limit))
 }
 
@@ -2020,27 +2057,27 @@ pub async fn podcast_programs(
     radio_id: u64,
     limit: u32,
     offset: u32,
-) -> Result<Vec<PodcastProgramDto>, String> {
+) -> Result<Vec<PodcastProgramDto>, FfiError> {
     let provider = with_provider(Capability::Podcast)?;
     let list = provider
         .podcast_programs(radio_id, limit, offset)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(program_dto).collect())
 }
 
 /// 单个节目详情
-pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, String> {
+pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, FfiError> {
     let provider = with_provider(Capability::Podcast)?;
     let p = provider
         .podcast_program(program_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(program_dto(p))
 }
 
 /// 播客/电台详情
-pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadio, String> {
+pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadio, FfiError> {
     ffi_forward!(Capability::PodcastDetail, provider.podcast_radio(radio_id))
 }
 
@@ -2123,22 +2160,22 @@ pub struct _RadioSubscriberPage {
 }
 
 /// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
-pub async fn radio_explore_home() -> Result<RadioExploreHome, String> {
+pub async fn radio_explore_home() -> Result<RadioExploreHome, FfiError> {
     ffi_forward!(Capability::RadioExplore, provider.radio_explore_home())
 }
 
 /// 某分类推荐电台(dj_recommend_type; cate_id 必须是真实分类 id).
-pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadio>, String> {
+pub async fn radio_recommend(cate_id: u64) -> Result<Vec<PodcastRadio>, FfiError> {
     ffi_forward!(Capability::RadioExplore, provider.radio_recommend(cate_id))
 }
 
 /// 电台榜单(kind: hot/new/pay/hours/newcomer/popular/program).
-pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, String> {
+pub async fn radio_toplist(kind: String) -> Result<RadioToplistDto, FfiError> {
     let provider = with_provider(Capability::RadioExplore)?;
     let r = provider
         .radio_toplist(&kind)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(RadioToplistDto {
         kind,
         radios: r.radios,
@@ -2160,7 +2197,7 @@ pub async fn radio_subscribers(
     radio_id: u64,
     limit: u32,
     time_ms: Option<u64>,
-) -> Result<RadioSubscriberPage, String> {
+) -> Result<RadioSubscriberPage, FfiError> {
     ffi_forward!(
         Capability::RadioExplore,
         provider.radio_subscribers(radio_id, limit, time_ms)
@@ -2177,7 +2214,7 @@ pub struct _HotSearchTerm {
 }
 
 /// 热门搜索榜(按热度排序)
-pub async fn hot_search() -> Result<Vec<HotSearchTerm>, String> {
+pub async fn hot_search() -> Result<Vec<HotSearchTerm>, FfiError> {
     ffi_forward!(Capability::SearchHot, provider.hot_search())
 }
 
@@ -2195,7 +2232,7 @@ pub struct _SearchExact {
 }
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
-pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, String> {
+pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, FfiError> {
     ffi_forward!(
         Capability::SearchSuggest,
         provider.search_suggest_keywords(&keywords)
@@ -2203,7 +2240,7 @@ pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, St
 }
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
-pub async fn search_exact(keywords: String) -> Result<SearchExact, String> {
+pub async fn search_exact(keywords: String) -> Result<SearchExact, FfiError> {
     ffi_forward!(Capability::SearchSuggest, provider.search_exact(&keywords))
 }
 
@@ -2219,7 +2256,7 @@ pub struct _HotSearchDetailItem {
 }
 
 /// 热搜榜详情(20 条, 带 score/rank; 需要登录态更稳)
-pub async fn hot_search_detail() -> Result<Vec<HotSearchDetailItem>, String> {
+pub async fn hot_search_detail() -> Result<Vec<HotSearchDetailItem>, FfiError> {
     ffi_forward!(Capability::SearchHot, provider.hot_search_detail())
 }
 
@@ -2233,24 +2270,21 @@ pub struct _DefaultSearch {
 }
 
 /// 默认/推荐搜索词("猜你想搜"); 接口没有时返回 null
-pub async fn default_search() -> Result<Option<DefaultSearch>, String> {
+pub async fn default_search() -> Result<Option<DefaultSearch>, FfiError> {
     ffi_forward!(Capability::SearchHot, provider.default_search())
 }
 
 // ---------------- 推荐页(私人 FM) / 我的(收藏播客/关注艺人/动态) ----------------
 
 /// 私人 FM(需登录)
-pub async fn personal_fm(limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn personal_fm(limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::PersonalFm)?;
-    let songs = provider
-        .personal_fm(limit)
-        .await
-        .map_err(|e| e.to_string())?;
+    let songs = provider.personal_fm(limit).await.map_err(FfiError::from)?;
     Ok(songs.into_iter().map(song_dto).collect())
 }
 
 /// 已收藏/订阅的播客(需登录)
-pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+pub async fn subscribed_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, FfiError> {
     ffi_forward!(Capability::Podcast, provider.subscribed_podcasts(limit))
 }
 
@@ -2263,7 +2297,7 @@ pub struct _Artist {
 }
 
 /// 关注的艺人(需登录)
-pub async fn subscribed_artists(limit: u32) -> Result<Vec<Artist>, String> {
+pub async fn subscribed_artists(limit: u32) -> Result<Vec<Artist>, FfiError> {
     ffi_forward!(Capability::Feed, provider.subscribed_artists(limit))
 }
 
@@ -2294,12 +2328,12 @@ pub struct FeedEventDto {
 }
 
 /// 关注动态(需登录): 关注的人/艺人发布的单曲、歌单、专辑、节目或文字动态
-pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>, String> {
+pub async fn feed_events(limit: u32, last_time: i64) -> Result<Vec<FeedEventDto>, FfiError> {
     let provider = with_provider(Capability::Feed)?;
     let list = provider
         .feed_events(limit, last_time)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(feed_event_dto).collect())
 }
 
@@ -2314,12 +2348,12 @@ pub struct FeedPageDto {
 
 /// 关注动态的一页(带游标). 与 feedEvents 并存:
 /// feedEvents 只给第一页(老调用方兼容), 需要"加载更多"的界面用这个.
-pub async fn feed_page(limit: u32, last_time: i64) -> Result<FeedPageDto, String> {
+pub async fn feed_page(limit: u32, last_time: i64) -> Result<FeedPageDto, FfiError> {
     let provider = with_provider(Capability::Feed)?;
     let page = provider
         .feed_page(limit, last_time)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(FeedPageDto {
         events: page.events.into_iter().map(feed_event_dto).collect(),
         last_time: page.last_time,
@@ -2355,12 +2389,12 @@ pub async fn user_events(
     uid: u64,
     limit: u32,
     last_time: i64,
-) -> Result<Vec<FeedEventDto>, String> {
+) -> Result<Vec<FeedEventDto>, FfiError> {
     let provider = with_provider(Capability::Feed)?;
     let list = provider
         .user_events(uid, limit, last_time)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(feed_event_dto).collect())
 }
 
@@ -2369,7 +2403,7 @@ pub async fn event_comments(
     thread_id: String,
     limit: u32,
     offset: u32,
-) -> Result<CommentPage, String> {
+) -> Result<CommentPage, FfiError> {
     ffi_forward!(
         Capability::Feed,
         provider.event_comments(&thread_id, limit, offset)
@@ -2377,12 +2411,12 @@ pub async fn event_comments(
 }
 
 /// 点赞/取消点赞一条动态
-pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, String> {
+pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, FfiError> {
     ffi_forward!(Capability::Feed, provider.like_event(&thread_id, liked))
 }
 
 /// 转发一条动态(附转发语)
-pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, String> {
+pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::Feed,
         provider.forward_event(event_id, user_id, &msg)
@@ -2399,13 +2433,13 @@ pub struct PlayRankEntryDto {
 
 /// 听歌排行(需登录): period = "all"(总量排行) | "week"(当周排行).
 /// 返回顺序即名次(1 开始由 UI 用下标表达).
-pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, String> {
+pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, FfiError> {
     let provider = with_provider(Capability::ListeningRank)?;
     let period = RankingPeriod::parse(&period).unwrap_or_default();
     let list = provider
         .play_ranking(period)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list
         .into_iter()
         .map(|e| PlayRankEntryDto {
@@ -2418,13 +2452,16 @@ pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, Strin
 
 /// 他人常听排行(用户主页): uid = 目标用户, period = "all" | "week".
 /// 对方没公开/没有记录时返回**空列表**(不是错误).
-pub async fn user_play_ranking(uid: u64, period: String) -> Result<Vec<PlayRankEntryDto>, String> {
+pub async fn user_play_ranking(
+    uid: u64,
+    period: String,
+) -> Result<Vec<PlayRankEntryDto>, FfiError> {
     let provider = with_provider(Capability::ListeningRank)?;
     let period = RankingPeriod::parse(&period).unwrap_or_default();
     let list = provider
         .play_ranking_of(uid, period)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list
         .into_iter()
         .map(|e| PlayRankEntryDto {
@@ -2446,22 +2483,22 @@ pub struct _StyleTag {
 }
 
 /// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
-pub async fn style_preference() -> Result<Vec<StyleTag>, String> {
+pub async fn style_preference() -> Result<Vec<StyleTag>, FfiError> {
     ffi_forward!(Capability::StyleRecommend, provider.style_preference())
 }
 
 /// 某个曲风下的歌曲
-pub async fn style_songs(tag_id: String, limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn style_songs(tag_id: String, limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::StyleRecommend)?;
     let list = provider
         .style_songs(&tag_id, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(song_dto).collect())
 }
 
 /// 某个曲风下的歌单
-pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<Playlist>, String> {
+pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<Playlist>, FfiError> {
     ffi_forward!(
         Capability::StyleRecommend,
         provider.style_playlists(&tag_id, limit)
@@ -2481,7 +2518,7 @@ pub struct _ChartSummary {
 }
 
 /// 排行榜列表(飙升/新歌/热歌/原创 + 语种/曲风榜)
-pub async fn chart_list() -> Result<Vec<ChartSummary>, String> {
+pub async fn chart_list() -> Result<Vec<ChartSummary>, FfiError> {
     ffi_forward!(Capability::Chart, provider.charts())
 }
 
@@ -2506,12 +2543,12 @@ pub struct _ToplistCatalogGroup {
 }
 
 /// 最新专辑(album_newest, 固定 12 张); 复用 AlbumItem
-pub async fn newest_albums(limit: u32) -> Result<Vec<AlbumItem>, String> {
+pub async fn newest_albums(limit: u32) -> Result<Vec<AlbumItem>, FfiError> {
     ffi_forward!(Capability::NewRelease, provider.newest_albums(limit))
 }
 
 /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组)
-pub async fn toplist_catalog() -> Result<Vec<ToplistCatalogGroup>, String> {
+pub async fn toplist_catalog() -> Result<Vec<ToplistCatalogGroup>, FfiError> {
     ffi_forward!(Capability::Chart, provider.toplist_catalog())
 }
 
@@ -2524,7 +2561,7 @@ pub struct _PlaylistCategory {
 }
 
 /// 歌单分类(歌单广场的筛选条)
-pub async fn playlist_categories() -> Result<Vec<PlaylistCategory>, String> {
+pub async fn playlist_categories() -> Result<Vec<PlaylistCategory>, FfiError> {
     ffi_forward!(Capability::Playlist, provider.playlist_categories())
 }
 
@@ -2533,22 +2570,22 @@ pub async fn playlists_by_category(
     cat: String,
     limit: u32,
     offset: u32,
-) -> Result<Vec<Playlist>, String> {
+) -> Result<Vec<Playlist>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
     let list = provider
         .playlists_by_category(&cat, limit, offset)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list)
 }
 
 /// 精品歌单(编辑精选)
-pub async fn high_quality_playlists(cat: String, limit: u32) -> Result<Vec<Playlist>, String> {
+pub async fn high_quality_playlists(cat: String, limit: u32) -> Result<Vec<Playlist>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
     let list = provider
         .high_quality_playlists(&cat, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list)
 }
 
@@ -2563,12 +2600,12 @@ pub struct _AlbumItem {
 }
 
 /// 我收藏的专辑(需登录)
-pub async fn subscribed_albums(limit: u32) -> Result<Vec<AlbumItem>, String> {
+pub async fn subscribed_albums(limit: u32) -> Result<Vec<AlbumItem>, FfiError> {
     ffi_forward!(Capability::AlbumSub, provider.subscribed_albums(limit))
 }
 
 /// 收藏/取消收藏专辑(需登录)
-pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<bool, String> {
+pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::AlbumSub,
         provider.set_album_subscribed(album_id, subscribed)
@@ -2576,7 +2613,7 @@ pub async fn set_album_subscribed(album_id: u64, subscribed: bool) -> Result<boo
 }
 
 /// 新建歌单(需登录), 返回新歌单 id. privacy: 0=公开 10=私密
-pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, String> {
+pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.create_playlist(&name, privacy as u8)
@@ -2584,7 +2621,7 @@ pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, String> 
 }
 
 /// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
-pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result<bool, String> {
+pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.playlist_tracks_add(playlist_id, &song_ids)
@@ -2592,7 +2629,7 @@ pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result
 }
 
 /// 删除歌单(需登录, 且只能删自己的)
-pub async fn delete_playlist(playlist_id: u64) -> Result<bool, String> {
+pub async fn delete_playlist(playlist_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.delete_playlist(playlist_id)
@@ -2600,7 +2637,7 @@ pub async fn delete_playlist(playlist_id: u64) -> Result<bool, String> {
 }
 
 /// 改歌单名
-pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, String> {
+pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.rename_playlist(playlist_id, &name)
@@ -2608,7 +2645,7 @@ pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, Str
 }
 
 /// 改歌单简介
-pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, String> {
+pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.update_playlist_desc(playlist_id, &desc)
@@ -2616,7 +2653,7 @@ pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool
 }
 
 /// 把一首歌移出歌单(需登录)
-pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<bool, String> {
+pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::PlaylistEdit,
         provider.remove_track(playlist_id, ncm_domain::TrackId::new(track_id))
@@ -2624,7 +2661,7 @@ pub async fn remove_from_playlist(playlist_id: u64, track_id: u64) -> Result<boo
 }
 
 /// 每日推荐"不感兴趣"(需登录)
-pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, String> {
+pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::DailyRecommend,
         provider.dislike_recommend_song(song_id)
@@ -2632,12 +2669,12 @@ pub async fn dislike_recommend_song(song_id: u64) -> Result<bool, String> {
 }
 
 /// 私人 FM"不再播放"(需登录)
-pub async fn trash_fm_song(song_id: u64) -> Result<bool, String> {
+pub async fn trash_fm_song(song_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(Capability::PersonalFm, provider.trash_fm_song(song_id))
 }
 
 /// 历史日推可用日期(黑胶 VIP; 新的在前)
-pub async fn history_recommend_dates() -> Result<Vec<String>, String> {
+pub async fn history_recommend_dates() -> Result<Vec<String>, FfiError> {
     ffi_forward!(
         Capability::DailyRecommend,
         provider.history_recommend_dates()
@@ -2645,52 +2682,56 @@ pub async fn history_recommend_dates() -> Result<Vec<String>, String> {
 }
 
 /// 某个日期的历史日推曲目
-pub async fn history_recommend_songs(date: String) -> Result<Vec<SongDto>, String> {
+pub async fn history_recommend_songs(date: String) -> Result<Vec<SongDto>, FfiError> {
     ffi_forward!(Capability::DailyRecommend, provider.history_recommend_songs(&date), map_each song_dto)
 }
 
 /// 推荐新音乐("新歌速递")
-pub async fn new_songs(limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn new_songs(limit: u32) -> Result<Vec<SongDto>, FfiError> {
     ffi_forward!(Capability::NewRelease, provider.new_songs(limit), map_each song_dto)
 }
 
 /// 新碟上架(limit<=30, offset 翻页); 复用 subscribed_albums 的 AlbumItem
-pub async fn new_albums(limit: u32, offset: u32) -> Result<Vec<AlbumItem>, String> {
+pub async fn new_albums(limit: u32, offset: u32) -> Result<Vec<AlbumItem>, FfiError> {
     ffi_forward!(Capability::NewRelease, provider.new_albums(limit, offset))
 }
 
 /// 相似歌曲
-pub async fn similar_songs(song_id: u64, limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn similar_songs(song_id: u64, limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::Similar)?;
     let list = provider
         .similar_songs(song_id, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(song_dto).collect())
 }
 
 /// 相似歌单
-pub async fn similar_playlists(song_id: u64, limit: u32) -> Result<Vec<Playlist>, String> {
+pub async fn similar_playlists(song_id: u64, limit: u32) -> Result<Vec<Playlist>, FfiError> {
     let provider = with_provider(Capability::Similar)?;
     let list = provider
         .similar_playlists(song_id, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list)
 }
 
 /// 相似歌手(需登录)
-pub async fn similar_artists(artist_id: u64) -> Result<Vec<Artist>, String> {
+pub async fn similar_artists(artist_id: u64) -> Result<Vec<Artist>, FfiError> {
     ffi_forward!(Capability::Similar, provider.similar_artists(artist_id))
 }
 
 /// 评论点赞/取消点赞(threadId 来自 CommentPage.thread_id)
-pub async fn like_comment(thread_id: String, comment_id: u64, liked: bool) -> Result<bool, String> {
+pub async fn like_comment(
+    thread_id: String,
+    comment_id: u64,
+    liked: bool,
+) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Comment)?;
     provider
         .like_comment(&thread_id, comment_id, liked)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 某条评论下的回复(楼层)
@@ -2698,7 +2739,7 @@ pub async fn comment_replies(
     thread_id: String,
     parent_comment_id: u64,
     limit: u32,
-) -> Result<CommentPage, String> {
+) -> Result<CommentPage, FfiError> {
     ffi_forward!(
         Capability::Comment,
         provider.comment_replies(&thread_id, parent_comment_id, limit)
@@ -2710,12 +2751,12 @@ pub async fn reply_comment(
     thread_id: String,
     comment_id: u64,
     content: String,
-) -> Result<bool, String> {
+) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Comment)?;
     provider
         .reply_comment(&thread_id, comment_id, &content)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 用户列表项: 直接镜像 domain 类型 `UserItem`.
@@ -2730,7 +2771,7 @@ pub struct _UserItem {
 }
 
 /// 某人关注的人(uid = 0 用当前账号)
-pub async fn user_follows(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, String> {
+pub async fn user_follows(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, FfiError> {
     ffi_forward!(
         Capability::Follow,
         provider.user_follows(uid, limit, offset)
@@ -2738,7 +2779,7 @@ pub async fn user_follows(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserI
 }
 
 /// 某人的粉丝(uid = 0 用当前账号)
-pub async fn user_followeds(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, String> {
+pub async fn user_followeds(uid: u64, limit: u32, offset: u32) -> Result<Vec<UserItem>, FfiError> {
     ffi_forward!(
         Capability::Follow,
         provider.user_followeds(uid, limit, offset)
@@ -2746,12 +2787,12 @@ pub async fn user_followeds(uid: u64, limit: u32, offset: u32) -> Result<Vec<Use
 }
 
 /// 关注/取关某人(需登录)
-pub async fn set_follow(uid: u64, follow: bool) -> Result<bool, String> {
+pub async fn set_follow(uid: u64, follow: bool) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Follow)?;
     provider
         .set_follow(uid, follow)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 关注/粉丝数: 直接镜像 domain 类型 `FollowCount`.
@@ -2762,27 +2803,27 @@ pub struct _FollowCount {
 }
 
 /// 我的关注/粉丝数(需登录)
-pub async fn follow_counts() -> Result<FollowCount, String> {
+pub async fn follow_counts() -> Result<FollowCount, FfiError> {
     ffi_forward!(Capability::Follow, provider.follow_counts())
 }
 
 /// 最近播放的专辑(需登录)
-pub async fn recent_albums(limit: u32) -> Result<Vec<AlbumItem>, String> {
+pub async fn recent_albums(limit: u32) -> Result<Vec<AlbumItem>, FfiError> {
     ffi_forward!(Capability::Recent, provider.recent_albums(limit))
 }
 
 /// 最近播放的歌单(需登录)
-pub async fn recent_playlists(limit: u32) -> Result<Vec<Playlist>, String> {
+pub async fn recent_playlists(limit: u32) -> Result<Vec<Playlist>, FfiError> {
     let provider = with_provider(Capability::Recent)?;
     let list = provider
         .recent_playlists(limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list)
 }
 
 /// 最近播放的播客/电台(需登录)
-pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, String> {
+pub async fn recent_podcasts(limit: u32) -> Result<Vec<PodcastRadio>, FfiError> {
     ffi_forward!(Capability::Recent, provider.recent_podcasts(limit))
 }
 
@@ -2809,17 +2850,17 @@ pub struct _SigninStatus {
 }
 
 /// 云贝签到状态(需登录)
-pub async fn signin_status() -> Result<SigninStatus, String> {
+pub async fn signin_status() -> Result<SigninStatus, FfiError> {
     ffi_forward!(Capability::Signin, provider.signin_status())
 }
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
-pub async fn sign_in() -> Result<SigninStatus, String> {
+pub async fn sign_in() -> Result<SigninStatus, FfiError> {
     ffi_forward!(Capability::Signin, provider.sign_in())
 }
 
 /// 删除自己的评论(需登录)
-pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, String> {
+pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(
         Capability::Comment,
         provider.delete_comment(&thread_id, comment_id)
@@ -2835,22 +2876,22 @@ pub struct _WikiFact {
 }
 
 /// 歌曲百科(曲风/语种/BPM/获奖成就). 没有百科时返回空列表
-pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFact>, String> {
+pub async fn song_wiki(song_id: u64) -> Result<Vec<WikiFact>, FfiError> {
     ffi_forward!(Capability::Wiki, provider.song_wiki(song_id))
 }
 
 /// 新歌速递(按地区; area = all|zh|ea|jp|kr)
-pub async fn new_songs_by_area(area: String, limit: u32) -> Result<Vec<SongDto>, String> {
+pub async fn new_songs_by_area(area: String, limit: u32) -> Result<Vec<SongDto>, FfiError> {
     let provider = with_provider(Capability::NewRelease)?;
     let list = provider
         .new_songs_by_area(&area, limit)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(FfiError::from)?;
     Ok(list.into_iter().map(song_dto).collect())
 }
 
 /// 新碟上架(按地区)
-pub async fn new_albums_by_area(area: String, limit: u32) -> Result<Vec<AlbumItem>, String> {
+pub async fn new_albums_by_area(area: String, limit: u32) -> Result<Vec<AlbumItem>, FfiError> {
     ffi_forward!(
         Capability::NewRelease,
         provider.new_albums_by_area(&area, limit)
@@ -2868,7 +2909,7 @@ pub struct _HotArtist {
 }
 
 /// 热门歌手榜
-pub async fn hot_artists(limit: u32, offset: u32) -> Result<Vec<HotArtist>, String> {
+pub async fn hot_artists(limit: u32, offset: u32) -> Result<Vec<HotArtist>, FfiError> {
     ffi_forward!(Capability::NewRelease, provider.hot_artists(limit, offset))
 }
 
@@ -2882,9 +2923,9 @@ pub struct MessageCountsDto {
 }
 
 /// 未读消息计数(需登录)
-pub async fn message_counts() -> Result<MessageCountsDto, String> {
+pub async fn message_counts() -> Result<MessageCountsDto, FfiError> {
     let provider = with_provider(Capability::Message)?;
-    let c = provider.message_counts().await.map_err(|e| e.to_string())?;
+    let c = provider.message_counts().await.map_err(FfiError::from)?;
     Ok(MessageCountsDto {
         private: c.private,
         notices: c.notices,
@@ -2905,7 +2946,7 @@ pub struct _PrivateSession {
 }
 
 /// 私信会话列表(需登录)
-pub async fn private_sessions(limit: u32, offset: u32) -> Result<Vec<PrivateSession>, String> {
+pub async fn private_sessions(limit: u32, offset: u32) -> Result<Vec<PrivateSession>, FfiError> {
     ffi_forward!(
         Capability::Message,
         provider.private_sessions(limit, offset)
@@ -2927,7 +2968,7 @@ pub async fn private_history(
     user_id: u64,
     limit: u32,
     before_ms: u64,
-) -> Result<Vec<PrivateMessage>, String> {
+) -> Result<Vec<PrivateMessage>, FfiError> {
     ffi_forward!(
         Capability::Message,
         provider.private_history(user_id, limit, before_ms)
@@ -2935,7 +2976,7 @@ pub async fn private_history(
 }
 
 /// 发送私信(需登录). 纯文本, 成功后应重拉 [private_history] 刷新会话.
-pub async fn private_send(user_id: u64, content: String) -> Result<bool, String> {
+pub async fn private_send(user_id: u64, content: String) -> Result<bool, FfiError> {
     ffi_forward!(Capability::Message, provider.private_send(user_id, content))
 }
 
@@ -2958,7 +2999,7 @@ pub struct _InboxItem {
 }
 
 /// 通知(需登录, 新的在前; last_time_ms = 0 取最新一页)
-pub async fn message_notices(limit: u32, last_time_ms: u64) -> Result<Vec<InboxItem>, String> {
+pub async fn message_notices(limit: u32, last_time_ms: u64) -> Result<Vec<InboxItem>, FfiError> {
     ffi_forward!(
         Capability::Message,
         provider.message_notices(limit, last_time_ms)
@@ -2966,7 +3007,7 @@ pub async fn message_notices(limit: u32, last_time_ms: u64) -> Result<Vec<InboxI
 }
 
 /// 评论/回复消息(需登录, 新的在前)
-pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItem>, String> {
+pub async fn comment_messages(limit: u32) -> Result<Vec<InboxItem>, FfiError> {
     ffi_forward!(Capability::Message, provider.comment_messages(limit))
 }
 
@@ -2984,7 +3025,7 @@ pub struct _ForwardItem {
 }
 
 /// 消息中心"@我"(需登录; last_time_ms 预留游标形状, 接口实际用 offset/limit, 恒取最新一页)
-pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItem>, String> {
+pub async fn forward_messages(limit: u32, last_time_ms: u64) -> Result<Vec<ForwardItem>, FfiError> {
     ffi_forward!(
         Capability::Message,
         provider.forward_messages(limit, last_time_ms)
@@ -3003,13 +3044,13 @@ pub struct _RecentContact {
 }
 
 /// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
-pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContact>, String> {
+pub async fn recent_contacts(limit: u32) -> Result<Vec<RecentContact>, FfiError> {
     ffi_forward!(Capability::Message, provider.recent_contacts(limit))
 }
 
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
-pub fn my_uid() -> Result<u64, String> {
-    let guard = core()?.lock().map_err(|e| e.to_string())?;
+pub fn my_uid() -> Result<u64, FfiError> {
+    let guard = core()?.lock().map_err(FfiError::from)?;
     Ok(guard
         .session
         .profile
@@ -3067,9 +3108,9 @@ pub struct _VipOverview {
 
 /// 黑胶会员总览: 会员等级/成长值/每日签到(云贝)/任务.
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
-pub async fn vip_overview() -> Result<VipOverview, String> {
+pub async fn vip_overview() -> Result<VipOverview, FfiError> {
     let provider = with_provider(Capability::Vip)?;
-    let o = provider.vip_overview().await.map_err(|e| e.to_string())?;
+    let o = provider.vip_overview().await.map_err(FfiError::from)?;
     Ok(o)
 }
 
@@ -3118,14 +3159,14 @@ pub struct _UserMedal {
 }
 
 /// 账号听歌等级(需要登录)
-pub async fn user_level() -> Result<UserLevel, String> {
+pub async fn user_level() -> Result<UserLevel, FfiError> {
     ffi_forward!(Capability::ProfileDetail, provider.user_level())
 }
 
 /// 账号勋章墙(需要登录). 全部勋章按服务端分类顺序平铺.
-pub async fn user_medals() -> Result<Vec<UserMedal>, String> {
+pub async fn user_medals() -> Result<Vec<UserMedal>, FfiError> {
     let provider = with_provider(Capability::ProfileDetail)?;
-    let wall = provider.user_medals().await.map_err(|e| e.to_string())?;
+    let wall = provider.user_medals().await.map_err(FfiError::from)?;
     Ok(wall.medals)
 }
 
@@ -3167,27 +3208,27 @@ pub struct _CloudPage {
 }
 
 /// 音乐云盘列表(需要登录). offset 翻页.
-pub async fn user_cloud(limit: u32, offset: u32) -> Result<CloudPage, String> {
+pub async fn user_cloud(limit: u32, offset: u32) -> Result<CloudPage, FfiError> {
     let provider = with_provider(Capability::Cloud)?;
     provider
         .user_cloud(limit, offset)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 删除云盘歌曲(需要登录). ids 是**云盘条目 id**(CloudSong.id).
-pub async fn cloud_delete(ids: Vec<u64>) -> Result<bool, String> {
+pub async fn cloud_delete(ids: Vec<u64>) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Cloud)?;
-    provider.cloud_delete(&ids).await.map_err(|e| e.to_string())
+    provider.cloud_delete(&ids).await.map_err(FfiError::from)
 }
 
 /// 云盘歌曲下载直链(需要登录; 签名 URL 约一小时过期).
-pub async fn cloud_song_url(song_id: u64) -> Result<Option<String>, String> {
+pub async fn cloud_song_url(song_id: u64) -> Result<Option<String>, FfiError> {
     let provider = with_provider(Capability::Cloud)?;
     provider
         .cloud_song_url(song_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(FfiError::from)
 }
 
 /// 传入的 cookie 里是否真的有非空 MUSIC_U("MUSIC_U=xxx")。
