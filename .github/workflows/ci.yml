@@ -42,6 +42,10 @@ jobs:
           channel: stable
           flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50, 要求 AGP>=9.1.1/Gradle>=9.5, 与本地 3.47.9 不一致
           cache: true
+      # golden(视觉回归)靠 FontLoader 直接读系统 CJK 字体, 缺了用例会整组 skip
+      # (等于没测); 干净 runner 没有中文字体, 所以先装(走带重试+镜像兜底的包装)。
+      - name: System deps (fonts-noto-cjk, golden 视觉基准需要)
+        run: bash tools/apt-install.sh fonts-noto-cjk
       - name: pub get
         working-directory: ui
         run: flutter pub get
@@ -53,9 +57,12 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
       - name: write-guard (测试不得直连写接口, CI 不触网)
         run: bash tools/check-write-guard.sh
-      - name: widget/unit tests (offline)
+      # 唯一的全量测试入口: 含 golden(12 张整屏像素)。只排除 network —— CI 没有
+      # 出口网络与凭据。golden 的渲染环境靠上一步的 fonts-noto-cjk + 固定的
+      # Flutter 3.47.9 对齐本地。
+      - name: widget/unit tests + golden (offline)
         working-directory: ui
-        run: flutter test --exclude-tags 'network || golden'
+        run: flutter test --exclude-tags network
 
   # 可直接安装的 **debug APK**(给模拟器/真机做视觉与回归验收)。
   #

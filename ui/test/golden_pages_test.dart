@@ -6,9 +6,12 @@
 // 运行前提(重要):
 //   * cwd 必须是 `ui/`(`matchesGoldenFile` 的路径按测试文件目录解析, 字体探测
 //     也依赖本机绝对路径);
-//   * golden 只在本机 Linux 生成与校验 —— 字体文件、Skia 版本、抗锯齿在不同平台/
+//   * golden 只在 Linux 上生成与校验 —— 字体文件、Skia 版本、抗锯齿在不同平台/
 //     不同 Flutter 版本间都有差异, 换机或升级 Flutter 后需 `--update-goldens` 重出
-//     基准, 否则会大面积假失败。**CI 暂不接入**(接入前得先把渲染环境容器化)。
+//     基准, 否则会大面积假失败。
+//   * CI 已接入(CI 里唯一跑 golden 的地方是 flutter 测试 job): 渲染环境靠
+//     `fonts-noto-cjk` + 固定 Flutter 3.47.9 与本地对齐, 命令是
+//     `flutter test --exclude-tags network`(只排联网 smoke)。
 //
 // 字体: flutter_test 的默认字体(FlutterTest)没有 CJK 字形, 中文会被画成方块,
 // golden 就失去意义。所以 setUpAll 里探测系统 CJK 字体, 用 FontLoader 注册后设成
@@ -22,9 +25,10 @@
 // 稳定性: 所有页面数据都走注入的假 loader(0 网络); 封面/头像一律 coverUrl: null
 // 走占位图; 无限动画(跑马灯/加载圈)用固定帧数推进代替 pumpAndSettle, 见 _pumpFrames。
 //
-// 门禁口径: 标 @Tags(['golden']), CI 用 `--exclude-tags 'network || golden'` 跳过
-// (GitHub runner 没有 fonts-noto-cjk, 渲染差异会假失败); 本机没有 CJK 字体时用例
-// 自动 skip 并给出安装提示, 不会红。
+// 门禁口径: 标 @Tags(['golden']) —— CI 与本地都跑(CI 侧先装 fonts-noto-cjk,
+// 见 .github/workflows/ci.yml / .gitlab-ci.yml)。本机没有 CJK 字体时用例自动 skip
+// 并给出安装提示, 不会红; CI 上字体装不上就会整组 skip, 所以 workflow 里把装字体
+// 单独做成一步, 失败即整条 job 红, 不会静默丢覆盖率。
 @Tags(['golden'])
 library;
 
