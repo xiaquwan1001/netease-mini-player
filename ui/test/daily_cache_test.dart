@@ -208,6 +208,34 @@ void main() {
     expect(await cache.lastCleanup(), isNotNull);
   });
 
+  test('days() 列出磁盘上的缓存天(倒序), 坏文件跳过并删除', () async {
+    clock = DateTime(2026, 3, 9, 8);
+    fetched = [_playlist(1, '九号')];
+    await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    clock = DateTime(2026, 3, 10, 9);
+    fetched = [_playlist(2, '十号')];
+    await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    await File('${cache.dir.path}/2026-03-08.json').writeAsString('{not json');
+    await File('${cache.dir.path}/notes.txt').writeAsString('keep me');
+
+    final days = await cache.days();
+    expect(days.map((d) => d.date), ['2026-03-10', '2026-03-09']);
+    expect(days.first.playlists.single.name, '十号');
+    expect(days.last.playlists.single.name, '九号');
+    expect(
+      File('${cache.dir.path}/2026-03-08.json').existsSync(),
+      isFalse,
+      reason: '损坏的日期文件读不出来时顺手删掉',
+    );
+    expect(File('${cache.dir.path}/notes.txt').existsSync(), isTrue);
+  });
+
+  test('目录为空/不存在时 days() 返回空表', () async {
+    expect(await cache.days(), isEmpty);
+    await cache.dir.create(recursive: true);
+    expect(await cache.days(), isEmpty);
+  });
+
   test('并发 load 同一实例不抛异常', () async {
     final results = await Future.wait([
       cache.load(fetch: doFetch, keepDays: 3, now: now),

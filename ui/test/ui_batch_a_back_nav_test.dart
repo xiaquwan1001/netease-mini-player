@@ -171,14 +171,27 @@ void main() {
     expect(calls, isNot(contains('SystemNavigator.pop')));
   });
 
-  testWidgets('首 tab 无二级态按返回 → 交还系统退出', (tester) async {
+  testWidgets('启动在推荐 tab; 退回首 tab 后再按返回才交还系统', (tester) async {
     final calls = recordSystemCalls(tester);
     await pumpHome(tester);
 
-    final handled = await tester.binding.handlePopRoute();
+    // 2026-11 用户要求: 冷启动落在「推荐」, 不再默认停在「搜索」
+    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(nav.selectedIndex, 1, reason: '启动默认 tab = 推荐');
+
+    // 第一次返回: 先退回搜索 tab(不退出)
+    var handled = await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
+    expect(handled, isTrue);
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.selectedIndex, 0);
+    expect(calls, isNot(contains('SystemNavigator.pop')));
 
+    // 第二次返回: 栈底无二级态 = 交给系统
+    handled = await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
     expect(handled, isFalse, reason: '栈底无二级态 = 交给系统');
     expect(calls, contains('SystemNavigator.pop'));
     expect(find.byType(HomePage), findsOneWidget, reason: 'Dart 侧不该自己 pop 根路由');
@@ -193,6 +206,10 @@ void main() {
     );
     expect(tester.takeException(), isNull);
 
+    // 启动在推荐 tab: 第一次返回退回首 tab, 第二次才交还系统
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
     final handled = await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));

@@ -3,6 +3,16 @@ import 'dart:io';
 
 import 'rust/api.dart' as rust;
 
+/// 磁盘上某一天的每日推荐歌单缓存(「历史日推」里合并展示用)。
+class DailyCacheDay {
+  const DailyCacheDay({required this.date, required this.playlists});
+
+  /// `YYYY-MM-DD`(本地时区), 与历史日推接口返回的日期串同一格式。
+  final String date;
+
+  final List<rust.Playlist> playlists;
+}
+
 /// 每日推荐歌单的本地缓存(按天落盘, 保留 N 天)。
 ///
 /// 为什么放在 Dart 侧而不是 Rust: 每日推荐本身要带账号身份, 但"今天这份已经
@@ -89,6 +99,34 @@ class DailyPlaylistCache {
     return removed;
   }
 
+  /// 磁盘上已有缓存的天(按日期倒序), 供「历史日推」合并展示。
+  ///
+  /// 损坏/旧格式/半截写入的文件由 [_read] 顺手删掉并跳过, 不会让整份清单报错:
+  /// 这里的结果只用来在 UI 里多列几行, 任何一天读不出来都只是少一行。
+  Future<List<DailyCacheDay>> days() async {
+    final out = <DailyCacheDay>[];
+    try {
+      if (!await dir.exists()) return const [];
+      final files = <File>[];
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is File && _dayFile.hasMatch(_name(entity.path))) {
+          files.add(entity);
+        }
+      }
+      for (final file in files) {
+        final day = _parseDayFile(file.path);
+        if (day == null) continue;
+        final playlists = await _read(file);
+        if (playlists == null) continue;
+        out.add(DailyCacheDay(date: _dayName(day), playlists: playlists));
+      }
+    } on FileSystemException {
+      // 列目录/读文件失败(权限/磁盘): 返回已读到的部分。
+    }
+    out.sort((a, b) => b.date.compareTo(a.date));
+    return out;
+  }
+
   /// 上次清理时间(没有则 null), 存在 `<dir>/last-cleanup`(epoch ms)。
   Future<DateTime?> lastCleanup() async {
     try {
@@ -117,10 +155,11 @@ class DailyPlaylistCache {
 
   static DateTime _dayStart(DateTime at) => DateTime(at.year, at.month, at.day);
 
+  static String _name(String path) => path.split(Platform.pathSeparator).last;
+
   /// 从文件名解析日期(本地时区零点); 不匹配返回 null。
   static DateTime? _parseDayFile(String path) {
-    final name = path.split(Platform.pathSeparator).last;
-    final match = _dayFile.firstMatch(name);
+    final match = _dayFile.firstMatch(_name(path));
     if (match == null) return null;
     return DateTime(
       int.parse(match.group(1)!),

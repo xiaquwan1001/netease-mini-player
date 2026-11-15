@@ -723,12 +723,16 @@ class _HomePageState extends State<HomePage> {
   BigInt? _likedPlaylistId;
 
   /// 底部导航: 0 搜索 / 1 推荐 / 2 关注 / 3 我的 / 4 设置
-  int _tab = 0;
+  ///
+  /// 启动落在「推荐」(2026-11 用户要求): 以前默认停在「搜索」, 而
+  /// [_restorePlayback] 又会把上次的队列塞进搜索页的歌单浏览态, 于是冷启动
+  /// 第一眼看到的是"正在播放"的歌单列表, 而不是推荐首页。
+  int _tab = 1;
 
   /// 已经打开过的 tab: 只有访问过的页面才进 IndexedStack(惰性构建),
   /// 之后一直保留 State —— 否则每次切 tab 都销毁重建子树,
   /// 图片 Widget 重新解析, 占位符会高频闪烁, 列表滚动位置也会丢
-  final Set<int> _tabVisited = <int>{0};
+  final Set<int> _tabVisited = <int>{1};
 
   /// 搜索请求代次: 取消/重新搜索后旧请求的结果直接丢弃
   int _searchToken = 0;
@@ -946,8 +950,11 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _queue.setAll(saved.songs, startAt: saved.index);
       _queue.mode = saved.mode;
-      _library = saved.songs;
-      _libraryTitle = saved.libraryTitle ?? '正在播放';
+      // 只恢复队列与播放现场, **不进"歌单浏览态"**: 那是搜索页里的一个显示
+      // 状态, 冷启动时把它填上会让 App 一开就停在"正在播放"列表(用户反馈)。
+      // 队列本身仍可从播放条/播放队列看到。
+      _library = const [];
+      _libraryTitle = null;
       _libraryPlaylistId = null;
       _queuePlaylistId = null;
       final song = saved.current;
@@ -1483,7 +1490,17 @@ class _HomePageState extends State<HomePage> {
           _playSongsList(songs, index, source: SongActionSource.dailyRecommend),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
       loadPlaylists: _dailyPlaylists,
+      // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
+      loadLocalDays: _dailyLocalDays,
     );
+  }
+
+  /// 历史日推里要合并的本地缓存天(设置 → 每日推荐歌单缓存; 0 天 = 关闭时返回空)。
+  Future<List<DailyCacheDay>> _dailyLocalDays() async {
+    final dir = _info?.dataDir;
+    if (dir == null || dir.isEmpty) return const [];
+    if (AppSettings.instance.dailyCacheDays <= 0) return const [];
+    return DailyPlaylistCache(dataDir: dir).days();
   }
 
   /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)

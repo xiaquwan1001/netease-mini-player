@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/daily_cache.dart';
 import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -284,6 +285,113 @@ void main() {
     await tester.tap(find.text('2024-06-20 的歌'));
     await tester.pumpAndSettle();
     expect(played?.single.id, BigInt.from(7));
+  });
+
+  testWidgets('历史日推: 本地缓存天与在线日期合并去重, 并标「本地」', (tester) async {
+    final opened = <String>[];
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (pl) => opened.add(pl.name),
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => ['2024-06-20'],
+          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-21',
+              playlists: [playlist(5, '本地歌单', 8)],
+            ),
+            DailyCacheDay(
+              date: '2024-06-20',
+              playlists: [playlist(6, '重复日的缓存', 3)],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    // 合并去重: 06-20 只留一行(在线 + 本地合成同一行), 06-21 是纯本地
+    expect(find.text('2024-06-20'), findsOneWidget);
+    expect(find.text('2024-06-21'), findsOneWidget);
+    expect(find.text('本地'), findsNWidgets(2));
+
+    // 纯本地日期: 直接展示缓存的推荐歌单, 点开回调给上层
+    await tester.tap(find.text('2024-06-21'));
+    await tester.pumpAndSettle();
+    expect(find.text('2024-06-21 的日推'), findsOneWidget);
+    expect(find.text('本地缓存的推荐歌单(1)'), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, '本地歌单'));
+    await tester.pumpAndSettle();
+    expect(opened, ['本地歌单']);
+  });
+
+  testWidgets('历史日推: 在线日期同时有本地缓存时曲目与歌单都展示', (tester) async {
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => ['2024-06-20'],
+          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-20',
+              playlists: [playlist(6, '重复日的缓存', 3)],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2024-06-20'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2024-06-20 的歌'), findsOneWidget);
+    expect(find.text('本地缓存的推荐歌单(1)'), findsOneWidget);
+    expect(find.text('重复日的缓存'), findsOneWidget);
+  });
+
+  testWidgets('历史日推: 在线接口失败但本地有缓存时仍列出(不整屏报错)', (tester) async {
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => throw Exception('[auth] 需要登录'),
+          loadHistorySongs: (date) async => const [],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-21',
+              playlists: [playlist(5, '本地歌单', 8)],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('2024-06-21'), findsOneWidget);
+    expect(find.text('在线历史日推获取失败'), findsOneWidget);
+    expect(find.text('本地'), findsOneWidget);
   });
 
   testWidgets('最近听过: 300dp + 1.25 字号不溢出', (tester) async {
