@@ -359,6 +359,57 @@ void main() {
     expect(find.text('加载更早'), findsNothing);
   });
 
+  testWidgets('消息页: 加载更早失败只在顶部提示, 重试仍翻同一页', (tester) async {
+    final befores = <BigInt>[];
+    var failOlder = true;
+    await tester.pumpWidget(
+      host(
+        MessagesPage(
+          loadCounts: () async => counts(),
+          pageSize: 2,
+          loadSessions: (limit, offset) async => [
+            session(7, '云音乐VIP', 'hi', 0),
+          ],
+          loadHistory: (uid, limit, before) async {
+            befores.add(before);
+            if (before == BigInt.zero) {
+              return [
+                message(1, '你好', timeMs: 1000),
+                message(2, '在的', mine: true, timeMs: 2000),
+              ];
+            }
+            if (failOlder) throw Exception('[internal] boom');
+            return [message(0, '更早一条', timeMs: 500)];
+          },
+          loadNotices: () async => const [],
+          loadComments: () async => const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('云音乐VIP'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('加载更早'));
+    await tester.pumpAndSettle();
+
+    // 改造前这里会把整屏换成错误行(且"重试"其实重拉最新页);
+    // 现在已渲染的消息不消失, 提示贴"加载更早"的位置。
+    expect(find.textContaining('boom'), findsOneWidget);
+    expect(find.text('你好'), findsOneWidget);
+    expect(find.text('在的'), findsOneWidget);
+
+    failOlder = false;
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('更早一条'), findsOneWidget);
+    expect(befores, [
+      BigInt.zero,
+      BigInt.from(1000),
+      BigInt.from(1000),
+    ], reason: '重试仍翻同一页(同一个 before 游标)');
+  });
+
   // 顶栏「最近联系人」横滑条是 SizedBox(height: 84) 定高(头像 44 + 4 + 11sp 标签),
   // 1.625 字号下标签行高变高会**竖向**溢出; 条高必须按 textScaler 放大。
   testWidgets('300dp x1.625: 最近联系人横滑条不竖向溢出', (tester) async {

@@ -376,6 +376,39 @@ void main() {
     expect(find.text('本地'), findsOneWidget);
   });
 
+  testWidgets('历史日推: 在线失败且本地无缓存时整屏报错, 重试后恢复', (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+          onPlaySongs: (_, _) {},
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async {
+            calls++;
+            if (calls == 1) throw Exception('[auth] 需要登录');
+            return ['2024-06-20'];
+          },
+          loadHistorySongs: (date) async => const [],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    // 在线挂了且本地没缓存: 整屏错误(不是"空态")
+    expect(find.textContaining('需要登录'), findsOneWidget);
+
+    await tester.tap(find.text('重试'));
+    await tester.pumpAndSettle();
+    expect(find.text('2024-06-20'), findsOneWidget);
+    expect(calls, 2);
+  });
+
   testWidgets('最近听过: 300dp + 1.25 字号不溢出', (tester) async {
     tester.view.physicalSize = const Size(300, 640);
     tester.view.devicePixelRatio = 1.0;

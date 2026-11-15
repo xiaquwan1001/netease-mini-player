@@ -143,7 +143,13 @@ class _HistoryDatesViewState extends State<_HistoryDatesView> {
     _future = _load();
   }
 
-  void _reload() => setState(() => _future = _load());
+  /// 重试/刷新日期列表. 用块体: 箭头体会把 Future 变成 setState 回调的返回值,
+  /// Flutter 会因此断言失败(AsyncView._reload 同款注释)。
+  void _reload() {
+    setState(() {
+      _future = _load();
+    });
+  }
 
   /// 在线日期与本地缓存并行加载: 本地读盘失败只是"少几行", 不能拖垮整页.
   ///
