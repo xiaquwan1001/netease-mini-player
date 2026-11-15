@@ -1,21 +1,23 @@
-// 详情页曲目行(_SongRow)窄宽回归: 300dp + font_scale 1.25 下,
+// 歌单详情页曲目行窄宽回归: 300dp + font_scale 1.25/1.625 下,
 // 超长曲名 + VIP/付费/无版权徽标不再出现 Flexible(Text) 被压到 0 宽/竖排的问题
-// (修复后走共享组件 AdaptiveTextRow: Expanded + 单行, 窄宽整组收起徽标).
+// (修复后走共享组件 AdaptiveTextRow: Expanded + 单行).
 //
-// 说明: _SongRow 为私有且数据来自 Rust FFI(测试无法注入假 loader),
-// 与 narrow_width_audit_test.dart 同口径, 这里按 detail_page.dart 的实际排版结构
-// (26 序号 + 10 间距 + Expanded 列 AdaptiveTextRow + 副标题 + 时长 + 红心)镜像验证.
+// 直接跑**真实页面组件** `PlaylistSongsSliver`(曲目行就是共享 `SongRow` + 页面参数),
+// 不再维护一份"同构排版"的镜像代码, 也不再复制 detail 页的行参数。
+// 行尾最坏情况按真机接线: 红心 + `SongOverflowButton`(装 `AppActions` 后是 48dp IconButton)。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:minincm/src/adaptive_text_row.dart';
+import 'package:minincm/src/detail/playlist_songs_sliver.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/song_actions.dart' show AppActions, SongActionHost;
 import 'package:minincm/src/song_tile.dart';
 
 import 'support/fakes.dart';
 
 const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
-const _longSub = '一条超级超级长的艺人名组合名称 · 一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版';
+const _longArtist = '一条超级超级长的艺人名组合名称';
+const _longAlbum = '一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版';
 
 /// 共享工厂 + 本文件的长歌名/长专辑口径(徽标三态由调用方给)。
 rust.SongDto song({
@@ -24,9 +26,9 @@ rust.SongDto song({
   required bool playable,
 }) => fakeSong(
   name: _longName,
-  artist: '某艺人',
+  artist: _longArtist,
   artistId: 9,
-  album: '某专辑',
+  album: _longAlbum,
   albumId: 8,
   durationMs: 269000,
   fee: vip ? 1 : 0,
@@ -35,88 +37,42 @@ rust.SongDto song({
   playable: playable,
 );
 
-/// 与 detail_page.dart _SongRow 同构的行(修复后: 行尾整组封顶 + 紧凑图标按钮).
-Widget rowOf(rust.SongDto song) {
-  // 与 detail_page.dart 同构: LayoutBuilder 取可用宽, 行尾最多吃 45%
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      final maxTrailingWidth = constraints.maxWidth.isFinite
-          ? constraints.maxWidth * 0.45
-          : double.infinity;
-      return Row(
-        children: [
-          const SizedBox(
-            width: 26,
-            child: Text('01', textAlign: TextAlign.right),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AdaptiveTextRow(title: song.name, marquee: false),
-                const SizedBox(height: 2),
-                // 徽标在副标题行(与 detail_page.dart _SongRow 同构): 300dp 下也可见
-                Row(
-                  children: [
-                    if (song.playable && song.vip) const VipBadge(small: true),
-                    if (song.playable && !song.vip && song.paid)
-                      const PaidBadge(),
-                    if (!song.playable) const UnplayableBadge(),
-                    const Expanded(
-                      child: Text(
-                        _longSub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxTrailingWidth),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 时长是弹性项: 行尾触到上限时先截断它
-                const Flexible(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text(
-                      '4:29',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-                // 红心: 40dp 紧凑命中区(高仍 48)
-                IconButton(
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  style: const ButtonStyle(
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 40,
-                    minHeight: 48,
-                  ),
-                  onPressed: null,
-                  icon: const Icon(Icons.favorite_border),
-                ),
-                // SongOverflowButton 无 host 时是 SizedBox.shrink; 这里按最坏情况
-                // 换成默认 48dp IconButton(真实 SongOverflowButton 的默认尺寸)
-                const IconButton(onPressed: null, icon: Icon(Icons.more_vert)),
-              ],
-            ),
-          ),
-        ],
-      );
-    },
-  );
-}
+/// 最小动作宿主: 只为让行尾 "..." 真正渲染出来(最坏情况的宽度)。
+SongActionHost _host() => SongActionHost(
+  loggedIn: true,
+  isLiked: (_) => false,
+  toggleLike: (_) async {},
+  playNext: (_) async {},
+  addToPlaylist: (_) async {},
+  share: (_) async {},
+  comments: (_) async {},
+  openArtist: (_) async {},
+  openAlbum: (_) async {},
+  download: (_) async {},
+);
+
+/// 页面级装配: 与 `playlist_detail_page._buildSongs` 一致(单首曲目的定高 sliver)。
+Widget pageOf(rust.SongDto song) => AppActions(
+  host: _host(),
+  child: CustomScrollView(
+    slivers: [
+      PlaylistSongsSliver(
+        songs: [song],
+        error: null,
+        display: [song],
+        filter: '',
+        special: false,
+        hiddenCount: 0,
+        playingId: null,
+        liked: const {},
+        listKey: GlobalKey(),
+        onRetry: () {},
+        onToggleLike: (_) {},
+        onTapSong: (_, _) {},
+      ),
+    ],
+  ),
+);
 
 Future<void> pumpCase(
   WidgetTester tester, {
@@ -135,15 +91,7 @@ Future<void> pumpCase(
           size: Size(width, 700),
           textScaler: TextScaler.linear(scale),
         ),
-        child: Scaffold(
-          body: Padding(
-            // 与 detail_page 的 Container(fromLTRB(12, 0, 4, 0)) 同留白
-            padding: const EdgeInsets.only(left: 12, right: 4),
-            // 不写死行高: 这里只验证**横向**排版(A6), 竖向高度由
-            // detail_page 的 itemExtent(SliverFixedExtentList)决定
-            child: rowOf(song),
-          ),
-        ),
+        child: Scaffold(body: pageOf(song)),
       ),
     ),
   );
@@ -166,6 +114,9 @@ void main() {
       ) async {
         await pumpCase(tester, width: 300, scale: scale, song: s);
         expect(tester.takeException(), isNull, reason: '不允许 overflow/布局异常');
+        // 曲目行确实是共享实现(不是各页一份私有 Row)
+        expect(find.byType(SongRow), findsOneWidget);
+
         final title = find.text(_longName).first;
         expect(title, findsOneWidget);
         final box = tester.renderObject<RenderBox>(title);
@@ -177,11 +128,13 @@ void main() {
           lessThan(24 * scale),
           reason: '曲名必须单行(竖排会远高于行高)',
         );
+
         // 行尾整组(时长 + 红心 + 更多)必须封顶在可用宽的 45%: 不封顶时
-        // 标题区在 300dp 下只剩 ~117dp, 大字号下更少
-        // 行宽 = 300 - 左 12 - 右 4
+        // 标题区在 300dp 下只剩 ~117dp, 大字号下更少。
+        // 行宽 = 300 - 行内留白(左 12 + 右 4, 见 SongRow.padding)
         const rowWidth = 300.0 - 12 - 4;
-        final duration = tester.getRect(find.text('4:29'));
+        // 时长文案走全 App 统一口径 formatSongDuration(mm:ss 补零) 且是弹性项
+        final duration = tester.getRect(find.text('04:29'));
         const durationPad = 4.0;
         expect(
           duration.left - durationPad,
@@ -189,6 +142,7 @@ void main() {
           reason: '行尾整组超出版面 45% 上限, 标题区被吃窄',
         );
         expect(duration.width, greaterThan(0), reason: '时长被压到 0 宽');
+
         // 徽标在副标题行: 300dp 窄屏也必须看得见(用户反馈"歌曲没有 VIP 标记")
         expect(
           find.byType(VipBadge),
