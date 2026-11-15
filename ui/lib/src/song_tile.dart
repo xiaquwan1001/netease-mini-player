@@ -11,7 +11,7 @@ import 'song_actions.dart';
 /// 歌曲行的布局口径(两条既有排版臂, 二选一):
 ///
 /// - [SongRowLayout.tile]: Material [ListTile] 口径(整页铺满的搜索/日推等列表)。
-///   行高、水波纹、selected 文本色都由 ListTile 负责, 行留白固定 [kSongRowPadding]。
+///   行高、水波纹、selected 文本色都由 ListTile 负责, 行留白默认 [kSongRowPadding]。
 /// - [SongRowLayout.plain]: 自带 InkWell + Row 的自绘口径(带序号列、行高由页面
 ///   自己定, 或包在固定 itemExtent 里需要竖直居中的行)。
 enum SongRowLayout { tile, plain }
@@ -323,7 +323,8 @@ class SongRow extends StatelessWidget {
   /// 长按整行(选中/多选等); null = 没有长按语义。
   final VoidCallback? onLongPress;
 
-  /// 自绘臂的行内留白(ListTile 臂固定走 [kSongRowPadding])。
+  /// 行内留白: 自绘臂默认零; ListTile 臂默认 [kSongRowPadding], 显式传值时按传入的走
+  /// (嵌在卡片里的列表要跟卡片栅格, 传 layout.dart 的 `kCardRowPadding`)。
   final EdgeInsetsGeometry padding;
 
   /// 无版权曲目是否禁用点击(true = 点了没有任何反应, 官方同款灰行)。
@@ -598,8 +599,9 @@ class SongRow extends StatelessWidget {
     return ListTile(
       dense: true,
       selected: playing,
-      // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp)
-      contentPadding: kSongRowPadding,
+      // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
+      // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
+      contentPadding: padding == EdgeInsets.zero ? kSongRowPadding : padding,
       leading: leading,
       title: _title(context, titleStyle),
       subtitle: Text(

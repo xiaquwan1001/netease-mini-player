@@ -20,7 +20,8 @@ import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';
-import 'song_tile.dart' show SongTitleWithBadges;
+import 'song_tile.dart'
+    show SongRow, SongRowLayout, SongRowSubtitle, SongTitleWithBadges;
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) /
@@ -993,41 +994,19 @@ class _RecentSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    NowPlayingHighlight(
-                      songId: preview[i].id,
-                      builder: (context, playing) => ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        // 正在播放的那首要高亮
-                        selected: playing,
-                        // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
-                        contentPadding: kCardRowPadding,
-                        leading: CoverArt(
-                          url: preview[i].coverUrl,
-                          size: 40,
-                          radius: 4,
-                        ),
-                        title: SongTitleWithBadges(
-                          song: preview[i],
-                          style: playing
-                              ? TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                )
-                              : null,
-                        ),
-                        subtitle: Text(
-                          preview[i].artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: SongOverflowButton(
-                          song: preview[i],
-                          size: 20,
-                          source: SongActionSource.playlist,
-                        ),
-                        onTap: () => onPlay(songs, i),
-                      ),
+                    SongRow(
+                      song: preview[i],
+                      layout: SongRowLayout.tile,
+                      coverSize: 40,
+                      subtitle: SongRowSubtitle.artist,
+                      showDuration: false,
+                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                      padding: kCardRowPadding,
+                      // 行尾 "..." = 统一歌曲菜单(最近听过按歌单来源)
+                      menuSource: SongActionSource.playlist,
+                      // 正在播放那首的高亮由 SongRow 读全局 nowPlayingSongId,
+                      // 页面不再自己包一层 NowPlayingHighlight
+                      onTap: () => onPlay(songs, i),
                     ),
                 ],
               ),
