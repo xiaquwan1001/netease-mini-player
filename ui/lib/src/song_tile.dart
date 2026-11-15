@@ -224,6 +224,7 @@ class SongRow extends StatelessWidget {
     this.subtitleStyle,
     this.showDuration = true,
     this.durationGap = 8,
+    this.trailingExtra,
     this.capTrailing = false,
     this.liked = false,
     this.onToggleLike,
@@ -300,6 +301,10 @@ class SongRow extends StatelessWidget {
 
   /// 时长前的间距(自绘臂且未封顶时生效)。
   final double durationGap;
+
+  /// 行尾在时长之前插入的附加内容(如"共 N 首"这类一次性说明);
+  /// null = 这一行没有附加内容。
+  final Widget? trailingExtra;
 
   /// 行尾(时长+红心+更多)是否封顶在可用宽的 45%(歌单详情口径):
   /// 触到上限时**先截断时长**, 歌名/徽标不被挤掉。
@@ -472,6 +477,7 @@ class SongRow extends StatelessWidget {
 
     Widget trailing({double? maxWidth}) {
       final children = <Widget>[
+        ?trailingExtra,
         if (showDuration) ...[
           if (maxWidth != null)
             // 时长是弹性项: 行尾触到上限时先截断它, 歌名/徽标不被挤掉
@@ -614,6 +620,7 @@ class SongRow extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          ?trailingExtra,
           if (showDuration && !narrow)
             Text(
               formatSongDuration(song.durationMs),

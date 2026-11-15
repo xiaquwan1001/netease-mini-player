@@ -5,14 +5,12 @@ import 'package:flutter/material.dart';
 import 'app_settings.dart';
 import 'async_view.dart';
 import 'cloud_page.dart' show showCloudPage;
-import 'cover_art.dart';
 import 'cover_row.dart';
 import 'digital_album_page.dart';
 import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
-import 'now_playing.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'recent_order.dart';
@@ -20,8 +18,7 @@ import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';
-import 'song_tile.dart'
-    show SongRow, SongRowLayout, SongRowSubtitle, SongTitleWithBadges;
+import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) /
@@ -582,59 +579,32 @@ class _LikedSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    NowPlayingHighlight(
-                      songId: preview[i].id,
-                      builder: (context, playing) => ListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        // 正在播放的那首要高亮(用户反馈: 列表里认不出正在放的歌)
-                        selected: playing,
-                        // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
-                        contentPadding: kCardRowPadding,
-                        leading: CoverArt(
-                          url: preview[i].coverUrl,
-                          size: 40,
-                          radius: 4,
-                        ),
-                        title: SongTitleWithBadges(
-                          song: preview[i],
-                          style: playing
-                              ? TextStyle(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  fontWeight: FontWeight.w600,
-                                )
-                              : null,
-                        ),
-                        subtitle: Text(
-                          preview[i].artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (songs.length > preview.length &&
-                                i == preview.length - 1)
-                              Text(
-                                '共 ${songs.length} 首',
-                                style: Theme.of(context).textTheme.labelSmall,
-                              ),
-                            SongOverflowButton(
-                              song: preview[i],
-                              size: 20,
-                              source: SongActionSource.playlist,
-                            ),
-                          ],
-                        ),
-                        onTap: preview[i].playable
-                            ? () {
-                                final index = playable.indexWhere(
-                                  (s) => s.id == preview[i].id,
-                                );
-                                onPlay(playable, index < 0 ? 0 : index);
-                              }
-                            : null,
-                      ),
+                    SongRow(
+                      song: preview[i],
+                      layout: SongRowLayout.tile,
+                      coverSize: 40,
+                      subtitle: SongRowSubtitle.artist,
+                      showDuration: false,
+                      // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
+                      padding: kCardRowPadding,
+                      // 预览被截断时在最后一行给出总数(整行"共 N 首")
+                      trailingExtra: songs.length > preview.length &&
+                              i == preview.length - 1
+                          ? Text(
+                              '共 ${songs.length} 首',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            )
+                          : null,
+                      // 行尾 "..." = 统一歌曲菜单(我喜欢按歌单来源)
+                      menuSource: SongActionSource.playlist,
+                      // 正在播放那首的高亮由 SongRow 读全局 nowPlayingSongId
+                      tapOnlyWhenPlayable: true,
+                      onTap: () {
+                        final index = playable.indexWhere(
+                          (s) => s.id == preview[i].id,
+                        );
+                        onPlay(playable, index < 0 ? 0 : index);
+                      },
                     ),
                 ],
               ),
