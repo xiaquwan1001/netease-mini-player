@@ -223,12 +223,8 @@ rust.SongDto _song(int id, String name, {String artist = '艺人'}) => fakeSong(
 rust.Playlist _playlist(int id, String name) =>
     fakePlaylist(id: id, name: name, trackCount: 12);
 
-rust.PodcastRadio _radio(int id, String name) => fakeRadio(
-  id: id,
-  name: name,
-  djName: '主播名',
-  programCount: 8,
-);
+rust.PodcastRadio _radio(int id, String name) =>
+    fakeRadio(id: id, name: name, djName: '主播名', programCount: 8);
 
 rust.AlbumItem _album(int id, String name) => rust.AlbumItem(
   id: BigInt.from(id),
@@ -386,7 +382,6 @@ List<rust.Comment> _goldenComments() => <rust.Comment>[
 ];
 
 // ---------------------------------------------------------------- 被测页面
-
 
 /// 一个 golden 目标: 名字进文件名, build 每次调用都产出全新的 widget(避免状态串味).
 class _GoldenPage {
@@ -638,8 +633,7 @@ rust.ArtistDetailDto _artistDetail() => rust.ArtistDetailDto(
 );
 
 List<rust.SongDto> _artistSongs() => <rust.SongDto>[
-  for (var i = 1; i <= 6; i++)
-    _song(600 + i, '艺人歌曲$i', artist: '周杰伦'),
+  for (var i = 1; i <= 6; i++) _song(600 + i, '艺人歌曲$i', artist: '周杰伦'),
 ];
 
 List<rust.AlbumBrief> _artistAlbums() => <rust.AlbumBrief>[
@@ -694,13 +688,7 @@ Widget _feedPage() => Scaffold(
         commentCount: 12,
         shareCount: 8,
       ),
-      _feedEvent(
-        13,
-        '林俊杰',
-        userId: 2116,
-        text: '练团结束, 下一站见。',
-        likedCount: 96,
-      ),
+      _feedEvent(13, '林俊杰', userId: 2116, text: '练团结束, 下一站见。', likedCount: 96),
     ],
     loadSubscribedArtists: () async => <rust.Artist>[
       rust.Artist(id: BigInt.from(6452), name: '周杰伦'),
@@ -767,7 +755,8 @@ void main() {
     expect(
       _cjkAvailable,
       isTrue,
-      reason: 'CI 上探测不到系统 CJK 字体(候选见 _cjkFontCandidates), '
+      reason:
+          'CI 上探测不到系统 CJK 字体(候选见 _cjkFontCandidates), '
           '18 张 golden 会被整组 skip; 检查 workflow 里的 fonts-noto-cjk 安装',
     );
   });

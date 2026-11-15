@@ -37,7 +37,7 @@ flutter:
       if ! find /usr/share/fonts -maxdepth 3 \( -name 'NotoSansCJK-*.ttc' -o -name 'NotoSansSC-*' -o -name 'wqy-*.ttc' -o -name 'DroidSansFallback*.ttf' \) -print -quit | grep -q .; then
         bash tools/apt-install.sh fonts-noto-cjk
       fi
-    # 全量(含 golden 12 张), 只排除联网 smoke: CI 无出口网络与凭据。
+    # 全量(含 golden 18 张), 只排除联网 smoke: CI 无出口网络与凭据。
     - (cd ui && flutter test --exclude-tags network)
 
 # ---------- 产物：tag 上自动跑；分支上手动触发（GitLab 页面/glab ci run 的 play） ----------

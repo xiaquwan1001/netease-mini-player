@@ -57,7 +57,7 @@ jobs:
         run: dart format --output=none --set-exit-if-changed lib test
       - name: write-guard (测试不得直连写接口, CI 不触网)
         run: bash tools/check-write-guard.sh
-      # 唯一的全量测试入口: 含 golden(12 张整屏像素)。只排除 network —— CI 没有
+      # 唯一的全量测试入口: 含 golden(18 张整屏像素)。只排除 network —— CI 没有
       # 出口网络与凭据。golden 的渲染环境靠上一步的 fonts-noto-cjk + 固定的
       # Flutter 3.47.9 对齐本地。
       - name: widget/unit tests + golden (offline)
