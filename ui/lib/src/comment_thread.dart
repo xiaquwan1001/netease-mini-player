@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'async_view.dart';
 import 'comment_stats_bar.dart';
 import 'cover_art.dart';
+import 'error_views.dart' show InlineError;
 import 'feed_share.dart' show showCommentShareSheet;
 import 'net_retry.dart';
 import 'sheet_header.dart';
@@ -123,10 +125,15 @@ class CommentThreadState extends State<CommentThread> {
   final List<rust.Comment> _items = <rust.Comment>[];
   BigInt _total = BigInt.zero;
   bool _hasMore = false;
-  bool _loading = true;
   bool _loadingMore = false;
-  String? _error;
   String? _moreError;
+
+  /// 第一页是否已经成功落进 [_items]: 只用来决定标题旁的评论数显示
+  /// (改造前这里读 _loading/_error, 那份信息现在在 AsyncView 里)
+  bool _firstPageLoaded = false;
+
+  /// 「全部/热门」页签代际: 切页签要换 [AsyncView] 的 key 重挂载重新取数
+  int _modeGen = 0;
 
   /// 点赞/回复/删除都要用它(来自第一页)
   String _threadId = '';
@@ -242,7 +249,7 @@ class CommentThreadState extends State<CommentThread> {
     _threadId = widget.threadId ?? '';
     final injected = widget.myUid;
     if (injected != null && injected != BigInt.zero) _myUid = injected;
-    _reload();
+    // 第一页不在 initState 里取: 四态收敛到 AsyncView(挂载即取, 出错可重试)
     if (injected == null) _loadMyUid();
   }
 
@@ -256,45 +263,61 @@ class CommentThreadState extends State<CommentThread> {
     }
   }
 
-  /// [silent] = 发表后回填用: 不显示整页 loading(列表不闪), 失败也不把列表打成错误页
-  Future<void> _reload({bool silent = false}) async {
-    final gen = ++_listGen;
+  /// [AsyncView] 的取数入口(组件自己套 [retryNetwork]): 取第一页并落进
+  /// [_items]。返回值就是 [_items] 实例本身 —— 发表后的静默重取与「加载更多」
+  /// 都是就地改这一份, AsyncView 的空态判定读同一实例才不会停在旧快照上
+  /// (改造前这里靠 _loading/_error 两个字段自己判四态)。
+  Future<List<rust.Comment>> _loadFirstPage() async {
+    final hot = _hot;
+    final page = await (hot ? _loadHotPage : _loadPage)(widget.pageSize, 0);
+    // 取数期间用户切了全部/热门: 旧页签的响应直接丢弃(AsyncView 已按页签换代)
+    if (!mounted || hot != _hot) return _items;
+    _applyFirstPage(page);
+    return _items;
+  }
+
+  /// 第一页落到 [_items] 上(整页重载的唯一落点): 作废旧代际的在途响应与预览缓存,
+  /// 顺带补统计条与行内预览。
+  void _applyFirstPage(rust.CommentPage page) {
+    if (!mounted) return;
     setState(() {
-      if (!silent) _loading = true;
-      _error = null;
-      _moreError = null;
+      _listGen++;
       // 整页重载: 预览缓存一并作废, 旧 gen 的在途响应会被丢弃
       _previewGen++;
       _replyPreviews.clear();
       _previewFailed.clear();
       _previewQueue.clear();
+      _moreError = null;
+      // 整页换过之后旧的翻页请求已作废, 别让 footer 的加载圈一直挂着
+      _loadingMore = false;
+      _items
+        ..clear()
+        ..addAll(page.comments);
+      _total = page.total;
+      _hasMore = page.hasMore;
+      if (page.threadId.isNotEmpty) _threadId = page.threadId;
+      // 列表换了就丢掉旧项的 key, 免得 _tileKeys 无限增长
+      final ids = _items.map((c) => c.id).toSet();
+      _tileKeys.removeWhere((k, _) => !ids.contains(k));
+      _absorbOrphanReplies();
+      _firstPageLoaded = true;
     });
+    _loadStats();
+    _schedulePreviews();
+  }
+
+  /// 发表后的静默重取: 不经过 AsyncView(整块不闪回加载态), 失败保留现状
+  /// (乐观项还在), 不把整页打成错误。
+  Future<void> _reloadSilently() async {
+    final hot = _hot;
     try {
-      final page = await retryNetwork(() => _fetchPage(widget.pageSize, 0));
-      if (!mounted || gen != _listGen) return;
-      setState(() {
-        _items
-          ..clear()
-          ..addAll(page.comments);
-        _total = page.total;
-        _hasMore = page.hasMore;
-        if (page.threadId.isNotEmpty) _threadId = page.threadId;
-        // 列表换了就丢掉旧项的 key, 免得 _tileKeys 无限增长
-        final ids = _items.map((c) => c.id).toSet();
-        _tileKeys.removeWhere((k, _) => !ids.contains(k));
-        _absorbOrphanReplies();
-        _loading = false;
-      });
-      _loadStats();
-      _schedulePreviews();
-    } catch (e) {
-      if (!mounted || gen != _listGen) return;
-      // 静默重载失败: 保留现状(乐观项还在), 不要把整页打成错误
-      if (silent) return;
-      setState(() {
-        _error = friendlyError(e);
-        _loading = false;
-      });
+      final page = await retryNetwork(
+        () => (hot ? _loadHotPage : _loadPage)(widget.pageSize, 0),
+      );
+      if (!mounted || hot != _hot) return;
+      _applyFirstPage(page);
+    } catch (_) {
+      // 静默重载失败: 保留现状
     }
   }
 
@@ -668,7 +691,7 @@ class CommentThreadState extends State<CommentThread> {
     // 乐观项是「我 / 刚刚 / 无头像」: 发表成功后静默重取一页, 用服务端的真实
     // 昵称/头像/时间/评论 id 替换掉, 并把这条滚进视野 + 高亮一下。
     // 不做这一步, 用户看到的就是一条假头像的"我", 得退出重进才正常。
-    await _reload(silent: true);
+    await _reloadSilently();
     if (!mounted) return;
     final posted = _items.where(
       (c) => c.id != BigInt.zero && c.userId == _myUid && c.content == content,
@@ -719,7 +742,7 @@ class CommentThreadState extends State<CommentThread> {
 
   bool get _canHot => _threadId.isNotEmpty || widget.loadHot != null;
 
-  /// 切"全部/热门": 换加载器并整页重载
+  /// 切"全部/热门": 换加载器并整页重载(换 AsyncView 的 key 重挂载)
   void _switchMode(bool hot) {
     if (_hot == hot) return;
     setState(() {
@@ -727,8 +750,9 @@ class CommentThreadState extends State<CommentThread> {
       _items.clear();
       _total = BigInt.zero;
       _hasMore = false;
+      _firstPageLoaded = false;
+      _modeGen++;
     });
-    _reload();
   }
 
   @override
@@ -758,9 +782,9 @@ class CommentThreadState extends State<CommentThread> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final count = (_loading || _error != null) && _total == BigInt.zero
-        ? BigInt.from(widget.totalHint)
-        : _total;
+    // 评论条数: 第一页回来之前先用外部给的 totalHint(改造前读 _loading/_error,
+    // 那份信息现在由 AsyncView 持有, 这里用 _firstPageLoaded 等价表达)
+    final count = _firstPageLoaded ? _total : BigInt.from(widget.totalHint);
     return Padding(
       padding: widget.inset,
       child: Column(
@@ -816,73 +840,27 @@ class CommentThreadState extends State<CommentThread> {
             ),
           ],
           const SizedBox(height: 8),
-          // 非分页: 评论面板嵌在详情页滚动体内(Column + 触底加载更多评论), 换 PagedListView 需整页重构
-          if (_loading)
-            const LoadingView(
+          // 非分页: 评论面板嵌在详情页滚动体内(Column + 触底加载更多评论),
+          // 换 PagedListView 需整页重构。四态收敛到 AsyncView:
+          // 加载中 = 区块级 LoadingView, 出错 = InlineError(文案走 friendlyError,
+          // 右侧「重试」), 空态 = EmptyView, 有数据 = 评论列表 + 翻页 footer。
+          // key 按「全部/热门」页签换代: 切页签要重挂载才能重新取数。
+          AsyncView<List<rust.Comment>>(
+            key: ValueKey(_modeGen),
+            load: _loadFirstPage,
+            emptyText: '还没有评论',
+            loadingBuilder: (_) => const LoadingView(
               size: 22,
               padding: EdgeInsets.symmetric(vertical: 20),
-            )
-          else if (_error != null)
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: scheme.error, fontSize: 12),
-                  ),
-                ),
-                TextButton(onPressed: _reload, child: const Text('重试')),
-              ],
-            )
-          else if (_items.isEmpty)
-            const EmptyView(
+            ),
+            emptyBuilder: (_) => const EmptyView(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               title: '还没有评论',
-            )
-          else
-            for (var i = 0; i < _items.length; i++)
-              _CommentTile(
-                // 乐观项(id == 0)没有服务端 id, 共用一个 key; 其余按 id 缓存
-                key: _items[i].id == BigInt.zero
-                    ? _draftKey
-                    : _tileKeys.putIfAbsent(_items[i].id, () => GlobalKey()),
-                highlight: _highlightId != null && _highlightId == _items[i].id,
-                comment: _items[i],
-                shareSourceTitle: widget.shareSourceTitle,
-                shareSourceKind: widget.shareSourceKind,
-                timeText: _relative(_items[i].timeMs),
-                onToggleLike: () => _toggleLike(i),
-                previewReplies: _previewFor(_items[i]),
-                onExpandReplies: () => _openReplies(_items[i]),
-                onReply: () => _openReplies(_items[i], focusComposer: true),
-                // 刚发表的乐观项(id == 0)还没有服务端 id, 不给删除入口
-                onDelete:
-                    _myUid != BigInt.zero &&
-                        _items[i].userId == _myUid &&
-                        _items[i].id != BigInt.zero
-                    ? () => _deleteComment(i)
-                    : null,
-              ),
-          if (!_loading && _error == null && _items.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (_loadingMore)
-                  const LoadingView.inline(size: 20)
-                else if (_moreError != null)
-                  TextButton(
-                    onPressed: _loadMore,
-                    child: Text(
-                      '${_moreError!} (重试)',
-                      style: TextStyle(color: scheme.error, fontSize: 12),
-                    ),
-                  )
-                else if (_hasMore)
-                  TextButton(onPressed: _loadMore, child: const Text('加载更多评论')),
-              ],
             ),
-          ],
+            errorBuilder: (_, error, retry) =>
+                InlineError(message: friendlyError(error), onRetry: retry),
+            builder: (context, _, _) => _buildList(context),
+          ),
           // 底部"写评论"入口: 点开才是 TextField(见 _ComposeSheet)。
           // 不常驻输入框的两个理由: 楼层回复面板里已有一个 TextField,
           // 常驻会让"写评论/发回复"在语义与测试上互相歧义;
@@ -890,6 +868,58 @@ class CommentThreadState extends State<CommentThread> {
           _ComposerBar(enabled: _canCompose, onTap: _openCompose),
         ],
       ),
+    );
+  }
+
+  /// 评论列表本体 + 翻页 footer(四态已由 AsyncView 判完, 这里只画有数据的形态)。
+  /// 列表非懒构建: 评论面板本身嵌在详情页滚动体内(见 build 里的注释)。
+  Widget _buildList(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < _items.length; i++)
+          _CommentTile(
+            // 乐观项(id == 0)没有服务端 id, 共用一个 key; 其余按 id 缓存
+            key: _items[i].id == BigInt.zero
+                ? _draftKey
+                : _tileKeys.putIfAbsent(_items[i].id, () => GlobalKey()),
+            highlight: _highlightId != null && _highlightId == _items[i].id,
+            comment: _items[i],
+            shareSourceTitle: widget.shareSourceTitle,
+            shareSourceKind: widget.shareSourceKind,
+            timeText: _relative(_items[i].timeMs),
+            onToggleLike: () => _toggleLike(i),
+            previewReplies: _previewFor(_items[i]),
+            onExpandReplies: () => _openReplies(_items[i]),
+            onReply: () => _openReplies(_items[i], focusComposer: true),
+            // 刚发表的乐观项(id == 0)还没有服务端 id, 不给删除入口
+            onDelete:
+                _myUid != BigInt.zero &&
+                    _items[i].userId == _myUid &&
+                    _items[i].id != BigInt.zero
+                ? () => _deleteComment(i)
+                : null,
+          ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_loadingMore)
+              const LoadingView.inline(size: 20)
+            else if (_moreError != null)
+              TextButton(
+                onPressed: _loadMore,
+                child: Text(
+                  '${_moreError!} (重试)',
+                  style: TextStyle(color: scheme.error, fontSize: 12),
+                ),
+              )
+            else if (_hasMore)
+              TextButton(onPressed: _loadMore, child: const Text('加载更多评论')),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -1325,15 +1355,11 @@ class _RepliesSheet extends StatefulWidget {
 class _RepliesSheetState extends State<_RepliesSheet> {
   static const _limit = 20;
   final TextEditingController _controller = TextEditingController();
-  List<rust.Comment>? _replies;
-  String? _error;
-  bool _sending = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  /// 发送失败的提示。改造前写进 `_error`, 而那个位置只在「整块加载失败」时显示,
+  /// 列表已经加载出来时发送失败等于静默; 现在单独留一处, 贴在输入框上方。
+  String? _sendError;
+  bool _sending = false;
 
   @override
   void dispose() {
@@ -1341,34 +1367,31 @@ class _RepliesSheetState extends State<_RepliesSheet> {
     super.dispose();
   }
 
-  Future<void> _load() async {
-    try {
-      final page = await retryNetwork(
-        () => widget.load(widget.parent.id, _limit),
-      );
-      if (!mounted) return;
-      setState(() => _replies = page.comments);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    }
+  /// [AsyncView] 的取数入口(组件自己套 [retryNetwork]): 楼层回复一次全量返回,
+  /// 无游标不分页。
+  Future<List<rust.Comment>> _load() async {
+    final page = await widget.load(widget.parent.id, _limit);
+    return page.comments;
   }
 
   Future<void> _send() async {
     final content = _controller.text.trim();
     if (content.isEmpty || _sending) return;
-    setState(() => _sending = true);
+    setState(() {
+      _sending = true;
+      _sendError = null;
+    });
     try {
       await widget.reply(widget.parent.id, content);
       if (!mounted) return;
       _controller.clear();
       FocusScope.of(context).unfocus();
-      await _load();
-      if (!mounted) return;
+      // 不在面板里再重拉一次(结果在 pop 前看不到): 回传 true, 由外层本地 +1
+      // 并重取行内预览。
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = friendlyError(e));
+      setState(() => _sendError = friendlyError(e));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1376,9 +1399,7 @@ class _RepliesSheetState extends State<_RepliesSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final replies = _replies;
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -1397,64 +1418,38 @@ class _RepliesSheetState extends State<_RepliesSheet> {
               ),
             ),
             const Divider(height: 1),
-            // 非分页: 楼层回复一次全量返回, 无游标
+            // 非分页: 楼层回复一次全量返回, 无游标。四态收敛到 AsyncView:
+            // 加载中 = LoadingView, 空态 = EmptyView, 出错 = 只有一行错误文案
+            // (改造前就是这个形态, 这里不新增重试按钮), 有数据 = 回复列表。
             Expanded(
-              child: replies == null
-                  ? (_error == null
-                        ? const LoadingView()
-                        : Center(
-                            child: Text(
-                              _error!,
-                              style: TextStyle(
-                                color: scheme.error,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ))
-                  : replies.isEmpty
-                  ? const EmptyView(title: '还没有回复')
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: replies.length,
-                      itemBuilder: (context, i) {
-                        final r = replies[i];
-                        return ListTile(
-                          dense: true,
-                          // 与主楼评论(12+2+32+8)对齐: 收窄 contentPadding,
-                          // leading 固定 32 槽, 避免楼层面板文字比主楼右移一截。
-                          contentPadding: const EdgeInsets.fromLTRB(
-                            4,
-                            0,
-                            12,
-                            0,
-                          ),
-                          leading: SizedBox(
-                            width: 32,
-                            child: UserAvatarTap(
-                              userId: r.userId,
-                              nickname: r.userName,
-                              child: CircleCover(
-                                url: r.avatarUrl,
-                                size: 28,
-                                icon: Icons.person_outline,
-                              ),
-                            ),
-                          ),
-                          title: Text(
-                            r.userName.isEmpty ? '匿名用户' : r.userName,
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: scheme.primary,
-                            ),
-                          ),
-                          subtitle: Text(
-                            (r.repliedTo ?? '').isEmpty
-                                ? r.content
-                                : '回复 @${r.repliedTo}：${r.content}',
-                          ),
-                        );
-                      },
+              child: AsyncView<List<rust.Comment>>(
+                load: _load,
+                emptyText: '还没有回复',
+                loadingBuilder: (_) => const LoadingView(),
+                emptyBuilder: (_) => const EmptyView(title: '还没有回复'),
+                errorBuilder: (context, error, _) => Center(
+                  child: Text(
+                    friendlyError(error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12,
                     ),
+                  ),
+                ),
+                builder: (context, replies, _) => _buildReplies(
+                  context,
+                  replies,
+                ),
+              ),
             ),
+            if (_sendError != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 2),
+                child: Text(
+                  _sendError!,
+                  style: TextStyle(color: scheme.error, fontSize: 12),
+                ),
+              ),
             SafeArea(
               top: false,
               child: Padding(
@@ -1488,6 +1483,46 @@ class _RepliesSheetState extends State<_RepliesSheet> {
           ],
         ),
       ),
+    );
+  }
+
+  /// 回复列表(四态已由 AsyncView 判完, 这里只画有数据的形态)
+  Widget _buildReplies(BuildContext context, List<rust.Comment> replies) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: replies.length,
+      itemBuilder: (context, i) {
+        final r = replies[i];
+        return ListTile(
+          dense: true,
+          // 与主楼评论(12+2+32+8)对齐: 收窄 contentPadding,
+          // leading 固定 32 槽, 避免楼层面板文字比主楼右移一截。
+          contentPadding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+          leading: SizedBox(
+            width: 32,
+            child: UserAvatarTap(
+              userId: r.userId,
+              nickname: r.userName,
+              child: CircleCover(
+                url: r.avatarUrl,
+                size: 28,
+                icon: Icons.person_outline,
+              ),
+            ),
+          ),
+          title: Text(
+            r.userName.isEmpty ? '匿名用户' : r.userName,
+            style: theme.textTheme.labelMedium?.copyWith(color: scheme.primary),
+          ),
+          subtitle: Text(
+            (r.repliedTo ?? '').isEmpty
+                ? r.content
+                : '回复 @${r.repliedTo}：${r.content}',
+          ),
+        );
+      },
     );
   }
 }
