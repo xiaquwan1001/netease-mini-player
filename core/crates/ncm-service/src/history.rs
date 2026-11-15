@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use ncm_domain::Song;
 use serde::{Deserialize, Serialize};
 
+/// 文件名: 与 `fsutil` 的目录归属表一致(见 [crate::fsutil]).
+const FILE: &str = "history.json";
+
 pub const SEARCH_LIMIT: usize = 20;
 pub const PLAYED_LIMIT: usize = 100;
 
@@ -29,7 +32,7 @@ impl HistoryStore {
     pub fn open(dir: &Path) -> io::Result<Self> {
         std::fs::create_dir_all(dir)?;
         Ok(Self {
-            path: dir.join("history.json"),
+            path: dir.join(FILE),
         })
     }
 
@@ -45,17 +48,10 @@ impl HistoryStore {
     }
 
     fn save(&self, data: &Data) -> io::Result<()> {
-        let tmp = self.path.with_extension("json.tmp");
         let body = serde_json::to_vec_pretty(data)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        std::fs::write(&tmp, body)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
-        }
-        std::fs::rename(&tmp, &self.path)?;
-        Ok(())
+        let dir = self.path.parent().unwrap_or(Path::new("."));
+        crate::fsutil::write_atomic_private(dir, FILE, &body)
     }
 
     /// 搜索历史(最近在前)

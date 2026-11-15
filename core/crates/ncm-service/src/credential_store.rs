@@ -129,7 +129,7 @@ impl CredentialPolicy {
     pub fn save(&self, dir: &Path) -> io::Result<()> {
         let data = serde_json::to_vec_pretty(self)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        write_private(&Self::path(dir), &data)
+        crate::fsutil::write_atomic_private(dir, POLICY_FILE, &data)
     }
 }
 
@@ -166,7 +166,8 @@ impl FileStore {
     fn save_map(&self, map: &BTreeMap<String, String>) -> Result<(), CredentialError> {
         let data =
             serde_json::to_vec_pretty(map).map_err(|e| CredentialError::Backend(e.to_string()))?;
-        write_private(&self.path(), &data).map_err(|e| CredentialError::Backend(e.to_string()))
+        crate::fsutil::write_atomic_private(&self.dir, CREDS_FILE, &data)
+            .map_err(|e| CredentialError::Backend(e.to_string()))
     }
 
     /// 同意门: 未同意 = AccessDenied, 上层走旧明文兼容路径并上报.
@@ -211,20 +212,6 @@ impl CredentialStore for FileStore {
     fn available(&self) -> Result<(), CredentialError> {
         self.consent()
     }
-}
-
-/// 原子写 + 0600(unix). 与 identity.rs 的 write_private 同语义; FileStore 用它落
-/// credentials.json, identity.rs 保留自己的实现落 identity.json 骨架.
-pub(crate) fn write_private(path: &Path, data: &[u8]) -> io::Result<()> {
-    let tmp = path.with_extension("json.tmp");
-    fs::write(&tmp, data)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
-    }
-    fs::rename(&tmp, path)?;
-    Ok(())
 }
 
 // ---------------- 启动时的后端选择与状态上报 ----------------
@@ -455,9 +442,8 @@ pub mod dpapi {
                 out.extend_from_slice(&(blob.len() as u32).to_le_bytes());
                 out.extend_from_slice(blob);
             }
-            let tmp = self.path().with_extension("dpapi.tmp");
-            fs::write(&tmp, &out).map_err(|e| CredentialError::Backend(e.to_string()))?;
-            fs::rename(&tmp, self.path()).map_err(|e| CredentialError::Backend(e.to_string()))
+            crate::fsutil::write_atomic(&self.dir, CREDS_FILE, &out)
+                .map_err(|e| CredentialError::Backend(e.to_string()))
         }
 
         fn upsert(&self, key: &str, blob: Vec<u8>) -> Result<(), CredentialError> {
@@ -615,6 +601,7 @@ pub use dpapi::DpapiStore;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lock_ignore_poison;
 
     fn tmpdir(tag: &str) -> PathBuf {
         let p = std::env::temp_dir().join(format!("ncm-cred-{}-{}", tag, std::process::id()));
@@ -706,14 +693,14 @@ mod tests {
         struct Mem(std::sync::Mutex<BTreeMap<String, String>>);
         impl CredentialStore for Mem {
             fn put(&self, k: CredentialKey, s: &str) -> Result<(), CredentialError> {
-                self.0.lock().unwrap().insert(k.id(), s.into());
+                lock_ignore_poison(&self.0).insert(k.id(), s.into());
                 Ok(())
             }
             fn get(&self, k: CredentialKey) -> Result<Option<String>, CredentialError> {
-                Ok(self.0.lock().unwrap().get(&k.id()).cloned())
+                Ok(lock_ignore_poison(&self.0).get(&k.id()).cloned())
             }
             fn remove(&self, k: CredentialKey) -> Result<(), CredentialError> {
-                self.0.lock().unwrap().remove(&k.id());
+                lock_ignore_poison(&self.0).remove(&k.id());
                 Ok(())
             }
             fn available(&self) -> Result<(), CredentialError> {

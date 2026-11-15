@@ -10,6 +10,7 @@
 //! 不落任何磁盘文件 —— Keystore 密文由 Kotlin 侧写 `filesDir/cred/<key>.bin`.
 
 use super::credential_store::{CredentialError, CredentialKey, CredentialStore};
+use crate::lock_ignore_poison;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -45,7 +46,7 @@ impl ChannelStore {
 
     /// 合并条目(幂等): 已存在的 key 以 restore 值覆盖(Keystore 是上次进程的最终态).
     fn merge(&self, entries: &[(String, String)]) {
-        let mut map = self.entries.lock().unwrap();
+        let mut map = lock_ignore_poison(&self.entries);
         for (k, v) in entries {
             map.insert(k.clone(), v.clone());
         }
@@ -53,7 +54,7 @@ impl ChannelStore {
 
     /// 同 key 合并: 先清掉该 key 的旧 op 再追加, drain 拿到的每 key 只有最终态.
     fn push_pending(&self, op: CredOp) {
-        let mut q = self.pending.lock().unwrap();
+        let mut q = lock_ignore_poison(&self.pending);
         q.retain(|o| o.key() != op.key());
         q.push_back(op);
     }
@@ -62,10 +63,7 @@ impl ChannelStore {
 impl CredentialStore for ChannelStore {
     fn put(&self, key: CredentialKey, secret: &str) -> Result<(), CredentialError> {
         let id = key.id();
-        self.entries
-            .lock()
-            .unwrap()
-            .insert(id.clone(), secret.to_string());
+        lock_ignore_poison(&self.entries).insert(id.clone(), secret.to_string());
         self.push_pending(CredOp::Put {
             key: id,
             value: secret.to_string(),
@@ -74,12 +72,12 @@ impl CredentialStore for ChannelStore {
     }
 
     fn get(&self, key: CredentialKey) -> Result<Option<String>, CredentialError> {
-        Ok(self.entries.lock().unwrap().get(&key.id()).cloned())
+        Ok(lock_ignore_poison(&self.entries).get(&key.id()).cloned())
     }
 
     fn remove(&self, key: CredentialKey) -> Result<(), CredentialError> {
         let id = key.id();
-        self.entries.lock().unwrap().remove(&id);
+        lock_ignore_poison(&self.entries).remove(&id);
         self.push_pending(CredOp::Remove { key: id });
         Ok(())
     }
@@ -102,7 +100,7 @@ fn bridge() -> &'static Mutex<Option<Arc<ChannelStore>>> {
 /// Dart 在 rust.init 之前调用: 用 Keystore 现存条目激活桥(幂等, 重复调用合并).
 /// 之后 `open_backend` 的 android 分支才会选用它; 不激活则走既有同意门.
 pub fn activate(entries: Vec<(String, String)>) {
-    let mut guard = bridge().lock().unwrap();
+    let mut guard = lock_ignore_poison(bridge());
     match &*guard {
         Some(s) => s.merge(&entries),
         None => {
@@ -115,7 +113,7 @@ pub fn activate(entries: Vec<(String, String)>) {
 
 /// 已激活的桥(供 open_backend 接线); 未激活返回 None.
 pub fn channel_backend() -> Option<Arc<dyn CredentialStore>> {
-    let guard = bridge().lock().unwrap();
+    let guard = lock_ignore_poison(bridge());
     guard
         .as_ref()
         .map(|s| s.clone() as Arc<dyn CredentialStore>)
@@ -123,8 +121,8 @@ pub fn channel_backend() -> Option<Arc<dyn CredentialStore>> {
 
 /// Dart drain: 拉走全部 pending(清空队列). 同 key 已合并为最终态.
 pub fn take_pending() -> Vec<CredOp> {
-    match bridge().lock().unwrap().as_ref() {
-        Some(s) => std::mem::take(&mut *s.pending.lock().unwrap()).into(),
+    match lock_ignore_poison(bridge()).as_ref() {
+        Some(s) => std::mem::take(&mut *lock_ignore_poison(&s.pending)).into(),
         None => Vec::new(),
     }
 }
@@ -132,7 +130,7 @@ pub fn take_pending() -> Vec<CredOp> {
 /// 仅供测试: 拆桥, 保证用例互不串扰.
 #[cfg(test)]
 pub fn deactivate_for_test() {
-    *bridge().lock().unwrap() = None;
+    *lock_ignore_poison(bridge()) = None;
 }
 
 #[cfg(test)]
@@ -176,7 +174,7 @@ mod tests {
         s.remove(CredentialKey::Account(7)).unwrap();
         s.put(CredentialKey::Account(7), "v3").unwrap();
         // 直接对内部实现取 pending(不走全局桥)
-        let q: Vec<CredOp> = std::mem::take(&mut *s.pending.lock().unwrap()).into();
+        let q: Vec<CredOp> = std::mem::take(&mut *lock_ignore_poison(&s.pending)).into();
         assert_eq!(
             q,
             vec![

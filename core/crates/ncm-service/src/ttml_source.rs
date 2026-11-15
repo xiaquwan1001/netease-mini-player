@@ -363,13 +363,9 @@ pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<Ttm
             return Ok(None);
         }
     };
-    // 落盘缓存(原子改名, 部分写入不可见)
-    let dir = ttml_dir(data_dir);
-    let _ = std::fs::create_dir_all(&dir);
-    let tmp = dir.join(format!("{ncm_music_id}.part"));
-    if std::fs::write(&tmp, ttml_text).is_ok() {
-        let _ = std::fs::rename(&tmp, &cache);
-    }
+    // 落盘缓存(原子改名, 部分写入不可见). 写失败不致命: 下次播放重抓即可.
+    let name = format!("{ncm_music_id}.ttml");
+    let _ = crate::fsutil::write_atomic(&ttml_dir(data_dir), &name, ttml_text.as_bytes());
     Ok(Some(doc))
 }
 

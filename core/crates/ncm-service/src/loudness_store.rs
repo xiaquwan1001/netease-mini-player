@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 
 use ncm_domain::TrackLoudness;
 
+/// 文件名: 与 `fsutil` 的目录归属表一致(见 [crate::fsutil]).
+const FILE: &str = "loudness.json";
+
 /// 一条测量记录的来源标记: 未测曲目不需要读它, 但需要知道"测过且失败"(避免每首重测).
 #[derive(Debug, Clone, PartialEq)]
 pub struct LoudnessStore {
@@ -18,7 +21,7 @@ pub struct LoudnessStore {
 impl LoudnessStore {
     /// 打开(不存在则视为空表). 读不出来就当空表, 不要因为缓存损坏让播放失败.
     pub fn open(dir: &Path) -> Self {
-        let path = dir.join("loudness.json");
+        let path = dir.join(FILE);
         let entries = std::fs::read_to_string(&path)
             .ok()
             .and_then(|text| serde_json::from_str::<BTreeMap<String, TrackLoudness>>(&text).ok())
@@ -68,12 +71,8 @@ impl LoudnessStore {
             .map(|(k, v)| (k.to_string(), v))
             .collect();
         let text = serde_json::to_string_pretty(&raw).map_err(|e| e.to_string())?;
-        let tmp = self.path.with_extension("json.tmp");
-        if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        std::fs::write(&tmp, text).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, &self.path).map_err(|e| e.to_string())
+        let dir = self.path.parent().unwrap_or(Path::new("."));
+        crate::fsutil::write_atomic(dir, FILE, text.as_bytes()).map_err(|e| e.to_string())
     }
 }
 

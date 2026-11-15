@@ -9,6 +9,7 @@ pub mod credential_channel;
 #[cfg(target_os = "linux")]
 pub mod credential_keyring;
 pub mod credential_store;
+pub mod fsutil;
 pub mod history;
 
 pub use credential_store::{CredentialStatus, CredentialStore};
@@ -28,9 +29,18 @@ pub use ttml_source::{
 
 use ncm_provider::{Capability, ProviderRegistry};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 
 pub const PROVIDER_NETEASE: &str = "netease";
+
+/// 取 Mutex 锁并**忽略中毒**: 持锁线程 panic 后 `unwrap()` 会把整个进程再带崩一次,
+/// 而我们持的这几把锁底下都是"可重建的状态"(凭据后端句柄、状态枚举、pending 队列),
+/// 数据即使在 panic 中途被改也只会退化成"这次读到的旧值", 不会 UB.
+///
+/// 只用于 `std::sync::Mutex`; `tokio::sync::Mutex` 没有中毒概念, 不要套进来.
+pub(crate) fn lock_ignore_poison<'a, T>(m: &'a Mutex<T>) -> MutexGuard<'a, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// 组装好的应用核心(不含 UI/播放)
 pub struct Core {

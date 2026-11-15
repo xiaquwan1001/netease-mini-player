@@ -7,6 +7,7 @@
 pub use ncm_domain::Session;
 
 use crate::credential_store::{self, CredentialKey, CredentialStatus, CredentialStore};
+use crate::lock_ignore_poison;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -173,17 +174,17 @@ impl IdentityStore {
         creds: Option<Arc<dyn CredentialStore>>,
         status: CredentialStatus,
     ) {
-        *self.creds.lock().unwrap() = creds;
-        *self.cred_status.lock().unwrap() = status;
+        *lock_ignore_poison(&self.creds) = creds;
+        *lock_ignore_poison(&self.cred_status) = status;
     }
 
     pub fn credential_status(&self) -> CredentialStatus {
-        self.cred_status.lock().unwrap().clone()
+        lock_ignore_poison(&self.cred_status).clone()
     }
 
     /// 共享句柄(Core::forget_account 用来删账号凭据)
     pub fn credential_backend(&self) -> Option<Arc<dyn CredentialStore>> {
-        self.creds.lock().unwrap().clone()
+        lock_ignore_poison(&self.creds).clone()
     }
 
     /// 旧明文 → CredentialStore 的一次性迁移(best-effort):
@@ -200,7 +201,7 @@ impl IdentityStore {
         // 注意: 只克隆 Arc, 不能在整个迁移期间持有 self.creds 锁 ——
         // 下面会调 load_accounts(), 它自己要拿同一把锁(非重入 Mutex),
         // 持锁调用会自锁死(2026-11-12 实测: 测试挂在 futex_do_wait)。
-        let creds = self.creds.lock().unwrap().clone();
+        let creds = lock_ignore_poison(&self.creds).clone();
         let creds = creds.as_ref();
         let mut migrated_any = false;
         let mut failure: Option<String> = None;
@@ -258,7 +259,7 @@ impl IdentityStore {
             policy.migrated = true;
             policy.backend = self.credential_status().backend_name().to_string();
             policy.save(&self.dir)?;
-            *self.cred_status.lock().unwrap() = match self.credential_status() {
+            *lock_ignore_poison(&self.cred_status) = match self.credential_status() {
                 CredentialStatus::Secure { backend, .. } => CredentialStatus::Secure {
                     backend,
                     migrated: true,
@@ -270,7 +271,7 @@ impl IdentityStore {
             };
         } else if let Some(reason) = failure {
             // 保留明文原样, 只上报 —— 不阻塞启动
-            *self.cred_status.lock().unwrap() = CredentialStatus::PlaintextFallback { reason };
+            *lock_ignore_poison(&self.cred_status) = CredentialStatus::PlaintextFallback { reason };
         }
         Ok(migrated_any)
     }
@@ -294,7 +295,7 @@ impl IdentityStore {
                     dirty = true;
                 }
                 // 从凭据后端回填登录键(后端里没有/读取失败 = 按未登录继续)
-                if let Some(creds) = self.creds.lock().unwrap().as_ref() {
+                if let Some(creds) = lock_ignore_poison(&self.creds).as_ref() {
                     if let Ok(Some(login)) = creds.get(CredentialKey::Session) {
                         let merged =
                             merge_device_cookie(&session.cookie, &login, &session.device_id);
@@ -336,7 +337,7 @@ impl IdentityStore {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(AccountBook::default()),
             Err(e) => return Err(e),
         };
-        let creds = self.creds.lock().unwrap();
+        let creds = lock_ignore_poison(&self.creds);
         if let Some(c) = creds.as_ref() {
             for a in &mut book.accounts {
                 if a.cookie.is_empty() {
@@ -351,7 +352,7 @@ impl IdentityStore {
 
     pub fn save_accounts(&self, book: &AccountBook) -> io::Result<()> {
         let mut persisted = book.clone();
-        let creds = self.creds.lock().unwrap();
+        let creds = lock_ignore_poison(&self.creds);
         let mut fallback = false;
         for a in &mut persisted.accounts {
             if a.cookie.is_empty() {
@@ -373,14 +374,14 @@ impl IdentityStore {
         }
         let data = serde_json::to_vec_pretty(&persisted)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        self.write_private(&self.dir.join(ACCOUNTS_FILE), &data)
+        self.write_private(ACCOUNTS_FILE, &data)
     }
 
     /// 账号簿骨架落盘(迁移路径专用: 凭据已进 store, 文件只写元数据)
     fn write_accounts_skeleton(&self, book: &AccountBook) -> io::Result<()> {
         let data = serde_json::to_vec_pretty(book)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        self.write_private(&self.dir.join(ACCOUNTS_FILE), &data)
+        self.write_private(ACCOUNTS_FILE, &data)
     }
 
     /// 原子写 + 0600 权限(Linux). 敏感文件不进日志.
@@ -390,7 +391,7 @@ impl IdentityStore {
     /// 保证登录不被策略卡死, 状态由 [credential_status] 上报.
     pub fn save(&self, session: &Session) -> io::Result<()> {
         let login = extract_login_cookie(&session.cookie);
-        let creds = self.creds.lock().unwrap();
+        let creds = lock_ignore_poison(&self.creds);
         match creds.as_ref() {
             Some(c) => {
                 let put_result = if login.is_empty() {
@@ -406,7 +407,7 @@ impl IdentityStore {
                         skeleton.cookie = clear_login_cookie(&session.cookie);
                         let data = serde_json::to_vec_pretty(&skeleton)
                             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-                        return self.write_private(&self.path(), &data);
+                        return self.write_private(IDENTITY_FILE, &data);
                     }
                     Err(_) => {
                         drop(creds);
@@ -425,18 +426,18 @@ impl IdentityStore {
         }
         let data = serde_json::to_vec_pretty(session)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        self.write_private(&self.path(), &data)
+        self.write_private(IDENTITY_FILE, &data)
     }
 
     /// 迁移成功后 identity.json 骨架写回(凭据已搬走)
     fn save_skeleton(&self, session: &Session) -> io::Result<()> {
         let data = serde_json::to_vec_pretty(session)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        self.write_private(&self.path(), &data)
+        self.write_private(IDENTITY_FILE, &data)
     }
 
     fn note_fallback(&self) {
-        let mut st = self.cred_status.lock().unwrap();
+        let mut st = lock_ignore_poison(&self.cred_status);
         if !matches!(&*st, CredentialStatus::PlaintextFallback { .. }) {
             *st = CredentialStatus::PlaintextFallback {
                 reason: "凭据后端不可用或未获明文回退同意, 已按旧明文兼容路径落盘".into(),
@@ -444,16 +445,8 @@ impl IdentityStore {
         }
     }
 
-    fn write_private(&self, path: &Path, data: &[u8]) -> io::Result<()> {
-        let tmp = path.with_extension("json.tmp");
-        fs::write(&tmp, data)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
-        }
-        fs::rename(&tmp, path)?;
-        Ok(())
+    fn write_private(&self, name: &str, data: &[u8]) -> io::Result<()> {
+        crate::fsutil::write_atomic_private(&self.dir, name, data)
     }
 }
 
