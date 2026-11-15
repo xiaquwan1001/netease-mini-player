@@ -3,19 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/podcast.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
+import 'support/fakes.dart';
+
+// 共享工厂 + 播客单集口径(主播 / 无专辑 / 1 分钟)。
+rust.SongDto song(int id, String name) => fakeSong(
+  id: id,
   name: name,
   artist: '主播',
-  artistId: BigInt.one,
   album: '',
-  albumId: BigInt.zero,
-  coverUrl: null,
-  durationMs: BigInt.from(60000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  albumId: 0,
+  durationMs: 60000,
 );
 
 rust.PodcastProgramDto program(

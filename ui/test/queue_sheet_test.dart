@@ -5,19 +5,17 @@ import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
+import 'support/fakes.dart';
+
+// 共享工厂 + 按 id 派生的艺人/专辑(队列断言会读这些字段)口径。
+rust.SongDto song(int id, String name) => fakeSong(
+  id: id,
   name: name,
   artist: '艺人$id',
-  artistId: BigInt.from(900 + id),
+  artistId: 900 + id,
   album: '专辑$id',
-  albumId: BigInt.from(800 + id),
-  coverUrl: null,
-  durationMs: BigInt.from(200000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  albumId: 800 + id,
+  durationMs: 200000,
 );
 
 /// 模拟 HomePage 的接线: 面板 + 真 PlayQueue, 记录"跳播/删当前项"的副作用

@@ -3,20 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/album_preview.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '周杰伦',
-  artistId: BigInt.one,
-  album: '叶惠美',
-  albumId: BigInt.from(9),
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
+
+// 共享工厂 + 周杰伦《叶惠美》(albumId=9) 口径。
+rust.SongDto song(int id, String name) =>
+    fakeSong(id: id, name: name, artist: '周杰伦', album: '叶惠美', albumId: 9);
 
 rust.AlbumDetailDto album() => rust.AlbumDetailDto(
   id: BigInt.from(9),

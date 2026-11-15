@@ -5,19 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
+import 'support/fakes.dart';
+
+// 共享工厂 + 按 id 派生的艺人/专辑口径(与 queue_sheet_test 一致)。
+rust.SongDto song(int id, String name) => fakeSong(
+  id: id,
   name: name,
   artist: '艺人$id',
-  artistId: BigInt.from(900 + id),
+  artistId: 900 + id,
   album: '专辑$id',
-  albumId: BigInt.from(800 + id),
-  coverUrl: null,
-  durationMs: BigInt.from(200000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  albumId: 800 + id,
+  durationMs: 200000,
 );
 
 /// 「存为歌单」面板行为测试: 全部注入假 onSaveAsPlaylist, 不联网。

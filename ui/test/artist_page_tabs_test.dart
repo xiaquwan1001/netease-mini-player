@@ -8,20 +8,17 @@ import 'package:minincm/src/cover_art.dart' show CircleCover;
 import 'package:minincm/src/profile_scaffold.dart' show ProfileStatRow;
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int i, {String name = '歌曲', bool playable = true}) =>
-    rust.SongDto(
-      id: BigInt.from(1000 + i),
-      name: '$name$i',
-      artist: '周杰伦',
-      artistId: BigInt.from(6452),
-      album: '专辑',
-      albumId: BigInt.from(1),
-      durationMs: BigInt.from(200000),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: playable,
-    );
+import 'support/fakes.dart';
+
+// 共享工厂 + 歌手页口径: id 从 1000 起, 名字带序号(断言会读), 周杰伦 200 秒。
+rust.SongDto song(int i, {String name = '歌曲', bool playable = true}) => fakeSong(
+  id: 1000 + i,
+  name: '$name$i',
+  artist: '周杰伦',
+  artistId: 6452,
+  durationMs: 200000,
+  playable: playable,
+);
 
 rust.ArtistDetailDto detail({
   int songs = 3,
