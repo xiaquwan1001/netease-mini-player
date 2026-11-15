@@ -14,6 +14,8 @@ import 'package:minincm/src/search_landing.dart';
 import 'package:minincm/src/search_results.dart';
 import 'package:minincm/src/song_tile.dart';
 
+import 'support/fakes.dart';
+
 const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
 const _longArtist = '一条超级超级长的艺人名组合名称竖排回归测试用艺人名还有更长';
 const _creatorLine = '创建者: $_longArtist';
@@ -22,19 +24,17 @@ const _longAlbum = '一张同样很长的专辑名称Magia Album Deluxe Edition 
 const _widths = [300.0, 320.0, 360.0];
 const _scales = [1.0, 1.25, 1.3, 1.625];
 
-rust.SongDto song({int id = 1, bool vip = false}) => rust.SongDto(
-  id: BigInt.from(id),
+/// 共享工厂 + 本文件的长歌名/长艺人/长专辑口径(窄屏排版回归专用)。
+rust.SongDto song({int id = 1, bool vip = false}) => fakeSong(
+  id: id,
   name: _longName,
   artist: _longArtist,
-  artistId: BigInt.from(9),
+  artistId: 9,
   album: _longAlbum,
-  albumId: BigInt.from(8),
-  coverUrl: null,
-  durationMs: BigInt.from(269000),
+  albumId: 8,
+  durationMs: 269000,
   fee: vip ? 1 : 0,
   vip: vip,
-  paid: false,
-  playable: true,
 );
 
 /// 在指定逻辑宽度/字体缩放下 pump, 返回捕获到的错误文案列表.

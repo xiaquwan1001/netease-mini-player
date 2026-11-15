@@ -7,21 +7,18 @@ import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/playback_policy.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
+import 'support/fakes.dart';
+
+/// 共享工厂 + 本文件口径: 曲名带序号, fee/vip/paid/playable 由调用方给。
 rust.SongDto song({
   int id = 1,
   bool vip = false,
   bool paid = false,
   bool playable = true,
   int fee = 0,
-}) => rust.SongDto(
-  id: BigInt.from(id),
+}) => fakeSong(
+  id: id,
   name: '曲目$id',
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
   fee: fee,
   vip: vip,
   paid: paid,

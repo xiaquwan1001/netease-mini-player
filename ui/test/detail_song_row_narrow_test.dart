@@ -12,22 +12,23 @@ import 'package:minincm/src/adaptive_text_row.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_tile.dart';
 
+import 'support/fakes.dart';
+
 const _longName = '魔法未来2019主题歌Magia[Quartet]Live.Ver超长歌名继续加长再加长一点直到溢出为止啊';
 const _longSub = '一条超级超级长的艺人名组合名称 · 一张同样很长的专辑名称Magia Album Deluxe Edition 豪华版';
 
+/// 共享工厂 + 本文件的长歌名/长专辑口径(徽标三态由调用方给)。
 rust.SongDto song({
   required bool vip,
   required bool paid,
   required bool playable,
-}) => rust.SongDto(
-  id: BigInt.one,
+}) => fakeSong(
   name: _longName,
   artist: '某艺人',
-  artistId: BigInt.from(9),
+  artistId: 9,
   album: '某专辑',
-  albumId: BigInt.from(8),
-  coverUrl: null,
-  durationMs: BigInt.from(269000),
+  albumId: 8,
+  durationMs: 269000,
   fee: vip ? 1 : 0,
   vip: vip,
   paid: paid,

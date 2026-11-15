@@ -8,19 +8,19 @@ import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/settings_view.dart';
 
-rust.SongDto _song(int id, {String? cover}) => rust.SongDto(
-  id: BigInt.from(id),
+import 'support/fakes.dart';
+
+/// 共享工厂 + 播放现场口径: 字段按 id 派生(序列化往返要能区分每首)。
+rust.SongDto _song(int id, {String? cover}) => fakeSong(
+  id: id,
   name: '歌曲 $id',
   artist: '歌手 $id',
-  artistId: BigInt.from(1000 + id),
+  artistId: 1000 + id,
   album: '专辑 $id',
-  albumId: BigInt.from(2000 + id),
+  albumId: 2000 + id,
   coverUrl: cover,
-  durationMs: BigInt.from(200000 + id),
-  fee: 0,
+  durationMs: 200000 + id,
   vip: id.isOdd,
-  paid: false,
-  playable: true,
 );
 
 void main() {
