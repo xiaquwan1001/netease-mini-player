@@ -8,7 +8,8 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `cookie_has_music_u`, `core`, `credential_status_dto`, `data_dir_default`, `feed_event_dto`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `clone`, `clone`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
+// These functions have error during generation (see debug logs or enable `stop_on_error: true` for more details): `auth`, `internal`, `network`, `new`, `unsupported`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 Future<InitInfo> init({String? dataDir}) =>
@@ -2130,6 +2131,37 @@ class FeedPageDto {
           events == other.events &&
           lastTime == other.lastTime &&
           more == other.more;
+}
+
+/// 跨桥错误: 结构化的 provider 错误, 不再让 Dart 靠文本前缀猜.
+///
+/// 字段语义与 [`ncm_provider::ProviderError`] 一一对应:
+/// - `kind`: `network` / `auth` / `riskControl` / `notFound` /
+///   `unsupported` / `forbidden` / `internal`
+/// - `retryable`: 是否值得重试(网络抖动类为 true; 鉴权/风控/无版权 false)
+/// - `detail`: 原始细节, 网络类基本是 os error, forbidden 类是可读中文
+class FfiError implements FrbException {
+  final String kind;
+  final bool retryable;
+  final String detail;
+
+  const FfiError({
+    required this.kind,
+    required this.retryable,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ retryable.hashCode ^ detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FfiError &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          retryable == other.retryable &&
+          detail == other.detail;
 }
 
 /// 关注/粉丝数: 直接镜像 domain 类型 `FollowCount`.

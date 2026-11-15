@@ -153,6 +153,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   FeedPageDto dco_decode_feed_page_dto(dynamic raw);
 
   @protected
+  FfiError dco_decode_ffi_error(dynamic raw);
+
+  @protected
   FollowCount dco_decode_follow_count(dynamic raw);
 
   @protected
@@ -734,6 +737,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FeedPageDto sse_decode_feed_page_dto(SseDeserializer deserializer);
+
+  @protected
+  FfiError sse_decode_ffi_error(SseDeserializer deserializer);
 
   @protected
   FollowCount sse_decode_follow_count(SseDeserializer deserializer);
@@ -1438,6 +1444,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_feed_page_dto(FeedPageDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_ffi_error(FfiError self, SseSerializer serializer);
 
   @protected
   void sse_encode_follow_count(FollowCount self, SseSerializer serializer);

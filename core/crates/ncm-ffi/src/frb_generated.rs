@@ -72,7 +72,7 @@ fn wire__crate__api__account_remove_impl(
             let api_user_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::account_remove(api_user_id)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -105,7 +105,7 @@ fn wire__crate__api__account_switch_impl(
             let api_user_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::account_switch(api_user_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -140,7 +140,7 @@ fn wire__crate__api__account_sync_active_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::account_sync_active().await?;
                         std::result::Result::Ok(output_ok)
@@ -175,7 +175,7 @@ fn wire__crate__api__accounts_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::accounts()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -209,7 +209,7 @@ fn wire__crate__api__add_to_playlist_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::add_to_playlist(api_playlist_id, api_track_id).await?;
@@ -246,7 +246,7 @@ fn wire__crate__api__album_detail_impl(
             let api_album_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::album_detail(api_album_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -284,7 +284,7 @@ fn wire__crate__api__artist_albums_page_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::artist_albums_page(api_artist_id, api_offset, api_limit)
@@ -322,7 +322,7 @@ fn wire__crate__api__artist_detail_impl(
             let api_artist_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::artist_detail(api_artist_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -360,7 +360,7 @@ fn wire__crate__api__artist_mvs_page_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::artist_mvs_page(api_artist_id, api_offset, api_limit)
@@ -400,7 +400,7 @@ fn wire__crate__api__artist_songs_page_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::artist_songs_page(api_artist_id, api_offset, api_limit)
@@ -439,7 +439,7 @@ fn wire__crate__api__artist_sub_toggle_impl(
             let api_sub = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::artist_sub_toggle(api_artist_id, api_sub).await?;
@@ -477,7 +477,7 @@ fn wire__crate__api__cache_enforce_limit_impl(
             let api_keep_track_id = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok =
                         crate::api::cache_enforce_limit(api_limit_mb, api_keep_track_id)?;
                     std::result::Result::Ok(output_ok)
@@ -511,7 +511,7 @@ fn wire__crate__api__cache_stats_impl(
             let api_limit_mb = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::cache_stats(api_limit_mb)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -543,7 +543,7 @@ fn wire__crate__api__chart_list_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::chart_list().await?;
                         std::result::Result::Ok(output_ok)
@@ -578,7 +578,7 @@ fn wire__crate__api__clear_search_history_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::clear_search_history()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -611,7 +611,7 @@ fn wire__crate__api__cloud_delete_impl(
             let api_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::cloud_delete(api_ids).await?;
                         std::result::Result::Ok(output_ok)
@@ -647,7 +647,7 @@ fn wire__crate__api__cloud_song_url_impl(
             let api_song_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::cloud_song_url(api_song_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -683,7 +683,7 @@ fn wire__crate__api__cloud_upload_impl(
             let api_file_path = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::cloud_upload(api_file_path).await?;
                         std::result::Result::Ok(output_ok)
@@ -719,7 +719,7 @@ fn wire__crate__api__comment_messages_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::comment_messages(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -757,7 +757,7 @@ fn wire__crate__api__comment_replies_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::comment_replies(
                             api_thread_id,
@@ -798,7 +798,7 @@ fn wire__crate__api__comment_stats_impl(
             let api_thread_id = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::comment_stats(api_thread_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -837,7 +837,7 @@ fn wire__crate__api__comments_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::comments(api_kind, api_resource_id, api_limit, api_offset)
@@ -875,7 +875,7 @@ fn wire__crate__api__consent_plaintext_storage_impl(
             let api_consent = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::consent_plaintext_storage(api_consent)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -909,7 +909,7 @@ fn wire__crate__api__create_playlist_impl(
             let api_privacy = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::create_playlist(api_name, api_privacy).await?;
                         std::result::Result::Ok(output_ok)
@@ -944,7 +944,7 @@ fn wire__crate__api__credential_pending_writes_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::credential_pending_writes()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -977,7 +977,7 @@ fn wire__crate__api__credential_restore_impl(
             let api_entries = <Vec<crate::api::CredentialEntryDto>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::credential_restore(api_entries)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1009,7 +1009,7 @@ fn wire__crate__api__credential_status_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::credential_status()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1041,7 +1041,7 @@ fn wire__crate__api__daily_recommend_playlists_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::daily_recommend_playlists().await?;
                         std::result::Result::Ok(output_ok)
@@ -1076,7 +1076,7 @@ fn wire__crate__api__daily_recommend_songs_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::daily_recommend_songs().await?;
                         std::result::Result::Ok(output_ok)
@@ -1111,7 +1111,7 @@ fn wire__crate__api__default_search_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::default_search().await?;
                         std::result::Result::Ok(output_ok)
@@ -1148,7 +1148,7 @@ fn wire__crate__api__delete_comment_impl(
             let api_comment_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::delete_comment(api_thread_id, api_comment_id).await?;
@@ -1185,7 +1185,7 @@ fn wire__crate__api__delete_playlist_impl(
             let api_playlist_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::delete_playlist(api_playlist_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -1221,7 +1221,7 @@ fn wire__crate__api__digital_album_detail_impl(
             let api_album_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::digital_album_detail(api_album_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -1258,7 +1258,7 @@ fn wire__crate__api__digital_album_purchased_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::digital_album_purchased(api_limit, api_offset).await?;
@@ -1295,7 +1295,7 @@ fn wire__crate__api__digital_album_sales_impl(
             let api_album_ids = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::digital_album_sales(api_album_ids).await?;
                         std::result::Result::Ok(output_ok)
@@ -1331,7 +1331,7 @@ fn wire__crate__api__dislike_recommend_song_impl(
             let api_song_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::dislike_recommend_song(api_song_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -1367,7 +1367,7 @@ fn wire__crate__api__eq_profile_normalize_impl(
             let api_text = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::eq_profile_normalize(api_text)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1400,7 +1400,7 @@ fn wire__crate__api__eq_profile_validate_impl(
             let api_text = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::eq_profile_validate(api_text)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1435,7 +1435,7 @@ fn wire__crate__api__event_comments_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::event_comments(api_thread_id, api_limit, api_offset)
@@ -1474,7 +1474,7 @@ fn wire__crate__api__feed_events_impl(
             let api_last_time = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::feed_events(api_limit, api_last_time).await?;
                         std::result::Result::Ok(output_ok)
@@ -1511,7 +1511,7 @@ fn wire__crate__api__feed_page_impl(
             let api_last_time = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::feed_page(api_limit, api_last_time).await?;
                         std::result::Result::Ok(output_ok)
@@ -1546,7 +1546,7 @@ fn wire__crate__api__follow_counts_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::follow_counts().await?;
                         std::result::Result::Ok(output_ok)
@@ -1584,7 +1584,7 @@ fn wire__crate__api__forward_event_impl(
             let api_msg = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::forward_event(api_event_id, api_user_id, api_msg).await?;
@@ -1622,7 +1622,7 @@ fn wire__crate__api__forward_messages_impl(
             let api_last_time_ms = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::forward_messages(api_limit, api_last_time_ms).await?;
@@ -1661,7 +1661,7 @@ fn wire__crate__api__heart_mode_songs_impl(
             let api_count = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::heart_mode_songs(api_song_id, api_playlist_id, api_count)
@@ -1700,7 +1700,7 @@ fn wire__crate__api__high_quality_playlists_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::high_quality_playlists(api_cat, api_limit).await?;
@@ -1736,7 +1736,7 @@ fn wire__crate__api__history_recommend_dates_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::history_recommend_dates().await?;
                         std::result::Result::Ok(output_ok)
@@ -1772,7 +1772,7 @@ fn wire__crate__api__history_recommend_songs_impl(
             let api_date = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::history_recommend_songs(api_date).await?;
                         std::result::Result::Ok(output_ok)
@@ -1809,7 +1809,7 @@ fn wire__crate__api__hot_artists_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::hot_artists(api_limit, api_offset).await?;
                         std::result::Result::Ok(output_ok)
@@ -1847,7 +1847,7 @@ fn wire__crate__api__hot_comments_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::hot_comments(api_thread_id, api_limit, api_offset).await?;
@@ -1883,7 +1883,7 @@ fn wire__crate__api__hot_search_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::hot_search().await?;
                         std::result::Result::Ok(output_ok)
@@ -1918,7 +1918,7 @@ fn wire__crate__api__hot_search_detail_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::hot_search_detail().await?;
                         std::result::Result::Ok(output_ok)
@@ -1954,7 +1954,7 @@ fn wire__crate__api__init_impl(
             let api_data_dir = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::init(api_data_dir)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -1989,7 +1989,7 @@ fn wire__crate__api__like_comment_impl(
             let api_liked = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::like_comment(api_thread_id, api_comment_id, api_liked)
@@ -2028,7 +2028,7 @@ fn wire__crate__api__like_event_impl(
             let api_liked = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::like_event(api_thread_id, api_liked).await?;
                         std::result::Result::Ok(output_ok)
@@ -2063,7 +2063,7 @@ fn wire__crate__api__liked_ids_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::liked_ids().await?;
                         std::result::Result::Ok(output_ok)
@@ -2098,7 +2098,7 @@ fn wire__crate__api__liked_songs_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::liked_songs().await?;
                         std::result::Result::Ok(output_ok)
@@ -2134,7 +2134,7 @@ fn wire__crate__api__local_recent_songs_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::local_recent_songs(api_limit)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2167,7 +2167,7 @@ fn wire__crate__api__login_qr_check_impl(
             let api_key = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::login_qr_check(api_key).await?;
                         std::result::Result::Ok(output_ok)
@@ -2202,7 +2202,7 @@ fn wire__crate__api__login_qr_create_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::login_qr_create().await?;
                         std::result::Result::Ok(output_ok)
@@ -2239,7 +2239,7 @@ fn wire__crate__api__login_sms_send_impl(
             let api_country_code = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::login_sms_send(api_phone, api_country_code).await?;
@@ -2278,7 +2278,7 @@ fn wire__crate__api__login_sms_verify_impl(
             let api_country_code = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::login_sms_verify(api_phone, api_code, api_country_code)
@@ -2316,7 +2316,7 @@ fn wire__crate__api__login_with_cookie_impl(
             let api_cookie = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::login_with_cookie(api_cookie)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2348,7 +2348,7 @@ fn wire__crate__api__logout_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::logout()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2382,7 +2382,7 @@ fn wire__crate__api__loudness_cached_impl(
             let api_target_lufs = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::loudness_cached(api_track_id, api_target_lufs)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2416,7 +2416,7 @@ fn wire__crate__api__loudness_measure_cached_impl(
             let api_target_lufs = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::loudness_measure_cached(api_track_id, api_target_lufs)
@@ -2457,7 +2457,7 @@ fn wire__crate__api__loudness_measure_path_impl(
             let api_format_hint = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::loudness_measure_path(
                             api_track_id,
@@ -2499,7 +2499,7 @@ fn wire__crate__api__lyric_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::lyric(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -2535,7 +2535,7 @@ fn wire__crate__api__lyric_lines_i18n_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::lyric_lines_i18n(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -2570,7 +2570,7 @@ fn wire__crate__api__message_counts_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::message_counts().await?;
                         std::result::Result::Ok(output_ok)
@@ -2607,7 +2607,7 @@ fn wire__crate__api__message_notices_impl(
             let api_last_time_ms = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::message_notices(api_limit, api_last_time_ms).await?;
@@ -2644,7 +2644,7 @@ fn wire__crate__api__mv_detail_impl(
             let api_mv_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::mv_detail(api_mv_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -2681,7 +2681,7 @@ fn wire__crate__api__mv_url_impl(
             let api_r = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::mv_url(api_mv_id, api_r).await?;
                         std::result::Result::Ok(output_ok)
@@ -2716,7 +2716,7 @@ fn wire__crate__api__my_playlists_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::my_playlists().await?;
                         std::result::Result::Ok(output_ok)
@@ -2751,7 +2751,7 @@ fn wire__crate__api__my_uid_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::my_uid()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -2785,7 +2785,7 @@ fn wire__crate__api__new_albums_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::new_albums(api_limit, api_offset).await?;
                         std::result::Result::Ok(output_ok)
@@ -2822,7 +2822,7 @@ fn wire__crate__api__new_albums_by_area_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::new_albums_by_area(api_area, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -2858,7 +2858,7 @@ fn wire__crate__api__new_songs_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::new_songs(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -2895,7 +2895,7 @@ fn wire__crate__api__new_songs_by_area_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::new_songs_by_area(api_area, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -2931,7 +2931,7 @@ fn wire__crate__api__newest_albums_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::newest_albums(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -2967,7 +2967,7 @@ fn wire__crate__api__personal_fm_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::personal_fm(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -3036,7 +3036,7 @@ fn wire__crate__api__play_ranking_impl(
             let api_period = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::play_ranking(api_period).await?;
                         std::result::Result::Ok(output_ok)
@@ -3074,7 +3074,7 @@ fn wire__crate__api__play_track_impl(
             let api_duration_ms = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::play_track(api_track_id, api_url, api_duration_ms).await?;
@@ -3113,7 +3113,7 @@ fn wire__crate__api__player_configure_impl(
             let api_eq_text = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok =
                         crate::api::player_configure(api_gain_db, api_fade_ms, api_eq_text)?;
                     std::result::Result::Ok(output_ok)
@@ -3372,7 +3372,7 @@ fn wire__crate__api__playlist_categories_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::playlist_categories().await?;
                         std::result::Result::Ok(output_ok)
@@ -3408,7 +3408,7 @@ fn wire__crate__api__playlist_detail_impl(
             let api_playlist_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::playlist_detail(api_playlist_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -3444,7 +3444,7 @@ fn wire__crate__api__playlist_songs_impl(
             let api_playlist_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::playlist_songs(api_playlist_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -3481,7 +3481,7 @@ fn wire__crate__api__playlist_tracks_add_impl(
             let api_song_ids = <Vec<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::playlist_tracks_add(api_playlist_id, api_song_ids).await?;
@@ -3520,7 +3520,7 @@ fn wire__crate__api__playlists_by_category_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::playlists_by_category(api_cat, api_limit, api_offset)
@@ -3558,7 +3558,7 @@ fn wire__crate__api__podcast_hot_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::podcast_hot(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -3594,7 +3594,7 @@ fn wire__crate__api__podcast_program_impl(
             let api_program_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::podcast_program(api_program_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -3632,7 +3632,7 @@ fn wire__crate__api__podcast_programs_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::podcast_programs(api_radio_id, api_limit, api_offset)
@@ -3670,7 +3670,7 @@ fn wire__crate__api__podcast_radio_impl(
             let api_radio_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::podcast_radio(api_radio_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -3708,7 +3708,7 @@ fn wire__crate__api__private_history_impl(
             let api_before_ms = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::private_history(api_user_id, api_limit, api_before_ms)
@@ -3747,7 +3747,7 @@ fn wire__crate__api__private_send_impl(
             let api_content = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::private_send(api_user_id, api_content).await?;
                         std::result::Result::Ok(output_ok)
@@ -3784,7 +3784,7 @@ fn wire__crate__api__private_sessions_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::private_sessions(api_limit, api_offset).await?;
                         std::result::Result::Ok(output_ok)
@@ -3819,7 +3819,7 @@ fn wire__crate__api__profile_detail_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::profile_detail().await?;
                         std::result::Result::Ok(output_ok)
@@ -3854,7 +3854,7 @@ fn wire__crate__api__radio_explore_home_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::radio_explore_home().await?;
                         std::result::Result::Ok(output_ok)
@@ -3890,7 +3890,7 @@ fn wire__crate__api__radio_recommend_impl(
             let api_cate_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::radio_recommend(api_cate_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -3928,7 +3928,7 @@ fn wire__crate__api__radio_subscribers_impl(
             let api_time_ms = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::radio_subscribers(api_radio_id, api_limit, api_time_ms)
@@ -3966,7 +3966,7 @@ fn wire__crate__api__radio_toplist_impl(
             let api_kind = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::radio_toplist(api_kind).await?;
                         std::result::Result::Ok(output_ok)
@@ -4002,7 +4002,7 @@ fn wire__crate__api__recent_albums_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::recent_albums(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4038,7 +4038,7 @@ fn wire__crate__api__recent_contacts_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::recent_contacts(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4074,7 +4074,7 @@ fn wire__crate__api__recent_playlists_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::recent_playlists(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4110,7 +4110,7 @@ fn wire__crate__api__recent_podcasts_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::recent_podcasts(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4146,7 +4146,7 @@ fn wire__crate__api__recent_songs_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::recent_songs(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4182,7 +4182,7 @@ fn wire__crate__api__record_search_impl(
             let api_keyword = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::record_search(api_keyword)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -4215,7 +4215,7 @@ fn wire__crate__api__remember_play_impl(
             let api_song = <crate::api::SongDto>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::remember_play(api_song)?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -4249,7 +4249,7 @@ fn wire__crate__api__remove_from_playlist_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::remove_from_playlist(api_playlist_id, api_track_id).await?;
@@ -4287,7 +4287,7 @@ fn wire__crate__api__rename_playlist_impl(
             let api_name = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::rename_playlist(api_playlist_id, api_name).await?;
@@ -4326,7 +4326,7 @@ fn wire__crate__api__reply_comment_impl(
             let api_content = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::reply_comment(api_thread_id, api_comment_id, api_content)
@@ -4365,7 +4365,7 @@ fn wire__crate__api__search_all_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::search_all(api_keywords, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4401,7 +4401,7 @@ fn wire__crate__api__search_exact_impl(
             let api_keywords = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::search_exact(api_keywords).await?;
                         std::result::Result::Ok(output_ok)
@@ -4436,7 +4436,7 @@ fn wire__crate__api__search_history_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| {
-                transform_result_sse::<_, String>((move || {
+                transform_result_sse::<_, crate::api::FfiError>((move || {
                     let output_ok = crate::api::search_history()?;
                     std::result::Result::Ok(output_ok)
                 })())
@@ -4469,7 +4469,7 @@ fn wire__crate__api__search_suggest_impl(
             let api_keywords = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::search_suggest(api_keywords).await?;
                         std::result::Result::Ok(output_ok)
@@ -4505,7 +4505,7 @@ fn wire__crate__api__search_suggest_keywords_impl(
             let api_keywords = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::search_suggest_keywords(api_keywords).await?;
                         std::result::Result::Ok(output_ok)
@@ -4542,7 +4542,7 @@ fn wire__crate__api__set_album_subscribed_impl(
             let api_subscribed = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::set_album_subscribed(api_album_id, api_subscribed).await?;
@@ -4580,7 +4580,7 @@ fn wire__crate__api__set_follow_impl(
             let api_follow = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::set_follow(api_uid, api_follow).await?;
                         std::result::Result::Ok(output_ok)
@@ -4617,7 +4617,7 @@ fn wire__crate__api__set_liked_impl(
             let api_liked = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::set_liked(api_track_id, api_liked).await?;
                         std::result::Result::Ok(output_ok)
@@ -4654,7 +4654,7 @@ fn wire__crate__api__set_playlist_subscribed_impl(
             let api_subscribed = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::set_playlist_subscribed(api_playlist_id, api_subscribed)
@@ -4694,7 +4694,7 @@ fn wire__crate__api__share_resource_impl(
             let api_msg = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::share_resource(api_kind, api_resource_id, api_msg).await?;
@@ -4730,7 +4730,7 @@ fn wire__crate__api__sign_in_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::sign_in().await?;
                         std::result::Result::Ok(output_ok)
@@ -4765,7 +4765,7 @@ fn wire__crate__api__signin_status_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::signin_status().await?;
                         std::result::Result::Ok(output_ok)
@@ -4801,7 +4801,7 @@ fn wire__crate__api__similar_artists_impl(
             let api_artist_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::similar_artists(api_artist_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -4838,7 +4838,7 @@ fn wire__crate__api__similar_playlists_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::similar_playlists(api_song_id, api_limit).await?;
@@ -4876,7 +4876,7 @@ fn wire__crate__api__similar_songs_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::similar_songs(api_song_id, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -4912,7 +4912,7 @@ fn wire__crate__api__song_like_state_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::song_like_state(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -4949,7 +4949,7 @@ fn wire__crate__api__song_purchased_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::song_purchased(api_limit, api_offset).await?;
                         std::result::Result::Ok(output_ok)
@@ -4986,7 +4986,7 @@ fn wire__crate__api__song_url_impl(
             let api_level = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::song_url(api_track_id, api_level).await?;
                         std::result::Result::Ok(output_ok)
@@ -5022,7 +5022,7 @@ fn wire__crate__api__song_wiki_impl(
             let api_song_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::song_wiki(api_song_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -5059,7 +5059,7 @@ fn wire__crate__api__style_playlists_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::style_playlists(api_tag_id, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -5094,7 +5094,7 @@ fn wire__crate__api__style_preference_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::style_preference().await?;
                         std::result::Result::Ok(output_ok)
@@ -5131,7 +5131,7 @@ fn wire__crate__api__style_songs_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::style_songs(api_tag_id, api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -5167,7 +5167,7 @@ fn wire__crate__api__subscribed_albums_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::subscribed_albums(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -5203,7 +5203,7 @@ fn wire__crate__api__subscribed_artists_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::subscribed_artists(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -5239,7 +5239,7 @@ fn wire__crate__api__subscribed_podcasts_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::subscribed_podcasts(api_limit).await?;
                         std::result::Result::Ok(output_ok)
@@ -5274,7 +5274,7 @@ fn wire__crate__api__toplist_catalog_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::toplist_catalog().await?;
                         std::result::Result::Ok(output_ok)
@@ -5310,7 +5310,7 @@ fn wire__crate__api__trash_fm_song_impl(
             let api_song_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::trash_fm_song(api_song_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -5346,7 +5346,7 @@ fn wire__crate__api__ttml_lyric_lines_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::ttml_lyric_lines(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -5383,7 +5383,7 @@ fn wire__crate__api__update_playlist_desc_impl(
             let api_desc = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::update_playlist_desc(api_playlist_id, api_desc).await?;
@@ -5420,7 +5420,7 @@ fn wire__crate__api__update_signature_impl(
             let api_signature = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::update_signature(api_signature).await?;
                         std::result::Result::Ok(output_ok)
@@ -5457,7 +5457,7 @@ fn wire__crate__api__user_cloud_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::user_cloud(api_limit, api_offset).await?;
                         std::result::Result::Ok(output_ok)
@@ -5495,7 +5495,7 @@ fn wire__crate__api__user_events_impl(
             let api_last_time = <i64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::user_events(api_uid, api_limit, api_last_time).await?;
@@ -5534,7 +5534,7 @@ fn wire__crate__api__user_followeds_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::user_followeds(api_uid, api_limit, api_offset).await?;
@@ -5573,7 +5573,7 @@ fn wire__crate__api__user_follows_impl(
             let api_offset = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::user_follows(api_uid, api_limit, api_offset).await?;
@@ -5609,7 +5609,7 @@ fn wire__crate__api__user_level_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::user_level().await?;
                         std::result::Result::Ok(output_ok)
@@ -5644,7 +5644,7 @@ fn wire__crate__api__user_medals_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::user_medals().await?;
                         std::result::Result::Ok(output_ok)
@@ -5681,7 +5681,7 @@ fn wire__crate__api__user_play_ranking_impl(
             let api_period = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::user_play_ranking(api_uid, api_period).await?;
                         std::result::Result::Ok(output_ok)
@@ -5718,7 +5718,7 @@ fn wire__crate__api__user_playlists_of_impl(
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok =
                             crate::api::user_playlists_of(api_user_id, api_limit).await?;
@@ -5755,7 +5755,7 @@ fn wire__crate__api__user_profile_impl(
             let api_user_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::user_profile(api_user_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -5790,7 +5790,7 @@ fn wire__crate__api__vip_overview_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::vip_overview().await?;
                         std::result::Result::Ok(output_ok)
@@ -5826,7 +5826,7 @@ fn wire__crate__api__word_lyric_lines_impl(
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
-                transform_result_sse::<_, String>(
+                transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
                         let output_ok = crate::api::word_lyric_lines(api_track_id).await?;
                         std::result::Result::Ok(output_ok)
@@ -6976,6 +6976,20 @@ impl SseDecode for crate::api::FeedPageDto {
             events: var_events,
             last_time: var_lastTime,
             more: var_more,
+        };
+    }
+}
+
+impl SseDecode for crate::api::FfiError {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_kind = <String>::sse_decode(deserializer);
+        let mut var_retryable = <bool>::sse_decode(deserializer);
+        let mut var_detail = <String>::sse_decode(deserializer);
+        return crate::api::FfiError {
+            kind: var_kind,
+            retryable: var_retryable,
+            detail: var_detail,
         };
     }
 }
@@ -9937,6 +9951,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::FeedPageDto> for crate::api::
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::FfiError {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.kind.into_into_dart().into_dart(),
+            self.retryable.into_into_dart().into_dart(),
+            self.detail.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::FfiError {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::FfiError> for crate::api::FfiError {
+    fn into_into_dart(self) -> crate::api::FfiError {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::FollowCount> {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -11868,6 +11899,15 @@ impl SseEncode for crate::api::FeedPageDto {
         <Vec<crate::api::FeedEventDto>>::sse_encode(self.events, serializer);
         <i64>::sse_encode(self.last_time, serializer);
         <bool>::sse_encode(self.more, serializer);
+    }
+}
+
+impl SseEncode for crate::api::FfiError {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.kind, serializer);
+        <bool>::sse_encode(self.retryable, serializer);
+        <String>::sse_encode(self.detail, serializer);
     }
 }
 

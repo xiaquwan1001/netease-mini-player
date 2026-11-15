@@ -639,7 +639,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountRemoveConstMeta,
         argValues: [userId],
@@ -667,7 +667,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountSwitchConstMeta,
         argValues: [userId],
@@ -694,7 +694,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_account_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountSyncActiveConstMeta,
         argValues: [],
@@ -721,7 +721,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_account_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountsConstMeta,
         argValues: [],
@@ -753,7 +753,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAddToPlaylistConstMeta,
         argValues: [playlistId, trackId],
@@ -783,7 +783,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_album_detail_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAlbumDetailConstMeta,
         argValues: [albumId],
@@ -817,7 +817,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_artist_album_page_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiArtistAlbumsPageConstMeta,
         argValues: [artistId, offset, limit],
@@ -847,7 +847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_artist_detail_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiArtistDetailConstMeta,
         argValues: [artistId],
@@ -881,7 +881,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_artist_mv_page_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiArtistMvsPageConstMeta,
         argValues: [artistId, offset, limit],
@@ -917,7 +917,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_artist_song_page_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiArtistSongsPageConstMeta,
         argValues: [artistId, offset, limit],
@@ -951,7 +951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiArtistSubToggleConstMeta,
         argValues: [artistId, sub],
@@ -985,7 +985,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_cache_eviction_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCacheEnforceLimitConstMeta,
         argValues: [limitMb, keepTrackId],
@@ -1015,7 +1015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_cache_stats_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCacheStatsConstMeta,
         argValues: [limitMb],
@@ -1042,7 +1042,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_chart_summary,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiChartListConstMeta,
         argValues: [],
@@ -1069,7 +1069,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiClearSearchHistoryConstMeta,
         argValues: [],
@@ -1097,7 +1097,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCloudDeleteConstMeta,
         argValues: [ids],
@@ -1125,7 +1125,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCloudSongUrlConstMeta,
         argValues: [songId],
@@ -1153,7 +1153,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_cloud_upload_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCloudUploadConstMeta,
         argValues: [filePath],
@@ -1181,7 +1181,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_inbox_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCommentMessagesConstMeta,
         argValues: [limit],
@@ -1215,7 +1215,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_comment_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCommentRepliesConstMeta,
         argValues: [threadId, parentCommentId, limit],
@@ -1245,7 +1245,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_comment_stats,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCommentStatsConstMeta,
         argValues: [threadId],
@@ -1281,7 +1281,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_comment_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCommentsConstMeta,
         argValues: [kind, resourceId, limit, offset],
@@ -1313,7 +1313,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_credential_status_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiConsentPlaintextStorageConstMeta,
         argValues: [consent],
@@ -1348,7 +1348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_64,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCreatePlaylistConstMeta,
         argValues: [name, privacy],
@@ -1377,7 +1377,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_credential_op_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCredentialPendingWritesConstMeta,
         argValues: [],
@@ -1407,7 +1407,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCredentialRestoreConstMeta,
         argValues: [entries],
@@ -1436,7 +1436,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_credential_status_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiCredentialStatusConstMeta,
         argValues: [],
@@ -1463,7 +1463,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDailyRecommendPlaylistsConstMeta,
         argValues: [],
@@ -1490,7 +1490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDailyRecommendSongsConstMeta,
         argValues: [],
@@ -1517,7 +1517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_default_search,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDefaultSearchConstMeta,
         argValues: [],
@@ -1549,7 +1549,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDeleteCommentConstMeta,
         argValues: [threadId, commentId],
@@ -1579,7 +1579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDeletePlaylistConstMeta,
         argValues: [playlistId],
@@ -1611,7 +1611,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_digital_album_detail,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDigitalAlbumDetailConstMeta,
         argValues: [albumId],
@@ -1645,7 +1645,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_digital_album_purchased,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDigitalAlbumPurchasedConstMeta,
         argValues: [limit, offset],
@@ -1678,7 +1678,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_digital_album_sales_entry,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDigitalAlbumSalesConstMeta,
         argValues: [albumIds],
@@ -1708,7 +1708,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiDislikeRecommendSongConstMeta,
         argValues: [songId],
@@ -1739,7 +1739,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiEqProfileNormalizeConstMeta,
         argValues: [text],
@@ -1769,7 +1769,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_eq_validation_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiEqProfileValidateConstMeta,
         argValues: [text],
@@ -1803,7 +1803,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_comment_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiEventCommentsConstMeta,
         argValues: [threadId, limit, offset],
@@ -1837,7 +1837,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_feed_event_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiFeedEventsConstMeta,
         argValues: [limit, lastTime],
@@ -1871,7 +1871,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_feed_page_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiFeedPageConstMeta,
         argValues: [limit, lastTime],
@@ -1900,7 +1900,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_follow_count,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiFollowCountsConstMeta,
         argValues: [],
@@ -1934,7 +1934,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiForwardEventConstMeta,
         argValues: [eventId, userId, msg],
@@ -1968,7 +1968,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_forward_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiForwardMessagesConstMeta,
         argValues: [limit, lastTimeMs],
@@ -2004,7 +2004,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHeartModeSongsConstMeta,
         argValues: [songId, playlistId, count],
@@ -2038,7 +2038,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHighQualityPlaylistsConstMeta,
         argValues: [cat, limit],
@@ -2068,7 +2068,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHistoryRecommendDatesConstMeta,
         argValues: [],
@@ -2096,7 +2096,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHistoryRecommendSongsConstMeta,
         argValues: [date],
@@ -2131,7 +2131,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_hot_artist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHotArtistsConstMeta,
         argValues: [limit, offset],
@@ -2167,7 +2167,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_comment_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHotCommentsConstMeta,
         argValues: [threadId, limit, offset],
@@ -2196,7 +2196,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_hot_search_term,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHotSearchConstMeta,
         argValues: [],
@@ -2223,7 +2223,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_hot_search_detail_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiHotSearchDetailConstMeta,
         argValues: [],
@@ -2251,7 +2251,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_init_info,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiInitConstMeta,
         argValues: [dataDir],
@@ -2285,7 +2285,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLikeCommentConstMeta,
         argValues: [threadId, commentId, liked],
@@ -2319,7 +2319,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLikeEventConstMeta,
         argValues: [threadId, liked],
@@ -2348,7 +2348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_64_strict,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLikedIdsConstMeta,
         argValues: [],
@@ -2375,7 +2375,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLikedSongsConstMeta,
         argValues: [],
@@ -2403,7 +2403,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLocalRecentSongsConstMeta,
         argValues: [limit],
@@ -2431,7 +2431,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_qr_login_check,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoginQrCheckConstMeta,
         argValues: [key],
@@ -2458,7 +2458,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_qr_login_key,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoginQrCreateConstMeta,
         argValues: [],
@@ -2490,7 +2490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_sms_code_sent,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoginSmsSendConstMeta,
         argValues: [phone, countryCode],
@@ -2526,7 +2526,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_phone_login_result,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoginSmsVerifyConstMeta,
         argValues: [phone, code, countryCode],
@@ -2556,7 +2556,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoginWithCookieConstMeta,
         argValues: [cookie],
@@ -2583,7 +2583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLogoutConstMeta,
         argValues: [],
@@ -2615,7 +2615,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoudnessCachedConstMeta,
         argValues: [trackId, targetLufs],
@@ -2649,7 +2649,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoudnessMeasureCachedConstMeta,
         argValues: [trackId, targetLufs],
@@ -2688,7 +2688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLoudnessMeasurePathConstMeta,
         argValues: [trackId, path, targetLufs, formatHint],
@@ -2719,7 +2719,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLyricConstMeta,
         argValues: [trackId],
@@ -2747,7 +2747,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_lyric_line_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiLyricLinesI18NConstMeta,
         argValues: [trackId],
@@ -2774,7 +2774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_message_counts_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMessageCountsConstMeta,
         argValues: [],
@@ -2806,7 +2806,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_inbox_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMessageNoticesConstMeta,
         argValues: [limit, lastTimeMs],
@@ -2836,7 +2836,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_mv_detail_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMvDetailConstMeta,
         argValues: [mvId],
@@ -2865,7 +2865,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_mv_url_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMvUrlConstMeta,
         argValues: [mvId, r],
@@ -2892,7 +2892,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMyPlaylistsConstMeta,
         argValues: [],
@@ -2919,7 +2919,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_u_64,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiMyUidConstMeta,
         argValues: [],
@@ -2951,7 +2951,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiNewAlbumsConstMeta,
         argValues: [limit, offset],
@@ -2985,7 +2985,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiNewAlbumsByAreaConstMeta,
         argValues: [area, limit],
@@ -3015,7 +3015,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiNewSongsConstMeta,
         argValues: [limit],
@@ -3047,7 +3047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiNewSongsByAreaConstMeta,
         argValues: [area, limit],
@@ -3077,7 +3077,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiNewestAlbumsConstMeta,
         argValues: [limit],
@@ -3105,7 +3105,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPersonalFmConstMeta,
         argValues: [limit],
@@ -3161,7 +3161,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_play_rank_entry_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlayRankingConstMeta,
         argValues: [period],
@@ -3195,7 +3195,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_player_state_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlayTrackConstMeta,
         argValues: [trackId, url, durationMs],
@@ -3231,7 +3231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_playback_tuning_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlayerConfigureConstMeta,
         argValues: [gainDb, fadeMs, eqText],
@@ -3451,7 +3451,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist_category,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlaylistCategoriesConstMeta,
         argValues: [],
@@ -3479,7 +3479,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_playlist_detail,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlaylistDetailConstMeta,
         argValues: [playlistId],
@@ -3509,7 +3509,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlaylistSongsConstMeta,
         argValues: [playlistId],
@@ -3543,7 +3543,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlaylistTracksAddConstMeta,
         argValues: [playlistId, songIds],
@@ -3579,7 +3579,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlaylistsByCategoryConstMeta,
         argValues: [cat, limit, offset],
@@ -3610,7 +3610,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_podcast_radio,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPodcastHotConstMeta,
         argValues: [limit],
@@ -3640,7 +3640,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_podcast_program_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPodcastProgramConstMeta,
         argValues: [programId],
@@ -3676,7 +3676,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_podcast_program_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPodcastProgramsConstMeta,
         argValues: [radioId, limit, offset],
@@ -3706,7 +3706,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_podcast_radio,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPodcastRadioConstMeta,
         argValues: [radioId],
@@ -3740,7 +3740,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_private_message,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPrivateHistoryConstMeta,
         argValues: [userId, limit, beforeMs],
@@ -3774,7 +3774,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPrivateSendConstMeta,
         argValues: [userId, content],
@@ -3808,7 +3808,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_private_session,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPrivateSessionsConstMeta,
         argValues: [limit, offset],
@@ -3837,7 +3837,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_profile_detail,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiProfileDetailConstMeta,
         argValues: [],
@@ -3864,7 +3864,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_radio_explore_home,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRadioExploreHomeConstMeta,
         argValues: [],
@@ -3892,7 +3892,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_podcast_radio,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRadioRecommendConstMeta,
         argValues: [cateId],
@@ -3926,7 +3926,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_radio_subscriber_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRadioSubscribersConstMeta,
         argValues: [radioId, limit, timeMs],
@@ -3956,7 +3956,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_radio_toplist_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRadioToplistConstMeta,
         argValues: [kind],
@@ -3984,7 +3984,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecentAlbumsConstMeta,
         argValues: [limit],
@@ -4012,7 +4012,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_recent_contact,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecentContactsConstMeta,
         argValues: [limit],
@@ -4040,7 +4040,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecentPlaylistsConstMeta,
         argValues: [limit],
@@ -4068,7 +4068,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_podcast_radio,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecentPodcastsConstMeta,
         argValues: [limit],
@@ -4096,7 +4096,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecentSongsConstMeta,
         argValues: [limit],
@@ -4124,7 +4124,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRecordSearchConstMeta,
         argValues: [keyword],
@@ -4152,7 +4152,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRememberPlayConstMeta,
         argValues: [song],
@@ -4184,7 +4184,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRemoveFromPlaylistConstMeta,
         argValues: [playlistId, trackId],
@@ -4218,7 +4218,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiRenamePlaylistConstMeta,
         argValues: [playlistId, name],
@@ -4254,7 +4254,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiReplyCommentConstMeta,
         argValues: [threadId, commentId, content],
@@ -4288,7 +4288,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_search_bundle_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSearchAllConstMeta,
         argValues: [keywords, limit],
@@ -4318,7 +4318,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_search_exact,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSearchExactConstMeta,
         argValues: [keywords],
@@ -4345,7 +4345,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSearchHistoryConstMeta,
         argValues: [],
@@ -4373,7 +4373,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_suggest_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSearchSuggestConstMeta,
         argValues: [keywords],
@@ -4403,7 +4403,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_String,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSearchSuggestKeywordsConstMeta,
         argValues: [keywords],
@@ -4438,7 +4438,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSetAlbumSubscribedConstMeta,
         argValues: [albumId, subscribed],
@@ -4469,7 +4469,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSetFollowConstMeta,
         argValues: [uid, follow],
@@ -4501,7 +4501,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSetLikedConstMeta,
         argValues: [trackId, liked],
@@ -4535,7 +4535,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSetPlaylistSubscribedConstMeta,
         argValues: [playlistId, subscribed],
@@ -4572,7 +4572,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiShareResourceConstMeta,
         argValues: [kind, resourceId, msg],
@@ -4601,7 +4601,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_signin_status,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSignInConstMeta,
         argValues: [],
@@ -4628,7 +4628,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_signin_status,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSigninStatusConstMeta,
         argValues: [],
@@ -4656,7 +4656,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_artist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSimilarArtistsConstMeta,
         argValues: [artistId],
@@ -4688,7 +4688,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSimilarPlaylistsConstMeta,
         argValues: [songId, limit],
@@ -4722,7 +4722,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSimilarSongsConstMeta,
         argValues: [songId, limit],
@@ -4752,7 +4752,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_song_like_state,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSongLikeStateConstMeta,
         argValues: [trackId],
@@ -4784,7 +4784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_song_purchased_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSongPurchasedConstMeta,
         argValues: [limit, offset],
@@ -4818,7 +4818,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_stream_url,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSongUrlConstMeta,
         argValues: [trackId, level],
@@ -4848,7 +4848,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_wiki_fact,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSongWikiConstMeta,
         argValues: [songId],
@@ -4880,7 +4880,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiStylePlaylistsConstMeta,
         argValues: [tagId, limit],
@@ -4909,7 +4909,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_style_tag,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiStylePreferenceConstMeta,
         argValues: [],
@@ -4941,7 +4941,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiStyleSongsConstMeta,
         argValues: [tagId, limit],
@@ -4971,7 +4971,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSubscribedAlbumsConstMeta,
         argValues: [limit],
@@ -4999,7 +4999,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_artist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSubscribedArtistsConstMeta,
         argValues: [limit],
@@ -5027,7 +5027,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_podcast_radio,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiSubscribedPodcastsConstMeta,
         argValues: [limit],
@@ -5056,7 +5056,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_toplist_catalog_group,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiToplistCatalogConstMeta,
         argValues: [],
@@ -5084,7 +5084,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiTrashFmSongConstMeta,
         argValues: [songId],
@@ -5112,7 +5112,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_word_lyric_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiTtmlLyricLinesConstMeta,
         argValues: [trackId],
@@ -5144,7 +5144,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUpdatePlaylistDescConstMeta,
         argValues: [playlistId, desc],
@@ -5174,7 +5174,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_profile_detail,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUpdateSignatureConstMeta,
         argValues: [signature],
@@ -5208,7 +5208,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_cloud_page,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserCloudConstMeta,
         argValues: [limit, offset],
@@ -5244,7 +5244,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_feed_event_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserEventsConstMeta,
         argValues: [uid, limit, lastTime],
@@ -5280,7 +5280,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_user_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserFollowedsConstMeta,
         argValues: [uid, limit, offset],
@@ -5316,7 +5316,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_user_item,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserFollowsConstMeta,
         argValues: [uid, limit, offset],
@@ -5345,7 +5345,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_user_level,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserLevelConstMeta,
         argValues: [],
@@ -5372,7 +5372,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_user_medal,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserMedalsConstMeta,
         argValues: [],
@@ -5404,7 +5404,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_play_rank_entry_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserPlayRankingConstMeta,
         argValues: [uid, period],
@@ -5438,7 +5438,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserPlaylistsOfConstMeta,
         argValues: [userId, limit],
@@ -5468,7 +5468,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_profile_detail,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiUserProfileConstMeta,
         argValues: [userId],
@@ -5495,7 +5495,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_vip_overview,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiVipOverviewConstMeta,
         argValues: [],
@@ -5523,7 +5523,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_word_lyric_dto,
-          decodeErrorData: sse_decode_String,
+          decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiWordLyricLinesConstMeta,
         argValues: [trackId],
@@ -6076,6 +6076,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       events: dco_decode_list_feed_event_dto(arr[0]),
       lastTime: dco_decode_i_64(arr[1]),
       more: dco_decode_bool(arr[2]),
+    );
+  }
+
+  @protected
+  FfiError dco_decode_ffi_error(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return FfiError(
+      kind: dco_decode_String(arr[0]),
+      retryable: dco_decode_bool(arr[1]),
+      detail: dco_decode_String(arr[2]),
     );
   }
 
@@ -8176,6 +8189,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       events: var_events,
       lastTime: var_lastTime,
       more: var_more,
+    );
+  }
+
+  @protected
+  FfiError sse_decode_ffi_error(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_kind = sse_decode_String(deserializer);
+    var var_retryable = sse_decode_bool(deserializer);
+    var var_detail = sse_decode_String(deserializer);
+    return FfiError(
+      kind: var_kind,
+      retryable: var_retryable,
+      detail: var_detail,
     );
   }
 
@@ -10676,6 +10702,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_list_feed_event_dto(self.events, serializer);
     sse_encode_i_64(self.lastTime, serializer);
     sse_encode_bool(self.more, serializer);
+  }
+
+  @protected
+  void sse_encode_ffi_error(FfiError self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.kind, serializer);
+    sse_encode_bool(self.retryable, serializer);
+    sse_encode_String(self.detail, serializer);
   }
 
   @protected
