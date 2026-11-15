@@ -4,20 +4,7 @@ import 'package:minincm/src/daily_cache.dart';
 import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 rust.Playlist playlist(int id, String name, int count) => rust.Playlist(
   id: BigInt.from(id),
@@ -57,7 +44,7 @@ void main() {
             playedIndex = index;
           },
           onOpenPlaylist: (_) {},
-          loadSongs: () async => [song(1, '晴天'), song(2, '七里香')],
+          loadSongs: () async => [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')],
           loadPlaylists: () async => [playlist(9, '推荐歌单', 12)],
         );
       }),
@@ -83,7 +70,7 @@ void main() {
           tester.element(find.text('open')),
           onPlaySongs: (_, _) {},
           onOpenPlaylist: (pl) => opened = pl,
-          loadSongs: () async => [song(1, '晴天')],
+          loadSongs: () async => [fakeSong(id: 1, name: '晴天')],
           loadPlaylists: () async => [playlist(9, '推荐歌单', 12)],
         );
       }),
@@ -125,7 +112,7 @@ void main() {
         showRecentPage(
           tester.element(find.text('open')),
           onPlay: (songs, index) => played = songs,
-          loadRecent: () async => [song(3, '最近一首')],
+          loadRecent: () async => [fakeSong(id: 3, name: '最近一首')],
           loadAlbums: () async => const [],
           loadPlaylists: () async => const [],
           loadPodcasts: () async => const [],
@@ -147,7 +134,7 @@ void main() {
         showRecentPage(
           tester.element(find.text('open')),
           onPlay: (_, _) {},
-          loadRecent: () async => [song(3, '最近一首')],
+          loadRecent: () async => [fakeSong(id: 3, name: '最近一首')],
           loadAlbums: () async => [
             rust.AlbumItem(
               id: BigInt.from(11),
@@ -240,7 +227,7 @@ void main() {
           tester.element(find.text('open')),
           onPlaySongs: (_, _) {},
           onOpenPlaylist: (_) {},
-          loadSongs: () async => [song(1, '晴天'), song(2, '七里香')],
+          loadSongs: () async => [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')],
           loadPlaylists: () async => const [],
         );
       }),
@@ -265,7 +252,7 @@ void main() {
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
           loadHistoryDates: () async => ['2024-06-20', '2024-06-19'],
-          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+          loadHistorySongs: (date) async => [fakeSong(id: 7, name: '$date 的歌')],
         );
       }),
     );
@@ -298,7 +285,7 @@ void main() {
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
           loadHistoryDates: () async => ['2024-06-20'],
-          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+          loadHistorySongs: (date) async => [fakeSong(id: 7, name: '$date 的歌')],
           loadLocalDays: () async => [
             DailyCacheDay(
               date: '2024-06-21',
@@ -342,7 +329,7 @@ void main() {
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
           loadHistoryDates: () async => ['2024-06-20'],
-          loadHistorySongs: (date) async => [song(7, '$date 的歌')],
+          loadHistorySongs: (date) async => [fakeSong(id: 7, name: '$date 的歌')],
           loadLocalDays: () async => [
             DailyCacheDay(
               date: '2024-06-20',
@@ -411,7 +398,7 @@ void main() {
               onPressed: () => showRecentPage(
                 ctx,
                 onPlay: (_, _) {},
-                loadRecent: () async => [song(3, '一首名字特别特别长的歌用于窄屏回归测试')],
+                loadRecent: () async => [fakeSong(id: 3, name: '一首名字特别特别长的歌用于窄屏回归测试')],
                 loadAlbums: () async => [
                   rust.AlbumItem(
                     id: BigInt.from(11),

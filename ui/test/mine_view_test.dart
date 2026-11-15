@@ -5,20 +5,7 @@ import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/user_page.dart' show UserPage;
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 /// 我的资料(简介/等级/uid) —— 「我的」页的简介/动态/我的主页都靠它
 rust.ProfileDetail profileDetail({String signature = ''}) => rust.ProfileDetail(
@@ -87,7 +74,7 @@ MineView buildMine({
   loggedIn: loggedIn,
   onLogin: onLogin ?? () {},
   onOpenAccounts: () {},
-  loadLiked: () async => [song(1, '喜欢的歌')],
+  loadLiked: () async => [fakeSong(id: 1, name: '喜欢的歌')],
   loadPlaylists: () async =>
       playlists ??
       [
@@ -134,10 +121,10 @@ MineView buildMine({
       ],
   loadProfile: () async => profile ?? profileDetail(),
   saveSignature: saveSignature,
-  loadRecent: () async => [song(7, '最近听的歌')],
+  loadRecent: () async => [fakeSong(id: 7, name: '最近听的歌')],
   loadRanking: (period) async => [
     rust.PlayRankEntryDto(
-      song: song(period == 'week' ? 9 : 8, period == 'week' ? '本周常听' : '最常听'),
+      song: fakeSong(id: period == 'week' ? 9 : 8, name: period == 'week' ? '本周常听' : '最常听'),
       playCount: BigInt.from(period == 'week' ? 3 : 42),
       score: BigInt.from(period == 'week' ? 30 : 420),
     ),

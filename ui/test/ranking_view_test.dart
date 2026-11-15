@@ -3,24 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/ranking_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 rust.PlayRankEntryDto entry(int id, String name, int playCount) =>
     rust.PlayRankEntryDto(
-      song: song(id, name),
+      song: fakeSong(id: id, name: name),
       playCount: BigInt.from(playCount),
       score: BigInt.from(playCount * 10),
     );

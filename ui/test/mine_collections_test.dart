@@ -4,20 +4,7 @@ import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/my_collections_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 rust.Playlist playlist(int id, String name) => rust.Playlist(
   id: BigInt.from(id),
@@ -80,12 +67,12 @@ Widget buildMine({required int Function() onLikedLoad}) => MineView(
   onOpenLiked: () {},
   loadLiked: () async {
     onLikedLoad();
-    return [song(1, '喜欢的歌')];
+    return [fakeSong(id: 1, name: '喜欢的歌')];
   },
   loadPlaylists: () async => [playlist(2, '收藏歌单A'), playlist(3, '收藏歌单B')],
   loadPodcasts: () async => [radio(4, '收藏播客A')],
   loadAlbums: () async => [album(5, '收藏专辑A')],
-  loadRecent: () async => [song(6, '最近听的歌')],
+  loadRecent: () async => [fakeSong(id: 6, name: '最近听的歌')],
   loadRanking: (_) async => const [],
 );
 

@@ -3,20 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto song(int id, String name) => rust.SongDto(
-  id: BigInt.from(id),
-  name: name,
-  artist: '艺人',
-  artistId: BigInt.one,
-  album: '专辑',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
-);
+import 'support/fakes.dart';
 
 rust.Playlist playlist(int id, String name) => rust.Playlist(
   id: BigInt.from(id),
@@ -81,15 +68,15 @@ void main() {
       host(
         RecommendView(
           loggedIn: true,
-          loadDailySongs: () async => [song(1, '每日一歌'), song(2, '每日二歌')],
+          loadDailySongs: () async => [fakeSong(id: 1, name: '每日一歌'), fakeSong(id: 2, name: '每日二歌')],
           loadDailyPlaylists: () async => [playlist(10, '推荐歌单A')],
           loadPodcasts: () async => [radio(20, '推荐播客A')],
-          loadFm: () async => [song(3, 'FM 曲')],
+          loadFm: () async => [fakeSong(id: 3, name: 'FM 曲')],
           loadStyles: () async => const [
             rust.StyleTag(id: '1009', name: '粤语流行'),
             rust.StyleTag(id: '1020', name: '华语流行'),
           ],
-          loadNewSongs: () async => [song(30, '新歌速递一')],
+          loadNewSongs: () async => [fakeSong(id: 30, name: '新歌速递一')],
           loadNewAlbums: () async => [
             rust.AlbumItem(
               id: BigInt.from(40),
@@ -172,16 +159,16 @@ void main() {
       scaled(
         RecommendView(
           loggedIn: true,
-          loadDailySongs: () async => [song(1, '一首名字特别特别长的日推歌曲用于小屏回归测试')],
+          loadDailySongs: () async => [fakeSong(id: 1, name: '一首名字特别特别长的日推歌曲用于小屏回归测试')],
           loadDailyPlaylists: () async => [
             playlist(10, '一个名字特别特别长的推荐歌单用于小屏回归测试'),
           ],
           loadPodcasts: () async => [radio(20, '一个名字特别特别长的推荐播客用于小屏回归测试')],
-          loadFm: () async => [song(3, 'FM 曲')],
+          loadFm: () async => [fakeSong(id: 3, name: 'FM 曲')],
           loadStyles: () async => const [
             rust.StyleTag(id: '1009', name: '粤语流行'),
           ],
-          loadNewSongs: () async => [song(30, '新歌速递一')],
+          loadNewSongs: () async => [fakeSong(id: 30, name: '新歌速递一')],
           loadNewAlbums: () async => [
             rust.AlbumItem(
               id: BigInt.from(40),
@@ -218,7 +205,7 @@ void main() {
           loadDailySongs: () async => const [],
           loadDailyPlaylists: () async => const [],
           loadPodcasts: () async => const [],
-          loadFm: () async => [song(7, 'FM 曲')],
+          loadFm: () async => [fakeSong(id: 7, name: 'FM 曲')],
           loadStyles: () async => const [],
           loadNewSongs: () async => const [],
           loadNewAlbums: () async => const [],
