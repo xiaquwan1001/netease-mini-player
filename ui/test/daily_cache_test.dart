@@ -52,7 +52,9 @@ void main() {
     addTearDown(() async {
       if (tmp.existsSync()) await tmp.delete(recursive: true);
     });
-    cache = DailyPlaylistCache(dataDir: tmp.path);
+    // 账号隔离后构造函数必须带账号键: 这里固定用 A 的键, 分区行为另见
+    // daily_cache_account_test.dart。
+    cache = DailyPlaylistCache(dataDir: tmp.path, accountKey: 'uid-1');
     clock = DateTime(2026, 3, 10, 9, 30);
     fetchCount = 0;
     fetched = [_playlist(1, '每日推荐')];

@@ -439,7 +439,9 @@ class _TextScaleSetting extends StatelessWidget {
 
 /// 每日推荐歌单缓存: 保留天数 + 立即清理 + 上次清理时间。
 ///
-/// 缓存本身在 `daily_cache.dart`(按天明文件); 这里只做展示与"什么时候清"。
+/// 缓存本身在 `daily_cache.dart`(按天`<账号键>/YYYY-MM-DD.json` 落文件);
+/// 这里只做展示与"什么时候清"。**清理只清当前账号的那个子目录** —— 日推缓存按账号
+/// 分区, 顺手清别人账号的缓存既没必要也会让那个账号多拉一次。
 /// 上次清理时间从缓存目录读, 所以点完「立即清理」要重读一次才好看见变化。
 class _DailyCacheTile extends StatefulWidget {
   const _DailyCacheTile({required this.dataDir});
@@ -454,16 +456,27 @@ class _DailyCacheTileState extends State<_DailyCacheTile> {
   DateTime? _lastCleanup;
   bool _cleaning = false;
 
+  /// 当前账号的缓存分区键; null = 还没解析出来(此时按钮不可用, 不会误清别的账号)。
+  String? _accountKey;
+
   DailyPlaylistCache? get _cache {
     final dir = widget.dataDir;
-    if (dir == null || dir.isEmpty) return null;
-    return DailyPlaylistCache(dataDir: dir);
+    final key = _accountKey;
+    if (dir == null || dir.isEmpty || key == null) return null;
+    return DailyPlaylistCache(dataDir: dir, accountKey: key);
   }
 
   @override
   void initState() {
     super.initState();
-    _loadLastCleanup();
+    _resolveAccount();
+  }
+
+  Future<void> _resolveAccount() async {
+    final key = await DailyPlaylistCache.resolveAccountKey();
+    if (!mounted) return;
+    setState(() => _accountKey = key);
+    await _loadLastCleanup();
   }
 
   Future<void> _loadLastCleanup() async {
@@ -481,8 +494,12 @@ class _DailyCacheTileState extends State<_DailyCacheTile> {
   }
 
   Future<void> _cleanup() async {
+    if (_cleaning) return;
+    // 账号键通常 initState 就解析完了; 万一用户手比 FFI 快, 这里补一次,
+    // 否则按钮会"点了没反应"。
+    if (_accountKey == null) await _resolveAccount();
     final cache = _cache;
-    if (cache == null || _cleaning) return;
+    if (cache == null) return;
     setState(() => _cleaning = true);
     try {
       final removed = await cache.cleanup(

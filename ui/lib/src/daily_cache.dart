@@ -20,20 +20,43 @@ class DailyCacheDay {
 /// 网络层, 也让离线冷启动能先出内容。
 ///
 /// 目录布局(都在 Rust 用的同一个 dataDir 下, 双端不依赖平台插件):
-/// - `<dataDir>/cache/daily-playlists/YYYY-MM-DD.json`: 当天的歌单清单
-/// - `<dataDir>/cache/daily-playlists/last-cleanup`: 上次清理时间(epoch ms)
+/// - `<dataDir>/cache/daily-playlists/<账号键>/YYYY-MM-DD.json`: 当天的歌单清单
+/// - `<dataDir>/cache/daily-playlists/<账号键>/last-cleanup`: 上次清理时间(epoch ms)
+///
+/// **账号隔离(2026-11 隐私修复)**: 每日推荐是**按账号算**的(日推接口带 uid 上下文,
+/// 见 Rust 侧 `read_cache` 的注释), 所以目录必须带账号维度 —— 否则切号后 B 会直接
+/// 读到 A 的日推清单。账号键由 [resolveAccountKey] 给出: `uid-<数字 uid>`,
+/// 未登录用 [anonymousKey]。登出/切号时由调用方删掉上一个账号的目录(见 [purgeAccount])。
+///
+/// **旧布局(无账号维度)一律丢弃**: 早期写在 `daily-playlists/` 顶层的
+/// `YYYY-MM-DD.json` 属于哪个账号已无从判断, 既不能归给某个 uid 也不能算匿名,
+/// 因此 [_purgeLegacyOnce] 首次运行时就地删掉(留 `legacy-purged` 标记, 只扫一遍)。
+/// 取舍: 老用户升级后当天的离线缓存会丢一次(进推荐页重新拉), 但绝不会串号。
 ///
 /// 文件里只存渲染必需的字段, 不含 device_id / cookie / token 之类凭据。
 class DailyPlaylistCache {
-  DailyPlaylistCache({required this.dataDir});
+  DailyPlaylistCache({required this.dataDir, required String accountKey})
+    : accountKey = _safeSegment(accountKey);
 
   final String dataDir;
 
-  /// 缓存目录: `<dataDir>/cache/daily-playlists`
-  Directory get dir => Directory('$dataDir/cache/daily-playlists');
+  /// 账号分区键: `uid-<uid>` 或 [anonymousKey]; 已消毒成单一路径片段。
+  final String accountKey;
+
+  /// 未登录时用的账号键。匿名日推是**另一份数据**, 不能和任何登录账号共用目录。
+  static const String anonymousKey = 'anonymous';
+
+  /// 缓存根目录(所有账号的父目录): `<dataDir>/cache/daily-playlists`
+  Directory get root => Directory('$dataDir/cache/daily-playlists');
+
+  /// 当前账号的缓存目录: `<root>/<账号键>`
+  Directory get dir => Directory('${root.path}/$accountKey');
 
   /// 清理标记文件: 与日期文件同目录, 但文件名不匹配日期模式, 不会被 [cleanup] 删掉。
   static const String _cleanupFile = 'last-cleanup';
+
+  /// 旧布局清理标记(放 root, 不含账号信息): 存在即表示顶层旧文件已经扫过一遍。
+  static const String _legacyMarker = 'legacy-purged';
 
   /// 只认 `YYYY-MM-DD.json`: 目录里可能还有 .tmp、别的模块的附属文件,
   /// 通配删除会误伤。
@@ -52,6 +75,9 @@ class DailyPlaylistCache {
       // 用户关了缓存: 一次多余的读写都不要, 行为与没有这个模块完全一致。
       return fetch();
     }
+
+    // 老布局(无账号维度)的文件先一次性清掉: 它们读不得(不知道属于谁), 也不能留。
+    await _purgeLegacyOnce();
 
     final clock = now ?? DateTime.now;
     final file = _fileFor(clock());
@@ -75,6 +101,9 @@ class DailyPlaylistCache {
   /// 边界按"天"算: keepDays=3 时保留今天及前 3 天, 4 天前(及更早)删除。
   /// 这里不抛异常: 清理是后台顺带做的事, 磁盘只读/文件被占用都不该影响推荐页。
   Future<int> cleanup({required int keepDays, DateTime Function()? now}) async {
+    // 只走设置页清理的用户也要能把旧布局的残留扫掉。
+    await _purgeLegacyOnce();
+
     final clock = now ?? DateTime.now;
     final today = _dayStart(clock());
     final cutoff = today.subtract(Duration(days: keepDays));
@@ -141,8 +170,121 @@ class DailyPlaylistCache {
   }
 
   // ---------------------------------------------------------------------------
+  // 账号维度(身份解析 / 清理)
+  // ---------------------------------------------------------------------------
+
+  /// 当前账号的缓存分区键: `uid-<uid>`, 未登录或查不到时 [anonymousKey]。
+  ///
+  /// 身份来源都不触网(纯本地状态), 按可信度排:
+  /// 1. `rust.myUid()`: 会话里的 profile, 登录/切号时立刻刷新, 最准;
+  /// 2. 账号簿里的 `active` 标记: 离线冷启动、profile 还没同步时兜底
+  ///    (账号簿是持久化的, 重启后仍然知道当前是哪个账号);
+  /// 3. 都没有 ⇒ 匿名(匿名日推与任何登录账号的数据分开)。
+  static Future<String> resolveAccountKey() async {
+    return accountKeyFor(await _currentUid());
+  }
+
+  /// 账号键的格式定义(`uid-<uid>` / [anonymousKey])。
+  /// 需要判断"是不是同一个账号"时用它, 不要在调用方自己拼字符串。
+  static String accountKeyFor(BigInt uid) =>
+      uid > BigInt.zero ? 'uid-$uid' : anonymousKey;
+
+  static Future<BigInt> _currentUid() async {
+    try {
+      final uid = await rust.myUid();
+      if (uid > BigInt.zero) return uid;
+    } catch (_) {
+      // FFI 还没初始化/引擎异常: 回落到账号簿, 不把异常抛给推荐页。
+    }
+    try {
+      for (final account in await rust.accounts()) {
+        if (account.active) return account.userId;
+      }
+    } catch (_) {
+      // 同上: 查不到就当未登录。
+    }
+    return BigInt.zero;
+  }
+
+  /// 删除**当前账号**的整份日推缓存目录(登出/切号时对上一个账号用)。
+  Future<bool> purge() =>
+      purgeAccount(dataDir: dataDir, accountKey: accountKey);
+
+  /// 删除指定账号的日推缓存目录(连同里面的 `last-cleanup` 标记)。
+  ///
+  /// 只删 `<root>/<账号键>` 这一层: 别的账号的目录、root 本身都不动, 所以
+  /// 切回老账号只是"要重新拉一次", 不会把别人的数据一起端掉。
+  /// 目录本来不存在也算成功; 失败(权限/占用)返回 false 而不抛 —— 登出流程
+  /// 不该因为清缓存失败而报错。
+  static Future<bool> purgeAccount({
+    required String dataDir,
+    required String accountKey,
+  }) async {
+    final target = Directory(
+      '$dataDir/cache/daily-playlists/${_safeSegment(accountKey)}',
+    );
+    try {
+      if (!await target.exists()) return true;
+      await target.delete(recursive: true);
+      return true;
+    } on FileSystemException {
+      return false;
+    }
+  }
+
+  /// 删掉**所有**账号(含匿名)的日推缓存: 设置里"清除本机登录凭据"这类隐私操作。
+  static Future<bool> purgeAll({required String dataDir}) async {
+    final root = Directory('$dataDir/cache/daily-playlists');
+    try {
+      if (!await root.exists()) return true;
+      await root.delete(recursive: true);
+      return true;
+    } on FileSystemException {
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // 内部实现
   // ---------------------------------------------------------------------------
+
+  /// 账号键只允许当单一路径片段: 去掉分隔符/空白, `.`/`..` 也不能当键。
+  static String _safeSegment(String raw) {
+    final cleaned = raw.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    if (cleaned.isEmpty || cleaned == '.' || cleaned == '..') {
+      return anonymousKey;
+    }
+    return cleaned;
+  }
+
+  /// 清理**旧布局**(顶层、无账号维度的)日期文件与旧 `last-cleanup`, 只做一次。
+  ///
+  /// 为什么删而不是留着: 这些文件属于哪个账号无从判断, 读进来就是串号; 留着又
+  /// 永久占盘, 因为新布局的 [cleanup] 只扫账号目录, 永远扫不到它们。
+  /// `legacy-purged` 标记保证只列一次目录, 之后每次 load 只多一次 `exists()`。
+  Future<void> _purgeLegacyOnce() async {
+    try {
+      if (!await root.exists()) return;
+      final marker = File('${root.path}/$_legacyMarker');
+      if (await marker.exists()) return;
+      await for (final entity in root.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = _name(entity.path);
+        final legacy =
+            _dayFile.hasMatch(name) ||
+            name == _cleanupFile ||
+            name == '$_cleanupFile.tmp' ||
+            name.endsWith('.json.tmp');
+        if (legacy) await _deleteQuietly(entity);
+      }
+      await marker.writeAsString(
+        '${DateTime.now().millisecondsSinceEpoch}',
+        flush: true,
+      );
+    } on FileSystemException {
+      // 列目录/写标记失败: 下次 load/cleanup 再试, 不影响本次缓存读写。
+    }
+  }
 
   File _fileFor(DateTime at) => File('${dir.path}/${_dayName(at)}.json');
 

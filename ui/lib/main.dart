@@ -1478,10 +1478,14 @@ class _HomePageState extends State<HomePage> {
   ///
   /// 缓存口径见 `daily_cache.dart` 与 设置 → 缓存(保留天数 / 立即清理)。
   /// 未初始化(dataDir 未知)或用户关掉缓存时原样透传, 行为与没有缓存一致。
-  Future<List<rust.Playlist>> _dailyPlaylists() {
+  Future<List<rust.Playlist>> _dailyPlaylists() async {
     final dir = _info?.dataDir;
     if (dir == null || dir.isEmpty) return rust.dailyRecommendPlaylists();
-    return DailyPlaylistCache(dataDir: dir).load(
+    // 缓存目录按账号分区: 日推是账号相关的, 不能把 A 的清单给 B 看。
+    return DailyPlaylistCache(
+      dataDir: dir,
+      accountKey: await DailyPlaylistCache.resolveAccountKey(),
+    ).load(
       fetch: rust.dailyRecommendPlaylists,
       keepDays: AppSettings.instance.dailyCacheDays,
     );
@@ -1505,7 +1509,21 @@ class _HomePageState extends State<HomePage> {
     final dir = _info?.dataDir;
     if (dir == null || dir.isEmpty) return const [];
     if (AppSettings.instance.dailyCacheDays <= 0) return const [];
-    return DailyPlaylistCache(dataDir: dir).days();
+    // 历史日推只合并**当前账号**的本地天: 别的账号的天不算"我的历史"。
+    return DailyPlaylistCache(
+      dataDir: dir,
+      accountKey: await DailyPlaylistCache.resolveAccountKey(),
+    ).days();
+  }
+
+  /// 清掉**某个账号**的每日推荐歌单缓存(登出/切号时对上一个账号做一次)。
+  ///
+  /// 缓存本身已按 uid 分区(见 `daily_cache.dart`), 这里再删一遍是为了不把上一个
+  /// 账号的日推清单留在这台设备上 —— 换人用同一台机器时不该翻得到别人的推荐。
+  Future<void> _purgeDailyCache(String accountKey) async {
+    final dir = _info?.dataDir;
+    if (dir == null || dir.isEmpty) return;
+    await DailyPlaylistCache.purgeAccount(dataDir: dir, accountKey: accountKey);
   }
 
   /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
@@ -2139,6 +2157,11 @@ class _HomePageState extends State<HomePage> {
         for (final account in await rust.accounts()) {
           await rust.accountRemove(userId: account.userId);
         }
+        // 隐私动作一并清掉日推缓存(所有账号 + 匿名), 不留推荐痕迹。
+        final dir = _info?.dataDir;
+        if (dir != null && dir.isNotEmpty) {
+          await DailyPlaylistCache.purgeAll(dataDir: dir);
+        }
         await _refreshInfo();
         if (!mounted) return;
         showToast(context, '已清除本机登录凭据');
@@ -2153,7 +2176,14 @@ class _HomePageState extends State<HomePage> {
         ? account.userId.toString()
         : account.nickname;
     try {
+      // 切号前先记下**上一个账号**的缓存键: accountSwitch 之后就变成新账号了。
+      final previousKey = await DailyPlaylistCache.resolveAccountKey();
       final ok = await rust.accountSwitch(userId: account.userId);
+      // 切到同一个账号(重复点同一行)就不用清, 清了只是白拉一次网络。
+      if (ok &&
+          previousKey != DailyPlaylistCache.accountKeyFor(account.userId)) {
+        unawaited(_purgeDailyCache(previousKey));
+      }
       await _refreshInfo();
       if (!mounted) return ok;
       showToast(context, ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录');
@@ -2205,7 +2235,13 @@ class _HomePageState extends State<HomePage> {
   /// 退出登录; thenLogin=true 表示切换账号(退出后立刻再开授权页)
   Future<void> _logout({bool thenLogin = false}) async {
     try {
+      // 同 _switchAccount: 先抓上一个账号的缓存键, 登出后 session 里就查不到了。
+      final previousKey = await DailyPlaylistCache.resolveAccountKey();
       await _auth.logout();
+      // 本来就没登录时 previousKey 是匿名分区: 没别人的数据要清, 留着还省一次网络。
+      if (previousKey != DailyPlaylistCache.anonymousKey) {
+        unawaited(_purgeDailyCache(previousKey));
+      }
       await _refreshInfo();
       if (!mounted) return;
       showToast(context, thenLogin ? '已退出, 请登录另一个账号' : '已退出登录(账号仍留在账号簿)');
