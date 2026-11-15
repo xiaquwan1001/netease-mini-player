@@ -8,10 +8,9 @@ import 'artist_page.dart';
 import 'cover_art.dart';
 import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
-import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
-import 'song_tile.dart' show SongTitleWithBadges;
+import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 
@@ -373,46 +372,20 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
       itemCount: songs.length,
       itemBuilder: (context, i) {
         final s = songs[i];
-        // 正在播放的那首在曲目表里要高亮(与歌单详情/日推同一语汇)
-        return NowPlayingHighlight(
-          songId: s.id,
-          builder: (context, playing) => ListTile(
-            dense: true,
-            selected: playing,
-            leading: playing
-                ? Icon(
-                    Icons.volume_up,
-                    size: 16,
-                    color: Theme.of(context).colorScheme.primary,
-                  )
-                : Text('${i + 1}'),
-            title: SongTitleWithBadges(
-              song: s,
-              style: playing
-                  ? TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w600,
-                    )
-                  : (s.playable
-                        ? null
-                        : TextStyle(
-                            color: Theme.of(context).colorScheme.outline,
-                          )),
-            ),
-            subtitle: Text(
-              s.artist,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            enabled: s.playable,
-            trailing: SongOverflowButton(
-              song: s,
-              size: 20,
-              source: SongActionSource.album,
-            ),
-            // 点播不退出专辑页(与歌单详情/日推一致): 换队列, 页面留在原地
-            onTap: s.playable ? () => widget.onPlay(songs, i) : null,
-          ),
+        // 正在播放的那首在曲目表里要高亮(与歌单详情/日推同一语汇) ——
+        // 播放态由 SongRow 自己读全局 nowPlayingSongId, 页面不再各自接线。
+        return SongRow(
+          song: s,
+          layout: SongRowLayout.tile,
+          // 序号列(正在播放时换成喇叭); 专辑曲目没有封面
+          indexText: '${i + 1}',
+          subtitle: SongRowSubtitle.artist,
+          // 行尾 "..." = 统一歌曲菜单(专辑来源)
+          menuSource: SongActionSource.album,
+          // 无版权曲目灰显且点了没反应(官方同款)
+          tapOnlyWhenPlayable: true,
+          // 点播不退出专辑页(与歌单详情/日推一致): 换队列, 页面留在原地
+          onTap: () => widget.onPlay(songs, i),
         );
       },
     );
