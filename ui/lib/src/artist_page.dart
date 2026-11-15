@@ -10,7 +10,6 @@ import 'feed_detail_page.dart'
     show showFeedDetail, feedRelativeTime, feedKindLabels;
 import 'layout.dart';
 import 'net_retry.dart';
-import 'now_playing.dart';
 import 'paged_list_view.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
@@ -19,7 +18,7 @@ import 'toast.dart';
 import 'song_actions.dart';
 import 'format.dart' show formatDurationMs, formatFanCount;
 import 'mv_page.dart' show showMvPage;
-import 'song_tile.dart' show SongTitleWithBadges;
+import 'song_tile.dart' show SongRow, SongRowSubtitle;
 import 'state_views.dart';
 import 'artist_sections.dart'
     show ArtistRecommendedSongsSection, SimilarArtistsRow;
@@ -785,9 +784,18 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         loader: (cursor) => widget
             .loader(widget.artistId, cursor)
             .then((p) => PagedPage(p.songs, hasMore: p.hasMore)),
-        itemBuilder: (context, song, index, items) => _ArtistSongRow(
+        itemBuilder: (context, song, index, items) => SongRow(
           song: song,
-          index: index,
+          indexText: '${index + 1}',
+          indexWidth: 24,
+          indexAlign: TextAlign.center,
+          indexGap: 10,
+          // 与同页其它区块的 12dp 对齐(布局审计 #7)
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          subtitle: SongRowSubtitle.artist,
+          // 无版权整行灰掉, 点了没有反应(原口径)
+          tapOnlyWhenPlayable: true,
+          menuSource: SongActionSource.artist,
           onTap: () => widget.onPlaySongs(items, index),
         ),
       );
@@ -814,9 +822,16 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
       ),
       itemCount: results.length,
-      itemBuilder: (context, i) => _ArtistSongRow(
+      itemBuilder: (context, i) => SongRow(
         song: results[i],
-        index: i,
+        indexText: '${i + 1}',
+        indexWidth: 24,
+        indexAlign: TextAlign.center,
+        indexGap: 10,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        subtitle: SongRowSubtitle.artist,
+        tapOnlyWhenPlayable: true,
+        menuSource: SongActionSource.artist,
         onTap: () => widget.onPlaySongs(results, i),
       ),
     );
@@ -975,95 +990,6 @@ class _MvsTab extends StatelessWidget {
           style: theme.textTheme.labelSmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 热门歌曲行: 序号 + 歌名/艺人 + 时长 + SongOverflowButton。无版权灰显。
-class _ArtistSongRow extends StatelessWidget {
-  const _ArtistSongRow({
-    required this.song,
-    required this.index,
-    required this.onTap,
-  });
-
-  final rust.SongDto song;
-  final int index;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    // 正在播放的那首在"全部歌曲"里也要有标记(与歌单详情/搜索结果同一语汇)
-    return NowPlayingHighlight(
-      songId: song.id,
-      builder: (context, playing) => _buildRow(context, playing),
-    );
-  }
-
-  Widget _buildRow(BuildContext context, bool playing) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final grey = TextStyle(color: scheme.outline);
-    return InkWell(
-      onTap: song.playable ? onTap : null,
-      child: Padding(
-        // 与同页其它区块的 12dp 对齐(布局审计 #7)
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 24,
-              child: playing
-                  ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
-                  : Text(
-                      '${index + 1}',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.outline,
-                      ),
-                    ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 歌名 + VIP/付费/无版权标记(标记固定宽度, 不会被歌名挤掉)
-                  SongTitleWithBadges(
-                    song: song,
-                    style: playing
-                        ? theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w600,
-                          )
-                        : (song.playable ? theme.textTheme.bodyMedium : grey),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    song.artist,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: song.playable
-                          ? scheme.onSurfaceVariant
-                          : scheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              formatDurationMs(song.durationMs),
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.outline),
-            ),
-            SongOverflowButton(
-              song: song,
-              size: 20,
-              source: SongActionSource.artist,
-            ),
-          ],
         ),
       ),
     );
