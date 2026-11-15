@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/feed_media.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
+import 'support/fakes.dart';
+
 rust.FeedEventDto event({
   String kind = 'text',
   String? coverUrl,
@@ -28,19 +30,15 @@ rust.FeedEventDto event({
   commentCount: BigInt.zero,
 );
 
-rust.SongDto song({String? coverUrl}) => rust.SongDto(
-  id: BigInt.from(9),
+// 共享工厂 + 动态卡片里的周杰伦《叶惠美》口径(封面可选)。
+rust.SongDto song({String? coverUrl}) => fakeSong(
+  id: 9,
   name: '晴天',
   artist: '周杰伦',
-  artistId: BigInt.from(6452),
+  artistId: 6452,
   album: '叶惠美',
-  albumId: BigInt.from(1),
   coverUrl: coverUrl,
-  durationMs: BigInt.from(200000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  durationMs: 200000,
 );
 
 Future<void> pumpGrid(WidgetTester tester, List<String> images) async {

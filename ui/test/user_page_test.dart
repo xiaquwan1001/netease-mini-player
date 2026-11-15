@@ -13,6 +13,8 @@ import 'package:minincm/src/profile_scaffold.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/user_page.dart';
 
+import 'support/fakes.dart';
+
 rust.ProfileDetail detail({String nickname = '下去玩', String signature = ''}) =>
     rust.ProfileDetail(
       userId: BigInt.from(1822714196),
@@ -40,18 +42,14 @@ rust.Playlist playlist(
   subscribed: false,
 );
 
-rust.SongDto likedSong(int i, String name) => rust.SongDto(
-  id: BigInt.from(900 + i),
+// 共享工厂 + 外人主页喜欢列表口径(id 从 900 起)。
+rust.SongDto likedSong(int i, String name) => fakeSong(
+  id: 900 + i,
   name: name,
   artist: '周杰伦',
-  artistId: BigInt.from(6452),
+  artistId: 6452,
   album: '叶惠美',
-  albumId: BigInt.from(1),
-  durationMs: BigInt.from(200000),
-  fee: 0,
-  vip: false,
-  paid: false,
-  playable: true,
+  durationMs: 200000,
 );
 
 rust.FeedEventDto feedEvent({String text = '一条动态'}) => rust.FeedEventDto(

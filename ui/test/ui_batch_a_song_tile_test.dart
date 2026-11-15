@@ -4,20 +4,16 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_actions.dart';
 import 'package:minincm/src/song_tile.dart';
 
+import 'support/fakes.dart';
+
+// 共享工厂 + 歌曲行口径(周杰伦《叶惠美》), 时长可覆盖。
 rust.SongDto song({int id = 1, String name = '晴天', int durationMs = 245000}) =>
-    rust.SongDto(
-      id: BigInt.from(id),
+    fakeSong(
+      id: id,
       name: name,
       artist: '周杰伦',
-      artistId: BigInt.one,
       album: '叶惠美',
-      albumId: BigInt.one,
-      coverUrl: null,
-      durationMs: BigInt.from(durationMs),
-      fee: 0,
-      vip: false,
-      paid: false,
-      playable: true,
+      durationMs: durationMs,
     );
 
 /// 只关心红心回调的假宿主(其余动作在本次改动里不走)

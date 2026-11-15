@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_tile.dart';
 
+import 'support/fakes.dart';
+
+// 共享工厂 + 歌曲行口径(周杰伦《晴天》4:29)。
 rust.SongDto song({
   int id = 1,
   String name = '晴天',
@@ -10,15 +13,12 @@ rust.SongDto song({
   bool vip = false,
   bool paid = false,
   bool playable = true,
-}) => rust.SongDto(
-  id: BigInt.from(id),
+}) => fakeSong(
+  id: id,
   name: name,
   artist: '周杰伦',
-  artistId: BigInt.one,
   album: '叶惠美',
-  albumId: BigInt.from(1),
-  coverUrl: null,
-  durationMs: BigInt.from(269000),
+  durationMs: 269000,
   fee: fee,
   vip: vip,
   paid: paid,

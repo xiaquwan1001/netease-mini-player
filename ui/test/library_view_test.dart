@@ -2,18 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/library_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
-rust.SongDto s(int id, {bool playable = true}) => rust.SongDto(
-  id: BigInt.from(id),
+import 'support/fakes.dart';
+
+// 共享工厂 + 曲库最小字段口径(albumId=0 表示未知)。
+rust.SongDto s(int id, {bool playable = true}) => fakeSong(
+  id: id,
   name: 'song$id',
   artist: 'a',
-  artistId: BigInt.one,
   album: 'b',
-  albumId: BigInt.zero,
-  coverUrl: null,
-  durationMs: BigInt.from(1000),
-  fee: 0,
-  vip: false,
-  paid: false,
+  albumId: 0,
   playable: playable,
 );
 

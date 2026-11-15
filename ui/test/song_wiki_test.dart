@@ -3,19 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_wiki.dart';
 
-rust.SongDto song() => rust.SongDto(
-  id: BigInt.from(1901371647),
+import 'support/fakes.dart';
+
+// 共享工厂 + 《孤勇者》口径(fee=1 / VIP 可播, wiki 页会读这些字段)。
+rust.SongDto song() => fakeSong(
+  id: 1901371647,
   name: '孤勇者',
   artist: '陈奕迅',
-  artistId: BigInt.one,
   album: '孤勇者',
-  albumId: BigInt.one,
-  coverUrl: null,
-  durationMs: BigInt.from(255000),
+  durationMs: 255000,
   fee: 1,
   vip: true,
-  paid: false,
-  playable: true,
 );
 
 Widget host() => MaterialApp(
