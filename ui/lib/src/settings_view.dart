@@ -7,6 +7,7 @@ import 'app_meta.dart';
 import 'app_settings.dart';
 import 'cover_quality_sheet.dart';
 import 'daily_cache.dart';
+import 'net_retry.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
@@ -510,7 +511,7 @@ class _DailyCacheTileState extends State<_DailyCacheTile> {
       showToast(context, removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 份旧缓存');
     } catch (e) {
       if (!mounted) return;
-      showToast(context, '清理失败: $e', isError: true);
+      showToast(context, '清理失败: ${describeError(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _cleaning = false);
     }

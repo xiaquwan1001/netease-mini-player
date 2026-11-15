@@ -4,6 +4,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'cover_art.dart';
 import 'feed_detail_page.dart' show feedRelativeTime;
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'song_share.dart' show SongShare, capturePng;
@@ -556,7 +557,7 @@ class _FeedShareSheetState extends State<FeedShareSheet> {
       if (messenger != null) showToastWith(messenger, msg);
     } catch (e) {
       if (messenger != null) {
-        showToastWith(messenger, '分享失败: $e', isError: true);
+        showToastWith(messenger, '分享失败: ${describeError(e)}', isError: true);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -707,9 +708,9 @@ class _FeedForwardSheetState extends State<FeedForwardSheet> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = '转发失败: $e');
+      setState(() => _error = '转发失败: ${describeError(e)}');
       if (messenger != null) {
-        showToastWith(messenger, '转发失败: $e', isError: true);
+        showToastWith(messenger, '转发失败: ${describeError(e)}', isError: true);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -851,7 +852,7 @@ class _CommentShareSheetState extends State<CommentShareSheet> {
       if (messenger != null) showToastWith(messenger, msg);
     } catch (e) {
       if (messenger != null) {
-        showToastWith(messenger, '分享失败: $e', isError: true);
+        showToastWith(messenger, '分享失败: ${describeError(e)}', isError: true);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

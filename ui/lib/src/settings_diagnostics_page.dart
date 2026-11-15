@@ -181,7 +181,7 @@ class _OneClickDiagTileState extends State<_OneClickDiagTile> {
       );
     } catch (e) {
       if (!mounted) return;
-      showToast(context, '生成失败: $e', isError: true);
+      showToast(context, '生成失败: ${describeError(e)}', isError: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -260,7 +260,7 @@ class _AnonymousReportTile extends StatelessWidget {
       showToast(context, '已生成匿名诊断包: $path');
     } catch (e) {
       if (!context.mounted) return;
-      showToast(context, '生成失败: $e', isError: true);
+      showToast(context, '生成失败: ${describeError(e)}', isError: true);
     }
   }
 

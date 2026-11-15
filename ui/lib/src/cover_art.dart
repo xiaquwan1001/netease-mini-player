@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'image_io.dart';
+import 'net_retry.dart';
 import 'state_views.dart';
 import 'toast.dart';
 
@@ -579,7 +580,7 @@ class _ImageViewerState extends State<_ImageViewer> {
       showToast(context, '原图已保存: $where');
     } catch (e) {
       if (!mounted) return;
-      showToast(context, '保存失败: $e');
+      showToast(context, '保存失败: ${describeError(e)}');
     } finally {
       if (mounted) setState(() => _saving = false);
     }

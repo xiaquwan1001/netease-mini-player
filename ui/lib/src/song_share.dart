@@ -10,6 +10,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'cover_art.dart';
 import 'image_io.dart';
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'toast.dart';
@@ -295,7 +296,7 @@ class _SongShareSheetState extends State<_SongShareSheet> {
       if (messenger != null) showToastWith(messenger, msg);
     } catch (e) {
       if (messenger != null) {
-        showToastWith(messenger, '分享失败: $e', isError: true);
+        showToastWith(messenger, '分享失败: ${describeError(e)}', isError: true);
       }
     } finally {
       if (mounted) setState(() => _busy = false);

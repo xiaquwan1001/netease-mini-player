@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/net_retry.dart';
+import 'package:minincm/src/rust/api.dart' as rust;
 
 void main() {
   test('网络错误会重试, 第二次成功', () async {
@@ -45,5 +46,54 @@ void main() {
     expect(friendlyError('[network] x'), contains('网络不稳定'));
     expect(isNetworkError('[riskControl] code=8821'), isFalse);
     expect(friendlyError('[notFound] code=404'), contains('404'));
+  });
+
+  group('结构化错误(FfiError 跨桥后)', () {
+    rust.FfiError fe(String kind, String detail, {bool retryable = false}) =>
+        rust.FfiError(kind: kind, retryable: retryable, detail: detail);
+
+    test('kind/retryable 直接来自 Rust, 不再靠文本前缀', () {
+      final net = fe('network', 'os error 104', retryable: true);
+      expect(isNetworkError(net), isTrue);
+      expect(isRetryableError(net), isTrue);
+      expect(friendlyError(net), contains('网络不稳定'));
+
+      final auth = fe('auth', '未登录');
+      expect(isNetworkError(auth), isFalse);
+      expect(isRetryableError(auth), isFalse);
+      expect(friendlyError(auth), '[auth] 未登录');
+      expect(errorKind(auth), 'auth');
+      expect(describeError(auth), '[auth] 未登录');
+    });
+
+    test('forbidden 只给 detail, 空 detail 兜底', () {
+      expect(friendlyError(fe('forbidden', '该用户已设置关注列表不可见')), '该用户已设置关注列表不可见');
+      expect(friendlyError(fe('forbidden', '')), '没有权限查看');
+    });
+
+    test('network 的 FfiError 会被 retryNetwork 重试', () async {
+      var calls = 0;
+      final v = await retryNetwork(() async {
+        calls += 1;
+        if (calls < 3) {
+          throw fe('network', 'connection reset', retryable: true);
+        }
+        return 7;
+      }, sleep: (_) async {});
+      expect(v, 7);
+      expect(calls, 3);
+    });
+
+    test('retryable=false 的 FfiError 不重试', () async {
+      var calls = 0;
+      await expectLater(
+        retryNetwork<int>(() async {
+          calls += 1;
+          throw fe('internal', 'boom');
+        }, sleep: (_) async {}),
+        throwsA(isA<rust.FfiError>()),
+      );
+      expect(calls, 1);
+    });
   });
 }

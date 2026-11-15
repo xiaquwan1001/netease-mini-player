@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
 import 'app_settings.dart';
@@ -151,7 +152,7 @@ Future<void> applyLoudnessForTrack(int trackId, {String? streamUrl}) async {
       }
     } catch (e) {
       // 测量失败(未缓存 / 解码失败)就让这首按 0 dB 播, 但要留下可查的日志
-      debugPrint('[R2b] 测量失败 track=$trackId: $e');
+      debugPrint('[R2b] 测量失败 track=$trackId: ${describeError(e)}');
     }
   }
   // 只有真的测到才记进缓存: 否则 0 dB 会被当成"已知", 之后的补测就不会再发生了

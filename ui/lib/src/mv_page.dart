@@ -6,7 +6,7 @@ import 'comment_thread.dart';
 import 'cover_art.dart';
 import 'error_views.dart' show FullError;
 import 'layout.dart' show kSectionGap;
-import 'net_retry.dart' show friendlyError;
+import 'net_retry.dart' show describeError, friendlyError;
 import 'state_views.dart' show LoadingView;
 import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
@@ -112,7 +112,10 @@ class _MvPageState extends State<MvPage> {
       );
     } catch (e) {
       if (mounted) {
-        setState(() => _startError = '播放失败: $e\n(直链约 1 小时过期, 可返回重进重试)');
+        setState(
+          () =>
+              _startError = '播放失败: ${describeError(e)}\n(直链约 1 小时过期, 可返回重进重试)',
+        );
       }
     } finally {
       if (mounted) setState(() => _starting = false);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
@@ -163,7 +164,7 @@ class LoginSheetState extends State<LoginSheet> {
       if (!mounted) return;
       setState(() {
         _creating = false;
-        _error = '申请二维码失败: $e';
+        _error = '申请二维码失败: ${describeError(e)}';
       });
     }
   }
@@ -265,7 +266,7 @@ class LoginSheetState extends State<LoginSheet> {
       if (!mounted) return;
       setState(() {
         _sending = false;
-        _error = '发送验证码失败: $e';
+        _error = '发送验证码失败: ${describeError(e)}';
       });
     }
   }
@@ -294,7 +295,7 @@ class LoginSheetState extends State<LoginSheet> {
       if (!mounted) return;
       setState(() {
         _verifying = false;
-        _error = '登录失败: $e';
+        _error = '登录失败: ${describeError(e)}';
       });
     }
   }
@@ -323,7 +324,7 @@ class LoginSheetState extends State<LoginSheet> {
       if (!mounted) return;
       setState(() {
         _committing = false;
-        _error = '导入失败: $e';
+        _error = '导入失败: ${describeError(e)}';
       });
     }
   }

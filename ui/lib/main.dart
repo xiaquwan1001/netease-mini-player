@@ -2223,7 +2223,8 @@ class _HomePageState extends State<HomePage> {
     try {
       await rust.accountSyncActive();
     } catch (e) {
-      if (!e.toString().contains('[auth]')) return;
+      // 结构化错误直接看 kind(FfiError.auth); 不再靠文本前缀 contains
+      if (errorKind(e) != 'auth') return;
       try {
         await rust.logout();
         await _refreshInfo();
