@@ -10,7 +10,7 @@ import 'rust/api.dart' as rust;
 // 私信/通知/@我 页签、单人聊天、回调类型与相对时间文案仍从本文件 import。
 export 'messages/forwards_tab.dart' show ForwardsTab;
 export 'messages/inbox_tab.dart' show InboxTab;
-export 'messages/message_shared.dart' show MessageErrorRow, relativeTime;
+export 'messages/message_shared.dart' show relativeTime;
 export 'messages/message_types.dart';
 export 'messages/private_chat.dart' show showPrivateChat;
 export 'messages/sessions_tab.dart' show SessionsTab;

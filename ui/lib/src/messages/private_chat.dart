@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../async_view.dart';
 import '../cover_art.dart';
-import '../net_retry.dart';
+import '../error_views.dart' show InlineError;
+import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../rust/api.dart' as rust;
 import '../sheet_header.dart';
 import '../state_views.dart';
 import '../toast.dart' show showToast;
 import '../user_nav.dart';
-import 'message_shared.dart' show MessageErrorRow;
 import 'message_types.dart';
 
 /// 单人私信历史(只读; 官方 App 才允许回复)
@@ -72,18 +73,19 @@ class _ChatBody extends StatefulWidget {
 }
 
 class _ChatBodyState extends State<_ChatBody> {
+  /// 当前完整列表(含「加载更早」拼进来的更早页);
+  /// null = 直接用 AsyncView 刚取回的最新一页。
   List<rust.PrivateMessage>? _items;
-  String? _error;
+
   bool _loadingOlder = false;
   bool _noMore = false;
   bool _sending = false;
-  final TextEditingController _input = TextEditingController();
 
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
+  /// 「加载更早」失败时的提示: 只贴在该按钮的位置, 已渲染的消息不消失
+  /// (改造前会把整屏换成错误行, 且"重试"其实是重拉最新页)。
+  String? _olderError;
+
+  final TextEditingController _input = TextEditingController();
 
   @override
   void dispose() {
@@ -106,7 +108,7 @@ class _ChatBodyState extends State<_ChatBody> {
       if (!mounted) return;
       if (ok) {
         _input.clear();
-        await _load();
+        await _refresh();
       }
     } catch (e) {
       if (!mounted) return;
@@ -116,8 +118,23 @@ class _ChatBodyState extends State<_ChatBody> {
     }
   }
 
-  Future<void> _load() async {
-    setState(() => _error = null);
+  /// [AsyncView] 的取数入口(组件自己套 [retryNetwork]): 取最新一页,
+  /// 并把「加载更早」拼出来的状态清零, 让列表回到只有最新一页。
+  Future<List<rust.PrivateMessage>> _load() async {
+    final items = await widget.load(
+      widget.session.userId,
+      widget.pageSize,
+      BigInt.zero,
+    );
+    if (!mounted) return items;
+    _items = null;
+    _noMore = items.length < widget.pageSize;
+    _olderError = null;
+    return items;
+  }
+
+  /// 发送成功后重拉最新一页(不经过 AsyncView, 免得整块闪回加载态)
+  Future<void> _refresh() async {
     try {
       final items = await retryNetwork(
         () => widget.load(widget.session.userId, widget.pageSize, BigInt.zero),
@@ -126,24 +143,28 @@ class _ChatBodyState extends State<_ChatBody> {
       setState(() {
         _items = items;
         _noMore = items.length < widget.pageSize;
+        _olderError = null;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = friendlyError(e));
+      showToast(context, friendlyError(e), isError: true);
     }
   }
 
   /// 加载更早: 用当前最早一条的 time_ms 当 before_ms, 不重复拉最新一页
-  Future<void> _loadOlder() async {
-    final items = _items;
-    if (items == null || items.isEmpty || _loadingOlder || _noMore) return;
+  Future<void> _loadOlder(List<rust.PrivateMessage> latest) async {
+    final items = _items ?? latest;
+    if (items.isEmpty || _loadingOlder || _noMore) return;
     final before = items.first.timeMs;
     if (before <= BigInt.zero) {
       // 没有可用游标(异常数据), 不再翻页
       setState(() => _noMore = true);
       return;
     }
-    setState(() => _loadingOlder = true);
+    setState(() {
+      _loadingOlder = true;
+      _olderError = null;
+    });
     try {
       final page = await retryNetwork(
         () => widget.load(widget.session.userId, widget.pageSize, before),
@@ -160,7 +181,7 @@ class _ChatBodyState extends State<_ChatBody> {
       if (!mounted) return;
       setState(() {
         _loadingOlder = false;
-        _error = friendlyError(e);
+        _olderError = friendlyError(e);
       });
     }
   }
@@ -238,16 +259,28 @@ class _ChatBodyState extends State<_ChatBody> {
   }
 
   Widget _buildList(BuildContext context) {
-    if (_error != null) {
-      return MessageErrorRow(message: _error!, onRetry: _load);
-    }
-    final items = _items;
-    if (items == null) {
-      return const LoadingView();
-    }
-    if (items.isEmpty) {
-      return const EmptyView(icon: Icons.notifications_none, title: '还没有消息');
-    }
+    return AsyncView<List<rust.PrivateMessage>>(
+      load: _load,
+      emptyText: '还没有消息',
+      loadingBuilder: (_) => const LoadingView(),
+      emptyBuilder: (_) => const EmptyView(
+        icon: Icons.notifications_none,
+        title: '还没有消息',
+      ),
+      // 聊天记录的错误保持改造前的一行式(文案走 friendlyError, 右侧重试)
+      errorBuilder: (_, error, retry) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: InlineError(message: friendlyError(error), onRetry: retry),
+      ),
+      builder: (context, latest, _) => _buildMessages(context, latest),
+    );
+  }
+
+  Widget _buildMessages(
+    BuildContext context,
+    List<rust.PrivateMessage> latest,
+  ) {
+    final items = _items ?? latest;
     final scheme = Theme.of(context).colorScheme;
     // 非分页: 私信按时间倒序锚底 + 向上"加载更早"(reverse + prepend), PagedListView 不支持该形态
     // 注意: 这个方法只负责列表本身, 外层 build 负责「列表 + 底部输入框」的 Column
@@ -257,19 +290,7 @@ class _ChatBodyState extends State<_ChatBody> {
       reverse: true,
       itemCount: items.length + (_noMore ? 0 : 1),
       itemBuilder: (context, i) {
-        if (i == items.length) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Center(
-              child: _loadingOlder
-                  ? const LoadingView.inline(size: 18)
-                  : TextButton(
-                      onPressed: _loadOlder,
-                      child: const Text('加载更早'),
-                    ),
-            ),
-          );
-        }
+        if (i == items.length) return _buildOlderSlot(latest);
         final m = items[items.length - 1 - i];
         final mine = m.fromMe;
         return Align(
@@ -293,6 +314,35 @@ class _ChatBodyState extends State<_ChatBody> {
           ),
         );
       },
+    );
+  }
+
+  /// 列表顶部的「加载更早」槽位: 加载中转小 spinner, 失败给一行提示 + 重试
+  Widget _buildOlderSlot(List<rust.PrivateMessage> latest) {
+    if (_loadingOlder) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(child: LoadingView.inline(size: 18)),
+      );
+    }
+    final error = _olderError;
+    if (error != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: InlineError(
+          message: error,
+          onRetry: () => _loadOlder(latest),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: TextButton(
+          onPressed: () => _loadOlder(latest),
+          child: const Text('加载更早'),
+        ),
+      ),
     );
   }
 }
