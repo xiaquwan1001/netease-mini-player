@@ -1,0 +1,403 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../app_settings.dart';
+import '../lyric.dart';
+import '../lyric_source.dart';
+import '../net_retry.dart' show friendlyError;
+import '../playback.dart';
+import '../rust/api.dart' as rust;
+import '../song_share.dart' show shareableLyricLines;
+import '../word_lyric_view.dart';
+
+/// 歌词状态机(从 main.dart 的 `_HomePageState` 搬出, 2026-11 拆壳 S2)。
+///
+/// 只搬"数据 + 索引计算 + 状态变更"; **渲染仍在 `HomePage._buildLyrics`**,
+/// UI 部分留到 S2 之后的步骤。搬运动作逐行等价: 切歌重置 / seek 强制跟随 /
+/// 展开期 120ms ticker 启停 / 翻译开关 / 多选分享 / 来源偏好与回落链路全部照旧。
+///
+/// 所有权(为什么有些东西仍留在页面):
+/// - 本类持有歌词数据、歌词列表的 [ScrollController]、高频刷新 ticker、
+///   两个"播放位置/播放中"notifier(它们高频变更, 不能走整页 setState);
+/// - `_player` 是播放态的唯一真相(S4 才搬), 这里只通过 [player] 回调读, 不复制;
+/// - 轮询 `_pollPlayer` / toast / 行高(依赖 MediaQuery 系统字号)由页面注入,
+///   避免把播放协调层或 BuildContext 拉进歌词状态机。
+/// - 状态变化一律走 [notifyListeners]; 页面用 `addListener(→setState)` 订阅,
+///   与拆分前"每处状态变更各自 setState"的重建语义一一对应。
+class LyricController extends ChangeNotifier {
+  LyricController({
+    required this.player,
+    required this.pollPlayer,
+    required this.itemExtentOf,
+    required this.toast,
+  });
+
+  /// 播放态快照(真相在页面的 `_player`)。
+  final PlayerView? Function() player;
+
+  /// 展开歌词期间的高频刷新(原 `_pollPlayer`)。
+  final Future<void> Function() pollPlayer;
+
+  /// 歌词行高: 基准 56dp 随系统字号等比放大, 取值依赖 BuildContext。
+  final double Function() itemExtentOf;
+
+  final void Function(String message) toast;
+
+  bool _disposed = false;
+
+  /// 歌词列表的滚动控制器(详情页歌词 + 三个 LyricView 共用同一个)。
+  final _lyricScroll = ScrollController();
+
+  List<ParsedLyricLine> _lyricLines = const [];
+  List<BigInt> _lyricTimes = const [];
+
+  /// 纯文本歌词兜底(无时间轴): 逐行接口失败/返回空时用 [parseLrc] 从原始 LRC 里取。
+  List<String>? _lyricPlain;
+  BigInt? _lyricTrackId;
+  String? _lyricError;
+
+  // 歌词来源("yrc"/"ttml"/"line")与择优理由不再上屏(左下角那条像水印的
+  // 小字已按用户要求去掉), 决策逻辑与文案生成仍留在 lyricSourceLabel / scoreWordLyric.
+  int _lyricIndex = -1;
+  bool _showLyrics = false;
+
+  /// 歌词是否跟随播放自动滚动: 用户手动滑歌词时置 false, 点"定位"再置回 true
+  bool _autoFollowLyric = true;
+
+  /// 详情页歌词多选: 长按进入, 点行加/减选, 选中后右上角变成分享/取消
+  final Set<int> _selectedLyricLines = <int>{};
+
+  /// 逐字(karaoke)歌词数据; 有则优先用 [WordLyricView], 无则回落行级/纯文本链。
+  List<WordLyricLineData> _wordLines = const [];
+
+  /// 播放位置(毫秒)注入给 [WordLyricView]: 刷新只重建当前行, 不整页 setState。
+  final ValueNotifier<int> _wordPositionMs = ValueNotifier<int>(0);
+
+  /// 播放中标志注入给 [WordLyricView]/[KaraokeLine]: 播放时才在行内插值到 60fps,
+  /// 暂停/default 场景不排帧(省电, 也让 pumpAndSettle 能收敛)。
+  final ValueNotifier<bool> _playing = ValueNotifier<bool>(false);
+
+  /// 展开歌词时的高频位置刷新(~120ms); 收起必须停掉, 避免后台耗电。
+  Timer? _lyricTicker;
+
+  // ---------------- 只读视图(页面渲染用) ----------------
+
+  /// 歌词页是否展开(原 `_showLyrics`)。
+  bool get visible => _showLyrics;
+
+  bool get autoFollow => _autoFollowLyric;
+
+  /// 多选态(原 `_lyricSelecting`)。
+  bool get selecting => _selectedLyricLines.isNotEmpty;
+
+  Set<int> get selected => _selectedLyricLines;
+
+  List<ParsedLyricLine> get lines => _lyricLines;
+
+  List<String>? get plain => _lyricPlain;
+
+  String? get error => _lyricError;
+
+  List<WordLyricLineData> get wordLines => _wordLines;
+
+  /// 当前高亮的行级歌词下标(-1 = 还没唱到第一句)。
+  int get activeIndex => _lyricIndex;
+
+  ScrollController get scroll => _lyricScroll;
+
+  ValueNotifier<int> get positionMs => _wordPositionMs;
+
+  ValueNotifier<bool> get playing => _playing;
+
+  /// 歌词行高(页面注入的 [rowExtentFor] 口径)。
+  double get itemExtent => itemExtentOf();
+
+  /// 歌词里有没有翻译(tlyric). 没有时整页不出现翻译开关, 免得点出个空开关
+  bool get hasTranslation =>
+      _wordLines.any((l) => (l.sub ?? '').trim().isNotEmpty) ||
+      _lyricLines.any((l) => (l.sub ?? '').trim().isNotEmpty);
+
+  /// 当前播放位置对应的歌词行(-1 = 还没唱到第一句)
+  int get currentIndex {
+    final pos = player()?.positionMs ?? BigInt.zero;
+    if (_wordLines.isNotEmpty) return wordLineIndexAt(_wordLines, pos.toInt());
+    if (_lyricTimes.isNotEmpty) return lyricIndexAt(_lyricTimes, pos);
+    return -1;
+  }
+
+  // ---------------- 加载 ----------------
+
+  Future<void> load(BigInt trackId) async {
+    if (_lyricTrackId == trackId) return;
+    _lyricTrackId = trackId;
+    if (!_disposed) {
+      _lyricLines = const [];
+      _lyricTimes = const [];
+      _lyricPlain = null;
+      _lyricIndex = -1;
+      _lyricError = null;
+      _wordLines = const [];
+      notifyListeners();
+      _wordPositionMs.value = 0;
+    }
+    // B13/C2: 逐字歌词来源决策(按用户偏好, auto 打分择优), loader 可注入(单测不联网)。
+    final resolved = await resolveLyricSource(
+      trackId,
+      LyricSourceLoaders(
+        yrc: (id) async => rust.wordLyricLines(trackId: id),
+        ttml: (id) async => rust.ttmlLyricLines(trackId: id),
+        lineLevel: (id) async => rust.lyricLinesI18N(trackId: id),
+      ),
+      preference: AppSettings.instance.lyricSourcePreference,
+    );
+    if (resolved != null && !_disposed && _lyricTrackId == trackId) {
+      final word = resolved.word;
+      if (word != null) {
+        _lyricError = null;
+        _lyricPlain = null;
+        _wordLines = [
+          for (var i = 0; i < word.lines.length; i++)
+            WordLyricLineData(
+              startMs: word.lines[i].startMs,
+              endMs: word.lines[i].endMs,
+              words: [
+                for (final w in word.lines[i].words)
+                  WordLyricWord(
+                    startMs: w.startMs,
+                    endMs: w.endMs,
+                    text: w.text,
+                  ),
+              ],
+              sub: i < word.translationLines.length
+                  ? word.translationLines[i]
+                  : null,
+            ),
+        ];
+        notifyListeners();
+        _wordPositionMs.value = player()?.positionMs.toInt() ?? 0;
+        _playing.value = player()?.playing ?? false;
+        return;
+      }
+      final lines = resolved.line;
+      if (lines != null && lines.isNotEmpty) {
+        _lyricError = null;
+        _lyricLines = [
+          for (final l in lines)
+            ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+        ];
+        _lyricTimes = [for (final l in lines) l.timeMs];
+        notifyListeners();
+        syncIndex(player() ?? PlayerView.empty);
+        return;
+      }
+    }
+    try {
+      final lines = await rust.lyricLinesI18N(trackId: trackId);
+      if (_disposed || _lyricTrackId != trackId) return;
+      if (lines.isNotEmpty) {
+        _lyricLines = [
+          for (final l in lines)
+            ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+        ];
+        _lyricTimes = [for (final l in lines) l.timeMs];
+        notifyListeners();
+        syncIndex(player() ?? PlayerView.empty);
+        return;
+      }
+      // 逐行接口没有内容(纯文本/老格式歌词) → 退回原始 LRC
+      await _loadRawLyric(trackId);
+    } catch (e) {
+      if (_disposed || _lyricTrackId != trackId) return;
+      // 兜底: 原始 LRC 里往往还有纯文本可显示; 都没有才报错
+      final ok = await _loadRawLyric(trackId);
+      if (!ok && !_disposed && _lyricTrackId == trackId) {
+        _lyricError = friendlyError(e);
+        notifyListeners();
+      }
+    }
+  }
+
+  /// 原始 LRC 兜底(逐行接口失败/为空时): 有时间轴就等价于逐行高亮,
+  /// 只有纯文本就走 [PlainLyricView]。返回是否有内容可用。
+  Future<bool> _loadRawLyric(BigInt trackId) async {
+    try {
+      final raw = await rust.lyric(trackId: trackId);
+      if (_disposed || _lyricTrackId != trackId) return false;
+      final doc = parseLrc(raw);
+      if (doc.isEmpty) return false;
+      _lyricError = null;
+      if (doc.hasTimeline) {
+        _lyricPlain = null;
+        _lyricLines = doc.timed;
+        _lyricTimes = [for (final l in doc.timed) l.timeMs];
+      } else {
+        _lyricLines = const [];
+        _lyricTimes = const [];
+        _lyricPlain = doc.plain;
+      }
+      notifyListeners();
+      if (doc.hasTimeline) syncIndex(player() ?? PlayerView.empty);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // ---------------- 索引与跟随 ----------------
+
+  void syncIndex(PlayerView state, {bool force = false}) {
+    if (!_showLyrics || _lyricTimes.isEmpty) return;
+    final idx = lyricIndexAt(_lyricTimes, state.positionMs);
+    // force=true: seek(拖/点进度条、切歌)后即使落在同一句也要把列表滚回当前句
+    if (idx == _lyricIndex && !force) return;
+    _lyricIndex = idx;
+    notifyListeners();
+    _scrollLyricTo(idx);
+  }
+
+  /// 把播放位置/播放中喂给两个高频 notifier, 再刷新高亮行。
+  /// (`_pollPlayer` 里的那三行, 顺序与条件保持不变。)
+  void followPlayer(PlayerView state) {
+    if (state.positionMs != BigInt.from(_wordPositionMs.value)) {
+      _wordPositionMs.value = state.positionMs.toInt();
+    }
+    if (_playing.value != state.playing) _playing.value = state.playing;
+    syncIndex(state);
+  }
+
+  void _scrollLyricTo(int idx) {
+    if (!_autoFollowLyric) return;
+    if (!_lyricScroll.hasClients || idx < 0) return;
+    final position = _lyricScroll.position;
+    final extent = itemExtent;
+    final target = idx * extent - (position.viewportDimension - extent) / 2;
+    final clamped = target.clamp(0.0, position.maxScrollExtent);
+    _lyricScroll.animateTo(
+      clamped,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// 播放条/详情页的"展开歌词"开关。
+  void toggle() {
+    _showLyrics = !_showLyrics;
+    // 每次进入详情页都恢复"跟随 + 无选中", 避免上次留下的状态让人困惑
+    _autoFollowLyric = true;
+    _selectedLyricLines.clear();
+    notifyListeners();
+    if (_showLyrics) {
+      // 仅展开期间提高刷新频率; 收起/切 tab 时必须停掉。
+      _lyricTicker?.cancel();
+      _lyricTicker = Timer.periodic(
+        const Duration(milliseconds: 120),
+        (_) => pollPlayer(),
+      );
+      final current = player();
+      if (current != null) {
+        syncIndex(current);
+        _wordPositionMs.value = current.positionMs.toInt();
+        _playing.value = current.playing;
+      }
+    } else {
+      _lyricTicker?.cancel();
+      _lyricTicker = null;
+    }
+  }
+
+  /// 切 tab / 收起歌词: 只改状态 + 停 ticker, **不发通知**
+  /// (调用方自己的 setState 会重建; 与拆分前"setState 里置 false、之后 cancel"等价)。
+  void collapse() {
+    _showLyrics = false;
+    _lyricTicker?.cancel();
+    _lyricTicker = null;
+  }
+
+  /// 一键回到当前唱到的那句(并恢复跟随)
+  void locateCurrent() {
+    final idx = currentIndex;
+    resumeFollow();
+    if (idx < 0) {
+      toast('还没唱到第一句');
+      return;
+    }
+    _scrollLyricTo(idx);
+  }
+
+  /// 恢复自动跟随(进入歌词页 / seek 后)。
+  ///
+  /// [notify] = false 供"调用方自己已经在 setState 里"的场景使用(seek), 避免多一次通知。
+  void resumeFollow({bool notify = true}) {
+    if (!_autoFollowLyric) {
+      _autoFollowLyric = true;
+      if (notify) notifyListeners();
+    }
+  }
+
+  /// 用户手动滑歌词: 停止自动跟随(否则下一句会把列表拽回去, 根本看不远)
+  void pauseFollow() {
+    if (!_autoFollowLyric) return;
+    _autoFollowLyric = false;
+    notifyListeners();
+  }
+
+  // ---------------- 翻译 / 多选 / 取文本 ----------------
+
+  void toggleTranslation() {
+    final next = !AppSettings.instance.lyricTranslation;
+    // 先重建一次(翻译键的图标/色), 再异步落设置 —— 与拆分前 setState(() {}) 同序。
+    notifyListeners();
+    unawaited(AppSettings.instance.update(lyricTranslation: next));
+  }
+
+  /// 长按歌词行: 进入多选并选中该行; 之后点击任意行加/减选
+  void selectLine(int index, {bool longPress = false}) {
+    if (longPress) {
+      _selectedLyricLines.add(index);
+    } else if (!_selectedLyricLines.remove(index)) {
+      _selectedLyricLines.add(index);
+    }
+    notifyListeners();
+    if (longPress && _selectedLyricLines.length == 1) {
+      toast('已选中 1 句歌词, 继续点击可多选');
+    }
+  }
+
+  void clearSelection() {
+    if (_selectedLyricLines.isEmpty) return;
+    _selectedLyricLines.clear();
+    notifyListeners();
+  }
+
+  /// 选中行的文本(按行号排序, 最多 8 行 —— 分享卡片放不下更多)
+  List<String> selectedTexts() {
+    final indexes = _selectedLyricLines.toList()..sort();
+    return shareableLyricLines([for (final i in indexes) _textAt(i)], max: 8);
+  }
+
+  /// 取第 [i] 行歌词的纯文本(逐字歌词把词拼回整行)
+  String _textAt(int i) {
+    if (_wordLines.isNotEmpty) {
+      if (i < 0 || i >= _wordLines.length) return '';
+      return [for (final w in _wordLines[i].words) w.text].join();
+    }
+    if (_lyricLines.isNotEmpty) {
+      if (i < 0 || i >= _lyricLines.length) return '';
+      return _lyricLines[i].text;
+    }
+    final plain = _lyricPlain;
+    if (plain == null || i < 0 || i >= plain.length) return '';
+    return plain[i];
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _lyricTicker?.cancel();
+    _lyricScroll.dispose();
+    _wordPositionMs.dispose();
+    _playing.dispose();
+    super.dispose();
+  }
+}
