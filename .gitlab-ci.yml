@@ -34,7 +34,7 @@ flutter:
     # golden(视觉回归)需要系统 CJK 字体, 缺了用例会整组 skip(等于没测)。
     # 本机 runner 一般已有(宿主装的 Noto CJK), 只在缺的时候走 apt(带重试+镜像兜底)。
     - |
-      if ! ls /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc /usr/share/fonts/opentype/noto/NotoSansSC-*.otf /usr/share/fonts/truetype/wqy/*.ttc >/dev/null 2>&1; then
+      if ! find /usr/share/fonts -maxdepth 3 \( -name 'NotoSansCJK-*.ttc' -o -name 'NotoSansSC-*' -o -name 'wqy-*.ttc' -o -name 'DroidSansFallback*.ttf' \) -print -quit | grep -q .; then
         bash tools/apt-install.sh fonts-noto-cjk
       fi
     # 全量(含 golden 12 张), 只排除联网 smoke: CI 无出口网络与凭据。

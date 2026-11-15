@@ -421,6 +421,18 @@ final bool _cjkAvailable = _cjkFontCandidates.any(
 );
 
 void main() {
+  // CI 上缺字体时下面 12 例会"全部 skip", 流水线看着绿其实一张图都没校验。
+  // 所以 CI 里显式断言字体在: 装字体那步若装到了别的路径/装失败, 这里直接红。
+  test('CI 必须能拿到 CJK 字体(golden 不允许静默整组跳过)', () {
+    if (Platform.environment['CI'] != 'true') return;
+    expect(
+      _cjkAvailable,
+      isTrue,
+      reason: 'CI 上探测不到系统 CJK 字体(候选见 _cjkFontCandidates), '
+          '12 张 golden 会被整组 skip; 检查 workflow 里的 fonts-noto-cjk 安装',
+    );
+  });
+
   setUpAll(() async {
     final path = await _loadGoldenFont();
     if (path == null) {
