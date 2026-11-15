@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'src/marquee_text.dart';
@@ -14,6 +13,7 @@ import 'src/sheet_header.dart';
 import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
+import 'src/app_shell.dart';
 import 'src/audio_tuning.dart';
 import 'src/artist_nav.dart';
 import 'src/artist_page.dart';
@@ -63,7 +63,6 @@ import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/song_wiki.dart';
 import 'src/toast.dart' show showToast;
-import 'src/theme.dart';
 import 'src/vip_page.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
@@ -73,6 +72,7 @@ import 'src/rust/frb_generated.dart';
 
 // 从本文件拆出的纯逻辑/小组件: 这里 re-export 保持既有
 // `import 'package:minincm/main.dart'` 的导入路径与符号集不变(测试零改动)。
+export 'src/app_shell.dart';
 export 'src/back_policy.dart';
 export 'src/lyric_source.dart';
 export 'src/notification_mode.dart';
@@ -80,225 +80,6 @@ export 'src/notification_mode.dart';
 Future<void> main() async {
   await RustLib.init();
   runApp(const MiniNcmApp());
-}
-
-/// 全局动作回调宿主: MaterialApp.builder 里包一层 AppActions,
-/// 这样搜索结果/详情页/底部面板等所有路由里的 "..." 菜单都能拿到同一套回调。
-final ValueNotifier<SongActionHost?> _actionsHost =
-    ValueNotifier<SongActionHost?>(null);
-
-/// 根导航栈里"全屏页"的层数(弹层/对话框不算一层): 1 = 只有首页.
-///
-/// 底部 tab 属于首页, 有全屏页压上来时让位; 若按 [ModalRoute.isCurrent] 判断,
-/// 弹一个底部面板(PopupRoute)也会让底部导航消失, 所以这里只数非弹层路由。
-///
-/// 初值 0 而不是 1: 首页这条路由本身也会走 didPush(变成 1); 而手工 pump HomePage
-/// 的单测里没有观察者, 值停在 0 —— 两者都满足 "<= 1 就是首页在栈顶"。
-final ValueNotifier<int> _pageDepth = ValueNotifier<int>(0);
-
-/// NavigatorObserver: 维护 [_pageDepth](栈里非弹层路由的层数).
-class _PageDepthObserver extends NavigatorObserver {
-  static void _up() {
-    if (_pageDepth.value < 1) {
-      _pageDepth.value = 1;
-    } else {
-      _pageDepth.value = _pageDepth.value + 1;
-    }
-  }
-
-  static void _down() {
-    _pageDepth.value = _pageDepth.value > 1 ? _pageDepth.value - 1 : 1;
-  }
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
-    _up();
-  }
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
-    _down();
-  }
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
-    _down();
-  }
-}
-
-/// 常驻底部条(播放条 + 首页底部导航)的投递槽位。
-///
-/// 播放条原先在 HomePage.bottomNavigationBar 里, 只有首页看得到; 二级页(日推"全部"、
-/// 歌单广场、风格详情、搜索页…)一压上来就没了。这里改由根布局 [PlayerBarHost] 渲染,
-/// 位置在 Navigator **之下**(Column 的兄弟, 不是覆盖层): 二级页自己的底部面板/滚动区
-/// 都落在它上方, 不会被它压住。唯一让位时机是键盘弹出 —— 那时它本来就被键盘挡住,
-/// 留着只会白占内容高度。
-final ValueNotifier<Widget?> playerBarSlot = ValueNotifier<Widget?>(null);
-
-/// 常驻播放条的数据快照槽位: HomePage 每帧投一份 [PlayerBarData](帧后),
-/// 与上一份相等时 ValueNotifier 不通知 → 播放条只在数据真变时才重建。
-final ValueNotifier<PlayerBarData?> playerBarData =
-    ValueNotifier<PlayerBarData?>(null);
-
-/// 常驻播放条的回调集合槽位: HomePage 在 initState 里建一次, 之后不再变。
-final ValueNotifier<PlayerBarActions?> playerBarActions =
-    ValueNotifier<PlayerBarActions?>(null);
-
-/// 投递底部条(每次 HomePage 构建投一次, 内容变了才通知)。
-///
-/// 必须在帧后投递: 槽位的监听者是 Navigator 的祖先, 在 HomePage.build 里同步写
-/// ValueNotifier 等于在 build 阶段 markNeedsBuild 祖先 → "setState() called during build"。
-void _publishBottomBar(Widget? bar) {
-  WidgetsBinding.instance.addPostFrameCallback(
-    (_) => playerBarSlot.value = bar,
-  );
-}
-
-/// 应用外壳: Navigator 与常驻底部条一起放进一个全屏 Overlay。
-///
-/// 为什么要有这层 Overlay: 播放条里的 Slider/Tooltip 用 OverlayPortal 画气泡,
-/// 必须有 Overlay 祖先; 而它又必须活在 Navigator 之外才能穿透二级路由。
-/// 条目内容通过 [_content] 更新(Overlay.initialEntries 只在首次生效, 每次塞新
-/// Widget 会卡在旧的 Navigator 上, 主题/字号设置改了不生效)。
-class PlayerBarHost extends StatefulWidget {
-  const PlayerBarHost({super.key, required this.content});
-
-  final Widget content;
-
-  @override
-  State<PlayerBarHost> createState() => _PlayerBarHostState();
-}
-
-class _PlayerBarHostState extends State<PlayerBarHost> {
-  late final ValueNotifier<Widget> _content = ValueNotifier<Widget>(
-    widget.content,
-  );
-  late final OverlayEntry _entry = OverlayEntry(
-    builder: (_) => _PlayerBarChrome(content: _content),
-  );
-
-  @override
-  void didUpdateWidget(covariant PlayerBarHost oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 监听者在条目内部(后代), 不是祖先, 在 build 之外通知更稳
-    _content.value = widget.content;
-  }
-
-  @override
-  Widget build(BuildContext context) => Overlay(initialEntries: [_entry]);
-}
-
-class _PlayerBarChrome extends StatelessWidget {
-  const _PlayerBarChrome({required this.content});
-
-  final ValueListenable<Widget> content;
-
-  @override
-  Widget build(BuildContext context) {
-    // 键盘弹出时底部条不占位: 反正会被键盘挡住, 留着只会把内容区白压一条
-    final keyboardUp = MediaQuery.viewInsetsOf(context).bottom > 0;
-    return ValueListenableBuilder<PlayerBarActions?>(
-      valueListenable: playerBarActions,
-      builder: (context, actions, _) => ValueListenableBuilder<PlayerBarData?>(
-        valueListenable: playerBarData,
-        builder: (context, data, _) => ValueListenableBuilder<Widget?>(
-          valueListenable: playerBarSlot,
-          builder: (context, navBar, _) => ValueListenableBuilder<Widget>(
-            valueListenable: content,
-            builder: (context, body, _) {
-              final bar = (data == null || actions == null || keyboardUp)
-                  ? null
-                  // 没有底部导航时播放条自己吃掉系统手势区
-                  : MiniPlayerBar(
-                      data: data,
-                      actions: actions,
-                      absorbBottomInset: navBar == null,
-                    );
-              // 底部条与底部导航都挂在 Navigator 之外(根布局), 看到的是根 MediaQuery
-              // ⇒ padding.top 仍是状态栏高度。NavigationBar 内部的 SafeArea 没关 top
-              // (它默认同时吃 top), 不剥掉就会在导航栏顶部多出一条状态栏高的空白,
-              // 表现为"播放条与底部导航之间有一段空", 同时整块底栏变高挤压内容区。
-              //
-              // 2026-11-13: 底部手势区原样(~24dp)全部被导航栏吃掉, 视觉上底部留白过大
-              // (用户反馈"略微下移底部导航栏, 减少到底部的空白")。这里把 bottom inset
-              // 夹到 8dp(仍高于手势条本体, 不挡点击), 导航栏整体下移约 16dp。
-              final mq = MediaQuery.of(context);
-              // 键盘弹出时底部导航也一起让位(2026-11-14 用户反馈 4/6):
-              // 搜索联想面板下方总有一段"跟随输入法出现"的空缺, 高度≈底部导航栏,
-              // 因为 HomePage 的 Scaffold 已经按 viewInsets.bottom 收缩过一次,
-              // 而导航栏还占着根 Column 的 80dp ⇒ 内容底边 = 键盘顶 - 80dp。
-              // 键盘在场时导航栏本来就被键盘挡住, 一并隐藏后缺口消失。
-              final nav = navBar == null || keyboardUp
-                  ? null
-                  : MediaQuery(
-                      data: mq.copyWith(
-                        padding: mq.padding.copyWith(
-                          top: 0,
-                          bottom: mq.padding.bottom.clamp(0.0, 8.0),
-                        ),
-                        viewPadding: mq.viewPadding.copyWith(
-                          top: 0,
-                          bottom: mq.viewPadding.bottom.clamp(0.0, 8.0),
-                        ),
-                      ),
-                      child: navBar,
-                    );
-              return Column(
-                children: [
-                  Expanded(child: body),
-                  ?bar,
-                  ?nav,
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class MiniNcmApp extends StatelessWidget {
-  const MiniNcmApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) {
-        final settings = AppSettings.instance;
-        return MaterialApp(
-          title: '轻音 MiniNCM',
-          // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
-          debugShowCheckedModeBanner: false,
-          // 视觉风格(主题色): 同一色板同时决定浅色/深色两套配色的 seed
-          theme: buildLightTheme(accent: settings.accent),
-          // R6: 深色 + OLED 开关 ⇒ 纯黑基底(见 src/theme.dart)
-          darkTheme: buildDarkTheme(
-            oled: settings.oledDark,
-            accent: settings.accent,
-          ),
-          themeMode: settings.themeMode,
-          builder: (context, child) => MediaQuery(
-            data: scaledMediaQuery(context, settings.textScale),
-            // 动作回调挂在 Navigator 之上, pushed route 也能取到
-            child: ValueListenableBuilder<SongActionHost?>(
-              valueListenable: _actionsHost,
-              builder: (_, host, inner) =>
-                  host == null ? inner! : AppActions(host: host, child: inner!),
-              child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
-            ),
-          ),
-          // 只用来数"有没有全屏页压在首页上"(决定底部 tab 是否让位)
-          navigatorObservers: [_PageDepthObserver()],
-          home: const HomePage(),
-        );
-      },
-    );
-  }
 }
 
 class HomePage extends StatefulWidget {
@@ -475,14 +256,14 @@ class _HomePageState extends State<HomePage> {
       // 首页被压住时先回首页再展开歌词: 否则切换的是看不见的那一页,
       // 用户只会觉得"点了没反应"
       onToggleLyrics: () {
-        if (_pageDepth.value > 1) {
+        if (pageDepth.value > 1) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
         _toggleLyrics();
       },
       // 播放条封面点击 = 进入播放详情(不是专辑预览, 用户要求)
       onOpenDetail: () {
-        if (_pageDepth.value > 1) {
+        if (pageDepth.value > 1) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
         if (!_showLyrics) _toggleLyrics();
@@ -515,7 +296,7 @@ class _HomePageState extends State<HomePage> {
     // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
     AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
-    _actionsHost.value = _buildActionsHost();
+    actionsHost.value = _buildActionsHost();
     _searchFocus.addListener(_onSearchFocusChanged);
     // 头像点击进入用户主页时, 主页里点歌仍要能播(共享同一份播放回调)
     UserNav.onPlaySongs = _playSongsList;
@@ -531,7 +312,7 @@ class _HomePageState extends State<HomePage> {
     // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
     UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
     // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
-    _pageDepth.addListener(_onPageDepthChanged);
+    pageDepth.addListener(_onPageDepthChanged);
     _bootstrap();
     _ticker = Timer.periodic(
       const Duration(milliseconds: 500),
@@ -546,7 +327,7 @@ class _HomePageState extends State<HomePage> {
     _suggestDebounce?.cancel();
     _searchFocus.removeListener(_onSearchFocusChanged);
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
-    _pageDepth.removeListener(_onPageDepthChanged);
+    pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
     _lyricTicker?.cancel();
     _lyricScroll.dispose();
@@ -591,7 +372,7 @@ class _HomePageState extends State<HomePage> {
       unawaited(enforceCacheLimit());
       if (!mounted) return;
       setState(() => _info = info);
-      _actionsHost.value = _buildActionsHost();
+      actionsHost.value = _buildActionsHost();
       // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
       unawaited(_restorePlayback(info.dataDir));
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
@@ -1878,7 +1659,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => _info = info);
       // 登录/登出/切号都汇到 _refreshInfo, 在这里统一 drain Keystore 桥的 pending
       unawaited(credentialSync.drainPending());
-      _actionsHost.value = _buildActionsHost();
+      actionsHost.value = _buildActionsHost();
       if (info.loggedIn) {
         await _loadLiked();
       } else {
@@ -2928,7 +2709,7 @@ class _HomePageState extends State<HomePage> {
     // 播放条数据快照 + 底部导航由根布局渲染(MaterialApp.builder 的 PlayerBarHost):
     // 二级路由压上来时播放条仍然在场, 这里只负责把当前数据投递过去.
     _publishPlayerBar(player, current);
-    _publishBottomBar(_buildBottomBar());
+    publishBottomBar(_buildBottomBar());
     return Scaffold(
       appBar: topBar,
       // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
@@ -3555,7 +3336,7 @@ class _HomePageState extends State<HomePage> {
   /// 底部 tab 属于首页: 有全屏页压在首页之上时返回 null(播放条由
   /// [playerBarData] 负责, 此时它自己吃掉系统手势区), 弹层/对话框不算。
   Widget? _buildBottomBar() {
-    if (_pageDepth.value > 1) return null;
+    if (pageDepth.value > 1) return null;
     return NavigationBar(
       selectedIndex: _tab,
       onDestinationSelected: _onTabSelected,
