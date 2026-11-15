@@ -708,8 +708,12 @@ class _HomePageState extends State<HomePage> {
   /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
   Set<BigInt> _liked = <BigInt>{};
 
-  /// 歌单浏览态: 非空时列表显示这个歌单而不是搜索结果
-  List<rust.SongDto> _library = const [];
+  /// 歌单浏览态标题: 非空时列表显示"正在播放/心动模式"而不是搜索结果。
+  ///
+  /// **不再另存一份曲目**: 这两个浏览态展示的就是播放队列本身, 以前存
+  /// `_library` 快照, 队列面板里删/拖/清空之后这一页仍是旧列表, 在这里
+  /// 点一首还会把整队重置回旧顺序(用户 2026-11-15 反馈页面重复)。现在
+  /// 唯一来源是 _queue.items, 见 [_sourceSongs]。
   String? _libraryTitle;
 
   /// 当前浏览的歌单 id(心动模式要用 playlistId; 搜索态为 null)
@@ -760,9 +764,12 @@ class _HomePageState extends State<HomePage> {
 
   rust.SongDto? get _current => _queue.current;
 
-  /// 当前列表的原始曲目(歌单浏览优先)
+  /// 当前列表的原始曲目。
+  ///
+  /// 歌单浏览态("正在播放"/"心动模式")= 播放队列的视图, 直接读 [_queue];
+  /// 否则是上一轮搜索结果。
   List<rust.SongDto> get _sourceSongs => _libraryTitle != null
-      ? _library
+      ? _queue.items
       : (_bundle?.songs ?? const <rust.SongDto>[]);
 
   /// 真正要显示/入队的曲目: 无版权且没收藏的直接不显示(与官方一致)
@@ -953,7 +960,6 @@ class _HomePageState extends State<HomePage> {
       // 只恢复队列与播放现场, **不进"歌单浏览态"**: 那是搜索页里的一个显示
       // 状态, 冷启动时把它填上会让 App 一开就停在"正在播放"列表(用户反馈)。
       // 队列本身仍可从播放条/播放队列看到。
-      _library = const [];
       _libraryTitle = null;
       _libraryPlaylistId = null;
       _queuePlaylistId = null;
@@ -1141,7 +1147,6 @@ class _HomePageState extends State<HomePage> {
       _exact = null;
       _keywordSuggestions = const [];
       // 搜索即离开歌单浏览态, 结果列表要保持"这一屏是什么"的唯一来源
-      _library = const [];
       _libraryTitle = null;
       _libraryPlaylistId = null;
     });
@@ -1181,7 +1186,6 @@ class _HomePageState extends State<HomePage> {
       _error = null;
       _retryLast = null;
       _busy = false;
-      _library = const [];
       _libraryTitle = null;
       _libraryPlaylistId = null;
     });
@@ -1407,7 +1411,6 @@ class _HomePageState extends State<HomePage> {
     _playSource = source;
     _userStopped = false;
     setState(() {
-      _library = songs;
       _libraryTitle = '正在播放';
       _libraryPlaylistId = null;
       _queuePlaylistId = playlistId;
@@ -1449,7 +1452,6 @@ class _HomePageState extends State<HomePage> {
       _playSource = SongActionSource.other;
       _userStopped = false;
       setState(() {
-        _library = list;
         _libraryTitle = '心动模式';
         _queuePlaylistId = null;
       });
@@ -2741,7 +2743,6 @@ class _HomePageState extends State<HomePage> {
   /// 退出歌单浏览, 回到搜索
   void _closeLibrary() {
     setState(() {
-      _library = const [];
       _libraryTitle = null;
       _libraryPlaylistId = null;
     });
@@ -3650,8 +3651,10 @@ class _HomePageState extends State<HomePage> {
     final songs = _visibleSongs;
     final hidden = _hiddenUnplayable;
     if (songs.isEmpty) {
+      // 浏览态现在是队列的视图: 队列被清空时这里要说明白, 不然会读成"歌单空了"
+      final emptyText = _libraryTitle == null ? '这个歌单是空的' : '播放队列是空的';
       return Center(
-        child: Text(hidden > 0 ? '这里没有可播放的曲目($hidden 首无版权已隐藏)' : '这个歌单是空的'),
+        child: Text(hidden > 0 ? '这里没有可播放的曲目($hidden 首无版权已隐藏)' : emptyText),
       );
     }
     // 列表顶部一句说明: 无版权且没收藏的曲目按官方行为直接不出现, 但要让用户知道少了什么

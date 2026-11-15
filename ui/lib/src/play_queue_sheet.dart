@@ -2,6 +2,7 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
+import 'layout.dart' show kCardRowInset, kRowTitleGap;
 import 'sheet_header.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 
@@ -182,29 +183,38 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            // 8 而不是 12: 标题行与下面列表的左右边缘对齐(列表行 4dp + 图标内缩)
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: SheetHeader(
               // 单行标题(不放 subtitle): 队列面板在 300dp/矮视口下高度很紧,
               // 双行标题会顶出 2px 纵向溢出(见 narrow_width_audit_test)
               title: '当前播放队列',
+              // 标题区曾被行尾挤成"当前播…"(用户 2026-11-15 截图)。
+              // 三处一起收: 计数降字号 + 动作按钮收到 40dp(见 [_SheetIconButton])
+              // + 标题栏横向留白 12→8。只改其中一处仍会截断, 所以三条都在这里。
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    _items.isEmpty ? '共 0 首' : '共 ${_items.length} 首',
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    // '共 N 首' → 'N 首': 大字号下「共」和一个空格要吃掉 ~33dp,
+                    // 正好是 6 字标题是否被截断的那一段(1.5× / 360dp 实测)。
+                    '${_items.length} 首',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
                   if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
-                    IconButton(
-                      icon: const Icon(Icons.playlist_add),
+                    _SheetIconButton(
+                      icon: Icons.playlist_add,
                       tooltip: '存为歌单',
                       onPressed: _busy ? null : _saveAsPlaylist,
                     ),
                   if (_items.isNotEmpty && widget.onClear != null)
-                    IconButton(
-                      icon: const Icon(Icons.delete_sweep_outlined),
+                    _SheetIconButton(
+                      icon: Icons.delete_sweep_outlined,
                       tooltip: '清空队列',
                       onPressed: _confirmClear,
                     ),
@@ -254,6 +264,15 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                         child: ListTile(
                           dense: true,
                           selected: current,
+                          // 行铺满: 序号贴左 4dp、删除/拖拽手柄贴右 4dp,
+                          // 中间(歌名+徽标)因此多出 ~34dp(用户 2026-11-15:
+                          // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
+                          // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
+                          // 四段固定留白。
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: kCardRowInset,
+                          ),
+                          horizontalTitleGap: kRowTitleGap,
                           leading: SizedBox(
                             // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
                             width: 28,
@@ -292,30 +311,19 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                             children: [
                               // 默认 IconButton 命中区 48dp, 与 leading 序号列叠加后
                               // 标题被压到个位数宽度。宽度收到 40dp(高度仍 48 保命中),
-                              // 与 SongTile 行尾口径一致。
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline,
-                                  size: 20,
-                                ),
-                                iconSize: 20,
-                                padding: EdgeInsets.zero,
-                                style: const ButtonStyle(
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 40,
-                                  minHeight: 48,
-                                ),
+                              // 与 SongTile 行尾口径一致; 与标题栏共用 [_SheetIconButton]。
+                              _SheetIconButton(
+                                icon: Icons.delete_outline,
                                 tooltip: '从队列移除',
+                                minHeight: 48,
                                 onPressed: () => _confirmRemove(i),
                               ),
                               ReorderableDragStartListener(
                                 index: i,
                                 child: Padding(
+                                  // 拖拽手柄贴到行右边缘(仍在 40×48 的触控区内)
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
+                                    horizontal: 4,
                                     vertical: 12,
                                   ),
                                   child: Icon(
@@ -340,6 +348,40 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 面板内的小图标按钮: 宽度固定 40dp(默认 48 会把标题/歌名挤窄),
+/// 高度默认 40(标题栏), 列表行传 48 保持触控高度。
+///
+/// 只在这个文件里用 —— 不要拿它替换别处的 IconButton, 触控口径不同。
+class _SheetIconButton extends StatelessWidget {
+  const _SheetIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.minHeight = 40,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  /// 触控区最小高度: 标题栏 40 / 列表行 48。
+  final double minHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      iconSize: 20,
+      padding: EdgeInsets.zero,
+      // 命中区 = constraints(不是默认 48 的方形), 与排列宽度一致
+      style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      constraints: BoxConstraints(minWidth: 40, minHeight: minHeight),
+      tooltip: tooltip,
+      onPressed: onPressed,
     );
   }
 }

@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-15(六)**。当前版本 **v0.12.3**(冷启动落在推荐 + 历史日推合并本地缓存)。
+> 最近更新: **2026-11-15(六)**。当前版本 **v0.12.4**(播放队列面板排版 + 「正在播放」去掉队列副本)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -17,7 +17,7 @@
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **287** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test`(全量, 含 golden) | **947** 通过 / 1 跳过(golden 12 张) |
+| `flutter test`(全量, 含 golden) | **949** 通过 / 1 跳过(golden 12 张) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -52,6 +52,7 @@
 | **v0.12.1** | **2026-11-14** | 分类条末尾空缺(均分 4+3 两排)、字号档位 chip 删除(只留滑块)、`docs/` 根 13 份完工专题归档 + 索引重写 |
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
+| **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -85,6 +86,14 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-15(六) 播放队列面板排版 + 「正在播放」去重(**v0.12.4 已发布**)
+
+- **反馈**: 队列面板标题被行尾挤成「当前播…」(截图 12:17); 序号/删除/拖拽把中间歌名压窄。同时被问「正在播放」整页的标题与返回按钮归谁管、是否重复。
+- **谁在管(未改结构)**: 「正在播放」整页 = 搜索 tab 的歌单浏览态, 标题与返回键**只有一处** —— `main.dart` 的 `_buildTopBar`(title = `_libraryTitle`, leading → `_closeLibrary`); body 里没有第二个标题/返回键; 系统返回键经 `HomeBackGuard` → 同一个 `_closeLibrary`(同一动作两条入口, 不是重复 UI)。队列面板是另一层: `play_queue_sheet.dart` 的 `SheetHeader`(标题「当前播放队列」, 无返回键)。
+- **真正的重复在数据层**: 「正在播放」页原先自己存一份 `_library` 快照, 队列面板删/拖/清空后它仍是旧列表, 在这页点一首还会把整队重置回旧顺序。现在删掉这份副本, `_sourceSongs` 对"正在播放/心动模式"直接读 `_queue.items`(单一真相), 队列空态文案也随之改成「播放队列是空的」。
+- **面板排版**: 标题行三处一起收才够(单改一处仍会截断): 计数 `共 N 首` → `N 首` 且降到 labelSmall、动作按钮 48→40dp(新的 `_SheetIconButton`, 行内删除键共用, 高度仍 48)、标题栏横向留白 12→8。实测 360dp × 1.5 字号: 标题可用宽度 116 → 181dp(整句需 144), 不再 ellipsis。行内: contentPadding 16+16 → 4+4(`kCardRowInset`)、`horizontalTitleGap` → `kRowTitleGap`(8)、拖拽手柄横向内缩 8→4 ⇒ 歌名起点 60→40dp、删除键 270→298dp、手柄 308→332dp, 中间 +48dp。
+- **回归网**: 新增 2 例(标题不 ellipsis 的 `RenderParagraph.didExceedMaxLines` 断言 + 序号/删除/拖拽/中间宽度断言), 原 5 处「共 N 首」断言随文案更新; 全量 `flutter test` **949**。
 
 ## 2026-11-15(六) 用户 2 条: 启动落推荐 + 历史日推合并本地缓存(**v0.12.3 已发布**)
 

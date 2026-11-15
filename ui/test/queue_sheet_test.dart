@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
@@ -107,7 +108,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('当前播放队列'), findsOneWidget);
-    expect(find.text('共 3 首'), findsOneWidget);
+    expect(find.text('3 首'), findsOneWidget);
     expect(find.text('第一首'), findsOneWidget);
     expect(find.text('第二首'), findsOneWidget);
     expect(find.text('第三首'), findsOneWidget);
@@ -152,7 +153,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('第一首'), findsNothing);
-    expect(find.text('共 2 首'), findsOneWidget);
+    expect(find.text('2 首'), findsOneWidget);
     expect(harness(tester).played, isEmpty, reason: '删的不是当前项, 不换歌');
     expect(harness(tester).queue.index, 0, reason: '当前下标左移一位');
     expect(harness(tester).queue.current!.name, '第二首');
@@ -196,7 +197,7 @@ void main() {
     expect(harness(tester).queue.isEmpty, isTrue);
     expect(harness(tester).queue.current, isNull);
     expect(find.textContaining('播放队列是空的'), findsOneWidget);
-    expect(find.text('共 0 首'), findsOneWidget);
+    expect(find.text('0 首'), findsOneWidget);
   });
 
   testWidgets('拖拽手柄排序: 顺序改变, 当前曲目不变且不换歌', (tester) async {
@@ -250,7 +251,7 @@ void main() {
     expect(harness(tester).cleared, 1);
     expect(harness(tester).queue.isEmpty, isTrue);
     expect(harness(tester).stopped, ['stop']);
-    expect(find.text('共 0 首'), findsOneWidget);
+    expect(find.text('0 首'), findsOneWidget);
     expect(find.textContaining('播放队列是空的'), findsOneWidget);
   });
 
@@ -267,7 +268,7 @@ void main() {
 
     expect(harness(tester).cleared, 0);
     expect(harness(tester).queue.items.length, 2);
-    expect(find.text('共 2 首'), findsOneWidget);
+    expect(find.text('2 首'), findsOneWidget);
   });
 
   testWidgets('空队列: 直接显示空态文案, 不渲染列表', (tester) async {
@@ -277,7 +278,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('播放队列是空的'), findsOneWidget);
-    expect(find.text('共 0 首'), findsOneWidget);
+    expect(find.text('0 首'), findsOneWidget);
     expect(find.byType(ListTile), findsNothing);
   });
 
@@ -333,6 +334,66 @@ void main() {
     );
     expect(button.width, 40, reason: '默认 48dp 会吃掉标题区, 必须收到 40dp');
     expect(button.height, greaterThanOrEqualTo(48), reason: '命中区高度不能缩');
+  });
+
+  // 用户 2026-11-15 截图: 队列面板标题被行尾挤成「当前播…」, 且行内序号/操作
+  // 把中间的歌名压得很窄。这两条用例锁住排版口径: 标题整句可见 + 序号贴左、
+  // 删除/拖拽贴右、中间留出空间(只改其中一处就会退回旧问题)。
+  testWidgets('360dp + 1.5 字号: 标题「当前播放队列」完整显示, 不被行尾挤断', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: const TextScaler.linear(1.5)),
+          child: child!,
+        ),
+        home: const QueueHarness(
+          names: ['第一首', '第二首', '第三首', '第四首', '第五首'],
+          startAt: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.text('当前播放队列');
+    expect(title, findsOneWidget);
+    final paragraph = tester.renderObject<RenderParagraph>(title);
+    expect(
+      paragraph.didExceedMaxLines,
+      isFalse,
+      reason: '标题不允许 ellipsis: 行尾只能留计数 + 两个 40dp 动作按钮',
+    );
+    expect(find.text('5 首'), findsOneWidget, reason: '计数仍在标题行右侧');
+  });
+
+  testWidgets('360dp: 序号贴左 / 删除与拖拽贴右 / 中间给歌名', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      const MaterialApp(home: QueueHarness(names: ['第一首', '第二首'], startAt: 0)),
+    );
+    await tester.pumpAndSettle();
+
+    final row = tester.getRect(find.byType(ListTile).first);
+    // 序号列: 4dp 行留白 + 28dp 序号列 ⇒ 标题从 ~40dp 起(旧口径 60dp)
+    final titleRect = tester.getRect(find.text('第一首').first);
+    expect(titleRect.left, lessThanOrEqualTo(44), reason: '序号左移, 歌名起点跟着左移');
+    final del = tester.getRect(
+      find.widgetWithIcon(IconButton, Icons.delete_outline).first,
+    );
+    final handle = tester.getRect(find.byIcon(Icons.drag_handle).first);
+    expect(del.left, greaterThan(row.width * 0.78), reason: '删除按钮贴右');
+    expect(handle.right, greaterThan(row.width - 12), reason: '拖拽手柄贴到右边缘');
+    // 中间可用宽度 = 歌名起点 → 删除按钮左边缘, 必须比旧的 ~210dp 明显宽
+    expect(
+      del.left - titleRect.left,
+      greaterThan(240),
+      reason: '中间内容(歌名+徽标)要拿到 ≥240dp',
+    );
   });
 }
 
