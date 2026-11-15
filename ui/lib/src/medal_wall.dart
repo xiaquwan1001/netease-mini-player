@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'async_view.dart';
 import 'cover_art.dart';
+import 'error_views.dart' show FullError;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'state_views.dart';
@@ -203,7 +205,7 @@ class LevelBadge extends StatelessWidget {
 
 /// 整页勋章墙: 顶部等级卡 + 每行 3 个的勋章网格, 支持下拉刷新。
 ///
-/// 状态机与其它页一致: 加载中转圈 / 错误态 friendlyError + 重试 / 空态 /
+/// 四态走 [AsyncView]: 加载中转圈 / 错误态 friendlyError + 重试 / 空态 /
 /// 正常态。未获得的勋章灰显但仍占位显示(不隐藏)。
 
 // ---------------------------------------------------------------------------
@@ -287,9 +289,10 @@ class MedalWallPage extends StatefulWidget {
 }
 
 class _MedalWallPageState extends State<MedalWallPage> {
-  MedalWallData? _data;
-  String? _error;
-  bool _loading = false;
+  /// 整页数据由本层持有(而不是交给 AsyncView 的 load): 下拉刷新要把新数据包成
+  /// "已完成的 future"换进去 —— AsyncView 换 future 而不重挂载, 已渲染的等级卡/
+  /// 勋章不闪回整页 loading。
+  late Future<MedalWallData> _future;
 
   /// 勋章图标边长(dp)
   static const double _medalSize = 56;
@@ -297,38 +300,32 @@ class _MedalWallPageState extends State<MedalWallPage> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _future = _load();
   }
 
-  Future<void> _load() async {
+  /// 取数: 网络错误自动退避重试。
+  /// 用 future 形态喂 AsyncView 时它不会自己套 retryNetwork, 所以这里套一层,
+  /// 与 load 形态的口径保持一致。
+  Future<MedalWallData> _load() => retryNetwork(widget.load);
+
+  /// 重试/换 future 重取(AsyncView 的 onRetry): 会显示整页加载态。
+  void _reload() {
+    // 必须用块体: 箭头体把 Future 当成 setState 回调的返回值, Flutter 会断言失败。
     setState(() {
-      _loading = true;
-      _error = null;
+      _future = _load();
     });
-    try {
-      final data = await widget.load();
-      if (!mounted) return;
-      setState(() => _data = data);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
   }
 
-  /// 下拉刷新: 走同一条 loader。
+  /// 下拉刷新: 成功才换数据(与改前一致 —— 刷新失败不动已渲染内容)。
   Future<void> _refresh() async {
     try {
-      final data = await widget.load();
+      final data = await _load();
       if (!mounted) return;
       setState(() {
-        _data = data;
-        _error = null;
+        _future = Future<MedalWallData>.value(data);
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
+    } catch (_) {
+      // 静默: 刷新失败保留旧内容
     }
   }
 
@@ -344,7 +341,6 @@ class _MedalWallPageState extends State<MedalWallPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('我的勋章'),
@@ -354,38 +350,24 @@ class _MedalWallPageState extends State<MedalWallPage> {
           onPressed: _back,
         ),
       ),
-      body: _buildBody(theme),
+      // 整页四态收敛到 AsyncView: 加载中整页 LoadingView, 出错整页
+      // FullError(文案走 friendlyError + 重试)。数据态交给 builder ——
+      // 勋章为空时仍要显示顶部等级卡, 所以空态在列表内(见 _content)。
+      body: AsyncView<MedalWallData>(
+        future: _future,
+        onRetry: _reload,
+        emptyText: '还没有勋章',
+        loadingBuilder: (_) => const LoadingView(),
+        errorBuilder: (_, error, retry) =>
+            FullError(message: friendlyError(error), onRetry: retry),
+        builder: (context, data, _) => _content(data),
+      ),
     );
   }
 
-  Widget _buildBody(ThemeData theme) {
-    if (_data == null && _error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(onPressed: _load, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
-    if (_data == null) {
-      return const LoadingView();
-    }
-
-    final data = _data!;
+  Widget _content(MedalWallData data) {
     final level = data.level;
     final medals = data.medals;
-
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView(
@@ -404,10 +386,6 @@ class _MedalWallPageState extends State<MedalWallPage> {
             )
           else
             _MedalGrid(medals: medals, medalSize: _medalSize),
-          if (_loading) ...[
-            const SizedBox(height: 12),
-            const LoadingView(size: 18),
-          ],
         ],
       ),
     );

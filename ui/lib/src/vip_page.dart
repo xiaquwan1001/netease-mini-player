@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'async_view.dart';
+import 'error_views.dart' show FullError;
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -174,31 +176,41 @@ class VipPage extends StatefulWidget {
 }
 
 class _VipPageState extends State<VipPage> {
-  VipPageData? _data;
-  Object? _error;
-  bool _loading = true;
+  /// 整页数据由本层持有(而不是交给 AsyncView 的 load): 签到成功后的静默刷新
+  /// 要把新数据包成"已完成的 future"换进去, 才不闪整页 loading。
+  late Future<VipPageData> _future;
   bool _signing = false;
 
   @override
   void initState() {
     super.initState();
-    _reload();
+    _future = _load();
   }
 
-  Future<void> _reload({bool silent = false}) async {
+  /// 取数: 网络错误自动退避重试(鉴权/风控立刻抛)。
+  /// 用 future 形态喂 AsyncView 时它不会自己套 retryNetwork, 所以这里套一层,
+  /// 与 load 形态的口径保持一致。
+  Future<VipPageData> _load() => retryNetwork(widget.load);
+
+  /// 重试/换 future 重取(AsyncView 的 onRetry): 会显示整页加载态。
+  void _reload() {
+    // 必须用块体: 箭头体把 Future 当成 setState 回调的返回值, Flutter 会断言失败。
     setState(() {
-      if (!silent) _loading = true;
-      _error = null;
+      _future = _load();
     });
+  }
+
+  /// 静默刷新(签到成功后 / 下拉刷新): 取到数据再换 future, 已渲染内容不闪
+  /// 加载态; 失败保留旧内容(签到动作本身已有成功/失败提示)。
+  Future<void> _refreshSilently() async {
     try {
-      final data = await widget.load();
+      final data = await _load();
       if (!mounted) return;
-      setState(() => _data = data);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = e);
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      setState(() {
+        _future = Future<VipPageData>.value(data);
+      });
+    } catch (_) {
+      // 静默刷新失败: 不覆盖已渲染内容
     }
   }
 
@@ -216,7 +228,7 @@ class _VipPageState extends State<VipPage> {
             ? '签到成功, 云贝 +${status.todayPoint}(累计 ${status.totalDays} 天)'
             : '今天已经签过了(累计 ${status.totalDays} 天)',
       );
-      await _reload(silent: true);
+      await _refreshSilently();
     } catch (e) {
       if (!mounted) return;
       showToast(context, '签到失败: ${friendlyError(e)}', isError: true);
@@ -237,28 +249,39 @@ class _VipPageState extends State<VipPage> {
               ),
         title: const Text('黑胶会员'),
       ),
-      body: _buildBody(context),
+      // 整页四态收敛到 AsyncView: 加载中整页 LoadingView, 出错整页
+      // FullError(文案走 friendlyError + 重试), 数据态交给 builder。
+      // 数据在 data 里而非"空" —— 未登录空态由 _content 自己给。
+      body: AsyncView<VipPageData>(
+        future: _future,
+        onRetry: _reload,
+        emptyText: '暂无数据',
+        loadingBuilder: (_) => const LoadingView(),
+        errorBuilder: (_, error, retry) =>
+            FullError(message: friendlyError(error), onRetry: retry),
+        builder: (context, data, _) => _content(context, data),
+      ),
     );
   }
 
-  Widget _buildBody(BuildContext context) {
-    if (_loading) {
-      return const LoadingView();
-    }
-    final error = _error;
-    if (error != null) {
-      return _ErrorView(message: friendlyError(error), onRetry: _reload);
-    }
-    final data = _data;
-    if (data == null) {
-      return const EmptyView(title: '暂无数据');
-    }
+  Widget _content(BuildContext context, VipPageData data) {
     if (!data.isLoggedIn) {
-      return _NotLoggedInView(onLogin: widget.onLogin);
+      // 未登录空态: 有数据但没登录, 不是 AsyncView 口径里的"空", 由页面给
+      // 文案 + 登录按钮(视觉走统一 EmptyView)。
+      return EmptyView(
+        icon: Icons.workspace_premium_outlined,
+        title: '登录后可查看会员信息',
+        action: widget.onLogin == null
+            ? null
+            : FilledButton(
+                onPressed: widget.onLogin,
+                child: const Text('登录'),
+              ),
+      );
     }
     final sign = data.sign;
     return RefreshIndicator(
-      onRefresh: _reload,
+      onRefresh: _refreshSilently,
       child: ListView(
         padding: const EdgeInsets.all(12),
         children: [
@@ -270,62 +293,6 @@ class _VipPageState extends State<VipPage> {
           ],
           if (data.tasks.isNotEmpty) _TaskList(tasks: data.tasks),
         ],
-      ),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined, size: 48),
-            const SizedBox(height: 12),
-            Text(message, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('重试'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NotLoggedInView extends StatelessWidget {
-  const _NotLoggedInView({this.onLogin});
-
-  final VoidCallback? onLogin;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.workspace_premium_outlined, size: 48),
-            const SizedBox(height: 12),
-            const Text('登录后可查看会员信息'),
-            const SizedBox(height: 16),
-            if (onLogin != null)
-              FilledButton(onPressed: onLogin, child: const Text('登录')),
-          ],
-        ),
       ),
     );
   }

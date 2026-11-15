@@ -352,6 +352,49 @@ void main() {
     expect(find.textContaining('累计 12 天'), findsOneWidget);
   });
 
+  testWidgets('签到后静默刷新: 刷新未完成时旧内容仍在(不闪整页 loading)', (tester) async {
+    // 静默刷新的门禁: 换 future 而不是换加载态 —— 刷新挂起期间依旧渲染旧卡片。
+    final gate = Completer<VipPageData>();
+    var loads = 0;
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () {
+            loads++;
+            if (loads == 1) {
+              return Future<VipPageData>.value(fakeData(signedToday: false));
+            }
+            return gate.future;
+          },
+          onSign: () async => const rust.SigninStatus(
+            signedToday: true,
+            totalDays: 13,
+            continuousDays: 6,
+            weekDays: 5,
+            recent: [],
+            todayPoint: 10,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('今天还没签到'), findsOneWidget);
+
+    await tester.tap(find.text('签到'));
+    await tester.pump();
+    await tester.pump();
+    expect(loads, 2, reason: '签到后立刻发起静默刷新');
+
+    // 刷新 future 还挂着: 数据态仍在(旧卡片没被整页 loading 顶掉)
+    expect(find.byType(RefreshIndicator), findsOneWidget);
+    expect(find.text('今天还没签到'), findsOneWidget);
+    expect(find.text('今日已签到'), findsNothing);
+
+    gate.complete(fakeData(signedToday: true));
+    await tester.pumpAndSettle();
+    expect(find.text('今日已签到'), findsOneWidget);
+  });
+
   testWidgets('未登录空态: 文案 + 登录按钮回调', (tester) async {
     var loginCalls = 0;
     await tester.pumpWidget(

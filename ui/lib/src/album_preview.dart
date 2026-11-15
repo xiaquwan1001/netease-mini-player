@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'async_view.dart';
 import 'artist_page.dart';
 import 'cover_art.dart';
+import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
 import 'now_playing.dart';
 import 'rust/api.dart' as rust;
@@ -102,36 +104,25 @@ class AlbumPreviewPage extends StatefulWidget {
 }
 
 class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
+  /// AppBar 标题要用"取到的专辑名", 而四态内容在 body 的 AsyncView 里 ——
+  /// 这里只留一份专辑引用给标题用, 四态判定仍在 AsyncView(见 _buildBody)。
   rust.AlbumDetailDto? _album;
-  String? _error;
-  bool _loading = false;
 
   /// 收藏状态: 由入参决定初值, 点按钮后本地翻转(没有可靠的"是否已收藏"查询接口)
   late bool _subscribed = widget.initiallySubscribed;
   bool _subBusy = false;
   String? _subError;
 
-  @override
-  void initState() {
-    super.initState();
-    if (widget.albumId > BigInt.zero) _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final album = await retryNetwork(() => widget.load(widget.albumId));
-      if (!mounted) return;
-      setState(() => _album = album);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+  /// 取数(**不要**再套 retryNetwork: AsyncView 的 load 形态已套了一层,
+  /// 双层会变成 3x3 = 9 次重试); 顺手记下专辑给 AppBar 标题用。
+  Future<rust.AlbumDetailDto> _loadAlbum() async {
+    final album = await widget.load(widget.albumId);
+    if (mounted && !identical(_album, album)) {
+      setState(() {
+        _album = album;
+      });
     }
+    return album;
   }
 
   Future<void> _toggleSubscribe() async {
@@ -233,134 +224,147 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
 
   @override
   Widget build(BuildContext context) {
-    final album = _album;
-    final name = album?.name ?? widget.albumName ?? '专辑';
-    final cover = album?.coverUrl ?? widget.coverUrl;
-    final songs = album?.songs ?? const <rust.SongDto>[];
+    final name = _album?.name ?? widget.albumName ?? '专辑';
     return Scaffold(
       // 全页骨架对齐歌单详情: AppBar 自带返回键, 破坏性/长内容不再挤在 Dialog 圈里
       appBar: AppBar(
         title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                CoverArt(url: cover, size: 120, radius: 10),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 专辑名只在 AppBar 出现一次(全页后正文不再重复标题)
-                      // 艺人可点: 单艺人直接进主页, 多艺人先弹窗选择(用户要求)
-                      InkWell(
-                        onTap: album == null
-                            ? null
-                            : () => _openArtist(context, album),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Text(
-                          album?.artist ?? '未知艺人',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: album == null
-                                    ? null
-                                    : Theme.of(context).colorScheme.primary,
-                              ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (songs.isNotEmpty)
-                        Text(
-                          '共 ${songs.length} 首',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      if (album != null && album.description.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          album.description,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                      if (widget.albumId > BigInt.zero)
-                        Row(
-                          children: [
-                            TextButton.icon(
-                              onPressed: _subBusy ? null : _toggleSubscribe,
-                              icon: Icon(
-                                _subscribed
-                                    ? Icons.favorite
-                                    : Icons.favorite_border,
-                                size: 18,
-                                color: _subscribed
-                                    ? Theme.of(context).colorScheme.primary
-                                    : null,
-                              ),
-                              label: Text(_subscribed ? '已收藏' : '收藏专辑'),
-                            ),
-                            if (_subBusy) const LoadingView.inline(size: 14),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_subError != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Text(
-                _subError!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ),
-          const Divider(height: 16),
-          Expanded(child: _buildSongs(context, songs)),
-        ],
-      ),
+      body: _buildBody(context),
     );
   }
 
-  Widget _buildSongs(BuildContext context, List<rust.SongDto> songs) {
-    if (_loading) {
-      return const LoadingView();
+  /// 整页四态: 加载 / 出错交给 [AsyncView], 数据态(含"详情有返回但曲目为空"
+  /// 的空态, 以及 albumId 为 0 的无 id 兜底)在 [_content] 里给。
+  ///
+  /// 取舍: AsyncView 的空判定只看 null / 空集合, 而"空专辑"是"详情非空、曲目为空",
+  /// 且头部(封面/艺人/收藏按钮)要照常显示 —— 所以空态留在内容里用统一的
+  /// [EmptyView], 不为了套 AsyncView 编造一份空数据。
+  Widget _buildBody(BuildContext context) {
+    if (widget.albumId <= BigInt.zero) {
+      // 没有专辑 id: 无可取数据(与改前一致, 一个请求都不发), 直接骨架 + 空态
+      return _content(context, null);
     }
-    if (_error != null) {
-      return Padding(
+    return AsyncView<rust.AlbumDetailDto>(
+      load: _loadAlbum,
+      emptyText: '这张专辑暂无曲目, 先去听听别的吧',
+      // 整页只有"头部 + 曲目表"两块, 加载/出错沿用改前视觉:
+      // 加载 = 整页 LoadingView; 出错 = 行内一行 + 右侧重试。
+      loadingBuilder: (_) => const LoadingView(),
+      errorBuilder: (_, error, retry) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                '专辑加载失败: $_error',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
+        child: InlineError(
+          message: '专辑加载失败: ${friendlyError(error)}',
+          onRetry: retry,
+        ),
+      ),
+      builder: (context, album, _) => _content(context, album),
+    );
+  }
+
+  Widget _content(BuildContext context, rust.AlbumDetailDto? album) {
+    final cover = album?.coverUrl ?? widget.coverUrl;
+    final songs = album?.songs ?? const <rust.SongDto>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              CoverArt(url: cover, size: 120, radius: 10),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 专辑名只在 AppBar 出现一次(全页后正文不再重复标题)
+                    // 艺人可点: 单艺人直接进主页, 多艺人先弹窗选择(用户要求)
+                    InkWell(
+                      onTap: album == null
+                          ? null
+                          : () => _openArtist(context, album),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Text(
+                        album?.artist ?? '未知艺人',
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(
+                              color: album == null
+                                  ? null
+                                  : Theme.of(context).colorScheme.primary,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (songs.isNotEmpty)
+                      Text(
+                        '共 ${songs.length} 首',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    if (album != null && album.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        album.description,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                    if (widget.albumId > BigInt.zero)
+                      Row(
+                        children: [
+                          TextButton.icon(
+                            onPressed: _subBusy ? null : _toggleSubscribe,
+                            icon: Icon(
+                              _subscribed
+                                  ? Icons.favorite
+                                  : Icons.favorite_border,
+                              size: 18,
+                              color: _subscribed
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                            label: Text(_subscribed ? '已收藏' : '收藏专辑'),
+                          ),
+                          if (_subBusy) const LoadingView.inline(size: 14),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_subError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+            child: Text(
+              _subError!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context).colorScheme.error,
               ),
             ),
-            TextButton(onPressed: _load, child: const Text('重试')),
-          ],
+          ),
+        const Divider(height: 16),
+        Expanded(
+          child: songs.isEmpty
+              ? const EmptyView(
+                  icon: Icons.music_note_outlined,
+                  title: '这张专辑暂无曲目, 先去听听别的吧',
+                )
+              : _songsArea(context, songs),
         ),
-      );
-    }
-    if (songs.isEmpty) {
-      return const EmptyView(
-        icon: Icons.music_note_outlined,
-        title: '这张专辑暂无曲目, 先去听听别的吧',
-      );
-    }
-    // 非分页: 专辑曲目随专辑详情一次全量返回
+      ],
+    );
+  }
+
+  /// 曲目表(非分页: 专辑曲目随专辑详情一次全量返回)
+  Widget _songsArea(BuildContext context, List<rust.SongDto> songs) {
     return ListView.builder(
       // 手势条留白(审查 P1-7.15: 全页列表要算底部 inset)
       padding: EdgeInsets.only(
