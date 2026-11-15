@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../error_views.dart' show InlineError;
 import '../layout.dart' show kPagePadding, rowExtentFor;
 import '../rust/api.dart' as rust;
 import '../song_actions.dart' show SongActionSource;
@@ -59,23 +60,15 @@ class PlaylistSongsSliver extends StatelessWidget {
       return const SliverToBoxAdapter(child: DetailSkeletonList());
     }
     if (error != null) {
+      // 错误行统一走 InlineError(文案已由页面套过 friendlyError),
+      // 与页面级/区块级错误态同一份实现, 不再手写 Row + 重试按钮。
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: kPagePadding,
             vertical: 20,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-              TextButton(onPressed: onRetry, child: const Text('重试')),
-            ],
-          ),
+          child: InlineError(message: error!, onRetry: onRetry),
         ),
       );
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 import '../app_settings.dart';
+import '../async_view.dart';
 import '../comment_thread.dart';
 import '../cover_palette.dart';
 import '../library_view.dart';
@@ -93,9 +94,12 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   rust.PlaylistDetail? _detail;
 
+  /// 头部详情由本层持有 future 交给 [AsyncView]: 编辑歌单信息后的静默刷新
+  /// 要把新数据包成"已完成的 future"换进去, 才不闪回整块加载态。
+  late Future<rust.PlaylistDetail> _detailFuture;
+
   /// 当前歌单封面的取色结果(头部卡片主色调背景), null/回退时透明直通主题
   CoverPalette? _palette;
-  String? _detailError;
   bool _subscribed = false;
   bool _subBusy = false;
 
@@ -115,7 +119,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   void initState() {
     super.initState();
     _liked = Set<BigInt>.of(widget.likedIds);
-    _loadDetail();
+    _detailFuture = _loadDetail();
     _loadSongs();
   }
 
@@ -128,33 +132,51 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   // ---------- 数据 ----------
 
-  /// 头部详情: 失败不整页报错, 头部用入参兜底, 卡片里给一个小重试链接
-  Future<void> _loadDetail() async {
-    setState(() => _detailError = null);
-    try {
-      final d = await retryNetwork(
-        () => rust.playlistDetail(playlistId: widget.playlistId),
-      );
+  /// 头部详情的取数入口(四态交给 [AsyncView]; 网络错误自动退避重试)。
+  /// 顺带把封面取色 / 收藏态 / 可编辑态同步进页面 —— 失败不整页报错,
+  /// 头部用入参兜底, 卡片里给一个小重试链接。
+  Future<rust.PlaylistDetail> _loadDetail() async {
+    final d = await retryNetwork(
+      () => rust.playlistDetail(playlistId: widget.playlistId),
+    );
+    if (!mounted) return d;
+    // 封面取色: 决定头部卡片的主色调背景(失败/灰白封面 → 回退主题, 不闪黑)
+    paletteFromUrl(d.coverUrl ?? widget.coverUrl).then((palette) {
       if (!mounted) return;
-      // 封面取色: 决定头部卡片的主色调背景(失败/灰白封面 → 回退主题, 不闪黑)
-      paletteFromUrl(d.coverUrl ?? widget.coverUrl).then((palette) {
-        if (!mounted) return;
-        setState(() => _palette = palette);
-      });
-      final myUid = await _currentUid();
+      setState(() => _palette = palette);
+    });
+    final myUid = await _currentUid();
+    if (!mounted) return d;
+    setState(() {
+      _detail = d;
+      _subscribed = d.subscribed;
+      _canEdit =
+          widget.loggedIn &&
+          !widget.special &&
+          d.creatorId > BigInt.zero &&
+          d.creatorId == myUid;
+    });
+    return d;
+  }
+
+  /// 重试(AsyncView 的 onRetry): 换 future 重取, 头部回到"入参兜底"形态
+  void _retryDetail() {
+    setState(() {
+      _detailFuture = _loadDetail();
+    });
+  }
+
+  /// 静默刷新(编辑歌单信息 / 改名成功后): 拿到新数据再换 future,
+  /// 已渲染的卡片不闪回加载态; 失败保留旧内容(保存动作本身已有提示)。
+  Future<void> _refreshDetailSilently() async {
+    try {
+      final d = await _loadDetail();
       if (!mounted) return;
       setState(() {
-        _detail = d;
-        _subscribed = d.subscribed;
-        _canEdit =
-            widget.loggedIn &&
-            !widget.special &&
-            d.creatorId > BigInt.zero &&
-            d.creatorId == myUid;
+        _detailFuture = Future<rust.PlaylistDetail>.value(d);
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _detailError = friendlyError(e));
+    } catch (_) {
+      // 静默刷新失败: 不覆盖已渲染的头部
     }
   }
 
@@ -311,7 +333,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         await rust.updatePlaylistDesc(playlistId: d.id, desc: edited.desc);
       }
       _toast('已保存');
-      await _loadDetail();
+      await _refreshDetailSilently();
     } catch (e) {
       _toast('保存失败: ${friendlyError(e)}');
     }
@@ -468,7 +490,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       body: CustomScrollView(
         controller: _scroll,
         slivers: [
-          SliverToBoxAdapter(child: _buildHeaderCard()),
+          _buildHeaderCard(),
           if (_editingTracks)
             SliverToBoxAdapter(
               child: PlaylistEditingBanner(
@@ -494,13 +516,33 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     );
   }
 
-  Widget _buildHeaderCard() => PlaylistHeaderCard(
-    detail: _detail,
+  /// 头部卡片: 四态收敛到 [AsyncView] —— 加载中/出错都用"入参兜底"的卡片
+  /// (改造前也是立刻渲染兜底卡片, 不转圈), 出错时卡片右下角给"点击重试";
+  /// 有数据时换成完整卡片。
+  Widget _buildHeaderCard() => SliverToBoxAdapter(
+    child: AsyncView<rust.PlaylistDetail>(
+      future: _detailFuture,
+      onRetry: _retryDetail,
+      // detail 是对象(不是 List/String), 不会落到空态; 文案只为断言/兜底
+      emptyText: '歌单详情暂无数据',
+      loadingBuilder: (_) => _headerCard(null, null, null),
+      errorBuilder: (_, error, retry) =>
+          _headerCard(null, friendlyError(error), retry),
+      builder: (_, detail, _) => _headerCard(detail, null, null),
+    ),
+  );
+
+  Widget _headerCard(
+    rust.PlaylistDetail? detail,
+    String? error,
+    VoidCallback? retry,
+  ) => PlaylistHeaderCard(
+    detail: detail,
     name: widget.name,
     fallbackCoverUrl: widget.coverUrl,
     palette: _palette,
-    detailError: _detailError,
-    onRetry: _loadDetail,
+    detailError: error,
+    onRetry: retry ?? _retryDetail,
   );
 
   Widget _buildToolbar() => PlaylistFilterBar(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../comment_thread.dart';
 import '../cover_art.dart';
+import '../error_views.dart' show InlineError;
 import '../expandable_text.dart';
 import '../layout.dart' show kPagePadding, rowExtentFor;
 import '../net_retry.dart';
@@ -277,23 +278,14 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       return const SliverToBoxAdapter(child: DetailSkeletonList());
     }
     if (_programsError != null) {
+      // 错误行统一走 InlineError(与歌单曲目列表同一份实现)
       return SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: kPagePadding,
             vertical: 20,
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  _programsError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-              TextButton(onPressed: _loadPrograms, child: const Text('重试')),
-            ],
-          ),
+          child: InlineError(message: _programsError!, onRetry: _loadPrograms),
         ),
       );
     }
