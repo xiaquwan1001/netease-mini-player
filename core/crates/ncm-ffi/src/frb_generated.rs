@@ -6358,22 +6358,9 @@ const _: fn() = || {
         let _: bool = VipOverview.logged_in;
         let _: Option<crate::api::VipMembership> = VipOverview.membership;
         let _: Option<crate::api::VipGrowth> = VipOverview.growth;
-        let _: Option<crate::api::VipSign> = VipOverview.sign;
+        let _: Option<crate::api::SigninStatus> = VipOverview.daily_sign;
         let _: Vec<crate::api::VipTask> = VipOverview.tasks;
         let _: i64 = VipOverview.task_score;
-    }
-    {
-        let VipSign = None::<crate::api::VipSign>.unwrap();
-        let _: Vec<crate::api::VipSignDay> = VipSign.days;
-        let _: bool = VipSign.signed_today;
-        let _: u32 = VipSign.week_signed;
-    }
-    {
-        let VipSignDay = None::<crate::api::VipSignDay>.unwrap();
-        let _: String = VipSignDay.date;
-        let _: bool = VipSignDay.signed;
-        let _: bool = VipSignDay.today;
-        let _: u32 = VipSignDay.score;
     }
     {
         let VipTask = None::<crate::api::VipTask>.unwrap();
@@ -7777,18 +7764,6 @@ impl SseDecode for Vec<crate::api::UserMedal> {
     }
 }
 
-impl SseDecode for Vec<crate::api::VipSignDay> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut len_ = <i32>::sse_decode(deserializer);
-        let mut ans_ = Vec::with_capacity(len_ as usize);
-        for idx_ in 0..len_ {
-            ans_.push(<crate::api::VipSignDay>::sse_decode(deserializer));
-        }
-        return ans_;
-    }
-}
-
 impl SseDecode for Vec<crate::api::VipTask> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -7980,6 +7955,17 @@ impl SseDecode for Option<crate::api::LoudnessDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::SigninStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::SigninStatus>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<crate::api::SongDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -8029,17 +8015,6 @@ impl SseDecode for Option<crate::api::VipMembership> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::VipMembership>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode for Option<crate::api::VipSign> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::VipSign>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -9000,46 +8975,16 @@ impl SseDecode for crate::api::VipOverview {
         let mut var_loggedIn = <bool>::sse_decode(deserializer);
         let mut var_membership = <Option<crate::api::VipMembership>>::sse_decode(deserializer);
         let mut var_growth = <Option<crate::api::VipGrowth>>::sse_decode(deserializer);
-        let mut var_sign = <Option<crate::api::VipSign>>::sse_decode(deserializer);
+        let mut var_dailySign = <Option<crate::api::SigninStatus>>::sse_decode(deserializer);
         let mut var_tasks = <Vec<crate::api::VipTask>>::sse_decode(deserializer);
         let mut var_taskScore = <i64>::sse_decode(deserializer);
         return crate::api::VipOverview {
             logged_in: var_loggedIn,
             membership: var_membership,
             growth: var_growth,
-            sign: var_sign,
+            daily_sign: var_dailySign,
             tasks: var_tasks,
             task_score: var_taskScore,
-        };
-    }
-}
-
-impl SseDecode for crate::api::VipSign {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_days = <Vec<crate::api::VipSignDay>>::sse_decode(deserializer);
-        let mut var_signedToday = <bool>::sse_decode(deserializer);
-        let mut var_weekSigned = <u32>::sse_decode(deserializer);
-        return crate::api::VipSign {
-            days: var_days,
-            signed_today: var_signedToday,
-            week_signed: var_weekSigned,
-        };
-    }
-}
-
-impl SseDecode for crate::api::VipSignDay {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_date = <String>::sse_decode(deserializer);
-        let mut var_signed = <bool>::sse_decode(deserializer);
-        let mut var_today = <bool>::sse_decode(deserializer);
-        let mut var_score = <u32>::sse_decode(deserializer);
-        return crate::api::VipSignDay {
-            date: var_date,
-            signed: var_signed,
-            today: var_today,
-            score: var_score,
         };
     }
 }
@@ -11438,7 +11383,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipOverview> {
             self.0.logged_in.into_into_dart().into_dart(),
             self.0.membership.into_into_dart().into_dart(),
             self.0.growth.into_into_dart().into_dart(),
-            self.0.sign.into_into_dart().into_dart(),
+            self.0.daily_sign.into_into_dart().into_dart(),
             self.0.tasks.into_into_dart().into_dart(),
             self.0.task_score.into_into_dart().into_dart(),
         ]
@@ -11453,49 +11398,6 @@ impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipOverview>>
     for crate::api::VipOverview
 {
     fn into_into_dart(self) -> FrbWrapper<crate::api::VipOverview> {
-        self.into()
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipSign> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.0.days.into_into_dart().into_dart(),
-            self.0.signed_today.into_into_dart().into_dart(),
-            self.0.week_signed.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for FrbWrapper<crate::api::VipSign>
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipSign>> for crate::api::VipSign {
-    fn into_into_dart(self) -> FrbWrapper<crate::api::VipSign> {
-        self.into()
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::VipSignDay> {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.0.date.into_into_dart().into_dart(),
-            self.0.signed.into_into_dart().into_dart(),
-            self.0.today.into_into_dart().into_dart(),
-            self.0.score.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for FrbWrapper<crate::api::VipSignDay>
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<FrbWrapper<crate::api::VipSignDay>>
-    for crate::api::VipSignDay
-{
-    fn into_into_dart(self) -> FrbWrapper<crate::api::VipSignDay> {
         self.into()
     }
 }
@@ -12591,16 +12493,6 @@ impl SseEncode for Vec<crate::api::UserMedal> {
     }
 }
 
-impl SseEncode for Vec<crate::api::VipSignDay> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(self.len() as _, serializer);
-        for item in self {
-            <crate::api::VipSignDay>::sse_encode(item, serializer);
-        }
-    }
-}
-
 impl SseEncode for Vec<crate::api::VipTask> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12738,6 +12630,16 @@ impl SseEncode for Option<crate::api::LoudnessDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::SigninStatus> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::SigninStatus>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<crate::api::SongDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -12784,16 +12686,6 @@ impl SseEncode for Option<crate::api::VipMembership> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::VipMembership>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode for Option<crate::api::VipSign> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::VipSign>::sse_encode(value, serializer);
         }
     }
 }
@@ -13403,28 +13295,9 @@ impl SseEncode for crate::api::VipOverview {
         <bool>::sse_encode(self.logged_in, serializer);
         <Option<crate::api::VipMembership>>::sse_encode(self.membership, serializer);
         <Option<crate::api::VipGrowth>>::sse_encode(self.growth, serializer);
-        <Option<crate::api::VipSign>>::sse_encode(self.sign, serializer);
+        <Option<crate::api::SigninStatus>>::sse_encode(self.daily_sign, serializer);
         <Vec<crate::api::VipTask>>::sse_encode(self.tasks, serializer);
         <i64>::sse_encode(self.task_score, serializer);
-    }
-}
-
-impl SseEncode for crate::api::VipSign {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Vec<crate::api::VipSignDay>>::sse_encode(self.days, serializer);
-        <bool>::sse_encode(self.signed_today, serializer);
-        <u32>::sse_encode(self.week_signed, serializer);
-    }
-}
-
-impl SseEncode for crate::api::VipSignDay {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.date, serializer);
-        <bool>::sse_encode(self.signed, serializer);
-        <bool>::sse_encode(self.today, serializer);
-        <u32>::sse_encode(self.score, serializer);
     }
 }
 

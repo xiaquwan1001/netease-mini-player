@@ -86,7 +86,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 2 | ~~评论补充~~ ✅已做 | `comment_info_list` | 评论区 | 统计条已接入(B2); 同族只剩 `comment_mv`/`comment_video`(MV/视频评论区, 等视频能力落地) |
 | 3 | 最近播放更多类型 | `record_recent_video` `record_recent_voice` | "最近听过"再加页签 | 专辑/歌单/播客已接入; 视频要有播放器, 声音是创作者内容 |
 | 4 | 歌词增强 | `lyric_new`(逐字) `song_lyrics_mark*`(4 个) | 歌词页 | 歌曲百科已接入(`song_wiki_summary`); 逐字歌词要换接口并改滚动实现 |
-| 5 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付 |
+| 5 | 会员签到/任务 | `vip_sign` `vip_sign_info` `sign_happy_info` `vip_tasks` | "我的"/设置 | 云贝签到已接入(`daily_signin`+`signin_progress`); 这几个是黑胶专属任务, 只读展示即可, 不碰支付。**`vip_sign_info` 2026-11-15 起有意弃用**(乐签成长值记录, 不是签到状态; 会员页签到区已统一到 `signin_progress`) |
 | 6 | 搜索增强 | `search_match` `search_multimatch` `pl_count` `search_hot_detail` `batch` | 搜索联想/结果数 | 联想现在只走 suggest |
 | 7 | 听歌识别 | `audio_match` | 搜索页"听歌识曲" | 需录音权限 + 指纹采集(约 10s), 单独评估 |
 | 8 | 榜单 v2 / 歌手榜 | `toplist` `toplist_detail_v2` `toplist_artist` | 排行榜页细分 | v2 给"更新几首", 现在用 detail 版够用 |

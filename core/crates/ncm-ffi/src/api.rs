@@ -19,7 +19,7 @@ pub use ncm_domain::{
     RecentContact, SearchAlbum, SearchArtist, SearchExact, SearchPlaylistItem, SearchPodcast,
     SigninDay, SigninStatus, SmsCodeSent, SongLikeState, SongPurchasedPage, StreamUrl, StyleTag,
     SuggestItem, ToplistCatalogGroup, ToplistCatalogItem, UserItem, UserLevel, UserMedal,
-    VipGrowth, VipMembership, VipOverview, VipSign, VipSignDay, VipTask, WikiFact,
+    VipGrowth, VipMembership, VipOverview, VipTask, WikiFact,
 };
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
@@ -2987,25 +2987,6 @@ pub struct _VipGrowth {
     pub max_level: bool,
 }
 
-/// 某一天的签到状态(接口只回最近 7 天)
-#[frb(mirror(VipSignDay))]
-pub struct _VipSignDay {
-    /// yyyy-MM-dd
-    pub date: String,
-    /// score > 0 才算已签
-    pub signed: bool,
-    pub today: bool,
-    pub score: u32,
-}
-
-/// 黑胶签到概览(本周维度)
-#[frb(mirror(VipSign))]
-pub struct _VipSign {
-    pub days: Vec<VipSignDay>,
-    pub signed_today: bool,
-    pub week_signed: u32,
-}
-
 /// 黑胶任务
 #[frb(mirror(VipTask))]
 pub struct _VipTask {
@@ -3026,12 +3007,12 @@ pub struct _VipOverview {
     pub logged_in: bool,
     pub membership: Option<VipMembership>,
     pub growth: Option<VipGrowth>,
-    pub sign: Option<VipSign>,
+    pub daily_sign: Option<SigninStatus>,
     pub tasks: Vec<VipTask>,
     pub task_score: i64,
 }
 
-/// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
+/// 黑胶会员总览: 会员等级/成长值/每日签到(云贝)/任务.
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
 pub async fn vip_overview() -> Result<VipOverview, String> {
     let provider = with_provider(Capability::Vip)?;

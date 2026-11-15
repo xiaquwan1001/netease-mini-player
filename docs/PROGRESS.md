@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-15(六)**。当前版本 **v0.12.4**(播放队列面板排版 + 「正在播放」去掉队列副本)。
+> 最近更新: **2026-11-15(六)**。当前版本 **v0.12.5**(逐字歌词默认走 AMLL + 签到数据源纠偏)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -14,15 +14,15 @@
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **287** 通过 / 0 失败(排除 vendor 联网 smoke) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **286** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test`(全量, 含 golden) | **949** 通过 / 1 跳过(golden 12 张) |
+| `flutter test`(全量, 含 golden) | **946** 通过 / 1 跳过(golden 12 张) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
-| 接口覆盖 | **136/136**(FFI 导出 160, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking) |
+| 接口覆盖 | **135/136**(FFI 导出 160, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking; 唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.12.5** | **2026-11-15** | 逐字歌词**默认走 AMLL TTML**(设置可切回网易云/自动择优, 旧 `auto` 一次性迁移) + 黑胶会员页签到数据源从 `vip_sign_info` 改回 `signin_progress`(修「今日未签到/累计 0」与「我的」页签到卡自相矛盾) |
 
 **各批次一句话结论**(详细验收证据见下方按日期小节与 `docs/archive/`):
 
@@ -86,6 +87,39 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-15(六) 逐字歌词默认 AMLL + 签到数据源纠偏(**v0.12.5**)
+
+用户两条反馈 + 一次前后端架构审计。
+
+### 1. 逐字歌词默认走 AMLL TTML(修回归)
+
+- 现象: 实际播放中绝大多数歌显示的是网易云 yrc, AMLL 几乎没被用上 —— 不是链路坏了, 是
+  `auto` 择优的 **0.9 短路**把 TTML 探测整个跳过了(2026-11-09 抽样 17 首: AMLL 覆盖 6/17,
+  但 auto 下实际只落到 2/17 ≈ 12%)。
+- 处置: 默认偏好 `auto` → **`amll`**; 设置页三态顺序改为 AMLL 优先 / 自动择优 / 网易云优先;
+  `LyricSourcePreference` 语义不变(yrc 侧仍是缺失/退化时的回退)。
+- 迁移: `settings.json` 加 `schemaVersion`(2), 旧文件里的 `auto` 一次性抬到 `amll`,
+  之后再手动改回 `auto` 不会被覆盖。
+- 延迟: `amll` 分支把 yrc 与 TTML **并发**发起(此前串行, TTML 5s 超时后白等一轮才轮到 yrc)。
+
+### 2. 黑胶会员页签到"今日未签到 / 累计 0"
+
+- 根因: 会员详情页的签到区取 `vip_sign_info`(乐签成长值记录, 用户不参与时整份 `score=0`),
+  而「我的」页签到卡取 `signin_progress`(云贝签到)。两个数据源 → 同一屏两个相反结论。
+- 处置: `VipOverview.sign`(`vip_sign_info`)删除, 换成 `daily_sign: SigninStatus`
+  (**唯一权威签到源**); `vip_overview` 的 join 里第三路改为 `signin_progress`;
+  `VipSign`/`VipSignDay` DTO 与 `parse_vip_sign` 一并删除, CLI `ncm vip` 同步改输出累计/连续/本周。
+- UI: 会员页签到卡改为「今日已签到/今天还没签到 + 累计/连续/本周 + 最近 7 天日历 + 签到按钮」,
+  「我的」页重复的 `SigninCard` 删除(入口保留: 我的 → 黑胶会员), 签到后静默刷新整页。
+- 副产品: 接口覆盖 136/136 → **135/136**(唯一未接入是弃用的 `vip_sign_info`, 属有意为之)。
+
+### 门禁
+
+`cargo test --offline --workspace --exclude ncm-api-rs` **286** / clippy 0 warning / fmt 干净;
+`flutter test` **946 + 1 skipped**(golden `mine_360x800` 因删卡片重建基线) / `dart analyze` 0 issue /
+`check-tokens --strict` + `check-write-guard` OK;`api-coverage` 135/136(FFI 160, 6 无 UI 入口)。
+
 
 ## 2026-11-15(六) 播放队列面板排版 + 「正在播放」去重(**v0.12.4 已发布**)
 

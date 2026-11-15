@@ -158,21 +158,28 @@ class AppSettings extends ChangeNotifier {
   /// 歌词页是否显示翻译(tlyric). 只有歌词本身带翻译时该开关才出现.
   bool lyricTranslation = true;
 
-  /// C2: 逐字歌词来源偏好. auto = 打分择优(默认), netease = 只用 yrc(缺失才 TTML),
-  /// amll = 优先 TTML(失败再 yrc).
-  String lyricSourcePreference = 'auto';
+  /// C2: 逐字歌词来源偏好. amll = 优先 TTML(默认; 人工审核逐字库, 质量最稳),
+  /// auto = 打分择优, netease = 只用 yrc(缺失才 TTML).
+  ///
+  /// 2026-11-15 口径变更: 默认从 'auto' 改为 'amll'。旧 auto 有 0.9 短路,
+  /// yrc 质量正常时直接采用、根本不请求 TTML, 实测 AMLL 只覆盖 12% 的播放
+  /// (docs/c2-lyric-source-quality.md), 等于"逐字库没被用上"。
+  String lyricSourcePreference = 'amll';
+
+  /// settings.json 结构版本(用于一次性迁移旧默认值)。
+  static const int settingsSchemaVersion = 2;
 
   static const lyricSourceOptions = <String, String>{
+    'amll': 'AMLL 优先',
     'auto': '自动择优',
     'netease': '网易云优先',
-    'amll': 'AMLL 优先',
   };
 
   /// 各偏好的一句语义说明(设置页副标题).
   static String lyricSourceDescription(String pref) => switch (pref) {
     'netease' => '只用网易云 yrc, 缺失才用 AMLL TTML',
-    'amll' => '优先 AMLL TTML, 失败再用网易云 yrc',
-    _ => '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',
+    'auto' => '给 yrc 与 AMLL 打分择优, yrc 质量高时不联网比较',
+    _ => '默认: 优先 AMLL TTML 逐字(人工审核库), 缺失再用网易云 yrc',
   };
 
   // 注意: double 作 key 不能用 const map(Dart 常量 map 的 key 必须原始相等语义)
@@ -311,7 +318,14 @@ class AppSettings extends ChangeNotifier {
           if (trans is bool) lyricTranslation = trans;
           final srcPref = raw['lyricSourcePreference'];
           if (srcPref is String && lyricSourceOptions.containsKey(srcPref)) {
-            lyricSourcePreference = srcPref;
+            // schema < 2 的 'auto' 是旧默认值(0.9 短路导致 AMLL 几乎不被用),
+            // 一次性抬到新默认 'amll'; 之后用户手动改回 'auto' 会被本版号挡住不再覆盖。
+            final schema = raw['schemaVersion'];
+            final legacy =
+                schema is! num || schema.toInt() < settingsSchemaVersion;
+            lyricSourcePreference = (legacy && srcPref == 'auto')
+                ? 'amll'
+                : srcPref;
           }
           // 自动更新检查(2026-11): 频率 + 节流/跳过记录
           // 兼容旧版布尔开关: true -> 每天, false -> 不自动检查。
@@ -512,6 +526,7 @@ class AppSettings extends ChangeNotifier {
           'cacheLimitMb': cacheLimitMb,
           'lyricTranslation': lyricTranslation,
           'lyricSourcePreference': lyricSourcePreference,
+          'schemaVersion': settingsSchemaVersion,
           'updateCheckInterval': updateCheckInterval.name,
           'librarySearchPlayAction': librarySearchPlayAction.name,
           'lastUpdateCheckMs': lastUpdateCheckMs,

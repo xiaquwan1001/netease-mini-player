@@ -21,7 +21,6 @@ import 'section_header.dart';
 import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
-import 'state_views.dart';
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) /
@@ -312,7 +311,7 @@ class _MineViewState extends State<MineView> {
                 child: ListTile(
                   leading: const Icon(Icons.workspace_premium_outlined),
                   title: const Text('黑胶会员'),
-                  subtitle: const Text('签到 / 任务 / 成长值(只读)'),
+                  subtitle: const Text('每日签到 / 任务 / 成长值'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: widget.onOpenVip,
                 ),
@@ -378,8 +377,6 @@ class _MineViewState extends State<MineView> {
                 ),
               ),
             ],
-            const SizedBox(height: kCardGap),
-            const SigninCard(),
             const SizedBox(height: kCardGap),
             _LikedSection(
               key: ValueKey('mine-liked-$_dataGeneration'),
@@ -1112,104 +1109,6 @@ class _MessageEntryCardState extends State<MessageEntryCard>
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: widget.onOpen,
-      ),
-    );
-  }
-}
-
-// ---------------- 每日签到(云贝) ----------------
-
-/// 签到卡片: 今日状态 + 累计/连续/本周天数.
-/// 载入失败(未登录/网络)就整块不显示 —— 它是锦上添花, 不该在"我的"顶部占一行报错.
-/// load/sign 可注入(测试用), 默认走 Rust 接口.
-class SigninCard extends StatefulWidget {
-  const SigninCard({super.key, this.load, this.sign});
-
-  final Future<rust.SigninStatus> Function()? load;
-  final Future<rust.SigninStatus> Function()? sign;
-
-  @override
-  State<SigninCard> createState() => _SigninCardState();
-}
-
-class _SigninCardState extends State<SigninCard>
-    with AutomaticKeepAliveClientMixin<SigninCard> {
-  rust.SigninStatus? _status;
-
-  @override
-  bool get wantKeepAlive => true;
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final status = await retryNetwork(widget.load ?? rust.signinStatus);
-      if (!mounted) return;
-      setState(() => _status = status);
-    } catch (_) {
-      // 未登录/网络失败: 不显示这块
-    }
-  }
-
-  Future<void> _sign() async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    try {
-      final before = _status;
-      final status = await (widget.sign ?? rust.signIn)();
-      if (!mounted) return;
-      setState(() => _status = status);
-      final earned = status.todayPoint;
-      final already = before?.signedToday == true;
-      showToast(
-        context,
-        already || earned == 0
-            ? '今天已经签过了(累计 ${status.totalDays} 天)'
-            : '签到成功, 云贝 +$earned(累计 ${status.totalDays} 天)',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context, '签到失败: ${friendlyError(e)}', isError: true);
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    final status = _status;
-    if (status == null) return const SizedBox.shrink();
-    final theme = Theme.of(context);
-    final detail = [
-      '累计 ${status.totalDays} 天',
-      '连续 ${status.continuousDays} 天',
-      '本周 ${status.weekDays} 天',
-    ].join(' · ');
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: ListTile(
-        dense: true,
-        leading: Icon(
-          status.signedToday ? Icons.task_alt : Icons.calendar_month_outlined,
-          color: status.signedToday ? theme.colorScheme.primary : null,
-        ),
-        title: Text(status.signedToday ? '今日已签到' : '今天还没签到'),
-        subtitle: Text(detail, style: theme.textTheme.bodySmall),
-        trailing: status.signedToday
-            ? Text('已签', style: TextStyle(color: theme.colorScheme.outline))
-            : FilledButton.tonal(
-                onPressed: _busy ? null : _sign,
-                child: _busy
-                    ? const LoadingView.inline(size: 16)
-                    : const Text('签到'),
-              ),
       ),
     );
   }

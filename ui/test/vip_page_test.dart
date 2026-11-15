@@ -3,9 +3,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/vip_page.dart';
 
-/// 7 天签到样本(对齐 vip_sign_info: [{timeStr, today, score}], 升序, score>0 即已签)
+/// 7 天签到样本(对齐 signin_progress.recent, 升序渲染), 前 3 天已签, 今天由 signedToday 决定
 List<VipSignDayView> sampleDays({required bool signedToday}) {
   const dates = [
     '2026-11-01', // 周日
@@ -53,6 +54,9 @@ VipPageData fakeData({
       ? VipSignView(
           days: sampleDays(signedToday: signedToday),
           signedToday: signedToday,
+          totalDays: 12,
+          continuousDays: 5,
+          weekDays: 4,
         )
       : null,
   tasks:
@@ -265,9 +269,11 @@ void main() {
     expect(find.textContaining('到期 2026-11-10'), findsOneWidget);
     expect(find.textContaining('成长值 2195'), findsOneWidget);
     expect(find.textContaining('今日 +6'), findsOneWidget);
-    // 签到: 本周维度, 不再有本月/累计文案
-    expect(find.textContaining('本月已签'), findsNothing);
-    expect(find.textContaining('累计'), findsNothing);
+    // 签到: 今日状态 + 累计/连续/本周(数据源 = 云贝签到)
+    expect(find.text('今日已签到'), findsOneWidget);
+    expect(find.textContaining('累计 12 天'), findsOneWidget);
+    expect(find.textContaining('连续 5 天'), findsOneWidget);
+    expect(find.textContaining('本周 4 天'), findsOneWidget);
     // 任务条
     expect(find.text('浏览黑胶时光机'), findsOneWidget); // name 空 -> 退 action
     expect(find.text('每日听歌 30 分钟'), findsOneWidget);
@@ -283,9 +289,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // 前 3 天 + 今天 = 4 天已签
-    expect(find.textContaining('本周已签 4/7 天'), findsOneWidget);
-    expect(find.textContaining('今日已签'), findsOneWidget);
-    expect(find.textContaining('今日未签'), findsNothing);
+    expect(find.text('今日已签到'), findsOneWidget);
+    expect(find.text('签到'), findsNothing);
+    expect(find.textContaining('本周 4 天'), findsOneWidget);
     // 7 格全部渲染: 只在签到卡片内数图标(任务条也用 radio_button_unchecked)
     expect(find.byIcon(Icons.check), findsNWidgets(4));
     expect(signDots(), findsNWidgets(7));
@@ -301,11 +307,49 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('本周已签 3/7 天'), findsOneWidget);
-    expect(find.textContaining('今日未签'), findsOneWidget);
-    expect(find.textContaining('今日已签'), findsNothing);
+    expect(find.text('今天还没签到'), findsOneWidget);
+    expect(find.text('今日已签到'), findsNothing);
+    expect(find.text('签到'), findsOneWidget);
     expect(find.byIcon(Icons.check), findsNWidgets(3));
     expect(signDots(), findsNWidgets(7));
+  });
+
+  testWidgets('签到按钮: 调 onSign 后静默刷新, 卡片变已签到', (tester) async {
+    var loads = 0;
+    var signs = 0;
+    var signed = false;
+    await tester.pumpWidget(
+      host(
+        VipPage(
+          load: () async {
+            loads++;
+            return fakeData(signedToday: signed);
+          },
+          onSign: () async {
+            signs++;
+            signed = true;
+            return const rust.SigninStatus(
+              signedToday: true,
+              totalDays: 13,
+              continuousDays: 6,
+              weekDays: 5,
+              recent: [],
+              todayPoint: 10,
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(loads, 1);
+
+    await tester.tap(find.text('签到'));
+    await tester.pumpAndSettle();
+
+    expect(signs, 1);
+    expect(loads, 2, reason: '签到后静默重载整页');
+    expect(find.text('今日已签到'), findsOneWidget);
+    expect(find.textContaining('累计 12 天'), findsOneWidget);
   });
 
   testWidgets('未登录空态: 文案 + 登录按钮回调', (tester) async {

@@ -266,11 +266,14 @@ Future<ResolvedLyric?> resolveLyricSource(
     }
   }
 
-  // amll: TTML 优先, 失败再 yrc
+  // amll(默认): TTML 优先, 失败再 yrc。两路**并发**发起 —— 串行时 TTML 超时
+  // (5s)会先白等一轮才轮到 yrc, 表现为"切歌后歌词好一会儿不出现"。
   if (preference == 'amll') {
-    final ttml = await loadTtml();
+    final ttmlFuture = loadTtml();
+    final yrcFuture = loadYrc();
+    final ttml = await ttmlFuture;
     if (ttml != null) return ResolvedLyric.ttml_(ttml);
-    final yrc = await loadYrc();
+    final yrc = await yrcFuture;
     if (yrc != null && yrc.lines.isNotEmpty) return ResolvedLyric.word_(yrc);
     return _lineLevel(trackId, loaders);
   }

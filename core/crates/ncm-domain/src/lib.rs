@@ -1314,30 +1314,6 @@ pub struct VipGrowth {
     pub max_level: bool,
 }
 
-/// 某一天的签到状态(vip_sign_info; 接口只回最近 7 天).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VipSignDay {
-    /// yyyy-MM-dd(接口的 timeStr)
-    pub date: String,
-    /// score > 0 才算已签(recordId/time 在未签时也是 0, 不能用来判断)
-    pub signed: bool,
-    /// 接口的 today 标记
-    pub today: bool,
-    /// 当天签到得到的成长值
-    pub score: u32,
-}
-
-/// 黑胶签到概览. 接口不提供"本月/累计"天数, 只能按返回的最近 7 天统计.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct VipSign {
-    /// 按日期升序(接口原序即升序)
-    #[serde(default)]
-    pub days: Vec<VipSignDay>,
-    pub signed_today: bool,
-    /// days 里已签的天数
-    pub week_signed: u32,
-}
-
 /// 黑胶任务(vip_tasks 的 data.taskList[].taskItems[], 已平铺).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VipTask {
@@ -1368,8 +1344,11 @@ pub struct VipOverview {
     pub membership: Option<VipMembership>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub growth: Option<VipGrowth>,
+    /// 每日签到(云贝签到, signin_progress).**这是"今日签到/累计天数"的唯一权威来源**:
+    /// 旧实现用 vip_sign_info(乐签成长值, 用户不参与时恒为 0)当签到区数据源,
+    /// 导致"详情页显示今日未签到/累计 0, 而下面的签到卡显示已签"的矛盾。
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub sign: Option<VipSign>,
+    pub daily_sign: Option<SigninStatus>,
     #[serde(default)]
     pub tasks: Vec<VipTask>,
     /// vip_tasks 的 data.taskScore

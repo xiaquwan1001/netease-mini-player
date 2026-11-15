@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `core`, `credential_status_dto`, `data_dir_default`, `feed_event_dto`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `audio_cache`, `cookie_has_music_u`, `core`, `credential_status_dto`, `data_dir_default`, `feed_event_dto`, `history_store`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `program_dto`, `song_dto`, `song_from_dto`, `state_dto`, `tuning_dto`, `with_provider`, `word_lyric_dto`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
@@ -928,7 +928,7 @@ Future<List<RecentContact>> recentContacts({required int limit}) =>
 /// 当前登录账号 uid(0 = 未登录/未同步). 用于判断歌单是不是自己的(能不能编辑)
 Future<BigInt> myUid() => RustLib.instance.api.crateApiMyUid();
 
-/// 黑胶会员总览: 会员等级/成长值/本周签到/任务.
+/// 黑胶会员总览: 会员等级/成长值/每日签到(云贝)/任务.
 /// 未登录返回 logged_in=false 的空态; 四个子接口互相独立, 单个失败只让对应字段为 None.
 Future<VipOverview> vipOverview() => RustLib.instance.api.crateApiVipOverview();
 
@@ -4427,7 +4427,7 @@ class VipOverview {
   final bool loggedIn;
   final VipMembership? membership;
   final VipGrowth? growth;
-  final VipSign? sign;
+  final SigninStatus? dailySign;
   final List<VipTask> tasks;
   final PlatformInt64 taskScore;
 
@@ -4435,7 +4435,7 @@ class VipOverview {
     required this.loggedIn,
     this.membership,
     this.growth,
-    this.sign,
+    this.dailySign,
     required this.tasks,
     required this.taskScore,
   });
@@ -4445,7 +4445,7 @@ class VipOverview {
       loggedIn.hashCode ^
       membership.hashCode ^
       growth.hashCode ^
-      sign.hashCode ^
+      dailySign.hashCode ^
       tasks.hashCode ^
       taskScore.hashCode;
 
@@ -4457,67 +4457,9 @@ class VipOverview {
           loggedIn == other.loggedIn &&
           membership == other.membership &&
           growth == other.growth &&
-          sign == other.sign &&
+          dailySign == other.dailySign &&
           tasks == other.tasks &&
           taskScore == other.taskScore;
-}
-
-/// 黑胶签到概览(本周维度)
-class VipSign {
-  final List<VipSignDay> days;
-  final bool signedToday;
-  final int weekSigned;
-
-  const VipSign({
-    required this.days,
-    required this.signedToday,
-    required this.weekSigned,
-  });
-
-  @override
-  int get hashCode =>
-      days.hashCode ^ signedToday.hashCode ^ weekSigned.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is VipSign &&
-          runtimeType == other.runtimeType &&
-          days == other.days &&
-          signedToday == other.signedToday &&
-          weekSigned == other.weekSigned;
-}
-
-/// 某一天的签到状态(接口只回最近 7 天)
-class VipSignDay {
-  /// yyyy-MM-dd
-  final String date;
-
-  /// score > 0 才算已签
-  final bool signed;
-  final bool today;
-  final int score;
-
-  const VipSignDay({
-    required this.date,
-    required this.signed,
-    required this.today,
-    required this.score,
-  });
-
-  @override
-  int get hashCode =>
-      date.hashCode ^ signed.hashCode ^ today.hashCode ^ score.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is VipSignDay &&
-          runtimeType == other.runtimeType &&
-          date == other.date &&
-          signed == other.signed &&
-          today == other.today &&
-          score == other.score;
 }
 
 /// 黑胶任务

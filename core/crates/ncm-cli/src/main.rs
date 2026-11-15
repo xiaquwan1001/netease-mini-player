@@ -719,7 +719,7 @@ async fn run() -> Result<(), BoxErr> {
             Ok(())
         }
         "vip" => {
-            // 黑胶会员只读总览: 等级/成长值/本周签到/任务
+            // 黑胶会员只读总览: 等级/成长值/每日签到(云贝)/任务
             announce(&core);
             let p = provider(&core, Capability::Vip)?;
             let o = p.vip_overview().await?;
@@ -743,20 +743,13 @@ async fn run() -> Result<(), BoxErr> {
                     g.growth_point, g.today_score, g.level, g.level_name
                 );
             }
-            if let Some(s) = &o.sign {
+            if let Some(s) = &o.daily_sign {
                 println!(
-                    "签到: 本周 {}/{} 天 今日已签={}",
-                    s.week_signed,
-                    s.days.len(),
-                    s.signed_today
+                    "签到: 今日已签={} 累计 {} 天 连续 {} 天 本周 {} 天",
+                    s.signed_today, s.total_days, s.continuous_days, s.week_days
                 );
-                for d in &s.days {
-                    println!(
-                        "  {} {}{}",
-                        d.date,
-                        if d.signed { "已签" } else { "-" },
-                        if d.today { " (今天)" } else { "" }
-                    );
+                for d in &s.recent {
+                    println!("  {} {}", d.day, if d.signed { "已签" } else { "-" });
                 }
             }
             println!("任务: {} 项 任务分={}", o.tasks.len(), o.task_score);

@@ -186,7 +186,10 @@ void main() {
   });
 
   test('AppSettings: 歌词来源偏好三态 + 副标题语义', () {
-    expect(AppSettings.instance.lyricSourcePreference, 'auto'); // 默认值
+    expect(
+      AppSettings.instance.lyricSourcePreference,
+      'amll',
+    ); // 默认值(2026-11-15 起)
     expect(AppSettings.lyricSourceOptions.keys.toSet(), {
       'auto',
       'netease',
@@ -202,13 +205,13 @@ void main() {
     );
     expect(
       AppSettings.lyricSourceDescription('amll'),
-      '优先 AMLL TTML, 失败再用网易云 yrc',
+      '默认: 优先 AMLL TTML 逐字(人工审核库), 缺失再用网易云 yrc',
     );
     final s = AppSettings.instance;
-    s.update(lyricSourcePreference: 'amll');
-    expect(s.lyricSourcePreference, 'amll');
-    s.update(lyricSourcePreference: 'bogus');
-    expect(s.lyricSourcePreference, 'amll'); // 非法值被拒
     s.update(lyricSourcePreference: 'auto');
+    expect(s.lyricSourcePreference, 'auto');
+    s.update(lyricSourcePreference: 'bogus');
+    expect(s.lyricSourcePreference, 'auto'); // 非法值被拒
+    s.update(lyricSourcePreference: 'amll');
   });
 }

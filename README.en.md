@@ -71,7 +71,7 @@ lyrics and a QR code pointing at the official song page (`music.163.com/song?id=
 | Area | What works |
 |---|---|
 | Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), play modes (incl. heart mode), auto update check (off / daily / weekly / monthly), MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
-| Lyrics | Synced highlight, word-by-word lyrics (yrc + AMLL TTML dual source with auto scoring), translation toggle, lyric multi-select → share card, cover-colour backdrop |
+| Lyrics | Synced highlight, word-by-word lyrics (**AMLL TTML by default** — community-reviewed word timing; switch to auto-scoring or NetEase yrc in settings), translation toggle, lyric multi-select → share card, cover-colour backdrop |
 | Playlists | Playlist square & charts, subscribe / create / edit / delete, batch add, in-playlist search play action (whole list / append to queue), liked-songs ordering, recent-play four tabs |
 | Community | Comments (hot / all / replies / like / delete / IP location), private messages & mentions (read-only), follows feed, follow/fan lists, sign-in |
 | Desktop | Linux (deb/AppImage/tar.gz) and Windows (setup.exe/zip) share one rodio backend (ALSA/WASAPI), OLED pure-black theme, fine volume -40..0 dB |
@@ -152,7 +152,7 @@ cargo run -p ncm-cli -- lyric 186016
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | `tools/check-tokens.sh --strict` | OK (spacing / radii / font sizes limited to `layout.dart`'s token set) |
-| API coverage | **136/136** (160 FFI exports, 6 without a UI entry point); recompute with `bash tools/api-coverage.sh` |
+| API coverage | **135/136** (160 FFI exports, 6 without a UI entry point; the one unused endpoint `vip_sign_info` is intentionally dropped); recompute with `bash tools/api-coverage.sh` |
 | Device run-through | emulator **a34** (API 34) + real-device (vivo X200 Ultra) release smoke & listening checks — see `docs/testing-dual-platform.md` |
 
 ## Roadmap (current version v0.8.0)

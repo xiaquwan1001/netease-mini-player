@@ -15,8 +15,8 @@ use ncm_domain::{
     SearchAlbum, SearchArtist, SearchBundle, SearchExact, SearchPage, SearchPlaylistItem,
     SearchPodcast, Session, SigninDay, SigninStatus, SmsCodeSent, Song, SongLikeState,
     SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup, ToplistCatalogItem,
-    TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipSign,
-    VipSignDay, VipTask, WikiFact, WordLyric,
+    TrackId, UserItem, UserLevel, UserMedal, VipGrowth, VipMembership, VipOverview, VipTask,
+    WikiFact, WordLyric,
 };
 use ncm_provider::{
     BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,

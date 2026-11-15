@@ -64,6 +64,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LoudnessDto dco_decode_box_autoadd_loudness_dto(dynamic raw);
 
   @protected
+  SigninStatus dco_decode_box_autoadd_signin_status(dynamic raw);
+
+  @protected
   SongDto dco_decode_box_autoadd_song_dto(dynamic raw);
 
   @protected
@@ -77,9 +80,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VipMembership dco_decode_box_autoadd_vip_membership(dynamic raw);
-
-  @protected
-  VipSign dco_decode_box_autoadd_vip_sign(dynamic raw);
 
   @protected
   WordLyricDto dco_decode_box_autoadd_word_lyric_dto(dynamic raw);
@@ -344,9 +344,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserMedal> dco_decode_list_user_medal(dynamic raw);
 
   @protected
-  List<VipSignDay> dco_decode_list_vip_sign_day(dynamic raw);
-
-  @protected
   List<VipTask> dco_decode_list_vip_task(dynamic raw);
 
   @protected
@@ -386,6 +383,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LoudnessDto? dco_decode_opt_box_autoadd_loudness_dto(dynamic raw);
 
   @protected
+  SigninStatus? dco_decode_opt_box_autoadd_signin_status(dynamic raw);
+
+  @protected
   SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw);
 
   @protected
@@ -399,9 +399,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   VipMembership? dco_decode_opt_box_autoadd_vip_membership(dynamic raw);
-
-  @protected
-  VipSign? dco_decode_opt_box_autoadd_vip_sign(dynamic raw);
 
   @protected
   WordLyricDto? dco_decode_opt_box_autoadd_word_lyric_dto(dynamic raw);
@@ -569,12 +566,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipOverview dco_decode_vip_overview(dynamic raw);
 
   @protected
-  VipSign dco_decode_vip_sign(dynamic raw);
-
-  @protected
-  VipSignDay dco_decode_vip_sign_day(dynamic raw);
-
-  @protected
   VipTask dco_decode_vip_task(dynamic raw);
 
   @protected
@@ -638,6 +629,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LoudnessDto sse_decode_box_autoadd_loudness_dto(SseDeserializer deserializer);
 
   @protected
+  SigninStatus sse_decode_box_autoadd_signin_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -653,9 +649,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipMembership sse_decode_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   );
-
-  @protected
-  VipSign sse_decode_box_autoadd_vip_sign(SseDeserializer deserializer);
 
   @protected
   WordLyricDto sse_decode_box_autoadd_word_lyric_dto(
@@ -986,9 +979,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<UserMedal> sse_decode_list_user_medal(SseDeserializer deserializer);
 
   @protected
-  List<VipSignDay> sse_decode_list_vip_sign_day(SseDeserializer deserializer);
-
-  @protected
   List<VipTask> sse_decode_list_vip_task(SseDeserializer deserializer);
 
   @protected
@@ -1034,6 +1024,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  SigninStatus? sse_decode_opt_box_autoadd_signin_status(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   SongDto? sse_decode_opt_box_autoadd_song_dto(SseDeserializer deserializer);
 
   @protected
@@ -1051,9 +1046,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipMembership? sse_decode_opt_box_autoadd_vip_membership(
     SseDeserializer deserializer,
   );
-
-  @protected
-  VipSign? sse_decode_opt_box_autoadd_vip_sign(SseDeserializer deserializer);
 
   @protected
   WordLyricDto? sse_decode_opt_box_autoadd_word_lyric_dto(
@@ -1241,12 +1233,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   VipOverview sse_decode_vip_overview(SseDeserializer deserializer);
 
   @protected
-  VipSign sse_decode_vip_sign(SseDeserializer deserializer);
-
-  @protected
-  VipSignDay sse_decode_vip_sign_day(SseDeserializer deserializer);
-
-  @protected
   VipTask sse_decode_vip_task(SseDeserializer deserializer);
 
   @protected
@@ -1325,6 +1311,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_box_autoadd_signin_status(
+    SigninStatus self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer);
 
   @protected
@@ -1344,9 +1336,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     VipMembership self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_box_autoadd_vip_sign(VipSign self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_word_lyric_dto(
@@ -1772,12 +1761,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
-  void sse_encode_list_vip_sign_day(
-    List<VipSignDay> self,
-    SseSerializer serializer,
-  );
-
-  @protected
   void sse_encode_list_vip_task(List<VipTask> self, SseSerializer serializer);
 
   @protected
@@ -1832,6 +1815,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_opt_box_autoadd_signin_status(
+    SigninStatus? self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_opt_box_autoadd_song_dto(
     SongDto? self,
     SseSerializer serializer,
@@ -1852,12 +1841,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_vip_membership(
     VipMembership? self,
-    SseSerializer serializer,
-  );
-
-  @protected
-  void sse_encode_opt_box_autoadd_vip_sign(
-    VipSign? self,
     SseSerializer serializer,
   );
 
@@ -2091,12 +2074,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_vip_overview(VipOverview self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_vip_sign(VipSign self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_vip_sign_day(VipSignDay self, SseSerializer serializer);
 
   @protected
   void sse_encode_vip_task(VipTask self, SseSerializer serializer);

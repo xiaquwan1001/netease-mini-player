@@ -4,6 +4,7 @@ import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'state_views.dart';
+import 'toast.dart' show showToast;
 
 /// 黑胶会员只读页 · 视图模型(纯 Dart, 不依赖 Rust 绑定)
 /// 数据由注入的 loader 提供, Rust 接入时在外层做 DTO 到 View 的转换。
@@ -11,7 +12,7 @@ import 'state_views.dart';
 /// 字段语义对齐真实接口(2026-11 CLI 实测):
 ///   `vip_info_v2`     -> VipProfileView.isVip / expireDate / level
 ///   vip_growthpoint -> VipProfileView.growthValue / todayGrowthValue / levelName
-///   vip_sign_info   -> VipSignView(数组, 只回最近 7 天, 无本月/累计维度)
+///   signin_progress -> VipSignView(每日签到: 今日/累计/连续/本周 + 最近记录)
 ///   vip_tasks       -> `List<VipTaskView>`
 
 class VipProfileView {
@@ -73,17 +74,33 @@ class VipSignDayView {
   final bool today;
 }
 
+/// 每日签到(云贝签到)视图模型。
+///
+/// 数据源是 signin_progress(与官方客户端"今日签到/累计/连续/本周"同源), 不再是
+/// vip_sign_info(乐签成长值记录, 用户不参与时恒为 0 —— 2026-11-15 修掉的错源)。
 class VipSignView {
   const VipSignView({
     this.days = const <VipSignDayView>[],
     this.signedToday = false,
+    this.totalDays = 0,
+    this.continuousDays = 0,
+    this.weekDays = 0,
   });
 
-  /// 按 timeStr 升序的最近 7 天(可能不足 7 天)
+  /// 按日期升序的最近若干天(最多 7 天, 可能不足)
   final List<VipSignDayView> days;
   final bool signedToday;
 
-  /// 接口不给本月/累计天数, 用本周维度: 已签天数 / 7
+  /// 累计签到天数(不循环)
+  final int totalDays;
+
+  /// 连续签到天数(28 天循环内的当前进度)
+  final int continuousDays;
+
+  /// 本周(周一~周日)已签天数, 由接口 stats 的 4001 给出
+  final int weekDays;
+
+  /// 日历里已签的格数(接口 recent 缺天时以它为准显示)
   int get weekSignedDays => days.where((d) => d.signed).length;
 }
 
@@ -137,11 +154,20 @@ class VipPageData {
 
 /// 黑胶会员只读页(纯展示层, loader 由调用方注入)。
 class VipPage extends StatefulWidget {
-  const VipPage({super.key, required this.load, this.onBack, this.onLogin});
+  const VipPage({
+    super.key,
+    required this.load,
+    this.onBack,
+    this.onLogin,
+    this.onSign,
+  });
 
   final Future<VipPageData> Function() load;
   final VoidCallback? onBack;
   final VoidCallback? onLogin;
+
+  /// 每日签到动作(默认 rust.signIn; 测试注入假实现)。
+  final Future<rust.SigninStatus> Function()? onSign;
 
   @override
   State<VipPage> createState() => _VipPageState();
@@ -151,6 +177,7 @@ class _VipPageState extends State<VipPage> {
   VipPageData? _data;
   Object? _error;
   bool _loading = true;
+  bool _signing = false;
 
   @override
   void initState() {
@@ -158,9 +185,9 @@ class _VipPageState extends State<VipPage> {
     _reload();
   }
 
-  Future<void> _reload() async {
+  Future<void> _reload({bool silent = false}) async {
     setState(() {
-      _loading = true;
+      if (!silent) _loading = true;
       _error = null;
     });
     try {
@@ -172,6 +199,29 @@ class _VipPageState extends State<VipPage> {
       setState(() => _error = e);
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// 每日签到: 成功后静默刷新整页(不闪 loading), 失败只弹提示.
+  Future<void> _sign() async {
+    if (_signing) return;
+    setState(() => _signing = true);
+    try {
+      final status = await (widget.onSign ?? rust.signIn)();
+      if (!mounted) return;
+      final fresh = status.todayPoint > 0;
+      showToast(
+        context,
+        fresh
+            ? '签到成功, 云贝 +${status.todayPoint}(累计 ${status.totalDays} 天)'
+            : '今天已经签过了(累计 ${status.totalDays} 天)',
+      );
+      await _reload(silent: true);
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, '签到失败: ${friendlyError(e)}', isError: true);
+    } finally {
+      if (mounted) setState(() => _signing = false);
     }
   }
 
@@ -215,7 +265,7 @@ class _VipPageState extends State<VipPage> {
           _VipCard(profile: data.profile),
           const SizedBox(height: 12),
           if (sign != null) ...[
-            _SignBar(sign: sign),
+            _SignBar(sign: sign, onSign: _sign, busy: _signing),
             const SizedBox(height: 12),
           ],
           if (data.tasks.isNotEmpty) _TaskList(tasks: data.tasks),
@@ -382,16 +432,21 @@ class VipPageBadge extends StatelessWidget {
   }
 }
 
-/// 签到日历条: 接口返回的最近 7 天(按 timeStr 升序), 已签高亮, 今天加边框。
-/// 不用 DateTime.now() 推算, 只渲染接口给的 days; 不足 7 天就少渲染几格。
+/// 每日签到卡(云贝签到): 今日状态 + 累计/连续/本周 + 最近几天日历 + 签到按钮。
+///
+/// 2026-11-15: 取代原先基于 vip_sign_info 的"本周已签 X/7"条 —— 那个数据源是
+/// 乐签成长值记录, 用户不参与时恒为 score=0, 于是详情页永远显示"今日未签到/累计 0",
+/// 与"我的"页签到卡(云贝签到)自相矛盾。现在两边同源。
 class _SignBar extends StatelessWidget {
-  const _SignBar({required this.sign});
+  const _SignBar({required this.sign, this.onSign, this.busy = false});
 
   final VipSignView sign;
+  final VoidCallback? onSign;
+  final bool busy;
 
   static const weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
 
-  /// timeStr "yyyy-MM-dd" -> 周几短标签; 解析失败返回空串(调用方退回原串)
+  /// "yyyy-MM-dd" -> 周几短标签; 解析失败返回空串(调用方退回日期尾部)
   static String weekdayLabel(String date) {
     final d = DateTime.tryParse(date);
     if (d == null) return '';
@@ -404,8 +459,8 @@ class _SignBar extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final days = sign.days;
     final summary =
-        '本周已签 ${sign.weekSignedDays}/7 天'
-        '${sign.signedToday ? ' · 今日已签' : ' · 今日未签'}';
+        '累计 ${sign.totalDays} 天 · 连续 ${sign.continuousDays} 天'
+        ' · 本周 ${sign.weekDays} 天';
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -413,23 +468,53 @@ class _SignBar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(summary, style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
             Row(
               children: [
-                for (final d in days)
-                  Expanded(
-                    child: _SignDay(
-                      label: weekdayLabel(d.date).isEmpty
-                          ? d.date
-                          : weekdayLabel(d.date),
-                      signed: d.signed,
-                      isToday: d.today,
-                      colorScheme: colorScheme,
-                    ),
+                Icon(
+                  sign.signedToday
+                      ? Icons.task_alt
+                      : Icons.calendar_month_outlined,
+                  size: 20,
+                  color: sign.signedToday ? colorScheme.primary : null,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    sign.signedToday ? '今日已签到' : '今天还没签到',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                ),
+                if (sign.signedToday)
+                  Text('已签', style: TextStyle(color: colorScheme.outline))
+                else
+                  FilledButton.tonal(
+                    onPressed: busy ? null : onSign,
+                    child: busy
+                        ? const LoadingView.inline(size: 16)
+                        : const Text('签到'),
                   ),
               ],
             ),
+            const SizedBox(height: 4),
+            Text(summary, style: theme.textTheme.bodySmall),
+            if (days.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  for (final d in days)
+                    Expanded(
+                      child: _SignDay(
+                        label: weekdayLabel(d.date).isEmpty
+                            ? d.date
+                            : weekdayLabel(d.date),
+                        signed: d.signed,
+                        isToday: d.today,
+                        colorScheme: colorScheme,
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -553,7 +638,7 @@ VipPageData mapVipOverview(
   }
   final m = overview.membership;
   final g = overview.growth;
-  final s = overview.sign;
+  final s = overview.dailySign;
   final level = (m?.redVipLevel ?? 0) > 0
       ? m!.redVipLevel
       : (m?.level ?? g?.level ?? 0);
@@ -573,13 +658,17 @@ VipPageData mapVipOverview(
         ? null
         : VipSignView(
             signedToday: s.signedToday,
+            totalDays: s.totalDays,
+            continuousDays: s.continuousDays,
+            weekDays: s.weekDays,
+            // recent 是"新的在前", 日历按日期升序渲染
             days: [
-              for (final d in s.days)
+              for (final d in _ascendingDays(s.recent))
                 VipSignDayView(
-                  date: d.date,
-                  label: _dayLabel(d.date),
+                  date: d.day,
+                  label: _dayLabel(d.day),
                   signed: d.signed,
-                  today: d.today,
+                  today: d.day == _todayYmd(),
                 ),
             ],
           ),
@@ -601,6 +690,22 @@ VipPageData mapVipOverview(
 String? _dateOf(int ms) {
   if (ms <= 0) return null;
   return formatDateYmd(BigInt.from(ms));
+}
+
+/// 签到接口的 recent 是"新的在前", 日历按日期升序渲染(纯函数, 单测覆盖)。
+List<rust.SigninDay> _ascendingDays(List<rust.SigninDay> recent) {
+  final copy = [...recent];
+  copy.sort((a, b) => a.day.compareTo(b.day));
+  return copy;
+}
+
+/// 本地今天(yyyy-MM-dd)。signin_progress 的 recent 不带 today 标记,
+/// 日历的"今天"边框靠日期串比较得到。
+String _todayYmd() {
+  final n = DateTime.now();
+  final m = n.month.toString().padLeft(2, '0');
+  final d = n.day.toString().padLeft(2, '0');
+  return '${n.year}-$m-$d';
 }
 
 /// "2026-11-07" -> "六"; 解析失败退回日期尾部(如 "07")

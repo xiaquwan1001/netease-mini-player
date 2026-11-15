@@ -4,6 +4,10 @@ use super::*;
 
 impl NeteaseProvider {
     /// 黑胶会员总览(需要登录). 四个子接口并行, 单个失败只丢对应字段.
+    ///
+    /// 签到区数据源是 **signin_progress(云贝签到)** —— 官方客户端的"今日签到/累计/连续"
+    /// 就是它。旧的 vip_sign_info 是乐签成长值记录(用户不参与时整份都是 score=0),
+    /// 拿它当签到区来源会永久显示"今日未签到 / 累计 0", 已废弃(见 2026-11-15 修复)。
     pub(super) fn vip_overview(&self) -> BoxFuture<'_, ProviderResult<VipOverview>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
@@ -15,7 +19,7 @@ impl NeteaseProvider {
             let (a, b, c, d) = futures::future::join4(
                 client.vip_info_v2(&mk()),
                 client.vip_growthpoint(&mk()),
-                client.vip_sign_info(&mk()),
+                client.signin_progress(&mk()),
                 client.vip_tasks(&mk()),
             )
             .await;
@@ -24,12 +28,13 @@ impl NeteaseProvider {
                 .as_ref()
                 .and_then(parse_vip_membership);
             let growth = take_body(b, &mut errs).as_ref().and_then(parse_vip_growth);
-            let sign = take_body(c, &mut errs).as_ref().map(parse_vip_sign);
+            let daily_sign = take_body(c, &mut errs).as_ref().map(parse_signin_progress);
             let (tasks, task_score) = take_body(d, &mut errs)
                 .as_ref()
                 .map(parse_vip_tasks)
                 .unwrap_or_default();
-            if membership.is_none() && growth.is_none() && sign.is_none() && tasks.is_empty() {
+            if membership.is_none() && growth.is_none() && daily_sign.is_none() && tasks.is_empty()
+            {
                 if let Some(e) = errs.into_iter().next() {
                     return Err(e);
                 }
@@ -38,7 +43,7 @@ impl NeteaseProvider {
                 logged_in: true,
                 membership,
                 growth,
-                sign,
+                daily_sign,
                 tasks,
                 task_score,
             })
@@ -256,37 +261,6 @@ pub fn parse_vip_growth(body: &Value) -> Option<VipGrowth> {
             .and_then(Value::as_bool)
             .unwrap_or(false),
     })
-}
-
-/// vip_sign_info: data 是**数组, 只回最近 7 天**(不是月份/累计).
-/// score > 0 才算已签 —— 未签的那天 recordId/time 也是 0, 拿它们判断会全判成"已签".
-pub fn parse_vip_sign(body: &Value) -> VipSign {
-    let days: Vec<VipSignDay> = body
-        .get("data")
-        .and_then(Value::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|v| {
-                    let date = str_of(v, "timeStr")?;
-                    let score = u64_of(v, "score").unwrap_or(0) as u32;
-                    Some(VipSignDay {
-                        date,
-                        signed: score > 0,
-                        today: v.get("today").and_then(Value::as_bool).unwrap_or(false),
-                        score,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let signed_today = days.iter().any(|d| d.today && d.signed);
-    let week_signed = days.iter().filter(|d| d.signed).count() as u32;
-    VipSign {
-        days,
-        signed_today,
-        week_signed,
-    }
 }
 
 /// vip_tasks: data.taskList[].taskItems[] 平铺.

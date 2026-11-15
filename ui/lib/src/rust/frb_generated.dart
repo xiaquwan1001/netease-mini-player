@@ -5710,6 +5710,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SigninStatus dco_decode_box_autoadd_signin_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_signin_status(raw);
+  }
+
+  @protected
   SongDto dco_decode_box_autoadd_song_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_song_dto(raw);
@@ -5737,12 +5743,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   VipMembership dco_decode_box_autoadd_vip_membership(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_vip_membership(raw);
-  }
-
-  @protected
-  VipSign dco_decode_box_autoadd_vip_sign(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return dco_decode_vip_sign(raw);
   }
 
   @protected
@@ -6533,12 +6533,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<VipSignDay> dco_decode_list_vip_sign_day(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return (raw as List<dynamic>).map(dco_decode_vip_sign_day).toList();
-  }
-
-  @protected
   List<VipTask> dco_decode_list_vip_task(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_vip_task).toList();
@@ -6672,6 +6666,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SigninStatus? dco_decode_opt_box_autoadd_signin_status(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_signin_status(raw);
+  }
+
+  @protected
   SongDto? dco_decode_opt_box_autoadd_song_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_song_dto(raw);
@@ -6699,12 +6699,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   VipMembership? dco_decode_opt_box_autoadd_vip_membership(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_vip_membership(raw);
-  }
-
-  @protected
-  VipSign? dco_decode_opt_box_autoadd_vip_sign(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return raw == null ? null : dco_decode_box_autoadd_vip_sign(raw);
   }
 
   @protected
@@ -7489,36 +7483,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       loggedIn: dco_decode_bool(arr[0]),
       membership: dco_decode_opt_box_autoadd_vip_membership(arr[1]),
       growth: dco_decode_opt_box_autoadd_vip_growth(arr[2]),
-      sign: dco_decode_opt_box_autoadd_vip_sign(arr[3]),
+      dailySign: dco_decode_opt_box_autoadd_signin_status(arr[3]),
       tasks: dco_decode_list_vip_task(arr[4]),
       taskScore: dco_decode_i_64(arr[5]),
-    );
-  }
-
-  @protected
-  VipSign dco_decode_vip_sign(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return VipSign(
-      days: dco_decode_list_vip_sign_day(arr[0]),
-      signedToday: dco_decode_bool(arr[1]),
-      weekSigned: dco_decode_u_32(arr[2]),
-    );
-  }
-
-  @protected
-  VipSignDay dco_decode_vip_sign_day(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-    return VipSignDay(
-      date: dco_decode_String(arr[0]),
-      signed: dco_decode_bool(arr[1]),
-      today: dco_decode_bool(arr[2]),
-      score: dco_decode_u_32(arr[3]),
     );
   }
 
@@ -7782,6 +7749,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SigninStatus sse_decode_box_autoadd_signin_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_signin_status(deserializer));
+  }
+
+  @protected
   SongDto sse_decode_box_autoadd_song_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_song_dto(deserializer));
@@ -7811,12 +7786,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_vip_membership(deserializer));
-  }
-
-  @protected
-  VipSign sse_decode_box_autoadd_vip_sign(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    return (sse_decode_vip_sign(deserializer));
   }
 
   @protected
@@ -9018,18 +8987,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  List<VipSignDay> sse_decode_list_vip_sign_day(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    var len_ = sse_decode_i_32(deserializer);
-    var ans_ = <VipSignDay>[];
-    for (var idx_ = 0; idx_ < len_; ++idx_) {
-      ans_.add(sse_decode_vip_sign_day(deserializer));
-    }
-    return ans_;
-  }
-
-  @protected
   List<VipTask> sse_decode_list_vip_task(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -9215,6 +9172,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  SigninStatus? sse_decode_opt_box_autoadd_signin_status(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_signin_status(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   SongDto? sse_decode_opt_box_autoadd_song_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -9268,17 +9238,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_vip_membership(deserializer));
-    } else {
-      return null;
-    }
-  }
-
-  @protected
-  VipSign? sse_decode_opt_box_autoadd_vip_sign(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    if (sse_decode_bool(deserializer)) {
-      return (sse_decode_box_autoadd_vip_sign(deserializer));
     } else {
       return null;
     }
@@ -10180,44 +10139,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       deserializer,
     );
     var var_growth = sse_decode_opt_box_autoadd_vip_growth(deserializer);
-    var var_sign = sse_decode_opt_box_autoadd_vip_sign(deserializer);
+    var var_dailySign = sse_decode_opt_box_autoadd_signin_status(deserializer);
     var var_tasks = sse_decode_list_vip_task(deserializer);
     var var_taskScore = sse_decode_i_64(deserializer);
     return VipOverview(
       loggedIn: var_loggedIn,
       membership: var_membership,
       growth: var_growth,
-      sign: var_sign,
+      dailySign: var_dailySign,
       tasks: var_tasks,
       taskScore: var_taskScore,
-    );
-  }
-
-  @protected
-  VipSign sse_decode_vip_sign(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_days = sse_decode_list_vip_sign_day(deserializer);
-    var var_signedToday = sse_decode_bool(deserializer);
-    var var_weekSigned = sse_decode_u_32(deserializer);
-    return VipSign(
-      days: var_days,
-      signedToday: var_signedToday,
-      weekSigned: var_weekSigned,
-    );
-  }
-
-  @protected
-  VipSignDay sse_decode_vip_sign_day(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_date = sse_decode_String(deserializer);
-    var var_signed = sse_decode_bool(deserializer);
-    var var_today = sse_decode_bool(deserializer);
-    var var_score = sse_decode_u_32(deserializer);
-    return VipSignDay(
-      date: var_date,
-      signed: var_signed,
-      today: var_today,
-      score: var_score,
     );
   }
 
@@ -10435,6 +10366,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_signin_status(
+    SigninStatus self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_signin_status(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_song_dto(SongDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_song_dto(self, serializer);
@@ -10468,12 +10408,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_vip_membership(self, serializer);
-  }
-
-  @protected
-  void sse_encode_box_autoadd_vip_sign(VipSign self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_vip_sign(self, serializer);
   }
 
   @protected
@@ -11446,18 +11380,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
-  void sse_encode_list_vip_sign_day(
-    List<VipSignDay> self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.length, serializer);
-    for (final item in self) {
-      sse_encode_vip_sign_day(item, serializer);
-    }
-  }
-
-  @protected
   void sse_encode_list_vip_task(List<VipTask> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
@@ -11603,6 +11525,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_signin_status(
+    SigninStatus? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_signin_status(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_song_dto(
     SongDto? self,
     SseSerializer serializer,
@@ -11658,19 +11593,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_vip_membership(self, serializer);
-    }
-  }
-
-  @protected
-  void sse_encode_opt_box_autoadd_vip_sign(
-    VipSign? self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-
-    sse_encode_bool(self != null, serializer);
-    if (self != null) {
-      sse_encode_box_autoadd_vip_sign(self, serializer);
     }
   }
 
@@ -12287,26 +12209,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.loggedIn, serializer);
     sse_encode_opt_box_autoadd_vip_membership(self.membership, serializer);
     sse_encode_opt_box_autoadd_vip_growth(self.growth, serializer);
-    sse_encode_opt_box_autoadd_vip_sign(self.sign, serializer);
+    sse_encode_opt_box_autoadd_signin_status(self.dailySign, serializer);
     sse_encode_list_vip_task(self.tasks, serializer);
     sse_encode_i_64(self.taskScore, serializer);
-  }
-
-  @protected
-  void sse_encode_vip_sign(VipSign self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_list_vip_sign_day(self.days, serializer);
-    sse_encode_bool(self.signedToday, serializer);
-    sse_encode_u_32(self.weekSigned, serializer);
-  }
-
-  @protected
-  void sse_encode_vip_sign_day(VipSignDay self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_String(self.date, serializer);
-    sse_encode_bool(self.signed, serializer);
-    sse_encode_bool(self.today, serializer);
-    sse_encode_u_32(self.score, serializer);
   }
 
   @protected

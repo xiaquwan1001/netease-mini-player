@@ -71,7 +71,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 |---|---|
 | 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式(含心动档)、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU、自动检查更新(off/每日/每周/每月) |
 | 长文字 | 统一 `AdaptiveText`:歌名/歌单名/专辑名/艺人名放不下时**单向跑马灯**(放得下不动),副标题走 ellipsis,封面卡标题 2 行 |
-| 歌词 | 行级滚动高亮、**逐字歌词带字内进度渐变**(双层裁剪 + 行内 60fps 插值)、yrc + AMLL TTML 双来源自动择优、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
+| 歌词 | 行级滚动高亮、**逐字歌词带字内进度渐变**(双层裁剪 + 行内 60fps 插值)、**默认 AMLL TTML 逐字**(人工审核逐字库; 设置里可切「自动择优」/「网易云优先」)、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
 | 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、歌单内搜索点歌策略(全列表/追加队列)、我喜欢按收藏时间排序、最近播放四分类 |
 | 社区 | 评论(热门/全部/楼层回复/点赞/删除/IP 归属)、私信与 @我(只读)、关注动态(游标翻页补历史)、他人/艺人动态(`/api/event/get/<uid>`, 匿名可取)、关注/粉丝列表、动态配图预览(1 大图 / 2 两列 / 3+ 三列)、动态/评论分享卡片(可选水印)、转发、签到 |
 | 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB |
@@ -189,7 +189,7 @@ cargo run -p ncm-cli -- lyric 186016
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | `tools/check-tokens.sh --strict` | OK(间距/圆角/字号只允许 `layout.dart` 的有限集合) |
-| 接口覆盖 | **136/136**(FFI 导出 160, 6 个无 UI 入口); `bash tools/api-coverage.sh` 可复算 |
+| 接口覆盖 | **135/136**(FFI 导出 160, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
 | 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing-dual-platform.md` |
 
 ## 项目进度(当前版本 v0.12.2)
@@ -197,7 +197,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
-| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 136/136,LOC 12k → 4k) | ✅ |
+| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 135/136,LOC 12k → 4k) | ✅ |
 | 三端壳 | Flutter Android/Linux/Windows、FRB 2.13 桥、三端构建链路(Windows 走 CI) | ✅ |
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |

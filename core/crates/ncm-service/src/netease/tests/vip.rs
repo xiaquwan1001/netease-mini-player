@@ -200,32 +200,6 @@ fn vip_growth_reads_today_score_from_ext_json() {
     assert_eq!(g.today_score, 0);
 }
 
-/// vip_sign_info: 只回最近 7 天, score > 0 才算已签(recordId/time 未签时也是 0)
-#[test]
-fn vip_sign_uses_score_not_record_id() {
-    let body = json!({
-        "code": 200,
-        "data": [
-            {"timeStr": "2026-11-05", "today": false, "score": 0, "recordId": 0, "time": 0},
-            {"timeStr": "2026-11-06", "today": false, "score": 3, "recordId": 0, "time": 0},
-            {"timeStr": "2026-11-07", "today": true, "score": 3, "recordId": 0, "time": 0}
-        ]
-    });
-    let s = parse_vip_sign(&body);
-    assert_eq!(s.days.len(), 3);
-    assert_eq!(s.week_signed, 2);
-    assert!(!s.days[0].signed);
-    assert!(s.days[1].signed);
-    assert!(s.signed_today);
-    assert!(s.days[2].today);
-
-    let empty = json!({"code": 200, "data": []});
-    let s = parse_vip_sign(&empty);
-    assert!(s.days.is_empty());
-    assert!(!s.signed_today);
-    assert_eq!(s.week_signed, 0);
-}
-
 /// vip_tasks: name 空回退 action; targets=null 时 target=0(不显示进度条); status=2 算完成
 #[test]
 fn vip_tasks_flatten_and_fallback_title() {

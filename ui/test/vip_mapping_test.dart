@@ -28,24 +28,18 @@ rust.VipOverview overview({
           maxLevel: false,
         )
       : null,
-  sign: loggedIn
-      ? rust.VipSign(
+  dailySign: loggedIn
+      ? rust.SigninStatus(
           signedToday: signedToday,
-          weekSigned: signedToday ? 2 : 1,
-          days: [
-            rust.VipSignDay(
-              date: '2026-11-06',
-              signed: true,
-              today: false,
-              score: 3,
-            ),
-            rust.VipSignDay(
-              date: '2026-11-07',
-              signed: signedToday,
-              today: true,
-              score: signedToday ? 3 : 0,
-            ),
+          totalDays: 12,
+          continuousDays: 5,
+          weekDays: signedToday ? 2 : 1,
+          // 接口 recent 是"新的在前"
+          recent: [
+            rust.SigninDay(day: '2026-11-07', signed: signedToday),
+            rust.SigninDay(day: '2026-11-06', signed: true),
           ],
+          todayPoint: 0,
         )
       : null,
   tasks: loggedIn
@@ -104,9 +98,14 @@ void main() {
 
     final sign = data.sign!;
     expect(sign.days.length, 2);
-    expect(sign.days.last.today, isTrue);
+    // recent 新的在前 -> 日历升序
+    expect(sign.days.first.date, '2026-11-06');
+    expect(sign.days.last.date, '2026-11-07');
     expect(sign.weekSignedDays, 2);
     expect(sign.signedToday, isTrue);
+    expect(sign.totalDays, 12);
+    expect(sign.continuousDays, 5);
+    expect(sign.weekDays, 2);
     expect(sign.days.last.label, '六');
 
     expect(data.tasks.length, 2);
@@ -134,6 +133,7 @@ void main() {
   test('映射: 今天未签时 signedToday=false', () {
     final data = mapVipOverview(overview(signedToday: false));
     expect(data.sign!.signedToday, isFalse);
-    expect(data.sign!.weekSignedDays, 1);
+    expect(data.sign!.weekSignedDays, 1, reason: '只有 11-06 已签');
+    expect(data.sign!.weekDays, 1);
   });
 }
