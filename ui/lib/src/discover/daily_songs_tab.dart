@@ -6,7 +6,7 @@ import '../net_retry.dart' show friendlyError;
 import '../rust/api.dart' as rust;
 import '../song_actions.dart';
 import '../state_views.dart';
-import 'discover_song_row.dart' show DiscoverSongRow;
+import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'discover_types.dart';
 
 /// 「推荐歌曲」页签: 一次全量返回, 点歌只换队列、不退出日推页.
@@ -38,16 +38,19 @@ class DailySongsTab extends StatelessWidget {
         itemCount: songs.length,
         itemBuilder: (context, i) {
           final s = songs[i];
-          return DiscoverSongRow(
+          return SongRow(
             song: s,
-            index: i + 1,
+            layout: SongRowLayout.tile,
+            indexText: '${i + 1}',
+            indexWidth: 22,
+            indexAlign: TextAlign.start,
+            indexGap: 0,
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+            showDuration: false,
             // 每日推荐 tab: "..."菜单同样允许"不感兴趣"
-            // 行尾不再放"不感兴趣"按钮: 它占掉 ~48dp 横向空间, 而同一动作
-            // 已经在行尾「...」菜单里(SongActionSource.dailyRecommend 决定显示)。
-            source: SongActionSource.dailyRecommend,
-            // 点歌只开始播放, **不退出日推页**: 之前 `Navigator.pop` 会直接
-            // 把整页弹掉, 用户想接着挑下一首还得重新进来(用户反馈)。与歌单详情页
-            // (detail_page)一致: 列表页点播 = 换队列, 页面留在原地。
+            menuSource: SongActionSource.dailyRecommend,
+            // 点歌只开始播放, 不退出日推页(与歌单详情页一致)。
             onTap: s.playable ? () => onPlay(songs, i) : null,
           );
         },

@@ -7,7 +7,7 @@ import '../error_views.dart' show FullError;
 import '../net_retry.dart';
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
-import 'discover_song_row.dart' show DiscoverSongRow;
+import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'discover_types.dart';
 
 /// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
@@ -93,9 +93,16 @@ class RecentPlayedPage extends StatelessWidget {
             _RecentBucketTab<rust.SongDto>(
               load: loadRecent,
               emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
-              itemBuilder: (context, s, i, list) => DiscoverSongRow(
+              itemBuilder: (context, s, i, list) => SongRow(
                 song: s,
-                index: i + 1,
+                layout: SongRowLayout.tile,
+                indexText: '${i + 1}',
+                indexWidth: 22,
+                indexAlign: TextAlign.start,
+                indexGap: 0,
+                coverSize: 40,
+                subtitle: SongRowSubtitle.artist,
+                showDuration: false,
                 // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable
                     ? () => onPlay(list.cast<rust.SongDto>(), i)

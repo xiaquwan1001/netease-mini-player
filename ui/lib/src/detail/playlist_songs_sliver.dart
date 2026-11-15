@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../layout.dart' show kPagePadding, rowExtentFor;
 import '../rust/api.dart' as rust;
+import '../song_actions.dart' show SongActionSource;
+import '../song_tile.dart' show SongRow;
 import 'detail_shared.dart' show DetailSkeletonList;
-import 'playlist_song_row.dart' show PlaylistSongRow;
 
 /// 歌单曲目列表(四态: 骨架 / 错误行 / 空态 / 定高列表), 作为 sliver 直接进
 /// [CustomScrollView]。行高随系统字号放大(rowExtentFor, 基准 56)。
@@ -102,12 +103,32 @@ class PlaylistSongsSliver extends StatelessWidget {
       itemExtent: rowExtentFor(context),
       delegate: SliverChildBuilderDelegate((context, i) {
         final song = display[i];
-        return PlaylistSongRow(
+        final theme = Theme.of(context);
+        return SongRow(
           song: song,
-          index: i,
-          playing: playingId == song.id,
+          // 序号两位右对齐(1 起); 正在播放时换成喇叭
+          indexText: '${i + 1}'.padLeft(2),
+          indexWidth: 26,
+          indexAlign: TextAlign.right,
+          indexGap: 10,
+          // 页内乐观态(playingId)与全局"正在播放"取并集: 在别处换了歌再回来也要跟着走
+          active: playingId == song.id,
+          unionWithNowPlaying: true,
+          playingTint: true,
+          // 保持原行为: 单行 ellipsis, 不跑马灯
+          titleMarquee: false,
+          // 徽标在副标题行: 300dp 手机上标题区只剩 ~100dp, 徽标会被整组收起
+          badgesInSubtitle: true,
+          subtitleStyle: theme.textTheme.labelSmall?.copyWith(
+            color: song.playable ? null : theme.colorScheme.outline,
+          ),
+          // 行尾整组封顶 45%: 触顶时先截断时长
+          capTrailing: true,
           liked: liked.contains(song.id),
           onToggleLike: () => onToggleLike(song),
+          menuSource: SongActionSource.playlist,
+          // 与 SectionHeader/推荐页同一栅格: 左 12 贴页面线, 右 4 给行尾按钮
+          padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
           onTap: () => onTapSong(song, i),
         );
       }, childCount: display.length),

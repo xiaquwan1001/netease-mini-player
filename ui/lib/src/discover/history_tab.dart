@@ -7,7 +7,7 @@ import '../error_views.dart' show FullError;
 import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
-import 'discover_song_row.dart' show DiscoverSongRow;
+import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'discover_types.dart';
 
 /// 历史日推的一行: 在线日期 / 本地缓存日期 / 两者都有(合并去重后只留一行).
@@ -288,9 +288,16 @@ class _HistoryDayView extends StatelessWidget {
       for (var i = 0; i < songs.length; i++) {
         final s = songs[i];
         rows.add(
-          DiscoverSongRow(
+          SongRow(
             song: s,
-            index: i + 1,
+            layout: SongRowLayout.tile,
+            indexText: '${i + 1}',
+            indexWidth: 22,
+            indexAlign: TextAlign.start,
+            indexGap: 0,
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+            showDuration: false,
             // 同「推荐歌曲」页签: 点播不退出历史日推列表
             onTap: s.playable ? () => onPlay(songs, i) : null,
           ),
