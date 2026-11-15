@@ -6,7 +6,7 @@ import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
 import 'song_actions.dart';
-import 'song_tile.dart' show SongTitleWithBadges;
+import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 
 /// 相似歌曲面板: 上半是相似歌曲(点击整批起播), 下半是相似歌单.
 ///
@@ -144,27 +144,19 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                     title: '没有找到相似歌曲',
                   ),
                 for (var i = 0; i < songs.length; i++)
-                  ListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    leading: CoverArt(
-                      url: songs[i].coverUrl,
-                      size: 40,
-                      radius: 4,
-                    ),
-                    title: SongTitleWithBadges(song: songs[i]),
-                    subtitle: Text(
-                      songs[i].artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: SongOverflowButton(song: songs[i], size: 20),
-                    onTap: songs[i].playable
-                        ? () {
-                            Navigator.pop(context);
-                            widget.onPlay(songs, i);
-                          }
-                        : null,
+                  SongRow(
+                    song: songs[i],
+                    layout: SongRowLayout.tile,
+                    coverSize: 40,
+                    subtitle: SongRowSubtitle.artist,
+                    showDuration: false,
+                    // 行尾 "..." = 统一歌曲菜单(相似歌曲没有专属来源, 用 other)
+                    menuSource: SongActionSource.other,
+                    tapOnlyWhenPlayable: true,
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onPlay(songs, i);
+                    },
                   ),
                 if (playlists != null && playlists.isNotEmpty) ...[
                   const Divider(height: 24),

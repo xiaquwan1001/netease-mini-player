@@ -4,7 +4,6 @@ import 'app_settings.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
-import 'layout.dart';
 import 'section_header.dart';
 import 'net_retry.dart';
 import 'playlist_square_page.dart';
@@ -12,7 +11,7 @@ import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
-import 'song_tile.dart' show SongTitleWithBadges;
+import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -323,30 +322,21 @@ class _NewSongsSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final s in preview)
-                    ListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: kSongRowPadding,
-                      leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
-                      title: Text(
-                        s.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        s.artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: SongOverflowButton(song: s, size: 20),
-                      onTap: s.playable
-                          ? () {
-                              final index = playable.indexWhere(
-                                (x) => x.id == s.id,
-                              );
-                              onPlay(playable, index < 0 ? 0 : index);
-                            }
-                          : null,
+                    SongRow(
+                      song: s,
+                      layout: SongRowLayout.tile,
+                      coverSize: 40,
+                      subtitle: SongRowSubtitle.artist,
+                      // 预览行不给时长(整行更要紧的是歌名/艺人)
+                      showDuration: false,
+                      // 行尾 "..." = 统一歌曲菜单(本区块历史来源是 other)
+                      menuSource: SongActionSource.other,
+                      // 无版权曲目灰显且点了没反应
+                      tapOnlyWhenPlayable: true,
+                      onTap: () {
+                        final index = playable.indexWhere((x) => x.id == s.id);
+                        onPlay(playable, index < 0 ? 0 : index);
+                      },
                     ),
                 ],
               ),
@@ -644,41 +634,23 @@ class _DailySongsSection extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (var i = 0; i < preview.length; i++)
-                    ListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: kSongRowPadding,
-                      leading: CoverArt(
-                        url: preview[i].coverUrl,
-                        size: 40,
-                        radius: 4,
-                      ),
-                      title: SongTitleWithBadges(song: preview[i]),
-                      subtitle: Text(
-                        preview[i].artist,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      trailing: preview[i].playable
-                          // 行尾 "..." 菜单(下一首播放/收藏/分享/不感兴趣等)
-                          ? SongOverflowButton(
-                              song: preview[i],
-                              size: 20,
-                              source: SongActionSource.dailyRecommend,
-                            )
-                          : Text(
-                              '无版权',
-                              style: Theme.of(context).textTheme.labelSmall,
-                            ),
-                      onTap: preview[i].playable
-                          ? () {
-                              final index = playable.indexWhere(
-                                (s) => s.id == preview[i].id,
-                              );
-                              onPlay(playable, index < 0 ? 0 : index);
-                            }
+                  for (final s in preview)
+                    SongRow(
+                      song: s,
+                      layout: SongRowLayout.tile,
+                      coverSize: 40,
+                      subtitle: SongRowSubtitle.artist,
+                      showDuration: false,
+                      // 行尾 "..." 菜单(下一首播放/收藏/分享/不感兴趣等);
+                      // 无版权曲目不给菜单, 改由歌名后的「无版权」徽标说明
+                      menuSource: s.playable
+                          ? SongActionSource.dailyRecommend
                           : null,
+                      tapOnlyWhenPlayable: true,
+                      onTap: () {
+                        final index = playable.indexWhere((x) => x.id == s.id);
+                        onPlay(playable, index < 0 ? 0 : index);
+                      },
                     ),
                 ],
               ),
