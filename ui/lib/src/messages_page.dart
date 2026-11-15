@@ -168,4 +168,3 @@ class _MessagesPageState extends State<MessagesPage> {
     return '$name $unread';
   }
 }
-

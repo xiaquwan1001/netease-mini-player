@@ -25,7 +25,10 @@ void main() {
                 playedIndex = index;
               },
               onOpenPlaylist: (pl) => opened = pl,
-              loadSongs: (id, limit) async => [fakeSong(id: 2, name: '相似一'), fakeSong(id: 3, name: '相似二')],
+              loadSongs: (id, limit) async => [
+                fakeSong(id: 2, name: '相似一'),
+                fakeSong(id: 3, name: '相似二'),
+              ],
               loadPlaylists: (id, limit) async => [
                 rust.Playlist(
                   id: BigInt.from(9),

@@ -57,7 +57,8 @@ rust.AccountDto account(int id, String nickname, {bool active = false}) =>
     );
 
 // 共享工厂 + 本文件特有默认值(albumId=9), 命名参数覆盖而不是再抄一份字面量。
-rust.SongDto song(int id, String name) => fakeSong(id: id, name: name, albumId: 9);
+rust.SongDto song(int id, String name) =>
+    fakeSong(id: id, name: name, albumId: 9);
 
 Widget host(Widget child) => MaterialApp(
   home: Scaffold(body: Builder(builder: (_) => child)),

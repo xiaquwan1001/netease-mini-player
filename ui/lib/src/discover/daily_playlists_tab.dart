@@ -29,10 +29,8 @@ class DailyPlaylistsTab extends StatelessWidget {
       keepAlive: true,
       emptyText: '今天没有推荐歌单',
       loadingBuilder: (_) => const LoadingView(),
-      emptyBuilder: (_) => const EmptyView(
-        icon: Icons.queue_music_outlined,
-        title: '今天没有推荐歌单',
-      ),
+      emptyBuilder: (_) =>
+          const EmptyView(icon: Icons.queue_music_outlined, title: '今天没有推荐歌单'),
       errorBuilder: (_, error, retry) => FullError(
         message: '推荐歌单需要登录后才能获取\n${friendlyError(error)}',
         onRetry: retry,

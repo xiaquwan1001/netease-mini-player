@@ -31,7 +31,10 @@ void main() {
         home: Scaffold(
           body: Column(
             children: [
-              for (final s in [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')])
+              for (final s in [
+                fakeSong(id: 1, name: '晴天'),
+                fakeSong(id: 2, name: '七里香'),
+              ])
                 SongTile(song: s, liked: false, onTap: () {}),
             ],
           ),
@@ -58,7 +61,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: DailyRecommendPage(
-          loadSongs: () async => [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')],
+          loadSongs: () async => [
+            fakeSong(id: 1, name: '晴天'),
+            fakeSong(id: 2, name: '七里香'),
+          ],
           loadPlaylists: () async => const <rust.Playlist>[],
           loadHistoryDates: () async => const <String>[],
           loadHistorySongs: (_) async => const <rust.SongDto>[],

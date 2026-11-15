@@ -87,7 +87,8 @@ class PlaylistHeaderCard extends StatelessWidget {
                               spacing: 6,
                               runSpacing: 4,
                               children: [
-                                for (final t in d.tags) _PlaylistTagChip(tag: t),
+                                for (final t in d.tags)
+                                  _PlaylistTagChip(tag: t),
                               ],
                             ),
                           ),
@@ -244,10 +245,7 @@ class PlaylistEditingBanner extends StatelessWidget {
             const Icon(Icons.remove_circle_outline, size: 16),
             const SizedBox(width: 6),
             const Expanded(
-              child: Text(
-                '移出曲目模式: 点击曲目即可移出歌单',
-                style: TextStyle(fontSize: 12),
-              ),
+              child: Text('移出曲目模式: 点击曲目即可移出歌单', style: TextStyle(fontSize: 12)),
             ),
             TextButton(onPressed: onDone, child: const Text('完成')),
           ],

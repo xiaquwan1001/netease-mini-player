@@ -124,7 +124,10 @@ MineView buildMine({
   loadRecent: () async => [fakeSong(id: 7, name: '最近听的歌')],
   loadRanking: (period) async => [
     rust.PlayRankEntryDto(
-      song: fakeSong(id: period == 'week' ? 9 : 8, name: period == 'week' ? '本周常听' : '最常听'),
+      song: fakeSong(
+        id: period == 'week' ? 9 : 8,
+        name: period == 'week' ? '本周常听' : '最常听',
+      ),
       playCount: BigInt.from(period == 'week' ? 3 : 42),
       score: BigInt.from(period == 'week' ? 30 : 420),
     ),

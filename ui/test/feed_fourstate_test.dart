@@ -56,7 +56,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(loads, 1);
-    expect(find.textContaining('boom'), findsOneWidget, reason: '文案走 friendlyError');
+    expect(
+      find.textContaining('boom'),
+      findsOneWidget,
+      reason: '文案走 friendlyError',
+    );
     expect(find.text('重试'), findsOneWidget);
 
     await tester.tap(find.text('重试'));

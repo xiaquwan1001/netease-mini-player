@@ -356,10 +356,7 @@ class _HistoryDayView extends StatelessWidget {
 }
 
 /// 在线日期 + 本地缓存按日期合并去重(同一天只留一行), 日期倒序.
-List<_HistoryEntry> _merge(
-  List<String> remote,
-  List<DailyCacheDay> local,
-) {
+List<_HistoryEntry> _merge(List<String> remote, List<DailyCacheDay> local) {
   final byDate = <String, _HistoryEntry>{};
   for (final raw in remote) {
     final date = raw.trim();

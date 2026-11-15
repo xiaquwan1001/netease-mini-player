@@ -39,7 +39,10 @@ void main() {
             playedIndex = index;
           },
           onOpenPlaylist: (_) {},
-          loadSongs: () async => [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')],
+          loadSongs: () async => [
+            fakeSong(id: 1, name: '晴天'),
+            fakeSong(id: 2, name: '七里香'),
+          ],
           loadPlaylists: () async => [playlist(9, '推荐歌单', 12)],
         );
       }),
@@ -222,7 +225,10 @@ void main() {
           tester.element(find.text('open')),
           onPlaySongs: (_, _) {},
           onOpenPlaylist: (_) {},
-          loadSongs: () async => [fakeSong(id: 1, name: '晴天'), fakeSong(id: 2, name: '七里香')],
+          loadSongs: () async => [
+            fakeSong(id: 1, name: '晴天'),
+            fakeSong(id: 2, name: '七里香'),
+          ],
           loadPlaylists: () async => const [],
         );
       }),
@@ -426,7 +432,9 @@ void main() {
               onPressed: () => showRecentPage(
                 ctx,
                 onPlay: (_, _) {},
-                loadRecent: () async => [fakeSong(id: 3, name: '一首名字特别特别长的歌用于窄屏回归测试')],
+                loadRecent: () async => [
+                  fakeSong(id: 3, name: '一首名字特别特别长的歌用于窄屏回归测试'),
+                ],
                 loadAlbums: () async => [
                   rust.AlbumItem(
                     id: BigInt.from(11),

@@ -263,10 +263,8 @@ class _ChatBodyState extends State<_ChatBody> {
       load: _load,
       emptyText: '还没有消息',
       loadingBuilder: (_) => const LoadingView(),
-      emptyBuilder: (_) => const EmptyView(
-        icon: Icons.notifications_none,
-        title: '还没有消息',
-      ),
+      emptyBuilder: (_) =>
+          const EmptyView(icon: Icons.notifications_none, title: '还没有消息'),
       // 聊天记录的错误保持改造前的一行式(文案走 friendlyError, 右侧重试)
       errorBuilder: (_, error, retry) => Padding(
         padding: const EdgeInsets.all(16),
@@ -329,10 +327,7 @@ class _ChatBodyState extends State<_ChatBody> {
     if (error != null) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: InlineError(
-          message: error,
-          onRetry: () => _loadOlder(latest),
-        ),
+        child: InlineError(message: error, onRetry: () => _loadOlder(latest)),
       );
     }
     return Padding(

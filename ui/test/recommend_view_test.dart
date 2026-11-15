@@ -6,8 +6,7 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'support/fakes.dart';
 
 // 共享工厂 + 本文件口径(3 首推荐歌单 / 主播 2 期电台), 位置参数签名保持不变。
-rust.Playlist playlist(int id, String name) =>
-    fakePlaylist(id: id, name: name);
+rust.Playlist playlist(int id, String name) => fakePlaylist(id: id, name: name);
 
 rust.PodcastRadio radio(int id, String name) => fakeRadio(id: id, name: name);
 
@@ -55,7 +54,10 @@ void main() {
       host(
         RecommendView(
           loggedIn: true,
-          loadDailySongs: () async => [fakeSong(id: 1, name: '每日一歌'), fakeSong(id: 2, name: '每日二歌')],
+          loadDailySongs: () async => [
+            fakeSong(id: 1, name: '每日一歌'),
+            fakeSong(id: 2, name: '每日二歌'),
+          ],
           loadDailyPlaylists: () async => [playlist(10, '推荐歌单A')],
           loadPodcasts: () async => [radio(20, '推荐播客A')],
           loadFm: () async => [fakeSong(id: 3, name: 'FM 曲')],
@@ -146,7 +148,9 @@ void main() {
       scaled(
         RecommendView(
           loggedIn: true,
-          loadDailySongs: () async => [fakeSong(id: 1, name: '一首名字特别特别长的日推歌曲用于小屏回归测试')],
+          loadDailySongs: () async => [
+            fakeSong(id: 1, name: '一首名字特别特别长的日推歌曲用于小屏回归测试'),
+          ],
           loadDailyPlaylists: () async => [
             playlist(10, '一个名字特别特别长的推荐歌单用于小屏回归测试'),
           ],

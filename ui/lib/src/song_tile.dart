@@ -377,11 +377,8 @@ class SongRow extends StatelessWidget {
   }
 
   /// 播放态歌名样式: 主色 + 半粗
-  TextStyle? _playingTitleStyle(ThemeData theme) =>
-      theme.textTheme.bodyMedium?.copyWith(
-        color: theme.colorScheme.primary,
-        fontWeight: FontWeight.w600,
-      );
+  TextStyle? _playingTitleStyle(ThemeData theme) => theme.textTheme.bodyMedium
+      ?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.w600);
 
   /// 红心: 命中区 40x48dp(高仍 48 便于点按, 宽度让给歌名), 与各页原口径一致。
   Widget _likeButton(ColorScheme scheme) => IconButton(
@@ -555,7 +552,11 @@ class SongRow extends StatelessWidget {
       );
     } else {
       body = Row(
-        children: [...leading, Expanded(child: column), trailing()],
+        children: [
+          ...leading,
+          Expanded(child: column),
+          trailing(),
+        ],
       );
     }
 
@@ -597,7 +598,9 @@ class SongRow extends StatelessWidget {
                     playing,
                     indexColor == null
                         ? theme.textTheme.bodySmall
-                        : theme.textTheme.bodySmall?.copyWith(color: indexColor),
+                        : theme.textTheme.bodySmall?.copyWith(
+                            color: indexColor,
+                          ),
                   ),
                 ),
                 if (indexGap > 0) SizedBox(width: indexGap),

@@ -273,10 +273,7 @@ class _VipPageState extends State<VipPage> {
         title: '登录后可查看会员信息',
         action: widget.onLogin == null
             ? null
-            : FilledButton(
-                onPressed: widget.onLogin,
-                child: const Text('登录'),
-              ),
+            : FilledButton(onPressed: widget.onLogin, child: const Text('登录')),
       );
     }
     final sign = data.sign;

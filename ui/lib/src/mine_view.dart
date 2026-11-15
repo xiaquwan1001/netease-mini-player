@@ -589,7 +589,8 @@ class _LikedSection extends StatelessWidget {
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
                       // 预览被截断时在最后一行给出总数(整行"共 N 首")
-                      trailingExtra: songs.length > preview.length &&
+                      trailingExtra:
+                          songs.length > preview.length &&
                               i == preview.length - 1
                           ? Text(
                               '共 ${songs.length} 首',

@@ -14,7 +14,11 @@ import 'detail_shared.dart' show showResourceShareSheet;
 import 'playlist_dialogs.dart'
     show confirmDeletePlaylist, confirmRemoveTrack, showEditPlaylistInfoSheet;
 import 'playlist_detail_parts.dart'
-    show PlaylistEditingBanner, PlaylistFilterBar, PlaylistHeaderCard, PlaylistHiddenNote;
+    show
+        PlaylistEditingBanner,
+        PlaylistFilterBar,
+        PlaylistHeaderCard,
+        PlaylistHiddenNote;
 import 'playlist_songs_sliver.dart' show PlaylistSongsSliver;
 
 /// 打开歌单详情页(全屏路由). special=true 表示"我喜欢的音乐"(曲目走 likedSongs)。

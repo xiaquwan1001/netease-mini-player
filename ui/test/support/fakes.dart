@@ -80,4 +80,3 @@ rust.PodcastRadio fakeRadio({
   programCount: BigInt.from(programCount),
   playCount: BigInt.from(playCount),
 );
-

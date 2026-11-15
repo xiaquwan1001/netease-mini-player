@@ -27,10 +27,8 @@ class DailySongsTab extends StatelessWidget {
       keepAlive: true,
       emptyText: '今天没有推荐歌曲',
       loadingBuilder: (_) => const LoadingView(),
-      emptyBuilder: (_) => const EmptyView(
-        icon: Icons.music_note_outlined,
-        title: '今天没有推荐歌曲',
-      ),
+      emptyBuilder: (_) =>
+          const EmptyView(icon: Icons.music_note_outlined, title: '今天没有推荐歌曲'),
       errorBuilder: (_, error, retry) =>
           FullError(message: friendlyError(error), onRetry: retry),
       // 非分页: 每日推荐歌曲一次全量返回, 接口无分页

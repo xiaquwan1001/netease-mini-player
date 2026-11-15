@@ -25,10 +25,8 @@ class ForwardsTab extends StatelessWidget {
       load: load,
       emptyText: '还没有@我',
       loadingBuilder: (_) => const LoadingView(),
-      emptyBuilder: (_) => const EmptyView(
-        icon: Icons.alternate_email,
-        title: '还没有@我',
-      ),
+      emptyBuilder: (_) =>
+          const EmptyView(icon: Icons.alternate_email, title: '还没有@我'),
       // 页签级错误保持改造前的一行式(文案走 friendlyError, 右侧重试)
       errorBuilder: (_, error, retry) => Padding(
         padding: const EdgeInsets.all(16),

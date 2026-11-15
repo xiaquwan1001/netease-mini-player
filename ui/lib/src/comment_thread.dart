@@ -1436,10 +1436,8 @@ class _RepliesSheetState extends State<_RepliesSheet> {
                     ),
                   ),
                 ),
-                builder: (context, replies, _) => _buildReplies(
-                  context,
-                  replies,
-                ),
+                builder: (context, replies, _) =>
+                    _buildReplies(context, replies),
               ),
             ),
             if (_sendError != null)

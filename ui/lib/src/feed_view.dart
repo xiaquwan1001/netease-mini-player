@@ -287,11 +287,8 @@ class _FeedViewState extends State<FeedView> {
       emptyText: '还没有动态',
       loadingBuilder: (_) => const LoadingView(),
       emptyBuilder: (_) => _feedBody(),
-      errorBuilder: (context, error, retry) => _errorView(
-        context,
-        friendlyError(error),
-        retry,
-      ),
+      errorBuilder: (context, error, retry) =>
+          _errorView(context, friendlyError(error), retry),
       builder: (_, _, _) => _feedBody(),
     );
   }

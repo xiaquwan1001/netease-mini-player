@@ -287,12 +287,11 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
                       borderRadius: BorderRadius.circular(4),
                       child: Text(
                         album?.artist ?? '未知艺人',
-                        style: Theme.of(context).textTheme.bodyMedium
-                            ?.copyWith(
-                              color: album == null
-                                  ? null
-                                  : Theme.of(context).colorScheme.primary,
-                            ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: album == null
+                              ? null
+                              : Theme.of(context).colorScheme.primary,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
