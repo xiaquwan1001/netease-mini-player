@@ -1,4 +1,4 @@
-// Golden(视觉回归)基准: 6 个高价值页面的整屏排版快照。
+// Golden(视觉回归)基准: 9 个高价值页面的整屏排版快照。
 //
 // 为什么需要: 现有 widget 测试只断言"某段文本存在/不溢出", 改动 A 页面把 B 的
 // 间距、换行、留白挤坏时全都测不出来。这里把整屏像素锁成基准图, 布局回归直接变红。
@@ -25,6 +25,12 @@
 // 稳定性: 所有页面数据都走注入的假 loader(0 网络); 封面/头像一律 coverUrl: null
 // 走占位图; 无限动画(跑马灯/加载圈)用固定帧数推进代替 pumpAndSettle, 见 _pumpFrames。
 //
+// 页面清单(9 页 x 2 视口 = 18 张): 设置 / 账号管理 / 推荐 / 我的 / 搜索落地 /
+// 消息中心 / 歌单详情 / 艺人页 / 动态流。后三页是 churn top-10 里最容易连带回归的
+// 三块(2026-11 前端审计建议 11): 歌单详情改行距会挤坏曲目行, 艺人页改信息区会挤坏
+// tab 行, 动态流改卡片会挤坏顶部分类条。其中歌单详情只有命令式入口(页面私有 +
+// 数据直连 FFI), 靠 _RouteHost 推路由 + _GoldenRustApi 垫数据才拿得到"正常态"。
+//
 // 门禁口径: 标 @Tags(['golden']) —— CI 与本地都跑(CI 侧先装 fonts-noto-cjk,
 // 见 .github/workflows/ci.yml / .gitlab-ci.yml)。本机没有 CJK 字体时用例自动 skip
 // 并给出安装提示, 不会红; CI 上字体装不上就会整组 skip, 所以 workflow 里把装字体
@@ -32,16 +38,21 @@
 @Tags(['golden'])
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FontLoader;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/artist_page.dart';
+import 'package:minincm/src/detail/playlist_detail_page.dart';
+import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/messages_page.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 import 'package:minincm/src/search_landing.dart';
 import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
@@ -127,6 +138,7 @@ Future<void> _pumpPage(
   Widget page, {
   required Size size,
   double textScale = 1.0,
+  int frames = 12,
 }) async {
   tester.view.physicalSize = size;
   // dpr 固定 1.0: 逻辑像素 == 物理像素, 基准图小(360x800)且不受设备密度影响
@@ -141,23 +153,25 @@ Future<void> _pumpPage(
         debugShowCheckedModeBanner: false,
         theme: theme,
         themeMode: ThemeMode.light,
-        home: Builder(
-          builder: (context) {
-            final media = MediaQuery.of(context);
-            return MediaQuery(
-              // 字号走 MediaQuery 而不是 platformDispatcher.textScaleFactorTestValue,
-              // 与 narrow_width_audit_test 的 pumpNarrow 保持同一口径
-              data: textScale == 1.0
-                  ? media
-                  : media.copyWith(textScaler: TextScaler.linear(textScale)),
-              child: page,
-            );
-          },
-        ),
+        // 字号走 MediaQuery 而不是 platformDispatcher.textScaleFactorTestValue,
+        // 与 narrow_width_audit_test 的 pumpNarrow 保持同一口径。
+        //
+        // 必须放 MaterialApp.builder(它包住 Navigator)而不是包在 home 里:
+        // Navigator 在 home 之上, 只包 home 管不到 push 出来的路由页(歌单详情
+        // 就是这么进去的), 那些页面会退回 1.0 字号 —— 窄屏基准就测不到东西。
+        builder: (context, child) {
+          if (textScale == 1.0) return child!;
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: media.copyWith(textScaler: TextScaler.linear(textScale)),
+            child: child!,
+          );
+        },
+        home: page,
       ),
     ),
   );
-  await _pumpFrames(tester);
+  await _pumpFrames(tester, frames: frames);
 }
 
 Future<void> _expectGolden(WidgetTester tester, String name) async {
@@ -261,14 +275,129 @@ rust.InboxItem _inbox(int id, String kind, String actor, String text) =>
 rust.HotSearchTerm _hot(int rank, String keyword) =>
     rust.HotSearchTerm(rank: rank, keyword: keyword);
 
+// ---------------------------------------------------------------- 假 FFI 通道
+
+/// 歌单详情页(`showPlaylistDetail`)只有命令式入口: 页面本身是私有类, 详情/曲目/
+/// 评论/当前 uid 全部直连 FFI, 没有任何 loader 注入点。不垫这一层, 基准图就是空壳
+/// 或错误态, 当不了回归探针。
+///
+/// 只覆盖歌单详情会调到的 5 个方法; 其余一律抛 —— 与"没 init 过 RustLib"时的行为
+/// 一致(那时也抛), 所以不会把"某处漏接线"悄悄变成正常态。
+class _GoldenRustApi implements RustLibApi {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('golden 未覆盖 ${invocation.memberName}');
+
+  /// 当前账号 uid: 故意不等于歌单创建者, 于是详情页不出现"管理"菜单
+  /// (编辑/移出曲目/删除属于另一条排版分支, 不进这张基准图)。
+  @override
+  Future<BigInt> crateApiMyUid() async => BigInt.from(1822714196);
+
+  @override
+  Future<rust.PlaylistDetail> crateApiPlaylistDetail({
+    required BigInt playlistId,
+  }) async => _playlistDetail;
+
+  @override
+  Future<List<rust.SongDto>> crateApiPlaylistSongs({
+    required BigInt playlistId,
+  }) async => _playlistSongs();
+
+  @override
+  Future<rust.CommentPage> crateApiComments({
+    required String kind,
+    required BigInt resourceId,
+    required int limit,
+    required int offset,
+  }) async => rust.CommentPage(
+    threadId: 'A_PL_0_24381616',
+    comments: _goldenComments(),
+    total: BigInt.from(2),
+    hasMore: false,
+  );
+
+  @override
+  Future<rust.CommentStats> crateApiCommentStats({
+    required String threadId,
+  }) async => rust.CommentStats(
+    threadId: threadId,
+    resourceId: BigInt.from(24381616),
+    commentCount: BigInt.from(88),
+    commentCountDesc: '88',
+    shareCount: BigInt.from(340),
+    likedCount: BigInt.zero,
+    liked: false,
+    musicianSaidCount: BigInt.zero,
+    commentUpgraded: false,
+  );
+}
+
+/// 歌单详情头部: 五位数播放量/收藏数 + 两个标签 + 一句简介, 已收藏(subscribed)。
+final rust.PlaylistDetail _playlistDetail = rust.PlaylistDetail(
+  id: BigInt.from(24381616),
+  name: '华语流行精选',
+  coverUrl: null,
+  description: '每日更新的华语流行精选, 收录本周最热单曲。',
+  creatorName: '云音乐编辑部',
+  creatorId: BigInt.from(999999999),
+  trackCount: BigInt.from(12),
+  playCount: BigInt.from(128000),
+  subscribed: true,
+  subscribedCount: BigInt.from(52000),
+  shareCount: BigInt.from(340),
+  commentCount: BigInt.from(88),
+  tags: const <String>['华语', '流行'],
+);
+
+/// 12 首曲目: 奇数/偶数行艺人换人, "艺人 · 专辑"两个字段都非空。
+List<rust.SongDto> _playlistSongs() => <rust.SongDto>[
+  for (var i = 1; i <= 12; i++)
+    _song(500 + i, '华语热歌$i', artist: i.isOdd ? '周杰伦' : '林俊杰'),
+];
+
+/// 评论区(在首屏之外): 存在的意义是"评论区不是错误态", 而不是锁定它的排版。
+List<rust.Comment> _goldenComments() => <rust.Comment>[
+  rust.Comment(
+    id: BigInt.from(90001),
+    userId: BigInt.from(1822714196),
+    userName: '小明',
+    content: '这张歌单我循环了一整周, 选曲比官方推荐靠谱。',
+    timeMs: BigInt.from(1700000000000),
+    likedCount: BigInt.from(12),
+    liked: false,
+    replyCount: BigInt.zero,
+    ipLocation: '广东',
+    hot: true,
+    parentId: BigInt.zero,
+  ),
+  rust.Comment(
+    id: BigInt.from(90002),
+    userId: BigInt.from(90003),
+    userName: '小红',
+    content: '第 3 首是什么歌?',
+    timeMs: BigInt.from(1700000000000),
+    likedCount: BigInt.from(3),
+    liked: false,
+    replyCount: BigInt.zero,
+    ipLocation: '浙江',
+    hot: false,
+    parentId: BigInt.zero,
+  ),
+];
+
 // ---------------------------------------------------------------- 被测页面
+
 
 /// 一个 golden 目标: 名字进文件名, build 每次调用都产出全新的 widget(避免状态串味).
 class _GoldenPage {
-  const _GoldenPage(this.name, this.build);
+  const _GoldenPage(this.name, this.build, {this.frames = 12});
 
   final String name;
   final Widget Function() build;
+
+  /// 固定推进的帧数(见 [_pumpFrames])。默认 12 帧 = 600ms 够静态页面用;
+  /// 推路由的页面还要额外等 300ms 转场 + 路由页自己的数据回来, 给到 24 帧。
+  final int frames;
 }
 
 Widget _settingsPage() => Scaffold(
@@ -383,11 +512,9 @@ Widget _searchLandingPage() => Scaffold(
   ),
 );
 
-/// 第 6 个页面用「消息中心」而不是歌单详情页: 歌单详情页(`_PlaylistDetailPage`)
-/// 是私有类, 对外只有 `openPlaylistDetail(...)` 这种命令式入口, 注入点(曲目
-/// 分页/评论/收藏/作者)太多且必须挂在路由上, 拿来做整屏基准既脆又难定位。
-/// 消息页的 loader 全部可注入, 页签 + 列表 + 未读角标三种排版都在一屏内, 更适合
-/// 当"改 A 破坏 B"的探针。
+/// 消息中心: 三个页签(带未读角标)+ 会话列表, loader 全部可注入。
+/// (2026-11 审计建议 11 之后歌单详情页也进了基准, 走 _RouteHost + _GoldenRustApi,
+/// 见 [_playlistDetailPage]; 这里原先"歌单详情不适合做整屏基准"的结论已作废。
 Widget _messagesPage() => MessagesPage(
   loadCounts: () async => _counts(),
   loadSessions: (limit, offset) async => <rust.PrivateSession>[
@@ -405,6 +532,214 @@ Widget _messagesPage() => MessagesPage(
   ],
 );
 
+// ---------------------------------------------------------------- 后补三页
+
+/// "只能从命令式入口进入"的页面的壳: 首帧后 push 一条普通路由, 之后照常推进固定帧数
+/// (见 _GoldenPage.frames —— 转场 300ms + 路由页自己的数据要时间落位)。
+/// 截图锚点仍是 _kGoldenRootKey 那个 RepaintBoundary, 路由页画在它内部。
+class _RouteHost extends StatefulWidget {
+  const _RouteHost({required this.open});
+
+  final void Function(BuildContext context) open;
+
+  @override
+  State<_RouteHost> createState() => _RouteHostState();
+}
+
+class _RouteHostState extends State<_RouteHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.open(context);
+    });
+  }
+
+  /// 只占一帧空壳, 真正的页面在首帧之后由路由压上来
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: SizedBox.shrink());
+}
+
+/// 基准图: playlist_detail_360x800.png / playlist_detail_300x640_s125.png。
+///
+/// 应有什么: 头部卡片(标题「华语流行精选」/ 创建者 / 「12 首 · 播放 128000 次」/
+/// 华语·流行 两个标签 / 一句简介 + 「展开」) → 「筛选本页曲目」输入框与
+/// 「定位正在播放」→ 曲目行(第 1 行是正在播放高亮, 其余是「序号 歌名 / 艺人 · 专辑 /
+/// 04:29 + 红心); 收藏态为已收藏(实心红心), 创建者不是自己(所以没有"管理"菜单)。
+///
+/// 坏在哪: 头部卡片整块消失 / 曲目行只剩骨架 / 整屏变错误态, 都属于内容坏(不是
+/// 像素抖动); 只是间距变了才是真的"布局回归"。
+Widget _playlistDetailPage() => _RouteHost(
+  open: (context) {
+    unawaited(
+      showPlaylistDetail(
+        context,
+        playlistId: BigInt.from(24381616),
+        name: '华语流行精选',
+        loggedIn: true,
+        currentTrackId: BigInt.from(501),
+        currentPlaylistId: BigInt.from(24381616),
+        onPlaySongs: (_, _) {},
+      ),
+    );
+  },
+);
+
+/// 基准图: artist_360x800.png / artist_300x640_s125.png。
+///
+/// 应有什么: 整宽横幅 → 身份卡(周杰伦 / 别名 Jay Chou / 「关注」/ 粉丝 1922.7万 /
+/// 32 个专辑 · 379 首歌曲) → 简介与相似艺人两块信息区 → 4 个 tab(推荐单曲 / 全部歌曲 /
+/// 专辑 / 动态,) → 首屏停在「推荐单曲」的 3 行曲目。
+///
+/// 坏在哪: tab 行被挤掉或竖溢、粉丝/作品数被截断、横幅高度跳变, 都是这一页最典型的
+/// 回归; 只剩 loading 骨架说明 _loadArtist 没接上。
+Widget _artistPage() => ArtistDetailPage(
+  artistId: BigInt.from(6452),
+  name: '周杰伦',
+  onPlaySongs: (_, _) {},
+  onOpenAlbum: (_, _, _) {},
+  onOpenUrl: (_) async {},
+  loadArtist: (_) async => _artistDetail(),
+  loadSimilar: (_) async => <rust.Artist>[
+    rust.Artist(id: BigInt.from(2116), name: '林俊杰'),
+    rust.Artist(id: BigInt.from(2117), name: '陈奕迅'),
+  ],
+  loadSongsPage: (_, _) async =>
+      rust.ArtistSongPageDto(songs: _artistSongs(), hasMore: false),
+  loadAlbumsPage: (_, _, _) async =>
+      rust.ArtistAlbumPageDto(albums: _artistAlbums(), hasMore: false),
+  // MV 探测给空页 = 不生成「MV」tab(有 MV 的排版另有用例覆盖)
+  loadMvsPage: (_, _) async =>
+      const rust.ArtistMvPageDto(mvs: <rust.ArtistMvDto>[], hasMore: false),
+  // 有绑定账号 + 2 条动态 ⇒ 生成「动态」tab(内容要切 tab 才看到)
+  loadDynamics: (_) async => <rust.FeedEventDto>[
+    _feedEvent(901, '周杰伦', userId: 6452, text: '新专辑预告'),
+    _feedEvent(902, '周杰伦', userId: 6452, text: '巡演日程公布'),
+  ],
+  toggleFollow: (_, _) async => true,
+);
+
+/// 艺人页头部: 32 张专辑 / 379 首歌 / 1922.7 万粉丝, 有别名、有简介。
+rust.ArtistDetailDto _artistDetail() => rust.ArtistDetailDto(
+  id: BigInt.from(6452),
+  name: '周杰伦',
+  avatarUrl: null,
+  coverUrl: null,
+  alias: const <String>['Jay Chou'],
+  briefDesc: '华语流行歌手、词曲创作人。',
+  albumCount: BigInt.from(32),
+  musicCount: BigInt.from(379),
+  fansCount: BigInt.from(19227000),
+  followed: false,
+  userId: BigInt.from(6452),
+  eventCount: BigInt.from(2),
+  songs: _artistSongs().take(3).toList(),
+  albums: _artistAlbums(),
+);
+
+List<rust.SongDto> _artistSongs() => <rust.SongDto>[
+  for (var i = 1; i <= 6; i++)
+    _song(600 + i, '艺人歌曲$i', artist: '周杰伦'),
+];
+
+List<rust.AlbumBrief> _artistAlbums() => <rust.AlbumBrief>[
+  rust.AlbumBrief(
+    id: BigInt.from(701),
+    name: '范特西',
+    coverUrl: null,
+    trackCount: BigInt.from(10),
+    publishTime: BigInt.zero,
+  ),
+  rust.AlbumBrief(
+    id: BigInt.from(702),
+    name: '叶惠美',
+    coverUrl: null,
+    trackCount: BigInt.from(11),
+    publishTime: BigInt.zero,
+  ),
+];
+
+/// 基准图: feed_360x800.png / feed_300x640_s125.png。
+///
+/// 应有什么: 顶部分类条(全部 / 周杰伦 / 云音乐编辑部 / 林俊杰 / 进入全部) + 3 张卡片
+/// (昵称 + 2023-11-15 + 正文 + 点赞·评论·转发三个数字 + 「查看详情」, 中间那张带单曲卡),
+/// 卡片头像是占位(无网络)。
+///
+/// 坏在哪: 分类条竖溢/被压扁、卡片正文被截断、封占位尺寸跳动, 是这一页最典型的回归;
+/// 出现"3 分钟前"这类相对时间说明用例的固定时间戳被改坏了(基准图会天天变)。
+Widget _feedPage() => Scaffold(
+  appBar: AppBar(title: const Text('动态')),
+  body: FeedView(
+    loggedIn: true,
+    onLogin: () {},
+    onPlaySongs: (_, _) {},
+    onOpenUrl: (_) async {},
+    loadFeed: () async => <rust.FeedEventDto>[
+      _feedEvent(
+        11,
+        '周杰伦',
+        userId: 6452,
+        text: '新专辑终于录完了, 谢谢大家等这么久。',
+        likedCount: 1200,
+        commentCount: 86,
+        shareCount: 42,
+      ),
+      _feedEvent(
+        12,
+        '云音乐编辑部',
+        userId: 30,
+        text: '本周华语新歌速递',
+        song: _song(601, '华语热歌1', artist: '周杰伦'),
+        likedCount: 320,
+        commentCount: 12,
+        shareCount: 8,
+      ),
+      _feedEvent(
+        13,
+        '林俊杰',
+        userId: 2116,
+        text: '练团结束, 下一站见。',
+        likedCount: 96,
+      ),
+    ],
+    loadSubscribedArtists: () async => <rust.Artist>[
+      rust.Artist(id: BigInt.from(6452), name: '周杰伦'),
+      rust.Artist(id: BigInt.from(2116), name: '林俊杰'),
+    ],
+  ),
+);
+
+/// 一条动态: 时间戳固定成 unix 1700000000000(2023-11-15), 比"今天"早 30 天以上,
+/// 于是页面退化成日期文案 —— 否则"3 分钟前/N 天前"会随运行时刻漂移, 基准图天天变。
+rust.FeedEventDto _feedEvent(
+  int id,
+  String userName, {
+  int userId = 10,
+  String text = '正文',
+  rust.SongDto? song,
+  int likedCount = 0,
+  int commentCount = 0,
+  int shareCount = 0,
+}) => rust.FeedEventDto(
+  id: BigInt.from(id),
+  threadId: 'A_EV_2_${id}_$userId',
+  userId: BigInt.from(userId),
+  kind: song == null ? 'text' : 'song',
+  userName: userName,
+  avatarUrl: null,
+  text: text,
+  song: song,
+  coverUrl: null,
+  images: const <String>[],
+  videoUrl: null,
+  title: '',
+  timeMs: BigInt.from(1700000000000),
+  liked: false,
+  likedCount: BigInt.from(likedCount),
+  shareCount: BigInt.from(shareCount),
+  commentCount: BigInt.from(commentCount),
+);
+
 final List<_GoldenPage> _goldenPages = <_GoldenPage>[
   _GoldenPage('settings', _settingsPage),
   _GoldenPage('account', _accountPage),
@@ -412,6 +747,10 @@ final List<_GoldenPage> _goldenPages = <_GoldenPage>[
   _GoldenPage('mine', _minePage),
   _GoldenPage('search_landing', _searchLandingPage),
   _GoldenPage('messages', _messagesPage),
+  // churn top-10 里最易回归的三页(审计建议 11), 详见各自 builder 上方的注释
+  _GoldenPage('playlist_detail', _playlistDetailPage, frames: 24),
+  _GoldenPage('artist', _artistPage),
+  _GoldenPage('feed', _feedPage),
 ];
 
 /// 本机是否装了可用于 golden 的 CJK 字体(`.ttc`/`.otf` 存在即算)。
@@ -429,11 +768,14 @@ void main() {
       _cjkAvailable,
       isTrue,
       reason: 'CI 上探测不到系统 CJK 字体(候选见 _cjkFontCandidates), '
-          '12 张 golden 会被整组 skip; 检查 workflow 里的 fonts-noto-cjk 安装',
+          '18 张 golden 会被整组 skip; 检查 workflow 里的 fonts-noto-cjk 安装',
     );
   });
 
   setUpAll(() async {
+    // 歌单详情只有命令式入口且数据直连 FFI, 用 FRB 自带的 mock 通道垫数据(见
+    // _GoldenRustApi)。只影响下面覆盖到的那 5 个方法, 其余照旧抛。
+    RustLib.initMock(api: _GoldenRustApi());
     final path = await _loadGoldenFont();
     if (path == null) {
       debugPrint(
@@ -451,7 +793,12 @@ void main() {
       // 本机没有 CJK 字体就跳过(方块字生成的基准没有意义)
       skip: !_cjkAvailable,
       (tester) async {
-        await _pumpPage(tester, page.build(), size: const Size(360, 800));
+        await _pumpPage(
+          tester,
+          page.build(),
+          size: const Size(360, 800),
+          frames: page.frames,
+        );
         await _expectGolden(tester, '${page.name}_360x800');
       },
     );
@@ -466,6 +813,7 @@ void main() {
           page.build(),
           size: const Size(300, 640),
           textScale: 1.25,
+          frames: page.frames,
         );
         await _expectGolden(tester, '${page.name}_300x640_s125');
       },
