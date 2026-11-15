@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'artist_nav.dart';
+import 'async_view.dart';
 import 'cover_art.dart';
 import 'feed_media.dart';
 import 'feed_share.dart';
@@ -68,8 +69,12 @@ class FeedView extends StatefulWidget {
 }
 
 class _FeedViewState extends State<FeedView> {
-  List<rust.FeedEventDto>? _events;
-  String? _error;
+  /// 已加载的动态(最新页 + 翻出来的历史, 按 id 去重)。
+  ///
+  /// 用**就地合并**(clear + addAll)而不是换列表实例: 它的同一个实例也是喂给
+  /// [AsyncView] 的 data, 换实例会让 AsyncView 的空态判定停在旧快照上
+  /// (刷新把空列表填满后仍显示"还没有动态")。
+  final List<rust.FeedEventDto> _events = <rust.FeedEventDto>[];
 
   /// 每页条数(与后端约定一致)
   static const int _pageSize = 30;
@@ -89,58 +94,60 @@ class _FeedViewState extends State<FeedView> {
   /// 当前选中的艺人(按 userId 过滤), null = 全部
   BigInt? _authorFilter;
 
-  @override
-  void initState() {
-    super.initState();
-    if (widget.loggedIn) _load();
-  }
+  // 首屏取数不在 initState 里: 四态收敛到 [AsyncView](挂载即取、出错时可重试)。
+  // 登录态从无到有时整块按 ValueKey 重挂载(main.dart), 会自动重取。
 
-  @override
-  void didUpdateWidget(covariant FeedView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 登录态从无到有时再拉一次
-    if (widget.loggedIn &&
-        !oldWidget.loggedIn &&
-        _events == null &&
-        _error == null) {
-      _load();
+  /// 取最新一页(不套 [retryNetwork]: AsyncView 的 load 形态会自己套,
+  /// 下拉刷新入口单独套一层, 免得同一次请求包两层退避)。
+  Future<({List<rust.FeedEventDto> events, bool more})> _fetchLatest() async {
+    if (widget.loadFeed != null) {
+      final events = await widget.loadFeed!();
+      return (events: events, more: events.length >= _pageSize);
     }
+    // 真实游标分页: lastTime/more 由服务端给, 不再按"满页"猜
+    final page = await rust.feedPage(limit: _pageSize, lastTime: -1);
+    _cursor = page.lastTime;
+    return (events: page.events, more: page.more);
   }
 
-  /// 拉最新一页并与已加载的历史**按 id 合并去重**(下拉刷新不清历史)。
-  Future<void> _load() async {
-    setState(() => _error = null);
+  /// 把最新一页并进 [_events]: 最新页优先(同 id 用最新副本, 点赞数等状态跟手),
+  /// 历史只在末尾追加未重复的。返回的就是 [_events] 本身(见字段注释)。
+  /// [more] 只在首次加载时决定"还有没有更早", 刷新不动已翻出的历史。
+  List<rust.FeedEventDto> _mergeLatest(
+    List<rust.FeedEventDto> latest, {
+    required bool more,
+  }) {
+    final hadHistory = _events.isNotEmpty;
+    final merged = mergeFeedEvents(latest, _events);
+    _events
+      ..clear()
+      ..addAll(merged);
+    if (!hadHistory) _hasMore = more;
+    // 选中的艺人还在列表里就保留, 否则回到"全部"
+    final filter = _authorFilter;
+    if (filter != null && !_events.any((e) => e.userId == filter)) {
+      _authorFilter = null;
+    }
+    return _events;
+  }
+
+  /// [AsyncView] 的取数入口(组件自己套 [retryNetwork]): 最新页与已加载历史
+  /// 合并去重, 下拉刷新不清历史。
+  Future<List<rust.FeedEventDto>> _loadInitial() async {
+    final page = await _fetchLatest();
+    return _mergeLatest(page.events, more: page.more);
+  }
+
+  /// 下拉刷新: 只重取最新页并与历史合并, 不经过 AsyncView(免得整页闪回加载态);
+  /// 失败保留已渲染的列表只弹提示, 不把已翻出来的历史打成整页错误。
+  Future<void> _refresh() async {
     try {
-      final List<rust.FeedEventDto> events;
-      var more = false;
-      if (widget.loadFeed != null) {
-        events = await retryNetwork(widget.loadFeed!);
-        more = events.length >= _pageSize;
-      } else {
-        // 真实游标分页: lastTime/more 由服务端给, 不再按"满页"猜
-        final page = await retryNetwork(
-          () => rust.feedPage(limit: _pageSize, lastTime: -1),
-        );
-        events = page.events;
-        more = page.more;
-        _cursor = page.lastTime;
-      }
+      final page = await retryNetwork(_fetchLatest);
       if (!mounted) return;
-      final hadHistory = (_events?.isNotEmpty ?? false);
-      setState(() {
-        // 刷新: 最新页优先(同 id 用最新副本, 点赞数等状态跟手), 历史只在末尾追加未重复的
-        _events = mergeFeedEvents(events, _events ?? const []);
-        // 首次加载才决定"还有没有更早"; 刷新不动已翻出的历史
-        if (!hadHistory) _hasMore = more;
-        // 选中的艺人还在列表里就保留, 否则回到"全部"
-        if (_authorFilter != null &&
-            !_events!.any((e) => e.userId == _authorFilter)) {
-          _authorFilter = null;
-        }
-      });
+      setState(() => _mergeLatest(page.events, more: page.more));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = friendlyError(e));
+      _snack('刷新失败: ${friendlyError(e)}');
     }
   }
 
@@ -148,7 +155,7 @@ class _FeedViewState extends State<FeedView> {
   Future<void> _loadOlder() async {
     if (_loadingMore) return;
     final current = _events;
-    if (current == null || current.isEmpty) return;
+    if (current.isEmpty) return;
     setState(() {
       _loadingMore = true;
       _olderError = null;
@@ -176,7 +183,9 @@ class _FeedViewState extends State<FeedView> {
         final merged = mergeFeedEvents(current, older);
         // 没有新增(全是重复 id / 游标没前进)就停, 否则会无限请求同一页
         final added = merged.length > current.length;
-        _events = merged;
+        _events
+          ..clear()
+          ..addAll(merged);
         _hasMore = added && more;
         _loadingMore = false;
       });
@@ -194,7 +203,7 @@ class _FeedViewState extends State<FeedView> {
   List<_Author> get _authors {
     final byKey = <BigInt, _Author>{};
     var firstSeen = 0;
-    for (final e in _events ?? const <rust.FeedEventDto>[]) {
+    for (final e in _events) {
       final key = e.userId != BigInt.zero
           ? e.userId
           : BigInt.from(-e.id.toInt());
@@ -241,7 +250,7 @@ class _FeedViewState extends State<FeedView> {
   }
 
   List<rust.FeedEventDto> get _visible {
-    final all = _events ?? const <rust.FeedEventDto>[];
+    final all = _events;
     final filter = _authorFilter;
     if (filter == null) return all;
     return [
@@ -271,28 +280,45 @@ class _FeedViewState extends State<FeedView> {
         ),
       );
     }
-    if (_events == null && _error == null) {
-      return const LoadingView();
-    }
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
+    // 整块四态收敛到 AsyncView: 加载中整块 LoadingView, 出错居中提示 + 重试,
+    // 空态与数据态共用 _feedBody(空态也要保留艺人筛选条与下拉刷新)。
+    return AsyncView<List<rust.FeedEventDto>>(
+      load: _loadInitial,
+      emptyText: '还没有动态',
+      loadingBuilder: (_) => const LoadingView(),
+      emptyBuilder: (_) => _feedBody(),
+      errorBuilder: (context, error, retry) => _errorView(
+        context,
+        friendlyError(error),
+        retry,
+      ),
+      builder: (_, _, _) => _feedBody(),
+    );
+  }
+
+  /// 整块错误态(改造前就是这个形态: 居中错误文案 + 重试按钮)
+  Widget _errorView(BuildContext context, String message, VoidCallback retry) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: theme.colorScheme.error),
             ),
-            const SizedBox(height: 12),
-            FilledButton.tonal(onPressed: _load, child: const Text('重试')),
-          ],
-        ),
-      );
-    }
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonal(onPressed: retry, child: const Text('重试')),
+        ],
+      ),
+    );
+  }
+
+  Widget _feedBody() {
     final events = _visible;
     final authors = _authors;
     return Column(
@@ -308,7 +334,7 @@ class _FeedViewState extends State<FeedView> {
         // 被构建时)再按最后一条的 time_ms 拉更早一页。
         Expanded(
           child: RefreshIndicator(
-            onRefresh: _load,
+            onRefresh: _refresh,
             child: events.isEmpty
                 ? ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -358,7 +384,6 @@ class _FeedViewState extends State<FeedView> {
   /// 详情页点赞回来后同步列表里的状态
   void _replace(rust.FeedEventDto updated) {
     final list = _events;
-    if (list == null) return;
     final index = list.indexWhere((e) => e.id == updated.id);
     if (index < 0) return;
     setState(() => list[index] = updated);
@@ -395,7 +420,6 @@ class _FeedViewState extends State<FeedView> {
     required BigInt likedCount,
   }) {
     final list = _events;
-    if (list == null) return;
     final index = list.indexWhere((e) => e.id == id);
     if (index < 0) return;
     setState(() {
