@@ -14,11 +14,26 @@ import android.widget.VideoView
  * MV 播放页(C3): 独立 VideoView 播放, 刻意不进 PlaybackService/Media3 队列 ——
  * MV 是一次性直链播放(1 小时签名过期), 和歌曲队列/通知栏互不相干。
  *
- * 生命周期: onDestroy/onPause 停止播放并释放, 不留后台解码器。
+ * 生命周期(P-07): onPause 暂停并把播放位置记下来(按 Home/锁屏后 MV 声音必须停,
+ * 否则会和后台歌曲播放叠加), onResume 回到原位置继续; 真正结束(isFinishing)才 stopPlayback()。
  * 直链 403(签名过期)或解析失败时给出可读 toast, 返回键直接回 Flutter 页面。
  */
 class MvPlayerActivity : Activity() {
     private lateinit var video: VideoView
+
+    /** 是否因生命周期(onPause)而暂停; 只有这种情况 onResume 才自动续播 */
+    private var pausedByLifecycle = false
+
+    /** onPause 时的播放位置, onResume 用它续播(不重头) */
+    private var resumePositionMs = 0
+
+    /**
+     * 待落位的播放位置(毫秒), -1 表示无需 seek。
+     *
+     * 窗口重新可见时 VideoView 会重建 MediaPlayer 并重新 prepare(surfaceCreated -> openVideo),
+     * 在 onResume 里对还没 prepare 的播放器 seekTo 会被那次 prepare 冲掉, 所以要等 onPrepared。
+     */
+    private var pendingSeekMs = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,6 +54,16 @@ class MvPlayerActivity : Activity() {
 
         // 竖屏按 16:9 容器居中, 横屏铺满(简单处理: 只做居中适配)
         video.setOnPreparedListener { mp ->
+            // MediaPlayer 被重建过(见 pendingSeekMs 注释): 在这里落回暂停位置再起播。
+            // 用 mp.seekTo 而不是 video.seekTo —— VideoView.seekTo 要求 isInPlaybackState(),
+            // 此刻 videoWidth/Height 可能还没通过 onVideoSizeChanged 回填, 会被降级成
+            // "记下位置等 prepare", 结果就是从 0 重播。
+            val seek = pendingSeekMs
+            if (seek >= 0) {
+                pendingSeekMs = -1
+                mp.seekTo(seek)
+                video.start()
+            }
             val vw = mp.videoWidth
             val vh = mp.videoHeight
             if (vw > 0 && vh > 0) {
@@ -75,11 +100,34 @@ class MvPlayerActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        if (isFinishing) video.stopPlayback()
+        if (!::video.isInitialized) return
+        // VideoView 不会随 Activity 暂停自动停: 这里显式 pause, 并记住位置供 onResume 续播
+        if (isFinishing) {
+            video.stopPlayback()
+        } else {
+            resumePositionMs = video.currentPosition
+            pausedByLifecycle = true
+            video.pause()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!::video.isInitialized) return
+        if (!pausedByLifecycle) return
+        pausedByLifecycle = false
+        if (video.duration > 0) {
+            // 播放器还在(窗口没被重建): 直接落位置续播, 不必等 onPrepared
+            video.seekTo(resumePositionMs)
+            video.start()
+        } else {
+            // MediaPlayer 已被重建且还没 prepare 好: 交给 onPrepared 落位置
+            pendingSeekMs = resumePositionMs
+        }
     }
 
     override fun onDestroy() {
-        video.stopPlayback()
+        if (::video.isInitialized) video.stopPlayback()
         super.onDestroy()
     }
 
