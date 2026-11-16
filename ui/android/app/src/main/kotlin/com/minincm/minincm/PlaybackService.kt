@@ -496,8 +496,14 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun buildDataSourceFactory(): DataSource.Factory {
+        // UA 的唯一来源是 Rust(ncm-service 的 platform_profile().ua, 取链用同一串),
+        // 由 Dart 启动时经 ncm/player#setUserAgent 注入; 这里的兜底常量只在注入失败时生效.
+        val ua = PlaybackService.resolvedUserAgent()
+        if (!PlaybackService.userAgentInjected()) {
+            Log.w(NCM_UA_TAG, "构建 DataSource 时还没有注入 UA, 用兜底常量: " + ua)
+        }
         val http = DefaultHttpDataSource.Factory()
-            .setUserAgent(USER_AGENT)
+            .setUserAgent(ua)
             .setDefaultRequestProperties(mapOf("Referer" to "https://music.163.com/"))
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
@@ -529,6 +535,17 @@ class PlaybackService : MediaSessionService() {
     private fun releaseCache() {
         simpleCache?.release()
         simpleCache = null
+    }
+
+    /**
+     * Dart 注入的 UA 与兜底常量不同(升级客户端版本后的正常漂移): DataSource 在构建时就捕获了
+     * UA, 要让新值生效只能重建播放器。启动注入时通常还没有 MediaItem, 重建是零代价的;
+     * 若正在播, 由 [rebuildPlayer] 保留播放项/位置, 代价与改 EQ 同量级(几十毫秒)。
+     */
+    private fun applyUserAgentChange(matchesFallback: Boolean) {
+        if (matchesFallback || exoPlayer == null) return
+        Log.i(TAG, "UA 变更 ⇒ 重建 ExoPlayer, 让 CDN 请求改用注入的 UA")
+        rebuildPlayer()
     }
 
     /**
@@ -603,13 +620,59 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         /**
-         * CDN 的 UA 也要与客户端形态一致: 安卓 App 用官方安卓客户端 UA
-         * (与 ncm-service 的 ANDROID_PROFILE.ua 同一串), 不要拿 PC 桌面 UA 冒充。
+         * 【兜底】CDN 的 UA: 安卓 App 用官方安卓客户端 UA, 不要拿 PC 桌面 UA 冒充。
          * ExoPlayer 默认 UA(NeteaseLib/ExoPlayerLib) 会被 CDN 拒。
+         *
+         * **真值来自 Dart/Rust**: `ncm-ffi` 的 `playback_user_agent()`
+         * (= ncm-service 的 `platform_profile().ua`, 与取链同一个常量) 在启动时经
+         * `ncm/player#setUserAgent` 注入, 见 [setUserAgent]。这里的字符串只在注入失败
+         * (Dart 侧 Rust 未就绪/通道未建)时生效, 不再需要与 Rust 手工保持一致;
+         * 注入值与它不同时 logcat 会打一条 `NCM-UA`(P-21 的防漂移面)。
          */
-        const val USER_AGENT =
+        const val FALLBACK_USER_AGENT =
             "NeteaseMusic/9.1.65.240927161425(9001065);Dalvik/2.1.0 (Linux; U; Android 14; " +
                 "23013RK75C Build/UKQ1.230804.001)"
+
+        /** UA 注入/漂移的 logcat 标签: `adb logcat -s NCM-UA` 即可对比兜底与真值 */
+        const val NCM_UA_TAG = "NCM-UA"
+
+        /** Dart 从 Rust 拿到的 UA(真值); null = 还没注入, 全程用 [FALLBACK_USER_AGENT] */
+        @Volatile
+        private var injectedUserAgent: String? = null
+
+        /** 播放器该用的 UA: 注入值优先, 否则兜底常量 */
+        fun resolvedUserAgent(): String = injectedUserAgent ?: FALLBACK_USER_AGENT
+
+        /** 是否已收到 Dart 注入(兜底路径的可观测判据) */
+        fun userAgentInjected(): Boolean = injectedUserAgent != null
+
+        /**
+         * `ncm/player#setUserAgent` 的落点(Dart → Kotlin), 由 MainActivity 转发。
+         *
+         * 三件事: 记住真值 / 打一条可对比的日志 / 让已建好的播放器改用新值。
+         */
+        fun setUserAgent(ua: String?) {
+            val trimmed = ua?.trim().orEmpty()
+            if (trimmed.isEmpty()) {
+                Log.w(NCM_UA_TAG, "注入的 UA 为空, 继续用兜底常量: " + FALLBACK_USER_AGENT)
+                return
+            }
+            if (trimmed == injectedUserAgent) return
+            injectedUserAgent = trimmed
+            val matchesFallback = trimmed == FALLBACK_USER_AGENT
+            if (matchesFallback) {
+                Log.i(NCM_UA_TAG, "UA 已注入, 与兜底常量一致: " + trimmed)
+            } else {
+                // 不是错误: 真值以 Rust 为准, 只是 Kotlin 的兜底副本过期了(升级客户端版本时正常出现)
+                Log.w(
+                    NCM_UA_TAG,
+                    "UA 已注入(播放用注入值), 兜底常量已过期:\n  注入=" + trimmed +
+                        "\n  兜底=" + FALLBACK_USER_AGENT,
+                )
+            }
+            // DataSource 在构建时捕获 UA: 已经建好且真值不同 ⇒ 重建一次(此刻通常还没开始播)
+            instance?.applyUserAgentChange(matchesFallback)
+        }
 
         /** logcat 统一前缀(NCM-PLAYER): 通知按钮/调音的可观测面, 回归与真机排查都看它 */
         const val TAG = "NCM-PLAYER"

@@ -748,6 +748,47 @@ mod tests {
         }
     }
 
+    /// UA 里 `NeteaseMusic/<版本>/...` 的版本段是 CDN/风控识别客户端的关键.
+    /// 升级客户端版本时**只改 identity.rs 这一处**: 播放器(Android ExoPlayer)通过 FFI
+    /// 拿同一串(P-21), 这里断言"版本号形态还在", 免得有人手改成没有版本号或带空白的串,
+    /// 让 CDN 侧静默降权(表现为偶发 403/试听).
+    #[test]
+    fn playback_ua_carries_client_version() {
+        fn version_token(ua: &str) -> &str {
+            let (_, rest) = ua
+                .split_once("NeteaseMusic")
+                .unwrap_or_else(|| panic!("UA 必须自称 NeteaseMusic 客户端: {ua}"));
+            let (_, rest) = rest
+                .split_once('/')
+                .unwrap_or_else(|| panic!("UA 缺版本号段(.../x.y.z.build): {ua}"));
+            let end = rest
+                .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+                .unwrap_or(rest.len());
+            &rest[..end]
+        }
+
+        for profile in [&ANDROID_PROFILE, &DESKTOP_PROFILE] {
+            let ua = profile.ua;
+            assert_eq!(ua.trim(), ua, "UA 两端不许有空白: {ua}");
+            assert!(!ua.is_empty(), "UA 不许为空");
+            let version = version_token(ua);
+            assert!(
+                version.as_bytes().first().is_some_and(u8::is_ascii_digit),
+                "版本号必须以数字开头: {version} (来自 {ua})"
+            );
+            assert!(
+                version.matches('.').count() >= 3,
+                "版本号至少要 4 段(x.y.z.build): {version} (来自 {ua})"
+            );
+        }
+        // 安卓 UA 还要带 build 指纹段: 只有 Dalvik/ 前缀的串会被 CDN 当成非官方客户端
+        assert!(
+            ANDROID_PROFILE.ua.contains("Dalvik/") && ANDROID_PROFILE.ua.contains("Build/"),
+            "{}",
+            ANDROID_PROFILE.ua
+        );
+    }
+
     #[test]
     fn device_id_is_stable_across_reloads() {
         let dir = tmpdir("stable");

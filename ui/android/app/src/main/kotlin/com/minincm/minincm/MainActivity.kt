@@ -354,6 +354,14 @@ class MainActivity : FlutterActivity() {
             result.success(dataDir())
             return
         }
+        // 播放 UA 的唯一来源在 Rust(ncm-service 的 platform_profile().ua), Dart 启动时把它
+        // 推进来; 服务还没创建也照样收下(存 companion 静态字段, onCreate 时读)。
+        // 兜底常量留在 PlaybackService.FALLBACK_USER_AGENT(P-21)。
+        if (method == "setUserAgent") {
+            PlaybackService.setUserAgent(args?.get("ua") as? String)
+            result.success(null)
+            return
+        }
         // configure 不需要 MediaController: 它落在 PlaybackService 上(服务拥有 ExoPlayer)
         if (method == "configure") {
             val svc = PlaybackService.instance
