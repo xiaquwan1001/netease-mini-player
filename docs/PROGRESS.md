@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.17.0**(第五批: 拆壳 S6 队列面板 / P-03 增益斜率三端统一 / P-07·P-08 Android 生命周期与登录 / P-17·P-18·P-20 打包加固)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.18.0**(第六批: 拆壳 S7 账号动作 / P-09 深浅色 / P-21 播放 UA 单一来源 / P-10 seek 如实反馈)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.18.0** | **2026-11-16** | **第六批**(4 lane): main.dart **1874→1562** 拆壳 **S7**(账号/登录态/列表态导航 → `home/account_actions.dart`, `_libraryTitle` 收口单一文件)、**P-09** 登录/MV 页跟随系统深浅色(同名 style + values-night)、**P-21** 播放 UA 收敛 Rust 单一来源(FFI→Dart→Kotlin 兜底+漂移日志)、**P-10** 渐进播放 seek 如实反馈并修掉 `EqSource` 未实现 `try_seek`(桌面完整文件本该能跳); Rust **294→298** / Dart **1028→1037** |
 | **v0.17.0** | **2026-11-16** | **第五批**(4 lane): main.dart **2156→1874** 拆壳 **S6**(队列面板 → `home/queue_sheet_controller.dart`)、**P-03** 增益斜率 `gain_slew_db_per_sec` 打通 Rust→FFI→Dart(`0=瞬时`, Rust 290→294)、**P-07/P-08** MV 跟随生命周期 + 登录 cookie 清理去重(模拟器实测)、**P-17/P-18/P-20** AppImage 工具 pin+sha256、两平台标题尺寸统一、注释纠偏; 测试 **1010→1028** |
 | **v0.16.0** | **2026-11-16** | **第四批**(平台层审计后的第一批修复, 4 lane): main.dart **2503→2156** 拆壳 **S5**(动作宿主+14 个动作闭包 → `home/song_action_wiring.dart`)、**P-01/P-02** Android 通知栏按钮上划清任务后仍可用 + 红心·模式自愈、**P-04/P-05/P-06** 桌面「边听边存」如实说明 + EQ 失败可观测 + 冷启动调音重试、**CI 门禁统一**(`ci-gates.sh` 唯一实现, golden 进发版门); 测试 **992→1010** |
 | **v0.15.0** | **2026-11-16** | **重构第三批**(4 lane): main.dart **2899→2503** 拆壳 **S4**(轮询/续播/现场恢复/预取/响度簿记 → `src/home/playback_coordinator.dart` 567 行)、**P1** `comment_thread` 1699→8 + `feed_view` 1190→7 barrel(part 保私有)、**P2** vip/medal 映射层与 cover_art 纯函数下移、**平台层只读审计**(22 条缺陷, P1×6); 门禁 992 / 290, golden 无变化 |
@@ -92,6 +93,34 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 第六批: S7 账号动作 + 深浅色 + UA 单一来源 + seek 如实反馈(**v0.18.0**)
+
+4 条 lane 并行。两条 lane 分别动了 `ncm-ffi/src/api.rs` 与 codegen 产物, 合并后**重跑 codegen 确认零 diff** 才继续(避免 Dart/Rust content hash 不一致)。
+
+### 前端结构
+
+- **main.dart 拆壳 S7**: 新增 `src/home/account_actions.dart`(500, `ChangeNotifier`): 登录/退出/切号/刷新/清凭据、账号簿入口、二级页导航(`openUserList/openPlaylist/openLikedDetail/leaveLibrary`)、列表态唯一写入口(`applyPlaybackStarted/enterHeartMode/setPlaySource/clearQueuePlaylistId`)、日推缓存按 uid 分区的入口; main.dart **1874 → 1562**(−312)。
+  `src/home/` 现 6 个 controller 合计 2749 行, main.dart 从本批开工前 3095 → **1562**(−49%)。
+- `_libraryTitle` 写点收口为**单一文件四处**(全在 `account_actions.dart`), 页面 0 写点; `PlaybackCoordinator.libraryTitleOf` 与 `QueueSheetController.libraryTitleOf` 改注入只读函数, S6 契约不变。
+
+### 平台层修复
+
+| 缺陷 | 修法 |
+|---|---|
+| **P-09** 登录页/MV 页固定浅色 | 平台无 `Theme.Material.DayNight`, 故用「同名 style + `values-night` 覆盖」(`LoginTheme`/`MvTheme`); `LoginActivity` 硬编码 `0xFFF5F5F5/0xFF1A1A1A` 改取 `@color/login_chrome_bg/fg`(浅 `#F5F5F5`/夜间 `#121212`, 文字 `#E6E6E6`); MV 页黑边恒纯黑但父主题随系统。模拟器(新建 p09daynight / 5558, 未抢 5554·5556)实测: 夜间采样 `#121212/#E6E6E6`, 浅色与改前一致 |
+| **P-21** 播放 UA 双份手抄常量 | `identity.rs` 为唯一真值 → `ncm-ffi #[frb(sync)] playback_user_agent()` → Dart 启动握手时 `setUserAgent` → Kotlin `resolvedUserAgent()`(注入值 ?: 兜底常量), 注入值变化会重建一次 ExoPlayer(UA 在构建 DataSource 时被捕获); 防漂移: Rust 单测校验版本号格式 + Dart 幂等注入测试 3 例 + Kotlin `NCM-UA` 日志在不一致时打 W 并列两串 |
+| **P-10** 渐进播放期 seek 静默失败 | 方案 A(如实反馈)而非 B(pending_seek, 需重建解码器): `PlaySource::seekable()` + `PlayerState.seekable/seek_error` + `Cmd::Seek` 有界回执(1.5s) + `Player::seek -> Result`; 进度条不可 seek 时换同款轨道 + `AbsorbPointer`, 拖/点弹「缓存中, 暂不可跳转」。**额外修掉审计没写到的缺陷**: `EqSource` 自研包装层没实现 `try_seek`(rodio 默认返回 NotSupported) ⇒ 桌面连完整落盘的文件也跳不动, 本次透传给内层 decoder |
+
+### 门禁(合并后 main 复跑)
+
+`cargo test --offline` **298** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **1037 通过 0 失败**(18 张 golden **无变化**) / `dart analyze` 0 issue / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK。
+
+### 过程
+
+- 两次合并后 `dart format --set-exit-if-changed` 抓到 3 个未格式化文件(`ua_injection_test` / `player_bar` / `player_bar_seek_test`), 各补一个 `style:` 提交 —— 教训: **合并复查清单必须包含格式门**, 不能只看 worker 自报。
+- P-10 遗留: 同一首歌下载完成后(解码器已是非 seekable)**仍需重播一次**才能 seek; 本机无音频输出设备, 端到端"拖一次"只能在 Linux 桌面上手验。
+
 
 ## 2026-11-16(日) 第五批: S6 队列面板 + 增益斜率统一 + Android 生命周期 + 打包加固(**v0.17.0**)
 
