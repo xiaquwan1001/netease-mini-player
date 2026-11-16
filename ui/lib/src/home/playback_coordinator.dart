@@ -187,6 +187,10 @@ class PlaybackCoordinator extends ChangeNotifier {
         );
       }
     }
+    // 通知栏图标自愈(P-02): 定时幂等重推一次红心/模式。
+    // 值没变时 Playback.setActionState 直接短路(不跨通道/不刷新通知), 所以这里只是
+    // 一次内存比较; 上一次推送失败(服务未就绪)或原生侧状态被重置时, 靠它自愈。
+    _maybeSyncActionState();
     // 位置/播放中两个高频 notifier + 高亮行(顺序与条件由控制器保持原样)
     lyric.followPlayer(state);
     // 状态记忆: 播放中每 5s 落一次盘(暂停/换曲时会另有 force 落盘)
@@ -194,6 +198,20 @@ class PlaybackCoordinator extends ChangeNotifier {
     if (_looksEnded(wasPlaying, state)) {
       await _onTrackEnded();
     }
+  }
+
+  /// 上一次定时重推通知栏按钮状态的时间(节流: 每 5s 最多一次, 与落盘节流同口径)
+  DateTime? _lastActionStateSync;
+
+  /// 节流版 syncActionState: 真正的幂等判断在 Playback.setActionState 里(值未变不跨通道)
+  void _maybeSyncActionState() {
+    final now = DateTime.now();
+    final last = _lastActionStateSync;
+    if (last != null && now.difference(last) < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastActionStateSync = now;
+    unawaited(syncActionState());
   }
 
   /// 播完判定: 从播放态落到非播放态, 且位置已在末尾附近.

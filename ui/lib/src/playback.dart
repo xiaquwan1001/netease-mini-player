@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart';
 
 import 'rust/api.dart' as rust;
@@ -51,6 +52,25 @@ class Playback {
 
   bool get isAndroid => Platform.isAndroid || debugForceAndroid;
 
+  static bool get _isAndroidPlatform => Platform.isAndroid || debugForceAndroid;
+
+  /// 通知按钮(红心/模式)最近一次**成功**推送的状态。
+  ///
+  /// 两个用途(见 P-02):
+  /// 1) 幂等: 值没变就不重复跨通道(轮询里的定时重推靠这里短路成一次内存比较);
+  /// 2) 自愈: 原生服务被系统回收重建后, 通知图标会回到默认值, 原生会请求重推,
+  ///    这里能立刻用"最近已知状态"补一次, 不必等用户切歌。
+  static bool? _sentLiked;
+  static String? _sentModeIcon;
+
+  /// 测试用: 清掉幂等/自愈缓存(生产路径由原生 syncActionState 请求来清)
+  @visibleForTesting
+  static void debugResetActionStateCache() {
+    _sentLiked = null;
+    _sentModeIcon = null;
+    _pendingNativeActions.clear();
+  }
+
   // 原生 → Dart 的单向回调(通知栏/耳机键/蓝牙都只发意图, 逻辑在 Dart):
   // 两条注册入口共用一个 handler, 后注册的不会把先注册的覆盖掉.
   static void Function()? _onNext;
@@ -82,38 +102,111 @@ class Playback {
     _registerNativeHandler();
   }
 
+  /// 原生动作名 → Dart 回调. 未注册的回调返回 null(动作进排队区, 注册后补执行).
+  static void Function()? _handlerOf(String method) => switch (method) {
+    'skipNext' => _onNext,
+    'skipPrevious' => _onPrevious,
+    'toggleLike' => _onToggleLike,
+    'cycleMode' => _onCycleMode,
+    'trackEnded' => _onEnded,
+    _ => null,
+  };
+
+  /// 能识别的原生动作名(其余名字不排队, 只打日志: 多半是两端口径漂了)
+  static const Set<String> _nativeActions = <String>{
+    'skipNext',
+    'skipPrevious',
+    'toggleLike',
+    'cycleMode',
+    'trackEnded',
+  };
+
+  /// 回调还没注册时到达的原生动作(握手比 [setActionHandlers] 先到的那几微秒).
+  /// 以前这里 `_onToggleLike?.call()` 会静默丢掉点击, 现在按到达顺序排队, 注册后补执行。
+  static final List<String> _pendingNativeActions = <String>[];
+
+  static const int _maxPendingNativeActions = 8;
+
   static void _registerNativeHandler() {
     _channel.setMethodCallHandler((call) async {
-      switch (call.method) {
-        case 'skipNext':
-          _onNext?.call();
-        case 'skipPrevious':
-          _onPrevious?.call();
-        case 'toggleLike':
-          _onToggleLike?.call();
-        case 'cycleMode':
-          _onCycleMode?.call();
-        case 'trackEnded':
-          _onEnded?.call();
+      if (call.method == 'syncActionState') {
+        _resyncActionState();
+        return null;
+      }
+      final handler = _handlerOf(call.method);
+      if (handler != null) {
+        handler();
+      } else if (_nativeActions.contains(call.method)) {
+        if (_pendingNativeActions.length >= _maxPendingNativeActions) {
+          _pendingNativeActions.removeAt(0);
+        }
+        _pendingNativeActions.add(call.method);
+        debugPrint('[NCM-PLAYER] 原生动作 ${call.method} 到达时回调未注册, 排队');
+      } else {
+        debugPrint('[NCM-PLAYER] 未知的原生动作: ${call.method}');
       }
       return null;
     });
+    // 先补执行排队中的动作(setSkipHandlers 会先注册、setActionHandlers 后来,
+    // 喜欢/模式可能在中间这批里), 再握手。
+    _flushPendingNativeActions();
+    // 握手: 告诉原生"通知回调已注册"。上划清任务后点通知按钮时, 原生会先用 Intent 把 App
+    // 拉起来并把动作排队, 收到这条握手才执行(见 MainActivity.deliverPendingPlaybackAction)。
+    if (_isAndroidPlatform) {
+      _channel
+          .invokeMethod<void>('actionHandlersReady')
+          .catchError((Object _) {});
+    }
+  }
+
+  /// 按到达顺序补执行排队中的原生动作; 对应回调仍未注册就停下(保持顺序, 等下一次注册)
+  static void _flushPendingNativeActions() {
+    while (_pendingNativeActions.isNotEmpty) {
+      final handler = _handlerOf(_pendingNativeActions.first);
+      if (handler == null) return;
+      _pendingNativeActions.removeAt(0);
+      handler();
+    }
+  }
+
+  /// 原生请求重推通知按钮状态(服务/会话重建、控制器重连): 用最近已知状态立刻补一次,
+  /// 并清掉幂等缓存, 让下一轮轮询把**当前真实状态**再推一遍(失败重试也走同一条路径)。
+  static void _resyncActionState() {
+    final liked = _sentLiked;
+    final icon = _sentModeIcon;
+    _sentLiked = null;
+    _sentModeIcon = null;
+    debugPrint('[NCM-PLAYER] 原生请求重推通知按钮状态(liked=$liked icon=$icon)');
+    if (liked != null && icon != null) {
+      unawaited(Playback().setActionState(liked: liked, modeIcon: icon));
+    }
   }
 
   /// Dart → 原生: 通知自定义按钮的状态(红心实/空 + 模式图标), 原生据此重设按钮并刷新通知.
-  /// 失败静默(通知未就绪/未连接时不影响播放).
+  ///
+  /// 幂等: 与上次**成功**推送的值相同就直接返回 —— 轮询每 5s 的定时重推因此几乎零成本,
+  /// 不会每 5s 重设一次通知按钮。
+  /// 失败可观测: 记一条日志(以前是完全静默), 且不记为"已推送", 下一轮轮询会自然重试。
   Future<void> setActionState({
     required bool liked,
     required String modeIcon,
   }) async {
     if (!isAndroid) return;
+    if (_sentLiked == liked && _sentModeIcon == modeIcon) return;
     try {
       await _channel.invokeMethod('setActionState', {
         'liked': liked,
         'modeIcon': modeIcon,
       });
-    } on PlatformException {
-      // 通知还没建好/服务未起: 忽略, 下次状态变化再同步
+      _sentLiked = liked;
+      _sentModeIcon = modeIcon;
+    } on PlatformException catch (e) {
+      // 通知还没建好/服务未起: 不记为已推送 ⇒ 下一轮轮询重试(自愈), 同时留下可观测痕迹
+      debugPrint(
+        '[NCM-PLAYER] setActionState 失败(${e.code}: ${e.message}), 下次重试',
+      );
+    } on MissingPluginException catch (e) {
+      debugPrint('[NCM-PLAYER] setActionState 通道缺失: $e');
     }
   }
 
