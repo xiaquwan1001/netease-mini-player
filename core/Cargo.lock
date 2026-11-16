@@ -1319,6 +1319,7 @@ dependencies = [
  "ncm-domain",
  "rodio",
  "serde",
+ "serde_json",
  "symphonia",
 ]
 

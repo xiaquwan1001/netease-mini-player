@@ -95,6 +95,13 @@ dependencies {
     // exoplayer 只是传递依赖它, 这里显式声明并锁到同一 1.9.4, 避免版本漂移
     implementation("androidx.media3:media3-datasource:1.9.4")
     implementation("androidx.core:core-ktx:1.17.0")
+
+    // P-11: 纯逻辑(Kotlin 解析/biquad)的 JVM 单测, 不需要设备也不需要真机.
+    // 三端共享夹具 ui/test/fixtures/eq_profile_cases.json 由 EqProfileParserFixtureTest 读取;
+    // gson 用来读该 JSON —— Android 的 org.json 在 JVM 单测里是 android.jar 的桩(调用即抛),
+    // 所以这里显式用 gson(2.10.1 与本机 gradle 缓存一致, 可离线解析).
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.code.gson:gson:2.10.1")
 }
 
 flutter {

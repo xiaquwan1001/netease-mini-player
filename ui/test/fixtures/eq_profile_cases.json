@@ -1,0 +1,479 @@
+{
+  "format": "ncm-eq-profile-fixture/1",
+  "description": [
+    "EQ 曲线文本解析的三端共享夹具(P-05 中期 / P-11): 同一 input 在 Dart(ui/lib/src/eq_profile.dart)、",
+    "Rust(core/crates/ncm-domain::eq_profile)、Kotlin(ui/android/.../EqProfileParser.kt)三份实现上必须有同一结果。",
+    "断言口径: expect 里出现的字段才断言, 没出现的字段不校验; 出现 null 表示断言\"没有 filter\"(first/last)。",
+    "Biquad 系数 = 48 kHz 采样率下首/尾 filter 的归一化系数 [b0, b1, b2, a1, a2], 容差见 coefficientTolerance。",
+    "只有首尾是 PK 的用例才带 biquad: LS/HS 的 shelf alpha 三端目前不一致(Dart 用 RBJ S=1: alpha=sin(w0)/2*sqrt(2),",
+    "Rust/Kotlin 用 Q 形式: alpha=sin(w0)/(2Q)), 该语义差异本次按要求只记录不修改(见交付报告\"口径差异\")。",
+    "已知分叉用例以 divergence_ 前缀命名: expect 是三端中的多数口径(Rust+Kotlin), expectDart 单列 Dart 的实际行为,",
+    "这样\"分叉\"本身也被锁进测试, 任何一端改动都会让测试变红(基线统一后删掉对应 override 即可)。"
+  ],
+  "sampleRateHz": 48000,
+  "floatTolerance": 0.0005,
+  "coefficientTolerance": 0.001,
+  "cases": [
+    {
+      "name": "basic_multi_filter",
+      "note": "正常多 filter(LS 只做中段, 首尾都是 PK): 三端解析出同一组首尾参数与同一组 biquad 系数",
+      "input": "Preamp: -6.0 dB\nFilter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71\nFilter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70\nFilter 3: ON PK Fc 3000 Hz Gain 4.5 dB Q 1.2",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -6,
+        "filterCount": 3,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 105,
+          "gainDb": -3.2,
+          "q": 0.71,
+          "biquad": [0.996455, -1.976808, 0.980539, -1.976808, 0.976995]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 3000,
+          "gainDb": 4.5,
+          "q": 1.2,
+          "biquad": [1.074382, -1.645285, 0.706461, -1.645285, 0.780844]
+        }
+      }
+    },
+    {
+      "name": "preamp_missing_defaults_to_zero",
+      "note": "Preamp 行可缺省, 缺省 0 dB",
+      "input": "Filter 1: ON PK Fc 1000 Hz Gain -2.0 dB Q 1.0",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": -2,
+          "q": 1,
+          "biquad": [0.985967, -1.847597, 0.877573, -1.847597, 0.86354]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": -2,
+          "q": 1,
+          "biquad": [0.985967, -1.847597, 0.877573, -1.847597, 0.86354]
+        }
+      }
+    },
+    {
+      "name": "preamp_only_no_filters",
+      "note": "只有 Preamp: 整体压 3 dB, 仍算生效(applied=true)",
+      "input": "Preamp: -3.0 dB",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -3,
+        "filterCount": 0,
+        "applied": true,
+        "first": null,
+        "last": null
+      }
+    },
+    {
+      "name": "empty_input",
+      "note": "空串等价旁路: 0 filter, Preamp 0 dB, applied=false",
+      "input": "",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 0,
+        "applied": false,
+        "first": null,
+        "last": null
+      }
+    },
+    {
+      "name": "comments_and_blank_lines_ignored",
+      "note": "空行与 # / // 注释行忽略: 不占 filter 计数, 不报错",
+      "input": "# AutoEQ curve\n\n// note\nPreamp: 0.0 dB\n\nFilter 1: ON PK Fc 500 Hz Gain 2.0 dB Q 1.0\n",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 500,
+          "gainDb": 2,
+          "q": 1,
+          "biquad": [1.007333, -1.939199, 0.936027, -1.939199, 0.94336]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 500,
+          "gainDb": 2,
+          "q": 1,
+          "biquad": [1.007333, -1.939199, 0.936027, -1.939199, 0.94336]
+        }
+      }
+    },
+    {
+      "name": "on_off_case_variants",
+      "note": "ON/OFF 大小写变体(on/Off/oN/OFf)都必须接受, enabled 逐条对应",
+      "input": "Filter 1: on PK Fc 500 Hz Gain -1.5 dB Q 0.9\nFilter 2: Off PK Fc 600 Hz Gain 1.5 dB Q 0.9\nFilter 3: oN PK Fc 700 Hz Gain -1.5 dB Q 0.9\nFilter 4: OFf PK Fc 800 Hz Gain 1.5 dB Q 0.9",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 4,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 500,
+          "gainDb": -1.5,
+          "q": 0.9,
+          "biquad": [0.993957, -1.919676, 0.929838, -1.919676, 0.923795]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": false,
+          "freqHz": 800,
+          "gainDb": 1.5,
+          "q": 0.9,
+          "biquad": [1.009533, -1.888451, 0.88932, -1.888451, 0.898853]
+        }
+      }
+    },
+    {
+      "name": "unit_case_variants",
+      "note": "单位/关键字大小写(db/DB/dB, pk, hz)都必须接受",
+      "input": "preamp: -2.5 db\nFilter 1: ON pk Fc 250 hz Gain -1.0 DB Q 0.7",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -2.5,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 250,
+          "gainDb": -1,
+          "q": 0.7,
+          "biquad": [0.997373, -1.95064, 0.954312, -1.95064, 0.951685]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 250,
+          "gainDb": -1,
+          "q": 0.7,
+          "biquad": [0.997373, -1.95064, 0.954312, -1.95064, 0.951685]
+        }
+      }
+    },
+    {
+      "name": "preamp_without_unit",
+      "note": "Preamp 的 dB 单位可省",
+      "input": "Preamp: 3.5\nFilter 1: ON PK Fc 4000 Hz Gain -3.5 dB Q 1.0",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 3.5,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 4000,
+          "gainDb": -3.5,
+          "q": 1,
+          "biquad": [0.92233, -1.326427, 0.609296, -1.326427, 0.531626]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 4000,
+          "gainDb": -3.5,
+          "q": 1,
+          "biquad": [0.92233, -1.326427, 0.609296, -1.326427, 0.531626]
+        }
+      }
+    },
+    {
+      "name": "gain_at_limits_accepted",
+      "note": "±24 dB 边界值本身合法(闭区间): Preamp -24, Gain +24, Gain -24",
+      "input": "Preamp: -24 dB\nFilter 1: ON PK Fc 1000 Hz Gain 24 dB Q 1.0\nFilter 2: ON PK Fc 2000 Hz Gain -24 dB Q 1.0",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -24,
+        "filterCount": 2,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": 24,
+          "q": 1,
+          "biquad": [1.239498, -1.950908, 0.728245, -1.950908, 0.967742]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 2000,
+          "gainDb": -24,
+          "q": 1,
+          "biquad": [0.681437, -1.274991, 0.63853, -1.274991, 0.319968]
+        }
+      }
+    },
+    {
+      "name": "gain_above_limit_is_error",
+      "note": "Gain 24.5 > 24: 报错而不是静默钳制到 24",
+      "input": "Filter 1: ON PK Fc 1000 Hz Gain 24.5 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "gain_below_limit_is_error",
+      "note": "Gain -24.5 < -24: 报错, 行号指向第 2 行(有 Preamp 在前)",
+      "input": "Preamp: 0.0 dB\nFilter 1: ON PK Fc 1000 Hz Gain -24.5 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 2
+      }
+    },
+    {
+      "name": "preamp_above_limit_is_error",
+      "note": "Preamp 25 > 24: 报错",
+      "input": "Preamp: 25 dB\nFilter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "filter_count_over_limit",
+      "note": "第 21 个 filter 报错(上限 20), 行号 = 第 21 行",
+      "input": "Filter 1: ON PK Fc 1000 Hz Gain 1.0 dB Q 1.0\nFilter 2: ON PK Fc 1010 Hz Gain 1.0 dB Q 1.0\nFilter 3: ON PK Fc 1020 Hz Gain 1.0 dB Q 1.0\nFilter 4: ON PK Fc 1030 Hz Gain 1.0 dB Q 1.0\nFilter 5: ON PK Fc 1040 Hz Gain 1.0 dB Q 1.0\nFilter 6: ON PK Fc 1050 Hz Gain 1.0 dB Q 1.0\nFilter 7: ON PK Fc 1060 Hz Gain 1.0 dB Q 1.0\nFilter 8: ON PK Fc 1070 Hz Gain 1.0 dB Q 1.0\nFilter 9: ON PK Fc 1080 Hz Gain 1.0 dB Q 1.0\nFilter 10: ON PK Fc 1090 Hz Gain 1.0 dB Q 1.0\nFilter 11: ON PK Fc 1100 Hz Gain 1.0 dB Q 1.0\nFilter 12: ON PK Fc 1110 Hz Gain 1.0 dB Q 1.0\nFilter 13: ON PK Fc 1120 Hz Gain 1.0 dB Q 1.0\nFilter 14: ON PK Fc 1130 Hz Gain 1.0 dB Q 1.0\nFilter 15: ON PK Fc 1140 Hz Gain 1.0 dB Q 1.0\nFilter 16: ON PK Fc 1150 Hz Gain 1.0 dB Q 1.0\nFilter 17: ON PK Fc 1160 Hz Gain 1.0 dB Q 1.0\nFilter 18: ON PK Fc 1170 Hz Gain 1.0 dB Q 1.0\nFilter 19: ON PK Fc 1180 Hz Gain 1.0 dB Q 1.0\nFilter 20: ON PK Fc 1190 Hz Gain 1.0 dB Q 1.0\nFilter 21: ON PK Fc 1200 Hz Gain 1.0 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 21
+      }
+    },
+    {
+      "name": "filter_count_over_limit_with_preamp",
+      "note": "有 Preamp 行时第 21 个 filter 在第 22 行",
+      "input": "Preamp: 0.0 dB\nFilter 1: ON PK Fc 1000 Hz Gain 1.0 dB Q 1.0\nFilter 2: ON PK Fc 1010 Hz Gain 1.0 dB Q 1.0\nFilter 3: ON PK Fc 1020 Hz Gain 1.0 dB Q 1.0\nFilter 4: ON PK Fc 1030 Hz Gain 1.0 dB Q 1.0\nFilter 5: ON PK Fc 1040 Hz Gain 1.0 dB Q 1.0\nFilter 6: ON PK Fc 1050 Hz Gain 1.0 dB Q 1.0\nFilter 7: ON PK Fc 1060 Hz Gain 1.0 dB Q 1.0\nFilter 8: ON PK Fc 1070 Hz Gain 1.0 dB Q 1.0\nFilter 9: ON PK Fc 1080 Hz Gain 1.0 dB Q 1.0\nFilter 10: ON PK Fc 1090 Hz Gain 1.0 dB Q 1.0\nFilter 11: ON PK Fc 1100 Hz Gain 1.0 dB Q 1.0\nFilter 12: ON PK Fc 1110 Hz Gain 1.0 dB Q 1.0\nFilter 13: ON PK Fc 1120 Hz Gain 1.0 dB Q 1.0\nFilter 14: ON PK Fc 1130 Hz Gain 1.0 dB Q 1.0\nFilter 15: ON PK Fc 1140 Hz Gain 1.0 dB Q 1.0\nFilter 16: ON PK Fc 1150 Hz Gain 1.0 dB Q 1.0\nFilter 17: ON PK Fc 1160 Hz Gain 1.0 dB Q 1.0\nFilter 18: ON PK Fc 1170 Hz Gain 1.0 dB Q 1.0\nFilter 19: ON PK Fc 1180 Hz Gain 1.0 dB Q 1.0\nFilter 20: ON PK Fc 1190 Hz Gain 1.0 dB Q 1.0\nFilter 21: ON PK Fc 1200 Hz Gain 1.0 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 22
+      }
+    },
+    {
+      "name": "illegal_filter_index_is_error",
+      "note": "Filter 序号不是数字: 报错行号一致(三端错误文案不同, 不在此断言)",
+      "input": "Filter 1: ON PK Fc 1000 Hz Gain 1 dB Q 1\nFilter x: ON PK Fc 1000 Hz Gain 1 dB Q 1",
+      "expect": {
+        "ok": false,
+        "errorLine": 2
+      }
+    },
+    {
+      "name": "garbled_line_is_error",
+      "note": "无法识别的行: 报错行号一致",
+      "input": "Preamp: 0.0 dB\nhello world",
+      "expect": {
+        "ok": false,
+        "errorLine": 2
+      }
+    },
+    {
+      "name": "freq_unit_without_space_is_error",
+      "note": "105Hz(无空格)当前三端都当\"非数字\"报错(不是静默旁路)",
+      "input": "Filter 1: ON PK Fc 105Hz Gain -3.2 dB Q 0.71",
+      "expect": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "missing_q_is_error",
+      "note": "Q 必填: 缺 Q 报错",
+      "input": "Filter 1: ON PK Fc 105 Hz Gain -3.2 dB",
+      "expect": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "unsupported_kind_is_error",
+      "note": "LP/HP/NO 等类型明确报不支持, 不静默跳过",
+      "input": "Filter 1: ON NO Fc 105 Hz Gain 1 dB Q 0.7",
+      "expect": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "divergence_param_order_swapped",
+      "note": "已知口径差异(保留): Rust/Kotlin 参数顺序自由, Dart 的 RegExp 要求 Fc→Gain→Q 固定顺序 → Dart 报错",
+      "input": "Filter 1: ON PK Q 0.71 Gain -3.2 dB Fc 105 Hz",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 105,
+          "gainDb": -3.2,
+          "q": 0.71,
+          "biquad": [0.996455, -1.976808, 0.980539, -1.976808, 0.976995]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 105,
+          "gainDb": -3.2,
+          "q": 0.71,
+          "biquad": [0.996455, -1.976808, 0.980539, -1.976808, 0.976995]
+        }
+      },
+      "expectDart": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "divergence_duplicate_preamp",
+      "note": "已知口径差异(保留): Rust/Kotlin 重复 Preamp 报错, Dart 后者覆盖前者(不报错)",
+      "input": "Preamp: -6.0 dB\nPreamp: -3.0 dB\nFilter 1: ON PK Fc 1000 Hz Gain 1.0 dB Q 1.0",
+      "expect": {
+        "ok": false,
+        "errorLine": 2
+      },
+      "expectDart": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -3,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": 1,
+          "q": 1,
+          "biquad": [1.007082, -1.86781, 0.876845, -1.86781, 0.883927]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": 1,
+          "q": 1,
+          "biquad": [1.007082, -1.86781, 0.876845, -1.86781, 0.883927]
+        }
+      }
+    },
+    {
+      "name": "divergence_preamp_trailing_token",
+      "note": "已知口径差异(保留): Rust/Kotlin 只看前两个 token, Dart 的 RegExp 行尾锚定 → 多余 token 在 Dart 报错",
+      "input": "Preamp: -6.0 dB extra\nFilter 1: ON PK Fc 1000 Hz Gain 1.0 dB Q 1.0",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": -6,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": 1,
+          "q": 1,
+          "biquad": [1.007082, -1.86781, 0.876845, -1.86781, 0.883927]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 1000,
+          "gainDb": 1,
+          "q": 1,
+          "biquad": [1.007082, -1.86781, 0.876845, -1.86781, 0.883927]
+        }
+      },
+      "expectDart": {
+        "ok": false,
+        "errorLine": 1
+      }
+    },
+    {
+      "name": "divergence_fc_above_nyquist",
+      "note": "已知口径差异(保留): Fc 30000 > Nyquist(24000)。Rust/Kotlin 在 omega() 里把频率钳到 0.49*fs=23520, Dart 的曲线求值不钳 → 系数不同(解析结果一致)",
+      "input": "Filter 1: ON PK Fc 30000 Hz Gain 6.0 dB Q 1.0",
+      "expect": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 30000,
+          "gainDb": 6,
+          "q": 1,
+          "biquad": [1.02164, 1.952654, 0.934874, 1.952654, 0.956514]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 30000,
+          "gainDb": 6,
+          "q": 1,
+          "biquad": [1.02164, 1.952654, 0.934874, 1.952654, 0.956514]
+        }
+      },
+      "expectDart": {
+        "ok": true,
+        "errorLine": 0,
+        "preampDb": 0,
+        "filterCount": 1,
+        "applied": true,
+        "first": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 30000,
+          "gainDb": 6,
+          "q": 1,
+          "biquad": [0.667721, 1.886364, 2.000001, 1.886364, 1.667722]
+        },
+        "last": {
+          "kind": "PK",
+          "enabled": true,
+          "freqHz": 30000,
+          "gainDb": 6,
+          "q": 1,
+          "biquad": [0.667721, 1.886364, 2.000001, 1.886364, 1.667722]
+        }
+      }
+    }
+  ]
+}

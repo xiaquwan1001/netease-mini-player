@@ -351,3 +351,82 @@ Filter 2: ON PK Fc 1000 Hz Gain 0 dB Q 1
         assert_eq!(clamp_sample(-2.0), -1.0);
     }
 }
+
+/// 三端共享夹具的**系数**断言(P-05 中期): 解析仍交给 `ncm_domain::EqProfile`,
+/// 系数用这里的 `Biquad` 算, 与 Dart `EqBiquad` / Kotlin `Biquad` 逐条比对。
+///
+/// 夹具里只有"首/尾 filter 是 PK"的用例才带 `biquad`(LS/HS 的 shelf alpha 三端
+/// 目前不一致, 见 reg-fixture 的 description), 所以这里跳过没有 `biquad` 的槽位。
+#[cfg(test)]
+mod shared_fixture_coefficients {
+    use super::*;
+
+    const FIXTURE: &str = include_str!("../../../../ui/test/fixtures/eq_profile_cases.json");
+
+    fn effective(case: &serde_json::Value, key: &str) -> serde_json::Value {
+        let mut merged = case["expect"].as_object().cloned().unwrap_or_default();
+        if let Some(over) = case.get(key).and_then(|v| v.as_object()) {
+            for (k, v) in over {
+                merged.insert(k.clone(), v.clone());
+            }
+        }
+        serde_json::Value::Object(merged)
+    }
+
+    #[test]
+    fn shared_fixture_biquad_coefficients() {
+        let doc: serde_json::Value =
+            serde_json::from_str(FIXTURE).expect("共享夹具必须是合法 JSON");
+        let rate = doc["sampleRateHz"].as_f64().expect("sampleRateHz") as f32;
+        let tol = doc["coefficientTolerance"]
+            .as_f64()
+            .expect("coefficientTolerance");
+        let cases = doc["cases"].as_array().expect("夹具缺少 cases 数组");
+
+        let mut checked = 0usize;
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let input = case["input"].as_str().unwrap();
+            let want = effective(case, "expectRust");
+            if want["ok"].as_bool() != Some(true) {
+                continue; // 报错用例没有系数可算
+            }
+            let Ok(profile) = EqProfile::parse(input) else {
+                continue; // 该用例在 Rust 侧预期就是报错(分叉锁), 系数另行断言
+            };
+            for which in ["first", "last"] {
+                let Some(slot) = want.get(which) else {
+                    continue;
+                };
+                if slot.is_null() {
+                    continue;
+                }
+                let Some(expected) = slot.get("biquad").and_then(|v| v.as_array()) else {
+                    continue; // LS/HS 槽位: shelf 公式三端不一致, 不在共享夹具里断言
+                };
+                assert_eq!(expected.len(), 5, "{name}/{which}: biquad 必须是 5 个系数");
+                let filter = if which == "first" {
+                    profile.filters.first()
+                } else {
+                    profile.filters.last()
+                }
+                .unwrap_or_else(|| panic!("{name}/{which}: 期望有 filter"));
+                let biquad = Biquad::from_filter(filter, rate);
+                let actual = [biquad.b0, biquad.b1, biquad.b2, biquad.a1, biquad.a2];
+                for (i, want_v) in expected.iter().enumerate() {
+                    let want_v = want_v.as_f64().expect("biquad 系数必须是数字");
+                    assert!(
+                        (actual[i] as f64 - want_v).abs() <= tol,
+                        "{name}/{which}: biquad[{i}] 期望 {want_v}, 实际 {}",
+                        actual[i]
+                    );
+                }
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 10,
+            "系数断言只覆盖了 {checked} 个槽位, 夹具疑似失效"
+        );
+    }
+}
