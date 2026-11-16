@@ -41,7 +41,8 @@ import kotlin.math.pow
  * 通知/锁屏/蓝牙/车机控制都走 Media3 默认通道, 不自己画通知.
  *
  * 两个必须项(网易云直链特性):
- * 1) 直链是 plain-http 的 *.music.126.net, 需要 manifest 允许 cleartext
+ * 1) 直链是 plain-http 的 *.music.126.net —— Dart 侧 preferHttpsStreamUrl() 已升 https,
+ *    明文只作为兜底: 白名单在 res/xml/network_security_config.xml(不再全局放开 cleartext)
  * 2) CDN 对 UA/Referer 敏感, 用官方桌面端 UA + music.163.com referer
  *
  * 队列纪律: 播放队列只在 Dart 一处(PlayQueue), 原生播放器永远只有一个 MediaItem.
