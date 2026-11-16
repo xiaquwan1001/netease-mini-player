@@ -410,9 +410,9 @@ class _HomePageState extends State<HomePage> {
       await AppSettings.instance.load(info.dataDir);
       // 登录期可能产生 pending, 启动点落一次 Keystore
       unawaited(credentialSync.drainPending());
-      // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
       // 首帧后 3s 后台静默检查更新(节流/开关在 update_checker 内, 失败静默)
       unawaited(runStartupUpdateCheck(AppSettings.instance));
+      // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
       unawaited(applyAudioTuning());
       unawaited(enforceCacheLimit());
       if (!mounted) return;

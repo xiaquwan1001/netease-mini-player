@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.16.0**(第四批: 拆壳 S5 动作宿主 / 平台层修复 P-01·P-02·P-04·P-05·P-06 / CI 门禁口径统一)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.17.0**(第五批: 拆壳 S6 队列面板 / P-03 增益斜率三端统一 / P-07·P-08 Android 生命周期与登录 / P-17·P-18·P-20 打包加固)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.17.0** | **2026-11-16** | **第五批**(4 lane): main.dart **2156→1874** 拆壳 **S6**(队列面板 → `home/queue_sheet_controller.dart`)、**P-03** 增益斜率 `gain_slew_db_per_sec` 打通 Rust→FFI→Dart(`0=瞬时`, Rust 290→294)、**P-07/P-08** MV 跟随生命周期 + 登录 cookie 清理去重(模拟器实测)、**P-17/P-18/P-20** AppImage 工具 pin+sha256、两平台标题尺寸统一、注释纠偏; 测试 **1010→1028** |
 | **v0.16.0** | **2026-11-16** | **第四批**(平台层审计后的第一批修复, 4 lane): main.dart **2503→2156** 拆壳 **S5**(动作宿主+14 个动作闭包 → `home/song_action_wiring.dart`)、**P-01/P-02** Android 通知栏按钮上划清任务后仍可用 + 红心·模式自愈、**P-04/P-05/P-06** 桌面「边听边存」如实说明 + EQ 失败可观测 + 冷启动调音重试、**CI 门禁统一**(`ci-gates.sh` 唯一实现, golden 进发版门); 测试 **992→1010** |
 | **v0.15.0** | **2026-11-16** | **重构第三批**(4 lane): main.dart **2899→2503** 拆壳 **S4**(轮询/续播/现场恢复/预取/响度簿记 → `src/home/playback_coordinator.dart` 567 行)、**P1** `comment_thread` 1699→8 + `feed_view` 1190→7 barrel(part 保私有)、**P2** vip/medal 映射层与 cover_art 纯函数下移、**平台层只读审计**(22 条缺陷, P1×6); 门禁 992 / 290, golden 无变化 |
 | **v0.14.0** | **2026-11-16** | **重构第二批**(3 条并行 lane, 断电后按续做重派): main.dart **3095→2899** 拆壳 **S3**(搜索状态/联想/热词/历史 → `src/home/search_controller.dart`)、**PlaybackBridge 单入口**(`onPlaySongs` 透传 158→0, 删 UserNav/ArtistNav 静态旁路与 20 文件构造参数)、`ncm-provider/lib.rs` **1321→30** 行按 capability/error/params/trait/registry 拆分(对外路径不变); 门禁 992 / 290, golden 无变化; 同批回收 21G 磁盘 |
@@ -91,6 +92,40 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 第五批: S6 队列面板 + 增益斜率统一 + Android 生命周期 + 打包加固(**v0.17.0**)
+
+平台层审计后续批, 4 条 lane 并行(互不共享热文件)。本轮起所有 worker 都要求「每段可工作改动先 commit」——当天机器又出现两次 rustc ICE(页缓存代码页坏, 已洗 `~/.cargo/registry` 恢复), 该措施避免了再次丢中间态。
+
+### 前端结构
+
+- **main.dart 拆壳 S6**: 新增 `src/home/queue_sheet_controller.dart`(430, `ChangeNotifier`): 面板开关/空队列提示、点项跳播、拖拽重排、删非当前项与删当前项、清空(二次确认仍在面板内)、清空后收尾(`userStopped`→`clearSavedState`→`stopPlayback`)、存为歌单、模式轮转、顶部短浮层; main.dart **2156 → 1874**(−282)。`PlayQueue` 仍留页面按引用注入(不复制); 队列来源标题 `_libraryTitle` 刻意不外移(搜索态/心动/恢复共享真相)。
+- 新增 `queue_sheet_controller_test.dart`(14 例)与 `audio_tuning_slew_test.dart`(4 例); 测试 **1010 → 1028**。
+
+### 平台层修复
+
+| 缺陷 | 修法 |
+|---|---|
+| **P-03** 增益变化三端不一致(桌面恒定 3 dB/s 且关不掉) | `PlaybackTuning.gain_slew_db_per_sec` 打通 Rust→FFI→Dart; `with_slew(0)` 语义改为**真瞬时**(旧实现 0 会回落默认 3); Dart 两端统一 `loudnessDynamic ? 3.0 : 0.0`; 运行期可 `set_slew` 切换。Rust 测试 290→**294** |
+| **P-07** MV 播放无生命周期门 | `onPause` 记位置 + `video.pause()`, `onResume` 仅在"因生命周期暂停"时续播; 关键坑: 窗口重可见时 VideoView 会重建 MediaPlayer, `VideoView.seekTo` 在未进 playback state 时只记待办 ⇒ 最终在 `onPrepared` 里用裸 `mp.seekTo` 落回位置 |
+| **P-08** 登录 cookie 清理做两遍且第二遍不等回调 | 清 cookie 只保留 `LoginActivity` 一处, `loadUrl` 移进 `removeAllCookies { flush; loadUrl }` 回调, 页面必然晚于清理开始加载 |
+| **P-17** AppImage 工具链未 pin | pin `appimagetool 1.9.1` + 按 ARCH 内置 sha256; 下载走 `.part`→校验→`mv`, 缓存也校验, 失败打印期望/实际 sha; 调用处不再掩埋 stderr(两次尝试输出落日志并在失败时原样打印) |
+| **P-18** 两平台标题/尺寸不一致 | Linux 标题 `minincm`→`轻音 MiniNCM`, Windows 尺寸 1180×780→1280×720 与 Linux 对齐; **application-id 仍不动**(会牵动单实例与用户数据路径, 另立项) |
+| **P-20** 注释漂移 | `.gitlab-ci.yml` 头部口径改为「仅镜像仓、不参与发布验收」; `main.dart` 启动注释归位(更新检查与调音各自紧邻其调用) |
+
+### 实测证据
+
+- P-07/P-08 均在模拟器实测(a36/emulator-5556, 未碰他人 5554 实例): `dumpsys audio` 显示按 Home 后 `state:started→paused`、回页 `paused→started`; 续播位置 11253ms→13225ms(非从 0); 登录页 WebView 正常加载 music.163.com 且无 FATAL。
+- P-17 正向/反向都验过: 改错 hash → exit 1 且不执行二进制; 损坏缓存 → 自动重下 → exit 0; 假工具 rc=7 → 完整 stderr 可见。
+
+### 门禁(合并后 main 复跑)
+
+`cargo test --offline` **294** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **1028 通过 0 失败**(18 张 golden **无变化**) / `dart analyze` 0 issue / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK。
+
+### 硬件稳定性(按规则 12 只登记)
+
+当天本项目相关已登记 3 起: 两次整机 soft lockup(rebuilt 前 `kcompactd0`/`ctrl-c` stuck)、一次 `flutter build linux` 与一次 Android 构建的 **rustc ICE**(`Ty::fn_sig() called on non-fn type`); 后者经 `posix_fadvise(DONTNEED)` 洗页缓存后恢复, 指向内存/页缓存而非代码。证据在 `~/hw-stability/evidence/inbox/` 三个目录。
+
 
 ## 2026-11-16(日) 第四批: S5 动作宿主 + Android 通知可靠性 + CI 门禁统一 + 调音诚实化(**v0.16.0**)
 
