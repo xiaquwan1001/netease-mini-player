@@ -147,13 +147,26 @@ class _WikiBodyState extends State<_WikiBody> {
               width: 72,
               child: Text(
                 f.label,
+                // 键值行(列表行审计 B4): 标签列宽固定 72, 不限行时一个长标签
+                // 就能把整行撑成好几行高。
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: scheme.outline,
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(child: Text(f.value, style: theme.textTheme.bodyMedium)),
+            Expanded(
+              child: Text(
+                f.value,
+                // 值可能是枚举串(曲风/语种), 留到 2 行仍能看到前几项;
+                // 不限行会被超长值无限撑高, 面板 75% 高度上限下会挤掉其它条目。
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
           ],
         );
       },

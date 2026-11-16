@@ -60,6 +60,26 @@ const EdgeInsets kSongRowPadding = EdgeInsets.fromLTRB(8, 0, 4, 0);
 /// Material 默认 16, 在 300dp 屏上等于白吃 5% 宽度。
 const double kRowTitleGap = 8;
 
+/// 行尾(trailing)一列最多吃掉行宽的多少 —— **全仓唯一口径**。
+///
+/// 之前各页各写一套(0.4 / 0.45 / 不设), 不设的那几处(排行 playCount、新歌发行
+/// 日期、私信相对时间、关注按钮)行尾宽度完全由内容决定: 字号 1.625 倍或数字位数
+/// 一变就把标题区挤扁(列表行审计 B5–B12)。取 0.45 与歌单详情 / song_tile 的既有
+/// 口径一致, 与 [SectionHeader] 的 60% 同一思路 —— 标题区永远拿大头。
+const double kRowTrailingMaxRatio = 0.45;
+
+/// 给行尾内容加宽度上限: [availableWidth] 传行(或 LayoutBuilder 的
+/// constraints.maxWidth)的可用宽。触顶时由行尾自己截断(时长/日期先省略),
+/// 标题区不会被压到 0 宽。宽度拿不到上限(无限宽容器)时不套约束。
+Widget capRowTrailing(double availableWidth, Widget child) => ConstrainedBox(
+  constraints: BoxConstraints(
+    maxWidth: availableWidth.isFinite
+        ? availableWidth * kRowTrailingMaxRatio
+        : double.infinity,
+  ),
+  child: child,
+);
+
 /// 卡片统一外边距 —— 永远不给 Card 留 margin。
 /// Material 默认 margin 是 4, 会悄悄叠在页面 padding 上。
 const EdgeInsets kCardMargin = EdgeInsets.zero;

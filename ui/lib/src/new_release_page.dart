@@ -183,22 +183,31 @@ class _NewSongsTabState extends State<_NewSongsTab> {
               await retryNetwork(() => widget.load(_area)),
               hasMore: false,
             ),
-            itemBuilder: (context, s, i, songs) => ListTile(
-              dense: true,
-              leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
-              title: AdaptiveText(s.name),
-              subtitle: Text(
-                s.artist,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            itemBuilder: (context, s, i, songs) => LayoutBuilder(
+              builder: (context, box) => ListTile(
+                dense: true,
+                leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
+                title: AdaptiveText(s.name),
+                subtitle: Text(
+                  s.artist,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                // 行尾(时长/发行日期)位数与字号都可变, 封顶 45%
+                // (列表行审计 B10)。
+                trailing: capRowTrailing(
+                  box.maxWidth,
+                  Text(
+                    formatDurationShort(s.durationMs),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                onTap: s.playable
+                    ? () => PlaybackBridge.instance.playSongs(songs, i)
+                    : null,
               ),
-              trailing: Text(
-                formatDurationShort(s.durationMs),
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
-              onTap: s.playable
-                  ? () => PlaybackBridge.instance.playSongs(songs, i)
-                  : null,
             ),
           ),
         ),

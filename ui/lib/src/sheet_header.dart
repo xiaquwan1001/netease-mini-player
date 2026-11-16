@@ -60,8 +60,12 @@ class SheetHeader extends StatelessWidget {
               ),
             ],
           );
-    return SizedBox(
-      height: 52,
+    // 52 是 1.0 字号下的标题栏高(旧实现写死 height: 52)。系统字号变大时
+    // 「标题 + 说明」两行会超过 52 并竖向溢出(实测 1.3 倍即溢 2px, 见列表行
+    // 审计 B3 的回归); 改成 minHeight —— 1.0 下几何完全不变, 大字号时标题栏
+    // 自己长高, 与 layout.dart 的 rowExtentFor 同一思路。
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
       child: Row(
         children: [
           if (onBack != null)

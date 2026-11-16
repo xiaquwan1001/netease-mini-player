@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
+import '../layout.dart' show capRowTrailing;
 import '../net_retry.dart' show friendlyError;
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
@@ -43,23 +44,31 @@ class ForwardsTab extends StatelessWidget {
           final actor = (nickname == null || nickname.isEmpty)
               ? '云音乐用户'
               : nickname;
-          return ListTile(
-            leading: UserAvatarTap(
-              userId: f.userId ?? BigInt.zero,
-              nickname: actor,
-              child: CircleCover(
-                url: f.avatarUrl,
-                size: 44,
-                icon: Icons.alternate_email,
+          return LayoutBuilder(
+            builder: (context, box) => ListTile(
+              leading: UserAvatarTap(
+                userId: f.userId ?? BigInt.zero,
+                nickname: actor,
+                child: CircleCover(
+                  url: f.avatarUrl,
+                  size: 44,
+                  icon: Icons.alternate_email,
+                ),
               ),
-            ),
-            title: Text(actor, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: comment.isEmpty
-                ? null
-                : Text(comment, maxLines: 2, overflow: TextOverflow.ellipsis),
-            trailing: Text(
-              relativeTime(f.timeMs ?? BigInt.zero),
-              style: Theme.of(context).textTheme.labelSmall,
+              title: Text(actor, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: comment.isEmpty
+                  ? null
+                  : Text(comment, maxLines: 2, overflow: TextOverflow.ellipsis),
+              // 相对时间封顶 45%(列表行审计 B11)
+              trailing: capRowTrailing(
+                box.maxWidth,
+                Text(
+                  relativeTime(f.timeMs ?? BigInt.zero),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
             ),
           );
         },

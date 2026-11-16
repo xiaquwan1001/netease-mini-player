@@ -4,6 +4,7 @@ import '../async_view.dart';
 import '../comment_page.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
+import '../layout.dart' show capRowTrailing;
 import '../net_retry.dart' show friendlyError;
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
@@ -54,39 +55,49 @@ class InboxTab extends StatelessWidget {
           // 条目本身(有线程时)可点进对应评论区并直接回复。
           final threadId = item.threadId;
           final openable = threadId != null && threadId.isNotEmpty;
-          return ListTile(
-            leading: UserAvatarTap(
-              userId: item.userId ?? BigInt.zero,
-              nickname: item.actor.isEmpty ? null : item.actor,
-              child: CircleCover(url: item.avatarUrl, size: 44, icon: icon),
-            ),
-            title: Text(
-              item.actor.isEmpty ? item.text : item.actor,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              item.actor.isEmpty ? item.detail : subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  relativeTime(item.timeMs),
-                  style: theme.textTheme.labelSmall,
+          return LayoutBuilder(
+            builder: (context, box) => ListTile(
+              leading: UserAvatarTap(
+                userId: item.userId ?? BigInt.zero,
+                nickname: item.actor.isEmpty ? null : item.actor,
+                child: CircleCover(url: item.avatarUrl, size: 44, icon: icon),
+              ),
+              title: Text(
+                item.actor.isEmpty ? item.text : item.actor,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                item.actor.isEmpty ? item.detail : subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              // 相对时间 + chevron 封顶 45%(列表行审计 B11)
+              trailing: capRowTrailing(
+                box.maxWidth,
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        relativeTime(item.timeMs),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ),
+                    if (openable) const Icon(Icons.chevron_right, size: 18),
+                  ],
                 ),
-                if (openable) const Icon(Icons.chevron_right, size: 18),
-              ],
+              ),
+              onTap: openable
+                  ? () => showCommentThreadPage(
+                      context,
+                      threadId: threadId,
+                      title: item.kind == 'comment' ? '评论' : '相关评论',
+                    )
+                  : null,
             ),
-            onTap: openable
-                ? () => showCommentThreadPage(
-                    context,
-                    threadId: threadId,
-                    title: item.kind == 'comment' ? '评论' : '相关评论',
-                  )
-                : null,
           );
         },
       ),

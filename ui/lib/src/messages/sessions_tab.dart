@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../cover_art.dart';
-import '../layout.dart' show avatarStripHeightFor;
+import '../layout.dart' show avatarStripHeightFor, capRowTrailing;
 import '../net_retry.dart';
 import '../paged_list_view.dart';
 import '../rust/api.dart' as rust;
@@ -96,43 +96,51 @@ class SessionsTabState extends State<SessionsTab> {
                 pageSize: widget.pageSize,
               ),
             ),
-      itemBuilder: (context, s, index, items) => ListTile(
-        // 头像点进用户主页, 整行仍然弹聊天面板
-        leading: UserAvatarTap(
-          userId: s.userId,
-          nickname: s.nickname,
-          child: CircleCover(
-            url: s.avatarUrl,
-            size: 44,
-            icon: Icons.person_outline,
-          ),
-        ),
-        title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(
-          s.lastMessage,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              relativeTime(s.lastTimeMs),
-              style: Theme.of(context).textTheme.labelSmall,
+      itemBuilder: (context, s, index, items) => LayoutBuilder(
+        builder: (context, box) => ListTile(
+          // 头像点进用户主页, 整行仍然弹聊天面板
+          leading: UserAvatarTap(
+            userId: s.userId,
+            nickname: s.nickname,
+            child: CircleCover(
+              url: s.avatarUrl,
+              size: 44,
+              icon: Icons.person_outline,
             ),
-            if (s.unread > 0) ...[
-              const SizedBox(height: 4),
-              Badge(label: Text('${s.unread}')),
-            ],
-          ],
-        ),
-        onTap: () => showPrivateChat(
-          context,
-          session: s,
-          load: widget.loadHistory,
-          send: widget.send,
-          pageSize: widget.pageSize,
+          ),
+          title: Text(s.nickname, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text(
+            s.lastMessage,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          // 相对时间宽度随「3天前」/日期变化, 封顶 45%(列表行审计 B11)
+          trailing: capRowTrailing(
+            box.maxWidth,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  relativeTime(s.lastTimeMs),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+                if (s.unread > 0) ...[
+                  const SizedBox(height: 4),
+                  Badge(label: Text('${s.unread}')),
+                ],
+              ],
+            ),
+          ),
+          onTap: () => showPrivateChat(
+            context,
+            session: s,
+            load: widget.loadHistory,
+            send: widget.send,
+            pageSize: widget.pageSize,
+          ),
         ),
       ),
     );
