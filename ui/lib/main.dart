@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'src/album_preview.dart';
 import 'src/cover_backdrop.dart';
 import 'src/cover_palette.dart';
-import 'src/sheet_header.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/app_shell.dart';
@@ -19,13 +18,13 @@ import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/back_policy.dart';
 import 'src/now_playing.dart' show nowPlayingSongId;
-import 'src/cover_art.dart';
 import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/home/lyric_controller.dart';
 import 'src/home/playback_coordinator.dart';
+import 'src/home/queue_sheet_controller.dart';
 import 'src/home/song_action_wiring.dart';
 // Flutter 的 material 也有 SearchController, 用前缀避免同名歧义
 import 'src/home/search_controller.dart' as search_state;
@@ -40,7 +39,6 @@ import 'src/new_release_page.dart';
 import 'src/mine_view.dart';
 import 'src/net_retry.dart';
 import 'src/notification_mode.dart';
-import 'src/play_queue_sheet.dart';
 import 'src/keystore.dart';
 import 'src/player_bar.dart';
 import 'src/playback.dart';
@@ -62,8 +60,6 @@ import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/toast.dart' show showToast;
 import 'src/vip_page.dart';
-
-import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
 
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -100,6 +96,12 @@ class _HomePageState extends State<HomePage> {
   /// 歌曲动作宿主装配(拆壳 S5): 宿主构建与歌曲/艺人/专辑动作闭包都在
   /// src/home/song_action_wiring.dart, 这里只注入页面状态与导航回调。
   late final SongActionWiring _songActions;
+
+  /// 播放队列面板 + 播放模式轮转(拆壳 S6): 面板开关(原 `_queueSheetOpen`)、
+  /// 拖拽重排/删除/清空/跳播、存为歌单、模式轮转与顶部浮层都在
+  /// src/home/queue_sheet_controller.dart。队列真相仍是本页面的 `_queue`
+  /// (注入引用, 不复制); 面板/对话框/浮层需要 BuildContext —— 按回调注入。
+  late final QueueSheetController _queueUI;
   rust.InitInfo? _info;
   String? _error;
 
@@ -229,6 +231,22 @@ class _HomePageState extends State<HomePage> {
       syncActionState: _syncActionState,
       openPlaylist: _openPlaylist,
     );
+    // 队列面板(拆壳 S6): 队列引用与上下文访问器注入, 队列视图/开关状态由它持有;
+    // 每次变更 notifyListeners -> 页面 setState(与拆分前每处 setState 一一对应)。
+    _queueUI = QueueSheetController(
+      contextOf: () => context,
+      isMounted: () => mounted,
+      queue: _queue,
+      libraryTitleOf: () => _libraryTitle,
+      toast: _toast,
+      loggedIn: () => _info?.loggedIn == true,
+      playSong: _coordinator.playSong,
+      stopPlayback: _coordinator.stopPlayback,
+      clearSavedState: _coordinator.clearSavedState,
+      setUserStopped: (stopped) => _coordinator.userStopped = stopped,
+      heartMode: () => _heartMode(),
+      syncActionState: _syncActionState,
+    )..addListener(_onQueueChanged);
     _playerBarActions = PlayerBarActions(
       onSeekStart: (v) => setState(() {
         _dragMax = (_coordinator.player?.durationMs ?? BigInt.zero).toDouble();
@@ -255,8 +273,8 @@ class _HomePageState extends State<HomePage> {
       onToggle: () => _coordinator.toggle(),
       onPrevious: _previous,
       onNext: _next,
-      onCycleMode: _cycleMode,
-      onOpenQueue: _openQueueSheet,
+      onCycleMode: _queueUI.cycleMode,
+      onOpenQueue: _queueUI.open,
     );
     // 播放条回调槽位只赋这一次(同一实例, 之后不再变)
     WidgetsBinding.instance.addPostFrameCallback(
@@ -318,6 +336,7 @@ class _HomePageState extends State<HomePage> {
     PlaybackBridge.instance.unbind();
     AppSettings.instance.removeListener(_onAudioSettingsChanged);
     _coordinator.dispose();
+    _queueUI.dispose();
     _search.dispose();
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     pageDepth.removeListener(_onPageDepthChanged);
@@ -337,6 +356,11 @@ class _HomePageState extends State<HomePage> {
 
   /// 播放协调器有变更时重建(与拆分前每处 setState(赋值 _player) 等价)。
   void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 队列面板状态有变更时重建(与拆分前队列增删/模式切换的 setState 等价)。
+  void _onQueueChanged() {
     if (mounted) setState(() {});
   }
 
@@ -1075,314 +1099,8 @@ class _HomePageState extends State<HomePage> {
     await _coordinator.playSong(prev);
   }
 
-  /// 队列面板是否已展开.
-  ///
-  /// 播放条挂在根 Overlay(Navigator 之外), 队列面板打开后播放条仍然可点 ——
-  /// 之前每点一次队列按钮就再压一层面板, 能无限叠加(用户反馈)。
-  /// 现在已展开时再点 = 收起。
-  bool _queueSheetOpen = false;
-
-  /// 播放队列面板: 看队列 / 点项跳播 / 滑删或长按删(原来只有 "$inQueue/$total" 文本, 完全黑箱)
-  Future<void> _openQueueSheet() async {
-    if (_queueSheetOpen) {
-      // 面板在栈顶; pop 掉它即"收起"
-      Navigator.of(context).pop();
-      return;
-    }
-    if (_queue.items.isEmpty) {
-      _toast('播放队列是空的');
-      return;
-    }
-    _queueSheetOpen = true;
-    try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: PlayQueueSheet(
-            items: _queue.items,
-            index: _queue.index,
-            onSelect: (song) {
-              Navigator.of(sheetContext).pop();
-              _jumpToQueueSong(song);
-            },
-            onRemove: _removeFromQueue,
-            onMove: _moveInQueue,
-            onClear: _clearQueue,
-            onSaveAsPlaylist: _saveQueueAsPlaylist,
-          ),
-        ),
-      );
-    } finally {
-      _queueSheetOpen = false;
-    }
-  }
-
-  /// 队列面板拖拽排序: PlayQueue 自己修下标, 当前曲目不变 ⇒ 不需要重播/换歌
-  void _moveInQueue(int from, int to) {
-    if (!mounted) return;
-    setState(() => _queue.moveTo(from, to));
-  }
-
-  /// 队列面板「清空」: 面板已经做过二次确认, 这里只负责清队列 + 停播
-  Future<void> _clearQueue() async {
-    if (!mounted) return;
-    setState(() => _queue.clear());
-    await _stopAfterQueueEmpty();
-  }
-
-  /// 队列面板「存为歌单」: 选已有歌单或新建, 把队列(面板已按 id 去重)整批加进去.
-  /// 批量走 playlistTracksAdd(vendor /playlist/manipulate/tracks 原生支持多 id);
-  /// 「我喜欢的音乐」(special)在官方网页端也走同一接口, 不再单独走红心.
-  Future<void> _saveQueueAsPlaylist(List<rust.SongDto> songs) async {
-    if (songs.isEmpty || !mounted) return;
-    if (_info?.loggedIn != true) {
-      _toast('存为歌单需要先登录');
-      return;
-    }
-    List<rust.Playlist> lists;
-    try {
-      lists = await retryNetwork(rust.myPlaylists);
-    } catch (e) {
-      if (!mounted) return;
-      _toast('存为歌单失败: ${friendlyError(e)}');
-      return;
-    }
-    if (!mounted) return;
-    final picked = await showModalBottomSheet<Object>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.6,
-          child: Column(
-            children: [
-              SheetHeader(
-                title: '存为歌单',
-                subtitle: '把队列里的 ${songs.length} 首歌存进去',
-              ),
-              const Divider(height: 1),
-              ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
-                  child: const Icon(Icons.add, size: 20),
-                ),
-                title: const Text('新建歌单'),
-                subtitle: const Text('创建后把队列加进去'),
-                onTap: () => Navigator.pop(sheetContext, 'create'),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: lists.length,
-                  itemBuilder: (context, i) {
-                    final pl = lists[i];
-                    return ListTile(
-                      dense: true,
-                      leading: CoverArt(url: pl.coverUrl, size: 40, radius: 4),
-                      title: Text(
-                        pl.special ? '我喜欢的音乐' : pl.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${pl.trackCount} 首'),
-                      onTap: () => Navigator.pop(sheetContext, pl),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked == null || !mounted) return;
-    if (picked is String) {
-      await _createPlaylistFromQueue(songs);
-      return;
-    }
-    final pl = picked as rust.Playlist;
-    await _addQueueToPlaylist(pl, songs);
-  }
-
-  /// 新建歌单并把整个队列存进去(默认名: 来自播放队列 M-D HH:mm)
-  Future<void> _createPlaylistFromQueue(List<rust.SongDto> songs) async {
-    final controller = TextEditingController(text: _queuePlaylistDefaultName());
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新建歌单'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(hintText: '歌单名称'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (name == null || name.isEmpty || !mounted) return;
-    try {
-      final id = await rust.createPlaylist(name: name, privacy: 0);
-      final ok = await rust.playlistTracksAdd(
-        playlistId: id,
-        songIds: _queueSongIds(songs),
-      );
-      if (!mounted) return;
-      _toast(ok ? '已存入《$name》, ${songs.length} 首' : '歌单已建, 加入未生效');
-    } catch (e) {
-      if (!mounted) return;
-      _toast('存为歌单失败: ${friendlyError(e)}');
-    }
-  }
-
-  /// 把队列存进已有歌单
-  Future<void> _addQueueToPlaylist(
-    rust.Playlist pl,
-    List<rust.SongDto> songs,
-  ) async {
-    try {
-      final ok = await rust.playlistTracksAdd(
-        playlistId: pl.id,
-        songIds: _queueSongIds(songs),
-      );
-      if (!mounted) return;
-      final shown = pl.special ? '我喜欢的音乐' : pl.name;
-      _toast(ok ? '已存入《$shown》, ${songs.length} 首' : '加入未生效, 请稍后重试');
-    } catch (e) {
-      if (!mounted) return;
-      _toast('存为歌单失败: ${friendlyError(e)}');
-    }
-  }
-
-  Uint64List _queueSongIds(List<rust.SongDto> songs) =>
-      Uint64List.fromList([for (final s in songs) s.id.toInt()]);
-
-  /// 「存为歌单」的默认歌单名
-  String _queuePlaylistDefaultName() {
-    final now = DateTime.now();
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '来自播放队列 ${now.month}-${now.day} ${two(now.hour)}:${two(now.minute)}';
-  }
-
-  /// 队列面板里点某一首: 定位到它再播(曲目可能已被别处挪过, 重新查下标)
-  Future<void> _jumpToQueueSong(rust.SongDto song) async {
-    final i = _queue.items.indexOf(song);
-    if (i < 0) return;
-    setState(() => _queue.jumpTo(i));
-    await _coordinator.playSong(song, explicit: true);
-  }
-
-  /// 队列面板删除: 删的不是当前项时只动列表; 删的是当前项时明确换到顶上来的下一首,
-  /// 队列被删空则停播(否则播放器会继续放一首已经从队列里消失的歌)
-  void _removeFromQueue(rust.SongDto song, bool wasCurrent) {
-    final i = _queue.items.indexOf(song);
-    if (i < 0) return;
-    setState(() => _queue.removeAt(i));
-    if (!wasCurrent) return;
-    final next = _queue.current;
-    if (next == null) {
-      unawaited(_stopAfterQueueEmpty());
-    } else {
-      unawaited(_coordinator.playSong(next));
-    }
-  }
-
-  Future<void> _stopAfterQueueEmpty() async {
-    _coordinator.userStopped = true;
-    // 队列没了就没有"现场"可恢复; 不清的话下次启动会恢复出一个空壳播放条
-    unawaited(_coordinator.clearSavedState());
-    _toast('播放队列已清空, 播放已停止');
-    await _coordinator.stopPlayback();
-  }
-
-  /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 心动 → 列表循环。
-  ///
-  /// 心动模式是否可用由 _heartMode 自己判断(未登录/无种子时会给提示并回落),
-  /// 切换成功/失败的反馈用顶部浮层, 不挡播放条上那个按钮(用户反馈)。
-  Future<void> _cycleMode() async {
-    if (_heartActive) {
-      setState(() => _queue.mode = PlayMode.repeatAll);
-      _toastTop(playModeLabels[PlayMode.repeatAll]!);
-      unawaited(_syncActionState());
-      return;
-    }
-    final next = nextNotificationMode(_queue.mode);
-    if (next == null) {
-      await _heartMode();
-      if (_heartActive) {
-        _toastTop('心动模式');
-      } else {
-        setState(() => _queue.mode = PlayMode.repeatAll);
-        _toastTop(playModeLabels[PlayMode.repeatAll]!);
-      }
-    } else {
-      setState(() => _queue.mode = next);
-      _toastTop(playModeLabels[next]!);
-    }
-    unawaited(_syncActionState());
-  }
-
-  /// 顶部短浮层: 只做"模式切换"这类即时反馈, 不拦截点击、不遮播放条按钮。
-  void _toastTop(String message) {
-    if (!mounted) return;
-    final overlay = Overlay.maybeOf(context);
-    if (overlay == null) return;
-    final scheme = Theme.of(context).colorScheme;
-    late OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (ctx) => Positioned(
-        top: MediaQuery.paddingOf(ctx).top + 12,
-        left: 0,
-        right: 0,
-        child: IgnorePointer(
-          child: Center(
-            child: Material(
-              color: scheme.inverseSurface,
-              elevation: 4,
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Text(
-                  message,
-                  style: TextStyle(
-                    color: scheme.onInverseSurface,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    overlay.insert(entry);
-    Timer(const Duration(milliseconds: 900), () {
-      if (entry.mounted) entry.remove();
-    });
-  }
-
   /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
-  bool get _heartActive => _libraryTitle == '心动模式';
+  bool get _heartActive => _queueUI.heartActive;
 
   /// 当前曲目封面主色(歌词页背景用); null = 回退主题色
   CoverPalette? _coverPalette;
@@ -1431,7 +1149,7 @@ class _HomePageState extends State<HomePage> {
         }
       } else {
         setState(() => _queue.mode = next);
-        _toastTop(playModeLabels[next]!);
+        _queueUI.toastTop(playModeLabels[next]!);
       }
     }
     await _syncActionState();
