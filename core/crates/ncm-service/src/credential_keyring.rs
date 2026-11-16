@@ -237,15 +237,30 @@ mod tests {
         // 缓存: 两次结果一致
         assert_eq!(format!("{first:?}"), format!("{second:?}"));
         match first {
+            // 真有 D-Bus: **只在门控(`NCM_KEYRING_TEST=1`)时**做真实 roundtrip。
+            //
+            // 未门控时绝不能写: 探针只做只读 `get_password`(collection 锁着也能回 NoEntry),
+            // 但 `set_password` 在 locked collection 上会等解锁提示 —— 无桌面会话时永不返回,
+            // 整个 `cargo test` 挂死、门禁无限红(2026-11-17 实测: 二进制卡在 D-Bus socket
+            // poll > 7 分钟, 只能 SIGKILL)。所以写路径一律加时限, 且默认跳过。
+            Ok(()) if gated => {
+                let roundtrip = move || {
+                    store.put(CredentialKey::Session, "MUSIC_U=probe")?;
+                    assert_eq!(
+                        store.get(CredentialKey::Session)?.as_deref(),
+                        Some("MUSIC_U=probe")
+                    );
+                    store.remove(CredentialKey::Session)?;
+                    assert_eq!(store.get(CredentialKey::Session)?, None);
+                    Ok::<(), CredentialError>(())
+                };
+                // 即便门控也给写路径上限: 解锁提示弹不出来时门要能自己回来
+                probe_with_timeout(Duration::from_secs(10), roundtrip)
+                    .expect("真 keyring roundtrip 失败(或解锁超时)");
+            }
             Ok(()) => {
-                // 真有 D-Bus: 做一次真实 roundtrip(登录态 cookie 样例)
-                store.put(CredentialKey::Session, "MUSIC_U=probe").unwrap();
-                assert_eq!(
-                    store.get(CredentialKey::Session).unwrap().as_deref(),
-                    Some("MUSIC_U=probe")
-                );
-                store.remove(CredentialKey::Session).unwrap();
-                assert_eq!(store.get(CredentialKey::Session).unwrap(), None);
+                // 未门控: 只验「探测可用 + 缓存一致」, 不碰写接口
+                assert_eq!(format!("{first:?}"), format!("{second:?}"));
             }
             Err(e) => {
                 assert!(
