@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  明文流量白名单(P-22)。
+
+  历史上这里是 manifest 上的全局 android:usesCleartextTraffic="true", 理由是
+  "网易云直链是明文 http 的 *.music.126.net"。现在真正需要明文的地方已经收窄到
+  下面这几个域名, 其余一律拒绝明文(证书只信系统根, 与 AOSP 默认一致)。
+
+  为什么还留着白名单而不是全关:
+  - 播放直链: 取链接口返回的是 http 直链, Dart 侧 preferHttpsStreamUrl() 已升 https,
+    但图像多级降级链(url_rewrite.dart 的 imageCandidates/sizedImageCandidates)最后
+    一级是 "https 失败就退回 http 原图" —— CDN 偶发 403/空 body 时靠这一级兜底。
+  - 登录 WebView: music.163.com 页面与其静态资源; WebView 走的是 Android 网络栈,
+    受本文件约束, 页面里若混有 http 子资源, 不给白名单就会变成半张白页。
+  - MV: 直链在 *.vod.126.net(已在 mv_page.dart 升 https, 这里同样兜底)。
+
+  实测范围(见交付报告): ExoPlayer/DefaultHttpDataSource、WebView 受本文件约束;
+  而 Dart 的 dart:io HttpClient、Rust(reqwest)与系统 DownloadManager 各自走自己的
+  网络实现, 不受本文件影响 —— 所以白名单宁可少开, 不要为了"保险"再放宽。
+-->
+<network-security-config>
+    <!-- 默认: 拒绝一切明文 -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- 只对确实可能出现明文直链的网易云域名放开 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- 播放直链 m*.music.126.net + 图片 CDN p1~p5.music.126.net(+ 其它子域) -->
+        <domain includeSubdomains="true">music.126.net</domain>
+        <!-- 登录页 / 分享页 / page 资源 -->
+        <domain includeSubdomains="true">music.163.com</domain>
+        <!-- MV 直链 vod*.vod.126.net -->
+        <domain includeSubdomains="true">vod.126.net</domain>
+    </domain-config>
+
+    <!-- debug 包额外信任用户根证书: 本机抓包(mitmproxy/Charles)需要; release 不含这一段 -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
