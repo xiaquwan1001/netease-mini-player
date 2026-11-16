@@ -15,7 +15,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%20536%20%2B%20Rust%20249-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%201037%20%2B%20Rust%20298-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -182,26 +182,26 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **287** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **298** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
 | `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
-| `flutter test --exclude-tags network` | **992** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1037** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | `tools/check-tokens.sh --strict` | OK(间距/圆角/字号只允许 `layout.dart` 的有限集合) |
-| 接口覆盖 | **135/136**(FFI 导出 160, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
+| 接口覆盖 | **135/136**(FFI 导出 161, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
 | 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing-dual-platform.md` |
 
 上表这些命令**只在 `tools/ci-gates.sh` 里实现一次**(`bash tools/ci-gates.sh list` 看全部子命令):
 本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
 调的都是同一处 —— 发版门不会再比 CI 弱(token / write-guard / format / clippy / golden 在 CI 与发版里都跑)。
 
-## 项目进度(当前版本 v0.12.2)
+## 项目进度(当前版本 v0.18.0)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | Rust workspace 分层、Provider 抽象、headless CLI | ✅ |
-| 协议 | vendor 移植 + 裁剪(382 → 118 个 endpoint,现覆盖 135/136,LOC 12k → 4k) | ✅ |
+| 协议 | vendor 移植 + 裁剪(382 → 136 个 endpoint,现覆盖 135/136,LOC 12k → 4k) | ✅ |
 | 三端壳 | Flutter Android/Linux/Windows、FRB 2.13 桥、三端构建链路(Windows 走 CI) | ✅ |
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |

@@ -4,14 +4,16 @@
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`docs/archive/remaining-batches-history.md`(历史分批口径)。
 >
-> 口径日期: **2026-11-13**。覆盖率 **123/123(100%)**, FFI 导出 **150** 个, 其中 5 个无 UI 入口
-> (`cache_stats`/`consent_plaintext_storage`/`eq_profile_normalize`/`player_tuning`/`word_lyric_with_fallback`);
-> 数字一律跑 `bash tools/api-coverage.sh` 复算。
+> 口径日期: **2026-11-16**。**覆盖率 / FFI 导出数 / 测试数一律跑脚本现算**, 本文件不再维护副本
+> (`bash tools/api-coverage.sh`、`bash tools/ci-gates.sh list`); 权威数字只在
+> [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表(2026-11-16 实测: 覆盖 **135/136**、FFI 导出 **161**、
+> Rust **298** / Dart **1037**, golden **18**)。
 >
 > **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
-> 设置项扩充 R1–R7 落地、真机听感验收通过; 三端分发六种产物 + arm64 腿, 当前版本 **v0.7.1**。
+> 平台层审计 22 条已修 17 条(P-01..P-10 / P-13..P-21)、main.dart 拆壳已到 **S7**(3095→**1562** 行, `ui/lib/src/home/` 已成目录);
+> 三端分发六种产物 + arm64 腿, 当前版本 **v0.18.0**。S8 在 `~/ncm-wt/main-split` **未提交**(见 §12.4)。
 >
-> **下一轮从哪挑**: 见本文件末尾 **§11 · 待办(2026-11-13 更新)**。
+> **下一轮从哪挑**: **§11 · 待办**(功能/小改, 2026-11-13 起维护) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**(2026-11-16 登记)。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
@@ -149,7 +151,8 @@
 
 ## 11. 待办(2026-11-13 更新)
 
-> 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次)。
+> 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次);
+> **平台层审计确认未做的 5 条债务(P-11 完整版 / P-05 长尾 / P-18 后半 / P-10 方案 B / P-22 在飞)见 §13**。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
 > **基线数字不在这里维护**(曾经 4 处各写一套 ⇒ 已实测分叉): 唯一权威是 [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
 > 本节只管「还剩什么没做」。
@@ -168,7 +171,7 @@
 | 7 | ✅ **行高统一: `itemExtent`/`_kRowHeight` 按 textScaler 缩放**(2026-11-14, `6cf0645`) | 落地 `layout.dart: kRowExtent/rowExtentFor`(基准 × clamp(1,2), 全仓唯一实现); `detail_page` 两个 `SliverFixedExtentList` 与「定位正在播放」偏移改用它, `_kRowHeight` 删除; `lyric.dart`/`word_lyric_view.dart` 的 `itemExtent` 改可空、缺省按字号缩放; `main.dart: _lyricItemExtent` 收敛到同一函数。**勘误: 原记「全仓 7 处」实际是 4 处**(`rg -n 'itemExtent' ui/lib --glob '!src/rust/**'`: detail_page 2 + lyric.dart/word_lyric_view.dart 缺省参数各 1; main.dart 2 处早在 v0.7.1 就按字号算)——原数字把歌词调用点与缺省参数重复计了。回归: `ui/test/row_extent_test.dart` 8 例(含「56dp 在 1.625 下确实溢出」的负向对照) | — |
 | 8 | ✅ `_AuthorChip` 筛选条定高 84 竖溢(2026-11-14, `2932dcc`) | `layout.dart: kAvatarStripHeight/avatarStripHeightFor`(只放大 16dp 文字段, 1.0 下仍是 84); 同一形态的 `messages_page` 最近联系人条一并修掉。测试: `feed_view_test` 1.625 用例升级为「两向都不许 overflow」+ `messages_page_test` 新增 1.625 用例(修复前实测失败) | — |
 | 9 | 列表行 B/C 级收敛(审计已出清单) | `docs/ui-row-audit.md`: A 级已在 v0.9.0 清零; 剩 B 潜在 12 / C 一致性 18(歌曲行 6 种留白并存)。改造顺序见报告第 7 条起, 含 `ListRow` API 草案 | M |
-| 10 | golden 接入 CI | 现在标 `@Tags(['golden'])` 且 CI 用 `--exclude-tags 'network \|\| golden'` 跳过(缺 CJK 字体必假失败)。要接得先容器化渲染环境(固定字体 + Flutter 版本) | M |
+| 10 | ✅ **golden 接入 CI/v0.13.0–v0.16.0**(2026-11-16 复核) | v0.13.0 golden 12→18 并进 CI;v0.16.0 CI 门禁统一到 `tools/ci-gates.sh`, 发版门不再用 `--exclude-tags 'network \|\| golden'`。渲染环境靠 CI 装 `fonts-noto-cjk` + 固定 Flutter 3.47.9, 未容器化(换 Flutter 版本要 `--update-goldens` 重出基准) | — |
 
 ### A-1. 2026-11-14 用户反馈批(已落 main, 未发版)
 
@@ -280,10 +283,13 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 验收: `rg -c CircularProgressIndicator ui/lib/src` ≤ 3(只剩共享组件); 全量测试绿; 300dp + 1.25 字号回归不退化。
 **并行性: 纯 Dart 车道**, 可与 12.1 并行;但与 12.4 改同一批页面时要错开。
 
-### 12.4 `main.dart` 拆壳(S · 半天)
+### 12.4 `main.dart` 拆壳(S · 半天)· **进行中: S0–S7 已落 main, 剩 S8+**
 
-现状 **3512 行**, 扇出为: app shell / 路由与导航 / 播放器胶水 / 设置宿主。
-目标 ≤1200 行, 其余进 `ui/lib/src/app/`。
+现状 **1562 行**(按日期见 `PROGRESS.md` v0.13.0–v0.18.0; 扇出为 app shell / 路由与导航 / 播放器胶水 / 设置宿主)。
+已搬出: `src/home/{lyric,search,playback,queue_sheet,song_action,account_actions}` 6 个 controller 合计 2749 行。
+**S8 未提交**: `~/ncm-wt/main-split`(分支 `lane/main-split` 已并入 main)里有在飞改动 ——
+main.dart 1555 行 + 新文件 `src/home/home_wiring.dart` 125 行;S9+ 未开工。
+目标 ≤1200 行, 其余进 `ui/lib/src/home/`(实际落点已从早期写的 `ui/lib/src/app/` 改为 `home/`)。
 
 验收: 全量测试绿;release 包冷启动时间不变(用 `tools/devui` 的 `--run` 取数)。
 **并行性: 与 12.3 冲突**(同批页面), 二选一先做。
@@ -314,7 +320,28 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|
 | 第 0 波(独占) | 12.0 格式 + 门禁 | 一个人一条车道, 落地后再开别的 |
 | ~~第 1 波~~ ✅ **已完成 2026-11-13** | 12.1 Rust 拆分 ∥ 12.3 UI 统一 | 两个 worktree 并行,编排者独立重跑门禁后合并 |
-| 第 2 波(2 条) | 12.2 能力 trait ∥ 12.4 main 拆分 | 12.2 依赖 12.1 落地;12.4 依赖 12.3 落地 |
+| 第 2 波(2 条) | 12.2 能力 trait ∥ 12.4 main 拆分 | 12.1/12.3 均已落地;12.4 **S0–S7 已合并(1562 行), 剩 S8+**(S8 在 `main-split` 未提交);12.2 god trait 未拆 |
 | 零散 | 12.5 / 12.6 | 随时可搭车, 都是一天内 |
 
-每波收口由编排者**独立重跑**: `cargo test` 271 · `cargo clippy` 0 · `dart analyze` 0 · `flutter test` 674 · `api-coverage` 123/123 · `write-guard` OK。
+每波收口由编排者**独立重跑**(数字现算, 勿抄): `cargo test` · `cargo clippy` 0 · `dart analyze` 0 · `flutter test` · `api-coverage` · `write-guard` OK; 权威值见 `PROGRESS.md` 头部「当前门禁」表。
+
+## 13. 平台层审计剩余项(2026-11-16 登记 · 只登记不排期)
+
+> 来源: `.pi/plans/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
+> **已修 17 条**: P-01..P-10、P-13..P-21(v0.16.0–v0.18.0 四批, 见 `PROGRESS.md` 对应小节)。
+> **P-12**(通知点击无 session activity)已随 P-01/P-02 批落地(commit `b6281b8`, `PlaybackService.kt:91`
+> `setSessionActivity(openAppPendingIntent())`), 不需要再排。
+> **P-22**(cleartext 收窄)代码已在 `~/ncm-wt/lane-cleartext` **未提交**(新增 `res/xml/network_security_config.xml`
+> + manifest 由全局 `usesCleartextTraffic` 改白名单), 合并前仍算在飞。
+> 下表只写「为什么没做 / 触发条件 / 预计工作量」; 方案原文在审计文件里, 不在此复制。
+
+| 项 | 为什么没做 | 触发条件(什么时候做) | 预计工作量 |
+|---|---|---|---|
+| **P-11 完整版** · Android instrumented + 桌面自动化 | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile`, 无 `test/`/`androidTest/`; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | M(首个 Kotlin JVM 测试 + `dumpsys notification` 断言脚本 ≈ 1 天; 再加 instrumented 一组 ≈ +1 天) |
+| **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
+| **P-18 后半** · application-id 与 AppStream id 对齐 | 前半(标题/尺寸)已做(`08e5d37`); `ui/linux/CMakeLists.txt:10` 仍是 `com.minincm.minincm`, metainfo/deb 用 `io.github.xiaquwan1001.MiniNCM`。改 id 会牵动**单实例标识、用户数据目录与 desktop 文件关联**, 必须连迁移一起设计, 审计也标了「不建议顺手改」 | ① 准备上架软件中心/Flatpak 类渠道; ② 或决定统一用户数据目录并接受一次性迁移 | M(改 id + 数据目录迁移 + 单实例锁 + deb/AppImage desktop 文件 + 冒烟 ≈ 1~2 天, 且**需用户拍板**是否迁移) |
+| **P-10 方案 B** · pending_seek | 方案 A(如实反馈 + 不可 seek 时禁用进度条)已在 v0.18.0 落地, 用户不再被「弹回」骗; 方案 B 要在渐进下载完成后**重建解码器**并应用待跳位置, 属播放引擎结构改动。遗留: 同一首歌下载完成后仍需重播一次才能 seek | ① 用户明确要求「边下边播也能跳」; ② 或重做渐进播放(分片写入 + 可 seek 容器) | M–L(重建解码器 + 位置/队列状态恢复 + Linux/Windows 听感验 ≈ 2 天起) |
+| **P-22** · cleartext 收窄合并 | 改动已完成但**留在 `lane/cleartext` 未提交**(白名单需真机验一次播放/登录/MV 才敢合) | 下次 Android 侧发版前, 或任何动 `AndroidManifest.xml` 的批次搭车 | S(合并 + 一次模拟器走查; 代码已在 worktree 里) |
+
+> 明确不做(审计 §3.3 已判, 不再重提): Kotlin 改从 Rust 拿 EQ 系数(跨 FFI 传数组 + 采样率协商) ·
+> 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当顺手改。

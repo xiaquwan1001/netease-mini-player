@@ -10,10 +10,10 @@
 
 | 文件 | 用途 | 最后更新 |
 |---|---|---|
-| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.8.0 起);更早的见 `archive/PROGRESS-v1.md` 与 `archive/PROGRESS-2026-11-03-11-12.md`。**活跃** | 2026-11-15 |
-| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑活**。**活跃** | 2026-11-14 |
-| [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-14 |
-| [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-14 |
+| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.8.0 起);更早的见 `archive/PROGRESS-v1.md` 与 `archive/PROGRESS-2026-11-03-11-12.md`。**活跃** | 2026-11-16 |
+| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活, §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-16 |
+| [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-16 |
+| [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-16 |
 
 ## 2. 构建 / 发布 / 测试
 
