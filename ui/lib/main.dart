@@ -12,7 +12,6 @@ import 'src/cover_palette.dart';
 import 'src/app_settings.dart';
 import 'src/app_shell.dart';
 import 'src/audio_tuning.dart';
-import 'src/artist_nav.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/back_policy.dart';
@@ -23,6 +22,7 @@ import 'src/feed_view.dart';
 import 'src/home/account_actions.dart';
 import 'src/home/lyric_controller.dart';
 import 'src/home/playback_coordinator.dart';
+import 'src/home/home_wiring.dart';
 import 'src/home/queue_sheet_controller.dart';
 import 'src/home/song_action_wiring.dart';
 // Flutter 的 material 也有 SearchController, 用前缀避免同名歧义
@@ -168,6 +168,11 @@ class _HomePageState extends State<HomePage> {
   /// 播放条回调集合: 建一次跨帧复用(回调内部读 State 字段, 不持有任何快照)。
   late final PlayerBarActions _playerBarActions;
 
+  /// 进程级静态钩子的注册/解绑配对(拆壳 S8, 见 src/home/home_wiring.dart):
+  /// 通知栏回调、动作宿主/播放条回调两个全局槽位、ArtistNav、更新弹窗、
+  /// 导航层数、设置监听都在 attach() 里装、detach() 里逐项摘掉。
+  late final HomeWiring _wiring;
+
   /// 已经弹过更新提示的版本 tag(同一次运行只弹一次, 避免重复打扰)
   String? _promptedUpdateTag;
 
@@ -291,28 +296,28 @@ class _HomePageState extends State<HomePage> {
       onCycleMode: _queueUI.cycleMode,
       onOpenQueue: _queueUI.open,
     );
-    // 播放条回调槽位只赋这一次(同一实例, 之后不再变)
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) =>
-          playerBarActions.value = playerBarActions.value ?? _playerBarActions,
-    );
-    // 通知栏/耳机键的上一首·下一首 → Dart 队列
-    // onEnded: 原生播放器 STATE_ENDED 的即时通知(不靠 500ms 轮询) —— 自动续播
-    // 的间隙主要就是"轮询发现播完 + 重新取链"堆出来的
-    Playback.setSkipHandlers(
+    // 进程级静态钩子一次性交给 HomeWiring(拆壳 S8): 注册顺序与拆分前 initState
+    // 一致 —— setSkipHandlers 会 flush 排队中的原生动作, 必须先于 setActionHandlers;
+    // 播放条回调槽位在这里帧后投递一次(同一实例, 之后不再变)。
+    _wiring = HomeWiring(
       onNext: _next,
       onPrevious: _previous,
       onEnded: _coordinator.onNativeTrackEnded,
-    );
-    // 通知栏自定义按钮(喜欢/播放顺序): 原生只发意图, 状态与副作用都在 Dart
-    Playback.setActionHandlers(
       onToggleLike: _songActions.toggleCurrentLike,
       onCycleMode: _cycleModeFromNotification,
-    );
-    // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
-    AppSettings.instance.addListener(_onAudioSettingsChanged);
-    // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
-    actionsHost.value = _songActions.buildHost();
+      buildActionsHost: _songActions.buildHost,
+      barActions: _playerBarActions,
+      // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
+      openAlbum: (albumId, albumName, coverUrl) => showAlbumPreview(
+        context,
+        albumId: albumId,
+        albumName: albumName,
+        coverUrl: coverUrl,
+      ),
+      onUpdatePrompt: _onUpdatePrompt,
+      onPageDepthChanged: _onPageDepthChanged,
+      onAudioSettingsChanged: _onAudioSettingsChanged,
+    )..attach();
     // 搜索状态机: 输入框/焦点仍由页面持有, 只把"失败/清错/离开浏览态"三件
     // 需要 setState 的副作用回灌给页面(与原 _search/_clearSearch 一一对应)
     _search = search_state.SearchController(
@@ -330,17 +335,6 @@ class _HomePageState extends State<HomePage> {
       appendNext: _songActions.appendSongToQueue,
       openPlaylist: _account.openPlaylist,
     );
-    // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
-    ArtistNav.onOpenAlbum = (albumId, albumName, coverUrl) => showAlbumPreview(
-      context,
-      albumId: albumId,
-      albumName: albumName,
-      coverUrl: coverUrl,
-    );
-    // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
-    UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
-    // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
-    pageDepth.addListener(_onPageDepthChanged);
     _bootstrap();
     _coordinator.startPolling();
   }
@@ -349,13 +343,12 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     // 断开播放能力: 避免下一个 HomePage 实例/测试用例误用已销毁的实现
     PlaybackBridge.instance.unbind();
-    AppSettings.instance.removeListener(_onAudioSettingsChanged);
+    // 逐项摘掉进程级静态钩子(槽位置 null, 不留旧对象); 见 src/home/home_wiring.dart
+    _wiring.detach();
     _coordinator.dispose();
     _queueUI.dispose();
     _account.dispose();
     _search.dispose();
-    UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
-    pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
     _lyric.dispose();
     super.dispose();
