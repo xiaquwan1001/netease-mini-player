@@ -1,0 +1,948 @@
+//! `Provider` trait 本体。
+//!
+//! 131 个方法里绝大多数有 `Unsupported` 默认实现, 新 provider 只需实现 6 个核心方法;
+//! 能力声明(`Capability`)与路由解耦, 所以**不要**按能力把 trait 拆成多个 ——
+//! 判定见 docs/remaining-batches.md 12.2 与 arch audit 6.1 第 6 项(缓做/不做)。
+//!
+//! 入参类型(`SearchQuery`/`SongUrlRequest`/`RankingPeriod`/`BoxFuture`)在 `params` 模块。
+
+use crate::capability::Capability;
+use crate::error::{ProviderError, ProviderResult};
+use crate::params::{BoxFuture, RankingPeriod, SearchQuery, SongUrlRequest};
+use ncm_domain::{
+    AlbumDetail, AlbumItem, Artist, ArtistAlbumPage, ArtistDetail, ArtistMvPage, ArtistSongPage,
+    ChartSummary, CloudPage, CloudUploadResult, CommentPage, CommentStats, DefaultSearch,
+    DigitalAlbumDetail, DigitalAlbumPurchased, DigitalAlbumSalesEntry, FeedEvent, FeedPage,
+    FollowCount, ForwardItem, HotArtist, HotSearchDetailItem, HotSearchTerm, InboxItem, Lyric,
+    MedalWall, MessageCounts, MvDetail, MvUrl, PhoneLoginOutcome, PlayRankEntry, Playlist,
+    PlaylistCategory, PlaylistDetail, PodcastProgram, PodcastRadio, PrivateMessage, PrivateSession,
+    Profile, ProfileDetail, QrLoginKey, QrLoginOutcome, RadioExploreHome, RadioSubscriberPage,
+    RadioToplist, RecentContact, SearchBundle, SearchExact, SearchPage, SigninStatus, SmsCodeSent,
+    Song, SongLikeState, SongPurchasedPage, StreamUrl, StyleTag, SuggestItem, ToplistCatalogGroup,
+    TrackId, UserItem, UserLevel, VipOverview, WikiFact, WordLyric,
+};
+pub trait Provider: Send + Sync {
+    fn id(&self) -> &'static str;
+    fn name(&self) -> &str;
+    fn capabilities(&self) -> &'static [Capability];
+
+    fn supports(&self, cap: Capability) -> bool {
+        self.capabilities().contains(&cap)
+    }
+
+    fn search<'a>(&'a self, query: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>>;
+
+    /// 综合搜索: 单曲/歌手/专辑/歌单/播客分板块.
+    /// 默认退化成只搜单曲(兼容只实现 search 的 provider).
+    fn search_all<'a>(
+        &'a self,
+        query: &'a SearchQuery,
+    ) -> BoxFuture<'a, ProviderResult<SearchBundle>> {
+        Box::pin(async move {
+            let page = self.search(query).await?;
+            Ok(SearchBundle {
+                songs: page.songs,
+                song_total: page.total,
+                ..SearchBundle::default()
+            })
+        })
+    }
+
+    fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>>;
+
+    fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>>;
+
+    /// 逐字歌词(YRC). 默认不支持; 解析失败在实现内部退化为整词行, 不返回错误.
+    fn word_lyric<'a>(&'a self, _track: TrackId) -> BoxFuture<'a, ProviderResult<WordLyric>> {
+        Box::pin(async { Err(ProviderError::unsupported("no word lyric")) })
+    }
+
+    /// 当前登录账号的资料(uid/昵称/VIP). 未登录或不支持时返回 Unsupported.
+    fn profile<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Profile>> {
+        Box::pin(async { Err(ProviderError::unsupported("no profile")) })
+    }
+
+    /// 申请一个扫码登录二维码(官方网页登录同一套通道). 默认不支持.
+    ///
+    /// 桌面端用它替代 WebView: 不必读取浏览器的 HttpOnly cookie, 凭据由轮询响应下发.
+    fn login_qr_create<'a>(&'a self) -> BoxFuture<'a, ProviderResult<QrLoginKey>> {
+        Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
+    }
+
+    /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
+    fn login_qr_check<'a>(
+        &'a self,
+        _key: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
+        Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
+    }
+
+    /// 手机号+验证码登录 ①: 给手机号发短信验证码. 默认不支持.
+    ///
+    /// 走网页登录通道(weapi /api/sms/captcha/sent); 命中交互式风控时返回
+    /// `ProviderErrorKind::RiskControl`(官方 code 8821), 调用方应引导用户改用扫码登录.
+    fn login_sms_send<'a>(
+        &'a self,
+        _phone: &'a str,
+        _country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<SmsCodeSent>> {
+        Box::pin(async { Err(ProviderError::unsupported("no sms login")) })
+    }
+
+    /// 手机号+验证码登录 ②: 校验验证码. 成功时带登录凭据, 由调用方合并落盘.
+    fn login_sms_verify<'a>(
+        &'a self,
+        _phone: &'a str,
+        _code: &'a str,
+        _country_code: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<PhoneLoginOutcome>> {
+        Box::pin(async { Err(ProviderError::unsupported("no sms login")) })
+    }
+
+    /// "我喜欢的音乐"里的曲目 id(用于红心状态)
+    fn liked_ids<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<TrackId>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no liked ids")) })
+    }
+
+    /// 红心/取消红心. 返回 true 表示操作被接受.
+    fn set_like<'a>(
+        &'a self,
+        _track: TrackId,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no like")) })
+    }
+
+    /// 当前账号的歌单列表(含"我喜欢的音乐")
+    fn user_playlists<'a>(&'a self) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlists")) })
+    }
+
+    /// 某个歌单的曲目
+    fn playlist_songs<'a>(&'a self, _playlist_id: u64) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist songs")) })
+    }
+
+    /// 批量取曲目详情(逗号分隔的 id)
+    fn songs_detail<'a>(&'a self, _ids: &'a str) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song detail")) })
+    }
+
+    /// 每日推荐歌曲(原版"每日推荐")
+    fn daily_recommend_songs(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no daily recommend")) })
+    }
+
+    /// 每日推荐歌单(原版"推荐歌单")
+    fn daily_recommend_playlists(&self) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no daily playlists")) })
+    }
+
+    /// 心动模式(基于当前曲目的智能连续播放)
+    fn intelligence_songs(
+        &self,
+        _song_id: u64,
+        _playlist_id: u64,
+        _count: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no intelligence mode")) })
+    }
+
+    /// 搜索建议(输入联想)
+    fn search_suggest<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<SuggestItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no search suggest")) })
+    }
+
+    /// 联想下拉的**纯关键词候选**(最多 6 条, 已去重保序).
+    ///
+    /// 与 `search_suggest` 的区别: 后者回的是「实体卡片」( songs/artists/albums/playlists 分段),
+    /// 这里只是可点的候选词串, 适合输入框下方的简版下拉.
+    /// 能力声明复用 [`Capability::SearchSuggest`].
+    fn search_suggest_keywords<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no suggest keywords")) })
+    }
+
+    /// 精确实体改写: 关键词命中歌手/歌单/电台时的"最精确那一条".
+    ///
+    /// 注意**空命中伪装成功**: provider 侧必须把 orders 为空的结果翻成 [`SearchExact::default()`],
+    /// 不要当错误抛. 能力声明复用 [`Capability::SearchSuggest`].
+    fn search_exact<'a>(
+        &'a self,
+        _keywords: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<SearchExact>> {
+        Box::pin(async { Err(ProviderError::unsupported("no search exact")) })
+    }
+
+    /// 最近播放(需要登录; 服务端记录)
+    fn recent_songs(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent songs")) })
+    }
+
+    /// 专辑详情(封面预览 + 曲目)
+    fn album_detail(&self, _album_id: u64) -> BoxFuture<'_, ProviderResult<AlbumDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no album detail")) })
+    }
+
+    /// 热门播客/电台
+    fn podcast_hot(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast")) })
+    }
+
+    /// 某个播客的节目列表
+    fn podcast_programs(
+        &self,
+        _radio_id: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PodcastProgram>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast programs")) })
+    }
+
+    /// 单个节目详情
+    fn podcast_program(&self, _program_id: u64) -> BoxFuture<'_, ProviderResult<PodcastProgram>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast program")) })
+    }
+
+    /// 搜索热词榜(已按热度排序, rank 从 1 开始)
+    fn hot_search(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchTerm>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot search")) })
+    }
+
+    /// 热搜榜详情(带热度分与榜位, 比 [`Self::hot_search`] 的瘦热词多 score/rank).
+    /// 能力声明复用 [`Capability::SearchHot`].
+    fn hot_search_detail(&self) -> BoxFuture<'_, ProviderResult<Vec<HotSearchDetailItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot search detail")) })
+    }
+
+    /// 默认/推荐搜索词("猜你想搜"): keyword 是要搜的词, show 是推荐理由文案
+    fn default_search(&self) -> BoxFuture<'_, ProviderResult<Option<DefaultSearch>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no default search")) })
+    }
+
+    /// 私人 FM(需要登录)
+    fn personal_fm(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no personal fm")) })
+    }
+
+    /// 已订阅的播客/电台(需要登录)
+    fn subscribed_podcasts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed podcasts")) })
+    }
+
+    /// 关注的艺人(需要登录)
+    fn subscribed_artists(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed artists")) })
+    }
+
+    /// 关注动态(关注的人/艺人发布的内容, 需要登录)
+    fn feed_events(
+        &self,
+        _limit: u32,
+        _last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no feed")) })
+    }
+
+    /// 关注动态的一页(带真实游标, 见 FeedPage). 默认实现退化成一页无游标.
+    fn feed_page(&self, _limit: u32, _last_time: i64) -> BoxFuture<'_, ProviderResult<FeedPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no feed page")) })
+    }
+
+    /// 音乐云盘列表(需要登录). 不含上传。
+    fn user_cloud(&self, _limit: u32, _offset: u32) -> BoxFuture<'_, ProviderResult<CloudPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud")) })
+    }
+
+    /// 删除云盘歌曲(入参是云盘条目 id, 见 CloudSong::id)
+    fn cloud_delete(&self, _ids: &[u64]) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud delete")) })
+    }
+
+    /// 云盘歌曲下载直链(签名 URL, 约一小时过期)
+    fn cloud_song_url(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Option<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud song url")) })
+    }
+
+    /// 指定用户的动态(他人主页): vendor 的 event 只支持 pagesize/lasttime,
+    /// provider 侧自己拼 uid. 对方没公开/没有动态时返回**空列表**.
+    fn user_events(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _last_time: i64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<FeedEvent>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user events")) })
+    }
+
+    /// 动态的评论列表(threadId 来自 FeedEvent.thread_id)
+    fn event_comments<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event comments")) })
+    }
+
+    /// 点赞/取消点赞一条动态(threadId 来自 FeedEvent.thread_id)
+    fn like_event<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event like")) })
+    }
+
+    /// 转发一条动态(附转发语)
+    fn forward_event<'a>(
+        &'a self,
+        _event_id: u64,
+        _user_id: u64,
+        _msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no event forward")) })
+    }
+
+    /// 歌单详情(歌单页头部信息)
+    fn playlist_detail(&self, _playlist_id: u64) -> BoxFuture<'_, ProviderResult<PlaylistDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist detail")) })
+    }
+
+    /// 收藏/取消收藏歌单(需要登录). 返回 true 表示操作被接受.
+    fn set_playlist_subscribed(
+        &self,
+        _playlist_id: u64,
+        _subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist subscribe")) })
+    }
+
+    /// 评论列表. kind = song | playlist | album | podcast
+    fn comments<'a>(
+        &'a self,
+        _kind: &'a str,
+        _id: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comments")) })
+    }
+
+    /// 评论统计(评论总数/分享数/点赞数). 能力复用 Capability::Comment.
+    /// threadId 形如 R_SO_4_186016 / A_PL_0_24381616, 来自 CommentPage.thread_id 或 thread_id_for.
+    fn comment_stats<'a>(
+        &'a self,
+        _thread_id: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<CommentStats>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment stats")) })
+    }
+
+    /// 精彩评论(单独接口, 可单独翻页). threadId 来自 CommentPage.thread_id
+    fn hot_comments<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot comments")) })
+    }
+
+    /// 分享资源到动态(需要登录). 返回 true 表示操作被接受.
+    fn share_resource<'a>(
+        &'a self,
+        _kind: &'a str,
+        _id: u64,
+        _msg: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no share")) })
+    }
+
+    /// 播客/电台详情
+    fn podcast_radio(&self, _radio_id: u64) -> BoxFuture<'_, ProviderResult<PodcastRadio>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast radio")) })
+    }
+
+    /// 歌手详情(头像/简介/热门歌曲/专辑)
+    fn artist_detail(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<ArtistDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist detail")) })
+    }
+
+    /// 歌手全部歌曲一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_songs_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistSongPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist songs")) })
+    }
+
+    /// 歌手专辑一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_albums_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistAlbumPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist albums")) })
+    }
+
+    /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
+    fn toggle_artist_sub<'a>(
+        &'a self,
+        _artist_id: u64,
+        _sub: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist sub")) })
+    }
+
+    /// 歌手 MV 一页(offset/limit 分页, has_more=还有下一页)
+    fn artist_mvs_page<'a>(
+        &'a self,
+        _artist_id: u64,
+        _offset: u32,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<ArtistMvPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no artist mvs")) })
+    }
+
+    /// MV 详情(mv_detail)
+    fn mv_detail<'a>(&'a self, _mv_id: u64) -> BoxFuture<'a, ProviderResult<MvDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no mv detail")) })
+    }
+
+    /// MV 播放链接(mv_url, r=清晰度档位如 1080)
+    fn mv_url<'a>(&'a self, _mv_id: u64, _r: u32) -> BoxFuture<'a, ProviderResult<MvUrl>> {
+        Box::pin(async { Err(ProviderError::unsupported("no mv url")) })
+    }
+
+    /// 当前账号资料详情(个人主页背景图/头像/签名/关注数)
+    fn profile_detail(&self) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no profile detail")) })
+    }
+
+    /// 上传本地音频到音乐云盘(需登录); 返回新歌 id/歌名. 默认不支持.
+    fn cloud_upload(&self, _file_path: String) -> BoxFuture<'_, ProviderResult<CloudUploadResult>> {
+        Box::pin(async { Err(ProviderError::unsupported("no cloud upload")) })
+    }
+
+    /// 修改个人简介(签名, 需登录); 返回更新后的资料. 默认不支持.
+    fn update_signature(&self, _signature: String) -> BoxFuture<'_, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no update signature")) })
+    }
+
+    /// 任意用户的公开资料(不需要登录). 用于"他人主页"(听众/粉丝列表点进去).
+    ///
+    /// 与 [Provider::profile_detail](只读当前登录账号)分开: 那个要先 `uid()`, 未登录直接报错.
+    fn user_profile<'a>(&'a self, _uid: u64) -> BoxFuture<'a, ProviderResult<ProfileDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user profile")) })
+    }
+
+    /// 任意用户的公开歌单(不需要登录).
+    fn user_playlists_of<'a>(
+        &'a self,
+        _uid: u64,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user playlists")) })
+    }
+
+    /// 收藏曲目到指定歌单(需要登录). 返回 true 表示接口接受.
+    fn add_to_playlist(
+        &self,
+        _playlist_id: u64,
+        _track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist edit")) })
+    }
+
+    /// "我喜欢的音乐"曲目, 按收藏时间从新到旧(服务端 addTime 排序).
+    fn liked_songs_ordered(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no liked songs")) })
+    }
+
+    /// 听歌排行(需要登录): 全部时间 / 最近一周. 顺序即名次.
+    fn play_ranking(
+        &self,
+        _period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no play ranking")) })
+    }
+
+    /// 他人常听排行: 与 [`play_ranking`](Self::play_ranking) 同一端点, 但 uid 由调用方给.
+    /// 对方没公开/没有记录时返回**空列表**(不报错), 让 UI 显示"暂无数据".
+    fn play_ranking_of(
+        &self,
+        _uid: u64,
+        _period: RankingPeriod,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PlayRankEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user play ranking")) })
+    }
+
+    /// 我的曲风偏好(系统按听歌口味算出来的风格, 需要登录; 未登录可退化成通用曲风表).
+    fn style_preference(&self) -> BoxFuture<'_, ProviderResult<Vec<StyleTag>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style preference")) })
+    }
+
+    /// 某个曲风下的歌曲
+    fn style_songs<'a>(
+        &'a self,
+        _tag_id: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style songs")) })
+    }
+
+    /// 某个曲风下的歌单
+    fn style_playlists<'a>(
+        &'a self,
+        _tag_id: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no style playlists")) })
+    }
+
+    /// 排行榜列表(飙升/新歌/热歌/原创 + 各语种/曲风榜)
+    fn charts(&self) -> BoxFuture<'_, ProviderResult<Vec<ChartSummary>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no charts")) })
+    }
+
+    /// 最新专辑(album_newest, 实测固定 12 张, 无 total). 能力复用 Capability::NewRelease.
+    fn newest_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no newest albums")) })
+    }
+
+    /// 榜单 v2 目录(toplist_detail_v2, 按 categoryCode 分组的榜单卡).
+    /// 能力复用 Capability::Chart.
+    fn toplist_catalog(&self) -> BoxFuture<'_, ProviderResult<Vec<ToplistCatalogGroup>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no toplist catalog")) })
+    }
+
+    /// 歌单分类(语种/风格/场景/情感/主题)
+    fn playlist_categories(&self) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist categories")) })
+    }
+
+    /// 某个分类下的歌单(按热度/最新排序, 支持 offset 翻页)
+    fn playlists_by_category<'a>(
+        &'a self,
+        _cat: &'a str,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no category playlists")) })
+    }
+
+    /// 精品歌单(编辑精选)
+    fn high_quality_playlists<'a>(
+        &'a self,
+        _cat: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no high quality playlists")) })
+    }
+
+    /// 我收藏的专辑(需要登录)
+    fn subscribed_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no subscribed albums")) })
+    }
+
+    /// 收藏/取消收藏专辑(需要登录)
+    fn set_album_subscribed(
+        &self,
+        _album_id: u64,
+        _subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no album subscribe")) })
+    }
+
+    /// 新建歌单(需要登录), 返回新歌单 id. privacy: 0=公开 10=私密
+    fn create_playlist<'a>(
+        &'a self,
+        _name: &'a str,
+        _privacy: u8,
+    ) -> BoxFuture<'a, ProviderResult<u64>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist create")) })
+    }
+
+    /// 批量把曲目加入歌单(需要登录). song_ids 应由调用方去重;
+    /// 服务端对已存在的曲目会跳过(count 可小于提交数), 返回 true 表示接口接受.
+    fn playlist_tracks_add<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _song_ids: &'a [u64],
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist tracks add")) })
+    }
+
+    /// 删除歌单(需要登录)
+    fn delete_playlist(&self, _playlist_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist delete")) })
+    }
+
+    /// 改歌单名
+    fn rename_playlist<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _name: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist rename")) })
+    }
+
+    /// 改歌单简介
+    fn update_playlist_desc<'a>(
+        &'a self,
+        _playlist_id: u64,
+        _desc: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist desc")) })
+    }
+
+    /// 把一首歌移出歌单(需要登录)
+    fn remove_track(
+        &self,
+        _playlist_id: u64,
+        _track: TrackId,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no playlist track delete")) })
+    }
+
+    /// 评论点赞/取消点赞(需要登录). threadId 来自 CommentPage.thread_id
+    fn like_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+        _liked: bool,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment like")) })
+    }
+
+    /// 某条评论下的回复(楼层)
+    fn comment_replies<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _parent_comment_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment replies")) })
+    }
+
+    /// 回复某条评论(需要登录)
+    fn reply_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+        _content: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment reply")) })
+    }
+
+    /// 某人关注的人(不传 uid 用当前账号)
+    fn user_follows(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user follows")) })
+    }
+
+    /// 某人的粉丝
+    fn user_followeds(
+        &self,
+        _uid: u64,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<UserItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user followeds")) })
+    }
+
+    /// 关注/取关某人(需要登录)
+    fn set_follow(&self, _uid: u64, _follow: bool) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no follow")) })
+    }
+
+    /// 我的关注/粉丝数
+    fn follow_counts(&self) -> BoxFuture<'_, ProviderResult<FollowCount>> {
+        Box::pin(async { Err(ProviderError::unsupported("no follow counts")) })
+    }
+
+    /// 推荐新音乐("新歌速递")
+    fn new_songs(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new songs")) })
+    }
+
+    /// 新碟上架(region = ALL|ZH|EA|KR|JP)
+    fn new_albums(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new albums")) })
+    }
+
+    /// 相似歌曲
+    fn similar_songs(
+        &self,
+        _song_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar songs")) })
+    }
+
+    /// 相似歌单
+    fn similar_playlists(
+        &self,
+        _song_id: u64,
+        _limit: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar playlists")) })
+    }
+
+    /// 相似歌手(需要登录)
+    fn similar_artists(&self, _artist_id: u64) -> BoxFuture<'_, ProviderResult<Vec<Artist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no similar artists")) })
+    }
+
+    /// 每日推荐"不感兴趣"(需要登录): 把这首歌从以后的日推里排掉
+    fn dislike_recommend_song(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recommend dislike")) })
+    }
+
+    /// 私人 FM"不再播放"(需要登录)
+    fn trash_fm_song(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no fm trash")) })
+    }
+
+    /// 历史日推可用日期(黑胶 VIP; 形如 "2024-06-20", 新的在前)
+    fn history_recommend_dates(&self) -> BoxFuture<'_, ProviderResult<Vec<String>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no history recommend dates")) })
+    }
+
+    /// 某个日期的历史日推曲目
+    fn history_recommend_songs<'a>(
+        &'a self,
+        _date: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no history recommend songs")) })
+    }
+
+    /// 最近播放的专辑(服务端记录, 需要登录)
+    fn recent_albums(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent albums")) })
+    }
+
+    /// 最近播放的歌单(服务端记录, 需要登录)
+    fn recent_playlists(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Playlist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent playlists")) })
+    }
+
+    /// 最近播放的播客/电台(服务端记录, 需要登录)
+    fn recent_podcasts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent podcasts")) })
+    }
+
+    /// 云贝签到状态(需要登录)
+    fn signin_status(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async { Err(ProviderError::unsupported("no signin status")) })
+    }
+
+    /// 签到(需要登录). 返回签到后的状态; 今日已签到时 Unsupported("已签到")
+    fn sign_in(&self) -> BoxFuture<'_, ProviderResult<SigninStatus>> {
+        Box::pin(async { Err(ProviderError::unsupported("no signin")) })
+    }
+
+    /// 黑胶会员总览(会员等级 / 成长值 / 本周签到 / 任务; 需要登录).
+    ///
+    /// 四个子接口互相独立: 单个失败只让对应字段为 None, 全部失败才返回错误.
+    fn vip_overview(&self) -> BoxFuture<'_, ProviderResult<VipOverview>> {
+        Box::pin(async { Err(ProviderError::unsupported("no vip overview")) })
+    }
+
+    /// 账号听歌等级(听歌数/登录天数/进度; 需要登录).
+    /// 能力复用 [`Capability::ProfileDetail`](crate::Capability::ProfileDetail).
+    fn user_level(&self) -> BoxFuture<'_, ProviderResult<UserLevel>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user level")) })
+    }
+
+    /// 账号勋章墙(已获得 + 未获得, 按服务端分类顺序平铺; 需要登录).
+    /// 能力复用 [`Capability::ProfileDetail`](crate::Capability::ProfileDetail).
+    fn user_medals(&self) -> BoxFuture<'_, ProviderResult<MedalWall>> {
+        Box::pin(async { Err(ProviderError::unsupported("no user medals")) })
+    }
+
+    /// 已购数字专辑(digitalAlbum/purchased; 需要登录).
+    fn digital_album_purchased<'a>(
+        &'a self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<DigitalAlbumPurchased>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album purchased")) })
+    }
+
+    /// 已购单曲(song/purchased, 分页; 需要登录).
+    fn song_purchased<'a>(
+        &'a self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'a, ProviderResult<SongPurchasedPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song purchased")) })
+    }
+
+    /// 数字专辑详情(vipmall/albumproduct/detail, 只读).
+    fn digital_album_detail(
+        &self,
+        _album_id: u64,
+    ) -> BoxFuture<'_, ProviderResult<DigitalAlbumDetail>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album detail")) })
+    }
+
+    /// 数字专辑销量(逗号分隔的专辑 id 串 → 每个专辑一条销量).
+    fn digital_album_sales<'a>(
+        &'a self,
+        _album_ids: &'a str,
+    ) -> BoxFuture<'a, ProviderResult<Vec<DigitalAlbumSalesEntry>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no digital album sales")) })
+    }
+
+    // ---- 电台发现(只读; 能力声明 Capability::RadioExplore) ----
+
+    /// 电台发现首页: 分类列表(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
+    fn radio_explore_home(&self) -> BoxFuture<'_, ProviderResult<RadioExploreHome>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio explore")) })
+    }
+
+    /// 某分类下的推荐电台(dj_recommend_type; cate_id 必须是真实分类 id, 0 返回空).
+    fn radio_recommend<'a>(
+        &'a self,
+        _cate_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<Vec<PodcastRadio>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio recommend")) })
+    }
+
+    /// 电台榜单(kind: "hot"|"new"|"pay"|"hours"|"newcomer"|"popular"|"program").
+    fn radio_toplist<'a>(&'a self, _kind: &'a str) -> BoxFuture<'a, ProviderResult<RadioToplist>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio toplist")) })
+    }
+
+    /// 电台订阅者列表(只读; 订阅/取消订阅等写操作不做).
+    /// 电台订阅者/听众列表. `time_ms` 是**时间游标**(首页传 None, 之后传上一页最后一条的 subscribe_time_ms).
+    fn radio_subscribers<'a>(
+        &'a self,
+        _radio_id: u64,
+        _limit: u32,
+        _time_ms: Option<u64>,
+    ) -> BoxFuture<'a, ProviderResult<RadioSubscriberPage>> {
+        Box::pin(async { Err(ProviderError::unsupported("no radio subscribers")) })
+    }
+
+    /// 删除自己的评论(需要登录)
+    fn delete_comment<'a>(
+        &'a self,
+        _thread_id: &'a str,
+        _comment_id: u64,
+    ) -> BoxFuture<'a, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment delete")) })
+    }
+
+    /// 歌曲百科(曲风/语种/BPM/获奖成就...). 没有百科时返回空列表.
+    fn song_wiki(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Vec<WikiFact>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song wiki")) })
+    }
+
+    /// 单曲喜欢状态 + 喜欢总数(需要登录; 老 provider 不支持时报 unsupported).
+    fn song_like_state(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<SongLikeState>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song like state")) })
+    }
+
+    /// 未读消息计数(需登录)
+    fn message_counts(&self) -> BoxFuture<'_, ProviderResult<MessageCounts>> {
+        Box::pin(async { Err(ProviderError::unsupported("no message counts")) })
+    }
+
+    /// 私信会话列表(需登录, 按最后一条消息倒序)
+    fn private_sessions(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateSession>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private sessions")) })
+    }
+
+    /// 与某人的私信历史(需登录; before_ms = 0 表示最新一页)
+    fn private_history(
+        &self,
+        _user_id: u64,
+        _limit: u32,
+        _before_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<PrivateMessage>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private history")) })
+    }
+
+    /// 发送私信(需登录). 上游 /api/msg/private/send, 纯文本.
+    fn private_send(&self, _user_id: u64, _content: String) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no private send")) })
+    }
+
+    /// 新歌速递(按地区; area = all|zh|ea|jp|kr)
+    fn new_songs_by_area<'a>(
+        &'a self,
+        _area: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new songs by area")) })
+    }
+
+    /// 新碟上架(按地区; area 同上)
+    fn new_albums_by_area<'a>(
+        &'a self,
+        _area: &'a str,
+        _limit: u32,
+    ) -> BoxFuture<'a, ProviderResult<Vec<AlbumItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no new albums by area")) })
+    }
+
+    /// 热门歌手榜(按粉丝/热度倒序)
+    fn hot_artists(
+        &self,
+        _limit: u32,
+        _offset: u32,
+    ) -> BoxFuture<'_, ProviderResult<Vec<HotArtist>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no hot artists")) })
+    }
+
+    /// 通知(点赞/关注/系统), 新的在前
+    fn message_notices(
+        &self,
+        _limit: u32,
+        _last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no notices")) })
+    }
+
+    /// 评论/回复消息(需登录), 新的在前
+    fn comment_messages(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<InboxItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no comment messages")) })
+    }
+
+    /// 消息中心"@我"(需登录, 新的在前).
+    /// 网易该接口实际用 offset/limit 分页, last_time_ms 只是保留游标形状, 实现可忽略.
+    fn forward_messages(
+        &self,
+        _limit: u32,
+        _last_time_ms: u64,
+    ) -> BoxFuture<'_, ProviderResult<Vec<ForwardItem>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no forward messages")) })
+    }
+
+    /// 最近联系人(需登录; "可发起私信的联系人/关注列表", 服务端顺序)
+    fn recent_contacts(&self, _limit: u32) -> BoxFuture<'_, ProviderResult<Vec<RecentContact>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no recent contacts")) })
+    }
+}
