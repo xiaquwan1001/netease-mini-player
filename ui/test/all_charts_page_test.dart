@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/all_charts_page.dart';
+import 'package:minincm/src/cover_art.dart';
+import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 rust.ToplistCatalogItem item(
@@ -143,5 +145,31 @@ void main() {
     // 榜单名允许两行(不滚), 但同页可能挂长标题跑马灯 → 固定帧推进.
     await pumpFrames(tester);
     expect(tester.takeException(), isNull);
+  });
+
+  // 列表行审计 C 级(2026-11-17): 整页铺满列表里, 分组小标题(12)与行首封面必须
+  // 共线 —— 修前行用的是 Material 默认 16/16, 小标题 12 ⇒ 同页两条竖线错开 4dp.
+  testWidgets('分组小标题与行首封面共线(12)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        AllChartsPage(
+          onOpenPlaylist: (_) {},
+          loadCatalog: () async => [
+            rust.ToplistCatalogGroup(code: 'OFFICIAL', items: [item(1, '飙升榜')]),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final titleLeft = tester.getRect(find.text('官方榜')).left;
+    final coverLeft = tester.getRect(find.byType(CoverArt).first).left;
+    expect(titleLeft, moreOrLessEquals(kPagePadding, epsilon: 0.5));
+    expect(coverLeft, moreOrLessEquals(kPagePadding, epsilon: 0.5));
+    expect(
+      tester.getRect(find.text('飙升榜')).left,
+      greaterThan(coverLeft + 40),
+      reason: '标题在 48dp 封面右侧',
+    );
   });
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/cover_art.dart';
+import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/style_page.dart';
 
@@ -9,6 +11,36 @@ import 'support/playback_spy.dart';
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
+  // 列表行审计 C 级(2026-11-17): 卡片内行 = 页面 12 + 卡片内缩 4 = 16.
+  // 修前是 Material 默认 16 + 页面 12 = 28(三重叠加), 此次收敛到 kCardRowPadding.
+  testWidgets('卡片内歌曲行距屏 16(12+4)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        StyleDetailView(
+          tag: rust.StyleTag(
+            id: '1009',
+            name: '粤语流行',
+            songCount: BigInt.from(2),
+          ),
+          loadSongs: (_) async => [fakeSong(id: 1, name: '风格单曲')],
+          loadPlaylists: (_) async => const <rust.Playlist>[],
+          onOpenPlaylist: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final covers = find.byType(CoverArt);
+    expect(covers, findsWidgets);
+    // 最后一个 CoverArt 是歌曲行封面(前面的来自头部/歌单卡)
+    final rowCover = tester.getRect(covers.last);
+    expect(
+      rowCover.left,
+      moreOrLessEquals(kPagePadding + kCardRowInset, epsilon: 0.5),
+      reason: '卡片内行内容距屏 16',
+    );
+  });
+
   testWidgets('曲风详情页展示歌单与歌曲', (tester) async {
     List<rust.SongDto>? played;
     installPlaybackSpy((songs, _) => played = songs);
