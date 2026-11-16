@@ -3111,11 +3111,16 @@ fn wire__crate__api__player_configure_impl(
             let api_gain_db = <f64>::sse_decode(&mut deserializer);
             let api_fade_ms = <u32>::sse_decode(&mut deserializer);
             let api_eq_text = <Option<String>>::sse_decode(&mut deserializer);
+            let api_gain_slew_db_per_sec = <f64>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, crate::api::FfiError>((move || {
-                    let output_ok =
-                        crate::api::player_configure(api_gain_db, api_fade_ms, api_eq_text)?;
+                    let output_ok = crate::api::player_configure(
+                        api_gain_db,
+                        api_fade_ms,
+                        api_eq_text,
+                        api_gain_slew_db_per_sec,
+                    )?;
                     std::result::Result::Ok(output_ok)
                 })())
             }
@@ -8081,11 +8086,13 @@ impl SseDecode for crate::api::PlaybackTuningDto {
         let mut var_fadeMs = <u32>::sse_decode(deserializer);
         let mut var_eqFilters = <u32>::sse_decode(deserializer);
         let mut var_eqPreampDb = <f64>::sse_decode(deserializer);
+        let mut var_gainSlewDbPerSec = <f64>::sse_decode(deserializer);
         return crate::api::PlaybackTuningDto {
             gain_db: var_gainDb,
             fade_ms: var_fadeMs,
             eq_filters: var_eqFilters,
             eq_preamp_db: var_eqPreampDb,
+            gain_slew_db_per_sec: var_gainSlewDbPerSec,
         };
     }
 }
@@ -10300,6 +10307,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlaybackTuningDto {
             self.fade_ms.into_into_dart().into_dart(),
             self.eq_filters.into_into_dart().into_dart(),
             self.eq_preamp_db.into_into_dart().into_dart(),
+            self.gain_slew_db_per_sec.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12765,6 +12773,7 @@ impl SseEncode for crate::api::PlaybackTuningDto {
         <u32>::sse_encode(self.fade_ms, serializer);
         <u32>::sse_encode(self.eq_filters, serializer);
         <f64>::sse_encode(self.eq_preamp_db, serializer);
+        <f64>::sse_encode(self.gain_slew_db_per_sec, serializer);
     }
 }
 

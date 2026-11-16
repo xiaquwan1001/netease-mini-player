@@ -1369,6 +1369,8 @@ pub struct PlaybackTuningDto {
     pub eq_filters: u32,
     /// 曲线前级增益(dB)
     pub eq_preamp_db: f64,
+    /// 生效的增益限速(dB/s): 0 = 瞬时, 3.0 = 动态 AGC 防 pump
+    pub gain_slew_db_per_sec: f64,
 }
 
 fn tuning_dto(t: &ncm_playback::PlaybackTuning) -> PlaybackTuningDto {
@@ -1384,6 +1386,7 @@ fn tuning_dto(t: &ncm_playback::PlaybackTuning) -> PlaybackTuningDto {
         fade_ms: t.fade_ms,
         eq_filters: filters,
         eq_preamp_db: preamp,
+        gain_slew_db_per_sec: t.gain_slew_db_per_sec as f64,
     }
 }
 
@@ -1421,10 +1424,13 @@ pub fn eq_profile_normalize(text: String) -> Result<String, FfiError> {
 /// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
 ///
 /// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
+/// `gain_slew_db_per_sec` = 增益变化限速(dB/s): **0 = 瞬时**(静态响度均衡/拖滑杆),
+/// 3.0 = 动态响度(AGC)防 pump。三端同一口径(P-03); 负数/NaN 由 Rust 侧回落默认 3 dB/s。
 pub fn player_configure(
     gain_db: f64,
     fade_ms: u32,
     eq_text: Option<String>,
+    gain_slew_db_per_sec: f64,
 ) -> Result<PlaybackTuningDto, FfiError> {
     let eq = match eq_text {
         Some(text) if !text.trim().is_empty() => {
@@ -1436,6 +1442,7 @@ pub fn player_configure(
         gain_db: gain_db as f32,
         fade_ms,
         eq,
+        gain_slew_db_per_sec: gain_slew_db_per_sec as f32,
     };
     player().configure(tuning);
     Ok(tuning_dto(&player().tuning()))

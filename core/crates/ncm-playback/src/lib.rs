@@ -15,7 +15,7 @@ pub mod biquad;
 pub mod loudness;
 
 /// 播放期的可调参数(R2/R5/R7 的落点). 全部由设置页写入, 默认值 = 完全不改变现状.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackTuning {
     /// R2 精细音量: -40..=+12 dB, 与系统音量相乘(0 = 不变)。
     ///
@@ -27,6 +27,22 @@ pub struct PlaybackTuning {
     pub fade_ms: u32,
     /// R7 自定义响度曲线(AutoEQ ParametricEQ); None = 旁路
     pub eq: Option<ncm_domain::EqProfile>,
+    /// 增益变化限速(dB/s): **0 = 瞬时**, >0 = 每个 tick 按该斜率逼近目标(P-03).
+    ///
+    /// 三端同一口径: 设置页开着"动态响度(AGC)"传 3.0(防 pump), 关着传 0.0(滑杆直感).
+    /// 默认 3.0 = 限速器一直以来的行为, 老调用方(CLI/未传该参数的 FFI)不回归.
+    pub gain_slew_db_per_sec: f32,
+}
+
+impl Default for PlaybackTuning {
+    fn default() -> Self {
+        Self {
+            gain_db: 0.0,
+            fade_ms: 0,
+            eq: None,
+            gain_slew_db_per_sec: agc::DEFAULT_MAX_SLEW_DB_PER_SEC,
+        }
+    }
 }
 
 impl PlaybackTuning {
@@ -40,6 +56,14 @@ impl PlaybackTuning {
             },
             fade_ms: self.fade_ms.min(5_000),
             eq: self.eq,
+            gain_slew_db_per_sec: if self.gain_slew_db_per_sec.is_finite()
+                && self.gain_slew_db_per_sec >= 0.0
+            {
+                // 0 是合法值(= 瞬时), 不要在这里被"当成未设置"改成默认值
+                self.gain_slew_db_per_sec
+            } else {
+                agc::DEFAULT_MAX_SLEW_DB_PER_SEC
+            },
         }
     }
 
@@ -401,10 +425,11 @@ mod backend {
         // user_volume 是"系统音量"(0..1), 精细音量(R2)/响度增益作为独立增益乘上去
         let mut user_volume = 1.0f32;
         let mut local = tuning.lock().map(|t| t.clone()).unwrap_or_default();
-        // 增益限速器: Cmd::Configure 改的是目标增益, 每个 tick 按 GainLimiter(默认 3 dB/s)逼近,
-        // 避免动态响度(AGC)在安静段/鼓点上突然抽一下(pump)。Cmd::Play 用 reset_to 立即到位,
+        // 增益限速器: Cmd::Configure 改的是目标增益, 每个 tick 按 GainLimiter 的斜率逼近,
+        // 避免动态响度(AGC)在安静段/鼓点上突然抽一下(pump)。斜率来自 PlaybackTuning
+        // (P-03: 0 = 瞬时, 3 dB/s = 动态模式), 三端同一口径。Cmd::Play 用 reset_to 立即到位,
         // Cmd::Volume(系统音量)完全不经过它, 保持瞬时。
-        let mut limiter = agc::GainLimiter::new();
+        let mut limiter = agc::GainLimiter::with_slew(local.gain_slew_db_per_sec);
         limiter.reset_to(local.gain_db);
         let mut last_tick = Instant::now();
         player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
@@ -490,6 +515,8 @@ mod backend {
                     if let Ok(mut shared) = tuning.lock() {
                         *shared = local.clone();
                     }
+                    // 斜率可以运行期改(切"动态响度"): 不改当前值, 从当前位置按新斜率继续
+                    limiter.set_slew(local.gain_slew_db_per_sec);
                     // 不在这里直接改音量: 目标增益已更新, 由循环尾部的 tick 按限速逐步逼近;
                     // EQ/淡入仍在下一首开始时套用(换曲时重新追加源)
                 }
@@ -659,6 +686,7 @@ mod tests {
             gain_db: 30.0,
             fade_ms: 0,
             eq: None,
+            ..Default::default()
         });
         assert_eq!(p.tuning().gain_db, 12.0);
         assert!((p.tuning().gain_linear() - 3.981).abs() < 0.01);
@@ -666,12 +694,14 @@ mod tests {
             gain_db: -99.0,
             fade_ms: 0,
             eq: None,
+            ..Default::default()
         });
         assert_eq!(p.tuning().gain_db, -40.0);
         p.configure(PlaybackTuning {
             gain_db: f32::NAN,
             fade_ms: 0,
             eq: None,
+            ..Default::default()
         });
         assert_eq!(p.tuning().gain_db, 0.0);
     }
@@ -724,5 +754,58 @@ mod tests {
         let before = effective_volume_db(0.5, limiter.current_db());
         let after = effective_volume_db(0.5, limiter.current_db());
         assert_eq!(before, after);
+    }
+
+    /// P-03: 斜率是显式配置 —— 0 = 瞬时, 3 = 按 tick 渐进, 与 Android 同口径。
+    ///
+    /// 桌面以前恒为 3 dB/s(没法关), Android 在静态模式下是瞬时 ⇒ 同一份设置听感不同。
+    #[test]
+    fn gain_slew_is_explicit_zero_instant_three_ramps() {
+        // 默认值 = 老行为(3 dB/s), 未传该参数的调用方不回归
+        assert_eq!(
+            PlaybackTuning::default().gain_slew_db_per_sec,
+            agc::DEFAULT_MAX_SLEW_DB_PER_SEC
+        );
+
+        // 静态模式: Dart 传 0 ⇒ 瞬时(滑杆拖到哪立刻生效)
+        let instant = PlaybackTuning {
+            gain_db: 9.0,
+            gain_slew_db_per_sec: 0.0,
+            ..Default::default()
+        }
+        .sanitized();
+        assert_eq!(instant.gain_slew_db_per_sec, 0.0, "0 不能被当成未设置");
+        let mut limiter = agc::GainLimiter::with_slew(instant.gain_slew_db_per_sec);
+        assert_eq!(limiter.step(instant.gain_db, 0.2), 9.0);
+
+        // 动态模式: Dart 传 3 ⇒ 每个 200ms tick 最多 0.6 dB
+        let dynamic = PlaybackTuning {
+            gain_db: 9.0,
+            gain_slew_db_per_sec: 3.0,
+            ..Default::default()
+        }
+        .sanitized();
+        let mut limiter = agc::GainLimiter::with_slew(dynamic.gain_slew_db_per_sec);
+        let mut applied = 0.0;
+        for _ in 0..5 {
+            applied = limiter.step(dynamic.gain_db, 0.2);
+        }
+        assert!(
+            (applied - 3.0).abs() < 1e-3,
+            "动态模式 1 秒只应走 3 dB, 实测 {applied}"
+        );
+        // 稳态: 慢慢逼近到目标后停住, 不来回抖
+        for _ in 0..100 {
+            applied = limiter.step(dynamic.gain_db, 0.2);
+        }
+        assert!((applied - 9.0).abs() < 1e-3);
+
+        // 非法斜率回落默认(避免"纹丝不动的增益"这种最难查的形态)
+        let bad = PlaybackTuning {
+            gain_slew_db_per_sec: -1.0,
+            ..Default::default()
+        }
+        .sanitized();
+        assert_eq!(bad.gain_slew_db_per_sec, agc::DEFAULT_MAX_SLEW_DB_PER_SEC);
     }
 }

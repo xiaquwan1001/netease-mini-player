@@ -288,14 +288,18 @@ Future<String> eqProfileNormalize({required String text}) =>
 /// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
 ///
 /// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
+/// `gain_slew_db_per_sec` = 增益变化限速(dB/s): **0 = 瞬时**(静态响度均衡/拖滑杆),
+/// 3.0 = 动态响度(AGC)防 pump。三端同一口径(P-03); 负数/NaN 由 Rust 侧回落默认 3 dB/s。
 Future<PlaybackTuningDto> playerConfigure({
   required double gainDb,
   required int fadeMs,
   String? eqText,
+  required double gainSlewDbPerSec,
 }) => RustLib.instance.api.crateApiPlayerConfigure(
   gainDb: gainDb,
   fadeMs: fadeMs,
   eqText: eqText,
+  gainSlewDbPerSec: gainSlewDbPerSec,
 );
 
 /// 读取当前生效的播放参数
@@ -2695,11 +2699,15 @@ class PlaybackTuningDto {
   /// 曲线前级增益(dB)
   final double eqPreampDb;
 
+  /// 生效的增益限速(dB/s): 0 = 瞬时, 3.0 = 动态 AGC 防 pump
+  final double gainSlewDbPerSec;
+
   const PlaybackTuningDto({
     required this.gainDb,
     required this.fadeMs,
     required this.eqFilters,
     required this.eqPreampDb,
+    required this.gainSlewDbPerSec,
   });
 
   @override
@@ -2707,7 +2715,8 @@ class PlaybackTuningDto {
       gainDb.hashCode ^
       fadeMs.hashCode ^
       eqFilters.hashCode ^
-      eqPreampDb.hashCode;
+      eqPreampDb.hashCode ^
+      gainSlewDbPerSec.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2717,7 +2726,8 @@ class PlaybackTuningDto {
           gainDb == other.gainDb &&
           fadeMs == other.fadeMs &&
           eqFilters == other.eqFilters &&
-          eqPreampDb == other.eqPreampDb;
+          eqPreampDb == other.eqPreampDb &&
+          gainSlewDbPerSec == other.gainSlewDbPerSec;
 }
 
 class PlayerStateDto {

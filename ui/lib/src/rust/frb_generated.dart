@@ -370,6 +370,7 @@ abstract class RustLibApi extends BaseApi {
     required double gainDb,
     required int fadeMs,
     String? eqText,
+    required double gainSlewDbPerSec,
   });
 
   Future<PlayerStateDto> crateApiPlayerPause();
@@ -3214,6 +3215,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required double gainDb,
     required int fadeMs,
     String? eqText,
+    required double gainSlewDbPerSec,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -3222,6 +3224,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_f_64(gainDb, serializer);
           sse_encode_u_32(fadeMs, serializer);
           sse_encode_opt_String(eqText, serializer);
+          sse_encode_f_64(gainSlewDbPerSec, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3234,7 +3237,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiPlayerConfigureConstMeta,
-        argValues: [gainDb, fadeMs, eqText],
+        argValues: [gainDb, fadeMs, eqText, gainSlewDbPerSec],
         apiImpl: this,
       ),
     );
@@ -3242,7 +3245,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiPlayerConfigureConstMeta => const TaskConstMeta(
     debugName: "player_configure",
-    argNames: ["gainDb", "fadeMs", "eqText"],
+    argNames: ["gainDb", "fadeMs", "eqText", "gainSlewDbPerSec"],
   );
 
   @override
@@ -6750,13 +6753,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlaybackTuningDto dco_decode_playback_tuning_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return PlaybackTuningDto(
       gainDb: dco_decode_f_64(arr[0]),
       fadeMs: dco_decode_u_32(arr[1]),
       eqFilters: dco_decode_u_32(arr[2]),
       eqPreampDb: dco_decode_f_64(arr[3]),
+      gainSlewDbPerSec: dco_decode_f_64(arr[4]),
     );
   }
 
@@ -9319,11 +9323,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_fadeMs = sse_decode_u_32(deserializer);
     var var_eqFilters = sse_decode_u_32(deserializer);
     var var_eqPreampDb = sse_decode_f_64(deserializer);
+    var var_gainSlewDbPerSec = sse_decode_f_64(deserializer);
     return PlaybackTuningDto(
       gainDb: var_gainDb,
       fadeMs: var_fadeMs,
       eqFilters: var_eqFilters,
       eqPreampDb: var_eqPreampDb,
+      gainSlewDbPerSec: var_gainSlewDbPerSec,
     );
   }
 
@@ -11675,6 +11681,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_32(self.fadeMs, serializer);
     sse_encode_u_32(self.eqFilters, serializer);
     sse_encode_f_64(self.eqPreampDb, serializer);
+    sse_encode_f_64(self.gainSlewDbPerSec, serializer);
   }
 
   @protected
