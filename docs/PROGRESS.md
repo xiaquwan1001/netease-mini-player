@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.14.0**(重构第二批: main.dart 拆壳 S3 搜索 controller / PlaybackBridge 单入口 / ncm-provider lib.rs 按域拆分)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.15.0**(重构第三批: main.dart 拆壳 S4 播放协调器 / comment·feed 按职责拆分 / vip·medal·cover_art 映射层下移)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.15.0** | **2026-11-16** | **重构第三批**(4 lane): main.dart **2899→2503** 拆壳 **S4**(轮询/续播/现场恢复/预取/响度簿记 → `src/home/playback_coordinator.dart` 567 行)、**P1** `comment_thread` 1699→8 + `feed_view` 1190→7 barrel(part 保私有)、**P2** vip/medal 映射层与 cover_art 纯函数下移、**平台层只读审计**(22 条缺陷, P1×6); 门禁 992 / 290, golden 无变化 |
 | **v0.14.0** | **2026-11-16** | **重构第二批**(3 条并行 lane, 断电后按续做重派): main.dart **3095→2899** 拆壳 **S3**(搜索状态/联想/热词/历史 → `src/home/search_controller.dart`)、**PlaybackBridge 单入口**(`onPlaySongs` 透传 158→0, 删 UserNav/ArtistNav 静态旁路与 20 文件构造参数)、`ncm-provider/lib.rs` **1321→30** 行按 capability/error/params/trait/registry 拆分(对外路径不变); 门禁 992 / 290, golden 无变化; 同批回收 21G 磁盘 |
 | **v0.13.0** | **2026-11-15** | **架构重构批**(48 提交, 7 条并行 lane): main.dart **3917→3095**(S0 纯逻辑 / S1 全局壳 / S2 歌词控制器)、detail/messages/discover 三个 P0 页面按页拆分(1558/886/882 → 子树)、**SongRow 收敛 11 处**、四态全部收口到 AsyncView(16 个域)、`FfiError{kind,retryable,detail}` 跨桥(160 导出)、锁中毒容忍 + fsutil 原子写收敛、日推缓存按 uid 隔离 + 登出清理、golden **12→18** 且进 CI、测试工厂 `fakes.dart` 收敛 32 份；门禁 992 / 290 |
 | **v0.12.5** | **2026-11-15** | 逐字歌词**默认走 AMLL TTML**(设置可切回网易云/自动择优, 旧 `auto` 一次性迁移) + 黑胶会员页签到数据源从 `vip_sign_info` 改回 `signin_progress`(修「今日未签到/累计 0」与「我的」页签到卡自相矛盾) |
@@ -89,6 +90,33 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 重构第三批: S4 播放协调器 + P1/P2 文件拆分 + 平台层审计(**v0.15.0**)
+
+4 条 lane 并行(互不共享热文件: 只有 S4 动 `main.dart`), 合并后主会话独立复跑门禁。
+
+### 前端结构
+
+| 项 | 结果 |
+|---|---|
+| main.dart 拆壳 **S4** | 新增 `src/home/playback_coordinator.dart`(567, `ChangeNotifier`): 500ms 轮询 + `_ticker`、STATE_ENDED 即时续播(`_advancing` 临界区)、现场恢复/5s 节流落盘、下一首直链预取、通知栏封面、响度增益簿记、`playSongsList/playSong/toggle`(`PlaybackBridge.bind` 目标); main.dart **2899 → 2503**(−396) |
+| **P1 拆分** | `comment_thread.dart` 1699 → **8 行 barrel**(`comment/` 5 文件: 状态机 916 / 楼中楼 tile 409 / 回复面板 194 / 输入条 170 / typedef 21); `feed_view.dart` 1190 → **7 行 barrel**(`feed/` 3 文件: 主体 607 / 卡片 278 / 艺人筛选条 313); 私有类靠 `part/part of` 留在库内, 12 个测试与各页面 import 零改动 |
+| **P2 搬运** | `vip_page` 761→507 + `vip/vip_mapping.dart` 258; `medal_wall` 610→488 + `medal/medal_mapping.dart` 125; `cover_art` 699→558 + `image/url_rewrite.dart` 147(URL 改写/像素档位 7 个纯函数同族下移, 避免循环 import); 对外符号靠 `export` 保持 |
+
+### 状态真相归属(S4)
+
+搬进协调器: 播放态快照 `player`、轮询/续播、现场恢复与落盘、预取、通知栏封面、响度增益簿记、起播入口。
+留在页面: 队列 `PlayQueue`(引用注入, 不复制)、拖拽进度、搜索页列表态(`libraryTitle`/`queuePlaylistId`/`playSource`)、依赖 BuildContext 的导航/调色板/seek/toast、`_publishPlayerBar` 帧后投递契约。
+歌词边界: `poll()` 只调 `lyric.followPlayer()`; 歌词展开期 120ms 高频 ticker 仍归 `LyricController` —— **ticker 单点, 无双 tick**。
+
+### 平台层审计(新)
+
+`.pi/plans/arch-audit-platform-2026-11-16.md`(419 行, 只读产出): Kotlin 1949 行/6 文件(`PlaybackService` 641 + `MainActivity` 487 双巨文件)、`ncm-playback` 1687 行、tools 746、CI 794(4 份配置)。**缺陷 22 条(P1×6/P2×11/P3×5)**, 前 5: ①上划清任务后通知栏按钮与耳机键静默失效 ②通知按钮红心/模式状态无自愈 ③响度增益三端语义不一致(桌面 3dB/s vs Android 瞬时) ④桌面「边听边存」是安慰剂 ⑤EQ 文本解析三份实现且 Kotlin 回显到不了 UI。三条系统风险: 平台层零自动化覆盖、CI 四处手抄且发版门比 CI 弱、构建/打包可移植性单点(tencent 镜像、AppImage 工具未 pin)。
+
+### 门禁(合并后 main 上复跑)
+
+`cargo test --offline` **290** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **992 通过 0 失败**(18 张 golden **无变化**) / `dart analyze` 0 issue / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK。
+
 
 ## 2026-11-16(日) 重构第二批: S3 搜索 controller + PlaybackBridge 单入口 + provider 按域拆分(**v0.14.0**)
 
