@@ -45,13 +45,17 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "minincm");
+    // 窗口标题两平台统一(轻音 MiniNCM): 与 ui/windows/runner/main.cpp 的
+    // window.Create 标题保持一致, 改一处要同步另一处(P-18).
+    gtk_header_bar_set_title(header_bar, "轻音 MiniNCM");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "minincm");
+    gtk_window_set_title(window, "轻音 MiniNCM");
   }
 
+  // 默认窗口尺寸两平台统一 1280x720: 与 ui/windows/runner/main.cpp 的
+  // Win32Window::Size 保持一致, 改一处要同步另一处(P-18).
   gtk_window_set_default_size(window, 1280, 720);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();

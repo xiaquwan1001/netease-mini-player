@@ -26,7 +26,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  Win32Window::Size size(1180, 780);
+  // 默认窗口尺寸两平台统一 1280x720: 与 ui/linux/runner/my_application.cc 的
+  // gtk_window_set_default_size 保持一致, 改一处要同步另一处(P-18).
+  Win32Window::Size size(1280, 720);
+  // 窗口标题两平台统一 轻音 MiniNCM, 同上要同步(P-18).
   if (!window.Create(L"轻音 MiniNCM", origin, size)) {
     return EXIT_FAILURE;
   }
