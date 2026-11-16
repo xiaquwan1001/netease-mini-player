@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
 import 'cover_art.dart';
+import 'layout.dart' show kPageRowPadding;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -107,6 +108,9 @@ class _MyCollectionPage<T> extends StatelessWidget {
         loader: (cursor) async =>
             PagedPage(await retryNetwork(load), hasMore: false),
         itemBuilder: (context, item, i, items) => ListTile(
+          // 整页铺满列表(PagedListView padding 0): 左 12 与页面线共线
+          // (列表行审计 C 级, 此前是 Material 默认 16/16)
+          contentPadding: kPageRowPadding,
           leading: leading(item),
           title: AdaptiveText(titleOf(item)),
           subtitle: Text(

@@ -186,6 +186,9 @@ class _NewSongsTabState extends State<_NewSongsTab> {
             itemBuilder: (context, s, i, songs) => LayoutBuilder(
               builder: (context, box) => ListTile(
                 dense: true,
+                // 整页铺满列表(PagedListView padding 0) + 行首封面:
+                // 左 12 与地区 chips 的 12 共线(列表行审计 C 级)
+                contentPadding: kPageRowPadding,
                 leading: CoverArt(url: s.coverUrl, size: 44, radius: 4),
                 title: AdaptiveText(s.name),
                 subtitle: Text(
@@ -250,6 +253,8 @@ class _NewAlbumsTabState extends State<_NewAlbumsTab> {
               hasMore: false,
             ),
             itemBuilder: (context, a, i, albums) => ListTile(
+              // 整页铺满列表 + 行首封面: 左 12 与地区 chips 共线(列表行审计 C 级)
+              contentPadding: kPageRowPadding,
               leading: CoverArt(url: a.coverUrl, size: 52, radius: 6),
               title: AdaptiveText(a.name),
               subtitle: Text(
@@ -283,6 +288,8 @@ class _HotArtistsTab extends StatelessWidget {
       loader: (cursor) async =>
           PagedPage(await retryNetwork(load), hasMore: false),
       itemBuilder: (context, a, i, artists) => ListTile(
+        // 整页铺满列表 + 行首头像: 左 12(列表行审计 C 级)
+        contentPadding: kPageRowPadding,
         leading: CircleCover(
           url: a.avatarUrl,
           size: 44,

@@ -16,10 +16,11 @@
 #   tools/ci-gates.sh dart-analyze         # dart analyze(不用 flutter analyze, 见下)
 #   tools/ci-gates.sh write-guard          # tools/check-write-guard.sh
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
+#   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 现状 67 error, 不进 verify)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + flutter-test + android-unit)
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test + android-unit)
 #
 # 口径约定(改之前先读 .pi/memory/notes-build.md):
 #   · 测试标签: 只排除 network(需要真实凭据)。golden **必须跑** —— 它靠 CI 的
@@ -103,6 +104,11 @@ cmd_tokens() {
   bash "$ROOT/tools/check-tokens.sh" --strict
 }
 
+cmd_row_padding() {
+  echo "+ bash tools/check-row-padding.sh --strict"
+  bash "$ROOT/tools/check-row-padding.sh" --strict
+}
+
 cmd_flutter_test() {
   # golden 在内: 缺 CJK 字体会整组 skip(= 没测), 所以跑这条之前必须装 fonts-noto-cjk
   # (CI 见 .github/workflows/*.yml 的 "System deps (fonts-noto-cjk ...)" 步骤)。
@@ -149,6 +155,7 @@ cmd_verify() {
   cmd_dart_analyze
   cmd_write_guard
   cmd_tokens
+  cmd_row_padding
   cmd_flutter_test
   cmd_android_unit
   echo "ALL GATES OK"
@@ -165,6 +172,7 @@ case "$sub" in
   dart-analyze)  cmd_dart_analyze ;;
   write-guard)   cmd_write_guard ;;
   tokens)        cmd_tokens ;;
+  row-padding)   cmd_row_padding ;;
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
   android-lint)  cmd_android_lint ;;

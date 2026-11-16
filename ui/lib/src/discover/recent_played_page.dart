@@ -4,6 +4,7 @@ import '../adaptive_text.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
+import '../layout.dart' show kPageRowPadding;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
@@ -100,6 +101,9 @@ class RecentPlayedPage extends StatelessWidget {
                 coverSize: 40,
                 subtitle: SongRowSubtitle.artist,
                 showDuration: false,
+                // 整页铺满列表 + 行首封面: 左 12 与同页专辑/歌单/播客行一致
+                // (列表行审计 C 级; 默认 kSongRowPadding 的 8 在这里会与下面三个 tab 错位)
+                padding: kPageRowPadding,
                 // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable
                     ? () => PlaybackBridge.instance.playSongs(
@@ -113,6 +117,8 @@ class RecentPlayedPage extends StatelessWidget {
               load: loadAlbums,
               emptyText: '还没有最近听过的专辑',
               itemBuilder: (context, a, i, _) => ListTile(
+                // 整页铺满列表: 左 12(列表行审计 C 级)
+                contentPadding: kPageRowPadding,
                 leading: CoverArt(url: a.coverUrl, size: 48, radius: 6),
                 title: Text(
                   a.name,
@@ -136,6 +142,8 @@ class RecentPlayedPage extends StatelessWidget {
               load: loadPlaylists,
               emptyText: '还没有最近听过的歌单',
               itemBuilder: (context, pl, i, _) => ListTile(
+                // 整页铺满列表: 左 12(列表行审计 C 级)
+                contentPadding: kPageRowPadding,
                 leading: CoverArt(url: pl.coverUrl, size: 48, radius: 6),
                 title: AdaptiveText(pl.name),
                 subtitle: pl.trackCount > BigInt.zero
@@ -153,6 +161,8 @@ class RecentPlayedPage extends StatelessWidget {
               load: loadPodcasts,
               emptyText: '还没有最近听过的播客',
               itemBuilder: (context, r, i, _) => ListTile(
+                // 整页铺满列表: 左 12(列表行审计 C 级)
+                contentPadding: kPageRowPadding,
                 leading: CoverArt(url: r.coverUrl, size: 48, radius: 6),
                 title: AdaptiveText(r.name),
                 subtitle: Text(

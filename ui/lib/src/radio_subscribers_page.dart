@@ -139,6 +139,9 @@ class _SubscriberRow extends StatelessWidget {
         ? '暂无简介'
         : subscriber.signature.trim();
     return ListTile(
+      // token-ok: 父容器(外层 ListView)已做 kPagePadding(12) 水平内缩,
+      // 行内再加就是三重叠加; 0 让头像与页面标题线严格共线
+      // (列表行审计 C 级: 这 5 处不是缺陷, 是「父容器已内缩」的正确写法)
       contentPadding: EdgeInsets.zero,
       leading: CoverArt(url: subscriber.avatarUrl, size: 40, radius: 20),
       title: Text(

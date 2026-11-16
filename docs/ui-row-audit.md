@@ -1,5 +1,43 @@
 # 列表行 / 溢出 只读审计（2026-11）
 
+> ## 状态（2026-11-17 复核，**看这段就够**）
+>
+> | 级别 | 条数 | 状态 |
+> |---|---|---|
+> | A 必坏 | 7 | ✅ 已清零（v0.9.0 批次） |
+> | B 潜在 | 12 | ✅ 已清零（2026-11-16 晚 `8f7b38c`：`kRowTrailingMaxRatio` + `capRowTrailing`） |
+> | C 一致性 | 18 | 🚧 **第一批已落（2026-11-17）**：歌曲行留白从 5 种收敛到 4 个具名口径 + 门禁；剩纵向 pitch 与 `ListRow` 组件化 |
+>
+> C 级第一批(2026-11-17)做了什么:
+> - `layout.dart` 新增 **`kPageRowPadding`**(12/0/4：整页铺满、行首非缩略图的列表行，与页面线严格共线)
+>   与 **`kPreviewRowPadding`**(0/6：父容器已内缩的预览行)；连同既有 `kSongRowPadding` /
+>   `kCardRowPadding` 构成**四个具名口径**，不再有第五种数字。
+> - 迁移 16 处：`all_charts_page` / `new_release_page`(歌/碟/艺人三 tab) / `my_collections_page` /
+>   `discover/recent_played_page`(4 行，同页此前 8 与 16 并存) / `style_page`(卡片内 16 ⇒ 4) /
+>   `detail/playlist_songs_sliver` / `artist_page`(两处 12/8 ⇒ 12/0) / `artist_sections` /
+>   `user_page`(0/6 ⇒ 具名) / `play_queue_sheet`(自造 4 ⇒ `kCardRowPadding`)。
+> - **新门禁** `tools/check-row-padding.sh --strict`（已进 `tools/ci-gates.sh verify`）：只看
+>   `contentPadding:` 与 `SongRow/SongTile` 的 `padding:`，值必须是上面四个常量之一；
+>   `EdgeInsets.zero` 放行但**必须写 `// token-ok: 理由`**（父容器已内缩时的正确写法）。
+> - 回归：`ui/test/layout_metrics_test.dart` 新增 1 例锁住四个常量的几何关系（叠出 16 / 整页行贴 12 线）。
+>
+> **本报告下一批还剩什么**（需视觉拍板或在页面上跑几何断言）：
+> ① `kSongRowPadding`(8) 与 `kPageRowPadding`(12) 的二分是否保留 —— 现口径是「行首是封面缩略图 ⇒ 8，
+>    其它 ⇒ 12」；要彻底一条线就改 `kSongRowPadding`，代价是主页/推荐/详情三处 golden 重出；
+> ② 纵向间距(pitch)未统一：预览行 6 / 歌曲行 0 / 各页 ListTile 默认；
+> ③ §6 的 `ListRow` 组件化（16 处同构歌曲行）仍未开工 —— 留白收敛成具名口径后它的收益从
+>    「统一留白」降到「少 12 份重复代码」，优先级下调。
+>
+> ⚠️ **第三节起的分级表与行号基于 2026-11-13 快照，已大面积漂移**（`detail_page.dart` 拆成
+> `src/detail/`、`discover.dart` 变 barrel、`song_tile.dart` 长出 `SongRowLayout`）。读表按
+> **锚点代码**定位，不要按行号。已核实的三条勘误：
+> - §4.2 的 5 处 `contentPadding: EdgeInsets.zero`（`radio_explore_page` ×4 / `radio_subscribers_page` ×1）
+>   **不是缺陷**：外层 `ListView` 已经 `padding: fromLTRB(12,8,12,24)`，行内再加就是三重叠加
+>   ⇒ 2026-11-17 就地标 `// token-ok` 并保留。
+> - §4.1 里 `album_preview` / `similar_sheet` 的「Material 默认 16/16」**已过期**：两处走
+>   `SongRow` 默认（`kSongRowPadding` 8/0/4）。
+> - §4.1 的 `play_queue_sheet:254` 行尾已是自造 4/0/4，2026-11-17 收敛成 `kCardRowPadding`。
+
 范围：`ui/lib/**`（排除 `ui/lib/src/rust/` codegen 产物）。只读审计，未改动 `lib/`、`test/`，未做任何 git 操作。
 
 **行号基准：2026-11-13 20:43 的工作区快照。** 该仓库当时已有未提交改动（`git status` 显示 `ui/lib/main.dart`、`artist_page.dart`、`feed_view.dart`、`profile_banner.dart`、`user_page.dart`、`settings_view.dart` 等为 `M`），这些改动不是本审计产生的；若他人继续编辑，行号会漂移，请以表格里的锚点代码（如 `formatDurationMs(song.durationMs)`）重新定位。

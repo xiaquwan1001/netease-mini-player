@@ -1,6 +1,8 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.19.0**(收尾批: 拆壳 **S8 完成**(main.dart 48 行门面) / P-22 明文白名单 / EQ 三端 fixture + Kotlin JVM 测试)。
+> 最近更新: **2026-11-17(一)**。已发布版本 **v0.19.0**; 其后 main 上还有两条**未发版**批次:
+> ① 2026-11-16 晚: Android 门进 CI + 列表行 B 级 12 条; ② 2026-11-17: 列表行 C 级第一批(四个具名留白口径 + `row-padding` 门) + 修掉一条会挂死门禁的 keyring 测试。
+> 见批次时间线最上面两条。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -8,22 +10,25 @@
 > 2026-11-03~11-12 批次与专题小节 → [`docs/archive/PROGRESS-2026-11-03-11-12.md`](archive/PROGRESS-2026-11-03-11-12.md)。
 > **本文件只保留 v0.8.0 起的活跃时间线**(2026-11-15 精简: 1656 行 → 517 行); 更早批次已归档。
 
-## 进度总览(2026-11-16 复核)
+## 进度总览(2026-11-17 复核)
 
 **当前门禁**(本机实测, 离线口径; **权威口径只在本表**, README/README.en/remaining-batches 都是指针)。
-复核口径: `cargo test` / `flutter test` / `tools/api-coverage.sh` 三条于 2026-11-16 在 `lane/s8-docs`(基线 main@73a22f4)重跑;
-clippy/format/analyze/tokens/write-guard 由 `tools/ci-gates.sh` 在 CI 与发版门强制, 不在本地重复跑。
+复核口径: **2026-11-17 在 main 上跑完整 `bash tools/ci-gates.sh verify` 全绿**(rc=0, 末行 `ALL GATES OK`);
+该轮新增 `row-padding` 门与 1 例布局常量测试(Dart **1071→1072**), Rust 侧只修了一个测试(数字不变)。
 
 | 门 | 结果 |
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1061** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1072** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
+| `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
+| `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(27 处行留白 / 7 种口径全部落在 `layout.dart` 的四个具名常量里, 见 2026-11-17 小节) |
 | 接口覆盖 | **135/136**(FFI 导出 161, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking; 唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
@@ -96,6 +101,91 @@ clippy/format/analyze/tokens/write-guard 由 `tools/ci-gates.sh` 在 CI 与发�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
+
+单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1072** /
+android-unit 3 / `row-padding` 门新增)。
+
+### 1) 先修门禁自身: keyring 测试会把 `cargo test` 挂死
+
+跑基线 `verify` 时 `ncm-service` 的测试二进制卡了 **7 分钟以上**(`/proc/<pid>/task` 只剩一个线程
+停在 D-Bus socket `poll_schedule_timeout`, 只能 SIGKILL), 门禁因此 rc=101。根因: 
+`credential_keyring::tests::available_is_cached_and_never_panics` 在 `available()` 返回 **Ok** 时
+(本机真有 D-Bus)会直接做 `put/get/remove` 真实 roundtrip —— 而本机 gnome-keyring 的 `login`
+collection 处于 **locked**, `set_password` 会等解锁提示(无桌面会话 = 永不返回)。探针侧本来就有 2s 上限,
+写路径没有。
+
+处置: 写路径**只在 `NCM_KEYRING_TEST=1` 门控下**跑, 且即便门控也套 `probe_with_timeout(10s)`;
+未门控时只验「探测可用 + 缓存一致」。修前 `--timed` 跑该 crate 无输出, 修后 **20 passed / 0.03s**。
+教训: 读路径有时限不等于整条测试有时限, 任何**写真实系统服务**的测试都必须自带截止。
+
+### 2) 列表行 C 级第一批: 四个具名留白口径 + `row-padding` 门
+
+审计 `docs/ui-row-audit.md` 的 C 级 18 条里, 真问题只有一个: **同一个语义用了五种不同的合法数字**
+(8/0/4、12/0/4、4/0/4、16/16 Material 默认、0/6), 而 `check-tokens.sh` 只管"数值是否在白名单",
+拦不住它(数值全合法)。
+
+- `layout.dart` 再收两个常量: **`kPageRowPadding`**(12/0/4, 整页铺满且行首非缩略图 ⇒ 与页面线严格共线)
+  与 **`kPreviewRowPadding`**(0/6, 父容器已内缩的预览行)。加上既有 `kSongRowPadding` / `kCardRowPadding`
+  = **四个具名口径**, 不再有第五种数字。
+- 迁移 **16 处** + 5 处勘误标注(radio_explore ×4 / radio_subscribers ×1, 只补理由不改代码): `all_charts_page` / `new_release_page`(歌 / 碟 / 艺人) / `my_collections_page` /
+  `discover/recent_played_page`(4 行; 同页此前单曲 8、专辑/歌单/播客 16 并存) / `style_page`(卡片内 16 ⇒ 4,
+  修掉 12+16=28 的三重叠加) / `detail/playlist_songs_sliver` / `artist_page`(2 处 12/8 ⇒ 12/0) /
+  `artist_sections` / `user_page` / `play_queue_sheet`。
+- **动错判的勘误**: 审计 §4.2 说 5 处 `contentPadding: EdgeInsets.zero` 是"贴容器边", 实测外层 `ListView`
+  已经 `fromLTRB(12,8,12,24)` ⇒ 行内再加就是三重叠加, 那 5 处**本来是对的**(就地补 `// token-ok:` 理由,
+  不动代码); 审计 §4.1 说 `album_preview`/`similar_sheet` 是 16/16 也已过期(它们走 `SongRow` 默认 8/0/4)。
+- 新门 `tools/check-row-padding.sh --strict`(已进 `verify`): 只看 `contentPadding:` 与
+  `SongRow/SongTile` 的 `padding:`, 值必须是四个常量之一; `EdgeInsets.zero` 放行但要理由。
+  回归: `layout_metrics_test.dart` 新增 1 例锁四个常量的几何关系(叠出 16 / 整页行贴 12 线)。
+
+> 为何不一起把 `kSongRowPadding`(8) 并入 12: 那会动主页/推荐/详情三处 golden 与大体量视觉,
+> 属"口径已统一、只差一个数值决策"的末尾项 ⇒ 留给用户拍板(见 `ui-row-audit.md` 头部状态段)。
+
+## 2026-11-16(日, 晚) 平台门禁进 CI + 列表行 B 级 12 条(**未发版**)
+
+两条 lane 并行(子代理跑一半遇整机重启, uib-rows 的改动已落盘, 由主会话复核、修正一处断言后提交)。
+合并后 main 上跑完整 `bash tools/ci-gates.sh verify` = **ALL GATES OK**(Rust 300 / Dart **1071** / android-unit 3)。
+
+### 1) Android 侧门禁进 CI(平台审计 **P-14 收口**)
+
+`tools/ci-gates.sh` 此前完全没有 Android 侧的门(`list` 里 9 个子命令, 一条都不碰 `ui/android`)。
+
+| 新增 | 内容 | 结论 |
+|---|---|---|
+| `android-unit` | `:app:testDebugUnitTest`(3 条 EQ 夹具单测, 热跑 1.5s), **已进 `verify`** ⇒ 发版门也跑 | 绿 |
+| `android-lint` | `:app:lintDebug`(AGP 自带, **不引 ktlint/detekt**) | **红: 67 error** ⇒ 不进 `verify`, 只在 CI 里 `continue-on-error` 暴露 + 上传报告 |
+
+两条共用一个 prepare: `gradlew` 与 `local.properties` 都被 `ui/android/.gitignore` 排除(新克隆不存在) ⇒ 用
+`flutter build apk --debug --config-only` 现场生成(0.3s, 不动 `gradle-wrapper.properties`); `JAVA_HOME` 缺 `javac`
+时回落 `~/android-dev/jdk`(本机 java-25 只有 JRE, 会报 `JAVA_COMPILER`)。三套 CI(`ci.yml` 新 `android` job /
+`release.yml` 发版门 / `.gitlab-ci.yml` 对等 job)都只调这两个子命令, 不再手抄命令(审计 P-13 的教训)。
+
+**lint 现状(不许用 baseline 掩盖)**: 66 × `UnsafeOptInUsageError`(media3 usage 缺 `@OptIn(UnstableApi::class)`,
+main 源) + 1 × `GestureBackNavigation`(`LoginActivity.kt:176 onBackPressed`, API36 预测性返回) + 9 warning
+(GradleDependency×3 / UseKtx×2 / SetJavaScriptEnabled / ObsoleteSdkInt / NewerVersionAvailable / ExportedService)。
+**触发条件**: 想让它进发版门就先补 `@OptIn` 把 error 打到 0, 再删 `continue-on-error` 并挪进 `verify`。
+
+### 2) 列表行审计 B 级 12 条(`docs/ui-row-audit.md` §3)
+
+B 级两类通病: ①写了 `overflow: ellipsis` 但**没 `maxLines`** ⇒ 先换行再省略(长专辑名逐字竖排);
+②行尾宽度**由内容决定** ⇒ 字号放大或数字位数一变就把标题区挤扁。
+
+- `layout.dart` 新增唯一口径 `kRowTrailingMaxRatio = 0.45` + `capRowTrailing()`; 之前各页各写一套(0.4/0.45/不设)。
+- B1 `digital_album_page` / B2 `radio_subscribers_page`: 补 `maxLines: 1`;
+  B3 `cover_quality_sheet`(档位名 1 行/说明 2 行) 顺带把 `sheet_header` 写死的 `height: 52` 改 `minHeight`(1.3 倍字号原本竖溢 2px);
+  B4 `song_wiki` 键值行(标签 1 行/值 2 行);
+  B5 `song_tile` ListTile 臂行尾封顶(触顶时**时长先省略**, 歌名不被挤) / B6 `artist_page` / B7 `artist_sections` 用 `capTrailing`;
+  B8 `ranking_view`(播放次数) / B9 `mine_view`(共 N 首) / B10 `new_release_page`(时长·发行日期) /
+  B11 `messages` 三个 tab(相对时间) / B12 `user_list_page`(关注按钮) 用 `capRowTrailing`。
+- 回归: `narrow_width_audit_test.dart` 新增 **10 条**用例(B1–B12, 各自 12 组合 300/320/360 × 1.0/1.25/1.3/1.625):
+  无溢出 + 关键文本单行 + 不出屏 + 行尾 ≤ 行宽 45%。`artist_360x800` golden 按行尾封顶后的 0.27% 差异重出。
+
+> **断言口径教训(主会话复核定下来的)**: B5 的原用例拿 `MarqueeText` 的宽度当"标题可用宽"的代理 ——
+> 但它是**自撑到内容宽**的(长标题时恰好等于可用宽, 短标题时更窄), 把 `kRowTrailingMaxRatio` 从 0.45 改成 1.0
+> 该数字一个像素都不变 ⇒ 断言与"封顶"解耦, 测不出回归。改成直接找 `capRowTrailing` 造的 `ConstrainedBox`
+> 量实际宽度。**经验: 断言要量被测的那件事, 不要量"看起来相关"的量**。
 
 ## 2026-11-16(日) 收尾批: 拆壳 S8 完成 + 明文白名单 + EQ 三端测试网(**v0.19.0**)
 

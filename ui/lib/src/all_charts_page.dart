@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
 import 'cover_art.dart';
+import 'layout.dart' show kPageRowPadding;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -99,6 +100,9 @@ class _GroupSection extends StatelessWidget {
         for (final item in group.items)
           ListTile(
             dense: true,
+            // 整页铺满列表(PagedListView padding 0): 左 12 与上面小标题的 12 共线
+            // (列表行审计 C 级, 此前是 Material 默认 16/16)
+            contentPadding: kPageRowPadding,
             leading: CoverArt(url: item.coverUrl, size: 48, radius: 6),
             title: AdaptiveText(
               item.name,

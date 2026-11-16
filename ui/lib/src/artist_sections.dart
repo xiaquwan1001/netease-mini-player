@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart' show kPreviewRowPadding;
 import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart' show SongRow, SongRowSubtitle;
@@ -73,7 +74,9 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
             // 历史口径: 这一块没有"正在播放"语汇(序号不换喇叭/歌名不变色)
             highlightNowPlaying: false,
             subtitle: SongRowSubtitle.artistAlbum,
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            // 父容器已做 12 内缩(见 artist_page 的 tab 列表), 行内不再重复加边
+            // (列表行审计 C 级: 口径统一到 layout.dart)
+            padding: kPreviewRowPadding,
             durationGap: 8,
             // 行尾(时长 + 更多)封顶 45%(列表行审计 B7), 口径同 artist_page。
             capTrailing: true,

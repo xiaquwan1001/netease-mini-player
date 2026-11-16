@@ -2,7 +2,7 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
-import 'layout.dart' show kCardRowInset, kRowTitleGap;
+import 'layout.dart' show kCardRowPadding, kRowTitleGap;
 import 'sheet_header.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 
@@ -269,9 +269,7 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                           // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
                           // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
                           // 四段固定留白。
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: kCardRowInset,
-                          ),
+                          contentPadding: kCardRowPadding,
                           horizontalTitleGap: kRowTitleGap,
                           leading: SizedBox(
                             // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度

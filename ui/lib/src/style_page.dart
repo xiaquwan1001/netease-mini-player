@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'async_view.dart';
 import 'cover_art.dart';
+import 'layout.dart' show kCardRowPadding;
 import 'net_retry.dart';
 import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
@@ -270,6 +271,9 @@ class _SongList extends StatelessWidget {
                 ListTile(
                   dense: true,
                   visualDensity: VisualDensity.compact,
+                  // 卡片内行: 卡片外已有 kPagePadding(12), 行内只再缩 4 = 16
+                  // (列表行审计 C 级, 此前是 Material 默认 16/16 ⇒ 叠成 28)
+                  contentPadding: kCardRowPadding,
                   leading: CoverArt(url: s.coverUrl, size: 40, radius: 4),
                   title: Text(
                     s.name,

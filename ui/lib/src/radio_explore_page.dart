@@ -344,6 +344,9 @@ class _RadioRow extends StatelessWidget {
       if (trailing != null && trailing!.isNotEmpty) trailing!,
     ].join(' · ');
     return ListTile(
+      // token-ok: 父容器(外层 ListView)已做 kPagePadding(12) 水平内缩,
+      // 行内再加就是三重叠加; 0 让头像与页面标题线严格共线
+      // (列表行审计 C 级: 这 5 处不是缺陷, 是「父容器已内缩」的正确写法)
       contentPadding: EdgeInsets.zero,
       leading: CoverArt(url: radio.coverUrl, size: 48, radius: 6),
       title: AdaptiveText(radio.name),
@@ -459,6 +462,9 @@ class _ToplistTabs extends StatelessWidget {
       // 节目榜: 排名 + 节目名 + 电台名 + 主播 + 时长, 点行直接播放
       for (final pr in t.programs)
         ListTile(
+          // token-ok: 父容器(外层 ListView)已做 kPagePadding(12) 水平内缩,
+          // 行内再加就是三重叠加; 0 让封面/序号与页面标题线严格共线
+          // (列表行审计 C 级: 这 5 处不是缺陷, 是「父容器已内缩」的正确写法)
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(pr.rank, pr.program.coverUrl ?? ''),
           title: AdaptiveText(pr.program.name),
@@ -478,6 +484,9 @@ class _ToplistTabs extends StatelessWidget {
         ),
       for (final r in t.radios)
         ListTile(
+          // token-ok: 父容器(外层 ListView)已做 kPagePadding(12) 水平内缩,
+          // 行内再加就是三重叠加; 0 让封面/序号与页面标题线严格共线
+          // (列表行审计 C 级: 这 5 处不是缺陷, 是「父容器已内缩」的正确写法)
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(r.rank, r.coverUrl),
           title: AdaptiveText(r.name),
@@ -507,6 +516,9 @@ class _ToplistTabs extends StatelessWidget {
       // 主播榜: 用户行, 不跳详情(电台详情需要 radioId)
       for (final d in t.djs)
         ListTile(
+          // token-ok: 父容器(外层 ListView)已做 kPagePadding(12) 水平内缩,
+          // 行内再加就是三重叠加; 0 让封面/序号与页面标题线严格共线
+          // (列表行审计 C 级: 这 5 处不是缺陷, 是「父容器已内缩」的正确写法)
           contentPadding: EdgeInsets.zero,
           leading: _rankBadge(d.rank, d.avatarUrl),
           title: AdaptiveText(d.nickname),

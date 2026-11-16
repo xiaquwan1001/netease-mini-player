@@ -763,8 +763,9 @@ class _AllSongsTabState extends State<_AllSongsTab> {
           // 行尾(时长 + 更多)封顶 45%: 不设上限时时长 + 默认 48dp 按钮会把
           // 标题区挤到个位数宽(列表行审计 B6)。
           capTrailing: true,
-          // 与同页其它区块的 12dp 对齐(布局审计 #7)
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          // 与同页其它区块的 12dp 对齐(布局审计 #7; 竖向 8 -> 0: 行距交给
+          // ListTile 自身高度, 与其它页罄距一致 —— 列表行审计 C 级)
+          padding: kPageRowPadding,
           subtitle: SongRowSubtitle.artist,
           // 无版权整行灰掉, 点了没有反应(原口径)
           tapOnlyWhenPlayable: true,
@@ -802,7 +803,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         indexAlign: TextAlign.center,
         indexGap: 10,
         capTrailing: true,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: kPageRowPadding,
         subtitle: SongRowSubtitle.artist,
         tapOnlyWhenPlayable: true,
         menuSource: SongActionSource.artist,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../error_views.dart' show InlineError;
-import '../layout.dart' show kPagePadding, rowExtentFor;
+import '../layout.dart' show kPagePadding, kPageRowPadding, rowExtentFor;
 import '../rust/api.dart' as rust;
 import '../song_actions.dart' show SongActionSource;
 import '../song_tile.dart' show SongRow;
@@ -121,7 +121,8 @@ class PlaylistSongsSliver extends StatelessWidget {
           onToggleLike: () => onToggleLike(song),
           menuSource: SongActionSource.playlist,
           // 与 SectionHeader/推荐页同一栅格: 左 12 贴页面线, 右 4 给行尾按钮
-          padding: const EdgeInsets.fromLTRB(12, 0, 4, 0),
+          // (列表行审计 C 级: 口径收进 layout.dart)
+          padding: kPageRowPadding,
           onTap: () => onTapSong(song, i),
         );
       }, childCount: display.length),

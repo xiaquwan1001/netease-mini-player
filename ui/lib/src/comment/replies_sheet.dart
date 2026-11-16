@@ -165,6 +165,8 @@ class _RepliesSheetState extends State<_RepliesSheet> {
           dense: true,
           // 与主楼评论(12+2+32+8)对齐: 收窄 contentPadding,
           // leading 固定 32 槽, 避免楼层面板文字比主楼右移一截。
+          // token-ok: 卡片内嵌套回复行, 左 4 是扣掉主楼缩进后的对齐量,
+          // 右 12 让回复正文与主楼正文右边界共线(列表行审计 C 级例外)
           contentPadding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
           leading: SizedBox(
             width: 32,

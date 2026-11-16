@@ -519,7 +519,9 @@ class _LikedPreview extends StatelessWidget {
                     // 历史口径: 预览行没有"正在播放"语汇(序号不换喇叭/歌名不变色)
                     highlightNowPlaying: false,
                     subtitle: SongRowSubtitle.artistAlbum,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    // 父容器(ListView)已有 12 内缩, 行内不再重复加边
+                    // (列表行审计 C 级: 口径统一到 layout.dart)
+                    padding: kPreviewRowPadding,
                     durationGap: 8,
                     tapOnlyWhenPlayable: true,
                     onTap: () => PlaybackBridge.instance.playSongs(songs, i),

@@ -54,7 +54,30 @@ const EdgeInsets kCardRowPadding = EdgeInsets.fromLTRB(
 
 /// 歌曲行留白: 用在**整页铺满**(页面 padding 0)的歌曲列表里,
 /// 左侧 8 保证和封面留一点呼吸, 右侧 4 给行尾按钮。
+///
+/// 与 [kPageRowPadding] 的区别只在这一条:**行首是封面缩略图**时用 8(留呼吸),
+/// 行首是序号/图标/徽标这类「以像素开头」的列时用 12(和页面标题线严格共线)。
 const EdgeInsets kSongRowPadding = EdgeInsets.fromLTRB(8, 0, 4, 0);
+
+/// 整页铺满列表里的封面/序号行留白: 左 = [kPagePadding](与 SectionHeader、页面标题
+/// 严格共线), 右 4 给行尾按钮。
+///
+/// 列表行审计 C 级(2026-11-17): 同一个「整页铺满 + 行首非缩略图」的语义此前有
+/// 12/0/4、16/16(Material 默认)、8/0/4 三种数字并存; 现在一律走本常量。
+/// 父容器**已经**做了 [kPagePadding] 内缩的, 不要用这个(会叠成 24 = 三重叠加),
+/// 用 [kCardRowPadding](叠出 16)或 [kPreviewRowPadding]。
+const EdgeInsets kPageRowPadding = EdgeInsets.fromLTRB(
+  kPagePadding,
+  0,
+  kCardRowInset,
+  0,
+);
+
+/// 父容器已有水平内缩时, 行内不再重复加左右边(0), 上下给 6 的呼吸。
+///
+/// 艺人推荐单曲 / 他人主页「喜欢的音乐」预览行共用这一个口径
+/// (此前两处各写一份 `symmetric(vertical: 6)`)。
+const EdgeInsets kPreviewRowPadding = EdgeInsets.symmetric(vertical: 6);
 
 /// 行内标题与 leading(封面/图标/序号)之间的水平间距。
 /// Material 默认 16, 在 300dp 屏上等于白吃 5% 宽度。

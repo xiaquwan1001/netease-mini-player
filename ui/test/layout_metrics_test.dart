@@ -311,6 +311,25 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     }
   });
+
+  // 列表行审计 C 级(2026-11-17): 行留白只有四个具名口径, 这里锁住它们的**几何关系**,
+  // 改数值可以, 但不能改成"叠起来不是 16"或"整页行不贴页面线"。
+  // 用法侧(哪个文件用了哪个常量)由 tools/check-row-padding.sh --strict 守。
+  test('行留白口径: 两级栅格 + 预览行', () {
+    // 整页铺满、行首非缩略图: 左边缘严格等于页面线
+    expect(kPageRowPadding.left, kPagePadding);
+    expect(kPageRowPadding.right, kCardRowInset);
+    // 父容器已内缩 12 时再缩 4 => 内容距屏 16(与卡片内行内容同一档)
+    expect(kCardRowPadding.left, kCardRowInset);
+    expect(kPagePadding + kCardRowPadding.left, 16);
+    // 缩略图行故意更靠边一点(留呼吸), 但仍比 Material 默认 16 窄
+    expect(kSongRowPadding.left, lessThan(kPageRowPadding.left));
+    expect(kSongRowPadding.left, lessThan(16));
+    // 预览行水平不再加边(父容器已内缩), 只留上下呼吸
+    expect(kPreviewRowPadding.left, 0);
+    expect(kPreviewRowPadding.right, 0);
+    expect(kPreviewRowPadding.top, kPreviewRowPadding.bottom);
+  });
 }
 
 void _noop() {}
