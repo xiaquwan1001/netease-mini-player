@@ -28,6 +28,8 @@ import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/format.dart' show formatCountMagnitude;
 import 'src/home/lyric_controller.dart';
+// Flutter 的 material 也有 SearchController, 用前缀避免同名歧义
+import 'src/home/search_controller.dart' as search_state;
 import 'src/lyric.dart';
 import 'src/word_lyric_view.dart';
 import 'src/layout.dart' show rowExtentFor;
@@ -95,13 +97,11 @@ class _HomePageState extends State<HomePage> {
   final _auth = Auth();
   final _queue = PlayQueue<rust.SongDto>();
   rust.InitInfo? _info;
-  rust.SearchBundleDto? _bundle;
   PlayerView? _player;
   String? _error;
 
   /// 出错时可以一键重试的动作(搜索/打开歌单这类幂等操作)
   Future<void> Function()? _retryLast;
-  bool _busy = false;
   Timer? _ticker;
 
   /// 用户主动停止后不再自动续播
@@ -163,29 +163,12 @@ class _HomePageState extends State<HomePage> {
   /// 图片 Widget 重新解析, 占位符会高频闪烁, 列表滚动位置也会丢
   final Set<int> _tabVisited = <int>{1};
 
-  /// 搜索请求代次: 取消/重新搜索后旧请求的结果直接丢弃
-  int _searchToken = 0;
+  // ---- 搜索 ----
+  /// 搜索状态机(结果/联想/历史/热词/请求代次/联想防抖/忙碌标志)在拆壳 S3 搬到
+  /// `search_state.SearchController`; 这里只留输入框与焦点(页面持有, 注入给 controller)。
+  late final search_state.SearchController _search;
 
-  // ---- 搜索建议 / 历史 ----
   final _searchFocus = FocusNode();
-  Timer? _suggestDebounce;
-  List<rust.SuggestItem> _suggestions = const [];
-
-  /// 精确实体命中(search_multimatch; orders 为空 = 无命中)
-  rust.SearchExact? _exact;
-
-  /// 纯关键词联想(mobile search_suggest; 卡片/实体都空时的兜底)
-  List<String> _keywordSuggestions = const [];
-  List<String> _searchHistory = const [];
-
-  // ---- 搜索落地页(热词/推荐词) ----
-  List<rust.HotSearchTerm> _hotTerms = const [];
-
-  /// "猜你想搜": keyword 是真正要搜的词, reason 是官方给的推荐理由(只展示)
-  String? _recommendedKeyword;
-  String? _recommendedReason;
-  bool _hotLoading = false;
-  String? _hotError;
 
   rust.SongDto? get _current => _queue.current;
 
@@ -195,7 +178,7 @@ class _HomePageState extends State<HomePage> {
   /// 否则是上一轮搜索结果。
   List<rust.SongDto> get _sourceSongs => _libraryTitle != null
       ? _queue.items
-      : (_bundle?.songs ?? const <rust.SongDto>[]);
+      : (_search.bundle?.songs ?? const <rust.SongDto>[]);
 
   /// 真正要显示/入队的曲目: 无版权且没收藏的直接不显示(与官方一致)
   List<rust.SongDto> get _visibleSongs => visibleSongs(_sourceSongs, _liked);
@@ -270,7 +253,15 @@ class _HomePageState extends State<HomePage> {
     AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
     actionsHost.value = _buildActionsHost();
-    _searchFocus.addListener(_onSearchFocusChanged);
+    // 搜索状态机: 输入框/焦点仍由页面持有, 只把"失败/清错/离开浏览态"三件
+    // 需要 setState 的副作用回灌给页面(与原 _search/_clearSearch 一一对应)
+    _search = search_state.SearchController(
+      text: _controller,
+      focus: _searchFocus,
+      onSearchFailed: _onSearchFailed,
+      onClearSearchError: _onClearSearchError,
+      onLeaveLibrary: _onLeaveLibrary,
+    );
     // 头像点击进入用户主页时, 主页里点歌仍要能播(共享同一份播放回调)
     UserNav.onPlaySongs = _playSongsList;
     // 艺人主页同理(关注流里的艺人头像 → 艺人主页, 与搜索进的是同一份页面)
@@ -297,8 +288,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     AppSettings.instance.removeListener(_onAudioSettingsChanged);
     _ticker?.cancel();
-    _suggestDebounce?.cancel();
-    _searchFocus.removeListener(_onSearchFocusChanged);
+    _search.dispose();
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     pageDepth.removeListener(_onPageDepthChanged);
     _searchFocus.dispose();
@@ -351,8 +341,8 @@ class _HomePageState extends State<HomePage> {
       // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
       unawaited(_restorePlayback(info.dataDir));
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
-      unawaited(_loadSearchHistory());
-      unawaited(_loadSearchLanding());
+      unawaited(_search.loadHistory());
+      unawaited(_search.loadLanding());
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
       if (info.loggedIn) {
         unawaited(_syncAccount());
@@ -565,215 +555,39 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _search() async {
-    final keyword = _controller.text.trim();
-    if (keyword.isEmpty) return;
-    final token = ++_searchToken;
-    _suggestDebounce?.cancel();
-    _searchFocus.unfocus();
+  // ---------------- 搜索(状态机在 SearchController, 见 src/home/search_controller.dart) ----------------
+
+  /// 搜索失败: 顶部横幅展示错误, 重试指回搜索(与原 `_search` 的 catch 等价)。
+  /// 注意 `_retryLast` 由 [_onClearSearchError] 一并清空: 横幅只在 `_error != null`
+  /// 时可达, 所以"新搜索时旧重试指针未清"这一点在 UI 上不可观测。
+  void _onSearchFailed(String message) {
+    if (!mounted) return;
     setState(() {
-      _busy = true;
-      _error = null;
-      _suggestions = const [];
-      _exact = null;
-      _keywordSuggestions = const [];
-      // 搜索即离开歌单浏览态, 结果列表要保持"这一屏是什么"的唯一来源
-      _libraryTitle = null;
-      _libraryPlaylistId = null;
+      _error = message;
+      _retryLast = _search.search;
     });
-    try {
-      final result = await retryNetwork(
-        () => rust.searchAll(keywords: keyword, limit: 20),
-      );
-      if (!mounted || token != _searchToken) return;
-      setState(() => _bundle = result);
-      // 搜索历史是本地记录, 失败不影响搜索结果
-      try {
-        final history = await rust.recordSearch(keyword: keyword);
-        if (mounted) setState(() => _searchHistory = history);
-      } catch (_) {}
-    } catch (e) {
-      if (!mounted || token != _searchToken) return;
-      setState(() {
-        _error = friendlyError(e);
-        _retryLast = _search;
-      });
-    } finally {
-      if (mounted && token == _searchToken) setState(() => _busy = false);
-    }
   }
 
-  /// 显式取消: 清掉输入、上一轮结果、联想和错误, 回到搜索落地页
-  void _clearSearch() {
-    _searchToken += 1;
-    _suggestDebounce?.cancel();
-    _controller.clear();
-    _searchFocus.unfocus();
+  /// 清掉顶部搜索错误(原 setState 里的 `_error = null` / `_retryLast = null`)
+  void _onClearSearchError() {
+    if (!mounted) return;
     setState(() {
-      _bundle = null;
-      _suggestions = const [];
-      _exact = null;
-      _keywordSuggestions = const [];
       _error = null;
       _retryLast = null;
-      _busy = false;
+    });
+  }
+
+  /// 搜索即离开歌单浏览态: 结果列表要保持"这一屏是什么"的唯一来源
+  void _onLeaveLibrary() {
+    if (!mounted) return;
+    setState(() {
       _libraryTitle = null;
       _libraryPlaylistId = null;
     });
   }
 
-  // ---------------- 搜索建议 / 历史 ----------------
-
-  void _onSearchFocusChanged() {
-    if (!mounted) return;
-    if (!_searchFocus.hasFocus) {
-      setState(() {
-        _suggestions = const [];
-        _exact = null;
-        _keywordSuggestions = const [];
-      });
-    } else {
-      // 重新获得焦点: 刷新历史(别处可能新增过)
-      _loadSearchHistory();
-      setState(() {});
-    }
-  }
-
-  Future<void> _loadSearchHistory() async {
-    try {
-      final list = await rust.searchHistory();
-      if (!mounted) return;
-      setState(() => _searchHistory = list);
-    } catch (_) {
-      // 历史读不出来不影响主流程
-    }
-  }
-
-  /// 搜索落地页的热词榜 + 默认/推荐搜索词. 两块互相独立, 失败不影响搜索.
-  Future<void> _loadSearchLanding() async {
-    if (mounted) setState(() => _hotLoading = true);
-    try {
-      // 热搜用 hotsearchlist(带服务端榜位/热度, 固定 20 条); 失败再退回老的热词接口
-      List<rust.HotSearchTerm> hot;
-      try {
-        final detail = await retryNetwork(rust.hotSearchDetail);
-        hot = [
-          for (final it in detail)
-            rust.HotSearchTerm(rank: it.rank, keyword: it.keyword),
-        ];
-        if (hot.isEmpty) hot = await retryNetwork(rust.hotSearch);
-      } catch (_) {
-        hot = await retryNetwork(rust.hotSearch);
-      }
-      if (!mounted) return;
-      setState(() {
-        _hotTerms = hot;
-        _hotError = null;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _hotError = friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _hotLoading = false);
-    }
-    try {
-      final recommended = await rust.defaultSearch();
-      if (!mounted) return;
-      setState(() {
-        _recommendedKeyword = recommended?.keyword;
-        _recommendedReason = recommended?.showText;
-      });
-    } catch (_) {
-      // 推荐词是锦上添花, 失败静默
-    }
-  }
-
-  void _onQueryChanged(String value) {
-    _suggestDebounce?.cancel();
-    // 让"清空/取消"按钮随输入内容即时出现
-    if (mounted) setState(() {});
-    final q = value.trim();
-    if (q.isEmpty) {
-      setState(() {
-        _suggestions = const [];
-        _exact = null;
-        _keywordSuggestions = const [];
-      });
-      return;
-    }
-    _suggestDebounce = Timer(const Duration(milliseconds: 300), () async {
-      // 三个来源并行: 联想卡片(web) / 精确实体(multimatch) / 纯关键词(mobile)
-      final exactFuture = _loadExact(q);
-      final keywordsFuture = _loadSuggestKeywords(q);
-      try {
-        final items = await rust.searchSuggest(keywords: q);
-        if (!mounted || _controller.text.trim() != q) return;
-        setState(() => _suggestions = items);
-      } catch (_) {
-        // 建议是锦上添花, 失败静默
-      }
-      final exact = await exactFuture;
-      final keywords = await keywordsFuture;
-      if (!mounted || _controller.text.trim() != q) return;
-      setState(() {
-        _exact = exact;
-        _keywordSuggestions = keywords;
-      });
-    });
-  }
-
-  Future<rust.SearchExact?> _loadExact(String q) async {
-    try {
-      final exact = await rust.searchExact(keywords: q);
-      // orders 为空就是空命中伪装成 200, 当作没有
-      return exact.orders.isEmpty ? null : exact;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<List<String>> _loadSuggestKeywords(String q) async {
-    try {
-      return await rust.searchSuggestKeywords(keywords: q);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  /// DTO -> 精确实体条视图(空命中由 SearchExactBar 自己隐藏)
-  SearchExactView _exactView(rust.SearchExact e) => SearchExactView(
-    orders: e.orders,
-    artists: [
-      for (final a in e.artists)
-        SearchExactArtist(
-          id: a.id.toInt(),
-          name: a.name,
-          avatarUrl: a.avatarUrl,
-        ),
-    ],
-    playlists: [
-      for (final p in e.playlists)
-        SearchExactPlaylist(
-          id: p.id.toInt(),
-          name: p.name,
-          coverUrl: p.coverUrl,
-          trackCount: p.trackCount.toInt(),
-        ),
-    ],
-    podcasts: [
-      for (final r in e.podcasts)
-        SearchExactRadio(
-          id: r.id.toInt(),
-          name: r.name,
-          coverUrl: r.coverUrl,
-          djName: r.djName,
-          programCount: r.programCount.toInt(),
-        ),
-    ],
-  );
-
   Future<void> _openExactArtist(int id) async {
-    for (final a in _exact?.artists ?? const <rust.Artist>[]) {
+    for (final a in _search.exact?.artists ?? const <rust.Artist>[]) {
       if (a.id.toInt() != id) continue;
       await showArtistDetail(
         context,
@@ -793,7 +607,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _openExactPlaylist(int id) async {
-    for (final p in _exact?.playlists ?? const <rust.Playlist>[]) {
+    for (final p in _search.exact?.playlists ?? const <rust.Playlist>[]) {
       if (p.id.toInt() == id) {
         await _openPlaylist(p);
         return;
@@ -802,30 +616,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openExactRadio(int id) {
-    for (final r in _exact?.podcasts ?? const <rust.PodcastRadio>[]) {
+    for (final r in _search.exact?.podcasts ?? const <rust.PodcastRadio>[]) {
       if (r.id.toInt() == id) {
         _openPodcastRadio(r);
         return;
       }
     }
-  }
-
-  Future<void> _searchKeyword(String keyword) async {
-    _controller.text = keyword;
-    _controller.selection = TextSelection.collapsed(offset: keyword.length);
-    setState(() {
-      _suggestions = const [];
-      _exact = null;
-      _keywordSuggestions = const [];
-    });
-    await _search();
-  }
-
-  Future<void> _clearSearchHistory() async {
-    try {
-      await rust.clearSearchHistory();
-      if (mounted) setState(() => _searchHistory = const []);
-    } catch (_) {}
   }
 
   /// 用一批曲目重置队列并从 index 开始播放(专辑/播客/每日推荐/最近听过共用).
@@ -860,7 +656,7 @@ class _HomePageState extends State<HomePage> {
       _toast('先播一首歌, 再开启心动模式');
       return;
     }
-    setState(() => _busy = true);
+    _search.setBusy(true);
     try {
       final songs = await retryNetwork(
         () => rust.heartModeSongs(
@@ -893,7 +689,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       _toast(friendlyError(e));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) _search.setBusy(false);
     }
   }
 
@@ -1001,7 +797,7 @@ class _HomePageState extends State<HomePage> {
   /// 搜索结果里点单曲: 用"可见单曲"重置队列(跳过无版权), 并定位到这首
   Future<void> _playFromSearch(rust.SongDto song) async {
     final songs = visibleSongs(
-      _bundle?.songs ?? const <rust.SongDto>[],
+      _search.bundle?.songs ?? const <rust.SongDto>[],
       _liked,
     );
     final start = songs.indexWhere((s) => s.id == song.id);
@@ -1913,7 +1709,7 @@ class _HomePageState extends State<HomePage> {
       _toast('登录后才能查看我喜欢的音乐');
       return;
     }
-    setState(() => _busy = true);
+    _search.setBusy(true);
     try {
       final pls = await retryNetwork(rust.myPlaylists);
       if (!mounted) return;
@@ -1954,7 +1750,7 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) return;
       _toast(friendlyError(e));
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) _search.setBusy(false);
     }
   }
 
@@ -2401,7 +2197,12 @@ class _HomePageState extends State<HomePage> {
     return HomeBackGuard(
       action: backAction,
       onBack: () => _handleBack(backAction),
-      child: _buildPage(context),
+      // 搜索状态在 [SearchController]: 它的一次通知 = 拆分前的一处 setState,
+      // 所以整页重建一次, 重建范围与拆分前一致。
+      child: ListenableBuilder(
+        listenable: _search,
+        builder: (context, _) => _buildPage(context),
+      ),
     );
   }
 
@@ -2444,21 +2245,21 @@ class _HomePageState extends State<HomePage> {
           children: [
             if (!_lyric.visible && _tab == 0) _buildSearchBar(),
             // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
-            if (!_lyric.visible && _tab == 0 && _exact != null)
+            if (!_lyric.visible && _tab == 0 && _search.exact != null)
               SearchExactBar(
-                view: _exactView(_exact!),
+                view: _search.exactView!,
                 onPickArtist: _openExactArtist,
                 onPickPlaylist: _openExactPlaylist,
                 onPickRadio: _openExactRadio,
               ),
             if (!_lyric.visible &&
                 _tab == 0 &&
-                _suggestions.isEmpty &&
-                _exact == null &&
-                _keywordSuggestions.isNotEmpty)
+                _search.suggestions.isEmpty &&
+                _search.exact == null &&
+                _search.keywordSuggestions.isNotEmpty)
               KeywordSuggestBar(
-                keywords: _keywordSuggestions,
-                onSelected: _searchKeyword,
+                keywords: _search.keywordSuggestions,
+                onSelected: _search.searchKeyword,
               ),
             if (!_lyric.visible && _tab == 0 && _error != null)
               Padding(
@@ -2506,18 +2307,21 @@ class _HomePageState extends State<HomePage> {
                   // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
                   // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,
                   // 下面还露出半截结果页。tab 树仍然挂在 Offstage 里, 收起联想不重建。
-                  if (!_lyric.visible && _tab == 0 && _suggestions.isNotEmpty)
+                  if (!_lyric.visible &&
+                      _tab == 0 &&
+                      _search.suggestions.isNotEmpty)
                     Positioned.fill(
                       // 不透明底色: 联想面板铺满后, 下面的 tab 内容不该从卡片外边
                       // 那 12dp 的缝里透出来。
                       child: ColoredBox(
                         color: Theme.of(context).colorScheme.surface,
                         child: SuggestionPanel(
-                          items: _suggestions,
+                          items: _search.suggestions,
                           // 分类 tab 与底部「看全部结果」都要知道当前输入词
                           keyword: _controller.text.trim(),
-                          onSelected: (item) => _searchKeyword(item.title),
-                          onSearchAll: _busy ? null : _search,
+                          onSelected: (item) =>
+                              _search.searchKeyword(item.title),
+                          onSearchAll: _search.busy ? null : _search.search,
                         ),
                       ),
                     ),
@@ -2546,12 +2350,12 @@ class _HomePageState extends State<HomePage> {
       if (AppSettings.instance.clearSearchOnTabSwitch &&
           (wasLyrics ||
               _controller.text.isNotEmpty ||
-              _bundle != null ||
+              _search.bundle != null ||
               _libraryTitle != null ||
               _error != null)) {
-        _clearSearch();
+        _search.clear();
       }
-      _loadSearchHistory();
+      _search.loadHistory();
     }
   }
 
@@ -2755,19 +2559,19 @@ class _HomePageState extends State<HomePage> {
     // 歌单浏览态优先(从我的/推荐点进来的)
     if (_libraryTitle != null) return _buildList();
     // 有上一轮结果就展示分区结果; 取消按钮会清空它
-    if (_bundle != null) return _buildSearchResults();
+    if (_search.bundle != null) return _buildSearchResults();
     // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
     if (query.isEmpty) {
       return SearchLanding(
-        history: _searchHistory,
-        hot: _hotTerms,
-        recommended: _recommendedKeyword,
-        recommendedReason: _recommendedReason,
-        onSelected: _searchKeyword,
-        onClearHistory: _clearSearchHistory,
-        hotLoading: _hotLoading,
-        hotError: _hotError,
-        onRetryHot: _loadSearchLanding,
+        history: _search.history,
+        hot: _search.hotTerms,
+        recommended: _search.recommendedKeyword,
+        recommendedReason: _search.recommendedReason,
+        onSelected: _search.searchKeyword,
+        onClearHistory: _search.clearHistory,
+        hotLoading: _search.hotLoading,
+        hotError: _search.hotError,
+        onRetryHot: _search.loadLanding,
         // 排行榜从「推荐」搬到这里(2026-11 用户要求)
         onOpenChartPlaylist: _openPlaylist,
       );
@@ -2778,10 +2582,10 @@ class _HomePageState extends State<HomePage> {
   /// 综合搜索结果: 单曲/艺人/专辑/歌单/播客分区
   Widget _buildSearchResults() {
     return SearchResultsView(
-      bundle: _bundle!,
+      bundle: _search.bundle!,
       // 后端 cloudsearch type=1004 的 MV 结果 → UI 的 SearchMv(同构映射)
       mvs: [
-        for (final m in _bundle!.mvs)
+        for (final m in _search.bundle!.mvs)
           SearchMv(
             id: m.id,
             name: m.name,
@@ -2821,25 +2625,25 @@ class _HomePageState extends State<HomePage> {
                 border: const OutlineInputBorder(),
                 isDense: true,
                 // 输入过东西或已有结果时给一个显式的清空按钮
-                suffixIcon: (_controller.text.isEmpty && _bundle == null)
+                suffixIcon: (_controller.text.isEmpty && _search.bundle == null)
                     ? null
                     : IconButton(
                         tooltip: '清空搜索',
                         icon: const Icon(Icons.clear, size: 18),
-                        onPressed: _clearSearch,
+                        onPressed: _search.clear,
                       ),
               ),
               textInputAction: TextInputAction.search,
-              onChanged: _onQueryChanged,
-              onSubmitted: (_) => _search(),
+              onChanged: _search.onQueryChanged,
+              onSubmitted: (_) => _search.search(),
             ),
           ),
           const SizedBox(width: 8),
           // 不再并排放「取消」: 它与输入框里的清空 suffix 是同一个动作
-          // (_clearSearch), 两个同义按钮只会让人不知道该按哪个(审查 P1-7.4)
+          // (_search.clear), 两个同义按钮只会让人不知道该按哪个(审查 P1-7.4)
           FilledButton(
-            onPressed: _busy ? null : _search,
-            child: Text(_busy ? '搜索中' : '搜索'),
+            onPressed: _search.busy ? null : _search.search,
+            child: Text(_search.busy ? '搜索中' : '搜索'),
           ),
         ],
       ),
@@ -2851,7 +2655,7 @@ class _HomePageState extends State<HomePage> {
     if (_libraryTitle == null) {
       // 搜索请求还没回来时给加载占位: 原来的"输入关键词后搜索"会让用户
       // 以为断网或没有结果(本次回归修复)。错误由顶部横幅展示(带重试)。
-      if (_busy) return SearchLoading(_controller.text.trim());
+      if (_search.busy) return SearchLoading(_controller.text.trim());
       if (_error != null) return const SizedBox.shrink();
       final typed = _controller.text.trim();
       if (typed.isEmpty) {
