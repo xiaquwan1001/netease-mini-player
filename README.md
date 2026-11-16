@@ -15,7 +15,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201037%20%2B%20Rust%20298-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%201074%20%2B%20Rust%20300-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -184,7 +184,7 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **298** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
 | `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
-| `flutter test --exclude-tags network` | **1037** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1074** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |

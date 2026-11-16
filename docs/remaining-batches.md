@@ -7,7 +7,7 @@
 > 口径日期: **2026-11-17**。**覆盖率 / FFI 导出数 / 测试数一律跑脚本现算**, 本文件不再维护副本
 > (`bash tools/api-coverage.sh`、`bash tools/ci-gates.sh list`); 权威数字只在
 > [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表(2026-11-16 实测: 覆盖 **135/136**、FFI 导出 **161**、
-> Rust **300** / Dart **1071**, golden **18**; Android `testDebugUnitTest` **3**)。
+> Rust **300** / Dart **1074**, golden **18**; Android `testDebugUnitTest` **3**, `row-padding` 门 OK)。
 >
 > **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
 > 平台层审计 22 条已落 19 条(P-01..P-22 除 P-11 完整版 / P-18 后半 / P-10 方案 B)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);

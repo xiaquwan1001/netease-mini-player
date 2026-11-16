@@ -13,14 +13,14 @@
 
 **当前门禁**(本机实测, 离线口径; **权威口径只在本表**, README/README.en/remaining-batches 都是指针)。
 复核口径: **2026-11-17 在 main 上跑完整 `bash tools/ci-gates.sh verify` 全绿**(rc=0, 末行 `ALL GATES OK`);
-该轮新增 `row-padding` 门与 1 例布局常量测试(Dart **1071→1072**), Rust 侧只修了一个测试(数字不变)。
+该轮新增 `row-padding` 门 + 3 例布局几何测试(Dart **1071→1074**), Rust 侧只修了一个测试(数字不变)。
 
 | 门 | 结果 |
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1072** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1074** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
@@ -36,7 +36,7 @@
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
-| **v0.19.1** | **2026-11-17** | **门禁/收敛批**(两个未发版批次一并出): Android 门进 CI(`android-unit` 进 `verify`, `android-lint` 暂只暴露) + 列表行 **B 级 12 条清零**(`kRowTrailingMaxRatio`/`capRowTrailing`) + **C 级第一批**(四个具名行留白口径 + `row-padding` 门) + 修掉会挂死 `cargo test` 的 keyring 写路径; Rust 300 / Dart **1072** |
+| **v0.19.1** | **2026-11-17** | **门禁/收敛批**(两个未发版批次一并出): Android 门进 CI(`android-unit` 进 `verify`, `android-lint` 暂只暴露) + 列表行 **B 级 12 条清零**(`kRowTrailingMaxRatio`/`capRowTrailing`) + **C 级第一批**(四个具名行留白口径 + `row-padding` 门) + 修掉会挂死 `cargo test` 的 keyring 写路径; Rust 300 / Dart **1074** |
 | **v0.19.0** | **2026-11-16** | **收尾批**(4 lane): **拆壳 S8 完成** —— `home/home_wiring.dart` 收口 8 条静态钩子的 attach/detach + `HomePage` 搬到 `home/home_page.dart`(1550) + main.dart **1562→48 行门面**(审计起点 3877); **P-22** 明文流量收窄到 `music.126.net`/`music.163.com`/`vod.126.net` 白名单; **P-05 中期/P-11 起步** EQ 三端共享 fixture(479 行) + Kotlin 纯逻辑抽取与 JVM 单测 3 例; 文档债务登记 §13; Rust **298→300** / Dart **1037→1061** |
 | **v0.18.0** | **2026-11-16** | **第六批**(4 lane): main.dart **1874→1562** 拆壳 **S7**(账号/登录态/列表态导航 → `home/account_actions.dart`, `_libraryTitle` 收口单一文件)、**P-09** 登录/MV 页跟随系统深浅色(同名 style + values-night)、**P-21** 播放 UA 收敛 Rust 单一来源(FFI→Dart→Kotlin 兜底+漂移日志)、**P-10** 渐进播放 seek 如实反馈并修掉 `EqSource` 未实现 `try_seek`(桌面完整文件本该能跳); Rust **294→298** / Dart **1028→1037** |
 | **v0.17.0** | **2026-11-16** | **第五批**(4 lane): main.dart **2156→1874** 拆壳 **S6**(队列面板 → `home/queue_sheet_controller.dart`)、**P-03** 增益斜率 `gain_slew_db_per_sec` 打通 Rust→FFI→Dart(`0=瞬时`, Rust 290→294)、**P-07/P-08** MV 跟随生命周期 + 登录 cookie 清理去重(模拟器实测)、**P-17/P-18/P-20** AppImage 工具 pin+sha256、两平台标题尺寸统一、注释纠偏; 测试 **1010→1028** |
@@ -104,7 +104,7 @@
 
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
-单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1072** /
+单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /
 android-unit 3 / `row-padding` 门新增)。
 
 ### 1) 先修门禁自身: keyring 测试会把 `cargo test` 挂死
@@ -884,8 +884,9 @@ B 级两类通病: ①写了 `overflow: ellipsis` 但**没 `maxLines`** ⇒ 先�
 `titleMedium` 后该测试立刻失败,还原即绿。
 
 > 两个车道都在独立 worktree 里跑,编排者独立重跑全量门禁后才合并(不采信 worker 自报)。
-> 剩余债务(能力 trait / main 拆壳 / AppSettings)见 `docs/remaining-batches.md` §12;
-> 未做的平台层审计项(P-11 完整版 / P-05 长尾 / P-18 后半 / P-10 方案 B / P-22 在飞)见同文件 §13。
+> 剩余债务(能力 trait / AppSettings)见 `docs/remaining-batches.md` §12;
+> 未做的平台层审计项(P-11 完整版 / P-18 后半 / P-10 方案 B)见同文件 §13
+> (P-05 长尾 / P-12 / P-22 已于 2026-11-16 落地, §13 已标「作废」)。
 
 ## 历史批次(≤2026-11-12)与专题小节
 

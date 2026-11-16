@@ -16,7 +16,7 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201037%20%2B%20Rust%20298-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%201074%20%2B%20Rust%20300-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 
@@ -147,7 +147,7 @@ cargo run -p ncm-cli -- lyric 186016
 |---|---|
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **298** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test --exclude-tags network` | **1037** passing / 0 failing (includes **18** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1074** passing / 0 failing (includes **18** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |

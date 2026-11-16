@@ -19,7 +19,8 @@
 > - **新门禁** `tools/check-row-padding.sh --strict`（已进 `tools/ci-gates.sh verify`）：只看
 >   `contentPadding:` 与 `SongRow/SongTile` 的 `padding:`，值必须是上面四个常量之一；
 >   `EdgeInsets.zero` 放行但**必须写 `// token-ok: 理由`**（父容器已内缩时的正确写法）。
-> - 回归：`ui/test/layout_metrics_test.dart` 新增 1 例锁住四个常量的几何关系（叠出 16 / 整页行贴 12 线）。
+> - 回归：`ui/test/layout_metrics_test.dart` 新增 1 例锁住四个常量的几何关系（叠出 16 / 整页行贴 12 线）,
+>   `all_charts_page_test` / `style_page_test` 各 1 例断言**渲染坐标**（整页 12 共线 / 卡片内 16）。
 >
 > **本报告下一批还剩什么**（需视觉拍板或在页面上跑几何断言）：
 > ① `kSongRowPadding`(8) 与 `kPageRowPadding`(12) 的二分是否保留 —— 现口径是「行首是封面缩略图 ⇒ 8，
