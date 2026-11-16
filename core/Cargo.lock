@@ -1315,6 +1315,7 @@ dependencies = [
 name = "ncm-playback"
 version = "0.1.0"
 dependencies = [
+ "log",
  "ncm-domain",
  "rodio",
  "serde",

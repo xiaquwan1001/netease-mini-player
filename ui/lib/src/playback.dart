@@ -14,6 +14,8 @@ class PlayerView {
     required this.positionMs,
     required this.durationMs,
     required this.volume,
+    this.seekable = true,
+    this.seekError,
   });
 
   final BigInt? trackId;
@@ -21,6 +23,18 @@ class PlayerView {
   final BigInt positionMs;
   final BigInt durationMs;
   final double volume;
+
+  /// 当前源能否精确 seek。
+  ///
+  /// 桌面端「边下边播」期解码器是非 seekable 的(Rust 侧 `with_seekable(false)`),
+  /// 这时 seek 一定不生效 —— 进度条据此禁用并提示「缓存中, 暂不可跳转」,
+  /// 而不是让位置先跳过去再弹回来(P-10)。
+  /// Android 走 Media3, 通道里没有这个键 ⇒ 默认 true(行为不变)。
+  final bool seekable;
+
+  /// 最近一次 seek 失败的原因(Rust 侧 `PlayerState::seek_error` 的直传)。
+  /// null = 没失败过 / 上次成功。
+  final String? seekError;
 
   static final empty = PlayerView(
     playing: false,
@@ -406,6 +420,8 @@ class Playback {
     positionMs: s.positionMs,
     durationMs: s.durationMs,
     volume: s.volume,
+    seekable: s.seekable,
+    seekError: s.seekError,
   );
 
   PlayerView _fromMap(Map<String, Object?>? map) {
@@ -417,6 +433,9 @@ class Playback {
       positionMs: toBig(map['positionMs']),
       durationMs: toBig(map['durationMs']),
       volume: (map['volume'] as num?)?.toDouble() ?? 1.0,
+      // Android(Media3)通道没有这两个键: 默认可 seek, 移动端行为一个字都不变
+      seekable: map['seekable'] as bool? ?? true,
+      seekError: map['seekError'] as String?,
     );
   }
 }

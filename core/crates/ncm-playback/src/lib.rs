@@ -80,13 +80,24 @@ pub struct PlayerState {
     pub position_ms: u64,
     pub duration_ms: u64,
     pub volume: f32,
+    /// 当前源能否精确 seek。边下边播(`PlaySource::Growing`)的解码器是以
+    /// `with_seekable(false)` 构建的, 这里如实报 false —— UI 据此禁用进度条并提示
+    /// **缓存中, 暂不可跳转**(P-10)。
+    #[serde(default)]
+    pub seekable: bool,
+    /// 最近一次 seek 失败的原因(None = 上次 seek 成功 / 从未 seek)。
+    /// 以前这个错误被 `let _ = player.try_seek(..)` 丢掉, 现在既写日志也回传给调用方。
+    #[serde(default)]
+    pub seek_error: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PlaybackError {
     NoBackend(String),
     Io(String),
     Decode(String),
+    /// 当前源不支持该操作(典型: 边下边播期 seek)
+    Unsupported(String),
 }
 
 impl std::fmt::Display for PlaybackError {
@@ -95,6 +106,7 @@ impl std::fmt::Display for PlaybackError {
             PlaybackError::NoBackend(s) => write!(f, "no audio backend: {s}"),
             PlaybackError::Io(s) => write!(f, "io: {s}"),
             PlaybackError::Decode(s) => write!(f, "decode: {s}"),
+            PlaybackError::Unsupported(s) => write!(f, "unsupported: {s}"),
         }
     }
 }
@@ -123,6 +135,18 @@ pub enum PlaySource {
     },
 }
 
+impl PlaySource {
+    /// 这个源能否精确 seek: **只有完整落盘的文件可以**。
+    ///
+    /// 边下边播的 `.part` 还在增长, 解码器以 `with_seekable(false)` 构建(否则 symphonia
+    /// 会为了算时长/建索引扫全文件, 等于把「边下边播」退化成「下完再播」);
+    /// rodio 对非 seekable 源的 `try_seek` 必然失败, 所以这里直接报 false,
+    /// 由 `check_seek` 在命令入口如实拒绝(P-10)。
+    pub fn seekable(&self) -> bool {
+        matches!(self, PlaySource::File(_))
+    }
+}
+
 enum Cmd {
     Play {
         track_id: u64,
@@ -133,12 +157,21 @@ enum Cmd {
     Pause,
     Resume,
     Stop,
-    Seek(u64),
+    /// seek 的结果**回传**给调用方(P-10): 以前这里是 `let _ = player.try_seek(..)`,
+    /// 失败被整个吞掉, UI 拖完进度条只会看到位置弹回原处、没有任何提示。
+    Seek {
+        position_ms: u64,
+        reply: Option<mpsc::SyncSender<Result<(), PlaybackError>>>,
+    },
     Volume(f32),
     /// 更新播放参数(增益/淡入/EQ). 增益即时生效, EQ 与淡入在下一首开始时套用
     Configure(PlaybackTuning),
     Shutdown,
 }
+
+/// seek 回执的等待上限: 音频线程最多 200ms 醒一次处理命令, 1.5s 足够;
+/// 又不会在阻塞读(边下边播等数据/设备挂死)时把 FFI 调用方一起拖住。
+pub const SEEK_REPLY_TIMEOUT: Duration = Duration::from_millis(1_500);
 
 /// 单实例播放器: 命令进 channel, 音频线程独占输出设备.
 pub struct Player {
@@ -216,8 +249,37 @@ impl Player {
         let _ = self.tx.send(Cmd::Stop);
     }
 
-    pub fn seek(&self, position_ms: u64) {
-        let _ = self.tx.send(Cmd::Seek(position_ms));
+    /// seek 到 [position_ms]. **不再静默失败**: 返回 `Unsupported`(当前源不可 seek,
+    /// 典型是边下边播期)或后端的其它错误, 同时由后端把原因写进
+    /// `PlayerState::seek_error` 并打一条 warn 日志。
+    ///
+    /// 等待是**有界**的(音频线程阻塞在读数据时不会把调用方一起拖死),
+    /// 超时按要求报错而不是假装成功。
+    pub fn seek(&self, position_ms: u64) -> Result<(), PlaybackError> {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        if self
+            .tx
+            .send(Cmd::Seek {
+                position_ms,
+                reply: Some(reply_tx),
+            })
+            .is_err()
+        {
+            let e = PlaybackError::NoBackend("音频线程已退出, seek 无法送达".into());
+            log::warn!("[playback] seek 未生效: {e}");
+            return Err(e);
+        }
+        match reply_rx.recv_timeout(SEEK_REPLY_TIMEOUT) {
+            Ok(result) => result,
+            Err(_) => {
+                let e = PlaybackError::Io(format!(
+                    "seek 在 {}ms 内没有回执(音频线程忙着解码/等数据)",
+                    SEEK_REPLY_TIMEOUT.as_millis()
+                ));
+                log::warn!("[playback] seek 未生效: {e}");
+                Err(e)
+            }
+        }
     }
 
     pub fn set_volume(&self, volume: f32) {
@@ -255,11 +317,47 @@ fn effective_volume_db(user_volume: f32, gain_db: f32) -> f32 {
     (user_volume * biquad::db_to_linear(gain_db.clamp(-40.0, 12.0))).clamp(0.0, 1.0)
 }
 
+/// 一次 seek 请求是否被允许(纯函数: 不需要音频设备就能测)。
+///
+/// 边下边播期的解码器是非 seekable 的, rodio 的 `try_seek` 对它必然失败 ——
+/// 与其把错误吞掉让进度条弹回旧位置(用户以为播放器卡死), 不如在命令入口就如实拒绝,
+/// 并把原因一路回传到 UI(P-10)。
+pub fn check_seek(seekable: bool, position_ms: u64) -> Result<(), PlaybackError> {
+    if seekable {
+        return Ok(());
+    }
+    Err(PlaybackError::Unsupported(format!(
+        "当前曲目仍在缓存(渐进播放, 目标 {position_ms}ms): 解码器非 seekable, 暂不可跳转"
+    )))
+}
+
+/// 把一次 seek 的结果落到可轮询状态里, 失败时留一条 warn 日志。
+///
+/// 之前这里是 `let _ = player.try_seek(..)`: 失败既没日志也没回传, 调用方拿到的
+/// 只是「没动」的旧位置。现在错误同时出现在 stderr 与 `PlayerState::seek_error`,
+/// UI 侧还有 `PlayerState::seekable` 可以提前把进度条禁掉。
+pub fn record_seek_outcome(state: &Mutex<PlayerState>, result: &Result<(), PlaybackError>) {
+    match result {
+        Ok(()) => {
+            if let Ok(mut st) = state.lock() {
+                st.seek_error = None;
+            }
+        }
+        Err(e) => {
+            log::warn!("[playback] seek 未生效: {e}");
+            if let Ok(mut st) = state.lock() {
+                st.seek_error = Some(e.to_string());
+            }
+        }
+    }
+}
+
 #[cfg(any(target_os = "linux", target_os = "windows"))]
 mod backend {
     use super::*;
     use rodio::{
-        ChannelCount, Decoder, DeviceSinkBuilder, Player as RodioPlayer, Sample, SampleRate, Source,
+        source::SeekError, ChannelCount, Decoder, DeviceSinkBuilder, Player as RodioPlayer, Sample,
+        SampleRate, Source,
     };
     use std::fs::File;
 
@@ -323,6 +421,15 @@ mod backend {
         fn total_duration(&self) -> Option<Duration> {
             self.input.total_duration()
         }
+
+        /// seek 必须**透传**给内层 decoder。
+        ///
+        /// `Source::try_seek` 的默认实现直接返回 `NotSupported`, 而我们的 EQ 包装层
+        /// 以前没实现它 —— 于是连完整落盘的文件都无法跳转(错误又被 `let _ =` 吞掉,
+        /// 表现就是拖进度条静默弹回)。这是 P-10 顺带查出的真实缺陷。
+        fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+            self.input.try_seek(pos)
+        }
     }
 
     /// 增长中的本地文件: 下载线程还在追加字节时, 读到 EOF **阻塞等待**而不是返回 0.
@@ -380,6 +487,7 @@ mod backend {
         local: &PlaybackTuning,
         track_id: u64,
         expected_duration_ms: Option<u64>,
+        seekable: bool,
         state: &Arc<Mutex<PlayerState>>,
     ) where
         I: Source<Item = Sample> + Send + 'static,
@@ -405,6 +513,9 @@ mod backend {
             st.duration_ms = duration.map(|d| d.as_millis() as u64).unwrap_or(0);
             st.position_ms = 0;
             st.playing = true;
+            // 源的 seek 能力随曲目一起发布给 UI(边下边播期 = false)
+            st.seekable = seekable;
+            st.seek_error = None;
         }
     }
 
@@ -432,6 +543,9 @@ mod backend {
         let mut limiter = agc::GainLimiter::with_slew(local.gain_slew_db_per_sec);
         limiter.reset_to(local.gain_db);
         let mut last_tick = Instant::now();
+        // 当前曲目的 seek 能力: 由 Play 命令按 `PlaySource::seekable()` 更新,
+        // Seek 命令据此在入口拒绝(不依赖 rodio 内部状态, 也不依赖演奏是否已开始)
+        let mut current_seekable = false;
         player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
 
         loop {
@@ -443,6 +557,7 @@ mod backend {
                 }) => {
                     // stop() 之后不可复用,换曲用 clear()
                     player.clear();
+                    current_seekable = source.seekable();
                     // 换曲: 增益立即对齐到当前目标, 不带着上一曲半截斜坡的残留、也不从 0 慢慢爬
                     limiter.reset_to(local.gain_db);
                     player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
@@ -455,6 +570,7 @@ mod backend {
                                     &local,
                                     track_id,
                                     expected_duration_ms,
+                                    current_seekable,
                                     &state,
                                 ),
                                 Err(e) => eprintln!("[playback] decode failed: {e}"),
@@ -476,6 +592,7 @@ mod backend {
                                             &local,
                                             track_id,
                                             expected_duration_ms,
+                                            current_seekable,
                                             &state,
                                         ),
                                         Err(e) => {
@@ -492,15 +609,37 @@ mod backend {
                 Ok(Cmd::Resume) => player.play(),
                 Ok(Cmd::Stop) => {
                     player.clear();
+                    current_seekable = false;
                     if let Ok(mut st) = state.lock() {
                         st.playing = false;
                         st.position_ms = 0;
                         st.track_id = None;
                         st.duration_ms = 0;
+                        st.seekable = false;
+                        st.seek_error = None;
                     }
                 }
-                Ok(Cmd::Seek(ms)) => {
-                    let _ = player.try_seek(Duration::from_millis(ms));
+                Ok(Cmd::Seek { position_ms, reply }) => {
+                    // 不可 seek 的源(边下边播)在入口就拒绝: 如实返回错误而不是丢掉,
+                    // 同时写进 state.seek_error / 打一条 warn 供 UI 与日志排查(P-10)。
+                    let result = match check_seek(current_seekable, position_ms) {
+                        Ok(()) => {
+                            player
+                                .try_seek(Duration::from_millis(position_ms))
+                                .map_err(|e| {
+                                    if matches!(&e, SeekError::NotSupported { .. }) {
+                                        PlaybackError::Unsupported(e.to_string())
+                                    } else {
+                                        PlaybackError::Decode(e.to_string())
+                                    }
+                                })
+                        }
+                        Err(e) => Err(e),
+                    };
+                    record_seek_outcome(&state, &result);
+                    if let Some(tx) = reply {
+                        let _ = tx.send(result);
+                    }
                 }
                 Ok(Cmd::Volume(v)) => {
                     user_volume = v;
@@ -648,6 +787,75 @@ mod backend {
             assert_eq!(total, 44, "只有 header 时读到 44 字节就该结束");
             let _ = std::fs::remove_dir_all(&dir);
         }
+
+        /// 写一个完整的 16bit/mono/8kHz WAV(header + samples 个静音样本)
+        fn full_wav(tag: &str, samples: usize) -> (std::path::PathBuf, std::path::PathBuf) {
+            let (dir, path) = temp_wav(tag);
+            let mut bytes = wav_header(samples);
+            bytes.extend(std::iter::repeat_n(0u8, samples * 2));
+            std::fs::write(&path, bytes).unwrap();
+            (dir, path)
+        }
+
+        fn empty_chain() -> biquad::EqChain {
+            biquad::EqChain::new(&ncm_domain::EqProfile::default(), 8000.0, 1)
+        }
+
+        /// EQ 包装层必须把 seek 透传给内层 decoder。
+        ///
+        /// `Source::try_seek` 的默认实现返回 `NotSupported`, 而 EqSource 以前没实现它,
+        /// 于是**连完整落盘的文件都跳不动**(错误又被 `let _ =` 吞掉, 只是静默弹回)。
+        #[test]
+        fn eq_source_forwards_seek_to_seekable_decoder() {
+            let (dir, path) = full_wav("eqseek", 4000);
+            let decoder = Decoder::try_from(File::open(&path).unwrap()).expect("wav 应该能解");
+            let mut src = EqSource::new(decoder, empty_chain());
+            assert!(
+                src.try_seek(Duration::from_millis(300)).is_ok(),
+                "完整落盘文件必须能 seek(透传到 symphonia)"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// 对照组: 不实现 `try_seek` 的包装层只能拿到默认实现 —— 直接 NotSupported。
+        ///
+        /// 这就是 P-10 之前的 EqSource(以及任何自己包一层 Source 的地方):
+        /// 不管内层能不能 seek, 默认实现一律报不支持。所以**透传不是可选项**。
+        struct NoSeekWrapper;
+
+        impl Iterator for NoSeekWrapper {
+            type Item = Sample;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                None
+            }
+        }
+
+        impl Source for NoSeekWrapper {
+            fn current_span_len(&self) -> Option<usize> {
+                None
+            }
+
+            fn channels(&self) -> ChannelCount {
+                std::num::NonZero::new(1).unwrap()
+            }
+
+            fn sample_rate(&self) -> SampleRate {
+                std::num::NonZero::new(8000).unwrap()
+            }
+
+            fn total_duration(&self) -> Option<Duration> {
+                None
+            }
+        }
+
+        #[test]
+        fn source_without_forwarding_cannot_seek() {
+            let err = NoSeekWrapper
+                .try_seek(Duration::from_millis(300))
+                .expect_err("默认实现必然拒绝 seek");
+            assert!(matches!(err, SeekError::NotSupported { .. }));
+        }
     }
 }
 
@@ -669,6 +877,45 @@ mod backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// P-10: 渐进播放期(Growing)的 seek 必须被**如实拒绝并记录**, 不能静默丢掉。
+    #[test]
+    fn check_seek_rejects_growing_source_and_records_reason() {
+        // 判据来自 PlaySource 本身: File 可 seek, Growing 不可(解码器 with_seekable(false))
+        assert!(PlaySource::File("/tmp/a.flac".into()).seekable());
+        let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let growing = PlaySource::Growing {
+            path: "/tmp/a.part".into(),
+            done,
+        };
+        assert!(!growing.seekable());
+
+        // 命令入口直接拒绝: Unsupported, 且带上给用户看的原因
+        let err = check_seek(growing.seekable(), 42_000).expect_err("渐进期 seek 必须被拒");
+        assert!(matches!(err, PlaybackError::Unsupported(_)));
+        assert!(err.to_string().contains("暂不可跳转"));
+
+        // 失败的 seek 要在可轮询状态里留下原因(以前这里是静默的)
+        let state = Mutex::new(PlayerState {
+            seekable: false,
+            ..Default::default()
+        });
+        record_seek_outcome(&state, &Err(err));
+        assert!(state
+            .lock()
+            .unwrap()
+            .seek_error
+            .as_deref()
+            .unwrap_or_default()
+            .contains("暂不可跳转"));
+
+        // 之后一次成功的 seek 清掉残留, 不让 UI 一直停在错误态
+        record_seek_outcome(&state, &Ok(()));
+        assert!(state.lock().unwrap().seek_error.is_none());
+
+        // 可 seek 的源(完整落盘文件)直接放行
+        assert!(check_seek(true, 42_000).is_ok());
+    }
 
     #[test]
     fn state_starts_empty() {

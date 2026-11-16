@@ -282,6 +282,11 @@ Future<PlayerStateDto> playerResume() =>
 Future<PlayerStateDto> playerStop() =>
     RustLib.instance.api.crateApiPlayerStop();
 
+/// seek 到 [position_ms]。
+///
+/// 失败**不再静默**(P-10): 后端会打 warn 并把原因写进 `seek_error`,
+/// 这里把状态原样带回 Dart —— 进度条拖到不可 seek 的位置时, UI 能立刻知道没生效,
+/// 而不是先跳到新位置再被下一次轮询弹回原处。
 Future<PlayerStateDto> playerSeek({required BigInt positionMs}) =>
     RustLib.instance.api.crateApiPlayerSeek(positionMs: positionMs);
 
@@ -2748,12 +2753,22 @@ class PlayerStateDto {
   final BigInt durationMs;
   final double volume;
 
+  /// 当前源能否精确 seek。桌面边下边播(渐进播放)期为 false,
+  /// UI 据此禁用进度条并提示「缓存中, 暂不可跳转」(P-10)。
+  /// Android 走 Media3, 不经过这里(通道 map 里没有这个键, Dart 侧默认 true)。
+  final bool seekable;
+
+  /// 最近一次 seek 失败的原因(None = 没失败过); 失败同时会打一条 warn 日志。
+  final String? seekError;
+
   const PlayerStateDto({
     this.trackId,
     required this.playing,
     required this.positionMs,
     required this.durationMs,
     required this.volume,
+    required this.seekable,
+    this.seekError,
   });
 
   @override
@@ -2762,7 +2777,9 @@ class PlayerStateDto {
       playing.hashCode ^
       positionMs.hashCode ^
       durationMs.hashCode ^
-      volume.hashCode;
+      volume.hashCode ^
+      seekable.hashCode ^
+      seekError.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2773,7 +2790,9 @@ class PlayerStateDto {
           playing == other.playing &&
           positionMs == other.positionMs &&
           durationMs == other.durationMs &&
-          volume == other.volume;
+          volume == other.volume &&
+          seekable == other.seekable &&
+          seekError == other.seekError;
 }
 
 /// 歌单(列表项): 直接镜像 domain 类型 `Playlist`.

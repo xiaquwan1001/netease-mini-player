@@ -1277,6 +1277,12 @@ pub struct PlayerStateDto {
     pub position_ms: u64,
     pub duration_ms: u64,
     pub volume: f32,
+    /// 当前源能否精确 seek。桌面边下边播(渐进播放)期为 false,
+    /// UI 据此禁用进度条并提示「缓存中, 暂不可跳转」(P-10)。
+    /// Android 走 Media3, 不经过这里(通道 map 里没有这个键, Dart 侧默认 true)。
+    pub seekable: bool,
+    /// 最近一次 seek 失败的原因(None = 没失败过); 失败同时会打一条 warn 日志。
+    pub seek_error: Option<String>,
 }
 
 fn state_dto() -> PlayerStateDto {
@@ -1287,6 +1293,8 @@ fn state_dto() -> PlayerStateDto {
         position_ms: s.position_ms,
         duration_ms: s.duration_ms,
         volume: s.volume,
+        seekable: s.seekable,
+        seek_error: s.seek_error,
     }
 }
 
@@ -1361,8 +1369,16 @@ pub fn player_stop() -> PlayerStateDto {
     state_dto()
 }
 
+/// seek 到 [position_ms]。
+///
+/// 失败**不再静默**(P-10): 后端会打 warn 并把原因写进 `seek_error`,
+/// 这里把状态原样带回 Dart —— 进度条拖到不可 seek 的位置时, UI 能立刻知道没生效,
+/// 而不是先跳到新位置再被下一次轮询弹回原处。
 pub fn player_seek(position_ms: u64) -> PlayerStateDto {
-    player().seek(position_ms);
+    if let Err(e) = player().seek(position_ms) {
+        // 后端已经 warn 过一次(带上下文), 这里补一层「从 FFI 调进来的」信息
+        eprintln!("[ncm-ffi] player_seek({position_ms}) 未生效: {e}");
+    }
     state_dto()
 }
 
