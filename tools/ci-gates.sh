@@ -17,7 +17,9 @@
 #   tools/ci-gates.sh write-guard          # tools/check-write-guard.sh
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + flutter-test)
+#   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
+#   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 现状 67 error, 不进 verify)
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + flutter-test + android-unit)
 #
 # 口径约定(改之前先读 .pi/memory/notes-build.md):
 #   · 测试标签: 只排除 network(需要真实凭据)。golden **必须跑** —— 它靠 CI 的
@@ -27,6 +29,11 @@
 #     两者同一套 lint 规则, 真 error 一样阻塞。
 #   · 版本号只有 ui/pubspec.yaml 一处事实来源(X.Y.Z = versionName, +N = versionCode),
 #     kAppVersion 由 tools/bump-version.sh 同步。
+#   · Android 侧静态检查/单测只用 AGP 自带能力(:app:lintDebug + :app:testDebugUnitTest),
+#     不引 ktlint/detekt 插件(平台审计明确排除自建静态检查栈)。lint 当前 **67 error**
+#     (66 × media3 UnsafeOptInUsageError 缺 @OptIn + 1 × GestureBackNavigation) 必红,
+#     修完之前**不进 verify**, 只在 CI 里以 continue-on-error 的独立 step 暴露;
+#     不许用 lint-baseline/lint.xml 掩盖(2026-11-16 实测, 细节见 notes-wip.md)。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -102,6 +109,39 @@ cmd_flutter_test() {
   ( cd ui && run flutter test --exclude-tags network "$@" )
 }
 
+# ---- Android(JVM 侧: 单测 + lint) ----
+# 这两条要一份可用的 Android 工程, 而它依赖两个**不入库**的文件(ui/android/.gitignore 里
+# 明确忽略): local.properties(flutter.sdk/sdk.dir) 与 gradlew + gradle-wrapper.jar。
+# 新克隆里 ./gradlew 根本不存在, 所以先 bootstrap 再用。
+cmd_android_prepare() {
+  # gradle 必须跑在带 javac 的 JDK21 上: 本机默认 java 可能只有 JRE(java-25), 会报
+  # "does not provide the required capabilities: [JAVA_COMPILER]"。
+  if [ -z "${JAVA_HOME:-}" ] || [ ! -x "${JAVA_HOME:-}/bin/javac" ]; then
+    [ -x "$HOME/android-dev/jdk/bin/javac" ] \
+      || die "Android 门需要带 javac 的 JDK21: 请设 JAVA_HOME(本地 source tools/env.sh, CI 用 actions/setup-java 21)"
+    export JAVA_HOME="$HOME/android-dev/jdk"
+  fi
+  command -v flutter >/dev/null \
+    || die "Android 门需要 flutter 在 PATH 上(--config-only 由它生成 local.properties/gradlew)"
+  if [ ! -x ui/android/gradlew ] || [ ! -f ui/android/local.properties ]; then
+    # --config-only: 只生成工程文件(local.properties / gradlew / wrapper jar), 不编译产物。
+    # 唯一实现交给 flutter —— 手写 local.properties 会把不存在的路径写进去, 拷别处的
+    # wrapper 又会漏版本对齐(本机实测 0.3s, 且不会改动 gradle-wrapper.properties)。
+    echo "+ (cd ui && flutter build apk --debug --config-only)  # 生成 local.properties + gradlew"
+    ( cd ui && flutter build apk --debug --config-only )
+  fi
+}
+
+cmd_android_unit() {
+  cmd_android_prepare
+  ( cd ui/android && run ./gradlew :app:testDebugUnitTest --console=plain )
+}
+
+cmd_android_lint() {
+  cmd_android_prepare
+  ( cd ui/android && run ./gradlew :app:lintDebug --console=plain )
+}
+
 cmd_verify() {
   cmd_rust_lint
   cmd_rust_test
@@ -110,6 +150,7 @@ cmd_verify() {
   cmd_write_guard
   cmd_tokens
   cmd_flutter_test
+  cmd_android_unit
   echo "ALL GATES OK"
 }
 
@@ -125,6 +166,8 @@ case "$sub" in
   write-guard)   cmd_write_guard ;;
   tokens)        cmd_tokens ;;
   flutter-test)  cmd_flutter_test "$@" ;;
+  android-unit)  cmd_android_unit ;;
+  android-lint)  cmd_android_lint ;;
   verify)        cmd_verify ;;
   list)
     sed -n 's/^#   tools\/ci-gates.sh \(.*\)$/  \1/p' "$0"
