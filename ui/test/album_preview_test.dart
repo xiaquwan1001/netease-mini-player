@@ -4,6 +4,7 @@ import 'package:minincm/src/album_preview.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 // 共享工厂 + 周杰伦《叶惠美》(albumId=9) 口径。
 rust.SongDto song(int id, String name) =>
@@ -30,15 +31,17 @@ void main() {
   testWidgets('专辑预览: 展示封面/信息/曲目, 点曲目回调整张专辑', (tester) async {
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       host(() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (songs, index) {
-            played = songs;
-            playedIndex = index;
-          },
+
           loadAlbum: (_) async => album(),
         );
       }),
@@ -64,7 +67,7 @@ void main() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async => album(),
           setSubscribed: (id, subscribed) async {
             calls.add('$id:$subscribed');
@@ -96,7 +99,7 @@ void main() {
           tester.element(find.text('open')),
           albumId: BigInt.zero,
           albumName: '未知专辑',
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async {
             called = true;
             return album();
@@ -124,7 +127,7 @@ void main() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async => empty,
         );
       }),
@@ -141,7 +144,7 @@ void main() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async {
             attempts++;
             if (attempts <= 3) throw Exception('[network] timeout');
@@ -169,7 +172,7 @@ void main() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async => album(),
           onOpenArtist: (id, name) {
             openedId = id;
@@ -203,7 +206,7 @@ void main() {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (_, _) {},
+
           loadAlbum: (_) async => multi,
           resolveArtistId: (name) async =>
               name == '方文山' ? BigInt.from(7) : BigInt.one,
@@ -242,7 +245,7 @@ void main() {
                   ctx,
                   albumId: BigInt.from(9),
                   albumName: '一个特别特别长的专辑名称用来测试小屏溢出情况',
-                  onPlay: (_, _) {},
+
                   loadAlbum: (_) async => album(),
                 ),
                 child: const Text('open'),

@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'state_views.dart';
 import 'format.dart' show formatDurationMs;
@@ -29,9 +30,6 @@ typedef OnOpenRadio = void Function(
   rust.PodcastRadio radio,
 );
 
-/// 播放回调链(与详情页 onPlaySongs 同一签名): 节目榜点行直接播放该节目
-typedef OnPlaySongs = void Function(List<rust.SongDto> songs, int index);
-
 class RadioExplorePage extends StatefulWidget {
   const RadioExplorePage({
     super.key,
@@ -39,16 +37,12 @@ class RadioExplorePage extends StatefulWidget {
     this.loadRecommend,
     this.loadToplist,
     this.onOpenRadio,
-    this.onPlaySongs,
   });
 
   final LoadRadioHome? loadHome;
   final LoadRadioRecommend? loadRecommend;
   final LoadRadioToplist? loadToplist;
   final OnOpenRadio? onOpenRadio;
-
-  /// 节目榜点行直接播放该节目(不传则回落打开电台详情)
-  final OnPlaySongs? onPlaySongs;
 
   @override
   State<RadioExplorePage> createState() => _RadioExplorePageState();
@@ -205,7 +199,6 @@ class _RadioExplorePageState extends State<RadioExplorePage> {
             error: _toplistError,
             onRetry: () => _loadToplist(_topKind),
             onOpenRadio: (ctx, radio) => _openRadio(radio),
-            onPlaySongs: widget.onPlaySongs,
           ),
         ],
       ),
@@ -373,7 +366,6 @@ class _ToplistTabs extends StatelessWidget {
     required this.error,
     required this.onRetry,
     required this.onOpenRadio,
-    this.onPlaySongs,
   });
 
   final String kind;
@@ -382,7 +374,6 @@ class _ToplistTabs extends StatelessWidget {
   final String? error;
   final VoidCallback onRetry;
   final OnOpenRadio onOpenRadio;
-  final OnPlaySongs? onPlaySongs;
 
   static const _kinds = [
     ('hot', '热门'),
@@ -435,13 +426,12 @@ class _ToplistTabs extends StatelessWidget {
     );
   }
 
-  /// 节目榜点行: 有音频直接播放(走注入的 onPlaySongs 回调链);
+  /// 节目榜点行: 有音频且播放能力可用时直接播放(走 PlaybackBridge 单入口);
   /// 无音频本体回落打开所属电台详情(只读榜单接口部分节目不带 song).
   void _openProgram(BuildContext context, rust.PodcastProgramDto p) {
     final song = p.song;
-    final play = onPlaySongs;
-    if (song != null && play != null) {
-      play([song], 0);
+    if (song != null && PlaybackBridge.instance.canPlaySongs) {
+      PlaybackBridge.instance.playSongs([song], 0);
       return;
     }
     onOpenRadio(

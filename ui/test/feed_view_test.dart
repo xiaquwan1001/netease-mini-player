@@ -54,7 +54,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => events,
           loadSubscribedArtists: () async => const [],
@@ -80,7 +80,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => events,
           loadSubscribedArtists: () async => [
@@ -126,7 +126,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => [
             event(id: 1, userId: 10, userName: '低互动艺人', text: '低互动正文'),
@@ -179,7 +179,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => [event(id: 1, userId: 10, userName: '本页艺人')],
           loadSubscribedArtists: () async => [
@@ -238,7 +238,7 @@ void main() {
           FeedView(
             loggedIn: true,
             onLogin: () {},
-            onPlaySongs: (_, _) {},
+
             onOpenUrl: (_) async {},
             loadFeed: () async => [e],
             loadSubscribedArtists: () async => const [],
@@ -282,7 +282,7 @@ void main() {
           body: FeedView(
             loggedIn: true,
             onLogin: () {},
-            onPlaySongs: (_, _) {},
+
             onOpenUrl: (_) async {},
             loadFeed: () async => const [],
             loadSubscribedArtists: () async => const [],

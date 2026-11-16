@@ -13,7 +13,6 @@ import 'history_tab.dart' show HistoryTab;
 /// [Scaffold](与歌单详情/新歌新碟一致); 行为与注入点不变。
 Future<void> showDiscoverPage(
   BuildContext context, {
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required void Function(rust.Playlist playlist) onOpenPlaylist,
   SongListLoader? loadSongs,
   PlaylistListLoader? loadPlaylists,
@@ -33,7 +32,6 @@ Future<void> showDiscoverPage(
             loadHistorySongs ??
             (date) => rust.historyRecommendSongs(date: date),
         loadLocalDays: loadLocalDays,
-        onPlaySongs: onPlaySongs,
         onOpenPlaylist: onOpenPlaylist,
       ),
     ),
@@ -48,7 +46,6 @@ class DailyRecommendPage extends StatelessWidget {
     required this.loadPlaylists,
     required this.loadHistoryDates,
     required this.loadHistorySongs,
-    required this.onPlaySongs,
     required this.onOpenPlaylist,
     this.loadLocalDays,
   });
@@ -60,7 +57,6 @@ class DailyRecommendPage extends StatelessWidget {
 
   /// 本地缓存的每日推荐歌单(设置里关掉缓存时为 null: 历史日推只列在线日期)
   final LocalDaysLoader? loadLocalDays;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override
@@ -80,14 +76,14 @@ class DailyRecommendPage extends StatelessWidget {
         ),
         body: TabBarView(
           children: [
-            DailySongsTab(load: loadSongs, onPlay: onPlaySongs),
+            // 页签内的点播走 PlaybackBridge(队列来源标记为每日推荐, 见标签内部)
+            DailySongsTab(load: loadSongs),
             DailyPlaylistsTab(load: loadPlaylists, onOpen: onOpenPlaylist),
             HistoryTab(
               loadDates: loadHistoryDates,
               loadSongs: loadHistorySongs,
               loadLocalDays: loadLocalDays,
               onOpenPlaylist: onOpenPlaylist,
-              onPlay: onPlaySongs,
             ),
           ],
         ),

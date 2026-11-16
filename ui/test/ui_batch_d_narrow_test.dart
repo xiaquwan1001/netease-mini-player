@@ -43,7 +43,7 @@ void main() {
           builder: (ctx) => TextButton(
             onPressed: () => showDiscoverPage(
               ctx,
-              onPlaySongs: (_, _) {},
+
               onOpenPlaylist: (_) {},
               loadSongs: () async => [song(1, '小屏日推歌')],
               loadPlaylists: () async => [],
@@ -65,7 +65,6 @@ void main() {
     await tester.pumpWidget(
       scaled(
         NewReleasePage(
-          onPlaySongs: (_, _) {},
           onOpenAlbum: (_) {},
           onOpenArtist: (_) {},
           loadSongs: (_) async => [song(1, '小屏新歌')],
@@ -132,7 +131,7 @@ void main() {
           loadAlbums: () async => [],
           loadRecent: () async => [],
           loadRanking: (_) async => [],
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           onOpenPodcast: (_) {},
           onOpenLiked: () {},
@@ -155,7 +154,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => [
             rust.FeedEventDto(

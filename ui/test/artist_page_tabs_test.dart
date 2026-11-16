@@ -9,6 +9,7 @@ import 'package:minincm/src/profile_scaffold.dart' show ProfileStatRow;
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 // 共享工厂 + 歌手页口径: id 从 1000 起, 名字带序号(断言会读), 周杰伦 200 秒。
 rust.SongDto song(int i, {String name = '歌曲', bool playable = true}) =>
@@ -118,7 +119,7 @@ Future<void> pump(
         key: ValueKey('artist-page-$pumpSeq'),
         artistId: BigInt.from(6452),
         name: '周杰伦',
-        onPlaySongs: (_, _) {},
+
         loadArtist:
             loadArtist ?? (_) async => detailData ?? detail(brief: '简介'),
         loadSimilar: loadSimilar,
@@ -211,6 +212,8 @@ void main() {
       });
     }
     final played = <int>[];
+    installPlaybackSpy((_, index) => played.add(index));
+    addTearDown(resetPlaybackSpy);
     pumpSeq++;
     await tester.pumpWidget(
       MaterialApp(
@@ -218,7 +221,7 @@ void main() {
           key: ValueKey('artist-play-$pumpSeq'),
           artistId: BigInt.from(6452),
           name: '周杰伦',
-          onPlaySongs: (songs, index) => played.add(index),
+
           loadArtist: (_) async => detail(songs: 3, albums: 0),
           loadSongsPage: (_, _) async =>
               const rust.ArtistSongPageDto(songs: [], hasMore: false),

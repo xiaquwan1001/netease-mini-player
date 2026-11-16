@@ -7,6 +7,7 @@ import 'feed_media.dart';
 import 'feed_share.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToast;
@@ -19,7 +20,6 @@ import 'user_nav.dart';
 Future<void> showFeedDetail(
   BuildContext context, {
   required rust.FeedEventDto event,
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required Future<void> Function(String url) onOpenUrl,
   void Function(BigInt eventId, bool liked, BigInt likedCount)? onLikeChanged,
 
@@ -32,7 +32,6 @@ Future<void> showFeedDetail(
     MaterialPageRoute<void>(
       builder: (_) => _FeedDetailPage(
         event: event,
-        onPlaySongs: onPlaySongs,
         onOpenUrl: onOpenUrl,
         onLikeChanged: onLikeChanged,
         focusComments: focusComments,
@@ -65,14 +64,12 @@ const Map<String, String> feedKindLabels = {
 class _FeedDetailPage extends StatefulWidget {
   const _FeedDetailPage({
     required this.event,
-    required this.onPlaySongs,
     required this.onOpenUrl,
     this.onLikeChanged,
     this.focusComments = false,
   });
 
   final rust.FeedEventDto event;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final void Function(BigInt eventId, bool liked, BigInt likedCount)?
   onLikeChanged;
@@ -284,7 +281,8 @@ class _FeedDetailPageState extends State<_FeedDetailPage> {
               const SizedBox(height: 12),
               _SongCard(
                 song: event.song!,
-                onPlay: () => widget.onPlaySongs([event.song!], 0),
+                onPlay: () =>
+                    PlaybackBridge.instance.playSongs([event.song!], 0),
               ),
             ],
             const SizedBox(height: 8),

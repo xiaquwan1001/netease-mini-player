@@ -4,6 +4,7 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/similar_sheet.dart';
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
@@ -11,6 +12,11 @@ void main() {
   testWidgets('相似歌曲面板: 点歌整批起播, 相似歌单可点开', (tester) async {
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
     rust.Playlist? opened;
 
     await tester.pumpWidget(
@@ -20,10 +26,7 @@ void main() {
             onPressed: () => showSimilarSongs(
               ctx,
               song: fakeSong(id: 1, name: '种子歌'),
-              onPlay: (songs, index) {
-                played = songs;
-                playedIndex = index;
-              },
+
               onOpenPlaylist: (pl) => opened = pl,
               loadSongs: (id, limit) async => [
                 fakeSong(id: 2, name: '相似一'),
@@ -79,7 +82,7 @@ void main() {
               onPressed: () => showSimilarSongs(
                 ctx,
                 song: fakeSong(id: 1, name: '种子歌名字也很长很长很长很长'),
-                onPlay: (_, _) {},
+
                 onOpenPlaylist: (_) {},
                 loadSongs: (id, limit) async => [
                   fakeSong(id: 2, name: '相似一'),

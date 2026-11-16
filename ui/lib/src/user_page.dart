@@ -14,6 +14,7 @@ import 'feed_media.dart'
 import 'layout.dart';
 import 'net_retry.dart';
 import 'platform.dart';
+import 'playback_bridge.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
@@ -38,7 +39,6 @@ class UserPage extends StatefulWidget {
     super.key,
     required this.userId,
     this.fallbackNickname,
-    this.onPlaySongs,
     this.loadProfile,
     this.loadPlaylists,
     this.loadFollows,
@@ -53,9 +53,6 @@ class UserPage extends StatefulWidget {
 
   final BigInt userId;
   final String? fallbackNickname;
-
-  /// 点歌单后播放回调(宿主注入); 为空时歌单只展示不可播(测试/无播放器场景)
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   /// 测试注入
   final Future<rust.ProfileDetail> Function(BigInt uid)? loadProfile;
@@ -190,8 +187,8 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   }
 
   Future<void> _openPlaylist(rust.Playlist playlist) async {
-    final play = widget.onPlaySongs;
-    if (play == null) {
+    // 播放能力统一走 PlaybackBridge(单入口); 未绑定时歌单只展示不可播
+    if (!PlaybackBridge.instance.canPlaySongs) {
       showToast(context, '当前页面不支持播放');
       return;
     }
@@ -201,7 +198,6 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       name: playlist.name,
       coverUrl: playlist.coverUrl,
       special: playlist.special,
-      onPlaySongs: play,
     );
   }
 
@@ -221,7 +217,6 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       startOnFans: fans,
       loadFollows: widget.loadFollows,
       loadFolloweds: widget.loadFolloweds,
-      onPlaySongs: widget.onPlaySongs,
     );
   }
 
@@ -328,7 +323,6 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     return _RefreshableEvents(
       load: () => _loadEvents(widget.userId),
       padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
-      onPlaySongs: widget.onPlaySongs,
       onOpenUrl: widget.onOpenUrl,
     );
   }
@@ -375,7 +369,6 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     return _LikedPreview(
       playlist: liked,
       load: widget.loadLikedSongs,
-      onPlaySongs: widget.onPlaySongs,
       padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
       header: Row(
         children: [
@@ -473,14 +466,12 @@ class _LikedPreview extends StatelessWidget {
     required this.playlist,
     required this.header,
     required this.padding,
-    this.onPlaySongs,
     this.load,
   });
 
   final rust.Playlist playlist;
   final Widget header;
   final EdgeInsetsGeometry padding;
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   /// 测试注入(默认 rust.playlistSongs)
   final Future<List<rust.SongDto>> Function(BigInt playlistId)? load;
@@ -495,7 +486,6 @@ class _LikedPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final play = onPlaySongs;
     return ListView(
       padding: padding,
       children: [
@@ -532,7 +522,7 @@ class _LikedPreview extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     durationGap: 8,
                     tapOnlyWhenPlayable: true,
-                    onTap: play == null ? null : () => play(songs, i),
+                    onTap: () => PlaybackBridge.instance.playSongs(songs, i),
                   ),
               ],
             );
@@ -547,13 +537,11 @@ class _RefreshableEvents extends StatefulWidget {
   const _RefreshableEvents({
     required this.load,
     required this.padding,
-    this.onPlaySongs,
     this.onOpenUrl,
   });
 
   final Future<List<rust.FeedEventDto>> Function() load;
   final EdgeInsetsGeometry padding;
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
   final Future<void> Function(String url)? onOpenUrl;
 
   @override
@@ -575,7 +563,6 @@ class _RefreshableEventsState extends State<_RefreshableEvents> {
           UserEventsList(
             key: ValueKey('user-events-$_generation'),
             load: widget.load,
-            onPlaySongs: widget.onPlaySongs,
             onOpenUrl: widget.onOpenUrl,
             emptyText: 'TA 还没有发布动态',
           ),
@@ -594,7 +581,6 @@ class UserEventsList extends StatelessWidget {
   const UserEventsList({
     super.key,
     required this.load,
-    this.onPlaySongs,
     this.onOpenUrl,
     this.emptyText = '还没有发布动态',
     this.maxItems,
@@ -603,7 +589,6 @@ class UserEventsList extends StatelessWidget {
   /// 取数(不含重试, 重试由 [AsyncView] 套 retryNetwork)
   final Future<List<rust.FeedEventDto>> Function() load;
 
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
   final Future<void> Function(String url)? onOpenUrl;
   final String emptyText;
 
@@ -627,11 +612,7 @@ class UserEventsList extends StatelessWidget {
           children: [
             for (var i = 0; i < shown.length; i++) ...[
               if (i > 0) const SizedBox(height: 8),
-              _EventSummaryCard(
-                event: shown[i],
-                onPlaySongs: onPlaySongs,
-                onOpenUrl: onOpenUrl,
-              ),
+              _EventSummaryCard(event: shown[i], onOpenUrl: onOpenUrl),
             ],
           ],
         );
@@ -646,14 +627,9 @@ class UserEventsList extends StatelessWidget {
 /// 私有实现; 用户主页/「我的」页只要"看得见有什么动态 + 点进详情", 所以这里用一份
 /// 摘要版, 点击统一进 [showFeedDetail]。
 class _EventSummaryCard extends StatelessWidget {
-  const _EventSummaryCard({
-    required this.event,
-    this.onPlaySongs,
-    this.onOpenUrl,
-  });
+  const _EventSummaryCard({required this.event, this.onOpenUrl});
 
   final rust.FeedEventDto event;
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
   final Future<void> Function(String url)? onOpenUrl;
 
   static const Map<String, IconData> _kindIcons = {
@@ -678,15 +654,11 @@ class _EventSummaryCard extends StatelessWidget {
     if (event.shareCount > BigInt.zero) '转发 ${event.shareCount}',
   ].join(' · ');
 
-  Future<void> _openDetail(BuildContext context) {
-    final play = onPlaySongs;
-    return showFeedDetail(
-      context,
-      event: event,
-      onPlaySongs: play ?? (_, _) => showToast(context, '当前页面不支持播放'),
-      onOpenUrl: onOpenUrl ?? PlatformBridge.openUrl,
-    );
-  }
+  Future<void> _openDetail(BuildContext context) => showFeedDetail(
+    context,
+    event: event,
+    onOpenUrl: onOpenUrl ?? PlatformBridge.openUrl,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -748,11 +720,7 @@ class _EventSummaryCard extends StatelessWidget {
               // 分享的单曲/视频(需求: 与关注动态流同一口径, 除文字外的内容
               // 都自动展示, 不必点进详情): 与 feed_view 列表卡片共用同一份组件
               if (event.song != null)
-                FeedSongMiniCard(
-                  song: event.song!,
-                  coverUrl: event.coverUrl,
-                  onPlaySongs: onPlaySongs ?? (_, _) {}, // 播放由详情页/播放器接管
-                ),
+                FeedSongMiniCard(song: event.song!, coverUrl: event.coverUrl),
               if (event.videoUrl != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -785,7 +753,6 @@ Future<void> showUserPage(
   BuildContext context, {
   required BigInt userId,
   String? fallbackNickname,
-  void Function(List<rust.SongDto> songs, int index)? onPlaySongs,
   Future<rust.ProfileDetail> Function(BigInt uid)? loadProfile,
   Future<List<rust.Playlist>> Function(BigInt uid)? loadPlaylists,
   UserListLoader? loadFollows,
@@ -801,7 +768,6 @@ Future<void> showUserPage(
       builder: (_) => UserPage(
         userId: userId,
         fallbackNickname: fallbackNickname,
-        onPlaySongs: onPlaySongs,
         loadProfile: loadProfile,
         loadPlaylists: loadPlaylists,
         loadFollows: loadFollows,

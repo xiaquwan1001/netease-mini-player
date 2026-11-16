@@ -73,7 +73,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => newest,
           loadSubscribedArtists: () async => const [],
@@ -114,7 +114,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async {
             loads++;

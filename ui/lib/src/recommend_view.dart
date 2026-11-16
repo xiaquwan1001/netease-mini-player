@@ -6,6 +6,7 @@ import 'cover_art.dart';
 import 'cover_row.dart';
 import 'section_header.dart';
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
@@ -21,7 +22,6 @@ class RecommendView extends StatefulWidget {
   const RecommendView({
     super.key,
     required this.loggedIn,
-    required this.onPlaySongs,
     required this.onOpenPlaylist,
     required this.onOpenPodcast,
     required this.onHeartMode,
@@ -34,12 +34,10 @@ class RecommendView extends StatefulWidget {
     this.loadNewSongs,
     this.loadNewAlbums,
     this.onOpenAlbum,
-    this.onPlayFm,
     this.onOpenNewRelease,
   });
 
   final bool loggedIn;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadio radio) onOpenPodcast;
   final VoidCallback onHeartMode;
@@ -59,10 +57,6 @@ class RecommendView extends StatefulWidget {
 
   /// 点专辑卡片(不传就不显示"新碟上架")
   final void Function(rust.AlbumItem album)? onOpenAlbum;
-
-  /// 私人FM 起播(不传就回落到 onPlaySongs)。上层用它标记"当前队列来自 FM",
-  /// 以便歌曲菜单里的"不感兴趣"走 fm_trash 而不是日推 dislike。
-  final void Function(List<rust.SongDto> songs, int index)? onPlayFm;
 
   /// 打开"新歌 / 新碟 / 艺人"分类页(不传就不显示"全部"入口)
   final VoidCallback? onOpenNewRelease;
@@ -123,18 +117,13 @@ class _RecommendViewState extends State<RecommendView> {
             ),
           ),
           const SizedBox(height: 16),
-          _DailySongsSection(
-            load: _dailySongs,
-            onPlay: widget.onPlaySongs,
-            onOpenAll: widget.onOpenDaily,
-          ),
+          _DailySongsSection(load: _dailySongs, onOpenAll: widget.onOpenDaily),
           const SizedBox(height: 16),
           // 排行榜(含「全部榜单」)已按用户要求移到搜索页;
           // 风格推荐留在推荐页, 现在是排行榜搬走后的独立单元。
           _hPad(
             _StylesSection(
               load: _styles,
-              onPlaySongs: widget.onPlaySongs,
               onOpenPlaylist: widget.onOpenPlaylist,
             ),
           ),
@@ -155,7 +144,6 @@ class _RecommendViewState extends State<RecommendView> {
             loadSongs: _newSongs,
             loadAlbums: widget.onOpenAlbum == null ? null : _newAlbums,
             loggedIn: widget.loggedIn,
-            onPlay: widget.onPlaySongs,
             onOpenAlbum: widget.onOpenAlbum,
             onMore: widget.onOpenNewRelease,
           ),
@@ -165,7 +153,6 @@ class _RecommendViewState extends State<RecommendView> {
               load: _podcasts,
               loggedIn: widget.loggedIn,
               onOpen: widget.onOpenPodcast,
-              onPlaySongs: widget.onPlaySongs,
             ),
           ),
         ],
@@ -188,12 +175,12 @@ class _RecommendViewState extends State<RecommendView> {
         _snack('暂时没有可播放的 FM 曲目');
         return;
       }
-      final start = widget.onPlayFm;
-      if (start != null) {
-        start(playable, 0);
-      } else {
-        widget.onPlaySongs(playable, 0);
-      }
+      // 队列来源标记为私人FM: 歌曲菜单里的"不感兴趣"据此走 fm_trash 而不是日推 dislike
+      await PlaybackBridge.instance.playSongs(
+        playable,
+        0,
+        source: SongActionSource.personalFm,
+      );
     } catch (e) {
       _snack(friendlyError(e));
     }
@@ -291,10 +278,9 @@ class _ActionCard extends StatelessWidget {
 
 /// 新歌速递: 一排歌曲(点任意一首按这个列表起播)
 class _NewSongsSection extends StatelessWidget {
-  const _NewSongsSection({required this.load, required this.onPlay});
+  const _NewSongsSection({required this.load});
 
   final Future<List<rust.SongDto>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +325,10 @@ class _NewSongsSection extends StatelessWidget {
                       tapOnlyWhenPlayable: true,
                       onTap: () {
                         final index = playable.indexWhere((x) => x.id == s.id);
-                        onPlay(playable, index < 0 ? 0 : index);
+                        PlaybackBridge.instance.playSongs(
+                          playable,
+                          index < 0 ? 0 : index,
+                        );
                       },
                     ),
                 ],
@@ -426,7 +415,6 @@ class _NewReleaseSection extends StatelessWidget {
     required this.loadSongs,
     required this.loadAlbums,
     required this.loggedIn,
-    required this.onPlay,
     this.onOpenAlbum,
     this.onMore,
   });
@@ -436,7 +424,6 @@ class _NewReleaseSection extends StatelessWidget {
   /// 为 null 表示不显示新碟(上层没给 onOpenAlbum)
   final Future<List<rust.AlbumItem>> Function()? loadAlbums;
   final bool loggedIn;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.AlbumItem album)? onOpenAlbum;
 
   /// "全部"入口(新歌/新碟/艺人分类页)
@@ -457,7 +444,7 @@ class _NewReleaseSection extends StatelessWidget {
                 : TextButton(onPressed: onMore, child: const Text('全部')),
           ),
         ),
-        _NewSongsSection(load: loadSongs, onPlay: onPlay),
+        _NewSongsSection(load: loadSongs),
         if (albums != null && open != null) ...[
           const SizedBox(height: 10),
           _hPad(
@@ -473,14 +460,9 @@ class _NewReleaseSection extends StatelessWidget {
 
 /// 风格推荐区块(排行榜搬到搜索页之后独立成块)。
 class _StylesSection extends StatelessWidget {
-  const _StylesSection({
-    required this.load,
-    required this.onPlaySongs,
-    required this.onOpenPlaylist,
-  });
+  const _StylesSection({required this.load, required this.onOpenPlaylist});
 
   final Future<List<rust.StyleTag>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   @override
@@ -489,11 +471,7 @@ class _StylesSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: '风格推荐'),
-        _StyleTiles(
-          load: load,
-          onPlaySongs: onPlaySongs,
-          onOpenPlaylist: onOpenPlaylist,
-        ),
+        _StyleTiles(load: load, onOpenPlaylist: onOpenPlaylist),
       ],
     );
   }
@@ -509,14 +487,9 @@ class _StylesSection extends StatelessWidget {
 /// 每个风格是一块「配图 + 名字」的窗格(与详情页头部的同一张图),
 /// 仍然是排行榜下方的次级内容, 不新起平级区块。
 class _StyleTiles extends StatelessWidget {
-  const _StyleTiles({
-    required this.load,
-    required this.onPlaySongs,
-    required this.onOpenPlaylist,
-  });
+  const _StyleTiles({required this.load, required this.onOpenPlaylist});
 
   final Future<List<rust.StyleTag>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
   /// 窗格边长: 比歌单封面(118)小一档, 一行能看 3~4 个, 不把排行榜区块撑太高。
@@ -556,12 +529,8 @@ class _StyleTiles extends StatelessWidget {
     final scheme = theme.colorScheme;
     final cover = tag.coverUrl;
     return InkWell(
-      onTap: () => showStyleDetail(
-        context,
-        tag: tag,
-        onPlaySongs: onPlaySongs,
-        onOpenPlaylist: onOpenPlaylist,
-      ),
+      onTap: () =>
+          showStyleDetail(context, tag: tag, onOpenPlaylist: onOpenPlaylist),
       borderRadius: BorderRadius.circular(8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -598,14 +567,9 @@ class _StyleTiles extends StatelessWidget {
 // ---------------- 每日推荐歌曲 ----------------
 
 class _DailySongsSection extends StatelessWidget {
-  const _DailySongsSection({
-    required this.load,
-    required this.onPlay,
-    required this.onOpenAll,
-  });
+  const _DailySongsSection({required this.load, required this.onOpenAll});
 
   final Future<List<rust.SongDto>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final VoidCallback onOpenAll;
 
   @override
@@ -654,7 +618,11 @@ class _DailySongsSection extends StatelessWidget {
                       tapOnlyWhenPlayable: true,
                       onTap: () {
                         final index = playable.indexWhere((x) => x.id == s.id);
-                        onPlay(playable, index < 0 ? 0 : index);
+                        // 推荐页的日推预览行按普通队列起播(与 main 注入的口径一致)
+                        PlaybackBridge.instance.playSongs(
+                          playable,
+                          index < 0 ? 0 : index,
+                        );
                       },
                     ),
                 ],
@@ -724,15 +692,11 @@ class _PodcastSection extends StatelessWidget {
     required this.load,
     required this.loggedIn,
     required this.onOpen,
-    this.onPlaySongs,
   });
 
   final Future<List<rust.PodcastRadio>> Function() load;
   final bool loggedIn;
   final void Function(rust.PodcastRadio radio) onOpen;
-
-  /// 电台广场节目榜点行直接播放(与上层播放回调同一签名)
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   Widget build(BuildContext context) {
@@ -748,7 +712,6 @@ class _PodcastSection extends StatelessWidget {
                   onOpenRadio: (ctx, radio) {
                     onOpen(radio);
                   },
-                  onPlaySongs: onPlaySongs,
                 ),
               ),
             ),

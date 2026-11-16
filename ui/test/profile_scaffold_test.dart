@@ -58,7 +58,7 @@ Widget artistPage() => MaterialApp(
   home: ArtistDetailPage(
     artistId: BigInt.from(6452),
     name: '周杰伦',
-    onPlaySongs: (_, _) {},
+
     loadArtist: (_) async => artistDetail(),
     loadSimilar: (_) async => const [],
     loadSongsPage: (_, _) async =>

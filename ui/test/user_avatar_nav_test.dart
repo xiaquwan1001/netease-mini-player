@@ -79,7 +79,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => [event(1, 7), event(2, 8)],
           loadSubscribedArtists: () async => const [],

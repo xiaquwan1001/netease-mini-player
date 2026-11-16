@@ -11,6 +11,7 @@ import 'feed_detail_page.dart'
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
+import 'playback_bridge.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
@@ -40,7 +41,6 @@ Future<void> showArtistDetail(
   BuildContext context, {
   required BigInt artistId,
   String? name,
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum,
 
@@ -60,7 +60,6 @@ Future<void> showArtistDetail(
       builder: (_) => ArtistDetailPage(
         artistId: artistId,
         name: name,
-        onPlaySongs: onPlaySongs,
         onOpenAlbum: onOpenAlbum,
         onOpenUrl: onOpenUrl,
         loadArtist: loadArtist,
@@ -78,7 +77,6 @@ class ArtistDetailPage extends StatefulWidget {
   const ArtistDetailPage({
     super.key,
     required this.artistId,
-    required this.onPlaySongs,
     this.name,
     this.onOpenAlbum,
     this.onOpenUrl,
@@ -93,7 +91,6 @@ class ArtistDetailPage extends StatefulWidget {
 
   final BigInt artistId;
   final String? name;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(BigInt albumId, String albumName, String? coverUrl)?
   onOpenAlbum;
 
@@ -381,19 +378,13 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
             kPagePadding,
             24 + MediaQuery.viewPaddingOf(context).bottom,
           ),
-          children: [
-            ArtistRecommendedSongsSection(
-              songs: detail.songs,
-              onPlaySongs: widget.onPlaySongs,
-            ),
-          ],
+          children: [ArtistRecommendedSongsSection(songs: detail.songs)],
         );
       case _TabKind.allSongs:
         return _AllSongsTab(
           artistId: widget.artistId,
           totalCount: detail.musicCount,
           loader: _songsLoader,
-          onPlaySongs: widget.onPlaySongs,
         );
       case _TabKind.albums:
         return _AlbumsTab(
@@ -409,11 +400,7 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           loader: _mvsLoader,
         );
       case _TabKind.dynamics:
-        return _DynamicsTab(
-          events: _dynamics ?? const [],
-          onPlaySongs: widget.onPlaySongs,
-          onOpenUrl: _openUrl,
-        );
+        return _DynamicsTab(events: _dynamics ?? const [], onOpenUrl: _openUrl);
     }
   }
 
@@ -488,7 +475,6 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
               context,
               artistId: a.id,
               name: a.name,
-              onPlaySongs: widget.onPlaySongs,
               onOpenAlbum: widget.onOpenAlbum,
               onOpenUrl: widget.onOpenUrl,
               loadDynamics: widget.loadDynamics,
@@ -513,14 +499,9 @@ enum _TabKind {
 /// 动态 tab: 艺人动态列表(只有拿到数据时这个 tab 才存在)。
 /// 点一行进动态详情页(正文/配图/视频/评论全部复用 feed_detail_page)。
 class _DynamicsTab extends StatelessWidget {
-  const _DynamicsTab({
-    required this.events,
-    required this.onPlaySongs,
-    required this.onOpenUrl,
-  });
+  const _DynamicsTab({required this.events, required this.onOpenUrl});
 
   final List<rust.FeedEventDto> events;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
 
   @override
@@ -543,12 +524,7 @@ class _DynamicsTab extends StatelessWidget {
         final body = e.title.trim().isNotEmpty ? e.title.trim() : e.text.trim();
         return InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap: () => showFeedDetail(
-            context,
-            event: e,
-            onPlaySongs: onPlaySongs,
-            onOpenUrl: onOpenUrl,
-          ),
+          onTap: () => showFeedDetail(context, event: e, onOpenUrl: onOpenUrl),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Column(
@@ -570,11 +546,7 @@ class _DynamicsTab extends StatelessWidget {
                     child: FeedImageGrid(images: feedAttachedImages(e)),
                   ),
                 if (e.song != null)
-                  FeedSongMiniCard(
-                    song: e.song!,
-                    coverUrl: e.coverUrl,
-                    onPlaySongs: onPlaySongs,
-                  ),
+                  FeedSongMiniCard(song: e.song!, coverUrl: e.coverUrl),
                 if (e.videoUrl != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -618,7 +590,6 @@ class _AllSongsTab extends StatefulWidget {
     required this.artistId,
     required this.totalCount,
     required this.loader,
-    required this.onPlaySongs,
   });
 
   final BigInt artistId;
@@ -626,7 +597,6 @@ class _AllSongsTab extends StatefulWidget {
   /// 全量歌曲数(artist detail 的 musicSize), 头部「共 N 首」用
   final BigInt totalCount;
   final Future<rust.ArtistSongPageDto> Function(BigInt, int) loader;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
   State<_AllSongsTab> createState() => _AllSongsTabState();
@@ -796,7 +766,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
           // 无版权整行灰掉, 点了没有反应(原口径)
           tapOnlyWhenPlayable: true,
           menuSource: SongActionSource.artist,
-          onTap: () => widget.onPlaySongs(items, index),
+          onTap: () => PlaybackBridge.instance.playSongs(items, index),
         ),
       );
     }
@@ -832,7 +802,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         subtitle: SongRowSubtitle.artist,
         tapOnlyWhenPlayable: true,
         menuSource: SongActionSource.artist,
-        onTap: () => widget.onPlaySongs(results, i),
+        onTap: () => PlaybackBridge.instance.playSongs(results, i),
       ),
     );
   }

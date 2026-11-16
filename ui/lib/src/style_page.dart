@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'toast.dart' show showToast;
@@ -19,7 +20,6 @@ typedef StylePlaylistsLoader = Future<List<rust.Playlist>> Function(
 Future<void> showStyleDetail(
   BuildContext context, {
   required rust.StyleTag tag,
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required void Function(rust.Playlist playlist) onOpenPlaylist,
   StyleSongsLoader? loadSongs,
   StylePlaylistsLoader? loadPlaylists,
@@ -30,7 +30,6 @@ Future<void> showStyleDetail(
         appBar: AppBar(title: Text(tag.name)),
         body: StyleDetailView(
           tag: tag,
-          onPlaySongs: onPlaySongs,
           onOpenPlaylist: onOpenPlaylist,
           loadSongs: loadSongs,
           loadPlaylists: loadPlaylists,
@@ -44,14 +43,12 @@ class StyleDetailView extends StatefulWidget {
   const StyleDetailView({
     super.key,
     required this.tag,
-    required this.onPlaySongs,
     required this.onOpenPlaylist,
     this.loadSongs,
     this.loadPlaylists,
   });
 
   final rust.StyleTag tag;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
   final StyleSongsLoader? loadSongs;
   final StylePlaylistsLoader? loadPlaylists;
@@ -125,11 +122,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
           ),
           const SizedBox(height: 16),
           const SectionHeader(title: '风格歌曲'),
-          _SongList(
-            future: _songsFuture,
-            onPlay: widget.onPlaySongs,
-            onRetry: () => setState(_reload),
-          ),
+          _SongList(future: _songsFuture, onRetry: () => setState(_reload)),
         ],
       ),
     );
@@ -250,14 +243,9 @@ class _PlaylistRow extends StatelessWidget {
 }
 
 class _SongList extends StatelessWidget {
-  const _SongList({
-    required this.future,
-    required this.onPlay,
-    required this.onRetry,
-  });
+  const _SongList({required this.future, required this.onRetry});
 
   final Future<List<rust.SongDto>> future;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final VoidCallback onRetry;
 
   @override
@@ -298,7 +286,10 @@ class _SongList extends StatelessWidget {
                           final index = playable.indexWhere(
                             (x) => x.id == s.id,
                           );
-                          onPlay(playable, index < 0 ? 0 : index);
+                          PlaybackBridge.instance.playSongs(
+                            playable,
+                            index < 0 ? 0 : index,
+                          );
                         }
                       : null,
                 ),

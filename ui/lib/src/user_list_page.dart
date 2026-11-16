@@ -30,7 +30,6 @@ Future<void> showUserList(
   UserListLoader? loadFolloweds,
   FollowHook? setFollow,
   void Function(BigInt userId)? onOpenUser,
-  void Function(List<rust.SongDto> songs, int index)? onPlaySongs,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -43,7 +42,6 @@ Future<void> showUserList(
           loadFolloweds: loadFolloweds,
           setFollow: setFollow,
           onOpenUser: onOpenUser,
-          onPlaySongs: onPlaySongs,
         ),
       ),
     ),
@@ -59,7 +57,6 @@ class UserListView extends StatefulWidget {
     this.loadFolloweds,
     this.setFollow,
     this.onOpenUser,
-    this.onPlaySongs,
   });
 
   final BigInt uid;
@@ -68,9 +65,6 @@ class UserListView extends StatefulWidget {
   final UserListLoader? loadFolloweds;
   final FollowHook? setFollow;
   final void Function(BigInt userId)? onOpenUser;
-
-  /// 进他人主页后点歌单要能播(宿主注入); 不传则歌单只展示
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   State<UserListView> createState() => _UserListViewState();
@@ -178,7 +172,6 @@ class _UserListViewState extends State<UserListView> {
                         context,
                         userId: u.id,
                         fallbackNickname: u.name,
-                        onPlaySongs: widget.onPlaySongs,
                         initialTab: '动态',
                       ),
                 trailing: OutlinedButton(

@@ -8,7 +8,8 @@ import 'user_page.dart';
 ///
 /// 动态/评论区散布在多个页面(列表卡、动态详情、歌曲详情、播客详情),
 /// 逐层透传 onOpenUser 回调会污染一堆构造函数; 这里用与 AppActions 同款的
-/// 全局注入: main 启动时把"点歌播放"回调塞进来, 各处直接用 [UserAvatarTap]。
+/// 全局注入: 各处直接用 [UserAvatarTap]; 主页里的"点歌播放"走
+/// [PlaybackBridge](由 main 启动时绑定一次), 本类不再持有播放回调。
 ///
 /// **统一口径(2026-11-14)**: 头像点击不直接假定"这是用户主页"。
 /// 网易云的 user id 与 artist id 是两个 id 空间 —— 音乐人账号的 user id 在动态里
@@ -19,9 +20,6 @@ import 'user_page.dart';
 /// 解析失败/网络异常一律退回用户主页(不挡用户的路)。
 class UserNav {
   UserNav._();
-
-  /// 用户主页里点歌单/歌曲时的播放回调(由 main 注入; 未注入时页面仍可浏览)
-  static void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   static bool canOpen(BigInt userId) => userId > BigInt.zero;
 
@@ -111,12 +109,7 @@ class UserNav {
     if (custom != null) {
       return custom(context, userId, nickname: nickname);
     }
-    return showUserPage(
-      context,
-      userId: userId,
-      fallbackNickname: nickname,
-      onPlaySongs: onPlaySongs,
-    );
+    return showUserPage(context, userId: userId, fallbackNickname: nickname);
   }
 }
 

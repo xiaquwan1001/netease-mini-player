@@ -4,12 +4,15 @@ import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/style_page.dart';
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
   testWidgets('曲风详情页展示歌单与歌曲', (tester) async {
     List<rust.SongDto>? played;
+    installPlaybackSpy((songs, _) => played = songs);
+    addTearDown(resetPlaybackSpy);
     rust.Playlist? opened;
 
     await tester.pumpWidget(
@@ -31,7 +34,7 @@ void main() {
               subscribed: false,
             ),
           ],
-          onPlaySongs: (songs, index) => played = songs,
+
           onOpenPlaylist: (pl) => opened = pl,
         ),
       ),
@@ -56,7 +59,7 @@ void main() {
           tag: rust.StyleTag(id: '1', name: '冷门风格', songCount: null),
           loadSongs: (_) async => const [],
           loadPlaylists: (_) async => const [],
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
         ),
       ),
@@ -78,7 +81,7 @@ void main() {
             return [fakeSong(id: 1, name: '重试后的风格歌')];
           },
           loadPlaylists: (_) async => const [],
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
         ),
       ),
@@ -118,7 +121,7 @@ void main() {
                   subscribed: false,
                 ),
               ],
-              onPlaySongs: (_, _) {},
+
               onOpenPlaylist: (_) {},
             ),
           ),

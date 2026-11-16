@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/playback_bridge.dart';
 import 'package:minincm/src/radio_explore_page.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+
+import 'support/playback_spy.dart';
 
 rust.RadioCategory _cat(int id, String name) =>
     rust.RadioCategory(id: BigInt.from(id), name: name, coverUrl: '');
@@ -120,6 +123,8 @@ Future<void> _pump(
   void Function(BuildContext, rust.PodcastRadio)? onOpenRadio,
   void Function(List<rust.SongDto>, int)? onPlaySongs,
 }) async {
+  PlaybackBridge.instance.resetDebugOverride();
+  if (onPlaySongs != null) installPlaybackSpy(onPlaySongs);
   await tester.pumpWidget(
     MaterialApp(
       home: RadioExplorePage(
@@ -127,7 +132,6 @@ Future<void> _pump(
         loadRecommend: recommend,
         loadToplist: toplist,
         onOpenRadio: onOpenRadio,
-        onPlaySongs: onPlaySongs,
       ),
     ),
   );

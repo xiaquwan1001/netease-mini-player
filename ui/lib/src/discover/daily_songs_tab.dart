@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../async_view.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart' show friendlyError;
+import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../song_actions.dart';
 import '../state_views.dart';
@@ -15,10 +16,9 @@ import 'discover_types.dart';
 /// 加载 = 整页 LoadingView, 出错 = 整页 FullError(文案走 friendlyError),
 /// 空 = 带图标的 EmptyView; keepAlive 保住"切走页签再回来不重新取数"。
 class DailySongsTab extends StatelessWidget {
-  const DailySongsTab({super.key, required this.load, required this.onPlay});
+  const DailySongsTab({super.key, required this.load});
 
   final SongListLoader load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +49,15 @@ class DailySongsTab extends StatelessWidget {
             // 每日推荐 tab: "..."菜单同样允许"不感兴趣"
             menuSource: SongActionSource.dailyRecommend,
             // 点歌只开始播放, 不退出日推页(与歌单详情页一致)。
-            onTap: s.playable ? () => onPlay(songs, i) : null,
+            // 点播走全局 PlaybackBridge; 队列来源标记为每日推荐
+            // (歌曲菜单据此决定"不感兴趣"走哪条接口)
+            onTap: s.playable
+                ? () => PlaybackBridge.instance.playSongs(
+                    songs,
+                    i,
+                    source: SongActionSource.dailyRecommend,
+                  )
+                : null,
           );
         },
       ),

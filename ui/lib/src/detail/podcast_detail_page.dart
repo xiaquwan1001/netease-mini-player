@@ -6,6 +6,7 @@ import '../error_views.dart' show InlineError;
 import '../expandable_text.dart';
 import '../layout.dart' show kPagePadding, rowExtentFor;
 import '../net_retry.dart';
+import '../playback_bridge.dart';
 import '../podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import '../radio_subscribers_page.dart';
 import '../rust/api.dart' as rust;
@@ -18,14 +19,12 @@ import 'podcast_program_row.dart' show PodcastProgramRow;
 Future<void> showPodcastDetail(
   BuildContext context, {
   required rust.PodcastRadio radio,
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   ProgramDetailLoader? loadProgramDetail,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => _PodcastDetailPage(
         radio: radio,
-        onPlaySongs: onPlaySongs,
         loadProgramDetail:
             loadProgramDetail ?? (id) => rust.podcastProgram(programId: id),
       ),
@@ -36,12 +35,10 @@ Future<void> showPodcastDetail(
 class _PodcastDetailPage extends StatefulWidget {
   const _PodcastDetailPage({
     required this.radio,
-    required this.onPlaySongs,
     required this.loadProgramDetail,
   });
 
   final rust.PodcastRadio radio;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   /// 单集详情(podcast_program), 测试可注入 mock
   final ProgramDetailLoader loadProgramDetail;
@@ -120,7 +117,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       for (final p in _display)
         if (p.song != null) p.song!,
     ];
-    widget.onPlaySongs(songs, index);
+    PlaybackBridge.instance.playSongs(songs, index);
   }
 
   @override
@@ -139,8 +136,6 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
               context,
               radioId: radio.id,
               radioName: radio.name,
-              // 听众 -> 他人主页 -> 歌单, 这条链上要把播放回调带下去
-              onPlaySongs: widget.onPlaySongs,
             ),
           ),
           IconButton(

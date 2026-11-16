@@ -4,6 +4,7 @@ import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 // 共享工厂 + 本文件口径(3 首推荐歌单 / 主播 2 期电台), 位置参数签名保持不变。
 rust.Playlist playlist(int id, String name) => fakePlaylist(id: id, name: name);
@@ -44,6 +45,11 @@ void main() {
 
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
     rust.Playlist? openedPlaylist;
     rust.PodcastRadio? openedRadio;
     rust.AlbumItem? openedAlbum;
@@ -77,10 +83,7 @@ void main() {
           ],
           onOpenAlbum: (album) => openedAlbum = album,
           onOpenNewRelease: () => moreTaps++,
-          onPlaySongs: (songs, index) {
-            played = songs;
-            playedIndex = index;
-          },
+
           onOpenPlaylist: (p) => openedPlaylist = p,
           onOpenPodcast: (r) => openedRadio = r,
           onHeartMode: () => heart++,
@@ -171,7 +174,7 @@ void main() {
           ],
           onOpenAlbum: (_) {},
           onOpenNewRelease: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           onOpenPodcast: (_) {},
           onHeartMode: () {},
@@ -189,6 +192,8 @@ void main() {
 
   testWidgets('私人 FM 播放按钮加载后回调曲目', (tester) async {
     List<rust.SongDto>? played;
+    installPlaybackSpy((songs, _) => played = songs);
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       host(
         RecommendView(
@@ -200,7 +205,7 @@ void main() {
           loadStyles: () async => const [],
           loadNewSongs: () async => const [],
           loadNewAlbums: () async => const [],
-          onPlaySongs: (songs, index) => played = songs,
+
           onOpenPlaylist: (_) {},
           onOpenPodcast: (_) {},
           onHeartMode: () {},

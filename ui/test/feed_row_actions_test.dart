@@ -67,7 +67,7 @@ Future<void> _pumpFeed(
       body: FeedView(
         loggedIn: true,
         onLogin: () {},
-        onPlaySongs: (_, _) {},
+
         onOpenUrl: (_) async {},
         loadFeed: () async => events,
         loadSubscribedArtists: () async => const [],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart' show SongRow, SongRowSubtitle;
 
@@ -15,14 +16,9 @@ import 'song_tile.dart' show SongRow, SongRowSubtitle;
 /// 推荐单曲列表(艺人详情页「推荐单曲」tab 的内容): 播放全部 + top N 行。
 /// 徽标直接放在标题行(不放 AdaptiveTextRow.badges —— 窄屏下那组会被整组收起)。
 class ArtistRecommendedSongsSection extends StatelessWidget {
-  const ArtistRecommendedSongsSection({
-    super.key,
-    required this.songs,
-    required this.onPlaySongs,
-  });
+  const ArtistRecommendedSongsSection({super.key, required this.songs});
 
   final List<rust.SongDto> songs;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +37,7 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
               message: '播放全部',
               child: InkWell(
                 borderRadius: BorderRadius.circular(6),
-                onTap: () => onPlaySongs(songs, 0),
+                onTap: () => PlaybackBridge.instance.playSongs(songs, 0),
                 child: Semantics(
                   button: true,
                   child: Padding(
@@ -79,7 +75,9 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
             subtitle: SongRowSubtitle.artistAlbum,
             padding: const EdgeInsets.symmetric(vertical: 6),
             durationGap: 8,
-            onTap: songs[i].playable ? () => onPlaySongs(songs, i) : null,
+            onTap: songs[i].playable
+                ? () => PlaybackBridge.instance.playSongs(songs, i)
+                : null,
           ),
       ],
     );

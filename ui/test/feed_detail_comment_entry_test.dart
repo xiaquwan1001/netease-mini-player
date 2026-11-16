@@ -29,12 +29,8 @@ Future<void> openDetail(
 }) async {
   final ev = event(withThread: withThread);
   Widget page(BuildContext context) => TextButton(
-    onPressed: () => showFeedDetail(
-      context,
-      event: ev,
-      onPlaySongs: (_, _) {},
-      onOpenUrl: (_) async {},
-    ),
+    onPressed: () =>
+        showFeedDetail(context, event: ev, onOpenUrl: (_) async {}),
     child: const Text('open'),
   );
   Widget tree = MaterialApp(

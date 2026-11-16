@@ -11,6 +11,7 @@ import 'layout.dart';
 import 'messages_page.dart';
 import 'my_collections_page.dart';
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'recent_order.dart';
@@ -43,7 +44,6 @@ class MineView extends StatefulWidget {
     required this.loggedIn,
     required this.onLogin,
     required this.onOpenAccounts,
-    required this.onPlaySongs,
     required this.onOpenPlaylist,
     required this.onOpenPodcast,
     required this.onOpenAlbum,
@@ -55,7 +55,7 @@ class MineView extends StatefulWidget {
     this.onOpenMedals,
     this.onOpenVip,
     this.loadMessageCounts,
-    this.onPlayLiked,
+    this.likedPlaylistId,
     this.loadLiked,
     this.loadPlaylists,
     this.loadPodcasts,
@@ -69,7 +69,6 @@ class MineView extends StatefulWidget {
   final bool loggedIn;
   final VoidCallback onLogin;
   final VoidCallback onOpenAccounts;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
   final void Function(rust.PodcastRadio radio) onOpenPodcast;
   final void Function(rust.AlbumItem album) onOpenAlbum;
@@ -96,9 +95,9 @@ class MineView extends StatefulWidget {
   /// 未读计数(缺省走 rust.messageCounts)
   final MessageCountsLoader? loadMessageCounts;
 
-  /// 点播"我喜欢的音乐"里的曲目(与 onPlaySongs 的区别: 队列来源可以标成
-  /// "我喜欢的音乐"这个歌单 id, 详情页的"定位正在播放"才有依据)。缺省回落 onPlaySongs。
-  final void Function(List<rust.SongDto> songs, int index)? onPlayLiked;
+  /// "我喜欢的音乐"歌单 id(可为 null = 尚未解析出来): 点播该区块的曲目时
+  /// 作为队列来源标记传给 [PlaybackBridge.playSongs], 详情页"定位正在播放"才有依据。
+  final BigInt? likedPlaylistId;
 
   final Future<List<rust.SongDto>> Function()? loadLiked;
   final Future<List<rust.Playlist>> Function()? loadPlaylists;
@@ -174,7 +173,6 @@ class _MineViewState extends State<MineView> {
       context,
       userId: uid,
       fallbackNickname: _profile?.nickname,
-      onPlaySongs: widget.onPlaySongs,
       initialTab: initialTab,
     );
   }
@@ -326,7 +324,7 @@ class _MineViewState extends State<MineView> {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => showCloudPage(
                     context,
-                    onPlay: (song) => widget.onPlaySongs([
+                    onPlay: (song) => PlaybackBridge.instance.playSongs([
                       rust.SongDto(
                         id: song.songId,
                         name: song.name,
@@ -379,7 +377,7 @@ class _MineViewState extends State<MineView> {
             _LikedSection(
               key: ValueKey('mine-liked-$_dataGeneration'),
               load: _liked,
-              onPlay: widget.onPlayLiked ?? widget.onPlaySongs,
+              likedPlaylistId: widget.likedPlaylistId,
               onOpenAll: widget.onOpenLiked,
             ),
             const SizedBox(height: kSectionGap),
@@ -416,18 +414,13 @@ class _MineViewState extends State<MineView> {
               key: ValueKey('mine-recent-$_dataGeneration'),
               load: _loadRecent,
               onOpenAll: widget.onOpenRecent,
-              onPlay: widget.onPlaySongs,
             ),
             const SizedBox(height: kSectionGap),
             _RankingSection(
               key: ValueKey('mine-ranking-$_dataGeneration'),
               load: widget.loadRanking,
-              onPlay: widget.onPlaySongs,
-              onOpenAll: () => showPlayRanking(
-                context,
-                onPlaySongs: widget.onPlaySongs,
-                load: widget.loadRanking,
-              ),
+              onOpenAll: () =>
+                  showPlayRanking(context, load: widget.loadRanking),
             ),
           ],
         ),
@@ -544,12 +537,14 @@ class _LikedSection extends StatelessWidget {
   const _LikedSection({
     super.key,
     required this.load,
-    required this.onPlay,
+    required this.likedPlaylistId,
     required this.onOpenAll,
   });
 
   final Future<List<rust.SongDto>> Function() load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
+
+  /// 队列来源标记(我喜欢的音乐歌单 id); null = 尚未解析出来
+  final BigInt? likedPlaylistId;
   final VoidCallback onOpenAll;
 
   @override
@@ -605,7 +600,11 @@ class _LikedSection extends StatelessWidget {
                         final index = playable.indexWhere(
                           (s) => s.id == preview[i].id,
                         );
-                        onPlay(playable, index < 0 ? 0 : index);
+                        PlaybackBridge.instance.playSongs(
+                          playable,
+                          index < 0 ? 0 : index,
+                          playlistId: likedPlaylistId,
+                        );
                       },
                     ),
                 ],
@@ -905,12 +904,10 @@ class _RankingSection extends StatelessWidget {
   const _RankingSection({
     super.key,
     required this.load,
-    required this.onPlay,
     required this.onOpenAll,
   });
 
   final RankingLoader? load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final VoidCallback onOpenAll;
 
   @override
@@ -919,12 +916,7 @@ class _RankingSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionHeader(title: '听歌排行'),
-        PlayRankingView(
-          load: load,
-          onPlaySongs: onPlay,
-          compact: true,
-          onOpenAll: onOpenAll,
-        ),
+        PlayRankingView(load: load, compact: true, onOpenAll: onOpenAll),
       ],
     );
   }
@@ -937,12 +929,10 @@ class _RecentSection extends StatelessWidget {
     super.key,
     required this.load,
     required this.onOpenAll,
-    required this.onPlay,
   });
 
   final Future<List<rust.SongDto>> Function() load;
   final VoidCallback onOpenAll;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   @override
   Widget build(BuildContext context) {
@@ -979,7 +969,7 @@ class _RecentSection extends StatelessWidget {
                       menuSource: SongActionSource.playlist,
                       // 正在播放那首的高亮由 SongRow 读全局 nowPlayingSongId,
                       // 页面不再自己包一层 NowPlayingHighlight
-                      onTap: () => onPlay(songs, i),
+                      onTap: () => PlaybackBridge.instance.playSongs(songs, i),
                     ),
                 ],
               ),

@@ -5,8 +5,10 @@ import '../cover_art.dart';
 import '../daily_cache.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart' show friendlyError, retryNetwork;
+import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
+import '../song_actions.dart' show SongActionSource;
 import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'discover_types.dart';
 
@@ -53,14 +55,12 @@ class HistoryTab extends StatefulWidget {
     super.key,
     required this.loadDates,
     required this.loadSongs,
-    required this.onPlay,
     this.loadLocalDays,
     this.onOpenPlaylist,
   });
 
   final DateListLoader loadDates;
   final HistorySongsLoader loadSongs;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   /// 本地缓存的天(设置里关掉缓存时由上层传 null)
   final LocalDaysLoader? loadLocalDays;
@@ -107,7 +107,6 @@ class HistoryTabState extends State<HistoryTab>
               key: ValueKey<String>(selected.date),
               entry: selected,
               loadSongs: widget.loadSongs,
-              onPlay: widget.onPlay,
               onOpenPlaylist: widget.onOpenPlaylist,
               onClose: _closeDay,
             ),
@@ -248,14 +247,12 @@ class _HistoryDayView extends StatelessWidget {
     super.key,
     required this.entry,
     required this.loadSongs,
-    required this.onPlay,
     required this.onClose,
     this.onOpenPlaylist,
   });
 
   final _HistoryEntry entry;
   final HistorySongsLoader loadSongs;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.Playlist playlist)? onOpenPlaylist;
 
   /// 退回日期列表(本页内部二级层级, 不是 Navigator.pop)
@@ -299,7 +296,13 @@ class _HistoryDayView extends StatelessWidget {
             subtitle: SongRowSubtitle.artist,
             showDuration: false,
             // 同「推荐歌曲」页签: 点播不退出历史日推列表
-            onTap: s.playable ? () => onPlay(songs, i) : null,
+            onTap: s.playable
+                ? () => PlaybackBridge.instance.playSongs(
+                    songs,
+                    i,
+                    source: SongActionSource.dailyRecommend,
+                  )
+                : null,
           ),
         );
       }

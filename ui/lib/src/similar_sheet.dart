@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
@@ -23,7 +24,6 @@ typedef SimilarPlaylistsLoader = Future<List<rust.Playlist>> Function(
 Future<void> showSimilarSongs(
   BuildContext context, {
   required rust.SongDto song,
-  required void Function(List<rust.SongDto> songs, int index) onPlay,
   required void Function(rust.Playlist playlist) onOpenPlaylist,
   SimilarSongsLoader? loadSongs,
   SimilarPlaylistsLoader? loadPlaylists,
@@ -37,7 +37,6 @@ Future<void> showSimilarSongs(
         height: MediaQuery.of(context).size.height * 0.8,
         child: _SimilarSheet(
           song: song,
-          onPlay: onPlay,
           onOpenPlaylist: onOpenPlaylist,
           loadSongs:
               loadSongs ??
@@ -54,14 +53,12 @@ Future<void> showSimilarSongs(
 class _SimilarSheet extends StatefulWidget {
   const _SimilarSheet({
     required this.song,
-    required this.onPlay,
     required this.onOpenPlaylist,
     required this.loadSongs,
     required this.loadPlaylists,
   });
 
   final rust.SongDto song;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
   final SimilarSongsLoader loadSongs;
   final SimilarPlaylistsLoader loadPlaylists;
@@ -156,7 +153,7 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                     tapOnlyWhenPlayable: true,
                     onTap: () {
                       Navigator.pop(context);
-                      widget.onPlay(songs, i);
+                      PlaybackBridge.instance.playSongs(songs, i);
                     },
                   ),
                 if (playlists != null && playlists.isNotEmpty) ...[

@@ -1,22 +1,18 @@
 import 'package:flutter/material.dart';
 
 import 'artist_page.dart';
-import 'rust/api.dart' as rust;
-import 'toast.dart';
 
 /// 艺人头像点击 -> 艺人主页。
 ///
 /// 与 [UserNav] 同形: 关注动态流的艺人 chip / 「全部艺人」面板 / 动态卡上的艺人
-/// 头像散布在多个页面, 逐层透传回调会污染构造函数; 这里用全局注入,
-/// main 启动时把「点歌播放」「打开专辑」塞进来, 各处直接用 [ArtistAvatarTap]。
+/// 头像散布在多个页面, 逐层透传回调会污染构造函数; 这里用全局注入:
+/// 「点歌播放」走 [PlaybackBridge](main 启动时绑定一次), 「打开专辑」由
+/// main 塞进来, 各处直接用 [ArtistAvatarTap]。
 ///
 /// 与 [UserNav] 分开而不是合并成一个"人物导航": 艺人主页与用户主页是两份数据源
 /// (artistDetail vs userProfile), id 空间也不同, 合在一起只会让调用方分不清该传哪种 id。
 class ArtistNav {
   ArtistNav._();
-
-  /// 艺人主页里点歌 / 播放全部时的回调(由 main 注入; 未注入时页面仍可浏览)
-  static void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   /// 艺人主页里点专辑的回调(由 main 注入; 未注入时专辑卡不可点)
   static void Function(BigInt albumId, String albumName, String? coverUrl)?
@@ -42,12 +38,10 @@ class ArtistNav {
     if (custom != null) {
       return custom(context, artistId, name: name);
     }
-    // 播放回调没注入时给出明确提示, 而不是让用户点了歌没反应
     return showArtistDetail(
       context,
       artistId: artistId,
       name: name,
-      onPlaySongs: onPlaySongs ?? (_, _) => showToast(context, '当前页面不支持播放'),
       onOpenAlbum: onOpenAlbum,
     );
   }

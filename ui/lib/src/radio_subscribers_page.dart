@@ -22,7 +22,6 @@ Future<void> showRadioSubscribers(
   required BigInt radioId,
   String radioName = '',
   LoadRadioSubscribers? loadSubscribers,
-  void Function(List<rust.SongDto> songs, int index)? onPlaySongs,
 }) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -30,7 +29,6 @@ Future<void> showRadioSubscribers(
         radioId: radioId,
         radioName: radioName,
         loadSubscribers: loadSubscribers,
-        onPlaySongs: onPlaySongs,
       ),
     ),
   );
@@ -42,7 +40,6 @@ class RadioSubscribersPage extends StatefulWidget {
     required this.radioId,
     this.radioName = '',
     this.loadSubscribers,
-    this.onPlaySongs,
   });
 
   final BigInt radioId;
@@ -50,9 +47,6 @@ class RadioSubscribersPage extends StatefulWidget {
 
   /// 注入加载器(测试用 mock); 不传走 FFI radioSubscribers
   final LoadRadioSubscribers? loadSubscribers;
-
-  /// 进他人主页后点歌单要能播(宿主注入)
-  final void Function(List<rust.SongDto> songs, int index)? onPlaySongs;
 
   @override
   State<RadioSubscribersPage> createState() => _RadioSubscribersPageState();
@@ -124,7 +118,6 @@ class _RadioSubscribersPageState extends State<RadioSubscribersPage> {
             context,
             userId: s.userId,
             fallbackNickname: s.nickname,
-            onPlaySongs: widget.onPlaySongs,
           ),
         ),
       ),
