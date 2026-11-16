@@ -9,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'src/album_preview.dart';
 import 'src/cover_backdrop.dart';
 import 'src/cover_palette.dart';
-import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/app_shell.dart';
 import 'src/audio_tuning.dart';
@@ -18,10 +17,10 @@ import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/back_policy.dart';
 import 'src/now_playing.dart' show nowPlayingSongId;
-import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
+import 'src/home/account_actions.dart';
 import 'src/home/lyric_controller.dart';
 import 'src/home/playback_coordinator.dart';
 import 'src/home/queue_sheet_controller.dart';
@@ -32,7 +31,6 @@ import 'src/lyric.dart';
 import 'src/word_lyric_view.dart';
 import 'src/layout.dart' show rowExtentFor;
 import 'src/library_view.dart';
-import 'src/login_sheet.dart';
 import 'src/medal_wall.dart';
 import 'src/messages_page.dart';
 import 'src/new_release_page.dart';
@@ -51,7 +49,6 @@ import 'src/search_exact_bar.dart';
 import 'src/search_loading.dart';
 import 'src/search_results.dart';
 import 'src/search_suggest.dart';
-import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/update_checker.dart';
 import 'src/update_dialog.dart';
@@ -59,7 +56,6 @@ import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
 import 'src/toast.dart' show showToast;
-import 'src/vip_page.dart';
 
 import 'src/rust/api.dart' as rust;
 import 'src/rust/frb_generated.dart';
@@ -102,6 +98,13 @@ class _HomePageState extends State<HomePage> {
   /// src/home/queue_sheet_controller.dart。队列真相仍是本页面的 `_queue`
   /// (注入引用, 不复制); 面板/对话框/浮层需要 BuildContext —— 按回调注入。
   late final QueueSheetController _queueUI;
+
+  /// 账号/登录态动作 + 二级页导航(拆壳 S7): 登录/退出/切号/清凭据/账号簿、
+  /// 歌单详情与关注列表这些二级入口, 以及"歌单浏览态"四件套(标题/歌单 id/
+  /// 队列来源/来源标记)的唯一写入口, 都在 src/home/account_actions.dart。
+  /// 登录态快照 `_info` 与红心集合 `_liked` 仍是本页面的状态(按访问器/回灌
+  /// 回调注入); 页面 addListener(→setState) 订阅它的变更。
+  late final AccountActions _account;
   rust.InitInfo? _info;
   String? _error;
 
@@ -120,24 +123,6 @@ class _HomePageState extends State<HomePage> {
 
   /// "我喜欢的音乐"里的曲目 id: 红心状态的唯一真相
   Set<BigInt> _liked = <BigInt>{};
-
-  /// 歌单浏览态标题: 非空时列表显示"正在播放/心动模式"而不是搜索结果。
-  ///
-  /// **不再另存一份曲目**: 这两个浏览态展示的就是播放队列本身, 以前存
-  /// `_library` 快照, 队列面板里删/拖/清空之后这一页仍是旧列表, 在这里
-  /// 点一首还会把整队重置回旧顺序(用户 2026-11-15 反馈页面重复)。现在
-  /// 唯一来源是 _queue.items, 见 [_sourceSongs]。
-  String? _libraryTitle;
-
-  /// 当前浏览的歌单 id(心动模式要用 playlistId; 搜索态为 null)
-  BigInt? _libraryPlaylistId;
-
-  /// 当前播放队列的来源歌单 id(详情页"定位正在播放"用;
-  /// 搜索/心动模式/推荐流等非歌单队列为 null)
-  BigInt? _queuePlaylistId;
-
-  /// "我喜欢的音乐"这个歌单的 id(懒解析: 从"我的"页点播时要用它标记队列来源)
-  BigInt? _likedPlaylistId;
 
   /// 底部导航: 0 搜索 / 1 推荐 / 2 关注 / 3 我的 / 4 设置
   ///
@@ -163,8 +148,14 @@ class _HomePageState extends State<HomePage> {
   /// 当前列表的原始曲目。
   ///
   /// 歌单浏览态("正在播放"/"心动模式")= 播放队列的视图, 直接读 [_queue];
-  /// 否则是上一轮搜索结果。
-  List<rust.SongDto> get _sourceSongs => _libraryTitle != null
+  /// 否则是上一轮搜索结果。浏览态标题的唯一写入口在 AccountActions
+  /// (拆壳 S7), 这里只读。
+  ///
+  /// **不再另存一份曲目**: 这两个浏览态展示的就是播放队列本身, 以前存
+  /// `_library` 快照, 队列面板里删/拖/清空之后这一页仍是旧列表, 在这里
+  /// 点一首还会把整队重置回旧顺序(用户 2026-11-15 反馈页面重复)。现在
+  /// 唯一来源是 _queue.items, 见 [_sourceSongs]。
+  List<rust.SongDto> get _sourceSongs => _account.libraryOpen
       ? _queue.items
       : (_search.bundle?.songs ?? const <rust.SongDto>[]);
 
@@ -183,6 +174,30 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // 账号/登录态动作 + 二级页导航(拆壳 S7): 浏览态四件套由它持有(唯一写入口),
+    // 登录态 `_info`/红心 `_liked` 仍是页面状态 —— 访问器 + 回灌回调注入;
+    // 需要 BuildContext 的 sheet/账号页/详情页经 contextOf 在调用瞬间取。
+    _account = AccountActions(
+      contextOf: () => context,
+      isMounted: () => mounted,
+      auth: _auth,
+      infoOf: () => _info,
+      setInfo: (info) => setState(() => _info = info),
+      dataDirOf: _playback.dataDir,
+      toast: _toast,
+      toastError: (message) {
+        if (!mounted) return;
+        showToast(context, message, isError: true);
+      },
+      likedOf: () => _liked,
+      markLiked: _markLiked,
+      setLiked: (ids) => setState(() => _liked = ids),
+      clearLiked: () => _liked = <BigInt>{},
+      rebuildActionsHost: () => actionsHost.value = _songActions.buildHost(),
+      setSearchBusy: (busy) => _search.setBusy(busy),
+      currentTrackIdOf: () => _current?.id,
+      touchInteraction: _touchInteraction,
+    )..addListener(_onAccountChanged);
     _lyric = LyricController(
       player: () => _coordinator.player,
       // 歌词展开期的高频刷新复用协调器的 poll(全仓只有这一处读播放器)
@@ -199,7 +214,7 @@ class _HomePageState extends State<HomePage> {
       queue: _queue,
       lyric: _lyric,
       dataDirOf: () => _info?.dataDir,
-      libraryTitleOf: () => _libraryTitle,
+      libraryTitleOf: () => _account.libraryTitle,
       toast: _toast,
       toastError: (message) {
         if (!mounted) return;
@@ -227,9 +242,9 @@ class _HomePageState extends State<HomePage> {
       queue: _queue,
       playSongsList: _coordinator.playSongsList,
       currentSong: () => _current,
-      playSource: () => _playSource,
+      playSource: () => _account.playSource,
       syncActionState: _syncActionState,
-      openPlaylist: _openPlaylist,
+      openPlaylist: _account.openPlaylist,
     );
     // 队列面板(拆壳 S6): 队列引用与上下文访问器注入, 队列视图/开关状态由它持有;
     // 每次变更 notifyListeners -> 页面 setState(与拆分前每处 setState 一一对应)。
@@ -237,7 +252,7 @@ class _HomePageState extends State<HomePage> {
       contextOf: () => context,
       isMounted: () => mounted,
       queue: _queue,
-      libraryTitleOf: () => _libraryTitle,
+      libraryTitleOf: () => _account.libraryTitle,
       toast: _toast,
       loggedIn: () => _info?.loggedIn == true,
       playSong: _coordinator.playSong,
@@ -313,7 +328,7 @@ class _HomePageState extends State<HomePage> {
     PlaybackBridge.instance.bind(
       playSongs: _coordinator.playSongsList,
       appendNext: _songActions.appendSongToQueue,
-      openPlaylist: _openPlaylist,
+      openPlaylist: _account.openPlaylist,
     );
     // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
     ArtistNav.onOpenAlbum = (albumId, albumName, coverUrl) => showAlbumPreview(
@@ -337,6 +352,7 @@ class _HomePageState extends State<HomePage> {
     AppSettings.instance.removeListener(_onAudioSettingsChanged);
     _coordinator.dispose();
     _queueUI.dispose();
+    _account.dispose();
     _search.dispose();
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     pageDepth.removeListener(_onPageDepthChanged);
@@ -364,25 +380,22 @@ class _HomePageState extends State<HomePage> {
     if (mounted) setState(() {});
   }
 
+  /// 账号/浏览态有变更时重建(与拆分前登录态/歌单浏览态的 setState 等价)。
+  void _onAccountChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// 起播一批曲目后的列表态(原 _playSongsList 里的那一处 setState)。
   void _onPlaybackStarted(BigInt? playlistId, SongActionSource source) {
     if (!mounted) return;
-    setState(() {
-      _libraryTitle = '正在播放';
-      _libraryPlaylistId = null;
-      _queuePlaylistId = playlistId;
-      _playSource = source;
-    });
+    // 浏览态字段的唯一写入口在 AccountActions(拆壳 S7), 这里只转发。
+    _account.applyPlaybackStarted(playlistId, source);
   }
 
   /// 启动恢复播放现场后的页面态: 不进"歌单浏览态"(与原 _restorePlayback 同一批字段)。
   void _onPlaybackRestored() {
     if (!mounted) return;
-    setState(() {
-      _libraryTitle = null;
-      _libraryPlaylistId = null;
-      _queuePlaylistId = null;
-    });
+    _account.applyPlaybackRestored();
   }
 
   /// 启动自动检查发现新版本时的弹窗(每天/每周/每月由 AppSettings 决定)。
@@ -425,9 +438,9 @@ class _HomePageState extends State<HomePage> {
       unawaited(_search.loadLanding());
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
       if (info.loggedIn) {
-        unawaited(_syncAccount());
-        unawaited(_loadLiked());
-        unawaited(_resolveLikedPlaylistId());
+        unawaited(_account.syncAccount());
+        unawaited(_account.loadLiked());
+        unawaited(_account.resolveLikedPlaylistId());
       }
     } catch (e) {
       setState(() => _error = friendlyError(e));
@@ -495,10 +508,7 @@ class _HomePageState extends State<HomePage> {
   /// 搜索即离开歌单浏览态: 结果列表要保持"这一屏是什么"的唯一来源
   void _onLeaveLibrary() {
     if (!mounted) return;
-    setState(() {
-      _libraryTitle = null;
-      _libraryPlaylistId = null;
-    });
+    _account.leaveLibrary();
   }
 
   Future<void> _openExactArtist(int id) async {
@@ -522,7 +532,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _openExactPlaylist(int id) async {
     for (final p in _search.exact?.playlists ?? const <rust.Playlist>[]) {
       if (p.id.toInt() == id) {
-        await _openPlaylist(p);
+        await _account.openPlaylist(p);
         return;
       }
     }
@@ -553,7 +563,7 @@ class _HomePageState extends State<HomePage> {
       final songs = await retryNetwork(
         () => rust.heartModeSongs(
           songId: id,
-          playlistId: _libraryPlaylistId ?? BigInt.zero,
+          playlistId: _account.libraryPlaylistId ?? BigInt.zero,
           count: 30,
         ),
       );
@@ -568,12 +578,9 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       _queue.setAll(list, startAt: 0);
-      _playSource = SongActionSource.other;
+      _account.setPlaySource(SongActionSource.other);
       _coordinator.userStopped = false;
-      setState(() {
-        _libraryTitle = '心动模式';
-        _queuePlaylistId = null;
-      });
+      _account.enterHeartMode();
       unawaited(_syncActionState());
       final next = _queue.next();
       if (next != null) await _coordinator.playSong(next);
@@ -590,53 +597,14 @@ class _HomePageState extends State<HomePage> {
     showToast(context, message);
   }
 
-  /// 每日推荐歌单(带本地缓存): 同一天第二次进页面直接读缓存, 离线也能出内容。
-  ///
-  /// 缓存口径见 `daily_cache.dart` 与 设置 → 缓存(保留天数 / 立即清理)。
-  /// 未初始化(dataDir 未知)或用户关掉缓存时原样透传, 行为与没有缓存一致。
-  Future<List<rust.Playlist>> _dailyPlaylists() async {
-    final dir = _info?.dataDir;
-    if (dir == null || dir.isEmpty) return rust.dailyRecommendPlaylists();
-    // 缓存目录按账号分区: 日推是账号相关的, 不能把 A 的清单给 B 看。
-    return DailyPlaylistCache(
-      dataDir: dir,
-      accountKey: await DailyPlaylistCache.resolveAccountKey(),
-    ).load(
-      fetch: rust.dailyRecommendPlaylists,
-      keepDays: AppSettings.instance.dailyCacheDays,
-    );
-  }
-
   void _openDiscover() {
     showDiscoverPage(
       context,
-      onOpenPlaylist: (pl) => _openPlaylist(pl),
-      loadPlaylists: _dailyPlaylists,
+      onOpenPlaylist: _account.openPlaylist,
+      loadPlaylists: _account.dailyPlaylists,
       // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
-      loadLocalDays: _dailyLocalDays,
+      loadLocalDays: _account.dailyLocalDays,
     );
-  }
-
-  /// 历史日推里要合并的本地缓存天(设置 → 每日推荐歌单缓存; 0 天 = 关闭时返回空)。
-  Future<List<DailyCacheDay>> _dailyLocalDays() async {
-    final dir = _info?.dataDir;
-    if (dir == null || dir.isEmpty) return const [];
-    if (AppSettings.instance.dailyCacheDays <= 0) return const [];
-    // 历史日推只合并**当前账号**的本地天: 别的账号的天不算"我的历史"。
-    return DailyPlaylistCache(
-      dataDir: dir,
-      accountKey: await DailyPlaylistCache.resolveAccountKey(),
-    ).days();
-  }
-
-  /// 清掉**某个账号**的每日推荐歌单缓存(登出/切号时对上一个账号做一次)。
-  ///
-  /// 缓存本身已按 uid 分区(见 `daily_cache.dart`), 这里再删一遍是为了不把上一个
-  /// 账号的日推清单留在这台设备上 —— 换人用同一台机器时不该翻得到别人的推荐。
-  Future<void> _purgeDailyCache(String accountKey) async {
-    final dir = _info?.dataDir;
-    if (dir == null || dir.isEmpty) return;
-    await DailyPlaylistCache.purgeAccount(dataDir: dir, accountKey: accountKey);
   }
 
   /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
@@ -655,7 +623,7 @@ class _HomePageState extends State<HomePage> {
   void _openRecent() {
     showRecentPage(
       context,
-      onOpenPlaylist: _openPlaylist,
+      onOpenPlaylist: _account.openPlaylist,
       onOpenPodcast: _openPodcastRadio,
       onOpenAlbum: (album) => showAlbumPreview(
         context,
@@ -671,9 +639,10 @@ class _HomePageState extends State<HomePage> {
     final songs = _visibleSongs;
     final start = songs.indexWhere((s) => s.id == song.id);
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
-    _playSource = SongActionSource.other;
+    _account.setPlaySource(SongActionSource.other);
     _coordinator.userStopped = false;
-    _queuePlaylistId = null; // 搜索列表点播不算歌单队列
+    // 搜索列表点播不算歌单队列
+    _account.clearQueuePlaylistId();
     await _coordinator.playSong(song, explicit: true);
   }
 
@@ -686,9 +655,9 @@ class _HomePageState extends State<HomePage> {
     final start = songs.indexWhere((s) => s.id == song.id);
     if (songs.isEmpty) return;
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
-    _playSource = SongActionSource.other;
+    _account.setPlaySource(SongActionSource.other);
     _coordinator.userStopped = false;
-    _queuePlaylistId = null;
+    _account.clearQueuePlaylistId();
     await _coordinator.playSong(song, explicit: true);
   }
 
@@ -718,7 +687,7 @@ class _HomePageState extends State<HomePage> {
 
   /// 搜索结果: 歌单卡片 → 歌单详情
   void _openSearchPlaylist(rust.SearchPlaylistItem item) {
-    _openPlaylist(
+    _account.openPlaylist(
       rust.Playlist(
         id: item.id,
         name: item.name,
@@ -772,176 +741,7 @@ class _HomePageState extends State<HomePage> {
     await _shareSong(lyrics: lines);
   }
 
-  // ---------------- 登录 ----------------
-
-  /// 黑胶会员(只读)页面; 未登录时页面内给「登录」入口。
-  /// 入口:「我的」页的「黑胶会员」行 / 账号与会员页的「会员」分组(审查 P1-7.9)。
-  Future<void> _openVip() => showVipPage(context, onLogin: _login);
-
-  Future<void> _login() async {
-    // 桌面端: 官方网页登录的**扫码通道**(纯 Rust, 不依赖 WebView/系统 cookie).
-    // 之前桌面端只能 ncm login-cookie, 等于把登录这一步踢给命令行, 体验断档.
-    if (!_auth.isAndroid) {
-      await showLoginSheet(
-        context,
-        onLoggedIn: () async {
-          await _syncAccount();
-          await _refreshInfo();
-        },
-        openWebLogin: () =>
-            PlatformBridge.openUrl('https://music.163.com/#/login'),
-      );
-      return;
-    }
-    try {
-      final cookie = await _auth.loginWeb();
-      if (cookie == null) {
-        if (!mounted) return;
-        showToast(context, '未获取到登录态', isError: true);
-        return;
-      }
-      final ok = await _auth.commitCookie(cookie);
-      if (ok) {
-        // 记住这个账号(昵称/uid) 并设为当前账号, 下次可直接切换
-        await _syncAccount();
-      }
-      await _refreshInfo();
-      if (!mounted) return;
-      showToast(context, ok ? '登录成功, 账号已记住' : 'cookie 里没有 MUSIC_U, 登录未生效');
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context, '登录失败: ${friendlyError(e)}', isError: true);
-    }
-  }
-
-  /// 账号管理页 —— 全 App 唯一账号面(账号簿/切换/添加/退出登录/清除凭据).
-  /// 入口: 设置 → 账号管理 + 「我的」页资料头(资料本身可点进账号页)。
-  Future<void> _openAccountPage() {
-    return showAccountPage(
-      context,
-      info: _info,
-      isAndroid: _auth.isAndroid,
-      onLogin: _login,
-      onLogout: () => _logout(),
-      onSwitchAccount: _switchAccount,
-      onRemoveAccount: (account) async {
-        await rust.accountRemove(userId: account.userId);
-        await _refreshInfo();
-        if (!mounted) return;
-        showToast(context, '已从账号簿移除');
-      },
-      // 隐私: 退出登录 + 删掉本机所有账号凭据(设备指纹保留).
-      onPurgeLocal: () async {
-        await _auth.logout();
-        for (final account in await rust.accounts()) {
-          await rust.accountRemove(userId: account.userId);
-        }
-        // 隐私动作一并清掉日推缓存(所有账号 + 匿名), 不留推荐痕迹。
-        final dir = _info?.dataDir;
-        if (dir != null && dir.isNotEmpty) {
-          await DailyPlaylistCache.purgeAll(dataDir: dir);
-        }
-        await _refreshInfo();
-        if (!mounted) return;
-        showToast(context, '已清除本机登录凭据');
-      },
-    );
-  }
-
-  /// 切换/重新登录账号(未登录时点账号簿里的一行也走这里).
-  /// 返回是否真的切成功, 账号页据此把登录态翻成"已登录"。
-  Future<bool> _switchAccount(rust.AccountDto account) async {
-    final name = account.nickname.isEmpty
-        ? account.userId.toString()
-        : account.nickname;
-    try {
-      // 切号前先记下**上一个账号**的缓存键: accountSwitch 之后就变成新账号了。
-      final previousKey = await DailyPlaylistCache.resolveAccountKey();
-      final ok = await rust.accountSwitch(userId: account.userId);
-      // 切到同一个账号(重复点同一行)就不用清, 清了只是白拉一次网络。
-      if (ok &&
-          previousKey != DailyPlaylistCache.accountKeyFor(account.userId)) {
-        unawaited(_purgeDailyCache(previousKey));
-      }
-      await _refreshInfo();
-      if (!mounted) return ok;
-      showToast(context, ok ? '已切换到 $name' : '这个账号没存过凭据, 请重新登录');
-      return ok;
-    } catch (e) {
-      if (!mounted) return false;
-      showToast(context, '切换账号失败: ${friendlyError(e)}', isError: true);
-      return false;
-    }
-  }
-
-  /// refresh init 信息(登录态/设备 id/会员状态)
-  Future<void> _refreshInfo() async {
-    try {
-      final dir = await _playback.dataDir();
-      final info = await rust.init(dataDir: dir);
-      if (mounted) setState(() => _info = info);
-      // 登录/登出/切号都汇到 _refreshInfo, 在这里统一 drain Keystore 桥的 pending
-      unawaited(credentialSync.drainPending());
-      actionsHost.value = _songActions.buildHost();
-      if (info.loggedIn) {
-        await _loadLiked();
-      } else {
-        _liked = <BigInt>{};
-      }
-    } catch (_) {
-      // init 失败保持旧状态
-    }
-  }
-
-  /// 记账号资料(昵称/uid/会员)进账号簿; 离线拉不到只是没名字, 不影响登录态.
-  ///
-  /// 同时兼作**登录态校验**: 本地有 MUSIC_U 字符串不代表凭据还有效(过期/被踢/从别处
-  /// 拷了数据目录). 只有服务端明确回 auth 错才清登录态 —— 网络/风控失败不动, 免得
-  /// 一次网络抖动就把人踢下线.
-  Future<void> _syncAccount() async {
-    try {
-      await rust.accountSyncActive();
-    } catch (e) {
-      // 结构化错误直接看 kind(FfiError.auth); 不再靠文本前缀 contains
-      if (errorKind(e) != 'auth') return;
-      try {
-        await rust.logout();
-        await _refreshInfo();
-        _toast('登录状态已失效, 请重新登录');
-      } catch (_) {}
-    }
-  }
-
-  /// 退出登录; thenLogin=true 表示切换账号(退出后立刻再开授权页)
-  Future<void> _logout({bool thenLogin = false}) async {
-    try {
-      // 同 _switchAccount: 先抓上一个账号的缓存键, 登出后 session 里就查不到了。
-      final previousKey = await DailyPlaylistCache.resolveAccountKey();
-      await _auth.logout();
-      // 本来就没登录时 previousKey 是匿名分区: 没别人的数据要清, 留着还省一次网络。
-      if (previousKey != DailyPlaylistCache.anonymousKey) {
-        unawaited(_purgeDailyCache(previousKey));
-      }
-      await _refreshInfo();
-      if (!mounted) return;
-      showToast(context, thenLogin ? '已退出, 请登录另一个账号' : '已退出登录(账号仍留在账号簿)');
-      if (thenLogin) await _login();
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context, '退出登录失败: ${friendlyError(e)}', isError: true);
-    }
-  }
-
   // ---------------- 收藏(红心)与歌单 ----------------
-
-  /// 拉一次"我喜欢的音乐"的 id 集合. 失败不影响播放, 只是红心状态未知。
-  Future<void> _loadLiked() async {
-    try {
-      final ids = await retryNetwork(rust.likedIds);
-      if (!mounted) return;
-      setState(() => _liked = ids.toSet());
-    } catch (_) {}
-  }
 
   bool _isLiked(BigInt? trackId) => trackId != null && _liked.contains(trackId);
 
@@ -968,121 +768,6 @@ class _HomePageState extends State<HomePage> {
           duration: const Duration(milliseconds: 1800),
         ),
       );
-  }
-
-  /// 当前播放队列的来源(决定歌曲详情页"..."里能否出现"不感兴趣":
-  /// 后端只接受每日推荐(dislike_recommend_song)与私人FM(fm_trash)这两个来源)。
-  ///
-  /// 之前这里是个粘性的 `_fmActive` 布尔: 播过一次 FM 就永远为 true, 之后从
-  /// 每日推荐播的歌也走 fm_trash; 详情页的菜单来源又硬编码成 other,
-  /// 所以日推歌曲在详情页里根本看不到"不感兴趣"(用户回归反馈)。
-  /// 现在每次开始播放都显式记来源, 详情页菜单直接读这个字段。
-  SongActionSource _playSource = SongActionSource.other;
-
-  /// 打开"关注/粉丝"列表(当前账号)
-  Future<void> _openUserList({required bool startOnFans}) async {
-    if (_info?.loggedIn != true) {
-      _toast('登录后才能查看关注与粉丝');
-      return;
-    }
-    await showUserList(context, startOnFans: startOnFans);
-  }
-
-  /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
-  /// 不再把曲目塞进搜索页列表。
-  Future<void> _openPlaylist(rust.Playlist pl) async {
-    _touchInteraction('playlist', pl.id);
-    await showPlaylistDetail(
-      context,
-      playlistId: pl.id,
-      name: pl.name,
-      coverUrl: pl.coverUrl,
-      special: pl.special,
-      loggedIn: _info?.loggedIn == true,
-      likedIds: _liked,
-      currentTrackId: _current?.id,
-      currentPlaylistId: _queuePlaylistId,
-      onLikeChanged: (id, liked) => setState(() {
-        if (liked) {
-          _liked.add(id);
-        } else {
-          _liked.remove(id);
-        }
-      }),
-    );
-  }
-
-  /// 从"我的"页打开"我喜欢的音乐"详情(要用 myPlaylists 找到这个歌单的 id)
-  /// 解析"我喜欢的音乐"歌单 id(缓存). 失败静默: 只是"定位正在播放"少一个依据.
-  Future<void> _resolveLikedPlaylistId() async {
-    if (_likedPlaylistId != null) return;
-    try {
-      final pls = await rust.myPlaylists();
-      for (final p in pls) {
-        if (p.special) {
-          if (mounted) setState(() => _likedPlaylistId = p.id);
-          return;
-        }
-      }
-    } catch (_) {
-      // 未登录/网络异常: 下次进"我喜欢的音乐"详情时再试
-    }
-  }
-
-  Future<void> _openLikedDetail() async {
-    if (_info?.loggedIn != true) {
-      _toast('登录后才能查看我喜欢的音乐');
-      return;
-    }
-    _search.setBusy(true);
-    try {
-      final pls = await retryNetwork(rust.myPlaylists);
-      if (!mounted) return;
-      rust.Playlist? found;
-      for (final p in pls) {
-        if (p.special) {
-          found = p;
-          break;
-        }
-      }
-      final sp = found;
-      if (sp == null) {
-        _toast('没有找到"我喜欢的音乐"歌单');
-        return;
-      }
-      _likedPlaylistId = sp.id;
-      await showPlaylistDetail(
-        context,
-        playlistId: sp.id,
-        name: '我喜欢的音乐',
-        coverUrl: sp.coverUrl,
-        special: true,
-        loggedIn: _info?.loggedIn == true,
-        likedIds: _liked,
-        currentTrackId: _current?.id,
-        currentPlaylistId: _queuePlaylistId,
-        onLikeChanged: (id, liked) => setState(() {
-          if (liked) {
-            _liked.add(id);
-          } else {
-            _liked.remove(id);
-          }
-        }),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      _toast(friendlyError(e));
-    } finally {
-      if (mounted) _search.setBusy(false);
-    }
-  }
-
-  /// 退出歌单浏览, 回到搜索
-  void _closeLibrary() {
-    setState(() {
-      _libraryTitle = null;
-      _libraryPlaylistId = null;
-    });
   }
 
   // ---------------- 播放控制 ----------------
@@ -1178,7 +863,7 @@ class _HomePageState extends State<HomePage> {
     final backAction = resolveHomeBackAction(
       showLyrics: _lyric.visible,
       tab: _tab,
-      libraryOpen: _libraryTitle != null,
+      libraryOpen: _account.libraryOpen,
     );
     return HomeBackGuard(
       action: backAction,
@@ -1205,7 +890,7 @@ class _HomePageState extends State<HomePage> {
       case HomeBackAction.resetTab:
         _onTabSelected(0);
       case HomeBackAction.closeLibrary:
-        _closeLibrary();
+        _account.leaveLibrary();
       case HomeBackAction.exitApp:
         // canPop=true 时由系统退出; 走到这里说明确实无可退层级, 兜底交还系统
         SystemNavigator.pop();
@@ -1337,7 +1022,7 @@ class _HomePageState extends State<HomePage> {
           (wasLyrics ||
               _controller.text.isNotEmpty ||
               _search.bundle != null ||
-              _libraryTitle != null ||
+              _account.libraryOpen ||
               _error != null)) {
         _search.clear();
       }
@@ -1360,7 +1045,7 @@ class _HomePageState extends State<HomePage> {
     BuildContext context,
     rust.SongDto? current,
   ) {
-    final showBar = _lyric.visible || _libraryTitle != null;
+    final showBar = _lyric.visible || _account.libraryOpen;
     if (!showBar) return null;
     return AppBar(
       // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
@@ -1376,7 +1061,7 @@ class _HomePageState extends State<HomePage> {
             ? (_lyric.selecting
                   ? '已选 ${_lyric.selected.length} 句'
                   : (current?.name ?? '歌词'))
-            : (_libraryTitle ?? '轻音 MiniNCM'),
+            : (_account.libraryTitle ?? '轻音 MiniNCM'),
       ),
       leading: _lyric.visible
           ? IconButton(
@@ -1384,11 +1069,11 @@ class _HomePageState extends State<HomePage> {
               tooltip: '收起歌词',
               onPressed: _lyric.toggle,
             )
-          : (_libraryTitle != null
+          : (_account.libraryOpen
                 ? IconButton(
                     icon: const Icon(Icons.arrow_back),
                     tooltip: '返回搜索',
-                    onPressed: _closeLibrary,
+                    onPressed: _account.leaveLibrary,
                   )
                 : null),
       actions: [
@@ -1413,7 +1098,7 @@ class _HomePageState extends State<HomePage> {
                 song: current,
                 size: 22,
                 // 队列来源即菜单来源: 日推/FM 才显示"不感兴趣"
-                source: _playSource,
+                source: _account.playSource,
               ),
             IconButton(
               icon: const Icon(Icons.share),
@@ -1425,7 +1110,7 @@ class _HomePageState extends State<HomePage> {
           // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
           // 审查 P1-7.10: 账号入口 3→1 —— 账号簿/切换/退出登录统一走「我的」页资料头。
           TextButton.icon(
-            onPressed: _login,
+            onPressed: _account.login,
             icon: const Icon(Icons.login, size: 18),
             label: const Text('登录'),
           ),
@@ -1453,8 +1138,8 @@ class _HomePageState extends State<HomePage> {
           key: ValueKey('recommend-${_info?.loggedIn}-${_info?.vip}'),
           loggedIn: _info?.loggedIn == true,
           // 每日推荐歌单走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
-          loadDailyPlaylists: _dailyPlaylists,
-          onOpenPlaylist: _openPlaylist,
+          loadDailyPlaylists: _account.dailyPlaylists,
+          onOpenPlaylist: _account.openPlaylist,
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
@@ -1489,19 +1174,19 @@ class _HomePageState extends State<HomePage> {
         return FeedView(
           key: ValueKey('feed-${_info?.loggedIn}'),
           loggedIn: _info?.loggedIn == true,
-          onLogin: _login,
+          onLogin: _account.login,
           onOpenUrl: PlatformBridge.openUrl,
         );
       case 3:
         return MineView(
           key: ValueKey('mine-${_info?.loggedIn}-${_info?.vip}'),
           loggedIn: _info?.loggedIn == true,
-          onLogin: _login,
-          onOpenAccounts: _openAccountPage,
-          onOpenPlaylist: _openPlaylist,
+          onLogin: _account.login,
+          onOpenAccounts: _account.openAccountPage,
+          onOpenPlaylist: _account.openPlaylist,
           onOpenPodcast: _openPodcastRadio,
-          onOpenFollows: () => _openUserList(startOnFans: false),
-          onOpenFolloweds: () => _openUserList(startOnFans: true),
+          onOpenFollows: () => _account.openUserList(startOnFans: false),
+          onOpenFolloweds: () => _account.openUserList(startOnFans: true),
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,
@@ -1510,12 +1195,12 @@ class _HomePageState extends State<HomePage> {
             initiallySubscribed: true,
           ),
           onOpenRecent: _openRecent,
-          onOpenLiked: _openLikedDetail,
+          onOpenLiked: _account.openLikedDetail,
           onOpenMessages: () => showMessagesPage(context),
           onOpenMedals: () => showMedalWall(context, isVip: _info?.vip == true),
-          onOpenVip: _openVip,
+          onOpenVip: _account.openVip,
           // "我喜欢的音乐"区块点播时的队列来源标记(解析出来之前为 null)
-          likedPlaylistId: _likedPlaylistId,
+          likedPlaylistId: _account.likedPlaylistId,
           // 简介保存: POST /api/user/profile/update(局部更新, 只改 signature)
           saveSignature: (signature) =>
               rust.updateSignature(signature: signature),
@@ -1523,7 +1208,10 @@ class _HomePageState extends State<HomePage> {
       case 4:
         // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口:
         // 账号管理、诊断与数据都是这里的二级页(账号入口 2026-11 统一收在这里)。
-        return SettingsView(info: _info, onOpenAccounts: _openAccountPage);
+        return SettingsView(
+          info: _info,
+          onOpenAccounts: _account.openAccountPage,
+        );
       default:
         return _buildSearchTab();
     }
@@ -1532,7 +1220,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildSearchTab() {
     final query = _controller.text.trim();
     // 歌单浏览态优先(从我的/推荐点进来的)
-    if (_libraryTitle != null) return _buildList();
+    if (_account.libraryOpen) return _buildList();
     // 有上一轮结果就展示分区结果; 取消按钮会清空它
     if (_search.bundle != null) return _buildSearchResults();
     // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
@@ -1548,7 +1236,7 @@ class _HomePageState extends State<HomePage> {
         hotError: _search.hotError,
         onRetryHot: _search.loadLanding,
         // 排行榜从「推荐」搬到这里(2026-11 用户要求)
-        onOpenChartPlaylist: _openPlaylist,
+        onOpenChartPlaylist: _account.openPlaylist,
       );
     }
     return _buildList();
@@ -1627,7 +1315,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildList() {
     final current = _current;
-    if (_libraryTitle == null) {
+    if (!_account.libraryOpen) {
       // 搜索请求还没回来时给加载占位: 原来的"输入关键词后搜索"会让用户
       // 以为断网或没有结果(本次回归修复)。错误由顶部横幅展示(带重试)。
       if (_search.busy) return SearchLoading(_controller.text.trim());
@@ -1649,7 +1337,7 @@ class _HomePageState extends State<HomePage> {
     final hidden = _hiddenUnplayable;
     if (songs.isEmpty) {
       // 浏览态现在是队列的视图: 队列被清空时这里要说明白, 不然会读成"歌单空了"
-      final emptyText = _libraryTitle == null ? '这个歌单是空的' : '播放队列是空的';
+      final emptyText = !_account.libraryOpen ? '这个歌单是空的' : '播放队列是空的';
       return Center(
         child: Text(hidden > 0 ? '这里没有可播放的曲目($hidden 首无版权已隐藏)' : emptyText),
       );
