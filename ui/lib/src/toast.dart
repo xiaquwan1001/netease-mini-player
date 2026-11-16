@@ -37,6 +37,22 @@ SnackBar _toastBar(
   );
 }
 
+/// 应用根 ScaffoldMessenger 的 key(挂在 MaterialApp.scaffoldMessengerKey)。
+///
+/// 播放/调音管线这类**后台**代码拿不到 BuildContext(不在任何 widget 的回调里),
+/// 又要让用户看到"设置没落地"的失败, 于是把根 messenger 暴露成一个全局 key。
+final GlobalKey<ScaffoldMessengerState> rootMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
+/// 无 context 场合的提示(播放/调音等后台失败)。
+///
+/// 根壳还没挂上(纯 Dart 单测 / 首帧前)时静默丢弃 —— 日志仍然会打, 不丢可观测性。
+void showGlobalToast(String message, {bool isError = false}) {
+  final messenger = rootMessengerKey.currentState;
+  if (messenger == null) return;
+  showToastWith(messenger, message, isError: isError);
+}
+
 void showToastWith(
   ScaffoldMessengerState messenger,
   String message, {
