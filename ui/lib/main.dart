@@ -28,6 +28,7 @@ import 'src/discover.dart';
 import 'src/feed_view.dart';
 import 'src/format.dart' show formatCountMagnitude;
 import 'src/home/lyric_controller.dart';
+import 'src/home/playback_coordinator.dart';
 // Flutter 的 material 也有 SearchController, 用前缀避免同名歧义
 import 'src/home/search_controller.dart' as search_state;
 import 'src/lyric.dart';
@@ -46,8 +47,6 @@ import 'src/keystore.dart';
 import 'src/player_bar.dart';
 import 'src/playback.dart';
 import 'src/playback_bridge.dart';
-import 'src/playback_policy.dart';
-import 'src/playback_state.dart';
 import 'src/queue.dart';
 import 'src/platform.dart';
 import 'src/recommend_view.dart';
@@ -96,34 +95,20 @@ class _HomePageState extends State<HomePage> {
   final _playback = Playback();
   final _auth = Auth();
   final _queue = PlayQueue<rust.SongDto>();
+
+  /// 播放协调器(轮询/续播/现场恢复/预取 + 播放态快照的唯一真相), 见
+  /// src/home/playback_coordinator.dart。依赖在 initState 里注入, 不持 BuildContext。
+  late final PlaybackCoordinator _coordinator;
   rust.InitInfo? _info;
-  PlayerView? _player;
   String? _error;
 
   /// 出错时可以一键重试的动作(搜索/打开歌单这类幂等操作)
   Future<void> Function()? _retryLast;
-  Timer? _ticker;
-
-  /// 用户主动停止后不再自动续播
-  bool _userStopped = false;
-
-  /// 启动时从 play_state.json 恢复了上次的队列/曲目(尚未真正加载到播放器)。
-  /// 这段时间里轮询到"播放器空"不能把恢复出来的播放条清掉; 用户按播放才真正续播。
-  bool _restoredFromDisk = false;
-
-  /// 恢复出来的续播位置(毫秒), 用户按播放时 seek 到这里
-  int _restoredResumeMs = 0;
-
-  /// 上次落盘播放现场的时间(节流: 每 5s 最多一次, 避免每 500ms 轮询都写文件)
-  DateTime? _lastStateSave;
 
   /// 拖动进度条时的临时值(避免每帧都 seek); _dragMax 在拖动开始时冻结,
   /// 否则自动续播换曲会让滑杆量程突跳, 把新曲目 seek 到末尾。
   double? _dragMs;
   double? _dragMax;
-
-  /// 续播临界区: 防止一次结束被处理两遍(轮询 500ms + 异步取链)
-  bool _advancing = false;
 
   // ---- 歌词 ----
   /// 歌词状态机(数据/索引计算/加载/跟随/多选/翻译开关)在拆壳 S2 搬到
@@ -154,7 +139,7 @@ class _HomePageState extends State<HomePage> {
   /// 底部导航: 0 搜索 / 1 推荐 / 2 关注 / 3 我的 / 4 设置
   ///
   /// 启动落在「推荐」(2026-11 用户要求): 以前默认停在「搜索」, 而
-  /// [_restorePlayback] 又会把上次的队列塞进搜索页的歌单浏览态, 于是冷启动
+  /// [PlaybackCoordinator.restoreFromDisk] 又会把上次的队列塞进搜索页的歌单浏览态, 于是冷启动
   /// 第一眼看到的是"正在播放"的歌单列表, 而不是推荐首页。
   int _tab = 1;
 
@@ -196,15 +181,37 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _lyric = LyricController(
-      player: () => _player,
-      pollPlayer: _pollPlayer,
+      player: () => _coordinator.player,
+      // 歌词展开期的高频刷新复用协调器的 poll(全仓只有这一处读播放器)
+      pollPlayer: () => _coordinator.poll(),
       // 行高跟随系统字号, 与拆分前 _lyric.itemExtent 同一口径(依赖 BuildContext)
       itemExtentOf: () => rowExtentFor(context),
       toast: _toast,
     )..addListener(_onLyricChanged);
+    // 播放协调器: 轮询/续播/现场恢复/预取与播放态快照的唯一真相(S4)。
+    // 需要 BuildContext 的副作用(toast/封面主色/通知栏按钮/seek/列表态)用回调注入;
+    // 播放器门面与队列传的是同一个实例(不复制, 队列真相仍在页面)。
+    _coordinator = PlaybackCoordinator(
+      playback: _playback,
+      queue: _queue,
+      lyric: _lyric,
+      dataDirOf: () => _info?.dataDir,
+      libraryTitleOf: () => _libraryTitle,
+      toast: _toast,
+      toastError: (message) {
+        if (!mounted) return;
+        showToast(context, message, isError: true);
+      },
+      dragActive: () => _dragMs != null,
+      seekTo: _seekTo,
+      onPlaybackStarted: _onPlaybackStarted,
+      onRestored: _onPlaybackRestored,
+      syncCoverPalette: _syncCoverPalette,
+      syncActionState: _syncActionState,
+    )..addListener(_onPlaybackChanged);
     _playerBarActions = PlayerBarActions(
       onSeekStart: (v) => setState(() {
-        _dragMax = (_player?.durationMs ?? BigInt.zero).toDouble();
+        _dragMax = (_coordinator.player?.durationMs ?? BigInt.zero).toDouble();
         _dragMs = v;
       }),
       onSeekChanging: (v) => setState(() => _dragMs = v),
@@ -225,7 +232,7 @@ class _HomePageState extends State<HomePage> {
         if (!_lyric.visible) _lyric.toggle();
       },
       onToggleLike: _toggleLike,
-      onToggle: _toggle,
+      onToggle: () => _coordinator.toggle(),
       onPrevious: _previous,
       onNext: _next,
       onCycleMode: _cycleMode,
@@ -242,7 +249,7 @@ class _HomePageState extends State<HomePage> {
     Playback.setSkipHandlers(
       onNext: _next,
       onPrevious: _previous,
-      onEnded: _onNativeTrackEnded,
+      onEnded: _coordinator.onNativeTrackEnded,
     );
     // 通知栏自定义按钮(喜欢/播放顺序): 原生只发意图, 状态与副作用都在 Dart
     Playback.setActionHandlers(
@@ -266,7 +273,7 @@ class _HomePageState extends State<HomePage> {
     // PlaybackBridge.instance, 不再有 UserNav/ArtistNav 静态字段与构造参数
     // 两条旁路(见 src/playback_bridge.dart 头注释)。
     PlaybackBridge.instance.bind(
-      playSongs: _playSongsList,
+      playSongs: _coordinator.playSongsList,
       appendNext: _appendSongToQueue,
       openPlaylist: _openPlaylist,
     );
@@ -282,10 +289,7 @@ class _HomePageState extends State<HomePage> {
     // 二级页压上来/退回时要重算底部条(tab 让位、播放条自己吸收安全区)
     pageDepth.addListener(_onPageDepthChanged);
     _bootstrap();
-    _ticker = Timer.periodic(
-      const Duration(milliseconds: 500),
-      (_) => _pollPlayer(),
-    );
+    _coordinator.startPolling();
   }
 
   @override
@@ -293,7 +297,7 @@ class _HomePageState extends State<HomePage> {
     // 断开播放能力: 避免下一个 HomePage 实例/测试用例误用已销毁的实现
     PlaybackBridge.instance.unbind();
     AppSettings.instance.removeListener(_onAudioSettingsChanged);
-    _ticker?.cancel();
+    _coordinator.dispose();
     _search.dispose();
     UpdateCheckHost.pendingPrompt.removeListener(_onUpdatePrompt);
     pageDepth.removeListener(_onPageDepthChanged);
@@ -309,6 +313,32 @@ class _HomePageState extends State<HomePage> {
   /// 歌词状态机有变更时重建(与拆分前每处 setState 一一对应: 一次通知 = 一次重建)。
   void _onLyricChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// 播放协调器有变更时重建(与拆分前每处 setState(赋值 _player) 等价)。
+  void _onPlaybackChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// 起播一批曲目后的列表态(原 _playSongsList 里的那一处 setState)。
+  void _onPlaybackStarted(BigInt? playlistId, SongActionSource source) {
+    if (!mounted) return;
+    setState(() {
+      _libraryTitle = '正在播放';
+      _libraryPlaylistId = null;
+      _queuePlaylistId = playlistId;
+      _playSource = source;
+    });
+  }
+
+  /// 启动恢复播放现场后的页面态: 不进"歌单浏览态"(与原 _restorePlayback 同一批字段)。
+  void _onPlaybackRestored() {
+    if (!mounted) return;
+    setState(() {
+      _libraryTitle = null;
+      _libraryPlaylistId = null;
+      _queuePlaylistId = null;
+    });
   }
 
   /// 启动自动检查发现新版本时的弹窗(每天/每周/每月由 AppSettings 决定)。
@@ -345,7 +375,7 @@ class _HomePageState extends State<HomePage> {
       setState(() => _info = info);
       actionsHost.value = _buildActionsHost();
       // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
-      unawaited(_restorePlayback(info.dataDir));
+      unawaited(_coordinator.restoreFromDisk(info.dataDir));
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
       unawaited(_search.loadHistory());
       unawaited(_search.loadLanding());
@@ -366,73 +396,6 @@ class _HomePageState extends State<HomePage> {
   bool? _lastLoudnessNormalize;
   double? _lastLoudnessTarget;
 
-  /// 已经为哪首曲目应用过响度增益(避免每 500ms 轮询都重算)
-  int? _loudnessAppliedTrackId;
-
-  /// 最近取到的直链(曲目 id -> url): Android 的响度测量要靠它去 SimpleCache 里找缓存文件
-  final Map<int, String> _streamUrlByTrack = <int, String>{};
-
-  /// 上一次"补测响度"的时间(Android 的缓存文件要整首存完才能测, 所以播放中隔一会儿重试)
-  DateTime? _lastLoudnessRetry;
-
-  /// 状态记忆: 恢复上次退出时的播放现场(队列 + 当前曲 + 位置)。
-  ///
-  /// 只恢复"看起来的样子", 不自动播放 —— 用户可能只是在后台/耳机里退出的,
-  /// 重开 App 吓一跳不合适。点播放才真正取链, 并从保存的位置续播。
-  Future<void> _restorePlayback(String dataDir) async {
-    if (dataDir.isEmpty || _queue.items.isNotEmpty) return;
-    final saved = await PlaybackStateStore(dataDir).load();
-    if (saved == null || saved.songs.isEmpty || !mounted) return;
-    if (_queue.items.isNotEmpty) return; // 期间用户已经点歌了, 不覆盖
-    setState(() {
-      _queue.setAll(saved.songs, startAt: saved.index);
-      _queue.mode = saved.mode;
-      // 只恢复队列与播放现场, **不进"歌单浏览态"**: 那是搜索页里的一个显示
-      // 状态, 冷启动时把它填上会让 App 一开就停在"正在播放"列表(用户反馈)。
-      // 队列本身仍可从播放条/播放队列看到。
-      _libraryTitle = null;
-      _libraryPlaylistId = null;
-      _queuePlaylistId = null;
-      final song = saved.current;
-      _player = PlayerView(
-        trackId: song.id,
-        playing: false,
-        positionMs: BigInt.from(saved.positionMs),
-        durationMs: song.durationMs,
-        volume: 1.0,
-      );
-      _restoredFromDisk = true;
-      _restoredResumeMs = saved.positionMs;
-    });
-  }
-
-  /// 状态记忆: 落盘当前现场(节流 5s; [force] 用于换曲/暂停等必须立刻记住的时刻)。
-  void _persistPlayback({bool force = false}) {
-    final dir = _info?.dataDir;
-    if (dir == null || dir.isEmpty || _restoredFromDisk) return;
-    final songs = _queue.items;
-    if (songs.isEmpty) return;
-    final now = DateTime.now();
-    final last = _lastStateSave;
-    if (!force &&
-        last != null &&
-        now.difference(last) < const Duration(seconds: 5)) {
-      return;
-    }
-    _lastStateSave = now;
-    unawaited(
-      PlaybackStateStore(dir).save(
-        SavedPlayback(
-          songs: songs,
-          index: _queue.index < 0 ? 0 : _queue.index,
-          positionMs: _player?.positionMs.toInt() ?? 0,
-          mode: _queue.mode,
-          libraryTitle: _libraryTitle,
-        ),
-      ),
-    );
-  }
-
   void _onAudioSettingsChanged() {
     final settings = AppSettings.instance;
     // 响度均衡的开关/目标电平变化 ⇒ 已算好的每曲增益全部作废, 当前曲目重算
@@ -443,9 +406,9 @@ class _HomePageState extends State<HomePage> {
     _lastLoudnessTarget = settings.loudnessTargetLufs;
     if (loudnessChanged) {
       forgetLoudnessGain();
-      final id = _player?.trackId?.toInt();
+      final id = _coordinator.player?.trackId?.toInt();
       if (id != null) {
-        _loudnessAppliedTrackId = id;
+        _coordinator.markLoudnessApplied(id);
         unawaited(applyLoudnessForTrack(id));
       }
       return;
@@ -457,107 +420,9 @@ class _HomePageState extends State<HomePage> {
     }
     if (settings.cacheLimitMb != _lastCacheLimitMb) {
       _lastCacheLimitMb = settings.cacheLimitMb;
-      unawaited(enforceCacheLimit(keepTrackId: _player?.trackId?.toInt()));
-    }
-  }
-
-  Future<void> _pollPlayer() async {
-    PlayerView state;
-    try {
-      state = await _playback.state();
-    } catch (_) {
-      return; // 播放后端未就绪(MediaController 连接中)时忽略
-    }
-    if (!mounted) return;
-    // 恢复出来的"未加载现场": 播放器实际是空的, 别用它覆盖恢复出来的播放条
-    if (_restoredFromDisk && state.trackId == null) return;
-    final wasPlaying = _player?.playing ?? false;
-    // 值没变就不 setState: 暂停时每 500ms 一次无意义的整页重建,
-    // 除了费电还会让 uiautomator 之类"等空闲"的工具永远等不到稳定帧。
-    final prev = _player;
-    if (prev == null ||
-        prev.trackId != state.trackId ||
-        prev.playing != state.playing ||
-        prev.positionMs != state.positionMs ||
-        prev.durationMs != state.durationMs ||
-        prev.volume != state.volume) {
-      setState(() => _player = state);
-    }
-    // R2b: 曲目一换就按新曲目的响度给一次增益(未测则后台补测, 先按 0 dB 播)
-    final playingId = state.trackId?.toInt();
-    if (playingId != _loudnessAppliedTrackId) {
-      _loudnessAppliedTrackId = playingId;
-      // 歌词页背景跟随封面主色(node-vibrant 思路, 纯 Dart; 同 URL 有 LRU 缓存)
-      unawaited(_syncCoverPalette());
-      // 通知栏红心按钮跟当前曲目走
-      unawaited(_syncActionState());
-      if (playingId != null) {
-        unawaited(
-          applyLoudnessForTrack(
-            playingId,
-            streamUrl: _streamUrlByTrack[playingId],
-          ),
-        );
-        unawaited(enforceCacheLimit(keepTrackId: playingId));
-      }
-    }
-    // Android: 边听边存要整首存完才有"完整缓存 span", 所以播放中每 20s 补测一次
-    if (playingId != null &&
-        AppSettings.instance.loudnessNormalize &&
-        !hasLoudnessGain(playingId)) {
-      final now = DateTime.now();
-      final last = _lastLoudnessRetry;
-      if (last == null || now.difference(last) > const Duration(seconds: 20)) {
-        _lastLoudnessRetry = now;
-        unawaited(
-          applyLoudnessForTrack(
-            playingId,
-            streamUrl: _streamUrlByTrack[playingId],
-          ),
-        );
-      }
-    }
-    // 位置/播放中两个高频 notifier + 高亮行(顺序与条件由控制器保持原样)
-    _lyric.followPlayer(state);
-    // 状态记忆: 播放中每 5s 落一次盘(暂停/换曲时会另有 force 落盘)
-    if (state.playing) _persistPlayback();
-    if (_looksEnded(wasPlaying, state)) {
-      await _onTrackEnded();
-    }
-  }
-
-  /// 播完判定: 从播放态落到非播放态, 且位置已在末尾附近.
-  /// Media3/rodio 都不保证把 "ENDED" 送到 UI 层, 所以用轮询兜底.
-  bool _looksEnded(bool wasPlaying, PlayerView s) {
-    if (_userStopped ||
-        _advancing ||
-        _dragMs != null ||
-        !wasPlaying ||
-        s.playing) {
-      return false;
-    }
-    if (s.durationMs == BigInt.zero) return false;
-    return s.positionMs + BigInt.from(800) >= s.durationMs;
-  }
-
-  /// 原生 STATE_ENDED → 队列续播(与轮询兜底共用 [_onTrackEnded] 的临界区)
-  void _onNativeTrackEnded() {
-    if (_advancing) return;
-    unawaited(_onTrackEnded());
-  }
-
-  Future<void> _onTrackEnded() async {
-    if (_advancing) return;
-    _advancing = true;
-    try {
-      final next = _queue.onEnded();
-      if (next == null) {
-        setState(() {}); // 顺序播放到队尾: 停在最后一首
-        return;
-      }
-      await _playSong(next);
-    } finally {
-      _advancing = false;
+      unawaited(
+        enforceCacheLimit(keepTrackId: _coordinator.player?.trackId?.toInt()),
+      );
     }
   }
 
@@ -628,27 +493,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// 用一批曲目重置队列并从 index 开始播放(专辑/播客/每日推荐/最近听过共用).
-  /// playlistId: 来源歌单(歌单详情页"定位正在播放"用), 不传即非歌单队列。
-  Future<void> _playSongsList(
-    List<rust.SongDto> songs,
-    int index, {
-    BigInt? playlistId,
-    SongActionSource source = SongActionSource.other,
-  }) async {
-    if (songs.isEmpty) return;
-    final start = index.clamp(0, songs.length - 1);
-    _queue.setAll(songs, startAt: start);
-    _playSource = source;
-    _userStopped = false;
-    setState(() {
-      _libraryTitle = '正在播放';
-      _libraryPlaylistId = null;
-      _queuePlaylistId = playlistId;
-    });
-    await _playSong(songs[start], explicit: true);
-  }
-
   // ---------------- 心动模式 / 每日推荐 / 播客 / 最近听过 / 封面预览 ----------------
 
   /// 心动模式: 以当前曲目为种子, 在当前歌单(0=不限定)里续播一队推荐.
@@ -681,14 +525,14 @@ class _HomePageState extends State<HomePage> {
       }
       _queue.setAll(list, startAt: 0);
       _playSource = SongActionSource.other;
-      _userStopped = false;
+      _coordinator.userStopped = false;
       setState(() {
         _libraryTitle = '心动模式';
         _queuePlaylistId = null;
       });
       unawaited(_syncActionState());
       final next = _queue.next();
-      if (next != null) await _playSong(next);
+      if (next != null) await _coordinator.playSong(next);
     } catch (e) {
       if (!mounted) return;
       _toast(friendlyError(e));
@@ -784,9 +628,9 @@ class _HomePageState extends State<HomePage> {
     final start = songs.indexWhere((s) => s.id == song.id);
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
     _playSource = SongActionSource.other;
-    _userStopped = false;
+    _coordinator.userStopped = false;
     _queuePlaylistId = null; // 搜索列表点播不算歌单队列
-    await _playSong(song, explicit: true);
+    await _coordinator.playSong(song, explicit: true);
   }
 
   /// 搜索结果里点单曲: 用"可见单曲"重置队列(跳过无版权), 并定位到这首
@@ -799,9 +643,9 @@ class _HomePageState extends State<HomePage> {
     if (songs.isEmpty) return;
     _queue.setAll(songs, startAt: start < 0 ? 0 : start);
     _playSource = SongActionSource.other;
-    _userStopped = false;
+    _coordinator.userStopped = false;
     _queuePlaylistId = null;
-    await _playSong(song, explicit: true);
+    await _coordinator.playSong(song, explicit: true);
   }
 
   /// 搜索结果: 艺人卡片 → 艺人页
@@ -855,181 +699,6 @@ class _HomePageState extends State<HomePage> {
         playCount: item.playCount,
       ),
     );
-  }
-
-  /// 当前设置下这首歌要不要跳过(口径见 playback_policy.dart, 已单测)。
-  bool _skipVip(rust.SongDto song) => shouldSkipVipSong(
-    song,
-    skipVipEnabled: AppSettings.instance.skipVipSongs,
-  );
-
-  /// 跳过取不到直链的曲目(会员/版权限制)与设置里要求跳过的 VIP 曲目, 最多绕队列一圈。
-  ///
-  /// VIP 跳过是用户自己开的策略, 所以静默跳过、整轮结束才提示一次 —— 否则自动续播
-  /// 会连环弹窗(与无版权曲目的处理口径一致)。
-  ///
-  /// [explicit] = 用户主动点选的这一首: 「自动跳过 VIP」只约束自动续播/切歌,
-  /// 用户亲手点的歌必须播(官方也是这么做的 —— 会员曲目能试听前 30s),
-  /// 只有取链真的拿不到直链时才继续往后跳。
-  Future<void> _playSong(rust.SongDto song, {bool explicit = false}) async {
-    _userStopped = false;
-    _restoredFromDisk = false;
-    _restoredResumeMs = 0;
-    var allowVip = explicit;
-    var attempts = 0;
-    var skippedVip = 0;
-    void reportSkipped() {
-      if (skippedVip > 0 && mounted) {
-        _toast('已跳过 $skippedVip 首 VIP 歌曲(可在设置里关闭)');
-      }
-    }
-
-    var target = song;
-    while (true) {
-      if (!allowVip && _skipVip(target)) {
-        skippedVip += 1;
-      } else if (await _resolveAndPlay(target)) {
-        reportSkipped();
-        _persistPlayback(force: true);
-        return;
-      }
-      // 跳过只发生在非主动点选的曲目上; 一旦绕到下一首就回到"自动续播"口径
-      allowVip = false;
-      attempts += 1;
-      if (attempts >= _queue.items.length) {
-        if (mounted) setState(() {});
-        reportSkipped();
-        return;
-      }
-      final next = _queue.next();
-      if (next == null) return;
-      target = next;
-    }
-  }
-
-  /// 预取的下一首直链(曲目 id → 直链 + 档位 + 取得时间)。
-  ///
-  /// 为什么预取: 播完一首再去取链(数百毫秒)+ 让播放器重新 prepare, 表现为
-  /// 连续播放每首之间都"卡一下"。提前把下一条直链拿到手, 换曲就只剩播放器
-  /// 自己的缓冲。直链有时效(约几分钟到几十分钟), 所以带时间戳, 超过 4 分钟不用。
-  final Map<int, ({String url, String level, DateTime at})> _prefetchedUrls =
-      <int, ({String url, String level, DateTime at})>{};
-
-  /// 取出可用的预取直链(一次性: 用过就删, 避免复用过期地址)
-  String? _takePrefetchedUrl(int trackId, String level) {
-    final hit = _prefetchedUrls.remove(trackId);
-    if (hit == null) return null;
-    if (hit.level != level) return null;
-    if (DateTime.now().difference(hit.at) > const Duration(minutes: 4)) {
-      return null;
-    }
-    return hit.url;
-  }
-
-  /// 后台预取"下一首"的直链(随机/单曲循环没有可预知的下一首, 直接跳过)。
-  void _prefetchNextTrack() {
-    final next = _queue.peekNext();
-    if (next == null || !next.playable) return;
-    final id = next.id.toInt();
-    if (_prefetchedUrls.containsKey(id)) return;
-    final level = AppSettings.instance.audioLevel;
-    unawaited(() async {
-      try {
-        final stream = await rust.songUrl(trackId: next.id, level: level);
-        final url = stream.url;
-        if (url == null || url.isEmpty) return;
-        _prefetchedUrls[id] = (url: url, level: level, at: DateTime.now());
-        if (_prefetchedUrls.length > 8) {
-          _prefetchedUrls.remove(_prefetchedUrls.keys.first);
-        }
-      } catch (_) {
-        // 预取失败无所谓: 真正换曲时还会走一次正常取链
-      }
-    }());
-  }
-
-  /// 通知栏/锁屏封面缓存(按已经按档位裁好的 URL 存, 最多 8 张)。
-  final Map<String, Uint8List> _notificationArtwork = <String, Uint8List>{};
-
-  /// 取当前播放内容的封面字节给系统通知用(播客/歌曲/电台都走 coverUrl)。
-  ///
-  /// 超时 300ms 就放弃: 封面是锦上添花, 绝不能为了它把播放拖慢(用户要求
-  /// "总是乐观播放已经得到的片段")。UI 上刚显示过的封面通常已在
-  /// cover_art.dart 的字节 LRU 里, 这条 await 实际是微任务级别。
-  Future<Uint8List?> _artworkFor(rust.SongDto song) async {
-    final url = song.coverUrl;
-    if (url == null || url.isEmpty) return null;
-    final key = neteaseThumbUrl(httpsImageUrl(url), width: 512, height: 512);
-    final cached = _notificationArtwork[key];
-    if (cached != null) return cached;
-    try {
-      final bytes = await fetchImageBytes(key)
-          .timeout(const Duration(milliseconds: 300));
-      if (_notificationArtwork.length >= 8) {
-        _notificationArtwork.remove(_notificationArtwork.keys.first);
-      }
-      _notificationArtwork[key] = bytes;
-      return bytes;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<bool> _resolveAndPlay(rust.SongDto song) async {
-    // 没版权的曲目连取链都不用试; 自动续播时静默跳过(点列表才提示, 否则一路弹窗)
-    if (!song.playable) return false;
-    try {
-      // 先用预取的直链(有就用, 省掉几百毫秒); 没有才真的去取。
-      final level = AppSettings.instance.audioLevel;
-      var url = _takePrefetchedUrl(song.id.toInt(), level);
-      if (url == null) {
-        // 移动网络切网时会偶发 connection reset, 取链是幂等的, 值得重试
-        final stream = await retryNetwork(
-          () => rust.songUrl(trackId: song.id, level: level),
-        );
-        url = stream.url;
-      }
-      if (url == null) {
-        if (mounted) {
-          showToast(context, '《${song.name}》没有可用直链(会员曲目需先登录), 已跳过');
-        }
-        return false;
-      }
-      // Android 的响度均衡要靠这条直链去 Media3 的 SimpleCache 里找缓存文件;
-      // 注意必须用**播放时实际用的**URL(playback.play 会把 http 升级成 https),
-      // 否则 SimpleCache 的 key 对不上, 永远找不到缓存文件.
-      final playingId = song.id.toInt();
-      final cacheKeyUrl = preferHttpsStreamUrl(url);
-      _streamUrlByTrack[playingId] = cacheKeyUrl;
-      if (_streamUrlByTrack.length > 64) {
-        _streamUrlByTrack.remove(_streamUrlByTrack.keys.first);
-      }
-      final state = await _playback.play(
-        trackId: song.id,
-        url: url,
-        title: song.name,
-        artist: song.artist,
-        // 边下边播(桌面)时解码器拿不到总时长, 进度条用接口时长兜底
-        durationMs: song.durationMs,
-        // 通知栏图标 = 当前播放内容的封面(歌曲/播客统一走 coverUrl)
-        artwork: await _artworkFor(song),
-      );
-      if (!mounted) return true;
-      setState(() => _player = state);
-      // 立刻按这首的响度给一次增益(未测到就先 0 dB, 轮询里会再补一次)
-      _loudnessAppliedTrackId = playingId;
-      unawaited(applyLoudnessForTrack(playingId, streamUrl: cacheKeyUrl));
-      // 本地播放历史(未登录/离线时"最近听过"的来源); 失败不影响播放
-      unawaited(rust.rememberPlay(song: song).catchError((_) => false));
-      unawaited(_lyric.load(song.id));
-      // 播放已经起来了, 顺手把下一首的直链拿到手(让连续播放不再每首卡一下)
-      _prefetchNextTrack();
-      return true;
-    } catch (e) {
-      if (!mounted) return false;
-      showToast(context, friendlyError(e), isError: true);
-      return false;
-    }
   }
 
   // ---------------- 详情页: 分享 ----------------
@@ -1339,7 +1008,7 @@ class _HomePageState extends State<HomePage> {
   /// 歌单内搜索后"只添加当前歌": 保留现有队列, 追加到队尾(已在队列则不重复)
   Future<void> _appendSongToQueue(rust.SongDto song) async {
     if (_queue.isEmpty) {
-      await _playSongsList([song], 0);
+      await _coordinator.playSongsList([song], 0);
       return;
     }
     final existed = _queue.items.any((s) => s.id == song.id);
@@ -1741,39 +1410,16 @@ class _HomePageState extends State<HomePage> {
 
   // ---------------- 播放控制 ----------------
 
-  Future<void> _toggle() async {
-    // 还没真正加载(启动时恢复的现场 / 空播放器): 按播放 = 开始这一首
-    if (_restoredFromDisk || _player?.trackId == null) {
-      final song = _current;
-      if (song != null) {
-        final resume = _restoredResumeMs;
-        _restoredFromDisk = false;
-        _restoredResumeMs = 0;
-        await _playSong(song, explicit: true);
-        if (resume > 0 && mounted) await _seekTo(resume.toDouble());
-        return;
-      }
-    }
-    final playing = _player?.playing ?? false;
-    final state = playing ? await _playback.pause() : await _playback.resume();
-    if (!mounted) return;
-    setState(() => _player = state);
-    // 状态记忆: 暂停/继续都立刻记一次位置(退出时最多差 5s)
-    _persistPlayback(force: true);
-  }
-
   Future<void> _next() async {
     final next = _queue.next();
     if (next == null) return;
-    _restoredFromDisk = false;
-    await _playSong(next);
+    await _coordinator.playSong(next);
   }
 
   Future<void> _previous() async {
     final prev = _queue.previous();
     if (prev == null) return;
-    _restoredFromDisk = false;
-    await _playSong(prev);
+    await _coordinator.playSong(prev);
   }
 
   /// 队列面板是否已展开.
@@ -1987,7 +1633,7 @@ class _HomePageState extends State<HomePage> {
     final i = _queue.items.indexOf(song);
     if (i < 0) return;
     setState(() => _queue.jumpTo(i));
-    await _playSong(song, explicit: true);
+    await _coordinator.playSong(song, explicit: true);
   }
 
   /// 队列面板删除: 删的不是当前项时只动列表; 删的是当前项时明确换到顶上来的下一首,
@@ -2001,24 +1647,16 @@ class _HomePageState extends State<HomePage> {
     if (next == null) {
       unawaited(_stopAfterQueueEmpty());
     } else {
-      unawaited(_playSong(next));
+      unawaited(_coordinator.playSong(next));
     }
   }
 
   Future<void> _stopAfterQueueEmpty() async {
-    _userStopped = true;
+    _coordinator.userStopped = true;
     // 队列没了就没有"现场"可恢复; 不清的话下次启动会恢复出一个空壳播放条
-    final dir = _info?.dataDir;
-    if (dir != null && dir.isNotEmpty) {
-      unawaited(PlaybackStateStore(dir).clear());
-    }
+    unawaited(_coordinator.clearSavedState());
     _toast('播放队列已清空, 播放已停止');
-    try {
-      final state = await _playback.stop();
-      if (mounted) setState(() => _player = state);
-    } catch (_) {
-      // 播放后端未就绪时忽略: 队列已经是空, UI 保持一致
-    }
+    await _coordinator.stopPlayback();
   }
 
   /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 心动 → 列表循环。
@@ -2158,7 +1796,7 @@ class _HomePageState extends State<HomePage> {
     });
     final state = await _playback.seek(BigInt.from(target));
     if (!mounted) return;
-    setState(() => _player = state);
+    _coordinator.adoptPlayer(state);
     _lyric.syncIndex(state, force: true);
   }
 
@@ -2204,7 +1842,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPage(BuildContext context) {
-    final player = _player;
+    final player = _coordinator.player;
     final current = _current;
     final topBar = _buildTopBar(context, current);
     // 播放条数据快照 + 底部导航由根布局渲染(MaterialApp.builder 的 PlayerBarHost):
