@@ -10,7 +10,6 @@ import 'src/album_preview.dart';
 import 'src/cover_backdrop.dart';
 import 'src/cover_palette.dart';
 import 'src/sheet_header.dart';
-import 'src/similar_sheet.dart';
 import 'src/user_list_page.dart';
 import 'src/app_settings.dart';
 import 'src/app_shell.dart';
@@ -19,16 +18,15 @@ import 'src/artist_nav.dart';
 import 'src/artist_page.dart';
 import 'src/auth.dart';
 import 'src/back_policy.dart';
-import 'src/comment_thread.dart' show commentSourceKindLabel;
 import 'src/now_playing.dart' show nowPlayingSongId;
 import 'src/cover_art.dart';
 import 'src/daily_cache.dart';
 import 'src/detail_page.dart';
 import 'src/discover.dart';
 import 'src/feed_view.dart';
-import 'src/format.dart' show formatCountMagnitude;
 import 'src/home/lyric_controller.dart';
 import 'src/home/playback_coordinator.dart';
+import 'src/home/song_action_wiring.dart';
 // Flutter 的 material 也有 SearchController, 用前缀避免同名歧义
 import 'src/home/search_controller.dart' as search_state;
 import 'src/lyric.dart';
@@ -62,7 +60,6 @@ import 'src/update_dialog.dart';
 import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
-import 'src/song_wiki.dart';
 import 'src/toast.dart' show showToast;
 import 'src/vip_page.dart';
 
@@ -99,6 +96,10 @@ class _HomePageState extends State<HomePage> {
   /// 播放协调器(轮询/续播/现场恢复/预取 + 播放态快照的唯一真相), 见
   /// src/home/playback_coordinator.dart。依赖在 initState 里注入, 不持 BuildContext。
   late final PlaybackCoordinator _coordinator;
+
+  /// 歌曲动作宿主装配(拆壳 S5): 宿主构建与歌曲/艺人/专辑动作闭包都在
+  /// src/home/song_action_wiring.dart, 这里只注入页面状态与导航回调。
+  late final SongActionWiring _songActions;
   rust.InitInfo? _info;
   String? _error;
 
@@ -209,6 +210,25 @@ class _HomePageState extends State<HomePage> {
       syncCoverPalette: _syncCoverPalette,
       syncActionState: _syncActionState,
     )..addListener(_onPlaybackChanged);
+    // 歌曲动作宿主(拆壳 S5): 红心集合/登录态/队列/当前曲目都是页面状态,
+    // 面板与路由跳转要 BuildContext —— 全部按回调注入, 装配逻辑在
+    // src/home/song_action_wiring.dart; 宿主刷新时机仍是下面三处
+    // actionsHost.value = _songActions.buildHost()。
+    _songActions = SongActionWiring(
+      contextOf: () => context,
+      toast: _toast,
+      isMounted: () => mounted,
+      loggedIn: () => _info?.loggedIn == true,
+      isLiked: _isLiked,
+      markLiked: _markLiked,
+      rebuild: () => setState(() {}),
+      queue: _queue,
+      playSongsList: _coordinator.playSongsList,
+      currentSong: () => _current,
+      playSource: () => _playSource,
+      syncActionState: _syncActionState,
+      openPlaylist: _openPlaylist,
+    );
     _playerBarActions = PlayerBarActions(
       onSeekStart: (v) => setState(() {
         _dragMax = (_coordinator.player?.durationMs ?? BigInt.zero).toDouble();
@@ -231,7 +251,7 @@ class _HomePageState extends State<HomePage> {
         }
         if (!_lyric.visible) _lyric.toggle();
       },
-      onToggleLike: _toggleLike,
+      onToggleLike: _songActions.toggleCurrentLike,
       onToggle: () => _coordinator.toggle(),
       onPrevious: _previous,
       onNext: _next,
@@ -253,13 +273,13 @@ class _HomePageState extends State<HomePage> {
     );
     // 通知栏自定义按钮(喜欢/播放顺序): 原生只发意图, 状态与副作用都在 Dart
     Playback.setActionHandlers(
-      onToggleLike: _toggleLike,
+      onToggleLike: _songActions.toggleCurrentLike,
       onCycleMode: _cycleModeFromNotification,
     );
     // R2/R5/R7: 设置里的播放参数变化时同步给 Rust 播放器
     AppSettings.instance.addListener(_onAudioSettingsChanged);
     // "..." 菜单的动作宿主在 Navigator 之上, 先放一份(登录态变化时再刷新)
-    actionsHost.value = _buildActionsHost();
+    actionsHost.value = _songActions.buildHost();
     // 搜索状态机: 输入框/焦点仍由页面持有, 只把"失败/清错/离开浏览态"三件
     // 需要 setState 的副作用回灌给页面(与原 _search/_clearSearch 一一对应)
     _search = search_state.SearchController(
@@ -274,7 +294,7 @@ class _HomePageState extends State<HomePage> {
     // 两条旁路(见 src/playback_bridge.dart 头注释)。
     PlaybackBridge.instance.bind(
       playSongs: _coordinator.playSongsList,
-      appendNext: _appendSongToQueue,
+      appendNext: _songActions.appendSongToQueue,
       openPlaylist: _openPlaylist,
     );
     // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
@@ -373,7 +393,7 @@ class _HomePageState extends State<HomePage> {
       unawaited(enforceCacheLimit());
       if (!mounted) return;
       setState(() => _info = info);
-      actionsHost.value = _buildActionsHost();
+      actionsHost.value = _songActions.buildHost();
       // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
       unawaited(_coordinator.restoreFromDisk(info.dataDir));
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
@@ -838,7 +858,7 @@ class _HomePageState extends State<HomePage> {
       if (mounted) setState(() => _info = info);
       // 登录/登出/切号都汇到 _refreshInfo, 在这里统一 drain Keystore 桥的 pending
       unawaited(credentialSync.drainPending());
-      actionsHost.value = _buildActionsHost();
+      actionsHost.value = _songActions.buildHost();
       if (info.loggedIn) {
         await _loadLiked();
       } else {
@@ -901,350 +921,16 @@ class _HomePageState extends State<HomePage> {
 
   bool _isLiked(BigInt? trackId) => trackId != null && _liked.contains(trackId);
 
-  /// "..." 菜单的回调宿主(登录态变化时重建)
-  SongActionHost _buildActionsHost() => SongActionHost(
-    loggedIn: _info?.loggedIn == true,
-    isLiked: _isLiked,
-    toggleLike: _toggleLikeFor,
-    playNext: _playNextSong,
-    addToPlaylist: _showAddToPlaylist,
-    share: _showShareSong,
-    comments: _showSongComments,
-    openArtist: _openSongArtist,
-    openAlbum: _openSongAlbum,
-    download: _downloadSong,
-    dislike: _dislikeSong,
-    songWiki: (song) => showSongWiki(context, song: song),
-    counts: _loadSongCounts,
-    similarSongs: (song) =>
-        showSimilarSongs(context, song: song, onOpenPlaylist: _openPlaylist),
-  );
-
-  /// 歌曲菜单里的三项数量级: 喜欢人数 / 评论数 / 分享数(与原版对齐).
-  ///
-  /// 数据来源:
-  /// - 评论数 + 分享数: 评论线程统计 `R_SO_4_<id>`(我们本来就有这接口);
-  /// - 喜欢人数: 官方 App 的 `/api/song/like/get`(`likedCount`), api-enhanced
-  ///   里没有这个模块, 从官方客户端抓到的路径, 已按 vendor 规则加到 vendor 侧。
-  ///   该接口**需要登录**, 匿名返回 301 —— 未登录时不显示, 菜单其余项不受影响。
-  ///
-  /// 任何一项失败都只是"这一项不显示", 绝不让菜单报错。
-  Future<SongActionCounts> _loadSongCounts(rust.SongDto song) async {
-    final id = song.id;
-    Future<String?> likedLabel() async {
-      if (_info?.loggedIn != true) return null;
-      try {
-        final state = await rust.songLikeState(trackId: id);
-        return formatCountMagnitude(state.likedCount.toInt());
-      } catch (_) {
-        return null;
-      }
-    }
-
-    Future<rust.CommentStats?> stats() async {
-      try {
-        return await rust.commentStats(threadId: 'R_SO_4_$id');
-      } catch (_) {
-        return null;
-      }
-    }
-
-    final results = await Future.wait<Object?>([likedLabel(), stats()]);
-    final liked = results[0] as String?;
-    final s = results[1] as rust.CommentStats?;
-    String? comments;
-    if (s != null) {
-      // 上游自带官方文案("100w+"/"999+")优先, 没有才用我们的量级口径
-      final desc = s.commentCountDesc.trim();
-      comments = desc.isNotEmpty
-          ? desc
-          : formatCountMagnitude(s.commentCount.toInt());
-    }
-    final shares = s == null
-        ? null
-        : formatCountMagnitude(s.shareCount.toInt());
-    return SongActionCounts(liked: liked, comments: comments, shares: shares);
-  }
-
-  /// 任意曲目的红心切换(列表/播放条共用; 先乐观更新, 失败回滚)
-  Future<void> _toggleLikeFor(rust.SongDto song) async {
-    if (_info?.loggedIn != true) {
-      _toast('收藏需要先登录');
-      return;
-    }
-    final id = song.id;
-    final wasLiked = _liked.contains(id);
+  /// 动作闭包改红心集合(原动作方法里的 setState; 见 SongActionWiring.markLiked)
+  void _markLiked(BigInt trackId, bool liked) {
+    if (!mounted) return;
     setState(() {
-      if (wasLiked) {
-        _liked.remove(id);
+      if (liked) {
+        _liked.add(trackId);
       } else {
-        _liked.add(id);
+        _liked.remove(trackId);
       }
     });
-    try {
-      await rust.setLiked(trackId: id, liked: !wasLiked);
-      // 通知栏红心按钮同步(当前曲目才影响通知图标, _syncActionState 里已取 _current)
-      if (id == _current?.id) unawaited(_syncActionState());
-      // 取消喜欢只给一条 3 秒提示, 不给「撤销」按钮:
-      // 红心本身一点就回来(再点一次), 而带 action 的撤销条会在底部常驻更久、
-      // 压住播放条和内容(用户反馈"不会自动回落, 遮挡内容")。
-      if (wasLiked && mounted) {
-        showToast(context, '已取消喜欢《${song.name}》');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        if (wasLiked) {
-          _liked.add(id);
-        } else {
-          _liked.remove(id);
-        }
-      });
-      if (id == _current?.id) unawaited(_syncActionState());
-      rethrow;
-    }
-  }
-
-  /// 歌单内搜索后"只添加当前歌": 保留现有队列, 追加到队尾(已在队列则不重复)
-  Future<void> _appendSongToQueue(rust.SongDto song) async {
-    if (_queue.isEmpty) {
-      await _coordinator.playSongsList([song], 0);
-      return;
-    }
-    final existed = _queue.items.any((s) => s.id == song.id);
-    _queue.append(song);
-    if (!mounted) return;
-    setState(() {});
-    _toast(existed ? '这首歌已在播放队列中' : '已添加到播放队列');
-  }
-
-  Future<void> _playNextSong(rust.SongDto song) async {
-    _queue.insertNext(song);
-    if (mounted) {
-      setState(() {});
-      _toast('已添加到下一首播放');
-    }
-  }
-
-  /// 收藏到歌单: 先选歌单, 再调接口. "我喜欢的音乐"走红心接口.
-  Future<void> _showAddToPlaylist(rust.SongDto song) async {
-    if (_info?.loggedIn != true) {
-      _toast('收藏到歌单需要先登录');
-      return;
-    }
-    final lists = await retryNetwork(rust.myPlaylists);
-    if (!mounted) return;
-    // 返回 PlaylistDto(选已有歌单) 或 'create'(新建歌单)
-    final picked = await showModalBottomSheet<Object>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetContext).size.height * 0.6,
-          child: Column(
-            children: [
-              SheetHeader(title: '收藏到歌单', subtitle: song.name),
-              const Divider(height: 1),
-              ListTile(
-                dense: true,
-                leading: CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest,
-                  child: const Icon(Icons.add, size: 20),
-                ),
-                title: const Text('新建歌单'),
-                subtitle: const Text('创建后把这首加进去'),
-                onTap: () => Navigator.pop(sheetContext, 'create'),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: lists.length,
-                  itemBuilder: (context, i) {
-                    final pl = lists[i];
-                    return ListTile(
-                      dense: true,
-                      leading: CoverArt(url: pl.coverUrl, size: 40, radius: 4),
-                      title: Text(
-                        pl.special ? '我喜欢的音乐' : pl.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${pl.trackCount} 首'),
-                      onTap: () => Navigator.pop(sheetContext, pl),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (picked == null) return;
-    if (picked is String) {
-      await _createPlaylistAndAdd(song);
-      return;
-    }
-    final pl = picked as rust.Playlist;
-    if (pl.special) {
-      await rust.setLiked(trackId: song.id, liked: true);
-      if (!mounted) return;
-      setState(() => _liked.add(song.id));
-      _toast('已加入我喜欢的音乐');
-      return;
-    }
-    final ok = await rust.addToPlaylist(playlistId: pl.id, trackId: song.id);
-    if (!mounted) return;
-    _toast(ok ? '已收藏到《${pl.name}》' : '收藏未生效, 请稍后重试');
-  }
-
-  /// 新建歌单并把当前歌曲放进去
-  Future<void> _createPlaylistAndAdd(rust.SongDto song) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('新建歌单'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(hintText: '歌单名称'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (name == null || name.isEmpty || !mounted) return;
-    try {
-      final id = await rust.createPlaylist(name: name, privacy: 0);
-      final ok = await rust.addToPlaylist(playlistId: id, trackId: song.id);
-      if (!mounted) return;
-      _toast(ok ? '已新建《$name》并收藏' : '歌单已建, 收藏未生效');
-    } catch (e) {
-      if (!mounted) return;
-      _toast('新建歌单失败: ${friendlyError(e)}');
-    }
-  }
-
-  Future<void> _showShareSong(rust.SongDto song) async {
-    final link = 'https://music.163.com/#/song?id=${song.id}';
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SheetHeader(title: '分享'),
-            ListTile(
-              leading: const Icon(Icons.share_outlined),
-              title: const Text('分享到动态'),
-              onTap: () async {
-                Navigator.pop(sheetContext);
-                try {
-                  final ok = await rust.shareResource(
-                    kind: 'song',
-                    resourceId: song.id,
-                    msg: song.name,
-                  );
-                  if (mounted) _toast(ok ? '已分享到动态' : '分享未生效');
-                } catch (e) {
-                  if (mounted) _toast(friendlyError(e));
-                }
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.link),
-              title: const Text('复制链接'),
-              onTap: () async {
-                Navigator.pop(sheetContext);
-                await Clipboard.setData(ClipboardData(text: link));
-                if (mounted) _toast('链接已复制');
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showSongComments(rust.SongDto song) async {
-    await showCommentsSheet(
-      context,
-      kind: 'song',
-      resourceId: song.id,
-      title: '《${song.name}》的评论',
-      // 评论分享卡片的语境(需求 10): 来自哪首歌
-      shareSourceTitle: song.name,
-      shareSourceKind: commentSourceKindLabel('song'),
-    );
-  }
-
-  Future<void> _openSongArtist(rust.SongDto song) async {
-    if (song.artistId == BigInt.zero) {
-      _toast('这首歌没有关联艺人信息');
-      return;
-    }
-    await showArtistDetail(
-      context,
-      artistId: song.artistId,
-      name: song.artist,
-      onOpenAlbum: (id, name, cover) => showAlbumPreview(
-        context,
-        albumId: id,
-        albumName: name,
-        coverUrl: cover,
-      ),
-    );
-  }
-
-  Future<void> _openSongAlbum(rust.SongDto song) async {
-    await showAlbumPreview(
-      context,
-      albumId: song.albumId,
-      albumName: song.album,
-      coverUrl: song.coverUrl,
-    );
-  }
-
-  Future<void> _downloadSong(rust.SongDto song) async {
-    _toast('正在获取下载地址…');
-    try {
-      final stream = await retryNetwork(
-        () => rust.songUrl(
-          trackId: song.id,
-          level: AppSettings.instance.audioLevel,
-        ),
-      );
-      final raw = stream.url;
-      if (raw == null || raw.isEmpty) {
-        _toast('这首歌暂时没有可用直链(会员/版权限制)');
-        return;
-      }
-      final url = preferHttpsStreamUrl(raw);
-      final ext = url.contains('.flac') ? 'flac' : 'mp3';
-      final name = '${song.artist} - ${song.name}.$ext';
-      final saved = await PlatformBridge.download(url: url, filename: name);
-      if (!mounted) return;
-      _toast(saved == null ? '下载失败' : '已开始下载(Android 在通知栏/Download 目录)');
-    } catch (e) {
-      if (!mounted) return;
-      _toast('下载失败: ${friendlyError(e)}');
-    }
   }
 
   /// 无版权提示(与官方一致的"点了才告诉你")
@@ -1260,17 +946,6 @@ class _HomePageState extends State<HomePage> {
       );
   }
 
-  /// 红心/取消红心(当前曲目). 先乐观更新, 失败回滚。
-  Future<void> _toggleLike() async {
-    final song = _current;
-    if (song == null) return;
-    try {
-      await _toggleLikeFor(song);
-    } catch (e) {
-      if (mounted) _toast('收藏失败: ${friendlyError(e)}');
-    }
-  }
-
   /// 当前播放队列的来源(决定歌曲详情页"..."里能否出现"不感兴趣":
   /// 后端只接受每日推荐(dislike_recommend_song)与私人FM(fm_trash)这两个来源)。
   ///
@@ -1279,28 +954,6 @@ class _HomePageState extends State<HomePage> {
   /// 所以日推歌曲在详情页里根本看不到"不感兴趣"(用户回归反馈)。
   /// 现在每次开始播放都显式记来源, 详情页菜单直接读这个字段。
   SongActionSource _playSource = SongActionSource.other;
-
-  /// 不感兴趣: FM 队列里走"不再播放", 其它场景走"少推这类歌"
-  Future<void> _dislikeSong(rust.SongDto song) async {
-    if (_info?.loggedIn != true) {
-      _toast('不感兴趣需要先登录');
-      return;
-    }
-    try {
-      if (_playSource == SongActionSource.personalFm) {
-        await rust.trashFmSong(songId: song.id);
-        if (!mounted) return;
-        _toast('已从私人FM里去掉《${song.name}》');
-      } else {
-        await rust.dislikeRecommendSong(songId: song.id);
-        if (!mounted) return;
-        _toast('已减少《${song.name}》这类推荐');
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _toast('操作失败: ${friendlyError(e)}');
-    }
-  }
 
   /// 打开"关注/粉丝"列表(当前账号)
   Future<void> _openUserList({required bool startOnFans}) async {
@@ -2208,7 +1861,7 @@ class _HomePageState extends State<HomePage> {
       onMenu: (song) => showSongActionsSheet(
         context,
         song,
-        _buildActionsHost(),
+        _songActions.buildHost(),
         // 综合搜索结果里的单曲
         source: SongActionSource.search,
       ),
@@ -2314,7 +1967,7 @@ class _HomePageState extends State<HomePage> {
           onMenu: () => showSongActionsSheet(
             context,
             s,
-            _buildActionsHost(),
+            _songActions.buildHost(),
             // 库内歌单/列表详情
             source: SongActionSource.playlist,
           ),
