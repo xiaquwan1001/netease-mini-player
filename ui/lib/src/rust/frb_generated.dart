@@ -6768,14 +6768,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlayerStateDto dco_decode_player_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return PlayerStateDto(
       trackId: dco_decode_opt_box_autoadd_u_64(arr[0]),
       playing: dco_decode_bool(arr[1]),
       positionMs: dco_decode_u_64(arr[2]),
       durationMs: dco_decode_u_64(arr[3]),
       volume: dco_decode_f_32(arr[4]),
+      seekable: dco_decode_bool(arr[5]),
+      seekError: dco_decode_opt_String(arr[6]),
     );
   }
 
@@ -9341,12 +9343,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_positionMs = sse_decode_u_64(deserializer);
     var var_durationMs = sse_decode_u_64(deserializer);
     var var_volume = sse_decode_f_32(deserializer);
+    var var_seekable = sse_decode_bool(deserializer);
+    var var_seekError = sse_decode_opt_String(deserializer);
     return PlayerStateDto(
       trackId: var_trackId,
       playing: var_playing,
       positionMs: var_positionMs,
       durationMs: var_durationMs,
       volume: var_volume,
+      seekable: var_seekable,
+      seekError: var_seekError,
     );
   }
 
@@ -11695,6 +11701,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.positionMs, serializer);
     sse_encode_u_64(self.durationMs, serializer);
     sse_encode_f_32(self.volume, serializer);
+    sse_encode_bool(self.seekable, serializer);
+    sse_encode_opt_String(self.seekError, serializer);
   }
 
   @protected

@@ -49,6 +49,7 @@ class PlayerBarData {
         other.dragMs == dragMs &&
         other.mode == mode &&
         other.heartActive == heartActive &&
+        other.player.seekable == player.seekable &&
         _playerEquals(other.player, player) &&
         identical(other.current, current);
   }
@@ -67,6 +68,7 @@ class PlayerBarData {
     player.positionMs,
     player.durationMs,
     player.volume,
+    player.seekable,
     identityHashCode(current),
   );
 
@@ -75,7 +77,18 @@ class PlayerBarData {
       a.playing == b.playing &&
       a.positionMs == b.positionMs &&
       a.durationMs == b.durationMs &&
-      a.volume == b.volume;
+      a.volume == b.volume &&
+      a.seekable == b.seekable;
+
+  /// 进度条能不能拖: 有曲目、有量程、且当前源可 seek。
+  ///
+  /// 桌面边下边播期 [PlayerView.seekable] 为 false(解码器非 seekable),
+  /// 这时拖了也不会生效, 所以进度条改成「只提示不跳转」。
+  bool get canSeek => player.seekable && player.durationMs > BigInt.zero;
+
+  /// 拖不动但**有**曲目(需要给用户一句「缓存中」的解释); 无曲目时静默禁用。
+  bool get seekBlocked =>
+      !player.seekable && player.durationMs > BigInt.zero;
 }
 
 /// 常驻播放条的回调集合: 不可变, 同一实例跨帧复用(HomePage 建一次后不再变)。
@@ -218,14 +231,23 @@ class MiniPlayerBar extends StatelessWidget {
                     overlayShape: SliderComponentShape.noOverlay,
                     showValueIndicator: ShowValueIndicator.never,
                   ),
-                  child: Slider(
-                    padding: const EdgeInsets.only(left: 8, right: 8),
-                    value: pos,
-                    max: maxMs,
-                    onChangeStart: dur <= 0 ? null : actions.onSeekStart,
-                    onChanged: dur <= 0 ? null : actions.onSeekChanging,
-                    onChangeEnd: dur <= 0 ? null : actions.onSeekEnd,
-                  ),
+                  // 不可 seek 期(桌面边下边播)换成「只提示不跳转」的同款轨道:
+                  // 以前拖过去会先跳到新位置、再被下一次轮询弹回旧位置,
+                  // 没有任何提示, 用户以为播放器卡死(P-10)。
+                  child: data.seekBlocked
+                      ? _SeekBlockedSlider(value: pos, max: maxMs)
+                      : Slider(
+                          padding: const EdgeInsets.only(left: 8, right: 8),
+                          value: pos,
+                          max: maxMs,
+                          onChangeStart: data.canSeek
+                              ? actions.onSeekStart
+                              : null,
+                          onChanged: data.canSeek
+                              ? actions.onSeekChanging
+                              : null,
+                          onChangeEnd: data.canSeek ? actions.onSeekEnd : null,
+                        ),
                 ),
               ),
               // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
@@ -353,6 +375,63 @@ class MiniPlayerBar extends StatelessWidget {
               const SizedBox(height: 2),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 不可 seek 时给用户的统一提示文案(播放条与测试共用一份口径)。
+const String seekBlockedHint = '缓存中，暂不可跳转';
+
+/// 不可 seek 期的进度条: 轨道/拇指与可拖版本一致(位置不会跳), 但拖或点
+/// **只弹提示、不改位置、不回调外层**。
+///
+/// 为什么不用 `Slider(onChanged: null)`: 那样是纯禁用, 用户拖了没有任何反馈,
+/// 观感与「播放器卡死」一样; 这里要的是「能操作, 但明确告诉你为什么不行」。
+class _SeekBlockedSlider extends StatefulWidget {
+  const _SeekBlockedSlider({required this.value, required this.max});
+
+  final double value;
+  final double max;
+
+  @override
+  State<_SeekBlockedSlider> createState() => _SeekBlockedSliderState();
+}
+
+class _SeekBlockedSliderState extends State<_SeekBlockedSlider> {
+  /// 节流到 1s 一次: 一直按着拖会连续回调, 别把提示堆成一串。
+  DateTime? _lastHintAt;
+
+  void _hint() {
+    final now = DateTime.now();
+    final last = _lastHintAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
+      return;
+    }
+    _lastHintAt = now;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        content: Text(seekBlockedHint),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => _hint(),
+      onHorizontalDragStart: (_) => _hint(),
+      // 吃掉原始手势: 位置冻结在播放进度上, 不会出现「拖到新位置再弹回」。
+      child: AbsorbPointer(
+        child: Slider(
+          padding: const EdgeInsets.only(left: 8, right: 8),
+          value: widget.value.clamp(0.0, widget.max),
+          max: widget.max,
+          onChanged: null,
         ),
       ),
     );

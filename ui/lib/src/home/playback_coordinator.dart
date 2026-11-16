@@ -111,6 +111,12 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 当前播放态快照(原页面 `_player`)。页面只读。
   PlayerView? get player => _player;
 
+  /// 当前源能否精确 seek(桌面「边下边播」期 = false)。
+  ///
+  /// 播放条是从 [PlayerBarData.canSeek] 自己判断的; 这里再显式暴露一份,
+  /// 给没有那份快照的调用方(歌词页/详情页)用, 也方便测试直接断言(P-10)。
+  bool get canSeek => _player?.seekable ?? false;
+
   /// 轮询/暂停/seek 之后回灌快照(原 `setState(() => _player = state)`)。
   void adoptPlayer(PlayerView state) {
     if (_disposed) return;
@@ -149,7 +155,10 @@ class PlaybackCoordinator extends ChangeNotifier {
         prev.playing != state.playing ||
         prev.positionMs != state.positionMs ||
         prev.durationMs != state.durationMs ||
-        prev.volume != state.volume) {
+        prev.volume != state.volume ||
+        // seek 能力随源变(边下边播期 = false), 变了就必须重建,
+        // 否则进度条会一直停在旧的可用/禁用态(P-10)
+        prev.seekable != state.seekable) {
       _player = state;
       notifyListeners();
     }
