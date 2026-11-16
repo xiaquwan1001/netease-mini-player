@@ -37,7 +37,7 @@ Widget _mine() => MineView(
   onOpenAlbum: (_) {},
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
-  onPlaySongs: (_, _) {},
+
   loadLiked: () async => [fakeSong(id: 1, name: '喜欢的歌')],
   loadPlaylists: () async => [
     rust.Playlist(

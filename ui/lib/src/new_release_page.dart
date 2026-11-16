@@ -7,6 +7,7 @@ import 'layout.dart';
 import 'format.dart' show formatDurationShort;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 
 typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
@@ -27,7 +28,6 @@ const List<({String key, String label})> releaseAreas = [
 /// 新歌=top_song(按地区 areaId), 新碟=top_album(weekData+monthData 合并), 艺人=top_artists.
 Future<void> showNewReleasePage(
   BuildContext context, {
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   required void Function(rust.AlbumItem album) onOpenAlbum,
   required void Function(rust.HotArtist artist) onOpenArtist,
   AreaSongLoader? loadSongs,
@@ -38,7 +38,6 @@ Future<void> showNewReleasePage(
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => NewReleasePage(
-        onPlaySongs: onPlaySongs,
         onOpenAlbum: onOpenAlbum,
         onOpenArtist: onOpenArtist,
         loadSongs: loadSongs,
@@ -53,7 +52,6 @@ Future<void> showNewReleasePage(
 class NewReleasePage extends StatelessWidget {
   const NewReleasePage({
     super.key,
-    required this.onPlaySongs,
     required this.onOpenAlbum,
     required this.onOpenArtist,
     this.loadSongs,
@@ -62,7 +60,6 @@ class NewReleasePage extends StatelessWidget {
     this.loadNewestAlbums,
   });
 
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(rust.AlbumItem album) onOpenAlbum;
   final void Function(rust.HotArtist artist) onOpenArtist;
   final AreaSongLoader? loadSongs;
@@ -99,7 +96,6 @@ class NewReleasePage extends StatelessWidget {
                 load:
                     loadSongs ??
                     (area) => rust.newSongsByArea(area: area, limit: 50),
-                onPlay: onPlaySongs,
               ),
               _NewAlbumsTab(
                 load:
@@ -155,10 +151,9 @@ class _AreaChips extends StatelessWidget {
 }
 
 class _NewSongsTab extends StatefulWidget {
-  const _NewSongsTab({required this.load, required this.onPlay});
+  const _NewSongsTab({required this.load});
 
   final AreaSongLoader load;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
 
   @override
   State<_NewSongsTab> createState() => _NewSongsTabState();
@@ -201,7 +196,9 @@ class _NewSongsTabState extends State<_NewSongsTab> {
                 formatDurationShort(s.durationMs),
                 style: Theme.of(context).textTheme.labelSmall,
               ),
-              onTap: s.playable ? () => widget.onPlay(songs, i) : null,
+              onTap: s.playable
+                  ? () => PlaybackBridge.instance.playSongs(songs, i)
+                  : null,
             ),
           ),
         ),

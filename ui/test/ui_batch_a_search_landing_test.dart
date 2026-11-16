@@ -114,7 +114,7 @@ void main() {
           loadNewAlbums: () async => const [],
           onOpenAlbum: (_) {},
           onOpenNewRelease: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           onOpenPodcast: (_) {},
           onHeartMode: () {},

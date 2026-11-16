@@ -215,7 +215,7 @@ void main() {
         FeedView(
           loggedIn: true,
           onLogin: () {},
-          onPlaySongs: (_, _) {},
+
           onOpenUrl: (_) async {},
           loadFeed: () async => [event(id: 7, userId: 70)],
           loadSubscribedArtists: () async => const [],

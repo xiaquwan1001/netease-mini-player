@@ -6,6 +6,7 @@ import 'package:minincm/src/user_page.dart' show UserPage;
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 /// 我的资料(简介/等级/uid) —— 「我的」页的简介/动态/我的主页都靠它
 rust.ProfileDetail profileDetail({String signature = ''}) => rust.ProfileDetail(
@@ -57,7 +58,6 @@ Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 MineView buildMine({
   required bool loggedIn,
-  void Function(List<rust.SongDto>, int)? onPlay,
   VoidCallback? onLogin,
 
   /// 覆盖收藏歌单/专辑/播客的返回数据(排序用例用)
@@ -100,7 +100,7 @@ MineView buildMine({
           playCount: BigInt.zero,
         ),
       ],
-  onPlaySongs: onPlay ?? (_, _) {},
+
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
   onOpenLiked: () {},
@@ -149,17 +149,12 @@ void main() {
     setTallView(tester);
     List<rust.SongDto>? played;
     int? index;
-    await tester.pumpWidget(
-      host(
-        buildMine(
-          loggedIn: true,
-          onPlay: (songs, i) {
-            played = songs;
-            index = i;
-          },
-        ),
-      ),
-    );
+    installPlaybackSpy((songs, i) {
+      played = songs;
+      index = i;
+    });
+    addTearDown(resetPlaybackSpy);
+    await tester.pumpWidget(host(buildMine(loggedIn: true)));
     await tester.pumpAndSettle();
 
     // 顶部现在是「资料卡 / 我的主页 / 简介」(需求 1/2),

@@ -260,7 +260,7 @@ void main() {
               ),
             ],
             loadNewSongs: () async => [song(id: 4)],
-            onPlaySongs: (_, _) {},
+
             onOpenPlaylist: (_) {},
             onOpenPodcast: (_) {},
             onHeartMode: () {},
@@ -300,7 +300,7 @@ void main() {
         FlutterError.onError = (d) => errors.add(d.exception.toString());
         showDiscoverPage(
           ctx,
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => [song(vip: true), song(id: 2)],
           loadPlaylists: () async => [

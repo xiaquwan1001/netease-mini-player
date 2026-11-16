@@ -15,6 +15,7 @@ import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 /// 只覆盖测试里会碰到的 FFI 方法(歌单广场一进去就拉分类), 其余 noSuchMethod。
 class _FakeRustApi implements RustLibApi {
@@ -173,7 +174,7 @@ void main() {
                 onPressed: () => showAlbumPreview(
                   ctx,
                   albumId: BigInt.from(9),
-                  onPlay: (_, _) {},
+
                   loadAlbum: (_) async => rust.AlbumDetailDto(
                     id: BigInt.from(9),
                     name: '叶惠美',
@@ -209,7 +210,7 @@ void main() {
           onLogin: () {},
           onOpenAccounts: () => accounts++,
           onOpenVip: () => vip++,
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           onOpenPodcast: (_) {},
           onOpenAlbum: (_) {},
@@ -318,7 +319,7 @@ void main() {
       ],
       onOpenAlbum: (_) {},
       onOpenNewRelease: onOpenNewRelease,
-      onPlaySongs: (_, _) {},
+
       onOpenPlaylist: (_) {},
       onOpenPodcast: (_) {},
       onHeartMode: () {},
@@ -395,15 +396,17 @@ void main() {
     big(tester);
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       pushHost('open', () {
         showAlbumPreview(
           tester.element(find.text('open')),
           albumId: BigInt.from(9),
-          onPlay: (songs, i) {
-            played = songs;
-            playedIndex = i;
-          },
+
           loadAlbum: (_) async => rust.AlbumDetailDto(
             id: BigInt.from(9),
             name: '叶惠美',
@@ -450,7 +453,7 @@ void main() {
       pushHost('open', () {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => [song(1, '晴天')],
           loadPlaylists: () async => const [],
@@ -493,7 +496,7 @@ void main() {
       pushHost('open', () {
         showRecentPage(
           tester.element(find.text('open')),
-          onPlay: (_, _) {},
+
           loadRecent: () async => [song(3, '最近一首')],
           loadAlbums: () async => const [],
           loadPlaylists: () async => const [],

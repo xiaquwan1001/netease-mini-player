@@ -381,7 +381,7 @@ void main() {
         ArtistDetailPage(
           artistId: BigInt.from(6452),
           name: '某艺人',
-          onPlaySongs: (_, _) {},
+
           loadArtist: (_) async => bareArtist(),
           loadSimilar: (_) async => const [],
           loadSongsPage: (_, _) async =>

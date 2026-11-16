@@ -15,7 +15,7 @@ const _longName = '一个很长很长的曲风名字用来验证省略号';
 
 Widget _recommend(List<rust.StyleTag> tags) => RecommendView(
   loggedIn: true,
-  onPlaySongs: (_, _) {},
+
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
   onHeartMode: () {},

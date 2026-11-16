@@ -4,6 +4,7 @@ import 'package:minincm/src/ranking_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 rust.PlayRankEntryDto entry(int id, String name, int playCount) =>
     rust.PlayRankEntryDto(
@@ -27,6 +28,11 @@ void main() {
     final periods = <String>[];
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
 
     await tester.pumpWidget(
       host(
@@ -36,10 +42,6 @@ void main() {
             return period == 'week'
                 ? [entry(2, '本周单曲', 7)]
                 : [entry(1, '常听单曲', 120), entry(3, '第二首', 80)];
-          },
-          onPlaySongs: (songs, index) {
-            played = songs;
-            playedIndex = index;
           },
         ),
       ),
@@ -79,7 +81,6 @@ void main() {
           load: (_) async => [
             for (var i = 1; i <= 8; i++) entry(i, '歌曲$i', 100 - i),
           ],
-          onPlaySongs: (_, _) {},
         ),
       ),
     );
@@ -93,11 +94,7 @@ void main() {
   });
 
   testWidgets('空排行显示提示', (tester) async {
-    await tester.pumpWidget(
-      host(
-        PlayRankingView(load: (_) async => const [], onPlaySongs: (_, _) {}),
-      ),
-    );
+    await tester.pumpWidget(host(PlayRankingView(load: (_) async => const [])));
     await tester.pumpAndSettle();
     expect(find.textContaining('还没有听歌记录'), findsOneWidget);
   });
@@ -112,7 +109,6 @@ void main() {
             if (attempts <= 3) throw Exception('[network] reset');
             return [entry(1, '重试后的歌', 5)];
           },
-          onPlaySongs: (_, _) {},
         ),
       ),
     );
@@ -137,7 +133,6 @@ void main() {
           child: Scaffold(
             body: PlayRankingView(
               load: (_) async => [entry(1, '小屏上的第一名歌曲名很长', 999)],
-              onPlaySongs: (_, _) {},
             ),
           ),
         ),
@@ -158,10 +153,7 @@ void main() {
         home: MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
           child: Scaffold(
-            body: PlayRankingView(
-              load: (_) async => throw Exception(' boom'),
-              onPlaySongs: (_, _) {},
-            ),
+            body: PlayRankingView(load: (_) async => throw Exception(' boom')),
           ),
         ),
       ),
@@ -180,12 +172,7 @@ void main() {
       MaterialApp(
         home: MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-          child: Scaffold(
-            body: PlayRankingView(
-              load: (_) async => const [],
-              onPlaySongs: (_, _) {},
-            ),
-          ),
+          child: Scaffold(body: PlayRankingView(load: (_) async => const [])),
         ),
       ),
     );

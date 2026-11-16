@@ -7,6 +7,7 @@ import 'layout.dart';
 import 'now_playing.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'state_views.dart';
 
@@ -22,16 +23,12 @@ typedef RankingLoader = Future<List<rust.PlayRankEntryDto>> Function(
 /// 统计区间: 传 "all" / "week" 给 Rust 侧(见 ncm_provider::RankingPeriod)
 const rankingPeriods = <(String, String)>[('all', '总排行'), ('week', '当周')];
 
-Future<void> showPlayRanking(
-  BuildContext context, {
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
-  RankingLoader? load,
-}) {
+Future<void> showPlayRanking(BuildContext context, {RankingLoader? load}) {
   return Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Scaffold(
         appBar: AppBar(title: const Text('听歌排行')),
-        body: PlayRankingView(onPlaySongs: onPlaySongs, load: load),
+        body: PlayRankingView(load: load),
       ),
     ),
   );
@@ -40,13 +37,11 @@ Future<void> showPlayRanking(
 class PlayRankingView extends StatefulWidget {
   const PlayRankingView({
     super.key,
-    required this.onPlaySongs,
     this.load,
     this.compact = false,
     this.onOpenAll,
   });
 
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final RankingLoader? load;
 
   /// 只展示前 5 条 + 一个"查看全部"入口("我的"页内嵌用)
@@ -164,7 +159,10 @@ class _PlayRankingViewState extends State<PlayRankingView>
                           final index = playable.indexWhere(
                             (s) => s.id == e.song.id,
                           );
-                          widget.onPlaySongs(playable, index < 0 ? 0 : index);
+                          PlaybackBridge.instance.playSongs(
+                            playable,
+                            index < 0 ? 0 : index,
+                          );
                         }
                       : null,
                 );
@@ -212,7 +210,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
                               final index = playable.indexWhere(
                                 (s) => s.id == shown[i].song.id,
                               );
-                              widget.onPlaySongs(
+                              PlaybackBridge.instance.playSongs(
                                 playable,
                                 index < 0 ? 0 : index,
                               );

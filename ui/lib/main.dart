@@ -45,6 +45,7 @@ import 'src/play_queue_sheet.dart';
 import 'src/keystore.dart';
 import 'src/player_bar.dart';
 import 'src/playback.dart';
+import 'src/playback_bridge.dart';
 import 'src/playback_policy.dart';
 import 'src/playback_state.dart';
 import 'src/queue.dart';
@@ -59,7 +60,6 @@ import 'src/settings_account_page.dart';
 import 'src/settings_view.dart';
 import 'src/update_checker.dart';
 import 'src/update_dialog.dart';
-import 'src/user_nav.dart';
 import 'src/song_actions.dart';
 import 'src/song_share.dart';
 import 'src/song_tile.dart';
@@ -262,16 +262,20 @@ class _HomePageState extends State<HomePage> {
       onClearSearchError: _onClearSearchError,
       onLeaveLibrary: _onLeaveLibrary,
     );
-    // 头像点击进入用户主页时, 主页里点歌仍要能播(共享同一份播放回调)
-    UserNav.onPlaySongs = _playSongsList;
-    // 艺人主页同理(关注流里的艺人头像 → 艺人主页, 与搜索进的是同一份页面)
-    ArtistNav.onPlaySongs = _playSongsList;
+    // 播放能力只在这里接线一次: 任何页面/任何深度的区块都调
+    // PlaybackBridge.instance, 不再有 UserNav/ArtistNav 静态字段与构造参数
+    // 两条旁路(见 src/playback_bridge.dart 头注释)。
+    PlaybackBridge.instance.bind(
+      playSongs: _playSongsList,
+      appendNext: _appendSongToQueue,
+      openPlaylist: _openPlaylist,
+    );
+    // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
     ArtistNav.onOpenAlbum = (albumId, albumName, coverUrl) => showAlbumPreview(
       context,
       albumId: albumId,
       albumName: albumName,
       coverUrl: coverUrl,
-      onPlay: _playSongsList,
     );
     // 启动自动检查发现新版本 -> 程序内弹窗(设置页手动检查走自己的弹窗)
     UpdateCheckHost.pendingPrompt.addListener(_onUpdatePrompt);
@@ -286,6 +290,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    // 断开播放能力: 避免下一个 HomePage 实例/测试用例误用已销毁的实现
+    PlaybackBridge.instance.unbind();
     AppSettings.instance.removeListener(_onAudioSettingsChanged);
     _ticker?.cancel();
     _search.dispose();
@@ -593,13 +599,11 @@ class _HomePageState extends State<HomePage> {
         context,
         artistId: a.id,
         name: a.name,
-        onPlaySongs: (songs, i) => _playSongsList(songs, i),
         onOpenAlbum: (albumId, name, cover) => showAlbumPreview(
           context,
           albumId: albumId,
           albumName: name,
           coverUrl: cover,
-          onPlay: (songs, i) => _playSongsList(songs, i),
         ),
       );
       return;
@@ -718,9 +722,6 @@ class _HomePageState extends State<HomePage> {
   void _openDiscover() {
     showDiscoverPage(
       context,
-      // 日推队列: 详情页"..."里要能继续"不感兴趣"
-      onPlaySongs: (songs, index) =>
-          _playSongsList(songs, index, source: SongActionSource.dailyRecommend),
       onOpenPlaylist: (pl) => _openPlaylist(pl),
       loadPlaylists: _dailyPlaylists,
       // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
@@ -760,17 +761,12 @@ class _HomePageState extends State<HomePage> {
 
   void _openPodcastRadio(rust.PodcastRadio radio) {
     _touchInteraction('podcast', radio.id);
-    showPodcastDetail(
-      context,
-      radio: radio,
-      onPlaySongs: (songs, index) => _playSongsList(songs, index),
-    );
+    showPodcastDetail(context, radio: radio);
   }
 
   void _openRecent() {
     showRecentPage(
       context,
-      onPlay: (songs, index) => _playSongsList(songs, index),
       onOpenPlaylist: _openPlaylist,
       onOpenPodcast: _openPodcastRadio,
       onOpenAlbum: (album) => showAlbumPreview(
@@ -778,7 +774,6 @@ class _HomePageState extends State<HomePage> {
         albumId: album.id,
         albumName: album.name,
         coverUrl: album.coverUrl,
-        onPlay: (songs, index) => _playSongsList(songs, index),
       ),
     );
   }
@@ -815,13 +810,11 @@ class _HomePageState extends State<HomePage> {
       context,
       artistId: artist.id,
       name: artist.name,
-      onPlaySongs: (songs, i) => _playSongsList(songs, i),
       onOpenAlbum: (id, name, cover) => showAlbumPreview(
         context,
         albumId: id,
         albumName: name,
         coverUrl: cover,
-        onPlay: (songs, i) => _playSongsList(songs, i),
       ),
     );
   }
@@ -832,7 +825,6 @@ class _HomePageState extends State<HomePage> {
       albumId: album.id,
       albumName: album.name,
       coverUrl: album.coverUrl,
-      onPlay: (songs, i) => _playSongsList(songs, i),
     );
   }
 
@@ -1255,12 +1247,8 @@ class _HomePageState extends State<HomePage> {
     dislike: _dislikeSong,
     songWiki: (song) => showSongWiki(context, song: song),
     counts: _loadSongCounts,
-    similarSongs: (song) => showSimilarSongs(
-      context,
-      song: song,
-      onPlay: _playSongsList,
-      onOpenPlaylist: _openPlaylist,
-    ),
+    similarSongs: (song) =>
+        showSimilarSongs(context, song: song, onOpenPlaylist: _openPlaylist),
   );
 
   /// 歌曲菜单里的三项数量级: 喜欢人数 / 评论数 / 分享数(与原版对齐).
@@ -1546,13 +1534,11 @@ class _HomePageState extends State<HomePage> {
       context,
       artistId: song.artistId,
       name: song.artist,
-      onPlaySongs: (songs, i) => _playSongsList(songs, i),
       onOpenAlbum: (id, name, cover) => showAlbumPreview(
         context,
         albumId: id,
         albumName: name,
         coverUrl: cover,
-        onPlay: (songs, i) => _playSongsList(songs, i),
       ),
     );
   }
@@ -1563,7 +1549,6 @@ class _HomePageState extends State<HomePage> {
       albumId: song.albumId,
       albumName: song.album,
       coverUrl: song.coverUrl,
-      onPlay: (songs, i) => _playSongsList(songs, i),
     );
   }
 
@@ -1654,11 +1639,7 @@ class _HomePageState extends State<HomePage> {
       _toast('登录后才能查看关注与粉丝');
       return;
     }
-    await showUserList(
-      context,
-      startOnFans: startOnFans,
-      onPlaySongs: (songs, i) => _playSongsList(songs, i),
-    );
+    await showUserList(context, startOnFans: startOnFans);
   }
 
   /// 打开歌单详情页(全屏路由): 曲目/收藏/分享/评论都在详情页里,
@@ -1675,8 +1656,6 @@ class _HomePageState extends State<HomePage> {
       likedIds: _liked,
       currentTrackId: _current?.id,
       currentPlaylistId: _queuePlaylistId,
-      onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: pl.id),
-      onAppendSong: _appendSongToQueue,
       onLikeChanged: (id, liked) => setState(() {
         if (liked) {
           _liked.add(id);
@@ -1736,8 +1715,6 @@ class _HomePageState extends State<HomePage> {
         likedIds: _liked,
         currentTrackId: _current?.id,
         currentPlaylistId: _queuePlaylistId,
-        onPlaySongs: (songs, i) => _playSongsList(songs, i, playlistId: sp.id),
-        onAppendSong: _appendSongToQueue,
         onLikeChanged: (id, liked) => setState(() {
           if (liked) {
             _liked.add(id);
@@ -2468,41 +2445,33 @@ class _HomePageState extends State<HomePage> {
           loggedIn: _info?.loggedIn == true,
           // 每日推荐歌单走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
           loadDailyPlaylists: _dailyPlaylists,
-          onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
-          onPlayFm: (songs, index) =>
-              _playSongsList(songs, index, source: SongActionSource.personalFm),
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,
             albumName: album.name,
             coverUrl: album.coverUrl,
-            onPlay: _playSongsList,
           ),
           onOpenNewRelease: () => showNewReleasePage(
             context,
-            onPlaySongs: _playSongsList,
             onOpenAlbum: (album) => showAlbumPreview(
               context,
               albumId: album.id,
               albumName: album.name,
               coverUrl: album.coverUrl,
-              onPlay: _playSongsList,
             ),
             onOpenArtist: (artist) => showArtistDetail(
               context,
               artistId: artist.id,
               name: artist.name,
-              onPlaySongs: (songs, i) => _playSongsList(songs, i),
               onOpenAlbum: (id, name, cover) => showAlbumPreview(
                 context,
                 albumId: id,
                 albumName: name,
                 coverUrl: cover,
-                onPlay: (songs, i) => _playSongsList(songs, i),
               ),
             ),
           ),
@@ -2512,7 +2481,6 @@ class _HomePageState extends State<HomePage> {
           key: ValueKey('feed-${_info?.loggedIn}'),
           loggedIn: _info?.loggedIn == true,
           onLogin: _login,
-          onPlaySongs: _playSongsList,
           onOpenUrl: PlatformBridge.openUrl,
         );
       case 3:
@@ -2521,7 +2489,6 @@ class _HomePageState extends State<HomePage> {
           loggedIn: _info?.loggedIn == true,
           onLogin: _login,
           onOpenAccounts: _openAccountPage,
-          onPlaySongs: _playSongsList,
           onOpenPlaylist: _openPlaylist,
           onOpenPodcast: _openPodcastRadio,
           onOpenFollows: () => _openUserList(startOnFans: false),
@@ -2531,7 +2498,6 @@ class _HomePageState extends State<HomePage> {
             albumId: album.id,
             albumName: album.name,
             coverUrl: album.coverUrl,
-            onPlay: _playSongsList,
             initiallySubscribed: true,
           ),
           onOpenRecent: _openRecent,
@@ -2539,8 +2505,8 @@ class _HomePageState extends State<HomePage> {
           onOpenMessages: () => showMessagesPage(context),
           onOpenMedals: () => showMedalWall(context, isVip: _info?.vip == true),
           onOpenVip: _openVip,
-          onPlayLiked: (songs, i) =>
-              _playSongsList(songs, i, playlistId: _likedPlaylistId),
+          // "我喜欢的音乐"区块点播时的队列来源标记(解析出来之前为 null)
+          likedPlaylistId: _likedPlaylistId,
           // 简介保存: POST /api/user/profile/update(局部更新, 只改 signature)
           saveSignature: (signature) =>
               rust.updateSignature(signature: signature),

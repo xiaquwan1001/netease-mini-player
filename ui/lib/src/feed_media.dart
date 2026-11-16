@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'song_tile.dart' show SongTitleWithBadges;
 
@@ -112,16 +113,10 @@ class FeedImageGrid extends StatelessWidget {
 /// 单曲 mini 卡(动态卡片/用户主页/艺人页共用): CoverArt + 歌名/艺人 + play 图标,
 /// 点击播放这一首(不可播放时置灰且不可点)。
 class FeedSongMiniCard extends StatelessWidget {
-  const FeedSongMiniCard({
-    super.key,
-    required this.song,
-    this.coverUrl,
-    required this.onPlaySongs,
-  });
+  const FeedSongMiniCard({super.key, required this.song, this.coverUrl});
 
   final rust.SongDto song;
   final String? coverUrl;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +126,9 @@ class FeedSongMiniCard extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: song.playable ? () => onPlaySongs([song], 0) : null,
+        onTap: song.playable
+            ? () => PlaybackBridge.instance.playSongs([song], 0)
+            : null,
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(

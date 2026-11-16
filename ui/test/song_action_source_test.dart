@@ -160,7 +160,7 @@ void main() {
           child: Scaffold(
             body: RecommendView(
               loggedIn: true,
-              onPlaySongs: (_, _) {},
+
               onOpenPlaylist: (_) {},
               onOpenPodcast: (_) {},
               onHeartMode: () {},
@@ -199,7 +199,7 @@ void main() {
           child: Scaffold(
             body: RecommendView(
               loggedIn: true,
-              onPlaySongs: (_, _) {},
+
               onOpenPlaylist: (_) {},
               onOpenPodcast: (_) {},
               onHeartMode: () {},

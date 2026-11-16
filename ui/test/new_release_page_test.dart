@@ -19,7 +19,6 @@ void main() {
     await tester.pumpWidget(
       host(
         NewReleasePage(
-          onPlaySongs: (_, _) {},
           onOpenAlbum: (a) => opened = a,
           onOpenArtist: (_) {},
           loadNewestAlbums: () async => [album(1, '精选新碟A'), album(2, '精选新碟B')],
@@ -46,7 +45,6 @@ void main() {
     await tester.pumpWidget(
       host(
         NewReleasePage(
-          onPlaySongs: (_, _) {},
           onOpenAlbum: (_) {},
           onOpenArtist: (_) {},
           loadSongs: (area) async {
@@ -70,7 +68,6 @@ void main() {
     await tester.pumpWidget(
       host(
         NewReleasePage(
-          onPlaySongs: (_, _) {},
           onOpenAlbum: (_) {},
           onOpenArtist: (_) {},
           loadNewestAlbums: () async {
@@ -104,7 +101,6 @@ void main() {
         ),
         home: Scaffold(
           body: NewReleasePage(
-            onPlaySongs: (_, _) {},
             onOpenAlbum: (_) {},
             onOpenArtist: (_) {},
             loadSongs: (area) async => <rust.SongDto>[],

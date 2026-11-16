@@ -5,6 +5,7 @@ import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart';
+import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
 import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
@@ -16,7 +17,6 @@ import 'discover_types.dart';
 /// 审查 §5.6: 4 个列表放进 72% 高的 sheet 同样局促, 改为全页 [Scaffold]。
 Future<void> showRecentPage(
   BuildContext context, {
-  required void Function(List<rust.SongDto> songs, int index) onPlay,
   SongListLoader? loadRecent,
   AlbumListLoader? loadAlbums,
   PlaylistListLoader? loadPlaylists,
@@ -36,7 +36,6 @@ Future<void> showRecentPage(
         loadAlbums: albums,
         loadPlaylists: playlists,
         loadPodcasts: podcasts,
-        onPlay: onPlay,
         onOpenPlaylist: onOpenPlaylist,
         onOpenPodcast: onOpenPodcast,
         onOpenAlbum: onOpenAlbum,
@@ -53,7 +52,6 @@ class RecentPlayedPage extends StatelessWidget {
     required this.loadAlbums,
     required this.loadPlaylists,
     required this.loadPodcasts,
-    required this.onPlay,
     this.onOpenPlaylist,
     this.onOpenPodcast,
     this.onOpenAlbum,
@@ -63,7 +61,6 @@ class RecentPlayedPage extends StatelessWidget {
   final AlbumListLoader loadAlbums;
   final PlaylistListLoader loadPlaylists;
   final PodcastListLoader loadPodcasts;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final void Function(rust.Playlist playlist)? onOpenPlaylist;
   final void Function(rust.PodcastRadio radio)? onOpenPodcast;
   final void Function(rust.AlbumItem album)? onOpenAlbum;
@@ -105,7 +102,10 @@ class RecentPlayedPage extends StatelessWidget {
                 showDuration: false,
                 // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable
-                    ? () => onPlay(list.cast<rust.SongDto>(), i)
+                    ? () => PlaybackBridge.instance.playSongs(
+                        list.cast<rust.SongDto>(),
+                        i,
+                      )
                     : null,
               ),
             ),

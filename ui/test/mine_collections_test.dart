@@ -44,7 +44,7 @@ Widget buildMine({required int Function() onLikedLoad}) => MineView(
   loggedIn: true,
   onLogin: () {},
   onOpenAccounts: () {},
-  onPlaySongs: (_, _) {},
+
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
   onOpenAlbum: (_) {},

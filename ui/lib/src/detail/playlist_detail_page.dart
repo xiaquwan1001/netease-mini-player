@@ -8,6 +8,7 @@ import '../cover_palette.dart';
 import '../library_view.dart';
 import '../layout.dart' show rowExtentFor;
 import '../net_retry.dart';
+import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../toast.dart' show showToast, showUndoToast;
 import 'detail_shared.dart' show showResourceShareSheet;
@@ -32,11 +33,7 @@ Future<void> showPlaylistDetail(
   Set<BigInt> likedIds = const {},
   BigInt? currentTrackId,
   BigInt? currentPlaylistId,
-  required void Function(List<rust.SongDto> songs, int index) onPlaySongs,
   void Function(BigInt id, bool liked)? onLikeChanged,
-
-  /// 歌单内搜索后"只添加当前歌"用(不传则退化为按筛选列表播放)
-  void Function(rust.SongDto song)? onAppendSong,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -49,9 +46,7 @@ Future<void> showPlaylistDetail(
         likedIds: likedIds,
         currentTrackId: currentTrackId,
         currentPlaylistId: currentPlaylistId,
-        onPlaySongs: onPlaySongs,
         onLikeChanged: onLikeChanged,
-        onAppendSong: onAppendSong,
       ),
     ),
   );
@@ -61,7 +56,6 @@ class _PlaylistDetailPage extends StatefulWidget {
   const _PlaylistDetailPage({
     required this.playlistId,
     required this.name,
-    required this.onPlaySongs,
     this.coverUrl,
     this.special = false,
     this.loggedIn = false,
@@ -69,7 +63,6 @@ class _PlaylistDetailPage extends StatefulWidget {
     this.currentTrackId,
     this.currentPlaylistId,
     this.onLikeChanged,
-    this.onAppendSong,
   });
 
   final BigInt playlistId;
@@ -80,11 +73,7 @@ class _PlaylistDetailPage extends StatefulWidget {
   final Set<BigInt> likedIds;
   final BigInt? currentTrackId;
   final BigInt? currentPlaylistId;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final void Function(BigInt id, bool liked)? onLikeChanged;
-
-  /// 设置里选"只添加当前歌"时用: 保留现有队列, 把歌追加到末尾
-  final void Function(rust.SongDto song)? onAppendSong;
 
   @override
   State<_PlaylistDetailPage> createState() => _PlaylistDetailPageState();
@@ -398,16 +387,19 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     // 没在筛选(或没有追加回调)时保持原行为: 按当前展示的列表起播。
     final filtering = _filter.trim().isNotEmpty;
     final action = AppSettings.instance.librarySearchPlayAction;
+    // 播放能力走全局 PlaybackBridge 单入口; playlistId 是歌单队列的来源标记
+    // (详情页"定位正在播放"据此判断当前队列是不是本歌单)
+    final bridge = PlaybackBridge.instance;
     if (filtering &&
         action == LibrarySearchPlayAction.appendCurrent &&
-        widget.onAppendSong != null) {
-      widget.onAppendSong!(song);
+        bridge.canAppendNext) {
+      bridge.appendNext(song);
     } else if (filtering && action == LibrarySearchPlayAction.fullList) {
       final all = _visible;
       final idx = all.indexWhere((s) => s.id == song.id);
-      widget.onPlaySongs(all, idx < 0 ? 0 : idx);
+      bridge.playSongs(all, idx < 0 ? 0 : idx, playlistId: widget.playlistId);
     } else {
-      widget.onPlaySongs(_display, index);
+      bridge.playSongs(_display, index, playlistId: widget.playlistId);
     }
     setState(() => _localTrackId = song.id);
   }

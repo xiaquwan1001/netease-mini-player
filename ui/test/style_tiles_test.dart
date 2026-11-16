@@ -13,7 +13,7 @@ Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 Widget _recommend(List<rust.StyleTag> tags) => RecommendView(
   loggedIn: true,
-  onPlaySongs: (_, _) {},
+
   onOpenPlaylist: (_) {},
   onOpenPodcast: (_) {},
   onHeartMode: () {},

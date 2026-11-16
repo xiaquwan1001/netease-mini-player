@@ -435,7 +435,7 @@ Widget _recommendPage() => Scaffold(
     loadNewAlbums: () async => <rust.AlbumItem>[_album(40, '新碟上架一')],
     onOpenAlbum: (_) {},
     onOpenNewRelease: () {},
-    onPlaySongs: (_, _) {},
+
     onOpenPlaylist: (_) {},
     onOpenPodcast: (_) {},
     onHeartMode: () {},
@@ -481,7 +481,7 @@ Widget _minePage() => Scaffold(
         score: BigInt.from(period == 'week' ? 30 : 420),
       ),
     ],
-    onPlaySongs: (_, _) {},
+
     onOpenPlaylist: (_) {},
     onOpenPodcast: (_) {},
     onOpenAlbum: (_) {},
@@ -574,7 +574,6 @@ Widget _playlistDetailPage() => _RouteHost(
         loggedIn: true,
         currentTrackId: BigInt.from(501),
         currentPlaylistId: BigInt.from(24381616),
-        onPlaySongs: (_, _) {},
       ),
     );
   },
@@ -591,7 +590,7 @@ Widget _playlistDetailPage() => _RouteHost(
 Widget _artistPage() => ArtistDetailPage(
   artistId: BigInt.from(6452),
   name: '周杰伦',
-  onPlaySongs: (_, _) {},
+
   onOpenAlbum: (_, _, _) {},
   onOpenUrl: (_) async {},
   loadArtist: (_) async => _artistDetail(),
@@ -666,7 +665,7 @@ Widget _feedPage() => Scaffold(
   body: FeedView(
     loggedIn: true,
     onLogin: () {},
-    onPlaySongs: (_, _) {},
+
     onOpenUrl: (_) async {},
     loadFeed: () async => <rust.FeedEventDto>[
       _feedEvent(

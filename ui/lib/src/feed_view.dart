@@ -31,7 +31,6 @@ class FeedView extends StatefulWidget {
     super.key,
     required this.loggedIn,
     required this.onLogin,
-    required this.onPlaySongs, // void Function(List<rust.SongDto>, int)
     required this.onOpenUrl, // Future<void> Function(String url) —— 视频交给系统打开
     this.loadFeed, // 测试注入
     this.loadSubscribedArtists, // 测试注入(关注艺人, 用于"全部艺人"面板)
@@ -42,7 +41,6 @@ class FeedView extends StatefulWidget {
 
   final bool loggedIn;
   final VoidCallback onLogin;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final Future<List<rust.FeedEventDto>> Function()? loadFeed;
   final Future<List<rust.Artist>> Function()? loadSubscribedArtists;
@@ -361,7 +359,6 @@ class _FeedViewState extends State<FeedView> {
                       }
                       return _FeedCard(
                         event: events[i],
-                        onPlaySongs: widget.onPlaySongs,
                         onOpenUrl: widget.onOpenUrl,
                         onOpenChanged: _replace,
                         onLike: () => _toggleLike(events[i]),
@@ -755,7 +752,6 @@ class _LoadOlderFooterState extends State<_LoadOlderFooter> {
 class _FeedCard extends StatelessWidget {
   const _FeedCard({
     required this.event,
-    required this.onPlaySongs,
     required this.onOpenUrl,
     required this.onOpenChanged,
     required this.onLike,
@@ -763,7 +759,6 @@ class _FeedCard extends StatelessWidget {
   });
 
   final rust.FeedEventDto event;
-  final void Function(List<rust.SongDto> songs, int index) onPlaySongs;
   final Future<void> Function(String url) onOpenUrl;
   final void Function(rust.FeedEventDto updated) onOpenChanged;
 
@@ -795,7 +790,6 @@ class _FeedCard extends StatelessWidget {
     await showFeedDetail(
       context,
       event: event,
-      onPlaySongs: onPlaySongs,
       onOpenUrl: onOpenUrl,
       // 从"评论"数字/图标进来时直接定位到评论区(不弹输入框)
       focusComments: focusComments,
@@ -880,11 +874,7 @@ class _FeedCard extends StatelessWidget {
                 ),
               // 单曲 mini 卡
               if (event.song != null)
-                FeedSongMiniCard(
-                  song: event.song!,
-                  coverUrl: event.coverUrl,
-                  onPlaySongs: onPlaySongs,
-                ),
+                FeedSongMiniCard(song: event.song!, coverUrl: event.coverUrl),
               // 配图: 只放用户自己附的照片, 排版按张数(1 张大图 / 2 两列 / 3+ 三列)
               if (feedAttachedImages(event).isNotEmpty) ...[
                 const SizedBox(height: 8),

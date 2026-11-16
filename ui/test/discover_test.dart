@@ -5,6 +5,7 @@ import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
+import 'support/playback_spy.dart';
 
 // 共享工厂 + 本文件口径(歌单首数由调用方给), 位置参数签名保持不变。
 rust.Playlist playlist(int id, String name, int count) =>
@@ -30,14 +31,16 @@ void main() {
   testWidgets('每日推荐: 歌曲列表可点, 回调整批曲目与下标', (tester) async {
     List<rust.SongDto>? played;
     int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (songs, index) {
-            played = songs;
-            playedIndex = index;
-          },
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => [
             fakeSong(id: 1, name: '晴天'),
@@ -66,7 +69,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (pl) => opened = pl,
           loadSongs: () async => [fakeSong(id: 1, name: '晴天')],
           loadPlaylists: () async => [playlist(9, '推荐歌单', 12)],
@@ -91,7 +94,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => throw Exception('[network] boom'),
           loadPlaylists: () async => const [],
@@ -105,11 +108,13 @@ void main() {
 
   testWidgets('最近听过: 列表可点并回调', (tester) async {
     List<rust.SongDto>? played;
+    installPlaybackSpy((songs, _) => played = songs);
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       host(() {
         showRecentPage(
           tester.element(find.text('open')),
-          onPlay: (songs, index) => played = songs,
+
           loadRecent: () async => [fakeSong(id: 3, name: '最近一首')],
           loadAlbums: () async => const [],
           loadPlaylists: () async => const [],
@@ -131,7 +136,7 @@ void main() {
       host(() {
         showRecentPage(
           tester.element(find.text('open')),
-          onPlay: (_, _) {},
+
           loadRecent: () async => [fakeSong(id: 3, name: '最近一首')],
           loadAlbums: () async => [
             rust.AlbumItem(
@@ -178,7 +183,7 @@ void main() {
       host(() {
         showRecentPage(
           tester.element(find.text('open')),
-          onPlay: (_, _) {},
+
           loadRecent: () async => const [],
           loadAlbums: () async => const [],
           loadPlaylists: () async => [playlist(9, '最近歌单', 3)],
@@ -223,7 +228,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => [
             fakeSong(id: 1, name: '晴天'),
@@ -244,11 +249,13 @@ void main() {
 
   testWidgets('历史日推: 日期列表 → 某天的歌单', (tester) async {
     List<rust.SongDto>? played;
+    installPlaybackSpy((songs, _) => played = songs);
+    addTearDown(resetPlaybackSpy);
     await tester.pumpWidget(
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (songs, index) => played = songs,
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
@@ -281,7 +288,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (pl) => opened.add(pl.name),
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
@@ -325,7 +332,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
@@ -357,7 +364,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
@@ -388,7 +395,7 @@ void main() {
       host(() {
         showDiscoverPage(
           tester.element(find.text('open')),
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
           loadSongs: () async => const [],
           loadPlaylists: () async => const [],
@@ -431,7 +438,7 @@ void main() {
             builder: (ctx) => TextButton(
               onPressed: () => showRecentPage(
                 ctx,
-                onPlay: (_, _) {},
+
                 loadRecent: () async => [
                   fakeSong(id: 3, name: '一首名字特别特别长的歌用于窄屏回归测试'),
                 ],

@@ -8,6 +8,7 @@ import 'artist_page.dart';
 import 'cover_art.dart';
 import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
+import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
@@ -28,7 +29,6 @@ Future<void> showAlbumPreview(
   required BigInt albumId,
   String? albumName,
   String? coverUrl,
-  required void Function(List<rust.SongDto> songs, int index) onPlay,
   AlbumLoader? loadAlbum,
 
   /// 从"收藏的专辑"进来时已知已收藏, 直接显示"已收藏"
@@ -55,7 +55,6 @@ Future<void> showAlbumPreview(
         albumId: albumId,
         albumName: albumName,
         coverUrl: coverUrl,
-        onPlay: onPlay,
         load: loadAlbum ?? (id) => rust.albumDetail(albumId: id),
         initiallySubscribed: initiallySubscribed,
         setSubscribed:
@@ -76,7 +75,6 @@ class AlbumPreviewPage extends StatefulWidget {
     required this.albumId,
     required this.albumName,
     required this.coverUrl,
-    required this.onPlay,
     required this.load,
     required this.initiallySubscribed,
     required this.setSubscribed,
@@ -87,7 +85,6 @@ class AlbumPreviewPage extends StatefulWidget {
   final BigInt albumId;
   final String? albumName;
   final String? coverUrl;
-  final void Function(List<rust.SongDto> songs, int index) onPlay;
   final AlbumLoader load;
   final bool initiallySubscribed;
   final Future<bool> Function(BigInt albumId, bool subscribed) setSubscribed;
@@ -204,12 +201,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
       open(id, name);
       return;
     }
-    await showArtistDetail(
-      context,
-      artistId: id,
-      name: name,
-      onPlaySongs: widget.onPlay,
-    );
+    await showArtistDetail(context, artistId: id, name: name);
   }
 
   /// 按名字解析艺人 id(默认走精确搜索; 取同名或第一个命中)
@@ -384,7 +376,7 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
           // 无版权曲目灰显且点了没反应(官方同款)
           tapOnlyWhenPlayable: true,
           // 点播不退出专辑页(与歌单详情/日推一致): 换队列, 页面留在原地
-          onTap: () => widget.onPlay(songs, i),
+          onTap: () => PlaybackBridge.instance.playSongs(songs, i),
         );
       },
     );

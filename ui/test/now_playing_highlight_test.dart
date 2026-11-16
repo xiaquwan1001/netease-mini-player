@@ -68,7 +68,7 @@ void main() {
           loadPlaylists: () async => const <rust.Playlist>[],
           loadHistoryDates: () async => const <String>[],
           loadHistorySongs: (_) async => const <rust.SongDto>[],
-          onPlaySongs: (_, _) {},
+
           onOpenPlaylist: (_) {},
         ),
       ),
@@ -91,7 +91,6 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: PlayRankingView(
-            onPlaySongs: (_, _) {},
             load: (period) async => [
               rust.PlayRankEntryDto(
                 song: fakeSong(id: 8, name: '最常听'),
