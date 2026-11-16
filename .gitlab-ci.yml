@@ -1,6 +1,6 @@
-# USTC GitLab CI（与 GitHub Actions 对齐：test 全跑；tag 上出 Linux/Android 产物）
-# 本机 runner：宿主工具链直跑（校园网直连，artifact 拉取比 GitHub 快），
-# 不建 arm64 包、不做 Windows（GitHub 侧仍负责 arm64/windows）。
+# USTC GitLab：仅作镜像仓，不参与发布验收（发布验收以 GitHub CI + Release 为准）。
+# 2026-11-16 口径：USTC 侧不用本机 runner；只用平台共享 runner，且只在空闲时跑、
+# 没空间就跳过（不建 arm64 包、不做 Windows，这些由 GitHub 侧负责）。
 stages: [test, build]
 
 default:
