@@ -192,6 +192,10 @@ cargo run -p ncm-cli -- lyric 186016
 | 接口覆盖 | **135/136**(FFI 导出 160, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
 | 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing-dual-platform.md` |
 
+上表这些命令**只在 `tools/ci-gates.sh` 里实现一次**(`bash tools/ci-gates.sh list` 看全部子命令):
+本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
+调的都是同一处 —— 发版门不会再比 CI 弱(token / write-guard / format / clippy / golden 在 CI 与发版里都跑)。
+
 ## 项目进度(当前版本 v0.12.2)
 
 | 阶段 | 内容 | 状态 |

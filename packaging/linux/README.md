@@ -19,7 +19,19 @@ Flutter 桌面**不支持交叉编译**: arm64 包必须在 aarch64 机器上原
 
 ```bash
 bash packaging/linux/build-tarball.sh dist     # 产物 MiniNCM-<ver>-linux-<arch>.tar.gz
+# 顶层目录就是 bundle/(解压后直接 ./bundle/minincm 可运行)
 ```
+
+覆盖变量(与 deb/AppImage 同名的 `BUNDLE` 语义一致):
+
+```bash
+BUNDLE=/path/to/arm64/bundle bash packaging/linux/build-tarball.sh dist
+ARCH=arm64 VER=0.15.0 bash packaging/linux/build-tarball.sh dist   # 手工指定文件名里的架构/版本
+```
+
+- `ARCH`: 文件名里的架构(`x64`/`arm64`), 默认按 `uname -m` 推断。
+- `VER`: 默认取 `ui/pubspec.yaml`(经 `tools/ci-gates.sh version`, 与 deb/AppImage/tag 校验同一实现)。
+- release workflow 的 x64 / arm64 两条腿都直接调这个脚本(以前是两处内联 `tar`)。
 
 ## deb
 

@@ -30,8 +30,8 @@ if command -v nm >/dev/null 2>&1; then
   [ -z "$BAD" ] || { echo "ERROR: minincm 引用了 GLib 2.80 符号($BAD), Ubuntu 22.04 起不来" >&2; exit 1; }
 fi
 
-VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
-[ -n "$VER" ] || { echo "读不到 ui/pubspec.yaml 的 version" >&2; exit 1; }
+# 版本号解析唯一实现: tools/ci-gates.sh(从 ui/pubspec.yaml 的 version: X.Y.Z+N 取 X.Y.Z)
+VER=$(bash "$ROOT/tools/ci-gates.sh" version)
 ARCH=${ARCH:-$DEB_ARCH}
 PKGNAME=minincm
 MAINTAINER=${MAINTAINER:-"MiniNCM <noreply@localhost>"}
@@ -57,6 +57,10 @@ METAINFO="$PKG/usr/share/metainfo/io.github.xiaquwan1001.MiniNCM.metainfo.xml"
 install -m644 "$ROOT/packaging/linux/io.github.xiaquwan1001.MiniNCM.metainfo.xml" "$METAINFO"
 # 版本号跟 pubspec 走(源文件里留一个可校验的占位版本, 发布时覆盖成真版本)
 sed -i "s|<release version=\"[^\"]*\"|<release version=\"$VER\"|" "$METAINFO"
+# 断言(P-19): sed 一旦没命中(属性顺序/引号变了)会静默 no-op, 出厂包就带着占位版本
+# 0.3.2 进软件中心而流水线全绿, 所以这里必须硬失败。
+grep -q "version=\"$VER\"" "$METAINFO" || {
+  echo "ERROR: metainfo 版本覆盖失败($METAINFO 里没有 version=\"$VER\")" >&2; exit 1; }
 
 cat > "$PKG/usr/share/applications/minincm.desktop" <<'DESKTOP'
 [Desktop Entry]

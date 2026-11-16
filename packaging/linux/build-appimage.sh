@@ -44,7 +44,8 @@ if command -v readelf >/dev/null 2>&1; then
   esac
 fi
 
-VER=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' "$ROOT/ui/pubspec.yaml" | head -1)
+# 版本号解析唯一实现: tools/ci-gates.sh
+VER=$(bash "$ROOT/tools/ci-gates.sh" version)
 ARCH=${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}
 
 TOOL=${APPIMAGETOOL:-}
@@ -80,6 +81,9 @@ cp "$ROOT/packaging/linux/minincm.png" "$APPDIR/minincm.png"
 METAINFO="$APPDIR/usr/share/metainfo/io.github.xiaquwan1001.MiniNCM.metainfo.xml"
 install -m644 "$ROOT/packaging/linux/io.github.xiaquwan1001.MiniNCM.metainfo.xml" "$METAINFO"
 sed -i "s|<release version=\"[^\"]*\"|<release version=\"$VER\"|" "$METAINFO"
+# 断言(P-19): sed 静默 no-op 会让包带着占位版本出厂而流水线全绿 → 硬失败
+grep -q "version=\"$VER\"" "$METAINFO" || {
+  echo "ERROR: metainfo 版本覆盖失败($METAINFO 里没有 version=\"$VER\")" >&2; exit 1; }
 
 cat > "$APPDIR/minincm.desktop" <<'DESKTOP'
 [Desktop Entry]
