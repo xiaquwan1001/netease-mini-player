@@ -2,7 +2,8 @@
 # 用 `flutter build linux --release` 的 bundle 打 AppImage.
 # 用法: bash packaging/linux/build-appimage.sh [输出目录, 默认 dist]
 #
-# 需要 appimagetool: 优先 PATH, 其次 $APPIMAGETOOL, 最后自动下载到 ~/.cache/minincm-packaging.
+# 需要 appimagetool: 优先 $APPIMAGETOOL, 其次 PATH, 最后自动下载(P-17: 固定 tag + sha256 校验)
+# 到 ~/.cache/minincm-packaging. 显式指定的 $APPIMAGETOOL / PATH 里的版本视为用户自选, 不校验.
 # CI/无 FUSE 环境自动用 --appimage-extract-and-run(等效 APPIMAGE_EXTRACT_AND_RUN=1).
 set -euo pipefail
 
@@ -48,19 +49,64 @@ fi
 VER=$(bash "$ROOT/tools/ci-gates.sh" version)
 ARCH=${APPIMAGE_ARCH:-$DEFAULT_APPIMAGE_ARCH}
 
+# appimagetool 工具链 pin(P-17): 只从固定 release tag 下载并校验 sha256, 不追可变的
+# releases/download/continuous. 升级 tag 时先取新 sha256 再改下面两行常量:
+#   gh release view <tag> --repo AppImage/appimagetool --json assets \
+#     | python3 -c 'import json,sys;[print(a["name"],a["digest"]) for a in json.load(sys.stdin)["assets"]]'
+# (或下载后 sha256sum appimagetool-<arch>.AppImage 与新 digest 手工确认一致)
+APPIMAGETOOL_TAG=1.9.1
+case "$ARCH" in
+  x86_64)  APPIMAGETOOL_SHA256=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 ;;
+  aarch64) APPIMAGETOOL_SHA256=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158 ;;
+  *) echo "ERROR: 没有 appimagetool 的 sha256 pin: ARCH=$ARCH" >&2; exit 1 ;;
+esac
+
+# sha256 校验: 不一致就退出, 绝不 chmod +x 内容未知的二进制.
+verify_appimagetool_sha256() {
+  local file=$1 actual sums
+  sums=$(mktemp)
+  printf '%s  %s\n' "$APPIMAGETOOL_SHA256" "$file" > "$sums"
+  if command -v sha256sum >/dev/null 2>&1; then
+    if sha256sum -c "$sums" >/dev/null 2>&1; then rm -f "$sums"; return 0; fi
+    actual=$(sha256sum "$file" | cut -d' ' -f1)
+  elif command -v shasum >/dev/null 2>&1; then
+    actual=$(shasum -a 256 "$file" | cut -d' ' -f1)
+  else
+    rm -f "$sums"
+    echo "ERROR: 系统没有 sha256sum/shasum, 无法校验 appimagetool($file)" >&2
+    return 1
+  fi
+  rm -f "$sums"
+  if [ "$actual" = "$APPIMAGETOOL_SHA256" ]; then return 0; fi
+  echo "ERROR: appimagetool sha256 校验失败: $file" >&2
+  echo "       期望 sha256: $APPIMAGETOOL_SHA256 (tag $APPIMAGETOOL_TAG, appimagetool-$ARCH.AppImage)" >&2
+  echo "       实际 sha256: ${actual:-<计算失败>}" >&2
+  return 1
+}
+
 TOOL=${APPIMAGETOOL:-}
 if [ -z "$TOOL" ]; then
   if command -v appimagetool >/dev/null 2>&1; then
+    # PATH 里的版本由用户/发行版提供, 不校验(显式选择优先于供应链 pin)
     TOOL=$(command -v appimagetool)
   else
     CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/minincm-packaging
     mkdir -p "$CACHE"
-    TOOL="$CACHE/appimagetool-$ARCH.AppImage"
+    # 缓存名带 tag: 换 tag 不会命中旧二进制
+    TOOL="$CACHE/appimagetool-$ARCH-$APPIMAGETOOL_TAG.AppImage"
+    if [ -e "$TOOL" ] && ! verify_appimagetool_sha256 "$TOOL"; then
+      echo "缓存文件校验失败, 删除后重新下载: $TOOL" >&2
+      rm -f "$TOOL"
+    fi
     if [ ! -x "$TOOL" ]; then
-      echo "下载 appimagetool 到 $TOOL" >&2
-      curl -fsSL -o "$TOOL" \
-        "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$ARCH.AppImage"
-      chmod +x "$TOOL"
+      echo "下载 appimagetool $APPIMAGETOOL_TAG ($ARCH) 到 $TOOL" >&2
+      DL_TMP="$TOOL.part"
+      rm -f "$DL_TMP"
+      curl -fsSL --retry 3 --connect-timeout 20 -o "$DL_TMP" \
+        "https://github.com/AppImage/appimagetool/releases/download/$APPIMAGETOOL_TAG/appimagetool-$ARCH.AppImage"
+      verify_appimagetool_sha256 "$DL_TMP" || { rm -f "$DL_TMP"; exit 1; }
+      chmod +x "$DL_TMP"
+      mv -f "$DL_TMP" "$TOOL"
     fi
   fi
 fi
@@ -110,9 +156,20 @@ chmod +x "$APPDIR/AppRun"
 
 mkdir -p "$OUT"
 OUTFILE="$OUT/MiniNCM-${VER}-linux-${ARCH}.AppImage"
-# 无 FUSE 的环境(容器/CI)必须 extract-and-run
-ARCH=$ARCH "$TOOL" --appimage-extract-and-run --no-appstream "$APPDIR" "$OUTFILE" >/dev/null 2>&1 \
-  || ARCH=$ARCH "$TOOL" --no-appstream "$APPDIR" "$OUTFILE"
+# 无 FUSE 的环境(容器/CI)必须 extract-and-run.
+# 失败不掩埋 stderr(P-17): 两次尝试的完整输出都写进 $TOOL_LOG, 全部失败时原样打印出来.
+TOOL_LOG="$WORK/appimagetool.log"
+if ARCH=$ARCH "$TOOL" --appimage-extract-and-run --no-appstream "$APPDIR" "$OUTFILE" >"$TOOL_LOG" 2>&1; then
+  :
+else
+  RC=$?
+  echo "提示: --appimage-extract-and-run 失败(rc=$RC), 回退直接执行(该路径需要 FUSE)" >&2
+  if ! ARCH=$ARCH "$TOOL" --no-appstream "$APPDIR" "$OUTFILE" >>"$TOOL_LOG" 2>&1; then
+    echo "ERROR: appimagetool 两次尝试都失败, 完整输出($TOOL_LOG):" >&2
+    sed 's/^/  | /' "$TOOL_LOG" >&2
+    exit 1
+  fi
+fi
 chmod +x "$OUTFILE"
 ls -lh "$OUTFILE"
 echo "appimage: $OUTFILE"
