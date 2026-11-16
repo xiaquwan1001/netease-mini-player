@@ -36,8 +36,22 @@ class MainActivity : FlutterActivity() {
     /** 云盘上传选文件: ACTION_OPEN_DOCUMENT 结束后把本地副本路径交回 Dart */
     private var pendingPick: MethodChannel.Result? = null
 
+    /**
+     * 通知按钮在没有同进程消费者时(上划清任务后)会用 Intent 把 App 拉起来并带上动作,
+     * 动作先在这里接住, 等 Dart 侧回调注册好(_registerNativeHandler 会调 actionHandlersReady)再执行。
+     */
+    private var pendingPlaybackAction: Pair<String, Long>? = null
+
+    /** Dart 侧的通知回调是否已注册(握手方法 = ncm/player#actionHandlersReady) */
+    private var dartActionReady = false
+
     companion object {
         private const val REQUEST_PICK_AUDIO = 4201
+
+        /** 拉起 App 到 Dart 回调就绪之间的最大容忍时间; 超过就丢弃(过期的「下一首」执行起来很突兀) */
+        private const val PLAYBACK_ACTION_TTL_MS = 60_000L
+
+        private const val TAG = "NCM-PLAYER"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -63,6 +77,11 @@ class MainActivity : FlutterActivity() {
                 }
                 if (method != null) channel.invokeMethod(method, null)
             }
+        }
+        // 通知按钮状态回读(P-02): 服务被系统回收重建 / 控制器重连时请求 Dart 重推红心/模式,
+        // 主线程投递是因为这里会被 PlaybackService 的 MediaSession 回调触发。
+        PlaybackService.actionStateSyncListener = {
+            runOnUiThread { playerChannel?.invokeMethod("syncActionState", null) }
         }
         channel.setMethodCallHandler { call, result ->
             try {
@@ -312,6 +331,29 @@ class MainActivity : FlutterActivity() {
     }
 
     private fun handle(method: String, args: Map<*, *>?, result: MethodChannel.Result) {
+        // Dart 侧通知回调(上一首/下一首/喜欢/模式)已注册: 执行先前排队等待的意图,
+        // 并顺手请原生把红心/模式重推一次(此时才有真正的状态可推)。
+        if (method == "actionHandlersReady") {
+            dartActionReady = true
+            // 同一次点击可能**既**塞进了拉起用的 Intent, **又**排在服务的兜底队列里(launchForAction
+            // 两条路都会留痕)。两个都执行 = 「下一首」跳两首, 所以只取一条:
+            // Intent 里带的那条时间戳最新, 优先用它; 用了它就作废队列里那条。
+            val hadIntentAction = pendingPlaybackAction != null
+            deliverPendingPlaybackAction()
+            if (hadIntentAction) {
+                PlaybackService.discardPendingFallback()
+            } else {
+                // 上划清任务时点过通知按钮、但拉起被 Android 14 BAL 拦掉的情形: 用户从通知本体回到 App,
+                // 此时 Dart 已就绪, 把排在服务里的那条意图补执行(Toast 里承诺过的动作真的会发生)。
+                PlaybackService.consumePendingFallbackAction()?.let { action ->
+                    android.util.Log.i(TAG, "补执行排队的通知按钮意图 " + action)
+                    dispatchPlaybackAction(action, 0L)
+                }
+            }
+            PlaybackService.instance?.requestActionStateSync()
+            result.success(null)
+            return
+        }
         if (method == "dataDir") {
             result.success(dataDir())
             return
@@ -476,9 +518,64 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // 必须在 super.onCreate 之前取: 冷启动时 Intent 里的动作要在 Dart 起来之前先接住
+        capturePlaybackAction(intent)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        capturePlaybackAction(intent)
+        deliverPendingPlaybackAction()
+    }
+
+    /** 取出并抹掉 Intent 里的通知按钮动作(同一次启动只消费一次) */
+    private fun capturePlaybackAction(intent: Intent?) {
+        val action = intent?.getStringExtra(PlaybackService.EXTRA_PLAYBACK_ACTION) ?: return
+        intent.removeExtra(PlaybackService.EXTRA_PLAYBACK_ACTION)
+        pendingPlaybackAction = action to System.currentTimeMillis()
+    }
+
+    /**
+     * 把排队中的通知按钮动作交给 Dart(与 PlaybackService.actionListener 的映射保持一致)。
+     * Dart 未就绪就继续等(下一次握手/onNewIntent 还会再调), 过期的直接丢弃并记日志。
+     */
+    private fun deliverPendingPlaybackAction() {
+        val pending = pendingPlaybackAction ?: return
+        if (!dartActionReady) return
+        pendingPlaybackAction = null
+        val (action, at) = pending
+        val ageMs = System.currentTimeMillis() - at
+        if (ageMs > PLAYBACK_ACTION_TTL_MS) {
+            android.util.Log.w(TAG, "丢弃过期的通知按钮意图 " + action + " (" + ageMs + "ms)")
+            return
+        }
+        dispatchPlaybackAction(action, ageMs)
+    }
+
+    /** 动作名 -> Dart 方法名的唯一映射(与 PlaybackService.actionListener 的口径保持一致) */
+    private fun dispatchPlaybackAction(action: String, ageMs: Long) {
+        val method = when (action) {
+            PlaybackService.CMD_LIKE -> "toggleLike"
+            PlaybackService.CMD_MODE -> "cycleMode"
+            PlaybackService.CMD_PREV -> "skipPrevious"
+            PlaybackService.CMD_NEXT -> "skipNext"
+            else -> null
+        }
+        if (method == null) {
+            android.util.Log.w(TAG, "未知的通知按钮意图: " + action)
+            return
+        }
+        android.util.Log.i(TAG, "执行通知按钮意图 " + action + " -> Dart " + method + " (排队 " + ageMs + "ms)")
+        playerChannel?.invokeMethod(method, null)
+    }
+
     override fun onDestroy() {
         PlaybackService.skipListener = null
         PlaybackService.actionListener = null
+        PlaybackService.actionStateSyncListener = null
         playerChannel = null
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controller = null

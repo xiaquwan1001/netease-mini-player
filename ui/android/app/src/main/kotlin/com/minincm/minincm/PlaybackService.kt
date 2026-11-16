@@ -1,8 +1,13 @@
 package com.minincm.minincm
 
 import android.animation.ValueAnimator
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
@@ -80,15 +85,32 @@ class PlaybackService : MediaSessionService() {
         val exo = buildExoPlayer()
         exoPlayer = exo
         mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo))
+            // 通知本体点击 = 回 App。默认(不设 sessionActivity)Media3 不生成 contentIntent,
+            // 模拟器 a34 实测点通知本体毫无反应; 而没有同进程消费者时按钮只能给提示
+            // 「请打开 App 操作」, 用户总得有一条路回来(P-01 的恢复半场)。
+            .setSessionActivity(openAppPendingIntent())
             .setCallback(sessionCallback)
             .build()
         // 通知上的自定义按钮(喜欢/播放顺序): 只发意图, 状态由 Dart 经 setActionState 回推
         applyCustomLayout()
     }
 
+    /** 通知本体点击用的 PendingIntent(系统发送 ⇒ 允许后台启动 Activity, 不受 BAL 限制) */
+    private fun openAppPendingIntent(): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        return PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+    }
+
     // ---- 通知自定义按钮(喜欢 / 播放顺序): 只发意图, 队列/红心/模式状态全在 Dart ----
-    private var likedState = false
-    private var modeIcon = "sequence"
+    // 状态字段本身在 companion(likedState/modeIcon): 服务被系统回收后重建时实例字段会回到默认值,
+    // 通知图标就与实际红心/模式脱节; 同进程内用静态字段保住最近一次已知值, 跨进程由 Dart 重推兜底。
 
     private val sessionCallback = object : MediaSession.Callback {
         override fun onConnect(
@@ -102,6 +124,9 @@ class PlaybackService : MediaSessionService() {
                 .add(SessionCommand(CMD_PREV, Bundle.EMPTY))
                 .add(SessionCommand(CMD_NEXT, Bundle.EMPTY))
                 .build()
+            // 控制器(重)连上 = Dart 就绪 或 服务刚被系统重建: 请 Dart 把红心/模式重推一次,
+            // 否则通知图标会停在原生默认值(红心空/列表循环)直到用户切歌(P-02 自愈路径)。
+            requestActionStateSync()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
                 .build()
@@ -118,7 +143,8 @@ class PlaybackService : MediaSessionService() {
                 CMD_PREV -> requestSkip(false)
                 CMD_NEXT -> requestSkip(true)
                 // 喜欢/播放顺序: 只把点击转发给 Dart, 不碰 ExoPlayer
-                else -> actionListener?.invoke(customCommand.customAction)
+                // (无同进程消费者时 requestAction 会拉起 App 兜底, 不再是无声失败)
+                else -> requestAction(customCommand.customAction)
             }
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
@@ -128,6 +154,21 @@ class PlaybackService : MediaSessionService() {
         likedState = liked
         modeIcon = icon
         applyCustomLayout()
+    }
+
+    /**
+     * 请 Dart 把通知按钮状态(红心/模式)重推一次。
+     *
+     * 触发点: 控制器(重)连上(见 [sessionCallback.onConnect])、Dart 回调注册好的握手(MainActivity)。
+     * 没有消费者(服务独立存活/App 进程已退)时静默跳过 —— 此时也没有"真实状态"可谈。
+     */
+    fun requestActionStateSync() {
+        val listener = actionStateSyncListener ?: return
+        try {
+            listener.invoke()
+        } catch (e: Exception) {
+            Log.w(TAG, "actionStateSync 通知失败: $e")
+        }
     }
 
     /**
@@ -142,6 +183,7 @@ class PlaybackService : MediaSessionService() {
         Log.d(
             "NCM-PLAYER",
             "notification buttons = " + NOTIFICATION_BUTTON_ORDER.joinToString(" -> ") +
+                " / liked=" + likedState + " mode=" + modeIcon +
                 " / custom = [" +
                 buttons.joinToString(", ") {
                     it.displayName.toString() + ":" + it.slots.toArray().joinToString("/")
@@ -569,9 +611,31 @@ class PlaybackService : MediaSessionService() {
             "NeteaseMusic/9.1.65.240927161425(9001065);Dalvik/2.1.0 (Linux; U; Android 14; " +
                 "23013RK75C Build/UKQ1.230804.001)"
 
+        /** logcat 统一前缀(NCM-PLAYER): 通知按钮/调音的可观测面, 回归与真机排查都看它 */
+        const val TAG = "NCM-PLAYER"
+
+        /**
+         * 「没有同进程消费者」时的兜底出口: 用 Intent 把 MainActivity 拉起来并带上动作名。
+         * MainActivity 在 Dart 侧回调就绪后再执行(见 deliverPendingPlaybackAction)。
+         */
+        const val EXTRA_PLAYBACK_ACTION = "com.minincm.minincm.PLAYBACK_ACTION"
+
         /** 同进程引用, 让 MainActivity 的 MethodChannel 直接落到本服务(同进程, 无 IPC) */
         @Volatile
         var instance: PlaybackService? = null
+
+        /**
+         * 通知自定义按钮的状态(红心实/空 + 模式图标)。
+         *
+         * 放 companion(而不是实例字段): 服务被系统回收后重建会走 onCreate, 实例字段回到
+         * liked=false/mode=sequence, 而通知里显示的仍是用户看到的旧图标 ⇒ 红心/模式与实际状态
+         * 不一致, 直到用户切歌触发 Dart 重推(P-02)。同进程内静态字段保住最近一次已知值,
+         * 跨进程再由 [requestActionStateSync] 请 Dart 重推。
+         */
+        @Volatile
+        private var likedState = false
+        @Volatile
+        private var modeIcon = "sequence"
 
         /**
          * 上一首/下一首的出口: true=下一首, false=上一首.
@@ -580,8 +644,134 @@ class PlaybackService : MediaSessionService() {
         @Volatile
         var skipListener: ((Boolean) -> Unit)? = null
 
+        /**
+         * 状态回读的出口: MainActivity 注入, 效果是向 Dart 发一条 "syncActionState"
+         * (Dart 侧 _registerNativeHandler 收到后重推红心/模式)。
+         */
+        @Volatile
+        var actionStateSyncListener: (() -> Unit)? = null
+
+        /** 兜底意图的有效期: 超过就不补执行(过期的一首"下一首"执行起来很突兵) */
+        const val PENDING_ACTION_TTL_MS = 60_000L
+
+        /** 无消费者时点下、但拉起被 BAL 拦掉的意图(等 App 回来补执行) */
+        @Volatile
+        private var pendingFallback: Pair<String, Long>? = null
+
+        /**
+         * 取走排队中的兜底意图(过期作废)。MainActivity 在 Dart 回调就绪(`actionHandlersReady`)时调用。
+         * 返回 null = 没有要补执行的动作。
+         */
+        /**
+         * 作废排队中的兜底意图(不执行)。
+         *
+         * 用在同一击已经通过拉起用的 Intent(EXTRA_PLAYBACK_ACTION)送达时: 两条路都留过痕,
+         * 都执行会让「下一首」跳两首(见 MainActivity 的 actionHandlersReady 处理)。
+         */
+        fun discardPendingFallback() {
+            if (pendingFallback != null) {
+                Log.i(TAG, "兜底意图已由 Intent 送达, 作废队列里那条")
+            }
+            pendingFallback = null
+        }
+
+        fun consumePendingFallbackAction(): String? {
+            val pending = pendingFallback ?: return null
+            pendingFallback = null
+            val ageMs = System.currentTimeMillis() - pending.second
+            if (ageMs > PENDING_ACTION_TTL_MS) {
+                Log.w(TAG, "丢弃过期的兜底意图 " + pending.first + " (" + ageMs + "ms)")
+                return null
+            }
+            return pending.first
+        }
+
         fun requestSkip(next: Boolean) {
-            skipListener?.invoke(next)
+            val listener = skipListener
+            if (listener != null) {
+                listener.invoke(next)
+                return
+            }
+            // 上划清任务后 MainActivity 已销毁(skipListener 被置空), 而"正在播放"时服务不 stopSelf:
+            // 通知/耳机键还在, 回调却没有消费者 —— 以前这里静默失败(用户点了没反应)。
+            // 现在改为把 App 拉起来并把意图带过去: 任何时刻点按钮都有可见结果(P-01)。
+            launchForAction(if (next) CMD_NEXT else CMD_PREV)
+        }
+
+        /** 通知栏喜欢/播放顺序的出口: 有消费者就直连, 没有就拉起 App 兜底 */
+        fun requestAction(action: String) {
+            val listener = actionListener
+            if (listener != null) {
+                listener.invoke(action)
+            } else {
+                launchForAction(action)
+            }
+        }
+
+        /**
+         * 兜底出口(没有同进程消费者时): 把动作塞进 Intent 拉起 MainActivity, 同时给一次可见反馈。
+         *
+         * 为什么不用"缓存意图等 listener 恢复再重放"(审计备选 a): 用户点按钮的那一刻 Activity
+         * 可能永远不回来, 缓存的意图要到下次打开 App 才生效, 期间仍然是"看着能点、实际哑掉"。
+         *
+         * 关于"为什么还配一条 Toast"(模拟器 a34 / Android 14 实测): 通知 action 的 PendingIntent 是
+         * startService 型, 系统给的是 BackgroundStartPrivileges[allowsBackgroundActivityStarts=false,
+         * allowsBackgroundForegroundServiceStarts=true], 所以从这里 startActivity 会被 BAL 拦掉
+         * (logcat: "Background activity launch blocked ... (BAL_BLOCK) result code=102")。
+         * 拉起成功与否不能当作可见反馈, 因此点击一律先给 Toast + logcat, 再尽力拉起 App:
+         * 拉起成功(旧系统/允许后台启动的 ROM)时动作会在 Dart 就绪后执行, 失败时用户至少看到
+         * "请打开 App 操作" —— 不再是无声失败(P-01 的目标: 任何时刻点按钮都有可见结果)。
+         */
+        private fun launchForAction(action: String) {
+            val svc = instance
+            if (svc == null) {
+                Log.w(TAG, "通知按钮意图 " + action + " 无人消费且服务已销毁")
+                return
+            }
+            Log.i(TAG, "无同进程消费者, 通知按钮意图 " + action + " 转交 App 处理")
+            // 拉起可能被 BAL 拦掉(见上), 所以同时把意图排进静态队列: 用户随后从通知本体回到 App 时,
+            // MainActivity 在 Dart 回调就绪后 consumePendingFallbackAction() 补执行(审计备选 a 的重放语义,
+            // 但不会"等到下次想起来才生效": 点下去就有 Toast + 立即可用的恢复路径)。
+            pendingFallback = action to System.currentTimeMillis()
+            showBackgroundToast(svc, action)
+            try {
+                val intent = Intent(svc.applicationContext, MainActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    putExtra(EXTRA_PLAYBACK_ACTION, action)
+                }
+                svc.applicationContext.startActivity(intent)
+                // startActivity 不抛异常不代表真的起来了: Android 14 会异步判 BAL 并 abort
+                // (logcat: ActivityTaskManager: Abort background activity starts), 那条兜底队列才是准的。
+                Log.i(TAG, "已发起拉起 MainActivity 处理 " + action + "(被 BAL 拦掉时靠兜底队列补执行)")
+            } catch (e: Exception) {
+                Log.w(TAG, "拉起 MainActivity 处理 " + action + " 失败: " + e)
+            }
+        }
+
+        /**
+         * 后台可见反馈: 服务没有 Activity 时用 Toast 告诉用户"动作交给了 App"。
+         * Android 12+ 对后台**自定义视图** Toast 有限制, 纯文本 Toast 由系统渲染, 前台服务进程仍可显示
+         * (模拟器 a34 实测可见); 万一某机型被系统拦掉, logcat 那条 NCM-PLAYER 仍是可追溯的记录。
+         */
+        private fun showBackgroundToast(svc: PlaybackService, action: String) {
+            val what = when (action) {
+                CMD_LIKE -> "喜欢"
+                CMD_MODE -> "播放顺序"
+                CMD_PREV -> "上一首"
+                CMD_NEXT -> "下一首"
+                else -> "操作"
+            }
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    Toast.makeText(
+                        svc.applicationContext,
+                        "轻音 MiniNCM: 队列在 App 内, 请打开 App 后执行「" + what + "」",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Toast 失败: " + e)
+                }
+            }
         }
 
         /**
