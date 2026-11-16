@@ -87,8 +87,7 @@ class PlayerBarData {
   bool get canSeek => player.seekable && player.durationMs > BigInt.zero;
 
   /// 拖不动但**有**曲目(需要给用户一句「缓存中」的解释); 无曲目时静默禁用。
-  bool get seekBlocked =>
-      !player.seekable && player.durationMs > BigInt.zero;
+  bool get seekBlocked => !player.seekable && player.durationMs > BigInt.zero;
 }
 
 /// 常驻播放条的回调集合: 不可变, 同一实例跨帧复用(HomePage 建一次后不再变)。

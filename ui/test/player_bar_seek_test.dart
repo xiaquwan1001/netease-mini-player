@@ -86,10 +86,7 @@ void main() {
     // 但用户要得到解释
     expect(find.text(seekBlockedHint), findsOneWidget);
     // 位置仍然停在播放进度上, 没有被拖动值覆盖
-    expect(
-      tester.widget<Slider>(find.byType(Slider)).value,
-      closeTo(30000, 1),
-    );
+    expect(tester.widget<Slider>(find.byType(Slider)).value, closeTo(30000, 1));
   });
 
   testWidgets('源可 seek(完整落盘文件): 拖动照常回调三件套', (tester) async {
