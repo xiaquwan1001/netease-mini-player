@@ -9,6 +9,7 @@ import android.view.WindowManager
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
+import androidx.core.content.ContextCompat
 
 /**
  * MV 播放页(C3): 独立 VideoView 播放, 刻意不进 PlaybackService/Media3 队列 ——
@@ -49,7 +50,10 @@ class MvPlayerActivity : Activity() {
         }
 
         setTitle(title)
+        // P-09: 黑边底色从资源取(values/values-night 都是纯黑); 主题 MvTheme 负责
+        // 状态栏/导航栏底色与图标亮度, 随系统深浅色切换, 不再固定写死一套。
         video = VideoView(this)
+        video.setBackgroundColor(ContextCompat.getColor(this, R.color.player_background))
         setContentView(video)
 
         // 竖屏按 16:9 容器居中, 横屏铺满(简单处理: 只做居中适配)

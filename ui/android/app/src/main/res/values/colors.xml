@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- P-09: 原生页(登录页顶栏 / MV 播放页)的配色。
+         夜间对应见 values-night/colors.xml —— 两份文件必须同名同义,
+         新增一个颜色两边都要加, 否则某一种模式下会取不到值。
+         不用 ?android:attr/colorBackground 的原因: 平台 Material 深色底色是 #303030,
+         和 Flutter 侧的 #121212/#000000 观感差一层灰, 显式给色更可控。 -->
+
+    <!-- 登录页顶栏底色/前景色(浅色下沿用旧硬编码值, 行为不变) -->
+    <color name="login_chrome_bg">#FFF5F5F5</color>
+    <color name="login_chrome_fg">#FF1A1A1A</color>
+
+    <!-- MV 播放页底色: 视频黑边两种模式都用纯黑(视频页行业默认, 浅色下发白反而刺眼) -->
+    <color name="player_background">#FF000000</color>
+</resources>

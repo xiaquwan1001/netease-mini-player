@@ -15,4 +15,21 @@
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- P-09 登录页(夜间): 与 values/styles.xml 同名, 父主题换成深色 Material。 -->
+    <style name="LoginTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/login_chrome_bg</item>
+        <item name="android:statusBarColor">@color/login_chrome_bg</item>
+        <item name="android:navigationBarColor">@color/login_chrome_bg</item>
+        <!-- 深色顶栏 -> 状态栏图标用浅色 -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- P-09 MV 播放页(夜间): 黑边底色不变, 父主题换深色 Material。 -->
+    <style name="MvTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/player_background</item>
+        <item name="android:statusBarColor">@color/player_background</item>
+        <item name="android:navigationBarColor">@color/player_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>
