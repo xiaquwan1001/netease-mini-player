@@ -5,66 +5,22 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import 'eq_biquad.dart';
 import 'eq_profile.dart';
 
-/// 数字 biquad 求值使用的采样率(与 Rust 侧一致的物理上限推导).
-const double eqEvalSampleRateHz = 48000.0;
+/// 数字 biquad 求值使用的采样率(与 Rust/Kotlin 侧一致的物理上限推导).
+/// 系数公式本体在 eq_biquad.dart(纯 Dart, 三端共享夹具直接测它).
+const double eqEvalSampleRateHz = defaultEqSampleRateHz;
 
 // ---------------------------------------------------------------- 纯函数
 
 /// RBJ biquad 幅频响应在 [freqHz] 处的增益(dB). 只支持 PK/LS/HS.
 /// OFF filter 不参与(由调用方过滤).
 double filterMagnitudeDb(EqFilter f, double freqHz) {
-  final w0 = 2 * math.pi * f.freqHz / eqEvalSampleRateHz;
-  final a = math.pow(10.0, f.gainDb / 40.0).toDouble();
-  final cw = math.cos(w0);
-  final sw = math.sin(w0);
-
-  double b0, b1, b2, a0, a1, a2;
-  switch (f.type) {
-    case EqFilterType.pk:
-      final alpha = sw / (2 * f.q);
-      b0 = 1 + alpha * a;
-      b1 = -2 * cw;
-      b2 = 1 - alpha * a;
-      a0 = 1 + alpha / a;
-      a1 = -2 * cw;
-      a2 = 1 - alpha / a;
-    case EqFilterType.ls:
-      final alpha = sw / 2 * math.sqrt((a + 1 / a) * 2);
-      final twoSqrtAalpha = 2 * math.sqrt(a) * alpha;
-      b0 = a * ((a + 1) - (a - 1) * cw + twoSqrtAalpha);
-      b1 = 2 * a * ((a - 1) - (a + 1) * cw);
-      b2 = a * ((a + 1) - (a - 1) * cw - twoSqrtAalpha);
-      a0 = (a + 1) + (a - 1) * cw + twoSqrtAalpha;
-      a1 = -2 * ((a - 1) + (a + 1) * cw);
-      a2 = (a + 1) + (a - 1) * cw - twoSqrtAalpha;
-    case EqFilterType.hs:
-      final alpha = sw / 2 * math.sqrt((a + 1 / a) * 2);
-      final twoSqrtAalpha = 2 * math.sqrt(a) * alpha;
-      b0 = a * ((a + 1) + (a - 1) * cw + twoSqrtAalpha);
-      b1 = -2 * a * ((a - 1) + (a + 1) * cw);
-      b2 = a * ((a + 1) + (a - 1) * cw - twoSqrtAalpha);
-      a0 = (a + 1) - (a - 1) * cw + twoSqrtAalpha;
-      a1 = 2 * ((a - 1) - (a + 1) * cw);
-      a2 = (a + 1) - (a - 1) * cw - twoSqrtAalpha;
-  }
-
-  double mag(double w) {
-    final c1 = math.cos(w);
-    final s1 = math.sin(w);
-    final c2 = math.cos(2 * w);
-    final s2 = math.sin(2 * w);
-    final numB = b0 + b1 * c1 + b2 * c2;
-    final numI = b1 * s1 + b2 * s2;
-    final denB = a0 + a1 * c1 + a2 * c2;
-    final denI = a1 * s1 + a2 * s2;
-    final num = math.sqrt(numB * numB + numI * numI);
-    final den = math.sqrt(denB * denB + denI * denI);
-    return num / den;
-  }
-
-  final m = mag(2 * math.pi * freqHz / eqEvalSampleRateHz);
+  final m = EqBiquad.fromFilter(
+    f,
+    sampleRate: eqEvalSampleRateHz,
+  ).magnitudeAt(freqHz, sampleRate: eqEvalSampleRateHz);
   if (m <= 0) return -maxEqGainDb;
   return 20 * math.log(m) / math.ln10;
 }

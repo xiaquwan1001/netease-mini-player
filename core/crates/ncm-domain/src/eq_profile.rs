@@ -92,6 +92,13 @@ impl EqProfile {
         self.filters.iter().filter(|f| f.enabled)
     }
 
+    /// 是否真的会改变声音: Preamp 非 0, 或存在"生效且增益非 0"的 filter。
+    /// 与 Kotlin `EqProfile.hasEffect` / Dart `ParametricEq.hasEffect` 同一口径
+    /// (三端共享夹具 ui/test/fixtures/eq_profile_cases.json 的 `applied` 字段)。
+    pub fn has_effect(&self) -> bool {
+        self.preamp_db.abs() > 1e-6 || self.active_filters().any(|f| f.gain_db.abs() > 1e-6)
+    }
+
     /// 总增益(前级 + 各 filter 在直流/高频端点上的近似), 用于判断是否需要额外衰减。
     /// 只做保守估计: 取所有 filter 的正增益之和 + preamp, 大于 0 时会建议再压。
     pub fn max_boost_db(&self) -> f32 {
@@ -409,5 +416,123 @@ mod tests {
         let p = EqProfile::parse(SAMPLE).unwrap();
         // 正增益: 2.5(LS) + 0(被禁用的 HS 不算) => -6 + 2.5 = -3.5
         assert!((p.max_boost_db() - (-3.5)).abs() < 1e-3);
+    }
+}
+
+/// 三端共享夹具的**解析**断言(P-05 中期 / P-11)。
+///
+/// 同一份 `ui/test/fixtures/eq_profile_cases.json` 也被
+/// - Dart: `ui/test/eq_profile_fixture_test.dart`
+/// - Kotlin: `ui/android/app/src/test/kotlin/com/minincm/minincm/EqProfileParserFixtureTest.kt`
+/// - Rust 系数: `core/crates/ncm-playback/src/biquad.rs`
+///
+/// 读取。断言口径: `expect` 里出现的字段才断言, `expectRust` 会浅覆盖 `expect`
+/// (已知口径分叉单列, 见夹具 description)。
+#[cfg(test)]
+mod shared_fixture {
+    use super::*;
+
+    const FIXTURE: &str = include_str!("../../../../ui/test/fixtures/eq_profile_cases.json");
+
+    /// 夹具里 `expect` 与 `expectRust` 的浅合并结果
+    fn effective(case: &serde_json::Value, key: &str) -> serde_json::Value {
+        let mut merged = case["expect"].as_object().cloned().unwrap_or_default();
+        if let Some(over) = case.get(key).and_then(|v| v.as_object()) {
+            for (k, v) in over {
+                merged.insert(k.clone(), v.clone());
+            }
+        }
+        serde_json::Value::Object(merged)
+    }
+
+    fn num(v: &serde_json::Value, key: &str, ctx: &str) -> f64 {
+        v[key]
+            .as_f64()
+            .unwrap_or_else(|| panic!("{ctx}: 夹具字段 {key} 缺失或不是数字"))
+    }
+
+    fn assert_filter(which: &str, filter: &EqFilter, want: &serde_json::Value, tol: f64) {
+        let ctx = format!("{which} filter");
+        assert_eq!(
+            filter.kind.as_str(),
+            want["kind"].as_str().unwrap(),
+            "{ctx}: 类型"
+        );
+        assert_eq!(
+            filter.enabled,
+            want["enabled"].as_bool().unwrap(),
+            "{ctx}: enabled"
+        );
+        for (key, actual) in [
+            ("freqHz", filter.freq_hz),
+            ("gainDb", filter.gain_db),
+            ("q", filter.q),
+        ] {
+            let expected = num(want, key, &ctx);
+            assert!(
+                (actual as f64 - expected).abs() <= tol,
+                "{ctx}: {key} 期望 {expected}, 实际 {actual}"
+            );
+        }
+    }
+
+    #[test]
+    fn shared_fixture_parse_cases() {
+        let doc: serde_json::Value =
+            serde_json::from_str(FIXTURE).expect("共享夹具必须是合法 JSON");
+        let tol = num(&doc, "floatTolerance", "fixture");
+        let cases = doc["cases"].as_array().expect("夹具缺少 cases 数组");
+        assert!(cases.len() >= 20, "夹具用例数 {} < 20", cases.len());
+
+        for case in cases {
+            let name = case["name"].as_str().unwrap();
+            let input = case["input"].as_str().unwrap();
+            let want = effective(case, "expectRust");
+            let ok = want["ok"].as_bool().expect("夹具每个用例都要给 ok");
+
+            match (EqProfile::parse(input), ok) {
+                (Ok(profile), true) => {
+                    if want.get("preampDb").is_some() {
+                        let expected = num(&want, "preampDb", name);
+                        assert!(
+                            (profile.preamp_db as f64 - expected).abs() <= tol,
+                            "{name}: preampDb 期望 {expected}, 实际 {}",
+                            profile.preamp_db
+                        );
+                    }
+                    if let Some(count) = want.get("filterCount").and_then(|v| v.as_u64()) {
+                        assert_eq!(profile.filters.len() as u64, count, "{name}: filter 数");
+                    }
+                    if let Some(applied) = want.get("applied").and_then(|v| v.as_bool()) {
+                        assert_eq!(profile.has_effect(), applied, "{name}: applied/has_effect");
+                    }
+                    for which in ["first", "last"] {
+                        let Some(slot) = want.get(which) else {
+                            continue;
+                        };
+                        if slot.is_null() {
+                            assert!(
+                                profile.filters.is_empty(),
+                                "{name}: {which} 期望没有 filter"
+                            );
+                            continue;
+                        }
+                        let filter = if which == "first" {
+                            profile.filters.first()
+                        } else {
+                            profile.filters.last()
+                        }
+                        .unwrap_or_else(|| panic!("{name}: {which} 期望有 filter, 实际为空"));
+                        assert_filter(&format!("{name}/{which}"), filter, slot, tol);
+                    }
+                }
+                (Err(e), false) => {
+                    let want_line = want["errorLine"].as_u64().expect("报错用例要给 errorLine");
+                    assert_eq!(e.line as u64, want_line, "{name}: 报错行号: {e}");
+                }
+                (Ok(_), false) => panic!("{name}: 期望解析失败, 实际成功"),
+                (Err(e), true) => panic!("{name}: 期望解析成功, 实际失败: {e}"),
+            }
+        }
     }
 }

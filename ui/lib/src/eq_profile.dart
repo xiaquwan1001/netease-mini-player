@@ -71,6 +71,13 @@ class ParametricEq {
   final double preampDb;
   final List<EqFilter> filters;
 
+  /// 是否真的会改变声音: Preamp 非 0, 或存在"生效且增益非 0"的 filter.
+  /// 与 Kotlin `EqProfile.hasEffect` / Rust `EqProfile::has_effect` 同一口径
+  /// (三端共享夹具 ui/test/fixtures/eq_profile_cases.json 的 applied 字段).
+  bool get hasEffect =>
+      preampDb.abs() > 1e-6 ||
+      filters.any((f) => f.enabled && f.gainDb.abs() > 1e-6);
+
   /// 序列化回 AutoEQ ParametricEQ.txt 格式(Preamp 行 + 每 filter 一行).
   /// 与 [parseParametricEq] 互为往返: parse(text).toParametricEqText() 幂等.
   String toParametricEqText() {
