@@ -96,9 +96,11 @@ class HomeWiring {
     actionsHost.value = buildActionsHost();
     // 播放条回调槽位只赋这一次(同一实例, 之后不再变); 帧后投递, 避免在
     // initState 所在的构建阶段通知 PlayerBarHost 的祖先。
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => playerBarActions.value = playerBarActions.value ?? barActions,
-    );
+    // detach 早于这一帧时(建完即销毁的实例)不要把它复活成悬挂引用。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_attached) return;
+      playerBarActions.value = playerBarActions.value ?? barActions;
+    });
     ArtistNav.onOpenAlbum = openAlbum;
     UpdateCheckHost.pendingPrompt.addListener(onUpdatePrompt);
     pageDepth.addListener(onPageDepthChanged);
