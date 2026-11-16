@@ -16,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 
 /**
  * 官方网页登录页(移动端授权页).
@@ -77,17 +78,21 @@ class LoginActivity : Activity() {
                 FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER),
             )
         }
+        // P-09: 顶栏配色改从资源取(values/values-night 各一份), 不再硬编码浅色,
+        // 夜间打开登录页不再整屏闪白。资源名与主题 LoginTheme 用的是同一组 @color。
+        val headerBg = ContextCompat.getColor(this, R.color.login_chrome_bg)
+        val headerFg = ContextCompat.getColor(this, R.color.login_chrome_fg)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), 0, dp(4), 0)
-            setBackgroundColor(HEADER_BG)
+            setBackgroundColor(headerBg)
         }
         header.addView(
             TextView(this).apply {
                 text = "登录网易云音乐"
                 textSize = 16f
-                setTextColor(HEADER_FG)
+                setTextColor(headerFg)
                 layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
             },
         )
@@ -95,13 +100,19 @@ class LoginActivity : Activity() {
             TextView(this).apply {
                 text = "关闭"
                 textSize = 16f
-                setTextColor(HEADER_FG)
+                setTextColor(headerFg)
                 gravity = Gravity.CENTER
                 setPadding(dp(16), dp(14), dp(16), dp(14))
                 setOnClickListener { finishCancelled() }
             },
         )
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // WebView 页面本身就是白底网页; 这里把「页面还没画出来」的空窗也染成顶栏色,
+        // 否则夜间会在顶栏下方再闪一块白。
+        webView.setBackgroundColor(headerBg)
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(headerBg)
+        }
         root.addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         root.addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         setContentView(root)
@@ -187,9 +198,7 @@ class LoginActivity : Activity() {
         /** 移动端授权页(官方 302 目标); 不要用带 #/login 的桌面路由 */
         private const val LOGIN_URL = "https://music.163.com/login"
 
-        /** 顶栏配色(不引主题依赖, 深浅色下都够用) */
-        private val HEADER_BG = 0xFFF5F5F5.toInt()
-        private val HEADER_FG = 0xFF1A1A1A.toInt()
+        /** 顶栏配色见 res/values{,-night}/colors.xml(login_chrome_bg / login_chrome_fg) */
         private const val POLL_MS = 1500L
         private val COOKIE_URLS = listOf("https://music.163.com", "https://163.com")
     }

@@ -38,13 +38,13 @@
             android:exported="false"
             android:label="MV 播放"
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-            android:theme="@android:style/Theme.Material.NoActionBar" />
+            android:theme="@style/MvTheme" />
 
         <activity
             android:name=".LoginActivity"
             android:exported="false"
             android:label="登录网易云"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+            android:theme="@style/LoginTheme" />
 
         <service
             android:name=".PlaybackService"

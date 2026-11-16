@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- P-09: 夜间配色。login_chrome_* 对齐 Flutter 深色主题(appBar/surface 系),
+         onSurface 取 0xFFE6E6E6 与 buildDarkTheme() 的 onSurface 一致。
+         修改这里时同步 values/colors.xml(两份必须同名同义)。 -->
+
+    <color name="login_chrome_bg">#FF121212</color>
+    <color name="login_chrome_fg">#FFE6E6E6</color>
+
+    <!-- MV 播放页底色: 视频黑边两种模式都用纯黑(见 values/colors.xml 的说明) -->
+    <color name="player_background">#FF000000</color>
+</resources>

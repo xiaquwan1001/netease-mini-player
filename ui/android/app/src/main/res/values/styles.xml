@@ -15,4 +15,26 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- P-09 登录页: 浅/深色各一份同名主题, 由 values / values-night 资源限定符自动选中。
+         平台没有 android:Theme.Material.DayNight(只有 API 29+ 的 Theme.DeviceDefault.DayNight),
+         所以 DayNight 用「同名 style + values-night 覆盖」实现, 不引 appcompat。
+         配色全部走 @color 资源, 不在 Kotlin 里硬编码。 -->
+    <style name="LoginTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/login_chrome_bg</item>
+        <item name="android:statusBarColor">@color/login_chrome_bg</item>
+        <item name="android:navigationBarColor">@color/login_chrome_bg</item>
+        <!-- 浅色顶栏 -> 状态栏图标用深色 -->
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- P-09 MV 播放页: 视频黑边两种模式都保持纯黑, 但主题本身跟随系统
+         (状态栏图标/MediaController 样式随亮度走), 与登录页同一套 DayNight 手法。 -->
+    <style name="MvTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/player_background</item>
+        <item name="android:statusBarColor">@color/player_background</item>
+        <item name="android:navigationBarColor">@color/player_background</item>
+        <!-- 黑底 -> 状态栏图标用浅色 -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>
