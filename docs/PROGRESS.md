@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.18.0**(第六批: 拆壳 S7 账号动作 / P-09 深浅色 / P-21 播放 UA 单一来源 / P-10 seek 如实反馈)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.19.0**(收尾批: 拆壳 **S8 完成**(main.dart 48 行门面) / P-22 明文白名单 / EQ 三端 fixture + Kotlin JVM 测试)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -16,10 +16,10 @@ clippy/format/analyze/tokens/write-guard 由 `tools/ci-gates.sh` 在 CI 与发�
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **298** 通过 / 0 失败(排除 vendor 联网 smoke) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1037** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1061** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -32,6 +32,7 @@ clippy/format/analyze/tokens/write-guard 由 `tools/ci-gates.sh` 在 CI 与发�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.19.0** | **2026-11-16** | **收尾批**(4 lane): **拆壳 S8 完成** —— `home/home_wiring.dart` 收口 8 条静态钩子的 attach/detach + `HomePage` 搬到 `home/home_page.dart`(1550) + main.dart **1562→48 行门面**(审计起点 3877); **P-22** 明文流量收窄到 `music.126.net`/`music.163.com`/`vod.126.net` 白名单; **P-05 中期/P-11 起步** EQ 三端共享 fixture(479 行) + Kotlin 纯逻辑抽取与 JVM 单测 3 例; 文档债务登记 §13; Rust **298→300** / Dart **1037→1061** |
 | **v0.18.0** | **2026-11-16** | **第六批**(4 lane): main.dart **1874→1562** 拆壳 **S7**(账号/登录态/列表态导航 → `home/account_actions.dart`, `_libraryTitle` 收口单一文件)、**P-09** 登录/MV 页跟随系统深浅色(同名 style + values-night)、**P-21** 播放 UA 收敛 Rust 单一来源(FFI→Dart→Kotlin 兜底+漂移日志)、**P-10** 渐进播放 seek 如实反馈并修掉 `EqSource` 未实现 `try_seek`(桌面完整文件本该能跳); Rust **294→298** / Dart **1028→1037** |
 | **v0.17.0** | **2026-11-16** | **第五批**(4 lane): main.dart **2156→1874** 拆壳 **S6**(队列面板 → `home/queue_sheet_controller.dart`)、**P-03** 增益斜率 `gain_slew_db_per_sec` 打通 Rust→FFI→Dart(`0=瞬时`, Rust 290→294)、**P-07/P-08** MV 跟随生命周期 + 登录 cookie 清理去重(模拟器实测)、**P-17/P-18/P-20** AppImage 工具 pin+sha256、两平台标题尺寸统一、注释纠偏; 测试 **1010→1028** |
 | **v0.16.0** | **2026-11-16** | **第四批**(平台层审计后的第一批修复, 4 lane): main.dart **2503→2156** 拆壳 **S5**(动作宿主+14 个动作闭包 → `home/song_action_wiring.dart`)、**P-01/P-02** Android 通知栏按钮上划清任务后仍可用 + 红心·模式自愈、**P-04/P-05/P-06** 桌面「边听边存」如实说明 + EQ 失败可观测 + 冷启动调音重试、**CI 门禁统一**(`ci-gates.sh` 唯一实现, golden 进发版门); 测试 **992→1010** |
@@ -95,6 +96,41 @@ clippy/format/analyze/tokens/write-guard 由 `tools/ci-gates.sh` 在 CI 与发�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 收尾批: 拆壳 S8 完成 + 明文白名单 + EQ 三端测试网(**v0.19.0**)
+
+4 条 lane 并行。期间机器重启一次, 最后一条 lane 的工作已落盘由主会话验完接续; 文档 lane 误报"工作树干净"被合并前抓到(实际 5 文件未提交), 由主会话补提交。
+
+### 前端结构: 拆壳 **S0–S8 全部完成**
+
+| 阶段 | 结果 |
+|---|---|
+| **S8-1** `home/home_wiring.dart`(127) | 8 条进程级静态钩子收成 `attach()/detach()`: `Playback.setSkipHandlers` / `setActionHandlers` / `AppSettings.addListener` / `actionsHost` / `playerBarActions` / `ArtistNav.onOpenAlbum` / `UpdateCheckHost.pendingPrompt` / `pageDepth`; dispose 全部解绑, `actionsHost`/`playerBarActions`/`onOpenAlbum` **置 null**(逐项核查过读方容忍 null) |
+| **S8-2** 搬家 | `HomePage`/`_HomePageState` 整体搬到 `src/home/home_page.dart`(1550) |
+| **S8-3** 门面 | `main.dart` **1562 → 48 行**(只剩 `main()` + 5 组 `export ... show`), 9 个 import main.dart 的测试零改动 |
+| 多实例语义 | 用 `static HomeWiring? _latest` + "只有最近 attach 者 detach 时才清全局槽位", 无需引用计数: 旧实例销毁不会清新实例绑定 |
+
+**总账**: 审计起点 main.dart **3877 行 → 48 行**; `src/home/` 现为 8 个文件(6 个 controller + home_page + home_wiring), 从"一个巨型 State"变成"一个外壳 + 六个职责单一状态机"。
+
+### 平台层修复
+
+- **P-22 明文流量收窄**: 取证后确认实际走明文的只有 `music.126.net`(图片降级链最后一级)、`music.163.com`(登录 WebView)、`vod.126.net`(MV 直链兜底); 新增 `res/xml/network_security_config.xml`(默认 `cleartextTrafficPermitted=false` + 三域名白名单), manifest 去掉全局 `usesCleartextTraffic`。**受影响面界定**: 该配置只约束 Android 网络栈(ExoPlayer/WebView), Rust `reqwest` 与 Dart `dart:io HttpClient` 不受影响 ⇒ 封面/歌词/评论走 dart:io 天然不受限。模拟器实测取链播放/封面/歌词/评论四链路正常, `Cleartext HTTP traffic ... not permitted` 0 条; MV 与下载未运行时验证(已在交付注明回退法: manifest 换回一行)。
+
+### 测试网
+
+- **P-05 中期 / P-11 起步**: EQ 文本解析三端 **共享 fixture** `ui/test/fixtures/eq_profile_cases.json`(479 行, 覆盖 >20 filter 截断、±24dB 钳制、`Preamp` 缺省、单位/大小写变体、非法行号、空串), 三端各写断言(Dart `eq_profile_fixture_test`、Rust `ncm-domain` 测试、Kotlin `EqProfileParserFixtureTest`)。
+- Kotlin 侧把邮箱解析逻辑从 `EqAudioProcessor`(240 行) 抽成无 Android 依赖的 `EqProfileParser.kt`(249), 并首次给 Android 加 **JVM 单测**(3 例, `./gradlew :app:testDebugUnitTest` 通过)。注意: 本机跑该任务必须 `source tools/env.sh`(否则 Gradle 会挑到无 javac 的 java-25 JRE, 报 "does not provide the required capabilities: [JAVA_COMPILER]")。
+- Dart 侧顺带抽出 `src/eq_biquad.dart`(170) 供曲线绘制与 fixtures 共用。
+
+### 门禁(合并后 main 复跑)
+
+`cargo test --offline` **300** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **1061 通过 0 失败**(18 张 golden 无变化) / `dart analyze` 0 issue / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK; Android debug 双 ABI 出包(92MB / 104MB) + Kotlin JVM 单测 3 例通过。
+
+### 过程
+
+- 一次 `assembleDebug` 因 cargokit 构建失败退出(exit 69), 重跑即通过; 期间主机另有并发 cargo 构建写同一 target 目录 ⇒ 判为并发/机器抖动, 非代码问题(与当天 4 起硬件异常同源, 证据见 `~/hw-stability/evidence/inbox/`)。
+- 文档 lane 把门禁数字与版本号对齐现状、并新增 `docs/remaining-batches.md` **§13 审计剩余债务**(P-11 完整版 / P-05 长尾 / P-18 后半 app-id / P-10 方案 B), 另产出 worktree 清理清单(可回收约 114G)。
+
 
 ## 2026-11-16(日) 第六批: S7 账号动作 + 深浅色 + UA 单一来源 + seek 如实反馈(**v0.18.0**)
 
