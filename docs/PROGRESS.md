@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-15(六)**。当前版本 **v0.13.0**(架构重构批: main.dart 拆壳 S0–S2 / 三个 P0 页面拆分 / 四态收口 / FfiError 跨桥)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.14.0**(重构第二批: main.dart 拆壳 S3 搜索 controller / PlaybackBridge 单入口 / ncm-provider lib.rs 按域拆分)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.14.0** | **2026-11-16** | **重构第二批**(3 条并行 lane, 断电后按续做重派): main.dart **3095→2899** 拆壳 **S3**(搜索状态/联想/热词/历史 → `src/home/search_controller.dart`)、**PlaybackBridge 单入口**(`onPlaySongs` 透传 158→0, 删 UserNav/ArtistNav 静态旁路与 20 文件构造参数)、`ncm-provider/lib.rs` **1321→30** 行按 capability/error/params/trait/registry 拆分(对外路径不变); 门禁 992 / 290, golden 无变化; 同批回收 21G 磁盘 |
 | **v0.13.0** | **2026-11-15** | **架构重构批**(48 提交, 7 条并行 lane): main.dart **3917→3095**(S0 纯逻辑 / S1 全局壳 / S2 歌词控制器)、detail/messages/discover 三个 P0 页面按页拆分(1558/886/882 → 子树)、**SongRow 收敛 11 处**、四态全部收口到 AsyncView(16 个域)、`FfiError{kind,retryable,detail}` 跨桥(160 导出)、锁中毒容忍 + fsutil 原子写收敛、日推缓存按 uid 隔离 + 登出清理、golden **12→18** 且进 CI、测试工厂 `fakes.dart` 收敛 32 份；门禁 992 / 290 |
 | **v0.12.5** | **2026-11-15** | 逐字歌词**默认走 AMLL TTML**(设置可切回网易云/自动择优, 旧 `auto` 一次性迁移) + 黑胶会员页签到数据源从 `vip_sign_info` 改回 `signin_progress`(修「今日未签到/累计 0」与「我的」页签到卡自相矛盾) |
 
@@ -88,6 +89,33 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 重构第二批: S3 搜索 controller + PlaybackBridge 单入口 + provider 按域拆分(**v0.14.0**)
+
+承 2026-11-15 的两份审计与前一批拆壳 S0–S2, 本批 3 条 lane 并行(各自 worktree), 主会话合并后独立复跑门禁。中途本机断电一次, 三条 lane 的半成品全部存活, 按「续做」方式重派, 无代码损失。
+
+### 前端结构
+
+| 项 | 结果 |
+|---|---|
+| main.dart 拆壳 **S3** | 新增 `src/home/search_controller.dart`(364, `ChangeNotifier`): 综合搜索结果 / 输入联想(卡片+精确实体+纯关键词) / 搜索历史 / 落地页热词与推荐词 / 请求代次 token / 300ms 联想防抖 / busy 全部搬出; main.dart **3095 → 2899**(−196), 页面只留输入框与焦点、导航回调与 `_error` 横幅 |
+| **PlaybackBridge 单入口** | 新增 `src/playback_bridge.dart`: `playSongs` / `appendNext` / `openPlaylist` 三个 handler 在 `_HomePageState.initState` `bind()` 一次; 删掉 `UserNav.onPlaySongs` / `ArtistNav.onPlaySongs` 两条静态旁路与 20 个文件的构造参数透传 —— `onPlaySongs` 在 `ui/lib` **158 → 0 处**; 保留 `playlistId`(心动模式/定位正在播放)与 `source`(日推/私人FM)附加语义; 测试注入改 `debugOverride`/`resetDebugOverride` |
+
+### 后端/Rust
+
+- `ncm-provider/src/lib.rs` **1321 → 30 行**(模块声明 + `pub use` + 文件分工表): 拆成 `capability.rs`(140) / `error.rs`(90) / `params.rs`(82) / `trait.rs`(948) / `registry.rs`(89); **对外路径零变化**, 下游 crate 与 FFI 未改、未触发 codegen。
+- 复核确认上一批已落地的三项无需重做: `lock_ignore_poison`(30 处)、`fsutil::write_atomic`(7 处)、ttml 的裸 `fs::rename` 已被 `write_atomic` 取代。
+
+### 门禁(本机实测, 合并后 main 上复跑)
+
+`cargo test --offline` **290** / clippy **0 warning** / fmt 干净; `flutter test --exclude-tags network` **992 通过 0 失败**(18 张 golden, **golden 无变化**) / `dart analyze` **0 issue** / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK。
+
+### 过程
+
+- 合并 `lane/playback-bridge` 时 main.dart 出现 1 处 `initState` 冲突(S3 的搜索 controller 装载 vs 旧 `_searchFocus.addListener` + 两条静态旁路): 保留 controller 装载、丢弃已被 controller 内部接管的焦点监听与静态赋值, 冲突后 `dart analyze` 干净、全量 992 例通过。
+- S3 的 `SearchController` 与 Flutter `material.SearchController` 同名, main.dart 用 `import ... as search_state` 前缀消歧(后续引用同此约定)。
+- 仓库卫生同批做: 删除 6 个已合并的陈旧 lane worktree(含 12G 的 lane-notif-order), 回收 **21G**(磁盘 626G/937G 已用, 264G 可用); 主仓 tracked 树 md5 查重无重复文件。
+
 
 ## 2026-11-15(六) 架构重构批(前后端 7 条并行 lane, **v0.13.0**)
 
