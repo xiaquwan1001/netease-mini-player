@@ -65,6 +65,61 @@ jobs:
       - name: widget/unit tests + golden (offline)
         run: bash tools/ci-gates.sh flutter-test
 
+  # ---- Android JVM 门(平台审计 P-14 的剩余部分) ----
+  # 命令的唯一实现仍是 tools/ci-gates.sh: 这里不写 gradle 任务名/参数, 也不手抄
+  # local.properties 与 gradlew —— 两者都被 ui/android/.gitignore 排除, 新克隆里
+  # 不存在, 由门内的 `flutter build apk --config-only` 现场生成(审计 P-13 的教训)。
+  android:
+    name: Android JVM (unit tests + lintDebug)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # 只要 platform/build-tools, **不装 NDK**: JVM 单测与 lintDebug 不走 native 构建
+      # (cargokit 的 rust 构建只在 assemble* 时触发)。哪天 AGP 在配置期强制要 NDK,
+      # 在这里补 "ndk;28.2.13676358"(build-android-debug 已有同样的安装步骤)。
+      - name: Android SDK components (platform 36 + build-tools, no NDK)
+        run: |
+          SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
+          echo "sdkmanager=$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50, 要求 AGP>=9.1.1/Gradle>=9.5, 与本地 3.47.9 不一致
+          cache: true
+
+      # 阻塞门: 三端共享夹具 ui/test/fixtures/eq_profile_cases.json 的 Kotlin 解析单测
+      # (EqProfileParserFixtureTest, 3 条; 本机 21s, 首次含依赖下载 5–15min)。
+      - name: JVM 单测 (:app:testDebugUnitTest)
+        run: bash tools/ci-gates.sh android-unit
+
+      # lintDebug 现状(2026-11-16 实测): **67 error + 9 warning**, 必红 —— 所以**不阻塞**
+      # (不进 verify, 也不进发版门), 也**不许**建 lint-baseline/lint.xml 掩盖:
+      #   66 × UnsafeOptInUsageError(media3 usage 缺 @OptIn(UnstableApi::class), main 源)
+      #    1 × GestureBackNavigation(LoginActivity.kt:176 onBackPressed, API36 预测性返回)
+      # 把 error 打到 0 之后再删掉 continue-on-error 并挪进 verify。
+      - name: lintDebug (现状 67 error, 仅暴露不阻塞)
+        continue-on-error: true
+        run: bash tools/ci-gates.sh android-lint
+
+      - name: upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: |
+            ui/build/app/reports/lint-results-debug.txt
+            ui/build/app/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
   # 可直接安装的 **debug APK**(给模拟器/真机做视觉与回归验收)。
   #
   # 为什么单独出一个: release 流水线只产 arm64 正式签名包, 模拟器(x86_64)装不上;

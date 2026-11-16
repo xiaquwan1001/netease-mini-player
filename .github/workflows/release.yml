@@ -19,6 +19,18 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      # Android JVM 单测(:app:testDebugUnitTest)要 JDK21 + Android SDK 的 platform/build-tools。
+      # 命令仍由 tools/ci-gates.sh 实现, 这里只准备工具链(不装 NDK: 单测不走 native 构建)。
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Android SDK components (platform 36 + build-tools, no NDK)
+        run: |
+          SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
+          echo "sdkmanager=$SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
       # 版本号解析唯一实现: tools/ci-gates.sh(workflow 里不再 sed pubspec)
       - name: Tag / pubspec 版本一致性
         if: startsWith(github.ref, 'refs/tags/v')
@@ -60,6 +72,12 @@ jobs:
       # 唯一测试入口: 只排 network, **含 golden**(与 ci.yml / tools/ci.sh 同口径)
       - name: widget/unit tests + golden (offline)
         run: bash tools/ci-gates.sh flutter-test
+      # 发版门加上 Android JVM 单测(三端共享 EQ fixture 的 Kotlin 解析): 以前发出去的
+      # APK 从没跑过它(审计 P-14)。**lint 不进发版门**: 现状 67 error(66 × media3
+      # UnsafeOptInUsageError + 1 × GestureBackNavigation), 红了会直接堵死发版;
+      # 修到 0 之后再把它加进来。详见 ci.yml 的 android job 注释。
+      - name: Android JVM 单测 (:app:testDebugUnitTest)
+        run: bash tools/ci-gates.sh android-unit
 
   # ---- Android(arm64) + Linux(x64) ----
   build:
