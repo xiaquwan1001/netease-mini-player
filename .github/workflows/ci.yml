@@ -25,12 +25,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: core
-      - name: cargo fmt --check
-        run: cargo fmt --manifest-path core/Cargo.toml --all -- --check
-      - name: cargo clippy (-D warnings)
-        run: cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      # 命令的唯一实现在 tools/ci-gates.sh(本地 tools/ci.sh / release.yml 调同一处),
+      # workflow 里不再手抄 cargo/dart/flutter 参数(2026-11-16 审计 P-13)。
+      - name: cargo fmt --check + clippy (-D warnings)
+        run: bash tools/ci-gates.sh rust-lint
       - name: cargo test (workspace, vendor network smoke excluded)
-        run: cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
+        run: bash tools/ci-gates.sh rust-test
 
   flutter:
     name: Flutter analyze + tests
@@ -49,20 +49,21 @@ jobs:
       - name: pub get
         working-directory: ui
         run: flutter pub get
-      - name: analyze
-        working-directory: ui
-        run: dart analyze
+      - name: analyze (dart analyze)
+        run: bash tools/ci-gates.sh dart-analyze
       - name: format check (dart format, 只读不写)
-        working-directory: ui
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: bash tools/ci-gates.sh dart-format
       - name: write-guard (测试不得直连写接口, CI 不触网)
-        run: bash tools/check-write-guard.sh
+        run: bash tools/ci-gates.sh write-guard
+      # token 门(间距/圆角/字号白名单)与 write-guard 以前只在本地 tools/ci.sh 里,
+      # GitHub CI 没跑 —— AGENTS.md 说它们是"固定门"却没人守(审计 P-14)。
+      - name: design token 门 (间距/圆角/字号只允许有限集合)
+        run: bash tools/ci-gates.sh tokens
       # 唯一的全量测试入口: 含 golden(18 张整屏像素)。只排除 network —— CI 没有
       # 出口网络与凭据。golden 的渲染环境靠上一步的 fonts-noto-cjk + 固定的
-      # Flutter 3.47.9 对齐本地。
+      # Flutter 3.47.9 对齐本地。口径与 release.yml / tools/ci.sh 完全一致(P-13)。
       - name: widget/unit tests + golden (offline)
-        working-directory: ui
-        run: flutter test --exclude-tags network
+        run: bash tools/ci-gates.sh flutter-test
 
   # 可直接安装的 **debug APK**(给模拟器/真机做视觉与回归验收)。
   #
