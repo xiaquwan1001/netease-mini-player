@@ -46,11 +46,7 @@ class LoginActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
-        // 进来先清一次 cookie: 已登录状态下 WebView 里还留着上一个账号的 MUSIC_U,
-        // 页面会直接判定"已登录"并原地返回 —— 那就是"想加第二个账号却立刻跳回来"的根因。
-        // 账号簿保存在 Rust 侧, 清 WebView cookie 不影响已记住的账号。
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
+        val loginUrl = intent?.getStringExtra(EXTRA_URL) ?: LOGIN_URL
 
         loadingBar = ProgressBar(this).apply { visibility = ProgressBar.GONE }
 
@@ -68,9 +64,6 @@ class LoginActivity : Activity() {
                     maybeFinishWithCookie()
                 }
             }
-            // 允许 adb 指定别的 URL(排查网络/区域差异用):
-            //   adb shell am start -n com.minincm.minincm/.LoginActivity --es url https://y.music.163.com/m/login
-            loadUrl(intent?.getStringExtra(EXTRA_URL) ?: LOGIN_URL)
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
@@ -112,6 +105,23 @@ class LoginActivity : Activity() {
         root.addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         root.addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         setContentView(root)
+
+        // 登录 cookie 的清理**只在这一处**(P-08): 已登录状态下 WebView 里还留着上一个账号的
+        // MUSIC_U, 页面会直接判定"已登录"并原地返回 —— "想加第二个账号却立刻跳回来"的根因.
+        // 账号簿保存在 Rust 侧, 清 WebView cookie 不影响已记住的账号。
+        //
+        // removeAllCookies 是**异步**的: loadUrl 必须放进它的回调里, 否则页面会先加载并把
+        // 新的 MUSIC_U 写进 cookie 仓库, 随后的清理再把它吃掉(取决于机型时序)。
+        // MainActivity 的 loginWeb 只负责 startActivity, 不再清一遍。
+        val manager = CookieManager.getInstance()
+        manager.removeAllCookies {
+            manager.flush()
+            if (!isFinishing && !isDestroyed && ::webView.isInitialized) {
+                // 允许 adb 指定别的 URL(排查网络/区域差异用):
+                //   adb shell am start -n com.minincm.minincm/.LoginActivity --es url https://y.music.163.com/m/login
+                webView.loadUrl(loginUrl)
+            }
+        }
         handler.postDelayed(cookiePoll, POLL_MS)
     }
 
