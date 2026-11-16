@@ -17,6 +17,7 @@ class AudioTuningRequest {
     required this.gainDb,
     required this.fadeMs,
     required this.eqText,
+    this.gainSlewDbPerSec = kGainSlewDefaultDbPerSec,
     this.loudnessGainDb = 0.0,
   });
 
@@ -28,6 +29,12 @@ class AudioTuningRequest {
 
   /// AutoEQ 曲线原文; null = 旁路
   final String? eqText;
+
+  /// 增益变化限速(dB/s): 0 = 瞬时, [kGainSlewDynamicDbPerSec] = 动态 AGC 防 pump。
+  ///
+  /// 三端同一口径(P-03): 开关只看设置里的「动态响度」, 与平台无关 —— Android 走
+  /// Media3 的 ValueAnimator 斜坡, 桌面走 Rust 的 GainLimiter, 斜率值完全一样。
+  final double gainSlewDbPerSec;
 
   /// 响度均衡给出的静态增益(RG 2.0 语义), 仅用于测试与调试回显
   final double loudnessGainDb;
@@ -46,6 +53,7 @@ class AudioTuningRequest {
       gainDb: (s.volumeGainDb + loudness).clamp(-40.0, 12.0),
       fadeMs: s.fadeMs,
       eqText: (text == null || text.isEmpty) ? null : s.eqProfileText,
+      gainSlewDbPerSec: gainSlewForSettings(s),
       loudnessGainDb: loudness,
     );
   }
@@ -55,14 +63,27 @@ class AudioTuningRequest {
       other is AudioTuningRequest &&
       other.gainDb == gainDb &&
       other.fadeMs == fadeMs &&
-      other.eqText == eqText;
+      other.eqText == eqText &&
+      other.gainSlewDbPerSec == gainSlewDbPerSec;
 
   @override
-  int get hashCode => Object.hash(gainDb, fadeMs, eqText);
+  int get hashCode => Object.hash(gainDb, fadeMs, eqText, gainSlewDbPerSec);
 
   @override
-  String toString() => 'AudioTuningRequest(gain=$gainDb dB, fade=$fadeMs ms)';
+  String toString() =>
+      'AudioTuningRequest(gain=$gainDb dB, fade=$fadeMs ms, '
+      'slew=$gainSlewDbPerSec dB/s)';
 }
+
+/// 动态响度(AGC)的增益限速(dB/s): 防 pump 的验收口径(任务书 §5 "<= 3 dB/s")。
+const double kGainSlewDynamicDbPerSec = 3.0;
+
+/// 静态响度均衡/纯手动时的限速: 0 = 瞬时(拖滑杆立刻听到变化)。
+const double kGainSlewDefaultDbPerSec = 0.0;
+
+/// 设置快照 → 增益限速(dB/s)。Android 与桌面共用这一条口径(P-03)。
+double gainSlewForSettings(AppSettings s) =>
+    s.loudnessDynamic ? kGainSlewDynamicDbPerSec : kGainSlewDefaultDbPerSec;
 
 /// 曲线校验(R7 导入时用): 成功返回生效滤波器数, 失败抛出带 "第 N 行" 的错误。
 Future<rust.EqValidationDto> validateEqProfile(String text) =>
@@ -142,17 +163,20 @@ Future<void> _applyTuningOnce(AudioTuningRequest request) async {
       streamCache: AppSettings.instance.streamCache,
       cacheLimitMb: AppSettings.instance.cacheLimitMb,
       eqText: request.eqText,
-      // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时, 行为不变。
-      // Linux 侧由 Rust 自己在 200ms tick 上做同样的限速, 这里不用管。
-      gainSlewDbPerSec: AppSettings.instance.loudnessDynamic ? 3.0 : 0.0,
+      // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时。
+      // 桌面分支把**同一个值**交给 Rust 的 GainLimiter(P-03)。
+      gainSlewDbPerSec: request.gainSlewDbPerSec,
     );
     _reportEqEcho(echo);
     return;
   }
+  // 桌面(Linux/Windows): rodio + Rust 的 GainLimiter。斜率与 Android 同口径:
+  // 0 = 瞬时(静态/手动), 3 dB/s = 动态 AGC 防 pump。
   await rust.playerConfigure(
     gainDb: request.gainDb,
     fadeMs: request.fadeMs,
     eqText: request.eqText,
+    gainSlewDbPerSec: request.gainSlewDbPerSec,
   );
 }
 
