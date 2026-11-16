@@ -1,5 +1,5 @@
-import 'dart:io' show Platform;
-
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -244,9 +244,12 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     final limit = AppSettings.cacheLimits.contains(settings.cacheLimitMb)
         ? settings.cacheLimitMb
         : 512;
+    // 桌面分支根本没把 streamCache 传下去(见 streamCachePlatformNote), 所以那里只能
+    // 显示如实说明; Android 才是有真实开关的平台。
+    final streamCacheNote = streamCachePlatformNote(defaultTargetPlatform);
     return Column(
       children: [
-        if (Platform.isAndroid)
+        if (defaultTargetPlatform == TargetPlatform.android)
           SwitchListTile(
             key: const Key('hardwareDecodeSwitch'),
             title: const Text('优先硬件解码'),
@@ -261,13 +264,21 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             subtitle: Text('Linux 端为纯软解(rodio + symphonia), 无硬件解码选项'),
           ),
         const Divider(height: 1),
-        SwitchListTile(
-          key: const Key('streamCacheSwitch'),
-          title: const Text('边听边存'),
-          subtitle: const Text('流式缓存落盘, 二次播放不重复下载'),
-          value: settings.streamCache,
-          onChanged: (v) => settings.update(streamCache: v),
-        ),
+        if (streamCacheNote == null)
+          SwitchListTile(
+            key: const Key('streamCacheSwitch'),
+            title: const Text('边听边存'),
+            subtitle: const Text('流式缓存落盘, 二次播放不重复下载'),
+            value: settings.streamCache,
+            onChanged: (v) => settings.update(streamCache: v),
+          )
+        else
+          ListTile(
+            key: const Key('streamCacheNote'),
+            leading: const Icon(Icons.info_outline),
+            title: const Text('边听边存'),
+            subtitle: Text(streamCacheNote),
+          ),
         const Divider(height: 1),
         ListTile(
           title: const Text('缓存上限'),
@@ -383,6 +394,24 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
       eqProfileName: '默认曲线',
     );
     if (context.mounted) showToast(context, '已重置为默认曲线(全 0 dB)');
+  }
+}
+
+/// 桌面「边听边存」的真实行为说明: null = 该平台有真实开关(Android)。
+///
+/// P-04: 桌面分支从来没把 streamCache 传给 Rust —— Linux 恒走 start_progressive
+/// (渐进下载 + 落盘, core/crates/ncm-ffi/src/api.rs 的 #[cfg(not(windows))] 分支),
+/// Windows 恒 cache.fetch 整首下载(#[cfg(windows)] 分支)。桌面上留一个点了没用的
+/// 开关等于"设置说谎", 所以只在桌面显示这句只读说明; 缓存上限桌面上是真生效的
+/// (enforceCacheLimit → cache_enforce_limit), 仍然保留可调。
+String? streamCachePlatformNote(TargetPlatform platform) {
+  switch (platform) {
+    case TargetPlatform.android:
+      return null;
+    case TargetPlatform.windows:
+      return '不可用(整首下载后播放)';
+    default:
+      return '恒开(渐进下载 + 落盘)';
   }
 }
 

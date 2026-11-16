@@ -8,6 +8,7 @@ import 'app_settings.dart';
 import 'player_bar.dart';
 import 'song_actions.dart';
 import 'theme.dart';
+import 'toast.dart';
 
 // 全局壳: 动作宿主/页面层数/常驻底部条槽位 + 根 Overlay + MaterialApp 装配。
 // 从 main.dart 原样搬出(2026-11 拆壳 S1), 行为/时序/文案零改动。
@@ -211,6 +212,9 @@ class MiniNcmApp extends StatelessWidget {
         final settings = AppSettings.instance;
         return MaterialApp(
           title: '轻音 MiniNCM',
+          // 根 messenger: 播放/调音管线的后台失败没有 BuildContext, 靠它提示
+          // (见 src/toast.dart 的 showGlobalToast)。
+          scaffoldMessengerKey: rootMessengerKey,
           // 桌面版 debug 构建的 DEBUG 斜标会压住 AppBar 右上角的歌单/账号按钮
           debugShowCheckedModeBanner: false,
           // 视觉风格(主题色): 同一色板同时决定浅色/深色两套配色的 seed

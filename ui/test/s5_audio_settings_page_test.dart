@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -133,25 +134,72 @@ void main() {
     expect(settings.fadeMs, 500);
   });
 
-  testWidgets('边听边存开关与缓存上限写回', (tester) async {
-    await pumpPage(tester);
-    await tester.tap(find.byKey(const Key('streamCacheSwitch')));
-    await tester.pumpAndSettle();
-    expect(settings.streamCache, isFalse);
+  /// 在指定 target platform 下渲染本页, 并在 body 结束前还原覆盖。
+  ///
+  /// 不用 addTearDown: 框架在 body 结束时就会断言 "debug 变量未被改动", tearDown
+  /// 已经太晚。另外 flutter test 里 defaultTargetPlatform 恒为 android(见
+  /// foundation/_platform_io.dart 的 FLUTTER_TEST 分支), 桌面分支必须显式覆盖。
+  Future<void> withPlatform(
+    WidgetTester tester,
+    TargetPlatform platform,
+    Future<void> Function() body,
+  ) async {
+    debugDefaultTargetPlatformOverride = platform;
+    try {
+      await pumpPage(tester);
+      await body();
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  }
 
-    final dd = tester.widget<DropdownButton<int>>(
-      find.byKey(const Key('cacheLimitDropdown')),
-    );
-    dd.onChanged!(2048);
-    await tester.pump();
-    expect(settings.cacheLimitMb, 2048);
+  testWidgets('Android: 边听边存开关与缓存上限写回', (tester) async {
+    // 只有 Android 真的把 streamCache 传给 Media3
+    await withPlatform(tester, TargetPlatform.android, () async {
+      await tester.tap(find.byKey(const Key('streamCacheSwitch')));
+      await tester.pumpAndSettle();
+      expect(settings.streamCache, isFalse);
+
+      final dd = tester.widget<DropdownButton<int>>(
+        find.byKey(const Key('cacheLimitDropdown')),
+      );
+      dd.onChanged!(2048);
+      await tester.pump();
+      expect(settings.cacheLimitMb, 2048);
+    });
+  });
+
+  // P-04: 桌面没有真实开关(Rust 侧恒渐进/恒整首), 只能显示如实说明 + 仍可调的缓存上限
+  testWidgets('Linux: 边听边存是只读说明, 缓存上限仍可调', (tester) async {
+    await withPlatform(tester, TargetPlatform.linux, () async {
+      expect(find.byKey(const Key('streamCacheSwitch')), findsNothing);
+      expect(find.byKey(const Key('streamCacheNote')), findsOneWidget);
+      expect(find.text('恒开(渐进下载 + 落盘)'), findsOneWidget);
+
+      final dd = tester.widget<DropdownButton<int>>(
+        find.byKey(const Key('cacheLimitDropdown')),
+      );
+      dd.onChanged!(1024);
+      await tester.pump();
+      expect(settings.cacheLimitMb, 1024);
+    });
+  });
+
+  testWidgets('Windows: 边听边存说明为"不可用(整首下载后播放)"', (tester) async {
+    await withPlatform(tester, TargetPlatform.windows, () async {
+      expect(find.byKey(const Key('streamCacheSwitch')), findsNothing);
+      expect(find.text('不可用(整首下载后播放)'), findsOneWidget);
+      // 桌面仍显示"硬件解码"的只读说明(与 Linux 同一分支)
+      expect(find.byKey(const Key('hardwareDecodeSwitch')), findsNothing);
+    });
   });
 
   testWidgets('Linux 下不显示"优先硬件解码"项', (tester) async {
-    await pumpPage(tester);
-    expect(find.byKey(const Key('hardwareDecodeSwitch')), findsNothing);
-    expect(find.text('优先硬件解码'), findsNothing);
-    expect(find.textContaining('纯软解'), findsOneWidget);
+    await withPlatform(tester, TargetPlatform.linux, () async {
+      expect(find.byKey(const Key('hardwareDecodeSwitch')), findsNothing);
+      expect(find.text('优先硬件解码'), findsNothing);
+      expect(find.textContaining('纯软解'), findsOneWidget);
+    });
   });
 
   testWidgets('导入非法曲线: 弹窗内报第 N 行且不写 AppSettings', (tester) async {

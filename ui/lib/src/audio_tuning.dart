@@ -1,10 +1,12 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show PlatformException;
 
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 
 import 'app_settings.dart';
 import 'playback.dart';
+import 'toast.dart';
 
 /// 把 AppSettings 里的播放参数(R2/R2b/R5/R7)翻成一次 FFI 调用。
 ///
@@ -72,40 +74,129 @@ final Playback _facade = Playback();
 /// 每个曲目测得的响度增益缓存(避免每次切歌都过一遍 FFI)
 final Map<int, double> _loudnessGainCache = <int, double>{};
 
+/// 冷启动「播放器还没就绪」的重试退避(ms): 最多 3 次, 合计再等 1.7s。
+///
+/// 竞态来源(P-06): `main.dart` 的 `_bootstrap` 里 `unawaited(applyAudioTuning())`
+/// 与 Android `PlaybackService` 的创建(MediaController.Builder)无任何同步, 服务
+/// 还没起来时 `configure` 返回 `not_ready`; 早先这里 `catch (_) {}` 整个吞掉 ⇒
+/// 用户保存的音量/淡入/EQ 一次全没落地, 连一条日志都没有。
+const List<int> kTuningRetryDelaysMs = <int>[200, 500, 1000];
+
+/// 一次调音调用是"播放器还没就绪"(值得重试)还是"真失败"。
+///
+/// - Android: 通道错误码 `not_ready`(MainActivity 的 configure 分支);
+/// - 桌面: Rust core 还没 init 时抛的 "core not initialized"。
+bool isTuningNotReady(Object error) {
+  if (error is PlatformException) return error.code == 'not_ready';
+  final text = error.toString().toLowerCase();
+  return text.contains('not_ready') || text.contains('not initialized');
+}
+
+/// EQ 旁路是否已经提示过(同一状态只打扰一次: 播放 tick 会反复调本函数)。
+bool _eqBypassNotified = false;
+
+/// 调音最终失败是否已经提示过(冷启动连续失败同样只提示一次)。
+bool _tuningFailureNotified = false;
+
+/// 测试用: 清掉"已经提示过"的去重状态。
+@visibleForTesting
+void resetAudioTuningNotices() {
+  _eqBypassNotified = false;
+  _tuningFailureNotified = false;
+}
+
+/// 消费 Android `configure` 的回显(`eqApplied/eqError/eqFilters`)。
+///
+/// Kotlin 侧解析失败时 EQ 会被旁路(播放照常进行), 但以前 Dart 侧把回显整个丢掉,
+/// 用户改了曲线"没生效"却毫无线索(P-05 立即项)。现在: logcat 打 `NCM-EQ` 前缀,
+/// 并在**状态变化**时给一次 UI 提示 —— 每次 tick 都弹会把人烦死。
+void _reportEqEcho(Map<String, Object?>? echo) {
+  if (echo == null) return; // 桌面/老版本不回显: 无事可做
+  final applied = echo['eqApplied'];
+  if (applied == true) {
+    if (_eqBypassNotified) {
+      _eqBypassNotified = false;
+      debugPrint('NCM-EQ 曲线已生效(此前被旁路)');
+    }
+    return;
+  }
+  if (applied != false) return; // 不回显 EQ 结果的老版本: 不误报
+  final error = (echo['eqError'] as String?)?.trim();
+  final detail = (error == null || error.isEmpty) ? '原因未知' : error;
+  final filters = echo['eqFilters'];
+  debugPrint('NCM-EQ 曲线未生效, 已旁路(filters=$filters): $detail');
+  if (_eqBypassNotified) return;
+  _eqBypassNotified = true;
+  showGlobalToast('自定义响度曲线未生效: $detail', isError: true);
+}
+
+/// 真正调一次底层(不含重试/上报), 把两个平台分支与重试逻辑分开。
+Future<void> _applyTuningOnce(AudioTuningRequest request) async {
+  if (_facade.isAndroid) {
+    // Android: Media3(S3)消费同一份参数 —— 增益乘系统音量档、淡入用 ValueAnimator、
+    // 硬解/边听边存/缓存上限/EQ 由 Kotlin 侧建 player 时套用
+    final echo = await _facade.applyTuning(
+      gainDb: request.gainDb,
+      fadeMs: request.fadeMs,
+      hardwareDecode: AppSettings.instance.hardwareDecode,
+      streamCache: AppSettings.instance.streamCache,
+      cacheLimitMb: AppSettings.instance.cacheLimitMb,
+      eqText: request.eqText,
+      // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时, 行为不变。
+      // Linux 侧由 Rust 自己在 200ms tick 上做同样的限速, 这里不用管。
+      gainSlewDbPerSec: AppSettings.instance.loudnessDynamic ? 3.0 : 0.0,
+    );
+    _reportEqEcho(echo);
+    return;
+  }
+  await rust.playerConfigure(
+    gainDb: request.gainDb,
+    fadeMs: request.fadeMs,
+    eqText: request.eqText,
+  );
+}
+
 /// 把当前设置的播放参数应用到播放器。
 ///
 /// - Android: 走 Media3(S3 车道)的 `ncm/player` configure;
 /// - 其它平台(Linux 桌面): 走 Rust rodio。
-/// 失败不抛给调用方: 播放参数属于"锦上添花", 不能因为它把播放/启动流程打断。
-Future<void> applyAudioTuning({double loudnessGainDb = 0.0}) async {
+/// 失败不抛给调用方: 播放参数属于"锦上添花", 不能因为它把播放/启动流程打断;
+/// 但**不再静默** —— 冷启动竞态按 [kTuningRetryDelaysMs] 有限次重试, 仍失败则
+/// 打日志 + 一次性提示, 其它异常同样留日志(P-06)。
+///
+/// [retryDelaysMs] 仅供测试缩短退避, 生产调用方不用传。
+Future<void> applyAudioTuning({
+  double loudnessGainDb = 0.0,
+  List<int> retryDelaysMs = kTuningRetryDelaysMs,
+}) async {
   final request = AudioTuningRequest.fromSettings(
     AppSettings.instance,
     loudnessGainDb: loudnessGainDb,
   );
-  try {
-    if (_facade.isAndroid) {
-      // Android: Media3(S3)消费同一份参数 —— 增益乘系统音量档、淡入用 ValueAnimator、
-      // 硬解/边听边存/缓存上限/EQ 由 Kotlin 侧建 player 时套用
-      await _facade.applyTuning(
-        gainDb: request.gainDb,
-        fadeMs: request.fadeMs,
-        hardwareDecode: AppSettings.instance.hardwareDecode,
-        streamCache: AppSettings.instance.streamCache,
-        cacheLimitMb: AppSettings.instance.cacheLimitMb,
-        eqText: request.eqText,
-        // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时, 行为不变。
-        // Linux 侧由 Rust 自己在 200ms tick 上做同样的限速, 这里不用管。
-        gainSlewDbPerSec: AppSettings.instance.loudnessDynamic ? 3.0 : 0.0,
-      );
+  final maxAttempts = retryDelaysMs.length + 1;
+  for (var attempt = 1; ; attempt++) {
+    try {
+      await _applyTuningOnce(request);
+      _tuningFailureNotified = false;
+      return;
+    } catch (e) {
+      final retryIndex = attempt - 1;
+      if (isTuningNotReady(e) && retryIndex < retryDelaysMs.length) {
+        final delayMs = retryDelaysMs[retryIndex];
+        debugPrint(
+          'NCM-TUNING 播放器未就绪, ${delayMs}ms 后重试($attempt/$maxAttempts)',
+        );
+        await Future<void>.delayed(Duration(milliseconds: delayMs));
+        continue;
+      }
+      // 走到这里就是最终失败: 不可重试(如通道参数错), 或重试用完
+      debugPrint('NCM-TUNING 播放参数未生效($attempt/$maxAttempts): $e');
+      if (!_tuningFailureNotified) {
+        _tuningFailureNotified = true;
+        showGlobalToast('播放参数暂未生效, 下次启动会重新应用', isError: true);
+      }
       return;
     }
-    await rust.playerConfigure(
-      gainDb: request.gainDb,
-      fadeMs: request.fadeMs,
-      eqText: request.eqText,
-    );
-  } catch (_) {
-    // Rust core 未初始化 / 平台通道未就绪时静默跳过
   }
 }
 
