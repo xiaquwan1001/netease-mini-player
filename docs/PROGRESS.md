@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-16(日)**。当前版本 **v0.15.0**(重构第三批: main.dart 拆壳 S4 播放协调器 / comment·feed 按职责拆分 / vip·medal·cover_art 映射层下移)。
+> 最近更新: **2026-11-16(日)**。当前版本 **v0.16.0**(第四批: 拆壳 S5 动作宿主 / 平台层修复 P-01·P-02·P-04·P-05·P-06 / CI 门禁口径统一)。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -53,6 +53,7 @@
 | **v0.12.2** | **2026-11-14** | 分类条回退为**单横排 + 横向拖拽**(不再做换行/均分几何) + 分类顺序按日用频率(歌曲→艺人→专辑→MV→播客→歌单→用户) |
 | **v0.12.3** | **2026-11-15** | 冷启动默认落「推荐」tab(不再被恢复的播放现场顶到"正在播放"列表) + 每日推荐歌单本地缓存在「历史日推」里合并去重 + 「本地」标记 |
 | **v0.12.4** | **2026-11-15** | 播放队列面板排版: 标题不再被行尾挤成「当前播…」, 序号贴左/删除与拖拽贴右, 中间歌名 +48dp; 「正在播放」页改为直接读队列(删掉过期副本) |
+| **v0.16.0** | **2026-11-16** | **第四批**(平台层审计后的第一批修复, 4 lane): main.dart **2503→2156** 拆壳 **S5**(动作宿主+14 个动作闭包 → `home/song_action_wiring.dart`)、**P-01/P-02** Android 通知栏按钮上划清任务后仍可用 + 红心·模式自愈、**P-04/P-05/P-06** 桌面「边听边存」如实说明 + EQ 失败可观测 + 冷启动调音重试、**CI 门禁统一**(`ci-gates.sh` 唯一实现, golden 进发版门); 测试 **992→1010** |
 | **v0.15.0** | **2026-11-16** | **重构第三批**(4 lane): main.dart **2899→2503** 拆壳 **S4**(轮询/续播/现场恢复/预取/响度簿记 → `src/home/playback_coordinator.dart` 567 行)、**P1** `comment_thread` 1699→8 + `feed_view` 1190→7 barrel(part 保私有)、**P2** vip/medal 映射层与 cover_art 纯函数下移、**平台层只读审计**(22 条缺陷, P1×6); 门禁 992 / 290, golden 无变化 |
 | **v0.14.0** | **2026-11-16** | **重构第二批**(3 条并行 lane, 断电后按续做重派): main.dart **3095→2899** 拆壳 **S3**(搜索状态/联想/热词/历史 → `src/home/search_controller.dart`)、**PlaybackBridge 单入口**(`onPlaySongs` 透传 158→0, 删 UserNav/ArtistNav 静态旁路与 20 文件构造参数)、`ncm-provider/lib.rs` **1321→30** 行按 capability/error/params/trait/registry 拆分(对外路径不变); 门禁 992 / 290, golden 无变化; 同批回收 21G 磁盘 |
 | **v0.13.0** | **2026-11-15** | **架构重构批**(48 提交, 7 条并行 lane): main.dart **3917→3095**(S0 纯逻辑 / S1 全局壳 / S2 歌词控制器)、detail/messages/discover 三个 P0 页面按页拆分(1558/886/882 → 子树)、**SongRow 收敛 11 处**、四态全部收口到 AsyncView(16 个域)、`FfiError{kind,retryable,detail}` 跨桥(160 导出)、锁中毒容忍 + fsutil 原子写收敛、日推缓存按 uid 隔离 + 登出清理、golden **12→18** 且进 CI、测试工厂 `fakes.dart` 收敛 32 份；门禁 992 / 290 |
@@ -90,6 +91,40 @@
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-16(日) 第四批: S5 动作宿主 + Android 通知可靠性 + CI 门禁统一 + 调音诚实化(**v0.16.0**)
+
+平台层审计(`.pi/plans/arch-audit-platform-2026-11-16.md`)后的第一批修复, 4 条 lane 并行; 期间本机两次非正常重启, 一条 lane 的验收步骤被打断, 代码已先落 WIP 再由续做 worker 完成编译与模拟器验收。
+
+### 前端结构
+
+- **main.dart 拆壳 S5**: 新增 `src/home/song_action_wiring.dart`(467): `_buildActionsHost` 的「…」菜单宿主、14 个歌曲/歌单/艺人/专辑/播客动作闭包(喜欢/加队列/下一首/收藏到歌单/新建歌单/分享/评论/艺人/专辑/下载/不感兴趣/相似歌曲/百科)全部搬出; main.dart **2503 → 2156**(−347)。菜单项零增删(golden 18 张未变)。
+- 测试基线 **992 → 1010**(新增 `notification_action_state_test` 7 例、`audio_tuning_apply_test`、音频设置页平台分支用例)。
+
+### 平台层修复(审计 P-01/P-02/P-04/P-05/P-06)
+
+| 缺陷 | 修法 |
+|---|---|
+| **P-01** 上划清任务后通知栏 4 按钮 + 耳机键静默失效 | 意图与消费者解耦: `requestSkip/requestAction` 无同进程消费者时走 `PendingIntent` 拉起 App 并带 `EXTRA_PLAYBACK_ACTION`(`PlaybackService.kt:725`), `MainActivity` 捕获后排队(60s TTL), Dart `actionHandlersReady` 握手后就绪重放; 兜底队列与 Intent 二选一(防同一次点击双执行); BAL 拦截时 Toast + logcat 诚实降级 |
+| **P-02** 红心/模式图标服务重建后不自愈 | 原生 `requestActionStateSync`(onConnect + 握手) → Dart `_resyncActionState` 用最近已知值立刻补推; `setActionState` 幂等短路(值未变不跨通道); poll 内每 5s 节流重推 |
+| **P-04** 桌面「边听边存」是安慰剂 | 桌面改为只读说明(Linux「恒开(渐进下载+落盘)」/ Windows「不可用(整首下载后播放)」), 缓存上限仍可调 |
+| **P-05**(立即项) EQ 解析失败静默旁路 | 消费 `configure` 回显, `eqApplied==false` → `NCM-EQ` 日志 + 状态变化时提示一次(新增 `rootMessengerKey`/`showGlobalToast`) |
+| **P-06** 冷启动调音参数丢失 | `not_ready` 改 200/500/1000ms 有限重试, 其它异常不再 `catch (_) {}` 吞掉 |
+
+**已知限制(诚实记录)**: Android 10+ 的 BAL 限制会拦掉后台拉起 Activity(`Abort background activity starts`), 因此上划清任务后点通知按钮的实际动作要等用户打开 App 才补执行; 期间按钮有 Toast + logcat 反馈, 且排队的意图只执行一次(模拟器实测: 点通知本体回 App 后 `ncm.MODE` 补执行、模式图标实际变化)。
+
+### CI / 门禁
+
+- 新增 `tools/ci-gates.sh`(唯一实现): `version/check-version/rust-lint/rust-test/dart-format/dart-analyze/write-guard/tokens/flutter-test/verify`; `tools/ci.sh`、`ci.yml`、`release.yml` 全部转发。
+- **修掉发版门比 CI 弱**: `release.yml` 原来 `--exclude-tags 'network || golden'`(排除 golden) → 统一 `--exclude-tags network` 并补装 `fonts-noto-cjk`; `check-tokens --strict` 与 `check-write-guard` 首次进 GitHub CI; 版本解析从 5 处收敛到一处。
+- 补 `packaging/linux/build-tarball.sh`(文档原先指向不存在的脚本) + metainfo 版本断言。
+- **发布验收口径(用户 2026-11-16 拍板)**: USTC GitLab 无云 runner, 此后不考虑其流水线; 代码仍双推作镜像, **GitHub CI + Release 绿即发完**。
+
+### 门禁(合并后 main 复跑)
+
+`cargo test --offline` **290** / clippy 0 warning / fmt 干净; `flutter test --exclude-tags network` **1010 通过 0 失败**(18 张 golden **无变化**) / `dart analyze` 0 issue / `dart format --check` 干净 / `check-tokens --strict` + `check-write-guard` OK。
+**本轮起 Release 流水线会真正跑 golden**(P-13 修复前一直是跳过的)。
+
 
 ## 2026-11-16(日) 重构第三批: S4 播放协调器 + P1/P2 文件拆分 + 平台层审计(**v0.15.0**)
 
