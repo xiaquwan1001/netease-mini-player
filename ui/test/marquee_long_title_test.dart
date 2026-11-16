@@ -265,7 +265,7 @@ void main() {
   // 这里读源码而不是 pump 页面: 两处标题都在 AppBar / 头卡里, 起一个完整页面成本太高.
   // 为了不被 dart format 的重排(缩进/换行/声明顺序)打挂, 一律用正则定位 + 窗口断言,
   // 不再用 indexOf(...) 之间的 substring 切片(上一次 CI RangeError 就是这么来的).
-  test('详情页标题字号防回退: main 用 titleLarge, detail_page 用 headlineSmall', () {
+  test('详情页标题字号防回退: 首页用 titleLarge, detail_page 用 headlineSmall', () {
     String window(
       String src,
       RegExp anchor, {
@@ -285,7 +285,9 @@ void main() {
         .where((l) => !l.trimLeft().startsWith('//'))
         .join('\n');
 
-    final mainSrc = File('lib/main.dart').readAsStringSync();
+    // 首页主体已在拆壳 S8 从 lib/main.dart 搬到 src/home/home_page.dart
+    // (main.dart 只剩 main() + export 门面), 这里读新的源码位置。
+    final mainSrc = File('lib/src/home/home_page.dart').readAsStringSync();
     // 歌单详情按「一页一文件」拆到 src/detail/ 下后, 头卡源码在这个文件里
     // (lib/src/detail_page.dart 只剩 export 入口)。
     final detailSrc = File('lib/src/detail/playlist_detail_parts.dart')
