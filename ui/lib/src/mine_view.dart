@@ -583,6 +583,8 @@ class _LikedSection extends StatelessWidget {
                       showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
+                      // 行尾「共 N 首」+ 更多按钮封顶 45%(列表行审计 B9)
+                      capTrailing: true,
                       // 预览被截断时在最后一行给出总数(整行"共 N 首")
                       trailingExtra:
                           songs.length > preview.length &&
@@ -965,6 +967,7 @@ class _RecentSection extends StatelessWidget {
                       showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
+                      capTrailing: true,
                       // 行尾 "..." = 统一歌曲菜单(最近听过按歌单来源)
                       menuSource: SongActionSource.playlist,
                       // 正在播放那首的高亮由 SongRow 读全局 nowPlayingSongId,

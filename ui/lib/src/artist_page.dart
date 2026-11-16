@@ -760,6 +760,9 @@ class _AllSongsTabState extends State<_AllSongsTab> {
           indexWidth: 24,
           indexAlign: TextAlign.center,
           indexGap: 10,
+          // 行尾(时长 + 更多)封顶 45%: 不设上限时时长 + 默认 48dp 按钮会把
+          // 标题区挤到个位数宽(列表行审计 B6)。
+          capTrailing: true,
           // 与同页其它区块的 12dp 对齐(布局审计 #7)
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           subtitle: SongRowSubtitle.artist,
@@ -798,6 +801,7 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         indexWidth: 24,
         indexAlign: TextAlign.center,
         indexGap: 10,
+        capTrailing: true,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         subtitle: SongRowSubtitle.artist,
         tapOnlyWhenPlayable: true,

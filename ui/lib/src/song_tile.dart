@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
-import 'layout.dart' show kSongRowPadding;
+import 'layout.dart' show capRowTrailing, kSongRowPadding;
 import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
@@ -610,40 +610,75 @@ class SongRow extends StatelessWidget {
             ],
           );
 
-    return ListTile(
-      dense: true,
-      visualDensity: visualDensity,
-      selected: playing,
-      // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
-      // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
-      contentPadding: padding == EdgeInsets.zero ? kSongRowPadding : padding,
-      leading: leading,
-      title: _title(context, titleStyle),
-      subtitle: Text(
-        _subtitleText,
-        // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: subtitleStyle,
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ?trailingExtra,
-          if (showDuration && !narrow)
-            Text(
-              formatSongDuration(song.durationMs),
-              style: playable ? null : grey,
-            ),
-          if (onToggleLike != null) _likeButton(scheme),
-          if (onMenu != null) _moreButton(),
-          if (menuSource != null)
-            SongOverflowButton(song: song, size: 20, source: menuSource!),
-        ],
-      ),
-      onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
-      onLongPress: onLongPress,
+    return LayoutBuilder(
+      builder: (context, box) {
+        // 行尾封顶(列表行审计 B5): 与自绘臂 [capTrailing] 同一口径 —— 最多吃
+        // 行宽的 45%, 触顶时时长先省略。宽度拿不到上限时不封顶(不套 Flexible)。
+        final maxTrailingWidth = capTrailing && box.maxWidth.isFinite
+            ? box.maxWidth
+            : null;
+        return ListTile(
+          dense: true,
+          visualDensity: visualDensity,
+          selected: playing,
+          // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
+          // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
+          contentPadding: padding == EdgeInsets.zero
+              ? kSongRowPadding
+              : padding,
+          leading: leading,
+          title: _title(context, titleStyle),
+          subtitle: Text(
+            _subtitleText,
+            // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: subtitleStyle,
+          ),
+          trailing: _tileTrailing(
+            scheme,
+            playable: playable,
+            grey: grey,
+            narrow: narrow,
+            maxWidth: maxTrailingWidth,
+          ),
+          onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
+          onLongPress: onLongPress,
+        );
+      },
     );
+  }
+
+  /// ListTile 臂的行尾(时长 + 红心 + 更多)。
+  ///
+  /// [maxWidth] 非空时封顶: ListTile 给 trailing 的是松约束, 时长随字号变宽会把
+  /// 标题区挤扁(列表行审计 B5); 触顶时**时长先省略**, 歌名/徽标不被挤掉。
+  Widget _tileTrailing(
+    ColorScheme scheme, {
+    required bool playable,
+    required TextStyle grey,
+    required bool narrow,
+    required double? maxWidth,
+  }) {
+    final duration = Text(
+      formatSongDuration(song.durationMs),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: playable ? null : grey,
+    );
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ?trailingExtra,
+        if (showDuration && !narrow)
+          maxWidth == null ? duration : Flexible(child: duration),
+        if (onToggleLike != null) _likeButton(scheme),
+        if (onMenu != null) _moreButton(),
+        if (menuSource != null)
+          SongOverflowButton(song: song, size: 20, source: menuSource!),
+      ],
+    );
+    return maxWidth == null ? row : capRowTrailing(maxWidth, row);
   }
 }
 
@@ -688,6 +723,9 @@ class SongTile extends StatelessWidget {
     return SongRow(
       song: song,
       layout: SongRowLayout.tile,
+      // 行尾(时长 + 红心 + 更多)封顶在行宽 45%: 时长随字号变宽时先省略它,
+      // 歌名/徽标不被挤掉(列表行审计 B5)。
+      capTrailing: true,
       coverSize: 40,
       active: active,
       // ListTile.selected 自己负责播放态文本色(不再叠一层主色加粗)

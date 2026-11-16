@@ -75,6 +75,8 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
             subtitle: SongRowSubtitle.artistAlbum,
             padding: const EdgeInsets.symmetric(vertical: 6),
             durationGap: 8,
+            // 行尾(时长 + 更多)封顶 45%(列表行审计 B7), 口径同 artist_page。
+            capTrailing: true,
             onTap: songs[i].playable
                 ? () => PlaybackBridge.instance.playSongs(songs, i)
                 : null,

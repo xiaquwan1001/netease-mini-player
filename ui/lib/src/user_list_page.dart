@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
 import 'cover_art.dart';
+import 'layout.dart' show capRowTrailing;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -152,33 +153,46 @@ class _UserListViewState extends State<UserListView> {
             loader: _loader,
             itemBuilder: (context, u, i, items) {
               final followed = _followed(u);
-              return ListTile(
-                leading: CircleCover(
-                  url: u.avatarUrl,
-                  size: 40,
-                  icon: Icons.person_outline,
-                ),
-                title: AdaptiveText(u.name),
-                subtitle: Text(
-                  u.signature.isEmpty ? '暂无签名' : u.signature,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                // 整行(含头像/名字)都进 ta 的「动态」: 关注列表的用途就是
-                // "他们最近发了什么"; 主页从动态卡片里的作者还能进。
-                onTap: () => widget.onOpenUser != null
-                    ? widget.onOpenUser!(u.id)
-                    : showUserPage(
-                        context,
-                        userId: u.id,
-                        fallbackNickname: u.name,
-                        initialTab: '动态',
+              return LayoutBuilder(
+                builder: (context, box) => ListTile(
+                  leading: CircleCover(
+                    url: u.avatarUrl,
+                    size: 40,
+                    icon: Icons.person_outline,
+                  ),
+                  title: AdaptiveText(u.name),
+                  subtitle: Text(
+                    u.signature.isEmpty ? '暂无签名' : u.signature,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  // 整行(含头像/名字)都进 ta 的「动态」: 关注列表的用途就是
+                  // "他们最近发了什么"; 主页从动态卡片里的作者还能进。
+                  onTap: () => widget.onOpenUser != null
+                      ? widget.onOpenUser!(u.id)
+                      : showUserPage(
+                          context,
+                          userId: u.id,
+                          fallbackNickname: u.name,
+                          initialTab: '动态',
+                        ),
+                  // 关注按钮封顶 45%: 默认左右 padding 16 + 1.625 字号下文字
+                  // 会把按钮撑到 ~150dp, 行尾不设上限就挤掉昵称(列表行审计 B12)。
+                  trailing: capRowTrailing(
+                    box.maxWidth,
+                    OutlinedButton(
+                      onPressed: () => _toggleFollow(u),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        minimumSize: const Size(0, 40),
                       ),
-                trailing: OutlinedButton(
-                  onPressed: () => _toggleFollow(u),
-                  child: Text(
-                    followed ? '已关注' : '关注',
-                    style: const TextStyle(fontSize: 12),
+                      child: Text(
+                        followed ? '已关注' : '关注',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
                   ),
                 ),
               );

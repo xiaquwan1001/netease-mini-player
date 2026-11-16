@@ -77,8 +77,12 @@ Widget _tierRow(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
+                // 档位名/说明都必须限行: 64dp 样例封面不会随文字变高,
+                // 说明文字两行以上会把整行撑高(列表行审计 B3)。
                 Text(
                   tier.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   ),
@@ -86,6 +90,8 @@ Widget _tierRow(
                 const SizedBox(height: 2),
                 Text(
                   tier.hint,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 12,
                     color: scheme.onSurfaceVariant,
