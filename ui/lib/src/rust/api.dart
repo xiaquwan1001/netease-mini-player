@@ -234,6 +234,17 @@ Future<WordLyricDto?> ttmlLyricLines({required BigInt trackId}) =>
 Future<bool> loginWithCookie({required String cookie}) =>
     RustLib.instance.api.crateApiLoginWithCookie(cookie: cookie);
 
+/// 播放器与取链**共用的客户端 UA**(唯一来源 = `ncm_service::identity::platform_profile().ua`).
+///
+/// Android 的 CDN 请求由 Kotlin(Media3)发, 拿不到 `ncm-service` 的常量, 以前手抄了
+/// 一份到 `PlaybackService.USER_AGENT` —— 升级客户端版本时只改一侧就会出现
+/// "取链用新 UA、播放用旧 UA", CDN/风控行为不一致, 表现为偶发 403 或偶发无声(P-21)。
+/// 现在 Dart 启动时把本函数返回值经 `ncm/player#setUserAgent` 注入 PlaybackService,
+/// Kotlin 侧只保留一份兜底常量(真值以这里为准)。
+///
+/// 同步函数: 纯常量读取, 不需要 async 运行时。
+String playbackUserAgent() => RustLib.instance.api.crateApiPlaybackUserAgent();
+
 Future<String> ping({required String name}) =>
     RustLib.instance.api.crateApiPing(name: name);
 

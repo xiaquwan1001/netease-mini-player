@@ -153,9 +153,69 @@ class Playback {
     // 握手: 告诉原生"通知回调已注册"。上划清任务后点通知按钮时, 原生会先用 Intent 把 App
     // 拉起来并把动作排队, 收到这条握手才执行(见 MainActivity.deliverPendingPlaybackAction)。
     if (_isAndroidPlatform) {
+      // 播放 UA 的唯一来源在 Rust: 启动时就把真值推给原生(Kotlin 只留兜底常量, P-21)。
+      // 与握手同一条通道, 不额外阻塞启动(失败只留日志, 首次 play 前还会再试一次)。
+      unawaited(_injectUserAgent());
       _channel
           .invokeMethod<void>('actionHandlersReady')
           .catchError((Object _) {});
+    }
+  }
+
+  // ---- 播放 UA 单一来源(P-21): Rust → FFI → Dart → Kotlin ----
+  // 以前 Kotlin 的 PlaybackService.USER_AGENT 与 Rust 的 platform_profile().ua 是两份手抄常量,
+  // 升级客户端版本只改一侧 ⇒ "取链用新 UA、播放用旧 UA" ⇒ 偶发 403/偶发无声。
+  // 现在真值只有一处(Rust), Dart 把它推过去; Kotlin 的常量降级为兜底。
+
+  /// 是否已成功把 UA 交给原生(成功一次就够)
+  static bool _uaInjected = false;
+
+  /// 正在进行中的注入(并发调用合并成一次)
+  static Future<void>? _uaInjection;
+
+  /// 测试用: 清掉注入缓存(生产路径不需要)
+  @visibleForTesting
+  static void debugResetUserAgentCache() {
+    _uaInjected = false;
+    _uaInjection = null;
+  }
+
+  /// 把 Rust 的播放 UA 推给原生(只 Android 需要: 桌面端的播放请求由 Rust 自己发)。
+  ///
+  /// 幂等且可重试: 成功后置位不再重复; 失败(原生服务没起 / Rust 未就绪)只留一条
+  /// `NCM-UA` 日志, 下次调用(启动握手之后的首次 [play])会再试。
+  static Future<void> _injectUserAgent() {
+    if (_uaInjected) return Future<void>.value();
+    final pending = _uaInjection;
+    if (pending != null) return pending;
+    final future = _doInjectUserAgent().whenComplete(() {
+      _uaInjection = null;
+    });
+    _uaInjection = future;
+    return future;
+  }
+
+  static Future<void> _doInjectUserAgent() async {
+    final String ua;
+    try {
+      // 同步 FFI: 纯常量读取(不进入 async 运行时)
+      ua = rust.playbackUserAgent();
+    } catch (e) {
+      debugPrint('[NCM-UA] 取 Rust 的播放 UA 失败(原生继续用兜底常量): $e');
+      return;
+    }
+    if (ua.trim().isEmpty) {
+      debugPrint('[NCM-UA] Rust 返回的播放 UA 为空(原生继续用兜底常量)');
+      return;
+    }
+    try {
+      await _channel.invokeMethod<void>('setUserAgent', {'ua': ua});
+      _uaInjected = true;
+      debugPrint('[NCM-UA] 已把 Rust 的播放 UA 交给原生: $ua');
+    } on MissingPluginException catch (e) {
+      debugPrint('[NCM-UA] setUserAgent 通道缺失(非 Android 构建?): $e');
+    } on PlatformException catch (e) {
+      debugPrint('[NCM-UA] setUserAgent 失败(${e.code}: ${e.message}), 下次再试');
     }
   }
 
@@ -230,6 +290,8 @@ class Playback {
     Uint8List? artwork,
   }) async {
     if (isAndroid) {
+      // 首播前保证 UA 已交给原生(启动握手时服务可能还没起, 那次失败了就在这里补)
+      await _injectUserAgent();
       final map = await _channel.invokeMapMethod<String, Object?>('play', {
         'trackId': trackId.toInt(),
         'url': preferHttpsStreamUrl(url),
