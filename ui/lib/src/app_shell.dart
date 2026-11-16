@@ -1,10 +1,8 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
-// 循环 import: MiniNcmApp.home 仍是 main.dart 里的 HomePage(拆壳 S2 才搬走)。
-import 'package:minincm/main.dart' show HomePage;
-
 import 'app_settings.dart';
+import 'home/home_page.dart' show HomePage;
 import 'player_bar.dart';
 import 'song_actions.dart';
 import 'theme.dart';
@@ -13,14 +11,13 @@ import 'toast.dart';
 // 全局壳: 动作宿主/页面层数/常驻底部条槽位 + 根 Overlay + MaterialApp 装配。
 // 从 main.dart 原样搬出(2026-11 拆壳 S1), 行为/时序/文案零改动。
 //
-// 跨文件符号: `_actionsHost`/`_pageDepth`/`_publishBottomBar` 在 main.dart 的
-// _HomePageState 里被直接读写, 而 Dart 的私有成员不跨库, 所以这里保留单一实例
-// 但改成公共名(不复制状态、不加 getter 包装), 只对 main.dart 暴露。
+// 跨文件符号: `_actionsHost`/`_pageDepth`/`_publishBottomBar` 在
+// src/home/home_page.dart 的 _HomePageState 里被直接读写, 而 Dart 的私有成员不跨库,
+// 所以这里保留单一实例但改成公共名(不复制状态、不加 getter 包装), 只对它暴露。
 // 其余(Observer/壳内部 State/Chrome)仍为私有。
 //
-// 循环导入: MiniNcmApp 的 home 目前还是 main.dart 里的 HomePage(拆壳 S2 才会搬),
-// 所以这里反向 import main.dart; Dart 允许循环 import, 顶层 final 是惰性初始化,
-// S2 把 HomePage 搬到 src/home_page.dart 后即可去掉这条反向依赖。
+// 与 home_page.dart 互相 import(Dart 允许环): MiniNcmApp.home 是 HomePage,
+// 而 HomePage 要读这里的槽位/投递函数; 顶层 final 惰性初始化, 无初始化顺序问题。
 
 /// 全局动作回调宿主: MaterialApp.builder 里包一层 AppActions,
 /// 这样搜索结果/详情页/底部面板等所有路由里的 "..." 菜单都能拿到同一套回调。
