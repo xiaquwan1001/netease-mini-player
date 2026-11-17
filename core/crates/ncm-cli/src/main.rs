@@ -28,7 +28,8 @@
 //!   ncm user-ranking <uid> [--period week]   他人常听排行(对方没公开则空)
 //!   ncm user-events <uid> [limit] [lasttime] 指定用户的动态(需登录)
 //!
-//! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/ncm
+//! 数据目录: $NCM_DATA_DIR 或 $HOME/.local/share/io.github.xiaquwan1001.MiniNCM
+//! (旧目录 $HOME/.local/share/ncm 由 ncm_service::fsutil 一次性迁移, 与桌面 App 同口径)
 
 use std::io::Write as _;
 use std::path::PathBuf;
@@ -57,7 +58,15 @@ fn data_dir() -> PathBuf {
         return PathBuf::from(dir);
     }
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".local/share/ncm")
+    let home = PathBuf::from(home);
+    // P-18 后半(2026-11-17): 与桌面 App 共用同一份「默认目录 + 一次性迁移」解析,
+    // 否则 headless 的 ncm-cli 会在旧目录 ~/.local/share/ncm 里新建 identity,
+    // 与迁移后的 App 变成两套账号簿/两套缓存。
+    let (dir, _) = ncm_service::fsutil::resolve_desktop_data_dir(
+        &ncm_service::fsutil::default_desktop_data_dir(&home),
+        &ncm_service::fsutil::legacy_desktop_data_dir(&home),
+    );
+    dir
 }
 
 struct Args {

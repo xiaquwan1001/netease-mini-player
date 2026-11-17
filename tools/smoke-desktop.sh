@@ -123,8 +123,12 @@ do_env() {
   fi
 
   echo
-  # DATA 目录
-  DATA_DIR="${HOME}/.local/share/ncm"
+  # DATA 目录(P-18 后半: 默认目录跟随 application-id, 旧目录 ~/.local/share/ncm 只作迁移来源)
+  DATA_DIR="${HOME}/.local/share/io.github.xiaquwan1001.MiniNCM"
+  LEGACY_DATA_DIR="${HOME}/.local/share/ncm"
+  if [ ! -d "$DATA_DIR" ] && [ -d "$LEGACY_DATA_DIR" ]; then
+    info "DATA-DIR: 旧目录 $LEGACY_DATA_DIR 存在而新目录未创建(下次启动会一次性迁移)"
+  fi
   if [ -d "$DATA_DIR" ]; then
     if [ -w "$DATA_DIR" ]; then
       ok "DATA-DIR: $DATA_DIR 存在且可写"
