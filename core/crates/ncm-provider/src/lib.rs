@@ -12,18 +12,25 @@
 //! | capability | `Capability`(路由依据) + `AudioLevel`(音质档位) |
 //! | error | `ProviderError{kind,retryable,detail}` / `ProviderErrorKind` / `ProviderResult` |
 //! | params | `BoxFuture` + 入参类型(`SearchQuery`/`SongUrlRequest`/`RankingPeriod`) |
-//! | `trait` | `Provider` trait 本体(核心 6 方法 + 其余默认实现) |
+//! | `trait` | `Provider` trait 本体: 身份 4 方法 + 13 个能力 trait 的超 trait 组合 |
+//! | caps | 13 个能力 trait(`ReadProvider`/`LyricProvider`/…)—— 按方法语义域拆开 |
 //! | registry | `ProviderRegistry`(按 id 索引 + 按能力挑选) |
 //!
 //! 对外路径保持不变: 下面全部 `pub use`, 调用方继续写 `ncm_provider::ProviderError` 等.
 
 mod capability;
+mod caps;
 mod error;
 mod params;
 mod registry;
 mod r#trait;
 
 pub use capability::{AudioLevel, Capability};
+pub use caps::{
+    AccountProvider, ArtistAlbumProvider, CloudProvider, CommentProvider, CommunityProvider,
+    LyricProvider, MessageProvider, PlaylistReadProvider, PlaylistWriteProvider, RadioProvider,
+    ReadProvider, RecommendProvider, VipProvider,
+};
 pub use error::{ProviderError, ProviderErrorKind, ProviderResult};
 pub use params::{BoxFuture, RankingPeriod, SearchQuery, SongUrlRequest};
 pub use r#trait::Provider;
