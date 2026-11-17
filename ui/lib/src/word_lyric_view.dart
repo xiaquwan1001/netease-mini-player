@@ -550,13 +550,8 @@ class KaraokeLineState extends State<KaraokeLine>
                   : 320.0;
               // 自然宽(不折行不省略)决定当前行要不要横向滚动: 与静态行同一口径
               // 用「真实渲染样式 + textScaler」测量, 不靠估算。
-              final naturalWidth = _naturalTextWidth(
-                text,
-                scaler,
-                direction,
-              );
-              final scrolling =
-                  naturalWidth - maxWidth > kMarqueeMinOverflow;
+              final naturalWidth = _naturalTextWidth(text, scaler, direction);
+              final scrolling = naturalWidth - maxWidth > kMarqueeMinOverflow;
               // 滚动时按自然宽排版(不能先省略号截到视口宽再平移, 那滚的只是
               // 被截断的一截); 放得下时维持原来的"段落宽 = 行宽 + 居中"。
               final layoutWidth = scrolling ? naturalWidth : maxWidth;
