@@ -102,7 +102,7 @@ Version: ${VER}
 Section: sound
 Priority: optional
 Architecture: ${ARCH}
-Depends: libgtk-3-0, libasound2, libdbus-1-3, liblzma5, libstdc++6, libc6 (>= 2.31)
+Depends: libgtk-3-0, libasound2, libdbus-1-3, libstdc++6, libc6 (>= 2.31)
 Recommends: libnotify4
 Installed-Size: ${INSTALLED_KB}
 Maintainer: ${MAINTAINER}
