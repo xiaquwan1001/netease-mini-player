@@ -213,11 +213,17 @@ void main() {
       matching: find.byIcon(Icons.drag_handle),
     );
     expect(handle, findsOneWidget, reason: '每行都要有拖拽手柄');
+    // 拖拽距离按**实测行高**算(列表行纵向 pitch 统一到 rowExtentFor 后不再是 64,
+    // 写死 60+60 只会跨一行): 每次推进 1.5 行, 共 3 行。
+    final rowH = tester.getSize(find.byType(ListTile).first).height;
     final gesture = await tester.startGesture(tester.getCenter(handle));
     await tester.pump(const Duration(milliseconds: 50));
-    await gesture.moveBy(const Offset(0, 60));
-    await tester.pump(const Duration(milliseconds: 50));
-    await gesture.moveBy(const Offset(0, 60));
+    // 分多次小步移动: ReorderableListView 只在跨过行的中点时换位, 一次跳 2 行会被
+    // 当成"还没跨过相邻行"。
+    for (var i = 0; i < 24; i++) {
+      await gesture.moveBy(Offset(0, rowH * 0.1));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     await tester.pump(const Duration(milliseconds: 50));
     await gesture.up();
     await tester.pumpAndSettle();

@@ -12,7 +12,7 @@ import 'radio_explore_page.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
-import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 import 'style_page.dart';
 
 /// 推荐页: 系统推荐的乐曲风格 + 每日推荐(歌曲/歌单) + 推荐播客 + 私人 FM + 心动模式.
@@ -98,7 +98,7 @@ class _RecommendViewState extends State<RecommendView> {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       // 2026-11 用户反馈: 推荐页歌曲行左右仍有空隙。页面横向留白改为 0,
-      // 歌曲卡片直接铺满屏宽(行内只留 kSongRowPadding); 其它区块各自补 12dp。
+      // 歌曲卡片直接铺满屏宽(行内只留 kPageRowPadding); 其它区块各自补 12dp。
       child: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         // 审查 P1-7.8 / §5.5: 首屏平级模块 8 个 + 1 个游离按钮 → 5 个。
@@ -308,17 +308,9 @@ class _NewSongsSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final s in preview)
-                    SongRow(
+                    // 卡片内的紧凑预览行见 SongRow.cardPreview(行距/封面/副标题同构)
+                    SongRow.cardPreview(
                       song: s,
-                      layout: SongRowLayout.tile,
-                      coverSize: 40,
-                      subtitle: SongRowSubtitle.artist,
-                      // 卡片内的紧凑预览: 保留原来的 compact 行密度
-                      visualDensity: VisualDensity.compact,
-                      // 预览行不给时长(整行更要紧的是歌名/艺人)
-                      showDuration: false,
-                      // 本页歌曲卡片铺满屏宽, 行内留白就是 SongRow 的默认
-                      // kSongRowPadding(页面横向留白为 0)
                       // 行尾 "..." = 统一歌曲菜单(本区块历史来源是 other)
                       menuSource: SongActionSource.other,
                       // 无版权曲目灰显且点了没反应
@@ -603,13 +595,8 @@ class _DailySongsSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (final s in preview)
-                    SongRow(
+                    SongRow.cardPreview(
                       song: s,
-                      layout: SongRowLayout.tile,
-                      coverSize: 40,
-                      subtitle: SongRowSubtitle.artist,
-                      visualDensity: VisualDensity.compact,
-                      showDuration: false,
                       // 行尾 "..." 菜单(下一首播放/收藏/分享/不感兴趣等);
                       // 无版权曲目不给菜单, 改由歌名后的「无版权」徽标说明
                       menuSource: s.playable

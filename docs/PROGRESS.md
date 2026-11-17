@@ -20,14 +20,14 @@
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1074** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1088** 通过 / 1 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-17(二) 加 2 例(纵向 pitch 渲染断言 / 已并入行留白用例) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
-| `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(27 处行留白 / 7 种口径全部落在 `layout.dart` 的四个具名常量里, 见 2026-11-17 小节) |
+| `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(25 处行留白 / **3 个**具名口径 + 纵向只允许 0/6; 具名工厂 `SongRow.xxx(` 也计入 —— 数量比 C 步前少 2 处是因为同构参数收进了工厂, 见 2026-11-17 两个小节) |
 | 接口覆盖 | **135/136**(FFI 导出 161, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking; 唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
@@ -102,7 +102,7 @@
 
 ## 批次时间线(倒序, 最新在上)
 
-## 2026-11-17(一) 平台审计 P-18 后半: application-id 与 AppStream id 统一 + 数据目录一次性迁移(**未发版**)
+## 2026-11-17(三) 平台审计 P-18 后半: application-id 与 AppStream id 统一 + 数据目录一次性迁移(**未发版**)
 
 用户 2026-11-17 拍板「按推荐做法直接做, 允许大变更(含用户数据目录一次性迁移), 接受迁移风险」。
 三个提交: 数据目录迁移(含单测) / id 与打包对齐 / 文档。合并后 Rust 单测 **300→308**。
@@ -159,6 +159,102 @@ Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72), `activate` 里若已有�
 **未验证(按车道约束由编排者收口)**: `flutter build linux`(runner C++ 只用 stub 头做过
 `g++ -fsyntax-only -Wall -Werror` + GLib 2.72 基线的语法检查)、真打 deb/AppImage、
 「任务栏归组」与「第二实例唤醒主实例」两条真机行为、真实用户目录的迁移(只在临时目录单测过)。
+
+## 2026-11-17(四) 列表行 C 级收尾: 单一条 12 线 + 纵向 pitch + `ListRow` 组件化(**未发版**)
+
+单会话、独立 worktree(`lane/uib-c`, 基于 `a883f6f`)。按 A→B→C 三步各自一个提交,
+每步都是「改 → 跑 → 记」, 不攒到最后一起修测试。
+
+### A) 取消 8/12 二分: 歌曲行并入页面 12 线
+
+用户 2026-11-17 裁决(见 `remaining-batches.md` §11 A-9):**取消** `kSongRowPadding`(8/0/4) 与
+`kPageRowPadding`(12/0/4) 的二分 —— 「行首是封面缩略图 ⇒ 8」这条口径收益只是 4dp 呼吸,
+代价是同一页里封面行与序号行左右边界差 4dp、且与 SectionHeader / 页面标题线不共线。
+
+- `layout.dart`: **删除 `kSongRowPadding`**(不做 deprecated 别名, 免得留下第五个可写名字),
+  `kPageRowPadding` 的注释改写成「整页铺满的行, 歌曲行也是它」并记下这次裁决。
+  头部栅格表那一行 `整页铺满的歌曲行` 从 8 改成 **12**。
+- 调用点迁移: `song_tile.dart`(ListTile 臂的默认 `contentPadding`)与 `ranking_view.dart`
+  (`_RankRow.padding` 默认)两处**代码**改常量; `recommend_view` / `discover/recent_played_page` /
+  `comment/comment_thread` 三处只改注释里的常量名。**16 处 SongRow(tile 臂)调用点因此全部从 8 变 12。**
+- 门禁: `tools/check-row-padding.sh` 的具名白名单 4 → **3**(删掉 `kSongRowPadding`),
+  文件头写明「旧名故意不在白名单里, 谁再写它就会被判未登记」——这样回归是**自动**的,
+  不需要再加一条 grep 规则。
+- 测试: `layout_metrics_test` 的「歌曲行左右贴边」用例改断言 `kPageRowPadding.left`(12);
+  「两级栅格 + 预览行」里原来断言「缩略图行比页面线更靠边」的那两条改成「整页行左右都 < 16」
+  (Material 默认 16 才是被废弃的口径)。`song_tile_test` / `ranking_view_test` 两处写死
+  `fromLTRB(8,0,4,0)` 的期望改成引用 `kPageRowPadding`(顺带不再写死数字)。
+- **golden 只动了 2 张, 且只有 recommend**: 逐字节比对后
+  `recommend_360x800.png` 变化 2661 px(0.924%, bbox `x∈[8,131] y∈[212,306]`)、
+  `recommend_300x640_s125.png` 变化 3329 px(1.734%, bbox `x∈[8,147] y∈[220,322]`)——
+  正好是「每日推荐」那三行预览歌曲行: 左边缘右移 4dp、文本可用宽度少 4dp 导致换行点变化。
+  其余 16 张**一字节未变**, 原因逐个个案核实: `playlist_detail` 的曲目 sliver 上一批已经用
+  `kPageRowPadding`(不是走 SongRow 默认), `artist` 页两处同理, `mine`/`messages`/`settings`/
+  `account`/`search_landing`/`feed` 不含 tile 臂默认留白的歌曲行。
+
+### B) 纵向 pitch 统一: 行高 = `rowExtentFor`, 行内纵向留白只有 0 和 6
+
+**判定(实测, 不是印象)**: 同一套 `SongRow` 在 360dp 宽、textScaler 1.0 / 1.3 / 1.625 下,
+改动前落在**四个**高度, 源头都不是「行 padding vertical」(那一直是 0), 而是四条隐式规则叠加:
+
+| 行 / 容器形态 | 1.0 | 1.3 | 1.625 | 纵向高度实际由谁决定 |
+|---|---|---|---|---|
+| `SongRow`(ListTile 臂, 默认) | 64 | 63 | 76 | `ListTile` dense 两行 minHeight(64) + `minVerticalPadding`(4×2) |
+| `SongRow`(tile 臂 + `visualDensity.compact`) | 53 | 63 | 76 | `VisualDensity.compact`(-2) 把 minHeight 压到 56, 内容再撑 |
+| `SongRow`(tile 臂 + `kPreviewRowPadding` 6/6) | 76 | 75 | 88 | 上一行 + 上下各 6(唯一具名纵向留白) |
+| `SongRow`(plain 自绘臂, 无 `itemExtent`) | 40 | 49 | 61 | 只有封面(`CoverArt` 40)高, 纵向无任何留白 |
+| 裸 `ListTile`(title+subtitle, Material 默认) | 72 | 73 | 88 | Material 两行 minHeight(72) |
+| `SliverFixedExtentList` + `itemExtent: rowExtentFor` | 56 | 72.8 | 91 | `itemExtent`(唯一本来正确的形态) |
+
+(`rg` 侧同时确认: 行级 `contentPadding`/`padding` 里 `vertical:` 非零的只有
+`kPreviewRowPadding` 一处具名常量; `minVerticalPadding:` 全仓 0 处; `dense: true` 10 个文件;
+`visualDensity` 21 处 —— 也就是说「行内 padding 已经全是 0」, pitch 不统一是 **ListTile 隐式规则** 的锅。)
+
+**落地(统一口径: 行内纵向留白 0, 行高 `rowExtentFor`)**:
+- `layout.dart` 新增 `rowHeightBox(context, child)` = `SizedBox(height: rowExtentFor(context))`
+  (基准 56 × 系统字号, 上限 2 倍), 并在 rowExtentFor 上方写清上面那张判定表。
+- 包上它的行: `SongRow` 两臂(`_build` 出口一处, 覆盖 16 处调用点)、听歌排行 `_RankRow`、
+  播放队列行、云盘歌曲行、数字专辑「已购单曲」行。**唯一保留的具名纵向留白是
+  `kPreviewRowPadding`(6/6)**, 且它现在落在这个定高盒**内部**(盒子仍 56 × 字号,
+  6 只是行内呼吸), 不再额外把行撑高到 76。
+- 不改的: 专辑/歌单/艺人等**非歌曲**的 `ListTile` 行(卡片形态、leading 是 48 封面,
+  且各有自己的两行文案), 本轮只统一歌曲行。
+- **门禁两道**: ①`tools/check-row-padding.sh` 新增纵向段 —— 行留白算出的纵向值只允许
+  `0`(22 处)或 `6`(2 处, 预览行), 其它数字直接 `--strict` 退出 1(实测注入
+  `symmetric(vertical: 8)` 后 rc=1); ②`ui/test/layout_metrics_test.dart` 新增
+  「列表行纵向 pitch」用例: 4 种行形态 × 4 种宽度 × 3 档字号, 断言**渲染出来的高度**
+  `== rowExtentFor` 且无 overflow。**为什么高度用渲染断言而不是 grep**: 行高是
+  `dense`/`minHeight`/`minVerticalPadding`/`visualDensity` 四条隐式规则算出来的,
+  源码里看不到结果值; grep 只能拦 padding 里写的数字(那部分交给脚本)。
+- golden: 只动 `recommend` 两张(与 A 步同一页的日推预览行): `360x800` 20738 px(7.201%,
+  bbox 覆盖 y∈[265,800] 的整整一块, 因为三行预览行各矮 8dp 后**下方区块整体上移**),
+  `300x640@1.25` 32046 px(16.691%, bbox y∈[281,629])。其余 16 张逐字节未变
+  (mine/artist 的歌曲行都在首屏之下, 未被 golden 取景)。
+- 顺带修 `queue_sheet_test` 的拖拽用例: 原来写死 `moveBy(0, 60)` ×2 假设行高 64,
+  行高统一后只跨一行 ⇒ 改成按**实测行高**分 24 小步推进(RowReorder 只在跨过中点时换位)。
+
+### C) `ListRow` 去重: 4 个静态工厂收掉 16 处同构调用点里的 12 处
+
+审计 §6 起草 `ListRow` 的初衷(「手写 Row 的歌曲行」)在 v0.13.0 收敛成 `SongRow` 之后已经不存在,
+剩下的重复**不在行骨架、而在调用点参数**: 同一种行在 3~5 个页面里逐字抄同一组参数
+(tile/plain 臂、序号宽、封面尺寸、副标题口径、是否给时长、行尾是否封顶), 漏抄一处就分叉。
+
+所以 C 步做的是「把同构参数命名成工厂」, **不是**新写一层组件 —— 每批 ≤5 处, 每批跑全量
+`flutter test`(含 18 张 golden), 三批都是**零 golden 变化**:
+
+| 提交 | 工厂 | 收敛的调用点 | 数 |
+|---|---|---|---|
+| `11c6483` | `SongRow.cardPreview` | 推荐页两个区块 / 相似歌曲面板 / 「我的」页两个预览区块 | 5 |
+| `bd56101` | `SongRow.pageIndexed` | 每日推荐页签 / 历史每日推荐 / 最近听过·单曲页签 | 3 |
+| `3710562` | `SongRow.cardIndexed` / `SongRow.artistSongs` | 艺人页热门单曲预览 + 他人主页喜欢预览 / 艺人页全部歌曲 + 搜索结果 | 2+2 |
+
+实现口径: 用 **static 工厂**(委托主构造), 不用具名构造 —— `SongRow` 有 30 个 final 字段,
+具名构造必须把它们逐个再初始化一遍, 等于第二个默认值源(改一个默认值就会两处分叉);
+静态工厂只写死那 5~10 个"同构值", 其余继续走主构造默认值。
+
+**还剩 3 处没被收敛**(各自形状唯一, 收敛无收益, 保留现状):
+`detail/playlist_songs_sliver`(徽标放副标题行 + 乐观态并集 + 两位序号)、
+`album_preview`(tile 臂 + 序号 + 无封面)、`search_results`/`home_page`(走 `SongTile` 旧 API)。
 
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 

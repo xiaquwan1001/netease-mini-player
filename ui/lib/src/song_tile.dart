@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
-import 'layout.dart' show capRowTrailing, kSongRowPadding;
+import 'layout.dart'
+    show capRowTrailing, kPageRowPadding, kPreviewRowPadding, rowHeightBox;
 import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
@@ -11,7 +12,7 @@ import 'song_actions.dart';
 /// 歌曲行的布局口径(两条既有排版臂, 二选一):
 ///
 /// - [SongRowLayout.tile]: Material [ListTile] 口径(整页铺满的搜索/日推等列表)。
-///   行高、水波纹、selected 文本色都由 ListTile 负责, 行留白默认 [kSongRowPadding]。
+///   行高、水波纹、selected 文本色都由 ListTile 负责, 行留白默认 [kPageRowPadding]。
 /// - [SongRowLayout.plain]: 自带 InkWell + Row 的自绘口径(带序号列、行高由页面
 ///   自己定, 或包在固定 itemExtent 里需要竖直居中的行)。
 enum SongRowLayout { tile, plain }
@@ -237,6 +238,117 @@ class SongRow extends StatelessWidget {
     this.tapOnlyWhenPlayable = false,
   });
 
+  /// 「卡片内的紧凑预览行」: 整页列表里嵌在 Card/区块中的歌曲预览
+  /// (推荐页两个区块、相似歌曲面板、「我的」页两个预览区块)。
+  ///
+  /// 这些调用点此前逐个重复同一组参数(tile 臂 + 封面 40 + 艺人副标题 +
+  /// compact 密度 + 不给时长), 一处漏写就会在整页里跑出第二种行距。
+  /// 做成静态工厂而不是具名构造: 那 5 个值在这里**写死一次**, 其余字段继续走
+  /// [SongRow] 的默认值 —— 具名构造得把二十多个 final 字段再抄一遍(第二个默认值源,
+  /// 迟早分叉)。语义上它就是「一组命名好的参数」, 不是另一种行。
+  static SongRow cardPreview({
+    Key? key,
+    required rust.SongDto song,
+    required VoidCallback? onTap,
+    SongActionSource? menuSource,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+    bool capTrailing = false,
+    Widget? trailingExtra,
+    bool tapOnlyWhenPlayable = false,
+  }) => SongRow(
+    key: key,
+    song: song,
+    layout: SongRowLayout.tile,
+    visualDensity: VisualDensity.compact,
+    coverSize: 40,
+    subtitle: SongRowSubtitle.artist,
+    showDuration: false,
+    onTap: onTap,
+    menuSource: menuSource,
+    padding: padding,
+    capTrailing: capTrailing,
+    trailingExtra: trailingExtra,
+    tapOnlyWhenPlayable: tapOnlyWhenPlayable,
+  );
+
+  /// 「整页列表 + 序号列」的单曲行: 每日推荐 / 历史每日推荐 / 最近听过 的歌曲页签。
+  /// tile 臂 + 序号(宽 22, 左对齐) + 封面 40 + 艺人副标题 + 不给时长。
+  /// 这几处此前逐字重复同一组参数, 只在菜单来源与点击回调整上不同。
+  static SongRow pageIndexed({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback? onTap,
+    SongActionSource? menuSource,
+  }) => SongRow(
+    key: key,
+    song: song,
+    layout: SongRowLayout.tile,
+    indexText: indexText,
+    indexWidth: 22,
+    indexAlign: TextAlign.start,
+    indexGap: 0,
+    coverSize: 40,
+    subtitle: SongRowSubtitle.artist,
+    showDuration: false,
+    onTap: onTap,
+    menuSource: menuSource,
+  );
+
+  /// 「父容器已内缩的卡片预览 + 序号列」行: 艺人页「热门单曲」预览与
+  /// 他人主页「喜欢的音乐」预览。自绘臂 + 序号(24 居中) + 封面 44 +
+  /// "艺人 · 专辑"副标题 + [kPreviewRowPadding](0/6)。
+  ///
+  /// 两处历史口径一致: 预览块没有"正在播放"语汇([highlightNowPlaying] = false)。
+  static SongRow cardIndexed({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback? onTap,
+    bool capTrailing = false,
+    bool tapOnlyWhenPlayable = false,
+  }) => SongRow(
+    key: key,
+    song: song,
+    indexText: indexText,
+    indexWidth: 24,
+    indexAlign: TextAlign.center,
+    indexGap: 8,
+    coverSize: 44,
+    coverGap: 10,
+    highlightNowPlaying: false,
+    subtitle: SongRowSubtitle.artistAlbum,
+    padding: kPreviewRowPadding,
+    durationGap: 8,
+    capTrailing: capTrailing,
+    tapOnlyWhenPlayable: tapOnlyWhenPlayable,
+    onTap: onTap,
+  );
+
+  /// 艺人页「全部歌曲」/「搜索歌曲结果」的整页序号行: 自绘臂 + 序号(24 居中) +
+  /// 艺人副标题 + 行尾封顶 + 统一歌曲菜单来源(艺人)。
+  ///
+  /// 没有封面(见 [coverSize] = null): 艺人页这两处都不给缩略图。
+  static SongRow artistSongs({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback onTap,
+  }) => SongRow(
+    key: key,
+    song: song,
+    indexText: indexText,
+    indexWidth: 24,
+    indexAlign: TextAlign.center,
+    indexGap: 10,
+    capTrailing: true,
+    padding: kPageRowPadding,
+    subtitle: SongRowSubtitle.artist,
+    tapOnlyWhenPlayable: true,
+    menuSource: SongActionSource.artist,
+    onTap: onTap,
+  );
+
   final rust.SongDto song;
 
   /// 排版口径(见 [SongRowLayout]); 默认自绘臂。
@@ -333,7 +445,7 @@ class SongRow extends StatelessWidget {
   /// 长按整行(选中/多选等); null = 没有长按语义。
   final VoidCallback? onLongPress;
 
-  /// 行内留白: 自绘臂默认零; ListTile 臂默认 [kSongRowPadding], 显式传值时按传入的走
+  /// 行内留白: 自绘臂默认零; ListTile 臂默认 [kPageRowPadding], 显式传值时按传入的走
   /// (嵌在卡片里的列表要跟卡片栅格, 传 layout.dart 的 `kCardRowPadding`)。
   final EdgeInsetsGeometry padding;
 
@@ -358,10 +470,14 @@ class SongRow extends StatelessWidget {
     );
   }
 
-  Widget _build(BuildContext context, bool playing) =>
-      layout == SongRowLayout.tile
-      ? _buildTile(context, playing)
-      : _buildPlain(context, playing);
+  /// 行高统一由 [rowHeightBox] 决定(56 × 系统字号), 行内纵向留白见 [padding]:
+  /// 不再让 ListTile 的 dense/minHeight/visualDensity 决定 pitch(实测 53/64/76 三档)。
+  Widget _build(BuildContext context, bool playing) => rowHeightBox(
+    context,
+    layout == SongRowLayout.tile
+        ? _buildTile(context, playing)
+        : _buildPlain(context, playing),
+  );
 
   String get _subtitleText => switch (subtitle) {
     SongRowSubtitle.artist => song.artist,
@@ -624,7 +740,7 @@ class SongRow extends StatelessWidget {
           // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
           // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
           contentPadding: padding == EdgeInsets.zero
-              ? kSongRowPadding
+              ? kPageRowPadding
               : padding,
           leading: leading,
           title: _title(context, titleStyle),

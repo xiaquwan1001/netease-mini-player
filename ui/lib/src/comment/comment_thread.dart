@@ -93,7 +93,7 @@ class CommentThread extends StatefulWidget {
   /// 当前账号 uid(测试注入); 不传就向 Rust 要. 决定哪些评论显示"删除".
   final BigInt? myUid;
 
-  /// 评论区外框留白. 默认 12dp 对齐歌单详情页的曲目行(kSongRowPadding);
+  /// 评论区外框留白. 默认 12dp 对齐歌单详情页的曲目行(kPageRowPadding);
   /// 嵌在已有 16dp 页面边距的页面里(如动态详情)时应传 0, 否则评论每行会
   /// 比正文多缩进 12dp(用户反馈"评论区每一行前面依然有空白").
   final EdgeInsetsGeometry inset;

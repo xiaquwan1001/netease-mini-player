@@ -331,21 +331,25 @@ class _CloudPageState extends State<CloudPage> {
           return _footer(context, songs, bodySmall);
         }
         final song = songs[index - 1];
-        return ListTile(
-          contentPadding: kCardRowPadding,
-          leading: CoverArt(url: song.coverUrl, size: 48, radius: 6),
-          title: AdaptiveText(song.name),
-          subtitle: Text(
-            cloudSubtitle(song),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        // 行高统一 56 × 系统字号(列表行审计 C 级 · 纵向 pitch)
+        return rowHeightBox(
+          context,
+          ListTile(
+            contentPadding: kCardRowPadding,
+            leading: CoverArt(url: song.coverUrl, size: 48, radius: 6),
+            title: AdaptiveText(song.name),
+            subtitle: Text(
+              cloudSubtitle(song),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: IconButton(
+              tooltip: '删除',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _deleting ? null : () => _delete(song),
+            ),
+            onTap: widget.onPlay == null ? null : () => widget.onPlay!(song),
           ),
-          trailing: IconButton(
-            tooltip: '删除',
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _deleting ? null : () => _delete(song),
-          ),
-          onTap: widget.onPlay == null ? null : () => widget.onPlay!(song),
         );
       },
     );

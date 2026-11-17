@@ -2,7 +2,7 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
-import 'layout.dart' show kCardRowPadding, kRowTitleGap;
+import 'layout.dart' show kCardRowPadding, kRowTitleGap, rowHeightBox;
 import 'sheet_header.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 
@@ -261,84 +261,88 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                           ),
                         ),
                         onDismissed: (_) => _removeAt(i),
-                        child: ListTile(
-                          dense: true,
-                          selected: current,
-                          // 行铺满: 序号贴左 4dp、删除/拖拽手柄贴右 4dp,
-                          // 中间(歌名+徽标)因此多出 ~34dp(用户 2026-11-15:
-                          // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
-                          // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
-                          // 四段固定留白。
-                          contentPadding: kCardRowPadding,
-                          horizontalTitleGap: kRowTitleGap,
-                          leading: SizedBox(
-                            // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
-                            width: 28,
-                            child: Center(
-                              child: current
-                                  ? Icon(
-                                      Icons.volume_up,
-                                      size: 18,
-                                      color: scheme.primary,
-                                    )
-                                  : Text(
-                                      '${i + 1}',
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(color: scheme.outline),
-                                    ),
-                            ),
-                          ),
-                          // 歌名 + VIP/付费/无版权标记(VIP 之前在这里完全看不到)
-                          title: SongTitleWithBadges(
-                            song: song,
-                            marquee: true,
-                            style: current
-                                ? TextStyle(
-                                    color: scheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                  )
-                                : null,
-                          ),
-                          subtitle: Text(
-                            song.artist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // 默认 IconButton 命中区 48dp, 与 leading 序号列叠加后
-                              // 标题被压到个位数宽度。宽度收到 40dp(高度仍 48 保命中),
-                              // 与 SongTile 行尾口径一致; 与标题栏共用 [_SheetIconButton]。
-                              _SheetIconButton(
-                                icon: Icons.delete_outline,
-                                tooltip: '从队列移除',
-                                minHeight: 48,
-                                onPressed: () => _confirmRemove(i),
+                        // 行高统一 56 × 系统字号(列表行审计 C 级 · 纵向 pitch)
+                        child: rowHeightBox(
+                          context,
+                          ListTile(
+                            dense: true,
+                            selected: current,
+                            // 行铺满: 序号贴左 4dp、删除/拖拽手柄贴右 4dp,
+                            // 中间(歌名+徽标)因此多出 ~34dp(用户 2026-11-15:
+                            // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
+                            // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
+                            // 四段固定留白。
+                            contentPadding: kCardRowPadding,
+                            horizontalTitleGap: kRowTitleGap,
+                            leading: SizedBox(
+                              // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
+                              width: 28,
+                              child: Center(
+                                child: current
+                                    ? Icon(
+                                        Icons.volume_up,
+                                        size: 18,
+                                        color: scheme.primary,
+                                      )
+                                    : Text(
+                                        '${i + 1}',
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(color: scheme.outline),
+                                      ),
                               ),
-                              ReorderableDragStartListener(
-                                index: i,
-                                child: Padding(
-                                  // 拖拽手柄贴到行右边缘(仍在 40×48 的触控区内)
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 12,
-                                  ),
-                                  child: Icon(
-                                    Icons.drag_handle,
-                                    size: 20,
-                                    color: scheme.outline,
+                            ),
+                            // 歌名 + VIP/付费/无版权标记(VIP 之前在这里完全看不到)
+                            title: SongTitleWithBadges(
+                              song: song,
+                              marquee: true,
+                              style: current
+                                  ? TextStyle(
+                                      color: scheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    )
+                                  : null,
+                            ),
+                            subtitle: Text(
+                              song.artist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // 默认 IconButton 命中区 48dp, 与 leading 序号列叠加后
+                                // 标题被压到个位数宽度。宽度收到 40dp(高度仍 48 保命中),
+                                // 与 SongTile 行尾口径一致; 与标题栏共用 [_SheetIconButton]。
+                                _SheetIconButton(
+                                  icon: Icons.delete_outline,
+                                  tooltip: '从队列移除',
+                                  minHeight: 48,
+                                  onPressed: () => _confirmRemove(i),
+                                ),
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  child: Padding(
+                                    // 拖拽手柄贴到行右边缘(仍在 40×48 的触控区内)
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 12,
+                                    ),
+                                    child: Icon(
+                                      Icons.drag_handle,
+                                      size: 20,
+                                      color: scheme.outline,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
+                            onTap: () {
+                              // 面板自己先跟着切(独立/常开使用时一致; 宿主一般会顺手关掉面板)
+                              setState(() => _index = i);
+                              widget.onSelect(song);
+                            },
+                            onLongPress: () => _confirmRemove(i),
                           ),
-                          onTap: () {
-                            // 面板自己先跟着切(独立/常开使用时一致; 宿主一般会顺手关掉面板)
-                            setState(() => _index = i);
-                            widget.onSelect(song);
-                          },
-                          onLongPress: () => _confirmRemove(i),
                         ),
                       );
                     },

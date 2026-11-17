@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart' show rowHeightBox;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'rust/api.dart' as rust;
@@ -157,17 +158,21 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
               onTap: () => _openDetail(e.album),
             ),
           ),
-          _SongEntry() => ListTile(
-            leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
-            title: Text(
-              e.song.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            subtitle: Text(
-              '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          // 行高统一 56 × 系统字号(列表行审计 C 级 · 纵向 pitch); 专辑行是卡片形态, 不动
+          _SongEntry() => rowHeightBox(
+            context,
+            ListTile(
+              leading: CoverArt(url: e.song.coverUrl, size: 40, radius: 4),
+              title: Text(
+                e.song.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${e.song.artistName} · ${_fmtDate(e.song.paidTimeMs)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ),
         },

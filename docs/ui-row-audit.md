@@ -6,7 +6,7 @@
 > |---|---|---|
 > | A 必坏 | 7 | ✅ 已清零（v0.9.0 批次） |
 > | B 潜在 | 12 | ✅ 已清零（2026-11-16 晚 `8f7b38c`：`kRowTrailingMaxRatio` + `capRowTrailing`） |
-> | C 一致性 | 18 | 🚧 **第一批已落（2026-11-17）**：歌曲行留白从 5 种收敛到 4 个具名口径 + 门禁；剩纵向 pitch 与 `ListRow` 组件化 |
+> | C 一致性 | 18 | ✅ **已清零（2026-11-17，三批）**：① 歌曲行留白 5 种 → 3 个具名口径 + 门禁；② 取消 8/12 二分（统一 12 线）；③ 纵向 pitch 统一到 `rowExtentFor`；④ `ListRow` 去重（4 个静态工厂 / 12 处） |
 >
 > C 级第一批(2026-11-17)做了什么:
 > - `layout.dart` 新增 **`kPageRowPadding`**(12/0/4：整页铺满、行首非缩略图的列表行，与页面线严格共线)
@@ -23,11 +23,21 @@
 >   `all_charts_page_test` / `style_page_test` 各 1 例断言**渲染坐标**（整页 12 共线 / 卡片内 16）。
 >
 > **本报告下一批还剩什么**（需视觉拍板或在页面上跑几何断言）：
-> ① `kSongRowPadding`(8) 与 `kPageRowPadding`(12) 的二分是否保留 —— 现口径是「行首是封面缩略图 ⇒ 8，
->    其它 ⇒ 12」；要彻底一条线就改 `kSongRowPadding`，代价是主页/推荐/详情三处 golden 重出；
-> ② 纵向间距(pitch)未统一：预览行 6 / 歌曲行 0 / 各页 ListTile 默认；
-> ③ §6 的 `ListRow` 组件化（16 处同构歌曲行）仍未开工 —— 留白收敛成具名口径后它的收益从
->    「统一留白」降到「少 12 份重复代码」，优先级下调。
+> ① ✅ 已拍板并落地（2026-11-17 第二批）：**取消二分**，`kSongRowPadding`(8) 删除，整页铺满的歌曲行
+>    统一到 `kPageRowPadding`(12/0/4) 那条页面线；门禁白名单 4 → 3，旧名不在白名单里（写了就红）。
+>    代价只有 `recommend` 两张 golden 变化（2661 px / 0.924% 与 3329 px / 1.734%，都是日推预览行左移
+>    4dp 引起的换行点变化），`playlist_detail`/`artist` 早已走 `kPageRowPadding` 故未动。
+> ② ✅ 已落地（2026-11-17 第二批）：纵向统一到「行内纵向留白 0、行高 `rowExtentFor`(56 × 字号)」，
+>    唯一例外是父容器已内缩的预览行仍走 `kPreviewRowPadding`(6/6，但落在定高盒内部)。
+>    实测判定：同一套 `SongRow` 改动前落在 53/64/76 三个高度（+`plain` 臂 40），根因是
+>    `dense`/`minHeight`/`minVerticalPadding`/`visualDensity` 四条隐式规则，**不是**行 padding；
+>    新门禁：`check-row-padding.sh` 纵向只允许 0/6 + `layout_metrics_test` 渲染高度断言；
+>    golden 只动 `recommend` 两张；
+> ③ ✅ 已落地（2026-11-17 第二批 C）：§6 的 `ListRow` 初衷（手写 Row 的歌曲行）在 v0.13.0
+>    收敛成 `SongRow` 后已不存在，剩余重复在**调用点参数**：改成 4 个 static 工厂
+>    （`SongRow.cardPreview` 5 处 / `pageIndexed` 3 处 / `cardIndexed` 2 处 / `artistSongs` 2 处
+>    = 12 处），三批各跑全量测试且 **golden 逐字节未变**。剩 3 处形状唯一
+>    （`playlist_songs_sliver` / `album_preview` / `SongTile` 旧 API）不收敛。
 >
 > ⚠️ **第三节起的分级表与行号基于 2026-11-13 快照，已大面积漂移**（`detail_page.dart` 拆成
 > `src/detail/`、`discover.dart` 变 barrel、`song_tile.dart` 长出 `SongRowLayout`）。读表按

@@ -9,7 +9,7 @@ import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
-import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
+import '../song_tile.dart' show SongRow;
 import 'discover_types.dart';
 
 /// 最近听过: 单曲 / 专辑 / 歌单 / 播客 四个分类.
@@ -91,19 +91,11 @@ class RecentPlayedPage extends StatelessWidget {
             _RecentBucketTab<rust.SongDto>(
               load: loadRecent,
               emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
-              itemBuilder: (context, s, i, list) => SongRow(
+              itemBuilder: (context, s, i, list) => SongRow.pageIndexed(
                 song: s,
-                layout: SongRowLayout.tile,
                 indexText: '${i + 1}',
-                indexWidth: 22,
-                indexAlign: TextAlign.start,
-                indexGap: 0,
-                coverSize: 40,
-                subtitle: SongRowSubtitle.artist,
-                showDuration: false,
                 // 整页铺满列表 + 行首封面: 左 12 与同页专辑/歌单/播客行一致
-                // (列表行审计 C 级; 默认 kSongRowPadding 的 8 在这里会与下面三个 tab 错位)
-                padding: kPageRowPadding,
+                // (列表行审计 C 级: SongRow 默认已是 kPageRowPadding 的 12, 与下面三个 tab 共线)
                 // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable
                     ? () => PlaybackBridge.instance.playSongs(
