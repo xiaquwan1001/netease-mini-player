@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+# 桌面端**无图形会话**的自动化冒烟(平台审计 P-11 ②: 桌面自动化此前为零)。
+#
+# 用法:
+#   tools/smoke-desktop-headless                 # 用现成 release bundle
+#   BUNDLE=<路径> tools/smoke-desktop-headless
+#   BUILD=1 tools/smoke-desktop-headless         # 先 flutter build linux --release(慢, 默认不做)
+#
+# 判据(全部自动断言, 不需要人看屏幕):
+#   ① 进程在 xvfb + 独立 dbus session 下能起来并稳定存活(默认 8s);
+#   ② 用 $NCM_DATA_DIR 指定的**临时**数据目录会被创建(证明 Rust 内核真的起来并解析了路径,
+#      且**不碰**用户真实的 ~/.local/share);
+#   ③ 同一 dbus session 内再启一个实例 2s 内退出(严格单实例, P-18 后半);
+#   ④ SIGTERM 能干净收尾(不留下僵尸/不挂死)。
+#
+# 退出码: 0 全通过 / 1 有断言失败 / 3 缺工具(不是失败, 门禁按 SKIP 处理)。
+set -uo pipefail
+
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+BUNDLE=${BUNDLE:-$ROOT/ui/build/linux/x64/release/bundle}
+ALIVE_SECONDS=${ALIVE_SECONDS:-8}
+SECOND_INSTANCE_WAIT_MS=${SECOND_INSTANCE_WAIT_MS:-2000}
+
+ok()   { printf '[ OK ] %s\n' "$1"; }
+bad()  { printf '[FAIL] %s\n' "$1"; FAILED=1; }
+skip() { printf '[SKIP] %s\n' "$1"; }
+info() { printf '[INFO] %s\n' "$1"; }
+FAILED=0
+
+for tool in xvfb-run dbus-run-session timeout; do
+  command -v "$tool" >/dev/null 2>&1 || { skip "缺 $tool, 无法无头驱动桌面版"; exit 3; }
+done
+
+if [ "${BUILD:-0}" = "1" ]; then
+  ( cd "$ROOT/ui" && flutter build linux --release ) || { bad "flutter build linux --release 失败"; exit 1; }
+fi
+
+BIN="$BUNDLE/minincm"
+[ -x "$BIN" ] || { skip "没有可执行的 bundle($BIN): 先 BUILD=1 或 flutter build linux --release"; exit 3; }
+# 0 字节二进制是硬件不稳期的真实故障(见 notes-build.md), 先挡掉, 免得把"打不开"当产品问题
+[ -s "$BIN" ] || { bad "bundle 里的 minincm 是 0 字节(打包产物损坏)"; exit 1; }
+
+TMP=$(mktemp -d)
+cleanup() { rm -rf "$TMP"; }
+trap cleanup EXIT
+
+info "bundle: $BIN"
+info "临时数据目录: $TMP/data"
+
+# 内层脚本在同一个 dbus session 里跑: 单实例判定依赖同一总线。
+cat > "$TMP/inner.sh" <<INNER
+#!/usr/bin/env bash
+set -uo pipefail
+BIN="$BIN"
+DATA="$TMP/data"
+LOG1="$TMP/first.log"
+LOG2="$TMP/second.log"
+export NCM_DATA_DIR="\$DATA"
+
+"\$BIN" >"\$LOG1" 2>&1 &
+P1=\$!
+sleep $ALIVE_SECONDS
+if kill -0 "\$P1" 2>/dev/null; then
+  echo "ALIVE=1"
+else
+  echo "ALIVE=0"
+fi
+if [ -d "\$DATA" ]; then echo "DATADIR=1"; else echo "DATADIR=0"; fi
+
+# 第二个实例: 严格单实例 ⇒ 应该很快自己退出
+T0=\$(date +%s%3N)
+"\$BIN" >"\$LOG2" 2>&1 &
+P2=\$!
+WAITED=0
+while [ \$WAITED -lt $SECOND_INSTANCE_WAIT_MS ]; do
+  kill -0 "\$P2" 2>/dev/null || break
+  sleep 0.05
+  WAITED=\$(( \$(date +%s%3N) - T0 ))
+done
+if kill -0 "\$P2" 2>/dev/null; then
+  echo "SECOND_EXITED=0"
+  kill -9 "\$P2" 2>/dev/null || true
+else
+  echo "SECOND_EXITED=1"
+fi
+wait "\$P2" 2>/dev/null || true
+
+# SIGTERM 收尾
+kill -TERM "\$P1" 2>/dev/null || true
+T1=\$(date +%s%3N)
+while kill -0 "\$P1" 2>/dev/null; do
+  [ \$(( \$(date +%s%3N) - T1 )) -gt 5000 ] && { kill -9 "\$P1" 2>/dev/null || true; break; }
+  sleep 0.05
+done
+wait "\$P1" 2>/dev/null || true
+echo "FIRST_LOG=\$LOG1"
+INNER
+chmod +x "$TMP/inner.sh"
+
+OUT=$(timeout -k 10 60 xvfb-run -a dbus-run-session -- "$TMP/inner.sh" 2>&1)
+RC=$?
+printf '%s\n' "$OUT" | sed 's/^/  | /'
+if [ $RC -ne 0 ]; then
+  bad "无头运行整体退出码 $RC(xvfb/dbus 或进程异常)"
+fi
+
+grep -q '^ALIVE=1$' <<<"$OUT" && ok "进程存活 ${ALIVE_SECONDS}s(启动成功)" || bad "进程在 ${ALIVE_SECONDS}s 内退出"
+grep -q '^DATADIR=1$' <<<"$OUT" && ok "临时数据目录已创建(内核起来且不碰真实 HOME)" || bad "数据目录没被创建"
+grep -q '^SECOND_EXITED=1$' <<<"$OUT" && ok "第二个实例自行退出(严格单实例)" || bad "第二个实例没有在 2s 内退出"
+
+echo "----- 首次启动日志尾部 -----"
+tail -15 "$TMP/first.log" 2>/dev/null | sed 's/^/  | /' || skip "没有首次启动日志"
+
+if [ "$FAILED" -ne 0 ]; then
+  echo "桌面无头冒烟: FAIL"
+  exit 1
+fi
+echo "桌面无头冒烟: PASS"

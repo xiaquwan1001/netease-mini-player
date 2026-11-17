@@ -21,6 +21,7 @@
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
 #   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 现状 67 error, 不进 verify)
+#   tools/ci-gates.sh desktop-smoke        # 桌面无头启动冒烟(xvfb+dbus; 没 bundle / 缺工具就 SKIP 退 0)
 #   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test + android-unit);
 #                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
 #
@@ -177,6 +178,17 @@ cmd_android_instrumented() {
   run env DEV="$dev" bash tools/devui/androidtest "$@"
 }
 
+cmd_desktop_smoke() {
+  echo "+ bash tools/smoke-desktop-headless"
+  local rc=0
+  bash "$ROOT/tools/smoke-desktop-headless" || rc=$?
+  case $rc in
+    0) : ;;
+    3) echo "SKIP desktop-smoke: 缺 bundle 或 xvfb/dbus(不是失败)" ;;
+    *) die "desktop-smoke 失败(rc=$rc)" ;;
+  esac
+}
+
 cmd_verify() {
   cmd_rust_lint
   cmd_rust_test
@@ -190,6 +202,10 @@ cmd_verify() {
   # 设备级案例默认不跑(要模拟器 + 5~10 分钟); 显式 NCM_INSTRUMENTED=1 才带上。
   if [ "${NCM_INSTRUMENTED:-0}" = "1" ]; then
     cmd_android_instrumented
+  fi
+  # 桌面无头冒烟同理: 需要现成 release bundle, 显式 NCM_DESKTOP_SMOKE=1 才带上。
+  if [ "${NCM_DESKTOP_SMOKE:-0}" = "1" ]; then
+    cmd_desktop_smoke
   fi
   echo "ALL GATES OK"
 }
@@ -209,6 +225,7 @@ case "$sub" in
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
   android-instrumented) cmd_android_instrumented "$@" ;;
+  desktop-smoke) cmd_desktop_smoke ;;
   android-lint)  cmd_android_lint ;;
   verify)        cmd_verify ;;
   list)
