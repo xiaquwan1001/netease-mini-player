@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import '../album_preview.dart';
 import '../app_settings.dart';
 import '../app_shell.dart';
+import '../app_meta.dart';
 import '../artist_page.dart';
 import '../audio_tuning.dart';
 import '../auth.dart';
@@ -13,6 +15,7 @@ import '../back_policy.dart';
 import '../cover_backdrop.dart';
 import '../cover_palette.dart';
 import '../detail_page.dart';
+import '../desktop_integration.dart';
 import '../discover.dart';
 import '../feed_view.dart';
 import '../keystore.dart';
@@ -424,6 +427,8 @@ class _HomePageState extends State<HomePage> {
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
       unawaited(_search.loadHistory());
       unawaited(_search.loadLanding());
+      // AppImage 首启: 问一次「集成到应用菜单」(deb 安装的走不到这条)
+      unawaited(_offerDesktopIntegration(info.dataDir));
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
       if (info.loggedIn) {
         unawaited(_account.syncAccount());
@@ -432,6 +437,56 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// Linux AppImage 首启: 问一次「是否集成到应用菜单」(§11.A-2)。
+  ///
+  /// 判据全部是纯函数(`desktop_integration.dart`), 这里只负责弹窗、落标记与提示。
+  /// 拒绝/失败都落标记 —— 以后不再骚扰; 安装只是用户目录下的两份文件, 不需要 root。
+  Future<void> _offerDesktopIntegration(String dataDir) async {
+    final pending = await desktopIntegrationPending(dataDir: dataDir);
+    if (pending == null || !mounted) return;
+    final home = Platform.environment['HOME'] ?? '';
+    if (home.isEmpty) return;
+    final agree = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('集成到应用菜单?'),
+        content: const Text(
+          '当前以 AppImage 方式运行, 系统菜单里还没有轻音 MiniNCM。\n'
+          '是否写入菜单入口与图标? (只改你自己的 ~/.local/share, 不需要管理员权限, '
+          '以后不想要了直接删掉那两个文件即可)',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('不用了'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('集成'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (agree != true) {
+      await markDesktopIntegrationAsked(dataDir);
+      return;
+    }
+    final r = await installDesktopIntegration(
+      appImagePath: pending.appImagePath,
+      home: home,
+      version: kAppVersion,
+    );
+    if (!mounted) return;
+    if (r.ok) {
+      showToast(context, r.iconInstalled ? '已添加到应用菜单' : '已添加菜单入口(未找到图标)');
+    } else {
+      await markDesktopIntegrationAsked(dataDir);
+      if (!mounted) return;
+      showToast(context, '集成失败: ${r.error ?? '未知错误'}', isError: true);
     }
   }
 
