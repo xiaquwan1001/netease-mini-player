@@ -805,7 +805,7 @@ pub async fn login_qr_create() -> Result<QrLoginKey, FfiError> {
         let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
-    use ncm_provider::Provider;
+    use ncm_provider::AccountProvider;
     provider.login_qr_create().await.map_err(FfiError::from)
 }
 
@@ -815,7 +815,7 @@ pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, FfiError> {
         let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
-    use ncm_provider::Provider;
+    use ncm_provider::AccountProvider;
     let outcome = provider
         .login_qr_check(&key)
         .await
@@ -918,7 +918,7 @@ pub async fn login_sms_send(phone: String, country_code: String) -> Result<SmsCo
         let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
-    use ncm_provider::Provider;
+    use ncm_provider::AccountProvider;
     provider
         .login_sms_send(&phone, &country_code)
         .await
@@ -935,7 +935,7 @@ pub async fn login_sms_verify(
         let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
-    use ncm_provider::Provider;
+    use ncm_provider::AccountProvider;
     let outcome = provider
         .login_sms_verify(&phone, &code, &country_code)
         .await

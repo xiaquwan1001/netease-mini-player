@@ -19,8 +19,8 @@ use ncm_domain::{
     WikiFact, WordLyric,
 };
 use ncm_provider::{
-    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,
-    RankingPeriod, SearchQuery, SongUrlRequest,
+    AccountProvider, BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind,
+    ProviderResult, RankingPeriod, SearchQuery, SongUrlRequest,
 };
 use serde_json::Value;
 pub const CAPABILITIES: &[Capability] = &[
@@ -185,7 +185,7 @@ impl NeteaseProvider {
         if let Some(uid) = cached {
             return Ok(uid);
         }
-        Ok(Provider::profile(self).await?.user_id)
+        Ok(AccountProvider::profile(self).await?.user_id)
     }
 
     /// 同步拿已缓存的当前账号 uid(不触发网络请求)
