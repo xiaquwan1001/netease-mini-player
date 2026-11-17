@@ -528,6 +528,10 @@ class PlaybackCoordinator extends ChangeNotifier {
     );
     _restoredFromDisk = true;
     _restoredResumeMs = saved.positionMs;
+    // 事件通知: 恢复出来的曲目不会走 `_playSong`(用户可能一直不点播放),
+    // 歌词/歌曲信息就永远停在「暂无 / 信息不可用」。开 App 即提前取一次
+    // (幂等, 失败只进 `LyricController.error`, 点播放时还会再试)。
+    unawaited(lyric.load(song.id));
     // 只恢复队列与播放现场, **不进"歌单浏览态"**: 那是搜索页里的一个显示
     // 状态, 冷启动时把它填上会让 App 一开就停在"正在播放"列表(用户反馈)。
     // 队列本身仍可从播放条/播放队列看到。页面态的清零由 onRestored 的 setState 做

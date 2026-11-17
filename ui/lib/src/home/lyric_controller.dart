@@ -280,6 +280,22 @@ class LyricController extends ChangeNotifier {
     );
   }
 
+  /// 提前取歌词/歌曲信息(事件驱动, 不需要等用户点播放)。
+  ///
+  /// 两个触发点:
+  /// - 冷启动恢复上次播放现场(`PlaybackCoordinator.restoreFromDisk`)——恢复出来的
+  ///   曲目在用户点播放之前不会走 `_playSong`, 也就没有任何取链动作;
+  /// - 进歌曲详情页(歌词页, [toggle] 展开时)——缓存不命中时用户看到的是
+  ///   「暂无歌词 / 信息不可用」干等。
+  ///
+  /// 幂等: [load] 内部按曲目 id 去重, 重复调用不重复请求。失败不影响页面,
+  /// 错误照旧进 [error]。返回的 Future 供测试等待。
+  Future<void> ensureLoaded() {
+    final id = player()?.trackId;
+    if (id == null) return Future<void>.value();
+    return load(id);
+  }
+
   /// 播放条/详情页的"展开歌词"开关。
   void toggle() {
     _showLyrics = !_showLyrics;
@@ -288,6 +304,8 @@ class LyricController extends ChangeNotifier {
     _selectedLyricLines.clear();
     notifyListeners();
     if (_showLyrics) {
+      // 进页面即开始准备资源(不等点播放): 缓存不命中时不再干等「信息不可用」
+      unawaited(ensureLoaded());
       // 仅展开期间提高刷新频率; 收起/切 tab 时必须停掉。
       _lyricTicker?.cancel();
       _lyricTicker = Timer.periodic(
