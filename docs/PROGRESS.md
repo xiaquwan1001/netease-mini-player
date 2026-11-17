@@ -102,6 +102,38 @@
 
 ## 批次时间线(倒序, 最新在上)
 
+## 2026-11-17(二) 列表行 C 级收尾: 单一条 12 线 + 纵向 pitch + `ListRow` 组件化(**未发版**)
+
+单会话、独立 worktree(`lane/uib-c`, 基于 `a883f6f`)。按 A→B→C 三步各自一个提交,
+每步都是「改 → 跑 → 记」, 不攒到最后一起修测试。
+
+### A) 取消 8/12 二分: 歌曲行并入页面 12 线
+
+用户 2026-11-17 裁决(见 `remaining-batches.md` §11 A-9):**取消** `kSongRowPadding`(8/0/4) 与
+`kPageRowPadding`(12/0/4) 的二分 —— 「行首是封面缩略图 ⇒ 8」这条口径收益只是 4dp 呼吸,
+代价是同一页里封面行与序号行左右边界差 4dp、且与 SectionHeader / 页面标题线不共线。
+
+- `layout.dart`: **删除 `kSongRowPadding`**(不做 deprecated 别名, 免得留下第五个可写名字),
+  `kPageRowPadding` 的注释改写成「整页铺满的行, 歌曲行也是它」并记下这次裁决。
+  头部栅格表那一行 `整页铺满的歌曲行` 从 8 改成 **12**。
+- 调用点迁移: `song_tile.dart`(ListTile 臂的默认 `contentPadding`)与 `ranking_view.dart`
+  (`_RankRow.padding` 默认)两处**代码**改常量; `recommend_view` / `discover/recent_played_page` /
+  `comment/comment_thread` 三处只改注释里的常量名。**16 处 SongRow(tile 臂)调用点因此全部从 8 变 12。**
+- 门禁: `tools/check-row-padding.sh` 的具名白名单 4 → **3**(删掉 `kSongRowPadding`),
+  文件头写明「旧名故意不在白名单里, 谁再写它就会被判未登记」——这样回归是**自动**的,
+  不需要再加一条 grep 规则。
+- 测试: `layout_metrics_test` 的「歌曲行左右贴边」用例改断言 `kPageRowPadding.left`(12);
+  「两级栅格 + 预览行」里原来断言「缩略图行比页面线更靠边」的那两条改成「整页行左右都 < 16」
+  (Material 默认 16 才是被废弃的口径)。`song_tile_test` / `ranking_view_test` 两处写死
+  `fromLTRB(8,0,4,0)` 的期望改成引用 `kPageRowPadding`(顺带不再写死数字)。
+- **golden 只动了 2 张, 且只有 recommend**: 逐字节比对后
+  `recommend_360x800.png` 变化 2661 px(0.924%, bbox `x∈[8,131] y∈[212,306]`)、
+  `recommend_300x640_s125.png` 变化 3329 px(1.734%, bbox `x∈[8,147] y∈[220,322]`)——
+  正好是「每日推荐」那三行预览歌曲行: 左边缘右移 4dp、文本可用宽度少 4dp 导致换行点变化。
+  其余 16 张**一字节未变**, 原因逐个个案核实: `playlist_detail` 的曲目 sliver 上一批已经用
+  `kPageRowPadding`(不是走 SongRow 默认), `artist` 页两处同理, `mine`/`messages`/`settings`/
+  `account`/`search_landing`/`feed` 不含 tile 臂默认留白的歌曲行。
+
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
 单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /

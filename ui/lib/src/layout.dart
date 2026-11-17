@@ -15,7 +15,7 @@ import 'app_settings.dart';
 //   · 卡片 / 区块外边缘 ............ 12  = kPagePadding
 //   · 区块标题(纯文本) ............ 12  = kPagePadding(SectionHeader 自己不带左右 padding)
 //   · 卡片内行内容(封面/图标) ..... 16  = kPagePadding + kCardRowInset
-//   · 整页铺满的歌曲行 .............  8  = 页面 padding 0 + kSongRowPadding 左边 8(右边 4)
+//   · 整页铺满的歌曲行 ...........  12  = 页面 padding 0 + kPageRowPadding 左边 12(右边 4)
 //   · 行内标题与 leading 的间距 ....  8  = kRowTitleGap(Material 默认 16, 白吃 8dp)
 //
 // 反面案例(2026-11 用户反馈「左右空隙大」的根因, 不要再出现):
@@ -52,18 +52,14 @@ const EdgeInsets kCardRowPadding = EdgeInsets.fromLTRB(
   0,
 );
 
-/// 歌曲行留白: 用在**整页铺满**(页面 padding 0)的歌曲列表里,
-/// 左侧 8 保证和封面留一点呼吸, 右侧 4 给行尾按钮。
+/// 整页铺满列表的行留白: 左 = [kPagePadding](与 SectionHeader、页面标题严格共线),
+/// 右 [kCardRowInset] 给行尾按钮。**歌曲行也是它** —— 行首是封面缩略图还是序号/图标,
+/// 都不再分岔(见下)。
 ///
-/// 与 [kPageRowPadding] 的区别只在这一条:**行首是封面缩略图**时用 8(留呼吸),
-/// 行首是序号/图标/徽标这类「以像素开头」的列时用 12(和页面标题线严格共线)。
-const EdgeInsets kSongRowPadding = EdgeInsets.fromLTRB(8, 0, 4, 0);
-
-/// 整页铺满列表里的封面/序号行留白: 左 = [kPagePadding](与 SectionHeader、页面标题
-/// 严格共线), 右 4 给行尾按钮。
-///
-/// 列表行审计 C 级(2026-11-17): 同一个「整页铺满 + 行首非缩略图」的语义此前有
-/// 12/0/4、16/16(Material 默认)、8/0/4 三种数字并存; 现在一律走本常量。
+/// 列表行审计 C 级: 同一个「整页铺满」语义此前有 12/0/4、16/16(Material 默认)、
+/// 8/0/4 三种数字并存; 2026-11-17 先收敛成「缩略图 8 / 其它 12」两级,**同日用户裁决
+/// 取消这个二分**(同一页里封面行与序号行左右边界差 4dp 肉眼可见, 且与页面标题线不
+/// 共线): 现在一律 12, 原 `kSongRowPadding`(8/0/4) 已删除, 不要再造第五种数字。
 /// 父容器**已经**做了 [kPagePadding] 内缩的, 不要用这个(会叠成 24 = 三重叠加),
 /// 用 [kCardRowPadding](叠出 16)或 [kPreviewRowPadding]。
 const EdgeInsets kPageRowPadding = EdgeInsets.fromLTRB(

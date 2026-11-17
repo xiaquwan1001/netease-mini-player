@@ -232,13 +232,13 @@ class _RankRow extends StatelessWidget {
     required this.rank,
     required this.entry,
     this.onTap,
-    this.padding = kSongRowPadding,
+    this.padding = kPageRowPadding,
   });
 
   final int rank;
   final rust.PlayRankEntryDto entry;
 
-  /// 行留白: 整页排行用 kSongRowPadding(8/4);
+  /// 行留白: 整页排行用 kPageRowPadding(12/4);
   /// 「我的」页里嵌在卡片里时传 kCardRowPadding, 与同页入口行同一栅格。
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;

@@ -98,7 +98,7 @@ class _RecommendViewState extends State<RecommendView> {
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       // 2026-11 用户反馈: 推荐页歌曲行左右仍有空隙。页面横向留白改为 0,
-      // 歌曲卡片直接铺满屏宽(行内只留 kSongRowPadding); 其它区块各自补 12dp。
+      // 歌曲卡片直接铺满屏宽(行内只留 kPageRowPadding); 其它区块各自补 12dp。
       child: ListView(
         padding: const EdgeInsets.only(top: 8, bottom: 24),
         // 审查 P1-7.8 / §5.5: 首屏平级模块 8 个 + 1 个游离按钮 → 5 个。
@@ -318,7 +318,7 @@ class _NewSongsSection extends StatelessWidget {
                       // 预览行不给时长(整行更要紧的是歌名/艺人)
                       showDuration: false,
                       // 本页歌曲卡片铺满屏宽, 行内留白就是 SongRow 的默认
-                      // kSongRowPadding(页面横向留白为 0)
+                      // kPageRowPadding(页面横向留白为 0)
                       // 行尾 "..." = 统一歌曲菜单(本区块历史来源是 other)
                       menuSource: SongActionSource.other,
                       // 无版权曲目灰显且点了没反应

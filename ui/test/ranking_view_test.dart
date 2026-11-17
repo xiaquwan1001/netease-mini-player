@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/ranking_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -52,11 +53,11 @@ void main() {
     expect(periods, ['all']);
     expect(find.text('常听单曲'), findsOneWidget);
     expect(find.text('120 次'), findsOneWidget);
-    // 听歌排行行左右铺满: 与歌曲行统一 8/4 留白(用户反馈过左右有空隙)
+    // 听歌排行行左右铺满: 与歌曲行统一 12/4 留白(用户反馈过左右有空隙)
     final rankTile = tester.widget<ListTile>(
       find.ancestor(of: find.text('常听单曲'), matching: find.byType(ListTile)),
     );
-    expect(rankTile.contentPadding, const EdgeInsets.fromLTRB(8, 0, 4, 0));
+    expect(rankTile.contentPadding, kPageRowPadding);
     expect(find.text('1'), findsOneWidget);
 
     // 切当周

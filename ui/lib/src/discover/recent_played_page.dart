@@ -102,7 +102,7 @@ class RecentPlayedPage extends StatelessWidget {
                 subtitle: SongRowSubtitle.artist,
                 showDuration: false,
                 // 整页铺满列表 + 行首封面: 左 12 与同页专辑/歌单/播客行一致
-                // (列表行审计 C 级; 默认 kSongRowPadding 的 8 在这里会与下面三个 tab 错位)
+                // (列表行审计 C 级: SongRow 默认已是 kPageRowPadding 的 12, 与下面三个 tab 共线)
                 padding: kPageRowPadding,
                 // 与其它全页列表一致: 点播换队列, 不退出"最近听过"
                 onTap: s.playable

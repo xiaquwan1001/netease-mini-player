@@ -4,7 +4,7 @@
 //   · 卡片 / 区块外边缘   = kPagePadding(12)
 //   · 区块标题(纯文本)   = kPagePadding(12)
 //   · 卡片内行内容        = kPagePadding + kCardRowInset(4) = 16
-//   · 整页铺满的歌曲行    = kSongRowPadding(左 8 / 右 4)
+//   · 整页铺满的歌曲行    = kPageRowPadding(左 12 / 右 4, 与页面标题线共线)
 //   · SectionHeader 标题与 trailing 必须同一中心线(差 < 1dp)
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +114,7 @@ void _expectNoOverflow(List<String> errors, String tag) {
 }
 
 void main() {
-  testWidgets('歌曲行左右贴边: 左 kSongRowPadding.left / 右侧不吃通行尾', (tester) async {
+  testWidgets('歌曲行左右贴边: 左 kPageRowPadding.left / 右侧不吃通行尾', (tester) async {
     for (final width in _widths) {
       final tag = 'SongTile w=$width';
       final errors = await _pump(
@@ -134,14 +134,14 @@ void main() {
       final cover = tester.getRect(find.byType(CoverArt).first);
       expect(
         cover.left,
-        moreOrLessEquals(kSongRowPadding.left, epsilon: 0.5),
+        moreOrLessEquals(kPageRowPadding.left, epsilon: 0.5),
         reason: '$tag 行左留白',
       );
-      // 行尾按钮右边缘不越过 kSongRowPadding.right
+      // 行尾按钮右边缘不越过 kPageRowPadding.right
       final more = tester.getRect(find.byTooltip('更多操作'));
       expect(
         more.right,
-        lessThanOrEqualTo(width - kSongRowPadding.right + 0.5),
+        lessThanOrEqualTo(width - kPageRowPadding.right + 0.5),
         reason: '$tag 行右留白',
       );
     }
@@ -312,8 +312,9 @@ void main() {
     }
   });
 
-  // 列表行审计 C 级(2026-11-17): 行留白只有四个具名口径, 这里锁住它们的**几何关系**,
-  // 改数值可以, 但不能改成"叠起来不是 16"或"整页行不贴页面线"。
+  // 列表行审计 C 级(2026-11-17): 行留白只有三个具名口径(歌曲行与其它整页行同一条
+  // 12 线, 原 kSongRowPadding 已删), 这里锁住它们的**几何关系**: 改数值可以, 但不能
+  // 改成"叠起来不是 16"或"整页行不贴页面线"。
   // 用法侧(哪个文件用了哪个常量)由 tools/check-row-padding.sh --strict 守。
   test('行留白口径: 两级栅格 + 预览行', () {
     // 整页铺满、行首非缩略图: 左边缘严格等于页面线
@@ -322,9 +323,9 @@ void main() {
     // 父容器已内缩 12 时再缩 4 => 内容距屏 16(与卡片内行内容同一档)
     expect(kCardRowPadding.left, kCardRowInset);
     expect(kPagePadding + kCardRowPadding.left, 16);
-    // 缩略图行故意更靠边一点(留呼吸), 但仍比 Material 默认 16 窄
-    expect(kSongRowPadding.left, lessThan(kPageRowPadding.left));
-    expect(kSongRowPadding.left, lessThan(16));
+    // 整页行的左右都不是 Material 默认的 16/16(那是白吃宽度的老口径)
+    expect(kPageRowPadding.left, lessThan(16));
+    expect(kPageRowPadding.right, lessThan(16));
     // 预览行水平不再加边(父容器已内缩), 只留上下呼吸
     expect(kPreviewRowPadding.left, 0);
     expect(kPreviewRowPadding.right, 0);

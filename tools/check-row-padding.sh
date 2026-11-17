@@ -15,8 +15,9 @@
 #   · `SongRow(...)` / `SongTile(...)` 调用里的 `padding: <expr>`
 #
 # 口径:
-#   · 白名单 = layout.dart 的 kSongRowPadding / kPageRowPadding / kCardRowPadding /
-#     kPreviewRowPadding, 以及 `EdgeInsets.zero`(父容器已内缩时贴线, 必须写理由)
+#   · 白名单 = layout.dart 的 kPageRowPadding / kCardRowPadding / kPreviewRowPadding,
+#     以及 `EdgeInsets.zero`(父容器已内缩时贴线, 必须写理由)。
+#     已经删除的 kSongRowPadding(8/0/4) 故意**不在**白名单里: 谁再写它就会被判未登记。
 #   · 显式例外: 命中那行(或上一行)带 `// token-ok: 理由` 就跳过, 与 check-tokens.sh 同规则
 #   · 传参转发(`padding: padding`)不算越界: 值由调用点决定, 由调用点负责登记
 set -uo pipefail
@@ -41,8 +42,7 @@ lib = Path(os.environ["LIB"])
 strict = os.environ["STRICT"] == "1"
 
 REGISTRY = {
-    "kSongRowPadding",      # 整页铺满 + 行首是封面缩略图(8/0/4)
-    "kPageRowPadding",      # 整页铺满 + 行首非缩略图(12/0/4, 与页面线共线)
+    "kPageRowPadding",      # 整页铺满(12/0/4, 与页面线共线): 歌曲行也是它
     "kCardRowPadding",      # 父容器已内缩 12, 行再缩 4(叠出 16)
     "kPreviewRowPadding",   # 父容器已内缩, 行内不再加左右边(0/6)
     "EdgeInsets.zero",      # 父容器已内缩且行首应贴线 —— 必须带 token-ok 理由

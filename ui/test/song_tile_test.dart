@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_tile.dart';
 
@@ -194,7 +195,7 @@ void main() {
     );
   });
 
-  testWidgets('歌曲行左右留白收到最小(把横向空间让给文字)', (tester) async {
+  testWidgets('歌曲行左右留白收到页面线 12/4(把横向空间让给文字)', (tester) async {
     await tester.pumpWidget(
       host(
         SongTile(
@@ -209,8 +210,8 @@ void main() {
     final tile = tester.widget<ListTile>(find.byType(ListTile));
     expect(
       tile.contentPadding,
-      const EdgeInsets.fromLTRB(8, 0, 4, 0),
-      reason: '默认 16+16 会白白吃掉 32dp; 用户反馈歌曲行左右没占满',
+      kPageRowPadding,
+      reason: '默认 16+16 会白白吃掉 32dp; 整页铺满的歌曲行与页面标题线共线(12/4)',
     );
     // 歌名那块文字区域必须占到行宽的绝大部分
     final nameBox = tester.renderObject<RenderBox>(find.text('需要更多横向空间的歌名'));
