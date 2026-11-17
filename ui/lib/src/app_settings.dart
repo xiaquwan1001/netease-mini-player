@@ -53,6 +53,36 @@ extension CoverQualityX on CoverQuality {
   };
 }
 
+/// 点主窗口关闭按钮(或 Alt+F4)时的行为 —— 目前只有 Linux 桌面有第二条路径。
+///
+/// 默认 [CloseBehavior.quit]: 与改造前完全一致("点关闭就退出"), 老配置读进来行为不变。
+/// Windows 端本轮**未实现**(窗口关闭仍是直接退出), 设置项在那边的文案必须如实说明,
+/// 见 desktop_shell.dart 的 [closeBehaviorSubtitle]。
+enum CloseBehavior {
+  /// 直接退出(杀进程, 播放停止)
+  quit,
+
+  /// 隐藏主窗口到系统托盘, 进程/播放继续; 托盘「退出」才真的终止
+  minimizeToTray,
+}
+
+extension CloseBehaviorX on CloseBehavior {
+  /// 持久化用的稳定 id(不要改: 改了老配置读不回来)
+  String get id => switch (this) {
+    CloseBehavior.quit => 'quit',
+    CloseBehavior.minimizeToTray => 'tray',
+  };
+
+  /// 设置页分段控件的档位名
+  String get label => switch (this) {
+    CloseBehavior.quit => '直接退出',
+    CloseBehavior.minimizeToTray => '最小化到托盘',
+  };
+
+  static CloseBehavior fromId(Object? raw) =>
+      raw == 'tray' ? CloseBehavior.minimizeToTray : CloseBehavior.quit;
+}
+
 class AppSettings extends ChangeNotifier {
   AppSettings._();
 
@@ -165,6 +195,12 @@ class AppSettings extends ChangeNotifier {
   /// yrc 质量正常时直接采用、根本不请求 TTML, 实测 AMLL 只覆盖 12% 的播放
   /// (docs/c2-lyric-source-quality.md), 等于"逐字库没被用上"。
   String lyricSourcePreference = 'amll';
+
+  /// 点关闭按钮时的行为(默认 [CloseBehavior.quit] = 保持旧语义).
+  ///
+  /// 只有 Linux 桌面会真的把设置推给 GTK runner(见 desktop_shell.dart);
+  /// 其它平台保留字段(不撒谎: 设置页在那边的文案写明"仅 Linux 生效")。
+  CloseBehavior closeBehavior = CloseBehavior.quit;
 
   /// settings.json 结构版本(用于一次性迁移旧默认值)。
   static const int settingsSchemaVersion = 2;
@@ -354,6 +390,8 @@ class AppSettings extends ChangeNotifier {
           if (skipped is String && skipped.isNotEmpty) {
             skippedUpdateVersion = skipped;
           }
+          // 关闭行为: 缺字段/未知值一律回落"直接退出"(不改变旧用户预期)
+          closeBehavior = CloseBehaviorX.fromId(raw['closeBehavior']);
           // 交互记录: 旧配置没有这个字段 ⇒ 保持空 map, 不报错。
           // 先清空再读, 让 load() 幂等(重复 load 不叠加旧的会话内记录)
           _interactions.clear();
@@ -414,7 +452,9 @@ class AppSettings extends ChangeNotifier {
     String? lyricSourcePreference,
     UpdateCheckInterval? updateCheckInterval,
     LibrarySearchPlayAction? librarySearchPlayAction,
+    CloseBehavior? closeBehavior,
   }) async {
+    if (closeBehavior != null) this.closeBehavior = closeBehavior;
     if (librarySearchPlayAction != null) {
       this.librarySearchPlayAction = librarySearchPlayAction;
     }
@@ -529,6 +569,7 @@ class AppSettings extends ChangeNotifier {
           'schemaVersion': settingsSchemaVersion,
           'updateCheckInterval': updateCheckInterval.name,
           'librarySearchPlayAction': librarySearchPlayAction.name,
+          'closeBehavior': closeBehavior.id,
           'lastUpdateCheckMs': lastUpdateCheckMs,
           'skippedUpdateVersion': skippedUpdateVersion,
           'interactions': _interactions,

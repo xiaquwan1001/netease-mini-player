@@ -16,6 +16,7 @@ import '../cover_backdrop.dart';
 import '../cover_palette.dart';
 import '../detail_page.dart';
 import '../desktop_integration.dart';
+import '../desktop_shell.dart';
 import '../discover.dart';
 import '../feed_view.dart';
 import '../keystore.dart';
@@ -171,6 +172,9 @@ class _HomePageState extends State<HomePage> {
   /// 通知栏回调、动作宿主/播放条回调两个全局槽位、ArtistNav、更新弹窗、
   /// 导航层数、设置监听都在 attach() 里装、detach() 里逐项摘掉。
   late final HomeWiring _wiring;
+
+  /// 「关闭主窗口」行为的最终分流点(didRequestAppExit); 仅 Linux 会有非退出结果。
+  late final DesktopCloseObserver _desktopClose;
 
   /// 已经弹过更新提示的版本 tag(同一次运行只弹一次, 避免重复打扰)
   String? _promptedUpdateTag;
@@ -334,12 +338,20 @@ class _HomePageState extends State<HomePage> {
       appendNext: _songActions.appendSongToQueue,
       openPlaylist: _account.openPlaylist,
     );
+    // Linux 桌面「点关闭 = 退出 / 隐藏到托盘」的分流点(Flutter 官方 System.requestAppExit
+    // → WidgetsBindingObserver.didRequestAppExit)。其它平台恒退出, 与旧版一致。
+    _desktopClose = DesktopCloseObserver(
+      shell: DesktopShell.instance,
+      settings: AppSettings.instance,
+    );
+    WidgetsBinding.instance.addObserver(_desktopClose);
     _bootstrap();
     _coordinator.startPolling();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_desktopClose);
     // 断开播放能力: 避免下一个 HomePage 实例/测试用例误用已销毁的实现
     PlaybackBridge.instance.unbind();
     // 逐项摘掉进程级静态钩子(槽位置 null, 不留旧对象); 见 src/home/home_wiring.dart
@@ -430,6 +442,8 @@ class _HomePageState extends State<HomePage> {
       unawaited(_search.loadLanding());
       // AppImage 首启: 问一次「集成到应用菜单」(deb 安装的走不到这条)
       unawaited(_offerDesktopIntegration(info.dataDir));
+      // Linux 桌面: 把「点关闭 = 退出 / 隐藏到托盘」推给 GTK runner(其它平台 no-op)
+      unawaited(_bindDesktopShell());
       // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
       if (info.loggedIn) {
         unawaited(_account.syncAccount());
@@ -438,6 +452,25 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       setState(() => _error = friendlyError(e));
+    }
+  }
+
+  /// Linux 桌面: 绑定「关闭主窗口」行为(退出 / 隐藏到托盘)并读回托盘能力。
+  ///
+  /// 核心价值是"关到托盘不停播放": 隐藏窗口不动进程与 Dart isolate, Rust 音频线程
+  /// 继续跑; 只有托盘菜单「退出」才真的终止进程。没有托盘宿主时原生会降级成
+  /// "最小化到任务栏"并通过 closeToTaskbarFallback 通知这里提示一次。
+  Future<void> _bindDesktopShell() async {
+    final shell = DesktopShell.instance;
+    _desktopClose.onFallbackToTaskbar = () {
+      if (!mounted) return;
+      showToast(context, '当前桌面没有托盘, 已最小化到任务栏');
+    };
+    final trayStatus = await shell.bindSettings(AppSettings.instance);
+    if (!mounted) return;
+    if (AppSettings.instance.closeBehavior == CloseBehavior.minimizeToTray &&
+        trayStatus.degraded) {
+      showToast(context, '本机没有可用的系统托盘, 关闭窗口将最小化到任务栏');
     }
   }
 

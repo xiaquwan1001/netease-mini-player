@@ -73,6 +73,24 @@ ARCH=arm64 BUNDLE=/path/to/arm64/bundle bash packaging/linux/build-deb.sh dist
 - deb 脚本会先用 `nm -D` 检查 minincm 是否引用 GLib 2.80 才有的符号
   (`g_once_init_*_pointer`), 有则拒绝打包(Ubuntu 22.04 起不来, 见 issue #2)。
 
+### 托盘 / 关闭到托盘的运行期依赖(lane/tray-close)
+
+「点关闭按钮隐藏到系统托盘」需要 **libayatana-appindicator3**(StatusNotifier 客户端库):
+
+- **deb**: 已放进 `Recommends: libayatana-appindicator3-1`(apt 默认会装)。
+  `Depends` 里**故意没有**它 —— runner 是运行期 `dlopen` 的(见
+  `ui/linux/runner/my_application.cc`), 没有该库应用照常启动, 只是"关闭到托盘"
+  降级为"最小化到任务栏", 设置页也会如实写明会降级。
+- **AppImage / tar.gz**: 不 bundle 该库, 用宿主系统的(几乎所有桌面发行版都自带;
+  没有就降级)。这也是不把它塞进 AppImage 的原因: 库在容器里还得跟宿主打包版本对齐,
+  而它缺失时的降级路径是安全的。
+- **托盘宿主**: 还需要会话总线上有 `org.kde.StatusNotifierWatcher`
+  (KDE Plasma 自带; GNOME 需装 AppIndicator 扩展; 裸窗口管理器通常没有)。
+  没有宿主时同样降级为"最小化到任务栏", 并在日志里留
+  `close-to-tray: 无托盘宿主, 降级为最小化到任务栏`。
+- 构建期**零依赖**: CMake 不 `pkg_check_modules(ayatana...)`, 没装
+  `libayatana-appindicator3-dev` 的 CI 机器也能编出带托盘功能的二进制。
+
 ## AppImage
 
 ```bash
