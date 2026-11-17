@@ -7,7 +7,7 @@ import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
 import '../song_actions.dart';
 import '../state_views.dart';
-import '../song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
+import '../song_tile.dart' show SongRow;
 import 'discover_types.dart';
 
 /// 「推荐歌曲」页签: 一次全量返回, 点歌只换队列、不退出日推页.
@@ -36,16 +36,9 @@ class DailySongsTab extends StatelessWidget {
         itemCount: songs.length,
         itemBuilder: (context, i) {
           final s = songs[i];
-          return SongRow(
+          return SongRow.pageIndexed(
             song: s,
-            layout: SongRowLayout.tile,
             indexText: '${i + 1}',
-            indexWidth: 22,
-            indexAlign: TextAlign.start,
-            indexGap: 0,
-            coverSize: 40,
-            subtitle: SongRowSubtitle.artist,
-            showDuration: false,
             // 每日推荐 tab: "..."菜单同样允许"不感兴趣"
             menuSource: SongActionSource.dailyRecommend,
             // 点歌只开始播放, 不退出日推页(与歌单详情页一致)。

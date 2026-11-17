@@ -270,6 +270,30 @@ class SongRow extends StatelessWidget {
     tapOnlyWhenPlayable: tapOnlyWhenPlayable,
   );
 
+  /// 「整页列表 + 序号列」的单曲行: 每日推荐 / 历史每日推荐 / 最近听过 的歌曲页签。
+  /// tile 臂 + 序号(宽 22, 左对齐) + 封面 40 + 艺人副标题 + 不给时长。
+  /// 这几处此前逐字重复同一组参数, 只在菜单来源与点击回调整上不同。
+  static SongRow pageIndexed({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback? onTap,
+    SongActionSource? menuSource,
+  }) => SongRow(
+    key: key,
+    song: song,
+    layout: SongRowLayout.tile,
+    indexText: indexText,
+    indexWidth: 22,
+    indexAlign: TextAlign.start,
+    indexGap: 0,
+    coverSize: 40,
+    subtitle: SongRowSubtitle.artist,
+    showDuration: false,
+    onTap: onTap,
+    menuSource: menuSource,
+  );
+
   final rust.SongDto song;
 
   /// 排版口径(见 [SongRowLayout]); 默认自绘臂。
