@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-17(七)**。已发布版本 **v0.20.1**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
+> 最近更新: **2026-11-17(八)**。已发布版本 **v0.21.0**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
 > 设备级门与桌面无头冒烟进 `ci-gates`), 见批次时间线最上面那条。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
@@ -38,6 +38,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.21.0** | **2026-11-17** | **用户 6 项反馈批**: ① Android 逐字歌词高光行贴左(`TextPainter` 只给 maxWidth) ② Linux 播放条宽屏留白/控件间隔 ③ 未登录时推荐页不再暴露 `[auth] Unknown error`(登录态门 + `friendlyError` auth 分支) ④ Linux 登录弹层切 tab 自动收起 ⑤ PC 网页登录风控**静态分析报告**(5 条差异, 未改登录码) ⑥ 超长当前行歌词横向自动滚动(复用唯一跑马灯内核); Dart **1089→1106**, golden 未变 |
 | **v0.20.1** | **2026-11-17** | **反馈批**(两条用户反馈 + 两处平台缺口): ① 歌词高光行 18→16sp 且两种行都居中(修「换行时左右瞬移」) ② 冷启动恢复/进详情页**主动预取**歌词(不再干等「信息不可用」) ③ **AppImage 首启集成到应用菜单** ④ `ci-gates.sh` 新增 `android-instrumented`(a34 3/3) 与 `desktop-smoke`(xvfb+dbus 无头冒烟); Dart **1075→1089** |
 | **v0.20.0** | **2026-11-17** | **四车道批**: P-18 后半(application-id 统一 + 数据目录一次性迁移)· P-10 方案 B(渐进期 seek 登记 + 下载完成换源重建解码器)· 列表行 C 级收尾(8/12 二分取消 + 纵向 pitch + SongRow 工厂)· P-11 第一步(首个 `androidTest` + `notif-slots` 断言脚本); Rust **300→313** / Dart **1061→1075** |
 | **v0.19.1** | **2026-11-17** | **门禁/收敛批**(两个未发版批次一并出): Android 门进 CI(`android-unit` 进 `verify`, `android-lint` 暂只暴露) + 列表行 **B 级 12 条清零**(`kRowTrailingMaxRatio`/`capRowTrailing`) + **C 级第一批**(四个具名行留白口径 + `row-padding` 门) + 修掉会挂死 `cargo test` 的 keyring 写路径; Rust 300 / Dart **1074** |
@@ -259,6 +260,28 @@ Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72), `activate` 里若已有�
 **还剩 3 处没被收敛**(各自形状唯一, 收敛无收益, 保留现状):
 `detail/playlist_songs_sliver`(徽标放副标题行 + 乐观态并集 + 两位序号)、
 `album_preview`(tile 臂 + 序号 + 无封面)、`search_results`/`home_page`(走 `SongTile` 旧 API)。
+
+## 2026-11-17(八) 用户 6 项反馈批: 歌词高光贴左 · 桌面留白 · 未登录错误 · 登录弹层 · 登录风控调查 · 长歌词滚动(**未发版**)
+
+> 三条车道(我 + 两个子代理)并行, 编排者独立复核: 每条都做了**负向验证**(把改动回退后对应用例必须红)。
+
+| # | 用户反馈 | 根因 | 落地 |
+|---|---|---|---|
+| 1 | Android 歌词页「作词/作曲」等头部行在高光时从居中变左对齐(Linux 正常) | `word_lyric_view._layoutFor` 的 `TextPainter` 只 `layout(maxWidth:)`: 段落宽 = 文本自身宽, `textAlign.center` 居中后又被 `paintOffset` 反向量左移 ⇒ 净效果画在 x=0。静态行走 RichText(段落宽=行宽)所以正常; Linux 常走行级歌词不撞这条路径 | `layout(minWidth: maxWidth)` + 副标题显式 `TextAlign.center`; 回归「高光行与静态行同一对齐口径」(回退即红) |
+| 2 | Linux 播放条控件挤在右下角、间距不自然 | 播放条按手机预算排版(左右 4dp + 控件零间隔), 1280 宽窗口上控件贴成一坨 | 按宽度分两档: 窄屏(<600) 沿用 4dp/零间隔, 宽屏用 `kPagePadding` + `kRowTitleGap`(全部 layout.dart 具名常量); `player_bar_spacing_test` |
+| 3 | Linux 未登录时推荐页把 `[auth] Unknown error` 当错误占位显示 | 推荐歌单区块未登录也照发请求, 匿名被判 auth, `friendlyError` 把后端原文上屏 | ① 判据改成**登录态**: 未登录不发请求, 显示中性引导(`_LoginHint`); ② `friendlyError` 增加 auth 分支 → 「需要登录后才能查看」(原文只进 `describeError` 日志); ③ daily_playlists_tab 不再叠第二句前缀 |
+| 4 | Linux 登录弹窗切底部 tab 后不收起 | `showModalBottomSheet` 返回 Future, 拿不到 route, 外部无法关它 | `login_sheet.dart` 自己持有 `ModalBottomSheetRoute` + `dismissLoginSheet()`(栈顶 pop / 非栈顶 removeRoute), `_onTabSelected` 调用 |
+| 5 | PC 网页登录风控(短信 4 位 / 微信扫不了) | 见 `docs/reports/login-risk-analysis-2026-11-17.md`(静态分析): ① weapi 提交**空 `csrf_token`**(登录前没 `__csrf`) ② UA 是 Mac Chrome 而 cookie 是 Windows 桌面客户端(`deviceId/appver/osver`)自相矛盾 ③ 缺 `Origin/Accept-Language/Sec-Fetch-*`、Referer 少尾斜杠 ④ 走 `/weapi` 密文路由而非官方页明文 `/api` ⑤ reqwest TLS/JA3 + 登录前无页面预检 | **本批只出报告不改代码**(改登录链必须真机/抓包对照); 报告含 5 条判据与「必须真机验证」的实验步骤 |
+| 6 | 过长歌词行只显示省略号, 不滚动 | 两个歌词视图的静态行都是 `maxLines:1 + ellipsis` | 抽出可复用内核 `MarqueeScroll`/`MarqueePlayGate`(`MarqueeText` 改成无状态壳, 全仓仍只有一台跑马灯), **当前行**超宽时横向滚动(只在播放中, 放得下就是居中静态文本), 非当前行保持省略号; `lyric_marquee_test` |
+
+**门禁**: `tools/ci-gates.sh verify` **全绿**(Rust 313 / Dart **1106** 通过 / golden 18 张逐字节未变 / clippy 0 /
+lock-poison / tokens / row-padding / android-unit 3); `desktop-smoke` 无头冒烟 PASS(窗口 1280x720 + WM_CLASS + 单实例);
+`android-instrumented` 5 通过 + 1 assume-skip(通知点击的 BAL 限制, 见 notes-build)。
+
+**环境事故(已按纪律归档)**: 同一时段 Gradle 缓存里 `launcher-0.0.9-alpha04.jar` 的
+`api/config/ConfigBase.class` **CRC 损坏**(导致 UTP `ClassFormatError`), 以及 Flutter SDK 的 `impellerc`
+在特定着色器路径上 **SIGILL**(rc=132, 其余着色器正常) —— 两件都判为**硬件位翻转**, 证据在
+`~/hw-stability/evidence/inbox/2026-11-17-netease-mini-player-gradle-jar-corrupt/`; 处置 = 删掉损坏 artifact 重新下载。
 
 ## 2026-11-17(七) 用户两条反馈 + AppImage 菜单集成 + 设备级门进阶(**未发版**)
 
