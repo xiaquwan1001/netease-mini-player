@@ -48,5 +48,3 @@
 - 静态检查门固定 `cd ui && dart analyze`（`flutter analyze` 本机会偶发 SIGSEGV，别重试或重装 Flutter）；Rust 侧 `cargo clippy --workspace --all-targets` 必须 0 warning（2026-11-13 清零，别再引入）。`dart format` 用 Dart 3.13 tall style 会重排全仓（~10k 行 diff），**不要顺手跑**；要统一格式就单独立一次提交并同时加 CI 门。
 - **发布纪律（2026-11-15 用户口径）**：改完**总是推送到两个远端**（分支 + tag），**CI 与 Release 必须同时做**，不许「只跑 CI、release 不发」。版本号按工作量定：**≤5 个 bug 反馈只加最小号**（patch +1，如 0.12.2→0.12.3）；**≤15 个反馈、或含架构改动加 0.1**（minor，如 0.12.x→0.13.0）；**1.0 只在用户明确认可「可以真实发布」时才提**。流程：`tools/bump-version.sh` → 提交 `chore(release): vX.Y.Z` → `git-dual-push` → `git push origin vX && git push ustc vX` → **GitHub CI + Release 绿就发完**（2026-11-16 用户口径：USTC GitLab 无云 runner，此后不考虑其流水线；代码仍双推作镜像，但不再等/贴 GitLab pipeline 号）。
 - UI 新代码固定入口：四态走 `AsyncView`；小组标题走 `SectionTitle`、区块标题走 `SectionHeader`；长文本/徽标走 `AdaptiveText`/`AdaptiveTextRow`；间距圆角字号只允许 `layout.dart` 与 `tools/check-tokens.sh` 的有限集合(例外写 `// token-ok: 理由`)。
-
-- 硬件稳定性（随机 SEGV/ICE、编译产物损坏、页缓存/位翻转）：工具与判据全在 `~/hw-stability`（入口 `~/hw-stability/AGENTS.md`，技能 `hw-stability-tools`）；本项目只按全局 AGENTS 硬性规则 12 上交证据到 `~/hw-stability/evidence/inbox/`，不在此复述。
