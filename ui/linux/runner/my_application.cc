@@ -22,6 +22,17 @@ static void first_frame_cb(MyApplication* self, FlView* view) {
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+
+  // 严格单实例(P-18 后半): 第二个进程的 activate 会被 GApplication 转发到主实例
+  // (my_application_new 里不再用 G_APPLICATION_NON_UNIQUE), 这里只把已有窗口提到前台,
+  // 不再开第二个窗口 —— 否则同一份 dataDir 会被两个窗口并发写(设置/播放现场/TTML 缓存)。
+  // 迁移窗口期例外: 旧版本(com.minincm.minincm)与新版本 id 不同, 两者互不可见, 可同时运行。
+  GList* existing = gtk_application_get_windows(GTK_APPLICATION(application));
+  if (existing != nullptr) {
+    gtk_window_present(GTK_WINDOW(existing->data));
+    return;
+  }
+
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 
@@ -144,9 +155,16 @@ MyApplication* my_application_new() {
   // like GTK and desktop environments map this running application to its
   // corresponding .desktop file. This ensures better integration by allowing
   // the application to be recognized beyond its binary name.
+  // 注意: g_set_prgname 同时决定 WM_CLASS(res_name 与 res_class), 所以
+  // packaging/linux 里 .desktop 的 StartupWMClass 必须与 APPLICATION_ID 完全一致,
+  // 否则任务栏会出现两个图标/图标不归组。
   g_set_prgname(APPLICATION_ID);
 
+  // flags = 0(P-18 后半: 严格单实例)。原来是 G_APPLICATION_NON_UNIQUE(每次启动都是
+  // 独立实例, 两个窗口会同时写同一份 dataDir)。用显式强转而不是
+  // G_APPLICATION_DEFAULT_FLAGS: 后者 Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72。
+  // 代价: 需要 session bus(桌面环境都有); 无 bus 时 g_application_register 失败并退 1。
   return MY_APPLICATION(g_object_new(my_application_get_type(),
                                      "application-id", APPLICATION_ID, "flags",
-                                     G_APPLICATION_NON_UNIQUE, nullptr));
+                                     static_cast<GApplicationFlags>(0), nullptr));
 }

@@ -10,6 +10,15 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:-$ROOT/dist}
 
+# P-18 后半: 与 deb / ui/linux/CMakeLists.txt 共用同一个 application-id。
+# AppDir 根部的 .desktop 文件名 + 里面的 StartupWMClass(= WM_CLASS = APPLICATION_ID)
+# 必须与 AppStream id 完全一致, 否则任务栏不归组、软件中心关联不到元数据。
+APPID=io.github.xiaquwan1001.MiniNCM
+CMAKE_APPID=$(sed -n 's/^set(APPLICATION_ID "\(.*\)")$/\1/p' "$ROOT/ui/linux/CMakeLists.txt")
+[ "$CMAKE_APPID" = "$APPID" ] || {
+  echo "ERROR: APPID 与 ui/linux/CMakeLists.txt 的 APPLICATION_ID 不一致(CMake='$CMAKE_APPID', 本脚本='$APPID')" >&2
+  exit 1; }
+
 # 架构: bundle 目录用 Flutter 的命名(x64 / arm64), AppImage 用发行名(x86_64 / aarch64)。
 # 默认按本机推断(arm64 包必须在 arm64 机器上原生构建); 需要时用 APPIMAGE_ARCH / BUNDLE 覆盖。
 HOST_ARCH=$(uname -m)
@@ -124,27 +133,33 @@ install -m644 "$ROOT/packaging/linux/minincm.png" \
   "$APPDIR/usr/share/icons/hicolor/256x256/apps/minincm.png"
 cp "$ROOT/packaging/linux/minincm.png" "$APPDIR/minincm.png"
 # AppStream 一起打进 AppDir(与 deb 同一份): 有的桌面集成工具会读它
-METAINFO="$APPDIR/usr/share/metainfo/io.github.xiaquwan1001.MiniNCM.metainfo.xml"
-install -m644 "$ROOT/packaging/linux/io.github.xiaquwan1001.MiniNCM.metainfo.xml" "$METAINFO"
+METAINFO="$APPDIR/usr/share/metainfo/$APPID.metainfo.xml"
+install -m644 "$ROOT/packaging/linux/$APPID.metainfo.xml" "$METAINFO"
 sed -i "s|<release version=\"[^\"]*\"|<release version=\"$VER\"|" "$METAINFO"
 # 断言(P-19): sed 静默 no-op 会让包带着占位版本出厂而流水线全绿 → 硬失败
 grep -q "version=\"$VER\"" "$METAINFO" || {
   echo "ERROR: metainfo 版本覆盖失败($METAINFO 里没有 version=\"$VER\")" >&2; exit 1; }
 
-cat > "$APPDIR/minincm.desktop" <<'DESKTOP'
+cat > "$APPDIR/${APPID}.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
 Name=轻音 MiniNCM
 Name[en]=MiniNCM
+Name[zh_CN]=轻音 MiniNCM
+GenericName=Music Player
+GenericName[zh_CN]=音乐播放器
 Comment=网易云音乐第三方客户端
+Comment[en]=A third-party NetEase Cloud Music client
 Exec=minincm %U
 Icon=minincm
 Terminal=false
 Categories=AudioVideo;Audio;Player;
+Keywords=music;netease;ncm;
+StartupWMClass=APPIMAGE_APPID
 X-AppImage-Version=APPIMAGE_VERSION
 DESKTOP
-sed -i "s/APPIMAGE_VERSION/$VER/" "$APPDIR/minincm.desktop"
-cp "$APPDIR/minincm.desktop" "$APPDIR/usr/share/applications/minincm.desktop"
+sed -i "s/APPIMAGE_VERSION/$VER/; s/APPIMAGE_APPID/$APPID/" "$APPDIR/${APPID}.desktop"
+cp "$APPDIR/${APPID}.desktop" "$APPDIR/usr/share/applications/${APPID}.desktop"
 
 cat > "$APPDIR/AppRun" <<'APPRUN'
 #!/bin/sh
