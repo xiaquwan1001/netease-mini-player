@@ -134,6 +134,47 @@
   `kPageRowPadding`(不是走 SongRow 默认), `artist` 页两处同理, `mine`/`messages`/`settings`/
   `account`/`search_landing`/`feed` 不含 tile 臂默认留白的歌曲行。
 
+### B) 纵向 pitch 统一: 行高 = `rowExtentFor`, 行内纵向留白只有 0 和 6
+
+**判定(实测, 不是印象)**: 同一套 `SongRow` 在 360dp 宽、textScaler 1.0 / 1.3 / 1.625 下,
+改动前落在**四个**高度, 源头都不是「行 padding vertical」(那一直是 0), 而是四条隐式规则叠加:
+
+| 行 / 容器形态 | 1.0 | 1.3 | 1.625 | 纵向高度实际由谁决定 |
+|---|---|---|---|---|
+| `SongRow`(ListTile 臂, 默认) | 64 | 63 | 76 | `ListTile` dense 两行 minHeight(64) + `minVerticalPadding`(4×2) |
+| `SongRow`(tile 臂 + `visualDensity.compact`) | 53 | 63 | 76 | `VisualDensity.compact`(-2) 把 minHeight 压到 56, 内容再撑 |
+| `SongRow`(tile 臂 + `kPreviewRowPadding` 6/6) | 76 | 75 | 88 | 上一行 + 上下各 6(唯一具名纵向留白) |
+| `SongRow`(plain 自绘臂, 无 `itemExtent`) | 40 | 49 | 61 | 只有封面(`CoverArt` 40)高, 纵向无任何留白 |
+| 裸 `ListTile`(title+subtitle, Material 默认) | 72 | 73 | 88 | Material 两行 minHeight(72) |
+| `SliverFixedExtentList` + `itemExtent: rowExtentFor` | 56 | 72.8 | 91 | `itemExtent`(唯一本来正确的形态) |
+
+(`rg` 侧同时确认: 行级 `contentPadding`/`padding` 里 `vertical:` 非零的只有
+`kPreviewRowPadding` 一处具名常量; `minVerticalPadding:` 全仓 0 处; `dense: true` 10 个文件;
+`visualDensity` 21 处 —— 也就是说「行内 padding 已经全是 0」, pitch 不统一是 **ListTile 隐式规则** 的锅。)
+
+**落地(统一口径: 行内纵向留白 0, 行高 `rowExtentFor`)**:
+- `layout.dart` 新增 `rowHeightBox(context, child)` = `SizedBox(height: rowExtentFor(context))`
+  (基准 56 × 系统字号, 上限 2 倍), 并在 rowExtentFor 上方写清上面那张判定表。
+- 包上它的行: `SongRow` 两臂(`_build` 出口一处, 覆盖 16 处调用点)、听歌排行 `_RankRow`、
+  播放队列行、云盘歌曲行、数字专辑「已购单曲」行。**唯一保留的具名纵向留白是
+  `kPreviewRowPadding`(6/6)**, 且它现在落在这个定高盒**内部**(盒子仍 56 × 字号,
+  6 只是行内呼吸), 不再额外把行撑高到 76。
+- 不改的: 专辑/歌单/艺人等**非歌曲**的 `ListTile` 行(卡片形态、leading 是 48 封面,
+  且各有自己的两行文案), 本轮只统一歌曲行。
+- **门禁两道**: ①`tools/check-row-padding.sh` 新增纵向段 —— 行留白算出的纵向值只允许
+  `0`(22 处)或 `6`(2 处, 预览行), 其它数字直接 `--strict` 退出 1(实测注入
+  `symmetric(vertical: 8)` 后 rc=1); ②`ui/test/layout_metrics_test.dart` 新增
+  「列表行纵向 pitch」用例: 4 种行形态 × 4 种宽度 × 3 档字号, 断言**渲染出来的高度**
+  `== rowExtentFor` 且无 overflow。**为什么高度用渲染断言而不是 grep**: 行高是
+  `dense`/`minHeight`/`minVerticalPadding`/`visualDensity` 四条隐式规则算出来的,
+  源码里看不到结果值; grep 只能拦 padding 里写的数字(那部分交给脚本)。
+- golden: 只动 `recommend` 两张(与 A 步同一页的日推预览行): `360x800` 20738 px(7.201%,
+  bbox 覆盖 y∈[265,800] 的整整一块, 因为三行预览行各矮 8dp 后**下方区块整体上移**),
+  `300x640@1.25` 32046 px(16.691%, bbox y∈[281,629])。其余 16 张逐字节未变
+  (mine/artist 的歌曲行都在首屏之下, 未被 golden 取景)。
+- 顺带修 `queue_sheet_test` 的拖拽用例: 原来写死 `moveBy(0, 60)` ×2 假设行高 64,
+  行高统一后只跨一行 ⇒ 改成按**实测行高**分 24 小步推进(RowReorder 只在跨过中点时换位)。
+
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
 单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /

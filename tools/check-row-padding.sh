@@ -35,6 +35,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 lib="$repo/ui/lib"
 
 STRICT="$strict" LIB="$lib" python3 - <<'PY'
+
 import os, re, sys
 from pathlib import Path
 
@@ -48,6 +49,34 @@ REGISTRY = {
     "EdgeInsets.zero",      # 父容器已内缩且行首应贴线 —— 必须带 token-ok 理由
 }
 PASSTHROUGH = {"padding", "contentPadding"}
+
+# 行内**纵向**留白的唯一口径(列表行审计 C 级 · 纵向 pitch, 2026-11-17):
+# 歌曲行 / 整页行 / 卡片行一律 0, 只有「父容器已经做过水平内缩」的预览行保留 6。
+# 行高由 layout.dart 的 rowExtentFor(56 × 系统字号)决定, 见 rowHeightBox();
+# 纵向数值写进 padding 就等于在行高之外再叠一段, 整页 pitch 立刻不再统一。
+# 注意: 行高本身**不是**本脚本能判的(ListTile 的 dense/minHeight/visualDensity
+# 是隐式规则), 那部分由 ui/test/layout_metrics_test.dart 的渲染断言守。
+VERTICAL = {
+    "kPageRowPadding": 0,
+    "kCardRowPadding": 0,
+    "kPreviewRowPadding": 6,
+    "EdgeInsets.zero": 0,
+}
+
+def vertical_of(expr: str):
+    """返回行留白的纵向值; 判不出来返回 None(转发/条件表达式)。"""
+    if expr in VERTICAL:
+        return VERTICAL[expr]
+    if "$" in expr or "?" in expr or expr in PASSTHROUGH:
+        return None
+    m = re.search(r"vertical:\s*([0-9.]+)", expr)
+    if m:
+        return float(m.group(1))
+    m = re.search(r"fromLTRB\(\s*[0-9.]+\s*,\s*([0-9.]+)\s*,\s*[0-9.]+\s*,\s*([0-9.]+)", expr)
+    if m:
+        top, bottom = float(m.group(1)), float(m.group(2))
+        return top if top == bottom else -1  # 上下不等也是越界
+    return None
 
 row_call = re.compile(r"\b(ListTile|SongRow|SongTile)\(")
 
@@ -101,6 +130,8 @@ for path in sorted(lib.rglob("*.dart")):
 
 
 bad = []
+bad_vertical = []
+vert_counts = {}
 for rel, line, expr, reasoned in hits:
     passthrough = expr in PASSTHROUGH or PASSTHROUGH_LIKE.search(expr)
     # EdgeInsets.zero 也要求理由: 它是「父容器已内缩」的正确写法, 但必须写清凭什么
@@ -110,19 +141,33 @@ for rel, line, expr, reasoned in hits:
     elif needs_reason and not reasoned:
         bad.append((rel, line, expr))
     counts[expr] = counts.get(expr, 0) + 1
+    # 纵向: 只允许 0(默认)与 6(预览行); 上下不等 / 其它数字一律算越界
+    v = vertical_of(expr)
+    if v is not None:
+        vert_counts[v] = vert_counts.get(v, 0) + 1
+        if v not in (0, 6):
+            bad_vertical.append((rel, line, expr, v))
 
 print(f"check-row-padding: 扫描 {len(hits)} 处行留白({len(counts)} 种口径)")
 for expr, n in sorted(counts.items(), key=lambda kv: -kv[1]):
     passthrough = expr in PASSTHROUGH or PASSTHROUGH_LIKE.search(expr)
     mark = "" if expr in REGISTRY or passthrough else "  <- 未登记"
     print(f"  {n:3d}  {expr}{mark}")
+mark = "  ".join(
+    f"纵向 {v:g}: {n} 处" for v, n in sorted(vert_counts.items(), key=lambda kv: -kv[1])
+)
+print(f"check-row-padding: 纵向留白 {mark}(0 = 行高由 rowExtentFor 定, 6 = 预览行)")
 if bad:
     print(f"\n未登记口径({len(bad)} 处, 需改成 layout.dart 常量或补 `// token-ok: 理由`):")
     for rel, line, expr in bad:
         print(f"  {rel}:{line}  {expr}")
 else:
     print("\n所有行留白都在 layout.dart 的具名口径里")
+if bad_vertical:
+    print(f"\n纵向留白越界({len(bad_vertical)} 处, 只允许 0 或 6):")
+    for rel, line, expr, v in bad_vertical:
+        print(f"  {rel}:{line}  {expr}  (纵向 {v:g})")
 
-if strict and bad:
+if strict and (bad or bad_vertical):
     sys.exit(1)
 PY

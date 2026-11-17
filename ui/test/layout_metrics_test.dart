@@ -312,7 +312,73 @@ void main() {
     }
   });
 
-  // 列表行审计 C 级(2026-11-17): 行留白只有三个具名口径(歌曲行与其它整页行同一条
+  // 纵向 pitch(列表行审计 C 级 · 2026-11-17): 行高只由 rowExtentFor 决定。
+  //
+  // 为什么是**渲染断言**而不是 grep 门: 行高不是源码里写出来的数值, 而是
+  // ListTile 的 dense / minHeight / minVerticalPadding / visualDensity 四条隐式
+  // 规则叠加出来的结果 —— 同一套 SongRow 在改动前实测落在 53 / 64 / 76 三个高度
+  // (以及自绘臂 40)。改源码里任何一个开关都会变, 只有量渲染出来的 rect 才算判据。
+  // 源码侧只额外拦「行留白写了非 0/6 的纵向值」(tools/check-row-padding.sh)。
+  testWidgets('列表行纵向 pitch: 行高 = rowExtentFor(124/56 口径), 预览行同高', (
+    tester,
+  ) async {
+    for (final width in _widths) {
+      for (final scale in _scales) {
+        final tag = 'SongRow w=$width s=$scale';
+        final song = fakeSong(id: 3, name: '晴天');
+        final cases = <String, SongRow>{
+          'tile 臂(默认真实列表行)': SongRow(
+            song: song,
+            layout: SongRowLayout.tile,
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+            showDuration: true,
+          ),
+          'tile 臂 + 卡片留白': SongRow(
+            song: song,
+            layout: SongRowLayout.tile,
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+            padding: kCardRowPadding,
+          ),
+          'plain 臂(带序号, 无 itemExtent)': SongRow(
+            song: song,
+            indexText: '${1}',
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+          ),
+          'plain 臂 + 预览行 6/6': SongRow(
+            song: song,
+            indexText: '${1}',
+            coverSize: 40,
+            subtitle: SongRowSubtitle.artist,
+            padding: kPreviewRowPadding,
+          ),
+        };
+        for (final entry in cases.entries) {
+          final errors = await _pump(
+            tester,
+            ListView(children: [entry.value]),
+            width: width,
+            scale: scale,
+          );
+          _expectNoOverflow(errors, '$tag ${entry.key}');
+          final h = tester.getSize(find.byType(SongRow)).height;
+          expect(
+            h,
+            moreOrLessEquals(
+              rowExtentFor(tester.element(find.byType(SongRow))),
+              epsilon: 0.5,
+            ),
+            reason: '$tag ${entry.key} 行高必须等于 rowExtentFor(56 × 字号)',
+          );
+          await tester.pumpWidget(const SizedBox.shrink());
+        }
+      }
+    }
+  });
+
+  // 行留白口径: 只有三个具名口径(歌曲行与其它整页行同一条
   // 12 线, 原 kSongRowPadding 已删), 这里锁住它们的**几何关系**: 改数值可以, 但不能
   // 改成"叠起来不是 16"或"整页行不贴页面线"。
   // 用法侧(哪个文件用了哪个常量)由 tools/check-row-padding.sh --strict 守。

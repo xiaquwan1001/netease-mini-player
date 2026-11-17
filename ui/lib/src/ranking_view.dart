@@ -258,63 +258,68 @@ class _RankRow extends StatelessWidget {
     // 前三名给主色, 其余用 outline, 一眼看出名次梯度
     final rankColor = rank <= 3 ? scheme.primary : scheme.outline;
     return LayoutBuilder(
-      builder: (context, box) => ListTile(
-        selected: playing,
-        dense: true,
-        visualDensity: VisualDensity.compact,
-        // 用户反馈听歌排行左右有空隙: 默认 16+16 收到歌曲行统一留白
-        contentPadding: padding,
-        leading: SizedBox(
-          // 名次(22) + 间距(4) + 封面(40), 给足宽度否则 ListTile 的 leading 会溢出
-          // token-ok: 68 = 列宽 22 + 间距 4 + 封面 40, 是组合尺寸不是布局 token
-          width: 68,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                // token-ok: 名次列宽按 "两位数" 内容宽度定
-                width: 22,
-                child: playing
-                    ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
-                    : Text(
-                        '$rank',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: rankColor,
-                          fontWeight: rank <= 3
-                              ? FontWeight.w700
-                              : FontWeight.w400,
+      builder: (context, box) => rowHeightBox(
+        context,
+        ListTile(
+          selected: playing,
+          dense: true,
+          visualDensity: VisualDensity.compact,
+          // 用户反馈听歌排行左右有空隙: 默认 16+16 收到歌曲行统一留白
+          contentPadding: padding,
+          leading: SizedBox(
+            // 名次(22) + 间距(4) + 封面(40), 给足宽度否则 ListTile 的 leading 会溢出
+            // token-ok: 68 = 列宽 22 + 间距 4 + 封面 40, 是组合尺寸不是布局 token
+            width: 68,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  // token-ok: 名次列宽按 "两位数" 内容宽度定
+                  width: 22,
+                  child: playing
+                      ? Icon(Icons.volume_up, size: 16, color: scheme.primary)
+                      : Text(
+                          '$rank',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: rankColor,
+                            fontWeight: rank <= 3
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                          ),
                         ),
-                      ),
-              ),
-              const SizedBox(width: 4),
-              CoverArt(url: entry.song.coverUrl, size: 40, radius: 4),
-            ],
+                ),
+                const SizedBox(width: 4),
+                CoverArt(url: entry.song.coverUrl, size: 40, radius: 4),
+              ],
+            ),
           ),
-        ),
-        title: AdaptiveText(
-          entry.song.name,
-          style: playing
-              ? TextStyle(color: scheme.primary, fontWeight: FontWeight.w600)
-              : null,
-        ),
-        subtitle: Text(
-          entry.song.artist,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: capRowTrailing(
-          box.maxWidth,
-          Text(
-            '${entry.playCount} 次',
-            // 播放次数位数可变('1234567 次' ≈ 70dp, 1.625 字号下更宽)也算
-            // 行尾: 不封顶会把歌名挤扁(列表行审计 B8)。
+          title: AdaptiveText(
+            entry.song.name,
+            style: playing
+                ? TextStyle(color: scheme.primary, fontWeight: FontWeight.w600)
+                : null,
+          ),
+          subtitle: Text(
+            entry.song.artist,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.labelSmall?.copyWith(color: scheme.outline),
           ),
+          trailing: capRowTrailing(
+            box.maxWidth,
+            Text(
+              '${entry.playCount} 次',
+              // 播放次数位数可变('1234567 次' ≈ 70dp, 1.625 字号下更宽)也算
+              // 行尾: 不封顶会把歌名挤扁(列表行审计 B8)。
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: scheme.outline,
+              ),
+            ),
+          ),
+          onTap: onTap,
         ),
-        onTap: onTap,
       ),
     );
   }

@@ -27,7 +27,12 @@
 >    统一到 `kPageRowPadding`(12/0/4) 那条页面线；门禁白名单 4 → 3，旧名不在白名单里（写了就红）。
 >    代价只有 `recommend` 两张 golden 变化（2661 px / 0.924% 与 3329 px / 1.734%，都是日推预览行左移
 >    4dp 引起的换行点变化），`playlist_detail`/`artist` 早已走 `kPageRowPadding` 故未动。
-> ② 纵向间距(pitch)未统一：预览行 6 / 歌曲行 0 / 各页 ListTile 默认；
+> ② ✅ 已落地（2026-11-17 第二批）：纵向统一到「行内纵向留白 0、行高 `rowExtentFor`(56 × 字号)」，
+>    唯一例外是父容器已内缩的预览行仍走 `kPreviewRowPadding`(6/6，但落在定高盒内部)。
+>    实测判定：同一套 `SongRow` 改动前落在 53/64/76 三个高度（+`plain` 臂 40），根因是
+>    `dense`/`minHeight`/`minVerticalPadding`/`visualDensity` 四条隐式规则，**不是**行 padding；
+>    新门禁：`check-row-padding.sh` 纵向只允许 0/6 + `layout_metrics_test` 渲染高度断言；
+>    golden 只动 `recommend` 两张；
 > ③ §6 的 `ListRow` 组件化（16 处同构歌曲行）仍未开工 —— 留白收敛成具名口径后它的收益从
 >    「统一留白」降到「少 12 份重复代码」，优先级下调。
 >

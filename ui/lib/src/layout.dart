@@ -148,6 +148,34 @@ double rowExtentFor(BuildContext context, [double base = kRowExtent]) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// 列表行的纵向口径(列表行审计 C 级 · 纵向 pitch, 2026-11-17)
+//
+// 横向留白收敛到具名常量之后, 纵向还留着几套隐式规则: 同一套 SongRow 在不同页面
+// 实测落在**四个**高度(2026-11-17 探针, 360dp 宽, textScaler 1.0 / 1.3 / 1.625):
+//
+//   SongRow(tile 臂, 默认)                      64 / 63 / 76
+//   SongRow(tile 臂, visualDensity.compact)     53 / 63 / 76
+//   SongRow(tile 臂, kPreviewRowPadding 6/6)    76 / 75 / 88
+//   SongRow(plain 臂, 无 itemExtent 时)         40 / 49 / 61   (只有封面高)
+//   裸 ListTile(title+subtitle, Material 默认)  72 / 73 / 88
+//
+// 这些数不是色值猜测, 而是 ListTile 的 dense / minHeight / minVerticalPadding 与
+// visualDensity 四条隐式规则叠加的结果 —— 谁调了其中一个, 整页 pitch 就变。
+// 现在统一成一条:**行高 = [rowExtentFor], 行内纵向留白 = 0**。
+// 唯一例外是父容器**已经**做过水平内缩的预览行([kPreviewRowPadding], 上下各 6):
+// 那 6 是行内呼吸, 不参与行高计算(盒子仍按 [rowExtentFor] 定高)。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 给列表行一个确定的行高盒: 行高 = [rowExtentFor](基准 56 × 系统字号, 上限 2 倍)。
+///
+/// 用它包住 [ListTile] / 自绘行, 行高就不再由 ListTile 的 dense/minHeight/
+/// visualDensity 决定(同一条行在不同页面会跑出 53/64/72/76 四个高度)。
+/// 纵向留白仍由行内的 padding 决定(歌曲行 = 0, 预览行 = [kPreviewRowPadding]);
+/// 盒子的高度已经包含它, 不要在外面再叠 SizedBox 间隔。
+Widget rowHeightBox(BuildContext context, Widget child) =>
+    SizedBox(height: rowExtentFor(context), child: child);
+
+// ───────────────────────────────────────────────────────────────────────────
 // 定高横滑条(艺人筛选条 / 最近联系人条)
 //
 // 两条都是 `SizedBox(height: 84)` + 横滑 `ListView`, 结构相同: 头像(40/44) +

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
-import 'layout.dart' show capRowTrailing, kPageRowPadding;
+import 'layout.dart' show capRowTrailing, kPageRowPadding, rowHeightBox;
 import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
@@ -358,10 +358,14 @@ class SongRow extends StatelessWidget {
     );
   }
 
-  Widget _build(BuildContext context, bool playing) =>
-      layout == SongRowLayout.tile
-      ? _buildTile(context, playing)
-      : _buildPlain(context, playing);
+  /// 行高统一由 [rowHeightBox] 决定(56 × 系统字号), 行内纵向留白见 [padding]:
+  /// 不再让 ListTile 的 dense/minHeight/visualDensity 决定 pitch(实测 53/64/76 三档)。
+  Widget _build(BuildContext context, bool playing) => rowHeightBox(
+    context,
+    layout == SongRowLayout.tile
+        ? _buildTile(context, playing)
+        : _buildPlain(context, playing),
+  );
 
   String get _subtitleText => switch (subtitle) {
     SongRowSubtitle.artist => song.artist,
