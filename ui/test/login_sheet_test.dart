@@ -6,8 +6,11 @@
 //
 // 注意: 弹层里有 Timer.periodic, **不要用 pumpAndSettle**(它会被周期定时器拖住),
 // 一律用显式 pump(时长) 推进.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/main.dart';
 import 'package:minincm/src/login_sheet.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -287,6 +290,73 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('等待扫码…'), findsOneWidget);
     // 卸载弹层, 停掉轮询 Timer, 避免 timersPending
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('切底部 tab 自动收起登录弹层(只关自己, 不误关其它弹层)', (tester) async {
+    // 弹层是 modal sheet, 切 tab 不会自然消失, 一直挂在旧页面上(用户反馈).
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    addTearDown(() => playerBarSlot.value = null);
+    // 底部导航由根布局的 PlayerBarHost 渲染(同 top_bar_no_duplicate_test)
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            PlayerBarHost(content: child ?? const SizedBox.shrink()),
+        home: const HomePage(),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+
+    // 从首页 context 走生产入口打开登录弹层(注入假实现, 不联网)
+    unawaited(
+      showLoginSheet(
+        tester.element(find.byType(HomePage)),
+        createQr: () async => key(),
+        checkQr: (_) async => check(rust.QrLoginState.pending),
+        pollInterval: const Duration(milliseconds: 100),
+      ),
+    );
+    await tester.pump(); // push 路由
+    await tester.pump(const Duration(milliseconds: 350)); // 滑入动画
+    expect(find.byType(LoginSheet), findsOneWidget);
+    expect(loginSheetOpen, isTrue);
+
+    // 切到「我的」
+    await tester.tap(
+      find.descendant(
+        of: find.byType(NavigationBar),
+        matching: find.text('我的'),
+      ),
+    );
+    await tester.pump(); // _onTabSelected → dismissLoginSheet
+    await tester.pump(const Duration(milliseconds: 400)); // 收起动画
+    expect(find.byType(LoginSheet), findsNothing);
+    expect(loginSheetOpen, isFalse);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('dismissLoginSheet 不碰其它弹层', (tester) async {
+    await tester.pumpWidget(
+      host((ctx) {
+        unawaited(
+          showModalBottomSheet<void>(
+            context: ctx,
+            builder: (_) => const Text('other-sheet'),
+          ),
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('other-sheet'), findsOneWidget);
+
+    dismissLoginSheet(); // 登录弹层没开 → 什么都不做
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.text('other-sheet'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

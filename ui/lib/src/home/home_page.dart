@@ -21,6 +21,7 @@ import '../feed_view.dart';
 import '../keystore.dart';
 import '../layout.dart' show rowExtentFor;
 import '../library_view.dart';
+import '../login_sheet.dart' show dismissLoginSheet;
 import '../lyric.dart';
 import '../marquee_text.dart';
 import '../medal_wall.dart';
@@ -1050,6 +1051,9 @@ class _HomePageState extends State<HomePage> {
 
   void _onTabSelected(int index) {
     if (_tab == index) return;
+    // 切 tab 前先收起登录弹层: 弹层是 modal sheet, 不会随 tab 切换消失,
+    // 会一直挂在旧页面上(用户 2026-11-17 反馈). 只关登录这一条, 其它弹层不动.
+    dismissLoginSheet();
     _tabVisited.add(index);
     // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
     final wasLyrics = _lyric.visible;

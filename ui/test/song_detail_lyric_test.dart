@@ -168,5 +168,59 @@ void main() {
       await tester.longPress(find.byKey(const ValueKey('word-lyric-line-1')));
       expect(longs, [1]);
     });
+
+    testWidgets('署名行(作词/作曲)高亮时与静态行同一对齐口径: 都居中', (tester) async {
+      // 高光行走 CustomPaint(KaraokePainter), 静态行走 RichText。两条路径
+      // 曾经不一致: 只给 maxWidth 的 TextPainter 宽 = 文本自身宽, 段落按行宽
+      // 居中后又由 paintOffset 反向量左移, 净效果是高光行画在 x=0(贴左)。
+      // 真实 yrc 的署名行是 {"t":0,...} 元数据行(start == end 零时长),
+      // 播放位置 0 时它就是当前行, 走的高光路径。
+      final credit = WordLyricLineData(
+        startMs: 0,
+        endMs: 0,
+        words: const [WordLyricWord(startMs: 0, endMs: 0, text: '作词 : 方文山')],
+      );
+      await tester.pumpWidget(
+        _host(
+          WordLyricView(
+            lines: [credit, wline(5000, '第一句')],
+            positionMs: ValueNotifier<int>(0),
+            itemExtent: 56,
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      );
+
+      final activeRow = tester.getRect(
+        find.byKey(const ValueKey('word-lyric-line-0')),
+      );
+      final idleRow = tester.getRect(
+        find.byKey(const ValueKey('word-lyric-line-1')),
+      );
+
+      // 高光行: 从画笔实际裁切矩形(画布坐标)反推已唱文本的水平中心
+      final canvasFinder = find.descendant(
+        of: find.byKey(const ValueKey('word-lyric-line-0')),
+        matching: find.byType(CustomPaint),
+      );
+      final canvas = tester.getRect(canvasFinder);
+      final painter =
+          tester.widget<CustomPaint>(canvasFinder).painter! as KaraokePainter;
+      expect(painter.debugClipRects, isNotEmpty);
+      final activeText = painter.debugClipRects.first.shift(canvas.topLeft);
+
+      // 静态行: RichText 自身矩形(宽度 = 文本固有宽, 由 Column 居中)
+      final idleText = tester.getRect(
+        find.descendant(
+          of: find.byKey(const ValueKey('word-lyric-line-1')),
+          matching: find.byType(RichText),
+        ),
+      );
+
+      // 两种行都相对自己的行居中, 且互相一致(不再一边居中一边贴左)
+      expect(activeText.center.dx, closeTo(activeRow.center.dx, 1.0));
+      expect(idleText.center.dx, closeTo(idleRow.center.dx, 1.0));
+      expect(activeText.center.dx, closeTo(idleText.center.dx, 1.0));
+    });
   });
 }

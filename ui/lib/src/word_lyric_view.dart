@@ -584,6 +584,8 @@ class KaraokeLineState extends State<KaraokeLine>
               widget.sub!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              // 与主词同一对齐口径: 超长被 ellipsis 截断时也居中
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: widget.subColor),
             ),
         ],
@@ -641,7 +643,12 @@ _KaraokeLayout _layoutFor({
     textAlign: TextAlign.center,
     maxLines: 1,
     ellipsis: '…',
-  )..layout(maxWidth: maxWidth);
+    // minWidth = maxWidth: 只给 maxWidth 时 TextPainter 的宽是**文本自身宽**
+    // (contentWidth), 而段落按 maxWidth 居中后再由 paintOffset 反向量左移
+    // (contentWidth - paragraph.width) / 2 —— 净效果是画在 x=0, 也就是
+    // 高光行贴左. 静态行是 RichText(段落宽 = 行宽, 真正的居中), 两条路径
+    // 口径必须一致: 把段落宽钉成行宽, paintOffset 变成 0, 交给 textAlign.center.
+  )..layout(minWidth: maxWidth, maxWidth: maxWidth);
 
   final base = build(baseColor);
   final sung = build(sungColor);
@@ -843,6 +850,8 @@ class _LineBody extends StatelessWidget {
               sub!,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              // 与主词同一对齐口径: 超长被 ellipsis 截断时也居中
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: subColor),
             ),
         ],

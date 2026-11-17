@@ -600,6 +600,9 @@ class LoginSheetState extends State<LoginSheet> {
 }
 
 /// 打开登录弹层; 返回是否登录成功.
+///
+/// 弹层路由记在 [_openLoginRoute]: 切底部 tab 时由 [dismissLoginSheet] 只收起
+/// 这一条 —— 用户 2026-11-17 反馈「切栏目后登录弹窗还挂着」.
 Future<bool> showLoginSheet(
   BuildContext context, {
   Future<rust.QrLoginKey> Function()? createQr,
@@ -617,10 +620,9 @@ Future<bool> showLoginSheet(
   Duration pollInterval = const Duration(seconds: 2),
   int resendCooldownSeconds = 60,
 }) async {
-  final ok = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
+  final navigator = Navigator.of(context);
+  final route = ModalBottomSheetRoute<bool>(
+    settings: const RouteSettings(name: loginSheetRouteName),
     builder: (_) => LoginSheet(
       createQr: createQr,
       checkQr: checkQr,
@@ -632,6 +634,49 @@ Future<bool> showLoginSheet(
       pollInterval: pollInterval,
       resendCooldownSeconds: resendCooldownSeconds,
     ),
+    capturedThemes: InheritedTheme.capture(
+      from: context,
+      to: navigator.context,
+    ),
+    isScrollControlled: true,
+    showDragHandle: true,
+    barrierLabel: MaterialLocalizations.of(context).scrimLabel,
+    barrierOnTapHint: MaterialLocalizations.of(context)
+        .scrimOnTapHint(MaterialLocalizations.of(context).bottomSheetLabel),
+    modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
   );
-  return ok == true;
+  _openLoginRoute = route;
+  try {
+    final ok = await navigator.push(route);
+    return ok == true;
+  } finally {
+    if (identical(_openLoginRoute, route)) _openLoginRoute = null;
+  }
+}
+
+/// 登录弹层路由名(排查/测试用).
+const String loginSheetRouteName = 'login-sheet';
+
+/// 当前打开的登录弹层路由; null = 没开.
+ModalBottomSheetRoute<bool>? _openLoginRoute;
+
+/// 登录弹层是否还开着(宿主/测试用).
+bool get loginSheetOpen => _openLoginRoute != null;
+
+/// 收起登录弹层: **只** pop 自己那条 route, 不碰其它弹层/对话框.
+///
+/// 底部导航切 tab 时调用(见 `home_page.dart` 的 `_onTabSelected`): 弹层是
+/// modal sheet, 不会随 tab 切换自然消失, 一直挂在旧页面上很突兀.
+void dismissLoginSheet() {
+  final route = _openLoginRoute;
+  if (route == null) return;
+  _openLoginRoute = null;
+  final navigator = route.navigator;
+  if (navigator == null) return;
+  if (route.isCurrent) {
+    navigator.pop();
+  } else {
+    // 不是栈顶(弹层之上又开了别的 sheet): 只摘掉自己, 不动上层
+    navigator.removeRoute(route);
+  }
 }
