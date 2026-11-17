@@ -101,13 +101,12 @@ jobs:
       - name: JVM 单测 (:app:testDebugUnitTest)
         run: bash tools/ci-gates.sh android-unit
 
-      # lintDebug 现状(2026-11-16 实测): **67 error + 9 warning**, 必红 —— 所以**不阻塞**
-      # (不进 verify, 也不进发版门), 也**不许**建 lint-baseline/lint.xml 掩盖:
-      #   66 × UnsafeOptInUsageError(media3 usage 缺 @OptIn(UnstableApi::class), main 源)
-      #    1 × GestureBackNavigation(LoginActivity.kt:176 onBackPressed, API36 预测性返回)
-      # 把 error 打到 0 之后再删掉 continue-on-error 并挪进 verify。
-      - name: lintDebug (现状 67 error, 仅暴露不阻塞)
-        continue-on-error: true
+      # lintDebug **阻塞门**(2026-11-18 起): error 已清到 0(66 × media3
+      # UnsafeOptInUsageError 收口到类级 @OptIn/@UnstableApi, LoginActivity 的
+      # onBackPressed 迁到 OnBackPressedDispatcher), 同时已进 `ci-gates.sh verify`。
+      # 剩下的 9 warning 全是依赖版本提示(GradleDependency), 不阻塞。
+      # 仍**不许**建 lint-baseline/lint.xml 掩盖错误。
+      - name: lintDebug (阻塞门)
         run: bash tools/ci-gates.sh android-lint
 
       - name: upload lint report

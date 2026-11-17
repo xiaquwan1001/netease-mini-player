@@ -21,9 +21,10 @@
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
-#   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 现状 67 error, 不进 verify)
+#   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 已 0 error, 在 verify 里)
 #   tools/ci-gates.sh desktop-smoke        # 桌面无头启动冒烟(xvfb+dbus; 没 bundle / 缺工具就 SKIP 退 0)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test + android-unit);
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test
+#                                          # + android-unit + android-lint);
 #                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
 #
 # 口径约定(改之前先读 .pi/memory/notes-build.md):
@@ -35,10 +36,11 @@
 #   · 版本号只有 ui/pubspec.yaml 一处事实来源(X.Y.Z = versionName, +N = versionCode),
 #     kAppVersion 由 tools/bump-version.sh 同步。
 #   · Android 侧静态检查/单测只用 AGP 自带能力(:app:lintDebug + :app:testDebugUnitTest),
-#     不引 ktlint/detekt 插件(平台审计明确排除自建静态检查栈)。lint 当前 **67 error**
-#     (66 × media3 UnsafeOptInUsageError 缺 @OptIn + 1 × GestureBackNavigation) 必红,
-#     修完之前**不进 verify**, 只在 CI 里以 continue-on-error 的独立 step 暴露;
-#     不许用 lint-baseline/lint.xml 掩盖(2026-11-16 实测, 细节见 notes-wip.md)。
+#     不引 ktlint/detekt 插件(平台审计明确排除自建静态检查栈)。lint **已 0 error**
+#     (2026-11-18: 66 × media3 UnsafeOptInUsageError 收口到类级 @OptIn/@UnstableApi,
+#     LoginActivity 的 onBackPressed 迁到 OnBackPressedDispatcher), 已进 verify;
+#     不许用 lint-baseline/lint.xml 掩盖, 也不许把 error 重新放回 continue-on-error
+#     (细节见 notes-wip.md)。
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -206,6 +208,7 @@ cmd_verify() {
   cmd_row_padding
   cmd_flutter_test
   cmd_android_unit
+  cmd_android_lint
   # 设备级案例默认不跑(要模拟器 + 5~10 分钟); 显式 NCM_INSTRUMENTED=1 才带上。
   if [ "${NCM_INSTRUMENTED:-0}" = "1" ]; then
     cmd_android_instrumented
