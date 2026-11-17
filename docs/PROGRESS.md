@@ -256,6 +256,52 @@ Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72), `activate` 里若已有�
 `detail/playlist_songs_sliver`(徽标放副标题行 + 乐观态并集 + 两位序号)、
 `album_preview`(tile 臂 + 序号 + 无封面)、`search_results`/`home_page`(走 `SongTile` 旧 API)。
 
+## 2026-11-17(五) P-11 完整版第一步: 首个 androidTest 设施 + 通知槽位断言脚本(**未发版**)
+
+平台层审计 P-11(「Android 侧零测试 / 没有设备级断言」)的**第一步**: 设施 + 脚本 + 编译门,
+**模拟器 a34 上实跑 3/3 通过**(编排者收口时跑的, `am instrument`)。真机首次跑暴露一个测试自身的缺陷
+(「Player is accessed on the wrong thread」⇒ 通知拼装必须回主线程, 已修, 见下), 这些正是设备级测试要抓的东西。
+
+> ⚠️ **收口事故记录(必须记着)**: 编排者第一次收口时直接跑了 `./gradlew :app:connectedDebugAndroidTest`,
+> 这个任务会**枚举所有在线设备**, 于是把测试 APK 装到了用户两台日常物理机(HUAWEI ELS-AN00 上还执行了 3 例、
+> 全部失败正是上面那个线程缺陷; 华为机上原有 `com.minincm.minincm.dev`(versionCode 4026)被 UTP 一并卸载,
+> 该机现在没有任何 minincm 包)。**纪律: connected* 任务一律先过 `tools/devui/androidtest` 的设备守卫,
+> 或用 `adb -s emulator-5554 install` + `am instrument` 手动指定设备; 绝不裸跑 gradle connected 任务。**
+
+### 1) `ui/android/app/src/androidTest/`(仓库首个 instrumented 测试设施)
+
+| 项 | 内容 |
+|---|---|
+| Gradle | `testInstrumentationRunner = androidx.test.runner.AndroidJUnitRunner`; `androidx.test:runner:1.7.0` / `core-ktx:1.7.0` / `ext.junit:1.3.0` / `espresso-core:3.7.0`(走仓库既有 google()/mavenCentral(), 无新增镜像) |
+| 用例 | `NotificationSlotsTest`(3 例, **不需要账号/网络/音频解码**): ① 通知渠道存在且 `IMPORTANCE_LOW`(无灯/无震动); ② action 槽位 = 上一首/播放暂停/下一首/喜欢/播放顺序 + `compactActions=[0,1,2]` + 「下一首」唯一; ③ `setActionState` 回推后第 4 位变「取消喜欢」再回「喜欢」 |
+| 断言口径 | 断言对象是 **Media3 用生产 `mediaButtonPreferences` 真拼出来的 `Notification`**(`DefaultMediaNotificationProvider.createNotification` + 测试侧 `ActionFactory` 记录), **不是** `NOTIFICATION_BUTTON_ORDER` 常量表 —— 改一行槽位就会红 |
+| 怎么拿到被测对象 | `bindService(PlaybackService, action=androidx.media3.session.MediaSessionService)` → `PlaybackService.instance` → 反射读 private `mediaSession`(生产代码不为测试开洞) |
+| 为什么不 post 再读 | 「播放一首再读 `getActiveNotifications()`」需要账号 + 网络 + 前台服务启动, 在 CI 模拟器上是不稳定源; 「真机/模拟器上**实际 post 出来的**通知」由下面的 adb 脚本覆盖, 两者互补 |
+| 跑法 | `DEV=emulator-5554 tools/devui/androidtest`(硬拦非 emulator 设备, 见下) |
+
+### 2) `tools/devui/notif-slots` + `notif_slots_parser.py`(读`dumpsys notification --noredact`)
+
+- 解析 AOSP `NotificationRecord.dump` 的排版(`NotificationRecord(... channel=... importance=...)` 头 +
+  `actions={` 里的 `[i] "<title>" -> PendingIntent{...}` + `extras` 的 `compactActions`/`largeIcon`),
+  逐条打 PASS/FAIL: 5 个 action、位置契约、第 2 位是系统 play/pause、渠道 `default_channel_id` 且 importance=2、
+  `compactActions=[0,1,2]`、「下一首」唯一。退出码 0/1/2/3(全 PASS/有 FAIL/用法或设备纪律/读不到 dump)。
+- **设备纪律内建**: `DEV` 不是 `emulator-*` 直接 exit 2(物理机上不装包、不清数据、不读通知)。
+- 离线自测 `--selftest`: `tools/devui/notif-slots-samples/` 三个**按 AOSP 排版手写**的样例(1 PASS + 2 期望 FAIL:
+  下一首被吞 / 顺序错位), 自测已验证判定方向正确。
+- 新增 `tools/devui/androidtest`: `connectedDebugAndroidTest` 会往**所有**在线设备装 APK, 脚本先校验
+  `DEV=emulator-*` 并把 `ANDROID_SERIAL` 传给 Gradle, 保证只碰那台模拟器。
+
+### 3) 验收(本批实测命令)
+
+```
+./gradlew :app:compileDebugAndroidTestKotlin   -> BUILD SUCCESSFUL
+./gradlew :app:testDebugUnitTest               -> BUILD SUCCESSFUL(既有 3 例 EQ 夹具单测未受影响)
+tools/devui/notif-slots --selftest             -> 3/3 判定正确, exit=0
+```
+
+**未做(下一批)**: 把 `connectedDebugAndroidTest` 接进 `tools/ci-gates.sh`(需模拟器, 属 CI 接入项, 本轮只登记);
+通知点击行为(点按钮真能跳歌/红心)仍需真机冒烟, 脚本只断言槽位不点按。
+
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
 单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /

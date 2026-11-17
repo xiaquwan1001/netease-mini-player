@@ -47,6 +47,8 @@ android {
         // 应用名走资源: release=「轻音 MiniNCM」, debug 额外加 (dev) 后缀,
         // 避免桌面上和正式包同名 —— 视觉验收时点错旧版本(曾把 0.5.5 当成新包)。
         resValue("string", "app_name", "轻音 MiniNCM")
+        // P-11: instrumented 测试(需要模拟器, 见 src/androidTest/)。
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -102,6 +104,14 @@ dependencies {
     // 所以这里显式用 gson(2.10.1 与本机 gradle 缓存一致, 可离线解析).
     testImplementation("junit:junit:4.13.2")
     testImplementation("com.google.code.gson:gson:2.10.1")
+
+    // P-11: instrumented(设备上跑)测试。只允许在模拟器上跑(见 tools/devui/androidtest),
+    // 用户物理机上的 App 绝不能被这套测试 install/uninstall。
+    // 只有 test 那一半是设备无关的 JVM 单测(android-unit 门); 这里的 androidTest 需要 :app:connectedDebugAndroidTest。
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:core-ktx:1.7.0")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
 }
 
 flutter {

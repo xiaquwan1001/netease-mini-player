@@ -1,0 +1,51 @@
+# 离线样例(手工按 AOSP NotificationRecord.dump 的排版构造, 不是真机 dump):
+# 模拟器 a34 / Android 14 上「播放中」的正常形态 —— 5 个 action + compactActions + 封面。
+# 用途: tools/devui/notif-slots --selftest 的 PASS 用例; 真机 dump 请自己 --dump 保存后比对。
+Notification List:
+  NotificationRecord(0x0e2b6b31: pkg=com.minincm.minincm.dev user=0 id=1001 tag=null importance=2 key=0|com.minincm.minincm.dev|1001|null|10198: Notification(channel=default_channel_id shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x2 color=0x00000000 category=transport actions=5 vis=PUBLIC))
+    uid=10198 userId=0
+    opPkg=com.minincm.minincm.dev
+    icon=Icon(typ=RESOURCE pkg=com.minincm.minincm.dev id=0x7f0c0001)
+    flags=FLAG_ONGOING_EVENT|FLAG_NO_CLEAR
+    originalFlags=FLAG_ONGOING_EVENT|FLAG_NO_CLEAR
+    pri=0
+    key=0|com.minincm.minincm.dev|1001|null|10198
+    seen=true
+    groupKey=0|com.minincm.minincm.dev|1001|null|10198
+    notification=
+        fullscreenIntent=null
+        contentIntent=PendingIntent{8c1e2e0: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startActivity}}
+        deleteIntent=PendingIntent{51d2b8c: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev broadcastIntent}}
+        number=0
+        groupAlertBehavior=0
+        when=1763401234567/1763401234567
+        tickerText=null
+        vis=1
+        contentView=null
+        bigContentView=null
+        headsUpContentView=null
+        color=0x00000000
+        timeout=0
+        actions={
+            [0] "上一首" -> PendingIntent{9a1b3c2: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [1] "播放" -> PendingIntent{3c4d5e6: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [2] "下一首" -> PendingIntent{7f8a9b0: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [3] "喜欢" -> PendingIntent{c1d2e3f: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [4] "播放顺序" -> PendingIntent{a4b5c6d: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+          }
+        extras={
+            android.title=String (晴天)
+            android.text=String (周杰伦)
+            android.mediaSession=Token (android.os.BinderProxy@b2c3d4)
+            android.compactActions=int (3)
+              [0] 0
+              [1] 1
+              [2] 2
+            android.largeIcon=Bitmap (48x48)
+            android.progress=Integer (182000)
+            android.progressMax=Integer (269000)
+          }
+    publicNotification=
+        None
+    stats=...
+    mImportance=IMPORTANCE_LOW
