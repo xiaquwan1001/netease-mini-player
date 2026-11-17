@@ -25,7 +25,9 @@
       <li>登录: 官方网页扫码登录(零风控路径), 不上传埋点</li>
     </ul>
   </description>
-  <launchable type="desktop-id">minincm.desktop</launchable>
+  <!-- launchable 必须指向真实装上的 .desktop 文件名(P-18 后半: 文件名 = 本 <id>.desktop,
+       与 ui/linux/CMakeLists.txt 的 APPLICATION_ID / g_set_prgname 的 WM_CLASS 同一个串)。 -->
+  <launchable type="desktop-id">io.github.xiaquwan1001.MiniNCM.desktop</launchable>
   <icon type="stock">minincm</icon>
   <url type="homepage">https://github.com/xiaquwan1001/netease-mini-player</url>
   <url type="bugtracker">https://github.com/xiaquwan1001/netease-mini-player/issues</url>

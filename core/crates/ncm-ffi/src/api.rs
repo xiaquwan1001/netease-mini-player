@@ -148,11 +148,25 @@ macro_rules! ffi_forward {
     }};
 }
 
+/// 桌面端默认数据目录(P-18 后半): `~/.local/share/io.github.xiaquwan1001.MiniNCM`.
+///
+/// - `$NCM_DATA_DIR` 是显式指定 ⇒ 原样使用, **不参与迁移**(测试/多实例靠它隔离)。
+/// - 其余情况(默认路径)在返回前做一次**一次性迁移**: 新目录缺失且旧目录
+///   (`~/.local/share/ncm`) 存在 ⇒ 搬过去, 失败则回退为继续用旧目录。
+///   迁移发生在这里(init 里、`Core::open` 之前), 保证没有任何缓存/凭据/播放状态文件
+///   在迁移完成前被打开。规则细节见 `ncm_service::fsutil` 模块注释。
+/// - Android 走平台通道传私有目录(`data_dir = Some`), 不经过本函数。
 fn data_dir_default() -> String {
-    std::env::var("NCM_DATA_DIR").unwrap_or_else(|_| {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        format!("{home}/.local/share/ncm")
-    })
+    if let Ok(explicit) = std::env::var("NCM_DATA_DIR") {
+        return explicit;
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let home = std::path::Path::new(&home);
+    let current = ncm_service::fsutil::default_desktop_data_dir(home);
+    let legacy = ncm_service::fsutil::legacy_desktop_data_dir(home);
+    // 失败时返回的是旧目录(可用的), 所以这里只关心"用哪个", 日志在 fsutil 里打。
+    let (dir, _) = ncm_service::fsutil::resolve_desktop_data_dir(&current, &legacy);
+    dir.to_string_lossy().into_owned()
 }
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.

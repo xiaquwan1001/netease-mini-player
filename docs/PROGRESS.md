@@ -102,6 +102,64 @@
 
 ## 批次时间线(倒序, 最新在上)
 
+## 2026-11-17(一) 平台审计 P-18 后半: application-id 与 AppStream id 统一 + 数据目录一次性迁移(**未发版**)
+
+用户 2026-11-17 拍板「按推荐做法直接做, 允许大变更(含用户数据目录一次性迁移), 接受迁移风险」。
+三个提交: 数据目录迁移(含单测) / id 与打包对齐 / 文档。合并后 Rust 单测 **300→308**。
+
+### 1) 桌面端标识收敛成一个串
+
+| 位置 | 改后 |
+|---|---|
+| `ui/linux/CMakeLists.txt` `APPLICATION_ID` | `com.minincm.minincm` → **`io.github.xiaquwan1001.MiniNCM`** |
+| `.desktop` 文件名(deb/AppImage) | `minincm.desktop` → `io.github.xiaquwan1001.MiniNCM.desktop` |
+| `.desktop` `StartupWMClass` | `minincm` → `io.github.xiaquwan1001.MiniNCM`(= WM_CLASS = `g_set_prgname` 的值) |
+| metainfo `<launchable>` | `minincm.desktop` → `io.github.xiaquwan1001.MiniNCM.desktop` |
+
+两个打包脚本都新增硬断言: 脚本内的 `APPID` 必须等于从 `ui/linux/CMakeLists.txt` 读出的
+`APPLICATION_ID`, 否则直接报错退出(避免打出任务栏不归组/AppStream 关联不上的包)。
+**不动的名字**: 二进制 `minincm`(dpkg 包名全小写)、Android `applicationId com.minincm.minincm.dev`。
+
+### 2) 单实例: `G_APPLICATION_NON_UNIQUE` → 严格单实例
+
+Flutter 模板原本是 NON_UNIQUE(每次启动都是独立进程/窗口, 两个窗口会并发写同一份 dataDir)。
+现在 `flags = static_cast<GApplicationFlags>(0)`(**不用** `G_APPLICATION_DEFAULT_FLAGS`, 那是
+Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72), `activate` 里若已有窗口就 `gtk_window_present`
+后返回 —— 第二次启动只把主窗口提到前台, 不开新窗口。
+
+取舍写进代码注释与 README: **迁移窗口期允许一旧一新同时运行**(新旧 id 不同, GApplication 互不可见);
+代价是现在需要 session bus(桌面环境都有), 无 bus 时注册失败并退 1。
+
+### 3) 用户数据目录一次性迁移(P-18 后半的"大变更")
+
+新目录 `~/.local/share/io.github.xiaquwan1001.MiniNCM`, 旧目录 `~/.local/share/ncm`。判据:
+
+| 磁盘现状 | 处置 |
+|---|---|
+| 新目录存在 | `KeptCurrent`: 什么都不做(幂等; 旧目录原样留着, 用户自己清) |
+| 只有旧目录 | 同设备 `rename`(原子); `EXDEV` 才 copy 到同级 `.migrating-<pid>` → 校验(相对路径+字节数全量比对) → `rename` 成正式目录 |
+| 新旧都没有 | `NoData`: 首次启动, 由上层按需创建 |
+| 迁移失败 | `Failed`: 旧目录原样保留, **返回旧路径**(退回 P-18 之前的行为) + `eprintln` 告警, 临时目录必删 |
+
+补充纪律: 迁移成功后旧目录留 `.migrated` 标记(写明新旧路径与降级步骤, 不静默删除);
+调用点唯一在 `ncm_ffi::api::data_dir_default()`(`init` 里、`Core::open` 之前) ⇒ 任何缓存/凭据/
+播放状态文件都在迁移之后才打开, 且是纯 `std::fs`(不依赖 GTK/DBus, headless 安全);
+`$NCM_DATA_DIR` 显式指定时不迁移; Android 走平台通道传私有目录, 不经过这里。
+
+单测 8 例(临时目录): 只有旧 / 只有新 / 两者都有 / 都没有 + 幂等(第二次 `KeptCurrent` 且不动新数据)
++ 跨设备 copy 分支(0600 权限保留、无 `.migrating-` 残骸) + 失败回退旧目录 + 校验能抓漏文件。
+
+### 4) 本车道门禁与**未验证项**
+
+`cargo test --offline --workspace --exclude ncm-api-rs` **308 passed / 0 failed** ·
+`cargo clippy --workspace --all-targets -- -D warnings` **0 warning** · `cargo fmt --all --check` 干净 ·
+`bash -n` 两个打包脚本 · metainfo XML 解析通过 · `grep -rn 'com\.minincm\.minincm' ui/linux packaging/linux`
+只剩一条说明性注释。
+
+**未验证(按车道约束由编排者收口)**: `flutter build linux`(runner C++ 只用 stub 头做过
+`g++ -fsyntax-only -Wall -Werror` + GLib 2.72 基线的语法检查)、真打 deb/AppImage、
+「任务栏归组」与「第二实例唤醒主实例」两条真机行为、真实用户目录的迁移(只在临时目录单测过)。
+
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
 单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /

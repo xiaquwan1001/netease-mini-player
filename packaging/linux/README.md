@@ -1,6 +1,28 @@
 # MiniNCM Linux 打包说明
 
 三个产物: **tar.gz**(纯 bundle 归档) / **deb**(Ubuntu 22.04+) / **AppImage**(通用)。
+
+## id 与数据目录(P-18 后半, 2026-11-17)
+
+桌面端只有**一个**标识串, 四处必须完全一致, 改一处就要改全部:
+
+| 位置 | 值 |
+|---|---|
+| `ui/linux/CMakeLists.txt` `APPLICATION_ID` | `io.github.xiaquwan1001.MiniNCM` |
+| `usr/share/applications/<id>.desktop` 文件名 | `io.github.xiaquwan1001.MiniNCM.desktop` |
+| `.desktop` 里 `StartupWMClass`(= WM_CLASS, 见 runner 的 `g_set_prgname`) | `io.github.xiaquwan1001.MiniNCM` |
+| `usr/share/metainfo/<id>.metainfo.xml` 的 `<id>` 与 `<launchable>` | `io.github.xiaquwan1001.MiniNCM` |
+
+`build-deb.sh` / `build-appimage.sh` 都会先从 `ui/linux/CMakeLists.txt` 读 `APPLICATION_ID`
+并与脚本内的 `APPID` 比对, 不一致直接报错退出(免得打出一个任务栏不归组的包)。
+
+**不动的两个名字**: 二进制名 `minincm`(deb 包名只能是全小写)与 Android 的
+`applicationId com.minincm.minincm.dev`。
+
+用户数据目录跟着 id 走: `~/.local/share/io.github.xiaquwan1001.MiniNCM`;
+老版本的 `~/.local/share/ncm` 在升级后首次启动时由 `ncm-service::fsutil` **一次性迁移**
+(同设备 rename, 跨设备 copy+校验+rename; 成功后在旧目录留 `.migrated` 标记, 失败回退旧目录)。
+`NCM_DATA_DIR` 显式指定时不迁移。
 全部从 `flutter build linux --release` 的 bundle 打包, 二进制不重链、目录结构原样保留
 (minincm 靠 `/proc/self/exe` 找同级的 `data/` 与 `lib/`)。
 

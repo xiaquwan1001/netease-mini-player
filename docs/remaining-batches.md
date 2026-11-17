@@ -10,7 +10,7 @@
 > Rust **300** / Dart **1074**, golden **18**; Android `testDebugUnitTest` **3**, `row-padding` 门 OK)。
 >
 > **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
-> 平台层审计 22 条已落 19 条(P-01..P-22 除 P-11 完整版 / P-18 后半 / P-10 方案 B)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);
+> 平台层审计 22 条已落 20 条(P-01..P-22 除 P-11 完整版 / P-10 方案 B; **P-18 后半 2026-11-17 已落**)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);
 > 列表行 A 级清零、**B 级 12 条清零(2026-11-16 晚)**、**C 级第一批已落(2026-11-17: 四个具名行留白口径 + `row-padding` 门)**;
 > Android 侧门禁已进 CI(`android-unit` 阻塞 / `android-lint` 仅暴露, 现状 67 error)。
 > 三端分发六种产物 + arm64 腿, 已发布版本 **v0.19.0**(其后 main 上还有一条未发版批次)。
@@ -154,7 +154,7 @@
 ## 11. 待办(2026-11-13 更新)
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次);
-> **平台层审计确认未做的 3 条债务(P-11 完整版 / P-18 后半 / P-10 方案 B)见 §13**。
+> **平台层审计确认未做的 2 条债务(P-11 完整版 / P-10 方案 B)见 §13**(P-18 后半已于 2026-11-17 落地)。
 > P-05 长尾 / P-12 / P-22 已于 2026-11-16 落地, §13 已标「作废」。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
 > **基线数字不在这里维护**(曾经 4 处各写一套 ⇒ 已实测分叉): 唯一权威是 [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
@@ -331,7 +331,14 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 ## 13. 平台层审计剩余项(2026-11-16 登记 · 只登记不排期)
 
 > 来源: `.pi/plans/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
-> **已落 19 条**: P-01..P-22 除下表 3 条(P-11 完整版 / P-18 后半 / P-10 方案 B)以外全部落地。
+> **已落 20 条**: P-01..P-22 除下表 2 条(P-11 完整版 / P-10 方案 B)以外全部落地。
+> **P-18 后半 已完成(2026-11-17)**: application-id 与 AppStream id 统一到
+> `io.github.xiaquwan1001.MiniNCM`(`ui/linux/CMakeLists.txt` + `.desktop` 文件名 + `StartupWMClass`
+> + metainfo `<launchable>`), 桌面端由 `G_APPLICATION_NON_UNIQUE` 改回**严格单实例**,
+> 用户数据目录 `~/.local/share/ncm` → `~/.local/share/io.github.xiaquwan1001.MiniNCM`
+> 带**一次性迁移**(幂等; 同设备 rename / 跨设备 copy+校验+rename; 失败回退旧目录;
+> 旧目录留 `.migrated` 标记)。迁移口径/四态判据/降级步骤见 `.pi/memory/notes-build.md` 与
+> `core/crates/ncm-service/src/fsutil.rs` 模块注释; `$NCM_DATA_DIR` 显式指定时不迁移。
 > 2026-11-17 复核时又订正了两条早已完成的：
 > - **P-12** 已随 P-01/P-02 批落地(`b6281b8`, `PlaybackService.kt:92` `setSessionActivity(openAppPendingIntent())`), 不再排。
 > - **P-22** cleartext 白名单 `6a3ea6f` 已合入 main(2026-11-16, `res/xml/network_security_config.xml` + manifest
@@ -346,8 +353,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|---|
 | **P-11 完整版** · Android instrumented + 桌面自动化 | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | M(首个 `androidTest/` + `dumpsys notification` 断言脚本 ≈ 1 天; Kotlin JVM 那半已由 `android-unit` 门覆盖) |
 | **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
-| **P-18 后半** · application-id 与 AppStream id 对齐 | 前半(标题/尺寸)已做(`08e5d37`); `ui/linux/CMakeLists.txt:10` 仍是 `com.minincm.minincm`, metainfo/deb 用 `io.github.xiaquwan1001.MiniNCM`。改 id 会牵动**单实例标识、用户数据目录与 desktop 文件关联**, 必须连迁移一起设计, 审计也标了「不建议顺手改」 | ① 准备上架软件中心/Flatpak 类渠道; ② 或决定统一用户数据目录并接受一次性迁移 | M(改 id + 数据目录迁移 + 单实例锁 + deb/AppImage desktop 文件 + 冒烟 ≈ 1~2 天, 且**需用户拍板**是否迁移) |
 | **P-10 方案 B** · pending_seek | 方案 A(如实反馈 + 不可 seek 时禁用进度条)已在 v0.18.0 落地, 用户不再被「弹回」骗; 方案 B 要在渐进下载完成后**重建解码器**并应用待跳位置, 属播放引擎结构改动。遗留: 同一首歌下载完成后仍需重播一次才能 seek | ① 用户明确要求「边下边播也能跳」; ② 或重做渐进播放(分片写入 + 可 seek 容器) | M–L(重建解码器 + 位置/队列状态恢复 + Linux/Windows 听感验 ≈ 2 天起) |
 
 > 明确不做(审计 §3.3 已判, 不再重提): Kotlin 改从 Rust 拿 EQ 系数(跨 FFI 传数组 + 采样率协商) ·
-> 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当顺手改。
+> 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当**顺手改**(P-18 后半已按「连数据目录迁移/单实例/打包一起做」的口径落地, 见 §13 顶部注记 —— 单独改 id 仍然是禁止项)。

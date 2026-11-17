@@ -7,7 +7,16 @@ project(runner LANGUAGES CXX)
 set(BINARY_NAME "minincm")
 # The unique GTK application identifier for this application. See:
 # https://wiki.gnome.org/HowDoI/ChooseApplicationID
-set(APPLICATION_ID "com.minincm.minincm")
+#
+# P-18 后半(2026-11-17): 与 AppStream/metainfo id、deb/AppImage 的 .desktop 文件名统一成
+# 同一个反 DNS 名。三个后果(都已在同批处理, 改这里要一起看):
+#   1. GApplication 的单实例名变了 ⇒ 新旧版本互不可见, 迁移窗口期允许一旧一新同时跑;
+#   2. 桌面端默认数据目录跟着变成 ~/.local/share/io.github.xiaquwan1001.MiniNCM
+#      (旧目录 ~/.local/share/ncm 由 ncm_service::fsutil 一次性迁移);
+#   3. 任务栏/窗口归属靠 WM_CLASS(= 本 id, 见 runner/my_application.cc 的 g_set_prgname),
+#      所以 .desktop 里的 StartupWMClass 必须写成同一个字符串。
+# 二进制名 BINARY_NAME(minincm)与 Android applicationId(com.minincm.minincm.dev)不动。
+set(APPLICATION_ID "io.github.xiaquwan1001.MiniNCM")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
