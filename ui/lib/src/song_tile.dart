@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
 import 'format.dart' show formatDurationMs;
-import 'layout.dart' show capRowTrailing, kPageRowPadding, rowHeightBox;
+import 'layout.dart'
+    show capRowTrailing, kPageRowPadding, kPreviewRowPadding, rowHeightBox;
 import 'now_playing.dart';
 import 'rust/api.dart' as rust;
 import 'song_actions.dart';
@@ -292,6 +293,60 @@ class SongRow extends StatelessWidget {
     showDuration: false,
     onTap: onTap,
     menuSource: menuSource,
+  );
+
+  /// 「父容器已内缩的卡片预览 + 序号列」行: 艺人页「热门单曲」预览与
+  /// 他人主页「喜欢的音乐」预览。自绘臂 + 序号(24 居中) + 封面 44 +
+  /// "艺人 · 专辑"副标题 + [kPreviewRowPadding](0/6)。
+  ///
+  /// 两处历史口径一致: 预览块没有"正在播放"语汇([highlightNowPlaying] = false)。
+  static SongRow cardIndexed({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback? onTap,
+    bool capTrailing = false,
+    bool tapOnlyWhenPlayable = false,
+  }) => SongRow(
+    key: key,
+    song: song,
+    indexText: indexText,
+    indexWidth: 24,
+    indexAlign: TextAlign.center,
+    indexGap: 8,
+    coverSize: 44,
+    coverGap: 10,
+    highlightNowPlaying: false,
+    subtitle: SongRowSubtitle.artistAlbum,
+    padding: kPreviewRowPadding,
+    durationGap: 8,
+    capTrailing: capTrailing,
+    tapOnlyWhenPlayable: tapOnlyWhenPlayable,
+    onTap: onTap,
+  );
+
+  /// 艺人页「全部歌曲」/「搜索歌曲结果」的整页序号行: 自绘臂 + 序号(24 居中) +
+  /// 艺人副标题 + 行尾封顶 + 统一歌曲菜单来源(艺人)。
+  ///
+  /// 没有封面(见 [coverSize] = null): 艺人页这两处都不给缩略图。
+  static SongRow artistSongs({
+    Key? key,
+    required rust.SongDto song,
+    required String indexText,
+    required VoidCallback onTap,
+  }) => SongRow(
+    key: key,
+    song: song,
+    indexText: indexText,
+    indexWidth: 24,
+    indexAlign: TextAlign.center,
+    indexGap: 10,
+    capTrailing: true,
+    padding: kPageRowPadding,
+    subtitle: SongRowSubtitle.artist,
+    tapOnlyWhenPlayable: true,
+    menuSource: SongActionSource.artist,
+    onTap: onTap,
   );
 
   final rust.SongDto song;

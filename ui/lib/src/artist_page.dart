@@ -16,10 +16,9 @@ import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'toast.dart';
-import 'song_actions.dart';
 import 'format.dart' show formatDurationMs, formatFanCount;
 import 'mv_page.dart' show showMvPage;
-import 'song_tile.dart' show SongRow, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 import 'state_views.dart';
 import 'artist_sections.dart'
     show ArtistRecommendedSongsSection, SimilarArtistsRow;
@@ -754,22 +753,10 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         loader: (cursor) => widget
             .loader(widget.artistId, cursor)
             .then((p) => PagedPage(p.songs, hasMore: p.hasMore)),
-        itemBuilder: (context, song, index, items) => SongRow(
+        // 序号/副标题/行尾封顶/菜单来源见 SongRow.artistSongs(与搜索结果同构)
+        itemBuilder: (context, song, index, items) => SongRow.artistSongs(
           song: song,
           indexText: '${index + 1}',
-          indexWidth: 24,
-          indexAlign: TextAlign.center,
-          indexGap: 10,
-          // 行尾(时长 + 更多)封顶 45%: 不设上限时时长 + 默认 48dp 按钮会把
-          // 标题区挤到个位数宽(列表行审计 B6)。
-          capTrailing: true,
-          // 与同页其它区块的 12dp 对齐(布局审计 #7; 竖向 8 -> 0: 行距交给
-          // ListTile 自身高度, 与其它页罄距一致 —— 列表行审计 C 级)
-          padding: kPageRowPadding,
-          subtitle: SongRowSubtitle.artist,
-          // 无版权整行灰掉, 点了没有反应(原口径)
-          tapOnlyWhenPlayable: true,
-          menuSource: SongActionSource.artist,
           onTap: () => PlaybackBridge.instance.playSongs(items, index),
         ),
       );
@@ -796,17 +783,9 @@ class _AllSongsTabState extends State<_AllSongsTab> {
         bottom: 24 + MediaQuery.viewPaddingOf(context).bottom,
       ),
       itemCount: results.length,
-      itemBuilder: (context, i) => SongRow(
+      itemBuilder: (context, i) => SongRow.artistSongs(
         song: results[i],
         indexText: '${i + 1}',
-        indexWidth: 24,
-        indexAlign: TextAlign.center,
-        indexGap: 10,
-        capTrailing: true,
-        padding: kPageRowPadding,
-        subtitle: SongRowSubtitle.artist,
-        tapOnlyWhenPlayable: true,
-        menuSource: SongActionSource.artist,
         onTap: () => PlaybackBridge.instance.playSongs(results, i),
       ),
     );

@@ -19,7 +19,7 @@ import 'profile_banner.dart';
 import 'profile_scaffold.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
-import 'song_tile.dart' show SongRow, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 import 'state_views.dart';
 import 'toast.dart';
 import 'user_list_page.dart';
@@ -508,21 +508,10 @@ class _LikedPreview extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < songs.length; i++)
-                  SongRow(
+                  // 序号/封面/副标题/预览留白见 SongRow.cardIndexed(与艺人页预览同构)
+                  SongRow.cardIndexed(
                     song: songs[i],
                     indexText: '${i + 1}',
-                    indexWidth: 24,
-                    indexAlign: TextAlign.center,
-                    indexGap: 8,
-                    coverSize: 44,
-                    coverGap: 10,
-                    // 历史口径: 预览行没有"正在播放"语汇(序号不换喇叭/歌名不变色)
-                    highlightNowPlaying: false,
-                    subtitle: SongRowSubtitle.artistAlbum,
-                    // 父容器(ListView)已有 12 内缩, 行内不再重复加边
-                    // (列表行审计 C 级: 口径统一到 layout.dart)
-                    padding: kPreviewRowPadding,
-                    durationGap: 8,
                     tapOnlyWhenPlayable: true,
                     onTap: () => PlaybackBridge.instance.playSongs(songs, i),
                   ),

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
-import 'layout.dart' show kPreviewRowPadding;
 import 'playback_bridge.dart';
 import 'rust/api.dart' as rust;
-import 'song_tile.dart' show SongRow, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 
 /// 艺人主页的「区块」组件。只吃 DTO, 不发请求,
 /// 数据与回调全部由 artist_page 注入(可测试)。
@@ -62,22 +61,10 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
           ),
         ),
         for (var i = 0; i < songs.length; i++)
-          SongRow(
+          // 序号/封面/副标题/预览留白见 SongRow.cardIndexed(与用户主页预览同构)
+          SongRow.cardIndexed(
             song: songs[i],
-            // 序号: 统一两位宽度, 大字号也不挤压标题
             indexText: '${i + 1}',
-            indexWidth: 24,
-            indexAlign: TextAlign.center,
-            indexGap: 8,
-            coverSize: 44,
-            coverGap: 10,
-            // 历史口径: 这一块没有"正在播放"语汇(序号不换喇叭/歌名不变色)
-            highlightNowPlaying: false,
-            subtitle: SongRowSubtitle.artistAlbum,
-            // 父容器已做 12 内缩(见 artist_page 的 tab 列表), 行内不再重复加边
-            // (列表行审计 C 级: 口径统一到 layout.dart)
-            padding: kPreviewRowPadding,
-            durationGap: 8,
             // 行尾(时长 + 更多)封顶 45%(列表行审计 B7), 口径同 artist_page。
             capTrailing: true,
             onTap: songs[i].playable
