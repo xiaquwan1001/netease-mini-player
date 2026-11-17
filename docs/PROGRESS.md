@@ -304,6 +304,13 @@ deb 由包管理器装 desktop 文件; AppImage 是单文件, 菜单里没入口
 ② 模拟器上残留旧 `.dev` 包(versionCode 4026)导致 `INSTALL_FAILED_VERSION_DOWNGRADE`;
   同时 `ui/build/app/outputs/apk/debug/app-debug.apk` 会是**旧版本产物**(aapt 显示 0.18.0/40) —— 删掉这两个 apk 强制重打再跑。
 
+### 5) 桌面自动化起步: 无头冒烟脚本(`00f1381`, §13 P-11 ③)
+
+此前桌面端自动化为零(全靠人工点)。新增 `tools/smoke-desktop-headless` + `ci-gates.sh desktop-smoke`:
+在 `xvfb-run -a dbus-run-session` 里真跑 release bundle, 自动断言 ① 存活 8s ② `$NCM_DATA_DIR` 临时目录被创建
+(不碰真实 HOME) ③ 同一 session 内第二个实例 2s 内退出(严格单实例) ④ SIGTERM 干净收尾。
+缺 bundle / 缺 xvfb/dbus 退 3(门禁按 SKIP); `verify` 里 `NCM_DESKTOP_SMOKE=1` 才带上。本机实测 PASS。
+
 ### 门禁(本机实测)
 
 Dart **1089 通过 / 0 失败**(基线 1075 + 4 歌词用例 + 10 桌面集成用例; golden 18 张逐字节未变), `dart analyze` 0 issue,
