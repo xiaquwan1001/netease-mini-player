@@ -19,8 +19,10 @@
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
+#   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
 #   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 现状 67 error, 不进 verify)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test + android-unit)
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test + android-unit);
+#                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
 #
 # 口径约定(改之前先读 .pi/memory/notes-build.md):
 #   · 测试标签: 只排除 network(需要真实凭据)。golden **必须跑** —— 它靠 CI 的
@@ -148,6 +150,33 @@ cmd_android_lint() {
   ( cd ui/android && run ./gradlew :app:lintDebug --console=plain )
 }
 
+# ---- Android(设备侧: instrumented test) ----
+# P-11 完整版第 ① 步: 设备级案例接进**唯一门禁实现**(之前只能在会话里手跑)。
+#
+# 为什么默认不进 verify: 要一台在线模拟器(本机 AVD `a34`), 一轮 5~10 分钟,
+# 会重建 debug APK + 编 ndk —— 本机硬件不稳的时段不该带在常跑门禁上。
+# 约定:
+#   ① 没有 emulator 在线 => SKIP(退 0), 接线方不需要写分支;
+#   ② `verify` 里只有显式 `NCM_INSTRUMENTED=1` 才跑;
+#   ③ 设备纪律复用 `tools/devui/androidtest`(非 emulator 一律拒绝 —— connected* 任务
+#      会枚举所有在线设备, 绝不因为插着用户的日常手机就往它上面装测试包)。
+cmd_android_instrumented() {
+  local dev=${DEV:-}
+  command -v adb >/dev/null || {
+    echo "SKIP android-instrumented: PATH 里没有 adb(先 source tools/env.sh)"
+    return 0
+  }
+  if [ -z "$dev" ]; then
+    dev=$(adb devices | tr -d '\r' | awk '$2 == "device" && $1 ~ /^emulator-/ {print $1; exit}')
+  fi
+  if [ -z "$dev" ]; then
+    echo "SKIP android-instrumented: 没有在线模拟器(起法: nohup ~/bin/avd headless a34 &)"
+    return 0
+  fi
+  cmd_android_prepare
+  run env DEV="$dev" bash tools/devui/androidtest "$@"
+}
+
 cmd_verify() {
   cmd_rust_lint
   cmd_rust_test
@@ -158,6 +187,10 @@ cmd_verify() {
   cmd_row_padding
   cmd_flutter_test
   cmd_android_unit
+  # 设备级案例默认不跑(要模拟器 + 5~10 分钟); 显式 NCM_INSTRUMENTED=1 才带上。
+  if [ "${NCM_INSTRUMENTED:-0}" = "1" ]; then
+    cmd_android_instrumented
+  fi
   echo "ALL GATES OK"
 }
 
@@ -175,6 +208,7 @@ case "$sub" in
   row-padding)   cmd_row_padding ;;
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
+  android-instrumented) cmd_android_instrumented "$@" ;;
   android-lint)  cmd_android_lint ;;
   verify)        cmd_verify ;;
   list)
