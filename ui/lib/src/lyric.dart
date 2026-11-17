@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'layout.dart' show rowExtentFor;
+import 'marquee_text.dart' show MarqueePlayGate, MarqueeText;
 
 /// 歌词时间轴的小工具(纯逻辑, 便于单测).
 ///
@@ -216,6 +218,7 @@ class TimedLyricView extends StatelessWidget {
     this.selected = const <int>{},
     this.onLineTap,
     this.onLineLongPress,
+    this.playing,
     this.emptyText = '暂无歌词',
     this.padding = const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
   });
@@ -241,6 +244,11 @@ class TimedLyricView extends StatelessWidget {
   /// 长按某一行(进入多选并选中该行); 为 null 时长按无反馈
   final void Function(int index)? onLineLongPress;
 
+  /// 播放中标志: 只有播放中当前行才横向自动滚动(暂停/静态预览停在行首, 零排帧).
+  ///
+  /// 为 null 视为未播放 —— 静态场景(测试/概览)不排帧, `pumpAndSettle` 能收敛。
+  final ValueListenable<bool>? playing;
+
   final String emptyText;
   final EdgeInsetsGeometry padding;
 
@@ -259,24 +267,36 @@ class TimedLyricView extends StatelessWidget {
         final isSelected = selected.contains(i);
         final text = line.text.isEmpty ? '♪' : line.text;
         final sub = showTranslation ? line.sub : null;
+        final style = TextStyle(
+          fontSize: active ? kTimedLyricActiveFontSize : kTimedLyricFontSize,
+          fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+          color: active
+              ? scheme.primary
+              : (isSelected ? scheme.onSurface : scheme.onSurfaceVariant),
+        );
         final body = Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: active
-                    ? kTimedLyricActiveFontSize
-                    : kTimedLyricFontSize,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                color: active
-                    ? scheme.primary
-                    : (isSelected ? scheme.onSurface : scheme.onSurfaceVariant),
+            // 当前行超宽时横向自动滚动(跑马灯, 与歌名同一实现); 放得下时仍是
+            // 居中的静态文本, 所以短句不会有任何位移。
+            // 非当前行保持单行省略号: 不能让整页歌词都在动。
+            if (!active)
+              Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: style,
+              )
+            else
+              MarqueePlayGate(
+                playing: playing,
+                child: MarqueeText(
+                  text,
+                  style: style,
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
             if (sub != null)
               Text(
                 sub,

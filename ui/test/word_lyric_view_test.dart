@@ -304,8 +304,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('超长行被 ellipsis 截断, 后面的词不产生裁切矩形', (tester) async {
-    final pos = ValueNotifier<int>(500);
+  testWidgets('超长当前行改为横向滚动: 按全文宽排版, 不再把后半句省略掉', (tester) async {
+    // 2026-11-17 用户反馈: 长句被静态省略号截断, 后半句永远看不到。现在当前行
+    // 按自然宽排版交给跑马灯视口滚动(见 lyric_marquee_test.dart), 而静态行仍是 ellipsis。
+    final pos = ValueNotifier<int>(3000);
     final lines = [
       _line(0, 4000, [
         (0, 1000, '一句非常非常非常长的歌词用来撑满整行并溢出容器宽度'),
@@ -313,10 +315,12 @@ void main() {
       ]),
     ];
     await tester.pumpWidget(_host(pos, lines: lines));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(tester.takeException(), isNull);
     final painter = _activePainter(tester);
-    expect(painter.debugClipRects.every((r) => r.right <= 300.5), isTrue);
+    expect(painter.ellipsis, isFalse, reason: '滚动分支不能画省略号');
+    // 超宽行里「后面的词」必须真的有裁切矩形(而不是被 ellipsis 吃掉)
+    expect(painter.debugClipRects.any((r) => r.right > 300.5), isTrue);
   });
 
   testWidgets('组件销毁后位置 notifier 更新无异常(无残留监听)', (tester) async {

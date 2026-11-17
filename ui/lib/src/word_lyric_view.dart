@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'layout.dart' show rowExtentFor;
+import 'marquee_text.dart'
+    show kMarqueeMinOverflow, MarqueePlayGate, MarqueeScroll;
 
 /// 逐字(karaoke)歌词的纯展示组件。
 ///
@@ -546,36 +548,62 @@ class KaraokeLineState extends State<KaraokeLine>
               final maxWidth = constraints.maxWidth.isFinite
                   ? constraints.maxWidth
                   : 320.0;
+              // 自然宽(不折行不省略)决定当前行要不要横向滚动: 与静态行同一口径
+              // 用「真实渲染样式 + textScaler」测量, 不靠估算。
+              final naturalWidth = _naturalTextWidth(
+                text,
+                scaler,
+                direction,
+              );
+              final scrolling =
+                  naturalWidth - maxWidth > kMarqueeMinOverflow;
+              // 滚动时按自然宽排版(不能先省略号截到视口宽再平移, 那滚的只是
+              // 被截断的一截); 放得下时维持原来的"段落宽 = 行宽 + 居中"。
+              final layoutWidth = scrolling ? naturalWidth : maxWidth;
               final layout = _layoutFor(
                 text: text,
                 words: widget.line.words,
-                maxWidth: maxWidth,
+                maxWidth: layoutWidth,
+                ellipsis: !scrolling,
                 scaler: scaler,
                 direction: direction,
                 baseColor: widget.upcomingColor,
                 sungColor: widget.sungColor,
               );
+              final canvas = CustomPaint(
+                size: Size(layoutWidth, layout.size.height),
+                isComplex: true,
+                willChange: true,
+                painter: KaraokePainter(
+                  line: widget.line,
+                  position: _pos,
+                  sungColor: widget.sungColor,
+                  upcomingColor: widget.upcomingColor,
+                  style: karaokeActiveTextStyle,
+                  textScaler: scaler,
+                  textDirection: direction,
+                  fadeWidth: widget.fadeWidth,
+                  ellipsis: !scrolling,
+                ),
+              );
               return Semantics(
                 label: text,
-                child: SizedBox(
-                  width: maxWidth,
-                  height: layout.size.height,
-                  child: CustomPaint(
-                    size: Size(maxWidth, layout.size.height),
-                    isComplex: true,
-                    willChange: true,
-                    painter: KaraokePainter(
-                      line: widget.line,
-                      position: _pos,
-                      sungColor: widget.sungColor,
-                      upcomingColor: widget.upcomingColor,
-                      style: karaokeActiveTextStyle,
-                      textScaler: scaler,
-                      textDirection: direction,
-                      fadeWidth: widget.fadeWidth,
-                    ),
-                  ),
-                ),
+                child: scrolling
+                    // 当前行超宽: 逐字高光不变, 整行横向自动滚动(同一台跑马灯内核,
+                    // 只有播放中才动). 放得下时走下面的静态分支, 短句不会位移。
+                    ? MarqueePlayGate(
+                        playing: widget.playing,
+                        child: MarqueeScroll(
+                          contentWidth: naturalWidth,
+                          height: layout.size.height,
+                          child: canvas,
+                        ),
+                      )
+                    : SizedBox(
+                        width: maxWidth,
+                        height: layout.size.height,
+                        child: canvas,
+                      ),
               );
             },
           ),
@@ -623,9 +651,11 @@ _KaraokeLayout _layoutFor({
   required TextDirection direction,
   required Color baseColor,
   required Color sungColor,
+  bool ellipsis = true,
 }) {
   final key =
-      '$text|$maxWidth|${scaler.scale(karaokeFontSize)}|${direction.name}'
+      '$text|$maxWidth|${ellipsis ? 'e' : 's'}'
+      '|${scaler.scale(karaokeFontSize)}|${direction.name}'
       '|${karaokeActiveTextStyle.fontSize}|${karaokeActiveTextStyle.fontWeight}'
       '|${baseColor.toARGB32()}|${sungColor.toARGB32()}';
   final hit = _layoutCache.remove(key);
@@ -642,12 +672,13 @@ _KaraokeLayout _layoutFor({
     textScaler: scaler,
     textAlign: TextAlign.center,
     maxLines: 1,
-    ellipsis: '…',
+    ellipsis: ellipsis ? '…' : null,
     // minWidth = maxWidth: 只给 maxWidth 时 TextPainter 的宽是**文本自身宽**
     // (contentWidth), 而段落按 maxWidth 居中后再由 paintOffset 反向量左移
     // (contentWidth - paragraph.width) / 2 —— 净效果是画在 x=0, 也就是
     // 高光行贴左. 静态行是 RichText(段落宽 = 行宽, 真正的居中), 两条路径
     // 口径必须一致: 把段落宽钉成行宽, paintOffset 变成 0, 交给 textAlign.center.
+    // 超宽滚动时 maxWidth 就是自然宽(段落宽 == 全文宽), 同理退化为左对齐排版。
   )..layout(minWidth: maxWidth, maxWidth: maxWidth);
 
   final base = build(baseColor);
@@ -688,6 +719,22 @@ _KaraokeLayout _layoutFor({
   return layout;
 }
 
+/// 高光行的自然宽(单行、不折行、不省略), 用于判断要不要横向滚动。
+///
+/// 必须用与绘制同一份样式([karaokeActiveTextStyle]) + 同一个 textScaler 量,
+/// 否则大字号下会误判"放得下"。
+double _naturalTextWidth(String text, TextScaler scaler, TextDirection d) {
+  final tp = TextPainter(
+    text: TextSpan(text: text, style: karaokeActiveTextStyle),
+    maxLines: 1,
+    textDirection: d,
+    textScaler: scaler,
+  )..layout();
+  final w = tp.width;
+  tp.dispose();
+  return w;
+}
+
 /// 逐字渐变歌词的画笔: 底层全行未唱色 + 顶层已唱色按裁切矩形绘制。
 @visibleForTesting
 class KaraokePainter extends CustomPainter {
@@ -700,6 +747,7 @@ class KaraokePainter extends CustomPainter {
     required this.textScaler,
     required this.textDirection,
     this.fadeWidth = 8,
+    this.ellipsis = true,
   }) : super(repaint: position);
 
   final WordLyricLineData line;
@@ -713,6 +761,9 @@ class KaraokePainter extends CustomPainter {
   final TextScaler textScaler;
   final TextDirection textDirection;
   final double fadeWidth;
+
+  /// 画不下时是否画省略号; 超宽滚动时为 false(按全文宽排版, 不截断).
+  final bool ellipsis;
 
   /// 上一次绘制用的裁切矩形(画布坐标), 供测试断言。
   @visibleForTesting
@@ -738,6 +789,7 @@ class KaraokePainter extends CustomPainter {
       direction: textDirection,
       baseColor: upcomingColor,
       sungColor: sungColor,
+      ellipsis: ellipsis,
     );
     final rawDy = (size.height - layout.size.height) / 2;
     final offset = Offset(0, rawDy < 0 ? 0 : rawDy);
@@ -816,7 +868,8 @@ class KaraokePainter extends CustomPainter {
       oldDelegate.style != style ||
       oldDelegate.textScaler != textScaler ||
       oldDelegate.textDirection != textDirection ||
-      oldDelegate.fadeWidth != fadeWidth;
+      oldDelegate.fadeWidth != fadeWidth ||
+      oldDelegate.ellipsis != ellipsis;
 
   @override
   bool shouldRebuildSemantics(KaraokePainter oldDelegate) => false;
