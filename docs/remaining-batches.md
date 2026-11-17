@@ -255,6 +255,37 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
 验收: `cargo test` 全绿、public API 与 FFI 零变化(`api-coverage.sh` 仍 123/123)、单文件 ≤1200 行。
 **并行性: 与 12.2 互斥**(同文件);与 12.3/12.4/12.5 可并行。
 
+### 12.1b 后端审计剩余两条的**裁决(2026-11-17 复核)**
+
+> 来源 `.pi/plans/arch-audit-backend-2026-11-15.md` §7 建议 3 / 4。原计划第 3 项(锁中毒统一 + `fsutil` 收敛)
+> 只差落地, 第 5 项(`api.rs` 按域拆)是唯一还开着的 M 级项。
+
+**① 锁中毒 + `fsutil` 收敛 —— 生产侧已清零, 本批补了门**
+
+| 检查 | 结果(2026-11-17 实测) |
+|---|---|
+| `rg '\.lock\(\)\.unwrap\(\)' core/crates` | **5 处, 全在 `ncm-playback` 的 `#[cfg(test)]` 模块里**(1316/1333/1351/1413/1532) |
+| 生产代码里的同类写法 | **0**(`ncm-ffi` 用 `lock().map_err(..)`, `ncm-service` 用 `unwrap_or_else(|e| e.into_inner())`) |
+| `fsutil::write_atomic` / `write_atomic_private` | 已是唯一实现, 7 个调用点(identity/credential×2/loudness/ttml/history) |
+| 门 | 新增 `tools/ci-gates.sh lock-poison`(`bash tools/check-lock-poison.sh`, 已进 `verify`): 只放行 `#[cfg(test)]` 模块内, 负向探针实测会红 |
+
+**② `api.rs` 按域拆 —— 结论: 现在不拆, 触发条件写明**
+
+现状(2026-11-17 实测): `api.rs` **3 325 行** / `pub fn` 30 个 + `ffi_forward!` 78 处 = **FFI 导出 161** / 65 个 `#[frb(mirror)]`
+/ 文件内已有 **20 个 `// ----` 分节**(即"逻辑上已按域分节", 只是没分文件)。Dart 侧 **173 个文件** 引用 `rust/api.dart`。
+
+- **收益**: 单文件变短、按域 review 更省; 但 Dart 侧 import 面不变(FRB 生成的 `api.dart` 仍是单一入口),
+  也就是说**收益是"编辑体验", 不是行为/性能/架构边界**(边界早已由 crate 结构守住: `ncm-ffi` 的 Cargo.toml 里没有 `ncm-api-rs`)。
+- **成本**: 迁移 161 个导出 + 65 个 mirror 会牵动 173 个 Dart 文件的 import 面(审计按 141 估, 现已 173),
+  且必须整体重跑 codegen(`flutter_rust_bridge_codegen generate`) + 全量 `flutter test` 才能证明零 diff。
+- **风险**: FRB 2.13 解析以 `rust_input` 为根的**模块树**; `api.rs → api/mod.rs + api/domain/*.rs` 形状合法,
+  但 mirror 一旦跟着散开, Dart 类路径会碎成 N 份 —— 审计建议"mirror 先全搬 `api/dto.rs`"。
+- **裁决(2026-11-17)**: **暂不拆**。触发条件(任一满足再做): ① 出现第二个需要并行改 FFI 的贡献者/车道;
+  ② `api.rs` > 4 000 行; ③ 某次 code review 因单文件过大漏看(事故后复盘判定)。
+  第一步永远只搬 mirror 到 `api/dto.rs` + 观察一次 codegen 零 diff, 不动业务 fn。
+- **明确不做**: `ncm-service` 拆 `ncm-store`(审计 §7 建议 7, L 级 2~3 天, 当前无第二个消费方);
+  `ncm-domain/src/lib.rs`(1 771 行 / 92 DTO)按域拆 —— 必须与 `api.rs` 拆同批, 单做只增加 mirror 路径漂移风险。
+
 ### 12.2 `Provider` 拆成能力 trait(M · 1~2 天)
 
 现状: `pub trait Provider` **一个 trait 120 个方法**(god trait),任何新实现都要空实现一大片。

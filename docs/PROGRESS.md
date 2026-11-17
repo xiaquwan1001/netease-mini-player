@@ -313,6 +313,14 @@ deb 由包管理器装 desktop 文件; AppImage 是单文件, 菜单里没入口
 (不碰真实 HOME) ③ 同一 session 内第二个实例 2s 内退出(严格单实例) ④ SIGTERM 干净收尾。
 缺 bundle / 缺 xvfb/dbus 退 3(门禁按 SKIP); `verify` 里 `NCM_DESKTOP_SMOKE=1` 才带上。本机实测 PASS。
 
+### 6) §12/后端审计剩余两条裁决 + lock-poison 门(`ca8b5c4`)
+
+- **锁中毒 + `fsutil` 收敛**: 生产侧已是 0(仅 `ncm-playback` 测试里 5 处放行), `write_atomic*` 是唯一实现(7 个调用点)。
+  本批把它变成不会再回来: `tools/check-lock-poison.sh` + `ci-gates.sh lock-poison`(进 `verify`), 负向探针实测会红。
+- **`api.rs` 按域拆**: 实测 3 325 行 / 导出 161(30 `pub fn` + 78 `ffi_forward`) / 65 mirror / Dart 侧 173 文件引用。
+  结论**暂不拆**(收益是编辑体验而非架构边界, 边界已由 crate 结构守住), 触发条件与"先搬 mirror 到 `api/dto.rs`"的第一步
+  写进 `docs/remaining-batches.md` §12.1b。
+
 ### 门禁(本机实测)
 
 Dart **1089 通过 / 0 失败**(基线 1075 + 4 歌词用例 + 10 桌面集成用例; golden 18 张逐字节未变), `dart analyze` 0 issue,
