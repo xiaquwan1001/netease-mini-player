@@ -188,6 +188,15 @@ class PlainLyricView extends StatelessWidget {
   }
 }
 
+/// 行级歌词字号: 静态行与当前行**几乎同号**(只 +1sp), 与逐字视图
+/// (`word_lyric_view.dart` 的 `karaokeFontSize` 口径一致)。
+///
+/// 历史: 当前行曾是 18sp/w600、静态 15sp —— 播放位置跨行时整行按新字号重排,
+/// 用户看到的是「高光行突然变大、像被推到左边」的一次瞬移(2026-11-17 反馈)。
+/// 现在只 +1sp 加粗, 且两种行都 `TextAlign.center` 居中, 不再有横向跳动。
+const double kTimedLyricFontSize = 15;
+const double kTimedLyricActiveFontSize = 16;
+
 /// 行级歌词视图(带时间轴): 当前行高亮 + 翻译开关 + 多选.
 ///
 /// 纯展示组件: 当前行下标/滚动控制/选中集合都由调用方给, 因此能在 widget test
@@ -200,7 +209,7 @@ class TimedLyricView extends StatelessWidget {
     this.controller,
 
     /// 行高; 不传 = [kRowExtent] × 系统字号(见 [rowExtentFor]).
-    /// 歌词是 18sp 主词 + 12sp 翻译两行, 写死 56 在 1.625 字号下会被 itemExtent
+    /// 歌词是 16sp 主词 + 12sp 翻译两行, 写死 56 在 1.625 字号下会被 itemExtent
     /// 从下方裁掉(用户报过"顶部歌词只显示上半段").
     this.itemExtent,
     this.showTranslation = true,
@@ -259,7 +268,9 @@ class TimedLyricView extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: active ? 18 : 15,
+                fontSize: active
+                    ? kTimedLyricActiveFontSize
+                    : kTimedLyricFontSize,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 color: active
                     ? scheme.primary

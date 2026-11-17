@@ -96,6 +96,26 @@ void main() {
       expect(find.textContaining('一句很长很长'), findsOneWidget);
     });
 
+    testWidgets('高光行只略微增大字号, 两种行都居中(不再左右瞬移)', (tester) async {
+      await tester.pumpWidget(
+        _host(TimedLyricView(lines: lines, activeIndex: 0)),
+      );
+
+      final active = tester.widget<Text>(find.text('第一句'));
+      final idle = tester.widget<Text>(find.text('第二句'));
+
+      // 居中: 高亮行与普通行同一对齐口径(2026-11-17 用户反馈)
+      expect(active.textAlign, TextAlign.center);
+      expect(idle.textAlign, TextAlign.center);
+      // 只 +1sp, 不再是 18 vs 15 那种整行重排
+      expect(active.style?.fontSize, kTimedLyricActiveFontSize);
+      expect(idle.style?.fontSize, kTimedLyricFontSize);
+      expect(
+        (active.style!.fontSize! - idle.style!.fontSize!).abs(),
+        lessThanOrEqualTo(1.0),
+      );
+    });
+
     testWidgets('空列表显示空态', (tester) async {
       await tester.pumpWidget(
         _host(const TimedLyricView(lines: [], activeIndex: -1)),
