@@ -2,30 +2,14 @@ package com.minincm.minincm
 
 import android.app.Notification
 import android.app.NotificationManager
-import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
-import android.os.Bundle
-import android.os.IBinder
-import androidx.core.app.NotificationCompat
-import androidx.core.graphics.drawable.IconCompat
-import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
-import androidx.media3.session.MediaNotification
-import androidx.media3.session.MediaSession
-import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import org.junit.After
+import org.junit.AfterClass
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.AfterClass
 import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -54,66 +38,13 @@ class NotificationSlotsTest {
         /** PlaybackService 的按钮顺序契约(见 media-notification-custom-buttons.md) */
         private val EXPECTED_TITLES = listOf("上一首", "下一首", "喜欢", "播放顺序")
 
-        private const val MEDIA_SESSION_SERVICE_ACTION = "androidx.media3.session.MediaSessionService"
-
-        private lateinit var context: Context
-        private lateinit var session: MediaSession
-        private var connection: ServiceConnection? = null
-
         @BeforeClass
         @JvmStatic
-        fun bindPlaybackService() {
-            context = ApplicationProvider.getApplicationContext()
-            val latch = CountDownLatch(1)
-            val conn = object : ServiceConnection {
-                override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-                    latch.countDown()
-                }
-
-                override fun onServiceDisconnected(name: ComponentName?) = Unit
-
-                override fun onNullBinding(name: ComponentName?) {
-                    // 服务已创建(onCreate 里 instance 已赋值), 只是没给 binder
-                    latch.countDown()
-                }
-            }
-            connection = conn
-            // 必须带 MediaSessionService 的 action: Media3 的 onBind 在 action==null 时直接返回 null
-            val intent = Intent(context, PlaybackService::class.java).setAction(MEDIA_SESSION_SERVICE_ACTION)
-            if (!context.bindService(intent, conn, Context.BIND_AUTO_CREATE)) {
-                fail("bindService(PlaybackService) 直接被拒")
-            }
-            if (!latch.await(10, TimeUnit.SECONDS)) {
-                fail("PlaybackService 10s 内没有创建完成")
-            }
-            val service = PlaybackService.instance
-            if (service == null) {
-                fail("PlaybackService.instance 为空 —— 服务没起来或被立刻回收")
-                return
-            }
-            session = sessionOf(service)
-        }
-
-        /** service 的 mediaSession 是 private(生产代码不需要为测试开洞), 测试侧反射读取 */
-        private fun sessionOf(service: PlaybackService): MediaSession {
-            val field = PlaybackService::class.java.getDeclaredField("mediaSession")
-            field.isAccessible = true
-            return field.get(service) as? MediaSession
-                ?: throw AssertionError("PlaybackService.mediaSession 仍是 null(onCreate 应该已经建好)")
-        }
+        fun bindPlaybackService() = PlaybackServiceTestSupport.bind()
 
         @AfterClass
         @JvmStatic
-        fun unbindPlaybackService() {
-            connection?.let {
-                try {
-                    context.unbindService(it)
-                } catch (e: IllegalArgumentException) {
-                    // 已经断了, 无所谓
-                }
-            }
-            connection = null
-        }
+        fun unbindPlaybackService() = PlaybackServiceTestSupport.unbind()
     }
 
     @After
@@ -128,7 +59,8 @@ class NotificationSlotsTest {
     fun notificationChannelHasLowImportance() {
         buildNotification() // createNotification 内部 ensureNotificationChannel()
 
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = PlaybackServiceTestSupport.context
+            .getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = nm.getNotificationChannel(DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID)
         assertNotNull(
             "默认通知渠道 " + DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID + " 不存在",
@@ -191,82 +123,12 @@ class NotificationSlotsTest {
         assertEquals("红心关回后第 4 位应回到「喜欢」, 实际 " + back, "喜欢", back[3])
     }
 
-    // ---- 工具 ----
+    // ---- 工具(共用设施见 PlaybackServiceTestSupport) ----
 
-    /**
-     * 用生产代码那套 mediaButtonPreferences 让 Media3 拼一条通知(不 post, 因此不需要 POST_NOTIFICATIONS
-     * 也不需要前台服务), 返回 Notification 对象供断言。
-     */
-    private fun buildNotification(): Notification {
-        // 必须回主线程: MediaSession/Player 是主线程亲和的, 在 instrumentation 线程上调
-        // createNotification / mediaButtonPreferences 会抛
-        // "Player is accessed on the wrong thread"(2026-11-17 在真机上实测踩到)。
-        var built: Notification? = null
-        onMain {
-            val provider = DefaultMediaNotificationProvider(context)
-            val factory = SlotRecordingActionFactory(context)
-            val media = provider.createNotification(
-                session,
-                session.mediaButtonPreferences,
-                factory,
-                androidx.media3.session.MediaNotification.Provider.Callback { },
-            )
-            built = media.notification
-        }
-        return built ?: throw AssertionError("主线程上没有拼出通知")
-    }
+    private fun buildNotification(): Notification = PlaybackServiceTestSupport.buildNotification()
 
     private fun actionTitles(notification: Notification): List<String> =
-        (notification.actions ?: emptyArray()).map { (it.title ?: "").toString().trim() }
+        PlaybackServiceTestSupport.actionTitles(notification)
 
-    private fun onMain(block: () -> Unit) {
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(block)
-    }
-
-    /**
-     * Media3 只会通过 [MediaNotification.ActionFactory] 要 action; 这里把它要的顺序与标题记下来,
-     * 并给出一个占位 PendingIntent(测试不点击按钮, 点按钮的行为由 notif-slots 脚本/手工冒烟覆盖)。
-     */
-    private class SlotRecordingActionFactory(private val context: Context) :
-        MediaNotification.ActionFactory {
-        private var seq = 0
-
-        private fun placeholderPendingIntent(): PendingIntent = PendingIntent.getService(
-            context,
-            seq++,
-            Intent(context, PlaybackService::class.java).setAction("com.minincm.minincm.TEST_NOOP"),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        override fun createMediaAction(
-            session: MediaSession,
-            icon: IconCompat,
-            title: CharSequence,
-            command: Int,
-        ): NotificationCompat.Action =
-            NotificationCompat.Action.Builder(icon, title, placeholderPendingIntent()).build()
-
-        override fun createCustomAction(
-            session: MediaSession,
-            icon: IconCompat,
-            title: CharSequence,
-            customAction: String,
-            args: Bundle,
-        ): NotificationCompat.Action =
-            NotificationCompat.Action.Builder(icon, title, placeholderPendingIntent()).build()
-
-        override fun createCustomActionFromCustomCommandButton(
-            session: MediaSession,
-            customCommandButton: CommandButton,
-        ): NotificationCompat.Action = NotificationCompat.Action.Builder(
-            customCommandButton.icon,
-            customCommandButton.displayName,
-            placeholderPendingIntent(),
-        ).build()
-
-        override fun createMediaActionPendingIntent(
-            session: MediaSession,
-            command: Long,
-        ): PendingIntent = placeholderPendingIntent()
-    }
+    private fun onMain(block: () -> Unit) = PlaybackServiceTestSupport.onMain(block)
 }
