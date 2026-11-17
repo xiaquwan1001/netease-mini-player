@@ -78,7 +78,9 @@ def vertical_of(expr: str):
         return top if top == bottom else -1  # 上下不等也是越界
     return None
 
-row_call = re.compile(r"\b(ListTile|SongRow|SongTile)\(")
+# 具名工厂也算行调���(SongRow.cardPreview / pageIndexed / cardIndexed / artistSongs):
+# 它们只是把同构参数命名下来, 行留白仍然由调用点传的 padding 决定。
+row_call = re.compile(r"\b(ListTile|SongRow|SongTile)(?:\.\w+)?\(")
 
 def block_of(src: str, start: int) -> str:
     """返回 `(` 之后到配对 `)` 之前的源码块。"""
