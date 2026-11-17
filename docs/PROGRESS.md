@@ -20,14 +20,14 @@
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1074** 通过 / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1088** 通过 / 1 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-17(二) 加 2 例(纵向 pitch 渲染断言 / 已并入行留白用例) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
-| `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(27 处行留白 / 7 种口径全部落在 `layout.dart` 的四个具名常量里, 见 2026-11-17 小节) |
+| `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(27 处行留白 / **3 个**具名口径 + 纵向只允许 0/6, 见 2026-11-17 两个小节) |
 | 接口覆盖 | **135/136**(FFI 导出 161, 其中 6 个无 UI 入口: cache_stats / cloud_song_url / consent_plaintext_storage / eq_profile_normalize / player_tuning / user_play_ranking; 唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节) |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
@@ -174,6 +174,29 @@
   (mine/artist 的歌曲行都在首屏之下, 未被 golden 取景)。
 - 顺带修 `queue_sheet_test` 的拖拽用例: 原来写死 `moveBy(0, 60)` ×2 假设行高 64,
   行高统一后只跨一行 ⇒ 改成按**实测行高**分 24 小步推进(RowReorder 只在跨过中点时换位)。
+
+### C) `ListRow` 去重: 4 个静态工厂收掉 16 处同构调用点里的 12 处
+
+审计 §6 起草 `ListRow` 的初衷(「手写 Row 的歌曲行」)在 v0.13.0 收敛成 `SongRow` 之后已经不存在,
+剩下的重复**不在行骨架、而在调用点参数**: 同一种行在 3~5 个页面里逐字抄同一组参数
+(tile/plain 臂、序号宽、封面尺寸、副标题口径、是否给时长、行尾是否封顶), 漏抄一处就分叉。
+
+所以 C 步做的是「把同构参数命名成工厂」, **不是**新写一层组件 —— 每批 ≤5 处, 每批跑全量
+`flutter test`(含 18 张 golden), 三批都是**零 golden 变化**:
+
+| 提交 | 工厂 | 收敛的调用点 | 数 |
+|---|---|---|---|
+| `11c6483` | `SongRow.cardPreview` | 推荐页两个区块 / 相似歌曲面板 / 「我的」页两个预览区块 | 5 |
+| `bd56101` | `SongRow.pageIndexed` | 每日推荐页签 / 历史每日推荐 / 最近听过·单曲页签 | 3 |
+| `3710562` | `SongRow.cardIndexed` / `SongRow.artistSongs` | 艺人页热门单曲预览 + 他人主页喜欢预览 / 艺人页全部歌曲 + 搜索结果 | 2+2 |
+
+实现口径: 用 **static 工厂**(委托主构造), 不用具名构造 —— `SongRow` 有 30 个 final 字段,
+具名构造必须把它们逐个再初始化一遍, 等于第二个默认值源(改一个默认值就会两处分叉);
+静态工厂只写死那 5~10 个"同构值", 其余继续走主构造默认值。
+
+**还剩 3 处没被收敛**(各自形状唯一, 收敛无收益, 保留现状):
+`detail/playlist_songs_sliver`(徽标放副标题行 + 乐观态并集 + 两位序号)、
+`album_preview`(tile 臂 + 序号 + 无封面)、`search_results`/`home_page`(走 `SongTile` 旧 API)。
 
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 

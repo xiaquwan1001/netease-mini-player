@@ -6,7 +6,7 @@
 > |---|---|---|
 > | A 必坏 | 7 | ✅ 已清零（v0.9.0 批次） |
 > | B 潜在 | 12 | ✅ 已清零（2026-11-16 晚 `8f7b38c`：`kRowTrailingMaxRatio` + `capRowTrailing`） |
-> | C 一致性 | 18 | 🚧 **第一批已落（2026-11-17）**：歌曲行留白从 5 种收敛到 4 个具名口径 + 门禁；**第二批（同日）取消 8/12 二分 ⇒ 三个口径**，剩纵向 pitch 与 `ListRow` 组件化 |
+> | C 一致性 | 18 | ✅ **已清零（2026-11-17，三批）**：① 歌曲行留白 5 种 → 3 个具名口径 + 门禁；② 取消 8/12 二分（统一 12 线）；③ 纵向 pitch 统一到 `rowExtentFor`；④ `ListRow` 去重（4 个静态工厂 / 12 处） |
 >
 > C 级第一批(2026-11-17)做了什么:
 > - `layout.dart` 新增 **`kPageRowPadding`**(12/0/4：整页铺满、行首非缩略图的列表行，与页面线严格共线)
@@ -33,8 +33,11 @@
 >    `dense`/`minHeight`/`minVerticalPadding`/`visualDensity` 四条隐式规则，**不是**行 padding；
 >    新门禁：`check-row-padding.sh` 纵向只允许 0/6 + `layout_metrics_test` 渲染高度断言；
 >    golden 只动 `recommend` 两张；
-> ③ §6 的 `ListRow` 组件化（16 处同构歌曲行）仍未开工 —— 留白收敛成具名口径后它的收益从
->    「统一留白」降到「少 12 份重复代码」，优先级下调。
+> ③ ✅ 已落地（2026-11-17 第二批 C）：§6 的 `ListRow` 初衷（手写 Row 的歌曲行）在 v0.13.0
+>    收敛成 `SongRow` 后已不存在，剩余重复在**调用点参数**：改成 4 个 static 工厂
+>    （`SongRow.cardPreview` 5 处 / `pageIndexed` 3 处 / `cardIndexed` 2 处 / `artistSongs` 2 处
+>    = 12 处），三批各跑全量测试且 **golden 逐字节未变**。剩 3 处形状唯一
+>    （`playlist_songs_sliver` / `album_preview` / `SongTile` 旧 API）不收敛。
 >
 > ⚠️ **第三节起的分级表与行号基于 2026-11-13 快照，已大面积漂移**（`detail_page.dart` 拆成
 > `src/detail/`、`discover.dart` 变 barrel、`song_tile.dart` 长出 `SongRowLayout`）。读表按
