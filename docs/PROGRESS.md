@@ -1,7 +1,7 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-17(六)**。已发布版本 **v0.20.0**(P-18 桌面 id 统一 + 数据目录迁移 · P-10 边下边播可跳 ·
-> 列表行 C 级收尾 · P-11 首个设备级测试设施), 见批次时间线最上面六条。
+> 最近更新: **2026-11-17(七)**。已发布版本 **v0.20.1**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
+> 设备级门与桌面无头冒烟进 `ci-gates`), 见批次时间线最上面那条。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -38,6 +38,8 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.20.1** | **2026-11-17** | **反馈批**(两条用户反馈 + 两处平台缺口): ① 歌词高光行 18→16sp 且两种行都居中(修「换行时左右瞬移」) ② 冷启动恢复/进详情页**主动预取**歌词(不再干等「信息不可用」) ③ **AppImage 首启集成到应用菜单** ④ `ci-gates.sh` 新增 `android-instrumented`(a34 3/3) 与 `desktop-smoke`(xvfb+dbus 无头冒烟); Dart **1075→1089** |
+| **v0.20.0** | **2026-11-17** | **四车道批**: P-18 后半(application-id 统一 + 数据目录一次性迁移)· P-10 方案 B(渐进期 seek 登记 + 下载完成换源重建解码器)· 列表行 C 级收尾(8/12 二分取消 + 纵向 pitch + SongRow 工厂)· P-11 第一步(首个 `androidTest` + `notif-slots` 断言脚本); Rust **300→313** / Dart **1061→1075** |
 | **v0.19.1** | **2026-11-17** | **门禁/收敛批**(两个未发版批次一并出): Android 门进 CI(`android-unit` 进 `verify`, `android-lint` 暂只暴露) + 列表行 **B 级 12 条清零**(`kRowTrailingMaxRatio`/`capRowTrailing`) + **C 级第一批**(四个具名行留白口径 + `row-padding` 门) + 修掉会挂死 `cargo test` 的 keyring 写路径; Rust 300 / Dart **1074** |
 | **v0.19.0** | **2026-11-16** | **收尾批**(4 lane): **拆壳 S8 完成** —— `home/home_wiring.dart` 收口 8 条静态钩子的 attach/detach + `HomePage` 搬到 `home/home_page.dart`(1550) + main.dart **1562→48 行门面**(审计起点 3877); **P-22** 明文流量收窄到 `music.126.net`/`music.163.com`/`vod.126.net` 白名单; **P-05 中期/P-11 起步** EQ 三端共享 fixture(479 行) + Kotlin 纯逻辑抽取与 JVM 单测 3 例; 文档债务登记 §13; Rust **298→300** / Dart **1037→1061** |
 | **v0.18.0** | **2026-11-16** | **第六批**(4 lane): main.dart **1874→1562** 拆壳 **S7**(账号/登录态/列表态导航 → `home/account_actions.dart`, `_libraryTitle` 收口单一文件)、**P-09** 登录/MV 页跟随系统深浅色(同名 style + values-night)、**P-21** 播放 UA 收敛 Rust 单一来源(FFI→Dart→Kotlin 兜底+漂移日志)、**P-10** 渐进播放 seek 如实反馈并修掉 `EqSource` 未实现 `try_seek`(桌面完整文件本该能跳); Rust **294→298** / Dart **1028→1037** |
