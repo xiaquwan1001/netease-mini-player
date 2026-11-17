@@ -1283,6 +1283,9 @@ pub struct PlayerStateDto {
     pub seekable: bool,
     /// 最近一次 seek 失败的原因(None = 没失败过); 失败同时会打一条 warn 日志。
     pub seek_error: Option<String>,
+    /// 渐进播放期(边下边播)登记下来、等下载完成后自动应用的跳转位置(ms)。
+    /// None = 没有挂起的跳转。UI 可以据此显示「已排队, 缓存完成后自动跳转」(P-10 方案 B)。
+    pub pending_seek_ms: Option<u64>,
 }
 
 fn state_dto() -> PlayerStateDto {
@@ -1295,6 +1298,7 @@ fn state_dto() -> PlayerStateDto {
         volume: s.volume,
         seekable: s.seekable,
         seek_error: s.seek_error,
+        pending_seek_ms: s.pending_seek_ms,
     }
 }
 
@@ -1335,9 +1339,13 @@ pub async fn play_track(
     {
         let progressive = cache.start_progressive(track_id, &url)?;
         let part = progressive.part_path.to_string_lossy().to_string();
+        // final_path 交给播放线程: 渐进期拖进度条会登记成待跳, 下载完成后据此重建
+        // 可 seek 的解码器并跳到那里(P-10 方案 B)
+        let final_path = progressive.final_path.to_string_lossy().to_string();
         player().play_stream(
             track_id,
             part,
+            Some(final_path),
             std::sync::Arc::clone(&progressive.done),
             duration_ms,
         );
@@ -1375,9 +1383,16 @@ pub fn player_stop() -> PlayerStateDto {
 /// 这里把状态原样带回 Dart —— 进度条拖到不可 seek 的位置时, UI 能立刻知道没生效,
 /// 而不是先跳到新位置再被下一次轮询弹回原处。
 pub fn player_seek(position_ms: u64) -> PlayerStateDto {
-    if let Err(e) = player().seek(position_ms) {
-        // 后端已经 warn 过一次(带上下文), 这里补一层「从 FFI 调进来的」信息
-        eprintln!("[ncm-ffi] player_seek({position_ms}) 未生效: {e}");
+    match player().seek(position_ms) {
+        // 渐进播放期无法立刻跳: 位置已登记, 下载完成后自动应用 —— 不是失败
+        Ok(ncm_playback::SeekOutcome::Queued) => {
+            eprintln!("[ncm-ffi] player_seek({position_ms}) 已排队: 缓存完成后自动跳转")
+        }
+        Ok(ncm_playback::SeekOutcome::Applied) => {}
+        Err(e) => {
+            // 后端已经 warn 过一次(带上下文), 这里补一层「从 FFI 调进来的」信息
+            eprintln!("[ncm-ffi] player_seek({position_ms}) 未生效: {e}");
+        }
     }
     state_dto()
 }

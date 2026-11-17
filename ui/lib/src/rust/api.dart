@@ -2761,6 +2761,10 @@ class PlayerStateDto {
   /// 最近一次 seek 失败的原因(None = 没失败过); 失败同时会打一条 warn 日志。
   final String? seekError;
 
+  /// 渐进播放期(边下边播)登记下来、等下载完成后自动应用的跳转位置(ms)。
+  /// None = 没有挂起的跳转。UI 可以据此显示「已排队, 缓存完成后自动跳转」(P-10 方案 B)。
+  final BigInt? pendingSeekMs;
+
   const PlayerStateDto({
     this.trackId,
     required this.playing,
@@ -2769,6 +2773,7 @@ class PlayerStateDto {
     required this.volume,
     required this.seekable,
     this.seekError,
+    this.pendingSeekMs,
   });
 
   @override
@@ -2779,7 +2784,8 @@ class PlayerStateDto {
       durationMs.hashCode ^
       volume.hashCode ^
       seekable.hashCode ^
-      seekError.hashCode;
+      seekError.hashCode ^
+      pendingSeekMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -2792,7 +2798,8 @@ class PlayerStateDto {
           durationMs == other.durationMs &&
           volume == other.volume &&
           seekable == other.seekable &&
-          seekError == other.seekError;
+          seekError == other.seekError &&
+          pendingSeekMs == other.pendingSeekMs;
 }
 
 /// 歌单(列表项): 直接镜像 domain 类型 `Playlist`.
