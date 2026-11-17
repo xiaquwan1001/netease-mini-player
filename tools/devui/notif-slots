@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# 断言「当前 post 出来的媒体通知」的按钮槽位是否符合契约:
+#   上一首 -> 播放/暂停 -> 下一首 -> 喜欢/取消喜欢 -> 播放顺序   (见 .pi/memory/media-notification-custom-buttons.md)
+#
+# 用法:
+#   DEV=emulator-5554 tools/devui/notif-slots                  # 从模拟器读 dumpsys notification
+#   DEV=emulator-5554 tools/devui/notif-slots --pkg com.minincm.minincm
+#   tools/devui/notif-slots --dump saved.txt                   # 解析已保存的 dump(离线)
+#   tools/devui/notif-slots --selftest                         # 用内置离线样例自测解析器
+#
+# 退出码: 0 = 全部 PASS; 1 = 有 FAIL; 2 = 用法/设备纪律问题(拒跑); 3 = 读不到 dump
+#
+# 为什么读 dumpsys notification 而不是 media_session:
+#   media_session 的 PlaybackState.customActions 是**滞后快照**(只在播放状态变化时重发布),
+#   而 notification 里 actions=[N] 就是 SystemUI 真拿去画的那一份。
+#
+# 限制(务必先读):
+#   - 只允许 emulator-*: 用户物理机上的 App 不装/不点/不读通知, 脚本对此硬拒。
+#   - 必须先有**正在播放**的媒体会话(通知只在播放/暂停态存在; 停了就没有 NotificationRecord)。
+#   - Android 13+ 需要 App 已授予 POST_NOTIFICATIONS, 否则通知被丢弃, 脚本会报「没找到记录」。
+#   - 部分 ROM 的 dumpsys 排版不同(少了 actions 段); 那时用 --dump 存原文人工核对。
+set -uo pipefail
+export PATH="${ANDROID_HOME:-$HOME/android-dev/sdk}/platform-tools:$PATH"
+
+DEV=${DEV:-emulator-5554}
+PKG=""
+DUMP=""
+MODE=device
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
+SAMPLES="$SELF_DIR/notif-slots-samples"
+PARSER="$SELF_DIR/notif_slots_parser.py"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --pkg) PKG=${2:-}; shift 2 ;;
+    --pkg=*) PKG=${1#--pkg=}; shift ;;
+    --dump) DUMP=${2:-}; shift 2 ;;
+    --dump=*) DUMP=${1#--dump=}; shift ;;
+    --selftest) MODE=selftest; shift ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    *) echo "未知参数: $1(见 --help)" >&2; exit 2 ;;
+  esac
+done
+
+if [ "$MODE" = selftest ]; then
+  rc=0
+  shopt -s nullglob
+  files=("$SAMPLES"/*.txt)
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "没有样例: $SAMPLES" >&2; exit 2
+  fi
+  for f in "${files[@]}"; do
+    base=$(basename "$f")
+    case "$base" in
+      *expect-fail*) want=1 ;;
+      *) want=0 ;;
+    esac
+    python3 "$PARSER" "$f" >/tmp/notif-slots-selftest.out 2>&1
+    got=$?
+    if [ "$got" = "$want" ]; then
+      echo "SELFTEST ok    $base (exit=$got)"
+    else
+      echo "SELFTEST FAIL  $base (exit=$got, 期望 $want)"
+      sed 's/^/    /' /tmp/notif-slots-selftest.out
+      rc=1
+    fi
+  done
+  [ "$rc" = 0 ] && echo "自测通过(PASS / FAIL 两种判定都被覆盖)"
+  exit "$rc"
+fi
+
+if [ -z "$DUMP" ]; then
+  case "$DEV" in
+    emulator-*) ;;
+    *) echo "拒绝: 只允许 emulator-*, 当前 DEV=$DEV(物理机上不读通知/不装包)" >&2; exit 2 ;;
+  esac
+  if ! adb devices | tr -d '\r' | grep -q "^$DEV[[:space:]]*device$"; then
+    echo "没有在线模拟器 $DEV(adb devices 里没有)" >&2
+    exit 3
+  fi
+  DUMP=$(mktemp /tmp/notif-slots-dump.XXXXXX.txt)
+  if ! adb -s "$DEV" shell dumpsys notification --noredact > "$DUMP" 2>/dev/null; then
+    echo "dumpsys notification 失败($DEV)" >&2
+    exit 3
+  fi
+  echo "# dump 已存 $DUMP"
+fi
+
+if [ ! -f "$DUMP" ]; then
+  echo "dump 文件不存在: $DUMP" >&2
+  exit 2
+fi
+
+python3 "$PARSER" "$DUMP" "$PKG"
+exit $?

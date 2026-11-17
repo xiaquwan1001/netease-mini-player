@@ -342,9 +342,17 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 >   三边读取 ⇒ 原「待办」记载**作废(2026-11-16)**。
 > 下表只写「为什么没做 / 触发条件 / 预计工作量」; 方案原文在审计文件里, 不在此复制。
 
+> **P-11 第一步已落(2026-11-17)**: 仓库有了首个 instrumented 设施 ——
+> `ui/android/app/src/androidTest/kotlin/com/minincm/minincm/NotificationSlotsTest.kt`(3 例: 通知渠道 importance /
+> action 槽位 = 上一首→播放暂停→下一首→喜欢→播放顺序 + `compactActions` / 喜欢·模式状态回推) +
+> `tools/devui/notif-slots`(解析 `dumpsys notification --noredact` 的 `NotificationRecord` 排版, PASS/FAIL,
+> 带离线样例自测) + `tools/devui/androidtest`(`connectedDebugAndroidTest` 的设备守卫: 只允许 `emulator-*`)。
+> 观察口径: 断言对象是 Media3 用生产 `mediaButtonPreferences` 拼出的 Notification, 不是常量表。
+> **该批未实跑**(开工时无模拟器), 编译门 `compileDebugAndroidTestKotlin` + `testDebugUnitTest` 已绿。
+
 | 项 | 为什么没做 | 触发条件(什么时候做) | 预计工作量 |
 |---|---|---|---|
-| **P-11 完整版** · Android instrumented + 桌面自动化 | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | M(首个 `androidTest/` + `dumpsys notification` 断言脚本 ≈ 1 天; Kotlin JVM 那半已由 `android-unit` 门覆盖) |
+| **P-11 完整版** · 桌面自动化(Android instrumented **第一步已落 2026-11-17**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M(首个 `androidTest/` + `dumpsys notification` 断言脚本)~~ ⇒ **剩余 S–M**: ① 把 `connectedDebugAndroidTest` 接进 `ci-gates.sh`(需模拟器); ② 桌面(Linux)自动化仍为零; ③ 通知**点击**行为仍靠真机冒烟 |
 | **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
 | **P-18 后半** · application-id 与 AppStream id 对齐 | 前半(标题/尺寸)已做(`08e5d37`); `ui/linux/CMakeLists.txt:10` 仍是 `com.minincm.minincm`, metainfo/deb 用 `io.github.xiaquwan1001.MiniNCM`。改 id 会牵动**单实例标识、用户数据目录与 desktop 文件关联**, 必须连迁移一起设计, 审计也标了「不建议顺手改」 | ① 准备上架软件中心/Flatpak 类渠道; ② 或决定统一用户数据目录并接受一次性迁移 | M(改 id + 数据目录迁移 + 单实例锁 + deb/AppImage desktop 文件 + 冒烟 ≈ 1~2 天, 且**需用户拍板**是否迁移) |
 | **P-10 方案 B** · pending_seek | 方案 A(如实反馈 + 不可 seek 时禁用进度条)已在 v0.18.0 落地, 用户不再被「弹回」骗; 方案 B 要在渐进下载完成后**重建解码器**并应用待跳位置, 属播放引擎结构改动。遗留: 同一首歌下载完成后仍需重播一次才能 seek | ① 用户明确要求「边下边播也能跳」; ② 或重做渐进播放(分片写入 + 可 seek 容器) | M–L(重建解码器 + 位置/队列状态恢复 + Linux/Windows 听感验 ≈ 2 天起) |

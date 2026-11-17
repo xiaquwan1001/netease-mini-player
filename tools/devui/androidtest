@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# 在**模拟器**上跑 instrumented 测试(ui/android/app/src/androidTest)。
+#
+# 用法:
+#   DEV=emulator-5554 tools/devui/androidtest                       # 跑全部 case
+#   DEV=emulator-5554 tools/devui/androidtest -Pandroid.testInstrumentationRunnerArguments.class=com.minincm.minincm.NotificationSlotsTest
+#
+# 为什么必须走这个脚本而不是直接 ./gradlew connectedDebugAndroidTest:
+#   connectedDebugAndroidTest 会往**所有**在线设备装 APK 并跑测试。本机 adb 上平时连着用户的
+#   日常手机, 直接跑等于往物理机上装包/覆盖数据。这里先硬性校验 DEV 是 emulator-*, 再显式把
+#   ANDROID_SERIAL 传给 Gradle, 保证只碰那一台模拟器。
+set -uo pipefail
+export PATH="${ANDROID_HOME:-$HOME/android-dev/sdk}/platform-tools:$PATH"
+
+DEV=${DEV:-emulator-5554}
+case "$DEV" in
+  emulator-*) ;;
+  *) echo "拒绝: 只允许 emulator-*, 当前 DEV=$DEV(物理机上不装包/不清数据)" >&2; exit 2 ;;
+esac
+
+if ! adb devices | tr -d '\r' | grep -q "^$DEV[[:space:]]*device$"; then
+  echo "没有在线模拟器 $DEV(编排者先起 a34 headless)" >&2
+  exit 3
+fi
+
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+[ -f "$ROOT/tools/env.sh" ] && source "$ROOT/tools/env.sh"
+cd "$ROOT/ui/android" || exit 2
+[ -x ./gradlew ] || { echo "缺 gradlew(Flutter 生成的本地文件, 先 flutter pub get)" >&2; exit 2; }
+
+ANDROID_SERIAL=$DEV timeout -k 30 2400 ./gradlew :app:connectedDebugAndroidTest "$@"

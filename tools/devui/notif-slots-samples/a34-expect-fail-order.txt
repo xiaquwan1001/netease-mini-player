@@ -1,0 +1,24 @@
+# 离线样例: 顺序错位(喜欢跑到第 3 位、下一首跑到第 4 位)—— 期望判 FAIL。
+Notification List:
+  NotificationRecord(0x0e2b6b31: pkg=com.minincm.minincm.dev user=0 id=1001 tag=null importance=2 key=0|com.minincm.minincm.dev|1001|null|10198: Notification(channel=default_channel_id shortcut=null contentView=null vibrate=null sound=null defaults=0x0 flags=0x2 color=0x00000000 category=transport actions=5 vis=PUBLIC))
+    uid=10198 userId=0
+    opPkg=com.minincm.minincm.dev
+    key=0|com.minincm.minincm.dev|1001|null|10198
+    notification=
+        contentIntent=PendingIntent{8c1e2e0: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startActivity}}
+        actions={
+            [0] "上一首" -> PendingIntent{9a1b3c2: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [1] "播放" -> PendingIntent{3c4d5e6: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [2] "喜欢" -> PendingIntent{c1d2e3f: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [3] "下一首" -> PendingIntent{7f8a9b0: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+            [4] "播放顺序" -> PendingIntent{a4b5c6d: PendingIntentRecord{2f6a1f1 com.minincm.minincm.dev startService}}
+          }
+        extras={
+            android.title=String (晴天)
+            android.compactActions=int (3)
+              [0] 0
+              [1] 1
+              [2] 2
+          }
+    publicNotification=
+        None
