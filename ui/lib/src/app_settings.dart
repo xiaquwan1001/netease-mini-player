@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 
 import 'theme.dart' show AccentPalette;
 
+// settings.json 的读写细节(按域解析 + 落盘 map)在 part 文件里。
+// 字段仍全在本类(单例形状未变, §12.6 只拆「编解码」这一层)。
+part 'app_settings_codec.dart';
+
 /// 全局 UI/播放偏好. 只存轻量 JSON, 放在 Rust 用的同一个 dataDir 下,
 /// 双端(Android/Linux)都不依赖平台插件.
 ///
@@ -285,124 +289,8 @@ class AppSettings extends ChangeNotifier {
       if (await _file!.exists()) {
         final raw = jsonDecode(await _file!.readAsString());
         if (raw is Map) {
-          themeMode = _themeFrom(raw['themeMode']);
-          accent = AccentPalette.fromId(raw['accent'] as String?);
-          textScale = snapTextScale(_doubleOf(raw['textScale'], 1.0));
-          final level = raw['audioLevel'];
-          if (level is String && audioLevels.containsKey(level)) {
-            audioLevel = level;
-          }
-          final rows = raw['coverRows'];
-          if (rows is num && (rows.toInt() == 1 || rows.toInt() == 2)) {
-            coverRows = rows.toInt();
-          }
-          final cols = raw['gridColumns'];
-          if (cols is num && cols.toInt() >= 2 && cols.toInt() <= 4) {
-            gridColumns = cols.toInt();
-          }
-          final clearOnSwitch = raw['clearSearchOnTabSwitch'];
-          if (clearOnSwitch is bool) clearSearchOnTabSwitch = clearOnSwitch;
-          final hotSearch = raw['showHotSearch'];
-          if (hotSearch is bool) showHotSearch = hotSearch;
-          final skipVip = raw['skipVipSongs'];
-          if (skipVip is bool) skipVipSongs = skipVip;
-          final cacheDays = raw['dailyCacheDays'];
-          if (cacheDays is num &&
-              dailyCacheOptions.contains(cacheDays.toInt())) {
-            dailyCacheDays = cacheDays.toInt();
-          }
-          final anonDebug = raw['anonymousDebug'];
-          if (anonDebug is bool) anonymousDebug = anonDebug;
-          final coverQualityRaw = raw['coverQuality'];
-          if (coverQualityRaw is String) {
-            coverQuality = CoverQualityX.fromId(coverQualityRaw);
-          }
-
-          if (raw['oledDark'] is bool) oledDark = raw['oledDark'] as bool;
-          volumeGainDb = _doubleOf(raw['volumeGainDb'], 0.0).clamp(-40.0, 0.0);
-          if (raw['loudnessNormalize'] is bool) {
-            loudnessNormalize = raw['loudnessNormalize'] as bool;
-          }
-          loudnessTargetLufs = _doubleOf(
-            raw['loudnessTargetLufs'],
-            -16.0,
-          ).clamp(-30.0, -5.0);
-          if (raw['loudnessDynamic'] is bool) {
-            loudnessDynamic = raw['loudnessDynamic'] as bool;
-          }
-          final eqName = raw['eqProfileName'];
-          if (eqName is String && eqName.isNotEmpty) eqProfileName = eqName;
-          final eqText = raw['eqProfileText'];
-          if (eqText is String && eqText.trim().isNotEmpty) {
-            eqProfileText = eqText;
-          }
-          final fade = raw['fadeMs'];
-          if (fade is num && fadeOptions.containsKey(fade.toInt())) {
-            fadeMs = fade.toInt();
-          }
-          if (raw['hardwareDecode'] is bool) {
-            hardwareDecode = raw['hardwareDecode'] as bool;
-          }
-          if (raw['streamCache'] is bool) {
-            streamCache = raw['streamCache'] as bool;
-          }
-          final limit = raw['cacheLimitMb'];
-          if (limit is num && cacheLimits.contains(limit.toInt())) {
-            cacheLimitMb = limit.toInt();
-          }
-          final trans = raw['lyricTranslation'];
-          if (trans is bool) lyricTranslation = trans;
-          final srcPref = raw['lyricSourcePreference'];
-          if (srcPref is String && lyricSourceOptions.containsKey(srcPref)) {
-            // schema < 2 的 'auto' 是旧默认值(0.9 短路导致 AMLL 几乎不被用),
-            // 一次性抬到新默认 'amll'; 之后用户手动改回 'auto' 会被本版号挡住不再覆盖。
-            final schema = raw['schemaVersion'];
-            final legacy =
-                schema is! num || schema.toInt() < settingsSchemaVersion;
-            lyricSourcePreference = (legacy && srcPref == 'auto')
-                ? 'amll'
-                : srcPref;
-          }
-          // 自动更新检查(2026-11): 频率 + 节流/跳过记录
-          // 兼容旧版布尔开关: true -> 每天, false -> 不自动检查。
-          final playRaw = raw['librarySearchPlayAction'];
-          if (playRaw is String) {
-            librarySearchPlayAction = LibrarySearchPlayAction.values.firstWhere(
-              (v) => v.name == playRaw,
-              orElse: () => LibrarySearchPlayAction.fullList,
-            );
-          }
-          final intervalRaw = raw['updateCheckInterval'];
-          if (intervalRaw is String) {
-            updateCheckInterval = UpdateCheckInterval.values.firstWhere(
-              (v) => v.name == intervalRaw,
-              orElse: () => UpdateCheckInterval.daily,
-            );
-          } else if (raw['updateCheckOnStartup'] is bool) {
-            updateCheckInterval = raw['updateCheckOnStartup'] as bool
-                ? UpdateCheckInterval.daily
-                : UpdateCheckInterval.off;
-          }
-          if (raw['lastUpdateCheckMs'] is int) {
-            lastUpdateCheckMs = raw['lastUpdateCheckMs'] as int;
-          }
-          final skipped = raw['skippedUpdateVersion'];
-          if (skipped is String && skipped.isNotEmpty) {
-            skippedUpdateVersion = skipped;
-          }
-          // 关闭行为: 缺字段/未知值一律回落"直接退出"(不改变旧用户预期)
-          closeBehavior = CloseBehaviorX.fromId(raw['closeBehavior']);
-          // 交互记录: 旧配置没有这个字段 ⇒ 保持空 map, 不报错。
-          // 先清空再读, 让 load() 幂等(重复 load 不叠加旧的会话内记录)
-          _interactions.clear();
-          final interactions = raw['interactions'];
-          if (interactions is Map) {
-            for (final entry in interactions.entries) {
-              final key = entry.key;
-              final value = entry.value;
-              if (key is String && value is int) _interactions[key] = value;
-            }
-          }
+          // 按域解析在 app_settings_codec.dart(part), 加设置项只改那一处 + _toJson。
+          applyStoredJson(raw);
         }
       }
     } catch (_) {
@@ -539,43 +427,7 @@ class AppSettings extends ChangeNotifier {
     try {
       await file.parent.create(recursive: true);
       final tmp = File('${file.path}.tmp');
-      await tmp.writeAsString(
-        jsonEncode({
-          'themeMode': _themeName(themeMode),
-          'accent': accent.id,
-          'textScale': textScale,
-          'audioLevel': audioLevel,
-          'coverRows': coverRows,
-          'gridColumns': gridColumns,
-          'clearSearchOnTabSwitch': clearSearchOnTabSwitch,
-          'showHotSearch': showHotSearch,
-          'skipVipSongs': skipVipSongs,
-          'dailyCacheDays': dailyCacheDays,
-          'anonymousDebug': anonymousDebug,
-          'coverQuality': coverQuality.id,
-          'oledDark': oledDark,
-          'volumeGainDb': volumeGainDb,
-          'loudnessNormalize': loudnessNormalize,
-          'loudnessTargetLufs': loudnessTargetLufs,
-          'loudnessDynamic': loudnessDynamic,
-          'eqProfileName': eqProfileName,
-          'eqProfileText': eqProfileText,
-          'fadeMs': fadeMs,
-          'hardwareDecode': hardwareDecode,
-          'streamCache': streamCache,
-          'cacheLimitMb': cacheLimitMb,
-          'lyricTranslation': lyricTranslation,
-          'lyricSourcePreference': lyricSourcePreference,
-          'schemaVersion': settingsSchemaVersion,
-          'updateCheckInterval': updateCheckInterval.name,
-          'librarySearchPlayAction': librarySearchPlayAction.name,
-          'closeBehavior': closeBehavior.id,
-          'lastUpdateCheckMs': lastUpdateCheckMs,
-          'skippedUpdateVersion': skippedUpdateVersion,
-          'interactions': _interactions,
-        }),
-        flush: true,
-      );
+      await tmp.writeAsString(jsonEncode(toJson()), flush: true);
       try {
         await tmp.rename(file.path);
       } on FileSystemException {
