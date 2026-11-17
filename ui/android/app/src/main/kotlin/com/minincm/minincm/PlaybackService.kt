@@ -55,6 +55,10 @@ import kotlin.math.pow
  * 直接经 [configure] 落到本服务; [userVolume]/[gainDb]/[fadeMs] 是音量三要素, 都归这里管,
  * 避免 MainActivity 与 Service 各存一份音量状态。
  */
+// 整个服务都在用 media3 的 UnstableApi(ExoPlayer/MediaSession/CommandButton/SimpleCache),
+// 逐个方法标 @OptIn 必漏(2026-11-18 lint 实测 51 处 UnsafeOptInUsageError), 统一标在类上;
+// 类内方法不再重复标注。
+@OptIn(UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var exoPlayer: ExoPlayer? = null
@@ -79,7 +83,6 @@ class PlaybackService : MediaSessionService() {
     private var fadeAnimator: ValueAnimator? = null
     private var gainSlewAnimator: ValueAnimator? = null
 
-    @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -176,7 +179,6 @@ class PlaybackService : MediaSessionService() {
      * 把按钮偏好(media button preferences)推给会话, 并把**生效顺序与槽位**打进 logcat(NCM-PLAYER),
      * 供 dumpsys / 回归核对(顺序契约见 [NOTIFICATION_BUTTON_ORDER])。
      */
-    @OptIn(UnstableApi::class)
     private fun applyCustomLayout() {
         val buttons = buildCustomLayout()
         mediaSession?.setMediaButtonPreferences(buttons)
@@ -234,7 +236,6 @@ class PlaybackService : MediaSessionService() {
      * MainActivity -> Dart skipPrevious/skipNext); 喜欢/播放顺序仍走 actionListener -> toggleLike/cycleMode。
      * 队列语义一点没动, 只改了通知按钮的槽位与去重。
      */
-    @OptIn(UnstableApi::class)
     private fun buildCustomLayout(): List<CommandButton> = listOf(
         // 上一首: 显式钉 SLOT_BACK(通知第 1 位)
         CommandButton.Builder()

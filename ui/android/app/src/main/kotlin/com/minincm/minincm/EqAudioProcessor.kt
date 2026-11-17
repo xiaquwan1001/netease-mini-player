@@ -1,8 +1,12 @@
+// 整个文件都在用 Media3 的 @UnstableApi(AudioProcessor/BaseAudioProcessor 及其嵌套类型)。
+// 注意: `@file:OptIn(...)` 不被 AndroidX 的 experimental lint 认(kotlin 编译器认, lint 不认),
+// 而类级 `@OptIn` 盖不住 **class 头部的父类引用**; 所以直接给类本身标 `@UnstableApi`。
 package com.minincm.minincm
 
 import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
+import androidx.media3.common.util.UnstableApi
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.abs
@@ -21,6 +25,7 @@ private fun dbToLinear(db: Float): Float = 10f.pow(db / 20f)
 // 输出限幅到 [-1,1]: 正增益可能把样本推出量程, 宁可削波也不要把噪声灌给设备。
 // ============================================================================
 
+@UnstableApi
 class EqAudioProcessor(private val profile: EqProfile) : BaseAudioProcessor() {
     private var sampleRate = 48000
     private var channelCount = 2

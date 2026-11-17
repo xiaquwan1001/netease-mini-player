@@ -1,6 +1,5 @@
 package com.minincm.minincm
 
-import android.app.Activity
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
@@ -16,6 +15,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
 
 /**
@@ -30,8 +31,21 @@ import androidx.core.content.ContextCompat
  * 2. 登录成功的唯一判据是 music.163.com 域下出现 MUSIC_U cookie;
  *    页面文案/跳转都不可靠, 所以要轮询 cookie。
  */
-class LoginActivity : Activity() {
+class LoginActivity : ComponentActivity() {
     private lateinit var webView: WebView
+
+    /**
+     * 返回键/返回手势 = 放弃登录(与顶栏「关闭」同一个出口)。
+     *
+     * 2026-11-18: 从 `override onBackPressed()` 迁到 OnBackPressedDispatcher ——
+     * targetSdk 36 起预测性返回默认开启, 系统**不再调用** onBackPressed(lint
+     * `GestureBackNavigation` 报错那一条), 旧写法在 Android 16 上会“返回键没反应”。
+     */
+    private val backCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            finishCancelled()
+        }
+    }
     private lateinit var loadingBar: ProgressBar
     private val handler = Handler(Looper.getMainLooper())
     private var finishedWithCookie = false
@@ -46,6 +60,7 @@ class LoginActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, backCallback)
         CookieManager.getInstance().setAcceptCookie(true)
         val loginUrl = intent?.getStringExtra(EXTRA_URL) ?: LOGIN_URL
 
@@ -171,11 +186,6 @@ class LoginActivity : Activity() {
         finishedWithCookie = true
         setResult(RESULT_CANCELED)
         finish()
-    }
-
-    override fun onBackPressed() {
-        // 不再在网页 history 里逐页回退: 那是"退不出去"的根源。
-        finishCancelled()
     }
 
     private fun dp(value: Int): Int =
