@@ -13,9 +13,19 @@
 | [ui-batch-d6.md](ui-batch-d6.md) / [ui-batch-d6b.md](ui-batch-d6b.md) | D6：PagedListView 抽取与迁移 | ✅ |
 | [ui-song-detail-share.md](ui-song-detail-share.md) | 播放条合并 + 歌曲详情页 + 分享卡片 | ✅ |
 | [PROGRESS-v1.md](PROGRESS-v1.md) | v1(WebView 版)阶段进度记录, 从 PROGRESS 拆出归档 | 📦 归档(2026-11-13) |
-| [remaining-batches-history.md](remaining-batches-history.md) | 待办规划历史口径: B0 收尾批 / 推荐波次 / 精简项排队 / UI 走查批 A–D | 📦 归档(2026-11-13) |
+| [remaining-batches-history.md](remaining-batches-history.md) | 待办规划历史口径: B0 收尾批 / 推荐波次 / 精简项排队 / UI 走查批 A–D / §11.A-1 2026-11-14 反馈批 | 📦 归档(2026-11-17) |
+| [PROGRESS-2026-11-13-11-19.md](PROGRESS-2026-11-13-11-19.md) | v0.8.0–v0.19.0 的按日批次明细(S 级拆壳各步 / 平台层审计落地 / 列表行 B+C 级 / 各用户反馈批), 从 PROGRESS 迁出 | 📦 归档(2026-11-17) |
 | [DOCS-REPORT-2026-11-10.md](DOCS-REPORT-2026-11-10.md) | 文档整理子代理的一次性报告（**数字为当时快照**：248/522，现值见 PROGRESS 头部） | 📦 归档(2026-11-11) |
 | [ffi-cleanup-d1d2d5.md](ffi-cleanup-d1d2d5.md) | D1/D2/D5：删死导出 + `ffi_forward!` 宏收敛（**数字为当时快照**：导出 123；现值见 api-coverage.md） | ✅ |
+
+## 2026-11-17 归档批次(PROGRESS 第二次拆分)
+
+`docs/PROGRESS.md` 从 1212 行压到 517 行: v0.19.0 及更早的按日批次(2026-11-13 ~ 11-16)整段迁出,
+主文件只留 **v0.20.0 起**的活跃批次(版本时间线表仍覆盖 v0.8.0 起全部版本)。
+
+| 旧路径 | 新路径 | 归档理由 |
+|---|---|---|
+| docs/PROGRESS.md §「2026-11-16(日) 收尾批 v0.19.0」…「2026-11-13 结构性债务第 1 波」 | [PROGRESS-2026-11-13-11-19.md](PROGRESS-2026-11-13-11-19.md) | 活跃批次只保留 v0.20.0 起; 旧批次明细不再随开发更新, 一行摘要留在版本时间线表。**归档** |
 
 ## 2026-11-15 归档批次(PROGRESS 拆分)
 

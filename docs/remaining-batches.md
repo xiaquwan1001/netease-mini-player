@@ -151,7 +151,7 @@
 
 > 「10. UI/UX 走查批次(A–D, 2026-11-09 审计产出)」是已完成/历史口径, 原文见 [`docs/archive/remaining-batches-history.md`](archive/remaining-batches-history.md)。
 
-## 11. 待办(2026-11-13 更新)
+## 11. 待办(2026-11-17 更新)
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次);
 > **平台层审计确认未做的 2 条债务(P-11 完整版 / P-10 方案 B)见 §13**(P-18 后半已于 2026-11-17 落地)。
@@ -160,40 +160,18 @@
 > **基线数字不在这里维护**(曾经 4 处各写一套 ⇒ 已实测分叉): 唯一权威是 [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
 > 本节只管「还剩什么没做」。
 
-### A. 只剩这些没做(按成本排序)
+### A. 只剩这些没做(按成本排序, 2026-11-17 复核后重写)
 
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
-| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— v0.7.1/v0.8.0 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
-| 1b | 主页新数据面接页面 | `userPlayRanking` / `userEvents` 已有 FFI 但无 UI 入口(FFI 152 里 7 个无入口);实测他人听歌排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再决定是否做「常听/动态」tab。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
-| 2 | ✅ **AppImage 桌面集成**(2026-11-17, `89f523b`) | 首启(仅 `APPIMAGE` 环境)问一次, 同意就写 `~/.local/share/applications/io.github.xiaquwan1001.MiniNCM.desktop` + hicolor 图标(不需要 root), Exec 写 AppImage 绝对路径; 拒绝/已装不再问(`desktop-integration.asked` 标记)。回归 `desktop_integration_test` 10 例 | — |
+| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
+| 2 | 主页新数据面接页面 | `userPlayRanking` / `userEvents` 已有 FFI 但无 UI 入口(FFI 161 里 6 个无入口);实测他人听歌排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再决定是否做「常听/动态」tab。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
 | 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
 | 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
 | 6 | **诊断 Worker 落地**(用户手动) | 代码与 8 步部署说明已在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
-| 7 | ✅ **行高统一: `itemExtent`/`_kRowHeight` 按 textScaler 缩放**(2026-11-14, `6cf0645`) | 落地 `layout.dart: kRowExtent/rowExtentFor`(基准 × clamp(1,2), 全仓唯一实现); `detail_page` 两个 `SliverFixedExtentList` 与「定位正在播放」偏移改用它, `_kRowHeight` 删除; `lyric.dart`/`word_lyric_view.dart` 的 `itemExtent` 改可空、缺省按字号缩放; `main.dart: _lyricItemExtent` 收敛到同一函数。**勘误: 原记「全仓 7 处」实际是 4 处**(`rg -n 'itemExtent' ui/lib --glob '!src/rust/**'`: detail_page 2 + lyric.dart/word_lyric_view.dart 缺省参数各 1; main.dart 2 处早在 v0.7.1 就按字号算)——原数字把歌词调用点与缺省参数重复计了。回归: `ui/test/row_extent_test.dart` 8 例(含「56dp 在 1.625 下确实溢出」的负向对照) | — |
-| 8 | ✅ `_AuthorChip` 筛选条定高 84 竖溢(2026-11-14, `2932dcc`) | `layout.dart: kAvatarStripHeight/avatarStripHeightFor`(只放大 16dp 文字段, 1.0 下仍是 84); 同一形态的 `messages_page` 最近联系人条一并修掉。测试: `feed_view_test` 1.625 用例升级为「两向都不许 overflow」+ `messages_page_test` 新增 1.625 用例(修复前实测失败) | — |
-| 9 | 列表行 C 级收敛(审计已出清单) | ✅ **B 级 12 条已于 2026-11-16 晚清零**(口径 `layout.dart: kRowTrailingMaxRatio=0.45` + `capRowTrailing()`, 回归 `narrow_width_audit_test` 10 条用例 12 组合)。**C 级第一批 2026-11-17 已落**: 四个具名行留白口径(`kSongRowPadding` / `kPageRowPadding` / `kCardRowPadding` / `kPreviewRowPadding`) + 16 处迁移 + 5 处勘误标注 + 门 `tools/check-row-padding.sh --strict`(已进 `verify`)。**C 级第二批 2026-11-17(独立 lane `lane/uib-c`) 已做 A**: 按用户裁决**取消 8/12 二分** —— `kSongRowPadding` 删除, 整页铺满的歌曲行统一到 `kPageRowPadding`(12/0/4), 门禁白名单 4→3(旧名写了就红), golden 只动 `recommend` 两张。**B 也已做**: 纵向统一「行内纵向留白 0 / 行高 `rowExtentFor`, 预览行保留具名 6」(`rowHeightBox` + `check-row-padding.sh` 纵向段 + `layout_metrics_test` 渲染高度断言)。**C 也已做**: `ListRow` 去重改了做法 —— 不新写组件, 改成 4 个 `SongRow` 静态工厂(12 处调用点, 三批 golden 逐字节未变), 剩 3 处形状唯一不收敛。**§11 A-9 三条全部清零**。详见 `docs/ui-row-audit.md` 头部状态段 | M→S |
-| 10 | ✅ **golden 接入 CI/v0.13.0–v0.16.0**(2026-11-16 复核) | v0.13.0 golden 12→18 并进 CI;v0.16.0 CI 门禁统一到 `tools/ci-gates.sh`, 发版门不再用 `--exclude-tags 'network \|\| golden'`。渲染环境靠 CI 装 `fonts-noto-cjk` + 固定 Flutter 3.47.9, 未容器化(换 Flutter 版本要 `--update-goldens` 重出基准) | — |
 
-### A-1. 2026-11-14 用户反馈批(已落 main, 未发版)
-
-| 项 | 结论 / 提交 |
-|---|---|
-| 通知封面 = 当前播放内容 | `14c4265`:Dart 带浏览器 UA 下字节 → `ncm/player#play.artwork` → `setArtworkData`;设备实测 `largeIcon typ=BITMAP` |
-| 通知栏「下一首」 | 同上:`CMD_NEXT` 自定义按钮(系统紧凑视图会挤掉第 3 个系统动作);设备实测 custom actions 含「下一首」 |
-| VIP 跳过只约束自动续播 | 同上:`_playSong(explicit: true)` 三处点播入口 |
-| 播放现场记忆 | 同上:`play_state.json` + `playback_state.dart`(7 例单测);设备实测 force-stop 重开恢复播放条 |
-| 乐观续播 | 同上:原生 `STATE_ENDED` 即时报 + 下一首直链预取 |
-| 设置页主题模式合并 OLED | `65c12bb`:四档(跟随/浅色/深色/纯黑) + 主题色行缩进/字重对齐;settings golden 已更新 |
-| 搜索 405 限流 | `747b458`:只读响应缓存 TTL300s+LRU+单飞(11 例单测;连搜 5 轮上游 30→6) |
-| 网格列数不吃档位/第三列被裁 | `7e2669f`:delegate 改吃真实可用宽度;艺人区分列接入 `gridColumns` |
-| 动态头像与搜索艺人不一致 | `9606c96`:`ProfileDetail.artistId` → 有歌手身份进艺人页, 否则用户页;顺带修 chip 传错 id 空间 |
-| 用户 15 项反馈(主题纯黑/主页简介动态/分享水印/转发页/隐私 400/云盘/通知顺序/网格列数/相似艺人/MV 分区/动态历史/统计行/等级 0/艺人 tab/联想高度/边缘留白) | 2026-11-14(二):7 lane 并行落地, 明细见 `docs/PROGRESS.md` 同日小节;合并后 919 例全绿 |
-| 编辑简介接通 | 2026-11-14(二) 追加:`user_profile_update`(局部更新)+ service/FFI/UI;132 字符校验 |
-| 云盘(列表/删除/取链/上传) | 2026-11-14(二) 追加:五步上传(查重→NOS token→整文件 → info → 转码轮询 → pub), Android/桌面选文件;分片上传仍未做 |
-| 通知按钮顺序(上一首/播放暂停/下一首/喜欢/顺序) | 2026-11-14(二):`setMediaButtonPreferences` 显式槽位;AOSP14 实测 actions=5 无重复 |
-| 艺人动态是否有专用接口 | 2026-11-14(二) 结论:无。`/api/artist/detail/dynamic` 只给 concert/videoNum;艺人页继续 `userEvents(artistId)` 尽力而为 |
+> 原表里 §11.A-2(A) / A-7 / A-8 / A-9 / A-10 已于 2026-11-14~17 全部清零, 一行结论见下面 §11.B。
 
 ### B. 已完成(供对照, 不要重做)
 
@@ -205,6 +183,12 @@
 - 桌面打包四态(deb / AppImage / tar.gz / setup.exe)、Linux arm64 腿、Windows 向导中文化、AppStream 元数据。
 - 凭据三端(Android Keystore / Linux secret-service / Windows DPAPI) + 凭据不再过 FFI 回传 Dart。
 - v0.6.0–v0.7.1 用户回归四连发(见 `docs/archive/PROGRESS-2026-11-03-11-12.md`「2026-11-12(晚)」)。
+- 原 §11.A 的 ✅ 项(一行结论, 明细见 `docs/PROGRESS.md` 与 `archive/PROGRESS-2026-11-13-11-19.md`):
+  **AppImage 首启「集成到应用菜单」**(2026-11-17, `89f523b`; 只写 `~/.local/share/applications` + hicolor 图标, 无需 root, 拒绝/已装不再问) ·
+  **行高按 textScaler 缩放**(2026-11-14, `layout.dart: rowExtentFor` 全仓唯一实现) ·
+  **筛选条 84 竖溢**(2026-11-14, `avatarStripHeightFor`) ·
+  **列表行 C 级收敛**(2026-11-16/17: B 级 12 条清零 → 四个具名留白口径 → 取消 8/12 二分(现统一 12 线)→ 纵向 pitch 0/6 → `SongRow` 4 个静态工厂去重 12 处; 门 `check-row-padding.sh --strict` 已进 verify) ·
+  **golden 接入 CI**(v0.13.0 12→18 张并进 CI; v0.16.0 门禁统一到 `tools/ci-gates.sh`)。
 
 ### C. 需要新能力的 L 级(单独立项, 不要混批)
 

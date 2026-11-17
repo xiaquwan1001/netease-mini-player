@@ -88,3 +88,23 @@ Wave 5:  B2/B8 这类小批可插空; 或转 M 级 B7/B10/B12
 | ~~**D · 技术债收敛**~~ ✅ **已完成**(2026-11-11, 见 §11.B2) | 抽 `fmtDuration`/`formatDurationShort`/日期格式化进 `format.dart`、弹层 21/21 统一 `SheetHeader`+`showDragHandle`、`podcast.dart` 半死入口已删(658→190 行, 存活组件测试同步改写)、窄屏+1.25 回归补到 45 个测试文件 | P2 全部 + P1-7.15/7.16/7.18 | ~~M~~ 已做 | — |
 
 **与 §9 的互斥关系**: A–D 全是纯 Dart 车道, 与 §9 的 Rust/codegen 批次(2/3/5)**可并行**; 但 A/B/C/D 之间按上表错序。
+
+## A-1 · 2026-11-14 用户反馈批(已落 main 并随后续版本发布, 归档)
+
+| 项 | 结论 / 提交 |
+|---|---|
+| 通知封面 = 当前播放内容 | `14c4265`:Dart 带浏览器 UA 下字节 → `ncm/player#play.artwork` → `setArtworkData`;设备实测 `largeIcon typ=BITMAP` |
+| 通知栏「下一首」 | 同上:`CMD_NEXT` 自定义按钮(系统紧凑视图会挤掉第 3 个系统动作);设备实测 custom actions 含「下一首」 |
+| VIP 跳过只约束自动续播 | 同上:`_playSong(explicit: true)` 三处点播入口 |
+| 播放现场记忆 | 同上:`play_state.json` + `playback_state.dart`(7 例单测);设备实测 force-stop 重开恢复播放条 |
+| 乐观续播 | 同上:原生 `STATE_ENDED` 即时报 + 下一首直链预取 |
+| 设置页主题模式合并 OLED | `65c12bb`:四档(跟随/浅色/深色/纯黑) + 主题色行缩进/字重对齐;settings golden 已更新 |
+| 搜索 405 限流 | `747b458`:只读响应缓存 TTL300s+LRU+单飞(11 例单测;连搜 5 轮上游 30→6) |
+| 网格列数不吃档位/第三列被裁 | `7e2669f`:delegate 改吃真实可用宽度;艺人区分列接入 `gridColumns` |
+| 动态头像与搜索艺人不一致 | `9606c96`:`ProfileDetail.artistId` → 有歌手身份进艺人页, 否则用户页;顺带修 chip 传错 id 空间 |
+| 用户 15 项反馈(主题纯黑/主页简介动态/分享水印/转发页/隐私 400/云盘/通知顺序/网格列数/相似艺人/MV 分区/动态历史/统计行/等级 0/艺人 tab/联想高度/边缘留白) | 2026-11-14(二):7 lane 并行落地, 明细见 `docs/PROGRESS.md` 同日小节;合并后 919 例全绿 |
+| 编辑简介接通 | 2026-11-14(二) 追加:`user_profile_update`(局部更新)+ service/FFI/UI;132 字符校验 |
+| 云盘(列表/删除/取链/上传) | 2026-11-14(二) 追加:五步上传(查重→NOS token→整文件 → info → 转码轮询 → pub), Android/桌面选文件;分片上传仍未做 |
+| 通知按钮顺序(上一首/播放暂停/下一首/喜欢/顺序) | 2026-11-14(二):`setMediaButtonPreferences` 显式槽位;AOSP14 实测 actions=5 无重复 |
+| 艺人动态是否有专用接口 | 2026-11-14(二) 结论:无。`/api/artist/detail/dynamic` 只给 concert/videoNum;艺人页继续 `userEvents(artistId)` 尽力而为 |
+
