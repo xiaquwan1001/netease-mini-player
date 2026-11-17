@@ -14,6 +14,13 @@
 #   ④ 临时数据目录里写出 identity.json(持久层真的初始化了);
 #   ⑤ SIGTERM 能干净收尾(不留下僵尸/不挂死)。
 #
+#   ⑦ 关闭按钮行为(lane/tray-close), 三个子用例(都用自带的 WM_DELETE_WINDOW 小工具
+#      发**真实**关闭请求, 因为 xdotool windowclose 是 XDestroyWindow, 绕过 delete-event):
+#      a. 默认配置 ⇒ 收到关闭请求即退出(与旧版一致);
+#      b. closeBehavior=tray 且**没有**托盘宿主 ⇒ 进程仍在 + 降级为"最小化到任务栏"(日志留痕);
+#      c. closeBehavior=tray 且**有**宿主(脚本自带最小假 StatusNotifierWatcher)⇒ 主窗口
+#         unmap(隐藏), 进程仍在 —— 这就是"关到托盘不停播放"的自动化证据。
+#
 #   ⑥ 窗口存在 + 标题非空 + WM_CLASS = application-id + 几何 >= 200x200。
 #      注意: 必须 unset WAYLAND_DISPLAY + GDK_BACKEND=x11(脚本内已做), 否则 GTK 会连真实
 #      compositor, 窗口跑到用户屏幕上而 xvfb 里看不到任何子窗口。
@@ -177,6 +184,213 @@ case "$(grep '^WINDOW=' <<<"$OUT")" in
   *) skip "窗口断言: 缺 xwininfo" ;;
 esac
 grep -q '^SECOND_EXITED=1$' <<<"$OUT" && ok "第二个实例自行退出(严格单实例)" || bad "第二个实例没有在 2s 内退出"
+
+# ⑦ 关闭按钮行为(lane/tray-close): 默认"直接退出" + 设置成托盘时"隐藏(无宿主则降级)"。
+#
+# 必须用真正的 WM_DELETE_WINDOW 客户端消息, 不能用 xdotool windowclose: 后者是直接
+# XDestroyWindow(销毁窗口时 GTK 根本不发 delete-event), 拿它测关闭行为会得到
+# 假结论 —— 实测"设了托盘模式进程照样退出", 其实是测试手法错了。
+# 两个用例各开一个独立 dbus session: 严格单实例按总线判定, 同一总线里第二个进程只会
+# 激活第一个, 换不了配置。
+CLOSE_HELPER="$TMP/wmdelete"
+if ! command -v xdotool >/dev/null 2>&1; then
+  skip "关闭行为断言: 缺 xdotool"
+elif ! command -v gcc >/dev/null 2>&1 || ! printf '#include <X11/Xlib.h>\nint main(void){return 0;}\n' | gcc -x c - -o /dev/null -lX11 >/dev/null 2>&1; then
+  skip "关闭行为断言: 缺 gcc / libX11 头文件"
+else
+  cat > "$TMP/wmdelete.c" <<'WMDELETE'
+/* 发一条 WM_DELETE_WINDOW 客户端消息(等价于点窗口关闭按钮 / Alt+F4)。
+   用法: wmdelete <window-id(十进制或 0x 前缀)> */
+#include <X11/Xlib.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main(int argc, char** argv) {
+  if (argc < 2) return 2;
+  Display* d = XOpenDisplay(NULL);
+  if (d == NULL) return 3;
+  Window w = (Window)strtoul(argv[1], NULL, 0);
+  XEvent ev;
+  memset(&ev, 0, sizeof(ev));
+  ev.xclient.type = ClientMessage;
+  ev.xclient.window = w;
+  ev.xclient.message_type = XInternAtom(d, "WM_PROTOCOLS", False);
+  ev.xclient.format = 32;
+  ev.xclient.data.l[0] = (long)XInternAtom(d, "WM_DELETE_WINDOW", False);
+  ev.xclient.data.l[1] = CurrentTime;
+  int ok = XSendEvent(d, w, False, NoEventMask, &ev);
+  XFlush(d);
+  XCloseDisplay(d);
+  return ok ? 0 : 4;
+}
+WMDELETE
+  if ! gcc -O0 -o "$CLOSE_HELPER" "$TMP/wmdelete.c" -lX11 2>"$TMP/wmdelete.log"; then
+    skip "关闭行为断言: wmdelete 编译失败($(head -1 "$TMP/wmdelete.log"))"
+  else
+    cat > "$TMP/close-phase.sh" <<'CLOSEPHASE'
+#!/usr/bin/env bash
+set -uo pipefail
+BIN=$1; DATA=$2; LOG=$3; HELPER=$4; CASE=$5; WATCHER=${6:-}
+export NCM_DATA_DIR="$DATA"
+# 同首次启动: 不摘掉真实桌面的 WAYLAND_DISPLAY, GTK 会绕过 xvfb 把窗口开到用户屏幕上
+unset WAYLAND_DISPLAY
+export GDK_BACKEND=x11
+# watched: 先起一个假的 StatusNotifierWatcher(见下面的 python 片段), 让托盘宿主真的存在
+if [ -n "$WATCHER" ]; then
+  python3 "$WATCHER" >"$LOG.watcher" 2>&1 &
+  WPID=$!
+  sleep 2
+  trap 'kill -9 "$WPID" 2>/dev/null || true' EXIT
+fi
+mkdir -p "$DATA"
+if [ "$CASE" = "tray" ] || [ "$CASE" = "watched" ]; then
+  printf '{"closeBehavior":"tray"}\n' > "$DATA/settings.json"
+fi
+"$BIN" >"$LOG" 2>&1 &
+P=$!
+sleep 7
+WID=$(xdotool search --name '轻音 MiniNCM' 2>/dev/null | head -1)
+if [ -z "$WID" ]; then
+  echo "CLOSE_WINDOW=0"
+  kill -9 "$P" 2>/dev/null || true
+  exit 0
+fi
+echo "CLOSE_WINDOW=1"
+"$HELPER" "$WID"
+echo "SEND_RC=$?"
+sleep 3
+if kill -0 "$P" 2>/dev/null; then echo "ALIVE_AFTER_CLOSE=1"; else echo "ALIVE_AFTER_CLOSE=0"; fi
+MAP=$(xwininfo -id "$WID" 2>/dev/null | sed -n 's/^ *Map State: *//p')
+echo "MAP_STATE=${MAP:-gone}"
+kill -TERM "$P" 2>/dev/null || true
+sleep 1
+kill -9 "$P" 2>/dev/null || true
+CLOSEPHASE
+    chmod +x "$TMP/close-phase.sh"
+
+    # ① 默认配置(settings.json 里没有 closeBehavior) ⇒ 点关闭 = 直接退出
+    OUTQ=$(timeout -k 10 90 xvfb-run -a dbus-run-session -- \
+      "$TMP/close-phase.sh" "$BIN" "$TMP/close-quit/data" "$TMP/close-quit.log" \
+      "$CLOSE_HELPER" quit 2>&1)
+    printf '%s\n' "$OUTQ" | grep -E '^(CLOSE_WINDOW|SEND_RC|ALIVE_AFTER_CLOSE|MAP_STATE)=' | sed 's/^/  | /'
+    if ! grep -q '^CLOSE_WINDOW=1$' <<<"$OUTQ"; then
+      bad "关闭行为(默认): 没找到主窗口"
+    elif grep -q '^ALIVE_AFTER_CLOSE=0$' <<<"$OUTQ"; then
+      ok "关闭行为(默认=直接退出): 收到关闭请求后进程退出"
+    else
+      bad "关闭行为(默认=直接退出): 收到关闭请求后进程仍存活(应该退出)"
+    fi
+
+    # ② settings.json 里 closeBehavior=tray ⇒ 隐藏主窗口; 无托盘宿主时降级为最小化
+    OUTT=$(timeout -k 10 90 xvfb-run -a dbus-run-session -- \
+      "$TMP/close-phase.sh" "$BIN" "$TMP/close-tray/data" "$TMP/close-tray.log" \
+      "$CLOSE_HELPER" tray 2>&1)
+    printf '%s\n' "$OUTT" | grep -E '^(CLOSE_WINDOW|SEND_RC|ALIVE_AFTER_CLOSE|MAP_STATE)=' | sed 's/^/  | /'
+    if ! grep -q '^CLOSE_WINDOW=1$' <<<"$OUTT"; then
+      bad "关闭行为(托盘): 没找到主窗口"
+    elif grep -q '^ALIVE_AFTER_CLOSE=1$' <<<"$OUTT"; then
+      ok "关闭行为(托盘): 关闭后进程仍在(播放不会被打断)"
+    else
+      bad "关闭行为(托盘): 关闭后进程退出了(设置没生效)"
+    fi
+    # xvfb + 独立 dbus session 里没有 StatusNotifierWatcher ⇒ 必须走降级分支
+    if grep -qa '无托盘宿主, 降级为最小化到任务栏' "$TMP/close-tray.log" 2>/dev/null; then
+      ok "托盘缺席时优雅降级为最小化到任务栏(日志已记录)"
+    else
+      bad "托盘缺席时没有走降级分支(日志里没有降级记录)"
+    fi
+    # 设置真的推给了原生(日志能看到当前行为)
+    grep -qa '关闭行为 = 隐藏到托盘' "$TMP/close-tray.log" 2>/dev/null \
+      && ok "settings.json 的 closeBehavior=tray 已推给 GTK runner" \
+      || bad "原生侧没收到 closeBehavior=tray"
+
+    # ③ 托盘宿主**存在**时: 关闭必须真的把窗口隐藏(unmap, 不是退出)
+    #
+    # 用一个最小的假 StatusNotifierWatcher 占住会话总线上的 well-known name —— 我们只
+    # 断言"检测到宿主 ⇒ 建托盘 ⇒ 隐藏窗口", 不验证图标画得好不好看(那是宿主的事, 也是
+    # 人工验证项)。需要 python3 + PyGObject, 缺了就 SKIP。
+    if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import gi; from gi.repository import Gio' >/dev/null 2>&1; then
+      skip "托盘宿主存在时的隐藏断言: 缺 python3/PyGObject"
+    else
+      cat > "$TMP/watcher.py" <<'WATCHER'
+# 最小 StatusNotifierWatcher: 只为让会话总线上真的有一个 owner。
+# 方法/属性实现足够让客户端不报致命错; 我们不断言图标渲染。
+import gi
+from gi.repository import Gio, GLib
+
+XML = """
+<node>
+  <interface name="org.kde.StatusNotifierWatcher">
+    <method name="RegisterStatusNotifierItem"><arg type="s" direction="in"/></method>
+    <method name="RegisterStatusNotifierHost"><arg type="s" direction="in"/></method>
+    <property name="RegisteredStatusNotifierItems" type="as" access="read"/>
+    <property name="IsStatusNotifierHostRegistered" type="b" access="read"/>
+    <property name="ProtocolVersion" type="i" access="read"/>
+    <signal name="StatusNotifierItemRegistered"><arg type="s"/></signal>
+    <signal name="StatusNotifierItemUnregistered"><arg type="s"/></signal>
+  </interface>
+</node>"""
+
+items = []
+node = Gio.DBusNodeInfo.new_for_xml(XML)
+
+
+def on_call(conn, sender, path, iface, method, params, inv):
+    if method == "RegisterStatusNotifierItem":
+        items.append(params.unpack()[0])
+    inv.return_value(None)
+
+
+def on_get(conn, sender, path, iface, prop):
+    if prop == "RegisteredStatusNotifierItems":
+        return GLib.Variant("as", items)
+    if prop == "IsStatusNotifierHostRegistered":
+        return GLib.Variant("b", True)
+    if prop == "ProtocolVersion":
+        return GLib.Variant("i", 0)
+    return None
+
+
+def on_bus(conn, name):
+    conn.register_object(
+        "/StatusNotifierWatcher", node.interfaces[0], on_call, on_get, None
+    )
+
+
+def on_acquired(conn, name):
+    print("WATCHER_READY", flush=True)
+
+
+Gio.bus_own_name(
+    Gio.BusType.SESSION,
+    "org.kde.StatusNotifierWatcher",
+    Gio.BusNameOwnerFlags.NONE,
+    on_bus,
+    on_acquired,
+    None,
+)
+GLib.timeout_add_seconds(120, lambda: False)
+GLib.MainLoop().run()
+WATCHER
+      OUTW=$(timeout -k 10 120 xvfb-run -a dbus-run-session -- \
+        "$TMP/close-phase.sh" "$BIN" "$TMP/close-watched/data" \
+        "$TMP/close-watched.log" "$CLOSE_HELPER" watched "$TMP/watcher.py" 2>&1)
+      printf '%s\n' "$OUTW" | grep -E '^(CLOSE_WINDOW|SEND_RC|ALIVE_AFTER_CLOSE|MAP_STATE)=' | sed 's/^/  | /'
+      grep -qa '托盘已就绪' "$TMP/close-watched.log" 2>/dev/null \
+        && ok "有 StatusNotifier 宿主时托盘图标已建好" \
+        || bad "有宿主却没建出托盘图标"
+      if ! grep -q '^CLOSE_WINDOW=1$' <<<"$OUTW"; then
+        bad "托盘隐藏: 没找到主窗口"
+      elif ! grep -q '^ALIVE_AFTER_CLOSE=1$' <<<"$OUTW"; then
+        bad "托盘隐藏: 关闭后进程退出了(应该隐藏继续播放)"
+      elif grep -q '^MAP_STATE=IsUnMapped$' <<<"$OUTW"; then
+        ok "托盘隐藏: 主窗口已 unmap(隐藏), 进程与播放继续"
+      else
+        bad "托盘隐藏: 窗口没被隐藏($(grep '^MAP_STATE=' <<<"$OUTW"))"
+      fi
+    fi
+  fi
+fi
 
 echo "----- 首次启动日志尾部 -----"
 tail -15 "$TMP/first.log" 2>/dev/null | sed 's/^/  | /' || skip "没有首次启动日志"

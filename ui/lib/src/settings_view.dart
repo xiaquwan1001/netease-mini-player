@@ -7,6 +7,7 @@ import 'app_meta.dart';
 import 'app_settings.dart';
 import 'cover_quality_sheet.dart';
 import 'daily_cache.dart';
+import 'desktop_shell.dart';
 import 'net_retry.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
@@ -231,6 +232,10 @@ class SettingsView extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Column(
                 children: [
+                  // Linux 专有: 点关闭按钮是退出还是隐藏到托盘(默认退出 = 旧语义)。
+                  // 托盘能力由原生探测, 副标题据此如实说明是否会降级。
+                  _CloseBehaviorTile(settings: settings),
+                  const Divider(height: 1),
                   SwitchListTile(
                     title: const Text('切到搜索时清空上次结果'),
                     subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
@@ -619,6 +624,57 @@ class _CredentialStorageTileState extends State<_CredentialStorageTile> {
       // 右侧原来还显示一遍后端名("android-keystore"), 与下方说明文案重复
       // (用户反馈: 凭据存储右边有一个重复的 android keystore 文本框)。
       onTap: _failed ? _load : null,
+    );
+  }
+}
+
+/// 「关闭主窗口时」设置项: Linux 桌面可选「直接退出 / 最小化到托盘」。
+///
+/// 非 Linux(Windows/Android)不撒谎也不给假开关: 只显示一行说明"仅 Linux 生效"。
+/// 托盘是否真的可用由原生 getStatus 决定(见 desktop_shell.dart), 副标题会如实写
+/// "将降级为最小化到任务栏"。
+class _CloseBehaviorTile extends StatelessWidget {
+  const _CloseBehaviorTile({required this.settings});
+
+  final AppSettings settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final linux = DesktopShell.isSupportedPlatform;
+    return ValueListenableBuilder<TrayStatus>(
+      valueListenable: DesktopShell.instance.status,
+      builder: (context, trayStatus, _) {
+        final subtitle = closeBehaviorSubtitle(
+          behavior: settings.closeBehavior,
+          status: trayStatus,
+          linux: linux,
+        );
+        if (!linux) {
+          return ListTile(
+            title: const Text('关闭主窗口时'),
+            subtitle: Text(subtitle),
+          );
+        }
+        return _SegmentedSettingTile<CloseBehavior>(
+          title: '关闭主窗口时',
+          subtitle: subtitle,
+          segments: const [
+            ButtonSegment(value: CloseBehavior.quit, label: Text('直接退出')),
+            ButtonSegment(
+              value: CloseBehavior.minimizeToTray,
+              label: Text('最小化到托盘'),
+            ),
+          ],
+          selected: settings.closeBehavior,
+          onSelectionChanged: (value) {
+            settings.update(closeBehavior: value);
+            // 选了托盘但这台机器没有托盘宿主: 当场说清会降级, 别让用户以为成功了
+            if (value == CloseBehavior.minimizeToTray && trayStatus.degraded) {
+              showToast(context, '当前桌面没有托盘, 关闭窗口将最小化到任务栏');
+            }
+          },
+        );
+      },
     );
   }
 }

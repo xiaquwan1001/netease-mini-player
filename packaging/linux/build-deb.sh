@@ -95,6 +95,11 @@ StartupWMClass=${APPID}
 DESKTOP
 
 # 依赖: Flutter Linux 桌面壳 + 音频(ALSA) + 压缩解码 + D-Bus(secret-service 凭据后端, keyring)
+#
+# libayatana-appindicator3-1 放在 Recommends 而不是 Depends: runner 是**运行期 dlopen**
+# 它的(见 ui/linux/runner/my_application.cc), 没有它应用照常启动, 只是"关闭到托盘"
+# 降级为"最小化到任务栏"。放 Depends 会让没有该库的发行版装不上, 放 Recommends 时
+# apt 默认仍会装上(→ 托盘可用), 卸载也只是降级。
 INSTALLED_KB=$(du -sk --apparent-size "$PKG" | cut -f1)
 cat > "$PKG/DEBIAN/control" <<CONTROL
 Package: ${PKGNAME}
@@ -103,7 +108,7 @@ Section: sound
 Priority: optional
 Architecture: ${ARCH}
 Depends: libgtk-3-0, libasound2, libdbus-1-3, libstdc++6, libc6 (>= 2.31)
-Recommends: libnotify4
+Recommends: libnotify4, libayatana-appindicator3-1
 Installed-Size: ${INSTALLED_KB}
 Maintainer: ${MAINTAINER}
 Homepage: https://github.com/xiaquwan1001/netease-mini-player
