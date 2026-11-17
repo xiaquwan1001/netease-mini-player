@@ -6792,8 +6792,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PlayerStateDto dco_decode_player_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 7)
-      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return PlayerStateDto(
       trackId: dco_decode_opt_box_autoadd_u_64(arr[0]),
       playing: dco_decode_bool(arr[1]),
@@ -6802,6 +6802,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       volume: dco_decode_f_32(arr[4]),
       seekable: dco_decode_bool(arr[5]),
       seekError: dco_decode_opt_String(arr[6]),
+      pendingSeekMs: dco_decode_opt_box_autoadd_u_64(arr[7]),
     );
   }
 
@@ -9369,6 +9370,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_volume = sse_decode_f_32(deserializer);
     var var_seekable = sse_decode_bool(deserializer);
     var var_seekError = sse_decode_opt_String(deserializer);
+    var var_pendingSeekMs = sse_decode_opt_box_autoadd_u_64(deserializer);
     return PlayerStateDto(
       trackId: var_trackId,
       playing: var_playing,
@@ -9377,6 +9379,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       volume: var_volume,
       seekable: var_seekable,
       seekError: var_seekError,
+      pendingSeekMs: var_pendingSeekMs,
     );
   }
 
@@ -11727,6 +11730,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.volume, serializer);
     sse_encode_bool(self.seekable, serializer);
     sse_encode_opt_String(self.seekError, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.pendingSeekMs, serializer);
   }
 
   @protected

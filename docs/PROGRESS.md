@@ -302,6 +302,30 @@ tools/devui/notif-slots --selftest             -> 3/3 判定正确, exit=0
 **未做(下一批)**: 把 `connectedDebugAndroidTest` 接进 `tools/ci-gates.sh`(需模拟器, 属 CI 接入项, 本轮只登记);
 通知点击行为(点按钮真能跳歌/红心)仍需真机冒烟, 脚本只断言槽位不点按。
 
+## 2026-11-17(六) P-10 方案 B: 边下边播也能跳(待跳登记 + 换源重建解码器)(**未发版 · 已合入 main**)
+
+用户 2026-11-17 拍板「方案 B 直接做, 允许大变更」之后, 桌面渐进播放期的 seek 从「如实拒绝」升级为「真的能跳」。
+
+- **待跳登记**: 渐进期(解码器 `with_seekable(false)`)收到 seek 不再报错, 而是登记进 `SeekPlanner`,
+  `Player::seek` 回 `SeekOutcome::Queued`, 并通过新的 `PlayerState::pending_seek_ms` 如实回传给 UI
+  (UI 文案与交互属 `ui/lib` 手写 Dart, 本轮未动)。后到的 seek 覆盖先到的。
+- **换源重建**: 新增 `SourceStatus`(`Seekable` / `Growing` / `GrowingComplete(path)` / `GrowingFailed`)。
+  下载完成(`done` 置位且 `.part` 已 rename 成正式缓存文件)后, 播放线程用**完整文件**重建可 seek 的解码器:
+  先旁路验证「能打开 + 能 seek」(失败**不动当前播放**), 再 `clear()` + 追加新源(**25ms 淡入消爆音**),
+  播放/暂停态、音量、EQ 链、时长原样保留, 位置等于待跳位置; `pos_base_ms` 负责把 rodio 的相对位置补回。
+- **老遗留修掉**: 换源成功后来源升级成 `PlaySource::File(完整文件)` ⇒ 同一首歌下载完成后
+  **不再需要重播一次才能 seek**。每条待跳只尝试一次, 失败写 `seek_error` 后清掉(不每个 tick 反复重建)。
+- **FFI 契约**(只加字段, 不动手写 Dart): `PlayerStateDto.pending_seek_ms`; `play_track` 的渐进分支把
+  `ProgressiveFetch.final_path` 交给播放线程; `player_seek` 对 `Queued` 只记日志不再当错误。codegen 跑一次
+  (flutter_rust_bridge 2.13, 产物 `core/crates/ncm-ffi/src/frb_generated.rs` + `ui/lib/src/rust/*`)。
+- **测试**(离线、**不需要声卡** —— 用 `Player::new()` + 手工从 `SourcesQueueOutput` 抽样本模拟混音器):
+  ① 待跳登记返回「已排队」而不是失败; ② 换源后 `position_ms == pending` 且换源后**立刻有声**
+  (证明解码器真从待跳位置开始, 而不是从文件开头的静音段); ③ 播放态保留(含暂停中换源不放起来);
+  ④ 无 pending 时行为不变(`Seekable => Direct`); 另加「换源失败不打断当前播放」「下载失败不假装排队」两例。
+- **本车道实测**: Rust `cargo test` **305** 通过(本 crate 41→46) / clippy 0 / `cargo fmt --check` 干净 /
+  `dart analyze` **0 issue**。**未做**: 真机桌面听感冒烟(接缝是否可闻)、`flutter test` 全量;
+  权威门禁数字仍在上面「当前门禁」表(合并时由编排者重跑后更新)。
+- 设计与取舍落盘在 `core/crates/ncm-playback/P10-NOTES.md`(含未做的事项)。
 ## 2026-11-17(一) 列表行 C 级第一批 + 一条会挂死门禁的 keyring 测试(**未发版**)
 
 单会话收尾批。`bash tools/ci-gates.sh verify` = **ALL GATES OK**(rc=0; Rust 300 / Dart **1074** /

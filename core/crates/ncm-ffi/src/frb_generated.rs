@@ -8136,6 +8136,7 @@ impl SseDecode for crate::api::PlayerStateDto {
         let mut var_volume = <f32>::sse_decode(deserializer);
         let mut var_seekable = <bool>::sse_decode(deserializer);
         let mut var_seekError = <Option<String>>::sse_decode(deserializer);
+        let mut var_pendingSeekMs = <Option<u64>>::sse_decode(deserializer);
         return crate::api::PlayerStateDto {
             track_id: var_trackId,
             playing: var_playing,
@@ -8144,6 +8145,7 @@ impl SseDecode for crate::api::PlayerStateDto {
             volume: var_volume,
             seekable: var_seekable,
             seek_error: var_seekError,
+            pending_seek_ms: var_pendingSeekMs,
         };
     }
 }
@@ -10365,6 +10367,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::PlayerStateDto {
             self.volume.into_into_dart().into_dart(),
             self.seekable.into_into_dart().into_dart(),
             self.seek_error.into_into_dart().into_dart(),
+            self.pending_seek_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -12823,6 +12826,7 @@ impl SseEncode for crate::api::PlayerStateDto {
         <f32>::sse_encode(self.volume, serializer);
         <bool>::sse_encode(self.seekable, serializer);
         <Option<String>>::sse_encode(self.seek_error, serializer);
+        <Option<u64>>::sse_encode(self.pending_seek_ms, serializer);
     }
 }
 

@@ -10,7 +10,7 @@
 > Rust **300** / Dart **1074**, golden **18**; Android `testDebugUnitTest` **3**, `row-padding` 门 OK)。
 >
 > **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
-> 平台层审计 22 条已落 20 条(P-01..P-22 除 P-11 完整版 / P-10 方案 B; **P-18 后半 2026-11-17 已落**)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);
+> 平台层审计 22 条已落 **21 条**(P-01..P-22 只剩 **P-11 完整版**; P-18 后半与 P-10 方案 B 均于 2026-11-17 落地并已合入 main)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);
 > 列表行 A 级清零、**B 级 12 条清零(2026-11-16 晚)**、**C 级第一批已落(2026-11-17: 四个具名行留白口径 + `row-padding` 门)**;
 > Android 侧门禁已进 CI(`android-unit` 阻塞 / `android-lint` 仅暴露, 现状 67 error)。
 > 三端分发六种产物 + arm64 腿, 已发布版本 **v0.19.0**(其后 main 上还有一条未发版批次)。
@@ -361,7 +361,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|---|
 | **P-11 完整版** · 桌面自动化(Android instrumented **第一步已落 2026-11-17**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M(首个 `androidTest/` + `dumpsys notification` 断言脚本)~~ ⇒ **剩余 S–M**: ① 把 `connectedDebugAndroidTest` 接进 `ci-gates.sh`(需模拟器); ② 桌面(Linux)自动化仍为零; ③ 通知**点击**行为仍靠真机冒烟 |
 | **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
-| **P-10 方案 B** · pending_seek | 方案 A(如实反馈 + 不可 seek 时禁用进度条)已在 v0.18.0 落地, 用户不再被「弹回」骗; 方案 B 要在渐进下载完成后**重建解码器**并应用待跳位置, 属播放引擎结构改动。遗留: 同一首歌下载完成后仍需重播一次才能 seek | ① 用户明确要求「边下边播也能跳」; ② 或重做渐进播放(分片写入 + 可 seek 容器) | M–L(重建解码器 + 位置/队列状态恢复 + Linux/Windows 听感验 ≈ 2 天起) |
+| ~~**P-10 方案 B** · pending_seek~~ ✅ **已落地并合入 main(2026-11-17, 车道 `lane/p10-seek`)** | 已做: 渐进期 seek 登记成待跳(`SeekOutcome::Queued` + `PlayerState::pending_seek_ms`)、下载完成后**换源重建**可 seek 解码器并跳到待跳位置(25ms 淡入消爆音, 播放/暂停态·音量·EQ·时长沿用)、同一首歌下载完成后不再需要重播一次才能 seek。设计见 `core/crates/ncm-playback/P10-NOTES.md`, 批次记录见 `PROGRESS.md` 2026-11-17 条 | 遗留(非本车道): UI 侧「已排队」文案与进度条交互(`ui/lib` 手写 Dart); 真机听感微调(`SWAP_FADE` 常量) | 剩余 ≈ S(`flutter test` 全量 + 真机冒烟) |
 
 > 明确不做(审计 §3.3 已判, 不再重提): Kotlin 改从 Rust 拿 EQ 系数(跨 FFI 传数组 + 采样率协商) ·
 > 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当**顺手改**(P-18 后半已按「连数据目录迁移/单实例/打包一起做」的口径落地, 见 §13 顶部注记 —— 单独改 id 仍然是禁止项)。
