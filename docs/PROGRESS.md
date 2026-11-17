@@ -21,9 +21,9 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1088** 通过 / 1 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-17(二) 加 2 例(纵向 pitch 渲染断言 / 已并入行留白用例) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1089** 通过 / 1 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-17(二) 加 2 例(纵向 pitch 渲染断言 / 已并入行留白用例) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
-| `adb -s emulator-5554 shell am instrument ...`(**设备级, 未进 `verify`**) | **3** 通过 / 0 失败(`NotificationSlotsTest`: 通知渠道 + 5 个 action 槽位 + 状态回推; 2026-11-17 a34 实跑) |
+| `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **3** 通过 / 0 失败(`NotificationSlotsTest`: 通知渠道 + 5 个 action 槽位 + 状态回推; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
@@ -257,6 +257,57 @@ Since 2.74, 而 CMakeLists 把 GLib 基线钉在 2.72), `activate` 里若已有�
 **还剩 3 处没被收敛**(各自形状唯一, 收敛无收益, 保留现状):
 `detail/playlist_songs_sliver`(徽标放副标题行 + 乐观态并集 + 两位序号)、
 `album_preview`(tile 臂 + 序号 + 无封面)、`search_results`/`home_page`(走 `SongTile` 旧 API)。
+
+## 2026-11-17(七) 用户两条反馈 + AppImage 菜单集成 + 设备级门进阶(**未发版**)
+
+> 上一轮中断(主机 14:29 卡死重启)后接手, 三项全部本机实跑取证。
+
+### 1) 歌词高光行不再左右瞬移(`58dc5e9`)
+
+用户反馈: 「滚动歌词的高光行会从居中变成左对齐, 有一次瞬移, 应该始终居中, 正在播放行只略微增大字号」。
+
+- 逐字视图(`word_lyric_view.dart`)早在 v0.9 就统一成 15sp/w600(注释里记着"活动行放大到 18 会整行重排 + 横向抖动");
+  **行级兜底 `TimedLyricView` 漏改**, 仍是 active 18sp vs 静态 15sp。
+- 改成 `kTimedLyricFontSize=15` / `kTimedLyricActiveFontSize=16`, 两种行都 `TextAlign.center`。
+- 回归: `song_detail_lyric_test` 新增「高光行只略微增大字号且两种行都居中」(字号差 ≤1)。
+
+### 2) 进详情页/冷启动即预取歌词(`97b94f2`)
+
+用户反馈: 「退出重进后点开上次歌曲的详情, 缓存不命中就一直显示信息不可用, 直到点播放才开始取周边信息」。
+
+根因: `lyric.load()` 只挂在 `_playSong`(真播)里; `restoreFromDisk` 恢复出来的曲目和「进歌词页」两条路径都不触发取数。
+
+- `PlaybackCoordinator.restoreFromDisk`: 恢复现场后立刻 `lyric.load(song.id)`(幂等, 失败只进 `error`)。
+- `LyricController.ensureLoaded()`: 进歌词页(`toggle()` 展开)时按播放态快照主动补一次。
+- 回归: `lyric_prefetch_test` 3 例(无当前曲目时纯 no-op / toggle 会读播放态并触发 / 重复调用不放大)。
+
+### 3) AppImage 首启「集成到应用菜单」(`89f523b`, §11.A-2)
+
+deb 由包管理器装 desktop 文件; AppImage 是单文件, 菜单里没入口也没图标。新增 `ui/lib/src/desktop_integration.dart`:
+
+| 项 | 做法 |
+|---|---|
+| 判据 | 只在 `APPIMAGE` 环境变量存在时问; 已装过 / 拒绝过(数据目录 `desktop-integration.asked`)不问 |
+| 安装 | 写 `~/.local/share/applications/io.github.xiaquwan1001.MiniNCM.desktop` + `~/.local/share/icons/hicolor/256x256/apps/minincm.png`(不需要 root), 尽力跑 `update-desktop-database` |
+| Exec | 写 AppImage **绝对路径**(包内那份 `Exec=minincm` 只在 deb 后成立), 含空格/引号按 desktop spec 转义 |
+| 不依赖 | 不用 `desktop-file-install`(desktop-file-utils 各发行版不保证有) |
+| 回归 | `desktop_integration_test` 10 例(判据/文本转义/临时 HOME 落盘幂等/缺图标降级/标记) |
+
+### 4) 设备级 androidTest 进阶进门禁(`c57a845`, §13 P-11 ②)
+
+`tools/ci-gates.sh android-instrumented`: 没有在线 emulator → SKIP 退 0; 设备纪律复用 `tools/devui/androidtest`
+(非 `emulator-*` 拒绝); `verify` 里只有 `NCM_INSTRUMENTED=1` 才带上。**a34 实跑 3/3 通过, rc=0**。
+
+途中两个坑(已记 `notes-build.md`):
+① `rustc` 在 `x86_64-linux-android` 的 **增量缓存**上 ICE(`try_normalize_generic_arg_after_erasing_regions` does not have an unique index)
+  → 删 `ui/build/rust_lib_minincm/build/<target>/debug/incremental` 重编即过(编译器自己提示 clean build)。
+② 模拟器上残留旧 `.dev` 包(versionCode 4026)导致 `INSTALL_FAILED_VERSION_DOWNGRADE`;
+  同时 `ui/build/app/outputs/apk/debug/app-debug.apk` 会是**旧版本产物**(aapt 显示 0.18.0/40) —— 删掉这两个 apk 强制重打再跑。
+
+### 门禁(本机实测)
+
+Dart **1089 通过 / 0 失败**(基线 1075 + 4 歌词用例 + 10 桌面集成用例; golden 18 张逐字节未变), `dart analyze` 0 issue,
+`dart format --check` 干净。Rust 侧本批未改源码(**cargo test 313 / clippy 0** 沿用上一轮)。
 
 ## 2026-11-17(五) P-11 完整版第一步: 首个 androidTest 设施 + 通知槽位断言脚本(**未发版**)
 

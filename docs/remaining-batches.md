@@ -166,7 +166,7 @@
 |---|---|---|---|
 | 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— v0.7.1/v0.8.0 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
 | 1b | 主页新数据面接页面 | `userPlayRanking` / `userEvents` 已有 FFI 但无 UI 入口(FFI 152 里 7 个无入口);实测他人听歌排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再决定是否做「常听/动态」tab。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
-| 2 | AppImage 桌面集成 | 首启提示「是否集成到应用菜单」(`desktop-file-install` 逻辑, 可选) | S |
+| 2 | ✅ **AppImage 桌面集成**(2026-11-17, `89f523b`) | 首启(仅 `APPIMAGE` 环境)问一次, 同意就写 `~/.local/share/applications/io.github.xiaquwan1001.MiniNCM.desktop` + hicolor 图标(不需要 root), Exec 写 AppImage 绝对路径; 拒绝/已装不再问(`desktop-integration.asked` 标记)。回归 `desktop_integration_test` 10 例 | — |
 | 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
 | 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
@@ -359,7 +359,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 | 项 | 为什么没做 | 触发条件(什么时候做) | 预计工作量 |
 |---|---|---|---|
-| **P-11 完整版** · 桌面自动化(Android instrumented **第一步已落 2026-11-17**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M(首个 `androidTest/` + `dumpsys notification` 断言脚本)~~ ⇒ **剩余 S–M**: ① 把 `connectedDebugAndroidTest` 接进 `ci-gates.sh`(需模拟器); ② 桌面(Linux)自动化仍为零; ③ 通知**点击**行为仍靠真机冒烟 |
+| **P-11 完整版** · 桌面自动化(Android instrumented **第一步 2026-11-17 已落, 设备级门 2026-11-17 已接进 ci-gates**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M~~ ⇒ **剩余 S**: ① ~~接进 `ci-gates.sh`~~ ✅(2026-11-17: `android-instrumented` 子命令, 无模拟器 SKIP, `NCM_INSTRUMENTED=1` 才进 verify, a34 实跑 3/3); ② 桌面(Linux)自动化仍为零(**下一项**); ③ 通知**点击**行为仍靠真机冒烟 |
 | **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
 | ~~**P-10 方案 B** · pending_seek~~ ✅ **已落地并合入 main(2026-11-17, 车道 `lane/p10-seek`)** | 已做: 渐进期 seek 登记成待跳(`SeekOutcome::Queued` + `PlayerState::pending_seek_ms`)、下载完成后**换源重建**可 seek 解码器并跳到待跳位置(25ms 淡入消爆音, 播放/暂停态·音量·EQ·时长沿用)、同一首歌下载完成后不再需要重播一次才能 seek。设计见 `core/crates/ncm-playback/P10-NOTES.md`, 批次记录见 `PROGRESS.md` 2026-11-17 条 | 遗留(非本车道): UI 侧「已排队」文案与进度条交互(`ui/lib` 手写 Dart); 真机听感微调(`SWAP_FADE` 常量) | 剩余 ≈ S(`flutter test` 全量 + 真机冒烟) |
 
