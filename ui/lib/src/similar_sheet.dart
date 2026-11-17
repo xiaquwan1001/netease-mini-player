@@ -7,7 +7,7 @@ import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
 import 'song_actions.dart';
-import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 
 /// 相似歌曲面板: 上半是相似歌曲(点击整批起播), 下半是相似歌单.
 ///
@@ -141,13 +141,8 @@ class _SimilarSheetState extends State<_SimilarSheet> {
                     title: '没有找到相似歌曲',
                   ),
                 for (var i = 0; i < songs.length; i++)
-                  SongRow(
+                  SongRow.cardPreview(
                     song: songs[i],
-                    layout: SongRowLayout.tile,
-                    coverSize: 40,
-                    subtitle: SongRowSubtitle.artist,
-                    visualDensity: VisualDensity.compact,
-                    showDuration: false,
                     // 行尾 "..." = 统一歌曲菜单(相似歌曲没有专属来源, 用 other)
                     menuSource: SongActionSource.other,
                     tapOnlyWhenPlayable: true,

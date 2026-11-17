@@ -237,6 +237,39 @@ class SongRow extends StatelessWidget {
     this.tapOnlyWhenPlayable = false,
   });
 
+  /// 「卡片内的紧凑预览行」: 整页列表里嵌在 Card/区块中的歌曲预览
+  /// (推荐页两个区块、相似歌曲面板、「我的」页两个预览区块)。
+  ///
+  /// 这些调用点此前逐个重复同一组参数(tile 臂 + 封面 40 + 艺人副标题 +
+  /// compact 密度 + 不给时长), 一处漏写就会在整页里跑出第二种行距。
+  /// 做成静态工厂而不是具名构造: 那 5 个值在这里**写死一次**, 其余字段继续走
+  /// [SongRow] 的默认值 —— 具名构造得把二十多个 final 字段再抄一遍(第二个默认值源,
+  /// 迟早分叉)。语义上它就是「一组命名好的参数」, 不是另一种行。
+  static SongRow cardPreview({
+    Key? key,
+    required rust.SongDto song,
+    required VoidCallback? onTap,
+    SongActionSource? menuSource,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+    bool capTrailing = false,
+    Widget? trailingExtra,
+    bool tapOnlyWhenPlayable = false,
+  }) => SongRow(
+    key: key,
+    song: song,
+    layout: SongRowLayout.tile,
+    visualDensity: VisualDensity.compact,
+    coverSize: 40,
+    subtitle: SongRowSubtitle.artist,
+    showDuration: false,
+    onTap: onTap,
+    menuSource: menuSource,
+    padding: padding,
+    capTrailing: capTrailing,
+    trailingExtra: trailingExtra,
+    tapOnlyWhenPlayable: tapOnlyWhenPlayable,
+  );
+
   final rust.SongDto song;
 
   /// 排版口径(见 [SongRowLayout]); 默认自绘臂。

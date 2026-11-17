@@ -19,7 +19,7 @@ import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';
-import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
+import 'song_tile.dart' show SongRow;
 import 'toast.dart' show showToast;
 
 /// "我的": 个人资料卡 / 我的主页入口 / 简介(可编辑) /
@@ -574,13 +574,8 @@ class _LikedSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    SongRow(
+                    SongRow.cardPreview(
                       song: preview[i],
-                      layout: SongRowLayout.tile,
-                      coverSize: 40,
-                      subtitle: SongRowSubtitle.artist,
-                      visualDensity: VisualDensity.compact,
-                      showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
                       // 行尾「共 N 首」+ 更多按钮封顶 45%(列表行审计 B9)
@@ -958,13 +953,8 @@ class _RecentSection extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   for (var i = 0; i < preview.length; i++)
-                    SongRow(
+                    SongRow.cardPreview(
                       song: preview[i],
-                      layout: SongRowLayout.tile,
-                      coverSize: 40,
-                      subtitle: SongRowSubtitle.artist,
-                      visualDensity: VisualDensity.compact,
-                      showDuration: false,
                       // 与同页入口行同一栅格: 卡片边缘 12 + 行内 4 = 16
                       padding: kCardRowPadding,
                       capTrailing: true,
