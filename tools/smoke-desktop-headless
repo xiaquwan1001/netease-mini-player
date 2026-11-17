@@ -11,7 +11,11 @@
 #   ② 用 $NCM_DATA_DIR 指定的**临时**数据目录会被创建(证明 Rust 内核真的起来并解析了路径,
 #      且**不碰**用户真实的 ~/.local/share);
 #   ③ 同一 dbus session 内再启一个实例 2s 内退出(严格单实例, P-18 后半);
-#   ④ SIGTERM 能干净收尾(不留下僵尸/不挂死)。
+#   ④ 临时数据目录里写出 identity.json(持久层真的初始化了);
+#   ⑤ SIGTERM 能干净收尾(不留下僵尸/不挂死)。
+#
+# 弱断言: 窗口 / WM_CLASS(xdotool)。xvfb 里通常没有 GL/合成器, Flutter 起不来首帧也就不建窗,
+#   默认只 SKIP; 在真桌面会话(或装了 llvmpipe 的 xvfb)里用 STRICT_WINDOW=1 转成硬断言。
 #
 # 退出码: 0 全通过 / 1 有断言失败 / 3 缺工具(不是失败, 门禁按 SKIP 处理)。
 set -uo pipefail
@@ -40,6 +44,9 @@ BIN="$BUNDLE/minincm"
 # 0 字节二进制是硬件不稳期的真实故障(见 notes-build.md), 先挡掉, 免得把"打不开"当产品问题
 [ -s "$BIN" ] || { bad "bundle 里的 minincm 是 0 字节(打包产物损坏)"; exit 1; }
 
+# WM_CLASS 必须与 application-id 一致(任务栏归组/AppStream 关联, P-18 后半)
+APP_ID=${APP_ID:-io.github.xiaquwan1001.MiniNCM}
+
 TMP=$(mktemp -d)
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
@@ -66,6 +73,26 @@ else
   echo "ALIVE=0"
 fi
 if [ -d "\$DATA" ]; then echo "DATADIR=1"; else echo "DATADIR=0"; fi
+# 内核真的初始化了持久层(身份文件): 只看目录存在不够, 空目录也可能是刚 mkdir。
+if [ -f "\$DATA/identity.json" ]; then echo "IDENTITY=1"; else echo "IDENTITY=0"; fi
+
+# 窗口级断言(P-11 ② 的下一步): 真起了窗口, WM_CLASS 就是 application-id。
+if command -v xdotool >/dev/null 2>&1 && command -v xprop >/dev/null 2>&1; then
+  WID=\$(xdotool search --class 'io.github.xiaquwan1001.MiniNCM' 2>/dev/null | head -1)
+  if [ -z "\$WID" ]; then
+    WID=\$(xdotool search --name '轻音\|MiniNCM' 2>/dev/null | head -1)
+  fi
+  if [ -n "\$WID" ]; then
+    echo "WINDOW=1"
+    echo "WMCLASS=\$(xprop -id "\$WID" WM_CLASS 2>/dev/null | sed 's/.*= //')"
+    GEO=\$(xdotool getwindowgeometry --shell "\$WID" 2>/dev/null)
+    echo "GEOMETRY=\$(printf '%s' "\$GEO" | tr '\n' ' ')"
+  else
+    echo "WINDOW=0"
+  fi
+else
+  echo "WINDOW=skip"
+fi
 
 # 第二个实例: 严格单实例 ⇒ 应该很快自己退出
 T0=\$(date +%s%3N)
@@ -106,6 +133,26 @@ fi
 
 grep -q '^ALIVE=1$' <<<"$OUT" && ok "进程存活 ${ALIVE_SECONDS}s(启动成功)" || bad "进程在 ${ALIVE_SECONDS}s 内退出"
 grep -q '^DATADIR=1$' <<<"$OUT" && ok "临时数据目录已创建(内核起来且不碰真实 HOME)" || bad "数据目录没被创建"
+grep -q '^IDENTITY=1$' <<<"$OUT" && ok "身份文件 identity.json 已写入(持久层初始化)" || bad "数据目录里没有 identity.json"
+case "$(grep '^WINDOW=' <<<"$OUT")" in
+  WINDOW=1)
+    ok "窗口已创建"
+    WMCLASS=$(sed -n 's/^WMCLASS=//p' <<<"$OUT" | head -1)
+    if grep -qF "$APP_ID" <<<"$WMCLASS"; then
+      ok "WM_CLASS 含 application-id($WMCLASS)"
+    else
+      bad "WM_CLASS 不含 application-id(实际: ${WMCLASS:-<空>})"
+    fi
+    ;;
+  WINDOW=0)
+    if [ "${STRICT_WINDOW:-0}" = "1" ]; then
+      bad "没有找到应用窗口(xdotool)"
+    else
+      skip "窗口断言: xvfb 下未建窗(无 GL/合成器); STRICT_WINDOW=1 可当硬断言"
+    fi
+    ;;
+  *) skip "窗口断言: 缺 xdotool/xprop" ;;
+ esac
 grep -q '^SECOND_EXITED=1$' <<<"$OUT" && ok "第二个实例自行退出(严格单实例)" || bad "第二个实例没有在 2s 内退出"
 
 echo "----- 首次启动日志尾部 -----"
