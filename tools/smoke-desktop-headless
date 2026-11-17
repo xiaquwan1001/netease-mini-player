@@ -262,6 +262,23 @@ sleep 3
 if kill -0 "$P" 2>/dev/null; then echo "ALIVE_AFTER_CLOSE=1"; else echo "ALIVE_AFTER_CLOSE=0"; fi
 MAP=$(xwininfo -id "$WID" 2>/dev/null | sed -n 's/^ *Map State: *//p')
 echo "MAP_STATE=${MAP:-gone}"
+# 托盘恢复: 用 StatusNotifierItem.SecondaryActivate(托盘条目导出的"中键/次要激活",
+# runner 里 set_secondary_activate_target 把它绑成"显示主界面", 见 my_application.cc)。
+# 注意 Ayatana 的 item **没有** Activate 方法(实测 introspect 只有 Scroll/SecondaryActivate/
+# XAyatanaSecondaryActivate), 所以左键那条路只能在真实宿主的菜单里点, 无头验不了;
+# SecondaryActivate 走的是同一个 present_window(), 足以证明"隐藏后能回到主界面"。
+if [ "$CASE" = "watched" ]; then
+  LINE=$(grep REG_SENDER "$LOG.watcher" 2>/dev/null | head -1)
+  SENDER=$(awk '{print $2}' <<<"${LINE:-}")
+  IPATH=$(awk '{print $4}' <<<"${LINE:-}")
+  if [ -n "${SENDER:-}" ] && [ -n "${IPATH:-}" ] && command -v gdbus >/dev/null 2>&1; then
+    gdbus call --session --dest "$SENDER" --object-path "$IPATH" \
+      --method org.kde.StatusNotifierItem.SecondaryActivate 0 0 >/dev/null 2>&1
+    sleep 3
+    RMAP=$(xwininfo -id "$WID" 2>/dev/null | sed -n 's/^ *Map State: *//p')
+    echo "MAP_AFTER_RESTORE=${RMAP:-gone}"
+  fi
+fi
 kill -TERM "$P" 2>/dev/null || true
 sleep 1
 kill -9 "$P" 2>/dev/null || true
@@ -338,6 +355,8 @@ node = Gio.DBusNodeInfo.new_for_xml(XML)
 def on_call(conn, sender, path, iface, method, params, inv):
     if method == "RegisterStatusNotifierItem":
         items.append(params.unpack()[0])
+        # 供冒烟脚本回调用: sender = 应用自己的唯一名, val = item 对象路径
+        print("REG_SENDER", sender, "REG_PATH", params.unpack()[0], flush=True)
     inv.return_value(None)
 
 
@@ -375,7 +394,7 @@ WATCHER
       OUTW=$(timeout -k 10 120 xvfb-run -a dbus-run-session -- \
         "$TMP/close-phase.sh" "$BIN" "$TMP/close-watched/data" \
         "$TMP/close-watched.log" "$CLOSE_HELPER" watched "$TMP/watcher.py" 2>&1)
-      printf '%s\n' "$OUTW" | grep -E '^(CLOSE_WINDOW|SEND_RC|ALIVE_AFTER_CLOSE|MAP_STATE)=' | sed 's/^/  | /'
+      printf '%s\n' "$OUTW" | grep -E '^(CLOSE_WINDOW|SEND_RC|ALIVE_AFTER_CLOSE|MAP_STATE|MAP_AFTER_RESTORE)=' | sed 's/^/  | /'
       grep -qa '托盘已就绪' "$TMP/close-watched.log" 2>/dev/null \
         && ok "有 StatusNotifier 宿主时托盘图标已建好" \
         || bad "有宿主却没建出托盘图标"
@@ -387,6 +406,14 @@ WATCHER
         ok "托盘隐藏: 主窗口已 unmap(隐藏), 进程与播放继续"
       else
         bad "托盘隐藏: 窗口没被隐藏($(grep '^MAP_STATE=' <<<"$OUTW"))"
+      fi
+      # 恢复: 托盘条目的次要激活(中键口径)必须把主窗口重新 map 回来
+      if grep -q '^MAP_AFTER_RESTORE=IsViewable$' <<<"$OUTW"; then
+        ok "托盘恢复: 触发托盘条目的 SecondaryActivate 后主窗口重新显示"
+      elif ! grep -q '^MAP_AFTER_RESTORE=' <<<"$OUTW"; then
+        skip "托盘恢复断言: 托盘条目没注册上来(无 gdbus 或注册延迟)"
+      else
+        bad "托盘恢复: 触发次要激活后窗口仍是隐藏的($(grep '^MAP_AFTER_RESTORE=' <<<"$OUTW"))"
       fi
     fi
   fi
