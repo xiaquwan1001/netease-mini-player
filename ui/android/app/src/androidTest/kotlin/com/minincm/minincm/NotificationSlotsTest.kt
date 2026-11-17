@@ -198,15 +198,22 @@ class NotificationSlotsTest {
      * 也不需要前台服务), 返回 Notification 对象供断言。
      */
     private fun buildNotification(): Notification {
-        val provider = DefaultMediaNotificationProvider(context)
-        val factory = SlotRecordingActionFactory(context)
-        val media = provider.createNotification(
-            session,
-            session.mediaButtonPreferences,
-            factory,
-            androidx.media3.session.MediaNotification.Provider.Callback { },
-        )
-        return media.notification
+        // 必须回主线程: MediaSession/Player 是主线程亲和的, 在 instrumentation 线程上调
+        // createNotification / mediaButtonPreferences 会抛
+        // "Player is accessed on the wrong thread"(2026-11-17 在真机上实测踩到)。
+        var built: Notification? = null
+        onMain {
+            val provider = DefaultMediaNotificationProvider(context)
+            val factory = SlotRecordingActionFactory(context)
+            val media = provider.createNotification(
+                session,
+                session.mediaButtonPreferences,
+                factory,
+                androidx.media3.session.MediaNotification.Provider.Callback { },
+            )
+            built = media.notification
+        }
+        return built ?: throw AssertionError("主线程上没有拼出通知")
     }
 
     private fun actionTitles(notification: Notification): List<String> =
