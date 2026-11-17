@@ -47,6 +47,7 @@ impl ProviderRegistry {
 mod tests {
     use super::*;
     use crate::capability::AudioLevel;
+    use crate::caps::{LyricProvider, ReadProvider};
     use crate::error::{ProviderError, ProviderResult};
     use crate::params::{BoxFuture, SearchQuery, SongUrlRequest};
     use ncm_domain::{Lyric, SearchPage, StreamUrl, TrackId};
@@ -63,6 +64,11 @@ mod tests {
         fn capabilities(&self) -> &'static [Capability] {
             &[Capability::Search]
         }
+    }
+
+    // 只实现它真正提供的两组能力(搜索/取链 + 歌词), 其余 11 个能力域一行宏补齐默认 impl ——
+    // 拆分前这里必须在一个 impl 块里把 god trait 的必填方法都写一遍。
+    impl ReadProvider for Dummy {
         fn search<'a>(&'a self, _q: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>> {
             Box::pin(async { Ok(SearchPage::default()) })
         }
@@ -72,10 +78,28 @@ mod tests {
         ) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
             Box::pin(async { Err(ProviderError::unsupported("no songUrl")) })
         }
+    }
+
+    impl LyricProvider for Dummy {
         fn lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {
             Box::pin(async { Err(ProviderError::unsupported("no lyric")) })
         }
     }
+
+    crate::impl_default_caps!(
+        Dummy,
+        RecommendProvider,
+        PlaylistReadProvider,
+        PlaylistWriteProvider,
+        CommentProvider,
+        AccountProvider,
+        ArtistAlbumProvider,
+        RadioProvider,
+        CommunityProvider,
+        VipProvider,
+        CloudProvider,
+        MessageProvider
+    );
 
     #[test]
     fn registry_and_capabilities() {

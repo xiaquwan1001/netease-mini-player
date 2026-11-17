@@ -11,7 +11,7 @@ use std::error::Error as _;
 use std::path::{Path, PathBuf};
 
 use ncm_domain::{parse_ttml, TrackId, TtmlLine, WordItem, WordLyric, WordLyricLine};
-use ncm_provider::{BoxFuture, Provider};
+use ncm_provider::{BoxFuture, LyricProvider};
 
 /// AMLL 官方歌词 API(按网易云曲目 id 查).
 pub const AMLL_API_BASE: &str = "https://api.amll.dev/v1/lyrics/get";
@@ -412,7 +412,7 @@ pub fn ttml_to_word_lyric(doc: &TtmlDoc) -> WordLyric {
 /// 都没有则回落行级 LRC. 返回值带来源标记与择优理由; 全部失败时 Err.
 /// TTML 探测经 probe 走, 测试可注入假实现(不联网).
 pub async fn word_lyric_with_fallback(
-    provider: &dyn Provider,
+    provider: &dyn LyricProvider,
     probe: &dyn TtmlProbe,
     data_dir: &Path,
     track_id: u64,
@@ -488,7 +488,7 @@ pub async fn word_lyric_with_fallback(
 
 /// netease 偏好: yrc 够好(0.6 阈值口径)直接用; 否则 TTML, 再退化 yrc, 最后行级.
 async fn netease_first(
-    provider: &dyn Provider,
+    provider: &dyn LyricProvider,
     probe: &dyn TtmlProbe,
     data_dir: &Path,
     track_id: u64,
@@ -524,7 +524,7 @@ async fn netease_first(
 
 /// amll 偏好: TTML 优先, 失败再 yrc, 最后行级.
 async fn amll_first(
-    provider: &dyn Provider,
+    provider: &dyn LyricProvider,
     probe: &dyn TtmlProbe,
     data_dir: &Path,
     track_id: u64,
@@ -565,7 +565,7 @@ async fn ttml_word_lyric(
 
 /// 行级 LRC 兜底(与原实现一致).
 async fn line_level_fallback(
-    provider: &dyn Provider,
+    provider: &dyn LyricProvider,
     track_id: u64,
 ) -> Result<WordLyricWithSource, String> {
     let lyric = provider
@@ -715,30 +715,9 @@ mod tests {
 
     #[test]
     fn fallback_to_line_level_lrc() {
-        use ncm_provider::{BoxFuture, ProviderResult, SongUrlRequest};
+        use ncm_provider::{BoxFuture, ProviderResult};
         struct P;
-        impl Provider for P {
-            fn id(&self) -> &'static str {
-                "dummy"
-            }
-            fn name(&self) -> &'static str {
-                "dummy"
-            }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
-                &[]
-            }
-            fn search<'a>(
-                &'a self,
-                _q: &'a ncm_provider::SearchQuery,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
-            fn song_url<'a>(
-                &'a self,
-                _r: &'a SongUrlRequest,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
+        impl LyricProvider for P {
             fn lyric<'a>(
                 &'a self,
                 _t: TrackId,
@@ -770,30 +749,9 @@ mod tests {
 
     #[test]
     fn no_lyrics_anywhere_is_err() {
-        use ncm_provider::{BoxFuture, ProviderError, ProviderResult, SongUrlRequest};
+        use ncm_provider::{BoxFuture, ProviderResult};
         struct P;
-        impl Provider for P {
-            fn id(&self) -> &'static str {
-                "dummy"
-            }
-            fn name(&self) -> &'static str {
-                "dummy"
-            }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
-                &[]
-            }
-            fn search<'a>(
-                &'a self,
-                _q: &'a ncm_provider::SearchQuery,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
-                Box::pin(async { Err(ProviderError::unsupported("x")) })
-            }
-            fn song_url<'a>(
-                &'a self,
-                _r: &'a SongUrlRequest,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
-                Box::pin(async { Err(ProviderError::unsupported("x")) })
-            }
+        impl LyricProvider for P {
             fn lyric<'a>(
                 &'a self,
                 _t: TrackId,
@@ -970,36 +928,16 @@ mod tests {
 
     #[test]
     fn auto_skips_ttml_probe_when_yrc_score_high() {
-        use ncm_provider::{ProviderResult, SongUrlRequest};
+        use ncm_provider::ProviderResult;
         struct P;
-        impl Provider for P {
-            fn id(&self) -> &'static str {
-                "dummy"
-            }
-            fn name(&self) -> &'static str {
-                "dummy"
-            }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
-                &[]
-            }
-            fn search<'a>(
-                &'a self,
-                _q: &'a ncm_provider::SearchQuery,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
-            fn song_url<'a>(
-                &'a self,
-                _r: &'a SongUrlRequest,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
+        impl LyricProvider for P {
             fn lyric<'a>(
                 &'a self,
                 _t: TrackId,
             ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
                 Box::pin(async { Ok(ncm_domain::Lyric::default()) })
             }
+
             fn word_lyric<'a>(&'a self, _t: TrackId) -> BoxFuture<'a, ProviderResult<WordLyric>> {
                 Box::pin(async { Ok(good_word_lyric(3)) })
             }
@@ -1047,30 +985,9 @@ mod tests {
             LyricSourcePreference::Auto
         );
 
-        use ncm_provider::{ProviderResult, SongUrlRequest};
+        use ncm_provider::ProviderResult;
         struct P;
-        impl Provider for P {
-            fn id(&self) -> &'static str {
-                "dummy"
-            }
-            fn name(&self) -> &'static str {
-                "dummy"
-            }
-            fn capabilities(&self) -> &'static [ncm_provider::Capability] {
-                &[]
-            }
-            fn search<'a>(
-                &'a self,
-                _q: &'a ncm_provider::SearchQuery,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::SearchPage>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
-            fn song_url<'a>(
-                &'a self,
-                _r: &'a SongUrlRequest,
-            ) -> BoxFuture<'a, ProviderResult<ncm_domain::StreamUrl>> {
-                Box::pin(async { Err(ncm_provider::ProviderError::unsupported("x")) })
-            }
+        impl LyricProvider for P {
             fn lyric<'a>(
                 &'a self,
                 _t: TrackId,
