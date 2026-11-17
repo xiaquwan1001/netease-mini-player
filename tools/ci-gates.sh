@@ -15,6 +15,7 @@
 #   tools/ci-gates.sh dart-format          # dart format --output=none --set-exit-if-changed lib test
 #   tools/ci-gates.sh dart-analyze         # dart analyze(不用 flutter analyze, 见下)
 #   tools/ci-gates.sh write-guard          # tools/check-write-guard.sh
+#   tools/ci-gates.sh lock-poison          # tools/check-lock-poison.sh(生产代码里禁 lock().unwrap())
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
@@ -100,6 +101,11 @@ cmd_dart_analyze() {
 cmd_write_guard() {
   echo "+ bash tools/check-write-guard.sh"
   bash "$ROOT/tools/check-write-guard.sh"
+}
+
+cmd_lock_poison() {
+  echo "+ bash tools/check-lock-poison.sh"
+  bash "$ROOT/tools/check-lock-poison.sh"
 }
 
 cmd_tokens() {
@@ -195,6 +201,7 @@ cmd_verify() {
   cmd_dart_format
   cmd_dart_analyze
   cmd_write_guard
+  cmd_lock_poison
   cmd_tokens
   cmd_row_padding
   cmd_flutter_test
@@ -220,6 +227,7 @@ case "$sub" in
   dart-format)   cmd_dart_format ;;
   dart-analyze)  cmd_dart_analyze ;;
   write-guard)   cmd_write_guard ;;
+  lock-poison)   cmd_lock_poison ;;
   tokens)        cmd_tokens ;;
   row-padding)   cmd_row_padding ;;
   flutter-test)  cmd_flutter_test "$@" ;;
