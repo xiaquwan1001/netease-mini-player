@@ -1,7 +1,7 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-17(一)**。已发布版本 **v0.19.1**(含 2026-11-16 晚的 Android 门进 CI + 列表行 B 级 12 条,
-> 以及 2026-11-17 的列表行 C 级第一批 + keyring 测试挂死修复), 见批次时间线最上面两条。
+> 最近更新: **2026-11-17(六)**。已发布版本 **v0.20.0**(P-18 桌面 id 统一 + 数据目录迁移 · P-10 边下边播可跳 ·
+> 列表行 C 级收尾 · P-11 首个设备级测试设施), 见批次时间线最上面六条。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -12,16 +12,18 @@
 ## 进度总览(2026-11-17 复核)
 
 **当前门禁**(本机实测, 离线口径; **权威口径只在本表**, README/README.en/remaining-batches 都是指针)。
-复核口径: **2026-11-17 在 main 上跑完整 `bash tools/ci-gates.sh verify` 全绿**(rc=0, 末行 `ALL GATES OK`);
-该轮新增 `row-padding` 门 + 3 例布局几何测试(Dart **1071→1074**), Rust 侧只修了一个测试(数字不变)。
+复核口径: **2026-11-17 晚在 main 上合并 p18/uib-c/p10/p11 四条车道后逐门重跑**(编排者独立跑, 不采信 worker 自报);
+本轮数字变化: Rust **300→313**(P-18 数据目录迁移 8 例 + P-10 播放引擎 5 例) · Dart **1074→1088**(纵向 pitch 渲染断言等) ·
+golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp、行矮 8dp) · 新增设备级门 `androidTest`(模拟器, 手工)。
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **300** 通过 / 0 失败(排除 vendor 联网 smoke) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
 | `flutter test --exclude-tags network`(全量, 含 golden) | **1088** 通过 / 1 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-17(二) 加 2 例(纵向 pitch 渲染断言 / 已并入行留白用例) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
+| `adb -s emulator-5554 shell am instrument ...`(**设备级, 未进 `verify`**) | **3** 通过 / 0 失败(`NotificationSlotsTest`: 通知渠道 + 5 个 action 槽位 + 状态回推; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
