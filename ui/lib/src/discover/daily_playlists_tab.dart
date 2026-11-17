@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
-import '../net_retry.dart' show friendlyError;
+import '../net_retry.dart' show errorKind, friendlyError;
 import '../rust/api.dart' as rust;
 import '../state_views.dart';
 import 'discover_types.dart';
@@ -32,7 +32,12 @@ class DailyPlaylistsTab extends StatelessWidget {
       emptyBuilder: (_) =>
           const EmptyView(icon: Icons.queue_music_outlined, title: '今天没有推荐歌单'),
       errorBuilder: (_, error, retry) => FullError(
-        message: '推荐歌单需要登录后才能获取\n${friendlyError(error)}',
+        // auth 类错误 friendlyError 已经统一给「需要登录后才能查看」, 不要再叠一句
+        // 「需要登录后才能获取」(同一句话显示成两行, 2026-11-18 收敛); 其它错误
+        // (网络/风控)仍旧带上这页的上下文前缀。
+        message: errorKind(error) == 'auth'
+            ? friendlyError(error)
+            : '推荐歌单需要登录后才能获取\n${friendlyError(error)}',
         onRetry: retry,
       ),
       // 非分页: 推荐歌单随一次请求全量返回, 接口无分页

@@ -61,7 +61,8 @@ void main() {
       final auth = fe('auth', '未登录');
       expect(isNetworkError(auth), isFalse);
       expect(isRetryableError(auth), isFalse);
-      expect(friendlyError(auth), '[auth] 未登录');
+      // auth: detail 是后端内部文本, 不抛给用户(2026-11-18 用户反馈)
+      expect(friendlyError(auth), '需要登录后才能查看');
       expect(errorKind(auth), 'auth');
       expect(describeError(auth), '[auth] 未登录');
     });

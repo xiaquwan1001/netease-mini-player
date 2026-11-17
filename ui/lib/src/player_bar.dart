@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'layout.dart'
+    show kPagePadding, kPlayerBarEdgeInset, kPlayerBarRoomyWidth, kRowTitleGap;
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api.dart' as rust;
@@ -200,6 +202,15 @@ class MiniPlayerBar extends StatelessWidget {
     // 拖动中冻结量程: 自动续播会让 duration 突跳
     final maxMs = data.dragMax ?? (dur <= 0 ? 1.0 : dur);
     final pos = (data.dragMs ?? player.positionMs.toDouble()).clamp(0.0, maxMs);
+    // 留白/控件间隔按宽度分两档(口径与理由见 layout.dart「常驻播放条的横向口径」):
+    // 窄屏沿用手机预算(留白 [kPlayerBarEdgeInset]、控件零间隔, 否则 300dp 上
+    // 信息行被挤到 0); 宽屏(桌面窗口/平板)用 [kPagePadding] + [kRowTitleGap],
+    // 否则六个控件会转成一坨贴在窗口右下角(2026-11-18 用户反馈)。
+    // 播放条恒等于窗口宽度(根布局 Column 的直接子项), 直接读 MediaQuery 宽度即可。
+    final roomy = MediaQuery.sizeOf(context).width >= kPlayerBarRoomyWidth;
+    final edge = roomy ? kPagePadding : kPlayerBarEdgeInset;
+    // 0 = 不加占位(SizedBox 宽度 0 会留一个无意义的 RenderBox)
+    final gap = roomy ? kRowTitleGap : 0.0;
     return Material(
       elevation: 8,
       // 有底部导航时, 底部的系统安全区由 NavigationBar 自己的 SafeArea 负责,
@@ -213,7 +224,7 @@ class MiniPlayerBar extends StatelessWidget {
         top: false,
         bottom: absorbBottomInset,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          padding: EdgeInsets.symmetric(horizontal: edge),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -316,6 +327,7 @@ class MiniPlayerBar extends StatelessWidget {
                   ),
                   // 红心 + 播放顺序 + 上一首/播放/下一首 + 队列: 与信息行同一排.
                   // 紧凑点击区 34dp(见 _barIcon 注释), 保证 6 个按钮 + 封面在 300dp 内.
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: liked ? '取消喜欢' : '喜欢',
                     icon: Icon(
@@ -328,6 +340,7 @@ class MiniPlayerBar extends StatelessWidget {
                     onPressed: actions.onToggleLike,
                   ),
                   // 播放顺序: 取代原来的"上一首"位置(用户要求); 心动模式也在这里轮转.
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: data.heartActive
                         ? '心动模式(点击返回列表循环)'
@@ -342,11 +355,13 @@ class MiniPlayerBar extends StatelessWidget {
                     ),
                     onPressed: actions.onCycleMode,
                   ),
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: '上一首',
                     icon: const Icon(Icons.skip_previous, size: 26),
                     onPressed: actions.onPrevious,
                   ),
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: player.playing ? '暂停' : '播放',
                     icon: Icon(
@@ -356,12 +371,14 @@ class MiniPlayerBar extends StatelessWidget {
                     onPressed: actions.onToggle,
                     size: 38,
                   ),
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: '下一首',
                     icon: const Icon(Icons.skip_next, size: 26),
                     onPressed: actions.onNext,
                   ),
                   // 队列入口与歌曲信息同一行右侧(用户要求)
+                  if (gap > 0) SizedBox(width: gap),
                   _barIcon(
                     tooltip: '播放队列',
                     icon: const Icon(Icons.queue_music, size: 22),

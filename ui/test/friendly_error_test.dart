@@ -20,6 +20,12 @@ void main() {
       );
     });
 
+    test('auth 换成中性引导, 不泄露后端内部 detail', () {
+      // 后端原样抛出的是 `[auth] Unknown error`(detail 对用户零信息量)
+      expect(friendlyError(Exception('[auth] Unknown error')), '需要登录后才能查看');
+      expect(friendlyError(Exception('[auth]')), '需要登录后才能查看');
+    });
+
     test('其它 kind 原样返回(方便定位)', () {
       final e = Exception('[internal] code=500');
       expect(friendlyError(e), contains('[internal]'));

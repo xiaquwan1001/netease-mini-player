@@ -8,6 +8,7 @@ import 'rust/api.dart' as rust;
 /// `Exception('[network] ...')`、以及不会进 FfiError 的本地异常)。
 const _kindNetwork = 'network';
 const _kindForbidden = 'forbidden';
+const _kindAuth = 'auth';
 
 /// 取错误 kind: [rust.FfiError] 直接读字段, 其它异常兜底解析 `[kind]` 前缀。
 String? errorKind(Object? e) {
@@ -61,11 +62,18 @@ Future<T> retryNetwork<T>(
 /// - forbidden: "对方设置了隐私"(关注/粉丝列表不可见等), Rust 侧 detail
 ///   已经是能直接读的中文, 不要把内部 kind 前缀露给用户(用户反馈看到的
 ///   "[internal]code=400" 就是这类)
+/// - auth: 统一中性引导。detail 是后端内部文本(`[auth] Unknown error` 这种),
+///   对用户没有任何信息量, 露出来只会让人以为客户端坏了(2026-11-18 用户反馈
+///   推荐页把 `[auth] Unknown error` 直接当成错误占位)。页面上"需登录才有的
+///   内容"还应该在未登录时直接隐藏(见 recommend_view 的登录态门), 这里是兵底。
 /// - 其它 kind: 保留 `[kind] detail` 原文, 方便定位问题
 String friendlyError(Object e) {
   final kind = errorKind(e);
   if (kind == _kindNetwork) {
     return '网络不稳定, 已自动重试仍失败, 请稍后重试';
+  }
+  if (kind == _kindAuth) {
+    return '需要登录后才能查看';
   }
   if (kind == _kindForbidden) {
     final detail =

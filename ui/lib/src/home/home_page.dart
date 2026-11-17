@@ -1475,6 +1475,8 @@ class _HomePageState extends State<HomePage> {
         selected: _lyric.selected,
         onLineTap: onTap,
         onLineLongPress: onLong,
+        // 超长当前行只在播放中横向滚动(与逐字歌词同一口径)
+        playing: _lyric.playing,
       );
     }
 

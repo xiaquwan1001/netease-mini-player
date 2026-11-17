@@ -207,7 +207,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('未登录'), findsOneWidget);
+    // auth 类错误走 friendlyError 的中性文案(不把 `[auth] ...` 原文给用户)
+    expect(find.textContaining('[auth]'), findsNothing);
+    expect(find.text('需要登录后才能查看'), findsOneWidget);
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(find.text('云音乐VIP'), findsOneWidget);

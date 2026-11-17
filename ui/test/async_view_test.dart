@@ -268,7 +268,7 @@ void main() {
           AsyncView<List<String>>(
             load: () async {
               loads += 1;
-              if (loads == 1) throw Exception('[auth] 登录已过期');
+              if (loads == 1) throw Exception('[auth] 登录已过期'); // 文案走中性引导
               return const ['晴天', '以父之名'];
             },
             builder: (_, data, _) => Text(data.join('/')),
@@ -278,7 +278,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.byType(InlineError), findsOneWidget);
-      expect(find.textContaining('[auth]'), findsOneWidget);
+      // auth 类错误不把原文抛给用户(见 net_retry.friendlyError 的 auth 分支)
+      expect(find.textContaining('[auth]'), findsNothing);
+      expect(find.text('需要登录后才能查看'), findsOneWidget);
 
       await tester.tap(find.text('重试'));
       await tester.pumpAndSettle();

@@ -642,6 +642,25 @@ class _DailyPlaylistsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 未登录: 这个区块的数据源(RecommendResource / "原版推荐歌单")**需要登录**,
+    // 匿名请求会直接抛 `[auth] Unknown error`。以前照发请求, 于是推荐页在
+    // 「推荐歌单」位置把后端内部错误原文留给用户看(2026-11-18 用户反馈)。
+    // 现在按**登录态**决定: 未登录干脆不发请求, 换成中性引导(与 mine_view /
+    // feed_view_body 的未登录态同一口径); 判断依据是 [loggedIn], 不靠匹配错误文案。
+    if (!loggedIn) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SectionHeader(
+            title: '推荐歌单',
+            trailing: onOpenAll == null
+                ? null
+                : TextButton(onPressed: onOpenAll, child: const Text('全部')),
+          ),
+          const _LoginHint('登录后显示每日推荐歌单'),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -653,7 +672,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
         ),
         AsyncView<List<rust.Playlist>>(
           load: load,
-          emptyText: loggedIn ? '今天没有推荐歌单' : '登录后显示每日推荐歌单',
+          emptyText: '今天没有推荐歌单',
           loadingPadding: const EdgeInsets.symmetric(vertical: 24),
           builder: (context, lists, reload) => CoverRow(
             height: kCoverCardHeight,
@@ -728,6 +747,25 @@ class _PodcastSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 需要登录才有内容的区块, 在**未登录**时的中性占位。
+///
+/// 视觉与 [AsyncView] 的空态一致(行内 bodySmall), 但语义不同: 空态是「登录了、
+/// 今天没数据」, 这里是「没登录, 登录后才有」。判据是登录态, 不是错误文本 ——
+/// 未登录时压根不发请求, 后端那串 `[auth] ...` 不会走到 InlineError。
+class _LoginHint extends StatelessWidget {
+  const _LoginHint(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Text(text, style: Theme.of(context).textTheme.bodySmall),
     );
   }
 }

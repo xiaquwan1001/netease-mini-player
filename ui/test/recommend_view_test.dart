@@ -218,4 +218,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(played?.single.name, 'FM 曲');
   });
+
+  // 回归 2026-11-18(用户反馈): 未登录时推荐页把后端内部错误 `[auth] Unknown error`
+  // 当错误占位直接显示在「推荐歌单」位置。
+  //
+  // 根因两层:
+  //  1) _DailyPlaylistsSection 不判登录态, 未登录也发 /personalized/playlist
+  //     (RecommendResource 需要登录) ⇒ 必抛 auth 错误;
+  //  2) friendlyError 只处理 network/forbidden, auth 走 describeError 兜底,
+  //     于是 `[auth] Unknown error` 原文进了 InlineError。
+  // 修法: 区块按**登录态**门控(未登录不发请求, 换中性引导), friendlyError 另加
+  // auth 兜底。这里同时验证两点: 页面不出现内部错误文本, 且显示中性文案。
+  testWidgets('未登录 + 推荐歌单接口抛 auth 错误: 不暴露 [auth], 改中性引导', (tester) async {
+    var playlistCalls = 0;
+    await tester.pumpWidget(
+      host(
+        RecommendView(
+          loggedIn: false,
+          loadDailySongs: () async => [fakeSong(id: 1, name: '匿名日推歌')],
+          // 模拟后端: 未登录时 RecommendResource 返回 auth 错误
+          loadDailyPlaylists: () async {
+            playlistCalls++;
+            throw Exception('[auth] Unknown error');
+          },
+          loadPodcasts: () async => [radio(20, '推荐播客A')],
+          loadFm: () async => const [],
+          loadStyles: () async => const [],
+          loadNewSongs: () async => const [],
+          loadNewAlbums: () async => const [],
+
+          onOpenPlaylist: (_) {},
+          onOpenPodcast: (_) {},
+          onHeartMode: () {},
+          onOpenDaily: () {},
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+
+    // 后端内部错误文本一个字都不许出现
+    expect(find.textContaining('[auth]'), findsNothing);
+    expect(find.textContaining('Unknown error'), findsNothing);
+    // 也不该出现「重试」按钮(错误态的标志)
+    expect(find.text('重试'), findsNothing);
+    // 换成中性引导, 且区块标题仍在(不整块消失, 用户知道这里有什么)
+    expect(find.text('推荐歌单'), findsOneWidget);
+    expect(find.text('登录后显示每日推荐歌单'), findsOneWidget);
+    // 压根没有发过这个需要登录的请求
+    expect(playlistCalls, 0, reason: '未登录时不该请求需要登录的推荐歌单接口');
+  });
+
+  testWidgets('已登录时 auth 错误也只给中性文案(不泄露 kind 前缀)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        RecommendView(
+          loggedIn: true,
+          loadDailySongs: () async => const [],
+          loadDailyPlaylists: () async =>
+              throw Exception('[auth] Unknown error'),
+          loadPodcasts: () async => const [],
+          loadFm: () async => const [],
+          loadStyles: () async => const [],
+          loadNewSongs: () async => const [],
+          loadNewAlbums: () async => const [],
+
+          onOpenPlaylist: (_) {},
+          onOpenPodcast: (_) {},
+          onHeartMode: () {},
+          onOpenDaily: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('[auth]'), findsNothing);
+    expect(find.text('需要登录后才能查看'), findsOneWidget);
+  });
 }

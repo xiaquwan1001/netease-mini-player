@@ -33,9 +33,12 @@ void main() {
       expect(friendlyError(Exception('[forbidden]   ')), '没有权限查看');
     });
 
-    test('auth: 原样保留(带前缀方便定位)', () {
-      expect(friendlyError(Exception('[auth] 登录已过期')), contains('[auth]'));
-      expect(friendlyError(Exception('[auth] 登录已过期')), contains('登录已过期'));
+    // 2026-11-18 用户反馈: 推荐页把 `[auth] Unknown error` 直接当错误占位显示。
+    // auth 的 detail 是后端内部文本, 对用户零信息量(还会让人以为客户端坏了),
+    // 所以从「原样保留」改成中性引导; 定位问题请看日志里的 describeError。
+    test('auth: 换成中性引导, 不把内部 kind/detail 给用户', () {
+      expect(friendlyError(Exception('[auth] 登录已过期')), '需要登录后才能查看');
+      expect(friendlyError(Exception('[auth] Unknown error')), '需要登录后才能查看');
     });
 
     test('internal: 原样保留(带前缀方便定位)', () {
