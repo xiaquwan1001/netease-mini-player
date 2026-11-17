@@ -216,6 +216,10 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
 | `dart format lib test` | 会重排 **143 文件**,+5846 −4405(已实测并回退, 不要顺手跑) |
 | `cargo clippy --workspace --all-targets` | 0 warning(2026-11-13 已清零, 需要门来锁住) |
 
+> **2026-11-18 补记**: Android 侧第三道门 `:app:lintDebug` 也已补齐 —— 67 error 清到 **0**
+> (media3 `UnstableApi` opt-in 收口 + `LoginActivity` 迁 `OnBackPressedDispatcher`), 已进
+> `tools/ci-gates.sh verify` 与 GitHub CI 阻塞门。细节见 `PROGRESS.md` 2026-11-18 条。
+
 做法:
 1. **纯格式提交**:`cargo fmt --all` + `dart format lib test`,**同一个 commit 里不放任何逻辑改动**(用 `git diff -w` 自检只看格式)。
 2. 同 commit 给 `.github/workflows/ci.yml` / `.gitlab-ci.yml` / `tools/ci.sh` 加三个 step:
@@ -321,10 +325,20 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 验收: `rg 'readAsStringSync' ui/test` 只剩读 `settings.json` / `pubspec.yaml` 的用例; 该测试文件仍能拦住回退。
 
-### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做)
+### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— **第一步已完成(2026-11-18)**
 
-498 行单一可变单例(字段多、通知靠 notifier 手工发)。若还要继续加设置项, 先按域拆
-(`playback` / `ui` / `network` / `update`)或改不可变快照 + 统一 diff 通知。
+现况: `ui/lib/src/app_settings.dart` **732 → 584 行**, 编解码已按域拆到同库 part
+`ui/lib/src/app_settings_codec.dart`(七个 `_apply*` 同构于唯一一份 `toJson()`: 外观 / 播放 / 搜索
+/ 平台窗口 / 更新 / 诊断 / 交互记录); `load()` 里 60 行 if 链 → `applyStoredJson(raw)`。
+门: `ui/test/app_settings_codec_roundtrip_test.dart`(4 例) —— 落盘 key 面 = 期望表 + 全字段
+写→读往返 + 二次落盘字节稳定 + 缺字段向后兼容 + `schemaVersion<2` 迁移。加设置项现在是
+「字段 + 某域 `_apply` + `toJson` + 期望键表」四处且**漏一处测试就红**。
+
+**未做(仍开着)**: 字段本身还是可变单例, `notifyListeners()` 仍靠调用方手工发(高频
+音量拖动会带动全页重建, 只是封面用 `ValueNotifier` 单独避开了)。要做就做**不可变快照 +
+统一 diff 通知**, 但那要连带改设置页与所有读点(≈ 一次重构批的量)。
+**触发条件(任一)**: ① 下次真加 ≥3 个设置项; ② 再出现「某控件拖动导致全页重建/掉帧」的反馈;
+③ 某次通知漏发 / 多发造成状态与落盘不一致的 bug。
 **并行性: 与 12.3 冲突**(设置页)。
 
 ### 12.7 FFI 逐接口样板(低优先 · 暂不做)

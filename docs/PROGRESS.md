@@ -15,7 +15,10 @@
 **当前门禁**(本机实测, 离线口径; **权威口径只在本表**, README/README.en/remaining-batches 都是指针)。
 复核口径: **2026-11-17 晚在 main 上合并 p18/uib-c/p10/p11 四条车道后逐门重跑**(编排者独立跑, 不采信 worker 自报);
 **v0.21.0 发版后(2026-11-17)再次独立重跑复核**: Rust 313 · Dart 1106 · golden 18 张 · 四道 checker 全 OK。
-本批数字变化: Rust **300→313**(P-18 数据目录迁移 8 例 + P-10 播放引擎 5 例) · Dart **1074→1106**(纵向 pitch 渲染断言 + v0.20.1/v0.21.0 反馈批用例) ·
+**2026-11-18 早(lint 清零 + settings codec 拆分后)第三次重跑**: `tools/ci-gates.sh verify` = **ALL GATES OK**
+(Rust **313** · Dart **1128** · golden 18 张 · clippy 0 · analyze 0 · 四道 checker OK · **android-lint 已 0 error 并进 verify**)。
+本批数字变化: v0.21.0 之后 Dart **1106→1124**(托盘关闭行为 lane 的 `desktop_close_behavior_test.dart` 18 例) ·
+本批 **1124→1128**(settings codec 键面/全字段往返 4 例); Rust 未动(仍 313)。
 golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp、行矮 8dp) · 新增设备级门 `androidTest`(模拟器, 手工)。
 
 | 门 | 结果 |
@@ -23,10 +26,10 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1106** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1128** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
-| `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **不在 `verify`) | **67 error / 9 warning**(必红: 66×media3 缺 `@OptIn(UnstableApi::class)` + 1×`GestureBackNavigation`; 未用 baseline 掩盖, 详见批次时间线最上面那条) |
+| `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -108,6 +111,33 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(一) Android lint 清零进 verify + settings.json codec 按域拆(**未发版**)
+
+两个切片, 各自一个提交, 都可离线复核(不需要人眼/Windows/sudo)。
+
+### 1) Android lint 从 67 error 清到 0, `android-lint` 进 `verify` 与 CI 阻塞门
+
+| 项 | 修法 |
+|---|---|
+| 66 × `UnsafeOptInUsageError`(51 × `PlaybackService.kt` / 15 × `EqAudioProcessor.kt`) | `PlaybackService` 标**类级** `@OptIn(UnstableApi::class)`(删掉 3 处散落的方法级标注); `EqAudioProcessor` 标**类本身** `@UnstableApi` —— 类级 `@OptIn` 盖不住 class 头部的**父类引用**, 而 `@file:OptIn` 只有 kotlin 编译器认、AndroidX experimental lint 不认(实测仍 16 error) |
+| 1 × `GestureBackNavigation`(`LoginActivity.kt` 的 `override onBackPressed`) | 迁到 `androidx.activity.ComponentActivity` + `OnBackPressedDispatcher`(`addCallback` → `finishCancelled()`)。**这不只是让 lint 闭嘴**: targetSdk 36 起系统不再调用 `onBackPressed`, 旧写法在 Android 16 上返回键会没反应 |
+
+门禁接线: `tools/ci-gates.sh verify` 增加 `cmd_android_lint`; `.github/workflows/ci.yml` 删 `continue-on-error`。
+仍未建 lint-baseline/lint.xml(项目纪律不变)。剩下的 9 warning 全是「有新版依赖」提示, 不阻塞。
+
+### 2) §12.6 第一步: settings.json 编解码按域拆出 `app_settings_codec.dart`
+
+`app_settings.dart` **732 → 584 行**; `load()` 里 60 行 if 链换成 `applyStoredJson(raw)`; 新增 part
+`app_settings_codec.dart`(七个 `_apply*` 按域解析 + **唯一一份** `toJson()`: 外观/播放/搜索/平台窗口/更新/诊断/交互记录)。
+字段形状**没动**(仍是可变单例), 只把「编解码」这一层收口 —— 以前加一个设置项要在 700 行里改 4 处且没有机械手段
+保证 load/save 字段一致(历史真实故障:「字号没有记忆」)。
+
+新增 `ui/test/app_settings_codec_roundtrip_test.dart`(4 例)把这件事变成门:
+① 落盘 key 面 `= 期望表`(多/少都红) ② 全字段设非默认值写→复位→`load()` 读回逐项等值 + 二次落盘字节稳定
+③ 老配置缺字段保持默认 ④ `schemaVersion<2` 的 `auto→amll` 一次性迁移仍生效。
+
+**未做**: 不可变快照 + 统一 diff 通知(要连带设置页全部读点, 触发条件见 §12.6)。
 
 ## 2026-11-17(三) 平台审计 P-18 后半: application-id 与 AppStream id 统一 + 数据目录一次性迁移(**未发版**)
 
