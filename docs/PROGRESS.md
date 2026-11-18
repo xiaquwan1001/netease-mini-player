@@ -17,8 +17,10 @@
 **v0.21.0 发版后(2026-11-17)再次独立重跑复核**: Rust 313 · Dart 1106 · golden 18 张 · 四道 checker 全 OK。
 **2026-11-18 早(lint 清零 + settings codec 拆分后)第三次重跑**: `tools/ci-gates.sh verify` = **ALL GATES OK**
 (Rust **313** · Dart **1128** · golden 18 张 · clippy 0 · analyze 0 · 四道 checker OK · **android-lint 已 0 error 并进 verify**)。
+**2026-11-18 中(P-11 交互级 + P-10 UI 面后)第四次重跑**: 仍 **ALL GATES OK**, Dart **1130**。
 本批数字变化: v0.21.0 之后 Dart **1106→1124**(托盘关闭行为 lane 的 `desktop_close_behavior_test.dart` 18 例) ·
-本批 **1124→1128**(settings codec 键面/全字段往返 4 例); Rust 未动(仍 313)。
+本批 **1124→1128**(settings codec 键面/全字段往返 4 例) · 再 **1128→1130**(播放条 seek 排队 8 例重写, +2);
+Rust 未动(仍 313)。
 golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp、行矮 8dp) · 新增设备级门 `androidTest`(模拟器, 手工)。
 
 | 门 | 结果 |
@@ -26,7 +28,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1128** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1130** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
@@ -112,6 +114,26 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(三) 播放条: 渐进期 seek 排队如实反馈(P-10 方案 B 的 UI 面) · **未发版**
+
+Rust 侧方案 B(2026-11-17)已经把渐进期 seek 从「拒绕」改成「排队 + 下载完成换源后跳」,
+但 UI 还停在方案 A 的假设上: `seekable=false` ⇒ 进度条钉死、拖了只弹「缓存中, 暂不可跳转」
+⇒ **明明能排队却不让拖**。本片把 UI 接到已有的 `pending_seek_ms`:
+
+| 改点 | 行为 |
+|---|---|
+| `PlayerView.pendingSeekMs` | 直传 `PlayerState.pending_seek_ms`; Android 通道无键 ⇒ `null`(移动端行为不变) |
+| 进度条可拖性 | `canSeek` 只看量程 —— 渐进期照常可拖、照常回调三件套 |
+| 拇指位置优先级 | `dragMs` → `pendingSeekMs` → `positionMs`(排队后停在「将要跳到的位置」) |
+| 信息行 | 已排队时前缀「已排队→mm:ss」(primary 色, 单行 ellipsis 不会溢出) |
+| 真被拒 | 只从 `seek_error` 回传 ⇒ `_seekTo` toast `seekFailedHint`; 旧的 `_SeekBlockedSlider`/`seekBlocked`/`seekBlockedHint` 删除 |
+| 轮询变化检测 | 加 `pendingSeekMs`(否则排队/生效要等下一次位置变化才刷新播放条) |
+
+门: `dart analyze` 0 · `dart format` 干净 · `flutter test` **1128→1130**(+2, `player_bar_seek_test.dart`
+重写为 8 例: 渐进期可拖 / 拇指停待跳点 / 已排队文案 / canSeek 口径 / 快照相等性 / 通道透出) · golden 18 未变。
+
+**交给用户的部分**: 真机听感(换源 25ms 淡入是否有可闻接缝, `SWAP_FADE` 常量)仍在 §13 P-10 行。
 
 ## 2026-11-18(二) 桌面 X11 交互级断言(P-11 剩余) · **未发版**
 

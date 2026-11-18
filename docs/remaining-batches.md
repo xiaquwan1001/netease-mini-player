@@ -360,7 +360,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 ## 13. 平台层审计剩余项(2026-11-16 登记 · 只登记不排期)
 
 > 来源: `.pi/plans/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
-> **已落 21 条**: P-01..P-22 除下表 P-10 方案 B(P-10 方案 B 遗留的 UI 文案/真机听感)与 P-11 的第 ③ 项(通知点击需真机)以外全部落地;
+> **已落 21 条**: P-01..P-22 除下表 P-10 的**真机听感**与 P-11 的第 ③ 项(通知点击需真机)以外全部落地;
 > **P-11 的桌面自动化部分 2026-11-18 已补齐**(交互级 X11 断言进入 `tools/smoke-desktop-headless`)。
 > **P-18 后半 已完成(2026-11-17)**: application-id 与 AppStream id 统一到
 > `io.github.xiaquwan1001.MiniNCM`(`ui/linux/CMakeLists.txt` + `.desktop` 文件名 + `StartupWMClass`
@@ -391,7 +391,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|---|
 | **P-11 完整版** · 桌面自动化(**Android instrumented** 第一步 2026-11-17 已落, 设备级门已接 ci-gates · **桌面交互级断言 2026-11-18 已落**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M~~ ⇒ **只剩 ③**: ① ~~接进 `ci-gates.sh`~~ ✅(2026-11-17: `android-instrumented` 子命令, 无模拟器 SKIP, `NCM_INSTRUMENTED=1` 才进 verify, a34 实跑 3/3); ② 桌面(Linux)自动化 ✅(2026-11-17 起步 + **2026-11-18 交互级**: `tools/smoke-desktop-headless` 第 ⑧ 段真的注入 X11 输入 —— windowfocus 回读 · XTEST space/Tab/space/Escape · 播放条 4 次点击 · 缩窗 640x480/320x240/还原, 每步断言存活 + 几何/标题/Map State 不变 + 主窗口仍 1 个 + 日志无崩溃痕迹; 实测 PASS 26 项 / 61s); ③ 通知**点击**行为仍靠真机冒烟。**已知边界**: xvfb 无 WM 时看不到 Dart 层状态(语义树空/标题是编译期常量) ⇒ 「空格真的切了播放」需 app 侧埋点(debug 日志 / `--e2e` 通道)才能断言, 属后续立项 |
 | **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
-| ~~**P-10 方案 B** · pending_seek~~ ✅ **已落地并合入 main(2026-11-17, 车道 `lane/p10-seek`)** | 已做: 渐进期 seek 登记成待跳(`SeekOutcome::Queued` + `PlayerState::pending_seek_ms`)、下载完成后**换源重建**可 seek 解码器并跳到待跳位置(25ms 淡入消爆音, 播放/暂停态·音量·EQ·时长沿用)、同一首歌下载完成后不再需要重播一次才能 seek。设计见 `core/crates/ncm-playback/P10-NOTES.md`, 批次记录见 `PROGRESS.md` 2026-11-17 条 | 遗留(非本车道): UI 侧「已排队」文案与进度条交互(`ui/lib` 手写 Dart); 真机听感微调(`SWAP_FADE` 常量) | 剩余 ≈ S(`flutter test` 全量 + 真机冒烟) |
+| ~~**P-10 方案 B** · pending_seek~~ ✅ **已全部落地(2026-11-17 引擎 + 2026-11-18 UI 面)** | 已做: 渐进期 seek 登记成待跳(`SeekOutcome::Queued` + `PlayerState::pending_seek_ms`)、下载完成后**换源重建**可 seek 解码器并跳到待跳位置(25ms 淡入消爆音, 播放/暂停态·音量·EQ·时长沿用)、同一首歌下载完成后不再需要重播一次才能 seek。设计见 `core/crates/ncm-playback/P10-NOTES.md`, 批次记录见 `PROGRESS.md` 2026-11-17 条。**UI 面 2026-11-18**(`fe604e2`): 进度条在渐进期照常可拖(`canSeek` 只看量程)、拇指停在待跳点、信息行前缀「已排队→mm:ss」、真被拒才从 `seek_error` 回传并 toast; `flutter test` 1128→1130 | 遗留(需真人/真机): 真机听感微调(`SWAP_FADE` 常量是否有可闻接缝) | 剩余 ≈ S(真机听感冒烟, **需用户**) |
 
 > 明确不做(审计 §3.3 已判, 不再重提): Kotlin 改从 Rust 拿 EQ 系数(跨 FFI 传数组 + 采样率协商) ·
 > 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当**顺手改**(P-18 后半已按「连数据目录迁移/单实例/打包一起做」的口径落地, 见 §13 顶部注记 —— 单独改 id 仍然是禁止项)。
