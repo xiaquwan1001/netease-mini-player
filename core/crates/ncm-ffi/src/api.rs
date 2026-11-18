@@ -2142,11 +2142,6 @@ pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, FfiEr
     Ok(program_dto(p))
 }
 
-/// 播客/电台详情
-pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadio, FfiError> {
-    ffi_forward!(Capability::PodcastDetail, provider.podcast_radio(radio_id))
-}
-
 // ---------------- 电台发现(只读) ----------------
 
 #[frb(mirror(RadioCategory))]
@@ -2686,14 +2681,6 @@ pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, FfiError
     )
 }
 
-/// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
-pub async fn playlist_tracks_add(playlist_id: u64, song_ids: Vec<u64>) -> Result<bool, FfiError> {
-    ffi_forward!(
-        Capability::PlaylistEdit,
-        provider.playlist_tracks_add(playlist_id, &song_ids)
-    )
-}
-
 /// 删除歌单(需登录, 且只能删自己的)
 pub async fn delete_playlist(playlist_id: u64) -> Result<bool, FfiError> {
     ffi_forward!(
@@ -2913,11 +2900,6 @@ pub struct _SigninStatus {
     pub recent: Vec<SigninDay>,
     /// 本次签到得到云贝(只有刚签完非 0)
     pub today_point: u32,
-}
-
-/// 云贝签到状态(需登录)
-pub async fn signin_status() -> Result<SigninStatus, FfiError> {
-    ffi_forward!(Capability::Signin, provider.signin_status())
 }
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)

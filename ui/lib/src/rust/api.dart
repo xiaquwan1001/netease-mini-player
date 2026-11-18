@@ -516,10 +516,6 @@ Future<List<PodcastProgramDto>> podcastPrograms({
 Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
     RustLib.instance.api.crateApiPodcastProgram(programId: programId);
 
-/// 播客/电台详情
-Future<PodcastRadio> podcastRadio({required BigInt radioId}) =>
-    RustLib.instance.api.crateApiPodcastRadio(radioId: radioId);
-
 /// 电台发现首页: 分类(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.
 Future<RadioExploreHome> radioExploreHome() =>
     RustLib.instance.api.crateApiRadioExploreHome();
@@ -702,15 +698,6 @@ Future<bool> setAlbumSubscribed({
 Future<BigInt> createPlaylist({required String name, required int privacy}) =>
     RustLib.instance.api.crateApiCreatePlaylist(name: name, privacy: privacy);
 
-/// 批量把歌加入歌单(需登录). songIds 应已去重; 重复曲目服务端会跳过.
-Future<bool> playlistTracksAdd({
-  required BigInt playlistId,
-  required Uint64List songIds,
-}) => RustLib.instance.api.crateApiPlaylistTracksAdd(
-  playlistId: playlistId,
-  songIds: songIds,
-);
-
 /// 删除歌单(需登录, 且只能删自己的)
 Future<bool> deletePlaylist({required BigInt playlistId}) =>
     RustLib.instance.api.crateApiDeletePlaylist(playlistId: playlistId);
@@ -857,10 +844,6 @@ Future<List<Playlist>> recentPlaylists({required int limit}) =>
 /// 最近播放的播客/电台(需登录)
 Future<List<PodcastRadio>> recentPodcasts({required int limit}) =>
     RustLib.instance.api.crateApiRecentPodcasts(limit: limit);
-
-/// 云贝签到状态(需登录)
-Future<SigninStatus> signinStatus() =>
-    RustLib.instance.api.crateApiSigninStatus();
 
 /// 签到(需登录). 已签到时返回当前状态(today_point = 0, 不报错)
 Future<SigninStatus> signIn() => RustLib.instance.api.crateApiSignIn();

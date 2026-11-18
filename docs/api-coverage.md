@@ -1,9 +1,9 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: **2026-11-18(六)** 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **136** / service 已调用 **135** / 未接入 **1**(`vip_sign_info`, 有意弃用); FFI 导出 **161** 个里 **9** 个无 UI 入口, 按去留分三类 ——
+> 最近更新: **2026-11-18(八)** 删 3 条真死 FFI 出口后复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **136** / service 已调用 **135** / 未接入 **1**(`vip_sign_info`, 有意弃用); FFI 导出 **158** 个里 **6** 个无 UI 入口, 按去留分两类 ——
 > **有意保留(4)**: `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用);
 > **待产品决策(2)**: `consent_plaintext_storage`(凭据回退同意门, UI 未落地)、`user_play_ranking`(他人常听排行, 匿名态恒空, 等有登录态真机);
-> **真死(3)**: `playlist_tracks_add`(唯一调用点随「存为歌单」面板在 `1a688d8` 删除)、`podcast_radio`/`signin_status`(UI 早已改走 `podcastProgram*` / `vipOverview`; provider 层仍被 `ncm-cli` 调用, 删只删 FFI 出口)。
+> **已删(3, 原「真死」)**: `playlist_tracks_add`(唯一调用点随「存为歌单」面板在 `1a688d8` 删除)、`podcast_radio`/`signin_status`(UI 早已改走 `podcastProgram*` / `vipOverview`)—— 2026-11-18 删掉这 3 个 FFI 出口(provider 层方法保留, `ncm-cli` 仍用同名方法), 导出 161→158、无 UI 入口 9→6。
 > **口径变化(2026-11-18)**: 脚本此前用「小写化标识符集合」判入口 ⇒ DTO 类型名(`rust.SigninStatus`)与**构造调用**(`rust.PodcastRadio(`)把同名导出顶替成"有入口", 少报 3 个; 现已改成「小写开头 + 调用/tearoff 形态」两条正则, 实测 6→9。死代码审计明细见本地 `.pi/plans/deadcode-audit-2026-11-18.md`。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
@@ -14,8 +14,8 @@
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **134**(2026-11-14: + 云盘上传 5 + 资料更新 1 + MV 搜索复用 cloudsearch) |
 | `ncm-service`(provider)实际调用的 | **134(100%)** |
 | 未接入 | **0** |
-| FFI 导出给 Dart 的函数 | **161** |
-| 其中 UI 还没有入口的 | **9**(保留 4 / 待决策 2 / 真死 3, 见文首分类) |
+| FFI 导出给 Dart 的函数 | **158**(2026-11-18 删 3 条真死出口: `playlist_tracks_add`/`podcast_radio`/`signin_status`) |
+| 其中 UI 还没有入口的 | **6**(保留 4 / 待决策 2, 见文首分类) |
 
 > 表内数字以 `bash tools/api-coverage.sh` 的实时输出为准(上面这行是 2026-11-10 收尾版实测)。
 
@@ -125,7 +125,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 ## 6. 已接后端但 UI 还缺入口(顺手能做)
 
 - `lyric`(纯文本)/`lyric_lines`(逐行, 无翻译): 已导出, UI 只用了 `lyric_lines_i18n`(逐行+翻译)。
-- `podcast_program`(单节目详情)/`podcast_radio`(电台详情): 已导出, UI 用列表数据渲染, 详情刷新没接。
+- `podcast_program`(单节目详情): 已导出, UI 用列表数据渲染, 详情刷新没接(`podcast_radio` 电台详情已在 2026-11-18 删除导出)。
 - `search`(单类型搜索): 已被 `search_all` 取代, 可以直接删掉导出。
 - `follow_counts`(关注/粉丝数): 已导出, 但资料卡的数字来自 `profile_detail`; 关注/取关后卡片数字会稍滞后,
   后续可在这里补一次刷新。
