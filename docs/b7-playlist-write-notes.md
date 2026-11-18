@@ -73,6 +73,8 @@
   「我喜欢的音乐」(special)也走 playlistTracksAdd(官方网页端同一接口)。
 - **测试**: Rust +6(netease.rs parse 单测,真实响应片段); Dart +6(`ui/test/queue_sheet_save_test.dart`:
   空队列无按钮 / 非空出现 / 成功回调收到快照 / 去重 / 防重复点击 / 失败不崩可重试)。
+  **2026-11-18 更新**: 「存为歌单」整条链路已按用户反馈删除, 该测试文件与宿主 `_saveQueueAsPlaylist` 一并移除;
+  本节其余接口结论(create / 加曲 / code=500 半成功)仍有效。
 - **门禁数字(2026-11-10 本批实测)**: `cargo test --offline --workspace --exclude ncm-api-rs`
   218(HEAD 基线)→ **224**(+6,零删除;vendor smoke 4 例联网项按记录在案口径 WARN 不阻塞);
   `dart analyze` **0 error/0 warning**(41 info 均为既有 lint);`flutter test --exclude-tags network`

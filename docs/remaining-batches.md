@@ -4,29 +4,26 @@
 > 配套: `docs/api-coverage.md`(接口差集, 用 `bash tools/api-coverage.sh` 复算)、
 > `docs/PROGRESS.md`(已落地功能与协议事实)、`docs/archive/remaining-batches-history.md`(历史分批口径)。
 >
-> 口径日期: **2026-11-17**。**覆盖率 / FFI 导出数 / 测试数一律跑脚本现算**, 本文件不再维护副本
-> (`bash tools/api-coverage.sh`、`bash tools/ci-gates.sh list`); 权威数字只在
-> [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表(2026-11-16 实测: 覆盖 **135/136**、FFI 导出 **161**、
-> Rust **300** / Dart **1074**, golden **18**; Android `testDebugUnitTest` **3**, `row-padding` 门 OK)。
+> 口径日期: **2026-11-18**。**覆盖率 / FFI 导出数 / 测试数一律脚本现算**(`bash tools/api-coverage.sh`、
+> `bash tools/ci-gates.sh list`), 本文件**不维护任何数字副本** —— 权威口径只在
+> [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
 >
-> **2026-11-18(四) 已落地**: 播放条/队列面板 7 条用户反馈(心动模式退不出 · 切导航收起弹层 ·
-> 删「存为歌单」与行尾垃圾桶 · 队列行高 48 · 首次展开「左滑移除」提示 · 面板跟随真实队列 +
-> 打开定位当前曲目 · 顶部「定位当前播放歌曲」按钮)。明细见 `PROGRESS.md` 2026-11-18(四)。
+> **2026-11-18(四) 已落地**: 播放条/队列面板 7 条用户反馈(明细见 `PROGRESS.md` 2026-11-18(四))。
 >
-> **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口、
-> 平台层审计 22 条已落 **21 条**(P-01..P-22 只剩 **P-11 完整版**; P-18 后半与 P-10 方案 B 均于 2026-11-17 落地并已合入 main)、main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`);
-> 列表行 A 级清零、**B 级 12 条清零(2026-11-16 晚)**、**C 级第一批已落(2026-11-17: 四个具名行留白口径 + `row-padding` 门)**;
-> Android 侧门禁已进 CI(`android-unit` 阻塞 / `android-lint` 仅暴露, 现状 67 error)。
-> 三端分发六种产物 + arm64 腿, 已发布版本 **v0.19.0**(其后 main 上还有一条未发版批次)。
+> **当前状态**: 功能批次 Wave 1–9 全部完成、D7(frb 直透 domain) 57/57 关闭、技术债 D 批收口;
+> 平台层审计 22 条已落 21 条(P-01..P-22 只剩 P-11 的 ③「通知点击需真机」与 P-10 的真机听感, 见 §13);
+> main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`); 列表行 A/B 级清零、C 级第一批已落;
+> Android 侧三道门全进 CI(`android-unit` / `android-lint` 阻塞, `android-instrumented` 需 `NCM_INSTRUMENTED=1`);
+> 已发布版本 **v0.21.0**, 其后 main 上的未发版切片见 `PROGRESS.md` 时间线与 `.pi/memory/notes-wip.md`。
 >
-> **下一轮从哪挑**: **§11 · 待办**(功能/小改, 2026-11-13 起维护) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**(2026-11-16 登记)。
+> **下一轮从哪挑**: **§11 · 待办**(功能/小改) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**。
 
 ## 1. 硬约束(决定哪些事不可能真并行)
 
 | 约束 | 影响 |
 |---|---|
-| 所有 provider 方法都写在同一个 `core/crates/ncm-service/src/netease.rs`(4700+ 行) | 两个批次同时加接口 = 同文件冲突 |
-| Provider trait 在 `core/crates/ncm-provider/src/lib.rs`, FFI 在 `core/crates/ncm-ffi/src/api.rs` | 同上, 且必须成对改 |
+| provider 实现按能力域分模块: `core/crates/ncm-service/src/netease/{song,playlist,comment,…}.rs`(2026-11-13 起, 最大 `song.rs` 1091 行) | 同一能力域的两批同时加接口 = 同文件冲突 |
+| Provider trait 在 `core/crates/ncm-provider/src/trait.rs`(+ `caps/` 13 个能力 trait), FFI 在 `core/crates/ncm-ffi/src/api.rs` | 同上, 且必须成对改 |
 | `flutter_rust_bridge_codegen` 一次重写 `ui/lib/src/rust/*` + `core/crates/ncm-ffi/src/frb_generated.rs` | **codegen 是全局串行点**, 同一时刻只能有一个批次跑它 |
 | `cargo` 共用 `core/target`, Gradle/Flutter 共用 `ui/build` | 两个批次同时 `cargo test`/`flutter build` 会互相排队或锁死 |
 | 模拟器有两台(**a34 / a36**, 一般占 5554/5556), 真机只在发布冒烟用 | 单台设备内实测串行; 两台可各跑一个批次(用 `adb -s` 指定), 但同一账号的写操作仍要串行 |
@@ -103,7 +100,7 @@
 5. **UI**: 先写 mock loader 的 widget test, 再接真实 Rust 调用。
 6. **实测**: 模拟器 a34 或 a36 手动路径 + logcat(两台可并行分担不同批次); 真机只在发布冒烟。
    a34(API 34)与 a36(API 36)版本不同, 涉及系统行为(Media3/通知/权限)的批次建议两台各跑一次。
-7. **收口**: 更新 `docs/api-coverage.md` 数字(跑 `tools/api-coverage.sh`)、`docs/PROGRESS.md` 新小节、`.pi/memory/HINDSIGHT.md` 协议事实。
+7. **收口**: 更新 `docs/api-coverage.md` 数字(跑 `tools/api-coverage.sh`)、`docs/PROGRESS.md` 新小节、`.pi/memory/history/HINDSIGHT.md` 协议事实。
 8. **提交**: 一个批次一个 commit, 消息格式 `feat: <能力>(<关键接口>)`。
 
 ## 7. 派发工单模板(fabric_exec)
@@ -113,12 +110,12 @@
 
 ```text
 【批次】B1 消息增强
-【必读】AGENTS.md、docs/remaining-batches.md §6、docs/PROGRESS.md 最近两节、.pi/memory/HINDSIGHT.md
+【必读】AGENTS.md、docs/remaining-batches.md §6、docs/PROGRESS.md 最近两节、.pi/memory/history/HINDSIGHT.md
 【范围】只做 msg_forwards / msg_recentcontact + 私信分页; 不碰支付/发送
 【允许改】core/crates/ncm-service/src/netease.rs(仅新增 parse/impl)、
           core/crates/ncm-provider/src/lib.rs、core/crates/ncm-ffi/src/api.rs、
           core/crates/ncm-domain/src/lib.rs、ui/lib/src/messages_page.dart、ui/test/messages_page_test.dart、
-          docs/PROGRESS.md、docs/api-coverage.md、.pi/memory/HINDSIGHT.md
+          docs/PROGRESS.md、docs/api-coverage.md、.pi/memory/history/HINDSIGHT.md
 【禁止】ui/lib/src/rust/*(生成物)、core/vendor/*、tools/*、flutter build、其他批次文件
 【codegen】本批是 Rust 批: 允许跑, 且必须只跑一次; 跑完 cargo build -p ncm_ffi
 【步骤】① 先用 CLI/env dump 抓真实响应并写进注释 ② domain+parse+单测 ③ trait+impl+CAPABILITIES
@@ -158,8 +155,8 @@
 ## 11. 待办(2026-11-17 更新)
 
 > 这一节是「下一轮从哪挑」的**唯一入口**(功能/小改); **结构性债务单独立项见末尾 §12**(含派发波次);
-> **平台层审计确认未做的 2 条债务(P-11 完整版 / P-10 方案 B)见 §13**(P-18 后半已于 2026-11-17 落地)。
-> P-05 长尾 / P-12 / P-22 已于 2026-11-16 落地, §13 已标「作废」。
+> **平台层审计只剩两条尾巴(见 §13)**: P-11 的 ③ 通知点击(需真机) / P-10 的真机听感微调。
+> P-05 长尾 / P-10 方案 B / P-12 / P-18 后半 / P-22 均已于 2026-11-16~11-18 落地, §13 顶部有 commit 与文件证据。
 > §2–§3、§6–§8 是批次目录与派发流程, 历史口径见 `docs/archive/remaining-batches-history.md`。
 > **基线数字不在这里维护**(曾经 4 处各写一套 ⇒ 已实测分叉): 唯一权威是 [`PROGRESS.md`](PROGRESS.md) 头部「当前门禁」表。
 > 本节只管「还剩什么没做」。
@@ -169,8 +166,8 @@
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
 | 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
-| 2 | 主页新数据面接页面 | `userPlayRanking` / `userEvents` 已有 FFI 但无 UI 入口(FFI 161 里 6 个无入口);实测他人听歌排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再决定是否做「常听/动态」tab。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
-| 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; 字体/插件等运行期数据文件仍需真最小桌面点一次 | S |
+| 2 | 他人主页「常听」排行接页面 | 只剩 `userPlayRanking`(他人听歌排行)无 UI 入口 —— `userEvents` 已接(`ui/lib/src/artist_page.dart:225`、`ui/lib/src/user_page.dart:317`);实测他人排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再定。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
+| 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; **bundle 侧 2026-11-17 已 dbus+xvfb 真跑过**(单实例 14ms 退、目录迁移), 只剩「装 `.deb` 后点一次」; 字体/插件等运行期数据文件仍要人眼看 | S |
 | 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
 | 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
 | 6 | **诊断 Worker 落地**(用户手动) | 代码与 8 步部署说明已在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
@@ -210,25 +207,13 @@ App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+�
 > 都是「改形状不改行为」, 每项**一个 commit 一条车道**; 先做 12.0 把门禁补齐, 再动后面的。
 > 现状数据均为 2026-11-13 本机实测。
 
-### 12.0 门禁补齐(S · 半天 · **必须第一个做**)
+### 12.0 门禁补齐(S · 半天) ✅ **已完成(2026-11-13 格式化/clippy 三门, 2026-11-18 `android-lint`)**
 
-CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, **没有格式门也没有 clippy 门**。
-
-| 现状 | 数字 |
-|---|---|
-| `cargo fmt --all -- --check` | **368 处差异**(netease.rs 125 / api.rs 63 / ttml_source.rs 32 / credential_store.rs 23 …) |
-| `dart format lib test` | 会重排 **143 文件**,+5846 −4405(已实测并回退, 不要顺手跑) |
-| `cargo clippy --workspace --all-targets` | 0 warning(2026-11-13 已清零, 需要门来锁住) |
-
-> **2026-11-18 补记**: Android 侧第三道门 `:app:lintDebug` 也已补齐 —— 67 error 清到 **0**
-> (media3 `UnstableApi` opt-in 收口 + `LoginActivity` 迁 `OnBackPressedDispatcher`), 已进
-> `tools/ci-gates.sh verify` 与 GitHub CI 阻塞门。细节见 `PROGRESS.md` 2026-11-18 条。
-
-做法:
-1. **纯格式提交**:`cargo fmt --all` + `dart format lib test`,**同一个 commit 里不放任何逻辑改动**(用 `git diff -w` 自检只看格式)。
-2. 同 commit 给 `.github/workflows/ci.yml` / `.gitlab-ci.yml` / `tools/ci.sh` 加三个 step:
-   `cargo fmt --all -- --check` · `cargo clippy --workspace --all-targets -- -D warnings` · `dart format --set-exit-if-changed lib test`。
-3. 之后任何改动都必须过格式门(否则 CI 红)。
+结果: `cargo fmt --all -- --check` · `cargo clippy --workspace --all-targets -- -D warnings` ·
+`dart format --set-exit-if-changed lib test` 三道门都进了 `tools/ci-gates.sh verify` 与 GitHub CI; Android 侧
+`:app:lintDebug` 67 error → **0**(media3 `UnstableApi` opt-in 收口 + `LoginActivity` 迁 `OnBackPressedDispatcher`), 同样阻塞。
+原状留档: 开工前 CI 只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`; `cargo fmt` 368 处差异、
+`dart format` 会重排 143 文件(+5846 −4405, 已实测并回退)—— **仍然不要顺手跑全仓 format**。明细见 `PROGRESS.md` 2026-11-18 条。
 
 验收: CI 三个新 step 全绿;`cargo test` / `flutter test` 数字不变。
 **并行性: 独占** —— 格式提交会和任何在飞车道撞车, 必须先落地再开别的。
@@ -263,8 +248,8 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
 
 **② `api.rs` 按域拆 —— 结论: 现在不拆, 触发条件写明**
 
-现状(2026-11-17 实测): `api.rs` **3 325 行** / `pub fn` 30 个 + `ffi_forward!` 78 处 = **FFI 导出 161** / 65 个 `#[frb(mirror)]`
-/ 文件内已有 **20 个 `// ----` 分节**(即"逻辑上已按域分节", 只是没分文件)。Dart 侧 **173 个文件** 引用 `rust/api.dart`。
+现状(2026-11-18 本机复核): `api.rs` **3 325 行** / `pub fn` **161** 个(其中 77 处走 `ffi_forward!` 转发, 即 **FFI 导出 161**) /
+65 个 `#[frb(mirror)]` / 文件内已有 **20 个 `// ----` 分节**(即"逻辑上已按域分节", 只是没分文件)。Dart 侧 **173 个文件** 引用 `rust/api.dart`。
 
 - **收益**: 单文件变短、按域 review 更省; 但 Dart 侧 import 面不变(FRB 生成的 `api.dart` 仍是单一入口),
   也就是说**收益是"编辑体验", 不是行为/性能/架构边界**(边界早已由 crate 结构守住: `ncm-ffi` 的 Cargo.toml 里没有 `ncm-api-rs`)。
@@ -276,7 +261,7 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
   ② `api.rs` > 4 000 行; ③ 某次 code review 因单文件过大漏看(事故后复盘判定)。
   第一步永远只搬 mirror 到 `api/dto.rs` + 观察一次 codegen 零 diff, 不动业务 fn。
 - **明确不做**: `ncm-service` 拆 `ncm-store`(审计 §7 建议 7, L 级 2~3 天, 当前无第二个消费方);
-  `ncm-domain/src/lib.rs`(1 771 行 / 92 DTO)按域拆 —— 必须与 `api.rs` 拆同批, 单做只增加 mirror 路径漂移风险。
+  `ncm-domain/src/lib.rs`(1 750 行 / 91 个 `pub struct`; 2026-11-18 本机 `wc -l` + `rg -c 'pub struct '` 实测)按域拆 —— 必须与 `api.rs` 拆同批, 单做只增加 mirror 路径漂移风险。
 
 ### 12.2 `Provider` 拆成能力 trait ✅ **已完成(v0.14.0, 2026-11-16; 本节 2026-11-18 订正)**
 
@@ -339,7 +324,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— **第一步已完成(2026-11-18)**
 
-现况: `ui/lib/src/app_settings.dart` **732 → 584 行**, 编解码已按域拆到同库 part
+现况: `ui/lib/src/app_settings.dart` **732 → 584 行**(当时口径; 2026-11-18 队列批加了 `queueSwipeHintDismissed` 后现 **594** 行, `wc -l` 实测), 编解码已按域拆到同库 part
 `ui/lib/src/app_settings_codec.dart`(七个 `_apply*` 同构于唯一一份 `toJson()`: 外观 / 播放 / 搜索
 / 平台窗口 / 更新 / 诊断 / 交互记录); `load()` 里 60 行 if 链 → `applyStoredJson(raw)`。
 门: `ui/test/app_settings_codec_roundtrip_test.dart`(4 例) —— 落盘 key 面 = 期望表 + 全字段
@@ -355,7 +340,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ### 12.7 FFI 逐接口样板(低优先 · 暂不做)
 
-`api.rs` 2757 行里大部分是 `ffi_forward!` 样板(加一个接口 = FFI 一处 + Dart 一处 + 测试一处)。
+`api.rs` 3 325 行(现码, 见 §12.1b)里大部分是 `ffi_forward!` 样板(加一个接口 = FFI 一处 + Dart 一处 + 测试一处)。
 接口数不翻倍就不动;若真要动, 方向是「按能力域批量生成 + 一份导出清单」, 不是继续手抄。
 
 ### 12.8 派发建议
@@ -374,13 +359,9 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 > 来源: `.pi/plans/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
 > **已落 21 条**: P-01..P-22 除下表 P-10 的**真机听感**与 P-11 的第 ③ 项(通知点击需真机)以外全部落地;
 > **P-11 的桌面自动化部分 2026-11-18 已补齐**(交互级 X11 断言进入 `tools/smoke-desktop-headless`)。
-> **P-18 后半 已完成(2026-11-17)**: application-id 与 AppStream id 统一到
-> `io.github.xiaquwan1001.MiniNCM`(`ui/linux/CMakeLists.txt` + `.desktop` 文件名 + `StartupWMClass`
-> + metainfo `<launchable>`), 桌面端由 `G_APPLICATION_NON_UNIQUE` 改回**严格单实例**,
-> 用户数据目录 `~/.local/share/ncm` → `~/.local/share/io.github.xiaquwan1001.MiniNCM`
-> 带**一次性迁移**(幂等; 同设备 rename / 跨设备 copy+校验+rename; 失败回退旧目录;
-> 旧目录留 `.migrated` 标记)。迁移口径/四态判据/降级步骤见 `.pi/memory/notes-build.md` 与
-> `core/crates/ncm-service/src/fsutil.rs` 模块注释; `$NCM_DATA_DIR` 显式指定时不迁移。
+> **P-18 后半 已完成(2026-11-17)**: application-id / AppStream id / 用户数据目录统一到
+> `io.github.xiaquwan1001.MiniNCM` + 严格单实例 + 数据目录一次性迁移(幂等, 旧目录留 `.migrated`)。
+> 明细见 `PROGRESS.md` 2026-11-17(三); 迁移四态判据/降级步骤见 `.pi/memory/notes-build.md` 与 `core/crates/ncm-service/src/fsutil.rs` 模块注释。
 > 2026-11-17 复核时又订正了两条早已完成的：
 > - **P-12** 已随 P-01/P-02 批落地(`b6281b8`, `PlaybackService.kt:92` `setSessionActivity(openAppPendingIntent())`), 不再排。
 > - **P-22** cleartext 白名单 `6a3ea6f` 已合入 main(2026-11-16, `res/xml/network_security_config.xml` + manifest
@@ -391,19 +372,35 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 >   三边读取 ⇒ 原「待办」记载**作废(2026-11-16)**。
 > 下表只写「为什么没做 / 触发条件 / 预计工作量」; 方案原文在审计文件里, 不在此复制。
 
-> **P-11 第一步已落(2026-11-17)**: 仓库有了首个 instrumented 设施 ——
-> `ui/android/app/src/androidTest/kotlin/com/minincm/minincm/NotificationSlotsTest.kt`(3 例: 通知渠道 importance /
-> action 槽位 = 上一首→播放暂停→下一首→喜欢→播放顺序 + `compactActions` / 喜欢·模式状态回推) +
-> `tools/devui/notif-slots`(解析 `dumpsys notification --noredact` 的 `NotificationRecord` 排版, PASS/FAIL,
-> 带离线样例自测) + `tools/devui/androidtest`(`connectedDebugAndroidTest` 的设备守卫: 只允许 `emulator-*`)。
-> 观察口径: 断言对象是 Media3 用生产 `mediaButtonPreferences` 拼出的 Notification, 不是常量表。
-> **该批未实跑**(开工时无模拟器), 编译门 `compileDebugAndroidTestKotlin` + `testDebugUnitTest` 已绿。
+> **P-11 第一步已落(2026-11-17)**: 仓库首个 instrumented 设施 ——
+> `NotificationSlotsTest.kt`(3 例: 渠道 importance / action 槽位 + `compactActions` / 喜欢·模式回推) + `tools/devui/notif-slots`
+> (解析 `dumpsys notification` 的 `NotificationRecord`) + `tools/devui/androidtest`(只允许 `emulator-*` 的设备守卫)。明细见 `PROGRESS.md` 2026-11-17(五)。
 
 | 项 | 为什么没做 | 触发条件(什么时候做) | 预计工作量 |
 |---|---|---|---|
 | **P-11 完整版** · 桌面自动化(**Android instrumented** 第一步 2026-11-17 已落, 设备级门已接 ci-gates · **桌面交互级断言 2026-11-18 已落**) | 审计只给方向(纯函数抽测 / Kotlin JVM 单测 / adb 断言), 要新建设备无关测试设施; 现状 `ui/android/app/src/` 只有 `main`/`debug`/`profile` + 刚建的 `test/`(只有 EQ 夹具一个类), **无 `androidTest/`**; `tools/devui` 只有截图/点击脚本, 没有通知槽位断言。审计里的 6 条 P1 已全部修完并真机验过 ⇒ 紧急度下降 | ① 下一次动 `PlaybackService` 的通知/按钮槽位; ② 或再出现「只有真机能发现」的回归(参照 P-01/P-02 那一类) | ~~M~~ ⇒ **只剩 ③**: ① ~~接进 `ci-gates.sh`~~ ✅(2026-11-17: `android-instrumented` 子命令, 无模拟器 SKIP, `NCM_INSTRUMENTED=1` 才进 verify, a34 实跑 3/3); ② 桌面(Linux)自动化 ✅(2026-11-17 起步 + **2026-11-18 交互级**: `tools/smoke-desktop-headless` 第 ⑧ 段真的注入 X11 输入 —— windowfocus 回读 · XTEST space/Tab/space/Escape · 播放条 4 次点击 · 缩窗 640x480/320x240/还原, 每步断言存活 + 几何/标题/Map State 不变 + 主窗口仍 1 个 + 日志无崩溃痕迹; 实测 PASS 26 项 / 61s); ③ 通知**点击**行为仍靠真机冒烟。**已知边界**: xvfb 无 WM 时看不到 Dart 层状态(语义树空/标题是编译期常量) ⇒ 「空格真的切了播放」需 app 侧埋点(debug 日志 / `--e2e` 通道)才能断言, 属后续立项 |
-| **P-05 长尾** · EQ 三份解析共享 fixture | 立即项(失败回显 `eqApplied`)已在 v0.16.0 落地; 中期项要把同一段 AutoEQ 文本当 fixture, 让 Dart/Kotlin/Rust 各断言系数与错误行号, 三端各需一套夹具读取器 | ① 再改任一份 EQ 解析(单位大小写 / `Preamp` 缺省 / `ON`-`OFF` 变体); ② 或出现「曲线看着在跑但没生效」的反馈 | S–M(≈ 半天~1 天, 纯测试, 不动产品代码) |
 | ~~**P-10 方案 B** · pending_seek~~ ✅ **已全部落地(2026-11-17 引擎 + 2026-11-18 UI 面)** | 已做: 渐进期 seek 登记成待跳(`SeekOutcome::Queued` + `PlayerState::pending_seek_ms`)、下载完成后**换源重建**可 seek 解码器并跳到待跳位置(25ms 淡入消爆音, 播放/暂停态·音量·EQ·时长沿用)、同一首歌下载完成后不再需要重播一次才能 seek。设计见 `core/crates/ncm-playback/P10-NOTES.md`, 批次记录见 `PROGRESS.md` 2026-11-17 条。**UI 面 2026-11-18**(`fe604e2`): 进度条在渐进期照常可拖(`canSeek` 只看量程)、拇指停在待跳点、信息行前缀「已排队→mm:ss」、真被拒才从 `seek_error` 回传并 toast; `flutter test` 1128→1130 | 遗留(需真人/真机): 真机听感微调(`SWAP_FADE` 常量是否有可闻接缝) | 剩余 ≈ S(真机听感冒烟, **需用户**) |
+
+## 14. UI 浮层 / 返回栈 / 生命周期(2026-11-18 审计登记 · 只登记不排期)
+
+> 来源 `.pi/plans/arch-audit-ui-overlay-2026-11-18.md`(13 条: P1×1 / P2×5 / P3×7)。**本表只列值得排期的 5 条**,
+> P3 的 7 条(未处理 `didReplace` / 注释里的「桌面 Esc」实为 0 处 / 不可达 `SystemNavigator.pop()` /
+> 每次构建都造新导航 / 缺页面级前后台钩子 / `identical(current)` 快照比较 / rail 在飞耦合点)按需查原文。
+> 口径(2026-11-18 本机实测): sheet **23 处/18 文件** · dialog **20 处/16 文件** · 统一入口 `showAppSheet` **0** ·
+> `PopScope` **3 处** · `WillPopScope`/`BackButtonListener`/`NavigatorPopHandler`/`RouteAware`/`didPopNext` **全 0** ·
+> `WidgetsBindingObserver` **3 处/2 文件** · `TickerProviderStateMixin` **6 处/4 文件** · `AppLifecycleListener` 与
+> `didChangeAppLifecycleState` **全 0** · `navigator.push` **28** / `Navigator.pop` **40** / `maybePop` **1**。
+
+| 编号 | 问题 | 触发条件(什么时候值得做) | 预计工作量 |
+|---|---|---|---|
+| **U-01**(P1) | 导航栏 + 播放条住在 Navigator **外面** ⇒ 弹层遮罩盖不住它们, 浮层开着仍能点 tab; 「切页收起浮层」只在 `_onTabSelected`(`home_page.dart`)一处手写, 实测还漏 5 类(歌曲动作面板 / 收藏到歌单 / 分享 / 关注页艺人筛选 / 更新弹窗) | ① 用户再反馈「浮层没关掉/点到了底下的东西」; ② 或做 U-03 统一入口时一并收口 | S~M(统一「切页先关全部浮层」的单一入口 + 补 5 类 + 测试) |
+| **U-02**(P2) | `QueueSheetController.close()` 用 `maybePop()` ⇒ 队列面板上压着「清空确认框」时切 tab 只关确认框(登录弹层已有 `isCurrent/removeRoute` 的正确写法) | 与 U-01 同批做(同一处切 tab 路径) | S |
+| **U-03**(P2) | 无统一浮层入口: 关闭语义三档(拖拽 21/22 · 关闭键 5 · 高度口径 3 套 · 键盘让位 5 处手写) | 下次批量改弹层, 或样式不一致的反馈出现 | M(≈ 前端审计 2026-11-15 就建议过的 `showAppSheet(...)`) |
+| **U-04**(P2) | 播 MV 不暂停歌曲, MV Activity 无音频焦点 ⇒ 双音源并发(**代码事实确定, 听感待真机**) | 用户报「看 MV 时歌还在放/两个声音」 | S(暂停 + 请求焦点, 需真机验) |
+| U-05/U-06(P2) | 帧后回调缺 `mounted` 守卫; `HomeWiring._latest` 漏「A attach→B attach→B detach」组合 | 出现「已销毁页面仍被回调/播放条状态被旧实例清掉」类崩溃或异常 | S(守卫 + 一个组合用例) |
+
+> 与 §12.6 不可变快照、§11.A 的真人项**互不重叠**; 与 `lane/ui-adaptive`(断点/限宽/Rail)只在
+> 「宽档下 `ContentWidthLimit` 会把浮层也限到 840」这一处交汇, 处置见 `PROGRESS.md` 2026-11-18(六)的复核补丁。
 
 > 明确不做(审计 §3.3 已判, 不再重提): Kotlin 改从 Rust 拿 EQ 系数(跨 FFI 传数组 + 采样率协商) ·
 > 给 Gradle 引 ktlint/detekt 插件 · 把 `APPLICATION_ID` 当**顺手改**(P-18 后半已按「连数据目录迁移/单实例/打包一起做」的口径落地, 见 §13 顶部注记 —— 单独改 id 仍然是禁止项)。

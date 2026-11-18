@@ -1,4 +1,4 @@
-# C3 — MV 播放 接口实测笔记(2026-11-22, ncm raw 实抓)
+# C3 — MV 播放 接口实测笔记(2026-11-10, ncm raw 实抓; 原写 2026-11-22 是笔误)
 
 ## mv_detail(`/api/v1/mv/detail`, weapi, 参数 mvid)
 

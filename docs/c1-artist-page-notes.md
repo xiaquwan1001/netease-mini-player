@@ -1,7 +1,7 @@
 # C1 歌手详情页重构 — 接口实测笔记
 
-日期: 2026-11-22。探测方式: 临时 example `core/crates/ncm-service/examples/probe_artist.rs`
-(复跑: `cargo run --offline --manifest-path core/Cargo.toml -p ncm-service --example probe_artist`),
+日期: 2026-11-09(原写 2026-11-22 是笔误, 该文件提交 `b67f9d6` 在 2026-11-09)。探测方式: 临时 example `core/crates/ncm-service/examples/probe_artist.rs`
+(**该探针已删**, 下面复跑命令只作留档: `cargo run --offline --manifest-path core/Cargo.toml -p ncm-service --example probe_artist`),
 账号为本地已登录 session(`~/.local/share/ncm`)。样例歌手: 周杰伦 id=6452。
 
 ## 模块恢复

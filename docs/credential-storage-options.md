@@ -1,6 +1,8 @@
 # 凭据存储方案调研(可决策稿)
 
 > lane/w4-cred-audit @ v0.5.2, 2026-11-11。只含事实(带代码指针)与方案对比, 不拍板。
+> **口径提醒(2026-11-18)**: 下文 `main.dart:728` 等行号是当时口径(现 main.dart 仅 48 行门面); 桌面数据目录也已于
+> 2026-11-17 改为 `~/.local/share/io.github.xiaquwan1001.MiniNCM`(见 `.pi/memory/notes-build.md`)。
 
 ## 1. 现状审计(全部来自代码, 无猜测)
 

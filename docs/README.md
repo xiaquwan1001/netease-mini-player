@@ -10,10 +10,10 @@
 
 | 文件 | 用途 | 最后更新 |
 |---|---|---|
-| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.20.0 起);更早的见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-17 |
-| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活, §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-17 |
+| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.20.0 起);更早的见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-18 |
+| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活, §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-18 |
 | [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-16 |
-| [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-17 |
+| [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-18 |
 
 ## 2. 构建 / 发布 / 测试
 
@@ -55,7 +55,8 @@
 |---|---|---|
 | [archive/](archive/README.md) | 已完工/已决策的专题文档 + 三段 PROGRESS 归档(`PROGRESS-v1.md` v1 WebView 时代 · `PROGRESS-2026-11-03-11-12.md` v2 早期批次 · `PROGRESS-2026-11-13-11-19.md` v0.8.0–v0.19.0 批次) + `remaining-batches-history.md`。**归档** | 2026-11-17 |
 | [audits/](audits/) | 近期审计报告: `2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md` · `2026-11-13-asset-docs-audit.md`(数字为当时快照)。**活跃** | 2026-11-13 |
-| [ui-row-audit.md](ui-row-audit.md) | 列表行/溢出全仓审计(49 处骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案与改造顺序; A 级已在 v0.9.0 清零, 剩 B/C 待收敛。**活跃** | 2026-11-13 |
+| [reports/](reports/) | 只读调查报告: `login-risk-analysis-2026-11-17.md`(PC 网页登录为什么被风控 —— 静态分析, 未真登录/未扫码; 关联 v0.21.0 第 ⑤ 项)。**留档** | 2026-11-17 |
+| [ui-row-audit.md](ui-row-audit.md) | 列表行/溢出全仓审计(49 处骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案与改造顺序; **三级已全部清零**(A 级 v0.9.0 · B 级 2026-11-16 · C 级 2026-11-17 三批), 文中 §4/§6/§7 的方案与行号是当时口径(`kSongRowPadding` 已删, 实际用 `SongRow` 静态工厂)。**留档为主** | 2026-11-18 |
 | [melodia-pr-workflow.md](melodia-pr-workflow.md) | 给 Melodia 提 PR 的工作流。**活跃(提 PR 时用)** | 2026-11-02 |
 | [spikes/](spikes/) | 零散 spike 产物(如 `2026-11-09-netease-music-spike.md`)。只读留痕 | 2026-11-07 |
 | [b8-dumps/](b8-dumps/README.md) | B8 等级/勋章接口原始 dump(含 `user_medal.sample.json`)。只读留痕 | 2026-11-07 |

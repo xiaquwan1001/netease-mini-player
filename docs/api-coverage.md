@@ -1,6 +1,10 @@
 # 网易云接口覆盖清单(vendor ncm-api ↔ 本仓库)
 
-> 最近更新: 2026-11-14(三) 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **136** / service 已调用 **136**(100%) / 未接入 **0**(本轮 +2: `user_event`、`artist_follow_count`); FFI 导出 **160** 个里 6 个无 UI 入口 —— `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`consent_plaintext_storage`(凭据回退同意门)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用)、`user_play_ranking`(他人常听排行, 暂无入口)。口径与复算方式见文末, 一条命令可重跑。
+> 最近更新: **2026-11-18(六)** 复核(`bash tools/api-coverage.sh` 实测): vendor endpoint 模块 **136** / service 已调用 **135** / 未接入 **1**(`vip_sign_info`, 有意弃用); FFI 导出 **161** 个里 **9** 个无 UI 入口, 按去留分三类 ——
+> **有意保留(4)**: `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用);
+> **待产品决策(2)**: `consent_plaintext_storage`(凭据回退同意门, UI 未落地)、`user_play_ranking`(他人常听排行, 匿名态恒空, 等有登录态真机);
+> **真死(3)**: `playlist_tracks_add`(唯一调用点随「存为歌单」面板在 `1a688d8` 删除)、`podcast_radio`/`signin_status`(UI 早已改走 `podcastProgram*` / `vipOverview`; provider 层仍被 `ncm-cli` 调用, 删只删 FFI 出口)。
+> **口径变化(2026-11-18)**: 脚本此前用「小写化标识符集合」判入口 ⇒ DTO 类型名(`rust.SigninStatus`)与**构造调用**(`rust.PodcastRadio(`)把同名导出顶替成"有入口", 少报 3 个; 现已改成「小写开头 + 调用/tearoff 形态」两条正则, 实测 6→9。死代码审计明细见本地 `.pi/plans/deadcode-audit-2026-11-18.md`。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览
@@ -10,8 +14,8 @@
 | vendor `core/vendor/ncm-api/src/api/*.rs` 里的 endpoint 模块 | **134**(2026-11-14: + 云盘上传 5 + 资料更新 1 + MV 搜索复用 cloudsearch) |
 | `ncm-service`(provider)实际调用的 | **134(100%)** |
 | 未接入 | **0** |
-| FFI 导出给 Dart 的函数 | **160**(+ 云盘上传/云盘列表/删除/直链/资料更新) |
-| 其中 UI 还没有入口的 | 6(`cache_stats` `cloud_song_url` `consent_plaintext_storage` `eq_profile_normalize` `player_tuning` `user_play_ranking`) |
+| FFI 导出给 Dart 的函数 | **161** |
+| 其中 UI 还没有入口的 | **9**(保留 4 / 待决策 2 / 真死 3, 见文首分类) |
 
 > 表内数字以 `bash tools/api-coverage.sh` 的实时输出为准(上面这行是 2026-11-10 收尾版实测)。
 
