@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
@@ -392,6 +393,127 @@ class CoverGrid extends StatelessWidget {
           ),
           itemCount: itemCount,
           itemBuilder: (context, i) => itemBuilder(context, i, tileWidth),
+        );
+      },
+    );
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 布局档位(横屏/宽屏响应式, 2026-11-18 · lane/ui-adaptive)
+//
+// 「宽屏怎么排」是**壳层**决策, 页面只返回内容 widget:
+//   · 档位只由**实际可用宽度**决定(壳层 LayoutBuilder 的 constraints.maxWidth /
+//     MediaQuery.sizeOf(context).width), **不看设备类型** —— 同一台手机横过来
+//     就是宽屏, 桌面窗口缩窄就是窄屏;
+//   · 三档: 窄(< [kCompactMaxWidth]) / 中([kCompactMaxWidth] ~ [kWideMinWidth])
+//     / 宽(>= [kWideMinWidth]);
+//   · 全仓唯一的**宽度**阈值只有本节的常量与既有的 [kPlayerBarRoomyWidth]
+//     (后者是播放条内部排版口径, 与档位无关, 不要混用)。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 布局档位(窄 / 中 / 宽)。壳层按它决定导航位置与内容限宽。
+enum LayoutTier {
+  /// 手机竖屏(< 600): 底部导航 + 内容铺满。
+  compact,
+
+  /// 小平板 / 手机横屏 / 窄桌面窗口(600 ~ 900): 仍是底部导航, 内容限宽。
+  medium,
+
+  /// 桌面窗口 / 大平板(>= 900): 左侧 NavigationRail + 内容限宽居中。
+  wide,
+}
+
+/// 窄档上界(**不含**): 可用宽 < 本值 ⇒ [LayoutTier.compact]。
+///
+/// 取 600 与 [kPlayerBarRoomyWidth] 一致: 手机竖屏最宽也就 480~540。
+const double kCompactMaxWidth = 600;
+
+/// 宽档下界(**含**): 可用宽 >= 本值 ⇒ [LayoutTier.wide]。
+///
+/// 900 是「窗口够宽、左侧塞一条 80dp 的导航栏之后内容仍然 >= 820」的分界。
+const double kWideMinWidth = 900;
+
+/// 宽档内容区最大宽度: 超过就居中限宽, 两侧留白。
+///
+/// 840 是常见正文可读宽度(约 100 个 14sp 字符); 再宽歌单行/信息卡会拉成一整屏,
+/// 视线要在左右两端来回跳。要调就改这一个数(测试按它算, 不会变红)。
+const double kContentMaxWidth = 840;
+
+/// 左侧导航栏(NavigationRail)的宽度。
+///
+/// 80 = Material 3 NavigationRail 默认 minWidth(72) + 8, 给文字标签留出余量;
+/// 只在 [LayoutTier.wide] 使用。
+const double kRailWidth = 80;
+
+/// 按可用宽度取布局档位。
+///
+/// 边界口径(**测试锁死**): 599 ⇒ compact / 600 ⇒ medium / 899 ⇒ medium /
+/// 900 ⇒ wide。非有限宽度(窗口被放进横滑容器等)按宽档处理 —— 无限宽**永远
+/// 不该**落进窄档; NaN 只能来自错误的约束传参, 退回窄档(最保守的排版)。
+LayoutTier layoutTierFor(double width) {
+  if (width.isNaN) return LayoutTier.compact;
+  if (!width.isFinite) return LayoutTier.wide;
+  if (width < kCompactMaxWidth) return LayoutTier.compact;
+  if (width >= kWideMinWidth) return LayoutTier.wide;
+  return LayoutTier.medium;
+}
+
+/// 弹层打开时两侧留白的压暗色(`Colors.black54` 的 ARGB), 与 `ModalBarrier`
+/// 的默认遮罩同源。
+///
+/// 为什么需要它: 限宽盒包在 Navigator **外面**, 于是 `showDialog`/`showModalBottomSheet`
+/// 的 `ModalBarrier` 也只有 840 宽 —— 1280 窗口下遮罩只盖中间一条, 两侧留白是亮的,
+/// 看起来像「遮罩破了两条」。这里在弹层在场时把留白按同一颜色压暗, 视觉上与遮罩连续
+/// (底色取 `scaffoldBackgroundColor`, 与页面的 Scaffold 同源)。
+/// **已知边界**: 留白只是「看起来被压暗」, 并不拦截点击; 底部导航/播放条本来就在
+/// Navigator 之外(改动前也是这样), 弹层期间仍可点。
+const Color kContentGapBarrierColor = Color(0x8A000000);
+
+/// 壳层内容限宽盒: 可用宽 > [kContentMaxWidth] 时**居中并限宽**, 否则原样返回。
+///
+/// 挂载点只有一个 —— `app_shell.dart` 的 `_PlayerBarChrome` 里包住 Navigator
+/// (body)。这样 150+ 个页面不用各写一份 ConstrainedBox: 页面仍然拿「可用宽」
+/// 排版, 只是这个「可用宽」被壳层收窄到 [kContentMaxWidth]。窄屏/中屏
+/// (<= 840) 时**完全不插入任何 widget**, 几何零变化。
+///
+/// 两侧留白用 [ThemeData.scaffoldBackgroundColor] 填充: 页面自己的 Scaffold
+/// 也是这个底色, 所以宽屏下看不到「两条杠」, 换主题/OLED 自动跟随。
+class ContentWidthLimit extends StatelessWidget {
+  const ContentWidthLimit({super.key, required this.child, this.dimmedGaps});
+
+  final Widget child;
+
+  /// 两侧留白是否要跟着弹层遮罩一起压暗(null = 永不压暗)。
+  ///
+  /// 传 `app_shell.dart` 的 `modalRouteOpen`(NavigatorObserver 维护的弹层在场标记);
+  /// 纯几何测试可以直接给一个 `ValueNotifier<bool>`。
+  final ValueListenable<bool>? dimmedGaps;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final available = constraints.maxWidth;
+        // 取不到有限宽(被塞进横滑容器)时不做任何事, 保持既有行为
+        if (!available.isFinite || available <= kContentMaxWidth) return child;
+        final base = Theme.of(context).scaffoldBackgroundColor;
+        final limited = Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+            child: child,
+          ),
+        );
+        final dim = dimmedGaps;
+        if (dim == null) return ColoredBox(color: base, child: limited);
+        return ValueListenableBuilder<bool>(
+          valueListenable: dim,
+          builder: (context, barrierOpen, _) => ColoredBox(
+            color: barrierOpen
+                ? Color.alphaBlend(kContentGapBarrierColor, base)
+                : base,
+            child: limited,
+          ),
         );
       },
     );

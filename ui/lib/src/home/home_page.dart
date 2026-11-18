@@ -20,7 +20,8 @@ import '../desktop_shell.dart';
 import '../discover.dart';
 import '../feed_view.dart';
 import '../keystore.dart';
-import '../layout.dart' show rowExtentFor;
+import '../layout.dart'
+    show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
 import '../login_sheet.dart' show dismissLoginSheet;
 import '../lyric.dart';
@@ -990,7 +991,7 @@ class _HomePageState extends State<HomePage> {
     // 播放条数据快照 + 底部导航由根布局渲染(MaterialApp.builder 的 PlayerBarHost):
     // 二级路由压上来时播放条仍然在场, 这里只负责把当前数据投递过去.
     _publishPlayerBar(player, current);
-    publishBottomBar(_buildBottomBar());
+    publishBottomBar(_buildBottomBar(context));
     return Scaffold(
       appBar: topBar,
       // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
@@ -1619,8 +1620,50 @@ class _HomePageState extends State<HomePage> {
   ///
   /// 底部 tab 属于首页: 有全屏页压在首页之上时返回 null(播放条由
   /// [playerBarData] 负责, 此时它自己吃掉系统手势区), 弹层/对话框不算。
-  Widget? _buildBottomBar() {
+  Widget? _buildBottomBar(BuildContext context) {
     if (pageDepth.value > 1) return null;
+    // 宽档(>= 900)把导航搬到左侧 NavigationRail, 中/窄档保持底部 NavigationBar。
+    // 档位只由可用宽度决定(不看设备类型): 桌面窗口缩窄就退回底部导航。
+    // 语义与 NavigationBar 一一对应: 同一 selectedIndex / 同一回调 / 标签常显
+    // (alwaysShow ↔ labelType.all) / 同一 pageDepth 让位(上面那行仍然先判)。
+    if (layoutTierFor(MediaQuery.sizeOf(context).width) == LayoutTier.wide) {
+      return NavigationRail(
+        selectedIndex: _tab,
+        onDestinationSelected: _onTabSelected,
+        labelType: NavigationRailLabelType.all,
+        minWidth: kRailWidth,
+        // 窗口矮(如横屏手机 700~900 高 < 450 时不算宽档, 但桌面小窗会)时
+        // 让目的地组自己滚: NavigationRail 默认不滚, 五个目的地会竖溢。
+        scrollable: true,
+        destinations: const [
+          NavigationRailDestination(
+            icon: Icon(Icons.search_outlined),
+            selectedIcon: Icon(Icons.search),
+            label: Text('搜索'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: Text('推荐'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.dynamic_feed_outlined),
+            selectedIcon: Icon(Icons.dynamic_feed),
+            label: Text('关注'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: Text('我的'),
+          ),
+          NavigationRailDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
+            label: Text('设置'),
+          ),
+        ],
+      );
+    }
     return NavigationBar(
       selectedIndex: _tab,
       onDestinationSelected: _onTabSelected,

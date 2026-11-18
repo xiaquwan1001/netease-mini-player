@@ -14,6 +14,8 @@ import 'package:minincm/main.dart';
 import 'package:minincm/src/login_sheet.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
+import 'support/nav_chrome.dart';
+
 rust.QrLoginKey key() => rust.QrLoginKey(
   key: 'k-1',
   url: 'https://music.163.com/login?codekey=k-1',
@@ -325,11 +327,9 @@ void main() {
     expect(loginSheetOpen, isTrue);
 
     // 切到「我的」
+    // 导航本体按宽度可能是底部 NavigationBar 或左侧 NavigationRail
     await tester.tap(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('我的'),
-      ),
+      find.descendant(of: navChromeFinder, matching: find.text('我的')),
     );
     await tester.pump(); // _onTabSelected → dismissLoginSheet
     await tester.pump(const Duration(milliseconds: 400)); // 收起动画

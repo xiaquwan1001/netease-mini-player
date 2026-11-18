@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 
+import 'support/nav_chrome.dart';
+
 /// 记录 SystemNavigator.pop(「交还系统退出」)是否被调用
 List<String> recordSystemCalls(WidgetTester tester) {
   final calls = <String>[];
@@ -154,10 +156,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
     // 2026-11-09: 顶部栏不再重复底部导航的关键词 —— 非首 tab 干脆没有 AppBar, 高度让给内容
     expect(find.byType(AppBar), findsNothing);
-    final navOnRecommend = tester.widget<NavigationBar>(
-      find.byType(NavigationBar),
-    );
-    expect(navOnRecommend.selectedIndex, 1);
+    // 导航本体按宽度可能是底部 NavigationBar 或左侧 NavigationRail(见 support/nav_chrome.dart)
+    expect(navSelectedIndex(tester), 1);
 
     final handled = await tester.binding.handlePopRoute();
     await tester.pump();
@@ -166,8 +166,7 @@ void main() {
     expect(handled, isTrue);
     // 2026-11-09: 首 tab 也去掉了顶部品牌横幅, 所以"回到搜索"的判据用导航选中态
     expect(find.byType(AppBar), findsNothing, reason: '搜索页没有顶部栏');
-    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(bar.selectedIndex, 0);
+    expect(navSelectedIndex(tester), 0);
     expect(calls, isNot(contains('SystemNavigator.pop')));
   });
 
@@ -176,16 +175,14 @@ void main() {
     await pumpHome(tester);
 
     // 2026-11 用户要求: 冷启动落在「推荐」, 不再默认停在「搜索」
-    final nav = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(nav.selectedIndex, 1, reason: '启动默认 tab = 推荐');
+    expect(navSelectedIndex(tester), 1, reason: '启动默认 tab = 推荐');
 
     // 第一次返回: 先退回搜索 tab(不退出)
     var handled = await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 16));
     expect(handled, isTrue);
-    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
-    expect(bar.selectedIndex, 0);
+    expect(navSelectedIndex(tester), 0);
     expect(calls, isNot(contains('SystemNavigator.pop')));
 
     // 第二次返回: 栈底无二级态 = 交给系统

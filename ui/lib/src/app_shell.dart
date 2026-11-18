@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
 import 'home/home_page.dart' show HomePage;
+import 'layout.dart' show ContentWidthLimit, kRailWidth;
 import 'player_bar.dart';
 import 'song_actions.dart';
 import 'theme.dart';
@@ -33,8 +34,29 @@ final ValueNotifier<SongActionHost?> actionsHost =
 /// 的单测里没有观察者, 值停在 0 —— 两者都满足 "<= 1 就是首页在栈顶"。
 final ValueNotifier<int> pageDepth = ValueNotifier<int>(0);
 
-/// NavigatorObserver: 维护 [pageDepth](栈里非弹层路由的层数).
-class _PageDepthObserver extends NavigatorObserver {
+/// 有弹层(PopupRoute: 底部面板/对话框)压着时为 true。
+///
+/// 只给宽屏的 [ContentWidthLimit] 用: 限宽盒在 Navigator **外面**, 弹层的
+/// `ModalBarrier` 因此也只有 840 宽(1280 窗口下两侧留白是亮的) —— 壳层据此把留白
+/// 按遮罩同色压暗, 视觉上连续。**不改变**任何点击/让位语义(播放条/导航栏在弹层期间
+/// 仍可点, 与改动前一致)。
+final ValueNotifier<bool> modalRouteOpen = ValueNotifier<bool>(false);
+
+/// NavigatorObserver: 维护 [pageDepth](栈里非弹层路由的层数)与 [modalRouteOpen].
+class NcmRouteObserver extends NavigatorObserver {
+  /// 当前压着的弹层数(PopupRoute)。pageDepth 特意不数它们, 这里单独数。
+  static int _popups = 0;
+
+  static void _popupUp() {
+    _popups += 1;
+    modalRouteOpen.value = true;
+  }
+
+  static void _popupDown() {
+    if (_popups > 0) _popups -= 1;
+    if (_popups == 0) modalRouteOpen.value = false;
+  }
+
   static void _up() {
     if (pageDepth.value < 1) {
       pageDepth.value = 1;
@@ -49,19 +71,28 @@ class _PageDepthObserver extends NavigatorObserver {
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
+    if (route is PopupRoute) {
+      _popupUp();
+      return;
+    }
     _up();
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
+    if (route is PopupRoute) {
+      _popupDown();
+      return;
+    }
     _down();
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route is PopupRoute) return;
+    if (route is PopupRoute) {
+      _popupDown();
+      return;
+    }
     _down();
   }
 }
@@ -146,13 +177,18 @@ class _PlayerBarChrome extends StatelessWidget {
           builder: (context, navBar, _) => ValueListenableBuilder<Widget>(
             valueListenable: content,
             builder: (context, body, _) {
+              // 宽档导航: HomePage 投递 NavigationRail 时, 壳层把它挂到**左侧**
+              // (见下), 其余一切的"底部条"假设不变。判据只用 widget 类型:
+              // 投递方(HomePage)按 MediaQuery 宽度决定投哪一种, 壳层不重复算档位。
+              final rail = navBar is NavigationRail ? navBar : null;
               final bar = (data == null || actions == null || keyboardUp)
                   ? null
-                  // 没有底部导航时播放条自己吃掉系统手势区
+                  // 没有「底部」导航(含宽档的左侧 Rail)时播放条自己吃掉系统手势区:
+                  // 宽档下没人替它吃, 不传 true 会贴不到屏幕底边。
                   : MiniPlayerBar(
                       data: data,
                       actions: actions,
-                      absorbBottomInset: navBar == null,
+                      absorbBottomInset: navBar == null || rail != null,
                     );
               // 底部条与底部导航都挂在 Navigator 之外(根布局), 看到的是根 MediaQuery
               // ⇒ padding.top 仍是状态栏高度。NavigationBar 内部的 SafeArea 没关 top
@@ -168,7 +204,9 @@ class _PlayerBarChrome extends StatelessWidget {
               // 因为 HomePage 的 Scaffold 已经按 viewInsets.bottom 收缩过一次,
               // 而导航栏还占着根 Column 的 80dp ⇒ 内容底边 = 键盘顶 - 80dp。
               // 键盘在场时导航栏本来就被键盘挡住, 一并隐藏后缺口消失。
-              final nav = navBar == null || keyboardUp
+              // 宽档的 Rail 不走这段(它没有底部/状态栏两条 inset 的问题,
+              // 由上面的 rail 分支单独挂载, 自己带 SafeArea)。
+              final nav = navBar == null || keyboardUp || rail != null
                   ? null
                   : MediaQuery(
                       data: mq.copyWith(
@@ -183,11 +221,34 @@ class _PlayerBarChrome extends StatelessWidget {
                       ),
                       child: navBar,
                     );
-              return Column(
+              // 宽屏内容限宽(lane/ui-adaptive P2): 可用宽 > kContentMaxWidth 时
+              // 内容居中限宽, 两侧留出与 Scaffold 同色的空白。窄屏/中屏完全不插入
+              // widget(几何零变化) —— 见 layout.dart 的 ContentWidthLimit。
+              // 只包 body(Navigator), 播放条与导航栏保持通栏。
+              final content = Expanded(
+                child: ContentWidthLimit(
+                  // 弹层在场时两侧留白跟着遮罩压暗(见 layout.dart 的
+                  // kContentGapBarrierColor 与该文件的「已知边界」)
+                  dimmedGaps: modalRouteOpen,
+                  child: body,
+                ),
+              );
+              final column = Column(children: [content, ?bar, ?nav]);
+              if (rail == null || keyboardUp) return column;
+              // 宽档: 左侧导航栏占满整列高度(含播放条那一行), 内容/播放条在右侧列。
+              // Row 必须 stretch: NavigationRail 内部有 Flexible, 松高度会报
+              // "non-zero flex but incoming height constraints are unbounded"。
+              // 顶部/底部安全区由 SafeArea 给(Rail 自己只处理左右),
+              // 否则安卓横屏第一条目的地会压在状态栏下。
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: body),
-                  ?bar,
-                  ?nav,
+                  SafeArea(
+                    left: false,
+                    right: false,
+                    child: SizedBox(width: kRailWidth, child: rail),
+                  ),
+                  Expanded(child: column),
                 ],
               );
             },
@@ -233,7 +294,7 @@ class MiniNcmApp extends StatelessWidget {
             ),
           ),
           // 只用来数"有没有全屏页压在首页上"(决定底部 tab 是否让位)
-          navigatorObservers: [_PageDepthObserver()],
+          navigatorObservers: [NcmRouteObserver()],
           home: const HomePage(),
         );
       },

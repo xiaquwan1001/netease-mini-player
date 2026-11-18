@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 
+import 'support/nav_chrome.dart';
+
 /// 顶部栏只承载导航里没有的信息(2026-11-09 用户要求: 去掉与底部导航重复的关键词,
 /// 并去掉搜索页顶部的「轻音 MiniNCM」横幅, 把高度让给内容)。
 ///
@@ -47,10 +49,7 @@ void main() {
     expect(find.text('轻音 MiniNCM'), findsNothing);
     // 搜索框自身也有"搜索"字样, 这里只保证顶部不再有重复的标题区(无 AppBar 即无标题)
     expect(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('搜索'),
-      ),
+      find.descendant(of: navChromeFinder, matching: find.text('搜索')),
       findsOneWidget,
     );
   });
@@ -75,10 +74,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(AppBar), findsNothing);
     expect(
-      find.descendant(
-        of: find.byType(NavigationBar),
-        matching: find.text('搜索'),
-      ),
+      find.descendant(of: navChromeFinder, matching: find.text('搜索')),
       findsOneWidget,
     );
   });

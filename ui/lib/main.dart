@@ -17,7 +17,9 @@ import 'src/rust/frb_generated.dart';
 export 'src/app_shell.dart'
     show
         MiniNcmApp,
+        NcmRouteObserver,
         PlayerBarHost,
+        modalRouteOpen,
         playerBarActions,
         playerBarData,
         playerBarSlot;
