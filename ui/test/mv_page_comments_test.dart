@@ -13,6 +13,10 @@ import 'package:minincm/src/rust/api.dart' as rust;
 class _FakePlayback extends MvPlayback {
   @override
   bool get supportsInlinePlayback => true;
+
+  // 本文件只测评论区; "歌曲让路"见 mv_song_duck_test.dart
+  @override
+  Future<bool> duckSong() async => false;
 }
 
 rust.MvDetailDto mvDetail() => rust.MvDetailDto(

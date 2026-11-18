@@ -3,7 +3,10 @@ package com.minincm.minincm
 import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.MediaController
@@ -18,12 +21,52 @@ import androidx.core.content.ContextCompat
  * 生命周期(P-07): onPause 暂停并把播放位置记下来(按 Home/锁屏后 MV 声音必须停,
  * 否则会和后台歌曲播放叠加), onResume 回到原位置继续; 真正结束(isFinishing)才 stopPlayback()。
  * 直链 403(签名过期)或解析失败时给出可读 toast, 返回键直接回 Flutter 页面。
+ *
+ * 音频焦点(U-04, 2026-11-18): MV 是第二个音源, 以前完全不参与系统焦点仲裁 ⇒ 和歌曲同时出声。
+ * 现在 onStart 申请 AUDIOFOCUS_GAIN、onStop/onDestroy 放弃, 失去焦点就暂停
+ * (决策见纯逻辑 [MvAudioFocusPolicy]); 歌曲侧 ExoPlayer 同时打开了 handleAudioFocus
+ * (见 [PlaybackService.buildExoPlayer]), 谁最后起播谁出声, 不会两路叠放。
+ * Dart 侧还会在起播前主动暂停歌曲(ui/lib/src/mv_playback.dart), 那是"让体验顺滑"的一层,
+ * 焦点这一层是"无论 Dart 漏了都不叠音"的兜底。
  */
 class MvPlayerActivity : Activity() {
     private lateinit var video: VideoView
 
     /** 是否因生命周期(onPause)而暂停; 只有这种情况 onResume 才自动续播 */
     private var pausedByLifecycle = false
+
+    /** 是否因**音频焦点**被别人抢走而暂停; 只有拿到 AUDIOFOCUS_GAIN 才恢复(U-04) */
+    private var pausedByFocus = false
+
+    /** 是否正持有音频焦点(onStart 申请/onStop 放弃, 幂等) */
+    private var holdingFocus = false
+
+    /** 窗口是否在前台(onResume 起为 true, onPause 起为 false): 焦点恢复只在可见时真出声 */
+    private var inForeground = false
+
+    /** API 26+ 的焦点请求句柄(放弃时要传同一个对象; 24/25 走旧接口, 这里保持 null) */
+    private var focusRequest: AudioFocusRequest? = null
+
+    /**
+     * 焦点变化 → 动作。决策在 [MvAudioFocusPolicy](纯逻辑, 有 JVM 单测), 这里只做副作用:
+     * 暂停/恢复 VideoView, 并记住"这次停是不是焦点造成的"。
+     */
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (MvAudioFocusPolicy.actionFor(change, pausedByFocus)) {
+            MvAudioFocusPolicy.Action.PAUSE -> {
+                pausedByFocus = true
+                if (::video.isInitialized && video.isPlaying) video.pause()
+            }
+
+            MvAudioFocusPolicy.Action.RESUME -> {
+                pausedByFocus = false
+                // 只在窗口可见时真恢复: 后台里被"焦点回来"起播就变成本次要修的那个问题了
+                if (::video.isInitialized && inForeground) video.start()
+            }
+
+            MvAudioFocusPolicy.Action.NONE -> Unit
+        }
+    }
 
     /** onPause 时的播放位置, onResume 用它续播(不重头) */
     private var resumePositionMs = 0
@@ -96,6 +139,64 @@ class MvPlayerActivity : Activity() {
         video.start()
     }
 
+    /**
+     * 申请音频焦点: API 26+ 用 [AudioFocusRequest], minSdk 24 的两档走旧接口。
+     * 类型 MOVIE/MEDIA + `setWillPauseWhenDucked(true)`: 别人要 ducking 时我们不压低音量硬放,
+     * 而是直接暂停(视频有对白, 压着听不清)。
+     */
+    private fun requestAudioFocus(): Boolean {
+        val am = getSystemService(AudioManager::class.java) ?: return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build(),
+                )
+                .setWillPauseWhenDucked(true)
+                .setOnAudioFocusChangeListener(focusListener)
+                .build()
+            focusRequest = request
+            am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            am.requestAudioFocus(
+                focusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN,
+            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    /** 放弃焦点(幂等)。放弃后清掉 pausedByFocus: 重新申请时系统回的那个 GAIN 不该自动起播 */
+    private fun abandonAudioFocus() {
+        val am = getSystemService(AudioManager::class.java)
+        if (am != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(focusListener)
+            }
+        }
+        focusRequest = null
+        holdingFocus = false
+        pausedByFocus = false
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 每次回前台都要重新持焦点(onStop 已放弃); 跨窗口重建/旋转也走这里
+        if (!holdingFocus) holdingFocus = requestAudioFocus()
+    }
+
+    override fun onStop() {
+        // 离开 MV(返回 Flutter / 按 Home)就不再占用音频焦点, 让别的 App 正常拿焦点
+        abandonAudioFocus()
+        super.onStop()
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // 系统控件即可, 方向变化交给 VideoView 重新布局; 不锁定方向
@@ -103,6 +204,7 @@ class MvPlayerActivity : Activity() {
     }
 
     override fun onPause() {
+        inForeground = false
         super.onPause()
         if (!::video.isInitialized) return
         // VideoView 不会随 Activity 暂停自动停: 这里显式 pause, 并记住位置供 onResume 续播
@@ -116,10 +218,18 @@ class MvPlayerActivity : Activity() {
     }
 
     override fun onResume() {
+        inForeground = true
         super.onResume()
         if (!::video.isInitialized) return
         if (!pausedByLifecycle) return
         pausedByLifecycle = false
+        if (pausedByFocus) {
+            // 上次是被别的音源抢走焦点才停的(暂停位置仍在播放器里, 不需要 seek):
+            // 回到前台就把焦点要回来 —— 拿到时系统会回调 GAIN, 由 focusListener 续播;
+            // 要不到(别的音源仍在放)就保持静音, 用户可用控制器上的播放键。
+            holdingFocus = requestAudioFocus()
+            return
+        }
         if (video.duration > 0) {
             // 播放器还在(窗口没被重建): 直接落位置续播, 不必等 onPrepared
             video.seekTo(resumePositionMs)
@@ -131,6 +241,7 @@ class MvPlayerActivity : Activity() {
     }
 
     override fun onDestroy() {
+        abandonAudioFocus()
         if (::video.isInitialized) video.stopPlayback()
         super.onDestroy()
     }

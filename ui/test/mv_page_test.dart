@@ -66,6 +66,10 @@ class _FakePlayback extends MvPlayback {
 
   @override
   bool get supportsInlinePlayback => android;
+
+  // 这些用例不关心"歌曲让路"(U-04 另有 mv_song_duck_test.dart), 且宿主上没有真播放器
+  @override
+  Future<bool> duckSong() async => false;
 }
 
 Future<void> pumpMv(

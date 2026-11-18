@@ -9,6 +9,8 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.audio.AudioProcessor
@@ -494,6 +496,21 @@ class PlaybackService : MediaSessionService() {
         return ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            // U-04(2026-11-18): 把音频交给系统焦点仲裁。
+            // 为什么以前没有: media3 1.9.4 的 ExoPlayer$Builder 构造函数只写
+            // audioAttributes = AudioAttributes.DEFAULT、从不写 handleAudioFocus
+            // ⇒ 取 JVM 默认值 false(用 javap 读 1.9.4 的 aar 字节码实测), 也就是
+            // ExoPlayer 根本不申请焦点、别人抢焦点也照放 —— MV(独立 Activity)一起播就双声。
+            // 现在: 起播申请 AUDIOFOCUS_GAIN, 来电/别的播放器抢焦点时自动暂停;
+            // MV 抢走焦点时歌曲自动停(即使 Dart 侧那次主动暂停漏了也不会叠音)。
+            // 内容都是音乐, 不用 ducking, 保持默认(失去焦点即停)。
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true,
+            )
             .build()
     }
 

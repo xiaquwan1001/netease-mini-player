@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
@@ -11,6 +13,7 @@ import 'state_views.dart' show LoadingView;
 import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
 import 'rust/api.dart' as rust;
+import 'toast.dart' show showToast;
 
 /// MV 详情/播放页(C3): 封面大图 + 标题/艺人/播放量/发布时间/简介 + 播放按钮
 /// + **评论区**(需求 10: 看评论 / 发评论 / 点赞)。
@@ -76,10 +79,55 @@ class MvPage extends StatefulWidget {
   State<MvPage> createState() => _MvPageState();
 }
 
-class _MvPageState extends State<MvPage> {
+class _MvPageState extends State<MvPage> with WidgetsBindingObserver {
   bool _starting = false;
   String? _startError;
   rust.MvDetailDto? _detail;
+
+  /// 起播 MV 前是否真的暂停过歌曲(U-04); 决定「回到本页」时是否给续播提示
+  bool _duckedSong = false;
+
+  /// 上一次的生命周期状态: 只在「后台 → 前台」这一次跳变上提示(= 从 MV 全屏回来),
+  /// 避免其他 resumed 事件重复弹提示。
+  AppLifecycleState? _lastLifecycle;
+
+  /// 返回后的提示(默认口径是"不自动恢复歌曲", 见 [mvReturnPlan])
+  static const String _mvReturnHint = '歌曲已暂停(MV 播放时不会叠音), 要接着听请点底部播放条的播放键';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 从 MV 全屏 Activity 回到本页(Flutter 侧表现为后台 → 前台)。
+  ///
+  /// MV 是独立 Activity, 起播时歌曲已被暂停([MvPlayback.duckSong]); 回来这段
+  /// 按 [mvReturnPlan] 的默认口径处理: **不自动恢复**歌曲, 只提示一次"要接着听点播放条"
+  /// (播放条是常驻的, 手动续播不需要额外入口)。提示只为"这次真的暂停过"给一次。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final prev = _lastLifecycle;
+    _lastLifecycle = state;
+    if (state != AppLifecycleState.resumed) return;
+    if (prev == null || prev == AppLifecycleState.resumed) return;
+    if (!_duckedSong) return;
+    _duckedSong = false;
+    switch (mvReturnPlan(songWasDucked: true)) {
+      case MvReturnPlan.autoResume:
+        unawaited(widget.playback.unduckSong());
+      case MvReturnPlan.hintManualResume:
+        if (mounted) showToast(context, _mvReturnHint);
+      case MvReturnPlan.nothing:
+        break;
+    }
+  }
 
   Future<rust.MvDetailDto> _loadDetail(BigInt id) =>
       widget.loadDetail?.call(id) ?? rust.mvDetail(mvId: id);
@@ -106,11 +154,20 @@ class _MvPageState extends State<MvPage> {
       if (url == null || url.isEmpty) {
         throw Exception('该 MV 无可播放链接(可能需要 VIP 或已下架)');
       }
+      // U-04: MV 是第二个音源 —— 起播前先让歌曲让路(只有真在播才暂停, 见 mvDuckPlan)。
+      // 这一层管"听感顺滑"; 原生侧 MvPlayerActivity 的音频焦点是"无论如何不叠音"的兜底。
+      final duckedNow = await widget.playback.duckSong();
+      if (duckedNow) _duckedSong = true;
       await widget.playback.play(
         _toHttps(url),
         _detail?.name ?? widget.name ?? 'MV',
       );
     } catch (e) {
+      // 起播失败(MV 根本没起来): 立刻把刚暂停的歌曲放回去, 不让用户平白丢播放
+      if (_duckedSong) {
+        _duckedSong = false;
+        await widget.playback.unduckSong();
+      }
       if (mounted) {
         setState(
           () =>
