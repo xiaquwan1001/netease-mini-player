@@ -33,7 +33,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1163** 通过 / 0 skip / 0 失败(golden **18** 张, 未重出; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148(响应式 25 例) → **1163**(浮层收起 7 + MV 双音源 8) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1205** 通过 / 0 skip / 0 失败(golden **18** 张, 本批重出 `settings_360x800` 1 张; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148(响应式 25) → 1163(浮层/MV 15) → **1205**(播放条 10 + EQ 8 + 托盘 10 + 定时关闭 10 + 设置修整 4) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **7** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
@@ -118,6 +118,28 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(十一) 用户反馈批 10 项: 播放条三档 / EQ 校验与图表 / 托盘播放控制 / 定时关闭 / 设置页修整 · **v0.23.0**
+
+用户验收了上一批(托盘最小化可用 · 横屏布局更合理 · MV 优先级通过)后给的 10 条反馈, 本批全落地:
+
+| # | 反馈 | 处理 |
+|---|---|---|
+| 1 | 0..1 音量档「精细音量已足够」 | **裁决: 不补入口**, `Playback.setVolume` 三端链路保留(已记进 `.pi/memory/notes-wip.md` 用户裁决, 别再当死码删) |
+| 2 | EQ 导入接入校验 | 新增 `eq_import.dart`: 先走 Rust `eqProfileValidate`(错误文本本身就是「第 N 行: 原因」), 失败**不落盘**并回显行号, 弹窗与落盘两个边界都校验; FFI 不可用时退回同一套 Dart 规则兜底 |
+| 3 | EQ 曲线/柱状图高度 +15% | `kEqPanelBaseHeight 232 → kEqPanelHeight 266.8`(比例常量 1.15), 两图内部本就走 LayoutBuilder 铺满, 一处生效; 300dp+1.25 字号不竖溢 |
+| 4 | 字号滑块「落点与档位标注点不对齐」 | 实测修前偏差 **33.7dp / 36.1dp**(thumb 中心 vs 两端 'A' 标签), 根因是 Material 轨道两端被 `max(overlay, thumb)+半轨高`(实测 26dp)内缩而标签还在 `Row` 里抢空间 ⇒ 改 `Stack`: 标签盒宽 = 2×端内缩、文本居中、`IgnorePointer` 不吃拖动区; 修后 **0.00dp**(300/360dp × 1.0/1.25/1.625 六组), 相邻 divisions 间距恒定; 内缩值 token 化进 `layout.dart` 并显式写死 SliderTheme 防版本漂移 |
+| 5 | Android 省略「关闭主窗口时」 | 纯谓词 `shouldShowCloseBehaviorTile({isLinux, isAndroid})`(Linux 显示 / **Android 整块省略含分隔线** / Windows 保留说明行)+ 3 例单测 |
+| 6 | Linux 托盘要有播放控制 | 菜单 2 项 → **7 项**(显示主界面 · 播放/暂停 · 上一首 · 下一首 · 喜欢/取消 · 退出), 文案与勾选态由 Dart 推送、无曲目置灰; 原生仍只 dlopen 现有 appindicator(**零新依赖**); 复用 `Playback` 既有 handler ⇒ 无页面时安全 no-op。**原生真编译通过** + dbusmenu 端到端探针点「播放」实测 Dart 收到动作 |
+| 7 | 定时关闭(停播并退出, 两种停法) | 新增 `sleep_timer.dart`(纯逻辑 + 生产单例)与 `settings_sleep_timer_page.dart`(15/30/45/60/90 档 · 立刻停 / 播完当前这首 · 剩余时间 · 可取消); 复用既有 **500ms 轮询**与 `_onTrackEnded` 判定, 到点: 停播放 → Android `SystemNavigator.pop` / Linux `DesktopShell.quit` / Windows `exit(0)`; 退出动作注入便于测试; 口径: 不跨重启、改档=重新计时 |
+| 8 | 竖屏播放条只留图形 icon / 横屏 名+艺人(+专辑) | 复用 `layoutTierFor`: <600 只留封面(无封面用中性占位)且零文字; 600~900 歌名+艺人; ≥900 且信息块可用宽 ≥ `kPlayerBarAlbumMinWidth`(120dp) 才加专辑名; 点击/进度/切歌/队列/手势区让位全未回退; 不加 Rust/FFI 字段(`PlayerBarData.current` 已有 name/artist/album) |
+| 9 | 横屏双列布局评估 | 只读评估 `.pi/plans/wide-two-column-eval-2026-11-18.md`(253 行): **推荐方案 A「页内双列」**, 第一刀只做歌单详情(左 300 / 间 12 / 右 528, 在既有 840 限宽内), 零新槽位、不碰 `pageDepth`/返回键/浮层登记表; 横屏手机(780x360)明确排除(判据宽 ≥900 **且** 高 ≥560); 方案 B(壳层主从)判 L 并列出三个洞; 迁移 S0~S4 已排 |
+| 10 | (派生) 脆弱测试 | `update_checker_test` 的「设置页 300dp+1.25 找检查更新」改为 `scrollUntilVisible`, 不再依赖设置页总高度余量(加设置行不该让这条红) |
+
+门(编排者独立重跑): `dart analyze` **0** · 全量 `flutter test` **1163→1205 / 0 失败** · `cargo test` 313/0 · clippy 0 · `flutter build linux --debug` **✓ Built**(原生 C++ 改动真编译) · `gradlew :app:testDebugUnitTest :app:lintDebug` BUILD SUCCESSFUL · `tools/smoke-desktop-headless` **PASS / 61s** · token/row-padding/write-guard OK · golden 重出 1 张(`settings_360x800`, 字号滑块改 Stack 后行程 216→284dp)。
+
+**交给用户**: 托盘 7 项人工点一遍(播放后文案变「暂停」、喜欢变「取消喜欢」、空队列置灰、缺库/缺宿主不崩) · 定时关闭真机跑一次(立刻停 / 播完这首) · 桌面横屏播放条观感 · 双列布局是否按方案 A 开工(建议下一批做 S0→S1)。
+
 
 ## 2026-11-18(十) UI 两件: 切页收起全部浮层(U-01/U-02) + 播 MV 不再叠音(U-04) · **v0.22.1**
 

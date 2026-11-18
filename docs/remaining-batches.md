@@ -402,6 +402,20 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | **U-04**(P2) | 播 MV 不暂停歌曲, MV Activity 无音频焦点 ⇒ 双音源并发(**代码事实确定, 听感待真机**) | 用户报「看 MV 时歌还在放/两个声音」 | S(暂停 + 请求焦点, 需真机验) |
 | U-05/U-06(P2) | 帧后回调缺 `mounted` 守卫; `HomeWiring._latest` 漏「A attach→B attach→B detach」组合 | 出现「已销毁页面仍被回调/播放条状态被旧实例清掉」类崩溃或异常 | S(守卫 + 一个组合用例) |
 
+## 15. 横屏双列布局(2026-11-18 评估产出 · 待开工)
+
+> 来源 `.pi/plans/wide-two-column-eval-2026-11-18.md`(253 行)。**推荐方案 A「页内双列」**, 只登记切片与验收:
+
+| 序 | 切片 | 内容 | 成本 | 验收 |
+|---|---|---|---|---|
+| S0 | 判据纯函数 | `twoColumnFor(Size)`: 宽 ≥900 **且** 高 ≥560(横屏手机 780x360 排除); 不动 `layoutTierFor` 签名 | S | 8 例单测 |
+| S1 | 歌单详情双列 | 左 300 / 间距 12 / 右 528(在既有 840 限宽内) | M | 6 条 `getRect` 断言 + 1 张 1280x720 golden |
+| S2 | 播客详情复用 | 同构 | S | 同上 |
+| S3 | 我的(打包式双列) | **先量高度差 >40% 就不做** | M | 待定 |
+| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | 仅用户明确要求时 |
+
+**明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。
+
 > 与 §12.6 不可变快照、§11.A 的真人项**互不重叠**; 与 `lane/ui-adaptive`(断点/限宽/Rail)只在
 > 「宽档下 `ContentWidthLimit` 会把浮层也限到 840」这一处交汇, 处置见 `PROGRESS.md` 2026-11-18(六)的复核补丁。
 
