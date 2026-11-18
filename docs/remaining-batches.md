@@ -278,7 +278,15 @@ CI 现在只有 `cargo test` / `dart analyze` / `write-guard` / `flutter test`, 
 - **明确不做**: `ncm-service` 拆 `ncm-store`(审计 §7 建议 7, L 级 2~3 天, 当前无第二个消费方);
   `ncm-domain/src/lib.rs`(1 771 行 / 92 DTO)按域拆 —— 必须与 `api.rs` 拆同批, 单做只增加 mirror 路径漂移风险。
 
-### 12.2 `Provider` 拆成能力 trait(M · 1~2 天)
+### 12.2 `Provider` 拆成能力 trait ✅ **已完成(v0.14.0, 2026-11-16; 本节 2026-11-18 订正)**
+
+结果(现查 `core/crates/ncm-provider/src/trait.rs` 49 行 + `caps/` 13 个能力 trait):`Provider` 只剩
+身份/能力声明 4 个核心方法, 超 trait 组合 `ReadProvider + LyricProvider + RecommendProvider +
+PlaylistReadProvider + PlaylistWriteProvider + CommentProvider + AccountProvider +
+ArtistAlbumProvider + RadioProvider + CommunityProvider + VipProvider + CloudProvider +
+MessageProvider`; 能力声明(`Capability`)仍是路由唯一依据, FFI/Dart 零变化。
+
+原状(留档):
 
 现状: `pub trait Provider` **一个 trait 120 个方法**(god trait),任何新实现都要空实现一大片。
 
@@ -356,7 +364,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|
 | 第 0 波(独占) | 12.0 格式 + 门禁 | 一个人一条车道, 落地后再开别的 |
 | ~~第 1 波~~ ✅ **已完成 2026-11-13** | 12.1 Rust 拆分 ∥ 12.3 UI 统一 | 两个 worktree 并行,编排者独立重跑门禁后合并 |
-| 第 2 波(2 条) | 12.2 能力 trait ∥ ~~12.4 main 拆分~~ ✅ | 12.1/12.3/12.4 均已落地(12.4 **S0–S8 全完成, main.dart 48 行**); 只剩 **12.2 god trait 未拆** |
+| ~~第 2 波~~ ✅ **已完成** | 12.2 能力 trait ∥ ~~12.4 main 拆分~~ ✅ | 12.1/12.2/12.3/12.4 均已落地(12.2 见本节订正; 12.4 **S0–S8 全完成, main.dart 48 行**); §12 只剩 **12.6 第二步**(不可变快照)与 12.7(低优先, 暂不做) |
 | 零散 | 12.5 / 12.6 | 随时可搭车, 都是一天内 |
 
 每波收口由编排者**独立重跑**(数字现算, 勿抄): `cargo test` · `cargo clippy` 0 · `dart analyze` 0 · `flutter test` · `api-coverage` · `write-guard` OK; 权威值见 `PROGRESS.md` 头部「当前门禁」表。
