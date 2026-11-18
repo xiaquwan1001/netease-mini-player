@@ -47,6 +47,7 @@ import 'package:flutter/services.dart' show FontLoader;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/detail/playlist_detail_page.dart';
+import 'package:minincm/src/detail/podcast_detail_page.dart';
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/layout.dart' show ContentWidthLimit;
 import 'package:minincm/src/messages_page.dart';
@@ -306,6 +307,14 @@ class _GoldenRustApi implements RustLibApi {
     required BigInt playlistId,
   }) async => _playlistSongs();
 
+  /// 播客详情的节目列表(S2 宽档双列基准用)
+  @override
+  Future<List<rust.PodcastProgramDto>> crateApiPodcastPrograms({
+    required BigInt radioId,
+    required int limit,
+    required int offset,
+  }) async => _podcastPrograms(radioId);
+
   @override
   Future<rust.CommentPage> crateApiComments({
     required String kind,
@@ -351,6 +360,34 @@ final rust.PlaylistDetail _playlistDetail = rust.PlaylistDetail(
   commentCount: BigInt.from(88),
   tags: const <String>['华语', '流行'],
 );
+
+/// 播客详情头部: 8 个节目 / 52.3 万次播放 / 主播名 / 一句简介。
+final rust.PodcastRadio _podcastRadio = rust.PodcastRadio(
+  id: BigInt.from(42666),
+  name: '硬地电台',
+  coverUrl: null,
+  description: '独立音乐人的访谈与现场, 每周一期。',
+  djName: '主播小林',
+  programCount: BigInt.from(8),
+  playCount: BigInt.from(523000),
+);
+
+/// 8 集节目: 奇数集正在播(第 1 集 song.id == 701), 时长 30 分钟。
+List<rust.PodcastProgramDto> _podcastPrograms(BigInt radioId) =>
+    <rust.PodcastProgramDto>[
+      for (var i = 1; i <= 8; i++)
+        rust.PodcastProgramDto(
+          id: BigInt.from(900 + i),
+          name: '第 $i 期 · 独立音乐现场',
+          coverUrl: null,
+          durationMs: BigInt.from(1800000),
+          djName: '主播小林',
+          radioId: radioId,
+          radioName: '硬地电台',
+          description: '本期聊独立音乐。',
+          song: _song(700 + i, '第 $i 期 · 独立音乐现场'),
+        ),
+    ];
 
 /// 12 首曲目: 奇数/偶数行艺人换人, "艺人 · 专辑"两个字段都非空。
 List<rust.SongDto> _playlistSongs() => <rust.SongDto>[
@@ -582,6 +619,29 @@ Widget _playlistDetailPage() => _RouteHost(
         loggedIn: true,
         currentTrackId: BigInt.from(501),
         currentPlaylistId: BigInt.from(24381616),
+      ),
+    );
+  },
+);
+
+/// 基准图: podcast_detail_1280x720.png(宽档双列, 方案 A · S2)。
+///
+/// 与歌单详情同构: 左 300 一列只有播客信息卡(封面 120 / 标题 / 主播 /
+/// 「8 个节目 · 播放 523000 次」/ 简介), 右 528 一列是「筛选节目」输入框 + 8 行节目
+/// (第 1 行正在播放高亮) + 评论。只锁宽档双列这一张, 窄档由
+/// test/podcast_detail_two_column_test.dart 的矩形断言覆盖。
+///
+/// 坏在哪: 两栏宽度/间距偏 1dp 以上、左栏混进节目行、只剩一列。
+/// 以后动 kContentMaxWidth / kTwoColumnListWidth / kTwoColumnGap 都要重出这一张。
+Widget _podcastDetailPage() => _RouteHost(
+  open: (context) {
+    unawaited(
+      showPodcastDetail(
+        context,
+        radio: _podcastRadio,
+        // 单集详情弹层用的 loader: 基准图不打开弹层, 给一个可用实现即可
+        loadProgramDetail: (id) async =>
+            _podcastPrograms(_podcastRadio.id).firstWhere((p) => p.id == id),
       ),
     );
   },
@@ -847,6 +907,21 @@ void main() {
       contentLimit: true,
     );
     await _expectGolden(tester, 'playlist_detail_1280x720');
+  });
+
+  // 宽档双列(2026-11-18 方案 A · S2): 播客详情页与歌单详情同一套双列骨架。
+  //   flutter test test/golden_pages_test.dart --update-goldens --plain-name 'podcast_detail: 1280x720'
+  testWidgets('podcast_detail: 1280x720(双列)', skip: !_cjkAvailable, (
+    tester,
+  ) async {
+    await _pumpPage(
+      tester,
+      _podcastDetailPage(),
+      size: const Size(1280, 720),
+      frames: 24,
+      contentLimit: true,
+    );
+    await _expectGolden(tester, 'podcast_detail_1280x720');
   });
 }
 

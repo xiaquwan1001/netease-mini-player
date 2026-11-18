@@ -4,7 +4,13 @@ import '../comment_thread.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
 import '../expandable_text.dart';
-import '../layout.dart' show kPagePadding, rowExtentFor;
+import '../layout.dart'
+    show
+        kPagePadding,
+        kTwoColumnGap,
+        kTwoColumnListWidth,
+        rowExtentFor,
+        twoColumnFor;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
@@ -145,25 +151,72 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
           ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeaderCard(radio)),
-          SliverToBoxAdapter(child: _buildToolbar()),
-          _buildPrograms(_display),
-          SliverToBoxAdapter(
-            child: CommentThread(
-              kind: 'podcast',
-              resourceId: radio.id,
-              // 评论分享卡片的语境(需求 10): 来自哪个播客
-              shareSourceTitle: radio.name,
-              shareSourceKind: commentSourceKindLabel('podcast'),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
-      ),
+      // 双列判据用**窗口逻辑尺寸**(MediaQuery.sizeOf), 不是 body 的实测宽:
+      // 壳层 ContentWidthLimit 把 body 限到 840, 拿它比 900 永远为假。
+      // 窗口 >= 900 时 body 恰好 840 = 300 + 12 + 528, 两栏不挤压。
+      // 与歌单详情(detail/playlist_detail_page.dart)共用同一个判据与切分口径。
+      body: twoColumnFor(MediaQuery.sizeOf(context))
+          ? _buildTwoColumnBody(radio)
+          : _buildSingleColumnBody(radio),
     );
   }
+
+  /// 单列 body(窄/中档): 与双列改造前**逐像素一致** —— 同一棵 sliver 树、同一顺序。
+  Widget _buildSingleColumnBody(rust.PodcastRadio radio) => CustomScrollView(
+    slivers: [
+      SliverToBoxAdapter(child: _buildHeaderCard(radio)),
+      SliverToBoxAdapter(child: _buildToolbar()),
+      _buildPrograms(_display),
+      _buildComments(radio),
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ],
+  );
+
+  /// 双列 body(窗口 >= [kTwoColumnMinWidth] 且 >= [kTwoColumnMinHeight])。
+  ///
+  /// 切分点取「播客信息 / 节目相关的一切」: 左栏只有电台信息卡(封面/标题/主播/统计/
+  /// 简介), 右栏是筛选框 + 节目列表 + 评论 —— 与歌单详情同构, 窄档里这些块的相对
+  /// 顺序原样保留(信息卡 -> 筛选 -> 节目 -> 评论)。
+  ///
+  /// 滚动口径与歌单详情双列一致: **两列各自滚动**。
+  /// 本页目前没有"定位正在播放"(歌单详情才有), 所以右栏不挂 controller;
+  /// 以后若加定位入口, 把 controller 挂到右栏 CustomScrollView 即可, 左栏保持无
+  /// controller, 两列互不影响。
+  Widget _buildTwoColumnBody(rust.PodcastRadio radio) {
+    final info = ListView(
+      key: const Key('podcast-detail-info-column'),
+      padding: EdgeInsets.zero,
+      children: [_buildHeaderCard(radio)],
+    );
+    final programs = CustomScrollView(
+      key: const Key('podcast-detail-programs-column'),
+      slivers: [
+        SliverToBoxAdapter(child: _buildToolbar()),
+        _buildPrograms(_display),
+        _buildComments(radio),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
+    );
+    return Row(
+      // stretch: 两列同高, 顶部/底部严格对齐(顶部对齐是双列的第一条几何断言)
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: kTwoColumnListWidth, child: info),
+        const SizedBox(width: kTwoColumnGap),
+        Expanded(child: programs),
+      ],
+    );
+  }
+
+  Widget _buildComments(rust.PodcastRadio radio) => SliverToBoxAdapter(
+    child: CommentThread(
+      kind: 'podcast',
+      resourceId: radio.id,
+      // 评论分享卡片的语境(需求 10): 来自哪个播客
+      shareSourceTitle: radio.name,
+      shareSourceKind: commentSourceKindLabel('podcast'),
+    ),
+  );
 
   Widget _buildHeaderCard(rust.PodcastRadio radio) {
     final theme = Theme.of(context);
