@@ -31,8 +31,6 @@ use ncm_provider::{Capability, ProviderRegistry};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-pub const PROVIDER_NETEASE: &str = "netease";
-
 /// 取 Mutex 锁并**忽略中毒**: 持锁线程 panic 后 `unwrap()` 会把整个进程再带崩一次,
 /// 而我们持的这几把锁底下都是"可重建的状态"(凭据后端句柄、状态枚举、pending 队列),
 /// 数据即使在 panic 中途被改也只会退化成"这次读到的旧值", 不会 UB.

@@ -136,16 +136,6 @@ impl NeteaseProvider {
         }
     }
 
-    /// 覆盖域名/UA (风控实验用): 例如切 interface3 + 网页 UA
-    pub fn with_channel(session: Session, domain: Option<String>, ua: Option<String>) -> Self {
-        Self {
-            inner: RwLock::new(Inner::new(session, domain, ua)),
-            cache: crate::read_cache::ReadCache::default(),
-            followed_artists: RwLock::new(None),
-            suggest_covers: RwLock::new(std::collections::HashMap::new()),
-        }
-    }
-
     pub fn update_session(&self, session: Session) {
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let domain = guard.domain.clone();

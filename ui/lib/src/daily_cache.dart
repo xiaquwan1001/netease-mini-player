@@ -206,10 +206,6 @@ class DailyPlaylistCache {
     return BigInt.zero;
   }
 
-  /// 删除**当前账号**的整份日推缓存目录(登出/切号时对上一个账号用)。
-  Future<bool> purge() =>
-      purgeAccount(dataDir: dataDir, accountKey: accountKey);
-
   /// 删除指定账号的日推缓存目录(连同里面的 `last-cleanup` 标记)。
   ///
   /// 只删 `<root>/<账号键>` 这一层: 别的账号的目录、root 本身都不动, 所以

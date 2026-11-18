@@ -430,13 +430,6 @@ impl Player {
         let _ = self.tx.send(Cmd::Volume(volume.clamp(0.0, 1.0)));
     }
 
-    /// 精细音量增益(dB, -40..=0), 立即作用于输出
-    pub fn set_gain_db(&self, gain_db: f32) {
-        let mut t = self.tuning();
-        t.gain_db = gain_db;
-        self.configure(t);
-    }
-
     pub fn state(&self) -> PlayerState {
         self.state.lock().map(|s| s.clone()).unwrap_or_default()
     }

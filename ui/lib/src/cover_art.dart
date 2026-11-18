@@ -26,12 +26,6 @@ const String kImageUserAgent =
     'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 '
     '(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
 
-/// 兼容旧引用(有些调用点可能还在用); 实际请求由 [_UaNetworkImage] 发.
-const Map<String, String> kImageHeaders = {
-  'User-Agent': kImageUserAgent,
-  'Referer': 'https://music.163.com/',
-};
-
 /// 带正确 UA 的网络图片 Provider.
 ///
 /// 用 `==`/`hashCode` 按 URL 判等: Flutter 的 ImageCache 以 provider 为 key,

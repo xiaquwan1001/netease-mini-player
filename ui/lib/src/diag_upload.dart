@@ -49,25 +49,6 @@ class DiagUploader {
     return _send(body);
   }
 
-  /// 上传已序列化的 JSON 文本(用于复用 DebugReport 落盘的那份内容)。
-  Future<DiagUploadResult> uploadJson(String json, {required String clientId}) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(json);
-    } on FormatException catch (e) {
-      // 本地都在自己手里, 解析不了说明是程序 bug: 重试没有意义
-      throw DiagUploadError(
-        'bad_json',
-        '诊断包不是合法 JSON: ${e.message}',
-        retryable: false,
-      );
-    }
-    if (decoded is! Map<String, Object?>) {
-      throw DiagUploadError('bad_json', '诊断包顶层必须是对象', retryable: false);
-    }
-    return upload(decoded, clientId: clientId);
-  }
-
   Future<DiagUploadResult> _send(Map<String, Object?> body) async {
     if (endpoint.trim().isEmpty) {
       // 未配置属于"产品上还没开这个功能", 不该被当成可重试故障
