@@ -53,6 +53,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.26.1** | **2026-11-19** | 补播放条取链提示的渲染级回归(4 例) —— 纯测试提交, 产物与 v0.26.0 等价; Dart **1293** |
 | **v0.26.0** | **2026-11-19** | **夜间三车道发版**: ① 音源信息无损(`StreamUrl` 补试听/降级/格式/md5/时长 + 播放条「试听 mm:ss · 已降级」) ② 缓冲/下载加固(强制 https · 下载 UA/Referer/超时 · 首包劫持判定 · 重试恰一次 · Android 缓冲水位 2s · 桌面 GrowingFile 修假 EOF · 缓存键带 level 且回退旧键) ③ 详情页歌词⇄封面切换 + 查看原图/保存 ④ 浮层入口第二批(待迁 0) ⑤ 匿名诊断通道上线(Worker 正式地址进客户端)。Rust **313→325** / Dart **1266→1289**(golden 20) / Kotlin 单测 **7→10** |
 | **v0.25.0** | **2026-11-18** | 双列 **S2**(播客详情 300-12-528 + 1280x720 golden) · **U-03** 统一浮层入口 `showAppSheet`(31 处 + `check-sheet-entry` 门) · 生命周期守卫 **U-05/06/07**; Dart 1243 |
 | **v0.24.0** | **2026-11-18** | 用户 4 条反馈(桌面播放条去队列排位 / 关注页横条按可用宽自适应 + 点击语义统一 / 刷新合并 / 桌面滚轮到顶刷新) + **AppImage 冒烟脚本** + 双列 **S0/S1**(歌单详情双列) |
@@ -140,6 +141,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | **详情页歌词⇄封面(detail-cover-toggle)** | 新 `detail_faces.dart` 双面模型 + 切换动画 + 「查看原图」「保存」(复用既有高清/保存链), 歌曲与播客详情共用; 248 行测试 |
 | **匿名诊断通道(§11.A-6)** | **已上线**。Worker 部署到 `https://minincm-diag.xiaquwan1001.workers.dev/diag`; KV `DIAG`=`03f39b…adbb3` 写进 `wrangler.toml`; `GH_TOKEN` 走 `wrangler secret put`(**仓库/客户端零 token**); `preview_urls=false`; 客户端 `app_meta.dart` 的 `kDiagUploadEndpoint` 已填 ⇒ **发版后香港用户即可「设置→诊断与数据→一键匿名提交」**。线上真单实测 (#4) + 404 + 幂等路径验过, 测试单已关闭 |
 | **浮层入口收口(U-03 第二批)** | 剩 7 处(`podcast_detail_page` / `mine_view` / `home/{home_page,queue_sheet_controller,song_action_wiring}`)全迁到 `showAppSheet`/`showAppDialog`(少数派参数如 `isScrollControlled:false` 显式写出); `check-sheet-entry.sh` 的 `PENDING_EXPECT` 删除 ⇒ **待迁 0**, `--self-test` 负向仍红; 新增「home 分享面板切 tab 会被收起」用例 |
+| **v0.26.1 补测** | 发版后补一条**渲染级**回归 `player_bar_stream_note_test.dart`(4 例: 试听前缀 + 已降级 + 跨曲目不串台 + 无 note 不加空提示) —— 此前只有纯逻辑用例, 没人验证提示真落到播放条上; Dart **1289→1293** |
 | **门禁(本版实测)** | `tools/ci-gates.sh verify` **EXIT=0 ALL GATES OK**: Rust **313→325** · Dart **1266→1289**(golden 20) · Kotlin 单测 **7→10** · clippy 0 · analyze 0 · `lintDebug` 0 error / 9 warning · `sheet-entry` 待迁 **0**。合并只在最终树跑全量; 两个 Rust 车道在 `ffi/api.rs` 同一行耦合(`remember_level` + `start_progressive(level)`), 故 Rust 侧合为一个提交 |
 
 **网络现实(实测)**: `*.workers.dev` **大陆直连超时**(20s), 经代理正常; 该 Cloudflare 账号无自有 zone ⇒ 暂不能绑自定义域。客户端上传失败会降级成本地诊断包文件。
