@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app_sheet.dart';
 import '../net_retry.dart';
 import '../rust/api.dart' as rust;
 import '../sheet_header.dart';
@@ -16,8 +17,9 @@ void showResourceShareSheet(
   required String message,
   required String link,
 }) {
-  showModalBottomSheet<void>(
-    context: context,
+  showAppSheet<void>(
+    context,
+    isScrollControlled: false,
     showDragHandle: true,
     builder: (sheetContext) => SafeArea(
       child: Column(

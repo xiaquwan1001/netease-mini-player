@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_meta.dart';
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'update_checker.dart';
 
 /// 发现新版本时的统一弹窗(启动自动检查 / 设置页手动检查共用)。
@@ -12,8 +13,8 @@ import 'update_checker.dart';
 /// - 直接返回(dismiss): 什么都不记, 下次启动仍会提示。
 Future<void> showUpdateDialog(BuildContext context, UpdateInfo info) async {
   final upd = info;
-  final choice = await showDialog<String>(
-    context: context,
+  final choice = await showAppDialog<String>(
+    context,
     builder: (dialogContext) => AlertDialog(
       title: Text('发现新版本 ${upd.latest}'),
       content: Text(trimUpdateNotes(upd.notes)),

@@ -18,6 +18,7 @@
 #   tools/ci-gates.sh lock-poison          # tools/check-lock-poison.sh(生产代码里禁 lock().unwrap())
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
+#   tools/ci-gates.sh sheet-entry          # tools/check-sheet-entry.sh(浮层只许经 app_sheet.dart 入口)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
@@ -118,6 +119,13 @@ cmd_tokens() {
   bash "$ROOT/tools/check-tokens.sh" --strict
 }
 
+# 浮层入口门(U-03): 业务代码里不许再直连 showModalBottomSheet / showDialog,
+# 只许走 ui/lib/src/app_sheet.dart 的 showAppSheet / showAppDialog。
+cmd_sheet_entry() {
+  echo "+ bash tools/check-sheet-entry.sh"
+  bash "$ROOT/tools/check-sheet-entry.sh"
+}
+
 cmd_row_padding() {
   echo "+ bash tools/check-row-padding.sh --strict"
   bash "$ROOT/tools/check-row-padding.sh" --strict
@@ -211,6 +219,7 @@ cmd_verify() {
   cmd_lock_poison
   cmd_tokens
   cmd_row_padding
+  cmd_sheet_entry
   cmd_flutter_test
   cmd_android_unit
   cmd_android_lint
@@ -238,6 +247,7 @@ case "$sub" in
   lock-poison)   cmd_lock_poison ;;
   tokens)        cmd_tokens ;;
   row-padding)   cmd_row_padding ;;
+  sheet-entry)   cmd_sheet_entry ;;
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
   android-instrumented) cmd_android_instrumented "$@" ;;

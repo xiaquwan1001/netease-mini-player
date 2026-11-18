@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
@@ -18,9 +19,11 @@ Future<void> showSongWiki(
   WikiLoader? load,
 }) {
   final loader = load ?? (id) => rust.songWiki(songId: id);
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
+    // 这个面板一直没拖拽条(自带 SheetHeader 的关闭键); 入口默认是 true, 显式写回来
+    showDragHandle: false,
     builder: (sheetContext) => SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(

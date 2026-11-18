@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'eq_curve_chart.dart';
 import 'eq_import.dart';
 import 'eq_profile.dart';
@@ -366,8 +367,8 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   /// 导入曲线: 弹窗里已校验一次, 这里是**落盘的唯一入口**(以后"从文件读取"也走它),
   /// 所以落盘前再校验一次 —— 不通过只提示, 绝不写 AppSettings。
   Future<void> _importEq(BuildContext context) async {
-    final text = await showDialog<String>(
-      context: context,
+    final text = await showAppDialog<String>(
+      context,
       builder: (_) => const _ImportEqDialog(),
     );
     if (text == null || !context.mounted) return;

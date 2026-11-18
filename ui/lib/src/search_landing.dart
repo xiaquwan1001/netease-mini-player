@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'chart_section.dart';
 import 'layout.dart';
 import 'rust/api.dart' as rust;
@@ -50,8 +51,8 @@ class SearchLanding extends StatelessWidget {
   Future<void> _confirmClear(BuildContext context) async {
     final clear = onClearHistory;
     final count = history.length;
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('清空搜索历史'),
         content: Text(count == 1 ? '将删除这 1 条搜索历史。' : '将删除全部 $count 条搜索历史。'),

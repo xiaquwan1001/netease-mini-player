@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
@@ -19,8 +20,8 @@ Future<void> showPrivateChat(
   PrivateSender? send,
   int pageSize = 30,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => SafeArea(

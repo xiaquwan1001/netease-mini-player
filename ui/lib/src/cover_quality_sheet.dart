@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'sheet_header.dart';
 
@@ -17,8 +18,8 @@ const String kCoverQualitySampleUrl =
 /// 比纯文字说明可靠。选完立即写设置(封面会随 [AppSettings] 的通知重建)。
 Future<void> showCoverQualitySheet(BuildContext context) {
   final settings = AppSettings.instance;
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     showDragHandle: true,
     isScrollControlled: true,
     builder: (sheetContext) => SafeArea(

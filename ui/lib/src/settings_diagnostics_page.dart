@@ -5,6 +5,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'app_meta.dart';
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'debug_report.dart';
 import 'diag_upload.dart';
 import 'net_retry.dart';
@@ -190,8 +191,8 @@ class _OneClickDiagTileState extends State<_OneClickDiagTile> {
   /// 提交成功后给"编号 + 链接 + 复制"三件套: 用户不需要知道 GitHub 存在。
   Future<void> _showSubmitted(DiagUploadResult result) async {
     final url = result.url;
-    await showDialog<void>(
-      context: context,
+    await showAppDialog<void>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('已提交'),
         content: Text(

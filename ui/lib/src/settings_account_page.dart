@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
@@ -158,8 +159,8 @@ class _AccountPageState extends State<AccountPage> {
   /// 清除本机凭据(隐私用途): 退出登录 + 忘掉账号簿里的每个账号.
   /// 二次确认, 因为不可撤销(要重新登录).
   Future<void> _purge() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('清除本机登录凭据?'),
         content: const Text(

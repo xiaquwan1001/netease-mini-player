@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'toast.dart' show showToastWith;
@@ -156,8 +157,8 @@ Future<void> showSongActionsSheet(
   SongActionHost host, {
   SongActionSource source = SongActionSource.other,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) =>

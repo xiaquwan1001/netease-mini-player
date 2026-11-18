@@ -2,6 +2,7 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'layout.dart'
     show kCardRowPadding, kQueueRowExtent, kRowTitleGap, rowExtentFor;
 import 'queue.dart';
@@ -208,8 +209,8 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
   /// 清空队列: 二次确认(清空会连当前播放一起停, 误触代价高)
   Future<void> _confirmClear() async {
     if (_items.isEmpty) return;
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('清空播放队列?'),
         content: Text('共 ${_items.length} 首, 清空后当前播放会停止。'),

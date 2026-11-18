@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
 
 import 'adaptive_text.dart';
+import 'app_sheet.dart';
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'file_pick.dart' show pickAudioFile;
@@ -205,8 +206,8 @@ class _CloudPageState extends State<CloudPage> {
     final navigator = Navigator.of(context, rootNavigator: true);
     var dialogShown = true;
     unawaited(
-      showDialog<void>(
-        context: context,
+      showAppDialog<void>(
+        context,
         barrierDismissible: false,
         builder: (_) => const _UploadingDialog(),
       ).then((_) => dialogShown = false),
@@ -234,8 +235,8 @@ class _CloudPageState extends State<CloudPage> {
 
   Future<void> _delete(rust.CloudSong song) async {
     if (_deleting) return;
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('从云盘删除'),
         content: Text('「${song.name}」删除后需要重新上传才能恢复。'),

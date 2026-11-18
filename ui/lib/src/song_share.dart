@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'image_io.dart';
 import 'net_retry.dart';
@@ -258,8 +259,8 @@ Future<void> showSongShareSheet(
   required rust.SongDto song,
   List<String> lyricLines = const [],
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) =>

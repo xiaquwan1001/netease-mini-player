@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'async_view.dart';
 import 'artist_page.dart';
 import 'cover_art.dart';
@@ -154,8 +155,8 @@ class _AlbumPreviewPageState extends State<AlbumPreviewPage> {
     if (names.isEmpty) return;
     var name = names.first;
     if (names.length > 1) {
-      final picked = await showDialog<String>(
-        context: context,
+      final picked = await showAppDialog<String>(
+        context,
         builder: (ctx) => SimpleDialog(
           title: const Text('选择艺人'),
           children: [

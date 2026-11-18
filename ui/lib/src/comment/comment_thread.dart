@@ -14,6 +14,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
 import '../async_view.dart';
 import '../comment_stats_bar.dart';
 import '../cover_art.dart';
@@ -535,8 +536,8 @@ class CommentThreadState extends State<CommentThread> {
     rust.Comment comment, {
     bool focusComposer = false,
   }) async {
-    final sent = await showModalBottomSheet<bool>(
-      context: context,
+    final sent = await showAppSheet<bool>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _RepliesSheet(
@@ -574,8 +575,8 @@ class CommentThreadState extends State<CommentThread> {
   /// 删除自己发的评论: 先确认, 成功后本地移除(不整页刷新)
   Future<void> _deleteComment(int index) async {
     final comment = _items[index];
-    final ok = await showDialog<bool>(
-      context: context,
+    final ok = await showAppDialog<bool>(
+      context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('删除这条评论?'),
         content: Text(
@@ -626,8 +627,8 @@ class CommentThreadState extends State<CommentThread> {
       _snack('评论暂时不可用, 请先重试加载评论');
       return;
     }
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppSheet<void>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _ComposeSheet(submit: _submitComment),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'playback_bridge.dart';
@@ -28,8 +29,8 @@ Future<void> showSimilarSongs(
   SimilarSongsLoader? loadSongs,
   SimilarPlaylistsLoader? loadPlaylists,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => SafeArea(

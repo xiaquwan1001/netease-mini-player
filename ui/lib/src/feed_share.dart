@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'feed_detail_page.dart' show feedRelativeTime;
 import 'net_retry.dart';
@@ -487,8 +488,8 @@ Future<void> showFeedShareSheet(
   required rust.FeedEventDto event,
   FeedForwardHook? forwardEvent,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => FeedShareSheet(event: event, forwardEvent: forwardEvent),
@@ -501,8 +502,8 @@ Future<void> showFeedForwardSheet(
   required rust.FeedEventDto event,
   FeedForwardHook? forwardEvent,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => FeedForwardSheet(event: event, forwardEvent: forwardEvent),
@@ -516,8 +517,8 @@ Future<void> showCommentShareSheet(
   String sourceTitle = '',
   String sourceKindLabel = '动态',
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (_) => CommentShareSheet(

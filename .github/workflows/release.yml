@@ -69,6 +69,9 @@ jobs:
         run: bash tools/ci-gates.sh write-guard
       - name: design token 门 (间距/圆角/字号只允许有限集合)
         run: bash tools/ci-gates.sh tokens
+      # 浮层入口门(U-03): 与 ci.yml 同口径(不许直连 showModalBottomSheet / showDialog)
+      - name: 浮层入口门 (sheet/dialog 只许经 app_sheet.dart)
+        run: bash tools/ci-gates.sh sheet-entry
       # 唯一测试入口: 只排 network, **含 golden**(与 ci.yml / tools/ci.sh 同口径)
       - name: widget/unit tests + golden (offline)
         run: bash tools/ci-gates.sh flutter-test

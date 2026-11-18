@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'adaptive_text.dart';
 import 'app_meta.dart';
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'cover_quality_sheet.dart';
 import 'daily_cache.dart';
 import 'desktop_shell.dart';
@@ -898,8 +899,10 @@ class _CheckUpdateTileState extends State<_CheckUpdateTile> {
 Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
   final settings = AppSettings.instance;
   final current = settings.librarySearchPlayAction;
-  final picked = await showModalBottomSheet<LibrarySearchPlayAction>(
-    context: context,
+  final picked = await showAppSheet<LibrarySearchPlayAction>(
+    context,
+    // 几行档位列表, 一直不超半屏(迁移前就没写 isScrollControlled)
+    isScrollControlled: false,
     showDragHandle: true,
     builder: (ctx) => SafeArea(
       child: Column(
@@ -933,8 +936,9 @@ Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
 Future<void> showUpdateIntervalSheet(BuildContext context) async {
   final settings = AppSettings.instance;
   final current = settings.updateCheckInterval;
-  final picked = await showModalBottomSheet<UpdateCheckInterval>(
-    context: context,
+  final picked = await showAppSheet<UpdateCheckInterval>(
+    context,
+    isScrollControlled: false,
     showDragHandle: true,
     builder: (ctx) => SafeArea(
       child: Column(

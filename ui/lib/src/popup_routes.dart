@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 
 // 浮层(sheet/dialog)的两把公共扳手。
 //
-// **不是**统一入口: U-03 的 `showAppSheet` 是另一批(会动 23 处 call site), 这里只解决
-// 「谁是我这一条 route」—— 给需要自己持有 route 的两处(登录弹层 / 播放队列面板)造路由,
-// 以及「关掉我这一条」的通用动作(登录弹层 / 队列面板 / 切 tab 收起全部浮层共用一份)。
+// **不是**统一入口: 统一入口是 `app_sheet.dart` 的 `showAppSheet` / `showAppDialog`
+// (U-03, 2026-11-18; 它内部就用 `buildAppSheetRoute`)。这里只解决「谁是我这一条 route」
+// —— 给需要自己持有 route 的两处(登录弹层 / 播放队列面板)造路由, 以及
+// 「关掉我这一条」的通用动作(登录弹层 / 队列面板 / 切 tab 收起全部浮层共用一份)。
 
 /// 造一条与 `showModalBottomSheet` 同口径的底部面板路由(主题捕获 / 遮罩文案 / 拖拽条)。
 ///
@@ -17,6 +18,7 @@ ModalBottomSheetRoute<T> buildAppSheetRoute<T>({
   RouteSettings? settings,
   bool isScrollControlled = true,
   bool showDragHandle = true,
+  bool useSafeArea = false,
 }) {
   final navigator = Navigator.of(context);
   final l10n = MaterialLocalizations.of(context);
@@ -30,6 +32,8 @@ ModalBottomSheetRoute<T> buildAppSheetRoute<T>({
     ),
     isScrollControlled: isScrollControlled,
     showDragHandle: showDragHandle,
+    // 与 showModalBottomSheet 的默认一致(false); 全仓没有调用点开过它
+    useSafeArea: useSafeArea,
     barrierLabel: l10n.scrimLabel,
     barrierOnTapHint: l10n.scrimOnTapHint(l10n.bottomSheetLabel),
     modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,

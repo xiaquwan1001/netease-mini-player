@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
+
 /// 歌单管理弹层(歌单详情页 "..." 菜单用): 只负责弹窗与输入收集,
 /// 网络请求留在页面里做, 弹层本身不吞错误.
 
@@ -11,8 +13,8 @@ Future<({String name, String desc})?> showEditPlaylistInfoSheet(
 }) async {
   final nameCtrl = TextEditingController(text: name);
   final descCtrl = TextEditingController(text: description);
-  final save = await showDialog<bool>(
-    context: context,
+  final save = await showAppDialog<bool>(
+    context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('编辑歌单信息'),
       content: Column(
@@ -54,8 +56,8 @@ Future<({String name, String desc})?> showEditPlaylistInfoSheet(
 
 /// 删除歌单确认(不可恢复, 文案带歌单名)
 Future<bool> confirmDeletePlaylist(BuildContext context, String name) async {
-  final ok = await showDialog<bool>(
-    context: context,
+  final ok = await showAppDialog<bool>(
+    context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('删除歌单'),
       content: Text('确定删除《$name》? 删除后无法恢复。'),
@@ -76,8 +78,8 @@ Future<bool> confirmDeletePlaylist(BuildContext context, String name) async {
 
 /// 把一首歌移出歌单的确认
 Future<bool> confirmRemoveTrack(BuildContext context, String songName) async {
-  final ok = await showDialog<bool>(
-    context: context,
+  final ok = await showAppDialog<bool>(
+    context,
     builder: (dialogContext) => AlertDialog(
       title: const Text('移出歌单'),
       content: Text('把《$songName》移出这个歌单?'),

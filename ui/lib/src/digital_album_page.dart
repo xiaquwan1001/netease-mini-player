@@ -4,6 +4,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'layout.dart' show rowHeightBox;
 import 'net_retry.dart';
@@ -101,8 +102,9 @@ class _DigitalAlbumPageState extends State<DigitalAlbumPage> {
         (BigInt id) => rust.digitalAlbumDetail(albumId: id);
     final salesLoader =
         widget.loadSales ?? (ids) => rust.digitalAlbumSales(albumIds: ids);
-    await showModalBottomSheet<void>(
-      context: context,
+    await showAppSheet<void>(
+      context,
+      isScrollControlled: false,
       showDragHandle: true,
       builder: (_) => _DetailSheet(
         album: album,

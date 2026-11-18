@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'image/url_rewrite.dart';
 import 'image_io.dart';
 import 'net_retry.dart';
@@ -360,8 +361,8 @@ Future<void> showImageViewer(
   ];
   if (images.isEmpty) return Future.value();
   final start = initialIndex.clamp(0, images.length - 1);
-  return showDialog<void>(
-    context: context,
+  return showAppDialog<void>(
+    context,
     barrierColor: Colors.black,
     builder: (dialogContext) => _ImageViewer(
       images: images,

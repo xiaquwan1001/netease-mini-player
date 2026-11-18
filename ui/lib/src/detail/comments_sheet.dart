@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
 import '../comment_thread.dart';
 import '../sheet_header.dart';
 
@@ -25,8 +26,8 @@ Future<void> showCommentsSheet(
   CommentRepliesLoader? loadReplies,
   CommentSendHook? send,
 }) {
-  return showModalBottomSheet<void>(
-    context: context,
+  return showAppSheet<void>(
+    context,
     isScrollControlled: true,
     showDragHandle: true,
     builder: (sheetContext) {

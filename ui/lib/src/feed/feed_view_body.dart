@@ -6,6 +6,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
 import '../artist_nav.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
@@ -241,8 +242,8 @@ class _FeedViewState extends State<FeedView> {
 
   /// 打开"全部艺人"面板: 本页发布者(按频率) + 关注但本页没发动态的艺人
   Future<void> _openAllArtists() async {
-    final selected = await showModalBottomSheet<BigInt?>(
-      context: context,
+    final selected = await showAppSheet<BigInt?>(
+      context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => _AllArtistsSheet(
