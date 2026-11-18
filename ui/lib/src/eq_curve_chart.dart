@@ -12,6 +12,18 @@ import 'eq_profile.dart';
 /// 系数公式本体在 eq_biquad.dart(纯 Dart, 三端共享夹具直接测它).
 const double eqEvalSampleRateHz = defaultEqSampleRateHz;
 
+/// EQ 面板高度基数(dp): 设置页给曲线图/柱状图的高度(2026-11-18 之前的实际值).
+///
+/// 图表内部(曲线 CustomPaint 与柱状图)都按父约束 LayoutBuilder 铺满, 没有任何
+/// 写死的内容高度, 所以"放大"只需改这里一处, 两张图同步生效。
+const double kEqPanelBaseHeight = 232;
+
+/// 2026-11-18 版面调整: 两张图统一放大 15%(用户反馈: 图偏小, 版面没用满).
+const double kEqChartHeightScale = 1.15;
+
+/// 设置页实际使用的面板高度 = [kEqPanelBaseHeight] × [kEqChartHeightScale].
+const double kEqPanelHeight = kEqPanelBaseHeight * kEqChartHeightScale;
+
 // ---------------------------------------------------------------- 纯函数
 
 /// RBJ biquad 幅频响应在 [freqHz] 处的增益(dB). 只支持 PK/LS/HS.

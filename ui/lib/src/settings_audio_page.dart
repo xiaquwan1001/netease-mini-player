@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import 'app_settings.dart';
 import 'eq_curve_chart.dart';
+import 'eq_import.dart';
 import 'eq_profile.dart';
 import 'section_header.dart';
 import 'toast.dart';
@@ -323,7 +324,8 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           ),
         ),
         SizedBox(
-          height: 232,
+          // 曲线图/柱状图同一比例放大, 见 kEqPanelHeight
+          height: kEqPanelHeight,
           child: EqCurvePanel(
             text: settings.eqProfileText,
             onChanged: (text) => settings.update(
@@ -361,17 +363,30 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     );
   }
 
+  /// 导入曲线: 弹窗里已校验一次, 这里是**落盘的唯一入口**(以后"从文件读取"也走它),
+  /// 所以落盘前再校验一次 —— 不通过只提示, 绝不写 AppSettings。
   Future<void> _importEq(BuildContext context) async {
     final text = await showDialog<String>(
       context: context,
       builder: (_) => const _ImportEqDialog(),
     );
     if (text == null || !context.mounted) return;
+    final check = await checkEqImportText(text);
+    if (!context.mounted) return;
+    if (!check.ok) {
+      showToast(context, '曲线未导入: ${check.error}', isError: true);
+      return;
+    }
     await AppSettings.instance.update(
       eqProfileText: text,
       eqProfileName: '自定义曲线',
     );
-    if (context.mounted) showToast(context, '已导入自定义响度曲线');
+    if (!context.mounted) return;
+    final active = check.validation?.activeFilters;
+    showToast(
+      context,
+      active == null ? '已导入自定义响度曲线' : '已导入自定义响度曲线(生效 $active 个滤波器)',
+    );
   }
 
   Future<void> _exportEq(BuildContext context) async {
@@ -431,25 +446,32 @@ class _ImportEqDialogState extends State<_ImportEqDialog> {
   final _controller = TextEditingController();
   String? _error;
 
+  /// 校验要过一次 FFI(异步), 期间禁用「导入」按钮防连点。
+  bool _busy = false;
+
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
   }
 
-  void _submit() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) {
-      setState(() => _error = '请输入曲线文本');
+  /// 校验通过才 pop 文本回去落盘; 不通过就在对话框内回显"第 N 行: 原因"。
+  Future<void> _submit() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final check = await checkEqImportText(_controller.text);
+    if (!mounted) return;
+    if (!check.ok) {
+      setState(() {
+        _busy = false;
+        _error = check.error;
+      });
       return;
     }
-    try {
-      parseParametricEq(text);
-    } on EqProfileException catch (e) {
-      setState(() => _error = e.message);
-      return;
-    }
-    Navigator.of(context).pop(text);
+    Navigator.of(context).pop(_controller.text.trim());
   }
 
   @override
@@ -490,7 +512,10 @@ class _ImportEqDialogState extends State<_ImportEqDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('取消'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('导入')),
+        FilledButton(
+          onPressed: _busy ? null : _submit,
+          child: const Text('导入'),
+        ),
       ],
     );
   }
