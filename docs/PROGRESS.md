@@ -18,6 +18,8 @@
 **2026-11-18 早(lint 清零 + settings codec 拆分后)第三次重跑**: `tools/ci-gates.sh verify` = **ALL GATES OK**
 (Rust **313** · Dart **1128** · golden 18 张 · clippy 0 · analyze 0 · 四道 checker OK · **android-lint 已 0 error 并进 verify**)。
 **2026-11-18 中(P-11 交互级 + P-10 UI 面后)第四次重跑**: 仍 **ALL GATES OK**, Dart **1130**。
+**2026-11-18 下(队列/播放条 7 条用户反馈批后)第五次重跑**: 仍 **ALL GATES OK**, Dart **1123**
+(删掉「存为歌单」面板 5 例 + controller 2 例, 新增提示/live-sync/定位/行高 7 例)。
 本批数字变化: v0.21.0 之后 Dart **1106→1124**(托盘关闭行为 lane 的 `desktop_close_behavior_test.dart` 18 例) ·
 本批 **1124→1128**(settings codec 键面/全字段往返 4 例) · 再 **1128→1130**(播放条 seek 排队 8 例重写, +2);
 Rust 未动(仍 313)。
@@ -28,7 +30,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` | 干净 |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1130** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1123** 通过 / 0 skip / 0 失败(golden **18** 张; network 标签需真实凭据, 本地/CI 都不跑) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
@@ -114,6 +116,22 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(四) 播放条/队列面板 7 条用户反馈批(含心动模式退不出) · **未发版**
+
+| # | 反馈 | 根因 / 修法 |
+|---|---|---|
+| 1 | 安卓播放条切到心动模式后**退不出来**(图标一直是心动, 再点只弹「列表循环」) | 退出分支只改 `queue.mode`, 而 `heartActive` 读的是歌单浏览态标题「心动模式」⇒ 永远为真。新增 `AccountActions.exitHeartMode()`(标题回「正在播放」, 队列保留), 播放条轮转 + 通知栏轮转两条路径都改 |
+| 2 | 切底部导航时队列面板/登录弹层不收起 | `_onTabSelected` 显式 `dismissLoginSheet()` + `QueueSheetController.close()`(`Navigator.maybePop`, 不用 pop 以免误退页面) |
+| 3 | 队列面板的「存为歌单」与行尾垃圾桶+二次确认该去掉(与左滑重复) | 整条链路删除(面板按钮 + `saveAsPlaylist`/新建/批量加曲 + `queue_sheet_save_test.dart`); 移除只保留左滑 |
+| 4 | 队列行间距太大 | 新 token `kQueueRowExtent = 48`(列表行仍 56) + `itemExtent` 定高, 仍随系统字号缩放 |
+| 5 | 首次展开提示「左滑可移除」+「确认后不再展示」 | 弹窗(带勾选)→ 落盘 settings.json 新字段 `queueSwipeHintDismissed`; codec 键面/往返门同步 |
+| 6 | 队列更新不及时; 打开时应聚焦当前曲目 | 面板改吃真实 `queue` + `changes`: 心动切换/自动续播/别处删歌立刻重排 + 高亮跟随; 打开按 `index × 行高` 自动定位 |
+| 7 | 队列顶部加「定位当前播放歌曲」按钮(放清空后面) | `Icons.my_location`, 点了把当前曲目滚回视野(无当前项置灰) |
+
+门: `dart analyze` 0 · `dart format` 干净 · `flutter test` **1130→1123**(净 -7: 删 save 面板 5 例 + controller 2 例,
+新增提示 2/live-sync 1/定位 2/行高 1 等 7 例) · `tools/ci-gates.sh verify`(NCM_DESKTOP_SMOKE=1) = **ALL GATES OK**。
+UI 口径与「别再手滑加回来」的清单记进 `.pi/memory/notes-ui-rules.md`(2026-11-18 两条)。
 
 ## 2026-11-18(三) 播放条: 渐进期 seek 排队如实反馈(P-10 方案 B 的 UI 面) · **未发版**
 
