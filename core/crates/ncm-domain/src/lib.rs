@@ -412,6 +412,7 @@ pub struct StreamUrl {
     /// None 表示当前账号/音质拿不到直链(版权或会员限制)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
+    /// **请求**的档位(取链时传入的 level). 服务端实际给的档位见 `actual_level`.
     pub quality: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub br: Option<u64>,
@@ -420,11 +421,67 @@ pub struct StreamUrl {
     /// 直链过期时间(unix 秒). 队列必须在到期前换链.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expire_at: Option<u64>,
+    /// 服务端**实际给**的档位(上游响应里的 `level`, 如 `standard`/`exhigh`/`lossless`).
+    ///
+    /// 和 `quality` 不一致 ⇒ 上游静默降级(请求 lossless 却回了 320k mp3)。
+    /// None = 上游没给这个字段(旧缓存 / 旧上游), 此时无法判断是否降级。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actual_level: Option<String>,
+    /// 容器/编码(上游响应里的 `type`): `mp3` / `flac` / `m4a` 等.
+    #[serde(
+        default,
+        rename = "type",
+        alias = "format",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub format: Option<String>,
+    /// 上游给的整文件 md5(空串归一成 None). 多候选/第三方源的完整性校验依据.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub md5: Option<String>,
+    /// 上游响应里的 `time`(毫秒, 原样透传).
+    ///
+    /// 注意: 试听片段的 `time` 是不是片段长度**未经实测确认**(上游对试听返回的
+    /// 可能是整曲时长). 片段起止只信 `trial_start_ms`/`trial_end_ms`(来自 `freeTrialInfo`)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    /// 试听片段的起点(毫秒, 相对整曲). 与 `trial_end_ms` 一起描述「从第 N 秒到第 M 秒」.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trial_start_ms: Option<u64>,
+    /// 试听片段的终点(毫秒, 相对整曲).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trial_end_ms: Option<u64>,
+    /// 这条直链是不是**试听片段**(上游 `freeTrialInfo` 非空).
+    ///
+    /// 为真时 UI 必须标出来: 播完这一段就是尽头, 不是整曲结束。
+    /// 旧 JSON/旧缓存没有这个字段 ⇒ 默认 false(向后兼容)。
+    #[serde(default)]
+    pub is_trial: bool,
 }
 
 impl StreamUrl {
     pub fn is_playable(&self) -> bool {
         self.url.as_deref().is_some_and(|u| !u.is_empty())
+    }
+
+    /// 试听片段的长度(毫秒). None = 不是试听, 或上游没给起止.
+    pub fn trial_len_ms(&self) -> Option<u64> {
+        if !self.is_trial {
+            return None;
+        }
+        let (start, end) = (self.trial_start_ms?, self.trial_end_ms?);
+        end.checked_sub(start).filter(|d| *d > 0)
+    }
+
+    /// 上游如实反映的档位: 有 `actual_level` 就信它, 否则退回请求档位(旧数据).
+    pub fn effective_level(&self) -> &str {
+        self.actual_level.as_deref().unwrap_or(&self.quality)
+    }
+
+    /// 是否被上游静默降级(实际档位 != 请求档位). None 表示无从判断.
+    pub fn is_degraded(&self) -> Option<bool> {
+        self.actual_level
+            .as_deref()
+            .map(|actual| actual != self.quality)
     }
 }
 
@@ -1694,6 +1751,52 @@ mod tests {
         assert!(!s.is_playable());
         s.url = Some("http://x/y.mp3".into());
         assert!(s.is_playable());
+    }
+
+    /// 旧 JSON(只有 url/quality/br/size/expire_at)必须还能反序列化:
+    /// 新字段全走 default, `is_trial` 为 false —— 旧缓存/旧快照不能炸。
+    #[test]
+    fn stream_url_deserializes_legacy_json() {
+        let legacy = r#"{"url":"http://m/1.mp3","quality":"exhigh","br":320000,"size":12345,"expire_at":99}"#;
+        let s: StreamUrl = serde_json::from_str(legacy).unwrap();
+        assert_eq!(s.quality, "exhigh");
+        assert_eq!(s.br, Some(320_000));
+        assert!(!s.is_trial);
+        assert!(s.actual_level.is_none());
+        assert!(s.format.is_none());
+        assert!(s.md5.is_none());
+        assert!(s.duration_ms.is_none());
+        assert_eq!(s.trial_len_ms(), None);
+        // 没有 actual_level ⇒ 退回请求档位, 降级判断"无从判断"
+        assert_eq!(s.effective_level(), "exhigh");
+        assert_eq!(s.is_degraded(), None);
+    }
+
+    /// 新字段的序列化往返(缓存/CLI --json 都走这条路径), `type` 是对外键名.
+    #[test]
+    fn stream_url_trial_roundtrip() {
+        let s = StreamUrl {
+            url: Some("http://m/1.mp3".into()),
+            quality: "lossless".into(),
+            br: Some(128_008),
+            size: Some(721_023),
+            expire_at: Some(1_700_000_000),
+            actual_level: Some("standard".into()),
+            format: Some("mp3".into()),
+            md5: Some("0d5c1e".into()),
+            duration_ms: Some(297_000),
+            trial_start_ms: Some(0),
+            trial_end_ms: Some(45_000),
+            is_trial: true,
+        };
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(json.contains(r#""type":"mp3""#), "对外键名是 type: {json}");
+        assert!(json.contains(r#""is_trial":true"#));
+        let back: StreamUrl = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.trial_len_ms(), Some(45_000));
+        assert_eq!(back.effective_level(), "standard");
+        assert_eq!(back.is_degraded(), Some(true));
+        assert_eq!(back.md5.as_deref(), Some("0d5c1e"));
     }
 
     #[test]

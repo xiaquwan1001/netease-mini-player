@@ -101,6 +101,129 @@ fn stream_mapping_and_expiry() {
     assert!(s.expire_at.unwrap() > 0);
 }
 
+/// 试听片段: 实测 19292984 (Love Story, 付费专辑) 匿名取链的响应形状 ——
+/// `size 721023 @128008` ≈ 45s, `freeTrialInfo{start:0,end:45}` 是关键信号。
+/// 这段 fixture 是照着真实响应裁剪的, 不联网。
+#[test]
+fn stream_trial_fragment_is_flagged() {
+    let body = json!({
+        "code": 200,
+        "data": [{
+            "id": 19292984,
+            "url": "https://m702.music.126.net/20261118/x/y.mp3",
+            "br": 128008,
+            "size": 721023,
+            "md5": "0d5c1e4f2a7b9c0d1e2f3a4b5c6d7e8f",
+            "code": 200,
+            "expi": 1200,
+            "type": "mp3",
+            "fee": 1,
+            "payed": 0,
+            "flag": 4,
+            "time": 297000,
+            "level": "standard",
+            "encodeType": "mp3",
+            "freeTrialInfo": {"start": 0, "end": 45},
+            "freeTrialPrivilege": {"resConsumable": false, "userConsumable": false, "listenType": 1}
+        }]
+    });
+    let s = parse_stream(&body, "lossless").unwrap();
+    assert!(s.is_playable());
+    assert!(s.is_trial, "freeTrialInfo 非空 ⇒ 试听片段");
+    assert_eq!(s.trial_start_ms, Some(0));
+    assert_eq!(s.trial_end_ms, Some(45_000));
+    assert_eq!(s.trial_len_ms(), Some(45_000));
+    // 请求 lossless, 服务端如实回了 standard: quality 保请求档位, actual_level 说真话
+    assert_eq!(s.quality, "lossless");
+    assert_eq!(s.actual_level.as_deref(), Some("standard"));
+    assert_eq!(s.effective_level(), "standard");
+    assert_eq!(s.is_degraded(), Some(true));
+    assert_eq!(s.format.as_deref(), Some("mp3"));
+    assert_eq!(s.md5.as_deref(), Some("0d5c1e4f2a7b9c0d1e2f3a4b5c6d7e8f"));
+    assert_eq!(s.duration_ms, Some(297_000));
+}
+
+/// 静默降级(不是试听): 匿名请求 lossless 被回 exhigh/320k mp3, code 仍是 200。
+/// 我们不许假装无损 —— actual_level 必须是 exhigh。
+#[test]
+fn stream_degraded_level_is_reported() {
+    let body = json!({
+        "code": 200,
+        "data": [{
+            "id": 33894312,
+            "url": "https://m8.music.126.net/20261118/a/b.mp3",
+            "br": 320000,
+            "size": 3000123,
+            "md5": "aabbccddeeff00112233445566778899",
+            "code": 200,
+            "expi": 1200,
+            "type": "mp3",
+            "time": 50000,
+            "level": "exhigh",
+            "freeTrialInfo": null
+        }]
+    });
+    let s = parse_stream(&body, "lossless").unwrap();
+    assert!(!s.is_trial);
+    assert_eq!(s.trial_len_ms(), None);
+    assert_eq!(s.actual_level.as_deref(), Some("exhigh"));
+    assert_eq!(s.is_degraded(), Some(true));
+    assert_eq!(s.format.as_deref(), Some("mp3"));
+}
+
+/// 正常整曲(无免费试听, 档位与请求一致): 只有一个 is_trial=false 的普通分支。
+#[test]
+fn stream_full_track_not_trial() {
+    let body = json!({
+        "code": 200,
+        "data": [{
+            "id": 1,
+            "url": "https://m7.music.126.net/20261118/c/d.flac",
+            "br": 999000,
+            "size": 30012345,
+            "md5": "11223344556677889900aabbccddeeff",
+            "code": 200,
+            "expi": 1200,
+            "type": "flac",
+            "time": 240000,
+            "level": "lossless"
+        }]
+    });
+    let s = parse_stream(&body, "lossless").unwrap();
+    assert!(!s.is_trial);
+    assert_eq!(s.actual_level.as_deref(), Some("lossless"));
+    assert_eq!(s.is_degraded(), Some(false));
+    assert_eq!(s.format.as_deref(), Some("flac"));
+    assert_eq!(s.duration_ms, Some(240_000));
+}
+
+/// freeTrialInfo 的毫秒形状(有的接口直接给 ms)也要落在 trial_*_ms 里,
+/// 且 end <= start / 空对象都当作"不是试听"。
+#[test]
+fn stream_trial_unit_and_malformed() {
+    let ms_shape = json!({
+        "code": 200,
+        "data": [{"id": 1, "url": "https://m/1.mp3", "code": 200,
+                  "freeTrialInfo": {"start": 30000, "end": 75000}}]
+    });
+    let s = parse_stream(&ms_shape, "standard").unwrap();
+    assert!(s.is_trial);
+    assert_eq!(s.trial_len_ms(), Some(45_000));
+
+    let empty = json!({
+        "code": 200,
+        "data": [{"id": 1, "url": "https://m/1.mp3", "code": 200, "freeTrialInfo": {}}]
+    });
+    assert!(!parse_stream(&empty, "standard").unwrap().is_trial);
+
+    let reversed = json!({
+        "code": 200,
+        "data": [{"id": 1, "url": "https://m/1.mp3", "code": 200,
+                  "freeTrialInfo": {"start": 45, "end": 0}}]
+    });
+    assert!(!parse_stream(&reversed, "standard").unwrap().is_trial);
+}
+
 #[test]
 fn stream_vip_without_login_has_no_url() {
     let body = json!({"code": 200, "data": [{"id": 1, "url": null, "code": 200, "expi": 1200}]});

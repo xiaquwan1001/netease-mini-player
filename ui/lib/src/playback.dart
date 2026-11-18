@@ -53,12 +53,36 @@ class PlayerView {
 /// 网易 CDN 直链默认是明文 http；模拟器 NAT / 公司网 / 部分运营商只放行 443,
 /// 明文 80 会被中间设备回 502(空 body), ExoPlayer 侧表现为
 /// "None of the available extractors could read the stream" 的假解码错误。
-/// CDN 同路径支持 https(证书覆盖 *.music.126.net), Android 边拉边播统一升级到 https。
-/// 纯函数, 方便单测。
-String preferHttpsStreamUrl(String url) {
+/// 更糟的是直接换成 **200 + text/html** 的重定向页(桌面实测), 那是静默播不了。
+/// CDN 同路径支持 https(证书覆盖 *.music.126.net), 两端统一升级到 https。
+///
+/// **只升级网易域名族**(与 Rust `ncm_service::cache::prefer_https` 同一口径):
+/// 第三方音源将来可能只支持明文, 替人家假设"一定有 https"会把能播的源改坏。
+/// 纯函数 + 可注入判定([shouldUpgrade]), 方便单测。
+String preferHttpsStreamUrl(
+  String url, {
+  bool Function(String host)? shouldUpgrade,
+}) {
   final uri = Uri.tryParse(url);
   if (uri == null || uri.scheme != 'http' || uri.host.isEmpty) return url;
-  return uri.replace(scheme: 'https').toString();
+  final allow = shouldUpgrade ?? isNeteaseStreamHost;
+  if (!allow(uri.host)) return url;
+  // 显式 :80 要一并去掉(https 的默认端口是 443)
+  return uri
+      .replace(
+        scheme: 'https',
+        port: uri.hasPort && uri.port != 80 ? uri.port : null,
+      )
+      .toString();
+}
+
+/// 网易域名族(`*.music.126.net` 直链边缘 / `*.music.163.com` 接口域).
+bool isNeteaseStreamHost(String host) {
+  final h = host.toLowerCase();
+  return h == '126.net' ||
+      h.endsWith('.126.net') ||
+      h == '163.com' ||
+      h.endsWith('.163.com');
 }
 
 /// 播放门面: Android 走 Media3(Kotlin), 其它平台走 Rust core.
@@ -321,9 +345,12 @@ class Playback {
       });
       return _fromMap(map);
     }
+    // 桌面同样强制 https(T2): 以前这里直接把上游给的明文直链交给 Rust,
+    // 明文 80 在校园网/跨境链路上会被中间设备换成 HTML 重定向页(实测)。
+    // Rust 的下载器会再兜底升一次, 这里先升是为了日志/缓存键都看到同一个 URL。
     final state = await rust.playTrack(
       trackId: trackId,
-      url: url,
+      url: preferHttpsStreamUrl(url),
       durationMs: durationMs,
     );
     return _fromRust(state);

@@ -21,8 +21,10 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.LoadControl
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -496,6 +498,12 @@ class PlaybackService : MediaSessionService() {
         return ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            // T2(2026-11-18): 音频专用的缓冲水位(见 AudioBufferPolicy 的取值理由)。
+            // 之前不设 ⇒ media3 默认起播 2.5s / **重缓冲 5s** / 最大 50s: 一次 200-400ms 的
+            // 网络抖动会把缓冲吃空, 然后要攒回 5 秒才恢复出声 —— 用户听到的就是「卡了 5 秒」。
+            // 现在: 重缓冲 2s 恢复、起播 1s、稳态 15s 水位、上限 50s 不变。
+            // 只影响缓冲策略, 不碰 handleAudioFocus / 数据源 / 缓存配置。
+            .setLoadControl(buildLoadControl())
             // U-04(2026-11-18): 把音频交给系统焦点仲裁。
             // 为什么以前没有: media3 1.9.4 的 ExoPlayer$Builder 构造函数只写
             // audioAttributes = AudioAttributes.DEFAULT、从不写 handleAudioFocus
@@ -513,6 +521,24 @@ class PlaybackService : MediaSessionService() {
             )
             .build()
     }
+
+    /**
+     * 缓冲水位: 数值与理由集中在 [AudioBufferPolicy](纯 Kotlin, JVM 单测覆盖).
+     *
+     * `setPrioritizeTimeOverSizeThresholds(true)`: 音频场景按**时长**决定缓冲多少,
+     * 而不是按 allocator 的字节预算 —— 128kbps 的 15 秒只有 ~240KB, 按字节算反而会让
+     * 位率更高的无损曲目(≈4MB)拿到比 15 秒更短的缓冲。
+     */
+    private fun buildLoadControl(): LoadControl =
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                AudioBufferPolicy.MIN_BUFFER_MS,
+                AudioBufferPolicy.MAX_BUFFER_MS,
+                AudioBufferPolicy.BUFFER_FOR_PLAYBACK_MS,
+                AudioBufferPolicy.BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
 
     private fun buildDataSourceFactory(): DataSource.Factory {
         // UA 的唯一来源是 Rust(ncm-service 的 platform_profile().ua, 取链用同一串),

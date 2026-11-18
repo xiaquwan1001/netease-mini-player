@@ -4073,10 +4073,33 @@ class SongPurchasedPage {
 
 class StreamUrl {
   final String? url;
+
+  /// 请求的档位(取链时传入). 服务端实际档位见 `actual_level`.
   final String quality;
   final BigInt? br;
   final BigInt? size;
   final BigInt? expireAt;
+
+  /// 服务端实际给的档位(上游响应 level). 与 quality 不同 = 被静默降级.
+  final String? actualLevel;
+
+  /// 容器/编码: mp3 / flac / m4a
+  final String? format;
+
+  /// 整文件 md5(完整性校验用)
+  final String? md5;
+
+  /// 上游响应 time(毫秒)
+  final BigInt? durationMs;
+
+  /// 试听片段起点(毫秒, 相对整曲)
+  final BigInt? trialStartMs;
+
+  /// 试听片段终点(毫秒, 相对整曲)
+  final BigInt? trialEndMs;
+
+  /// 是不是试听片段(freeTrialInfo 非空)
+  final bool isTrial;
 
   const StreamUrl({
     this.url,
@@ -4084,6 +4107,13 @@ class StreamUrl {
     this.br,
     this.size,
     this.expireAt,
+    this.actualLevel,
+    this.format,
+    this.md5,
+    this.durationMs,
+    this.trialStartMs,
+    this.trialEndMs,
+    required this.isTrial,
   });
 
   @override
@@ -4092,7 +4122,14 @@ class StreamUrl {
       quality.hashCode ^
       br.hashCode ^
       size.hashCode ^
-      expireAt.hashCode;
+      expireAt.hashCode ^
+      actualLevel.hashCode ^
+      format.hashCode ^
+      md5.hashCode ^
+      durationMs.hashCode ^
+      trialStartMs.hashCode ^
+      trialEndMs.hashCode ^
+      isTrial.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -4103,7 +4140,14 @@ class StreamUrl {
           quality == other.quality &&
           br == other.br &&
           size == other.size &&
-          expireAt == other.expireAt;
+          expireAt == other.expireAt &&
+          actualLevel == other.actualLevel &&
+          format == other.format &&
+          md5 == other.md5 &&
+          durationMs == other.durationMs &&
+          trialStartMs == other.trialStartMs &&
+          trialEndMs == other.trialEndMs &&
+          isTrial == other.isTrial;
 }
 
 /// 曲风标签: 直接镜像 domain 类型(D7 spike), Dart 侧靠 dart_code 的 typedef 保持旧名.

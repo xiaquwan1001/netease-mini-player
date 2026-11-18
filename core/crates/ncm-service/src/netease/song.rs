@@ -627,13 +627,54 @@ pub fn parse_stream(body: &Value, level: &str) -> ProviderResult<StreamUrl> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
+    // 试听片段: freeTrialInfo{start,end} 非空 ⇒ 这条直链只有其中一段。
+    // 单位见 [trial_to_ms] 的注释: 归一成毫秒, 起止都拿到且 end > start 才算数。
+    let trial = entry
+        .get("freeTrialInfo")
+        .filter(|t| t.is_object())
+        .and_then(|t| {
+            let start = u64_of(t, "start").map(trial_to_ms)?;
+            let end = u64_of(t, "end").map(trial_to_ms)?;
+            (end > start).then_some((start, end))
+        });
     Ok(StreamUrl {
         url,
+        // quality 保持"请求档位"(UI 预取/缓存键依赖它), 上游实际档位另存 actual_level
         quality: level.to_string(),
         br: u64_of(entry, "br"),
         size: u64_of(entry, "size"),
         expire_at: Some(now + expi),
+        actual_level: text_of(entry, "level"),
+        format: text_of(entry, "type"),
+        md5: text_of(entry, "md5"),
+        duration_ms: u64_of(entry, "time").filter(|ms| *ms > 0),
+        trial_start_ms: trial.map(|(s, _)| s),
+        trial_end_ms: trial.map(|(_, e)| e),
+        is_trial: trial.is_some(),
     })
+}
+
+/// 取一个"非空字符串"字段(空串 / 非字符串 / 缺失都归成 None).
+fn text_of(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+/// 试听片段里超过这个数就当作毫秒(试听只有几十秒, 不会到 10 分钟)。
+const TRIAL_SECONDS_MAX: u64 = 600;
+
+/// `freeTrialInfo{start,end}` 的量级归一: 上游文档缺失, 社区实现按**秒**解释
+/// (45s 试听回 `{"start":0,"end":45}`), 但拿不到线上样本逐字核对 ⇒
+/// 小值(≤600)当秒换算成毫秒, 大值原样当毫秒, 两种形状都能落在 `trial_*_ms` 里。
+fn trial_to_ms(raw: u64) -> u64 {
+    if raw <= TRIAL_SECONDS_MAX {
+        raw.saturating_mul(1000)
+    } else {
+        raw
+    }
 }
 
 /// 每日推荐歌曲的响应形如 {code:200, data:{dailySongs:[...], privileges:[...]}}

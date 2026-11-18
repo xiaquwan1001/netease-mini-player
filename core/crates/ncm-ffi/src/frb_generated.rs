@@ -6200,6 +6200,13 @@ const _: fn() = || {
         let _: Option<u64> = StreamUrl.br;
         let _: Option<u64> = StreamUrl.size;
         let _: Option<u64> = StreamUrl.expire_at;
+        let _: Option<String> = StreamUrl.actual_level;
+        let _: Option<String> = StreamUrl.format;
+        let _: Option<String> = StreamUrl.md5;
+        let _: Option<u64> = StreamUrl.duration_ms;
+        let _: Option<u64> = StreamUrl.trial_start_ms;
+        let _: Option<u64> = StreamUrl.trial_end_ms;
+        let _: bool = StreamUrl.is_trial;
     }
     {
         let StyleTag = None::<crate::api::StyleTag>.unwrap();
@@ -8708,12 +8715,26 @@ impl SseDecode for crate::api::StreamUrl {
         let mut var_br = <Option<u64>>::sse_decode(deserializer);
         let mut var_size = <Option<u64>>::sse_decode(deserializer);
         let mut var_expireAt = <Option<u64>>::sse_decode(deserializer);
+        let mut var_actualLevel = <Option<String>>::sse_decode(deserializer);
+        let mut var_format = <Option<String>>::sse_decode(deserializer);
+        let mut var_md5 = <Option<String>>::sse_decode(deserializer);
+        let mut var_durationMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_trialStartMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_trialEndMs = <Option<u64>>::sse_decode(deserializer);
+        let mut var_isTrial = <bool>::sse_decode(deserializer);
         return crate::api::StreamUrl {
             url: var_url,
             quality: var_quality,
             br: var_br,
             size: var_size,
             expire_at: var_expireAt,
+            actual_level: var_actualLevel,
+            format: var_format,
+            md5: var_md5,
+            duration_ms: var_durationMs,
+            trial_start_ms: var_trialStartMs,
+            trial_end_ms: var_trialEndMs,
+            is_trial: var_isTrial,
         };
     }
 }
@@ -11110,6 +11131,13 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::StreamUrl> {
             self.0.br.into_into_dart().into_dart(),
             self.0.size.into_into_dart().into_dart(),
             self.0.expire_at.into_into_dart().into_dart(),
+            self.0.actual_level.into_into_dart().into_dart(),
+            self.0.format.into_into_dart().into_dart(),
+            self.0.md5.into_into_dart().into_dart(),
+            self.0.duration_ms.into_into_dart().into_dart(),
+            self.0.trial_start_ms.into_into_dart().into_dart(),
+            self.0.trial_end_ms.into_into_dart().into_dart(),
+            self.0.is_trial.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -13135,6 +13163,13 @@ impl SseEncode for crate::api::StreamUrl {
         <Option<u64>>::sse_encode(self.br, serializer);
         <Option<u64>>::sse_encode(self.size, serializer);
         <Option<u64>>::sse_encode(self.expire_at, serializer);
+        <Option<String>>::sse_encode(self.actual_level, serializer);
+        <Option<String>>::sse_encode(self.format, serializer);
+        <Option<String>>::sse_encode(self.md5, serializer);
+        <Option<u64>>::sse_encode(self.duration_ms, serializer);
+        <Option<u64>>::sse_encode(self.trial_start_ms, serializer);
+        <Option<u64>>::sse_encode(self.trial_end_ms, serializer);
+        <bool>::sse_encode(self.is_trial, serializer);
     }
 }
 

@@ -581,8 +581,35 @@ mod backend {
     struct GrowingFile {
         file: File,
         done: Arc<std::sync::atomic::AtomicBool>,
-        /// 无新字节的忍耐上限: 超时按结束处理, 避免下载线程挂死时把音频线程卡住
-        since: Instant,
+        /// **最近一次拿到新字节**的时刻(不是"打开文件"的时刻).
+        ///
+        /// T2(2026-11-18) 修的真实缺陷: 以前这个字段叫 `since` 且只在 open 时赋值,
+        /// 于是"打开后 90s"就成了判死线 —— 一首在慢网上下载的 5 分钟歌曲, 只要
+        /// 播放线程(比下载快)在 90s 后偶尔读空一次, 就会被当成 EOF **提前结束**。
+        /// 现在每次读到字节都刷新, 判死口径变成"连续这么久没有任何新字节"。
+        last_data: Instant,
+        /// 无新字节的忍耐上限(可配, 见 [`stall_limit_from`])
+        limit: Duration,
+    }
+
+    /// 静止判死阈值: 默认 90s, 可用 `NCM_GROWING_STALL_SECS` 覆盖(最小 5s).
+    ///
+    /// 为什么默认仍是 90s: 桌面下载器本身有 20s 读间隔超时(ncm-service `cache::READ_TIMEOUT`),
+    /// 真的 stalled 会在那里先失败并把 `done` 置位 —— 这里的阈值只兜"下载线程整个消失"
+    /// 的病态情况, 阈值太小反而会把**正常慢网**判死。
+    fn stall_limit_from(raw: Option<&str>) -> Duration {
+        const DEFAULT_SECS: u64 = 90;
+        const MIN_SECS: u64 = 5;
+        let secs = raw
+            .and_then(|v| v.trim().parse::<u64>().ok())
+            .filter(|s| *s >= MIN_SECS)
+            .unwrap_or(DEFAULT_SECS);
+        Duration::from_secs(secs)
+    }
+
+    fn stall_limit() -> Duration {
+        let raw = std::env::var("NCM_GROWING_STALL_SECS").ok();
+        stall_limit_from(raw.as_deref())
     }
 
     impl GrowingFile {
@@ -590,7 +617,8 @@ mod backend {
             Ok(Self {
                 file: File::open(path)?,
                 done,
-                since: Instant::now(),
+                last_data: Instant::now(),
+                limit: stall_limit(),
             })
         }
     }
@@ -601,14 +629,27 @@ mod backend {
             loop {
                 let n = self.file.read(buf)?;
                 if n > 0 {
+                    // 有新字节 ⇒ 重新计时(见 last_data 的注释: 以前漏了这一步)
+                    self.last_data = Instant::now();
                     return Ok(n);
                 }
                 if self.done.load(std::sync::atomic::Ordering::Acquire) {
                     return Ok(0);
                 }
-                if self.since.elapsed() > Duration::from_secs(90) {
-                    eprintln!("[playback] growing file stalled > 90s, stop reading");
-                    return Ok(0);
+                if self.last_data.elapsed() > self.limit {
+                    // **明确报错而不是静默 EOF**: 以前返回 Ok(0) 等于"这首曲目正常播完了",
+                    // 用户听感是"无缘无故切下一首", 日志里也没有失败痕迹。
+                    eprintln!(
+                        "[playback] growing file stalled > {:?}, aborting this track",
+                        self.limit
+                    );
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::TimedOut,
+                        format!(
+                            "边下边播 stalled: 连续 {:?} 没有新字节(下载线程可能已挂死;                              NCM_GROWING_STALL_SECS 可调)",
+                            self.limit
+                        ),
+                    ));
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
@@ -1052,6 +1093,21 @@ mod backend {
     mod growing_tests {
         use super::*;
         use std::io::{Read, Write};
+
+        /// T2: 边下边播的"判死阈值"可配, 且不会被配成把正常慢网判死的值。
+        #[test]
+        fn stall_limit_is_configurable_with_a_floor() {
+            // 默认 90s
+            assert_eq!(stall_limit_from(None), Duration::from_secs(90));
+            // 正常值生效
+            assert_eq!(stall_limit_from(Some("45")), Duration::from_secs(45));
+            // 前后空白可接受
+            assert_eq!(stall_limit_from(Some(" 120 ")), Duration::from_secs(120));
+            // 非数字/过小(小于 5s 会把正常慢网判死)⇒ 回落默认
+            assert_eq!(stall_limit_from(Some("abc")), Duration::from_secs(90));
+            assert_eq!(stall_limit_from(Some("1")), Duration::from_secs(90));
+            assert_eq!(stall_limit_from(Some("0")), Duration::from_secs(90));
+        }
 
         /// 造一个 16bit/mono/8kHz 的 WAV(只剩 header, data 由调用方按块追加).
         fn wav_header(samples: usize) -> Vec<u8> {

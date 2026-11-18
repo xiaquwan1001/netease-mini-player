@@ -1242,7 +1242,30 @@ async fn run() -> Result<(), BoxErr> {
             if args.has("--json") {
                 println!("{}", serde_json::to_string_pretty(&stream)?);
             } else {
-                println!("playable={} quality={} br={:?}", stream.is_playable(), stream.quality, stream.br);
+                println!(
+                    "playable={} quality={} actual={} br={:?}",
+                    stream.is_playable(),
+                    stream.quality,
+                    stream.effective_level(),
+                    stream.br
+                );
+                // 信息无损(方案 A): 试听片段/降级/完整性字段都在这一行里看得见,
+                // 否则「能播」的 45s 片段与整曲在 CLI 输出上完全一样。
+                println!(
+                    "trial={} trial_ms={:?} type={:?} md5={:?} duration_ms={:?}",
+                    stream.is_trial,
+                    stream.trial_len_ms(),
+                    stream.format,
+                    stream.md5,
+                    stream.duration_ms
+                );
+                if stream.is_degraded() == Some(true) {
+                    println!(
+                        "degraded: 请求 {} ⇒ 实际 {}",
+                        stream.quality,
+                        stream.effective_level()
+                    );
+                }
                 println!("url={:?}", stream.url);
             }
             if let Some(path) = args.value("--download") {
@@ -1270,9 +1293,12 @@ async fn run() -> Result<(), BoxErr> {
             let stream = p
                 .song_url(&SongUrlRequest { track: TrackId::new(id), level })
                 .await?;
+            // 缓存键带实际档位(与桌面/FFI 同口径: cache.rs 的 level 参数).
+            // 先取字符串再 move url(否则 stream 被部分 move 后不能再借用).
+            let cache_level = stream.effective_level().to_string();
             let url = stream.url.ok_or("no url (VIP 曲目需要登录 cookie)")?;
             let cache = ncm_service::cache::AudioCache::open(&data_dir().join("audio"))?;
-            let path = cache.fetch(id, &url).await?;
+            let path = cache.fetch(id, &url, Some(&cache_level)).await?;
             eprintln!("cached -> {}", path.display());
             let player = ncm_playback::Player::new();
             player.play_file(id, path.to_string_lossy().to_string());

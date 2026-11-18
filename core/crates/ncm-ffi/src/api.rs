@@ -293,10 +293,25 @@ fn song_from_dto(d: &SongDto) -> ncm_domain::Song {
 #[frb(mirror(StreamUrl))]
 pub struct _StreamUrl {
     pub url: Option<String>,
+    /// 请求的档位(取链时传入). 服务端实际档位见 `actual_level`.
     pub quality: String,
     pub br: Option<u64>,
     pub size: Option<u64>,
     pub expire_at: Option<u64>,
+    /// 服务端实际给的档位(上游响应 level). 与 quality 不同 = 被静默降级.
+    pub actual_level: Option<String>,
+    /// 容器/编码: mp3 / flac / m4a
+    pub format: Option<String>,
+    /// 整文件 md5(完整性校验用)
+    pub md5: Option<String>,
+    /// 上游响应 time(毫秒)
+    pub duration_ms: Option<u64>,
+    /// 试听片段起点(毫秒, 相对整曲)
+    pub trial_start_ms: Option<u64>,
+    /// 试听片段终点(毫秒, 相对整曲)
+    pub trial_end_ms: Option<u64>,
+    /// 是不是试听片段(freeTrialInfo 非空)
+    pub is_trial: bool,
 }
 
 // ---------------- 综合搜索(分板块) ----------------
@@ -679,6 +694,10 @@ pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, FfiErro
         level,
     };
     let stream = provider.song_url(&req).await.map_err(FfiError::from)?;
+    // T2(2026-11-18): 记下"这条曲子这次按什么音质取的链", 供桌面缓存键
+    // (`AudioCache::path_for_level`) 打标 —— 旧键不含音质, 换档会误命中别的码率文件。
+    // 走进程内旁路而不是给 `play_track` 加参数: 那个签名是 FFI 导出, 改它要动 codegen。
+    ncm_service::cache::remember_level(track_id, level.as_str());
     Ok(stream)
 }
 
@@ -1338,20 +1357,24 @@ pub async fn play_track(
         .ok_or_else(|| FfiError::internal("core not initialized"))?
         .join("audio");
     let cache = ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)?;
-    if let Some(path) = cache.cached(track_id, &url) {
+    // 缓存键带音质: 取链时记过(见 `song_url`), 没记过就退回旧键(向后兼容)
+    let level = ncm_service::cache::level_hint(track_id);
+    let level = level.as_deref();
+    if let Some(path) = cache.cached_with_level(track_id, &url, level) {
         player().play_file(track_id, path.to_string_lossy().to_string());
         return Ok(state_dto());
     }
     #[cfg(windows)]
     {
         let _ = duration_ms;
-        let path = cache.fetch(track_id, &url).await?;
+        // 失败时把分类原因(`ProviderError{kind,retryable,detail}`)回传 Dart 的错误通道
+        let path = cache.fetch(track_id, &url, level).await?;
         player().play_file(track_id, path.to_string_lossy().to_string());
         Ok(state_dto())
     }
     #[cfg(not(windows))]
     {
-        let progressive = cache.start_progressive(track_id, &url)?;
+        let progressive = cache.start_progressive(track_id, &url, level)?;
         let part = progressive.part_path.to_string_lossy().to_string();
         // final_path 交给播放线程: 渐进期拖进度条会登记成待跳, 下载完成后据此重建
         // 可 seek 的解码器并跳到那里(P-10 方案 B)
@@ -1364,6 +1387,10 @@ pub async fn play_track(
             duration_ms,
         );
         tokio::spawn(async move {
+            // 失败时 `done` 已置位, 播放线程会立刻收尾而不是干等; 这里把分类原因
+            // (`[kind] detail`, 与 ProviderError 同一文本协议)打进日志便于现场取证。
+            // 注意: 渐进播放没有独立的"播放错误"字段可回传(codegen DTO 不在本车道改动面内),
+            // 所以 UI 侧表现为"这一首很快结束"; 下载到文件(Win/CLI)走的是有错误通道的 fetch。
             if let Err(e) = cache.download_progressive(&url, progressive).await {
                 eprintln!("[play] progressive download failed: {e}");
             }

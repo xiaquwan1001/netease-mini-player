@@ -7244,14 +7244,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   StreamUrl dco_decode_stream_url(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return StreamUrl(
       url: dco_decode_opt_String(arr[0]),
       quality: dco_decode_String(arr[1]),
       br: dco_decode_opt_box_autoadd_u_64(arr[2]),
       size: dco_decode_opt_box_autoadd_u_64(arr[3]),
       expireAt: dco_decode_opt_box_autoadd_u_64(arr[4]),
+      actualLevel: dco_decode_opt_String(arr[5]),
+      format: dco_decode_opt_String(arr[6]),
+      md5: dco_decode_opt_String(arr[7]),
+      durationMs: dco_decode_opt_box_autoadd_u_64(arr[8]),
+      trialStartMs: dco_decode_opt_box_autoadd_u_64(arr[9]),
+      trialEndMs: dco_decode_opt_box_autoadd_u_64(arr[10]),
+      isTrial: dco_decode_bool(arr[11]),
     );
   }
 
@@ -9902,12 +9909,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_br = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_size = sse_decode_opt_box_autoadd_u_64(deserializer);
     var var_expireAt = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_actualLevel = sse_decode_opt_String(deserializer);
+    var var_format = sse_decode_opt_String(deserializer);
+    var var_md5 = sse_decode_opt_String(deserializer);
+    var var_durationMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_trialStartMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_trialEndMs = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_isTrial = sse_decode_bool(deserializer);
     return StreamUrl(
       url: var_url,
       quality: var_quality,
       br: var_br,
       size: var_size,
       expireAt: var_expireAt,
+      actualLevel: var_actualLevel,
+      format: var_format,
+      md5: var_md5,
+      durationMs: var_durationMs,
+      trialStartMs: var_trialStartMs,
+      trialEndMs: var_trialEndMs,
+      isTrial: var_isTrial,
     );
   }
 
@@ -12056,6 +12077,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_box_autoadd_u_64(self.br, serializer);
     sse_encode_opt_box_autoadd_u_64(self.size, serializer);
     sse_encode_opt_box_autoadd_u_64(self.expireAt, serializer);
+    sse_encode_opt_String(self.actualLevel, serializer);
+    sse_encode_opt_String(self.format, serializer);
+    sse_encode_opt_String(self.md5, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.durationMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.trialStartMs, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.trialEndMs, serializer);
+    sse_encode_bool(self.isTrial, serializer);
   }
 
   @protected
