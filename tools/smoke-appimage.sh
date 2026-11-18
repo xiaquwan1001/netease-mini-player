@@ -78,6 +78,10 @@ if [ -z "$APPIMAGE" ] || [ ! -f "$APPIMAGE" ]; then
   skip "没有 AppImage 产物(找 dist/*.AppImage; 或用 APPIMAGE=<路径> / BUILD=1), 本段冒烟跳过"
   exit 3
 fi
+# 必须转绝对路径: A 段要 `cd "$TMP/extract"` 里跑 `--appimage-extract`,
+# 而文档教用户写 APPIMAGE=dist/xxx.AppImage —— 相对路径 cd 之后失效, 会报
+# "AppImage --appimage-extract 失败"(2026-11-19 实测: 同一文件手动解包 rc=0)。
+APPIMAGE=$(readlink -f "$APPIMAGE")
 [ -x "$APPIMAGE" ] || chmod +x "$APPIMAGE" 2>/dev/null || true
 BASE=$(basename "$APPIMAGE")
 info "AppImage: $APPIMAGE"
