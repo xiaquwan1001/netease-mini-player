@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-17(八)**。已发布版本 **v0.21.0**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
+> 最近更新: **2026-11-18(二)**。已发布版本 **v0.21.0**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
 > 设备级门与桌面无头冒烟进 `ci-gates`), 见批次时间线最上面那条。
 > 面向新读者的速览在下一节; 按日期的批次记录从「批次时间线」起倒序(最新在上)。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能) / **§12**(结构性债务) / **§13**(平台层审计剩余);文档总索引: [`docs/README.md`](README.md);
@@ -30,6 +30,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
+| `ci-gates.sh desktop-smoke`(`NCM_DESKTOP_SMOKE=1` 才进 `verify`; 需现成 release bundle) | **PASS / 0 FAIL / 0 SKIP, 26 项 OK, 61s**(2026-11-18 本机实测): 启动+数据目录+`identity.json`+WM_CLASS+几何+单实例+SIGTERM · **⑦ 关闭行为三例**(默认退出 / 托盘降级 / 有宿主时 unmap + SecondaryActivate 恢复) · **⑧ 交互级**(windowfocus 回读 + XTEST 按键 4 次 + 播放条 4 次点击 + 缩窗 640x480/320x240/还原, 每步断言存活且几何·标题·Map State 不变, 主窗口仍 1 个, 日志无崩溃痕迹) |
 | `dart format --set-exit-if-changed lib test` | 干净 |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
@@ -111,6 +112,30 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(二) 桌面 X11 交互级断言(P-11 剩余) · **未发版**
+
+`tools/smoke-desktop-headless` 此前只断言「起来了 / 单实例 / 能收 SIGTERM / 关到托盘」, 没有一条
+「真的往应用里打字点鼠标」的证据。本片补第 ⑧ 段(单开一个 xvfb + dbus 会话):
+
+| 段 | 动作 | 断言 |
+|---|---|---|
+| a 焦点 | `xdotool windowfocus --sync` + `getwindowfocus` 回读 | 焦点确实在应用主窗口上(拿不到就 **SKIP**, 不假装通过) |
+| b 按键 | XTEST 发 `space` / `Tab` / `space` / `Escape` | 进程存活 + 几何/标题/Map State 不变 |
+| c 鼠标 | XTEST 在播放条那一行横扫 3 点 + 进度条 1 点 | 进程存活 + 窗口属性不变 |
+| d 几何 | 缩 640x480 → 320x240 → 还原 | 每次改写生效且存活; 还原后必须回到初始几何 |
+| e/f | 顶层窗口数 + 应用日志 | 主窗口仍 **1** 个; 日志无 `segfault`/`core dumped`/`GLib-ERROR`/`panic` |
+
+**主窗口选择**按几何(>=200x200)+ `Map State=IsViewable` 筛候选: `xdotool search` 的首行实测会命中
+10x10 辅助窗口, 对未 map 的窗口 `XSetInputFocus` 会 `BadMatch` ⇒ 焦点/按键断言全废(上一条子代理
+硬卡死前的版本直接取首行)。
+
+**断言边界(写进脚本头, 防后人高估)**: 无 WM 的 xvfb 里观察不到 Dart 层状态 —— Flutter 语义树实测
+只有空的 panel/filler, 窗口标题是编译期常量, 未登录+离线也点不出能触发 `touchInteraction` 的条目,
+所以只能断言「输入打进窗口后没崩、窗口属性没被破坏」; 要断言「空格真的切了播放」得先有 app 侧埋点
+(debug 日志 / `--e2e` 通道), 目前没有 ⇒ 列为后续立项, 不假装做了。
+
+成本: 该段 +15s(整脚本 45s → **60s**), `ci-gates.sh desktop-smoke` 现在自报耗时。
 
 ## 2026-11-18(一) Android lint 清零进 verify + settings.json codec 按域拆(**未发版**)
 
