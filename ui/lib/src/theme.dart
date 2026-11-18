@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// 视觉风格(主题色): 同一个 seed 生成整套 M3 配色, 浅色/深色共用同一个 seed,
-/// 只换亮度 ⇒ 两套配色语义一致(与改造前 kBrandSeed 的做法一致).
+/// 只换亮度 ⇒ 两套配色语义一致(默认品牌红 seed 沿用改造前的纯红 0xFFF40000).
 ///
 /// [id] 是持久化用的稳定名字(不要改: 改了老配置读不回来), [label] 是设置页文案。
 /// 新增色板只加一项: 设置页选择器与主题构建都遍历 values, 会自动跟上。
@@ -36,13 +36,6 @@ enum AccentPalette {
   }
 }
 
-/// 默认品牌色(网易云红 seed), 保留旧名字: 老调用点与测试仍在引用。
-///
-/// 2026-11-11 从 0xFFE60026 改成纯红 0xFFF40000: 旧值在 M3 默认策略下被压成灰玫瑰
-/// (#904A46), 与「樱粉」几乎同色(用户实测反馈)。配合 [kAccentSchemeVariant] 的
-/// fidelity 策略, primary 现在是 #BC0100(纯红、100% 饱和度)。
-const Color kBrandSeed = Color(0xFFF40000);
-
 /// 色板的取色策略: M3 的 [DynamicSchemeVariant.fidelity] 会尽量保留 seed 的彩度,
 /// 而不是像默认的 tonalSpot 那样把鲜艳色压成低饱和的灰玫瑰色 ——
 /// 实测默认策略下 brandRed(#E60026) 的 primary 是 #904A46、樱粉是 #8E4958,
@@ -62,7 +55,7 @@ ColorScheme accentScheme(AccentPalette accent, Brightness brightness) =>
 /// 在 OLED 屏上不发光的像素真正熄灭(省电 + 无灰边).
 const Color kOledBlack = Color(0xFF000000);
 
-/// 浅色主题(与改造前 ThemeData(colorSchemeSeed: kBrandSeed, useMaterial3: true) 等价;
+/// 浅色主题(与改造前 ThemeData(colorSchemeSeed: 0xFFF40000, useMaterial3: true) 等价;
 /// 换主题色只是换 seed, 其余语义不变)
 ThemeData buildLightTheme({AccentPalette accent = AccentPalette.neteaseRed}) =>
     ThemeData(

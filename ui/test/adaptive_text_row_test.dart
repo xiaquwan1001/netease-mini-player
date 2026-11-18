@@ -25,19 +25,51 @@ Future<void> pump(WidgetTester tester, Widget child, {double? width}) async {
 }
 
 void main() {
-  group('shouldShowBadges 纯函数(阈值判定)', () {
-    test('默认阈值 120: 60/80/119 隐藏, 120/121/200 显示', () {
-      expect(shouldShowBadges(60), isFalse);
-      expect(shouldShowBadges(80), isFalse);
-      expect(shouldShowBadges(119.9), isFalse);
-      expect(shouldShowBadges(120), isTrue);
-      expect(shouldShowBadges(121), isTrue);
-      expect(shouldShowBadges(200), isTrue);
+  group('shouldShowBadgesForWidth 纯函数(阈值判定, 现口径: 行宽 - 徽标宽)', () {
+    test('默认阈值 120: 60/80/119.9 隐藏, 120/121/200 显示(无徽标占用)', () {
+      // 迁移自旧的 shouldShowBadges(可用宽) 版本: 徽标宽 0 时新函数等价于旧函数,
+      // 所以原来的每一档宽度断言都保留。
+      expect(shouldShowBadgesForWidth(60, 0), isFalse);
+      expect(shouldShowBadgesForWidth(80, 0), isFalse);
+      expect(shouldShowBadgesForWidth(119.9, 0), isFalse);
+      expect(shouldShowBadgesForWidth(120, 0), isTrue);
+      expect(shouldShowBadgesForWidth(121, 0), isTrue);
+      expect(shouldShowBadgesForWidth(200, 0), isTrue);
+
+      // 空徽标列表: 占用 0 宽, 判定退回整行宽(与上面同一组边界)
+      expect(badgeGroupWidth(const []), 0);
+      expect(titleAvailableWidth(200, badgeGroupWidth(const [])), 200);
+      expect(
+        shouldShowBadgesForWidth(119.9, badgeGroupWidth(const [])),
+        isFalse,
+      );
+      expect(shouldShowBadgesForWidth(120, badgeGroupWidth(const [])), isTrue);
+
+      // 新口径才有的部分: 徽标宽从行宽里扣掉后才比阈值
+      // (旧版按整行宽判定, 行宽 200 / 徽标 72 会误判"够宽")
+      expect(titleAvailableWidth(130, 72), 58);
+      expect(badgeGroupWidth([68], gap: 4), 72);
+      expect(
+        shouldShowBadgesForWidth(200, 72),
+        isTrue,
+        reason: '可用宽 128 >= 120',
+      );
+      expect(
+        shouldShowBadgesForWidth(191.9, 72),
+        isFalse,
+        reason: '可用宽 119.9 < 120(整行宽 191.9 按旧口径会误判)',
+      );
+      expect(shouldShowBadgesForWidth(192, 72), isTrue, reason: '可用宽恰好 120');
     });
-    test('自定义阈值生效', () {
-      expect(shouldShowBadges(100, threshold: 90), isTrue);
-      expect(shouldShowBadges(89, threshold: 90), isFalse);
-      expect(shouldShowBadges(0), isFalse);
+    test('自定义阈值生效 + 徽标宽超过行宽时钳 0', () {
+      expect(shouldShowBadgesForWidth(100, 10, threshold: 90), isTrue); // 可用 90
+      expect(shouldShowBadgesForWidth(99, 10, threshold: 90), isFalse); // 可用 89
+      expect(shouldShowBadgesForWidth(0, 0), isFalse);
+      // 徽标比行还宽: 可用宽钳到 0(不是负数) ⇒ 默认阈值下隐藏;
+      // 阈值 0 时仍算达标(0 >= 0) —— 这一条同时证明钳位没留下负值。
+      expect(titleAvailableWidth(60, 139), 0);
+      expect(shouldShowBadgesForWidth(60, 139), isFalse);
+      expect(shouldShowBadgesForWidth(60, 139, threshold: 0), isTrue);
     });
   });
 

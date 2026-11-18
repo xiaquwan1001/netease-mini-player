@@ -3,7 +3,7 @@
 // 口径:
 // - 色板只是 colorSchemeSeed, 浅色/深色是同一 seed 的两种亮度 ⇒ "每个颜色都有深色/浅色"
 //   由「主题模式」+「色板」两个正交开关组合出来, 不是 5x2 的独立配置;
-// - 默认色板必须与改造前完全一致(kBrandSeed);
+// - 默认色板必须与改造前完全一致(品牌红 seed 0xFFF40000 ⇒ 浅色 primary #BC0100);
 // - 未知/损坏的配置回落默认, 不能让界面没主题。
 
 import 'dart:convert';
@@ -56,7 +56,15 @@ void main() {
   });
 
   test('默认色板 = 改造前的品牌红(不传 accent 与传 neteaseRed 等价)', () {
-    expect(AccentPalette.neteaseRed.seed, kBrandSeed);
+    // 旧锚点是已删除的 kBrandSeed 常量; 现口径直接钉住「同一 seed ⇒ 同一 primary」:
+    // 改造前 ThemeData(colorSchemeSeed: 0xFFF40000) 在 fidelity 策略下就是 #BC0100
+    // (纯红、100% 饱和), 换成任何别的 seed/策略都会让这条断言先红。
+    expect(AccentPalette.neteaseRed.seed, const Color(0xFFF40000));
+    expect(
+      buildLightTheme().colorScheme.primary,
+      const Color(0xFFBC0100),
+      reason: '默认品牌红 seed 的浅色 primary 必须仍是改造前的 #BC0100',
+    );
     expect(
       buildLightTheme().colorScheme.primary,
       buildLightTheme(accent: AccentPalette.neteaseRed).colorScheme.primary,

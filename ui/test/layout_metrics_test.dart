@@ -148,13 +148,25 @@ void main() {
   });
 
   testWidgets('SectionHeader: 标题与 trailing 同一中心线 + 左右贴齐页面留白', (tester) async {
+    // 现口径的横向栅格几何(原 kPageHorizontalPadding 常量已删, 这里用关系断言替代):
+    // 页面留白只有一个数 kPagePadding, kPageInsets 左右都等于它、合计 2 倍,
+    // 整页铺满的行(左 12 / 右 4)与页面标题线共线。
+    expect(kPageInsets.left, kPagePadding);
+    expect(kPageInsets.right, kPagePadding);
+    expect(kPageInsets.horizontal, kPagePadding * 2);
+    expect(kPageInsets.vertical, 8 + 24);
+    expect(kPageRowPadding.left, kPagePadding);
+    expect(kPageRowPadding.right, kCardRowInset);
+    expect(kCardRowPadding.horizontal, kCardRowInset * 2);
+
     for (final width in _widths) {
       for (final scale in _scales) {
         final tag = 'SectionHeader w=$width s=$scale';
         final errors = await _pump(
           tester,
           const Padding(
-            padding: kPageHorizontalPadding,
+            // 只左右留白 = 页面栅格线(Math 与已删的 kPageHorizontalPadding 一致)
+            padding: EdgeInsets.symmetric(horizontal: kPagePadding),
             child: SectionHeader(
               title: '我喜欢的音乐',
               trailing: SectionSeeAllButton(label: '查看全部', onTap: _noop),

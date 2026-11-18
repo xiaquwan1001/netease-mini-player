@@ -28,11 +28,6 @@ import 'app_settings.dart';
 /// 页面级水平留白(卡片、区块、区块标题的外边缘都对齐这条线)。
 const double kPagePadding = 12;
 
-/// 页面级水平留白(只左右)。
-const EdgeInsets kPageHorizontalPadding = EdgeInsets.symmetric(
-  horizontal: kPagePadding,
-);
-
 /// 可滚动页面的标准 padding: 左 12 / 右 12, 顶部 8, 底部 24(给底部播放条留量)。
 const EdgeInsets kPageInsets = EdgeInsets.fromLTRB(
   kPagePadding,

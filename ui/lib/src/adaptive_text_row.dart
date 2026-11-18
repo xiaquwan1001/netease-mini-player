@@ -15,17 +15,6 @@ export 'adaptive_text.dart'
         shouldShowBadgesForWidth,
         titleAvailableWidth;
 
-/// 纯函数(兼容旧接口, 便于单测): 标题区可用 [availableWidth] px 时, 徽标组是否还能显示.
-///
-/// 新版口径在 [shouldShowBadgesForWidth](输入行宽 + 实测徽标宽); 这里保留
-/// "已算好的标题可用宽"版本, 供原来按可用宽断言的单测/调用方继续用.
-bool shouldShowBadges(
-  double availableWidth, {
-  double threshold = kBadgeCollapseBelowDefault,
-}) {
-  return availableWidth >= threshold;
-}
-
 /// 「标题文本 + 一串装饰徽标」的窄宽降级行 —— [AdaptiveText] 的薄封装.
 ///
 /// - 标题永远 Expanded + 单行: [marquee] 为 true 时走 [AdaptiveTextMode.marquee]
