@@ -20,12 +20,17 @@ const String _kName = '歌名甲很长的名字用来验证省略';
 const String _kArtist = '艺人乙';
 const String _kAlbum = '专辑丙';
 
-PlayerBarData _data({String? coverUrl, bool hasSong = true}) => PlayerBarData(
+PlayerBarData _data({
+  String? coverUrl,
+  bool hasSong = true,
+  BigInt? pendingSeekMs,
+}) => PlayerBarData(
   player: PlayerView(
     playing: true,
     positionMs: BigInt.from(30 * 1000),
     durationMs: BigInt.from(200 * 1000),
     volume: 1.0,
+    pendingSeekMs: pendingSeekMs,
   ),
   current: hasSong
       ? rust.SongDto(
@@ -73,6 +78,7 @@ Future<void> _pump(
   double textScale = 1.0,
   PlayerBarData? data,
   PlayerBarActions? actions,
+  bool? desktopPlatform,
 }) async {
   tester.view.physicalSize = Size(width, 240);
   tester.view.devicePixelRatio = 1.0;
@@ -91,6 +97,7 @@ Future<void> _pump(
               data: data ?? _data(),
               actions: actions ?? _actions(),
               absorbBottomInset: false,
+              desktopPlatformOverride: desktopPlatform,
             ),
           ),
         ),
@@ -157,13 +164,15 @@ void main() {
   });
 
   testWidgets('中档(700): 歌名 + 艺人, 不带专辑名', (tester) async {
-    await _pump(tester, width: 700);
+    // 队列排位只属于手机端(桌面口径见下面的「队列排位」组), 这里钉成手机平台
+    await _pump(tester, width: 700, desktopPlatform: false);
 
     final text = _barText(tester);
     expect(text, contains(_kName), reason: '中档要显示完整歌名');
     expect(text, contains(_kArtist), reason: '中档要显示艺人');
     expect(text, isNot(contains(_kAlbum)), reason: '专辑名只属于宽档');
     // 既有信息不丢: 位置/时长与队列序号
+    expect(text, contains('00:30 / 03:20'));
     expect(text, contains('3/12'));
     expect(tester.takeException(), isNull);
   });
@@ -182,7 +191,7 @@ void main() {
   });
 
   testWidgets('宽档(1200): 歌名 + 艺人 + 专辑名', (tester) async {
-    await _pump(tester, width: 1200);
+    await _pump(tester, width: 1200, desktopPlatform: false);
 
     final text = _barText(tester);
     expect(text, contains(_kName));
@@ -208,6 +217,63 @@ void main() {
 
     expect(_barText(tester), contains('未在播放'));
     expect(tester.takeException(), isNull);
+  });
+
+  // 用户口径(2026-11-18): 「桌面版底部播放栏不要显示当前歌曲在队列的排位比如 2/35」。
+  // 判据只看平台, 与档位无关 —— 桌面窗口拖窄/拖宽都仍是桌面版, 都不显示排位。
+  group('队列排位: 桌面隐藏 / 手机保留', () {
+    final indexPattern = RegExp(r'\d+/\d+');
+
+    for (final width in const [700.0, 1200.0]) {
+      testWidgets('桌面(Linux/Windows) $width 宽: 不出现 N/M, 其余文案照旧', (
+        tester,
+      ) async {
+        await _pump(tester, width: width, desktopPlatform: true);
+
+        final text = _barText(tester);
+        expect(indexPattern.hasMatch(text), isFalse, reason: '桌面版不显示队列排位');
+        expect(text, isNot(contains('3/12')));
+        // 其它信息一个都不能少
+        expect(text, contains(_kName));
+        expect(text, contains(_kArtist));
+        expect(
+          text,
+          contains('00:30 / 03:20'),
+          reason: '位置/时长是既有信息, 不能跟着排位一起删',
+        );
+        expect(tester.takeException(), isNull);
+      });
+    }
+
+    testWidgets('桌面: 「已排队→mm:ss」不当作排位删掉', (tester) async {
+      await _pump(
+        tester,
+        width: 700,
+        desktopPlatform: true,
+        data: _data(pendingSeekMs: BigInt.from(42 * 1000)),
+      );
+
+      final text = _barText(tester);
+      expect(text, contains('已排队→00:42'), reason: 'P-10 方案 B 的排队状态必须保留');
+      expect(indexPattern.hasMatch(text), isFalse);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('手机(Android) 700 宽: 仍然显示 3/12', (tester) async {
+      await _pump(tester, width: 700, desktopPlatform: false);
+
+      final text = _barText(tester);
+      expect(text, contains('3/12'), reason: '手机端口径不变');
+      expect(text, contains('00:30 / 03:20'));
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('排位判据(playerBarShowsQueueIndex)', () {
+    test('桌面隐藏, 手机保留', () {
+      expect(playerBarShowsQueueIndex(isDesktop: true), isFalse);
+      expect(playerBarShowsQueueIndex(isDesktop: false), isTrue);
+    });
   });
 
   group('专辑名的「空间还有」判据(playerBarShowsAlbum)', () {

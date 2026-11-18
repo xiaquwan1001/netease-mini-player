@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
@@ -183,6 +186,20 @@ bool playerBarShowsAlbum({
   return infoWidth >= kPlayerBarAlbumMinWidth;
 }
 
+/// 当前进程是不是「桌面版」(Linux / Windows)。
+///
+/// 用户口径(2026-11-18): **桌面版**底部播放栏不要显示当前曲在队列的排位(2/35);
+/// 手机端(Android)保留。判据只看平台, 不看窗口宽度 —— 桌面窗口拖窄了仍然是桌面版。
+bool get isDesktopPlatform =>
+    !kIsWeb && (Platform.isLinux || Platform.isWindows);
+
+/// 播放条是否显示队列排位 `N/M`。
+///
+/// 抽成纯函数: 只吃平台布尔, 与宽度/档位无关, 便于单测(见 player_bar_tiers_test)。
+/// 桌面隐藏的理由: 排位在桌面窗口里多是 "5/12" 这种噪音 —— 队列顺序在队列面板里
+/// 看更准, 播放条第二行的位置/时长与「已排队→mm:ss」才是当下要的信息。
+bool playerBarShowsQueueIndex({required bool isDesktop}) => !isDesktop;
+
 /// 常驻播放条: 从 HomePage.bottomNavigationBar 上移到根布局(见 [PlayerBarHost])。
 ///
 /// 数据([PlayerBarData])与回调([PlayerBarActions])全部由 _HomePageState 注入
@@ -194,10 +211,17 @@ class MiniPlayerBar extends StatelessWidget {
     required this.data,
     required this.actions,
     required this.absorbBottomInset,
+    this.desktopPlatformOverride,
   });
 
   final PlayerBarData data;
   final PlayerBarActions actions;
+
+  /// 桌面平台判定的注入口(null = 按当前进程平台, 见 [isDesktopPlatform])。
+  ///
+  /// 只在测试里用: widget 测试跑在 Linux 宿主机上, 若要验「手机端仍显示队列排位」
+  /// 就必须能把平台钉成非桌面, 否则同一份断言只能取一头。
+  final bool? desktopPlatformOverride;
 
   /// 没有底部导航时自己吃掉系统手势区(有导航时由 NavigationBar 的 SafeArea 负责)
   final bool absorbBottomInset;
@@ -255,6 +279,10 @@ class MiniPlayerBar extends StatelessWidget {
     final edge = roomy ? kPagePadding : kPlayerBarEdgeInset;
     // 0 = 不加占位(SizedBox 宽度 0 会留一个无意义的 RenderBox)
     final gap = roomy ? kRowTitleGap : 0.0;
+    // 队列排位只给手机端(判据与理由见 [playerBarShowsQueueIndex])。
+    final showQueueIndex = playerBarShowsQueueIndex(
+      isDesktop: desktopPlatformOverride ?? isDesktopPlatform,
+    );
     return Material(
       elevation: 8,
       // 有底部导航时, 底部的系统安全区由 NavigationBar 自己的 SafeArea 负责,
@@ -390,7 +418,7 @@ class MiniPlayerBar extends StatelessWidget {
                                         .textTheme
                                         .titleSmall,
                                   ),
-                                  // 第二行: 艺人(· 专辑) + 位置/时长 + 队列序号
+                                  // 第二行: 艺人(· 专辑) + 位置/时长 (+ 队列序号, 仅手机端)
                                   Text.rich(
                                     TextSpan(
                                       children: [
@@ -412,10 +440,12 @@ class MiniPlayerBar extends StatelessWidget {
                                           TextSpan(
                                             text: ' · ${current!.album}',
                                           ),
+                                        // 位置/时长是既有信息, 任何平台都留;
+                                        // 队列排位只在手机端追加(桌面版用户口径)
                                         TextSpan(
                                           text:
                                               '  ${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                                              '  ${data.queueIndex}/${data.queueLength}',
+                                              '${showQueueIndex ? '  ${data.queueIndex}/${data.queueLength}' : ''}',
                                         ),
                                       ],
                                     ),
