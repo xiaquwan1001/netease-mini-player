@@ -6,6 +6,7 @@ import '../app_settings.dart' show AppSettings;
 import '../notification_mode.dart' show nextNotificationMode;
 import '../play_queue_sheet.dart';
 import '../player_bar.dart' show playModeLabels;
+import '../popup_routes.dart' show buildAppSheetRoute, dismissPopupRoute;
 import '../queue.dart';
 import '../rust/api.dart' as rust;
 
@@ -114,21 +115,31 @@ class QueueSheetController extends ChangeNotifier {
   /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
   bool get heartActive => libraryTitleOf() == '心动模式';
 
+  /// 面板自己那条路由(open 时建、push 完清空; null = 没开).
+  ///
+  /// 为什么要自己持有 route: [Navigator.maybePop] 关的是「栈顶」而不是「我」——
+  /// 面板之上还压着「清空确认框」时, 切 tab 只关掉确认框, 面板自己还开着
+  /// (用户 2026-11-18 反馈, U-02)。拿到自己这条就能 `removeRoute`。
+  ModalBottomSheetRoute<void>? _route;
+
   /// 收起面板(若开着).
   ///
-  /// 底部导航切视图时调它: 面板是 modal route, 不会随 tab 切换自己消失,
-  /// 会一直压在旧页面上(用户 2026-11-18 反馈: 切 tab 后顶部冒出一堆返回条目)。
-  /// 用 [Navigator.maybePop] 而不是 pop: 面板已被别处关掉时不能误退页面。
+  /// 切底部 tab 的主路径已改成 `app_shell.dart` 的 `dismissAllPopups()`(它按
+  /// NavigatorObserver 的登记表一次收掉所有浮层); 这里保留「只关自己」的入口,
+  /// 供面板内部/别处与既有测试使用, 语义是**只摘自己那条 route**。
   void close() {
-    if (!_open) return;
-    Navigator.of(contextOf()).maybePop();
+    final route = _route;
+    _route = null;
+    _open = false;
+    if (route == null) return;
+    dismissPopupRoute(route);
   }
 
   /// 播放队列面板: 看队列 / 点项跳播 / 左滑删(原来只有 "$inQueue/$total" 文本, 完全黑箱)
   Future<void> open() async {
     if (_open) {
-      // 面板在栈顶; pop 掉它即"收起"
-      Navigator.of(contextOf()).pop();
+      // 已展开: 再点一次 = 收起(只关自己, 见 close)
+      close();
       return;
     }
     if (queue.items.isEmpty) {
@@ -139,30 +150,34 @@ class QueueSheetController extends ChangeNotifier {
     // 用户可以勾「确认后不再展示」, 之后永久不弹(存 settings.json)。
     await _maybeShowSwipeHint();
     if (!isMounted()) return;
+    final context = contextOf();
+    if (!context.mounted) return;
     _open = true;
-    try {
-      await showModalBottomSheet<void>(
-        context: contextOf(),
-        isScrollControlled: true,
-        showDragHandle: true,
-        builder: (sheetContext) => SafeArea(
-          child: PlayQueueSheet(
-            items: queue.items,
-            index: queue.index,
-            onSelect: (song) {
-              Navigator.of(sheetContext).pop();
-              jumpTo(song);
-            },
-            onRemove: remove,
-            onMove: move,
-            onClear: clear,
-            // 面板跟着真实队列走: 心动模式切换/自动续播/别处删歌立刻重排(用户反馈)
-            queue: queue,
-            changes: this,
-          ),
+    final navigator = Navigator.of(context);
+    final route = buildAppSheetRoute<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: PlayQueueSheet(
+          items: queue.items,
+          index: queue.index,
+          onSelect: (song) {
+            Navigator.of(sheetContext).pop();
+            jumpTo(song);
+          },
+          onRemove: remove,
+          onMove: move,
+          onClear: clear,
+          // 面板跟着真实队列走: 心动模式切换/自动续播/别处删歌立刻重排(用户反馈)
+          queue: queue,
+          changes: this,
         ),
-      );
+      ),
+    );
+    _route = route;
+    try {
+      await navigator.push(route);
     } finally {
+      if (identical(_route, route)) _route = null;
       _open = false;
     }
   }

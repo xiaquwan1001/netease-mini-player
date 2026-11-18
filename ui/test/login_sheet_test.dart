@@ -301,9 +301,12 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     addTearDown(() => playerBarSlot.value = null);
-    // 底部导航由根布局的 PlayerBarHost 渲染(同 top_bar_no_duplicate_test)
+    // 底部导航由根布局的 PlayerBarHost 渲染(同 top_bar_no_duplicate_test);
+    // 观察者与生产一致(MiniNcmApp 挂了 NcmRouteObserver): 切 tab 收起浮层走的是
+    // 它的浮层登记表(见 app_shell.dart 的 dismissAllPopups), 不挂就收不到。
     await tester.pumpWidget(
       MaterialApp(
+        navigatorObservers: [NcmRouteObserver()],
         builder: (context, child) =>
             PlayerBarHost(content: child ?? const SizedBox.shrink()),
         home: const HomePage(),
@@ -331,7 +334,7 @@ void main() {
     await tester.tap(
       find.descendant(of: navChromeFinder, matching: find.text('我的')),
     );
-    await tester.pump(); // _onTabSelected → dismissLoginSheet
+    await tester.pump(); // _onTabSelected → dismissAllPopups
     await tester.pump(const Duration(milliseconds: 400)); // 收起动画
     expect(find.byType(LoginSheet), findsNothing);
     expect(loginSheetOpen, isFalse);

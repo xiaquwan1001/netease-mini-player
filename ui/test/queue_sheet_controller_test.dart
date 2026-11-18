@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/home/queue_sheet_controller.dart';
+import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
@@ -102,6 +105,50 @@ void main() {
     // 面板首次展开会弹「左滑移除」提示(2026-11-18)。除了专门测它的用例,
     // 其余用例一律预置"已确认", 免得每条都要先点掉弹窗。
     AppSettings.instance.queueSwipeHintDismissed = true;
+  });
+
+  group('收起面板(U-02)', () {
+    testWidgets('面板之上压着别的对话框时, close() 关的是自己那条, 不是栈顶', (tester) async {
+      final h = await _pump(tester, names: ['a', 'b']);
+      final opening = h.controller.open();
+      await tester.pumpAndSettle();
+      expect(find.text('当前播放队列'), findsOneWidget);
+
+      // 真实场景: 面板里的「清空确认框」压在上面
+      unawaited(
+        showDialog<void>(
+          context: tester.element(find.byType(PlayQueueSheet)),
+          builder: (_) => const AlertDialog(title: Text('上层对话框')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('上层对话框'), findsOneWidget);
+
+      h.controller.close();
+      await tester.pumpAndSettle();
+      // 旧实现是 Navigator.maybePop(): 弹掉的是栈顶的对话框, 面板自己还开着
+      expect(find.text('当前播放队列'), findsNothing, reason: '关的是自己那条 route');
+      expect(find.text('上层对话框'), findsOneWidget, reason: 'close() 不碰上层');
+      expect(h.controller.isOpen, isFalse);
+
+      Navigator.of(tester.element(find.text('上层对话框'))).pop();
+      await tester.pumpAndSettle();
+      await opening;
+    });
+
+    testWidgets('close() 关掉自己后, 面板 pop 掉也不会误退页面', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      final opening = h.controller.open();
+      await tester.pumpAndSettle();
+      h.controller.close();
+      await tester.pumpAndSettle();
+      expect(h.controller.isOpen, isFalse);
+      expect(find.text('当前播放队列'), findsNothing);
+      await opening;
+      await tester.pumpAndSettle();
+      // 页面本体还在(没有被多 pop 一层)
+      expect(find.byType(_Harness), findsOneWidget);
+    });
   });
 
   group('左滑提示', () {

@@ -23,7 +23,6 @@ import '../keystore.dart';
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
-import '../login_sheet.dart' show dismissLoginSheet;
 import '../lyric.dart';
 import '../marquee_text.dart';
 import '../medal_wall.dart';
@@ -1094,13 +1093,15 @@ class _HomePageState extends State<HomePage> {
 
   void _onTabSelected(int index) {
     if (_tab == index) return;
-    // 切 tab 前先收起登录弹层: 弹层是 modal sheet, 不会随 tab 切换消失,
-    // 会一直挂在旧页面上(用户 2026-11-17 反馈).
-    dismissLoginSheet();
-    // 同理收起播放队列面板(用户 2026-11-18 反馈: 切 tab 后面板还挂着, 顶部冒出
-    // 一堆返回条目把视图分成了两半)。底部导航切换必须是一个“干净的新视图”
-    // —— 任何跨导航的常驻弹层都在这里收。
-    if (_queueUI.isOpen) _queueUI.close();
+    // 切 tab = 一个"干净的新视图": 收掉**所有**浮层(底部面板 / 对话框)。
+    //
+    // 弹层是 modal route, 不会随 tab 切换自己消失, 会一直挂在旧页面上
+    // (用户 2026-11-17 登录弹层 / 2026-11-18 队列面板反馈)。以前这里逐类手写
+    // (`dismissLoginSheet()` + `_queueUI.close()`), 只补了 2 类 —— 歌曲动作面板 /
+    // 收藏到歌单 / 分享面板 / 关注页艺人筛选 / 更新弹窗 都还挂着。
+    // 现在只有一个入口: 按 NavigatorObserver 的浮层登记表逐条摘除
+    // (见 app_shell.dart 的 dismissAllPopups / popup_routes.dart)。
+    dismissAllPopups();
     _tabVisited.add(index);
     // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
     final wasLyrics = _lyric.visible;

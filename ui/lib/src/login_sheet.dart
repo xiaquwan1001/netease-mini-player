@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'net_retry.dart';
+import 'popup_routes.dart' show buildAppSheetRoute, dismissPopupRoute;
 import 'rust/api.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
@@ -601,8 +602,9 @@ class LoginSheetState extends State<LoginSheet> {
 
 /// 打开登录弹层; 返回是否登录成功.
 ///
-/// 弹层路由记在 [_openLoginRoute]: 切底部 tab 时由 [dismissLoginSheet] 只收起
-/// 这一条 —— 用户 2026-11-17 反馈「切栏目后登录弹窗还挂着」.
+/// 弹层路由记在 [_openLoginRoute]: 切底部 tab 时由 `app_shell.dart` 的
+/// `dismissAllPopups()` 统一收起(它认得这条 route, 见 popup_routes.dart)——
+/// 用户 2026-11-17 反馈「切栏目后登录弹窗还挂着」.
 Future<bool> showLoginSheet(
   BuildContext context, {
   Future<rust.QrLoginKey> Function()? createQr,
@@ -621,7 +623,8 @@ Future<bool> showLoginSheet(
   int resendCooldownSeconds = 60,
 }) async {
   final navigator = Navigator.of(context);
-  final route = ModalBottomSheetRoute<bool>(
+  final route = buildAppSheetRoute<bool>(
+    context: context,
     settings: const RouteSettings(name: loginSheetRouteName),
     builder: (_) => LoginSheet(
       createQr: createQr,
@@ -634,16 +637,6 @@ Future<bool> showLoginSheet(
       pollInterval: pollInterval,
       resendCooldownSeconds: resendCooldownSeconds,
     ),
-    capturedThemes: InheritedTheme.capture(
-      from: context,
-      to: navigator.context,
-    ),
-    isScrollControlled: true,
-    showDragHandle: true,
-    barrierLabel: MaterialLocalizations.of(context).scrimLabel,
-    barrierOnTapHint: MaterialLocalizations.of(context)
-        .scrimOnTapHint(MaterialLocalizations.of(context).bottomSheetLabel),
-    modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
   );
   _openLoginRoute = route;
   try {
@@ -663,20 +656,15 @@ ModalBottomSheetRoute<bool>? _openLoginRoute;
 /// 登录弹层是否还开着(宿主/测试用).
 bool get loginSheetOpen => _openLoginRoute != null;
 
-/// 收起登录弹层: **只** pop 自己那条 route, 不碰其它弹层/对话框.
+/// 收起登录弹层: **只**关自己那条 route, 不碰其它弹层/对话框.
 ///
-/// 底部导航切 tab 时调用(见 `home_page.dart` 的 `_onTabSelected`): 弹层是
-/// modal sheet, 不会随 tab 切换自然消失, 一直挂在旧页面上很突兀.
+/// 切 tab 的主路径已经改成 `app_shell.dart` 的 `dismissAllPopups()`(一次收掉所有
+/// 浮层); 这个函数保留给「只想关登录弹层」的场合与既有测试.
 void dismissLoginSheet() {
   final route = _openLoginRoute;
   if (route == null) return;
   _openLoginRoute = null;
-  final navigator = route.navigator;
-  if (navigator == null) return;
-  if (route.isCurrent) {
-    navigator.pop();
-  } else {
-    // 不是栈顶(弹层之上又开了别的 sheet): 只摘掉自己, 不动上层
-    navigator.removeRoute(route);
-  }
+  // 只摘自己: 是栈顶就 pop, 上面还压着别的浮层就 removeRoute(不误关上层)。
+  // 与队列面板的 close() 共用同一份实现(见 popup_routes.dart)。
+  dismissPopupRoute(route);
 }

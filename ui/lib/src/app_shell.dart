@@ -5,6 +5,7 @@ import 'app_settings.dart';
 import 'home/home_page.dart' show HomePage;
 import 'layout.dart' show ContentWidthLimit, kRailWidth;
 import 'player_bar.dart';
+import 'popup_routes.dart' show dismissPopupRoute;
 import 'song_actions.dart';
 import 'theme.dart';
 import 'toast.dart';
@@ -44,17 +45,21 @@ final ValueNotifier<bool> modalRouteOpen = ValueNotifier<bool>(false);
 
 /// NavigatorObserver: 维护 [pageDepth](栈里非弹层路由的层数)与 [modalRouteOpen].
 class NcmRouteObserver extends NavigatorObserver {
-  /// 当前压着的弹层数(PopupRoute)。pageDepth 特意不数它们, 这里单独数。
-  static int _popups = 0;
+  /// 当前压着的弹层路由(PopupRoute), **栈序: 底 → 顶**。
+  ///
+  /// 不只数个数: 收起浮层时必须能指名「关掉哪一条」—— 关"栈顶"的 `maybePop()`
+  /// 在浮层之上又压了一层时会关错(队列面板上的「清空确认框」, U-02)。
+  /// 登记表只记 route 本身, 当前/活跃状态交给 route 自己的 `isCurrent`/`isActive`。
+  static final List<PopupRoute<dynamic>> _popups = <PopupRoute<dynamic>>[];
 
-  static void _popupUp() {
-    _popups += 1;
+  static void _popupUp(PopupRoute<dynamic> route) {
+    _popups.add(route);
     modalRouteOpen.value = true;
   }
 
-  static void _popupDown() {
-    if (_popups > 0) _popups -= 1;
-    if (_popups == 0) modalRouteOpen.value = false;
+  static void _popupDown(PopupRoute<dynamic> route) {
+    _popups.remove(route);
+    if (_popups.isEmpty) modalRouteOpen.value = false;
   }
 
   static void _up() {
@@ -72,7 +77,7 @@ class NcmRouteObserver extends NavigatorObserver {
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is PopupRoute) {
-      _popupUp();
+      _popupUp(route);
       return;
     }
     _up();
@@ -81,7 +86,7 @@ class NcmRouteObserver extends NavigatorObserver {
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is PopupRoute) {
-      _popupDown();
+      _popupDown(route);
       return;
     }
     _down();
@@ -90,11 +95,36 @@ class NcmRouteObserver extends NavigatorObserver {
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is PopupRoute) {
-      _popupDown();
+      _popupDown(route);
       return;
     }
     _down();
   }
+}
+
+/// 根 Navigator 上当前压着的浮层(栈序: 底 → 顶)的只读快照。排查/测试用。
+List<PopupRoute<dynamic>> get openPopups =>
+    List<PopupRoute<dynamic>>.unmodifiable(NcmRouteObserver._popups);
+
+/// **关闭所有浮层**(底部面板 / 对话框)—— 切底部 tab 的唯一入口。返回关掉的条数。
+///
+/// 为什么需要它: 底部导航住在 Navigator **之外**, 弹层开着时仍然可点; 而弹层是
+/// modal route, 不会随 tab 切换自己消失, 会一直挂在旧页面上(用户 2026-11-17 登录弹层 /
+/// 2026-11-18 队列面板反馈)。以前在 `_onTabSelected` 里逐类手写
+/// (`dismissLoginSheet()` + `_queueUI.close()`), 只补了 2 类, 实测漏 5 类
+/// (歌曲动作面板 / 收藏到歌单 / 分享面板 / 关注页艺人筛选 / 更新弹窗)。
+///
+/// 现在按 `NcmRouteObserver` 的登记表逐条关: 是 sheet 还是 dialog 不重要, 只要是
+/// `PopupRoute` 就被收掉。栈顶那条走 `pop()`(带动画), 被压在下面的直接 `removeRoute`。
+int dismissAllPopups() {
+  final routes = List<PopupRoute<dynamic>>.of(NcmRouteObserver._popups);
+  if (routes.isEmpty) return 0;
+  var closed = 0;
+  // 从栈顶往下: 先关上面那条, 下面那条随即变成 current
+  for (final route in routes.reversed) {
+    if (dismissPopupRoute(route)) closed += 1;
+  }
+  return closed;
 }
 
 /// 常驻底部条(播放条 + 首页底部导航)的投递槽位。
