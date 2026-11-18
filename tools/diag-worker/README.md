@@ -16,14 +16,33 @@ App(ui/lib/src/diag_upload.dart)
 
 端上只会收到 `{ok, number, url}` 或 `{error: "<code>"}`, 拿不到 token, 也读不到 Issue 以外的东西。
 
-## 仓库里没有任何 token / 端点(现状)
+## 部署现状(2026-11-18 已上线)
+
+| 项 | 值 |
+|---|---|
+| Worker 地址 | `https://minincm-diag.xiaquwan1001.workers.dev/diag`(workers.dev 子域 `xiaquwan1001`; 该 Cloudflare 账号**没有自有 zone** ⇒ 暂不能绑自定义域) |
+| KV | `DIAG` = `03f39b209f4f402ca8f9babe4b0adbb3`(已写进 `wrangler.toml`) |
+| GH_TOKEN | 已 `wrangler secret put`(只存在 Cloudflare; 仓库/客户端零 token) |
+| 客户端端点 | `ui/lib/src/app_meta.dart` 的 `kDiagUploadEndpoint` 已填该地址 ⇒ 「一键匿名提交」可点 |
+| 冒烟 | 本地 `wrangler dev --local` 与线上各建过一张真单(#3 / #4), 均带 `diagnostics,anonymous` 标签, 验证后已关闭 |
+| `preview_urls` | 已关(`wrangler.toml`), 避免额外暴露预览端点 |
+
+**网络现实(实测)**: `*.workers.dev` 在**大陆网络直连超时**(本机 curl 20s 超时), 经代理正常 ⇒ 香港/海外用户可用;
+大陆用户要稳定需绑自定义域(须先有 zone)。客户端上传失败会降级成本地诊断包文件, 不会卡住。
+
+**换 token**(到期/轮换): 生成新 fine-grained PAT 后只需 `printf '%s' "$NEW" | npx wrangler secret put GH_TOKEN`, 不用改代码、不用重发版。
+
+> **本机注意**: wrangler 会读 `HTTP(S)_PROXY`, 在本机代理下 TLS 会失败 ⇒ 部署/查询时先
+> `env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy npx wrangler deploy`。
+
+---
+
+## 仓库里没有任何 token / 端点(设计口径)
 
 - **GH_TOKEN 由「你」在部署时手动创建**(第 4 步, GitHub 网页生成 fine-grained PAT),
   只通过 `wrangler secret put` 存到 Cloudflare; 仓库、CI、客户端都不含 token,
   也没有任何 `.env` / 明文密钥(见根 `.gitignore` 的 `tools/diag-worker/.dev.vars*`)。
-- 客户端端点常量是 `ui/lib/src/app_meta.dart` 的 `kDiagUploadEndpoint`, **当前为空**
-  ⇒ 端上「一键匿名提交」不可点, 只保留「生成匿名诊断包」本地落盘。
-  部署完把 `https://<你的域名>/diag` 填进去再发版即可(注意要带 `/diag` 路由)。
+- 客户端端点常量是 `ui/lib/src/app_meta.dart` 的 `kDiagUploadEndpoint`(**2026-11-18 已填入线上地址**, 见下方「部署现状」)。
 - 想彻底停掉上报: Cloudflare 后台删 route 或 `npx wrangler delete`; 端上即使留着旧端点
   也只会拿到网络错误并降级成本地文件。
 

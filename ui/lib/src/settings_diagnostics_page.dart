@@ -33,10 +33,18 @@ Future<void> showDiagnosticsPage(
 }
 
 class DiagnosticsPage extends StatelessWidget {
-  const DiagnosticsPage({super.key, this.info, this.ping});
+  const DiagnosticsPage({
+    super.key,
+    this.info,
+    this.ping,
+    this.diagEndpoint = kDiagUploadEndpoint,
+  });
 
   final rust.InitInfo? info;
   final Future<String> Function()? ping;
+
+  /// 诊断上传端点。默认取构建期常量; **测试注入**(传空串 = 未配置, 演练禁用分支)。
+  final String diagEndpoint;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +87,11 @@ class DiagnosticsPage extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                _OneClickDiagTile(dataDir: info?.dataDir, info: info),
+                _OneClickDiagTile(
+                  dataDir: info?.dataDir,
+                  info: info,
+                  endpoint: diagEndpoint,
+                ),
                 const Divider(height: 1),
                 _AnonymousReportTile(dataDir: info?.dataDir, info: info),
               ],
@@ -125,10 +137,15 @@ class DiagnosticsPage extends StatelessWidget {
 /// - GitHub token 只在 Worker 侧, 客户端拿不到, issue 作者也不暴露用户;
 /// - 上传失败**一定**留一份本地文件: 小白不会两手空空(`retryable` 只决定提示口径)。
 class _OneClickDiagTile extends StatefulWidget {
-  const _OneClickDiagTile({required this.dataDir, this.info});
+  const _OneClickDiagTile({
+    required this.dataDir,
+    this.info,
+    required this.endpoint,
+  });
 
   final String? dataDir;
   final rust.InitInfo? info;
+  final String endpoint;
 
   @override
   State<_OneClickDiagTile> createState() => _OneClickDiagTileState();
@@ -137,7 +154,7 @@ class _OneClickDiagTile extends StatefulWidget {
 class _OneClickDiagTileState extends State<_OneClickDiagTile> {
   bool _busy = false;
 
-  bool get _configured => kDiagUploadEndpoint.trim().isNotEmpty;
+  bool get _configured => widget.endpoint.trim().isNotEmpty;
 
   /// UUIDv4(幂等键): 不引 uuid 依赖, 用 Random.secure 拼 16 字节。
   /// 同一次点击内复用同一个 id, Worker 据此不会重复建单。
@@ -167,7 +184,7 @@ class _OneClickDiagTileState extends State<_OneClickDiagTile> {
         info: widget.info,
       );
       final payload = await DebugReport.build(info: widget.info);
-      final result = await DiagUploader(endpoint: kDiagUploadEndpoint)
+      final result = await DiagUploader(endpoint: widget.endpoint)
           .upload(payload, clientId: _clientId());
       if (!mounted) return;
       await _showSubmitted(result);

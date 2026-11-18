@@ -15,7 +15,8 @@ const String kAppVersion = '0.25.0';
 /// 安全口径: Worker 里只用 `wrangler secret put GH_TOKEN` 存 token(由用户部署时
 /// 手动创建 fine-grained PAT, 只勾 Issues: write + 单仓库), 客户端与仓库都不含
 /// 任何 token; 客户端只拿到一个匿名 URL。
-const String kDiagUploadEndpoint = '';
+const String kDiagUploadEndpoint =
+    'https://minincm-diag.xiaquwan1001.workers.dev/diag';
 
 /// 项目 GitHub 仓库地址。
 const String kGithubUrl = 'https://github.com/xiaquwan1001/netease-mini-player';
