@@ -16,6 +16,7 @@ import 'layout.dart'
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api.dart' as rust;
+import 'stream_note.dart' show currentStreamNote, StreamNote;
 
 /// 常驻播放条的不可变数据快照。
 ///
@@ -418,42 +419,71 @@ class MiniPlayerBar extends StatelessWidget {
                                         .textTheme
                                         .titleSmall,
                                   ),
-                                  // 第二行: 艺人(· 专辑) + 位置/时长 (+ 队列序号, 仅手机端)
-                                  Text.rich(
-                                    TextSpan(
-                                      children: [
-                                        // 渐进期已登记待跳(P-10 方案 B): 必须说出来,
-                                        // 否则用户拖完等了几十秒不知道到底跳了没有。
-                                        if (queued != null)
-                                          TextSpan(
-                                            text: '已排队→${_fmt(queued)}  ',
-                                            style: TextStyle(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .primary,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        if (current?.artist.isNotEmpty ?? false)
-                                          TextSpan(text: current!.artist),
-                                        if (showAlbum)
-                                          TextSpan(
-                                            text: ' · ${current!.album}',
-                                          ),
-                                        // 位置/时长是既有信息, 任何平台都留;
-                                        // 队列排位只在手机端追加(桌面版用户口径)
+                                  // 第二行: 取链提示 + 艺人(· 专辑) + 位置/时长 (+ 队列序号, 仅手机端)
+                                  //
+                                  // 行首的「试听 00:45 / 已降级 极高」是方案 A 的信息无损展示:
+                                  // 上游 freeTrialInfo 与 level 以前整块丢掉, 45s 试听片段被当
+                                  // 整曲播。单行 ellipsis 天然不越界; 窄档(< kCompactMaxWidth)
+                                  // 本来就没有文字块, 这条提示也就不显示(要更细的提示见详情页)。
+                                  ValueListenableBuilder<
+                                    ({BigInt trackId, StreamNote note})?
+                                  >(
+                                    valueListenable: currentStreamNote,
+                                    builder: (context, slot, _) {
+                                      final noteLabel =
+                                          slot != null &&
+                                              current != null &&
+                                              slot.trackId == current.id
+                                          ? slot.note.label
+                                          : null;
+                                      return Text.rich(
                                         TextSpan(
-                                          text:
-                                              '  ${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                                              '${showQueueIndex ? '  ${data.queueIndex}/${data.queueLength}' : ''}',
+                                          children: [
+                                            if (noteLabel != null)
+                                              TextSpan(
+                                                text: noteLabel,
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            // 渐进期已登记待跳(P-10 方案 B): 必须说出来,
+                                            // 否则用户拖完等了几十秒不知道到底跳了没有。
+                                            if (queued != null)
+                                              TextSpan(
+                                                text: '已排队→${_fmt(queued)}  ',
+                                                style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .primary,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            if (current?.artist.isNotEmpty ??
+                                                false)
+                                              TextSpan(text: current!.artist),
+                                            if (showAlbum)
+                                              TextSpan(
+                                                text: ' · ${current!.album}',
+                                              ),
+                                            // 位置/时长是既有信息, 任何平台都留;
+                                            // 队列排位只在手机端追加(桌面版用户口径)
+                                            TextSpan(
+                                              text:
+                                                  '  ${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                                                  '${showQueueIndex ? '  ${data.queueIndex}/${data.queueLength}' : ''}',
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      );
+                                    },
                                   ),
                                 ],
                               ),

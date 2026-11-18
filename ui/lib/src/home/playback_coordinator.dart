@@ -13,6 +13,7 @@ import '../queue.dart';
 import '../rust/api.dart' as rust;
 import '../sleep_timer.dart';
 import '../song_actions.dart' show SongActionSource;
+import '../stream_note.dart' show StreamNote, publishStreamNote;
 import 'lyric_controller.dart';
 
 /// 播放协调器(从 main.dart 的 `_HomePageState` 搬出, 2026-11 拆壳 S4)。
@@ -362,18 +363,23 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 为什么预取: 播完一首再去取链(数百毫秒)+ 让播放器重新 prepare, 表现为
   /// 连续播放每首之间都"卡一下"。提前把下一条直链拿到手, 换曲就只剩播放器
   /// 自己的缓冲。直链有时效(约几分钟到几十分钟), 所以带时间戳, 超过 4 分钟不用。
-  final Map<int, ({String url, String level, DateTime at})> _prefetchedUrls =
-      <int, ({String url, String level, DateTime at})>{};
+  /// `note` 随直链一起存: 试听/降级是要在播放条上说的, 预取命中时不能丢。
+  final Map<int, ({String url, String level, DateTime at, StreamNote? note})>
+  _prefetchedUrls =
+      <int, ({String url, String level, DateTime at, StreamNote? note})>{};
 
   /// 取出可用的预取直链(一次性: 用过就删, 避免复用过期地址)
-  String? _takePrefetchedUrl(int trackId, String level) {
+  ({String url, StreamNote? note})? _takePrefetchedUrl(
+    int trackId,
+    String level,
+  ) {
     final hit = _prefetchedUrls.remove(trackId);
     if (hit == null) return null;
     if (hit.level != level) return null;
     if (DateTime.now().difference(hit.at) > const Duration(minutes: 4)) {
       return null;
     }
-    return hit.url;
+    return (url: hit.url, note: hit.note);
   }
 
   /// 后台预取"下一首"的直链(随机/单曲循环没有可预知的下一首, 直接跳过)。
@@ -388,7 +394,12 @@ class PlaybackCoordinator extends ChangeNotifier {
         final stream = await rust.songUrl(trackId: next.id, level: level);
         final url = stream.url;
         if (url == null || url.isEmpty) return;
-        _prefetchedUrls[id] = (url: url, level: level, at: DateTime.now());
+        _prefetchedUrls[id] = (
+          url: url,
+          level: level,
+          at: DateTime.now(),
+          note: StreamNote.fromStream(stream),
+        );
         if (_prefetchedUrls.length > 8) {
           _prefetchedUrls.remove(_prefetchedUrls.keys.first);
         }
@@ -435,15 +446,21 @@ class PlaybackCoordinator extends ChangeNotifier {
     try {
       // 先用预取的直链(有就用, 省掉几百毫秒); 没有才真的去取。
       final level = AppSettings.instance.audioLevel;
-      var url = _takePrefetchedUrl(song.id.toInt(), level);
+      final prefetched = _takePrefetchedUrl(song.id.toInt(), level);
+      String? url = prefetched?.url;
+      var note = prefetched?.note;
       if (url == null) {
         // 移动网络切网时会偶发 connection reset, 取链是幂等的, 值得重试
         final stream = await retryNetwork(
           () => rust.songUrl(trackId: song.id, level: level),
         );
         url = stream.url;
+        // 试听片段 / 静默降级 如实带出来(方案 A: 信息无损)
+        note = StreamNote.fromStream(stream);
       }
       if (url == null) {
+        // 没拿到直链 ⇒ 清掉提示(不能让上一条曲目的「试听」标签挂在别的曲子上)
+        publishStreamNote(null, null);
         if (!_disposed) {
           toastError('《${song.name}》没有可用直链(会员曲目需先登录), 已跳过');
         }
@@ -458,6 +475,8 @@ class PlaybackCoordinator extends ChangeNotifier {
       if (_streamUrlByTrack.length > 64) {
         _streamUrlByTrack.remove(_streamUrlByTrack.keys.first);
       }
+      // 播放条上的「试听 mm:ss / 已降级 极高」提示(只读展示, 不参与播放控制)
+      publishStreamNote(song.id, note);
       final state = await playback.play(
         trackId: song.id,
         url: url,
