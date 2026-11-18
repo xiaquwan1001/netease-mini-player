@@ -25,6 +25,24 @@
 #      注意: 必须 unset WAYLAND_DISPLAY + GDK_BACKEND=x11(脚本内已做), 否则 GTK 会连真实
 #      compositor, 窗口跑到用户屏幕上而 xvfb 里看不到任何子窗口。
 #
+#   ⑧ 交互级断言(P-11 剩余, 2026-11-18): 真的往应用里**注入 X11 输入**, 再断言
+#      「进程存活 + 窗口依旧 viewable + 标题不变 + 几何不变」。四段:
+#      a. 输入焦点: `xdotool windowfocus` 把 X 输入焦点移到主窗口, 再 `getwindowfocus`
+#         回读确认 —— 焦点拿不到就没法注入按键(下面 b 会 SKIP 而不是假装通过);
+#      b. 按键: 焦点确实在应用上时, 用 XTEST 发 space / Tab / space / Escape(真实事件,
+#         不是 xdotool `key --window` 的 XSendEvent —— GTK 会丢弃后者);
+#      c. 鼠标: XTEST 在播放条那一行(窗口底部 导航栏之上)横扫三个点各点一次 + 进度条
+#         一个点, 覆盖「点播放条/播放键」这类点击;
+#      d. 几何: 缩到 640x480 再缩到 320x240(矮/窄布局重新排版)再还原, 每次都断言进程
+#         存活且标题不变, 还原后几何必须回到初始值。
+#      另加: 应用日志里不得出现 `segmentation fault` / `core dumped` / `GLib-ERROR`
+#      / `Gtk-ERROR` / `FATAL`(崩溃被 X11 层「幸存」掩盖的情况)。
+#      **断言边界(为什么不更强)**: 无 WM 的 xvfb 里**观察不到 Dart 层的状态变化** ——
+#      Flutter 把语义树留空(实测 AT-SPI 只有空的 panel/filler, 见 2026-11-18 探针),
+#      窗口标题是编译期常量(不随播放/页面变化), 未登录 + 离线也拿不到能触发
+#      `touchInteraction` 的条目 ⇒ 只能断言「输入打进窗口后没崩、窗口属性没被破坏」;
+#      要断言「空格真的切了播放」得有 app 侧埋点(debug 日志/`--e2e` 通道), 目前没有。
+#
 # 退出码: 0 全通过 / 1 有断言失败 / 3 缺工具(不是失败, 门禁按 SKIP 处理)。
 set -uo pipefail
 
@@ -58,6 +76,8 @@ APP_ID=${APP_ID:-io.github.xiaquwan1001.MiniNCM}
 TMP=$(mktemp -d)
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
+# 自报成本(秒): 门禁耗时数字不要靠拍脑袋, 由脚本自己报(实现在下面).
+T_START=$(date +%s)
 
 info "bundle: $BIN"
 info "临时数据目录: $TMP/data"
@@ -184,6 +204,243 @@ case "$(grep '^WINDOW=' <<<"$OUT")" in
   *) skip "窗口断言: 缺 xwininfo" ;;
 esac
 grep -q '^SECOND_EXITED=1$' <<<"$OUT" && ok "第二个实例自行退出(严格单实例)" || bad "第二个实例没有在 2s 内退出"
+
+# ⑧ 交互级断言(P-11 剩余): 注入真实 X11 输入后, 进程/窗口属性必须不变。
+#
+# 单独开一个 xvfb + dbus session: 不和上面那轮(要测 SIGTERM 收尾)共享状态,
+# 失败时也能按段归因。用 quoted heredoc 写内层脚本(无 shell 展开), 好读也少 escape。
+if ! command -v xdotool >/dev/null 2>&1; then
+  skip "交互级断言: 缺 xdotool(按键/点击/几何注入)"
+else
+  cat > "$TMP/interact.sh" <<'INTERACT'
+#!/usr/bin/env bash
+set -uo pipefail
+BIN=$1; DATA=$2; LOG=$3; PNAME=$4
+export NCM_DATA_DIR="$DATA"
+# 同上: 不摘掉真实桌面的 WAYLAND_DISPLAY 会把窗口开到用户屏幕上
+unset WAYLAND_DISPLAY
+export GDK_BACKEND=x11
+mkdir -p "$DATA"
+"$BIN" >"$LOG" 2>&1 &
+P=$!
+trap 'kill -9 "$P" 2>/dev/null || true' EXIT
+
+# 等窗口出现**并真的 map 上来**(最多 25s; 冷启动 + Rust 内核初始化会慢于固定的 sleep).
+# 注意不能只看 search 有没有命中: 窗口对象先建出来、几帧后才 map, 那一刻
+# Map State 还是 IsUnMapped, XSetInputFocus 到未 map 的窗口会 BadMatch ⇒ 焦点拿不到。
+WID=""
+MS=""
+for _ in $(seq 1 50); do
+  # 要的是**主窗口**, 不是 xdotool search 会排在前面那个 10x10 辅助窗口(实测):
+  # 逐候选按几何筛 >= 200x200, 再要 Map State=IsViewable(未 map 的窗口 XSetInputFocus
+  # 会 BadMatch ⇒ 焦点/按键断言全废)。
+  while read -r cand; do
+    [ -n "$cand" ] || continue
+    cg=$(xwininfo -id "$cand" 2>/dev/null | awk '/^  Width:/{w=$2} /^  Height:/{h=$2} END{print w" "h}')
+    cw=${cg% *}; ch=${cg#* }
+    [ "${cw:-0}" -ge 200 ] 2>/dev/null || continue
+    [ "${ch:-0}" -ge 200 ] 2>/dev/null || continue
+    WID=$cand
+    MS=$(xwininfo -id "$WID" 2>/dev/null | sed -n 's/^ *Map State: *//p')
+    [ "$MS" = "IsViewable" ] && break
+  done <<<"$(xdotool search --name "$PNAME" 2>/dev/null)"
+  [ "$MS" = "IsViewable" ] && break
+  sleep 0.5
+done
+if [ -z "$WID" ]; then
+  echo "INTERACT_WINDOW=0"
+  exit 0
+fi
+if [ "$MS" != "IsViewable" ]; then
+  echo "INTERACT_WINDOW=2"   # 窗口有了但一直没 map 上来
+  exit 0
+fi
+sleep 0.5
+echo "INTERACT_WINDOW=1"
+
+# 一次采齐「几何/标题/映射状态」: 全部走 X11 查询, 不依赖截图
+props() {
+  local g t m
+  g=$(xwininfo -id "$WID" 2>/dev/null \
+    | awk '/^  Width:/{w=$2} /^  Height:/{h=$2} END{print w"x"h}')
+  t=$(xdotool getwindowname "$WID" 2>/dev/null)
+  m=$(xwininfo -id "$WID" 2>/dev/null | sed -n 's/^ *Map State: *//p')
+  echo "${1}_GEO=$g"
+  echo "${1}_TITLE=$t"
+  echo "${1}_MAP=$m"
+}
+alive() { if kill -0 "$P" 2>/dev/null; then echo "${1}=1"; else echo "${1}=0"; fi; }
+
+BASE_LINES=$(props BASE)
+printf '%s\n' "$BASE_LINES"
+BASE_GEO=$(sed -n 's/^BASE_GEO=//p' <<<"$BASE_LINES" | head -1)
+
+# --- a. 输入焦点: 无 WM 的 xvfb 里 windowactivate 不可用(要 EWMH 窗口管理器), 但
+#        windowfocus = XSetInputFocus 不需要 WM; 回读 getwindowfocus 自证焦点真的到了应用上。
+xdotool windowfocus --sync "$WID" 2>/dev/null
+FOCUS=$(xdotool getwindowfocus 2>/dev/null)
+if [ "$FOCUS" = "$WID" ]; then echo "FOCUS_TAKEN=1"; else echo "FOCUS_TAKEN=0"; fi
+echo "FOCUS_GOT=$FOCUS"
+
+# --- b. 按键(XTEST 真实事件; 焦点不在应用上就如实标 SENT=0, 不假装通过)
+if [ "$FOCUS" = "$WID" ]; then
+  KRC=0
+  for k in space Tab space Escape; do
+    xdotool key --clearmodifiers "$k" || KRC=1
+    sleep 0.2
+  done
+  echo "KEYS_SENT=1"
+  echo "KEYS_RC=$KRC"
+else
+  echo "KEYS_SENT=0"
+  echo "KEYS_RC=1"
+fi
+sleep 1
+alive ALIVE_AFTER_KEYS
+props KEYS
+
+# --- c. 鼠标: 在播放条那一行横扫(窗口宽 15% / 50% / 85%, 高度 = 底边上方 110px ⇒
+#        落在「播放进度条 + 信息/控件行」里, 导航栏在它下面约 80px), 再加进度条一点。
+W=${BASE_GEO%%x*}
+H=${BASE_GEO##*x}
+CROW=$(( H - 110 ))
+CSLIDER=$(( H - 140 ))
+CRC=0
+for x in $(( W * 15 / 100 )) $(( W / 2 )) $(( W * 85 / 100 )); do
+  xdotool mousemove --sync --window "$WID" "$x" "$CROW" || CRC=1
+  xdotool click 1 || CRC=1
+  sleep 0.4
+done
+xdotool mousemove --sync --window "$WID" $(( W / 2 )) "$CSLIDER" || CRC=1
+xdotool click 1 || CRC=1
+echo "CLICKS_DONE=4"
+echo "CLICKS_RC=$CRC"
+sleep 1
+alive ALIVE_AFTER_CLICKS
+props CLICKS
+
+# --- d. 几何: 缩小(窄/矮布局重新排版) ⇒ 还原几何必须回到初始值
+xdotool windowsize --sync "$WID" 640 480 || true
+sleep 1.5
+props SHRINK
+alive ALIVE_AFTER_SHRINK
+xdotool windowsize --sync "$WID" 320 240 || true
+sleep 1.5
+props TINY
+alive ALIVE_AFTER_TINY
+xdotool windowsize --sync "$WID" "$W" "$H" || true
+sleep 1.5
+props RESTORE
+alive ALIVE_AFTER_RESTORE
+echo "BASE_GEO_USED=$BASE_GEO"
+
+# --- e. 顶层窗口没多出来(没有崩溃弹窗/重复主窗口)
+echo "APP_WINDOWS=$(xdotool search --name "$PNAME" 2>/dev/null | wc -l)"
+
+kill -TERM "$P" 2>/dev/null || true
+sleep 1
+kill -9 "$P" 2>/dev/null || true
+INTERACT
+  chmod +x "$TMP/interact.sh"
+  WINDOW_TITLE=$(sed -n 's/^TITLE=//p' <<<"$OUT" | head -1)
+  OUTI=$(timeout -k 10 120 xvfb-run -a dbus-run-session -- \
+    "$TMP/interact.sh" "$BIN" "$TMP/interact/data" "$TMP/interact.log" \
+    "${WINDOW_TITLE:-轻音 MiniNCM}" 2>&1)
+  printf '%s\n' "$OUTI" | grep -E '^(INTERACT_WINDOW|BASE_|FOCUS_|KEYS_|ALIVE_AFTER_KEYS|CLICKS_|ALIVE_AFTER_CLICKS|SHRINK_|TINY_|RESTORE_|ALIVE_AFTER|APP_WINDOWS|BASE_GEO_USED)=' \
+    | sed 's/^/  | /'
+  if ! grep -q '^INTERACT_WINDOW=1$' <<<"$OUTI"; then
+    bad "交互级断言: 25s 内没等到 map 上来的主窗口($(grep '^INTERACT_WINDOW=' <<<"$OUTI"))"
+  else
+    IBASE_GEO=$(sed -n 's/^BASE_GEO=//p' <<<"$OUTI" | head -1)
+    IBASE_TITLE=$(sed -n 's/^BASE_TITLE=//p' <<<"$OUTI" | head -1)
+    IBASE_MAP=$(sed -n 's/^BASE_MAP=//p' <<<"$OUTI" | head -1)
+    # 初始状态本身是后面所有「没变」断言的基准
+    if [ -n "$IBASE_GEO" ] && [ "$IBASE_MAP" = "IsViewable" ]; then
+      ok "交互前基准: 几何 $IBASE_GEO / 标题 '$IBASE_TITLE' / viewable"
+    else
+      bad "交互前基准取不到(几何 '${IBASE_GEO:-}' 映射 '${IBASE_MAP:-}')"
+    fi
+
+    # a/b 焦点 + 按键
+    if grep -q '^FOCUS_TAKEN=1$' <<<"$OUTI"; then
+      ok "X 输入焦点已切到主窗口(windowfocus 回读一致)"
+      if grep -q '^KEYS_RC=0$' <<<"$OUTI"; then
+        ok "按键已注入(space/Tab/space/Escape, XTEST)"
+      else
+        bad "按键注入失败(xdotool key 返回非 0)"
+      fi
+      if grep -q '^ALIVE_AFTER_KEYS=1$' <<<"$OUTI"; then
+        ok "按键后进程存活"
+      else
+        bad "按键后进程退出"
+      fi
+      IKG=$(sed -n 's/^KEYS_GEO=//p' <<<"$OUTI" | head -1)
+      IKT=$(sed -n 's/^KEYS_TITLE=//p' <<<"$OUTI" | head -1)
+      IKM=$(sed -n 's/^KEYS_MAP=//p' <<<"$OUTI" | head -1)
+      if [ "$IKG" = "$IBASE_GEO" ] && [ "$IKT" = "$IBASE_TITLE" ] && [ "$IKM" = "$IBASE_MAP" ]; then
+        ok "按键后窗口属性不变(几何/标题/映射状态)"
+      else
+        bad "按键后窗口属性变了(几何 '${IKG:-}' 标题 '${IKT:-}' 映射 '${IKM:-}')"
+      fi
+    else
+      skip "按键断言: 拿不到 X 输入焦点(windowfocus 回读 $(sed -n 's/^FOCUS_GOT=//p' <<<"$OUTI" | head -1))"
+    fi
+
+    # c 点击
+    if grep -q '^ALIVE_AFTER_CLICKS=1$' <<<"$OUTI"; then
+      ok "播放条点击后进程存活($(sed -n 's/^CLICKS_DONE=//p' <<<"$OUTI" | head -1) 次 XTEST 点击)"
+    else
+      bad "播放条点击后进程退出"
+    fi
+    ICG=$(sed -n 's/^CLICKS_GEO=//p' <<<"$OUTI" | head -1)
+    ICT=$(sed -n 's/^CLICKS_TITLE=//p' <<<"$OUTI" | head -1)
+    ICM=$(sed -n 's/^CLICKS_MAP=//p' <<<"$OUTI" | head -1)
+    if [ "$ICG" = "$IBASE_GEO" ] && [ "$ICT" = "$IBASE_TITLE" ] && [ "$ICM" = "$IBASE_MAP" ]; then
+      ok "点击后窗口属性不变(几何/标题/映射状态)"
+    else
+      bad "点击后窗口属性变了(几何 '${ICG:-}' 标题 '${ICT:-}' 映射 '${ICM:-}')"
+    fi
+
+    # d 几何交互: 缩到 640x480 / 320x240 再还原
+    ISG=$(sed -n 's/^SHRINK_GEO=//p' <<<"$OUTI" | head -1)
+    ITG=$(sed -n 's/^TINY_GEO=//p' <<<"$OUTI" | head -1)
+    IRG=$(sed -n 's/^RESTORE_GEO=//p' <<<"$OUTI" | head -1)
+    if [ "$ISG" = "640x480" ] && grep -q '^ALIVE_AFTER_SHRINK=1$' <<<"$OUTI"; then
+      ok "缩窗到 640x480 生效且进程存活(窄布局重新排版不崩)"
+    else
+      bad "缩窗到 640x480 异常(几何 '${ISG:-}')"
+    fi
+    if [ "$ITG" = "320x240" ] && grep -q '^ALIVE_AFTER_TINY=1$' <<<"$OUTI"; then
+      ok "缩窗到 320x240 生效且进程存活(极小窗口重新排版不崩)"
+    else
+      bad "缩窗到 320x240 异常(几何 '${ITG:-}')"
+    fi
+    IRT=$(sed -n 's/^RESTORE_TITLE=//p' <<<"$OUTI" | head -1)
+    IRM=$(sed -n 's/^RESTORE_MAP=//p' <<<"$OUTI" | head -1)
+    if [ "$IRG" = "$IBASE_GEO" ] && grep -q '^ALIVE_AFTER_RESTORE=1$' <<<"$OUTI" \
+        && [ "$IRT" = "$IBASE_TITLE" ] && [ "$IRM" = "IsViewable" ]; then
+      ok "还原几何到 $IRG 且标题/viewable 不变"
+    else
+      bad "还原几何失败(几何 '${IRG:-}' 标题 '${IRT:-}' 映射 '${IRM:-}')"
+    fi
+
+    # e 仍然只有一个主窗口
+    if [ "$(sed -n 's/^APP_WINDOWS=//p' <<<"$OUTI" | head -1)" = "1" ]; then
+      ok "交互后仍只有一个主窗口(没冒出崩溃弹窗/重复窗口)"
+    else
+      bad "交互后主窗口数 != 1($(sed -n 's/^APP_WINDOWS=//p' <<<"$OUTI" | head -1))"
+    fi
+
+    # f 日志里不能有崩溃痕迹(SIGSEGV 后进程偶尔还「活着」到下一帧, 只看存活不够)
+    FATAL=$(grep -aiE 'segmentation fault|core dumped|GLib-ERROR|Gtk-ERROR|^FATAL|panic' \
+      "$TMP/interact.log" 2>/dev/null | head -3)
+    if [ -z "$FATAL" ]; then
+      ok "交互全程应用日志无崩溃痕迹(segfault/core/GLib-ERROR/panic)"
+    else
+      bad "交互过程中日志出现崩溃痕迹: $FATAL"
+    fi
+  fi
+fi
 
 # ⑦ 关闭按钮行为(lane/tray-close): 默认"直接退出" + 设置成托盘时"隐藏(无宿主则降级)"。
 #
@@ -427,3 +684,6 @@ if [ "$FAILED" -ne 0 ]; then
   exit 1
 fi
 echo "桌面无头冒烟: PASS"
+# 分项成本(只报一段"非窗口启动"的粗口径): ①~⑥ ≈ 进程启动 8s + 单实例/信号判定,
+# ⑧ 交互段 ≈ 一次 xvfb+dubus 重启 + 焦点/按键/点击/三轮改尺寸, ␇ 关闭行为 ≈ 三次会话.
+info "耗时 $(( $(date +%s) - T_START ))s(含首次启动/交互/三次关闭行为会话)"

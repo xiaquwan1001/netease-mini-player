@@ -22,7 +22,10 @@
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
 #   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 已 0 error, 在 verify 里)
-#   tools/ci-gates.sh desktop-smoke        # 桌面无头启动冒烟(xvfb+dbus; 没 bundle / 缺工具就 SKIP 退 0)
+#   tools/ci-gates.sh desktop-smoke        # 桌面无头冒烟(xvfb+dbus; 没 bundle / 缺工具就 SKIP 退 0)
+#                                          # 含**交互级断言**(X11 注入焦点/按键/点击/改尺寸后断言存活+窗口属性不变,
+#                                          # 见 tools/smoke-desktop-headless 头注释), 本机约 **60s**
+#                                          # (vs 只有启动/单实例/信号时的 45s; 交互段 +15s)
 #   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test
 #                                          # + android-unit + android-lint);
 #                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
@@ -187,9 +190,11 @@ cmd_android_instrumented() {
 }
 
 cmd_desktop_smoke() {
-  echo "+ bash tools/smoke-desktop-headless"
+  echo "+ bash tools/smoke-desktop-headless(含交互级断言, 本机 ≈60s)"
   local rc=0
+  local t0=$(date +%s)
   bash "$ROOT/tools/smoke-desktop-headless" || rc=$?
+  echo "desktop-smoke 耗时 $(( $(date +%s) - t0 ))s(rc=$rc)"
   case $rc in
     0) : ;;
     3) echo "SKIP desktop-smoke: 缺 bundle 或 xvfb/dbus(不是失败)" ;;
