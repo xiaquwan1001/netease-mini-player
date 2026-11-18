@@ -23,6 +23,7 @@ import '../keystore.dart';
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
+import '../lifecycle_guard.dart' show runPostFrameIfAlive;
 import '../lyric.dart';
 import '../marquee_text.dart';
 import '../medal_wall.dart';
@@ -1023,8 +1024,8 @@ class _HomePageState extends State<HomePage> {
     final topBar = _buildTopBar(context, current);
     // 播放条数据快照 + 底部导航由根布局渲染(MaterialApp.builder 的 PlayerBarHost):
     // 二级路由压上来时播放条仍然在场, 这里只负责把当前数据投递过去.
-    _publishPlayerBar(player, current);
-    publishBottomBar(_buildBottomBar(context));
+    _publishPlayerBar(context, player, current);
+    publishBottomBar(context, _buildBottomBar(context));
     return Scaffold(
       appBar: topBar,
       // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
@@ -1626,7 +1627,14 @@ class _HomePageState extends State<HomePage> {
   /// 投递播放条数据快照(帧后; 与上一份相等时 ValueNotifier 不通知 → 播放条不重建)。
   ///
   /// 没有曲目时不投(Media3 连接前拿到的是一份空状态, 空态不占位置)。
-  void _publishPlayerBar(PlayerView? player, rust.SongDto? current) {
+  ///
+  /// 帧后回调一律过 [runPostFrameIfAlive](U-05): 首页在这一帧之后被销毁时,
+  /// 旧实例的数据/播放态不准再写进全局槽位(播放条、列表高亮会读到死页面的状态)。
+  void _publishPlayerBar(
+    BuildContext context,
+    PlayerView? player,
+    rust.SongDto? current,
+  ) {
     final showBar =
         player != null && (player.trackId != null || current != null);
     final PlayerBarData? data = !showBar
@@ -1652,7 +1660,7 @@ class _HomePageState extends State<HomePage> {
         hasTrack: showBar,
       ),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    runPostFrameIfAlive(context, () {
       playerBarData.value = data;
       // 全局"正在播放"样本(见 src/now_playing.dart): 所有列表行的播放态高亮
       // 都读它 —— 以前各页自己传 currentTrackId, 少接一处(如完整日推歌单)

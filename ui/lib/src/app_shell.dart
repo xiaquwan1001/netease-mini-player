@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app_settings.dart';
 import 'home/home_page.dart' show HomePage;
 import 'layout.dart' show ContentWidthLimit, kRailWidth;
+import 'lifecycle_guard.dart' show runPostFrameIfAlive;
 import 'player_bar.dart';
 import 'popup_routes.dart' show dismissPopupRoute;
 import 'song_actions.dart';
@@ -123,6 +124,34 @@ class NcmRouteObserver extends NavigatorObserver {
     }
     _down();
   }
+
+  /// `pushReplacement` / `Navigator.replace` 的钩子(U-07)。
+  ///
+  /// 替换**既不是 push 也不是 pop**: 不接这一路的话, 被换掉那条的账永远收不回来 —
+  /// 用 `pushReplacement` 把一层全屏页换成弹层, [pageDepth] 就永久停在 2
+  /// (底部导航再也不出现); 把弹层换成全屏页, [modalRouteOpen] 就永久 true
+  /// (宽屏两侧留白一直压暗), 而且 [NcmRouteObserver._popups] 还留着死 route,
+  /// [dismissAllPopups] 会去关一条已经不在栈上的浮层。
+  ///
+  /// 口径与 push/pop 完全一致: 按"先摘旧的、再挂新的"记账。净效果:
+  /// 全屏↔全屏 层数不变, 全屏→弹层 层数 -1 且并入弹层登记表, 弹层→全屏 反之。
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute != null) {
+      if (oldRoute is PopupRoute) {
+        _popupDown(oldRoute);
+      } else {
+        _down();
+      }
+    }
+    if (newRoute != null) {
+      if (newRoute is PopupRoute) {
+        _popupUp(newRoute);
+      } else {
+        _up();
+      }
+    }
+  }
 }
 
 /// 根 Navigator 上当前压着的浮层(栈序: 底 → 顶)的只读快照。排查/测试用。
@@ -172,10 +201,11 @@ final ValueNotifier<PlayerBarActions?> playerBarActions =
 ///
 /// 必须在帧后投递: 槽位的监听者是 Navigator 的祖先, 在 HomePage.build 里同步写
 /// ValueNotifier 等于在 build 阶段 markNeedsBuild 祖先 → "setState() called during build"。
-void publishBottomBar(Widget? bar) {
-  WidgetsBinding.instance.addPostFrameCallback(
-    (_) => playerBarSlot.value = bar,
-  );
+///
+/// [context] 是给"帧后回调"用的存活判据(U-05): 首页在两次构建之间被销毁时,
+/// 它的旧导航栏(以及旧闭包)不能再写进全局槽位, 见 [runPostFrameIfAlive]。
+void publishBottomBar(BuildContext context, Widget? bar) {
+  runPostFrameIfAlive(context, () => playerBarSlot.value = bar);
 }
 
 /// 应用外壳: Navigator 与常驻底部条一起放进一个全屏 Overlay。

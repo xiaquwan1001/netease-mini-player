@@ -31,10 +31,19 @@ import '../update_checker.dart';
 /// | 启动检查的更新弹窗 | pendingPrompt.addListener | removeListener |
 /// | 根导航层数(底部 tab 让位) | pageDepth.addListener | removeListener |
 ///
-/// **多实例语义与拆分前一致**: attach 仍是"后建覆盖先建"; 区别只在销毁时
-/// 会把自己装的那份摘掉。[_latest] 记住最近一次 attach 的实例, 只有它才是
-/// 当前全局钩子的主人 —— 旧实例先销毁时不得清掉新实例的绑定。
-/// 因此不需要引用计数: 页面在同一时刻只有一个"最新"实例, 全局槽位也只该认一份。
+/// **多实例语义**: attach 仍是"后建覆盖先建"; 区别只在销毁时不再把槽位留给下一个
+/// 实例, 而是按 attach 顺序**交还**给仍然活着的上一个([_alive] 栈)。
+///
+/// 为什么是栈而不是"最近一次 attach"的单指针(U-06): 单指针只记最后一个, 于是
+/// `A attach → B attach → B detach` 时主人直接变 null ⇒ 全局槽位被清空,
+/// 而 A 明明还活着(它的监听器都还挂着), 通知栏/耳机键/托盘/"..."菜单/播放条回调
+/// 全部失效(要等下一个 HomePage 实例把槽位重新装上)。栈让 B 走掉时把所有权还给 A。
+///
+/// 不会在"真实多页面"下退化: 生产里同一时刻只有一个 HomePage 实例在树上(根 tab
+/// 容器就是它), 栈深恒为 1; 栈 >1 只出现在"新实例已 attach、旧实例还没 dispose"
+/// 的交接帧(测试里反复建/销毁 HomePage, 或热重启), 那时的正确语义正是
+/// "新的拥有槽位, 新的走掉就把槽位还给旧的那个"。也不需要引用计数: 每个实例
+/// 的 attach/detach 严格配对([_attached]), 栈里不会有重复项。
 class HomeWiring {
   HomeWiring({
     required this.onNext,
@@ -79,16 +88,37 @@ class HomeWiring {
   final VoidCallback onPageDepthChanged;
   final VoidCallback onAudioSettingsChanged;
 
-  /// 最近一次 attach 的实例: 只有它销毁时才有权清空全局槽位。
-  static HomeWiring? _latest;
+  /// 仍然存活的实例, **按 attach 顺序**: 栈顶是当前全局槽位的主人。
+  static final List<HomeWiring> _alive = <HomeWiring>[];
+
+  /// 当前主人(栈顶): 只有它销毁时才有权改全局槽位。
+  static HomeWiring? get _latest => _alive.isEmpty ? null : _alive.last;
 
   bool _attached = false;
+
+  /// [buildActionsHost] 的结果: 恢复(交还)时复用同一份, 不重新构造宿主。
+  SongActionHost? _host;
 
   /// 注册全部钩子。重复调用是幂等的(静态 setter/槽位都是覆盖写,
   /// 监听器由 [_attached] 挡住不会重复加)。
   void attach() {
     if (_attached) return;
     _attached = true;
+    _alive.remove(this);
+    _alive.add(this);
+    // 一对 add/remove 的监听器只在这里加(恢复/交还时不加, 否则会重复监听)。
+    AppSettings.instance.addListener(onAudioSettingsChanged);
+    UpdateCheckHost.pendingPrompt.addListener(onUpdatePrompt);
+    pageDepth.addListener(onPageDepthChanged);
+    // 每次 attach 重新构造动作宿主(登录态可能已变); 交还时复用同一份, 见下。
+    _host = buildActionsHost();
+    _installSlots();
+  }
+
+  /// 把本实例的回调写进进程级槽位。attach 与"上位实例销毁后交还"共用。
+  ///
+  /// 只碰**覆盖写**的静态 setter/槽位; 那三条 addListener 不在这里(见 [attach])。
+  void _installSlots() {
     // 顺序与拆分前的 initState 一致: setSkipHandlers 会 flush 排队中的原生动作,
     // 所以必须先注册它再注册 setActionHandlers。
     Playback.setSkipHandlers(
@@ -110,31 +140,40 @@ class HomeWiring {
         onToggleLike: () => unawaited(onToggleLike()),
       ),
     );
-    AppSettings.instance.addListener(onAudioSettingsChanged);
-    actionsHost.value = buildActionsHost();
-    // 播放条回调槽位只赋这一次(同一实例, 之后不再变); 帧后投递, 避免在
-    // initState 所在的构建阶段通知 PlayerBarHost 的祖先。
-    // detach 早于这一帧时(建完即销毁的实例)不要把它复活成悬挂引用。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_attached) return;
-      playerBarActions.value = playerBarActions.value ?? barActions;
-    });
+    // 宿主建一次就存下: 交还(restore)时写回同一份, 不重复构造。
+    actionsHost.value = _host ??= buildActionsHost();
     ArtistNav.onOpenAlbum = openAlbum;
-    UpdateCheckHost.pendingPrompt.addListener(onUpdatePrompt);
-    pageDepth.addListener(onPageDepthChanged);
-    _latest = this;
+    // 播放条回调槽位: 帧后投递, 避免在 initState 所在的构建阶段通知
+    // PlayerBarHost 的祖先。帧前后被销毁/被下一个实例顶掉时都不要写
+    // (建完即销毁的实例不该再复活成悬挂引用)。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_attached || !identical(_latest, this)) return;
+      playerBarActions.value = barActions;
+    });
   }
 
   /// 解绑全部钩子。监听器总是摘掉自己的(闭包引用是本实例的);
-  /// 全局单例槽位只在"我还是最新那个"时清空, 免得把后建实例的绑定清掉。
+  /// 全局槽位只由"当前主人"改 —— 自己不是主人时什么都不碰, 更不会清空。
   void detach() {
     if (!_attached) return;
     _attached = false;
     AppSettings.instance.removeListener(onAudioSettingsChanged);
     UpdateCheckHost.pendingPrompt.removeListener(onUpdatePrompt);
     pageDepth.removeListener(onPageDepthChanged);
-    if (!identical(_latest, this)) return;
-    _latest = null;
+    final wasLatest = identical(_latest, this);
+    _alive.remove(this);
+    if (!wasLatest) return;
+    final next = _latest;
+    if (next != null) {
+      // 交还: A attach → B attach → B detach ⇒ A 重新拥有全局槽位(它还活着)。
+      next._installSlots();
+      return;
+    }
+    _clearSlots();
+  }
+
+  /// 没有存活实例了: 把进程级槽位恢复成"未注册"状态。
+  static void _clearSlots() {
     // 三个 null = 未注册: 原生动作会重新进排队区, 而不是调到已销毁的 State。
     Playback.setSkipHandlers();
     Playback.setActionHandlers();
