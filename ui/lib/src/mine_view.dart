@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'app_sheet.dart';
 import 'async_view.dart';
 import 'cloud_page.dart' show showCloudPage;
 import 'cover_row.dart';
@@ -187,8 +188,8 @@ class _MineViewState extends State<MineView> {
   /// cookie), FFI 暴露 updateSignature(signature: String); 注入
   /// MineView.saveSignature 后这里自动变成真保存。
   Future<void> _editSignature() async {
-    final text = await showDialog<String>(
-      context: context,
+    final text = await showAppDialog<String>(
+      context,
       builder: (_) => _SignatureEditDialog(initial: _profile?.signature ?? ''),
     );
     if (text == null || !mounted) return;

@@ -8,12 +8,14 @@ import '../album_preview.dart';
 import '../app_settings.dart';
 import '../app_shell.dart';
 import '../app_meta.dart';
+import '../app_sheet.dart';
 import '../artist_page.dart';
 import '../audio_tuning.dart';
 import '../auth.dart';
 import '../back_policy.dart';
 import '../cover_backdrop.dart';
 import '../cover_palette.dart';
+import '../detail_faces.dart';
 import '../detail_page.dart';
 import '../desktop_integration.dart';
 import '../desktop_shell.dart';
@@ -518,8 +520,8 @@ class _HomePageState extends State<HomePage> {
     if (pending == null || !mounted) return;
     final home = Platform.environment['HOME'] ?? '';
     if (home.isEmpty) return;
-    final agree = await showDialog<bool>(
-      context: context,
+    final agree = await showAppDialog<bool>(
+      context,
       builder: (ctx) => AlertDialog(
         title: const Text('集成到应用菜单?'),
         content: const Text(
@@ -1578,45 +1580,53 @@ class _HomePageState extends State<HomePage> {
               }
               return false;
             },
-            child: Stack(
-              children: [
-                Positioned.fill(child: body),
-                // 曾经在这里常驻一行"逐字歌词 · 网易云"来源小字(左下角),
-                // 用户反馈那是一条像水印的文本框, 已去掉(2026-11)。
-                // 打分/择优的实现与单测仍在 lyricSourceLabel / scoreWordLyric.
+            // 歌词面 ⇄ 封面面: 轻点画面切换(再点回歌词); 歌词面用 Offstage 常驻,
+            // 切回来滚动位置不丢。播客单集播放时进队列的也是 SongDto, 同一个控件。
+            child: DetailFaces(
+              trackId: _current?.id,
+              coverUrl: _current?.coverUrl,
+              // 多选态里点行 = 选中某句, 不是切面
+              tappable: !_lyric.selecting,
+              lyrics: Stack(
+                children: [
+                  Positioned.fill(child: body),
+                  // 曾经在这里常驻一行"逐字歌词 · 网易云"来源小字(左下角),
+                  // 用户反馈那是一条像水印的文本框, 已去掉(2026-11)。
+                  // 打分/择优的实现与单测仍在 lyricSourceLabel / scoreWordLyric.
 
-                // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
-                // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.
-                Positioned(
-                  right: 8,
-                  bottom: 8,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_lyric.hasTranslation)
-                        IconButton.filledTonal(
-                          tooltip: AppSettings.instance.lyricTranslation
-                              ? '关闭翻译'
-                              : '显示翻译',
-                          icon: Icon(
-                            Icons.translate,
-                            size: 20,
-                            color: AppSettings.instance.lyricTranslation
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
+                  // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
+                  // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_lyric.hasTranslation)
+                          IconButton.filledTonal(
+                            tooltip: AppSettings.instance.lyricTranslation
+                                ? '关闭翻译'
+                                : '显示翻译',
+                            icon: Icon(
+                              Icons.translate,
+                              size: 20,
+                              color: AppSettings.instance.lyricTranslation
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                            onPressed: _lyric.toggleTranslation,
                           ),
-                          onPressed: _lyric.toggleTranslation,
+                        if (_lyric.hasTranslation) const SizedBox(height: 8),
+                        IconButton.filledTonal(
+                          tooltip: '定位到当前歌词',
+                          icon: const Icon(Icons.my_location, size: 20),
+                          onPressed: _lyric.locateCurrent,
                         ),
-                      if (_lyric.hasTranslation) const SizedBox(height: 8),
-                      IconButton.filledTonal(
-                        tooltip: '定位到当前歌词',
-                        icon: const Icon(Icons.my_location, size: 20),
-                        onPressed: _lyric.locateCurrent,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../album_preview.dart';
+import '../app_sheet.dart';
 import '../app_settings.dart';
 import '../artist_page.dart';
 import '../comment_thread.dart' show commentSourceKindLabel;
@@ -228,9 +229,11 @@ class SongActionWiring {
     final context = contextOf();
     if (!context.mounted) return;
     // 返回 PlaylistDto(选已有歌单) 或 'create'(新建歌单)
-    final picked = await showModalBottomSheet<Object>(
-      context: context,
-      showDragHandle: true,
+    final picked = await showAppSheet<Object>(
+      context,
+      // 迁移前没写 isScrollControlled(= showModalBottomSheet 的 false):
+      // 面板高度 0.6 屏会被 9/16 屏上限夹住, 这里保持旧的夹取行为
+      isScrollControlled: false,
       builder: (sheetContext) => SafeArea(
         child: SizedBox(
           height: MediaQuery.of(sheetContext).size.height * 0.6,
@@ -298,8 +301,8 @@ class SongActionWiring {
   Future<void> _createPlaylistAndAdd(rust.SongDto song) async {
     final context = contextOf();
     final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
+    final name = await showAppDialog<String>(
+      context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('新建歌单'),
         content: TextField(
@@ -337,9 +340,10 @@ class SongActionWiring {
   Future<void> _showShareSong(rust.SongDto song) async {
     final context = contextOf();
     final link = 'https://music.163.com/#/song?id=${song.id}';
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
+    await showAppSheet<void>(
+      context,
+      // 迁移前没写 isScrollControlled(= false); 三行小列表, 保持旧口径
+      isScrollControlled: false,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart' show showAppDialog;
 import '../app_settings.dart' show AppSettings;
 import '../notification_mode.dart' show nextNotificationMode;
 import '../play_queue_sheet.dart';
@@ -189,8 +190,8 @@ class QueueSheetController extends ChangeNotifier {
     final context = contextOf();
     if (!context.mounted) return;
     var dontShowAgain = false;
-    await showDialog<void>(
-      context: context,
+    await showAppDialog<void>(
+      context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setLocal) => AlertDialog(
           title: const Text('小提示'),

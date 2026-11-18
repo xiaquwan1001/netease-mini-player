@@ -14,9 +14,8 @@
 #       ui/lib/src/app_sheet.dart     —— 入口本身
 #       ui/lib/src/popup_routes.dart  —— 造 route 的底层扳手
 #       ui/test/**                    —— 测试要构造"裸"浮层来验证登记表/遮罩(不在本脚本扫描范围)
-#   · 待迁移(U-03 第二批, 别的车道在改): mine_view.dart / app_shell.dart /
-#     detail/podcast_detail_page.dart / home/** —— 列在 PENDING 里, 且**条数不许增长**
-#     (PENDING_EXPECT 是冻结值); 第二批落地后把它们从 PENDING 删掉、把 PENDING_EXPECT 减到 0。
+#   · **没有待迁移名单了**(U-03 第二批, 2026-11-18 落地): 白名单外一处直连都不许有。
+#     真需要新例外, 先改本脚本并写明理由(目前无例外)。
 #
 # 用法:
 #   tools/check-sheet-entry.sh            # 门禁模式: 有违规退出 1
@@ -28,15 +27,13 @@ self_test=0
 for arg in "$@"; do
   case "$arg" in
     --self-test) self_test=1 ;;
-    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown arg: $arg" >&2; exit 2 ;;
   esac
 done
 
 LIB="ui/lib/src"
 ALLOW='^(ui/lib/src/app_sheet\.dart|ui/lib/src/popup_routes\.dart):'
-PENDING='^ui/lib/src/(mine_view|app_shell)\.dart:|^ui/lib/src/detail/podcast_detail_page\.dart:|^ui/lib/src/home/'
-PENDING_EXPECT=7
 
 # 真实调用 = 函数名 + 可选泛型实参 + "(" ; 只提名字(注释/文档)不匹配。
 PATTERN='\b(showModalBottomSheet|showDialog|showGeneralDialog|showBottomSheet)[[:space:]]*(<[^>]*>)?[[:space:]]*\('
@@ -60,7 +57,7 @@ Future<void> selftest(BuildContext context) async {
   );
 }
 DART
-  if [ -n "$(scan | grep -Ev "$PENDING")" ]; then
+  if [ -n "$(scan)" ]; then
     echo "OK: self-test 生效(临时文件里的直连调用被抓到)"
     exit 0
   fi
@@ -68,15 +65,7 @@ DART
   exit 1
 fi
 
-pending=$(scan | grep -E "$PENDING" || true)
-violations=$(scan | grep -Ev "$PENDING" || true)
-n_pending=$(printf '%s' "$pending" | grep -c . || true)
-
-if [ "$n_pending" -gt "$PENDING_EXPECT" ]; then
-  echo "::error::待迁移清单(U-03 第二批)从 $PENDING_EXPECT 处涨到 $n_pending 处 —— 新代码不许再直连:"
-  echo "$pending"
-  exit 1
-fi
+violations=$(scan)
 
 if [ -n "$violations" ]; then
   echo "::error::浮层直连(必须走 ui/lib/src/app_sheet.dart 的 showAppSheet / showAppDialog):"
@@ -90,9 +79,4 @@ if [ -n "$violations" ]; then
   exit 1
 fi
 
-if [ "$n_pending" -gt 0 ]; then
-  echo "OK: 白名单外 0 处直连; 待 U-03 第二批迁移 $n_pending 处(冻结上限 $PENDING_EXPECT):"
-  echo "$pending" | sed 's/^/  /'
-else
-  echo "OK: ui/lib/src 的浮层全部经 app_sheet.dart 入口(白名单: app_sheet.dart / popup_routes.dart / ui/test)"
-fi
+echo "OK: ui/lib/src 的浮层全部经 app_sheet.dart 入口(白名单: app_sheet.dart / popup_routes.dart / ui/test)"

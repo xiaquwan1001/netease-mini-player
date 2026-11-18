@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../app_sheet.dart';
 import '../comment_thread.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
@@ -304,10 +305,9 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     final display = _display;
     if (index < 0 || index >= display.length) return;
     final p = display[index];
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
+    // isScrollControlled / showDragHandle 迁移前就是 true(= 入口默认), 省略
+    await showAppSheet<void>(
+      context,
       builder: (_) => ProgramDetailSheet(
         program: p,
         loadDetail: widget.loadProgramDetail,

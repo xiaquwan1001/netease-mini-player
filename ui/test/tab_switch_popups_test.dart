@@ -21,10 +21,11 @@ import 'package:minincm/src/app_shell.dart'
         openPopups,
         pageDepth;
 import 'package:minincm/src/home/queue_sheet_controller.dart';
+import 'package:minincm/src/home/song_action_wiring.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/song_actions.dart'
-    show SongActionHost, showSongActionsSheet;
+    show SongActionHost, SongActionSource, showSongActionsSheet;
 import 'package:minincm/src/song_share.dart' show showSongShareSheet;
 import 'package:minincm/src/update_checker.dart' show UpdateInfo;
 import 'package:minincm/src/update_dialog.dart' show showUpdateDialog;
@@ -223,6 +224,46 @@ void main() {
 
     expect(livePopups(), isEmpty);
     expect(pageDepth.value, depthBefore);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('U-03: home 歌曲动作装配的分享面板(wiring 入口)切 tab ⇒ 关闭', (tester) async {
+    // 这条盯的是**第二批迁移的 home 入口**(song_action_wiring 的 `_showShareSong`):
+    // 它以前直连 showModalBottomSheet, 只能靠"恰好是 PopupRoute"被兜住; 现在经
+    // showAppSheet ⇒ buildAppSheetRoute, 必须出现在登记表里并被 dismissAllPopups 收掉。
+    await pumpHomeShell(tester);
+    final depthBefore = pageDepth.value;
+    final homeContext = tester.element(find.byType(HomePage));
+    final wiring = SongActionWiring(
+      contextOf: () => homeContext,
+      toast: (_) {},
+      isMounted: () => true,
+      loggedIn: () => false,
+      isLiked: (_) => false,
+      markLiked: (_, _) {},
+      rebuild: () {},
+      queue: PlayQueue<rust.SongDto>(),
+      playSongsList: (songs, index) async {},
+      currentSong: () => null,
+      playSource: () => SongActionSource.other,
+      syncActionState: () async {},
+      openPlaylist: (_) async {},
+    );
+    unawaited(wiring.buildHost().share(fakeSong(id: 5, name: '晴天')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('分享到动态'), findsOneWidget);
+    expect(
+      livePopups().single,
+      isA<ModalBottomSheetRoute<void>>(),
+      reason: '走 showAppSheet/builder 造的是可登记的 ModalBottomSheetRoute',
+    );
+
+    await switchToMine(tester);
+
+    expect(find.text('分享到动态'), findsNothing);
+    expect(livePopups(), isEmpty);
+    expect(pageDepth.value, depthBefore, reason: '浮层不算一层, 不许误退页面');
     await tester.pumpWidget(const SizedBox());
   });
 
