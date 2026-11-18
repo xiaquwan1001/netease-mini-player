@@ -12,13 +12,15 @@ import '../cover_art.dart';
 import '../feed_media.dart';
 import '../feed_share.dart';
 import '../feed_detail_page.dart';
-import '../layout.dart' show avatarStripHeightFor;
+import '../layout.dart' show avatarStripHeightFor, kPagePadding;
 import '../net_retry.dart';
 import '../rust/api.dart' as rust;
 import '../toast.dart' show showToast;
 import '../user_nav.dart';
+import 'feed_merge.dart';
 import '../sheet_header.dart';
 import '../state_views.dart';
+import '../wheel_refresh.dart';
 
 part 'artist_filter_bar.dart';
 part 'feed_card.dart';
@@ -113,7 +115,10 @@ class _FeedViewState extends State<FeedView> {
     }
     // 真实游标分页: lastTime/more 由服务端给, 不再按"满页"猜
     final page = await rust.feedPage(limit: _pageSize, lastTime: -1);
-    _cursor = page.lastTime;
+    // 游标只在**还没翻过页**时确立: 下拉刷新拿到的是"最新页"的游标, 拿它覆盖
+    // 已翻出的历史游标会让 [loadOlder] 回头重取同一段(条目重复 + 游标不前进,
+    // 于是提前判定"没有更早"并停掉分页)。
+    _cursor ??= page.lastTime;
     return (events: page.events, more: page.more);
   }
 
@@ -234,9 +239,6 @@ class _FeedViewState extends State<FeedView> {
     return out;
   }
 
-  /// 分类行只放互动频率最高的几个, 其余走"进入全部"
-  static const _visibleAuthorCount = 8;
-
   /// 打开"全部艺人"面板: 本页发布者(按频率) + 关注但本页没发动态的艺人
   Future<void> _openAllArtists() async {
     final selected = await showModalBottomSheet<BigInt?>(
@@ -327,8 +329,10 @@ class _FeedViewState extends State<FeedView> {
     final authors = _authors;
     return Column(
       children: [
+        // 放几个由横条自己的 LayoutBuilder 按实宽算(visibleAuthorCountFor),
+        // 这里把**全部**作者交下去: 宽屏能多放, 窄屏仍可横滑。
         _ArtistFilterBar(
-          authors: authors.take(_visibleAuthorCount).toList(),
+          authors: authors,
           totalAuthors: authors.length,
           selected: _authorFilter,
           onSelected: (id) => setState(() => _authorFilter = id),
@@ -337,44 +341,57 @@ class _FeedViewState extends State<FeedView> {
         // 分页: 下拉刷新只重取最新页并与历史按 id 合并; 滚动到底(末尾 footer
         // 被构建时)再按最后一条的 time_ms 拉更早一页。
         Expanded(
-          child: RefreshIndicator(
+          // 桌面(鼠标/触控板)没有手指下拉: 滚轮到顶继续上滚也算一次刷新,
+          // 冷却期内只算一次(见 [WheelRefreshable])。
+          child: WheelRefreshable(
             onRefresh: _refresh,
-            child: events.isEmpty
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 64),
-                        child: EmptyView(
-                          padding: EdgeInsets.zero,
-                          title: _authorFilter == null ? '还没有动态' : 'ta 最近没有动态',
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: events.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 64),
+                          child: EmptyView(
+                            padding: EdgeInsets.zero,
+                            title: _authorFilter == null
+                                ? '还没有动态'
+                                : 'ta 最近没有动态',
+                          ),
                         ),
+                      ],
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      // 水平 = kPagePadding, 与顶部横条同一口径(左右边缘共线)
+                      padding: const EdgeInsets.fromLTRB(
+                        kPagePadding,
+                        4,
+                        kPagePadding,
+                        24,
                       ),
-                    ],
-                  )
-                : ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                    // 末尾多一格 footer: 懒构建的 ListView 只在滚到底时构建它,
-                    // footer 的 initState 就是"滚动到底加载更早"的触发器。
-                    itemCount: events.length + (_hasMoreFooter ? 1 : 0),
-                    itemBuilder: (context, i) {
-                      if (i >= events.length) {
-                        return _LoadOlderFooter(
-                          busy: _loadingMore,
-                          error: _olderError,
-                          onLoad: _loadOlder,
+                      // 末尾多一格 footer: 懒构建的 ListView 只在滚到底时构建它,
+                      // footer 的 initState 就是"滚动到底加载更早"的触发器。
+                      itemCount: events.length + (_hasMoreFooter ? 1 : 0),
+                      itemBuilder: (context, i) {
+                        if (i >= events.length) {
+                          return _LoadOlderFooter(
+                            busy: _loadingMore,
+                            error: _olderError,
+                            onLoad: _loadOlder,
+                          );
+                        }
+                        return _FeedCard(
+                          event: events[i],
+                          onOpenUrl: widget.onOpenUrl,
+                          onOpenChanged: _replace,
+                          onLike: () => _toggleLike(events[i]),
+                          forwardEvent: widget.forwardEvent,
                         );
-                      }
-                      return _FeedCard(
-                        event: events[i],
-                        onOpenUrl: widget.onOpenUrl,
-                        onOpenChanged: _replace,
-                        onLike: () => _toggleLike(events[i]),
-                        forwardEvent: widget.forwardEvent,
-                      );
-                    },
-                  ),
+                      },
+                    ),
+            ),
           ),
         ),
       ],
@@ -438,25 +455,6 @@ class _FeedViewState extends State<FeedView> {
     if (!mounted) return;
     showToast(context, message);
   }
-}
-
-/// 合并两页动态(刷新/加载更早共用): 按 id 去重, [first] 的副本优先(最新的
-/// 点赞/评论状态跟手), [second] 中未出现过的条目按原顺序追加到末尾。
-List<rust.FeedEventDto> mergeFeedEvents(
-  List<rust.FeedEventDto> first,
-  List<rust.FeedEventDto> second,
-) {
-  final seen = <BigInt>{};
-  final out = <rust.FeedEventDto>[];
-  void take(List<rust.FeedEventDto> src) {
-    for (final e in src) {
-      if (seen.add(e.id)) out.add(e);
-    }
-  }
-
-  take(first);
-  take(second);
-  return out;
 }
 
 /// 复制一条动态并替换点赞状态(列表行乐观更新 / 详情页点赞回传共用)

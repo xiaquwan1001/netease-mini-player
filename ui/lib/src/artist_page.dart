@@ -23,6 +23,8 @@ import 'state_views.dart';
 import 'artist_sections.dart'
     show ArtistRecommendedSongsSection, SimilarArtistsRow;
 import 'expandable_text.dart';
+import 'feed/feed_merge.dart' show mergeFeedEvents;
+import 'wheel_refresh.dart';
 
 /// 艺人详情页(C1 重构): 顶部信息区(横幅/头像/姓名/作品数/简介/关注) + 纵向 tab。
 ///
@@ -231,6 +233,27 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
     }
   }
 
+  /// 动态 tab 的下拉刷新: 重取最新页并**并进**已有列表。
+  ///
+  /// 不能用新页整体替换: 最新页常常只回 1 条, 替换会让 3 条变 1 条
+  /// (用户 2026-11-18: "歌手个人空间展示三条, 下拉刷新只有一条")。
+  /// 失败保留原列表(不把已展示的内容打成错误态)。
+  Future<void> _refreshDynamics() async {
+    final uid = _detail?.userId;
+    if (uid == null || uid == BigInt.zero) return;
+    try {
+      final latest = await (widget.loadDynamics != null
+          ? widget.loadDynamics!(uid)
+          : rust.userEvents(uid: uid, limit: 10, lastTime: -1));
+      if (!mounted) return;
+      setState(
+        () => _dynamics = mergeFeedEvents(latest, _dynamics ?? const []),
+      );
+    } catch (_) {
+      // 刷新失败: 保留原列表
+    }
+  }
+
   /// tab 集合变了就换新 controller(旧的一律延到帧末 dispose, 见
   /// [syncProfileTabs] —— 立刻 dispose 会抛 used-after-dispose)。
   void _rebuildTabs() {
@@ -399,7 +422,11 @@ class _ArtistDetailPageState extends State<ArtistDetailPage>
           loader: _mvsLoader,
         );
       case _TabKind.dynamics:
-        return _DynamicsTab(events: _dynamics ?? const [], onOpenUrl: _openUrl);
+        return _DynamicsTab(
+          events: _dynamics ?? const [],
+          onOpenUrl: _openUrl,
+          onRefresh: _refreshDynamics,
+        );
     }
   }
 
@@ -498,10 +525,17 @@ enum _TabKind {
 /// 动态 tab: 艺人动态列表(只有拿到数据时这个 tab 才存在)。
 /// 点一行进动态详情页(正文/配图/视频/评论全部复用 feed_detail_page)。
 class _DynamicsTab extends StatelessWidget {
-  const _DynamicsTab({required this.events, required this.onOpenUrl});
+  const _DynamicsTab({
+    required this.events,
+    required this.onOpenUrl,
+    required this.onRefresh,
+  });
 
   final List<rust.FeedEventDto> events;
   final Future<void> Function(String url) onOpenUrl;
+
+  /// 下拉刷新(桌面: 鼠标拖拽 / 滚轮到顶再上滚): 由父级重取并**合并**最新页
+  final Future<void> Function() onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -510,70 +544,83 @@ class _DynamicsTab extends StatelessWidget {
     if (events.isEmpty) {
       return const EmptyView(icon: Icons.dynamic_feed_outlined, title: '暂无动态');
     }
-    return ListView.builder(
-      padding: EdgeInsets.fromLTRB(
-        kPagePadding,
-        12,
-        kPagePadding,
-        24 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      itemCount: events.length,
-      itemBuilder: (context, i) {
-        final e = events[i];
-        final body = e.title.trim().isNotEmpty ? e.title.trim() : e.text.trim();
-        return InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => showFeedDetail(context, event: e, onOpenUrl: onOpenUrl),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 长文走 AdaptiveText(单行跑马灯); 这里允许 3 行换行
-                AdaptiveText(
-                  body.isEmpty ? '（无正文）' : body,
-                  mode: AdaptiveTextMode.wrap,
-                  maxLines: 3,
-                  style: theme.textTheme.bodyMedium,
-                ),
-
-                // 需求: 艺人页「动态」tab 与关注动态流同一口径 —— 附图/分享的
-                // 单曲/视频都直接展示, 不必点进详情(与 feed_view/用户主页共用组件)
-                if (feedAttachedImages(e).isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: FeedImageGrid(images: feedAttachedImages(e)),
-                  ),
-                if (e.song != null)
-                  FeedSongMiniCard(song: e.song!, coverUrl: e.coverUrl),
-                if (e.videoUrl != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: FeedVideoThumb(
-                      url: e.videoUrl!,
-                      coverUrl: e.coverUrl,
-                      onOpenUrl: onOpenUrl,
-                    ),
-                  ),
-                const SizedBox(height: 4),
-                Text(
-                  [
-                    feedRelativeTime(e.timeMs),
-                    feedKindLabels[e.kind] ?? '动态',
-                    if (e.commentCount > BigInt.zero) '${e.commentCount} 评论',
-                    if (e.likedCount > BigInt.zero) '${e.likedCount} 赞',
-                  ].where((s) => s.isNotEmpty).join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: scheme.outline,
-                  ),
-                ),
-              ],
-            ),
+    // 之前这一栏是**一次性快照**(探测时取 10 条, 之后没有刷新入口),
+    // 桌面又没有手指下拉 —— 用户口径: 与「关注动态」同一套刷新语义。
+    return WheelRefreshable(
+      onRefresh: onRefresh,
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            kPagePadding,
+            12,
+            kPagePadding,
+            24 + MediaQuery.viewPaddingOf(context).bottom,
           ),
-        );
-      },
+          itemCount: events.length,
+          itemBuilder: (context, i) {
+            final e = events[i];
+            final body = e.title.trim().isNotEmpty
+                ? e.title.trim()
+                : e.text.trim();
+            return InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () =>
+                  showFeedDetail(context, event: e, onOpenUrl: onOpenUrl),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 长文走 AdaptiveText(单行跑马灯); 这里允许 3 行换行
+                    AdaptiveText(
+                      body.isEmpty ? '（无正文）' : body,
+                      mode: AdaptiveTextMode.wrap,
+                      maxLines: 3,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+
+                    // 需求: 艺人页「动态」tab 与关注动态流同一口径 —— 附图/分享的
+                    // 单曲/视频都直接展示, 不必点进详情(与 feed_view/用户主页共用组件)
+                    if (feedAttachedImages(e).isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FeedImageGrid(images: feedAttachedImages(e)),
+                      ),
+                    if (e.song != null)
+                      FeedSongMiniCard(song: e.song!, coverUrl: e.coverUrl),
+                    if (e.videoUrl != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: FeedVideoThumb(
+                          url: e.videoUrl!,
+                          coverUrl: e.coverUrl,
+                          onOpenUrl: onOpenUrl,
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        feedRelativeTime(e.timeMs),
+                        feedKindLabels[e.kind] ?? '动态',
+                        if (e.commentCount > BigInt.zero)
+                          '${e.commentCount} 评论',
+                        if (e.likedCount > BigInt.zero) '${e.likedCount} 赞',
+                      ].where((s) => s.isNotEmpty).join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.outline,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 }

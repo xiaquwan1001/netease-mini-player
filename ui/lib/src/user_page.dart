@@ -7,6 +7,7 @@ import 'async_view.dart';
 import 'cover_row.dart';
 import 'detail_page.dart';
 import 'error_views.dart';
+import 'feed/feed_merge.dart' show mergeFeedEvents;
 import 'feed_detail_page.dart'
     show feedKindLabels, feedRelativeTime, showFeedDetail;
 import 'feed_media.dart'
@@ -23,6 +24,7 @@ import 'song_tile.dart' show SongRow;
 import 'state_views.dart';
 import 'toast.dart';
 import 'user_list_page.dart';
+import 'wheel_refresh.dart';
 
 /// 他人主页: 与艺人页共用 [ProfileScaffold] 骨架(横幅 + 身份卡 + 统计 chip +
 /// 分区 + pinned TabBar), 内容分 tab: 歌单 / 关注(有才显示) / 粉丝(有才显示).
@@ -542,22 +544,40 @@ class _RefreshableEvents extends StatefulWidget {
 class _RefreshableEventsState extends State<_RefreshableEvents> {
   int _generation = 0;
 
+  /// 刷新前已经拿到的完整列表(跨"换 key 重挂载"保留在 State 里)。
+  ///
+  /// 下拉刷新原来只是 `setState(_generation += 1)` 让 [UserEventsList] 重挂载、
+  /// 用新页**整体替换** —— 而"最新页"(lastTime=-1)常常只回 1 条, 于是列表从
+  /// 3 条掉到 1 条(用户 2026-11-18: "歌手个人空间展示三条, 下拉刷新只有一条")。
+  /// 现在每次取数都按 id 并进这份快照: 新内容进得来, 已展示的不消失。
+  List<rust.FeedEventDto> _kept = const <rust.FeedEventDto>[];
+
+  Future<List<rust.FeedEventDto>> _loadMerged() async {
+    final latest = await widget.load();
+    final merged = mergeFeedEvents(latest, _kept);
+    _kept = merged;
+    return merged;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return RefreshIndicator(
+    return WheelRefreshable(
       onRefresh: () async => setState(() => _generation += 1),
-      // AlwaysScrollable: 只有一两张卡(或空态)时也要能下拉
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: widget.padding,
-        children: [
-          UserEventsList(
-            key: ValueKey('user-events-$_generation'),
-            load: widget.load,
-            onOpenUrl: widget.onOpenUrl,
-            emptyText: 'TA 还没有发布动态',
-          ),
-        ],
+      child: RefreshIndicator(
+        onRefresh: () async => setState(() => _generation += 1),
+        // AlwaysScrollable: 只有一两张卡(或空态)时也要能下拉
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: widget.padding,
+          children: [
+            UserEventsList(
+              key: ValueKey('user-events-$_generation'),
+              load: _loadMerged,
+              onOpenUrl: widget.onOpenUrl,
+              emptyText: 'TA 还没有发布动态',
+            ),
+          ],
+        ),
       ),
     );
   }

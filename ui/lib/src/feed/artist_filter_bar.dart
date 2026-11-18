@@ -1,5 +1,54 @@
 part of 'feed_view_body.dart';
 
+// ───────────────────────────────────────────────────────────────────────────
+// 分类横条的几何口径(渲染与"放几个"共用同一个值, 禁止两处各写 64)
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 一个作者 chip 的宽度(头像 40 + 边框 4 + 文字列的实际占位)。
+const double kAuthorChipWidth = 64;
+
+/// "进入全部"这类文字更长的入口 chip 宽度。
+const double kAuthorChipWideWidth = 84;
+
+/// chip 之间的水平间距(由每个 chip 自己带的 right padding 实现)。
+const double kAuthorChipGap = 10;
+
+/// 横条至少展示多少个作者 chip —— **手机预算的兜底下限**。
+///
+/// 之前是写死 8 且与屏宽无关: 1280 的桌面窗口与 360 的手机放同样多个,
+/// 宽屏右侧留一大片空白(用户 2026-11-18: "数量可以更多, 与动态主视图等宽")。
+/// 但也不能反过来按"刚好铺满"算: 360dp 上只铺得下 2 个作者, 视野比改之前更窄。
+/// 所以取「铺得下多少就放多少, 但不低于 8」—— 成品是**只增不减**。
+const int kAuthorChipMinVisible = 8;
+
+/// 横条按**实际可用宽**能放下多少个作者 chip(纯函数, 便于单测)。
+///
+/// [availableWidth] 必须是 LayoutBuilder 给的真实可用宽(不是 MediaQuery 窗口宽:
+/// 桌面有内容限宽盒、横条还可能嵌在别的容器里)。
+/// [fixedLeading]/[fixedTrailing] 是两条**固定入口**("全部" / "进入全部"),
+/// 它们也占位, 漏算就会让宽屏多挤掉一个作者。
+/// 结果永不超过 [total], 永不低于 [minVisible](至少 1)。
+int visibleAuthorCountFor({
+  required double availableWidth,
+  required double chipWidth,
+  required double gap,
+  int fixedLeading = 1,
+  int fixedTrailing = 1,
+  required int total,
+  int minVisible = kAuthorChipMinVisible,
+}) {
+  if (total <= 0) return 0;
+  // 无限宽(无约束容器 / 测试里的 unbounded): 全部放出
+  if (!availableWidth.isFinite) return total;
+  final slot = chipWidth + gap;
+  var fit = slot <= 0
+      ? 0
+      : (availableWidth / slot).floor() - (fixedLeading + fixedTrailing);
+  if (fit < minVisible) fit = minVisible;
+  if (fit < 1) fit = 1;
+  return fit > total ? total : fit;
+}
+
 /// 横向艺人分类: "全部" + 互动频率最高的若干发布者 + 末尾"进入全部"入口
 class _ArtistFilterBar extends StatelessWidget {
   const _ArtistFilterBar({
@@ -10,7 +59,8 @@ class _ArtistFilterBar extends StatelessWidget {
     required this.onOpenAll,
   });
 
-  /// 已按互动频率排序, 且已截断到"高频率的几位"
+  /// 已按互动频率排序的**全部**本页发布者(截断交给 [visibleAuthorCountFor]:
+  /// 放几个由实际可用宽决定, 不再由调用方写死)
   final List<_Author> authors;
 
   /// 本页发布者总数(> authors.length 时"进入全部"才有意义)
@@ -26,48 +76,70 @@ class _ArtistFilterBar extends StatelessWidget {
     return SizedBox(
       // 定高横滑条: 头像/内边距固定, 只有 11sp 标签随字号涨(写死 84 时 1.625 下竖溢 4dp)
       height: avatarStripHeightFor(context),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-        children: [
-          _AuthorChip(
-            label: '全部',
-            avatarUrl: null,
-            icon: Icons.all_inclusive,
-            selected: selected == null,
-            onTap: () => onSelected(null),
-            scheme: scheme,
-          ),
-          for (final a in authors)
-            _AuthorChip(
-              label: a.name,
-              avatarUrl: a.avatarUrl,
-              // 点头像进主页, 点整块仍是筛选(两者靠命中区区分, 见 _AuthorChip)。
-              // 这里只有 feed 的 **user id**: 是艺人还是普通用户交给 UserNav 解析
-              // (以前直接当 artistId 传, 会拿用户 id 去请求艺人详情)。
-              userId: a.userId,
-              selected: selected == a.userId,
-              onTap: () => onSelected(a.userId),
-              scheme: scheme,
+      // 用 LayoutBuilder 的**真实可用宽**算放几个(MediaQuery 窗口宽会把内容限宽盒、
+      // 嵌入容器的内缩都算漏)。
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // 末尾"进入全部"比普通 chip 宽 20, 先扣掉, 让"刚好铺满"的算式落在实宽上
+          final usable =
+              constraints.maxWidth -
+              2 * kPagePadding -
+              (kAuthorChipWideWidth - kAuthorChipWidth);
+          final count = visibleAuthorCountFor(
+            availableWidth: usable,
+            chipWidth: kAuthorChipWidth,
+            gap: kAuthorChipGap,
+            total: authors.length,
+          );
+          return ListView(
+            scrollDirection: Axis.horizontal,
+            // 水平内边距与动态列表同口径(kPagePadding): 横条与主视图左右边缘共线
+            padding: const EdgeInsets.fromLTRB(
+              kPagePadding,
+              8,
+              kPagePadding,
+              4,
             ),
-          // 末尾固定一个"进入全部": 浏览所有艺人(本页 + 已关注)
-          _AuthorChip(
-            label: totalAuthors > authors.length
-                ? '进入全部($totalAuthors)'
-                : '进入全部',
-            avatarUrl: null,
-            icon: Icons.grid_view,
-            selected: false,
-            onTap: onOpenAll,
-            scheme: scheme,
-            wide: true,
-          ),
-        ],
+            children: [
+              _AuthorChip(
+                label: '全部',
+                avatarUrl: null,
+                icon: Icons.all_inclusive,
+                selected: selected == null,
+                onTap: () => onSelected(null),
+                scheme: scheme,
+              ),
+              for (final a in authors.take(count))
+                _AuthorChip(
+                  label: a.name,
+                  avatarUrl: a.avatarUrl,
+                  selected: selected == a.userId,
+                  onTap: () => onSelected(a.userId),
+                  scheme: scheme,
+                ),
+              // 末尾固定一个"进入全部": 浏览所有艺人(本页 + 已关注)
+              _AuthorChip(
+                label: totalAuthors > count ? '进入全部($totalAuthors)' : '进入全部',
+                avatarUrl: null,
+                icon: Icons.grid_view,
+                selected: false,
+                onTap: onOpenAll,
+                scheme: scheme,
+                wide: true,
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
+/// 横条上的一个 chip: 整块(含圆形头像)只做**页内聚焦**。
+///
+/// 用户口径(2026-11-18): 横条点头像**不再**进用户空间详情, 与点 chip 其它位置
+/// 完全一致 —— 同一块区域给出两种结果最容易误触; 想进这个人的主页请点下方
+/// 动态卡片里的头像(那里是唯一的主页入口)。
 class _AuthorChip extends StatelessWidget {
   const _AuthorChip({
     required this.label,
@@ -76,16 +148,11 @@ class _AuthorChip extends StatelessWidget {
     required this.onTap,
     required this.scheme,
     this.icon,
-    this.userId,
     this.wide = false,
   });
 
   final String label;
   final String? avatarUrl;
-
-  /// 有值 = 头像可点进这个人的主页(艺人页/用户页由 UserNav 解析);
-  /// 为空(「全部」「进入全部」这类纯筛选入口)不拦截点击。
-  final BigInt? userId;
   final bool selected;
   final VoidCallback onTap;
   final ColorScheme scheme;
@@ -98,12 +165,12 @@ class _AuthorChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.only(right: kAuthorChipGap),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: SizedBox(
-          width: wide ? 84 : 64,
+          width: wide ? kAuthorChipWideWidth : kAuthorChipWidth,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -124,13 +191,9 @@ class _AuthorChip extends StatelessWidget {
                             : scheme.surfaceContainerHighest,
                         child: Icon(icon, size: 20, color: scheme.primary),
                       )
-                    // 只把 40dp 的头像包进 UserAvatarTap: 整块的 InkWell 仍是筛选,
-                    // 命中区小才不会在点 chip 时误进主页。
-                    : UserAvatarTap(
-                        userId: userId ?? BigInt.zero,
-                        nickname: label,
-                        child: CircleCover(url: avatarUrl, size: 40),
-                      ),
+                    // 头像只是装饰, **不**包 UserAvatarTap(见类注释):
+                    // 整个 chip 交给外层 InkWell 做页内聚焦。
+                    : CircleCover(url: avatarUrl, size: 40),
               ),
               const SizedBox(height: 2),
               Text(

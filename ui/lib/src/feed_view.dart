@@ -5,3 +5,4 @@
 library;
 
 export 'feed/feed_view_body.dart';
+export 'feed/feed_merge.dart' show mergeFeedEvents;

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
@@ -20,6 +21,28 @@ import 'toast.dart';
 //
 // 与 home_page.dart 互相 import(Dart 允许环): MiniNcmApp.home 是 HomePage,
 // 而 HomePage 要读这里的槽位/投递函数; 顶层 final 惰性初始化, 无初始化顺序问题。
+
+/// 应用级滚动行为: **桌面也能拖动列表**。
+///
+/// Flutter 默认的 [ScrollBehavior.dragDevices] 只有 touch —— 桌面(鼠标/触控板)
+/// 既拖不动列表, 也就永远触发不了 RefreshIndicator(它的 overscroll 判定只认
+/// 拖动)。用户 2026-11-18: "Linux 桌面没有下拉刷新触发逻辑, 要补: 拖拽下拉"。
+/// 放开四种指针后, 手指/鼠标/触控板/手写笔的拖动语义完全一致:
+/// 列表能滚就滚, 已到顶还继续下拉就是刷新(RefreshIndicator 原有逻辑)。
+///
+/// 滚轮这一路不走拖动, 见 WheelRefreshable(每个可刷新列表自己包)。
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => const <PointerDeviceKind>{
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+    PointerDeviceKind.invertedStylus,
+  };
+}
 
 /// 全局动作回调宿主: MaterialApp.builder 里包一层 AppActions,
 /// 这样搜索结果/详情页/底部面板等所有路由里的 "..." 菜单都能拿到同一套回调。
@@ -300,6 +323,8 @@ class MiniNcmApp extends StatelessWidget {
         final settings = AppSettings.instance;
         return MaterialApp(
           title: '轻音 MiniNCM',
+          // 桌面也能拖动滚动(见 [AppScrollBehavior]): 下拉刷新才不会只在手机上可用
+          scrollBehavior: const AppScrollBehavior(),
           // 根 messenger: 播放/调音管线的后台失败没有 BuildContext, 靠它提示
           // (见 src/toast.dart 的 showGlobalToast)。
           scaffoldMessengerKey: rootMessengerKey,
