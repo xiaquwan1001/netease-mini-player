@@ -399,9 +399,10 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~U-01-old / U-02-old / U-04-old~~ ✅ 见上三行(已落) | (保留作历史说明) | — | — |
 | **U-01-old**(P1) | 导航栏 + 播放条住在 Navigator **外面** ⇒ 弹层遮罩盖不住它们, 浮层开着仍能点 tab; 「切页收起浮层」只在 `_onTabSelected`(`home_page.dart`)一处手写, 实测还漏 5 类(歌曲动作面板 / 收藏到歌单 / 分享 / 关注页艺人筛选 / 更新弹窗) | ① 用户再反馈「浮层没关掉/点到了底下的东西」; ② 或做 U-03 统一入口时一并收口 | S~M(统一「切页先关全部浮层」的单一入口 + 补 5 类 + 测试) |
 | **U-02**(P2) | `QueueSheetController.close()` 用 `maybePop()` ⇒ 队列面板上压着「清空确认框」时切 tab 只关确认框(登录弹层已有 `isCurrent/removeRoute` 的正确写法) | 与 U-01 同批做(同一处切 tab 路径) | S |
-| **U-03**(P2) | 无统一浮层入口: 关闭语义三档(拖拽 21/22 · 关闭键 5 · 高度口径 3 套 · 键盘让位 5 处手写) | 下次批量改弹层, 或样式不一致的反馈出现 | M(≈ 前端审计 2026-11-15 就建议过的 `showAppSheet(...)`) |
+| ~~**U-03**(P2)~~ ✅ **已落(v0.25.0)** | 新 `showAppSheet`/`showAppDialog` 统一入口, 已迁 31/38 处(剩 7 处冻结: podcast 详情 1 / 我的 1 / home 5); 新门 `tools/check-sheet-entry.sh` 已接 `ci-gates verify` + CI, 待迁名单不许增长 | 第二批跟随表的 7 处一起迁 | 剩余 S |
 | **U-04**(P2) | 播 MV 不暂停歌曲, MV Activity 无音频焦点 ⇒ 双音源并发(**代码事实确定, 听感待真机**) | 用户报「看 MV 时歌还在放/两个声音」 | S(暂停 + 请求焦点, 需真机验) |
-| U-05/U-06(P2) | 帧后回调缺 `mounted` 守卫; `HomeWiring._latest` 漏「A attach→B attach→B detach」组合 | 出现「已销毁页面仍被回调/播放条状态被旧实例清掉」类崩溃或异常 | S(守卫 + 一个组合用例) |
+| ~~U-05/U-06(P2)~~ ✅ **已落(v0.25.0)** | `runPostFrameIfAlive` 守卫帧后写槽; `HomeWiring` 改实例栈 `_alive`(主人 detach 交还仍活着的上一个)。红→绿已实证(还原补丁后 `A→B→B detach` 等用例失败) | 已做 | — |
+| ~~U-07(P3)~~ ✅ **已落(v0.25.0)** | `NcmRouteObserver.didReplace` 补全(同时维护 pageDepth 与 popup 表), `pushReplacement` 两条用例红→绿 | 已做 | — |
 
 ## 15. 横屏双列布局(2026-11-18 评估产出 · 待开工)
 
@@ -411,8 +412,8 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|---|---|
 | ~~S0~~ ✅ **已落(v0.24.0)** | 判据纯函数 `twoColumnFor(Size)`: 宽 ≥900 **且** 高 ≥560(横屏手机 780x360 排除); `layoutTierFor` 未动 | S | 9 例单测 ✔ |
 | ~~S1~~ ✅ **已落(v0.24.0)** | 歌单详情双列左 300 / 间 12 / 右 528(填满 840); 两列各自滚动; 判据用 `MediaQuery.sizeOf`(窗口宽)以免被 840 限宽判死 | M | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
-| S2 | 播客详情复用 | 同构 | S | 同上 |
-| S3 | 我的(打包式双列) | **先量高度差 >40% 就不做** | M | 待定 |
+| ~~S2~~ ✅ **已落(v0.25.0)** | 播客详情双列同构(左 300/间 12/右 528, 两列各自滚动; 窄/中档零几何变化) | S | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
+| ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `.pi/plans/q1-two-column-s2s3-2026-11-18.md` |
 | S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | 仅用户明确要求时 |
 
 **明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。

@@ -119,6 +119,22 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 ## 批次时间线(倒序, 最新在上)
 
+## 2026-11-18(十三) 双列 S2 + 统一浮层入口(U-03) + 生命周期守卫(U-05/06/07) · **v0.25.0**
+
+| 项 | 内容 |
+|---|---|
+| **双列 S2** | 播客详情页同构改造 `twoColumnFor(MediaQuery.sizeOf)` ⇒ 左 300 / 间 12 / 右 528(填满 840), 两列各自滚动; 窄/中档同一棵 sliver 树零几何变化(只把 `_buildComments` 抽成共用方法); +6 例几何测试 + 1 张 1280x720 golden |
+| **双列 S3(判不做)** | 先量再定: 「我的」在 720 高下双列会出现 **左列 885 vs 右列 1969(差 55.1% > 40% 阈值)**; 另一读法(单列总高 2781 vs 右 1969)不足以抵左列空白 ⇒ **`mine_view.dart` 一字未改**, 测量方法与数字留在报告 |
+| **U-03 统一浮层入口** | 新 `ui/lib/src/app_sheet.dart` 的 `showAppSheet` / `showAppDialog`(默认值取实测多数派: `isScrollControlled:true` 13/20 · `showDragHandle:true` 19/20; 少数派在调用点显式写出); 本批迁移 **31 处 / 23 文件**(sheet 17 + dialog 14), 剩余 7 处(podcast 详情 1 / 我的 1 / home 5)冻结在第二批。**新增门** `tools/check-sheet-entry.sh`(纯 rg + 退出码, 白名单 `app_sheet.dart`/`popup_routes.dart`/测试, 待迁名单冻结不许增长), 已接 `ci-gates.sh sheet-entry` + `verify` + ci.yml/release.yml |
+| **U-05 帧后回调** | 新 `lifecycle_guard.dart` 的 `runPostFrameIfAlive(context, cb)`(`BuildContext.mounted` 判据一处实现); `publishBottomBar` / `_publishPlayerBar`(含 `playerBarData`/`nowPlayingSongId` 两处写槽)改走它 |
+| **U-06 HomeWiring** | 单指针 `_latest` → **实例栈** `_alive`: attach 压栈、栈顶即槽位主人; 主人 detach **交还**给仍活着的上一个, 栈空才清槽(actionsHost 缓存复用同一份); 文档写明真实单页面下栈深恒为 1、不需引用计数 |
+| **U-07 didReplace** | `NcmRouteObserver` 补 `didReplace`: 先摘旧再挂新, 同时维护 `pageDepth` 与 popup 登记表(全屏↔全屏层数不变; 全屏→弹层 -1 且入表) |
+
+**红→绿证据(不是“新测试也绿”)**: 把三个 lib 文件临时还原成 `HEAD` 版本后跑新测试 —— `A→B→B detach` / `A→B→A detach` 两条 **实测失败**, `pushReplacement` 两条 **实测失败**; 恢复补丁后全绿。顺带记一个测试坑: `TestWidgetsFlutterBinding.pump()` 只在 `hasScheduledFrame` 时真推进帧, 裸 `pump()` 不跑帧后回调(会假绿) ⇒ 用例加 `flushFrame()` + 一条无守卫对照回调。
+
+门(编排者独立重跑): `dart analyze` **0** · 全量 `flutter test` **1243→1265 / 0 失败**(golden **20** 张) · token/row-padding/write-guard/lock-poison/`check-sheet-entry` 全 OK · `dart format` 35 个改动文件 0 需重排。
+
+
 ## 2026-11-18(十二) 用户反馈 4 条 + §11.A AppImage 冒烟 + 横屏双列 S0/S1 · **v0.24.0**
 
 | # | 反馈 | 处理 |
