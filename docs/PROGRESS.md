@@ -33,8 +33,8 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1148** 通过 / 0 skip / 0 失败(golden **18** 张, 未重出; network 标签需真实凭据, 本地/CI 都不跑)。2026-11-18 晚 1123 → **+25**(断点 15 + 内容限宽 4 + 宽档 Rail 5 + 弹层留白压暗 1) |
-| `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **3** 通过 / 0 失败(EQ 三端共享夹具的 Kotlin 侧) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1163** 通过 / 0 skip / 0 失败(golden **18** 张, 未重出; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148(响应式 25 例) → **1163**(浮层收起 7 + MV 双音源 8) |
+| `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **7** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
 | `ci-gates.sh desktop-smoke`(`NCM_DESKTOP_SMOKE=1` 才进 `verify`; 需现成 release bundle) | **PASS / 0 FAIL / 0 SKIP, 26 项 OK, 61s**(2026-11-18 本机实测): 启动+数据目录+`identity.json`+WM_CLASS+几何+单实例+SIGTERM · **⑦ 关闭行为三例**(默认退出 / 托盘降级 / 有宿主时 unmap + SecondaryActivate 恢复) · **⑧ 交互级**(windowfocus 回读 + XTEST 按键 4 次 + 播放条 4 次点击 + 缩窗 640x480/320x240/还原, 每步断言存活且几何·标题·Map State 不变, 主窗口仍 1 个, 日志无崩溃痕迹) |
@@ -42,7 +42,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
 | `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(25 处行留白 / **3 个**具名口径 + 纵向只允许 0/6; 具名工厂 `SongRow.xxx(` 也计入 —— 数量比 C 步前少 2 处是因为同构参数收进了工厂, 见 2026-11-17 两个小节) |
-| 接口覆盖 | **135/136**(唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节)。FFI 导出 **161** 里 **9 个**无 UI 入口, 分三类: **保留 4**(cache_stats / cloud_song_url / eq_profile_normalize / player_tuning) · **待产品决策 2**(consent_plaintext_storage / user_play_ranking) · **真死 3**(playlist_tracks_add / podcast_radio / signin_status)。2026-11-18 修了脚本的入口判定(旧口径 6→实测 9, 类型名与构造调用曾把导出顶替成"有入口"), 明细见 `docs/api-coverage.md` 文首与本地 `.pi/plans/deadcode-audit-2026-11-18.md` |
+| 接口覆盖 | **135/136**(唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节)。FFI 导出 **158** 里 **6 个**无 UI 入口, 全是有意保留或待决策: **保留 4**(cache_stats / cloud_song_url / eq_profile_normalize / player_tuning) · **待产品决策 2**(consent_plaintext_storage / user_play_ranking)。2026-11-18 修了脚本的入口判定(类型名与构造调用曾把导出顶替成"有入口"), 并把 3 条真死出口删掉(161→158 / 9→6); 明细见 `docs/api-coverage.md` 文首与本地 `.pi/plans/deadcode-audit-2026-11-18.md` |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
@@ -118,6 +118,29 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(十) UI 两件: 切页收起全部浮层(U-01/U-02) + 播 MV 不再叠音(U-04) · **v0.22.1**
+
+两条都来自 2026-11-18(七) 的 UI 审计:
+
+| 项 | 改法 |
+|---|---|
+| **U-01** 切 tab 收起浮层会漏 5 类 | `NcmRouteObserver` 从「只数弹层个数」升级为**登记表**(按栈序维护 `PopupRoute`, 新增 `openPopups` 快照); 新增 `dismissAllPopups()`(`app_shell.dart`)从栈顶逐条 `dismissPopupRoute`(`isCurrent ? pop() : removeRoute`); `_onTabSelected` 里原手写的 `dismissLoginSheet()` + 队列 `close()` 删除, 只调这一个入口。5 类漏项(歌曲动作面板/收藏到歌单/分享/关注页艺人筛选/更新弹窗)全部经 `showModalBottomSheet`/`showDialog` ⇒ 天然走登记表; 实测 `ui/lib/src` 共 **44 处**弹层调用, 无 `showGeneralDialog`/常驻 `showBottomSheet` |
+| **U-02** 队列面板 `close()` 误关上层确认框 | `QueueSheetController` 改为持有自己的 `ModalBottomSheetRoute`, `close()` 走 `dismissPopupRoute` 而非 `maybePop()`; 登录弹层收敛同一实现(新增 `popup_routes.dart`, 三处共用不复制)。**回归测试实证**: 换回旧写法该例会失败 |
+| **U-04** 播 MV 不暂停歌曲 + MV 无音频焦点 ⇒ 双音源 | 三层都做: ① Dart 起播前按 `mvDuckPlan` 暂停歌曲(失败回滚, 返回**不自动恢复**并提示一次); ② `MvPlayerActivity` 申请 `AUDIOFOCUS_GAIN`、onStop/onDestroy 放弃、被抢暂停、仅在「被焦点暂停过」时恢复; ③ `PlaybackService` 给歌曲 ExoPlayer 打开 `handleAudioFocus = true`。**关键实测**: media3 1.9.4 的 `ExoPlayer.Builder` 从不写 `handleAudioFocus`(JVM 默认 false, `javap` 读 aar 字节码证实) ⇒「ExoPlayer 会自动暂停」本不成立 |
+
+**交给用户(真机听感)**: ① 播歌→进 MV 播放 ⇒ 只剩 MV 声; ② MV 返回 ⇒ 歌不自动回来, 提示点播放条续播; ③ MV 播放中从通知栏点播放 ⇒ 歌曲抢焦点、MV 停声, 全程不得两路同响。已知风险: 蓝牙/耳机 AVRCP 路由未验; `handleAudioFocus=true` 是全局行为变更(来电 transient 丢失后会自行续播)。
+
+门(编排者独立重跑): `dart analyze` **0** · 全量 `flutter test` **1148→1163** · `gradlew :app:testDebugUnitTest :app:lintDebug` BUILD SUCCESSFUL(Kotlin 单测 3→**7**; lint **0 error**) · golden 18 未变 · format/token/row-padding/write-guard OK。
+
+## 2026-11-18(九) 死码第二批: 3 个 FFI 真死导出 + 3 条仅测试引用的公开符号 · **v0.22.1**
+
+| 面 | 内容 | 结果 |
+|---|---|---|
+| FFI | 删 `podcast_radio`/`playlist_tracks_add`/`signin_status` 三个真死出口(`api.rs` -18 行; provider 层保留 —— `ncm-cli` 仍调 podcast_radio/signin_status); DTO 与 `Capability` 未删(仍被别的接口用) | codegen 三步走完; 生成文件为**纯删减 + 分发表 funcId 重编号**(无格式化抖动); 导出 **161→158**, 无 UI 入口 **9→6** |
+| Dart 公开符号 | `kBrandSeed`(theme)/`kPageHorizontalPadding`(layout)/`shouldShowBadges`(adaptive_text_row) 只被测试引用 ⇒ **先把断言迁到现行口径再删**, 不许删空测试 | 净删 23 行; `adaptive_text_row_test` 整体迁到 `shouldShowBadgesForWidth` 且断言更严(新增 191.9/192 边界) |
+
+门(编排者独立重跑): clippy **0** · `cargo test` **313/0** · `dart analyze` **0** · 全量 `flutter test` **1163/0** · `api-coverage` 158 / 6 · 四道 checker OK。
 
 ## 2026-11-18(八) 死码清账 51 行(纯删除) + 去掉零引用依赖 · **未发版**
 
