@@ -117,8 +117,16 @@ void main() {
       expect(find.byType(MiniPlayerBar), findsOneWidget);
       expect(find.byType(Slider), findsOneWidget);
       expect(find.byType(CoverArt), findsOneWidget);
-      // 标题行(AdaptiveTextRow)已被移除, 信息行仍在
-      expect(find.textContaining('3/12'), findsOneWidget);
+      // 窄档(300dp < kCompactMaxWidth)按用户口径只留封面 icon, 一个字都不显示
+      // (歌名/艺人只在中/宽档出现, 见 player_bar_tiers_test)
+      expect(
+        find.descendant(
+          of: find.byType(MiniPlayerBar),
+          matching: find.byType(Text),
+        ),
+        findsNothing,
+        reason: '窄档播放条不该有任何文字',
+      );
       // 每个操作按钮都有 tooltip(→ Semantics label), 窄屏下也不能被裁掉
       expect(find.byTooltip('喜欢'), findsOneWidget);
       // 数据里 playing=true, 播放键的 tooltip 就是「暂停」(状态文案回归)

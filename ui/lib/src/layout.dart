@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
@@ -147,6 +149,17 @@ const double kPlayerBarRoomyWidth = 600;
 ///
 /// 不能改成 [kPagePadding]: 300dp 上会再吃掉 16dp, 信息行直接归零(见上面注释)。
 const double kPlayerBarEdgeInset = 4;
+
+/// 宽档播放条追加「专辑名」所要求的最小信息块可用宽(dp)。
+///
+/// 2026-11-18 用户口径: 宽档显示「完整歌名 + 艺人名」, **空间还有**时才加专辑名。
+/// 「空间还有」的口径就是这一条: 信息块(封面与右侧控件之间那一段)通过
+/// LayoutBuilder 实测到的可用宽 >= 本值才追加, 不看窗口宽 —— 窗口再宽, 若壳层把
+/// 播放条塞进窄容器或信息块被挤扁, 也不该硬塞专辑名。
+/// 取 120: 一行 14sp 中文大约 6~7 个字, 再短放专辑名就只剩省略号, 反而更乱。
+/// 常规桌面窗口(>= [kWideMinWidth] 900)上信息块实际有 500dp 以上, 所以这个闸门
+/// 基本只在异常窄容器里生效 —— 那正是它存在的意义。
+const double kPlayerBarAlbumMinWidth = 120;
 
 // ───────────────────────────────────────────────────────────────────────────
 // 固定行高列表(itemExtent)
@@ -514,3 +527,40 @@ class ContentWidthLimit extends StatelessWidget {
     );
   }
 }
+
+// ───────────────────────────────────────────────────────────────────────────
+// 设置页「界面字号」滑块的端点几何(2026-11-18)
+//
+// 用户反馈「滑块落点与两端的 A 标签不共线」的根因不是标签写错了位置, 而是
+// Material Slider 自己把轨道两端内缩了:
+//
+//   轨道起点 = Slider 盒左边 + max(overlay 半径, thumb 半径)
+//   极端落点 = 轨道起点 + 轨道高度/2   (圆角轨道 + 离散刻度会再留半个轨高)
+//
+// 默认值下这个内缩是 24 + 2 = 26dp, 而标签是 Row 里的普通文本, 于是
+// value=min/max 时 thumb 中心与标签中心实测差 33.7dp / 36.1dp
+// (360dp + 1.25 字号, 回归在 ui/test/text_scale_slider_geometry_test.dart)。
+//
+// 修法: 标签不再跟 Slider 抢 Row 的横向空间, 而是叠在 Slider 上面、
+// 以「极端落点」为盒中心摆放(见 settings_view.dart 的 _TextScaleSetting)。
+// Slider 自己那份内缩由 SliderTheme 显式写死成本文件的三个常量 —— 不跟随
+// Flutter 默认值改版; 标签盒宽 = 2 × 端内缩, 所以标签中心与落点恒等。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 字号滑块轨道两端的内缩基数(overlay 半径)。旧版 Material 圆形 overlay 的
+/// 默认半径就是 24, 写死它是为了让「落点位置」有唯一来源。
+const double kTextScaleSliderOverlayRadius = 24;
+
+/// 字号滑块的轨道高度(year2023 口径的圆角轨道, 4 = 改造前的观感)。
+///
+/// 圆角轨道的离散刻度会额外在两端各留「半轨高」, 所以它同时参与端内缩计算。
+const double kTextScaleSliderTrackHeight = 4;
+
+/// 「极端落点」到 Slider 盒边缘的距离(dp)。
+///
+/// [thumbRadius] 传当前 SliderTheme 里 thumb 的半径 —— 与 Slider 自己的
+/// max(overlay 半径, thumb 半径) 口径一致, 换成更大的 thumb 也不会算偏。
+/// 返回值同时是两端 'A' 标签盒的半宽: 标签居中 ⇒ 标签中心 == 极端落点。
+double textScaleSliderEndInset(double thumbRadius) =>
+    math.max(kTextScaleSliderOverlayRadius, thumbRadius) +
+    kTextScaleSliderTrackHeight / 2;

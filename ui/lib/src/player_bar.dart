@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'layout.dart'
-    show kPagePadding, kPlayerBarEdgeInset, kPlayerBarRoomyWidth, kRowTitleGap;
+    show
+        LayoutTier,
+        kPagePadding,
+        kPlayerBarAlbumMinWidth,
+        kPlayerBarEdgeInset,
+        kPlayerBarRoomyWidth,
+        kRowTitleGap,
+        layoutTierFor;
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api.dart' as rust;
@@ -158,6 +165,24 @@ const Map<PlayMode, String> playModeLabels = {
   PlayMode.shuffle: '随机播放',
 };
 
+/// 宽档播放条是否追加「专辑名」—— 文案分档里「空间还有」的唯一判据。
+///
+/// 两条同时成立才加:
+///   · 档位是宽档(>= [kWideMinWidth]): 中/窄档按用户口径根本不放专辑名;
+///   · 信息块(封面与右侧控件之间那一段)实测可用宽 >= [kPlayerBarAlbumMinWidth]。
+///
+/// 可用宽由播放条的 LayoutBuilder 给出, 不是窗口宽: 窗口再宽, 若壳层把播放条
+/// 塞进窄容器, 也不该硬塞专辑名(那时专辑名只会变成一串省略号)。
+bool playerBarShowsAlbum({
+  required LayoutTier tier,
+  required double infoWidth,
+}) {
+  if (tier != LayoutTier.wide) return false;
+  if (infoWidth.isNaN) return false;
+  if (!infoWidth.isFinite) return true;
+  return infoWidth >= kPlayerBarAlbumMinWidth;
+}
+
 /// 常驻播放条: 从 HomePage.bottomNavigationBar 上移到根布局(见 [PlayerBarHost])。
 ///
 /// 数据([PlayerBarData])与回调([PlayerBarActions])全部由 _HomePageState 注入
@@ -219,7 +244,14 @@ class MiniPlayerBar extends StatelessWidget {
     // 信息行被挤到 0); 宽屏(桌面窗口/平板)用 [kPagePadding] + [kRowTitleGap],
     // 否则六个控件会转成一坨贴在窗口右下角(2026-11-18 用户反馈)。
     // 播放条恒等于窗口宽度(根布局 Column 的直接子项), 直接读 MediaQuery 宽度即可。
-    final roomy = MediaQuery.sizeOf(context).width >= kPlayerBarRoomyWidth;
+    final width = MediaQuery.sizeOf(context).width;
+    // 文案与留白共用同一套档位口径(layout.dart: 窄 < 600 <= 中 < 900 <= 宽),
+    // 不再自造阈值。
+    final tier = layoutTierFor(width);
+    final compact = tier == LayoutTier.compact;
+    // roomy 与 compact 同界(kPlayerBarRoomyWidth == kCompactMaxWidth), 但语义不同:
+    // roomy 只管留白/控件间隔, 档位管文案。两者都从 width 算, 不会再分叉。
+    final roomy = width >= kPlayerBarRoomyWidth;
     final edge = roomy ? kPagePadding : kPlayerBarEdgeInset;
     // 0 = 不加占位(SizedBox 宽度 0 会留一个无意义的 RenderBox)
     final gap = roomy ? kRowTitleGap : 0.0;
@@ -283,67 +315,123 @@ class MiniPlayerBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: actions.onToggleLyrics,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 0, 6, 2),
-                        // 滚动歌名(marquee)按用户要求从播放条移除: 横向空间让给
-                        // 「上一首」。曲名仍在播放详情页 AppBar 与队列面板里。
-                        //
-                        // 信息行在 300dp 手机上只有 ~45dp 宽, 独立徽标(≈54dp)会直接
-                        // 溢出; 这里把 VIP/付费做成行首彩色前缀, 单行 ellipsis 天然
-                        // 不溢出, 且前缀永远先显示(用户反馈"歌曲没有 VIP 标记")。
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              if (current?.vip == true)
-                                TextSpan(
-                                  text: 'VIP  ',
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
-                                    fontWeight: FontWeight.w700,
+                  // 播放条文案按档位分三种(2026-11-18 用户口径「竖屏只留封面 icon;
+                  // 横屏(平板/电脑)显示歌名 + 艺人 + 空间够时的专辑名」):
+                  //   · 窄(< kCompactMaxWidth): 只留封面图形 icon —— 无封面/加载失败时
+                  //     CoverArt 自带中性占位图标(music_note), 不会是一片空白;
+                  //   · 中(kCompactMaxWidth ~ kWideMinWidth): 歌名 + 艺人;
+                  //   · 宽(>= kWideMinWidth): 歌名 + 艺人 + 空间够时专辑名。
+                  // 时间/队列序号是既有信息(进度与 P-10 方案 B 的「已排队」状态靠它),
+                  // 中/宽档放第二行; 窄档整块不渲染 —— 300dp 上那几个字本来就会被挤成
+                  // 省略号, 不如把宽度还给封面与控件。
+                  if (compact)
+                    // 窄档没有文字块: 用 Spacer 把右侧控件推到与中/宽档相同的位置
+                    const Spacer()
+                  else
+                    Expanded(
+                      child: InkWell(
+                        // 点信息区仍是「展开歌词」(既有行为, 不顺手改成详情页);
+                        // 点封面 = 播放详情, 两个入口都保留。
+                        onTap: actions.onToggleLyrics,
+                        child: LayoutBuilder(
+                          builder: (context, info) {
+                            // 「空间还有」的口径见 layout.dart 的 kPlayerBarAlbumMinWidth
+                            final showAlbum =
+                                playerBarShowsAlbum(
+                                  tier: tier,
+                                  infoWidth: info.maxWidth,
+                                ) &&
+                                (current?.album.isNotEmpty ?? false);
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 6, 2),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // 第一行: 歌名。VIP/付费做成行首彩色前缀 —— 独立徽标
+                                  // (≈54dp)在窄信息区会直接溢出, 单行 ellipsis 天然
+                                  // 不越界, 且前缀永远先显示(用户反馈过"没有 VIP 标记")。
+                                  Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        if (current?.vip == true)
+                                          TextSpan(
+                                            text: 'VIP  ',
+                                            style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        if (current?.paid == true &&
+                                            current?.vip != true)
+                                          TextSpan(
+                                            text: '付费  ',
+                                            style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .tertiary,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        TextSpan(
+                                          text:
+                                              (current?.name.isNotEmpty ??
+                                                  false)
+                                              ? current!.name
+                                              : '未在播放',
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall,
                                   ),
-                                ),
-                              if (current?.paid == true && current?.vip != true)
-                                TextSpan(
-                                  text: '付费  ',
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .tertiary,
-                                    fontWeight: FontWeight.w700,
+                                  // 第二行: 艺人(· 专辑) + 位置/时长 + 队列序号
+                                  Text.rich(
+                                    TextSpan(
+                                      children: [
+                                        // 渐进期已登记待跳(P-10 方案 B): 必须说出来,
+                                        // 否则用户拖完等了几十秒不知道到底跳了没有。
+                                        if (queued != null)
+                                          TextSpan(
+                                            text: '已排队→${_fmt(queued)}  ',
+                                            style: TextStyle(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .primary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        if (current?.artist.isNotEmpty ?? false)
+                                          TextSpan(text: current!.artist),
+                                        if (showAlbum)
+                                          TextSpan(
+                                            text: ' · ${current!.album}',
+                                          ),
+                                        TextSpan(
+                                          text:
+                                              '  ${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                                              '  ${data.queueIndex}/${data.queueLength}',
+                                        ),
+                                      ],
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall,
                                   ),
-                                ),
-                              // 渐进期已登记待跳(P-10 方案 B): 必须说出来, 否则用户
-                              // 拖完等了几十秒不知道到底跳了没有。
-                              if (queued != null)
-                                TextSpan(
-                                  text: '已排队→${_fmt(queued)}  ',
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .primary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              TextSpan(
-                                text:
-                                    '${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
-                                    '  ${current?.artist ?? ''}'
-                                    '  ${data.queueIndex}/${data.queueLength}',
+                                ],
                               ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall,
+                            );
+                          },
                         ),
                       ),
                     ),
-                  ),
                   // 红心 + 播放顺序 + 上一首/播放/下一首 + 队列: 与信息行同一排.
                   // 紧凑点击区 34dp(见 _barIcon 注释), 保证 6 个按钮 + 封面在 300dp 内.
                   if (gap > 0) SizedBox(width: gap),
