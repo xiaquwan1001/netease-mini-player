@@ -16,6 +16,7 @@ class PlayerView {
     required this.volume,
     this.seekable = true,
     this.seekError,
+    this.pendingSeekMs,
   });
 
   final BigInt? trackId;
@@ -26,15 +27,20 @@ class PlayerView {
 
   /// 当前源能否精确 seek。
   ///
-  /// 桌面端「边下边播」期解码器是非 seekable 的(Rust 侧 `with_seekable(false)`),
-  /// 这时 seek 一定不生效 —— 进度条据此禁用并提示「缓存中, 暂不可跳转」,
-  /// 而不是让位置先跳过去再弹回来(P-10)。
+  /// 桌面端「边下边播」期解码器是非 seekable 的(Rust 侧 `with_seekable(false)`)。
+  /// P-10 方案 B 之后这种状态**不再意味着不能跳**: seek 会登记成待跳
+  /// ([pendingSeekMs]), 缓存完成后换源重建解码器再跳过去。所以这个标志现在只用于
+  /// 展示/诊断, 进度条不再据它禁拖。
   /// Android 走 Media3, 通道里没有这个键 ⇒ 默认 true(行为不变)。
   final bool seekable;
 
   /// 最近一次 seek 失败的原因(Rust 侧 `PlayerState::seek_error` 的直传)。
   /// null = 没失败过 / 上次成功。
   final String? seekError;
+
+  /// 已登记的待跳位置(P-10 方案 B; Rust 侧 `PlayerState::pending_seek_ms` 的直传)。
+  /// null = 没有挂起的跳转; 非 null 时 UI 显示「已排队→mm:ss」并把拇指停在这里。
+  final BigInt? pendingSeekMs;
 
   static final empty = PlayerView(
     playing: false,
@@ -422,6 +428,7 @@ class Playback {
     volume: s.volume,
     seekable: s.seekable,
     seekError: s.seekError,
+    pendingSeekMs: s.pendingSeekMs,
   );
 
   PlayerView _fromMap(Map<String, Object?>? map) {
@@ -433,9 +440,12 @@ class Playback {
       positionMs: toBig(map['positionMs']),
       durationMs: toBig(map['durationMs']),
       volume: (map['volume'] as num?)?.toDouble() ?? 1.0,
-      // Android(Media3)通道没有这两个键: 默认可 seek, 移动端行为一个字都不变
+      // Android(Media3)通道没有这几个键: 默认可 seek/无待跳, 移动端行为一个字都不变
       seekable: map['seekable'] as bool? ?? true,
       seekError: map['seekError'] as String?,
+      pendingSeekMs: map['pendingSeekMs'] == null
+          ? null
+          : toBig(map['pendingSeekMs']),
     );
   }
 }

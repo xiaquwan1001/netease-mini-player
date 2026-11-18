@@ -80,16 +80,20 @@ class PlayerBarData {
       a.positionMs == b.positionMs &&
       a.durationMs == b.durationMs &&
       a.volume == b.volume &&
-      a.seekable == b.seekable;
+      a.seekable == b.seekable &&
+      a.pendingSeekMs == b.pendingSeekMs;
 
-  /// 进度条能不能拖: 有曲目、有量程、且当前源可 seek。
+  /// 进度条能不能拖: 有量程就可拖。
   ///
-  /// 桌面边下边播期 [PlayerView.seekable] 为 false(解码器非 seekable),
-  /// 这时拖了也不会生效, 所以进度条改成「只提示不跳转」。
-  bool get canSeek => player.seekable && player.durationMs > BigInt.zero;
+  /// 桌面「边下边播」期 [PlayerView.seekable] 为 false, 但 P-10 方案 B 之后 Rust 侧不再直接
+  /// 拒绝 —— 它会把这次跳转**登记成待跳**(`pending_seek_ms`), 缓存完成后换源重建解码器再跳。
+  /// 所以 UI 不能再用 seekable 提前把进度条钉死(那会变成「明明能排队却不让拖」);
+  /// 真正不可跳(下载失败)只在 seek 结果里回传 `seek_error`, 由页面 toast 如实告知。
+  bool get canSeek => player.durationMs > BigInt.zero;
 
-  /// 拖不动但**有**曲目(需要给用户一句「缓存中」的解释); 无曲目时静默禁用。
-  bool get seekBlocked => !player.seekable && player.durationMs > BigInt.zero;
+  /// 已登记的待跳位置(null = 没有挂起的跳转)。播放条据此把拇指停在待跳点并在信息行
+  /// 显示「已排队→mm:ss」, 而不是停在一个之后会被换源改掉的位置上。
+  BigInt? get pendingSeekMs => player.pendingSeekMs;
 }
 
 /// 常驻播放条的回调集合: 不可变, 同一实例跨帧复用(HomePage 建一次后不再变)。
@@ -201,7 +205,15 @@ class MiniPlayerBar extends StatelessWidget {
     final dur = player.durationMs.toDouble();
     // 拖动中冻结量程: 自动续播会让 duration 突跳
     final maxMs = data.dragMax ?? (dur <= 0 ? 1.0 : dur);
-    final pos = (data.dragMs ?? player.positionMs.toDouble()).clamp(0.0, maxMs);
+    // 拇指位置优先级: 正在拖 → 已登记的待跳点(P-10 方案 B: 缓存完成后会跳到这里) → 当前进度。
+    // 少了中间这档, 渐进期排队后拇指会继续跟着旧解码器往前走, 看起来像「没接受这次跳转」。
+    final pos =
+        (data.dragMs ??
+                data.pendingSeekMs?.toDouble() ??
+                player.positionMs.toDouble())
+            .clamp(0.0, maxMs);
+    // 待跳位置(信息行「已排队→mm:ss」用; null = 没有挂起的跳转)
+    final queued = data.pendingSeekMs;
     // 留白/控件间隔按宽度分两档(口径与理由见 layout.dart「常驻播放条的横向口径」):
     // 窄屏沿用手机预算(留白 [kPlayerBarEdgeInset]、控件零间隔, 否则 300dp 上
     // 信息行被挤到 0); 宽屏(桌面窗口/平板)用 [kPagePadding] + [kRowTitleGap],
@@ -241,23 +253,18 @@ class MiniPlayerBar extends StatelessWidget {
                     overlayShape: SliderComponentShape.noOverlay,
                     showValueIndicator: ShowValueIndicator.never,
                   ),
-                  // 不可 seek 期(桌面边下边播)换成「只提示不跳转」的同款轨道:
-                  // 以前拖过去会先跳到新位置、再被下一次轮询弹回旧位置,
-                  // 没有任何提示, 用户以为播放器卡死(P-10)。
-                  child: data.seekBlocked
-                      ? _SeekBlockedSlider(value: pos, max: maxMs)
-                      : Slider(
-                          padding: const EdgeInsets.only(left: 8, right: 8),
-                          value: pos,
-                          max: maxMs,
-                          onChangeStart: data.canSeek
-                              ? actions.onSeekStart
-                              : null,
-                          onChanged: data.canSeek
-                              ? actions.onSeekChanging
-                              : null,
-                          onChangeEnd: data.canSeek ? actions.onSeekEnd : null,
-                        ),
+                  // 不可 seek 期(桌面边下边播)不再换成「只提示不跳转」的轨道:
+                  // P-10 方案 B 落地后 Rust 会把这次跳转**排队**, 所以拖动照常回调;
+                  // 排队状态由拇指位置(见上面 pos)与信息行的「已排队→mm:ss」体现。
+                  // 真正不可跳(下载失败)时 seek 会回传 seek_error, 由页面 toast 如实告知。
+                  child: Slider(
+                    padding: const EdgeInsets.only(left: 8, right: 8),
+                    value: pos,
+                    max: maxMs,
+                    onChangeStart: data.canSeek ? actions.onSeekStart : null,
+                    onChanged: data.canSeek ? actions.onSeekChanging : null,
+                    onChangeEnd: data.canSeek ? actions.onSeekEnd : null,
+                  ),
                 ),
               ),
               // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
@@ -308,6 +315,18 @@ class MiniPlayerBar extends StatelessWidget {
                                         .colorScheme
                                         .tertiary,
                                     fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              // 渐进期已登记待跳(P-10 方案 B): 必须说出来, 否则用户
+                              // 拖完等了几十秒不知道到底跳了没有。
+                              if (queued != null)
+                                TextSpan(
+                                  text: '已排队→${_fmt(queued)}  ',
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               TextSpan(
@@ -397,59 +416,9 @@ class MiniPlayerBar extends StatelessWidget {
   }
 }
 
-/// 不可 seek 时给用户的统一提示文案(播放条与测试共用一份口径)。
-const String seekBlockedHint = '缓存中，暂不可跳转';
-
-/// 不可 seek 期的进度条: 轨道/拇指与可拖版本一致(位置不会跳), 但拖或点
-/// **只弹提示、不改位置、不回调外层**。
+/// seek **真的**被拒时给用户的统一提示文案(播放条与测试共用一份口径)。
 ///
-/// 为什么不用 `Slider(onChanged: null)`: 那样是纯禁用, 用户拖了没有任何反馈,
-/// 观感与「播放器卡死」一样; 这里要的是「能操作, 但明确告诉你为什么不行」。
-class _SeekBlockedSlider extends StatefulWidget {
-  const _SeekBlockedSlider({required this.value, required this.max});
-
-  final double value;
-  final double max;
-
-  @override
-  State<_SeekBlockedSlider> createState() => _SeekBlockedSliderState();
-}
-
-class _SeekBlockedSliderState extends State<_SeekBlockedSlider> {
-  /// 节流到 1s 一次: 一直按着拖会连续回调, 别把提示堆成一串。
-  DateTime? _lastHintAt;
-
-  void _hint() {
-    final now = DateTime.now();
-    final last = _lastHintAt;
-    if (last != null && now.difference(last) < const Duration(seconds: 1)) {
-      return;
-    }
-    _lastHintAt = now;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(
-        content: Text(seekBlockedHint),
-        duration: Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => _hint(),
-      onHorizontalDragStart: (_) => _hint(),
-      // 吃掉原始手势: 位置冻结在播放进度上, 不会出现「拖到新位置再弹回」。
-      child: AbsorbPointer(
-        child: Slider(
-          padding: const EdgeInsets.only(left: 8, right: 8),
-          value: widget.value.clamp(0.0, widget.max),
-          max: widget.max,
-          onChanged: null,
-        ),
-      ),
-    );
-  }
-}
+/// 什么时候会看到它: 桌面渐进播放期 seek 是**排队**不是拒绝(P-10 方案 B), 排队成功不进这里;
+/// 只有下载失败(`GrowingFailed`)等硬不可跳的源, Rust 才会把原因写进 `PlayerState::seek_error`,
+/// 页面据此 toast。旧的「缓存中, 暂不可跳转」闸门已随方案 B 撤掉。
+const String seekFailedHint = '跳转没生效：当前音源暂不可跳转';

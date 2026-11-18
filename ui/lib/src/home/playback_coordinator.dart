@@ -111,10 +111,12 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 当前播放态快照(原页面 `_player`)。页面只读。
   PlayerView? get player => _player;
 
-  /// 当前源能否精确 seek(桌面「边下边播」期 = false)。
+  /// 当前源能否**立即**精确 seek(桌面「边下边播」期 = false)。
   ///
-  /// 播放条是从 [PlayerBarData.canSeek] 自己判断的; 这里再显式暴露一份,
-  /// 给没有那份快照的调用方(歌词页/详情页)用, 也方便测试直接断言(P-10)。
+  /// 注意: false **不等于不能跳**。P-10 方案 B 之后渐进期的 seek 会被 Rust 登记成
+  /// 待跳([PlayerView.pendingSeekMs]), 缓存完成自动跳过去 ⇒ 进度条(播放条的
+  /// [PlayerBarData.canSeek])一律可拖。这里保留的只是「立即生效」这一层信息,
+  /// 给需要区分「已跳」与「已排队」的调用方/测试用。
   bool get canSeek => _player?.seekable ?? false;
 
   /// 轮询/暂停/seek 之后回灌快照(原 `setState(() => _player = state)`)。
@@ -158,7 +160,10 @@ class PlaybackCoordinator extends ChangeNotifier {
         prev.volume != state.volume ||
         // seek 能力随源变(边下边播期 = false), 变了就必须重建,
         // 否则进度条会一直停在旧的可用/禁用态(P-10)
-        prev.seekable != state.seekable) {
+        prev.seekable != state.seekable ||
+        // 待跳登记/生效同样必须重建: 否则「已排队→mm:ss」与拇指位置会停在旧值,
+        // 直到下一次位置变化才更新(P-10 方案 B 的 UI 面)。
+        prev.pendingSeekMs != state.pendingSeekMs) {
       _player = state;
       notifyListeners();
     }

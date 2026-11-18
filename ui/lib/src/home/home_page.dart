@@ -931,6 +931,12 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     _coordinator.adoptPlayer(state);
     _lyric.syncIndex(state, force: true);
+    // 如实反馈(P-10 方案 B 的另一半): 排队成功有「已排队→mm:ss」在播放条上,
+    // 而**真的被拒**(下载失败等硬不可跳)只会回传 seek_error —— 不说一句用户
+    // 会当成「播放器又卡了」。排队/成功时 seek_error 被 Rust 清空, 不会误报。
+    if (state.seekError != null && state.pendingSeekMs == null) {
+      _toast(seekFailedHint);
+    }
   }
 
   // ---------------- UI ----------------
