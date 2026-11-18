@@ -1,7 +1,7 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-18(四)**。已发布版本 **v0.21.0**(歌词高光行居中 + 详情页/冷启动预取 · AppImage 菜单集成 ·
-> 设备级门与桌面无头冒烟进 `ci-gates`), 见批次时间线最上面那条; 速览在下一节, 批次记录从「批次时间线」起倒序。
+> 最近更新: **2026-11-19(四)**。已发布版本 **v0.26.0**(音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道),
+> 见批次时间线最上面那条; 速览在下一节, 批次记录从「批次时间线」起倒序。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能, 余项均需人眼/真机) / **§12**(结构性债务, 主体已清) / **§13**(平台层审计剩余, 余项需真人);
 > 2026-11-18 起的批次拆解与三条只读审计车道(文档/死代码/UI 浮层·返回栈·生命周期)见本地 `.pi/plans/2026-11-18-next-batch.md`;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
@@ -22,6 +22,9 @@
 **2026-11-18 晚(响应式布局三档 + 弹层留白压暗后)第六次重跑**(编排者独立): `dart analyze` **0 issue** ·
 全量 `flutter test` **1148 通过 / 0 失败**(golden 18 未重出) · `dart format` 干净 · token / row-padding / write-guard 三门 OK;
 Rust 侧本批未动(仍 313, 未重跑)。
+**2026-11-19 早(夜间三车道合并回 main 后, v0.26.0 发版前)第八次重跑**(编排者独立, `tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**):
+Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flutter test` **1289 通过 / 0 失败**(golden **20** 张) ·
+`dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · 四道 checker(含 `sheet-entry` 待迁 0) OK。
 **2026-11-18 下(队列/播放条 7 条用户反馈批后)第五次重跑**: 仍 **ALL GATES OK**, Dart **1123**
 (删掉「存为歌单」面板 5 例 + controller 2 例, 新增提示/live-sync/定位/行高 7 例)。
 本批数字变化: v0.21.0 之后 Dart **1106→1124**(托盘关闭 lane `desktop_close_behavior_test.dart` 18 例) → **1124→1128**
@@ -30,11 +33,11 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **325** 通过 / 0 失败(排除 vendor 联网 smoke; v0.26.0 起, domain 49 + playback 47 + provider 1 + service 227 + ffi 1) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1243** 通过 / 0 skip / 0 失败(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → **1243**(桌面播放条 5 + 关注页 22 + 双列 16) |
-| `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **7** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1289** 通过 / 0 skip / 0 失败(golden **20** 张(v0.26.0 起: 双列 2 张 + 既有 18); 上一版口径为 **1243**(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → **1243**(桌面播放条 5 + 关注页 22 + 双列 16) |
+| `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **10** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4 + 缓冲水位策略 `AudioBufferPolicy` 3; v0.26.0) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
 | `ci-gates.sh desktop-smoke`(`NCM_DESKTOP_SMOKE=1` 才进 `verify`; 需现成 release bundle) | **PASS / 0 FAIL / 0 SKIP, 26 项 OK, 61s**(2026-11-18 本机实测): 启动+数据目录+`identity.json`+WM_CLASS+几何+单实例+SIGTERM · **⑦ 关闭行为三例**(默认退出 / 托盘降级 / 有宿主时 unmap + SecondaryActivate 恢复) · **⑧ 交互级**(windowfocus 回读 + XTEST 按键 4 次 + 播放条 4 次点击 + 缩窗 640x480/320x240/还原, 每步断言存活且几何·标题·Map State 不变, 主窗口仍 1 个, 日志无崩溃痕迹) |
@@ -50,6 +53,12 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.26.0** | **2026-11-19** | **夜间三车道发版**: ① 音源信息无损(`StreamUrl` 补试听/降级/格式/md5/时长 + 播放条「试听 mm:ss · 已降级」) ② 缓冲/下载加固(强制 https · 下载 UA/Referer/超时 · 首包劫持判定 · 重试恰一次 · Android 缓冲水位 2s · 桌面 GrowingFile 修假 EOF · 缓存键带 level 且回退旧键) ③ 详情页歌词⇄封面切换 + 查看原图/保存 ④ 浮层入口第二批(待迁 0) ⑤ 匿名诊断通道上线(Worker 正式地址进客户端)。Rust **313→325** / Dart **1266→1289**(golden 20) / Kotlin 单测 **7→10** |
+| **v0.25.0** | **2026-11-18** | 双列 **S2**(播客详情 300-12-528 + 1280x720 golden) · **U-03** 统一浮层入口 `showAppSheet`(31 处 + `check-sheet-entry` 门) · 生命周期守卫 **U-05/06/07**; Dart 1243 |
+| **v0.24.0** | **2026-11-18** | 用户 4 条反馈(桌面播放条去队列排位 / 关注页横条按可用宽自适应 + 点击语义统一 / 刷新合并 / 桌面滚轮到顶刷新) + **AppImage 冒烟脚本** + 双列 **S0/S1**(歌单详情双列) |
+| **v0.23.0** | **2026-11-18** | 用户 10 条反馈: 播放条三档文案 / EQ 导入先走 Rust 校验 + 图表 +15% / **Linux 托盘 7 项播放控制** / **定时关闭**(立刻·播完这首) / 字号滑块落点对齐 / Android 省略「关闭主窗口时」 |
+| **v0.22.1** | **2026-11-18** | **U-01** 切页收起全部浮层(单一入口 `dismissAllPopups`) + **U-02** 队列面板不再误关确认框 + **U-04** MV 双音源(暂停歌曲 + 音频焦点) + FFI 死导出 -3(161→158) |
+| **v0.22.0** | **2026-11-18** | 宽屏三档响应式(断点 + 内容限宽 + 宽档 NavigationRail, 弹层留白随遮罩压暗) + `api-coverage` 门假绿修复(6→9) + 死码清账 51 行 + 删 `cupertino_icons` |
 | **v0.21.0** | **2026-11-17** | **用户 6 项反馈批**: ① Android 逐字歌词高光行贴左(`TextPainter` 只给 maxWidth) ② Linux 播放条宽屏留白/控件间隔 ③ 未登录时推荐页不再暴露 `[auth] Unknown error`(登录态门 + `friendlyError` auth 分支) ④ Linux 登录弹层切 tab 自动收起 ⑤ PC 网页登录风控**静态分析报告**(5 条差异, 未改登录码) ⑥ 超长当前行歌词横向自动滚动(复用唯一跑马灯内核); Dart **1089→1106**, golden 未变 |
 | **v0.20.1** | **2026-11-17** | **反馈批**(两条用户反馈 + 两处平台缺口): ① 歌词高光行 18→16sp 且两种行都居中(修「换行时左右瞬移」) ② 冷启动恢复/进详情页**主动预取**歌词(不再干等「信息不可用」) ③ **AppImage 首启集成到应用菜单** ④ `ci-gates.sh` 新增 `android-instrumented`(a34 3/3) 与 `desktop-smoke`(xvfb+dbus 无头冒烟); Dart **1075→1089** |
 | **v0.20.0** | **2026-11-17** | **四车道批**: P-18 后半(application-id 统一 + 数据目录一次性迁移)· P-10 方案 B(渐进期 seek 登记 + 下载完成换源重建解码器)· 列表行 C 级收尾(8/12 二分取消 + 纵向 pitch + SongRow 工厂)· P-11 第一步(首个 `androidTest` + `notif-slots` 断言脚本); Rust **300→313** / Dart **1061→1075** |
@@ -118,6 +127,25 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-19(十五) 夜间三条车道落地 + 诊断通道发版 · **v0.26.0**
+
+> 2026-11-18 深夜断电, 车道成果以分支 `wip/2026-11-18-night` 快照保住; 11-19 早复核(`ci-gates.sh verify` EXIT=0)后
+> 拆成 5 个正式提交合回 `main`(playback / source-ui / detail / diag / 发版), 快照分支已删除。
+
+| 项 | 内容 |
+|---|---|
+| **音源信息无损(source-plan-a)** | `StreamUrl` 增 `actual_level`/`format`/`md5`/`duration_ms`/`trial_start_ms`/`trial_end_ms`/`is_trial`(全 `serde(default)` 兼容); `parse_stream` 如实填 `freeTrialInfo`/`level`/`type`/`md5`/`time`; 非法区间不标试听; `quality` 仍表示**请求档位**。播放条第二行显示「试听 mm:ss · 已降级 极高」(`stream_note.dart` 单一发布点 + 幂等), 窄档自动隐藏 |
+| **缓冲/下载加固(buffering-download)** | 强制 https(仅 `*.126.net`/`*.163.com`, 判定可注入) + 桌面 `play()` 也升级; 下载器单例 `reqwest::Client`(UA 取 `identity` 单一来源 + Referer + connect 10s + 读间隔 20s) + 首包 15s 限时 + `classify_http`(非 2xx / 2xx 但首包 html 判劫持 ⇒ 可重试), 重试**恰一次**; Android 新 `AudioBufferPolicy`(15s/50s/1s/**2s**) + `DefaultLoadControl` 重缓冲恢复 5s→2s; 桌面 `GrowingFile` 改为每读到字节刷新 `last_data`(修慢网假 EOF), stalled 返回 `TimedOut` 不再静默切歌; 缓存键 `{track}.{level}.{ext}` **先新键后回退旧键**(不清缓存) |
+| **详情页歌词⇄封面(detail-cover-toggle)** | 新 `detail_faces.dart` 双面模型 + 切换动画 + 「查看原图」「保存」(复用既有高清/保存链), 歌曲与播客详情共用; 248 行测试 |
+| **匿名诊断通道(§11.A-6)** | **已上线**。Worker 部署到 `https://minincm-diag.xiaquwan1001.workers.dev/diag`; KV `DIAG`=`03f39b…adbb3` 写进 `wrangler.toml`; `GH_TOKEN` 走 `wrangler secret put`(**仓库/客户端零 token**); `preview_urls=false`; 客户端 `app_meta.dart` 的 `kDiagUploadEndpoint` 已填 ⇒ **发版后香港用户即可「设置→诊断与数据→一键匿名提交」**。线上真单实测 (#4) + 404 + 幂等路径验过, 测试单已关闭 |
+| **浮层入口收口(U-03 第二批)** | 剩 7 处(`podcast_detail_page` / `mine_view` / `home/{home_page,queue_sheet_controller,song_action_wiring}`)全迁到 `showAppSheet`/`showAppDialog`(少数派参数如 `isScrollControlled:false` 显式写出); `check-sheet-entry.sh` 的 `PENDING_EXPECT` 删除 ⇒ **待迁 0**, `--self-test` 负向仍红; 新增「home 分享面板切 tab 会被收起」用例 |
+| **门禁(本版实测)** | `tools/ci-gates.sh verify` **EXIT=0 ALL GATES OK**: Rust **313→325** · Dart **1266→1289**(golden 20) · Kotlin 单测 **7→10** · clippy 0 · analyze 0 · `lintDebug` 0 error / 9 warning · `sheet-entry` 待迁 **0**。合并只在最终树跑全量; 两个 Rust 车道在 `ffi/api.rs` 同一行耦合(`remember_level` + `start_progressive(level)`), 故 Rust 侧合为一个提交 |
+
+**网络现实(实测)**: `*.workers.dev` **大陆直连超时**(20s), 经代理正常; 该 Cloudflare 账号无自有 zone ⇒ 暂不能绑自定义域。客户端上传失败会降级成本地诊断包文件。
+
+**隔夜交接已收口**: `wip/2026-11-18-night` 已拆提交并删除; `.pi/plans/HANDOFF-2026-11-19.md` 保留为历史记录(§4 需用户介入项仍有效)。
+
 
 ## 2026-11-18(十三) 双列 S2 + 统一浮层入口(U-03) + 生命周期守卫(U-05/06/07) · **v0.25.0**
 
