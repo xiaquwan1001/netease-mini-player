@@ -33,7 +33,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **313** 通过 / 0 失败(排除 vendor 联网 smoke) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1205** 通过 / 0 skip / 0 失败(golden **18** 张, 本批重出 `settings_360x800` 1 张; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148(响应式 25) → 1163(浮层/MV 15) → **1205**(播放条 10 + EQ 8 + 托盘 10 + 定时关闭 10 + 设置修整 4) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1243** 通过 / 0 skip / 0 失败(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → **1243**(桌面播放条 5 + 关注页 22 + 双列 16) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **7** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
@@ -118,6 +118,22 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-18(十二) 用户反馈 4 条 + §11.A AppImage 冒烟 + 横屏双列 S0/S1 · **v0.24.0**
+
+| # | 反馈 | 处理 |
+|---|---|---|
+| 1 | 桌面版底部播放栏不要显示队列排位(2/35) | 判据抽纯函数 `playerBarShowsQueueIndex({isDesktop})`(`!kIsWeb && (Linux || Windows)`): 桌面隐藏 `N/M`、手机保留; 位置/时长/「已排队→mm:ss」不受影响。用**平台**而不是宽度档(窄窗口的桌面仍是桌面), 测试用 `desktopPlatformOverride` 注入避免依赖宿主机 |
+| 2 | 关注页顶部横条数量要更多、与动态主视图等宽 | 根因不是长度变量: `_visibleAuthorCount = 8` 与屏宽无关 + chip 宽(`wide ? 84 : 64`)是渲染侧字面量 ⇒ 提成具名常量(`kAuthorChipWidth 64 / Wide 84 / Gap 10`)并新增纯函数 `visibleAuthorCountFor(...)`(计入「全部」「进入全部」, 不足一格至少 1, 无限宽全放); 横条改用 `LayoutBuilder` 真实可用宽、水平内边距统一 `kPagePadding` 与列表共线。实测 360→8 / 840→9 / **1280→14** 位 |
+| 3 | 点击语义统一 | `_AuthorChip` 删掉头像独立跳转(整块只做页内聚焦); 动态卡片头像成为**唯一**进用户空间详情的入口(复用 `UserAvatarTap → UserNav`)。3 例测试锁死 |
+| 4 | 刷新: 安卓刷新只回 1 条(展示 3 条); Linux 无下拉刷新 | 数据面根因**不在关注流**(早已合并): 用户空间用重挂载**整体替换**、艺人空间压根没有刷新入口 ⇒ 最新页只回 1 条就 3 变 1。`mergeFeedEvents` 抽到 `feed/feed_merge.dart` 三处共用, 艺人页补 `_refreshDynamics()` + `RefreshIndicator`; 附带修 `_fetchLatest` 不再覆盖已翻出的 `_cursor`。**桌面**: `AppScrollBehavior`(dragDevices 含 mouse/trackpad/stylus)+ 新组件 `wheel_refresh.dart`(仅 `extentBefore<=0` 且向上滚时触发, 1.5s 冷却、在途不重入), 接入关注流/用户空间/艺人空间 |
+| 5 | §11.A 桌面冒烟(AppImage) | 新增 **`tools/smoke-appimage.sh`**(无产物 SKIP=exit 3): 静态 39 项 + 运行期 9 项(xvfb+dbus、FUSE 真挂载、数据目录与 `identity.json` 幂等、`NCM_DATA_DIR` 优先、日志无 panic) + 托盘 5 项(假 StatusNotifierWatcher + dbusmenu 回读 8 子项=6 文案+2 分隔线, 无曲目 4 项 `enabled=0`)。编排者复跑 **PASS / 39s**; 留 5 条人工项(真实桌面双击、无 FUSE 兜底、真实托盘宿主、中文字体、业务功能) |
+| 6 | 横屏双列 S0+S1 | `layout.dart` 新增 `twoColumnFor(Size)`(宽 ≥900 **且** 高 ≥560; 不改 `layoutTierFor`) + 歌单详情页内双列 **左 300 / 间 12 / 右 528**(正好填满 840 限宽), 两列各自滚动(右列沿用 `_scroll` 使「定位当前曲目」语义不变); 窄/中档一行未改。**显式偏差**: 判据用 `MediaQuery.sizeOf`(窗口逻辑尺寸)而非 `LayoutBuilder` 实测宽 —— 壳层把 body 限到 840, 拿 840 比 900 永远为假, 双列会成死代码 |
+
+门(编排者独立重跑): `dart analyze` **0** · 全量 `flutter test` **1205→1243 / 0 失败**(golden 19) · `cargo test` 313/0 · `dart format` 干净(**9 个文件需重排, 门抓到后已修**) · token/row-padding/write-guard OK · `bash tools/smoke-appimage.sh` **PASS / 39s**。
+
+**交给用户**: 双列观感(1280x720 歌单详情) · 宽屏横条是否够用(1280 现 14 位) · 桌面滚轮到顶刷新手感 · AppImage 的 5 条人工项。
+
 
 ## 2026-11-18(十一) 用户反馈批 10 项: 播放条三档 / EQ 校验与图表 / 托盘播放控制 / 定时关闭 / 设置页修整 · **v0.23.0**
 
