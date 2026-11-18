@@ -454,6 +454,15 @@ void main() {
         size: const Size(300, 2800),
         scaler: const TextScaler.linear(1.25),
       );
+      // 加设置行不该让这条红: 「检查更新」在页面靠下, 300dp + 1.25 字号下它离
+      // 视口下边缘只剩一行 —— 上面再加一行设置(如「定时关闭」), ListView 就不再
+      // 构建它, 断言会莫名其妙地红。所以先滚到它, 不依赖设置页的总高度余量。
+      await tester.scrollUntilVisible(
+        find.text('检查更新'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('检查更新'), findsOneWidget);
       expect(find.text('发现新版本 v0.3.0'), findsOneWidget);

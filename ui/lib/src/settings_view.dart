@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'adaptive_text.dart';
@@ -8,12 +10,14 @@ import 'app_settings.dart';
 import 'cover_quality_sheet.dart';
 import 'daily_cache.dart';
 import 'desktop_shell.dart';
+import 'layout.dart';
 import 'net_retry.dart';
 import 'platform.dart';
 import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
+import 'settings_sleep_timer_page.dart';
 import 'state_views.dart';
 import 'theme.dart' show AccentPalette;
 import 'toast.dart';
@@ -216,12 +220,27 @@ class SettingsView extends StatelessWidget {
             const SizedBox(height: 16),
             Card(
               margin: EdgeInsets.zero,
-              child: ListTile(
-                leading: const Icon(Icons.graphic_eq),
-                title: const Text('播放与音质'),
-                subtitle: const Text('精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => showAudioSettingsPage(context),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.graphic_eq),
+                    title: const Text('播放与音质'),
+                    subtitle: const Text(
+                      '精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showAudioSettingsPage(context),
+                  ),
+                  const Divider(height: 1),
+                  // 定时关闭(睡眠定时): 到点停止播放并退出, 可等当前这首播完。
+                  // 状态活在 SleepTimer 单例里, 与播放协调器共用同一份。
+                  ListTile(
+                    leading: const Icon(Icons.bedtime_outlined),
+                    title: const Text('定时关闭'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showSleepTimerPage(context),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -232,10 +251,17 @@ class SettingsView extends StatelessWidget {
               margin: EdgeInsets.zero,
               child: Column(
                 children: [
-                  // Linux 专有: 点关闭按钮是退出还是隐藏到托盘(默认退出 = 旧语义)。
-                  // 托盘能力由原生探测, 副标题据此如实说明是否会降级。
-                  _CloseBehaviorTile(settings: settings),
-                  const Divider(height: 1),
+                  // Linux: 真开关; Windows: 保留「仅 Linux 生效」说明行;
+                  // Android: 整块不渲染(用户 2026-11-18 口径)。见谓词注释。
+                  if (shouldShowCloseBehaviorTile(
+                    isLinux: DesktopShell.isSupportedPlatform,
+                    isAndroid: _isAndroidPlatform,
+                  )) ...[
+                    // 点关闭按钮是退出还是隐藏到托盘(默认退出 = 旧语义)。
+                    // 托盘能力由原生探测, 副标题据此如实说明是否会降级。
+                    _CloseBehaviorTile(settings: settings),
+                    const Divider(height: 1),
+                  ],
                   SwitchListTile(
                     title: const Text('切到搜索时清空上次结果'),
                     subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
@@ -396,6 +422,12 @@ class _TextScaleSetting extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scale = settings.textScale;
+    // 端内缩: thumb 半径取当前 SliderTheme(可能被外层主题替换), 其余由
+    // layout.dart 的常量给出 —— 与下面 SliderTheme 里写死的轨道/overlay 同一来源。
+    final ambient = SliderTheme.of(context);
+    final thumbRadius =
+        (ambient.thumbShape?.getPreferredSize(true, true).width ?? 0) / 2;
+    final endInset = textScaleSliderEndInset(thumbRadius);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -403,14 +435,26 @@ class _TextScaleSetting extends StatelessWidget {
           title: const Text('界面字号'),
           subtitle: Text(AppSettings.textScaleHint(scale)),
         ),
-        Row(
+        // 滑块与两端 'A' 叠在同一个 Stack 里, 而不是并排的 Row:
+        //
+        // Slider 的轨道两端本来就被 overlay/thumb 内缩(默认 24 + 半轨高 = 26dp),
+        // Row 里的文本标签永远对不上极端落点(2026-11-18 实测差 33.7 / 36.1dp)。
+        // 现在标签盒宽 = 2 × 端内缩、文本居中 ⇒ 标签中心 == value=min/max 时
+        // thumb 的中心; 盒宽是常量, 系统字号变大只改文本自身宽度, 中心不会跑。
+        Stack(
           children: [
-            // 滑块两端的尺寸提示(A 小 / A 大); 走 bodySmall, 不直写 fontSize
-            Padding(
-              padding: const EdgeInsets.only(left: 16),
-              child: Text('A', style: theme.textTheme.bodySmall),
-            ),
-            Expanded(
+            SliderTheme(
+              // 显式写死这一年的轨道口径(trackHeight 4 / 圆角轨道 / overlay 24):
+              // 端内缩 = max(overlay 半径, thumb 半径) + 半轨高 才可推导, 不随
+              // Flutter 改默认值把落点挪走(常量见 layout.dart)。
+              data: ambient.copyWith(
+                year2023: true,
+                trackHeight: kTextScaleSliderTrackHeight,
+                trackShape: const RoundedRectSliderTrackShape(),
+                overlayShape: const RoundSliderOverlayShape(
+                  overlayRadius: kTextScaleSliderOverlayRadius,
+                ),
+              ),
               child: Slider(
                 value: scale,
                 min: AppSettings.kTextScaleMin,
@@ -422,9 +466,29 @@ class _TextScaleSetting extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Text('A', style: theme.textTheme.titleMedium),
+            // 两端的尺寸提示(A 小 / A 大), 走 bodySmall / titleMedium。
+            // IgnorePointer: 标签压在轨道端点上, 不能让这两条 52dp 变成拖动死区。
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: endInset * 2,
+              child: IgnorePointer(
+                child: Center(
+                  child: Text('A', style: theme.textTheme.bodySmall),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: endInset * 2,
+              child: IgnorePointer(
+                child: Center(
+                  child: Text('A', style: theme.textTheme.titleMedium),
+                ),
+              ),
             ),
           ],
         ),
@@ -628,9 +692,29 @@ class _CredentialStorageTileState extends State<_CredentialStorageTile> {
   }
 }
 
+/// 「关闭主窗口时」这一整块该不该出现在设置页里(纯谓词, 单测见
+/// ui/test/close_behavior_tile_visible_test.dart)。
+///
+/// - Linux: 真开关(直接退出 / 最小化到托盘), 托盘能力由原生探测;
+/// - Windows: 没有托盘语义, 但保留一行如实说明「仅 Linux 生效」(不给假开关);
+/// - Android: 用户 2026-11-18 口径是「直接省略」—— 手机既没有主窗口关闭按钮,
+///   也没有托盘, 整块(含它后面的分隔线)不该占位, 不是置灰、也不是留说明行。
+bool shouldShowCloseBehaviorTile({
+  required bool isLinux,
+  required bool isAndroid,
+}) => isLinux || !isAndroid;
+
+/// 当前进程是不是 Android(桌面 Linux/Windows 上恒为 false)。
+///
+/// 不用 [defaultTargetPlatform]: 它在 widget 测试里默认是 android, 会把「没有
+/// Android 平台也能测的纯谓词」和一个假的平台标记搅在一起。真实 IO 平台才有
+/// 意义, 单测一律直接调上面的谓词。
+bool get _isAndroidPlatform => !kIsWeb && Platform.isAndroid;
+
 /// 「关闭主窗口时」设置项: Linux 桌面可选「直接退出 / 最小化到托盘」。
 ///
-/// 非 Linux(Windows/Android)不撒谎也不给假开关: 只显示一行说明"仅 Linux 生效"。
+/// 非 Linux(只剩 Windows 会到这里, Android 由 [shouldShowCloseBehaviorTile]
+/// 整块省略)不撒谎也不给假开关: 只显示一行说明"仅 Linux 生效"。
 /// 托盘是否真的可用由原生 getStatus 决定(见 desktop_shell.dart), 副标题会如实写
 /// "将降级为最小化到任务栏"。
 class _CloseBehaviorTile extends StatelessWidget {

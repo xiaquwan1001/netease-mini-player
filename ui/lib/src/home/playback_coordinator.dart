@@ -11,6 +11,7 @@ import '../playback_policy.dart' show shouldSkipVipSong;
 import '../playback_state.dart';
 import '../queue.dart';
 import '../rust/api.dart' as rust;
+import '../sleep_timer.dart';
 import '../song_actions.dart' show SongActionSource;
 import 'lyric_controller.dart';
 
@@ -58,6 +59,7 @@ class PlaybackCoordinator extends ChangeNotifier {
     required this.onRestored,
     required this.syncCoverPalette,
     required this.syncActionState,
+    this.sleepTimer,
   });
 
   /// 播放门面(Android=Media3, 其它=Rust). 与页面共用**同一个实例**。
@@ -101,6 +103,10 @@ class PlaybackCoordinator extends ChangeNotifier {
 
   /// 换曲后把红心/播放模式回传原生通知栏(原 `_syncActionState`)。
   final Future<void> Function() syncActionState;
+
+  /// 睡眠定时(定时关闭): 到点判定挂在**既有**的 500ms 轮询与曲末处理上,
+  /// 不另起一套轮询; null = 未接线(测试/无宿主)。
+  final SleepTimer? sleepTimer;
 
   bool _disposed = false;
 
@@ -201,6 +207,9 @@ class PlaybackCoordinator extends ChangeNotifier {
         );
       }
     }
+    // 睡眠定时: 用同一份播放态心跳更新剩余时间, 并在到点(立刻停/播完这首)时
+    // 通过 SleepTimer.onExpire 触发"停播放 + 退出"。不新起轮询。
+    sleepTimer?.onPlaybackTick(playing: state.playing);
     // 通知栏图标自愈(P-02): 定时幂等重推一次红心/模式。
     // 值没变时 Playback.setActionState 直接短路(不跨通道/不刷新通知), 所以这里只是
     // 一次内存比较; 上一次推送失败(服务未就绪)或原生侧状态被重置时, 靠它自愈。
@@ -256,6 +265,16 @@ class PlaybackCoordinator extends ChangeNotifier {
     if (_advancing) return;
     _advancing = true;
     try {
+      final timer = sleepTimer;
+      if (timer != null) {
+        // 「播完这首」: 到点的这一曲播完就停, 不再续播下一首。
+        // 已经由 poll 的 tick 触发过(fired)时 onTrackEnded 是空操作, 同样不续播。
+        timer.onTrackEnded();
+        if (timer.fired) {
+          if (!_disposed) notifyListeners();
+          return;
+        }
+      }
       final next = queue.onEnded();
       if (next == null) {
         // 顺序播放到队尾: 停在最后一首

@@ -1,7 +1,7 @@
 /// Linux 桌面的「关闭主窗口」行为桥: `ncm/desktop_shell` method channel.
 ///
 /// 原生侧在 `ui/linux/runner/my_application.cc`(GTK + 运行期 dlopen 的
-/// libayatana-appindicator3)。这里做四件事:
+/// libayatana-appindicator3)。这里做五件事:
 ///   1. 把 [AppSettings.closeBehavior] 推给原生(启动一次, 之后每次改设置推一次);
 ///   2. 读回原生能力快照([TrayStatus]): 有托盘 / 缺库 / 缺 StatusNotifier 宿主;
 ///   3. **关闭请求的分流点**: Flutter 的 FlView 自己连了窗口的 delete-event 并调
@@ -9,7 +9,10 @@
 ///      [WidgetsBindingObserver.didRequestAppExit]: 退出 ⇒ AppExitResponse.exit,
 ///      隐藏 ⇒ 调原生 hideToTray 后 AppExitResponse.cancel。这是官方支持的路径,
 ///      也不需要去 GTK 侧跟引擎抢 delete-event(实测抢不到: 回调一次都不会被调用);
-///   4. 提供 [DesktopCloseObserver] 供首页注册(见 home_page.dart 的 initState)。
+///   4. 提供 [DesktopCloseObserver] 供首页注册(见 home_page.dart 的 initState);
+///   5. **托盘播放控制**: 原生菜单里的「播放/暂停·上一首·下一首·喜欢」只发意图
+///      ([TrayActionNames] → [TrayActionHandlers]), 真正的播放控制在 Dart; 反方向由
+///      [DesktopShell.setPlaybackState] 把播放态/喜欢态推回去, 原生据此改文案与置灰。
 ///
 /// 为什么能力探测放在原生: 只有原生能查会话总线上的 org.kde.StatusNotifierWatcher、
 /// 也只有原生知道 dlopen 到没到 libayatana-appindicator3。Dart 侧不猜。
@@ -113,6 +116,85 @@ String closeBehaviorSubtitle({
 /// 通道名(与原生 `kDesktopChannelName` 一致)。
 const MethodChannel kDesktopShellChannel = MethodChannel('ncm/desktop_shell');
 
+/// 托盘菜单动作名 —— **与原生 `my_application.cc` 的 kTrayAction* 是同一份表**,
+/// 改一边必须同步另一边(两边注释互指):
+///
+/// | 常量 | 原生菜单项 | Dart 侧落到哪个已有入口 |
+/// |---|---|---|
+/// | [togglePlay] | 播放 / 暂停 | 播放控制器的 toggle(与播放条按钮同一个) |
+/// | [previous] | 上一首 | 队列上一首(与通知栏/耳机键同一个回调) |
+/// | [next] | 下一首 | 队列下一首(同上) |
+/// | [toggleLike] | 喜欢 / 取消喜欢 | 当前曲目的红心切换(同上) |
+///
+/// 原生只发意图: 队列、喜欢列表、登录态都只有 Dart 一份, 原生不复制也不猜。
+abstract final class TrayActionNames {
+  static const String togglePlay = 'togglePlay';
+  static const String previous = 'previous';
+  static const String next = 'next';
+  static const String toggleLike = 'toggleLike';
+}
+
+/// 托盘菜单动作(解析后的稳定枚举; 未知动作解析成 null)。
+enum TrayAction {
+  togglePlay(TrayActionNames.togglePlay),
+  previous(TrayActionNames.previous),
+  next(TrayActionNames.next),
+  toggleLike(TrayActionNames.toggleLike);
+
+  const TrayAction(this.id);
+
+  /// 通道里传的字符串(与原生常量逐字一致)。
+  final String id;
+
+  /// 动作名 → 枚举。大小写/空白都不做特判: 认不出就是 null(两端口径漂了)。
+  static TrayAction? tryParse(Object? raw) {
+    if (raw is! String) return null;
+    for (final action in TrayAction.values) {
+      if (action.id == raw) return action;
+    }
+    return null;
+  }
+}
+
+/// 托盘动作 → **已有**播放控制回调的映射表(纯数据 + 纯分发, 便于单测)。
+///
+/// 为什么这里全是可空回调: 首页没建/已销毁、未登录、没有队列时, 这些入口本来就不
+/// 该被调 —— 此时 [dispatch] 安全 no-op 并返回 false(不抛、不 toast、不假装成功)。
+/// 原生侧靠 [DesktopShell.setPlaybackState] 推过去的 hasTrack 把不可用项置灰,
+/// 这里再兜一层, 避免"点了置灰失败的项 ⇒ 异常"。
+@immutable
+class TrayActionHandlers {
+  const TrayActionHandlers({
+    this.onTogglePlay,
+    this.onPrevious,
+    this.onNext,
+    this.onToggleLike,
+  });
+
+  final VoidCallback? onTogglePlay;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+  final VoidCallback? onToggleLike;
+
+  /// 某个动作当前有没有注册回调(没有 ⇒ 原生把它置灰最合适)。
+  bool handles(TrayAction action) => _handlerOf(action) != null;
+
+  VoidCallback? _handlerOf(TrayAction action) => switch (action) {
+    TrayAction.togglePlay => onTogglePlay,
+    TrayAction.previous => onPrevious,
+    TrayAction.next => onNext,
+    TrayAction.toggleLike => onToggleLike,
+  };
+
+  /// 分发一个动作。返回是否真的执行了(未注册回调 ⇒ false)。
+  bool dispatch(TrayAction action) {
+    final handler = _handlerOf(action);
+    if (handler == null) return false;
+    handler();
+    return true;
+  }
+}
+
 /// Linux 关闭行为/托盘桥。默认单例 [instance]; 单测可 new 一个注入假通道。
 class DesktopShell {
   DesktopShell({MethodChannel? channel})
@@ -131,6 +213,14 @@ class DesktopShell {
 
   AppSettings? _settings;
   bool _pushing = false;
+
+  /// 托盘动作的落点(首页 attach 时注册, detach 时清空 ⇒ 无页面即 no-op)。
+  TrayActionHandlers? _trayHandlers;
+
+  /// 最近一次**成功**推给原生的托盘按钮态: 值没变就不跨通道(整页重建时会频繁调)。
+  bool? _sentPlaying;
+  bool? _sentLiked;
+  bool? _sentHasTrack;
 
   /// 这个平台有没有桌面壳通道(只有 Linux 有)。
   static bool get isSupportedPlatform => !kIsWeb && Platform.isLinux;
@@ -201,6 +291,56 @@ class DesktopShell {
     }
   }
 
+  /// 注册托盘动作的落点(传 null = 取消注册, 之后的动作安全 no-op)。
+  ///
+  /// 与 [Playback.setSkipHandlers] 同一口径: 后注册的覆盖先注册的, 首页销毁时清空。
+  void setTrayActionHandlers(TrayActionHandlers? handlers) {
+    _trayHandlers = handlers;
+  }
+
+  /// Dart → 原生: 托盘菜单按钮态(文案 + 置灰)。返回原生侧托盘菜单是否真的活着。
+  ///
+  /// - [playing] 决定「播放」还是「暂停」, [liked] 决定「喜欢」还是「取消喜欢」;
+  /// - [hasTrack] = false(没有当前曲目/播放条还没出现) ⇒ 原生四个按钮全置灰,
+  ///   避免点了没反应的"假按钮";
+  /// - 幂等: 与上次成功推送的值相同就不跨通道(整页重建/轮询重推因此几乎零成本);
+  /// - 失败(非 Linux / 通道缺失 / 缺库)一律静默返回 false, 与关闭行为的降级路径一致。
+  Future<bool> setPlaybackState({
+    required bool playing,
+    required bool liked,
+    required bool hasTrack,
+  }) async {
+    if (!isSupportedPlatform) return false;
+    if (_sentPlaying == playing &&
+        _sentLiked == liked &&
+        _sentHasTrack == hasTrack) {
+      return true;
+    }
+    try {
+      final live = await _channel.invokeMethod<bool>('setTrayPlaybackState', {
+        'playing': playing,
+        'liked': liked,
+        'hasTrack': hasTrack,
+      });
+      _sentPlaying = playing;
+      _sentLiked = liked;
+      _sentHasTrack = hasTrack;
+      return live ?? false;
+    } on MissingPluginException {
+      return false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// 测试用: 清掉推送幂等缓存(生产路径不需要)。
+  @visibleForTesting
+  void debugResetPlaybackStateCache() {
+    _sentPlaying = null;
+    _sentLiked = null;
+    _sentHasTrack = null;
+  }
+
   /// 真的退出进程(停播放)。
   Future<void> quit() async {
     if (!isSupportedPlatform) return;
@@ -246,7 +386,24 @@ class DesktopShell {
     }
   }
 
-  Future<Object?> _onNativeCall(MethodCall call) async => null;
+  /// 原生 → Dart: 目前只有托盘菜单动作("trayAction", 参数是 [TrayActionNames] 里的字符串)。
+  Future<Object?> _onNativeCall(MethodCall call) async {
+    if (call.method != 'trayAction') return null;
+    final action = TrayAction.tryParse(call.arguments);
+    if (action == null) {
+      debugPrint('[NCM-TRAY] 未知的托盘动作: ${call.arguments}');
+      return null;
+    }
+    final handlers = _trayHandlers;
+    if (handlers == null || !handlers.dispatch(action)) {
+      // 没有页面/未登录: 安全 no-op(原生那边本该把这几个按钮置灰)
+      debugPrint('[NCM-TRAY] 托盘动作 ${action.id} 没有注册回调, 忽略');
+      return null;
+    }
+    // 留痕: 用户报"点托盘播放没反应"时, 有这条就能分清是原生没发还是 Dart 没接。
+    debugPrint('[NCM-TRAY] 托盘动作 ${action.id} 已执行');
+    return null;
+  }
 }
 
 /// 「点关闭按钮」的最终分流点(Flutter 官方路径: `System.requestAppExit`)。

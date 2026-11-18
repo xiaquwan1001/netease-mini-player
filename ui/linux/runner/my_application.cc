@@ -19,6 +19,14 @@ struct _MyApplication {
   GtkWidget* tray_menu;              // 托盘菜单(自持一份引用, dispose 时销毁)
   gboolean close_to_tray;            // 当前设置: TRUE = 点关闭隐藏到托盘
   gboolean quitting;                 // 正在真退出(此时不再拦截关闭事件)
+  // ---- 托盘菜单里的播放控制(N3): 文案/可用性全由 Dart 推送的状态决定 ----
+  GtkWidget* tray_play_item;         // 「播放 / 暂停」
+  GtkWidget* tray_prev_item;         // 「上一首」
+  GtkWidget* tray_next_item;         // 「下一首」
+  GtkWidget* tray_like_item;         // 「喜欢 / 取消喜欢」
+  gboolean tray_has_track;           // FALSE = 没有当前曲目(四个按钮置灰, 点了也没意义)
+  gboolean tray_playing;             // 当前是否正在播放(决定「播放」还是「暂停」)
+  gboolean tray_liked;               // 当前曲目是否已喜欢(决定「喜欢」还是「取消喜欢」)
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -50,6 +58,18 @@ constexpr const char* kTrayWatcherBusName = "org.kde.StatusNotifierWatcher";
 
 /// 与 Dart 约定的通道名(见 ui/lib/src/desktop_shell.dart)。
 constexpr const char* kDesktopChannelName = "ncm/desktop_shell";
+
+// 托盘菜单动作名(原生 → Dart, 走上面这条通道的 "trayAction" 方法)。
+// **与 Dart 侧 desktop_shell.dart 的 TrayActionNames 是同一份表**, 改一边必须同步另一边:
+//   togglePlay = 播放/暂停(合并成一个动作, 真正的切换由 Dart 的播放控制器决定)
+//   previous   = 上一首(队列)
+//   next       = 下一首(队列)
+//   toggleLike = 喜欢 / 取消喜欢(当前曲目)
+// 原生只发意图, 不做任何播放决定: 队列、喜欢列表、登录态都只有 Dart 那份。
+constexpr const char* kTrayActionTogglePlay = "togglePlay";
+constexpr const char* kTrayActionPrevious = "previous";
+constexpr const char* kTrayActionNext = "next";
+constexpr const char* kTrayActionToggleLike = "toggleLike";
 
 // libayatana-appindicator3 的最小 ABI 子集: 不引头文件 ⇒ 构建期零依赖,
 // 运行期 dlopen 探测 ⇒ 缺库只降级不崩。枚举值取自 app-indicator.h, 0.4 起未变:
@@ -175,6 +195,78 @@ void tray_quit_cb(GtkMenuItem* /*item*/, gpointer user_data) {
   desktop_quit(MY_APPLICATION(user_data));
 }
 
+/// 原生 → Dart: 托盘菜单被点了(Dart 侧解析动作名后调**已有**的播放控制入口)。
+///
+/// 没有通道(理论上不会: 通道在 activate 里先建)就静默丢弃 —— 托盘不能因为一次
+/// 跨端调用失败就崩。Dart 侧回调未注册时自己是 no-op(无页面/未登录)。
+void send_tray_action(MyApplication* self, const char* action) {
+  if (self->desktop_channel == nullptr) return;
+  FlValue* args = fl_value_new_string(action);
+  fl_method_channel_invoke_method(self->desktop_channel, "trayAction", args,
+                                  nullptr, nullptr, nullptr);
+  fl_value_unref(args);
+}
+
+/// 一个托盘播放控制项的绑定: 哪个 app + 哪个动作名(字符串常量, 不拥有)。
+struct TrayActionBinding {
+  MyApplication* self;
+  const char* action;
+};
+
+void tray_action_binding_free(gpointer data, GClosure* /*closure*/) {
+  g_free(data);
+}
+
+void tray_action_cb(GtkMenuItem* /*item*/, gpointer user_data) {
+  TrayActionBinding* binding = static_cast<TrayActionBinding*>(user_data);
+  send_tray_action(binding->self, binding->action);
+}
+
+/// 往菜单里追加一项播放控制(点击 ⇒ 发动作给 Dart)。
+GtkWidget* append_tray_action_item(MyApplication* self,
+                                   GtkWidget* menu,
+                                   const char* label,
+                                   const char* action) {
+  GtkWidget* item = gtk_menu_item_new_with_label(label);
+  TrayActionBinding* binding = g_new0(TrayActionBinding, 1);
+  binding->self = self;
+  binding->action = action;
+  g_signal_connect_data(item, "activate", G_CALLBACK(tray_action_cb), binding,
+                        tray_action_binding_free,
+                        static_cast<GConnectFlags>(0));
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+  return item;
+}
+
+/// 按 Dart 推送的状态刷新四个菜单项(文案 + 置灰)。
+///
+/// AppIndicator 通过 dbusmenu 把 GTK 菜单导出给宿主, 改完 label 必须再 show 一次
+/// 才会重绘(本地 GTK 菜单不需要, 但托盘菜单都走这条路)。
+/// 状态**先于**托盘创建到达也没问题: 状态存在 self 上, ensure_tray 末尾会再调一次本函数。
+void apply_tray_menu_state(MyApplication* self) {
+  const gboolean has_track = self->tray_has_track;
+  if (self->tray_play_item != nullptr) {
+    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_play_item),
+                            self->tray_playing ? "暂停" : "播放");
+    gtk_widget_set_sensitive(self->tray_play_item, has_track);
+    gtk_widget_show(self->tray_play_item);
+  }
+  if (self->tray_prev_item != nullptr) {
+    gtk_widget_set_sensitive(self->tray_prev_item, has_track);
+    gtk_widget_show(self->tray_prev_item);
+  }
+  if (self->tray_next_item != nullptr) {
+    gtk_widget_set_sensitive(self->tray_next_item, has_track);
+    gtk_widget_show(self->tray_next_item);
+  }
+  if (self->tray_like_item != nullptr) {
+    gtk_menu_item_set_label(GTK_MENU_ITEM(self->tray_like_item),
+                            self->tray_liked ? "取消喜欢" : "喜欢");
+    gtk_widget_set_sensitive(self->tray_like_item, has_track);
+    gtk_widget_show(self->tray_like_item);
+  }
+}
+
 /// 确保托盘图标存在(幂等)。返回 FALSE = 这台机器上没有可用托盘宿主。
 gboolean ensure_tray(MyApplication* self) {
   if (self->indicator != nullptr) return TRUE;
@@ -206,10 +298,23 @@ gboolean ensure_tray(MyApplication* self) {
   g_signal_connect(show_item, "activate", G_CALLBACK(tray_show_window_cb),
                    self);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), show_item);
+  // 顺序(用户口径): 显示主界面 · ─ · 播放/暂停 · 上一首 · 下一首 · 喜欢/取消喜欢 · ─ · 退出
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
+  self->tray_play_item = append_tray_action_item(self, menu, "播放",
+                                                 kTrayActionTogglePlay);
+  self->tray_prev_item =
+      append_tray_action_item(self, menu, "上一首", kTrayActionPrevious);
+  self->tray_next_item =
+      append_tray_action_item(self, menu, "下一首", kTrayActionNext);
+  self->tray_like_item =
+      append_tray_action_item(self, menu, "喜欢", kTrayActionToggleLike);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), gtk_separator_menu_item_new());
   GtkWidget* quit_item = gtk_menu_item_new_with_label("退出");
   g_signal_connect(quit_item, "activate", G_CALLBACK(tray_quit_cb), self);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
   gtk_widget_show_all(menu);
+  // Dart 可能在托盘建好之前就推过状态(启动即推), 这里按已存的状态刷新一次。
+  apply_tray_menu_state(self);
 
   api.set_menu(indicator, menu);
   if (api.set_secondary_activate_target != nullptr) {
@@ -297,6 +402,42 @@ void desktop_channel_on_method_call(FlMethodChannel* /*channel*/,
     FlValue* active = fl_value_new_bool(self->indicator != nullptr);
     fl_method_call_respond_success(method_call, active, nullptr);
     fl_value_unref(active);
+    return;
+  }
+  if (g_strcmp0(method, "setTrayPlaybackState") == 0) {
+    // Dart → 原生: 托盘菜单按钮态({playing, liked, hasTrack})。
+    // 缺字段/类型不对一律按 false(置灰), 不抛也不崩 —— 与 TrayStatus.fromChannel 同口径。
+    FlValue* args = fl_method_call_get_args(method_call);
+    auto read_flag = [args](const char* key) -> gboolean {
+      if (args == nullptr || fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+        return FALSE;
+      }
+      FlValue* value = fl_value_lookup_string(args, key);
+      if (value == nullptr || fl_value_get_type(value) != FL_VALUE_TYPE_BOOL) {
+        return FALSE;
+      }
+      return fl_value_get_bool(value);
+    };
+    const gboolean playing = read_flag("playing");
+    const gboolean liked = read_flag("liked");
+    const gboolean has_track = read_flag("hasTrack");
+    const gboolean changed = playing != self->tray_playing ||
+                             liked != self->tray_liked ||
+                             has_track != self->tray_has_track;
+    self->tray_playing = playing;
+    self->tray_liked = liked;
+    self->tray_has_track = has_track;
+    if (self->indicator != nullptr) apply_tray_menu_state(self);
+    // 只在真的变化时留痕(Dart 侧已按值去重, 这里再挡一层日志刷屏):
+    // 排查"托盘按钮文案不跟着变"时, 先看这条就知道是 Dart 没推还是原生没刷。
+    if (changed) {
+      g_message("close-to-tray: 托盘播放态 = %s / %s / 有曲目:%s",
+                playing ? "播放中" : "已暂停", liked ? "已喜欢" : "未喜欢",
+                has_track ? "是" : "否");
+    }
+    FlValue* live = fl_value_new_bool(self->indicator != nullptr);
+    fl_method_call_respond_success(method_call, live, nullptr);
+    fl_value_unref(live);
     return;
   }
   if (g_strcmp0(method, "hideToTray") == 0) {
@@ -489,6 +630,11 @@ static void my_application_dispose(GObject* object) {
     gtk_widget_destroy(self->tray_menu);
     self->tray_menu = nullptr;
   }
+  // 菜单销毁时子项一起没了(绑定结构由 g_signal_connect_data 的 destroy notify 释放)
+  self->tray_play_item = nullptr;
+  self->tray_prev_item = nullptr;
+  self->tray_next_item = nullptr;
+  self->tray_like_item = nullptr;
   self->window = nullptr;
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, exit;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,6 +45,7 @@ import '../search_loading.dart';
 import '../search_results.dart';
 import '../search_suggest.dart';
 import '../settings_view.dart';
+import '../sleep_timer.dart';
 import '../song_actions.dart';
 import '../song_share.dart';
 import '../song_tile.dart';
@@ -234,7 +235,11 @@ class _HomePageState extends State<HomePage> {
       onRestored: _onPlaybackRestored,
       syncCoverPalette: _syncCoverPalette,
       syncActionState: _syncActionState,
+      // 定时关闭: 同一个状态机既给设置页显示, 也在轮询/曲末里判定到点
+      sleepTimer: sleepTimer,
     )..addListener(_onPlaybackChanged);
+    // 到点动作必须由页面注入(纯逻辑不碰平台 API): 停播放 + 退出应用
+    sleepTimer.onExpire = _onSleepTimerExpired;
     // 歌曲动作宿主(拆壳 S5): 红心集合/登录态/队列/当前曲目都是页面状态,
     // 面板与路由跳转要 BuildContext —— 全部按回调注入, 装配逻辑在
     // src/home/song_action_wiring.dart; 宿主刷新时机仍是下面三处
@@ -307,6 +312,8 @@ class _HomePageState extends State<HomePage> {
       onPrevious: _previous,
       onEnded: _coordinator.onNativeTrackEnded,
       onToggleLike: _songActions.toggleCurrentLike,
+      // Linux 托盘「播放/暂停」= 播放条上那个按钮(同一个控制器入口, 不新造旋钮)
+      onTogglePlay: () => _coordinator.toggle(),
       onCycleMode: _cycleModeFromNotification,
       buildActionsHost: _songActions.buildHost,
       barActions: _playerBarActions,
@@ -351,6 +358,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    // 睡眠定时的到点动作属于本页面实例: 摘掉, 免得销毁后的 State 被回调
+    sleepTimer.onExpire = null;
     WidgetsBinding.instance.removeObserver(_desktopClose);
     // 断开播放能力: 避免下一个 HomePage 实例/测试用例误用已销毁的实现
     PlaybackBridge.instance.unbind();
@@ -377,6 +386,31 @@ class _HomePageState extends State<HomePage> {
   /// 播放协调器有变更时重建(与拆分前每处 setState(赋值 _player) 等价)。
   void _onPlaybackChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// 定时关闭到点: 停止播放 + 退出应用。
+  ///
+  /// 平台分流(2026-11 用户需求「定时停止播放并退出」):
+  /// - Android: [Playback.stop] 先停播放器并清空 MediaItem(服务随之退到空闲),
+  ///   再 [SystemNavigator.pop] 结束界面;
+  /// - Linux: 走桌面壳的 quit(与点窗口关闭选「直接退出」同一条实现);
+  /// - Windows: 没有桌面壳通道, 直接退出进程(播放现场已按 5s 节流落盘)。
+  Future<void> _onSleepTimerExpired() async {
+    try {
+      await _playback.stop();
+    } catch (_) {
+      // 播放后端已不可用(未就绪/已停止): 不挡住退出
+    }
+    if (!mounted) return;
+    if (Platform.isAndroid) {
+      await SystemNavigator.pop();
+      return;
+    }
+    if (Platform.isLinux) {
+      await DesktopShell.instance.quit();
+      return;
+    }
+    exit(0);
   }
 
   /// 队列面板状态有变更时重建(与拆分前队列增删/模式切换的 setState 等价)。
@@ -1608,6 +1642,16 @@ class _HomePageState extends State<HomePage> {
             mode: _queue.mode,
             heartActive: _heartActive,
           );
+    // Linux 系统托盘菜单的按钮态: 文案(播放/暂停、喜欢/取消喜欢)与置灰全由
+    // 这里推过去。幂等(值没变不跨通道), 所以每次构建推一次几乎零成本;
+    // 非 Linux 平台直接 return false, 不碰通道。
+    unawaited(
+      DesktopShell.instance.setPlaybackState(
+        playing: showBar && player.playing,
+        liked: _isLiked(current?.id),
+        hasTrack: showBar,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       playerBarData.value = data;
       // 全局"正在播放"样本(见 src/now_playing.dart): 所有列表行的播放态高亮

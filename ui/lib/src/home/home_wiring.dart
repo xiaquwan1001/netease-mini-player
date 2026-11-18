@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../app_settings.dart';
+import '../desktop_shell.dart';
 import '../app_shell.dart';
 import '../artist_nav.dart';
 import '../playback.dart';
@@ -20,6 +23,7 @@ import '../update_checker.dart';
 /// |---|---|---|
 /// | 通知栏/耳机键 上一首·下一首·播完 | [Playback.setSkipHandlers] | 传三个 null |
 /// | 通知栏自定义按钮(喜欢/模式) | [Playback.setActionHandlers] | 传两个 null |
+/// | Linux 托盘播放控制(4 项) | [DesktopShell.setTrayActionHandlers] | 传 null |
 /// | 设置变化(播放参数) | addListener | removeListener(同一个引用) |
 /// | "..." 动作宿主 | actionsHost.value = 宿主 | actionsHost.value = null |
 /// | 播放条回调集合 | playerBarActions.value = 集合 | playerBarActions.value = null |
@@ -38,6 +42,7 @@ class HomeWiring {
     required this.onEnded,
     required this.onToggleLike,
     required this.onCycleMode,
+    required this.onTogglePlay,
     required this.buildActionsHost,
     required this.barActions,
     required this.openAlbum,
@@ -52,6 +57,9 @@ class HomeWiring {
 
   /// 原生 STATE_ENDED 的即时通知(自动续播不等 500ms 轮询)。
   final void Function() onEnded;
+
+  /// Linux 托盘菜单「播放 / 暂停」(与播放条上的那个按钮同一个入口)。
+  final void Function() onTogglePlay;
 
   /// 通知栏自定义按钮: 喜欢 / 播放顺序。原生只发意图, 状态与副作用在 Dart。
   final Future<void> Function() onToggleLike;
@@ -92,6 +100,16 @@ class HomeWiring {
       onToggleLike: onToggleLike,
       onCycleMode: onCycleMode,
     );
+    // Linux 托盘菜单(播放/暂停·上一首·下一首·喜欢)复用**同一批**回调:
+    // 托盘只发意图, 队列与喜欢状态仍然只有 Dart 这一份。非 Linux 平台上是空操作。
+    DesktopShell.instance.setTrayActionHandlers(
+      TrayActionHandlers(
+        onTogglePlay: onTogglePlay,
+        onPrevious: () => unawaited(onPrevious()),
+        onNext: () => unawaited(onNext()),
+        onToggleLike: () => unawaited(onToggleLike()),
+      ),
+    );
     AppSettings.instance.addListener(onAudioSettingsChanged);
     actionsHost.value = buildActionsHost();
     // 播放条回调槽位只赋这一次(同一实例, 之后不再变); 帧后投递, 避免在
@@ -120,6 +138,8 @@ class HomeWiring {
     // 三个 null = 未注册: 原生动作会重新进排队区, 而不是调到已销毁的 State。
     Playback.setSkipHandlers();
     Playback.setActionHandlers();
+    // 托盘动作同样摘掉: 这之后点托盘按钮安全 no-op(原生那边通常会先把按钮置灰)。
+    DesktopShell.instance.setTrayActionHandlers(null);
     ArtistNav.onOpenAlbum = null;
     actionsHost.value = null;
     playerBarActions.value = null;
