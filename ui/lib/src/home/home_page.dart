@@ -262,12 +262,12 @@ class _HomePageState extends State<HomePage> {
       queue: _queue,
       libraryTitleOf: () => _account.libraryTitle,
       toast: _toast,
-      loggedIn: () => _info?.loggedIn == true,
       playSong: _coordinator.playSong,
       stopPlayback: _coordinator.stopPlayback,
       clearSavedState: _coordinator.clearSavedState,
       setUserStopped: (stopped) => _coordinator.userStopped = stopped,
       heartMode: () => _heartMode(),
+      leaveHeartMode: _account.exitHeartMode,
       syncActionState: _syncActionState,
     )..addListener(_onQueueChanged);
     _playerBarActions = PlayerBarActions(
@@ -898,7 +898,10 @@ class _HomePageState extends State<HomePage> {
   /// 心动模式那一步调 _heartMode(); 未登录/失败时 _heartMode 会自己 toast, 这里回退列表循环.
   Future<void> _cycleModeFromNotification() async {
     if (_heartActive) {
+      // 退出心动模式必须连歌单浏览态一起改(标题还停在「心动模式」的话,
+      // _heartActive 永远为真: 图标变不回来、再点只弹「列表循环」)。
       setState(() => _queue.mode = PlayMode.repeatAll);
+      _account.exitHeartMode();
       _toast('列表循环');
     } else {
       final next = nextNotificationMode(_queue.mode);
@@ -1091,8 +1094,12 @@ class _HomePageState extends State<HomePage> {
   void _onTabSelected(int index) {
     if (_tab == index) return;
     // 切 tab 前先收起登录弹层: 弹层是 modal sheet, 不会随 tab 切换消失,
-    // 会一直挂在旧页面上(用户 2026-11-17 反馈). 只关登录这一条, 其它弹层不动.
+    // 会一直挂在旧页面上(用户 2026-11-17 反馈).
     dismissLoginSheet();
+    // 同理收起播放队列面板(用户 2026-11-18 反馈: 切 tab 后面板还挂着, 顶部冒出
+    // 一堆返回条目把视图分成了两半)。底部导航切换必须是一个“干净的新视图”
+    // —— 任何跨导航的常驻弹层都在这里收。
+    if (_queueUI.isOpen) _queueUI.close();
     _tabVisited.add(index);
     // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
     final wasLyrics = _lyric.visible;

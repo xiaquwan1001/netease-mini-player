@@ -2,14 +2,22 @@ import 'rust/api.dart' as rust;
 
 import 'package:flutter/material.dart';
 
-import 'layout.dart' show kCardRowPadding, kRowTitleGap, rowHeightBox;
+import 'layout.dart'
+    show kCardRowPadding, kQueueRowExtent, kRowTitleGap, rowExtentFor;
+import 'queue.dart';
 import 'sheet_header.dart';
 import 'song_tile.dart' show SongTitleWithBadges;
 
 /// 当前播放队列面板(播放条上的 Icons.queue_music 打开)。
 ///
-/// 只做展示与"意图表达": 列表是传入的快照, 删除/切歌通过回调交给 [_HomePageState],
-/// 由它去改真正的 PlayQueue 并驱动播放 —— 所以这个 widget 可以脱离 Rust 单独测。
+/// 只做展示与"意图表达": 删除/切歌通过回调交给宿主, 由它去改真正的 PlayQueue
+/// 并驱动播放 —— 所以这个 widget 可以脱离 Rust 单独测。
+///
+/// 面板的两层数据:
+/// - [items]/[index] 是**打开瞬间的快照**(脱机/测试用, 也是首帧的真相);
+/// - [queue] + [changes] 是**可选的真实队列**: 给了之后面板跟着它走 —— 心动模式切换、
+///   自动续播、别处删歌都会立刻把列表与「当前高亮」重排(2026-11-18 用户反馈:
+///   "当前播放队列的更新响应不及时"), 不再是一份打开时就定死的旧快照。
 class PlayQueueSheet extends StatefulWidget {
   const PlayQueueSheet({
     super.key,
@@ -19,7 +27,8 @@ class PlayQueueSheet extends StatefulWidget {
     required this.onRemove,
     this.onMove,
     this.onClear,
-    this.onSaveAsPlaylist,
+    this.queue,
+    this.changes,
   });
 
   final List<rust.SongDto> items;
@@ -40,9 +49,11 @@ class PlayQueueSheet extends StatefulWidget {
   /// 「清空队列」(面板头部): 宿主负责清 PlayQueue 并在需要时停播。
   final void Function()? onClear;
 
-  /// 「存为歌单」(面板头部): 面板只把**去重后**的队列快照交给宿主,
-  /// 选歌单/新建/调 Rust/toast 都在宿主 —— 面板保持可脱机单测。
-  final Future<void> Function(List<rust.SongDto> songs)? onSaveAsPlaylist;
+  /// 真实队列(只读): 非 null 时面板跟着它刷新(见类头注释)。
+  final PlayQueue<rust.SongDto>? queue;
+
+  /// 队列变更通知(通常是 QueueSheetController, 它持有真实队列引用)。
+  final Listenable? changes;
 
   @override
   State<PlayQueueSheet> createState() => _PlayQueueSheetState();
@@ -59,28 +70,102 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
 
   late int _index = widget.index;
 
-  /// 「存为歌单」进行中: 防重复提交(回调未完成时按钮置灰)
-  bool _busy = false;
+  /// 行高(itemExtent)与滚动控制器: 打开时直接定位到当前播放曲目, 顶部「定位」按钮复用。
+  double? _extent;
+  ScrollController? _scroll;
 
-  /// 存为歌单: 交给宿主处理。同一首歌可能在队列里出现多次,
-  /// 服务端对重复 id 只收一次 —— 这里按 id 去重后传快照。
-  Future<void> _saveAsPlaylist() async {
-    if (_busy || _items.isEmpty) return;
-    final save = widget.onSaveAsPlaylist;
-    if (save == null) return;
-    final seen = <BigInt>{};
-    final songs = [
-      for (final s in _items)
-        if (seen.add(s.id)) s,
-    ];
-    setState(() => _busy = true);
-    try {
-      await save(songs);
-    } catch (_) {
-      // 失败反馈(toast)由宿主负责; 面板只保证按钮回到可用状态。
-    } finally {
-      if (mounted) setState(() => _busy = false);
+  @override
+  void initState() {
+    super.initState();
+    widget.changes?.addListener(_syncFromQueue);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 行高随系统字号缩放(与列表行同一口径), 所以只能在拿到 MediaQuery 之后建滚动控制器。
+    final extent = rowExtentFor(context, kQueueRowExtent);
+    if (_scroll == null) {
+      _extent = extent;
+      _scroll = ScrollController(initialScrollOffset: _currentOffset(extent));
+    } else if (_extent != extent) {
+      // 字号档位在面板打开期间变了: 行高已变, 旧偏移没有意义 ⇒ 复位到当前曲目
+      _extent = extent;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrent(animate: false);
+      });
     }
+  }
+
+  @override
+  void didUpdateWidget(PlayQueueSheet oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.changes != widget.changes) {
+      oldWidget.changes?.removeListener(_syncFromQueue);
+      widget.changes?.addListener(_syncFromQueue);
+      _syncFromQueue();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.changes?.removeListener(_syncFromQueue);
+    _scroll?.dispose();
+    super.dispose();
+  }
+
+  /// 打开时的初始滚动位置: 让当前播放曲目落在可视区(不再从第 1 首开始).
+  double _currentOffset(double extent) => _index <= 0 ? 0.0 : _index * extent;
+
+  /// 「定位当前播放歌曲」(面板头部按钮): 滚动到当前曲目(带一点上边距, 不贴顶)。
+  void _scrollToCurrent({bool animate = true}) {
+    final scroll = _scroll;
+    final extent = _extent;
+    if (scroll == null || extent == null || _index < 0) return;
+    if (!scroll.hasClients) return;
+    final target = (_currentOffset(extent) - extent * 0.5).clamp(
+      0.0,
+      scroll.position.maxScrollExtent,
+    );
+    if (!animate) {
+      scroll.jumpTo(target);
+      return;
+    }
+    scroll.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// 外部队列变了(心动模式切换/自动续播/别处删歌): 列表与高亮立刻按真实队列重排.
+  ///
+  /// 只在**内容或当前下标真的变了**时才 setState: 面板自己的拖拽/滑删也会让宿主
+  /// 回写队列并通知, 那些情况本地已经是最新形状, 重建只会白丢拖拽 key。
+  void _syncFromQueue() {
+    if (!mounted) return;
+    final queue = widget.queue;
+    if (queue == null) return;
+    final live = queue.items;
+    var same = live.length == _items.length;
+    if (same) {
+      for (var i = 0; i < live.length; i++) {
+        if (!identical(live[i], _items[i])) {
+          same = false;
+          break;
+        }
+      }
+    }
+    if (same && queue.index == _index) return;
+    setState(() {
+      _items
+        ..clear()
+        ..addAll(live);
+      _keys
+        ..clear()
+        ..addAll([for (final _ in _items) UniqueKey()]);
+      _index = queue.index;
+    });
   }
 
   /// 拖拽排序: 本地先动(面板即时反馈), 下标修正规则与 PlayQueue.moveTo 保持一致
@@ -120,30 +205,6 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
     widget.onRemove(song, wasCurrent);
   }
 
-  /// 长按/点删除图标: 先确认(误删一手滑就要重新找歌)
-  Future<void> _confirmRemove(int i) async {
-    if (i < 0 || i >= _items.length) return;
-    final song = _items[i];
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('从播放队列移除?'),
-        content: Text(song.name, maxLines: 2, overflow: TextOverflow.ellipsis),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('移除'),
-          ),
-        ],
-      ),
-    );
-    if (ok == true && mounted) _removeAt(i);
-  }
-
   /// 清空队列: 二次确认(清空会连当前播放一起停, 误触代价高)
   Future<void> _confirmClear() async {
     if (_items.isEmpty) return;
@@ -177,6 +238,7 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final extent = _extent ?? rowExtentFor(context, kQueueRowExtent);
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.6,
       child: Column(
@@ -206,17 +268,19 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                       color: scheme.onSurfaceVariant,
                     ),
                   ),
-                  if (_items.isNotEmpty && widget.onSaveAsPlaylist != null)
-                    _SheetIconButton(
-                      icon: Icons.playlist_add,
-                      tooltip: '存为歌单',
-                      onPressed: _busy ? null : _saveAsPlaylist,
-                    ),
                   if (_items.isNotEmpty && widget.onClear != null)
                     _SheetIconButton(
                       icon: Icons.delete_sweep_outlined,
                       tooltip: '清空队列',
                       onPressed: _confirmClear,
+                    ),
+                  // 「定位当前播放歌曲」: 长队列里当前项常在屏幕外, 以前只能自己往下翻。
+                  // 位置在「清空」**后面**(用户 2026-11-18 指定), 无当前项时置灰。
+                  if (_items.isNotEmpty)
+                    _SheetIconButton(
+                      icon: Icons.my_location,
+                      tooltip: '定位当前播放歌曲',
+                      onPressed: _index < 0 ? null : () => _scrollToCurrent(),
                     ),
                 ],
               ),
@@ -239,7 +303,12 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                   )
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.only(bottom: 8),
-                    // 拖拽手柄只在自己的行上(整行长按留给"移除"), 见下面的 drag_handle
+                    scrollController: _scroll,
+                    // 定高行: 「定位当前曲目」靠 index × 行高算偏移, 也顺带收掉行间空白
+                    // (用户 2026-11-18: 队列行间距过大 —— 基准 56 → 48, 见 kQueueRowExtent)
+                    itemExtent: extent,
+                    // 拖拽手柄只在自己的行上(整行长按不再有动作: 移除只保留左滑,
+                    // 与左滑重复的垃圾桶按钮 + 二次确认已于 2026-11-18 移除)
                     buildDefaultDragHandles: false,
                     itemCount: _items.length,
                     // onReorderItem 已按"移除后"修正过 newIndex, 直接用;
@@ -261,88 +330,71 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
                           ),
                         ),
                         onDismissed: (_) => _removeAt(i),
-                        // 行高统一 56 × 系统字号(列表行审计 C 级 · 纵向 pitch)
-                        child: rowHeightBox(
-                          context,
-                          ListTile(
-                            dense: true,
-                            selected: current,
-                            // 行铺满: 序号贴左 4dp、删除/拖拽手柄贴右 4dp,
-                            // 中间(歌名+徽标)因此多出 ~34dp(用户 2026-11-15:
-                            // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
-                            // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
-                            // 四段固定留白。
-                            contentPadding: kCardRowPadding,
-                            horizontalTitleGap: kRowTitleGap,
-                            leading: SizedBox(
-                              // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
-                              width: 28,
-                              child: Center(
-                                child: current
-                                    ? Icon(
-                                        Icons.volume_up,
-                                        size: 18,
-                                        color: scheme.primary,
-                                      )
-                                    : Text(
-                                        '${i + 1}',
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(color: scheme.outline),
-                                      ),
+                        child: ListTile(
+                          dense: true,
+                          selected: current,
+                          // 行铺满: 序号贴左 4dp、拖拽手柄贴右 4dp,
+                          // 中间(歌名+徽标)因此多出 ~34dp(用户 2026-11-15:
+                          // "数字序号左移、删除和移动 icon 右移, 为中间内容腾空间")。
+                          // 与 SongTile 用同一套 token: 不再出现 16+28+16+76 的
+                          // 四段固定留白。
+                          contentPadding: kCardRowPadding,
+                          horizontalTitleGap: kRowTitleGap,
+                          leading: SizedBox(
+                            // token-ok: 队列序号列宽(两位数字 + 播放图标)的内容宽度
+                            width: 28,
+                            child: Center(
+                              child: current
+                                  ? Icon(
+                                      Icons.volume_up,
+                                      size: 18,
+                                      color: scheme.primary,
+                                    )
+                                  : Text(
+                                      '${i + 1}',
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(color: scheme.outline),
+                                    ),
+                            ),
+                          ),
+                          // 歌名 + VIP/付费/无版权标记(VIP 之前在这里完全看不到)
+                          title: SongTitleWithBadges(
+                            song: song,
+                            marquee: true,
+                            style: current
+                                ? TextStyle(
+                                    color: scheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : null,
+                          ),
+                          subtitle: Text(
+                            song.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          // 行尾只剩拖拽手柄: 「从队列移除」的垃圾桶与二次确认已删除
+                          // (与左滑删除功能重复, 用户 2026-11-18)
+                          trailing: ReorderableDragStartListener(
+                            index: i,
+                            child: Padding(
+                              // 拖拽手柄贴到行右边缘(触控区由行高决定)
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 10,
+                              ),
+                              child: Icon(
+                                Icons.drag_handle,
+                                size: 20,
+                                color: scheme.outline,
                               ),
                             ),
-                            // 歌名 + VIP/付费/无版权标记(VIP 之前在这里完全看不到)
-                            title: SongTitleWithBadges(
-                              song: song,
-                              marquee: true,
-                              style: current
-                                  ? TextStyle(
-                                      color: scheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    )
-                                  : null,
-                            ),
-                            subtitle: Text(
-                              song.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // 默认 IconButton 命中区 48dp, 与 leading 序号列叠加后
-                                // 标题被压到个位数宽度。宽度收到 40dp(高度仍 48 保命中),
-                                // 与 SongTile 行尾口径一致; 与标题栏共用 [_SheetIconButton]。
-                                _SheetIconButton(
-                                  icon: Icons.delete_outline,
-                                  tooltip: '从队列移除',
-                                  minHeight: 48,
-                                  onPressed: () => _confirmRemove(i),
-                                ),
-                                ReorderableDragStartListener(
-                                  index: i,
-                                  child: Padding(
-                                    // 拖拽手柄贴到行右边缘(仍在 40×48 的触控区内)
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 12,
-                                    ),
-                                    child: Icon(
-                                      Icons.drag_handle,
-                                      size: 20,
-                                      color: scheme.outline,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            onTap: () {
-                              // 面板自己先跟着切(独立/常开使用时一致; 宿主一般会顺手关掉面板)
-                              setState(() => _index = i);
-                              widget.onSelect(song);
-                            },
-                            onLongPress: () => _confirmRemove(i),
                           ),
+                          onTap: () {
+                            // 面板自己先跟着切(独立/常开使用时一致; 宿主一般会顺手关掉面板)
+                            setState(() => _index = i);
+                            widget.onSelect(song);
+                          },
                         ),
                       );
                     },
@@ -355,7 +407,7 @@ class _PlayQueueSheetState extends State<PlayQueueSheet> {
 }
 
 /// 面板内的小图标按钮: 宽度固定 40dp(默认 48 会把标题/歌名挤窄),
-/// 高度默认 40(标题栏), 列表行传 48 保持触控高度。
+/// 高度默认 40(标题栏)。
 ///
 /// 只在这个文件里用 —— 不要拿它替换别处的 IconButton, 触控口径不同。
 class _SheetIconButton extends StatelessWidget {
@@ -363,15 +415,11 @@ class _SheetIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
-    this.minHeight = 40,
   });
 
   final IconData icon;
   final String tooltip;
   final VoidCallback? onPressed;
-
-  /// 触控区最小高度: 标题栏 40 / 列表行 48。
-  final double minHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +429,7 @@ class _SheetIconButton extends StatelessWidget {
       padding: EdgeInsets.zero,
       // 命中区 = constraints(不是默认 48 的方形), 与排列宽度一致
       style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-      constraints: BoxConstraints(minWidth: 40, minHeight: minHeight),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
       tooltip: tooltip,
       onPressed: onPressed,
     );

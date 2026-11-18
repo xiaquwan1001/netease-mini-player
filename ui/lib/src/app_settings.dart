@@ -137,6 +137,12 @@ class AppSettings extends ChangeNotifier {
   /// 默认 false; 打开后只在用户主动点「生成匿名诊断包」时产出文件, 不会自动上传。
   bool anonymousDebug = false;
 
+  /// 播放队列面板的「左滑可以把歌曲从队列里移除」提示是否已被用户确认不再展示。
+  ///
+  /// 默认 false ⇒ 首次展开队列时弹一次(带「确认后不再展示」勾选)。
+  /// 放在设置里而不是内存变量: 用户点过「不再展示」就该永久生效, 不该下次启动又弹。
+  bool queueSwipeHintDismissed = false;
+
   /// 封面/图片清晰度档位(见 [CoverQuality]). 默认 [CoverQuality.standard] = 按设备像素 1:1.
   ///
   /// 单独用 [ValueNotifier] 通知: 界面上封面可能有上百个, 不该让"音量滑块拖动"这类
@@ -324,6 +330,7 @@ class AppSettings extends ChangeNotifier {
     bool? skipVipSongs,
     int? dailyCacheDays,
     bool? anonymousDebug,
+    bool? queueSwipeHintDismissed,
     CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
@@ -370,6 +377,9 @@ class AppSettings extends ChangeNotifier {
       this.dailyCacheDays = dailyCacheDays;
     }
     if (anonymousDebug != null) this.anonymousDebug = anonymousDebug;
+    if (queueSwipeHintDismissed != null) {
+      this.queueSwipeHintDismissed = queueSwipeHintDismissed;
+    }
     if (coverQuality != null) this.coverQuality = coverQuality;
     if (oledDark != null) this.oledDark = oledDark;
     if (volumeGainDb != null) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/layout.dart' show kQueueRowExtent;
 import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
@@ -96,6 +97,43 @@ String? currentTitle(WidgetTester tester) {
   return tester.widget<Text>(text).data;
 }
 
+/// 跟随真实队列的宿主: 面板拿到 `queue` + `changes`, 外部队列变了应当立刻重排。
+class LiveHarness extends StatefulWidget {
+  const LiveHarness({super.key});
+  @override
+  State<LiveHarness> createState() => LiveHarnessState();
+}
+
+class LiveHarnessState extends State<LiveHarness> {
+  final PlayQueue<rust.SongDto> queue = PlayQueue<rust.SongDto>()
+    ..setAll([song(1, '心动A'), song(2, '心动B')], startAt: 0);
+  final ChangeNotifier changes = ChangeNotifier();
+
+  /// 模拟"心动模式切换 / 自动续播": 整批换队列 + 通知(面板应当立刻跟着变)
+  void replaceQueue() {
+    queue.setAll([song(9, '推荐X'), song(10, '推荐Y')], startAt: 1);
+    changes.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    changes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: PlayQueueSheet(
+      items: queue.items,
+      index: queue.index,
+      queue: queue,
+      changes: changes,
+      onSelect: (_) {},
+      onRemove: (_, _) {},
+    ),
+  );
+}
+
 void main() {
   testWidgets('打开面板渲染当前项: 高亮当前项 + 曲目数 + 顺序', (tester) async {
     await tester.pumpWidget(
@@ -166,11 +204,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 长按当前项 → 确认移除
-    await tester.longPress(find.text('第二首'));
-    await tester.pumpAndSettle();
-    expect(find.text('从播放队列移除?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(TextButton, '移除'));
+    // 左滑当前项(垃圾桶按钮 + 二次确认已于 2026-11-18 移除, 移除只剩左滑一条路)
+    await tester.drag(find.text('第二首'), const Offset(-500, 0));
     await tester.pumpAndSettle();
 
     expect(find.text('第二首'), findsNothing);
@@ -186,9 +221,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.longPress(find.text('唯一一首'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, '移除'));
+    await tester.drag(find.text('唯一一首'), const Offset(-500, 0));
     await tester.pumpAndSettle();
 
     expect(harness(tester).stopped, ['stop']);
@@ -312,32 +345,39 @@ void main() {
     expect(currentTitle(tester), '第一首');
   });
 
-  // A7 回归: 行尾「移除」原先用默认 IconButton(命中区 48dp), 与 leading 序号列
-  // 叠加后 300dp 下标题被压到个位数宽度。现在宽度收到 40dp, 高度仍 48 保命中区。
-  testWidgets('300dp x1.625: 行尾移除按钮宽 40dp(高仍 48), 不横向溢出', (tester) async {
-    tester.view.physicalSize = const Size(300, 640);
+  // 2026-11-18 用户反馈: 队列行之间空白太大。行高基准从 56 收到 kQueueRowExtent(48),
+  // 仍然随系统字号等比放大 ⇒ 大字号下不会竖溢(这条用例锁住两头)。
+  testWidgets('行高 = kQueueRowExtent × 字号(收掉行间空白, 且大字号不溢出)', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1.0;
-    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       const MaterialApp(
-        home: QueueHarness(
-          names: ['第一首', '一首名字特别特别长的歌用于窄屏回归测试', '第三首'],
-          startAt: 0,
-        ),
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 0),
       ),
     );
-    // 长歌名会触发 marquee 无限滚动, 不能 pumpAndSettle
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSize(find.byType(ListTile).first).height,
+      kQueueRowExtent,
+      reason: '1.0x 字号下队列行高必须是 48(旧值 56 留下一截空白)',
+    );
+
+    // 1.625x 字号: 行高跟着放大, 且不允许 overflow
+    tester.platformDispatcher.textScaleFactorTestValue = 1.625;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: QueueHarness(names: ['第一首', '第二首', '第三首'], startAt: 0),
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-
-    expect(tester.takeException(), isNull, reason: '队列行不允许 overflow');
-    final button = tester.getSize(
-      find.widgetWithIcon(IconButton, Icons.delete_outline).first,
-    );
-    expect(button.width, 40, reason: '默认 48dp 会吃掉标题区, 必须收到 40dp');
-    expect(button.height, greaterThanOrEqualTo(48), reason: '命中区高度不能缩');
+    expect(tester.takeException(), isNull, reason: '大字号下队列行不允许 overflow');
+    // 具体倍率取决于平台的非线性 TextScaler, 只断言"确实放大且不超过 2 倍上限"
+    final bigRow = tester.getSize(find.byType(ListTile).first).height;
+    expect(bigRow, greaterThan(kQueueRowExtent * 1.4));
+    expect(bigRow, lessThanOrEqualTo(kQueueRowExtent * 2));
   });
 
   // 用户 2026-11-15 截图: 队列面板标题被行尾挤成「当前播…」, 且行内序号/操作
@@ -386,15 +426,17 @@ void main() {
     // 序号列: 4dp 行留白 + 28dp 序号列 ⇒ 标题从 ~40dp 起(旧口径 60dp)
     final titleRect = tester.getRect(find.text('第一首').first);
     expect(titleRect.left, lessThanOrEqualTo(44), reason: '序号左移, 歌名起点跟着左移');
-    final del = tester.getRect(
-      find.widgetWithIcon(IconButton, Icons.delete_outline).first,
-    );
     final handle = tester.getRect(find.byIcon(Icons.drag_handle).first);
-    expect(del.left, greaterThan(row.width * 0.78), reason: '删除按钮贴右');
-    expect(handle.right, greaterThan(row.width - 12), reason: '拖拽手柄贴到右边缘');
-    // 中间可用宽度 = 歌名起点 → 删除按钮左边缘, 必须比旧的 ~210dp 明显宽
     expect(
-      del.left - titleRect.left,
+      handle.right,
+      greaterThan(row.width - 12),
+      reason: '拖拽手柄贴到右边缘(行尾垃圾桶已删, 手柄独占行尾)',
+    );
+    // 行尾不再有删除按钮(与左滑重复, 2026-11-18 移除)
+    expect(find.widgetWithIcon(IconButton, Icons.delete_outline), findsNothing);
+    // 中间可用宽度 = 歌名起点 → 拖拽手柄左边缘, 必须比旧的 ~210dp 明显宽
+    expect(
+      handle.left - titleRect.left,
       greaterThan(240),
       reason: '中间内容(歌名+徽标)要拿到 ≥240dp',
     );
@@ -416,4 +458,54 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
       home: home,
     ),
   );
+
+  testWidgets('打开时长队列自动定位当前播放曲目(不从头开始)', (tester) async {
+    final names = [for (var i = 0; i < 40; i++) '第$i首'];
+    await tester.pumpWidget(
+      MaterialApp(home: QueueHarness(names: names, startAt: 30)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('第30首'), findsOneWidget, reason: '当前项要在可视区');
+    expect(find.text('第0首'), findsNothing, reason: '长队列不应从第 1 首开始渲染');
+  });
+
+  testWidgets('顶部「定位当前」按钮在「清空」后面, 点了把当前曲目滚回视野', (tester) async {
+    final names = [for (var i = 0; i < 40; i++) '第$i首'];
+    await tester.pumpWidget(
+      MaterialApp(home: QueueHarness(names: names, startAt: 30)),
+    );
+    await tester.pumpAndSettle();
+
+    // 位置: 必须在清空按钮**后面**(用户 2026-11-18 指定)
+    final clearDx = tester
+        .getCenter(find.byIcon(Icons.delete_sweep_outlined))
+        .dx;
+    final locateDx = tester.getCenter(find.byIcon(Icons.my_location)).dx;
+    expect(locateDx, greaterThan(clearDx), reason: '定位按钮要排在清空之后');
+
+    // 手动滚到顶部(当前项跑到屏幕外), 再点定位
+    await tester.drag(find.byType(ReorderableListView), const Offset(0, 3000));
+    await tester.pumpAndSettle();
+    expect(find.text('第30首'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.my_location));
+    await tester.pumpAndSettle();
+    expect(find.text('第30首'), findsOneWidget, reason: '定位后当前曲目要回到视野');
+  });
+
+  testWidgets('面板跟随真实队列: 换一批曲目后立刻重排 + 高亮跟着走', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LiveHarness()));
+    await tester.pumpAndSettle();
+    expect(find.text('心动A'), findsOneWidget);
+    expect(currentTitle(tester), '心动A');
+
+    tester.state<LiveHarnessState>(find.byType(LiveHarness)).replaceQueue();
+    await tester.pumpAndSettle();
+
+    expect(find.text('心动A'), findsNothing, reason: '旧队列必须整体消失(不是留着旧快照)');
+    expect(find.text('推荐X'), findsOneWidget);
+    expect(find.text('推荐Y'), findsOneWidget);
+    expect(currentTitle(tester), '推荐Y', reason: '高亮要跟真实队列的 index=1 走');
+    expect(find.text('2 首'), findsOneWidget);
+  });
 }

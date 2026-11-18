@@ -57,6 +57,7 @@ const expectedKeys = <String>{
   'anonymousDebug',
   // 交互记录
   'interactions',
+  'queueSwipeHintDismissed',
 };
 
 /// 把单例恢复到"未改动"的形状, 避免用例之间互相污染(同一文件的用例共享单例)。
@@ -92,6 +93,7 @@ void resetToDefaults() {
   s.updateCheckInterval = UpdateCheckInterval.daily;
   s.lastUpdateCheckMs = null;
   s.skippedUpdateVersion = null;
+  s.queueSwipeHintDismissed = false;
 }
 
 void main() {
@@ -159,6 +161,7 @@ void main() {
     s.updateCheckInterval = UpdateCheckInterval.weekly;
     s.lastUpdateCheckMs = 1700000000000;
     s.skippedUpdateVersion = 'v9.9.9';
+    s.queueSwipeHintDismissed = true;
     await s.touchInteraction('album', BigInt.from(42), nowMs: 1700000000001);
 
     await s.update();
@@ -199,6 +202,7 @@ void main() {
     expect(s.updateCheckInterval, UpdateCheckInterval.weekly);
     expect(s.lastUpdateCheckMs, 1700000000000);
     expect(s.skippedUpdateVersion, 'v9.9.9');
+    expect(s.queueSwipeHintDismissed, isTrue);
     expect(s.lastInteractionMs('album', BigInt.from(42)), 1700000000001);
 
     // 再落一次盘: 读回来的值必须能原样写出去(往返稳定, 不引入漂移)。

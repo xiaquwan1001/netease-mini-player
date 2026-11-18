@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/home/queue_sheet_controller.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
@@ -11,15 +12,14 @@ import 'support/fakes.dart';
 // `_stopAfterQueueEmpty` / `_cycleMode` 逐条等价(见 main.dart 的 G10 搬运)。
 //
 // 只测 controller 与队列/播放回调之间的契约, 面板自身的渲染由
-// queue_sheet_test.dart / queue_sheet_save_test.dart 覆盖。
+// queue_sheet_test.dart 覆盖。
 
 /// 模拟 HomePage 的接线: 真 PlayQueue + 记录侧效应
 class _Harness extends StatefulWidget {
-  const _Harness({required this.names, this.startAt = 0, this.loggedIn = true});
+  const _Harness({required this.names, this.startAt = 0});
 
   final List<String> names;
   final int startAt;
-  final bool loggedIn;
 
   @override
   State<_Harness> createState() => HarnessState();
@@ -38,7 +38,6 @@ class HarnessState extends State<_Harness> {
     queue: queue,
     libraryTitleOf: () => libraryTitle,
     toast: (m) => toasts.add(m),
-    loggedIn: () => widget.loggedIn,
     playSong: (song, {bool explicit = false}) async {
       played.add((song.name, explicit));
     },
@@ -48,6 +47,10 @@ class HarnessState extends State<_Harness> {
     heartMode: () async {
       heartCalls += 1;
       if (heartModeSucceeds) libraryTitle = '心动模式';
+    },
+    leaveHeartMode: () {
+      leaveCalls += 1;
+      if (libraryTitle == '心动模式') libraryTitle = '正在播放';
     },
     syncActionState: () async => syncCalls += 1,
   );
@@ -61,6 +64,7 @@ class HarnessState extends State<_Harness> {
   final List<(String, bool)> played = [];
   final List<String> stopped = [];
   int heartCalls = 0;
+  int leaveCalls = 0;
   int syncCalls = 0;
   int rebuilds = 0;
 
@@ -84,17 +88,64 @@ Future<HarnessState> _pump(
   WidgetTester tester, {
   required List<String> names,
   int startAt = 0,
-  bool loggedIn = true,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      home: _Harness(names: names, startAt: startAt, loggedIn: loggedIn),
+      home: _Harness(names: names, startAt: startAt),
     ),
   );
   return tester.state<HarnessState>(find.byType(_Harness));
 }
 
 void main() {
+  setUp(() {
+    // 面板首次展开会弹「左滑移除」提示(2026-11-18)。除了专门测它的用例,
+    // 其余用例一律预置"已确认", 免得每条都要先点掉弹窗。
+    AppSettings.instance.queueSwipeHintDismissed = true;
+  });
+
+  group('左滑提示', () {
+    testWidgets('首次展开弹提示; 勾「确认后不再展示」后永久不再弹', (tester) async {
+      AppSettings.instance.queueSwipeHintDismissed = false;
+      final h = await _pump(tester, names: ['a', 'b']);
+      final opening = h.controller.open();
+      await tester.pumpAndSettle();
+      expect(find.textContaining('左滑'), findsOneWidget);
+      expect(find.text('确认后不再展示'), findsOneWidget);
+
+      await tester.tap(find.text('确认后不再展示'));
+      await tester.pump();
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      expect(AppSettings.instance.queueSwipeHintDismissed, isTrue);
+      expect(h.controller.isOpen, isTrue, reason: '确认完提示后照常展开面板');
+      h.controller.close();
+      await tester.pumpAndSettle();
+      await opening;
+
+      // 第二次: 不再弹
+      final second = h.controller.open();
+      await tester.pumpAndSettle();
+      expect(find.text('确认后不再展示'), findsNothing);
+      h.controller.close();
+      await tester.pumpAndSettle();
+      await second;
+    });
+
+    testWidgets('不勾选 = 只关掉本次提示, 下次还会弹', (tester) async {
+      AppSettings.instance.queueSwipeHintDismissed = false;
+      final h = await _pump(tester, names: ['a']);
+      final opening = h.controller.open();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      expect(AppSettings.instance.queueSwipeHintDismissed, isFalse);
+      h.controller.close();
+      await tester.pumpAndSettle();
+      await opening;
+    });
+  });
+
   group('面板开关', () {
     testWidgets('空队列点开: 只给提示, 不弹面板', (tester) async {
       final h = await _pump(tester, names: []);
@@ -193,7 +244,7 @@ void main() {
       expect(find.text('单曲循环'), findsNothing);
     });
 
-    testWidgets('心动模式中再轮转 = 回列表循环, 且不取心动数据', (tester) async {
+    testWidgets('心动模式中再轮转 = 回列表循环, 且**真的退出心动**', (tester) async {
       final h = await _pump(tester, names: ['a']);
       h.libraryTitle = '心动模式';
       expect(h.controller.heartActive, isTrue);
@@ -201,6 +252,11 @@ void main() {
       expect(h.queue.mode, PlayMode.repeatAll);
       expect(h.heartCalls, 0);
       expect(h.syncCalls, 1);
+      // 2026-11-18 用户反馈的根因: 以前只改 mode, 浏览态标题仍是「心动模式」⇒
+      // heartActive 永远为真, 图标变不回来、再点只反复弹「列表循环」。
+      expect(h.controller.heartActive, isFalse, reason: '必须真的跳出心动模式');
+      expect(h.leaveCalls, 1);
+      expect(h.libraryTitle, '正在播放', reason: '队列还在, 标题回到正在播放而不是清空');
       await tester.pump();
       expect(find.text('列表循环'), findsOneWidget);
       // 顶部浮层 900ms 自动移除, 排掉这个 Timer 再结束用例
@@ -230,22 +286,6 @@ void main() {
       expect(find.text('列表循环'), findsOneWidget);
       expect(h.syncCalls, 1);
       await tester.pump(const Duration(seconds: 1));
-    });
-  });
-
-  group('存为歌单入口', () {
-    testWidgets('未登录: 只提示, 不弹选择面板', (tester) async {
-      final h = await _pump(tester, names: ['a'], loggedIn: false);
-      await h.controller.saveAsPlaylist(h.queue.items);
-      expect(h.toasts, ['存为歌单需要先登录']);
-      expect(find.text('存为歌单'), findsNothing);
-    });
-
-    testWidgets('空快照: 直接返回(面板按 id 去重后可能为空)', (tester) async {
-      final h = await _pump(tester, names: ['a']);
-      await h.controller.saveAsPlaylist(const []);
-      expect(h.toasts, isEmpty);
-      expect(find.text('存为歌单'), findsNothing);
     });
   });
 }

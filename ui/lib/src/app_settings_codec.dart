@@ -165,7 +165,7 @@ extension _AppSettingsJsonCodec on AppSettings {
     if (anonDebug is bool) anonymousDebug = anonDebug;
   }
 
-  /// 「我的」页排序用的最近交互记录(epoch ms)。
+  /// 「我的」页排序用的最近交互记录(epoch ms) + 队列面板「左滑移除」提示的记忆。
   ///
   /// 先清空再读, 让 load() 幂等(重复 load 不叠加旧的会话内记录)。
   void _applyInteractionsJson(Map<dynamic, dynamic> raw) {
@@ -178,6 +178,9 @@ extension _AppSettingsJsonCodec on AppSettings {
         if (key is String && value is int) _interactions[key] = value;
       }
     }
+    // 队列面板的「左滑移除」提示: 用户勾过「不再展示」就永久生效
+    final queueHint = raw['queueSwipeHintDismissed'];
+    if (queueHint is bool) queueSwipeHintDismissed = queueHint;
   }
 
   /// 落盘用的整份 map —— 与上面七个 `_apply*` 一一对应。
@@ -224,5 +227,6 @@ extension _AppSettingsJsonCodec on AppSettings {
     'anonymousDebug': anonymousDebug,
     // ---- 交互记录 ----
     'interactions': _interactions,
+    'queueSwipeHintDismissed': queueSwipeHintDismissed,
   };
 }

@@ -187,6 +187,18 @@ class AccountActions extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 退出心动模式(2026-11-18): 队列还在(就是心动那批推荐), 所以标题回到
+  /// 「正在播放」而不是清成 null —— null 会把页面踢回搜索态, 用户丢掉当前列表。
+  ///
+  /// 必须与 `queue.mode = PlayMode.repeatAll` 同时做:
+  /// [QueueSheetController.heartActive] 判定的就是这个标题, 只改 mode 会让播放条
+  /// 图标永远停在心动、再点只弹「列表循环」、队列也不重排(用户反馈)。
+  void exitHeartMode() {
+    if (_libraryTitle != '心动模式') return;
+    _libraryTitle = '正在播放';
+    notifyListeners();
+  }
+
   /// 记队列来源(原 `_playSource = ...`; 不重建界面, 与拆分前一致)。
   void setPlaySource(SongActionSource source) {
     _playSource = source;
