@@ -25,7 +25,7 @@
 // 稳定性: 所有页面数据都走注入的假 loader(0 网络); 封面/头像一律 coverUrl: null
 // 走占位图; 无限动画(跑马灯/加载圈)用固定帧数推进代替 pumpAndSettle, 见 _pumpFrames。
 //
-// 页面清单(9 页 x 2 视口 = 18 张): 设置 / 账号管理 / 推荐 / 我的 / 搜索落地 /
+// 页面清单(9 页 x 2 视口 = 18 张 + 宽档双列 1 张): 设置 / 账号管理 / 推荐 / 我的 / 搜索落地 /
 // 消息中心 / 歌单详情 / 艺人页 / 动态流。后三页是 churn top-10 里最容易连带回归的
 // 三块(2026-11 前端审计建议 11): 歌单详情改行距会挤坏曲目行, 艺人页改信息区会挤坏
 // tab 行, 动态流改卡片会挤坏顶部分类条。其中歌单详情只有命令式入口(页面私有 +
@@ -48,6 +48,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/detail/playlist_detail_page.dart';
 import 'package:minincm/src/feed_view.dart';
+import 'package:minincm/src/layout.dart' show ContentWidthLimit;
 import 'package:minincm/src/messages_page.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/recommend_view.dart';
@@ -139,6 +140,7 @@ Future<void> _pumpPage(
   required Size size,
   double textScale = 1.0,
   int frames = 12,
+  bool contentLimit = false,
 }) async {
   tester.view.physicalSize = size;
   // dpr 固定 1.0: 逻辑像素 == 物理像素, 基准图小(360x800)且不受设备密度影响
@@ -160,11 +162,16 @@ Future<void> _pumpPage(
         // Navigator 在 home 之上, 只包 home 管不到 push 出来的路由页(歌单详情
         // 就是这么进去的), 那些页面会退回 1.0 字号 —— 窄屏基准就测不到东西。
         builder: (context, child) {
-          if (textScale == 1.0) return child!;
+          // contentLimit: 宽档基准要带上真实壳层的内容限宽(840 居中), 否则
+          // 1280 窗口下页面会按整窗排版, 双列右栏变成 968 —— 不是线上几何。
+          final content = contentLimit
+              ? ContentWidthLimit(child: child!)
+              : child!;
+          if (textScale == 1.0) return content;
           final media = MediaQuery.of(context);
           return MediaQuery(
             data: media.copyWith(textScaler: TextScaler.linear(textScale)),
-            child: child!,
+            child: content,
           );
         },
         home: page,
@@ -555,7 +562,8 @@ class _RouteHostState extends State<_RouteHost> {
   Widget build(BuildContext context) => const Scaffold(body: SizedBox.shrink());
 }
 
-/// 基准图: playlist_detail_360x800.png / playlist_detail_300x640_s125.png。
+/// 基准图: playlist_detail_360x800.png / playlist_detail_300x640_s125.png /
+/// playlist_detail_1280x720.png(宽档双列, 见下面单独那条用例)。
 ///
 /// 应有什么: 头部卡片(标题「华语流行精选」/ 创建者 / 「12 首 · 播放 128000 次」/
 /// 华语·流行 两个标签 / 一句简介 + 「展开」) → 「筛选本页曲目」输入框与
@@ -815,6 +823,31 @@ void main() {
       },
     );
   }
+
+  // 宽档双列(2026-11-18 方案 A · S1): 1280x720 = 桌面默认窗口, 唯一会走
+  // 「页内双列」分支的视口。必须带 ContentWidthLimit(真实壳层的 840 限宽),
+  // 否则页面按整窗排版, 右栏 968 而不是 528。
+  //
+  // 应有什么: 左侧 300 宽一列只有歌单信息(封面 120 / 标题 / 创建者 / 「12 首 ·
+  // 播放 128000 次」/ 华语·流行 标签 / 简介), 右侧 528 宽一列是筛选条 + 曲目行
+  // (第 1 行正在播放高亮, 其余「序号 歌名 / 艺人 · 专辑 / 04:29 + 红心」);
+  // AppBar 仍通栏 840(不跟左栏缩), 两侧是壳层的 220 留白。
+  //
+  // 坏在哪: 两栏宽度/间距偏 1dp 以上、左栏混进曲目、只剩一列、整屏错误态。
+  // 以后动 kContentMaxWidth / kTwoColumnListWidth / kTwoColumnGap 都要重出这一张:
+  //   flutter test test/golden_pages_test.dart --update-goldens --plain-name 'playlist_detail: 1280x720'
+  testWidgets('playlist_detail: 1280x720(双列)', skip: !_cjkAvailable, (
+    tester,
+  ) async {
+    await _pumpPage(
+      tester,
+      _playlistDetailPage(),
+      size: const Size(1280, 720),
+      frames: 24,
+      contentLimit: true,
+    );
+    await _expectGolden(tester, 'playlist_detail_1280x720');
+  });
 }
 
 /// 带极小容差的 golden 比较器(官方 LocalFileComparator 文档里的推荐写法)。

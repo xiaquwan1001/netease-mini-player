@@ -416,8 +416,9 @@ class CoverGrid extends StatelessWidget {
 //     就是宽屏, 桌面窗口缩窄就是窄屏;
 //   · 三档: 窄(< [kCompactMaxWidth]) / 中([kCompactMaxWidth] ~ [kWideMinWidth])
 //     / 宽(>= [kWideMinWidth]);
-//   · 全仓唯一的**宽度**阈值只有本节的常量与既有的 [kPlayerBarRoomyWidth]
-//     (后者是播放条内部排版口径, 与档位无关, 不要混用)。
+//   · 全仓的**宽度**阈值只有本节的常量、[kPlayerBarRoomyWidth](播放条内部排版
+//     口径, 与档位无关, 不要混用)以及下面的「页内双列」阈值(见
+//     [kTwoColumnMinWidth]) —— 不要在校验函数之外再造第五个数字。
 // ───────────────────────────────────────────────────────────────────────────
 
 /// 布局档位(窄 / 中 / 宽)。壳层按它决定导航位置与内容限宽。
@@ -465,6 +466,56 @@ LayoutTier layoutTierFor(double width) {
   if (width < kCompactMaxWidth) return LayoutTier.compact;
   if (width >= kWideMinWidth) return LayoutTier.wide;
   return LayoutTier.medium;
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// 页内双列(wide two-column, 2026-11-18 · 方案 A)
+//
+// 「横屏把页面做成左右两列」用**页内双列**实现: 页面自己把 body 切成左右两栏,
+// 不新增路由、不新增全局槽位 ⇒ pageDepth / 返回键 / dismissAllPopups 全不涉及
+// (评估见 .pi/plans/wide-two-column-eval-2026-11-18.md)。
+//
+// 空间口径(**只能这么算**): 宽档内容区被壳层限宽到 [kContentMaxWidth]=840
+// (ContentWidthLimit), 所以两栏是 **840 内切分**: 左 [kTwoColumnListWidth]=300 /
+// 间距 [kTwoColumnGap]=12 / 右 528(≈5:8)。想更宽必须先动壳层(方案 C, 不做)。
+//
+// 判据为什么同时看**高度**: 手机横屏(780x360)宽度不够、高度更不够 —— 高度不足时
+// 两条独立滚动各只看得到 3 行, 比单列更难用 ⇒ 宽和高都达标才双列。
+// ───────────────────────────────────────────────────────────────────────────
+
+/// 页内双列的最小**可用宽**(沿用 [kWideMinWidth] 的数字: 宽档下界, 不造第四个阈值)。
+///
+/// 注意判据的入参是**窗口逻辑宽**(`MediaQuery.sizeOf`), 不是页面 body 的实测宽:
+/// 壳层限宽后 body 宽永远 <= [kContentMaxWidth]=840, 拿它比 900 永远为假 ——
+/// 双列就成死代码。窗口 >= 900 时 body 恰好是 840 = 300 + 12 + 528, 两栏不需要
+/// 挤压, 这正是 900 这个界的含义。
+const double kTwoColumnMinWidth = 900;
+
+/// 页内双列的最小**可用高**。取 560: 1280x720 桌面默认窗口(AppBar 与播放条之后
+/// body 约 600)够用; 手机横屏 780x360 不够, 那时双列每列只看 3 行。
+const double kTwoColumnMinHeight = 560;
+
+/// 双列时左栏(歌单信息)的固定宽。
+///
+/// 300 = 封面 120 + 卡片内留白与文字列的最小可读宽; 与 [kContentMaxWidth] 组合后
+/// 右栏 = 840 - 300 - 12 = 528, 是既有 840 内容宽内的 5:8 切分。
+const double kTwoColumnListWidth = 300;
+
+/// 双列时两栏之间的间距。数值与 [kPagePadding] 相同(12)但**具名独立**: 它是栅格
+/// 切分间距, 不是页面留白, 以后要调只改这一处。
+const double kTwoColumnGap = 12;
+
+/// 是否该用页内双列排版。
+///
+/// 边界口径(**测试锁死**, 见 test/two_column_breakpoints_test.dart):
+/// 900x560 ⇒ true / 899 宽或 559 高 ⇒ false / 780x360(横屏手机) ⇒ false /
+/// 840x800(内容限宽本身) ⇒ false。
+///
+/// 非有限值的保守口径(与 [layoutTierFor] 一致): 无限宽/无限高视为**满足**该维度
+/// (被放进横滑/无限高容器时不该退化), NaN(错误约束传参)一律 false。
+bool twoColumnFor(Size size) {
+  if (size.width.isNaN || size.height.isNaN) return false;
+  return size.width >= kTwoColumnMinWidth && size.height >= kTwoColumnMinHeight;
 }
 
 /// 弹层打开时两侧留白的压暗色(`Colors.black54` 的 ARGB), 与 `ModalBarrier`

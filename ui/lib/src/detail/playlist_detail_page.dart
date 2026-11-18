@@ -6,7 +6,8 @@ import '../async_view.dart';
 import '../comment_thread.dart';
 import '../cover_palette.dart';
 import '../library_view.dart';
-import '../layout.dart' show rowExtentFor;
+import '../layout.dart'
+    show kTwoColumnGap, kTwoColumnListWidth, rowExtentFor, twoColumnFor;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
@@ -483,49 +484,101 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
           ),
         ],
       ),
-      body: CustomScrollView(
-        controller: _scroll,
-        slivers: [
-          _buildHeaderCard(),
-          if (_editingTracks)
-            SliverToBoxAdapter(
-              child: PlaylistEditingBanner(
-                onDone: () => setState(() => _editingTracks = false),
-              ),
-            ),
-          SliverToBoxAdapter(child: _buildToolbar()),
-          if (_hiddenCount > 0) SliverToBoxAdapter(child: _buildHiddenNote()),
-          _buildSongs(display),
-          SliverToBoxAdapter(
-            child: CommentThread(
-              kind: 'playlist',
-              resourceId: widget.playlistId,
-              totalHint: _detail?.commentCount.toInt() ?? 0,
-              // 评论分享卡片的语境(需求 10): 来自哪个歌单
-              shareSourceTitle: widget.name,
-              shareSourceKind: commentSourceKindLabel('playlist'),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-        ],
-      ),
+      // 双列判据用**窗口逻辑尺寸**(MediaQuery.sizeOf), 不是 body 的实测宽:
+      // 壳层 ContentWidthLimit 把 body 限到 840, 拿它比 900 永远为假。
+      // 窗口 >= 900 时 body 恰好 840 = 300 + 12 + 528, 两栏不挤压。
+      body: twoColumnFor(MediaQuery.sizeOf(context))
+          ? _buildTwoColumnBody(display)
+          : _buildSingleColumnBody(display),
     );
   }
+
+  /// 单列 body(窄/中档): 与双列改造前**逐像素一致** —— 同一棵 sliver 树、同一顺序,
+  /// 双列分支只是把它一分为二, 这里一行几何都没有动。
+  Widget _buildSingleColumnBody(List<rust.SongDto> display) => CustomScrollView(
+    controller: _scroll,
+    slivers: [
+      _buildHeaderCard(),
+      if (_editingTracks) SliverToBoxAdapter(child: _editingBanner()),
+      SliverToBoxAdapter(child: _buildToolbar()),
+      if (_hiddenCount > 0) SliverToBoxAdapter(child: _buildHiddenNote()),
+      _buildSongs(display),
+      _buildComments(),
+      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+    ],
+  );
+
+  /// 双列 body(窗口 >= [kTwoColumnMinWidth] 且 >= [kTwoColumnMinHeight])。
+  ///
+  /// 切分点取「头部卡片 / 其余」: 左栏只有歌单信息(封面/标题/创建者/统计/简介),
+  /// 右栏是曲目相关的一切(移出模式横幅 / 筛选条 / 无版权提示 / 曲目 / 评论) ——
+  /// 窄档里这些块的相对顺序原样保留(横幅 -> 筛选 -> 提示 -> 曲目 -> 评论)。
+  ///
+  /// 滚动口径: **两列各自滚动**, 理由三点:
+  ///   · 头部卡片在 300 宽下高度随简介展开/系统字号变化, 与曲目列表没有"同步滚动"
+  ///     的语义关系; 绑在一起会让"定位正在播放"把左栏一起滚出视野;
+  ///   · 右栏继续用 _scroll ⇒ [_locateCurrent] 的"量曲目列表起点"语义原样成立
+  ///     (左栏不设 controller, 两列互不影响);
+  ///   · 左栏内容比右栏短时, 右栏仍能滚满整个 body 高度, 不浪费。
+  Widget _buildTwoColumnBody(List<rust.SongDto> display) {
+    final info = ListView(
+      key: const Key('playlist-detail-info-column'),
+      padding: EdgeInsets.zero,
+      children: [_buildHeaderContent()],
+    );
+    final songs = CustomScrollView(
+      key: const Key('playlist-detail-songs-column'),
+      controller: _scroll,
+      slivers: [
+        if (_editingTracks) SliverToBoxAdapter(child: _editingBanner()),
+        SliverToBoxAdapter(child: _buildToolbar()),
+        if (_hiddenCount > 0) SliverToBoxAdapter(child: _buildHiddenNote()),
+        _buildSongs(display),
+        _buildComments(),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
+    );
+    return Row(
+      // stretch: 两列同高, 顶部/底部严格对齐(顶部对齐是双列的第一条几何断言)
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: kTwoColumnListWidth, child: info),
+        const SizedBox(width: kTwoColumnGap),
+        Expanded(child: songs),
+      ],
+    );
+  }
+
+  Widget _editingBanner() => PlaylistEditingBanner(
+    onDone: () => setState(() => _editingTracks = false),
+  );
+
+  Widget _buildComments() => SliverToBoxAdapter(
+    child: CommentThread(
+      kind: 'playlist',
+      resourceId: widget.playlistId,
+      totalHint: _detail?.commentCount.toInt() ?? 0,
+      // 评论分享卡片的语境(需求 10): 来自哪个歌单
+      shareSourceTitle: widget.name,
+      shareSourceKind: commentSourceKindLabel('playlist'),
+    ),
+  );
 
   /// 头部卡片: 四态收敛到 [AsyncView] —— 加载中/出错都用"入参兜底"的卡片
   /// (改造前也是立刻渲染兜底卡片, 不转圈), 出错时卡片右下角给"点击重试";
   /// 有数据时换成完整卡片。
-  Widget _buildHeaderCard() => SliverToBoxAdapter(
-    child: AsyncView<rust.PlaylistDetail>(
-      future: _detailFuture,
-      onRetry: _retryDetail,
-      // detail 是对象(不是 List/String), 不会落到空态; 文案只为断言/兜底
-      emptyText: '歌单详情暂无数据',
-      loadingBuilder: (_) => _headerCard(null, null, null),
-      errorBuilder: (_, error, retry) =>
-          _headerCard(null, friendlyError(error), retry),
-      builder: (_, detail, _) => _headerCard(detail, null, null),
-    ),
+  Widget _buildHeaderCard() => SliverToBoxAdapter(child: _buildHeaderContent());
+
+  /// 头部卡片本体: 单列进 sliver, 双列直接进左栏 ListView(不再套 sliver)。
+  Widget _buildHeaderContent() => AsyncView<rust.PlaylistDetail>(
+    future: _detailFuture,
+    onRetry: _retryDetail,
+    // detail 是对象(不是 List/String), 不会落到空态; 文案只为断言/兜底
+    emptyText: '歌单详情暂无数据',
+    loadingBuilder: (_) => _headerCard(null, null, null),
+    errorBuilder: (_, error, retry) =>
+        _headerCard(null, friendlyError(error), retry),
+    builder: (_, detail, _) => _headerCard(detail, null, null),
   );
 
   Widget _headerCard(
