@@ -27,7 +27,7 @@
 
 ## 1. B4 搜索增强 · 接口实测(只读调研)
 
-> 原文件: `docs/b4-search-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b4-search-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 生成时间: 2026-11-07 · 二进制: core/target/debug/ncm(debug 构建, 已登录设备)
 原始响应: 抓取时在 /tmp/b4/*.json(临时目录, 需要时按本文命令重抓) · 参数写法: `ncm raw <method> k=v ...`(位置参数 `key=value`, **不是** `--param`)
@@ -301,7 +301,7 @@ pub struct HotSearchDetailItem { pub search_word: String, pub score: Option<i64>
 
 ## 2. B5 逐字歌词 · 实测 notes(契约层, 2026-11-09)
 
-> 原文件: `docs/b5-word-lyric-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b5-word-lyric-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 #### 端点与开关
 - 逐字歌词走 vendor `lyric_new`(`/api/song/lyric/v1`), body 由 vendor 写死
@@ -369,7 +369,7 @@ add/del(`/add` `/del`)是写操作, 本批禁接。
 
 ## 3. B7 歌单写接口 · 真实响应笔记(2026-11-10)
 
-> 原文件: `docs/b7-playlist-write-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b7-playlist-write-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 > 批次: 歌单写接口 + 播放队列「存为歌单」(B2④ 最后一项)。
 > 抓包方式: 临时 example `core/crates/ncm-service/examples/b7_probe.rs`(跑完已删)直连 vendor `ApiClient`,
@@ -480,7 +480,7 @@ add/del(`/add` `/del`)是写操作, 本批禁接。
 
 ## 4. B10 电台补充(只读) · 实测笔记(2026-11-09)
 
-> 原文件: `docs/b10-radio-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b10-radio-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 > 用 `ncm raw <method> k=v`(本批给 CLI raw 分支补了 10 个接线)实测;登录态 = 本机已登录账号,匿名 = 空 NCM_DATA_DIR。
 > 全部接口匿名都通(无登录门槛);所有调用均为只读 GET/查询,不做任何写操作。
@@ -619,7 +619,7 @@ add/del(`/add` `/del`)是写操作, 本批禁接。
 
 ## 5. B12 数字专辑只读 · 实测笔记(2026-11-09)
 
-> 原文件: `docs/b12-digital-album-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b12-digital-album-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 > 用 `ncm raw <method> k=v`(本批给 CLI raw 分支补了 4 个接线)实测;登录态 = 本机已登录账号,匿名 = 空 NCM_DATA_DIR。
 
@@ -688,7 +688,7 @@ add/del(`/add` `/del`)是写操作, 本批禁接。
 
 ## 6. B13: AMLL TTML 逐字歌词第二来源（实测笔记）
 
-> 原文件: `docs/b13-ttml-lyrics-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `b13-ttml-lyrics-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 日期：2026-11-10
 
@@ -743,7 +743,7 @@ curl -s --noproxy '*' 'https://api.amll.dev/v1/lyrics/get?ncmMusicId=99999999' #
 
 ## 7. C1 歌手详情页重构 — 接口实测笔记
 
-> 原文件: `docs/c1-artist-page-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `c1-artist-page-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 日期: 2026-11-09(原写 2026-11-22 是笔误, 该文件提交 `b67f9d6` 在 2026-11-09)。探测方式: 临时 example `core/crates/ncm-service/examples/probe_artist.rs`
 (**该探针已删**, 下面复跑命令只作留档: `cargo run --offline --manifest-path core/Cargo.toml -p ncm-service --example probe_artist`),
@@ -821,7 +821,7 @@ MV 播放首期不在范围(只展示)。
 
 ## 8. C2: 逐字歌词来源质量抽样对比(2026-11)
 
-> 原文件: `docs/c2-lyric-source-quality.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `c2-lyric-source-quality.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 > 一次性真实抽样, 不入测试。复现: `cargo run --release -p ncm-service --example c2_sampling`
 > (需登录态数据目录与代理; AMLL 走 api.amll.dev, yrc/行级走网易云接口)。
@@ -878,7 +878,7 @@ MV 播放首期不在范围(只展示)。
 
 ## 9. C3 — MV 播放 接口实测笔记(2026-11-10, ncm raw 实抓; 原写 2026-11-22 是笔误)
 
-> 原文件: `docs/c3-mv-playback-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `c3-mv-playback-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 #### mv_detail(`/api/v1/mv/detail`, weapi, 参数 mvid)
 
@@ -916,7 +916,7 @@ id=5436712(莫文蔚/张洪量《广岛之恋》)真实形状:
 
 ## 10. Wave 9 · §4 剩余只读 endpoint 收尾笔记(2026-11-09)
 
-> 原文件: `docs/wave9-endpoint-notes.md`(2026-11-19 合并前); 标题已下调两级。
+> 原文件: `wave9-endpoint-notes.md(原在 docs 根, 已并入本文件)`(2026-11-19 合并前); 标题已下调两级。
 
 > 实测通道: weapi, 登录态(device BF448268...); 匿名与登录对下列只读接口响应形状一致。
 > 命令: `source tools/env.sh && unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY`
