@@ -167,9 +167,9 @@
 |---|---|---|---|
 | ~~1~~ | ~~视觉人工过目~~ ✅ **已通过(2026-11-19 用户: 视觉页面全部通过)** | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
 | 2 | 他人主页「常听」排行接页面 | 只剩 `userPlayRanking`(他人听歌排行)无 UI 入口 —— `userEvents` 已接(`ui/lib/src/artist_page.dart:225`、`ui/lib/src/user_page.dart:317`);实测他人排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再定。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
-| 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; **bundle 侧 2026-11-17 已 dbus+xvfb 真跑过**(单实例 14ms 退、目录迁移), 只剩「装 `.deb` 后点一次」; 字体/插件等运行期数据文件仍要人眼看 | S |
-| 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
-| 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
+| ~~3~~ | ~~deb 运行期最小桌面冒烟~~ ✅ **已完成(2026-11-19 用户: deb 安装包已完成)** | 依赖闭包静态核查 100% 覆盖 + bundle 侧 2026-11-17 dbus+xvfb 真跑 + 装 `.deb` 实跑 | — |
+| 4 | ~~Windows / 桌面扫码登录冒烟~~ **归为 issue 反馈驱动(2026-11-19 用户口径)**: Windows 侧不是人工项, **收不到 issue 不主动处理** | 同一份 Rust 链路; 本机无 Windows 桌面。触发条件 = 用户报 issue | — |
+| ~~5~~ | ~~桌面 keyring 装包后冒烟~~ ✅ **随 deb 实装运行一并验证(2026-11-19 用户确认 deb 完成)**; 若后续出现凭据相关 issue 再单独立项 | secret-service 真实 D-Bus 单测 + 装包实跑 | — |
 | 6 | **诊断 Worker** —— ✅ 部署已完成(2026-11-18, Worker 正式地址已进 `app_meta.dart: kDiagUploadEndpoint`); 只剩**自定义域**(workers.dev 大陆超时)与 **PAT 轮换**(用户) | 原部署说明(已执行, 留档)在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
 
 > 原表里 §11.A-2(A) / A-7 / A-8 / A-9 / A-10 已于 2026-11-14~17 全部清零, 一行结论见下面 §11.B。
@@ -195,7 +195,7 @@
 
 视频/最近播放页页签(需视频播放器) · 听歌识曲(录音 + 指纹) · **云盘分片上传**(主体已接入, 只差 >单请求上限的大文件分片; 旧编号 B13 与「B13 逐字歌词 TTML」撞号, 以后只称「云盘」) ·
 MV 列表页/视频详情(播放器已有) · 一起听(房间 + 心跳, 需双端联调) · 动态发送(发包 + 审核语义) ·
-云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`)。
+云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`) —— **2026-11-19 用户批准, 切片 1(ncm-plugin + rquickjs 沙箱 + ScriptProvider, 不接 UI/FFI)在飞: 车道 `lane/plugin-host`**。
 
 ### D. 明确不做
 
@@ -331,6 +331,8 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 写→读往返 + 二次落盘字节稳定 + 缺字段向后兼容 + `schemaVersion<2` 迁移。加设置项现在是
 「字段 + 某域 `_apply` + `toJson` + 期望键表」四处且**漏一处测试就红**。
 
+**第二步在飞(2026-11-19, 车道 `lane/settings-snapshot`)**: 不可变快照 + 统一 diff 通知(分域 scoped listener)。
+
 **未做(仍开着)**: 字段本身还是可变单例, `notifyListeners()` 仍靠调用方手工发(高频
 音量拖动会带动全页重建, 只是封面用 `ValueNotifier` 单独避开了)。要做就做**不可变快照 +
 统一 diff 通知**, 但那要连带改设置页与所有读点(≈ 一次重构批的量)。
@@ -410,7 +412,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~S1~~ ✅ **已落(v0.24.0)** | 歌单详情双列左 300 / 间 12 / 右 528(填满 840); 两列各自滚动; 判据用 `MediaQuery.sizeOf`(窗口宽)以免被 840 限宽判死 | M | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S2~~ ✅ **已落(v0.25.0)** | 播客详情双列同构(左 300/间 12/右 528, 两列各自滚动; 窄/中档零几何变化) | S | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `docs/archive/plans-2026-11/q1-two-column-s2s3-2026-11-18.md` |
-| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | 仅用户明确要求时 |
+| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | **2026-11-19 用户批准 → 车道 `lane/wide-s4` 在飞**(最小切片: 歌单广场/搜索 → 歌单详情) |
 
 **明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。
 
