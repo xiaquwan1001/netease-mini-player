@@ -8,20 +8,20 @@
 //! - 脚本只能经 `lx.request` 出站(宿主注入的 transport), 没有 fetch/require/文件系统;
 //! - `lx.storage` 按 namespace 隔离;
 //! - 单次调用硬超时由 QuickJS interrupt handler 实现, 内存上限由 `JS_SetMemoryLimit` 实现;
-//! - 每次调用都重置请求计数, 日志与 \`lx.send\` 上报留在宿主侧。
+//! - 每次调用都重置请求计数, 日志留在宿主侧。
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use rquickjs::{Context, Ctx, Exception, Function, Object, Runtime, Value};
+use rquickjs::{Context, Ctx, Exception, Function, Object, Runtime};
 use serde::Deserialize;
 
 use crate::error::{PluginError, PluginErrorKind};
 use crate::storage::Storage;
-use crate::transport::{Transport, TransportError, TransportRequest, TransportResponse};
+use crate::transport::{Transport, TransportRequest, TransportResponse};
 
 const PRELUDE: &str = include_str!("prelude.js");
 
@@ -34,13 +34,13 @@ pub struct SandboxConfig {
     pub memory_limit_bytes: usize,
     /// JS 栈上限.
     pub max_stack_bytes: usize,
-    /// 单次调用允许的 \`lx.request\` 次数.
+    /// 单次调用允许的 `lx.request` 次数.
     pub max_requests_per_call: usize,
     /// 单次响应体上限(与 Melodia 的 4 MB 对齐).
     pub max_response_bytes: usize,
     /// 单次调用保留的日志条数上限.
     pub max_log_entries: usize,
-    /// 单次 \`lx.storage.set\` 的 value 字节上限.
+    /// 单次 `lx.storage.set` 的 value 字节上限.
     pub max_storage_value_bytes: usize,
 }
 
@@ -91,7 +91,7 @@ impl HostState {
         self.logs.push(format!("[{level}] {message}"));
     }
 
-    /// 返回 Err(String) => 变成 JS 侧异常(交给脚本 try/catch).
+    /// 返回 Err(String) => 变成 `{"__error": ...}` 信封, 由 prelude 抛成 JS 异常.
     fn request(&mut self, json: &str) -> Result<String, String> {
         if self.requests >= self.config.max_requests_per_call {
             return Err(format!(
@@ -99,14 +99,11 @@ impl HostState {
                 self.config.max_requests_per_call
             ));
         }
-        let raw: RawRequest =
-            serde_json::from_str(json).map_err(|e| format!("lx.request: 参数不是合法 JSON: {e}"))?;
+        let raw: RawRequest = serde_json::from_str(json)
+            .map_err(|e| format!("lx.request: 参数不是合法 JSON: {e}"))?;
         let url = raw.url.trim();
-        let scheme_ok = url.starts_with("https://") || url.starts_with("http://");
-        if !scheme_ok {
-            return Err(format!(
-                "lx.request: 只允许 http/https, 拒绝 {url}"
-            ));
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(format!("lx.request: 只允许 http/https, 拒绝 {url}"));
         }
         let method = raw
             .method
@@ -176,7 +173,9 @@ impl HostState {
                 self.storage.remove(&self.namespace, &key);
                 Ok("{\"ok\":true}".to_string())
             }
-            "keys" => Ok(serde_json::json!({ "keys": self.storage.keys(&self.namespace) }).to_string()),
+            "keys" => {
+                Ok(serde_json::json!({ "keys": self.storage.keys(&self.namespace) }).to_string())
+            }
             other => Err(format!("lx.storage: 未知操作 {other}")),
         }
     }
@@ -239,12 +238,15 @@ pub struct ScriptEngine {
     // JS_FreeRuntime 里断言 gc_obj_list 非空(实测 SIGABRT).
     context: Context,
     runtime: Runtime,
-    // 红相占位: 预算(interrupt/内存上限)在下一提交接入后才被读取.
-    #[allow(dead_code)]
     config: SandboxConfig,
     host: Rc<RefCell<HostState>>,
     handlers: Vec<String>,
+    /// interrupt handler 用: 这次调用是否已被判成超时(区分超时与脚本自己抛错).
     timed_out: Arc<AtomicBool>,
+    /// 相对 `epoch` 的绝对截止毫秒(u64::MAX = 未布防).
+    deadline_ms: Arc<AtomicU64>,
+    /// 与 interrupt handler 共享的时间原点(`Instant` 是 Copy, 可直接搬进闭包).
+    epoch: Instant,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,7 +267,13 @@ impl ScriptEngine {
         storage: Arc<dyn Storage>,
         namespace: impl Into<String>,
     ) -> Result<Self, PluginError> {
-        let runtime = Runtime::new().map_err(|e| PluginError::load(format!("Runtime::new: {e}")))?;
+        let runtime =
+            Runtime::new().map_err(|e| PluginError::load(format!("Runtime::new: {e}")))?;
+        // 内存/栈上限必须在建 Context 之前设好: 装载期就要受约束(脚本顶层也能放炸弹).
+        // 注意 rquickjs 的 set_memory_limit 只有**不用** rust-alloc/allocator 特性时才生效,
+        // 我们正是这么选的(见 Cargo.toml 注释).
+        runtime.set_memory_limit(config.memory_limit_bytes);
+        runtime.set_max_stack_size(config.max_stack_bytes);
         let context = Context::full(&runtime)
             .map_err(|e| PluginError::load(format!("Context::full: {e}")))?;
         let host = Rc::new(RefCell::new(HostState {
@@ -276,17 +284,22 @@ impl ScriptEngine {
             requests: 0,
             logs: Vec::new(),
         }));
-        let timed_out = Arc::new(AtomicBool::new(false));
         let mut engine = Self {
             context,
             runtime,
             config,
             host,
             handlers: Vec::new(),
-            timed_out,
+            timed_out: Arc::new(AtomicBool::new(false)),
+            deadline_ms: Arc::new(AtomicU64::new(u64::MAX)),
+            epoch: Instant::now(),
         };
+        engine.install_interrupt();
         engine.install()?;
-        engine.load_script(source)?;
+        engine.arm_deadline(engine.config.call_timeout);
+        let loaded = engine.load_script(source);
+        engine.disarm_deadline();
+        loaded?;
         engine.handlers = engine.eval_handlers()?;
         Ok(engine)
     }
@@ -309,21 +322,40 @@ impl ScriptEngine {
     ) -> Result<serde_json::Value, PluginError> {
         self.host.borrow_mut().begin_call();
         self.timed_out.store(false, Ordering::SeqCst);
-        let args_json = serde_json::to_string(&args)
-            .map_err(|e| PluginError::protocol(format!("入参无法序列化: {e}")))?;
+        self.arm_deadline(self.config.call_timeout);
+        let result = self.invoke_armed(event, args);
+        self.disarm_deadline();
+        result
+    }
 
-        let first = self.call(event, &args_json)?;
-        match first.status.as_str() {
-            "missing" => Err(PluginError::missing_handler(format!(
-                "脚本未注册事件 {event}"
-            ))),
-            "error" => Err(PluginError::script(first.error)),
-            "ok" => Ok(first.value),
-            "pending" => self.drive_promises(),
-            other => Err(PluginError::protocol(format!(
-                "未知的调用状态 {other}"
-            ))),
-        }
+    /// QuickJS 每跑若干条字节码就回调一次; 超过截止时间返回 true, 引擎随即抛
+    /// InternalError 中断执行。这是死循环必须有界的唯一实现点。
+    fn install_interrupt(&mut self) {
+        let timed_out = self.timed_out.clone();
+        let deadline_ms = self.deadline_ms.clone();
+        let epoch = self.epoch;
+        self.runtime.set_interrupt_handler(Some(Box::new(move || {
+            let now = epoch.elapsed().as_millis() as u64;
+            if now >= deadline_ms.load(Ordering::Relaxed) {
+                timed_out.store(true, Ordering::SeqCst);
+                true
+            } else {
+                false
+            }
+        })));
+    }
+
+    /// 布防一次调用的截止时间(装载脚本也走这条路).
+    fn arm_deadline(&self, timeout: Duration) {
+        let now = self.epoch.elapsed().as_millis() as u64;
+        self.deadline_ms.store(
+            now.saturating_add(timeout.as_millis() as u64),
+            Ordering::SeqCst,
+        );
+    }
+
+    fn disarm_deadline(&self) {
+        self.deadline_ms.store(u64::MAX, Ordering::SeqCst);
     }
 
     fn install(&mut self) -> Result<(), PluginError> {
@@ -332,8 +364,8 @@ impl ScriptEngine {
             let result = (|| -> rquickjs::Result<()> {
                 let host_obj = Object::new(ctx.clone())?;
 
-                // 注意: native 闭包里**不许**捕获 `Ctx`(实测会在 JS_FreeRuntime 断言
-                // gc_obj_list 非空 → SIGABRT). 失败以 {"__error": msg} 信封回给 prelude,
+                // 注意: native 闭包里不许捕获 `Ctx`(实测会在 JS_FreeRuntime 断言
+                // gc_obj_list 非空 -> SIGABRT). 失败以 {"__error": msg} 信封回给 prelude,
                 // 由 JS 侧 throw new Error(...), 语义不变且异常栈落在脚本侧.
                 let request_host = host.clone();
                 let request = Function::new(ctx.clone(), move |args: String| {
@@ -388,11 +420,11 @@ impl ScriptEngine {
     fn call(&mut self, event: &str, args_json: &str) -> Result<CallOutcome, PluginError> {
         let event_json = serde_json::to_string(event)
             .map_err(|e| PluginError::protocol(format!("事件名序列化失败: {e}")))?;
+        // args 必须以 **JSON 字符串字面量** 传入(prelude 会 JSON.parse), 不能
+        // 直接内联成 JS 表达式 —— 否则 JSON.parse([]) 拿到的就是空串.
+        let args_literal = serde_json::to_string(args_json)
+            .map_err(|e| PluginError::protocol(format!("入参序列化失败: {e}")))?;
         let raw: String = self.context.with(|ctx| {
-            // args 必须以 **JSON 字符串字面量** 传入(prelude 会 JSON.parse), 不能
-            // 直接内联成 JS 表达式 —— 否则 JSON.parse([]) 拿到的就是空串.
-            let args_literal = serde_json::to_string(args_json)
-                .map_err(|e| PluginError::protocol(format!("入参序列化失败: {e}")))?;
             let expr = format!("__lxCall({event_json}, {args_literal})");
             ctx.eval::<std::string::String, _>(expr)
                 .map_err(|e| js_error(&ctx, e, &self.timed_out, PluginErrorKind::Script, event))
@@ -400,11 +432,39 @@ impl ScriptEngine {
         parse_outcome(&raw)
     }
 
+    fn invoke_armed(
+        &mut self,
+        event: &str,
+        args: serde_json::Value,
+    ) -> Result<serde_json::Value, PluginError> {
+        let args_json = serde_json::to_string(&args)
+            .map_err(|e| PluginError::protocol(format!("入参无法序列化: {e}")))?;
+
+        let first = self.call(event, &args_json)?;
+        match first.status.as_str() {
+            "missing" => Err(PluginError::missing_handler(format!(
+                "脚本未注册事件 {event}"
+            ))),
+            "error" => Err(script_failure(first.error)),
+            "ok" => Ok(first.value),
+            "pending" => self.drive_promises(),
+            other => Err(PluginError::protocol(format!("未知的调用状态 {other}"))),
+        }
+    }
+
     fn drive_promises(&mut self) -> Result<serde_json::Value, PluginError> {
         // 同步泵 QuickJS job queue: 脚本的 await 只等宿主注入的同步实现,
         // 所以微任务队列是有限且必然收敛的; 不收敛 = 脚本把 promise 挂死了.
         let mut idle_rounds = 0usize;
         loop {
+            // interrupt 只在 JS 执行时被回调; 纯 Rust 侧的泵循环自己再看一眼截止时间.
+            if self.epoch.elapsed().as_millis() as u64 >= self.deadline_ms.load(Ordering::Relaxed) {
+                self.timed_out.store(true, Ordering::SeqCst);
+                return Err(PluginError::timeout(format!(
+                    "沙箱调用超时(泵 job queue, 预算 {:?})",
+                    self.config.call_timeout
+                )));
+            }
             match self.runtime.execute_pending_job() {
                 Ok(true) => idle_rounds = 0,
                 Ok(false) => {
@@ -427,7 +487,7 @@ impl ScriptEngine {
             match settled.status.as_str() {
                 "pending" => continue,
                 "ok" => return Ok(settled.value),
-                "error" => return Err(PluginError::script(settled.error)),
+                "error" => return Err(script_failure(settled.error)),
                 other => {
                     return Err(PluginError::protocol(format!(
                         "未知的 promise 状态 {other}"
@@ -467,12 +527,21 @@ fn exception_message(ctx: &Ctx<'_>) -> String {
     "script error".to_string()
 }
 
+/// 脚本侧冒泡上来的失败: OOM 要单独归类(内存上限 ≠ 脚本 bug).
+fn script_failure(message: String) -> PluginError {
+    if is_oom_message(&message) {
+        PluginError::memory(message)
+    } else {
+        PluginError::script(message)
+    }
+}
+
 fn is_oom_message(message: &str) -> bool {
     let lower = message.to_ascii_lowercase();
     lower.contains("out of memory") || lower.contains("allocation")
 }
 
-/// JS 层错误 -> PluginError. 超时优先级最高(interrupt 也会以异常形式冒泡).
+/// JS 层错误 -> PluginError. 超时优先级最高(interrupt 也以异常形式冒泡).
 fn js_error(
     ctx: &Ctx<'_>,
     err: rquickjs::Error,
@@ -495,16 +564,4 @@ fn js_error(
         PluginErrorKind::Load => PluginError::load(message),
         _ => PluginError::script(message),
     }
-}
-
-/// 宿主未使用的 transport 应答辅助(留作真实 transport 的参考形状).
-#[allow(dead_code)]
-fn _transport_error_hint(err: &TransportError) -> String {
-    err.message.clone()
-}
-
-/// 让 `Value` 在本模块可见(避免 unused import; 异常消息路径用到它的方法).
-#[allow(dead_code)]
-fn _value_marker(value: &Value<'_>) -> bool {
-    value.is_undefined()
 }

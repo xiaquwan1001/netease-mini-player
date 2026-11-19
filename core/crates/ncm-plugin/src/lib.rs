@@ -47,5 +47,7 @@ pub mod worker;
 pub use error::{PluginError, PluginErrorKind};
 pub use sandbox::{SandboxConfig, ScriptEngine};
 pub use storage::{MemoryStorage, Storage};
-pub use transport::{MockTransport, Transport, TransportError, TransportRequest, TransportResponse};
+pub use transport::{
+    MockTransport, Transport, TransportError, TransportRequest, TransportResponse,
+};
 pub use worker::{PluginSpec, ScriptProvider};

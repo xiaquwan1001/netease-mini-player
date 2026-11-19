@@ -86,9 +86,7 @@ impl MockTransport {
 
     fn lock(&self) -> std::sync::MutexGuard<'_, MockState> {
         // 中毒即续用: 这是测试/可观测用的缓存锁, 与 docs/remaining-batches.md §4.1 口径一致.
-        self.inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 

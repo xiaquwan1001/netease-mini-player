@@ -63,9 +63,7 @@ fn invoke_with_guard(
     });
     match rx.recv_timeout(guard) {
         Ok(result) => result,
-        Err(_) => panic!(
-            "沙箱在守护时限 {guard:?} 内没有返回: 时间/内存预算未生效(红相)"
-        ),
+        Err(_) => panic!("沙箱在守护时限 {guard:?} 内没有返回: 时间/内存预算未生效(红相)"),
     }
 }
 
@@ -232,7 +230,10 @@ fn request_scheme_allowlist_blocks_file_and_unknown() {
         .invoke("musicUrl", json!([]))
         .expect_err("file:// 必须被拒");
     assert!(err.detail.contains("http/https"), "detail: {}", err.detail);
-    assert!(transport.requests().is_empty(), "被拒的请求不能到达 transport");
+    assert!(
+        transport.requests().is_empty(),
+        "被拒的请求不能到达 transport"
+    );
 }
 
 #[test]
@@ -298,7 +299,9 @@ fn missing_handler_maps_to_missing_handler_kind() {
 fn script_throw_maps_to_internal() {
     let script = "lx.on('musicUrl', () => { throw new Error('boom'); });";
     let mut engine = engine(script);
-    let err = engine.invoke("musicUrl", json!([])).expect_err("脚本抛错应失败");
+    let err = engine
+        .invoke("musicUrl", json!([]))
+        .expect_err("脚本抛错应失败");
     assert_eq!(err.kind, PluginErrorKind::Script);
     assert!(err.detail.contains("boom"), "detail: {}", err.detail);
     assert_eq!(

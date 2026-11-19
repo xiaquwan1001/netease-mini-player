@@ -107,10 +107,7 @@ pub fn stream_url(raw: &Value, requested: AudioLevel) -> Result<StreamUrl, Plugi
                 format,
                 md5: string_field(map, &["md5"]),
                 duration_ms: u64_field(map, &["durationMs", "duration_ms"]),
-                is_trial: map
-                    .get("isTrial")
-                    .and_then(Value::as_bool)
-                    .unwrap_or(false),
+                is_trial: map.get("isTrial").and_then(Value::as_bool).unwrap_or(false),
                 ..StreamUrl::default()
             })
         }

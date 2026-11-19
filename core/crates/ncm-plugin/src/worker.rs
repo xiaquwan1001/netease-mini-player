@@ -97,10 +97,7 @@ pub struct ScriptProvider {
 impl ScriptProvider {
     /// 加载并初始化脚本(语法错误/初始化超时/sandbox 起不来都在这里报).
     pub fn load(spec: PluginSpec) -> Result<Self, PluginError> {
-        let namespace = spec
-            .namespace
-            .clone()
-            .unwrap_or_else(|| spec.name.clone());
+        let namespace = spec.namespace.clone().unwrap_or_else(|| spec.name.clone());
         let logs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let logs_for_thread = logs.clone();
         let (init_tx, init_rx) = mpsc::channel::<Result<Vec<String>, PluginError>>();
@@ -288,10 +285,7 @@ impl RecommendProvider for ScriptProvider {}
 impl VipProvider for ScriptProvider {}
 
 impl LyricProvider for ScriptProvider {
-    fn lyric<'a>(
-        &'a self,
-        _track: TrackId,
-    ) -> BoxFuture<'a, ProviderResult<Lyric>> {
+    fn lyric<'a>(&'a self, _track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {
         Box::pin(async { Err(convert::lyric_unsupported()) })
     }
 }

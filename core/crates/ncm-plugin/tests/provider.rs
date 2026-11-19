@@ -8,7 +8,9 @@ use ncm_plugin::{
     MemoryStorage, MockTransport, PluginErrorKind, PluginSpec, SandboxConfig, ScriptProvider,
     TransportResponse,
 };
-use ncm_provider::{AudioLevel, Capability, Provider, ProviderErrorKind, ReadProvider, SearchQuery, SongUrlRequest};
+use ncm_provider::{
+    AudioLevel, Capability, Provider, ProviderErrorKind, ReadProvider, SearchQuery, SongUrlRequest,
+};
 
 fn reply(body: &str) -> Result<TransportResponse, ncm_plugin::TransportError> {
     Ok(TransportResponse {
@@ -18,11 +20,7 @@ fn reply(body: &str) -> Result<TransportResponse, ncm_plugin::TransportError> {
     })
 }
 
-fn spec(
-    source: &str,
-    transport: Arc<MockTransport>,
-    config: SandboxConfig,
-) -> PluginSpec {
+fn spec(source: &str, transport: Arc<MockTransport>, config: SandboxConfig) -> PluginSpec {
     PluginSpec::new("demo", source, transport, Arc::new(MemoryStorage::new())).with_config(config)
 }
 
@@ -95,7 +93,10 @@ fn search_maps_to_search_page() {
     assert_eq!(song.id, TrackId(7));
     assert_eq!(song.name, "夜曲");
     assert_eq!(song.artist_line(), "周杰伦");
-    assert_eq!(song.album.as_ref().map(|a| a.name.as_str()), Some("十一月的萧邦"));
+    assert_eq!(
+        song.album.as_ref().map(|a| a.name.as_str()),
+        Some("十一月的萧邦")
+    );
     assert_eq!(song.duration_ms, 227_000);
     assert!(!page.has_more);
 }
@@ -145,10 +146,8 @@ fn syntax_error_fails_load() {
 
 #[test]
 fn null_url_maps_to_not_found() {
-    let transport = Arc::new(MockTransport::new().on(
-        "example.test/api/song/url",
-        reply(r#"{"url":null}"#),
-    ));
+    let transport =
+        Arc::new(MockTransport::new().on("example.test/api/song/url", reply(r#"{"url":null}"#)));
     let provider = ScriptProvider::load(spec(
         include_str!("fixtures/music_url.js"),
         transport,
