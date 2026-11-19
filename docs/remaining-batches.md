@@ -402,6 +402,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~**U-04**(P2)~~ ✅ **已落(v0.22.1); 听感 2026-11-19 用户确认通过(无双音源并发)** | Dart 起播前暂停歌曲 + `MvPlayerActivity` 申请/放弃音频焦点 + 歌曲 ExoPlayer 开 `handleAudioFocus`(media3 1.9.4 默认 false, 已 `javap` 证实)。**需用户真机验 3 步**(见 PROGRESS 2026-11-18(十)) | 真机听感受限于用户 | — |
 | ~~**U-03**(P2)~~ ✅ **已落(v0.25.0)** | 新 `showAppSheet`/`showAppDialog` 统一入口, 已迁 31/38 处(剩 7 处冻结: podcast 详情 1 / 我的 1 / home 5); 新门 `tools/check-sheet-entry.sh` 已接 `ci-gates verify` + CI, 待迁名单不许增长 | 第二批跟随表的 7 处一起迁 | 剩余 S |
 | ~~U-05/U-06(P2)~~ ✅ **已落(v0.25.0)** | `runPostFrameIfAlive` 守卫帧后写槽; `HomeWiring` 改实例栈 `_alive`(主人 detach 交还仍活着的上一个)。红→绿已实证(还原补丁后 `A→B→B detach` 等用例失败) | 已做 | — |
+| **U-08**(P2, 2026-11-19 登记) | 「setState() called during build」的潜在面: `ContentWidthLimit`(LayoutBuilder)包住 `HomePage.initState` 时, 端到端测试用 `MiniNcmApp` pump 会命中该断言(生产同形)。S4 的端到端用例因此改用 `tab_switch_popups_test` 的注入式树绕开 | 用户报「首帧闪断/冷启动报错」, 或下次动 `app_shell.dart` 的限宽层 | S(把首页首帧副作用挪到 `addPostFrameCallback`, 补 1 例 pump 走真壳的回归) |
 | ~~U-07(P3)~~ ✅ **已落(v0.25.0)** | `NcmRouteObserver.didReplace` 补全(同时维护 pageDepth 与 popup 表), `pushReplacement` 两条用例红→绿 | 已做 | — |
 
 ## 15. 横屏双列布局(2026-11-18 评估产出 · 待开工)
@@ -414,7 +415,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~S1~~ ✅ **已落(v0.24.0)** | 歌单详情双列左 300 / 间 12 / 右 528(填满 840); 两列各自滚动; 判据用 `MediaQuery.sizeOf`(窗口宽)以免被 840 限宽判死 | M | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S2~~ ✅ **已落(v0.25.0)** | 播客详情双列同构(左 300/间 12/右 528, 两列各自滚动; 窄/中档零几何变化) | S | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `docs/archive/plans-2026-11/q1-two-column-s2s3-2026-11-18.md` |
-| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | **2026-11-19 用户批准 → 车道 `lane/wide-s4` 在飞**(最小切片: 歌单广场/搜索 → 歌单详情) |
+| ~~S4~~ ✅ **已落(v0.27.0)** | 方案 B 最小切片: 新文件 `ui/lib/src/detail_pane.dart` —— `detailPaneSlot`(ValueNotifier, **不是路由**)+ 统一入口 `openDetail(context, key:, pane:, route:)`(三条否决: 宿主不在场 / 调用者不在根路由 / `twoColumnFor` 不成立 ⇒ 一律走原 push)+ `closeDetailPane()`; 右栏几何 840 内 **左 408 / 间 12 / 右 420**(`kDetailPaneWidth`); `_PlaylistDetailPage.embedded`(去 AppBar/返回箭头, 顶部一行收藏·管理·分享, 内嵌强制单列); `HomeBackAction.closeDetailPane` 插在 `resetTab` 之前(**两条语义**: 宽档只清右栏不 pop / 窄档 pop), HomePage 用 `ValueListenableBuilder` 监听槽位重算返回优先级; 选中态用**外框**(2dp primary 描边, 不塞进 857 行 `SongRow` 契约)。**主链路取「搜索结果 → 歌单详情」**: 歌单广场本身是 push 出来的全屏页, 在那里填右栏等于往看不见的层塞内容 ⇒ `openDetail` 第 2 条判据直接 push。右栏里弹 sheet 仍被根 observer 登记(`tab_switch_popups_test` 补 1 例, `pageDepth` 不变)。Dart **1299→1320**(+21), golden **20→21**(`master_detail_1280x720`, 既有 20 张未重出) | L | 证据: `detail_pane_test`(250 行)+ `master_detail_flow_test`(333 行)+ `playlist_detail_embedded_test`(206 行)+ golden 1 张 ✔ |
 
 **明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。
 
