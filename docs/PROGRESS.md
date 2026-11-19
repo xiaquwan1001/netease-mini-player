@@ -26,6 +26,7 @@ Rust 侧本批未动(仍 313, 未重跑)。
 Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flutter test` **1293 通过 / 0 失败**(golden **20** 张) ·
 `dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · `docs`/`tokens`/`row-padding`/`sheet-entry`/`write-guard` 五道 checker OK。
 **2026-11-19 晚(合并 §12.6 第二步车道 `lane/settings-snapshot` 后)第十次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **325** · 全量 `flutter test` **1299 通过 / 0 失败**(golden **20** 张, +6 例 `app_settings_scoped_notify_test.dart`) · `dart analyze` **0** · 其余门同上。
+**2026-11-19 晚(合并云盘分片车道 `lane/cloud-chunk-upload` 后)第十一次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **325→345**(service 227→247, 分片规划/引擎/续传/重试 + 云盘单请求路径假 HTTP 服务 20 例) · 全量 `flutter test` **1299** · clippy **0** · `dart analyze` **0** · 五道 checker OK。
 **2026-11-19 早(夜间三车道合并回 main 后, v0.26.0 发版前)第八次重跑**(编排者独立, `tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**):
 Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flutter test` **1289 通过 / 0 失败**(golden **20** 张) ·
 `dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · 四道 checker(含 `sheet-entry` 待迁 0) OK。
@@ -37,7 +38,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **325** 通过 / 0 失败(排除 vendor 联网 smoke; v0.26.0 起, domain 49 + playback 47 + provider 1 + service 227 + ffi 1) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **345** 通过 / 0 失败(排除 vendor 联网 smoke; domain 49 + playback 47 + provider 1 + service **247** + ffi 1; service 的 227→247 = 云盘分片 20 例, 2026-11-19) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
 | `flutter test --exclude-tags network`(全量, 含 golden) | **1299** 通过 / 0 skip / 0 失败(golden **20** 张(v0.26.0 起: 双列 2 张 + 既有 18); 上一版口径为 **1243**(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → 1243 → 1289(v0.26.0 夜间三车道) → 1293(v0.26.1 补测) → **1299**(§12.6 第二步按域 diff 通知 6 例) |
