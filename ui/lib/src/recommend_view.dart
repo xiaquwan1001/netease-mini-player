@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
-import 'app_sheet.dart' show showAppSheet;
 import 'async_view.dart';
 import 'cover_art.dart';
 import 'cover_row.dart';
@@ -11,7 +10,6 @@ import 'playback_bridge.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
 import 'queue_guide.dart' show kFmBatchesPerFill, loadFmBatches;
-import 'ranking_view.dart' show showPlayRanking;
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
@@ -66,12 +64,12 @@ class RecommendView extends StatefulWidget {
   /// 打开"新歌 / 新碟 / 艺人"分类页(不传就不显示"全部"入口)
   final VoidCallback? onOpenNewRelease;
 
-  /// 打开听歌排行(顶栏「自定义」卡可选动作之一; 不传时直接用
-  /// [showPlayRanking], 与「我的」页同一个落地页)
+  /// 保留字段, **当前没有消费者**: 顶栏第一格已固定为「歌单广场」(2026-11-20
+  /// 用户口径, 删掉「自定义选择」)。home_page 仍在传这两个回调, 为避免越界改动
+  /// 那条车道, 这里先保留形参; 等 home_page 侧清理时一并删除。
   final VoidCallback? onOpenRanking;
 
-  /// 打开每日推荐页并落到第三个页签「历史日推」(同一页, 只是初始 tab 不同;
-  /// 不传时退回 [onOpenDaily])
+  /// 见 [onOpenRanking](原「自定义」卡的历史日推动作, 现同样无人消费)。
   final VoidCallback? onOpenDailyHistory;
 
   @override
@@ -124,11 +122,7 @@ class _RecommendViewState extends State<RecommendView> {
         children: [
           _hPad(
             _QuickActions(
-              onOpenDaily: widget.onOpenDaily,
-              onOpenDailyHistory: widget.onOpenDailyHistory,
               onOpenPlaylist: widget.onOpenPlaylist,
-              onOpenRanking: widget.onOpenRanking,
-              onOpenNewRelease: widget.onOpenNewRelease,
               onPlayFm: _playFm,
               onHeartMode: widget.onHeartMode,
             ),
@@ -213,47 +207,32 @@ class _RecommendViewState extends State<RecommendView> {
 
 // ---------------- 快捷入口 ----------------
 
-/// 顶栏三格: 自定义(可绑定动作) / 心动模式 / 私人FM。
+/// 顶栏三格: 歌单广场 / 心动模式 / 私人FM。
 ///
-/// B7(2026-11-19 用户口径): 第一格原先是「每日推荐」, 与下方「每日推荐」区块
-/// 标题右侧的「全部」是同一个 onOpenDaily —— 同一入口出现两次。现在这一格留给
-/// **自定义功能**: 卡片显示所选动作的图标 + 文案, 点卡片执行该动作; 换绑动作走
-/// 卡片右上角的设置角标(或长按卡片) → [showAppSheet] 单选浮层, 选中即落
-/// [AppSettings.customQuickAction], 重启后保留。
+/// 2026-11-20 用户口径: 第一格**固定**为「歌单广场」, 与「推荐歌单」区块标题右侧
+/// 的「全部」同一个落地页([showPlaylistSquare])。原「自定义选择」机制(右上角设置
+/// 角标 + 长按换绑浮层 + AppSettings.customQuickAction 持久化)已整体删除。
 class _QuickActions extends StatelessWidget {
   const _QuickActions({
-    required this.onOpenDaily,
-    required this.onOpenDailyHistory,
     required this.onOpenPlaylist,
     required this.onPlayFm,
     required this.onHeartMode,
-    this.onOpenRanking,
-    this.onOpenNewRelease,
   });
 
-  final VoidCallback onOpenDaily;
-  final VoidCallback? onOpenDailyHistory;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
   final VoidCallback onPlayFm;
   final VoidCallback onHeartMode;
 
-  /// 排行榜落地页(不传时自己用 showPlayRanking 兜底)
-  final VoidCallback? onOpenRanking;
-
-  /// 新歌新碟分类页(与下方区块的「全部」同一个回调)
-  final VoidCallback? onOpenNewRelease;
-
   @override
   Widget build(BuildContext context) {
-    final action = AppSettings.instance.customQuickAction;
     return Row(
       children: [
         Expanded(
           child: _ActionCard(
-            icon: iconOf(action),
-            label: action.label,
-            onTap: () => _run(context, action),
-            onCustomize: () => _pick(context),
+            icon: Icons.grid_view,
+            label: '歌单广场',
+            onTap: () =>
+                showPlaylistSquare(context, onOpenPlaylist: onOpenPlaylist),
           ),
         ),
         const SizedBox(width: 8),
@@ -272,80 +251,6 @@ class _QuickActions extends StatelessWidget {
       ],
     );
   }
-
-  /// 自定义动作 → 图标(浮层单选项与卡片共用, 保证两处口径一致)
-  static IconData iconOf(CustomQuickAction action) => switch (action) {
-    CustomQuickAction.ranking => Icons.leaderboard,
-    CustomQuickAction.newRelease => Icons.fiber_new,
-    CustomQuickAction.playlistSquare => Icons.grid_view,
-    CustomQuickAction.historyDaily => Icons.history,
-    CustomQuickAction.personalFm => Icons.radio,
-  };
-
-  /// 执行当前绑定的动作; 回调缺失时按动作自身的真实落地页兜底(不留死按钮)。
-  void _run(BuildContext context, CustomQuickAction action) {
-    switch (action) {
-      case CustomQuickAction.ranking:
-        (onOpenRanking ?? () => showPlayRanking(context))();
-      case CustomQuickAction.newRelease:
-        final more = onOpenNewRelease;
-        if (more != null) {
-          more();
-        } else {
-          // 没有分类页入口(测试/裁剪场景)时不留死按钮: 退回默认动作的落地页
-          (onOpenRanking ?? () => showPlayRanking(context))();
-        }
-      case CustomQuickAction.playlistSquare:
-        showPlaylistSquare(context, onOpenPlaylist: onOpenPlaylist);
-      case CustomQuickAction.historyDaily:
-        (onOpenDailyHistory ?? onOpenDaily)();
-      case CustomQuickAction.personalFm:
-        onPlayFm();
-    }
-  }
-
-  /// 换绑动作的浮层。**必须**走 app_sheet 的唯一入口(showAppSheet), 否则
-  /// tools/check-sheet-entry.sh 判回归。
-  Future<void> _pick(BuildContext context) async {
-    final current = AppSettings.instance.customQuickAction;
-    final picked = await showAppSheet<CustomQuickAction>(
-      context,
-      settings: const RouteSettings(name: 'quick-action-sheet'),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                '把这一格换成',
-                style: Theme.of(sheetContext).textTheme.titleSmall,
-              ),
-            ),
-            RadioGroup<CustomQuickAction>(
-              groupValue: current,
-              onChanged: (value) => Navigator.of(sheetContext).pop(value),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final action in CustomQuickAction.values)
-                    RadioListTile<CustomQuickAction>(
-                      value: action,
-                      title: Text(action.label),
-                      secondary: Icon(iconOf(action)),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null) return;
-    // RecommendView 外层已订阅 AppSettings(AnimatedBuilder), 写快照即整块重建
-    AppSettings.instance.customQuickAction = picked;
-  }
 }
 
 class _ActionCard extends StatelessWidget {
@@ -353,33 +258,23 @@ class _ActionCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.onCustomize,
   });
 
   /// 主图标尺寸: 原 24 按用户口径 B8 放大 10% (=26.4, 写具体值便于测试锁定)。
   static const double iconSize = 26.4;
 
-  /// 右上角设置角标的尺寸(只做"这一格可换绑"的提示, 不抢主图标;
-  /// 命中区 = 图标 + 两侧 4 = 24, 长按卡片是同一动作的大目标入口)。
-  static const double customizeIconSize = 16;
-
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  /// 非 null 时卡片右上角出现设置角标 + 长按也进浮层(自定义那一格)
-  final VoidCallback? onCustomize;
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final customize = onCustomize;
-    final card = Card(
+    return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        onLongPress: customize,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
           child: Column(
@@ -398,29 +293,6 @@ class _ActionCard extends StatelessWidget {
         ),
       ),
     );
-    if (customize == null) return card;
-    // 角标单独一个命中区: 卡片点击 = 执行动作, 角标点击 = 换绑动作。
-    return Stack(
-      children: [
-        card,
-        Positioned(
-          top: 0,
-          right: 0,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: customize,
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Icon(
-                Icons.tune,
-                size: customizeIconSize,
-                color: scheme.outline,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -438,7 +310,7 @@ class _NewSongsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
-        _hPad(const _Caption('新歌速递')),
+        _hPad(const _Caption('新歌速递', icon: Icons.new_releases_outlined)),
         AsyncView<List<rust.SongDto>>(
           load: load,
           emptyText: '暂时没有新歌',
@@ -501,7 +373,7 @@ class _NewAlbumsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 「全部」入口由外层 _NewReleaseSection 统一提供(合并后全屏只有一个)
-        const _Caption('新碟上架'),
+        const _Caption('新碟上架', icon: Icons.album_outlined),
         AsyncView<List<rust.AlbumItem>>(
           load: load,
           emptyText: loggedIn ? '暂时没有新碟' : '暂时没有新碟',
@@ -530,21 +402,35 @@ class _NewAlbumsSection extends StatelessWidget {
 
 /// 小标题: 合并区块内部的次级分类名(不是平级区块, 没有自己的「全部」出口)。
 class _Caption extends StatelessWidget {
-  const _Caption(this.text);
+  const _Caption(this.text, {this.icon});
 
   final String text;
+
+  /// 次级分类的小图标(可选, 口径同 SectionHeader.icon: 内置 Material Icons)
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final style = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.outline,
+    );
+    final text0 = Text(text, style: style);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6, top: 2),
-      child: Text(
-        text,
-        style: theme.textTheme.labelMedium?.copyWith(
-          color: theme.colorScheme.outline,
-        ),
-      ),
+      child: icon == null
+          ? text0
+          : Row(
+              children: [
+                Icon(
+                  icon,
+                  size: MediaQuery.textScalerOf(context).scale(14),
+                  color: theme.colorScheme.outline,
+                ),
+                const SizedBox(width: 4),
+                Flexible(child: text0),
+              ],
+            ),
     );
   }
 }
@@ -581,6 +467,7 @@ class _NewReleaseSection extends StatelessWidget {
         _hPad(
           SectionHeader(
             title: '新歌新碟',
+            icon: Icons.fiber_new_outlined,
             trailing: onMore == null
                 ? null
                 : TextButton(onPressed: onMore, child: const Text('全部')),
@@ -612,7 +499,7 @@ class _StylesSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: '风格推荐'),
+        const SectionHeader(title: '风格推荐', icon: Icons.category_outlined),
         _StyleTiles(load: load, onOpenPlaylist: onOpenPlaylist),
       ],
     );
@@ -724,6 +611,7 @@ class _DailySongsSection extends StatelessWidget {
         _hPad(
           SectionHeader(
             title: '每日推荐',
+            icon: Icons.wb_sunny_outlined,
             // 同一语义(看完整列表)全页统一叫「全部」, 放区块标题右侧(审查 P1-7.13)
             trailing: TextButton(onPressed: onOpenAll, child: const Text('全部')),
           ),
@@ -803,6 +691,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
         children: [
           SectionHeader(
             title: '推荐歌单',
+            icon: Icons.queue_music_outlined,
             trailing: onOpenAll == null
                 ? null
                 : TextButton(onPressed: onOpenAll, child: const Text('全部')),
@@ -816,6 +705,7 @@ class _DailyPlaylistsSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '推荐歌单',
+          icon: Icons.queue_music_outlined,
           trailing: onOpenAll == null
               ? null
               : TextButton(onPressed: onOpenAll, child: const Text('全部')),
@@ -861,6 +751,7 @@ class _PodcastSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '推荐播客',
+          icon: Icons.podcasts_outlined,
           trailing: TextButton(
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(

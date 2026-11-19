@@ -431,6 +431,7 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
             padding: const EdgeInsets.only(right: kPagePadding),
             child: SectionHeader(
               title: 'TA 的歌单',
+              icon: Icons.queue_music_outlined,
               trailing: Text(
                 '${lists.length} 个',
                 style: theme.textTheme.labelMedium?.copyWith(

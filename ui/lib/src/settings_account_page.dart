@@ -257,7 +257,7 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           const SizedBox(height: 16),
-          const SectionTitle('账号簿'),
+          const SectionTitle('账号簿', icon: Icons.switch_account_outlined),
           Card(
             margin: EdgeInsets.zero,
             child: Column(
@@ -331,7 +331,7 @@ class _AccountPageState extends State<AccountPage> {
           ],
           if (_accounts.isNotEmpty) ...[
             const SizedBox(height: 16),
-            const SectionTitle('隐私'),
+            const SectionTitle('隐私', icon: Icons.lock_outline),
             Card(
               margin: EdgeInsets.zero,
               child: ListTile(

@@ -255,9 +255,19 @@ void main() {
           reason: '$tag 消息卡行内容左边缘',
         );
 
-        // 区块标题(纯文本)距屏 12
+        // 区块标题(图标 + 文字)距屏 12。2026-11-20 起栏目标题左侧带图标,
+        // 所以量的是标题行(Row)的左边缘, 而不是文字本身(文字右移「图标 + 6」)。
         expect(
-          tester.getRect(find.text('我喜欢的音乐')).left,
+          tester
+              .getRect(
+                find
+                    .ancestor(
+                      of: find.text('我喜欢的音乐'),
+                      matching: find.byType(Row),
+                    )
+                    .first,
+              )
+              .left,
           moreOrLessEquals(kPagePadding, epsilon: 0.5),
           reason: '$tag 区块标题左边缘',
         );

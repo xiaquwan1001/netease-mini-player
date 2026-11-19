@@ -94,9 +94,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // 排行榜区块已按用户要求从推荐页移到搜索页(这里不再有区块);
-    // B7 之后顶栏第一格是「自定义」快捷卡, 默认绑定动作就是排行榜 ⇒
-    // 文案「排行榜」只在快捷卡上出现一次(区块/榜单列表不渲染)。
-    expect(find.text('排行榜'), findsOneWidget);
+    // 2026-11-20 之后顶栏第一格固定为「歌单广场」快捷卡(原「自定义选择」已删除)
+    // ⇒ 文案「歌单广场」只在快捷卡上出现一次(区块/榜单列表不渲染)。
+    expect(find.text('歌单广场'), findsOneWidget);
+    expect(find.text('排行榜'), findsNothing);
     expect(find.text('飙升榜'), findsNothing);
 
     // 风格推荐

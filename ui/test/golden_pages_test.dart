@@ -553,7 +553,7 @@ Widget _searchLandingPage() => Scaffold(
       _hot(3, '七里香'),
       _hot(4, '夜曲'),
     ],
-    recommended: '周杰伦',
+    recommended: const [RecommendedKeyword(keyword: '周杰伦')],
     onSelected: (_) {},
     onClearHistory: () {},
   ),

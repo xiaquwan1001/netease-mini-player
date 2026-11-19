@@ -133,7 +133,7 @@ class SettingsView extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            const SectionTitle('界面'),
+            const SectionTitle('界面', icon: Icons.palette_outlined),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -247,7 +247,7 @@ class SettingsView extends StatelessWidget {
             const SizedBox(height: 16),
             // 「行为」类开关: 搜索/播放原本是两个一级分组, 各只有一个开关时
             // 不必各占一个分区(审查 §5.3 建议并入「通用」)
-            const SectionTitle('通用'),
+            const SectionTitle('通用', icon: Icons.tune),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -339,13 +339,13 @@ class SettingsView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             // 每日推荐歌单缓存(2026-11 用户需求): 保留天数 + 立即清理 + 上次清理时间
-            const SectionTitle('缓存'),
+            const SectionTitle('缓存', icon: Icons.sd_storage_outlined),
             Card(
               margin: EdgeInsets.zero,
               child: _DailyCacheTile(dataDir: info?.dataDir),
             ),
             const SizedBox(height: 16),
-            const SectionTitle('关于'),
+            const SectionTitle('关于', icon: Icons.info_outline),
             Card(
               margin: EdgeInsets.zero,
               child: Column(
@@ -508,9 +508,10 @@ class _TextScaleSetting extends StatelessWidget {
   }
 }
 
-/// 每日推荐歌单缓存: 保留天数 + 立即清理 + 上次清理时间。
+/// 每日推荐缓存(歌单 + 单曲): 保留天数 + 立即清理 + 上次清理时间。
 ///
-/// 缓存本身在 `daily_cache.dart`(按天`<账号键>/YYYY-MM-DD.json` 落文件);
+/// 缓存本身在 `daily_cache.dart`(按天`<账号键>/YYYY-MM-DD.json` 落文件, 当天的
+/// 推荐**歌单**与推荐**单曲**在同一个文件里);
 /// 这里只做展示与"什么时候清"。**清理只清当前账号的那个子目录** —— 日推缓存按账号
 /// 分区, 顺手清别人账号的缓存既没必要也会让那个账号多拉一次。
 /// 上次清理时间从缓存目录读, 所以点完「立即清理」要重读一次才好看见变化。
@@ -578,7 +579,10 @@ class _DailyCacheTileState extends State<_DailyCacheTile> {
       );
       await _loadLastCleanup();
       if (!mounted) return;
-      showToast(context, removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 份旧缓存');
+      showToast(
+        context,
+        removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 天的缓存(歌单 + 单曲)',
+      );
     } catch (e) {
       if (!mounted) return;
       showToast(context, '清理失败: ${describeError(e)}', isError: true);
@@ -601,11 +605,11 @@ class _DailyCacheTileState extends State<_DailyCacheTile> {
     return Column(
       children: [
         ListTile(
-          title: const Text('每日推荐歌单缓存'),
+          title: const Text('每日推荐缓存'),
           subtitle: Text(
             settings.dailyCacheDays <= 0
                 ? '已关闭: 每次进推荐页都联网拉取'
-                : '同一天只拉一次, 保留 ${settings.dailyCacheDays} 天',
+                : '歌单 + 单曲, 同一天只拉一次, 保留 ${settings.dailyCacheDays} 天',
           ),
           trailing: DropdownButton<int>(
             value: settings.dailyCacheDays,

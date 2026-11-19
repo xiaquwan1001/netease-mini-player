@@ -334,9 +334,9 @@ void main() {
 
     // 合并后的 5 个区块标题(快捷区是三张卡, 没有标题)
     expect(find.text('每日推荐'), findsOneWidget); // 只剩区块标题
-    // 排行榜区块已按用户要求移到搜索页; B7 之后顶栏第一格是「自定义」卡,
-    // 默认绑定排行榜 ⇒ 只有这张卡的文案是「排行榜」, 页面里没有榜单区块。
-    expect(find.text('排行榜'), findsOneWidget);
+    // 排行榜区块已按用户要求移到搜索页; 顶栏第一格 2026-11-20 起固定为
+    // 「歌单广场」卡(原「自定义选择」已删除) ⇒ 页面里没有榜单区块。
+    expect(find.text('排行榜'), findsNothing);
     expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('推荐歌单'), findsOneWidget);
     expect(find.text('新歌新碟'), findsOneWidget);
@@ -344,7 +344,9 @@ void main() {
 
     // 被合并掉的两个区块标题不再单独作为区块存在
     expect(find.text('每日推荐歌曲'), findsNothing);
-    expect(find.text('歌单广场'), findsNothing); // 游离按钮已提到 header
+    // 歌单广场只剩顶栏快捷卡一处(游离按钮已提到 header; 「推荐歌单」的「全部」
+    // 是同一个落地页, 但不是文字入口)
+    expect(find.text('歌单广场'), findsOneWidget);
 
     // 新歌/新碟 降为同一区块内的两个小标题, 内容仍可达
     expect(find.text('新歌速递'), findsOneWidget);

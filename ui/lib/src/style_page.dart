@@ -109,6 +109,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
           // 用 SectionHeader 而不是 SectionTitle(小组标题 titleSmall), 保持原字号。
           SectionHeader(
             title: '风格歌单',
+            icon: Icons.library_music_outlined,
             trailing: widget.tag.songCount == null
                 ? null
                 : Text(
@@ -122,7 +123,7 @@ class _StyleDetailViewState extends State<StyleDetailView> {
             onRetry: () => setState(_reload),
           ),
           const SizedBox(height: 16),
-          const SectionHeader(title: '风格歌曲'),
+          const SectionHeader(title: '风格歌曲', icon: Icons.music_note_outlined),
           _SongList(future: _songsFuture, onRetry: () => setState(_reload)),
         ],
       ),

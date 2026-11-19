@@ -555,6 +555,7 @@ class _LikedSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '我喜欢的音乐',
+          icon: Icons.favorite_outline,
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         AsyncView<List<rust.SongDto>>(
@@ -642,6 +643,7 @@ class _PlaylistsSection extends StatelessWidget {
         children: [
           SectionHeader(
             title: '收藏的歌单',
+            icon: Icons.queue_music_outlined,
             trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
           ),
           AsyncView<List<rust.Playlist>>(
@@ -696,6 +698,7 @@ class _PodcastsSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '收藏的播客',
+          icon: Icons.podcasts_outlined,
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         AsyncView<List<rust.PodcastRadio>>(
@@ -752,6 +755,7 @@ class _AlbumsSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '收藏的专辑',
+          icon: Icons.album_outlined,
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         AsyncView<List<rust.AlbumItem>>(
@@ -913,7 +917,7 @@ class _RankingSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SectionHeader(title: '听歌排行'),
+        const SectionHeader(title: '听歌排行', icon: Icons.leaderboard_outlined),
         PlayRankingView(load: load, compact: true, onOpenAll: onOpenAll),
       ],
     );
@@ -939,6 +943,7 @@ class _RecentSection extends StatelessWidget {
       children: [
         SectionHeader(
           title: '最近听过',
+          icon: Icons.history,
           trailing: SectionSeeAllButton(label: '查看全部', onTap: onOpenAll),
         ),
         AsyncView<List<rust.SongDto>>(

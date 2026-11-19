@@ -32,13 +32,13 @@ class SleepTimerPage extends StatelessWidget {
         builder: (context, _) => ListView(
           padding: kPageInsets,
           children: [
-            const SectionTitle('停法'),
+            const SectionTitle('停法', icon: Icons.pause_circle_outline),
             Card(margin: kCardMargin, child: _modeCard(context, state)),
             const SizedBox(height: kSectionGap),
-            const SectionTitle('时长'),
+            const SectionTitle('时长', icon: Icons.timer_outlined),
             Card(margin: kCardMargin, child: _presetCard(context, state)),
             const SizedBox(height: kSectionGap),
-            const SectionTitle('当前状态'),
+            const SectionTitle('当前状态', icon: Icons.hourglass_bottom),
             Card(margin: kCardMargin, child: _statusCard(context, state)),
           ],
         ),

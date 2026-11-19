@@ -59,13 +59,13 @@ class DiagnosticsPage extends StatelessWidget {
           24 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          const SectionTitle('诊断'),
+          const SectionTitle('诊断', icon: Icons.bug_report_outlined),
           Card(
             margin: EdgeInsets.zero,
             child: ChannelSelfCheckTile(ping: ping),
           ),
           const SizedBox(height: 16),
-          const SectionTitle('匿名诊断'),
+          const SectionTitle('匿名诊断', icon: Icons.shield_outlined),
           Card(
             margin: EdgeInsets.zero,
             child: Column(
@@ -99,7 +99,7 @@ class DiagnosticsPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          const SectionTitle('数据'),
+          const SectionTitle('数据', icon: Icons.data_object),
           Card(
             margin: EdgeInsets.zero,
             child: Column(

@@ -26,7 +26,7 @@ const expectedKeys = <String>{
   'gridColumns',
   'coverQuality',
   'oledDark',
-  'customQuickAction',
+  // (customQuickAction 已于 2026-11-20 删除: 推荐页顶栏第一格固定为「歌单广场」)
   // 播放/音质
   'audioLevel',
   'skipVipSongs',
@@ -78,7 +78,6 @@ void resetToDefaults() {
   s.anonymousDebug = false;
   s.coverQuality = CoverQuality.standard;
   s.oledDark = false;
-  s.customQuickAction = CustomQuickAction.ranking;
   s.volumeGainDb = 0.0;
   s.loudnessNormalize = false;
   s.loudnessTargetLufs = -16.0;
@@ -147,7 +146,6 @@ void main() {
     s.anonymousDebug = true;
     s.coverQuality = CoverQuality.ultra;
     s.oledDark = true;
-    s.customQuickAction = CustomQuickAction.historyDaily;
     s.volumeGainDb = -7.5;
     s.loudnessNormalize = true;
     s.loudnessTargetLufs = -14.0;
@@ -191,7 +189,6 @@ void main() {
     expect(s.anonymousDebug, isTrue);
     expect(s.coverQuality, CoverQuality.ultra);
     expect(s.oledDark, isTrue);
-    expect(s.customQuickAction, CustomQuickAction.historyDaily);
     expect(s.volumeGainDb, -7.5);
     expect(s.loudnessNormalize, isTrue);
     expect(s.loudnessTargetLufs, -14.0);
@@ -231,8 +228,7 @@ void main() {
     expect(AppSettings.instance.closeBehavior, CloseBehavior.quit);
     // 详情面偏好: 老配置没有这个字段 ⇒ 默认歌词(不迁移、不报错)
     expect(AppSettings.instance.detailFace, 'lyrics');
-    // B7: 老配置没有 customQuickAction ⇒ 默认「排行榜」, 不报错
-    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
+    // 2026-11-20: 旧配置里可能还留着已删除的 customQuickAction 字段 ⇒ 安全忽略
   });
 
   test('detailFace 白名单: 手工改坏的未知值被丢弃, 保持默认', () async {
@@ -248,11 +244,30 @@ void main() {
     expect(AppSettings.instance.detailFace, 'cover');
   });
 
-  test('customQuickAction 未知值也回落排行榜(手改坏的配置不炸)', () async {
-    File('${dir.path}/settings.json')
-        .writeAsStringSync(jsonEncode({'customQuickAction': 'nope'}));
-    await AppSettings.instance.load(dir.path);
-    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
+  test('已删除的 customQuickAction 字段: 读到即忽略, 解析不失败也不回写', () async {
+    final s = AppSettings.instance;
+    File('${dir.path}/settings.json').writeAsStringSync(
+      jsonEncode({
+        'themeMode': 'dark',
+        // 旧版本(≤ v0.28.x)写过这个字段, 值可能是任何字符串
+        'customQuickAction': 'historyDaily',
+        'textScale': 1.25,
+      }),
+    );
+
+    // 1) 解析不炸, 同文件里的其它字段照常生效
+    await s.load(dir.path);
+    expect(s.themeMode, ThemeMode.dark);
+    expect(s.textScale, 1.25);
+
+    // 2) 再落盘时该字段自然消失(不再回写), 其它字段保持
+    await s.update();
+    final raw = jsonDecode(
+      File('${dir.path}/settings.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
+    expect(raw.containsKey('customQuickAction'), isFalse);
+    expect(raw['themeMode'], 'dark');
+    expect(raw['textScale'], 1.25);
   });
 
   test('schema < 2 的 lyricSourcePreference=auto 一次性抬到 amll(迁移仍生效)', () async {

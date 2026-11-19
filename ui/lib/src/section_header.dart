@@ -16,11 +16,18 @@ class SectionHeader extends StatelessWidget {
   const SectionHeader({
     super.key,
     required this.title,
+    this.icon,
     this.trailing,
     this.padding = kSectionHeaderPadding,
   });
 
   final String title;
+
+  /// 标题左侧的栏目图标(可选; 不传 = 与历史渲染完全一致的纯文字标题)。
+  ///
+  /// 图标只用内置 Material Icons(outline 为主, 选中/点亮态才用 filled),
+  /// 尺寸跟随标题字号并随系统字号缩放, 与文字居中对齐。
+  final IconData? icon;
 
   /// 尾部动作(通常是 [SectionSeeAllButton]); 垂直方向与标题居中对齐。
   final Widget? trailing;
@@ -30,19 +37,50 @@ class SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final style = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w600,
+    );
     return _titleRow(
       padding: padding,
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w600,
+      title: _titleWithIcon(
+        context,
+        icon: icon,
+        style: style,
+        text: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
         ),
       ),
       trailing: trailing,
     );
   }
+}
+
+/// 标题左侧图标的统一尺寸/颜色口径(区块标题与小组标题共用)。
+///
+/// - 尺寸 = 标题字号 + 2(16 → 18), 随系统字号缩放, 大字号下不会显得"图标很小";
+/// - 颜色用 onSurfaceVariant 而不是 primary: 图标只提示"这是哪个栏目", 不该跟
+///   尾部动作(「查看全部」)抢视觉重心, 与卡片里 ListTile.leading 同一档。
+Widget _titleWithIcon(
+  BuildContext context, {
+  required IconData? icon,
+  required TextStyle? style,
+  required Widget text,
+}) {
+  if (icon == null) return text;
+  final scheme = Theme.of(context).colorScheme;
+  final base = (style?.fontSize ?? 16) + 2;
+  final size = MediaQuery.textScalerOf(context).scale(base);
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(icon, size: size, color: scheme.onSurfaceVariant),
+      const SizedBox(width: 6),
+      Flexible(child: text),
+    ],
+  );
 }
 
 /// 「标题 + 可选尾部动作」的公共布局(区块标题与小组标题共用)。
@@ -93,11 +131,15 @@ class SectionTitle extends StatelessWidget {
   const SectionTitle(
     this.title, {
     super.key,
+    this.icon,
     this.trailing,
     this.padding = kSectionTitlePadding,
   });
 
   final String title;
+
+  /// 标题左侧的栏目图标(可选, 口径同 [SectionHeader.icon])。
+  final IconData? icon;
 
   /// 尾部动作(计数文字、开关按钮等); 垂直方向与标题居中对齐。
   final Widget? trailing;
@@ -106,14 +148,20 @@ class SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(fontWeight: FontWeight.w600);
     return _titleRow(
       padding: padding,
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.titleSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
+      title: _titleWithIcon(
+        context,
+        icon: icon,
+        style: style,
+        text: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
       ),
       trailing: trailing,
     );
