@@ -202,7 +202,8 @@ void main() {
     Future<void> openViewer(
       WidgetTester tester, {
       required Future<Uint8List> Function(String) fetch,
-      required Future<String> Function(Uint8List, String) save,
+      required Future<String> Function(Uint8List, {required String filename})
+      save,
       List<String> urls = const ['http://p3.music.126.net/a/cover.jpg'],
     }) async {
       await tester.pumpWidget(
@@ -237,9 +238,9 @@ void main() {
           fetched.add(url);
           return Uint8List.fromList(List<int>.filled(2048, 7));
         },
-        save: (bytes, name) async {
-          saved[name] = bytes.length;
-          return '/tmp/$name';
+        save: (bytes, {required String filename}) async {
+          saved[filename] = bytes.length;
+          return '/tmp/$filename';
         },
       );
       await tester.pumpAndSettle();
@@ -262,7 +263,7 @@ void main() {
       await openViewer(
         tester,
         fetch: (url) async => throw const SocketException('boom'),
-        save: (bytes, name) async => '/tmp/$name',
+        save: (bytes, {required String filename}) async => '/tmp/$filename',
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('保存原图'));
@@ -274,7 +275,7 @@ void main() {
       await openViewer(
         tester,
         fetch: (url) async => Uint8List(0),
-        save: (bytes, name) async => name,
+        save: (bytes, {required String filename}) async => filename,
         urls: const [
           'https://p3.music.126.net/a/1.jpg',
           'https://p3.music.126.net/a/2.jpg',

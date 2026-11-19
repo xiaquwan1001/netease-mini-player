@@ -51,9 +51,9 @@ void main() {
             fetched.add(url);
             return Uint8List.fromList(List<int>.filled(4096, 9));
           },
-          saveOverride: (bytes, name) async {
-            saved[name] = bytes.length;
-            return '/tmp/$name';
+          saveOverride: (bytes, {required String filename}) async {
+            saved[filename] = bytes.length;
+            return '/tmp/$filename';
           },
         ),
       ),
@@ -122,6 +122,7 @@ void main() {
 
 /// 下面两个只是占位实现(本文件里从不真正取图/落盘)
 Future<Uint8List> _neverFetch(String url) async => Uint8List(0);
-Future<String> _neverSave(Uint8List bytes, String filename) async => filename;
+Future<String> _neverSave(Uint8List bytes, {required String filename}) async =>
+    filename;
 Future<Uint8List> _failFetch(String url) async =>
     throw const FormatException('boom');

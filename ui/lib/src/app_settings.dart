@@ -142,6 +142,7 @@ class AppSettingsSnapshot {
     this.dailyCacheDays = 7,
     this.anonymousDebug = false,
     this.queueSwipeHintDismissed = false,
+    this.detailFace = 'lyrics',
     this.coverQuality = CoverQuality.standard,
     this.oledDark = false,
     this.volumeGainDb = 0.0,
@@ -176,6 +177,9 @@ class AppSettingsSnapshot {
   final int dailyCacheDays;
   final bool anonymousDebug;
   final bool queueSwipeHintDismissed;
+
+  /// 详情页上次停在的那一面('lyrics' | 'cover'), 见 [AppSettings.detailFace]。
+  final String detailFace;
   final CoverQuality coverQuality;
   final bool oledDark;
   final double volumeGainDb;
@@ -215,6 +219,7 @@ class AppSettingsSnapshot {
     int? dailyCacheDays,
     bool? anonymousDebug,
     bool? queueSwipeHintDismissed,
+    String? detailFace,
     CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
@@ -251,6 +256,7 @@ class AppSettingsSnapshot {
       anonymousDebug: anonymousDebug ?? this.anonymousDebug,
       queueSwipeHintDismissed:
           queueSwipeHintDismissed ?? this.queueSwipeHintDismissed,
+      detailFace: detailFace ?? this.detailFace,
       coverQuality: coverQuality ?? this.coverQuality,
       oledDark: oledDark ?? this.oledDark,
       volumeGainDb: volumeGainDb ?? this.volumeGainDb,
@@ -332,7 +338,10 @@ class AppSettingsSnapshot {
     if (anonymousDebug != other.anonymousDebug) {
       changed.add(AppSettingsDomain.diagnostics);
     }
+    // 详情面偏好与交互记录同域: 它不参与渲染(当前面由 DetailFaces 自己持有),
+    // 所以切面不该触发外观域订阅者(整棵 MaterialApp)重建。
     if (queueSwipeHintDismissed != other.queueSwipeHintDismissed ||
+        detailFace != other.detailFace ||
         !mapEquals(interactions, other.interactions)) {
       changed.add(AppSettingsDomain.interactions);
     }
@@ -523,6 +532,21 @@ class AppSettings extends ChangeNotifier {
   bool get queueSwipeHintDismissed => _snapshot.queueSwipeHintDismissed;
   set queueSwipeHintDismissed(bool value) =>
       _update(_snapshot.copyWith(queueSwipeHintDismissed: value));
+
+  /// 详情页「歌词 ⇄ 封面」上次停在的那一面('lyrics' | 'cover', 默认歌词)。
+  ///
+  /// 用户 2026-11-19 口径: 切面要**记住**, 换歌也不回歌词; 播放条封面点击就是在
+  /// 这两面之间来回切。取值白名单见 [detailFaces]: 未知值在读/写两侧都会被丢弃,
+  /// 旧 settings.json 缺字段时保持默认 'lyrics'(无需迁移, 也不报错)。
+  String get detailFace => _snapshot.detailFace;
+  set detailFace(String value) {
+    // 白名单外的值直接丢弃(写侧唯一校验点, 手工改坏 settings.json 也进不来)
+    if (!detailFaces.contains(value)) return;
+    _update(_snapshot.copyWith(detailFace: value));
+  }
+
+  /// [detailFace] 的合法取值(顺序 = 语义顺序)。
+  static const List<String> detailFaces = <String>['lyrics', 'cover'];
 
   /// 封面/图片清晰度档位(见 [CoverQuality]). 默认 [CoverQuality.standard] = 按设备像素 1:1.
   ///
@@ -739,6 +763,7 @@ class AppSettings extends ChangeNotifier {
     int? dailyCacheDays,
     bool? anonymousDebug,
     bool? queueSwipeHintDismissed,
+    String? detailFace,
     CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
@@ -773,6 +798,7 @@ class AppSettings extends ChangeNotifier {
         dailyCacheDays: dailyCacheDays,
         anonymousDebug: anonymousDebug,
         queueSwipeHintDismissed: queueSwipeHintDismissed,
+        detailFace: detailFace,
         coverQuality: coverQuality,
         oledDark: oledDark,
         volumeGainDb: volumeGainDb,
@@ -811,6 +837,7 @@ class AppSettings extends ChangeNotifier {
     int? dailyCacheDays,
     bool? anonymousDebug,
     bool? queueSwipeHintDismissed,
+    String? detailFace,
     CoverQuality? coverQuality,
     bool? oledDark,
     double? volumeGainDb,
@@ -859,6 +886,9 @@ class AppSettings extends ChangeNotifier {
     if (anonymousDebug != null) this.anonymousDebug = anonymousDebug;
     if (queueSwipeHintDismissed != null) {
       this.queueSwipeHintDismissed = queueSwipeHintDismissed;
+    }
+    if (detailFace != null && detailFaces.contains(detailFace)) {
+      this.detailFace = detailFace;
     }
     if (coverQuality != null) this.coverQuality = coverQuality;
     if (oledDark != null) this.oledDark = oledDark;

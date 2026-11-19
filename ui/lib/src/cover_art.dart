@@ -349,8 +349,13 @@ Future<void> showImageViewer(
   required List<String> urls,
   int initialIndex = 0,
 
-  /// 保存实现可注入(测试用假实现, 不落盘)
-  Future<String> Function(Uint8List bytes, String filename)? saveOverride,
+  /// 保存实现可注入(测试用假实现, 不落盘)。
+  ///
+  /// 签名与 [saveImageBytes] 严格一致(命名参数 filename): 以前这里写成位置参数,
+  /// 与默认实现合用 `??` 时两侧签名不同 ⇒ LUB 退化成裸 `Function`, 静态检查失明,
+  /// 运行期按位置参数调用命名参数实现 ⇒ `NoSuchMethodError`(线上"保存原图"必崩)。
+  Future<String> Function(Uint8List bytes, {required String filename})?
+  saveOverride,
 
   /// 取图字节实现可注入(测试断言"保存的是原图字节"用, 免联网)
   Future<Uint8List> Function(String url)? fetchOverride,
@@ -387,7 +392,8 @@ class _ImageViewer extends StatefulWidget {
 
   final List<String> images;
   final int initialIndex;
-  final Future<String> Function(Uint8List bytes, String filename)? saveOverride;
+  final Future<String> Function(Uint8List bytes, {required String filename})?
+  saveOverride;
   final Future<Uint8List> Function(String url)? fetchOverride;
 
   @override
@@ -409,6 +415,10 @@ class _ImageViewerState extends State<_ImageViewer> {
 
   String get _currentUrl => widget.images[_index];
 
+  /// 保存实现的统一入口(两侧签名相同; 显式约束返回类型防止 LUB 再次退化)
+  Future<String> Function(Uint8List bytes, {required String filename})
+  get _saveBytes => widget.saveOverride ?? saveImageBytes;
+
   /// 从 URL 猜扩展名(网易云 CDN 基本都是 .jpg; 少数 png/无后缀)
   String get _filename {
     final path = Uri.tryParse(_currentUrl)?.path ?? '';
@@ -428,8 +438,8 @@ class _ImageViewerState extends State<_ImageViewer> {
       final bytes = await (widget.fetchOverride ?? fetchImageBytes)(
         _currentUrl,
       );
-      final save = widget.saveOverride ?? saveImageBytes;
-      final where = await save(bytes, _filename);
+      final save = _saveBytes;
+      final where = await save(bytes, filename: _filename);
       if (!mounted) return;
       showToast(context, '原图已保存: $where');
     } catch (e) {
@@ -509,6 +519,7 @@ class CoverArt extends StatelessWidget {
     this.size = 44,
     this.radius = 6,
     this.quality,
+    this.requestPx,
   });
 
   final String? url;
@@ -518,6 +529,13 @@ class CoverArt extends StatelessWidget {
   /// 只为设置页的"档位预览"用: 临时按指定档位取图, 不改全局设置.
   /// 生产调用点一律留空(跟随 [AppSettings.coverQuality]).
   final CoverQuality? quality;
+
+  /// 直接指定请求像素边长(而不是按 [size] x DPR x 档位算).
+  ///
+  /// 只为详情页封面面的"先出小图再换大图"用: 控件显示得很大(整块画面),
+  /// 但底层那张图要的作品是**播放条同一档位**(40dp)的缩略图, 才能命中同一份
+  /// 字节缓存/ImageCache ⇒ 切面第一帧就有图。其余调用点保持 null(按 size 算)。
+  final double? requestPx;
 
   @override
   Widget build(BuildContext context) {
@@ -535,7 +553,7 @@ class CoverArt extends StatelessWidget {
     return AnimatedBuilder(
       animation: AppSettings.instance.coverQualityListenable,
       builder: (context, _) {
-        final px = coverRequestPx(context, size, quality: quality);
+        final px = requestPx ?? coverRequestPx(context, size, quality: quality);
         final candidates = imageCandidates(url, width: px, height: px);
         if (candidates.isEmpty) return placeholder;
         return ClipRRect(
