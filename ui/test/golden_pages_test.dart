@@ -25,7 +25,8 @@
 // 稳定性: 所有页面数据都走注入的假 loader(0 网络); 封面/头像一律 coverUrl: null
 // 走占位图; 无限动画(跑马灯/加载圈)用固定帧数推进代替 pumpAndSettle, 见 _pumpFrames。
 //
-// 页面清单(9 页 x 2 视口 = 18 张 + 宽档双列 1 张): 设置 / 账号管理 / 推荐 / 我的 / 搜索落地 /
+// 页面清单(9 页 x 2 视口 = 18 张 + 宽档 3 张: 歌单详情双列 / 播客详情双列 /
+// 主从分栏): 设置 / 账号管理 / 推荐 / 我的 / 搜索落地 /
 // 消息中心 / 歌单详情 / 艺人页 / 动态流。后三页是 churn top-10 里最容易连带回归的
 // 三块(2026-11 前端审计建议 11): 歌单详情改行距会挤坏曲目行, 艺人页改信息区会挤坏
 // tab 行, 动态流改卡片会挤坏顶部分类条。其中歌单详情只有命令式入口(页面私有 +
@@ -48,6 +49,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/detail/playlist_detail_page.dart';
 import 'package:minincm/src/detail/podcast_detail_page.dart';
+import 'package:minincm/src/detail_pane.dart'
+    show
+        DetailPaneSplit,
+        attachDetailPaneHost,
+        detachDetailPaneHost,
+        detailPaneSlot;
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/layout.dart' show ContentWidthLimit;
 import 'package:minincm/src/messages_page.dart';
@@ -56,6 +63,7 @@ import 'package:minincm/src/recommend_view.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 import 'package:minincm/src/search_landing.dart';
+import 'package:minincm/src/search_results.dart';
 import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
 import 'package:minincm/src/theme.dart';
@@ -647,6 +655,94 @@ Widget _podcastDetailPage() => _RouteHost(
   },
 );
 
+/// 主从分栏(方案 B · S4)的基准图宿主: 左栏 = 搜索结果的歌单网格, 右栏 = 歌单详情
+/// 内嵌形态。与生产同一条装配(ContentWidthLimit 840 + DetailPaneSplit + openDetail
+/// 的宽档分支), 只是左栏用 SearchResultsView 直接喂假 bundle(整页 HomePage 的搜索链路
+/// 已由 test/master_detail_flow_test.dart 端到端覆盖)。
+class _MasterDetailGoldenHost extends StatefulWidget {
+  const _MasterDetailGoldenHost();
+
+  @override
+  State<_MasterDetailGoldenHost> createState() =>
+      _MasterDetailGoldenHostState();
+}
+
+class _MasterDetailGoldenHostState extends State<_MasterDetailGoldenHost> {
+  @override
+  void initState() {
+    super.initState();
+    attachDetailPaneHost();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // 宽档 + 根路由 + 宿主在场 ⇒ 填右栏(不 push)
+      unawaited(
+        showPlaylistDetail(
+          context,
+          playlistId: BigInt.from(24381616),
+          name: '华语流行精选',
+          loggedIn: true,
+          currentTrackId: BigInt.from(501),
+          currentPlaylistId: BigInt.from(24381616),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    detachDetailPaneHost();
+    detailPaneSlot.value = null;
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: DetailPaneSplit(
+      master: (context, selectedKey) => SearchResultsView(
+        bundle: _searchPlaylistBundle(),
+        liked: const <BigInt>{},
+        currentTrackId: null,
+        onPlaySong: (_) {},
+        onOpenArtist: (_) {},
+        onOpenAlbum: (_) {},
+        onOpenPlaylist: (_) {},
+        onOpenPodcast: (_) {},
+        selectedPlaylistId: selectedKey is BigInt ? selectedKey : null,
+      ),
+    ),
+  );
+}
+
+/// 只有歌单分区有数据 ⇒ 分类条自动停在「歌单」(与真实搜索结果的首屏一致)。
+rust.SearchBundleDto _searchPlaylistBundle() => rust.SearchBundleDto(
+  songs: const <rust.SongDto>[],
+  songTotal: BigInt.zero,
+  artists: const <rust.SearchArtist>[],
+  albums: const <rust.SearchAlbum>[],
+  playlists: <rust.SearchPlaylistItem>[
+    rust.SearchPlaylistItem(
+      id: BigInt.from(24381616),
+      name: '华语流行精选',
+      coverUrl: null,
+      creatorName: '云音乐编辑部',
+      trackCount: BigInt.from(12),
+      playCount: BigInt.from(128000),
+    ),
+    for (var i = 2; i <= 6; i++)
+      rust.SearchPlaylistItem(
+        id: BigInt.from(24381610 + i),
+        name: '华语精选$i',
+        coverUrl: null,
+        creatorName: '云音乐编辑部',
+        trackCount: BigInt.from(20 + i),
+        playCount: BigInt.from(10000 * i),
+      ),
+  ],
+  podcasts: const <rust.SearchPodcast>[],
+  users: const <rust.UserItem>[],
+  mvs: const <rust.MvItem>[],
+);
+
 /// 基准图: artist_360x800.png / artist_300x640_s125.png。
 ///
 /// 应有什么: 整宽横幅 → 身份卡(周杰伦 / 别名 Jay Chou / 「关注」/ 粉丝 1922.7万 /
@@ -922,6 +1018,29 @@ void main() {
       contentLimit: true,
     );
     await _expectGolden(tester, 'podcast_detail_1280x720');
+  });
+
+  // 主从分栏(方案 B · S4): 840 内容区里 左 408 / 间距 12 / 右 420。
+  //
+  // 应有什么: 左栏是**搜索结果的歌单网格**(6 张卡片, 第一张「华语流行精选」带 2dp
+  // primary 选中外框 —— 它就是右栏正在看的那一条), 右栏是歌单详情的**内嵌形态**
+  // (没有 AppBar 与返回箭头, 顶部只有 收藏/分享 图标行, 下面照旧是头部卡片 + 筛选条 +
+  // 曲目行); 右栏有圆角细边框, 与左栏在视觉上分开。
+  //
+  // 坏在哪: 左栏消失/整宽、右栏偏 1dp 以上、右栏里出现 AppBar 或返回箭头、选中外框丢、
+  // 右栏详情变错误态。以后动 kDetailPaneWidth / kTwoColumnGap 都要重出这一张:
+  //   flutter test test/golden_pages_test.dart --update-goldens --plain-name 'master_detail: 1280x720'
+  testWidgets('master_detail: 1280x720(主从分栏)', skip: !_cjkAvailable, (
+    tester,
+  ) async {
+    await _pumpPage(
+      tester,
+      const _MasterDetailGoldenHost(),
+      size: const Size(1280, 720),
+      frames: 24,
+      contentLimit: true,
+    );
+    await _expectGolden(tester, 'master_detail_1280x720');
   });
 }
 

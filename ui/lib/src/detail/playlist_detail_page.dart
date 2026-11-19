@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 import '../app_settings.dart';
+import '../detail_pane.dart' show openDetail;
 import '../async_view.dart';
 import '../comment_thread.dart';
 import '../cover_palette.dart';
 import '../library_view.dart';
 import '../layout.dart'
-    show kTwoColumnGap, kTwoColumnListWidth, rowExtentFor, twoColumnFor;
+    show
+        kCardRowPadding,
+        kTwoColumnGap,
+        kTwoColumnListWidth,
+        rowExtentFor,
+        twoColumnFor;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api.dart' as rust;
@@ -23,7 +29,13 @@ import 'playlist_detail_parts.dart'
         PlaylistHiddenNote;
 import 'playlist_songs_sliver.dart' show PlaylistSongsSliver;
 
-/// 打开歌单详情页(全屏路由). special=true 表示"我喜欢的音乐"(曲目走 likedSongs)。
+/// 打开歌单详情(主从分栏的右栏 **或** 全屏路由). special=true 表示"我喜欢的音乐"
+/// (曲目走 likedSongs)。
+///
+/// 走向由 [openDetail] 统一决定(方案 B · S4):
+///   · 宽档 + 根路由 + 有右栏宿主 ⇒ 填右栏(此时用 [embedded] 形态: 去 AppBar /
+///     去返回箭头 / 保留内容与滚动);
+///   · 窄/中档, 或从"已经压上来的全屏页"里点 ⇒ 照旧 push 一整页(几何零变化)。
 Future<void> showPlaylistDetail(
   BuildContext context, {
   required BigInt playlistId,
@@ -35,21 +47,25 @@ Future<void> showPlaylistDetail(
   BigInt? currentTrackId,
   BigInt? currentPlaylistId,
   void Function(BigInt id, bool liked)? onLikeChanged,
-}) async {
-  await Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => _PlaylistDetailPage(
-        playlistId: playlistId,
-        name: name,
-        coverUrl: coverUrl,
-        special: special,
-        loggedIn: loggedIn,
-        likedIds: likedIds,
-        currentTrackId: currentTrackId,
-        currentPlaylistId: currentPlaylistId,
-        onLikeChanged: onLikeChanged,
-      ),
-    ),
+}) {
+  Widget build({required bool embedded}) => _PlaylistDetailPage(
+    playlistId: playlistId,
+    name: name,
+    coverUrl: coverUrl,
+    special: special,
+    loggedIn: loggedIn,
+    likedIds: likedIds,
+    currentTrackId: currentTrackId,
+    currentPlaylistId: currentPlaylistId,
+    onLikeChanged: onLikeChanged,
+    embedded: embedded,
+  );
+  return openDetail(
+    context,
+    key: playlistId,
+    pane: (_) => build(embedded: true),
+    route: () =>
+        MaterialPageRoute<void>(builder: (_) => build(embedded: false)),
   );
 }
 
@@ -64,7 +80,12 @@ class _PlaylistDetailPage extends StatefulWidget {
     this.currentTrackId,
     this.currentPlaylistId,
     this.onLikeChanged,
+    this.embedded = false,
   });
+
+  /// 内嵌形态(主从分栏右栏): 没有 AppBar、没有返回箭头, 双列判据让位(右栏只有
+  /// 420 宽, 按窗口宽切 300+12+528 会竖排溢出), 其余内容/滚动/四态全部照旧。
+  final bool embedded;
 
   final BigInt playlistId;
   final String name;
@@ -442,47 +463,31 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   @override
   Widget build(BuildContext context) {
     final display = _display;
+    // 内嵌形态(主从分栏右栏): 没有 AppBar/返回箭头 —— 否则右栏里会出现一条
+    // "返回箭头退整页"的错语义。动作(收藏/管理/分享)一个不少, 挪到顶部一行;
+    // 双列判据必须让位: 右栏 420 宽按窗口尺寸(1280)判会切出 300+12+528 ⇒ 溢出。
+    if (widget.embedded) {
+      final actions = _buildActions();
+      return Scaffold(
+        body: Column(
+          children: [
+            if (actions.isNotEmpty)
+              Padding(
+                padding: kCardRowPadding,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: actions,
+                ),
+              ),
+            Expanded(child: _buildSingleColumnBody(display)),
+          ],
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: Text(_detail?.name ?? widget.name),
-        actions: [
-          // "我喜欢的音乐"不提供收藏按钮; 详情没拉到时也不知道收藏状态
-          if (!widget.special && widget.loggedIn && _detail != null)
-            IconButton(
-              tooltip: _subscribed ? '取消收藏' : '收藏歌单',
-              icon: Icon(_subscribed ? Icons.favorite : Icons.favorite_border),
-              onPressed: _subBusy ? null : _toggleSubscribe,
-            ),
-          // 自己的歌单才能管理(改名/移出曲目/删除)
-          if (_canEdit)
-            PopupMenuButton<String>(
-              tooltip: '歌单管理',
-              icon: const Icon(Icons.more_vert),
-              onSelected: (value) {
-                switch (value) {
-                  case 'edit':
-                    _showEditSheet();
-                  case 'remove':
-                    setState(() => _editingTracks = !_editingTracks);
-                  case 'delete':
-                    _confirmDelete();
-                }
-              },
-              itemBuilder: (_) => [
-                const PopupMenuItem(value: 'edit', child: Text('编辑歌单信息')),
-                PopupMenuItem(
-                  value: 'remove',
-                  child: Text(_editingTracks ? '结束移出曲目' : '移出曲目'),
-                ),
-                const PopupMenuItem(value: 'delete', child: Text('删除歌单')),
-              ],
-            ),
-          IconButton(
-            tooltip: '分享',
-            icon: const Icon(Icons.share_outlined),
-            onPressed: _showShareSheet,
-          ),
-        ],
+        actions: _buildActions(),
       ),
       // 双列判据用**窗口逻辑尺寸**(MediaQuery.sizeOf), 不是 body 的实测宽:
       // 壳层 ContentWidthLimit 把 body 限到 840, 拿它比 900 永远为假。
@@ -492,6 +497,46 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
           : _buildSingleColumnBody(display),
     );
   }
+
+  /// AppBar 动作(内嵌形态里挪到顶部一行): 收藏 / 管理 / 分享。
+  List<Widget> _buildActions() => [
+    // "我喜欢的音乐"不提供收藏按钮; 详情没拉到时也不知道收藏状态
+    if (!widget.special && widget.loggedIn && _detail != null)
+      IconButton(
+        tooltip: _subscribed ? '取消收藏' : '收藏歌单',
+        icon: Icon(_subscribed ? Icons.favorite : Icons.favorite_border),
+        onPressed: _subBusy ? null : _toggleSubscribe,
+      ),
+    // 自己的歌单才能管理(改名/移出曲目/删除)
+    if (_canEdit)
+      PopupMenuButton<String>(
+        tooltip: '歌单管理',
+        icon: const Icon(Icons.more_vert),
+        onSelected: (value) {
+          switch (value) {
+            case 'edit':
+              _showEditSheet();
+            case 'remove':
+              setState(() => _editingTracks = !_editingTracks);
+            case 'delete':
+              _confirmDelete();
+          }
+        },
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'edit', child: Text('编辑歌单信息')),
+          PopupMenuItem(
+            value: 'remove',
+            child: Text(_editingTracks ? '结束移出曲目' : '移出曲目'),
+          ),
+          const PopupMenuItem(value: 'delete', child: Text('删除歌单')),
+        ],
+      ),
+    IconButton(
+      tooltip: '分享',
+      icon: const Icon(Icons.share_outlined),
+      onPressed: _showShareSheet,
+    ),
+  ];
 
   /// 单列 body(窄/中档): 与双列改造前**逐像素一致** —— 同一棵 sliver 树、同一顺序,
   /// 双列分支只是把它一分为二, 这里一行几何都没有动。

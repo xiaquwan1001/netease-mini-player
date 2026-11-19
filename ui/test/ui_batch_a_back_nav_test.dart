@@ -120,6 +120,52 @@ void main() {
         HomeBackAction.exitApp,
       );
     });
+
+    // ---- 主从分栏(方案 B · S4)新增的一级: 右栏详情 ----
+    test('右栏详情排在 resetTab 之前(右栏还开着就跳 tab = 详情凭空消失)', () {
+      expect(
+        resolveHomeBackAction(
+          showLyrics: false,
+          tab: 2,
+          libraryOpen: true,
+          detailPaneOpen: true,
+        ),
+        HomeBackAction.closeDetailPane,
+      );
+      expect(
+        resolveHomeBackAction(
+          showLyrics: false,
+          tab: 0,
+          libraryOpen: false,
+          detailPaneOpen: true,
+        ),
+        HomeBackAction.closeDetailPane,
+      );
+    });
+
+    test('右栏清掉之后才轮到 resetTab(两级语义的第二级)', () {
+      expect(
+        resolveHomeBackAction(
+          showLyrics: false,
+          tab: 2,
+          libraryOpen: false,
+          detailPaneOpen: false,
+        ),
+        HomeBackAction.resetTab,
+      );
+    });
+
+    test('歌词展开仍高于右栏(歌词是全屏层, 右栏在它下面)', () {
+      expect(
+        resolveHomeBackAction(
+          showLyrics: true,
+          tab: 2,
+          libraryOpen: true,
+          detailPaneOpen: true,
+        ),
+        HomeBackAction.collapseLyrics,
+      );
+    });
   });
 
   testWidgets('歌词展开态按返回 → 先收歌词, 不退出 App', (tester) async {
