@@ -195,7 +195,7 @@
 
 视频/最近播放页页签(需视频播放器) · 听歌识曲(录音 + 指纹) · **云盘分片上传** —— **2026-11-19 已完成可验证部分**(`ncm-service/src/cloud_chunk.rs`: 分片规划纯函数 + 顺序上传引擎 + 每片「重试恰一次」+ 可恢复点 + 进度回调 + `ChunkUploader` 接缝; 20 例单测含本地假 HTTP 服务; Rust 325→345)。**端点未接线**: 音乐云盘桶的分片 HTTP 形状无可信证据(本地只有 voice 桶的 S3 式流程, 桶/主机/收尾都不同), 判据与验证步骤见该模块 TODO —— 需真人抓包; 接线只需实现一个 `ChunkUploader` + 在 `Chunked` 分支接上 + 把 `CLOUD_SINGLE_SHOT_CEILING` 换成实测值。旧编号 B13 与「B13 逐字歌词 TTML」撞号, 以后只称「云盘」 ·
 MV 列表页/视频详情(播放器已有) · 一起听(房间 + 心跳, 需双端联调) · 动态发送(发包 + 审核语义) ·
-云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`) —— **2026-11-19 用户批准, 切片 1(ncm-plugin + rquickjs 沙箱 + ScriptProvider, 不接 UI/FFI)在飞: 车道 `lane/plugin-host`**。
+云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`) —— **切片 1 已完成(2026-11-19, 车道 `lane/plugin-host`)**: 新 crate `core/crates/ncm-plugin`(rquickjs 0.12.2, 默认特性只开 `std` 以保住自带分配器 ⇒ `set_memory_limit` 真生效) 提供 `lx.on(musicUrl/search)`/`lx.request`(注入 `Transport`, 生产未接真实网络)/`lx.log`/`lx.storage`(命名空间隔离)/`lx.utils.crypto.md5`, 沙箱预算 8s 硬超时(interrupt)+32MB 内存+512KB 栈+8 请求/次, 逃逸面用例断言 `require/process/fetch/XMLHttpRequest/Deno/module` 全 undefined; `ScriptProvider` 实现**既有** `Provider`(songUrl+search) 并标注实验性。**未接入产品**: 无 crate 依赖它(不进 `ncm_ffi`/APK), 未改 FFI/UI。Rust 347→368(plugin 21 例: 沙箱 14 + provider 6 + doctest 1)。**后续切片**(README §4 列 12 项): 插件管理层/导入启停/管理页、真实网络 transport、持久化 storage、FFI 与注册路由、交叉编译验证、进程外隔离二期。
 
 ### D. 明确不做
 
