@@ -32,23 +32,23 @@
 
 协议/风控/加解密的**结论层**在 `.pi/memory/notes-api.md`; 这里只放"当时的原始响应长什么样"。
 
-## 4. 保留在原位的归档文档(结论已定, 但被代码注释/活跃文档引用, 暂不移动)
+## 4. 2026-11-19 新归档的 5 份(原本留在 `docs/` 根, 现全部移入 `archive/`)
 
-| 文件 | 用途 | 为什么留在 `docs/` |
+| 文件 | 用途 | 归档理由 |
 |---|---|---|
-| [plan-2026-11-09-settings-and-player.md](plan-2026-11-09-settings-and-player.md) | 设置扩充 + 播放体验任务书(7 项已验收)。**归档** | `ui/lib`、`ui/test`、`core/crates/ncm-domain` 多处注释按此路径引用契约(§2.2/§5); 待这些注释下次改动时一并迁 `archive/`。最后更新 2026-11-10 |
-| [credential-storage-options.md](credential-storage-options.md) | 凭据存储方案调研(已选型落地, 实现在 `credential_store.rs`/`credential_keyring.rs`)。**归档** | `core/crates/ncm-service/src/credential_store.rs`、`credential_keyring.rs` 注释按此路径引用。最后更新 2026-11-12 |
-| [lx-plugin.md](lx-plugin.md) | LX 音源脚本工坊(Melodia 沙盒契约 + 回归台)。**搁置** | 待插件化立项, 结论仍会被引用。最后更新 2026-10-31 |
+| [archive/plan-2026-11-09-settings-and-player.md](archive/plan-2026-11-09-settings-and-player.md) | 设置扩充 + 播放体验任务书(7 项已验收)。**归档** | 7 项全落地、真机听感验收通过; 文中 `main.dart:NNNN` 行号已失效(main.dart 现为 48 行门面)。代码注释里的路径已同步改指 `docs/archive/`(§2.2/§5 契约仍从这里查) |
+| [archive/credential-storage-options.md](archive/credential-storage-options.md) | 凭据存储方案调研(已选型落地, 实现在 `credential_store.rs`/`credential_keyring.rs`)。**归档** | 5 条决策已由用户拍板并固化在 `.pi/memory/notes-credentials.md`; 本文只留调研过程 |
+| [archive/ui-row-audit.md](archive/ui-row-audit.md) | 列表行/溢出全仓审计(A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案。**归档** | A/B/C 三级已全部清零(v0.9.0 + 2026-11-16/17 三批), 口径已进 `.pi/memory/notes-ui-rules.md` 与 `layout.dart` token; 文中 §4/§6/§7 行号是当时口径 |
+| [archive/lx-plugin.md](archive/lx-plugin.md) | LX 音源脚本工坊(Melodia 沙盒契约 + 回归台)。**作废(2026-11-19)** | 未落地设计稿, 面向外部项目 Melodia; 文件头已加作废 banner, 立项时再取出 |
+| [archive/melodia-pr-workflow.md](archive/melodia-pr-workflow.md) | 给 Melodia 提 PR 的工作流。**作废(2026-11-19)** | 针对被 fork 的 WebView 版(`legacy/`), 本仓已重启为独立工程; 文件头已加作废 banner |
 
 ## 5. 其他
 
 | 路径 | 用途 | 最后更新 |
 |---|---|---|
-| [archive/](archive/README.md) | 已完工/已决策的专题文档 + 三段 PROGRESS 归档(`PROGRESS-v1.md` v1 WebView 时代 · `PROGRESS-2026-11-03-11-12.md` v2 早期批次 · `PROGRESS-2026-11-13-11-19.md` v0.8.0–v0.19.0 批次) + `remaining-batches-history.md`。**归档** | 2026-11-17 |
+| [archive/](archive/README.md) | 已完工/已决策的专题文档(2026-11-19 新增 `plans-2026-11/`(31 份车道记录)与 5 份原在根目录的归档件) + 三段 PROGRESS 归档(`PROGRESS-v1.md` v1 WebView 时代 · `PROGRESS-2026-11-03-11-12.md` v2 早期批次 · `PROGRESS-2026-11-13-11-19.md` v0.8.0–v0.19.0 批次) + `remaining-batches-history.md`。**归档** | 2026-11-17 |
 | [audits/](audits/) | 近期审计报告: `2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md` · `2026-11-13-asset-docs-audit.md`(数字为当时快照)。**活跃** | 2026-11-13 |
 | [reports/](reports/) | 只读调查报告: `login-risk-analysis-2026-11-17.md`(PC 网页登录为什么被风控 —— 静态分析, 未真登录/未扫码; 关联 v0.21.0 第 ⑤ 项)。**留档** | 2026-11-17 |
-| [ui-row-audit.md](ui-row-audit.md) | 列表行/溢出全仓审计(49 处骨架 → A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案与改造顺序; **三级已全部清零**(A 级 v0.9.0 · B 级 2026-11-16 · C 级 2026-11-17 三批), 文中 §4/§6/§7 的方案与行号是当时口径(`kSongRowPadding` 已删, 实际用 `SongRow` 静态工厂)。**留档为主** | 2026-11-18 |
-| [melodia-pr-workflow.md](melodia-pr-workflow.md) | 给 Melodia 提 PR 的工作流。**活跃(提 PR 时用)** | 2026-11-02 |
 | [spikes/](spikes/) | 零散 spike 产物(如 `2026-11-09-netease-music-spike.md`)。只读留痕 | 2026-11-07 |
 | [b8-dumps/](b8-dumps/README.md) | B8 等级/勋章接口原始 dump(含 `user_medal.sample.json`)。只读留痕 | 2026-11-07 |
 | images/ | README 截图素材(hero/手机截图/分享卡片) | — |

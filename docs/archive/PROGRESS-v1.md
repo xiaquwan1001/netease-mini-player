@@ -6,10 +6,10 @@
 
 > 里程碑式记录 "做到了什么 / 怎么验证的 / 下一步",
 > 协议细节放 `.pi/skills/netease-cloud-music-api-reverse/SKILL.md`,
-> LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/lx-plugin.md`,
+> LX 音源脚本工坊(插件契约 + 回归台 + 真机导入)见 `docs/archive/lx-plugin.md`,
 > 社区项目与路线选择见 `community-projects.md`,
 > fork/PR/自建对比见 `build-vs-fork.md`,
-> 给 Melodia 提 PR 的分支/构建/真机验证/截图流程见 `docs/melodia-pr-workflow.md`。
+> 给 Melodia 提 PR 的分支/构建/真机验证/截图流程见 `docs/archive/melodia-pr-workflow.md`。
 
 ## 当前状态: v1 全链路可用(真机验证)
 
@@ -118,10 +118,10 @@ node tools/lx-plugin-harness.mjs      # 匿名:inited 握手 / 直链可取 / �
    下一件可做「UI 控件展示项」(#126:侧边栏/首页板块自定义;底栏的 `BottomBarLayout` + 拖拽弹层可直接复用)。
    vivo 锁屏歌词已定位为厂商白名单私有通道(见 `.pi/memory/HINDSIGHT.md`),应用侧无解,最多补设置页说明。
 1. 等上游 review #139 / #140:若维护者更希望用「guest 侧边栏」而不是顶栏齿轮,
-   改 `ProfileSidebar + MelodiaApp` 的 nullable 化即可(已在 `docs/melodia-pr-workflow.md` 记录现状)。
+   改 `ProfileSidebar + MelodiaApp` 的 nullable 化即可(已在 `docs/archive/melodia-pr-workflow.md` 记录现状)。
 2. #139 的两个可选延伸(都还没做):音量键细调(拦截 `KEYCODE_VOLUME_*`,1/4 档虚拟音量梯)、
    桌面端(桌面已有 mpv 0~100,不需要)。
-3. 等上游对 #134 表态 → 决定是否补沙盒契约缺口(见 `docs/lx-plugin.md` 第 6 节:
+3. 等上游对 #134 表态 → 决定是否补沙盒契约缺口(见 `docs/archive/lx-plugin.md` 第 6 节:
    `utils.crypto.aesEncrypt/rsaEncrypt/randomBytes`、`utils.buffer` 正确语义、`statusCode` 透传)。
 4. 若 #137 被接受,同款诊断可推广到 UNM 分支(目前只汇总了社区源侧)。
 5. 本仓库的 MiniNCM 保持「协议实验台」定位:新协议结论先在这里测,再以 issue/PR 形式回流上游。

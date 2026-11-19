@@ -12,7 +12,7 @@
 
 | # | 位置 | 问题 | 建议 |
 |---|---|---|---|
-| A1 | docs/plan-2026-11-09-settings-and-player.md:187-194 | 「### 下一波(未开工)」列 S4/S3/S5/D7批4-7, 但同文件 §10 执行记录(154-183 行)已记录 S4 批1/批2(b3bcf55/f073a9b)、S3(5504fad)、S5a(c6ea894)、D7 已 57/57 关闭(见 246a1be) — 直接自相矛盾 | 改为「~~下一波~~ 已全部完成」或删除该节, 保留指向 §10 |
+| A1 | docs/archive/plan-2026-11-09-settings-and-player.md:187-194 | 「### 下一波(未开工)」列 S4/S3/S5/D7批4-7, 但同文件 §10 执行记录(154-183 行)已记录 S4 批1/批2(b3bcf55/f073a9b)、S3(5504fad)、S5a(c6ea894)、D7 已 57/57 关闭(见 246a1be) — 直接自相矛盾 | 改为「~~下一波~~ 已全部完成」或删除该节, 保留指向 §10 |
 | A2 | docs/remaining-batches.md:14 | 「Wave 8 进行中(B5 逐字歌词…覆盖 114/382)」与下一行 15「Wave 9 完成…覆盖 118/382」矛盾; B5 已完成(见 docs/api-notes-snapshot-20261119.md 与 PROGRESS) | 删「进行中」, 改「Wave 8 完成」 |
 | A3 | docs/remaining-batches.md:6,9-13 | 头部口径 90/94/98/99/103/113/114/382 一串历史数字, 与文末 196 行及 api-coverage.md 的 118/382 不一致 | 头部只保留一句「当前 118/382, 见 docs/api-coverage.md」, 历史数字留在执行记录里 |
 | A4 | backend-service-options.md:16,24,30,31,35,105,141,145,162 | 全文按旧基线 **114/382、删 268 模块、382 个 endpoint 文件**写; 实际 P1+P2 裁剪已落地(2026-11-09): 118/118/0, vendor 12k→4.1k LOC | 顶部加「⚠ 本文写于裁剪前(基线 114/382), 裁剪已于 2026-11-09 落地, 见 backend-prune.md」; §g 候选里的 118/43 落差数字同步复核 |
@@ -47,7 +47,7 @@
 | B8 | backend-service-options.md | 184 行 | 顶部加过时横幅 | 决策已定(不切库、裁剪已落地), 只剩 §6 复测清单有价值 |
 | B9 | docs/b8-dumps/*.json | 小 | 保留或移测试 fixture | 若无单测引用, 归入 ui/test/fixtures 更合理 |
 | B10 | dist/*.apk + *.tar.gz | 41 MB | 本地可删 | git 不追踪, GitHub Release 已托管正式产物(SHA256SUMS) |
-| B11 | docs/plan-2026-11-09-settings-and-player.md | 194 行 | 修 A1 后归档 | 三波全部执行完, 只剩「依赖人耳的 5 条」 |
+| B11 | docs/archive/plan-2026-11-09-settings-and-player.md | 194 行 | 修 A1 后归档 | 三波全部执行完, 只剩「依赖人耳的 5 条」 |
 
 ## C. 计划文件归档建议
 

@@ -5,7 +5,7 @@
 ///   Filter 1: ON PK Fc 105 Hz Gain -3.2 dB Q 0.71
 ///   Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 ///
-/// 契约(与 Rust 侧 S4 共享, 见 docs/plan-2026-11-09-settings-and-player.md §2.2):
+/// 契约(与 Rust 侧 S4 共享, 见 docs/archive/plan-2026-11-09-settings-and-player.md §2.2):
 /// - 类型只支持 PK/LS/HS; LP/HP/NO 等明确报"不支持".
 /// - Fc 可带 Hz 单位, 必须 0 < Fc ≤ 48000; Gain 必须在 ±24 dB 内(超范围报错, 不静默裁剪).
 /// - Q 必填且 > 0; 最多 20 个 filter(第 21 个报错).

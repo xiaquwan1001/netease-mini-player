@@ -714,7 +714,7 @@ collection 处于 **locked**, `set_password` 会等解锁提示(无桌面会话 
 
 ### 2) 列表行 C 级第一批: 四个具名留白口径 + `row-padding` 门
 
-审计 `docs/ui-row-audit.md` 的 C 级 18 条里, 真问题只有一个: **同一个语义用了五种不同的合法数字**
+审计 `docs/archive/ui-row-audit.md` 的 C 级 18 条里, 真问题只有一个: **同一个语义用了五种不同的合法数字**
 (8/0/4、12/0/4、4/0/4、16/16 Material 默认、0/6), 而 `check-tokens.sh` 只管"数值是否在白名单",
 拦不住它(数值全合法)。
 
@@ -759,7 +759,7 @@ main 源) + 1 × `GestureBackNavigation`(`LoginActivity.kt:176 onBackPressed`, A
 (GradleDependency×3 / UseKtx×2 / SetJavaScriptEnabled / ObsoleteSdkInt / NewerVersionAvailable / ExportedService)。
 **触发条件**: 想让它进发版门就先补 `@OptIn` 把 error 打到 0, 再删 `continue-on-error` 并挪进 `verify`。
 
-### 2) 列表行审计 B 级 12 条(`docs/ui-row-audit.md` §3)
+### 2) 列表行审计 B 级 12 条(`docs/archive/ui-row-audit.md` §3)
 
 B 级两类通病: ①写了 `overflow: ellipsis` 但**没 `maxLines`** ⇒ 先换行再省略(长专辑名逐字竖排);
 ②行尾宽度**由内容决定** ⇒ 字号放大或数字位数一变就把标题区挤扁。

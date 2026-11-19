@@ -1,4 +1,4 @@
-//! 凭据存储: 抽象后端 + 策略门(2026-11-11, 基于 docs/credential-storage-options.md §3 的地基).
+//! 凭据存储: 抽象后端 + 策略门(2026-11-11, 基于 docs/archive/credential-storage-options.md §3 的地基).
 //!
 //! 目标: 登录凭据(MUSIC_U 等登录键)不再进明文 JSON; 设备指纹 cookie 仍留在
 //! identity.json(指纹不是凭据, 且按风控纪律必须持久化).

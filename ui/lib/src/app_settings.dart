@@ -158,7 +158,7 @@ class AppSettings extends ChangeNotifier {
     }
   }
 
-  // ---------------- 播放与外观(2026-11 任务书 docs/plan-2026-11-09-settings-and-player.md) ----------------
+  // ---------------- 播放与外观(2026-11 任务书 docs/archive/plan-2026-11-09-settings-and-player.md) ----------------
   // 原则: 默认值一律等于"不改变现状", 老配置读进来行为不变.
 
   /// R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212

@@ -1,6 +1,6 @@
 # Android Keystore 凭据接线设计（lane p1，2026-11-12）
 
-> 前置阅读: docs/credential-storage-options.md §3、core/crates/ncm-service/src/credential_store.rs、
+> 前置阅读: docs/archive/credential-storage-options.md §3、core/crates/ncm-service/src/credential_store.rs、
 > ui/lib/src/keystore.dart + ui/android/**/KeystoreChannel.kt。
 > 用户已拍板: 钥匙串可用就用; 不可用**经用户明确同意**才退 0600 明文; 凭据不落明文、不回传 Dart。
 

@@ -7,7 +7,7 @@
 //! Filter 2: ON LS Fc 120 Hz Gain 2.5 dB Q 0.70
 //! ```
 //!
-//! 约束(与任务书 docs/plan-2026-11-09-settings-and-player.md §2.2 一致):
+//! 约束(与任务书 docs/archive/plan-2026-11-09-settings-and-player.md §2.2 一致):
 //! - 只支持 PK / LS / HS 三种二阶滤波器(其余 LP/HP/NO 等明确报不支持);
 //! - 最多 [MAX_FILTERS] 个 filter(EqualizerAPO 惯例 20);
 //! - 增益(含 Preamp)必须落在 ±[MAX_GAIN_DB] dB, **超范围报错而不是静默裁剪**;

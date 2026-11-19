@@ -74,7 +74,7 @@
 | `X-Real-IP`(+`X-Forwarded-For`) | `vendor/.../request.rs:170-182`(`real_ip`/`random_cn_ip`), 服务层从不设置 | 注入 `X-Real-IP: <香港IP>` ⇒ 条目 `code=404` | **不可用**, 直接被拒 |
 | 只带 `X-Forwarded-For` | 同上 | 忽略, 正常 200 | 无作用 |
 | `NMTID` | `request.rs:232-236`(非登录接口随机注入) | 与节点无关 | 与节点无关 |
-| `os` / `appver` / `osver` / `channel` | `request.rs:196-241` + `util/config.rs` | 决定**能不能拿到直链**(缺 `os/appver` 会被封顶音质), 不是节点旋钮(`docs/lx-plugin.md` §5.2 复测一致) | 身份闸门, 非地区 |
+| `os` / `appver` / `osver` / `channel` | `request.rs:196-241` + `util/config.rs` | 决定**能不能拿到直链**(缺 `os/appver` 会被封顶音质), 不是节点旋钮(`docs/archive/lx-plugin.md` §5.2 复测一致) | 身份闸门, 非地区 |
 | `level` / `encodeType` | `song_url_v1.rs` | 决定档位/容器, 与节点无关 | 无关 |
 | `domain` | `request.rs:260+` | 换**接口**域名(weapi/eapi 主机), 与 CDN 节点无关 | 无关 |
 | 登录态 | `request.rs:243-250` | 只影响**可播性/音质**(匿名 VIP 曲 → 试听片段; 有 `MUSIC_U` → flac), 不影响节点 | 权限, 非地区 |
@@ -317,7 +317,7 @@ pub trait SourceResolver: Send + Sync {
 ## 9. 风险与明确不做
 
 **风险**
-1. **版权/合规**: 公开仓库不得内置任何具体第三方音源域名/令牌/接口密钥; 插件层只能留「接口形状 + 校验规则」, 具体源由用户自填(与 `docs/lx-plugin.md` 的 cookie 处理口径一致)。
+1. **版权/合规**: 公开仓库不得内置任何具体第三方音源域名/令牌/接口密钥; 插件层只能留「接口形状 + 校验规则」, 具体源由用户自填(与 `docs/archive/lx-plugin.md` 的 cookie 处理口径一致)。
 2. **凭据与出口代理密钥管理**: 代理地址/订阅/密钥**一律不落盘、不进仓库、不进报告**; 运行期从用户环境或 OS keyring 取; 设置页只存「是否启用」, 不存凭据。
 3. **风控封号**: 用代理出口 + 固定 device_id 打官方接口, 在网易侧是「异地设备」特征; 高频多候选探针会放大 `405` 风控。对策: 并发上限 2、探针只在「首播失败/超时」时触发、绝不为不同地区造不同 device_id。
 4. **第三方源投毒**: 必须做 `md5 + duration + br/size` 三向一致性校验(官方响应里现成有 `md5`/`time`, 现在被我们丢弃), 且只信 https。

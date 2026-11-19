@@ -6,7 +6,7 @@ import 'package:minincm/src/theme.dart';
 
 /// R6: 深色模式提供 OLED 纯黑.
 ///
-/// 验收口径(docs/plan-2026-11-09-settings-and-player.md §5):
+/// 验收口径(docs/archive/plan-2026-11-09-settings-and-player.md §5):
 /// 深色 + OLED ⇒ Scaffold / NavigationBar / 播放条(Material canvas) 背景严格 #000000,
 /// 关掉 ⇒ 回到 Material 默认深色(不是纯黑).
 void main() {

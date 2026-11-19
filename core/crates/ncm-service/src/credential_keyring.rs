@@ -1,4 +1,4 @@
-//! P2: Linux secret-service 凭据后端(2026-11-12, 基于 docs/credential-storage-options.md §2a/§3).
+//! P2: Linux secret-service 凭据后端(2026-11-12, 基于 docs/archive/credential-storage-options.md §2a/§3).
 //!
 //! - `keyring` crate 3.x + `sync-secret-service`(zbus 阻塞式), service 名 `com.minincm.minincm`,
 //!   account 用 `CredentialKey::id()`(与 FileStore/DpapiStore 同一套键).

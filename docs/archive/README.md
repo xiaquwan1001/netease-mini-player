@@ -59,5 +59,14 @@
 | docs/license-agpl-evaluation.md | [license-agpl-evaluation.md](license-agpl-evaluation.md) | MIT vs AGPL 评估, 结论"保持 MIT"已执行。**归档** |
 | docs/api-channel.md | [api-channel.md](api-channel.md) | interface vs interface3 通道实测, 结论"保持库默认 App 形态"已定。**归档** |
 
-> 未迁移的归档文档(结论已定但被代码注释引用, 暂留 `docs/` 原位): `plan-2026-11-09-settings-and-player.md`、
-> `credential-storage-options.md` —— 见 [`../README.md`](../README.md) §4 的说明与解绑条件。
+## 2026-11-19 归档批次(docs 根目录收口)
+
+| 旧路径 | 新路径 | 归档理由 |
+|---|---|---|
+| docs/plan-2026-11-09-settings-and-player.md | [plan-2026-11-09-settings-and-player.md](plan-2026-11-09-settings-and-player.md) | 7 项全部验收; 行号口径已失效。代码注释里的路径同步改指本目录 |
+| docs/credential-storage-options.md | [credential-storage-options.md](credential-storage-options.md) | 决策已固化在 `.pi/memory/notes-credentials.md`, 本文留调研过程 |
+| docs/ui-row-audit.md | [ui-row-audit.md](ui-row-audit.md) | A/B/C 三级全部清零, 结论已进 `.pi/memory/notes-ui-rules.md` |
+| docs/lx-plugin.md | [lx-plugin.md](lx-plugin.md) | 未落地设计稿 + 面向外部项目 Melodia, **加作废 banner** |
+| docs/melodia-pr-workflow.md | [melodia-pr-workflow.md](melodia-pr-workflow.md) | 外部项目流程, 与本仓重启后的工程无关, **加作废 banner** |
+| `.pi/plans/*.md`(31 份, gitignore) | [plans-2026-11/](plans-2026-11/README.md) | 车道任务书全部已落地, 整批留档 + 落地提交索引表 |
+| docs/{b4,b5,b7,b10,b12,b13,c1,c2,c3,wave9}-*.md(10 份 908 行) | → [../api-notes-snapshot-20261119.md](../api-notes-snapshot-20261119.md) | 同体裁批次笔记合并成一份快照(原文零删改, 原文件删除) |

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/eq_profile.dart';
 
-/// AutoEQ 曲线解析/序列化契约测试(docs/plan-2026-11-09-settings-and-player.md §2.2).
+/// AutoEQ 曲线解析/序列化契约测试(docs/archive/plan-2026-11-09-settings-and-player.md §2.2).
 void main() {
   void expectEqError(String text, {int? line, String? containsText}) {
     try {

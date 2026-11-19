@@ -1,5 +1,9 @@
 # LX 音源脚本工坊(plugins/lx-music)
 
+> ⛔ **作废(2026-11-19)**: 本文是**未落地的设计稿**, 且面向外部项目 Melodia(LX 自定义音源脚本),
+> 不是本仓主线 —— `plugins/lx-music/ncm-wy.js` 与 `tools/lx-plugin-harness.mjs` 至今不存在。
+> 立项时再取出本文按契约开工; 在此之前**不要据此排期或改动产品代码**。
+
 把我们的网易云协议知识做成**能在 Melodia 里直接跑的 LX 自定义音源脚本**,不 fork、不重写 App。
 **状态(2026-11-18 核实): 设计稿, 未落地** —— `plugins/lx-music/ncm-wy.js` 与回归台 `tools/lx-plugin-harness.mjs`
 在仓库里都不存在, 立项时再按本文契约开工。
