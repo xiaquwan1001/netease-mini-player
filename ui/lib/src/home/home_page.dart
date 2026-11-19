@@ -249,7 +249,9 @@ class _HomePageState extends State<HomePage> {
       // 引导态(心动模式/私人FM): 播完一首不看 PlayMode, 由页面续播(见 _guideNext)
       guideOf: () => _queueUI.guide,
       guideNext: _guideNext,
-      queueChanged: _queueUI.queueChanged,
+      // 必须包一层闭包: 直接写 `_queueUI.queueChanged` 会在 initState 里**立刻**
+      // 解引用 _queueUI(它在这行之后才初始化)⇒ LateInitializationError。
+      queueChanged: () => _queueUI.queueChanged(),
       syncCoverPalette: _syncCoverPalette,
       syncActionState: _syncActionState,
       // 定时关闭: 同一个状态机既给设置页显示, 也在轮询/曲末里判定到点
