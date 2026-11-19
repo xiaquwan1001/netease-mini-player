@@ -93,8 +93,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 排行榜已按用户要求从推荐页移到搜索页(这里不再渲染)
-    expect(find.text('排行榜'), findsNothing);
+    // 排行榜区块已按用户要求从推荐页移到搜索页(这里不再有区块);
+    // B7 之后顶栏第一格是「自定义」快捷卡, 默认绑定动作就是排行榜 ⇒
+    // 文案「排行榜」只在快捷卡上出现一次(区块/榜单列表不渲染)。
+    expect(find.text('排行榜'), findsOneWidget);
     expect(find.text('飙升榜'), findsNothing);
 
     // 风格推荐
@@ -102,9 +104,9 @@ void main() {
     expect(find.text('粤语流行'), findsOneWidget);
     expect(find.text('华语流行'), findsOneWidget);
 
-    // 每日推荐(批次 C: 「每日推荐歌曲」与「每日推荐歌单」合并成一格;
-    // 「每日推荐」文案同时出现在快捷卡与区块标题上, 所以是 findsNWidgets(2))
-    expect(find.text('每日推荐'), findsNWidgets(2));
+    // 每日推荐(批次 C: 「每日推荐歌曲」与「每日推荐歌单」合并成一格)。
+    // B7 之后顶栏第一格不再是「每日推荐」(改成自定义动作卡), 所以只剩区块标题 1 处。
+    expect(find.text('每日推荐'), findsOneWidget);
     expect(find.text('每日一歌'), findsOneWidget);
     // 推荐页歌曲卡铺满屏宽(页面横向 padding=0), 歌名文字不再被额外内缩
     expect(tester.getRect(find.text('每日一歌')).left, lessThan(70));

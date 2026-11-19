@@ -19,6 +19,7 @@ Future<void> showDiscoverPage(
   DateListLoader? loadHistoryDates,
   HistorySongsLoader? loadHistorySongs,
   LocalDaysLoader? loadLocalDays,
+  int initialTab = 0,
 }) {
   final songs = loadSongs ?? rust.dailyRecommendSongs;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
@@ -33,6 +34,7 @@ Future<void> showDiscoverPage(
             (date) => rust.historyRecommendSongs(date: date),
         loadLocalDays: loadLocalDays,
         onOpenPlaylist: onOpenPlaylist,
+        initialTab: initialTab,
       ),
     ),
   );
@@ -48,6 +50,7 @@ class DailyRecommendPage extends StatelessWidget {
     required this.loadHistorySongs,
     required this.onOpenPlaylist,
     this.loadLocalDays,
+    this.initialTab = 0,
   });
 
   final SongListLoader loadSongs;
@@ -59,14 +62,26 @@ class DailyRecommendPage extends StatelessWidget {
   final LocalDaysLoader? loadLocalDays;
   final void Function(rust.Playlist playlist) onOpenPlaylist;
 
+  /// 打开时落在第几个页签(0 推荐歌曲 / 1 推荐歌单 / 2 历史日推)。
+  /// B7「历史日推」快捷动作复用它, 不另开一份页面; 默认 0 = 历史行为。
+  final int initialTab;
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 3,
+      initialIndex: initialTab.clamp(0, 2),
       child: Scaffold(
         appBar: AppBar(
           title: const Text('每日推荐'),
+          // B3a(2026-11-19 用户反馈): 三个页签原来均分屏宽, 300dp + 1.25 字号下
+          // 每格约 100dp, 4 个汉字 + labelPadding(16×2) 放不下 ⇒ 末尾字被裁。
+          // 改成自然宽度 + 可横向拖动(TabAlignment.start), labelPadding 收窄到 12,
+          // 页签仍由 TabBar 自己管指示器/联动(不换成自写 chip 行)。
           bottom: const TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelPadding: EdgeInsets.symmetric(horizontal: 12),
             tabs: [
               Tab(text: '推荐歌曲'),
               Tab(text: '推荐歌单'),

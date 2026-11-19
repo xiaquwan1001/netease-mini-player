@@ -26,6 +26,7 @@ const expectedKeys = <String>{
   'gridColumns',
   'coverQuality',
   'oledDark',
+  'customQuickAction',
   // 播放/音质
   'audioLevel',
   'skipVipSongs',
@@ -76,6 +77,7 @@ void resetToDefaults() {
   s.anonymousDebug = false;
   s.coverQuality = CoverQuality.standard;
   s.oledDark = false;
+  s.customQuickAction = CustomQuickAction.ranking;
   s.volumeGainDb = 0.0;
   s.loudnessNormalize = false;
   s.loudnessTargetLufs = -16.0;
@@ -143,6 +145,7 @@ void main() {
     s.anonymousDebug = true;
     s.coverQuality = CoverQuality.ultra;
     s.oledDark = true;
+    s.customQuickAction = CustomQuickAction.historyDaily;
     s.volumeGainDb = -7.5;
     s.loudnessNormalize = true;
     s.loudnessTargetLufs = -14.0;
@@ -185,6 +188,7 @@ void main() {
     expect(s.anonymousDebug, isTrue);
     expect(s.coverQuality, CoverQuality.ultra);
     expect(s.oledDark, isTrue);
+    expect(s.customQuickAction, CustomQuickAction.historyDaily);
     expect(s.volumeGainDb, -7.5);
     expect(s.loudnessNormalize, isTrue);
     expect(s.loudnessTargetLufs, -14.0);
@@ -221,6 +225,15 @@ void main() {
     expect(AppSettings.instance.gridColumns, 3);
     expect(AppSettings.instance.updateCheckInterval, UpdateCheckInterval.daily);
     expect(AppSettings.instance.closeBehavior, CloseBehavior.quit);
+    // B7: 老配置没有 customQuickAction ⇒ 默认「排行榜」, 不报错
+    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
+  });
+
+  test('customQuickAction 未知值也回落排行榜(手改坏的配置不炸)', () async {
+    File('${dir.path}/settings.json')
+        .writeAsStringSync(jsonEncode({'customQuickAction': 'nope'}));
+    await AppSettings.instance.load(dir.path);
+    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
   });
 
   test('schema < 2 的 lyricSourcePreference=auto 一次性抬到 amll(迁移仍生效)', () async {
