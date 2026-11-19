@@ -10,6 +10,7 @@ import 'net_retry.dart';
 import 'playback_bridge.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
+import 'queue_guide.dart' show kFmBatchesPerFill, loadFmBatches;
 import 'ranking_view.dart' show showPlayRanking;
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
@@ -182,11 +183,13 @@ class _RecommendViewState extends State<RecommendView> {
       return;
     }
     try {
-      final songs = await retryNetwork(_fm);
-      final playable = [
-        for (final s in songs)
-          if (s.playable) s,
-      ];
+      // 私人FM 的 /api/v1/radio/get 实测**一次只回 2 首**(2026-11-19 CLI 取证)。
+      // 只取一批 ⇒ 队列面板里永远只有两首歌, 播完就被 PlayMode 接管(用户反馈)。
+      // 这里连取 3 批拼成一段队列(6 首起步), 之后由引导态续播接着追加。
+      final playable = await loadFmBatches(
+        () => retryNetwork(_fm),
+        batches: kFmBatchesPerFill,
+      );
       if (playable.isEmpty) {
         _snack('暂时没有可播放的 FM 曲目');
         return;

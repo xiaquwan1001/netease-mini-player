@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/layout.dart' show kQueueRowExtent;
 import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
+import 'package:minincm/src/queue_guide.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
 
 import 'support/fakes.dart';
@@ -112,6 +113,60 @@ class LiveHarnessState extends State<LiveHarness> {
   /// 模拟"心动模式切换 / 自动续播": 整批换队列 + 通知(面板应当立刻跟着变)
   void replaceQueue() {
     queue.setAll([song(9, '推荐X'), song(10, '推荐Y')], startAt: 1);
+    changes.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    changes.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: PlayQueueSheet(
+      items: queue.items,
+      index: queue.index,
+      queue: queue,
+      changes: changes,
+      onSelect: (_) {},
+      onRemove: (_, _) {},
+    ),
+  );
+}
+
+/// 私人FM 引导态的宿主: 面板拿真队列 + changes, 续播走 GuideQueueAdvance。
+///
+/// 真接口 `/api/v1/radio/get` 一次只回 2 首(2026-11-19 CLI 取证), 所以初始队列就是
+/// 两首; "播完一首"由 [FmHarnessState.playNext] 模拟, 它走的是与生产同一个
+/// `GuideQueueAdvance`(顺序前进 / 段尾续一批追加)。
+class FmHarness extends StatefulWidget {
+  const FmHarness({super.key});
+  @override
+  State<FmHarness> createState() => FmHarnessState();
+}
+
+class FmHarnessState extends State<FmHarness> {
+  final PlayQueue<rust.SongDto> queue = PlayQueue<rust.SongDto>()
+    ..setAll([song(1, 'FM 第一批1'), song(2, 'FM 第一批2')], startAt: 0);
+
+  final ChangeNotifier changes = ChangeNotifier();
+
+  /// 假 FM 服务: 第一批已经入队(上面), 续播时给第二批 2 首
+  var _batch = 1;
+
+  late final GuideQueueAdvance advance = GuideQueueAdvance(
+    fetchFm: () async {
+      _batch += 1;
+      if (_batch > 2) return const [];
+      return [song(3, 'FM 第二批3'), song(4, 'FM 第二批4')];
+    },
+    fetchHeart: (_) async => const [],
+  );
+
+  /// 模拟"当前这首播完": 走生产同一条续播路径, 然后通知面板
+  Future<void> playNext() async {
+    await advance.next(queue, QueueGuide.fm);
     changes.notifyListeners();
   }
 
@@ -507,5 +562,30 @@ Future<void> pumpNarrow(WidgetTester tester, Widget home) async {
     expect(find.text('推荐Y'), findsOneWidget);
     expect(currentTitle(tester), '推荐Y', reason: '高亮要跟真实队列的 index=1 走');
     expect(find.text('2 首'), findsOneWidget);
+  });
+
+  testWidgets('私人FM 引导态: 播完一段续一批, 面板立刻出现新条目并跟着高亮', (tester) async {
+    // 真接口一次只回 2 首(CLI 取证) ⇒ 初始队列就是 2 首, 续播由引导态负责追加。
+    await tester.pumpWidget(const MaterialApp(home: FmHarness()));
+    await tester.pumpAndSettle();
+    expect(find.text('FM 第一批1'), findsOneWidget);
+    expect(find.text('FM 第一批2'), findsOneWidget);
+    expect(find.text('2 首'), findsOneWidget);
+    expect(currentTitle(tester), 'FM 第一批1');
+
+    final fm = tester.state<FmHarnessState>(find.byType(FmHarness));
+    // 第一首播完 → 顺序到第二首(不重排、不看 PlayMode)
+    await fm.playNext();
+    await tester.pumpAndSettle();
+    expect(find.text('2 首'), findsOneWidget);
+    expect(currentTitle(tester), 'FM 第一批2');
+
+    // 第二首播完(段尾) → 续一批追加到队尾, 面板必须立刻显示新条目
+    await fm.playNext();
+    await tester.pumpAndSettle();
+    expect(find.text('4 首'), findsOneWidget, reason: '续播要追加进队列, 不是替换');
+    expect(find.text('FM 第二批3'), findsOneWidget, reason: '新条目要在面板里可见');
+    expect(find.text('FM 第二批4'), findsOneWidget);
+    expect(currentTitle(tester), 'FM 第二批3', reason: '高亮跟着真实队列走');
   });
 }

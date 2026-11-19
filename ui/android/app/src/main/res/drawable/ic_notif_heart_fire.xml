@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <!-- 心动模式: Material "local_fire_department" 火焰; 与 Dart 侧 Icons.local_fire_department 同形。
+         与喜欢按钮的 ic_notif_heart_filled(红心)**必须区分**(2026-11-19 用户反馈 6: 同图分不清) -->
+    <path android:fillColor="@android:color/white" android:pathData="M12 12.9l-2.13 2.09c-0.56 0.56 -0.87 1.29 -0.87 2.07C9 18.68 10.35 20 12 20s3-1.32 3-2.94c0-0.78 -0.31 -1.51 -0.87 -2.07L12 12.9z"/>
+    <path android:fillColor="@android:color/white" android:pathData="M16 6l-0.44 0.55C14.38 8.02 12 7.19 12 5.3V2S4 6 4 13c0 2.92 1.56 5.47 3.89 6.86C7.33 19.34 7 18.24 7 17c0-1.26 0.46 -2.44 1.22 -3.34L12 10l3.78 3.66C16.54 14.56 17 15.74 17 17c0 1.24 -0.33 2.34 -0.89 3.86C18.44 19.47 20 16.92 20 14c0-3.5 -2 -6.5 -4 -8z"/>
+</vector>

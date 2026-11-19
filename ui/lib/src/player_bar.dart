@@ -33,6 +33,7 @@ class PlayerBarData {
     required this.dragMs,
     this.mode = PlayMode.repeatAll,
     this.heartActive = false,
+    this.fmActive = false,
   });
 
   final PlayerView player;
@@ -47,9 +48,14 @@ class PlayerBarData {
   final double? dragMax;
   final double? dragMs;
 
-  /// 播放顺序(含"心动模式"这一虚拟档, 用 [heartActive] 表示)
+  /// 播放顺序(只有 4 档; 引导态不在里面)
   final PlayMode mode;
+
+  /// 心动模式引导态(火焰图标; 播放顺序按钮此时 = 退出引导回到列表循环)
   final bool heartActive;
+
+  /// 私人FM 引导态(广播图标; 同上)
+  final bool fmActive;
 
   @override
   bool operator ==(Object other) {
@@ -62,6 +68,7 @@ class PlayerBarData {
         other.dragMs == dragMs &&
         other.mode == mode &&
         other.heartActive == heartActive &&
+        other.fmActive == fmActive &&
         other.player.seekable == player.seekable &&
         _playerEquals(other.player, player) &&
         identical(other.current, current);
@@ -76,6 +83,7 @@ class PlayerBarData {
     dragMs,
     mode,
     heartActive,
+    fmActive,
     player.trackId,
     player.playing,
     player.positionMs,
@@ -506,16 +514,25 @@ class MiniPlayerBar extends StatelessWidget {
                     ),
                     onPressed: actions.onToggleLike,
                   ),
-                  // 播放顺序: 取代原来的"上一首"位置(用户要求); 心动模式也在这里轮转.
+                  // 播放顺序: 取代原来的"上一首"位置(用户要求)。
+                  //
+                  // 引导态(私人FM/心动模式)下这个按钮显示对应的专属图标, 语义变成
+                  // "退出引导回到列表循环"(2026-11-19 用户反馈 5/6: 以前 FM 和心动
+                  // 都挤在播放顺序轮转里, 图标也不说明当前在哪个引导态)。
                   if (gap > 0) SizedBox(width: gap),
                   _barIcon(
-                    tooltip: data.heartActive
+                    tooltip: data.fmActive
+                        ? '私人FM(点击返回列表循环)'
+                        : data.heartActive
                         ? '心动模式(点击返回列表循环)'
                         : '播放顺序: ${playModeLabels[data.mode] ?? ''}',
                     icon: Icon(
-                      data.heartActive
-                          // 全 App 统一: 心动 = local_fire_department(与推荐页入口同图)。
-                          // auto_awesome 归「每日推荐」独占, 不再两种语义共用一个图标。
+                      // 全 App 统一: 心动 = local_fire_department(与推荐页入口同图),
+                      // 私人FM = radio(与推荐页「私人FM」卡片同图)。
+                      // auto_awesome 归「每日推荐」独占, 不再两种语义共用一个图标。
+                      data.fmActive
+                          ? Icons.radio
+                          : data.heartActive
                           ? Icons.local_fire_department
                           : (playModeIcons[data.mode] ?? Icons.repeat),
                       size: 22,

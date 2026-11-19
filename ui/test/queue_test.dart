@@ -189,6 +189,33 @@ void main() {
       expect(q.current, 'a');
     });
 
+    test('advanceSequential 忽略 PlayMode: 只顺序走一格, 队尾返回 null', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle)
+        ..setAll(['a', 'b', 'c'], startAt: 0);
+      expect(q.advanceSequential(), 'b');
+      expect(q.advanceSequential(), 'c');
+      expect(q.advanceSequential(), isNull, reason: '不绕回队首(续播由引导态负责)');
+      expect(q.current, 'c');
+      // 空队列不炸
+      expect((PlayQueue<String>()..clear()).advanceSequential(), isNull);
+    });
+
+    test('previousSequential 忽略 PlayMode: 队首返回 null', () {
+      final q = PlayQueue<String>(mode: PlayMode.repeatAll)
+        ..setAll(['a', 'b', 'c'], startAt: 1);
+      expect(q.previousSequential(), 'a');
+      expect(q.previousSequential(), isNull);
+    });
+
+    test('peekSequential 不移动下标(引导态预取用)', () {
+      final q = PlayQueue<String>(mode: PlayMode.shuffle)
+        ..setAll(['a', 'b'], startAt: 0);
+      expect(q.peekSequential(), 'b');
+      expect(q.index, 0);
+      q.jumpTo(1);
+      expect(q.peekSequential(), isNull, reason: '队尾没有下一首');
+    });
+
     test('删当前项后 next/onEnded 仍按队列长度走', () {
       final q = PlayQueue<String>(mode: PlayMode.repeatAll)
         ..setAll(['a', 'b', 'c'], startAt: 0);
