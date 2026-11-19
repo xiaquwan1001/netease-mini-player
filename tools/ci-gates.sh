@@ -19,7 +19,7 @@
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh sheet-entry          # tools/check-sheet-entry.sh(浮层只许经 app_sheet.dart 入口)
-#   tools/ci-gates.sh docs                 # tools/check-docs.sh(相对链接死链 + docs 根索引覆盖)
+#   tools/ci-gates.sh docs                 # tools/check-docs.sh(docs/** 与根 *.md 的相对链接死链 + docs 根索引覆盖)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
@@ -127,7 +127,7 @@ cmd_sheet_entry() {
   bash "$ROOT/tools/check-sheet-entry.sh"
 }
 
-# 文档门: docs/**/*.md + 根 README.md 的相对链接死链, 以及 docs/ 根文件的索引覆盖
+# 文档门: docs/**/*.md + 仓库根所有 *.md 的相对链接死链, 以及 docs/ 根文件的索引覆盖
 # (docs/archive/** 只查链接不查索引)。存量豁免只走 tools/docs-gate-allowlist.txt(理由必填)。
 cmd_docs() {
   echo "+ bash tools/check-docs.sh"

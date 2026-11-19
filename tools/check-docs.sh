@@ -6,7 +6,8 @@
 # 临时脚本随 /tmp 一起没了 ⇒ 下一次搬迁又得现写。这道门把那次自证固化下来。
 #
 # 两条检查(都只看**相对** markdown 链接, 外链/锚点不校验):
-#   ① 死链: `docs/**/*.md` 与仓库根 `README.md` 里的 `[text](path)` / `![alt](path)` 的
+#   ① 死链: `docs/**/*.md` 与仓库根目录的**所有** `*.md`(README / README.en / CONTRIBUTING /
+#      AGENTS / THIRD_PARTY_NOTICES)里的 `[text](path)` / `![alt](path)` 的
 #      **文件部分**必须存在(锚点 `#fragment` 丢弃后再判; 目录链接要求目录存在)。
 #   ② 索引: `docs/` 根(**不递归**)的每个 `.md` 都必须被 `docs/README.md` 链接到。
 #      `docs/archive/**` 只查 ①, 不强制进索引(归档件本来就只留痕)。
@@ -132,7 +133,9 @@ def load_allowlist():
 
 
 def walk_markdown():
-    files = [os.path.join(ROOT, "README.md")]
+    files = sorted(
+        os.path.join(ROOT, n) for n in os.listdir(ROOT) if n.endswith(".md")
+    )
     docs = os.path.join(ROOT, "docs")
     for dirpath, dirnames, filenames in os.walk(docs):
         dirnames.sort()
