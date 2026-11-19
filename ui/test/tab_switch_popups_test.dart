@@ -20,6 +20,8 @@ import 'package:minincm/src/app_shell.dart'
         modalRouteOpen,
         openPopups,
         pageDepth;
+import 'package:minincm/src/detail_pane.dart'
+    show DetailPaneRequest, closeDetailPane, detailPaneSlot;
 import 'package:minincm/src/home/queue_sheet_controller.dart';
 import 'package:minincm/src/home/song_action_wiring.dart';
 import 'package:minincm/src/queue.dart';
@@ -285,6 +287,51 @@ void main() {
     expect(find.textContaining('发现新版本'), findsNothing);
     expect(pageDepth.value, depthBefore);
     expect(livePopups(), isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('主从分栏: 右栏详情里弹 sheet 仍被登记, 切 tab 仍收起', (tester) async {
+    // 方案 B · S4 的关键取舍: 右栏**不是路由**, 所以右栏里弹的 sheet 走的是**根**
+    // Navigator ⇒ 登记面与改动前完全一致(不靠嵌套 Navigator 的 observer, 不会双计
+    // pageDepth)。这条用例就是那句话的证据: 右栏里弹的 sheet 既被登记也被切 tab 收掉,
+    // 且页面层数不变。
+    await pumpHomeShell(tester);
+    final depthBefore = pageDepth.value;
+    addTearDown(() {
+      detailPaneSlot.value = null;
+    });
+    detailPaneSlot.value = DetailPaneRequest(
+      key: 'pl-1',
+      builder: (paneContext) => Center(
+        child: TextButton(
+          onPressed: () => unawaited(
+            showModalBottomSheet<void>(
+              context: paneContext,
+              builder: (_) => const Center(child: Text('右栏里的面板')),
+            ),
+          ),
+          child: const Text('open-pane-sheet'),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('open-pane-sheet'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('右栏里的面板'), findsOneWidget);
+    expect(livePopups(), hasLength(1), reason: '右栏里的 sheet 仍挂在根 Navigator 上');
+    expect(modalRouteOpen.value, isTrue);
+    expect(pageDepth.value, depthBefore, reason: '浮层不算一层');
+
+    await switchToMine(tester);
+
+    expect(find.text('右栏里的面板'), findsNothing, reason: '切 tab 照旧收起');
+    expect(livePopups(), isEmpty);
+    expect(detailPaneSlot.value, isNull, reason: '切 tab 一并清掉右栏');
+    expect(pageDepth.value, depthBefore, reason: '右栏与浮层都不算一层, 不许误退页面');
+    expect(navSelectedIndex(tester), 3, reason: 'tab 真的切过去了');
+    closeDetailPane();
     await tester.pumpWidget(const SizedBox());
   });
 }

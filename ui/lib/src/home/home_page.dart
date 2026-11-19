@@ -19,6 +19,15 @@ import '../detail_faces.dart';
 import '../detail_page.dart';
 import '../desktop_integration.dart';
 import '../desktop_shell.dart';
+import '../detail_pane.dart'
+    show
+        DetailPaneRequest,
+        DetailPaneSplit,
+        attachDetailPaneHost,
+        closeDetailPane,
+        detachDetailPaneHost,
+        detailPaneOpen,
+        detailPaneSlot;
 import '../discover.dart';
 import '../feed_view.dart';
 import '../keystore.dart';
@@ -355,12 +364,16 @@ class _HomePageState extends State<HomePage> {
       settings: AppSettings.instance,
     );
     WidgetsBinding.instance.addObserver(_desktopClose);
+    // 主从分栏的右栏由本页渲染(方案 B · S4): 登记"宿主在场", openDetail 才知道
+    // 该填右栏还是照旧 push。计数而非 bool —— 换树时新旧页面的 init/dispose 顺序不保证。
+    attachDetailPaneHost();
     _bootstrap();
     _coordinator.startPolling();
   }
 
   @override
   void dispose() {
+    detachDetailPaneHost();
     // 睡眠定时的到点动作属于本页面实例: 摘掉, 免得销毁后的 State 被回调
     sleepTimer.onExpire = null;
     WidgetsBinding.instance.removeObserver(_desktopClose);
@@ -983,20 +996,39 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final backAction = resolveHomeBackAction(
-      showLyrics: _lyric.visible,
-      tab: _tab,
-      libraryOpen: _account.libraryOpen,
-    );
-    return HomeBackGuard(
-      action: backAction,
-      onBack: () => _handleBack(backAction),
-      // 搜索状态在 [SearchController]: 它的一次通知 = 拆分前的一处 setState,
-      // 所以整页重建一次, 重建范围与拆分前一致。
-      child: ListenableBuilder(
-        listenable: _search,
-        builder: (context, _) => _buildPage(context),
-      ),
+    // 右栏槽位的变化**不会**让 HomePage.build 重跑(它由 [DetailPaneSplit] 自己监听),
+    // 而返回键优先级依赖"右栏开着没有" ⇒ 这里必须监听一次, 否则 PopScope 拿到的是
+    // 旧优先级: 右栏开着按返回会直接跳到 resetTab(详情凭空消失又换了个 tab)。
+    return ValueListenableBuilder<DetailPaneRequest?>(
+      valueListenable: detailPaneSlot,
+      builder: (context, paneRequest, _) {
+        final open = paneRequest != null;
+        final backAction = resolveHomeBackAction(
+          showLyrics: _lyric.visible,
+          tab: _tab,
+          libraryOpen: _account.libraryOpen,
+          // 宽档主从分栏的右栏优先级**高于** resetTab(见 back_policy.dart)
+          detailPaneOpen: open,
+        );
+        return HomeBackGuard(
+          action: backAction,
+          // 用当帧的优先级回调: 槽位在读屏/动画帧之间变化时也不会退错层级
+          onBack: () => _handleBack(
+            resolveHomeBackAction(
+              showLyrics: _lyric.visible,
+              tab: _tab,
+              libraryOpen: _account.libraryOpen,
+              detailPaneOpen: detailPaneOpen,
+            ),
+          ),
+          // 搜索状态在 [SearchController]: 它的一次通知 = 拆分前的一处 setState,
+          // 所以整页重建一次, 重建范围与拆分前一致。
+          child: ListenableBuilder(
+            listenable: _search,
+            builder: (context, _) => _buildPage(context),
+          ),
+        );
+      },
     );
   }
 
@@ -1010,6 +1042,10 @@ class _HomePageState extends State<HomePage> {
         } else {
           _lyric.toggle();
         }
+      case HomeBackAction.closeDetailPane:
+        // 宽档: 只清右栏, 页面与左栏都不动(**不** pop 页面);
+        // 窄档的详情是一整页, 由系统返回键 pop, 永远走不到这个分支
+        closeDetailPane();
       case HomeBackAction.resetTab:
         _onTabSelected(0);
       case HomeBackAction.closeLibrary:
@@ -1030,103 +1066,107 @@ class _HomePageState extends State<HomePage> {
     publishBottomBar(context, _buildBottomBar(context));
     return Scaffold(
       appBar: topBar,
-      // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
-      body: Padding(
-        padding: EdgeInsets.only(
-          top: topBar == null ? MediaQuery.paddingOf(context).top : 0,
-        ),
-        child: Column(
-          children: [
-            if (!_lyric.visible && _tab == 0) _buildSearchBar(),
-            // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
-            if (!_lyric.visible && _tab == 0 && _search.exact != null)
-              SearchExactBar(
-                view: _search.exactView!,
-                onPickArtist: _openExactArtist,
-                onPickPlaylist: _openExactPlaylist,
-                onPickRadio: _openExactRadio,
-              ),
-            if (!_lyric.visible &&
-                _tab == 0 &&
-                _search.suggestions.isEmpty &&
-                _search.exact == null &&
-                _search.keywordSuggestions.isNotEmpty)
-              KeywordSuggestBar(
-                keywords: _search.keywordSuggestions,
-                onSelected: _search.searchKeyword,
-              ),
-            if (!_lyric.visible && _tab == 0 && _error != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                    if (_retryLast != null)
-                      TextButton(
-                        onPressed: () {
-                          final retry = _retryLast;
-                          setState(() => _error = null);
-                          retry?.call();
-                        },
-                        child: const Text('重试'),
-                      ),
-                  ],
+      // 主从分栏(方案 B · S4): 右栏有详情时**整页正文都在左栏**(搜索框/联想/tab 树),
+      // 让位给 420 的右栏; 没有右栏时 [DetailPaneSplit] 原样返回 —— 几何零变化。
+      // AppBar(歌词页/歌单浏览态才有)仍通栏, 与页内双列(S1)同一口径。
+      body: DetailPaneSplit(
+        master: (context, selectedKey) => Padding(
+          // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
+          padding: EdgeInsets.only(
+            top: topBar == null ? MediaQuery.paddingOf(context).top : 0,
+          ),
+          child: Column(
+            children: [
+              if (!_lyric.visible && _tab == 0) _buildSearchBar(),
+              // 有输入时给输入联想(原版交互); 历史/热词在搜索落地页里
+              if (!_lyric.visible && _tab == 0 && _search.exact != null)
+                SearchExactBar(
+                  view: _search.exactView!,
+                  onPickArtist: _openExactArtist,
+                  onPickPlaylist: _openExactPlaylist,
+                  onPickRadio: _openExactRadio,
                 ),
-              ),
-            Expanded(
-              child: Stack(
-                children: [
-                  // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
-                  Positioned.fill(
-                    child: Offstage(
-                      offstage: _lyric.visible,
-                      child: _buildTabPages(),
-                    ),
-                  ),
-                  if (_lyric.visible)
-                    // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
-                    Positioned.fill(
-                      child: CoverBackdrop(
-                        palette: _coverPalette,
-                        child: _buildLyrics(),
-                      ),
-                    ),
-                  // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
-                  // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,
-                  // 下面还露出半截结果页。tab 树仍然挂在 Offstage 里, 收起联想不重建。
-                  if (!_lyric.visible &&
-                      _tab == 0 &&
-                      _search.suggestions.isNotEmpty)
-                    Positioned.fill(
-                      // 不透明底色: 联想面板铺满后, 下面的 tab 内容不该从卡片外边
-                      // 那 12dp 的缝里透出来。
-                      child: ColoredBox(
-                        color: Theme.of(context).colorScheme.surface,
-                        child: SuggestionPanel(
-                          items: _search.suggestions,
-                          // 分类 tab 与底部「看全部结果」都要知道当前输入词
-                          keyword: _controller.text.trim(),
-                          onSelected: (item) =>
-                              _search.searchKeyword(item.title),
-                          onSearchAll: _search.busy ? null : _search.search,
+              if (!_lyric.visible &&
+                  _tab == 0 &&
+                  _search.suggestions.isEmpty &&
+                  _search.exact == null &&
+                  _search.keywordSuggestions.isNotEmpty)
+                KeywordSuggestBar(
+                  keywords: _search.keywordSuggestions,
+                  onSelected: _search.searchKeyword,
+                ),
+              if (!_lyric.visible && _tab == 0 && _error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+                      if (_retryLast != null)
+                        TextButton(
+                          onPressed: () {
+                            final retry = _retryLast;
+                            setState(() => _error = null);
+                            retry?.call();
+                          },
+                          child: const Text('重试'),
+                        ),
+                    ],
+                  ),
+                ),
+              // 左栏 = tab 区(歌词页/输入联想都盖在它上面); 槽位一变它跟着重建,
+              // 才能画出"右栏正在看哪一条"的选中外框。
+              Expanded(child: _buildTabArea(context, selectedKey)),
+            ],
+          ),
         ),
       ),
     );
   }
+
+  /// 首页 tab 区(歌词页与输入联想都盖在它上面), 作为 [DetailPaneSplit] 的左栏。
+  ///
+  /// [selectedKey] = 右栏正在看的详情锚点(歌单 id); null = 没有右栏。
+  Widget _buildTabArea(BuildContext context, Object? selectedKey) => Stack(
+    children: [
+      // 歌词页盖在上面时 tab 树仍然存活(Offstage), 收起歌词不重建、不闪图
+      Positioned.fill(
+        child: Offstage(
+          offstage: _lyric.visible,
+          child: _buildTabPages(selectedKey),
+        ),
+      ),
+      if (_lyric.visible)
+        // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
+        Positioned.fill(
+          child: CoverBackdrop(palette: _coverPalette, child: _buildLyrics()),
+        ),
+      // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
+      // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,
+      // 下面还露出半截结果页。tab 树仍然挂在 Offstage 里, 收起联想不重建。
+      if (!_lyric.visible && _tab == 0 && _search.suggestions.isNotEmpty)
+        Positioned.fill(
+          // 不透明底色: 联想面板铺满后, 下面的 tab 内容不该从卡片外边
+          // 那 12dp 的缝里透出来。
+          child: ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: SuggestionPanel(
+              items: _search.suggestions,
+              // 分类 tab 与底部「看全部结果」都要知道当前输入词
+              keyword: _controller.text.trim(),
+              onSelected: (item) => _search.searchKeyword(item.title),
+              onSearchAll: _search.busy ? null : _search.search,
+            ),
+          ),
+        ),
+    ],
+  );
 
   void _onTabSelected(int index) {
     if (_tab == index) return;
@@ -1139,6 +1179,9 @@ class _HomePageState extends State<HomePage> {
     // 现在只有一个入口: 按 NavigatorObserver 的浮层登记表逐条摘除
     // (见 app_shell.dart 的 dismissAllPopups / popup_routes.dart)。
     dismissAllPopups();
+    // 右栏详情属于"上一屏的左栏": 切 tab 等于换一个干净视图, 右栏一并清掉
+    // (与收浮层同一个语义 —— 否则右栏会挂在新 tab 上, 左栏却已经不是它的列表)
+    closeDetailPane();
     _tabVisited.add(index);
     // 切 tab 一律收起歌词: 否则歌词页会一直占着焦点, 切过去看不到目标页面
     final wasLyrics = _lyric.visible;
@@ -1250,20 +1293,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildTabPages() {
+  Widget _buildTabPages(Object? selectedKey) {
     return IndexedStack(
       index: _tab,
       children: [
         for (var i = 0; i < 5; i++)
           if (_tabVisited.contains(i))
-            _buildTabPage(i)
+            _buildTabPage(i, selectedKey)
           else
             const SizedBox.shrink(),
       ],
     );
   }
 
-  Widget _buildTabPage(int index) {
+  Widget _buildTabPage(int index, Object? selectedKey) {
     switch (index) {
       case 1:
         return RecommendView(
@@ -1345,16 +1388,16 @@ class _HomePageState extends State<HomePage> {
           onOpenAccounts: _account.openAccountPage,
         );
       default:
-        return _buildSearchTab();
+        return _buildSearchTab(selectedKey);
     }
   }
 
-  Widget _buildSearchTab() {
+  Widget _buildSearchTab(Object? selectedKey) {
     final query = _controller.text.trim();
     // 歌单浏览态优先(从我的/推荐点进来的)
     if (_account.libraryOpen) return _buildList();
     // 有上一轮结果就展示分区结果; 取消按钮会清空它
-    if (_search.bundle != null) return _buildSearchResults();
+    if (_search.bundle != null) return _buildSearchResults(selectedKey);
     // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
     if (query.isEmpty) {
       return SearchLanding(
@@ -1375,9 +1418,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 综合搜索结果: 单曲/艺人/专辑/歌单/播客分区
-  Widget _buildSearchResults() {
+  ///
+  /// [selectedKey] 是主从分栏右栏正在看的歌单 id(窄/中档恒为 null) —— 左栏据此给
+  /// 该卡片画选中外框。
+  Widget _buildSearchResults(Object? selectedKey) {
     return SearchResultsView(
       bundle: _search.bundle!,
+      selectedPlaylistId: selectedKey is BigInt ? selectedKey : null,
       // 后端 cloudsearch type=1004 的 MV 结果 → UI 的 SearchMv(同构映射)
       mvs: [
         for (final m in _search.bundle!.mvs)

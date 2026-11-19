@@ -57,6 +57,7 @@ class SearchResultsView extends StatefulWidget {
     this.onOpenMv,
     this.mvs = const <SearchMv>[],
     this.onMenu,
+    this.selectedPlaylistId,
   });
 
   final rust.SearchBundleDto bundle;
@@ -78,6 +79,14 @@ class SearchResultsView extends StatefulWidget {
 
   /// 行尾 "..." 菜单
   final void Function(rust.SongDto)? onMenu;
+
+  /// 右栏正在看的歌单 id(主从分栏的"选中态"; null = 没有右栏)。
+  ///
+  /// 选中态用**外框**而不是行底色: 行底色已经是"正在播放"的词汇
+  /// ([NowPlayingHighlight] 的 primary 底 + 图标), 再叠一套同款底色会让用户分不清
+  /// "在播"与"在看"; 外框(2dp primary 描边 + 圆角)在视觉上与播放态正交, 也不需要
+  /// 给 SongRow 加第二个高亮参数。
+  final BigInt? selectedPlaylistId;
 
   @override
   State<SearchResultsView> createState() => _SearchResultsViewState();
@@ -269,6 +278,8 @@ class _SearchResultsViewState extends State<SearchResultsView> {
             cover: CoverArt(url: p.coverUrl, size: w, radius: 8),
             name: p.name,
             subtitle: '${p.creatorName} · ${p.trackCount} 首',
+            // 主从分栏: 右栏正在看的这一条加外框
+            selected: widget.selectedPlaylistId == p.id,
           ),
         );
       case _Section.podcasts:
@@ -380,40 +391,66 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     required Widget cover,
     required String name,
     required String subtitle,
+    bool selected = false,
   }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final card = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        cover,
+        const SizedBox(height: kCardGap),
+        Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodySmall,
+        ),
+        Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
     return SizedBox(
       width: tileWidth,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+      child: Semantics(
+        selected: selected,
+        child: Stack(
           children: [
-            cover,
-            const SizedBox(height: kCardGap),
-            Text(
-              name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(8),
+              child: card,
             ),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
+            // 选中外框: 画在卡片**之上**(IgnorePointer), 不参与布局 ⇒ 选中/未选中
+            // 的格子尺寸完全一致, 网格不会因为点了一条就重排。
+            if (selected)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    key: kGridCardSelectedKey,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: scheme.primary, width: 2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
 }
+
+/// 主从分栏里"右栏正在看的那一条"的外框(测试用它断言选中态真的画出来了)。
+const Key kGridCardSelectedKey = Key('grid-card-selected');
 
 /// 圆形头像(艺人/用户)在网格里的直径上限: 再宽也不放大,
 /// 否则 2 列时一张头像就占满半屏。
