@@ -1,0 +1,16 @@
+[package]
+name = "ncm-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "QuickJS 音源插件宿主(实验性, 未接入产品): lx 兼容层 + 沙箱预算 + ScriptProvider"
+
+[dependencies]
+ncm-domain.workspace = true
+ncm-provider.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# 默认特性只用 std: 不用 macro/loader/futures(我们同步泵 job queue, 不需要 AsyncContext),
+# 也不用 rust-alloc(保留 QuickJS 自带分配器, 这样 set_memory_limit 才真的生效)。
+rquickjs = { version = "0.12.2", default-features = false, features = ["std"] }
