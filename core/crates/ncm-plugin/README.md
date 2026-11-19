@@ -2,6 +2,10 @@
 
 > **状态: 实验性, 未接入产品。** 本 crate 没有 FFI 导出、没有注册进 `ProviderRegistry`、
 > 生产路径也没有接真实网络 transport —— 改动它不会影响 App 默认行为(不碰风控、不加包体风险)。
+> **未接入产品, 门禁 --exclude, 接入条件见 docs/remaining-batches.md §11.C。**
+> 具体是: `tools/ci-gates.sh` 的 rust-lint / rust-test 都带 `--exclude ncm-plugin`(不给
+> 产品门禁付 rquickjs 的编译时间), 本 crate 自己的门是 `tools/ci-gates.sh rust-plugin`
+> (clippy -D warnings + 全部 21 例), 动本目录时必须跑它。
 > 设计边界见 [`docs/archive/architecture-restart.md`](../../../docs/archive/architecture-restart.md)
 > 「插件化三层」「插件契约 v1 草案」「M5 插件」; 那里的 `platform/` 目录与 mpv 已作废, 以仓库现状为准。
 

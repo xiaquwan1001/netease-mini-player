@@ -10,8 +10,9 @@
 #   tools/ci-gates.sh list                 # 列出所有子命令
 #   tools/ci-gates.sh version              # 从 ui/pubspec.yaml 的 version: X.Y.Z+N 取 X.Y.Z
 #   tools/ci-gates.sh check-version <tag>  # tag / pubspec / kAppVersion 三者一致(否则退出 1)
-#   tools/ci-gates.sh rust-lint            # cargo fmt --check + clippy -D warnings
-#   tools/ci-gates.sh rust-test            # workspace 单测(vendor 联网 smoke 排除)
+#   tools/ci-gates.sh rust-lint            # cargo fmt --check + clippy -D warnings(--exclude ncm-plugin)
+#   tools/ci-gates.sh rust-test            # workspace 单测(vendor 联网 smoke 与 ncm-plugin 排除)
+#   tools/ci-gates.sh rust-plugin          # 【可选】ncm-plugin 自己的 clippy + 21 例测试(不进 verify)
 #   tools/ci-gates.sh dart-format          # dart format --output=none --set-exit-if-changed lib test
 #   tools/ci-gates.sh dart-analyze         # dart analyze(不用 flutter analyze, 见下)
 #   tools/ci-gates.sh write-guard          # tools/check-write-guard.sh
@@ -19,6 +20,7 @@
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh sheet-entry          # tools/check-sheet-entry.sh(浮层只许经 app_sheet.dart 入口)
+#   tools/ci-gates.sh global-slots         # tools/check-global-slots.sh(全局槽位只许声明方/home_wiring 写)
 #   tools/ci-gates.sh docs                 # tools/check-docs.sh(docs/** 与根 *.md 的相对链接死链 + docs 根索引覆盖)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
@@ -30,7 +32,7 @@
 #                                          # 含**交互级断言**(X11 注入焦点/按键/点击/改尺寸后断言存活+窗口属性不变,
 #                                          # 见 tools/smoke-desktop-headless 头注释), 本机约 **60s**
 #                                          # (vs 只有启动/单实例/信号时的 45s; 交互段 +15s)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + 五道 checker
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + 六道 checker
 #                                          # + flutter-test + android-unit + android-lint);
 #                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
 #
@@ -88,15 +90,34 @@ cmd_check_version() {
   echo "版本号一致: $pub"
 }
 
+# ncm-plugin 为什么显式 --exclude(审计 7.9, 2026-11-20):
+#   它是实验性插件宿主, **没有 crate 依赖它**(不进 ncm_ffi/APK), 但每轮 rust 门都要为它
+#   编 rquickjs(-sys 里还有一份 quickjs C)+ 跑 21 例, 是纯净成本。所以 verify 的两道 rust 门
+#   把包排除掉, 它自己的门单独成 rust-plugin(碰它时才跑, 覆盖口径不减)。
+#   不走「从 workspace members 移出」: 移出后 version/edition/license 与依赖的
+#   .workspace = true 继承字段全部解析失败, 得把它改成独立 workspace(自带 [workspace]
+#   并把所有 path 依赖重写), 而现成的 `cargo test -p ncm-plugin --manifest-path
+#   core/Cargo.toml` 也就跑不了了。--exclude 一行达到同样耗时收益且不丢能力。
+#   `cargo fmt --all` 仍然覆盖它(只读不编, 零成本), 所以格式化门没有盲区。
 cmd_rust_lint() {
   run cargo fmt --manifest-path core/Cargo.toml --all -- --check
-  run cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
+  run cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --exclude ncm-plugin --locked -- -D warnings
 }
 
 cmd_rust_test() {
   # --exclude ncm-api-rs: vendor 的 tests/integration.rs 是匿名真实联网 smoke, 会被上游
   # 风控/公网抖动弹回非 200(与改动无关), 本地另跑(见 tools/ci.sh)。
-  run cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
+  # --exclude ncm-plugin: 未接入产品, 见 cmd_rust_lint 上方注释; 单独门是 rust-plugin。
+  run cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --exclude ncm-plugin --locked
+}
+
+# ncm-plugin 的独立门(不进 verify): 摘出去的是耗时, 不是覆盖 ——
+# clippy -D warnings + 全部 21 例(沙箱 14 / provider 6 / doctest 1) 在碰这个 crate 时必须过。
+# 用法: tools/ci-gates.sh rust-plugin  (改了 core/crates/ncm-plugin/** 就跑一次)
+cmd_rust_plugin() {
+  # fmt 不在这里重复: rust-lint 的 cargo fmt --all 已覆盖本 crate(不编译, 零成本)。
+  run cargo clippy --manifest-path core/Cargo.toml -p ncm-plugin --all-targets --locked -- -D warnings
+  run cargo test --manifest-path core/Cargo.toml -p ncm-plugin --locked
 }
 
 cmd_dart_format() {
@@ -127,6 +148,13 @@ cmd_tokens() {
 cmd_sheet_entry() {
   echo "+ bash tools/check-sheet-entry.sh"
   bash "$ROOT/tools/check-sheet-entry.sh"
+}
+
+# 全局槽位门(审计 7.6): 进程级 ValueNotifier(顶格声明)只许在"声明它的文件"与
+# home/home_wiring.dart 里赋值, 其余地方一律走声明方的 publish* 入口(见脚本头注释)。
+cmd_global_slots() {
+  echo "+ bash tools/check-global-slots.sh"
+  bash "$ROOT/tools/check-global-slots.sh"
 }
 
 # 文档门: docs/**/*.md + 仓库根所有 *.md 的相对链接死链, 以及 docs/ 根文件的索引覆盖
@@ -247,6 +275,7 @@ cmd_verify() {
   cmd_tokens
   cmd_row_padding
   cmd_sheet_entry
+  cmd_global_slots
   cmd_docs
   cmd_flutter_test
   cmd_android_unit
@@ -269,6 +298,7 @@ case "$sub" in
   check-version) cmd_check_version "$@" ;;
   rust-lint)     cmd_rust_lint ;;
   rust-test)     cmd_rust_test ;;
+  rust-plugin)   cmd_rust_plugin ;;
   dart-format)   cmd_dart_format ;;
   dart-analyze)  cmd_dart_analyze ;;
   write-guard)   cmd_write_guard ;;
@@ -276,6 +306,7 @@ case "$sub" in
   tokens)        cmd_tokens ;;
   row-padding)   cmd_row_padding ;;
   sheet-entry)   cmd_sheet_entry ;;
+  global-slots)  cmd_global_slots ;;
   docs|doc)      cmd_docs ;;
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;

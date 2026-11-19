@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'layout.dart' show rowExtentFor;
+import 'lru.dart';
 import 'marquee_text.dart'
     show kMarqueeMinOverflow, MarqueePlayGate, MarqueeScroll;
 
@@ -635,8 +636,9 @@ class _KaraokeLayout {
 }
 
 /// 小容量 LRU: 同一行文本 + 宽度 + 样式在多次重绘间复用排版结果。
-final Map<String, _KaraokeLayout> _layoutCache = <String, _KaraokeLayout>{};
 const int _layoutCacheMax = 8;
+final LruMap<String, _KaraokeLayout> _layoutCache =
+    LruMap<String, _KaraokeLayout>(maxEntries: _layoutCacheMax);
 
 _KaraokeLayout _layoutFor({
   required String text,
@@ -653,11 +655,8 @@ _KaraokeLayout _layoutFor({
       '|${scaler.scale(karaokeFontSize)}|${direction.name}'
       '|${karaokeActiveTextStyle.fontSize}|${karaokeActiveTextStyle.fontWeight}'
       '|${baseColor.toARGB32()}|${sungColor.toARGB32()}';
-  final hit = _layoutCache.remove(key);
-  if (hit != null) {
-    _layoutCache[key] = hit; // LRU touch
-    return hit;
-  }
+  final hit = _layoutCache[key]; // 命中即触碰 LRU
+  if (hit != null) return hit;
   TextPainter build(Color color) => TextPainter(
     text: TextSpan(
       text: text,
@@ -707,10 +706,7 @@ _KaraokeLayout _layoutFor({
     rects.add(r);
   }
   final layout = _KaraokeLayout(base: base, sung: sung, wordRects: rects);
-  if (_layoutCache.length >= _layoutCacheMax) {
-    _layoutCache.remove(_layoutCache.keys.first);
-  }
-  _layoutCache[key] = layout;
+  _layoutCache.put(key, layout);
   return layout;
 }
 

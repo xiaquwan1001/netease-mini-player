@@ -6,6 +6,7 @@ import 'app_settings.dart';
 import 'home/home_page.dart' show HomePage;
 import 'layout.dart' show ContentWidthLimit, kRailWidth;
 import 'lifecycle_guard.dart' show runPostFrameIfAlive;
+import 'now_playing.dart' show nowPlayingSongId;
 import 'player_bar.dart';
 import 'popup_routes.dart' show dismissPopupRoute;
 import 'song_actions.dart';
@@ -14,6 +15,10 @@ import 'toast.dart';
 
 // 全局壳: 动作宿主/页面层数/常驻底部条槽位 + 根 Overlay + MaterialApp 装配。
 // 从 main.dart 原样搬出(2026-11 拆壳 S1), 行为/时序/文案零改动。
+//
+// **全局槽位只许在本文件(或 home/home_wiring.dart)里写**: 这里每个 publish* 都是
+// "帧后 + 存活守卫"的唯一写入口, 门禁 tools/check-global-slots.sh 会拦住别的文件
+// 直接 `xxxSlot.value = ...`(审计 7.6)。
 //
 // 跨文件符号: `_actionsHost`/`_pageDepth`/`_publishBottomBar` 在
 // src/home/home_page.dart 的 _HomePageState 里被直接读写, 而 Dart 的私有成员不跨库,
@@ -206,6 +211,34 @@ final ValueNotifier<PlayerBarActions?> playerBarActions =
 /// 它的旧导航栏(以及旧闭包)不能再写进全局槽位, 见 [runPostFrameIfAlive]。
 void publishBottomBar(BuildContext context, Widget? bar) {
   runPostFrameIfAlive(context, () => playerBarSlot.value = bar);
+}
+
+/// 投递全局动作宿主([actionsHost] 的**唯一写入口**)。
+///
+/// 与 [publishBottomBar] 同口径(帧后 + [BuildContext.mounted] 判据): 宿主是页面
+/// 生成的一束菜单回调, 页面销毁后它的闭包还指着死页面的 State —— 之后再点 "..."
+/// 就是在已销毁实例上 setState。原先两处(home_page 的启动与"重建宿主"回调)各自
+/// 直接写槽位, 靠人记守卫; 收口到本函数后漏写就编译不到全局槽位(见
+/// tools/check-global-slots.sh)。
+void publishActionsHost(BuildContext context, SongActionHost? host) {
+  runPostFrameIfAlive(context, () => actionsHost.value = host);
+}
+
+/// 投递播放条数据快照 + 全局"正在播放"样本([playerBarData] / [nowPlayingSongId]
+/// 的**唯一写入口**)。
+///
+/// 两者必须落在**同一个**帧后回调里(顺序: 快照 → 高亮), 与拆分前一致; 拆成两次
+/// 投递会让同一帧里多出一次通知。帧后 + 存活判据同 [publishBottomBar]: 首页在这一帧
+/// 之后被销毁时, 旧实例的数据/播放态不准再写进全局槽位。
+void publishPlayerBarSnapshot(
+  BuildContext context, {
+  required PlayerBarData? data,
+  required BigInt? nowPlayingId,
+}) {
+  runPostFrameIfAlive(context, () {
+    playerBarData.value = data;
+    nowPlayingSongId.value = nowPlayingId;
+  });
 }
 
 /// 应用外壳: Navigator 与常驻底部条一起放进一个全屏 Overlay。

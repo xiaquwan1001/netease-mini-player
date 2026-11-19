@@ -22,6 +22,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'lru.dart';
+
 /// 量化位数: 5-bit/通道 → 最多 32768 个桶
 const int kQuantBits = 5;
 
@@ -362,8 +364,8 @@ Future<CoverPalette?> paletteFromImage(ui.Image image) async {
 
 // ---------------------------------------------------------------- url 解析 + LRU 缓存
 
-final LinkedHashMap<String, Future<CoverPalette?>> _paletteCache =
-    LinkedHashMap();
+final LruMap<String, Future<CoverPalette?>> _paletteCache =
+    LruMap<String, Future<CoverPalette?>>(maxEntries: kPaletteCacheMax);
 
 /// 清空调色缓存(测试用)
 @visibleForTesting
@@ -377,16 +379,10 @@ Future<CoverPalette?> paletteFromUrl(
   ImageProvider<Object>? provider,
 }) async {
   if (url == null || url.isEmpty) return null;
-  final cached = _paletteCache.remove(url);
-  if (cached != null) {
-    _paletteCache[url] = cached; // 触碰 LRU
-    return cached;
-  }
+  final cached = _paletteCache[url]; // 命中即触碰 LRU
+  if (cached != null) return cached;
   final future = _computeForUrl(url, provider ?? NetworkImage(url));
-  _paletteCache[url] = future;
-  while (_paletteCache.length > kPaletteCacheMax) {
-    _paletteCache.remove(_paletteCache.keys.first);
-  }
+  _paletteCache.put(url, future);
   return future;
 }
 

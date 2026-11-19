@@ -34,7 +34,6 @@ import '../keystore.dart';
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
-import '../lifecycle_guard.dart' show runPostFrameIfAlive;
 import '../lyric.dart';
 import '../marquee_text.dart';
 import '../medal_wall.dart';
@@ -43,7 +42,6 @@ import '../mine_view.dart';
 import '../net_retry.dart';
 import '../new_release_page.dart';
 import '../notification_mode.dart';
-import '../now_playing.dart' show nowPlayingSongId;
 import '../platform.dart';
 import '../playback.dart';
 import '../playback_bridge.dart';
@@ -224,7 +222,8 @@ class _HomePageState extends State<HomePage> {
       markLiked: _markLiked,
       setLiked: (ids) => setState(() => _liked = ids),
       clearLiked: () => _liked = <BigInt>{},
-      rebuildActionsHost: () => actionsHost.value = _songActions.buildHost(),
+      rebuildActionsHost: () =>
+          publishActionsHost(context, _songActions.buildHost()),
       setSearchBusy: (busy) => _search.setBusy(busy),
       currentTrackIdOf: () => _current?.id,
       touchInteraction: _touchInteraction,
@@ -270,8 +269,8 @@ class _HomePageState extends State<HomePage> {
     sleepTimer.onExpire = _onSleepTimerExpired;
     // 歌曲动作宿主(拆壳 S5): 红心集合/登录态/队列/当前曲目都是页面状态,
     // 面板与路由跳转要 BuildContext —— 全部按回调注入, 装配逻辑在
-    // src/home/song_action_wiring.dart; 宿主刷新时机仍是下面三处
-    // actionsHost.value = _songActions.buildHost()。
+    // src/home/song_action_wiring.dart; 宿主刷新时机仍是三处, 但一律走
+    // publishActionsHost(context, ...)(帧后 + 存活守卫, 见 app_shell.dart)。
     _songActions = SongActionWiring(
       contextOf: () => context,
       toast: _toast,
@@ -534,7 +533,7 @@ class _HomePageState extends State<HomePage> {
       unawaited(enforceCacheLimit());
       if (!mounted) return;
       setState(() => _info = info);
-      actionsHost.value = _songActions.buildHost();
+      publishActionsHost(context, _songActions.buildHost());
       // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
       unawaited(_coordinator.restoreFromDisk(info.dataDir));
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
@@ -1784,8 +1783,9 @@ class _HomePageState extends State<HomePage> {
   ///
   /// 没有曲目时不投(Media3 连接前拿到的是一份空状态, 空态不占位置)。
   ///
-  /// 帧后回调一律过 [runPostFrameIfAlive](U-05): 首页在这一帧之后被销毁时,
-  /// 旧实例的数据/播放态不准再写进全局槽位(播放条、列表高亮会读到死页面的状态)。
+  /// 写入走 app_shell.dart 的 publishPlayerBarSnapshot(帧后 + 存活守卫, U-05):
+  /// 首页在这一帧之后被销毁时, 旧实例的数据/播放态不准再写进全局槽位(播放条、
+  /// 列表高亮会读到死页面的状态)。帧后投递与"同帧一次通知"的口径都在那里。
   void _publishPlayerBar(
     BuildContext context,
     PlayerView? player,
@@ -1817,13 +1817,14 @@ class _HomePageState extends State<HomePage> {
         hasTrack: showBar,
       ),
     );
-    runPostFrameIfAlive(context, () {
-      playerBarData.value = data;
-      // 全局"正在播放"样本(见 src/now_playing.dart): 所有列表行的播放态高亮
-      // 都读它 —— 以前各页自己传 currentTrackId, 少接一处(如完整日推歌单)
-      // 就不高亮。帧后写, 避免在 build 期间通知下游 setState。
-      nowPlayingSongId.value = showBar ? (current?.id ?? player.trackId) : null;
-    });
+    // 快照 + 全局"正在播放"样本(见 src/now_playing.dart): 所有列表行的播放态
+    // 高亮都读它 —— 以前各页自己传 currentTrackId, 少接一处(如完整日推歌单)
+    // 就不高亮。帧后写, 避免在 build 期间通知下游 setState。
+    publishPlayerBarSnapshot(
+      context,
+      data: data,
+      nowPlayingId: showBar ? (current?.id ?? player.trackId) : null,
+    );
   }
 
   /// 首页底部导航栏的构建结果, 由根布局渲染(见 [playerBarSlot])。

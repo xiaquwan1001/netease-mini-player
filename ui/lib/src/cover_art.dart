@@ -9,6 +9,7 @@ import 'app_settings.dart';
 import 'app_sheet.dart';
 import 'image/url_rewrite.dart';
 import 'image_io.dart';
+import 'lru.dart';
 import 'net_retry.dart';
 import 'state_views.dart';
 import 'toast.dart';
@@ -46,8 +47,10 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
     ..userAgent = kImageUserAgent
     ..connectionTimeout = const Duration(seconds: 15);
 
-  /// 已下载的原始字节(简单 LRU, 200 张上限): 避免 provider 重建时重复拉图.
-  static final Map<String, Uint8List> _bytes = <String, Uint8List>{};
+  /// 已下载的原始字节(LRU, 200 张上限): 避免 provider 重建时重复拉图.
+  static final LruMap<String, Uint8List> _bytes = LruMap<String, Uint8List>(
+    maxEntries: 200,
+  );
 
   static Future<Uint8List> _fetch(String url) async {
     final cached = _bytes[url];
@@ -64,8 +67,7 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
       );
     }
     final bytes = await consolidateHttpClientResponseBytes(resp);
-    if (_bytes.length >= 200) _bytes.remove(_bytes.keys.first);
-    _bytes[url] = bytes;
+    _bytes.put(url, bytes);
     return bytes;
   }
 

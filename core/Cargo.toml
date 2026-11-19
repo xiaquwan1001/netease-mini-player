@@ -5,6 +5,10 @@ members = [
     "crates/ncm-provider",
     "crates/ncm-service",
     "crates/ncm-playback",
+    # 实验性插件宿主(未接入产品: 无 crate 依赖它, 不进 ncm_ffi/APK)。
+    # 门禁 rust-lint/rust-test 用 --exclude ncm-plugin 跳过编译(审计 7.9), 独立门是
+    # tools/ci-gates.sh rust-plugin; 保留 workspace 成员是为了 cargo test -p ncm-plugin
+    # 与 .workspace = true 继承字段继续可用。接入条件见 docs/remaining-batches.md §11.C。
     "crates/ncm-plugin",
     "crates/ncm-cli",
     "crates/ncm-ffi",

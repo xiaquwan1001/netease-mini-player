@@ -15,7 +15,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201074%20%2B%20Rust%20300-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%201401%20%2B%20Rust%20369-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -69,16 +69,19 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 
 | 分组 | 已实现 |
 |---|---|
-| 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放模式(含心动档)、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU、自动检查更新(off/每日/每周/每月) |
+| 播放 | 一行播放条、播放队列(跳转/拖拽排序/清空/存为歌单)、播放顺序 4 档(列表循环/单曲循环/顺序/随机)、心动模式与私人 FM 是**独立引导态**(FM 自动续播、专属通知图标)、MV 播放(Android 内嵌 VideoView / 桌面系统播放器)、边听边存 + 缓存上限 LRU、自动检查更新(off/每日/每周/每月) |
+| 推荐 | 顶栏三格固定「歌单广场 / 心动模式 / 私人 FM」;每日推荐页签自然宽不裁字、播客卡副标题两行;历史日推 = 在线日期 + 本地按天缓存合并去重(歌单与单曲同落盘 v2 格式, 兼容旧 v1),上游重复日的歌单只留一行 |
 | 长文字 | 统一 `AdaptiveText`:歌名/歌单名/专辑名/艺人名放不下时**单向跑马灯**(放得下不动),副标题走 ellipsis,封面卡标题 2 行 |
 | 歌词 | 行级滚动高亮、**逐字歌词带字内进度渐变**(双层裁剪 + 行内 60fps 插值)、**默认 AMLL TTML 逐字**(人工审核逐字库; 设置里可切「自动择优」/「网易云优先」)、翻译开关、歌词多选 → 分享卡片、封面取色背景 |
-| 歌单 | 歌单广场/排行榜、收藏/新建/编辑/删除、批量加曲、歌单内搜索点歌策略(全列表/追加队列)、我喜欢按收藏时间排序、最近播放四分类 |
+| 歌单 | 歌单广场按**官方两级分类分组**浏览(语种/风格/场景/情感/主题;分组与子分类名全部取自 `/api/playlist/catlist`, 后台调整 UI 自动跟随)、热门/精品两种模式互斥、分类筛选条常驻;排行榜;收藏/新建/编辑/删除、批量加曲、歌单内搜索点歌策略(全列表/追加队列)、我喜欢按收藏时间排序、最近播放四分类 |
 | 社区 | 评论(热门/全部/楼层回复/点赞/删除/IP 归属)、私信与 @我(只读)、关注动态(游标翻页补历史)、他人/艺人动态(`/api/event/get/<uid>`, 匿名可取)、关注/粉丝列表、动态配图预览(1 大图 / 2 两列 / 3+ 三列)、动态/评论分享卡片(可选水印)、转发、签到 |
-| 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB |
+| 桌面 | Linux(deb/AppImage/tar.gz)与 Windows(setup.exe/zip)同一套 rodio 后端(ALSA/WASAPI)、OLED 纯黑主题、精细音量 -40..0 dB、定时关闭(立刻/播完这首)、关闭主窗口可选退出或最小化到托盘(托盘能力由原生探测, 不支持时如实降级) |
 | 主页 | 艺人与用户共用同一套主页骨架:高清横幅(按屏宽×DPR×清晰度档位取图, 点开全屏可保存原图)、身份卡(简介在昵称下、统计行占整卡宽:关注/粉丝/等级/作品数)、声明式 tab(艺人=推荐单曲/全部歌曲/专辑/MV/动态 · 用户=动态/我喜欢/歌单);「我的」可看/改简介与动态 |
 | 会员只读 | 黑胶会员卡/成长值/本周签到/任务、数字专辑已购、云贝签到(只读展示, 不碰支付) |
-| 云盘 | 音乐云盘列表(容量/大小)、播放、删除、上传本地音频(md5 查重/秒传 → NOS 上传 → 云端转码 → 发布), 上传进度提示; 分片上传暂未做 |
-| 搜索与发现 | 搜索(历史/联想/热词榜/多板块, 含 MV 分类)、每日推荐、私人 FM、心动模式、新歌新碟分地区、风格推荐、播客广场(电台已并入播客口径) |
+| 云盘 | 音乐云盘列表(容量/大小)、播放、删除、上传本地音频(md5 查重/秒传 → NOS 上传 → 云端转码 → 发布), 上传进度提示;分片上传只落地了规划/续传引擎,生产路径仍是单请求(缺音乐云盘桶的分片 HTTP 形状, 需真机抓包取证) |
+| 搜索与发现 | 搜索(历史 / **猜你想搜**格子 / 热门搜索可开关 / 联想 / 多板块含 MV 分类;落地页含排行榜)、每日推荐、私人 FM、心动模式、新歌新碟分地区、风格推荐、播客广场(电台已并入播客口径) |
+| 布局 | **三档响应式**(窄 <600 / 中 600–899 / 宽 ≥900):内容宽上限 840、宽档双列与歌单详情主从分栏、宽档 NavigationRail;300dp 窄屏与 1.25 字号有 golden 锁 |
+| 可扩展性 | 音源插件宿主切片 1(`ncm-plugin`:rquickjs 宿主 + lx 兼容层 + 沙箱预算),仅在 crate 内落地——未注册路由、不进 `ncm_ffi`/APK |
 | 音质 | 响度均衡(EBU R128 + ReplayGain 2.0)、AutoEQ 曲线导入(PK·LS·HS)、淡入淡出、硬解/软解、封面清晰度三档 |
 
 > 会员/签到/评论等写操作均只做经实测验证的子集, 支付与兑换明确不做(见 `docs/remaining-batches.md` §11 E)。
@@ -119,7 +122,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 | Windows x64 | `*-setup.exe` / `*-x64.zip` | 安装向导 / 解压运行 `minincm.exe` |
 | 校验 | `SHA256SUMS.txt` | `sha256sum -c SHA256SUMS.txt` |
 
-每次打 tag 由 Release 流水线统一产出六种资产(v0.3.2 实测: APK 28.5 MB / tar.gz 15.0 MB / AppImage 14.6 MB / deb 11.1 MB / Windows zip 17.0 MB / setup.exe 13.7 MB)。
+每次打 tag 由 Release 流水线统一产出上表资产(APK / tar.gz / deb / AppImage / Windows setup.exe / zip + `SHA256SUMS.txt`);确切文件名以 [`release.yml`](.github/workflows/release.yml) 的拼装规则为准,体积见各次 Release 页面。
 
 ## 快速开始
 
@@ -182,21 +185,22 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **298** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **369** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
 | `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
-| `flutter test --exclude-tags network` | **1074** 通过 / 0 失败(**18** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1401** 通过 / 0 失败(**21** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | `tools/check-tokens.sh --strict` | OK(间距/圆角/字号只允许 `layout.dart` 的有限集合) |
-| 接口覆盖 | **135/136**(FFI 导出 161, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
+| 接口覆盖 | **135/136**(FFI 导出 **158**, 6 个无 UI 入口: 4 个有意保留 / 2 个待产品决策; 唯一未接入的 endpoint `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
+| Android 单测 / lint | `testDebugUnitTest` **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning**(9 条全是依赖版本提示), 两道都已进 `ci-gates.sh verify` |
 | 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing.md` |
 
 上表这些命令**只在 `tools/ci-gates.sh` 里实现一次**(`bash tools/ci-gates.sh list` 看全部子命令):
 本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
 调的都是同一处 —— 发版门不会再比 CI 弱(token / write-guard / format / clippy / golden 在 CI 与发版里都跑)。
 
-## 项目进度(当前版本 v0.26.2 —— 版本号唯一事实来源是 `ui/pubspec.yaml`)
+## 项目进度(版本号唯一事实来源是 `ui/pubspec.yaml`; 当前已发布线见 [Releases](https://github.com/xiaquwan1001/netease-mini-player/releases/latest))
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
@@ -206,7 +210,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 播放 | Media3(Android)/ rodio(Linux ALSA · Windows WASAPI)、响度均衡、AutoEQ、缓存 | ✅ |
 | UI | 五栏 IA、推荐/搜索/关注/我的/设置、播放条一行、歌曲详情页、分享卡片 | ✅ |
 | 真机验收 | 听感项(EQ 削波 / 淡入手感 / 响度均衡 A/B / 硬解)与 MV 播放均已于 2026-11-10 在真机通过 | ✅ |
-| 待办 | 视觉人工过目、AppImage 桌面集成、打包后冒烟(deb/keyring)、L 级立项(一起听/听歌识曲; 云盘主体已落地, 分片上传待补) —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
+| 待办 | 视觉人工过目、打包后冒烟(deb/keyring)、L 级立项(一起听/听歌识曲; 云盘主体已落地, 分片上传待真机抓包补齐) —— 清单见 [`docs/remaining-batches.md`](docs/remaining-batches.md) **§11** | ⏳ |
 
 进度明细与每批验收证据见 `docs/PROGRESS.md`。
 

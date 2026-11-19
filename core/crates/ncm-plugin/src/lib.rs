@@ -4,6 +4,9 @@
 //!
 //! - **实验性, 未接入产品**: 没有 FFI 导出, 没有注册进 `ProviderRegistry`,
 //!   也没有真实网络 transport —— 产品默认路径完全不受影响.
+//! - **门禁隔离**: 未接入产品, `tools/ci-gates.sh` 的 rust-lint/rust-test 用
+//!   `--exclude ncm-plugin` 跳过它(审计 7.9), 独立门是 `tools/ci-gates.sh rust-plugin`;
+//!   接入条件见 `docs/remaining-batches.md` §11.C。
 //! - **不新增 product trait**: `ScriptProvider` 实现的是 `ncm-provider` 里既有的
 //!   `Provider`(本切片落地 `songUrl` + `search` 两个能力).
 //! - **协议/加解密仍归 vendor**: 插件层只是宿主, 不碰网易云 eapi/weapi.
