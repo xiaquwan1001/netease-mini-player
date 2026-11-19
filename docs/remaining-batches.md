@@ -165,12 +165,12 @@
 
 | 序 | 项 | 说明 | 成本 |
 |---|---|---|---|
-| 1 | 视觉人工过目 | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
+| ~~1~~ | ~~视觉人工过目~~ ✅ **已通过(2026-11-19 用户: 视觉页面全部通过)** | 账号页层级 / 新歌新碟合并块 / 风格 chips 归属 / 全页 AppBar+TabBar 高度 / 设置页密度 / 我的页会员行位置 —— 已按反馈改过两轮, 仍需人眼确认 | S(需人眼) |
 | 2 | 他人主页「常听」排行接页面 | 只剩 `userPlayRanking`(他人听歌排行)无 UI 入口 —— `userEvents` 已接(`ui/lib/src/artist_page.dart:225`、`ui/lib/src/user_page.dart:317`);实测他人排行匿名态恒空、`event/get` 匿名 301 需登录 ⇒ **接了也看不到东西**, 等有登录态真机再定。另: `/api/user/playlist` 的 `subscribed` 恒 null(实测), 拆「创建/收藏」需改用 `playlist_detail` | S~M |
-| 3 | deb 运行期最小桌面冒烟 | 依赖闭包已静态核查 100% 覆盖; **bundle 侧 2026-11-17 已 dbus+xvfb 真跑过**(单实例 14ms 退、目录迁移), 只剩「装 `.deb` 后点一次」; 字体/插件等运行期数据文件仍要人眼看 | S |
-| 4 | Windows / 桌面扫码登录冒烟 | 同一份 Rust 链路, 本机没有 Windows 桌面, 只能 CI 或用户机验 | S |
-| 5 | 桌面 keyring 装包后冒烟 | secret-service 已在真实 D-Bus 下过单测, `.deb`/AppImage 装后未点 | S |
-| 6 | **诊断 Worker 落地**(用户手动) | 代码与 8 步部署说明已在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
+| ~~3~~ | ~~deb 运行期最小桌面冒烟~~ ✅ **已完成(2026-11-19 用户: deb 安装包已完成)** | 依赖闭包静态核查 100% 覆盖 + bundle 侧 2026-11-17 dbus+xvfb 真跑 + 装 `.deb` 实跑 | — |
+| 4 | ~~Windows / 桌面扫码登录冒烟~~ **归为 issue 反馈驱动(2026-11-19 用户口径)**: Windows 侧不是人工项, **收不到 issue 不主动处理** | 同一份 Rust 链路; 本机无 Windows 桌面。触发条件 = 用户报 issue | — |
+| ~~5~~ | ~~桌面 keyring 装包后冒烟~~ ✅ **随 deb 实装运行一并验证(2026-11-19 用户确认 deb 完成)**; 若后续出现凭据相关 issue 再单独立项 | secret-service 真实 D-Bus 单测 + 装包实跑 | — |
+| 6 | **诊断 Worker** —— ✅ 部署已完成(2026-11-18, Worker 正式地址已进 `app_meta.dart: kDiagUploadEndpoint`); 只剩**自定义域**(workers.dev 大陆超时)与 **PAT 轮换**(用户) | 原部署说明(已执行, 留档)在 `tools/diag-worker/`; 需要用户: 建 fine-grained PAT(只勾 Issues: write + 单仓库) → `wrangler secret put GH_TOKEN` → 部署 → 绑自定义域(workers.dev 国内不稳) → 把 `https://<域>/diag` 填进 `app_meta.dart: kDiagUploadEndpoint` 再发版。**仓库/客户端零 token** | S(需用户) |
 
 > 原表里 §11.A-2(A) / A-7 / A-8 / A-9 / A-10 已于 2026-11-14~17 全部清零, 一行结论见下面 §11.B。
 
@@ -195,7 +195,7 @@
 
 视频/最近播放页页签(需视频播放器) · 听歌识曲(录音 + 指纹) · **云盘分片上传**(主体已接入, 只差 >单请求上限的大文件分片; 旧编号 B13 与「B13 逐字歌词 TTML」撞号, 以后只称「云盘」) ·
 MV 列表页/视频详情(播放器已有) · 一起听(房间 + 心跳, 需双端联调) · 动态发送(发包 + 审核语义) ·
-云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`)。
+云贝任务(兑换类不碰) · 音源插件化(QuickJS 宿主 + lx 兼容层, 设计边界见 `docs/archive/architecture-restart.md`) —— **2026-11-19 用户批准, 切片 1(ncm-plugin + rquickjs 沙箱 + ScriptProvider, 不接 UI/FFI)在飞: 车道 `lane/plugin-host`**。
 
 ### D. 明确不做
 
@@ -322,7 +322,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 验收: `rg 'readAsStringSync' ui/test` 只剩读 `settings.json` / `pubspec.yaml` 的用例; 该测试文件仍能拦住回退。
 
-### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— **第一步已完成(2026-11-18)**
+### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— ✅ **两步均完成(2026-11-19)**
 
 现况: `ui/lib/src/app_settings.dart` **732 → 584 行**(当时口径; 2026-11-18 队列批加了 `queueSwipeHintDismissed` 后现 **594** 行, `wc -l` 实测), 编解码已按域拆到同库 part
 `ui/lib/src/app_settings_codec.dart`(七个 `_apply*` 同构于唯一一份 `toJson()`: 外观 / 播放 / 搜索
@@ -330,6 +330,10 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 门: `ui/test/app_settings_codec_roundtrip_test.dart`(4 例) —— 落盘 key 面 = 期望表 + 全字段
 写→读往返 + 二次落盘字节稳定 + 缺字段向后兼容 + `schemaVersion<2` 迁移。加设置项现在是
 「字段 + 某域 `_apply` + `toJson` + 期望键表」四处且**漏一处测试就红**。
+
+**第二步已完成(2026-11-19, 车道 `lane/settings-snapshot`, 合并 `ade2b97`)**: `@immutable AppSettingsSnapshot`(32 字段; 可空字段用 `_notPassed` 哨兵区分「没传/传 null」) + 单例持 `_snapshot`、保留全部同名 getter/setter(全仓读点零改动); 写入口统一 `_update(copyWith)` → `diffTo` 算七域变更集 → `_dispatch` 只通知订阅了受影响域的 `addScopedListener` 回调(全体 `addListener` 契约不变, 空写不通知); `update()`/`load()` 用批量窗口一次一条通知; 落盘仍整份 `toJson()`(键面/往返/字节稳定门未改)。实证迁移 4 处高频消费点(根 `MaterialApp` 只订外观域 ⇒ 根治音量拖动重建整棵树 · 播放与音质页 + `HomeWiring` 订播放域 · 诊断页订诊断域)。门: Dart **1293→1299**(`app_settings_scoped_notify_test.dart` 6 例: 单域只通知该域 / 20 次音量写播放 20 外观 0 / 空写 0 / 旧快照不变 / ScopedBuilder 重建次数), Rust 325, golden 20 未重出。
+
+**仍开着(小尾)**: `settings_view.dart` 总设置页与 `SettingsScope` 跨多域, 未迁到单域(迁反而是错的) ⇒ 留作「按域拆界面/搜索/缓存/平台/更新分块订阅」的后续切片。
 
 **未做(仍开着)**: 字段本身还是可变单例, `notifyListeners()` 仍靠调用方手工发(高频
 音量拖动会带动全页重建, 只是封面用 `ValueNotifier` 单独避开了)。要做就做**不可变快照 +
@@ -395,12 +399,8 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 |---|---|---|---|
 | ~~**U-01**(P1)~~ ✅ **已落(v0.22.1)** | `NcmRouteObserver` 升级为 `PopupRoute` 登记表 + 统一 `dismissAllPopups()`, `_onTabSelected` 只调一处; 实测 `ui/lib/src` 44 处弹层全走登记表(5 类漏项覆盖), 5 例新测试 | 已做 | — |
 | ~~**U-02**(P2)~~ ✅ **已落(v0.22.1)** | `QueueSheetController` 持有自己的 route, `close()` 用 `dismissPopupRoute`(`isCurrent ? pop : removeRoute`)不再 `maybePop()`; 登录弹层收敛同一实现。回归测试实证「换回旧写法就红」 | 已做 | — |
-| ~~**U-04**(P2)~~ ✅ **已落(v0.22.1, 听感待真机)** | Dart 起播前暂停歌曲 + `MvPlayerActivity` 申请/放弃音频焦点 + 歌曲 ExoPlayer 开 `handleAudioFocus`(media3 1.9.4 默认 false, 已 `javap` 证实)。**需用户真机验 3 步**(见 PROGRESS 2026-11-18(十)) | 真机听感受限于用户 | — |
-| ~~U-01-old / U-02-old / U-04-old~~ ✅ 见上三行(已落) | (保留作历史说明) | — | — |
-| **U-01-old**(P1) | 导航栏 + 播放条住在 Navigator **外面** ⇒ 弹层遮罩盖不住它们, 浮层开着仍能点 tab; 「切页收起浮层」只在 `_onTabSelected`(`home_page.dart`)一处手写, 实测还漏 5 类(歌曲动作面板 / 收藏到歌单 / 分享 / 关注页艺人筛选 / 更新弹窗) | ① 用户再反馈「浮层没关掉/点到了底下的东西」; ② 或做 U-03 统一入口时一并收口 | S~M(统一「切页先关全部浮层」的单一入口 + 补 5 类 + 测试) |
-| **U-02**(P2) | `QueueSheetController.close()` 用 `maybePop()` ⇒ 队列面板上压着「清空确认框」时切 tab 只关确认框(登录弹层已有 `isCurrent/removeRoute` 的正确写法) | 与 U-01 同批做(同一处切 tab 路径) | S |
+| ~~**U-04**(P2)~~ ✅ **已落(v0.22.1); 听感 2026-11-19 用户确认通过(无双音源并发)** | Dart 起播前暂停歌曲 + `MvPlayerActivity` 申请/放弃音频焦点 + 歌曲 ExoPlayer 开 `handleAudioFocus`(media3 1.9.4 默认 false, 已 `javap` 证实)。**需用户真机验 3 步**(见 PROGRESS 2026-11-18(十)) | 真机听感受限于用户 | — |
 | ~~**U-03**(P2)~~ ✅ **已落(v0.25.0)** | 新 `showAppSheet`/`showAppDialog` 统一入口, 已迁 31/38 处(剩 7 处冻结: podcast 详情 1 / 我的 1 / home 5); 新门 `tools/check-sheet-entry.sh` 已接 `ci-gates verify` + CI, 待迁名单不许增长 | 第二批跟随表的 7 处一起迁 | 剩余 S |
-| **U-04**(P2) | 播 MV 不暂停歌曲, MV Activity 无音频焦点 ⇒ 双音源并发(**代码事实确定, 听感待真机**) | 用户报「看 MV 时歌还在放/两个声音」 | S(暂停 + 请求焦点, 需真机验) |
 | ~~U-05/U-06(P2)~~ ✅ **已落(v0.25.0)** | `runPostFrameIfAlive` 守卫帧后写槽; `HomeWiring` 改实例栈 `_alive`(主人 detach 交还仍活着的上一个)。红→绿已实证(还原补丁后 `A→B→B detach` 等用例失败) | 已做 | — |
 | ~~U-07(P3)~~ ✅ **已落(v0.25.0)** | `NcmRouteObserver.didReplace` 补全(同时维护 pageDepth 与 popup 表), `pushReplacement` 两条用例红→绿 | 已做 | — |
 
@@ -414,7 +414,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~S1~~ ✅ **已落(v0.24.0)** | 歌单详情双列左 300 / 间 12 / 右 528(填满 840); 两列各自滚动; 判据用 `MediaQuery.sizeOf`(窗口宽)以免被 840 限宽判死 | M | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S2~~ ✅ **已落(v0.25.0)** | 播客详情双列同构(左 300/间 12/右 528, 两列各自滚动; 窄/中档零几何变化) | S | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `docs/archive/plans-2026-11/q1-two-column-s2s3-2026-11-18.md` |
-| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | 仅用户明确要求时 |
+| S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | **2026-11-19 用户批准 → 车道 `lane/wide-s4` 在飞**(最小切片: 歌单广场/搜索 → 歌单详情) |
 
 **明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。
 

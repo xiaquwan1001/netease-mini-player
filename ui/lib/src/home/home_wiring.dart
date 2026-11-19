@@ -107,7 +107,10 @@ class HomeWiring {
     _alive.remove(this);
     _alive.add(this);
     // 一对 add/remove 的监听器只在这里加(恢复/交还时不加, 否则会重复监听)。
-    AppSettings.instance.addListener(onAudioSettingsChanged);
+    // 只订阅播放域: 这里只把音量/响度/解码参数推给原生, 与外观/交互记录无关。
+    AppSettings.instance.addScopedListener(const {
+      AppSettingsDomain.playback,
+    }, onAudioSettingsChanged);
     UpdateCheckHost.pendingPrompt.addListener(onUpdatePrompt);
     pageDepth.addListener(onPageDepthChanged);
     // 每次 attach 重新构造动作宿主(登录态可能已变); 交还时复用同一份, 见下。
@@ -157,7 +160,7 @@ class HomeWiring {
   void detach() {
     if (!_attached) return;
     _attached = false;
-    AppSettings.instance.removeListener(onAudioSettingsChanged);
+    AppSettings.instance.removeScopedListener(onAudioSettingsChanged);
     UpdateCheckHost.pendingPrompt.removeListener(onUpdatePrompt);
     pageDepth.removeListener(onPageDepthChanged);
     final wasLatest = identical(_latest, this);
