@@ -322,7 +322,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 验收: `rg 'readAsStringSync' ui/test` 只剩读 `settings.json` / `pubspec.yaml` 的用例; 该测试文件仍能拦住回退。
 
-### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— **第一步已完成(2026-11-18)**
+### 12.6 `AppSettings` 形状(M · 可选, 加设置项前做) —— ✅ **两步均完成(2026-11-19)**
 
 现况: `ui/lib/src/app_settings.dart` **732 → 584 行**(当时口径; 2026-11-18 队列批加了 `queueSwipeHintDismissed` 后现 **594** 行, `wc -l` 实测), 编解码已按域拆到同库 part
 `ui/lib/src/app_settings_codec.dart`(七个 `_apply*` 同构于唯一一份 `toJson()`: 外观 / 播放 / 搜索
@@ -331,7 +331,9 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 写→读往返 + 二次落盘字节稳定 + 缺字段向后兼容 + `schemaVersion<2` 迁移。加设置项现在是
 「字段 + 某域 `_apply` + `toJson` + 期望键表」四处且**漏一处测试就红**。
 
-**第二步在飞(2026-11-19, 车道 `lane/settings-snapshot`)**: 不可变快照 + 统一 diff 通知(分域 scoped listener)。
+**第二步已完成(2026-11-19, 车道 `lane/settings-snapshot`, 合并 `ade2b97`)**: `@immutable AppSettingsSnapshot`(32 字段; 可空字段用 `_notPassed` 哨兵区分「没传/传 null」) + 单例持 `_snapshot`、保留全部同名 getter/setter(全仓读点零改动); 写入口统一 `_update(copyWith)` → `diffTo` 算七域变更集 → `_dispatch` 只通知订阅了受影响域的 `addScopedListener` 回调(全体 `addListener` 契约不变, 空写不通知); `update()`/`load()` 用批量窗口一次一条通知; 落盘仍整份 `toJson()`(键面/往返/字节稳定门未改)。实证迁移 4 处高频消费点(根 `MaterialApp` 只订外观域 ⇒ 根治音量拖动重建整棵树 · 播放与音质页 + `HomeWiring` 订播放域 · 诊断页订诊断域)。门: Dart **1293→1299**(`app_settings_scoped_notify_test.dart` 6 例: 单域只通知该域 / 20 次音量写播放 20 外观 0 / 空写 0 / 旧快照不变 / ScopedBuilder 重建次数), Rust 325, golden 20 未重出。
+
+**仍开着(小尾)**: `settings_view.dart` 总设置页与 `SettingsScope` 跨多域, 未迁到单域(迁反而是错的) ⇒ 留作「按域拆界面/搜索/缓存/平台/更新分块订阅」的后续切片。
 
 **未做(仍开着)**: 字段本身还是可变单例, `notifyListeners()` 仍靠调用方手工发(高频
 音量拖动会带动全页重建, 只是封面用 `ValueNotifier` 单独避开了)。要做就做**不可变快照 +
