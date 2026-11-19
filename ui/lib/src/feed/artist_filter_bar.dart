@@ -66,7 +66,10 @@ class _ArtistFilterBar extends StatelessWidget {
   /// 本页发布者总数(> authors.length 时"进入全部"才有意义)
   final int totalAuthors;
   final BigInt? selected;
-  final void Function(BigInt? userId) onSelected;
+
+  /// 选中回调: null = 「全部」; 否则带上作者快照(名字/头像), 供 FeedView
+  /// 把选中艺人钉在横条上并切换到 ta 自己的动态流。
+  final void Function(_Author? author) onSelected;
   final Future<void> Function() onOpenAll;
 
   @override
@@ -114,7 +117,7 @@ class _ArtistFilterBar extends StatelessWidget {
                   label: a.name,
                   avatarUrl: a.avatarUrl,
                   selected: selected == a.userId,
-                  onTap: () => onSelected(a.userId),
+                  onTap: () => onSelected(a),
                   scheme: scheme,
                 ),
               // 末尾固定一个"进入全部": 浏览所有艺人(本页 + 已关注)
@@ -300,7 +303,10 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                   trailing: widget.selected == null
                       ? Icon(Icons.check, color: scheme.primary)
                       : null,
-                  onTap: () => Navigator.of(context).pop(BigInt.zero),
+                  // 回传作者快照(userId == 0 = 全部动态), 见 [_ArtistFilterBar.onSelected]
+                  onTap: () =>
+                      Navigator.of(context)
+                          .pop(_Author(userId: BigInt.zero, name: '全部动态')),
                 ),
                 const Divider(height: 1),
                 if (widget.authors.isNotEmpty)
@@ -329,7 +335,7 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                     trailing: widget.selected == a.userId
                         ? Icon(Icons.check, color: scheme.primary)
                         : null,
-                    onTap: () => Navigator.of(context).pop(a.userId),
+                    onTap: () => Navigator.of(context).pop(a),
                   ),
                 if (_subscribed == null && _error == null)
                   const LoadingView(
@@ -363,7 +369,13 @@ class _AllArtistsSheetState extends State<_AllArtistsSheet> {
                       trailing: widget.selected == a.id
                           ? Icon(Icons.check, color: scheme.primary)
                           : null,
-                      onTap: () => Navigator.of(context).pop(a.id),
+                      onTap: () => Navigator.of(context).pop(
+                        _Author(
+                          userId: a.id,
+                          name: a.name,
+                          avatarUrl: a.avatarUrl,
+                        ),
+                      ),
                     ),
                 ],
               ],

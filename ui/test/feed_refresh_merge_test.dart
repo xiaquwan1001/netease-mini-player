@@ -41,15 +41,23 @@ rust.FeedEventDto ev(
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-FeedView feed({required Future<List<rust.FeedEventDto>> Function() loadFeed}) =>
-    FeedView(
-      loggedIn: true,
-      onLogin: () {},
+FeedView feed({
+  required Future<List<rust.FeedEventDto>> Function() loadFeed,
+  Future<List<rust.FeedEventDto>> Function({
+    required BigInt uid,
+    required int limit,
+    required int lastTime,
+  })?
+  loadArtistEvents,
+}) => FeedView(
+  loggedIn: true,
+  onLogin: () {},
 
-      onOpenUrl: (_) async {},
-      loadFeed: loadFeed,
-      loadSubscribedArtists: () async => const [],
-    );
+  onOpenUrl: (_) async {},
+  loadFeed: loadFeed,
+  loadSubscribedArtists: () async => const [],
+  loadArtistEvents: loadArtistEvents,
+);
 
 /// 竖向列表(下拉刷新的那个), 横条是 horizontal 的
 Finder verticalList() => find
@@ -101,6 +109,7 @@ void main() {
 
   testWidgets('关注流: 筛选某作者后刷新, 筛选与条目都保留', (tester) async {
     var calls = 0;
+    var artistCalls = 0;
     await tester.pumpWidget(
       host(
         feed(
@@ -116,6 +125,23 @@ void main() {
             // 刷新回来的最新页里有一条乙艺人的新动态
             return [ev(9, userId: 20, name: '乙艺人')];
           },
+          // 关注页选中艺人后数据源切到 ta 自己的动态流(用户反馈 2026-11-19):
+          // 首屏回本页该艺人的 2 条, 刷新回 1 条新的
+          loadArtistEvents:
+              ({
+                required BigInt uid,
+                required int limit,
+                required int lastTime,
+              }) async {
+                artistCalls++;
+                if (artistCalls == 1) {
+                  return [
+                    ev(2, userId: 20, name: '乙艺人'),
+                    ev(3, userId: 20, name: '乙艺人'),
+                  ];
+                }
+                return [ev(9, userId: 20, name: '乙艺人')];
+              },
         ),
       ),
     );
@@ -126,9 +152,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Card), findsNWidgets(2));
 
+    expect(artistCalls, 1, reason: '选中艺人后首屏取该艺人自己的动态流');
+
     await pullToRefresh(tester);
 
-    expect(calls, 2);
+    expect(artistCalls, 2, reason: '刷新重取该艺人最新一页');
+    expect(calls, 1, reason: '艺人模式不再重取关注流');
     expect(find.byType(Card), findsNWidgets(3), reason: '原 2 条 + 刷新来的 1 条');
     // 筛选没被刷新重置: 甲艺人的动态仍不显示
     expect(find.text('动态 1'), findsNothing);

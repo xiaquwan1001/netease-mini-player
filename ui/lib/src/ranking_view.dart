@@ -227,6 +227,15 @@ class _PlayRankingViewState extends State<PlayRankingView>
   }
 }
 
+/// 一行排行.
+///
+/// 口径(2026-11-19 核对官方接口后固化):
+/// - **名次** = 列表下标 + 1。Rust 侧 [rust.PlayRankEntryDto] 的顺序就是接口
+///   返回顺序, 也就是官方名次(不再按 score 客户端重排, 见
+///   `ncm-service/song.rs` 的 `parse_play_ranking`)。
+/// - **次数** = `playCount` 字段: 总榜是累计播放次数, 周榜是本周播放次数。
+/// - `score` 是接口给的**归一化分值**(实测 = floor(playCount / 最大值 * 100),
+///   最高 100), 不是名次也不是播放次数, 所以这里不显示。
 class _RankRow extends StatelessWidget {
   const _RankRow({
     required this.rank,

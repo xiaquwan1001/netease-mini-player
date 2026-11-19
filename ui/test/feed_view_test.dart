@@ -87,6 +87,12 @@ void main() {
             rust.Artist(id: BigInt.from(10), name: '本页艺人'),
             rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
           ],
+          // 选中艺人后切到 ta 自己的动态流: 这里 99 号没有动态
+          loadArtistEvents: ({
+            required BigInt uid,
+            required int limit,
+            required int lastTime,
+          }) async => const [],
         ),
       ),
     );
@@ -101,7 +107,7 @@ void main() {
     expect(find.text('没发动态的艺人'), findsOneWidget);
     expect(find.text('已关注 · 本页暂无动态'), findsOneWidget);
 
-    // 选中后筛选生效: 这位艺人本页没有动态
+    // 选中后切到 ta 自己的动态流: 这位艺人没有动态 ⇒ 空态
     await tester.tap(find.text('没发动态的艺人'));
     await tester.pumpAndSettle();
     expect(find.text('ta 最近没有动态'), findsOneWidget);
@@ -139,6 +145,15 @@ void main() {
             ),
           ],
           loadSubscribedArtists: () async => const [],
+          // 选中艺人后数据源切到 ta 自己的动态流(按 uid 只回本人的)
+          loadArtistEvents:
+              ({
+                required BigInt uid,
+                required int limit,
+                required int lastTime,
+              }) async => uid == BigInt.from(10)
+              ? [event(id: 1, userId: 10, userName: '低互动艺人', text: '低互动正文')]
+              : [event(id: 2, userId: 20, userName: '高互动艺人', text: '高互动正文')],
         ),
       ),
     );
@@ -186,6 +201,11 @@ void main() {
             rust.Artist(id: BigInt.from(10), name: '本页艺人'),
             rust.Artist(id: BigInt.from(99), name: '没发动态的艺人'),
           ],
+          loadArtistEvents: ({
+            required BigInt uid,
+            required int limit,
+            required int lastTime,
+          }) async => const [],
         ),
       ),
     );
@@ -206,7 +226,7 @@ void main() {
     // 面板没关、筛选没生效(点头像只是打开主页)
     expect(find.text('全部艺人'), findsOneWidget);
 
-    // 整行仍是筛选: 选中后弹回并只显示这位(本页没他的动态)
+    // 整行仍是筛选: 选中后弹回, 切到 ta 的动态流(没有动态 ⇒ 空态)
     await tester.tap(find.text('没发动态的艺人'));
     await tester.pumpAndSettle();
     expect(calls, hasLength(1), reason: '点整行不该进主页');
