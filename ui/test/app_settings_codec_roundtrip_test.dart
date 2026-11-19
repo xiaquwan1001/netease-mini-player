@@ -252,7 +252,7 @@ void main() {
     File('${dir.path}/settings.json')
         .writeAsStringSync(jsonEncode({'customQuickAction': 'nope'}));
     await AppSettings.instance.load(dir.path);
-    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking)
+    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
   });
 
   test('schema < 2 的 lyricSourcePreference=auto 一次性抬到 amll(迁移仍生效)', () async {
