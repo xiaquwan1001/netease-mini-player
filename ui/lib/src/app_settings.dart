@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show mapEquals, setEquals;
 import 'package:flutter/material.dart';
 
 import 'theme.dart' show AccentPalette;
@@ -87,61 +88,441 @@ extension CloseBehaviorX on CloseBehavior {
       raw == 'tray' ? CloseBehavior.minimizeToTray : CloseBehavior.quit;
 }
 
+/// 设置域: 与 app_settings_codec.dart 的七个 `_apply*` 一一对应。
+///
+/// 一次变更先算"哪些域真的变了"([AppSettingsSnapshot.diffTo]), 订阅方按域收通知;
+/// 音量滑块这类高频写入因此不会再惊动外观/交互域的订阅者。
+enum AppSettingsDomain {
+  /// 外观: 主题/强调色/字号/封面行列/清晰度/OLED 纯黑
+  appearance,
+
+  /// 播放与音质: 音质档/跳过 VIP/精细音量/响度/EQ/淡入/解码缓存/歌词来源
+  playback,
+
+  /// 搜索与列表: 切换清空/热搜榜/日推缓存天数/歌单内点歌行为
+  search,
+
+  /// 平台与窗口: 关闭按钮行为
+  platform,
+
+  /// 自动更新: 检查频率与节流/跳过记录
+  update,
+
+  /// 诊断: 匿名诊断包开关
+  diagnostics,
+
+  /// 交互记录: 「我的」页排序时间戳 + 队列左滑提示记忆
+  interactions,
+}
+
+/// [AppSettings] 的**不可变状态快照**(§12.6 第二步)。
+///
+/// 为什么要不可变: 以前这些偏好全是可变 public 成员, "一次操作到底改了哪些字段"
+/// 无法机械判断, 于是只能整份 `notifyListeners()` —— 音量滑块每拖一格都会
+/// 把根 MaterialApp(主题/字号/整棵树)重建一遍。现在每次变更产出**一份新快照**,
+/// 新旧一比就知道变了哪些域(见 [diffTo]), 订阅方只收自己关心的域
+/// (见 [AppSettings.addScopedListener] / [AppSettingsScopedBuilder])。
+///
+/// 语义纪律:
+///   · 字段与 [AppSettings] 的同名 getter **一一对应**, 默认值等于"不改变现状";
+///   · 校验/夹取仍然只发生在读侧与 [AppSettings.update](快照本身不夹), 与改造前一致;
+///   · 拿到手里的旧快照**永不改变**(新变更只换 [AppSettings] 内部的那一份)。
+@immutable
+class AppSettingsSnapshot {
+  const AppSettingsSnapshot({
+    this.themeMode = ThemeMode.system,
+    this.accent = AccentPalette.neteaseRed,
+    this.textScale = 1.0,
+    this.audioLevel = 'exhigh',
+    this.coverRows = 1,
+    this.gridColumns = 3,
+    this.clearSearchOnTabSwitch = true,
+    this.showHotSearch = true,
+    this.skipVipSongs = false,
+    this.dailyCacheDays = 7,
+    this.anonymousDebug = false,
+    this.queueSwipeHintDismissed = false,
+    this.coverQuality = CoverQuality.standard,
+    this.oledDark = false,
+    this.volumeGainDb = 0.0,
+    this.loudnessNormalize = false,
+    this.loudnessTargetLufs = -16.0,
+    this.loudnessDynamic = false,
+    this.eqProfileName,
+    this.eqProfileText,
+    this.fadeMs = 0,
+    this.hardwareDecode = true,
+    this.streamCache = true,
+    this.cacheLimitMb = 512,
+    this.lyricTranslation = true,
+    this.lyricSourcePreference = 'amll',
+    this.closeBehavior = CloseBehavior.quit,
+    this.librarySearchPlayAction = LibrarySearchPlayAction.fullList,
+    this.updateCheckInterval = UpdateCheckInterval.daily,
+    this.lastUpdateCheckMs,
+    this.skippedUpdateVersion,
+    this.interactions = const <String, int>{},
+  });
+
+  final ThemeMode themeMode;
+  final AccentPalette accent;
+  final double textScale;
+  final String audioLevel;
+  final int coverRows;
+  final int gridColumns;
+  final bool clearSearchOnTabSwitch;
+  final bool showHotSearch;
+  final bool skipVipSongs;
+  final int dailyCacheDays;
+  final bool anonymousDebug;
+  final bool queueSwipeHintDismissed;
+  final CoverQuality coverQuality;
+  final bool oledDark;
+  final double volumeGainDb;
+  final bool loudnessNormalize;
+  final double loudnessTargetLufs;
+  final bool loudnessDynamic;
+  final String? eqProfileName;
+  final String? eqProfileText;
+  final int fadeMs;
+  final bool hardwareDecode;
+  final bool streamCache;
+  final int cacheLimitMb;
+  final bool lyricTranslation;
+  final String lyricSourcePreference;
+  final CloseBehavior closeBehavior;
+  final LibrarySearchPlayAction librarySearchPlayAction;
+  final UpdateCheckInterval updateCheckInterval;
+  final int? lastUpdateCheckMs;
+  final String? skippedUpdateVersion;
+
+  /// 最近交互记录(epoch ms), 只读视图; 新记录产出**新 map**, 老快照看不到。
+  final Map<String, int> interactions;
+
+  /// copyWith 里区分"没传"与"显式传 null"的哨兵([eqProfileName] 等可空字段要用)。
+  static const Object _notPassed = Object();
+
+  AppSettingsSnapshot copyWith({
+    ThemeMode? themeMode,
+    AccentPalette? accent,
+    double? textScale,
+    String? audioLevel,
+    int? coverRows,
+    int? gridColumns,
+    bool? clearSearchOnTabSwitch,
+    bool? showHotSearch,
+    bool? skipVipSongs,
+    int? dailyCacheDays,
+    bool? anonymousDebug,
+    bool? queueSwipeHintDismissed,
+    CoverQuality? coverQuality,
+    bool? oledDark,
+    double? volumeGainDb,
+    bool? loudnessNormalize,
+    double? loudnessTargetLufs,
+    bool? loudnessDynamic,
+    Object? eqProfileName = _notPassed,
+    Object? eqProfileText = _notPassed,
+    int? fadeMs,
+    bool? hardwareDecode,
+    bool? streamCache,
+    int? cacheLimitMb,
+    bool? lyricTranslation,
+    String? lyricSourcePreference,
+    CloseBehavior? closeBehavior,
+    LibrarySearchPlayAction? librarySearchPlayAction,
+    UpdateCheckInterval? updateCheckInterval,
+    Object? lastUpdateCheckMs = _notPassed,
+    Object? skippedUpdateVersion = _notPassed,
+    Map<String, int>? interactions,
+  }) {
+    return AppSettingsSnapshot(
+      themeMode: themeMode ?? this.themeMode,
+      accent: accent ?? this.accent,
+      textScale: textScale ?? this.textScale,
+      audioLevel: audioLevel ?? this.audioLevel,
+      coverRows: coverRows ?? this.coverRows,
+      gridColumns: gridColumns ?? this.gridColumns,
+      clearSearchOnTabSwitch:
+          clearSearchOnTabSwitch ?? this.clearSearchOnTabSwitch,
+      showHotSearch: showHotSearch ?? this.showHotSearch,
+      skipVipSongs: skipVipSongs ?? this.skipVipSongs,
+      dailyCacheDays: dailyCacheDays ?? this.dailyCacheDays,
+      anonymousDebug: anonymousDebug ?? this.anonymousDebug,
+      queueSwipeHintDismissed:
+          queueSwipeHintDismissed ?? this.queueSwipeHintDismissed,
+      coverQuality: coverQuality ?? this.coverQuality,
+      oledDark: oledDark ?? this.oledDark,
+      volumeGainDb: volumeGainDb ?? this.volumeGainDb,
+      loudnessNormalize: loudnessNormalize ?? this.loudnessNormalize,
+      loudnessTargetLufs: loudnessTargetLufs ?? this.loudnessTargetLufs,
+      loudnessDynamic: loudnessDynamic ?? this.loudnessDynamic,
+      eqProfileName: identical(eqProfileName, _notPassed)
+          ? this.eqProfileName
+          : eqProfileName as String?,
+      eqProfileText: identical(eqProfileText, _notPassed)
+          ? this.eqProfileText
+          : eqProfileText as String?,
+      fadeMs: fadeMs ?? this.fadeMs,
+      hardwareDecode: hardwareDecode ?? this.hardwareDecode,
+      streamCache: streamCache ?? this.streamCache,
+      cacheLimitMb: cacheLimitMb ?? this.cacheLimitMb,
+      lyricTranslation: lyricTranslation ?? this.lyricTranslation,
+      lyricSourcePreference:
+          lyricSourcePreference ?? this.lyricSourcePreference,
+      closeBehavior: closeBehavior ?? this.closeBehavior,
+      librarySearchPlayAction:
+          librarySearchPlayAction ?? this.librarySearchPlayAction,
+      updateCheckInterval: updateCheckInterval ?? this.updateCheckInterval,
+      lastUpdateCheckMs: identical(lastUpdateCheckMs, _notPassed)
+          ? this.lastUpdateCheckMs
+          : lastUpdateCheckMs as int?,
+      skippedUpdateVersion: identical(skippedUpdateVersion, _notPassed)
+          ? this.skippedUpdateVersion
+          : skippedUpdateVersion as String?,
+      interactions: interactions ?? this.interactions,
+    );
+  }
+
+  /// 与 [other] 相比**真的变了**的域(空集合 = 什么都没变)。
+  ///
+  /// 这是统一 diff 通知的唯一判据: 通知按域分发给
+  /// [AppSettings.addScopedListener] 的订阅者, 全体 [AppSettings.addListener] 照旧。
+  Set<AppSettingsDomain> diffTo(AppSettingsSnapshot other) {
+    final changed = <AppSettingsDomain>{};
+    if (themeMode != other.themeMode ||
+        accent != other.accent ||
+        textScale != other.textScale ||
+        coverRows != other.coverRows ||
+        gridColumns != other.gridColumns ||
+        coverQuality != other.coverQuality ||
+        oledDark != other.oledDark) {
+      changed.add(AppSettingsDomain.appearance);
+    }
+    if (audioLevel != other.audioLevel ||
+        skipVipSongs != other.skipVipSongs ||
+        volumeGainDb != other.volumeGainDb ||
+        loudnessNormalize != other.loudnessNormalize ||
+        loudnessTargetLufs != other.loudnessTargetLufs ||
+        loudnessDynamic != other.loudnessDynamic ||
+        eqProfileName != other.eqProfileName ||
+        eqProfileText != other.eqProfileText ||
+        fadeMs != other.fadeMs ||
+        hardwareDecode != other.hardwareDecode ||
+        streamCache != other.streamCache ||
+        cacheLimitMb != other.cacheLimitMb ||
+        lyricTranslation != other.lyricTranslation ||
+        lyricSourcePreference != other.lyricSourcePreference) {
+      changed.add(AppSettingsDomain.playback);
+    }
+    if (clearSearchOnTabSwitch != other.clearSearchOnTabSwitch ||
+        showHotSearch != other.showHotSearch ||
+        dailyCacheDays != other.dailyCacheDays ||
+        librarySearchPlayAction != other.librarySearchPlayAction) {
+      changed.add(AppSettingsDomain.search);
+    }
+    if (closeBehavior != other.closeBehavior) {
+      changed.add(AppSettingsDomain.platform);
+    }
+    if (updateCheckInterval != other.updateCheckInterval ||
+        lastUpdateCheckMs != other.lastUpdateCheckMs ||
+        skippedUpdateVersion != other.skippedUpdateVersion) {
+      changed.add(AppSettingsDomain.update);
+    }
+    if (anonymousDebug != other.anonymousDebug) {
+      changed.add(AppSettingsDomain.diagnostics);
+    }
+    if (queueSwipeHintDismissed != other.queueSwipeHintDismissed ||
+        !mapEquals(interactions, other.interactions)) {
+      changed.add(AppSettingsDomain.interactions);
+    }
+    return changed;
+  }
+}
+
 class AppSettings extends ChangeNotifier {
   AppSettings._();
 
   static final AppSettings instance = AppSettings._();
 
-  ThemeMode themeMode = ThemeMode.system;
+  // ---------------- §12.6: 不可变快照 + 按域 diff 通知 ----------------
+
+  /// 当前状态。**唯一权威**: 所有读点都经同名 getter 委托到这里。
+  AppSettingsSnapshot _snapshot = const AppSettingsSnapshot();
+
+  /// 当前状态的只读视图(拿到的快照永不改变, 可以安全存起来做前后比对)。
+  AppSettingsSnapshot get snapshot => _snapshot;
+
+  /// 按域订阅的回调: 一个回调只绑一组域(重复 add 会覆盖域集合)。
+  final Map<VoidCallback, Set<AppSettingsDomain>> _scopedListeners =
+      <VoidCallback, Set<AppSettingsDomain>>{};
+
+  /// 批量窗口内的已完成域(一次 update()/load() 只发一次通知)。
+  final Set<AppSettingsDomain> _batchedDomains = <AppSettingsDomain>{};
+
+  int _batchDepth = 0;
+  bool _batchDirty = false;
+  int _quietDepth = 0;
+
+  /// 订阅"只在 [domains] 里的域变化时"才回调(与全体 [addListener] 并存, 互不影响)。
+  ///
+  /// 用法: 高频写入点(音量滑块/播放参数)的消费者从 `addListener` 换成
+  /// `addScopedListener({AppSettingsDomain.playback}, ...)`, 未变的域不再惊动它。
+  void addScopedListener(
+    Set<AppSettingsDomain> domains,
+    VoidCallback listener,
+  ) {
+    assert(domains.isNotEmpty, '按域订阅至少要给一个域');
+    _scopedListeners[listener] = Set<AppSettingsDomain>.of(domains);
+  }
+
+  void removeScopedListener(VoidCallback listener) {
+    _scopedListeners.remove(listener);
+  }
+
+  /// 一次状态变更的唯一入口: 换快照 → 算 diff → 按域分发。
+  ///
+  /// 域集合为空(写的值和原来一样)时**不通知**: 旧实现里这类空写也会整份通知,
+  /// 是"拖动滑块时全树重建"的另一半来源。
+  void _update(AppSettingsSnapshot next) {
+    final prev = _snapshot;
+    if (identical(prev, next)) return;
+    _snapshot = next;
+    if (prev.coverQuality != next.coverQuality) {
+      // 封面清晰度还有一批 ValueListenableBuilder 订阅者(上百个封面图),
+      // 它们只吃 notifier, 不进全局通知(见 coverQualityListenable 的注释)。
+      coverQualityListenable.value = next.coverQuality;
+    }
+    final changed = prev.diffTo(next);
+    if (changed.isEmpty || _quietDepth > 0) return;
+    if (_batchDepth > 0) {
+      _batchedDomains.addAll(changed);
+      _batchDirty = true;
+      return;
+    }
+    _dispatch(changed);
+  }
+
+  /// 开一个批量窗口: 窗口内的多次写只发一次通知(update()/load() 用)。
+  void _beginBatch() {
+    _batchDepth++;
+  }
+
+  void _endBatch() {
+    if (_batchDepth == 0) return;
+    _batchDepth--;
+    if (_batchDepth > 0) return;
+    final changed = Set<AppSettingsDomain>.of(_batchedDomains);
+    final dirty = _batchDirty;
+    _batchedDomains.clear();
+    _batchDirty = false;
+    if (!dirty) return;
+    _dispatch(changed);
+  }
+
+  /// 静默写(只改状态/落盘, 不通知): 更新检查的节流记录用, 保持旧语义。
+  void _quiet(void Function() body) {
+    _quietDepth++;
+    try {
+      body();
+    } finally {
+      _quietDepth--;
+    }
+  }
+
+  void _dispatch(Set<AppSettingsDomain> changed) {
+    // 全体监听者: 旧契约不变(任何变更都通知), 未迁移的读点零改动。
+    super.notifyListeners();
+    if (_scopedListeners.isEmpty) return;
+    for (final entry in _scopedListeners.entries.toList(growable: false)) {
+      // 回调里可能顺手 add/remove 订阅: 发之前确认这一条还在、域集合没被换掉。
+      if (!identical(_scopedListeners[entry.key], entry.value)) continue;
+      if (entry.value.any(changed.contains)) entry.key();
+    }
+  }
+
+  @override
+  void notifyListeners() {
+    // 直接调 notifyListeners 的路径(测试/兼容旧代码)按"全领域变化"处理,
+    // 否则按域订阅的 widget 会漏掉这类通知; 正常变更走 [_dispatch]。
+    super.notifyListeners();
+    if (_scopedListeners.isEmpty) return;
+    for (final entry in _scopedListeners.entries.toList(growable: false)) {
+      if (!identical(_scopedListeners[entry.key], entry.value)) continue;
+      entry.key();
+    }
+  }
+
+  ThemeMode get themeMode => _snapshot.themeMode;
+  set themeMode(ThemeMode value) =>
+      _update(_snapshot.copyWith(themeMode: value));
 
   /// 视觉风格(主题色). 默认网易云红 = 与改造前完全一致; 浅色/深色共用同一个色板。
-  AccentPalette accent = AccentPalette.neteaseRed;
+  AccentPalette get accent => _snapshot.accent;
+  set accent(AccentPalette value) => _update(_snapshot.copyWith(accent: value));
 
   /// 界面字号倍率(叠在系统字号之上)。1.0 = 跟随系统。
   ///
   /// 只有一个入口: 设置页滑块 [kTextScaleMin]..[kTextScaleMax] 步长 [kTextScaleStep],
   /// 永远落在 0.05 的格子上(见 [snapTextScale])。2026-11-14 用户反馈: 滑块已经够用,
   /// 「小/标准/大/特大」档位 chip 是重复的第二套入口, 已移除。
-  double textScale = 1.0;
+  double get textScale => _snapshot.textScale;
+  set textScale(double value) => _update(_snapshot.copyWith(textScale: value));
 
   /// ncm-provider 的音质字符串: standard / higher / exhigh / lossless / hires
-  String audioLevel = 'exhigh';
+  String get audioLevel => _snapshot.audioLevel;
+  set audioLevel(String value) =>
+      _update(_snapshot.copyWith(audioLevel: value));
 
   /// 推荐页歌单/播客卡片每屏展示几排(1 排 = 横向滑动, 2 排 = 网格)
-  int coverRows = 1;
+  int get coverRows => _snapshot.coverRows;
+  set coverRows(int value) => _update(_snapshot.copyWith(coverRows: value));
 
   /// 方格网格(艺人专辑 / 新碟 / 歌单广场)每行列数, 2-4。
   ///
   /// 之前用 maxCrossAxisExtent 拍死列宽: 列数随屏幕漂移、格子末端留白。
   /// 改为显式列数 + 均分(见 [coverGridDelegate])。
-  int gridColumns = 3;
+  int get gridColumns => _snapshot.gridColumns;
+  set gridColumns(int value) => _update(_snapshot.copyWith(gridColumns: value));
 
   /// 切回"搜索"底部 tab 时是否丢弃上一次的输入/结果(默认丢弃, 避免残留)
-  bool clearSearchOnTabSwitch = true;
+  bool get clearSearchOnTabSwitch => _snapshot.clearSearchOnTabSwitch;
+  set clearSearchOnTabSwitch(bool value) =>
+      _update(_snapshot.copyWith(clearSearchOnTabSwitch: value));
 
   /// 搜索页是否展示「热门搜索」榜(默认展示; 关闭后只留历史与猜你想搜)
-  bool showHotSearch = true;
+  bool get showHotSearch => _snapshot.showHotSearch;
+  set showHotSearch(bool value) =>
+      _update(_snapshot.copyWith(showHotSearch: value));
 
   /// 播放时跳过 VIP 歌曲(默认关 = 保持现状: VIP 曲目仍然尝试取链, 取决于账号是否会员).
   ///
   /// 跳的是"需要黑胶会员"的曲目(fee=1 ⇒ SongDto.vip), 不是无版权曲目
   /// (后者本来就由 `playable == false` 处理)。列表里仍会显示, 只是切歌/续播时跳过。
-  bool skipVipSongs = false;
+  bool get skipVipSongs => _snapshot.skipVipSongs;
+  set skipVipSongs(bool value) =>
+      _update(_snapshot.copyWith(skipVipSongs: value));
 
   /// 每日推荐歌单的本地缓存天数: 0 = 关闭, 3/7/30 = 保留天数.
   ///
   /// 缓存的是歌单列表本身(不含歌曲/凭据), 关掉后下次进推荐页就要联网拉。
-  int dailyCacheDays = 7;
+  int get dailyCacheDays => _snapshot.dailyCacheDays;
+  set dailyCacheDays(int value) =>
+      _update(_snapshot.copyWith(dailyCacheDays: value));
 
   /// 是否允许生成匿名诊断数据(见 debug_report.dart).
   /// 默认 false; 打开后只在用户主动点「生成匿名诊断包」时产出文件, 不会自动上传。
-  bool anonymousDebug = false;
+  bool get anonymousDebug => _snapshot.anonymousDebug;
+  set anonymousDebug(bool value) =>
+      _update(_snapshot.copyWith(anonymousDebug: value));
 
   /// 播放队列面板的「左滑可以把歌曲从队列里移除」提示是否已被用户确认不再展示。
   ///
   /// 默认 false ⇒ 首次展开队列时弹一次(带「确认后不再展示」勾选)。
   /// 放在设置里而不是内存变量: 用户点过「不再展示」就该永久生效, 不该下次启动又弹。
-  bool queueSwipeHintDismissed = false;
+  bool get queueSwipeHintDismissed => _snapshot.queueSwipeHintDismissed;
+  set queueSwipeHintDismissed(bool value) =>
+      _update(_snapshot.copyWith(queueSwipeHintDismissed: value));
 
   /// 封面/图片清晰度档位(见 [CoverQuality]). 默认 [CoverQuality.standard] = 按设备像素 1:1.
   ///
@@ -150,53 +531,73 @@ class AppSettings extends ChangeNotifier {
   final ValueNotifier<CoverQuality> coverQualityListenable =
       ValueNotifier<CoverQuality>(CoverQuality.standard);
 
-  CoverQuality get coverQuality => coverQualityListenable.value;
+  CoverQuality get coverQuality => _snapshot.coverQuality;
 
-  set coverQuality(CoverQuality value) {
-    if (coverQualityListenable.value != value) {
-      coverQualityListenable.value = value;
-    }
-  }
+  /// 写快照时同步 notifier([_update] 里做), 老的封面订阅点零改动。
+  set coverQuality(CoverQuality value) =>
+      _update(_snapshot.copyWith(coverQuality: value));
 
   // ---------------- 播放与外观(2026-11 任务书 docs/archive/plan-2026-11-09-settings-and-player.md) ----------------
   // 原则: 默认值一律等于"不改变现状", 老配置读进来行为不变.
 
   /// R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212
-  bool oledDark = false;
+  bool get oledDark => _snapshot.oledDark;
+  set oledDark(bool value) => _update(_snapshot.copyWith(oledDark: value));
 
   /// R2: 播放器级精细音量增益(dB). 与系统音量相乘, 0 = 不变.
   /// 范围 -40..0, 步进 0.5; 0 dB 时完全旁路.
-  double volumeGainDb = 0.0;
+  double get volumeGainDb => _snapshot.volumeGainDb;
+  set volumeGainDb(double value) =>
+      _update(_snapshot.copyWith(volumeGainDb: value));
 
   /// R2b/R7: 响度均衡(EBU R128 测量 -> ReplayGain 2.0 语义的静态增益)
-  bool loudnessNormalize = false;
+  bool get loudnessNormalize => _snapshot.loudnessNormalize;
+  set loudnessNormalize(bool value) =>
+      _update(_snapshot.copyWith(loudnessNormalize: value));
 
   /// 响度均衡目标电平(LUFS). 移动端常用 -16, 广播口径 -23.
-  double loudnessTargetLufs = -16.0;
+  double get loudnessTargetLufs => _snapshot.loudnessTargetLufs;
+  set loudnessTargetLufs(double value) =>
+      _update(_snapshot.copyWith(loudnessTargetLufs: value));
 
   /// R7: 动态 AGC 模式(默认 false = 静态 ReplayGain, 无 pumping)
-  bool loudnessDynamic = false;
+  bool get loudnessDynamic => _snapshot.loudnessDynamic;
+  set loudnessDynamic(bool value) =>
+      _update(_snapshot.copyWith(loudnessDynamic: value));
 
   /// R7: 生效的自定义响度曲线名(AutoEQ ParametricEQ.txt 导入时取文件名)
-  String? eqProfileName;
+  String? get eqProfileName => _snapshot.eqProfileName;
+  set eqProfileName(String? value) =>
+      _update(_snapshot.copyWith(eqProfileName: value));
 
   /// R7: 曲线原文(AutoEQ ParametricEQ.txt / GraphicEQ.txt). null = 旁路
-  String? eqProfileText;
+  String? get eqProfileText => _snapshot.eqProfileText;
+  set eqProfileText(String? value) =>
+      _update(_snapshot.copyWith(eqProfileText: value));
 
   /// R5: 淡入淡出时长(ms). 0 = 关闭
-  int fadeMs = 0;
+  int get fadeMs => _snapshot.fadeMs;
+  set fadeMs(int value) => _update(_snapshot.copyWith(fadeMs: value));
 
   /// R5: 优先硬解(仅 Android; Linux 纯软解无此概念)
-  bool hardwareDecode = true;
+  bool get hardwareDecode => _snapshot.hardwareDecode;
+  set hardwareDecode(bool value) =>
+      _update(_snapshot.copyWith(hardwareDecode: value));
 
   /// R5: 边听边存(流式缓存落盘)
-  bool streamCache = true;
+  bool get streamCache => _snapshot.streamCache;
+  set streamCache(bool value) =>
+      _update(_snapshot.copyWith(streamCache: value));
 
   /// R5: 缓存占用上限(MB)
-  int cacheLimitMb = 512;
+  int get cacheLimitMb => _snapshot.cacheLimitMb;
+  set cacheLimitMb(int value) =>
+      _update(_snapshot.copyWith(cacheLimitMb: value));
 
   /// 歌词页是否显示翻译(tlyric). 只有歌词本身带翻译时该开关才出现.
-  bool lyricTranslation = true;
+  bool get lyricTranslation => _snapshot.lyricTranslation;
+  set lyricTranslation(bool value) =>
+      _update(_snapshot.copyWith(lyricTranslation: value));
 
   /// C2: 逐字歌词来源偏好. amll = 优先 TTML(默认; 人工审核逐字库, 质量最稳),
   /// auto = 打分择优, netease = 只用 yrc(缺失才 TTML).
@@ -204,13 +605,17 @@ class AppSettings extends ChangeNotifier {
   /// 2026-11-15 口径变更: 默认从 'auto' 改为 'amll'。旧 auto 有 0.9 短路,
   /// yrc 质量正常时直接采用、根本不请求 TTML, 实测 AMLL 只覆盖 12% 的播放
   /// (docs/api-notes-snapshot-20261119.md), 等于"逐字库没被用上"。
-  String lyricSourcePreference = 'amll';
+  String get lyricSourcePreference => _snapshot.lyricSourcePreference;
+  set lyricSourcePreference(String value) =>
+      _update(_snapshot.copyWith(lyricSourcePreference: value));
 
   /// 点关闭按钮时的行为(默认 [CloseBehavior.quit] = 保持旧语义).
   ///
   /// 只有 Linux 桌面会真的把设置推给 GTK runner(见 desktop_shell.dart);
   /// 其它平台保留字段(不撒谎: 设置页在那边的文案写明"仅 Linux 生效")。
-  CloseBehavior closeBehavior = CloseBehavior.quit;
+  CloseBehavior get closeBehavior => _snapshot.closeBehavior;
+  set closeBehavior(CloseBehavior value) =>
+      _update(_snapshot.copyWith(closeBehavior: value));
 
   /// settings.json 结构版本(用于一次性迁移旧默认值)。
   static const int settingsSchemaVersion = 2;
@@ -296,7 +701,10 @@ class AppSettings extends ChangeNotifier {
         final raw = jsonDecode(await _file!.readAsString());
         if (raw is Map) {
           // 按域解析在 app_settings_codec.dart(part), 加设置项只改那一处 + _toJson。
-          applyStoredJson(raw);
+          //
+          // 静默应用: 读盘期间不能让订阅者看到"半份配置"(旧的 settle 循环也一样),
+          // 读完整份后由下面那一次 notifyListeners 统一通知(全体 + 全领域)。
+          _quiet(() => applyStoredJson(raw));
         }
       }
     } catch (_) {
@@ -349,6 +757,78 @@ class AppSettings extends ChangeNotifier {
     LibrarySearchPlayAction? librarySearchPlayAction,
     CloseBehavior? closeBehavior,
   }) async {
+    // 一次 update() 可能改多个域: 批量窗口保证只发一次通知(域集合是并集)。
+    _beginBatch();
+    try {
+      _applyUpdateArgs(
+        themeMode: themeMode,
+        accent: accent,
+        textScale: textScale,
+        audioLevel: audioLevel,
+        coverRows: coverRows,
+        gridColumns: gridColumns,
+        clearSearchOnTabSwitch: clearSearchOnTabSwitch,
+        showHotSearch: showHotSearch,
+        skipVipSongs: skipVipSongs,
+        dailyCacheDays: dailyCacheDays,
+        anonymousDebug: anonymousDebug,
+        queueSwipeHintDismissed: queueSwipeHintDismissed,
+        coverQuality: coverQuality,
+        oledDark: oledDark,
+        volumeGainDb: volumeGainDb,
+        loudnessNormalize: loudnessNormalize,
+        loudnessTargetLufs: loudnessTargetLufs,
+        loudnessDynamic: loudnessDynamic,
+        eqProfileName: eqProfileName,
+        eqProfileText: eqProfileText,
+        fadeMs: fadeMs,
+        hardwareDecode: hardwareDecode,
+        streamCache: streamCache,
+        cacheLimitMb: cacheLimitMb,
+        lyricTranslation: lyricTranslation,
+        lyricSourcePreference: lyricSourcePreference,
+        updateCheckInterval: updateCheckInterval,
+        librarySearchPlayAction: librarySearchPlayAction,
+        closeBehavior: closeBehavior,
+      );
+    } finally {
+      _endBatch();
+    }
+    await _save();
+  }
+
+  /// [update] 的写入口: 校验/夹取口径全部保持改造前的样子(读侧与这里两处)。
+  void _applyUpdateArgs({
+    ThemeMode? themeMode,
+    AccentPalette? accent,
+    double? textScale,
+    String? audioLevel,
+    int? coverRows,
+    int? gridColumns,
+    bool? clearSearchOnTabSwitch,
+    bool? showHotSearch,
+    bool? skipVipSongs,
+    int? dailyCacheDays,
+    bool? anonymousDebug,
+    bool? queueSwipeHintDismissed,
+    CoverQuality? coverQuality,
+    bool? oledDark,
+    double? volumeGainDb,
+    bool? loudnessNormalize,
+    double? loudnessTargetLufs,
+    bool? loudnessDynamic,
+    String? eqProfileName,
+    String? eqProfileText,
+    int? fadeMs,
+    bool? hardwareDecode,
+    bool? streamCache,
+    int? cacheLimitMb,
+    bool? lyricTranslation,
+    String? lyricSourcePreference,
+    UpdateCheckInterval? updateCheckInterval,
+    LibrarySearchPlayAction? librarySearchPlayAction,
+    CloseBehavior? closeBehavior,
+  }) {
     if (closeBehavior != null) this.closeBehavior = closeBehavior;
     if (librarySearchPlayAction != null) {
       this.librarySearchPlayAction = librarySearchPlayAction;
@@ -403,8 +883,6 @@ class AppSettings extends ChangeNotifier {
         lyricSourceOptions.containsKey(lyricSourcePreference)) {
       this.lyricSourcePreference = lyricSourcePreference;
     }
-    notifyListeners();
-    await _save();
   }
 
   /// 正在进行的落盘(串行化用, 见 [_save])
@@ -472,17 +950,25 @@ class AppSettings extends ChangeNotifier {
   // ---------------- 自动更新检查(2026-11) ----------------
 
   /// 歌单内搜索后点歌: 默认切回完整列表(不会只播筛出来的几首)
-  LibrarySearchPlayAction librarySearchPlayAction =
-      LibrarySearchPlayAction.fullList;
+  LibrarySearchPlayAction get librarySearchPlayAction =>
+      _snapshot.librarySearchPlayAction;
+  set librarySearchPlayAction(LibrarySearchPlayAction value) =>
+      _update(_snapshot.copyWith(librarySearchPlayAction: value));
 
   /// 自动检查更新频率(默认每天; off 时仍可手动「检查更新」)
-  UpdateCheckInterval updateCheckInterval = UpdateCheckInterval.daily;
+  UpdateCheckInterval get updateCheckInterval => _snapshot.updateCheckInterval;
+  set updateCheckInterval(UpdateCheckInterval value) =>
+      _update(_snapshot.copyWith(updateCheckInterval: value));
 
   /// 上次启动检查的 epoch ms(按 [updateCheckInterval] 的周期节流; 手动检查不写)
-  int? lastUpdateCheckMs;
+  int? get lastUpdateCheckMs => _snapshot.lastUpdateCheckMs;
+  set lastUpdateCheckMs(int? value) =>
+      _update(_snapshot.copyWith(lastUpdateCheckMs: value));
 
   /// 用户点「稍后」跳过的版本 tag, 启动静默检查不再提示该版本
-  String? skippedUpdateVersion;
+  String? get skippedUpdateVersion => _snapshot.skippedUpdateVersion;
+  set skippedUpdateVersion(String? value) =>
+      _update(_snapshot.copyWith(skippedUpdateVersion: value));
 
   // ---------------- 最近交互记录(2026-11「我的」页按最近交互排序) ----------------
 
@@ -490,7 +976,9 @@ class AppSettings extends ChangeNotifier {
   ///
   /// key 形如 `album:123` / `podcast:45` / `playlist:67`; 只存在 settings.json
   /// 的 `interactions` 字段里 —— 排序是纯本地偏好, 不必新开文件/新依赖。
-  final Map<String, int> _interactions = <String, int>{};
+  ///
+  /// 只读视图; 写记录产出**新 map**(老快照不会跟着变), 见 [touchInteraction]。
+  Map<String, int> get _interactions => _snapshot.interactions;
 
   /// 记录条数上限: 超出丢最旧的, 防止 settings.json 长年累加无限变长。
   static const int interactionLimit = 200;
@@ -505,29 +993,33 @@ class AppSettings extends ChangeNotifier {
   ///
   /// [nowMs] 仅供测试注入, 生产路径用当前时间。
   Future<void> touchInteraction(String kind, BigInt id, {int? nowMs}) async {
-    _interactions[_interactionKey(kind, id)] =
-        nowMs ?? DateTime.now().millisecondsSinceEpoch;
-    if (_interactions.length > interactionLimit) {
+    // copy-on-write: 老快照持有的是旧 map, 不会被这次记录改到(§12.6 快照语义)。
+    final next = <String, int>{
+      ..._interactions,
+      _interactionKey(kind, id): nowMs ?? DateTime.now().millisecondsSinceEpoch,
+    };
+    if (next.length > interactionLimit) {
       // 丢最旧: 按时间升序删到上限。量级只有 200, 排一次不心疼。
-      final byAge = _interactions.entries.toList()
+      final byAge = next.entries.toList()
         ..sort((a, b) => a.value.compareTo(b.value));
-      for (final e in byAge.take(_interactions.length - interactionLimit)) {
-        _interactions.remove(e.key);
+      for (final e in byAge.take(next.length - interactionLimit)) {
+        next.remove(e.key);
       }
     }
-    notifyListeners();
+    // 只改交互记录域: 通知按域分发(外观/播放域的订阅者不会被惊动)。
+    _update(_snapshot.copyWith(interactions: next));
     await _save();
   }
 
   void recordUpdateCheck(int nowMs) {
-    lastUpdateCheckMs = nowMs;
-    // 节流记录走独立小落盘, 不 notifyListeners(避免无谓全页重建)
+    // 节流记录走独立小落盘, 不通知监听者(避免无谓全页重建, 与改造前一致)
+    _quiet(() => lastUpdateCheckMs = nowMs);
     _persist();
   }
 
   /// 「稍后」: 记住该版本, 启动检查不再提示
   void skipUpdate(String versionTag) {
-    skippedUpdateVersion = versionTag;
+    _quiet(() => skippedUpdateVersion = versionTag);
     _persist();
   }
 
@@ -569,7 +1061,10 @@ enum LibrarySearchPlayAction {
   final String hint;
 }
 
-/// 让 MaterialApp 跟随 AppSettings 重建(主题/字号即时生效)
+/// 让 MaterialApp 跟随 AppSettings 重建(主题/字号即时生效)。
+///
+/// 订阅的是**全体**通知(旧的兼容入口); 新代码请用 [AppSettingsScopedBuilder],
+/// 只订阅自己真正要用的域, 否则音量滑块这类高频写入还是会把整棵树带上。
 class SettingsScope extends StatelessWidget {
   const SettingsScope({super.key, required this.builder});
 
@@ -582,6 +1077,60 @@ class SettingsScope extends StatelessWidget {
       builder: (context, _) => builder(context),
     );
   }
+}
+
+/// 只在 [domains] 里的设置域真的变化时重建(§12.6 第二步的消费侧入口)。
+///
+/// 与 `AnimatedBuilder(animation: AppSettings.instance)` 的区别: 后者订阅全体通知,
+/// 音量滑块每拖一格都会重建整个 MaterialApp(主题/字号/全树); 这里只收自己那一域。
+class AppSettingsScopedBuilder extends StatefulWidget {
+  const AppSettingsScopedBuilder({
+    super.key,
+    required this.domains,
+    required this.builder,
+  });
+
+  /// 关心的设置域(空集合会被断言拦下: 那就等于不订阅)。
+  final Set<AppSettingsDomain> domains;
+
+  final WidgetBuilder builder;
+
+  @override
+  State<AppSettingsScopedBuilder> createState() =>
+      _AppSettingsScopedBuilderState();
+}
+
+class _AppSettingsScopedBuilderState extends State<AppSettingsScopedBuilder> {
+  /// tear-off 存成字段: remove/listener 用同一个引用, 不多不少。
+  late final VoidCallback _listener = _onSettingsChanged;
+
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.instance.addScopedListener(widget.domains, _listener);
+  }
+
+  @override
+  void didUpdateWidget(AppSettingsScopedBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!setEquals(oldWidget.domains, widget.domains)) {
+      AppSettings.instance.removeScopedListener(_listener);
+      AppSettings.instance.addScopedListener(widget.domains, _listener);
+    }
+  }
+
+  @override
+  void dispose() {
+    AppSettings.instance.removeScopedListener(_listener);
+    super.dispose();
+  }
+
+  void _onSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context);
 }
 
 /// 把用户选择的字号叠到系统字号上(系统无障碍设置仍然生效).

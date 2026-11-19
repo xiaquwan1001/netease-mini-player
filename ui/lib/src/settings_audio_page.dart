@@ -52,9 +52,10 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     final settings = AppSettings.instance;
     return Scaffold(
       appBar: AppBar(title: const Text('播放与音质')),
-      body: AnimatedBuilder(
-        animation: settings,
-        builder: (context, _) => ListView(
+      // 本页只显示播放/音质域; 外观/交互域的写入不该重建这张列表。
+      body: AppSettingsScopedBuilder(
+        domains: const {AppSettingsDomain.playback},
+        builder: (context) => ListView(
           padding: EdgeInsets.fromLTRB(
             12,
             8,
