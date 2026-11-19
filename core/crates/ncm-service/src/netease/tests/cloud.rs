@@ -4,6 +4,46 @@ use crate::netease::*;
 use ncm_provider::ProviderErrorKind;
 use serde_json::json;
 
+/// 真实形状(2026-11-19 抓包): token 响应的 resourceId 是**数字**(84382086772)。
+///
+/// 回归: 旧代码用 `str_of` 只按字符串解析 ⇒ 拿到空串 ⇒ info/v2 缺 resourceId ⇒
+/// 服务端 `{"code":400,"songId":"0"}`, 安卓端表现为「上传识别失败, internal code 400」。
+#[test]
+fn nos_token_resource_id_is_numeric_in_real_response() {
+    let body = json!({
+        "code": 200,
+        "message": null,
+        "result": {
+            "bucket": "jd-musicrep-privatecloud-audio-public",
+            "objectKey": "obj/xx/84382086772/1e7a/0da7/6418/d9e23.data",
+            "resourceId": 84382086772u64,
+            "token": "UPLOAD xxx"
+        }
+    });
+    let result = body.get("result").expect("result");
+    assert_eq!(
+        str_of(result, "resourceId"),
+        None,
+        "反向证据: 只按字符串解析会拿到空串(这是修前的 bug)"
+    );
+    assert_eq!(
+        str_or_num_of(result, "resourceId").as_deref(),
+        Some("84382086772")
+    );
+}
+
+/// 真实形状(2026-11-19 抓包): check 的 songId 是 128 位**十六进制串**, 必须原样回填给 info/v2。
+#[test]
+fn upload_check_song_id_hex_is_not_parsed_as_number() {
+    const HEX: &str = "1B23A9CEAFF2E6B4B2173517C5A871FE8DEDA1B08CB70BB5799988A856BC7997E08685E3143A89952A5B7328303FDDBB4E3B1D28DD517C9C0131C84CB28618BD";
+    let check = json!({"code": 200, "needUpload": true, "songId": HEX});
+    assert_eq!(u64_of(&check, "songId"), None, "十六进制串不能被当数字解析");
+    assert_eq!(str_or_num_of(&check, "songId").as_deref(), Some(HEX));
+    // 服务端也可能给数字串: 两种都要能原样回填
+    let numeric = json!({"code": 200, "needUpload": true, "songId": 12345});
+    assert_eq!(str_or_num_of(&numeric, "songId").as_deref(), Some("12345"));
+}
+
 /// 真实形状(2026-11 抓包): data[] 同时带云盘文件字段与内嵌 simpleSong.
 #[test]
 fn cloud_page_mapping() {

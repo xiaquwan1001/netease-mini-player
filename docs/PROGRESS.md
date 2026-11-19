@@ -27,6 +27,7 @@ Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flu
 `dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · `docs`/`tokens`/`row-padding`/`sheet-entry`/`write-guard` 五道 checker OK。
 **2026-11-19 晚(合并 §12.6 第二步车道 `lane/settings-snapshot` 后)第十次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **325** · 全量 `flutter test` **1299 通过 / 0 失败**(golden **20** 张, +6 例 `app_settings_scoped_notify_test.dart`) · `dart analyze` **0** · 其余门同上。
 **2026-11-19 晚(合并云盘分片车道 `lane/cloud-chunk-upload` 后)第十一次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **325→345**(service 227→247, 分片规划/引擎/续传/重试 + 云盘单请求路径假 HTTP 服务 20 例) · 全量 `flutter test` **1299** · clippy **0** · `dart analyze` **0** · 五道 checker OK。
+**2026-11-19 晚(云盘上传 400 修复后, v0.26.3 发版前)第十二次重跑**(编排者独立): `tools/ci-gates.sh verify` **EXIT=0 ALL GATES OK** · Rust **345→347**(+2 例 resourceId/songId 解析回归) · Dart **1299** · clippy **0** · `dart analyze` **0** · `lintDebug` 0 error · 五道 checker OK。
 **2026-11-19 早(夜间三车道合并回 main 后, v0.26.0 发版前)第八次重跑**(编排者独立, `tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**):
 Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flutter test` **1289 通过 / 0 失败**(golden **20** 张) ·
 `dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · 四道 checker(含 `sheet-entry` 待迁 0) OK。
@@ -38,7 +39,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 门 | 结果 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **345** 通过 / 0 失败(排除 vendor 联网 smoke; domain 49 + playback 47 + provider 1 + service **247** + ffi 1; service 的 227→247 = 云盘分片 20 例, 2026-11-19) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **347** 通过 / 0 失败(排除 vendor 联网 smoke; domain 49 + playback 47 + provider 1 + service **249** + ffi 1; service 227→247 = 云盘分片 20 例, 247→249 = 云盘 resourceId/songId 解析回归 2 例) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
 | `flutter test --exclude-tags network`(全量, 含 golden) | **1299** 通过 / 0 skip / 0 失败(golden **20** 张(v0.26.0 起: 双列 2 张 + 既有 18); 上一版口径为 **1243**(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → 1243 → 1289(v0.26.0 夜间三车道) → 1293(v0.26.1 补测) → **1299**(§12.6 第二步按域 diff 通知 6 例) |
@@ -59,6 +60,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.26.3** | **2026-11-19** | **云盘上传 400 修复**(用户报「安卓端上传任意音频都是上传识别失败, internal code 400, songid=0」): 根因 `/api/nos/token/alloc` 的 `resourceId` 是**数字**(如 84382086772), 旧代码用 `str_of` 只认字符串 ⇒ 传给 info/v2 的 resourceId 是空串 ⇒ 服务端回 `{"code":400,"songId":"0"}`; 顺带修 check 的 `songId`(128 位十六进制串)被 `u64_of` 解析成 0。真实账号 headless CLI 复现 → 修复 → 实测上传成功 → 删除测试歌曲; 新增 `str_or_num_of` + 2 例回归测试(真实响应形状)。Rust **345→347** |
 | **v0.26.2** | **2026-11-19** | `tools/smoke-appimage.sh` 修相对路径假 FAIL(`APPIMAGE=dist/xxx.AppImage` 文档写法在 cd 之后失效); 用真产物 v0.26.1 AppImage 实测 PASS/39s |
 | **v0.26.1** | **2026-11-19** | 补播放条取链提示的渲染级回归(4 例) —— 纯测试提交, 产物与 v0.26.0 等价; Dart **1293** |
 | **v0.26.0** | **2026-11-19** | **夜间三车道发版**: ① 音源信息无损(`StreamUrl` 补试听/降级/格式/md5/时长 + 播放条「试听 mm:ss · 已降级」) ② 缓冲/下载加固(强制 https · 下载 UA/Referer/超时 · 首包劫持判定 · 重试恰一次 · Android 缓冲水位 2s · 桌面 GrowingFile 修假 EOF · 缓存键带 level 且回退旧键) ③ 详情页歌词⇄封面切换 + 查看原图/保存 ④ 浮层入口第二批(待迁 0) ⑤ 匿名诊断通道上线(Worker 正式地址进客户端)。Rust **313→325** / Dart **1266→1289**(golden 20) / Kotlin 单测 **7→10** |

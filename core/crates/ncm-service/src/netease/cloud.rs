@@ -233,7 +233,9 @@ impl NeteaseProvider {
                 .get("needUpload")
                 .and_then(Value::as_bool)
                 .unwrap_or(true);
-            let cloud_song_id = u64_of(&check.body, "songId").unwrap_or(0);
+            // check 的 songId 是 **128 位十六进制串**(不是数字); 上游把它原样回填给 info/v2。
+            // 2026-11-19 前这里用 u64_of 解析 ⇒ 永远变 0, 见 upload_ids_from 的注释。
+            let cloud_song_id = str_or_num_of(&check.body, "songId").unwrap_or_else(|| "0".into());
 
             // ② 申请 NOS token
             let safe_stem: String = stem
@@ -260,8 +262,10 @@ impl NeteaseProvider {
                 .and_then(|r| str_of(r, "objectKey"))
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| ProviderError::internal("nos token: 响应缺 objectKey"))?;
+            // resourceId 是**数字**(如 84382086772), 只按字符串解析会拿到空串 ⇒
+            // info/v2 缺 resourceId ⇒ `{"code":400,"songId":"0"}`(2026-11-19 实测复现)。
             let resource_id = result
-                .and_then(|r| str_of(r, "resourceId"))
+                .and_then(|r| str_or_num_of(r, "resourceId"))
                 .unwrap_or_default();
 
             // ③ 上传文件字节(秒传跳过)
@@ -275,7 +279,7 @@ impl NeteaseProvider {
             for attempt in 0..5 {
                 let q = make_query(&cookie, &domain, &ua)
                     .param("md5", &md5_hex)
-                    .param("songid", &cloud_song_id.to_string())
+                    .param("songid", &cloud_song_id)
                     .param("filename", &file_name)
                     .param("song", &stem)
                     .param("resourceId", &resource_id);
