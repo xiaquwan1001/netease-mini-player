@@ -49,6 +49,7 @@ import '../playback.dart';
 import '../playback_bridge.dart';
 import '../player_bar.dart';
 import '../queue.dart';
+import '../queue_guide.dart';
 import '../recommend_view.dart';
 import '../rust/api.dart' as rust;
 import '../search_exact_bar.dart';
@@ -245,6 +246,10 @@ class _HomePageState extends State<HomePage> {
       seekTo: _seekTo,
       onPlaybackStarted: _onPlaybackStarted,
       onRestored: _onPlaybackRestored,
+      // 引导态(心动模式/私人FM): 播完一首不看 PlayMode, 由页面续播(见 _guideNext)
+      guideOf: () => _queueUI.guide,
+      guideNext: _guideNext,
+      queueChanged: _queueUI.queueChanged,
       syncCoverPalette: _syncCoverPalette,
       syncActionState: _syncActionState,
       // 定时关闭: 同一个状态机既给设置页显示, 也在轮询/曲末里判定到点
@@ -277,13 +282,11 @@ class _HomePageState extends State<HomePage> {
       contextOf: () => context,
       isMounted: () => mounted,
       queue: _queue,
-      libraryTitleOf: () => _account.libraryTitle,
       toast: _toast,
       playSong: _coordinator.playSong,
       stopPlayback: _coordinator.stopPlayback,
       clearSavedState: _coordinator.clearSavedState,
       setUserStopped: (stopped) => _coordinator.userStopped = stopped,
-      heartMode: () => _heartMode(),
       leaveHeartMode: _account.exitHeartMode,
       syncActionState: _syncActionState,
     )..addListener(_onQueueChanged);
@@ -440,10 +443,17 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// 起播一批曲目后的列表态(原 _playSongsList 里的那一处 setState)。
+  ///
+  /// 同时同步**引导态**: 只有"私人FM 起播"才进 fm 引导态, 其它任何起播(歌单/
+  /// 日推/搜索/单曲)都把引导态清掉 —— 否则播完那批歌还会被 FM 续播接管。
   void _onPlaybackStarted(BigInt? playlistId, SongActionSource source) {
     if (!mounted) return;
     // 浏览态字段的唯一写入口在 AccountActions(拆壳 S7), 这里只转发。
     _account.applyPlaybackStarted(playlistId, source);
+    final nextGuide = source == SongActionSource.personalFm
+        ? QueueGuide.fm
+        : QueueGuide.none;
+    if (nextGuide != _queueUI.guide) _queueUI.enterGuide(nextGuide);
   }
 
   /// 启动恢复播放现场后的页面态: 不进"歌单浏览态"(与原 _restorePlayback 同一批字段)。
@@ -707,9 +717,14 @@ class _HomePageState extends State<HomePage> {
       _queue.setAll(list, startAt: 0);
       _account.setPlaySource(SongActionSource.other);
       _coordinator.userStopped = false;
+      // 引导态 + 歌单浏览态标题一起改: 引导态决定"下一首怎么来"(不受 PlayMode 约束),
+      // 标题决定列表/播放条显示什么。只改一处会出现图标/列表对不上的老问题。
+      _queueUI.enterGuide(QueueGuide.heart);
       _account.enterHeartMode();
       unawaited(_syncActionState());
-      final next = _queue.next();
+      // 顺序前进一首(种子曲就是 list[0], 从第一条推荐开始播); 不能用 queue.next(),
+      // 随机播放下它会随机挑一首, 心动模式的"顺序"就没了
+      final next = _queue.advanceSequential();
       if (next != null) await _coordinator.playSong(next);
     } catch (e) {
       if (!mounted) return;
@@ -900,15 +915,54 @@ class _HomePageState extends State<HomePage> {
   // ---------------- 播放控制 ----------------
 
   Future<void> _next() async {
+    // 引导态(心动/私人FM): 下一首按 provider 的顺序走, 不许随机/单曲循环接管
+    if (_queueUI.guide != QueueGuide.none) {
+      final song = await _guideNext();
+      if (song != null) await _coordinator.playSong(song);
+      return;
+    }
     final next = _queue.next();
     if (next == null) return;
+    // 下标变了 ⇒ 队列面板的高亮/「正在播放」要跟着走(用户反馈: 切歌列表不跟随)
+    _queueUI.queueChanged();
     await _coordinator.playSong(next);
   }
 
   Future<void> _previous() async {
-    final prev = _queue.previous();
+    final prev = _queueUI.guide == QueueGuide.none
+        ? _queue.previous()
+        : _queue.previousSequential();
     if (prev == null) return;
+    _queueUI.queueChanged();
     await _coordinator.playSong(prev);
+  }
+
+  /// 引导态续播取料(心动模式/私人FM 各一批; 逻辑在 queue_guide.dart)。
+  late final GuideQueueAdvance _guideAdvance = GuideQueueAdvance(
+    fetchFm: () => retryNetwork(() => rust.personalFm(limit: 30)),
+    fetchHeart: (seed) => retryNetwork(
+      () => rust.heartModeSongs(
+        songId: seed.id,
+        playlistId: _account.libraryPlaylistId ?? BigInt.zero,
+        count: 30,
+      ),
+    ),
+    // 续一批 = 连取 2 次: 接口一次只回 2 首, 2 次够下一首立刻有货且只多花一个请求
+    fmBatches: 2,
+  );
+
+  /// 引导态的"下一首": 顺序前进一首, 到这段队列末尾就向 provider 续一批再前进。
+  /// 返回 null = 没有更多(播放器停在当前这首)。
+  ///
+  /// 队列是页面持有的普通对象(不是 ChangeNotifier), 队列面板订阅的是
+  /// [QueueSheetController], 所以每次续播/追加后都要显式 [queueChanged]
+  /// (用户反馈: FM 切下一首时列表不跟随刷新)。
+  Future<rust.SongDto?> _guideNext() async {
+    final guide = _queueUI.guide;
+    if (guide == QueueGuide.none) return null;
+    final next = await _guideAdvance.next(_queue, guide);
+    _queueUI.queueChanged();
+    return next;
   }
 
   /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
@@ -940,35 +994,22 @@ class _HomePageState extends State<HomePage> {
   Future<void> _syncActionState() async {
     await _playback.setActionState(
       liked: _isLiked(_current?.id),
-      modeIcon: notificationModeIcon(_queue.mode, heartActive: _heartActive),
+      // 引导态优先(fm > heart): 通知栏图标要说清"现在在哪个引导态",
+      // 因为此时按播放顺序按钮 = 退出引导
+      modeIcon: notificationModeIcon(
+        _queue.mode,
+        heartActive: _heartActive,
+        fmActive: _queueUI.fmActive,
+      ),
     );
   }
 
-  /// 通知栏「播放顺序」按钮: 列表循环→单曲循环→顺序播放→随机播放→心动模式→(回到)列表循环.
-  /// 心动模式那一步调 _heartMode(); 未登录/失败时 _heartMode 会自己 toast, 这里回退列表循环.
-  Future<void> _cycleModeFromNotification() async {
-    if (_heartActive) {
-      // 退出心动模式必须连歌单浏览态一起改(标题还停在「心动模式」的话,
-      // _heartActive 永远为真: 图标变不回来、再点只弹「列表循环」)。
-      setState(() => _queue.mode = PlayMode.repeatAll);
-      _account.exitHeartMode();
-      _toast('列表循环');
-    } else {
-      final next = nextNotificationMode(_queue.mode);
-      if (next == null) {
-        await _heartMode();
-        if (!mounted) return;
-        if (!_heartActive) {
-          setState(() => _queue.mode = PlayMode.repeatAll);
-          _toast('列表循环');
-        }
-      } else {
-        setState(() => _queue.mode = next);
-        _queueUI.toastTop(playModeLabels[next]!);
-      }
-    }
-    await _syncActionState();
-  }
+  /// 通知栏「播放顺序」按钮: 列表循环→单曲循环→顺序播放→随机播放→(回到)列表循环。
+  ///
+  /// 与播放条上的按钮**同一个实现**(QueueSheetController.cycleMode): 轮转只剩 4 档,
+  /// 引导态下按一下 = 退出引导回到列表循环。两条路径各写一份曾经漂过
+  /// (2026-11-18 心动模式退不干净的根因), 现在只留一个入口。
+  Future<void> _cycleModeFromNotification() => _queueUI.cycleMode();
 
   Future<void> _seekTo(double ms) async {
     final target = ms.round();
@@ -1706,6 +1747,7 @@ class _HomePageState extends State<HomePage> {
             dragMs: _dragMs,
             mode: _queue.mode,
             heartActive: _heartActive,
+            fmActive: _queueUI.fmActive,
           );
     // Linux 系统托盘菜单的按钮态: 文案(播放/暂停、喜欢/取消喜欢)与置灰全由
     // 这里推过去。幂等(值没变不跨通道), 所以每次构建推一次几乎零成本;

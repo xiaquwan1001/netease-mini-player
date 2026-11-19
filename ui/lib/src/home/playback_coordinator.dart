@@ -58,6 +58,9 @@ class PlaybackCoordinator extends ChangeNotifier {
     required this.seekTo,
     required this.onPlaybackStarted,
     required this.onRestored,
+    required this.guideOf,
+    required this.guideNext,
+    required this.queueChanged,
     required this.syncCoverPalette,
     required this.syncActionState,
     this.sleepTimer,
@@ -98,6 +101,24 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 启动恢复现场后页面的 `setState`(原 `_restorePlayback` 里同时清掉的
   /// 歌单浏览态三件: `_libraryTitle` / `_libraryPlaylistId` / `_queuePlaylistId`)。
   final void Function() onRestored;
+
+  /// 当前引导态(心动模式/私人FM; 真相在 QueueSheetController)。
+  ///
+  /// 引导态下**播完一首不看 PlayMode**: 下一首由 provider 续（见 [guideNext]）。
+  /// 用户反馈的现场就是反的 —— FM 只有 2 首, 播完以后被随机/单曲循环接管,
+  /// 于是「切下一首列表不跟随刷新」「一直在两首里循环」。
+  final QueueGuide Function() guideOf;
+
+  /// 引导态下的"下一首"(页面实现: 顺序前进或续一批, 会把曲目追加进队列)。
+  /// 返回 null = 没有更多, 停在当前这首。
+  final Future<rust.SongDto?> Function() guideNext;
+
+  /// 队列内容/当前下标被本类改过(自动续播、跳过曲目)时通知队列面板重排。
+  ///
+  /// PlayQueue 是普通对象不是 ChangeNotifier, 面板订阅的是 QueueSheetController
+  /// ⇒ 续播后不叫这一声, 面板的高亮与「N 首」会停在旧状态(用户反馈
+  /// 「切下一首时列表不跟随刷新」)。
+  final void Function() queueChanged;
 
   /// 换曲后重算封面主色(原 `_syncCoverPalette`, 需要 setState)。
   final Future<void> Function() syncCoverPalette;
@@ -276,12 +297,20 @@ class PlaybackCoordinator extends ChangeNotifier {
           return;
         }
       }
-      final next = queue.onEnded();
+      // 引导态(心动模式/私人FM): 下一首由 provider 续播, 不受 PlayMode 约束。
+      // 以前这里一律走 queue.onEnded() ⇒ 随机播放会打乱 FM 的顺序、单曲循环
+      // 会把它钉成一首歌循环(用户反馈 4/5)。
+      final next = guideOf() == QueueGuide.none
+          ? queue.onEnded()
+          : await guideNext();
       if (next == null) {
-        // 顺序播放到队尾: 停在最后一首
+        // 顺序播放到队尾 / 引导态续不到新歌: 停在最后一首
+        queueChanged();
         if (!_disposed) notifyListeners();
         return;
       }
+      // 下标/队列已经变了(引导态还可能追加了一批): 队列面板要跟着重排
+      queueChanged();
       await playSong(next);
     } finally {
       _advancing = false;
@@ -353,6 +382,8 @@ class PlaybackCoordinator extends ChangeNotifier {
         return;
       }
       final next = queue.next();
+      // 跳过不可播曲目时下标也动了: 面板高亮要跟上, 否则「正在播放」指在别的行
+      queueChanged();
       if (next == null) return;
       target = next;
     }
@@ -384,7 +415,10 @@ class PlaybackCoordinator extends ChangeNotifier {
 
   /// 后台预取"下一首"的直链(随机/单曲循环没有可预知的下一首, 直接跳过)。
   void _prefetchNextTrack() {
-    final next = queue.peekNext();
+    // 引导态下"下一首"是顺序的下一格(随机/单曲循环的 peekNext 在这里恒为 null)
+    final next = guideOf() == QueueGuide.none
+        ? queue.peekNext()
+        : queue.peekSequential();
     if (next == null || !next.playable) return;
     final id = next.id.toInt();
     if (_prefetchedUrls.containsKey(id)) return;

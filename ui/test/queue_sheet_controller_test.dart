@@ -39,7 +39,6 @@ class HarnessState extends State<_Harness> {
     contextOf: () => context,
     isMounted: () => mounted,
     queue: queue,
-    libraryTitleOf: () => libraryTitle,
     toast: (m) => toasts.add(m),
     playSong: (song, {bool explicit = false}) async {
       played.add((song.name, explicit));
@@ -47,10 +46,6 @@ class HarnessState extends State<_Harness> {
     stopPlayback: () async => stopped.add('stop'),
     clearSavedState: () async => stopped.add('clearState'),
     setUserStopped: (v) => stopped.add('userStopped=$v'),
-    heartMode: () async {
-      heartCalls += 1;
-      if (heartModeSucceeds) libraryTitle = '心动模式';
-    },
     leaveHeartMode: () {
       leaveCalls += 1;
       if (libraryTitle == '心动模式') libraryTitle = '正在播放';
@@ -60,13 +55,9 @@ class HarnessState extends State<_Harness> {
 
   String? libraryTitle;
 
-  /// 心动模式取数是否成功(false = 未登录/无推荐, 页面会回落列表循环)
-  bool heartModeSucceeds = true;
-
   final List<String> toasts = [];
   final List<(String, bool)> played = [];
   final List<String> stopped = [];
-  int heartCalls = 0;
   int leaveCalls = 0;
   int syncCalls = 0;
   int rebuilds = 0;
@@ -75,6 +66,12 @@ class HarnessState extends State<_Harness> {
   void initState() {
     super.initState();
     controller.addListener(() => rebuilds += 1);
+  }
+
+  /// 模拟页面 `_heartMode()` 成功后的两步: 引导态 + 歌单浏览态标题
+  void enterHeart() {
+    libraryTitle = '心动模式';
+    controller.enterGuide(QueueGuide.heart);
   }
 
   @override
@@ -291,16 +288,26 @@ void main() {
       expect(find.text('单曲循环'), findsNothing);
     });
 
-    testWidgets('心动模式中再轮转 = 回列表循环, 且**真的退出心动**', (tester) async {
+    testWidgets('随机播放之后回到列表循环(轮转只有 4 档, 不再进心动模式)', (tester) async {
       final h = await _pump(tester, names: ['a']);
-      h.libraryTitle = '心动模式';
+      h.queue.mode = PlayMode.shuffle;
+      await h.controller.cycleMode();
+      expect(h.queue.mode, PlayMode.repeatAll);
+      expect(h.controller.heartActive, isFalse);
+      await tester.pump();
+      expect(find.text('列表循环'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('心动引导态中按播放顺序 = 退出引导回列表循环(标题一起改)', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      h.enterHeart();
       expect(h.controller.heartActive, isTrue);
       await h.controller.cycleMode();
       expect(h.queue.mode, PlayMode.repeatAll);
-      expect(h.heartCalls, 0);
       expect(h.syncCalls, 1);
-      // 2026-11-18 用户反馈的根因: 以前只改 mode, 浏览态标题仍是「心动模式」⇒
-      // heartActive 永远为真, 图标变不回来、再点只反复弹「列表循环」。
+      // 2026-11-18 用户反馈的根因: 只改 mode 不改歌单浏览态标题 ⇒ heartActive
+      // 永远为真, 图标变不回来、再点只反复弹「列表循环」。
       expect(h.controller.heartActive, isFalse, reason: '必须真的跳出心动模式');
       expect(h.leaveCalls, 1);
       expect(h.libraryTitle, '正在播放', reason: '队列还在, 标题回到正在播放而不是清空');
@@ -310,29 +317,72 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('随机之后下一步 = 取心动数据, 成功则留在心动模式', (tester) async {
-      final h = await _pump(tester, names: ['a']);
+    testWidgets('私人FM 引导态中按播放顺序 = 退出引导回列表循环(不动心动标题)', (tester) async {
+      final h = await _pump(tester, names: ['a', 'b']);
       h.queue.mode = PlayMode.shuffle;
+      h.controller.enterGuide(QueueGuide.fm);
+      expect(h.controller.fmActive, isTrue);
+      expect(h.controller.heartActive, isFalse);
       await h.controller.cycleMode();
-      expect(h.heartCalls, 1);
-      expect(h.queue.mode, PlayMode.shuffle);
-      expect(h.toasts, isEmpty);
-      await tester.pump();
-      expect(find.text('心动模式'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 1));
-    });
-
-    testWidgets('心动取数失败: 回落列表循环(原 _cycleMode 的兜底)', (tester) async {
-      final h = await _pump(tester, names: ['a']);
-      h.queue.mode = PlayMode.shuffle;
-      h.heartModeSucceeds = false;
-      await h.controller.cycleMode();
-      expect(h.heartCalls, 1);
+      expect(h.controller.fmActive, isFalse);
       expect(h.queue.mode, PlayMode.repeatAll);
+      expect(h.leaveCalls, 0, reason: 'FM 没有心动标题要改');
       await tester.pump();
       expect(find.text('列表循环'), findsOneWidget);
-      expect(h.syncCalls, 1);
       await tester.pump(const Duration(seconds: 1));
+    });
+  });
+
+  // 2026-11-19 用户反馈 4/5: 「播放顺序」与心动模式/私人FM 彻底分开 —— 进入时记下
+  // 原来的 PlayMode, 退出(非播放顺序按钮路径)时恢复它。
+  group('引导态进出', () {
+    testWidgets('进入心动记录原模式, exitGuide() 恢复它', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      h.queue.mode = PlayMode.repeatOne;
+      h.enterHeart();
+      expect(h.queue.mode, PlayMode.repeatOne, reason: '进入引导不擅自改 mode');
+      h.controller.exitGuide();
+      expect(h.queue.mode, PlayMode.repeatOne, reason: '恢复进入前的 PlayMode');
+      expect(h.controller.heartActive, isFalse);
+      expect(h.libraryTitle, '正在播放');
+    });
+
+    testWidgets('FM → 心动: 记录的仍是回到普通播放要用的那个模式', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      h.queue.mode = PlayMode.sequence;
+      h.controller.enterGuide(QueueGuide.fm);
+      h.controller.enterGuide(QueueGuide.heart);
+      h.controller.exitGuide();
+      expect(h.queue.mode, PlayMode.sequence);
+      expect(h.controller.guide, QueueGuide.none);
+    });
+
+    testWidgets('重复进入同一引导态不重复记录、不通知', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      h.queue.mode = PlayMode.shuffle;
+      h.controller.enterGuide(QueueGuide.fm);
+      final rebuilds = h.rebuilds;
+      h.controller.enterGuide(QueueGuide.fm);
+      expect(h.rebuilds, rebuilds);
+      h.queue.mode = PlayMode.repeatAll;
+      h.controller.exitGuide();
+      expect(h.queue.mode, PlayMode.shuffle, reason: '记录的还是第一次进入前的模式');
+    });
+
+    testWidgets('enterGuide(none) = 退出引导', (tester) async {
+      final h = await _pump(tester, names: ['a']);
+      h.controller.enterGuide(QueueGuide.fm);
+      h.controller.enterGuide(QueueGuide.none);
+      expect(h.controller.guide, QueueGuide.none);
+    });
+
+    testWidgets('queueChanged(): 引导态续播追加了一批 ⇒ 通知面板重排', (tester) async {
+      final h = await _pump(tester, names: ['a', 'b']);
+      h.controller.enterGuide(QueueGuide.fm);
+      final rebuilds = h.rebuilds;
+      h.queue.append(fakeSong(id: 9, name: 'FM 新歌'));
+      h.controller.queueChanged();
+      expect(h.rebuilds, rebuilds + 1);
     });
   });
 }

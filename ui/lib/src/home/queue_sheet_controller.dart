@@ -21,25 +21,29 @@ import '../rust/api.dart' as rust;
 ///   [remove](原 `_removeFromQueue`: 删当前项时换到顶上来的下一首, 删空则停播)、
 ///   清空 [clear](原 `_clearQueue`: 二次确认在面板里, 这里只清队列 + [stopAfterEmpty])、
 ///   点项跳播 [jumpTo](原 `_jumpToQueueSong`: 重新查下标再 `playSong(explicit)`)。
-/// - **播放模式轮转** [cycleMode](原 `_cycleMode`: 列表循环 → 单曲 → 顺序 → 随机 →
-///   心动 → 列表循环)与顶部短浮层 [toastTop](原 `_toastTop`)。
+/// - **播放模式轮转** [cycleMode](原 `_cycleMode`): 只剩 4 档
+///   (列表循环 → 单曲 → 顺序 → 随机 → 列表循环)与顶部短浮层 [toastTop](原 `_toastTop`)。
+/// - **引导态 [guide]**: 心动模式/私人FM 从播放顺序里**独立**出来(2026-11-19 用户反馈
+///   4/5/6)。进入时记下进入前的 [PlayMode], 退出时恢复(或按播放顺序按钮的语义回列表
+///   循环, 见 [exitGuide]); 引导态期间下一首由 provider 续播, 不看 PlayMode。
 /// - **退出心动模式** [leaveHeartMode]: 2026-11-18 修 —— 以前只把 mode 改回列表循环,
 ///   歌单浏览态标题仍是「心动模式」⇒ `heartActive` 永远为真, 图标变不回来、
-///   再点只反复弹「列表循环」(用户反馈)。
+///   再点只反复弹「列表循环」(用户反馈)。现在标题跟着引导态一起改。
 /// - **重要变更(2026-11-18 用户反馈)**: 「存为歌单」整条链路已删除(选歌单/新建/批量加曲
 ///   连同 `ui/test/queue_sheet_save_test.dart` 一并移除)。
-/// - **队列来源标题的口径** [heartActive](原 `_heartActive`): 心动不是 `PlayMode`,
-///   用"歌单浏览态标题 == 心动模式"识别; 标题本体仍是页面状态, 这里经
-///   [libraryTitleOf] 只读。
+/// - **引导态口径** [heartActive] / [fmActive](原 `_heartActive`): 心动模式与私人FM
+///   不是 `PlayMode`, 由 [guide] 表达; 歌单浏览态标题只是展示面, 由页面经
+///   [leaveHeartMode] 跟着改。
 ///
 /// 所有权边界(为什么这些仍留在页面):
 /// - **队列 `PlayQueue` 由页面持有并注入引用**, 这里不复制(与
 ///   [PlaybackCoordinator] 同一口径): 拖拽/删除/清空/跳播改的就是页面那一份,
 ///   `_sourceSongs`、播放条快照读到的立刻是同一状态。
 /// - **歌单浏览态标题**(`_libraryTitle`/`_libraryPlaylistId`/`_queuePlaylistId`)
-///   归页面: 起播/恢复/搜索都会改, 不是队列面板的语义, 这里只读 [libraryTitleOf]。
-/// - **心动模式取数**(`_heartMode`)与**通知栏状态回传**(`_syncActionState`)仍
-///   在页面/协调器, 经 [heartMode] / [syncActionState] 注入调用。
+///   归页面: 起播/恢复/搜索都会改, 不是队列面板的语义, 这里只在退出引导时
+///   请求一次标题回落([leaveHeartMode])。
+/// - **心动模式/私人FM 取数**(页面 `_heartMode` 与引导态续播)与**通知栏状态回传**
+///   (`_syncActionState`)仍在页面/协调器, 这里只在退出引导时用 [syncActionState] 收尾。
 /// - **播放动作**落到注入的 [playSong] / [stopPlayback] / [clearSavedState]
 ///   (播放协调器), 这里不碰播放器/歌词/搜索。
 /// - **需要 BuildContext 的东西**一律不进来: 面板/对话框/toast 都经 [contextOf]
@@ -52,13 +56,11 @@ class QueueSheetController extends ChangeNotifier {
     required this.contextOf,
     required this.isMounted,
     required this.queue,
-    required this.libraryTitleOf,
     required this.toast,
     required this.playSong,
     required this.stopPlayback,
     required this.clearSavedState,
     required this.setUserStopped,
-    required this.heartMode,
     required this.leaveHeartMode,
     required this.syncActionState,
   });
@@ -71,9 +73,6 @@ class QueueSheetController extends ChangeNotifier {
 
   /// 播放队列(真相在页面, 这里只持有引用)。
   final PlayQueue<rust.SongDto> queue;
-
-  /// 当前"歌单浏览态"标题(原 `_libraryTitle`); 心动模式靠它识别。
-  final String? Function() libraryTitleOf;
 
   /// 普通提示(页面实现: mounted 判断 + `showToast`)。
   final void Function(String message) toast;
@@ -89,9 +88,6 @@ class QueueSheetController extends ChangeNotifier {
 
   /// 标记"用户主动停止, 不再自动续播"(原 `_coordinator.userStopped = ...`)。
   final void Function(bool stopped) setUserStopped;
-
-  /// 心动模式(在页面实现: 要改搜索忙碌态与歌单浏览态标题)。
-  final Future<void> Function() heartMode;
 
   /// 退出心动模式的列表态(页面实现: 标题从「心动模式」改回「正在播放」)。
   ///
@@ -113,8 +109,65 @@ class QueueSheetController extends ChangeNotifier {
 
   bool get isOpen => _open;
 
-  /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
-  bool get heartActive => libraryTitleOf() == '心动模式';
+  // ---------------- 引导态(心动模式 / 私人FM) ----------------
+  //
+  // 这两个模式**不是** PlayMode(见 [QueueGuide] 的注释): 它们自己管续播, 不许
+  // 随机/单曲循环接管; 播放顺序按钮在引导态下只剩"退出引导"一个语义。
+
+  QueueGuide _guide = QueueGuide.none;
+
+  /// 进入引导态之前的 [PlayMode](退出时恢复; 见 [exitGuide])。
+  PlayMode _modeBeforeGuide = PlayMode.repeatAll;
+
+  /// 当前引导态(none = 普通播放)。
+  QueueGuide get guide => _guide;
+
+  /// 是否处于心动模式。
+  ///
+  /// 判定从"歌单浏览态标题"换成引导态: 标题只是展示, 引导态才是"下一首怎么来"的
+  /// 真相; 两者由 [enterGuide]/[exitGuide] 一起改。
+  bool get heartActive => _guide == QueueGuide.heart;
+
+  /// 是否处于私人FM。
+  bool get fmActive => _guide == QueueGuide.fm;
+
+  /// 进入引导态(心动模式/私人FM)。
+  ///
+  /// 记下进入前的 [PlayMode] 供 [exitGuide] 恢复; 已经在别的引导态时以新态为准
+  /// (不覆盖记录的 mode —— 记录的是"回到普通播放时该用什么模式")。
+  void enterGuide(QueueGuide guide) {
+    if (guide == QueueGuide.none) {
+      exitGuide();
+      return;
+    }
+    if (_guide == guide) return;
+    if (_guide == QueueGuide.none) _modeBeforeGuide = queue.mode;
+    _guide = guide;
+    notifyListeners();
+  }
+
+  /// 退出引导态。
+  ///
+  /// [restoreMode] = true 恢复进入前的 [PlayMode](默认: 别处退出引导时用);
+  /// [restoreMode] = false 强制回列表循环 —— 播放条/通知栏的「播放顺序」按钮在
+  /// 引导态下就是这个语义(用户要求"按一下回到列表循环")。
+  ///
+  /// 必须与**歌单浏览态标题**一起改: 只改 mode 会留下「图标还是心动 / 再点只弹
+  /// 列表循环 / 歌单不重排」三连(2026-11-18 用户反馈)。
+  void exitGuide({bool restoreMode = true}) {
+    if (_guide == QueueGuide.none) return;
+    final wasHeart = _guide == QueueGuide.heart;
+    _guide = QueueGuide.none;
+    queue.mode = restoreMode ? _modeBeforeGuide : PlayMode.repeatAll;
+    if (wasHeart) leaveHeartMode();
+    notifyListeners();
+  }
+
+  /// 队列被别处改过(引导态续播追加了一批/切了下一首): 面板要跟着重排。
+  ///
+  /// `PlayQueue` 本身不是 ChangeNotifier, 面板订阅的是本控制器, 所以引导态的
+  /// 续播路径必须显式叫一声(用户反馈: FM 切下一首时列表不跟随刷新)。
+  void queueChanged() => notifyListeners();
 
   /// 面板自己那条路由(open 时建、push 完清空; null = 没开).
   ///
@@ -279,37 +332,25 @@ class QueueSheetController extends ChangeNotifier {
 
   // ---------------- 播放模式轮转 ----------------
 
-  /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 心动 → 列表循环。
+  /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 列表循环(**只有 4 档**)。
   ///
-  /// 心动模式是否可用由 [heartMode] 自己判断(未登录/无种子时会给提示并回落),
-  /// 切换成功/失败的反馈用顶部浮层, 不挡播放条上那个按钮(用户反馈)。
+  /// 心动模式/私人FM 不在轮转里(2026-11-19 用户反馈 4/5): 它们由自己的入口进入,
+  /// 有自己的续播逻辑。引导态下这个按钮的语义 = 「退出引导回到列表循环」
+  /// ([exitGuide] 的 restoreMode: false), 图标由 [heartActive]/[fmActive] 换成
+  /// 火焰/广播(见 `notificationModeIcon` 与播放条)。
+  ///
+  /// 反馈用顶部浮层, 不挡播放条上那个按钮(用户反馈)。
   Future<void> cycleMode() async {
-    if (heartActive) {
-      // 退出心动模式: mode 与**歌单浏览态标题**必须一起改。
-      // 以前只改 mode ⇒ heartActive 仍为真(它读的是标题), 于是图标一直是心动,
-      // 再点还是走这个分支只弹「列表循环」, 队列也不重排(2026-11-18 用户反馈)。
-      queue.mode = PlayMode.repeatAll;
-      leaveHeartMode();
-      notifyListeners();
+    if (_guide != QueueGuide.none) {
+      exitGuide(restoreMode: false);
       toastTop(playModeLabels[PlayMode.repeatAll]!);
       unawaited(syncActionState());
       return;
     }
     final next = nextNotificationMode(queue.mode);
-    if (next == null) {
-      await heartMode();
-      if (heartActive) {
-        toastTop('心动模式');
-      } else {
-        queue.mode = PlayMode.repeatAll;
-        notifyListeners();
-        toastTop(playModeLabels[PlayMode.repeatAll]!);
-      }
-    } else {
-      queue.mode = next;
-      notifyListeners();
-      toastTop(playModeLabels[next]!);
-    }
+    queue.mode = next;
+    notifyListeners();
+    toastTop(playModeLabels[next]!);
     unawaited(syncActionState());
   }
 

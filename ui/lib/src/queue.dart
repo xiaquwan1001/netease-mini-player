@@ -20,6 +20,28 @@ enum PlayMode {
   shuffle,
 }
 
+/// 「引导态」: 心动模式 / 私人FM —— 自己管续播的推荐流, **不是** [PlayMode] 的一档。
+///
+/// 2026-11-19 用户反馈(4/5/6)把这两件事彻底分开:
+/// - 它们不是"播放顺序": 下一首由 provider 决定, 不能被随机/单曲循环接管
+///   (以前随机播放会把 FM 的下一首打乱, 单曲循环会把它变成一首歌循环);
+/// - 私人FM 的 `/api/v1/radio/get` 实测**一次只回 2 首**, 播到这段末尾必须再
+///   取一批追加队列, 否则队列面板里永远只有两首;
+/// - 所以「播放顺序」轮转里不再有心动(只剩 4 档), 引导态下按播放顺序按钮的语义
+///   变成「退出引导回到列表循环」。
+///
+/// 由 `QueueSheetController` 持有(它同时是队列面板的 changes 通知源), 页面只读。
+enum QueueGuide {
+  /// 普通播放: 下一首完全由 [PlayMode] 决定
+  none,
+
+  /// 心动模式: 一批推荐 = 30 首, 播完用当前曲目当种子再来一批
+  heart,
+
+  /// 私人FM: 一批只有 2 首, 播完立刻再取
+  fm,
+}
+
 class PlayQueue<T> {
   PlayQueue({this.mode = PlayMode.repeatAll, Random? random})
     : _random = random ?? Random();
@@ -83,6 +105,32 @@ class PlayQueue<T> {
     }
     _index = (_index <= 0) ? _items.length - 1 : _index - 1;
     return current;
+  }
+
+  /// 手动下一首, **忽略 [mode]**(引导态专用): 只顺序走一格, 到队尾返回 null。
+  ///
+  /// 心动模式/私人FM 的续播走它, 才不会被随机播放/单曲循环接管
+  /// (2026-11-19 用户反馈: 「切下一首时列表不跟随刷新」的根因之一)。
+  T? advanceSequential() {
+    if (_items.isEmpty) return null;
+    if (_index + 1 >= _items.length) return null;
+    _index += 1;
+    return current;
+  }
+
+  /// 手动上一首, **忽略 [mode]**; 已在队首返回 null。
+  T? previousSequential() {
+    if (_items.isEmpty || _index <= 0) return null;
+    _index -= 1;
+    return current;
+  }
+
+  /// 引导态预取: 顺序上的下一首(**不移动下标**); 队尾返回 null。
+  ///
+  /// 与 [peekNext] 的区别: 那个在随机/单曲循环下返回 null, 引导态不接受这种"不可预知"。
+  T? peekSequential() {
+    if (_items.isEmpty || _index + 1 >= _items.length) return null;
+    return _items[_index + 1];
   }
 
   /// 当前曲目自然播完: 返回下一首要播的曲目, null 表示停止

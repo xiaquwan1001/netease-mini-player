@@ -139,13 +139,11 @@ void main() {
       contextOf: () => homeContext,
       isMounted: () => true,
       queue: queue,
-      libraryTitleOf: () => null,
       toast: (_) {},
       playSong: (song, {bool explicit = false}) async {},
       stopPlayback: () async {},
       clearSavedState: () async {},
       setUserStopped: (_) {},
-      heartMode: () async {},
       leaveHeartMode: () {},
       syncActionState: () async {},
     );

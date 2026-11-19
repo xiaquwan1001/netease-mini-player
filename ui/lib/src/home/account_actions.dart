@@ -181,6 +181,9 @@ class AccountActions extends ChangeNotifier {
 
   /// 心动模式接管列表态(原 `_heartMode` 里的 setState: 只改标题与队列来源,
   /// 保留 [libraryPlaylistId] 作为下一轮的种子歌单)。
+  ///
+  /// 这一处只改**展示**; "心动模式续播"由 [QueueSheetController.enterGuide]
+  /// (`QueueGuide.heart`) 决定, 两处必须一起改(2026-11-19)。
   void enterHeartMode() {
     _libraryTitle = '心动模式';
     _queuePlaylistId = null;
@@ -190,9 +193,10 @@ class AccountActions extends ChangeNotifier {
   /// 退出心动模式(2026-11-18): 队列还在(就是心动那批推荐), 所以标题回到
   /// 「正在播放」而不是清成 null —— null 会把页面踢回搜索态, 用户丢掉当前列表。
   ///
-  /// 必须与 `queue.mode = PlayMode.repeatAll` 同时做:
-  /// [QueueSheetController.heartActive] 判定的就是这个标题, 只改 mode 会让播放条
-  /// 图标永远停在心动、再点只弹「列表循环」、队列也不重排(用户反馈)。
+  /// 必须与**引导态**一起改(2026-11-19 起 [QueueSheetController.guide] 才是
+  /// 「心动模式/私人FM」的判定依据, 这个标题只是展示面): 只改一处会出现
+  /// 「图标还是心动 / 列表标题还是心动模式 / 再点只弹列表循环」(用户反馈 2026-11-18)。
+  /// 两条入口已合并成一个: [QueueSheetController.exitGuide]。
   void exitHeartMode() {
     if (_libraryTitle != '心动模式') return;
     _libraryTitle = '正在播放';

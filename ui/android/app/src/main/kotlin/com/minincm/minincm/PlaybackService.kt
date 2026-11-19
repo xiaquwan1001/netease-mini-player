@@ -275,7 +275,11 @@ class PlaybackService : MediaSessionService() {
         "repeat" -> R.drawable.ic_notif_repeat
         "repeatOne" -> R.drawable.ic_notif_repeat_one
         "shuffle" -> R.drawable.ic_notif_shuffle
-        "heart" -> R.drawable.ic_notif_heart_filled
+        // 心动模式 = 火焰(独立 drawable): 之前和喜欢按钮共用红心, 通知栏里
+        // 「心动模式」和「我喜欢的」同图分不清(2026-11-19 用户反馈 6)
+        "heart" -> R.drawable.ic_notif_heart_fire
+        // 私人FM 引导态(2026-11-19 用户反馈 5): 与 Dart 侧 notificationModeIcon('fm') 对齐
+        "fm" -> R.drawable.ic_notif_fm
         else -> R.drawable.ic_notif_sequence
     }
 
