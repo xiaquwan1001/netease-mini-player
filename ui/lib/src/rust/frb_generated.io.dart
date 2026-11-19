@@ -4,6 +4,20 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/account.dart';
+import 'api/artist.dart';
+import 'api/cloud.dart';
+import 'api/detail.dart';
+import 'api/discover.dart';
+import 'api/library.dart';
+import 'api/lyric.dart';
+import 'api/me.dart';
+import 'api/playback.dart';
+import 'api/podcast.dart';
+import 'api/radio.dart';
+import 'api/recommend.dart';
+import 'api/search.dart';
+import 'api/social.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -86,9 +100,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CacheEvictionDto dco_decode_cache_eviction_dto(dynamic raw);
-
-  @protected
-  CacheStatsDto dco_decode_cache_stats_dto(dynamic raw);
 
   @protected
   ChartSummary dco_decode_chart_summary(dynamic raw);
@@ -267,6 +278,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PodcastRadio> dco_decode_list_podcast_radio(dynamic raw);
 
   @protected
+  Int64List dco_decode_list_prim_i_64_strict(dynamic raw);
+
+  @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw);
 
   @protected
@@ -360,6 +374,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LoudnessDto dco_decode_loudness_dto(dynamic raw);
+
+  @protected
+  LyricChoiceDto dco_decode_lyric_choice_dto(dynamic raw);
 
   @protected
   LyricLineDto dco_decode_lyric_line_dto(dynamic raw);
@@ -584,6 +601,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto dco_decode_word_lyric_line_dto(dynamic raw);
 
   @protected
+  WordLyricScoreDto dco_decode_word_lyric_score_dto(dynamic raw);
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
@@ -660,9 +680,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CacheEvictionDto sse_decode_cache_eviction_dto(SseDeserializer deserializer);
-
-  @protected
-  CacheStatsDto sse_decode_cache_stats_dto(SseDeserializer deserializer);
 
   @protected
   ChartSummary sse_decode_chart_summary(SseDeserializer deserializer);
@@ -877,6 +894,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer);
+
+  @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer);
 
   @protected
@@ -1000,6 +1020,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LoudnessDto sse_decode_loudness_dto(SseDeserializer deserializer);
+
+  @protected
+  LyricChoiceDto sse_decode_lyric_choice_dto(SseDeserializer deserializer);
 
   @protected
   LyricLineDto sse_decode_lyric_line_dto(SseDeserializer deserializer);
@@ -1254,6 +1277,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WordLyricLineDto sse_decode_word_lyric_line_dto(SseDeserializer deserializer);
 
   @protected
+  WordLyricScoreDto sse_decode_word_lyric_score_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
@@ -1354,9 +1382,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     CacheEvictionDto self,
     SseSerializer serializer,
   );
-
-  @protected
-  void sse_encode_cache_stats_dto(CacheStatsDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_chart_summary(ChartSummary self, SseSerializer serializer);
@@ -1623,6 +1648,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_prim_i_64_strict(
+    Int64List self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_prim_u_32_strict(
     Uint32List self,
     SseSerializer serializer,
@@ -1789,6 +1820,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_loudness_dto(LoudnessDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_lyric_choice_dto(
+    LyricChoiceDto self,
+    SseSerializer serializer,
+  );
 
   @protected
   void sse_encode_lyric_line_dto(LyricLineDto self, SseSerializer serializer);
@@ -2099,6 +2136,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_word_lyric_line_dto(
     WordLyricLineDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_word_lyric_score_dto(
+    WordLyricScoreDto self,
     SseSerializer serializer,
   );
 }

@@ -4,6 +4,20 @@
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
 import 'api.dart';
+import 'api/account.dart';
+import 'api/artist.dart';
+import 'api/cloud.dart';
+import 'api/detail.dart';
+import 'api/discover.dart';
+import 'api/library.dart';
+import 'api/lyric.dart';
+import 'api/me.dart';
+import 'api/playback.dart';
+import 'api/podcast.dart';
+import 'api/radio.dart';
+import 'api/recommend.dart';
+import 'api/search.dart';
+import 'api/social.dart';
 
 import 'dart:async';
 import 'dart:convert';
@@ -67,7 +81,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -1088441002;
+  int get rustContentHash => 1208985053;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,534 +93,579 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<bool> crateApiAccountRemove({required BigInt userId});
+  Future<bool> crateApiAccountAccountRemove({required BigInt userId});
 
-  Future<bool> crateApiAccountSwitch({required BigInt userId});
+  Future<bool> crateApiAccountAccountSwitch({required BigInt userId});
 
-  Future<AccountDto> crateApiAccountSyncActive();
+  Future<AccountDto> crateApiAccountAccountSyncActive();
 
-  Future<List<AccountDto>> crateApiAccounts();
+  Future<List<AccountDto>> crateApiAccountAccounts();
 
-  Future<bool> crateApiAddToPlaylist({
+  Future<bool> crateApiAccountAddToPlaylist({
     required BigInt playlistId,
     required BigInt trackId,
   });
 
-  Future<AlbumDetailDto> crateApiAlbumDetail({required BigInt albumId});
+  Future<AlbumDetailDto> crateApiDetailAlbumDetail({required BigInt albumId});
 
-  Future<ArtistAlbumPageDto> crateApiArtistAlbumsPage({
+  Future<ArtistAlbumPageDto> crateApiArtistArtistAlbumsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
   });
 
-  Future<ArtistDetailDto> crateApiArtistDetail({required BigInt artistId});
+  Future<ArtistDetailDto> crateApiArtistArtistDetail({
+    required BigInt artistId,
+  });
 
-  Future<ArtistMvPageDto> crateApiArtistMvsPage({
+  Future<ArtistMvPageDto> crateApiArtistArtistMvsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
   });
 
-  Future<ArtistSongPageDto> crateApiArtistSongsPage({
+  Future<ArtistSongPageDto> crateApiArtistArtistSongsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
   });
 
-  Future<bool> crateApiArtistSubToggle({
+  Future<bool> crateApiArtistArtistSubToggle({
     required BigInt artistId,
     required bool sub,
   });
 
-  Future<CacheEvictionDto> crateApiCacheEnforceLimit({
+  Future<CacheEvictionDto> crateApiPlaybackCacheEnforceLimit({
     required int limitMb,
     BigInt? keepTrackId,
   });
 
-  Future<CacheStatsDto> crateApiCacheStats({required int limitMb});
+  Future<List<ChartSummary>> crateApiDiscoverChartList();
 
-  Future<List<ChartSummary>> crateApiChartList();
+  Future<bool> crateApiSearchClearSearchHistory();
 
-  Future<bool> crateApiClearSearchHistory();
+  Future<bool> crateApiCloudCloudDelete({required Uint64List ids});
 
-  Future<bool> crateApiCloudDelete({required Uint64List ids});
+  Future<CloudUploadResult> crateApiAccountCloudUpload({
+    required String filePath,
+  });
 
-  Future<String?> crateApiCloudSongUrl({required BigInt songId});
+  Future<List<InboxItem>> crateApiSocialCommentMessages({required int limit});
 
-  Future<CloudUploadResult> crateApiCloudUpload({required String filePath});
-
-  Future<List<InboxItem>> crateApiCommentMessages({required int limit});
-
-  Future<CommentPage> crateApiCommentReplies({
+  Future<CommentPage> crateApiSocialCommentReplies({
     required String threadId,
     required BigInt parentCommentId,
     required int limit,
   });
 
-  Future<CommentStats> crateApiCommentStats({required String threadId});
+  Future<CommentStats> crateApiDetailCommentStats({required String threadId});
 
-  Future<CommentPage> crateApiComments({
+  Future<CommentPage> crateApiDetailComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
     required int offset,
   });
 
-  Future<CredentialStatusDto> crateApiConsentPlaintextStorage({
-    required bool consent,
-  });
-
-  Future<BigInt> crateApiCreatePlaylist({
+  Future<BigInt> crateApiLibraryCreatePlaylist({
     required String name,
     required int privacy,
   });
 
-  Future<List<CredentialOpDto>> crateApiCredentialPendingWrites();
+  Future<List<CredentialOpDto>> crateApiAccountCredentialPendingWrites();
 
-  Future<void> crateApiCredentialRestore({
+  Future<void> crateApiAccountCredentialRestore({
     required List<CredentialEntryDto> entries,
   });
 
-  Future<CredentialStatusDto> crateApiCredentialStatus();
+  Future<CredentialStatusDto> crateApiAccountCredentialStatus();
 
-  Future<List<Playlist>> crateApiDailyRecommendPlaylists();
+  Future<List<Playlist>> crateApiRecommendDailyRecommendPlaylists();
 
-  Future<List<SongDto>> crateApiDailyRecommendSongs();
+  Future<List<SongDto>> crateApiRecommendDailyRecommendSongs();
 
-  Future<DefaultSearch?> crateApiDefaultSearch();
+  Future<DefaultSearch?> crateApiSearchDefaultSearch();
 
-  Future<bool> crateApiDeleteComment({
+  Future<bool> crateApiMeDeleteComment({
     required String threadId,
     required BigInt commentId,
   });
 
-  Future<bool> crateApiDeletePlaylist({required BigInt playlistId});
+  Future<bool> crateApiLibraryDeletePlaylist({required BigInt playlistId});
 
-  Future<DigitalAlbumDetail> crateApiDigitalAlbumDetail({
+  Future<DigitalAlbumDetail> crateApiDetailDigitalAlbumDetail({
     required BigInt albumId,
   });
 
-  Future<DigitalAlbumPurchased> crateApiDigitalAlbumPurchased({
+  Future<DigitalAlbumPurchased> crateApiDetailDigitalAlbumPurchased({
     required int limit,
     required int offset,
   });
 
-  Future<List<DigitalAlbumSalesEntry>> crateApiDigitalAlbumSales({
+  Future<List<DigitalAlbumSalesEntry>> crateApiDetailDigitalAlbumSales({
     required String albumIds,
   });
 
-  Future<bool> crateApiDislikeRecommendSong({required BigInt songId});
+  Future<bool> crateApiLibraryDislikeRecommendSong({required BigInt songId});
 
-  Future<String> crateApiEqProfileNormalize({required String text});
+  Future<EqValidationDto> crateApiPlaybackEqProfileValidate({
+    required String text,
+  });
 
-  Future<EqValidationDto> crateApiEqProfileValidate({required String text});
-
-  Future<CommentPage> crateApiEventComments({
+  Future<CommentPage> crateApiSocialEventComments({
     required String threadId,
     required int limit,
     required int offset,
   });
 
-  Future<List<FeedEventDto>> crateApiFeedEvents({
+  Future<List<FeedEventDto>> crateApiSocialFeedEvents({
     required int limit,
     required PlatformInt64 lastTime,
   });
 
-  Future<FeedPageDto> crateApiFeedPage({
+  Future<FeedPageDto> crateApiSocialFeedPage({
     required int limit,
     required PlatformInt64 lastTime,
   });
 
-  Future<FollowCount> crateApiFollowCounts();
+  Future<FollowCount> crateApiSocialFollowCounts();
 
-  Future<bool> crateApiForwardEvent({
+  Future<bool> crateApiSocialForwardEvent({
     required BigInt eventId,
     required BigInt userId,
     required String msg,
   });
 
-  Future<List<ForwardItem>> crateApiForwardMessages({
+  Future<List<ForwardItem>> crateApiSocialForwardMessages({
     required int limit,
     required BigInt lastTimeMs,
   });
 
-  Future<List<SongDto>> crateApiHeartModeSongs({
+  Future<List<SongDto>> crateApiRecommendHeartModeSongs({
     required BigInt songId,
     required BigInt playlistId,
     required int count,
   });
 
-  Future<List<Playlist>> crateApiHighQualityPlaylists({
+  Future<List<Playlist>> crateApiDiscoverHighQualityPlaylists({
     required String cat,
     required int limit,
   });
 
-  Future<List<String>> crateApiHistoryRecommendDates();
+  Future<List<String>> crateApiRecommendHistoryRecommendDates();
 
-  Future<List<SongDto>> crateApiHistoryRecommendSongs({required String date});
+  Future<List<SongDto>> crateApiRecommendHistoryRecommendSongs({
+    required String date,
+  });
 
-  Future<List<HotArtist>> crateApiHotArtists({
+  Future<List<HotArtist>> crateApiMeHotArtists({
     required int limit,
     required int offset,
   });
 
-  Future<CommentPage> crateApiHotComments({
+  Future<CommentPage> crateApiDetailHotComments({
     required String threadId,
     required int limit,
     required int offset,
   });
 
-  Future<List<HotSearchTerm>> crateApiHotSearch();
+  Future<List<HotSearchTerm>> crateApiSearchHotSearch();
 
-  Future<List<HotSearchDetailItem>> crateApiHotSearchDetail();
+  Future<List<HotSearchDetailItem>> crateApiSearchHotSearchDetail();
 
   Future<InitInfo> crateApiInit({String? dataDir});
 
-  Future<bool> crateApiLikeComment({
+  Future<bool> crateApiSocialLikeComment({
     required String threadId,
     required BigInt commentId,
     required bool liked,
   });
 
-  Future<bool> crateApiLikeEvent({
+  Future<bool> crateApiSocialLikeEvent({
     required String threadId,
     required bool liked,
   });
 
-  Future<Uint64List> crateApiLikedIds();
+  Future<Uint64List> crateApiLibraryLikedIds();
 
-  Future<List<SongDto>> crateApiLikedSongs();
+  Future<List<SongDto>> crateApiLibraryLikedSongs();
 
-  Future<List<SongDto>> crateApiLocalRecentSongs({required int limit});
+  Future<List<SongDto>> crateApiSearchLocalRecentSongs({required int limit});
 
-  Future<QrLoginCheck> crateApiLoginQrCheck({required String key});
+  Future<QrLoginCheck> crateApiAccountLoginQrCheck({required String key});
 
-  Future<QrLoginKey> crateApiLoginQrCreate();
+  Future<QrLoginKey> crateApiAccountLoginQrCreate();
 
-  Future<SmsCodeSent> crateApiLoginSmsSend({
+  Future<SmsCodeSent> crateApiAccountLoginSmsSend({
     required String phone,
     required String countryCode,
   });
 
-  Future<PhoneLoginResult> crateApiLoginSmsVerify({
+  Future<PhoneLoginResult> crateApiAccountLoginSmsVerify({
     required String phone,
     required String code,
     required String countryCode,
   });
 
-  Future<bool> crateApiLoginWithCookie({required String cookie});
+  Future<bool> crateApiAccountLoginWithCookie({required String cookie});
 
-  Future<bool> crateApiLogout();
+  Future<bool> crateApiAccountLogout();
 
-  Future<LoudnessDto?> crateApiLoudnessCached({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessCached({
     required BigInt trackId,
     required double targetLufs,
   });
 
-  Future<LoudnessDto?> crateApiLoudnessMeasureCached({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessMeasureCached({
     required BigInt trackId,
     required double targetLufs,
   });
 
-  Future<LoudnessDto?> crateApiLoudnessMeasurePath({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessMeasurePath({
     required BigInt trackId,
     required String path,
     required double targetLufs,
     String? formatHint,
   });
 
-  Future<String> crateApiLyric({required BigInt trackId});
+  Future<String> crateApiAccountLyric({required BigInt trackId});
 
-  Future<List<LyricLineDto>> crateApiLyricLinesI18N({required BigInt trackId});
+  bool crateApiLyricLyricAutoSkipTtml({required WordLyricDto dto});
 
-  Future<MessageCountsDto> crateApiMessageCounts();
+  LyricChoiceDto crateApiLyricLyricChooseSource({
+    WordLyricDto? yrc,
+    WordLyricDto? ttml,
+    required Int64List lineStarts,
+  });
 
-  Future<List<InboxItem>> crateApiMessageNotices({
+  Future<List<LyricLineDto>> crateApiLyricLyricLinesI18N({
+    required BigInt trackId,
+  });
+
+  WordLyricScoreDto crateApiLyricLyricScore({
+    WordLyricDto? dto,
+    required Int64List lineStarts,
+  });
+
+  bool crateApiLyricLyricScoresClose({
+    required WordLyricDto yrc,
+    required WordLyricDto ttml,
+  });
+
+  bool crateApiLyricLyricYrcGoodEnough({required WordLyricDto dto});
+
+  Future<MessageCountsDto> crateApiSocialMessageCounts();
+
+  Future<List<InboxItem>> crateApiSocialMessageNotices({
     required int limit,
     required BigInt lastTimeMs,
   });
 
-  Future<MvDetailDto> crateApiMvDetail({required BigInt mvId});
+  Future<MvDetailDto> crateApiArtistMvDetail({required BigInt mvId});
 
-  Future<MvUrlDto> crateApiMvUrl({required BigInt mvId, required int r});
+  Future<MvUrlDto> crateApiArtistMvUrl({required BigInt mvId, required int r});
 
-  Future<List<Playlist>> crateApiMyPlaylists();
+  Future<List<Playlist>> crateApiLibraryMyPlaylists();
 
-  Future<BigInt> crateApiMyUid();
+  Future<BigInt> crateApiSocialMyUid();
 
-  Future<List<AlbumItem>> crateApiNewAlbums({
+  Future<List<AlbumItem>> crateApiDiscoverNewAlbums({
     required int limit,
     required int offset,
   });
 
-  Future<List<AlbumItem>> crateApiNewAlbumsByArea({
+  Future<List<AlbumItem>> crateApiMeNewAlbumsByArea({
     required String area,
     required int limit,
   });
 
-  Future<List<SongDto>> crateApiNewSongs({required int limit});
+  Future<List<SongDto>> crateApiRecommendNewSongs({required int limit});
 
-  Future<List<SongDto>> crateApiNewSongsByArea({
+  Future<List<SongDto>> crateApiMeNewSongsByArea({
     required String area,
     required int limit,
   });
 
-  Future<List<AlbumItem>> crateApiNewestAlbums({required int limit});
+  Future<List<AlbumItem>> crateApiDiscoverNewestAlbums({required int limit});
 
-  Future<List<SongDto>> crateApiPersonalFm({required int limit});
+  Future<List<SongDto>> crateApiRecommendPersonalFm({required int limit});
 
   Future<String> crateApiPing({required String name});
 
-  Future<List<PlayRankEntryDto>> crateApiPlayRanking({required String period});
+  Future<List<PlayRankEntryDto>> crateApiMePlayRanking({
+    required String period,
+  });
 
-  Future<PlayerStateDto> crateApiPlayTrack({
+  Future<PlayerStateDto> crateApiPlaybackPlayTrack({
     required BigInt trackId,
     required String url,
     BigInt? durationMs,
   });
 
-  String crateApiPlaybackUserAgent();
+  String crateApiPlaybackPlaybackUserAgent();
 
-  Future<PlaybackTuningDto> crateApiPlayerConfigure({
+  Future<PlaybackTuningDto> crateApiPlaybackPlayerConfigure({
     required double gainDb,
     required int fadeMs,
     String? eqText,
     required double gainSlewDbPerSec,
   });
 
-  Future<PlayerStateDto> crateApiPlayerPause();
+  Future<PlayerStateDto> crateApiPlaybackPlayerPause();
 
-  Future<PlayerStateDto> crateApiPlayerResume();
+  Future<PlayerStateDto> crateApiPlaybackPlayerResume();
 
-  Future<PlayerStateDto> crateApiPlayerSeek({required BigInt positionMs});
+  Future<PlayerStateDto> crateApiPlaybackPlayerSeek({
+    required BigInt positionMs,
+  });
 
-  Future<PlayerStateDto> crateApiPlayerSetVolume({required double volume});
+  Future<PlayerStateDto> crateApiPlaybackPlayerSetVolume({
+    required double volume,
+  });
 
-  Future<PlayerStateDto> crateApiPlayerState();
+  Future<PlayerStateDto> crateApiPlaybackPlayerState();
 
-  Future<PlayerStateDto> crateApiPlayerStop();
+  Future<PlayerStateDto> crateApiPlaybackPlayerStop();
 
-  Future<PlaybackTuningDto> crateApiPlayerTuning();
+  Future<List<PlaylistCategory>> crateApiDiscoverPlaylistCategories();
 
-  Future<List<PlaylistCategory>> crateApiPlaylistCategories();
+  Future<PlaylistDetail> crateApiDetailPlaylistDetail({
+    required BigInt playlistId,
+  });
 
-  Future<PlaylistDetail> crateApiPlaylistDetail({required BigInt playlistId});
+  Future<List<SongDto>> crateApiLibraryPlaylistSongs({
+    required BigInt playlistId,
+  });
 
-  Future<List<SongDto>> crateApiPlaylistSongs({required BigInt playlistId});
-
-  Future<List<Playlist>> crateApiPlaylistsByCategory({
+  Future<List<Playlist>> crateApiDiscoverPlaylistsByCategory({
     required String cat,
     required int limit,
     required int offset,
   });
 
-  Future<List<PodcastRadio>> crateApiPodcastHot({required int limit});
+  Future<List<PodcastRadio>> crateApiPodcastPodcastHot({required int limit});
 
-  Future<PodcastProgramDto> crateApiPodcastProgram({required BigInt programId});
+  Future<PodcastProgramDto> crateApiPodcastPodcastProgram({
+    required BigInt programId,
+  });
 
-  Future<List<PodcastProgramDto>> crateApiPodcastPrograms({
+  Future<List<PodcastProgramDto>> crateApiPodcastPodcastPrograms({
     required BigInt radioId,
     required int limit,
     required int offset,
   });
 
-  Future<List<PrivateMessage>> crateApiPrivateHistory({
+  Future<List<PrivateMessage>> crateApiSocialPrivateHistory({
     required BigInt userId,
     required int limit,
     required BigInt beforeMs,
   });
 
-  Future<bool> crateApiPrivateSend({
+  Future<bool> crateApiSocialPrivateSend({
     required BigInt userId,
     required String content,
   });
 
-  Future<List<PrivateSession>> crateApiPrivateSessions({
+  Future<List<PrivateSession>> crateApiSocialPrivateSessions({
     required int limit,
     required int offset,
   });
 
-  Future<ProfileDetail> crateApiProfileDetail();
+  Future<ProfileDetail> crateApiAccountProfileDetail();
 
-  Future<RadioExploreHome> crateApiRadioExploreHome();
+  Future<RadioExploreHome> crateApiRadioRadioExploreHome();
 
-  Future<List<PodcastRadio>> crateApiRadioRecommend({required BigInt cateId});
+  Future<List<PodcastRadio>> crateApiRadioRadioRecommend({
+    required BigInt cateId,
+  });
 
-  Future<RadioSubscriberPage> crateApiRadioSubscribers({
+  Future<RadioSubscriberPage> crateApiRadioRadioSubscribers({
     required BigInt radioId,
     required int limit,
     BigInt? timeMs,
   });
 
-  Future<RadioToplistDto> crateApiRadioToplist({required String kind});
+  Future<RadioToplistDto> crateApiRadioRadioToplist({required String kind});
 
-  Future<List<AlbumItem>> crateApiRecentAlbums({required int limit});
+  Future<List<AlbumItem>> crateApiSocialRecentAlbums({required int limit});
 
-  Future<List<RecentContact>> crateApiRecentContacts({required int limit});
+  Future<List<RecentContact>> crateApiSocialRecentContacts({
+    required int limit,
+  });
 
-  Future<List<Playlist>> crateApiRecentPlaylists({required int limit});
+  Future<List<Playlist>> crateApiSocialRecentPlaylists({required int limit});
 
-  Future<List<PodcastRadio>> crateApiRecentPodcasts({required int limit});
+  Future<List<PodcastRadio>> crateApiSocialRecentPodcasts({required int limit});
 
-  Future<List<SongDto>> crateApiRecentSongs({required int limit});
+  Future<List<SongDto>> crateApiSearchRecentSongs({required int limit});
 
-  Future<List<String>> crateApiRecordSearch({required String keyword});
+  Future<List<String>> crateApiSearchRecordSearch({required String keyword});
 
-  Future<bool> crateApiRememberPlay({required SongDto song});
+  Future<bool> crateApiSearchRememberPlay({required SongDto song});
 
-  Future<bool> crateApiRemoveFromPlaylist({
+  Future<bool> crateApiLibraryRemoveFromPlaylist({
     required BigInt playlistId,
     required BigInt trackId,
   });
 
-  Future<bool> crateApiRenamePlaylist({
+  Future<bool> crateApiLibraryRenamePlaylist({
     required BigInt playlistId,
     required String name,
   });
 
-  Future<bool> crateApiReplyComment({
+  Future<bool> crateApiSocialReplyComment({
     required String threadId,
     required BigInt commentId,
     required String content,
   });
 
-  Future<SearchBundleDto> crateApiSearchAll({
+  Future<SearchBundleDto> crateApiSearchSearchAll({
     required String keywords,
     required int limit,
   });
 
-  Future<SearchExact> crateApiSearchExact({required String keywords});
+  Future<SearchExact> crateApiSearchSearchExact({required String keywords});
 
-  Future<List<String>> crateApiSearchHistory();
+  Future<List<String>> crateApiSearchSearchHistory();
 
-  Future<List<SuggestItem>> crateApiSearchSuggest({required String keywords});
-
-  Future<List<String>> crateApiSearchSuggestKeywords({
+  Future<List<SuggestItem>> crateApiSearchSearchSuggest({
     required String keywords,
   });
 
-  Future<bool> crateApiSetAlbumSubscribed({
+  Future<List<String>> crateApiSearchSearchSuggestKeywords({
+    required String keywords,
+  });
+
+  Future<bool> crateApiDiscoverSetAlbumSubscribed({
     required BigInt albumId,
     required bool subscribed,
   });
 
-  Future<bool> crateApiSetFollow({required BigInt uid, required bool follow});
+  Future<bool> crateApiSocialSetFollow({
+    required BigInt uid,
+    required bool follow,
+  });
 
-  Future<bool> crateApiSetLiked({required BigInt trackId, required bool liked});
+  Future<bool> crateApiLibrarySetLiked({
+    required BigInt trackId,
+    required bool liked,
+  });
 
-  Future<bool> crateApiSetPlaylistSubscribed({
+  Future<bool> crateApiDetailSetPlaylistSubscribed({
     required BigInt playlistId,
     required bool subscribed,
   });
 
-  Future<bool> crateApiShareResource({
+  Future<bool> crateApiDetailShareResource({
     required String kind,
     required BigInt resourceId,
     required String msg,
   });
 
-  Future<SigninStatus> crateApiSignIn();
+  Future<SigninStatus> crateApiMeSignIn();
 
-  Future<List<Artist>> crateApiSimilarArtists({required BigInt artistId});
+  Future<List<Artist>> crateApiDiscoverSimilarArtists({
+    required BigInt artistId,
+  });
 
-  Future<List<Playlist>> crateApiSimilarPlaylists({
+  Future<List<Playlist>> crateApiDiscoverSimilarPlaylists({
     required BigInt songId,
     required int limit,
   });
 
-  Future<List<SongDto>> crateApiSimilarSongs({
+  Future<List<SongDto>> crateApiDiscoverSimilarSongs({
     required BigInt songId,
     required int limit,
   });
 
-  Future<SongLikeState> crateApiSongLikeState({required BigInt trackId});
+  Future<SongLikeState> crateApiDetailSongLikeState({required BigInt trackId});
 
-  Future<SongPurchasedPage> crateApiSongPurchased({
+  Future<SongPurchasedPage> crateApiDetailSongPurchased({
     required int limit,
     required int offset,
   });
 
-  Future<StreamUrl> crateApiSongUrl({
+  Future<StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
   });
 
-  Future<List<WikiFact>> crateApiSongWiki({required BigInt songId});
+  Future<List<WikiFact>> crateApiMeSongWiki({required BigInt songId});
 
-  Future<List<Playlist>> crateApiStylePlaylists({
+  Future<List<Playlist>> crateApiMeStylePlaylists({
     required String tagId,
     required int limit,
   });
 
-  Future<List<StyleTag>> crateApiStylePreference();
+  Future<List<StyleTag>> crateApiMeStylePreference();
 
-  Future<List<SongDto>> crateApiStyleSongs({
+  Future<List<SongDto>> crateApiMeStyleSongs({
     required String tagId,
     required int limit,
   });
 
-  Future<List<AlbumItem>> crateApiSubscribedAlbums({required int limit});
+  Future<List<AlbumItem>> crateApiDiscoverSubscribedAlbums({
+    required int limit,
+  });
 
-  Future<List<Artist>> crateApiSubscribedArtists({required int limit});
+  Future<List<Artist>> crateApiRecommendSubscribedArtists({required int limit});
 
-  Future<List<PodcastRadio>> crateApiSubscribedPodcasts({required int limit});
+  Future<List<PodcastRadio>> crateApiRecommendSubscribedPodcasts({
+    required int limit,
+  });
 
-  Future<List<ToplistCatalogGroup>> crateApiToplistCatalog();
+  Future<List<ToplistCatalogGroup>> crateApiDiscoverToplistCatalog();
 
-  Future<bool> crateApiTrashFmSong({required BigInt songId});
+  Future<bool> crateApiRecommendTrashFmSong({required BigInt songId});
 
-  Future<WordLyricDto?> crateApiTtmlLyricLines({required BigInt trackId});
+  Future<WordLyricDto?> crateApiLyricTtmlLyricLines({required BigInt trackId});
 
-  Future<bool> crateApiUpdatePlaylistDesc({
+  Future<bool> crateApiLibraryUpdatePlaylistDesc({
     required BigInt playlistId,
     required String desc,
   });
 
-  Future<ProfileDetail> crateApiUpdateSignature({required String signature});
+  Future<ProfileDetail> crateApiAccountUpdateSignature({
+    required String signature,
+  });
 
-  Future<CloudPage> crateApiUserCloud({
+  Future<CloudPage> crateApiCloudUserCloud({
     required int limit,
     required int offset,
   });
 
-  Future<List<FeedEventDto>> crateApiUserEvents({
+  Future<List<FeedEventDto>> crateApiSocialUserEvents({
     required BigInt uid,
     required int limit,
     required PlatformInt64 lastTime,
   });
 
-  Future<List<UserItem>> crateApiUserFolloweds({
+  Future<List<UserItem>> crateApiSocialUserFolloweds({
     required BigInt uid,
     required int limit,
     required int offset,
   });
 
-  Future<List<UserItem>> crateApiUserFollows({
+  Future<List<UserItem>> crateApiSocialUserFollows({
     required BigInt uid,
     required int limit,
     required int offset,
   });
 
-  Future<UserLevel> crateApiUserLevel();
+  Future<UserLevel> crateApiMeUserLevel();
 
-  Future<List<UserMedal>> crateApiUserMedals();
+  Future<List<UserMedal>> crateApiMeUserMedals();
 
-  Future<List<PlayRankEntryDto>> crateApiUserPlayRanking({
-    required BigInt uid,
-    required String period,
-  });
-
-  Future<List<Playlist>> crateApiUserPlaylistsOf({
+  Future<List<Playlist>> crateApiAccountUserPlaylistsOf({
     required BigInt userId,
     required int limit,
   });
 
-  Future<ProfileDetail> crateApiUserProfile({required BigInt userId});
+  Future<ProfileDetail> crateApiAccountUserProfile({required BigInt userId});
 
-  Future<VipOverview> crateApiVipOverview();
+  Future<VipOverview> crateApiMeVipOverview();
 
-  Future<WordLyricDto> crateApiWordLyricLines({required BigInt trackId});
+  Future<WordLyricDto> crateApiLyricWordLyricLines({required BigInt trackId});
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -618,7 +677,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<bool> crateApiAccountRemove({required BigInt userId}) {
+  Future<bool> crateApiAccountAccountRemove({required BigInt userId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -635,18 +694,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAccountRemoveConstMeta,
+        constMeta: kCrateApiAccountAccountRemoveConstMeta,
         argValues: [userId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAccountRemoveConstMeta =>
+  TaskConstMeta get kCrateApiAccountAccountRemoveConstMeta =>
       const TaskConstMeta(debugName: "account_remove", argNames: ["userId"]);
 
   @override
-  Future<bool> crateApiAccountSwitch({required BigInt userId}) {
+  Future<bool> crateApiAccountAccountSwitch({required BigInt userId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -663,18 +722,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAccountSwitchConstMeta,
+        constMeta: kCrateApiAccountAccountSwitchConstMeta,
         argValues: [userId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAccountSwitchConstMeta =>
+  TaskConstMeta get kCrateApiAccountAccountSwitchConstMeta =>
       const TaskConstMeta(debugName: "account_switch", argNames: ["userId"]);
 
   @override
-  Future<AccountDto> crateApiAccountSyncActive() {
+  Future<AccountDto> crateApiAccountAccountSyncActive() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -690,18 +749,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_account_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAccountSyncActiveConstMeta,
+        constMeta: kCrateApiAccountAccountSyncActiveConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAccountSyncActiveConstMeta =>
+  TaskConstMeta get kCrateApiAccountAccountSyncActiveConstMeta =>
       const TaskConstMeta(debugName: "account_sync_active", argNames: []);
 
   @override
-  Future<List<AccountDto>> crateApiAccounts() {
+  Future<List<AccountDto>> crateApiAccountAccounts() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -717,18 +776,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_account_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAccountsConstMeta,
+        constMeta: kCrateApiAccountAccountsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAccountsConstMeta =>
+  TaskConstMeta get kCrateApiAccountAccountsConstMeta =>
       const TaskConstMeta(debugName: "accounts", argNames: []);
 
   @override
-  Future<bool> crateApiAddToPlaylist({
+  Future<bool> crateApiAccountAddToPlaylist({
     required BigInt playlistId,
     required BigInt trackId,
   }) {
@@ -749,20 +808,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAddToPlaylistConstMeta,
+        constMeta: kCrateApiAccountAddToPlaylistConstMeta,
         argValues: [playlistId, trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAddToPlaylistConstMeta => const TaskConstMeta(
-    debugName: "add_to_playlist",
-    argNames: ["playlistId", "trackId"],
-  );
+  TaskConstMeta get kCrateApiAccountAddToPlaylistConstMeta =>
+      const TaskConstMeta(
+        debugName: "add_to_playlist",
+        argNames: ["playlistId", "trackId"],
+      );
 
   @override
-  Future<AlbumDetailDto> crateApiAlbumDetail({required BigInt albumId}) {
+  Future<AlbumDetailDto> crateApiDetailAlbumDetail({required BigInt albumId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -779,18 +839,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_album_detail_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiAlbumDetailConstMeta,
+        constMeta: kCrateApiDetailAlbumDetailConstMeta,
         argValues: [albumId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiAlbumDetailConstMeta =>
+  TaskConstMeta get kCrateApiDetailAlbumDetailConstMeta =>
       const TaskConstMeta(debugName: "album_detail", argNames: ["albumId"]);
 
   @override
-  Future<ArtistAlbumPageDto> crateApiArtistAlbumsPage({
+  Future<ArtistAlbumPageDto> crateApiArtistArtistAlbumsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
@@ -813,20 +873,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_artist_album_page_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiArtistAlbumsPageConstMeta,
+        constMeta: kCrateApiArtistArtistAlbumsPageConstMeta,
         argValues: [artistId, offset, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiArtistAlbumsPageConstMeta => const TaskConstMeta(
-    debugName: "artist_albums_page",
-    argNames: ["artistId", "offset", "limit"],
-  );
+  TaskConstMeta get kCrateApiArtistArtistAlbumsPageConstMeta =>
+      const TaskConstMeta(
+        debugName: "artist_albums_page",
+        argNames: ["artistId", "offset", "limit"],
+      );
 
   @override
-  Future<ArtistDetailDto> crateApiArtistDetail({required BigInt artistId}) {
+  Future<ArtistDetailDto> crateApiArtistArtistDetail({
+    required BigInt artistId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -843,18 +906,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_artist_detail_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiArtistDetailConstMeta,
+        constMeta: kCrateApiArtistArtistDetailConstMeta,
         argValues: [artistId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiArtistDetailConstMeta =>
+  TaskConstMeta get kCrateApiArtistArtistDetailConstMeta =>
       const TaskConstMeta(debugName: "artist_detail", argNames: ["artistId"]);
 
   @override
-  Future<ArtistMvPageDto> crateApiArtistMvsPage({
+  Future<ArtistMvPageDto> crateApiArtistArtistMvsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
@@ -877,20 +940,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_artist_mv_page_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiArtistMvsPageConstMeta,
+        constMeta: kCrateApiArtistArtistMvsPageConstMeta,
         argValues: [artistId, offset, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiArtistMvsPageConstMeta => const TaskConstMeta(
-    debugName: "artist_mvs_page",
-    argNames: ["artistId", "offset", "limit"],
-  );
+  TaskConstMeta get kCrateApiArtistArtistMvsPageConstMeta =>
+      const TaskConstMeta(
+        debugName: "artist_mvs_page",
+        argNames: ["artistId", "offset", "limit"],
+      );
 
   @override
-  Future<ArtistSongPageDto> crateApiArtistSongsPage({
+  Future<ArtistSongPageDto> crateApiArtistArtistSongsPage({
     required BigInt artistId,
     required int offset,
     required int limit,
@@ -913,20 +977,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_artist_song_page_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiArtistSongsPageConstMeta,
+        constMeta: kCrateApiArtistArtistSongsPageConstMeta,
         argValues: [artistId, offset, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiArtistSongsPageConstMeta => const TaskConstMeta(
-    debugName: "artist_songs_page",
-    argNames: ["artistId", "offset", "limit"],
-  );
+  TaskConstMeta get kCrateApiArtistArtistSongsPageConstMeta =>
+      const TaskConstMeta(
+        debugName: "artist_songs_page",
+        argNames: ["artistId", "offset", "limit"],
+      );
 
   @override
-  Future<bool> crateApiArtistSubToggle({
+  Future<bool> crateApiArtistArtistSubToggle({
     required BigInt artistId,
     required bool sub,
   }) {
@@ -947,20 +1012,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiArtistSubToggleConstMeta,
+        constMeta: kCrateApiArtistArtistSubToggleConstMeta,
         argValues: [artistId, sub],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiArtistSubToggleConstMeta => const TaskConstMeta(
-    debugName: "artist_sub_toggle",
-    argNames: ["artistId", "sub"],
-  );
+  TaskConstMeta get kCrateApiArtistArtistSubToggleConstMeta =>
+      const TaskConstMeta(
+        debugName: "artist_sub_toggle",
+        argNames: ["artistId", "sub"],
+      );
 
   @override
-  Future<CacheEvictionDto> crateApiCacheEnforceLimit({
+  Future<CacheEvictionDto> crateApiPlaybackCacheEnforceLimit({
     required int limitMb,
     BigInt? keepTrackId,
   }) {
@@ -981,25 +1047,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_cache_eviction_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCacheEnforceLimitConstMeta,
+        constMeta: kCrateApiPlaybackCacheEnforceLimitConstMeta,
         argValues: [limitMb, keepTrackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCacheEnforceLimitConstMeta => const TaskConstMeta(
-    debugName: "cache_enforce_limit",
-    argNames: ["limitMb", "keepTrackId"],
-  );
+  TaskConstMeta get kCrateApiPlaybackCacheEnforceLimitConstMeta =>
+      const TaskConstMeta(
+        debugName: "cache_enforce_limit",
+        argNames: ["limitMb", "keepTrackId"],
+      );
 
   @override
-  Future<CacheStatsDto> crateApiCacheStats({required int limitMb}) {
+  Future<List<ChartSummary>> crateApiDiscoverChartList() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(limitMb, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1008,21 +1074,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_cache_stats_dto,
+          decodeSuccessData: sse_decode_list_chart_summary,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCacheStatsConstMeta,
-        argValues: [limitMb],
+        constMeta: kCrateApiDiscoverChartListConstMeta,
+        argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCacheStatsConstMeta =>
-      const TaskConstMeta(debugName: "cache_stats", argNames: ["limitMb"]);
+  TaskConstMeta get kCrateApiDiscoverChartListConstMeta =>
+      const TaskConstMeta(debugName: "chart_list", argNames: []);
 
   @override
-  Future<List<ChartSummary>> crateApiChartList() {
+  Future<bool> crateApiSearchClearSearchHistory() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1035,25 +1101,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_chart_summary,
+          decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiChartListConstMeta,
+        constMeta: kCrateApiSearchClearSearchHistoryConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiChartListConstMeta =>
-      const TaskConstMeta(debugName: "chart_list", argNames: []);
+  TaskConstMeta get kCrateApiSearchClearSearchHistoryConstMeta =>
+      const TaskConstMeta(debugName: "clear_search_history", argNames: []);
 
   @override
-  Future<bool> crateApiClearSearchHistory() {
+  Future<bool> crateApiCloudCloudDelete({required Uint64List ids}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_prim_u_64_strict(ids, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1065,74 +1132,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiClearSearchHistoryConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiClearSearchHistoryConstMeta =>
-      const TaskConstMeta(debugName: "clear_search_history", argNames: []);
-
-  @override
-  Future<bool> crateApiCloudDelete({required Uint64List ids}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_prim_u_64_strict(ids, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 16,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_bool,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiCloudDeleteConstMeta,
+        constMeta: kCrateApiCloudCloudDeleteConstMeta,
         argValues: [ids],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCloudDeleteConstMeta =>
+  TaskConstMeta get kCrateApiCloudCloudDeleteConstMeta =>
       const TaskConstMeta(debugName: "cloud_delete", argNames: ["ids"]);
 
   @override
-  Future<String?> crateApiCloudSongUrl({required BigInt songId}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_64(songId, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 17,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_opt_String,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiCloudSongUrlConstMeta,
-        argValues: [songId],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCloudSongUrlConstMeta =>
-      const TaskConstMeta(debugName: "cloud_song_url", argNames: ["songId"]);
-
-  @override
-  Future<CloudUploadResult> crateApiCloudUpload({required String filePath}) {
+  Future<CloudUploadResult> crateApiAccountCloudUpload({
+    required String filePath,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1141,7 +1154,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 18,
+            funcId: 16,
             port: port_,
           );
         },
@@ -1149,18 +1162,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_cloud_upload_result,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCloudUploadConstMeta,
+        constMeta: kCrateApiAccountCloudUploadConstMeta,
         argValues: [filePath],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCloudUploadConstMeta =>
+  TaskConstMeta get kCrateApiAccountCloudUploadConstMeta =>
       const TaskConstMeta(debugName: "cloud_upload", argNames: ["filePath"]);
 
   @override
-  Future<List<InboxItem>> crateApiCommentMessages({required int limit}) {
+  Future<List<InboxItem>> crateApiSocialCommentMessages({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1169,7 +1182,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 19,
+            funcId: 17,
             port: port_,
           );
         },
@@ -1177,18 +1190,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_inbox_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCommentMessagesConstMeta,
+        constMeta: kCrateApiSocialCommentMessagesConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCommentMessagesConstMeta =>
+  TaskConstMeta get kCrateApiSocialCommentMessagesConstMeta =>
       const TaskConstMeta(debugName: "comment_messages", argNames: ["limit"]);
 
   @override
-  Future<CommentPage> crateApiCommentReplies({
+  Future<CommentPage> crateApiSocialCommentReplies({
     required String threadId,
     required BigInt parentCommentId,
     required int limit,
@@ -1203,7 +1216,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 20,
+            funcId: 18,
             port: port_,
           );
         },
@@ -1211,20 +1224,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCommentRepliesConstMeta,
+        constMeta: kCrateApiSocialCommentRepliesConstMeta,
         argValues: [threadId, parentCommentId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCommentRepliesConstMeta => const TaskConstMeta(
-    debugName: "comment_replies",
-    argNames: ["threadId", "parentCommentId", "limit"],
-  );
+  TaskConstMeta get kCrateApiSocialCommentRepliesConstMeta =>
+      const TaskConstMeta(
+        debugName: "comment_replies",
+        argNames: ["threadId", "parentCommentId", "limit"],
+      );
 
   @override
-  Future<CommentStats> crateApiCommentStats({required String threadId}) {
+  Future<CommentStats> crateApiDetailCommentStats({required String threadId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1233,7 +1247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 21,
+            funcId: 19,
             port: port_,
           );
         },
@@ -1241,18 +1255,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_comment_stats,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCommentStatsConstMeta,
+        constMeta: kCrateApiDetailCommentStatsConstMeta,
         argValues: [threadId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCommentStatsConstMeta =>
+  TaskConstMeta get kCrateApiDetailCommentStatsConstMeta =>
       const TaskConstMeta(debugName: "comment_stats", argNames: ["threadId"]);
 
   @override
-  Future<CommentPage> crateApiComments({
+  Future<CommentPage> crateApiDetailComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -1269,7 +1283,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 22,
+            funcId: 20,
             port: port_,
           );
         },
@@ -1277,53 +1291,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCommentsConstMeta,
+        constMeta: kCrateApiDetailCommentsConstMeta,
         argValues: [kind, resourceId, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCommentsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiDetailCommentsConstMeta => const TaskConstMeta(
     debugName: "comments",
     argNames: ["kind", "resourceId", "limit", "offset"],
   );
 
   @override
-  Future<CredentialStatusDto> crateApiConsentPlaintextStorage({
-    required bool consent,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_bool(consent, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 23,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_credential_status_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiConsentPlaintextStorageConstMeta,
-        argValues: [consent],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiConsentPlaintextStorageConstMeta =>
-      const TaskConstMeta(
-        debugName: "consent_plaintext_storage",
-        argNames: ["consent"],
-      );
-
-  @override
-  Future<BigInt> crateApiCreatePlaylist({
+  Future<BigInt> crateApiLibraryCreatePlaylist({
     required String name,
     required int privacy,
   }) {
@@ -1336,7 +1317,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 24,
+            funcId: 21,
             port: port_,
           );
         },
@@ -1344,20 +1325,108 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_u_64,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCreatePlaylistConstMeta,
+        constMeta: kCrateApiLibraryCreatePlaylistConstMeta,
         argValues: [name, privacy],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCreatePlaylistConstMeta => const TaskConstMeta(
-    debugName: "create_playlist",
-    argNames: ["name", "privacy"],
-  );
+  TaskConstMeta get kCrateApiLibraryCreatePlaylistConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_playlist",
+        argNames: ["name", "privacy"],
+      );
 
   @override
-  Future<List<CredentialOpDto>> crateApiCredentialPendingWrites() {
+  Future<List<CredentialOpDto>> crateApiAccountCredentialPendingWrites() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 22,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_credential_op_dto,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiAccountCredentialPendingWritesConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAccountCredentialPendingWritesConstMeta =>
+      const TaskConstMeta(debugName: "credential_pending_writes", argNames: []);
+
+  @override
+  Future<void> crateApiAccountCredentialRestore({
+    required List<CredentialEntryDto> entries,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_list_credential_entry_dto(entries, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 23,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_unit,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiAccountCredentialRestoreConstMeta,
+        argValues: [entries],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAccountCredentialRestoreConstMeta =>
+      const TaskConstMeta(
+        debugName: "credential_restore",
+        argNames: ["entries"],
+      );
+
+  @override
+  Future<CredentialStatusDto> crateApiAccountCredentialStatus() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 24,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_credential_status_dto,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiAccountCredentialStatusConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAccountCredentialStatusConstMeta =>
+      const TaskConstMeta(debugName: "credential_status", argNames: []);
+
+  @override
+  Future<List<Playlist>> crateApiRecommendDailyRecommendPlaylists() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1370,28 +1439,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_credential_op_dto,
+          decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCredentialPendingWritesConstMeta,
+        constMeta: kCrateApiRecommendDailyRecommendPlaylistsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCredentialPendingWritesConstMeta =>
-      const TaskConstMeta(debugName: "credential_pending_writes", argNames: []);
+  TaskConstMeta get kCrateApiRecommendDailyRecommendPlaylistsConstMeta =>
+      const TaskConstMeta(debugName: "daily_recommend_playlists", argNames: []);
 
   @override
-  Future<void> crateApiCredentialRestore({
-    required List<CredentialEntryDto> entries,
-  }) {
+  Future<List<SongDto>> crateApiRecommendDailyRecommendSongs() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_list_credential_entry_dto(entries, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -1400,23 +1466,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_unit,
+          decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiCredentialRestoreConstMeta,
-        argValues: [entries],
+        constMeta: kCrateApiRecommendDailyRecommendSongsConstMeta,
+        argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiCredentialRestoreConstMeta => const TaskConstMeta(
-    debugName: "credential_restore",
-    argNames: ["entries"],
-  );
+  TaskConstMeta get kCrateApiRecommendDailyRecommendSongsConstMeta =>
+      const TaskConstMeta(debugName: "daily_recommend_songs", argNames: []);
 
   @override
-  Future<CredentialStatusDto> crateApiCredentialStatus() {
+  Future<DefaultSearch?> crateApiSearchDefaultSearch() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1429,102 +1493,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_credential_status_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiCredentialStatusConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiCredentialStatusConstMeta =>
-      const TaskConstMeta(debugName: "credential_status", argNames: []);
-
-  @override
-  Future<List<Playlist>> crateApiDailyRecommendPlaylists() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 28,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiDailyRecommendPlaylistsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiDailyRecommendPlaylistsConstMeta =>
-      const TaskConstMeta(debugName: "daily_recommend_playlists", argNames: []);
-
-  @override
-  Future<List<SongDto>> crateApiDailyRecommendSongs() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 29,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiDailyRecommendSongsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiDailyRecommendSongsConstMeta =>
-      const TaskConstMeta(debugName: "daily_recommend_songs", argNames: []);
-
-  @override
-  Future<DefaultSearch?> crateApiDefaultSearch() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 30,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
           decodeSuccessData: sse_decode_opt_box_autoadd_default_search,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDefaultSearchConstMeta,
+        constMeta: kCrateApiSearchDefaultSearchConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDefaultSearchConstMeta =>
+  TaskConstMeta get kCrateApiSearchDefaultSearchConstMeta =>
       const TaskConstMeta(debugName: "default_search", argNames: []);
 
   @override
-  Future<bool> crateApiDeleteComment({
+  Future<bool> crateApiMeDeleteComment({
     required String threadId,
     required BigInt commentId,
   }) {
@@ -1537,7 +1520,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 31,
+            funcId: 28,
             port: port_,
           );
         },
@@ -1545,20 +1528,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDeleteCommentConstMeta,
+        constMeta: kCrateApiMeDeleteCommentConstMeta,
         argValues: [threadId, commentId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDeleteCommentConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiMeDeleteCommentConstMeta => const TaskConstMeta(
     debugName: "delete_comment",
     argNames: ["threadId", "commentId"],
   );
 
   @override
-  Future<bool> crateApiDeletePlaylist({required BigInt playlistId}) {
+  Future<bool> crateApiLibraryDeletePlaylist({required BigInt playlistId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1567,7 +1550,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 32,
+            funcId: 29,
             port: port_,
           );
         },
@@ -1575,20 +1558,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDeletePlaylistConstMeta,
+        constMeta: kCrateApiLibraryDeletePlaylistConstMeta,
         argValues: [playlistId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDeletePlaylistConstMeta => const TaskConstMeta(
-    debugName: "delete_playlist",
-    argNames: ["playlistId"],
-  );
+  TaskConstMeta get kCrateApiLibraryDeletePlaylistConstMeta =>
+      const TaskConstMeta(
+        debugName: "delete_playlist",
+        argNames: ["playlistId"],
+      );
 
   @override
-  Future<DigitalAlbumDetail> crateApiDigitalAlbumDetail({
+  Future<DigitalAlbumDetail> crateApiDetailDigitalAlbumDetail({
     required BigInt albumId,
   }) {
     return handler.executeNormal(
@@ -1599,7 +1583,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 33,
+            funcId: 30,
             port: port_,
           );
         },
@@ -1607,20 +1591,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_digital_album_detail,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDigitalAlbumDetailConstMeta,
+        constMeta: kCrateApiDetailDigitalAlbumDetailConstMeta,
         argValues: [albumId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDigitalAlbumDetailConstMeta => const TaskConstMeta(
-    debugName: "digital_album_detail",
-    argNames: ["albumId"],
-  );
+  TaskConstMeta get kCrateApiDetailDigitalAlbumDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "digital_album_detail",
+        argNames: ["albumId"],
+      );
 
   @override
-  Future<DigitalAlbumPurchased> crateApiDigitalAlbumPurchased({
+  Future<DigitalAlbumPurchased> crateApiDetailDigitalAlbumPurchased({
     required int limit,
     required int offset,
   }) {
@@ -1633,7 +1618,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 34,
+            funcId: 31,
             port: port_,
           );
         },
@@ -1641,21 +1626,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_digital_album_purchased,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDigitalAlbumPurchasedConstMeta,
+        constMeta: kCrateApiDetailDigitalAlbumPurchasedConstMeta,
         argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDigitalAlbumPurchasedConstMeta =>
+  TaskConstMeta get kCrateApiDetailDigitalAlbumPurchasedConstMeta =>
       const TaskConstMeta(
         debugName: "digital_album_purchased",
         argNames: ["limit", "offset"],
       );
 
   @override
-  Future<List<DigitalAlbumSalesEntry>> crateApiDigitalAlbumSales({
+  Future<List<DigitalAlbumSalesEntry>> crateApiDetailDigitalAlbumSales({
     required String albumIds,
   }) {
     return handler.executeNormal(
@@ -1666,7 +1651,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 35,
+            funcId: 32,
             port: port_,
           );
         },
@@ -1674,20 +1659,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_digital_album_sales_entry,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDigitalAlbumSalesConstMeta,
+        constMeta: kCrateApiDetailDigitalAlbumSalesConstMeta,
         argValues: [albumIds],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDigitalAlbumSalesConstMeta => const TaskConstMeta(
-    debugName: "digital_album_sales",
-    argNames: ["albumIds"],
-  );
+  TaskConstMeta get kCrateApiDetailDigitalAlbumSalesConstMeta =>
+      const TaskConstMeta(
+        debugName: "digital_album_sales",
+        argNames: ["albumIds"],
+      );
 
   @override
-  Future<bool> crateApiDislikeRecommendSong({required BigInt songId}) {
+  Future<bool> crateApiLibraryDislikeRecommendSong({required BigInt songId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1696,7 +1682,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 36,
+            funcId: 33,
             port: port_,
           );
         },
@@ -1704,21 +1690,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiDislikeRecommendSongConstMeta,
+        constMeta: kCrateApiLibraryDislikeRecommendSongConstMeta,
         argValues: [songId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiDislikeRecommendSongConstMeta =>
+  TaskConstMeta get kCrateApiLibraryDislikeRecommendSongConstMeta =>
       const TaskConstMeta(
         debugName: "dislike_recommend_song",
         argNames: ["songId"],
       );
 
   @override
-  Future<String> crateApiEqProfileNormalize({required String text}) {
+  Future<EqValidationDto> crateApiPlaybackEqProfileValidate({
+    required String text,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1727,37 +1715,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 37,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_String,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiEqProfileNormalizeConstMeta,
-        argValues: [text],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiEqProfileNormalizeConstMeta => const TaskConstMeta(
-    debugName: "eq_profile_normalize",
-    argNames: ["text"],
-  );
-
-  @override
-  Future<EqValidationDto> crateApiEqProfileValidate({required String text}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(text, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 38,
+            funcId: 34,
             port: port_,
           );
         },
@@ -1765,18 +1723,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_eq_validation_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiEqProfileValidateConstMeta,
+        constMeta: kCrateApiPlaybackEqProfileValidateConstMeta,
         argValues: [text],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiEqProfileValidateConstMeta =>
+  TaskConstMeta get kCrateApiPlaybackEqProfileValidateConstMeta =>
       const TaskConstMeta(debugName: "eq_profile_validate", argNames: ["text"]);
 
   @override
-  Future<CommentPage> crateApiEventComments({
+  Future<CommentPage> crateApiSocialEventComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -1791,7 +1749,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 39,
+            funcId: 35,
             port: port_,
           );
         },
@@ -1799,20 +1757,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiEventCommentsConstMeta,
+        constMeta: kCrateApiSocialEventCommentsConstMeta,
         argValues: [threadId, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiEventCommentsConstMeta => const TaskConstMeta(
-    debugName: "event_comments",
-    argNames: ["threadId", "limit", "offset"],
-  );
+  TaskConstMeta get kCrateApiSocialEventCommentsConstMeta =>
+      const TaskConstMeta(
+        debugName: "event_comments",
+        argNames: ["threadId", "limit", "offset"],
+      );
 
   @override
-  Future<List<FeedEventDto>> crateApiFeedEvents({
+  Future<List<FeedEventDto>> crateApiSocialFeedEvents({
     required int limit,
     required PlatformInt64 lastTime,
   }) {
@@ -1825,7 +1784,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 40,
+            funcId: 36,
             port: port_,
           );
         },
@@ -1833,20 +1792,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_feed_event_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiFeedEventsConstMeta,
+        constMeta: kCrateApiSocialFeedEventsConstMeta,
         argValues: [limit, lastTime],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiFeedEventsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialFeedEventsConstMeta => const TaskConstMeta(
     debugName: "feed_events",
     argNames: ["limit", "lastTime"],
   );
 
   @override
-  Future<FeedPageDto> crateApiFeedPage({
+  Future<FeedPageDto> crateApiSocialFeedPage({
     required int limit,
     required PlatformInt64 lastTime,
   }) {
@@ -1859,7 +1818,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 41,
+            funcId: 37,
             port: port_,
           );
         },
@@ -1867,20 +1826,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_feed_page_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiFeedPageConstMeta,
+        constMeta: kCrateApiSocialFeedPageConstMeta,
         argValues: [limit, lastTime],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiFeedPageConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialFeedPageConstMeta => const TaskConstMeta(
     debugName: "feed_page",
     argNames: ["limit", "lastTime"],
   );
 
   @override
-  Future<FollowCount> crateApiFollowCounts() {
+  Future<FollowCount> crateApiSocialFollowCounts() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -1888,7 +1847,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 42,
+            funcId: 38,
             port: port_,
           );
         },
@@ -1896,18 +1855,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_follow_count,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiFollowCountsConstMeta,
+        constMeta: kCrateApiSocialFollowCountsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiFollowCountsConstMeta =>
+  TaskConstMeta get kCrateApiSocialFollowCountsConstMeta =>
       const TaskConstMeta(debugName: "follow_counts", argNames: []);
 
   @override
-  Future<bool> crateApiForwardEvent({
+  Future<bool> crateApiSocialForwardEvent({
     required BigInt eventId,
     required BigInt userId,
     required String msg,
@@ -1922,7 +1881,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 43,
+            funcId: 39,
             port: port_,
           );
         },
@@ -1930,20 +1889,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiForwardEventConstMeta,
+        constMeta: kCrateApiSocialForwardEventConstMeta,
         argValues: [eventId, userId, msg],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiForwardEventConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialForwardEventConstMeta => const TaskConstMeta(
     debugName: "forward_event",
     argNames: ["eventId", "userId", "msg"],
   );
 
   @override
-  Future<List<ForwardItem>> crateApiForwardMessages({
+  Future<List<ForwardItem>> crateApiSocialForwardMessages({
     required int limit,
     required BigInt lastTimeMs,
   }) {
@@ -1956,7 +1915,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 44,
+            funcId: 40,
             port: port_,
           );
         },
@@ -1964,20 +1923,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_forward_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiForwardMessagesConstMeta,
+        constMeta: kCrateApiSocialForwardMessagesConstMeta,
         argValues: [limit, lastTimeMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiForwardMessagesConstMeta => const TaskConstMeta(
-    debugName: "forward_messages",
-    argNames: ["limit", "lastTimeMs"],
-  );
+  TaskConstMeta get kCrateApiSocialForwardMessagesConstMeta =>
+      const TaskConstMeta(
+        debugName: "forward_messages",
+        argNames: ["limit", "lastTimeMs"],
+      );
 
   @override
-  Future<List<SongDto>> crateApiHeartModeSongs({
+  Future<List<SongDto>> crateApiRecommendHeartModeSongs({
     required BigInt songId,
     required BigInt playlistId,
     required int count,
@@ -1992,7 +1952,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 45,
+            funcId: 41,
             port: port_,
           );
         },
@@ -2000,20 +1960,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHeartModeSongsConstMeta,
+        constMeta: kCrateApiRecommendHeartModeSongsConstMeta,
         argValues: [songId, playlistId, count],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHeartModeSongsConstMeta => const TaskConstMeta(
-    debugName: "heart_mode_songs",
-    argNames: ["songId", "playlistId", "count"],
-  );
+  TaskConstMeta get kCrateApiRecommendHeartModeSongsConstMeta =>
+      const TaskConstMeta(
+        debugName: "heart_mode_songs",
+        argNames: ["songId", "playlistId", "count"],
+      );
 
   @override
-  Future<List<Playlist>> crateApiHighQualityPlaylists({
+  Future<List<Playlist>> crateApiDiscoverHighQualityPlaylists({
     required String cat,
     required int limit,
   }) {
@@ -2026,7 +1987,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 46,
+            funcId: 42,
             port: port_,
           );
         },
@@ -2034,21 +1995,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHighQualityPlaylistsConstMeta,
+        constMeta: kCrateApiDiscoverHighQualityPlaylistsConstMeta,
         argValues: [cat, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHighQualityPlaylistsConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverHighQualityPlaylistsConstMeta =>
       const TaskConstMeta(
         debugName: "high_quality_playlists",
         argNames: ["cat", "limit"],
       );
 
   @override
-  Future<List<String>> crateApiHistoryRecommendDates() {
+  Future<List<String>> crateApiRecommendHistoryRecommendDates() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2056,7 +2017,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 47,
+            funcId: 43,
             port: port_,
           );
         },
@@ -2064,18 +2025,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHistoryRecommendDatesConstMeta,
+        constMeta: kCrateApiRecommendHistoryRecommendDatesConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHistoryRecommendDatesConstMeta =>
+  TaskConstMeta get kCrateApiRecommendHistoryRecommendDatesConstMeta =>
       const TaskConstMeta(debugName: "history_recommend_dates", argNames: []);
 
   @override
-  Future<List<SongDto>> crateApiHistoryRecommendSongs({required String date}) {
+  Future<List<SongDto>> crateApiRecommendHistoryRecommendSongs({
+    required String date,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2084,7 +2047,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 48,
+            funcId: 44,
             port: port_,
           );
         },
@@ -2092,21 +2055,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHistoryRecommendSongsConstMeta,
+        constMeta: kCrateApiRecommendHistoryRecommendSongsConstMeta,
         argValues: [date],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHistoryRecommendSongsConstMeta =>
+  TaskConstMeta get kCrateApiRecommendHistoryRecommendSongsConstMeta =>
       const TaskConstMeta(
         debugName: "history_recommend_songs",
         argNames: ["date"],
       );
 
   @override
-  Future<List<HotArtist>> crateApiHotArtists({
+  Future<List<HotArtist>> crateApiMeHotArtists({
     required int limit,
     required int offset,
   }) {
@@ -2119,7 +2082,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 49,
+            funcId: 45,
             port: port_,
           );
         },
@@ -2127,20 +2090,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_hot_artist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHotArtistsConstMeta,
+        constMeta: kCrateApiMeHotArtistsConstMeta,
         argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHotArtistsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiMeHotArtistsConstMeta => const TaskConstMeta(
     debugName: "hot_artists",
     argNames: ["limit", "offset"],
   );
 
   @override
-  Future<CommentPage> crateApiHotComments({
+  Future<CommentPage> crateApiDetailHotComments({
     required String threadId,
     required int limit,
     required int offset,
@@ -2155,7 +2118,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 50,
+            funcId: 46,
             port: port_,
           );
         },
@@ -2163,20 +2126,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_comment_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHotCommentsConstMeta,
+        constMeta: kCrateApiDetailHotCommentsConstMeta,
         argValues: [threadId, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHotCommentsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiDetailHotCommentsConstMeta => const TaskConstMeta(
     debugName: "hot_comments",
     argNames: ["threadId", "limit", "offset"],
   );
 
   @override
-  Future<List<HotSearchTerm>> crateApiHotSearch() {
+  Future<List<HotSearchTerm>> crateApiSearchHotSearch() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2184,7 +2147,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 51,
+            funcId: 47,
             port: port_,
           );
         },
@@ -2192,18 +2155,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_hot_search_term,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHotSearchConstMeta,
+        constMeta: kCrateApiSearchHotSearchConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHotSearchConstMeta =>
+  TaskConstMeta get kCrateApiSearchHotSearchConstMeta =>
       const TaskConstMeta(debugName: "hot_search", argNames: []);
 
   @override
-  Future<List<HotSearchDetailItem>> crateApiHotSearchDetail() {
+  Future<List<HotSearchDetailItem>> crateApiSearchHotSearchDetail() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2211,7 +2174,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 52,
+            funcId: 48,
             port: port_,
           );
         },
@@ -2219,14 +2182,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_hot_search_detail_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiHotSearchDetailConstMeta,
+        constMeta: kCrateApiSearchHotSearchDetailConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiHotSearchDetailConstMeta =>
+  TaskConstMeta get kCrateApiSearchHotSearchDetailConstMeta =>
       const TaskConstMeta(debugName: "hot_search_detail", argNames: []);
 
   @override
@@ -2239,7 +2202,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 53,
+            funcId: 49,
             port: port_,
           );
         },
@@ -2258,7 +2221,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "init", argNames: ["dataDir"]);
 
   @override
-  Future<bool> crateApiLikeComment({
+  Future<bool> crateApiSocialLikeComment({
     required String threadId,
     required BigInt commentId,
     required bool liked,
@@ -2273,7 +2236,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 54,
+            funcId: 50,
             port: port_,
           );
         },
@@ -2281,20 +2244,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLikeCommentConstMeta,
+        constMeta: kCrateApiSocialLikeCommentConstMeta,
         argValues: [threadId, commentId, liked],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLikeCommentConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialLikeCommentConstMeta => const TaskConstMeta(
     debugName: "like_comment",
     argNames: ["threadId", "commentId", "liked"],
   );
 
   @override
-  Future<bool> crateApiLikeEvent({
+  Future<bool> crateApiSocialLikeEvent({
     required String threadId,
     required bool liked,
   }) {
@@ -2307,7 +2270,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 55,
+            funcId: 51,
             port: port_,
           );
         },
@@ -2315,20 +2278,130 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLikeEventConstMeta,
+        constMeta: kCrateApiSocialLikeEventConstMeta,
         argValues: [threadId, liked],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLikeEventConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialLikeEventConstMeta => const TaskConstMeta(
     debugName: "like_event",
     argNames: ["threadId", "liked"],
   );
 
   @override
-  Future<Uint64List> crateApiLikedIds() {
+  Future<Uint64List> crateApiLibraryLikedIds() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 52,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_prim_u_64_strict,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiLibraryLikedIdsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryLikedIdsConstMeta =>
+      const TaskConstMeta(debugName: "liked_ids", argNames: []);
+
+  @override
+  Future<List<SongDto>> crateApiLibraryLikedSongs() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 53,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_song_dto,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiLibraryLikedSongsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLibraryLikedSongsConstMeta =>
+      const TaskConstMeta(debugName: "liked_songs", argNames: []);
+
+  @override
+  Future<List<SongDto>> crateApiSearchLocalRecentSongs({required int limit}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 54,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_song_dto,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiSearchLocalRecentSongsConstMeta,
+        argValues: [limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSearchLocalRecentSongsConstMeta =>
+      const TaskConstMeta(debugName: "local_recent_songs", argNames: ["limit"]);
+
+  @override
+  Future<QrLoginCheck> crateApiAccountLoginQrCheck({required String key}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(key, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 55,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_qr_login_check,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiAccountLoginQrCheckConstMeta,
+        argValues: [key],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAccountLoginQrCheckConstMeta =>
+      const TaskConstMeta(debugName: "login_qr_check", argNames: ["key"]);
+
+  @override
+  Future<QrLoginKey> crateApiAccountLoginQrCreate() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2341,131 +2414,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_prim_u_64_strict,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiLikedIdsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiLikedIdsConstMeta =>
-      const TaskConstMeta(debugName: "liked_ids", argNames: []);
-
-  @override
-  Future<List<SongDto>> crateApiLikedSongs() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 57,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiLikedSongsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiLikedSongsConstMeta =>
-      const TaskConstMeta(debugName: "liked_songs", argNames: []);
-
-  @override
-  Future<List<SongDto>> crateApiLocalRecentSongs({required int limit}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_32(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 58,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_song_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiLocalRecentSongsConstMeta,
-        argValues: [limit],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiLocalRecentSongsConstMeta =>
-      const TaskConstMeta(debugName: "local_recent_songs", argNames: ["limit"]);
-
-  @override
-  Future<QrLoginCheck> crateApiLoginQrCheck({required String key}) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(key, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 59,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_qr_login_check,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiLoginQrCheckConstMeta,
-        argValues: [key],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiLoginQrCheckConstMeta =>
-      const TaskConstMeta(debugName: "login_qr_check", argNames: ["key"]);
-
-  @override
-  Future<QrLoginKey> crateApiLoginQrCreate() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 60,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
           decodeSuccessData: sse_decode_qr_login_key,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoginQrCreateConstMeta,
+        constMeta: kCrateApiAccountLoginQrCreateConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoginQrCreateConstMeta =>
+  TaskConstMeta get kCrateApiAccountLoginQrCreateConstMeta =>
       const TaskConstMeta(debugName: "login_qr_create", argNames: []);
 
   @override
-  Future<SmsCodeSent> crateApiLoginSmsSend({
+  Future<SmsCodeSent> crateApiAccountLoginSmsSend({
     required String phone,
     required String countryCode,
   }) {
@@ -2478,7 +2441,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 61,
+            funcId: 57,
             port: port_,
           );
         },
@@ -2486,20 +2449,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_sms_code_sent,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoginSmsSendConstMeta,
+        constMeta: kCrateApiAccountLoginSmsSendConstMeta,
         argValues: [phone, countryCode],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoginSmsSendConstMeta => const TaskConstMeta(
-    debugName: "login_sms_send",
-    argNames: ["phone", "countryCode"],
-  );
+  TaskConstMeta get kCrateApiAccountLoginSmsSendConstMeta =>
+      const TaskConstMeta(
+        debugName: "login_sms_send",
+        argNames: ["phone", "countryCode"],
+      );
 
   @override
-  Future<PhoneLoginResult> crateApiLoginSmsVerify({
+  Future<PhoneLoginResult> crateApiAccountLoginSmsVerify({
     required String phone,
     required String code,
     required String countryCode,
@@ -2514,7 +2478,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 62,
+            funcId: 58,
             port: port_,
           );
         },
@@ -2522,20 +2486,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_phone_login_result,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoginSmsVerifyConstMeta,
+        constMeta: kCrateApiAccountLoginSmsVerifyConstMeta,
         argValues: [phone, code, countryCode],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoginSmsVerifyConstMeta => const TaskConstMeta(
-    debugName: "login_sms_verify",
-    argNames: ["phone", "code", "countryCode"],
-  );
+  TaskConstMeta get kCrateApiAccountLoginSmsVerifyConstMeta =>
+      const TaskConstMeta(
+        debugName: "login_sms_verify",
+        argNames: ["phone", "code", "countryCode"],
+      );
 
   @override
-  Future<bool> crateApiLoginWithCookie({required String cookie}) {
+  Future<bool> crateApiAccountLoginWithCookie({required String cookie}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2544,7 +2509,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 63,
+            funcId: 59,
             port: port_,
           );
         },
@@ -2552,18 +2517,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoginWithCookieConstMeta,
+        constMeta: kCrateApiAccountLoginWithCookieConstMeta,
         argValues: [cookie],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoginWithCookieConstMeta =>
+  TaskConstMeta get kCrateApiAccountLoginWithCookieConstMeta =>
       const TaskConstMeta(debugName: "login_with_cookie", argNames: ["cookie"]);
 
   @override
-  Future<bool> crateApiLogout() {
+  Future<bool> crateApiAccountLogout() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2571,7 +2536,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 64,
+            funcId: 60,
             port: port_,
           );
         },
@@ -2579,18 +2544,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLogoutConstMeta,
+        constMeta: kCrateApiAccountLogoutConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLogoutConstMeta =>
+  TaskConstMeta get kCrateApiAccountLogoutConstMeta =>
       const TaskConstMeta(debugName: "logout", argNames: []);
 
   @override
-  Future<LoudnessDto?> crateApiLoudnessCached({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessCached({
     required BigInt trackId,
     required double targetLufs,
   }) {
@@ -2603,7 +2568,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 65,
+            funcId: 61,
             port: port_,
           );
         },
@@ -2611,20 +2576,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoudnessCachedConstMeta,
+        constMeta: kCrateApiPlaybackLoudnessCachedConstMeta,
         argValues: [trackId, targetLufs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoudnessCachedConstMeta => const TaskConstMeta(
-    debugName: "loudness_cached",
-    argNames: ["trackId", "targetLufs"],
-  );
+  TaskConstMeta get kCrateApiPlaybackLoudnessCachedConstMeta =>
+      const TaskConstMeta(
+        debugName: "loudness_cached",
+        argNames: ["trackId", "targetLufs"],
+      );
 
   @override
-  Future<LoudnessDto?> crateApiLoudnessMeasureCached({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessMeasureCached({
     required BigInt trackId,
     required double targetLufs,
   }) {
@@ -2637,7 +2603,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 66,
+            funcId: 62,
             port: port_,
           );
         },
@@ -2645,21 +2611,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoudnessMeasureCachedConstMeta,
+        constMeta: kCrateApiPlaybackLoudnessMeasureCachedConstMeta,
         argValues: [trackId, targetLufs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoudnessMeasureCachedConstMeta =>
+  TaskConstMeta get kCrateApiPlaybackLoudnessMeasureCachedConstMeta =>
       const TaskConstMeta(
         debugName: "loudness_measure_cached",
         argNames: ["trackId", "targetLufs"],
       );
 
   @override
-  Future<LoudnessDto?> crateApiLoudnessMeasurePath({
+  Future<LoudnessDto?> crateApiPlaybackLoudnessMeasurePath({
     required BigInt trackId,
     required String path,
     required double targetLufs,
@@ -2676,7 +2642,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 67,
+            funcId: 63,
             port: port_,
           );
         },
@@ -2684,21 +2650,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_opt_box_autoadd_loudness_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLoudnessMeasurePathConstMeta,
+        constMeta: kCrateApiPlaybackLoudnessMeasurePathConstMeta,
         argValues: [trackId, path, targetLufs, formatHint],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLoudnessMeasurePathConstMeta =>
+  TaskConstMeta get kCrateApiPlaybackLoudnessMeasurePathConstMeta =>
       const TaskConstMeta(
         debugName: "loudness_measure_path",
         argNames: ["trackId", "path", "targetLufs", "formatHint"],
       );
 
   @override
-  Future<String> crateApiLyric({required BigInt trackId}) {
+  Future<String> crateApiAccountLyric({required BigInt trackId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2707,7 +2673,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 68,
+            funcId: 64,
             port: port_,
           );
         },
@@ -2715,18 +2681,75 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_String,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLyricConstMeta,
+        constMeta: kCrateApiAccountLyricConstMeta,
         argValues: [trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLyricConstMeta =>
+  TaskConstMeta get kCrateApiAccountLyricConstMeta =>
       const TaskConstMeta(debugName: "lyric", argNames: ["trackId"]);
 
   @override
-  Future<List<LyricLineDto>> crateApiLyricLinesI18N({required BigInt trackId}) {
+  bool crateApiLyricLyricAutoSkipTtml({required WordLyricDto dto}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_word_lyric_dto(dto, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLyricLyricAutoSkipTtmlConstMeta,
+        argValues: [dto],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLyricLyricAutoSkipTtmlConstMeta =>
+      const TaskConstMeta(debugName: "lyric_auto_skip_ttml", argNames: ["dto"]);
+
+  @override
+  LyricChoiceDto crateApiLyricLyricChooseSource({
+    WordLyricDto? yrc,
+    WordLyricDto? ttml,
+    required Int64List lineStarts,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_box_autoadd_word_lyric_dto(yrc, serializer);
+          sse_encode_opt_box_autoadd_word_lyric_dto(ttml, serializer);
+          sse_encode_list_prim_i_64_strict(lineStarts, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_lyric_choice_dto,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLyricLyricChooseSourceConstMeta,
+        argValues: [yrc, ttml, lineStarts],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLyricLyricChooseSourceConstMeta =>
+      const TaskConstMeta(
+        debugName: "lyric_choose_source",
+        argNames: ["yrc", "ttml", "lineStarts"],
+      );
+
+  @override
+  Future<List<LyricLineDto>> crateApiLyricLyricLinesI18N({
+    required BigInt trackId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2735,7 +2758,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 69,
+            funcId: 67,
             port: port_,
           );
         },
@@ -2743,18 +2766,103 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_lyric_line_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiLyricLinesI18NConstMeta,
+        constMeta: kCrateApiLyricLyricLinesI18NConstMeta,
         argValues: [trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiLyricLinesI18NConstMeta =>
+  TaskConstMeta get kCrateApiLyricLyricLinesI18NConstMeta =>
       const TaskConstMeta(debugName: "lyric_lines_i18n", argNames: ["trackId"]);
 
   @override
-  Future<MessageCountsDto> crateApiMessageCounts() {
+  WordLyricScoreDto crateApiLyricLyricScore({
+    WordLyricDto? dto,
+    required Int64List lineStarts,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_box_autoadd_word_lyric_dto(dto, serializer);
+          sse_encode_list_prim_i_64_strict(lineStarts, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_word_lyric_score_dto,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLyricLyricScoreConstMeta,
+        argValues: [dto, lineStarts],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLyricLyricScoreConstMeta => const TaskConstMeta(
+    debugName: "lyric_score",
+    argNames: ["dto", "lineStarts"],
+  );
+
+  @override
+  bool crateApiLyricLyricScoresClose({
+    required WordLyricDto yrc,
+    required WordLyricDto ttml,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_word_lyric_dto(yrc, serializer);
+          sse_encode_box_autoadd_word_lyric_dto(ttml, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLyricLyricScoresCloseConstMeta,
+        argValues: [yrc, ttml],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLyricLyricScoresCloseConstMeta =>
+      const TaskConstMeta(
+        debugName: "lyric_scores_close",
+        argNames: ["yrc", "ttml"],
+      );
+
+  @override
+  bool crateApiLyricLyricYrcGoodEnough({required WordLyricDto dto}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_word_lyric_dto(dto, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_bool,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiLyricLyricYrcGoodEnoughConstMeta,
+        argValues: [dto],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiLyricLyricYrcGoodEnoughConstMeta =>
+      const TaskConstMeta(
+        debugName: "lyric_yrc_good_enough",
+        argNames: ["dto"],
+      );
+
+  @override
+  Future<MessageCountsDto> crateApiSocialMessageCounts() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2762,7 +2870,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 70,
+            funcId: 71,
             port: port_,
           );
         },
@@ -2770,18 +2878,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_message_counts_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiMessageCountsConstMeta,
+        constMeta: kCrateApiSocialMessageCountsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMessageCountsConstMeta =>
+  TaskConstMeta get kCrateApiSocialMessageCountsConstMeta =>
       const TaskConstMeta(debugName: "message_counts", argNames: []);
 
   @override
-  Future<List<InboxItem>> crateApiMessageNotices({
+  Future<List<InboxItem>> crateApiSocialMessageNotices({
     required int limit,
     required BigInt lastTimeMs,
   }) {
@@ -2794,7 +2902,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 71,
+            funcId: 72,
             port: port_,
           );
         },
@@ -2802,20 +2910,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_inbox_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiMessageNoticesConstMeta,
+        constMeta: kCrateApiSocialMessageNoticesConstMeta,
         argValues: [limit, lastTimeMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMessageNoticesConstMeta => const TaskConstMeta(
-    debugName: "message_notices",
-    argNames: ["limit", "lastTimeMs"],
-  );
+  TaskConstMeta get kCrateApiSocialMessageNoticesConstMeta =>
+      const TaskConstMeta(
+        debugName: "message_notices",
+        argNames: ["limit", "lastTimeMs"],
+      );
 
   @override
-  Future<MvDetailDto> crateApiMvDetail({required BigInt mvId}) {
+  Future<MvDetailDto> crateApiArtistMvDetail({required BigInt mvId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2824,7 +2933,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 72,
+            funcId: 73,
             port: port_,
           );
         },
@@ -2832,18 +2941,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_mv_detail_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiMvDetailConstMeta,
+        constMeta: kCrateApiArtistMvDetailConstMeta,
         argValues: [mvId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMvDetailConstMeta =>
+  TaskConstMeta get kCrateApiArtistMvDetailConstMeta =>
       const TaskConstMeta(debugName: "mv_detail", argNames: ["mvId"]);
 
   @override
-  Future<MvUrlDto> crateApiMvUrl({required BigInt mvId, required int r}) {
+  Future<MvUrlDto> crateApiArtistMvUrl({required BigInt mvId, required int r}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2853,7 +2962,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 73,
+            funcId: 74,
             port: port_,
           );
         },
@@ -2861,45 +2970,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_mv_url_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiMvUrlConstMeta,
+        constMeta: kCrateApiArtistMvUrlConstMeta,
         argValues: [mvId, r],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMvUrlConstMeta =>
+  TaskConstMeta get kCrateApiArtistMvUrlConstMeta =>
       const TaskConstMeta(debugName: "mv_url", argNames: ["mvId", "r"]);
 
   @override
-  Future<List<Playlist>> crateApiMyPlaylists() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 74,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_playlist,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiMyPlaylistsConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiMyPlaylistsConstMeta =>
-      const TaskConstMeta(debugName: "my_playlists", argNames: []);
-
-  @override
-  Future<BigInt> crateApiMyUid() {
+  Future<List<Playlist>> crateApiLibraryMyPlaylists() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -2912,21 +2994,48 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_u_64,
+          decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiMyUidConstMeta,
+        constMeta: kCrateApiLibraryMyPlaylistsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiMyUidConstMeta =>
+  TaskConstMeta get kCrateApiLibraryMyPlaylistsConstMeta =>
+      const TaskConstMeta(debugName: "my_playlists", argNames: []);
+
+  @override
+  Future<BigInt> crateApiSocialMyUid() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 76,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_u_64,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiSocialMyUidConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSocialMyUidConstMeta =>
       const TaskConstMeta(debugName: "my_uid", argNames: []);
 
   @override
-  Future<List<AlbumItem>> crateApiNewAlbums({
+  Future<List<AlbumItem>> crateApiDiscoverNewAlbums({
     required int limit,
     required int offset,
   }) {
@@ -2939,40 +3048,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 76,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_album_item,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiNewAlbumsConstMeta,
-        argValues: [limit, offset],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiNewAlbumsConstMeta => const TaskConstMeta(
-    debugName: "new_albums",
-    argNames: ["limit", "offset"],
-  );
-
-  @override
-  Future<List<AlbumItem>> crateApiNewAlbumsByArea({
-    required String area,
-    required int limit,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(area, serializer);
-          sse_encode_u_32(limit, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
             funcId: 77,
             port: port_,
           );
@@ -2981,24 +3056,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_album_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiNewAlbumsByAreaConstMeta,
-        argValues: [area, limit],
+        constMeta: kCrateApiDiscoverNewAlbumsConstMeta,
+        argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiNewAlbumsByAreaConstMeta => const TaskConstMeta(
-    debugName: "new_albums_by_area",
-    argNames: ["area", "limit"],
+  TaskConstMeta get kCrateApiDiscoverNewAlbumsConstMeta => const TaskConstMeta(
+    debugName: "new_albums",
+    argNames: ["limit", "offset"],
   );
 
   @override
-  Future<List<SongDto>> crateApiNewSongs({required int limit}) {
+  Future<List<AlbumItem>> crateApiMeNewAlbumsByArea({
+    required String area,
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(area, serializer);
           sse_encode_u_32(limit, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -3008,29 +3087,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_song_dto,
+          decodeSuccessData: sse_decode_list_album_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiNewSongsConstMeta,
-        argValues: [limit],
+        constMeta: kCrateApiMeNewAlbumsByAreaConstMeta,
+        argValues: [area, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiNewSongsConstMeta =>
-      const TaskConstMeta(debugName: "new_songs", argNames: ["limit"]);
+  TaskConstMeta get kCrateApiMeNewAlbumsByAreaConstMeta => const TaskConstMeta(
+    debugName: "new_albums_by_area",
+    argNames: ["area", "limit"],
+  );
 
   @override
-  Future<List<SongDto>> crateApiNewSongsByArea({
-    required String area,
-    required int limit,
-  }) {
+  Future<List<SongDto>> crateApiRecommendNewSongs({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_String(area, serializer);
           sse_encode_u_32(limit, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -3043,24 +3120,26 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiNewSongsByAreaConstMeta,
-        argValues: [area, limit],
+        constMeta: kCrateApiRecommendNewSongsConstMeta,
+        argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiNewSongsByAreaConstMeta => const TaskConstMeta(
-    debugName: "new_songs_by_area",
-    argNames: ["area", "limit"],
-  );
+  TaskConstMeta get kCrateApiRecommendNewSongsConstMeta =>
+      const TaskConstMeta(debugName: "new_songs", argNames: ["limit"]);
 
   @override
-  Future<List<AlbumItem>> crateApiNewestAlbums({required int limit}) {
+  Future<List<SongDto>> crateApiMeNewSongsByArea({
+    required String area,
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(area, serializer);
           sse_encode_u_32(limit, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
@@ -3070,21 +3149,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_album_item,
+          decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiNewestAlbumsConstMeta,
-        argValues: [limit],
+        constMeta: kCrateApiMeNewSongsByAreaConstMeta,
+        argValues: [area, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiNewestAlbumsConstMeta =>
-      const TaskConstMeta(debugName: "newest_albums", argNames: ["limit"]);
+  TaskConstMeta get kCrateApiMeNewSongsByAreaConstMeta => const TaskConstMeta(
+    debugName: "new_songs_by_area",
+    argNames: ["area", "limit"],
+  );
 
   @override
-  Future<List<SongDto>> crateApiPersonalFm({required int limit}) {
+  Future<List<AlbumItem>> crateApiDiscoverNewestAlbums({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3098,17 +3179,45 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_list_song_dto,
+          decodeSuccessData: sse_decode_list_album_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPersonalFmConstMeta,
+        constMeta: kCrateApiDiscoverNewestAlbumsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPersonalFmConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverNewestAlbumsConstMeta =>
+      const TaskConstMeta(debugName: "newest_albums", argNames: ["limit"]);
+
+  @override
+  Future<List<SongDto>> crateApiRecommendPersonalFm({required int limit}) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 82,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_song_dto,
+          decodeErrorData: sse_decode_ffi_error,
+        ),
+        constMeta: kCrateApiRecommendPersonalFmConstMeta,
+        argValues: [limit],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiRecommendPersonalFmConstMeta =>
       const TaskConstMeta(debugName: "personal_fm", argNames: ["limit"]);
 
   @override
@@ -3121,7 +3230,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 82,
+            funcId: 83,
             port: port_,
           );
         },
@@ -3140,7 +3249,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "ping", argNames: ["name"]);
 
   @override
-  Future<List<PlayRankEntryDto>> crateApiPlayRanking({required String period}) {
+  Future<List<PlayRankEntryDto>> crateApiMePlayRanking({
+    required String period,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3149,7 +3260,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 83,
+            funcId: 84,
             port: port_,
           );
         },
@@ -3157,18 +3268,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_play_rank_entry_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlayRankingConstMeta,
+        constMeta: kCrateApiMePlayRankingConstMeta,
         argValues: [period],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayRankingConstMeta =>
+  TaskConstMeta get kCrateApiMePlayRankingConstMeta =>
       const TaskConstMeta(debugName: "play_ranking", argNames: ["period"]);
 
   @override
-  Future<PlayerStateDto> crateApiPlayTrack({
+  Future<PlayerStateDto> crateApiPlaybackPlayTrack({
     required BigInt trackId,
     required String url,
     BigInt? durationMs,
@@ -3183,7 +3294,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 84,
+            funcId: 85,
             port: port_,
           );
         },
@@ -3191,42 +3302,42 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlayTrackConstMeta,
+        constMeta: kCrateApiPlaybackPlayTrackConstMeta,
         argValues: [trackId, url, durationMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayTrackConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiPlaybackPlayTrackConstMeta => const TaskConstMeta(
     debugName: "play_track",
     argNames: ["trackId", "url", "durationMs"],
   );
 
   @override
-  String crateApiPlaybackUserAgent() {
+  String crateApiPlaybackPlaybackUserAgent() {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlaybackUserAgentConstMeta,
+        constMeta: kCrateApiPlaybackPlaybackUserAgentConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlaybackUserAgentConstMeta =>
+  TaskConstMeta get kCrateApiPlaybackPlaybackUserAgentConstMeta =>
       const TaskConstMeta(debugName: "playback_user_agent", argNames: []);
 
   @override
-  Future<PlaybackTuningDto> crateApiPlayerConfigure({
+  Future<PlaybackTuningDto> crateApiPlaybackPlayerConfigure({
     required double gainDb,
     required int fadeMs,
     String? eqText,
@@ -3243,7 +3354,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 86,
+            funcId: 87,
             port: port_,
           );
         },
@@ -3251,47 +3362,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_playback_tuning_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlayerConfigureConstMeta,
+        constMeta: kCrateApiPlaybackPlayerConfigureConstMeta,
         argValues: [gainDb, fadeMs, eqText, gainSlewDbPerSec],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerConfigureConstMeta => const TaskConstMeta(
-    debugName: "player_configure",
-    argNames: ["gainDb", "fadeMs", "eqText", "gainSlewDbPerSec"],
-  );
+  TaskConstMeta get kCrateApiPlaybackPlayerConfigureConstMeta =>
+      const TaskConstMeta(
+        debugName: "player_configure",
+        argNames: ["gainDb", "fadeMs", "eqText", "gainSlewDbPerSec"],
+      );
 
   @override
-  Future<PlayerStateDto> crateApiPlayerPause() {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 87,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_player_state_dto,
-          decodeErrorData: null,
-        ),
-        constMeta: kCrateApiPlayerPauseConstMeta,
-        argValues: [],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiPlayerPauseConstMeta =>
-      const TaskConstMeta(debugName: "player_pause", argNames: []);
-
-  @override
-  Future<PlayerStateDto> crateApiPlayerResume() {
+  Future<PlayerStateDto> crateApiPlaybackPlayerPause() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3307,23 +3392,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerResumeConstMeta,
+        constMeta: kCrateApiPlaybackPlayerPauseConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerResumeConstMeta =>
-      const TaskConstMeta(debugName: "player_resume", argNames: []);
+  TaskConstMeta get kCrateApiPlaybackPlayerPauseConstMeta =>
+      const TaskConstMeta(debugName: "player_pause", argNames: []);
 
   @override
-  Future<PlayerStateDto> crateApiPlayerSeek({required BigInt positionMs}) {
+  Future<PlayerStateDto> crateApiPlaybackPlayerResume() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_64(positionMs, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3335,23 +3419,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerSeekConstMeta,
-        argValues: [positionMs],
+        constMeta: kCrateApiPlaybackPlayerResumeConstMeta,
+        argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerSeekConstMeta =>
-      const TaskConstMeta(debugName: "player_seek", argNames: ["positionMs"]);
+  TaskConstMeta get kCrateApiPlaybackPlayerResumeConstMeta =>
+      const TaskConstMeta(debugName: "player_resume", argNames: []);
 
   @override
-  Future<PlayerStateDto> crateApiPlayerSetVolume({required double volume}) {
+  Future<PlayerStateDto> crateApiPlaybackPlayerSeek({
+    required BigInt positionMs,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_f_32(volume, serializer);
+          sse_encode_u_64(positionMs, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3363,22 +3449,25 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerSetVolumeConstMeta,
-        argValues: [volume],
+        constMeta: kCrateApiPlaybackPlayerSeekConstMeta,
+        argValues: [positionMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerSetVolumeConstMeta =>
-      const TaskConstMeta(debugName: "player_set_volume", argNames: ["volume"]);
+  TaskConstMeta get kCrateApiPlaybackPlayerSeekConstMeta =>
+      const TaskConstMeta(debugName: "player_seek", argNames: ["positionMs"]);
 
   @override
-  Future<PlayerStateDto> crateApiPlayerState() {
+  Future<PlayerStateDto> crateApiPlaybackPlayerSetVolume({
+    required double volume,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(volume, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -3390,18 +3479,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerStateConstMeta,
-        argValues: [],
+        constMeta: kCrateApiPlaybackPlayerSetVolumeConstMeta,
+        argValues: [volume],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerStateConstMeta =>
-      const TaskConstMeta(debugName: "player_state", argNames: []);
+  TaskConstMeta get kCrateApiPlaybackPlayerSetVolumeConstMeta =>
+      const TaskConstMeta(debugName: "player_set_volume", argNames: ["volume"]);
 
   @override
-  Future<PlayerStateDto> crateApiPlayerStop() {
+  Future<PlayerStateDto> crateApiPlaybackPlayerState() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3417,18 +3506,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerStopConstMeta,
+        constMeta: kCrateApiPlaybackPlayerStateConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerStopConstMeta =>
-      const TaskConstMeta(debugName: "player_stop", argNames: []);
+  TaskConstMeta get kCrateApiPlaybackPlayerStateConstMeta =>
+      const TaskConstMeta(debugName: "player_state", argNames: []);
 
   @override
-  Future<PlaybackTuningDto> crateApiPlayerTuning() {
+  Future<PlayerStateDto> crateApiPlaybackPlayerStop() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3441,21 +3530,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           );
         },
         codec: SseCodec(
-          decodeSuccessData: sse_decode_playback_tuning_dto,
+          decodeSuccessData: sse_decode_player_state_dto,
           decodeErrorData: null,
         ),
-        constMeta: kCrateApiPlayerTuningConstMeta,
+        constMeta: kCrateApiPlaybackPlayerStopConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlayerTuningConstMeta =>
-      const TaskConstMeta(debugName: "player_tuning", argNames: []);
+  TaskConstMeta get kCrateApiPlaybackPlayerStopConstMeta =>
+      const TaskConstMeta(debugName: "player_stop", argNames: []);
 
   @override
-  Future<List<PlaylistCategory>> crateApiPlaylistCategories() {
+  Future<List<PlaylistCategory>> crateApiDiscoverPlaylistCategories() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3471,18 +3560,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist_category,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlaylistCategoriesConstMeta,
+        constMeta: kCrateApiDiscoverPlaylistCategoriesConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlaylistCategoriesConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverPlaylistCategoriesConstMeta =>
       const TaskConstMeta(debugName: "playlist_categories", argNames: []);
 
   @override
-  Future<PlaylistDetail> crateApiPlaylistDetail({required BigInt playlistId}) {
+  Future<PlaylistDetail> crateApiDetailPlaylistDetail({
+    required BigInt playlistId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3499,20 +3590,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_playlist_detail,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlaylistDetailConstMeta,
+        constMeta: kCrateApiDetailPlaylistDetailConstMeta,
         argValues: [playlistId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlaylistDetailConstMeta => const TaskConstMeta(
-    debugName: "playlist_detail",
-    argNames: ["playlistId"],
-  );
+  TaskConstMeta get kCrateApiDetailPlaylistDetailConstMeta =>
+      const TaskConstMeta(
+        debugName: "playlist_detail",
+        argNames: ["playlistId"],
+      );
 
   @override
-  Future<List<SongDto>> crateApiPlaylistSongs({required BigInt playlistId}) {
+  Future<List<SongDto>> crateApiLibraryPlaylistSongs({
+    required BigInt playlistId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3529,20 +3623,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlaylistSongsConstMeta,
+        constMeta: kCrateApiLibraryPlaylistSongsConstMeta,
         argValues: [playlistId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlaylistSongsConstMeta => const TaskConstMeta(
-    debugName: "playlist_songs",
-    argNames: ["playlistId"],
-  );
+  TaskConstMeta get kCrateApiLibraryPlaylistSongsConstMeta =>
+      const TaskConstMeta(
+        debugName: "playlist_songs",
+        argNames: ["playlistId"],
+      );
 
   @override
-  Future<List<Playlist>> crateApiPlaylistsByCategory({
+  Future<List<Playlist>> crateApiDiscoverPlaylistsByCategory({
     required String cat,
     required int limit,
     required int offset,
@@ -3565,21 +3660,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPlaylistsByCategoryConstMeta,
+        constMeta: kCrateApiDiscoverPlaylistsByCategoryConstMeta,
         argValues: [cat, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPlaylistsByCategoryConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverPlaylistsByCategoryConstMeta =>
       const TaskConstMeta(
         debugName: "playlists_by_category",
         argNames: ["cat", "limit", "offset"],
       );
 
   @override
-  Future<List<PodcastRadio>> crateApiPodcastHot({required int limit}) {
+  Future<List<PodcastRadio>> crateApiPodcastPodcastHot({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3596,18 +3691,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_podcast_radio,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPodcastHotConstMeta,
+        constMeta: kCrateApiPodcastPodcastHotConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPodcastHotConstMeta =>
+  TaskConstMeta get kCrateApiPodcastPodcastHotConstMeta =>
       const TaskConstMeta(debugName: "podcast_hot", argNames: ["limit"]);
 
   @override
-  Future<PodcastProgramDto> crateApiPodcastProgram({
+  Future<PodcastProgramDto> crateApiPodcastPodcastProgram({
     required BigInt programId,
   }) {
     return handler.executeNormal(
@@ -3626,20 +3721,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_podcast_program_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPodcastProgramConstMeta,
+        constMeta: kCrateApiPodcastPodcastProgramConstMeta,
         argValues: [programId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPodcastProgramConstMeta => const TaskConstMeta(
-    debugName: "podcast_program",
-    argNames: ["programId"],
-  );
+  TaskConstMeta get kCrateApiPodcastPodcastProgramConstMeta =>
+      const TaskConstMeta(
+        debugName: "podcast_program",
+        argNames: ["programId"],
+      );
 
   @override
-  Future<List<PodcastProgramDto>> crateApiPodcastPrograms({
+  Future<List<PodcastProgramDto>> crateApiPodcastPodcastPrograms({
     required BigInt radioId,
     required int limit,
     required int offset,
@@ -3662,20 +3758,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_podcast_program_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPodcastProgramsConstMeta,
+        constMeta: kCrateApiPodcastPodcastProgramsConstMeta,
         argValues: [radioId, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPodcastProgramsConstMeta => const TaskConstMeta(
-    debugName: "podcast_programs",
-    argNames: ["radioId", "limit", "offset"],
-  );
+  TaskConstMeta get kCrateApiPodcastPodcastProgramsConstMeta =>
+      const TaskConstMeta(
+        debugName: "podcast_programs",
+        argNames: ["radioId", "limit", "offset"],
+      );
 
   @override
-  Future<List<PrivateMessage>> crateApiPrivateHistory({
+  Future<List<PrivateMessage>> crateApiSocialPrivateHistory({
     required BigInt userId,
     required int limit,
     required BigInt beforeMs,
@@ -3698,20 +3795,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_private_message,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPrivateHistoryConstMeta,
+        constMeta: kCrateApiSocialPrivateHistoryConstMeta,
         argValues: [userId, limit, beforeMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPrivateHistoryConstMeta => const TaskConstMeta(
-    debugName: "private_history",
-    argNames: ["userId", "limit", "beforeMs"],
-  );
+  TaskConstMeta get kCrateApiSocialPrivateHistoryConstMeta =>
+      const TaskConstMeta(
+        debugName: "private_history",
+        argNames: ["userId", "limit", "beforeMs"],
+      );
 
   @override
-  Future<bool> crateApiPrivateSend({
+  Future<bool> crateApiSocialPrivateSend({
     required BigInt userId,
     required String content,
   }) {
@@ -3732,20 +3830,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPrivateSendConstMeta,
+        constMeta: kCrateApiSocialPrivateSendConstMeta,
         argValues: [userId, content],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPrivateSendConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialPrivateSendConstMeta => const TaskConstMeta(
     debugName: "private_send",
     argNames: ["userId", "content"],
   );
 
   @override
-  Future<List<PrivateSession>> crateApiPrivateSessions({
+  Future<List<PrivateSession>> crateApiSocialPrivateSessions({
     required int limit,
     required int offset,
   }) {
@@ -3766,20 +3864,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_private_session,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiPrivateSessionsConstMeta,
+        constMeta: kCrateApiSocialPrivateSessionsConstMeta,
         argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiPrivateSessionsConstMeta => const TaskConstMeta(
-    debugName: "private_sessions",
-    argNames: ["limit", "offset"],
-  );
+  TaskConstMeta get kCrateApiSocialPrivateSessionsConstMeta =>
+      const TaskConstMeta(
+        debugName: "private_sessions",
+        argNames: ["limit", "offset"],
+      );
 
   @override
-  Future<ProfileDetail> crateApiProfileDetail() {
+  Future<ProfileDetail> crateApiAccountProfileDetail() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3795,18 +3894,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_profile_detail,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiProfileDetailConstMeta,
+        constMeta: kCrateApiAccountProfileDetailConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiProfileDetailConstMeta =>
+  TaskConstMeta get kCrateApiAccountProfileDetailConstMeta =>
       const TaskConstMeta(debugName: "profile_detail", argNames: []);
 
   @override
-  Future<RadioExploreHome> crateApiRadioExploreHome() {
+  Future<RadioExploreHome> crateApiRadioRadioExploreHome() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3822,18 +3921,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_radio_explore_home,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRadioExploreHomeConstMeta,
+        constMeta: kCrateApiRadioRadioExploreHomeConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRadioExploreHomeConstMeta =>
+  TaskConstMeta get kCrateApiRadioRadioExploreHomeConstMeta =>
       const TaskConstMeta(debugName: "radio_explore_home", argNames: []);
 
   @override
-  Future<List<PodcastRadio>> crateApiRadioRecommend({required BigInt cateId}) {
+  Future<List<PodcastRadio>> crateApiRadioRadioRecommend({
+    required BigInt cateId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3850,18 +3951,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_podcast_radio,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRadioRecommendConstMeta,
+        constMeta: kCrateApiRadioRadioRecommendConstMeta,
         argValues: [cateId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRadioRecommendConstMeta =>
+  TaskConstMeta get kCrateApiRadioRadioRecommendConstMeta =>
       const TaskConstMeta(debugName: "radio_recommend", argNames: ["cateId"]);
 
   @override
-  Future<RadioSubscriberPage> crateApiRadioSubscribers({
+  Future<RadioSubscriberPage> crateApiRadioRadioSubscribers({
     required BigInt radioId,
     required int limit,
     BigInt? timeMs,
@@ -3884,20 +3985,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_radio_subscriber_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRadioSubscribersConstMeta,
+        constMeta: kCrateApiRadioRadioSubscribersConstMeta,
         argValues: [radioId, limit, timeMs],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRadioSubscribersConstMeta => const TaskConstMeta(
-    debugName: "radio_subscribers",
-    argNames: ["radioId", "limit", "timeMs"],
-  );
+  TaskConstMeta get kCrateApiRadioRadioSubscribersConstMeta =>
+      const TaskConstMeta(
+        debugName: "radio_subscribers",
+        argNames: ["radioId", "limit", "timeMs"],
+      );
 
   @override
-  Future<RadioToplistDto> crateApiRadioToplist({required String kind}) {
+  Future<RadioToplistDto> crateApiRadioRadioToplist({required String kind}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3914,18 +4016,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_radio_toplist_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRadioToplistConstMeta,
+        constMeta: kCrateApiRadioRadioToplistConstMeta,
         argValues: [kind],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRadioToplistConstMeta =>
+  TaskConstMeta get kCrateApiRadioRadioToplistConstMeta =>
       const TaskConstMeta(debugName: "radio_toplist", argNames: ["kind"]);
 
   @override
-  Future<List<AlbumItem>> crateApiRecentAlbums({required int limit}) {
+  Future<List<AlbumItem>> crateApiSocialRecentAlbums({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3942,18 +4044,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_album_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecentAlbumsConstMeta,
+        constMeta: kCrateApiSocialRecentAlbumsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecentAlbumsConstMeta =>
+  TaskConstMeta get kCrateApiSocialRecentAlbumsConstMeta =>
       const TaskConstMeta(debugName: "recent_albums", argNames: ["limit"]);
 
   @override
-  Future<List<RecentContact>> crateApiRecentContacts({required int limit}) {
+  Future<List<RecentContact>> crateApiSocialRecentContacts({
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3970,18 +4074,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_recent_contact,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecentContactsConstMeta,
+        constMeta: kCrateApiSocialRecentContactsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecentContactsConstMeta =>
+  TaskConstMeta get kCrateApiSocialRecentContactsConstMeta =>
       const TaskConstMeta(debugName: "recent_contacts", argNames: ["limit"]);
 
   @override
-  Future<List<Playlist>> crateApiRecentPlaylists({required int limit}) {
+  Future<List<Playlist>> crateApiSocialRecentPlaylists({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -3998,18 +4102,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecentPlaylistsConstMeta,
+        constMeta: kCrateApiSocialRecentPlaylistsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecentPlaylistsConstMeta =>
+  TaskConstMeta get kCrateApiSocialRecentPlaylistsConstMeta =>
       const TaskConstMeta(debugName: "recent_playlists", argNames: ["limit"]);
 
   @override
-  Future<List<PodcastRadio>> crateApiRecentPodcasts({required int limit}) {
+  Future<List<PodcastRadio>> crateApiSocialRecentPodcasts({
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4026,18 +4132,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_podcast_radio,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecentPodcastsConstMeta,
+        constMeta: kCrateApiSocialRecentPodcastsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecentPodcastsConstMeta =>
+  TaskConstMeta get kCrateApiSocialRecentPodcastsConstMeta =>
       const TaskConstMeta(debugName: "recent_podcasts", argNames: ["limit"]);
 
   @override
-  Future<List<SongDto>> crateApiRecentSongs({required int limit}) {
+  Future<List<SongDto>> crateApiSearchRecentSongs({required int limit}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4054,18 +4160,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecentSongsConstMeta,
+        constMeta: kCrateApiSearchRecentSongsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecentSongsConstMeta =>
+  TaskConstMeta get kCrateApiSearchRecentSongsConstMeta =>
       const TaskConstMeta(debugName: "recent_songs", argNames: ["limit"]);
 
   @override
-  Future<List<String>> crateApiRecordSearch({required String keyword}) {
+  Future<List<String>> crateApiSearchRecordSearch({required String keyword}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4082,18 +4188,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRecordSearchConstMeta,
+        constMeta: kCrateApiSearchRecordSearchConstMeta,
         argValues: [keyword],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRecordSearchConstMeta =>
+  TaskConstMeta get kCrateApiSearchRecordSearchConstMeta =>
       const TaskConstMeta(debugName: "record_search", argNames: ["keyword"]);
 
   @override
-  Future<bool> crateApiRememberPlay({required SongDto song}) {
+  Future<bool> crateApiSearchRememberPlay({required SongDto song}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4110,18 +4216,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRememberPlayConstMeta,
+        constMeta: kCrateApiSearchRememberPlayConstMeta,
         argValues: [song],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRememberPlayConstMeta =>
+  TaskConstMeta get kCrateApiSearchRememberPlayConstMeta =>
       const TaskConstMeta(debugName: "remember_play", argNames: ["song"]);
 
   @override
-  Future<bool> crateApiRemoveFromPlaylist({
+  Future<bool> crateApiLibraryRemoveFromPlaylist({
     required BigInt playlistId,
     required BigInt trackId,
   }) {
@@ -4142,20 +4248,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRemoveFromPlaylistConstMeta,
+        constMeta: kCrateApiLibraryRemoveFromPlaylistConstMeta,
         argValues: [playlistId, trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRemoveFromPlaylistConstMeta => const TaskConstMeta(
-    debugName: "remove_from_playlist",
-    argNames: ["playlistId", "trackId"],
-  );
+  TaskConstMeta get kCrateApiLibraryRemoveFromPlaylistConstMeta =>
+      const TaskConstMeta(
+        debugName: "remove_from_playlist",
+        argNames: ["playlistId", "trackId"],
+      );
 
   @override
-  Future<bool> crateApiRenamePlaylist({
+  Future<bool> crateApiLibraryRenamePlaylist({
     required BigInt playlistId,
     required String name,
   }) {
@@ -4176,20 +4283,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiRenamePlaylistConstMeta,
+        constMeta: kCrateApiLibraryRenamePlaylistConstMeta,
         argValues: [playlistId, name],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiRenamePlaylistConstMeta => const TaskConstMeta(
-    debugName: "rename_playlist",
-    argNames: ["playlistId", "name"],
-  );
+  TaskConstMeta get kCrateApiLibraryRenamePlaylistConstMeta =>
+      const TaskConstMeta(
+        debugName: "rename_playlist",
+        argNames: ["playlistId", "name"],
+      );
 
   @override
-  Future<bool> crateApiReplyComment({
+  Future<bool> crateApiSocialReplyComment({
     required String threadId,
     required BigInt commentId,
     required String content,
@@ -4212,20 +4320,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiReplyCommentConstMeta,
+        constMeta: kCrateApiSocialReplyCommentConstMeta,
         argValues: [threadId, commentId, content],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiReplyCommentConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialReplyCommentConstMeta => const TaskConstMeta(
     debugName: "reply_comment",
     argNames: ["threadId", "commentId", "content"],
   );
 
   @override
-  Future<SearchBundleDto> crateApiSearchAll({
+  Future<SearchBundleDto> crateApiSearchSearchAll({
     required String keywords,
     required int limit,
   }) {
@@ -4246,20 +4354,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_search_bundle_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSearchAllConstMeta,
+        constMeta: kCrateApiSearchSearchAllConstMeta,
         argValues: [keywords, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSearchAllConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSearchSearchAllConstMeta => const TaskConstMeta(
     debugName: "search_all",
     argNames: ["keywords", "limit"],
   );
 
   @override
-  Future<SearchExact> crateApiSearchExact({required String keywords}) {
+  Future<SearchExact> crateApiSearchSearchExact({required String keywords}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4276,18 +4384,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_search_exact,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSearchExactConstMeta,
+        constMeta: kCrateApiSearchSearchExactConstMeta,
         argValues: [keywords],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSearchExactConstMeta =>
+  TaskConstMeta get kCrateApiSearchSearchExactConstMeta =>
       const TaskConstMeta(debugName: "search_exact", argNames: ["keywords"]);
 
   @override
-  Future<List<String>> crateApiSearchHistory() {
+  Future<List<String>> crateApiSearchSearchHistory() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4303,18 +4411,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSearchHistoryConstMeta,
+        constMeta: kCrateApiSearchSearchHistoryConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSearchHistoryConstMeta =>
+  TaskConstMeta get kCrateApiSearchSearchHistoryConstMeta =>
       const TaskConstMeta(debugName: "search_history", argNames: []);
 
   @override
-  Future<List<SuggestItem>> crateApiSearchSuggest({required String keywords}) {
+  Future<List<SuggestItem>> crateApiSearchSearchSuggest({
+    required String keywords,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4331,18 +4441,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_suggest_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSearchSuggestConstMeta,
+        constMeta: kCrateApiSearchSearchSuggestConstMeta,
         argValues: [keywords],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSearchSuggestConstMeta =>
+  TaskConstMeta get kCrateApiSearchSearchSuggestConstMeta =>
       const TaskConstMeta(debugName: "search_suggest", argNames: ["keywords"]);
 
   @override
-  Future<List<String>> crateApiSearchSuggestKeywords({
+  Future<List<String>> crateApiSearchSearchSuggestKeywords({
     required String keywords,
   }) {
     return handler.executeNormal(
@@ -4361,21 +4471,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_String,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSearchSuggestKeywordsConstMeta,
+        constMeta: kCrateApiSearchSearchSuggestKeywordsConstMeta,
         argValues: [keywords],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSearchSuggestKeywordsConstMeta =>
+  TaskConstMeta get kCrateApiSearchSearchSuggestKeywordsConstMeta =>
       const TaskConstMeta(
         debugName: "search_suggest_keywords",
         argNames: ["keywords"],
       );
 
   @override
-  Future<bool> crateApiSetAlbumSubscribed({
+  Future<bool> crateApiDiscoverSetAlbumSubscribed({
     required BigInt albumId,
     required bool subscribed,
   }) {
@@ -4396,20 +4506,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSetAlbumSubscribedConstMeta,
+        constMeta: kCrateApiDiscoverSetAlbumSubscribedConstMeta,
         argValues: [albumId, subscribed],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSetAlbumSubscribedConstMeta => const TaskConstMeta(
-    debugName: "set_album_subscribed",
-    argNames: ["albumId", "subscribed"],
-  );
+  TaskConstMeta get kCrateApiDiscoverSetAlbumSubscribedConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_album_subscribed",
+        argNames: ["albumId", "subscribed"],
+      );
 
   @override
-  Future<bool> crateApiSetFollow({required BigInt uid, required bool follow}) {
+  Future<bool> crateApiSocialSetFollow({
+    required BigInt uid,
+    required bool follow,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4427,18 +4541,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSetFollowConstMeta,
+        constMeta: kCrateApiSocialSetFollowConstMeta,
         argValues: [uid, follow],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSetFollowConstMeta =>
+  TaskConstMeta get kCrateApiSocialSetFollowConstMeta =>
       const TaskConstMeta(debugName: "set_follow", argNames: ["uid", "follow"]);
 
   @override
-  Future<bool> crateApiSetLiked({
+  Future<bool> crateApiLibrarySetLiked({
     required BigInt trackId,
     required bool liked,
   }) {
@@ -4459,20 +4573,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSetLikedConstMeta,
+        constMeta: kCrateApiLibrarySetLikedConstMeta,
         argValues: [trackId, liked],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSetLikedConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiLibrarySetLikedConstMeta => const TaskConstMeta(
     debugName: "set_liked",
     argNames: ["trackId", "liked"],
   );
 
   @override
-  Future<bool> crateApiSetPlaylistSubscribed({
+  Future<bool> crateApiDetailSetPlaylistSubscribed({
     required BigInt playlistId,
     required bool subscribed,
   }) {
@@ -4493,21 +4607,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSetPlaylistSubscribedConstMeta,
+        constMeta: kCrateApiDetailSetPlaylistSubscribedConstMeta,
         argValues: [playlistId, subscribed],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSetPlaylistSubscribedConstMeta =>
+  TaskConstMeta get kCrateApiDetailSetPlaylistSubscribedConstMeta =>
       const TaskConstMeta(
         debugName: "set_playlist_subscribed",
         argNames: ["playlistId", "subscribed"],
       );
 
   @override
-  Future<bool> crateApiShareResource({
+  Future<bool> crateApiDetailShareResource({
     required String kind,
     required BigInt resourceId,
     required String msg,
@@ -4530,20 +4644,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiShareResourceConstMeta,
+        constMeta: kCrateApiDetailShareResourceConstMeta,
         argValues: [kind, resourceId, msg],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiShareResourceConstMeta => const TaskConstMeta(
-    debugName: "share_resource",
-    argNames: ["kind", "resourceId", "msg"],
-  );
+  TaskConstMeta get kCrateApiDetailShareResourceConstMeta =>
+      const TaskConstMeta(
+        debugName: "share_resource",
+        argNames: ["kind", "resourceId", "msg"],
+      );
 
   @override
-  Future<SigninStatus> crateApiSignIn() {
+  Future<SigninStatus> crateApiMeSignIn() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4559,18 +4674,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_signin_status,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSignInConstMeta,
+        constMeta: kCrateApiMeSignInConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSignInConstMeta =>
+  TaskConstMeta get kCrateApiMeSignInConstMeta =>
       const TaskConstMeta(debugName: "sign_in", argNames: []);
 
   @override
-  Future<List<Artist>> crateApiSimilarArtists({required BigInt artistId}) {
+  Future<List<Artist>> crateApiDiscoverSimilarArtists({
+    required BigInt artistId,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4587,18 +4704,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_artist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSimilarArtistsConstMeta,
+        constMeta: kCrateApiDiscoverSimilarArtistsConstMeta,
         argValues: [artistId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimilarArtistsConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverSimilarArtistsConstMeta =>
       const TaskConstMeta(debugName: "similar_artists", argNames: ["artistId"]);
 
   @override
-  Future<List<Playlist>> crateApiSimilarPlaylists({
+  Future<List<Playlist>> crateApiDiscoverSimilarPlaylists({
     required BigInt songId,
     required int limit,
   }) {
@@ -4619,20 +4736,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSimilarPlaylistsConstMeta,
+        constMeta: kCrateApiDiscoverSimilarPlaylistsConstMeta,
         argValues: [songId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimilarPlaylistsConstMeta => const TaskConstMeta(
-    debugName: "similar_playlists",
-    argNames: ["songId", "limit"],
-  );
+  TaskConstMeta get kCrateApiDiscoverSimilarPlaylistsConstMeta =>
+      const TaskConstMeta(
+        debugName: "similar_playlists",
+        argNames: ["songId", "limit"],
+      );
 
   @override
-  Future<List<SongDto>> crateApiSimilarSongs({
+  Future<List<SongDto>> crateApiDiscoverSimilarSongs({
     required BigInt songId,
     required int limit,
   }) {
@@ -4653,20 +4771,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSimilarSongsConstMeta,
+        constMeta: kCrateApiDiscoverSimilarSongsConstMeta,
         argValues: [songId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSimilarSongsConstMeta => const TaskConstMeta(
-    debugName: "similar_songs",
-    argNames: ["songId", "limit"],
-  );
+  TaskConstMeta get kCrateApiDiscoverSimilarSongsConstMeta =>
+      const TaskConstMeta(
+        debugName: "similar_songs",
+        argNames: ["songId", "limit"],
+      );
 
   @override
-  Future<SongLikeState> crateApiSongLikeState({required BigInt trackId}) {
+  Future<SongLikeState> crateApiDetailSongLikeState({required BigInt trackId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4683,18 +4802,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_song_like_state,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSongLikeStateConstMeta,
+        constMeta: kCrateApiDetailSongLikeStateConstMeta,
         argValues: [trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSongLikeStateConstMeta =>
+  TaskConstMeta get kCrateApiDetailSongLikeStateConstMeta =>
       const TaskConstMeta(debugName: "song_like_state", argNames: ["trackId"]);
 
   @override
-  Future<SongPurchasedPage> crateApiSongPurchased({
+  Future<SongPurchasedPage> crateApiDetailSongPurchased({
     required int limit,
     required int offset,
   }) {
@@ -4715,20 +4834,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_song_purchased_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSongPurchasedConstMeta,
+        constMeta: kCrateApiDetailSongPurchasedConstMeta,
         argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSongPurchasedConstMeta => const TaskConstMeta(
-    debugName: "song_purchased",
-    argNames: ["limit", "offset"],
-  );
+  TaskConstMeta get kCrateApiDetailSongPurchasedConstMeta =>
+      const TaskConstMeta(
+        debugName: "song_purchased",
+        argNames: ["limit", "offset"],
+      );
 
   @override
-  Future<StreamUrl> crateApiSongUrl({
+  Future<StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
   }) {
@@ -4749,20 +4869,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_stream_url,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSongUrlConstMeta,
+        constMeta: kCrateApiAccountSongUrlConstMeta,
         argValues: [trackId, level],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSongUrlConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiAccountSongUrlConstMeta => const TaskConstMeta(
     debugName: "song_url",
     argNames: ["trackId", "level"],
   );
 
   @override
-  Future<List<WikiFact>> crateApiSongWiki({required BigInt songId}) {
+  Future<List<WikiFact>> crateApiMeSongWiki({required BigInt songId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4779,18 +4899,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_wiki_fact,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSongWikiConstMeta,
+        constMeta: kCrateApiMeSongWikiConstMeta,
         argValues: [songId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSongWikiConstMeta =>
+  TaskConstMeta get kCrateApiMeSongWikiConstMeta =>
       const TaskConstMeta(debugName: "song_wiki", argNames: ["songId"]);
 
   @override
-  Future<List<Playlist>> crateApiStylePlaylists({
+  Future<List<Playlist>> crateApiMeStylePlaylists({
     required String tagId,
     required int limit,
   }) {
@@ -4811,20 +4931,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiStylePlaylistsConstMeta,
+        constMeta: kCrateApiMeStylePlaylistsConstMeta,
         argValues: [tagId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiStylePlaylistsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiMeStylePlaylistsConstMeta => const TaskConstMeta(
     debugName: "style_playlists",
     argNames: ["tagId", "limit"],
   );
 
   @override
-  Future<List<StyleTag>> crateApiStylePreference() {
+  Future<List<StyleTag>> crateApiMeStylePreference() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4840,18 +4960,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_style_tag,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiStylePreferenceConstMeta,
+        constMeta: kCrateApiMeStylePreferenceConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiStylePreferenceConstMeta =>
+  TaskConstMeta get kCrateApiMeStylePreferenceConstMeta =>
       const TaskConstMeta(debugName: "style_preference", argNames: []);
 
   @override
-  Future<List<SongDto>> crateApiStyleSongs({
+  Future<List<SongDto>> crateApiMeStyleSongs({
     required String tagId,
     required int limit,
   }) {
@@ -4872,20 +4992,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_song_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiStyleSongsConstMeta,
+        constMeta: kCrateApiMeStyleSongsConstMeta,
         argValues: [tagId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiStyleSongsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiMeStyleSongsConstMeta => const TaskConstMeta(
     debugName: "style_songs",
     argNames: ["tagId", "limit"],
   );
 
   @override
-  Future<List<AlbumItem>> crateApiSubscribedAlbums({required int limit}) {
+  Future<List<AlbumItem>> crateApiDiscoverSubscribedAlbums({
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4902,18 +5024,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_album_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSubscribedAlbumsConstMeta,
+        constMeta: kCrateApiDiscoverSubscribedAlbumsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSubscribedAlbumsConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverSubscribedAlbumsConstMeta =>
       const TaskConstMeta(debugName: "subscribed_albums", argNames: ["limit"]);
 
   @override
-  Future<List<Artist>> crateApiSubscribedArtists({required int limit}) {
+  Future<List<Artist>> crateApiRecommendSubscribedArtists({
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4930,18 +5054,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_artist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSubscribedArtistsConstMeta,
+        constMeta: kCrateApiRecommendSubscribedArtistsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSubscribedArtistsConstMeta =>
+  TaskConstMeta get kCrateApiRecommendSubscribedArtistsConstMeta =>
       const TaskConstMeta(debugName: "subscribed_artists", argNames: ["limit"]);
 
   @override
-  Future<List<PodcastRadio>> crateApiSubscribedPodcasts({required int limit}) {
+  Future<List<PodcastRadio>> crateApiRecommendSubscribedPodcasts({
+    required int limit,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4958,20 +5084,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_podcast_radio,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiSubscribedPodcastsConstMeta,
+        constMeta: kCrateApiRecommendSubscribedPodcastsConstMeta,
         argValues: [limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiSubscribedPodcastsConstMeta => const TaskConstMeta(
-    debugName: "subscribed_podcasts",
-    argNames: ["limit"],
-  );
+  TaskConstMeta get kCrateApiRecommendSubscribedPodcastsConstMeta =>
+      const TaskConstMeta(
+        debugName: "subscribed_podcasts",
+        argNames: ["limit"],
+      );
 
   @override
-  Future<List<ToplistCatalogGroup>> crateApiToplistCatalog() {
+  Future<List<ToplistCatalogGroup>> crateApiDiscoverToplistCatalog() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -4987,18 +5114,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_toplist_catalog_group,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiToplistCatalogConstMeta,
+        constMeta: kCrateApiDiscoverToplistCatalogConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiToplistCatalogConstMeta =>
+  TaskConstMeta get kCrateApiDiscoverToplistCatalogConstMeta =>
       const TaskConstMeta(debugName: "toplist_catalog", argNames: []);
 
   @override
-  Future<bool> crateApiTrashFmSong({required BigInt songId}) {
+  Future<bool> crateApiRecommendTrashFmSong({required BigInt songId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5015,18 +5142,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiTrashFmSongConstMeta,
+        constMeta: kCrateApiRecommendTrashFmSongConstMeta,
         argValues: [songId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiTrashFmSongConstMeta =>
+  TaskConstMeta get kCrateApiRecommendTrashFmSongConstMeta =>
       const TaskConstMeta(debugName: "trash_fm_song", argNames: ["songId"]);
 
   @override
-  Future<WordLyricDto?> crateApiTtmlLyricLines({required BigInt trackId}) {
+  Future<WordLyricDto?> crateApiLyricTtmlLyricLines({required BigInt trackId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5043,18 +5170,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_opt_box_autoadd_word_lyric_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiTtmlLyricLinesConstMeta,
+        constMeta: kCrateApiLyricTtmlLyricLinesConstMeta,
         argValues: [trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiTtmlLyricLinesConstMeta =>
+  TaskConstMeta get kCrateApiLyricTtmlLyricLinesConstMeta =>
       const TaskConstMeta(debugName: "ttml_lyric_lines", argNames: ["trackId"]);
 
   @override
-  Future<bool> crateApiUpdatePlaylistDesc({
+  Future<bool> crateApiLibraryUpdatePlaylistDesc({
     required BigInt playlistId,
     required String desc,
   }) {
@@ -5075,20 +5202,23 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_bool,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUpdatePlaylistDescConstMeta,
+        constMeta: kCrateApiLibraryUpdatePlaylistDescConstMeta,
         argValues: [playlistId, desc],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUpdatePlaylistDescConstMeta => const TaskConstMeta(
-    debugName: "update_playlist_desc",
-    argNames: ["playlistId", "desc"],
-  );
+  TaskConstMeta get kCrateApiLibraryUpdatePlaylistDescConstMeta =>
+      const TaskConstMeta(
+        debugName: "update_playlist_desc",
+        argNames: ["playlistId", "desc"],
+      );
 
   @override
-  Future<ProfileDetail> crateApiUpdateSignature({required String signature}) {
+  Future<ProfileDetail> crateApiAccountUpdateSignature({
+    required String signature,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5105,20 +5235,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_profile_detail,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUpdateSignatureConstMeta,
+        constMeta: kCrateApiAccountUpdateSignatureConstMeta,
         argValues: [signature],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUpdateSignatureConstMeta => const TaskConstMeta(
-    debugName: "update_signature",
-    argNames: ["signature"],
-  );
+  TaskConstMeta get kCrateApiAccountUpdateSignatureConstMeta =>
+      const TaskConstMeta(
+        debugName: "update_signature",
+        argNames: ["signature"],
+      );
 
   @override
-  Future<CloudPage> crateApiUserCloud({
+  Future<CloudPage> crateApiCloudUserCloud({
     required int limit,
     required int offset,
   }) {
@@ -5139,20 +5270,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_cloud_page,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserCloudConstMeta,
+        constMeta: kCrateApiCloudUserCloudConstMeta,
         argValues: [limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserCloudConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiCloudUserCloudConstMeta => const TaskConstMeta(
     debugName: "user_cloud",
     argNames: ["limit", "offset"],
   );
 
   @override
-  Future<List<FeedEventDto>> crateApiUserEvents({
+  Future<List<FeedEventDto>> crateApiSocialUserEvents({
     required BigInt uid,
     required int limit,
     required PlatformInt64 lastTime,
@@ -5175,20 +5306,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_feed_event_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserEventsConstMeta,
+        constMeta: kCrateApiSocialUserEventsConstMeta,
         argValues: [uid, limit, lastTime],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserEventsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialUserEventsConstMeta => const TaskConstMeta(
     debugName: "user_events",
     argNames: ["uid", "limit", "lastTime"],
   );
 
   @override
-  Future<List<UserItem>> crateApiUserFolloweds({
+  Future<List<UserItem>> crateApiSocialUserFolloweds({
     required BigInt uid,
     required int limit,
     required int offset,
@@ -5211,20 +5342,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_user_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserFollowedsConstMeta,
+        constMeta: kCrateApiSocialUserFollowedsConstMeta,
         argValues: [uid, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserFollowedsConstMeta => const TaskConstMeta(
-    debugName: "user_followeds",
-    argNames: ["uid", "limit", "offset"],
-  );
+  TaskConstMeta get kCrateApiSocialUserFollowedsConstMeta =>
+      const TaskConstMeta(
+        debugName: "user_followeds",
+        argNames: ["uid", "limit", "offset"],
+      );
 
   @override
-  Future<List<UserItem>> crateApiUserFollows({
+  Future<List<UserItem>> crateApiSocialUserFollows({
     required BigInt uid,
     required int limit,
     required int offset,
@@ -5247,20 +5379,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_user_item,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserFollowsConstMeta,
+        constMeta: kCrateApiSocialUserFollowsConstMeta,
         argValues: [uid, limit, offset],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserFollowsConstMeta => const TaskConstMeta(
+  TaskConstMeta get kCrateApiSocialUserFollowsConstMeta => const TaskConstMeta(
     debugName: "user_follows",
     argNames: ["uid", "limit", "offset"],
   );
 
   @override
-  Future<UserLevel> crateApiUserLevel() {
+  Future<UserLevel> crateApiMeUserLevel() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5276,18 +5408,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_user_level,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserLevelConstMeta,
+        constMeta: kCrateApiMeUserLevelConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserLevelConstMeta =>
+  TaskConstMeta get kCrateApiMeUserLevelConstMeta =>
       const TaskConstMeta(debugName: "user_level", argNames: []);
 
   @override
-  Future<List<UserMedal>> crateApiUserMedals() {
+  Future<List<UserMedal>> crateApiMeUserMedals() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5303,52 +5435,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_user_medal,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserMedalsConstMeta,
+        constMeta: kCrateApiMeUserMedalsConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserMedalsConstMeta =>
+  TaskConstMeta get kCrateApiMeUserMedalsConstMeta =>
       const TaskConstMeta(debugName: "user_medals", argNames: []);
 
   @override
-  Future<List<PlayRankEntryDto>> crateApiUserPlayRanking({
-    required BigInt uid,
-    required String period,
-  }) {
-    return handler.executeNormal(
-      NormalTask(
-        callFfi: (port_) {
-          final serializer = SseSerializer(generalizedFrbRustBinding);
-          sse_encode_u_64(uid, serializer);
-          sse_encode_String(period, serializer);
-          pdeCallFfi(
-            generalizedFrbRustBinding,
-            serializer,
-            funcId: 154,
-            port: port_,
-          );
-        },
-        codec: SseCodec(
-          decodeSuccessData: sse_decode_list_play_rank_entry_dto,
-          decodeErrorData: sse_decode_ffi_error,
-        ),
-        constMeta: kCrateApiUserPlayRankingConstMeta,
-        argValues: [uid, period],
-        apiImpl: this,
-      ),
-    );
-  }
-
-  TaskConstMeta get kCrateApiUserPlayRankingConstMeta => const TaskConstMeta(
-    debugName: "user_play_ranking",
-    argNames: ["uid", "period"],
-  );
-
-  @override
-  Future<List<Playlist>> crateApiUserPlaylistsOf({
+  Future<List<Playlist>> crateApiAccountUserPlaylistsOf({
     required BigInt userId,
     required int limit,
   }) {
@@ -5361,7 +5459,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 155,
+            funcId: 154,
             port: port_,
           );
         },
@@ -5369,20 +5467,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_list_playlist,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserPlaylistsOfConstMeta,
+        constMeta: kCrateApiAccountUserPlaylistsOfConstMeta,
         argValues: [userId, limit],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserPlaylistsOfConstMeta => const TaskConstMeta(
-    debugName: "user_playlists_of",
-    argNames: ["userId", "limit"],
-  );
+  TaskConstMeta get kCrateApiAccountUserPlaylistsOfConstMeta =>
+      const TaskConstMeta(
+        debugName: "user_playlists_of",
+        argNames: ["userId", "limit"],
+      );
 
   @override
-  Future<ProfileDetail> crateApiUserProfile({required BigInt userId}) {
+  Future<ProfileDetail> crateApiAccountUserProfile({required BigInt userId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5391,7 +5490,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 156,
+            funcId: 155,
             port: port_,
           );
         },
@@ -5399,18 +5498,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_profile_detail,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiUserProfileConstMeta,
+        constMeta: kCrateApiAccountUserProfileConstMeta,
         argValues: [userId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiUserProfileConstMeta =>
+  TaskConstMeta get kCrateApiAccountUserProfileConstMeta =>
       const TaskConstMeta(debugName: "user_profile", argNames: ["userId"]);
 
   @override
-  Future<VipOverview> crateApiVipOverview() {
+  Future<VipOverview> crateApiMeVipOverview() {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5418,7 +5517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 157,
+            funcId: 156,
             port: port_,
           );
         },
@@ -5426,18 +5525,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_vip_overview,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiVipOverviewConstMeta,
+        constMeta: kCrateApiMeVipOverviewConstMeta,
         argValues: [],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiVipOverviewConstMeta =>
+  TaskConstMeta get kCrateApiMeVipOverviewConstMeta =>
       const TaskConstMeta(debugName: "vip_overview", argNames: []);
 
   @override
-  Future<WordLyricDto> crateApiWordLyricLines({required BigInt trackId}) {
+  Future<WordLyricDto> crateApiLyricWordLyricLines({required BigInt trackId}) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
@@ -5446,7 +5545,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 158,
+            funcId: 157,
             port: port_,
           );
         },
@@ -5454,14 +5553,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeSuccessData: sse_decode_word_lyric_dto,
           decodeErrorData: sse_decode_ffi_error,
         ),
-        constMeta: kCrateApiWordLyricLinesConstMeta,
+        constMeta: kCrateApiLyricWordLyricLinesConstMeta,
         argValues: [trackId],
         apiImpl: this,
       ),
     );
   }
 
-  TaskConstMeta get kCrateApiWordLyricLinesConstMeta =>
+  TaskConstMeta get kCrateApiLyricWordLyricLinesConstMeta =>
       const TaskConstMeta(debugName: "word_lyric_lines", argNames: ["trackId"]);
 
   @protected
@@ -5691,19 +5790,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       freedBytes: dco_decode_u_64(arr[1]),
       totalBytes: dco_decode_u_64(arr[2]),
       limitBytes: dco_decode_u_64(arr[3]),
-    );
-  }
-
-  @protected
-  CacheStatsDto dco_decode_cache_stats_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-    return CacheStatsDto(
-      totalBytes: dco_decode_u_64(arr[0]),
-      limitBytes: dco_decode_u_64(arr[1]),
-      files: dco_decode_u_32(arr[2]),
     );
   }
 
@@ -6313,6 +6399,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Int64List dco_decode_list_prim_i_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeInt64List(raw);
+  }
+
+  @protected
   Uint32List dco_decode_list_prim_u_32_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint32List;
@@ -6510,6 +6602,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       samplePeak: dco_decode_f_64(arr[2]),
       gainDb: dco_decode_f_64(arr[3]),
       measuredAtMs: dco_decode_u_64(arr[4]),
+    );
+  }
+
+  @protected
+  LyricChoiceDto dco_decode_lyric_choice_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return LyricChoiceDto(
+      source: dco_decode_opt_String(arr[0]),
+      reason: dco_decode_opt_String(arr[1]),
     );
   }
 
@@ -7512,6 +7616,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WordLyricScoreDto dco_decode_word_lyric_score_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return WordLyricScoreDto(
+      coverage: dco_decode_f_64(arr[0]),
+      monotonic: dco_decode_f_64(arr[1]),
+      firstWord: dco_decode_f_64(arr[2]),
+      spans: dco_decode_f_64(arr[3]),
+      consistency: dco_decode_f_64(arr[4]),
+      score: dco_decode_f_64(arr[5]),
+    );
+  }
+
+  @protected
   String sse_decode_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_list_prim_u_8_strict(deserializer);
@@ -7761,19 +7881,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       freedBytes: var_freedBytes,
       totalBytes: var_totalBytes,
       limitBytes: var_limitBytes,
-    );
-  }
-
-  @protected
-  CacheStatsDto sse_decode_cache_stats_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var var_totalBytes = sse_decode_u_64(deserializer);
-    var var_limitBytes = sse_decode_u_64(deserializer);
-    var var_files = sse_decode_u_32(deserializer);
-    return CacheStatsDto(
-      totalBytes: var_totalBytes,
-      limitBytes: var_limitBytes,
-      files: var_files,
     );
   }
 
@@ -8626,6 +8733,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Int64List sse_decode_list_prim_i_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getInt64List(len_);
+  }
+
+  @protected
   Uint32List sse_decode_list_prim_u_32_strict(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
@@ -9019,6 +9133,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       gainDb: var_gainDb,
       measuredAtMs: var_measuredAtMs,
     );
+  }
+
+  @protected
+  LyricChoiceDto sse_decode_lyric_choice_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_source = sse_decode_opt_String(deserializer);
+    var var_reason = sse_decode_opt_String(deserializer);
+    return LyricChoiceDto(source: var_source, reason: var_reason);
   }
 
   @protected
@@ -10209,6 +10331,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WordLyricScoreDto sse_decode_word_lyric_score_dto(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_coverage = sse_decode_f_64(deserializer);
+    var var_monotonic = sse_decode_f_64(deserializer);
+    var var_firstWord = sse_decode_f_64(deserializer);
+    var var_spans = sse_decode_f_64(deserializer);
+    var var_consistency = sse_decode_f_64(deserializer);
+    var var_score = sse_decode_f_64(deserializer);
+    return WordLyricScoreDto(
+      coverage: var_coverage,
+      monotonic: var_monotonic,
+      firstWord: var_firstWord,
+      spans: var_spans,
+      consistency: var_consistency,
+      score: var_score,
+    );
+  }
+
+  @protected
   void sse_encode_String(String self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
@@ -10417,17 +10560,6 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.freedBytes, serializer);
     sse_encode_u_64(self.totalBytes, serializer);
     sse_encode_u_64(self.limitBytes, serializer);
-  }
-
-  @protected
-  void sse_encode_cache_stats_dto(
-    CacheStatsDto self,
-    SseSerializer serializer,
-  ) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_u_64(self.totalBytes, serializer);
-    sse_encode_u_64(self.limitBytes, serializer);
-    sse_encode_u_32(self.files, serializer);
   }
 
   @protected
@@ -11073,6 +11205,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_prim_i_64_strict(
+    Int64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putInt64List(self);
+  }
+
+  @protected
   void sse_encode_list_prim_u_32_strict(
     Uint32List self,
     SseSerializer serializer,
@@ -11428,6 +11570,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_64(self.samplePeak, serializer);
     sse_encode_f_64(self.gainDb, serializer);
     sse_encode_u_64(self.measuredAtMs, serializer);
+  }
+
+  @protected
+  void sse_encode_lyric_choice_dto(
+    LyricChoiceDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.source, serializer);
+    sse_encode_opt_String(self.reason, serializer);
   }
 
   @protected
@@ -12266,5 +12418,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_64(self.startMs, serializer);
     sse_encode_i_64(self.endMs, serializer);
     sse_encode_list_word_item_dto(self.words, serializer);
+  }
+
+  @protected
+  void sse_encode_word_lyric_score_dto(
+    WordLyricScoreDto self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_64(self.coverage, serializer);
+    sse_encode_f_64(self.monotonic, serializer);
+    sse_encode_f_64(self.firstWord, serializer);
+    sse_encode_f_64(self.spans, serializer);
+    sse_encode_f_64(self.consistency, serializer);
+    sse_encode_f_64(self.score, serializer);
   }
 }

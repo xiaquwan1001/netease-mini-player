@@ -10,6 +10,7 @@ import 'cover_art.dart';
 import 'file_pick.dart' show pickAudioFile;
 import 'layout.dart';
 import 'net_retry.dart';
+import 'paged_list_view.dart' show OffsetPager;
 import 'rust/api.dart' as rust;
 import 'toast.dart' show showToast;
 
@@ -106,10 +107,16 @@ class CloudPage extends StatefulWidget {
 }
 
 class _CloudPageState extends State<CloudPage> {
-  /// 已加载的条目(翻页是累加, 刷新是清空重来).
-  final List<rust.CloudSong> _songs = <rust.CloudSong>[];
+  /// 分页状态(条目/offset/是否还有更多)交给统用的 [OffsetPager], 本页只负责排版.
+  ///
+  /// 没有直接换成 [PagedListView]: 那个组件只能整体重载, 而云盘页要在列表里就地
+  /// 删除一行(重载会丢掉已翻到的页与滚动位置), 首行还要显示每页随包带回的容量
+  /// 信息; 上游也只给 `more` 标志, 没有 cursor 可用.
+  late final OffsetPager<rust.CloudSong> _pager = OffsetPager<rust.CloudSong>(
+    pageSize: kCloudPageSize,
+    load: _loadPage,
+  );
   late Future<List<rust.CloudSong>> _future;
-  bool _more = false;
   bool _loadingMore = false;
   bool _deleting = false;
   bool _uploading = false;
@@ -130,29 +137,24 @@ class _CloudPageState extends State<CloudPage> {
   @override
   void initState() {
     super.initState();
-    _future = _fetch(reset: true);
+    _future = _pager.fetch(reset: true);
   }
 
-  /// 取一页: [reset] 为真时清空并从 offset 0 重来(刷新/重试), 否则追加(加载更多)。
-  Future<List<rust.CloudSong>> _fetch({required bool reset}) async {
-    final offset = reset ? 0 : _songs.length;
-    final page = await _loader(kCloudPageSize, offset);
-    if (reset) {
-      _songs
-        ..clear()
-        ..addAll(page.songs);
-    } else {
-      _songs.addAll(page.songs);
-    }
-    _more = page.more && page.songs.isNotEmpty;
+  /// 取一页并与 [OffsetPager] 对接: 顺带记下容量信息(上游把 count/size/maxSize
+  /// 放在每一页的返回值里)。
+  Future<({List<rust.CloudSong> items, bool hasMore})> _loadPage(
+    int limit,
+    int offset,
+  ) async {
+    final page = await _loader(limit, offset);
     _total = page.count.toInt();
     _used = page.size.toInt();
     _capacity = page.maxSize.toInt();
-    return List<rust.CloudSong>.unmodifiable(_songs);
+    return (items: page.songs, hasMore: page.more && page.songs.isNotEmpty);
   }
 
   Future<void> _refresh() async {
-    final next = _fetch(reset: true);
+    final next = _pager.fetch(reset: true);
     // 用块体: 箭头体把 Future 当 setState 回调返回值, Flutter 会断言失败
     setState(() {
       _future = next;
@@ -162,12 +164,12 @@ class _CloudPageState extends State<CloudPage> {
   }
 
   Future<void> _loadMore() async {
-    if (_loadingMore || !_more) return;
+    if (_loadingMore || !_pager.hasMore) return;
     setState(() {
       _loadingMore = true;
     });
     try {
-      final next = _fetch(reset: false);
+      final next = _pager.fetch(reset: false);
       await next;
       if (mounted) {
         setState(() {
@@ -264,10 +266,8 @@ class _CloudPageState extends State<CloudPage> {
         return;
       }
       setState(() {
-        _songs.removeWhere((s) => s.id == song.id);
-        _future = Future<List<rust.CloudSong>>.value(
-          List<rust.CloudSong>.unmodifiable(_songs),
-        );
+        _pager.removeWhere((s) => s.id == song.id);
+        _future = Future<List<rust.CloudSong>>.value(_pager.items);
       });
       showToast(context, '已从云盘删除');
     } catch (e) {
@@ -376,7 +376,7 @@ class _CloudPageState extends State<CloudPage> {
     TextStyle? style,
   ) {
     if (songs.isEmpty) return const SizedBox.shrink();
-    if (_more) {
+    if (_pager.hasMore) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: kSectionHeaderGap),
         child: Center(

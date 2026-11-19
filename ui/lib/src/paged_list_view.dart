@@ -40,66 +40,6 @@ typedef PagedItemBuilder<T> = Widget Function(
 /// 传 [gridDelegate] 时按网格(SliverGrid)排版, 否则线性列表。
 /// 自带布局、需要就地改条目的页面(如云盘页)不受这套 UI 约束, 但可以复用
 /// 同文件的 [OffsetPager] 管分页状态。
-/// 「(limit, offset) 取一页」风格的分页状态机(与 [PagedListView] 的 cursor 模式互补)。
-///
-/// [PagedListView] 只能整体重载、翻页靠服务端 cursor, 有几类页面用不了: 音乐云盘页要
-/// 在列表里**就地删除**一行(整体重载会把用户已经拉到第 N 页的进度和滚动位置丢掉)、
-/// 首行要显示每页随包带回的容量信息、上游也只给 `more` 标志而给不出 cursor。
-/// 这类页面继续自己排版, 但不必再手写 offset 算术 —— 条目/offset/是否还有更多都交给这里。
-///
-/// 语义(与云盘页原先的手写实现逐条一致):
-/// - [fetch] `reset: true` = 清空重来(offset 0); `reset: false` = 从**当前已加载条数**
-///   续拉, 所以就地删除之后条数变了, 下一次追加仍然接着正确的位置;
-/// - 只有取页成功才改动内部状态: 失败时旧条目原样保留, 错误抛给调用方决定怎么提示;
-/// - [hasMore] 就是上一次取页给出的 `hasMore`, 调用方自己决定尾部件怎么画。
-class OffsetPager<T extends Object> {
-  OffsetPager({required this.pageSize, required this.load});
-
-  /// 每页条数(透传给 [load] 的 limit)。
-  final int pageSize;
-
-  /// 取一页: 返回 (本页条目, 是否还有下一页)。
-  final Future<({List<T> items, bool hasMore})> Function(int limit, int offset)
-  load;
-
-  final List<T> _items = <T>[];
-  bool _hasMore = false;
-
-  /// 已加载条目(只读视图; 改动请走 [fetch] / [removeWhere] / [clear])。
-  List<T> get items => List<T>.unmodifiable(_items);
-
-  int get length => _items.length;
-  bool get hasMore => _hasMore;
-
-  /// 拉一页并返回累计条目。[reset] 为真时清空重来(刷新/重试), 否则追加(加载更多)。
-  Future<List<T>> fetch({required bool reset}) async {
-    final offset = reset ? 0 : _items.length;
-    final page = await load(pageSize, offset);
-    if (reset) {
-      _items
-        ..clear()
-        ..addAll(page.items);
-    } else {
-      _items.addAll(page.items);
-    }
-    _hasMore = page.hasMore;
-    return items;
-  }
-
-  /// 就地删除(如云盘删歌): 不动已加载的其他条目, 也不触发重新取页。
-  /// 返回是否有条目被删掉。
-  bool removeWhere(bool Function(T item) test) {
-    final before = _items.length;
-    _items.removeWhere(test);
-    return _items.length != before;
-  }
-
-  void clear() {
-    _items.clear();
-    _hasMore = false;
-  }
-}
-
 class PagedListView<T> extends StatefulWidget {
   const PagedListView({
     super.key,
@@ -389,5 +329,65 @@ class _PagedListViewState<T> extends State<PagedListView<T>> {
             : TextButton(onPressed: _loadMore, child: Text(widget.moreText)),
       ),
     );
+  }
+}
+
+/// 「(limit, offset) 取一页」风格的分页状态机(与 [PagedListView] 的 cursor 模式互补)。
+///
+/// [PagedListView] 只能整体重载、翻页靠服务端 cursor, 有几类页面用不了: 音乐云盘页要
+/// 在列表里**就地删除**一行(整体重载会把用户已经拉到第 N 页的进度和滚动位置丢掉)、
+/// 首行要显示每页随包带回的容量信息、上游也只给 `more` 标志而给不出 cursor。
+/// 这类页面继续自己排版, 但不必再手写 offset 算术 —— 条目/offset/是否还有更多都交给这里。
+///
+/// 语义(与云盘页原先的手写实现逐条一致):
+/// - [fetch] `reset: true` = 清空重来(offset 0); `reset: false` = 从**当前已加载条数**
+///   续拉, 所以就地删除之后条数变了, 下一次追加仍然接着正确的位置;
+/// - 只有取页成功才改动内部状态: 失败时旧条目原样保留, 错误抛给调用方决定怎么提示;
+/// - [hasMore] 就是上一次取页给出的 `hasMore`, 调用方自己决定尾部件怎么画。
+class OffsetPager<T extends Object> {
+  OffsetPager({required this.pageSize, required this.load});
+
+  /// 每页条数(透传给 [load] 的 limit)。
+  final int pageSize;
+
+  /// 取一页: 返回 (本页条目, 是否还有下一页)。
+  final Future<({List<T> items, bool hasMore})> Function(int limit, int offset)
+  load;
+
+  final List<T> _items = <T>[];
+  bool _hasMore = false;
+
+  /// 已加载条目(只读视图; 改动请走 [fetch] / [removeWhere] / [clear])。
+  List<T> get items => List<T>.unmodifiable(_items);
+
+  int get length => _items.length;
+  bool get hasMore => _hasMore;
+
+  /// 拉一页并返回累计条目。[reset] 为真时清空重来(刷新/重试), 否则追加(加载更多)。
+  Future<List<T>> fetch({required bool reset}) async {
+    final offset = reset ? 0 : _items.length;
+    final page = await load(pageSize, offset);
+    if (reset) {
+      _items
+        ..clear()
+        ..addAll(page.items);
+    } else {
+      _items.addAll(page.items);
+    }
+    _hasMore = page.hasMore;
+    return items;
+  }
+
+  /// 就地删除(如云盘删歌): 不动已加载的其他条目, 也不触发重新取页。
+  /// 返回是否有条目被删掉。
+  bool removeWhere(bool Function(T item) test) {
+    final before = _items.length;
+    _items.removeWhere(test);
+    return _items.length != before;
+  }
+
+  void clear() {
+    _items.clear();
+    _hasMore = false;
   }
 }

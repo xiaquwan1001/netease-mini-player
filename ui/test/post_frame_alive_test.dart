@@ -15,8 +15,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_shell.dart'
-    show playerBarSlot, publishBottomBar;
+    show
+        actionsHost,
+        playerBarData,
+        playerBarSlot,
+        publishActionsHost,
+        publishBottomBar,
+        publishPlayerBarSnapshot;
 import 'package:minincm/src/lifecycle_guard.dart';
+import 'package:minincm/src/now_playing.dart' show nowPlayingSongId;
+import 'package:minincm/src/song_actions.dart' show SongActionHost;
 
 /// 模拟"在 build 里投递帧后回调"的页面: 真正调度的是 [runPostFrameIfAlive]。
 class Probe extends StatefulWidget {
@@ -42,6 +50,20 @@ Future<void> flushFrame(WidgetTester tester) async {
   tester.binding.scheduleFrame();
   await tester.pump();
 }
+
+/// 全局动作宿主的壳(内容与本组用例无关, 只用来判"槽位里是不是这一份")。
+SongActionHost fakeHost() => SongActionHost(
+  loggedIn: true,
+  isLiked: (_) => false,
+  toggleLike: (_) async {},
+  playNext: (_) async {},
+  addToPlaylist: (_) async {},
+  share: (_) async {},
+  comments: (_) async {},
+  openArtist: (_) async {},
+  openAlbum: (_) async {},
+  download: (_) async {},
+);
 
 void main() {
   testWidgets('存活: 帧后回调照常执行, 槽位被写入', (tester) async {
@@ -107,5 +129,69 @@ void main() {
     publishBottomBar(probeCtx, const Text('stale'));
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     expect((playerBarSlot.value as Text?)?.data, 'nav');
+  });
+
+  // 真实调用点(app_shell.publishActionsHost): 动作宿主是"页面状态生成的菜单回调
+  // 集合", 页面销毁后它的闭包还指着死页面的 State —— 旧实例一份都不许再写进去。
+  testWidgets('publishActionsHost: 帧后才写, 销毁后不写', (tester) async {
+    final before = actionsHost.value;
+    addTearDown(() => actionsHost.value = before);
+    late BuildContext probeCtx;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            probeCtx = context;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final host = fakeHost();
+    publishActionsHost(probeCtx, host);
+    expect(actionsHost.value, same(before), reason: '帧后才会写, 不能在调度时同步写');
+    await flushFrame(tester);
+    expect(actionsHost.value, same(host));
+
+    // 再投一份, 但同一帧里页面就被换掉 ⇒ 槽位必须停在上一份
+    publishActionsHost(probeCtx, fakeHost());
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    expect(actionsHost.value, same(host), reason: '已销毁实例不得再写全局槽位');
+  });
+
+  // 真实调用点(app_shell.publishPlayerBarSnapshot): 播放条快照与"正在播放"样本
+  // 必须在同一个帧后回调里写(同帧只通知一轮), 且同样受存活判据保护。
+  testWidgets('publishPlayerBarSnapshot: 快照与播放态同帧投递, 销毁后都不写', (tester) async {
+    final beforeId = nowPlayingSongId.value;
+    final beforeData = playerBarData.value;
+    addTearDown(() {
+      nowPlayingSongId.value = beforeId;
+      playerBarData.value = beforeData;
+    });
+    late BuildContext probeCtx;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            probeCtx = context;
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    publishPlayerBarSnapshot(probeCtx, data: null, nowPlayingId: BigInt.two);
+    expect(nowPlayingSongId.value, beforeId, reason: '帧后才会写');
+    await flushFrame(tester);
+    expect(nowPlayingSongId.value, BigInt.two);
+
+    publishPlayerBarSnapshot(
+      probeCtx,
+      data: null,
+      nowPlayingId: BigInt.from(3),
+    );
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    expect(nowPlayingSongId.value, BigInt.two, reason: '已销毁实例不得再写高亮样本');
   });
 }

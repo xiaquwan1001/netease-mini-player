@@ -28,7 +28,7 @@ export 'src/back_policy.dart'
     show HomeBackAction, HomeBackGuard, resolveHomeBackAction;
 // 首页(五 tab 壳 + 歌词页 + 歌单浏览态)。
 export 'src/home/home_page.dart' show HomePage;
-// 逐字歌词来源解析与打分(与 Rust 同口径镜像, 见文件头注释)。
+// 逐字歌词来源解析与择优(打分规则唯一实现在 Rust, 见文件头注释)。
 export 'src/lyric_source.dart'
     show
         LyricSourceLoaders,
@@ -36,7 +36,6 @@ export 'src/lyric_source.dart'
         WordLyricScore,
         chooseWordSource,
         lyricSourceLabel,
-        kYrcWordCoverageThreshold,
         resolveLyricSource,
         scoreWordLyric,
         yrcWordGoodEnough;

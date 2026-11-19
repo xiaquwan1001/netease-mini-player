@@ -1737,7 +1737,7 @@ class _HomePageState extends State<HomePage> {
                   Positioned.fill(child: body),
                   // 曾经在这里常驻一行"逐字歌词 · 网易云"来源小字(左下角),
                   // 用户反馈那是一条像水印的文本框, 已去掉(2026-11)。
-                  // 打分/择优的实现与单测仍在 lyricSourceLabel / scoreWordLyric.
+                  // 打分/择优规则在 Rust(ncm-service::ttml_source), 文案在 lyricSourceLabel.
 
                   // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
                   // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'feed_detail_page.dart' show feedRelativeTime;
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'share_qr.dart';
 import 'sheet_header.dart';
 import 'song_share.dart' show SongShare, capturePng;
 import 'toast.dart' show showToast, showToastWith;
@@ -235,29 +235,7 @@ class FeedShareCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                // 二维码必须落在浅底上, 否则暗色卡片里扫不出来
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                  ),
-                  child: QrImageView(
-                    data: feedShareUrl(event.id),
-                    version: QrVersions.auto,
-                    size: 76,
-                    gapless: true,
-                    backgroundColor: Colors.white,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: Color(0xFF101114),
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: Color(0xFF101114),
-                    ),
-                  ),
-                ),
+                ShareQrCode(data: feedShareUrl(event.id), size: 76),
               ],
             ),
           ],

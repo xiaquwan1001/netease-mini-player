@@ -226,6 +226,17 @@ class _FallbackImageState extends State<_FallbackImage> {
   }
 }
 
+/// 测试用: 清空 _FallbackImage 的会话级"确认拿不到"记忆。
+///
+/// 为什么需要: _dead/_resolved 是 static, 会跨同一测试文件内的用例泄漏 ——
+/// 一条用例手动调 errorBuilder 拉黑某个 URL 后, 后面断言该 URL 的用例就会跳过它
+/// 取下一个候选(2026-11-19 T11 摸底复现: profile_banner_test 随机顺序必红)。
+@visibleForTesting
+void debugResetImageFailureMemory() {
+  _FallbackImageState._dead.clear();
+  _FallbackImageState._resolved.clear();
+}
+
 /// 通用网络图片: 封面/动态配图/头像/背景图都走这里.
 /// 统一升级 https、圆角裁剪、失败占位(不抛异常)。
 class NetImage extends StatelessWidget {

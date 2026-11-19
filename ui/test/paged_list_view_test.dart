@@ -239,4 +239,72 @@ void main() {
     expect(find.byType(SliverGrid), findsOneWidget);
     expect(loads, 1);
   });
+  group('OffsetPager', () {
+    test('reset 从 offset 0 清空重来, append 从已加载条数续拉', () async {
+      final offsets = <int>[];
+      final pager = OffsetPager<String>(
+        pageSize: 10,
+        load: (limit, offset) async {
+          offsets.add(offset);
+          expect(limit, 10);
+          return offset == 0
+              ? (items: <String>['a', 'b'], hasMore: true)
+              : (items: <String>['c'], hasMore: false);
+        },
+      );
+
+      expect(await pager.fetch(reset: true), <String>['a', 'b']);
+      expect(pager.hasMore, isTrue);
+      expect(await pager.fetch(reset: false), <String>['a', 'b', 'c']);
+      expect(pager.hasMore, isFalse);
+      expect(offsets, <int>[0, 2], reason: '追加的 offset 是已加载条数');
+    });
+
+    test('就地删除后追加仍从当前条数续拉', () async {
+      final offsets = <int>[];
+      final pager = OffsetPager<String>(
+        pageSize: 2,
+        load: (limit, offset) async {
+          offsets.add(offset);
+          return (items: <String>['x', 'y'], hasMore: true);
+        },
+      );
+
+      await pager.fetch(reset: true);
+      expect(pager.removeWhere((s) => s == 'x'), isTrue);
+      expect(pager.removeWhere((s) => s == 'nope'), isFalse);
+      expect(pager.items, <String>['y']);
+      await pager.fetch(reset: false);
+      expect(offsets, <int>[0, 1], reason: '删除后 offset 跟着条目数走, 不跳行');
+    });
+
+    test('取页失败时旧条目原样保留, 错误抛给调用方', () async {
+      var fail = false;
+      final pager = OffsetPager<String>(
+        pageSize: 2,
+        load: (limit, offset) async {
+          if (fail) throw Exception('[internal] boom');
+          return (items: <String>['a'], hasMore: true);
+        },
+      );
+
+      await pager.fetch(reset: true);
+      fail = true;
+      await expectLater(pager.fetch(reset: false), throwsException);
+      expect(pager.items, <String>['a']);
+      expect(pager.hasMore, isTrue);
+    });
+
+    test('items 是只读视图, clear 清空条目与 hasMore', () async {
+      final pager = OffsetPager<String>(
+        pageSize: 1,
+        load: (limit, offset) async => (items: <String>['a'], hasMore: true),
+      );
+      await pager.fetch(reset: true);
+      expect(() => pager.items.add('b'), throwsUnsupportedError);
+      pager.clear();
+      expect(pager.items, isEmpty);
+      expect(pager.hasMore, isFalse);
+    });
+  });
 }

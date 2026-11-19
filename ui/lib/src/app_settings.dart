@@ -679,6 +679,18 @@ class AppSettings extends ChangeNotifier {
 
   bool get loaded => _loaded;
 
+  /// 测试用: 忘掉落盘路径, 让之后的 [update] 直接返回、不再做真实文件 IO。
+  ///
+  /// 为什么需要: [load] 之后 [_save] 会真的写盘, 而 testWidgets 跑在 FakeAsync
+  /// zone 里 —— 真实 IO 的 Future 在该 zone 内不会完成, await update(...) 会一直
+  /// 挂着(表现为整条用例 10 分钟超时, 见 2026-11-19 T11 摸底)。用例顺序一旦被打乱
+  /// (--test-randomize-ordering-seed)就必然踩到, 这就是"顺序相关的偶红"。
+  @visibleForTesting
+  void debugForgetSettingsFile() {
+    _file = null;
+    _saving = null;
+  }
+
   static const audioLevels = <String, String>{
     'standard': '标准',
     'higher': '较高',

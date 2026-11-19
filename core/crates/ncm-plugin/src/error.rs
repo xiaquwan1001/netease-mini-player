@@ -83,10 +83,6 @@ impl PluginError {
         Self::new(PluginErrorKind::Protocol, false, detail)
     }
 
-    pub fn request_denied(detail: impl Into<String>) -> Self {
-        Self::new(PluginErrorKind::RequestDenied, false, detail)
-    }
-
     pub fn transport(detail: impl Into<String>, retryable: bool) -> Self {
         Self::new(PluginErrorKind::Transport, retryable, detail)
     }

@@ -1,8 +1,16 @@
-// B13: 逐字歌词三来源解析(yrc -> AMLL TTML -> 行级)的假 loader 单测.
-// 全程不联网: loader 都是内存假实现.
+// B13: 逐字歌词三来源解析(yrc -> AMLL TTML -> 行级)的**编排**单测.
+//
+// 全程不联网: 三个 loader 都是内存假实现。打分/择优的结论由 [FakeLyricPolicy]
+// 脚本化 —— 规则数值的唯一事实源在 Rust(架构审计 7.3), Dart 侧现在只剩
+// "先探谁 / 省掉哪次请求"这层编排, 这里断言的就是它。
+// 数值与理由文案见 lyric_source_rust_parity_test.dart(真实 Rust)与
+// `cargo test -p ncm-service ttml_source`。
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/frb_generated.dart';
+
+import 'support/lyric_policy_fake.dart';
 
 rust.WordLyricDto _wordLyric({
   required int lines,
@@ -31,7 +39,19 @@ rust.WordLyricDto _wordLyric({
 );
 
 void main() {
-  test('有合格 yrc 时不调 TTML(也不调行级)', () async {
+  late FakeLyricPolicy policy;
+
+  setUpAll(() {
+    policy = FakeLyricPolicy();
+    RustLib.initMock(api: policy);
+  });
+  // 必须**调用** reset: `setUp(() => policy.reset)` 只返回 tear-off, 计数器会跨用例累加.
+  setUp(() {
+    policy.reset();
+  });
+
+  test('yrc 够好(策略说不必探测)时不调 TTML, 也不调行级', () async {
+    policy.autoSkip = true;
     var ttmlCalls = 0, lineCalls = 0;
     final r = await resolveLyricSource(
       BigInt.from(1),
@@ -49,12 +69,16 @@ void main() {
     );
     expect(r?.source, 'yrc');
     expect(r?.word?.lines.length, 2);
+    expect(r?.reason, isNull);
+    expect(policy.autoSkipCalls, 1); // 只问了一次策略
     expect(ttmlCalls, 0);
     expect(lineCalls, 0);
+    expect(policy.chooseCalls, 0); // 早退, 没有择优
   });
 
-  test('yrc 覆盖率低于阈值(0.6)时改用 TTML', () async {
-    // 2 行只有 1 行有词级时间 => 0.5 < 0.6
+  test('策略判 yrc 不合格且择优选 TTML 时改用 TTML(不额外取行级)', () async {
+    policy.choiceSource = 'ttml';
+    policy.choiceReason = 'yrc 覆盖低';
     final r = await resolveLyricSource(
       BigInt.from(2),
       LyricSourceLoaders(
@@ -67,7 +91,13 @@ void main() {
         lineLevel: (_) async => throw StateError('不应到行级'),
       ),
     );
+    expect(policy.autoSkipCalls, 1);
+    expect(policy.chooseCalls, 1);
+    // 策略说"得分不接近" => 不该为一致性多取一次行级 LRC
+    expect(policy.closeCalls, 1);
+    expect(policy.lastLineStarts, isEmpty);
     expect(r?.source, 'ttml');
+    expect(r?.reason, 'yrc 覆盖低');
     expect(r?.word?.lines.length, 3);
   });
 
@@ -82,6 +112,7 @@ void main() {
         ],
       ),
     );
+    expect(policy.autoSkipCalls, 0); // 没有 yrc, 不必问策略
     expect(r?.source, 'line');
     expect(r?.line?.single.text, '第一行');
   });
@@ -102,6 +133,7 @@ void main() {
   });
 
   test('yrc 差但非空且 TTML 也没有时, 保留差 yrc 而不是行级', () async {
+    policy.choiceSource = 'yrc';
     final r = await resolveLyricSource(
       BigInt.from(5),
       LyricSourceLoaders(
@@ -126,30 +158,13 @@ void main() {
     expect(r, isNull);
   });
 
-  test('yrcWordGoodEnough 阈值口径', () {
+  test('yrcWordGoodEnough 只把结论转发给 Rust(null 直接 false, 不调 FFI)', () {
     expect(yrcWordGoodEnough(null), false);
+    expect(policy.goodEnoughCalls, 0);
+    policy.goodEnough = true;
     expect(yrcWordGoodEnough(_wordLyric(lines: 3, wordTiming: true)), true);
-    // 3 行只有 2 行逐字 => 0.667 >= 0.6
-    expect(
-      yrcWordGoodEnough(
-        _wordLyric(
-          lines: 3,
-          wordTiming: false,
-          perLineTimed: [true, true, false],
-        ),
-      ),
-      true,
-    );
-    // 3 行只有 1 行逐字 => 0.333 < 0.6
-    expect(
-      yrcWordGoodEnough(
-        _wordLyric(
-          lines: 3,
-          wordTiming: false,
-          perLineTimed: [true, false, false],
-        ),
-      ),
-      false,
-    );
+    expect(policy.goodEnoughCalls, 1);
+    policy.goodEnough = false;
+    expect(yrcWordGoodEnough(_wordLyric(lines: 3, wordTiming: true)), false);
   });
 }

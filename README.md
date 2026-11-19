@@ -221,6 +221,7 @@ cargo run -p ncm-cli -- lyric 186016
 | [`docs/README.md`](docs/README.md) | **文档总索引**(每个文件一行用途与状态) |
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次, 只保留 v0.20.0 起; v1 / 2026-11-03~11-12 / v0.8.0~v0.19.0 批次在 `docs/archive/`) |
 | [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | 架构选型、决策记录、插件边界(已归档) |
+| [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | 播放条合并 / 歌曲详情页 / 分享卡片与通道契约(已归档) |
 | [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
 | [`docs/testing.md`](docs/testing.md) | 多端测试指南: 上篇日常自测流程(Android/Linux/Windows, 语义驱动)+ 踩坑速查, 下篇桌面发版前 31 条冒烟清单 |
 | [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | 接口通道(interface / interface3)实测(已归档) |

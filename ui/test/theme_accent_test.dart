@@ -147,6 +147,10 @@ void main() {
     final settings = AppSettings.instance;
     final before = settings.accent;
     addTearDown(() => settings.update(accent: before));
+    // 本用例会把单例的落盘路径指到临时目录 —— 用例结束后必须忘掉它, 否则同文件里
+    // 任何 testWidgets 的 update() 都会在 FakeAsync 里做真实 IO 并永久挂住
+    // (随机顺序下本用例排在前面就必现 10 分钟超时)。
+    addTearDown(settings.debugForgetSettingsFile);
 
     await settings.load(dir.path);
     await settings.update(accent: AccentPalette.orange);

@@ -10,7 +10,7 @@
 
 | 文件 | 用途 | 最后更新 |
 |---|---|---|
-| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线 + 按日期批次(倒序, 只留 v0.20.0 起);更早的见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-19 |
+| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线(v0.20.0 起) + 未发版在飞状态;按日批次已归档, 见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-19 |
 | [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活, §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-18 |
 | [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-16 |
 | [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-18 |
@@ -51,6 +51,7 @@
 |---|---|---|
 | [archive/](archive/README.md) | 已完工/已决策的专题文档(2026-11-19 新增 `plans-2026-11/`(31 份车道记录)与 5 份原在根目录的归档件) + 三段 PROGRESS 归档(`PROGRESS-v1.md` v1 WebView 时代 · `PROGRESS-2026-11-03-11-12.md` v2 早期批次 · `PROGRESS-2026-11-13-11-19.md` v0.8.0–v0.19.0 批次) + `remaining-batches-history.md`。**归档** | 2026-11-17 |
 | [audits/](audits/) | 近期审计报告: `2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md` · `2026-11-13-asset-docs-audit.md`(数字为当时快照)。**活跃** | 2026-11-13 |
+| [audit/](audit/) | 只读架构审计(2026-11-20): 模块边界/FFI 面/门禁漂移/守卫缺口 + 排序后的建议清单(每条带 `文件:行`)。**活跃** | 2026-11-19 |
 | [reports/](reports/) | 只读调查报告: `login-risk-analysis-2026-11-17.md`(PC 网页登录为什么被风控 —— 静态分析, 未真登录/未扫码; 关联 v0.21.0 第 ⑤ 项)。**留档** | 2026-11-17 |
 | [spikes/](spikes/) | 零散 spike 产物(如 `2026-11-09-netease-music-spike.md`)。只读留痕 | 2026-11-07 |
 | [b8-dumps/](b8-dumps/README.md) | B8 等级/勋章接口原始 dump(含 `user_medal.sample.json`)。只读留痕 | 2026-11-07 |

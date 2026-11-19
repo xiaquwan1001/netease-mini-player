@@ -1,29 +1,27 @@
-// C2: 逐字歌词来源偏好(auto/netease/amll) + 打分择优 + 标注文案的单测.
-// 全程不联网: loader 都是内存假实现.
+// C2: 逐字歌词来源偏好(auto/netease/amll)的**编排**单测 + 标注文案 + 设置项.
+//
+// 全程不联网: loader 都是内存假实现, 打分/择优结论由 [FakeLyricPolicy] 脚本化。
+// 打分权重/阈值/理由文案本身只在 Rust 一份(架构审计 7.3), 它们的数值断言在
+// lyric_source_rust_parity_test.dart(真实 Rust)/ cargo test -p ncm-service.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/frb_generated.dart';
 
-rust.WordLyricDto _good(
-  int lines, {
-  int offsetMs = 0,
-  int firstWordShiftMs = 0,
-}) => rust.WordLyricDto(
+import 'support/lyric_policy_fake.dart';
+
+rust.WordLyricDto _good(int lines) => rust.WordLyricDto(
   lines: [
     for (var i = 0; i < lines; i++)
       rust.WordLyricLineDto(
-        startMs: offsetMs + i * 1000,
-        endMs: offsetMs + i * 1000 + 900,
+        startMs: i * 1000,
+        endMs: i * 1000 + 900,
         words: [
+          rust.WordItemDto(startMs: i * 1000, endMs: i * 1000 + 400, text: '你'),
           rust.WordItemDto(
-            startMs: offsetMs + i * 1000 + firstWordShiftMs,
-            endMs: offsetMs + i * 1000 + 400,
-            text: '你',
-          ),
-          rust.WordItemDto(
-            startMs: offsetMs + i * 1000 + 400,
-            endMs: offsetMs + i * 1000 + 900,
+            startMs: i * 1000 + 400,
+            endMs: i * 1000 + 900,
             text: '好',
           ),
         ],
@@ -33,56 +31,20 @@ rust.WordLyricDto _good(
   hasWordTiming: true,
 );
 
-rust.WordLyricDto _scrambled(int lines) {
-  final starts = [9000, 2000, 7000, 4000];
-  return rust.WordLyricDto(
-    lines: [
-      for (var i = 0; i < lines; i++)
-        rust.WordLyricLineDto(
-          startMs: starts[i],
-          endMs: starts[i] + 900,
-          words: [
-            rust.WordItemDto(
-              startMs: starts[i],
-              endMs: starts[i] + 400,
-              text: '你',
-            ),
-          ],
-        ),
-    ],
-    translationLines: const [],
-    hasWordTiming: true,
-  );
-}
-
 void main() {
-  test('scoreWordLyric: 完好 yrc 满分, 退化(无词级时间)低分', () {
-    final s = scoreWordLyric(_good(3));
-    expect(s.score, closeTo(1.0, 1e-9));
-    final d = rust.WordLyricDto(
-      lines: [
-        rust.WordLyricLineDto(
-          startMs: 0,
-          endMs: 0,
-          words: [rust.WordItemDto(startMs: 0, endMs: 0, text: '整行')],
-        ),
-      ],
-      translationLines: const [],
-      hasWordTiming: false,
-    );
-    final sd = scoreWordLyric(d);
-    expect(sd.coverage, 0.0);
-    expect(sd.spans, 0.0);
-    expect(sd.score, lessThan(0.6));
+  late FakeLyricPolicy policy;
+
+  setUpAll(() {
+    policy = FakeLyricPolicy();
+    RustLib.initMock(api: policy);
+  });
+  // 必须**调用** reset: `setUp(() => policy.reset)` 只返回 tear-off, 计数器会跨用例累加.
+  setUp(() {
+    policy.reset();
   });
 
-  test('auto 择优: yrc 覆盖率高但时间错乱应输给 TTML(理由: yrc 时间错乱)', () {
-    final c = chooseWordSource(_scrambled(4), _good(4));
-    expect(c.source, 'ttml');
-    expect(c.reason, 'yrc 时间错乱');
-  });
-
-  test('auto: yrc 得分已很高(>=0.9)时跳过 TTML 探测(不联网)', () async {
+  test('auto: 策略说 yrc 得分已很高时跳过 TTML 探测(不联网)', () async {
+    policy.autoSkip = true;
     var ttmlCalls = 0;
     final r = await resolveLyricSource(
       BigInt.one,
@@ -97,14 +59,17 @@ void main() {
     );
     expect(r?.source, 'yrc');
     expect(r?.reason, isNull);
+    expect(policy.autoSkipCalls, 1);
     expect(ttmlCalls, 0);
   });
 
-  test('auto: 择优选中 TTML 时来源标注带理由', () async {
+  test('auto: 择优选 TTML 时来源标注带 Rust 给的理由', () async {
+    policy.choiceSource = 'ttml';
+    policy.choiceReason = 'yrc 时间错乱';
     final r = await resolveLyricSource(
       BigInt.two,
       LyricSourceLoaders(
-        yrc: (_) async => _scrambled(4),
+        yrc: (_) async => _good(4),
         ttml: (_) async => _good(4),
         lineLevel: (_) async => throw StateError('分数悬殊不应调行级'),
       ),
@@ -114,30 +79,49 @@ void main() {
     expect(lyricSourceLabel(r?.source, r?.reason), '逐字歌词 · AMLL(择优: yrc 时间错乱)');
   });
 
-  test('auto: 分数接近时用行级 LRC 一致性加分决定(ttml 行首更贴近 LRC)', () async {
-    // 两边都轻微不完美(首字偏移 100ms => firstWord 0, 得分 0.85 < 0.9),
-    // 行级 LRC 更贴近 TTML 行首 => 一致性加分后 TTML 胜出.
-    final yrc = _good(2, firstWordShiftMs: 100); // 行首 0, 1000
-    final ttml = _good(2, offsetMs: 500, firstWordShiftMs: 100); // 行首 500, 1500
+  test('auto: 分数接近才取行级 LRC 起始时间喂给择优(不接近就省一次请求)', () async {
+    policy.choiceSource = 'ttml';
+    policy.choiceReason = 'yrc 首字偏移';
+    policy.scoresClose = true;
     final r = await resolveLyricSource(
       BigInt.from(3),
       LyricSourceLoaders(
-        yrc: (_) async => yrc,
-        ttml: (_) async => ttml,
+        yrc: (_) async => _good(2),
+        ttml: (_) async => _good(2),
         lineLevel: (_) async => [
           rust.LyricLineDto(timeMs: BigInt.from(500), text: 'a', sub: null),
           rust.LyricLineDto(timeMs: BigInt.from(1500), text: 'b', sub: null),
         ],
       ),
     );
+    expect(policy.closeCalls, 1);
+    // 行级 loader 的 timeMs 原样转成毫秒整数喂给 Rust
+    expect(policy.lastLineStarts, equals(<int>[500, 1500]));
     expect(r?.source, 'ttml');
     expect(lyricSourceLabel(r?.source, r?.reason), '逐字歌词 · AMLL(择优: yrc 首字偏移)');
   });
 
-  test('netease 偏好: yrc 够好直接用(不调 TTML)', () async {
-    var ttmlCalls = 0;
+  test('auto: 择优选 yrc 时也把理由(如"yrc 质量更优")带回去', () async {
+    policy.choiceSource = 'yrc';
+    policy.choiceReason = 'yrc 质量更优';
     final r = await resolveLyricSource(
       BigInt.from(4),
+      LyricSourceLoaders(
+        yrc: (_) async => _good(2),
+        ttml: (_) async => _good(2),
+        lineLevel: (_) async => null,
+      ),
+    );
+    expect(r?.source, 'yrc');
+    expect(r?.reason, 'yrc 质量更优');
+    expect(lyricSourceLabel(r?.source, r?.reason), '逐字歌词 · 网易云(择优: yrc 质量更优)');
+  });
+
+  test('netease 偏好: 策略判 yrc 够好就直接用(不调 TTML, 不择优)', () async {
+    policy.goodEnough = true;
+    var ttmlCalls = 0;
+    final r = await resolveLyricSource(
+      BigInt.from(5),
       LyricSourceLoaders(
         yrc: (_) async => _good(2),
         ttml: (_) async {
@@ -149,12 +133,30 @@ void main() {
       preference: 'netease',
     );
     expect(r?.source, 'yrc');
+    expect(policy.goodEnoughCalls, 1);
+    expect(policy.autoSkipCalls, 0); // netease 不走 auto 的跳过规则
+    expect(policy.chooseCalls, 0);
     expect(ttmlCalls, 0);
   });
 
-  test('amll 偏好: 即使 yrc 很好也优先 TTML, TTML 失败再 yrc', () async {
+  test('netease 偏好: yrc 不够好时改投 TTML', () async {
+    policy.goodEnough = false;
+    final r = await resolveLyricSource(
+      BigInt.from(6),
+      LyricSourceLoaders(
+        yrc: (_) async => null,
+        ttml: (_) async => _good(3),
+        lineLevel: (_) async => throw StateError('有 TTML 不该到行级'),
+      ),
+      preference: 'netease',
+    );
+    expect(r?.source, 'ttml');
+    expect(r?.reason, isNull);
+  });
+
+  test('amll 偏好: 即使 yrc 很好也优先 TTML, TTML 失败再 yrc, 且不问策略', () async {
     final r1 = await resolveLyricSource(
-      BigInt.from(5),
+      BigInt.from(7),
       LyricSourceLoaders(
         yrc: (_) async => _good(3),
         ttml: (_) async => _good(3),
@@ -164,7 +166,7 @@ void main() {
     );
     expect(r1?.source, 'ttml');
     final r2 = await resolveLyricSource(
-      BigInt.from(6),
+      BigInt.from(8),
       LyricSourceLoaders(
         yrc: (_) async => _good(3),
         ttml: (_) async => null,
@@ -174,6 +176,11 @@ void main() {
     );
     expect(r2?.source, 'yrc');
     expect(r2?.reason, isNull);
+    // amll 是单路优先, 既不打分也不择优
+    expect(policy.autoSkipCalls, 0);
+    expect(policy.closeCalls, 0);
+    expect(policy.chooseCalls, 0);
+    expect(policy.goodEnoughCalls, 0);
   });
 
   test('lyricSourceLabel: 三来源 + 无理由 + 行级不带择优后缀', () {

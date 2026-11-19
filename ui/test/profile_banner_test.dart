@@ -35,6 +35,8 @@ String? renderedImage(WidgetTester tester) {
 void main() {
   setUp(() {
     AppSettings.instance.coverQuality = CoverQuality.standard;
+    // 图片失败记忆是跨用例的 static(见 debugResetImageFailureMemory 注释)
+    debugResetImageFailureMemory();
   });
 
   group('neteaseSizedUrl: 矩形 param', () {

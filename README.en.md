@@ -16,7 +16,7 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201074%20%2B%20Rust%20300-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%201401%20%2B%20Rust%20369-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 
@@ -70,13 +70,19 @@ lyrics and a QR code pointing at the official song page (`music.163.com/song?id=
 
 | Area | What works |
 |---|---|
-| Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), play modes (incl. heart mode), auto update check (off / daily / weekly / monthly), MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
+| Playback | One-row player bar, queue (jump / drag-reorder / clear / save as playlist), 4 play orders (repeat-all / repeat-one / in-order / shuffle), heart mode and personal FM as **separate guided states** (FM auto-continues, own notification icon), auto update check (off / daily / weekly / monthly), MV playback (embedded VideoView on Android / system player on desktop), stream cache with LRU limit |
+| Long text | One shared `AdaptiveText`: song / playlist / album / artist names marquee one-way only when they do not fit (static otherwise), subtitles truncate with ellipsis, cover-card titles use two lines |
+| Recommend | Top row fixed to three cells (playlist square / heart mode / personal FM); daily-pick tabs size to content, podcast cards use two-line subtitles; daily-pick history merges online dates with the local per-day cache (playlists and songs in one v2 file, v1 still readable) and collapses repeated playlist days |
 | Lyrics | Synced highlight, word-by-word lyrics (**AMLL TTML by default** — community-reviewed word timing; switch to auto-scoring or NetEase yrc in settings), translation toggle, lyric multi-select → share card, cover-colour backdrop |
-| Playlists | Playlist square & charts, subscribe / create / edit / delete, batch add, in-playlist search play action (whole list / append to queue), liked-songs ordering, recent-play four tabs |
+| Playlists | Playlist square browsed by the **official two-level categories** (language / style / scene / mood / theme, names come from `/api/playlist/catlist`), hot and premium modes are mutually exclusive with a persistent filter bar; charts; subscribe / create / edit / delete, batch add, in-playlist search play action (whole list / append to queue), liked-songs ordering, recent-play four tabs |
 | Community | Comments (hot / all / replies / like / delete / IP location), private messages & mentions (read-only), follows feed, follow/fan lists, sign-in |
-| Desktop | Linux (deb/AppImage/tar.gz) and Windows (setup.exe/zip) share one rodio backend (ALSA/WASAPI), OLED pure-black theme, fine volume -40..0 dB |
+| Desktop | Linux (deb/AppImage/tar.gz) and Windows (setup.exe/zip) share one rodio backend (ALSA/WASAPI), OLED pure-black theme, fine volume -40..0 dB, sleep timer (now / end of track), close-to-tray option (tray capability is probed natively, degrades honestly when absent) |
+| Profile pages | Artist and user pages share one skeleton: hi-res banner (size × DPR × quality preset, tap for full-screen and save original), identity card (bio under the nickname, stats spanning the card: follows / fans / level / works), declarative tabs (artist = top songs / all songs / albums / MVs / feed · user = feed / liked songs / playlists); your own bio and feed are editable from Mine |
+| Cloud drive | Music cloud list (quota / sizes), playback, delete, upload local audio (md5 dedupe → NOS upload → cloud transcode → publish) with progress; chunked upload ships only the planning/resume engine — the production path is still a single request (the music-bucket chunk HTTP shape needs a capture from a real client) |
 | VIP (read-only) | VIP card / growth / weekly sign-in / tasks, purchased digital albums (no payments) |
-| Search & discover | Search (history / suggestions / hot queries / typed sections), daily picks, personal FM, heart mode, new songs & albums by region, style picks |
+| Search & discover | Search (history / **guess-you-want-to-search** grid / toggleable hot queries / suggestions / typed sections incl. MV; the landing page also carries charts), daily picks, personal FM, heart mode, new songs & albums by region, style picks, podcast square (radio folded into podcasts) |
+| Layout | **Three responsive tiers** (narrow <600 / medium 600–899 / wide ≥900): content capped at 840, two-column and playlist master-detail on wide, NavigationRail on wide; 300dp narrow and 1.25 text scale are golden-locked |
+| Extensibility | Source-plugin host slice 1 (`ncm-plugin`: rquickjs host + lx compatibility layer + sandbox budget) — crate-only, no route registered, not linked into `ncm_ffi`/the APK |
 | Audio quality | Loudness normalisation (EBU R128 + ReplayGain 2.0), AutoEQ curve import (PK·LS·HS), fade in/out, hardware/software decode, cover quality presets |
 
 ## Architecture
@@ -125,7 +131,7 @@ bash packaging/linux/build-appimage.sh   # -> dist/MiniNCM-<ver>-linux-x86_64.Ap
 
 Every tagged release ships via [**GitHub Releases**](https://github.com/xiaquwan1001/netease-mini-player/releases/latest):
 APK (arm64) · Linux tar.gz · `.deb` · AppImage · Windows `setup.exe` · Windows portable zip · `SHA256SUMS.txt`
-(v0.3.2 measured: APK 28.5 MB / tar.gz 15.0 MB / AppImage 14.6 MB / deb 11.1 MB / Windows zip 17.0 MB / setup.exe 13.7 MB).
+exact asset names come from [`release.yml`](.github/workflows/release.yml); sizes are listed on each release page.
 
 Windows desktop **must be built on Windows** (Flutter desktop does not cross-compile), so there is no local
 script: [`.github/workflows/windows.yml`](.github/workflows/windows.yml) produces
@@ -145,17 +151,18 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **298** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **369** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test --exclude-tags network` | **1074** passing / 0 failing (includes **18** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1401** passing / 0 failing (includes **21** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | `tools/check-tokens.sh --strict` | OK (spacing / radii / font sizes limited to `layout.dart`'s token set) |
-| API coverage | **135/136** (161 FFI exports, 6 without a UI entry point; the one unused endpoint `vip_sign_info` is intentionally dropped); recompute with `bash tools/api-coverage.sh` |
+| API coverage | **135/136** (**158** FFI exports, 6 without a UI entry point: 4 intentionally kept, 2 awaiting a product decision; the one unused endpoint `vip_sign_info` is intentionally dropped); recompute with `bash tools/api-coverage.sh` |
+| Android unit / lint | `testDebugUnitTest` **10** passing / 0 failing · `lintDebug` **0 error / 9 warning** (all dependency-version hints); both run inside `ci-gates.sh verify` |
 | Device run-through | emulator **a34** (API 34) + real-device (vivo X200 Ultra) release smoke & listening checks — see `docs/testing.md` |
 
-## Roadmap (current version v0.18.0)
+## Roadmap (the only source of truth for the version is `ui/pubspec.yaml`; the published line is on [Releases](https://github.com/xiaquwan1001/netease-mini-player/releases/latest))
 
 | Stage | Content | Status |
 |---|---|---|
@@ -165,7 +172,7 @@ cargo run -p ncm-cli -- lyric 186016
 | Playback | Media3 (Android) / rodio (Linux ALSA · Windows WASAPI), loudness, AutoEQ, cache | done |
 | UI | 5-tab IA, recommend/search/follows/mine/settings, one-row player bar, song detail, share card | done |
 | Real-device checks | listening items (EQ clipping / fade feel / loudness A/B / hardware decoding) and MV playback passed on a real device on 2026-11-10 | done |
-| TODO | visual review pass, AppImage desktop integration, post-install smoke (deb / keyring), L-sized features (cloud drive / listen together / audio recognition) — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
+| TODO | visual review pass, post-install smoke (deb / keyring), L-sized features (listen together / audio recognition; the cloud drive itself is done, chunked upload needs a real-client capture) — see [`docs/remaining-batches.md`](docs/remaining-batches.md) §11 | planned |
 
 See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 

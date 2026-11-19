@@ -6,13 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'image_io.dart';
 import 'net_retry.dart';
 import 'rust/api.dart' as rust;
+import 'share_qr.dart';
 import 'sheet_header.dart';
 import 'toast.dart';
 
@@ -222,29 +222,7 @@ class SongShareCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // 二维码必须落在浅底上, 否则暗色卡片里扫不出来
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.all(Radius.circular(8)),
-                ),
-                child: QrImageView(
-                  data: songShareUrl(song.id),
-                  version: QrVersions.auto,
-                  size: 84,
-                  gapless: true,
-                  backgroundColor: Colors.white,
-                  eyeStyle: const QrEyeStyle(
-                    eyeShape: QrEyeShape.square,
-                    color: Color(0xFF101114),
-                  ),
-                  dataModuleStyle: const QrDataModuleStyle(
-                    dataModuleShape: QrDataModuleShape.square,
-                    color: Color(0xFF101114),
-                  ),
-                ),
-              ),
+              ShareQrCode(data: songShareUrl(song.id), size: 84),
             ],
           ),
         ],

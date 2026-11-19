@@ -22,10 +22,12 @@ bash tools/build-android.sh  # Android debug APK(按 ABI 分包: x86_64 = 模拟
 | Dart 静态检查 | `cd ui && dart analyze`(0 error / 0 warning) |
 | Flutter 单测 | `cd ui && flutter test --exclude-tags network` |
 | 多端构建 | `bash tools/build-linux.sh` + `bash tools/build-android.sh`(Windows 只能在 Windows 上编, 见 `.github/workflows/windows.yml`) |
+| 全量门禁(推荐) | `bash tools/ci-gates.sh verify` —— 上面几道 + clippy / 两道格式门 / golden / Kotlin 单测 / `lintDebug` / 五道 checker 一次跑完, 与 CI、发版同源;`bash tools/ci-gates.sh list` 看全部子命令 |
 
 - 真实联网 smoke 打了 `network` 标签(上游风控会抖),本地可跑 `flutter test`,
   CI 默认跳过。
-- 格式暂未强制(`cargo fmt` / `dart format` 历史代码未统一),请不要整文件重排制造大 diff。
+- 格式门已在 `ci-gates.sh`(`cargo fmt --all -- --check` + `dart format --set-exit-if-changed lib test`),
+  **只格式化你改过的文件**;请不要整文件重排制造大 diff。
 
 ## 代码约定
 

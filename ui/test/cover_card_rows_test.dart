@@ -20,6 +20,10 @@ void narrow125(WidgetTester tester) {
   tester.view.devicePixelRatio = 1;
   tester.view.platformDispatcher.textScaleFactorTestValue = 1.25;
   addTearDown(tester.view.reset);
+  // textScaleFactorTestValue 挂在 platformDispatcher 上, tester.view.reset() 不含它
+  // (TestFlutterView.reset 只清 size/dpr/insets, 见 flutter_test/src/window.dart),
+  // 不显式清理会漏给同文件的下一条用例(随机顺序下必红)。
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
 }
 
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
@@ -63,6 +67,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.platformDispatcher.textScaleFactorTestValue = 1.25;
     addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpWidget(host(CoverRow(children: [card(), card()])));
     await tester.pumpAndSettle();

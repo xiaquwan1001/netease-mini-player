@@ -58,7 +58,7 @@ class LyricController extends ChangeNotifier {
   String? _lyricError;
 
   // 歌词来源("yrc"/"ttml"/"line")与择优理由不再上屏(左下角那条像水印的
-  // 小字已按用户要求去掉), 决策逻辑与文案生成仍留在 lyricSourceLabel / scoreWordLyric.
+  // 小字已按用户要求去掉); 打分/择优口径在 Rust(src/lyric_source.dart 只做转发).
   int _lyricIndex = -1;
   bool _showLyrics = false;
 

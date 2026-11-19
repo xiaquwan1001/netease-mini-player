@@ -33,6 +33,10 @@ pub const FIRST_WORD_TOLERANCE_MS: i64 = 80;
 /// 与行级 LRC 的同句起始偏差阈值.
 pub const LINE_CONSISTENCY_MS: i64 = 250;
 
+/// 两来源得分差小于此值即"接近": 只有接近时才值得再取行级 LRC 做一致性判断
+/// (多一次网络请求). 原先这个 0.15 只写在 Dart 侧(架构审计 7.3 的重复规则之一).
+pub const SCORE_CLOSE_WINDOW: f64 = 0.15;
+
 /// 逐字歌词来源偏好.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LyricSourcePreference {
@@ -75,6 +79,17 @@ pub enum LyricSource {
     Ttml,
     /// 行级 LRC 兜底
     LineLevel,
+}
+
+impl LyricSource {
+    /// UI/FFI 用的短标识("yrc" / "ttml" / "line"), 与 Dart 侧来源字符串同一口径.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Yrc => "yrc",
+            Self::Ttml => "ttml",
+            Self::LineLevel => "line",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -198,6 +213,14 @@ pub fn score_word_lyric(wl: &WordLyric, line_starts: Option<&[i64]>) -> WordLyri
     }
 }
 
+/// 两来源得分是否"接近"(差 < `SCORE_CLOSE_WINDOW`).
+///
+/// 只有接近时才值得取行级 LRC 做一致性加分 —— 这个判断原先写在 Dart 侧
+/// (`resolveLyricSource` 里手抄的 0.15), 现在归口到这里, 由 FFI 直接问.
+pub fn scores_close(a: &WordLyric, b: &WordLyric) -> bool {
+    (score_word_lyric(a, None).score - score_word_lyric(b, None).score).abs() < SCORE_CLOSE_WINDOW
+}
+
 /// auto 择优结果: 选中来源 + 短理由(只有两来源比较后才给出).
 #[derive(Debug, Clone, PartialEq)]
 pub struct SourceChoice {
@@ -307,7 +330,10 @@ pub fn yrc_word_coverage(wl: &WordLyric) -> f64 {
 }
 
 /// yrc 是否"足够好"(有行、有词级时间、覆盖率达标).
-fn yrc_good_enough(wl: &WordLyric) -> bool {
+///
+/// netease 偏好用它决定"直接用 yrc / 转投 TTML"; FFI(`lyric_yrc_good_enough`)
+/// 直接复用, Dart 侧不再手抄这条 0.6 阈值(架构审计 7.3).
+pub fn yrc_good_enough(wl: &WordLyric) -> bool {
     !wl.is_empty() && wl.has_word_timing && yrc_word_coverage(wl) >= YRC_WORD_COVERAGE_THRESHOLD
 }
 
@@ -1017,5 +1043,75 @@ mod tests {
                 LyricSourcePreference::Netease,
             ));
         assert!(r.is_err(), "无 yrc 无 ttmL 无行级 => Err");
+    }
+
+    // ---------------- 7.3: 原 Dart 镜像单测搬过来的口径(单一事实源在 Rust) ----------------
+
+    #[test]
+    fn reason_first_word_offset() {
+        // yrc 覆盖/单调都正常, 只有首字偏离行首 500ms => 理由应为"首字偏移"
+        let mut yrc = good_word_lyric(4);
+        for l in yrc.lines.iter_mut() {
+            l.words[0].start_ms = l.start_ms + 500;
+        }
+        let ttml = good_word_lyric(4);
+        let c = choose_word_source(Some(&yrc), Some(&ttml), None);
+        assert_eq!(c.source, Some(LyricSource::Ttml));
+        assert_eq!(c.reason.as_deref(), Some("yrc 首字偏移"));
+    }
+
+    #[test]
+    fn reason_spans_worse_than_ttml() {
+        // yrc 每行 1 个词(粒度 0.5), TTML 每行 2 个词 => 理由"粒度差"
+        let mut yrc = good_word_lyric(4);
+        for l in yrc.lines.iter_mut() {
+            let start = l.start_ms;
+            l.words = vec![WordItem {
+                start_ms: start,
+                end_ms: start + 900,
+                text: "你".into(),
+            }];
+        }
+        let ttml = good_word_lyric(4);
+        let sy = score_word_lyric(&yrc, None);
+        assert!(sy.first_word > 0.99, "first={}", sy.first_word);
+        assert!(sy.spans < 0.75, "spans={}", sy.spans);
+        let c = choose_word_source(Some(&yrc), Some(&ttml), None);
+        assert_eq!(c.source, Some(LyricSource::Ttml));
+        assert_eq!(c.reason.as_deref(), Some("yrc 粒度差"));
+    }
+
+    #[test]
+    fn scores_close_window() {
+        let a = good_word_lyric(4);
+        // 两边完全一样 => 接近
+        assert!(scores_close(&a, &a));
+        // 一半行首字偏移 500ms(first_word = 0.5) => 只差 0.075 < 0.15, 仍算接近
+        let mut half = good_word_lyric(4);
+        for l in half.lines.iter_mut().take(2) {
+            l.words[0].start_ms = l.start_ms + 500;
+        }
+        let gap = (score_word_lyric(&a, None).score - score_word_lyric(&half, None).score).abs();
+        assert!((gap - 0.075).abs() < 1e-9, "gap={gap}");
+        assert!(scores_close(&a, &half));
+        // 全退化(无词级时间) => 差远超窗口, 不值得再为一致性多打一次行级请求
+        assert!(!scores_close(&a, &degenerate_word_lyric(4)));
+        const _: () = assert!(SCORE_CLOSE_WINDOW > 0.0 && SCORE_CLOSE_WINDOW < 1.0);
+    }
+
+    #[test]
+    fn choose_ignores_empty_side_and_keeps_no_reason() {
+        // 空的 yrc(DTO 里可能有 0 行)等价于"没有": 只有 TTML 时不该给择优理由
+        let ttml = good_word_lyric(2);
+        let c = choose_word_source(None, Some(&ttml), None);
+        assert_eq!(c.source, Some(LyricSource::Ttml));
+        assert!(c.reason.is_none());
+    }
+
+    #[test]
+    fn source_as_str_matches_dart_strings() {
+        assert_eq!(LyricSource::Yrc.as_str(), "yrc");
+        assert_eq!(LyricSource::Ttml.as_str(), "ttml");
+        assert_eq!(LyricSource::LineLevel.as_str(), "line");
     }
 }
