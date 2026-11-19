@@ -184,6 +184,10 @@ extension _AppSettingsJsonCodec on AppSettings {
     // 队列面板的「左滑移除」提示: 用户勾过「不再展示」就永久生效
     final queueHint = raw['queueSwipeHintDismissed'];
     if (queueHint is bool) queueSwipeHintDismissed = queueHint;
+    // 详情页「歌词 ⇄ 封面」的记忆面(用户 2026-11-19): 老配置缺字段 ⇒ 保持默认
+    // 'lyrics'; 未知值由 setter 的白名单丢弃。
+    final face = raw['detailFace'];
+    if (face is String) detailFace = face;
   }
 
   /// 落盘用的整份 map —— 与上面七个 `_apply*` 一一对应。
@@ -231,5 +235,6 @@ extension _AppSettingsJsonCodec on AppSettings {
     // ---- 交互记录 ----
     'interactions': _interactions,
     'queueSwipeHintDismissed': queueSwipeHintDismissed,
+    'detailFace': detailFace,
   };
 }

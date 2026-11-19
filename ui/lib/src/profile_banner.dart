@@ -41,7 +41,11 @@ class ProfileBannerImage extends StatelessWidget {
   final IconData icon;
   final bool showFullscreenHint;
   final Future<Uint8List> Function(String url)? fetchOverride;
-  final Future<String> Function(Uint8List bytes, String filename)? saveOverride;
+
+  /// 与 saveImageBytes 同签名(命名参数 filename) —— 位置参数版本会和默认实现
+  /// 一起被 `??` 推断成裸 Function, 运行期 NoSuchMethodError(见 cover_art.dart)。
+  final Future<String> Function(Uint8List bytes, {required String filename})?
+  saveOverride;
 
   String get _src => httpsImageUrl(url);
 
@@ -404,7 +408,8 @@ class ProfileBanner extends StatelessWidget {
   final Widget? footer;
   final double height;
   final Future<Uint8List> Function(String url)? fetchOverride;
-  final Future<String> Function(Uint8List bytes, String filename)? saveOverride;
+  final Future<String> Function(Uint8List bytes, {required String filename})?
+  saveOverride;
 
   @override
   Widget build(BuildContext context) {

@@ -58,6 +58,7 @@ const expectedKeys = <String>{
   // 交互记录
   'interactions',
   'queueSwipeHintDismissed',
+  'detailFace',
 };
 
 /// 把单例恢复到"未改动"的形状, 避免用例之间互相污染(同一文件的用例共享单例)。
@@ -94,6 +95,7 @@ void resetToDefaults() {
   s.lastUpdateCheckMs = null;
   s.skippedUpdateVersion = null;
   s.queueSwipeHintDismissed = false;
+  s.detailFace = 'lyrics';
 }
 
 void main() {
@@ -162,6 +164,7 @@ void main() {
     s.lastUpdateCheckMs = 1700000000000;
     s.skippedUpdateVersion = 'v9.9.9';
     s.queueSwipeHintDismissed = true;
+    s.detailFace = 'cover';
     await s.touchInteraction('album', BigInt.from(42), nowMs: 1700000000001);
 
     await s.update();
@@ -203,6 +206,7 @@ void main() {
     expect(s.lastUpdateCheckMs, 1700000000000);
     expect(s.skippedUpdateVersion, 'v9.9.9');
     expect(s.queueSwipeHintDismissed, isTrue);
+    expect(s.detailFace, 'cover', reason: '详情页「歌词 ⇄ 封面」的记忆面');
     expect(s.lastInteractionMs('album', BigInt.from(42)), 1700000000001);
 
     // 再落一次盘: 读回来的值必须能原样写出去(往返稳定, 不引入漂移)。
@@ -221,6 +225,21 @@ void main() {
     expect(AppSettings.instance.gridColumns, 3);
     expect(AppSettings.instance.updateCheckInterval, UpdateCheckInterval.daily);
     expect(AppSettings.instance.closeBehavior, CloseBehavior.quit);
+    // 详情面偏好: 老配置没有这个字段 ⇒ 默认歌词(不迁移、不报错)
+    expect(AppSettings.instance.detailFace, 'lyrics');
+  });
+
+  test('detailFace 白名单: 手工改坏的未知值被丢弃, 保持默认', () async {
+    File('${dir.path}/settings.json')
+        .writeAsStringSync(jsonEncode({'detailFace': 'nonsense'}));
+    await AppSettings.instance.load(dir.path);
+    expect(AppSettings.instance.detailFace, 'lyrics');
+
+    // 写侧同样拦(唯一的写入校验点)
+    AppSettings.instance.detailFace = 'nonsense';
+    expect(AppSettings.instance.detailFace, 'lyrics');
+    AppSettings.instance.detailFace = 'cover';
+    expect(AppSettings.instance.detailFace, 'cover');
   });
 
   test('schema < 2 的 lyricSourcePreference=auto 一次性抬到 amll(迁移仍生效)', () async {

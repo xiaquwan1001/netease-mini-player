@@ -12,7 +12,15 @@ import 'package:flutter/services.dart';
 /// `song_share.dart`(后者 import 了 cover_art).
 const MethodChannel _shareChannel = MethodChannel('ncm/share');
 
-bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+/// 是否走 Android 的 MediaStore 通道(而不是桌面直接写文件)。
+///
+/// 判据用框架的 [defaultTargetPlatform] 而不是 `Platform.isAndroid`:
+/// 两者在真机上等价, 但前者可以在测试里用 `debugDefaultTargetPlatformOverride`
+/// 强制成 android —— 这是"默认保存实现"回归测试(不注入保存实现 + mock
+/// `ncm/share` 通道)能真正跑到生产分支的唯一入口; 否则 Linux 上跑 flutter test
+/// 永远走桌面分支(会写真磁盘)。
+bool get _isAndroid =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 Future<String> saveImageBytes(
   Uint8List bytes, {

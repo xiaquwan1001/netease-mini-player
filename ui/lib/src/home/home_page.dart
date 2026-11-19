@@ -192,12 +192,20 @@ class _HomePageState extends State<HomePage> {
   /// 已经弹过更新提示的版本 tag(同一次运行只弹一次, 避免重复打扰)
   String? _promptedUpdateTag;
 
+  /// 详情面板当前是「歌词」还是「封面」面 —— **唯一真相**, 三处共享:
+  /// - DetailFaces 用它当控制器(值变了就跟着翻面, 也会把用户手动切面写回);
+  /// - 播放条封面点击把它翻到另一面(于是"点封面"每次都是真的换视图);
+  /// - 偏好落盘: 用户切面 → AppSettings.detailFace, 下次进面板按记忆面初始化
+  ///   (换歌不重置, 用户 2026-11-19 口径)。
+  late final ValueNotifier<DetailFace> _detailFace;
+
   @override
   void initState() {
     super.initState();
     // 账号/登录态动作 + 二级页导航(拆壳 S7): 浏览态四件套由它持有(唯一写入口),
     // 登录态 `_info`/红心 `_liked` 仍是页面状态 —— 访问器 + 回灌回调注入;
     // 需要 BuildContext 的 sheet/账号页/详情页经 contextOf 在调用瞬间取。
+    _detailFace = ValueNotifier<DetailFace>(_storedDetailFace());
     _account = AccountActions(
       contextOf: () => context,
       isMounted: () => mounted,
@@ -302,11 +310,18 @@ class _HomePageState extends State<HomePage> {
         }
         _lyric.toggle();
       },
-      // 播放条封面点击 = 进入播放详情(不是专辑预览, 用户要求)
+      // 播放条封面点击 = 在「歌词 ⇄ 封面」两面之间切换(用户 2026-11-19 口径:
+      // 每次点都真的"换个视图", 不是单纯打开歌词页)。面板已显示时直接翻面;
+      // 未显示时先显示面板 —— 面板按记忆面初始化, 所以先把记忆面翻成相反的一面。
+      // 歌词按钮(onToggleLyrics)语义不变, 仍然是"展开/收起歌词"。
       onOpenDetail: () {
         if (pageDepth.value > 1) {
           Navigator.of(context).popUntil((route) => route.isFirst);
         }
+        final next = oppositeDetailFace(_detailFace.value);
+        _detailFace.value = next;
+        // 播放条点封面同样算"用户切面" ⇒ 写回记忆面(否则重启后回到旧的那一面)
+        _onDetailFaceChanged(next);
         if (!_lyric.visible) _lyric.toggle();
       },
       onToggleLike: _songActions.toggleCurrentLike,
@@ -387,6 +402,7 @@ class _HomePageState extends State<HomePage> {
     _search.dispose();
     _searchFocus.dispose();
     _lyric.dispose();
+    _detailFace.dispose();
     super.dispose();
   }
 
@@ -397,6 +413,27 @@ class _HomePageState extends State<HomePage> {
   /// 歌词状态机有变更时重建(与拆分前每处 setState 一一对应: 一次通知 = 一次重建)。
   void _onLyricChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// 上次看的详情面(持久化偏好; 缺省/未知值一律 = 歌词)。
+  static DetailFace _storedDetailFace() =>
+      AppSettings.instance.detailFace == DetailFace.cover.name
+      ? DetailFace.cover
+      : DetailFace.lyrics;
+
+  /// 用户手动切面 → 立刻写回偏好(异步落盘, 不阻塞手势)。
+  ///
+  /// 走 [AppSettings.update] 而不是裸 setter: setter 只改内存不落盘, 重启就丢
+  /// (这正是"切面没有记忆"的症状)。该字段与交互记录同域, 通知不会重建整棵树。
+  void _onDetailFaceChanged(DetailFace face) {
+    unawaited(AppSettings.instance.update(detailFace: face.name));
+  }
+
+  /// 封面面「查看评论」: 打开**当前**曲目(而不是切面瞬间的快照)的评论面板
+  void _openComments() {
+    final song = _current;
+    if (song == null) return;
+    unawaited(_songActions.openComments(song));
   }
 
   /// 播放协调器有变更时重建(与拆分前每处 setState(赋值 _player) 等价)。
@@ -1634,6 +1671,14 @@ class _HomePageState extends State<HomePage> {
               coverUrl: _current?.coverUrl,
               // 多选态里点行 = 选中某句, 不是切面
               tappable: !_lyric.selecting,
+              // 面记忆: 面板按偏好里的记忆面初始化(控件只在建树时读 initialFace),
+              // 用户切面立刻写回偏好 —— 换歌不再强制回歌词。
+              initialFace: _storedDetailFace(),
+              faceController: _detailFace,
+              onFaceChanged: _onDetailFaceChanged,
+              // 封面面右下角「查看评论」: 与歌曲"..."菜单里的查看评论同一条链路;
+              // 没有当前曲目(纯占位/未播放)时不显示按钮。
+              onOpenComments: _current == null ? null : _openComments,
               lyrics: Stack(
                 children: [
                   Positioned.fill(child: body),

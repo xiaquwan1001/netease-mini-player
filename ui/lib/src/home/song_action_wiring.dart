@@ -381,6 +381,12 @@ class SongActionWiring {
     );
   }
 
+  /// 「查看评论」的公共入口(歌曲"..."菜单 + 详情页封面面的评论按钮共用)。
+  ///
+  /// 详情面板只拿到"当前曲目", 不该自己拼 kind/resourceId/分享语境 —— 这条链路
+  /// 已经在歌曲菜单里存在一份, 复制第二份必然会漂。
+  Future<void> openComments(rust.SongDto song) => _showSongComments(song);
+
   Future<void> _showSongComments(rust.SongDto song) async {
     await showCommentsSheet(
       contextOf(),
