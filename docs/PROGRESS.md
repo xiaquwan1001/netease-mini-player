@@ -38,7 +38,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
 | `flutter test --exclude-tags network`(全量, 含 golden) | **1289** 通过 / 0 skip / 0 失败(golden **20** 张(v0.26.0 起: 双列 2 张 + 既有 18); 上一版口径为 **1243**(golden **19** 张 —— 新增 `playlist_detail_1280x720`(双列), 上一批重出 `settings_360x800`; network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → **1243**(桌面播放条 5 + 关注页 22 + 双列 16) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **10** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4 + 缓冲水位策略 `AudioBufferPolicy` 3; v0.26.0) |
-| `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行; 2026-11-17 a34 实跑) |
+| `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) / 可选 `android-test-emu`(钉 emulator-5554, 必须显式调用) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行)。**2026-11-19 复核**: a34(emulator-5554, SDK 34)连跑两轮均 **0 失败**, 用例 **15.9s** / 任务 **23–25s** |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
 | `ci-gates.sh desktop-smoke`(`NCM_DESKTOP_SMOKE=1` 才进 `verify`; 需现成 release bundle) | **PASS / 0 FAIL / 0 SKIP, 26 项 OK, 61s**(2026-11-18 本机实测): 启动+数据目录+`identity.json`+WM_CLASS+几何+单实例+SIGTERM · **⑦ 关闭行为三例**(默认退出 / 托盘降级 / 有宿主时 unmap + SecondaryActivate 恢复) · **⑧ 交互级**(windowfocus 回读 + XTEST 按键 4 次 + 播放条 4 次点击 + 缩窗 640x480/320x240/还原, 每步断言存活且几何·标题·Map State 不变, 主窗口仍 1 个, 日志无崩溃痕迹) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
@@ -130,6 +130,19 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-19(十七) 设备级 androidTest 补跑(KVM 放开后) + 可选门 `android-test-emu` · **未发版**
+
+> 上一轮设备级门没跑成的**真实原因不是代码**: `/dev/kvm` 的 ACL 只给了 gdm-greeter, a34/a36 起不来报
+> 「x86_64 emulation requires hardware acceleration」。KVM 对 `xuqianhui` 放开后补上设备侧实测。
+
+| 项 | 内容 |
+|---|---|
+| **设备级测试结果** | 设备 **a34 (emulator-5554) · sdk_gphone64_x86_64 · SDK 34**; 跑 `DEV=emulator-5554 tools/devui/androidtest`: **6 例 → 5 通过 / 0 失败 / 1 assume-skip**, 用例耗时 **15.9s**, Gradle 任务 **23–25s**。分布 `NotificationSlotsTest` 3(渠道 importance + 5 个 action 槽位契约 + 状态回推) / `NotificationClickTest` 3(其中 `contentIntentClickBringsMainActivityToFront` 仍 assume-skip: 通知点击被 BAL 拦, 需真人开 App 才补执行 —— **设计内跳过, 不是回归**)。连跑两次(手工 + 新门)均绿 |
+| **首跑翻车(环境, 非代码)** | 第一次跑在 2/6 时 `device offline` → `device 'emulator-5554' not found`, 实为**模拟器自己 SIGSEGV 挂了**(`/tmp/avd-a34-*.log`: gfxstream `glGetIntegerv ... null ctx` 之后 `段错误(核心已转储)`)。成因: `~/bin/avd headless` 复用 `COMMON` 里的 **`-gpu host`**, 无窗口下把 GLES 转译器带进空 ctx。处置: `nohup ~/bin/avd headless a34 -gpu swiftshader_indirect -no-snapshot &` 冷启(后者覆盖前者), 之后连跑两轮稳定。**判据: 设备级门报 offline/not found 时先看 `pgrep -f qemu-system` 与 `/tmp/avd-*.log`, 别先怀疑测试代码** |
+| **新增【可选】门 `ci-gates.sh android-test-emu`** | 与 `android-instrumented` 的差别只在**选设备口径**: 那边按 `adb devices` 顺序挑第一台模拟器(本机另起 a36 时会挑错台), 这条**钉死本项目独占的 `emulator-5554`**(`DEV` 可覆盖), 不在线就 `SKIP` 退 0 并打印起法。**不进 `verify`**, 必须显式调用。实测: `tools/ci-gates.sh android-test-emu` → `BUILD SUCCESSFUL in 25s` / `Finished 7 tests`; `DEV=emulator-9999 tools/ci-gates.sh android-test-emu` → SKIP 退 0 |
+| **UI 冒烟(同一台模拟器)** | `adb -s emulator-5554 install -r -d -g ui/build/app/outputs/apk/debug/app-debug.apk`(213 MB, 今日 Gradle 产物) → `am start`: `topResumedActivity=com.minincm.minincm/.MainActivity`, 进程存活(`pidof` 非空), 搜索页**真实联网渲染**(热搜 10 条为线上数据), `adb logcat -d \| grep -i 'FATAL EXCEPTION'` **0 条**。截图 2 张存 `.pi/evidence/emu-20261119/`(`smoke-01-home.png` / `smoke-02-home.png`, 各 **1080x2400**) |
+| **门禁(本次实测)** | `bash tools/ci-gates.sh verify` → **ALL GATES OK**(设备级门仍未进 verify, 既有门零改动) |
 
 ## 2026-11-19(十六) 文档门落地 + 两条文档债收口 · **未发版**
 

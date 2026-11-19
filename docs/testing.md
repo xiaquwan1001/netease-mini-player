@@ -34,7 +34,21 @@ source tools/env.sh
 ~/bin/avd headless a34                       # 无窗口 + 自动关 netsim wifi
 DEV=$(adb devices | awk '/emulator-/{print $1; exit}')   # a34 若排在第二台会是 emulator-5556
 echo "DEV=$DEV"
+```
 
+> **headless 必须显式给 GPU 后端**: `~/bin/avd` 的 `COMMON` 里是 `-gpu host`, 无窗口时 gfxstream 会拿到空 ctx
+> 然后**段错误** —— 表现是跑到一半 `device offline` / `device 'emulator-5554' not found`, 很容易误判成测试挂了
+> (2026-11-19 实测; 日志判据是 `/tmp/avd-a34-*.log` 里的 `null ctx` + `段错误(核心已转储)`)。稳妥起法:
+>
+> ```bash
+> nohup ~/bin/avd headless a34 -gpu swiftshader_indirect -no-snapshot > /tmp/avd-a34.log 2>&1 &
+> ```
+>
+> 排查顺序: `pgrep -f qemu-system`(进程还在吗) → `/tmp/avd-*.log` 尾部 → 再怀疑用例。
+
+装包:
+
+```bash
 adb -s "$DEV" shell pm grant com.minincm.minincm android.permission.POST_NOTIFICATIONS
 # debug APK 现在 ~213MB(双 ABI): 必须 --no-streaming, 否则报
 # INSTALL_PARSE_FAILED_NO_CERTIFICATES (SHA-256 digest did not verify)

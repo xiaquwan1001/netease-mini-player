@@ -23,6 +23,8 @@
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
+#   tools/ci-gates.sh android-test-emu     # 【可选】同上但**钉本项目的 emulator-5554**(a34); 不在线就 SKIP 退 0,
+#                                          # 不进 verify, 必须显式调用(2026-11-19 实测 6 例/0 失败/1 assume-skip/15.9s)
 #   tools/ci-gates.sh android-lint         # :app:lintDebug(AGP 自带 lint; 已 0 error, 在 verify 里)
 #   tools/ci-gates.sh desktop-smoke        # 桌面无头冒烟(xvfb+dbus; 没 bundle / 缺工具就 SKIP 退 0)
 #                                          # 含**交互级断言**(X11 注入焦点/按键/点击/改尺寸后断言存活+窗口属性不变,
@@ -205,6 +207,23 @@ cmd_android_instrumented() {
   run env DEV="$dev" bash tools/devui/androidtest "$@"
 }
 
+# 【可选】钉死本项目独占实例 emulator-5554(a34)。与 android-instrumented 的区别:
+# 那边按 adb devices 顺序挑第一台模拟器, 本机若另起了 a36 会挑错台; 这条只认 5554, 不在线就 SKIP 退 0。
+# 不进 verify(要模拟器活着, 一轮 ~30s 构建 + ~16s 用例), 必须显式调用。
+cmd_android_test_emu() {
+  local dev=${DEV:-emulator-5554}
+  command -v adb >/dev/null || {
+    echo "SKIP android-test-emu: PATH 里没有 adb(先 source tools/env.sh)"
+    return 0
+  }
+  if ! adb devices | tr -d '\r' | awk -v d="$dev" '$1 == d && $2 == "device" {found=1} END {exit !found}'; then
+    echo "SKIP android-test-emu: $dev 不在线(起法: nohup ~/bin/avd headless a34 -gpu swiftshader_indirect -no-snapshot &)"
+    return 0
+  fi
+  cmd_android_prepare
+  run env DEV="$dev" bash tools/devui/androidtest "$@"
+}
+
 cmd_desktop_smoke() {
   echo "+ bash tools/smoke-desktop-headless(含交互级断言, 本机 ≈60s)"
   local rc=0
@@ -261,6 +280,7 @@ case "$sub" in
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
   android-instrumented) cmd_android_instrumented "$@" ;;
+  android-test-emu) cmd_android_test_emu "$@" ;;
   desktop-smoke) cmd_desktop_smoke ;;
   android-lint)  cmd_android_lint ;;
   verify)        cmd_verify ;;
