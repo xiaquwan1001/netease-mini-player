@@ -85,6 +85,33 @@ void main() {
     expect((await b.days()).single.playlists.single.name, 'B 的每日推荐');
   });
 
+  test('单曲同样按账号隔离: B 读不到 A 今天缓存的曲目', () async {
+    Future<List<rust.SongDto>> fetchA() async => [
+      fakeSong(id: 11, name: 'A 的歌'),
+    ];
+    Future<List<rust.SongDto>> fetchB() async => [
+      fakeSong(id: 22, name: 'B 的歌'),
+    ];
+
+    final a = cacheFor('uid-6001');
+    final aSongs = await a.loadSongs(fetchSongs: fetchA, keepDays: 7, now: now);
+    expect(aSongs.single.name, 'A 的歌');
+
+    final b = cacheFor('uid-6002');
+    // B 没有缓存 ⇒ 必须真的走自己的 fetch, 绝不能读到 A 的曲目
+    final bSongs = await b.loadSongs(fetchSongs: fetchB, keepDays: 7, now: now);
+    expect(bSongs.single.name, 'B 的歌');
+    expect((await b.days()).single.songs.single.name, 'B 的歌');
+
+    // 切回 A: 读到的还是 A 自己那份(连 fetch 都不用再发)
+    final aAgain = await a.loadSongs(
+      fetchSongs: () async => throw StateError('A 的缓存应当命中'),
+      keepDays: 7,
+      now: now,
+    );
+    expect(aAgain.single.name, 'A 的歌');
+  });
+
   test('未登录(anonymous)与登录账号互不可见', () async {
     final anon = cacheFor(DailyPlaylistCache.anonymousKey);
     await anon.load(fetch: doFetch, keepDays: 7, now: now);

@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../rust/api.dart' as rust;
 import '../search_exact_bar.dart';
+import '../search_landing.dart' show RecommendedKeyword;
 
 /// 搜索状态机(从 main.dart 的 `_HomePageState` 搬出, 2026-11 拆壳 S3)。
 ///
@@ -29,9 +30,13 @@ class SearchController extends ChangeNotifier {
     required this.onSearchFailed,
     required this.onClearSearchError,
     required this.onLeaveLibrary,
-  }) {
+    DateTime Function()? now,
+  }) : now = now ?? DateTime.now {
     focus.addListener(_onFocusChanged);
   }
+
+  /// 时间源(只服务于「猜你想搜」的短 TTL; 测试注入假时钟, 生产就是 [DateTime.now])
+  final DateTime Function() now;
 
   /// 搜索输入框(页面持有; 这里只读文本 / 写入联想着色)
   final TextEditingController text;
@@ -73,9 +78,12 @@ class SearchController extends ChangeNotifier {
   // ---- 搜索落地页(热词/推荐词) ----
   List<rust.HotSearchTerm> _hotTerms = const [];
 
-  /// "猜你想搜": keyword 是真正要搜的词, reason 是官方给的推荐理由(只展示)
-  String? _recommendedKeyword;
-  String? _recommendedReason;
+  /// "猜你想搜": 多来源合并去重后的候选池(按优先级排序, 最多 [recommendedLimit] 个)
+  List<RecommendedKeyword> _recommended = const [];
+
+  /// 上次拉候选池的时间(短 TTL 判定用; 失败也记, 避免每次进页面都重试打网络)
+  DateTime? _recommendedFetchedAt;
+  bool _recommendedLoading = false;
   bool _hotLoading = false;
   String? _hotError;
 
@@ -95,9 +103,10 @@ class SearchController extends ChangeNotifier {
 
   List<rust.HotSearchTerm> get hotTerms => _hotTerms;
 
-  String? get recommendedKeyword => _recommendedKeyword;
+  /// 落地页「猜你想搜」的候选(空 = 没有任何可信候选, 整块不渲染)
+  List<RecommendedKeyword> get recommended => _recommended;
 
-  String? get recommendedReason => _recommendedReason;
+  bool get recommendedLoading => _recommendedLoading;
 
   bool get hotLoading => _hotLoading;
 
@@ -207,7 +216,7 @@ class SearchController extends ChangeNotifier {
     }
   }
 
-  /// 搜索落地页的热词榜 + 默认/推荐搜索词. 两块互相独立, 失败不影响搜索.
+  /// 搜索落地页的热词榜. 与「猜你想搜」互相独立, 失败不影响搜索.
   Future<void> loadLanding() async {
     if (!_disposed) {
       _hotLoading = true;
@@ -240,15 +249,106 @@ class SearchController extends ChangeNotifier {
         notifyListeners();
       }
     }
-    try {
-      final recommended = await rust.defaultSearch();
-      if (_disposed) return;
-      _recommendedKeyword = recommended?.keyword;
-      _recommendedReason = recommended?.showText;
-      notifyListeners();
-    } catch (_) {
-      // 推荐词是锦上添花, 失败静默
+  }
+
+  // ---------------- 「猜你想搜」候选池 ----------------
+
+  /// 候选格子的展示上限(与 [SearchLanding] 的格子上限一致)
+  static const int recommendedLimit = 4;
+
+  /// 候选池的短 TTL: 进入搜索页时按需重新拉, 10 分钟内复用上次结果。
+  ///
+  /// 不能做成永久缓存 —— 官方的默认词/联想词是"最近在听什么"的反映,
+  /// 长期固定就成了死板的一块(2026-11 用户反馈"猜你想搜长期不变")。
+  static const Duration recommendedTtl = Duration(minutes: 10);
+
+  /// 进入搜索页时调用: 只有 TTL 到期(或从没拉过)才真正请求一次。
+  ///
+  /// [force] 给"重试"类入口用; 正常进页面不要传, 否则 10 分钟的短缓存就没意义了。
+  Future<void> refreshRecommended({bool force = false}) async {
+    if (_disposed || _recommendedLoading) return;
+    final at = _recommendedFetchedAt;
+    if (!force && at != null && now().difference(at) < recommendedTtl) {
+      return;
     }
+    await _loadRecommended();
+  }
+
+  /// 多来源合并去重取前 [recommendedLimit] 个。优先级:
+  /// 1. 官方「默认/推荐搜索」词(rust.defaultSearch, 只有 1 个, 带官方理由文案);
+  /// 2. 以「默认词 + 最近搜索历史」为种子取联想词(rust.searchSuggestKeywords);
+  /// 3. 热搜词 —— **不取**: 落地页下方「热门搜索」就在展示同一批词, 再塞进来只是
+  ///    把同样的 4 个词重复两遍, 宁可按第 4 条如实少显示。
+  ///
+  /// 任何来源失败都静默降级, 不影响其它来源; 全空时整块不渲染。
+  Future<void> _loadRecommended() async {
+    if (_disposed) return;
+    _recommendedLoading = true;
+    notifyListeners();
+
+    final picked = <RecommendedKeyword>[];
+    void add(String? keyword, {String? reason}) {
+      final k = (keyword ?? '').trim();
+      if (k.isEmpty || picked.length >= recommendedLimit) return;
+      if (picked.any((e) => e.keyword == k)) return;
+      picked.add(RecommendedKeyword(keyword: k, reason: reason));
+    }
+
+    // 来源 1: 官方默认/推荐搜索词(未登录时接口可能拿不到, 静默跳过)
+    String? seed;
+    try {
+      final def = await rust.defaultSearch();
+      if (_disposed) return;
+      if (def != null) {
+        add(def.keyword, reason: def.showText);
+        seed = def.keyword;
+      }
+    } catch (_) {}
+
+    // 来源 2: 联想词。种子最多两个(默认词优先, 其次最近一条搜索历史),
+    // 并行请求但按种子顺序合并 —— 越相关的种子排越前。
+    if (!_disposed && picked.length < recommendedLimit) {
+      var history = _searchHistory;
+      if (history.isEmpty) {
+        try {
+          history = await rust.searchHistory();
+          if (_disposed) return;
+          _searchHistory = history;
+        } catch (_) {
+          history = const [];
+        }
+      }
+      final seeds = <String>{
+        if (seed != null && seed.isNotEmpty) seed,
+        ...history.take(2),
+      }.take(2).toList();
+      if (seeds.isNotEmpty) {
+        final lists = await Future.wait([
+          for (final s in seeds) _loadSuggestKeywords(s),
+        ]);
+        if (_disposed) return;
+        for (final list in lists) {
+          for (final k in list) {
+            add(k);
+            if (picked.length >= recommendedLimit) break;
+          }
+        }
+      }
+    }
+
+    if (_disposed) return;
+    final next = List<RecommendedKeyword>.unmodifiable(picked);
+    // 新集合与当前展示一致就不替换, 避免进页面时无意义的重建/闪烁
+    final same =
+        next.length == _recommended.length &&
+        List<int>.generate(
+          next.length,
+          (i) => i,
+        ).every((i) => next[i] == _recommended[i]);
+    if (!same) _recommended = next;
+    _recommendedFetchedAt = now();
+    _recommendedLoading = false;
+    notifyListeners();
   }
 
   void onQueryChanged(String value) {

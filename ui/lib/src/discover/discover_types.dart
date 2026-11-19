@@ -8,7 +8,7 @@ typedef PlaylistListLoader = Future<List<rust.Playlist>> Function();
 typedef DateListLoader = Future<List<String>> Function();
 typedef HistorySongsLoader = Future<List<rust.SongDto>> Function(String date);
 
-/// 本地缓存的每日推荐歌单(来自 daily_cache.dart); null/不传 = 不合并本地.
+/// 本地缓存的每日推荐(歌单 + 单曲, 来自 daily_cache.dart); null/不传 = 不合并本地.
 typedef LocalDaysLoader = Future<List<DailyCacheDay>> Function();
 
 typedef AlbumListLoader = Future<List<rust.AlbumItem>> Function();

@@ -26,7 +26,7 @@ void main() {
         SearchLanding(
           history: const ['七里香'],
           hot: [hot(1, '晴天'), hot(2, '稻香')],
-          recommended: '周杰伦',
+          recommended: const [RecommendedKeyword(keyword: '周杰伦')],
           onSelected: (k) => chosen = k,
           onClearHistory: () => cleared++,
         ),
@@ -79,7 +79,7 @@ void main() {
             body: SearchLanding(
               history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
               hot: [hot(1, '晴天'), hot(2, '稻香')],
-              recommended: '周杰伦',
+              recommended: const [RecommendedKeyword(keyword: '周杰伦')],
               onSelected: (_) {},
               onClearHistory: () {},
             ),
@@ -100,7 +100,7 @@ void main() {
         SearchLanding(
           history: const [],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
           hotError: '网络不稳定',
@@ -120,7 +120,7 @@ void main() {
         SearchLanding(
           history: const [],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
           loadCharts: () async => [
@@ -148,7 +148,7 @@ void main() {
         SearchLanding(
           history: const [],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
         ),
@@ -156,5 +156,146 @@ void main() {
     );
     expect(find.text('暂无热词'), findsOneWidget);
     expect(find.text('搜索历史'), findsNothing);
+  });
+
+  // ---- 「猜你想搜」2026-11 改版: 多个候选 + 格子 + 会更新 ----
+
+  testWidgets('多个候选渲染成与历史一致的 chip 格子, 点谁搜谁', (tester) async {
+    String? chosen;
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const ['七里香'],
+          hot: const [],
+          recommended: const [
+            RecommendedKeyword(keyword: '周杰伦'),
+            RecommendedKeyword(keyword: '稻香'),
+            RecommendedKeyword(keyword: '夜曲'),
+          ],
+          onSelected: (k) => chosen = k,
+          onClearHistory: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('猜你想搜'), findsOneWidget);
+    final chips = find.byType(ActionChip);
+    // 1 条历史 + 3 个候选, 全是同一套 ActionChip
+    expect(chips, findsNWidgets(4));
+    expect(find.widgetWithText(ActionChip, '周杰伦'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, '稻香'), findsOneWidget);
+    expect(find.widgetWithText(ActionChip, '夜曲'), findsOneWidget);
+    // 不再是一张整行 Card+ListTile
+    expect(find.byType(ListTile), findsNothing);
+
+    // 命中区与历史 chip 同一口径(≥48dp)
+    for (final keyword in ['周杰伦', '稻香', '夜曲']) {
+      final size = tester.getSize(find.widgetWithText(ActionChip, keyword));
+      expect(size.height, greaterThanOrEqualTo(48), reason: keyword);
+    }
+
+    await tester.tap(find.text('稻香'));
+    expect(chosen, '稻香');
+  });
+
+  testWidgets('候选上限 4: 传再多也只渲染 4 个格子', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const [],
+          hot: const [],
+          recommended: const [
+            RecommendedKeyword(keyword: '候选一'),
+            RecommendedKeyword(keyword: '候选二'),
+            RecommendedKeyword(keyword: '候选三'),
+            RecommendedKeyword(keyword: '候选四'),
+            RecommendedKeyword(keyword: '候选五'),
+            RecommendedKeyword(keyword: '候选六'),
+          ],
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
+
+    expect(find.byType(ActionChip), findsNWidgets(4));
+    expect(find.text('候选四'), findsOneWidget);
+    expect(find.text('候选五'), findsNothing);
+    expect(find.text('候选六'), findsNothing);
+  });
+
+  testWidgets('空候选: 连「猜你想搜」标题一起不渲染', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const ['七里香'],
+          hot: const [],
+          recommended: const [],
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
+    expect(find.text('猜你想搜'), findsNothing);
+    expect(find.byType(ActionChip), findsOneWidget); // 只剩历史那一个
+  });
+
+  testWidgets('推荐理由只做 Tooltip, 不占行', (tester) async {
+    await tester.pumpWidget(
+      host(
+        SearchLanding(
+          history: const [],
+          hot: const [],
+          recommended: const [
+            RecommendedKeyword(keyword: 'Mili', reason: '🔥Mili 你的十月榜首'),
+            RecommendedKeyword(keyword: '稻香'),
+          ],
+          onSelected: (_) {},
+          onClearHistory: () {},
+        ),
+      ),
+    );
+
+    // 理由文案不直接铺在页面上
+    expect(find.text('🔥Mili 你的十月榜首'), findsNothing);
+    final tips = tester.widgetList<Tooltip>(find.byType(Tooltip));
+    expect(
+      tips.map((t) => t.message),
+      contains('🔥Mili 你的十月榜首'),
+      reason: '有理由的候选要能长按看到来源说明',
+    );
+    // 没理由的候选不加空 Tooltip
+    expect(tips.map((t) => t.message), isNot(contains('')));
+  });
+
+  testWidgets('换成新候选集合会替换旧内容(「有新的就换」)', (tester) async {
+    Widget page(List<RecommendedKeyword> items) => host(
+      SearchLanding(
+        history: const ['七里香'],
+        hot: const [],
+        recommended: items,
+        onSelected: (_) {},
+        onClearHistory: () {},
+      ),
+    );
+
+    await tester.pumpWidget(
+      page(const [
+        RecommendedKeyword(keyword: '旧候选甲'),
+        RecommendedKeyword(keyword: '旧候选乙'),
+      ]),
+    );
+    expect(find.text('旧候选甲'), findsOneWidget);
+
+    await tester.pumpWidget(
+      page(const [
+        RecommendedKeyword(keyword: '新候选甲'),
+        RecommendedKeyword(keyword: '新候选乙'),
+      ]),
+    );
+    expect(find.text('旧候选甲'), findsNothing);
+    expect(find.text('旧候选乙'), findsNothing);
+    expect(find.text('新候选甲'), findsOneWidget);
+    expect(find.text('新候选乙'), findsOneWidget);
   });
 }

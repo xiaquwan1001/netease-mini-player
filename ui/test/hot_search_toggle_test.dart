@@ -23,7 +23,7 @@ Widget host(SearchLanding Function() make) => MaterialApp(
 SearchLanding landing() => SearchLanding(
   history: const ['七里香'],
   hot: [hot(1, '晴天'), hot(2, '稻香')],
-  recommended: '周杰伦',
+  recommended: const [RecommendedKeyword(keyword: '周杰伦')],
   onSelected: (_) {},
   onClearHistory: () {},
 );
@@ -79,7 +79,7 @@ void main() {
         () => SearchLanding(
           history: const [],
           hot: [hot(1, '晴天')],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
         ),
@@ -129,7 +129,9 @@ void main() {
         body: SearchLanding(
           history: const ['一条特别特别长的历史搜索词用于窄屏回归测试'],
           hot: [hot(1, '一个特别特别长不会有人搜的热词窄屏回归'), hot(2, '稻香')],
-          recommended: '一个特别特别长的推荐艺人名用于窄屏回归测试',
+          recommended: const [
+            RecommendedKeyword(keyword: '一个特别特别长的推荐艺人名用于窄屏回归测试'),
+          ],
           onSelected: (_) {},
           onClearHistory: () {},
         ),

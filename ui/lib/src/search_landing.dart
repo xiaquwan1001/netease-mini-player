@@ -8,6 +8,31 @@ import 'rust/api.dart' as rust;
 import 'section_header.dart';
 import 'state_views.dart';
 
+/// "猜你想搜"的一个候选词.
+///
+/// [keyword] 是真正要搜的词(点一下只搜它), [reason] 是官方给的推荐理由
+/// (形如 "🔥Mili 你的十月榜首"), 只做 Tooltip/小字说明, 不占整行.
+class RecommendedKeyword {
+  const RecommendedKeyword({required this.keyword, this.reason});
+
+  final String keyword;
+  final String? reason;
+
+  @override
+  int get hashCode => keyword.hashCode ^ reason.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecommendedKeyword &&
+          runtimeType == other.runtimeType &&
+          keyword == other.keyword &&
+          reason == other.reason;
+
+  @override
+  String toString() => 'RecommendedKeyword($keyword)';
+}
+
 /// 搜索页的"落地内容": 历史 + 猜你想搜 + 热门榜.
 /// 没有输入时展示, 和搜索结果共用一个滚动区, 避免列表套列表.
 class SearchLanding extends StatelessWidget {
@@ -18,7 +43,6 @@ class SearchLanding extends StatelessWidget {
     required this.recommended,
     required this.onSelected,
     required this.onClearHistory,
-    this.recommendedReason,
     this.hotLoading = false,
     this.hotError,
     this.onRetryHot,
@@ -29,11 +53,12 @@ class SearchLanding extends StatelessWidget {
   final List<String> history;
   final List<rust.HotSearchTerm> hot;
 
-  /// "猜你想搜"的关键词(真正要搜的词)
-  final String? recommended;
+  /// "猜你想搜"的候选词(按优先级排好序, 最多 [_recommendedMaxCount] 个).
+  /// 空列表 = 没有任何可信候选, 整块(含标题)不渲染.
+  final List<RecommendedKeyword> recommended;
 
-  /// 官方给的推荐理由文案(形如 "🔥Mili 你的十月榜首"), 只用于展示
-  final String? recommendedReason;
+  /// 候选格子最多显示几个(多来源合并去重后截断; 不足就少显示).
+  static const int _recommendedMaxCount = 4;
 
   final void Function(String keyword) onSelected;
   final VoidCallback onClearHistory;
@@ -45,6 +70,27 @@ class SearchLanding extends StatelessWidget {
   /// [onOpenChartPlaylist] 为 null 时不渲染该区块(纯搜索落地页测试/嵌入场景)。
   final ChartListLoader? loadCharts;
   final void Function(rust.Playlist playlist)? onOpenChartPlaylist;
+
+  /// 一个候选格子。样式与「搜索历史」chip 完全一致(字号 12 / padded 命中区),
+  /// 推荐理由只放在 Tooltip 里, 不再占一整行。
+  Widget _recommendedChip(ColorScheme scheme, RecommendedKeyword item) {
+    final reason = item.reason;
+    final hasReason =
+        reason != null && reason.isNotEmpty && reason != item.keyword;
+    final chip = ActionChip(
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      avatar: hasReason
+          ? Icon(Icons.auto_awesome, size: 16, color: scheme.primary)
+          : null,
+      label: Text(
+        item.keyword,
+        style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+      ),
+      onPressed: () => onSelected(item.keyword),
+    );
+    if (!hasReason) return chip;
+    return Tooltip(message: reason, child: chip);
+  }
 
   /// 清空历史前的二次确认(C2): 一次误触就不可恢复, 且这是页面上唯一的破坏性操作.
   /// 先把回调取出来再 await, 避免 "use_build_context_synchronously".
@@ -77,7 +123,8 @@ class SearchLanding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final hasRecommended = recommended != null && recommended!.isNotEmpty;
+    // 上限 4 个: 再多就把「搜索历史」挤下一屏, 且猜你想搜只要"提示感"
+    final candidates = recommended.take(_recommendedMaxCount).toList();
     // 字段是 public 的, 先提成本地变量才能做 null 提升
     final chartOpen = onOpenChartPlaylist;
     return ListView(
@@ -120,28 +167,16 @@ class SearchLanding extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        if (hasRecommended) ...[
+        if (candidates.isNotEmpty) ...[
+          // 与「搜索历史」同一套格子(Wrap + ActionChip), 两块视觉一致;
+          // 2026-11 起候选是"多个 + 会更新", 不再是一张长期不变的卡片。
           const SectionTitle('猜你想搜'),
-          Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              dense: true,
-              leading: Icon(Icons.auto_awesome, color: scheme.primary),
-              // 关键词和推荐理由必须分开: 点一下只搜关键词, 理由只是说明
-              title: Text(recommended!),
-              subtitle:
-                  (recommendedReason == null ||
-                      recommendedReason!.isEmpty ||
-                      recommendedReason == recommended)
-                  ? null
-                  : Text(
-                      recommendedReason!,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-              trailing: const Icon(Icons.north_west, size: 16),
-              onTap: () => onSelected(recommended!),
-            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final item in candidates) _recommendedChip(scheme, item),
+            ],
           ),
           const SizedBox(height: 12),
         ],

@@ -10,7 +10,7 @@ SearchLanding landing({
 }) => SearchLanding(
   history: history,
   hot: const [],
-  recommended: null,
+  recommended: const [],
   onSelected: (_) {},
   onClearHistory: onClear ?? () {},
 );

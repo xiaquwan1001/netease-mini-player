@@ -540,6 +540,8 @@ class _HomePageState extends State<HomePage> {
       // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
       unawaited(_search.loadHistory());
       unawaited(_search.loadLanding());
+      // 「猜你想搜」候选池: 预热一次(进搜索页时会按 10 分钟 TTL 再决定是否重拉)
+      unawaited(_search.refreshRecommended());
       // AppImage 首启: 问一次「集成到应用菜单」(deb 安装的走不到这条)
       unawaited(_offerDesktopIntegration(info.dataDir));
       // Linux 桌面: 把「点关闭 = 退出 / 隐藏到托盘」推给 GTK runner(其它平台 no-op)
@@ -1286,6 +1288,8 @@ class _HomePageState extends State<HomePage> {
         _search.clear();
       }
       _search.loadHistory();
+      // 「猜你想搜」不再是一块长期不变的内容: 每次进搜索页按 TTL 决定是否换新
+      unawaited(_search.refreshRecommended());
     }
   }
 
@@ -1491,8 +1495,7 @@ class _HomePageState extends State<HomePage> {
       return SearchLanding(
         history: _search.history,
         hot: _search.hotTerms,
-        recommended: _search.recommendedKeyword,
-        recommendedReason: _search.recommendedReason,
+        recommended: _search.recommended,
         onSelected: _search.searchKeyword,
         onClearHistory: _search.clearHistory,
         hotLoading: _search.hotLoading,

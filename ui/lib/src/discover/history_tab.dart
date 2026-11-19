@@ -17,7 +17,9 @@ class _HistoryEntry {
   const _HistoryEntry({
     required this.date,
     required this.remote,
-    required this.local,
+    this.playlists = const <rust.Playlist>[],
+    this.songs = const <rust.SongDto>[],
+    this.samePlaylistsAs,
   });
 
   /// YYYY-MM-DD
@@ -26,10 +28,24 @@ class _HistoryEntry {
   /// 服务端历史日推里有这一天(VIP 才能取到曲目)
   final bool remote;
 
-  /// 这一天本地缓存的推荐歌单(可能为空)
-  final List<rust.Playlist> local;
+  /// 这一天本地缓存的推荐歌单(可能为空; 已按 id 去重)
+  final List<rust.Playlist> playlists;
 
-  bool get hasLocal => local.isNotEmpty;
+  /// 这一天本地缓存的推荐**单曲**(问题⑤)。在线日期不展示它 —— 接口结果更新。
+  final List<rust.SongDto> songs;
+
+  /// 本地歌单与**更早的某一天**完全相同(上游日推歌单高度稳定), 值是那天的 YYYY-MM-DD。
+  final String? samePlaylistsAs;
+
+  bool get hasLocal => playlists.isNotEmpty || songs.isNotEmpty;
+
+  _HistoryEntry withSamePlaylistsAs(String? date) => _HistoryEntry(
+    date: this.date,
+    remote: remote,
+    playlists: playlists,
+    songs: songs,
+    samePlaylistsAs: date,
+  );
 }
 
 /// 在线日期取失败、本地也没有缓存时的整屏错误: 文案已经过 [friendlyError],
@@ -241,7 +257,7 @@ class _HistoryDatesViewState extends State<_HistoryDatesView> {
   }
 }
 
-/// 某一天的日推(二级): 在线日期取曲目, 纯本地日期直接展示缓存的推荐歌单.
+/// 某一天的日推(二级): 在线日期取曲目, 纯本地日期直接展示缓存的推荐单曲 + 歌单.
 class _HistoryDayView extends StatelessWidget {
   const _HistoryDayView({
     super.key,
@@ -274,14 +290,47 @@ class _HistoryDayView extends StatelessWidget {
     );
   }
 
-  Widget _content(BuildContext context, List<rust.SongDto> songs) {
-    final playlists = entry.local;
+  /// 当天头部副标题: 在线日期报接口给的曲目数; 纯本地日期报缓存里的曲目/歌单数。
+  String _headerSubtitle(List<rust.SongDto> songs) {
+    final playlists = entry.playlists;
+    if (entry.remote) {
+      return playlists.isEmpty
+          ? '${songs.length} 首'
+          : '${songs.length} 首 · 缓存 ${playlists.length} 个歌单';
+    }
+    final parts = <String>[
+      if (songs.isNotEmpty) '${songs.length} 首',
+      if (playlists.isNotEmpty) '${playlists.length} 个歌单',
+    ];
+    return '缓存 ${parts.join(' · ')}';
+  }
+
+  Widget _content(BuildContext context, List<rust.SongDto> remoteSongs) {
+    final playlists = entry.playlists;
     final openPlaylist = onOpenPlaylist;
+    // 同一天只出一份曲目(问题④): 在线日期以接口结果为准, 本地缓存里那份是同一天的
+    // 旧副本, 两边都列会让「某一天」看起来重复; 只有纯本地日期才用缓存曲目。
+    final songs = entry.remote
+        ? remoteSongs
+        : DailyPlaylistCache.dedupeSongs(entry.songs);
     final rows = <Widget>[];
     if (entry.remote) {
       if (songs.isEmpty) {
         rows.add(const ListTile(dense: true, title: Text('这一天没有记录')));
       }
+    }
+    if (!entry.remote && songs.isNotEmpty) {
+      rows.add(
+        ListTile(
+          dense: true,
+          title: Text(
+            '缓存的推荐单曲(${songs.length})',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ),
+      );
+    }
+    if (songs.isNotEmpty) {
       for (var i = 0; i < songs.length; i++) {
         final s = songs[i];
         rows.add(
@@ -325,6 +374,17 @@ class _HistoryDayView extends StatelessWidget {
           ),
         );
       }
+      // 上游日推歌单高度稳定: 与更早某天完全相同时明说, 免得用户以为本地串了号。
+      final sameAs = entry.samePlaylistsAs;
+      if (sameAs != null) {
+        rows.add(
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.info_outline, size: 18),
+            title: Text('推荐歌单与 $sameAs 相同(服务端当天返回的就是这份)'),
+          ),
+        );
+      }
     }
     return Column(
       children: [
@@ -336,13 +396,7 @@ class _HistoryDayView extends StatelessWidget {
             onPressed: onClose,
           ),
           title: Text('${entry.date} 的日推'),
-          subtitle: Text(
-            entry.remote
-                ? (playlists.isEmpty
-                      ? '${songs.length} 首'
-                      : '${songs.length} 首 · 本地缓存 ${playlists.length} 个歌单')
-                : '本地缓存 ${playlists.length} 个歌单',
-          ),
+          subtitle: Text(_headerSubtitle(songs)),
         ),
         const Divider(height: 1),
         Expanded(child: ListView(children: rows)),
@@ -352,29 +406,59 @@ class _HistoryDayView extends StatelessWidget {
 }
 
 /// 在线日期 + 本地缓存按日期合并去重(同一天只留一行), 日期倒序.
+///
+/// 三条口径(问题④, 根因见 `daily_cache.dart` 头注释):
+/// 1. **同一天只出一行**: 在线与本地合成一条;
+/// 2. **同一份内容只留一条**: 歌单/单曲合并前按 id 去重(上游会重复返回同一歌单);
+/// 3. **不伪造天**: 本地那份歌单与单曲都空的天直接跳过(文件在 ≠ 这天有内容)。
+///
+/// 另外: 若某天的歌单清单与更早某天完全相同, 记下"跟哪天一样", 由 UI 标一行 ——
+/// 上游的日推歌单本来就高度稳定, 让用户看到这是服务端当天的结果, 而不是本地串了号。
 List<_HistoryEntry> _merge(List<String> remote, List<DailyCacheDay> local) {
   final byDate = <String, _HistoryEntry>{};
   for (final raw in remote) {
     final date = raw.trim();
-    if (date.isEmpty) continue;
-    byDate[date] = _HistoryEntry(date: date, remote: true, local: const []);
+    if (date.isEmpty || byDate.containsKey(date)) continue;
+    byDate[date] = _HistoryEntry(date: date, remote: true);
   }
   for (final day in local) {
+    final playlists = DailyPlaylistCache.dedupePlaylists(day.playlists);
+    final songs = DailyPlaylistCache.dedupeSongs(day.songs);
+    if (playlists.isEmpty && songs.isEmpty) continue;
     final existing = byDate[day.date];
     byDate[day.date] = _HistoryEntry(
       date: day.date,
       remote: existing?.remote ?? false,
-      local: day.playlists,
+      playlists: playlists,
+      songs: songs,
     );
   }
-  return byDate.values.toList()..sort((a, b) => b.date.compareTo(a.date));
+  // 升序扫一遍: 每个「歌单指纹」记住最近一次出现的日期, 撞指纹就标出更早那天。
+  final lastSeenAt = <String, String>{};
+  final merged = <_HistoryEntry>[];
+  final dates = byDate.keys.toList()..sort();
+  for (final date in dates) {
+    final entry = byDate[date]!;
+    String? same;
+    if (entry.playlists.isNotEmpty) {
+      final fingerprint = entry.playlists.map((p) => p.id.toString()).join(',');
+      same = lastSeenAt[fingerprint];
+      lastSeenAt[fingerprint] = date;
+    }
+    merged.add(same == null ? entry : entry.withSamePlaylistsAs(same));
+  }
+  return merged.reversed.toList(growable: false);
 }
 
 String _subtitleOf(_HistoryEntry entry) {
   if (entry.remote) {
-    return entry.hasLocal ? '查看这一天的每日推荐(含本地缓存歌单)' : '查看这一天的每日推荐';
+    return entry.hasLocal ? '查看这一天的每日推荐(含缓存内容)' : '查看这一天的每日推荐';
   }
-  return '本地缓存的每日推荐歌单';
+  final parts = <String>[
+    if (entry.songs.isNotEmpty) '${entry.songs.length} 首',
+    if (entry.playlists.isNotEmpty) '${entry.playlists.length} 个歌单',
+  ];
+  return '缓存的每日推荐: ${parts.join(' · ')}';
 }
 
 /// 「本地」标记: 这一天的内容来自本地缓存(设置里关掉缓存后不会出现).

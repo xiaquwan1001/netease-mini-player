@@ -248,8 +248,9 @@ void main() {
               rust.HotSearchTerm(rank: 1, keyword: _longName),
               rust.HotSearchTerm(rank: 2, keyword: '短词'),
             ],
-            recommended: '一个很长很长很长很长的猜你想搜关键词Magia',
-            recommendedReason: '🔥Mili 你的十月榜首',
+            recommended: const [
+              RecommendedKeyword(keyword: '一个很长很长很长很长的猜你想搜关键词Magia'),
+            ],
             onSelected: (_) {},
             onClearHistory: () {},
           ),

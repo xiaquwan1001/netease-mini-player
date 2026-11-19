@@ -16,7 +16,7 @@ void main() {
         SearchLanding(
           history: const ['七里香', '稻香'],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
         ),
@@ -40,7 +40,7 @@ void main() {
         SearchLanding(
           history: const ['七里香'],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (k) => chosen = k,
           onClearHistory: () {},
         ),
@@ -62,7 +62,7 @@ void main() {
             body: SearchLanding(
               history: const ['七里香', '一条很长很长的搜索历史关键词用于小屏回归测试'],
               hot: const [],
-              recommended: '周杰伦',
+              recommended: const [RecommendedKeyword(keyword: '周杰伦')],
               onSelected: (_) {},
               onClearHistory: () {},
             ),
@@ -83,7 +83,7 @@ void main() {
         SearchLanding(
           history: const [],
           hot: const [],
-          recommended: null,
+          recommended: const [],
           onSelected: (_) {},
           onClearHistory: () {},
           hotError: '网络不稳定',

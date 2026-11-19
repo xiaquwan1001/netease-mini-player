@@ -359,6 +359,142 @@ void main() {
     expect(find.text('重复日的缓存'), findsOneWidget);
   });
 
+  testWidgets('历史日推: 纯本地日期也能列出当天缓存的单曲并点播(问题⑤)', (tester) async {
+    List<rust.SongDto>? played;
+    int? playedIndex;
+    installPlaybackSpy((songs, index) {
+      played = songs;
+      playedIndex = index;
+    });
+    addTearDown(resetPlaybackSpy);
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          // 未登录/VIP 过期: 在线侧拿不到日期, 只剩本地缓存
+          loadHistoryDates: () async => const [],
+          loadHistorySongs: (date) async => const [],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-21',
+              playlists: const [],
+              songs: [
+                fakeSong(id: 3, name: '缓存的晴天'),
+                fakeSong(id: 4, name: '缓存的七里香'),
+              ],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    // 本地天也要在日期列表里出现(以前只有歌单会)
+    expect(find.text('2024-06-21'), findsOneWidget);
+    await tester.tap(find.text('2024-06-21'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('缓存的推荐单曲(2)'), findsOneWidget);
+    expect(find.text('缓存的晴天'), findsOneWidget);
+    expect(find.text('缓存的七里香'), findsOneWidget);
+
+    // 可点播: 队列就是当天缓存的曲目
+    await tester.tap(find.text('缓存的七里香'));
+    await tester.pumpAndSettle();
+    expect(played?.map((s) => s.id), [BigInt.from(3), BigInt.from(4)]);
+    expect(playedIndex, 1);
+  });
+
+  testWidgets('历史日推: 同一天在线与本地只出一份曲目(问题④)', (tester) async {
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => ['2024-06-20'],
+          loadHistorySongs: (date) async => [fakeSong(id: 7, name: '在线曲目')],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-20',
+              playlists: [playlist(6, '当天的缓存歌单', 3)],
+              songs: [fakeSong(id: 7, name: '缓存曲目')],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+    // 在线 + 本地只合成一行
+    expect(find.text('2024-06-20'), findsOneWidget);
+
+    await tester.tap(find.text('2024-06-20'));
+    await tester.pumpAndSettle();
+    expect(find.text('在线曲目'), findsOneWidget);
+    expect(find.text('缓存曲目'), findsNothing, reason: '同一天不列两份曲目');
+    // 歌单侧只有本地有, 照常展示
+    expect(find.text('当天的缓存歌单'), findsOneWidget);
+  });
+
+  testWidgets('历史日推: 歌单按 id 去重、空天不列、相同清单标出更早那天(问题④)', (tester) async {
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => const [],
+          loadHistorySongs: (date) async => const [],
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-22',
+              playlists: const [],
+              songs: const [],
+            ),
+            DailyCacheDay(
+              date: '2024-06-21',
+              playlists: [playlist(5, '私人雷达', 55), playlist(5, '私人雷达', 55)],
+            ),
+            DailyCacheDay(
+              date: '2024-06-20',
+              playlists: [playlist(5, '私人雷达', 55)],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    // 歌单与单曲都空的天不该凭空出现一行
+    expect(find.text('2024-06-22'), findsNothing);
+    expect(find.text('2024-06-21'), findsOneWidget);
+
+    await tester.tap(find.text('2024-06-21'));
+    await tester.pumpAndSettle();
+    // 同一天清单内部重复 id 只留一条
+    expect(find.text('本地缓存的推荐歌单(1)'), findsOneWidget);
+    expect(find.text('私人雷达'), findsOneWidget);
+    // 与更早那天完全相同: 明说, 免得用户以为本地串了号
+    expect(find.textContaining('推荐歌单与 2024-06-20 相同'), findsOneWidget);
+  });
+
   testWidgets('历史日推: 在线接口失败但本地有缓存时仍列出(不整屏报错)', (tester) async {
     await tester.pumpWidget(
       host(() {

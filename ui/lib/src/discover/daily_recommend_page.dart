@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app_settings.dart' show AppSettings;
+import '../daily_cache.dart' show DailyPlaylistCache;
 import '../rust/api.dart' as rust;
 import 'daily_playlists_tab.dart' show DailyPlaylistsTab;
 import 'daily_songs_tab.dart' show DailySongsTab;
@@ -21,7 +23,7 @@ Future<void> showDiscoverPage(
   LocalDaysLoader? loadLocalDays,
   int initialTab = 0,
 }) {
-  final songs = loadSongs ?? rust.dailyRecommendSongs;
+  final songs = loadSongs ?? dailySongsWithCache;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
   return Navigator.of(context).push<void>(
     MaterialPageRoute<void>(
@@ -39,6 +41,20 @@ Future<void> showDiscoverPage(
     ),
   );
 }
+
+/// 「推荐歌曲」页签的默认加载器: 走到本地日推缓存(歌单 + 单曲同一天一个文件)。
+///
+/// 为什么要自己拼一层: 外壳只把「推荐歌单」的读取接进了缓存
+/// (`AccountActions.dailyPlaylists`), 单曲一直直连 `rust.dailyRecommendSongs`,
+/// 于是历史日推里"某一天"只有歌单没有曲目(问题⑤)。这里用
+/// [DailyPlaylistCache.loadSongsForActive] 复用外壳已经建好的同一分区
+/// (dataDir + 账号键), 不改外壳接线: 打开本页 = 当天(歌单 + 单曲)落一次盘,
+/// 当天再进直接读缓存。没有接线/账号键对不上时它原样透传 fetch, 行为与改造前一致。
+Future<List<rust.SongDto>> dailySongsWithCache() =>
+    DailyPlaylistCache.loadSongsForActive(
+      fetch: rust.dailyRecommendSongs,
+      keepDays: AppSettings.instance.dailyCacheDays,
+    );
 
 /// 每日推荐全页(原 showDiscoverSheet 的弹层内容)。
 class DailyRecommendPage extends StatelessWidget {

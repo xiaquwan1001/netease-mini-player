@@ -37,6 +37,15 @@ void main() {
     return fetched;
   }
 
+  /// 单曲侧的计数器/假数据(问题⑤的缓存口径与歌单同一套纪律)。
+  late int songFetchCount;
+  late List<rust.SongDto> songFetched;
+
+  Future<List<rust.SongDto>> doFetchSongs() async {
+    songFetchCount += 1;
+    return songFetched;
+  }
+
   List<String> cacheFiles() {
     final dir = cache.dir;
     if (!dir.existsSync()) return const [];
@@ -61,6 +70,8 @@ void main() {
     fetchCount = 0;
     fetched = [_playlist(1, '每日推荐')];
     fetchError = null;
+    songFetchCount = 0;
+    songFetched = [fakeSong(id: 7, name: '晴天')];
   });
 
   test('首次 load 走 fetch 并落盘; 第二次 load 读缓存不再 fetch', () async {
@@ -74,13 +85,18 @@ void main() {
     expect(second, first, reason: '读回的歌单字段应与写入时一致');
   });
 
-  test('落盘 JSON 只含渲染字段且不含凭据', () async {
+  test('落盘 JSON 只含渲染字段且不含凭据(v2: 歌单 + 单曲同文件)', () async {
     await cache.load(fetch: doFetch, keepDays: 3, now: now);
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 3, now: now);
     final file = File('${cache.dir.path}/2026-03-10.json');
-    final decoded = jsonDecode(await file.readAsString()) as List<dynamic>;
-    expect(decoded, hasLength(1));
-    final item = decoded.single as Map<String, dynamic>;
-    expect(item.keys.toSet(), {
+    final decoded =
+        jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    expect(decoded['version'], DailyPlaylistCache.formatVersion);
+    // 歌单: 只有渲染字段(与 v1 一致), 没有 device_id / cookie / token
+    final playlists = decoded['playlists'] as List<dynamic>;
+    expect(playlists, hasLength(1));
+    final playlist = playlists.single as Map<String, dynamic>;
+    expect(playlist.keys.toSet(), {
       'id',
       'name',
       'coverUrl',
@@ -88,6 +104,25 @@ void main() {
       'special',
       'subscribed',
     });
+    // 单曲: 只留渲染 + 点播必需字段, 直链/凭据一律不落盘
+    final songs = decoded['songs'] as List<dynamic>;
+    expect(songs, hasLength(1));
+    final song = songs.single as Map<String, dynamic>;
+    expect(song.keys.toSet(), {
+      'id',
+      'name',
+      'artist',
+      'artistId',
+      'album',
+      'albumId',
+      'coverUrl',
+      'durationMs',
+      'fee',
+      'vip',
+      'paid',
+      'playable',
+    });
+    expect(song.values.whereType<String>(), isNot(contains('token')));
   });
 
   test('keepDays=0: 不落盘, 每次都 fetch', () async {
@@ -138,6 +173,222 @@ void main() {
     );
   });
 
+  // -------------------------------------------------------------------------
+  // 问题⑤: 每日推荐**单曲**按天落盘(不再只有歌单)
+  // -------------------------------------------------------------------------
+
+  test('单曲: 首次 loadSongs 走 fetch 并落盘; 同日再读命中缓存', () async {
+    final first = await cache.loadSongs(
+      fetchSongs: doFetchSongs,
+      keepDays: 7,
+      now: now,
+    );
+    expect(songFetchCount, 1);
+    expect(first.map((s) => s.name), ['晴天']);
+    expect(cacheFiles(), ['2026-03-10.json']);
+
+    songFetched = [fakeSong(id: 99, name: '不该被拉到')];
+    final second = await cache.loadSongs(
+      fetchSongs: doFetchSongs,
+      keepDays: 7,
+      now: now,
+    );
+    expect(songFetchCount, 1, reason: '同日第二次必须命中缓存');
+    expect(second.single.name, '晴天');
+    // 写完再读, 渲染 + 点播字段都要原样回来
+    expect(second.single.id, BigInt.from(7));
+    expect(second.single.artist, '艺人');
+    expect(second.single.playable, isTrue);
+  });
+
+  test('歌单与单曲共用一天的同一文件, 互不覆盖', () async {
+    await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    final songs = await cache.loadSongs(
+      fetchSongs: doFetchSongs,
+      keepDays: 7,
+      now: now,
+    );
+    expect(songs, hasLength(1));
+    // 歌单那一节必须还在(没被单曲写入的清空)
+    final afterSongs = await cache.load(
+      fetch: () async => throw StateError('不该再 fetch'),
+      keepDays: 7,
+      now: now,
+    );
+    expect(afterSongs.single.name, '每日推荐');
+
+    // 反方向: 先有单曲, 再写入歌单, 单曲还在
+    clock = DateTime(2026, 3, 11, 8);
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 7, now: now);
+    await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    final readBack = await cache.loadSongs(
+      fetchSongs: () async => throw StateError('不该再 fetch'),
+      keepDays: 7,
+      now: now,
+    );
+    expect(readBack.single.name, '晴天');
+  });
+
+  test('旧格式(v1 裸数组)兼容: 歌单照读, 单曲未知 ⇒ 取一次后原地升 v2, 旧歌单不丢', () async {
+    await cache.dir.create(recursive: true);
+    final file = File('${cache.dir.path}/2026-03-10.json');
+    // v1: 顶层裸数组, 只有歌单, 没有 songs 字段
+    await file.writeAsString(
+      jsonEncode([
+        {
+          'id': 42,
+          'name': '旧格式歌单',
+          'coverUrl': null,
+          'trackCount': 5,
+          'special': false,
+          'subscribed': false,
+        },
+      ]),
+    );
+
+    final playlists = await cache.load(
+      fetch: () async => throw StateError('旧格式的歌单还算数, 不该重新拉'),
+      keepDays: 7,
+      now: now,
+    );
+    expect(playlists.single.name, '旧格式歌单', reason: '旧格式文件不能删, 也不能当成没缓存');
+
+    final days = await cache.days();
+    expect(days.single.songs, isEmpty, reason: 'v1 文件读成"单曲未知"(空表)');
+
+    // 单曲未知 ⇒ 走一次 fetch 并把文件升成 v2
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 7, now: now);
+    expect(songFetchCount, 1);
+    final decoded =
+        jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    expect(decoded['version'], DailyPlaylistCache.formatVersion);
+    expect((decoded['playlists'] as List).single['name'], '旧格式歌单');
+    expect((decoded['songs'] as List).single['name'], '晴天');
+  });
+
+  test('单曲按 id 去重: 写入时与读取时都不重复', () async {
+    songFetched = [
+      fakeSong(id: 7, name: '晴天'),
+      fakeSong(id: 7, name: '晴天(重复条目)'),
+      fakeSong(id: 8, name: '七里香'),
+    ];
+    final songs = await cache.loadSongs(
+      fetchSongs: doFetchSongs,
+      keepDays: 7,
+      now: now,
+    );
+    expect(songs.map((s) => s.id), [BigInt.from(7), BigInt.from(8)]);
+    expect(songs.first.name, '晴天', reason: '保留首次出现的那条');
+  });
+
+  test('歌单按 id 去重: 上游重复返回同一歌单只留一条', () async {
+    fetched = [
+      _playlist(1, '私人雷达'),
+      _playlist(2, '独立乐队'),
+      _playlist(1, '私人雷达(重复)'),
+    ];
+    final playlists = await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    expect(playlists.map((p) => p.name), ['私人雷达', '独立乐队']);
+    final days = await cache.days();
+    expect(days.single.playlists, hasLength(2));
+  });
+
+  test('keepDays 清理对歌单+单曲同时生效(同一个日期文件)', () async {
+    await cache.dir.create(recursive: true);
+    for (final day in ['2026-03-06', '2026-03-07', '2026-03-10']) {
+      final file = File('${cache.dir.path}/$day.json');
+      await file.writeAsString(
+        jsonEncode({
+          'version': DailyPlaylistCache.formatVersion,
+          'playlists': [
+            {
+              'id': 1,
+              'name': '歌单 $day',
+              'coverUrl': null,
+              'trackCount': 1,
+              'special': false,
+              'subscribed': false,
+            },
+          ],
+          'songs': [
+            {
+              'id': 7,
+              'name': '单曲 $day',
+              'artist': '艺人',
+              'artistId': 1,
+              'album': '专辑',
+              'albumId': 1,
+              'coverUrl': null,
+              'durationMs': 1000,
+              'fee': 0,
+              'vip': false,
+              'paid': false,
+              'playable': true,
+            },
+          ],
+        }),
+      );
+    }
+
+    // keepDays=3 ⇒ 保留今天(03-10)及前三天的 03-07, 只删 03-06
+    expect(await cache.cleanup(keepDays: 3, now: now), 1);
+    final left = await cache.days();
+    expect(left.map((d) => d.date), ['2026-03-10', '2026-03-07']);
+    expect(left.first.playlists.single.name, '歌单 2026-03-10');
+    expect(left.first.songs.single.name, '单曲 2026-03-10');
+    expect(left.last.songs.single.name, '单曲 2026-03-07');
+  });
+
+  test('days() 带上当天单曲; 歌单与单曲都空的天不列(不伪造行)', () async {
+    clock = DateTime(2026, 3, 9, 8);
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 7, now: now);
+    clock = DateTime(2026, 3, 10, 9);
+    await cache.dir.create(recursive: true);
+    // 空内容文件: 以前会被当成"有这一天"列出来
+    await File('${cache.dir.path}/2026-03-10.json').writeAsString(
+      jsonEncode({
+        'version': DailyPlaylistCache.formatVersion,
+        'playlists': <Object>[],
+        'songs': <Object>[],
+      }),
+    );
+
+    final days = await cache.days();
+    expect(days.map((d) => d.date), ['2026-03-09']);
+    expect(days.single.songs.single.name, '晴天');
+    expect(days.single.playlists, isEmpty);
+    expect(
+      File('${cache.dir.path}/2026-03-10.json').existsSync(),
+      isTrue,
+      reason: '空内容是合法缓存, 不该被删',
+    );
+  });
+
+  test('keepDays=0 时单曲也不落盘(与歌单同一口径)', () async {
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 0, now: now);
+    await cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 0, now: now);
+    expect(songFetchCount, 2);
+    expect(cache.dir.existsSync(), isFalse);
+  });
+
+  test('单曲 fetch 抛错 ⇒ 原样抛出, 且不破坏当天已落盘的歌单', () async {
+    await cache.load(fetch: doFetch, keepDays: 7, now: now);
+    await expectLater(
+      cache.loadSongs(
+        fetchSongs: () async => throw StateError('网络断了'),
+        keepDays: 7,
+        now: now,
+      ),
+      throwsA(isA<StateError>()),
+    );
+    final playlists = await cache.load(
+      fetch: () async => throw StateError('不该再 fetch'),
+      keepDays: 7,
+      now: now,
+    );
+    expect(playlists.single.name, '每日推荐');
+  });
+
   test('缓存 JSON 损坏 ⇒ 删文件并回落 fetch', () async {
     await cache.load(fetch: doFetch, keepDays: 3, now: now);
     final file = File('${cache.dir.path}/2026-03-10.json');
@@ -147,10 +398,11 @@ void main() {
     final fixed = await cache.load(fetch: doFetch, keepDays: 3, now: now);
     expect(fetchCount, 2, reason: '坏缓存必须回落 fetch');
     expect(fixed.single.name, '重新拉到的推荐');
-    // 坏文件被覆盖成新内容, 不会残留
+    // 坏文件被覆盖成新内容(v2: 歌单 + 单曲同文件), 不会残留
     expect(await file.exists(), isTrue);
-    final decoded = jsonDecode(await file.readAsString()) as List<dynamic>;
-    expect((decoded.single as Map<String, dynamic>)['name'], '重新拉到的推荐');
+    final decoded =
+        jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    expect((decoded['playlists'] as List).single['name'], '重新拉到的推荐');
   });
 
   test('缓存字段缺失/旧格式 ⇒ 删文件并回落 fetch', () async {
@@ -162,8 +414,9 @@ void main() {
     final fixed = await cache.load(fetch: doFetch, keepDays: 3, now: now);
     expect(fetchCount, 1);
     expect(fixed.single.name, '每日推荐');
-    final decoded = jsonDecode(await file.readAsString()) as List<dynamic>;
-    expect((decoded.single as Map<String, dynamic>)['name'], '每日推荐');
+    final decoded =
+        jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    expect((decoded['playlists'] as List).single['name'], '每日推荐');
   });
 
   test('cleanup(3): 删 4 天前(及更早), 保留今天与 3 天内; lastCleanup 可读回', () async {
