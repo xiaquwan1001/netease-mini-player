@@ -50,7 +50,15 @@ impl NeteaseProvider {
     }
 
     /// 听歌排行(需要登录): type=0 全部时间 / type=1 最近一周.
+    ///
     /// 响应形如 {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}
+    /// (2026-11-19 实测: type=0 回 allData 100 条; type=1 只回
+    /// `{"code":200,"weekData":[]}`, 连 allData 都没有 —— 上游当前不给周榜数据,
+    /// 多个公开账号同样为空, 换 weapi/eapi/明文、加减参数都不变).
+    ///
+    /// 因此**当周的非 200/空数据一律当"本周没记录"返回空列表, 不报错**:
+    /// 这是页面上的合法空态, 报错会让 UI 弹整块错误([play_ranking_of](Self::play_ranking_of) 早就这么做了)。
+    /// 总排行(type=0)仍按错误上抛, 真正的失败要能重试。
     pub(super) fn play_ranking(
         &self,
         period: RankingPeriod,
@@ -62,7 +70,12 @@ impl NeteaseProvider {
                 .param("uid", &uid.to_string())
                 .param("type", period.type_param());
             let resp = client.user_record(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
+            if let Err(err) = check_body(&resp.body) {
+                if period == RankingPeriod::Week {
+                    return Ok(Vec::new());
+                }
+                return Err(err);
+            }
             Ok(parse_play_ranking(&resp.body, period))
         })
     }
@@ -960,14 +973,23 @@ pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
 }
 
 /// 听歌排行的响应: {code:200, allData:[{playCount,score,song:{...}}], weekData:[...]}.
-/// 名次按 score(其次 play_count)倒序, 保证 UI 拿到的顺序稳定.
+///
+/// **顺序就是名次**: 接口已经按播放次数从多到少排好, 客户端不再重排。
+/// 2026-11-19 实测(uid=1822714196, type=0):
+/// playCount 283/152/145/142/104..., score 100/53/51/50/36..., 而
+/// score == floor(playCount / max * 100), 即 score 只是**归一化分值**, 不是名次;
+/// 按 score 排与按接口顺序排等价, 但 score 相同的条目(如 87 次与 86 次同为 30)
+/// 用 play_count 二次排序会平白改动官方并列次序。所以这里保留接口顺序。
+///
+/// 容错: 当周(type=1)上游目前回 `{"code":200,"weekData":[]}`(也可能完全没有
+/// 这个键), 一律解析成**空列表**而不是错误; 条目缺 song 的跳过。
 pub fn parse_play_ranking(body: &Value, period: RankingPeriod) -> Vec<PlayRankEntry> {
     let key = match period {
         RankingPeriod::All => "allData",
         RankingPeriod::Week => "weekData",
     };
     let privileges = parse_privileges(body);
-    let mut out: Vec<PlayRankEntry> = body
+    let out: Vec<PlayRankEntry> = body
         .get(key)
         .and_then(Value::as_array)
         .map(|arr| {
@@ -983,11 +1005,6 @@ pub fn parse_play_ranking(body: &Value, period: RankingPeriod) -> Vec<PlayRankEn
                 .collect()
         })
         .unwrap_or_default();
-    out.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
-            .then_with(|| b.play_count.cmp(&a.play_count))
-    });
     out
 }
 

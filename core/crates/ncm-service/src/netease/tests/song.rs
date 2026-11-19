@@ -351,24 +351,54 @@ fn fm_songs_mapping() {
 
 #[test]
 fn play_ranking_mapping() {
+    // 真实响应形状(2026-11-19 实测 uid=1822714196): 接口已按播放次数从多到少
+    // 排好, score 只是 floor(playCount/max*100) 的归一化分值(283→100, 152→53),
+    // 不是名次, 所以客户端不再重排。
     let body = json!({
         "code": 200,
         "allData": [
-            {"playCount": 100, "score": 90, "song": {"id": 1, "name": "A", "ar": [{"id": 7, "name": "x"}], "dt": 1000}},
-            {"playCount": 200, "score": 95, "song": {"id": 2, "name": "B", "ar": [{"name": "y"}], "dt": 2000}}
-        ],
-        "weekData": [
-            {"playCount": 5, "score": 5, "song": {"id": 3, "name": "C", "ar": [], "dt": 3000}}
+            {"playCount": 283, "score": 100, "song": {"id": 1, "name": "A", "ar": [{"id": 7, "name": "x"}], "dt": 1000}},
+            {"playCount": 152, "score": 53, "song": {"id": 2, "name": "B", "ar": [{"name": "y"}], "dt": 2000}},
+            {"playCount": 145, "score": 51, "song": {"id": 3, "name": "C", "ar": [], "dt": 3000}}
         ]
     });
     let all = parse_play_ranking(&body, RankingPeriod::All);
-    assert_eq!(all.len(), 2);
-    // 按 score 倒序: B(95) 在 A(90) 前
-    assert_eq!(all[0].song.name, "B");
-    assert_eq!(all[0].play_count, 200);
-    let week = parse_play_ranking(&body, RankingPeriod::Week);
-    assert_eq!(week.len(), 1);
-    assert_eq!(week[0].song.name, "C");
+    assert_eq!(all.len(), 3);
+    // 顺序 = 接口顺序(1,2,3), 不按 score 重排
+    let ids: Vec<u64> = all.iter().map(|e| e.song.id.0).collect();
+    assert_eq!(ids, vec![1, 2, 3]);
+    assert_eq!(all[0].play_count, 283);
+    assert_eq!(all[0].score, 100);
+    assert_eq!(all[1].play_count, 152);
+    assert_eq!(all[1].score, 53);
+}
+
+#[test]
+fn play_ranking_week_shapes() {
+    // 上游当周只回 code + 空 weekData(2026-11-19 实测: type=1 对多个账号都是
+    // {"code":200,"weekData":[]}, 且不返回 allData) ⇒ 解析成空列表, 不是错误
+    let empty = json!({"code": 200, "weekData": []});
+    assert!(parse_play_ranking(&empty, RankingPeriod::Week).is_empty());
+
+    // 缺 weekData 键(异常/降级形状)时也回空, 且**不能**串到 allData 去
+    let missing = json!({
+        "code": 200,
+        "allData": [{"playCount": 9, "score": 100, "song": {"id": 9, "name": "x", "ar": [], "dt": 1}}]
+    });
+    assert!(parse_play_ranking(&missing, RankingPeriod::Week).is_empty());
+
+    // 空 body(无 code)同样只是空
+    assert!(parse_play_ranking(&json!({}), RankingPeriod::Week).is_empty());
+
+    // 有当周数据时: playCount 是**本周**次数, 原样透传
+    let week = json!({"code": 200, "weekData": [
+        {"playCount": 7, "score": 100, "song": {"id": 3, "name": "C", "ar": [], "dt": 3000}},
+        {"playCount": 5, "score": 71, "song": {"id": 4, "name": "D", "ar": [], "dt": 4000}}
+    ]});
+    let list = parse_play_ranking(&week, RankingPeriod::Week);
+    assert_eq!(list.len(), 2);
+    assert_eq!(list[0].play_count, 7);
+    assert_eq!(list[1].song.name, "D");
 }
 
 #[test]

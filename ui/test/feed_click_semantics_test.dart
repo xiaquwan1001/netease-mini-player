@@ -96,6 +96,12 @@ void main() {
             ev(2, userId: 20, name: '乙艺人'),
           ],
           loadSubscribedArtists: () async => const [],
+          // 选中艺人后数据源切到 ta 自己的动态流(不再是本页客户端过滤)
+          loadArtistEvents: ({
+            required BigInt uid,
+            required int limit,
+            required int lastTime,
+          }) async => [ev(1, userId: 10, name: '甲艺人')],
         ),
         observers: [counter],
       ),
