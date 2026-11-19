@@ -19,6 +19,7 @@
 #   tools/ci-gates.sh tokens               # tools/check-tokens.sh --strict
 #   tools/ci-gates.sh row-padding          # tools/check-row-padding.sh --strict(行留白只许用具名口径)
 #   tools/ci-gates.sh sheet-entry          # tools/check-sheet-entry.sh(浮层只许经 app_sheet.dart 入口)
+#   tools/ci-gates.sh docs                 # tools/check-docs.sh(相对链接死链 + docs 根索引覆盖)
 #   tools/ci-gates.sh flutter-test         # flutter test --exclude-tags network(**含 golden**)
 #   tools/ci-gates.sh android-unit         # :app:testDebugUnitTest(Android JVM 单测, 不用设备/NDK)
 #   tools/ci-gates.sh android-instrumented # 设备级 androidTest(需在线**模拟器**; 没设备就 SKIP 退 0)
@@ -27,8 +28,8 @@
 #                                          # 含**交互级断言**(X11 注入焦点/按键/点击/改尺寸后断言存活+窗口属性不变,
 #                                          # 见 tools/smoke-desktop-headless 头注释), 本机约 **60s**
 #                                          # (vs 只有启动/单实例/信号时的 45s; 交互段 +15s)
-#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + row-padding + flutter-test
-#                                          # + android-unit + android-lint);
+#   tools/ci-gates.sh verify               # 全部离线门(rust-lint/rust-test + dart 四道 + 五道 checker
+#                                          # + flutter-test + android-unit + android-lint);
 #                                          # 带 NCM_INSTRUMENTED=1 时额外跑 android-instrumented(有模拟器才真跑)
 #
 # 口径约定(改之前先读 .pi/memory/notes-build.md):
@@ -126,6 +127,13 @@ cmd_sheet_entry() {
   bash "$ROOT/tools/check-sheet-entry.sh"
 }
 
+# 文档门: docs/**/*.md + 根 README.md 的相对链接死链, 以及 docs/ 根文件的索引覆盖
+# (docs/archive/** 只查链接不查索引)。存量豁免只走 tools/docs-gate-allowlist.txt(理由必填)。
+cmd_docs() {
+  echo "+ bash tools/check-docs.sh"
+  bash "$ROOT/tools/check-docs.sh"
+}
+
 cmd_row_padding() {
   echo "+ bash tools/check-row-padding.sh --strict"
   bash "$ROOT/tools/check-row-padding.sh" --strict
@@ -220,6 +228,7 @@ cmd_verify() {
   cmd_tokens
   cmd_row_padding
   cmd_sheet_entry
+  cmd_docs
   cmd_flutter_test
   cmd_android_unit
   cmd_android_lint
@@ -248,6 +257,7 @@ case "$sub" in
   tokens)        cmd_tokens ;;
   row-padding)   cmd_row_padding ;;
   sheet-entry)   cmd_sheet_entry ;;
+  docs|doc)      cmd_docs ;;
   flutter-test)  cmd_flutter_test "$@" ;;
   android-unit)  cmd_android_unit ;;
   android-instrumented) cmd_android_instrumented "$@" ;;
