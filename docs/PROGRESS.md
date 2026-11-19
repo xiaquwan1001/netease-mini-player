@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-19**。已发布版本 **v0.27.0**(**横屏双列 S4 主从分栏**; v0.26.4 音源插件宿主切片 1; v0.26.3 云盘上传 400 修复; v0.26.2 修 `smoke-appimage` 相对路径假 FAIL; v0.26.1 播放条取链提示渲染级回归; v0.26.0 音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道),
+> 最近更新: **2026-11-19**。已发布版本 **v0.27.1**(**U-08 真壳首帧修复**; v0.27.0 横屏双列 S4 主从分栏; v0.26.4 音源插件宿主切片 1; v0.26.3 云盘上传 400 修复; v0.26.2 修 `smoke-appimage` 相对路径假 FAIL; v0.26.1 播放条取链提示渲染级回归; v0.26.0 音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道),
 > 见批次时间线最上面那条; 速览在下一节, 批次记录从「批次时间线」起倒序。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能, 余项均需人眼/真机) / **§12**(结构性债务, 主体已清) / **§13**(平台层审计剩余, 余项需真人);
 > 2026-11-18 起的批次拆解与三条只读审计车道(文档/死代码/UI 浮层·返回栈·生命周期)见 `docs/archive/plans-2026-11/2026-11-18-next-batch.md`;文档总索引: [`docs/README.md`](README.md);
@@ -63,6 +63,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 | 版本 | 日期 | 里程碑 |
 |---|---|---|
+| **v0.27.1** | **2026-11-19** | **U-08 收口**: 真壳首帧不再 `setState() called during build` —— `HomeWiring` 的两个 `ValueNotifier` 槽位(动作宿主/播放条回调)**一律帧后投递**(壳层 `ContentWidthLimit` 是 LayoutBuilder, 页面建树落在 layout 阶段), `_clearSlots` 对称帧后再清; 回归 `test/app_shell_first_frame_test.dart` 2 例(宽/窄两档真壳)。Dart **1320→1322**, Rust 368 不变。Release 9 产物全绿 |
 | **v0.27.0** | **2026-11-19** | **横屏双列 S4(方案 B 主从分栏)**: `detailPaneSlot` + `openDetail` 统一入口(**右栏不是路由**, 故 `pageDepth`/`modalRouteOpen`/`dismissAllPopups` 登记面零改动, 不加嵌套 Navigator); 歌单详情 `embedded` 形态; 返回键新层级 `closeDetailPane`(宽档只清右栏 / 窄档 pop, 两语义各有用例); 选中态用外框而非第二套行高亮; 840 内切 左 408 / 间 12 / 右 420。Dart **1299→1320**(+21 例), golden **20→21**(`master_detail_1280x720`, 既有 20 张零重出) |
 | **v0.26.4** | **2026-11-19** | **音源插件宿主切片 1(不接产品)**: 新 crate `ncm-plugin` —— rquickjs 0.12.2 宿主 + lx 兼容层(`lx.on/request/log/storage/utils`)+ 沙箱预算(8s interrupt / 32MB / 512KB 栈 / 8 请求)+ 逃逸面断言 + `ScriptProvider` 实现既有 `Provider`(未注册路由, 不进 `ncm_ffi`/APK)。红→绿实证(死循环与内存炸弹先红后绿)。Rust **347→368** |
 | **v0.26.3** | **2026-11-19** | **云盘上传 400 修复**(用户报「安卓端上传任意音频都是上传识别失败, internal code 400, songid=0」): 根因 `/api/nos/token/alloc` 的 `resourceId` 是**数字**(如 84382086772), 旧代码用 `str_of` 只认字符串 ⇒ 传给 info/v2 的 resourceId 是空串 ⇒ 服务端回 `{"code":400,"songId":"0"}`; 顺带修 check 的 `songId`(128 位十六进制串)被 `u64_of` 解析成 0。真实账号 headless CLI 复现 → 修复 → 实测上传成功 → 删除测试歌曲; 新增 `str_or_num_of` + 2 例回归测试(真实响应形状)。Rust **345→347** |
@@ -143,7 +144,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 ## 批次时间线(倒序, 最新在上)
 
-## 2026-11-19(十八) U-08 收口: 真壳首帧不再「setState() called during build」 · **未发版**
+## 2026-11-19(十八) U-08 收口: 真壳首帧不再「setState() called during build」 · **v0.27.1**
 
 > U-08 是 2026-11-18 UI 浮层审计的**最后一条**待办(§14 表内 P2): 壳层的 `ContentWidthLimit` 是
 > `LayoutBuilder`, 所以 Navigator(`MaterialApp.home` = `HomePage`)的**首次建树发生在 layout 阶段**;
