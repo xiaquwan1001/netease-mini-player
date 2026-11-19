@@ -72,6 +72,9 @@ jobs:
       # 浮层入口门(U-03): 与 ci.yml 同口径(不许直连 showModalBottomSheet / showDialog)
       - name: 浮层入口门 (sheet/dialog 只许经 app_sheet.dart)
         run: bash tools/ci-gates.sh sheet-entry
+      # 文档门(2026-11-19): 与 ci.yml / verify 同口径(链接死链 0 + docs 根索引覆盖)
+      - name: 文档门 (相对链接死链 + docs 根索引)
+        run: bash tools/ci-gates.sh docs
       # 唯一测试入口: 只排 network, **含 golden**(与 ci.yml / tools/ci.sh 同口径)
       - name: widget/unit tests + golden (offline)
         run: bash tools/ci-gates.sh flutter-test

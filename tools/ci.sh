@@ -44,6 +44,9 @@ echo "== design token 门 (间距/圆角/字号只允许有限集合)"
 # 2026-11-13 基线已清零(20 处全部收敛或按 `// token-ok: 理由` 显式例外), 现在阻塞。
 bash tools/ci-gates.sh tokens
 
+echo "== 文档门 (相对链接死链 + docs 根索引)"
+bash tools/ci-gates.sh docs
+
 echo "== dart 格式 + analyze"
 bash tools/ci-gates.sh dart-format
 bash tools/ci-gates.sh dart-analyze

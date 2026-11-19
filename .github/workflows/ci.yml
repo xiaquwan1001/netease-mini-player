@@ -63,6 +63,10 @@ jobs:
       # 只许走 ui/lib/src/app_sheet.dart 的 showAppSheet / showAppDialog。
       - name: 浮层入口门 (sheet/dialog 只许经 app_sheet.dart)
         run: bash tools/ci-gates.sh sheet-entry
+      # 文档门(2026-11-19): 链接死链 + docs/ 根索引覆盖。纯 python3(标准库), 不依赖 Flutter,
+      # 放进本 job 只是为了"CI 门清单与 verify 一致", 跑起来 <1s。
+      - name: 文档门 (相对链接死链 + docs 根索引)
+        run: bash tools/ci-gates.sh docs
       # 唯一的全量测试入口: 含 golden(18 张整屏像素)。只排除 network —— CI 没有
       # 出口网络与凭据。golden 的渲染环境靠上一步的 fonts-noto-cjk + 固定的
       # Flutter 3.47.9 对齐本地。口径与 release.yml / tools/ci.sh 完全一致(P-13)。
