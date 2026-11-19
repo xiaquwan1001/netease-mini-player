@@ -30,7 +30,9 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 剩下的缺口集中在三块 —— ①"内容发现"类(排行榜/歌单广场/新歌新碟/相似推荐)、
 ②"社区互动"类(评论点赞/私信通知/转发)、③"账号周边"类(收藏专辑/关注粉丝/歌单编辑/签到)。
 ④ MV/视频(评论已接)、一起听、创作者中心这类需要额外能力(视频解码、长连接、权限)的, 建议先不做;
-云盘已在 2026-11-14 接入(列表/删除/取链/上传, 上传走单请求 `complete=true`, 分片未做)。
+云盘已在 2026-11-14 接入(列表/删除/取链/上传, 上传走单请求 `complete=true`);
+大文件分片 2026-11-19 只落地了规划/引擎/接缝(`ncm-service/src/cloud_chunk.rs`: 分片规划 + 顺序上传 + 每片重试恰一次 + 可恢复点 + 进度, 20 例单测),
+**端点仍未接线** —— 音乐云盘桶的分片 HTTP 形状没有可信证据(本地只有 voice 桶的 S3 式流程), 判据见该模块 TODO。
 
 ## 2. 已接入(45 个 endpoint → 22 项 UI 能力)
 
@@ -78,7 +80,7 @@ bash tools/api-coverage.sh --list   # 附带已接入/未接入全名单
 | 通道自检 | (FFI `ping`) | 设置页「诊断 → Rust 通道自检」: 点击显示耗时与返回值, 失败给 `friendlyError` 并允许重试(防重入) |
 | 评论统计 | `comment_info_list` | 评论区标题下统计条「评论 N · 分享 N · 点赞 N」(空/失败不显示); 歌曲/歌单/专辑/播客/视频共用, **动态评论接口不认**, 且**没有收藏数/热评数**(官方文档有但不回) |
 | 评论热门/IP 归属 | `comment_hot` | 评论区"全部/热门"页签(热门单独翻页, 计数 9405 而非 31 万); 普通评论显示 IP 归属地, 精彩评论带"热门"角标; 顺手修掉"全部"页 offset 把热评算进去导致的重复拉取 |
-| 音乐云盘 | `user_cloud` `user_cloud_del` `cloud_upload_check` `cloud_nos_token` `cloud_upload_info` `cloud_pub` `cloud_music_status` `song_cloud_download` | 「我的」→音乐云盘: 列表(容量/大小)、播放、删除、下拉/翻页; 右上角上传(选文件 → md5 查重/秒传 → NOS 上传 → 转码轮询 → 发布)。**分片上传未做**, 单请求路径与上游前端一致 |
+| 音乐云盘 | `user_cloud` `user_cloud_del` `cloud_upload_check` `cloud_nos_token` `cloud_upload_info` `cloud_pub` `cloud_music_status` `song_cloud_download` | 「我的」→音乐云盘: 列表(容量/大小)、播放、删除、下拉/翻页; 右上角上传(选文件 → md5 查重/秒传 → NOS 上传 → 转码轮询 → 发布)。**分片上传未接线**(规划/引擎/接缝已在 `cloud_chunk.rs`, 缺可验证的分片端点证据) |
 | 编辑资料 | `user_profile_update` | 「我的」→简介区块「编辑简介」: 保存签名(局部更新, 132 字符上限), 保存后回读资料; 头像上传(`avatar_upload`)未做 |
 | 消息增强 | `msg_forwards` `msg_recentcontact` | 消息中心第四页签"@我"(空账号, 防御式解析) + 私信页顶部"最近联系人"横滑条(data.follow, 服务端顺序) + 私信会话/聊天记录分页(触底预取/按钮, 返回 < limit 到底, 聊天用最早一条 time_ms 当游标) |
 

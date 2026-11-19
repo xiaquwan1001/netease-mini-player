@@ -1,6 +1,11 @@
 //! 音乐云盘: 列表 / 删除 / 下载直链 / 上传(NOS 单请求 complete=true).
+//!
+//! 大文件分片: **分片规划与引擎已在 `crate::cloud_chunk`**(规划/进度/重试/可恢复点 + 单测),
+//! 但音乐云盘桶的分片端点**没有可信证据**(只有 voice 桶的 S3 式流程, 参数不可照搬) ⇒
+//! 这里仍只走单请求整文件; 接缝与「缺什么证据、怎么验」写在 `cloud_chunk` 的模块注释里.
 
 use super::*;
+use crate::cloud_chunk::{self, UploadPlan};
 use md5::Digest as _;
 
 impl NeteaseProvider {
@@ -165,8 +170,9 @@ impl NeteaseProvider {
     /// ④ `/api/upload/cloud/info/v2` 提交元信息(转码中会重试几次)
     /// ⑤ `/api/v1/cloud/music/status` 轮询转码(status=9 就绪) → `/api/cloud/pub/v2` 发布
     ///
-    /// 大文件一次读进内存(云盘单曲常见 5-60MB); 分片上传未做 —— 单次 complete=true
-    /// 是上游前端同款路径, 超过服务端单请求上限时才需要 offset 分片。
+    /// 大文件一次读进内存(云盘单曲常见 5-60MB); 单次 complete=true 是上游前端同款路径
+    /// (`plugins/songUpload.js`), 超过服务端单请求上限时才需要分片 —— 服务端上限尚未实测,
+    /// 见 `CLOUD_SINGLE_SHOT_CEILING` 与 `crate::cloud_chunk` 的模块 TODO.
     pub(super) fn cloud_upload(
         &self,
         file_path: String,
@@ -176,6 +182,17 @@ impl NeteaseProvider {
             let (client, domain, ua, cookie) = self.snapshot();
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("上传云盘需要登录"));
+            }
+            // 先按文件大小选策略: 分片分支今天一定选不中(上限未实测 ⇒ 恒为 None),
+            // 接缝留在这里是为了「证据到手后只改常量 + 加一个 ChunkUploader 实现」.
+            let file_size = tokio::fs::metadata(&path)
+                .await
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if let UploadPlan::Chunked(_) = cloud_upload_plan(file_size)? {
+                return Err(ProviderError::unsupported(
+                    "大文件分片上传尚未接线: 音乐云盘分片端点缺少可信证据(见 ncm_service::cloud_chunk 模块 TODO)",
+                ));
             }
             let bytes = tokio::fs::read(&path)
                 .await
@@ -216,7 +233,9 @@ impl NeteaseProvider {
                 .get("needUpload")
                 .and_then(Value::as_bool)
                 .unwrap_or(true);
-            let cloud_song_id = u64_of(&check.body, "songId").unwrap_or(0);
+            // check 的 songId 是 **128 位十六进制串**(不是数字); 上游把它原样回填给 info/v2。
+            // 2026-11-19 前这里用 u64_of 解析 ⇒ 永远变 0, 见 upload_ids_from 的注释。
+            let cloud_song_id = str_or_num_of(&check.body, "songId").unwrap_or_else(|| "0".into());
 
             // ② 申请 NOS token
             let safe_stem: String = stem
@@ -243,8 +262,10 @@ impl NeteaseProvider {
                 .and_then(|r| str_of(r, "objectKey"))
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| ProviderError::internal("nos token: 响应缺 objectKey"))?;
+            // resourceId 是**数字**(如 84382086772), 只按字符串解析会拿到空串 ⇒
+            // info/v2 缺 resourceId ⇒ `{"code":400,"songId":"0"}`(2026-11-19 实测复现)。
             let resource_id = result
-                .and_then(|r| str_of(r, "resourceId"))
+                .and_then(|r| str_or_num_of(r, "resourceId"))
                 .unwrap_or_default();
 
             // ③ 上传文件字节(秒传跳过)
@@ -258,7 +279,7 @@ impl NeteaseProvider {
             for attempt in 0..5 {
                 let q = make_query(&cookie, &domain, &ua)
                     .param("md5", &md5_hex)
-                    .param("songid", &cloud_song_id.to_string())
+                    .param("songid", &cloud_song_id)
                     .param("filename", &file_name)
                     .param("song", &stem)
                     .param("resourceId", &resource_id);
@@ -323,26 +344,38 @@ impl NeteaseProvider {
     }
 }
 
-/// 把整份文件 POST 到 NOS 上传节点(秒传判定为 false 时才会调用).
+/// 音乐云盘桶名(上游 `module/cloud_upload_token.js` 写死的那一个).
+pub(super) const CLOUD_BUCKET: &str = "jd-musicrep-privatecloud-audio-public";
+
+/// 单请求 `complete=true` 路径能承载的文件上限.
 ///
-/// 与上游前端同款: `http://<lbs-node>/<bucket>/<objectKey>?offset=0&complete=true&version=1.0`,
-/// 头 `X-Nos-Token` + `Content-MD5`(hex) + 音频 Content-Type; 响应非 2xx 视为失败。
-async fn upload_nos_bytes(
-    ua: &str,
-    token: &str,
-    md5_hex: &str,
-    object_key: &str,
-    bytes: Vec<u8>,
-    ext: &str,
-) -> ProviderResult<()> {
-    const BUCKET: &str = "jd-musicrep-privatecloud-audio-public";
-    let http = reqwest::Client::builder()
+/// **实测值未知**(见 `crate::cloud_chunk` 模块 TODO 第 4 条) ⇒ `None`: 不设门槛, 一律走单请求.
+/// 拿到实测数字后只改这一行, `UploadPlan::Chunked` 分支才开始可能被选中 —— 那之前
+/// `cloud_upload` 遇到 `Chunked` 会返回明确的 `Unsupported`, 不会静默走错路径.
+pub(super) const CLOUD_SINGLE_SHOT_CEILING: Option<u64> = None;
+
+/// 选上传策略(薄包装: 让「今天恒为单请求」这件事在单测里可断言).
+pub(super) fn cloud_upload_plan(file_size: u64) -> ProviderResult<UploadPlan> {
+    cloud_chunk::plan_cloud_upload(
+        file_size,
+        CLOUD_SINGLE_SHOT_CEILING,
+        cloud_chunk::DEFAULT_CHUNK_SIZE,
+    )
+}
+
+/// 创建 NOS 上传用的客户端(整文件请求可能跑几分钟).
+pub(super) fn build_upload_client() -> ProviderResult<reqwest::Client> {
+    reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(180))
         .build()
-        .map_err(|e| ProviderError::internal(format!("创建上传客户端失败: {e}")))?;
+        .map_err(|e| ProviderError::internal(format!("创建上传客户端失败: {e}")))
+}
+
+/// 取 NOS 上传节点(上游 `plugins/songUpload.js` 同款 `wanproxy.127.net/lbs`).
+async fn resolve_lbs_upload_host(http: &reqwest::Client, ua: &str) -> ProviderResult<String> {
     let lbs = http
         .get(format!(
-            "https://wanproxy.127.net/lbs?version=1.0&bucketname={BUCKET}"
+            "https://wanproxy.127.net/lbs?version=1.0&bucketname={CLOUD_BUCKET}"
         ))
         .header("Referer", "https://music.163.com")
         .header("User-Agent", ua)
@@ -353,22 +386,34 @@ async fn upload_nos_bytes(
         .json()
         .await
         .map_err(|e| ProviderError::internal(format!("上传节点响应无法解析: {e}")))?;
-    let host = lbs
-        .get("upload")
+    lbs.get("upload")
         .and_then(Value::as_array)
         .and_then(|a| a.first())
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| ProviderError::network("上传节点列表为空"))?;
+        .map(|s| s.to_string())
+        .ok_or_else(|| ProviderError::network("上传节点列表为空"))
+}
+
+/// 把整份文件 POST 到一个已知的 NOS 上传节点(秒传判定为 false 时才会调用).
+///
+/// 与上游前端同款: `<lbs-node>/<bucket>/<objectKey>?offset=0&complete=true&version=1.0`,
+/// 头 `X-Nos-Token` + `Content-MD5`(hex) + 音频 Content-Type; 响应非 2xx 视为失败。
+///
+/// 与 [`resolve_lbs_upload_host`] 拆开是**为了可测**: 本地假 HTTP 服务能直接吃这条请求
+/// (不经 LBS 域名), 从而在不触网的前提下断言 URL 参数/请求头/body 与失败映射.
+pub(super) async fn upload_nos_whole_file(
+    http: &reqwest::Client,
+    lbs_host: &str,
+    token: &str,
+    md5_hex: &str,
+    object_key: &str,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> ProviderResult<()> {
     let encoded = object_key.replace('/', "%2F");
-    let url = format!("{host}/{BUCKET}/{encoded}?offset=0&complete=true&version=1.0");
-    let content_type = match ext {
-        "flac" => "audio/flac",
-        "m4a" | "aac" => "audio/mp4",
-        "wav" => "audio/wav",
-        "ogg" => "audio/ogg",
-        _ => "audio/mpeg",
-    };
+    let url = format!("{lbs_host}/{CLOUD_BUCKET}/{encoded}?offset=0&complete=true&version=1.0");
+    let content_type = nos_content_type(ext);
     let resp = http
         .post(&url)
         .header("X-Nos-Token", token)
@@ -387,6 +432,31 @@ async fn upload_nos_bytes(
         )));
     }
     Ok(())
+}
+
+/// 上传后整条链路: 取 LBS 节点 → 整文件 POST.
+async fn upload_nos_bytes(
+    ua: &str,
+    token: &str,
+    md5_hex: &str,
+    object_key: &str,
+    bytes: Vec<u8>,
+    ext: &str,
+) -> ProviderResult<()> {
+    let http = build_upload_client()?;
+    let host = resolve_lbs_upload_host(&http, ua).await?;
+    upload_nos_whole_file(&http, &host, token, md5_hex, object_key, bytes, ext).await
+}
+
+/// 音频扩展名 → 上传 Content-Type(上游不少文件是 mp3/flac, 其余按容器近似).
+pub(super) fn nos_content_type(ext: &str) -> &'static str {
+    match ext {
+        "flac" => "audio/flac",
+        "m4a" | "aac" => "audio/mp4",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        _ => "audio/mpeg",
+    }
 }
 
 /// 错误详情里别塞整段响应体: 只保留前 200 字符, 便于日志/提示。

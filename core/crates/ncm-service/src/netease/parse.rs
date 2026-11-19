@@ -13,6 +13,19 @@ pub(super) fn str_of(v: &Value, key: &str) -> Option<String> {
     v.get(key).and_then(Value::as_str).map(str::to_string)
 }
 
+/// 同一个字段既可能是字符串也可能是数字时用它(服务端两种都给过).
+///
+/// 云盘上传踩过: `/api/nos/token/alloc` 的 `resourceId` 是**数字**, 用 [`str_of`] 只剩空串,
+/// 于是 info/v2 缺 resourceId 直接回 `{"code":400,"songId":"0"}`(2026-11-19 实测复现)。
+/// 数字按十进制原样转字符串(不丢精度), 字符串原样返回(十六进制 songId 不能被当数字解析)。
+pub(super) fn str_or_num_of(v: &Value, key: &str) -> Option<String> {
+    v.get(key).and_then(|x| {
+        x.as_str()
+            .map(str::to_string)
+            .or_else(|| x.as_u64().map(|n| n.to_string()))
+    })
+}
+
 pub(super) fn u32_of(v: &Value, key: &str) -> Option<u32> {
     u64_of(v, key).and_then(|n| u32::try_from(n).ok())
 }

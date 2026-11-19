@@ -347,9 +347,12 @@ class MiniNcmApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) {
+    // 只订阅**外观**域: 主题色/OLED/字号是这里唯一吃的东西。
+    // 旧写法(AnimatedBuilder on AppSettings.instance)订阅全体通知, 音量滑块每拖一格
+    // 都会把整个 MaterialApp 连同整棵树重建一遍(§12.6 第二步的痛点)。
+    return AppSettingsScopedBuilder(
+      domains: const {AppSettingsDomain.appearance},
+      builder: (context) {
         final settings = AppSettings.instance;
         return MaterialApp(
           title: '轻音 MiniNCM',
