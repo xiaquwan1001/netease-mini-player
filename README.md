@@ -190,7 +190,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |
 | `tools/check-tokens.sh --strict` | OK(间距/圆角/字号只允许 `layout.dart` 的有限集合) |
 | 接口覆盖 | **135/136**(FFI 导出 161, 6 个无 UI 入口; 唯一未接入 `vip_sign_info` 为有意弃用); `bash tools/api-coverage.sh` 可复算 |
-| 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing-dual-platform.md` |
+| 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing.md` |
 
 上表这些命令**只在 `tools/ci-gates.sh` 里实现一次**(`bash tools/ci-gates.sh list` 看全部子命令):
 本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
@@ -218,7 +218,7 @@ cargo run -p ncm-cli -- lyric 186016
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | 进度记录(版本时间线 + 按日期批次, 只保留 v0.20.0 起; v1 / 2026-11-03~11-12 / v0.8.0~v0.19.0 批次在 `docs/archive/`) |
 | [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | 架构选型、决策记录、插件边界(已归档) |
 | [`docs/archive/`](docs/archive/README.md) | 已完工车道的执行记录(索引见该目录 README) |
-| [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |
+| [`docs/testing.md`](docs/testing.md) | 多端测试指南: 上篇日常自测流程(Android/Linux/Windows, 语义驱动)+ 踩坑速查, 下篇桌面发版前 31 条冒烟清单 |
 | [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | 接口通道(interface / interface3)实测(已归档) |
 | [`docs/remaining-batches.md`](docs/remaining-batches.md) | **待办与分批规划(最新在 §11)** |
 | [`docs/api-notes-snapshot-20261119.md`](docs/api-notes-snapshot-20261119.md) | 批次接口实测笔记合并快照(B4 搜索 / B5·B13 逐字歌词 / B7 歌单写 / B10 电台 / B12 数字专辑 / C1 歌手页 / C2 歌词来源 / C3 MV / Wave9), 只读参考 |

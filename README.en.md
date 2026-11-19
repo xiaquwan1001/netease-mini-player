@@ -153,7 +153,7 @@ cargo run -p ncm-cli -- lyric 186016
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
 | `tools/check-tokens.sh --strict` | OK (spacing / radii / font sizes limited to `layout.dart`'s token set) |
 | API coverage | **135/136** (161 FFI exports, 6 without a UI entry point; the one unused endpoint `vip_sign_info` is intentionally dropped); recompute with `bash tools/api-coverage.sh` |
-| Device run-through | emulator **a34** (API 34) + real-device (vivo X200 Ultra) release smoke & listening checks — see `docs/testing-dual-platform.md` |
+| Device run-through | emulator **a34** (API 34) + real-device (vivo X200 Ultra) release smoke & listening checks — see `docs/testing.md` |
 
 ## Roadmap (current version v0.18.0)
 
@@ -177,7 +177,7 @@ See `docs/PROGRESS.md` (Chinese) for the per-batch evidence.
 | [`docs/PROGRESS.md`](docs/PROGRESS.md) | progress log: version timeline + per-batch evidence (Chinese) |
 | [`docs/archive/architecture-restart.md`](docs/archive/architecture-restart.md) | architecture decisions, plugin boundaries (archived) |
 | [`docs/archive/ui-song-detail-share.md`](docs/archive/ui-song-detail-share.md) | player bar merge / song detail / share card & channel contract |
-| [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | dual-platform testing, semantics-driven automation, gotchas |
+| [`docs/testing.md`](docs/testing.md) | multi-platform testing: daily self-test flow (semantics-driven) + gotchas; desktop pre-release 31-item smoke checklist |
 | [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | API channel (interface / interface3) measurements (archived) |
 | [`docs/remaining-batches.md`](docs/remaining-batches.md) | backlog & batching plan (latest in §11) |
 | [`packaging/`](packaging/) | deb / AppImage / Windows installer scripts |

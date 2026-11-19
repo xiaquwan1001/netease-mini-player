@@ -231,7 +231,7 @@ do_report() {
   do_run 2>&1 || true
   echo "\`\`\`"
   echo
-  echo "人工段见 docs/smoke-desktop.md(31 条清单), 逐条 ✅/❌/N/A 后贴回。"
+  echo "人工段见 docs/testing.md「下篇: 桌面端发布前冒烟清单」(31 条), 逐条 ✅/❌/N/A 后贴回。"
 }
 
 parse_args "$@"

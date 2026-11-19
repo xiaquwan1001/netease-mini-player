@@ -45,6 +45,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
 | `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(25 处行留白 / **3 个**具名口径 + 纵向只允许 0/6; 具名工厂 `SongRow.xxx(` 也计入 —— 数量比 C 步前少 2 处是因为同构参数收进了工厂, 见 2026-11-17 两个小节) |
+| `tools/check-docs.sh`(`ci-gates.sh docs`, 2026-11-19 新门, 已进 `verify`) | **PASS**: 相对链接死链 **0** · `docs/` 根未进索引 **0** · 白名单命中 **0/0**。扫描范围 = `docs/**/*.md` + 仓库根所有 `*.md`(锚点丢弃, 只校验文件部分); `docs/archive/**` 只查链接不强制进索引 |
 | 接口覆盖 | **135/136**(唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节)。FFI 导出 **158** 里 **6 个**无 UI 入口, 全是有意保留或待决策: **保留 4**(cache_stats / cloud_song_url / eq_profile_normalize / player_tuning) · **待产品决策 2**(consent_plaintext_storage / user_play_ranking)。2026-11-18 修了脚本的入口判定(类型名与构造调用曾把导出顶替成"有入口"), 并把 3 条真死出口删掉(161→158 / 9→6); 明细见 `docs/api-coverage.md` 文首与 `docs/archive/plans-2026-11/deadcode-audit-2026-11-18.md` |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
@@ -129,6 +130,16 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-19(十六) 文档门落地 + 两条文档债收口 · **未发版**
+
+| 项 | 内容 |
+|---|---|
+| **新增文档门 `tools/check-docs.sh`** | ① 扫 `docs/**/*.md` + 仓库根目录**所有** `*.md`(README / README.en / CONTRIBUTING / AGENTS / THIRD_PARTY_NOTICES)的**相对** markdown 链接, 目标文件部分必须存在(锚点 `#fragment` 丢弃后再判; 外链/站内绝对路径不校验); ② `docs/` 根(**不递归**)每个 `.md` 必须被 `docs/README.md` 链接到, `docs/archive/**` 只查①。按**行**剥围栏代码块/行内代码/HTML 注释(整篇正则配对会被大量代码块带跑, 曾把 `[start,duration](wStart,wDur,0)` 判成死链)。输出 `PASS/FAIL` + 逐条违规清单, 退出码对应; `--check`(默认) / `--fix-index`(只打印建议行, 不改文件)。存量豁免只走 `tools/docs-gate-allowlist.txt`(`kind | subject | 理由`, 理由必填, 空理由=语法错误直接 FAIL), 当前 **0 条** |
+| **接入门禁** | `ci-gates.sh` 新增 `docs`(别名 `doc`)子命令, 并入 `verify`(紧跟 `sheet-entry` 之后, 与其它快 checker 同组)。落地即绿: 建门时实测死链 0 / 未进索引 0, **无需任何白名单** |
+| **文档债①: `testing-dual-platform.md` + `smoke-desktop.md` 合并为 `docs/testing.md`** | 旧标题写「dual」(两端)实为三端, 且两份都讲测试、内容重叠。合并成一份: **上篇**=日常自测流程(Android 模拟器 a34 · Linux Xvfb · 语义树驱动 `tools/devui/*` · 踩坑速查), **下篇**=桌面端发布前 31 条人工冒烟清单(每条带通过判据, 配套 `tools/smoke-desktop.sh`)。**原文零删改**(合并脚本逐行断言 `missing=0`, 245 行 = 132 + 99 - 2 个 H1 + 新头部)。旧路径在 [docs/README.md](README.md) 记了「旧路径 → 新路径」映射, 归档件不改原文 |
+| **文档债②: `notes-wip.md` 去双写** | 删掉与 PROGRESS 双写的两组门禁数字(v0.26.2 发版那行 + 2026-11-18 晚那一整段), 改成一行指针指向 `docs/PROGRESS.md`「进度总览」表(门禁数字唯一权威), 现场状态只留「工作树/在飞车道/需用户介入项」 |
+| **门禁(本次实测)** | `bash tools/check-docs.sh` **PASS** · `bash tools/ci-gates.sh docs` **PASS** · `bash tools/ci-gates.sh verify` **ALL GATES OK**(含新 docs 门) · 反作弊自证: 故意造死链 + 未索引文件 ⇒ **FAIL / EXIT=1**, 立即还原 ⇒ PASS |
 
 ## 2026-11-19(十五) 夜间三条车道落地 + 诊断通道发版 · **v0.26.0**
 

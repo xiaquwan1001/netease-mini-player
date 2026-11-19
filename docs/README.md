@@ -21,8 +21,11 @@
 |---|---|---|
 | [android-signing.md](android-signing.md) | Android 签名与 versionCode 纪律, 发版必读。**活跃** | 2026-11-09 |
 | [android-keystore-wiring-design.md](android-keystore-wiring-design.md) | 凭据后端接线设计(Keystore / secret-service / DPAPI 三端)。**活跃** | 2026-11-12 |
-| [testing-dual-platform.md](testing-dual-platform.md) | Android/Linux/Windows 三端测试记录与自测方法。**活跃** | 2026-11-10 |
-| [smoke-desktop.md](smoke-desktop.md) | 桌面端(Linux/Windows)冒烟测试清单。**活跃** | 2026-11-11 |
+| [testing.md](testing.md) | **多端测试指南(唯一入口)**: 上篇=日常自测流程(Android 模拟器 a34 · Linux Xvfb · 语义树驱动 uix/uitap/shot + 踩坑速查) · 下篇=桌面端(Linux/Windows)发布前 31 条人工冒烟清单(每条带通过判据, 配套 `tools/smoke-desktop.sh`)。2026-11-19 由 `testing-dual-platform.md`(旧标题误写「dual」, 实为三端)与 `smoke-desktop.md` 合并, 原文零删改。**活跃** | 2026-11-19 |
+
+> 2026-11-19 合并(旧路径 → 新路径): `docs/testing-dual-platform.md`(三端测试记录, 标题误写「dual」)与
+> `docs/smoke-desktop.md`(桌面冒烟 31 条)已删除, **内容原样**并入 [testing.md](testing.md) 的上篇/下篇;
+> 代码注释与脚本里的旧路径按本行解析(历史归档件不改原文)。
 
 ## 3. 批次接口实测笔记(已合并为一份快照)
 
