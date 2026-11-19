@@ -69,5 +69,5 @@ $ rg -n 'playlistTracksAdd|podcastRadio|signinStatus' ui/lib ui/test --glob '!ui
 
 1. **测试总数没变**: 3 条导出在本仓 Dart 侧全无测试调用, 所以 1148 不减少; `check-write-guard.sh` 里 `playlistTracksAdd` 是**正则名单**(检查 `ui/test/**` 不许直连写接口), 与导出是否存在无关, 仍 OK, 未改脚本。
 2. **首轮全量 test 出现 3 个 "loading …" 失败**(adaptive_text_row_test / layout_metrics_test / theme_accent_test)。不是本次改动导致: 同一时刻仓库里 `ui/lib/src/{adaptive_text_row,layout,theme}.dart` 与这三个测试文件正被**并行的其他车道**改写(`git status` 可见), 加载期读到写了一半的文件; 单跑与第二轮全量都通过(1148/0)。**结论: 当时是并发写文件竞态, 与本车道无关。**
-3. 文档只改了 `docs/api-coverage.md`(文首复核行 + 总览两行 + §6 的 `podcast_radio` 句子)。`docs/b7-playlist-write-notes.md`、`docs/archive/**` 里的旧叙述属历史记录, 未动; `docs/PROGRESS.md` 按纪律留给编排者。
+3. 文档只改了 `docs/api-coverage.md`(文首复核行 + 总览两行 + §6 的 `podcast_radio` 句子)。`docs/api-notes-snapshot-20261119.md`、`docs/archive/**` 里的旧叙述属历史记录, 未动; `docs/PROGRESS.md` 按纪律留给编排者。
 4. 未提交 git;未跑 `dart format` 全仓、未跑 `flutter analyze`。

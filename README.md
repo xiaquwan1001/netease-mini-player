@@ -221,7 +221,7 @@ cargo run -p ncm-cli -- lyric 186016
 | [`docs/testing-dual-platform.md`](docs/testing-dual-platform.md) | 多端(Android/Linux/Windows)测试流程、语义驱动自测法、踩坑速查 |
 | [`docs/archive/api-channel.md`](docs/archive/api-channel.md) | 接口通道(interface / interface3)实测(已归档) |
 | [`docs/remaining-batches.md`](docs/remaining-batches.md) | **待办与分批规划(最新在 §11)** |
-| [`docs/b7-playlist-write-notes.md`](docs/b7-playlist-write-notes.md) | 歌单写接口的真实响应形状与踩坑 |
+| [`docs/api-notes-snapshot-20261119.md`](docs/api-notes-snapshot-20261119.md) | 批次接口实测笔记合并快照(B4 搜索 / B5·B13 逐字歌词 / B7 歌单写 / B10 电台 / B12 数字专辑 / C1 歌手页 / C2 歌词来源 / C3 MV / Wave9), 只读参考 |
 | [`packaging/`](packaging/) | deb / AppImage / Windows 安装包的打包脚本 |
 | [`tools/devui/`](tools/devui/README.md) | 无窗口模拟器自测脚本(按语义树点击/截图/像素核对) |
 

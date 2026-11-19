@@ -1,6 +1,6 @@
 //! 逐字歌词(YRC)模型与解析: 纯函数, 只做 "文本 -> 时间轴逐字行".
 //!
-//! 网易云 yrc 实测形状(见 docs/b5-word-lyric-notes.md):
+//! 网易云 yrc 实测形状(见 docs/api-notes-snapshot-20261119.md):
 //! - 署名/元数据行(JSON): `{"t":0,"c":[{"tx":"作词: "},{"tx":"方文山"}]}`, t 可为负;
 //! - 逐字行: `[start,dur](wStart,wDur,0)字(wStart,wDur,0)字...`, 词文本可含空格。
 //!

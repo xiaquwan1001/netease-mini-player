@@ -1,5 +1,5 @@
 //! C2 真实抽样(一次性脚本, 不进测试): 对若干曲目拉 yrc + 行级 LRC + AMLL TTML,
-//! 打印打分与 auto 择优结果, 统计 AMLL 被选中比例. 结果摘录进 docs/c2-lyric-source-quality.md.
+//! 打印打分与 auto 择优结果, 统计 AMLL 被选中比例. 结果摘录进 docs/api-notes-snapshot-20261119.md.
 //! 用法: cargo run --release -p ncm-service --example c2_sampling
 use std::path::PathBuf;
 

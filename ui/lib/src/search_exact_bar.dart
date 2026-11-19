@@ -5,7 +5,7 @@ import 'layout.dart';
 
 // ---------------------------------------------------------------------------
 // 视图模型 —— 纯 Dart, 语义对齐 Rust search_multimatch 的 DTO
-// (docs/b4-search-notes.md). 这里刻意不 import rust: 组件与桥解耦,
+// (docs/api-notes-snapshot-20261119.md). 这里刻意不 import rust: 组件与桥解耦,
 // 之后由上层把 Rust DTO 转成这些 view 类型.
 // ---------------------------------------------------------------------------
 

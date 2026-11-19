@@ -1,5 +1,5 @@
 //! 歌单写接口(新建/批量加歌)的响应 DTO。
-//! 字段口径与真实响应样例见 docs/b7-playlist-write-notes.md(2026-11-10 实测)。
+//! 字段口径与真实响应样例见 docs/api-notes-snapshot-20261119.md(2026-11-10 实测)。
 //! 纯数据类型(本 crate 不依赖 serde_json); JSON 解析在 ncm-service/src/netease.rs 的 parse_* 函数。
 
 use serde::{Deserialize, Serialize};

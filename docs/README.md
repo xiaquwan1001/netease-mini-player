@@ -24,20 +24,11 @@
 | [testing-dual-platform.md](testing-dual-platform.md) | Android/Linux/Windows 三端测试记录与自测方法。**活跃** | 2026-11-10 |
 | [smoke-desktop.md](smoke-desktop.md) | 桌面端(Linux/Windows)冒烟测试清单。**活跃** | 2026-11-11 |
 
-## 3. 批次接口实测笔记(真实响应形状 / 协议坑, 只读参考)
+## 3. 批次接口实测笔记(已合并为一份快照)
 
 | 文件 | 内容 | 最后更新 |
 |---|---|---|
-| [b4-search-notes.md](b4-search-notes.md) | B4 搜索增强(联想/热词/多匹配) | 2026-11-07 |
-| [b5-word-lyric-notes.md](b5-word-lyric-notes.md) | B5 逐字歌词契约层 | 2026-11-07 |
-| [b7-playlist-write-notes.md](b7-playlist-write-notes.md) | B7 歌单写接口(含 code=500 半成功坑) | 2026-11-10 |
-| [b10-radio-notes.md](b10-radio-notes.md) | B10 电台只读补充 | 2026-11-07 |
-| [b12-digital-album-notes.md](b12-digital-album-notes.md) | B12 数字专辑只读 | 2026-11-07 |
-| [b13-ttml-lyrics-notes.md](b13-ttml-lyrics-notes.md) | B13 AMLL TTML 逐字第二来源 | 2026-11-09 |
-| [c1-artist-page-notes.md](c1-artist-page-notes.md) | C1 歌手详情页接口 | 2026-11-09 |
-| [c2-lyric-source-quality.md](c2-lyric-source-quality.md) | C2 逐字歌词来源质量抽样 | 2026-11-09 |
-| [c3-mv-playback-notes.md](c3-mv-playback-notes.md) | C3 MV 播放接口 | 2026-11-10 |
-| [wave9-endpoint-notes.md](wave9-endpoint-notes.md) | Wave 9 收尾只读 endpoint | 2026-11-07 |
+| [api-notes-snapshot-20261119.md](api-notes-snapshot-20261119.md) | **10 份批次笔记的原文合并**(B4 搜索 / B5 逐字歌词 / B7 歌单写(含 code=500 半成功坑) / B10 电台 / B12 数字专辑 / B13 AMLL TTML / C1 歌手页 / C2 歌词来源质量抽样 / C3 MV / Wave9 endpoint), 每节带原小节标题, 顶部有索引。2026-11-19 精简时由 `b4/b5/b7/b10/b12/b13/c1/c2/c3/wave9-*.md`(共 908 行)合并且原文件删除(合并脚本逐行断言 missing=0, 一字未删) | 2026-11-19 |
 
 协议/风控/加解密的**结论层**在 `.pi/memory/notes-api.md`; 这里只放"当时的原始响应长什么样"。
 

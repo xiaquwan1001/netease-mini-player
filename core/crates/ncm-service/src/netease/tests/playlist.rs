@@ -4,7 +4,7 @@ use crate::netease::*;
 use ncm_provider::ProviderErrorKind;
 use serde_json::json;
 
-/// ---- 歌单写接口 parse(2026-11-10 实测样例, 见 docs/b7-playlist-write-notes.md) ----
+/// ---- 歌单写接口 parse(2026-11-10 实测样例, 见 docs/api-notes-snapshot-20261119.md) ----
 #[test]
 fn created_playlist_from_top_level_id() {
     let body = json!({"code":200,"id":18580697682u64,"playlist":{"adType":0,"anonimous":false,

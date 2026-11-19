@@ -1,6 +1,6 @@
 //! TTML(AMLL) 逐字歌词模型与解析: 纯函数, 手写轻量 XML 扫描(domain 层零第三方依赖).
 //!
-//! 实测 schema 见 docs/b13-ttml-lyrics-notes.md: 逐字在 <p begin end> 内联
+//! 实测 schema 见 docs/api-notes-snapshot-20261119.md: 逐字在 <p begin end> 内联
 //! <span begin end>text</span>; ttm:role="x-translation" 行译文 / "x-roman" 罗马音
 //! (存起来, UI 暂不用); "x-bg" 背景声跳过. 时间支持纯秒("31.5")与 m:ss.mmm("00:29.231").
 use serde::{Deserialize, Serialize};

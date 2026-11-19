@@ -203,7 +203,7 @@ class AppSettings extends ChangeNotifier {
   ///
   /// 2026-11-15 口径变更: 默认从 'auto' 改为 'amll'。旧 auto 有 0.9 短路,
   /// yrc 质量正常时直接采用、根本不请求 TTML, 实测 AMLL 只覆盖 12% 的播放
-  /// (docs/c2-lyric-source-quality.md), 等于"逐字库没被用上"。
+  /// (docs/api-notes-snapshot-20261119.md), 等于"逐字库没被用上"。
   String lyricSourcePreference = 'amll';
 
   /// 点关闭按钮时的行为(默认 [CloseBehavior.quit] = 保持旧语义).

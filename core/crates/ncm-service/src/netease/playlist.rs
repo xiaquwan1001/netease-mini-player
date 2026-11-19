@@ -56,7 +56,7 @@ impl NeteaseProvider {
         })
     }
 
-    /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/b7-playlist-write-notes.md)
+    /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/api-notes-snapshot-20261119.md)
     pub(super) fn create_playlist<'a>(
         &'a self,
         name: &'a str,
@@ -414,7 +414,7 @@ impl NeteaseProvider {
 }
 
 /// 新建歌单响应 → (id, name). id 在顶层, 老形态回退 playlist.id(2026-11-10 实测,
-/// 样例见 docs/b7-playlist-write-notes.md). 拿不到 id 视为解析失败.
+/// 样例见 docs/api-notes-snapshot-20261119.md). 拿不到 id 视为解析失败.
 pub fn parse_created_playlist(body: &Value) -> Option<ncm_domain::CreatedPlaylist> {
     let playlist = body.get("playlist");
     let id = body

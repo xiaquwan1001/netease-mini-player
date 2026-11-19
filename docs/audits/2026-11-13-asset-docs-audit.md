@@ -46,7 +46,7 @@
 | 文件 | 前 | 后 | 处理 |
 |---|---|---|---|
 | `docs/PROGRESS.md` | 1352 行, 内部**有两份文档头**, v1 段插在中间, 11-09~11-12 的专题小节被追加在文件末尾 | 1244 行, 单入口 | v1 段 → `docs/archive/PROGRESS-v1.md`;末尾专题小节加「专题小节(按主题, 非时间序)」标题并声明新批次写时间线;头部换成 2026-11-13 口径 |
-| `docs/remaining-batches.md` | 296 行, §4/§5/§9/§10 全是已完成历史;S 级表被一块 B4 预研笔记**从中间打断**(B8 行成孤儿表) | 187 行 | §4/§5/§9/§10 → `docs/archive/remaining-batches-history.md` 并留指针;B4 笔记压成一行指向 `docs/b4-search-notes.md`(内容已在其中);§11 重写为「只剩这些没做 / 已完成不要再做 / L 级 / 明确不做」 |
+| `docs/remaining-batches.md` | 296 行, §4/§5/§9/§10 全是已完成历史;S 级表被一块 B4 预研笔记**从中间打断**(B8 行成孤儿表) | 187 行 | §4/§5/§9/§10 → `docs/archive/remaining-batches-history.md` 并留指针;B4 笔记压成一行指向 `docs/api-notes-snapshot-20261119.md`(内容已在其中);§11 重写为「只剩这些没做 / 已完成不要再做 / L 级 / 明确不做」 |
 | `README.md` / `README.en.md` | 门禁写 254/617/38 info;待办还写着 D 批技术债与短信登录待真机验 | 271/674/0 issue;待办改为 §11.A 五项;功能表补自动更新频率与歌单内搜索策略;文档表加 `docs/README.md` 索引 |
 | `docs/README.md` | 缺 `audits/`, 归档目录描述未更新 | 补 audits 行、归档两新文件说明 |
 | `.pi/memory/notes-wip.md` | 77 行"在飞状态", 实际全是已发布版本的明细(v0.5.5~v0.7.0) | 24 行 | 只留现场状态 + 门禁基线 + 环境注意,版本明细**只留指针**指回 PROGRESS |

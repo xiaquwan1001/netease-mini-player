@@ -375,7 +375,7 @@ impl PlaylistWriteProvider for NeteaseProvider {
         NeteaseProvider::add_to_playlist(self, playlist_id, track)
     }
 
-    /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/b7-playlist-write-notes.md)
+    /// 新建歌单: 响应 {code, id, playlist:{id,...}}(id 在顶层, 实测样例见 docs/api-notes-snapshot-20261119.md)
     fn create_playlist<'a>(
         &'a self,
         name: &'a str,
