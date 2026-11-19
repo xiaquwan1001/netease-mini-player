@@ -4,7 +4,7 @@
 > **有意保留(4)**: `cache_stats`/`eq_profile_normalize`/`player_tuning`(给未来设置项留的宿主口)、`cloud_song_url`(云盘行播放走 `song_url_v1`, 直链接口备用);
 > **待产品决策(2)**: `consent_plaintext_storage`(凭据回退同意门, UI 未落地)、`user_play_ranking`(他人常听排行, 匿名态恒空, 等有登录态真机);
 > **已删(3, 原「真死」)**: `playlist_tracks_add`(唯一调用点随「存为歌单」面板在 `1a688d8` 删除)、`podcast_radio`/`signin_status`(UI 早已改走 `podcastProgram*` / `vipOverview`)—— 2026-11-18 删掉这 3 个 FFI 出口(provider 层方法保留, `ncm-cli` 仍用同名方法), 导出 161→158、无 UI 入口 9→6。
-> **口径变化(2026-11-18)**: 脚本此前用「小写化标识符集合」判入口 ⇒ DTO 类型名(`rust.SigninStatus`)与**构造调用**(`rust.PodcastRadio(`)把同名导出顶替成"有入口", 少报 3 个; 现已改成「小写开头 + 调用/tearoff 形态」两条正则, 实测 6→9。死代码审计明细见本地 `.pi/plans/deadcode-audit-2026-11-18.md`。口径与复算方式见文末, 一条命令可重跑。
+> **口径变化(2026-11-18)**: 脚本此前用「小写化标识符集合」判入口 ⇒ DTO 类型名(`rust.SigninStatus`)与**构造调用**(`rust.PodcastRadio(`)把同名导出顶替成"有入口", 少报 3 个; 现已改成「小写开头 + 调用/tearoff 形态」两条正则, 实测 6→9。死代码审计明细见本地 `docs/archive/plans-2026-11/deadcode-audit-2026-11-18.md`。口径与复算方式见文末, 一条命令可重跑。
 > 剩余待办怎么分批、哪些能并行、怎么派工: 见 [`docs/remaining-batches.md`](remaining-batches.md)。
 
 ## 1. 总览

@@ -234,7 +234,7 @@ App 原生登录族(eapi, 8821 风控) —— **网页登录族**的手机号+�
 
 ### 12.1b 后端审计剩余两条的**裁决(2026-11-17 复核)**
 
-> 来源 `.pi/plans/arch-audit-backend-2026-11-15.md` §7 建议 3 / 4。原计划第 3 项(锁中毒统一 + `fsutil` 收敛)
+> 来源 `docs/archive/plans-2026-11/arch-audit-backend-2026-11-15.md` §7 建议 3 / 4。原计划第 3 项(锁中毒统一 + `fsutil` 收敛)
 > 只差落地, 第 5 项(`api.rs` 按域拆)是唯一还开着的 M 级项。
 
 **① 锁中毒 + `fsutil` 收敛 —— 生产侧已清零, 本批补了门**
@@ -356,7 +356,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ## 13. 平台层审计剩余项(2026-11-16 登记 · 只登记不排期)
 
-> 来源: `.pi/plans/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
+> 来源: `docs/archive/plans-2026-11/arch-audit-platform-2026-11-16.md`(22 条: P1×6 / P2×11 / P3×5)。
 > **已落 21 条**: P-01..P-22 除下表 P-10 的**真机听感**与 P-11 的第 ③ 项(通知点击需真机)以外全部落地;
 > **P-11 的桌面自动化部分 2026-11-18 已补齐**(交互级 X11 断言进入 `tools/smoke-desktop-headless`)。
 > **P-18 后半 已完成(2026-11-17)**: application-id / AppStream id / 用户数据目录统一到
@@ -383,7 +383,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ## 14. UI 浮层 / 返回栈 / 生命周期(2026-11-18 审计登记 · 只登记不排期)
 
-> 来源 `.pi/plans/arch-audit-ui-overlay-2026-11-18.md`(13 条: P1×1 / P2×5 / P3×7)。**本表只列值得排期的 5 条**,
+> 来源 `docs/archive/plans-2026-11/arch-audit-ui-overlay-2026-11-18.md`(13 条: P1×1 / P2×5 / P3×7)。**本表只列值得排期的 5 条**,
 > P3 的 7 条(未处理 `didReplace` / 注释里的「桌面 Esc」实为 0 处 / 不可达 `SystemNavigator.pop()` /
 > 每次构建都造新导航 / 缺页面级前后台钩子 / `identical(current)` 快照比较 / rail 在飞耦合点)按需查原文。
 > 口径(2026-11-18 本机实测): sheet **23 处/18 文件** · dialog **20 处/16 文件** · 统一入口 `showAppSheet` **0** ·
@@ -406,14 +406,14 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ## 15. 横屏双列布局(2026-11-18 评估产出 · 待开工)
 
-> 来源 `.pi/plans/wide-two-column-eval-2026-11-18.md`(253 行)。**推荐方案 A「页内双列」**, 只登记切片与验收:
+> 来源 `docs/archive/plans-2026-11/wide-two-column-eval-2026-11-18.md`(253 行)。**推荐方案 A「页内双列」**, 只登记切片与验收:
 
 | 序 | 切片 | 内容 | 成本 | 验收 |
 |---|---|---|---|---|
 | ~~S0~~ ✅ **已落(v0.24.0)** | 判据纯函数 `twoColumnFor(Size)`: 宽 ≥900 **且** 高 ≥560(横屏手机 780x360 排除); `layoutTierFor` 未动 | S | 9 例单测 ✔ |
 | ~~S1~~ ✅ **已落(v0.24.0)** | 歌单详情双列左 300 / 间 12 / 右 528(填满 840); 两列各自滚动; 判据用 `MediaQuery.sizeOf`(窗口宽)以免被 840 限宽判死 | M | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
 | ~~S2~~ ✅ **已落(v0.25.0)** | 播客详情双列同构(左 300/间 12/右 528, 两列各自滚动; 窄/中档零几何变化) | S | 6 条 `getRect` + 1 张 1280x720 golden ✔ |
-| ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `.pi/plans/q1-two-column-s2s3-2026-11-18.md` |
+| ~~S3~~ ❌ **判不做(v0.25.0, 已量)** | 「我的」双列左 885 vs 右 1969 = **差 55.1% > 40% 阈值** ⇒ `mine_view.dart` 未改 | — | 测量数字见 `docs/archive/plans-2026-11/q1-two-column-s2s3-2026-11-18.md` |
 | S4 | 方案 B(壳层主从 + `detailPaneSlot`) | 判 L: 详情页要 `embedded` 模式、嵌套 Navigator 会让 U-01/U-02 复发、返回键要新增一级 | L | 仅用户明确要求时 |
 
 **明确不做**: 28 处 `push` 全改 · 宽档 push 时保留 rail(正交, 可单做) · 顶栏通栏 · 嵌套 Navigator · 按屏宽偷偷翻倍网格列数 · 840→1120 内容宽(需 `contentWidthRequest` 协商槽, 会重写现有坐标断言)。

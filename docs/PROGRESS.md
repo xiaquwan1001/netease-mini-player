@@ -3,7 +3,7 @@
 > 最近更新: **2026-11-19(四)**。已发布版本 **v0.26.0**(音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道),
 > 见批次时间线最上面那条; 速览在下一节, 批次记录从「批次时间线」起倒序。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能, 余项均需人眼/真机) / **§12**(结构性债务, 主体已清) / **§13**(平台层审计剩余, 余项需真人);
-> 2026-11-18 起的批次拆解与三条只读审计车道(文档/死代码/UI 浮层·返回栈·生命周期)见本地 `.pi/plans/2026-11-18-next-batch.md`;文档总索引: [`docs/README.md`](README.md);
+> 2026-11-18 起的批次拆解与三条只读审计车道(文档/死代码/UI 浮层·返回栈·生命周期)见 `docs/archive/plans-2026-11/2026-11-18-next-batch.md`;文档总索引: [`docs/README.md`](README.md);
 > 架构决策: [`docs/archive/architecture-restart.md`](archive/architecture-restart.md);
 > 历史批次:v1(WebView 版) → [`docs/archive/PROGRESS-v1.md`](archive/PROGRESS-v1.md),
 > 2026-11-03~11-12 批次与专题小节 → [`docs/archive/PROGRESS-2026-11-03-11-12.md`](archive/PROGRESS-2026-11-03-11-12.md)。
@@ -45,7 +45,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `tools/check-write-guard.sh` | OK(测试不触网/不直连写接口) |
 | `tools/check-tokens.sh --strict` | **OK**(间距/圆角/字号 0 越界, 例外必须写 `// token-ok: 理由`) |
 | `tools/check-row-padding.sh --strict`(`ci-gates.sh row-padding`, 已进 `verify`) | **OK**(25 处行留白 / **3 个**具名口径 + 纵向只允许 0/6; 具名工厂 `SongRow.xxx(` 也计入 —— 数量比 C 步前少 2 处是因为同构参数收进了工厂, 见 2026-11-17 两个小节) |
-| 接口覆盖 | **135/136**(唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节)。FFI 导出 **158** 里 **6 个**无 UI 入口, 全是有意保留或待决策: **保留 4**(cache_stats / cloud_song_url / eq_profile_normalize / player_tuning) · **待产品决策 2**(consent_plaintext_storage / user_play_ranking)。2026-11-18 修了脚本的入口判定(类型名与构造调用曾把导出顶替成"有入口"), 并把 3 条真死出口删掉(161→158 / 9→6); 明细见 `docs/api-coverage.md` 文首与本地 `.pi/plans/deadcode-audit-2026-11-18.md` |
+| 接口覆盖 | **135/136**(唯一未接入 `vip_sign_info` 是**有意弃用**, 见 v0.12.5 小节)。FFI 导出 **158** 里 **6 个**无 UI 入口, 全是有意保留或待决策: **保留 4**(cache_stats / cloud_song_url / eq_profile_normalize / player_tuning) · **待产品决策 2**(consent_plaintext_storage / user_play_ranking)。2026-11-18 修了脚本的入口判定(类型名与构造调用曾把导出顶替成"有入口"), 并把 3 条真死出口删掉(161→158 / 9→6); 明细见 `docs/api-coverage.md` 文首与 `docs/archive/plans-2026-11/deadcode-audit-2026-11-18.md` |
 
 凭据落盘 0600 文件骨架 + 系统钥匙串(Android Keystore / Linux secret-service / Windows DPAPI)。
 
@@ -147,7 +147,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 
 **网络现实(实测)**: `*.workers.dev` **大陆直连超时**(20s), 经代理正常; 该 Cloudflare 账号无自有 zone ⇒ 暂不能绑自定义域。客户端上传失败会降级成本地诊断包文件。
 
-**隔夜交接已收口**: `wip/2026-11-18-night` 已拆提交并删除; `.pi/plans/HANDOFF-2026-11-19.md` 保留为历史记录(§4 需用户介入项仍有效)。
+**隔夜交接已收口**: `wip/2026-11-18-night` 已拆提交并删除; `docs/archive/plans-2026-11/HANDOFF-2026-11-19.md` 保留为历史记录(§4 需用户介入项仍有效)。
 
 
 ## 2026-11-18(十三) 双列 S2 + 统一浮层入口(U-03) + 生命周期守卫(U-05/06/07) · **v0.25.0**
@@ -196,7 +196,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | 6 | Linux 托盘要有播放控制 | 菜单 2 项 → **7 项**(显示主界面 · 播放/暂停 · 上一首 · 下一首 · 喜欢/取消 · 退出), 文案与勾选态由 Dart 推送、无曲目置灰; 原生仍只 dlopen 现有 appindicator(**零新依赖**); 复用 `Playback` 既有 handler ⇒ 无页面时安全 no-op。**原生真编译通过** + dbusmenu 端到端探针点「播放」实测 Dart 收到动作 |
 | 7 | 定时关闭(停播并退出, 两种停法) | 新增 `sleep_timer.dart`(纯逻辑 + 生产单例)与 `settings_sleep_timer_page.dart`(15/30/45/60/90 档 · 立刻停 / 播完当前这首 · 剩余时间 · 可取消); 复用既有 **500ms 轮询**与 `_onTrackEnded` 判定, 到点: 停播放 → Android `SystemNavigator.pop` / Linux `DesktopShell.quit` / Windows `exit(0)`; 退出动作注入便于测试; 口径: 不跨重启、改档=重新计时 |
 | 8 | 竖屏播放条只留图形 icon / 横屏 名+艺人(+专辑) | 复用 `layoutTierFor`: <600 只留封面(无封面用中性占位)且零文字; 600~900 歌名+艺人; ≥900 且信息块可用宽 ≥ `kPlayerBarAlbumMinWidth`(120dp) 才加专辑名; 点击/进度/切歌/队列/手势区让位全未回退; 不加 Rust/FFI 字段(`PlayerBarData.current` 已有 name/artist/album) |
-| 9 | 横屏双列布局评估 | 只读评估 `.pi/plans/wide-two-column-eval-2026-11-18.md`(253 行): **推荐方案 A「页内双列」**, 第一刀只做歌单详情(左 300 / 间 12 / 右 528, 在既有 840 限宽内), 零新槽位、不碰 `pageDepth`/返回键/浮层登记表; 横屏手机(780x360)明确排除(判据宽 ≥900 **且** 高 ≥560); 方案 B(壳层主从)判 L 并列出三个洞; 迁移 S0~S4 已排 |
+| 9 | 横屏双列布局评估 | 只读评估 `docs/archive/plans-2026-11/wide-two-column-eval-2026-11-18.md`(253 行): **推荐方案 A「页内双列」**, 第一刀只做歌单详情(左 300 / 间 12 / 右 528, 在既有 840 限宽内), 零新槽位、不碰 `pageDepth`/返回键/浮层登记表; 横屏手机(780x360)明确排除(判据宽 ≥900 **且** 高 ≥560); 方案 B(壳层主从)判 L 并列出三个洞; 迁移 S0~S4 已排 |
 | 10 | (派生) 脆弱测试 | `update_checker_test` 的「设置页 300dp+1.25 找检查更新」改为 `scrollUntilVisible`, 不再依赖设置页总高度余量(加设置行不该让这条红) |
 
 门(编排者独立重跑): `dart analyze` **0** · 全量 `flutter test` **1163→1205 / 0 失败** · `cargo test` 313/0 · clippy 0 · `flutter build linux --debug` **✓ Built**(原生 C++ 改动真编译) · `gradlew :app:testDebugUnitTest :app:lintDebug` BUILD SUCCESSFUL · `tools/smoke-desktop-headless` **PASS / 61s** · token/row-padding/write-guard OK · golden 重出 1 张(`settings_360x800`, 字号滑块改 Stack 后行程 216→284dp)。
@@ -243,17 +243,17 @@ C 级 4 条 FFI 真死出口(要 codegen 独占窗口)与 B 级 3 条(要先改 
 
 门(编排者独立重跑): `cargo test` **313 / 0 失败** · clippy **0 warning** · `cargo fmt --check` 干净 ·
 `dart analyze` **0** · 全量 `flutter test` **1148 / 0 失败** · token/row-padding/write-guard OK · `api-coverage` 仍 161 导出 / 9 无入口。
-明细(逐条复核命令与输出、以及对审计报告两处口径问题的订正)见本地 `.pi/plans/deadcode-cleanup-2026-11-18.md`。
+明细(逐条复核命令与输出、以及对审计报告两处口径问题的订正)见 `docs/archive/plans-2026-11/deadcode-cleanup-2026-11-18.md`。
 
 
 ## 2026-11-18(七) 两份只读审计: 死代码存量 + UI 浮层/返回栈/生命周期(**只登记, 未改代码**) · **未发版**
 
-- **死代码审计**(`.pi/plans/deadcode-audit-2026-11-18.md`, 320 行): 扫 148 个 Dart 手写源(821 个顶层符号)/ 72 个 Rust 文件(733 个 `pub` 项)/ 7 个 Kotlin 文件 + res。
+- **死代码审计**(`docs/archive/plans-2026-11/deadcode-audit-2026-11-18.md`, 320 行): 扫 148 个 Dart 手写源(821 个顶层符号)/ 72 个 Rust 文件(733 个 `pub` 项)/ 7 个 Kotlin 文件 + res。
   结论: 私有死码已是 0(`dart analyze` 的 `unused_*` 与 clippy 兜住), **Dart 无死文件、Kotlin 无死符号**; 公开面剩 A 级 8 条 48 行 / B 级 3 条 14 行 / C 级 9 个 FFI 无入口 / D 级 3 条。
   两条功能性发现: ① **`Playback.setVolume` 整链无入口** ⇒ 0..1 音量档 UI 完全调不到(只有 dB 精细增益), 需产品决策补入口或三端一起删;
   ② `validateEqProfile` 无人调用 ⇒ **EQ 导入当前不校验曲线**(与 R7 设计意图脱节)。
   汇总时**修正了审计报告的口径**: §1 把 `requiresPurchase`/`validateEqProfile` 记成「零风险可删」与其条目内文自相矛盾(它们是未接线功能), §5 的行数合计按函数体手数会系统性少算 ⇒ 一律以 `git diff --numstat` 为准。
-- **UI 浮层/返回栈/生命周期审计**(`.pi/plans/arch-audit-ui-overlay-2026-11-18.md`, 433 行): 13 条缺陷(P1 1 / P2 5 / P3 7)。核心结论:
+- **UI 浮层/返回栈/生命周期审计**(`docs/archive/plans-2026-11/arch-audit-ui-overlay-2026-11-18.md`, 433 行): 13 条缺陷(P1 1 / P2 5 / P3 7)。核心结论:
   ① **U-01(唯一 P1)**: 导航栏 + 播放条住在 Navigator **之外**(`app_shell.dart` 的 Column 兄弟位) ⇒ 弹层遮罩盖不住它们, 浮层开着照样能点 tab; 而「切页收起浮层」只写在 `_onTabSelected` 一处, 还漏 5 类浮层(歌曲动作面板 / 收藏到歌单 / 分享 / 关注页艺人筛选 / 更新弹窗)。
   ② **U-02**: 队列面板 `close()` 用 `maybePop()` ⇒ 面板上压着「清空确认框」时切 tab 只关确认框(登录弹层已有 `isCurrent/removeRoute` 的正确写法可抄)。
   ③ **U-03**: 无统一浮层入口 —— 关闭语义三档(拖拽 21/22、关闭键 5、高度口径 3 套、键盘让位 5 处手写)。
@@ -262,7 +262,7 @@ C 级 4 条 FFI 真死出口(要 codegen 独占窗口)与 B 级 3 条(要先改 
   ⑥ 顺带订正了口径: 浮层 **23 处/18 文件**(sheet)与 **20 处/16 文件**(dialog)、`PopScope` 3 处(1 处注释)、`WidgetsBindingObserver` 3 处/2 文件、`TickerProviderStateMixin` 6 处/4 文件、`AppLifecycleListener` 与 `didChangeAppLifecycleState` **全 0**(没有任何页面级前后台钩子)。
   可执行项已登记 `docs/remaining-batches.md` **§14**(P1 一条 + P2 四条, 各带触发条件与成本)。
 
-两份报告都在 `.pi/plans/`(本地, gitignore), 未改任何产品代码。
+两份报告都在 [`docs/archive/plans-2026-11/`](archive/plans-2026-11/README.md)(2026-11-19 自本地 `.pi/plans/` 归档), 未改任何产品代码。
 
 
 ## 2026-11-18(六) 横屏/宽屏响应式: 断点三档 + 内容限宽 + 宽档 NavigationRail · **未发版**
@@ -285,7 +285,7 @@ C 级 4 条 FFI 真死出口(要 codegen 独占窗口)与 B 级 3 条(要先改 
 **已知边界(写进代码注释与测试)**: 留白只压暗、不拦点击; 底部导航/播放条在弹层期间仍可点(与改动前一致);
 宽档 AppBar 也随内容居中; `MediaQuery.sizeOf(context).width` 仍是窗口宽(新代码要量可用宽用 `LayoutBuilder` 的 `constraints.maxWidth`)。
 
-**未做(方案与触发条件在 `.pi/plans/ui-adaptive-layout-2026-11-18.md` §4)**: 播放条位置适配(低成本方案 A: 给它也套限宽 ≈10 行; 右侧栏方案 B 需新竖向 UI + golden, 等用户明确要独立播放器面板) ·
+**未做(方案与触发条件在 `docs/archive/plans-2026-11/ui-adaptive-layout-2026-11-18.md` §4)**: 播放条位置适配(低成本方案 A: 给它也套限宽 ≈10 行; 右侧栏方案 B 需新竖向 UI + golden, 等用户明确要独立播放器面板) ·
 二级页分栏/detail pane(28 处 `push` 换统一入口 + `back_policy` 加一级 + 详情页支持内嵌, 估 2~3 批) ·
 横屏手机(700~900 宽 / 高 <450)需档位函数加纵向输入 · 宽档无 golden 基准(建议后续补 2 张 1280x800)。
 
