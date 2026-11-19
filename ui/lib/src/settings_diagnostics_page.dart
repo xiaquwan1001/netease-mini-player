@@ -72,9 +72,10 @@ class DiagnosticsPage extends StatelessWidget {
               children: [
                 // AppSettings 是单例; 本页没有外层 AnimatedBuilder,
                 // 不监听的话点了开关视觉不动(设置值其实已变)。
-                AnimatedBuilder(
-                  animation: AppSettings.instance,
-                  builder: (context, _) => SwitchListTile(
+                // 只订阅诊断域: 其它域(音量滑块/交互记录)的写入不再重建这一块。
+                AppSettingsScopedBuilder(
+                  domains: const {AppSettingsDomain.diagnostics},
+                  builder: (context) => SwitchListTile(
                     title: const Text('允许匿名发送 debug 数据'),
                     subtitle: const Text(
                       '只收环境与设置(版本/系统/屏幕/开关), 不含昵称、uid、cookie; '

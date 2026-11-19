@@ -169,15 +169,18 @@ extension _AppSettingsJsonCodec on AppSettings {
   ///
   /// 先清空再读, 让 load() 幂等(重复 load 不叠加旧的会话内记录)。
   void _applyInteractionsJson(Map<dynamic, dynamic> raw) {
-    _interactions.clear();
+    // 「先清空再读」让 load() 幂等(重复 load 不叠加旧的会话内记录);
+    // §12.6 之后记录是快照里的不可变 map, 所以这里建一份新的整份写回。
+    final restored = <String, int>{};
     final interactions = raw['interactions'];
     if (interactions is Map) {
       for (final entry in interactions.entries) {
         final key = entry.key;
         final value = entry.value;
-        if (key is String && value is int) _interactions[key] = value;
+        if (key is String && value is int) restored[key] = value;
       }
     }
+    _update(_snapshot.copyWith(interactions: restored));
     // 队列面板的「左滑移除」提示: 用户勾过「不再展示」就永久生效
     final queueHint = raw['queueSwipeHintDismissed'];
     if (queueHint is bool) queueSwipeHintDismissed = queueHint;
