@@ -1,6 +1,6 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-19**。已发布版本 **v0.26.2**(v0.26.0 音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道; v0.26.1 播放条取链提示渲染级回归; v0.26.2 修 `smoke-appimage` 相对路径假 FAIL),
+> 最近更新: **2026-11-19**。已发布版本 **v0.27.0**(**横屏双列 S4 主从分栏**; v0.26.4 音源插件宿主切片 1; v0.26.3 云盘上传 400 修复; v0.26.2 修 `smoke-appimage` 相对路径假 FAIL; v0.26.1 播放条取链提示渲染级回归; v0.26.0 音源信息无损 + 缓冲/下载加固 + 详情页歌词⇄封面 + 匿名诊断通道),
 > 见批次时间线最上面那条; 速览在下一节, 批次记录从「批次时间线」起倒序。
 > 下一轮做什么: [`docs/remaining-batches.md`](remaining-batches.md) **§11**(功能, 余项均需人眼/真机) / **§12**(结构性债务, 主体已清) / **§13**(平台层审计剩余, 余项需真人);
 > 2026-11-18 起的批次拆解与三条只读审计车道(文档/死代码/UI 浮层·返回栈·生命周期)见 `docs/archive/plans-2026-11/2026-11-18-next-batch.md`;文档总索引: [`docs/README.md`](README.md);
@@ -30,6 +30,7 @@ Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flu
 **2026-11-19 晚(云盘上传 400 修复后, v0.26.3 发版前)第十二次重跑**(编排者独立): `tools/ci-gates.sh verify` **EXIT=0 ALL GATES OK** · Rust **345→347**(+2 例 resourceId/songId 解析回归) · Dart **1299** · clippy **0** · `dart analyze` **0** · `lintDebug` 0 error · 五道 checker OK。
 **2026-11-19 晚(合并横屏主从分栏 S4 车道 `lane/wide-s4` 后)第十四次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **368** · 全量 `flutter test` **1320 通过 / 0 失败**(golden **21** 张, 既有 20 张零重出) · `dart analyze` **0** · clippy **0** · `lintDebug` 0 error · 六道 checker OK。
 **2026-11-19 晚(合并音源插件宿主切片 1 车道 `lane/plugin-host` 后)第十三次重跑**(编排者独立, lane 内与 main 合并后各跑一次, 均 **EXIT=0 ALL GATES OK**): Rust **347→368**(+ncm-plugin 21 例) · Dart **1299** · golden 20 · clippy **0** · `dart analyze` **0** · `lintDebug` 0 error · 六道 checker OK。
+**2026-11-19 晚(v0.27.0 之后、U-08 修复树)第十五次重跑**(编排者独立, `tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**): Rust **368** · 全量 `flutter test` **1320→1322 通过 / 0 失败**(golden **21** 张零重出) · `dart analyze` **0** · clippy **0** · 六道 checker OK。**注**: 本轮首跑被本机随机 SIGSEGV 打断(`flutter_tester` 的 `Shell subprocess crashed with segmentation fault`, 同文件单跑 2/2 绿 ⇒ 非回归), 证据已上交 `~/hw-stability/evidence/inbox/20261119-netease-mini-player-fluttertester-segv/`, 复跑即绿。
 **2026-11-19 早(夜间三车道合并回 main 后, v0.26.0 发版前)第八次重跑**(编排者独立, `tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**):
 Rust **325** 通过 / 0 失败 · clippy **0** · 格式门干净 · 全量 `flutter test` **1289 通过 / 0 失败**(golden **20** 张) ·
 `dart analyze` **0** · Kotlin 单测 **10** 通过 / 0 失败 · `lintDebug` **0 error / 9 warning** · 四道 checker(含 `sheet-entry` 待迁 0) OK。
@@ -44,7 +45,7 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 | `cargo test --offline --workspace --exclude ncm-api-rs` | **368** 通过 / 0 失败(排除 vendor 联网 smoke; domain 49 + playback 47 + provider 1 + service **249** + plugin **21** + ffi 1; service 227→247 = 云盘分片 20 例, 247→249 = 云盘解析回归 2 例; plugin 21 = 沙箱 14 + provider 6 + doctest 1) |
 | `cargo clippy --workspace --all-targets -- -D warnings` | **0 warning** |
 | `cargo fmt --all -- --check` · `dart format --set-exit-if-changed lib test` | 干净(两道格式门) |
-| `flutter test --exclude-tags network`(全量, 含 golden) | **1320** 通过 / 0 skip / 0 失败(golden **21** 张(v0.27.0 起: 双列 2 张 + 主从分栏 1 张 + 既有 18); network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → 1243 → 1289(v0.26.0 夜间三车道) → 1293(v0.26.1 补测) → 1299(§12.6 按域 diff 通知 6 例) → **1320**(S4 主从分栏 +21 例) |
+| `flutter test --exclude-tags network`(全量, 含 golden) | **1322** 通过 / 0 skip / 0 失败(golden **21** 张(v0.27.0 起: 双列 2 张 + 主从分栏 1 张 + 既有 18); network 标签需真实凭据, 本地/CI 都不跑)。演进: 1123 → 1148 → 1163 → 1205 → 1243 → 1289(v0.26.0 夜间三车道) → 1293(v0.26.1 补测) → 1299(§12.6 按域 diff 通知 6 例) → 1320(S4 主从分栏 +21 例) → **1322**(U-08 真壳首帧回归 +2 例) |
 | `./gradlew :app:testDebugUnitTest`(`ci-gates.sh android-unit`, 已进 `verify`) | **10** 通过 / 0 失败(EQ 三端共享夹具 3 + MV 音频焦点策略 4 + 缓冲水位策略 `AudioBufferPolicy` 3; v0.26.0) |
 | `ci-gates.sh android-instrumented`(`connectedDebugAndroidTest`, 需模拟器; `NCM_INSTRUMENTED=1` 才进 `verify`) / 可选 `android-test-emu`(钉 emulator-5554, 必须显式调用) | **6 例 → 5 通过 / 1 skip**(`NotificationSlotsTest` 3: 渠道 + 5 个 action 槽位 + 状态回推; `NotificationClickTest` 3, 其中 1 例 assume-skip —— 通知点击被 BAL 拦, 需真人开 App 才补执行)。**2026-11-19 复核**: a34(emulator-5554, SDK 34)连跑两轮均 **0 失败**, 用例 **15.9s** / 任务 **23–25s** |
 | `./gradlew :app:lintDebug`(`ci-gates.sh android-lint`, **已进 `verify` + GitHub CI 阻塞门**) | **0 error / 9 warning**(9 条全是依赖版本提示)。2026-11-18 清零: 66×media3 `UnstableApi` 收口到类级 `@OptIn`/`@UnstableApi` + 1×`GestureBackNavigation` 迁到 `OnBackPressedDispatcher`; 仍未用 baseline 掩盖 |
@@ -141,6 +142,23 @@ golden 只重出 recommend 2 张(8/12 二分取消后日推预览行左移 4dp�
 > 版本号 bump 到 0.3.0 后"同一版本不算更新"让两条断言在 CI 上挂(本地还停在 0.2.2 所以没暴露) ⇒ 默认 tag 改 `v9.9.9`。
 
 ## 批次时间线(倒序, 最新在上)
+
+## 2026-11-19(十八) U-08 收口: 真壳首帧不再「setState() called during build」 · **未发版**
+
+> U-08 是 2026-11-18 UI 浮层审计的**最后一条**待办(§14 表内 P2): 壳层的 `ContentWidthLimit` 是
+> `LayoutBuilder`, 所以 Navigator(`MaterialApp.home` = `HomePage`)的**首次建树发生在 layout 阶段**;
+> 而 `HomePage.initState` → `HomeWiring._installSlots` 同步写 `actionsHost` ⇒ `MaterialApp.builder` 里的
+> `ValueListenableBuilder` 在构建期被标脏 ⇒ 断言 `setState() or markNeedsBuild() called during build`。
+> **生产同形**(宽档/窄档都有 —— LayoutBuilder 总在 layout 里跑), 只是不炸给人看; S4 的端到端用例
+> 当时为此绕开了真壳(`master_detail_flow_test` 用注入式树), 这条债因此一直挂着。
+
+| 项 | 内容 |
+|---|---|
+| **红相**(修复前实测) | 裸 `pumpWidget(const MiniNcmApp())` 就必现: `FlutterError: setState() or markNeedsBuild() called during build. This ValueListenableBuilder<SongActionHost?> widget cannot be marked as needing to build`(栈里的"正在构建"者是 `Builder`, 即 `MaterialApp.builder`) |
+| **修法** | `src/home/home_wiring.dart`: 两个 `ValueNotifier` 槽位(动作宿主 `actionsHost` / 播放条回调 `playerBarActions`)**一律帧后投递**(`addPostFrameCallback`, 仍带 `_attached` + `identical(_latest, this)` 守卫); `_clearSlots` **对称地帧后再清**(`dispose` 也可能发生在 build 里, 帧后若已有新实例接手就什么都不清)。`buildActionsHost()` 仍在 attach 时就构造好, 只把**通知**挪到帧后 |
+| **回归** | 新 `ui/test/app_shell_first_frame_test.dart`(2 例): 真壳 `MiniNcmApp` 宽档 1280x720 / 窄档 360x800 首帧 `takeException() == null`, 且断言两个槽位帧后真的到位、`pageDepth == 1`。把写入挪回同步即红(已实测) |
+| **门禁(本次实测)** | `bash tools/ci-gates.sh verify` → **EXIT=0 ALL GATES OK**(首跑曾被本机随机 SIGSEGV 打断: `flutter_tester` 在中途 `Shell subprocess crashed with segmentation fault`, 单跑同文件 2/2 绿, 证据已上交 `~/hw-stability/evidence/inbox/20261119-netease-mini-player-fluttertester-segv/`)· Rust **368** · 全量 `flutter test` **1322 通过 / 0 失败**(golden 21 张, 零重出) · `dart analyze` **0** · clippy **0** · 六道 checker OK |
+| **顺带** | `master_detail_flow_test.dart` 头部注释里「不能直接用 MiniNcmApp」的硬理由已失效, 改写为「轻壳更快更稳 + 回归锁在 app_shell_first_frame_test」 |
 
 ## 2026-11-19(十七) 设备级 androidTest 补跑(KVM 放开后) + 可选门 `android-test-emu` · **未发版**
 

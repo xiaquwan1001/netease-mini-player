@@ -402,7 +402,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 | ~~**U-04**(P2)~~ ✅ **已落(v0.22.1); 听感 2026-11-19 用户确认通过(无双音源并发)** | Dart 起播前暂停歌曲 + `MvPlayerActivity` 申请/放弃音频焦点 + 歌曲 ExoPlayer 开 `handleAudioFocus`(media3 1.9.4 默认 false, 已 `javap` 证实)。**需用户真机验 3 步**(见 PROGRESS 2026-11-18(十)) | 真机听感受限于用户 | — |
 | ~~**U-03**(P2)~~ ✅ **已落(v0.25.0)** | 新 `showAppSheet`/`showAppDialog` 统一入口, 已迁 31/38 处(剩 7 处冻结: podcast 详情 1 / 我的 1 / home 5); 新门 `tools/check-sheet-entry.sh` 已接 `ci-gates verify` + CI, 待迁名单不许增长 | 第二批跟随表的 7 处一起迁 | 剩余 S |
 | ~~U-05/U-06(P2)~~ ✅ **已落(v0.25.0)** | `runPostFrameIfAlive` 守卫帧后写槽; `HomeWiring` 改实例栈 `_alive`(主人 detach 交还仍活着的上一个)。红→绿已实证(还原补丁后 `A→B→B detach` 等用例失败) | 已做 | — |
-| **U-08**(P2, 2026-11-19 登记) | 「setState() called during build」的潜在面: `ContentWidthLimit`(LayoutBuilder)包住 `HomePage.initState` 时, 端到端测试用 `MiniNcmApp` pump 会命中该断言(生产同形)。S4 的端到端用例因此改用 `tab_switch_popups_test` 的注入式树绕开 | 用户报「首帧闪断/冷启动报错」, 或下次动 `app_shell.dart` 的限宽层 | S(把首页首帧副作用挪到 `addPostFrameCallback`, 补 1 例 pump 走真壳的回归) |
+| ~~**U-08**(P2, 2026-11-19 登记)~~ ✅ **已落(2026-11-19 晚, 未发版)** | 「setState() called during build」: `ContentWidthLimit`(LayoutBuilder)把 HomePage 首次建树压在 layout 阶段, 而 `HomeWiring._installSlots` 在 initState 里同步写 `actionsHost` ⇒ `MaterialApp.builder` 的 `ValueListenableBuilder` 构建期被标脏(生产同形, 宽/窄两档都有)。修法: 两个 ValueNotifier 槽位(动作宿主 / 播放条回调)**一律帧后投递**(仍带 `_attached`/`_latest` 守卫), `_clearSlots` 对称帧后再清。回归 `test/app_shell_first_frame_test.dart`(带真壳 `MiniNcmApp` 宽/窄两档 + 槽位帧后到位断言), 把写入挪回同步即红 | 已做 | — |
 | ~~U-07(P3)~~ ✅ **已落(v0.25.0)** | `NcmRouteObserver.didReplace` 补全(同时维护 pageDepth 与 popup 表), `pushReplacement` 两条用例红→绿 | 已做 | — |
 
 ## 15. 横屏双列布局(2026-11-18 评估产出 · 待开工)
