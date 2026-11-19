@@ -1,5 +1,9 @@
 # 轻音 MiniNCM — UI/UX 走查报告(只读审查)
 
+> ⛔ **行号证据已失效(2026-11-19 标注)**: 审查基线是 `main.dart` 单文件(3877 行)时代的 `7b6bfbe`, 拆壳 S0–S8 后
+> `main.dart` 只剩 48 行门面、页面逻辑在 `ui/lib/src/home/` ⇒ 文中所有 `main.dart:NNNN` 引用已漂移,
+> **不要把行号当入口**; 结论层(A/B/C 级已清零、C 级第一批已落)见 `docs/PROGRESS.md`。保留原文只为留过程证据。
+>
 > 审查基线: commit `7b6bfbe`(2026-11)。范围 `ui/lib/main.dart` + `ui/lib/src/*.dart`(44 文件 36.7k 行, 其中 3 个 rust/frb 生成文件不计)。
 > 方法: 静态阅读 + 定向 rg 证据链,未改动任何文件、未跑构建。
 > 每条结论均附 `文件:行号` 证据,行号对应上述 baseline。
