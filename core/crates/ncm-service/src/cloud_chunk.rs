@@ -2,7 +2,7 @@
 //!
 //! ## 为什么这里没有「真实分片端点」
 //!
-//! 2026-11-20 静态核实了本地全部上游参考(`references/api-enhanced`、vendor `ncm-api`、
+//! 2026-11-19 静态核实了本地全部上游参考(`references/api-enhanced`、vendor `ncm-api`、
 //! `legacy/plugins/lx-music`):
 //!
 //! - 音乐云盘桶 `jd-musicrep-privatecloud-audio-public` 的唯一上传路径是**单请求整文件**:
