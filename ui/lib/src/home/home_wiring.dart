@@ -144,13 +144,17 @@ class HomeWiring {
       ),
     );
     // 宿主建一次就存下: 交还(restore)时写回同一份, 不重复构造。
-    actionsHost.value = _host ??= buildActionsHost();
+    _host ??= buildActionsHost();
     ArtistNav.onOpenAlbum = openAlbum;
-    // 播放条回调槽位: 帧后投递, 避免在 initState 所在的构建阶段通知
-    // PlayerBarHost 的祖先。帧前后被销毁/被下一个实例顶掉时都不要写
-    // (建完即销毁的实例不该再复活成悬挂引用)。
+    // 两个 ValueNotifier 槽位(动作宿主 / 播放条回调)一律**帧后投递**:
+    // HomePage.initState 可能发生在 layout 阶段(壳层的 ContentWidthLimit 是
+    // LayoutBuilder, 首页首帧因此被压在 layout 里), 同步写槽位会让
+    // MaterialApp.builder 里的 ValueListenableBuilder 在构建期被标脏 ⇒
+    // 「setState() called during build」(U-08)。
+    // 帧前后被销毁/被下一个实例顶掉时都不要写(建完即销毁的实例不该复活成悬挂引用)。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_attached || !identical(_latest, this)) return;
+      actionsHost.value = _host;
       playerBarActions.value = barActions;
     });
   }
@@ -183,7 +187,14 @@ class HomeWiring {
     // 托盘动作同样摘掉: 这之后点托盘按钮安全 no-op(原生那边通常会先把按钮置灰)。
     DesktopShell.instance.setTrayActionHandlers(null);
     ArtistNav.onOpenAlbum = null;
-    actionsHost.value = null;
-    playerBarActions.value = null;
+    // 两个 ValueNotifier 与 [_installSlots] 对称地帧后再清: dispose 也可能发生在
+    // 构建/布局阶段(换树时旧 HomePage 的 dispose 与新页面的 build 同属一帧),
+    // 同步置 null 同样会命中「setState() called during build」。
+    // 帧后若已有新实例接手就什么都别清(谁活着谁拥有槽位)。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_alive.isNotEmpty) return;
+      actionsHost.value = null;
+      playerBarActions.value = null;
+    });
   }
 }

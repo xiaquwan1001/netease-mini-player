@@ -157,9 +157,11 @@ class _FakeRustApi implements RustLibApi {
 
 /// 根壳: 观察者 + Navigator 之外的播放条/导航栏(tab_switch_popups_test 同一条装配)。
 ///
-/// 不直接用 MiniNcmApp: 它的 ContentWidthLimit(LayoutBuilder)把 HomePage 的首次建树
-/// 压在 layout 阶段, 而 HomePage.initState 会写 actionsHost 槽位 ⇒ 测试里必然触发
-/// "setState() called during build"(生产环境同样存在, 只是不在这条用例的关心范围内)。
+/// 不直接用 MiniNcmApp: 它要真 Rust/真设置, 这条用例只测布局语义, 用同一条装配的
+/// 轻壳更快更稳。(曾经的硬原因 —— ContentWidthLimit(LayoutBuilder)把 HomePage 的
+/// 首次建树压在 layout 阶段, 而 initState 同步写 actionsHost 槽位 ⇒
+/// "setState() called during build" —— 已由 U-08 修掉, 回归锁在
+/// test/app_shell_first_frame_test.dart。)
 /// 840 限宽下的主从几何由 test/detail_pane_test.dart 精确锁住。
 ///
 /// HomePage 的 bootstrap 会打平台通道/Rust 并起 500ms 轮询 Timer, 所以只 pump 固定
