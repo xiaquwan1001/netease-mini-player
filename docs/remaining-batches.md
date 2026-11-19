@@ -14,7 +14,7 @@
 > 平台层审计 22 条已落 21 条(P-01..P-22 只剩 P-11 的 ③「通知点击需真机」与 P-10 的真机听感, 见 §13);
 > main.dart 拆壳 **S0–S8 全部完成**(3877→**48 行**门面, `ui/lib/src/home/`); 列表行 A/B 级清零、C 级第一批已落;
 > Android 侧三道门全进 CI(`android-unit` / `android-lint` 阻塞, `android-instrumented` 需 `NCM_INSTRUMENTED=1`);
-> 已发布版本 **v0.21.0**, 其后 main 上的未发版切片见 `PROGRESS.md` 时间线与 `.pi/memory/notes-wip.md`。
+> 已发布版本 **v0.26.2**(2026-11-19); 版本时间线与门禁基线只看 `PROGRESS.md`, 本文件不复述数字。
 >
 > **下一轮从哪挑**: **§11 · 待办**(功能/小改) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**。
 

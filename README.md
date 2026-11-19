@@ -196,7 +196,7 @@ cargo run -p ncm-cli -- lyric 186016
 本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
 调的都是同一处 —— 发版门不会再比 CI 弱(token / write-guard / format / clippy / golden 在 CI 与发版里都跑)。
 
-## 项目进度(当前版本 v0.18.0)
+## 项目进度(当前版本 v0.26.2 —— 版本号唯一事实来源是 `ui/pubspec.yaml`)
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
