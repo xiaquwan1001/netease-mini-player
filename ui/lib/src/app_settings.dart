@@ -88,6 +88,52 @@ extension CloseBehaviorX on CloseBehavior {
       raw == 'tray' ? CloseBehavior.minimizeToTray : CloseBehavior.quit;
 }
 
+/// 推荐页顶栏第一格「自定义」可绑定的动作(2026-11-19 用户口径: 这一格留给
+/// 自定义功能, 不再和下方「每日推荐」区块的「全部」重复)。
+///
+/// 持久化用 [CustomQuickActionX.id](稳定字符串), 缺字段/未知值回落
+/// [CustomQuickAction.ranking] —— 既不是重复入口, 又有真实落地页。
+enum CustomQuickAction {
+  /// 听歌排行(需登录, 与「我的」页同一个落地页)
+  ranking,
+
+  /// 新歌新碟分类页
+  newRelease,
+
+  /// 歌单广场
+  playlistSquare,
+
+  /// 历史日推(每日推荐页的第三个页签)
+  historyDaily,
+
+  /// 私人 FM
+  personalFm,
+}
+
+extension CustomQuickActionX on CustomQuickAction {
+  /// 持久化用的稳定 id(不要改: 改了老配置读不回来)
+  String get id => switch (this) {
+    CustomQuickAction.ranking => 'ranking',
+    CustomQuickAction.newRelease => 'newRelease',
+    CustomQuickAction.playlistSquare => 'playlistSquare',
+    CustomQuickAction.historyDaily => 'historyDaily',
+    CustomQuickAction.personalFm => 'personalFm',
+  };
+
+  /// 快捷卡文案(也是自定义浮层里单选项的标题)
+  String get label => switch (this) {
+    CustomQuickAction.ranking => '排行榜',
+    CustomQuickAction.newRelease => '新歌新碟',
+    CustomQuickAction.playlistSquare => '歌单广场',
+    CustomQuickAction.historyDaily => '历史日推',
+    CustomQuickAction.personalFm => '私人FM',
+  };
+
+  /// 缺字段/未知值一律回落默认动作(排行榜)。
+  static CustomQuickAction fromId(Object? raw) => CustomQuickAction.values
+      .firstWhere((v) => v.id == raw, orElse: () => CustomQuickAction.ranking);
+}
+
 /// 设置域: 与 app_settings_codec.dart 的七个 `_apply*` 一一对应。
 ///
 /// 一次变更先算"哪些域真的变了"([AppSettingsSnapshot.diffTo]), 订阅方按域收通知;
@@ -145,6 +191,7 @@ class AppSettingsSnapshot {
     this.detailFace = 'lyrics',
     this.coverQuality = CoverQuality.standard,
     this.oledDark = false,
+    this.customQuickAction = CustomQuickAction.ranking,
     this.volumeGainDb = 0.0,
     this.loudnessNormalize = false,
     this.loudnessTargetLufs = -16.0,
@@ -182,6 +229,9 @@ class AppSettingsSnapshot {
   final String detailFace;
   final CoverQuality coverQuality;
   final bool oledDark;
+
+  /// 推荐页顶栏第一格「自定义」绑定的动作(B7)。
+  final CustomQuickAction customQuickAction;
   final double volumeGainDb;
   final bool loudnessNormalize;
   final double loudnessTargetLufs;
@@ -222,6 +272,7 @@ class AppSettingsSnapshot {
     String? detailFace,
     CoverQuality? coverQuality,
     bool? oledDark,
+    CustomQuickAction? customQuickAction,
     double? volumeGainDb,
     bool? loudnessNormalize,
     double? loudnessTargetLufs,
@@ -259,6 +310,7 @@ class AppSettingsSnapshot {
       detailFace: detailFace ?? this.detailFace,
       coverQuality: coverQuality ?? this.coverQuality,
       oledDark: oledDark ?? this.oledDark,
+      customQuickAction: customQuickAction ?? this.customQuickAction,
       volumeGainDb: volumeGainDb ?? this.volumeGainDb,
       loudnessNormalize: loudnessNormalize ?? this.loudnessNormalize,
       loudnessTargetLufs: loudnessTargetLufs ?? this.loudnessTargetLufs,
@@ -302,7 +354,8 @@ class AppSettingsSnapshot {
         coverRows != other.coverRows ||
         gridColumns != other.gridColumns ||
         coverQuality != other.coverQuality ||
-        oledDark != other.oledDark) {
+        oledDark != other.oledDark ||
+        customQuickAction != other.customQuickAction) {
       changed.add(AppSettingsDomain.appearance);
     }
     if (audioLevel != other.audioLevel ||
@@ -567,6 +620,11 @@ class AppSettings extends ChangeNotifier {
   /// R6: 深色模式下用 OLED 纯黑(#000000)取代 Material 的 #121212
   bool get oledDark => _snapshot.oledDark;
   set oledDark(bool value) => _update(_snapshot.copyWith(oledDark: value));
+
+  /// B7: 推荐页顶栏第一格「自定义」绑定的动作(默认排行榜)。
+  CustomQuickAction get customQuickAction => _snapshot.customQuickAction;
+  set customQuickAction(CustomQuickAction value) =>
+      _update(_snapshot.copyWith(customQuickAction: value));
 
   /// R2: 播放器级精细音量增益(dB). 与系统音量相乘, 0 = 不变.
   /// 范围 -40..0, 步进 0.5; 0 dB 时完全旁路.

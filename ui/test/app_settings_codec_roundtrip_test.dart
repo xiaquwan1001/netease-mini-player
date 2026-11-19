@@ -26,6 +26,7 @@ const expectedKeys = <String>{
   'gridColumns',
   'coverQuality',
   'oledDark',
+  'customQuickAction',
   // 播放/音质
   'audioLevel',
   'skipVipSongs',
@@ -77,6 +78,7 @@ void resetToDefaults() {
   s.anonymousDebug = false;
   s.coverQuality = CoverQuality.standard;
   s.oledDark = false;
+  s.customQuickAction = CustomQuickAction.ranking;
   s.volumeGainDb = 0.0;
   s.loudnessNormalize = false;
   s.loudnessTargetLufs = -16.0;
@@ -145,6 +147,7 @@ void main() {
     s.anonymousDebug = true;
     s.coverQuality = CoverQuality.ultra;
     s.oledDark = true;
+    s.customQuickAction = CustomQuickAction.historyDaily;
     s.volumeGainDb = -7.5;
     s.loudnessNormalize = true;
     s.loudnessTargetLufs = -14.0;
@@ -188,6 +191,7 @@ void main() {
     expect(s.anonymousDebug, isTrue);
     expect(s.coverQuality, CoverQuality.ultra);
     expect(s.oledDark, isTrue);
+    expect(s.customQuickAction, CustomQuickAction.historyDaily);
     expect(s.volumeGainDb, -7.5);
     expect(s.loudnessNormalize, isTrue);
     expect(s.loudnessTargetLufs, -14.0);
@@ -227,6 +231,8 @@ void main() {
     expect(AppSettings.instance.closeBehavior, CloseBehavior.quit);
     // 详情面偏好: 老配置没有这个字段 ⇒ 默认歌词(不迁移、不报错)
     expect(AppSettings.instance.detailFace, 'lyrics');
+    // B7: 老配置没有 customQuickAction ⇒ 默认「排行榜」, 不报错
+    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking);
   });
 
   test('detailFace 白名单: 手工改坏的未知值被丢弃, 保持默认', () async {
@@ -240,6 +246,13 @@ void main() {
     expect(AppSettings.instance.detailFace, 'lyrics');
     AppSettings.instance.detailFace = 'cover';
     expect(AppSettings.instance.detailFace, 'cover');
+  });
+
+  test('customQuickAction 未知值也回落排行榜(手改坏的配置不炸)', () async {
+    File('${dir.path}/settings.json')
+        .writeAsStringSync(jsonEncode({'customQuickAction': 'nope'}));
+    await AppSettings.instance.load(dir.path);
+    expect(AppSettings.instance.customQuickAction, CustomQuickAction.ranking)
   });
 
   test('schema < 2 的 lyricSourcePreference=auto 一次性抬到 amll(迁移仍生效)', () async {

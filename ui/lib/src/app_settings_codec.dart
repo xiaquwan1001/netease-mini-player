@@ -52,6 +52,11 @@ extension _AppSettingsJsonCodec on AppSettings {
       coverQuality = CoverQualityX.fromId(coverQualityRaw);
     }
     if (raw['oledDark'] is bool) oledDark = raw['oledDark'] as bool;
+    // B7 自定义快捷入口: 缺字段/未知值回落默认(排行榜), 老配置零迁移。
+    final quickAction = raw['customQuickAction'];
+    if (quickAction is String) {
+      customQuickAction = CustomQuickActionX.fromId(quickAction);
+    }
   }
 
   /// 播放/音质/响度/EQ/歌词来源/桌面关闭行为。
@@ -203,6 +208,7 @@ extension _AppSettingsJsonCodec on AppSettings {
     'gridColumns': gridColumns,
     'coverQuality': coverQuality.id,
     'oledDark': oledDark,
+    'customQuickAction': customQuickAction.id,
     // ---- 播放/音质 ----
     'audioLevel': audioLevel,
     'skipVipSongs': skipVipSongs,

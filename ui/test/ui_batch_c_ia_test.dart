@@ -333,9 +333,10 @@ void main() {
     await tester.pumpAndSettle();
 
     // 合并后的 5 个区块标题(快捷区是三张卡, 没有标题)
-    expect(find.text('每日推荐'), findsNWidgets(2)); // 快捷卡 + 区块标题
-    // 排行榜已按用户要求移到搜索页
-    expect(find.text('排行榜'), findsNothing);
+    expect(find.text('每日推荐'), findsOneWidget); // 只剩区块标题
+    // 排行榜区块已按用户要求移到搜索页; B7 之后顶栏第一格是「自定义」卡,
+    // 默认绑定排行榜 ⇒ 只有这张卡的文案是「排行榜」, 页面里没有榜单区块。
+    expect(find.text('排行榜'), findsOneWidget);
     expect(find.text('风格推荐'), findsOneWidget);
     expect(find.text('推荐歌单'), findsOneWidget);
     expect(find.text('新歌新碟'), findsOneWidget);

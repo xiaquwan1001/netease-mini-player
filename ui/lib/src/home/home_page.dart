@@ -49,6 +49,7 @@ import '../playback.dart';
 import '../playback_bridge.dart';
 import '../player_bar.dart';
 import '../queue.dart';
+import '../ranking_view.dart' show showPlayRanking;
 import '../recommend_view.dart';
 import '../rust/api.dart' as rust;
 import '../search_exact_bar.dart';
@@ -761,13 +762,16 @@ class _HomePageState extends State<HomePage> {
     showToast(context, message);
   }
 
-  void _openDiscover() {
+  /// 每日推荐页。[initialTab] 给「历史日推」快捷动作复用(B7):
+  /// 0 推荐歌曲 / 1 推荐歌单 / 2 历史日推, 默认 0(历史行为不变)。
+  void _openDiscover({int initialTab = 0}) {
     showDiscoverPage(
       context,
       onOpenPlaylist: _account.openPlaylist,
       loadPlaylists: _account.dailyPlaylists,
       // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
       loadLocalDays: _account.dailyLocalDays,
+      initialTab: initialTab,
     );
   }
 
@@ -1355,6 +1359,10 @@ class _HomePageState extends State<HomePage> {
           onOpenPodcast: _openPodcastRadio,
           onHeartMode: () => _heartMode(),
           onOpenDaily: _openDiscover,
+          // B7 顶栏「自定义」卡可绑定的动作: 历史日推 = 每日推荐页第三个页签;
+          // 排行榜复用「我的」页同一个落地页(showPlayRanking)。
+          onOpenDailyHistory: () => _openDiscover(initialTab: 2),
+          onOpenRanking: () => showPlayRanking(context),
           onOpenAlbum: (album) => showAlbumPreview(
             context,
             albumId: album.id,
