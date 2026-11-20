@@ -2068,11 +2068,14 @@ fn wire__crate__api__account__login_qr_check_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_key = <String>::sse_decode(&mut deserializer);
+            let api_secure_captcha = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
-                        let output_ok = crate::api::account::login_qr_check(api_key).await?;
+                        let output_ok =
+                            crate::api::account::login_qr_check(api_key, api_secure_captcha)
+                                .await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,
@@ -6103,6 +6106,7 @@ const _: fn() = || {
         let _: bool = QrLoginCheck.logged_in;
         let _: String = QrLoginCheck.nickname;
         let _: Option<String> = QrLoginCheck.avatar_url;
+        let _: Option<String> = QrLoginCheck.secure_captcha;
     }
     {
         let QrLoginKey = None::<crate::api::account::QrLoginKey>.unwrap();
@@ -8375,12 +8379,14 @@ impl SseDecode for crate::api::account::QrLoginCheck {
         let mut var_loggedIn = <bool>::sse_decode(deserializer);
         let mut var_nickname = <String>::sse_decode(deserializer);
         let mut var_avatarUrl = <Option<String>>::sse_decode(deserializer);
+        let mut var_secureCaptcha = <Option<String>>::sse_decode(deserializer);
         return crate::api::account::QrLoginCheck {
             state: var_state,
             code: var_code,
             logged_in: var_loggedIn,
             nickname: var_nickname,
             avatar_url: var_avatarUrl,
+            secure_captcha: var_secureCaptcha,
         };
     }
 }
@@ -8409,6 +8415,8 @@ impl SseDecode for crate::api::account::QrLoginState {
             2 => crate::api::account::QrLoginState::Confirmed,
             3 => crate::api::account::QrLoginState::Expired,
             4 => crate::api::account::QrLoginState::Failed,
+            5 => crate::api::account::QrLoginState::Captcha,
+            6 => crate::api::account::QrLoginState::Unknown,
             _ => unreachable!("Invalid variant for QrLoginState: {}", inner),
         };
     }
@@ -10849,6 +10857,7 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::account::QrLoginCh
             self.0.logged_in.into_into_dart().into_dart(),
             self.0.nickname.into_into_dart().into_dart(),
             self.0.avatar_url.into_into_dart().into_dart(),
+            self.0.secure_captcha.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -10895,6 +10904,8 @@ impl flutter_rust_bridge::IntoDart for FrbWrapper<crate::api::account::QrLoginSt
             crate::api::account::QrLoginState::Confirmed => 2.into_dart(),
             crate::api::account::QrLoginState::Expired => 3.into_dart(),
             crate::api::account::QrLoginState::Failed => 4.into_dart(),
+            crate::api::account::QrLoginState::Captcha => 5.into_dart(),
+            crate::api::account::QrLoginState::Unknown => 6.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -13248,6 +13259,7 @@ impl SseEncode for crate::api::account::QrLoginCheck {
         <bool>::sse_encode(self.logged_in, serializer);
         <String>::sse_encode(self.nickname, serializer);
         <Option<String>>::sse_encode(self.avatar_url, serializer);
+        <Option<String>>::sse_encode(self.secure_captcha, serializer);
     }
 }
 
@@ -13270,6 +13282,8 @@ impl SseEncode for crate::api::account::QrLoginState {
                 crate::api::account::QrLoginState::Confirmed => 2,
                 crate::api::account::QrLoginState::Expired => 3,
                 crate::api::account::QrLoginState::Failed => 4,
+                crate::api::account::QrLoginState::Captcha => 5,
+                crate::api::account::QrLoginState::Unknown => 6,
                 _ => {
                     unimplemented!("");
                 }

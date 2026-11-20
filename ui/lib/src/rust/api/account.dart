@@ -73,8 +73,13 @@ Future<QrLoginKey> loginQrCreate() =>
     RustLib.instance.api.crateApiAccountLoginQrCreate();
 
 /// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
-Future<QrLoginCheck> loginQrCheck({required String key}) =>
-    RustLib.instance.api.crateApiAccountLoginQrCheck(key: key);
+Future<QrLoginCheck> loginQrCheck({
+  required String key,
+  String? secureCaptcha,
+}) => RustLib.instance.api.crateApiAccountLoginQrCheck(
+  key: key,
+  secureCaptcha: secureCaptcha,
+);
 
 /// 当前凭据后端状态(设置页/排障用): 是否有安全后端、旧明文是否已迁移.
 Future<CredentialStatusDto> credentialStatus() =>
@@ -377,7 +382,7 @@ class ProfileDetail {
 class QrLoginCheck {
   final QrLoginState state;
 
-  /// 官方原始 code(801/802/803/800), 排障用
+  /// 官方原始 code(801/802/803/800/8821; 未知 code 原样保留), 排障用
   final PlatformInt64 code;
 
   /// Confirmed 且凭据已落盘
@@ -385,12 +390,16 @@ class QrLoginCheck {
   final String nickname;
   final String? avatarUrl;
 
+  /// 易盾验证句柄(8821 场景), 下一轮轮询原样回传
+  final String? secureCaptcha;
+
   const QrLoginCheck({
     required this.state,
     required this.code,
     required this.loggedIn,
     required this.nickname,
     this.avatarUrl,
+    this.secureCaptcha,
   });
 
   @override
@@ -399,7 +408,8 @@ class QrLoginCheck {
       code.hashCode ^
       loggedIn.hashCode ^
       nickname.hashCode ^
-      avatarUrl.hashCode;
+      avatarUrl.hashCode ^
+      secureCaptcha.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -410,7 +420,8 @@ class QrLoginCheck {
           code == other.code &&
           loggedIn == other.loggedIn &&
           nickname == other.nickname &&
-          avatarUrl == other.avatarUrl;
+          avatarUrl == other.avatarUrl &&
+          secureCaptcha == other.secureCaptcha;
 }
 
 /// 扫码登录: 二维码会话(Dart 侧渲染 QR + 轮询)
@@ -442,8 +453,16 @@ class QrLoginKey {
           expiresIn == other.expiresIn;
 }
 
-/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期)
-enum QrLoginState { pending, scanned, confirmed, expired, failed }
+/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期 / 8821 需易盾验证)
+enum QrLoginState {
+  pending,
+  scanned,
+  confirmed,
+  expired,
+  failed,
+  captcha,
+  unknown,
+}
 
 class SmsCodeSent {
   /// 服务端原始 code(200 已发送 / 8821 风控 / 400 号码不合法 / 503 频率限制)

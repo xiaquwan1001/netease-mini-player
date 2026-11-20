@@ -79,7 +79,7 @@ void main() {
         result = await showLoginSheet(
           ctx,
           createQr: () async => key(),
-          checkQr: (_) async {
+          checkQr: (_, _) async {
             final i = calls < states.length - 1 ? calls : states.length - 1;
             calls++;
             return states[i];
@@ -120,7 +120,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => key(),
-          checkQr: (_) async {
+          checkQr: (_, _) async {
             calls++;
             return check(rust.QrLoginState.expired, code: 800);
           },
@@ -146,6 +146,111 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('扫码 8821(需易盾验证): 提示安全验证并继续轮询', (tester) async {
+    await bigSurface(tester);
+    var calls = 0;
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_, _) async {
+            calls++;
+            // 8821: 官方 PC 端此时弹易盾窗口; 本仓只做文案 + secureCaptcha 透传,
+            // 扫码会话不结束, 轮询必须继续。
+            return rust.QrLoginCheck(
+              state: rust.QrLoginState.captcha,
+              code: 8821,
+              loggedIn: false,
+              nickname: '',
+              avatarUrl: null,
+              secureCaptcha: 'tok-1',
+            );
+          },
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
+    await openSheet(tester);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump();
+    expect(find.text('需要在手机上完成安全验证, 完成后会自动继续'), findsOneWidget);
+
+    // 与 expired/failed 不同: 定时器**不停**, 继续轮询等用户完成验证
+    final before = calls;
+    await tester.pump(const Duration(milliseconds: 320));
+    await tester.pump();
+    expect(calls, greaterThan(before));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('扫码 8821: secureCaptcha 记住后下一轮原样回传', (tester) async {
+    await bigSurface(tester);
+    final seen = <String?>[];
+    var calls = 0;
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_, captcha) async {
+            seen.add(captcha);
+            calls++;
+            // 第一轮 8821 带句柄, 之后句柄一路带着走(官方 PC 客户端同理)
+            return rust.QrLoginCheck(
+              state: rust.QrLoginState.captcha,
+              code: 8821,
+              loggedIn: false,
+              nickname: '',
+              avatarUrl: null,
+              secureCaptcha: 'tok-9',
+            );
+          },
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
+    await openSheet(tester);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump();
+    expect(calls, greaterThanOrEqualTo(2));
+    // 首轮没有句柄(null), 拿到后下一轮原样回传, 不做解析/改写
+    expect(seen.first, isNull);
+    expect(seen.skip(1).every((c) => c == 'tok-9'), isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('扫码未知 code(Unknown): 提示异常码并停轮询', (tester) async {
+    await bigSurface(tester);
+    var calls = 0;
+    await tester.pumpWidget(
+      host((ctx) {
+        showLoginSheet(
+          ctx,
+          createQr: () async => key(),
+          checkQr: (_, _) async {
+            calls++;
+            return check(rust.QrLoginState.unknown, code: 9999);
+          },
+          pollInterval: const Duration(milliseconds: 100),
+        );
+      }),
+    );
+    await openSheet(tester);
+    await tester.pump(const Duration(milliseconds: 120));
+    await tester.pump();
+    // 文案层提示异常码(状态行给「刷新二维码」建议, 详情行给 code)
+    expect(find.text('扫码状态异常, 请点「刷新二维码」重试'), findsOneWidget);
+
+    // Unknown 不是可继续状态: 定时器必须停(与 8821 相反)
+    final afterUnknown = calls;
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(calls, afterUnknown);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('导入 Cookie: 成功后关闭并回调', (tester) async {
     await bigSurface(tester);
     var committed = '';
@@ -156,7 +261,7 @@ void main() {
         result = await showLoginSheet(
           ctx,
           createQr: () async => key(),
-          checkQr: (_) async => check(rust.QrLoginState.pending),
+          checkQr: (_, _) async => check(rust.QrLoginState.pending),
           commitCookie: (cookie) async {
             committed = cookie;
             return true;
@@ -187,7 +292,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => key(),
-          checkQr: (_) async => check(rust.QrLoginState.pending),
+          checkQr: (_, _) async => check(rust.QrLoginState.pending),
           commitCookie: (_) async => false,
           pollInterval: const Duration(milliseconds: 100),
         );
@@ -213,7 +318,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => key(),
-          checkQr: (_) async => check(rust.QrLoginState.pending),
+          checkQr: (_, _) async => check(rust.QrLoginState.pending),
           commitCookie: (_) async {
             called++;
             return true;
@@ -244,7 +349,7 @@ void main() {
             if (attempts == 1) throw Exception('[network] boom');
             return key();
           },
-          checkQr: (_) async => check(rust.QrLoginState.pending),
+          checkQr: (_, _) async => check(rust.QrLoginState.pending),
           pollInterval: const Duration(milliseconds: 100),
         );
       }),
@@ -277,7 +382,7 @@ void main() {
                 showLoginSheet(
                   ctx,
                   createQr: () async => key(),
-                  checkQr: (_) async => check(rust.QrLoginState.pending),
+                  checkQr: (_, _) async => check(rust.QrLoginState.pending),
                   pollInterval: const Duration(milliseconds: 100),
                 );
               },
@@ -320,7 +425,7 @@ void main() {
       showLoginSheet(
         tester.element(find.byType(HomePage)),
         createQr: () async => key(),
-        checkQr: (_) async => check(rust.QrLoginState.pending),
+        checkQr: (_, _) async => check(rust.QrLoginState.pending),
         pollInterval: const Duration(milliseconds: 100),
       ),
     );

@@ -71,7 +71,10 @@ class LoginSheet extends StatefulWidget {
   final Future<rust.QrLoginKey> Function()? createQr;
 
   /// 轮询一次(默认 rust.loginQrCheck)
-  final Future<rust.QrLoginCheck> Function(String key)? checkQr;
+  ///
+  /// 第二个参数是易盾验证句柄(官方 code 8821), 拿到后下一轮原样回传; 正常扫码一直是 null.
+  final Future<rust.QrLoginCheck> Function(String key, String? secureCaptcha)?
+  checkQr;
 
   /// 发短信验证码(默认 rust.loginSmsSend)
   final Future<rust.SmsCodeSent> Function(String phone, String countryCode)?
@@ -110,6 +113,12 @@ class LoginSheetState extends State<LoginSheet> {
 
   rust.QrLoginKey? _qr;
   rust.QrLoginState _state = rust.QrLoginState.pending;
+
+  /// 易盾验证句柄(官方 code 8821)
+  ///
+  /// 只做**透传**: 服务端在 `QrLoginCheck.secureCaptcha` 里给什么, 下一轮就原样带回去
+  /// (官方 PC 客户端也是这么用的)。本仓没有易盾 SDK, 正常扫码一直为 null。
+  String? _captcha;
   String? _error;
   bool _creating = false;
   bool _committing = false;
@@ -143,8 +152,9 @@ class LoginSheetState extends State<LoginSheet> {
   Future<rust.QrLoginKey> Function() get _createQr =>
       widget.createQr ?? rust.loginQrCreate;
 
-  Future<rust.QrLoginCheck> Function(String key) get _checkQr =>
-      widget.checkQr ?? (key) => rust.loginQrCheck(key: key);
+  Future<rust.QrLoginCheck> Function(String, String?) get _checkQr =>
+      widget.checkQr ??
+      (key, captcha) => rust.loginQrCheck(key: key, secureCaptcha: captcha);
 
   Future<void> _startQr() async {
     _timer?.cancel();
@@ -152,6 +162,7 @@ class LoginSheetState extends State<LoginSheet> {
       _creating = true;
       _error = null;
       _state = rust.QrLoginState.pending;
+      _captcha = null;
     });
     try {
       final key = await _createQr();
@@ -175,11 +186,15 @@ class LoginSheetState extends State<LoginSheet> {
     // 弹层已关闭 / 还没拿到 key / 用户切到别的登录方式时不再轮询
     if (key == null || !mounted || _tab != 0) return;
     try {
-      final check = await _checkQr(key.key);
+      final check = await _checkQr(key.key, _captcha);
       if (!mounted) return;
       // 期间用户重新申请了新码: 丢弃这次结果
       if (_qr?.key != key.key) return;
-      setState(() => _state = check.state);
+      setState(() {
+        _state = check.state;
+        // 8821 之后服务端可能下发句柄: 下一轮原样带回去, 不解析
+        _captcha = check.secureCaptcha;
+      });
       switch (check.state) {
         case rust.QrLoginState.confirmed:
           _timer?.cancel();
@@ -189,6 +204,13 @@ class LoginSheetState extends State<LoginSheet> {
         case rust.QrLoginState.failed:
           _timer?.cancel();
           setState(() => _error = '扫码失败(code=${check.code})');
+        case rust.QrLoginState.captcha:
+          // 官方 8821: 需要在手机上完成易盾安全验证。扫码会话没结束, **继续轮询**;
+          // 本仓不做整套易盾 UI(没有 SDK), 只把状态透到文案层。
+          break;
+        case rust.QrLoginState.unknown:
+          _timer?.cancel();
+          setState(() => _error = '扫码状态异常(code=${check.code})');
         case rust.QrLoginState.pending:
         case rust.QrLoginState.scanned:
           break;
@@ -340,6 +362,10 @@ class LoginSheetState extends State<LoginSheet> {
         return '扫码失败, 请重试';
       case rust.QrLoginState.confirmed:
         return '登录成功';
+      case rust.QrLoginState.captcha:
+        return '需要在手机上完成安全验证, 完成后会自动继续';
+      case rust.QrLoginState.unknown:
+        return '扫码状态异常, 请点「刷新二维码」重试';
       case rust.QrLoginState.pending:
         return '等待扫码…';
     }
@@ -608,7 +634,8 @@ class LoginSheetState extends State<LoginSheet> {
 Future<bool> showLoginSheet(
   BuildContext context, {
   Future<rust.QrLoginKey> Function()? createQr,
-  Future<rust.QrLoginCheck> Function(String key)? checkQr,
+  Future<rust.QrLoginCheck> Function(String key, String? secureCaptcha)?
+  checkQr,
   Future<rust.SmsCodeSent> Function(String phone, String countryCode)? sendSms,
   Future<rust.PhoneLoginResult> Function(
     String phone,

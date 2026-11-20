@@ -68,7 +68,7 @@ void main() {
         result = await showLoginSheet(
           ctx,
           createQr: () async => qrKey(),
-          checkQr: (_) async => pending(),
+          checkQr: (_, _) async => pending(),
           sendSms: (phone, cc) async {
             sentPhone = '$cc-$phone';
             return const rust.SmsCodeSent(
@@ -127,7 +127,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => qrKey(),
-          checkQr: (_) async => pending(),
+          checkQr: (_, _) async => pending(),
           sendSms: (phone, cc) async =>
               throw Exception('[riskControl] code=8821: 安全环境风险, 请切换其他登录方式'),
           verifySms: (phone, code, cc) async => okLogin(),
@@ -162,7 +162,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => qrKey(),
-          checkQr: (_) async => pending(),
+          checkQr: (_, _) async => pending(),
           sendSms: (phone, cc) async {
             called++;
             return const rust.SmsCodeSent(
@@ -204,7 +204,7 @@ void main() {
         showLoginSheet(
           ctx,
           createQr: () async => qrKey(),
-          checkQr: (_) async {
+          checkQr: (_, _) async {
             polls++;
             return pending();
           },
@@ -238,7 +238,7 @@ void main() {
                 showLoginSheet(
                   ctx,
                   createQr: () async => qrKey(),
-                  checkQr: (_) async => pending(),
+                  checkQr: (_, _) async => pending(),
                   sendSms: (phone, cc) async => const rust.SmsCodeSent(
                     code: 200,
                     message: '',

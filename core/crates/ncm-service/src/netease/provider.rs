@@ -530,8 +530,12 @@ impl AccountProvider for NeteaseProvider {
     }
 
     /// 扫码登录 ②: 轮询. 803 时的登录凭据在 Set-Cookie 里(不在 body).
-    fn login_qr_check<'a>(&'a self, key: &'a str) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
-        NeteaseProvider::login_qr_check(self, key)
+    fn login_qr_check<'a>(
+        &'a self,
+        key: &'a str,
+        secure_captcha: Option<&'a str>,
+    ) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
+        NeteaseProvider::login_qr_check(self, key, secure_captcha)
     }
 
     /// 手机号登录 ①: 发短信验证码(网页登录通道 weapi, 与扫码同一族).

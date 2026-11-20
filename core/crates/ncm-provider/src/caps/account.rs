@@ -23,9 +23,13 @@ pub trait AccountProvider: Send + Sync {
     }
 
     /// 轮询扫码结果. 成功(Confirmed)时带登录凭据, 由调用方合并落盘.
+    ///
+    /// `secure_captcha`: 易盾安全验证句柄(官方 code 8821 场景). 官方 PC 客户端每轮都带
+    /// (初值空串), 验证通过后回填; 没有易盾组件时传 `None` 即可, 服务端对缺省是宽容的.
     fn login_qr_check<'a>(
         &'a self,
         _key: &'a str,
+        _secure_captcha: Option<&'a str>,
     ) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
         Box::pin(async { Err(ProviderError::unsupported("no qr login")) })
     }

@@ -292,7 +292,10 @@ abstract class RustLibApi extends BaseApi {
 
   Future<List<SongDto>> crateApiSearchLocalRecentSongs({required int limit});
 
-  Future<QrLoginCheck> crateApiAccountLoginQrCheck({required String key});
+  Future<QrLoginCheck> crateApiAccountLoginQrCheck({
+    required String key,
+    String? secureCaptcha,
+  });
 
   Future<QrLoginKey> crateApiAccountLoginQrCreate();
 
@@ -2373,12 +2376,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "local_recent_songs", argNames: ["limit"]);
 
   @override
-  Future<QrLoginCheck> crateApiAccountLoginQrCheck({required String key}) {
+  Future<QrLoginCheck> crateApiAccountLoginQrCheck({
+    required String key,
+    String? secureCaptcha,
+  }) {
     return handler.executeNormal(
       NormalTask(
         callFfi: (port_) {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(key, serializer);
+          sse_encode_opt_String(secureCaptcha, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -2391,14 +2398,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountLoginQrCheckConstMeta,
-        argValues: [key],
+        argValues: [key, secureCaptcha],
         apiImpl: this,
       ),
     );
   }
 
   TaskConstMeta get kCrateApiAccountLoginQrCheckConstMeta =>
-      const TaskConstMeta(debugName: "login_qr_check", argNames: ["key"]);
+      const TaskConstMeta(
+        debugName: "login_qr_check",
+        argNames: ["key", "secureCaptcha"],
+      );
 
   @override
   Future<QrLoginKey> crateApiAccountLoginQrCreate() {
@@ -6983,14 +6993,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   QrLoginCheck dco_decode_qr_login_check(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
     return QrLoginCheck(
       state: dco_decode_qr_login_state(arr[0]),
       code: dco_decode_i_64(arr[1]),
       loggedIn: dco_decode_bool(arr[2]),
       nickname: dco_decode_String(arr[3]),
       avatarUrl: dco_decode_opt_String(arr[4]),
+      secureCaptcha: dco_decode_opt_String(arr[5]),
     );
   }
 
@@ -9627,12 +9638,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_loggedIn = sse_decode_bool(deserializer);
     var var_nickname = sse_decode_String(deserializer);
     var var_avatarUrl = sse_decode_opt_String(deserializer);
+    var var_secureCaptcha = sse_decode_opt_String(deserializer);
     return QrLoginCheck(
       state: var_state,
       code: var_code,
       loggedIn: var_loggedIn,
       nickname: var_nickname,
       avatarUrl: var_avatarUrl,
+      secureCaptcha: var_secureCaptcha,
     );
   }
 
@@ -11951,6 +11964,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.loggedIn, serializer);
     sse_encode_String(self.nickname, serializer);
     sse_encode_opt_String(self.avatarUrl, serializer);
+    sse_encode_opt_String(self.secureCaptcha, serializer);
   }
 
   @protected

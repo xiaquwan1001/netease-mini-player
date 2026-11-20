@@ -102,13 +102,16 @@ impl NeteaseProvider {
     }
 
     /// 扫码登录 ①: 申请二维码 key(官方网页登录页同一通道, weapi)
+    ///
+    /// `type` 不写魔数: 统一由 [`QrClientKind::current`] 按编译目标派生(口径与匿名实测
+    /// 见该类型的文档)。
     pub(super) fn login_qr_create<'a>(&'a self) -> BoxFuture<'a, ProviderResult<QrLoginKey>> {
         Box::pin(async move {
             let (client, domain, _ua, _cookie) = self.snapshot();
             let resp = client
                 .request(
                     "/api/login/qrcode/unikey",
-                    serde_json::json!({ "type": 1 }),
+                    serde_json::json!({ "type": QrClientKind::current().unikey_type() }),
                     qr_option(domain),
                 )
                 .await
@@ -133,18 +136,26 @@ impl NeteaseProvider {
     }
 
     /// 扫码登录 ②: 轮询. 803 时的登录凭据在 Set-Cookie 里(不在 body).
+    ///
+    /// `secure_captcha` 是易盾验证句柄(见 [`QrLoginCheck::secure_captcha`]): 官方 PC 端
+    /// 每轮都带(初值空串), 拿到 8821 后在验证完成时回填; 服务端对空串宽容(2026-11-17 匿名
+    /// 实测 801 正常返回), 因此这里只在有值时才放进请求体, 避免给服务端塞无用字段。
     pub(super) fn login_qr_check<'a>(
         &'a self,
         key: &'a str,
+        secure_captcha: Option<&'a str>,
     ) -> BoxFuture<'a, ProviderResult<QrLoginOutcome>> {
         Box::pin(async move {
             let (client, domain, _ua, _cookie) = self.snapshot();
+            let mut payload = serde_json::json!({
+                "key": key,
+                "type": QrClientKind::current().unikey_type(),
+            });
+            if let Some(token) = secure_captcha.filter(|s| !s.is_empty()) {
+                payload["secureCaptcha"] = Value::String(token.to_string());
+            }
             let resp = client
-                .request(
-                    "/api/login/qrcode/client/login",
-                    serde_json::json!({ "key": key, "type": 1 }),
-                    qr_option(domain),
-                )
+                .request("/api/login/qrcode/client/login", payload, qr_option(domain))
                 .await
                 .map_err(map_error)?;
             parse_qr_check(&resp.body, &resp.cookie)
@@ -245,9 +256,13 @@ pub fn parse_profile_detail(body: &Value) -> ProfileDetail {
 
 /// 轮询响应的解析(抽出来便于单测).
 ///
-/// 官方 code: 800 过期 / 801 待扫 / 802 已扫待确认 / 803 成功.
+/// 官方 code(官方 PC 客户端 bundle `hybrid/chunks/118.js` 的 `checkQRCodeLogin`):
+/// 800 过期 / 801 待扫 / 802 已扫待确认 / 803 成功 / **8821 需过易盾验证**。
 /// **803 的登录凭据不在 body 里, 而在响应的 Set-Cookie 中** —— 这是整个桌面端登录
 /// 能绕开 WebView 的关键(见 docs 与 .pi/memory/HINDSIGHT.md).
+///
+/// 未知 code **不 panic 也不当成登录失败**: 落到 [`QrLoginState::Unknown`] 并打一行日志,
+/// 原始值留在 `QrLoginCheck::code` 里供排障(官方 bundle 对未知 code 也只是 `status=error`)。
 pub(super) fn parse_qr_check(
     body: &Value,
     set_cookies: &[String],
@@ -258,7 +273,14 @@ pub(super) fn parse_qr_check(
         802 => QrLoginState::Scanned,
         801 => QrLoginState::Pending,
         800 => QrLoginState::Expired,
-        _ => QrLoginState::Failed,
+        // 8821: 交互式风控要求先过易盾验证; 扫码会话继续, 拿到 secureCaptcha 后重试
+        8821 => QrLoginState::Captcha,
+        // 400/402/404: key 不存在/已被消费这类**确定失败**, 保留 Failed
+        400 | 402 | 404 => QrLoginState::Failed,
+        _ => {
+            eprintln!("[qr] 未知轮询 code={code}, 按 Unknown 上报(body={body})");
+            QrLoginState::Unknown
+        }
     };
     let cookie = if state == QrLoginState::Confirmed {
         // 只留登录凭据键: 设备指纹(deviceId/_ntes_nuid/WNMCID...)由本地会话提供
@@ -288,12 +310,19 @@ pub(super) fn parse_qr_check(
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
+    // 易盾句柄: 官方 bundle 只在 8821 场景用, 但字段只要服务端给了就透传, 不猜语义
+    let secure_captcha = body
+        .get("secureCaptcha")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
     let check = QrLoginCheck {
         state,
         code,
         logged_in: cookie.is_some(),
         nickname,
         avatar_url,
+        secure_captcha,
     };
     Ok(QrLoginOutcome { check, cookie })
 }
@@ -406,6 +435,60 @@ pub(super) fn write_option(
         ua: ua.clone(),
         domain: domain.clone(),
         ..Default::default()
+    }
+}
+
+// ===== 扫码登录的客户端类型 ====================================================
+
+/// 扫码登录 `type` 的**唯一来源**: 这个数字表示"我们在网易服务端眼里是哪种客户端".
+///
+/// 取值依据:
+/// * 官方 PC 客户端线上 bundle(`hybrid/chunks/24.js` 登录页): `getQrcode` 与
+///   `checkQRCodeLogin` 的 payload 都是 `{type: isOSX ? 4 : 3}` —— Windows=3 / macOS=4;
+///   上游 NeteaseCloudMusicApi 4.25.0 起统一 `type: 3`。
+/// * 本仓匿名实测(2026-11-14 / 11-17, `/api/login/qrcode/unikey` + `/client/login`,
+///   每档 ≤2 次请求): type=1/3/4 都回 `code=200` + 36 字符 UUID unikey, 未扫码轮询都回
+///   `code=801` 等待扫码; key 与 type 交叉(type=1 的 key 用 type=4 轮询)同样 801 ——
+///   **服务端在未扫码阶段不区分这三个值**, 匿名实验反推不出语义, 故按官方 bundle 口径
+///   取 3/4, 不再沿用历史值 1。
+/// * Android 保持历史值 1: 手机端走 App 内流程(与 PC bundle 不是同一入口), 1 线上一直可用,
+///   本任务不动它。
+///
+/// 三档里只有当前编译目标那档会被 `current()` 构造(其余两档由单测显式断言),
+/// 因此本机 lint 会报另外两档 "never constructed" —— 这是设计使然, 不是死代码。
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum QrClientKind {
+    /// Android App 内扫码流程(历史值, 线上可用; 不属于官方 PC bundle 的通道)
+    AndroidApp,
+    /// Windows / Linux 桌面客户端 = 官方 bundle 的 `isOSX=false` 分支
+    DesktopPc,
+    /// macOS 桌面客户端 = 官方 bundle 的 `isOSX=true` 分支
+    DesktopMac,
+}
+
+impl QrClientKind {
+    // 平台 → 类型只在编译期选一次; 本仓不产 macOS 包(构建脚本只有 android/linux/windows),
+    // 所以 DesktopMac 这条分支**从未被本仓构建或实测覆盖**, 只为与官方 isOSX 口径一致而保留。
+    #[cfg(target_os = "android")]
+    const CURRENT: Self = Self::AndroidApp;
+    #[cfg(target_os = "macos")]
+    const CURRENT: Self = Self::DesktopMac;
+    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+    const CURRENT: Self = Self::DesktopPc;
+
+    /// 当前编译目标对应的客户端类型。派生逻辑只在这里做一次, 别处不许再出现魔数。
+    pub(super) const fn current() -> Self {
+        Self::CURRENT
+    }
+
+    /// `/api/login/qrcode/{unikey,client/login}` 的 `type` 入参
+    pub(super) const fn unikey_type(self) -> i64 {
+        match self {
+            Self::AndroidApp => 1,
+            Self::DesktopPc => 3,
+            Self::DesktopMac => 4,
+        }
     }
 }
 

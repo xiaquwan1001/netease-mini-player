@@ -148,7 +148,7 @@ async fn run() -> Result<(), BoxErr> {
             let mut last = String::new();
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                let outcome = p.login_qr_check(&key.key).await?;
+                let outcome = p.login_qr_check(&key.key, None).await?;
                 let check = outcome.check;
                 let now = format!("{:?}", check.state);
                 if now != last {
