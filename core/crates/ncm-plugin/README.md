@@ -78,12 +78,18 @@ lx.on('musicUrl', (source, musicInfo, quality) => string | {url,...} | null)
 | 参数 | 类型 | 说明 |
 |---|---|---|
 | `source` | string | v1 传 `"script"`; `request` 事件适配路径已按 `inited.sources` 给真实代号(见上) |
-| `musicInfo` | object | `{id, name, singer, albumName, interval, type}` |
+| `musicInfo` | object | `{id, name, singer, albumName, albumId, interval, type, songmid?, hash?}` |
 | `quality` | string | LX 代号, 见下「音质映射」 |
 
-`musicInfo` 在 v1 **只有 `id` 是真实值**: `ncm_provider::SongUrlRequest` 只带 `TrackId + AudioLevel`,
-所以 `name/singer/albumName` 传空串、`interval` 传 0。依赖歌名/歌手中转的脚本(kw/tx 系)现阶段取不到链,
-需要上层在后续切片把 `Song` 上下文补进调用参数(见 §4)。
+`musicInfo` 的真实度取决于上层有没有给上下文(切片 3 起可给):
+
+- 宿主侧 `ncm_provider::SongUrlMeta`(`SongUrlRequest::with_meta`)承载 `name/singer/album_name/album_id/interval/song_mid`;
+  `ncm-ffi::song_url(track_id, level, name, singer, album_name, interval)` 把它们透传进来,
+  Dart 的三个取链点从 `SongDto` 直接带(预取/播放/下载)。
+- 全空时**不带上下文**: `name/singer/albumName` 仍是空串、`interval` 是 0, 字段本身始终存在(脚本不必判空)。
+- `interval` 是**秒**(`SongDto.durationMs / 1000`), 与 LX 脚本口径一致。
+- `songmid`/`hash` 只在 `SongUrlMeta.song_mid` 有值时出现(网易云曲目一般没有; kw/kg/QQ 系的兼容键)。
+- 内置 provider 不看这些字段(网易云接口只吃 trackId), 所以带上下文只影响插件链路。
 
 返回值(三选一):
 
@@ -294,7 +300,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |
-| 6 | **`songUrl` 上下文补齐** | `SongUrlRequest` 只有 `track+level`, 需要上层把 `name/singer/albumName/interval` 带进来(§1.2) |
+| 6 | ~~**`songUrl` 上下文补齐**~~ | ✅ 切片 3 已落: `ncm_provider::SongUrlMeta`(`name/singer/album_name/album_id/interval/song_mid`)+ `SongUrlRequest::with_meta`; `ncm-ffi::song_url` 增加四个可选参数(`name/singer/album_name/interval`), Dart 三个取链点(`playback_coordinator` 预取与播放、`song_action_wiring` 下载)从 `SongDto` 带上真实字段; 内置 provider 不看这些字段 |
 | 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); ✅ 切片 2 第五步已接进 **Rust 侧 Core**: `plugins::host::PluginHost` 由 `Core::open` 构造, 暴露 `plugin_status/summaries/failures/rejected/ids/provider/enable/disable/rescan/set_enabled/set_root`, 错误一律 `ProviderError{kind,retryable,detail}`(唯一翻译点 `host::to_provider_error`), **缺省不扫描**(`<data_dir>/plugin_host.json` 的 `enabled` 缺省 false, 理由见 `host.rs` 头注释); ✅ 切片 2 第六步已导出到 `ncm-ffi`(`api/plugin.rs`: 8 个函数 + `PluginStatusDto`/`PluginSummaryDto`/`PluginFailureDto`/`PluginRejectedDto`/`PluginRescanDto`, 错误仍只经 `ProviderError -> FfiError` 一条口径, Android 目标返回空视图/`unsupported` 且编译通过); **仍缺**: Flutter 管理页, 以及路由层在产品链路优先用插件 provider(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件) |
 | 8 | **双端一致性** | 桌面(PC)侧全绿; **Android 已实测可行(2026-11-21, 未接线)**: `rquickjs-sys` 0.12.2/0.14.0 都不带 `*-linux-android` 预生成 bindings(`include!` 直接报缺文件), 但开 `bindgen` 特性 + `BINDGEN_EXTRA_CLANG_ARGS_<target>`(NDK sysroot) 后四个 quickjs `.c` 编过、`ncm-plugin` 副本 17.7s 链出 `aarch64-linux-android`/`x86_64-linux-android`, 真机(ELS-AN00/API31)跑通 eval·promise 泵·interrupt·32MB 内存炸弹。代价 ≈ +300KB/ABI + 构建机装 libclang。触发条件(三条全中)与四方案对比见 [`docs/audit/2026-11-21-plugin-android-crosscompile.md`](../../../docs/audit/2026-11-21-plugin-android-crosscompile.md) |
 | 9 | **日志通道到 UI** | 日志暂由 `ScriptProvider::take_logs()` 拉取, 没有订阅/回放 |

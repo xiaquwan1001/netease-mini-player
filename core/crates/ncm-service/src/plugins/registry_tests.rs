@@ -84,6 +84,7 @@ fn song_request() -> SongUrlRequest {
     SongUrlRequest {
         track: TrackId(7),
         level: AudioLevel::Exhigh,
+        meta: None,
     }
 }
 

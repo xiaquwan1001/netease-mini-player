@@ -254,19 +254,26 @@ impl ReadProvider for ScriptProvider {
     fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
         Box::pin(async move {
             let quality = convert::quality_to_lx(req.level);
-            // v1: 只传 id + 音质. 名字/歌手/时长由上层补(SongUrlRequest 没有这些字段).
-            let args = serde_json::json!([
-                "script",
-                {
-                    "id": req.track.0,
-                    "name": "",
-                    "singer": "",
-                    "albumName": "",
-                    "interval": 0,
-                    "type": quality,
-                },
-                quality,
-            ]);
+            // musicInfo 的字段名对齐上游 LX 社区脚本(id 必须是数字 trackId;
+            // songmid/hash 是 kw/kg/QQ 系的兼容键, 网易云曲目通常没有)。
+            let meta = req.meta.as_ref();
+            let mut music_info = serde_json::json!({
+                "id": req.track.0,
+                "name": meta.map(|m| m.name.clone()).unwrap_or_default(),
+                "singer": meta.map(|m| m.singer.clone()).unwrap_or_default(),
+                "albumName": meta.map(|m| m.album_name.clone()).unwrap_or_default(),
+                "albumId": meta.map(|m| m.album_id).unwrap_or(0),
+                "interval": meta.map(|m| m.interval).unwrap_or(0),
+                "type": quality,
+            });
+            if let Some(song_mid) = meta.and_then(|m| m.song_mid.clone()) {
+                if !song_mid.is_empty() {
+                    // 上游脚本按 hash/songmid/id 依次兜底, 两个键同值即可.
+                    music_info["songmid"] = serde_json::Value::String(song_mid.clone());
+                    music_info["hash"] = serde_json::Value::String(song_mid);
+                }
+            }
+            let args = serde_json::json!(["script", music_info, quality]);
             let raw = self.invoke("musicUrl", args).await?;
             convert::stream_url(&raw, req.level).map_err(Into::into)
         })

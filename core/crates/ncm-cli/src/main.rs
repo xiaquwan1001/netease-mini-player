@@ -1237,7 +1237,7 @@ async fn run() -> Result<(), BoxErr> {
             let p = provider(&core, Capability::SongUrl)?;
             announce(&core);
             let stream = p
-                .song_url(&SongUrlRequest { track: TrackId::new(id), level })
+                .song_url(&SongUrlRequest { track: TrackId::new(id), level, meta: None })
                 .await?;
             if args.has("--json") {
                 println!("{}", serde_json::to_string_pretty(&stream)?);
@@ -1291,7 +1291,7 @@ async fn run() -> Result<(), BoxErr> {
             let p = provider(&core, Capability::SongUrl)?;
             announce(&core);
             let stream = p
-                .song_url(&SongUrlRequest { track: TrackId::new(id), level })
+                .song_url(&SongUrlRequest { track: TrackId::new(id), level, meta: None })
                 .await?;
             // 缓存键带实际档位(与桌面/FFI 同口径: cache.rs 的 level 参数).
             // 先取字符串再 move url(否则 stream 被部分 move 后不能再借用).

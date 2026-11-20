@@ -618,6 +618,10 @@ abstract class RustLibApi extends BaseApi {
   Future<StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
+    String? name,
+    String? singer,
+    String? albumName,
+    BigInt? interval,
   });
 
   Future<List<WikiFact>> crateApiMeSongWiki({required BigInt songId});
@@ -5200,6 +5204,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Future<StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
+    String? name,
+    String? singer,
+    String? albumName,
+    BigInt? interval,
   }) {
     return handler.executeNormal(
       NormalTask(
@@ -5207,6 +5215,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_64(trackId, serializer);
           sse_encode_String(level, serializer);
+          sse_encode_opt_String(name, serializer);
+          sse_encode_opt_String(singer, serializer);
+          sse_encode_opt_String(albumName, serializer);
+          sse_encode_opt_box_autoadd_u_64(interval, serializer);
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
@@ -5219,7 +5231,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           decodeErrorData: sse_decode_ffi_error,
         ),
         constMeta: kCrateApiAccountSongUrlConstMeta,
-        argValues: [trackId, level],
+        argValues: [trackId, level, name, singer, albumName, interval],
         apiImpl: this,
       ),
     );
@@ -5227,7 +5239,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiAccountSongUrlConstMeta => const TaskConstMeta(
     debugName: "song_url",
-    argNames: ["trackId", "level"],
+    argNames: ["trackId", "level", "name", "singer", "albumName", "interval"],
   );
 
   @override

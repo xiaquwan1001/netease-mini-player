@@ -313,6 +313,7 @@ fn script_provider_song_url_works_over_real_transport() {
     let request = ncm_provider::SongUrlRequest {
         track: ncm_domain::TrackId(42),
         level: ncm_provider::AudioLevel::Exhigh,
+        meta: None,
     };
     let stream =
         futures::executor::block_on(ncm_provider::ReadProvider::song_url(&provider, &request))
@@ -344,6 +345,7 @@ fn script_provider_surfaces_non_2xx_as_error() {
     let request = ncm_provider::SongUrlRequest {
         track: ncm_domain::TrackId(1),
         level: ncm_provider::AudioLevel::Standard,
+        meta: None,
     };
     let err =
         futures::executor::block_on(ncm_provider::ReadProvider::song_url(&provider, &request))

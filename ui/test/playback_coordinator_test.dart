@@ -62,6 +62,10 @@ class _FakeApi implements RustLibApi {
   Future<rust.StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
+    String? name,
+    String? singer,
+    String? albumName,
+    BigInt? interval,
   }) async {
     songUrlCalls.add(trackId);
     final err = songUrlError;

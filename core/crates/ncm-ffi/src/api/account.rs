@@ -91,14 +91,38 @@ pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, Ff
 ///
 /// 判定(用插件还是内置)只在 `ncm_service::plugins::route` 里做, 本层不重复判断;
 /// 插件侧失败(超时/脚本错/协议错)回落内置 provider, 内置自身的失败直接上抛。
-pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, FfiError> {
+pub async fn song_url(
+    track_id: u64,
+    level: String,
+    name: Option<String>,
+    singer: Option<String>,
+    album_name: Option<String>,
+    interval: Option<u64>,
+) -> Result<StreamUrl, FfiError> {
     let level = ncm_provider::AudioLevel::parse(&level).unwrap_or_default();
-    let req = ncm_provider::SongUrlRequest {
-        track: ncm_domain::TrackId::new(track_id),
-        level,
+    let mut req = ncm_provider::SongUrlRequest::new(ncm_domain::TrackId::new(track_id));
+    req.level = level;
+    // 歌曲上下文只给**插件**用(拼上游 LX 的 musicInfo): name/singer 缺了, 靠关键词中转的
+    // 脚本(咪咕 oiapi / QQ keyword 系)必然取不到链。内置 provider 不看它 ⇒ 传了也不改官方链路。
+    let meta = ncm_provider::SongUrlMeta {
+        name: name.unwrap_or_default(),
+        singer: singer.unwrap_or_default(),
+        album_name: album_name.unwrap_or_default(),
+        interval: interval.unwrap_or(0),
+        ..Default::default()
     };
+    let has_meta = !meta.name.is_empty()
+        || !meta.singer.is_empty()
+        || !meta.album_name.is_empty()
+        || meta.interval > 0;
+    if has_meta {
+        req = req.with_meta(meta);
+    }
+    // 闭包是 Fn(可能被调两次: 插件一次、回落内置一次), SongUrlRequest 已不是 Copy,
+    // 所以先影子成引用再按引用捕获。
+    let req = &req;
     let stream = routed_call(Capability::SongUrl, |provider| {
-        Box::pin(async move { provider.song_url(&req).await })
+        Box::pin(async move { provider.song_url(req).await })
     })
     .await?;
     // T2(2026-11-18): 记下"这条曲子这次按什么音质取的链", 供桌面缓存键

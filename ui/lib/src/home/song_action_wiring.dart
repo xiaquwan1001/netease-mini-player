@@ -434,6 +434,10 @@ class SongActionWiring {
         () => rust.songUrl(
           trackId: song.id,
           level: AppSettings.instance.audioLevel,
+          name: song.name,
+          singer: song.artist,
+          albumName: song.album,
+          interval: song.durationMs ~/ BigInt.from(1000),
         ),
       );
       final raw = stream.url;

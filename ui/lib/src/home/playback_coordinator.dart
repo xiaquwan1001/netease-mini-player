@@ -425,7 +425,16 @@ class PlaybackCoordinator extends ChangeNotifier {
     final level = AppSettings.instance.audioLevel;
     unawaited(() async {
       try {
-        final stream = await rust.songUrl(trackId: next.id, level: level);
+        // 带上歌曲上下文: 插件侧要用它拼上游 musicInfo(name/singer 缺了, 关键词系脚本取不到链);
+        // 内置 provider 不看这些字段。
+        final stream = await rust.songUrl(
+          trackId: next.id,
+          level: level,
+          name: next.name,
+          singer: next.artist,
+          albumName: next.album,
+          interval: next.durationMs ~/ BigInt.from(1000),
+        );
         final url = stream.url;
         if (url == null || url.isEmpty) return;
         _prefetchedUrls[id] = (
@@ -486,7 +495,14 @@ class PlaybackCoordinator extends ChangeNotifier {
       if (url == null) {
         // 移动网络切网时会偶发 connection reset, 取链是幂等的, 值得重试
         final stream = await retryNetwork(
-          () => rust.songUrl(trackId: song.id, level: level),
+          () => rust.songUrl(
+            trackId: song.id,
+            level: level,
+            name: song.name,
+            singer: song.artist,
+            albumName: song.album,
+            interval: song.durationMs ~/ BigInt.from(1000),
+          ),
         );
         url = stream.url;
         // 试听片段 / 静默降级 如实带出来(方案 A: 信息无损)

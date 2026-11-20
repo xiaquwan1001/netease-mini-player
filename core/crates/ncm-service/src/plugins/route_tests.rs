@@ -318,9 +318,10 @@ fn plugin_hit_is_used() {
         detail: String::new(),
     };
     let req = request();
+    let req = &req;
     let routed = futures::executor::block_on(route::call_routed(
         decision(plan, Some(plugin), true),
-        |p| Box::pin(async move { p.song_url(&req).await }),
+        |p| Box::pin(async move { p.song_url(req).await }),
     ))
     .expect("插件命中不该失败");
     assert_eq!(routed.used, RouteUsed::Plugin("demo".into()));
@@ -337,9 +338,10 @@ fn plugin_error_falls_back_to_builtin() {
         detail: String::new(),
     };
     let req = request();
+    let req = &req;
     let routed = futures::executor::block_on(route::call_routed(
         decision(plan, Some(plugin), true),
-        |p| Box::pin(async move { p.song_url(&req).await }),
+        |p| Box::pin(async move { p.song_url(req).await }),
     ))
     .expect("插件失败要回落内置, 不是整次失败");
     assert!(routed.fell_back(), "回落要能看出来: {:?}", routed.used);
@@ -373,9 +375,10 @@ fn plugin_error_without_builtin_surfaces_original_error() {
         detail: String::new(),
     };
     let req = request();
+    let req = &req;
     let err = futures::executor::block_on(route::call_routed(
         decision(plan, Some(plugin), false),
-        |p| Box::pin(async move { p.song_url(&req).await }),
+        |p| Box::pin(async move { p.song_url(req).await }),
     ))
     .unwrap_err();
     assert_eq!(err.kind, ProviderErrorKind::Network);
@@ -398,8 +401,9 @@ fn builtin_error_is_not_swallowed() {
         builtin: Some(Arc::new(FakeBroken)),
     };
     let req = request();
+    let req = &req;
     let err = futures::executor::block_on(route::call_routed(decision, |p| {
-        Box::pin(async move { p.song_url(&req).await })
+        Box::pin(async move { p.song_url(req).await })
     }))
     .unwrap_err();
     assert_eq!(err.kind, ProviderErrorKind::Network);

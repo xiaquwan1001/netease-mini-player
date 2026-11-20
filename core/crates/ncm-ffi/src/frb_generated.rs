@@ -5350,12 +5350,23 @@ fn wire__crate__api__account__song_url_impl(
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_track_id = <u64>::sse_decode(&mut deserializer);
             let api_level = <String>::sse_decode(&mut deserializer);
+            let api_name = <Option<String>>::sse_decode(&mut deserializer);
+            let api_singer = <Option<String>>::sse_decode(&mut deserializer);
+            let api_album_name = <Option<String>>::sse_decode(&mut deserializer);
+            let api_interval = <Option<u64>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, crate::api::FfiError>(
                     (move || async move {
-                        let output_ok =
-                            crate::api::account::song_url(api_track_id, api_level).await?;
+                        let output_ok = crate::api::account::song_url(
+                            api_track_id,
+                            api_level,
+                            api_name,
+                            api_singer,
+                            api_album_name,
+                            api_interval,
+                        )
+                        .await?;
                         std::result::Result::Ok(output_ok)
                     })()
                     .await,

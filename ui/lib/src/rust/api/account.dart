@@ -58,8 +58,21 @@ Future<bool> addToPlaylist({
 ///
 /// 判定(用插件还是内置)只在 `ncm_service::plugins::route` 里做, 本层不重复判断;
 /// 插件侧失败(超时/脚本错/协议错)回落内置 provider, 内置自身的失败直接上抛。
-Future<StreamUrl> songUrl({required BigInt trackId, required String level}) =>
-    RustLib.instance.api.crateApiAccountSongUrl(trackId: trackId, level: level);
+Future<StreamUrl> songUrl({
+  required BigInt trackId,
+  required String level,
+  String? name,
+  String? singer,
+  String? albumName,
+  BigInt? interval,
+}) => RustLib.instance.api.crateApiAccountSongUrl(
+  trackId: trackId,
+  level: level,
+  name: name,
+  singer: singer,
+  albumName: albumName,
+  interval: interval,
+);
 
 Future<String> lyric({required BigInt trackId}) =>
     RustLib.instance.api.crateApiAccountLyric(trackId: trackId);

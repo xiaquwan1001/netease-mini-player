@@ -45,6 +45,7 @@ fn song_url_maps_to_stream_url() {
     let request = SongUrlRequest {
         track: TrackId(42),
         level: AudioLevel::Exhigh,
+        meta: None,
     };
     let stream = block_on(provider.song_url(&request)).expect("取链应成功");
     assert_eq!(stream.url.as_deref(), Some("https://cdn.test/a.mp3"));
@@ -84,9 +85,86 @@ fn lx_request_only_script_is_song_url_capable() {
     let request = SongUrlRequest {
         track: TrackId(99),
         level: AudioLevel::Exhigh,
+        meta: None,
     };
     let stream = block_on(provider.song_url(&request)).expect("取链应成功");
     assert_eq!(stream.url.as_deref(), Some("https://cdn.test/lx.mp3"));
+}
+
+#[test]
+fn song_url_passes_song_context_as_music_info() {
+    // name/singer/interval 是「关键词中转」脚本的唯一入口; songmid/hash 是 kw/kg/QQ 系的兼容键.
+    let transport = Arc::new(MockTransport::new().on(
+        "example.test/api/echo",
+        reply(r#"{"url":"https://cdn.test/meta.mp3"}"#),
+    ));
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/music_info_echo.js"),
+        transport.clone(),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+
+    let mut request = SongUrlRequest::new(TrackId(7));
+    request.level = AudioLevel::Lossless;
+    request = request.with_meta(ncm_provider::SongUrlMeta {
+        name: "夜曲".into(),
+        singer: "周杰伦".into(),
+        album_name: "十一月的萧邦".into(),
+        album_id: 12345,
+        interval: 227,
+        song_mid: Some("0039MnYb0qxYhV".into()),
+    });
+    let stream = block_on(provider.song_url(&request)).expect("取链应成功");
+    assert_eq!(stream.url.as_deref(), Some("https://cdn.test/meta.mp3"));
+
+    let seen = transport.requests();
+    assert_eq!(seen.len(), 1);
+    let body: serde_json::Value =
+        serde_json::from_str(seen[0].body.as_deref().unwrap_or("null")).expect("请求体应是 JSON");
+    let info = &body["info"];
+    assert_eq!(info["name"], "夜曲");
+    assert_eq!(info["singer"], "周杰伦");
+    assert_eq!(info["albumName"], "十一月的萧邦");
+    assert_eq!(info["albumId"], 12345);
+    assert_eq!(info["interval"], 227);
+    assert_eq!(info["songmid"], "0039MnYb0qxYhV");
+    assert_eq!(info["hash"], "0039MnYb0qxYhV");
+    assert_eq!(info["id"], 7);
+    assert_eq!(info["type"], "flac");
+    assert_eq!(body["quality"], "flac");
+    assert_eq!(body["source"], "script");
+}
+
+#[test]
+fn song_url_without_meta_sends_empty_context() {
+    // 没传上下文时字段仍在(空串/0), 脚本不必额外判空.
+    let transport = Arc::new(MockTransport::new().on(
+        "example.test/api/echo",
+        reply(r#"{"url":"https://cdn.test/plain.mp3"}"#),
+    ));
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/music_info_echo.js"),
+        transport.clone(),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+
+    let request = SongUrlRequest {
+        track: TrackId(9),
+        level: AudioLevel::Exhigh,
+        meta: None,
+    };
+    block_on(provider.song_url(&request)).expect("取链应成功");
+    let seen = transport.requests();
+    let body: serde_json::Value =
+        serde_json::from_str(seen[0].body.as_deref().unwrap_or("null")).expect("请求体应是 JSON");
+    assert_eq!(body["info"]["name"], "");
+    assert_eq!(body["info"]["interval"], 0);
+    assert!(
+        body["info"].get("songmid").is_none(),
+        "没有 songmid 就别造一个"
+    );
 }
 
 #[test]
@@ -180,6 +258,7 @@ fn null_url_maps_to_not_found() {
     let request = SongUrlRequest {
         track: TrackId(1),
         level: AudioLevel::Standard,
+        meta: None,
     };
     let err = block_on(provider.song_url(&request)).expect_err("脚本返回 null 时应 notFound");
     assert_eq!(err.kind, ProviderErrorKind::NotFound);

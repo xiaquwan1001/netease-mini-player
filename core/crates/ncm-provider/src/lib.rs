@@ -32,6 +32,6 @@ pub use caps::{
     ReadProvider, RecommendProvider, VipProvider,
 };
 pub use error::{ProviderError, ProviderErrorKind, ProviderResult};
-pub use params::{BoxFuture, RankingPeriod, SearchQuery, SongUrlRequest};
+pub use params::{BoxFuture, RankingPeriod, SearchQuery, SongUrlMeta, SongUrlRequest};
 pub use r#trait::Provider;
 pub use registry::ProviderRegistry;
