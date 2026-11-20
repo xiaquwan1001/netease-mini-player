@@ -11,6 +11,8 @@
 //! 在 `cfg(target_os = "android")` 下整体不编译(见 `lib.rs` 与 `Cargo.toml` 的 target 段).
 //! 反过来不行: 宿主 HTTP 栈(UA/代理/超时/重试)必须留在 service 侧.
 
+pub mod manager;
 pub mod transport;
 
+pub use manager::{ManagerError, ManagerErrorKind, PluginManager, PluginSummary};
 pub use transport::ReqwestTransport;
