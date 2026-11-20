@@ -3,6 +3,12 @@
 > 日期: 2026-11-21 · 车道: 只读调研(静态对照, 未跑构建/测试)
 > 对照基准: `core/crates/ncm-plugin/README.md` §1.2(事件) / §1.3(注入 API) / §4(缺口表)
 > 上游契约权威: <https://lxmusic.toside.cn/desktop/custom-source>(官方文档, 本次已核对)
+>
+> **落地状态(2026-11-21, 切片 3 波次 2 D)**: §4 表的 **#1 request 事件适配 / #2 setTimeout / #3 回调式 lx.request /
+> #6 lx.utils.buffer + btoa/atob / #7 lx.env** 已落地, 见
+> `core/crates/ncm-plugin/README.md` §1.2/§1.3; #4(musicInfo 真实上下文)/#5(音质码透传)/#8(inited 回传宿主)/#9/#10 仍未做。
+> 适配口径与本文件略有出入: 宿主**不改**已有 `musicUrl` 事件, 而是在脚本没注册 `musicUrl` 时由 prelude 翻译成
+> `request` 事件(两者都注册时优先 `musicUrl`)。
 
 ## 1. 取样脚本表
 
