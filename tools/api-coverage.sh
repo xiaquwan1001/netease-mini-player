@@ -11,7 +11,13 @@ VENDOR = "core/vendor/ncm-api/src/api"
 # provider 实现 2026-11-13 起按能力域拆成模块目录(netease/mod.rs + netease/*.rs);
 # 单文件时代遗留路径仍兼容, 便于对老 tag 跑同一份统计.
 SERVICE = Path("core/crates/ncm-service/src/netease.rs")
-FFI = "core/crates/ncm-ffi/src/api.rs"
+FFI = Path("core/crates/ncm-ffi/src/api.rs")
+# 与 SERVICE 同口径: T2(2026-11-20, v0.29.0) 把 api.rs 按域拆成 api/*.rs, 单文件只剩 init;
+# 老 tag 仍是单文件, 两处都收(否则统计会静默退化成「FFI 导出函数 2」).
+def ffi_src() -> str:
+    parts = [FFI.with_suffix("").rglob("*.rs")] if FFI.with_suffix("").is_dir() else []
+    text = FFI.read_text() if FFI.is_file() else ""
+    return text + "".join(p.read_text() for g in parts for p in sorted(g))
 UI = "ui/lib"
 
 # mod.rs 是模块清单本身, 不是 endpoint, 不计入统计
@@ -26,7 +32,7 @@ used = [m for m in used if m in all_endpoints]
 unused = [m for m in all_endpoints if m not in used]
 
 # FFI 导出 vs UI 调用(Dart 侧是 camelCase)
-ffi = sorted(set(re.findall(r"^pub (?:async )?fn ([a-z0-9_]+)", open(FFI).read(), re.M)))
+ffi = sorted(set(re.findall(r"^pub (?:async )?fn ([a-z0-9_]+)", ffi_src(), re.M)))
 def camel(s):
     p = s.split("_")
     return p[0] + "".join(x[:1].upper() + x[1:] for x in p[1:])
