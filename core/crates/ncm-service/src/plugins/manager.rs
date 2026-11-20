@@ -1,4 +1,5 @@
-//! 插件目录管理 + 启停状态(切片 2 第二步; **仍不接 FFI/UI, 不注册进 ProviderRegistry**).
+//! 插件目录管理 + 启停状态(切片 2 第二步; **仍不接 FFI/UI**;
+//! 装配 `Provider` 的是 [`PluginRegistry`](super::registry), 本层只管目录与启停状态).
 //!
 //! # 这一层负责什么
 //!
@@ -49,7 +50,7 @@
 //!   [`GuardedTransport`](ncm_plugin::GuardedTransport)(每插件一份 [`DomainPolicy`](ncm_plugin::DomainPolicy)),
 //!   不在清单白名单里的主机在发出去之前就被拒(未声明 = 不出站);
 //! - 没有热重载: 改脚本要重新 `install_from_dir` + 重新 `load_provider`;
-//! - 没有接 `ProviderRegistry`/FFI/UI ⇒ **插件仍不可从产品触发**.
+//! - 没有接 FFI/UI ⇒ **插件仍不可从产品触发**(装配在 `PluginRegistry`, 它也不进 `Core`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

@@ -1,10 +1,12 @@
-# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一/二步)
+# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一/二/三/四步)
 
-> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** 本 crate 没有 FFI 导出、没有注册进
-> `ProviderRegistry`、`Core::open` 也不构造插件宿主 —— 改动它不会改变 App 默认行为
+> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** 本 crate 没有 FFI 导出、
+> `Core::open` 也不构造插件宿主 —— 改动它不会改变 App 默认行为
 > (不碰风控、不加包体风险)。**接缝已经落地**: 真实网络 transport 在
 > `ncm-service/src/plugins/`(`ReqwestTransport`, 复用 service 的 UA/超时/重试口径),
-> 落盘 storage 是本 crate 的 [`FileStorage`](src/storage.rs)(目录由宿主传入)。
+> 落盘 storage 是本 crate 的 [`FileStorage`](src/storage.rs)(目录由宿主传入),
+> 目录扫描/启停是 `PluginManager`, 装配成 `Provider` 是 `PluginRegistry`
+> (键 = **插件 id**, 不是 `Provider::id()`, 原因见该文件头注释)。
 > **门禁**: `ncm-service` 现在依赖本 crate, 所以 `tools/ci-gates.sh` 的 rust-lint / rust-test
 > **按 workspace 全量跑**它(不再 `--exclude`, 独立门 `rust-plugin` 已删除 —— 同一口径只留一份)。
 > 接线条件见 docs/remaining-batches.md §11.C。
@@ -244,7 +246,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 仍**未接线**(产路径不构造) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |
 | 6 | **`songUrl` 上下文补齐** | `SongUrlRequest` 只有 `track+level`, 需要上层把 `name/singer/albumName/interval` 带进来(§1.2) |
-| 7 | **FFI / 注册路由** | 没有 `ncm-ffi` 导出, 也没有注册进 `ProviderRegistry`; 接入要单独评审风控与体积 |
+| 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); **仍缺**: FFI 导出、`Core::open` 构造, 以及路由层直接认这张"插件 id -> provider"表(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件); 接入要单独评审风控与体积 |
 | 8 | **双端一致性** | Android(NDK)与桌面(PC)交叉编译 rquickjs-sys 未在本切片验证, 只在 Linux x86_64 全绿 |
 | 9 | **日志通道到 UI** | 日志暂由 `ScriptProvider::take_logs()` 拉取, 没有订阅/回放 |
 | 10 | **歌词能力** | `LyricProvider::lyric` 明确返回 `unsupported` |
