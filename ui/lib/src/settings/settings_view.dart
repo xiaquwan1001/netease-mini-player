@@ -18,6 +18,7 @@ import '../rust/api_all.dart' as rust;
 import '../section_header.dart';
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
+import 'settings_plugins_page.dart';
 import 'settings_sleep_timer_page.dart';
 import '../state_views.dart';
 import '../theme.dart' show AccentPalette;
@@ -387,6 +388,14 @@ class SettingsView extends StatelessWidget {
                   // 凭据后端(Android Keystore / Windows DPAPI / 明文回退)属于
                   // "这台机器怎么存东西", 从账号页的隐私栏搬到这里展示(2026-11 需求)。
                   const _CredentialStorageTile(),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.extension_outlined),
+                    title: const Text('插件'),
+                    subtitle: const Text('总开关 / 已装载插件 / 失败清单'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showPluginsPage(context),
+                  ),
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.monitor_heart_outlined),
