@@ -23,7 +23,10 @@ pub mod route;
 pub mod transport;
 
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
-pub use manager::{ManagerError, ManagerErrorKind, PluginManager, PluginSummary};
+pub use manager::{
+    ManagerError, ManagerErrorKind, PluginFailureRecord, PluginManager, PluginSummary,
+    MAX_CONSECUTIVE_FAILURES,
+};
 pub use registry::{PluginRegistry, RegistryReport};
 pub use route::{
     call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason, Routed,

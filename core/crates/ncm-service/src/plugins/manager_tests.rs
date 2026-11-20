@@ -14,7 +14,7 @@ use ncm_domain::TrackId;
 use ncm_plugin::{MockTransport, SandboxConfig, Storage, TransportResponse};
 use ncm_provider::{AudioLevel, ProviderErrorKind, ReadProvider, SongUrlRequest};
 
-use super::{ManagerErrorKind, PluginManager, STATE_FILE};
+use super::{ManagerErrorKind, PluginManager, MAX_CONSECUTIVE_FAILURES, STATE_FILE};
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -708,4 +708,128 @@ fn plugin_without_request_domains_cannot_make_any_request() {
         .expect("alpha 行");
     assert!(row.request_domains.is_empty(), "{row:?}");
     assert!(row.error.is_none(), "{row:?}");
+}
+
+// ---- 连续失败计数: rescan 不清计数 + 跨实例保留(P3) ----
+
+#[test]
+fn failure_counts_survive_rescan_and_reopen() {
+    let tmp = TempDir::new("fail-state");
+    write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json("alpha", "index.js"),
+        "index.js",
+        OK_SOURCE,
+    );
+
+    {
+        let mut mgr = manager(tmp.path());
+        mgr.install_from_dir(tmp.path());
+        mgr.enable("alpha").expect("启用");
+        assert!(!mgr
+            .record_load_failure("alpha", "模拟装载失败 1")
+            .expect("计数"));
+        // rescan / 重扫不清计数: 重新读目录与状态无关.
+        assert!(mgr.rescan().is_clean());
+        mgr.install_from_dir(tmp.path());
+        assert_eq!(
+            mgr.failure_record("alpha").map(|r| r.count),
+            Some(1),
+            "rescan 不清计数"
+        );
+        assert!(mgr.is_enabled("alpha"), "1 次失败不禁用");
+        assert!(!mgr
+            .record_load_failure("alpha", "模拟装载失败 2")
+            .expect("计数"));
+        assert_eq!(mgr.failure_record("alpha").map(|r| r.count), Some(2));
+
+        // 未登记的 id 记账要报错(不写状态文件).
+        assert_eq!(
+            mgr.record_load_failure("ghost", "x")
+                .expect_err("未登记")
+                .kind,
+            ManagerErrorKind::NotInstalled
+        );
+        assert_eq!(
+            mgr.record_load_success("ghost").expect_err("未登记").kind,
+            ManagerErrorKind::NotInstalled
+        );
+    }
+
+    // 换一个实例(等价于重启): 计数与启用态都从盘上读回.
+    let mut mgr = manager(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    assert!(mgr.is_enabled("alpha"));
+    let record = mgr.failure_record("alpha").expect("计数跨实例保留");
+    assert_eq!(record.count, 2);
+    assert!(!record.is_auto_disabled());
+    assert!(record
+        .last_reason
+        .as_deref()
+        .unwrap()
+        .contains("模拟装载失败 2"));
+
+    // 第 3 次: 达阈值 ⇒ 自动禁用(启用态同一次原子写里变 false).
+    assert!(mgr
+        .record_load_failure("alpha", "模拟装载失败 3")
+        .expect("计数"));
+    assert!(!mgr.is_enabled("alpha"), "3 次失败必须禁用");
+    let record = mgr.failure_record("alpha").expect("记录").clone();
+    assert_eq!(record.count, MAX_CONSECUTIVE_FAILURES);
+    assert!(record.is_auto_disabled());
+    assert!(record.disabled_at_ms.is_some());
+    assert_eq!(
+        mgr.load_provider("alpha").expect_err("已禁用").kind,
+        ManagerErrorKind::Disabled
+    );
+
+    // 手动启用 = 显式重置.
+    mgr.enable("alpha").expect("手动启用");
+    assert!(mgr.is_enabled("alpha"));
+    assert_eq!(
+        mgr.failure_record("alpha"),
+        None,
+        "手动启用清掉计数与禁用原因"
+    );
+    assert!(mgr.load_provider("alpha").is_ok(), "重置后能重新装载");
+
+    // 落盘文件里只剩 enabled 段(没有失败记录).
+    let text = std::fs::read_to_string(tmp.path().join(STATE_FILE)).expect("读状态文件");
+    assert!(text.contains("\"enabled\""), "{text}");
+    assert!(!text.contains("disabledReason"), "{text}");
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&text).expect("状态文件应是合法 JSON")
+            ["failures"],
+        serde_json::json!({}),
+        "没有失败记录的插件不该留在 failures 段: {text}"
+    );
+}
+
+#[test]
+fn load_success_without_record_does_not_rewrite_state() {
+    let tmp = TempDir::new("fail-noop");
+    write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json("alpha", "index.js"),
+        "index.js",
+        OK_SOURCE,
+    );
+    let mut mgr = manager(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    mgr.enable("alpha").expect("启用");
+    let path = tmp.path().join(STATE_FILE);
+    let before = std::fs::metadata(&path)
+        .expect("stat")
+        .modified()
+        .expect("mtime");
+    std::thread::sleep(Duration::from_millis(20));
+    // 没有失败记录时"成功一次"不写盘(否则每次重扫都落一次盘).
+    mgr.record_load_success("alpha").expect("清零");
+    let after = std::fs::metadata(&path)
+        .expect("stat")
+        .modified()
+        .expect("mtime");
+    assert_eq!(before, after, "无记录的成功不该重写状态文件");
 }
