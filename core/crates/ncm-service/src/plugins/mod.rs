@@ -1,9 +1,9 @@
 //! 插件宿主的**宿主侧接缝**: 目录管理 + 真实网络 transport + provider 注册表 + Core 接线.
 //!
 //! 边界: 本模块提供 `ncm-plugin` 所需的宿主实现与装配, 并已由 [`host::PluginHost`] 接进
-//! `Core::open`(**Rust 侧**); 但仍然**没有 FFI 导出/UI 入口**, 所以产品默认路径的行为不变:
-//! 缺省策略是**不扫描**([`host::PluginHostPolicy::default`]), 开启必须显式调
-//! `Core::plugin_set_enabled(true)`.
+//! `Core::open`; 也已导出到 `ncm-ffi`(`api/plugin.rs` 的 8 个函数). 但**没有 UI 入口**,
+//! 所以产品默认路径的行为不变: 缺省策略是**不扫描**([`host::PluginHostPolicy::default`]),
+//! 开启必须显式调 `Core::plugin_set_enabled(true)`.
 //!
 //! 路由纪律: `ScriptProvider::id()` 恒为 `"script"`, 所以插件 provider **不进**
 //! `ncm_provider::ProviderRegistry`, 一律按**插件 id** 走 [`host::PluginHost::provider`]

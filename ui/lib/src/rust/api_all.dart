@@ -17,6 +17,7 @@ export 'api/library.dart';
 export 'api/lyric.dart';
 export 'api/me.dart';
 export 'api/playback.dart';
+export 'api/plugin.dart';
 export 'api/podcast.dart';
 export 'api/radio.dart';
 export 'api/recommend.dart';

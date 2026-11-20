@@ -208,7 +208,7 @@ impl Core {
     }
 }
 
-/// 插件宿主的 **Rust 侧 API**(非 Android; 无 FFI 导出).
+/// 插件宿主的 Rust 侧 API(非 Android; FFI 出口在 `ncm-ffi` 的 `api/plugin.rs`).
 ///
 /// 三条纪律(详见 `plugins/host.rs` 头注释):
 /// 1. **缺省不扫描**: 总开关在 `<data_dir>/plugin_host.json` 的 `enabled`(缺省 false),

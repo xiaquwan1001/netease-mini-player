@@ -16,6 +16,7 @@ import 'api/library.dart';
 import 'api/lyric.dart';
 import 'api/me.dart';
 import 'api/playback.dart';
+import 'api/plugin.dart';
 import 'api/podcast.dart';
 import 'api/radio.dart';
 import 'api/recommend.dart';
@@ -274,6 +275,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PlaylistCategory> dco_decode_list_playlist_category(dynamic raw);
 
   @protected
+  List<PluginFailureDto> dco_decode_list_plugin_failure_dto(dynamic raw);
+
+  @protected
+  List<PluginRejectedDto> dco_decode_list_plugin_rejected_dto(dynamic raw);
+
+  @protected
+  List<PluginSummaryDto> dco_decode_list_plugin_summary_dto(dynamic raw);
+
+  @protected
   List<PodcastProgramDto> dco_decode_list_podcast_program_dto(dynamic raw);
 
   @protected
@@ -445,6 +455,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaylistDetail dco_decode_playlist_detail(dynamic raw);
+
+  @protected
+  PluginFailureDto dco_decode_plugin_failure_dto(dynamic raw);
+
+  @protected
+  PluginRejectedDto dco_decode_plugin_rejected_dto(dynamic raw);
+
+  @protected
+  PluginRescanDto dco_decode_plugin_rescan_dto(dynamic raw);
+
+  @protected
+  PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
+
+  @protected
+  PluginSummaryDto dco_decode_plugin_summary_dto(dynamic raw);
 
   @protected
   PodcastProgramDto dco_decode_podcast_program_dto(dynamic raw);
@@ -886,6 +911,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PluginFailureDto> sse_decode_list_plugin_failure_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PluginRejectedDto> sse_decode_list_plugin_rejected_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<PluginSummaryDto> sse_decode_list_plugin_summary_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PodcastProgramDto> sse_decode_list_podcast_program_dto(
     SseDeserializer deserializer,
   );
@@ -1105,6 +1145,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PlaylistDetail sse_decode_playlist_detail(SseDeserializer deserializer);
+
+  @protected
+  PluginFailureDto sse_decode_plugin_failure_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginRejectedDto sse_decode_plugin_rejected_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginRescanDto sse_decode_plugin_rescan_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginSummaryDto sse_decode_plugin_summary_dto(SseDeserializer deserializer);
 
   @protected
   PodcastProgramDto sse_decode_podcast_program_dto(
@@ -1638,6 +1695,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_plugin_failure_dto(
+    List<PluginFailureDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_plugin_rejected_dto(
+    List<PluginRejectedDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_plugin_summary_dto(
+    List<PluginSummaryDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_podcast_program_dto(
     List<PodcastProgramDto> self,
     SseSerializer serializer,
@@ -1934,6 +2009,36 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_playlist_detail(
     PlaylistDetail self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_failure_dto(
+    PluginFailureDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_rejected_dto(
+    PluginRejectedDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_rescan_dto(
+    PluginRescanDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_status_dto(
+    PluginStatusDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_summary_dto(
+    PluginSummaryDto self,
     SseSerializer serializer,
   );
 

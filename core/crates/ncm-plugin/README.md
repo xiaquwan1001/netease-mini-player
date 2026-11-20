@@ -1,8 +1,12 @@
 # ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一/二/三/四步)
 
-> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** 本 crate 没有 FFI 导出、
-> `Core::open` 也不构造插件宿主 —— 改动它不会改变 App 默认行为
-> (不碰风控、不加包体风险)。**接缝已经落地**: 真实网络 transport 在
+> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** `Core::open` 会构造插件宿主
+> (`plugins::host::PluginHost`), 但**缺省不扫描**: 总开关在 `<data_dir>/plugin_host.json`
+> 的 `enabled`(缺省 false), 只有显式 `plugin_set_enabled(true)` 之后才会碰插件目录 ——
+> 所以改动本 crate 仍不改变 App 默认行为(不碰风控、不加包体风险)。
+> `ncm-ffi` 已导出 8 个函数(`plugin_status/summaries/failures/rejected/enable/disable/
+> rescan/set_enabled`, 见 `ncm-ffi/src/api/plugin.rs`), 但**还没有 UI 页面**;
+> Android 侧整层不编译, 导出函数返回空视图/`unsupported`。**接缝已经落地**: 真实网络 transport 在
 > `ncm-service/src/plugins/`(`ReqwestTransport`, 复用 service 的 UA/超时/重试口径),
 > 落盘 storage 是本 crate 的 [`FileStorage`](src/storage.rs)(目录由宿主传入),
 > 目录扫描/启停是 `PluginManager`, 装配成 `Provider` 是 `PluginRegistry`
@@ -246,7 +250,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |
 | 6 | **`songUrl` 上下文补齐** | `SongUrlRequest` 只有 `track+level`, 需要上层把 `name/singer/albumName/interval` 带进来(§1.2) |
-| 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); ✅ 切片 2 第五步已接进 **Rust 侧 Core**: `plugins::host::PluginHost` 由 `Core::open` 构造, 暴露 `plugin_status/summaries/failures/rejected/ids/provider/enable/disable/rescan/set_enabled/set_root`, 错误一律 `ProviderError{kind,retryable,detail}`(唯一翻译点 `host::to_provider_error`), **缺省不扫描**(`<data_dir>/plugin_host.json` 的 `enabled` 缺省 false, 理由见 `host.rs` 头注释); **仍缺**: `ncm-ffi` 导出、Flutter 管理页, 以及路由层在产品链路优先用插件 provider(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件) |
+| 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); ✅ 切片 2 第五步已接进 **Rust 侧 Core**: `plugins::host::PluginHost` 由 `Core::open` 构造, 暴露 `plugin_status/summaries/failures/rejected/ids/provider/enable/disable/rescan/set_enabled/set_root`, 错误一律 `ProviderError{kind,retryable,detail}`(唯一翻译点 `host::to_provider_error`), **缺省不扫描**(`<data_dir>/plugin_host.json` 的 `enabled` 缺省 false, 理由见 `host.rs` 头注释); ✅ 切片 2 第六步已导出到 `ncm-ffi`(`api/plugin.rs`: 8 个函数 + `PluginStatusDto`/`PluginSummaryDto`/`PluginFailureDto`/`PluginRejectedDto`/`PluginRescanDto`, 错误仍只经 `ProviderError -> FfiError` 一条口径, Android 目标返回空视图/`unsupported` 且编译通过); **仍缺**: Flutter 管理页, 以及路由层在产品链路优先用插件 provider(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件) |
 | 8 | **双端一致性** | Android(NDK)与桌面(PC)交叉编译 rquickjs-sys 未在本切片验证, 只在 Linux x86_64 全绿 |
 | 9 | **日志通道到 UI** | 日志暂由 `ScriptProvider::take_logs()` 拉取, 没有订阅/回放 |
 | 10 | **歌词能力** | `LyricProvider::lyric` 明确返回 `unsupported` |
