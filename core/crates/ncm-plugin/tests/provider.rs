@@ -67,6 +67,29 @@ fn song_url_maps_to_stream_url() {
 }
 
 #[test]
+fn lx_request_only_script_is_song_url_capable() {
+    // 上游 LX 脚本只注册 `request`; 能力声明与取链都必须照常工作.
+    let transport = Arc::new(MockTransport::new().on(
+        "example.test/api/song/url",
+        reply(r#"{"url":"https://cdn.test/lx.mp3"}"#),
+    ));
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/lx_request_event.js"),
+        transport,
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+
+    assert_eq!(provider.capabilities(), &[Capability::SongUrl]);
+    let request = SongUrlRequest {
+        track: TrackId(99),
+        level: AudioLevel::Exhigh,
+    };
+    let stream = block_on(provider.song_url(&request)).expect("取链应成功");
+    assert_eq!(stream.url.as_deref(), Some("https://cdn.test/lx.mp3"));
+}
+
+#[test]
 fn search_maps_to_search_page() {
     let transport = Arc::new(MockTransport::new().on(
         "example.test/api/search",

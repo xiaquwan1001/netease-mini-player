@@ -1,4 +1,4 @@
-# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一/二/三/四步)
+# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 全部 + 切片 3 LX 兼容层)
 
 > **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** `Core::open` 会构造插件宿主
 > (`plugins::host::PluginHost`), 但**缺省不扫描**: 总开关在 `<data_dir>/plugin_host.json`
@@ -22,7 +22,7 @@
 | 文件 | 职责 |
 |---|---|
 | `src/sandbox.rs` | QuickJS `Runtime`/`Context`、`lx.*` 注入、单次调用预算(interrupt + 内存上限) |
-| `src/prelude.js` | 注入给脚本的 JS 侧兼容层(`lx.on/request/storage/log/utils`, promise -> job queue 泵) |
+| `src/prelude.js` | 注入给脚本的 JS 侧兼容层(`lx.on/request/storage/log/env/utils`、`setTimeout/clearTimeout`、`btoa/atob`、`request` 事件适配, promise -> job queue 泵) |
 | `src/transport.rs` | 出站注入面 `Transport` / `TransportError`(带状态码与 `to_provider_error`) + 测试用 `MockTransport`(纯内存); 生产实现在 `ncm-service::plugins` |
 | `src/storage.rs` | `Storage` + `MemoryStorage`(进程内) / `FileStorage`(每 namespace 一个 JSON, 0600, tmp+rename 原子替换) |
 | `src/convert.rs` | 脚本 JSON -> `ncm-domain` 的 `StreamUrl` / `SearchPage`(纯函数) |
@@ -51,6 +51,24 @@ lx.on('musicUrl', async (source, info, quality) => {
 
 调用一律是**位置参数**, 返回值经纯 JSON 边界回宿主(不跨沙箱传宿主对象)。
 
+#### `request` —— 上游 LX 单入口(**兼容层**, 切片 3)
+
+真实 LX 社区脚本**只注册这一个事件**(`action ∈ {musicUrl, lyric, pic}`); 脚本没有注册
+`musicUrl` 时, 宿主仍按契约 v1 发 `musicUrl(source, musicInfo, quality)`, prelude 负责翻成上游形状:
+
+```js
+lx.on('request', ({ source, action, info }) => Promise<string | {url,...}>)
+// action = 'musicUrl'; info = { type: <音质代号>, musicInfo: {...} }
+```
+
+- `source`: 取脚本 `send('inited', {sources})` 声明里的 `wy`; 没有 `wy` 取第一个 key;
+  两者都没有才回落 `wy`。这样多平台脚本的 `apis[source]` 能命中网易云分支。
+- `info.musicInfo`: 与下面 `musicUrl` 的 `musicInfo` 同字段, 额外带 `source`。
+- 返回值与 `musicUrl` 一致(字符串或对象), 同一条 `convert::stream_url` 收口。
+- 两个事件都注册时**优先 `musicUrl`**(契约 v1 显式优先)。
+- 只注册 `request` 也算 `Capability::SongUrl`(`worker::capabilities_for`), 产品路由照常命中。
+- 适配只做 `action = musicUrl`; `lyric/pic` 不在本 crate 能力面内(脚本 reject 即可)。
+
 #### `musicUrl` —— 取直链
 
 ```js
@@ -59,7 +77,7 @@ lx.on('musicUrl', (source, musicInfo, quality) => string | {url,...} | null)
 
 | 参数 | 类型 | 说明 |
 |---|---|---|
-| `source` | string | v1 传 `"script"`(插件没有真实平台代号; 兼容层二期再按 LX 的 `wy/kw/tx…` 传) |
+| `source` | string | v1 传 `"script"`; `request` 事件适配路径已按 `inited.sources` 给真实代号(见上) |
 | `musicInfo` | object | `{id, name, singer, albumName, interval, type}` |
 | `quality` | string | LX 代号, 见下「音质映射」 |
 
@@ -107,10 +125,14 @@ lx.on('search', (query) => Song[] | {songs, total?, hasMore?})
 | API | 说明 |
 |---|---|
 | `lx.on(name, handler)` / `lx.off(name)` | 注册/注销事件, 返回 `lx` |
-| `lx.EVENT_NAMES` | `{request, inited, musicUrl, search}`(字符串常量, 与 Melodia 的 `lx.EVENT_NAMES` 对齐) |
+| `lx.EVENT_NAMES` | `{request, inited, musicUrl, search, updateAlert}`(字符串常量, 与 Melodia 的 `lx.EVENT_NAMES` 对齐) |
 | `lx.send(name, data)` | 脚本向宿主上报(当前只在宿主侧留痕, 接 UI 是后续切片) |
 | `lx.log(...)` / `console.log/info/warn/error/debug` | 写宿主日志缓冲(`Provider::take_logs`) |
-| `lx.request(args)` | **唯一**出站通道, 返回 Promise |
+| `lx.request(args)` / `lx.request(url, options?, callback?)` | **唯一**出站通道; 两种签名见下 |
+| `setTimeout(fn, ms, ...args)` / `clearTimeout(id)` | 宿主泵循环推进的定时器(精度 = 泵周期, **不建定时线程**); 一次调用结束即丢弃未到期任务 |
+| `btoa(str)` / `atob(str)` | 全局 base64(latin1 口径, 与浏览器一致) |
+| `lx.env` | `{platform, env}`: 桌面(Linux/Windows) `"desktop"`, Android `"mobile"`(宿主注 `__lxPlatform`) |
+| `lx.utils.buffer` | `from / bufToString / toString / concat`, 纯 JS codec(utf-8 / hex / base64 / latin1, 返回 `Uint8Array`) |
 | `lx.storage.get/set/remove/keys` | namespace 隔离的键值存储(值走 JSON) |
 | `lx.utils.crypto.md5(str)` | 纯 JS 标准 MD5(测试向量 `abc -> 900150983cd24fb0d6963f7d28e17f72`) |
 | `lx.utils.stringify(v)` | `JSON.stringify`, `undefined -> "null"` |
@@ -127,11 +149,22 @@ const res = await lx.request({
 // res = { status, statusCode, headers: [[k,v],...], body }
 ```
 
+上游回调式(三参)也支持, 语义与 LX 对齐(response 的 `headers` 变成小写键普通对象, 且带最终 URL):
+
+```js
+lx.request('https://...', { method: 'POST', body: 'x' }, function (err, resp) {
+  // err 非空 = 失败; resp = {statusCode, status, headers: {k: v}, headersArray: [[k,v]], body, url}
+});
+```
+
 失败(非 http/https、超出次数/体积预算、transport 报错)在 JS 侧表现为**被 reject 的 Promise**
 (`throw new Error(message)`), 脚本可以 try/catch 自行降级。
 
 **沙箱里没有**: `require` / `module` / `process` / `fetch` / `XMLHttpRequest` / `Deno` / 文件系统 /
-任意 socket / `setTimeout`(`lx.utils.sleep` 会明确抛错)。这一点有专项用例断言。
+任意 socket / `setInterval`(`lx.utils.sleep` 会明确抛错)。这一点有专项用例断言。
+
+定时器语义的边界: 只在**调用期**的泵间隙被推进; 装载期注册的定时器不会在装载中触发,
+调用结束后残留任务随实例丢弃(不跨调用续跑, 也不会有后台线程在跑脚本)。
 
 ### 1.4 预算(默认值, `SandboxConfig`)
 
@@ -231,12 +264,14 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 # 坏 JSON 当空 / 沙箱 8 请求预算在落盘后端下仍生效
 ```
 
-- `tests/sandbox.rs`(14 例): 事件分发、request 注入(method/headers/body 原样)、transport 报错、
+- `tests/sandbox.rs`(20 例): 事件分发、request 注入(method/headers/body 原样)、
+  **LX `request` 事件适配 + 回调式 `lx.request` + `setTimeout` 泵**(切片 3)、transport 报错、
   **超时中断**、**内存上限**、storage 命名空间隔离与跨调用保持、请求次数/响应体/协议白名单预算、
   逃逸面(`require/process/fetch/XMLHttpRequest/Deno/module` 全 undefined)、MD5 向量、缺处理器、脚本抛错映射;
-- `tests/provider.rs`(6 例): `songUrl`/`search` 走既有 `Provider`、能力声明由注册事件决定、
+- `tests/provider.rs`(7 例): `songUrl`/`search` 走既有 `Provider`、能力声明由注册事件决定(含「只注册 `request` ⇒ SongUrl」)、
   不支持能力 -> `unsupported`、语法错误 -> `Load`、`null` 直链 -> `notFound`;
-- JS fixture 在 `tests/fixtures/`(music_url / search / storage / budget / escape / md5 / loop / memory_bomb)。
+- JS fixture 在 `tests/fixtures/`(music_url / search / storage / budget / escape / md5 / loop / memory_bomb /
+  lx_request_event / lx_timer / lx_timer_hang)。
 
 **红 -> 绿实证**(必看):
 
@@ -265,7 +300,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 9 | **日志通道到 UI** | 日志暂由 `ScriptProvider::take_logs()` 拉取, 没有订阅/回放 |
 | 10 | **歌词能力** | `LyricProvider::lyric` 明确返回 `unsupported` |
 | 11 | **运行期进程外隔离** | 二期: 进程/沙箱子进程; 本切片只有线程内 QuickJS 沙箱 |
-| 12 | **`lx.crypto` / `lx.utils.zlib` / `buffer` codec** | 未实现(见 §5 的差异表) |
+| 12 | **`lx.crypto` / `lx.utils.zlib`** | `aesEncrypt/rsaEncrypt/randomBytes` 与 `zlib` 未实现(见 §5 的差异表); `buffer` codec 已在切片 3 落地 |
 
 ---
 
@@ -278,12 +313,14 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
    本 crate 的 `{keywords, limit, offset}` -> `Song[] | {songs,...}` 是**本主机 v1 自定义形状**,
    与社区脚本的 `lx.on('search', (keyword, page, limit) => ...)` 之类写法可能不一致, 接入前要拿真实脚本对表。
 2. **`musicUrl` 的位置参数**沿用 Melodia 源码读出的 `(source, musicInfo, quality)`
-   (`resolveMusicUrl`), 但 `source` 的真实平台代号(`wy/kw/tx…`)本切片不传, 统一给 `"script"`;
-   依赖 `source` 分流的多平台脚本会受影响。
+   (`resolveMusicUrl`); v1 的 `musicUrl` 事件仍传 `"script"`, 只有 `request` 适配路径会按
+   `inited.sources` 给真实代号(`wy` 优先)。实测依据: `docs/audit/2026-11-21-lx-script-compat.md`。
 3. **`lx.utils.crypto`**: 上游只有 `md5`(Melodia 实测), 本 crate 也只实现 md5;
-   `aesEncrypt / rsaEncrypt / randomBytes / zlib / buffer codec` 的上游语义未验证, 暂不提供。
+   `aesEncrypt / rsaEncrypt / randomBytes / zlib` 的上游语义未验证, 暂不提供;
+   `lx.utils.buffer` + 全局 `btoa/atob` 已按社区脚本实测用法补齐(切片 3)。
 4. **`lx.send('inited', {sources})` 握手**: Melodia 从 `data.sources` 的 key 取支持平台列表;
-   本 crate 只把 `lx.send` 的载荷留在沙箱内(尚未回传宿主), 握手语义等接插件管理层时再定。
+   本 crate 仍只把载荷留在沙箱内(未回传宿主), 但 `request` 适配已用它挑 `source` 代号;
+   回传宿主(能力/平台白名单)等接插件管理层时再定。
 5. **LX 脚本元信息头**(`@name/@description/@version/@capabilities/@apiVersion`)解析:
    **仍未做**(元信息一律取自 `manifest.json`)。`apiVersion` 的协商与拒绝文案已在**清单**侧落地
    (见 §1.6 与 `manifest::check_api_version`), 脚本头里的 `@apiVersion` 不作数。
