@@ -243,10 +243,10 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); 仍缺版本协商与「连续失败 3 次自动禁用」, 且**未接 FFI/UI** |
 | 2 | **导入/启停** | 粘贴/文件/URL 导入、启用禁用、卸载; 目前只接受调用方给的内存脚本文本 |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
-| 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 仍**未接线**(产路径不构造) |
+| 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |
 | 6 | **`songUrl` 上下文补齐** | `SongUrlRequest` 只有 `track+level`, 需要上层把 `name/singer/albumName/interval` 带进来(§1.2) |
-| 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); **仍缺**: FFI 导出、`Core::open` 构造, 以及路由层直接认这张"插件 id -> provider"表(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件); 接入要单独评审风控与体积 |
+| 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); ✅ 切片 2 第五步已接进 **Rust 侧 Core**: `plugins::host::PluginHost` 由 `Core::open` 构造, 暴露 `plugin_status/summaries/failures/rejected/ids/provider/enable/disable/rescan/set_enabled/set_root`, 错误一律 `ProviderError{kind,retryable,detail}`(唯一翻译点 `host::to_provider_error`), **缺省不扫描**(`<data_dir>/plugin_host.json` 的 `enabled` 缺省 false, 理由见 `host.rs` 头注释); **仍缺**: `ncm-ffi` 导出、Flutter 管理页, 以及路由层在产品链路优先用插件 provider(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件) |
 | 8 | **双端一致性** | Android(NDK)与桌面(PC)交叉编译 rquickjs-sys 未在本切片验证, 只在 Linux x86_64 全绿 |
 | 9 | **日志通道到 UI** | 日志暂由 `ScriptProvider::take_logs()` 拉取, 没有订阅/回放 |
 | 10 | **歌词能力** | `LyricProvider::lyric` 明确返回 `unsupported` |

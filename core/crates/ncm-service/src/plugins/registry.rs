@@ -1,5 +1,10 @@
 //! 插件 provider 注册表(切片 2 第四步): 把"已登记 + 已启用"的插件装配成
-//! 产品既有的 `Provider` 对象, **仍不接 FFI/UI, 也不进 `Core`**.
+//! 产品既有的 `Provider` 对象.
+//!
+//! **接线状态(切片 2 第五步)**: 已由 `super::host::PluginHost` 接进 `Core::open`(Rust 侧);
+//! 仍**没有** FFI 导出/UI 入口, 且缺省不扫描(总开关在 `plugin_host.json`), 所以产品默认路径
+//! 不受影响. 管理层错误(`ManagerError`)到 `ProviderError` 的**唯一**翻译点在
+//! `host::to_provider_error`(映射表见 `host.rs` 头注释).
 //!
 //! # 这一层负责什么
 //!
@@ -27,7 +32,8 @@
 //!   脚本侧的失败在 `ncm_plugin` 里已经收口成 `ProviderError{kind,retryable,detail}`
 //!   (映射表见 `ncm-plugin/src/error.rs`), 本层不做任何错误翻译;
 //! - 装载/扫描失败的 `ManagerError` 只在**宿主管理层**使用(`enable` 的返回值、`failures()`),
-//!   不会伪装成 provider 调用错误;
+//!   不会伪装成 provider 调用错误; 需要跨到 `Core` 边界时由 `super::host::to_provider_error`
+//!   一处翻成 `ProviderError`(调用期与协调期同一口径, 不新增错误类型);
 //! - `Capability` 由脚本实际注册的事件决定(`ScriptProvider` 内), 本层不猜、不覆盖.
 //!
 //! # 刷新与冲突口径(与 `PluginManager` 一致)

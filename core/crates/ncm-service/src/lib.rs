@@ -28,6 +28,10 @@ pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
+#[cfg(not(target_os = "android"))]
+pub use plugins::host::{PluginHostPolicy, PluginHostStatus};
+#[cfg(not(target_os = "android"))]
+pub use plugins::{PluginHost, PluginSummary, RegistryReport};
 pub use ttml_source::{
     fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource,
 };
@@ -51,6 +55,9 @@ pub struct Core {
     pub session: ncm_domain::Session,
     pub providers: ProviderRegistry,
     pub netease: Arc<NeteaseProvider>,
+    /// 插件宿主(仅非 Android 目标): 缺省不扫描, 详见 `plugins::host` 头注释.
+    #[cfg(not(target_os = "android"))]
+    plugin_host: PluginHost,
 }
 
 impl Core {
@@ -66,11 +73,17 @@ impl Core {
         let netease = Arc::new(NeteaseProvider::new(session.clone()));
         let mut providers = ProviderRegistry::new();
         providers.register(netease.clone());
+        // 插件宿主:**不返回 Result** —— 插件侧的失败(坏清单/根目录建不出来)只降级成
+        // "宿主不可用", 绝不影响 Core 启动(见 plugins/host.rs 头注释的缺省值一节).
+        #[cfg(not(target_os = "android"))]
+        let plugin_host = PluginHost::open(data_dir);
         Ok(Self {
             store,
             session,
             providers,
             netease,
+            #[cfg(not(target_os = "android"))]
+            plugin_host,
         })
     }
 
@@ -192,5 +205,79 @@ impl Core {
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_default()
+    }
+}
+
+/// 插件宿主的 **Rust 侧 API**(非 Android; 无 FFI 导出).
+///
+/// 三条纪律(详见 `plugins/host.rs` 头注释):
+/// 1. **缺省不扫描**: 总开关在 `<data_dir>/plugin_host.json` 的 `enabled`(缺省 false),
+///    未打开时读类接口给空视图, 写类接口给 `Forbidden` —— 绝不因磁盘上有多一个目录就开始执行脚本;
+/// 2. **按插件 id 路由**: `ScriptProvider::id()` 恒为 `"script"`, 所以插件 provider 不进
+///    `self.providers`(`ncm_provider::ProviderRegistry`), 一律走 [`Core::plugin_provider`];
+/// 3. **单一错误口径**: 可失败的插件操作都是 `ProviderResult<_>`, 不新增错误类型.
+#[cfg(not(target_os = "android"))]
+impl Core {
+    /// 宿主状态(UI 用它解释"为什么列表是空的")
+    pub fn plugin_status(&self) -> PluginHostStatus {
+        self.plugin_host.status()
+    }
+
+    /// 插件列表(含坏条目的 `error` 原因)
+    pub fn plugin_summaries(&self) -> Vec<PluginSummary> {
+        self.plugin_host.summaries()
+    }
+
+    /// 失败原因(清单坏/路径不安全/装载失败)
+    pub fn plugin_failures(&self) -> std::collections::BTreeMap<String, String> {
+        self.plugin_host.failures()
+    }
+
+    /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问)
+    pub fn plugin_rejected(&self) -> Vec<(String, String)> {
+        self.plugin_host.rejected()
+    }
+
+    /// 已装载 provider 的插件 id(字典序)
+    pub fn plugin_ids(&self) -> Vec<String> {
+        self.plugin_host.ids()
+    }
+
+    /// 按**插件 id** 取 provider(未启用/未装载/不存在都是 `None`)
+    pub fn plugin_provider(&self, id: &str) -> Option<Arc<dyn ncm_provider::Provider>> {
+        self.plugin_host.provider(id)
+    }
+
+    /// 启用插件并即时装载
+    pub fn plugin_enable(&mut self, id: &str) -> ncm_provider::ProviderResult<()> {
+        self.plugin_host.enable(id)
+    }
+
+    /// 停用插件并摘掉 provider
+    pub fn plugin_disable(&mut self, id: &str) -> ncm_provider::ProviderResult<()> {
+        self.plugin_host.disable(id)
+    }
+
+    /// 重扫插件根目录(全量重建, 没有热重载)
+    pub fn plugin_rescan(&mut self) -> ncm_provider::ProviderResult<RegistryReport> {
+        self.plugin_host.rescan()
+    }
+
+    /// 宿主总开关(持久化到 `plugin_host.json`)
+    pub fn plugin_set_enabled(&mut self, enabled: bool) -> ncm_provider::ProviderResult<()> {
+        self.plugin_host.set_enabled(enabled)
+    }
+
+    /// 改插件根目录(`None` = 回到缺省 `<data_dir>/plugins`)
+    pub fn plugin_set_root(
+        &mut self,
+        root: Option<PathBuf>,
+    ) -> ncm_provider::ProviderResult<()> {
+        self.plugin_host.set_root(root)
+    }
+
+    /// 宿主策略(只读: 总开关与根目录)
+    pub fn plugin_policy(&self) -> &PluginHostPolicy {
+        self.plugin_host.policy()
     }
 }

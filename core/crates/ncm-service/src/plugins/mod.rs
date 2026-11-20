@@ -1,9 +1,13 @@
-//! 插件宿主的**宿主侧接缝**: 目录管理 + 真实网络 transport + provider 注册表.
+//! 插件宿主的**宿主侧接缝**: 目录管理 + 真实网络 transport + provider 注册表 + Core 接线.
 //!
-//! 边界: 本模块只提供 `ncm-plugin` 所需的宿主实现与装配, **仍未接线** —— 没有 FFI 导出,
-//! `Core::open` 也不构造任何插件宿主/注册表, 所以产品默认路径不受影响, 插件仍然
-//! "不可从 UI 触发". 接线(含 `Provider::id()` 恒为 `"script"` 与 `ProviderRegistry` 的
-//! 键冲突问题)要单独评审风控与包体(见 `docs/remaining-batches.md` §11.C 与 `registry.rs` 头注释).
+//! 边界: 本模块提供 `ncm-plugin` 所需的宿主实现与装配, 并已由 [`host::PluginHost`] 接进
+//! `Core::open`(**Rust 侧**); 但仍然**没有 FFI 导出/UI 入口**, 所以产品默认路径的行为不变:
+//! 缺省策略是**不扫描**([`host::PluginHostPolicy::default`]), 开启必须显式调
+//! `Core::plugin_set_enabled(true)`.
+//!
+//! 路由纪律: `ScriptProvider::id()` 恒为 `"script"`, 所以插件 provider **不进**
+//! `ncm_provider::ProviderRegistry`, 一律按**插件 id** 走 [`host::PluginHost::provider`]
+//! (见 `registry.rs` 头注释与 `docs/remaining-batches.md` §11.C).
 //!
 //! 依赖方向: `ncm-service -> ncm-plugin`(plugin 只依赖 ncm-domain/ncm-provider, 无环).
 //!
@@ -12,10 +16,12 @@
 //! 在 `cfg(target_os = "android")` 下整体不编译(见 `lib.rs` 与 `Cargo.toml` 的 target 段).
 //! 反过来不行: 宿主 HTTP 栈(UA/代理/超时/重试)必须留在 service 侧.
 
+pub mod host;
 pub mod manager;
 pub mod registry;
 pub mod transport;
 
+pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
 pub use manager::{ManagerError, ManagerErrorKind, PluginManager, PluginSummary};
 pub use registry::{PluginRegistry, RegistryReport};
 pub use transport::ReqwestTransport;
