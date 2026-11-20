@@ -29,9 +29,11 @@
 //! 3. **id 不许出现点号/分隔符/大写**: Windows/macOS 的文件系统大小写不敏感, `Foo` 与 `foo`
 //!    会撞成同一个目录; 点号则直接开出 `..` 逃逸的口子.
 //!
-//! 权限**目前是声明性数据**: 沙箱尚未按 `requestDomains` 过滤出站(接线切片再做), 所以不要把它
-//! 当既成事实的安全边界 —— 真正的边界在 `ncm-plugin` 的沙箱(无 fs/无 fetch, 只有宿主注入的
-//! `lx.request`)与 `PluginManager` 的路径规范化.
+//! 权限**已生效**: `PluginManager` 为每个插件把宿主 transport 包进
+//! [`policy::GuardedTransport`](crate::policy::GuardedTransport), `requestDomains` 之外的出站
+//! **在发出去之前**就被拒(未声明 = 全拒, 见 `crate::policy`). 但白名单只到主机名粒度, 它**不是**
+//! 全部安全边界 —— 另一半仍在沙箱(无 fs/无 fetch, 只有宿主注入的 `lx.request`)与
+//! `PluginManager` 的路径规范化.
 
 use std::fmt;
 
@@ -72,6 +74,9 @@ pub struct Permissions {
     #[serde(default)]
     pub lx_events: Vec<String>,
     /// 出站域名白名单(形如 `api.example.com` 或 `*.example.com`).
+    ///
+    /// 匹配语义见 [`DomainPolicy`](crate::DomainPolicy): `*.host` 同时覆盖 `host` **自身**与其任意
+    /// 层级子域, `host` 只覆盖它自己(不做后缀匹配). 空列表 = 该插件出站全拒.
     #[serde(default)]
     pub request_domains: Vec<String>,
 }

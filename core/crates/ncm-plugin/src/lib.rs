@@ -21,6 +21,7 @@
 //! | 模块 | 职责 |
 //! |---|---|
 //! | [`manifest`] | 插件清单(`manifest.json`)的纯数据形态与校验(可读错误, 不 panic) |
+//! | [`policy`] | 出站域名白名单: 把 `permissions.requestDomains` 变成真判据(越界请求发不出去) |
 //! | [`sandbox`] | QuickJS 实例、`lx.*` 注入、单次调用的时间/内存/请求预算 |
 //! | [`transport`] / [`storage`] | 宿主注入面: 受控出站 + 命名空间隔离存储(内存/落盘两实现) |
 //! | [`worker`] | `ScriptProvider`: 专属线程 + 异步 `Provider` 方法桥接 |
@@ -49,6 +50,7 @@
 pub mod convert;
 pub mod error;
 pub mod manifest;
+pub mod policy;
 pub mod sandbox;
 pub mod storage;
 pub mod transport;
@@ -56,6 +58,7 @@ pub mod worker;
 
 pub use error::{PluginError, PluginErrorKind};
 pub use manifest::{ManifestError, Permissions, PluginManifest, KNOWN_EVENTS, MANIFEST_FILE};
+pub use policy::{DomainPolicy, GuardedTransport};
 pub use sandbox::{SandboxConfig, ScriptEngine};
 pub use storage::{FileStorage, MemoryStorage, Storage};
 pub use transport::{

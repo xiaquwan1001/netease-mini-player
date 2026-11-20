@@ -44,7 +44,9 @@
 //! # 明确未做
 //!
 //! - 没有"下载/解包插件"的能力(只从**已经在本机磁盘上**的目录登记);
-//! - `permissions.requestDomains` 目前只是清单数据, 出站不按域过滤(接线切片再做);
+//! - `permissions.requestDomains` **已强制**: 每个插件装载时把宿主 transport 包进
+//!   [`GuardedTransport`](ncm_plugin::GuardedTransport)(每插件一份 [`DomainPolicy`](ncm_plugin::DomainPolicy)),
+//!   不在清单白名单里的主机在发出去之前就被拒(未声明 = 不出站);
 //! - 没有热重载: 改脚本要重新 `install_from_dir` + 重新 `load_provider`;
 //! - 没有接 `ProviderRegistry`/FFI/UI ⇒ **插件仍不可从产品触发**.
 
@@ -53,8 +55,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ncm_plugin::{
-    FileStorage, PluginError, PluginManifest, PluginSpec, SandboxConfig, ScriptProvider, Storage,
-    Transport, MANIFEST_FILE,
+    DomainPolicy, FileStorage, GuardedTransport, PluginError, PluginManifest, PluginSpec,
+    SandboxConfig, ScriptProvider, Storage, Transport, MANIFEST_FILE,
 };
 use serde::{Deserialize, Serialize};
 
@@ -166,6 +168,9 @@ pub struct PluginSummary {
     pub name: String,
     pub version: String,
     pub enabled: bool,
+    /// 清单声明的出站白名单(`permissions.requestDomains` 原样, 装载时**强制生效**).
+    /// 空 = 该插件出站全拒; 坏条目拿不到清单 ⇒ 也是空.
+    pub request_domains: Vec<String>,
     /// `Some(reason)` = 这个目录没装上(清单坏/路径不安全/重复 id ...).
     pub error: Option<String>,
 }
@@ -435,6 +440,7 @@ impl PluginManager {
                     name: plugin.manifest.name.clone(),
                     version: plugin.manifest.version.clone(),
                     enabled: self.is_enabled(id),
+                    request_domains: plugin.manifest.permissions.request_domains.clone(),
                     error: None,
                 },
                 None => PluginSummary {
@@ -442,6 +448,7 @@ impl PluginManager {
                     name: String::new(),
                     version: String::new(),
                     enabled: false,
+                    request_domains: Vec::new(),
                     error: self.errors.get(id).cloned(),
                 },
             })
@@ -527,14 +534,13 @@ impl PluginManager {
             ManagerError::io(&format!("读取入口脚本 {}", plugin.entry_path.display()), &e)
         })?;
         let storage: Arc<dyn Storage> = Arc::new(self.storage_for(id)?);
-        let spec = PluginSpec::new(
-            plugin.manifest.name.clone(),
-            source,
-            self.transport.clone(),
-            storage,
-        )
-        .with_config(self.sandbox.clone())
-        .with_namespace(id.to_string());
+        // 出站白名单: 每插件一份(不共享), 宿主 HTTP 栈原样复用, 只在通道口裁决.
+        let policy = DomainPolicy::from_permissions(&plugin.manifest.permissions);
+        let transport: Arc<dyn Transport> =
+            Arc::new(GuardedTransport::new(self.transport.clone(), policy));
+        let spec = PluginSpec::new(plugin.manifest.name.clone(), source, transport, storage)
+            .with_config(self.sandbox.clone())
+            .with_namespace(id.to_string());
         ScriptProvider::load(spec).map_err(ManagerError::from)
     }
 }

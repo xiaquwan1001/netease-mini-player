@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ncm_domain::TrackId;
-use ncm_plugin::{MockTransport, SandboxConfig, Storage};
+use ncm_plugin::{MockTransport, SandboxConfig, Storage, TransportResponse};
 use ncm_provider::{AudioLevel, ProviderErrorKind, ReadProvider, SongUrlRequest};
 
 use super::{ManagerErrorKind, PluginManager, STATE_FILE};
@@ -54,6 +54,40 @@ fn manifest_json(id: &str, entry: &str) -> String {
     format!(
         r#"{{"id":"{id}","name":"{id} 插件","version":"1.0.0","entry":"{entry}","permissions":{{"lxEvents":["musicUrl"]}}}}"#
     )
+}
+
+/// 带 `permissions.requestDomains` 的清单.
+fn manifest_json_with_domains(id: &str, entry: &str, domains: &[&str]) -> String {
+    let declared: Vec<String> = domains
+        .iter()
+        .map(|domain| format!("\"{domain}\""))
+        .collect();
+    format!(
+        r#"{{"id":"{id}","name":"{id} 插件","version":"1.0.0","entry":"{entry}","permissions":{{"lxEvents":["musicUrl"],"requestDomains":[{}]}}}}"#,
+        declared.join(",")
+    )
+}
+
+/// 打开 manager 并**留下** transport 句柄(白名单用例要查它到底收到了什么).
+fn manager_with_transport(root: &Path) -> (PluginManager, Arc<MockTransport>) {
+    let mock = transport();
+    let mgr = PluginManager::open(root, mock.clone()).expect("打开插件根目录");
+    (mgr, mock)
+}
+
+/// 取链时先 `lx.request(url)` 再返回直链的脚本(未捕获的拒绝会冒泡成取链失败).
+fn request_script(url: &str) -> String {
+    format!(
+        "lx.on('musicUrl', async () => {{ await lx.request({{ url: '{url}' }}); return 'https://cdn.test/a.mp3'; }});"
+    )
+}
+
+fn ok_body(body: &str) -> TransportResponse {
+    TransportResponse {
+        status: 200,
+        headers: Vec::new(),
+        body: body.to_string(),
+    }
 }
 
 /// 写一个插件目录: `<root>/<dir>/{manifest.json, <entry>}`.
@@ -553,4 +587,119 @@ fn rescan_drops_plugin_whose_manifest_broke() {
         .find(|row| row.id == "alpha")
         .expect("错误行");
     assert!(row.error.is_some(), "{row:?}");
+}
+
+// ---- 出站域名白名单(切片 2 第三步): 清单声明在装载时变成真判据 ----
+
+#[test]
+fn undeclared_domain_request_is_denied_before_transport() {
+    let tmp = TempDir::new("policy-deny");
+    let source = request_script("https://evil.test/steal");
+    write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json_with_domains("alpha", "index.js", &["api.example.com"]),
+        "index.js",
+        &source,
+    );
+
+    let (mut mgr, mock) = manager_with_transport(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    mgr.enable("alpha").expect("启用 alpha");
+    let provider = mgr.load_provider("alpha").expect("装载 alpha");
+
+    let err = futures::executor::block_on(provider.song_url(&song_request()))
+        .expect_err("越界域名必须让取链失败");
+    // 白名单拒绝 = 脚本侧未捕获的拒绝 ⇒ kind=Internal, retryable=false(写死错口径).
+    assert!(!err.retryable, "白名单拒绝不是重试类错误: {err:?}");
+    assert!(
+        err.detail.contains("出站被拒"),
+        "错误文案要说明是白名单拒绝: {err:?}"
+    );
+    assert!(
+        err.detail.contains("evil.test"),
+        "错误文案必须点名被拒主机: {err:?}"
+    );
+    assert!(
+        mock.requests().is_empty(),
+        "被拒的请求不许真的发出去: {:?}",
+        mock.requests()
+    );
+}
+
+#[test]
+fn declared_domain_request_reaches_transport() {
+    let tmp = TempDir::new("policy-allow");
+    let url = "https://api.example.com/url?id=7";
+    let source = request_script(url);
+    write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json_with_domains("alpha", "index.js", &["api.example.com"]),
+        "index.js",
+        &source,
+    );
+
+    let (mut mgr, mock) = manager_with_transport(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    mgr.enable("alpha").expect("启用 alpha");
+    mock.expect("api.example.com", Ok(ok_body(r#"{"data":"ok"}"#)));
+    let provider = mgr.load_provider("alpha").expect("装载 alpha");
+
+    let stream = futures::executor::block_on(provider.song_url(&song_request()))
+        .expect("白名单内的域名应放行");
+    assert_eq!(stream.url.as_deref(), Some("https://cdn.test/a.mp3"));
+
+    let seen = mock.requests();
+    assert_eq!(seen.len(), 1, "白名单内的请求必须真的发出去: {seen:?}");
+    assert_eq!(seen[0].url, url);
+    assert_eq!(seen[0].method, "GET");
+
+    // 汇总里的可观测字段取自清单.
+    let row = mgr
+        .list()
+        .into_iter()
+        .find(|row| row.id == "alpha")
+        .expect("alpha 行");
+    assert_eq!(row.request_domains, vec!["api.example.com".to_string()]);
+}
+
+#[test]
+fn plugin_without_request_domains_cannot_make_any_request() {
+    let tmp = TempDir::new("policy-empty");
+    let source = request_script("https://api.example.com/url?id=7");
+    write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json("alpha", "index.js"),
+        "index.js",
+        &source,
+    );
+
+    let (mut mgr, mock) = manager_with_transport(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    mgr.enable("alpha").expect("启用 alpha");
+    mock.expect("api.example.com", Ok(ok_body("{}")));
+    let provider = mgr.load_provider("alpha").expect("装载 alpha");
+
+    let err = futures::executor::block_on(provider.song_url(&song_request()))
+        .expect_err("未声明白名单 = 不出站");
+    assert!(!err.retryable, "未声明拒绝不重试: {err:?}");
+    assert!(
+        err.detail.contains("未声明"),
+        "错误文案要指出未声明 requestDomains: {err:?}"
+    );
+    assert!(
+        mock.requests().is_empty(),
+        "未声明插件的任何请求都不许发出去: {:?}",
+        mock.requests()
+    );
+
+    let row = mgr
+        .list()
+        .into_iter()
+        .find(|row| row.id == "alpha")
+        .expect("alpha 行");
+    assert!(row.request_domains.is_empty(), "{row:?}");
+    assert!(row.error.is_none(), "{row:?}");
 }
