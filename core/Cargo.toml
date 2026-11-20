@@ -5,10 +5,10 @@ members = [
     "crates/ncm-provider",
     "crates/ncm-service",
     "crates/ncm-playback",
-    # 实验性插件宿主(未接入产品: 无 crate 依赖它, 不进 ncm_ffi/APK)。
-    # 门禁 rust-lint/rust-test 用 --exclude ncm-plugin 跳过编译(审计 7.9), 独立门是
-    # tools/ci-gates.sh rust-plugin; 保留 workspace 成员是为了 cargo test -p ncm-plugin
-    # 与 .workspace = true 继承字段继续可用。接入条件见 docs/remaining-batches.md §11.C。
+    # 实验性插件宿主(未接入产品: 没有 FFI 导出/没注册进 ProviderRegistry, 不进 APK 默认路径)。
+    # 2026-11-20 切片 2 第一步起 ncm-service 依赖它(plugins::ReqwestTransport), 所以
+    # rust-lint/rust-test 按 workspace 全量跑它(不再 --exclude, 独立门 rust-plugin 已删)。
+    # 接入条件见 docs/remaining-batches.md §11.C。
     "crates/ncm-plugin",
     "crates/ncm-cli",
     "crates/ncm-ffi",

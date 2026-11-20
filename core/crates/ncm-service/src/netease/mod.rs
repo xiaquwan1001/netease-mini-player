@@ -210,7 +210,7 @@ pub(super) fn make_query(cookie: &str, domain: &Option<String>, ua: &Option<Stri
 /// reqwest 会读 HTTPS_PROXY/ALL_PROXY 等环境变量。本机常见坑: 代理进程没起或换端口,
 /// 报错却是笼统的 "error sending request for url (...)", 看起来像"接口挂了/设备风控"。
 /// 这里附一句提示, 省掉一次误判。
-pub(super) fn proxy_hint() -> String {
+pub(crate) fn proxy_hint() -> String {
     for key in [
         "HTTPS_PROXY",
         "https_proxy",
@@ -231,7 +231,7 @@ pub(super) fn proxy_hint() -> String {
 /// 把错误链一路串起来(`外层 <- 内层 <- 根因`).
 /// reqwest 的 Display 只有一句 "error sending request", 真正的原因(DNS/TCP/TLS)
 /// 全在 source() 链里 —— 真机排障必须看到这一层。
-pub(super) fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
+pub(crate) fn error_chain(err: &(dyn std::error::Error + 'static)) -> String {
     let mut out = err.to_string();
     let mut depth = 0;
     let mut cursor = err.source();

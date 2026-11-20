@@ -17,14 +17,20 @@ use ncm_provider::ProviderError;
 
 /// 桌面下载的 Referer: 与 Android 侧 `DefaultHttpDataSource` 的默认请求头保持一致.
 pub const DOWNLOAD_REFERER: &str = "https://music.163.com/";
-/// 建连上限(跨境链路上 TLS 握手可能慢, 但 10s 还没连上就是真的不通)
-const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-/// 读间隔上限(首包与后续每次读都受它约束): 20s 完全没有字节才算 stalled
-const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+/// 建连上限(跨境链路上 TLS 握手可能慢, 但 10s 还没连上就是真的不通).
+///
+/// `pub(crate)`: 插件宿主的 `plugins::ReqwestTransport` 复用同一口径(见那里头注释).
+pub(crate) const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// 读间隔上限(首包与后续每次读都受它约束): 20s 完全没有字节才算 stalled.
+///
+/// `pub(crate)`: 同上, 插件出站不另起一套超时数字.
+pub(crate) const READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 /// 首包单独再压一道: 连上了但 CDN 迟迟不给 body(或被劫持成重定向页)时尽早失败
 const FIRST_CHUNK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
-/// 下载失败后重试的次数上限(总尝试 = 1 + 1)
-const DOWNLOAD_RETRIES: u32 = 1;
+/// 下载失败后重试的次数上限(总尝试 = 1 + 1).
+///
+/// `pub(crate)`: 插件出站的重试档位抄这一个数(`plugins::TRANSPORT_RETRIES`), 不另定.
+pub(crate) const DOWNLOAD_RETRIES: u32 = 1;
 
 pub struct AudioCache {
     dir: PathBuf,
