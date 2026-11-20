@@ -57,9 +57,7 @@ pub enum RouteMode {
     /// 显式只用内置 provider(多个插件都在时, 这是"谁都别用"的表达方式).
     Builtin,
     /// 显式指定插件 id.
-    Plugin {
-        id: String,
-    },
+    Plugin { id: String },
 }
 
 impl RouteMode {
@@ -359,7 +357,11 @@ pub fn warn_plan(cap: Capability, plan: &RoutePlan) {
         return;
     }
     *last = Some(key);
-    eprintln!("[ncm-plugin] 路由提示({}): {}", plan.reason.as_str(), plan.detail);
+    eprintln!(
+        "[ncm-plugin] 路由提示({}): {}",
+        plan.reason.as_str(),
+        plan.detail
+    );
 }
 
 // ------------------------------- 调用 -------------------------------
@@ -378,6 +380,7 @@ pub struct RouteDecision {
 }
 
 /// 路由调用结果: 值 + 这次到底走了谁.
+#[derive(Debug)]
 pub struct Routed<T> {
     pub value: T,
     pub used: RouteUsed,
@@ -396,9 +399,14 @@ impl<T> Routed<T> {
 ///
 /// 回落条件: 插件侧返回 `Err` 且内置 provider 存在. 内置 provider 缺席时**原错误上抛**
 /// (没有兜底就别假装成功), 内置 provider 自己的失败也不回落(见模块头注释).
-pub async fn call_routed<T, F>(decision: RouteDecision, call: F) -> ProviderResult<Routed<T>>
+///
+/// 闭包拿的是 provider 的 `Arc`(**按值**)而不是 `&Arc`: 这样 future 自己持有 provider,
+/// 生命周期只剩调用点借来的请求参数(`&SongUrlRequest` / `&SearchQuery`, 即 `'p`),
+/// 不会被 `for<'a>` HRTB 逼成 `'static`(`&self` 形态实际写不出来). 调用点写成
+/// `|p| Box::pin(async move { p.song_url(&req).await })`.
+pub async fn call_routed<'p, T, F>(decision: RouteDecision, call: F) -> ProviderResult<Routed<T>>
 where
-    F: for<'a> Fn(&'a std::sync::Arc<dyn Provider>) -> BoxFuture<'a, ProviderResult<T>>,
+    F: Fn(std::sync::Arc<dyn Provider>) -> BoxFuture<'p, ProviderResult<T>>,
 {
     let RouteDecision {
         capability,
@@ -410,7 +418,7 @@ where
 
     // 命中插件: 先插件, 失败回落内置.
     if let (RouteTarget::Plugin(id), Some(plugin)) = (&plan.target, plugin) {
-        let attempted = call(&plugin).await;
+        let attempted = call(plugin).await;
         match attempted {
             Ok(value) => {
                 let used = RouteUsed::Plugin(id.clone());
@@ -436,7 +444,7 @@ where
                     kind: err.kind.as_str().to_string(),
                     detail: err.detail.clone(),
                 };
-                let value = call(&builtin).await?;
+                let value = call(builtin).await?;
                 record(&used);
                 return Ok(Routed { value, used });
             }
@@ -451,7 +459,7 @@ where
             plan.detail
         ))
     })?;
-    let value = call(&builtin).await?;
+    let value = call(builtin).await?;
     let used = RouteUsed::Builtin;
     record(&used);
     Ok(Routed { value, used })

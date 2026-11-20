@@ -61,7 +61,59 @@ pub enum Capability {
     Cloud,
 }
 
+/// 全部能力(顺序 = 声明顺序, 稳定). FFI 文本入口靠它做反查/遍历.
+pub const ALL_CAPABILITIES: &[Capability] = &[
+    Capability::Search,
+    Capability::SongUrl,
+    Capability::Lyric,
+    Capability::Login,
+    Capability::Profile,
+    Capability::Playlist,
+    Capability::DailyRecommend,
+    Capability::PersonalFm,
+    Capability::Album,
+    Capability::Podcast,
+    Capability::SearchSuggest,
+    Capability::Recent,
+    Capability::SearchHot,
+    Capability::Feed,
+    Capability::PlaylistDetail,
+    Capability::Comment,
+    Capability::Share,
+    Capability::PodcastDetail,
+    Capability::SearchAll,
+    Capability::Artist,
+    Capability::ProfileDetail,
+    Capability::PlaylistEdit,
+    Capability::ListeningRank,
+    Capability::StyleRecommend,
+    Capability::Chart,
+    Capability::AlbumSub,
+    Capability::Follow,
+    Capability::NewRelease,
+    Capability::Similar,
+    Capability::Signin,
+    Capability::Wiki,
+    Capability::SongLike,
+    Capability::Message,
+    Capability::Vip,
+    Capability::DigitalAlbum,
+    Capability::RadioExplore,
+    Capability::Cloud,
+];
+
 impl Capability {
+    /// 文本 -> 能力([`as_str`](Self::as_str) 的逆; FFI 入口只有字符串).
+    ///
+    /// 未知文本返回 `None` —— 调用方(FFI 层)翻成 `unsupported`, 不静默当成某个能力.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        ALL_CAPABILITIES
+            .iter()
+            .copied()
+            .find(|cap| cap.as_str() == text)
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Capability::Search => "search",

@@ -85,9 +85,10 @@ pub async fn style_songs(tag_id: String, limit: u32) -> Result<Vec<SongDto>, Ffi
 
 /// 某个曲风下的歌单
 pub async fn style_playlists(tag_id: String, limit: u32) -> Result<Vec<Playlist>, FfiError> {
+    let tag_id = tag_id.as_str();
     ffi_forward!(
         Capability::StyleRecommend,
-        provider.style_playlists(&tag_id, limit)
+        provider.style_playlists(tag_id, limit)
     )
 }
 
@@ -120,9 +121,10 @@ pub async fn sign_in() -> Result<SigninStatus, FfiError> {
 
 /// 删除自己的评论(需登录)
 pub async fn delete_comment(thread_id: String, comment_id: u64) -> Result<bool, FfiError> {
+    let thread_id = thread_id.as_str();
     ffi_forward!(
         Capability::Comment,
-        provider.delete_comment(&thread_id, comment_id)
+        provider.delete_comment(thread_id, comment_id)
     )
 }
 
@@ -151,9 +153,10 @@ pub async fn new_songs_by_area(area: String, limit: u32) -> Result<Vec<SongDto>,
 
 /// 新碟上架(按地区)
 pub async fn new_albums_by_area(area: String, limit: u32) -> Result<Vec<AlbumItem>, FfiError> {
+    let area = area.as_str();
     ffi_forward!(
         Capability::NewRelease,
-        provider.new_albums_by_area(&area, limit)
+        provider.new_albums_by_area(area, limit)
     )
 }
 

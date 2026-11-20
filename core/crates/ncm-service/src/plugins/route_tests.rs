@@ -9,12 +9,12 @@ use std::sync::Arc;
 
 use ncm_domain::{SearchPage, StreamUrl};
 use ncm_provider::{
-    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult, ReadProvider,
-    SearchQuery, SongUrlRequest,
+    BoxFuture, Capability, Provider, ProviderError, ProviderErrorKind, ProviderResult,
+    ReadProvider, SearchQuery, SongUrlRequest,
 };
 
-use super::route::{self, RouteMode, RoutePlan, RouteReason, RouteTarget, RouteUsed};
-use super::host::{PluginHostPolicy, DEFAULT_ROOT_DIR};
+use crate::plugins::host::{PluginHostPolicy, DEFAULT_ROOT_DIR};
+use crate::plugins::route::{self, RouteMode, RoutePlan, RouteReason, RouteTarget, RouteUsed};
 
 // ------------------------------ 假 provider ------------------------------
 
@@ -36,9 +36,10 @@ impl Provider for FakeBuiltin {
 impl FakeBuiltin {
     /// 内置替身的返回值(用例用它断言"回落真的落到了内置").
     fn song_url_now(&self) -> StreamUrl {
-        let mut url = StreamUrl::default();
-        url.url = Some("https://builtin.test/a.mp3".to_string());
-        url
+        StreamUrl {
+            url: Some("https://builtin.test/a.mp3".to_string()),
+            ..StreamUrl::default()
+        }
     }
 }
 
@@ -46,10 +47,7 @@ impl ReadProvider for FakeBuiltin {
     fn search<'a>(&'a self, _q: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>> {
         Box::pin(async { Ok(SearchPage::default()) })
     }
-    fn song_url<'a>(
-        &'a self,
-        _r: &'a SongUrlRequest,
-    ) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
+    fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
         let url = self.song_url_now();
         Box::pin(async move { Ok(url) })
     }
@@ -74,17 +72,31 @@ impl ReadProvider for FakeBroken {
     fn search<'a>(&'a self, _q: &'a SearchQuery) -> BoxFuture<'a, ProviderResult<SearchPage>> {
         Box::pin(async { Err(ProviderError::network("脚本抛错")) })
     }
-    fn song_url<'a>(
-        &'a self,
-        _r: &'a SongUrlRequest,
-    ) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
+    fn song_url<'a>(&'a self, _r: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
         Box::pin(async { Err(ProviderError::network("脚本抛错")) })
+    }
+}
+
+impl ncm_provider::LyricProvider for FakeBuiltin {
+    fn lyric<'a>(
+        &'a self,
+        _track: ncm_domain::TrackId,
+    ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+        Box::pin(async { Err(ProviderError::unsupported("fake builtin 不带歌词")) })
+    }
+}
+
+impl ncm_provider::LyricProvider for FakeBroken {
+    fn lyric<'a>(
+        &'a self,
+        _track: ncm_domain::TrackId,
+    ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
+        Box::pin(async { Err(ProviderError::unsupported("fake broken 不带歌词")) })
     }
 }
 
 ncm_provider::impl_default_caps!(
     FakeBuiltin,
-    LyricProvider,
     RecommendProvider,
     PlaylistReadProvider,
     PlaylistWriteProvider,
@@ -99,7 +111,6 @@ ncm_provider::impl_default_caps!(
 );
 ncm_provider::impl_default_caps!(
     FakeBroken,
-    LyricProvider,
     RecommendProvider,
     PlaylistReadProvider,
     PlaylistWriteProvider,
@@ -173,9 +184,7 @@ fn auto_ignores_plugins_without_the_capability() {
 #[test]
 fn explicit_selection_hits() {
     let plan = route::plan(
-        &RouteMode::Plugin {
-            id: "beta".into(),
-        },
+        &RouteMode::Plugin { id: "beta".into() },
         true,
         &loaded(&["alpha", "beta"]),
         |_| true,
@@ -189,9 +198,7 @@ fn explicit_selection_hits() {
 #[test]
 fn disabled_selection_falls_back_to_builtin() {
     let plan = route::plan(
-        &RouteMode::Plugin {
-            id: "beta".into(),
-        },
+        &RouteMode::Plugin { id: "beta".into() },
         true,
         &loaded(&["alpha"]),
         |_| true,
@@ -199,7 +206,11 @@ fn disabled_selection_falls_back_to_builtin() {
     );
     assert_eq!(plan.target, RouteTarget::Builtin);
     assert_eq!(plan.reason, RouteReason::SelectionMissing);
-    assert!(plan.detail.contains("beta"), "原因要点名失效的 id: {}", plan.detail);
+    assert!(
+        plan.detail.contains("beta"),
+        "原因要点名失效的 id: {}",
+        plan.detail
+    );
     assert_eq!(plan.plugin_id(), None);
 }
 
@@ -207,9 +218,7 @@ fn disabled_selection_falls_back_to_builtin() {
 #[test]
 fn capability_missing_falls_back_to_builtin() {
     let plan = route::plan(
-        &RouteMode::Plugin {
-            id: "beta".into(),
-        },
+        &RouteMode::Plugin { id: "beta".into() },
         true,
         &loaded(&["beta"]),
         |_| false,
@@ -256,25 +265,39 @@ fn mode_labels_roundtrip_and_persist() {
         RouteMode::Plugin { id: "demo".into() },
     ] {
         let label = mode.label();
-        assert_eq!(RouteMode::parse(&label), Some(mode.clone()), "标签: {label}");
+        assert_eq!(
+            RouteMode::parse(&label),
+            Some(mode.clone()),
+            "标签: {label}"
+        );
     }
     assert_eq!(RouteMode::parse(""), Some(RouteMode::Auto));
     assert_eq!(RouteMode::parse("plugin:  "), None);
 
     let temp = TempDir::new("mode-persist");
-    assert_eq!(RouteMode::load(temp.path()), RouteMode::Auto, "缺文件 = 缺省");
-    let mode = RouteMode::Plugin {
-        id: "demo".into(),
-    };
+    assert_eq!(
+        RouteMode::load(temp.path()),
+        RouteMode::Auto,
+        "缺文件 = 缺省"
+    );
+    let mode = RouteMode::Plugin { id: "demo".into() };
     mode.save(temp.path()).expect("落盘");
     assert_eq!(RouteMode::load(temp.path()), mode);
     std::fs::write(temp.path().join(route::ROUTE_FILE), b"{not json").expect("写坏");
-    assert_eq!(RouteMode::load(temp.path()), RouteMode::Auto, "坏文件回落缺省");
+    assert_eq!(
+        RouteMode::load(temp.path()),
+        RouteMode::Auto,
+        "坏文件回落缺省"
+    );
 }
 
 // ------------------------------ 调用 + 回落 ------------------------------
 
-fn decision(plan: RoutePlan, plugin: Option<Arc<dyn Provider>>, builtin: bool) -> route::RouteDecision {
+fn decision(
+    plan: RoutePlan,
+    plugin: Option<Arc<dyn Provider>>,
+    builtin: bool,
+) -> route::RouteDecision {
     route::RouteDecision {
         capability: Capability::SongUrl,
         plan,
@@ -294,9 +317,11 @@ fn plugin_hit_is_used() {
         reason: RouteReason::AutoSingle,
         detail: String::new(),
     };
-    let routed = futures::executor::block_on(route::call_routed(decision(plan, Some(plugin), true), |p| {
-        p.song_url(&request())
-    }))
+    let req = request();
+    let routed = futures::executor::block_on(route::call_routed(
+        decision(plan, Some(plugin), true),
+        |p| Box::pin(async move { p.song_url(&req).await }),
+    ))
     .expect("插件命中不该失败");
     assert_eq!(routed.used, RouteUsed::Plugin("demo".into()));
     assert!(!routed.fell_back());
@@ -311,13 +336,19 @@ fn plugin_error_falls_back_to_builtin() {
         reason: RouteReason::AutoSingle,
         detail: String::new(),
     };
-    let routed = futures::executor::block_on(route::call_routed(decision(plan, Some(plugin), true), |p| {
-        p.song_url(&request())
-    }))
+    let req = request();
+    let routed = futures::executor::block_on(route::call_routed(
+        decision(plan, Some(plugin), true),
+        |p| Box::pin(async move { p.song_url(&req).await }),
+    ))
     .expect("插件失败要回落内置, 不是整次失败");
     assert!(routed.fell_back(), "回落要能看出来: {:?}", routed.used);
     match &routed.used {
-        RouteUsed::Fallback { plugin, kind, detail } => {
+        RouteUsed::Fallback {
+            plugin,
+            kind,
+            detail,
+        } => {
             assert_eq!(plugin, "demo");
             assert_eq!(kind, "network");
             assert!(detail.contains("脚本抛错"), "detail 要保留原文: {detail}");
@@ -341,9 +372,11 @@ fn plugin_error_without_builtin_surfaces_original_error() {
         reason: RouteReason::AutoSingle,
         detail: String::new(),
     };
-    let err = futures::executor::block_on(route::call_routed(decision(plan, Some(plugin), false), |p| {
-        p.song_url(&request())
-    }))
+    let req = request();
+    let err = futures::executor::block_on(route::call_routed(
+        decision(plan, Some(plugin), false),
+        |p| Box::pin(async move { p.song_url(&req).await }),
+    ))
     .unwrap_err();
     assert_eq!(err.kind, ProviderErrorKind::Network);
     assert!(err.retryable, "插件的可重试性要保留");
@@ -364,8 +397,11 @@ fn builtin_error_is_not_swallowed() {
         plugin: None,
         builtin: Some(Arc::new(FakeBroken)),
     };
-    let err = futures::executor::block_on(route::call_routed(decision, |p| p.song_url(&request())))
-        .unwrap_err();
+    let req = request();
+    let err = futures::executor::block_on(route::call_routed(decision, |p| {
+        Box::pin(async move { p.song_url(&req).await })
+    }))
+    .unwrap_err();
     assert_eq!(err.kind, ProviderErrorKind::Network);
 }
 
@@ -436,25 +472,24 @@ fn core_routes_to_single_plugin_then_back_after_disable() {
     let decision = core.route_decision(Capability::SongUrl);
     assert_eq!(decision.plan.plugin_id(), Some("demo"));
     assert_eq!(decision.plan.reason, RouteReason::AutoSingle);
-    let plugin = decision.plugin.clone().expect("判定命中就要拿到插件 provider");
+    let plugin = decision
+        .plugin
+        .clone()
+        .expect("判定命中就要拿到插件 provider");
     assert_eq!(plugin.id(), "script", "插件 provider 的 id 恒为 script");
     let url = futures::executor::block_on(route::call_routed(decision, |p| {
-        p.song_url(&request())
+        Box::pin(async move { p.song_url(&request()).await })
     }))
     .expect("插件取链");
     assert_eq!(url.used, RouteUsed::Plugin("demo".into()));
     assert_eq!(url.value.url.as_deref(), Some("https://cdn.test/a.mp3"));
 
     // 显式选择落盘.
-    core.plugin_set_route_mode(RouteMode::Plugin {
-        id: "demo".into(),
-    })
-    .expect("写路由偏好");
+    core.plugin_set_route_mode(RouteMode::Plugin { id: "demo".into() })
+        .expect("写路由偏好");
     assert_eq!(
         core.plugin_route_mode(),
-        &RouteMode::Plugin {
-            id: "demo".into()
-        }
+        &RouteMode::Plugin { id: "demo".into() }
     );
 
     // ③ 停用 ⇒ 当次回内置(`selectionMissing`), 偏好本身不被偷偷改掉.
@@ -470,9 +505,7 @@ fn core_routes_to_single_plugin_then_back_after_disable() {
     );
     assert_eq!(
         core.plugin_route_mode(),
-        &RouteMode::Plugin {
-            id: "demo".into()
-        },
+        &RouteMode::Plugin { id: "demo".into() },
         "停用插件 ≠ 改用户选择"
     );
 }
@@ -481,6 +514,8 @@ fn core_routes_to_single_plugin_then_back_after_disable() {
 #[test]
 fn core_route_preference_survives_reopen() {
     let temp = TempDir::new("core-persist");
+    // 宿主总开关开着, 才能把"显式内置"的判定原因与"宿主没开"区分开.
+    enable_policy(temp.path());
     {
         let mut core = crate::Core::open(temp.path()).expect("Core 打开");
         assert_eq!(core.plugin_route_mode(), &RouteMode::Auto);
@@ -507,7 +542,10 @@ fn core_two_plugins_without_selection_stay_on_builtin() {
     let mut core = crate::Core::open(temp.path()).expect("Core 打开");
     core.plugin_enable("alpha").expect("启用 alpha");
     core.plugin_enable("beta").expect("启用 beta");
-    assert_eq!(core.plugin_ids(), vec!["alpha".to_string(), "beta".to_string()]);
+    assert_eq!(
+        core.plugin_ids(),
+        vec!["alpha".to_string(), "beta".to_string()]
+    );
 
     let plan = core.plugin_route_plan(Capability::SongUrl);
     assert_eq!(plan.target, RouteTarget::Builtin);
@@ -516,10 +554,8 @@ fn core_two_plugins_without_selection_stay_on_builtin() {
     assert!(decision.plugin.is_none(), "多插件未选择时不许挑一个用");
 
     // 显式选了谁就用谁(选择是唯一的出路).
-    core.plugin_set_route_mode(RouteMode::Plugin {
-        id: "beta".into(),
-    })
-    .expect("写路由偏好");
+    core.plugin_set_route_mode(RouteMode::Plugin { id: "beta".into() })
+        .expect("写路由偏好");
     let plan = core.plugin_route_plan(Capability::SongUrl);
     assert_eq!(plan.target, RouteTarget::Plugin("beta".into()));
     assert_eq!(plan.reason, RouteReason::Selected);

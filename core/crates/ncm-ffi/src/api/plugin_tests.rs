@@ -16,7 +16,8 @@ use ncm_provider::{ProviderError, ProviderErrorKind};
 use ncm_service::{PluginHost, PluginHostPolicy, PluginHostStatus, PluginSummary};
 
 use super::{
-    failures_dto, rejected_dto, rescan_dto, status_dto, summary_dto, unsupported_error,
+    failures_dto, rejected_dto, rescan_dto, route_mode_dto, route_plan_dto, status_dto,
+    summary_dto, unsupported_error, unsupported_route_mode, unsupported_route_plan,
     unsupported_status,
 };
 
@@ -233,6 +234,74 @@ fn rescan_dto_maps_all_four_buckets() {
     assert_eq!(dto.skipped, vec!["b".to_string()], "停用不是错误, 单独一桶");
     assert_eq!(dto.failed.len(), 1);
     assert_eq!(dto.failed[0].id, "c");
+}
+
+// ------------------------- 路由视图(取链/搜索的判定) -------------------------
+
+/// 路由偏好视图: 标签可原样回传(`label` / `parse` 往返), id 只从 `plugin:<id>` 来.
+#[test]
+fn route_mode_dto_roundtrips_labels() {
+    use ncm_service::RouteMode;
+    for mode in [
+        RouteMode::Auto,
+        RouteMode::Builtin,
+        RouteMode::Plugin { id: "demo".into() },
+    ] {
+        let dto = route_mode_dto(&mode);
+        assert!(dto.supported, "非 Android 一律 supported");
+        assert_eq!(dto.mode, mode.label());
+        assert_eq!(
+            dto.plugin_id,
+            match &mode {
+                RouteMode::Plugin { id } => Some(id.clone()),
+                _ => None,
+            }
+        );
+        // 回传等价: 桥接层把 `mode` 原样喂回 plugin_set_route_mode 不应变成别的模式
+        assert_eq!(RouteMode::parse(&dto.mode), Some(mode));
+    }
+}
+
+/// 判定视图: 目标/原因/插件 id 三个字段直接来自 `RoutePlan`, 不重新解释.
+#[test]
+fn route_plan_dto_mirrors_plan() {
+    use ncm_service::{RoutePlan, RouteReason, RouteTarget};
+    let plan = RoutePlan {
+        target: RouteTarget::Plugin("demo".into()),
+        reason: RouteReason::AutoSingle,
+        detail: "只有插件 `demo` 支持 songUrl, 自动选用".to_string(),
+    };
+    let dto = route_plan_dto(&plan);
+    assert!(dto.supported);
+    assert_eq!(dto.target, "plugin:demo");
+    assert_eq!(dto.plugin_id.as_deref(), Some("demo"));
+    assert_eq!(dto.reason, "autoSingle");
+    assert_eq!(dto.detail, plan.detail);
+
+    let builtin = route_plan_dto(&RoutePlan {
+        target: RouteTarget::Builtin,
+        reason: RouteReason::Ambiguous,
+        detail: "2 个启用插件支持 songUrl".to_string(),
+    });
+    assert_eq!(builtin.target, "builtin");
+    assert_eq!(builtin.plugin_id, None, "内置目标没有插件 id");
+    assert_eq!(builtin.reason, "ambiguous");
+}
+
+/// Android: 读类给"恒内置"的空视图(supported=false + 原因), 与"宿主没开"区分得开.
+#[test]
+fn android_route_view_is_builtin_and_explicit() {
+    let mode = unsupported_route_mode();
+    assert!(!mode.supported);
+    assert_eq!(mode.mode, "auto", "缺省偏好就是 auto(行为同没插件)");
+    assert_eq!(mode.plugin_id, None);
+
+    let plan = unsupported_route_plan("songUrl");
+    assert!(!plan.supported);
+    assert_eq!(plan.target, "builtin");
+    assert_eq!(plan.plugin_id, None);
+    assert_eq!(plan.reason, "unsupported");
+    assert!(plan.detail.starts_with("songUrl"), "detail 要点名能力");
 }
 
 // ------------------------- Android 空视图语义 -------------------------

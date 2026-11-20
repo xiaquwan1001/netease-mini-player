@@ -15,17 +15,10 @@ pub struct LyricLineDto {
 
 /// 带翻译的歌词时间轴(网易云 tlyric). UI 只需要按 position 找当前行, 不再自己啃 LRC.
 pub async fn lyric_lines_i18n(track_id: u64) -> Result<Vec<LyricLineDto>, FfiError> {
-    let provider = {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        guard
-            .providers
-            .first_with(Capability::Lyric)
-            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
-    };
-    let lyric = provider
-        .lyric(ncm_domain::TrackId::new(track_id))
-        .await
-        .map_err(FfiError::from)?;
+    let lyric = routed_call(Capability::Lyric, |provider| {
+        Box::pin(async move { provider.lyric(ncm_domain::TrackId::new(track_id)).await })
+    })
+    .await?;
     Ok(ncm_domain::parse_lrc_with_translation(
         lyric.lrc.as_deref().unwrap_or_default(),
         lyric.translated.as_deref(),
@@ -55,17 +48,14 @@ pub struct WordLyricLineDto {
 
 /// 逐字歌词(YRC). 无逐字数据时 lines 为空, UI 应回落 lyric_lines_i18n.
 pub async fn word_lyric_lines(track_id: u64) -> Result<WordLyricDto, FfiError> {
-    let provider = {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        guard
-            .providers
-            .first_with(Capability::Lyric)
-            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
-    };
-    let wl = provider
-        .word_lyric(ncm_domain::TrackId::new(track_id))
-        .await
-        .map_err(FfiError::from)?;
+    let wl = routed_call(Capability::Lyric, |provider| {
+        Box::pin(async move {
+            provider
+                .word_lyric(ncm_domain::TrackId::new(track_id))
+                .await
+        })
+    })
+    .await?;
     Ok(WordLyricDto {
         lines: wl
             .lines

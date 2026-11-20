@@ -466,6 +466,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PluginRescanDto dco_decode_plugin_rescan_dto(dynamic raw);
 
   @protected
+  PluginRouteModeDto dco_decode_plugin_route_mode_dto(dynamic raw);
+
+  @protected
+  PluginRoutePlanDto dco_decode_plugin_route_plan_dto(dynamic raw);
+
+  @protected
   PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
 
   @protected
@@ -1156,6 +1162,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginRescanDto sse_decode_plugin_rescan_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginRouteModeDto sse_decode_plugin_route_mode_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  PluginRoutePlanDto sse_decode_plugin_route_plan_dto(
+    SseDeserializer deserializer,
+  );
 
   @protected
   PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
@@ -2027,6 +2043,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_plugin_rescan_dto(
     PluginRescanDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_route_mode_dto(
+    PluginRouteModeDto self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_plugin_route_plan_dto(
+    PluginRoutePlanDto self,
     SseSerializer serializer,
   );
 

@@ -29,7 +29,7 @@ pub use manager::{
 };
 pub use registry::{PluginRegistry, RegistryReport};
 pub use route::{
-    call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason, Routed,
-    RouteTarget, RouteUsed,
+    call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason,
+    RouteTarget, RouteUsed, Routed,
 };
 pub use transport::ReqwestTransport;

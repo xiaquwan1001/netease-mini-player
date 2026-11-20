@@ -109,22 +109,25 @@ pub async fn event_comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, FfiError> {
+    let thread_id = thread_id.as_str();
     ffi_forward!(
         Capability::Feed,
-        provider.event_comments(&thread_id, limit, offset)
+        provider.event_comments(thread_id, limit, offset)
     )
 }
 
 /// 点赞/取消点赞一条动态
 pub async fn like_event(thread_id: String, liked: bool) -> Result<bool, FfiError> {
-    ffi_forward!(Capability::Feed, provider.like_event(&thread_id, liked))
+    let thread_id = thread_id.as_str();
+    ffi_forward!(Capability::Feed, provider.like_event(thread_id, liked))
 }
 
 /// 转发一条动态(附转发语)
 pub async fn forward_event(event_id: u64, user_id: u64, msg: String) -> Result<bool, FfiError> {
+    let msg = msg.as_str();
     ffi_forward!(
         Capability::Feed,
-        provider.forward_event(event_id, user_id, &msg)
+        provider.forward_event(event_id, user_id, msg)
     )
 }
 
@@ -147,9 +150,10 @@ pub async fn comment_replies(
     parent_comment_id: u64,
     limit: u32,
 ) -> Result<CommentPage, FfiError> {
+    let thread_id = thread_id.as_str();
     ffi_forward!(
         Capability::Comment,
-        provider.comment_replies(&thread_id, parent_comment_id, limit)
+        provider.comment_replies(thread_id, parent_comment_id, limit)
     )
 }
 
@@ -298,7 +302,11 @@ pub async fn private_history(
 
 /// 发送私信(需登录). 纯文本, 成功后应重拉 [private_history] 刷新会话.
 pub async fn private_send(user_id: u64, content: String) -> Result<bool, FfiError> {
-    ffi_forward!(Capability::Message, provider.private_send(user_id, content))
+    routed_call(Capability::Message, |p| {
+        let content = content.clone();
+        Box::pin(async move { p.private_send(user_id, content).await })
+    })
+    .await
 }
 
 #[frb(mirror(InboxItem))]
