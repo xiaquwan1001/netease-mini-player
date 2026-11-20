@@ -145,12 +145,28 @@ fn denial_maps_to_network_provider_error_non_retryable() {
         !err.message.is_empty(),
         "拒绝原因必须可读(给脚本回错误文案用)"
     );
+    assert!(
+        err.message.contains("evil.test"),
+        "拒绝文案必须带被拒的主机名(插件作者靠它自诊断): {}",
+        err.message
+    );
+    assert!(
+        err.message.contains("*.example.com"),
+        "拒绝文案必须列出已声明的白名单, 否则作者只能去翻清单: {}",
+        err.message
+    );
 
     let provider_error = err.to_provider_error();
     assert_eq!(
         provider_error.kind,
         ncm_provider::ProviderErrorKind::Network,
         "白名单拒绝应归到 network 档(不是 forbidden/not_found)"
+    );
+    assert!(
+        provider_error.detail.contains("evil.test")
+            && provider_error.detail.contains("*.example.com"),
+        "落到 ProviderError.detail 的文案同样要带主机名 + 已声明白名单: {}",
+        provider_error.detail
     );
     assert!(
         !provider_error.retryable,

@@ -8,8 +8,8 @@ use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 use ncm_plugin::{
-    MemoryStorage, MockTransport, PluginError, PluginErrorKind, SandboxConfig, ScriptEngine,
-    TransportError, TransportResponse,
+    DomainPolicy, GuardedTransport, MemoryStorage, MockTransport, Permissions, PluginError,
+    PluginErrorKind, SandboxConfig, ScriptEngine, Transport, TransportError, TransportResponse,
 };
 use serde_json::{json, Value};
 
@@ -31,7 +31,7 @@ fn ok(body: &str) -> TransportResponse {
 
 fn engine_with(
     source: &str,
-    transport: Arc<MockTransport>,
+    transport: Arc<dyn Transport>,
     storage: Arc<MemoryStorage>,
     config: SandboxConfig,
     namespace: &str,
@@ -213,6 +213,101 @@ fn request_count_budget_is_enforced() {
         .expect_err("第 4 次请求必须被拒");
     assert!(err.detail.contains("上限"), "detail: {}", err.detail);
     assert_eq!(transport.requests().len(), 3, "只有预算内的请求能出站");
+}
+
+/// 白名单拒绝的请求**照常消耗** `lx.request` 预算(`src/policy.rs` 顶部「预算语义」的钉子).
+///
+/// 判据是二选一的强断言: 两次越界被拒后, 第 3 次(域名已合法)必须先撞次数预算 ——
+/// 只要实现把 `requests += 1` 挪到 transport 成功之后, 第 3 次就会真的出站, 用例立即变红。
+/// 顺带钉住拒绝文案的可诊断性: 脚本收到的错误里带被拒主机 + 已声明的白名单。
+#[test]
+fn denied_request_still_consumes_request_budget() {
+    let mock = Arc::new(MockTransport::new().on("api.example.com", Ok(ok("{}"))));
+    let policy = DomainPolicy::from_permissions(&Permissions {
+        lx_events: vec!["musicUrl".to_string()],
+        request_domains: vec!["api.example.com".to_string()],
+    });
+    let guarded: Arc<dyn Transport> = Arc::new(GuardedTransport::new(mock.clone(), policy));
+    let config = SandboxConfig {
+        max_requests_per_call: 2,
+        ..cfg()
+    };
+    let mut engine = engine_with(
+        include_str!("fixtures/denied_budget.js"),
+        guarded,
+        Arc::new(MemoryStorage::new()),
+        config,
+        "test",
+    );
+    let out = engine
+        .invoke("musicUrl", json!([]))
+        .expect("脚本自己吞掉了全部错误, 调用本身应成功");
+    let errors: Vec<String> = serde_json::from_value(out).expect("脚本应返回错误文案数组");
+    assert_eq!(errors.len(), 3, "三次请求都应拿到文案: {errors:?}");
+
+    for (idx, text) in errors.iter().take(2).enumerate() {
+        assert!(
+            text.contains("denied.test"),
+            "第 {idx} 次拒绝文案必须带被拒主机(插件作者要能自诊断): {text}"
+        );
+        assert!(
+            text.contains("api.example.com"),
+            "第 {idx} 次拒绝文案必须列出已声明的白名单: {text}"
+        );
+    }
+    assert!(
+        errors[2].contains("上限"),
+        "第 3 次必须因预算耗尽被拒 —— 说明前两次被拒的请求也计费了: {}",
+        errors[2]
+    );
+    assert!(
+        !errors[2].starts_with("OK"),
+        "域名合法的第 3 次不许真出站: {}",
+        errors[2]
+    );
+    assert!(
+        mock.requests().is_empty(),
+        "被拒的两次一次都不许落到内层 transport, 第 3 次也不许: {:?}",
+        mock.requests()
+    );
+}
+
+/// 对照面: 沙箱**前置**拒的请求(非 http(s) scheme)**不**消耗预算 —— 那几处 `return Err`
+/// 都在 `requests += 1` 之前。与上一条合起来才是完整口径: *能走到 transport 的*被拒请求计费,
+/// 连沙箱都过不了的请求不计费(`src/policy.rs` 模块头「预算语义」的钉子)。
+#[test]
+fn sandbox_level_rejection_does_not_consume_budget() {
+    let mock = Arc::new(MockTransport::new().on("api.example.com", Ok(ok("{}"))));
+    let config = SandboxConfig {
+        max_requests_per_call: 1,
+        ..cfg()
+    };
+    let mut engine = engine_with(
+        include_str!("fixtures/sandbox_denied_budget.js"),
+        mock.clone(),
+        Arc::new(MemoryStorage::new()),
+        config,
+        "test",
+    );
+    let out = engine
+        .invoke("musicUrl", json!([]))
+        .expect("脚本自己吞掉错误");
+    let out: Vec<String> = serde_json::from_value(out).expect("脚本应返回文案数组");
+    assert!(
+        out[0].contains("http/https"),
+        "file:// 应该在沙箱层就被拒: {}",
+        out[0]
+    );
+    assert_eq!(
+        out[1], "OK 200",
+        "上一次被拒不能吃掉预算 —— 否则这里会是「超过上限」: {out:?}"
+    );
+    assert_eq!(
+        mock.requests().len(),
+        1,
+        "只有合法那一次能出站: {:?}",
+        mock.requests()
+    );
 }
 
 #[test]

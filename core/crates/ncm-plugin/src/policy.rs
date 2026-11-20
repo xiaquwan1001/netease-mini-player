@@ -27,6 +27,25 @@
 //! - 不做 IP 段/端口粒度授权(白名单只到主机名, 与清单校验的范围一致);
 //! - 不做"按脚本粒度"授权: 一个插件一份白名单, 同插件内所有 `lx.request` 共用;
 //! - 拒绝**只记在返回的错误里**, 不写落盘审计日志(接线切片再接诊断通道)。
+//!
+//! # 拒绝文案([`DomainPolicy::deny_reason`])
+//!
+//! 文案要能让插件作者自诊断, 固定带两件东西: **被拒的主机名** + **已声明的白名单规则**
+//! ([`DomainPolicy::rules_summary`], 最多 `manifest::MAX_DOMAINS` = 16 条)。URL 的 path /
+//! 查询串 / userinfo 一概不进文案 —— 脚本常把 token 放查询串里, 拒绝理由不该顺手抄进日志。
+//!
+//! # 预算语义(与 [`sandbox`](crate::sandbox) 的 `HostState::request` 对齐)
+//!
+//! **已经走到 transport 的请求照常消耗一次 `lx.request` 预算**, 哪怕它在通道口就被白名单拒:
+//! 沙箱先 `requests += 1` 再调 transport, 所以"越界域名被拒"与"放行后网络失败"花掉的
+//! 次数一样。反过来("被拒不计费")会变成绕预算的通道 —— 脚本能无限撞白名单而不花预算。
+//!
+//! 对称地有一处**不对称**: 沙箱自己能提前判死的请求(非法 JSON / 非 http(s) scheme /
+//! headers 不合法)**不计数** —— `HostState::request` 里那几处 `return Err` 都在计数自增之前,
+//! 因此它们连白名单那一层都到不了。两边语义各自有钉子:
+//! `tests/sandbox.rs::denied_request_still_consumes_request_budget`(白名单拒 = 计费)与
+//! `sandbox_level_rejection_does_not_consume_budget`(沙箱前置拒 = 不计费)。
+//! 改沙箱里的自增位置必须同时跑这两条。
 
 use std::sync::Arc;
 
@@ -113,13 +132,34 @@ impl DomainPolicy {
         })
     }
 
+    /// 已声明规则的可读形态(`api.example.com` / `*.example.org`), 顺序同清单.
+    ///
+    /// 给拒绝文案([`Self::deny_reason`])与宿主日志用: 让插件作者一眼看出"我声明的是什么"。
+    /// 空策略返回空串(文案走另一档, 见 [`Self::deny_reason`])。
+    pub fn rules_summary(&self) -> String {
+        self.rules
+            .iter()
+            .map(|rule| match rule {
+                Rule::Exact(name) => name.clone(),
+                Rule::Subtree(suffix) => format!("*.{suffix}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     /// 拒绝时给人看的原因(给 `TransportError::message` 用, 不含 URL 里的凭据).
+    ///
+    /// 两档文案都带**被拒的主机名**; 非空策略还列出**已声明的白名单**, 让脚本作者不翻清单
+    /// 就能区分"没声明"与"声明写错了"(`*.example.com` 并不跨到 `evil.test`)。
     pub fn deny_reason(&self, url: &str) -> String {
         let host = host_of(url).unwrap_or_else(|| "<无主机>".to_string());
         if self.is_empty() {
             format!("出站被拒: 主机 `{host}` 不在白名单内(插件未声明 permissions.requestDomains)")
         } else {
-            format!("出站被拒: 主机 `{host}` 不在 permissions.requestDomains 白名单内")
+            format!(
+                "出站被拒: 主机 `{host}` 不匹配 permissions.requestDomains 里任何一条(已声明: {})",
+                self.rules_summary()
+            )
         }
     }
 }
@@ -169,9 +209,18 @@ pub fn host_of(url: &str) -> Option<String> {
 
 /// 把宿主 transport 包一层白名单: 越界请求在**发出去之前**被拒.
 ///
-/// 拒绝形态是 [`TransportError`] 且 `retryable = false`, `status = None` ⇒ 经
-/// [`TransportError::to_provider_error`] 落到 `ProviderErrorKind::Network`(不重试),
-/// 上层换源逻辑照旧(sandbox 侧只把错误文案回给脚本, 预算计数照常消耗一次).
+/// 拒绝形态是 [`TransportError`] 且 `retryable = false`, `status = None`。两条消费路径不同,
+/// 别把两者混为一谈:
+///
+/// - 宿主代码直接调本 trait object(或自己调 [`TransportError::to_provider_error`]):
+///   → `ProviderErrorKind::Network` + `retryable = false`;
+/// - 经沙箱的 `lx.request`(产品链路): 沙箱只把 `message` 回给脚本
+///   ([`sandbox`](crate::sandbox) 的 `HostState::request`), 脚本没捕获就变成
+///   `PluginErrorKind::Script` → `ProviderErrorKind::Internal`(`ncm-service` 的
+///   `manager_tests` 把这条口径写死为"白名单拒绝 = Internal + 不重试")。
+///
+/// 两条路径共同保证的只有两件: **文案带被拒主机 + 已声明白名单**, 且**不重试**。
+/// `lx.request` 预算: 走到这里的请求已经计过费(见模块头「预算语义」)。
 pub struct GuardedTransport {
     inner: Arc<dyn Transport>,
     policy: Arc<DomainPolicy>,
@@ -353,6 +402,36 @@ mod tests {
         );
         assert!(!provider_error.retryable);
         assert!(mock.requests().is_empty());
+    }
+
+    #[test]
+    fn deny_reason_names_host_and_declared_rules_but_not_url_secrets() {
+        let p = policy(&["api.example.com", "*.cdn.test"]);
+        let reason = p.deny_reason("https://evil.test/steal?token=s3cret#frag");
+        assert!(
+            reason.contains("evil.test"),
+            "拒绝理由必须带被拒的主机: {reason}"
+        );
+        assert!(
+            reason.contains("api.example.com") && reason.contains("*.cdn.test"),
+            "拒绝理由必须列出已声明的白名单, 否则插件作者只能去翻清单: {reason}"
+        );
+        assert!(
+            !reason.contains("s3cret"),
+            "拒绝理由不许把 URL 查询串/凭据抄进去: {reason}"
+        );
+        assert_eq!(p.rules_summary(), "api.example.com, *.cdn.test");
+    }
+
+    #[test]
+    fn deny_reason_for_empty_policy_says_nothing_declared() {
+        let reason = DomainPolicy::default().deny_reason("https://evil.test/x");
+        assert!(reason.contains("evil.test"), "{reason}");
+        assert!(
+            reason.contains("未声明"),
+            "空策略要说清是「没声明」: {reason}"
+        );
+        assert_eq!(DomainPolicy::default().rules_summary(), "");
     }
 
     #[test]
