@@ -32,7 +32,8 @@
 //! | 入口脚本只许读插件自己目录 | `canonicalize(dir/entry)` 必须是目录内的**文件** | 拒绝(`..` 与 symlink 逃逸都命中) |
 //! | 清单不得异常巨大 | 单个 manifest 上限 [`MAX_MANIFEST_BYTES`] | 拒绝 |
 //! | 坏插件不阻塞好插件 | 每个目录独立 `Result`, 错误进 `list()` 的 `error` 字段 | 好插件照常登记 |
-//! | 同 id 不抢已登记 | 目录已登记过同一 id ⇒ 记 `InstallReport::failed`, 不覆盖原登记 | 只出现在报告里(`list()` 不会同 id 两行) |
+//! | 同目录重扫 = 刷新 | 同一目录重复登记 ⇒ 先撤旧登记(按 `dir` 匹配)再重读清单, 清单坏掉就变成错误条目 | 覆盖原登记(`list()` 仍只一行) |
+//! | 跨目录同 id 不抢已登记 | 同 id 已从**另一个目录**登记过 ⇒ 记 `InstallReport::failed`, 不覆盖原登记 | 只出现在报告里(`list()` 不会同 id 两行) |
 //!
 //! # 预算不跨插件共享
 //!
@@ -245,8 +246,10 @@ impl PluginManager {
     ///
     /// 语义:
     /// - 返回 [`InstallReport`] 而不是整体失败 —— **坏插件不阻塞好插件**;
-    /// - 重复调用是"刷新"(同一 id 重新读清单/路径), 清单坏掉的旧登记会被撤掉并转成错误条目;
-    /// - 不同扫描根之间出现同一个 id ⇒ 后者记"重复 id"错误(不抢已有登记).
+    /// - 重复调用同一个目录是"刷新": 先按 `dir` 撤掉该目录的旧登记, 再重读清单/路径;
+    ///   清单坏掉的旧登记就此变成错误条目(这条与顶部表格「同目录重扫 = 刷新」一致);
+    /// - 不同目录(含不同扫描根)出现同一个 id ⇒ 先到先得, 后者记"重复 id"错误, 不覆盖
+    ///   (顶部表格「跨目录同 id 不抢已登记」).
     pub fn install_from_dir(&mut self, dir: &Path) -> InstallReport {
         let mut report = InstallReport::default();
         let scan_root = match std::fs::canonicalize(dir) {

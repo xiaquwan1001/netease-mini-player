@@ -31,11 +31,26 @@ pub struct TransportResponse {
     pub body: String,
 }
 
-/// transport 层失败(网络/DNS/TLS/超时/非 2xx).
+/// transport 层失败的四类来源:
+///
+/// 1. **网络/DNS/TLS/超时**(纯传输失败, `status = None`);
+/// 2. **非 2xx 应答**(`status = Some(..)`, 可重试口径见 [`TransportError::http_status`]);
+/// 3. **策略拒绝** —— [`GuardedTransport`](crate::GuardedTransport) 在请求**发出去之前**就返回
+///    `new(reason, retryable = false)`(`status = None`, 文案带被拒主机与已声明白名单)。
+///    经沙箱 `lx.request` 时这条最终以 [`PluginErrorKind::Script`](crate::PluginErrorKind::Script)
+///    (-> `Internal` + 不重试) 报给插件; 宿主直接调 trait object 时才是下面的 `Network`;
+/// 4. **mock/测试实现**自己构造的失败(`MockTransport` 未命中路由等)。
+///
+/// 收口口径: [`TransportError::to_provider_error`] 只按 `status` 分档, 不看来源 —— 所以策略拒绝
+/// 与纯网络失败在这里同为 `Network`(不重试与否则由 `retryable` 携带); 沙箱链路里两者的
+/// 区分点是文案 + `retryable`, 不需要额外的错误变体(见 `error.rs` 模块头「分类收敛口径」)。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransportError {
     pub message: String,
-    /// 传输层是否值得重试(连接失败=true, 4xx/证书错误=false ...).
+    /// 传输层是否值得重试(连接失败/超时=true; 401/403/404 与证书错误=false).
+    ///
+    /// 精确口径看构造点: [`TransportError::http_status`] 只把 `401 | 403 | 404` 判成不可重试,
+    /// 其余状态码(5xx/429/…)仍可重试 —— 不要笼统写成"4xx 不可重试"。
     pub retryable: bool,
     /// HTTP 状态码(非 2xx 时由实现填上); 纯传输失败(超时/断连)为 `None`.
     ///

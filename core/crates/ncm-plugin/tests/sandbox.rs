@@ -125,6 +125,52 @@ fn transport_error_surfaces_as_script_error() {
 }
 
 #[test]
+fn policy_denial_kind_is_script_on_plugin_boundary() {
+    // 分类收敛口径的钉子(见 src/error.rs 模块头): 白名单拒绝在**插件边界**只能落到
+    // `Script` -> `Internal` + 不重试。想"恢复"成 `RequestDenied`/`Transport` 变体会让这里变红 ——
+    // 改口径必须同时改本用例 + `manager_tests::undeclared_domain_request_is_denied_before_transport`。
+    let policy = DomainPolicy::from_domains(["api.example.com"]);
+    let guarded: Arc<dyn Transport> = Arc::new(GuardedTransport::new(
+        Arc::new(MockTransport::new()),
+        policy,
+    ));
+    let mut engine = engine_with(
+        // 固定剧本请求 example.test —— 它不在白名单里, 且脚本没捕获 ⇒ 直接冒泡。
+        include_str!("fixtures/music_url.js"),
+        guarded,
+        Arc::new(MemoryStorage::new()),
+        cfg(),
+        "test",
+    );
+    let err = engine
+        .invoke("musicUrl", json!(["script", { "id": 1 }, "320k"]))
+        .expect_err("白名单外的请求必须让调用失败");
+    assert_eq!(
+        err.kind,
+        PluginErrorKind::Script,
+        "策略拒绝在插件边界就是 Script(不用单独变体): {err:?}"
+    );
+    assert!(
+        err.detail.contains("example.test"),
+        "文案要点名被拒主机: {}",
+        err.detail
+    );
+    assert!(
+        err.detail.contains("api.example.com"),
+        "文案要列出白名单: {}",
+        err.detail
+    );
+    assert!(!err.retryable, "策略拒绝不是重试类错误: {err:?}");
+    let provider_error = err.to_provider_error();
+    assert_eq!(
+        provider_error.kind,
+        ncm_provider::ProviderErrorKind::Internal,
+        "产品落点是 Internal: {provider_error:?}"
+    );
+    assert!(!provider_error.retryable);
+}
+
+#[test]
 fn timeout_interrupts_infinite_loop() {
     let err = invoke_with_guard(
         include_str!("fixtures/loop.js"),

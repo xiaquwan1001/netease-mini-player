@@ -148,15 +148,20 @@ const res = await lx.request({
 |---|---|---|---|
 | `Timeout` | `network` | ✅ | 死循环 / 超时 |
 | `Memory` | `internal` | ❌ | 内存炸弹 / OOM |
-| `Script` | `internal` | ❌ | 脚本抛错、promise reject、transport 报错被脚本透传 |
+| `Script` | `internal` | ❌ | 脚本抛错、promise reject、transport 报错/策略拒绝被脚本透传 |
 | `Protocol` | `internal` | ❌ | 返回值形状不对 / promise 永不 settle |
-| `RequestDenied` | `internal` | ❌ | 非 http/https、次数/体积预算(当前以 JS 异常形式抛出) |
 | `MissingHandler` | `unsupported` | ❌ | 脚本没注册该事件 |
 | `NoUrl` | `notFound` | ❌ | 脚本返回 null / 空 url |
 | `Load` | `internal` | ❌ | 语法错误 / 初始化超时 / 线程起不来 |
 | `Shutdown` | `internal` | ❌ | worker 线程已退出 |
 
 `Display` 形状是 `[<kind>] <detail>`, 与 `ncm-provider` 既有约定一致(跨桥文本协议, 不要改格式)。
+
+> **没有 `RequestDenied` / `Transport` 两个变体**(分类收敛口径): 策略拒绝(白名单/预算超出)与
+transport 层失败在沙箱链路里都只把文案交给脚本, 脚本不捕获就成 `Script` -> `internal` + 不重试;
+需要按状态码分档(`401/403 -> Forbidden`、`404 -> NotFound`)时由
+`TransportError::to_provider_error()` 直接给 `ProviderError`, 不经过 `PluginError`。
+> 理由与判据用例见 `src/error.rs` 模块头。
 
 ---
 
@@ -186,7 +191,9 @@ const res = await lx.request({
 目录管理在 `ncm-service::plugins::PluginManager`(`<root>/<plugin-id>/{manifest.json, <entry>}` 扫描;
 启停落盘 `<root>/plugins-state.json` 0600 原子写; 每插件自己的 `<root>/<id>/data/` storage 目录 +
 自己那份 `SandboxConfig` clone)。判据表见 `manager.rs` 头注释, 逐条用例见 `manager_tests.rs`。
-**权限目前是声明性数据**: 出站不按 `requestDomains` 过滤(接线切片再做)。
+**权限已强制**(不再是"声明性数据"): 插件装载时把宿主 transport 包进 `GuardedTransport`
+(每插件一份 `DomainPolicy`), 未声明主机/白名单外的请求在发出去之前就被拒;
+拒绝形态与两条消费路径见 `src/policy.rs` 的 `GuardedTransport` 文档。
 
 ---
 

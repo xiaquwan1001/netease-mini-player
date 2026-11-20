@@ -610,7 +610,13 @@ fn undeclared_domain_request_is_denied_before_transport() {
 
     let err = futures::executor::block_on(provider.song_url(&song_request()))
         .expect_err("越界域名必须让取链失败");
-    // 白名单拒绝 = 脚本侧未捕获的拒绝 ⇒ kind=Internal, retryable=false(写死错口径).
+    // 白名单拒绝 = 脚本侧未捕获的拒绝 ⇒ PluginErrorKind::Script ⇒ kind=Internal, retryable=false.
+    // 分类收敛口径见 `ncm_plugin::error` 模块头(没有 RequestDenied/Transport 变体)。
+    assert_eq!(
+        err.kind,
+        ProviderErrorKind::Internal,
+        "产品链路落点必须是 Internal: {err:?}"
+    );
     assert!(!err.retryable, "白名单拒绝不是重试类错误: {err:?}");
     assert!(
         err.detail.contains("出站被拒"),
