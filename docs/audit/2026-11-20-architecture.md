@@ -203,7 +203,7 @@
 - 方案（择一，不建议大改）：① 加一道 `tools/check-global-slots.sh`（按 `<notifier>.value =` 匹配，白名单 `app_shell/home_wiring/detail_pane`），照抄 `check-sheet-entry.sh` 的实现；② 更彻底：把这些 notifier 收进 `InheritedNotifier` 作用域（要动 `PlayerBarHost` 在 `MaterialApp.builder` 之外的渲染前提，风险明显更高）。
 - 收益：新代码不会悄悄绕过生命周期守卫。风险：低（①）/中（②）。量：小（①）/中（②）。并行：**否**（`app_shell.dart` 是公共热文件）。
 
-### 7.7 拆 `home/home_page.dart`
+### 7.7 拆 `home/home_page.dart` ◐ **第一步已落(v0.30.0)**: `home/navigation.dart`(188 行, 10 个纯导航)+ `home/tab_builder.dart`(364 行, 5 个 tab 构建), home_page **1911→1575**; 剩余「启动编排 + 歌词页装配 + 搜索条」待第二刀
 - 问题：1907 行 / 46 方法，逻辑（播放、搜索跳转、账号、更新提示）与布局（5 tab + 歌词页 + 主从分栏）混在一个 State。
 - 证据：`:127 _retryLast`…`:1082 build`…`:1380 _buildTabPages`；既有 4 个"协调器/控制器"文件（`home/playback_coordinator.dart`、`home/lyric_controller.dart`、`home/search_controller.dart`、`home/song_action_wiring.dart`）说明拆分方向已定，只是主文件没跟着瘦。
 - 方案：按"行为"而非"行数"切：`_playFromList/_next/_previous/_guideNext` → coordinator（已有）；`_openExact*/_openSearch*/_openDiscover/_openRecent` → `home/navigation.dart`；`_buildTabPages/_buildTabPage/_buildSearchTab/_buildList` → `home/tab_builder.dart`。每步之后跑 `flutter test ui/test/home_wiring_stack_test.dart app_shell_first_frame_test.dart tab_switch_popups_test.dart`。
