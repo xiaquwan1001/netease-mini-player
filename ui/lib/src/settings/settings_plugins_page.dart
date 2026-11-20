@@ -20,9 +20,8 @@ import '../toast.dart' show showToast;
 /// 的唯一一把锁, 重扫/开总开关期间其它域的调用会等待 ⇒ 本页把写操作**串行化**
 /// ([_busy] 期间开关与重扫按钮全部禁用), 并且不给后台轮询。
 Future<void> showPluginsPage(BuildContext context) {
-  return Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(builder: (_) => const PluginsPage()),
-  );
+  return Navigator.of(context)
+      .push<void>(MaterialPageRoute<void>(builder: (_) => const PluginsPage()));
 }
 
 /// 一次读到的四份视图(状态 + 列表 + 失败 + 拒收).
@@ -219,16 +218,16 @@ class _PluginsPageState extends State<PluginsPage> {
             children: [
               SwitchListTile(
                 title: const Text('启用插件宿主'),
-                subtitle: const Text(
-                  '关闭时不扫描插件目录; 打开后会执行目录里的本地脚本',
-                ),
+                subtitle: const Text('关闭时不扫描插件目录; 打开后会执行目录里的本地脚本'),
                 value: status.enabled,
                 onChanged: _busy ? null : _toggleHost,
               ),
               const Divider(height: 1),
               ListTile(
                 leading: Icon(
-                  status.active ? Icons.check_circle_outline : Icons.pause_circle_outline,
+                  status.active
+                      ? Icons.check_circle_outline
+                      : Icons.pause_circle_outline,
                 ),
                 title: const Text('运行状态'),
                 subtitle: AdaptiveText(
@@ -249,7 +248,10 @@ class _PluginsPageState extends State<PluginsPage> {
               if (status.error != null) ...[
                 const Divider(height: 1),
                 ListTile(
-                  leading: Icon(Icons.error_outline, color: theme.colorScheme.error),
+                  leading: Icon(
+                    Icons.error_outline,
+                    color: theme.colorScheme.error,
+                  ),
                   title: const Text('宿主失败原因'),
                   subtitle: AdaptiveText(
                     status.error!,
@@ -338,7 +340,10 @@ class _PluginsPageState extends State<PluginsPage> {
       padding: const EdgeInsets.symmetric(vertical: 32),
       child: Column(
         children: [
-          Icon(Icons.extension_off_outlined, color: theme.colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.extension_off_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 8),
           Text('当前平台不支持插件', style: theme.textTheme.titleSmall),
           const SizedBox(height: 4),

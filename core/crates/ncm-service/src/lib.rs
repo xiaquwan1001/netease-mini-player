@@ -269,10 +269,7 @@ impl Core {
     }
 
     /// 改插件根目录(`None` = 回到缺省 `<data_dir>/plugins`)
-    pub fn plugin_set_root(
-        &mut self,
-        root: Option<PathBuf>,
-    ) -> ncm_provider::ProviderResult<()> {
+    pub fn plugin_set_root(&mut self, root: Option<PathBuf>) -> ncm_provider::ProviderResult<()> {
         self.plugin_host.set_root(root)
     }
 

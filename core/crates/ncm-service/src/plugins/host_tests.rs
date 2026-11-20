@@ -53,7 +53,8 @@ fn manifest_json(id: &str, entry: &str) -> String {
 }
 
 /// 最小可用入口脚本: 不联网, 直接给一条常量直链.
-const MIN_SCRIPT: &str = "lx.on('musicUrl', async (source, info, type) => 'https://cdn.test/a.mp3');";
+const MIN_SCRIPT: &str =
+    "lx.on('musicUrl', async (source, info, type) => 'https://cdn.test/a.mp3');";
 
 /// 写一个插件目录(`<root>/<id>/{manifest.json,index.js}`).
 fn write_plugin(root: &Path, id: &str) {
@@ -98,7 +99,11 @@ fn default_policy_creates_no_plugin_dir() {
     let status = host.status();
     assert!(!status.enabled);
     assert!(!status.active);
-    assert!(status.error.is_none(), "没开不是错误: {}", status.error.unwrap_or_default());
+    assert!(
+        status.error.is_none(),
+        "没开不是错误: {}",
+        status.error.unwrap_or_default()
+    );
     assert_eq!(status.root, temp.path().join(DEFAULT_ROOT_DIR));
 }
 
@@ -120,7 +125,10 @@ fn enabled_state_on_disk_is_ignored_while_policy_is_off() {
         host.summaries().is_empty(),
         "总开关关闭 ⇒ 不扫盘, 列表必须为空"
     );
-    assert!(host.provider("demo").is_none(), "磁盘文件不能单方面给出执行权");
+    assert!(
+        host.provider("demo").is_none(),
+        "磁盘文件不能单方面给出执行权"
+    );
 }
 
 #[test]
@@ -135,7 +143,10 @@ fn write_ops_while_off_are_forbidden_not_panic() {
     ] {
         assert_eq!(err.kind, ProviderErrorKind::Forbidden);
         assert!(!err.retryable);
-        assert!(err.detail.contains(POLICY_FILE), "detail 要指出开关在哪: {err}");
+        assert!(
+            err.detail.contains(POLICY_FILE),
+            "detail 要指出开关在哪: {err}"
+        );
     }
 }
 
@@ -194,10 +205,7 @@ fn set_enabled_round_trip_persists_policy() {
     host.set_enabled(false).expect("关闭总开关");
     assert!(!host.is_active());
     assert!(host.summaries().is_empty());
-    assert!(
-        !PluginHostPolicy::load(temp.path()).enabled,
-        "关闭也要落盘"
-    );
+    assert!(!PluginHostPolicy::load(temp.path()).enabled, "关闭也要落盘");
     assert!(
         temp.path().join(DEFAULT_ROOT_DIR).exists(),
         "关闭不删用户目录(插件与 data/ 都是用户资产)"
@@ -223,9 +231,15 @@ fn custom_root_is_resolved_and_relative_paths_hang_off_data_dir() {
 
     // 相对路径挂到数据目录下(纯函数口径).
     policy.root = Some(PathBuf::from("rel-plugins"));
-    assert_eq!(policy.resolve_root(temp.path()), temp.path().join("rel-plugins"));
+    assert_eq!(
+        policy.resolve_root(temp.path()),
+        temp.path().join("rel-plugins")
+    );
     policy.root = None;
-    assert_eq!(policy.resolve_root(temp.path()), temp.path().join(DEFAULT_ROOT_DIR));
+    assert_eq!(
+        policy.resolve_root(temp.path()),
+        temp.path().join(DEFAULT_ROOT_DIR)
+    );
 }
 
 #[test]
@@ -266,7 +280,10 @@ fn bad_plugin_is_isolated_and_visible() {
     let ids: Vec<String> = host.summaries().into_iter().map(|row| row.id).collect();
     assert_eq!(ids, vec!["broken".to_string(), "demo".to_string()]);
     let failures = host.failures();
-    assert!(failures.contains_key("broken"), "坏插件要在 failures 里: {failures:?}");
+    assert!(
+        failures.contains_key("broken"),
+        "坏插件要在 failures 里: {failures:?}"
+    );
     assert!(!failures.contains_key("demo"));
     let status = host.status();
     assert!(status.error.is_none(), "行级失败不算宿主失败");
@@ -368,17 +385,21 @@ fn core_end_to_end_enable_disable_rescan_and_routing() {
     assert!(status.enabled && status.active, "开了总开关就该有注册表");
     assert_eq!(status.root, root);
     assert_eq!(core.plugin_summaries().len(), 1);
-    assert!(
-        !core.plugin_summaries()[0].enabled,
-        "缺省停用被断言钉住"
-    );
+    assert!(!core.plugin_summaries()[0].enabled, "缺省停用被断言钉住");
     assert!(core.plugin_provider("demo").is_none());
 
     // 启用 ⇒ 按插件 id 路由拿到 provider; `Provider::id()` 仍是常量 "script".
     core.plugin_enable("demo").expect("启用");
     let provider = core.plugin_provider("demo").expect("按插件 id 取 provider");
-    assert_eq!(provider.id(), "script", "trait 的 id 恒为 script, 不能拿来当键");
-    assert!(!provider.capabilities().is_empty(), "能力由脚本注册的事件决定");
+    assert_eq!(
+        provider.id(),
+        "script",
+        "trait 的 id 恒为 script, 不能拿来当键"
+    );
+    assert!(
+        !provider.capabilities().is_empty(),
+        "能力由脚本注册的事件决定"
+    );
     assert_eq!(core.plugin_ids(), vec!["demo".to_string()]);
 
     // 重扫是可重复的幂等操作(全量重建).

@@ -83,7 +83,10 @@ fn write_before_enabling_host_is_forbidden() {
     assert!(!ffi.retryable, "策略拒绝重试不会变");
     // detail 保留宿主层原文(细分原因不丢). 这里**只要求非空**, 不对文案措辞做断言 ——
     // 文案改了不该让"错误口径"用例假红.
-    assert!(!ffi.detail.is_empty(), "detail 不能丢, 否则 UI 只剩一个 kind");
+    assert!(
+        !ffi.detail.is_empty(),
+        "detail 不能丢, 否则 UI 只剩一个 kind"
+    );
 
     // 三个写操作同口径: 都走 registry_mut(), 不该有一个漏网
     let disable = host.disable("demo").expect_err("未启用时停用必须失败");
@@ -143,11 +146,7 @@ fn broken_plugin_is_recorded_not_panicked() {
     assert_eq!(failures[0].id, "demo");
     assert!(!failures[0].detail.is_empty(), "失败原因不能为空");
 
-    let summaries: Vec<_> = host
-        .summaries()
-        .iter()
-        .map(summary_dto)
-        .collect();
+    let summaries: Vec<_> = host.summaries().iter().map(summary_dto).collect();
     // 坏目录未必进 summaries(扫描阶段就被拒), 但一定有 error 或进 failures —— 两者至少一处
     assert!(
         summaries.iter().any(|s| s.error.is_some()) || !failures.is_empty(),
@@ -243,7 +242,10 @@ fn rescan_dto_maps_all_four_buckets() {
 #[test]
 fn android_view_is_empty_and_explicit() {
     let status = unsupported_status();
-    assert!(!status.supported, "Android 必须自报不支持, 不能假装'只是没开'");
+    assert!(
+        !status.supported,
+        "Android 必须自报不支持, 不能假装'只是没开'"
+    );
     assert!(!status.enabled && !status.active);
     assert!(status.loaded.is_empty());
     assert_eq!(status.failed, 0);

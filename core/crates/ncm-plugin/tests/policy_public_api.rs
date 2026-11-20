@@ -81,7 +81,8 @@ fn policy_from_permissions_matches_declared_domains_only() {
     };
     let hand_policy = DomainPolicy::from_permissions(&hand_built);
     assert!(
-        hand_policy.allows("https://api.example.com/x") && !hand_policy.allows("https://a.api.example.com/x"),
+        hand_policy.allows("https://api.example.com/x")
+            && !hand_policy.allows("https://a.api.example.com/x"),
         "手工构造的 Permissions 必须与清单解析出的同义"
     );
 }

@@ -150,7 +150,8 @@ fn unsupported_error(op: &str) -> FfiError {
 }
 
 #[cfg(target_os = "android")]
-const PLATFORM_DETAIL: &str = "当前平台(Android)不带插件宿主: rquickjs-sys 0.12.2 无 Android 预生成 bindings, \
+const PLATFORM_DETAIL: &str =
+    "当前平台(Android)不带插件宿主: rquickjs-sys 0.12.2 无 Android 预生成 bindings, \
 插件相关接口只返回空视图/不支持; 桌面端(Linux/Windows)可用";
 #[cfg(not(target_os = "android"))]
 #[allow(dead_code)] // 只被上面两个 Android 专用构造函数引用

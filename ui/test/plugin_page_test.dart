@@ -203,7 +203,10 @@ void main() {
 
     expect(find.textContaining('总开关未打开'), findsOneWidget);
     // 宿主未启用 ⇒ 单插件开关不可切(否则点下去只会拿到 forbidden)。
-    expect(tester.widget<SwitchListTile>(_pluginTile('示例插件')).onChanged, isNull);
+    expect(
+      tester.widget<SwitchListTile>(_pluginTile('示例插件')).onChanged,
+      isNull,
+    );
     expect(find.textContaining('出站: music.example.com'), findsOneWidget);
   });
 
@@ -233,7 +236,10 @@ void main() {
     expect(find.textContaining('跨目录同 id'), findsOneWidget);
     // 坏条目(error != null)不能"启用": Rust 侧根本没登记它。
     expect(tester.widget<SwitchListTile>(_pluginTile('坏插件')).onChanged, isNull);
-    expect(tester.widget<SwitchListTile>(_pluginTile('示例插件')).onChanged, isNotNull);
+    expect(
+      tester.widget<SwitchListTile>(_pluginTile('示例插件')).onChanged,
+      isNotNull,
+    );
     expect(find.textContaining('已装载 1 个'), findsOneWidget);
   });
 
@@ -339,7 +345,5 @@ void main() {
 Finder _masterTile() => find.widgetWithText(SwitchListTile, '启用插件宿主');
 
 /// 某个插件名对应的开关行。
-Finder _pluginTile(String name) => find.ancestor(
-  of: find.text(name),
-  matching: find.byType(SwitchListTile),
-);
+Finder _pluginTile(String name) =>
+    find.ancestor(of: find.text(name), matching: find.byType(SwitchListTile));
