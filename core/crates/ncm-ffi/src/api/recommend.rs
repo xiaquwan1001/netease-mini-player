@@ -82,7 +82,8 @@ pub async fn history_recommend_dates() -> Result<Vec<String>, FfiError> {
 
 /// 某个日期的历史日推曲目
 pub async fn history_recommend_songs(date: String) -> Result<Vec<SongDto>, FfiError> {
-    ffi_forward!(Capability::DailyRecommend, provider.history_recommend_songs(&date), map_each song_dto)
+    let date = date.as_str();
+    ffi_forward!(Capability::DailyRecommend, provider.history_recommend_songs(date), map_each song_dto)
 }
 
 /// 推荐新音乐("新歌速递")

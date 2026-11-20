@@ -8,8 +8,6 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `with_provider`
-
 /// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
 Future<Uint64List> likedIds() => RustLib.instance.api.crateApiLibraryLikedIds();
 

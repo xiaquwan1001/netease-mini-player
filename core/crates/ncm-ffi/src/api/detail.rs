@@ -238,9 +238,11 @@ pub async fn digital_album_detail(album_id: u64) -> Result<DigitalAlbumDetail, F
 pub async fn digital_album_sales(
     album_ids: String,
 ) -> Result<Vec<DigitalAlbumSalesEntry>, FfiError> {
+    // 借用先摊成 Copy 的 `&str`, 免得路由调用把 `album_ids` 搬进闭包(闭包要被调两次).
+    let album_ids = album_ids.as_str();
     ffi_forward!(
         Capability::DigitalAlbum,
-        provider.digital_album_sales(&album_ids)
+        provider.digital_album_sales(album_ids)
     )
 }
 
@@ -251,16 +253,18 @@ pub async fn comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, FfiError> {
+    let kind = kind.as_str();
     ffi_forward!(
         Capability::Comment,
-        provider.comments(&kind, resource_id, limit, offset)
+        provider.comments(kind, resource_id, limit, offset)
     )
 }
 
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
 pub async fn comment_stats(thread_id: String) -> Result<CommentStats, FfiError> {
-    ffi_forward!(Capability::Comment, provider.comment_stats(&thread_id))
+    let thread_id = thread_id.as_str();
+    ffi_forward!(Capability::Comment, provider.comment_stats(thread_id))
 }
 
 /// 单曲喜欢状态 + 喜欢总数(需要登录; 官方 App 的 /api/song/like/get).
@@ -276,9 +280,10 @@ pub async fn hot_comments(
     limit: u32,
     offset: u32,
 ) -> Result<CommentPage, FfiError> {
+    let thread_id = thread_id.as_str();
     ffi_forward!(
         Capability::Comment,
-        provider.hot_comments(&thread_id, limit, offset)
+        provider.hot_comments(thread_id, limit, offset)
     )
 }
 

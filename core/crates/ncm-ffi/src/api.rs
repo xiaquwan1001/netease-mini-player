@@ -130,20 +130,20 @@ fn core() -> Result<&'static Mutex<Core>, FfiError> {
 /// - ffi_forward!(Capability::X, provider.method(args), map_each conv) Vec 转 Vec<Dto>
 ///   错误统一靠 `?` 走 `From<_> for FfiError`(ProviderError 保留 kind/retryable);
 ///   frb 只看函数签名, 宏只生成函数体。
+///
+/// 调用走 [`routed_call`](routed_call): 判定(插件/内置)由 `ncm_service::plugins::route` 独家
+/// 负责, 插件侧失败自动回落内置 provider —— 本层不重复判定, 也不自己写回落分支。
 macro_rules! ffi_forward {
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map $conv:expr) => {{
-        let $p = with_provider($cap)?;
-        let v = $p.$m($($arg),*).await?;
+        let v = routed_call($cap, |$p| Box::pin(async move { $p.$m($($arg),*).await })).await?;
         Ok(($conv)(v))
     }};
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* ), map_each $conv:expr) => {{
-        let $p = with_provider($cap)?;
-        let list = $p.$m($($arg),*).await?;
+        let list = routed_call($cap, |$p| Box::pin(async move { $p.$m($($arg),*).await })).await?;
         Ok(list.into_iter().map($conv).collect())
     }};
     ($cap:expr, $p:ident . $m:ident ( $($arg:expr),* )) => {{
-        let $p = with_provider($cap)?;
-        let v = $p.$m($($arg),*).await?;
+        let v = routed_call($cap, |$p| Box::pin(async move { $p.$m($($arg),*).await })).await?;
         Ok(v)
     }};
 }
@@ -320,12 +320,62 @@ pub fn ping(name: String) -> String {
 
 // ---------------- 共享 helper(各域模块共用) ----------------
 
+/// 本次调用该用哪个 provider 的**目标选择**: 判定归 `ncm_service::plugins::route`
+/// (`Core::route_decision`), 这里只把判定结果翻成 `Arc`, 不自己挑人。
+///
+/// 只选目标、不负责回落 —— 需要"插件失败回落内置"的调用点用 [`routed_call`]
+/// (单个 provider 方法调用的标准形态), 多步拼装(如 `search_all` 的 DTO 转换)也用
+/// [`routed_call`] 包住那一次调用即可。这里保留下来的直连形态只用于"取到 provider
+/// 之后还要做别的事"的少数调用点, 它们因此拿到的是路由判定后的目标(插件命中即插件)。
 fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, FfiError> {
     let guard = core()?.lock().map_err(FfiError::from)?;
-    guard
-        .providers
-        .first_with(cap)
-        .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
+    #[cfg(not(target_os = "android"))]
+    {
+        let decision = guard.route_decision(cap);
+        decision
+            .plugin
+            .or(decision.builtin)
+            .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
+    }
+    #[cfg(target_os = "android")]
+    {
+        guard
+            .providers
+            .first_with(cap)
+            .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
+    }
+}
+
+/// 一次**路由调用**: 判定 + 「插件先试、失败回落内置」都由
+/// `ncm_service::plugins::route::call_routed` 独家实现(回落只在插件侧失败时发生,
+/// 内置自身的错误直接上抛)。本函数只做两件事: 拿 `Core` 锁取判定、把错误摊成 [`FfiError`]。
+///
+/// 闭包拿到的是 provider 的 `Arc`(按值), 调用点写
+/// `|p| Box::pin(async move { p.method(&args).await })` —— future 自己持有 provider,
+/// 只有调用点借来的参数受限, 不会被迫 `'static`。
+async fn routed_call<'p, T, F>(cap: Capability, call: F) -> Result<T, FfiError>
+where
+    F: Fn(
+        std::sync::Arc<dyn ncm_provider::Provider>,
+    ) -> ncm_provider::BoxFuture<'p, ncm_provider::ProviderResult<T>>,
+{
+    #[cfg(not(target_os = "android"))]
+    {
+        let decision = {
+            let guard = core()?.lock().map_err(FfiError::from)?;
+            guard.route_decision(cap)
+        };
+        let routed = ncm_service::plugins::call_routed(decision, call)
+            .await
+            .map_err(FfiError::from)?;
+        Ok(routed.value)
+    }
+    #[cfg(target_os = "android")]
+    {
+        // Android 不带插件宿主(见 api/plugin.rs 头注释), 路由退化为"只有内置".
+        let provider = with_provider(cap)?;
+        call(provider).await.map_err(FfiError::from)
+    }
 }
 
 static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();

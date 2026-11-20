@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `count`, `failed_pairs_dto`, `failures_dto`, `rejected_dto`, `rescan_dto`, `status_dto`, `summary_dto`, `unsupported_error`, `unsupported_status`
+// These functions are ignored because they are not marked as `pub`: `count`, `failed_pairs_dto`, `failures_dto`, `rejected_dto`, `rescan_dto`, `route_mode_dto`, `route_plan_dto`, `status_dto`, `summary_dto`, `unsupported_error`, `unsupported_route_mode`, `unsupported_route_plan`, `unsupported_status`
 
 /// 宿主状态(UI 用它解释"为什么列表是空的").
 ///
@@ -47,6 +47,25 @@ Future<PluginRescanDto> pluginRescan() =>
 /// 打开失败时策略不落盘并回滚内存状态, 错误是 `internal`.
 Future<void> pluginSetEnabled({required bool enabled}) =>
     RustLib.instance.api.crateApiPluginPluginSetEnabled(enabled: enabled);
+
+/// 当前路由偏好.
+Future<PluginRouteModeDto> pluginRouteMode() =>
+    RustLib.instance.api.crateApiPluginPluginRouteMode();
+
+/// 改路由偏好(落盘 `plugin_route.json`, 0600 原子写)并回读生效值.
+///
+/// 入口只有字符串(桥接层不传枚举): `auto` / `builtin` / `plugin:<id>`;
+/// 空串按 `auto`. 形状不成立(如 `plugin:` 后面为空) ⇒ `unsupported`, 不改盘.
+/// id 不存在**不算错误**: 判定时按 `selectionMissing` 回内置, 见 [`plugin_route_plan`].
+Future<PluginRouteModeDto> pluginSetRouteMode({required String mode}) =>
+    RustLib.instance.api.crateApiPluginPluginSetRouteMode(mode: mode);
+
+/// 这个能力这次会走谁(纯判定; 想要"实际走了谁"看日志/诊断, 那是调用期的事).
+///
+/// `cap` 用 [`Capability::as_str`](ncm_provider::Capability::as_str) 的标签
+/// (`songUrl` / `search` / `searchAll` ...), 未知标签 ⇒ `unsupported`.
+Future<PluginRoutePlanDto> pluginRoutePlan({required String cap}) =>
+    RustLib.instance.api.crateApiPluginPluginRoutePlan(cap: cap);
 
 /// 失败条目: 键是目录名或插件 id(见 `PluginHost::failures`).
 class PluginFailureDto {
@@ -120,6 +139,85 @@ class PluginRescanDto {
           loaded == other.loaded &&
           skipped == other.skipped &&
           failed == other.failed;
+}
+
+/// 路由偏好视图(`<dataDir>/plugin_route.json`): 用户选的是"自动/只用内置/指定插件".
+///
+/// 与宿主状态分开: 宿主开不开(`PluginStatusDto.enabled`)决定"有没有插件可用",
+/// 这里决定"可用的时候优先用谁". 两者都缺省(不扫描 + auto)时产品行为不变.
+class PluginRouteModeDto {
+  /// 本平台是否带插件宿主(Android = false ⇒ 路由恒为内置).
+  final bool supported;
+
+  /// 稳定标签: `auto` / `builtin` / `plugin:<id>`(可原样回传给 [`plugin_set_route_mode`]).
+  final String mode;
+
+  /// 显式选中的插件 id(`mode` 不是 `plugin:<id>` 形态时为 None).
+  final String? pluginId;
+
+  const PluginRouteModeDto({
+    required this.supported,
+    required this.mode,
+    this.pluginId,
+  });
+
+  @override
+  int get hashCode => supported.hashCode ^ mode.hashCode ^ pluginId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginRouteModeDto &&
+          runtimeType == other.runtimeType &&
+          supported == other.supported &&
+          mode == other.mode &&
+          pluginId == other.pluginId;
+}
+
+/// 一次路由**判定**的诊断视图(纯判定, 不发请求、不改状态).
+class PluginRoutePlanDto {
+  final bool supported;
+
+  /// 这次会用的目标: `builtin` / `plugin:<id>`.
+  final String target;
+
+  /// 命中的插件 id(None = 内置).
+  final String? pluginId;
+
+  /// 判定依据的稳定标签(`autoSingle` / `selected` / `builtinSelected` / `ambiguous` /
+  /// `selectionMissing` / `capabilityMissing` / `hostInactive` / `noPluginLoaded`;
+  /// Android 恒为 `unsupported`).
+  final String reason;
+
+  /// 可读原因(与日志同一份原文).
+  final String detail;
+
+  const PluginRoutePlanDto({
+    required this.supported,
+    required this.target,
+    this.pluginId,
+    required this.reason,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode =>
+      supported.hashCode ^
+      target.hashCode ^
+      pluginId.hashCode ^
+      reason.hashCode ^
+      detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginRoutePlanDto &&
+          runtimeType == other.runtimeType &&
+          supported == other.supported &&
+          target == other.target &&
+          pluginId == other.pluginId &&
+          reason == other.reason &&
+          detail == other.detail;
 }
 
 /// 宿主状态: 一句话回答"插件现在能不能用、为什么不能用".

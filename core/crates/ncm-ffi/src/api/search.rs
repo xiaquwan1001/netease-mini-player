@@ -75,13 +75,17 @@ pub struct SearchBundleDto {
 
 /// 综合搜索: 一次拿回所有板块(UI 分区展示).
 pub async fn search_all(keywords: String, limit: u32) -> Result<SearchBundleDto, FfiError> {
-    let provider = with_provider(Capability::SearchAll)?;
     let query = SearchQuery {
         keywords,
         limit,
         offset: 0,
     };
-    let bundle = provider.search_all(&query).await.map_err(FfiError::from)?;
+    // 产品搜索路径: 判定走插件路由, 插件失败回落内置(见 api.rs 的 routed_call).
+    let query = &query;
+    let bundle = routed_call(Capability::SearchAll, |provider| {
+        Box::pin(async move { provider.search_all(query).await })
+    })
+    .await?;
     Ok(SearchBundleDto {
         songs: bundle.songs.into_iter().map(song_dto).collect(),
         song_total: bundle.song_total,
@@ -112,10 +116,8 @@ pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, FfiErr
     if keywords.trim().is_empty() {
         return Ok(Vec::new());
     }
-    ffi_forward!(
-        Capability::SearchSuggest,
-        provider.search_suggest(keywords.trim())
-    )
+    let keywords = keywords.trim();
+    ffi_forward!(Capability::SearchSuggest, provider.search_suggest(keywords))
 }
 
 fn history_store() -> Result<ncm_service::HistoryStore, FfiError> {
@@ -209,15 +211,17 @@ pub struct _SearchExact {
 
 /// 联想下拉的纯关键词候选(最多 6 条, 已去重保序). 空/异常返回空 Vec, 不报错.
 pub async fn search_suggest_keywords(keywords: String) -> Result<Vec<String>, FfiError> {
+    let keywords = keywords.as_str();
     ffi_forward!(
         Capability::SearchSuggest,
-        provider.search_suggest_keywords(&keywords)
+        provider.search_suggest_keywords(keywords)
     )
 }
 
 /// 精确实体改写(歌手/歌单/电台各最多 1 条). 无命中时返回 orders 为空的 DTO, 不是错误.
 pub async fn search_exact(keywords: String) -> Result<SearchExact, FfiError> {
-    ffi_forward!(Capability::SearchSuggest, provider.search_exact(&keywords))
+    let keywords = keywords.as_str();
+    ffi_forward!(Capability::SearchSuggest, provider.search_exact(keywords))
 }
 
 /// 热搜榜详情行: 带热度分与榜位(比 HotSearchTerm 多 score/icon_type)

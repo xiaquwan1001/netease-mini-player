@@ -44,7 +44,12 @@ pub struct _CloudUploadResult {
 /// 同步阻塞直到上传+转码+发布完成(最长约 1 分钟), 调用方要显示"上传中"。
 /// 失败语义: 未登录 `[auth]`、文件读不到 `[unsupported]`、上传/转码失败 `[internal]`/`[network]`。
 pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, FfiError> {
-    ffi_forward!(Capability::Cloud, provider.cloud_upload(file_path))
+    // 按值参数要两份(插件 + 内置回落), 所以在闭包里先克隆再交给 future.
+    routed_call(Capability::Cloud, |p| {
+        let file_path = file_path.clone();
+        Box::pin(async move { p.cloud_upload(file_path).await })
+    })
+    .await
 }
 
 /// 修改个人简介(签名). 需要登录; 返回更新后的资料(服务端可能做敏感词折中).
@@ -52,10 +57,11 @@ pub async fn cloud_upload(file_path: String) -> Result<CloudUploadResult, FfiErr
 /// 上游 `module/user_update.js` → `POST /api/user/profile/update`; 局部更新, 只改签名。
 /// 失败语义: 未登录 `[auth]`、超过 132 字符 `[unsupported]`、风控 `[riskControl]`。
 pub async fn update_signature(signature: String) -> Result<ProfileDetail, FfiError> {
-    ffi_forward!(
-        Capability::ProfileDetail,
-        provider.update_signature(signature)
-    )
+    routed_call(Capability::ProfileDetail, |p| {
+        let signature = signature.clone();
+        Box::pin(async move { p.update_signature(signature).await })
+    })
+    .await
 }
 
 /// 任意用户的公开资料(他人主页; 不需要登录). 与 profile_detail 的区别: 那个只读当前账号.
@@ -81,20 +87,20 @@ pub async fn add_to_playlist(playlist_id: u64, track_id: u64) -> Result<bool, Ff
         .map_err(FfiError::from)
 }
 
+/// 取播放直链: **产品取链路径**, 走插件路由(`Core::route_decision` + `route::call_routed`).
+///
+/// 判定(用插件还是内置)只在 `ncm_service::plugins::route` 里做, 本层不重复判断;
+/// 插件侧失败(超时/脚本错/协议错)回落内置 provider, 内置自身的失败直接上抛。
 pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, FfiError> {
-    let provider = {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        guard
-            .providers
-            .first_with(Capability::SongUrl)
-            .ok_or_else(|| FfiError::unsupported("no provider supports songUrl"))?
-    };
     let level = ncm_provider::AudioLevel::parse(&level).unwrap_or_default();
     let req = ncm_provider::SongUrlRequest {
         track: ncm_domain::TrackId::new(track_id),
         level,
     };
-    let stream = provider.song_url(&req).await.map_err(FfiError::from)?;
+    let stream = routed_call(Capability::SongUrl, |provider| {
+        Box::pin(async move { provider.song_url(&req).await })
+    })
+    .await?;
     // T2(2026-11-18): 记下"这条曲子这次按什么音质取的链", 供桌面缓存键
     // (`AudioCache::path_for_level`) 打标 —— 旧键不含音质, 换档会误命中别的码率文件。
     // 走进程内旁路而不是给 `play_track` 加参数: 那个签名是 FFI 导出, 改它要动 codegen。
@@ -103,17 +109,10 @@ pub async fn song_url(track_id: u64, level: String) -> Result<StreamUrl, FfiErro
 }
 
 pub async fn lyric(track_id: u64) -> Result<String, FfiError> {
-    let provider = {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        guard
-            .providers
-            .first_with(Capability::Lyric)
-            .ok_or_else(|| FfiError::unsupported("no provider supports lyric"))?
-    };
-    let lyric = provider
-        .lyric(ncm_domain::TrackId::new(track_id))
-        .await
-        .map_err(FfiError::from)?;
+    let lyric = routed_call(Capability::Lyric, |provider| {
+        Box::pin(async move { provider.lyric(ncm_domain::TrackId::new(track_id)).await })
+    })
+    .await?;
     Ok(lyric.lrc.unwrap_or_default())
 }
 
@@ -386,19 +385,17 @@ pub fn accounts() -> Result<Vec<AccountDto>, FfiError> {
 /// 登录后/启动时调用: 拉一次账号资料并记进账号簿.
 /// 失败(离线/风控)不影响已登录状态, UI 只当作"没有昵称"。
 pub async fn account_sync_active() -> Result<AccountDto, FfiError> {
-    let (logged_in, provider) = {
+    let logged_in = {
         let guard = core()?.lock().map_err(FfiError::from)?;
-        if !guard.session.is_logged_in() {
-            return Err(FfiError::auth("未登录"));
-        }
-        let provider = guard
-            .providers
-            .first_with(Capability::Profile)
-            .ok_or_else(|| FfiError::unsupported("no provider supports profile"))?;
-        (true, provider)
+        guard.session.is_logged_in()
     };
-    debug_assert!(logged_in);
-    let profile = provider.profile().await.map_err(FfiError::from)?;
+    if !logged_in {
+        return Err(FfiError::auth("未登录"));
+    }
+    let profile = routed_call(Capability::Profile, |provider| {
+        Box::pin(async move { provider.profile().await })
+    })
+    .await?;
     let mut guard = core()?.lock().map_err(FfiError::from)?;
     guard.remember_account(&profile).map_err(FfiError::from)?;
     Ok(AccountDto {

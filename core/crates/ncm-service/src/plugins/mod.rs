@@ -19,6 +19,7 @@
 pub mod host;
 pub mod manager;
 pub mod registry;
+pub mod route;
 pub mod transport;
 
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
@@ -27,4 +28,8 @@ pub use manager::{
     MAX_CONSECUTIVE_FAILURES,
 };
 pub use registry::{PluginRegistry, RegistryReport};
+pub use route::{
+    call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason,
+    RouteTarget, RouteUsed, Routed,
+};
 pub use transport::ReqwestTransport;

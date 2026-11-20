@@ -344,6 +344,141 @@ pub fn plugin_set_enabled(enabled: bool) -> Result<(), FfiError> {
     }
 }
 
+// ---------------------------- 路由(取链/搜索的判定视图) ----------------------------
+
+/// 路由偏好视图(`<dataDir>/plugin_route.json`): 用户选的是"自动/只用内置/指定插件".
+///
+/// 与宿主状态分开: 宿主开不开(`PluginStatusDto.enabled`)决定"有没有插件可用",
+/// 这里决定"可用的时候优先用谁". 两者都缺省(不扫描 + auto)时产品行为不变.
+pub struct PluginRouteModeDto {
+    /// 本平台是否带插件宿主(Android = false ⇒ 路由恒为内置).
+    pub supported: bool,
+    /// 稳定标签: `auto` / `builtin` / `plugin:<id>`(可原样回传给 [`plugin_set_route_mode`]).
+    pub mode: String,
+    /// 显式选中的插件 id(`mode` 不是 `plugin:<id>` 形态时为 None).
+    pub plugin_id: Option<String>,
+}
+
+/// 一次路由**判定**的诊断视图(纯判定, 不发请求、不改状态).
+pub struct PluginRoutePlanDto {
+    pub supported: bool,
+    /// 这次会用的目标: `builtin` / `plugin:<id>`.
+    pub target: String,
+    /// 命中的插件 id(None = 内置).
+    pub plugin_id: Option<String>,
+    /// 判定依据的稳定标签(`autoSingle` / `selected` / `builtinSelected` / `ambiguous` /
+    /// `selectionMissing` / `capabilityMissing` / `hostInactive` / `noPluginLoaded`;
+    /// Android 恒为 `unsupported`).
+    pub reason: String,
+    /// 可读原因(与日志同一份原文).
+    pub detail: String,
+}
+
+#[cfg(not(target_os = "android"))]
+fn route_mode_dto(mode: &ncm_service::RouteMode) -> PluginRouteModeDto {
+    PluginRouteModeDto {
+        supported: true,
+        mode: mode.label(),
+        plugin_id: match mode {
+            ncm_service::RouteMode::Plugin { id } => Some(id.clone()),
+            _ => None,
+        },
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+fn route_plan_dto(plan: &ncm_service::RoutePlan) -> PluginRoutePlanDto {
+    PluginRoutePlanDto {
+        supported: true,
+        target: plan.target.label(),
+        plugin_id: plan.plugin_id().map(str::to_string),
+        reason: plan.reason.as_str().to_string(),
+        detail: plan.detail.clone(),
+    }
+}
+
+/// Android 的"无宿主"路由偏好视图(`auto` = 产品缺省, 行为与没插件时一致).
+///
+/// 这里写字面量而不是 `RouteMode::default().label()`: `ncm_service::plugins` 在 Android
+/// 目标整体不编译(见本文件头注释), 而 Dart 侧 API 形状两端必须一致.
+#[allow(dead_code)] // Linux 上只被单测调用(生产调用点在 Android 分支)
+fn unsupported_route_mode() -> PluginRouteModeDto {
+    PluginRouteModeDto {
+        supported: false,
+        mode: "auto".to_string(),
+        plugin_id: None,
+    }
+}
+
+/// Android 的"无宿主"判定视图: 恒为内置, 原因写 `unsupported` 与平台说明.
+#[allow(dead_code)] // 同 `unsupported_route_mode`
+fn unsupported_route_plan(cap: &str) -> PluginRoutePlanDto {
+    PluginRoutePlanDto {
+        supported: false,
+        target: "builtin".to_string(),
+        plugin_id: None,
+        reason: "unsupported".to_string(),
+        detail: format!("{cap}: {PLATFORM_DETAIL}"),
+    }
+}
+
+/// 当前路由偏好.
+pub fn plugin_route_mode() -> Result<PluginRouteModeDto, FfiError> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let guard = core()?.lock().map_err(FfiError::from)?;
+        Ok(route_mode_dto(guard.plugin_route_mode()))
+    }
+    #[cfg(target_os = "android")]
+    {
+        Ok(unsupported_route_mode())
+    }
+}
+
+/// 改路由偏好(落盘 `plugin_route.json`, 0600 原子写)并回读生效值.
+///
+/// 入口只有字符串(桥接层不传枚举): `auto` / `builtin` / `plugin:<id>`;
+/// 空串按 `auto`. 形状不成立(如 `plugin:` 后面为空) ⇒ `unsupported`, 不改盘.
+/// id 不存在**不算错误**: 判定时按 `selectionMissing` 回内置, 见 [`plugin_route_plan`].
+pub fn plugin_set_route_mode(mode: String) -> Result<PluginRouteModeDto, FfiError> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let parsed = ncm_service::RouteMode::parse(&mode).ok_or_else(|| {
+            FfiError::unsupported(format!(
+                "plugin_set_route_mode: 不认识的模式 `{mode}`, 只接受 auto / builtin / plugin:<id>"
+            ))
+        })?;
+        let mut guard = core()?.lock().map_err(FfiError::from)?;
+        guard
+            .plugin_set_route_mode(parsed)
+            .map_err(FfiError::from)?;
+        Ok(route_mode_dto(guard.plugin_route_mode()))
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = mode;
+        Err(unsupported_error("plugin_set_route_mode"))
+    }
+}
+
+/// 这个能力这次会走谁(纯判定; 想要"实际走了谁"看日志/诊断, 那是调用期的事).
+///
+/// `cap` 用 [`Capability::as_str`](ncm_provider::Capability::as_str) 的标签
+/// (`songUrl` / `search` / `searchAll` ...), 未知标签 ⇒ `unsupported`.
+pub fn plugin_route_plan(cap: String) -> Result<PluginRoutePlanDto, FfiError> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let capability = ncm_provider::Capability::parse(&cap)
+            .ok_or_else(|| FfiError::unsupported(format!("plugin_route_plan: 未知能力 `{cap}`")))?;
+        let guard = core()?.lock().map_err(FfiError::from)?;
+        Ok(route_plan_dto(&guard.plugin_route_plan(capability)))
+    }
+    #[cfg(target_os = "android")]
+    {
+        Ok(unsupported_route_plan(&cap))
+    }
+}
+
 // 用例用到 `ncm_service::plugins`(非 Android 才有), 所以测试模块也按平台 gate.
 #[cfg(all(test, not(target_os = "android")))]
 #[path = "plugin_tests.rs"]

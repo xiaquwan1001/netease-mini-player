@@ -87,6 +87,7 @@ use serde::{Deserialize, Serialize};
 
 use super::manager::{ManagerError, ManagerErrorKind, PluginSummary};
 use super::registry::{PluginRegistry, RegistryReport};
+use super::route::{self, RouteMode, RoutePlan};
 use super::transport::ReqwestTransport;
 
 /// 宿主策略文件名(与 `credential_policy.json` 同目录、同一落盘手法).
@@ -203,6 +204,8 @@ pub struct PluginHost {
     transport: Option<Arc<dyn Transport>>,
     registry: Option<PluginRegistry>,
     error: Option<String>,
+    /// 路由偏好(用户的显式选择; 落盘 [`ROUTE_FILE`](super::route::ROUTE_FILE)).
+    mode: RouteMode,
 }
 
 impl PluginHost {
@@ -217,6 +220,7 @@ impl PluginHost {
             transport: None,
             registry: None,
             error: None,
+            mode: RouteMode::load(data_dir),
         };
         // 缺省(不扫描)时不建 reqwest 客户端: 少一个后台 runtime 线程、少一次 DNS/UA 初始化.
         if let Err(err) = host.rebuild() {
@@ -233,6 +237,7 @@ impl PluginHost {
             transport: Some(transport),
             registry: None,
             error: None,
+            mode: RouteMode::load(data_dir),
         };
         if let Err(err) = host.rebuild() {
             eprintln!("[ncm-plugin] 插件宿主未就绪(不影响 Core 启动): {err}");
@@ -306,6 +311,42 @@ impl PluginHost {
     /// 想区分原因请看 [`Self::failures`] / [`Self::summaries`] 的 `error` 字段.
     pub fn provider(&self, id: &str) -> Option<Arc<dyn Provider>> {
         self.registry.as_ref().and_then(|r| r.get(id))
+    }
+
+    /// 路由偏好(用户的显式选择; `auto` = 单插件自动、多插件不猜).
+    pub fn route_mode(&self) -> &RouteMode {
+        &self.mode
+    }
+
+    /// 改路由偏好并落盘(`plugin_route.json`, 0600 原子写).
+    ///
+    /// **不校验 id 是否存在**: 偏好是"我想用谁", 插件可能稍后才启用; 失效的选择在
+    /// [`Self::route_plan`] 里报 `selectionMissing` 并回内置, 不在这里制造错误.
+    /// 写盘失败 ⇒ 内存回滚, 返回 `internal`(与 `set_enabled` 同一手法).
+    pub fn set_route_mode(&mut self, mode: RouteMode) -> ProviderResult<()> {
+        let previous = std::mem::replace(&mut self.mode, mode);
+        if let Err(io) = self.mode.save(&self.data_dir) {
+            self.mode = previous;
+            return Err(ProviderError::internal(format!(
+                "写 {} 失败: {io}",
+                route::ROUTE_FILE
+            )));
+        }
+        Ok(())
+    }
+
+    /// 本次调用该走谁(纯判定, 不碰 provider 调用).
+    ///
+    /// 能力是唯一路由依据: 插件没声明 `cap` 就不算候选(见 [`super::route::plan`]).
+    pub fn route_plan(&self, cap: ncm_provider::Capability) -> RoutePlan {
+        let loaded = self.ids();
+        route::plan(
+            &self.mode,
+            self.is_active(),
+            &loaded,
+            |id| self.provider(id).is_some_and(|p| p.supports(cap)),
+            cap,
+        )
     }
 
     // ---------------- 写 ----------------

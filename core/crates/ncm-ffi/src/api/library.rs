@@ -21,14 +21,6 @@ pub struct _Playlist {
     pub subscribed: bool,
 }
 
-fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    guard
-        .providers
-        .first_with(cap)
-        .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
-}
-
 /// "我喜欢的音乐"里的曲目 id(红心状态的唯一真相)
 pub async fn liked_ids() -> Result<Vec<u64>, FfiError> {
     let provider = with_provider(Capability::Playlist)?;
@@ -99,9 +91,10 @@ pub async fn liked_songs() -> Result<Vec<SongDto>, FfiError> {
 
 /// 新建歌单(需登录), 返回新歌单 id. privacy: 0=公开 10=私密
 pub async fn create_playlist(name: String, privacy: u32) -> Result<u64, FfiError> {
+    let name = name.as_str();
     ffi_forward!(
         Capability::PlaylistEdit,
-        provider.create_playlist(&name, privacy as u8)
+        provider.create_playlist(name, privacy as u8)
     )
 }
 
@@ -115,17 +108,19 @@ pub async fn delete_playlist(playlist_id: u64) -> Result<bool, FfiError> {
 
 /// 改歌单名
 pub async fn rename_playlist(playlist_id: u64, name: String) -> Result<bool, FfiError> {
+    let name = name.as_str();
     ffi_forward!(
         Capability::PlaylistEdit,
-        provider.rename_playlist(playlist_id, &name)
+        provider.rename_playlist(playlist_id, name)
     )
 }
 
 /// 改歌单简介
 pub async fn update_playlist_desc(playlist_id: u64, desc: String) -> Result<bool, FfiError> {
+    let desc = desc.as_str();
     ffi_forward!(
         Capability::PlaylistEdit,
-        provider.update_playlist_desc(playlist_id, &desc)
+        provider.update_playlist_desc(playlist_id, desc)
     )
 }
 
