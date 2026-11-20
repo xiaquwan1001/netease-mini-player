@@ -7,15 +7,11 @@ import 'package:flutter/services.dart';
 import '../album_preview.dart';
 import '../app_settings.dart';
 import '../app_shell.dart';
-import '../app_meta.dart';
-import '../app_sheet.dart';
-import '../audio_tuning.dart';
 import '../auth.dart';
 import '../back_policy.dart';
 import '../cover_backdrop.dart';
 import '../cover_palette.dart';
 import '../detail_faces.dart';
-import '../desktop_integration.dart';
 import '../desktop_shell.dart';
 import '../detail_pane.dart'
     show
@@ -26,12 +22,9 @@ import '../detail_pane.dart'
         detachDetailPaneHost,
         detailPaneOpen,
         detailPaneSlot;
-import '../keystore.dart';
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
-import '../lyric.dart';
-import '../marquee_text.dart';
 import '../net_retry.dart';
 import '../notification_mode.dart';
 import '../playback.dart';
@@ -46,17 +39,17 @@ import '../sleep_timer.dart';
 import '../song_actions.dart';
 import '../song_share.dart';
 import '../toast.dart' show showToast;
-import '../update_checker.dart';
-import '../update_dialog.dart';
-import '../word_lyric_view.dart';
 import 'account_actions.dart';
 import 'home_wiring.dart';
+import 'lyrics_page.dart';
 import 'navigation.dart';
 import 'lyric_controller.dart';
 import 'playback_coordinator.dart';
 import 'queue_sheet_controller.dart';
+import 'search_bar_host.dart';
 import 'search_controller.dart' as search_state;
 import 'song_action_wiring.dart';
+import 'startup.dart';
 import 'tab_builder.dart';
 
 /// 首页(拆壳 S8 从 main.dart 原样搬出): 五 tab 外壳 + 歌词详情页 + 歌单浏览态
@@ -66,8 +59,13 @@ import 'tab_builder.dart';
 /// [LyricController] / [search_state.SearchController] / [PlaybackCoordinator] /
 /// [SongActionWiring] / [QueueSheetController] / [AccountActions];
 /// 进程级静态钩子的注册/解绑在 [HomeWiring]。
-/// 本文件只负责: 页面状态(tab/输入框/红心/错误横幅)、生命周期接线、
-/// 启动编排, 以及 G11/G12 的页面装配(build/_buildPage/_buildTopBar/...)。
+/// 本文件只负责: 页面状态(tab/输入框/红心/错误横幅)、生命周期接线, 以及
+/// G11/G12 的骨架装配(build/_buildPage/_buildTabArea/底部导航)。
+///
+/// §7.7 第二刀把三块装配搬到同级文件(同样是纯"函数搬家"):
+/// [HomeStartup](src/home/startup.dart) 启动/外壳编排、
+/// [HomeLyricsPage](src/home/lyrics_page.dart) 歌词全屏页与顶栏、
+/// [HomeSearchBarHost](src/home/search_bar_host.dart) 搜索输入条。
 ///
 /// 搬家用的是纯"函数搬家": 结构、时序、注释一律照旧 —— 见
 /// .pi/plans/arch-audit-frontend-2026-11-15.md §1.3 风险 5(build 结构是踩坑史)。
@@ -113,6 +111,17 @@ class _HomePageState extends State<HomePage> {
   /// 结果分区 / 曲目列表。只读页面状态, 播放与搜索条仍归本页面 ——
   /// 见 src/home/tab_builder.dart。
   late final HomeTabBuilder _tabs;
+
+  /// 启动/外壳编排(拆 §7.7 第二刀): 冷启动恢复、桌面壳/窗口行为接线、
+  /// AppImage 菜单集成、更新提示、设置变更后的播放参数节流 ——
+  /// 见 src/home/startup.dart。构造零副作用, 在 initState 末尾(所有依赖就位后)建。
+  late final HomeStartup _startup;
+
+  /// 歌词全屏页 + 顶栏装配(拆 §7.7 第二刀), 见 src/home/lyrics_page.dart。
+  late final HomeLyricsPage _lyrics;
+
+  /// 搜索输入条(拆 §7.7 第二刀), 见 src/home/search_bar_host.dart。
+  late final HomeSearchBarHost _searchBar;
 
   rust.InitInfo? _info;
   String? _error;
@@ -184,9 +193,6 @@ class _HomePageState extends State<HomePage> {
 
   /// 「关闭主窗口」行为的最终分流点(didRequestAppExit); 仅 Linux 会有非退出结果。
   late final DesktopCloseObserver _desktopClose;
-
-  /// 已经弹过更新提示的版本 tag(同一次运行只弹一次, 避免重复打扰)
-  String? _promptedUpdateTag;
 
   /// 详情面板当前是「歌词」还是「封面」面 —— **唯一真相**, 三处共享:
   /// - DetailFaces 用它当控制器(值变了就跟着翻面, 也会把用户手动切面写回);
@@ -352,9 +358,12 @@ class _HomePageState extends State<HomePage> {
         albumName: albumName,
         coverUrl: coverUrl,
       ),
-      onUpdatePrompt: _onUpdatePrompt,
+      // 两个回调都走 _startup 的方法: 间接一层是为了让 _startup(它要 _search/
+      // _desktopClose)在所有依赖就位后、在同一次 initState 末尾才构造,
+      // 而 HomeWiring 的注册顺序(含 setSkipHandlers 先于 setActionHandlers)不变。
+      onUpdatePrompt: () => _startup.onUpdatePrompt(),
       onPageDepthChanged: _onPageDepthChanged,
-      onAudioSettingsChanged: _onAudioSettingsChanged,
+      onAudioSettingsChanged: () => _startup.onAudioSettingsChanged(),
     )..attach();
     // 搜索状态机: 输入框/焦点仍由页面持有, 只把"失败/清错/离开浏览态"三件
     // 需要 setState 的副作用回灌给页面(与原 _search/_clearSearch 一一对应)
@@ -415,7 +424,40 @@ class _HomePageState extends State<HomePage> {
     // 主从分栏的右栏由本页渲染(方案 B · S4): 登记"宿主在场", openDetail 才知道
     // 该填右栏还是照旧 push。计数而非 bool —— 换树时新旧页面的 init/dispose 顺序不保证。
     attachDetailPaneHost();
-    _bootstrap();
+    // 三块装配(拆 §7.7 第二刀): 启动编排 / 歌词页(含顶栏) / 搜索条。
+    // 构造本身零副作用(只存引用与回调), 所以放在依赖全部就位的 initState 末尾,
+    // 与拆分前"这些方法直接长在 State 上"的时机一致。
+    _startup = HomeStartup(
+      playback: _playback,
+      coordinator: _coordinator,
+      account: _account,
+      search: _search,
+      buildActionsHost: _songActions.buildHost,
+      desktopClose: _desktopClose,
+      contextOf: () => context,
+      isMounted: () => mounted,
+      setInfo: (info) => setState(() => _info = info),
+      setError: (message) => setState(() => _error = message),
+    );
+    _lyrics = HomeLyricsPage(
+      lyric: _lyric,
+      account: _account,
+      auth: _auth,
+      infoOf: () => _info,
+      currentOf: () => _current,
+      detailFace: _detailFace,
+      storedDetailFace: _storedDetailFace,
+      onDetailFaceChanged: _onDetailFaceChanged,
+      shareSong: _shareSong,
+      shareSelectedLyrics: _shareSelectedLyrics,
+      openComments: _openComments,
+    );
+    _searchBar = HomeSearchBarHost(
+      controller: _controller,
+      focusNode: _searchFocus,
+      search: _search,
+    );
+    _startup.bootstrap();
     _coordinator.startPolling();
   }
 
@@ -527,166 +569,6 @@ class _HomePageState extends State<HomePage> {
   void _onPlaybackRestored() {
     if (!mounted) return;
     _account.applyPlaybackRestored();
-  }
-
-  /// 启动自动检查发现新版本时的弹窗(每天/每周/每月由 AppSettings 决定)。
-  void _onUpdatePrompt() {
-    final info = UpdateCheckHost.pendingPrompt.value;
-    if (info == null || !info.isNewer) return;
-    if (info.latest == _promptedUpdateTag) return;
-    _promptedUpdateTag = info.latest;
-    // 立即清掉, 避免同一次通知重入; 红点仍由 pendingUpdate 维护。
-    UpdateCheckHost.pendingPrompt.value = null;
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await showUpdateDialog(context, info);
-    });
-  }
-
-  Future<void> _bootstrap() async {
-    try {
-      final dir = await _playback.dataDir();
-      // Android Keystore 凭据桥: 先 restore(幂等, 非 Android/不可用则跳过)再开 Core,
-      // 否则 Core::open 选不到后端(见 docs/android-keystore-wiring-design.md).
-      await credentialSync.ensureRestored();
-      final info = await rust.init(dataDir: dir);
-      await AppSettings.instance.load(info.dataDir);
-      // 登录期可能产生 pending, 启动点落一次 Keystore
-      unawaited(credentialSync.drainPending());
-      // 首帧后 3s 后台静默检查更新(节流/开关在 update_checker 内, 失败静默)
-      unawaited(runStartupUpdateCheck(AppSettings.instance));
-      // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
-      unawaited(applyAudioTuning());
-      unawaited(enforceCacheLimit());
-      if (!mounted) return;
-      setState(() => _info = info);
-      publishActionsHost(context, _songActions.buildHost());
-      // 状态记忆: 恢复上次退出时的队列与曲目(只恢复现场, 不自动出声)
-      unawaited(_coordinator.restoreFromDisk(info.dataDir));
-      // 本地历史和热词都依赖 init() 建立的 Core, 必须等初始化完成再拉
-      unawaited(_search.loadHistory());
-      unawaited(_search.loadLanding());
-      // 「猜你想搜」候选池: 预热一次(进搜索页时会按 10 分钟 TTL 再决定是否重拉)
-      unawaited(_search.refreshRecommended());
-      // AppImage 首启: 问一次「集成到应用菜单」(deb 安装的走不到这条)
-      unawaited(_offerDesktopIntegration(info.dataDir));
-      // Linux 桌面: 把「点关闭 = 退出 / 隐藏到托盘」推给 GTK runner(其它平台 no-op)
-      unawaited(_bindDesktopShell());
-      // 已登录就把账号记进账号簿(老版本登录过的账号也能被记住)
-      if (info.loggedIn) {
-        unawaited(_account.syncAccount());
-        unawaited(_account.loadLiked());
-        unawaited(_account.resolveLikedPlaylistId());
-      }
-    } catch (e) {
-      setState(() => _error = friendlyError(e));
-    }
-  }
-
-  /// Linux 桌面: 绑定「关闭主窗口」行为(退出 / 隐藏到托盘)并读回托盘能力。
-  ///
-  /// 核心价值是"关到托盘不停播放": 隐藏窗口不动进程与 Dart isolate, Rust 音频线程
-  /// 继续跑; 只有托盘菜单「退出」才真的终止进程。没有托盘宿主时原生会降级成
-  /// "最小化到任务栏"并通过 closeToTaskbarFallback 通知这里提示一次。
-  Future<void> _bindDesktopShell() async {
-    final shell = DesktopShell.instance;
-    _desktopClose.onFallbackToTaskbar = () {
-      if (!mounted) return;
-      showToast(context, '当前桌面没有托盘, 已最小化到任务栏');
-    };
-    final trayStatus = await shell.bindSettings(AppSettings.instance);
-    if (!mounted) return;
-    if (AppSettings.instance.closeBehavior == CloseBehavior.minimizeToTray &&
-        trayStatus.degraded) {
-      showToast(context, '本机没有可用的系统托盘, 关闭窗口将最小化到任务栏');
-    }
-  }
-
-  /// Linux AppImage 首启: 问一次「是否集成到应用菜单」(§11.A-2)。
-  ///
-  /// 判据全部是纯函数(`desktop_integration.dart`), 这里只负责弹窗、落标记与提示。
-  /// 拒绝/失败都落标记 —— 以后不再骚扰; 安装只是用户目录下的两份文件, 不需要 root。
-  Future<void> _offerDesktopIntegration(String dataDir) async {
-    final pending = await desktopIntegrationPending(dataDir: dataDir);
-    if (pending == null || !mounted) return;
-    final home = Platform.environment['HOME'] ?? '';
-    if (home.isEmpty) return;
-    final agree = await showAppDialog<bool>(
-      context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('集成到应用菜单?'),
-        content: const Text(
-          '当前以 AppImage 方式运行, 系统菜单里还没有轻音 MiniNCM。\n'
-          '是否写入菜单入口与图标? (只改你自己的 ~/.local/share, 不需要管理员权限, '
-          '以后不想要了直接删掉那两个文件即可)',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('不用了'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('集成'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (agree != true) {
-      await markDesktopIntegrationAsked(dataDir);
-      return;
-    }
-    final r = await installDesktopIntegration(
-      appImagePath: pending.appImagePath,
-      home: home,
-      version: kAppVersion,
-    );
-    if (!mounted) return;
-    if (r.ok) {
-      showToast(context, r.iconInstalled ? '已添加到应用菜单' : '已添加菜单入口(未找到图标)');
-    } else {
-      await markDesktopIntegrationAsked(dataDir);
-      if (!mounted) return;
-      showToast(context, '集成失败: ${r.error ?? '未知错误'}', isError: true);
-    }
-  }
-
-  /// 播放参数变化时才真的调 FFI(设置页里每拖一格 Slider 都会 notifyListeners)
-  AudioTuningRequest? _lastTuning;
-  int? _lastCacheLimitMb;
-  bool? _lastLoudnessNormalize;
-  double? _lastLoudnessTarget;
-
-  void _onAudioSettingsChanged() {
-    final settings = AppSettings.instance;
-    // 响度均衡的开关/目标电平变化 ⇒ 已算好的每曲增益全部作废, 当前曲目重算
-    final loudnessChanged =
-        settings.loudnessNormalize != _lastLoudnessNormalize ||
-        settings.loudnessTargetLufs != _lastLoudnessTarget;
-    _lastLoudnessNormalize = settings.loudnessNormalize;
-    _lastLoudnessTarget = settings.loudnessTargetLufs;
-    if (loudnessChanged) {
-      forgetLoudnessGain();
-      final id = _coordinator.player?.trackId?.toInt();
-      if (id != null) {
-        _coordinator.markLoudnessApplied(id);
-        unawaited(applyLoudnessForTrack(id));
-      }
-      return;
-    }
-    final request = AudioTuningRequest.fromSettings(settings);
-    if (request != _lastTuning) {
-      _lastTuning = request;
-      unawaited(applyAudioTuning());
-    }
-    if (settings.cacheLimitMb != _lastCacheLimitMb) {
-      _lastCacheLimitMb = settings.cacheLimitMb;
-      unawaited(
-        enforceCacheLimit(keepTrackId: _coordinator.player?.trackId?.toInt()),
-      );
-    }
   }
 
   // ---------------- 搜索(状态机在 SearchController, 见 src/home/search_controller.dart) ----------------
@@ -1190,258 +1072,21 @@ class _HomePageState extends State<HomePage> {
 
   /// 五个 tab 都塞进 IndexedStack(访问过的才真正构建), 保留各自的 State.
 
-  /// 顶部栏: **只在它承载了导航里没有的信息时才出现**。
-  ///
-  /// - 歌词页: 曲名 + 收起按钮;
-  /// - 歌单/正在播放/心动模式的浏览态: 当前列表名 + 返回按钮;
-  /// - 其它情况(含「搜索」tab 首页、「推荐/关注/我的/设置」): **整条 AppBar 不出现**。
-  ///   两处理由: ①这四页标题原本就是底部导航标签, 完全重复;
-  ///   ②搜索页顶部的品牌横幅只是装饰, 用户明确要求去掉 —— 省下的 56dp 全给内容。
-  ///   没有 AppBar 时也不再有顶部「登录」动作: 未登录引导在「我的」页(mine_view 的登录按钮)
-  ///   与资料头点击(审查 P1-7.10 已定: 账号入口 3→1)。
+  /// 顶部栏: 只在它承载了导航里没有的信息时才出现(歌词页 / 歌单浏览态),
+  /// 其余情况整条不出现。装配在 [HomeLyricsPage.buildTopBar](src/home/lyrics_page.dart)。
   PreferredSizeWidget? _buildTopBar(
     BuildContext context,
     rust.SongDto? current,
-  ) {
-    final showBar = _lyric.visible || _account.libraryOpen;
-    if (!showBar) return null;
-    return AppBar(
-      // 大字号 + 动作图标会把默认 22sp 的标题挤成 "轻音 Mi…"(vivo 1440px 实测),
-      // 标题固定用 titleMedium, 让品牌字至少完整显示
-      // 详情页(歌词页)标题: 保留 titleLarge 的字重观感, 但显式 20sp + height 1.25。
-      // 22sp 默认行高下中文歌名在 56dp AppBar 里下半段会被裁掉(用户反馈);
-      // 20sp 仍明显大于 titleMedium(16sp), 不会退回"字号特别小"。
-      titleTextStyle: Theme.of(context).textTheme.titleLarge
-          ?.copyWith(fontSize: 20, height: 1.25, fontWeight: FontWeight.w600),
-      // 长歌名横向滚动播放(marquee); 放不下不再 FittedBox 缩成小字
-      title: MarqueeText(
-        _lyric.visible
-            ? (_lyric.selecting
-                  ? '已选 ${_lyric.selected.length} 句'
-                  : (current?.name ?? '歌词'))
-            : (_account.libraryTitle ?? '轻音 MiniNCM'),
-      ),
-      leading: _lyric.visible
-          ? IconButton(
-              icon: const Icon(Icons.expand_more),
-              tooltip: '收起歌词',
-              onPressed: _lyric.toggle,
-            )
-          : (_account.libraryOpen
-                ? IconButton(
-                    icon: const Icon(Icons.arrow_back),
-                    tooltip: '返回搜索',
-                    onPressed: _account.leaveLibrary,
-                  )
-                : null),
-      actions: [
-        // 歌曲详情页(歌词页)的右上角: 分享 / 翻译开关 / "..." 菜单
-        if (_lyric.visible) ...[
-          if (_lyric.selecting) ...[
-            IconButton(
-              icon: const Icon(Icons.share),
-              tooltip: '分享所选歌词',
-              onPressed: _shareSelectedLyrics,
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: '取消选择',
-              onPressed: _lyric.clearSelection,
-            ),
-          ] else ...[
-            // 翻译开关已挪到歌词右下角(「定位当前歌词」上方), 见 _buildLyrics.
-            // "..." 从播放条挪到详情页里(播放条只留播放控制)
-            if (current != null)
-              SongOverflowButton(
-                song: current,
-                size: 22,
-                // 队列来源即菜单来源: 日推/FM 才显示"不感兴趣"
-                source: _account.playSource,
-              ),
-            IconButton(
-              icon: const Icon(Icons.share),
-              tooltip: '分享这首歌',
-              onPressed: () => _shareSong(),
-            ),
-          ],
-        ] else if (_auth.isAndroid && _info?.loggedIn != true)
-          // 登录(WebView)只在安卓端(桌面版还没有网页登录宿主)。
-          // 审查 P1-7.10: 账号入口 3→1 —— 账号簿/切换/退出登录统一走「我的」页资料头。
-          TextButton.icon(
-            onPressed: _account.login,
-            icon: const Icon(Icons.login, size: 18),
-            label: const Text('登录'),
-          ),
-      ],
-    );
-  }
+  ) => _lyrics.buildTopBar(context, current);
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _searchFocus,
-              decoration: InputDecoration(
-                labelText: '搜索',
-                border: const OutlineInputBorder(),
-                isDense: true,
-                // 输入过东西或已有结果时给一个显式的清空按钮
-                suffixIcon: (_controller.text.isEmpty && _search.bundle == null)
-                    ? null
-                    : IconButton(
-                        tooltip: '清空搜索',
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: _search.clear,
-                      ),
-              ),
-              textInputAction: TextInputAction.search,
-              onChanged: _search.onQueryChanged,
-              onSubmitted: (_) => _search.search(),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // 不再并排放「取消」: 它与输入框里的清空 suffix 是同一个动作
-          // (_search.clear), 两个同义按钮只会让人不知道该按哪个(审查 P1-7.4)
-          FilledButton(
-            onPressed: _search.busy ? null : _search.search,
-            child: Text(_search.busy ? '搜索中' : '搜索'),
-          ),
-        ],
-      ),
-    );
-  }
+  /// 搜索输入条(装配在 [HomeSearchBarHost.build], 见 src/home/search_bar_host.dart)
+  Widget _buildSearchBar() => _searchBar.build();
 
   /// 歌曲详情页正文 = 歌词 + (定位当前句 / 底部次要控制)
-  Widget _buildLyrics() {
-    // 多选态: 点行 = 加/减选; 非多选态点击不做事(避免误改焦点)
-    final onTap = _lyric.selecting ? (int i) => _lyric.selectLine(i) : null;
-    final onLong = _lyric.selectLine;
-    final showTranslation = AppSettings.instance.lyricTranslation;
-
-    final Widget body;
-    if (_lyric.wordLines.isNotEmpty) {
-      body = WordLyricView(
-        lines: _lyric.wordLines,
-        positionMs: _lyric.positionMs,
-        playing: _lyric.playing,
-        controller: _lyric.scroll,
-        itemExtent: _lyric.itemExtent,
-        showTranslation: showTranslation,
-        selected: _lyric.selected,
-        onLineTap: onTap,
-        onLineLongPress: onLong,
-        autoScroll: _lyric.autoFollow,
-      );
-    } else if (_lyric.plain != null) {
-      body = PlainLyricView(
-        lines: _lyric.plain!,
-        controller: _lyric.scroll,
-        selected: _lyric.selected,
-        onLineTap: onTap,
-        onLineLongPress: onLong,
-      );
-    } else if (_lyric.error != null) {
-      body = Padding(
-        padding: const EdgeInsets.all(24),
-        child: Center(child: Text(_lyric.error!, textAlign: TextAlign.center)),
-      );
-    } else if (_lyric.lines.isEmpty) {
-      body = const Center(child: Text('暂无歌词'));
-    } else {
-      body = TimedLyricView(
-        lines: _lyric.lines,
-        activeIndex: _lyric.activeIndex,
-        controller: _lyric.scroll,
-        itemExtent: _lyric.itemExtent,
-        showTranslation: showTranslation,
-        selected: _lyric.selected,
-        onLineTap: onTap,
-        onLineLongPress: onLong,
-        // 超长当前行只在播放中横向滚动(与逐字歌词同一口径)
-        playing: _lyric.playing,
-      );
-    }
-
-    return Column(
-      children: [
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (n) {
-              // 只认"手指拖动启动"(ScrollStartNotification.dragDetails != null):
-              // - 这个 NotificationListener 只包住歌词列表, 子树里能带 dragDetails 的
-              //   ScrollStart 只可能来自列表自身的拖动(播放条/进度条在子树外);
-              // - 自动跟随的 animateTo 发出的 ScrollStart/ScrollUpdate 都没有
-              //   dragDetails, 不会被误判成用户滑动.
-              if (n is ScrollStartNotification && n.dragDetails != null) {
-                _lyric.pauseFollow();
-              }
-              return false;
-            },
-            // 歌词面 ⇄ 封面面: 轻点画面切换(再点回歌词); 歌词面用 Offstage 常驻,
-            // 切回来滚动位置不丢。播客单集播放时进队列的也是 SongDto, 同一个控件。
-            child: DetailFaces(
-              trackId: _current?.id,
-              coverUrl: _current?.coverUrl,
-              // 多选态里点行 = 选中某句, 不是切面
-              tappable: !_lyric.selecting,
-              // 面记忆: 面板按偏好里的记忆面初始化(控件只在建树时读 initialFace),
-              // 用户切面立刻写回偏好 —— 换歌不再强制回歌词。
-              initialFace: _storedDetailFace(),
-              faceController: _detailFace,
-              onFaceChanged: _onDetailFaceChanged,
-              // 封面面右下角「查看评论」: 与歌曲"..."菜单里的查看评论同一条链路;
-              // 没有当前曲目(纯占位/未播放)时不显示按钮。
-              onOpenComments: _current == null ? null : _openComments,
-              lyrics: Stack(
-                children: [
-                  Positioned.fill(child: body),
-                  // 曾经在这里常驻一行"逐字歌词 · 网易云"来源小字(左下角),
-                  // 用户反馈那是一条像水印的文本框, 已去掉(2026-11)。
-                  // 打分/择优规则在 Rust(ncm-service::ttml_source), 文案在 lyricSourceLabel.
-
-                  // 右下角竖排: 翻译开关在上, 定位当前歌词在下(用户要求把顶部翻译
-                  // 开关挪到侧面). 歌词本身没有 tlyric 时不出现翻译键.
-                  Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_lyric.hasTranslation)
-                          IconButton.filledTonal(
-                            tooltip: AppSettings.instance.lyricTranslation
-                                ? '关闭翻译'
-                                : '显示翻译',
-                            icon: Icon(
-                              Icons.translate,
-                              size: 20,
-                              color: AppSettings.instance.lyricTranslation
-                                  ? Theme.of(context).colorScheme.primary
-                                  : null,
-                            ),
-                            onPressed: _lyric.toggleTranslation,
-                          ),
-                        if (_lyric.hasTranslation) const SizedBox(height: 8),
-                        IconButton.filledTonal(
-                          tooltip: '定位到当前歌词',
-                          icon: const Icon(Icons.my_location, size: 20),
-                          onPressed: _lyric.locateCurrent,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  ///
+  /// 装配在 [HomeLyricsPage.buildBody](src/home/lyrics_page.dart, 拆 §7.7 第二刀):
+  /// 逐字/纯文本/错误/暂无/时间轴五分支的顺序与"歌词 ⇄ 封面"面板原样搬过去。
+  Widget _buildLyrics() => _lyrics.buildBody(context);
 
   /// 投递播放条数据快照(帧后; 与上一份相等时 ValueNotifier 不通知 → 播放条不重建)。
   ///
