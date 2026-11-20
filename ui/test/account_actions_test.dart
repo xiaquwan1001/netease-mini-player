@@ -427,6 +427,11 @@ void main() {
       expect(h.auth.logoutCalls, 1, reason: '清 WebView/凭据走登录门面');
       expect(h.clearLikedCalls, 1);
       expect(h.toasts.single, '已退出登录(账号仍留在账号簿)');
+      // purgeDailyCache 是 unawaited（不阻塞 UI），CI 上慢一档就会赶不上一次 pumpEventQueue，
+      // 所以这里等到目录真的消失（上限 1s），判据不变。
+      for (var i = 0; i < 50 && await stale.exists(); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
       expect(await stale.exists(), isFalse);
     });
 

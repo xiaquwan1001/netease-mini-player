@@ -85,13 +85,18 @@ rust.WordLyricDto _degenerate(int lines) => rust.WordLyricDto(
   hasWordTiming: false,
 );
 
+/// 缺 cdylib 时整组 skip（`skip` 必须落在 test 上，光在 setUpAll 里 return 不够：
+/// 测试体照样会跑，CI 就报 10 条 "flutter_rust_bridge has not been initialized"）。
+void _test(String name, dynamic Function() body) =>
+    test(name, body, skip: _skip);
+
 void main() {
   setUpAll(() async {
     if (_skip != null) return;
     await RustLib.init(externalLibrary: ExternalLibrary.open(_libFile.path));
   });
 
-  test('scoreWordLyric: 完好 yrc 满分, 退化/空/无数据低分', () {
+  _test('scoreWordLyric: 完好 yrc 满分, 退化/空/无数据低分', () {
     final s = scoreWordLyric(_good(3));
     expect(s.coverage, closeTo(1.0, 1e-9));
     expect(s.monotonic, closeTo(1.0, 1e-9));
@@ -111,19 +116,19 @@ void main() {
     expect(scoreWordLyric(null).score, 0.0);
   });
 
-  test('打分口径: 行级 LRC 一致性只用 250ms 窗口内的行', () {
+  _test('打分口径: 行级 LRC 一致性只用 250ms 窗口内的行', () {
     final yrc = _good(2);
     expect(scoreWordLyric(yrc, lineStarts: const [0, 1000]).consistency, 1.0);
     expect(scoreWordLyric(yrc, lineStarts: const [400, 1400]).consistency, 0.0);
   });
 
-  test('chooseWordSource: yrc 覆盖率高但时间错乱应输给 TTML(理由 yrc 时间错乱)', () {
+  _test('chooseWordSource: yrc 覆盖率高但时间错乱应输给 TTML(理由 yrc 时间错乱)', () {
     final c = chooseWordSource(_scrambled(4), _good(4));
     expect(c.source, 'ttml');
     expect(c.reason, 'yrc 时间错乱');
   });
 
-  test('chooseWordSource: 只有一方时不带择优理由, 空的 yrc 等于没有', () {
+  _test('chooseWordSource: 只有一方时不带择优理由, 空的 yrc 等于没有', () {
     expect(chooseWordSource(_good(2), null).source, 'yrc');
     expect(chooseWordSource(_good(2), null).reason, isNull);
     final onlyTtml = chooseWordSource(null, _good(2));
@@ -140,13 +145,13 @@ void main() {
     expect(chooseWordSource(null, null).source, isNull);
   });
 
-  test('yrcWordGoodEnough: 覆盖率 0.6 阈值口径', () {
+  _test('yrcWordGoodEnough: 覆盖率 0.6 阈值口径', () {
     expect(yrcWordGoodEnough(null), false);
     expect(yrcWordGoodEnough(_good(3)), true);
     expect(yrcWordGoodEnough(_degenerate(3)), false);
   });
 
-  test('auto: yrc 得分已很高(>= 0.9)时跳过 TTML 探测(省一次网络)', () async {
+  _test('auto: yrc 得分已很高(>= 0.9)时跳过 TTML 探测(省一次网络)', () async {
     var ttmlCalls = 0;
     final r = await resolveLyricSource(
       BigInt.one,
@@ -164,7 +169,7 @@ void main() {
     expect(ttmlCalls, 0);
   });
 
-  test('auto: 择优选中 TTML 时来源标注带理由', () async {
+  _test('auto: 择优选中 TTML 时来源标注带理由', () async {
     final r = await resolveLyricSource(
       BigInt.two,
       LyricSourceLoaders(
@@ -178,7 +183,7 @@ void main() {
     expect(lyricSourceLabel(r?.source, r?.reason), '逐字歌词 · AMLL(择优: yrc 时间错乱)');
   });
 
-  test('auto: 分数接近时用行级 LRC 一致性加分决定(ttml 行首更贴近 LRC)', () async {
+  _test('auto: 分数接近时用行级 LRC 一致性加分决定(ttml 行首更贴近 LRC)', () async {
     // 两边都轻微不完美(首字偏移 100ms => firstWord 0, 得分 0.85 < 0.9),
     // 行级 LRC 更贴近 TTML 行首 => 一致性加分后 TTML 胜出. 这个用例同时锁住
     // "得分差 < 0.15 才额外取行级 LRC"这个窗口(Rust SCORE_CLOSE_WINDOW).
@@ -204,7 +209,7 @@ void main() {
     expect(lyricSourceLabel(r?.source, r?.reason), '逐字歌词 · AMLL(择优: yrc 首字偏移)');
   });
 
-  test('auto: 分数悬殊时不额外取行级 LRC', () async {
+  _test('auto: 分数悬殊时不额外取行级 LRC', () async {
     final r = await resolveLyricSource(
       BigInt.from(4),
       LyricSourceLoaders(
@@ -216,7 +221,7 @@ void main() {
     expect(r?.source, 'ttml');
   });
 
-  test('netease 偏好: yrc 覆盖率达标记为够好, 直接用(不调 TTML)', () async {
+  _test('netease 偏好: yrc 覆盖率达标记为够好, 直接用(不调 TTML)', () async {
     var ttmlCalls = 0;
     final r = await resolveLyricSource(
       BigInt.from(5),
