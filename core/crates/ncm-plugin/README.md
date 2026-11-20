@@ -1,4 +1,4 @@
-# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一步)
+# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一/二步)
 
 > **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** 本 crate 没有 FFI 导出、没有注册进
 > `ProviderRegistry`、`Core::open` 也不构造插件宿主 —— 改动它不会改变 App 默认行为
@@ -22,6 +22,7 @@
 | `src/convert.rs` | 脚本 JSON -> `ncm-domain` 的 `StreamUrl` / `SearchPage`(纯函数) |
 | `src/worker.rs` | `ScriptProvider`: 专属线程 + `oneshot` 桥接,实现既有 `ncm_provider::Provider` |
 | `src/error.rs` | `PluginError` -> `ProviderError{kind,retryable,detail}` 映射 |
+| `src/manifest.rs` | 插件清单(`manifest.json`)纯数据 + 校验(可读错误, 不 panic); 目录管理在 `ncm-service/src/plugins/manager.rs` |
 
 ---
 
@@ -159,6 +160,36 @@ const res = await lx.request({
 
 ---
 
+### 1.6 插件清单(`manifest.json`)与目录管理(切片 2 第二步)
+
+清单由本 crate 的 [`manifest`](src/manifest.rs) 定义并校验(**纯数据, 无 I/O**):
+
+```json
+{
+  "id": "demo",
+  "name": "Demo 插件",
+  "version": "1.0.0",
+  "entry": "index.js",
+  "permissions": { "lxEvents": ["musicUrl", "search"], "requestDomains": ["api.example.com"] }
+}
+```
+
+| 字段 | 规则(违反 -> `ManifestError{field,reason}`, 绝不 panic) |
+|---|---|
+| `id` | `[a-z0-9][a-z0-9_-]{0,63}`, **必须等于目录名**(不收点号/斜杠/大写: 路径安全 + 大小写不敏感文件系统) |
+| `name` | 非空、≤64 字符、无首尾空白/控制字符 |
+| `version` | `主.次.修订`(可带 `-预发布`) |
+| `entry` | **单层文件名**, 以 `.js` 结尾, 不以点开头, 无分隔符/冒号 |
+| `permissions.lxEvents` | 只能取 `KNOWN_EVENTS`(`request/inited/musicUrl/search`), 不重复, ≤8 个 |
+| `permissions.requestDomains` | `host` 或 `*.host`, 不带 scheme/端口/路径, ≤16 个 |
+
+目录管理在 `ncm-service::plugins::PluginManager`(`<root>/<plugin-id>/{manifest.json, <entry>}` 扫描;
+启停落盘 `<root>/plugins-state.json` 0600 原子写; 每插件自己的 `<root>/<id>/data/` storage 目录 +
+自己那份 `SandboxConfig` clone)。判据表见 `manager.rs` 头注释, 逐条用例见 `manager_tests.rs`。
+**权限目前是声明性数据**: 出站不按 `requestDomains` 过滤(接线切片再做)。
+
+---
+
 ## 2. 线程与生命周期
 
 - `ScriptEngine` 是 **`!Send`**(rquickjs 未开 `parallel` feature), 只在一个线程里用;
@@ -200,8 +231,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | **插件管理层** | 插件列表/元信息(`@name/@version/@apiVersion/@capabilities` 头注释解析)、版本协商、
-禁用(连续失败 3 次)、安装目录扫描 |
+| 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); 仍缺版本协商与「连续失败 3 次自动禁用」, 且**未接 FFI/UI** |
 | 2 | **导入/启停** | 粘贴/文件/URL 导入、启用禁用、卸载; 目前只接受调用方给的内存脚本文本 |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 仍**未接线**(产路径不构造) |

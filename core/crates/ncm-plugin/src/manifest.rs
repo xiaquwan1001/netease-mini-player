@@ -283,7 +283,10 @@ fn validate_permissions(perms: &Permissions) -> Result<(), ManifestError> {
     if perms.lx_events.len() > MAX_EVENTS {
         return Err(ManifestError::new(
             "permissions.lxEvents",
-            format!("声明了 {} 个事件, 超过上限 {MAX_EVENTS}", perms.lx_events.len()),
+            format!(
+                "声明了 {} 个事件, 超过上限 {MAX_EVENTS}",
+                perms.lx_events.len()
+            ),
         ));
     }
     let mut seen: Vec<&str> = Vec::with_capacity(perms.lx_events.len());
@@ -291,10 +294,7 @@ fn validate_permissions(perms: &Permissions) -> Result<(), ManifestError> {
         if !KNOWN_EVENTS.contains(&event.as_str()) {
             return Err(ManifestError::new(
                 format!("permissions.lxEvents[{idx}]"),
-                format!(
-                    "`{event}` 不是已知事件(可用: {})",
-                    KNOWN_EVENTS.join(", ")
-                ),
+                format!("`{event}` 不是已知事件(可用: {})", KNOWN_EVENTS.join(", ")),
             ));
         }
         if seen.contains(&event.as_str()) {

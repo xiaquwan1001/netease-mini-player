@@ -55,9 +55,7 @@ pub mod transport;
 pub mod worker;
 
 pub use error::{PluginError, PluginErrorKind};
-pub use manifest::{
-    ManifestError, Permissions, PluginManifest, KNOWN_EVENTS, MANIFEST_FILE,
-};
+pub use manifest::{ManifestError, Permissions, PluginManifest, KNOWN_EVENTS, MANIFEST_FILE};
 pub use sandbox::{SandboxConfig, ScriptEngine};
 pub use storage::{FileStorage, MemoryStorage, Storage};
 pub use transport::{
