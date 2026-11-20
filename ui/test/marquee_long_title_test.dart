@@ -285,9 +285,10 @@ void main() {
         .where((l) => !l.trimLeft().startsWith('//'))
         .join('\n');
 
-    // 首页主体已在拆壳 S8 从 lib/main.dart 搬到 src/home/home_page.dart
-    // (main.dart 只剩 main() + export 门面), 这里读新的源码位置。
-    final mainSrc = File('lib/src/home/home_page.dart').readAsStringSync();
+    // 首页主体在拆壳 S8 从 lib/main.dart 搬到 src/home/home_page.dart;
+    // §7.7 第二刀又把「歌词页 AppBar」搬到 src/home/lyrics_page.dart,
+    // 这里读它的新源码位置(断言内容不变)。
+    final mainSrc = File('lib/src/home/lyrics_page.dart').readAsStringSync();
     // 歌单详情按「一页一文件」拆到 src/detail/ 下后, 头卡源码在这个文件里
     // (lib/src/detail_page.dart 只剩 export 入口)。
     final detailSrc = File('lib/src/detail/playlist_detail_parts.dart')
