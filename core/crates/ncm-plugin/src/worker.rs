@@ -195,9 +195,12 @@ fn drain_logs(engine: &mut ScriptEngine, sink: &Mutex<Vec<String>>) {
 }
 
 /// 能力声明完全由脚本注册了哪些事件决定(不信任脚本头部的自述).
+///
+/// 上游 LX 脚本只注册 `request`(action=musicUrl), prelude 会在宿主调 musicUrl 时
+/// 翻译成 request 事件 —— 所以两者都算取链能力.
 fn capabilities_for(handlers: &[String]) -> &'static [Capability] {
     let has = |name: &str| handlers.iter().any(|h| h == name);
-    match (has("musicUrl"), has("search")) {
+    match (has("musicUrl") || has("request"), has("search")) {
         (true, true) => &[Capability::SongUrl, Capability::Search],
         (true, false) => &[Capability::SongUrl],
         (false, true) => &[Capability::Search],

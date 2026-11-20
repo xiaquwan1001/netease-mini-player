@@ -14,6 +14,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::thread;
 use std::time::{Duration, Instant};
 
 use rquickjs::{Context, Ctx, Exception, Function, Object, Runtime};
@@ -249,6 +250,14 @@ pub struct ScriptEngine {
     epoch: Instant,
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct TimerPump {
+    #[serde(default)]
+    fired: usize,
+    #[serde(default, rename = "nextDelay")]
+    next_delay: Option<u64>,
+}
+
 #[derive(Debug, Deserialize)]
 struct CallOutcome {
     status: String,
@@ -394,6 +403,15 @@ impl ScriptEngine {
                 host_obj.set("storage", storage)?;
 
                 ctx.globals().set("__lxHost", host_obj)?;
+                // 运行端形态: 脚本用 lx.env.platform 做能力分流(Android = mobile).
+                ctx.globals().set(
+                    "__lxPlatform",
+                    if cfg!(target_os = "android") {
+                        "mobile"
+                    } else {
+                        "desktop"
+                    },
+                )?;
                 ctx.eval::<(), _>(PRELUDE)?;
                 Ok(())
             })();
@@ -470,11 +488,24 @@ impl ScriptEngine {
                 Ok(false) => {
                     let settled = self.settled()?;
                     if settled.status == "pending" {
-                        idle_rounds += 1;
-                        if idle_rounds > 3 {
-                            return Err(PluginError::protocol(
-                                "promise 永不 settle(宿主没有异步源, 脚本不要创建挂起的 promise)",
-                            ));
+                        // 有 setTimeout 在飞就按剩余毫秒浅睡(精度 = 泵周期), 否则才计 idle.
+                        let pump = self.pump_timers()?;
+                        if pump.fired > 0 {
+                            idle_rounds = 0;
+                        } else if let Some(delay) = pump.next_delay {
+                            let remaining = self
+                                .deadline_ms
+                                .load(Ordering::Relaxed)
+                                .saturating_sub(self.epoch.elapsed().as_millis() as u64);
+                            thread::sleep(Duration::from_millis(delay.min(remaining).clamp(1, 25)));
+                            idle_rounds = 0;
+                        } else {
+                            idle_rounds += 1;
+                            if idle_rounds > 3 {
+                                return Err(PluginError::protocol(
+                                    "promise 永不 settle(宿主没有异步源, 脚本不要创建挂起的 promise)",
+                                ));
+                            }
                         }
                     }
                 }
@@ -495,6 +526,16 @@ impl ScriptEngine {
                 }
             }
         }
+    }
+
+    /// 推进到期定时器: 返回本次触发数 + 下一个未到期任务的剩余毫秒.
+    fn pump_timers(&self) -> Result<TimerPump, PluginError> {
+        let raw: String = self.context.with(|ctx| {
+            ctx.eval::<std::string::String, _>("__lxPumpTimers()")
+                .map_err(|e| js_error(&ctx, e, &self.timed_out, PluginErrorKind::Script, "timer"))
+        })?;
+        serde_json::from_str(&raw)
+            .map_err(|e| PluginError::protocol(format!("定时器泵结果无法解析: {e}")))
     }
 
     fn settled(&self) -> Result<CallOutcome, PluginError> {

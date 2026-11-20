@@ -136,13 +136,266 @@
     return hex(a0) + hex(b0) + hex(c0) + hex(d0);
   }
 
+  // ---- 运行端信息(上游 LX 的 lx.env) ----
+  // 宿主在建 Context 时注入字符串; 读到即删, 不给脚本留额外全局.
+  var platform =
+    typeof globalThis.__lxPlatform === 'string' ? globalThis.__lxPlatform : 'desktop';
+  try {
+    delete globalThis.__lxPlatform;
+  } catch (e) {
+    /* 删不掉也无害 */
+  }
+
+  // ---- 定时器: 只有 setTimeout/clearTimeout(无 setInterval), 由宿主泵循环推进 ----
+  // 语义: 精度 = 泵周期; 不建定时线程; 一次调用结束即丢弃未到期任务.
+  var timers = Object.create(null);
+  var nextTimerId = 1;
+
+  function addTimer(fn, delay, args) {
+    var id = nextTimerId++;
+    var ms = typeof delay === 'number' && isFinite(delay) && delay > 0 ? delay : 0;
+    timers[id] = { due: Date.now() + ms, fn: fn, args: args };
+    return id;
+  }
+
+  globalThis.setTimeout = function (fn, delay) {
+    if (typeof fn !== 'function') return 0;
+    return addTimer(fn, delay, Array.prototype.slice.call(arguments, 2));
+  };
+
+  globalThis.clearTimeout = function (id) {
+    delete timers[id];
+  };
+
+  // 宿主泵循环调用: 触发所有到期任务, 返回 {fired, nextDelay}.
+  // nextDelay = null 表示没有未到期任务; 有值 = 还要等这么多毫秒.
+  globalThis.__lxPumpTimers = function () {
+    var now = Date.now();
+    var ids = Object.keys(timers);
+    var fired = 0;
+    var nextDelay = null;
+    for (var i = 0; i < ids.length; i++) {
+      var task = timers[ids[i]];
+      if (!task) continue;
+      if (task.due <= now) {
+        delete timers[ids[i]];
+        fired++;
+        try {
+          task.fn.apply(null, task.args);
+        } catch (e) {
+          log('error', 'setTimeout: ' + errorText(e));
+        }
+      } else {
+        var delay = task.due - now;
+        if (nextDelay === null || delay < nextDelay) nextDelay = delay;
+      }
+    }
+    return stringify({ fired: fired, nextDelay: nextDelay });
+  };
+
+  // ---- 二进制编解码: lx.utils.buffer + 全局 btoa/atob(QuickJS 没有 Web 全局) ----
+  var B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+  function bytesToBase64(bytes) {
+    var out = '';
+    for (var i = 0; i < bytes.length; i += 3) {
+      var b0 = bytes[i] & 255;
+      var has1 = i + 1 < bytes.length;
+      var has2 = i + 2 < bytes.length;
+      var b1 = has1 ? bytes[i + 1] & 255 : 0;
+      var b2 = has2 ? bytes[i + 2] & 255 : 0;
+      out += B64.charAt(b0 >> 2);
+      out += B64.charAt(((b0 & 3) << 4) | (b1 >> 4));
+      out += has1 ? B64.charAt(((b1 & 15) << 2) | (b2 >> 6)) : '=';
+      out += has2 ? B64.charAt(b2 & 63) : '=';
+    }
+    return out;
+  }
+
+  function base64ToBytes(text) {
+    var clean = String(text).replace(/[^A-Za-z0-9+/=]/g, '');
+    var out = [];
+    for (var i = 0; i < clean.length; i += 4) {
+      var c0 = B64.indexOf(clean.charAt(i));
+      var c1 = B64.indexOf(clean.charAt(i + 1));
+      var c2 = B64.indexOf(clean.charAt(i + 2));
+      var c3 = B64.indexOf(clean.charAt(i + 3));
+      if (c0 < 0) continue;
+      out.push(((c0 << 2) | (c1 < 0 ? 0 : c1 >> 4)) & 255);
+      if (c2 >= 0) out.push((((c1 & 15) << 4) | (c2 >> 2)) & 255);
+      if (c3 >= 0) out.push((((c2 & 3) << 6) | c3) & 255);
+    }
+    return out;
+  }
+
+  function bytesToUtf8(bytes) {
+    var out = '';
+    var i = 0;
+    while (i < bytes.length) {
+      var b = bytes[i++] & 255;
+      var cp;
+      if (b < 0x80) cp = b;
+      else if (b < 0xe0) cp = ((b & 31) << 6) | (bytes[i++] & 63);
+      else if (b < 0xf0) cp = ((b & 15) << 12) | ((bytes[i++] & 63) << 6) | (bytes[i++] & 63);
+      else
+        cp =
+          ((b & 7) << 18) |
+          ((bytes[i++] & 63) << 12) |
+          ((bytes[i++] & 63) << 6) |
+          (bytes[i++] & 63);
+      out += String.fromCodePoint(cp);
+    }
+    return out;
+  }
+
+  function bytesToHex(bytes) {
+    var s = '';
+    for (var i = 0; i < bytes.length; i++) {
+      var v = bytes[i] & 255;
+      s += (v < 16 ? '0' : '') + v.toString(16);
+    }
+    return s;
+  }
+
+  function hexToBytes(text) {
+    var clean = String(text).replace(/[^0-9a-fA-F]/g, '');
+    var out = [];
+    for (var i = 0; i + 1 < clean.length; i += 2) {
+      out.push(parseInt(clean.substr(i, 2), 16) & 255);
+    }
+    return out;
+  }
+
+  function latin1ToBytes(text) {
+    var out = [];
+    var s = String(text);
+    for (var i = 0; i < s.length; i++) out.push(s.charCodeAt(i) & 255);
+    return out;
+  }
+
+  function bytesToLatin1(bytes) {
+    var out = '';
+    for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i] & 255);
+    return out;
+  }
+
+  function normalizeEncoding(encoding) {
+    var enc = String(encoding || 'utf-8').toLowerCase();
+    if (enc === 'utf8' || enc === 'utf-8') return 'utf-8';
+    if (enc === 'hex') return 'hex';
+    if (enc === 'base64') return 'base64';
+    if (enc === 'latin1' || enc === 'binary' || enc === 'ascii') return 'latin1';
+    return 'utf-8';
+  }
+
+  // 接受 string / 字节数组 / Uint8Array / array-like, 统一成普通数字数组.
+  function asBytes(value, encoding) {
+    if (value === null || value === undefined) return [];
+    if (typeof value === 'string') {
+      var enc = normalizeEncoding(encoding);
+      if (enc === 'base64') return base64ToBytes(value);
+      if (enc === 'hex') return hexToBytes(value);
+      if (enc === 'latin1') return latin1ToBytes(value);
+      return utf8Bytes(value);
+    }
+    if (typeof value === 'number') return [value & 255];
+    if (typeof value.length === 'number') {
+      var out = [];
+      for (var i = 0; i < value.length; i++) out.push(Number(value[i]) & 255);
+      return out;
+    }
+    return utf8Bytes(String(value));
+  }
+
+  function makeBytes(list) {
+    var arr = new Uint8Array(list.length);
+    for (var i = 0; i < list.length; i++) arr[i] = list[i] & 255;
+    return arr;
+  }
+
+  function encodeBytes(bytes, encoding) {
+    var enc = normalizeEncoding(encoding);
+    if (enc === 'base64') return bytesToBase64(bytes);
+    if (enc === 'hex') return bytesToHex(bytes);
+    if (enc === 'latin1') return bytesToLatin1(bytes);
+    return bytesToUtf8(bytes);
+  }
+
+  globalThis.btoa = function (input) {
+    return bytesToBase64(latin1ToBytes(String(input)));
+  };
+
+  globalThis.atob = function (input) {
+    return bytesToLatin1(base64ToBytes(String(input)));
+  };
+
+  // ---- 上游 LX 的 request 事件 shaping ----
+  // 回调式 lx.request 的响应形状对齐 axios/LX: headers 是普通对象(小写键), 带最终 URL.
+  function lxResponse(res, fallbackUrl) {
+    var headers = {};
+    var list = res && res.headers ? res.headers : [];
+    for (var i = 0; i < list.length; i++) {
+      var pair = list[i];
+      if (pair && pair.length === 2) headers[String(pair[0]).toLowerCase()] = pair[1];
+    }
+    var status = res && typeof res.status === 'number' ? res.status : 0;
+    if (res && typeof res.statusCode === 'number') status = res.statusCode;
+    return {
+      statusCode: status,
+      status: status,
+      headers: headers,
+      headersArray: list,
+      body: res && res.body !== undefined ? res.body : '',
+      url: (res && res.url) || fallbackUrl || '',
+    };
+  }
+
+  // 脚本通过 send('inited', {sources}) 声明的平台能力(决定 request 事件的 source 代号).
+  function initedSources() {
+    for (var i = 0; i < sends.length; i++) {
+      var entry = sends[i];
+      if (entry && entry.name === 'inited' && entry.data && entry.data.sources) {
+        return entry.data.sources;
+      }
+    }
+    return null;
+  }
+
+  function pickSource(preferred) {
+    var sources = initedSources();
+    if (sources && typeof sources === 'object') {
+      if (Object.prototype.hasOwnProperty.call(sources, 'wy')) return 'wy';
+      var keys = Object.keys(sources);
+      if (keys.length > 0) return keys[0];
+    }
+    if (preferred && preferred !== 'script') return String(preferred);
+    return 'wy';
+  }
+
+  // 宿主调 musicUrl 而脚本只注册了 request 时, 翻译成上游形状:
+  //   {source, action: 'musicUrl', info: {type, musicInfo}}
+  function requestEventArg(sourceArg, info, quality) {
+    var musicInfo = {};
+    if (info && typeof info === 'object') {
+      for (var key in info) {
+        if (Object.prototype.hasOwnProperty.call(info, key)) musicInfo[key] = info[key];
+      }
+    }
+    var source = pickSource(sourceArg);
+    musicInfo.source = source;
+    return { source: source, action: 'musicUrl', info: { type: quality, musicInfo: musicInfo } };
+  }
+
   var lx = {
     EVENT_NAMES: {
       request: 'request',
       inited: 'inited',
       musicUrl: 'musicUrl',
       search: 'search',
+      updateAlert: 'updateAlert',
     },
+    // 运行端: 桌面(Linux/Windows) 与 Android 各报自己的形态.
+    env: { platform: platform, env: platform },
     on: function (name, handler) {
       if (typeof name !== 'string') throw new TypeError('lx.on: event name must be a string');
       if (typeof handler !== 'function') throw new TypeError('lx.on: handler must be a function');
@@ -160,8 +413,30 @@
     send: function (name, data) {
       sends.push({ name: String(name), data: data === undefined ? null : data });
     },
-    request: function (args) {
-      return new Promise(function (resolve, reject) {
+    // 两种调用形态(同一实现):
+    //   ① 宿主契约 v1: lx.request({url, method?, headers?, body?}) -> Promise<resp>
+    //   ② 上游 LX: lx.request(url, options, callback) / lx.request({url,...}, callback)
+    request: function (urlOrArgs, options, callback) {
+      var cb = null;
+      var opts = null;
+      if (typeof options === 'function') cb = options;
+      else if (options && typeof options === 'object') opts = options;
+      if (typeof callback === 'function') cb = callback;
+
+      var args;
+      if (typeof urlOrArgs === 'string') {
+        args = {};
+        if (opts) {
+          for (var key in opts) {
+            if (Object.prototype.hasOwnProperty.call(opts, key)) args[key] = opts[key];
+          }
+        }
+        args.url = urlOrArgs;
+      } else {
+        args = urlOrArgs;
+      }
+
+      var promise = new Promise(function (resolve, reject) {
         var res;
         try {
           res = unwrap(host.request(stringify(args)));
@@ -171,6 +446,24 @@
         }
         resolve(res);
       });
+      if (typeof cb !== 'function') return promise;
+      promise.then(
+        function (res) {
+          try {
+            cb(null, lxResponse(res, args && args.url));
+          } catch (e) {
+            log('error', 'lx.request 回调抛错: ' + errorText(e));
+          }
+        },
+        function (e) {
+          try {
+            cb(e, null);
+          } catch (err) {
+            log('error', 'lx.request 回调抛错: ' + errorText(err));
+          }
+        }
+      );
+      return undefined;
     },
     storage: {
       get: function (key) {
@@ -189,6 +482,28 @@
     utils: {
       crypto: {
         md5: md5,
+      },
+      // Buffer 子集的纯 JS 实现(from/bufToString/toString/concat, utf-8/hex/base64/latin1).
+      buffer: {
+        from: function (value, encoding) {
+          return makeBytes(asBytes(value, encoding));
+        },
+        bufToString: function (buf, encoding) {
+          return encodeBytes(asBytes(buf), encoding);
+        },
+        toString: function (buf, encoding) {
+          return encodeBytes(asBytes(buf), encoding);
+        },
+        concat: function (list) {
+          var out = [];
+          if (list && typeof list.length === 'number') {
+            for (var i = 0; i < list.length; i++) {
+              var part = asBytes(list[i]);
+              for (var j = 0; j < part.length; j++) out.push(part[j]);
+            }
+          }
+          return makeBytes(out);
+        },
       },
       // 纯函数, 不碰宿主: 脚本常用的 JSON 往返.
       stringify: stringify,
@@ -219,9 +534,17 @@
 
   // 宿主调用入口: 事件名 + 位置参数(JSON 数组).
   globalThis.__lxCall = function (event, argsJson) {
-    var handler = handlers[event];
-    if (typeof handler !== 'function') return stringify({ status: 'missing' });
     var args = JSON.parse(argsJson);
+    var handler = handlers[event];
+    // 上游 LX 唯一入口是 on('request'); 宿主仍按契约 v1 发 musicUrl, 这里做一次翻译.
+    if (typeof handler !== 'function' && event === 'musicUrl') {
+      if (typeof handlers.request === 'function') {
+        event = 'request';
+        handler = handlers.request;
+        args = [requestEventArg(args[0], args[1], args[2])];
+      }
+    }
+    if (typeof handler !== 'function') return stringify({ status: 'missing' });
     var out;
     try {
       out = handler.apply(null, args);

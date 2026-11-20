@@ -105,6 +105,76 @@ fn music_url_dispatch_and_request_injection() {
 }
 
 #[test]
+fn lx_request_event_adapter_and_callback_request() {
+    let transport = Arc::new(MockTransport::new().on(
+        "example.test/api/song/url",
+        Ok(ok(r#"{"url":"https://cdn.test/lx.mp3"}"#)),
+    ));
+    let mut engine = engine_with(
+        include_str!("fixtures/lx_request_event.js"),
+        transport.clone(),
+        Arc::new(MemoryStorage::new()),
+        cfg(),
+        "test",
+    );
+
+    // 宿主仍按契约 v1 发 musicUrl; 脚本只注册 request ⇒ prelude 负责翻译.
+    let out = engine
+        .invoke(
+            "musicUrl",
+            json!([
+                "script",
+                { "id": 99, "name": "", "singer": "", "albumName": "", "interval": 0 },
+                "320k"
+            ]),
+        )
+        .expect("request 事件适配应成功");
+    assert_eq!(out, json!("https://cdn.test/lx.mp3"));
+
+    let seen = transport.requests();
+    assert_eq!(seen.len(), 1, "脚本应该正好发一次请求");
+    assert_eq!(seen[0].method, "POST");
+    assert_eq!(
+        seen[0].headers,
+        vec![("X-Source".to_string(), "wy".to_string())],
+        "source 必须取自 inited 声明的 sources"
+    );
+    let body = seen[0].body.clone().unwrap_or_default();
+    assert!(body.contains("quality=320k"), "info.type 透传: {body}");
+    assert!(body.contains("b64=OTk="), "buffer.from/bufToString: {body}");
+    assert!(body.contains("env=desktop"), "lx.env.platform: {body}");
+    assert!(body.contains("roundtrip=ok"), "btoa/atob 往返: {body}");
+}
+
+#[test]
+fn set_timeout_resolves_promise_through_pump() {
+    let mut engine = engine_with(
+        include_str!("fixtures/lx_timer.js"),
+        Arc::new(MockTransport::new()),
+        Arc::new(MemoryStorage::new()),
+        cfg(),
+        "test",
+    );
+    let out = engine
+        .invoke("musicUrl", json!(["script", {}, "320k"]))
+        .expect("定时器必须被泵循环触发");
+    assert_eq!(out, json!("https://cdn.test/delayed.mp3"));
+}
+
+#[test]
+fn pending_timer_without_settle_hits_call_timeout() {
+    // 只挂 60s 定时器、promise 永不 settle: 必须由调用预算(而不是 idle 判定)收口.
+    let err = invoke_with_guard(
+        include_str!("fixtures/lx_timer_hang.js"),
+        "musicUrl",
+        json!(["script", {}, "320k"]),
+        Duration::from_secs(5),
+    )
+    .expect_err("挂住的定时器必须被时间预算截断");
+    assert_eq!(err.kind, PluginErrorKind::Timeout, "detail: {}", err.detail);
+}
+
+#[test]
 fn transport_error_surfaces_as_script_error() {
     let transport = Arc::new(MockTransport::new().on(
         "example.test/api/song/url",
