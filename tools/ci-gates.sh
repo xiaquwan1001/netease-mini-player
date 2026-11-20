@@ -10,9 +10,8 @@
 #   tools/ci-gates.sh list                 # 列出所有子命令
 #   tools/ci-gates.sh version              # 从 ui/pubspec.yaml 的 version: X.Y.Z+N 取 X.Y.Z
 #   tools/ci-gates.sh check-version <tag>  # tag / pubspec / kAppVersion 三者一致(否则退出 1)
-#   tools/ci-gates.sh rust-lint            # cargo fmt --check + clippy -D warnings(--exclude ncm-plugin)
-#   tools/ci-gates.sh rust-test            # workspace 单测(vendor 联网 smoke 与 ncm-plugin 排除)
-#   tools/ci-gates.sh rust-plugin          # 【可选】ncm-plugin 自己的 clippy + 21 例测试(不进 verify)
+#   tools/ci-gates.sh rust-lint            # cargo fmt --check + clippy -D warnings(workspace 全量, 含 ncm-plugin)
+#   tools/ci-gates.sh rust-test            # workspace 单测(只排除 vendor 的联网 smoke)
 #   tools/ci-gates.sh dart-format          # dart format --output=none --set-exit-if-changed lib test
 #   tools/ci-gates.sh dart-analyze         # dart analyze(不用 flutter analyze, 见下)
 #   tools/ci-gates.sh write-guard          # tools/check-write-guard.sh
@@ -90,34 +89,19 @@ cmd_check_version() {
   echo "版本号一致: $pub"
 }
 
-# ncm-plugin 为什么显式 --exclude(审计 7.9, 2026-11-20):
-#   它是实验性插件宿主, **没有 crate 依赖它**(不进 ncm_ffi/APK), 但每轮 rust 门都要为它
-#   编 rquickjs(-sys 里还有一份 quickjs C)+ 跑 21 例, 是纯净成本。所以 verify 的两道 rust 门
-#   把包排除掉, 它自己的门单独成 rust-plugin(碰它时才跑, 覆盖口径不减)。
-#   不走「从 workspace members 移出」: 移出后 version/edition/license 与依赖的
-#   .workspace = true 继承字段全部解析失败, 得把它改成独立 workspace(自带 [workspace]
-#   并把所有 path 依赖重写), 而现成的 `cargo test -p ncm-plugin --manifest-path
-#   core/Cargo.toml` 也就跑不了了。--exclude 一行达到同样耗时收益且不丢能力。
-#   `cargo fmt --all` 仍然覆盖它(只读不编, 零成本), 所以格式化门没有盲区。
+# ncm-plugin 不再 --exclude(2026-11-20 切片 2 第一步): `ncm-service` 现在依赖它
+# (plugins::ReqwestTransport 实现 ncm-plugin 的 Transport), 它已经是产品依赖图的一部分,
+# 所以 rust-lint / rust-test 都按 workspace 全量跑; 原来的独立门 `rust-plugin` 已删除
+# (同一口径只留一种实现, 不留双门)。
 cmd_rust_lint() {
   run cargo fmt --manifest-path core/Cargo.toml --all -- --check
-  run cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --exclude ncm-plugin --locked -- -D warnings
+  run cargo clippy --manifest-path core/Cargo.toml --workspace --all-targets --locked -- -D warnings
 }
 
 cmd_rust_test() {
   # --exclude ncm-api-rs: vendor 的 tests/integration.rs 是匿名真实联网 smoke, 会被上游
   # 风控/公网抖动弹回非 200(与改动无关), 本地另跑(见 tools/ci.sh)。
-  # --exclude ncm-plugin: 未接入产品, 见 cmd_rust_lint 上方注释; 单独门是 rust-plugin。
-  run cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --exclude ncm-plugin --locked
-}
-
-# ncm-plugin 的独立门(不进 verify): 摘出去的是耗时, 不是覆盖 ——
-# clippy -D warnings + 全部 21 例(沙箱 14 / provider 6 / doctest 1) 在碰这个 crate 时必须过。
-# 用法: tools/ci-gates.sh rust-plugin  (改了 core/crates/ncm-plugin/** 就跑一次)
-cmd_rust_plugin() {
-  # fmt 不在这里重复: rust-lint 的 cargo fmt --all 已覆盖本 crate(不编译, 零成本)。
-  run cargo clippy --manifest-path core/Cargo.toml -p ncm-plugin --all-targets --locked -- -D warnings
-  run cargo test --manifest-path core/Cargo.toml -p ncm-plugin --locked
+  run cargo test --manifest-path core/Cargo.toml --workspace --exclude ncm-api-rs --locked
 }
 
 cmd_dart_format() {
@@ -298,7 +282,6 @@ case "$sub" in
   check-version) cmd_check_version "$@" ;;
   rust-lint)     cmd_rust_lint ;;
   rust-test)     cmd_rust_test ;;
-  rust-plugin)   cmd_rust_plugin ;;
   dart-format)   cmd_dart_format ;;
   dart-analyze)  cmd_dart_analyze ;;
   write-guard)   cmd_write_guard ;;

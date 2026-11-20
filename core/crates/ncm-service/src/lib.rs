@@ -17,6 +17,7 @@ pub use credential_store::{CredentialStatus, CredentialStore};
 pub mod identity;
 pub mod loudness_store;
 pub mod netease;
+pub mod plugins;
 pub mod read_cache;
 pub mod ttml_source;
 

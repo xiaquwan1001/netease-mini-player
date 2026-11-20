@@ -1,11 +1,13 @@
-# ncm-plugin —— QuickJS 音源插件宿主(切片 1)
+# ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 第一步)
 
-> **状态: 实验性, 未接入产品。** 本 crate 没有 FFI 导出、没有注册进 `ProviderRegistry`、
-> 生产路径也没有接真实网络 transport —— 改动它不会影响 App 默认行为(不碰风控、不加包体风险)。
-> **未接入产品, 门禁 --exclude, 接入条件见 docs/remaining-batches.md §11.C。**
-> 具体是: `tools/ci-gates.sh` 的 rust-lint / rust-test 都带 `--exclude ncm-plugin`(不给
-> 产品门禁付 rquickjs 的编译时间), 本 crate 自己的门是 `tools/ci-gates.sh rust-plugin`
-> (clippy -D warnings + 全部 21 例), 动本目录时必须跑它。
+> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** 本 crate 没有 FFI 导出、没有注册进
+> `ProviderRegistry`、`Core::open` 也不构造插件宿主 —— 改动它不会改变 App 默认行为
+> (不碰风控、不加包体风险)。**接缝已经落地**: 真实网络 transport 在
+> `ncm-service/src/plugins/`(`ReqwestTransport`, 复用 service 的 UA/超时/重试口径),
+> 落盘 storage 是本 crate 的 [`FileStorage`](src/storage.rs)(目录由宿主传入)。
+> **门禁**: `ncm-service` 现在依赖本 crate, 所以 `tools/ci-gates.sh` 的 rust-lint / rust-test
+> **按 workspace 全量跑**它(不再 `--exclude`, 独立门 `rust-plugin` 已删除 —— 同一口径只留一份)。
+> 接线条件见 docs/remaining-batches.md §11.C。
 > 设计边界见 [`docs/archive/architecture-restart.md`](../../../docs/archive/architecture-restart.md)
 > 「插件化三层」「插件契约 v1 草案」「M5 插件」; 那里的 `platform/` 目录与 mpv 已作废, 以仓库现状为准。
 
@@ -15,8 +17,8 @@
 |---|---|
 | `src/sandbox.rs` | QuickJS `Runtime`/`Context`、`lx.*` 注入、单次调用预算(interrupt + 内存上限) |
 | `src/prelude.js` | 注入给脚本的 JS 侧兼容层(`lx.on/request/storage/log/utils`, promise -> job queue 泵) |
-| `src/transport.rs` | 出站注入面 `Transport` + 测试用 `MockTransport`(纯内存) |
-| `src/storage.rs` | `Storage` + `MemoryStorage`,按 namespace 隔离 |
+| `src/transport.rs` | 出站注入面 `Transport` / `TransportError`(带状态码与 `to_provider_error`) + 测试用 `MockTransport`(纯内存); 生产实现在 `ncm-service::plugins` |
+| `src/storage.rs` | `Storage` + `MemoryStorage`(进程内) / `FileStorage`(每 namespace 一个 JSON, 0600, tmp+rename 原子替换) |
 | `src/convert.rs` | 脚本 JSON -> `ncm-domain` 的 `StreamUrl` / `SearchPage`(纯函数) |
 | `src/worker.rs` | `ScriptProvider`: 专属线程 + `oneshot` 桥接,实现既有 `ncm_provider::Provider` |
 | `src/error.rs` | `PluginError` -> `ProviderError{kind,retryable,detail}` 映射 |
@@ -171,6 +173,8 @@ const res = await lx.request({
 
 ```bash
 cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
+# 落盘 storage 的专项用例(tests/storage_file.rs): 命名空间隔离 / 原子替换 / 0600 /
+# 坏 JSON 当空 / 沙箱 8 请求预算在落盘后端下仍生效
 ```
 
 - `tests/sandbox.rs`(14 例): 事件分发、request 注入(method/headers/body 原样)、transport 报错、
@@ -200,8 +204,8 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 禁用(连续失败 3 次)、安装目录扫描 |
 | 2 | **导入/启停** | 粘贴/文件/URL 导入、启用禁用、卸载; 目前只接受调用方给的内存脚本文本 |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
-| 4 | **真实网络 transport** | 生产用 `ncm-service` 的 HTTP 栈实现 `Transport`(UA/代理/超时/证书/连接复用); 本切片只有 `MockTransport` |
-| 5 | **持久化 storage** | 目前 `MemoryStorage`(进程内); 落盘 + 迁移是后续切片 |
+| 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 仍**未接线**(产路径不构造) |
+| 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |
 | 6 | **`songUrl` 上下文补齐** | `SongUrlRequest` 只有 `track+level`, 需要上层把 `name/singer/albumName/interval` 带进来(§1.2) |
 | 7 | **FFI / 注册路由** | 没有 `ncm-ffi` 导出, 也没有注册进 `ProviderRegistry`; 接入要单独评审风控与体积 |
 | 8 | **双端一致性** | Android(NDK)与桌面(PC)交叉编译 rquickjs-sys 未在本切片验证, 只在 Linux x86_64 全绿 |

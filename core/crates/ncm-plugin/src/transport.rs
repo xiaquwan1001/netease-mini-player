@@ -1,13 +1,16 @@
 //! 出站网络的最小注入面: 插件只能经 `lx.request` 走宿主注入的 [`Transport`].
 //!
-//! 本切片**不接真实网络**: 生产集成留到后续切片(见 README「未做项」),
-//! 测试/回归台用 [`MockTransport`] 在内存里应答.
+//! 生产实现挂在 `ncm-service`(`ncm_service::plugins::ReqwestTransport`, 复用 service 既有的
+//! UA/连接超时/读超时/重试口径); 本 crate 只留 trait 与测试用 [`MockTransport`] ——
+//! 依赖方向是 `ncm-service -> ncm-plugin`, 反向不成立, 宿主 HTTP 栈不许下沉到这里.
 //!
 //! 为什么是同步 trait: 宿主把插件放在自己的 worker 线程上跑, JS 侧的
 //! `lx.request` 以 Promise 形式暴露给脚本, 但底层实现是同步阻塞的 —— 这样
 //! 沙箱里不存在"半个请求在飞"的中间态, 超时/预算裁决点只有一个.
 
 use std::sync::Mutex;
+
+use ncm_provider::{ProviderError, ProviderErrorKind};
 
 /// 脚本发起的一次请求(宿主侧看到的最终形态).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -28,20 +31,52 @@ pub struct TransportResponse {
     pub body: String,
 }
 
-/// transport 层失败(网络/DNS/TLS/超时).
+/// transport 层失败(网络/DNS/TLS/超时/非 2xx).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransportError {
     pub message: String,
     /// 传输层是否值得重试(连接失败=true, 4xx/证书错误=false ...).
     pub retryable: bool,
+    /// HTTP 状态码(非 2xx 时由实现填上); 纯传输失败(超时/断连)为 `None`.
+    ///
+    /// 有这个字段才能把"403 是直链失效"和"超时是网络抖动"分开映射到 ProviderError,
+    /// 否则上层只能看到一句字符串.
+    pub status: Option<u16>,
 }
 
 impl TransportError {
+    /// 纯传输失败(没有 HTTP 状态码).
     pub fn new(message: impl Into<String>, retryable: bool) -> Self {
         Self {
             message: message.into(),
             retryable,
+            status: None,
         }
+    }
+
+    /// 超时: 一律可重试(与官方 provider 的 network 超时同档).
+    pub fn timeout(message: impl Into<String>) -> Self {
+        Self::new(message, true)
+    }
+
+    /// 非 2xx 应答. 可重试口径与 `ncm_service::cache::DownloadFailure` 一致:
+    /// 401/403/404 是"这个地址已经不能用了", 原样重试没有意义; 其余(5xx/429/…)可以再试.
+    pub fn http_status(status: u16, message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            retryable: !matches!(status, 401 | 403 | 404),
+            status: Some(status),
+        }
+    }
+
+    /// 收口到产品既有的错误模型: 状态码能分档的按档给 kind, 纯网络失败一律 `network`.
+    pub fn to_provider_error(&self) -> ProviderError {
+        let kind = match self.status {
+            Some(401 | 403) => ProviderErrorKind::Forbidden,
+            Some(404) => ProviderErrorKind::NotFound,
+            _ => ProviderErrorKind::Network,
+        };
+        ProviderError::new(kind, self.retryable, self.message.clone())
     }
 }
 
