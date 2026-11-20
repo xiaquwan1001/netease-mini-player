@@ -29,6 +29,9 @@ class _FakePluginHost implements RustLibApi {
   /// 重扫闸门: 非 null 时 pluginRescan 停在这里(测 loading 态)。
   Completer<void>? rescanGate;
 
+  /// 路由偏好(`auto` / `builtin` / `plugin:<id>`), 与 Rust 侧 `plugin_route.json` 同形。
+  String routeMode = 'auto';
+
   /// 首屏读状态失败注入(测 AsyncView 的错误态 + 重试)。
   Object? statusError;
 
@@ -127,6 +130,60 @@ class _FakePluginHost implements RustLibApi {
   }
 
   @override
+  Future<rust.PluginRouteModeDto> crateApiPluginPluginRouteMode() async {
+    final mode = routeMode;
+    return rust.PluginRouteModeDto(
+      supported: supported,
+      mode: mode,
+      pluginId: mode.startsWith('plugin:') ? mode.substring(7) : null,
+    );
+  }
+
+  @override
+  Future<rust.PluginRouteModeDto> crateApiPluginPluginSetRouteMode({
+    required String mode,
+  }) async {
+    calls.add('setRouteMode($mode)');
+    if (!supported) {
+      throw const rust.FfiError(
+        kind: 'unsupported',
+        retryable: false,
+        detail: 'set_route_mode: 当前平台不带插件宿主',
+      );
+    }
+    routeMode = mode.isEmpty ? 'auto' : mode;
+    return crateApiPluginPluginRouteMode();
+  }
+
+  @override
+  Future<rust.PluginRoutePlanDto> crateApiPluginPluginRoutePlan({
+    required String cap,
+  }) async {
+    if (!supported) {
+      return const rust.PluginRoutePlanDto(
+        supported: false,
+        target: 'builtin',
+        reason: 'unsupported',
+        detail: '当前平台不带插件宿主',
+      );
+    }
+    if (!enabled) {
+      return const rust.PluginRoutePlanDto(
+        supported: true,
+        target: 'builtin',
+        reason: 'hostInactive',
+        detail: '插件宿主未启用, 一律回内置',
+      );
+    }
+    return rust.PluginRoutePlanDto(
+      supported: true,
+      target: routeMode,
+      reason: 'selected',
+      detail: '$cap 按偏好取目标',
+    );
+  }
+
+  @override
   Future<rust.PluginRescanDto> crateApiPluginPluginRescan() async {
     calls.add('rescan');
     final gate = rescanGate;
@@ -179,7 +236,8 @@ void main() {
       ..failures = const []
       ..rejected = const []
       ..statusError = null
-      ..rescanGate = null;
+      ..rescanGate = null
+      ..routeMode = 'auto';
     _fake.calls.clear();
   });
 
@@ -243,6 +301,42 @@ void main() {
     expect(find.textContaining('已装载 1 个'), findsOneWidget);
   });
 
+  testWidgets('音源路由: 默认自动, 列插件选项; 点「只用内置」调 setRouteMode 并刷新', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true
+      ..summaries = [_summary('demo', name: '示例插件', enabled: true)];
+    await _pumpPage(tester);
+
+    expect(find.text('音源路由'), findsOneWidget);
+    expect(find.text('自动'), findsOneWidget);
+    expect(find.text('只用内置'), findsOneWidget);
+    expect(find.textContaining('优先用 demo'), findsOneWidget);
+
+    await tester.tap(find.text('只用内置'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, ['setRouteMode(builtin)']);
+    expect(_fake.routeMode, 'builtin');
+    expect(find.textContaining('音源路由已切到 只用内置'), findsOneWidget);
+  });
+
+  testWidgets('音源路由: 判定行显示 hostInactive(宿主没开 ⇒ 回内置)', (tester) async {
+    _fake.summaries = [_summary('demo', name: '示例插件')];
+    await _pumpPage(tester);
+
+    expect(find.textContaining('hostInactive'), findsNWidgets(2));
+    expect(find.text('当前判定 · 取直链'), findsOneWidget);
+    expect(find.text('当前判定 · 搜索'), findsOneWidget);
+  });
+
+  testWidgets('Android(supported=false): 没有音源路由段', (tester) async {
+    _fake.supported = false;
+    await _pumpPage(tester);
+
+    expect(find.text('音源路由'), findsNothing);
+  });
+
   testWidgets('单插件停用: 调 disable 后重新取数, 开关跟着落下去', (tester) async {
     _fake
       ..enabled = true
@@ -250,6 +344,9 @@ void main() {
       ..summaries = [_summary('demo', name: '示例插件', enabled: true)];
     await _pumpPage(tester);
 
+    // 路由段加进来后插件列表在首屏以下: 先滚到可见再点(否则 tap 会打空)。
+    await tester.ensureVisible(_pluginTile('示例插件'));
+    await tester.pumpAndSettle();
     await tester.tap(_pluginTile('示例插件'));
     await tester.pumpAndSettle();
 
@@ -287,6 +384,8 @@ void main() {
       ..rescanGate = Completer<void>();
     await _pumpPage(tester);
 
+    await tester.ensureVisible(find.text('重扫'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('重扫'));
     await tester.pump();
 
@@ -313,6 +412,8 @@ void main() {
     await _pumpPage(tester);
 
     _fake.enabled = false; // 页面不知道, 模拟被其它出口关掉
+    await tester.ensureVisible(_pluginTile('示例插件'));
+    await tester.pumpAndSettle();
     await tester.tap(_pluginTile('示例插件'));
     await tester.pumpAndSettle();
 

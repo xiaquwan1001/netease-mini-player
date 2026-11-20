@@ -10,6 +10,12 @@ import '../section_header.dart';
 import '../state_views.dart' show LoadingView;
 import '../toast.dart' show showToast;
 
+/// 本页展示判定视图的能力标签(与 `ncm_provider::Capability::as_str` 同一份字符串)。
+const List<String> _routeCaps = ['songUrl', 'search'];
+
+/// 路由表里的一项: 稳定标签 + 展示名 + 一句解释。
+typedef _RouteOption = ({String mode, String title, String? subtitle});
+
 /// 插件二级页(设置 → 关于 → 「插件」).
 ///
 /// 只包一层 FFI(`plugin_status/summaries/failures/rejected/enable/disable/rescan/
@@ -35,12 +41,20 @@ class _HostSnapshot {
     required this.summaries,
     required this.failures,
     required this.rejected,
+    this.routeMode,
+    this.routePlans = const {},
   });
 
   final rust.PluginStatusDto status;
   final List<rust.PluginSummaryDto> summaries;
   final List<rust.PluginFailureDto> failures;
   final List<rust.PluginRejectedDto> rejected;
+
+  /// 路由偏好(plugin_route.json); 平台不带插件宿主时为 null, 整段不渲染。
+  final rust.PluginRouteModeDto? routeMode;
+
+  /// 能力标签 -> 路由**判定**视图。只取本页展示的两个能力, 纯判定(不发请求、不改状态)。
+  final Map<String, rust.PluginRoutePlanDto> routePlans;
 }
 
 class PluginsPage extends StatefulWidget {
@@ -81,11 +95,20 @@ class _PluginsPageState extends State<PluginsPage> {
     final summariesFuture = rust.pluginSummaries();
     final failuresFuture = rust.pluginFailures();
     final rejectedFuture = rust.pluginRejected();
+    final routeModeFuture = rust.pluginRouteMode();
+    // 判定视图是"这次会走谁"的只读诊断, 与路由偏好同批取, 不额外多一轮往返。
+    final planFutures = <String, Future<rust.PluginRoutePlanDto>>{
+      for (final cap in _routeCaps) cap: rust.pluginRoutePlan(cap: cap),
+    };
     return _HostSnapshot(
       status: status,
       summaries: await summariesFuture,
       failures: await failuresFuture,
       rejected: await rejectedFuture,
+      routeMode: await routeModeFuture,
+      routePlans: {
+        for (final entry in planFutures.entries) entry.key: await entry.value,
+      },
     );
   }
 
@@ -176,6 +199,17 @@ class _PluginsPageState extends State<PluginsPage> {
     });
   }
 
+  /// 路由偏好: `auto` / `builtin` / `plugin:<id>`。
+  ///
+  /// 落盘与校验都在 Rust 侧(plugin_set_route_mode); 本页只回传稳定标签。
+  /// 选中的 id 后来不存在**不算错误** —— 判定按 selectionMissing 回内置, 并显示在判定行里。
+  Future<void> _setRoute(String mode) {
+    return _run(() async {
+      final applied = await rust.pluginSetRouteMode(mode: mode);
+      return '音源路由已切到 ${_routeModeLabel(applied)}';
+    });
+  }
+
   /// 重扫: 扫盘 + 全量重建 provider 视图(没有热重载)。
   Future<void> _rescan() {
     return _run(rescan: true, () async {
@@ -208,6 +242,7 @@ class _PluginsPageState extends State<PluginsPage> {
     if (!status.supported) return _unsupported(context, status.error);
     final theme = Theme.of(context);
     final bodySmall = theme.textTheme.bodySmall;
+    final routeOptions = _routeOptions(snapshot);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -264,6 +299,48 @@ class _PluginsPageState extends State<PluginsPage> {
             ],
           ),
         ),
+        if (snapshot.routeMode != null) ...[
+          const SizedBox(height: kSectionGap),
+          const SectionHeader(title: '音源路由', icon: Icons.alt_route),
+          AdaptiveText(
+            '取直链/搜索时优先用谁。这里只改本机偏好 —— 判定、回落与失败切换都在 Rust 侧, 页面不重复判断。',
+            mode: AdaptiveTextMode.wrap,
+            maxLines: 2,
+            style: bodySmall,
+          ),
+          const SizedBox(height: kSectionHeaderGap),
+          Card(
+            margin: kCardMargin,
+            child: Column(
+              children: [
+                for (var i = 0; i < routeOptions.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _routeTile(
+                    context,
+                    routeOptions[i],
+                    snapshot.routeMode!.mode,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: kSectionGap),
+          Card(
+            margin: kCardMargin,
+            child: Column(
+              children: [
+                for (var i = 0; i < _routeCaps.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _planTile(
+                    context,
+                    _routeCaps[i],
+                    snapshot.routePlans[_routeCaps[i]],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: kSectionGap),
         SectionHeader(
           title: '插件',
@@ -448,6 +525,80 @@ class _PluginsPageState extends State<PluginsPage> {
       ),
     );
   }
+
+  /// 可选项: 自动 / 只用内置 / 每个**能装载**的插件(坏条目不进列表 —— 它本来就跑不起来)。
+  List<_RouteOption> _routeOptions(_HostSnapshot snapshot) => [
+    (mode: 'auto', title: '自动', subtitle: '只有一个可用插件时用它; 多个候选不一致时回落内置'),
+    (mode: 'builtin', title: '只用内置', subtitle: '始终走网易云官方接口, 不使用插件'),
+    // 选项标题只用 id 形态(与上面「插件」分区的名称不重名, 免得同一页出现两条同名行)。
+    for (final summary in snapshot.summaries)
+      if (summary.error == null)
+        (
+          mode: 'plugin:${summary.id}',
+          title: '优先用 ${summary.id}',
+          subtitle: null,
+        ),
+  ];
+
+  Widget _routeTile(
+    BuildContext context,
+    _RouteOption option,
+    String selected,
+  ) {
+    final theme = Theme.of(context);
+    final isSelected = selected == option.mode;
+    final subtitle = option.subtitle;
+    return ListTile(
+      title: AdaptiveText(option.title, mode: AdaptiveTextMode.ellipsis),
+      subtitle: subtitle == null
+          ? null
+          : AdaptiveText(
+              subtitle,
+              mode: AdaptiveTextMode.wrap,
+              maxLines: 2,
+              style: theme.textTheme.bodySmall,
+            ),
+      trailing: Icon(
+        isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+        color: isSelected ? theme.colorScheme.primary : null,
+      ),
+      onTap: (_busy || isSelected) ? null : () => _setRoute(option.mode),
+    );
+  }
+
+  /// 判定行: 纯只读(判定 = "会走谁", 实际走了谁看日志/诊断)。
+  Widget _planTile(
+    BuildContext context,
+    String cap,
+    rust.PluginRoutePlanDto? plan,
+  ) {
+    final text = plan == null
+        ? '判定不可用'
+        : '${plan.target} · ${plan.reason} — ${plan.detail}';
+    return ListTile(
+      leading: const Icon(Icons.alt_route),
+      title: Text('当前判定 · ${_capLabel(cap)}'),
+      subtitle: AdaptiveText(
+        text,
+        mode: AdaptiveTextMode.wrap,
+        maxLines: 2,
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+    );
+  }
+
+  String _routeModeLabel(rust.PluginRouteModeDto mode) {
+    if (mode.mode == 'auto') return '自动';
+    if (mode.mode == 'builtin') return '只用内置';
+    final id = mode.pluginId;
+    return id == null ? mode.mode : '插件 $id';
+  }
+
+  String _capLabel(String cap) => switch (cap) {
+    'songUrl' => '取直链',
+    'search' => '搜索',
+    _ => cap,
+  };
 
   /// 一句话回答「插件现在能不能用、为什么不能用」。
   String _hostStateText(rust.PluginStatusDto status) {
