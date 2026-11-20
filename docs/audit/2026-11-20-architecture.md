@@ -203,19 +203,19 @@
 - 方案（择一，不建议大改）：① 加一道 `tools/check-global-slots.sh`（按 `<notifier>.value =` 匹配，白名单 `app_shell/home_wiring/detail_pane`），照抄 `check-sheet-entry.sh` 的实现；② 更彻底：把这些 notifier 收进 `InheritedNotifier` 作用域（要动 `PlayerBarHost` 在 `MaterialApp.builder` 之外的渲染前提，风险明显更高）。
 - 收益：新代码不会悄悄绕过生命周期守卫。风险：低（①）/中（②）。量：小（①）/中（②）。并行：**否**（`app_shell.dart` 是公共热文件）。
 
-### 7.7 拆 `home/home_page.dart` ◐ **第一步已落(v0.30.0)**: `home/navigation.dart`(188 行, 10 个纯导航)+ `home/tab_builder.dart`(364 行, 5 个 tab 构建), home_page **1911→1575**; 剩余「启动编排 + 歌词页装配 + 搜索条」待第二刀
+### 7.7 拆 `home/home_page.dart` ✅ **两刀已落(v0.30.0 + v0.31.0)**: 第一步 `navigation.dart`(188)+ `tab_builder.dart`(364), **1911→1575**; 第二步 `startup.dart`(253)+ `lyrics_page.dart`(292)+ `search_bar_host.dart`(71), **1575→1220**(= 原 1907 行的 64%, 余下主要是 State 生命周期与跨切片粘合代码) —— 审计不强求清零, 后续按需再切
 - 问题：1907 行 / 46 方法，逻辑（播放、搜索跳转、账号、更新提示）与布局（5 tab + 歌词页 + 主从分栏）混在一个 State。
 - 证据：`:127 _retryLast`…`:1082 build`…`:1380 _buildTabPages`；既有 4 个"协调器/控制器"文件（`home/playback_coordinator.dart`、`home/lyric_controller.dart`、`home/search_controller.dart`、`home/song_action_wiring.dart`）说明拆分方向已定，只是主文件没跟着瘦。
 - 方案：按"行为"而非"行数"切：`_playFromList/_next/_previous/_guideNext` → coordinator（已有）；`_openExact*/_openSearch*/_openDiscover/_openRecent` → `home/navigation.dart`；`_buildTabPages/_buildTabPage/_buildSearchTab/_buildList` → `home/tab_builder.dart`。每步之后跑 `flutter test ui/test/home_wiring_stack_test.dart app_shell_first_frame_test.dart tab_switch_popups_test.dart`。
 - 收益：单文件从 1907 降到 ~700，tab 结构调整不再碰播放逻辑。风险：中高（回归面是"整个首页"，且依赖全局槽位时序）。量：大。并行：**否**（热文件，必须独占）。
 
-### 7.8 UI 根目录按域继续迁移
+### 7.8 UI 根目录按域继续迁移 ◐ **第一批已落(v0.31.0 前)**: `settings_view.dart` + 4 个 `settings_*_page.dart` 迁入 `ui/lib/src/settings/`, 根目录留 5 个同名 barrel(外部 import **零改动**); 余 mine / artist / user 三批待做(仍仅顺序)
 - 问题：120 个根文件 vs 41 个子目录文件；barrel 与目录同名（`discover.dart`/`discover/`）造成双入口。
 - 证据：`discover.dart:5-12`、`detail_page.dart:7-12`、`feed_view.dart:5-8`、`messages_page.dart:11-19`。
 - 方案：按风险从低到高迁：`settings/`（`settings_view.dart` 1049 + 4 个 `settings_*_page.dart`）→ `mine/`（`mine_view.dart` 1051 + `my_collections_page` 等）→ `artist/`（1000 + `artist_sections/artist_nav`）→ `user/`（794 + `user_list_page/user_nav`）。每批只做"移动 + 根目录留 barrel + 更新 import"，不改行为，独立提交。
 - 收益：定位成本下降；后续 §7.7 类拆分有落点。风险：中（纯 import churn，但 diff 大、易与其它车道冲突）。量：大。并行：**仅顺序**（跨多域，与所有 UI 车道冲突）。
 
-### 7.9（可选）`ncm-plugin` 的接线或显式隔离 ✅ **隔离已落(`2088352`)**: 主门禁 `--exclude ncm-plugin` + 独立门 `rust-plugin`(21 例); 接线 = 插件切片 2, 待拍板
+### 7.9（可选）`ncm-plugin` 的接线或显式隔离 ✅ **接线第一步已落(v0.31.0)**: 真实 `ReqwestTransport`(service 侧实现) + `FileStorage` 落盘接缝; 主门禁并回(`--exclude` 与独立门删除); **平台限于非 Android**(rquickjs-sys 0.12.2 无 Android bindings ⇒ `service -> plugin` 用 `cfg(not(target_os = "android"))`); 仍不接 FFI/UI(不可从产品触发)
 - 问题：workspace 成员但无人依赖，每轮 `rust-lint/rust-test` 都为它付时间。
 - 证据：`core/Cargo.toml:8,24`；`docs/remaining-batches.md:198`。
 - 方案：二选一——接 `ncm-ffi`（切片 2 的活，量大）或从 `members` 移出（保留目录、用独立 workspace 或 `--exclude` 在门禁里跳过，能力不丢、门禁变快）。

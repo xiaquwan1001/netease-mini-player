@@ -17,6 +17,9 @@ pub use credential_store::{CredentialStatus, CredentialStore};
 pub mod identity;
 pub mod loudness_store;
 pub mod netease;
+// 插件宿主接缝只在**非 Android** 目标编译: rquickjs-sys 0.12.2 没有 Android 的预生成
+// bindings(cross 编译直接失败), 详见 Cargo.toml 里 [target.`cfg(not(target_os = "android"))`] 段。
+#[cfg(not(target_os = "android"))]
 pub mod plugins;
 pub mod read_cache;
 pub mod ttml_source;

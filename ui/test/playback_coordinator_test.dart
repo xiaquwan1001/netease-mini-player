@@ -703,14 +703,25 @@ void main() {
       await h.coordinator.toggle();
       expect(h.playback.resumeCalls, 1);
       expect(h.coordinator.player!.playing, isTrue);
-      // 落盘是 unawaited 的真实文件 IO, 让它跑完
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-
-      final state = await PlaybackStateStore(dir).load();
+      // 落盘是 unawaited 的真实文件 IO: 不能用固定 sleep(全量并发跑时会假红, 2026-11-20 实测),
+      // 改成有界轮询, 直到文件可读为止(仍带 2s 上限, 超时照常失败)。
+      final state = await _waitForPersistedState(dir);
       expect(state, isNotNull, reason: '暂停/继续必须立刻记住位置');
       expect(state!.songs.length, 1);
     });
   });
+}
+
+/// 有界轮询: 等 unawaited 的落盘真正完成(最多 2s, 每 10ms 复查一次)。
+///
+/// 固定 sleep 在全量并发跑时会偶尔早于 IO 完成 → 假红(2026-11-20 实测两次)。
+Future<SavedPlayback?> _waitForPersistedState(String dir) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 2));
+  for (;;) {
+    final state = await PlaybackStateStore(dir).load();
+    if (state != null || !DateTime.now().isBefore(deadline)) return state;
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
 }
 
 /// 平台通道类错误的最小替身(不依赖 flutter/services, 只让 state() 抛一次)。

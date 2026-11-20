@@ -7,9 +7,6 @@ license.workspace = true
 [dependencies]
 ncm-domain.workspace = true
 ncm-provider.workspace = true
-# 插件宿主接缝(plugins::ReqwestTransport 实现 ncm-plugin 的 Transport).
-# 依赖方向 service -> plugin; plugin 只依赖 domain/provider, 无环.
-ncm-plugin.workspace = true
 ncm-api-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -30,6 +27,16 @@ md-5 = "0.10"
 # P2 Linux secret-service 后端(credential_keyring.rs). keyring 3.x 默认不带 linux 后端,
 # 开 sync-secret-service(zbus 系, 阻塞式 API 与本 crate 同步 trait 匹配). 仅 cfg(linux)
 # 生效, Android(target_os=android) 与 Windows 构建不受影响.
+# 插件宿主接缝(plugins::ReqwestTransport 实现 ncm-plugin 的 Transport).
+# 依赖方向 service -> plugin; plugin 只依赖 domain/provider, 无环.
+# **只对非 Android 目标生效**: rquickjs-sys 0.12.2 只随包提供桌面/服务端目标的预生成 bindings,
+# 没有 aarch64/armv7-linux-android(或 x86_64-linux-android) 的 .rs, 交叉编译会直接
+# include! 失败(bindgen feature 要额外 libclang + android sysroot, 属另一笔债务)。
+# 所以插件宿主暂时只有桌面端可用; Android 侧保持"无插件"直到上游补 bindings 或我们单独做
+# 交叉编译方案 —— 见 docs/remaining-batches.md §11.C 与 ncm-plugin/README §4。
+[target.'cfg(not(target_os = "android"))'.dependencies]
+ncm-plugin.workspace = true
+
 [target.'cfg(target_os = "linux")'.dependencies]
 keyring = { version = "3", features = ["sync-secret-service"] }
 
