@@ -180,6 +180,7 @@ transport 层失败在沙箱链路里都只把文案交给脚本, 脚本不捕�
   "id": "demo",
   "name": "Demo 插件",
   "version": "1.0.0",
+  "apiVersion": 1,
   "entry": "index.js",
   "permissions": { "lxEvents": ["musicUrl", "search"], "requestDomains": ["api.example.com"] }
 }
@@ -190,9 +191,18 @@ transport 层失败在沙箱链路里都只把文案交给脚本, 脚本不捕�
 | `id` | `[a-z0-9][a-z0-9_-]{0,63}`, **必须等于目录名**(不收点号/斜杠/大写: 路径安全 + 大小写不敏感文件系统) |
 | `name` | 非空、≤64 字符、无首尾空白/控制字符 |
 | `version` | `主.次.修订`(可带 `-预发布`) |
+| `apiVersion` | 可选整数; 缺失 = 契约 v1 老清单按 `1` 处理. 必须在宿主支持的 `1..=1` 内, 否则**装载前就拒**, 文案带区间 |
 | `entry` | **单层文件名**, 以 `.js` 结尾, 不以点开头, 无分隔符/冒号 |
 | `permissions.lxEvents` | 只能取 `KNOWN_EVENTS`(`request/inited/musicUrl/search`), 不重复, ≤8 个 |
 | `permissions.requestDomains` | `host` 或 `*.host`, 不带 scheme/端口/路径, ≤16 个 |
+
+版本协商与失败计数都在 `PluginManager` 之上: `PluginManifest::validate` 里先过
+`check_api_version`(不兼容 ⇒ 该目录成为错误行, 原文含 `1..=1`, 不建沙箱不 panic);
+装载期失败经 `PluginManager::record_load_failure` 计数(`plugins-state.json` 的 `failures.<id>`,
+记录次数/最近原因/时间), 达 `MAX_CONSECUTIVE_FAILURES = 3` 时**同一份原子写**把
+`enabled` 置 false 并写明 `disabledReason` / `disabledAtMs`; 装载成功一次即清零
+(`record_load_success`, 无记录时不写盘); 用户手动 `enable` = 显式重置; `rescan` 不碰计数.
+只数装载期失败, 不数单次取链失败(调用期错误已由 `ProviderError{kind,retryable}` 交上层决策).
 
 目录管理在 `ncm-service::plugins::PluginManager`(`<root>/<plugin-id>/{manifest.json, <entry>}` 扫描;
 启停落盘 `<root>/plugins-state.json` 0600 原子写; 每插件自己的 `<root>/<id>/data/` storage 目录 +
@@ -244,7 +254,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 
 | # | 事项 | 说明 |
 |---|---|---|
-| 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); 仍缺版本协商与「连续失败 3 次自动禁用」, 且**未接 FFI/UI** |
+| 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); ✅ P3 已落**清单 `apiVersion` 版本协商**(纯函数 `manifest::check_api_version`, 区间 `1..=1`, 不兼容 ⇒ 拒绝装载 + 带区间文案)与**连续装载失败 3 次自动禁用**(计数落 `plugins-state.json` 的 `failures` 段, 成功一次清零, 重启仍禁用, 手动启用 = 显式重置, `--rescan` 不清计数); 仍**未接 FFI/UI 管理页** |
 | 2 | **导入/启停** | 粘贴/文件/URL 导入、启用禁用、卸载; 目前只接受调用方给的内存脚本文本 |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
@@ -274,8 +284,9 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
    `aesEncrypt / rsaEncrypt / randomBytes / zlib / buffer codec` 的上游语义未验证, 暂不提供。
 4. **`lx.send('inited', {sources})` 握手**: Melodia 从 `data.sources` 的 key 取支持平台列表;
    本 crate 只把 `lx.send` 的载荷留在沙箱内(尚未回传宿主), 握手语义等接插件管理层时再定。
-5. **LX 脚本元信息头**(`@name/@description/@version/@capabilities/@apiVersion`)解析与
-   `apiVersion` 不兼容时的拒绝文案, 本切片未做。
+5. **LX 脚本元信息头**(`@name/@description/@version/@capabilities/@apiVersion`)解析:
+   **仍未做**(元信息一律取自 `manifest.json`)。`apiVersion` 的协商与拒绝文案已在**清单**侧落地
+   (见 §1.6 与 `manifest::check_api_version`), 脚本头里的 `@apiVersion` 不作数。
 6. **`expireAt` 单位**: 按社区惯例当毫秒处理并折算成秒; 是否有脚本给秒级时间戳未统计。
 7. **静默降级 / 试听片段**: 上游 `freeTrialInfo` 非空 = 试听, 这属于网易云协议层(vendor)而不是
    插件契约; 本切片只透传脚本给的 `isTrial`, 不做猜测。

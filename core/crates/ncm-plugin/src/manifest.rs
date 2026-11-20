@@ -7,6 +7,7 @@
 //!   "id": "demo",
 //!   "name": "Demo 插件",
 //!   "version": "1.0.0",
+//!   "apiVersion": 1,
 //!   "entry": "index.js",
 //!   "permissions": {
 //!     "lxEvents": ["musicUrl", "search"],
@@ -18,7 +19,10 @@
 //! - `id`: 插件身份, **同时是目录名**(`<root>/<plugin-id>/`), 所以它必须是路径安全的名字;
 //! - `entry`: 单个文件名(不是路径), 以 `.js` 结尾, 必须是插件自己目录下的一层文件;
 //! - `permissions`: 可选. `lxEvents` 声明要用 `lx.on` 注册哪些事件, `requestDomains`
-//!   声明出站域名白名单.
+//!   声明出站域名白名单;
+//! - `apiVersion`: 可选(缺失 = 契约 v1 时期的老清单, 按 1 处理). 与宿主支持的
+//!   [`SUPPORTED_API_MIN`]..=[`SUPPORTED_API_MAX`] 协商: 不在区间内 ⇒ 装载前就拒, 文案带区间;
+//!   判定是纯函数 [`check_api_version`], 边界用例见测试 `api_version_boundaries`.
 //!
 //! # 校验纪律
 //!
@@ -51,6 +55,14 @@ pub const MAX_ENTRY_LEN: usize = 128;
 pub const MAX_EVENTS: usize = 8;
 /// 声明域名的条数上限.
 pub const MAX_DOMAINS: usize = 16;
+/// 本宿主实现的插件契约 API 版本.
+pub const HOST_API_VERSION: u32 = 1;
+/// 能接受的最低 `apiVersion`(低于它 = 插件太旧, 用的是本宿主已不实现的契约).
+pub const SUPPORTED_API_MIN: u32 = 1;
+/// 能接受的最高 `apiVersion`(高于它 = 插件太新, 用了本宿主还没有的能力).
+pub const SUPPORTED_API_MAX: u32 = HOST_API_VERSION;
+/// 清单里没写 `apiVersion` 时的口径: 契约 v1 时期的老清单按版本 1 处理(不是拒绝).
+pub const LEGACY_API_VERSION: u32 = 1;
 /// `lx.on` 认识的事件名(契约 v1, 见 `prelude.js` 的 `EVENT_NAMES`).
 pub const KNOWN_EVENTS: &[&str] = &["request", "inited", "musicUrl", "search"];
 
@@ -60,6 +72,12 @@ pub struct PluginManifest {
     pub id: String,
     pub name: String,
     pub version: String,
+    /// 契约 API 版本(可选: 缺失 = 老清单, 按 [`LEGACY_API_VERSION`] 处理).
+    ///
+    /// 用自定义反序列化而不是裸 `u32`: 类型不对(`"1.0"` / `1.5` / `-1`)要报出**字段名**,
+    /// 而不是一句 serde 的 "invalid type". 区间判定在 [`check_api_version`].
+    #[serde(default, rename = "apiVersion", deserialize_with = "de_api_version")]
+    pub api_version: Option<u32>,
     /// 入口脚本文件名(单层, 以 `.js` 结尾).
     pub entry: String,
     #[serde(default)]
@@ -142,8 +160,69 @@ impl PluginManifest {
         validate_id(&self.id)?;
         validate_name(&self.name)?;
         validate_version(&self.version)?;
+        // 版本协商在**装载前**做: 不兼容的清单直接是错误态, 走不到建沙箱那一步.
+        check_api_version(self.api_version)?;
         validate_entry(&self.entry)?;
         validate_permissions(&self.permissions)
+    }
+}
+
+impl PluginManifest {
+    /// 协商后的生效 `apiVersion`([`check_api_version`] 的结构化入口).
+    pub fn resolve_api_version(&self) -> Result<u32, ManifestError> {
+        check_api_version(self.api_version)
+    }
+}
+
+/// 版本协商(纯函数, 不碰盘): 声明的 `apiVersion` 与宿主支持的区间是否兼容.
+///
+/// - `None`(清单里没写) ⇒ 按 [`LEGACY_API_VERSION`] 处理, 但仍然协商一遍;
+/// - 返回**生效版本**; 不在 [`SUPPORTED_API_MIN`]..=[`SUPPORTED_API_MAX`] 内 ⇒
+///   `ManifestError{field: "apiVersion"}`, 文案里带出所需区间(调用方原样展示给用户).
+pub fn check_api_version(declared: Option<u32>) -> Result<u32, ManifestError> {
+    let version = declared.unwrap_or(LEGACY_API_VERSION);
+    if version < SUPPORTED_API_MIN {
+        return Err(ManifestError::new(
+            "apiVersion",
+            format!(
+                "`{version}` 太旧: 本宿主需要的区间是 {SUPPORTED_API_MIN}..={SUPPORTED_API_MAX}。\
+                 请升级插件到兼容版本"
+            ),
+        ));
+    }
+    if version > SUPPORTED_API_MAX {
+        return Err(ManifestError::new(
+            "apiVersion",
+            format!(
+                "`{version}` 太新: 本宿主需要的区间是 {SUPPORTED_API_MIN}..={SUPPORTED_API_MAX}。\
+                 请升级 App(或换用兼容版本的插件)"
+            ),
+        ));
+    }
+    Ok(version)
+}
+
+/// `apiVersion` 的反序列化: 只收整数, 其它类型给出**带字段名**的可读错误.
+fn de_api_version<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error as _;
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        None => Ok(None),
+        Some(serde_json::Value::Number(number)) => number
+            .as_u64()
+            .and_then(|value| u32::try_from(value).ok())
+            .map(Some)
+            .ok_or_else(|| {
+                D::Error::custom(format!(
+                    "字段 `apiVersion` 必须是 0..={} 的整数(如 1), 实际 `{number}`",
+                    u32::MAX
+                ))
+            }),
+        Some(other) => Err(D::Error::custom(format!(
+            "字段 `apiVersion` 必须是整数(如 1), 实际 `{other}`"
+        ))),
     }
 }
 
@@ -373,6 +452,7 @@ mod tests {
             "id": "demo-lx",
             "name": "Demo 插件",
             "version": "1.2.3",
+            "apiVersion": 1,
             "entry": "index.js",
             "permissions": { "lxEvents": ["musicUrl"], "requestDomains": ["api.example.com", "*.example.org"] }
         }"#
@@ -456,6 +536,62 @@ mod tests {
         for ok in ["1.0.0", "10.20.30", "1.0.0-beta.1"] {
             manifest.version = ok.to_string();
             assert!(manifest.validate().is_ok(), "{ok} 应通过");
+        }
+    }
+
+    #[test]
+    fn api_version_boundaries() {
+        // 纯函数边界: 更低 / 恰好 / 更高 / 缺失.
+        assert_eq!(
+            check_api_version(None).expect("缺失 = 老清单, 按 v1 兼容"),
+            LEGACY_API_VERSION
+        );
+        assert_eq!(check_api_version(Some(1)).expect("恰好"), HOST_API_VERSION);
+        let too_old = SUPPORTED_API_MIN - 1;
+        let err = check_api_version(Some(too_old)).expect_err("更低应拒绝");
+        assert_eq!(err.field(), "apiVersion");
+        assert!(err.reason().contains("1..=1"), "文案必须带所需区间: {err}");
+        assert!(err.reason().contains("太旧"), "{err}");
+        for too_new in [SUPPORTED_API_MAX + 1, 99] {
+            let err = check_api_version(Some(too_new)).expect_err("更高应拒绝");
+            assert_eq!(err.field(), "apiVersion");
+            assert!(err.reason().contains("1..=1"), "文案必须带所需区间: {err}");
+            assert!(err.reason().contains("太新"), "{err}");
+        }
+    }
+
+    #[test]
+    fn api_version_is_parsed_and_rejected_through_manifest() {
+        let with_version = |raw: &str| {
+            format!(
+                r#"{{"id":"a1","name":"A","version":"0.0.1","apiVersion":{raw},"entry":"main.js"}}"#
+            )
+        };
+        // 合法: 恰好 = 1; 缺失也合法(老清单).
+        let manifest = PluginManifest::parse(&with_version("1")).expect("apiVersion 1");
+        assert_eq!(manifest.api_version, Some(1));
+        assert_eq!(manifest.resolve_api_version().expect("兼容"), 1);
+        let legacy = PluginManifest::parse(&with_version("null")).expect("显式 null = 缺失");
+        assert_eq!(legacy.api_version, None);
+        let legacy =
+            PluginManifest::parse(r#"{"id":"a1","name":"A","version":"0.0.1","entry":"main.js"}"#)
+                .expect("缺字段 = 老清单");
+        assert_eq!(legacy.api_version, None);
+        assert_eq!(
+            legacy.resolve_api_version().expect("老清单按 v1"),
+            LEGACY_API_VERSION
+        );
+
+        // 区间外: 与其它字段错误同一种形态(字段名 + 原因 + 区间).
+        for raw in ["2", "0", "99"] {
+            let err = PluginManifest::parse(&with_version(raw)).expect_err(raw);
+            assert_eq!(err.field(), "apiVersion", "{raw}: {err}");
+            assert!(err.reason().contains("1..=1"), "{raw}: {err}");
+        }
+        // 类型非法: 报出字段名(不是裸 serde 的 invalid type).
+        for raw in [r#""1.0""#, "1.5", "-1", "true", "[]"] {
+            let err = PluginManifest::parse(&with_version(raw)).expect_err(raw);
+            assert!(err.to_string().contains("apiVersion"), "{raw}: {err}");
         }
     }
 

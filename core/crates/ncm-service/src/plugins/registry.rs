@@ -44,7 +44,9 @@
 //! | 跨目录同 id | 先到先得: 后到的记 `RegistryReport::failed`, **不覆盖**已在装的那份 |
 //! | 坏插件 | 单条进 `failed`, 其它插件照常装载(逐条 `Result`) |
 //! | 未启用(缺省) | 进 `skipped`, 不算错误、不装载 —— 沿用 `PluginManager` 的"缺省停用"纪律 |
-//! | 装载失败(语法错/初始化超时) | 进 `failed`, 该 id 的旧 provider 摘掉 |
+//! | 装载失败(语法错/初始化超时) | 进 `failed`, 该 id 的旧 provider 摘掉; **计一次连续失败** |
+//! | 连续装载失败达 3 次 | `PluginManager` 自动禁用(落盘), 下一次刷新起进 `skipped` |
+//! | 装载成功 | **连续失败清零**(落盘记录删掉, 本来没有就不写盘) |
 //! | 空目录 | 0 provider / 0 失败, `RegistryReport::is_clean()` 为真 |
 //!
 //! 刷新是**全量重建**: 每次 `scan*` 都把仍处于启用态的插件重新 `ScriptProvider::load` 一遍
@@ -58,7 +60,10 @@ use std::sync::Arc;
 use ncm_plugin::{SandboxConfig, Transport};
 use ncm_provider::Provider;
 
-use super::manager::{InstallReport, ManagerError, PluginManager, PluginSummary};
+use super::manager::{
+    InstallReport, ManagerError, ManagerErrorKind, PluginManager, PluginSummary,
+    MAX_CONSECUTIVE_FAILURES,
+};
 
 /// 一次装配的结果: 扫描到的 / 装上的 / 跳过的 / 失败的.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -229,12 +234,20 @@ impl PluginRegistry {
             }
             match self.manager.load_provider(&row.id) {
                 Ok(provider) => {
+                    // 装载成功 = 连续失败清零(没有记录时不写盘, 见 `record_load_success`).
+                    if let Err(err) = self.manager.record_load_success(&row.id) {
+                        eprintln!(
+                            "[ncm-plugin] 插件 `{}` 失败计数清零未落盘(不影响本次装载): {err}",
+                            row.id
+                        );
+                    }
                     report.loaded.push(row.id.clone());
                     providers.insert(row.id, Arc::new(provider) as Arc<dyn Provider>);
                 }
                 Err(err) => {
                     // 装载失败也要在报告里出现, 否则"启用了但没 provider"查不到原因.
-                    failures.insert(row.id, err.to_string());
+                    let detail = self.note_load_failure(&row.id, &err);
+                    failures.insert(row.id.clone(), detail);
                 }
             }
         }
@@ -257,6 +270,10 @@ impl PluginRegistry {
     fn load_one(&mut self, id: &str) -> Result<(), ManagerError> {
         match self.manager.load_provider(id) {
             Ok(provider) => {
+                // 手动启用已把记录清空, 这里再清一次是给"启用了但期间又被外部改坏"的路径兜底.
+                if let Err(err) = self.manager.record_load_success(id) {
+                    eprintln!("[ncm-plugin] 插件 `{id}` 失败计数清零未落盘: {err}");
+                }
                 self.providers
                     .insert(id.to_string(), Arc::new(provider) as Arc<dyn Provider>);
                 self.failures.remove(id);
@@ -264,9 +281,29 @@ impl PluginRegistry {
             }
             Err(err) => {
                 self.providers.remove(id);
-                self.failures.insert(id.to_string(), err.to_string());
+                let detail = self.note_load_failure(id, &err);
+                self.failures.insert(id.to_string(), detail);
                 Err(err)
             }
+        }
+    }
+
+    /// 记一次装载失败并返回**给用户看的文案**: 自动禁用时要说清"是被禁掉的", 而不是只报最近
+    /// 一次语法错(否则用户会以为"改好脚本就自动好了", 实际上它已经不在启用态).
+    ///
+    /// `Disabled` 类错误(接口被停用态挡住)不算失败 —— 那不是插件的错, 计进去会让用户
+    /// 每次点"停用"都往计数里加一笔.
+    fn note_load_failure(&mut self, id: &str, err: &ManagerError) -> String {
+        let detail = err.to_string();
+        if err.kind == ManagerErrorKind::Disabled {
+            return detail;
+        }
+        match self.manager.record_load_failure(id, &detail) {
+            Ok(true) => format!(
+                "连续 {MAX_CONSECUTIVE_FAILURES} 次装载失败 ⇒ 已自动禁用(手动启用可重置); 最近一次: {detail}"
+            ),
+            Ok(false) => detail,
+            Err(state_err) => format!("{detail}(失败计数未落盘: {state_err})"),
         }
     }
 }
