@@ -31,7 +31,10 @@ pub use netease::{thread_id_for, NeteaseProvider};
 #[cfg(not(target_os = "android"))]
 pub use plugins::host::{PluginHostPolicy, PluginHostStatus};
 #[cfg(not(target_os = "android"))]
-pub use plugins::{PluginHost, PluginSummary, RegistryReport};
+pub use plugins::{
+    PluginHost, PluginSummary, RegistryReport, RouteDecision, RouteMode, RoutePlan, RouteReason,
+    RouteTarget, RouteUsed, Routed,
+};
 pub use ttml_source::{
     fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource,
 };
@@ -276,5 +279,41 @@ impl Core {
     /// 宿主策略(只读: 总开关与根目录)
     pub fn plugin_policy(&self) -> &PluginHostPolicy {
         self.plugin_host.policy()
+    }
+
+    // ---------------- 路由(产品路径: 取链 / 搜索) ----------------
+
+    /// 当前路由偏好(`auto` 单插件自动 / `builtin` 只用内置 / `plugin:<id>` 显式选).
+    pub fn plugin_route_mode(&self) -> &RouteMode {
+        self.plugin_host.route_mode()
+    }
+
+    /// 改路由偏好并落盘(`plugin_route.json`). 失效的 id 不在这里报错, 见
+    /// [`Core::plugin_route_plan`](Self::plugin_route_plan) 的 `selectionMissing`.
+    pub fn plugin_set_route_mode(&mut self, mode: RouteMode) -> ncm_provider::ProviderResult<()> {
+        self.plugin_host.set_route_mode(mode)
+    }
+
+    /// 本次调用该走谁(纯判定; 判定依据见 [`RouteReason`]).
+    pub fn plugin_route_plan(&self, cap: Capability) -> RoutePlan {
+        self.plugin_host.route_plan(cap)
+    }
+
+    /// 产品路径的**唯一路由入口**: 判定 + 取到两边 provider(`Arc`), 之后调用方不持锁.
+    ///
+    /// 插件命中失败(超时/脚本错/协议错)的回落由 [`plugins::route::call_routed`] 做,
+    /// 判定原因(`RouteReason`)与回落(`RouteUsed`)都进日志 + [`plugins::last_route_event`].
+    pub fn route_decision(&self, cap: Capability) -> RouteDecision {
+        let plan = self.plugin_host.route_plan(cap);
+        plugins::route::warn_plan(cap, &plan);
+        let plugin = plan
+            .plugin_id()
+            .and_then(|id| self.plugin_host.provider(id));
+        RouteDecision {
+            capability: cap,
+            plan,
+            plugin,
+            builtin: self.providers.first_with(cap),
+        }
     }
 }

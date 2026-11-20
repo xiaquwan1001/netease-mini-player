@@ -19,9 +19,14 @@
 pub mod host;
 pub mod manager;
 pub mod registry;
+pub mod route;
 pub mod transport;
 
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
 pub use manager::{ManagerError, ManagerErrorKind, PluginManager, PluginSummary};
 pub use registry::{PluginRegistry, RegistryReport};
+pub use route::{
+    call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason, Routed,
+    RouteTarget, RouteUsed,
+};
 pub use transport::ReqwestTransport;
