@@ -167,37 +167,37 @@
 
 > 每条的"是否适合独立车道并行"按文件冲突面判，不按难度。
 
-### 7.1 恢复绿门（P0，前置）
+### 7.1 恢复绿门（P0，前置） ✅ **已落**
 - 问题：`dart-format` 1 文件漂移 + `dart-analyze` 42 error，全部来自在飞改动；任何后续审计/重构都会踩在红树上。
 - 证据：`ui/lib/src/search_landing.dart:78,178`；`ui/test/recommend_quick_action_test.dart:40,110`、`ui/test/search_landing_test.dart:29`。
 - 方案：等在飞车道把 lib 改完 → 同步 6 个测试 → 对改动文件跑 `dart format` → 再跑 `tools/ci-gates.sh dart-format && dart-analyze`。可选：加 `.git/hooks/pre-commit` 只对 staged `.dart` 跑 format。
 - 收益：门可信。风险：低。量：小。并行：**否**（必须串在在飞车道之后）。
 
-### 7.2 FFI 面按域拆分 + 清死面
+### 7.2 FFI 面按域拆分 + 清死面 ✅ **已落(v0.29.0, T2)**: `api.rs` 3334→380 行, 按域 14 个 `api/*.rs` + Dart barrel + 手写 `api_all.dart` 入仓
 - 问题：`api.rs` 3334 行单文件、158 函数，其中 64 个挤在 `api.rs:2365-3247`；6 个函数 UI 零调用。
 - 证据：`api.rs:2365` 段标题；`api.rs:1560/955/1538/1505/877/632`；Dart 侧 85/161 文件直连生成物。
 - 方案：① 把 `api.rs` 拆成 `api/search.rs / api/me.rs / api/playback.rs / api/social.rs`（frb 支持多模块，`#[frb] pub use` 或保持 `api.rs` 只做 `mod`+`pub use`）；② 6 个死面标 `#[frb(ignore)]` 或补 UI；③ `mirror` 清单单独成 `dto.rs` 并加注释"改这里 = 改 Dart API"。
 - 收益：meta 控件热文件冲突下降；生成物体量可测地缩小（6/158 ≈ 4% 函数 + 相关 DTO）。风险：低（纯搬移 + 标忽略，行为不变；需重跑 codegen 三步）。量：中。并行：**是**（`api.rs` 目前只有本类改动）。
 
-### 7.3 消掉歌词打分的 Dart 镜像
+### 7.3 消掉歌词打分的 Dart 镜像 ✅ **已落(v0.29.0, T3)**: 打分/阈值/择优唯一事实源在 Rust, Dart 只转发 + 真 Rust parity 测试
 - 问题：同一套阈值/权重/择优规则在 Rust 与 Dart 各一份，且各有单测。
 - 证据：`lyric_source.dart:45,58,61,160,233` ↔ `ttml_source.rs:21,24,27,129,247,311,435`。
 - 方案：把"打分/择优/理由"整段下沉到 Rust（已有 `word_lyric_with_fallback`（`ncm-service/src/lib.rs:27 pub use`），只把结果 + reason 回传），Dart 只保留 loader 注入（`lyric_source.dart:13 LyricSourceLoaders` 的测试价值）。若必须保留 Dart 侧（离线/无 bridge 场景），则改为由 Rust 生成常量 JSON 供 Dart 读取，禁止手抄。
 - 收益：单一事实源；少一份 200 行打分逻辑与重复测试。风险：中（涉及切歌主路径与"省一次网络探测"行为；现有 `lyric_source_*_test.dart` 可当回归网）。量：中。并行：**是**。
 
-### 7.4 统一 LRU / 分页小工具
+### 7.4 统一 LRU / 分页小工具 ✅ **已落(`2088352` + T4)**: 新 `ui/lib/src/lru.dart`, 云盘页归位 `PagedListView`
 - 问题：3 份手写 LRU；云盘页手写 offset 分页与 `PagedListView` 重复。
 - 证据：`cover_art.dart:49`、`cover_palette.dart:365`、`word_lyric_view.dart:638`；`cloud_page.dart:136-164` vs `paged_list_view.dart:123`。
 - 方案：抽 `ui/lib/src/lru.dart`（`LinkedHashMap` + `maxEntries`，统一 touch/淘汰），三处替换；云盘页改用 `PagedListView` 的 `nextCursor`（`paged_list_view.dart:16`）或反之把云盘的分页抽成 `PagedListView` 的一种 loader 适配。
 - 收益：消 ~3 处重复淘汰逻辑；云盘页少 1 份 `_loadingMore` 状态机。风险：低（各有单测：`cover_palette_test.dart`、`cloud_page_test.dart`）。量：小。并行：**是**。
 
-### 7.5 补最大未直测的两个 home 逻辑文件
+### 7.5 补最大未直测的两个 home 逻辑文件 ✅ **已落(v0.29.0, T5)**: +37 例直测
 - 问题：`home/playback_coordinator.dart`（675 行，播放/歌词/主色/通知栏协调）与 `home/account_actions.dart`（516 行，登录态/红心/账号切换动作）只有间接覆盖。
 - 证据：`ui/test` 中 `grep -rln 'src/home/'` 只命中 6 个文件，均不直测这两个；体量见 §2.1。
 - 方案：给两者注入现有 fake（`ui/test/support/fakes.dart`、`playback_spy.dart`）写直测：先覆盖"切歌→同步主色/动作态"与"账号切换→重取红心/失效态"两条主链。
 - 收益：这两个文件是下一轮重构（§7.7）的安全网。风险：低。量：中。并行：**是**。
 
-### 7.6 全局槽位写入加"结构约束"而非继续加约定
+### 7.6 全局槽位写入加"结构约束"而非继续加约定 ✅ **①已落(`2088352`)**: `tools/check-global-slots.sh` 进 verify; ②(作用域化)明确不做
 - 问题：8 个进程级 `ValueNotifier` 的写入点分散；`runPostFrameIfAlive` 靠人记。
 - 证据：`app_shell.dart:50,60,68,189,193,197`、`now_playing.dart:13`、`stream_note.dart:107`、`detail_pane.dart:35`；`lifecycle_guard.dart:19`；未守卫点 `detail_pane.dart:117`。
 - 方案（择一，不建议大改）：① 加一道 `tools/check-global-slots.sh`（按 `<notifier>.value =` 匹配，白名单 `app_shell/home_wiring/detail_pane`），照抄 `check-sheet-entry.sh` 的实现；② 更彻底：把这些 notifier 收进 `InheritedNotifier` 作用域（要动 `PlayerBarHost` 在 `MaterialApp.builder` 之外的渲染前提，风险明显更高）。
@@ -215,7 +215,7 @@
 - 方案：按风险从低到高迁：`settings/`（`settings_view.dart` 1049 + 4 个 `settings_*_page.dart`）→ `mine/`（`mine_view.dart` 1051 + `my_collections_page` 等）→ `artist/`（1000 + `artist_sections/artist_nav`）→ `user/`（794 + `user_list_page/user_nav`）。每批只做"移动 + 根目录留 barrel + 更新 import"，不改行为，独立提交。
 - 收益：定位成本下降；后续 §7.7 类拆分有落点。风险：中（纯 import churn，但 diff 大、易与其它车道冲突）。量：大。并行：**仅顺序**（跨多域，与所有 UI 车道冲突）。
 
-### 7.9（可选）`ncm-plugin` 的接线或显式隔离
+### 7.9（可选）`ncm-plugin` 的接线或显式隔离 ✅ **隔离已落(`2088352`)**: 主门禁 `--exclude ncm-plugin` + 独立门 `rust-plugin`(21 例); 接线 = 插件切片 2, 待拍板
 - 问题：workspace 成员但无人依赖，每轮 `rust-lint/rust-test` 都为它付时间。
 - 证据：`core/Cargo.toml:8,24`；`docs/remaining-batches.md:198`。
 - 方案：二选一——接 `ncm-ffi`（切片 2 的活，量大）或从 `members` 移出（保留目录、用独立 workspace 或 `--exclude` 在门禁里跳过，能力不丢、门禁变快）。

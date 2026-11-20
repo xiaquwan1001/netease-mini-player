@@ -344,7 +344,7 @@ AccountProvider / RadioProvider / CommunityProvider`,再用
 
 ### 12.7 FFI 逐接口样板(低优先 · 暂不做)
 
-`api.rs` 3 325 行(现码, 见 §12.1b)里大部分是 `ffi_forward!` 样板(加一个接口 = FFI 一处 + Dart 一处 + 测试一处)。
+`api.rs` **380** 行(2026-11-20 T2 按域拆到 `api/*.rs` 14 个文件后, 见 §12.1b; 拆前 3 334 行)里大部分是 `ffi_forward!` 样板(加一个接口 = FFI 一处 + Dart 一处 + 测试一处)。
 接口数不翻倍就不动;若真要动, 方向是「按能力域批量生成 + 一份导出清单」, 不是继续手抄。
 
 ### 12.8 派发建议
