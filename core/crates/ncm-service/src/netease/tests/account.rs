@@ -134,6 +134,63 @@ fn qr_login_check_states_and_cookie() {
     assert_eq!(err.kind, ProviderErrorKind::Internal);
 }
 
+/// 扫码 `type` 按平台派生(唯一入口 [`QrClientKind`]): 桌面 3 / macOS 4 / Android 保持 1.
+///
+/// 证据: 官方 PC 客户端 bundle `{type: isOSX?4:3}` + 本仓 2026-11-14 匿名实测
+/// (type=1/3/4 在 unikey/轮询阶段返回完全一致, 故按官方口径取 3/4).
+#[test]
+fn qr_client_kind_type_selection() {
+    assert_eq!(QrClientKind::AndroidApp.unikey_type(), 1);
+    assert_eq!(QrClientKind::DesktopPc.unikey_type(), 3);
+    assert_eq!(QrClientKind::DesktopMac.unikey_type(), 4);
+
+    // 当前构建目标必须落到三档之一: 桌面(Linux/Windows)取 3, Android 取 1
+    let current = QrClientKind::current();
+    #[cfg(target_os = "android")]
+    assert_eq!(current.unikey_type(), 1);
+    #[cfg(target_os = "macos")]
+    assert_eq!(current.unikey_type(), 4);
+    #[cfg(not(any(target_os = "android", target_os = "macos")))]
+    assert_eq!(current.unikey_type(), 3);
+}
+
+/// 官方 code 8821(需过易盾安全验证)与未知 code 的映射 + secureCaptcha 透传.
+#[test]
+fn qr_login_captcha_and_unknown_codes() {
+    // 8821: 官方 PC 端此时弹易盾子窗口, 扫码会话**继续**; 不产生凭据也不算失败
+    let r = parse_qr_check(&json!({"code":8821,"message":"需要安全验证"}), &[]).unwrap();
+    assert_eq!(r.check.state, QrLoginState::Captcha);
+    assert_eq!(r.check.code, 8821);
+    assert!(r.cookie.is_none());
+    assert!(!r.check.logged_in);
+    assert_eq!(r.check.secure_captcha, None);
+
+    // 服务端若下发 secureCaptcha, 原样透传给下一轮(不解析、不改写)
+    let r = parse_qr_check(&json!({"code":8821,"secureCaptcha":"tok-abc"}), &[]).unwrap();
+    assert_eq!(r.check.secure_captcha.as_deref(), Some("tok-abc"));
+
+    // 空串等同于没有(官方初值就是空串)
+    let r = parse_qr_check(&json!({"code":8821,"secureCaptcha":""}), &[]).unwrap();
+    assert_eq!(r.check.secure_captcha, None);
+
+    // 未知/新增 code: 不 panic, 落到 Unknown 并保留原始 code(可观测)
+    let r = parse_qr_check(&json!({"code":9999,"message":"?"}), &[]).unwrap();
+    assert_eq!(r.check.state, QrLoginState::Unknown);
+    assert_eq!(r.check.code, 9999);
+    assert!(r.cookie.is_none());
+
+    // 连 code 字段都没有: 不 panic(-1 → Unknown)
+    let r = parse_qr_check(&json!({}), &[]).unwrap();
+    assert_eq!(r.check.state, QrLoginState::Unknown);
+    assert_eq!(r.check.code, -1);
+
+    // 显式错误码仍是 Failed(用户可据此重试), 不落 Unknown
+    for c in [400, 402, 404] {
+        let r = parse_qr_check(&json!({"code": c}), &[]).unwrap();
+        assert_eq!(r.check.state, QrLoginState::Failed, "code={c}");
+    }
+}
+
 /// 签到进度: today.todaySignedIn + stats[6001/4001/5001] + records
 #[test]
 fn signin_progress_mapping() {

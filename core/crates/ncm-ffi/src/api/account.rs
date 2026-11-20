@@ -146,7 +146,7 @@ pub struct _QrLoginKey {
     pub expires_in: u64,
 }
 
-/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期)
+/// 扫码登录状态(801 待扫 / 802 已扫 / 803 成功 / 800 过期 / 8821 需易盾验证)
 #[frb(mirror(QrLoginState))]
 pub enum _QrLoginState {
     Pending,
@@ -154,6 +154,8 @@ pub enum _QrLoginState {
     Confirmed,
     Expired,
     Failed,
+    Captcha,
+    Unknown,
 }
 
 /// 扫码登录: 一次轮询的结果(Confirmed 时凭据已由 Rust 落盘, UI 只看 loggedIn).
@@ -163,12 +165,14 @@ pub enum _QrLoginState {
 #[frb(mirror(QrLoginCheck))]
 pub struct _QrLoginCheck {
     pub state: QrLoginState,
-    /// 官方原始 code(801/802/803/800), 排障用
+    /// 官方原始 code(801/802/803/800/8821; 未知 code 原样保留), 排障用
     pub code: i64,
     /// Confirmed 且凭据已落盘
     pub logged_in: bool,
     pub nickname: String,
     pub avatar_url: Option<String>,
+    /// 易盾验证句柄(8821 场景), 下一轮轮询原样回传
+    pub secure_captcha: Option<String>,
 }
 
 #[frb(mirror(SmsCodeSent))]
@@ -230,14 +234,17 @@ pub async fn login_qr_create() -> Result<QrLoginKey, FfiError> {
 }
 
 /// 扫码登录 ②: 轮询一次. Confirmed(803) 时顺带把凭据合并落盘, Dart 侧再同步账号资料.
-pub async fn login_qr_check(key: String) -> Result<QrLoginCheck, FfiError> {
+pub async fn login_qr_check(
+    key: String,
+    secure_captcha: Option<String>,
+) -> Result<QrLoginCheck, FfiError> {
     let provider = {
         let guard = core()?.lock().map_err(FfiError::from)?;
         guard.netease.clone()
     };
     use ncm_provider::AccountProvider;
     let outcome = provider
-        .login_qr_check(&key)
+        .login_qr_check(&key, secure_captcha.as_deref())
         .await
         .map_err(FfiError::from)?;
     if let Some(cookie) = outcome.cookie.as_deref() {

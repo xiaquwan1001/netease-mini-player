@@ -1267,7 +1267,11 @@ pub struct QrLoginKey {
     pub expires_in: u64,
 }
 
-/// 扫码轮询状态. 对齐官方 code: 801 待扫 / 802 已扫待确认 / 803 成功 / 800 过期.
+/// 扫码轮询状态. 对齐官方 PC 客户端 bundle(`hybrid/chunks/118.js` 的 `checkQRCodeLogin`):
+/// 801 待扫 / 802 已扫待确认 / 803 成功 / 800 过期, 另加 **8821 需过易盾安全验证**.
+///
+/// **变体只追加不重排**: 前五个是既有口径(flutter_rust_bridge 的枚举序号 0..4 已随
+/// 已发布版本发到 Dart 侧), `Captcha`/`Unknown` 一律追加在末尾。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QrLoginState {
     #[default]
@@ -1276,6 +1280,13 @@ pub enum QrLoginState {
     Confirmed,
     Expired,
     Failed,
+    /// 8821: 服务端要求先在手机上完成易盾安全验证。扫码会话**没有结束** ——
+    /// 官方此时弹易盾子窗口, 验证通过把 `secureCaptcha` 回填进下一次轮询
+    /// (见 [`QrLoginCheck::secure_captcha`]), 因此客户端应**继续轮询**。
+    Captcha,
+    /// 已知口径外的 code(本仓没有对应语义): 原始 code 保留在 [`QrLoginCheck::code`] 里,
+    /// 只做可观测上报, 不 panic、不当成登录失败(见 service 侧 `parse_qr_check` 的日志)。
+    Unknown,
 }
 
 /// 一次轮询的结果(交给 UI 的那半边: 只有元数据, 凭据不进 UI 层).
@@ -1293,6 +1304,11 @@ pub struct QrLoginCheck {
     pub nickname: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
+    /// 易盾安全验证句柄(8821 场景; 服务端在 body 的 `secureCaptcha` 里下发)。
+    ///
+    /// 本仓只做**透传**: 有值时下一次轮询原样回传(见 `AccountProvider::login_qr_check`)。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secure_captcha: Option<String>,
 }
 
 /// 手机号 + 短信验证码登录: 发送验证码的结果.
