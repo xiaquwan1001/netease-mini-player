@@ -24,8 +24,8 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<List<rust.PlaylistCategory>> crateApiDiscoverPlaylistCategories() async =>
-      const [];
+  Future<List<rust.PlaylistCategory>>
+  crateApiDiscoverPlaylistCategories() async => const [];
 
   @override
   Future<List<rust.Playlist>> crateApiDiscoverPlaylistsByCategory({

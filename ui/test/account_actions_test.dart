@@ -136,10 +136,12 @@ class _FakeApi implements RustLibApi {
   Future<List<rust.AccountDto>> crateApiAccountAccounts() async => const [];
 
   @override
-  Future<bool> crateApiAccountAccountRemove({required BigInt userId}) async => true;
+  Future<bool> crateApiAccountAccountRemove({required BigInt userId}) async =>
+      true;
 
   @override
-  Future<List<rust.CredentialOpDto>> crateApiAccountCredentialPendingWrites() async =>
+  Future<List<rust.CredentialOpDto>>
+  crateApiAccountCredentialPendingWrites() async =>
       const <rust.CredentialOpDto>[];
 
   @override
@@ -149,8 +151,8 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<List<rust.Playlist>> crateApiRecommendDailyRecommendPlaylists() async =>
-      const <rust.Playlist>[];
+  Future<List<rust.Playlist>>
+  crateApiRecommendDailyRecommendPlaylists() async => const <rust.Playlist>[];
 }
 
 /// 登录门面替身(桌面分支, 不碰 WebView/通道)。

@@ -75,7 +75,8 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<bool> crateApiSearchRememberPlay({required rust.SongDto song}) async => true;
+  Future<bool> crateApiSearchRememberPlay({required rust.SongDto song}) async =>
+      true;
 
   @override
   Future<rust.WordLyricDto> crateApiLyricWordLyricLines({

@@ -57,8 +57,9 @@ class _FakeRustApi implements RustLibApi {
   );
 
   @override
-  Future<List<String>> crateApiSearchRecordSearch({required String keyword}) async =>
-      <String>[keyword];
+  Future<List<String>> crateApiSearchRecordSearch({
+    required String keyword,
+  }) async => <String>[keyword];
 
   @override
   Future<List<String>> crateApiSearchSearchHistory() async => const <String>[];
@@ -84,8 +85,8 @@ class _FakeRustApi implements RustLibApi {
   );
 
   @override
-  Future<List<rust.HotSearchDetailItem>> crateApiSearchHotSearchDetail() async =>
-      const <rust.HotSearchDetailItem>[];
+  Future<List<rust.HotSearchDetailItem>>
+  crateApiSearchHotSearchDetail() async => const <rust.HotSearchDetailItem>[];
 
   @override
   Future<List<rust.HotSearchTerm>> crateApiSearchHotSearch() async =>
