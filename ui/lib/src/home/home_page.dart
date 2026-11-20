@@ -9,14 +9,12 @@ import '../app_settings.dart';
 import '../app_shell.dart';
 import '../app_meta.dart';
 import '../app_sheet.dart';
-import '../artist_page.dart';
 import '../audio_tuning.dart';
 import '../auth.dart';
 import '../back_policy.dart';
 import '../cover_backdrop.dart';
 import '../cover_palette.dart';
 import '../detail_faces.dart';
-import '../detail_page.dart';
 import '../desktop_integration.dart';
 import '../desktop_shell.dart';
 import '../detail_pane.dart'
@@ -28,50 +26,38 @@ import '../detail_pane.dart'
         detachDetailPaneHost,
         detailPaneOpen,
         detailPaneSlot;
-import '../discover.dart';
-import '../feed_view.dart';
 import '../keystore.dart';
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
 import '../library_view.dart';
 import '../lyric.dart';
 import '../marquee_text.dart';
-import '../medal_wall.dart';
-import '../messages_page.dart';
-import '../mine_view.dart';
 import '../net_retry.dart';
-import '../new_release_page.dart';
 import '../notification_mode.dart';
-import '../platform.dart';
 import '../playback.dart';
 import '../playback_bridge.dart';
 import '../player_bar.dart';
 import '../queue.dart';
 import '../queue_guide.dart';
-import '../ranking_view.dart' show showPlayRanking;
-import '../recommend_view.dart';
 import '../rust/api_all.dart' as rust;
 import '../search_exact_bar.dart';
-import '../search_landing.dart';
-import '../search_loading.dart';
-import '../search_results.dart';
 import '../search_suggest.dart';
-import '../settings_view.dart';
 import '../sleep_timer.dart';
 import '../song_actions.dart';
 import '../song_share.dart';
-import '../song_tile.dart';
 import '../toast.dart' show showToast;
 import '../update_checker.dart';
 import '../update_dialog.dart';
 import '../word_lyric_view.dart';
 import 'account_actions.dart';
 import 'home_wiring.dart';
+import 'navigation.dart';
 import 'lyric_controller.dart';
 import 'playback_coordinator.dart';
 import 'queue_sheet_controller.dart';
 import 'search_controller.dart' as search_state;
 import 'song_action_wiring.dart';
+import 'tab_builder.dart';
 
 /// 首页(拆壳 S8 从 main.dart 原样搬出): 五 tab 外壳 + 歌词详情页 + 歌单浏览态
 /// 的页面装配与少量胶水。
@@ -118,6 +104,16 @@ class _HomePageState extends State<HomePage> {
   /// 登录态快照 `_info` 与红心集合 `_liked` 仍是本页面的状态(按访问器/回灌
   /// 回调注入); 页面 addListener(→setState) 订阅它的变更。
   late final AccountActions _account;
+
+  /// 导航类动作(拆 §7.7 第一刀): 输入联想的精确实体、搜索结果五类卡片、每日推荐/
+  /// 最近听过/播客详情。纯导航, 不持状态 —— 见 src/home/navigation.dart。
+  late final HomeNavigation _nav;
+
+  /// 五个 tab 的正文构建(拆 §7.7 第二刀): IndexedStack / 五个 tab / 搜索落地页 /
+  /// 结果分区 / 曲目列表。只读页面状态, 播放与搜索条仍归本页面 ——
+  /// 见 src/home/tab_builder.dart。
+  late final HomeTabBuilder _tabs;
+
   rust.InitInfo? _info;
   String? _error;
 
@@ -346,7 +342,7 @@ class _HomePageState extends State<HomePage> {
       onToggleLike: _songActions.toggleCurrentLike,
       // Linux 托盘「播放/暂停」= 播放条上那个按钮(同一个控制器入口, 不新造旋钮)
       onTogglePlay: () => _coordinator.toggle(),
-      onCycleMode: _cycleModeFromNotification,
+      onCycleMode: _queueUI.cycleMode,
       buildActionsHost: _songActions.buildHost,
       barActions: _playerBarActions,
       // 头像点击进入用户主页/艺人主页时, 主页里的专辑卡仍要能打开(与播放无关)
@@ -368,6 +364,38 @@ class _HomePageState extends State<HomePage> {
       onSearchFailed: _onSearchFailed,
       onClearSearchError: _onClearSearchError,
       onLeaveLibrary: _onLeaveLibrary,
+    );
+    // 导航 + tab 正文构建(拆 §7.7): 两者都只**读**页面状态, 状态写入仍在页面
+    // (浏览态四件套在 AccountActions、队列在 _queue、搜索结果在 SearchController);
+    // 传的是现取回调而不是快照, 与拆分前每次 build 现读 State 字段等价。
+    _nav = HomeNavigation(
+      contextOf: () => context,
+      exactOf: () => _search.exact,
+      openPlaylist: _account.openPlaylist,
+      dailyPlaylists: _account.dailyPlaylists,
+      dailyLocalDays: _account.dailyLocalDays,
+      touchInteraction: _touchInteraction,
+    );
+    _tabs = HomeTabBuilder(
+      contextOf: () => context,
+      infoOf: () => _info,
+      account: _account,
+      search: _search,
+      navigation: _nav,
+      queryOf: () => _controller.text,
+      tabOf: () => _tab,
+      tabVisitedOf: () => _tabVisited,
+      currentOf: () => _current,
+      visibleSongsOf: () => _visibleSongs,
+      hiddenUnplayableOf: () => _hiddenUnplayable,
+      likedOf: () => _liked,
+      errorOf: () => _error,
+      isLiked: _isLiked,
+      playFromList: _playFromList,
+      playFromSearch: _playFromSearch,
+      notifyUnplayable: _notifyUnplayable,
+      buildActionsHost: _songActions.buildHost,
+      openHeartMode: () => _heartMode(),
     );
     // 播放能力只在这里接线一次: 任何页面/任何深度的区块都调
     // PlaybackBridge.instance, 不再有 UserNav/ArtistNav 静态字段与构造参数
@@ -689,42 +717,6 @@ class _HomePageState extends State<HomePage> {
     _account.leaveLibrary();
   }
 
-  Future<void> _openExactArtist(int id) async {
-    for (final a in _search.exact?.artists ?? const <rust.Artist>[]) {
-      if (a.id.toInt() != id) continue;
-      await showArtistDetail(
-        context,
-        artistId: a.id,
-        name: a.name,
-        onOpenAlbum: (albumId, name, cover) => showAlbumPreview(
-          context,
-          albumId: albumId,
-          albumName: name,
-          coverUrl: cover,
-        ),
-      );
-      return;
-    }
-  }
-
-  Future<void> _openExactPlaylist(int id) async {
-    for (final p in _search.exact?.playlists ?? const <rust.Playlist>[]) {
-      if (p.id.toInt() == id) {
-        await _account.openPlaylist(p);
-        return;
-      }
-    }
-  }
-
-  void _openExactRadio(int id) {
-    for (final r in _search.exact?.podcasts ?? const <rust.PodcastRadio>[]) {
-      if (r.id.toInt() == id) {
-        _openPodcastRadio(r);
-        return;
-      }
-    }
-  }
-
   // ---------------- 心动模式 / 每日推荐 / 播客 / 最近听过 / 封面预览 ----------------
 
   /// 心动模式: 以当前曲目为种子, 在当前歌单(0=不限定)里续播一队推荐.
@@ -780,44 +772,11 @@ class _HomePageState extends State<HomePage> {
     showToast(context, message);
   }
 
-  /// 每日推荐页。[initialTab] 给「历史日推」快捷动作复用(B7):
-  /// 0 推荐歌曲 / 1 推荐歌单 / 2 历史日推, 默认 0(历史行为不变)。
-  void _openDiscover({int initialTab = 0}) {
-    showDiscoverPage(
-      context,
-      onOpenPlaylist: _account.openPlaylist,
-      loadPlaylists: _account.dailyPlaylists,
-      // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
-      loadLocalDays: _account.dailyLocalDays,
-      initialTab: initialTab,
-    );
-  }
-
-  /// 直接打开某个播客的详情页(推荐/我的页面的卡片点进来)
   /// 记录"最近一次交互"(我的页收藏栏按它排序, 见 recent_order.dart)。
   /// 打开动作是唯一可靠的信号: 收藏列表本身没有"最近使用"字段。
   void _touchInteraction(String kind, BigInt id) {
     if (id <= BigInt.zero) return;
     unawaited(AppSettings.instance.touchInteraction(kind, id));
-  }
-
-  void _openPodcastRadio(rust.PodcastRadio radio) {
-    _touchInteraction('podcast', radio.id);
-    showPodcastDetail(context, radio: radio);
-  }
-
-  void _openRecent() {
-    showRecentPage(
-      context,
-      onOpenPlaylist: _account.openPlaylist,
-      onOpenPodcast: _openPodcastRadio,
-      onOpenAlbum: (album) => showAlbumPreview(
-        context,
-        albumId: album.id,
-        albumName: album.name,
-        coverUrl: album.coverUrl,
-      ),
-    );
   }
 
   /// 点列表: 用当前可见列表(搜索/歌单)重置队列, 从被点那首开始
@@ -845,59 +804,6 @@ class _HomePageState extends State<HomePage> {
     _coordinator.userStopped = false;
     _account.clearQueuePlaylistId();
     await _coordinator.playSong(song, explicit: true);
-  }
-
-  /// 搜索结果: 艺人卡片 → 艺人页
-  Future<void> _openSearchArtist(rust.SearchArtist artist) async {
-    await showArtistDetail(
-      context,
-      artistId: artist.id,
-      name: artist.name,
-      onOpenAlbum: (id, name, cover) => showAlbumPreview(
-        context,
-        albumId: id,
-        albumName: name,
-        coverUrl: cover,
-      ),
-    );
-  }
-
-  void _openSearchAlbum(rust.SearchAlbum album) {
-    showAlbumPreview(
-      context,
-      albumId: album.id,
-      albumName: album.name,
-      coverUrl: album.coverUrl,
-    );
-  }
-
-  /// 搜索结果: 歌单卡片 → 歌单详情
-  void _openSearchPlaylist(rust.SearchPlaylistItem item) {
-    _account.openPlaylist(
-      rust.Playlist(
-        id: item.id,
-        name: item.name,
-        coverUrl: item.coverUrl,
-        trackCount: item.trackCount,
-        special: false,
-        subscribed: false,
-      ),
-    );
-  }
-
-  /// 搜索结果: 播客卡片 → 播客详情
-  void _openSearchPodcast(rust.SearchPodcast item) {
-    _openPodcastRadio(
-      rust.PodcastRadio(
-        id: item.id,
-        name: item.name,
-        coverUrl: item.coverUrl,
-        description: '',
-        djName: item.djName,
-        programCount: item.programCount,
-        playCount: item.playCount,
-      ),
-    );
   }
 
   // ---------------- 详情页: 分享 ----------------
@@ -1009,9 +915,6 @@ class _HomePageState extends State<HomePage> {
     return next;
   }
 
-  /// 是否处于心动模式队列(心动不是 PlayMode, 用队列标题识别)
-  bool get _heartActive => _queueUI.heartActive;
-
   /// 当前曲目封面主色(歌词页背景用); null = 回退主题色
   CoverPalette? _coverPalette;
 
@@ -1042,18 +945,11 @@ class _HomePageState extends State<HomePage> {
       // 因为此时按播放顺序按钮 = 退出引导
       modeIcon: notificationModeIcon(
         _queue.mode,
-        heartActive: _heartActive,
+        heartActive: _queueUI.heartActive,
         fmActive: _queueUI.fmActive,
       ),
     );
   }
-
-  /// 通知栏「播放顺序」按钮: 列表循环→单曲循环→顺序播放→随机播放→(回到)列表循环。
-  ///
-  /// 与播放条上的按钮**同一个实现**(QueueSheetController.cycleMode): 轮转只剩 4 档,
-  /// 引导态下按一下 = 退出引导回到列表循环。两条路径各写一份曾经漂过
-  /// (2026-11-18 心动模式退不干净的根因), 现在只留一个入口。
-  Future<void> _cycleModeFromNotification() => _queueUI.cycleMode();
 
   Future<void> _seekTo(double ms) async {
     final target = ms.round();
@@ -1167,9 +1063,9 @@ class _HomePageState extends State<HomePage> {
               if (!_lyric.visible && _tab == 0 && _search.exact != null)
                 SearchExactBar(
                   view: _search.exactView!,
-                  onPickArtist: _openExactArtist,
-                  onPickPlaylist: _openExactPlaylist,
-                  onPickRadio: _openExactRadio,
+                  onPickArtist: _nav.openExactArtist,
+                  onPickPlaylist: _nav.openExactPlaylist,
+                  onPickRadio: _nav.openExactRadio,
                 ),
               if (!_lyric.visible &&
                   _tab == 0 &&
@@ -1224,7 +1120,7 @@ class _HomePageState extends State<HomePage> {
       Positioned.fill(
         child: Offstage(
           offstage: _lyric.visible,
-          child: _buildTabPages(selectedKey),
+          child: _tabs.buildPages(selectedKey),
         ),
       ),
       if (_lyric.visible)
@@ -1380,169 +1276,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildTabPages(Object? selectedKey) {
-    return IndexedStack(
-      index: _tab,
-      children: [
-        for (var i = 0; i < 5; i++)
-          if (_tabVisited.contains(i))
-            _buildTabPage(i, selectedKey)
-          else
-            const SizedBox.shrink(),
-      ],
-    );
-  }
-
-  Widget _buildTabPage(int index, Object? selectedKey) {
-    switch (index) {
-      case 1:
-        return RecommendView(
-          key: ValueKey('recommend-${_info?.loggedIn}-${_info?.vip}'),
-          loggedIn: _info?.loggedIn == true,
-          // 每日推荐歌单走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
-          loadDailyPlaylists: _account.dailyPlaylists,
-          onOpenPlaylist: _account.openPlaylist,
-          onOpenPodcast: _openPodcastRadio,
-          onHeartMode: () => _heartMode(),
-          onOpenDaily: _openDiscover,
-          // B7 顶栏「自定义」卡可绑定的动作: 历史日推 = 每日推荐页第三个页签;
-          // 排行榜复用「我的」页同一个落地页(showPlayRanking)。
-          onOpenDailyHistory: () => _openDiscover(initialTab: 2),
-          onOpenRanking: () => showPlayRanking(context),
-          onOpenAlbum: (album) => showAlbumPreview(
-            context,
-            albumId: album.id,
-            albumName: album.name,
-            coverUrl: album.coverUrl,
-          ),
-          onOpenNewRelease: () => showNewReleasePage(
-            context,
-            onOpenAlbum: (album) => showAlbumPreview(
-              context,
-              albumId: album.id,
-              albumName: album.name,
-              coverUrl: album.coverUrl,
-            ),
-            onOpenArtist: (artist) => showArtistDetail(
-              context,
-              artistId: artist.id,
-              name: artist.name,
-              onOpenAlbum: (id, name, cover) => showAlbumPreview(
-                context,
-                albumId: id,
-                albumName: name,
-                coverUrl: cover,
-              ),
-            ),
-          ),
-        );
-      case 2:
-        return FeedView(
-          key: ValueKey('feed-${_info?.loggedIn}'),
-          loggedIn: _info?.loggedIn == true,
-          onLogin: _account.login,
-          onOpenUrl: PlatformBridge.openUrl,
-        );
-      case 3:
-        return MineView(
-          key: ValueKey('mine-${_info?.loggedIn}-${_info?.vip}'),
-          loggedIn: _info?.loggedIn == true,
-          onLogin: _account.login,
-          onOpenAccounts: _account.openAccountPage,
-          onOpenPlaylist: _account.openPlaylist,
-          onOpenPodcast: _openPodcastRadio,
-          onOpenFollows: () => _account.openUserList(startOnFans: false),
-          onOpenFolloweds: () => _account.openUserList(startOnFans: true),
-          onOpenAlbum: (album) => showAlbumPreview(
-            context,
-            albumId: album.id,
-            albumName: album.name,
-            coverUrl: album.coverUrl,
-            initiallySubscribed: true,
-          ),
-          onOpenRecent: _openRecent,
-          onOpenLiked: _account.openLikedDetail,
-          onOpenMessages: () => showMessagesPage(context),
-          onOpenMedals: () => showMedalWall(context, isVip: _info?.vip == true),
-          onOpenVip: _account.openVip,
-          // "我喜欢的音乐"区块点播时的队列来源标记(解析出来之前为 null)
-          likedPlaylistId: _account.likedPlaylistId,
-          // 简介保存: POST /api/user/profile/update(局部更新, 只改 signature)
-          saveSignature: (signature) =>
-              rust.updateSignature(signature: signature),
-        );
-      case 4:
-        // 设置只剩下「App 怎么表现」的偏好开关 + 分组入口:
-        // 账号管理、诊断与数据都是这里的二级页(账号入口 2026-11 统一收在这里)。
-        return SettingsView(
-          info: _info,
-          onOpenAccounts: _account.openAccountPage,
-        );
-      default:
-        return _buildSearchTab(selectedKey);
-    }
-  }
-
-  Widget _buildSearchTab(Object? selectedKey) {
-    final query = _controller.text.trim();
-    // 歌单浏览态优先(从我的/推荐点进来的)
-    if (_account.libraryOpen) return _buildList();
-    // 有上一轮结果就展示分区结果; 取消按钮会清空它
-    if (_search.bundle != null) return _buildSearchResults(selectedKey);
-    // 没输入关键词时: 搜索历史 + 猜你想搜 + 热门榜
-    if (query.isEmpty) {
-      return SearchLanding(
-        history: _search.history,
-        hot: _search.hotTerms,
-        recommended: _search.recommended,
-        onSelected: _search.searchKeyword,
-        onClearHistory: _search.clearHistory,
-        hotLoading: _search.hotLoading,
-        hotError: _search.hotError,
-        onRetryHot: _search.loadLanding,
-        // 排行榜从「推荐」搬到这里(2026-11 用户要求)
-        onOpenChartPlaylist: _account.openPlaylist,
-      );
-    }
-    return _buildList();
-  }
-
-  /// 综合搜索结果: 单曲/艺人/专辑/歌单/播客分区
-  ///
-  /// [selectedKey] 是主从分栏右栏正在看的歌单 id(窄/中档恒为 null) —— 左栏据此给
-  /// 该卡片画选中外框。
-  Widget _buildSearchResults(Object? selectedKey) {
-    return SearchResultsView(
-      bundle: _search.bundle!,
-      selectedPlaylistId: selectedKey is BigInt ? selectedKey : null,
-      // 后端 cloudsearch type=1004 的 MV 结果 → UI 的 SearchMv(同构映射)
-      mvs: [
-        for (final m in _search.bundle!.mvs)
-          SearchMv(
-            id: m.id,
-            name: m.name,
-            coverUrl: m.coverUrl,
-            artistName: m.artistName,
-            playCount: m.playCount,
-          ),
-      ],
-      liked: _liked,
-      currentTrackId: _current?.id,
-      onPlaySong: _playFromSearch,
-      onOpenArtist: _openSearchArtist,
-      onOpenAlbum: _openSearchAlbum,
-      onOpenPlaylist: _openSearchPlaylist,
-      onOpenPodcast: _openSearchPodcast,
-      onMenu: (song) => showSongActionsSheet(
-        context,
-        song,
-        _songActions.buildHost(),
-        // 综合搜索结果里的单曲
-        source: SongActionSource.search,
-      ),
-    );
-  }
-
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.all(12),
@@ -1579,75 +1312,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildList() {
-    final current = _current;
-    if (!_account.libraryOpen) {
-      // 搜索请求还没回来时给加载占位: 原来的"输入关键词后搜索"会让用户
-      // 以为断网或没有结果(本次回归修复)。错误由顶部横幅展示(带重试)。
-      if (_search.busy) return SearchLoading(_controller.text.trim());
-      if (_error != null) return const SizedBox.shrink();
-      final typed = _controller.text.trim();
-      if (typed.isEmpty) {
-        return const Center(child: Text('输入关键词后搜索'));
-      }
-      // 已经输入但还没提交: 上方是联想面板, 这里给一句明确的操作提示
-      return Center(
-        child: Text(
-          '点「搜索」查看「$typed」的结果',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      );
-    }
-    final songs = _visibleSongs;
-    final hidden = _hiddenUnplayable;
-    if (songs.isEmpty) {
-      // 浏览态现在是队列的视图: 队列被清空时这里要说明白, 不然会读成"歌单空了"
-      final emptyText = !_account.libraryOpen ? '这个歌单是空的' : '播放队列是空的';
-      return Center(
-        child: Text(hidden > 0 ? '这里没有可播放的曲目($hidden 首无版权已隐藏)' : emptyText),
-      );
-    }
-    // 列表顶部一句说明: 无版权且没收藏的曲目按官方行为直接不出现, 但要让用户知道少了什么
-    final headerCount = hidden > 0 ? 1 : 0;
-    return ListView.builder(
-      itemCount: songs.length + headerCount,
-      itemBuilder: (context, i) {
-        if (headerCount == 1 && i == 0) {
-          return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Text(
-              '已隐藏 $hidden 首无版权曲目',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          );
-        }
-        final s = songs[i - headerCount];
-        final active = current?.id == s.id;
-        // 没版权: 整行灰掉 + "无版权"标, 点了才提示(官方同款行为)
-        return SongTile(
-          song: s,
-          active: active,
-          liked: _isLiked(s.id),
-          onTap: () {
-            if (s.playable) {
-              _playFromList(s);
-            } else {
-              _notifyUnplayable(s);
-            }
-          },
-          onMenu: () => showSongActionsSheet(
-            context,
-            s,
-            _songActions.buildHost(),
-            // 库内歌单/列表详情
-            source: SongActionSource.playlist,
-          ),
-        );
-      },
     );
   }
 
@@ -1804,7 +1468,7 @@ class _HomePageState extends State<HomePage> {
             dragMax: _dragMax,
             dragMs: _dragMs,
             mode: _queue.mode,
-            heartActive: _heartActive,
+            heartActive: _queueUI.heartActive,
             fmActive: _queueUI.fmActive,
           );
     // Linux 系统托盘菜单的按钮态: 文案(播放/暂停、喜欢/取消喜欢)与置灰全由
