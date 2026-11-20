@@ -9,7 +9,7 @@ import 'app_sheet.dart';
 import 'debug_report.dart';
 import 'diag_upload.dart';
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'state_views.dart';
 import 'toast.dart' show showToast;

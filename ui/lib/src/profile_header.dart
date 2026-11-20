@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'layout.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 个人主页头部卡片: 背景图 + 头像/昵称/VIP/签名 + 关注/粉丝/等级一行。
 /// 未登录时显示默认灰背景卡片, 点击触发 onTap(登录)。

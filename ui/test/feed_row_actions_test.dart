@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
 import 'package:minincm/src/feed_share.dart';
 import 'package:minincm/src/feed_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 动态流列表行交互回归: 点赞(乐观/回滚) + 评论直达 + 分享面板 + 窄屏溢出.
 

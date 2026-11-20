@@ -6,7 +6,7 @@ import '../daily_cache.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../playback_bridge.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../state_views.dart';
 import '../song_actions.dart' show SongActionSource;
 import '../song_tile.dart' show SongRow;

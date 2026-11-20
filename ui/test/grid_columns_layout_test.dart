@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/paged_list_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/search_results.dart';
 
 /// 方格网格列数 / 窄视口布局回归(2026-11 用户反馈)。

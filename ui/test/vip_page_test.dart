@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/vip_page.dart';
 
 /// 7 天签到样本(对齐 signin_progress.recent, 升序渲染), 前 3 天已签, 今天由 signedToday 决定

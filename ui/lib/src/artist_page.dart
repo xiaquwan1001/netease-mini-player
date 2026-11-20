@@ -14,7 +14,7 @@ import 'paged_list_view.dart';
 import 'playback_bridge.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'toast.dart';
 import 'format.dart' show formatDurationMs, formatFanCount;
 import 'mv_page.dart' show showMvPage;

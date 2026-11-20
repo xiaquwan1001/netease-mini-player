@@ -11,7 +11,7 @@ import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'image_io.dart';
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'share_qr.dart';
 import 'sheet_header.dart';
 import 'toast.dart';

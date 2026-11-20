@@ -14,7 +14,7 @@ import 'desktop_shell.dart';
 import 'layout.dart';
 import 'net_retry.dart';
 import 'platform.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';

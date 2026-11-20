@@ -22,7 +22,7 @@ import '../error_views.dart' show InlineError;
 import '../feed_share.dart' show showCommentShareSheet;
 import '../net_retry.dart';
 import '../sheet_header.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../toast.dart' show showToast;
 import '../state_views.dart';
 import '../user_nav.dart';

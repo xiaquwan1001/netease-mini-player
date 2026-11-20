@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/now_playing.dart';
 import 'package:minincm/src/ranking_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/song_tile.dart';
 
 import 'support/fakes.dart';

@@ -1,5 +1,5 @@
 import '../daily_cache.dart' show DailyCacheDay;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 每日推荐/最近听过的加载回调 typedef(页面与测试注入点共用).
 

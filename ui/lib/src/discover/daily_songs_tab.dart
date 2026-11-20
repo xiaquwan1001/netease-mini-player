@@ -4,7 +4,7 @@ import '../async_view.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart' show friendlyError;
 import '../playback_bridge.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../song_actions.dart';
 import '../state_views.dart';
 import '../song_tile.dart' show SongRow;

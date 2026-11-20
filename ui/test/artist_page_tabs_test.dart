@@ -6,7 +6,7 @@ import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/artist_sections.dart';
 import 'package:minincm/src/cover_art.dart' show CircleCover;
 import 'package:minincm/src/profile_scaffold.dart' show ProfileStatRow;
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 import 'support/fakes.dart';
 import 'support/playback_spy.dart';

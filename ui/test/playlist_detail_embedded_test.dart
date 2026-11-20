@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/detail/playlist_detail_page.dart';
 import 'package:minincm/src/detail_pane.dart';
 import 'package:minincm/src/layout.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 
 import 'support/fakes.dart';
@@ -26,10 +26,10 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('内嵌形态测试未覆盖 ${invocation.memberName}');
 
   @override
-  Future<BigInt> crateApiMyUid() async => BigInt.from(1822714196);
+  Future<BigInt> crateApiSocialMyUid() async => BigInt.from(1822714196);
 
   @override
-  Future<rust.PlaylistDetail> crateApiPlaylistDetail({
+  Future<rust.PlaylistDetail> crateApiDetailPlaylistDetail({
     required BigInt playlistId,
   }) async => rust.PlaylistDetail(
     id: BigInt.from(24381616),
@@ -48,7 +48,7 @@ class _FakeRustApi implements RustLibApi {
   );
 
   @override
-  Future<List<rust.SongDto>> crateApiPlaylistSongs({
+  Future<List<rust.SongDto>> crateApiLibraryPlaylistSongs({
     required BigInt playlistId,
   }) async => <rust.SongDto>[
     for (var i = 1; i <= 12; i++)
@@ -56,7 +56,7 @@ class _FakeRustApi implements RustLibApi {
   ];
 
   @override
-  Future<rust.CommentPage> crateApiComments({
+  Future<rust.CommentPage> crateApiDetailComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -69,7 +69,7 @@ class _FakeRustApi implements RustLibApi {
   );
 
   @override
-  Future<rust.CommentStats> crateApiCommentStats({
+  Future<rust.CommentStats> crateApiDetailCommentStats({
     required String threadId,
   }) async => rust.CommentStats(
     threadId: threadId,

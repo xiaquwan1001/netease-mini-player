@@ -6,7 +6,7 @@ import '../cover_palette.dart';
 import '../expandable_text.dart';
 import '../layout.dart' show kPagePadding;
 import '../marquee_text.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 歌单详情的纯视图零件(头部卡片 / 筛选条 / 无版权提示): 只吃入参, 不碰网络.
 

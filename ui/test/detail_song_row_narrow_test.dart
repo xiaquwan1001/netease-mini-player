@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:minincm/src/detail/playlist_songs_sliver.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/song_actions.dart' show AppActions, SongActionHost;
 import 'package:minincm/src/song_tile.dart';
 

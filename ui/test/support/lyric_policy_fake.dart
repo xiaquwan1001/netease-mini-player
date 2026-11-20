@@ -8,7 +8,7 @@
 // Rust)与 `cargo test -p ncm-service ttml_source` 锁。
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Int64List;
 
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 
 class FakeLyricPolicy implements RustLibApi {
@@ -52,13 +52,13 @@ class FakeLyricPolicy implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  bool crateApiLyricAutoSkipTtml({required rust.WordLyricDto dto}) {
+  bool crateApiLyricLyricAutoSkipTtml({required rust.WordLyricDto dto}) {
     autoSkipCalls++;
     return autoSkip;
   }
 
   @override
-  bool crateApiLyricScoresClose({
+  bool crateApiLyricLyricScoresClose({
     required rust.WordLyricDto yrc,
     required rust.WordLyricDto ttml,
   }) {
@@ -67,7 +67,7 @@ class FakeLyricPolicy implements RustLibApi {
   }
 
   @override
-  rust.LyricChoiceDto crateApiLyricChooseSource({
+  rust.LyricChoiceDto crateApiLyricLyricChooseSource({
     rust.WordLyricDto? yrc,
     rust.WordLyricDto? ttml,
     required Int64List lineStarts,
@@ -79,7 +79,7 @@ class FakeLyricPolicy implements RustLibApi {
   }
 
   @override
-  bool crateApiLyricYrcGoodEnough({required rust.WordLyricDto dto}) {
+  bool crateApiLyricLyricYrcGoodEnough({required rust.WordLyricDto dto}) {
     goodEnoughCalls++;
     return goodEnough;
   }

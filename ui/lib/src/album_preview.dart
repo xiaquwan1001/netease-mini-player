@@ -10,7 +10,7 @@ import 'cover_art.dart';
 import 'error_views.dart' show InlineError;
 import 'net_retry.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongRow, SongRowLayout, SongRowSubtitle;
 import 'state_views.dart';

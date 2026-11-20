@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/feed_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/user_page.dart';
 
 /// 刷新语义回归(2026-11-18 用户反馈 3):

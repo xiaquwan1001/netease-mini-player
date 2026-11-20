@@ -5,7 +5,7 @@ import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
 import '../net_retry.dart' show friendlyError, retryNetwork;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../sheet_header.dart';
 import '../state_views.dart';
 import '../toast.dart' show showToast;

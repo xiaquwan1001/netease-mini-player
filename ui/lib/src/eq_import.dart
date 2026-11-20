@@ -8,7 +8,7 @@ library;
 
 import 'audio_tuning.dart' show validateEqProfile;
 import 'eq_profile.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 一次导入校验的结果。
 class EqImportCheck {

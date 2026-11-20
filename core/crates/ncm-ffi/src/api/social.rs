@@ -4,7 +4,7 @@
 //! 函数签名与行为与原文件逐字一致, 只是搬家。
 //! 本文件里的 #[frb(mirror(..))] 就是 Dart 侧的类定义 -- 改这里 = 改 Dart API。
 
-use super::*;
+pub(crate) use super::*;
 
 pub struct FeedEventDto {
     pub id: u64,

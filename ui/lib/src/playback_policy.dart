@@ -5,7 +5,7 @@
 /// 这几个容易混的口径), 也让 main 的循环只剩"怎么跳"而不含"为什么跳"。
 library;
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 需要黑胶会员才能完整播放(`fee == 1`), Rust 侧映射成 [rust.SongDto.vip]。
 bool requiresVip(rust.SongDto song) => song.vip;

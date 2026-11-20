@@ -22,7 +22,7 @@ class _FakeRustApi implements RustLibApi {
 
   @override
   // ignore: override_on_non_overriding_member
-  String crateApiPlaybackUserAgent() {
+  String crateApiPlaybackPlaybackUserAgent() {
     if (throwOnUa) throw StateError('RustLib 未初始化');
     return ua;
   }

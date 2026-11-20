@@ -8,7 +8,7 @@ import 'now_playing.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'state_views.dart';
 
 /// 听歌排行(需登录): 总量排行 + 当周排行.

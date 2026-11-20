@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/cover_art.dart';
 import 'package:minincm/src/recommend_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 const _longName = '一个很长很长的曲风名字用来验证省略号';
 

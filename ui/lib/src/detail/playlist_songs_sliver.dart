@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../error_views.dart' show InlineError;
 import '../layout.dart' show kPagePadding, kPageRowPadding, rowExtentFor;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../song_actions.dart' show SongActionSource;
 import '../song_tile.dart' show SongRow;
 import 'detail_shared.dart' show DetailSkeletonList;

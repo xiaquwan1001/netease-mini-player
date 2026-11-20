@@ -5,7 +5,7 @@ import 'cover_art.dart';
 import 'layout.dart' show kCardRowPadding;
 import 'net_retry.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'toast.dart' show showToast;
 

@@ -10,7 +10,7 @@ import '../playback.dart';
 import '../playback_policy.dart' show shouldSkipVipSong;
 import '../playback_state.dart';
 import '../queue.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../sleep_timer.dart';
 import '../song_actions.dart' show SongActionSource;
 import '../stream_note.dart' show StreamNote, publishStreamNote;

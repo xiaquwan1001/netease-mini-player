@@ -6,7 +6,7 @@ import 'format.dart' show formatDurationMs;
 import 'layout.dart'
     show capRowTrailing, kPageRowPadding, kPreviewRowPadding, rowHeightBox;
 import 'now_playing.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_actions.dart';
 
 /// 歌曲行的布局口径(两条既有排版臂, 二选一):

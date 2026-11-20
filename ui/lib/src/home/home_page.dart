@@ -50,7 +50,7 @@ import '../queue.dart';
 import '../queue_guide.dart';
 import '../ranking_view.dart' show showPlayRanking;
 import '../recommend_view.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../search_exact_bar.dart';
 import '../search_landing.dart';
 import '../search_loading.dart';

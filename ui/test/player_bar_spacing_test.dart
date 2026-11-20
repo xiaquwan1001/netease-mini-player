@@ -21,7 +21,7 @@ import 'package:minincm/src/cover_art.dart';
 import 'package:minincm/src/layout.dart';
 import 'package:minincm/src/player_bar.dart';
 import 'package:minincm/src/playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 PlayerBarData _data() => PlayerBarData(
   player: PlayerView(

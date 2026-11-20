@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/eq_curve_chart.dart';
 import 'package:minincm/src/eq_profile.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 import 'package:minincm/src/settings_audio_page.dart';
 
@@ -30,7 +30,7 @@ class _FakeEqApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<rust.EqValidationDto> crateApiEqProfileValidate({
+  Future<rust.EqValidationDto> crateApiPlaybackEqProfileValidate({
     required String text,
   }) async {
     validated.add(text);

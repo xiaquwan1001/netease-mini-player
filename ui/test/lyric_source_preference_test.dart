@@ -6,7 +6,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 import 'package:minincm/src/app_settings.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 
 import 'support/lyric_policy_fake.dart';

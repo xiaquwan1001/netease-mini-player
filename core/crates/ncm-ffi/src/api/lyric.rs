@@ -4,7 +4,7 @@
 //! 函数签名与行为与原文件逐字一致, 只是搬家。
 //! 本文件里的 #[frb(mirror(..))] 就是 Dart 侧的类定义 -- 改这里 = 改 Dart API。
 
-use super::*;
+pub(crate) use super::*;
 
 /// 一行歌词(已按时间排序, 翻译按时间戳对齐)
 pub struct LyricLineDto {

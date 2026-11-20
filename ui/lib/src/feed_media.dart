@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_tile.dart' show SongTitleWithBadges;
 
 /// 动态配图: **只渲染用户自己附加的照片**, 并按数量决定排版.

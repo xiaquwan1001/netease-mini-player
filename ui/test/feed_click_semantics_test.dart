@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/cover_art.dart' show CircleCover;
 import 'package:minincm/src/feed_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/user_nav.dart';
 
 /// 点击语义统一(2026-11-18 用户反馈 2):

@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/debug_report.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 rust.InitInfo info({String deviceId = 'device-raw-1234'}) => rust.InitInfo(
   dataDir: '/tmp/minincm',

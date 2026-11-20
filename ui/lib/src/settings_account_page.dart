@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_sheet.dart';
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'song_tile.dart' show VipBadge;
 

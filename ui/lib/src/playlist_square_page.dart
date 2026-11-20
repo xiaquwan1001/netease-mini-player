@@ -5,7 +5,7 @@ import 'cover_art.dart';
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'state_views.dart';
 
 /// 歌单广场: 按分类浏览歌单(热门) / 精品歌单.

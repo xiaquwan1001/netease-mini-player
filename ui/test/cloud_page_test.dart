@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Uint64List;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/cloud_page.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 rust.CloudSong _song(
   int id, {

@@ -5,7 +5,7 @@ import 'package:minincm/src/layout.dart' show kQueueRowExtent;
 import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/queue_guide.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 import 'support/fakes.dart';
 

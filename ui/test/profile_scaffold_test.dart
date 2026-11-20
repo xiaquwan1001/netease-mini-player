@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/profile_banner.dart';
 import 'package:minincm/src/profile_scaffold.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/user_page.dart';
 
 rust.ArtistDetailDto artistDetail() => rust.ArtistDetailDto(

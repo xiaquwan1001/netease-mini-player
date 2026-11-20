@@ -60,7 +60,7 @@ import 'package:minincm/src/layout.dart' show ContentWidthLimit;
 import 'package:minincm/src/messages_page.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/recommend_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 import 'package:minincm/src/search_landing.dart';
 import 'package:minincm/src/search_results.dart';
@@ -303,28 +303,28 @@ class _GoldenRustApi implements RustLibApi {
   /// 当前账号 uid: 故意不等于歌单创建者, 于是详情页不出现"管理"菜单
   /// (编辑/移出曲目/删除属于另一条排版分支, 不进这张基准图)。
   @override
-  Future<BigInt> crateApiMyUid() async => BigInt.from(1822714196);
+  Future<BigInt> crateApiSocialMyUid() async => BigInt.from(1822714196);
 
   @override
-  Future<rust.PlaylistDetail> crateApiPlaylistDetail({
+  Future<rust.PlaylistDetail> crateApiDetailPlaylistDetail({
     required BigInt playlistId,
   }) async => _playlistDetail;
 
   @override
-  Future<List<rust.SongDto>> crateApiPlaylistSongs({
+  Future<List<rust.SongDto>> crateApiLibraryPlaylistSongs({
     required BigInt playlistId,
   }) async => _playlistSongs();
 
   /// 播客详情的节目列表(S2 宽档双列基准用)
   @override
-  Future<List<rust.PodcastProgramDto>> crateApiPodcastPrograms({
+  Future<List<rust.PodcastProgramDto>> crateApiPodcastPodcastPrograms({
     required BigInt radioId,
     required int limit,
     required int offset,
   }) async => _podcastPrograms(radioId);
 
   @override
-  Future<rust.CommentPage> crateApiComments({
+  Future<rust.CommentPage> crateApiDetailComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -337,7 +337,7 @@ class _GoldenRustApi implements RustLibApi {
   );
 
   @override
-  Future<rust.CommentStats> crateApiCommentStats({
+  Future<rust.CommentStats> crateApiDetailCommentStats({
     required String threadId,
   }) async => rust.CommentStats(
     threadId: threadId,

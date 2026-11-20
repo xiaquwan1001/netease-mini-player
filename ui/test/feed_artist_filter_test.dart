@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/feed/feed_view_body.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 关注页选中艺人后的"贪婪加载历史"回归(用户反馈 2026-11-19, 发条月亮):
 ///

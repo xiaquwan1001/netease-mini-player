@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/detail/podcast_detail_page.dart';
 import 'package:minincm/src/layout.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 
 import 'support/fakes.dart';
@@ -39,7 +39,7 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('双列测试未覆盖 ${invocation.memberName}');
 
   @override
-  Future<List<rust.PodcastProgramDto>> crateApiPodcastPrograms({
+  Future<List<rust.PodcastProgramDto>> crateApiPodcastPodcastPrograms({
     required BigInt radioId,
     required int limit,
     required int offset,
@@ -59,7 +59,7 @@ class _FakeRustApi implements RustLibApi {
   ];
 
   @override
-  Future<rust.CommentPage> crateApiComments({
+  Future<rust.CommentPage> crateApiDetailComments({
     required String kind,
     required BigInt resourceId,
     required int limit,
@@ -72,7 +72,7 @@ class _FakeRustApi implements RustLibApi {
   );
 
   @override
-  Future<rust.CommentStats> crateApiCommentStats({
+  Future<rust.CommentStats> crateApiDetailCommentStats({
     required String threadId,
   }) async => rust.CommentStats(
     threadId: threadId,

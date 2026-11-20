@@ -4,7 +4,7 @@
 //! 函数签名与行为与原文件逐字一致, 只是搬家。
 //! 本文件里的 #[frb(mirror(..))] 就是 Dart 侧的类定义 -- 改这里 = 改 Dart API。
 
-use super::*;
+pub(crate) use super::*;
 
 /// 播放器与取链**共用的客户端 UA**(唯一来源 = `ncm_service::identity::platform_profile().ua`).
 ///

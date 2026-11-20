@@ -8,7 +8,7 @@ import 'feed_share.dart';
 import 'format.dart' show formatDateYmd;
 import 'net_retry.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_tile.dart' show SongTitleWithBadges;
 import 'toast.dart' show showToast;
 import 'user_nav.dart';

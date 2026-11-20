@@ -9,7 +9,7 @@ import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/profile_header.dart';
 import 'package:minincm/src/recommend_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 import 'package:minincm/src/settings_account_page.dart';
 import 'package:minincm/src/settings_view.dart';
@@ -24,18 +24,18 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<List<rust.PlaylistCategory>> crateApiPlaylistCategories() async =>
+  Future<List<rust.PlaylistCategory>> crateApiDiscoverPlaylistCategories() async =>
       const [];
 
   @override
-  Future<List<rust.Playlist>> crateApiPlaylistsByCategory({
+  Future<List<rust.Playlist>> crateApiDiscoverPlaylistsByCategory({
     required String cat,
     required int limit,
     required int offset,
   }) async => const [];
 
   @override
-  Future<List<rust.Playlist>> crateApiHighQualityPlaylists({
+  Future<List<rust.Playlist>> crateApiDiscoverHighQualityPlaylists({
     required String cat,
     required int limit,
   }) async => const [];

@@ -4,7 +4,7 @@ import 'messages/forwards_tab.dart' show ForwardsTab;
 import 'messages/inbox_tab.dart' show InboxTab;
 import 'messages/message_types.dart';
 import 'messages/sessions_tab.dart' show SessionsTab;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 // 对外入口保持不变(审计建议 3: 一页一文件后调用方零改动):
 // 私信/通知/@我 页签、单人聊天、回调类型与相对时间文案仍从本文件 import。

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/mv_page.dart';
 import 'package:minincm/src/mv_playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// U-04(2026-11-18): 播 MV 时歌曲必须让路(暂停), 且 MV 结束后**不自动恢复**,
 /// 返回本页给一次"要接着听点播放条"的提示。

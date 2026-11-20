@@ -19,7 +19,7 @@ import 'package:minincm/src/play_queue_sheet.dart';
 import 'package:minincm/src/radio_subscribers_page.dart';
 import 'package:minincm/src/ranking_view.dart';
 import 'package:minincm/src/recommend_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/search_landing.dart';
 import 'package:minincm/src/search_results.dart';
 import 'package:minincm/src/song_tile.dart';

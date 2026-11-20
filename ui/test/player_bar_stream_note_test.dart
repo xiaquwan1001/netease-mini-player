@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
 import 'package:minincm/src/player_bar.dart';
 import 'package:minincm/src/playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/stream_note.dart';
 
 const _trackId = 4242;

@@ -9,7 +9,7 @@ import 'cover_art.dart';
 import 'layout.dart' show rowHeightBox;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'sheet_header.dart';
 
 /// 可注入的加载器(测试用 mock)

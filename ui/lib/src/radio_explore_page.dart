@@ -13,7 +13,7 @@ import 'adaptive_text.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'state_views.dart';
 import 'format.dart' show formatDurationMs;
 

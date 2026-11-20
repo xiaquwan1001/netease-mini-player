@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/feed_detail_page.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 动态详情页「评论」按钮回归: 点它必须「去写评论」(滚到评论区 + 打开
 /// 写评论面板聚焦输入框), 不能把详情页 pop 掉(曾经误写成 Navigator.pop)。

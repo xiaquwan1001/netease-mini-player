@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart';
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// UI 用的播放状态(与 Rust/Android 两侧统一)
 class PlayerView {

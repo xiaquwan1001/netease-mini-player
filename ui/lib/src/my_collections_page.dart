@@ -5,7 +5,7 @@ import 'cover_art.dart';
 import 'layout.dart' show kPageRowPadding;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 「我的」页里的收藏歌单 / 收藏播客 / 收藏专辑的"查看全部"二级页。
 ///

@@ -7,7 +7,7 @@ import '../error_views.dart' show FullError;
 import '../layout.dart' show kPageRowPadding;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../state_views.dart';
 import '../song_tile.dart' show SongRow;
 import 'discover_types.dart';

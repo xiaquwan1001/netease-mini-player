@@ -1,4 +1,4 @@
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 列表可见性策略(与官方一致):
 /// - 无版权 **且没被收藏** 的曲目: 搜不出来 / 不显示(官方也是直接消失, 不做交互)

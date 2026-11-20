@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// Android Keystore 凭据后端的 Dart 封装(通道层).
 ///

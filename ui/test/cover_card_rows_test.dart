@@ -10,7 +10,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/cover_row.dart';
 import 'package:minincm/src/recommend_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 const _dj = '四十只烤翅的电台主播名很长很长很长继续加长一点直到折行为止';
 const _subtitle = '$_dj · 1234 集';

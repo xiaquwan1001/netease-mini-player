@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'async_view.dart';
 import 'error_views.dart' show FullError;
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'state_views.dart';
 import 'toast.dart' show showToast;
 import 'vip/vip_mapping.dart';

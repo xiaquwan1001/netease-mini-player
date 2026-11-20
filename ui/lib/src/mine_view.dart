@@ -16,7 +16,7 @@ import 'playback_bridge.dart';
 import 'profile_header.dart';
 import 'ranking_view.dart';
 import 'recent_order.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'user_page.dart' show showUserPage;
 import 'song_actions.dart';

@@ -40,7 +40,7 @@
 | 文件 | 用途 | 归档理由 |
 |---|---|---|
 | [archive/plan-2026-11-09-settings-and-player.md](archive/plan-2026-11-09-settings-and-player.md) | 设置扩充 + 播放体验任务书(7 项已验收)。**归档** | 7 项全落地、真机听感验收通过; 文中 `main.dart:NNNN` 行号已失效(main.dart 现为 48 行门面)。代码注释里的路径已同步改指 `docs/archive/`(§2.2/§5 契约仍从这里查) |
-| [archive/credential-storage-options.md](archive/credential-storage-options.md) | 凭据存储方案调研(已选型落地, 实现在 `credential_store.rs`/`credential_keyring.rs`)。**归档** | 5 条决策已由用户拍板并固化在 `.pi/memory/notes-credentials.md`; 本文只留调研过程 |
+| [archive/credential-storage-options.md](archive/credential-storage-options.md) | 凭据存储方案调研(已选型落地, 实现在 `core/crates/ncm-service/src/credential_store.rs`/`credential_keyring.rs`)。**归档** | 5 条决策已由用户拍板并固化在 `.pi/memory/notes-credentials.md`; 本文只留调研过程 |
 | [archive/ui-row-audit.md](archive/ui-row-audit.md) | 列表行/溢出全仓审计(A 必坏 7 / B 潜在 12 / C 一致性 18)+ `ListRow` API 草案。**归档** | A/B/C 三级已全部清零(v0.9.0 + 2026-11-16/17 三批), 口径已进 `.pi/memory/notes-ui-rules.md` 与 `layout.dart` token; 文中 §4/§6/§7 行号是当时口径 |
 | [archive/lx-plugin.md](archive/lx-plugin.md) | LX 音源脚本工坊(Melodia 沙盒契约 + 回归台)。**作废(2026-11-19)** | 未落地设计稿, 面向外部项目 Melodia; 文件头已加作废 banner, 立项时再取出 |
 | [archive/melodia-pr-workflow.md](archive/melodia-pr-workflow.md) | 给 Melodia 提 PR 的工作流。**作废(2026-11-19)** | 针对被 fork 的 WebView 版(`legacy/`), 本仓已重启为独立工程; 文件头已加作废 banner |

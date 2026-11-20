@@ -6,7 +6,7 @@ import 'package:flutter/widgets.dart';
 
 import 'app_meta.dart';
 import 'app_settings.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 匿名诊断包: "复现问题必需的环境与状态", **不含任何账号身份**。
 ///

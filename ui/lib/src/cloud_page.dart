@@ -11,7 +11,7 @@ import 'file_pick.dart' show pickAudioFile;
 import 'layout.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart' show OffsetPager;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'toast.dart' show showToast;
 
 /// 音乐云盘页(我的 → 音乐云盘).

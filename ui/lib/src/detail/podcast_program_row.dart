@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../format.dart' show formatDurationMs;
 import '../now_playing.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../song_actions.dart';
 
 /// 固定行高(基准 56, 随字号放大)的节目行: 节目名 + DJ · 时长

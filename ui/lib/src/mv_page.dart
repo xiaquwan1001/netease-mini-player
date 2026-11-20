@@ -12,7 +12,7 @@ import 'net_retry.dart' show describeError, friendlyError;
 import 'state_views.dart' show LoadingView;
 import 'format.dart' show formatDurationMs;
 import 'mv_playback.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'toast.dart' show showToast;
 
 /// MV 详情/播放页(C3): 封面大图 + 标题/艺人/播放量/发布时间/简介 + 播放按钮

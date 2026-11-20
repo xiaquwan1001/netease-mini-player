@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app_settings.dart' show AppSettings;
 import '../daily_cache.dart' show DailyPlaylistCache;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import 'daily_playlists_tab.dart' show DailyPlaylistsTab;
 import 'daily_songs_tab.dart' show DailySongsTab;
 import 'discover_types.dart';

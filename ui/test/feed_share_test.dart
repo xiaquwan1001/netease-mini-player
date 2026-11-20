@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
 import 'package:minincm/src/feed_share.dart';
 import 'package:minincm/src/feed_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:qr_flutter/qr_flutter.dart';
 
 /// 动态/评论分享面板回归: 预览卡片、水印开关、长按转发、评论长按分享.

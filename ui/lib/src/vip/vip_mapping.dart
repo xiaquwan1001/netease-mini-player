@@ -1,5 +1,5 @@
 import '../format.dart' show formatDateYmd;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 黑胶会员只读页 · 视图模型(纯 Dart, 不依赖 Rust 绑定)
 /// 数据由注入的 loader 提供, Rust 接入时在外层做 DTO 到 View 的转换。

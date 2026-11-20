@@ -5,7 +5,7 @@ import 'cover_art.dart';
 import 'layout.dart' show kPageRowPadding;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 typedef ToplistCatalogLoader =
     Future<List<rust.ToplistCatalogGroup>> Function();

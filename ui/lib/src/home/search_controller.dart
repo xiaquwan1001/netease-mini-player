@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../net_retry.dart' show friendlyError, retryNetwork;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../search_exact_bar.dart';
 import '../search_landing.dart' show RecommendedKeyword;
 

@@ -16,7 +16,7 @@ import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import '../radio_subscribers_page.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import 'detail_shared.dart' show DetailSkeletonList, showResourceShareSheet;
 import 'podcast_program_row.dart' show PodcastProgramRow;
 

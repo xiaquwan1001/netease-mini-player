@@ -25,7 +25,7 @@ import 'package:minincm/src/detail_pane.dart'
 import 'package:minincm/src/home/queue_sheet_controller.dart';
 import 'package:minincm/src/home/song_action_wiring.dart';
 import 'package:minincm/src/queue.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/song_actions.dart'
     show SongActionHost, SongActionSource, showSongActionsSheet;
 import 'package:minincm/src/song_share.dart' show showSongShareSheet;

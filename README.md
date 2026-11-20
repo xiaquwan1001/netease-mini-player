@@ -197,7 +197,7 @@ cargo run -p ncm-cli -- lyric 186016
 | 设备走查 | 模拟器 **a34**(API 34)全流程 + 真机(vivo X200 Ultra)发布冒烟与听感验收;记录见 `docs/testing.md` |
 
 上表这些命令**只在 `tools/ci-gates.sh` 里实现一次**(`bash tools/ci-gates.sh list` 看全部子命令):
-本地 `tools/ci.sh`、GitHub `ci.yml` 的 rust/flutter 两个 job、`release.yml` 的 verify job
+本地 `tools/ci.sh`、GitHub `.github/workflows/ci.yml` 的 rust/flutter 两个 job、`.github/workflows/release.yml` 的 verify job
 调的都是同一处 —— 发版门不会再比 CI 弱(token / write-guard / format / clippy / golden 在 CI 与发版里都跑)。
 
 ## 项目进度(版本号唯一事实来源是 `ui/pubspec.yaml`; 当前已发布线见 [Releases](https://github.com/xiaquwan1001/netease-mini-player/releases/latest))

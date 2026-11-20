@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/eq_import.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// N1: EQ 导入的校验门(粘贴文本 / 从文件读取共用同一个入口)。
 ///

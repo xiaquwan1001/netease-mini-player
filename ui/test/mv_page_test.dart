@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/mv_page.dart';
 import 'package:minincm/src/mv_playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// MV 详情/播放页(C3)测试: 假 loader + 假通道, 不触网络/平台。
 

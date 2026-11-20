@@ -1,5 +1,5 @@
 import 'package:minincm/src/playback_bridge.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/song_actions.dart' show SongActionSource;
 
 /// 播放探针: 用 [PlaybackBridge.debugOverride] 截获页面内的点播。

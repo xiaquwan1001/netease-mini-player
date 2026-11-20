@@ -9,7 +9,7 @@ import '../play_queue_sheet.dart';
 import '../player_bar.dart' show playModeLabels;
 import '../popup_routes.dart' show buildAppSheetRoute, dismissPopupRoute;
 import '../queue.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 播放队列面板 + 播放模式轮转(从 main.dart 的 `_HomePageState` 搬出,
 /// 2026-11 拆壳 S6, 对应审计 G10 + `_queueSheetOpen`)。

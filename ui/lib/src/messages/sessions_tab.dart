@@ -4,7 +4,7 @@ import '../cover_art.dart';
 import '../layout.dart' show avatarStripHeightFor, capRowTrailing;
 import '../net_retry.dart';
 import '../paged_list_view.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../user_nav.dart';
 import 'message_shared.dart' show relativeTime;
 import 'message_types.dart';

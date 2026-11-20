@@ -7,7 +7,7 @@
 //
 // 默认值取"最常见的测试口径": 艺人/专辑/1 秒/免费/无 VIP/可播。
 // 需要的字段用命名参数覆盖, 不要再复制第二份字面量。
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 歌曲 DTO 假数据。
 ///

@@ -10,7 +10,7 @@ import '../keystore.dart' show credentialSync;
 import '../login_sheet.dart' show showLoginSheet;
 import '../net_retry.dart' show errorKind, friendlyError, retryNetwork;
 import '../platform.dart' show PlatformBridge;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../settings_account_page.dart' show showAccountPage;
 import '../song_actions.dart' show SongActionSource;
 import '../user_list_page.dart' show showUserList;

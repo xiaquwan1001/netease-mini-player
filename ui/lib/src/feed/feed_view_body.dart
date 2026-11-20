@@ -16,7 +16,7 @@ import '../error_views.dart';
 import '../feed_detail_page.dart';
 import '../layout.dart' show avatarStripHeightFor, kPagePadding;
 import '../net_retry.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../toast.dart' show showToast;
 import '../user_nav.dart';
 import 'feed_merge.dart';

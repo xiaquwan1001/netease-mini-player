@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/feed_view.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 动态流分页回归: 滚动到底加载更早(游标 = 最后一条 time_ms)、
 /// 下拉刷新只刷最新页并与历史按 id 合并去重。

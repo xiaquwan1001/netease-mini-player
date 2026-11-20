@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/comment_thread.dart';
 import 'package:minincm/src/mv_page.dart';
 import 'package:minincm/src/mv_playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// MV 播放页评论区(需求 10): 看评论 / 点赞 / 发评论, 全部复用 CommentThread
 /// (kind: 'mv' → provider 的 comment_mv)。测试全用注入 hook, 不触网络。

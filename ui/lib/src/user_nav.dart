@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'artist_nav.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'user_page.dart';
 
 /// 头像点击 -> 这个人该去的主页。

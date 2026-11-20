@@ -7,7 +7,7 @@ import '../lyric.dart';
 import '../lyric_source.dart';
 import '../net_retry.dart' show friendlyError;
 import '../playback.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../song_share.dart' show shareableLyricLines;
 import '../word_lyric_view.dart';
 

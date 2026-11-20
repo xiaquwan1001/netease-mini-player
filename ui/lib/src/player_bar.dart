@@ -15,7 +15,7 @@ import 'layout.dart'
         layoutTierFor;
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'stream_note.dart' show currentStreamNote, StreamNote;
 
 /// 常驻播放条的不可变数据快照。

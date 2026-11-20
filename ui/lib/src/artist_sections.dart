@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_tile.dart' show SongRow;
 
 /// 艺人主页的「区块」组件。只吃 DTO, 不发请求,

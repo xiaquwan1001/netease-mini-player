@@ -25,7 +25,7 @@ import 'package:minincm/src/home/playback_coordinator.dart';
 import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/playback_state.dart';
 import 'package:minincm/src/queue.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 import 'package:minincm/src/sleep_timer.dart';
 
@@ -59,7 +59,7 @@ class _FakeApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<rust.StreamUrl> crateApiSongUrl({
+  Future<rust.StreamUrl> crateApiAccountSongUrl({
     required BigInt trackId,
     required String level,
   }) async {
@@ -75,10 +75,10 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<bool> crateApiRememberPlay({required rust.SongDto song}) async => true;
+  Future<bool> crateApiSearchRememberPlay({required rust.SongDto song}) async => true;
 
   @override
-  Future<rust.WordLyricDto> crateApiWordLyricLines({
+  Future<rust.WordLyricDto> crateApiLyricWordLyricLines({
     required BigInt trackId,
   }) async => const rust.WordLyricDto(
     lines: <rust.WordLyricLineDto>[],
@@ -87,26 +87,26 @@ class _FakeApi implements RustLibApi {
   );
 
   @override
-  Future<rust.WordLyricDto?> crateApiTtmlLyricLines({
+  Future<rust.WordLyricDto?> crateApiLyricTtmlLyricLines({
     required BigInt trackId,
   }) async => null;
 
   @override
-  Future<List<rust.LyricLineDto>> crateApiLyricLinesI18N({
+  Future<List<rust.LyricLineDto>> crateApiLyricLyricLinesI18N({
     required BigInt trackId,
   }) async => const <rust.LyricLineDto>[];
 
   @override
-  Future<String> crateApiLyric({required BigInt trackId}) async => '';
+  Future<String> crateApiAccountLyric({required BigInt trackId}) async => '';
 
   @override
-  Future<rust.LoudnessDto?> crateApiLoudnessCached({
+  Future<rust.LoudnessDto?> crateApiPlaybackLoudnessCached({
     required BigInt trackId,
     required double targetLufs,
   }) async => null;
 
   @override
-  Future<rust.PlaybackTuningDto> crateApiPlayerConfigure({
+  Future<rust.PlaybackTuningDto> crateApiPlaybackPlayerConfigure({
     required double gainDb,
     required int fadeMs,
     String? eqText,

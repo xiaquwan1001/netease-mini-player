@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'category_bar.dart';
 import 'cover_art.dart';
 import 'layout.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 IconData suggestIcon(String kind) {
   switch (kind) {

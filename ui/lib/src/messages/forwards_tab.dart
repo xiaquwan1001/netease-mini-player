@@ -5,7 +5,7 @@ import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
 import '../layout.dart' show capRowTrailing;
 import '../net_retry.dart' show friendlyError;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../state_views.dart';
 import '../user_nav.dart';
 import 'message_shared.dart' show relativeTime;

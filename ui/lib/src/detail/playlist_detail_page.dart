@@ -16,7 +16,7 @@ import '../layout.dart'
         twoColumnFor;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../toast.dart' show showToast, showUndoToast;
 import 'detail_shared.dart' show showResourceShareSheet;
 import 'playlist_dialogs.dart'

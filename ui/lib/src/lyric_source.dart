@@ -14,7 +14,7 @@ library;
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge.dart' show Int64List;
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// ---------------- B13: 逐字歌词三来源解析(yrc -> AMLL TTML -> 行级) ----------------
 

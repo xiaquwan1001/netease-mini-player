@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 登录门面: 平台差异只出现在这一层。
 ///

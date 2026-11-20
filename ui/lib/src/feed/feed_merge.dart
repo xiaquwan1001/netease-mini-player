@@ -1,4 +1,4 @@
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 合并两页动态(刷新/加载更早共用): 按 id 去重, [first] 的副本优先(最新的
 /// 点赞/评论状态跟手), [second] 中未出现过的条目按原顺序追加到末尾。

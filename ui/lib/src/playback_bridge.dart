@@ -1,4 +1,4 @@
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_actions.dart' show SongActionSource;
 
 /// 起播一批曲目: 用 [songs] 重置播放队列并从 [index] 开始播。

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/cover_art.dart' show CircleCover;
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/layout.dart' show kPagePadding;
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 /// 顶部艺人横条「放几个」的自适应回归(2026-11-18 用户反馈 1)。
 ///

@@ -1,4 +1,4 @@
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 import 'package:flutter/material.dart';
 

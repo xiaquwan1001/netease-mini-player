@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 import 'app_settings.dart';
 import 'playback.dart';

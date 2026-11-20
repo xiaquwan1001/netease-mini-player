@@ -11,7 +11,7 @@
 library;
 
 import 'queue.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 私人FM 一次"入队"要连取几批。
 ///

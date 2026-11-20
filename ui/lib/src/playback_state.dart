@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'queue.dart' show PlayMode;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 退出 App 时的"播放现场"(队列 + 当前曲 + 位置), 下次启动恢复。
 ///

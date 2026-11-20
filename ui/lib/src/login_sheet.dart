@@ -6,7 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import 'net_retry.dart';
 import 'popup_routes.dart' show buildAppSheetRoute, dismissPopupRoute;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
 import 'toast.dart';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/digital_album_page.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 rust.DigitalAlbumPurchased _albums({int n = 2}) => rust.DigitalAlbumPurchased(
   total: BigInt.from(n),

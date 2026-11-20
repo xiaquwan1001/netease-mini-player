@@ -1,4 +1,4 @@
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 等级 / 勋章墙 · 纯 Dart 视图模型(不依赖 Rust 绑定)。
 ///

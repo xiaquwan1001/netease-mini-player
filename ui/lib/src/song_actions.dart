@@ -4,7 +4,7 @@ import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'toast.dart' show showToastWith;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'sheet_header.dart';
 
 /// 歌曲菜单打开时所处的"来源"场景。

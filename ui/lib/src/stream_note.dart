@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 取链结果里"信息无损"那一半的只读展示摘要(方案 A)。
 ///

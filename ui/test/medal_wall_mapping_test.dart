@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/medal_wall.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 rust.UserLevel levelDto({int level = 9}) => rust.UserLevel(
   level: level,

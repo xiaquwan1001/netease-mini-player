@@ -6,7 +6,7 @@ import 'format.dart' show formatCountMagnitude;
 import 'layout.dart';
 import 'library_view.dart';
 import 'mv_page.dart' show showMvPage;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'song_tile.dart';
 import 'user_nav.dart';
 

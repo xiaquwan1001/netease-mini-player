@@ -11,7 +11,7 @@ import 'dart:io';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 
 final File _libFile = File(

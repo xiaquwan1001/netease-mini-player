@@ -23,7 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/auth.dart';
 import 'package:minincm/src/home/account_actions.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 import 'package:minincm/src/song_actions.dart' show SongActionSource;
 
@@ -100,7 +100,7 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<Uint64List> crateApiLikedIds() async {
+  Future<Uint64List> crateApiLibraryLikedIds() async {
     likedCalls += 1;
     final err = likedError;
     if (err != null) throw err;
@@ -108,7 +108,7 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<bool> crateApiAccountSwitch({required BigInt userId}) async {
+  Future<bool> crateApiAccountAccountSwitch({required BigInt userId}) async {
     switchCalls.add(userId);
     final err = switchError;
     if (err != null) throw err;
@@ -117,39 +117,39 @@ class _FakeApi implements RustLibApi {
   }
 
   @override
-  Future<rust.AccountDto> crateApiAccountSyncActive() async {
+  Future<rust.AccountDto> crateApiAccountAccountSyncActive() async {
     final err = syncActiveError;
     if (err != null) throw err;
     return syncActiveResult;
   }
 
   @override
-  Future<bool> crateApiLogout() async {
+  Future<bool> crateApiAccountLogout() async {
     logoutCalls += 1;
     return true;
   }
 
   @override
-  Future<BigInt> crateApiMyUid() async => currentUid;
+  Future<BigInt> crateApiSocialMyUid() async => currentUid;
 
   @override
-  Future<List<rust.AccountDto>> crateApiAccounts() async => const [];
+  Future<List<rust.AccountDto>> crateApiAccountAccounts() async => const [];
 
   @override
-  Future<bool> crateApiAccountRemove({required BigInt userId}) async => true;
+  Future<bool> crateApiAccountAccountRemove({required BigInt userId}) async => true;
 
   @override
-  Future<List<rust.CredentialOpDto>> crateApiCredentialPendingWrites() async =>
+  Future<List<rust.CredentialOpDto>> crateApiAccountCredentialPendingWrites() async =>
       const <rust.CredentialOpDto>[];
 
   @override
-  Future<List<rust.Playlist>> crateApiMyPlaylists() async {
+  Future<List<rust.Playlist>> crateApiLibraryMyPlaylists() async {
     myPlaylistsCalls += 1;
     return myPlaylists;
   }
 
   @override
-  Future<List<rust.Playlist>> crateApiDailyRecommendPlaylists() async =>
+  Future<List<rust.Playlist>> crateApiRecommendDailyRecommendPlaylists() async =>
       const <rust.Playlist>[];
 }
 

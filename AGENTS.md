@@ -37,7 +37,7 @@
 - 身份纪律:device_id 首启生成后**永久复用**;设备 cookie(`_ntes_nuid/_ntes_nnid/NMTID/WNMCID`)
   必须持久化,禁止每进程随机。
 - 用户操作设备(扫码/点应用);助手准备资产、给精确步骤、盯 `adb logcat`。
-- 第二份工作副本 `~/ncm-wt/ldata`(分支 `lane/data-profile`,checkout 落后于 main):**记忆唯一权威仍是本仓 `.pi/memory/`**,不要在 ldata 里另建/维护记忆;它的 `AGENTS.md` 随分支落后属正常,动手前先 `git merge main` 或按本仓 AGENTS.md 为准。
+- 第二份工作副本 `ncm-wt/ldata`（家目录下，分支 `lane/data-profile`,checkout 落后于 main）【2026-11-20 注：该 worktree 现已不在盘（`ls ncm-wt/ldata` 空），若需重建再按同分支 checkout；本条事实保留作历史】:**记忆唯一权威仍是本仓 `.pi/memory/`**,不要在 ldata 里另建/维护记忆;它的 `AGENTS.md` 随分支落后属正常,动手前先 `git merge main` 或按本仓 AGENTS.md 为准。
 - 项目记忆 `.pi/memory/`（`mem -t project` 自动搜；`history/` 被跳过）：`FAILURES.md` 失败教训｜`notes-build.md` 构建/工具链/CI/体积基线｜`notes-api.md` 登录/取链/歌词/评论协议｜`notes-ui-rules.md` UI 规则层｜`notes-credentials.md` 凭据存储决策｜`notes-wip.md` 在飞状态与门禁基线｜`media-notification-custom-buttons.md` Media3 通知/按钮槽位｜`USER.md` 项目专属口径｜`history/HINDSIGHT.md` 2026-10~11-04 历史 hindsight（存量事实，按需查）。项目技能 `.pi/skills/`。
   **`.pi/` 只在本地工作区, 已在 `.gitignore` 排除、不进公开仓库**(2026-11-10 起)。
   **明细不写进本文件**: 构建/工具链/CI/体积 → `notes-build.md`; 协议语义 → `notes-api.md`; UI 规则层(数值/容器/四态/门禁) → `notes-ui-rules.md`; 在飞状态与门禁基线 → `notes-wip.md`。

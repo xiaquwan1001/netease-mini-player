@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/home/search_controller.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 
 /// 只桩住「猜你想搜」候选池用到的三个接口, 其余调动直接抛(测试没覆盖到就是 bug)。
@@ -38,14 +38,14 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<rust.DefaultSearch?> crateApiDefaultSearch() async {
+  Future<rust.DefaultSearch?> crateApiSearchDefaultSearch() async {
     defaultCalls++;
     if (failDefault) throw StateError('未登录');
     return defaults;
   }
 
   @override
-  Future<List<String>> crateApiSearchSuggestKeywords({
+  Future<List<String>> crateApiSearchSearchSuggestKeywords({
     required String keywords,
   }) async {
     suggestCalls.add(keywords);
@@ -53,7 +53,7 @@ class _FakeRustApi implements RustLibApi {
   }
 
   @override
-  Future<List<String>> crateApiSearchHistory() async {
+  Future<List<String>> crateApiSearchSearchHistory() async {
     historyCalls++;
     return history;
   }

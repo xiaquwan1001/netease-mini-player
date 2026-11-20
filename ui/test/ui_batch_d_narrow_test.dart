@@ -5,7 +5,7 @@ import 'package:minincm/src/discover.dart';
 import 'package:minincm/src/feed_view.dart';
 import 'package:minincm/src/mine_view.dart';
 import 'package:minincm/src/new_release_page.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 
 import 'support/fakes.dart';
 

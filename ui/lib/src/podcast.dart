@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
 import 'net_retry.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'sheet_header.dart';
 import 'state_views.dart';
 import 'format.dart' show formatDurationMs;

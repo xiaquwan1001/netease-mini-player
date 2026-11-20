@@ -4,7 +4,7 @@ import 'app_settings.dart';
 import 'app_sheet.dart';
 import 'chart_section.dart';
 import 'layout.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'state_views.dart';
 

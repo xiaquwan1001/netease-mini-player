@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'cover_art.dart';
 import 'net_retry.dart';
 import 'paged_list_view.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'user_page.dart';
 
 /// 订阅者/听众列表加载器(测试用 mock). timeMs 是分页游标(上一页最后一条的

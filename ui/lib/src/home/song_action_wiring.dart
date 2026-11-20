@@ -15,7 +15,7 @@ import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../playback.dart' show preferHttpsStreamUrl;
 import '../platform.dart' show PlatformBridge;
 import '../queue.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../sheet_header.dart' show SheetHeader;
 import '../similar_sheet.dart' show showSimilarSongs;
 import '../song_actions.dart';

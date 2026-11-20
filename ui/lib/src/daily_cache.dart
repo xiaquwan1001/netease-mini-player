@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'playback_state.dart' show songFromJson, songToJson;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 磁盘上某一天的每日推荐缓存(「历史日推」里合并展示用)。
 ///

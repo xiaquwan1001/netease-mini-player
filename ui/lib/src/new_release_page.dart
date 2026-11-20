@@ -8,7 +8,7 @@ import 'format.dart' show formatDurationShort;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'playback_bridge.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 typedef AreaSongLoader = Future<List<rust.SongDto>> Function(String area);
 typedef AreaAlbumLoader = Future<List<rust.AlbumItem>> Function(String area);

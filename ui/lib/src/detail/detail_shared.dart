@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../app_sheet.dart';
 import '../net_retry.dart';
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../sheet_header.dart';
 import '../toast.dart' show showToast;
 

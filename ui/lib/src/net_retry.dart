@@ -1,4 +1,4 @@
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 错误 kind 的文本名, 与 Rust 侧 `ncm_provider::ProviderErrorKind::as_str` 一致:
 /// network / auth / riskControl / notFound / unsupported / forbidden / internal。

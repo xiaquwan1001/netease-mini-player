@@ -1,4 +1,4 @@
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 
 /// 消息中心的加载/发送回调类型(页面与注入点共用, 见 main.dart 的接线).
 

@@ -4,7 +4,7 @@ import 'all_charts_page.dart';
 import 'app_settings.dart';
 import 'async_view.dart';
 import 'cover_row.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 
 /// 榜单列表加载器(可注入, 测试用)。缺省走 FFI chartList。
 typedef ChartListLoader = Future<List<rust.ChartSummary>> Function();

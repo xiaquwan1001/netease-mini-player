@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/audio_tuning.dart';
 import 'package:minincm/src/playback.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
 
 /// P-03: 增益限速斜率三端同口径。
@@ -22,7 +22,7 @@ class _FakeRustApi implements RustLibApi {
       throw UnimplementedError('${invocation.memberName}');
 
   @override
-  Future<rust.PlaybackTuningDto> crateApiPlayerConfigure({
+  Future<rust.PlaybackTuningDto> crateApiPlaybackPlayerConfigure({
     required double gainDb,
     required int fadeMs,
     String? eqText,

@@ -349,20 +349,24 @@ fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
 // 子模块靠 use super::*; 拿到上面的共享 helper(FfiError/core/with_provider/
 // song_dto/ffi_forward! 等); pub use 必须保留 —— frb 生成的 wire 代码按
 // crate::api::<fn> 取函数, 少了这行就编译不过。
-mod account;
-mod artist;
-mod cloud;
-mod detail;
-mod discover;
-mod library;
-mod lyric;
-mod me;
-mod playback;
-mod podcast;
-mod radio;
-mod recommend;
-mod search;
-mod social;
+//
+// 子模块必须是 `pub mod`: frb 生成物对在子模块里声明的 DTO 直接写
+// `crate::api::<域>::TypeName`(实测 frb_generated.rs 对 WordLyricScoreDto 就是这样),
+// 私有模块会让生成物报 E0603(module is private)。
+pub mod account;
+pub mod artist;
+pub mod cloud;
+pub mod detail;
+pub mod discover;
+pub mod library;
+pub mod lyric;
+pub mod me;
+pub mod playback;
+pub mod podcast;
+pub mod radio;
+pub mod recommend;
+pub mod search;
+pub mod social;
 
 pub use account::*;
 pub use artist::*;

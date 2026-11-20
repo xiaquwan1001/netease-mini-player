@@ -10,7 +10,7 @@ import 'playback_bridge.dart';
 import 'playlist_square_page.dart';
 import 'radio_explore_page.dart';
 import 'queue_guide.dart' show kFmBatchesPerFill, loadFmBatches;
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'toast.dart' show showToast;
 import 'song_actions.dart';
 import 'song_tile.dart' show SongRow;

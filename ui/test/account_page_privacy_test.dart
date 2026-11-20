@@ -7,7 +7,7 @@
 //   2) 账号簿仍可展示昵称(它就是一本地址簿), 但要标明「当前未登录」.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:minincm/src/rust/api.dart' as rust;
+import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/settings_account_page.dart';
 
 rust.InitInfo info({required bool loggedIn}) => rust.InitInfo(

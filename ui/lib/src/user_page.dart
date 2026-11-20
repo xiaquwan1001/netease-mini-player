@@ -18,7 +18,7 @@ import 'platform.dart';
 import 'playback_bridge.dart';
 import 'profile_banner.dart';
 import 'profile_scaffold.dart';
-import 'rust/api.dart' as rust;
+import 'rust/api_all.dart' as rust;
 import 'section_header.dart';
 import 'song_tile.dart' show SongRow;
 import 'state_views.dart';

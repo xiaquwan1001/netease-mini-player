@@ -4,7 +4,7 @@ import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
 import '../net_retry.dart' show errorKind, friendlyError;
-import '../rust/api.dart' as rust;
+import '../rust/api_all.dart' as rust;
 import '../state_views.dart';
 import 'discover_types.dart';
 
