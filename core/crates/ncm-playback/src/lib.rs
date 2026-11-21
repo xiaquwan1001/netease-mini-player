@@ -662,11 +662,15 @@ mod backend {
         }
     }
 
-    /// 把一条源套上 EQ 链与淡入后追加进播放队列(**不碰状态**).
+    /// 把一条源套上 EQ 链与淡入(**纯构造**: 不碰播放器/输出设备, 因此没有声卡也能单测包络).
     ///
     /// 开播([`start_source`])与渐进下载完成后的换源([`upgrade_to_complete`])共用这一段:
     /// 两处的 EQ 链构造、淡入、声道/采样率读取必须完全一致, 否则换源后音色会变。
-    fn append_source<I>(player: &RodioPlayer, input: I, local: &PlaybackTuning, fade: Duration)
+    fn tuned_source<I>(
+        input: I,
+        local: &PlaybackTuning,
+        fade: Duration,
+    ) -> impl Source<Item = Sample> + Send + 'static
     where
         I: Source<Item = Sample> + Send + 'static,
     {
@@ -678,7 +682,23 @@ mod backend {
             input.sample_rate().get() as f32,
             input.channels().get() as usize,
         );
-        player.append(EqSource::new(input, chain).fade_in(fade));
+        EqSource::new(input, chain).fade_in(fade)
+    }
+
+    /// 开播时的淡入时长: 0 ms 用 1 ms 近似"立即"(避免除零, 也顺手消除切歌爆音).
+    ///
+    /// rodio 的 `fade_in` 会断言时长非零, 所以这里必须兜住 0; 抽成函数是为了让
+    /// "设置值 → 实际淡入时长"这条换算能被单测直接盯住(见 `fade_tests`)。
+    fn start_fade(tuning: &PlaybackTuning) -> Duration {
+        Duration::from_millis(tuning.fade_ms.max(1) as u64)
+    }
+
+    /// 把一条源套上 EQ 链与淡入后追加进播放队列(**不碰状态**).
+    fn append_source<I>(player: &RodioPlayer, input: I, local: &PlaybackTuning, fade: Duration)
+    where
+        I: Source<Item = Sample> + Send + 'static,
+    {
+        player.append(tuned_source(input, local, fade));
     }
 
     /// 两条来源(落盘文件 / 增长中文件)共用的一段: 套 EQ + 淡入后开始播, 并写回状态.
@@ -697,9 +717,8 @@ mod backend {
         let duration = input
             .total_duration()
             .or_else(|| expected_duration_ms.map(Duration::from_millis));
-        // 淡入: 0 ms 时用 1 ms 近似"立即"(避免除零, 也顺手消除切歌爆音)
-        let fade = Duration::from_millis(local.fade_ms.max(1) as u64);
-        append_source(player, input, local, fade);
+        // 淡入: 0 ms 时用 1 ms 近似"立即"(见 start_fade)
+        append_source(player, input, local, start_fade(local));
         player.play();
         if let Ok(mut st) = state.lock() {
             st.track_id = Some(track_id);
@@ -1518,6 +1537,104 @@ mod backend {
             stop.store(true, std::sync::atomic::Ordering::Release);
             drainer.join().unwrap();
             let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+
+    /// 淡入包络的单测(不需要声卡/音频设备)。
+    ///
+    /// 用户反馈 #3「选了淡入淡出, 听感上似乎没生效」的**可证伪判据**就在这里:
+    /// 设置 fade_ms=200 时, 追加后的源前 200ms 幅度必须从 0 线性升到原值 ——
+    /// 直接量样本, 不听感。桌面的淡入是**样本级**的(rodio 在源上做线性增益斜坡),
+    /// 所以这段构造就是桌面真实播放的路径([`start_source`] / [`upgrade_to_complete`]
+    /// 都经 [`tuned_source`])。
+    mod fade_tests {
+        use super::*;
+        use core::num::NonZero;
+        use rodio::buffer::SamplesBuffer;
+
+        const RATE: u32 = 8_000;
+
+        /// 恒定 1.0 的源: 输出包络 = 淡入增益本身, 便于直接读幅度。
+        fn const_source(samples: usize) -> SamplesBuffer {
+            SamplesBuffer::new(
+                NonZero::new(1u16).unwrap(),
+                NonZero::new(RATE).unwrap(),
+                vec![1.0 as Sample; samples],
+            )
+        }
+
+        fn envelope(tuning: &PlaybackTuning, fade: Duration, samples: usize) -> Vec<Sample> {
+            tuned_source(const_source(samples), tuning, fade)
+                .take(samples)
+                .collect()
+        }
+
+        /// 核心判据: fade_ms=200 ⇒ 前 1600 个样本(8kHz 下 200ms)线性 0→1, 之后满幅。
+        ///
+        /// 现状(修复前)也必须过这条 —— 它同时是**回归网**: 以后谁把淡入挪回"音量回调"
+        /// 或把 `max(1)` 去掉(rodio 的 fade_in 断言时长非零), 这里立刻炸。
+        #[test]
+        fn fade_ms_200_ramps_up_linearly_over_the_first_200ms() {
+            let tuning = PlaybackTuning {
+                fade_ms: 200,
+                ..Default::default()
+            };
+            let fade = start_fade(&tuning);
+            assert_eq!(fade, Duration::from_millis(200));
+            let s = envelope(&tuning, fade, 2_400);
+
+            // 起点必须是 0(否则第一帧就是个阶跃 = 爆音)
+            assert!(s[0].abs() < 1e-6, "淡入起点应为 0, 实测 {}", s[0]);
+            // 100ms 处 ≈ 0.5, 150ms 处 ≈ 0.75(误差 < 1%)
+            assert!(
+                (s[800] - 0.5).abs() < 0.01,
+                "100ms 处应约 0.5, 实测 {}",
+                s[800]
+            );
+            assert!(
+                (s[1_200] - 0.75).abs() < 0.01,
+                "150ms 处应约 0.75, 实测 {}",
+                s[1_200]
+            );
+            // 200ms 之后恢复原样(1.0), 不再衰减
+            for (i, v) in s[1_600..2_400].iter().enumerate() {
+                assert!(
+                    (v - 1.0).abs() < 1e-4,
+                    "200ms 之后第 {i} 个样本应满幅, 实测 {v}"
+                );
+            }
+            // 单调不减(包络不是"抖动"或"只降不升")
+            assert!(s[..1_600].windows(2).all(|w| w[1] >= w[0] - 1e-6));
+        }
+
+        /// fade_ms=0(关闭淡入)仍然用 1ms 近似"立即": 8kHz 下 8 个样本内到满幅。
+        #[test]
+        fn fade_ms_zero_is_effectively_instant_but_still_starts_at_zero() {
+            let tuning = PlaybackTuning::default();
+            let fade = start_fade(&tuning);
+            assert_eq!(fade, Duration::from_millis(1), "0 必须兜成 1ms");
+            let s = envelope(&tuning, fade, 64);
+            assert!(s[0].abs() < 1e-6);
+            for (i, v) in s[8..64].iter().enumerate() {
+                assert!((v - 1.0).abs() < 1e-4, "第 {i} 个样本应满幅, 实测 {v}");
+            }
+        }
+
+        /// 防爆音不回归: 换源用的 [`SWAP_FADE`](25ms)即使和用户的长淡入无关, 也必须
+        /// 从 0 起、25ms 内升到满幅 —— 它是"波形不连续 → 爆音"的唯一防线。
+        #[test]
+        fn swap_fade_still_ramps_from_silence_to_avoid_clicks() {
+            let tuning = PlaybackTuning {
+                fade_ms: 1_000,
+                ..Default::default()
+            };
+            let s = envelope(&tuning, SWAP_FADE, 400);
+            assert!(s[0].abs() < 1e-6, "换源后半场起点必须是 0(防爆音)");
+            // 25ms = 200 个样本: 100ms 处 = 0.5, 之后满幅(换源用的是 SWAP_FADE 不是用户值)
+            assert!((s[100] - 0.5).abs() < 0.01, "实测 {}", s[100]);
+            for (i, v) in s[200..400].iter().enumerate() {
+                assert!((v - 1.0).abs() < 1e-4, "第 {i} 个样本应满幅, 实测 {v}");
+            }
         }
     }
 }
