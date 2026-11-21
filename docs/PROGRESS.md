@@ -14,6 +14,10 @@
 
 ## 进度总览(2026-11-17 复核)
 
+**2026-11-22 收尾核实(v0.38.0 之后无代码改动, 独立复跑)**: `bash tools/ci-gates.sh verify` = **EXIT=0 ALL GATES OK**
+(Rust **545** · 全量 `flutter test` **1528 通过 / 0 失败** · golden **21** 张零重出 · clippy 0 · `dart analyze` 0 · android-unit/lint · 七道 checker OK),
+与头部 v0.38.0 条目宣称的数字**完全一致, 无分叉**。同轮文档核实: `remaining-batches.md` §15 标题去「待开工」、§11 入口加「待办已清零」口径; `docs/health` FAIL 只剩 `~/hw-stability/.pi/memory/MEMORY.md` 超 50 KB(非本项目)。
+
 **当前门禁**(本机实测, 离线口径; **权威口径只在本表**, README/README.en/remaining-batches 都是指针)。
 复核口径: **2026-11-17 晚在 main 上合并 p18/uib-c/p10/p11 四条车道后逐门重跑**(编排者独立跑, 不采信 worker 自报);
 **v0.21.0 发版后(2026-11-17)再次独立重跑复核**: Rust 313 · Dart 1106 · golden 18 张 · 四道 checker 全 OK。
