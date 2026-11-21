@@ -35,9 +35,13 @@ pub async fn play_ranking(period: String) -> Result<Vec<PlayRankEntryDto>, FfiEr
 
 /// 他人常听排行(用户主页): uid = 目标用户, period = "all" | "week".
 /// 对方没公开/没有记录时返回**空列表**(不是错误).
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
-#[frb(ignore)]
+///
+/// **登录态是硬前提**(2026-11-21 用户实测): 官方 PC 网页登录后能看到别人的
+/// 累积/一周排行(对一个累积 6114 首的账号有真实数据), 而匿名请求同一个端点
+/// (vendor 的 user_record → `/api/v1/play/record`)只回 `{"code":200,"allData":[]}`
+/// —— 200 + 空数组, 连错误都不给, 所以上游本身分不出「未登录」和「真没记录」。
+/// 因此「未登录」这一态必须由 UI 按登录态自己判(见 account.rs 的 `logged_in`),
+/// 不能指望本方法返回错误。
 pub async fn user_play_ranking(
     uid: u64,
     period: String,

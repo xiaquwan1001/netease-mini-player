@@ -40,6 +40,8 @@ class PlayRankingView extends StatefulWidget {
     this.load,
     this.compact = false,
     this.onOpenAll,
+    this.periods,
+    this.emptyText,
   });
 
   final RankingLoader? load;
@@ -49,6 +51,15 @@ class PlayRankingView extends StatefulWidget {
 
   /// compact 模式下点"查看全部"
   final VoidCallback? onOpenAll;
+
+  /// 周期分段的分组标签(默认 [rankingPeriods] 的总排行/当周)。
+  /// 他人主页用「所有时间 / 最近一周」——那是官方页面上的原话,
+  /// "总排行/当周"是「我的」页的历史措辞, 两处不要互相改名。
+  final List<(String, String)>? periods;
+
+  /// 空态文案覆盖。默认是"我自己没听歌"的口径("登录后听几首歌就有了"),
+  /// 挂在他人主页时必须换掉: 这句在别人的页面上没有任何意义。
+  final String? emptyText;
 
   @override
   State<PlayRankingView> createState() => _PlayRankingViewState();
@@ -61,6 +72,14 @@ class _PlayRankingViewState extends State<PlayRankingView>
 
   RankingLoader get _loader =>
       widget.load ?? (period) => rust.playRanking(period: period);
+
+  /// 实际用于分段控件的标签组
+  List<(String, String)> get _periods => widget.periods ?? rankingPeriods;
+
+  /// 当前区间的空态文案
+  String get _emptyText =>
+      widget.emptyText ??
+      (_period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)');
 
   /// compact 内嵌模式的取数(重试由 AsyncView 内部套 retryNetwork);
   /// 整页模式由 PagedListView 负责加载。
@@ -108,7 +127,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 segments: [
-                  for (final (value, label) in rankingPeriods)
+                  for (final (value, label) in _periods)
                     ButtonSegment<String>(value: value, label: Text(label)),
                 ],
                 selected: {_period},
@@ -144,7 +163,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
                   horizontal: 12,
                   vertical: 10,
                 ),
-                title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
+                title: _emptyText,
               ),
               itemBuilder: (context, e, i, items) {
                 final playable = [
@@ -182,11 +201,11 @@ class _PlayRankingViewState extends State<PlayRankingView>
           key: ValueKey(_period),
           load: _load,
           keepAlive: true,
-          emptyText: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
-          // 空态沿用原来的 EmptyView 视觉, 文案一字未改。
+          emptyText: _emptyText,
+          // 空态沿用原来的 EmptyView 视觉(默认文案一字未改)。
           emptyBuilder: (context) => EmptyView(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            title: _period == 'week' ? '这周还没有听歌记录' : '还没有听歌记录(登录后听几首歌就有了)',
+            title: _emptyText,
           ),
           builder: (context, entries, reload) {
             final shown = entries.take(5).toList();

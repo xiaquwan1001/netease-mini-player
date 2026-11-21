@@ -10,12 +10,24 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `user_play_ranking`
-
 /// 听歌排行(需登录): period = "all"(总量排行) | "week"(当周排行).
 /// 返回顺序即名次(1 开始由 UI 用下标表达).
 Future<List<PlayRankEntryDto>> playRanking({required String period}) =>
     RustLib.instance.api.crateApiMePlayRanking(period: period);
+
+/// 他人常听排行(用户主页): uid = 目标用户, period = "all" | "week".
+/// 对方没公开/没有记录时返回**空列表**(不是错误).
+///
+/// **登录态是硬前提**(2026-11-21 用户实测): 官方 PC 网页登录后能看到别人的
+/// 累积/一周排行(对一个累积 6114 首的账号有真实数据), 而匿名请求同一个端点
+/// (vendor 的 user_record → `/api/v1/play/record`)只回 `{"code":200,"allData":[]}`
+/// —— 200 + 空数组, 连错误都不给, 所以上游本身分不出「未登录」和「真没记录」。
+/// 因此「未登录」这一态必须由 UI 按登录态自己判(见 account.rs 的 `logged_in`),
+/// 不能指望本方法返回错误。
+Future<List<PlayRankEntryDto>> userPlayRanking({
+  required BigInt uid,
+  required String period,
+}) => RustLib.instance.api.crateApiMeUserPlayRanking(uid: uid, period: period);
 
 /// 系统推荐的曲风(我的曲风偏好; 未登录时退化成通用曲风表)
 Future<List<StyleTag>> stylePreference() =>
