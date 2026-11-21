@@ -66,8 +66,9 @@ lx.on('request', ({ source, action, info }) => Promise<string | {url,...}>)
 - `info.musicInfo`: 与下面 `musicUrl` 的 `musicInfo` 同字段, 额外带 `source`。
 - 返回值与 `musicUrl` 一致(字符串或对象), 同一条 `convert::stream_url` 收口。
 - 两个事件都注册时**优先 `musicUrl`**(契约 v1 显式优先)。
-- 只注册 `request` 也算 `Capability::SongUrl`(`worker::capabilities_for`), 产品路由照常命中。
-- 适配只做 `action = musicUrl`; `lyric/pic` 不在本 crate 能力面内(脚本 reject 即可)。
+- 只注册 `request` 同时算 `Capability::SongUrl` 与 `Capability::Lyric`(`worker::capabilities_for`),
+  产品路由照常命中; 脚本对某个 action 驳回时按 `PluginError` 映射(`Script` -> `Internal`)由路由层回落内置。
+- 适配做 `action = musicUrl` 与 `action = lyric`; `pic` 不在本 crate 能力面内(脚本 reject 即可)。
 
 #### `musicUrl` —— 取直链
 
@@ -106,6 +107,27 @@ lx.on('musicUrl', (source, musicInfo, quality) => string | {url,...} | null)
 | `Lossless` | `flac` |
 | `Exhigh` | `320k` |
 | `Higher` / `Standard` | `128k` |
+
+#### `lyric` —— 取歌词(宿主事件名; 上游经 `request` 翻译)
+
+宿主侧调用 `ScriptProvider::lyric(track)` 时发 `lyric(source, musicInfo)`:
+
+- 脚本注册了 `request` 时, prelude 翻成上游形状
+  `{source, action: 'lyric', info: {type: 'lyric', musicInfo}}`(与 `musicUrl` 同一条通路,
+  同一份预算/超时/`lx.request` 计数);
+- 脚本直接注册 `lyric` 事件时按位置参数 `(source, musicInfo)` 调用, 返回同上;
+- `musicInfo` 与 `musicUrl` 同字段(`{id, name, singer, albumName, albumId, interval}`);
+  `lyric` 的 trait 只有 trackId, 无 Song 上下文, 所以 `name/singer/albumName` 是空串、`interval` 是 0,
+  真实脚本几乎只读 `musicInfo.id`。
+
+返回值(三种形态, 全部容错):
+
+- `{lyric, tlyric?, rlyric?, lxlyric?}`: `lyric` 是原文 LRC, `tlyric` 是翻译
+  (`rlyric/lxlyric` 本切片忽略); 空串/缺字段当"没有这段";
+- 纯字符串: 当作原文 LRC(有的源只给这一段);
+- `null` / 空对象 / 原文与翻译都没有: `PluginErrorKind::MissingHandler` 或
+  `convert::lyric_unsupported()` ⇒ `ProviderErrorKind::Unsupported`(与内置 provider
+  "不提供歌词"同义, 路由回落内置); 其它类型(`number/array`)是 `Protocol`。
 
 #### `search` —— 搜索(**本宿主自定义形状**, 见 §5)
 
@@ -274,13 +296,15 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
   **LX `request` 事件适配 + 回调式 `lx.request` + `setTimeout` 泵**(切片 3)、transport 报错、
   **超时中断**、**内存上限**、storage 命名空间隔离与跨调用保持、请求次数/响应体/协议白名单预算、
   逃逸面(`require/process/fetch/XMLHttpRequest/Deno/module` 全 undefined)、MD5 向量、缺处理器、脚本抛错映射;
-- `tests/provider.rs`(7 例): `songUrl`/`search` 走既有 `Provider`、能力声明由注册事件决定(含「只注册 `request` ⇒ SongUrl」)、
-  不支持能力 -> `unsupported`、语法错误 -> `Load`、`null` 直链 -> `notFound`;
+- `tests/provider.rs`(16 例): `songUrl`/`search`/`lyric` 走既有 `Provider`、能力声明由注册事件决定
+  (含「只注册 `request` ⇒ SongUrl + Lyric」)、**歌词三形态**(对象 `{lyric,tlyric}` / 纯字符串 / 空 payload)
+  与「发出的是 `action:'lyric'` 而不是 musicUrl」、不支持能力 -> `unsupported`、语法错误 -> `Load`、
+  `null` 直链 -> `notFound`;
 - **Android 设备侧冒烟**: `examples/android_smoke.rs`(独立二进制, 不起 App 不联网)—— 在模拟器/真机上跑一遍
   「装载 + `request` 适配 + 回调式 `lx.request` + `setTimeout` / 死循环 interrupt 超时 / 32MB 内存炸弹」,
   末行 `SMOKE_PASS`。构建/推送命令见 `docs/audit/2026-11-21-plugin-android-crosscompile.md` §3.5 与 `notes-build.md`。
 - JS fixture 在 `tests/fixtures/`(music_url / search / storage / budget / escape / md5 / loop / memory_bomb /
-  lx_request_event / lx_timer / lx_timer_hang)。
+  lx_request_event / lx_lyric / lx_lyric_plain / lx_lyric_empty / lx_timer / lx_timer_hang)。
 
 **红 -> 绿实证**(必看):
 
@@ -307,7 +331,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | 7 | **FFI / 注册路由** | ✅ 切片 2 第四步已落 `ncm-service::plugins::PluginRegistry`(按插件 id 索引, 扫描/刷新/启停/失败隔离); ✅ 切片 2 第五步已接进 **Rust 侧 Core**: `plugins::host::PluginHost` 由 `Core::open` 构造, 暴露 `plugin_status/summaries/failures/rejected/ids/provider/enable/disable/rescan/set_enabled/set_root`, 错误一律 `ProviderError{kind,retryable,detail}`(唯一翻译点 `host::to_provider_error`), **缺省不扫描**(`<data_dir>/plugin_host.json` 的 `enabled` 缺省 false, 理由见 `host.rs` 头注释); ✅ 切片 2 第六步已导出到 `ncm-ffi`(`api/plugin.rs`: 8 个函数 + `PluginStatusDto`/`PluginSummaryDto`/`PluginFailureDto`/`PluginRejectedDto`/`PluginRescanDto`, 错误仍只经 `ProviderError -> FfiError` 一条口径, Android 目标返回空视图/`unsupported` 且编译通过); **仍缺**: Flutter 管理页, 以及路由层在产品链路优先用插件 provider(`ScriptProvider::id()` 恒为 `"script"`, 直接塞 `ncm_provider::ProviderRegistry` 会静默丢第二个插件) |
 | 8 | ~~**双端一致性**~~ | ✅ **2026-11-21 已接线**: Android 目标改 `rquickjs` 的 `bindgen` 特性(`ncm-plugin/Cargo.toml` 按 target 分段, 桌面仍吃预生成 bindings) + 新增 `tools/android-bindgen-env.sh`(NDK sysroot/libclang/CC/AR 注入) + `ncm-service` 撤 `cfg(not(android))` + `ncm-ffi` 撤平台分支(两端同一份实现) + CI/gradle 入口全接线。历史评估: 桌面(PC)侧全绿; **Android 已实测可行(2026-11-21, 未接线)**: `rquickjs-sys` 0.12.2/0.14.0 都不带 `*-linux-android` 预生成 bindings(`include!` 直接报缺文件), 但开 `bindgen` 特性 + `BINDGEN_EXTRA_CLANG_ARGS_<target>`(NDK sysroot) 后四个 quickjs `.c` 编过、`ncm-plugin` 副本 17.7s 链出 `aarch64-linux-android`/`x86_64-linux-android`, 真机(ELS-AN00/API31)跑通 eval·promise 泵·interrupt·32MB 内存炸弹。代价 ≈ +300KB/ABI + 构建机装 libclang。触发条件(三条全中)与四方案对比见 [`docs/audit/2026-11-21-plugin-android-crosscompile.md`](../../../docs/audit/2026-11-21-plugin-android-crosscompile.md) |
 | 9 | ~~**日志通道到 UI**~~ | ✅ 切片 3 已落(拉取式, 不做订阅/回放): `Provider::take_logs()` 默认空方法 + `ScriptProvider` 覆盖(取走语义) → `PluginHost::take_logs()` 按插件 id 分组 → FFI `plugin_logs()`(`Vec<PluginLogDto{id, lines}>`, Android 空视图) → 插件页「日志」段 `拉取日志` 按钮(在飞换行内 spinner, 与其它写入口共用 `_busy` 闸门, **不后台轮询**)。用例: service `take_logs_groups_by_plugin_and_drains`(装载期 `lx.log` 也在内 + 二次拉空) + Dart `plugin_page_test` 日志段一例 |
-| 10 | **歌词能力** | `LyricProvider::lyric` 明确返回 `unsupported` |
+| 10 | ~~**歌词能力**~~ | ✅ 2026-11-21: `LyricProvider::lyric` 真实现 —— 走与 `songUrl` 同一条 request 事件通路(`action:'lyric'`), 解析 `{lyric,tlyric}` / 纯字符串 / 空 payload(⇒ `unsupported` 回落内置) → `ncm_domain::Lyric`(`lrc` = 原文, `translated` = tlyric); `request` 注册同时声明 `Capability::Lyric`; 清单 `lxEvents` 接受 `lyric`。**逐字歌词(`rlyric/lxlyric`)** 仍不做(`word_lyric` 走 trait 默认 unsupported) |
 | 11 | **运行期进程外隔离** | 二期: 进程/沙箱子进程; 本切片只有线程内 QuickJS 沙箱 |
 | 12 | **`lx.crypto` / `lx.utils.zlib`** | `aesEncrypt/rsaEncrypt/randomBytes` 与 `zlib` 未实现(见 §5 的差异表); `buffer` codec 已在切片 3 落地 |
 
