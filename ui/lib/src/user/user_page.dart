@@ -427,9 +427,27 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     );
   }
 
+  /// 把 loader 的非网络错误吞成空列表(双保险)。
+  ///
+  /// Rust 侧 `play_ranking_of` 已按 kind 分流成空列表, 但桥仍可能抛
+  /// internal/forbidden(加密、序列化、风控变体)。网络错误照旧抛给四态 UI
+  /// 重试, 其余一律当"对方没公开记录"—— 别人主页上绝不铺 `[internal error]`
+  /// 这种内部文案(用户反馈 3)。
+  static RankingLoader _rankingLoaderSansInternalError(RankingLoader raw) {
+    return (period) async {
+      try {
+        return await raw(period);
+      } catch (e) {
+        if (isNetworkError(e)) rethrow;
+        return const <rust.PlayRankEntryDto>[];
+      }
+    };
+  }
+
   /// 「常听」栏: 对方的听歌排行(所有时间 / 最近一周)。
   ///
-  /// 复用「我的」页同一份 [PlayRankingView](compact): 只画前 5 条 + 「查看全部」,
+  /// 复用「我的」页同一份 [PlayRankingView](compact): 只画前
+  /// [PlayRankingView.previewLimit] 条(这里传 20) + 「查看全部」,
   /// 完整排行进 [showPlayRanking] 整页 —— 主页不一次铺满对方上百条排行。
   /// tab 内容是懒构建的(见 [ProfileTabSpec]), 没点进这一栏就不会发请求,
   /// 与同页「我喜欢」预览一个口径。
@@ -451,13 +469,15 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
         ],
       );
     }
-    final load = _loadRanking;
+    final load = _rankingLoaderSansInternalError(_loadRanking);
     return ListView(
       padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
       children: [
         PlayRankingView(
           load: load,
           compact: true,
+          // 预览 20 条: 5 条会让人以为 Ta 只听过这么几首(反馈 4)
+          previewLimit: 20,
           // 官方页面上的原话是「所有时间 / 最近一周」(「我的」页沿用总排行/当周)
           periods: const [('all', '所有时间'), ('week', '最近一周')],
           // 别人的页面不能说"登录后听几首歌就有了"

@@ -184,7 +184,7 @@ fn nos_content_type_maps_audio_containers() {
 }
 
 /// 假 HTTP 服务收到的原始请求.
-struct CapturedRequest {
+pub(super) struct CapturedRequest {
     request_line: String,
     headers: Vec<(String, String)>,
     body: Vec<u8>,
@@ -202,7 +202,8 @@ impl CapturedRequest {
 
 /// 起一个只听 127.0.0.1 的假 HTTP 服务: 收**一个**请求, 按 `status`/`body` 回包.
 /// 返回 (base_url, join handle → 捕获到的请求).
-fn spawn_fake_nos(
+/// 云盘上传与听歌排行(provider 端到端)共用；不联网、不读环境变量。
+pub(super) fn spawn_fake_http(
     status: u16,
     response_body: &'static str,
 ) -> (String, std::thread::JoinHandle<CapturedRequest>) {
@@ -264,7 +265,7 @@ fn spawn_fake_nos(
 /// 这条序列是上游 `plugins/songUpload.js` 的同款, 也是分片接线的对照物。
 #[tokio::test]
 async fn upload_nos_whole_file_posts_evidenced_single_shot_request() {
-    let (base, handle) = spawn_fake_nos(200, "");
+    let (base, handle) = spawn_fake_http(200, "");
     let http = build_upload_client().expect("建上传客户端");
     let bytes = b"ID3\x04\x00fake-audio-bytes".to_vec();
 
@@ -296,7 +297,7 @@ async fn upload_nos_whole_file_posts_evidenced_single_shot_request() {
 /// 非 2xx: 收口成 `internal`(不可重试), detail 带状态码与截断后的响应体.
 #[tokio::test]
 async fn upload_nos_whole_file_maps_non_2xx_to_error() {
-    let (base, handle) = spawn_fake_nos(500, "boom-from-nos");
+    let (base, handle) = spawn_fake_http(500, "boom-from-nos");
     let http = build_upload_client().expect("建上传客户端");
 
     let err = upload_nos_whole_file(&http, &base, "tok", "md5", "k.mp3", b"abc".to_vec(), "flac")

@@ -26,6 +26,26 @@ pub(super) fn str_or_num_of(v: &Value, key: &str) -> Option<String> {
     })
 }
 
+/// 计数容错: 数字 / 数字字符串 / 浮点(整数值) 都认.
+///
+/// `playCount` 这类计数上游不同通道/版本给过数字、数字字符串、浮点三种形态;
+/// 只认 [`u64_of`] 会把后两种读成 0, 界面上就是「0 次」。非整数值(如 283.4)
+/// 不当计数, 回 None 由调用方兜底成 0 —— 绝不四舍五入去猜。
+pub(super) fn u64_count_of(v: &Value, key: &str) -> Option<u64> {
+    let x = v.get(key)?;
+    if let Some(n) = x.as_u64() {
+        return Some(n);
+    }
+    let f = x
+        .as_f64()
+        .or_else(|| x.as_str().and_then(|s| s.trim().parse::<f64>().ok()))?;
+    if f.is_finite() && f >= 0.0 && f.fract() == 0.0 {
+        Some(f as u64)
+    } else {
+        None
+    }
+}
+
 pub(super) fn u32_of(v: &Value, key: &str) -> Option<u32> {
     u64_of(v, key).and_then(|n| u32::try_from(n).ok())
 }
