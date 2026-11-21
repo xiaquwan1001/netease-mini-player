@@ -3,7 +3,7 @@
 //! 契约 v1 的脚本侧形状都是**我们**定义的(除 `musicUrl` 的位置参数沿用 Melodia
 //! 已验证的调用形态), 与上游 LX 官方 spec 的差异记在 README「待验证项」.
 
-use ncm_domain::{Album, Artist, SearchPage, Song, StreamUrl, TrackId};
+use ncm_domain::{Album, Artist, Lyric, SearchPage, Song, StreamUrl, TrackId};
 use ncm_provider::{AudioLevel, SearchQuery};
 use serde_json::{Map, Value};
 
@@ -252,7 +252,57 @@ pub fn search_page(raw: &Value, query: &SearchQuery) -> Result<SearchPage, Plugi
     })
 }
 
-/// `lyric` 未实现: 本切片只要求 1~2 个能力, 歌词留给后续切片(已在 README 列明).
-pub fn lyric_unsupported() -> ncm_provider::ProviderError {
-    ncm_provider::ProviderError::unsupported("脚本插件本切片不提供歌词(v2 待定)")
+/// 脚本没有可用的歌词原文时的统一出口.
+///
+/// 语义 = 「这个插件不提供这首歌的歌词」-> `PluginErrorKind::MissingHandler`
+/// -> `ProviderErrorKind::Unsupported`, 路由层据此回落内置 provider
+/// (而不是把空歌词当成成功结果).
+pub fn lyric_unsupported() -> PluginError {
+    PluginError::missing_handler("脚本未返回歌词(lyric/tlyric 都为空)")
+}
+
+/// `lyric` 的返回值 -> [`Lyric`].
+///
+/// 容错口径(真实 LX 脚本的返回形态, 见 docs/audit/2026-11-21-lx-script-compat.md §1):
+/// - 纯字符串: 当作原文 LRC(`{lyric: "..."}` 的简写, 有的源只给这一段);
+/// - 对象: `lyric`/`lrc` 是原文, `tlyric`/`translated` 是翻译;
+///   空串 / 缺字段 / `null` 一律当"没有这段";
+/// - `null`、空对象、两段都没有: [`lyric_unsupported`](self)(与"不提供歌词"同义);
+/// - 其它类型(`number`/`array`/...): [`PluginError::protocol`](crate::PluginError::protocol).
+///
+/// `rlyric`/`lxlyric`(逐字)不在本切片能力面内, 直接忽略.
+pub fn lyric(raw: &Value) -> Result<Lyric, PluginError> {
+    // 空串/纯空白都算"没有"(有的源用 `tlyric: ""` 表示没有翻译).
+    fn text(map: &Map<String, Value>, keys: &[&str]) -> Option<String> {
+        string_field(map, keys).filter(|s| !s.trim().is_empty())
+    }
+    match raw {
+        Value::String(text) => {
+            let text = text.trim();
+            if text.is_empty() {
+                return Err(lyric_unsupported());
+            }
+            Ok(Lyric {
+                lrc: Some(text.to_string()),
+                ..Lyric::default()
+            })
+        }
+        Value::Object(map) => {
+            let lrc = text(map, &["lyric", "lrc"]);
+            let translated = text(map, &["tlyric", "translated"]);
+            if lrc.is_none() && translated.is_none() {
+                return Err(lyric_unsupported());
+            }
+            Ok(Lyric {
+                lrc,
+                translated,
+                romaji: None,
+            })
+        }
+        Value::Null => Err(lyric_unsupported()),
+        other => Err(PluginError::protocol(format!(
+            "lyric 返回值必须是字符串或对象, 收到 {}",
+            type_name(other)
+        ))),
+    }
 }

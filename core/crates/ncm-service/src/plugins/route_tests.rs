@@ -29,7 +29,7 @@ impl Provider for FakeBuiltin {
         "FakeBuiltin"
     }
     fn capabilities(&self) -> &'static [Capability] {
-        &[Capability::SongUrl, Capability::Search]
+        &[Capability::SongUrl, Capability::Search, Capability::Lyric]
     }
 }
 
@@ -82,7 +82,12 @@ impl ncm_provider::LyricProvider for FakeBuiltin {
         &'a self,
         _track: ncm_domain::TrackId,
     ) -> BoxFuture<'a, ProviderResult<ncm_domain::Lyric>> {
-        Box::pin(async { Err(ProviderError::unsupported("fake builtin 不带歌词")) })
+        Box::pin(async {
+            Ok(ncm_domain::Lyric {
+                lrc: Some("[00:00.00]builtin".to_string()),
+                ..ncm_domain::Lyric::default()
+            })
+        })
     }
 }
 
@@ -363,6 +368,39 @@ fn plugin_error_falls_back_to_builtin() {
         Some("https://builtin.test/a.mp3"),
         "落点必须是内置 provider 的返回值"
     );
+}
+
+/// 歌词能力: 插件声明 Lyric ⇒ auto 命中; 插件失败 ⇒ 回落内置(歌词是"有则更好"的数据).
+#[test]
+fn lyric_capability_routes_to_plugin_and_falls_back_on_error() {
+    let plan = route::plan(
+        &RouteMode::Auto,
+        true,
+        &loaded(&["lyric-only"]),
+        |_| true,
+        Capability::Lyric,
+    );
+    assert_eq!(plan.target, RouteTarget::Plugin("lyric-only".into()));
+    assert_eq!(plan.reason, RouteReason::AutoSingle);
+
+    let plugin: Arc<dyn Provider> = Arc::new(FakeBroken);
+    let track = ncm_domain::TrackId::new(5);
+    let routed = futures::executor::block_on(route::call_routed(
+        route::RouteDecision {
+            capability: Capability::Lyric,
+            plan: RoutePlan {
+                target: RouteTarget::Plugin("demo".into()),
+                reason: RouteReason::AutoSingle,
+                detail: String::new(),
+            },
+            plugin: Some(plugin),
+            builtin: Some(Arc::new(FakeBuiltin) as Arc<dyn Provider>),
+        },
+        |p| Box::pin(async move { p.lyric(track).await }),
+    ))
+    .expect("插件歌词失败要回落内置, 不是整次失败");
+    assert!(routed.fell_back(), "回落要能看出来: {:?}", routed.used);
+    assert_eq!(routed.value.lrc.as_deref(), Some("[00:00.00]builtin"));
 }
 
 /// 没有内置 provider 可回落 ⇒ 插件错误原样上抛(不假装成功).

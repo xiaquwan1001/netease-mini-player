@@ -64,7 +64,7 @@ pub const SUPPORTED_API_MAX: u32 = HOST_API_VERSION;
 /// 清单里没写 `apiVersion` 时的口径: 契约 v1 时期的老清单按版本 1 处理(不是拒绝).
 pub const LEGACY_API_VERSION: u32 = 1;
 /// `lx.on` 认识的事件名(契约 v1, 见 `prelude.js` 的 `EVENT_NAMES`).
-pub const KNOWN_EVENTS: &[&str] = &["request", "inited", "musicUrl", "search"];
+pub const KNOWN_EVENTS: &[&str] = &["request", "inited", "musicUrl", "lyric", "search"];
 
 /// 一个插件的清单(已解析; 校验走 [`PluginManifest::validate`]).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -598,10 +598,18 @@ mod tests {
     #[test]
     fn unknown_event_lists_known_names() {
         let text = r#"{"id":"a1","name":"A","version":"0.0.1","entry":"main.js",
-            "permissions":{"lxEvents":["lyric"]}}"#;
+            "permissions":{"lxEvents":["bogus"]}}"#;
         let err = PluginManifest::parse(text).expect_err("未知事件应报错");
         assert_eq!(err.field(), "permissions.lxEvents[0]");
         assert!(err.reason().contains("musicUrl"), "{err}");
+    }
+
+    #[test]
+    fn lyric_event_is_known() {
+        // `lyric` 是宿主事件名(歌词能力), 清单里可以声明; `request` 仍是上游单入口.
+        let text = r#"{"id":"a1","name":"A","version":"0.0.1","entry":"main.js",
+            "permissions":{"lxEvents":["request","lyric"]}}"#;
+        assert!(PluginManifest::parse(text).is_ok());
     }
 
     #[test]

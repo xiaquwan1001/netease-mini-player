@@ -9,7 +9,8 @@ use ncm_plugin::{
     TransportResponse,
 };
 use ncm_provider::{
-    AudioLevel, Capability, Provider, ProviderErrorKind, ReadProvider, SearchQuery, SongUrlRequest,
+    AudioLevel, Capability, LyricProvider, Provider, ProviderErrorKind, ReadProvider, SearchQuery,
+    SongUrlRequest,
 };
 
 fn reply(body: &str) -> Result<TransportResponse, ncm_plugin::TransportError> {
@@ -81,7 +82,11 @@ fn lx_request_only_script_is_song_url_capable() {
     ))
     .expect("插件应加载成功");
 
-    assert_eq!(provider.capabilities(), &[Capability::SongUrl]);
+    // 上游单入口: request 同时声明取链与歌词(脚本对某个 action 驳回时路由层回落内置).
+    assert_eq!(
+        provider.capabilities(),
+        &[Capability::SongUrl, Capability::Lyric]
+    );
     let request = SongUrlRequest {
         track: TrackId(99),
         level: AudioLevel::Exhigh,
@@ -89,6 +94,96 @@ fn lx_request_only_script_is_song_url_capable() {
     };
     let stream = block_on(provider.song_url(&request)).expect("取链应成功");
     assert_eq!(stream.url.as_deref(), Some("https://cdn.test/lx.mp3"));
+}
+
+#[test]
+fn lyric_maps_object_payload_and_sends_lyric_action() {
+    // 上游 LX 的歌词返回: {lyric, tlyric}; 宿主要把它落成 ncm_domain::Lyric.
+    let transport = Arc::new(MockTransport::new().on(
+        "example.test/api/lyric",
+        reply(r#"{"lyric":"[00:01.00]原文","tlyric":"[00:01.00]翻译"}"#),
+    ));
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/lx_lyric.js"),
+        transport.clone(),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    assert!(provider.supports(Capability::Lyric));
+
+    let lyric = block_on(provider.lyric(TrackId(42))).expect("歌词应成功");
+    assert_eq!(lyric.lrc.as_deref(), Some("[00:01.00]原文"));
+    assert_eq!(lyric.translated.as_deref(), Some("[00:01.00]翻译"));
+    assert_eq!(lyric.romaji, None);
+
+    // 发出的是 action:'lyric'(不是 musicUrl), info.type 也是 'lyric'.
+    let seen = transport.requests();
+    assert_eq!(seen.len(), 1);
+    let body: serde_json::Value =
+        serde_json::from_str(seen[0].body.as_deref().unwrap_or("null")).expect("请求体应是 JSON");
+    assert_eq!(body["action"], "lyric");
+    assert_eq!(body["type"], "lyric");
+    assert_eq!(body["musicInfo"]["id"], 42);
+    assert_eq!(body["source"], "wy", "按 inited.sources 挑平台代号");
+}
+
+#[test]
+fn lyric_plain_string_is_lrc() {
+    // 有的源只给原文一段纯字符串: 当 lrc, 翻译为空.
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/lx_lyric_plain.js"),
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    let lyric = block_on(provider.lyric(TrackId(7))).expect("歌词应成功");
+    assert_eq!(
+        lyric.lrc.as_deref(),
+        Some("[00:01.00]一句原文\n[00:05.00]另一句")
+    );
+    assert_eq!(lyric.translated, None);
+}
+
+#[test]
+fn lyric_empty_payload_is_unsupported() {
+    // 空 payload(lyric/tlyric 都是空串)与"没有歌词"同义: unsupported, 由路由回落内置.
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/lx_lyric_empty.js"),
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    let err = block_on(provider.lyric(TrackId(3))).expect_err("空 payload 必须 unsupported");
+    assert_eq!(err.kind, ProviderErrorKind::Unsupported);
+    assert!(!err.retryable);
+}
+
+#[test]
+fn lyric_without_request_handler_is_unsupported() {
+    // 脚本没注册 request/lyric: 与"不提供歌词"同义(不是 internal).
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/music_url.js"),
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    assert!(!provider.supports(Capability::Lyric));
+    let err = block_on(provider.lyric(TrackId(1))).expect_err("没注册歌词事件");
+    assert_eq!(err.kind, ProviderErrorKind::Unsupported);
+}
+
+#[test]
+fn lyric_event_registered_directly_declares_lyric_only() {
+    // 契约 v1 的宿主事件名(非上游单入口): 直接注册 lyric 只声明歌词能力.
+    let provider = ScriptProvider::load(spec(
+        "lx.on('lyric', function (source, info) { return { lyric: '[00:00.00]' + info.id }; });",
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    assert_eq!(provider.capabilities(), &[Capability::Lyric]);
+    let lyric = block_on(provider.lyric(TrackId(11))).expect("歌词应成功");
+    assert_eq!(lyric.lrc.as_deref(), Some("[00:00.00]11"));
 }
 
 #[test]

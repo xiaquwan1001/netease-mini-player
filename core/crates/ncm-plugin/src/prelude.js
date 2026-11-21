@@ -372,9 +372,10 @@
     return 'wy';
   }
 
-  // 宿主调 musicUrl 而脚本只注册了 request 时, 翻译成上游形状:
-  //   {source, action: 'musicUrl', info: {type, musicInfo}}
-  function requestEventArg(sourceArg, info, quality) {
+  // 宿主调本宿主的契约事件(musicUrl / lyric)而脚本只注册了上游 request 时, 翻译成上游形状:
+  //   {source, action: 'musicUrl' | 'lyric', info: {type, musicInfo}}
+  // type: musicUrl 用音质代号, lyric 固定 'lyric'(与 LX 官方文档一致).
+  function requestEventArg(sourceArg, info, action, type) {
     var musicInfo = {};
     if (info && typeof info === 'object') {
       for (var key in info) {
@@ -383,7 +384,7 @@
     }
     var source = pickSource(sourceArg);
     musicInfo.source = source;
-    return { source: source, action: 'musicUrl', info: { type: quality, musicInfo: musicInfo } };
+    return { source: source, action: action, info: { type: type, musicInfo: musicInfo } };
   }
 
   var lx = {
@@ -536,12 +537,15 @@
   globalThis.__lxCall = function (event, argsJson) {
     var args = JSON.parse(argsJson);
     var handler = handlers[event];
-    // 上游 LX 唯一入口是 on('request'); 宿主仍按契约 v1 发 musicUrl, 这里做一次翻译.
-    if (typeof handler !== 'function' && event === 'musicUrl') {
+    // 上游 LX 唯一入口是 on('request'); 宿主仍按契约 v1 发 musicUrl / lyric, 这里各做一次翻译.
+    if (typeof handler !== 'function' && (event === 'musicUrl' || event === 'lyric')) {
       if (typeof handlers.request === 'function') {
+        var action = event;
+        // musicUrl 的 type 是音质代号(第三个位置参数), lyric 的 type 固定 'lyric'.
+        var type = action === 'lyric' ? 'lyric' : args[2];
         event = 'request';
         handler = handlers.request;
-        args = [requestEventArg(args[0], args[1], args[2])];
+        args = [requestEventArg(args[0], args[1], action, type)];
       }
     }
     if (typeof handler !== 'function') return stringify({ status: 'missing' });

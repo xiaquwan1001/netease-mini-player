@@ -193,18 +193,56 @@ fn drain_logs(engine: &mut ScriptEngine, sink: &Mutex<Vec<String>>) {
     }
 }
 
+// 能力组合的静态表(返回 `&'static [Capability]`, 不每次分配).
+const CAP_NONE: &[Capability] = &[];
+const CAP_SONG: &[Capability] = &[Capability::SongUrl];
+const CAP_SEARCH: &[Capability] = &[Capability::Search];
+const CAP_LYRIC: &[Capability] = &[Capability::Lyric];
+const CAP_SONG_SEARCH: &[Capability] = &[Capability::SongUrl, Capability::Search];
+const CAP_SONG_LYRIC: &[Capability] = &[Capability::SongUrl, Capability::Lyric];
+const CAP_SEARCH_LYRIC: &[Capability] = &[Capability::Search, Capability::Lyric];
+const CAP_SONG_SEARCH_LYRIC: &[Capability] =
+    &[Capability::SongUrl, Capability::Search, Capability::Lyric];
+
 /// 能力声明完全由脚本注册了哪些事件决定(不信任脚本头部的自述).
 ///
-/// 上游 LX 脚本只注册 `request`(action=musicUrl), prelude 会在宿主调 musicUrl 时
-/// 翻译成 request 事件 —— 所以两者都算取链能力.
+/// 上游 LX 脚本只注册 `request`(单入口, action ∈ {musicUrl, lyric, pic}), prelude 会在
+/// 宿主调 musicUrl / lyric 时翻译成 request 事件 —— 所以 `request` 同时声明取链与歌词能力.
+/// 只注册 `request` 的脚本若对 lyric action 驳回, 路由层按 `Unsupported`/`Internal` 回落内置
+/// (`route::call_routed` 的回落分支), 不会把插件失败暴露给用户.
+///
+/// 契约 v1 的宿主事件名(`musicUrl` / `lyric` / `search`)直接注册也算能力.
 fn capabilities_for(handlers: &[String]) -> &'static [Capability] {
     let has = |name: &str| handlers.iter().any(|h| h == name);
-    match (has("musicUrl") || has("request"), has("search")) {
-        (true, true) => &[Capability::SongUrl, Capability::Search],
-        (true, false) => &[Capability::SongUrl],
-        (false, true) => &[Capability::Search],
-        (false, false) => &[],
+    let request = has("request");
+    let song = request || has("musicUrl");
+    let lyric = request || has("lyric");
+    let search = has("search");
+    match (song, search, lyric) {
+        (true, true, true) => CAP_SONG_SEARCH_LYRIC,
+        (true, true, false) => CAP_SONG_SEARCH,
+        (true, false, true) => CAP_SONG_LYRIC,
+        (true, false, false) => CAP_SONG,
+        (false, true, true) => CAP_SEARCH_LYRIC,
+        (false, true, false) => CAP_SEARCH,
+        (false, false, true) => CAP_LYRIC,
+        (false, false, false) => CAP_NONE,
     }
+}
+
+/// 歌词请求的 `musicInfo`(`LyricProvider::lyric` 只有 trackId, 没有 Song 上下文).
+///
+/// 字段与 `songUrl` 对齐(id/name/singer/albumName/albumId/interval), 空上下文也把字段补齐,
+/// 脚本不必判空; 真实 LX 歌词脚本几乎只读 `musicInfo.id`.
+fn lyric_music_info(track: TrackId) -> Value {
+    serde_json::json!({
+        "id": track.0,
+        "name": "",
+        "singer": "",
+        "albumName": "",
+        "albumId": 0,
+        "interval": 0,
+    })
 }
 
 impl std::fmt::Debug for ScriptProvider {
@@ -304,7 +342,16 @@ impl RecommendProvider for ScriptProvider {}
 impl VipProvider for ScriptProvider {}
 
 impl LyricProvider for ScriptProvider {
-    fn lyric<'a>(&'a self, _track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {
-        Box::pin(async { Err(convert::lyric_unsupported()) })
+    /// 歌词: 走与 `songUrl` 同一条 request 事件通路(上游形状
+    /// `{source, action: 'lyric', info: {type: 'lyric', musicInfo}}`, prelude 负责拼).
+    ///
+    /// 失败口径: 脚本没注册 request/lyric ⇒ `Unsupported`(路由回落内置);
+    /// 返回空 payload ⇒ 同样是 `Unsupported`; 脚本抛错/超时/预算 ⇒ 既有 `PluginError` 映射.
+    fn lyric<'a>(&'a self, track: TrackId) -> BoxFuture<'a, ProviderResult<Lyric>> {
+        Box::pin(async move {
+            let args = serde_json::json!(["script", lyric_music_info(track)]);
+            let raw = self.invoke("lyric", args).await?;
+            convert::lyric(&raw).map_err(Into::into)
+        })
     }
 }
