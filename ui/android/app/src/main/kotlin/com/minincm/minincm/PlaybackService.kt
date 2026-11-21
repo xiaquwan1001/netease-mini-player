@@ -1,11 +1,15 @@
 package com.minincm.minincm
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
+import android.view.animation.LinearInterpolator
 import android.util.Log
 import android.widget.Toast
 import androidx.annotation.OptIn
@@ -87,11 +91,51 @@ class PlaybackService : MediaSessionService() {
     private var fadeAnimator: ValueAnimator? = null
     private var gainSlewAnimator: ValueAnimator? = null
 
+    // ---- 淡入/淡出的落地状态(曲线、开关、起声门控的判据全在 [FadePolicy]) ----
+
+    /** 淡入已挂起、等真正出声的时刻(elapsedRealtime); 0 = 没有挂起 */
+    private var fadeArmedAt = 0L
+
+    /** 挂起那一刻捕获的目标音量: 起声后 ramp 的目标 */
+    private var fadeArmedTarget = 0f
+
+    /** 淡出结束后要执行的动作(暂停/停止); 被打断也必须落地, 否则请求会静默丢掉 */
+    private var pendingAfterFadeOut: (() -> Unit)? = null
+    private val fadeHandler = Handler(Looper.getMainLooper())
+
+    /** 等不到起声的兜底: 到点直接把音量落到目标(绝不把播放器留在 0 音量) */
+    private val abandonArmedTick = object : Runnable {
+        override fun run() {
+            if (fadeArmedAt == 0L) return
+            val elapsed = SystemClock.elapsedRealtime() - fadeArmedAt
+            if (!FadePolicy.shouldAbandonArmed(elapsed)) {
+                fadeHandler.postDelayed(this, FadePolicy.ARM_TIMEOUT_MS - elapsed)
+                return
+            }
+            fadeArmedAt = 0L
+            exoPlayer?.volume = targetVolume()
+            Log.d("NCM-PLAYER", "fadeIn 等不到起声(${elapsed}ms), 直接落到目标音量")
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
         val exo = buildExoPlayer()
         exoPlayer = exo
+        // 淡入的起声门控: ramp 只在真正出声后推进, 缓冲期不空转(见 [FadePolicy.shouldStartRamp])。
+        // 实测(模拟器 a34, fadeMs=500): play 到真正出声 243–404ms, 旧实现这段静默里已经爬到 55%。
+        exo.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying || fadeArmedAt == 0L) return
+                val target = fadeArmedTarget
+                fadeArmedAt = 0L
+                fadeHandler.removeCallbacks(abandonArmedTick)
+                exo.volume = 0f
+                Log.d("NCM-PLAYER", "fadeIn start(起声) target=$target fadeMs=$fadeMs")
+                startFadeRamp(from = 0f, to = target, out = false)
+            }
+        })
         mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo))
             // 通知本体点击 = 回 App。默认(不设 sessionActivity)Media3 不生成 contentIntent,
             // 模拟器 a34 实测点通知本体毫无反应; 而没有同进程消费者时按钮只能给提示
@@ -294,6 +338,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         instance = null
+        fadeArmedAt = 0L
+        fadeHandler.removeCallbacks(abandonArmedTick)
         fadeAnimator?.cancel()
         fadeAnimator = null
         gainSlewAnimator?.cancel()
@@ -428,32 +474,146 @@ class PlaybackService : MediaSessionService() {
         userVolume = v.coerceIn(0f, 1f)
         // 系统音量必须立刻响应: 只取消淡入(淡入目标里含旧 userVolume);
         // 增益斜坡(若有)继续跑, 它的每帧回调会读最新的 userVolume, 这里先同步一次当前值。
-        fadeAnimator?.cancel()
-        fadeAnimator = null
+        cancelFade()
         exoPlayer?.volume = appliedVolume()
     }
 
-    /** 换曲/开始: 在 fadeMs 内把音量从 0 线性升到目标值, 避免切歌爆音(0 = 关闭) */
+    /**
+     * 换曲/开始/继续播放: 在 fadeMs 内把音量从 0 升到目标值(`fadeMs = 0` = 关闭, 行为不变)。
+     *
+     * 与 2026-11-22 之前那版的差别(模拟器 a34 实测结论见 [FadePolicy] 类 KDoc):
+     * ① 曲线用感知曲线 `1-(1-t)^3`, 不再用 `ValueAnimator` 默认的加速-减速插值 + 线性振幅;
+     * ② ramp **等真正出声**才起(`onIsPlayingChanged(true)`), 缓冲期的静默不再把慢起段烧掉;
+     * ③ 等不到起声有 [FadePolicy.ARM_TIMEOUT_MS] 兜底。
+     */
     fun fadeIn() {
         val exo = exoPlayer ?: return
-        fadeAnimator?.cancel()
+        cancelFade()
         // 淡入与增益斜坡互斥(last-wins): 淡入开始即取消斜坡, 并把 appliedGainDb 对齐到当前目标增益,
         // 这样淡入结束后音量就是目标值, 下一次 configure 的斜坡也从正确基线出发(不带半截斜坡残留)。
         gainSlewAnimator?.cancel()
         gainSlewAnimator = null
         appliedGainDb = gainDb
         val target = targetVolume()
-        if (fadeMs <= 0) {
+        if (!FadePolicy.isEnabled(fadeMs)) {
             exo.volume = target
             return
         }
-        val animator = ValueAnimator.ofFloat(0f, target)
-        animator.duration = fadeMs.toLong()
-        animator.addUpdateListener { a ->
-            exo.volume = (a.animatedValue as Float).coerceIn(0f, 1f)
+        exo.volume = 0f
+        if (FadePolicy.shouldStartRamp(audioStarted = exo.isPlaying)) {
+            startFadeRamp(from = 0f, to = target, out = false)
+        } else {
+            fadeArmedAt = SystemClock.elapsedRealtime()
+            fadeArmedTarget = target
+            fadeHandler.removeCallbacks(abandonArmedTick)
+            fadeHandler.postDelayed(abandonArmedTick, FadePolicy.ARM_TIMEOUT_MS)
+            Log.d("NCM-PLAYER", "fadeIn armed(等起声) target=$target fadeMs=$fadeMs")
         }
+    }
+
+    /**
+     * 唯一的音量斜坡落地处(淡入/淡出都是它): 曲线取 [FadePolicy], 时长取当前 `fadeMs`。
+     *
+     * [out] = true 用淡出曲线(半程已降到 12.5%, 越到后面越慢), false 用淡入曲线;
+     * 音量为 0 与关闭无区别, 所以从当前音量出发就够, 不需要额外的线性映射参数。
+     */
+    private fun startFadeRamp(from: Float, to: Float, out: Boolean, onDone: (() -> Unit)? = null) {
+        val exo = exoPlayer ?: return
+        val duration = FadePolicy.rampDurationMs(fadeMs)
+        if (duration <= 0L) {
+            exo.volume = to.coerceIn(0f, 1f)
+            onDone?.invoke()
+            return
+        }
+        fadeArmedAt = 0L
+        fadeHandler.removeCallbacks(abandonArmedTick)
+        val startedAt = SystemClock.elapsedRealtime()
+        val animator = ValueAnimator.ofFloat(0f, 1f)
+        animator.interpolator = LinearInterpolator()
+        animator.duration = duration
+        animator.addUpdateListener {
+            if (exoPlayer !== exo) return@addUpdateListener
+            val elapsed = SystemClock.elapsedRealtime() - startedAt
+            val f = if (out) {
+                FadePolicy.fadeOutFraction(elapsed, fadeMs)
+            } else {
+                FadePolicy.fadeInFraction(elapsed, fadeMs)
+            }
+            val v = if (out) from * f else from + (to - from) * f
+            exo.volume = v.coerceIn(0f, 1f)
+        }
+        animator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                // cancelFade 会先把 fadeAnimator 置 null, 所以被打断的那次不会走到这里结束动作
+                if (fadeAnimator !== animator) return
+                fadeAnimator = null
+                exoPlayer?.volume = to.coerceIn(0f, 1f)
+                onDone?.invoke()
+            }
+        })
         fadeAnimator = animator
         animator.start()
+    }
+
+    /**
+     * 取消正在跑的斜坡/挂起态。
+     *
+     * 若是淡出被打断(用户拖音量 / 又点了一次播放), **排队的暂停/停止仍要执行** ——
+     * 否则用户点暂停却什么都没发生, 比不淡出更糟。
+     */
+    private fun cancelFade() {
+        fadeArmedAt = 0L
+        fadeHandler.removeCallbacks(abandonArmedTick)
+        val animator = fadeAnimator
+        fadeAnimator = null
+        animator?.cancel()
+        val pending = pendingAfterFadeOut
+        pendingAfterFadeOut = null
+        pending?.invoke()
+    }
+
+    /**
+     * 暂停/停止前先在 fadeMs 内淡出(用户反馈 F1: 以前只有淡入、没有淡出)。
+     *
+     * `fadeMs = 0`、音量已为 0 或本来就没在出声时直接执行, 不留空等。
+     * [action] 必须落到**原始 ExoPlayer**(不能走 [SkipAwarePlayer], 否则递归)。
+     */
+    private fun fadeOutThen(action: () -> Unit) {
+        val exo = exoPlayer
+        if (exo == null || !FadePolicy.isEnabled(fadeMs) || exo.volume <= 0f || !exo.isPlaying) {
+            action()
+            return
+        }
+        cancelFade()
+        // 淡出期间音量归这里管: 取消增益斜坡, 否则它每帧会把音量顶回目标值
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        appliedGainDb = gainDb
+        pendingAfterFadeOut = action
+        Log.d("NCM-PLAYER", "fadeOut start from=${exo.volume} fadeMs=$fadeMs")
+        startFadeRamp(from = exo.volume, to = 0f, out = true) {
+            val a = pendingAfterFadeOut
+            pendingAfterFadeOut = null
+            // 停下来的播放器把音量交回目标值: 下次继续播放(或关闭淡入时)不会变成静音
+            exoPlayer?.volume = targetVolume()
+            a?.invoke()
+        }
+    }
+
+    /** [SkipAwarePlayer.pause] 的唯一出口: 先在 fadeMs 内淡出, 再真正暂停 */
+    fun pauseWithFade() {
+        fadeOutThen { exoPlayer?.pause() }
+    }
+
+    /** [SkipAwarePlayer.stop] 的唯一出口: 先在 fadeMs 内淡出, 再真正停止 */
+    fun stopWithFade() {
+        fadeOutThen { exoPlayer?.stop() }
+    }
+
+    /** [SkipAwarePlayer.play] 的唯一出口: 立即恢复出声, 淡入从真正出声开始计 */
+    fun playWithFade() {
+        exoPlayer?.play()
+        fadeIn()
     }
 
     private fun targetVolume(): Float {
@@ -477,12 +637,15 @@ class PlaybackService : MediaSessionService() {
         // play 之后紧跟一次 applyLoudnessForTrack → configure; 以前这里无条件 cancel 淡入,
         // 刚起的 ValueAnimator 几毫秒内就被打断 ⇒ 用户选 200ms/500ms/1s 都听不到淡入。
         // 决策抽成纯函数 [VolumeHandoffPolicy.owner], 由 JVM 单测盯住。
-        if (VolumeHandoffPolicy.owner(delta, fadeRunning = fadeAnimator != null) == VolumeOwner.Fade) {
+        if (VolumeHandoffPolicy.owner(
+                delta,
+                fadeRunning = fadeAnimator != null || fadeArmedAt != 0L,
+            ) == VolumeOwner.Fade
+        ) {
             return
         }
         // 增益变化与淡入互斥: 这里(重新)接管 volume, 先取消淡入(last-wins)
-        fadeAnimator?.cancel()
-        fadeAnimator = null
+        cancelFade()
         gainSlewAnimator?.cancel()
         gainSlewAnimator = null
         if (gainSlewDbPerSec > 0.0 && kotlin.math.abs(delta) > 1e-4) {
@@ -948,4 +1111,18 @@ private class SkipAwarePlayer(private val delegate: Player) : ForwardingPlayer(d
     override fun seekToNext() = PlaybackService.requestSkip(true)
 
     override fun seekToPrevious() = PlaybackService.requestSkip(false)
+
+    // 淡入淡出(F1)的统一入口: Dart 通道、通知栏、锁屏、耳机键都经过 MediaSession ⇒ 这一层拦一次就全覆盖。
+    // 暂停/停止先在 fadeMs 内淡出再真正执行(fadeMs=0 时行为与以前完全一致), 恢复播放则从真正出声重新淡入。
+    override fun pause() {
+        PlaybackService.instance?.pauseWithFade() ?: delegate.pause()
+    }
+
+    override fun stop() {
+        PlaybackService.instance?.stopWithFade() ?: delegate.stop()
+    }
+
+    override fun play() {
+        PlaybackService.instance?.playWithFade() ?: delegate.play()
+    }
 }
