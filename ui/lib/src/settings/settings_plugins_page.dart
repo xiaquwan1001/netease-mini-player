@@ -695,38 +695,40 @@ class _PluginsPageState extends State<PluginsPage> {
       children: [
         Expanded(
           child: SwitchListTile(
-      value: summary.enabled,
-      onChanged: canToggle ? (value) => _togglePlugin(summary, value) : null,
-      isThreeLine: true,
-      title: AdaptiveText(summary.name, mode: AdaptiveTextMode.ellipsis),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AdaptiveText(
-            '${summary.id} · v${summary.version}',
-            mode: AdaptiveTextMode.ellipsis,
-            style: bodySmall,
-          ),
-          const SizedBox(height: 2),
-          AdaptiveText(
-            hasError ? '未能装载: ${summary.error}' : domainsText,
-            mode: AdaptiveTextMode.wrap,
-            maxLines: 2,
-            style: hasError
-                ? bodySmall?.copyWith(color: theme.colorScheme.error)
-                : bodySmall,
-          ),
-          if (!hasError) ...[
-            const SizedBox(height: 2),
-            AdaptiveText(
-              sourcesText,
-              mode: AdaptiveTextMode.wrap,
-              maxLines: 2,
-              style: bodySmall,
+            value: summary.enabled,
+            onChanged: canToggle
+                ? (value) => _togglePlugin(summary, value)
+                : null,
+            isThreeLine: true,
+            title: AdaptiveText(summary.name, mode: AdaptiveTextMode.ellipsis),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AdaptiveText(
+                  '${summary.id} · v${summary.version}',
+                  mode: AdaptiveTextMode.ellipsis,
+                  style: bodySmall,
+                ),
+                const SizedBox(height: 2),
+                AdaptiveText(
+                  hasError ? '未能装载: ${summary.error}' : domainsText,
+                  mode: AdaptiveTextMode.wrap,
+                  maxLines: 2,
+                  style: hasError
+                      ? bodySmall?.copyWith(color: theme.colorScheme.error)
+                      : bodySmall,
+                ),
+                if (!hasError) ...[
+                  const SizedBox(height: 2),
+                  AdaptiveText(
+                    sourcesText,
+                    mode: AdaptiveTextMode.wrap,
+                    maxLines: 2,
+                    style: bodySmall,
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
           ),
         ),
         IconButton(

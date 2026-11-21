@@ -714,7 +714,9 @@ void main() {
     expect(find.textContaining('已导入 fileplug(本机文件)'), findsOneWidget);
   });
 
-  testWidgets('导入(URL): 非 https 前端拦住不调 FFI, https 才调 pluginInstallUrl', (tester) async {
+  testWidgets('导入(URL): 非 https 前端拦住不调 FFI, https 才调 pluginInstallUrl', (
+    tester,
+  ) async {
     _fake
       ..enabled = true
       ..active = true;
@@ -749,7 +751,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '导入'));
     await tester.pumpAndSettle();
 
-    expect(_fake.calls, ['installUrl(urlplug|URL 插件|1.0.0|https://cdn.test/a.js)']);
+    expect(_fake.calls, [
+      'installUrl(urlplug|URL 插件|1.0.0|https://cdn.test/a.js)',
+    ]);
     expect(find.text('URL 插件'), findsOneWidget);
   });
 
@@ -791,10 +795,7 @@ void main() {
     _fake.summaries = [_summary('demo', name: '示例插件')];
     await _pumpPage(tester);
 
-    expect(
-      tester.widget<IconButton>(_uninstallButton()).onPressed,
-      isNull,
-    );
+    expect(tester.widget<IconButton>(_uninstallButton()).onPressed, isNull);
   });
 }
 
@@ -806,4 +807,5 @@ Finder _pluginTile(String name) =>
     find.ancestor(of: find.text(name), matching: find.byType(SwitchListTile));
 
 /// 插件行里的卸载按钮(单插件用例直接取唯一一个)。
-Finder _uninstallButton() => find.widgetWithIcon(IconButton, Icons.delete_outline);
+Finder _uninstallButton() =>
+    find.widgetWithIcon(IconButton, Icons.delete_outline);
