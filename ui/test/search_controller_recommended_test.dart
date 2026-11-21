@@ -4,7 +4,7 @@ import 'package:minincm/src/home/search_controller.dart';
 import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart' show RustLib, RustLibApi;
 
-/// 只桩住「猜你想搜」候选池用到的三个接口, 其余调动直接抛(测试没覆盖到就是 bug)。
+/// 只桩住「猜你想搜」候选池用到的接口(`defaultSearch`; 另两个联想/历史接口留着断言「不再调用」), 其余调动直接抛(测试没覆盖到就是 bug)。
 ///
 /// flutter_rust_bridge 的 mock 只能装一次, 所以这里用**一个可变实例**:
 /// [reset] 在每个用例开头换掉数据与计数器。
@@ -74,7 +74,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() => RustLib.initMock(api: _api));
 
-  test('多个来源合并去重、默认词优先、最多 4 个', () async {
+  test('只保留官方默认词一个, 不再用联想词扩池', () async {
     _api.reset(
       defaults: const rust.DefaultSearch(
         keyword: 'Mili',
@@ -82,7 +82,7 @@ void main() {
       ),
       history: const ['七里香', '晴天'],
       suggests: const {
-        'Mili': ['Mili', 'Mili (Live)', 'Mili 歌词'],
+        'Mili': ['Mili', 'Mili Fly,My Wings', '密林', '迷恋'],
         '七里香': ['七里香', '夜曲'],
       },
     );
@@ -91,20 +91,13 @@ void main() {
 
     await c.refreshRecommended();
 
-    expect(c.recommended.map((e) => e.keyword).toList(), [
-      'Mili', // 默认词永远第一
-      'Mili (Live)',
-      'Mili 歌词',
-      '七里香', // 第二个种子的联想词
-    ]);
-    expect(c.recommended.length, SearchController.recommendedLimit);
-    // 官方理由跟着默认词走, 其它候选没有理由
-    expect(c.recommended.first.reason, '🔥Mili 你的十月榜首');
-    expect(c.recommended[1].reason, isNull);
-    // 两个种子各请求一次
-    expect(_api.suggestCalls, ['Mili', '七里香']);
-    // 候选池里的词不会重复
-    expect(c.recommended.map((e) => e.keyword).toSet().length, 4);
+    // 2026-11 用户口径: 上游只给一个词, 其余联想词是对它的自动补全 ⇒ 只留这一个
+    expect(c.recommended.map((e) => e.keyword).toList(), ['Mili']);
+    expect(SearchController.recommendedLimit, 1);
+    expect(c.recommended.single.reason, '🔥Mili 你的十月榜首');
+    // 不再请求联想词/历史(否则又会把同一个意图拆成四个格子)
+    expect(_api.suggestCalls, isEmpty);
+    expect(_api.historyCalls, 0);
   });
 
   test('10 分钟内再进搜索页不重新请求; 过期后换新集合', () async {
@@ -149,7 +142,7 @@ void main() {
     expect(_api.defaultCalls, 2);
   });
 
-  test('默认词接口失败: 静默降级到历史种子的联想词', () async {
+  test('默认词接口失败/未登录: 候选池为空(不拿联想词顶替)', () async {
     _api.reset(
       failDefault: true,
       history: const ['晴天'],
@@ -163,8 +156,8 @@ void main() {
     await c.refreshRecommended();
 
     expect(_api.defaultCalls, 1);
-    expect(c.recommended.map((e) => e.keyword).toList(), ['晴天', '晴天 (Live)']);
-    expect(c.recommended.every((e) => e.reason == null), isTrue);
+    expect(c.recommended, isEmpty, reason: '没有官方默认词就整块不渲染');
+    expect(_api.suggestCalls, isEmpty);
   });
 
   test('所有来源都空/失败: 候选池为空(整块不渲染), 且不会无限重试', () async {

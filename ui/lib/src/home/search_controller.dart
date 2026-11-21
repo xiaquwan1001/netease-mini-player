@@ -78,7 +78,9 @@ class SearchController extends ChangeNotifier {
   // ---- 搜索落地页(热词/推荐词) ----
   List<rust.HotSearchTerm> _hotTerms = const [];
 
-  /// "猜你想搜": 多来源合并去重后的候选池(按优先级排序, 最多 [recommendedLimit] 个)
+  /// "猜你想搜": **只放上游官方默认/推荐搜索词**(2026-11 用户口径: 官方一次只给一个,
+  /// 其余联想词只是对它的自动补全, 一起摆出来等于把同一个意图说四遍)。
+  /// 空列表 = 上游没给词(未登录常见) ⇒ 整块(含标题)不渲染。
   List<RecommendedKeyword> _recommended = const [];
 
   /// 上次拉候选池的时间(短 TTL 判定用; 失败也记, 避免每次进页面都重试打网络)
@@ -253,8 +255,8 @@ class SearchController extends ChangeNotifier {
 
   // ---------------- 「猜你想搜」候选池 ----------------
 
-  /// 候选格子的展示上限(与 [SearchLanding] 的格子上限一致)
-  static const int recommendedLimit = 4;
+  /// 候选上限 = **1**(只展示上游 API 返回的那一个词; 见 [recommendedLimit] 的字段注释)
+  static const int recommendedLimit = 1;
 
   /// 候选池的短 TTL: 进入搜索页时按需重新拉, 10 分钟内复用上次结果。
   ///
@@ -274,70 +276,31 @@ class SearchController extends ChangeNotifier {
     await _loadRecommended();
   }
 
-  /// 多来源合并去重取前 [recommendedLimit] 个。优先级:
-  /// 1. 官方「默认/推荐搜索」词(rust.defaultSearch, 只有 1 个, 带官方理由文案);
-  /// 2. 以「默认词 + 最近搜索历史」为种子取联想词(rust.searchSuggestKeywords);
-  /// 3. 热搜词 —— **不取**: 落地页下方「热门搜索」就在展示同一批词, 再塞进来只是
-  ///    把同样的 4 个词重复两遍, 宁可按第 4 条如实少显示。
+  /// 只取**官方「默认/推荐搜索」词**(`rust.defaultSearch`, 上游恒为 1 个, 带官方理由文案)。
   ///
-  /// 任何来源失败都静默降级, 不影响其它来源; 全空时整块不渲染。
+  /// 2026-11 用户口径: 候选词实际只有一个, 后面的都是对第一个的联想/自动补充
+  /// (如 `Mili` → `Mili Fly,My Wings` / `密林` / `迷恋`), 一起摆出来只是把同一意图说多遍 ⇒
+  /// 不再用 `searchSuggestKeywords` 扩池, 也不掺热搜词(下方「热门搜索」已在展示同一批)。
+  /// 接口失败/未登录 = 没有可信候选, 静默降级成空列表(整块不渲染)。
   Future<void> _loadRecommended() async {
     if (_disposed) return;
     _recommendedLoading = true;
     notifyListeners();
 
-    final picked = <RecommendedKeyword>[];
-    void add(String? keyword, {String? reason}) {
-      final k = (keyword ?? '').trim();
-      if (k.isEmpty || picked.length >= recommendedLimit) return;
-      if (picked.any((e) => e.keyword == k)) return;
-      picked.add(RecommendedKeyword(keyword: k, reason: reason));
-    }
-
-    // 来源 1: 官方默认/推荐搜索词(未登录时接口可能拿不到, 静默跳过)
-    String? seed;
+    // 官方默认/推荐搜索词: 上游恒给 1 个(未登录/接口失败时拿不到, 静默跳过)
+    var next = const <RecommendedKeyword>[];
     try {
       final def = await rust.defaultSearch();
       if (_disposed) return;
-      if (def != null) {
-        add(def.keyword, reason: def.showText);
-        seed = def.keyword;
+      final keyword = (def?.keyword ?? '').trim();
+      if (keyword.isNotEmpty) {
+        next = List<RecommendedKeyword>.unmodifiable([
+          RecommendedKeyword(keyword: keyword, reason: def?.showText),
+        ]);
       }
     } catch (_) {}
 
-    // 来源 2: 联想词。种子最多两个(默认词优先, 其次最近一条搜索历史),
-    // 并行请求但按种子顺序合并 —— 越相关的种子排越前。
-    if (!_disposed && picked.length < recommendedLimit) {
-      var history = _searchHistory;
-      if (history.isEmpty) {
-        try {
-          history = await rust.searchHistory();
-          if (_disposed) return;
-          _searchHistory = history;
-        } catch (_) {
-          history = const [];
-        }
-      }
-      final seeds = <String>{
-        if (seed != null && seed.isNotEmpty) seed,
-        ...history.take(2),
-      }.take(2).toList();
-      if (seeds.isNotEmpty) {
-        final lists = await Future.wait([
-          for (final s in seeds) _loadSuggestKeywords(s),
-        ]);
-        if (_disposed) return;
-        for (final list in lists) {
-          for (final k in list) {
-            add(k);
-            if (picked.length >= recommendedLimit) break;
-          }
-        }
-      }
-    }
-
     if (_disposed) return;
-    final next = List<RecommendedKeyword>.unmodifiable(picked);
     // 新集合与当前展示一致就不替换, 避免进页面时无意义的重建/闪烁
     final same =
         next.length == _recommended.length &&

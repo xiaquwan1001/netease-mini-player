@@ -158,7 +158,7 @@ void main() {
     expect(find.text('搜索历史'), findsNothing);
   });
 
-  // ---- 「猜你想搜」2026-11 改版: 多个候选 + 格子 + 会更新 ----
+  // ---- 「猜你想搜」格子视图(生产侧只给 1 个官方词; 视图按列表渲染, 上限是防御约束) ----
 
   testWidgets('多个候选渲染成与历史一致的 chip 格子, 点谁搜谁', (tester) async {
     String? chosen;

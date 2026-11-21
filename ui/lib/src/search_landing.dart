@@ -53,11 +53,13 @@ class SearchLanding extends StatelessWidget {
   final List<String> history;
   final List<rust.HotSearchTerm> hot;
 
-  /// "猜你想搜"的候选词(按优先级排好序, 最多 [_recommendedMaxCount] 个).
-  /// 空列表 = 没有任何可信候选, 整块(含标题)不渲染.
+  /// "猜你想搜"的候选词。
+  /// **生产侧只会给 1 个**(`SearchController.recommendedLimit = 1`, 官方默认/推荐搜索词);
+  /// 本视图仍按列表渲染, 上限只是一种防御性约束。
+  /// 空列表 = 没有任何可信候选, 整块(含标题)不渲染。
   final List<RecommendedKeyword> recommended;
 
-  /// 候选格子最多显示几个(多来源合并去重后截断; 不足就少显示).
+  /// 候选格子的防御上限(实际由生产侧只给 1 个; 多给了也只显示这么多个)。
   static const int _recommendedMaxCount = 4;
 
   final void Function(String keyword) onSelected;
