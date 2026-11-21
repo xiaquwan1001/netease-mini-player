@@ -7,7 +7,8 @@
 //! 为什么不是 tokio task: `ncm-provider` 不依赖任何 runtime, 这里也不引入;
 //! `oneshot` 只是 future, 谁的 executor 都能 poll.
 
-use std::sync::mpsc::{self, Sender};
+use std::collections::HashMap;
+use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -17,8 +18,8 @@ use ncm_domain::{Lyric, SearchPage, StreamUrl, TrackId};
 use ncm_provider::{
     AccountProvider, ArtistAlbumProvider, BoxFuture, Capability, CloudProvider, CommentProvider,
     CommunityProvider, LyricProvider, MessageProvider, PlaylistReadProvider, PlaylistWriteProvider,
-    Provider, ProviderResult, RadioProvider, ReadProvider, RecommendProvider, SearchQuery,
-    SongUrlRequest, VipProvider,
+    Provider, ProviderError, ProviderResult, RadioProvider, ReadProvider, RecommendProvider,
+    SearchQuery, SongUrlRequest, VipProvider,
 };
 use serde_json::Value;
 
@@ -32,6 +33,12 @@ use crate::transport::Transport;
 const INIT_TIMEOUT: Duration = Duration::from_secs(8);
 /// 宿主侧保留的日志条数上限(超出丢最旧的).
 const MAX_RETAINED_LOGS: usize = 512;
+/// 每个插件的调用队列深度(**不含正在执行的那一次**).
+///
+/// 满则立即拒绝(`network` + 可重试), 而不是让调用方无限排队 —— 排队会叠加起播延迟,
+/// 且 worker 线程本来就是串行的, 排再长也不会更快. 见
+/// `docs/audit/2026-11-21-plugin-isolation-phase2.md` 切片 B.
+const CALL_QUEUE_DEPTH: usize = 2;
 
 /// 装载一个脚本插件所需的全部外部依赖(宿主注入).
 pub struct PluginSpec {
@@ -83,6 +90,84 @@ enum WorkerMsg {
     Shutdown,
 }
 
+// ---------------------- 同曲取链合并(去重) ----------------------
+
+/// 同一 `track + 档位` 的在飞取链请求合并表(key -> 等待同一结果的订阅者).
+///
+/// 为什么单独做在 `song_url` 上: 起播预取、正式播放、下载三条路径可能同时问同一首,
+/// 每次都让脚本打一遍网络既慢又容易撞上音源站频控. 合并只发生在**同一插件实例**内,
+/// 首个请求(leader)真实执行, 其余(follower)等它的结果(成功或失败都共享).
+#[derive(Default)]
+struct SongUrlCoalescer {
+    waiting: Mutex<HashMap<String, Vec<oneshot::Sender<ProviderResult<StreamUrl>>>>>,
+}
+
+impl SongUrlCoalescer {
+    /// 已有在飞请求 ⇒ 返回订阅端(等 leader 广播); 否则登记为 leader(返回 `None`).
+    fn join(&self, key: &str) -> Option<oneshot::Receiver<ProviderResult<StreamUrl>>> {
+        let mut waiting = self.waiting.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(sinks) = waiting.get_mut(key) {
+            let (tx, rx) = oneshot::channel();
+            sinks.push(tx);
+            return Some(rx);
+        }
+        waiting.insert(key.to_string(), Vec::new());
+        None
+    }
+
+    /// leader 结束(成功/失败/被取消): 摘掉登记并向所有 follower 广播同一结果.
+    fn complete(&self, key: &str, result: &ProviderResult<StreamUrl>) {
+        let sinks = self
+            .waiting
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(key)
+            .unwrap_or_default();
+        for sink in sinks {
+            // follower 也可能已经放弃等待(drop), 丢弃即可.
+            let _ = sink.send(result.clone());
+        }
+    }
+}
+
+/// leader 的取消守卫: 若 leader 的 future 被提前 drop(调用方取消), 也要把登记摘掉并把
+/// 等待中的 follower 唤醒成"可重试"(否则它们会挂到各自的等待被丢弃为止).
+struct CoalesceLeader<'a> {
+    table: &'a SongUrlCoalescer,
+    key: String,
+    plugin: &'a str,
+    armed: bool,
+}
+
+impl<'a> CoalesceLeader<'a> {
+    fn new(table: &'a SongUrlCoalescer, key: String, plugin: &'a str) -> Self {
+        Self {
+            table,
+            key,
+            plugin,
+            armed: true,
+        }
+    }
+
+    /// 正常结束: 广播结果并解除守卫.
+    fn finish(mut self, result: &ProviderResult<StreamUrl>) {
+        self.armed = false;
+        self.table.complete(&self.key, result);
+    }
+}
+
+impl Drop for CoalesceLeader<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let err = ProviderError::network(format!(
+                "插件 `{}` 的同一首取链请求被合并, 但发起方已提前结束; 请重试",
+                self.plugin
+            ));
+            self.table.complete(&self.key, &Err(err));
+        }
+    }
+}
+
 /// 实验性音源 provider: 脚本经 QuickJS 沙箱提供 `songUrl` / `search`.
 ///
 /// **未接入产品默认路径**(没有 FFI 导出口, 也没有注册进 `ProviderRegistry`);
@@ -92,8 +177,11 @@ pub struct ScriptProvider {
     capabilities: &'static [Capability],
     /// 脚本经 `send('inited', {sources})` 声明的平台代号(装载期读一次, 之后不变).
     declared_sources: Vec<String>,
-    tx: Sender<WorkerMsg>,
+    /// **有界**调用队列: 满 ⇒ 立即拒绝(见 [`CALL_QUEUE_DEPTH`]).
+    tx: SyncSender<WorkerMsg>,
     logs: Arc<Mutex<Vec<String>>>,
+    /// 同一首在飞取链请求合并表.
+    song_urls: SongUrlCoalescer,
 }
 
 impl ScriptProvider {
@@ -104,7 +192,7 @@ impl ScriptProvider {
         let logs_for_thread = logs.clone();
         type InitResult = Result<(Vec<String>, Vec<String>), PluginError>;
         let (init_tx, init_rx) = mpsc::channel::<InitResult>();
-        let (tx, rx) = mpsc::channel::<WorkerMsg>();
+        let (tx, rx) = mpsc::sync_channel::<WorkerMsg>(CALL_QUEUE_DEPTH);
         let thread_name = format!("ncm-plugin:{}", spec.name);
 
         thread::Builder::new()
@@ -161,18 +249,29 @@ impl ScriptProvider {
             declared_sources,
             tx,
             logs,
+            song_urls: SongUrlCoalescer::default(),
         })
     }
 
     async fn invoke(&self, event: &str, args: Value) -> ProviderResult<Value> {
         let (reply_tx, reply_rx) = oneshot::channel();
-        self.tx
-            .send(WorkerMsg::Invoke {
-                event: event.to_string(),
-                args,
-                reply: reply_tx,
-            })
-            .map_err(|_| PluginError::shutdown("插件 worker 已退出").to_provider_error())?;
+        match self.tx.try_send(WorkerMsg::Invoke {
+            event: event.to_string(),
+            args,
+            reply: reply_tx,
+        }) {
+            Ok(()) => {}
+            // 队列满 ⇒ 立即拒绝(可重试), 不排队: worker 是串行的, 排队只会叠加延迟.
+            Err(TrySendError::Full(_)) => {
+                return Err(ProviderError::network(format!(
+                    "插件 `{}` 忙: 已有 {} 个调用在排队; 请稍后重试",
+                    self.name, CALL_QUEUE_DEPTH
+                )));
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                return Err(PluginError::shutdown("插件 worker 已退出").to_provider_error());
+            }
+        }
         reply_rx
             .await
             .map_err(|_| PluginError::shutdown("插件 worker 未回传结果").to_provider_error())?
@@ -257,7 +356,9 @@ impl std::fmt::Debug for ScriptProvider {
 impl Drop for ScriptProvider {
     fn drop(&mut self) {
         // 不 join: 若有一次调用正在跑, join 会把析构阻塞到超时预算结束.
-        let _ = self.tx.send(WorkerMsg::Shutdown);
+        // 队列满时 try_send 失败也没关系: 本结构体析构后 `tx` 一并 drop, worker 的
+        // `recv()` 会立刻返回 Err 而退出.
+        let _ = self.tx.try_send(WorkerMsg::Shutdown);
     }
 }
 
@@ -300,30 +401,52 @@ impl ReadProvider for ScriptProvider {
 
     fn song_url<'a>(&'a self, req: &'a SongUrlRequest) -> BoxFuture<'a, ProviderResult<StreamUrl>> {
         Box::pin(async move {
-            let quality = convert::quality_to_lx(req.level);
-            // musicInfo 的字段名对齐上游 LX 社区脚本(id 必须是数字 trackId;
-            // songmid/hash 是 kw/kg/QQ 系的兼容键, 网易云曲目通常没有)。
-            let meta = req.meta.as_ref();
-            let mut music_info = serde_json::json!({
-                "id": req.track.0,
-                "name": meta.map(|m| m.name.clone()).unwrap_or_default(),
-                "singer": meta.map(|m| m.singer.clone()).unwrap_or_default(),
-                "albumName": meta.map(|m| m.album_name.clone()).unwrap_or_default(),
-                "albumId": meta.map(|m| m.album_id).unwrap_or(0),
-                "interval": meta.map(|m| m.interval).unwrap_or(0),
-                "type": quality,
-            });
-            if let Some(song_mid) = meta.and_then(|m| m.song_mid.clone()) {
-                if !song_mid.is_empty() {
-                    // 上游脚本按 hash/songmid/id 依次兜底, 两个键同值即可.
-                    music_info["songmid"] = serde_json::Value::String(song_mid.clone());
-                    music_info["hash"] = serde_json::Value::String(song_mid);
-                }
+            // 同一 track + 档位在飞时合并(预取/起播/下载可能同时问同一首).
+            let key = format!("{}:{}", req.track.0, convert::quality_to_lx(req.level));
+            if let Some(waiter) = self.song_urls.join(&key) {
+                return match waiter.await {
+                    Ok(result) => result,
+                    // leader 被取消: 不假装成功, 让这次调用自己重试.
+                    Err(_) => Err(ProviderError::network(format!(
+                        "插件 `{}` 的同一首取链请求被合并, 但发起方已提前结束; 请重试",
+                        self.name
+                    ))),
+                };
             }
-            let args = serde_json::json!(["script", music_info, quality]);
-            let raw = self.invoke("musicUrl", args).await?;
-            convert::stream_url(&raw, req.level).map_err(Into::into)
+            let leader = CoalesceLeader::new(&self.song_urls, key, &self.name);
+            let result = self.song_url_uncached(req).await;
+            leader.finish(&result);
+            result
         })
+    }
+}
+
+impl ScriptProvider {
+    /// 未合并的取链实现(`musicUrl` 事件的真实调用; 合并逻辑只在 [`ReadProvider::song_url`] 入口).
+    async fn song_url_uncached(&self, req: &SongUrlRequest) -> ProviderResult<StreamUrl> {
+        let quality = convert::quality_to_lx(req.level);
+        // musicInfo 的字段名对齐上游 LX 社区脚本(id 必须是数字 trackId;
+        // songmid/hash 是 kw/kg/QQ 系的兼容键, 网易云曲目通常没有)。
+        let meta = req.meta.as_ref();
+        let mut music_info = serde_json::json!({
+            "id": req.track.0,
+            "name": meta.map(|m| m.name.clone()).unwrap_or_default(),
+            "singer": meta.map(|m| m.singer.clone()).unwrap_or_default(),
+            "albumName": meta.map(|m| m.album_name.clone()).unwrap_or_default(),
+            "albumId": meta.map(|m| m.album_id).unwrap_or(0),
+            "interval": meta.map(|m| m.interval).unwrap_or(0),
+            "type": quality,
+        });
+        if let Some(song_mid) = meta.and_then(|m| m.song_mid.clone()) {
+            if !song_mid.is_empty() {
+                // 上游脚本按 hash/songmid/id 依次兜底, 两个键同值即可.
+                music_info["songmid"] = serde_json::Value::String(song_mid.clone());
+                music_info["hash"] = serde_json::Value::String(song_mid);
+            }
+        }
+        let args = serde_json::json!(["script", music_info, quality]);
+        let raw = self.invoke("musicUrl", args).await?;
+        convert::stream_url(&raw, req.level).map_err(Into::into)
     }
 }
 

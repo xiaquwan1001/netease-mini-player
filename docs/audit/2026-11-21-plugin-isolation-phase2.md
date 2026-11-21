@@ -16,18 +16,23 @@
 | 站点 | 持锁期间发生什么 | 阻塞风险 |
 |---|---|---|
 | `Core::route_decision`（`ncm-service/src/plugins/host.rs::route_plan` → `PluginHost::route_plan`） | `ids()` / `provider(id).supports(cap)` / `is_active()`，锁内查注册表 | 小（纯内存），但每次取链都走一遍 |
-| `PluginHost::summaries / failures / rejected / status / sources`（host.rs） | 遍历注册表 + `declared_sources()`（后者会 eval `__lxSends()`，见 `sandbox.rs` `ScriptEngine::declared_sources`） | **中**：`sources()` 触发 JS eval，受 8s 预算保护但锁内等结果；`PluginHost::take_logs` 头注释自己承认「拉取本身要拿 Core 的唯一一把锁，轮询会拖慢别的域调用」 |
+| `PluginHost::summaries / failures / rejected / status / sources`（host.rs） | 遍历注册表 + `declared_sources()`（**已在装载期算好并缓存在 `ScriptProvider.declared_sources` 字段**，不再每次 eval `__lxSends()`；见「勘误 2026-11-21」） | 小（纯内存遍历）；`PluginHost::take_logs` 头注释仍强调「拉取要拿 Core 的唯一一把锁，别轮询」 |
 | `PluginHost::set_enabled / set_root / rescan / enable / disable / install_source`（host.rs） | `rebuild()` ⇒ `registry.scan()` ⇒ 装载（`ScriptProvider::load` 装载预算 8s，`recv_timeout`） | **最大**：`rescan`/`install_source` 锁内全量重扫 + 逐插件装载，期间所有其它 FFI 域调用排队 |
 | `PluginHost::enable/disable` 之外的**常规取链** `song_url` | 插件 provider 的 oneshot `recv` 是异步等待（worker 线程执行脚本），**不持 Core 锁** | 小（**已核实 2026-11-21**：`ncm-ffi/src/api.rs:346` `routed_call` 只在花括号作用域内取判定，guard 在 `call_routed(...).await` 之前就已释放；`api.rs:330` `with_provider` 同样只取 `Arc` 后立即释放 ⇒ 脚本执行期间没有 Core 锁） |
 
-结论：死循环脚本被 8s interrupt 限死在**worker 线程**，不会直接占锁；真正的锁内阻塞面是
-`rescan`/`install_source` 的锁内装载（最多 8s × 插件数）与 `sources()` 的锁内 eval。
+结论：死循环脚本被 8s interrupt 限死在**worker 线程**，不会直接占锁；真正的锁内阻塞面
+只剩 `rescan`/`install_source` 的锁内装载（最多 8s × 插件数）。
 **已核实（2026-11-21，读码）**：`ncm-ffi` 的取链入口**不**整段持 Core 锁 —— `api.rs:346`
 `routed_call` 把 `route_decision` 关在一个块里，guard 在 `call_routed(...).await` 之前释放
 （future 自带 provider `Arc`）；`api.rs:330` `with_provider` 亦然。所以死循环脚本被 8s
 interrupt 限死在 worker 线程，**不会**阻塞其它域 FFI。仍然成立的锁内阻塞面只有
-「`rescan`/`install_source` 的装载」与「`sources()` 的 `__lxSends()` eval」两处（上表第 2/3 行）。
+「`rescan`/`install_source` 的装载」一处（上表第 3 行）。
 剩余待实测：死循环 fixture 下 `search` 的墙钟延迟（确认 worker 线程之外确实无锁）。
+
+**勘误（2026-11-21 落地切片 B/C 时读码）**：上一版把 `sources()` 也列为锁内 JS eval，实际不是 ——
+`worker.rs` 在 `ScriptProvider::load` 里只调一次 `engine.declared_sources()`，结果存进
+`declared_sources: Vec<String>` 字段，之后 `Provider::declared_sources()` 只 clone 那个 Vec。
+`ScriptEngine::declared_sources()`（eval 那一份）只在装载期和 `examples/android_smoke` 里用。
 
 ### ② panic 传播面
 
@@ -84,17 +89,25 @@ FFI `song_url` → `call_routed`（`route.rs`）→ 插件 `song_url`（worker �
 
 切片（每片可独立验收，不动 UI）：
 
-1. **切片 A：锁面收敛**——`PluginHost::rescan/install_source/enable` 的装载移到 Core 锁外
-   （注册表用 `ArcSwap`/内部锁），`sources()` 改为装载期缓存一次（不每次 eval）。
+1. **切片 A：锁面收敛（未做）**——`PluginHost::rescan/install_source/enable` 的装载移到 Core 锁外
+   （注册表用 `ArcSwap`/内部锁）。`sources()` 的装载期缓存**已在 v0.34.5 之前就存在**（见勘误），
+   本片只剩「装载移出 Core 锁」一件事。
    验收：死循环插件 fixture 存在时，并发取链 20 次测其它域 FFI（如 `search`）p95 延迟
    < 50ms；`rescan` 期间取链不排队。用例：`host_tests` 新增「rescan 进行中 route_decision
    不阻塞」。
-2. **切片 B：有界调用队列**——`worker.rs` 的 oneshot 通道改有界（如队列深度 2/插件，
-   满时立即返回 `ProviderError{kind:network, retryable:true}`）+ 调用去重（同一 track+level
-   在飞请求合并）。验收：并发 10 次同 track 取链，脚本侧 `lx.request` 计数 ≤ 2（去重生效）；
-   队列满时响应时间 < 10ms 且不丢已有请求。
-3. **切片 C：起播超时上限**——`SandboxConfig` 对取链调用给独立的更紧预算（如 4s，
-   与 8s 装载/通用预算分离），超时立即回落内置（`call_routed` 已支持）。
+2. **切片 B：有界调用队列（已落，v0.35.0）**——`worker.rs` 的 oneshot 通道改有界
+   （`CALL_QUEUE_DEPTH = 2`/插件，`sync_channel` + `try_send`，满时立即返回
+   `ProviderError{kind:network, retryable:true}`）+ 同曲取链合并（`SongUrlCoalescer`：
+   同一 `track + 档位` 的在飞请求只让脚本执行一次，follower 共享结果；leader 被取消时
+   用 `CoalesceLeader` 守卫唤醒 follower 成「可重试」）。验收用例：
+   `ncm-plugin/tests/worker_limits.rs`（10 并发同曲网络命中 ≤ 2；4 并发不同曲恰好拒 1~2 次且
+   拒绝在 ≤ 200ms 内返回、不打网络）。实测拒绝是**微秒级**（远好于 10ms 目标）。
+   口径差异：`Shutdown` 也用 `try_send`（队列满时丢弃也没关系 —— `tx` 随结构体 drop，
+    worker 的 `recv()` 会立刻返回 `Err` 退出）。
+3. **切片 C：起播超时上限（已落，v0.35.0）**——`SandboxConfig::song_url_timeout`（缺省 4s）
+   + `SandboxConfig::timeout_for(event)`（**唯一判定点**：`ScriptEngine::invoke`；装载期仍吃
+   `call_timeout`），取链实际预算 = `min(song_url_timeout, call_timeout)` ⇒ 收紧通用预算
+   不会反而放宽取链。超时仍是 `Timeout` → `Network` + 可重试，`call_routed` 照旧回落内置。
    验收：死循环插件 fixture 下，端到端起播（死循环→超时→内置取链成功）总墙钟 ≤ 4s + 内置
    取链耗时；`tests/sandbox.rs` 的超时用例改用新预算并保持绿。
 

@@ -31,6 +31,11 @@ const PRELUDE: &str = include_str!("prelude.js");
 pub struct SandboxConfig {
     /// 单次调用(含脚本加载)的硬超时.
     pub call_timeout: Duration,
+    /// **取链**(`musicUrl`)的独立预算: 起播路径对延迟敏感, 超时即由路由层回落内置.
+    ///
+    /// 缺省 4s(切片 C, 见 `docs/audit/2026-11-21-plugin-isolation-phase2.md`);
+    /// 实际生效值再与 `call_timeout` 取小 —— 收紧通用预算不会反而放宽取链.
+    pub song_url_timeout: Duration,
     /// QuickJS 堆上限.
     pub memory_limit_bytes: usize,
     /// JS 栈上限.
@@ -49,12 +54,26 @@ impl Default for SandboxConfig {
     fn default() -> Self {
         Self {
             call_timeout: Duration::from_secs(8),
+            song_url_timeout: Duration::from_secs(4),
             memory_limit_bytes: 32 * 1024 * 1024,
             max_stack_bytes: 512 * 1024,
             max_requests_per_call: 8,
             max_response_bytes: 4 * 1024 * 1024,
             max_log_entries: 200,
             max_storage_value_bytes: 64 * 1024,
+        }
+    }
+}
+
+impl SandboxConfig {
+    /// 单次事件的调用预算(**唯一判定点**: [`ScriptEngine::invoke`]; 装载期仍吃 `call_timeout`).
+    ///
+    /// 目前只有取链走更紧的 [`Self::song_url_timeout`]: 取链在起播链路的关键路径上,
+    /// 而搜索/歌词/装载都可以吃满 `call_timeout`.
+    pub fn timeout_for(&self, event: &str) -> Duration {
+        match event {
+            "musicUrl" => self.song_url_timeout.min(self.call_timeout),
+            _ => self.call_timeout,
         }
     }
 }
@@ -353,7 +372,8 @@ impl ScriptEngine {
     ) -> Result<serde_json::Value, PluginError> {
         self.host.borrow_mut().begin_call();
         self.timed_out.store(false, Ordering::SeqCst);
-        self.arm_deadline(self.config.call_timeout);
+        // 取链走独立(更紧)预算, 其余事件吃通用预算; 见 `SandboxConfig::timeout_for`.
+        self.arm_deadline(self.config.timeout_for(event));
         let result = self.invoke_armed(event, args);
         self.disarm_deadline();
         result
@@ -500,10 +520,9 @@ impl ScriptEngine {
             // interrupt 只在 JS 执行时被回调; 纯 Rust 侧的泵循环自己再看一眼截止时间.
             if self.epoch.elapsed().as_millis() as u64 >= self.deadline_ms.load(Ordering::Relaxed) {
                 self.timed_out.store(true, Ordering::SeqCst);
-                return Err(PluginError::timeout(format!(
-                    "沙箱调用超时(泵 job queue, 预算 {:?})",
-                    self.config.call_timeout
-                )));
+                return Err(PluginError::timeout(
+                    "沙箱调用超时(泵 job queue, 已达本次调用的截止时间)".to_string(),
+                ));
             }
             match self.runtime.execute_pending_job() {
                 Ok(true) => idle_rounds = 0,
