@@ -18,6 +18,8 @@ import '../platform.dart';
 import '../playback_bridge.dart';
 import '../profile_banner.dart';
 import '../profile_scaffold.dart';
+import '../ranking_view.dart'
+    show PlayRankingView, RankingLoader, showPlayRanking;
 import '../rust/api_all.dart' as rust;
 import '../section_header.dart';
 import '../song_tile.dart' show SongRow;
@@ -49,6 +51,8 @@ class UserPage extends StatefulWidget {
     this.onOpenFolloweds,
     this.loadEvents,
     this.loadLikedSongs,
+    this.loadRanking,
+    this.loggedIn,
     this.onOpenUrl,
     this.initialTab,
   });
@@ -74,6 +78,15 @@ class UserPage extends StatefulWidget {
   /// 「我喜欢」栏的曲目 loader(测试注入; 默认 rust.playlistSongs)
   final Future<List<rust.SongDto>> Function(BigInt playlistId)? loadLikedSongs;
 
+  /// 「常听」栏的排行 loader("all"/"week" 为参数; 默认 rust.userPlayRanking)。
+  /// 这是**对方**的排行, 与「我的」页的 rust.playRanking 是两个上游参数。
+  final RankingLoader? loadRanking;
+
+  /// 登录态(测试注入; 默认同步读 rust.loggedIn 的会话快照)。
+  /// 别人的听歌排行上游要求带 MUSIC_U: 匿名请求同一个端点只回 200 + 空数组
+  /// (实测 code=200 且 allData=[]), 所以"未登录"和"对方没记录"只能靠它分开。
+  final bool? loggedIn;
+
   /// 动态详情里打开外链/视频(默认交给系统, 见 [PlatformBridge.openUrl])
   final Future<void> Function(String url)? onOpenUrl;
 
@@ -89,6 +102,10 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   List<rust.Playlist>? _playlists;
   String? _error;
   bool _loading = true;
+
+  /// 首帧就要知道"要不要显示登录后可见", 所以同步读(纯内存判据);
+  /// 拿不到 Rust 会话(如 widget 测试没初始化桥)时按未登录处理。
+  bool _loggedIn = false;
 
   final ScrollController _scroll = ScrollController();
   bool _collapsed = false;
@@ -107,10 +124,26 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _loggedIn = widget.loggedIn ?? _sessionLoggedIn();
     _scroll.addListener(_onScroll);
     _tabController = TabController(length: _tabCount, vsync: this);
     _reload();
   }
+
+  /// 会话登录态(不联网); 桥未初始化/出错一律当未登录。
+  static bool _sessionLoggedIn() {
+    try {
+      return rust.loggedIn();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 「常听」默认 loader: 目标用户的排行(周期口径与 Rust 的 RankingPeriod 一致)
+  RankingLoader get _loadRanking =>
+      widget.loadRanking ??
+      (period) async =>
+          rust.userPlayRanking(uid: widget.userId, period: period);
 
   @override
   void dispose() {
@@ -344,6 +377,9 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
       ProfileTabSpec('动态', builder: _eventsTab),
       if (liked != null)
         ProfileTabSpec('我喜欢', builder: (context) => _likedTab(context, liked)),
+      // 常听: 与他人主页的其它栏一样**恒在**(未登录时栏内给「登录后可见」)。
+      // 上游对匿名请求只回 200 + 空数组, 所以不能靠"有没有数据"决定这一栏在不在。
+      ProfileTabSpec('常听', builder: _rankingTab),
       // 歌单栏在资料加载完成后恒在(空时由 tab 内给空态): 「没有公开歌单」本身
       // 是有用信息, 而不是"没有这条数据"。
       if (_playlists != null) ProfileTabSpec('歌单', builder: _playlistsTab),
@@ -388,6 +424,47 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
           ),
         ],
       ),
+    );
+  }
+
+  /// 「常听」栏: 对方的听歌排行(所有时间 / 最近一周)。
+  ///
+  /// 复用「我的」页同一份 [PlayRankingView](compact): 只画前 5 条 + 「查看全部」,
+  /// 完整排行进 [showPlayRanking] 整页 —— 主页不一次铺满对方上百条排行。
+  /// tab 内容是懒构建的(见 [ProfileTabSpec]), 没点进这一栏就不会发请求,
+  /// 与同页「我喜欢」预览一个口径。
+  ///
+  /// 登录态是硬前提: 匿名请求同一个端点, 上游只回 200 + 空数组(实测
+  /// code=200 且 allData=[]), 与"对方真的没记录"长得一模一样; 所以未登录时
+  /// 给「登录后可见」, 而不是画一个会误导人的空列表。
+  Widget _rankingTab(BuildContext context) {
+    final bottom = 24 + MediaQuery.viewPaddingOf(context).bottom;
+    if (!_loggedIn) {
+      return ListView(
+        padding: EdgeInsets.fromLTRB(kPagePadding, 24, kPagePadding, bottom),
+        children: const [
+          EmptyView(
+            icon: Icons.lock_outline,
+            title: '登录后可见',
+            hint: '听歌排行需要登录: 登录后能看到 Ta 最近常听的歌',
+          ),
+        ],
+      );
+    }
+    final load = _loadRanking;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(kPagePadding, 8, kPagePadding, bottom),
+      children: [
+        PlayRankingView(
+          load: load,
+          compact: true,
+          // 官方页面上的原话是「所有时间 / 最近一周」(「我的」页沿用总排行/当周)
+          periods: const [('all', '所有时间'), ('week', '最近一周')],
+          // 别人的页面不能说"登录后听几首歌就有了"
+          emptyText: 'Ta 还没有公开的听歌记录',
+          onOpenAll: () => showPlayRanking(context, load: load),
+        ),
+      ],
     );
   }
 
@@ -772,6 +849,8 @@ Future<void> showUserPage(
   VoidCallback? onOpenFollows,
   VoidCallback? onOpenFolloweds,
   Future<List<rust.FeedEventDto>> Function(BigInt uid)? loadEvents,
+  RankingLoader? loadRanking,
+  bool? loggedIn,
   Future<void> Function(String url)? onOpenUrl,
   String? initialTab,
 }) {
@@ -787,6 +866,8 @@ Future<void> showUserPage(
         onOpenFollows: onOpenFollows,
         onOpenFolloweds: onOpenFolloweds,
         loadEvents: loadEvents,
+        loadRanking: loadRanking,
+        loggedIn: loggedIn,
         onOpenUrl: onOpenUrl,
         initialTab: initialTab,
       ),

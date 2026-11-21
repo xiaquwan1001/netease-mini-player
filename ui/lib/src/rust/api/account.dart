@@ -136,6 +136,15 @@ Future<PhoneLoginResult> loginSmsVerify({
   countryCode: countryCode,
 );
 
+/// 当前会话是否已登录(装了 MUSIC_U)。
+///
+/// 给「上游对未登录和空数据都回 200 + 空列表」的场景用(如他人常听排行:
+/// 匿名请求 play/record 只回 `{"code":200,"allData":[]}`), UI 靠它把
+/// 「登录后可见」与「对方真的没有记录」分开, 而不是都画成空列表。
+/// 纯内存判据(不联网), 因此标 sync: UI 可以在 initState/首帧直接读,
+/// 不必为"要不要显示登录后可见"先转一圈异步。
+bool loggedIn() => RustLib.instance.api.crateApiAccountLoggedIn();
+
 /// 已记住的账号列表(只含凭据, 指纹共享)
 Future<List<AccountDto>> accounts() =>
     RustLib.instance.api.crateApiAccountAccounts();

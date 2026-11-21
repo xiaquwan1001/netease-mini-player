@@ -125,9 +125,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 纵向分类 tab: 动态 / 我喜欢 / 歌单(关注、粉丝已按反馈 8 移除)
+    // 纵向分类 tab: 动态 / 我喜欢 / 常听 / 歌单(关注、粉丝已按反馈 8 移除)
     final labels = tester.widgetList<Tab>(find.byType(Tab)).map((t) => t.text);
-    expect(labels, ['动态', '我喜欢', '歌单']);
+    expect(labels, ['动态', '我喜欢', '常听', '歌单']);
     // 我喜欢栏: 计数 + 最近喜欢的歌
     expect(find.text('共 42 首'), findsOneWidget);
     expect(find.text('晴天'), findsOneWidget);
@@ -315,8 +315,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 计数为 0 时不生成关注/粉丝 tab: 只剩「动态」+「歌单」两条恒定 tab
-    expect(find.byType(Tab), findsNWidgets(2));
+    // 计数为 0 时不生成关注/粉丝 tab: 只剩「动态」+「常听」+「歌单」三条恒定 tab
+    // (常听恒在: 未登录时栏内是「登录后可见」, 不是靠"有数据才出现")
+    expect(find.byType(Tab), findsNWidgets(3));
     expect(find.text('关注'), findsNothing);
     expect(find.text('粉丝'), findsNothing);
 
@@ -432,9 +433,9 @@ void main() {
     expect(find.text('TA 的歌单'), findsNothing);
     expect(find.text('关注'), findsNothing);
     expect(find.text('粉丝'), findsNothing);
-    // 「动态」+「歌单」=
-    // 两条恒定 tab(动态是用户主页主内容, 不随数据缺失消失)
-    expect(find.byType(Tab), findsNWidgets(2));
+    // 「动态」+「常听」+「歌单」=
+    // 三条恒定 tab(动态是用户主页主内容、常听未登录时给登录提示, 都不随数据缺失消失)
+    expect(find.byType(Tab), findsNWidgets(3));
 
     // 骨架几何一致: 身份卡左右边缘与上沿都在同一条线上
     final userIdentity = tester.getRect(find.byType(ProfileIdentity));
