@@ -136,19 +136,57 @@ class LoginActivity : ComponentActivity() {
         // MUSIC_U, 页面会直接判定"已登录"并原地返回 —— "想加第二个账号却立刻跳回来"的根因.
         // 账号簿保存在 Rust 侧, 清 WebView cookie 不影响已记住的账号。
         //
+        // 2026-11-21(#5 回归): 以前这里是无差别 removeAllCookies, 把网易自己的
+        // "这台设备登录过谁"的证据(设备指纹 / 记住上次账号)一起清了 ⇒ 官方登录页每次都
+        // 当新设备, 用户报"以前有一键手机号/输后四位继续, 现在必须完整手机号 + 验证码"。
+        // 现在只删**登录凭据键**(见 LoginCookiePolicy), 设备指纹与 __remember_me 留着。
+        //
+        // 兜底: 分键删除在不同机型/域 cookie 上未必一次到位; 删完再查一遍, 还看得到
+        // 登录凭据就仍然整体清空 —— 宁可丢"记住账号", 也不能让 P-08 回归(旧账号自动登录)。
         // removeAllCookies 是**异步**的: loadUrl 必须放进它的回调里, 否则页面会先加载并把
         // 新的 MUSIC_U 写进 cookie 仓库, 随后的清理再把它吃掉(取决于机型时序)。
         // MainActivity 的 loginWeb 只负责 startActivity, 不再清一遍。
         val manager = CookieManager.getInstance()
-        manager.removeAllCookies {
-            manager.flush()
-            if (!isFinishing && !isDestroyed && ::webView.isInitialized) {
-                // 允许 adb 指定别的 URL(排查网络/区域差异用):
-                //   adb shell am start -n com.minincm.minincm/.LoginActivity --es url https://y.music.163.com/m/login
-                webView.loadUrl(loginUrl)
+        clearLoginCookies(manager)
+        if (hasLoginCookieLeft(manager)) {
+            manager.removeAllCookies {
+                manager.flush()
+                loadLoginPage(loginUrl)
             }
+        } else {
+            manager.flush()
+            loadLoginPage(loginUrl)
         }
         handler.postDelayed(cookiePoll, POLL_MS)
+    }
+
+    /** 只删登录凭据键, 保留设备指纹与"记住上次账号"类 cookie(#5). */
+    private fun clearLoginCookies(manager: CookieManager) {
+        for (url in COOKIE_URLS) {
+            val raw = manager.getCookie(url) ?: continue
+            val host = url.substringAfter("://", url)
+            for (key in LoginCookiePolicy.keysToClear(raw)) {
+                // 网易写的是域 cookie(.163.com / .music.163.com): 只按 host 写过期的
+                // Set-Cookie 删不掉, 所以 host-only 与 Domain=.<当前域> 各写一次。
+                manager.setCookie(url, "$key=; Max-Age=0; Path=/")
+                manager.setCookie(url, "$key=; Domain=.$host; Max-Age=0; Path=/")
+            }
+        }
+    }
+
+    /** 分键清理之后还残留登录凭据吗(是 ⇒ 走整体清空兜底). */
+    private fun hasLoginCookieLeft(manager: CookieManager): Boolean =
+        COOKIE_URLS.any { url ->
+            val raw = manager.getCookie(url) ?: return@any false
+            LoginCookiePolicy.hasLoginCookie(raw)
+        }
+
+    /** 加载登录页(带"页面已经关了"守卫). */
+    private fun loadLoginPage(url: String) {
+        if (isFinishing || isDestroyed || !::webView.isInitialized) return
+        // 允许 adb 指定别的 URL(排查网络/区域差异用):
+        //   adb shell am start -n com.minincm.minincm/.LoginActivity --es url https://y.music.163.com/m/login
+        webView.loadUrl(url)
     }
 
     /** 返回 true 表示已拿到登录态并结束页面 */
