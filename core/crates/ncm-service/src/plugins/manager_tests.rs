@@ -7,14 +7,18 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use ncm_domain::TrackId;
 use ncm_plugin::{MockTransport, SandboxConfig, Storage, TransportResponse};
 use ncm_provider::{AudioLevel, ProviderErrorKind, ReadProvider, SongUrlRequest};
 
-use super::{ManagerErrorKind, PluginManager, MAX_CONSECUTIVE_FAILURES, STATE_FILE};
+use super::super::transport::SourceFetcher;
+use super::{
+    check_https_url, read_capped, ManagerError, ManagerErrorKind, PluginManager,
+    MAX_CONSECUTIVE_FAILURES, MAX_SOURCE_BYTES, STATE_FILE,
+};
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);
 
@@ -833,4 +837,390 @@ fn load_success_without_record_does_not_rewrite_state() {
         .modified()
         .expect("mtime");
     assert_eq!(before, after, "无记录的成功不该重写状态文件");
+}
+
+// ---- 文件导入 / URL 导入 / 卸载(P4 插件导入补全) ----
+
+/// URL 抓取替身: 不发网络, 记录被调用的 URL, 按预设返回(超限/非 2xx 的裁决在抓取器里,
+/// 这里直接给结果就是为了只测"管理器怎么用抓取结果").
+struct FakeFetcher {
+    outcome: Result<String, ManagerError>,
+    calls: Mutex<Vec<String>>,
+}
+
+impl FakeFetcher {
+    fn ok(body: &str) -> Arc<Self> {
+        Arc::new(Self {
+            outcome: Ok(body.to_string()),
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn fail(err: ManagerError) -> Arc<Self> {
+        Arc::new(Self {
+            outcome: Err(err),
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().expect("lock").clone()
+    }
+}
+
+impl SourceFetcher for FakeFetcher {
+    fn fetch(&self, url: &str) -> Result<String, ManagerError> {
+        self.calls.lock().expect("lock").push(url.to_string());
+        self.outcome.clone()
+    }
+}
+
+/// 注入抓取器的 manager(URL 用例专用).
+fn manager_with_fetcher(root: &Path, fetcher: Arc<FakeFetcher>) -> PluginManager {
+    PluginManager::open(root, transport())
+        .expect("打开插件根目录")
+        .with_source_fetcher(fetcher)
+}
+
+fn events(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| name.to_string()).collect()
+}
+
+#[test]
+fn install_file_reads_local_script_and_writes_plugin() {
+    // 来源文件放在**插件根目录之外**(放根里会被当插件目录扫, 干扰断言).
+    let outside = TempDir::new("source-file");
+    let src = outside.path().join("chain.js");
+    std::fs::write(&src, OK_SOURCE).expect("写来源文件");
+
+    let tmp = TempDir::new("install-file");
+    let mut mgr = manager(tmp.path());
+    let report = mgr
+        .install_file(
+            "fromfile",
+            "文件插件",
+            "2.0.0",
+            &src,
+            &events(&["musicUrl"]),
+            &events(&["api.example.com"]),
+        )
+        .expect("文件导入应成功");
+    assert_eq!(report.installed, vec!["fromfile".to_string()]);
+    assert!(report.is_clean(), "{report:?}");
+
+    let dir = tmp.path().join("fromfile");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("index.js")).expect("入口脚本要写出来"),
+        OK_SOURCE,
+        "文件内容原样落盘"
+    );
+    let manifest = std::fs::read_to_string(dir.join("manifest.json")).expect("清单要写出来");
+    assert!(manifest.contains("\"entry\":\"index.js\""), "{manifest}");
+    assert!(manifest.contains("api.example.com"), "{manifest}");
+
+    let row = mgr
+        .list()
+        .into_iter()
+        .find(|row| row.id == "fromfile")
+        .expect("应登记");
+    assert_eq!(row.name, "文件插件");
+    assert_eq!(row.version, "2.0.0");
+    assert!(!row.enabled, "导入不等于启用");
+    assert!(row.error.is_none(), "{row:?}");
+}
+
+#[test]
+fn install_file_rejects_bad_source_without_touching_disk() {
+    let outside = TempDir::new("source-bad");
+    let tmp = TempDir::new("install-file-bad");
+    let mut mgr = manager(tmp.path());
+
+    // 1) 不存在
+    let missing = outside.path().join("nope.js");
+    let err = mgr
+        .install_file("f1", "x", "1.0.0", &missing, &events(&["musicUrl"]), &[])
+        .expect_err("不存在必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Io, "{err}");
+
+    // 2) 是目录不是文件
+    let err = mgr
+        .install_file(
+            "f2",
+            "x",
+            "1.0.0",
+            outside.path(),
+            &events(&["musicUrl"]),
+            &[],
+        )
+        .expect_err("目录必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Io, "{err}");
+
+    // 3) 非 UTF-8 文本
+    let binary = outside.path().join("binary.js");
+    std::fs::write(&binary, [0xff, 0xfe, 0x00]).expect("写非 UTF-8");
+    let err = mgr
+        .install_file("f3", "x", "1.0.0", &binary, &events(&["musicUrl"]), &[])
+        .expect_err("非 UTF-8 必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Manifest, "{err}");
+
+    // 4) 超过 2 MiB(清单类错误)
+    let huge = outside.path().join("huge.js");
+    let mut bytes = vec![b'/'; MAX_SOURCE_BYTES + 1];
+    std::fs::write(&huge, &mut bytes).expect("写超大来源");
+    let err = mgr
+        .install_file("f4", "x", "1.0.0", &huge, &events(&["musicUrl"]), &[])
+        .expect_err("超限必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Manifest, "{err}");
+    assert!(err.detail.contains("超过上限"), "{err}");
+
+    for id in ["f1", "f2", "f3", "f4"] {
+        assert!(
+            !tmp.path().join(id).exists(),
+            "来源被拒后不能在盘上留下 {id}"
+        );
+    }
+    assert!(mgr.list().is_empty(), "一条都不该登记: {:?}", mgr.list());
+}
+
+#[test]
+fn install_url_only_accepts_https_and_never_fetches_otherwise() {
+    let tmp = TempDir::new("install-url-bad");
+    let fetcher = FakeFetcher::ok(OK_SOURCE);
+    let mut mgr = manager_with_fetcher(tmp.path(), fetcher.clone());
+
+    for url in [
+        "http://cdn.test/plugin.js",
+        "ftp://cdn.test/plugin.js",
+        "file:///etc/passwd",
+        "cdn.test/plugin.js",
+        "https://",
+        "",
+    ] {
+        let err = mgr
+            .install_url("u1", "x", "1.0.0", url, &events(&["musicUrl"]), &[])
+            .expect_err("非 https 必须拒绝");
+        assert_eq!(err.kind, ManagerErrorKind::UnsafePath, "{url}: {err}");
+    }
+    assert!(
+        fetcher.calls().is_empty(),
+        "形态裁决在抓取之前, 不该发任何请求: {:?}",
+        fetcher.calls()
+    );
+    assert!(!tmp.path().join("u1").exists(), "被拒后不落任何文件");
+    assert!(mgr.list().is_empty());
+}
+
+#[test]
+fn install_url_writes_fetched_script() {
+    let tmp = TempDir::new("install-url");
+    let fetcher = FakeFetcher::ok(OK_SOURCE);
+    let mut mgr = manager_with_fetcher(tmp.path(), fetcher.clone());
+
+    let report = mgr
+        .install_url(
+            "fromurl",
+            "URL 插件",
+            "3.1.4",
+            "https://cdn.test/plugin.js",
+            &events(&["musicUrl", "search"]),
+            &events(&["*.cdn.test"]),
+        )
+        .expect("URL 导入应成功");
+    assert_eq!(report.installed, vec!["fromurl".to_string()]);
+    assert_eq!(
+        fetcher.calls(),
+        vec!["https://cdn.test/plugin.js".to_string()],
+        "抓取只发生一次, 且 URL 原样传下去"
+    );
+    let dir = tmp.path().join("fromurl");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("index.js")).expect("入口脚本"),
+        OK_SOURCE
+    );
+    let row = mgr
+        .list()
+        .into_iter()
+        .find(|row| row.id == "fromurl")
+        .expect("应登记");
+    assert_eq!(row.version, "3.1.4");
+    assert_eq!(row.request_domains, vec!["*.cdn.test".to_string()]);
+    assert!(!row.enabled);
+}
+
+#[test]
+fn install_url_rejects_oversized_body_and_fetch_errors() {
+    let tmp = TempDir::new("install-url-limits");
+
+    // 1) 抓取器给了超限内容(对注入实现的兜底) ⇒ 清单类错误, 不落盘.
+    let big = "x".repeat(MAX_SOURCE_BYTES + 1);
+    let fetcher = FakeFetcher::ok(&big);
+    let mut mgr = manager_with_fetcher(tmp.path(), fetcher);
+    let err = mgr
+        .install_url(
+            "u2",
+            "x",
+            "1.0.0",
+            "https://cdn.test/big.js",
+            &events(&["musicUrl"]),
+            &[],
+        )
+        .expect_err("超限必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Manifest, "{err}");
+    assert!(!tmp.path().join("u2").exists(), "超限不能落盘");
+
+    // 2) 抓取器报网络错(非 2xx/超时/DNS) ⇒ 原样透出 Network, 且**不落盘**.
+    let fetcher = FakeFetcher::fail(ManagerError::new(
+        ManagerErrorKind::Network,
+        "抓取 https://cdn.test/x.js 返回 http 404(只接受 2xx)",
+    ));
+    let mut mgr = manager_with_fetcher(tmp.path(), fetcher);
+    let err = mgr
+        .install_url(
+            "u3",
+            "x",
+            "1.0.0",
+            "https://cdn.test/x.js",
+            &events(&["musicUrl"]),
+            &[],
+        )
+        .expect_err("抓取失败必须报错");
+    assert_eq!(err.kind, ManagerErrorKind::Network, "{err}");
+    assert!(err.detail.contains("404"), "{err}");
+    assert!(!tmp.path().join("u3").exists(), "抓取失败不能落盘");
+    assert!(mgr.list().is_empty());
+}
+
+#[test]
+fn uninstall_removes_dir_state_and_data_then_disappears_after_rescan() {
+    let tmp = TempDir::new("uninstall");
+    let dir = write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json("alpha", "index.js"),
+        "index.js",
+        OK_SOURCE,
+    );
+    // 插件自己的存储目录(卸载一并删掉).
+    let data = dir.join("data");
+    std::fs::create_dir_all(&data).expect("建 data");
+    std::fs::write(data.join("kv.json"), b"{}").expect("写存储");
+
+    let mut mgr = manager(tmp.path());
+    mgr.install_from_dir(tmp.path());
+    mgr.enable("alpha").expect("启用");
+    assert!(mgr.load_provider("alpha").is_ok(), "启用后可装载");
+    // 顺手留一条失败计数, 验证卸载会把它一起清掉.
+    mgr.record_load_failure("alpha", "模拟一次失败")
+        .expect("计数");
+
+    mgr.uninstall("alpha").expect("卸载应成功");
+
+    assert!(!dir.exists(), "插件目录(含 data/)必须删掉");
+    assert!(mgr.list().is_empty(), "卸载后列表不该再有它");
+    assert!(mgr.manifest("alpha").is_none());
+    assert!(!mgr.is_enabled("alpha"));
+    assert!(mgr.failure_record("alpha").is_none(), "失败计数要清掉");
+    assert_eq!(
+        mgr.load_provider("alpha").expect_err("已删").kind,
+        ManagerErrorKind::NotInstalled
+    );
+
+    // 状态文件里不残留该 id(否则会在盘上留一条指向不存在插件的记录).
+    let text = std::fs::read_to_string(tmp.path().join(STATE_FILE)).expect("读状态文件");
+    assert!(!text.contains("alpha"), "状态文件不该残留: {text}");
+
+    // 重扫(等价于重启后首扫)不会让它回来.
+    let report = mgr.rescan();
+    assert!(report.is_clean(), "{report:?}");
+    assert!(mgr.list().is_empty(), "重扫后仍不该出现");
+}
+
+#[test]
+fn uninstall_rejects_unsafe_ids_and_unknown_plugins() {
+    let tmp = TempDir::new("uninstall-unsafe");
+    let dir = write_plugin(
+        tmp.path(),
+        "alpha",
+        &manifest_json("alpha", "index.js"),
+        "index.js",
+        OK_SOURCE,
+    );
+    let mut mgr = manager(tmp.path());
+    mgr.install_from_dir(tmp.path());
+
+    // 路径安全: `..` / 分隔符 / 绝对路径 / 大写 / 点号 / 空串一律 UnsafePath.
+    for bad in [
+        "../alpha",
+        "alpha/../alpha",
+        "/etc/alpha",
+        "Alpha",
+        "al.pha",
+        "",
+        ".",
+        "..",
+    ] {
+        let err = mgr.uninstall(bad).expect_err("非法 id 必须拒绝");
+        assert_eq!(err.kind, ManagerErrorKind::UnsafePath, "{bad}: {err}");
+    }
+    assert!(dir.exists(), "非法 id 不能删掉任何东西");
+    assert_eq!(mgr.list().len(), 1, "登记要原样留着");
+
+    // 未登记(且目录不存在) ⇒ notInstalled, 不 panic.
+    let err = mgr.uninstall("ghost").expect_err("未登记必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::NotInstalled, "{err}");
+}
+
+#[test]
+fn uninstall_removes_broken_plugin_dir() {
+    let tmp = TempDir::new("uninstall-broken");
+    let dir = tmp.path().join("broken");
+    std::fs::create_dir_all(&dir).expect("建目录");
+    std::fs::write(dir.join("manifest.json"), b"{ not json").expect("写坏清单");
+
+    let mut mgr = manager(tmp.path());
+    let report = mgr.install_from_dir(tmp.path());
+    assert!(!report.is_clean(), "坏清单应该进报告: {report:?}");
+
+    // 坏条目虽未登记, 但目录存在 ⇒ 必须能删掉(这是清垃圾的唯一入口).
+    mgr.uninstall("broken").expect("坏插件目录也要能删");
+    assert!(!dir.exists(), "坏插件目录应被删除");
+    assert!(
+        mgr.list().is_empty(),
+        "卸载后不该再有错误行: {:?}",
+        mgr.list()
+    );
+}
+
+#[test]
+fn https_url_shape_helper_is_strict() {
+    for ok in [
+        "https://cdn.test/a.js",
+        "HTTPS://cdn.test/a.js",
+        "https://cdn.test:8443/x?a=1#f",
+    ] {
+        check_https_url(ok).unwrap_or_else(|err| panic!("{ok} 应通过: {err}"));
+    }
+    for bad in [
+        "http://cdn.test/a.js",
+        "ftp://cdn.test/a.js",
+        "file:///etc/passwd",
+        "cdn.test/a.js",
+        "https://",
+        "https:///a.js",
+        "   ",
+    ] {
+        let err = check_https_url(bad).expect_err("应被拒绝");
+        assert_eq!(err.kind, ManagerErrorKind::UnsafePath, "{bad}: {err}");
+        assert!(!err.detail.is_empty());
+    }
+}
+
+#[test]
+fn read_capped_stops_at_the_limit() {
+    let ok = read_capped(std::io::Cursor::new(b"abc".to_vec()), 3).expect("恰好到上限可以");
+    assert_eq!(ok, b"abc");
+
+    let err = read_capped(std::io::Cursor::new(vec![b'x'; 4]), 3).expect_err("超限必须拒绝");
+    assert_eq!(err.kind, ManagerErrorKind::Manifest, "{err}");
+    assert!(err.detail.contains("超过上限"), "{err}");
 }

@@ -12,7 +12,8 @@ use std::sync::Arc;
 use ncm_plugin::MockTransport;
 use ncm_provider::ProviderErrorKind;
 
-use super::super::manager::STATE_FILE;
+use super::super::manager::{ManagerError, ManagerErrorKind, STATE_FILE};
+use super::super::route::{RouteMode, ROUTE_FILE};
 use super::{PluginHost, PluginHostPolicy, DEFAULT_ROOT_DIR, POLICY_FILE};
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);
@@ -575,4 +576,158 @@ fn core_starts_even_with_broken_plugin() {
     // 好插件照常可启用.
     core.plugin_enable("demo").expect("好插件照常启用");
     assert!(core.plugin_provider("demo").is_some());
+}
+
+// ------------------------- 导入补全: 文件 / URL / 卸载 -------------------------
+
+#[test]
+fn install_file_then_uninstall_round_trip() {
+    let temp = TempDir::new("file-roundtrip");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    let outside = TempDir::new("file-roundtrip-src");
+    let src = outside.path().join("chain.js");
+    std::fs::write(&src, MIN_SCRIPT).expect("写来源文件");
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+
+    let report = host
+        .install_file(
+            "fromfile",
+            "文件插件",
+            "1.0.0",
+            &src,
+            &[String::from("musicUrl")],
+            &[],
+        )
+        .expect("文件导入应成功");
+    assert_eq!(report.scanned, vec!["fromfile".to_string()]);
+    assert!(root.join("fromfile").join("index.js").is_file());
+    let row = host
+        .summaries()
+        .into_iter()
+        .find(|row| row.id == "fromfile")
+        .expect("应登记");
+    assert!(!row.enabled, "导入不等于启用");
+    assert!(row.error.is_none(), "{row:?}");
+
+    // 启用后卸载: provider 摘掉 + 目录消失 + 列表空.
+    host.enable("fromfile").expect("启用");
+    assert!(host.provider("fromfile").is_some());
+    host.uninstall("fromfile").expect("卸载应成功");
+    assert!(host.provider("fromfile").is_none(), "provider 必须摘掉");
+    assert!(!root.join("fromfile").exists(), "插件目录必须删掉");
+    assert!(host.summaries().is_empty(), "{:?}", host.summaries());
+    assert!(host.failures().is_empty(), "{:?}", host.failures());
+}
+
+#[test]
+fn uninstall_resets_route_selection_to_auto() {
+    let temp = TempDir::new("uninstall-route");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    write_plugin(&root, "demo");
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+    host.enable("demo").expect("启用");
+    host.set_route_mode(RouteMode::Plugin { id: "demo".into() })
+        .expect("选插件");
+    assert_eq!(
+        host.route_mode(),
+        &RouteMode::Plugin { id: "demo".into() },
+        "偏好应已落盘"
+    );
+
+    host.uninstall("demo").expect("卸载应成功");
+
+    assert_eq!(host.route_mode(), &RouteMode::Auto, "选择要回 auto");
+    let text = std::fs::read_to_string(temp.path().join(ROUTE_FILE)).expect("读路由文件");
+    assert!(text.contains("\"auto\""), "盘上也要是 auto: {text}");
+    assert!(!text.contains("demo"), "不该继续指向被卸载的 id: {text}");
+    // 判定回内置(卸载后没有插件可用).
+    let plan = host.route_plan(ncm_provider::Capability::SongUrl);
+    assert_eq!(plan.target, super::super::RouteTarget::Builtin, "{plan:?}");
+}
+
+#[test]
+fn uninstall_unknown_or_unsafe_id_flattens_to_one_error_caliber() {
+    let temp = TempDir::new("uninstall-errors");
+    write_plugin(&temp.path().join(DEFAULT_ROOT_DIR), "demo");
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+
+    // 未登记 ⇒ notFound / 不可重试.
+    let err = host.uninstall("ghost").expect_err("未登记必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::NotFound, "{err}");
+    assert!(!err.retryable);
+
+    // 路径不安全 ⇒ forbidden(不许越界删目录).
+    let err = host.uninstall("../demo").expect_err("越界必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Forbidden, "{err}");
+    assert!(!err.retryable);
+    assert!(
+        temp.path().join(DEFAULT_ROOT_DIR).join("demo").exists(),
+        "越界请求不能删掉任何东西"
+    );
+}
+
+#[test]
+fn install_file_and_url_require_enabled_host() {
+    let temp = TempDir::new("install-off-paths");
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+    let outside = TempDir::new("install-off-src");
+    let src = outside.path().join("chain.js");
+    std::fs::write(&src, MIN_SCRIPT).expect("写来源文件");
+
+    let err = host
+        .install_file("demo", "x", "1.0.0", &src, &[], &[])
+        .expect_err("总开关没开必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Forbidden, "{err}");
+
+    let err = host
+        .install_url("demo", "x", "1.0.0", "https://cdn.test/a.js", &[], &[])
+        .expect_err("总开关没开必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Forbidden, "{err}");
+
+    let err = host.uninstall("demo").expect_err("总开关没开必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Forbidden, "{err}");
+}
+
+#[test]
+fn install_url_rejects_non_https_before_any_fetch() {
+    let temp = TempDir::new("install-url-scheme");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+
+    for url in ["http://cdn.test/a.js", "cdn.test/a.js", "https://"] {
+        let err = host
+            .install_url("demo", "x", "1.0.0", url, &[], &[])
+            .expect_err("非 https 必须拒绝");
+        assert_eq!(err.kind, ProviderErrorKind::Forbidden, "{url}: {err}");
+        assert!(!err.retryable);
+        assert!(!root.join("demo").exists(), "{url}: 不能落任何文件");
+    }
+    assert!(host.summaries().is_empty());
+}
+
+/// 管理层唯一的可重试错误: `Network`(URL 导入的抓取失败); 其余一律不可重试(重试不会变).
+#[test]
+fn network_is_the_only_retryable_manager_error() {
+    let network = super::to_provider_error(&ManagerError::new(
+        ManagerErrorKind::Network,
+        "抓取插件来源 https://x/y.js 失败: timed out",
+    ));
+    assert_eq!(network.kind, ProviderErrorKind::Network, "{network}");
+    assert!(network.retryable, "网络抖动值得重试: {network}");
+
+    for kind in [
+        ManagerErrorKind::NotInstalled,
+        ManagerErrorKind::Disabled,
+        ManagerErrorKind::UnsafePath,
+        ManagerErrorKind::Manifest,
+        ManagerErrorKind::Io,
+        ManagerErrorKind::Plugin,
+    ] {
+        let err = super::to_provider_error(&ManagerError::new(kind, "x"));
+        assert!(!err.retryable, "{kind:?} 不该可重试");
+    }
 }

@@ -24,12 +24,12 @@ pub mod transport;
 
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
 pub use manager::{
-    ManagerError, ManagerErrorKind, PluginFailureRecord, PluginManager, PluginSummary,
-    MAX_CONSECUTIVE_FAILURES,
+    check_https_url, ManagerError, ManagerErrorKind, PluginFailureRecord, PluginManager,
+    PluginSummary, DEFAULT_ENTRY, MAX_CONSECUTIVE_FAILURES, MAX_SOURCE_BYTES, MAX_SOURCE_REDIRECTS,
 };
 pub use registry::{PluginRegistry, RegistryReport};
 pub use route::{
     call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason,
     RouteTarget, RouteUsed, Routed,
 };
-pub use transport::ReqwestTransport;
+pub use transport::{HttpsSourceFetcher, ReqwestTransport, SourceFetcher};

@@ -1,12 +1,12 @@
 # ncm-plugin —— QuickJS 音源插件宿主(切片 1 + 切片 2 全部 + 切片 3 LX 兼容层)
 
-> **状态: 实验性, 未接入产品(仍不可从 UI 触发)。** `Core::open` 会构造插件宿主
+> **状态: 实验性, 缺省关闭**(设置 → 关于 → 「插件」页有入口, 但总开关缺省 false, 打开前不扫描不执行)。`Core::open` 会构造插件宿主
 > (`plugins::host::PluginHost`), 但**缺省不扫描**: 总开关在 `<data_dir>/plugin_host.json`
 > 的 `enabled`(缺省 false), 只有显式 `plugin_set_enabled(true)` 之后才会碰插件目录 ——
 > 所以改动本 crate 仍不改变 App 默认行为(不碰风控、不加包体风险)。
-> `ncm-ffi` 已导出 8 个函数(`plugin_status/summaries/failures/rejected/enable/disable/
-> rescan/set_enabled`, 见 `ncm-ffi/src/api/plugin.rs`), 但**还没有 UI 页面**;
-> Android 侧整层不编译, 导出函数返回空视图/`unsupported`。**接缝已经落地**: 真实网络 transport 在
+> `ncm-ffi` 已导出状态/列表/失败/拒收/日志/启停/重扫/总开关/**导入(文本·文件·URL)**/**卸载**/
+> 路由判定一组函数(清单见 `ncm-ffi/src/api/plugin.rs`), 插件页已接出(导入弹层三来源 + 插件行卸载)。
+> **接缝已经落地**: 真实网络 transport 在
 > `ncm-service/src/plugins/`(`ReqwestTransport`, 复用 service 的 UA/超时/重试口径),
 > 落盘 storage 是本 crate 的 [`FileStorage`](src/storage.rs)(目录由宿主传入),
 > 目录扫描/启停是 `PluginManager`, 装配成 `Provider` 是 `PluginRegistry`
@@ -299,7 +299,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | # | 事项 | 说明 |
 |---|---|---|
 | 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); ✅ P3 已落**清单 `apiVersion` 版本协商**(纯函数 `manifest::check_api_version`, 区间 `1..=1`, 不兼容 ⇒ 拒绝装载 + 带区间文案)与**连续装载失败 3 次自动禁用**(计数落 `plugins-state.json` 的 `failures` 段, 成功一次清零, 重启仍禁用, 手动启用 = 显式重置, `--rescan` 不清计数); 仍**未接 FFI/UI 管理页** |
-| 2 | **导入/启停** | 启用/禁用 ✅(切片 2); **粘贴脚本文本导入 ✅(v0.34.4)**: 插件页「导入」弹层 → FFI `plugin_install_script` → `PluginManager::install_source`(先校验清单再 `write_atomic_private` 落盘, 失败不留文件; 导入不自动启用; 覆盖同名保留 `data/`)。仍缺: 从**文件**导入、从 **URL** 导入、卸载(删目录) |
+| 2 | **导入/启停** | 启用/禁用 ✅(切片 2); **粘贴脚本文本导入 ✅(v0.34.4)**: 插件页「导入」弹层 → FFI `plugin_install_script` → `PluginManager::install_source`(先校验清单再 `write_atomic_private` 落盘, 失败不留文件; 导入不自动启用; 覆盖同名保留 `data/`)。✅ **文件 / URL 导入 + 卸载(v0.34.5)**: `install_file`(读本地文件, 上限 `MAX_SOURCE_BYTES` = 2 MiB, 非 UTF-8/超限按清单类错误拒)/ `install_url`(**只允许 https**, `SourceFetcher` 抽象 + 生产 `HttpsSourceFetcher` 复用 `ReqwestTransport` 的 UA/连接与整体超时, 重定向上限 3 跳且落地 URL 仍须 https, 非 2xx/超限/非 https **一律不落文件**)/ `uninstall`(id 走 `validate_id` 路径安全校验 → 只删 `<root>/<id>` 这一棵(含该插件 `data/`)→ 清 `enabled`/`failures` → 调用方把 `plugin_route.json` 的选择回 `auto`)。第三条入口由 FFI `plugin_install_file/plugin_install_url/plugin_uninstall` → 插件页「导入」弹层(三来源切换)与插件行「卸载」(二次确认)接出; 抓取失败是**唯一**可重试的管理层错误(`ManagerErrorKind::Network` -> `ProviderError{network, retryable: true}`) |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |

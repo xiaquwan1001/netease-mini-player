@@ -287,6 +287,41 @@ impl Core {
         )
     }
 
+    /// 从**本机文件**导入一个插件(读文件 → 写盘 → 立即重扫)
+    #[allow(clippy::too_many_arguments)]
+    pub fn plugin_install_file(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        path: &std::path::Path,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ncm_provider::ProviderResult<RegistryReport> {
+        self.plugin_host
+            .install_file(id, name, version, path, lx_events, request_domains)
+    }
+
+    /// 从 **URL** 导入一个插件(只允许 https; 抓取失败是唯一可重试的一类错误)
+    #[allow(clippy::too_many_arguments)]
+    pub fn plugin_install_url(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        url: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ncm_provider::ProviderResult<RegistryReport> {
+        self.plugin_host
+            .install_url(id, name, version, url, lx_events, request_domains)
+    }
+
+    /// 卸载一个插件(停用 → 删目录含 `data/` → 清状态 → 重扫; 路由选择回 `auto`)
+    pub fn plugin_uninstall(&mut self, id: &str) -> ncm_provider::ProviderResult<RegistryReport> {
+        self.plugin_host.uninstall(id)
+    }
+
     /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn plugin_rescan(&mut self) -> ncm_provider::ProviderResult<RegistryReport> {
         self.plugin_host.rescan()

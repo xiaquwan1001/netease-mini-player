@@ -60,13 +60,15 @@
 //! | `NotInstalled` | `NotFound` | false | 该 id 没登记(目录不存在/清单坏/没扫到), 重试不会变 |
 //! | `Disabled` | `Forbidden` | false | 用户停用 = 策略拒绝 |
 //! | `UnsafePath` | `Forbidden` | false | 本地安全拒绝(目录名/symlink 逃逸), 重试不会变 |
-//! | `Manifest` | `Unsupported` | false | 清单/入口形状不成立, 同一份文件重试无用 |
+//! | `Manifest` | `Unsupported` | false | 清单/入口/来源文本形状不成立(含来源体积超限), 重试无用 |
 //! | `Io` | `Internal` | false | 本地文件系统失败 |
+//! | `Network` | `Network` | **true** | URL 导入的抓取失败(DNS/连接/超时/非 2xx), 瞬时且值得重试 |
 //! | `Plugin` | `Internal` | false | 装载失败(语法错/初始化超时) |
 //!
 //! `detail` 保留管理层原文(`"[notInstalled] 插件 \`x\` 未登记..."`), 所以细分原因**不丢**,
-//! 只是不再单开错误类型. `retryable` 在管理层一律 `false`: 调用期(provider 方法)的
-//! `retryable` 由 `PluginError::retryable` 决定, 那里才是"重试有没有意义"的唯一判据.
+//! 只是不再单开错误类型. `retryable` 在管理层**除了 `Network` 之外**均为 `false`: 调用期
+//! (provider 方法)的 `retryable` 由 `PluginError::retryable` 决定, 那里才是"重试有没有意义"
+//! 的唯一判据; URL 导入是本地人对网络的一次性动作, 与调用期无关, 所以单独一间.
 //!
 //! 宿主不可用(总开关关闭 / 构造失败)时: 读类接口返回空视图(`summaries()` 空、`provider()`
 //! `None`), 写类接口(`enable`/`disable`/`rescan`)返回 `Forbidden`(关闭)或 `Internal`(构造失败)
@@ -467,6 +469,111 @@ impl PluginHost {
         })
     }
 
+    /// 从**本机文件**导入一个插件(读文件 → 写盘 → 重扫装载).
+    ///
+    /// 口径与 [`Self::install_source`] 一致: 未启用总开关 ⇒ `forbidden`; 来源文件读不了/不是
+    /// UTF-8/超过 2 MiB ⇒ `internal`(`Io`)或 `unsupported`(`Manifest`); 任何失败**不落文件**.
+    #[allow(clippy::too_many_arguments)]
+    pub fn install_file(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        path: &Path,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ProviderResult<RegistryReport> {
+        self.install_with(|manager| {
+            manager.install_file(id, name, version, path, lx_events, request_domains)
+        })
+    }
+
+    /// 从 **URL** 导入一个插件(只允许 https).
+    ///
+    /// 三条硬约束全在落盘之前: `https://` 形态、重定向上限、响应体 ≤ 2 MiB; 失败不落任何文件.
+    /// 抓取失败是**唯一**可重试的插件错误(`network` + `retryable = true`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn install_url(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        url: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ProviderResult<RegistryReport> {
+        self.install_with(|manager| {
+            manager.install_url(id, name, version, url, lx_events, request_domains)
+        })
+    }
+
+    /// 卸载一个插件: 停用 → 删目录(含该插件的 `data/`) → 清状态 → 重扫; 指向它的路由选择回 `Auto`.
+    ///
+    /// 未启用总开关 ⇒ `forbidden`; 非法 id(symlink/`..`/绝对路径) ⇒ `forbidden`;
+    /// 目录删不掉 ⇒ `internal` 且插件**保持停用**(不留下"启用但删了一半"的状态).
+    /// 路由偏好回 `Auto` 写盘失败时返回 `internal`, 但目录已经删了(不可回滚) —— 下次
+    /// 判定会自己报 `selectionMissing` 并回内置.
+    pub fn uninstall(&mut self, id: &str) -> ProviderResult<RegistryReport> {
+        // 借用分两段: 删目录/清状态只需注册表, 改路由偏好要 &mut self(它落自己的盘).
+        {
+            let Some(registry) = self.registry.as_mut() else {
+                return Err(self.inactive_error());
+            };
+            registry
+                .manager_mut()
+                .uninstall(id)
+                .map_err(|err| to_provider_error(&err))?;
+        }
+        // 路由选择指向被卸载的 id ⇒ 回 auto, 否则判定永远停在 selectionMissing.
+        let selected = matches!(&self.mode, RouteMode::Plugin { id: current } if current == id);
+        if selected {
+            self.set_route_mode(RouteMode::Auto)?;
+        }
+        let Some(registry) = self.registry.as_mut() else {
+            return Err(self.inactive_error());
+        };
+        let refreshed = registry.scan();
+        self.error = None;
+        Ok(RegistryReport {
+            // 卸载不"新登记"任何插件, 所以 `scanned` 恒为空; 结果看 loaded/skipped/failed.
+            scanned: Vec::new(),
+            loaded: refreshed.loaded,
+            skipped: refreshed.skipped,
+            failed: refreshed.failed,
+        })
+    }
+
+    /// 导入类操作的公共壳: 取注册表 → 交给目录管理器 → 重扫刷新 provider 视图.
+    fn install_with(
+        &mut self,
+        run: impl FnOnce(
+            &mut super::manager::PluginManager,
+        ) -> Result<super::manager::InstallReport, ManagerError>,
+    ) -> ProviderResult<RegistryReport> {
+        let Some(registry) = self.registry.as_mut() else {
+            return Err(self.inactive_error());
+        };
+        let report = run(registry.manager_mut()).map_err(|err| to_provider_error(&err))?;
+        let refreshed = registry.scan();
+        self.error = None;
+        Ok(RegistryReport {
+            scanned: report.installed.clone(),
+            loaded: refreshed.loaded.clone(),
+            skipped: refreshed.skipped.clone(),
+            failed: refreshed.failed.clone(),
+        })
+    }
+
+    /// 写类操作在"宿主不可用"时的统一错误(关闭 ⇒ forbidden / 构造失败 ⇒ internal).
+    fn inactive_error(&self) -> ProviderError {
+        match &self.error {
+            Some(reason) => ProviderError::internal(format!("插件宿主未就绪: {reason}")),
+            None => ProviderError::forbidden(format!(
+                "插件宿主未启用({POLICY_FILE} 的 enabled 缺省 false): 先打开总开关再操作插件"
+            )),
+        }
+    }
+
     /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn rescan(&mut self) -> ProviderResult<RegistryReport> {
         Ok(self.registry_mut()?.scan())
@@ -493,12 +600,7 @@ impl PluginHost {
     /// 写类操作共用这一处判断 —— 未启用时**不**静默 `Ok`/`None`, 也不 panic.
     fn registry_mut(&mut self) -> ProviderResult<&mut PluginRegistry> {
         if self.registry.is_none() {
-            return Err(match &self.error {
-                Some(reason) => ProviderError::internal(format!("插件宿主未就绪: {reason}")),
-                None => ProviderError::forbidden(format!(
-                    "插件宿主未启用({POLICY_FILE} 的 enabled 缺省 false): 先打开总开关再操作插件"
-                )),
-            });
+            return Err(self.inactive_error());
         }
         self.registry
             .as_mut()
@@ -570,6 +672,8 @@ fn to_provider_error(err: &ManagerError) -> ProviderError {
         ManagerErrorKind::UnsafePath => (ProviderErrorKind::Forbidden, false),
         ManagerErrorKind::Manifest => (ProviderErrorKind::Unsupported, false),
         ManagerErrorKind::Io => (ProviderErrorKind::Internal, false),
+        // 唯一可重试的管理层错误: URL 导入时 DNS/连接/超时/非 2xx 都是瞬时的.
+        ManagerErrorKind::Network => (ProviderErrorKind::Network, true),
         ManagerErrorKind::Plugin => (ProviderErrorKind::Internal, false),
     };
     ProviderError::new(kind, retryable, err.to_string())
