@@ -4,7 +4,10 @@ import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/settings_view.dart';
 import 'package:minincm/src/theme.dart';
 
-/// 回归: 设置页在「窄屏 + 大字号」下不得溢出。
+/// 回归: 设置二级页「外观与布局」在「窄屏 + 大字号」下不得溢出。
+///
+/// 2026-11 设置页 IA 重组后, 主题模式/纯黑/主题色/界面字号都搬进了这个二级页,
+/// 断言口径不变(仍锁同一批控件与左边界)。
 ///
 /// 实测机型(vivo 真机): 1440x3168 物理分辨率, density override 768
 /// ⇒ 逻辑宽 300dp; 系统字号 1.25(+ App 内「界面字号」最大 1.3 ⇒ 1.625)。
@@ -37,7 +40,7 @@ void main() {
             builder: (context) => MediaQuery(
               data: MediaQuery.of(context)
                   .copyWith(textScaler: TextScaler.linear(scale)),
-              child: const Scaffold(body: SettingsView(info: null)),
+              child: const Scaffold(body: AppearanceSettingsPage()),
             ),
           ),
         ),

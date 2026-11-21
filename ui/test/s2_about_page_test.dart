@@ -38,8 +38,9 @@ Future<void> pumpSettings(WidgetTester tester) async {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
+  // 2026-11 设置页 IA 重组: 「关于」是独立二级页(原先是设置首页最下面一段)
   await tester.pumpWidget(
-    const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
+    const MaterialApp(home: Scaffold(body: AboutSettingsPage())),
   );
   await tester.pumpAndSettle();
 }

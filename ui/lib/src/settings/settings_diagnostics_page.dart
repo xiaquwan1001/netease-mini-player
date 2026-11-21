@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../app_meta.dart';
 import '../app_settings.dart';
 import '../app_sheet.dart';
+import '../daily_cache.dart';
 import '../debug_report.dart';
 import '../diag_upload.dart';
 import '../net_retry.dart';
@@ -17,7 +18,8 @@ import '../toast.dart' show showToast;
 /// 诊断与数据二级页(审查 P1-7.9: 原是设置页里的「诊断」+「数据」两个一级分组).
 ///
 /// Rust 通道自检 / 设备 ID / 数据目录都是开发者向内容, 不该占设置首页;
-/// 现由 设置 → 关于 → 「诊断与数据」进入。
+/// 2026-11 设置页 IA 重组后由**设置首页 → 「数据与诊断」**直接进入(原先还套一层
+/// 「关于」), 顺手把「每日推荐缓存」并进来 —— 它也是"本机数据"这件事。
 Future<void> showDiagnosticsPage(
   BuildContext context, {
   rust.InitInfo? info,
@@ -123,6 +125,14 @@ class DiagnosticsPage extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 16),
+          // 每日推荐歌单缓存(2026-11 用户需求; 原先平铺在设置首页, IA 重组后
+          // 归「数据与诊断」): 保留天数 + 立即清理 + 上次清理时间。
+          const SectionTitle('缓存', icon: Icons.sd_storage_outlined),
+          Card(
+            margin: EdgeInsets.zero,
+            child: _DailyCacheTile(dataDir: info?.dataDir),
           ),
         ],
       ),
@@ -367,6 +377,142 @@ class _ChannelSelfCheckTileState extends State<ChannelSelfCheckTile> {
       title: const Text('Rust 通道自检'),
       subtitle: Text(subtitle),
       onTap: _running ? null : _run,
+    );
+  }
+}
+
+/// 每日推荐缓存(歌单 + 单曲): 保留天数 + 立即清理 + 上次清理时间。
+///
+/// 缓存本身在 `daily_cache.dart`(按天`<账号键>/YYYY-MM-DD.json` 落文件, 当天的
+/// 推荐**歌单**与推荐**单曲**在同一个文件里);
+/// 这里只做展示与"什么时候清"。**清理只清当前账号的那个子目录** —— 日推缓存按账号
+/// 分区, 顺手清别人账号的缓存既没必要也会让那个账号多拉一次。
+/// 上次清理时间从缓存目录读, 所以点完「立即清理」要重读一次才好看见变化。
+class _DailyCacheTile extends StatefulWidget {
+  const _DailyCacheTile({required this.dataDir});
+
+  final String? dataDir;
+
+  @override
+  State<_DailyCacheTile> createState() => _DailyCacheTileState();
+}
+
+class _DailyCacheTileState extends State<_DailyCacheTile> {
+  DateTime? _lastCleanup;
+  bool _cleaning = false;
+
+  /// 当前账号的缓存分区键; null = 还没解析出来(此时按钮不可用, 不会误清别的账号)。
+  String? _accountKey;
+
+  DailyPlaylistCache? get _cache {
+    final dir = widget.dataDir;
+    final key = _accountKey;
+    if (dir == null || dir.isEmpty || key == null) return null;
+    return DailyPlaylistCache(dataDir: dir, accountKey: key);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAccount();
+  }
+
+  Future<void> _resolveAccount() async {
+    final key = await DailyPlaylistCache.resolveAccountKey();
+    if (!mounted) return;
+    setState(() => _accountKey = key);
+    await _loadLastCleanup();
+  }
+
+  Future<void> _loadLastCleanup() async {
+    final at = await _cache?.lastCleanup();
+    if (!mounted) return;
+    setState(() => _lastCleanup = at);
+  }
+
+  /// 保留天数一变就顺手按新口径清一次: 否则用户把 30 天改成 3 天,
+  /// 旧文件要等到下次手动清理才消失。
+  Future<void> _setDays(int days) async {
+    await AppSettings.instance.update(dailyCacheDays: days);
+    if (mounted) setState(() {});
+    await _cleanup();
+  }
+
+  Future<void> _cleanup() async {
+    if (_cleaning) return;
+    // 账号键通常 initState 就解析完了; 万一用户手比 FFI 快, 这里补一次,
+    // 否则按钮会"点了没反应"。
+    if (_accountKey == null) await _resolveAccount();
+    final cache = _cache;
+    if (cache == null) return;
+    setState(() => _cleaning = true);
+    try {
+      final removed = await cache.cleanup(
+        keepDays: AppSettings.instance.dailyCacheDays,
+      );
+      await _loadLastCleanup();
+      if (!mounted) return;
+      showToast(
+        context,
+        removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 天的缓存(歌单 + 单曲)',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, '清理失败: ${describeError(e)}', isError: true);
+    } finally {
+      if (mounted) setState(() => _cleaning = false);
+    }
+  }
+
+  String get _cleanupLabel {
+    final at = _lastCleanup;
+    if (at == null) return '还没有清理过';
+    String two(int v) => v.toString().padLeft(2, '0');
+    return '上次清理: ${at.year}-${two(at.month)}-${two(at.day)} '
+        '${two(at.hour)}:${two(at.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = AppSettings.instance;
+    return Column(
+      children: [
+        ListTile(
+          title: const Text('每日推荐缓存'),
+          subtitle: Text(
+            settings.dailyCacheDays <= 0
+                ? '已关闭: 每次进推荐页都联网拉取'
+                : '歌单 + 单曲, 同一天只拉一次, 保留 ${settings.dailyCacheDays} 天',
+          ),
+          trailing: DropdownButton<int>(
+            value: settings.dailyCacheDays,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final days in AppSettings.dailyCacheOptions)
+                DropdownMenuItem(
+                  value: days,
+                  child: Text(AppSettings.dailyCacheLabel(days)),
+                ),
+            ],
+            onChanged: (value) {
+              if (value != null) _setDays(value);
+            },
+          ),
+        ),
+        const Divider(height: 1),
+        ListTile(
+          leading: _cleaning
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.cleaning_services_outlined),
+          title: const Text('立即清理'),
+          subtitle: Text(_cleanupLabel),
+          onTap: _cleaning ? null : _cleanup,
+        ),
+      ],
     );
   }
 }

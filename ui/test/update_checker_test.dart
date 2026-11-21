@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_meta.dart';
 import 'package:minincm/src/app_settings.dart';
+import 'package:minincm/src/settings_audio_page.dart';
 import 'package:minincm/src/settings_view.dart';
 import 'package:minincm/src/update_checker.dart';
 
@@ -420,10 +421,13 @@ void main() {
   });
 
   group('设置页「检查更新」项 UI(假 host, 不联网)', () {
+    /// 2026-11 设置页 IA 重组: 这些项目已按主题搬进二级页, 默认落「关于」
+    /// (检查更新 / 版本与许可), 需要别的页时用 [page] 指过去。
     Future<void> pumpSettings(
       WidgetTester tester, {
       Size size = const Size(1000, 2800),
       TextScaler? scaler,
+      Widget Function()? page,
     }) async {
       tester.view.physicalSize = size;
       tester.view.devicePixelRatio = 1.0;
@@ -433,7 +437,7 @@ void main() {
         MaterialApp(
           home: MediaQuery(
             data: MediaQueryData(textScaler: scaler ?? TextScaler.noScaling),
-            child: const Scaffold(body: SettingsView(info: null)),
+            child: Scaffold(body: page?.call() ?? const AboutSettingsPage()),
           ),
         ),
       );
@@ -552,7 +556,7 @@ void main() {
       stubOpenUrl();
       final settings = AppSettings.instance
         ..librarySearchPlayAction = LibrarySearchPlayAction.fullList;
-      await pumpSettings(tester);
+      await pumpSettings(tester, page: () => const AudioSettingsPage());
       final tile = find.widgetWithText(ListTile, '歌单内搜索后点歌');
       expect(tile, findsOneWidget);
       expect(find.textContaining('切到完整列表'), findsOneWidget);
@@ -572,7 +576,7 @@ void main() {
       stubOpenUrl();
       final settings = AppSettings.instance
         ..updateCheckInterval = UpdateCheckInterval.daily;
-      await pumpSettings(tester);
+      await pumpSettings(tester, page: () => const SystemSettingsPage());
       final tile = find.widgetWithText(ListTile, '自动检查更新');
       expect(tile, findsOneWidget);
       expect(find.textContaining('每天'), findsOneWidget);

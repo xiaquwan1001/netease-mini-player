@@ -10,6 +10,7 @@ import '../eq_import.dart';
 import '../eq_profile.dart';
 import '../section_header.dart';
 import '../toast.dart';
+import 'settings_sleep_timer_page.dart';
 
 /// 设置二级页: 播放与音质(R2 / R2b / R5 / R7 的设置 UI 部分).
 ///
@@ -63,6 +64,72 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             24 + MediaQuery.viewPaddingOf(context).bottom,
           ),
           children: [
+            // 播放行为: 定时关闭 / 跳过 VIP / 歌单内点歌原本平铺在设置首页,
+            // 按主题并进「播放与音质」(2026-11 设置页 IA 重组)。
+            const SectionTitle('播放行为', icon: Icons.play_circle_outline),
+            Card(
+              margin: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  // 定时关闭(睡眠定时): 到点停止播放并退出, 可等当前这首播完。
+                  // 状态活在 SleepTimer 单例里, 与播放协调器共用同一份。
+                  ListTile(
+                    leading: const Icon(Icons.bedtime_outlined),
+                    title: const Text('定时关闭'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showSleepTimerPage(context),
+                  ),
+                  const Divider(height: 1),
+                  // 播放策略(2026-11 用户需求): 不想听会员曲目时, 切歌/续播直接跳过。
+                  SwitchListTile(
+                    title: const Text('播放跳过 VIP 歌曲'),
+                    subtitle: const Text('切歌与自动续播时跳过需要黑胶会员的曲目(列表里仍然显示)'),
+                    value: settings.skipVipSongs,
+                    onChanged: (v) => settings.update(skipVipSongs: v),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    title: const Text('歌单内搜索后点歌'),
+                    subtitle: Text(
+                      '${settings.librarySearchPlayAction.label} · '
+                      '${settings.librarySearchPlayAction.hint}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showLibrarySearchPlaySheet(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 取链音质: 请求的音质档位(与本页的音效链路相互独立)。
+            const SectionTitle('音质', icon: Icons.high_quality_outlined),
+            Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                title: const Text('取链音质'),
+                subtitle: Text(
+                  '${AppSettings.audioLevels[settings.audioLevel] ?? settings.audioLevel}'
+                  ' · 需要会员的音质会自动回落到可用档位',
+                ),
+                trailing: DropdownButton<String>(
+                  value: settings.audioLevel,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    for (final entry in AppSettings.audioLevels.entries)
+                      DropdownMenuItem(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) settings.update(audioLevel: value);
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             const SectionTitle('精细音量', icon: Icons.volume_up_outlined),
             Card(
               margin: EdgeInsets.zero,
@@ -521,4 +588,44 @@ class _ImportEqDialogState extends State<_ImportEqDialog> {
       ],
     );
   }
+}
+
+/// 「歌单内搜索后点歌」行为选择。
+///
+/// 原在设置首页(2026-11 设置页 IA 重组后归「播放与音质」): 它决定在歌单里搜到
+/// 一首歌后是"整张歌单入队"还是"只加当前这首", 属于播放行为而不是界面偏好。
+Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
+  final settings = AppSettings.instance;
+  final current = settings.librarySearchPlayAction;
+  final picked = await showAppSheet<LibrarySearchPlayAction>(
+    context,
+    // 几行档位列表, 一直不超半屏(迁移前就没写 isScrollControlled)
+    isScrollControlled: false,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              '歌单内搜索后点歌',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          for (final value in LibrarySearchPlayAction.values)
+            ListTile(
+              title: Text(value.label),
+              subtitle: Text(value.hint),
+              trailing: value == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(ctx).pop(value),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+  if (picked == null) return;
+  settings.update(librarySearchPlayAction: picked);
 }

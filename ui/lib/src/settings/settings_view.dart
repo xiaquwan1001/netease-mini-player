@@ -1,94 +1,51 @@
-import 'dart:async';
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import '../adaptive_text.dart';
-import '../app_meta.dart';
-import '../app_settings.dart';
-import '../app_sheet.dart';
-import '../cover_quality_sheet.dart';
-import '../daily_cache.dart';
-import '../desktop_shell.dart';
-import '../layout.dart';
-import '../net_retry.dart';
-import '../platform.dart';
 import '../rust/api_all.dart' as rust;
 import '../section_header.dart';
+import 'settings_about_page.dart';
+import 'settings_appearance_page.dart';
 import 'settings_audio_page.dart';
 import 'settings_diagnostics_page.dart';
 import 'settings_plugins_page.dart';
-import 'settings_sleep_timer_page.dart';
-import '../state_views.dart';
-import '../theme.dart' show AccentPalette;
-import '../toast.dart';
-import '../update_checker.dart';
-import '../update_dialog.dart';
+import 'settings_system_page.dart';
 
-/// 「主题模式」的三档(2026-11 用户需求 1: 从四档拆回)。
+// 旧调用点与既有测试是从本文件拿这些符号的(主题三档 / 纯黑口径 / 关闭行为谓词)。
+// 实体已按主题搬进各自二级页, 这里只做**再导出**, 不重复实现 —— 门禁脚本与
+// 单测的 import 因此零改动。
+export 'settings_about_page.dart' show AboutSettingsPage, showAboutPage;
+export 'settings_appearance_page.dart'
+    show
+        AppearanceSettingsPage,
+        ThemeChoice,
+        applyThemeChoice,
+        isOledDarkEffective,
+        oledDarkLabel,
+        showAppearancePage,
+        themeChoiceLabel,
+        themeChoiceOf;
+export 'settings_system_page.dart'
+    show
+        SystemSettingsPage,
+        shouldShowCloseBehaviorTile,
+        showSystemPage,
+        showUpdateIntervalSheet;
+
+/// 设置首页: **只有主题入口**, 每项进一个二级页(2026-11 用户反馈:
+/// 「设置页面内容很乱, 需要整改为按照不同主题划分二级页面」)。
 ///
-/// 历史: 最早是「跟随/浅色/深色」三档 + 独立的「OLED 纯黑」开关;
-/// 2026-11-14 一度把纯黑并成第四档(纯黑 = themeMode.dark + oledDark),
-/// 结果「跟随系统」与「纯黑」互斥 —— 跟随系统时想开纯黑只能被迫改成深色。
-/// 现在恢复三档 + 独立开关: 两者正交、可同时为真, 持久化字段仍是
-/// themeMode(跟随/浅色/深色) 与 oledDark(bool), 旧 settings.json 直接可读
-/// (oledDark=true 且 themeMode=dark ⇒ 显示为「深色 + 纯黑开」)。
-enum ThemeChoice { system, light, dark }
-
-/// 当前设置 → 三档里的哪一档(只看 themeMode; 纯黑是独立开关, 不参与)。
-ThemeChoice themeChoiceOf(AppSettings settings) => switch (settings.themeMode) {
-  ThemeMode.light => ThemeChoice.light,
-  ThemeMode.dark => ThemeChoice.dark,
-  ThemeMode.system => ThemeChoice.system,
-};
-
-/// 三档 → 只写回 themeMode。不动 oledDark(纯黑开关独立保存, 可同时开启)。
-void applyThemeChoice(AppSettings settings, ThemeChoice choice) {
-  unawaited(
-    settings.update(
-      themeMode: switch (choice) {
-        ThemeChoice.system => ThemeMode.system,
-        ThemeChoice.light => ThemeMode.light,
-        ThemeChoice.dark => ThemeMode.dark,
-      },
-    ),
-  );
-}
-
-/// 三档的副标题文案（与分段控件的选项一一对应）。
-String themeChoiceLabel(ThemeChoice choice) => switch (choice) {
-  ThemeChoice.system => '跟随系统 · 系统深色时用 Material 深灰',
-  ThemeChoice.light => '浅色',
-  ThemeChoice.dark => '深色 · Material 深灰 #121212',
-};
-
-/// 「纯黑 (OLED)」开关此刻是否真的生效: 纯黑只是深色基底的另一种底色,
-/// 浅色基底(浅色档, 或跟随系统且系统为浅色)下开关仍可操作但不改变外观。
-bool isOledDarkEffective({
-  required ThemeMode themeMode,
-  required Brightness platformBrightness,
-}) => switch (themeMode) {
-  ThemeMode.dark => true,
-  ThemeMode.light => false,
-  ThemeMode.system => platformBrightness == Brightness.dark,
-};
-
-/// 「纯黑 (OLED)」开关的副标题: 生效时说清效果, 不生效时说明「仅在深色时生效」
-/// (不静默改 themeMode, 也不把开关置灰 —— 用户可以提前开好等切深色)。
-String oledDarkLabel({required bool effective}) => effective
-    ? '深色基底用 #000000 取代 #121212(OLED 省电, 无灰边)'
-    : '仅在深色时生效 · 当前底色不变, 切到深色后自动变纯黑';
-
-/// 设置页: 「App 怎么表现」的偏好开关 + 分组入口。
+/// 分组与落点(旧位置 → 新位置见 docs 内的 IA 表):
+/// - 账号与同步 → settings_account_page.dart(账号簿/切换/添加/退出登录/清除凭据;
+///   入口由宿主通过 [onOpenAccounts] 注入, 仍是全 App 唯一的账号面)。
+/// - 播放与音质 → settings_audio_page.dart(精细音量/响度/淡入淡出/解码缓存/
+///   歌词来源/自定义响度曲线 + 本轮的取链音质、跳过 VIP、歌单内点歌、定时关闭)。
+/// - 外观与布局 → settings_appearance_page.dart(主题/纯黑/主题色/字号/卡片排列/
+///   网格列数/封面清晰度)。
+/// - 通知与系统 → settings_system_page.dart(关闭主窗口时/切到搜索清空/自动检查更新)。
+/// - 插件与音源 → settings_plugins_page.dart(总开关/插件清单/音源路由)。
+/// - 数据与诊断 → settings_diagnostics_page.dart(日推缓存/匿名诊断/设备 ID/数据目录)。
+/// - 关于 → settings_about_page.dart(版本与许可/开源仓库/检查更新/凭据存储)。
 ///
-/// 二级页:
-/// - 账号管理(账号簿/切换/添加/退出登录/清除凭据)→ settings_account_page.dart。
-///   2026-11 用户反馈: 账号入口曾在「我的」页资料头/药丸/按钮三处重复,
-///   现在统一收在这里(唯一入口)。
-/// - Rust 自检 / 设备 ID / 数据目录 → 诊断与数据二级页
-///   (settings_diagnostics_page.dart), 从「关于」进入。
-/// - 「清空搜索历史」→ 只保留动作发生处(搜索落地页, 审查 P1-7.11)。
+/// 「清空搜索历史」仍然只在动作发生处(搜索落地页, 审查 P1-7.11), 不进设置。
 class SettingsView extends StatelessWidget {
   const SettingsView({super.key, required this.info, this.onOpenAccounts});
 
@@ -100,963 +57,109 @@ class SettingsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = AppSettings.instance;
-    return AnimatedBuilder(
-      animation: settings,
+    final loggedIn = info?.loggedIn == true;
+    final entries = <Widget>[
+      if (onOpenAccounts != null)
+        _SettingsEntry(
+          icon: Icons.manage_accounts_outlined,
+          title: '账号与同步',
+          subtitle: loggedIn ? '已登录 · 切换账号 / 添加账号 / 退出登录' : '未登录 · 登录后可同步收藏与歌单',
+          onTap: onOpenAccounts!,
+        ),
+      _SettingsEntry(
+        icon: Icons.graphic_eq,
+        title: '播放与音质',
+        subtitle: '精细音量 · 响度均衡 · 淡入淡出 · 音质与歌词来源 · 定时关闭',
+        onTap: () => showAudioSettingsPage(context),
+      ),
+      _SettingsEntry(
+        icon: Icons.palette_outlined,
+        title: '外观与布局',
+        subtitle: '主题模式 · 主题色 · 界面字号 · 卡片排列 · 网格列数 · 封面清晰度',
+        onTap: () => showAppearancePage(context),
+      ),
+      _SettingsEntry(
+        icon: Icons.desktop_windows_outlined,
+        title: '通知与系统',
+        subtitle: '关闭主窗口行为 · 切到搜索时清空 · 自动检查更新',
+        onTap: () => showSystemPage(context),
+      ),
+      _SettingsEntry(
+        icon: Icons.extension_outlined,
+        title: '插件与音源',
+        subtitle: '总开关 / 已装载插件 / 音源路由 / 导入与日志',
+        onTap: () => showPluginsPage(context),
+      ),
+      _SettingsEntry(
+        icon: Icons.monitor_heart_outlined,
+        title: '数据与诊断',
+        subtitle: '每日推荐缓存 · 匿名诊断 · 设备 ID · 数据目录',
+        onTap: () => showDiagnosticsPage(context, info: info),
+      ),
+      _SettingsEntry(
+        icon: Icons.info_outline,
+        title: '关于',
+        subtitle: '版本与许可 · 检查更新 · 凭据存储 · 开源仓库',
+        onTap: () => showAboutPage(context),
+      ),
+    ];
+    return ListTileTheme(
       // 页面本身已有 12dp 横向留白; ListTile 默认再吃 16dp → 文字距屏 28dp。
       // 统一收紧到 12(叠后 24), 与列表类内容的基线一致(2026-11 布局审计 #1)。
-      builder: (context, _) => ListTileTheme(
-        data: const ListTileThemeData(
-          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+      data: const ListTileThemeData(
+        contentPadding: EdgeInsets.symmetric(horizontal: 12),
+      ),
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          12,
+          8,
+          12,
+          24 + MediaQuery.viewPaddingOf(context).bottom,
         ),
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            12,
-            8,
-            12,
-            24 + MediaQuery.viewPaddingOf(context).bottom,
+        children: [
+          const SectionTitle('设置', icon: Icons.settings_outlined),
+          Card(
+            margin: EdgeInsets.zero,
+            child: Column(
+              children: [
+                for (var i = 0; i < entries.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  entries[i],
+                ],
+              ],
+            ),
           ),
-          children: [
-            if (onOpenAccounts != null) ...[
-              Card(
-                margin: EdgeInsets.zero,
-                child: ListTile(
-                  leading: const Icon(Icons.manage_accounts_outlined),
-                  title: const Text('账号管理'),
-                  subtitle: Text(
-                    info?.loggedIn == true
-                        ? '已登录 · 切换账号 / 添加账号 / 退出登录'
-                        : '未登录 · 登录后可同步收藏与歌单',
-                  ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: onOpenAccounts,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            const SectionTitle('界面', icon: Icons.palette_outlined),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  // 2026-11 用户需求 1: 主题模式回到三档, 「纯黑 (OLED)」
-                  // 拆成下面的独立开关 —— 「跟随系统 + 纯黑」可以同时成立。
-                  _SegmentedSettingTile<ThemeChoice>(
-                    title: '主题模式',
-                    subtitle: themeChoiceLabel(themeChoiceOf(settings)),
-                    segments: const [
-                      ButtonSegment(
-                        value: ThemeChoice.system,
-                        label: Text('跟随'),
-                      ),
-                      ButtonSegment(
-                        value: ThemeChoice.light,
-                        label: Text('浅色'),
-                      ),
-                      ButtonSegment(value: ThemeChoice.dark, label: Text('深色')),
-                    ],
-                    selected: themeChoiceOf(settings),
-                    onSelectionChanged: (value) =>
-                        applyThemeChoice(settings, value),
-                  ),
-                  const Divider(height: 1),
-                  // 纯黑是深色基底的底色选项(不是第四个主题档): 与三档正交,
-                  // 浅色/跟随浅色下开关仍可操作, 副标题说明「仅在深色时生效」。
-                  SwitchListTile(
-                    title: const Text('纯黑 (OLED)'),
-                    subtitle: Text(
-                      oledDarkLabel(
-                        effective: isOledDarkEffective(
-                          themeMode: settings.themeMode,
-                          platformBrightness: MediaQuery.platformBrightnessOf(
-                            context,
-                          ),
-                        ),
-                      ),
-                    ),
-                    value: settings.oledDark,
-                    onChanged: (value) => settings.update(oledDark: value),
-                  ),
-                  const Divider(height: 1),
-                  // 视觉风格: 同一色板同时决定浅色/深色两套配色(不是两套独立开关)
-                  _AccentSettingTile(
-                    selected: settings.accent,
-                    onSelected: (value) => settings.update(accent: value),
-                  ),
-                  const Divider(height: 1),
-                  _TextScaleSetting(settings: settings),
-                  const Divider(height: 1),
-                  _SegmentedSettingTile<int>(
-                    title: '卡片排列(一排 / 两排)',
-                    // 用户反馈 16: 这一项不只作用于推荐页 —— 我的页与他人主页的
-                    // 歌单/播客/专辑横滑区块同样跟着变(统一走 CoverRow(rows: ...))
-                    subtitle: settings.coverRows == 1
-                        ? '一排: 横向滑动, 推荐/我的/他人主页的歌单播客都用'
-                        : '两排: 网格平铺, 推荐/我的/他人主页的歌单播客都用',
-                    segments: const [
-                      ButtonSegment(value: 1, label: Text('一排')),
-                      ButtonSegment(value: 2, label: Text('两排')),
-                    ],
-                    selected: settings.coverRows,
-                    onSelectionChanged: (value) {
-                      settings.update(coverRows: value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  _SegmentedSettingTile<int>(
-                    title: '方格网格列数',
-                    subtitle: '艺人专辑 / 精选新碟 / 歌单广场每行几张(均分, 不留空隙)',
-                    segments: const [
-                      ButtonSegment(value: 2, label: Text('2')),
-                      ButtonSegment(value: 3, label: Text('3')),
-                      ButtonSegment(value: 4, label: Text('4')),
-                    ],
-                    selected: settings.gridColumns,
-                    onSelectionChanged: (value) {
-                      settings.update(gridColumns: value);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.graphic_eq),
-                    title: const Text('播放与音质'),
-                    subtitle: const Text(
-                      '精细音量 · 响度均衡 · 淡入淡出 · 解码与缓存 · 自定义响度曲线',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showAudioSettingsPage(context),
-                  ),
-                  const Divider(height: 1),
-                  // 定时关闭(睡眠定时): 到点停止播放并退出, 可等当前这首播完。
-                  // 状态活在 SleepTimer 单例里, 与播放协调器共用同一份。
-                  ListTile(
-                    leading: const Icon(Icons.bedtime_outlined),
-                    title: const Text('定时关闭'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showSleepTimerPage(context),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 「行为」类开关: 搜索/播放原本是两个一级分组, 各只有一个开关时
-            // 不必各占一个分区(审查 §5.3 建议并入「通用」)
-            const SectionTitle('通用', icon: Icons.tune),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  // Linux: 真开关; Windows: 保留「仅 Linux 生效」说明行;
-                  // Android: 整块不渲染(用户 2026-11-18 口径)。见谓词注释。
-                  if (shouldShowCloseBehaviorTile(
-                    isLinux: DesktopShell.isSupportedPlatform,
-                    isAndroid: _isAndroidPlatform,
-                  )) ...[
-                    // 点关闭按钮是退出还是隐藏到托盘(默认退出 = 旧语义)。
-                    // 托盘能力由原生探测, 副标题据此如实说明是否会降级。
-                    _CloseBehaviorTile(settings: settings),
-                    const Divider(height: 1),
-                  ],
-                  SwitchListTile(
-                    title: const Text('切到搜索时清空上次结果'),
-                    subtitle: const Text('关闭后, 底部切回搜索仍保留上一次的关键词与结果'),
-                    value: settings.clearSearchOnTabSwitch,
-                    onChanged: (value) {
-                      settings.update(clearSearchOnTabSwitch: value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  // 播放策略(2026-11 用户需求): 不想听会员曲目时, 切歌/续播直接跳过。
-                  SwitchListTile(
-                    title: const Text('播放跳过 VIP 歌曲'),
-                    subtitle: const Text('切歌与自动续播时跳过需要黑胶会员的曲目(列表里仍然显示)'),
-                    value: settings.skipVipSongs,
-                    onChanged: (value) {
-                      settings.update(skipVipSongs: value);
-                    },
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('歌单内搜索后点歌'),
-                    subtitle: Text(
-                      '${settings.librarySearchPlayAction.label} · ${settings.librarySearchPlayAction.hint}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showLibrarySearchPlaySheet(context),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('自动检查更新'),
-                    subtitle: Text(
-                      '${settings.updateCheckInterval.label} · 发现新版本时弹窗提示',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showUpdateIntervalSheet(context),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('封面与图片清晰度'),
-                    subtitle: Text(
-                      '${settings.coverQuality.label} · ${settings.coverQuality.hint}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showCoverQualitySheet(context),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    title: const Text('取链音质'),
-                    subtitle: Text(
-                      '${AppSettings.audioLevels[settings.audioLevel] ?? settings.audioLevel}'
-                      ' · 需要会员的音质会自动回落到可用档位',
-                    ),
-                    trailing: DropdownButton<String>(
-                      value: settings.audioLevel,
-                      underline: const SizedBox.shrink(),
-                      items: [
-                        for (final entry in AppSettings.audioLevels.entries)
-                          DropdownMenuItem(
-                            value: entry.key,
-                            child: Text(entry.value),
-                          ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) settings.update(audioLevel: value);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 每日推荐歌单缓存(2026-11 用户需求): 保留天数 + 立即清理 + 上次清理时间
-            const SectionTitle('缓存', icon: Icons.sd_storage_outlined),
-            Card(
-              margin: EdgeInsets.zero,
-              child: _DailyCacheTile(dataDir: info?.dataDir),
-            ),
-            const SizedBox(height: 16),
-            const SectionTitle('关于', icon: Icons.info_outline),
-            Card(
-              margin: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  const ListTile(
-                    leading: Icon(Icons.info_outline),
-                    title: Text('轻音 MiniNCM'),
-                    subtitle: Text(
-                      'Rust core + Flutter UI · 协议/加解密由 vendor 库负责\n'
-                      '登录凭据与设备指纹只保存在本机数据目录',
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.code),
-                    title: const Text('开源仓库'),
-                    subtitle: const Text(
-                      kGithubUrl,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: const Icon(Icons.open_in_new),
-                    onTap: () => PlatformBridge.openUrl(kGithubUrl),
-                  ),
-                  const Divider(height: 1),
-                  const ListTile(
-                    leading: Icon(Icons.description_outlined),
-                    title: Text('版本与许可'),
-                    subtitle: Text(
-                      'v$kAppVersion · $kLicenseSummary',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  const _CheckUpdateTile(),
-                  const Divider(height: 1),
-                  const Divider(height: 1),
-                  // 凭据后端(Android Keystore / Windows DPAPI / 明文回退)属于
-                  // "这台机器怎么存东西", 从账号页的隐私栏搬到这里展示(2026-11 需求)。
-                  const _CredentialStorageTile(),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.extension_outlined),
-                    title: const Text('插件'),
-                    subtitle: const Text('总开关 / 已装载插件 / 失败清单'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showPluginsPage(context),
-                  ),
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.monitor_heart_outlined),
-                    title: const Text('诊断与数据'),
-                    subtitle: const Text('Rust 通道自检 / 设备 ID / 数据目录'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => showDiagnosticsPage(context, info: info),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
-/// 「界面字号」设置项: 0.80~1.50 步长 0.05 的滑块。
+/// 首页的主题入口行: 图标 + 标题 + 一句"这一页里有什么" + 右侧箭头。
 ///
-/// 为什么不再用 `DropdownButton<double>`: 它的 `value` 必须**恰好等于** items 里的
-/// 某一项(命中不了会 assert), 与"字号是可精细调节的连续值"天然冲突。
-/// 为什么也没有「小/标准/大/特大」档位 chip: 滑块已经是唯一的可调入口, 档位 chip
-/// 只是重复入口, 用户 2026-11-14 反馈要求去掉(见 [AppSettings.textScaleLabel])。
-///
-/// 实时预览: MaterialApp.builder 的 scaledMediaQuery 直接读 AppSettings, 所以拖动
-/// 滑块时**整页**(含本行)立刻按新倍率重排, 下面的预览行是同倍率的实例说明。
-class _TextScaleSetting extends StatelessWidget {
-  const _TextScaleSetting({required this.settings});
-
-  final AppSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scale = settings.textScale;
-    // 端内缩: thumb 半径取当前 SliderTheme(可能被外层主题替换), 其余由
-    // layout.dart 的常量给出 —— 与下面 SliderTheme 里写死的轨道/overlay 同一来源。
-    final ambient = SliderTheme.of(context);
-    final thumbRadius =
-        (ambient.thumbShape?.getPreferredSize(true, true).width ?? 0) / 2;
-    final endInset = textScaleSliderEndInset(thumbRadius);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ListTile(
-          title: const Text('界面字号'),
-          subtitle: Text(AppSettings.textScaleHint(scale)),
-        ),
-        // 滑块与两端 'A' 叠在同一个 Stack 里, 而不是并排的 Row:
-        //
-        // Slider 的轨道两端本来就被 overlay/thumb 内缩(默认 24 + 半轨高 = 26dp),
-        // Row 里的文本标签永远对不上极端落点(2026-11-18 实测差 33.7 / 36.1dp)。
-        // 现在标签盒宽 = 2 × 端内缩、文本居中 ⇒ 标签中心 == value=min/max 时
-        // thumb 的中心; 盒宽是常量, 系统字号变大只改文本自身宽度, 中心不会跑。
-        Stack(
-          children: [
-            SliderTheme(
-              // 显式写死这一年的轨道口径(trackHeight 4 / 圆角轨道 / overlay 24):
-              // 端内缩 = max(overlay 半径, thumb 半径) + 半轨高 才可推导, 不随
-              // Flutter 改默认值把落点挪走(常量见 layout.dart)。
-              data: ambient.copyWith(
-                year2023: true,
-                trackHeight: kTextScaleSliderTrackHeight,
-                trackShape: const RoundedRectSliderTrackShape(),
-                overlayShape: const RoundSliderOverlayShape(
-                  overlayRadius: kTextScaleSliderOverlayRadius,
-                ),
-              ),
-              child: Slider(
-                value: scale,
-                min: AppSettings.kTextScaleMin,
-                max: AppSettings.kTextScaleMax,
-                divisions: AppSettings.textScaleDivisions,
-                label: AppSettings.textScaleLabel(scale),
-                onChanged: (value) => settings.update(
-                  textScale: AppSettings.snapTextScale(value),
-                ),
-              ),
-            ),
-            // 两端的尺寸提示(A 小 / A 大), 走 bodySmall / titleMedium。
-            // IgnorePointer: 标签压在轨道端点上, 不能让这两条 52dp 变成拖动死区。
-            Positioned(
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: endInset * 2,
-              child: IgnorePointer(
-                child: Center(
-                  child: Text('A', style: theme.textTheme.bodySmall),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: endInset * 2,
-              child: IgnorePointer(
-                child: Center(
-                  child: Text('A', style: theme.textTheme.titleMedium),
-                ),
-              ),
-            ),
-          ],
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          // 预览行: 长文字走 AdaptiveText(2 行截断), 2.0 字号 + 320dp 也不溢出
-          child: AdaptiveText(
-            '预览: 歌单 · 播客 · 动态都会按这个字号显示',
-            mode: AdaptiveTextMode.wrap,
-            maxLines: 2,
-            style: theme.textTheme.bodySmall,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 每日推荐缓存(歌单 + 单曲): 保留天数 + 立即清理 + 上次清理时间。
-///
-/// 缓存本身在 `daily_cache.dart`(按天`<账号键>/YYYY-MM-DD.json` 落文件, 当天的
-/// 推荐**歌单**与推荐**单曲**在同一个文件里);
-/// 这里只做展示与"什么时候清"。**清理只清当前账号的那个子目录** —— 日推缓存按账号
-/// 分区, 顺手清别人账号的缓存既没必要也会让那个账号多拉一次。
-/// 上次清理时间从缓存目录读, 所以点完「立即清理」要重读一次才好看见变化。
-class _DailyCacheTile extends StatefulWidget {
-  const _DailyCacheTile({required this.dataDir});
-
-  final String? dataDir;
-
-  @override
-  State<_DailyCacheTile> createState() => _DailyCacheTileState();
-}
-
-class _DailyCacheTileState extends State<_DailyCacheTile> {
-  DateTime? _lastCleanup;
-  bool _cleaning = false;
-
-  /// 当前账号的缓存分区键; null = 还没解析出来(此时按钮不可用, 不会误清别的账号)。
-  String? _accountKey;
-
-  DailyPlaylistCache? get _cache {
-    final dir = widget.dataDir;
-    final key = _accountKey;
-    if (dir == null || dir.isEmpty || key == null) return null;
-    return DailyPlaylistCache(dataDir: dir, accountKey: key);
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _resolveAccount();
-  }
-
-  Future<void> _resolveAccount() async {
-    final key = await DailyPlaylistCache.resolveAccountKey();
-    if (!mounted) return;
-    setState(() => _accountKey = key);
-    await _loadLastCleanup();
-  }
-
-  Future<void> _loadLastCleanup() async {
-    final at = await _cache?.lastCleanup();
-    if (!mounted) return;
-    setState(() => _lastCleanup = at);
-  }
-
-  /// 保留天数一变就顺手按新口径清一次: 否则用户把 30 天改成 3 天,
-  /// 旧文件要等到下次手动清理才消失。
-  Future<void> _setDays(int days) async {
-    await AppSettings.instance.update(dailyCacheDays: days);
-    if (mounted) setState(() {});
-    await _cleanup();
-  }
-
-  Future<void> _cleanup() async {
-    if (_cleaning) return;
-    // 账号键通常 initState 就解析完了; 万一用户手比 FFI 快, 这里补一次,
-    // 否则按钮会"点了没反应"。
-    if (_accountKey == null) await _resolveAccount();
-    final cache = _cache;
-    if (cache == null) return;
-    setState(() => _cleaning = true);
-    try {
-      final removed = await cache.cleanup(
-        keepDays: AppSettings.instance.dailyCacheDays,
-      );
-      await _loadLastCleanup();
-      if (!mounted) return;
-      showToast(
-        context,
-        removed == 0 ? '没有需要清理的缓存' : '已清理 $removed 天的缓存(歌单 + 单曲)',
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showToast(context, '清理失败: ${describeError(e)}', isError: true);
-    } finally {
-      if (mounted) setState(() => _cleaning = false);
-    }
-  }
-
-  String get _cleanupLabel {
-    final at = _lastCleanup;
-    if (at == null) return '还没有清理过';
-    String two(int v) => v.toString().padLeft(2, '0');
-    return '上次清理: ${at.year}-${two(at.month)}-${two(at.day)} '
-        '${two(at.hour)}:${two(at.minute)}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final settings = AppSettings.instance;
-    return Column(
-      children: [
-        ListTile(
-          title: const Text('每日推荐缓存'),
-          subtitle: Text(
-            settings.dailyCacheDays <= 0
-                ? '已关闭: 每次进推荐页都联网拉取'
-                : '歌单 + 单曲, 同一天只拉一次, 保留 ${settings.dailyCacheDays} 天',
-          ),
-          trailing: DropdownButton<int>(
-            value: settings.dailyCacheDays,
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final days in AppSettings.dailyCacheOptions)
-                DropdownMenuItem(
-                  value: days,
-                  child: Text(AppSettings.dailyCacheLabel(days)),
-                ),
-            ],
-            onChanged: (value) {
-              if (value != null) _setDays(value);
-            },
-          ),
-        ),
-        const Divider(height: 1),
-        ListTile(
-          leading: _cleaning
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.cleaning_services_outlined),
-          title: const Text('立即清理'),
-          subtitle: Text(_cleanupLabel),
-          onTap: _cleaning ? null : _cleanup,
-        ),
-      ],
-    );
-  }
-}
-
-/// 凭据后端状态行(Android Keystore / Windows DPAPI / 明文回退).
-///
-/// 2026-11 用户要求: 「隐私」栏目里的 Android Keystore 加密说明搬到设置 → 关于。
-/// 只读展示, 失败不影响设置页其余部分(点一下可重试)。
-class _CredentialStorageTile extends StatefulWidget {
-  const _CredentialStorageTile();
-
-  @override
-  State<_CredentialStorageTile> createState() => _CredentialStorageTileState();
-}
-
-class _CredentialStorageTileState extends State<_CredentialStorageTile> {
-  rust.CredentialStatusDto? _status;
-  bool _failed = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final status = await rust.credentialStatus();
-      if (!mounted) return;
-      setState(() {
-        _status = status;
-        _failed = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _failed = true);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = _status;
-    return ListTile(
-      leading: const Icon(Icons.enhanced_encryption_outlined),
-      title: const Text('凭据存储'),
-      subtitle: Text(
-        status?.note ?? (_failed ? '凭据后端状态不可用, 点击重试' : '正在读取…'),
-        maxLines: 3,
-        overflow: TextOverflow.ellipsis,
-      ),
-      // 右侧原来还显示一遍后端名("android-keystore"), 与下方说明文案重复
-      // (用户反馈: 凭据存储右边有一个重复的 android keystore 文本框)。
-      onTap: _failed ? _load : null,
-    );
-  }
-}
-
-/// 「关闭主窗口时」这一整块该不该出现在设置页里(纯谓词, 单测见
-/// ui/test/close_behavior_tile_visible_test.dart)。
-///
-/// - Linux: 真开关(直接退出 / 最小化到托盘), 托盘能力由原生探测;
-/// - Windows: 没有托盘语义, 但保留一行如实说明「仅 Linux 生效」(不给假开关);
-/// - Android: 用户 2026-11-18 口径是「直接省略」—— 手机既没有主窗口关闭按钮,
-///   也没有托盘, 整块(含它后面的分隔线)不该占位, 不是置灰、也不是留说明行。
-bool shouldShowCloseBehaviorTile({
-  required bool isLinux,
-  required bool isAndroid,
-}) => isLinux || !isAndroid;
-
-/// 当前进程是不是 Android(桌面 Linux/Windows 上恒为 false)。
-///
-/// 不用 [defaultTargetPlatform]: 它在 widget 测试里默认是 android, 会把「没有
-/// Android 平台也能测的纯谓词」和一个假的平台标记搅在一起。真实 IO 平台才有
-/// 意义, 单测一律直接调上面的谓词。
-bool get _isAndroidPlatform => !kIsWeb && Platform.isAndroid;
-
-/// 「关闭主窗口时」设置项: Linux 桌面可选「直接退出 / 最小化到托盘」。
-///
-/// 非 Linux(只剩 Windows 会到这里, Android 由 [shouldShowCloseBehaviorTile]
-/// 整块省略)不撒谎也不给假开关: 只显示一行说明"仅 Linux 生效"。
-/// 托盘是否真的可用由原生 getStatus 决定(见 desktop_shell.dart), 副标题会如实写
-/// "将降级为最小化到任务栏"。
-class _CloseBehaviorTile extends StatelessWidget {
-  const _CloseBehaviorTile({required this.settings});
-
-  final AppSettings settings;
-
-  @override
-  Widget build(BuildContext context) {
-    final linux = DesktopShell.isSupportedPlatform;
-    return ValueListenableBuilder<TrayStatus>(
-      valueListenable: DesktopShell.instance.status,
-      builder: (context, trayStatus, _) {
-        final subtitle = closeBehaviorSubtitle(
-          behavior: settings.closeBehavior,
-          status: trayStatus,
-          linux: linux,
-        );
-        if (!linux) {
-          return ListTile(
-            title: const Text('关闭主窗口时'),
-            subtitle: Text(subtitle),
-          );
-        }
-        return _SegmentedSettingTile<CloseBehavior>(
-          title: '关闭主窗口时',
-          subtitle: subtitle,
-          segments: const [
-            ButtonSegment(value: CloseBehavior.quit, label: Text('直接退出')),
-            ButtonSegment(
-              value: CloseBehavior.minimizeToTray,
-              label: Text('最小化到托盘'),
-            ),
-          ],
-          selected: settings.closeBehavior,
-          onSelectionChanged: (value) {
-            settings.update(closeBehavior: value);
-            // 选了托盘但这台机器没有托盘宿主: 当场说清会降级, 别让用户以为成功了
-            if (value == CloseBehavior.minimizeToTray && trayStatus.degraded) {
-              showToast(context, '当前桌面没有托盘, 关闭窗口将最小化到任务栏');
-            }
-          },
-        );
-      },
-    );
-  }
-}
-
-/// 带分段选择器的设置行。
-///
-/// 之前用 `ListTile(trailing: SegmentedButton(...))`: 窄屏 + 大字号下(例如
-/// vivo 真机 1440x3168 @ density 768 ⇒ 300dp 宽, 系统字号 1.25)trailing 被要求
-/// 吃掉整行宽度, ListTile 直接抛
-/// "Trailing widget consumes the entire tile width", 该 ListTile 及其后的
-/// render box 都不再布局 ⇒ 文案竖排、内容越界。
-/// 所以分段控件单独占一行, 宽度跟着内容走, 极端字号下退化为横向滚动。
-class _SegmentedSettingTile<T> extends StatelessWidget {
-  const _SegmentedSettingTile({
+/// 副标题用 [Text] 的 maxLines 2 + ellipsis(窄屏/大字号下长副标题必须收住,
+/// 与设置二级页里的入口行同一口径)。
+class _SettingsEntry extends StatelessWidget {
+  const _SettingsEntry({
+    required this.icon,
     required this.title,
     required this.subtitle,
-    required this.segments,
-    required this.selected,
-    required this.onSelectionChanged,
+    required this.onTap,
   });
 
+  final IconData icon;
   final String title;
   final String subtitle;
-  final List<ButtonSegment<T>> segments;
-  final T selected;
-  final ValueChanged<T> onSelectionChanged;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // 外层 Card 的 Column 是交叉轴 center, 不给满宽就会整行被居中
-    // (表现为「主题模式」这行相对上下 ListTile 缩进/不对齐)。
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: theme.textTheme.bodyLarge),
-            const SizedBox(height: 2),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 10),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SegmentedButton<T>(
-                showSelectedIcon: false,
-                segments: segments,
-                selected: {selected},
-                onSelectionChanged: (value) => onSelectionChanged(value.first),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// 「检查更新」项: 点击手动检查(loading), 有新版本弹窗引导下载;
-/// 启动静默检查发现新版本时在 trailing 显示红点(不弹窗打扰)。
-class _CheckUpdateTile extends StatefulWidget {
-  const _CheckUpdateTile();
-
-  @override
-  State<_CheckUpdateTile> createState() => _CheckUpdateTileState();
-}
-
-class _CheckUpdateTileState extends State<_CheckUpdateTile> {
-  bool _checking = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<UpdateInfo?>(
-      valueListenable: UpdateCheckHost.pendingUpdate,
-      builder: (context, pending, _) {
-        final newer = pending != null && pending.isNewer;
-        return ListTile(
-          leading: const Icon(Icons.system_update_outlined),
-          title: Row(
-            children: [
-              const Text('检查更新'),
-              if (newer) ...[
-                const SizedBox(width: 8),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.error,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          subtitle: Text(
-            newer ? '发现新版本 ${pending.latest}' : '当前 v$kAppVersion',
-          ),
-          trailing: _checking
-              ? const LoadingView.inline(size: 20)
-              : const Icon(Icons.refresh),
-          onTap: _checking ? null : _check,
-        );
-      },
-    );
-  }
-
-  Future<void> _check() async {
-    setState(() => _checking = true);
-    UpdateInfo? info;
-    try {
-      info = await UpdateCheckHost.check(kAppVersion);
-    } finally {
-      if (mounted) setState(() => _checking = false);
-    }
-    if (!mounted) return;
-    if (info == null) {
-      showToast(context, '检查更新失败, 请检查网络后重试', isError: true);
-      return;
-    }
-    if (!info.isNewer) {
-      showToast(context, '已是最新版本 v${info.current}');
-      return;
-    }
-    UpdateCheckHost.pendingUpdate.value = info;
-    // 弹窗与启动自动检查共用一份实现(见 update_dialog.dart)
-    await showUpdateDialog(context, info);
-  }
-}
-
-/// 「歌单内搜索后点歌」行为选择。
-Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
-  final settings = AppSettings.instance;
-  final current = settings.librarySearchPlayAction;
-  final picked = await showAppSheet<LibrarySearchPlayAction>(
-    context,
-    // 几行档位列表, 一直不超半屏(迁移前就没写 isScrollControlled)
-    isScrollControlled: false,
-    showDragHandle: true,
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              '歌单内搜索后点歌',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          for (final value in LibrarySearchPlayAction.values)
-            ListTile(
-              title: Text(value.label),
-              subtitle: Text(value.hint),
-              trailing: value == current ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.of(ctx).pop(value),
-            ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
-  if (picked == null) return;
-  settings.update(librarySearchPlayAction: picked);
-}
-
-/// 「自动检查更新」频率选择: 不自动检查 / 每天 / 每周 / 每月。
-Future<void> showUpdateIntervalSheet(BuildContext context) async {
-  final settings = AppSettings.instance;
-  final current = settings.updateCheckInterval;
-  final picked = await showAppSheet<UpdateCheckInterval>(
-    context,
-    isScrollControlled: false,
-    showDragHandle: true,
-    builder: (ctx) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
-              '自动检查更新',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          for (final value in UpdateCheckInterval.values)
-            ListTile(
-              title: Text(value.label),
-              subtitle: Text(value.hint),
-              trailing: value == current ? const Icon(Icons.check) : null,
-              onTap: () => Navigator.of(ctx).pop(value),
-            ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    ),
-  );
-  if (picked == null) return;
-  settings.update(updateCheckInterval: picked);
-}
-
-/// 主题色(视觉风格)选择器: 一行色点, 选中项带对勾与描边.
-///
-/// 不塞进 SegmentedButton: 5 个色板在 300dp + 1.25 字号下会把分段控件挤爆
-/// (与「界面字号」同样的窄屏约束, 见 test/settings_narrow_overflow_test.dart),
-/// 这里用 Wrap + 纯色圆点, 换行即可, 不依赖文字宽度。
-class _AccentSettingTile extends StatelessWidget {
-  const _AccentSettingTile({required this.selected, required this.onSelected});
-
-  final AccentPalette selected;
-  final ValueChanged<AccentPalette> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    // 缩进/字重与同卡的 _SegmentedSettingTile、ListTile 对齐(2026-11-14 用户反馈):
-    // - SizedBox(width: infinity): 外层 Card 的 Column 交叉轴是 center, 不铺满就会
-    //   整块被居中, 表现为「主题色」比上下行多缩进一截;
-    // - 标题 bodyLarge / 副标题 bodyMedium: 之前是 titleMedium + bodySmall,
-    //   比同卡其它行更粗更小, 层级看着乱。
-    return SizedBox(
-      width: double.infinity,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('主题色', style: theme.textTheme.bodyLarge),
-            const SizedBox(height: 2),
-            Text(
-              '${selected.label} · 浅色/深色通用',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 12,
-              runSpacing: 10,
-              children: [
-                for (final palette in AccentPalette.values)
-                  _dot(context, palette),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _dot(BuildContext context, AccentPalette palette) {
-    final theme = Theme.of(context);
-    final isSelected = palette == selected;
-    return Tooltip(
-      message: palette.label,
-      child: InkWell(
-        key: ValueKey('accent-${palette.id}'),
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => onSelected(palette),
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: palette.seed,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isSelected
-                  ? theme.colorScheme.onSurface
-                  : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: isSelected
-              ? const Icon(Icons.check, size: 20, color: Colors.white)
-              : null,
-        ),
-      ),
+    return ListTile(
+      leading: Icon(icon),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     );
   }
 }

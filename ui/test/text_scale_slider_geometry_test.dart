@@ -60,7 +60,7 @@ Future<_ThumbProbe> _pumpSettings(
         // track/overlay, 不动 thumbShape, 所以它会生效。
         child: SliderTheme(
           data: SliderThemeData(thumbShape: probe),
-          child: const Scaffold(body: SettingsView(info: null)),
+          child: const Scaffold(body: AppearanceSettingsPage()),
         ),
       ),
     ),

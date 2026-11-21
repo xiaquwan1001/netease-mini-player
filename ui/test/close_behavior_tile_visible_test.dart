@@ -35,14 +35,14 @@ void main() {
     },
   );
 
-  testWidgets('宿主(非 Android)上这一块照常出现', (tester) async {
+  testWidgets('宿主(非 Android)上这一块在「通知与系统」里照常出现', (tester) async {
     tester.view.physicalSize = const Size(360, 2800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         theme: buildLightTheme(),
-        home: const Scaffold(body: SettingsView(info: null)),
+        home: const Scaffold(body: SystemSettingsPage()),
       ),
     );
     await tester.pumpAndSettle();

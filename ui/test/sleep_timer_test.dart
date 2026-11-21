@@ -189,6 +189,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      // 2026-11 设置页 IA 重组: 定时关闭并进「播放与音质」二级页
+      await tester.tap(find.text('播放与音质'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('定时关闭'));
       await tester.pumpAndSettle();
 
