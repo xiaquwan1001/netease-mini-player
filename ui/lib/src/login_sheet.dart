@@ -132,6 +132,9 @@ class LoginSheetState extends State<LoginSheet> {
   int _cooldown = 0;
   Timer? _cooldownTimer;
 
+  /// 导入 Cookie 页的「怎么获取?」展开状态(#6: 长步骤不再塞进 helperText)
+  bool _cookieHelp = false;
+
   @override
   void initState() {
     super.initState();
@@ -524,8 +527,10 @@ class LoginSheetState extends State<LoginSheet> {
               ],
               decoration: const InputDecoration(
                 labelText: '手机号',
-                hintText: '13800138000',
-                helperText: '区号 + 号码, 只填数字',
+                // #8: 以前 hintText 是 '13800138000' —— 空输入框点一下/读屏会把假号码
+                // 当示例念出来, 用户误以为要照这个填。占位不再放任何号码,
+                // 口径挪到 helperText(区号在左边那个框, 这里只填号码本身).
+                helperText: '只填号码, 区号在左边',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -594,7 +599,22 @@ class LoginSheetState extends State<LoginSheet> {
     ];
   }
 
+  /// 导入 Cookie 页.
+  ///
+  /// #6(2026-11-21): 以前只有一句 helperText(「浏览器登录 music.163.com 后, F12 →
+  /// Application → Cookies 复制 MUSIC_U」), 用户反馈"约等于没用" —— 缺"先登录"、
+  /// 缺具体列(Storage → Cookies → 选域)、缺该点哪一列复制、也没说要不要带前缀。
+  /// 长步骤塞进 helperText 会把输入框挤成两行糊字, 所以改成: helperText 只留一行
+  /// **口径**(粘贴格式), 步骤收进可点的「怎么获取?」, 展开后才显示。
+  ///
+  /// 文案与实现对齐(Rust `cookie_has_music_u` + `merge_device_cookie`):
+  /// - 认的是 cookie 串里出现非空的 `MUSIC_U=`**键值对**, 所以整行/整串都能粘;
+  ///   只粘"值"(没有 `MUSIC_U=` 前缀)一律判失败;
+  /// - 多余的键不报错, 会一起并进会话 cookie(incoming 覆盖同名键), 所以多粘几条无害。
   List<Widget> _cookieTab(ThemeData theme) {
+    final hint = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     return [
       TextField(
         controller: _cookieCtrl,
@@ -610,11 +630,35 @@ class LoginSheetState extends State<LoginSheet> {
           labelText: 'Cookie',
           hintText: 'MUSIC_U=...; __csrf=...',
           border: OutlineInputBorder(),
-          helperText:
-              '浏览器登录 music.163.com 后, F12 → Application → Cookies 复制 MUSIC_U',
+          helperText: '粘整行 MUSIC_U=... 即可; 只填值(不带前缀)认不出来',
           helperMaxLines: 2,
         ),
       ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => setState(() => _cookieHelp = !_cookieHelp),
+          icon: Icon(_cookieHelp ? Icons.expand_less : Icons.expand_more),
+          label: const Text('怎么获取?'),
+        ),
+      ),
+      if (_cookieHelp) ...[
+        for (final step in _cookieHelpSteps)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 20, // token-ok: 序号列宽按内容定, 不是间距
+                  child: Text(step.$1, style: hint),
+                ),
+                Expanded(child: Text(step.$2, style: hint)),
+              ],
+            ),
+          ),
+        const SizedBox(height: 6),
+      ],
       const SizedBox(height: 12),
       FilledButton(
         onPressed: _committing ? null : _importCookie,
@@ -624,6 +668,32 @@ class LoginSheetState extends State<LoginSheet> {
       ),
     ];
   }
+
+  /// 「怎么获取?」的步骤(编号, 文案). 只写实现支持的路径, 不写"大概这样"。
+  static const List<(String, String)> _cookieHelpSteps = [
+    (
+      '1',
+      '在电脑浏览器(Chrome / Edge)打开 music.163.com 并先登录 —— 没登录过就没有 '
+          'MUSIC_U 这条可复制。',
+    ),
+    (
+      '2',
+      '按 F12 打开开发者工具 → 顶部选「Application(应用)」→ 左侧 Storage 下点 '
+          '「Cookies」→ 选中 https://music.163.com。',
+    ),
+    ('3', '在列表里找 Name 是 MUSIC_U 的那一行 → 双击它的 Value 列 → 全选 → 复制。'),
+    (
+      '4',
+      '粘到上面输入框: MUSIC_U=<刚复制的值>。整条 cookie(比如 '
+          'MUSIC_U=...; __csrf=...)一起粘也行, 多出来的键不会报错, 会被一起并入登录态。',
+    ),
+    (
+      '5',
+      'Firefox: F12 → 「存储(Storage)」→ Cookie → https://music.163.com → 右键 '
+          'MUSIC_U → 「复制」→「值」; Firefox 复制出来只有值, 记得自己补上 MUSIC_U= 前缀。',
+    ),
+    ('6', '手机上取不到(移动浏览器没有开发者工具): 请改用「扫码登录」或「手机号登录」。'),
+  ];
 }
 
 /// 打开登录弹层; 返回是否登录成功.

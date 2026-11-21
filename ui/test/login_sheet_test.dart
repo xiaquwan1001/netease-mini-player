@@ -446,6 +446,65 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  // #8: 空手机号输入框以前有个假号码占位(13800138000), 点击/读屏会当成示例
+  testWidgets('手机号页不再有假示例号码占位', (tester) async {
+    await bigSurface(tester);
+    await tester.pumpWidget(
+      host((ctx) {
+        unawaited(
+          showLoginSheet(
+            ctx,
+            createQr: () async => key(),
+            checkQr: (_, _) async => check(rust.QrLoginState.pending),
+            pollInterval: const Duration(milliseconds: 100),
+          ),
+        );
+      }),
+    );
+    await openSheet(tester);
+    await tester.tap(find.text('手机号登录'));
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.text('13800138000'), findsNothing);
+    // 口径保留在 helperText(不再靠"假号码"表达)
+    expect(find.text('只填号码, 区号在左边'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  // #6: 长步骤不能塞进 helperText —— 默认收起, 点「怎么获取?」才展开
+  testWidgets('导入 Cookie: 步骤默认收起, 点「怎么获取?」展开', (tester) async {
+    await bigSurface(tester);
+    await tester.pumpWidget(
+      host((ctx) {
+        unawaited(
+          showLoginSheet(
+            ctx,
+            createQr: () async => key(),
+            checkQr: (_, _) async => check(rust.QrLoginState.pending),
+            pollInterval: const Duration(milliseconds: 100),
+          ),
+        );
+      }),
+    );
+    await openSheet(tester);
+    await tester.tap(find.text('导入 Cookie'));
+    await tester.pump(const Duration(milliseconds: 120));
+
+    // 一行口径留在输入框下
+    expect(find.text('粘整行 MUSIC_U=... 即可; 只填值(不带前缀)认不出来'), findsOneWidget);
+    // 步骤未展开
+    expect(find.text('怎么获取?'), findsOneWidget);
+    expect(find.textContaining('Application'), findsNothing);
+
+    await tester.tap(find.text('怎么获取?'));
+    await tester.pump(const Duration(milliseconds: 120));
+
+    expect(find.textContaining('Application'), findsOneWidget);
+    // 手机上取不到 ⇒ 引回扫码/手机号(不写"手机上也能取"这种做不到的步骤)
+    expect(find.textContaining('手机上取不到'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('dismissLoginSheet 不碰其它弹层', (tester) async {
     await tester.pumpWidget(
       host((ctx) {
