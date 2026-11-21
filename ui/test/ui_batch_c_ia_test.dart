@@ -93,7 +93,7 @@ void main() {
 
   // ---------------- 1) 设置瘦身 ----------------
 
-  testWidgets('设置首页: 账号管理入口在这里, 会员/诊断/清空搜索历史仍是二级页', (tester) async {
+  testWidgets('设置首页: 只剩主题入口(账号/播放/外观/系统/插件/数据/关于), 具体开关在二级页', (tester) async {
     big(tester);
     var accounts = 0;
     await tester.pumpWidget(
@@ -106,9 +106,29 @@ void main() {
     await tester.pumpAndSettle();
 
     // 2026-11 用户要求: 账号管理统一在设置里(「我的」页不再有账号控件)
-    expect(find.text('账号管理'), findsOneWidget);
-    await tester.tap(find.text('账号管理'));
+    expect(find.text('账号与同步'), findsOneWidget);
+    await tester.tap(find.text('账号与同步'));
     expect(accounts, 1);
+
+    // 2026-11 用户反馈「设置页面内容很乱」: 首页只剩 7 个主题入口
+    for (final entry in const [
+      '播放与音质',
+      '外观与布局',
+      '通知与系统',
+      '插件与音源',
+      '数据与诊断',
+      '关于',
+    ]) {
+      expect(find.text(entry), findsOneWidget, reason: '首页缺主题入口: $entry');
+    }
+
+    // 具体设置项不再平铺在首页(否则就是旧的"一页到底")
+    expect(find.text('界面'), findsNothing);
+    expect(find.text('通用'), findsNothing);
+    expect(find.text('切到搜索时清空上次结果'), findsNothing);
+    expect(find.text('取链音质'), findsNothing);
+    expect(find.text('检查更新'), findsNothing);
+    expect(find.text('每日推荐缓存'), findsNothing);
 
     // 仍不作为一级项出现(审查 P1-7.9 / P1-7.11)
     expect(find.text('账号'), findsNothing);
@@ -116,17 +136,9 @@ void main() {
     expect(find.text('诊断'), findsNothing);
     expect(find.text('Rust 通道自检'), findsNothing);
     expect(find.text('清空搜索历史'), findsNothing);
-
-    // 留下: 外观 / 行为开关 / 关于(含诊断二级页入口)
-    expect(find.text('界面'), findsOneWidget);
-    expect(find.text('通用'), findsOneWidget);
-    expect(find.text('关于'), findsOneWidget);
-    expect(find.text('诊断与数据'), findsOneWidget);
-    expect(find.text('切到搜索时清空上次结果'), findsOneWidget);
-    expect(find.text('取链音质'), findsOneWidget);
   });
 
-  testWidgets('设置 → 关于 → 诊断与数据: 二级页可达(自检/设备ID/数据目录)', (tester) async {
+  testWidgets('设置 → 数据与诊断: 二级页可达(自检/设备ID/数据目录/日推缓存)', (tester) async {
     big(tester);
     await tester.pumpWidget(
       MaterialApp(
@@ -135,7 +147,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('诊断与数据'));
+    await tester.tap(find.text('数据与诊断'));
     await tester.pumpAndSettle();
 
     expect(find.text('Rust 通道自检'), findsOneWidget);
@@ -143,6 +155,8 @@ void main() {
     expect(find.text('dev-1'), findsOneWidget);
     expect(find.text('数据目录'), findsOneWidget);
     expect(find.text('/tmp/minincm'), findsOneWidget);
+    // 日推缓存也从设置首页并到了这里(2026-11 IA 重组)
+    expect(find.text('每日推荐缓存'), findsOneWidget);
   });
 
   testWidgets('设置首页: 300dp + 1.25 不溢出', (tester) async {
@@ -157,9 +171,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('界面'), findsOneWidget);
-    expect(find.text('诊断与数据'), findsOneWidget);
-    expect(find.text('切到搜索时清空上次结果'), findsOneWidget);
+    expect(find.text('外观与布局'), findsOneWidget);
+    expect(find.text('数据与诊断'), findsOneWidget);
+    expect(
+      find.text('账号与同步'),
+      findsNothing,
+      reason: '未传 onOpenAccounts 时不显示该入口',
+    );
   });
 
   testWidgets('专辑详情全页: 300dp + 1.25 不溢出', (tester) async {

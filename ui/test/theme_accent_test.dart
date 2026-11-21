@@ -96,14 +96,14 @@ void main() {
     expect(AccentPalette.fromId('neon-purple'), AccentPalette.neteaseRed);
   });
 
-  testWidgets('设置页点色点即切换主题色(并写回设置)', (tester) async {
+  testWidgets('设置 → 外观与布局: 点色点即切换主题色(并写回设置)', (tester) async {
     final settings = AppSettings.instance;
     final before = settings.accent;
     addTearDown(() => settings.update(accent: before));
     await settings.update(accent: AccentPalette.neteaseRed);
 
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
+      const MaterialApp(home: Scaffold(body: AppearanceSettingsPage())),
     );
     await tester.pumpAndSettle();
 
@@ -130,7 +130,7 @@ void main() {
       MaterialApp(
         home: MediaQuery(
           data: const MediaQueryData(textScaler: TextScaler.linear(1.625)),
-          child: const Scaffold(body: SettingsView(info: null)),
+          child: const Scaffold(body: AppearanceSettingsPage()),
         ),
       ),
     );

@@ -69,6 +69,15 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    // 2026-11 IA 重组在本页顶部加了「播放行为 / 音质」两段: 640dp 高的视口里
+    // 「精细音量」已经落到首屏之外, 先滚到它再断言(与原口径等价: 该行必须存在)。
+    await tester.scrollUntilVisible(
+      find.text('不变'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     expect(find.text('不变'), findsOneWidget);
   });
 

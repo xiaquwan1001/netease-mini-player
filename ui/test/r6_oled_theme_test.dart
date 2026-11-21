@@ -107,7 +107,7 @@ void main() {
     expect(buildLightTheme().scaffoldBackgroundColor, isNot(kOledBlack));
   });
 
-  testWidgets('设置页: 三档 + 独立「纯黑 (OLED)」开关互不覆写且持久化', (tester) async {
+  testWidgets('设置 → 外观与布局: 三档 + 独立「纯黑 (OLED)」开关互不覆写且持久化', (tester) async {
     final settings = AppSettings.instance;
     final beforeMode = settings.themeMode;
     final beforeOled = settings.oledDark;
@@ -117,7 +117,7 @@ void main() {
     settings.update(themeMode: ThemeMode.system, oledDark: false);
 
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: SettingsView(info: null))),
+      const MaterialApp(home: Scaffold(body: AppearanceSettingsPage())),
     );
     await tester.pumpAndSettle();
 

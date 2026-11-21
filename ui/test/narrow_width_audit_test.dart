@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:minincm/src/app_settings.dart';
+import 'package:minincm/src/settings_about_page.dart';
+import 'package:minincm/src/settings_appearance_page.dart';
+import 'package:minincm/src/settings_audio_page.dart';
+import 'package:minincm/src/settings_diagnostics_page.dart';
+import 'package:minincm/src/settings_system_page.dart';
 import 'package:minincm/src/artist_page.dart';
 import 'package:minincm/src/artist_sections.dart';
 import 'package:minincm/src/cover_quality_sheet.dart';
@@ -872,6 +877,39 @@ void main() {
         );
         expect(button.maxLines, 1, reason: '$tag 关注按钮文字缺 maxLines');
         await tester.pumpWidget(const SizedBox.shrink());
+      }
+    }
+  });
+  // ─────────────────────────────────────────────────────────────────────
+  // 2026-11 设置页 IA 重组: 设置首页拆为「主题入口 + 7 个二级页」。新/改过的
+  // 五个二级页(外观与布局 / 通知与系统 / 关于 / 播放与音质 / 数据与诊断)
+  // 同样进 300/320/360 × 1.0/1.25/1.3/1.625 的 12 组合矩阵。
+  // ─────────────────────────────────────────────────────────────────────
+  testWidgets('设置二级页(外观/系统/关于/播放/数据): 12 组合无溢出', (tester) async {
+    final pages = <String, Widget>{
+      '外观与布局': const AppearanceSettingsPage(),
+      '通知与系统': const SystemSettingsPage(),
+      '关于': const AboutSettingsPage(),
+      '播放与音质': const AudioSettingsPage(),
+      '诊断与数据': const DiagnosticsPage(),
+    };
+    for (final entry in pages.entries) {
+      for (final width in _widths) {
+        for (final scale in _scales) {
+          final tag = _tag(entry.key, width, scale);
+          final errors = await pumpAudited(
+            tester,
+            entry.value,
+            width: width,
+            scale: scale,
+            // 设置二级页比单条列表行长: 给足高度让整页参与布局
+            height: 2400,
+          );
+          expectNoOverflow(errors, tag);
+          // AppBar 标题必须单行(大字号下换行会把标题栏撑高)
+          expectSingleLine(tester, find.text(entry.key), tag);
+          await tester.pumpWidget(const SizedBox.shrink());
+        }
       }
     }
   });
