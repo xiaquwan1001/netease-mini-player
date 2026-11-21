@@ -492,6 +492,33 @@ fn write_plugin(root: &Path, id: &str) {
     .expect("写脚本");
 }
 
+/// 慢插件: 取链时在 worker 里忙等 `busy_ms` 毫秒(模拟死循环被自身预算收口), 再回常量直链.
+/// 忙等用 `Date.now()` 轮询而不是 `while(true)`, 所以它会在预算内自己结束.
+const SLOW_URL: &str = "https://cdn.test/slow.mp3";
+
+fn write_slow_plugin(root: &Path, id: &str, busy_ms: u64) {
+    let dir = root.join(id);
+    std::fs::create_dir_all(&dir).expect("建插件目录");
+    std::fs::write(
+        dir.join("manifest.json"),
+        format!(
+            r#"{{"id":"{id}","name":"{id} 插件","version":"1.0.0","entry":"index.js","permissions":{{"lxEvents":["musicUrl"]}}}}"#
+        ),
+    )
+    .expect("写清单");
+    std::fs::write(
+        dir.join("index.js"),
+        format!(
+            "lx.on('musicUrl', async () => {{
+               const until = Date.now() + {busy_ms};
+               while (Date.now() < until) {{}}
+               return '{SLOW_URL}';
+             }});"
+        ),
+    )
+    .expect("写脚本");
+}
+
 fn enable_policy(data_dir: &Path) {
     let policy = PluginHostPolicy {
         enabled: true,
@@ -625,6 +652,174 @@ fn plugin_handle_does_not_hold_the_core_lock_while_loading() {
     assert!(
         elapsed < std::time::Duration::from_millis(200),
         "插件装载期间其它域不应排队等 Core 锁, 实际等了 {elapsed:?}"
+    );
+}
+
+/// 隔离二期切片 A2 的判据(**反方向**): 路由判定读**快照**, 不再进插件句柄锁 ——
+/// 另一线程持句柄**写锁** 300ms 模拟重扫/导入(真实装载预算 8s × N)时,
+/// 主线程在**持 Core 锁**的前提下取路由判定, 必须立刻返回.
+///
+/// 改造前该用例必红: `Core::route_decision` 要取 `PluginHost` 的读锁, 会等满那 300ms.
+#[test]
+fn route_decision_does_not_wait_for_plugin_handle_lock() {
+    let temp = TempDir::new("core-route-lock");
+    write_plugin(&temp.path().join(DEFAULT_ROOT_DIR), "demo");
+    enable_policy(temp.path());
+    let core = Arc::new(std::sync::Mutex::new(
+        crate::Core::open(temp.path()).expect("Core 打开"),
+    ));
+    let handle = core
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .plugin_host_handle();
+
+    // 另一个线程持**写锁**模拟「正在 rescan / 导入插件」(装载 QuickJS).
+    let loader = {
+        let handle = handle.clone();
+        std::thread::spawn(move || {
+            let _write = handle.write().unwrap_or_else(|e| e.into_inner());
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        })
+    };
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    let started = std::time::Instant::now();
+    {
+        let guard = core.lock().unwrap_or_else(|e| e.into_inner());
+        let decision = guard.route_decision(Capability::SongUrl);
+        // `demo` 没有进 `plugins-state.json` ⇒ 未装载, 判定按"无插件可选"走内置.
+        assert_eq!(decision.plan.target, RouteTarget::Builtin);
+        assert_eq!(decision.plan.reason, RouteReason::NoPluginLoaded);
+        assert!(decision.plugin.is_none());
+    }
+    let elapsed = started.elapsed();
+
+    loader.join().expect("装载线程不应 panic");
+    assert!(
+        elapsed < std::time::Duration::from_millis(200),
+        "重扫期间路由判定不应等插件句柄锁, 实际等了 {elapsed:?}"
+    );
+}
+
+/// 快照**发布点**覆盖: 重扫 / 总开关 / 换根 都会让判定看到新视图(否则读路径会停在旧快照).
+///
+/// 这条用例的用意是防"新加写路径忘了发布": 判定输入变了而快照没换, 症状是路由长期走错人,
+/// 比锁排队更难查. 启用/停用/改偏好已由 `core_routes_to_single_plugin_then_back_after_disable`
+/// 与 `core_two_plugins_without_selection_stay_on_builtin` 覆盖, 这里补齐剩下的写路径.
+#[test]
+fn route_snapshot_is_republished_by_rescan_and_policy_writes() {
+    let temp = TempDir::new("core-snapshot-publish");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    write_plugin(&root, "demo");
+    enable_policy(temp.path());
+    let mut core = crate::Core::open(temp.path()).expect("Core 打开");
+    core.plugin_enable("demo").expect("启用插件");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).target,
+        RouteTarget::Plugin("demo".into())
+    );
+
+    // ① 重扫: 插件目录被删 ⇒ 判定立刻回内置, 不许停在旧快照.
+    std::fs::remove_dir_all(root.join("demo")).expect("删插件目录");
+    core.plugin_rescan().expect("重扫");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).reason,
+        RouteReason::NoPluginLoaded
+    );
+
+    // ② 总开关: 关 ⇒ `hostInactive`(与"没插件"可区分); 再开 ⇒ 回到"没插件".
+    core.plugin_set_enabled(false).expect("关总开关");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).reason,
+        RouteReason::HostInactive
+    );
+    core.plugin_set_enabled(true).expect("开总开关");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).reason,
+        RouteReason::NoPluginLoaded
+    );
+
+    // ③ 换根: 空根目录 ⇒ 仍是"没插件"; 换回缺省根(目录已空)同理.
+    let empty = temp.path().join("empty-root");
+    std::fs::create_dir_all(&empty).expect("建空根");
+    core.plugin_set_root(Some(empty)).expect("换根");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).reason,
+        RouteReason::NoPluginLoaded
+    );
+    core.plugin_set_root(None).expect("回缺省根");
+    assert_eq!(
+        core.plugin_route_plan(Capability::SongUrl).reason,
+        RouteReason::NoPluginLoaded
+    );
+}
+
+/// 审计文档「剩余待实测」: **慢插件在飞期间路由判定不被挡**.
+///
+/// 插件调用期忙等 600ms(等价于死循环/超时由自身预算收口的那段时间)时:
+/// ① 调用路径不持 `Core` 锁 —— 另一线程持 `Core` 锁取判定必须 <200ms 返回;
+/// ② 判定仍命中该插件(快照视图在此期间稳定, 不会因为"正在调用"而退化);
+/// ③ 调用本身真的忙等了(否则断言 ① 就是假的).
+///
+/// 与 [`route_decision_does_not_wait_for_plugin_handle_lock`] 互补: 那条钉"重扫持写锁",
+/// 这条钉"调用在飞"; 两者同时成立才没有可排队的锁面.
+#[test]
+fn slow_plugin_call_does_not_block_route_decisions() {
+    const BUSY_MS: u64 = 600;
+    let temp = TempDir::new("core-slow-plugin");
+    write_slow_plugin(&temp.path().join(DEFAULT_ROOT_DIR), "slow", BUSY_MS);
+    enable_policy(temp.path());
+    let core = Arc::new(std::sync::Mutex::new(
+        crate::Core::open(temp.path()).expect("Core 打开"),
+    ));
+    core.lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .plugin_enable("slow")
+        .expect("启用插件");
+
+    // 调用线程: 模拟 FFI 的 `routed_call`(判定时短暂持 Core 锁, 调用期完全不持).
+    let caller = {
+        let core = core.clone();
+        std::thread::spawn(move || {
+            let decision = {
+                let guard = core.lock().unwrap_or_else(|e| e.into_inner());
+                guard.route_decision(Capability::SongUrl)
+            };
+            let started = std::time::Instant::now();
+            let routed = futures::executor::block_on(route::call_routed(decision, |p| {
+                Box::pin(async move { p.song_url(&request()).await })
+            }))
+            .expect("慢插件取链应成功");
+            (started.elapsed(), routed)
+        })
+    };
+
+    // 等调用线程真的进到插件里(忙等窗口内), 再量判定耗时.
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    let started = std::time::Instant::now();
+    {
+        let guard = core.lock().unwrap_or_else(|e| e.into_inner());
+        let decision = guard.route_decision(Capability::SongUrl);
+        assert_eq!(
+            decision.plan.plugin_id(),
+            Some("slow"),
+            "慢插件在飞时判定仍应命中它(快照不被调用影响)"
+        );
+        assert_eq!(decision.plan.reason, RouteReason::AutoSingle);
+        assert!(decision.plugin.is_some(), "命中就要拿到 provider 的 Arc");
+    }
+    let wait = started.elapsed();
+
+    let (call_elapsed, routed) = caller.join().expect("调用线程不应 panic");
+    assert_eq!(routed.used, RouteUsed::Plugin("slow".into()));
+    assert_eq!(routed.value.url.as_deref(), Some(SLOW_URL));
+    assert!(
+        call_elapsed >= std::time::Duration::from_millis(BUSY_MS - 150),
+        "插件调用确实忙等了(否则这条用例测不到锁面), 实际 {call_elapsed:?}"
+    );
+    assert!(
+        wait < std::time::Duration::from_millis(200),
+        "插件调用在飞期间路由判定不应排队, 实际等了 {wait:?}"
     );
 }
 

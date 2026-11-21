@@ -60,6 +60,13 @@ pub struct Core {
     /// 存**共享句柄**而不是裸 `PluginHost`: 装载/扫描很慢(单插件 8s), 而 `Core` 只有唯一一把锁,
     /// 插件 FFI 入口要能跳过 `Core` 锁直接拿这一把(锁序纪律见 `plugins::PluginHostHandle`).
     plugin_host: PluginHostHandle,
+    /// 路由判定**快照**槽位(隔离二期切片 A2): 与 `plugin_host` 里那份是**同一个 `Arc`**
+    /// (由 `PluginHost::open` 造、此处取走).
+    ///
+    /// 判定只读它: 短锁 clone `Arc` 后立刻释放, 于是重扫/导入(持插件句柄写锁, 8s × N)期间
+    /// 取链/搜索/歌词的判定照跑. 快照的发布点全在插件宿主写路径末尾
+    /// (见 `plugins::route::RouteSnapshot` 的注释), 这里只读不写.
+    route_snapshot: plugins::RouteSnapshotHandle,
 }
 
 impl Core {
@@ -79,6 +86,16 @@ impl Core {
     fn plugin_host_write(&self) -> RwLockWriteGuard<'_, PluginHost> {
         self.plugin_host.write().unwrap_or_else(|e| e.into_inner())
     }
+
+    /// 路由判定快照(**只取一次短锁**, `Arc::clone` 后立刻释放).
+    ///
+    /// 之后判定/取 provider 全在快照里做, **不再进插件句柄锁** —— 这就是切片 A2 的解耦点.
+    fn route_snapshot(&self) -> Arc<plugins::RouteSnapshot> {
+        self.route_snapshot
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
 }
 
 impl Core {
@@ -96,13 +113,17 @@ impl Core {
         providers.register(netease.clone());
         // 插件宿主:**不返回 Result** —— 插件侧的失败(坏清单/根目录建不出来)只降级成
         // "宿主不可用", 绝不影响 Core 启动(见 plugins/host.rs 头注释的缺省值一节).
-        let plugin_host = Arc::new(RwLock::new(PluginHost::open(data_dir)));
+        let host = PluginHost::open(data_dir);
+        // 快照槽位在宿主构造时就发布了"宿主没开/首扫后"的那份, 这里只是取走同一个 `Arc`.
+        let route_snapshot = host.snapshot_handle();
+        let plugin_host = Arc::new(RwLock::new(host));
         Ok(Self {
             store,
             session,
             providers,
             netease,
             plugin_host,
+            route_snapshot,
         })
     }
 
@@ -382,8 +403,10 @@ impl Core {
     }
 
     /// 本次调用该走谁(纯判定; 判定依据见 [`RouteReason`]).
+    ///
+    /// 读**快照**(切片 A2): 重扫/导入持插件句柄写锁期间照样立刻返回.
     pub fn plugin_route_plan(&self, cap: Capability) -> RoutePlan {
-        self.plugin_host_read().route_plan(cap)
+        self.route_snapshot().plan(cap)
     }
 
     /// 产品路径的**唯一路由入口**: 判定 + 取到两边 provider(`Arc`), 之后调用方不持锁.
@@ -391,11 +414,11 @@ impl Core {
     /// 插件命中失败(超时/脚本错/协议错)的回落由 [`plugins::route::call_routed`] 做,
     /// 判定原因(`RouteReason`)与回落(`RouteUsed`)都进日志 + [`plugins::last_route_event`].
     pub fn route_decision(&self, cap: Capability) -> RouteDecision {
-        let plan = self.plugin_host_read().route_plan(cap);
+        // 判定 + 插件 provider 全部来自**快照**(一次短锁 clone, 之后不再碰插件句柄锁).
+        let snapshot = self.route_snapshot();
+        let plan = snapshot.plan(cap);
         plugins::route::warn_plan(cap, &plan);
-        let plugin = plan
-            .plugin_id()
-            .and_then(|id| self.plugin_host_read().provider(id));
+        let plugin = plan.plugin_id().and_then(|id| snapshot.provider(id));
         RouteDecision {
             capability: cap,
             plan,

@@ -78,6 +78,22 @@
 //!
 //! `ScriptProvider::id()` 恒为 `"script"`, 所以路由**必须**认"插件 id -> provider"这张表
 //! (见 [`PluginRegistry`] 头注释), `ncm_provider::ProviderRegistry` 不放插件 provider.
+//!
+//! # 路由判定快照(切片 A2: 判定不再进本宿主的锁)
+//!
+//! 判定读的是 [`RouteSnapshot`] 的共享槽位([`Self::snapshot_handle`]), **不读本宿主的
+//! `RwLock`** —— 于是重扫/导入(持写锁, 单插件装载预算 8s × N)期间, 取链/搜索/歌词这些
+//! "只要一次判定"的 FFI 照跑, 不会被排队.
+//!
+//! 快照在本层**所有**会改变判定输入的写路径末尾由 [`Self::publish_snapshot`] 原子替换
+//! (`Arc` 换 `Arc`): [`Self::rebuild`](首扫/`set_enabled`/`set_root`) /
+//! [`Self::rescan`] / [`Self::install_source`] / [`Self::install_with`] /
+//! [`Self::uninstall`] / [`Self::enable`] / [`Self::disable`] /
+//! [`Self::set_route_mode`]. **加新的写路径必须在那里也发布一次**, 否则判定会停在旧视图
+//! (判据用例 `route_tests::route_snapshot_is_republished_by_rescan_and_policy_writes`).
+//!
+//! 锁序仍然只有一条: `Core 锁 -> 插件句柄`. 快照槽位是**叶子锁**(持它时不再取任何锁,
+//! 读侧更是只 clone 一次 `Arc` 就放), 所以不引入新的死锁面.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -89,7 +105,7 @@ use serde::{Deserialize, Serialize};
 
 use super::manager::{ManagerError, ManagerErrorKind, PluginSummary};
 use super::registry::{PluginRegistry, RegistryReport};
-use super::route::{self, RouteMode, RoutePlan};
+use super::route::{self, RouteMode, RoutePlan, RouteSnapshot};
 use super::transport::ReqwestTransport;
 
 /// 宿主策略文件名(与 `credential_policy.json` 同目录、同一落盘手法).
@@ -208,6 +224,10 @@ pub struct PluginHost {
     error: Option<String>,
     /// 路由偏好(用户的显式选择; 落盘 [`ROUTE_FILE`](super::route::ROUTE_FILE)).
     mode: RouteMode,
+    /// 路由判定快照的共享槽位(切片 A2). 与 `Core` 共用**同一个 `Arc`**, 读路径
+    /// (`Core::route_decision`)只 clone 快照, 不取本宿主锁 —— 所以重扫/导入持写锁期间
+    /// 判定照跑. 快照在下面每个写路径末尾由 [`Self::publish_snapshot`] 原子替换.
+    snapshot: super::RouteSnapshotHandle,
 }
 
 impl PluginHost {
@@ -223,6 +243,9 @@ impl PluginHost {
             registry: None,
             error: None,
             mode: RouteMode::load(data_dir),
+            snapshot: std::sync::Arc::new(std::sync::RwLock::new(std::sync::Arc::new(
+                RouteSnapshot::inactive(),
+            ))),
         };
         // 缺省(不扫描)时不建 reqwest 客户端: 少一个后台 runtime 线程、少一次 DNS/UA 初始化.
         if let Err(err) = host.rebuild() {
@@ -240,6 +263,9 @@ impl PluginHost {
             registry: None,
             error: None,
             mode: RouteMode::load(data_dir),
+            snapshot: std::sync::Arc::new(std::sync::RwLock::new(std::sync::Arc::new(
+                RouteSnapshot::inactive(),
+            ))),
         };
         if let Err(err) = host.rebuild() {
             eprintln!("[ncm-plugin] 插件宿主未就绪(不影响 Core 启动): {err}");
@@ -259,6 +285,43 @@ impl PluginHost {
     /// 生效的插件根目录.
     pub fn root(&self) -> PathBuf {
         self.policy.resolve_root(&self.data_dir)
+    }
+
+    // ---------------- 路由快照(切片 A2) ----------------
+
+    /// 路由判定快照的共享槽位. `Core` 在 `open` 时拿走同一个 `Arc`, 读路径靠它绕开本宿主锁.
+    ///
+    /// **只有一处发布点**: [`Self::publish_snapshot`](Self::publish_snapshot)(所有写路径末尾).
+    pub fn snapshot_handle(&self) -> super::RouteSnapshotHandle {
+        self.snapshot.clone()
+    }
+
+    /// 当前快照(短锁 + `Arc::clone`; 之后判定完全不再进锁).
+    ///
+    /// 缺快照(理论上不会发生: 构造期就发布了"宿主没开"的那份)时给
+    /// [`RouteSnapshot::inactive`] 的语义 —— 一律内置, 不 panic.
+    pub fn route_snapshot(&self) -> std::sync::Arc<RouteSnapshot> {
+        let slot = self.snapshot.read().unwrap_or_else(|e| e.into_inner());
+        slot.clone()
+    }
+
+    /// 按当前注册表 + 路由偏好拍一份快照(纯内存, 不碰盘/不碰网络).
+    fn build_snapshot(&self) -> RouteSnapshot {
+        let loaded = match self.registry.as_ref() {
+            Some(registry) => registry.entries(),
+            None => Vec::new(),
+        };
+        RouteSnapshot::new(self.is_active(), self.mode.clone(), loaded)
+    }
+
+    /// **原子替换**快照(`Arc` 换 `Arc`; 读路径永远看到完整的旧值或完整的新值).
+    ///
+    /// 发布纪律: 任何会改变判定输入的写路径(重扫/导入/卸载/启停/`set_root`/
+    /// `set_route_mode`/首扫)末尾都必须调它, 否则判定会停在旧视图.
+    fn publish_snapshot(&self) {
+        let fresh = std::sync::Arc::new(self.build_snapshot());
+        let mut slot = self.snapshot.write().unwrap_or_else(|e| e.into_inner());
+        *slot = fresh;
     }
 
     /// 状态上报(UI 用来解释"为什么列表是空的").
@@ -359,14 +422,19 @@ impl PluginHost {
     /// 写盘失败 ⇒ 内存回滚, 返回 `internal`(与 `set_enabled` 同一手法).
     pub fn set_route_mode(&mut self, mode: RouteMode) -> ProviderResult<()> {
         let previous = std::mem::replace(&mut self.mode, mode);
-        if let Err(io) = self.mode.save(&self.data_dir) {
-            self.mode = previous;
-            return Err(ProviderError::internal(format!(
-                "写 {} 失败: {io}",
-                route::ROUTE_FILE
-            )));
-        }
-        Ok(())
+        let result = match self.mode.save(&self.data_dir) {
+            Ok(()) => Ok(()),
+            Err(io) => {
+                self.mode = previous;
+                Err(ProviderError::internal(format!(
+                    "写 {} 失败: {io}",
+                    route::ROUTE_FILE
+                )))
+            }
+        };
+        // 判定输入变了(失败时已回滚 ⇒ 发布的是回滚后的值, 同样一致) ⇒ 立刻换快照.
+        self.publish_snapshot();
+        result
     }
 
     /// 本次调用该走谁(纯判定, 不碰 provider 调用).
@@ -449,6 +517,31 @@ impl PluginHost {
         lx_events: &[String],
         request_domains: &[String],
     ) -> ProviderResult<RegistryReport> {
+        let result = self.install_source_report(
+            id,
+            name,
+            version,
+            entry,
+            source,
+            lx_events,
+            request_domains,
+        );
+        self.publish_snapshot();
+        result
+    }
+
+    /// [`Self::install_source`] 的本体(发布快照由外层统一做).
+    #[allow(clippy::too_many_arguments)]
+    fn install_source_report(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        entry: &str,
+        source: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ProviderResult<RegistryReport> {
         let Some(registry) = self.registry.as_mut() else {
             return Err(ProviderError::forbidden(
                 "插件宿主未启用: 先打开总开关再导入",
@@ -514,6 +607,14 @@ impl PluginHost {
     /// 路由偏好回 `Auto` 写盘失败时返回 `internal`, 但目录已经删了(不可回滚) —— 下次
     /// 判定会自己报 `selectionMissing` 并回内置.
     pub fn uninstall(&mut self, id: &str) -> ProviderResult<RegistryReport> {
+        let result = self.uninstall_inner(id);
+        // 目录已删/可能已回 `auto` ⇒ 无论成功失败都要让判定看到新视图.
+        self.publish_snapshot();
+        result
+    }
+
+    /// [`Self::uninstall`] 的本体(发布快照由外层统一做).
+    fn uninstall_inner(&mut self, id: &str) -> ProviderResult<RegistryReport> {
         // 借用分两段: 删目录/清状态只需注册表, 改路由偏好要 &mut self(它落自己的盘).
         {
             let Some(registry) = self.registry.as_mut() else {
@@ -550,6 +651,18 @@ impl PluginHost {
             &mut super::manager::PluginManager,
         ) -> Result<super::manager::InstallReport, ManagerError>,
     ) -> ProviderResult<RegistryReport> {
+        let result = self.install_report(run);
+        self.publish_snapshot();
+        result
+    }
+
+    /// [`Self::install_with`] 的本体(发布快照由外层统一做).
+    fn install_report(
+        &mut self,
+        run: impl FnOnce(
+            &mut super::manager::PluginManager,
+        ) -> Result<super::manager::InstallReport, ManagerError>,
+    ) -> ProviderResult<RegistryReport> {
         let Some(registry) = self.registry.as_mut() else {
             return Err(self.inactive_error());
         };
@@ -576,21 +689,28 @@ impl PluginHost {
 
     /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn rescan(&mut self) -> ProviderResult<RegistryReport> {
-        Ok(self.registry_mut()?.scan())
+        let result = self.registry_mut().map(|registry| registry.scan());
+        self.publish_snapshot();
+        result
     }
 
     /// 启用插件并即时装载(失败 ⇒ `Err`, 但"启用"状态已经落盘, 下次重扫会重试装载).
     pub fn enable(&mut self, id: &str) -> ProviderResult<()> {
-        self.registry_mut()?
-            .enable(id)
-            .map_err(|err| to_provider_error(&err))
+        let result = self
+            .registry_mut()
+            .and_then(|registry| registry.enable(id).map_err(|err| to_provider_error(&err)));
+        // 即使失败, 边界状态也可能变了(启用已落盘) ⇒ 照发一次快照.
+        self.publish_snapshot();
+        result
     }
 
     /// 停用插件并摘掉内存里的 provider.
     pub fn disable(&mut self, id: &str) -> ProviderResult<()> {
-        self.registry_mut()?
-            .disable(id)
-            .map_err(|err| to_provider_error(&err))
+        let result = self
+            .registry_mut()
+            .and_then(|registry| registry.disable(id).map_err(|err| to_provider_error(&err)));
+        self.publish_snapshot();
+        result
     }
 
     // ---------------- 内部 ----------------
@@ -607,8 +727,16 @@ impl PluginHost {
             .ok_or_else(|| ProviderError::internal("插件宿主内部状态不一致: registry 缺失"))
     }
 
-    /// 按当前策略重建注册表(不落盘: 落盘归调用方).
+    /// 按当前策略重建注册表(不落盘: 落盘归调用方), 结束时发布一次快照.
     fn rebuild(&mut self) -> ProviderResult<()> {
+        let result = self.rebuild_registry();
+        // 首扫/开关/换根都会改判定输入; 失败时注册表已被摘掉(⇒ 宿主不可用), 同样要发布.
+        self.publish_snapshot();
+        result
+    }
+
+    /// [`Self::rebuild`] 的本体(发布快照由外层统一做).
+    fn rebuild_registry(&mut self) -> ProviderResult<()> {
         self.registry = None;
         self.error = None;
         if !self.policy.enabled {
