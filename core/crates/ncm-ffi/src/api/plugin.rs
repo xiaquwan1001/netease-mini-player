@@ -15,7 +15,10 @@
 //!
 //! | 场景 | kind | retryable |
 //! |---|---|---|
-//! | 总开关没开就 `plugin_enable/disable/rescan` | `forbidden` | false |
+//! | 总开关没开就 `plugin_enable/disable/rescan/install_*/uninstall` | `forbidden` | false |
+//! | 卸载/文件导入的路径不安全(id 非法) | `forbidden` | false |
+//! | URL 导入只收 `https://`(形态不成立) | `forbidden` | false |
+//! | URL 导入抓取失败(DNS/连接/超时/非 2xx) | `network` | **true** |
 //! | 宿主构造失败(根目录/出站客户端建不出来) | `internal` | false |
 //! | 插件 id 没登记(目录不存在/清单坏) | `notFound` | false |
 //! | 清单形状不成立 | `unsupported` | false |
@@ -280,6 +283,67 @@ pub fn plugin_install_script(
             &request_domains,
         )
         .map_err(FfiError::from)?;
+    Ok(rescan_dto(&report))
+}
+
+/// 从**本机文件**导入一个插件(读文件 → 写 `<root>/<id>/{manifest.json,index.js}` 后立即重扫).
+///
+/// `path` 是**绝对路径**(UI 侧只收绝对路径; 也可以用文本输入, 不引文件选择器依赖)。
+/// 口径与 [`plugin_install_script`] 一致: 总开关没开 ⇒ `forbidden`; 文件读不了/不是
+/// UTF-8/超过 2 MiB ⇒ `internal`(`Io`)或 `unsupported`(`Manifest`); 失败**不落任何文件**。
+/// 导入**不**自动启用插件。
+pub fn plugin_install_file(
+    id: String,
+    name: String,
+    version: String,
+    path: String,
+    lx_events: Vec<String>,
+    request_domains: Vec<String>,
+) -> Result<PluginRescanDto, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let report = guard
+        .plugin_install_file(
+            &id,
+            &name,
+            &version,
+            std::path::Path::new(&path),
+            &lx_events,
+            &request_domains,
+        )
+        .map_err(FfiError::from)?;
+    Ok(rescan_dto(&report))
+}
+
+/// 从 **URL** 导入一个插件(只允许 `https://`)。
+///
+/// 三条硬约束全在落盘之前: `https://` 形态、重定向上限(3 跳)、响应体 ≤ 2 MiB; 任一不满足
+/// **不落任何文件**。抓取失败是全仓**唯一**可重试的插件错误(`network` + `retryable = true`),
+/// UI 侧可提示“稍后重试”。导入**不**自动启用插件。
+pub fn plugin_install_url(
+    id: String,
+    name: String,
+    version: String,
+    url: String,
+    lx_events: Vec<String>,
+    request_domains: Vec<String>,
+) -> Result<PluginRescanDto, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let report = guard
+        .plugin_install_url(&id, &name, &version, &url, &lx_events, &request_domains)
+        .map_err(FfiError::from)?;
+    Ok(rescan_dto(&report))
+}
+
+/// 卸载一个插件: 停用 → **删掉 `<root>/<id>`(含该插件的 `data/`)** → 清状态 → 重扫。
+///
+/// - 总开关没开 ⇒ `forbidden`; 非法 id(`..`/`/`/绝对路径/大写) ⇒ `forbidden`;
+/// - 未登记且目录不存在 ⇒ `notFound`; 目录删不掉 ⇒ `internal` 且插件**保持停用**;
+/// - 指向它的路由选择会自动回 `auto`(否则判定永远停在 `selectionMissing`)。
+///
+/// 返回的 `scanned` 恒为空(卸载不“新登记”任何插件), 结果看 `loaded/skipped/failed`。
+pub fn plugin_uninstall(id: String) -> Result<PluginRescanDto, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let report = guard.plugin_uninstall(&id).map_err(FfiError::from)?;
     Ok(rescan_dto(&report))
 }
 

@@ -27,6 +27,11 @@ use ncm_provider::{ProviderError, ProviderResult};
 
 use crate::cache::{CONNECT_TIMEOUT, DOWNLOAD_RETRIES, READ_TIMEOUT};
 
+use super::manager::{
+    check_https_url, read_capped, ManagerError, ManagerErrorKind, MAX_SOURCE_BYTES,
+    MAX_SOURCE_REDIRECTS,
+};
+
 /// 与 `cache::DOWNLOAD_RETRIES` 同档: 只对可重试失败多试一次.
 const TRANSPORT_RETRIES: u32 = DOWNLOAD_RETRIES;
 
@@ -153,6 +158,105 @@ fn classify(err: &reqwest::Error) -> TransportError {
         TransportError::new(format!("插件请求连不上: {detail}"), true)
     } else {
         TransportError::new(detail, false)
+    }
+}
+
+// ------------------------- 插件来源(文件/URL 导入)的抓取 -------------------------
+
+/// URL 导入的**抓取面**: 只负责"把一个 URL 变成脚本文本", 不关心 id/清单/落盘.
+///
+/// 抽成 trait 是为了让 URL 导入的判据(https / 重定向 / 体积 / 非 2xx 不落盘)
+/// 能在**不联网**的用例里跑(测试注入内存实现), 生产实现见 [`HttpsSourceFetcher`].
+///
+/// 失败一律用 [`ManagerError`]: `Network`(可重试) / `UnsafePath`(形态/协议不允许) /
+/// `Manifest`(超限或不是 UTF-8 文本).
+pub trait SourceFetcher: Send + Sync {
+    fn fetch(&self, url: &str) -> Result<String, ManagerError>;
+}
+
+/// 生产抓取器: 与 [`ReqwestTransport`] **同一套 HTTP 口径**(UA/连接超时/整体超时),
+/// 只多两条来源专属约束:
+///
+/// | 约束 | 做法 | 失败表现 |
+/// |---|---|---|
+/// | 只允许 https | `check_https_url` + 最终落地 URL 再查一次 scheme | `ManagerErrorKind::UnsafePath` |
+/// | 重定向有上限 | `redirect::Policy::limited(MAX_SOURCE_REDIRECTS)` | reqwest 报错 ⇒ `Network` |
+/// | 响应体有上限 | 边读边截(`read_capped`) | `ManagerErrorKind::Manifest` |
+/// | 非 2xx 不落盘 | 先判 `status.is_success()` 再读体 | `ManagerErrorKind::Network` |
+///
+/// 用 blocking 客户端的理由与 [`ReqwestTransport`] 完全相同(沙箱/导入都在同步路径上,
+/// async client 在不带 tokio runtime 的线程里 `block_on` 会 panic)。
+pub struct HttpsSourceFetcher {
+    client: reqwest::blocking::Client,
+}
+
+impl HttpsSourceFetcher {
+    /// 生产构造: 不复用插件出站客户端的连接池(导入是一次性动作, 不该跟脚本请求抢限流),
+    /// 但**口径同一份**(同一个 UA、同样的连接/整体超时).
+    pub fn new() -> Result<Self, ManagerError> {
+        let client = reqwest::blocking::Client::builder()
+            .user_agent(crate::identity::platform_profile().ua)
+            .connect_timeout(CONNECT_TIMEOUT)
+            .timeout(READ_TIMEOUT)
+            .redirect(reqwest::redirect::Policy::limited(MAX_SOURCE_REDIRECTS))
+            .build()
+            .map_err(|e| {
+                ManagerError::new(
+                    ManagerErrorKind::Network,
+                    format!("创建插件来源客户端失败: {e}"),
+                )
+            })?;
+        Ok(Self { client })
+    }
+
+    /// 注入现成客户端(测试/定制超时用).
+    pub fn with_client(client: reqwest::blocking::Client) -> Self {
+        Self { client }
+    }
+}
+
+impl SourceFetcher for HttpsSourceFetcher {
+    fn fetch(&self, url: &str) -> Result<String, ManagerError> {
+        // 生产实现自己也裁决一次形态: 不依赖调用方是否先调了 `check_https_url`.
+        check_https_url(url)?;
+        let response = self.client.get(url).send().map_err(|err| {
+            ManagerError::new(
+                ManagerErrorKind::Network,
+                format!(
+                    "抓取插件来源 {url} 失败: {}{}",
+                    crate::netease::error_chain(&err),
+                    crate::netease::proxy_hint()
+                ),
+            )
+        })?;
+        // 重定向跟随后的落地 URL 也必须仍是 https(否则等于被指向明文 http).
+        let final_url = response.url().clone();
+        if final_url.scheme() != "https" {
+            return Err(ManagerError::new(
+                ManagerErrorKind::UnsafePath,
+                format!(
+                    "插件来源重定向到了非 https 地址: {}(只接受 https)",
+                    final_url
+                ),
+            ));
+        }
+        let status = response.status();
+        if !status.is_success() {
+            return Err(ManagerError::new(
+                ManagerErrorKind::Network,
+                format!(
+                    "抓取插件来源 {url} 返回 http {}(只接受 2xx)",
+                    status.as_u16()
+                ),
+            ));
+        }
+        let bytes = read_capped(response, MAX_SOURCE_BYTES)?;
+        String::from_utf8(bytes).map_err(|err| {
+            ManagerError::new(
+                ManagerErrorKind::Manifest,
+                format!("插件来源不是 UTF-8 文本: {err}"),
+            )
+        })
     }
 }
 

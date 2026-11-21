@@ -235,27 +235,83 @@ class _PluginsPageState extends State<PluginsPage> {
     }
   }
 
-  /// 导入一个插件: 用户在弹层里填 id/名称/版本/白名单/事件 + 粘贴脚本正文。
+  /// 导入一个插件: 弹层收 id/名称/版本/白名单/事件 + **三种来源之一**
+  /// (粘贴文本 / 本机文件绝对路径 / URL)。
   ///
-  /// 落盘与校验全在 Rust 侧(`plugin_install_script`): 本页只收集字段、串行调用、重取数。
+  /// 三条入口在 Rust 侧各自收口(`plugin_install_script` / `plugin_install_file` /
+  /// `plugin_install_url`), 落盘与校验全在那边: 本页只收集字段、串行调用、重取数。
   /// 导入**不**自动启用 —— 装进来后单插件开关仍默认关闭(与目录导入同一套纪律)。
-  Future<void> _importScript() async {
+  Future<void> _importPlugin() async {
     final spec = await showAppDialog<_ImportSpec>(
       context,
       builder: (_) => const _ImportPluginDialog(),
     );
     if (spec == null || !mounted) return;
     await _run(rescan: true, () async {
-      final result = await rust.pluginInstallScript(
-        id: spec.id,
-        name: spec.name,
-        version: spec.version,
-        source: spec.source,
-        lxEvents: spec.lxEvents,
-        requestDomains: spec.requestDomains,
-      );
-      return '已导入 ${spec.id}: 装载 ${result.loaded.length} · '
-          '未启用 ${result.skipped.length} · 失败 ${result.failed.length}';
+      // 三选一: Rust 侧三条入口同一套落盘/校验纪律, 本页只负责选入口。
+      final result = switch (spec.kind) {
+        _ImportKind.paste => await rust.pluginInstallScript(
+          id: spec.id,
+          name: spec.name,
+          version: spec.version,
+          source: spec.text,
+          lxEvents: spec.lxEvents,
+          requestDomains: spec.requestDomains,
+        ),
+        _ImportKind.file => await rust.pluginInstallFile(
+          id: spec.id,
+          name: spec.name,
+          version: spec.version,
+          path: spec.text,
+          lxEvents: spec.lxEvents,
+          requestDomains: spec.requestDomains,
+        ),
+        _ImportKind.url => await rust.pluginInstallUrl(
+          id: spec.id,
+          name: spec.name,
+          version: spec.version,
+          url: spec.text,
+          lxEvents: spec.lxEvents,
+          requestDomains: spec.requestDomains,
+        ),
+      };
+      return '已导入 ${spec.id}(${_importKindLabel(spec.kind)}): '
+          '装载 ${result.loaded.length} · 未启用 ${result.skipped.length} · '
+          '失败 ${result.failed.length}';
+    });
+  }
+
+  /// 卸载一个插件: **二次确认**(删的是盘上真东西, 不可撤销)。
+  ///
+  /// 文案把边界说完整: 删插件目录(脚本/清单/它自己的 `data/`), 路由选择回「自动」,
+  /// 内置音源不受影响。成功后重取数(列表里就没有它了)。
+  Future<void> _uninstall(rust.PluginSummaryDto summary) async {
+    final confirmed = await showAppDialog<bool>(
+      context,
+      builder: (ctx) => AlertDialog(
+        title: Text('卸载 ${summary.id}?'),
+        content: Text(
+          '会从插件目录删除「${summary.id}」这个子目录: 脚本、清单, '
+          '以及它自己的本地数据 data/。\n'
+          '如果音源路由正指向它, 会自动回到「自动」; 内置音源不受影响。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('卸载'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _run(() async {
+      final result = await rust.pluginUninstall(id: summary.id);
+      return '已卸载 ${summary.id}: 装载 ${result.loaded.length} · '
+          '未启用 ${result.skipped.length}';
     });
   }
 
@@ -580,7 +636,7 @@ class _PluginsPageState extends State<PluginsPage> {
       mainAxisSize: MainAxisSize.min,
       children: [
         TextButton(
-          onPressed: canImport ? _importScript : null,
+          onPressed: canImport ? _importPlugin : null,
           style: TextButton.styleFrom(
             visualDensity: VisualDensity.compact,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -632,7 +688,13 @@ class _PluginsPageState extends State<PluginsPage> {
     final sourcesText = summary.sources.isEmpty
         ? '平台: 未声明'
         : '平台: ${summary.sources.join(', ')}';
-    return SwitchListTile(
+    // 卸载入口与启停同排: 坏条目(error != null)也允许卸载(这是清垃圾的唯一入口),
+    // 但宿主总开关没开或有写操作在飞时禁用(与其它写入口同口径)。
+    final canUninstall = status.enabled && !_busy;
+    return Row(
+      children: [
+        Expanded(
+          child: SwitchListTile(
       value: summary.enabled,
       onChanged: canToggle ? (value) => _togglePlugin(summary, value) : null,
       isThreeLine: true,
@@ -665,6 +727,15 @@ class _PluginsPageState extends State<PluginsPage> {
           ],
         ],
       ),
+          ),
+        ),
+        IconButton(
+          onPressed: canUninstall ? () => _uninstall(summary) : null,
+          icon: const Icon(Icons.delete_outline),
+          tooltip: '卸载',
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 
@@ -774,21 +845,48 @@ class _PluginsPageState extends State<PluginsPage> {
   }
 }
 
+/// 导入来源: 与 Rust 侧三条入口一一对应(粘贴文本 / 本机文件 / URL)。
+enum _ImportKind { paste, file, url }
+
+String _importKindLabel(_ImportKind kind) => switch (kind) {
+  _ImportKind.paste => '粘贴文本',
+  _ImportKind.file => '本机文件',
+  _ImportKind.url => 'URL',
+};
+
+/// 来源字段的展示名(用于校验文案与标签)。
+String _payloadLabel(_ImportKind kind) => switch (kind) {
+  _ImportKind.paste => '脚本正文',
+  _ImportKind.file => '文件路径',
+  _ImportKind.url => 'URL',
+};
+
+/// 浅层形态校验(真正的规则与落盘都在 Rust 侧): 协议必须是 https 且带主机名。
+bool _looksHttpsUrl(String raw) {
+  final uri = Uri.tryParse(raw.trim());
+  return uri != null && uri.scheme == 'https' && uri.host.isNotEmpty;
+}
+
 /// 导入弹层收集到的字段(全部是用户输入; 校验与落盘都在 Rust 侧)。
 class _ImportSpec {
   const _ImportSpec({
+    required this.kind,
     required this.id,
     required this.name,
     required this.version,
-    required this.source,
+    required this.text,
     required this.lxEvents,
     required this.requestDomains,
   });
 
+  /// 来源种类(决定调哪条 FFI)。
+  final _ImportKind kind;
   final String id;
   final String name;
   final String version;
-  final String source;
+
+  /// 按 [kind] 解释: 粘贴时的脚本正文 / 文件的绝对路径 / 抓取 URL。
+  final String text;
   final List<String> lxEvents;
   final List<String> requestDomains;
 }
@@ -811,7 +909,12 @@ class _ImportPluginDialogState extends State<_ImportPluginDialog> {
   final _version = TextEditingController(text: '1.0.0');
   final _events = TextEditingController(text: 'musicUrl');
   final _domains = TextEditingController();
-  final _source = TextEditingController();
+
+  /// 三种来源共用一个输入框(按 [_kind] 解释内容), 切换来源时内容保留。
+  final _payload = TextEditingController();
+
+  /// 当前选中的来源(缺省粘贴文本, 与历史行为一致)。
+  _ImportKind _kind = _ImportKind.paste;
   String? _error;
 
   @override
@@ -821,7 +924,7 @@ class _ImportPluginDialogState extends State<_ImportPluginDialog> {
     _version.dispose();
     _events.dispose();
     _domains.dispose();
-    _source.dispose();
+    _payload.dispose();
     super.dispose();
   }
 
@@ -835,20 +938,27 @@ class _ImportPluginDialogState extends State<_ImportPluginDialog> {
     final id = _id.text.trim();
     final name = _name.text.trim();
     final version = _version.text.trim();
-    final source = _source.text;
-    if (id.isEmpty ||
-        name.isEmpty ||
-        version.isEmpty ||
-        source.trim().isEmpty) {
-      setState(() => _error = 'id / 名称 / 版本 / 脚本正文都不能为空');
+    final payload = _payload.text;
+    if (id.isEmpty || name.isEmpty || version.isEmpty) {
+      setState(() => _error = 'id / 名称 / 版本都不能为空');
+      return;
+    }
+    if (payload.trim().isEmpty) {
+      setState(() => _error = '${_payloadLabel(_kind)}不能为空');
+      return;
+    }
+    // URL 的形态在这里先拦一道(省一次往返): Rust 侧在抓取之前也会再判一次。
+    if (_kind == _ImportKind.url && !_looksHttpsUrl(payload)) {
+      setState(() => _error = '只接受 https:// 开头的链接');
       return;
     }
     Navigator.of(context).pop(
       _ImportSpec(
+        kind: _kind,
         id: id,
         name: name,
         version: version,
-        source: source,
+        text: payload,
         lxEvents: _splitCsv(_events.text),
         requestDomains: _splitCsv(_domains.text),
       ),
@@ -865,6 +975,33 @@ class _ImportPluginDialogState extends State<_ImportPluginDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // 来源三选一: 粘贴正文 / 本机文件绝对路径 / URL(没有文件选择器依赖, 所以收路径)。
+            SegmentedButton<_ImportKind>(
+              segments: const [
+                ButtonSegment(
+                  value: _ImportKind.paste,
+                  label: Text('粘贴文本'),
+                  icon: Icon(Icons.edit_note),
+                ),
+                ButtonSegment(
+                  value: _ImportKind.file,
+                  label: Text('本机文件'),
+                  icon: Icon(Icons.folder_open),
+                ),
+                ButtonSegment(
+                  value: _ImportKind.url,
+                  label: Text('URL'),
+                  icon: Icon(Icons.link),
+                ),
+              ],
+              selected: {_kind},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) => setState(() {
+                _kind = selection.first;
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _id,
               decoration: const InputDecoration(
@@ -894,19 +1031,40 @@ class _ImportPluginDialogState extends State<_ImportPluginDialog> {
                 helperText: '逗号分隔(api.example.com / *.example.com); 留空 = 全部拒绝',
               ),
             ),
-            TextField(
-              controller: _source,
-              minLines: 6,
-              maxLines: 12,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontFamily: 'monospace',
+            if (_kind == _ImportKind.paste)
+              TextField(
+                controller: _payload,
+                minLines: 6,
+                maxLines: 12,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+                decoration: const InputDecoration(
+                  labelText: '脚本正文',
+                  alignLabelWithHint: true,
+                  helperText: '粘贴 LX 兼容脚本(lx.on / lx.request ...)',
+                ),
+              )
+            else if (_kind == _ImportKind.file)
+              TextField(
+                controller: _payload,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+                decoration: const InputDecoration(
+                  labelText: '文件绝对路径',
+                  helperText: '本机 .js 文件的绝对路径(UTF-8, ≤ 2 MiB)',
+                ),
+              )
+            else
+              TextField(
+                controller: _payload,
+                style: theme.textTheme.bodySmall,
+                decoration: const InputDecoration(
+                  labelText: '脚本 URL',
+                  helperText: '只接受 https:// 直链(≤ 2 MiB, 最多跟随 3 次重定向)',
+                ),
               ),
-              decoration: const InputDecoration(
-                labelText: '脚本正文',
-                alignLabelWithHint: true,
-                helperText: '粘贴 LX 兼容脚本(lx.on / lx.request ...)',
-              ),
-            ),
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(

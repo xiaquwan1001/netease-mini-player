@@ -87,10 +87,24 @@ fn write_before_enabling_host_is_forbidden() {
         "detail 不能丢, 否则 UI 只剩一个 kind"
     );
 
-    // 三个写操作同口径: 都走 registry_mut(), 不该有一个漏网
+    // 写操作同口径: 都走 registry_mut(), 不该有一个漏网
     let disable = host.disable("demo").expect_err("未启用时停用必须失败");
     let rescan = host.rescan().expect_err("未启用时重扫必须失败");
-    for err in [disable, rescan] {
+    let install_file = host
+        .install_file(
+            "demo",
+            "x",
+            "1.0.0",
+            Path::new("/nonexistent/chain.js"),
+            &[],
+            &[],
+        )
+        .expect_err("未启用时文件导入必须失败");
+    let install_url = host
+        .install_url("demo", "x", "1.0.0", "https://cdn.test/a.js", &[], &[])
+        .expect_err("未启用时 URL 导入必须失败");
+    let uninstall = host.uninstall("demo").expect_err("未启用时卸载必须失败");
+    for err in [disable, rescan, install_file, install_url, uninstall] {
         let ffi = super::FfiError::from(err);
         assert_eq!(ffi.kind, ProviderErrorKind::Forbidden.as_str());
         assert!(!ffi.retryable);
@@ -290,4 +304,108 @@ fn route_plan_dto_mirrors_plan() {
     assert_eq!(builtin.target, "builtin");
     assert_eq!(builtin.plugin_id, None, "内置目标没有插件 id");
     assert_eq!(builtin.reason, "ambiguous");
+}
+
+// ---------------- 导入补全(文件 / URL / 卸载)在导出层的端到端 ----------------
+
+/// 文件导入 → 列表视图 → 启用 → 卸载: 四个视图都回到“没有插件”, 目录也不在了。
+///
+/// 全局单例那一层薄壳(取锁 + 转发)由 clippy/codegen 保证形状, 这里测的是
+/// “导出层拿到的 `RegistryReport` 能被 `rescan_dto` 完整搬出去 + 错误仍只有一条口径”。
+#[test]
+fn install_file_then_uninstall_round_trip() {
+    let dir = TempDir::new("install-file");
+    let outside = TempDir::new("install-file-src");
+    let src = outside.path().join("chain.js");
+    std::fs::write(
+        &src,
+        "lx.on('musicUrl', async () => 'https://cdn.test/a.mp3');",
+    )
+    .expect("写来源文件");
+    enable_policy(dir.path());
+    let mut host = PluginHost::open(dir.path());
+
+    // 未登记 id 的卸载 ⇒ notFound(已有词表, 不新造).
+    let ffi = super::FfiError::from(host.uninstall("ghost").expect_err("未登记"));
+    assert_eq!(ffi.kind, ProviderErrorKind::NotFound.as_str());
+    assert!(!ffi.retryable);
+
+    // 坏来源路径 ⇒ internal(Io), 且不落任何文件.
+    let ffi = super::FfiError::from(
+        host.install_file(
+            "bad",
+            "x",
+            "1.0.0",
+            &outside.path().join("nope.js"),
+            &[],
+            &[],
+        )
+        .expect_err("不存在必须拒绝"),
+    );
+    assert_eq!(ffi.kind, ProviderErrorKind::Internal.as_str(), "{ffi}");
+    assert!(!dir.path().join("plugins").join("bad").exists());
+
+    // 正常导入: 报告能完整搬到 DTO(未启用 ⇒ skipped 而不是 failed).
+    let report = host
+        .install_file(
+            "fromfile",
+            "文件插件",
+            "1.0.0",
+            &src,
+            &[String::from("musicUrl")],
+            &[],
+        )
+        .expect("文件导入应成功");
+    let dto = rescan_dto(&report);
+    assert_eq!(dto.scanned, vec!["fromfile".to_string()]);
+    assert!(dto.loaded.is_empty(), "导入不自动启用");
+    assert_eq!(dto.skipped, vec!["fromfile".to_string()]);
+    assert!(dto.failed.is_empty());
+
+    // 列表视图带上新插件(默认停用).
+    let sources = host.sources();
+    let rows: Vec<_> = host
+        .summaries()
+        .iter()
+        .map(|summary| summary_dto(summary, &sources))
+        .collect();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].name, "文件插件");
+    assert!(!rows[0].enabled, "缺省停用被断言钉住");
+
+    // 启用后卸载: provider 摘掉 + 报告四桶皆空 + 目录消失.
+    host.enable("fromfile").expect("启用");
+    assert_eq!(
+        status_dto(&host.status()).loaded,
+        vec!["fromfile".to_string()]
+    );
+    let dto = rescan_dto(&host.uninstall("fromfile").expect("卸载"));
+    assert!(dto.scanned.is_empty(), "卸载不新登记任何插件");
+    assert!(dto.loaded.is_empty() && dto.skipped.is_empty() && dto.failed.is_empty());
+    assert!(host.summaries().is_empty());
+    assert!(host.provider("fromfile").is_none());
+    assert!(!dir.path().join("plugins").join("fromfile").exists());
+}
+
+/// URL 导入的形态裁决在导出层同样是 `forbidden`(UnsafePath 不可重试), 且不联网/不落盘。
+#[test]
+fn url_import_rejects_non_https_at_export_layer() {
+    let dir = TempDir::new("install-url");
+    enable_policy(dir.path());
+    let mut host = PluginHost::open(dir.path());
+
+    for url in ["http://cdn.test/a.js", "cdn.test/a.js", "https://"] {
+        let ffi = super::FfiError::from(
+            host.install_url("demo", "x", "1.0.0", url, &[], &[])
+                .expect_err("非 https 必须拒绝"),
+        );
+        assert_eq!(
+            ffi.kind,
+            ProviderErrorKind::Forbidden.as_str(),
+            "{url}: {ffi}"
+        );
+        assert!(!ffi.retryable, "形态错误重试不会变: {url}");
+        assert!(!ffi.detail.is_empty(), "detail 不能丢: {url}");
+        assert!(!dir.path().join("plugins").join("demo").exists());
+    }
 }

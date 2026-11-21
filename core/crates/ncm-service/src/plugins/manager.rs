@@ -82,12 +82,22 @@ use ncm_plugin::{
 };
 use serde::{Deserialize, Serialize};
 
+use super::transport::{HttpsSourceFetcher, SourceFetcher};
 use crate::fsutil;
 
 /// 启停状态文件名(`<root>/plugins-state.json`).
 pub const STATE_FILE: &str = "plugins-state.json";
 /// 单个清单文件的大小上限(正常清单是几百字节; 超了就是坏文件或攻击).
 pub const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
+/// 导入来源(文件 / URL 抓到的脚本文本)的大小上限.
+///
+/// 真实 LX 脚本几十 KB 到几百 KB, 2 MiB 足够宽; 超了按清单类错误拒(坏文件/攻击/下错了东西),
+/// **不落任何文件**.
+pub const MAX_SOURCE_BYTES: usize = 2 * 1024 * 1024;
+/// 文件 / URL 导入写的入口文件名(与粘贴文本导入同口径: 单层文件名).
+pub const DEFAULT_ENTRY: &str = "index.js";
+/// URL 导入允许的最大重定向跳数(每一跳落地 URL 仍必须是 https).
+pub const MAX_SOURCE_REDIRECTS: usize = 3;
 /// 状态文件格式版本(改形状才加, 读的时候不校验).
 ///
 /// v2 起多出 `failures` 段(连续失败计数 + 自动禁用原因); 读 v1 文件时该段缺省为空,
@@ -111,6 +121,8 @@ pub enum ManagerErrorKind {
     Manifest,
     /// 文件系统失败(建目录/读写/落盘).
     Io,
+    /// 出站失败(URL 导入的 DNS/连接/超时/非 2xx): **唯一**可重试的一类.
+    Network,
     /// 装载沙箱失败(语法错误/初始化超时).
     Plugin,
 }
@@ -123,6 +135,7 @@ impl ManagerErrorKind {
             ManagerErrorKind::UnsafePath => "unsafePath",
             ManagerErrorKind::Manifest => "manifest",
             ManagerErrorKind::Io => "io",
+            ManagerErrorKind::Network => "network",
             ManagerErrorKind::Plugin => "plugin",
         }
     }
@@ -280,6 +293,9 @@ pub struct PluginManager {
     enabled: BTreeMap<String, bool>,
     /// 连续装载失败计数(键 = 插件 id); 与 `enabled` 同一份状态文件.
     failures: BTreeMap<String, PluginFailureRecord>,
+    /// URL 导入的抓取器(测试/headless 可注入); `None` = 首次用到时才建生产实现
+    /// (没人导入 URL 就不建 HTTP 客户端, 与宿主"缺省零成本"同口径).
+    source_fetcher: Option<Arc<dyn SourceFetcher>>,
 }
 
 impl PluginManager {
@@ -300,6 +316,7 @@ impl PluginManager {
             errors: BTreeMap::new(),
             enabled,
             failures,
+            source_fetcher: None,
         })
     }
 
@@ -450,6 +467,175 @@ impl PluginManager {
         }
         Ok(report)
     }
+    /// 从**本机文件**装一个插件(读文件 → 走 [`Self::install_source`] 的落盘路径).
+    ///
+    /// 语义:
+    /// - 来源文件必须存在、是普通文件、是 UTF-8 文本、且不超过 [`MAX_SOURCE_BYTES`];
+    ///   任一不满足都在**读完之后不落盘**(与粘贴文本导入同一条纪律: 坏输入不留痕迹);
+    /// - 入口文件名固定 [`DEFAULT_ENTRY`](与 `plugin_install_script` 同口径);
+    /// - id/name/version 的校验、覆盖语义、`data/` 保留全部沿用 [`Self::install_source`].
+    pub fn install_file(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        path: &Path,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> Result<InstallReport, ManagerError> {
+        let source = read_source_file(path)?;
+        self.install_source(
+            id,
+            name,
+            version,
+            DEFAULT_ENTRY,
+            &source,
+            lx_events,
+            request_domains,
+        )
+    }
+
+    /// 从 **URL** 装一个插件(抓取 → 走 [`Self::install_source`] 的落盘路径).
+    ///
+    /// 三条硬判据(全部在**落盘之前**, 失败不留任何文件):
+    /// 1. 只允许 `https://`([`check_https_url`], 空 URL/无主机/http/ftp 一律 `UnsafePath`);
+    /// 2. 抓取客户端带连接/整体超时 + 重定向上限 [`MAX_SOURCE_REDIRECTS`], 落地 URL 仍须 https
+    ///    (见 `transport::HttpsSourceFetcher`);
+    /// 3. 响应体上限 [`MAX_SOURCE_BYTES`](边读边截, 不是先读全再判).
+    ///
+    /// 抓取失败(连不上/超时/非 2xx)映射成 [`ManagerErrorKind::Network`] —— 全仓唯一
+    /// `retryable = true` 的管理层错误.
+    pub fn install_url(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        url: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> Result<InstallReport, ManagerError> {
+        check_https_url(url)?;
+        let fetcher = self.fetcher()?;
+        let source = fetcher.fetch(url)?;
+        // 抓取器已经按上限边读边截; 这里再判一次是**对注入实现的兜底**(体积是契约的一部分,
+        // 不能指望每个 `SourceFetcher` 都自带).
+        if source.len() > MAX_SOURCE_BYTES {
+            return Err(source_too_large(source.len() as u64));
+        }
+        self.install_source(
+            id,
+            name,
+            version,
+            DEFAULT_ENTRY,
+            &source,
+            lx_events,
+            request_domains,
+        )
+    }
+
+    /// 注入 URL 抓取器(测试/headless): 生产口径就是 `transport::HttpsSourceFetcher`.
+    pub fn with_source_fetcher(mut self, fetcher: Arc<dyn SourceFetcher>) -> Self {
+        self.source_fetcher = Some(fetcher);
+        self
+    }
+
+    /// 卸载一个插件: 停用 → 删目录 → 清状态 → 重扫.
+    ///
+    /// 判据与顺序:
+    /// 1. **id 先过路径安全校验**([`ncm_plugin::manifest::validate_id`]): `..` / `/` /
+    ///    绝对路径 / 大写 / 点号一律 `UnsafePath`, 不碰盘;
+    /// 2. 目录取已登记的 canonical 路径(坏条目/未登记则取 `<root>/<id>`, 必须存在),
+    ///    且必须**严格落在 canonical 的 root 内**、不是 root 本身 ⇒ 只删 `<root>/<id>` 这一棵;
+    /// 3. 启用中的插件**先停用**(落盘 `enabled=false`), 再删目录;
+    /// 4. 删目录 = `remove_dir_all`, 该插件的 `data/` 存储目录**一并删除**(不提供保留开关:
+    ///    "保留 data 但删清单" 会留下一个永远报错的半插件目录);
+    /// 5. 最后清掉 `enabled`/`failures` 里该 id 的记录(**同一份原子写**), 并从内存登记表移除.
+    ///
+    /// 失败回滚策略(明确写死):
+    /// - 第 1/2 步失败 ⇒ 完全没动盘;
+    /// - 第 3 步失败 ⇒ 什么都没删, 插件仍启用;
+    /// - 第 4 步失败 ⇒ **插件保持停用**(不会留下"启用但删了一半"的目录), 用户可重试
+    ///   或改回启用;
+    /// - 第 5 步(状态落盘)失败 ⇒ 目录已经删了(**不可回滚**), 只留下一条指向不存在插件的
+    ///   陈旧状态行; 该行在下次扫描时不影响其它插件, 也不参与 `list()`.
+    ///
+    /// 路由偏好(`plugin_route.json`)不归本层管: 调用方([`PluginHost`](super::host::PluginHost))
+    /// 负责把指向该 id 的选择回 `Auto`.
+    pub fn uninstall(&mut self, id: &str) -> Result<(), ManagerError> {
+        // 1) 路径安全: id 必须是合法插件 id(拦截 `..` / `/` / 绝对路径 / 大写 / 点号).
+        ncm_plugin::manifest::validate_id(id).map_err(|err| {
+            ManagerError::new(
+                ManagerErrorKind::UnsafePath,
+                format!("拒绝卸载 `{id}`: {err}"),
+            )
+        })?;
+        // 2) 目录: 已登记用 canonical 路径; 坏条目/未登记按 `<root>/<id>` 找(必须存在).
+        let registered = self.plugins.get(id).map(|plugin| plugin.dir.clone());
+        let dir = match registered {
+            Some(dir) => dir,
+            None => {
+                let candidate = self.root.join(id);
+                match std::fs::canonicalize(&candidate) {
+                    Ok(dir) => dir,
+                    Err(err) => {
+                        // 坏条目要把原因带出来(否则用户只看到"未登记").
+                        let reason = self.errors.get(id).cloned();
+                        return Err(match reason {
+                            Some(reason) => ManagerError::new(
+                                ManagerErrorKind::NotInstalled,
+                                format!(
+                                    "插件 `{id}` 登记失败({reason}), 且目录 {} 不可访问: {err}",
+                                    candidate.display()
+                                ),
+                            ),
+                            None => ManagerError::not_installed(id),
+                        });
+                    }
+                }
+            }
+        };
+        // 3) 只许删 root 之下的子目录: 目录本身不能是 root, 也不许 canonical 后跳出 root.
+        let canonical_root = std::fs::canonicalize(&self.root).map_err(|err| {
+            ManagerError::io(&format!("解析插件根目录 {}", self.root.display()), &err)
+        })?;
+        if dir == canonical_root || !dir.starts_with(&canonical_root) {
+            return Err(ManagerError::new(
+                ManagerErrorKind::UnsafePath,
+                format!(
+                    "拒绝卸载 `{id}`: 目录 {} 不是插件根目录 {} 下的子目录",
+                    dir.display(),
+                    canonical_root.display()
+                ),
+            ));
+        }
+        // 4) 启用中 ⇒ 先停用(落盘), 之后任何失败都保持"已停用"这个安全态.
+        if self.is_enabled(id) {
+            self.disable(id)?;
+        }
+        // 5) 删目录(内容是插件脚本/清单/该插件自己的 data/).
+        std::fs::remove_dir_all(&dir)
+            .map_err(|err| ManagerError::io(&format!("删除插件目录 {}", dir.display()), &err))?;
+        // 6) 内存登记 + 状态记录一起清(状态一次原子写).
+        self.plugins.remove(id);
+        self.errors.remove(id);
+        let id_owned = id.to_string();
+        self.mutate_state(move |manager| {
+            manager.enabled.remove(&id_owned);
+            manager.failures.remove(&id_owned);
+        })?;
+        Ok(())
+    }
+
+    /// URL 抓取器: 注入过就用注入的; 否则首次用到时建生产实现并缓存(不联网就不建客户端).
+    fn fetcher(&mut self) -> Result<Arc<dyn SourceFetcher>, ManagerError> {
+        if let Some(fetcher) = &self.source_fetcher {
+            return Ok(fetcher.clone());
+        }
+        let fetcher: Arc<dyn SourceFetcher> = Arc::new(HttpsSourceFetcher::new()?);
+        self.source_fetcher = Some(fetcher.clone());
+        Ok(fetcher)
+    }
+
     /// 重新扫描自己的根目录.
     pub fn rescan(&mut self) -> InstallReport {
         let root = self.root.clone();
@@ -758,6 +944,110 @@ impl std::fmt::Debug for PluginManager {
             .field("failures", &self.failures)
             .finish_non_exhaustive()
     }
+}
+
+/// 来源超限的错(文件与 URL 两条入口共用一份文案).
+fn source_too_large(bytes: u64) -> ManagerError {
+    ManagerError::new(
+        ManagerErrorKind::Manifest,
+        format!("插件来源有 {bytes} 字节, 超过上限 {MAX_SOURCE_BYTES} 字节(2 MiB)"),
+    )
+}
+
+/// 按上限读一个 reader: 边读边截, **不**先读全再判(否则上限就形同虚设).
+pub(crate) fn read_capped(
+    reader: impl std::io::Read,
+    limit: usize,
+) -> Result<Vec<u8>, ManagerError> {
+    use std::io::Read;
+    let mut buf = Vec::new();
+    let read = reader
+        .take(limit as u64 + 1)
+        .read_to_end(&mut buf)
+        .map_err(|err| {
+            ManagerError::new(ManagerErrorKind::Io, format!("读取插件来源失败: {err}"))
+        })?;
+    if read > limit {
+        return Err(source_too_large(read as u64));
+    }
+    Ok(buf)
+}
+
+/// 读**文件**来源: 必须存在 / 是普通文件 / 不超限 / 是 UTF-8 文本.
+///
+/// 先看 metadata 再按上限读一遍: 前者给出人读的大小, 后者挡住"读的同时文件被长大".
+fn read_source_file(path: &Path) -> Result<String, ManagerError> {
+    let meta = std::fs::metadata(path).map_err(|err| {
+        ManagerError::new(
+            ManagerErrorKind::Io,
+            format!("读插件来源文件 {} 失败: {err}", path.display()),
+        )
+    })?;
+    if !meta.is_file() {
+        return Err(ManagerError::new(
+            ManagerErrorKind::Io,
+            format!("插件来源 {} 不是普通文件", path.display()),
+        ));
+    }
+    if meta.len() > MAX_SOURCE_BYTES as u64 {
+        return Err(source_too_large(meta.len()));
+    }
+    let file = std::fs::File::open(path).map_err(|err| {
+        ManagerError::new(
+            ManagerErrorKind::Io,
+            format!("打开插件来源文件 {} 失败: {err}", path.display()),
+        )
+    })?;
+    let bytes = read_capped(file, MAX_SOURCE_BYTES)?;
+    String::from_utf8(bytes).map_err(|err| {
+        ManagerError::new(
+            ManagerErrorKind::Manifest,
+            format!("插件来源不是 UTF-8 文本: {err}"),
+        )
+    })
+}
+
+/// URL 形态判据(**纯字符串, 不联网**): 只接受 `https://` 且必须有主机名.
+///
+/// 拒绝 `http://`(明文)、空串、无 scheme、`https://` 后直接跟路径的写法。
+/// 这里只判"形状", 真正的抓取/重定向/体积由 `transport::HttpsSourceFetcher` 裁决。
+pub fn check_https_url(url: &str) -> Result<(), ManagerError> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err(ManagerError::new(
+            ManagerErrorKind::UnsafePath,
+            "URL 不能为空",
+        ));
+    }
+    let Some(rest) = trimmed
+        .strip_prefix("https://")
+        .or_else(|| trimmed.strip_prefix("HTTPS://"))
+    else {
+        let scheme = trimmed
+            .find("://")
+            .map(|at| &trimmed[..at])
+            .unwrap_or("(无 scheme)");
+        return Err(ManagerError::new(
+            ManagerErrorKind::UnsafePath,
+            format!("只接受 https:// 开头的插件来源, 实际是 `{scheme}`"),
+        ));
+    };
+    // authority = 第一个 `/` `?` `#` 之前的部分; 去掉 userinfo 与端口后必须有主机名.
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = authority
+        .rsplit('@')
+        .next()
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or_default();
+    if host.is_empty() {
+        return Err(ManagerError::new(
+            ManagerErrorKind::UnsafePath,
+            format!("URL `{trimmed}` 缺少主机名"),
+        ));
+    }
+    Ok(())
 }
 
 /// 读启停状态 + 连续失败计数; 文件缺失/损坏一律当"没有声明"(全部停用, 无失败记录), 不 panic.

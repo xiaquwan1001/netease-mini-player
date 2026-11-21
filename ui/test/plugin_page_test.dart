@@ -163,6 +163,101 @@ class _FakePluginHost implements RustLibApi {
   }
 
   @override
+  Future<rust.PluginRescanDto> crateApiPluginPluginInstallFile({
+    required String id,
+    required String name,
+    required String version,
+    required String path,
+    required List<String> lxEvents,
+    required List<String> requestDomains,
+  }) async {
+    calls.add('installFile($id|$name|$version|$path)');
+    if (!enabled) {
+      throw const rust.FfiError(
+        kind: 'forbidden',
+        retryable: false,
+        detail: '插件宿主未启用',
+      );
+    }
+    summaries = [...summaries, _summary(id, name: name, sources: const [])];
+    return rust.PluginRescanDto(
+      scanned: [id],
+      loaded: const [],
+      skipped: [id],
+      failed: const [],
+    );
+  }
+
+  @override
+  Future<rust.PluginRescanDto> crateApiPluginPluginInstallUrl({
+    required String id,
+    required String name,
+    required String version,
+    required String url,
+    required List<String> lxEvents,
+    required List<String> requestDomains,
+  }) async {
+    calls.add('installUrl($id|$name|$version|$url)');
+    if (!enabled) {
+      throw const rust.FfiError(
+        kind: 'forbidden',
+        retryable: false,
+        detail: '插件宿主未启用',
+      );
+    }
+    if (!url.startsWith('https://')) {
+      throw const rust.FfiError(
+        kind: 'forbidden',
+        retryable: false,
+        detail: '只接受 https:// 开头的插件来源',
+      );
+    }
+    summaries = [...summaries, _summary(id, name: name, sources: const [])];
+    return rust.PluginRescanDto(
+      scanned: [id],
+      loaded: const [],
+      skipped: [id],
+      failed: const [],
+    );
+  }
+
+  @override
+  Future<rust.PluginRescanDto> crateApiPluginPluginUninstall({
+    required String id,
+  }) async {
+    calls.add('uninstall($id)');
+    if (!enabled) {
+      throw const rust.FfiError(
+        kind: 'forbidden',
+        retryable: false,
+        detail: '插件宿主未启用',
+      );
+    }
+    if (!summaries.any((s) => s.id == id)) {
+      throw const rust.FfiError(
+        kind: 'notFound',
+        retryable: false,
+        detail: '插件未登记',
+      );
+    }
+    summaries = _summariesWithout(id);
+    // Rust 侧: 指向被卸载 id 的路由选择回 auto。
+    if (routeMode == 'plugin:$id') routeMode = 'auto';
+    return const rust.PluginRescanDto(
+      scanned: [],
+      loaded: [],
+      skipped: [],
+      failed: [],
+    );
+  }
+
+  /// 卸载后的替身列表(去掉该 id)。
+  List<rust.PluginSummaryDto> _summariesWithout(String id) => [
+    for (final s in summaries)
+      if (s.id != id) s,
+  ];
+
+  @override
   Future<List<rust.PluginLogDto>> crateApiPluginPluginLogs() async {
     calls.add('logs');
     return logBatches.isEmpty ? const [] : logBatches.removeAt(0);
@@ -579,6 +674,128 @@ void main() {
     expect(find.text('示例插件'), findsOneWidget);
     expect(find.text('重试'), findsNothing);
   });
+
+  // ---------------- 导入补全: 文件 / URL / 卸载 ----------------
+
+  testWidgets('导入(文件): 切到「本机文件」收绝对路径, 提交调 pluginInstallFile', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true;
+    await _pumpPage(tester);
+
+    await tester.ensureVisible(find.text('导入'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导入'));
+    await tester.pumpAndSettle();
+
+    // 缺省是粘贴文本; 切成「本机文件」后字段标签换成绝对路径。
+    await tester.tap(find.text('本机文件'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '文件绝对路径'), findsOneWidget);
+    expect(find.widgetWithText(TextField, '脚本正文'), findsNothing);
+
+    // 路径为空 ⇒ 本地浅校验拦下, 不调 FFI。
+    await tester.enterText(find.widgetWithText(TextField, 'id'), 'fileplug');
+    await tester.enterText(find.widgetWithText(TextField, '名称'), '文件插件');
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+    expect(_fake.calls, isEmpty);
+    expect(find.textContaining('不能为空'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '文件绝对路径'),
+      '/home/u/chain.js',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, ['installFile(fileplug|文件插件|1.0.0|/home/u/chain.js)']);
+    expect(find.text('文件插件'), findsOneWidget);
+    expect(find.textContaining('已导入 fileplug(本机文件)'), findsOneWidget);
+  });
+
+  testWidgets('导入(URL): 非 https 前端拦住不调 FFI, https 才调 pluginInstallUrl', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true;
+    await _pumpPage(tester);
+
+    await tester.ensureVisible(find.text('导入'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导入'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('URL'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '脚本 URL'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'id'), 'urlplug');
+    await tester.enterText(find.widgetWithText(TextField, '名称'), 'URL 插件');
+    await tester.enterText(
+      find.widgetWithText(TextField, '脚本 URL'),
+      'http://cdn.test/a.js',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+
+    // 明文 http 在弹层里就被拦下(省一次往返, Rust 侧还有第二道)。
+    expect(_fake.calls, isEmpty);
+    expect(find.text('只接受 https:// 开头的链接'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '脚本 URL'),
+      'https://cdn.test/a.js',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, ['installUrl(urlplug|URL 插件|1.0.0|https://cdn.test/a.js)']);
+    expect(find.text('URL 插件'), findsOneWidget);
+  });
+
+  testWidgets('卸载: 二次确认(说明会删脚本与 data/), 取消不调 FFI, 确认后列表移除', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true
+      ..routeMode = 'plugin:demo'
+      ..summaries = [_summary('demo', name: '示例插件', enabled: true)];
+    await _pumpPage(tester);
+
+    await tester.ensureVisible(_uninstallButton());
+    await tester.pumpAndSettle();
+    await tester.tap(_uninstallButton());
+    await tester.pumpAndSettle();
+
+    expect(find.text('卸载 demo?'), findsOneWidget);
+    expect(find.textContaining('本地数据 data/'), findsOneWidget);
+    expect(find.textContaining('会自动回到「自动」'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(_fake.calls, isEmpty);
+    expect(find.text('示例插件'), findsOneWidget);
+
+    await tester.tap(_uninstallButton());
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '卸载'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, ['uninstall(demo)']);
+    expect(find.text('示例插件'), findsNothing);
+    expect(find.textContaining('已卸载 demo'), findsOneWidget);
+    // Rust 侧把指向它的路由选择回了 auto, 重取数后页面跟着回「自动」。
+    expect(_fake.routeMode, 'auto');
+  });
+
+  testWidgets('卸载: 宿主总开关没开时入口禁用(不静默失败)', (tester) async {
+    _fake.summaries = [_summary('demo', name: '示例插件')];
+    await _pumpPage(tester);
+
+    expect(
+      tester.widget<IconButton>(_uninstallButton()).onPressed,
+      isNull,
+    );
+  });
 }
 
 /// 总开关那一行。
@@ -587,3 +804,6 @@ Finder _masterTile() => find.widgetWithText(SwitchListTile, '启用插件宿主'
 /// 某个插件名对应的开关行。
 Finder _pluginTile(String name) =>
     find.ancestor(of: find.text(name), matching: find.byType(SwitchListTile));
+
+/// 插件行里的卸载按钮(单插件用例直接取唯一一个)。
+Finder _uninstallButton() => find.widgetWithIcon(IconButton, Icons.delete_outline);
