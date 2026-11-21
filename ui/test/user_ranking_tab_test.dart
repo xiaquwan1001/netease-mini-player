@@ -63,10 +63,7 @@ void main() {
           loadEvents: (_) async => const [],
           loadRanking: (period) async {
             periods.add(period);
-            return [
-              entry(1, '常听的歌', 120),
-              entry(2, '第二常听', 80),
-            ];
+            return [entry(1, '常听的歌', 120), entry(2, '第二常听', 80)];
           },
           initialTab: '常听',
         ),
