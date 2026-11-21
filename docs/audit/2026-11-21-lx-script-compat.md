@@ -113,6 +113,30 @@
 - **Node `require/module` 环境**: 维持 undefined(README §1.3 断言不变); 真实明文脚本不依赖。
 - **真实定时线程**: setTimeout 只求「泵间隙可触发」的近似语义, 不为精度上多线程。
 
+## 6. 实测冒烟(2026-11-21, 兼容层落地后)
+
+取样脚本**不入库**(第三方代码 + 内含他人接口地址), 只在本地跑; 出站一律走假 transport(全 200 + 假 JSON), 绝不联网。
+做法: `curl -sS --noproxy '*' -o /tmp/lx_latest.js https://raw.githubusercontent.com/pdone/lx-music-source/main/helloworld/latest.js`
+(星海同法取 `cdyUuu/lx-music-xinghai-source/main/xinghai-music-source.js`), 临时 `tests/real_script_smoke.rs` 用
+`ScriptEngine::new` 装载 + 调一次 `musicUrl`, 断言 handlers / 返回值 / 出站记录, 跑完即删。
+
+| 脚本 | 装载 | 注册事件 | 宿主 `musicUrl` 调用结果 | 出站 |
+|---|---|---|---|---|
+| S1 HelloWorld(21 KB, 明文) | ✅ | `["request"]` | ✅ 回直链字符串 | 1 次 `POST https://musicserver.haitangw.cc/v1/music/resolve-url`(body 里 `source=wy` + `rid=123456` + `level=lossless`) |
+| S2 星海 v3.2.12(18 KB, 明文) | ✅ | `["request"]` | ✅ 回直链字符串 | 4 次: 装载期 2 次(`/ip.php`、版本检查 ×2 主机) + 取链 1 次 `.../api.php?...&source=netease&id=123456&br=740` |
+
+结论(与 §4 补齐清单逐条对应):
+
+- **#1 `request` 事件适配 / #2 `setTimeout` / #3 回调式 `lx.request`** 在真脚本上都生效 —— 三者任一缺失,S1/S2 装载或首次调用就会失败(§3.3 的「装载期 ReferenceError」风险已消除)。
+- **#6 `lx.utils.buffer` / `btoa`** 被 S1 的 token 生成路径实际调用, 无异常(不再走 `catch` 回退)。
+- **#7 `lx.env`** 被 S2 的 header 构造读取, 无异常。
+- **音质代号**: 两家脚本的 `quality` 表都覆盖我方四档(`128k/320k/flac/flac24bit`), 我方音质映射不需要扩展即可命中。
+- **`musicInfo` 真实字段有用**: S1 的 `wy` 接口按 `rid/songmid/id` 取 id, S2 直接 `id=`; 依赖 `{keyword}` 的接口在带 `name/singer` 后才可能命中(本轮假 transport 不验证结果质量)。
+- **装载期异步**(§3.3 未验证项, 现已有结论): 顶层 IIFE 里的 `lx.request` 在**装载期就会真的发出**(同步实现), 但其 Promise 要等宿主泵才会 settle ——
+  所以「装载期发请求」不会崩也不会静默丢弃, 只是那些 `await` 之后的分支要等第一次调用时的泵循环才继续。
+- **仍不建议**接混淆/自校验源(§5), 本轮也未验证 `lyric/pic` 动作(宿主不做这两个能力)。
+
+## 7. 方法与限制
 ## 6. 方法与限制
 - 仅抓 raw 明文(github raw 直链), 未 clone、未执行; S3 混淆体只做字符串级特征扫描。
 - 上游契约以官方文档(lxmusic.toside.cn)为准, 脚本实测与之吻合; 未覆盖 iOS/预加载脚本差异。
