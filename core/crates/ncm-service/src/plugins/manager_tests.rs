@@ -864,13 +864,16 @@ impl FakeFetcher {
     }
 
     fn calls(&self) -> Vec<String> {
-        self.calls.lock().expect("lock").clone()
+        self.calls.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
 }
 
 impl SourceFetcher for FakeFetcher {
     fn fetch(&self, url: &str) -> Result<String, ManagerError> {
-        self.calls.lock().expect("lock").push(url.to_string());
+        self.calls
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(url.to_string());
         self.outcome.clone()
     }
 }
