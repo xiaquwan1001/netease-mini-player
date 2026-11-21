@@ -1547,6 +1547,7 @@ mod backend {
     /// 直接量样本, 不听感。桌面的淡入是**样本级**的(rodio 在源上做线性增益斜坡),
     /// 所以这段构造就是桌面真实播放的路径([`start_source`] / [`upgrade_to_complete`]
     /// 都经 [`tuned_source`])。
+    #[cfg(test)]
     mod fade_tests {
         use super::*;
         use core::num::NonZero;
