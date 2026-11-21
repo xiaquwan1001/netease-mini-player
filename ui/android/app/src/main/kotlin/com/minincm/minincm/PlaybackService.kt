@@ -471,12 +471,20 @@ class PlaybackService : MediaSessionService() {
 
     /** 把目标增益 [gainDb] 作用到音量: 限速>0 时按 dB/s 斜坡逼近, 否则瞬时(静态 RG2.0 行为不变) */
     private fun applyGainChange() {
+        val delta = gainDb - appliedGainDb
+        // 目标增益没变且淡入还在跑 ⇒ volume 交回淡入, 这里什么都不做。
+        // 为什么(2026-11-21 用户反馈 #3「淡入淡出没生效」的安卓根因): 每次切歌 Dart 都会在
+        // play 之后紧跟一次 applyLoudnessForTrack → configure; 以前这里无条件 cancel 淡入,
+        // 刚起的 ValueAnimator 几毫秒内就被打断 ⇒ 用户选 200ms/500ms/1s 都听不到淡入。
+        // 决策抽成纯函数 [VolumeHandoffPolicy.owner], 由 JVM 单测盯住。
+        if (VolumeHandoffPolicy.owner(delta, fadeRunning = fadeAnimator != null) == VolumeOwner.Fade) {
+            return
+        }
         // 增益变化与淡入互斥: 这里(重新)接管 volume, 先取消淡入(last-wins)
         fadeAnimator?.cancel()
         fadeAnimator = null
         gainSlewAnimator?.cancel()
         gainSlewAnimator = null
-        val delta = gainDb - appliedGainDb
         if (gainSlewDbPerSec > 0.0 && kotlin.math.abs(delta) > 1e-4) {
             // 按 dB/s 限速: 时长 = |ΔdB| / slew。斜坡在 dB 域线性推进, 与 Rust GainLimiter(3 dB/s)口径一致,
             // 保证"每秒最多变 slew dB"严格成立(在 volume 线性域直接差值会把 dB 变成非均匀速率)。
