@@ -54,6 +54,10 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
+# Android 目标的 Rust 构建要过构建期 bindgen(rquickjs-sys 无 *-linux-android 预生成 bindings)
+# ⇒ 所有 gradle 入口都套这层(否则 cc/bindgen 找不到 NDK 与 libclang)。
+ANDROID_ENV="$ROOT/tools/android-bindgen-env.sh"
+
 # 本地直跑时补工具链环境; CI(GitHub runner)严禁 source —— env.sh 会把 JAVA_HOME
 # 指到 ~/android-dev/jdk 覆盖 runner 自带的 JDK21, 构建会直接炸。
 if [ -z "${GITHUB_ACTIONS:-}" ] && [ -z "${CI:-}" ] && [ -f "$ROOT/tools/env.sh" ]; then
@@ -184,12 +188,12 @@ cmd_android_prepare() {
 
 cmd_android_unit() {
   cmd_android_prepare
-  ( cd ui/android && run ./gradlew :app:testDebugUnitTest --console=plain )
+  ( cd ui/android && run "$ANDROID_ENV" ./gradlew :app:testDebugUnitTest --console=plain )
 }
 
 cmd_android_lint() {
   cmd_android_prepare
-  ( cd ui/android && run ./gradlew :app:lintDebug --console=plain )
+  ( cd ui/android && run "$ANDROID_ENV" ./gradlew :app:lintDebug --console=plain )
 }
 
 # ---- Android(设备侧: instrumented test) ----

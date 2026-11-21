@@ -31,31 +31,25 @@
 //! `MUTEX<Core>`. `plugin_rescan`/`plugin_set_enabled(true)` 会真的扫盘并装载 QuickJS,
 //! **持锁期间其它域调用会等待** ⇒ UI 侧串行调用、给个 loading 态, 别并发轮询.
 //!
-//! # Android: 编译通过 + 空视图(不是 `cfg` 掉函数)
+//! # 平台覆盖: 四端同一份实现(2026-11-21 起 Android 也带插件宿主)
 //!
-//! 插件宿主只在非 Android 目标编译(`rquickjs-sys` 0.12.2 没有 `*-linux-android`
-//! 的预生成 bindings, 见 `ncm-service` 的 `Cargo.toml` target 段与
-//! `docs/remaining-batches.md` §11.C). 本模块**故意不** `cfg` 掉导出函数:
-//! Dart 侧 API 形状必须两端一致, 否则桥接代码/调用方要在编译期分平台.
-//! 于是 Android 分支:
+//! 历史上 `ncm-plugin` 只在非 Android 目标编译(`rquickjs-sys` 无 `*-linux-android`
+//! 预生成 bindings)。2026-11-21 起 Android 走**构建期 bindgen**(见
+//! `docs/audit/2026-11-21-plugin-android-crosscompile.md` §3 推荐路径 b 与
+//! `ncm-plugin/Cargo.toml` 的 target 段), 于是:
 //!
-//! - 读类 ⇒ `Ok(空视图)`, 其中 `PluginStatusDto.supported = false` 且 `error` 写明原因;
-//! - 写类(`enable/disable/rescan/set_enabled`) ⇒ `Err(unsupported)`, detail 带操作名.
-//!
-//! 两个分支共用同一批 DTO 构造函数(`unsupported_status` / `unsupported_error`),
-//! 所以 "空视图语义" 在 Linux 上就能单测(`plugin_tests::android_view_is_empty_and_explicit`),
-//! 只有 `#[cfg(target_os = "android")]` 那几行本身需要 Android 目标编译才验证
-//! (`cargo check --target aarch64-linux-android -p ncm_ffi`).
+//! - 本文件**没有**平台分支: 读类/写类在 Linux/Windows/Android 上是同一段代码;
+//! - 构建 Android 时必须经 `tools/android-bindgen-env.sh`(或 `tools/build-android.sh`
+//!   自动套的那层)启动, 否则 bindgen 拿不到 NDK sysroot, 构建期直接失败;
+//! - `PluginStatusDto.supported` 现在两端都恒为 `true`(保留字段是为了桥接兼容).
 
 pub(crate) use super::*;
-
-use ncm_provider::{ProviderError, ProviderErrorKind};
 
 // ------------------------------- DTO -------------------------------
 
 /// 宿主状态: 一句话回答"插件现在能不能用、为什么不能用".
 pub struct PluginStatusDto {
-    /// 本平台是否带插件宿主(Android = false ⇒ 其余字段恒为缺省).
+    /// 本平台是否带插件宿主(实现细节见「平台覆盖」; 现在两端都是 true).
     pub supported: bool,
     /// 策略文件(`plugin_host.json`)里的总开关; 缺省 false = 不扫描.
     pub enabled: bool,
@@ -122,56 +116,12 @@ pub struct PluginRescanDto {
 // ---------------------- 平台无关的构造函数 ----------------------
 
 /// `usize` -> `u32`(桥接侧统一用 `u32` 计数, 饱和而不是回绕).
-#[cfg(not(target_os = "android"))]
 fn count(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
 
-/// Android 的"无宿主"状态视图(读类接口的返回值).
-///
-/// 也用作 `PluginStatusDto` 的空视图基准: `supported = false` 是唯一的平台信号,
-/// `error` 必须非空 —— 别让 UI 以为"只是没开".
-///
-/// 非 Android 构建里它只被单测调用(生产调用点是 `#[cfg(target_os = "android")]` 分支),
-/// 所以显式 `allow(dead_code)`: 别为了消警告把它 cfg 掉 —— 那空视图语义就没法在
-/// Linux 上单测了.
-#[allow(dead_code)]
-fn unsupported_status() -> PluginStatusDto {
-    PluginStatusDto {
-        supported: false,
-        enabled: false,
-        active: false,
-        root: String::new(),
-        error: Some(PLATFORM_DETAIL.to_string()),
-        loaded: Vec::new(),
-        failed: 0,
-    }
-}
-
-/// Android 的"无宿主"错误(写类接口的返回值).
-///
-/// **仍经 [`ProviderError`] 中转**, 所以 `kind` 来自同一张词表(`unsupported`),
-/// `retryable = false`(重试不会变出 bindings).
-#[allow(dead_code)] // 同 `unsupported_status`: Linux 上只被单测调用
-fn unsupported_error(op: &str) -> FfiError {
-    FfiError::from(ProviderError::new(
-        ProviderErrorKind::Unsupported,
-        false,
-        format!("{op}: {PLATFORM_DETAIL}"),
-    ))
-}
-
-#[cfg(target_os = "android")]
-const PLATFORM_DETAIL: &str =
-    "当前平台(Android)不带插件宿主: rquickjs-sys 0.12.2 无 Android 预生成 bindings, \
-插件相关接口只返回空视图/不支持; 桌面端(Linux/Windows)可用";
-#[cfg(not(target_os = "android"))]
-#[allow(dead_code)] // 只被上面两个 Android 专用构造函数引用
-const PLATFORM_DETAIL: &str = "当前平台不带插件宿主";
-
 // ---------------------- 非 Android 的 DTO 转换 ----------------------
 
-#[cfg(not(target_os = "android"))]
 fn status_dto(status: &ncm_service::PluginHostStatus) -> PluginStatusDto {
     PluginStatusDto {
         supported: true,
@@ -184,7 +134,6 @@ fn status_dto(status: &ncm_service::PluginHostStatus) -> PluginStatusDto {
     }
 }
 
-#[cfg(not(target_os = "android"))]
 fn summary_dto(
     summary: &ncm_service::PluginSummary,
     sources: &std::collections::BTreeMap<String, Vec<String>>,
@@ -201,7 +150,6 @@ fn summary_dto(
 }
 
 /// `BTreeMap<id, detail>` -> 有序 `Vec`(BTreeMap 已是字典序, 顺序直接透传).
-#[cfg(not(target_os = "android"))]
 fn failures_dto(map: &std::collections::BTreeMap<String, String>) -> Vec<PluginFailureDto> {
     map.iter()
         .map(|(id, detail)| PluginFailureDto {
@@ -212,7 +160,6 @@ fn failures_dto(map: &std::collections::BTreeMap<String, String>) -> Vec<PluginF
 }
 
 /// `Vec<(键, 原因)>` -> `Vec<PluginFailureDto>`(重扫报表的 `failed` 是这种形状).
-#[cfg(not(target_os = "android"))]
 fn failed_pairs_dto(entries: &[(String, String)]) -> Vec<PluginFailureDto> {
     entries
         .iter()
@@ -223,7 +170,6 @@ fn failed_pairs_dto(entries: &[(String, String)]) -> Vec<PluginFailureDto> {
         .collect()
 }
 
-#[cfg(not(target_os = "android"))]
 fn rejected_dto(entries: &[(String, String)]) -> Vec<PluginRejectedDto> {
     entries
         .iter()
@@ -234,7 +180,6 @@ fn rejected_dto(entries: &[(String, String)]) -> Vec<PluginRejectedDto> {
         .collect()
 }
 
-#[cfg(not(target_os = "android"))]
 fn rescan_dto(report: &ncm_service::RegistryReport) -> PluginRescanDto {
     PluginRescanDto {
         scanned: report.scanned.clone(),
@@ -250,46 +195,25 @@ fn rescan_dto(report: &ncm_service::RegistryReport) -> PluginRescanDto {
 ///
 /// 读类: 总开关关闭时**不报错**, 返回 `enabled = false` 的空视图.
 pub fn plugin_status() -> Result<PluginStatusDto, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(status_dto(&guard.plugin_status()))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(unsupported_status())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(status_dto(&guard.plugin_status()))
 }
 
 /// 插件列表(含坏条目的 `error` 原因).
 pub fn plugin_summaries() -> Result<Vec<PluginSummaryDto>, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        let sources = guard.plugin_sources();
-        Ok(guard
-            .plugin_summaries()
-            .iter()
-            .map(|summary| summary_dto(summary, &sources))
-            .collect())
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(Vec::new())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    let sources = guard.plugin_sources();
+    Ok(guard
+        .plugin_summaries()
+        .iter()
+        .map(|summary| summary_dto(summary, &sources))
+        .collect())
 }
 
 /// 失败原因(清单坏/路径不安全/装载失败), 按 id 字典序.
 pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(failures_dto(&guard.plugin_failures()))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(Vec::new())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(failures_dto(&guard.plugin_failures()))
 }
 
 /// 拉走所有插件累计的诊断日志(按插件 id 分组, 空组丢弃)。
@@ -297,74 +221,37 @@ pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
 /// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。UI 侧按需点「拉取日志」,
 /// **不做后台轮询**(拉取要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用)。
 pub fn plugin_logs() -> Result<Vec<PluginLogDto>, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(guard
-            .plugin_take_logs()
-            .into_iter()
-            .map(|(id, lines)| PluginLogDto { id, lines })
-            .collect())
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(Vec::new())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(guard
+        .plugin_take_logs()
+        .into_iter()
+        .map(|(id, lines)| PluginLogDto { id, lines })
+        .collect())
 }
 
 /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问).
 pub fn plugin_rejected() -> Result<Vec<PluginRejectedDto>, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(rejected_dto(&guard.plugin_rejected()))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(Vec::new())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(rejected_dto(&guard.plugin_rejected()))
 }
 
 /// 启用单个插件并即时装载(宿主总开关没开 ⇒ `forbidden`, 不会隐式打开总开关).
 pub fn plugin_enable(id: String) -> Result<(), FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        guard.plugin_enable(&id).map_err(FfiError::from)
-    }
-    #[cfg(target_os = "android")]
-    {
-        let _ = id;
-        Err(unsupported_error("plugin_enable"))
-    }
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard.plugin_enable(&id).map_err(FfiError::from)
 }
 
 /// 停用单个插件并摘掉内存里的 provider.
 pub fn plugin_disable(id: String) -> Result<(), FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        guard.plugin_disable(&id).map_err(FfiError::from)
-    }
-    #[cfg(target_os = "android")]
-    {
-        let _ = id;
-        Err(unsupported_error("plugin_disable"))
-    }
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard.plugin_disable(&id).map_err(FfiError::from)
 }
 
 /// 重扫插件根目录(全量重建 provider 视图).
 pub fn plugin_rescan() -> Result<PluginRescanDto, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        let report = guard.plugin_rescan().map_err(FfiError::from)?;
-        Ok(rescan_dto(&report))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Err(unsupported_error("plugin_rescan"))
-    }
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let report = guard.plugin_rescan().map_err(FfiError::from)?;
+    Ok(rescan_dto(&report))
 }
 
 /// 宿主**总开关**(落盘 `<dataDir>/plugin_host.json`, 0600 原子写).
@@ -373,16 +260,8 @@ pub fn plugin_rescan() -> Result<PluginRescanDto, FfiError> {
 /// 这是"磁盘上多一个插件目录"变成"真的执行脚本"的唯一开关 ——
 /// 打开失败时策略不落盘并回滚内存状态, 错误是 `internal`.
 pub fn plugin_set_enabled(enabled: bool) -> Result<(), FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        guard.plugin_set_enabled(enabled).map_err(FfiError::from)
-    }
-    #[cfg(target_os = "android")]
-    {
-        let _ = enabled;
-        Err(unsupported_error("plugin_set_enabled"))
-    }
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard.plugin_set_enabled(enabled).map_err(FfiError::from)
 }
 
 // ---------------------------- 路由(取链/搜索的判定视图) ----------------------------
@@ -392,7 +271,7 @@ pub fn plugin_set_enabled(enabled: bool) -> Result<(), FfiError> {
 /// 与宿主状态分开: 宿主开不开(`PluginStatusDto.enabled`)决定"有没有插件可用",
 /// 这里决定"可用的时候优先用谁". 两者都缺省(不扫描 + auto)时产品行为不变.
 pub struct PluginRouteModeDto {
-    /// 本平台是否带插件宿主(Android = false ⇒ 路由恒为内置).
+    /// 本平台是否带插件宿主(现在两端都是 true).
     pub supported: bool,
     /// 稳定标签: `auto` / `builtin` / `plugin:<id>`(可原样回传给 [`plugin_set_route_mode`]).
     pub mode: String,
@@ -415,7 +294,6 @@ pub struct PluginRoutePlanDto {
     pub detail: String,
 }
 
-#[cfg(not(target_os = "android"))]
 fn route_mode_dto(mode: &ncm_service::RouteMode) -> PluginRouteModeDto {
     PluginRouteModeDto {
         supported: true,
@@ -427,7 +305,6 @@ fn route_mode_dto(mode: &ncm_service::RouteMode) -> PluginRouteModeDto {
     }
 }
 
-#[cfg(not(target_os = "android"))]
 fn route_plan_dto(plan: &ncm_service::RoutePlan) -> PluginRoutePlanDto {
     PluginRoutePlanDto {
         supported: true,
@@ -438,42 +315,10 @@ fn route_plan_dto(plan: &ncm_service::RoutePlan) -> PluginRoutePlanDto {
     }
 }
 
-/// Android 的"无宿主"路由偏好视图(`auto` = 产品缺省, 行为与没插件时一致).
-///
-/// 这里写字面量而不是 `RouteMode::default().label()`: `ncm_service::plugins` 在 Android
-/// 目标整体不编译(见本文件头注释), 而 Dart 侧 API 形状两端必须一致.
-#[allow(dead_code)] // Linux 上只被单测调用(生产调用点在 Android 分支)
-fn unsupported_route_mode() -> PluginRouteModeDto {
-    PluginRouteModeDto {
-        supported: false,
-        mode: "auto".to_string(),
-        plugin_id: None,
-    }
-}
-
-/// Android 的"无宿主"判定视图: 恒为内置, 原因写 `unsupported` 与平台说明.
-#[allow(dead_code)] // 同 `unsupported_route_mode`
-fn unsupported_route_plan(cap: &str) -> PluginRoutePlanDto {
-    PluginRoutePlanDto {
-        supported: false,
-        target: "builtin".to_string(),
-        plugin_id: None,
-        reason: "unsupported".to_string(),
-        detail: format!("{cap}: {PLATFORM_DETAIL}"),
-    }
-}
-
 /// 当前路由偏好.
 pub fn plugin_route_mode() -> Result<PluginRouteModeDto, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(route_mode_dto(guard.plugin_route_mode()))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(unsupported_route_mode())
-    }
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(route_mode_dto(guard.plugin_route_mode()))
 }
 
 /// 改路由偏好(落盘 `plugin_route.json`, 0600 原子写)并回读生效值.
@@ -482,24 +327,16 @@ pub fn plugin_route_mode() -> Result<PluginRouteModeDto, FfiError> {
 /// 空串按 `auto`. 形状不成立(如 `plugin:` 后面为空) ⇒ `unsupported`, 不改盘.
 /// id 不存在**不算错误**: 判定时按 `selectionMissing` 回内置, 见 [`plugin_route_plan`].
 pub fn plugin_set_route_mode(mode: String) -> Result<PluginRouteModeDto, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let parsed = ncm_service::RouteMode::parse(&mode).ok_or_else(|| {
-            FfiError::unsupported(format!(
-                "plugin_set_route_mode: 不认识的模式 `{mode}`, 只接受 auto / builtin / plugin:<id>"
-            ))
-        })?;
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        guard
-            .plugin_set_route_mode(parsed)
-            .map_err(FfiError::from)?;
-        Ok(route_mode_dto(guard.plugin_route_mode()))
-    }
-    #[cfg(target_os = "android")]
-    {
-        let _ = mode;
-        Err(unsupported_error("plugin_set_route_mode"))
-    }
+    let parsed = ncm_service::RouteMode::parse(&mode).ok_or_else(|| {
+        FfiError::unsupported(format!(
+            "plugin_set_route_mode: 不认识的模式 `{mode}`, 只接受 auto / builtin / plugin:<id>"
+        ))
+    })?;
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    guard
+        .plugin_set_route_mode(parsed)
+        .map_err(FfiError::from)?;
+    Ok(route_mode_dto(guard.plugin_route_mode()))
 }
 
 /// 这个能力这次会走谁(纯判定; 想要"实际走了谁"看日志/诊断, 那是调用期的事).
@@ -507,20 +344,13 @@ pub fn plugin_set_route_mode(mode: String) -> Result<PluginRouteModeDto, FfiErro
 /// `cap` 用 [`Capability::as_str`](ncm_provider::Capability::as_str) 的标签
 /// (`songUrl` / `search` / `searchAll` ...), 未知标签 ⇒ `unsupported`.
 pub fn plugin_route_plan(cap: String) -> Result<PluginRoutePlanDto, FfiError> {
-    #[cfg(not(target_os = "android"))]
-    {
-        let capability = ncm_provider::Capability::parse(&cap)
-            .ok_or_else(|| FfiError::unsupported(format!("plugin_route_plan: 未知能力 `{cap}`")))?;
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(route_plan_dto(&guard.plugin_route_plan(capability)))
-    }
-    #[cfg(target_os = "android")]
-    {
-        Ok(unsupported_route_plan(&cap))
-    }
+    let capability = ncm_provider::Capability::parse(&cap)
+        .ok_or_else(|| FfiError::unsupported(format!("plugin_route_plan: 未知能力 `{cap}`")))?;
+    let guard = core()?.lock().map_err(FfiError::from)?;
+    Ok(route_plan_dto(&guard.plugin_route_plan(capability)))
 }
 
 // 用例用到 `ncm_service::plugins`(非 Android 才有), 所以测试模块也按平台 gate.
-#[cfg(all(test, not(target_os = "android")))]
+#[cfg(test)]
 #[path = "plugin_tests.rs"]
 mod tests;

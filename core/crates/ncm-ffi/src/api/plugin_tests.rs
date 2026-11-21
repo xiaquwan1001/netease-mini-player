@@ -16,9 +16,7 @@ use ncm_provider::{ProviderError, ProviderErrorKind};
 use ncm_service::{PluginHost, PluginHostPolicy, PluginHostStatus, PluginSummary};
 
 use super::{
-    failures_dto, rejected_dto, rescan_dto, route_mode_dto, route_plan_dto, status_dto,
-    summary_dto, unsupported_error, unsupported_route_mode, unsupported_route_plan,
-    unsupported_status,
+    failures_dto, rejected_dto, rescan_dto, route_mode_dto, route_plan_dto, status_dto, summary_dto,
 };
 
 static SEQ: AtomicUsize = AtomicUsize::new(0);
@@ -292,56 +290,4 @@ fn route_plan_dto_mirrors_plan() {
     assert_eq!(builtin.target, "builtin");
     assert_eq!(builtin.plugin_id, None, "内置目标没有插件 id");
     assert_eq!(builtin.reason, "ambiguous");
-}
-
-/// Android: 读类给"恒内置"的空视图(supported=false + 原因), 与"宿主没开"区分得开.
-#[test]
-fn android_route_view_is_builtin_and_explicit() {
-    let mode = unsupported_route_mode();
-    assert!(!mode.supported);
-    assert_eq!(mode.mode, "auto", "缺省偏好就是 auto(行为同没插件)");
-    assert_eq!(mode.plugin_id, None);
-
-    let plan = unsupported_route_plan("songUrl");
-    assert!(!plan.supported);
-    assert_eq!(plan.target, "builtin");
-    assert_eq!(plan.plugin_id, None);
-    assert_eq!(plan.reason, "unsupported");
-    assert!(plan.detail.starts_with("songUrl"), "detail 要点名能力");
-}
-
-// ------------------------- Android 空视图语义 -------------------------
-
-/// Android 分支的返回值(与真实 Android 分支**共用**同一对构造函数):
-/// 读 = 空视图 + `supported = false` + 非空 error; 写 = `Err(unsupported)`.
-#[test]
-fn android_view_is_empty_and_explicit() {
-    let status = unsupported_status();
-    assert!(
-        !status.supported,
-        "Android 必须自报不支持, 不能假装'只是没开'"
-    );
-    assert!(!status.enabled && !status.active);
-    assert!(status.loaded.is_empty());
-    assert_eq!(status.failed, 0);
-    // 未启用时也要给 root; Android 没有 root 概念, 空串是唯一诚实的值
-    assert!(status.root.is_empty());
-    let detail = status.error.as_deref().unwrap_or_default();
-    assert!(!detail.is_empty(), "空视图必须带原因, 否则 UI 只能瞎猜");
-    // 语义要求: 与"总开关没开"区分得开 —— 那一条是 `forbidden`, 这一条是 `unsupported`
-    // (见下面的写类断言). 文案措辞不断言, 只要求非空.
-    assert!(!detail.is_empty());
-
-    // 写类: 同词表(unsupported) + 不可重试 + detail 带操作名
-    for op in [
-        "plugin_enable",
-        "plugin_disable",
-        "plugin_rescan",
-        "plugin_set_enabled",
-    ] {
-        let err = unsupported_error(op);
-        assert_eq!(err.kind, ProviderErrorKind::Unsupported.as_str());
-        assert!(!err.retryable, "重试变不出 bindings");
-        assert!(err.detail.starts_with(op), "detail 要指明是哪个操作: {err}");
-    }
 }

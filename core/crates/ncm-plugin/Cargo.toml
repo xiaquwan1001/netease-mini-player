@@ -13,4 +13,14 @@ serde.workspace = true
 serde_json.workspace = true
 # 默认特性只用 std: 不用 macro/loader/futures(我们同步泵 job queue, 不需要 AsyncContext),
 # 也不用 rust-alloc(保留 QuickJS 自带分配器, 这样 set_memory_limit 才真的生效)。
+#
+# 分目标声明(2026-11-21 起 Android 也带插件宿主, 见 docs/audit/2026-11-21-plugin-android-crosscompile.md):
+# - 桌面/服务端: 吃 rquickjs 随包提供的**预生成 bindings** ⇒ 不需要 libclang, 也不多 15~20s bindgen;
+# - Android: rquickjs-sys 0.12.2 没有 *-linux-android 的预生成 bindings ⇒ 构建期 bindgen。
+#   必须经 `tools/android-bindgen-env.sh`(或 `tools/build-android.sh` 自动套的那层)启动,
+#   否则 bindgen 会拿宿主 glibc 头并报 `bits/libc-header-start.h not found`。
+[target.'cfg(not(target_os = "android"))'.dependencies]
 rquickjs = { version = "0.12.2", default-features = false, features = ["std"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+rquickjs = { version = "0.12.2", default-features = false, features = ["std", "bindgen"] }

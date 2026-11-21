@@ -329,21 +329,11 @@ pub fn ping(name: String) -> String {
 /// 之后还要做别的事"的少数调用点, 它们因此拿到的是路由判定后的目标(插件命中即插件)。
 fn with_provider(cap: Capability) -> Result<std::sync::Arc<dyn ncm_provider::Provider>, FfiError> {
     let guard = core()?.lock().map_err(FfiError::from)?;
-    #[cfg(not(target_os = "android"))]
-    {
-        let decision = guard.route_decision(cap);
-        decision
-            .plugin
-            .or(decision.builtin)
-            .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
-    }
-    #[cfg(target_os = "android")]
-    {
-        guard
-            .providers
-            .first_with(cap)
-            .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
-    }
+    let decision = guard.route_decision(cap);
+    decision
+        .plugin
+        .or(decision.builtin)
+        .ok_or_else(|| FfiError::unsupported(format!("no provider supports {}", cap.as_str())))
 }
 
 /// 一次**路由调用**: 判定 + 「插件先试、失败回落内置」都由
@@ -359,23 +349,14 @@ where
         std::sync::Arc<dyn ncm_provider::Provider>,
     ) -> ncm_provider::BoxFuture<'p, ncm_provider::ProviderResult<T>>,
 {
-    #[cfg(not(target_os = "android"))]
-    {
-        let decision = {
-            let guard = core()?.lock().map_err(FfiError::from)?;
-            guard.route_decision(cap)
-        };
-        let routed = ncm_service::plugins::call_routed(decision, call)
-            .await
-            .map_err(FfiError::from)?;
-        Ok(routed.value)
-    }
-    #[cfg(target_os = "android")]
-    {
-        // Android 不带插件宿主(见 api/plugin.rs 头注释), 路由退化为"只有内置".
-        let provider = with_provider(cap)?;
-        call(provider).await.map_err(FfiError::from)
-    }
+    let decision = {
+        let guard = core()?.lock().map_err(FfiError::from)?;
+        guard.route_decision(cap)
+    };
+    let routed = ncm_service::plugins::call_routed(decision, call)
+        .await
+        .map_err(FfiError::from)?;
+    Ok(routed.value)
 }
 
 static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();

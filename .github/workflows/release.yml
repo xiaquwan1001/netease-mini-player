@@ -20,17 +20,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Android JVM 单测(:app:testDebugUnitTest)要 JDK21 + Android SDK 的 platform/build-tools。
-      # 命令仍由 tools/ci-gates.sh 实现, 这里只准备工具链(不装 NDK: 单测不走 native 构建)。
+      # 命令仍由 tools/ci-gates.sh 实现, 这里只准备工具链。
+      # NDK 28.2 + libclang 是 2026-11-21 起必须的: android-unit/android-lint 会触发 cargokit
+      # 编 Android 目标, 而插件宿主的 rquickjs 走构建期 bindgen(见 ncm-plugin/Cargo.toml target 段)。
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - name: Android SDK components (platform 36 + build-tools, no NDK)
+      - name: Android SDK components (platform 36 + build-tools + NDK 28.2)
         run: |
           SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
           echo "sdkmanager=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      # bindgen 要 libclang(build-time 依赖, 不进产物)。
+      - name: Install libclang (bindgen for rquickjs on Android)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev
       # 版本号解析唯一实现: tools/ci-gates.sh(workflow 里不再 sed pubspec)
       - name: Tag / pubspec 版本一致性
         if: startsWith(github.ref, 'refs/tags/v')
@@ -156,7 +165,11 @@ jobs:
 
       - name: Build Android APK (arm64, release)
         working-directory: ui
-        run: flutter build apk --release --target-platform android-arm64
+        run: |
+          ../tools/android-bindgen-env.sh bash -c '
+            set -euo pipefail
+            flutter build apk --release --target-platform android-arm64
+          '
 
       # 自检: 配了正式 keystore 就不许产出 debug 签名的包
       - name: Verify APK signature

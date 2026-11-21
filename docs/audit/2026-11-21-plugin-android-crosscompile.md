@@ -154,6 +154,18 @@ a 只作为「顺手回看上游」；c 不做。**
 > 换句话说：**Android 交叉编译曾是「未验证」里最不确定的一条，现在它是全表里最确定的一条**
 > （引擎语义已在真机跑过）。剩下 5 条全是产品接线工作，成本都比它高。
 
+## 3.5 落地记录(2026-11-21, 用户拍板做推荐路径 b)
+
+| 步骤 | 落点 | 状态 |
+|---|---|---|
+| ① rquickjs 特性按目标分段 | `core/crates/ncm-plugin/Cargo.toml`: 桌面 `[target.'cfg(not(target_os = "android"))']` 用 `std`(预生成 bindings); Android 用 `std` + `bindgen` | ✅ |
+| ② 构建入口注入 NDK sysroot + libclang | 新增 `tools/android-bindgen-env.sh`(env(1) 注入 `BINDGEN_EXTRA_CLANG_ARGS_<triple>` / `CC_<triple>` / `AR_<triple>`, 变量名带连字符不能用 export); `tools/build-android.sh` 自 re-exec; `tools/ci-gates.sh` 的 android-unit/android-lint 套这层; `ci.yml`(android job + Debug APK job) 与 `release.yml`(Tests gate + Android 构建) 加装 libclang 并把 NDK 28.2 装进每个会触发 cargokit 的 job | ✅ |
+| ③ 撤 `cfg(not(android))` 门 | `ncm-service/Cargo.toml` 的 ncm-plugin 依赖回到 `[dependencies]`; `ncm-service/src/lib.rs` 的 `plugins` mod/use/`Core::plugin_host`/`impl Core` 全部无条件; `ncm-ffi/src/api/plugin.rs` 删掉整套「Android 空视图」分支(两端同一份实现), `api.rs` 的 `with_provider`/`routed_call` 也只剩一条路由实现 | ✅ |
+| ④ 真机/模拟器验收门 | 本机只连着用户物理机(未动); 已验证: `cargo check --target aarch64-linux-android -p ncm_ffi` 过(含 rquickjs-sys bindgen + ncm-plugin/service/ffi)、`tools/ci-gates.sh verify` 全绿(`android-unit`/`android-lint` 会真的编 Android 目标的 Rust)、`bash tools/build-android.sh debug` 出两个 ABI 的 APK | ⏳ 设备侧「启用宿主→装 fixture 插件→取一次链→超时/内存炸弹各一次」仍待模拟器/真机跑 |
+
+成本实测(本机): Android 目标首次 bindgen + 15 个 build-dep 拉取约 +15s/ABI; 桌面构建零变化(仍吃预生成 bindings, 不需要 libclang)。
+
+## 4. 明确不做
 ## 4. 明确不做
 
 - **不做 c（换 boa_engine）**：为省一条构建 env 而丢掉「32MB 内存上限」这条不可信脚本的硬门，

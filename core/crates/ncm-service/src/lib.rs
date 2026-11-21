@@ -17,9 +17,8 @@ pub use credential_store::{CredentialStatus, CredentialStore};
 pub mod identity;
 pub mod loudness_store;
 pub mod netease;
-// 插件宿主接缝只在**非 Android** 目标编译: rquickjs-sys 0.12.2 没有 Android 的预生成
-// bindings(cross 编译直接失败), 详见 Cargo.toml 里 [target.`cfg(not(target_os = "android"))`] 段。
-#[cfg(not(target_os = "android"))]
+// 插件宿主: 四端同一份实现(2026-11-21 起 Android 走构建期 bindgen,
+// 见 docs/audit/2026-11-21-plugin-android-crosscompile.md)。
 pub mod plugins;
 pub mod read_cache;
 pub mod ttml_source;
@@ -28,9 +27,7 @@ pub use history::HistoryStore;
 pub use identity::{AccountBook, IdentityStore, StoredAccount};
 pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
-#[cfg(not(target_os = "android"))]
 pub use plugins::host::{PluginHostPolicy, PluginHostStatus};
-#[cfg(not(target_os = "android"))]
 pub use plugins::{
     PluginHost, PluginSummary, RegistryReport, RouteDecision, RouteMode, RoutePlan, RouteReason,
     RouteTarget, RouteUsed, Routed,
@@ -58,8 +55,7 @@ pub struct Core {
     pub session: ncm_domain::Session,
     pub providers: ProviderRegistry,
     pub netease: Arc<NeteaseProvider>,
-    /// 插件宿主(仅非 Android 目标): 缺省不扫描, 详见 `plugins::host` 头注释.
-    #[cfg(not(target_os = "android"))]
+    /// 插件宿主: 缺省不扫描, 详见 `plugins::host` 头注释.
     plugin_host: PluginHost,
 }
 
@@ -78,14 +74,12 @@ impl Core {
         providers.register(netease.clone());
         // 插件宿主:**不返回 Result** —— 插件侧的失败(坏清单/根目录建不出来)只降级成
         // "宿主不可用", 绝不影响 Core 启动(见 plugins/host.rs 头注释的缺省值一节).
-        #[cfg(not(target_os = "android"))]
         let plugin_host = PluginHost::open(data_dir);
         Ok(Self {
             store,
             session,
             providers,
             netease,
-            #[cfg(not(target_os = "android"))]
             plugin_host,
         })
     }
@@ -219,7 +213,6 @@ impl Core {
 /// 2. **按插件 id 路由**: `ScriptProvider::id()` 恒为 `"script"`, 所以插件 provider 不进
 ///    `self.providers`(`ncm_provider::ProviderRegistry`), 一律走 [`Core::plugin_provider`];
 /// 3. **单一错误口径**: 可失败的插件操作都是 `ProviderResult<_>`, 不新增错误类型.
-#[cfg(not(target_os = "android"))]
 impl Core {
     /// 宿主状态(UI 用它解释"为什么列表是空的")
     pub fn plugin_status(&self) -> PluginHostStatus {

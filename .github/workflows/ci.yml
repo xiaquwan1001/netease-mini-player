@@ -88,15 +88,21 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # 只要 platform/build-tools, **不装 NDK**: JVM 单测与 lintDebug 不走 native 构建
-      # (cargokit 的 rust 构建只在 assemble* 时触发)。哪天 AGP 在配置期强制要 NDK,
-      # 在这里补 "ndk;28.2.13676358"(build-android-debug 已有同样的安装步骤)。
-      - name: Android SDK components (platform 36 + build-tools, no NDK)
+      # NDK 28.2 从 2026-11-21 起必须: 插件宿主的 rquickjs 在 Android 目标走构建期 bindgen,
+      # 而 lintDebug / testDebugUnitTest 会触发 cargokit 编 Android 目标的 Rust。
+      - name: Android SDK components (platform 36 + build-tools + NDK 28.2)
         run: |
           SDKMANAGER=$(command -v sdkmanager || ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | tail -1)
           echo "sdkmanager=$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses > /dev/null || true
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+
+      # bindgen 的 libclang(build-time 依赖)。
+      - name: Install libclang (bindgen for rquickjs on Android)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev
 
       - uses: subosito/flutter-action@v2
         with:
@@ -157,6 +163,12 @@ jobs:
           "$SDKMANAGER" "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
+      # 插件宿主的 rquickjs 在 Android 目标用构建期 bindgen ⇒ build-time 依赖 libclang(不进产物)。
+      - name: Install libclang (bindgen for rquickjs on Android)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang libclang-dev
+
       # 四个 Android target 全装: 产物只留 arm64 + x86_64(--target-platform 限制),
       # 但 cargokit 在构建期会按它认得的 ABI 列表逐个编, 缺 target 会直接报错。
       - uses: dtolnay/rust-toolchain@stable
@@ -176,10 +188,15 @@ jobs:
 
       - name: build debug APKs (split per ABI)
         working-directory: ui
+        # 过 tools/android-bindgen-env.sh: 插件宿主的 rquickjs 在 Android 目标用构建期 bindgen,
+        # 需要 NDK sysroot + libclang(见 docs/audit/2026-11-21-plugin-android-crosscompile.md).
         run: |
-          flutter pub get
-          # 必须带 --target-platform, 否则 --split-per-abi 会试图编 32 位包而失败
-          flutter build apk --debug --split-per-abi --target-platform android-arm64,android-x64
+          ../../../tools/android-bindgen-env.sh bash -c '
+            set -euo pipefail
+            flutter pub get
+            # 必须带 --target-platform, 否则 --split-per-abi 会试图编 32 位包而失败
+            flutter build apk --debug --split-per-abi --target-platform android-arm64,android-x64
+          '
 
       - name: collect + verify ABI
         run: |

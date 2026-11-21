@@ -16,8 +16,18 @@
 #   printf 'storeFile=%s/release.keystore\nstorePassword=%s\nkeyAlias=mykey\nkeyPassword=%s\n' "$HOME" "$SP" "$KP" > ui/android/key.properties
 # 缺 key.properties 时 Gradle 会回落到 debug 签名(产物不能当发布包, workflow 里有自检)。
 set -euo pipefail
-cd "$(dirname "$0")/.."
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+cd "$ROOT"
 source tools/env.sh
+
+# 插件宿主在 Android 用**构建期 bindgen**(rquickjs-sys 没有 *-linux-android 的预生成
+# bindings)⇒ 必须有 NDK sysroot + libclang 那套环境变量。变量名带连字符, bash 不能 export,
+# 所以先经 tools/android-bindgen-env.sh(用 env(1))重跑自己; 该脚本失败时这里直接退出。
+if [ -z "${NCM_ANDROID_BINDGEN_ENV:-}" ]; then
+  export NCM_ANDROID_BINDGEN_ENV=1
+  exec "$ROOT/tools/android-bindgen-env.sh" bash "$0" "$@"
+fi
+
 MODE="${1:-debug}"
 case "$MODE" in
   debug|release) ;;
