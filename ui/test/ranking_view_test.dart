@@ -122,10 +122,7 @@ void main() {
     await tester.pumpWidget(
       host(
         PlayRankingView(
-          load: (_) async => [
-            entry(1, '有次数', 120),
-            entry(2, '上游没给次数', 0),
-          ],
+          load: (_) async => [entry(1, '有次数', 120), entry(2, '上游没给次数', 0)],
         ),
       ),
     );

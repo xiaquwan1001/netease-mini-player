@@ -41,7 +41,10 @@ rust.PodcastProgramDto _program({rust.SongDto? song}) => rust.PodcastProgramDto(
   song: song,
 );
 
-Future<void> _pumpRow(WidgetTester tester, rust.PodcastProgramDto program) async {
+Future<void> _pumpRow(
+  WidgetTester tester,
+  rust.PodcastProgramDto program,
+) async {
   await tester.pumpWidget(
     MaterialApp(
       home: AppActions(

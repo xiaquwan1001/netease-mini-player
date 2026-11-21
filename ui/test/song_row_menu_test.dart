@@ -54,11 +54,7 @@ void main() {
   testWidgets('工厂行默认渲染行尾三点, 点开出现「下一首播放」', (tester) async {
     await _pumpRow(
       tester,
-      SongRow.pageIndexed(
-        song: _song(),
-        indexText: '1',
-        onTap: () {},
-      ),
+      SongRow.pageIndexed(song: _song(), indexText: '1', onTap: () {}),
     );
 
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
@@ -105,11 +101,7 @@ void main() {
     var longPresses = 0;
     await _pumpRow(
       tester,
-      SongRow(
-        song: _song(),
-        onTap: () {},
-        onLongPress: () => longPresses++,
-      ),
+      SongRow(song: _song(), onTap: () {}, onLongPress: () => longPresses++),
     );
     await tester.longPress(find.byType(SongRow));
     await tester.pumpAndSettle();
@@ -120,11 +112,7 @@ void main() {
   testWidgets('显式 menuSource: null 时不渲染三点, 长按也不弹菜单', (tester) async {
     await _pumpRow(
       tester,
-      SongRow(
-        song: _song(),
-        menuSource: null,
-        onTap: () {},
-      ),
+      SongRow(song: _song(), menuSource: null, onTap: () {}),
     );
     expect(find.byIcon(Icons.more_vert), findsNothing);
     await tester.longPress(find.byType(SongRow));
@@ -137,11 +125,7 @@ void main() {
     var menuCalls = 0;
     await _pumpRow(
       tester,
-      SongRow(
-        song: _song(),
-        onMenu: () => menuCalls++,
-        onTap: () {},
-      ),
+      SongRow(song: _song(), onMenu: () => menuCalls++, onTap: () {}),
     );
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
     await tester.tap(find.byIcon(Icons.more_vert));
