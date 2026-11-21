@@ -46,4 +46,12 @@ pub trait Provider:
     fn supports(&self, cap: Capability) -> bool {
         self.capabilities().contains(&cap)
     }
+
+    /// 取走 provider 侧累计的诊断日志(插件脚本的 `lx.log` / `console.*`)。
+    ///
+    /// 缺省是空(内置 provider 不攒日志); 有日志通道的实现自己覆盖。
+    /// **取走语义**: 同一批日志不会交付两次 —— 调用方是「按需拉取」而不是后台轮询。
+    fn take_logs(&self) -> Vec<String> {
+        Vec::new()
+    }
 }

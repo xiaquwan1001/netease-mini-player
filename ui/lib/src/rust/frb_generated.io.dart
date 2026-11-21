@@ -276,6 +276,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PluginFailureDto> dco_decode_list_plugin_failure_dto(dynamic raw);
 
   @protected
+  List<PluginLogDto> dco_decode_list_plugin_log_dto(dynamic raw);
+
+  @protected
   List<PluginRejectedDto> dco_decode_list_plugin_rejected_dto(dynamic raw);
 
   @protected
@@ -456,6 +459,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginFailureDto dco_decode_plugin_failure_dto(dynamic raw);
+
+  @protected
+  PluginLogDto dco_decode_plugin_log_dto(dynamic raw);
 
   @protected
   PluginRejectedDto dco_decode_plugin_rejected_dto(dynamic raw);
@@ -920,6 +926,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<PluginLogDto> sse_decode_list_plugin_log_dto(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   List<PluginRejectedDto> sse_decode_list_plugin_rejected_dto(
     SseDeserializer deserializer,
   );
@@ -1152,6 +1163,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginFailureDto sse_decode_plugin_failure_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginLogDto sse_decode_plugin_log_dto(SseDeserializer deserializer);
 
   @protected
   PluginRejectedDto sse_decode_plugin_rejected_dto(
@@ -1715,6 +1729,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_plugin_log_dto(
+    List<PluginLogDto> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_plugin_rejected_dto(
     List<PluginRejectedDto> self,
     SseSerializer serializer,
@@ -2031,6 +2051,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     PluginFailureDto self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_plugin_log_dto(PluginLogDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_plugin_rejected_dto(

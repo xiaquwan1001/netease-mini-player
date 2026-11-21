@@ -83,6 +83,14 @@ pub struct PluginSummaryDto {
     pub error: Option<String>,
 }
 
+/// 一个插件的诊断日志批次(`lx.log` / `console.*`)。
+///
+/// **取走语义**: 拉一次就清一次, 同一批日志不会重复交付(见 `PluginHost::take_logs`)。
+pub struct PluginLogDto {
+    pub id: String,
+    pub lines: Vec<String>,
+}
+
 /// 失败条目: 键是目录名或插件 id(见 `PluginHost::failures`).
 pub struct PluginFailureDto {
     pub id: String,
@@ -264,6 +272,26 @@ pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
     {
         let guard = core()?.lock().map_err(FfiError::from)?;
         Ok(failures_dto(&guard.plugin_failures()))
+    }
+    #[cfg(target_os = "android")]
+    {
+        Ok(Vec::new())
+    }
+}
+
+/// 拉走所有插件累计的诊断日志(按插件 id 分组, 空组丢弃)。
+///
+/// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。UI 侧按需点「拉取日志」,
+/// **不做后台轮询**(拉取要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用)。
+pub fn plugin_logs() -> Result<Vec<PluginLogDto>, FfiError> {
+    #[cfg(not(target_os = "android"))]
+    {
+        let guard = core()?.lock().map_err(FfiError::from)?;
+        Ok(guard
+            .plugin_take_logs()
+            .into_iter()
+            .map(|(id, lines)| PluginLogDto { id, lines })
+            .collect())
     }
     #[cfg(target_os = "android")]
     {

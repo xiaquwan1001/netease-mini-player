@@ -24,6 +24,13 @@ Future<List<PluginSummaryDto>> pluginSummaries() =>
 Future<List<PluginFailureDto>> pluginFailures() =>
     RustLib.instance.api.crateApiPluginPluginFailures();
 
+/// 拉走所有插件累计的诊断日志(按插件 id 分组, 空组丢弃)。
+///
+/// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。UI 侧按需点「拉取日志」,
+/// **不做后台轮询**(拉取要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用)。
+Future<List<PluginLogDto>> pluginLogs() =>
+    RustLib.instance.api.crateApiPluginPluginLogs();
+
 /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问).
 Future<List<PluginRejectedDto>> pluginRejected() =>
     RustLib.instance.api.crateApiPluginPluginRejected();
@@ -84,6 +91,27 @@ class PluginFailureDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           detail == other.detail;
+}
+
+/// 一个插件的诊断日志批次(`lx.log` / `console.*`)。
+///
+/// **取走语义**: 拉一次就清一次, 同一批日志不会重复交付(见 `PluginHost::take_logs`)。
+class PluginLogDto {
+  final String id;
+  final List<String> lines;
+
+  const PluginLogDto({required this.id, required this.lines});
+
+  @override
+  int get hashCode => id.hashCode ^ lines.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginLogDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          lines == other.lines;
 }
 
 /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问).

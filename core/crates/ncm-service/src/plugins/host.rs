@@ -305,6 +305,24 @@ impl PluginHost {
             .unwrap_or_default()
     }
 
+    /// 拉走所有已装载插件累计的诊断日志(按插件 id 分组, 空组丢弃).
+    ///
+    /// **取走语义**: 同一批日志只交付一次; UI 按需拉取(不做后台轮询 —— 拉取本身
+    /// 不碰网络, 但要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用).
+    pub fn take_logs(&self) -> Vec<(String, Vec<String>)> {
+        let Some(registry) = self.registry.as_ref() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for (id, provider) in registry.entries() {
+            let lines = provider.take_logs();
+            if !lines.is_empty() {
+                out.push((id, lines));
+            }
+        }
+        out
+    }
+
     /// 按**插件 id** 取 provider(不是 `Provider::id()`, 后者恒为 `"script"`).
     ///
     /// 未启用/未装载/不存在都返回 `None` —— 这是查询不是操作, 不制造错误;

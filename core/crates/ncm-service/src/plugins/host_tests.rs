@@ -64,6 +64,37 @@ fn write_plugin(root: &Path, id: &str) {
     std::fs::write(dir.join("index.js"), MIN_SCRIPT).expect("写入口脚本");
 }
 
+/// 日志通道: 取走语义 + 按插件 id 分组(空组不进结果).
+#[test]
+fn take_logs_groups_by_plugin_and_drains() {
+    let temp = TempDir::new("logs");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    write_plugin(&root, "demo");
+    // 顶层 lx.log: 装载期就该进宿主日志缓冲(不是只有调用期才有).
+    std::fs::write(
+        root.join("demo").join("index.js"),
+        "lx.log('boot', 1);\nlx.on('musicUrl', async () => 'https://cdn.test/a.mp3');",
+    )
+    .expect("写入口脚本");
+    enable_policy(temp.path());
+
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+    assert!(host.take_logs().is_empty(), "没启用就没有日志可拉");
+    host.enable("demo").expect("启用");
+
+    let batch = host.take_logs();
+    assert_eq!(batch.len(), 1, "只有一个插件有日志: {batch:?}");
+    assert_eq!(batch[0].0, "demo");
+    assert!(
+        batch[0].1.iter().any(|line| line.contains("boot")),
+        "装载期 lx.log 要落进宿主缓冲: {:?}",
+        batch[0].1
+    );
+    assert!(
+        host.take_logs().is_empty(),
+        "取走语义: 同一批日志不能交付两次"
+    );
+}
 /// 打开总开关(写策略文件).
 fn enable_policy(data_dir: &Path) {
     let policy = PluginHostPolicy {

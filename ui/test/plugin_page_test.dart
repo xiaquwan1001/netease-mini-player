@@ -32,6 +32,9 @@ class _FakePluginHost implements RustLibApi {
   /// 路由偏好(`auto` / `builtin` / `plugin:<id>`), 与 Rust 侧 `plugin_route.json` 同形。
   String routeMode = 'auto';
 
+  /// 日志批次队列: 每次拉取弹一批(模拟 Rust 侧的取走语义)。
+  List<List<rust.PluginLogDto>> logBatches = [];
+
   /// 首屏读状态失败注入(测 AsyncView 的错误态 + 重试)。
   Object? statusError;
 
@@ -127,6 +130,12 @@ class _FakePluginHost implements RustLibApi {
         else
           s,
     ];
+  }
+
+  @override
+  Future<List<rust.PluginLogDto>> crateApiPluginPluginLogs() async {
+    calls.add('logs');
+    return logBatches.isEmpty ? const [] : logBatches.removeAt(0);
   }
 
   @override
@@ -237,7 +246,8 @@ void main() {
       ..rejected = const []
       ..statusError = null
       ..rescanGate = null
-      ..routeMode = 'auto';
+      ..routeMode = 'auto'
+      ..logBatches = [];
     _fake.calls.clear();
   });
 
@@ -421,6 +431,37 @@ void main() {
     // 失败不换 future ⇒ 内容还在, 没闪成错误态。
     expect(find.text('示例插件'), findsOneWidget);
     expect(tester.widget<SwitchListTile>(_masterTile()).onChanged, isNotNull);
+  });
+
+  testWidgets('日志: 拉取后按插件分组显示, 再拉一次给"没有新日志"', (tester) async {
+    _fake.logBatches = [
+      [
+        const rust.PluginLogDto(
+          id: 'demo',
+          lines: ['[log] boot', '[warn] slow'],
+        ),
+      ],
+    ];
+    await _pumpPage(tester);
+
+    // 还没拉过 ⇒ 只给提示, 不凭空显示内容.
+    expect(find.text('还没拉取过。'), findsOneWidget);
+    await tester.ensureVisible(find.text('拉取日志'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('拉取日志'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, ['logs']);
+    expect(find.text('demo'), findsWidgets);
+    expect(find.textContaining('[log] boot'), findsOneWidget);
+    expect(find.textContaining('[warn] slow'), findsOneWidget);
+
+    // 取走语义: 第二批是空的 ⇒ 页面说"没有新日志", 旧内容被替换.
+    await tester.tap(find.text('拉取日志'));
+    await tester.pumpAndSettle();
+    expect(_fake.calls, ['logs', 'logs']);
+    expect(find.text('暂时没有新日志。'), findsOneWidget);
+    expect(find.textContaining('[log] boot'), findsNothing);
   });
 
   testWidgets('首屏失败: AsyncView 的错误态 + 重试能恢复', (tester) async {

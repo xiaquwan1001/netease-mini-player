@@ -73,6 +73,12 @@ class _PluginsPageState extends State<PluginsPage> {
   /// 正在重扫(重扫按钮换成行内 spinner, 不换整页加载态)。
   bool _rescanning = false;
 
+  /// 最近一次拉到的日志(`null` = 还没拉过)。**取走语义**: 每次拉取只给新日志。
+  List<rust.PluginLogDto>? _logs;
+
+  /// 日志拉取在飞(按钮换行内 spinner)。
+  bool _pullingLogs = false;
+
   @override
   void initState() {
     super.initState();
@@ -208,6 +214,25 @@ class _PluginsPageState extends State<PluginsPage> {
       final applied = await rust.pluginSetRouteMode(mode: mode);
       return '音源路由已切到 ${_routeModeLabel(applied)}';
     });
+  }
+
+  /// 拉取插件日志(`lx.log` / `console.*`)。
+  ///
+  /// **取走语义**: 拉一次清一次, 页面只显示最近一批; 不后台轮询(拉取要拿 `Core` 的
+  /// 唯一一把锁, 轮询会拖慢别的域调用)。
+  Future<void> _pullLogs() async {
+    if (_busy || _pullingLogs) return;
+    setState(() => _pullingLogs = true);
+    try {
+      final logs = await rust.pluginLogs();
+      if (!mounted) return;
+      setState(() => _logs = logs);
+    } catch (e) {
+      if (!mounted) return;
+      showToast(context, friendlyError(e), isError: true);
+    } finally {
+      if (mounted) setState(() => _pullingLogs = false);
+    }
   }
 
   /// 重扫: 扫盘 + 全量重建 provider 视图(没有热重载)。
@@ -406,7 +431,83 @@ class _PluginsPageState extends State<PluginsPage> {
             ),
           ),
         ],
+        const SizedBox(height: kSectionGap),
+        SectionHeader(
+          title: '日志',
+          icon: Icons.article_outlined,
+          trailing: _pullLogsButton(),
+        ),
+        AdaptiveText(
+          '脚本的 lx.log / console.* 按需拉取; 拉一次清一次(取走语义), 不做后台轮询。',
+          mode: AdaptiveTextMode.wrap,
+          maxLines: 2,
+          style: bodySmall,
+        ),
+        const SizedBox(height: kSectionHeaderGap),
+        _logsCard(context),
       ],
+    );
+  }
+
+  /// 拉取按钮: 在飞换行内 spinner; 与其它写入口共用 `_busy` 闸门。
+  Widget _pullLogsButton() {
+    if (_pullingLogs) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: LoadingView.inline(size: 16),
+      );
+    }
+    return TextButton(
+      onPressed: _busy ? null : _pullLogs,
+      style: TextButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        minimumSize: Size.zero,
+      ),
+      child: const Text('拉取日志'),
+    );
+  }
+
+  /// 日志卡片: 一插件一条, 多行等宽显示(`lx.log` 原文, 不再加工)。
+  Widget _logsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final logs = _logs;
+    if (logs == null) {
+      return AdaptiveText(
+        '还没拉取过。',
+        mode: AdaptiveTextMode.wrap,
+        maxLines: 2,
+        style: theme.textTheme.bodySmall,
+      );
+    }
+    if (logs.isEmpty) {
+      return AdaptiveText(
+        '暂时没有新日志。',
+        mode: AdaptiveTextMode.wrap,
+        maxLines: 2,
+        style: theme.textTheme.bodySmall,
+      );
+    }
+    return Card(
+      margin: kCardMargin,
+      child: Column(
+        children: [
+          for (var i = 0; i < logs.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.terminal_outlined),
+              title: AdaptiveText(logs[i].id, mode: AdaptiveTextMode.ellipsis),
+              subtitle: SelectableText(
+                logs[i].lines.join('\n'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

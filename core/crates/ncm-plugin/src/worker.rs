@@ -159,12 +159,6 @@ impl ScriptProvider {
         })
     }
 
-    /// 取走宿主累计的 `lx.log` / `console.*` 输出(UI 日志通道是后续切片).
-    pub fn take_logs(&self) -> Vec<String> {
-        let mut guard = self.logs.lock().unwrap_or_else(|e| e.into_inner());
-        std::mem::take(&mut *guard)
-    }
-
     async fn invoke(&self, event: &str, args: Value) -> ProviderResult<Value> {
         let (reply_tx, reply_rx) = oneshot::channel();
         self.tx
@@ -235,6 +229,12 @@ impl Provider for ScriptProvider {
 
     fn capabilities(&self) -> &'static [Capability] {
         self.capabilities
+    }
+
+    /// 取走宿主累计的 `lx.log` / `console.*` 输出(取走语义; UI 走 `plugin_logs` 拉取).
+    fn take_logs(&self) -> Vec<String> {
+        let mut guard = self.logs.lock().unwrap_or_else(|e| e.into_inner());
+        std::mem::take(&mut *guard)
     }
 }
 
