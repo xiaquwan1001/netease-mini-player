@@ -167,11 +167,11 @@
 
 | # | 项 | 需要的动作 | 相关代码/判据 |
 |---|---|---|---|
-| H1 | 扫码登录端到端 | 真机扫一次码: 确认桌面 type=3 通道成功、8821 时提示「需要在手机上完成安全验证」后能自动继续 | v0.30.0 QrClientKind / login_sheet.dart |
-| H2 | 他人主页「常听」排行 | 有登录态真机看 userPlayRanking 是否真有数据, 有数据才接页面 | §11.A-2 |
+| ~~H1~~ | ~~扫码登录端到端~~ **不适用(2026-11-21 用户裁决)** | 我们的场景 PC 端没有 web 登录, 扫码全程在手机上完成; 8821 安全验证只存在于 PC web 登录 ⇒ 该验收项取消 | v0.30.0 QrClientKind / login_sheet.dart |
+| ~~H2~~ | ~~他人主页「常听」排行~~ **有数据, 已排期(2026-11-21)** | 用户以登录态在官方 PC 网页确认: 关注用户「小猫屿海」有真实听歌排行(累积 6114 首 / 所有时间 / 最近一周)⇒ 此前「匿名恒空」不构成否决; 车道 `lane/user-rank` 接页面 | §11.A-2 |
 | H3 | 诊断 Worker 自定义域 + PAT 轮换 | wrangler secret put GH_TOKEN + 绑自有域 + 填 app_meta.dart 端点 | §11.A-6 |
-| H4 | 云盘分片上传端点 | 抓包音乐云盘桶的分片 HTTP 形状(桶/主机/收尾), 再实现 ChunkUploader | ncm-service/src/cloud_chunk.rs TODO |
-| H5 | 通知点击真机验证 | 真人点通知, 补执行被 BAL 拦的 1 例 instrumented 用例 | NotificationClickTest assume-skip |
+| ~~H4~~ | ~~云盘分片上传端点~~ **云盘操作已由用户验证通过(2026-11-21)** | 云盘上传/删除等操作实测可用; 分片端点抓包只剩「大文件速度优化」性质, 降级为可选(不再阻塞) | ncm-service/src/cloud_chunk.rs TODO |
+| ~~H5~~ | ~~通知点击真机验证~~ **通过(2026-11-21 用户)** | 安卓系统状态栏点通知能跳转 App; 被 BAL 拦的那 1 例 instrumented 仍保留 assume-skip, 不再作为待办 | NotificationClickTest |
 | H6 | 桌面听感 / P-10 微调 | 真机听一遍缓冲与切歌听感 | §13 P-10 |
 | H7 | Windows 侧 | **issue 驱动**: 收不到 issue 不主动处理 | §11.A-4 |
 
