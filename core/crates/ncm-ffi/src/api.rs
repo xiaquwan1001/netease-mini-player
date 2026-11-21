@@ -26,6 +26,13 @@ use ncm_service::Core;
 
 static CORE: OnceLock<Mutex<Core>> = OnceLock::new();
 
+/// 插件宿主的共享句柄(与 `CORE` 里那份是**同一个** `Arc`).
+///
+/// 插件 FFI 入口只走这里, **不再取 `CORE` 锁**: `rescan`/`install_*`/`enable` 会真的装载
+/// QuickJS(单插件装载预算 8s), 持 `Core` 锁做这些会让所有其它域的 FFI 排队(隔离二期切片 A).
+/// 锁序纪律: 允许 `Core -> 插件句柄`, **禁止**反过来.
+static PLUGIN: OnceLock<ncm_service::PluginHostHandle> = OnceLock::new();
+
 /// 跨桥错误: 结构化的 provider 错误, 不再让 Dart 靠文本前缀猜.
 ///
 /// 字段语义与 [`ncm_provider::ProviderError`] 一一对应:
@@ -124,6 +131,14 @@ fn core() -> Result<&'static Mutex<Core>, FfiError> {
         .ok_or_else(|| FfiError::internal("core not initialized"))
 }
 
+/// 插件宿主的共享句柄(未初始化 ⇒ 与 `core()` 同一个错误口径).
+fn plugin_host() -> Result<ncm_service::PluginHostHandle, FfiError> {
+    PLUGIN
+        .get()
+        .cloned()
+        .ok_or_else(|| FfiError::internal("core not initialized"))
+}
+
 /// D5: 纯 provider 转发型 FFI 封装统一 helper。
 /// - ffi_forward!(Capability::X, provider.method(args))             返回值直接透传
 /// - ffi_forward!(Capability::X, provider.method(args), map conv)     末步转 Dto(conv 为普通 fn/闭包)
@@ -175,7 +190,9 @@ pub fn init(data_dir: Option<String>) -> Result<InitInfo, FfiError> {
     let _ = DATA_DIR.set(std::path::PathBuf::from(&dir));
     if CORE.get().is_none() {
         let core = Core::open(Path::new(&dir)).map_err(FfiError::from)?;
+        let handle = core.plugin_host_handle();
         let _ = CORE.set(Mutex::new(core));
+        let _ = PLUGIN.set(handle);
     }
     let guard = core()?.lock().map_err(FfiError::from)?;
     Ok(InitInfo {

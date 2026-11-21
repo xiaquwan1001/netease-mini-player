@@ -22,6 +22,18 @@ pub mod registry;
 pub mod route;
 pub mod transport;
 
+/// 插件宿主的**共享句柄**: FFI 层靠它绕开 `Core` 的唯一一把锁做装载/扫描(切片 A).
+///
+/// 为什么要单独一把锁: `rescan`/`install_*`/`enable` 会真的装载 QuickJS(单插件装载预算
+/// 8s), 若持 `Core` 锁执行, 期间**所有其它域**的 FFI 都排队. 现在换成独立 `RwLock`:
+/// - 读类(`status/summaries/failures/rejected/sources/logs/ids/provider/policy/route_*`)取**读锁**
+///   (纯内存遍历, 多个读并发不互斥);
+/// - 写类(`rescan/install_*/enable/disable/uninstall/set_enabled/set_root/set_route_mode`)取**写锁**.
+///
+/// **锁序纪律**: 允许 `Core 锁 -> 这里`, **禁止**反过来 —— 插件侧的代码绝不回头拿 `Core` 锁
+/// (所以插件 FFI 入口一个都不要再调 `super::core()`).
+pub type PluginHostHandle = std::sync::Arc<std::sync::RwLock<PluginHost>>;
+
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
 pub use manager::{
     check_https_url, ManagerError, ManagerErrorKind, PluginFailureRecord, PluginManager,

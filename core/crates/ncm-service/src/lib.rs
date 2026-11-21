@@ -29,8 +29,8 @@ pub use loudness_store::LoudnessStore;
 pub use netease::{thread_id_for, NeteaseProvider};
 pub use plugins::host::{PluginHostPolicy, PluginHostStatus};
 pub use plugins::{
-    PluginHost, PluginSummary, RegistryReport, RouteDecision, RouteMode, RoutePlan, RouteReason,
-    RouteTarget, RouteUsed, Routed,
+    PluginHost, PluginHostHandle, PluginSummary, RegistryReport, RouteDecision, RouteMode,
+    RoutePlan, RouteReason, RouteTarget, RouteUsed, Routed,
 };
 pub use ttml_source::{
     fetch_ttml, word_lyric_with_fallback, LyricSource, TtmlDoc, WordLyricWithSource,
@@ -38,7 +38,7 @@ pub use ttml_source::{
 
 use ncm_provider::{Capability, ProviderRegistry};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// 取 Mutex 锁并**忽略中毒**: 持锁线程 panic 后 `unwrap()` 会把整个进程再带崩一次,
 /// 而我们持的这几把锁底下都是"可重建的状态"(凭据后端句柄、状态枚举、pending 队列),
@@ -56,7 +56,29 @@ pub struct Core {
     pub providers: ProviderRegistry,
     pub netease: Arc<NeteaseProvider>,
     /// 插件宿主: 缺省不扫描, 详见 `plugins::host` 头注释.
-    plugin_host: PluginHost,
+    ///
+    /// 存**共享句柄**而不是裸 `PluginHost`: 装载/扫描很慢(单插件 8s), 而 `Core` 只有唯一一把锁,
+    /// 插件 FFI 入口要能跳过 `Core` 锁直接拿这一把(锁序纪律见 `plugins::PluginHostHandle`).
+    plugin_host: PluginHostHandle,
+}
+
+impl Core {
+    /// 插件宿主的**共享句柄**(FFI 层用它绕开 `Core` 锁执行装载/扫描等慢操作).
+    ///
+    /// 拿到之后**不要再回头调 `core()`**(锁序纪律见 [`PluginHostHandle`]).
+    pub fn plugin_host_handle(&self) -> PluginHostHandle {
+        self.plugin_host.clone()
+    }
+
+    /// 插件宿主读锁(忽略中毒: 底下是"可重建的内存视图").
+    fn plugin_host_read(&self) -> RwLockReadGuard<'_, PluginHost> {
+        self.plugin_host.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 插件宿主写锁(装载/扫描/落盘; 同类写操作之间串行).
+    fn plugin_host_write(&self) -> RwLockWriteGuard<'_, PluginHost> {
+        self.plugin_host.write().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 impl Core {
@@ -74,7 +96,7 @@ impl Core {
         providers.register(netease.clone());
         // 插件宿主:**不返回 Result** —— 插件侧的失败(坏清单/根目录建不出来)只降级成
         // "宿主不可用", 绝不影响 Core 启动(见 plugins/host.rs 头注释的缺省值一节).
-        let plugin_host = PluginHost::open(data_dir);
+        let plugin_host = Arc::new(RwLock::new(PluginHost::open(data_dir)));
         Ok(Self {
             store,
             session,
@@ -216,52 +238,52 @@ impl Core {
 impl Core {
     /// 宿主状态(UI 用它解释"为什么列表是空的")
     pub fn plugin_status(&self) -> PluginHostStatus {
-        self.plugin_host.status()
+        self.plugin_host_read().status()
     }
 
     /// 插件列表(含坏条目的 `error` 原因)
     pub fn plugin_summaries(&self) -> Vec<PluginSummary> {
-        self.plugin_host.summaries()
+        self.plugin_host_read().summaries()
     }
 
     /// 失败原因(清单坏/路径不安全/装载失败)
     pub fn plugin_failures(&self) -> std::collections::BTreeMap<String, String> {
-        self.plugin_host.failures()
+        self.plugin_host_read().failures()
     }
 
     /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问)
     pub fn plugin_rejected(&self) -> Vec<(String, String)> {
-        self.plugin_host.rejected()
+        self.plugin_host_read().rejected()
     }
 
     /// 各插件自报的平台代号(展示/诊断用, 不参与路由)
     pub fn plugin_sources(&self) -> std::collections::BTreeMap<String, Vec<String>> {
-        self.plugin_host.sources()
+        self.plugin_host_read().sources()
     }
 
     /// 拉走所有插件累计的诊断日志(按插件 id 分组, 取走语义)
     pub fn plugin_take_logs(&self) -> Vec<(String, Vec<String>)> {
-        self.plugin_host.take_logs()
+        self.plugin_host_read().take_logs()
     }
 
     /// 已装载 provider 的插件 id(字典序)
     pub fn plugin_ids(&self) -> Vec<String> {
-        self.plugin_host.ids()
+        self.plugin_host_read().ids()
     }
 
     /// 按**插件 id** 取 provider(未启用/未装载/不存在都是 `None`)
     pub fn plugin_provider(&self, id: &str) -> Option<Arc<dyn ncm_provider::Provider>> {
-        self.plugin_host.provider(id)
+        self.plugin_host_read().provider(id)
     }
 
     /// 启用插件并即时装载
     pub fn plugin_enable(&mut self, id: &str) -> ncm_provider::ProviderResult<()> {
-        self.plugin_host.enable(id)
+        self.plugin_host_write().enable(id)
     }
 
     /// 停用插件并摘掉 provider
     pub fn plugin_disable(&mut self, id: &str) -> ncm_provider::ProviderResult<()> {
-        self.plugin_host.disable(id)
+        self.plugin_host_write().disable(id)
     }
 
     /// 从脚本文本导入一个插件(写盘 + 立即重扫)
@@ -276,7 +298,7 @@ impl Core {
         lx_events: &[String],
         request_domains: &[String],
     ) -> ncm_provider::ProviderResult<RegistryReport> {
-        self.plugin_host.install_source(
+        self.plugin_host_write().install_source(
             id,
             name,
             version,
@@ -298,7 +320,7 @@ impl Core {
         lx_events: &[String],
         request_domains: &[String],
     ) -> ncm_provider::ProviderResult<RegistryReport> {
-        self.plugin_host
+        self.plugin_host_write()
             .install_file(id, name, version, path, lx_events, request_domains)
     }
 
@@ -313,51 +335,55 @@ impl Core {
         lx_events: &[String],
         request_domains: &[String],
     ) -> ncm_provider::ProviderResult<RegistryReport> {
-        self.plugin_host
+        self.plugin_host_write()
             .install_url(id, name, version, url, lx_events, request_domains)
     }
 
     /// 卸载一个插件(停用 → 删目录含 `data/` → 清状态 → 重扫; 路由选择回 `auto`)
     pub fn plugin_uninstall(&mut self, id: &str) -> ncm_provider::ProviderResult<RegistryReport> {
-        self.plugin_host.uninstall(id)
+        self.plugin_host_write().uninstall(id)
     }
 
     /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn plugin_rescan(&mut self) -> ncm_provider::ProviderResult<RegistryReport> {
-        self.plugin_host.rescan()
+        self.plugin_host_write().rescan()
     }
 
     /// 宿主总开关(持久化到 `plugin_host.json`)
     pub fn plugin_set_enabled(&mut self, enabled: bool) -> ncm_provider::ProviderResult<()> {
-        self.plugin_host.set_enabled(enabled)
+        self.plugin_host_write().set_enabled(enabled)
     }
 
     /// 改插件根目录(`None` = 回到缺省 `<data_dir>/plugins`)
     pub fn plugin_set_root(&mut self, root: Option<PathBuf>) -> ncm_provider::ProviderResult<()> {
-        self.plugin_host.set_root(root)
+        self.plugin_host_write().set_root(root)
     }
 
-    /// 宿主策略(只读: 总开关与根目录)
-    pub fn plugin_policy(&self) -> &PluginHostPolicy {
-        self.plugin_host.policy()
+    /// 宿主策略(只读: 总开关与根目录).
+    ///
+    /// 返回**拥有值**(策略是小结构体): 句柄锁是局部的, 给不出借用的生命周期.
+    pub fn plugin_policy(&self) -> PluginHostPolicy {
+        self.plugin_host_read().policy().clone()
     }
 
     // ---------------- 路由(产品路径: 取链 / 搜索) ----------------
 
     /// 当前路由偏好(`auto` 单插件自动 / `builtin` 只用内置 / `plugin:<id>` 显式选).
-    pub fn plugin_route_mode(&self) -> &RouteMode {
-        self.plugin_host.route_mode()
+    ///
+    /// 返回**拥有值**(理由同 [`Core::plugin_policy`]: 句柄锁是局部的).
+    pub fn plugin_route_mode(&self) -> RouteMode {
+        self.plugin_host_read().route_mode().clone()
     }
 
     /// 改路由偏好并落盘(`plugin_route.json`). 失效的 id 不在这里报错, 见
     /// [`Core::plugin_route_plan`](Self::plugin_route_plan) 的 `selectionMissing`.
     pub fn plugin_set_route_mode(&mut self, mode: RouteMode) -> ncm_provider::ProviderResult<()> {
-        self.plugin_host.set_route_mode(mode)
+        self.plugin_host_write().set_route_mode(mode)
     }
 
     /// 本次调用该走谁(纯判定; 判定依据见 [`RouteReason`]).
     pub fn plugin_route_plan(&self, cap: Capability) -> RoutePlan {
-        self.plugin_host.route_plan(cap)
+        self.plugin_host_read().route_plan(cap)
     }
 
     /// 产品路径的**唯一路由入口**: 判定 + 取到两边 provider(`Arc`), 之后调用方不持锁.
@@ -365,11 +391,11 @@ impl Core {
     /// 插件命中失败(超时/脚本错/协议错)的回落由 [`plugins::route::call_routed`] 做,
     /// 判定原因(`RouteReason`)与回落(`RouteUsed`)都进日志 + [`plugins::last_route_event`].
     pub fn route_decision(&self, cap: Capability) -> RouteDecision {
-        let plan = self.plugin_host.route_plan(cap);
+        let plan = self.plugin_host_read().route_plan(cap);
         plugins::route::warn_plan(cap, &plan);
         let plugin = plan
             .plugin_id()
-            .and_then(|id| self.plugin_host.provider(id));
+            .and_then(|id| self.plugin_host_read().provider(id));
         RouteDecision {
             capability: cap,
             plan,

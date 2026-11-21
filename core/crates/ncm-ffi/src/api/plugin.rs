@@ -1,7 +1,7 @@
 //! 插件管理导出层: 宿主状态 / 列表 / 失败视图 / 单插件启停 / 重扫 / 总开关.
 //!
 //! 这是 `ncm-service::plugins::host` 的**唯一 FFI 出口**(切片 2 第六步; 没有 UI 页面).
-//! 本文件只做两件事: 取 `Core` 锁、把 DTO 摊平成桥接类型. 所有决策(缺省不扫描、
+//! 本文件只做两件事: 取**插件宿主句柄的锁**、把 DTO 摊平成桥接类型. 所有决策(缺省不扫描、
 //! 单插件状态、失败隔离)都在 `PluginHost` 里, 这里**不重复判断**.
 //!
 //! # 错误口径: 只有一条
@@ -28,11 +28,19 @@
 //! 给空视图 + `status.enabled == false`(UI 靠它解释"为什么列表是空的").
 //! 这与 `Core` 侧语义逐字一致, 本层没有额外规则.
 //!
-//! # 并发: 这些都拿 `Core` 的唯一一把锁
+//! # 并发: 拿的是**插件宿主自己的锁**, 不再是 `Core` 的唯一一把锁(隔离二期切片 A, v0.36.0)
 //!
-//! 导出函数是同步实现(`frb` 给 Dart 生成 `Future`, 但 Rust 侧不 await), 每次调用锁
-//! `MUTEX<Core>`. `plugin_rescan`/`plugin_set_enabled(true)` 会真的扫盘并装载 QuickJS,
-//! **持锁期间其它域调用会等待** ⇒ UI 侧串行调用、给个 loading 态, 别并发轮询.
+//! 导出函数是同步实现(`frb` 给 Dart 生成 `Future`, 但 Rust 侧不 await). 入口统一走
+//! `super::plugin_host()` 拿 `Arc<RwLock<PluginHost>>`(与 `CORE` 里那份**同一个** `Arc`):
+//! - 读类(`status/summaries/failures/logs/rejected/route_mode/route_plan`)取**读锁**, 多个读并发;
+//! - 写类(`rescan/set_enabled/install_*/enable/disable/uninstall/set_route_mode`)取**写锁**,
+//!   彼此串行 —— 它们会真的扫盘并装载 QuickJS(单插件预算 8s).
+//!
+//! 关键收益: 装载期间**其它域的 FFI(`song_url`/`search`/账号…)完全不受影响**, 因为它们只碰
+//! `Core` 锁. UI 侧仍建议给个 loading 态(同类写操作之间还是会排队), 但不必再怕"重扫时整机卡".
+//!
+//! 锁序纪律: 允许 `Core 锁 -> 插件句柄`, **禁止**反过来(插件侧代码绝不回头拿 `Core` 锁);
+//! 判据用例 `ncm-service` `plugins::route_tests::plugin_handle_does_not_hold_the_core_lock_while_loading`.
 //!
 //! # 平台覆盖: 四端同一份实现(2026-11-21 起 Android 也带插件宿主)
 //!
@@ -198,16 +206,18 @@ fn rescan_dto(report: &ncm_service::RegistryReport) -> PluginRescanDto {
 ///
 /// 读类: 总开关关闭时**不报错**, 返回 `enabled = false` 的空视图.
 pub fn plugin_status() -> Result<PluginStatusDto, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    Ok(status_dto(&guard.plugin_status()))
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    Ok(status_dto(&guard.status()))
 }
 
 /// 插件列表(含坏条目的 `error` 原因).
 pub fn plugin_summaries() -> Result<Vec<PluginSummaryDto>, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    let sources = guard.plugin_sources();
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    let sources = guard.sources();
     Ok(guard
-        .plugin_summaries()
+        .summaries()
         .iter()
         .map(|summary| summary_dto(summary, &sources))
         .collect())
@@ -215,8 +225,9 @@ pub fn plugin_summaries() -> Result<Vec<PluginSummaryDto>, FfiError> {
 
 /// 失败原因(清单坏/路径不安全/装载失败), 按 id 字典序.
 pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    Ok(failures_dto(&guard.plugin_failures()))
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    Ok(failures_dto(&guard.failures()))
 }
 
 /// 拉走所有插件累计的诊断日志(按插件 id 分组, 空组丢弃)。
@@ -224,9 +235,10 @@ pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
 /// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。UI 侧按需点「拉取日志」,
 /// **不做后台轮询**(拉取要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用)。
 pub fn plugin_logs() -> Result<Vec<PluginLogDto>, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
     Ok(guard
-        .plugin_take_logs()
+        .take_logs()
         .into_iter()
         .map(|(id, lines)| PluginLogDto { id, lines })
         .collect())
@@ -234,26 +246,30 @@ pub fn plugin_logs() -> Result<Vec<PluginLogDto>, FfiError> {
 
 /// 最近一次扫描被拒收的条目(跨目录同 id / 目录不可访问).
 pub fn plugin_rejected() -> Result<Vec<PluginRejectedDto>, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    Ok(rejected_dto(&guard.plugin_rejected()))
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    Ok(rejected_dto(&guard.rejected()))
 }
 
 /// 启用单个插件并即时装载(宿主总开关没开 ⇒ `forbidden`, 不会隐式打开总开关).
 pub fn plugin_enable(id: String) -> Result<(), FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard.plugin_enable(&id).map_err(FfiError::from)
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    guard.enable(&id).map_err(FfiError::from)
 }
 
 /// 停用单个插件并摘掉内存里的 provider.
 pub fn plugin_disable(id: String) -> Result<(), FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard.plugin_disable(&id).map_err(FfiError::from)
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    guard.disable(&id).map_err(FfiError::from)
 }
 
 /// 重扫插件根目录(全量重建 provider 视图).
 pub fn plugin_rescan() -> Result<PluginRescanDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    let report = guard.plugin_rescan().map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    let report = guard.rescan().map_err(FfiError::from)?;
     Ok(rescan_dto(&report))
 }
 
@@ -271,9 +287,10 @@ pub fn plugin_install_script(
     lx_events: Vec<String>,
     request_domains: Vec<String>,
 ) -> Result<PluginRescanDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
     let report = guard
-        .plugin_install_script(
+        .install_source(
             &id,
             &name,
             &version,
@@ -300,9 +317,10 @@ pub fn plugin_install_file(
     lx_events: Vec<String>,
     request_domains: Vec<String>,
 ) -> Result<PluginRescanDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
     let report = guard
-        .plugin_install_file(
+        .install_file(
             &id,
             &name,
             &version,
@@ -327,9 +345,10 @@ pub fn plugin_install_url(
     lx_events: Vec<String>,
     request_domains: Vec<String>,
 ) -> Result<PluginRescanDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
     let report = guard
-        .plugin_install_url(&id, &name, &version, &url, &lx_events, &request_domains)
+        .install_url(&id, &name, &version, &url, &lx_events, &request_domains)
         .map_err(FfiError::from)?;
     Ok(rescan_dto(&report))
 }
@@ -342,8 +361,9 @@ pub fn plugin_install_url(
 ///
 /// 返回的 `scanned` 恒为空(卸载不“新登记”任何插件), 结果看 `loaded/skipped/failed`。
 pub fn plugin_uninstall(id: String) -> Result<PluginRescanDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    let report = guard.plugin_uninstall(&id).map_err(FfiError::from)?;
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    let report = guard.uninstall(&id).map_err(FfiError::from)?;
     Ok(rescan_dto(&report))
 }
 
@@ -353,8 +373,9 @@ pub fn plugin_uninstall(id: String) -> Result<PluginRescanDto, FfiError> {
 /// 这是"磁盘上多一个插件目录"变成"真的执行脚本"的唯一开关 ——
 /// 打开失败时策略不落盘并回滚内存状态, 错误是 `internal`.
 pub fn plugin_set_enabled(enabled: bool) -> Result<(), FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard.plugin_set_enabled(enabled).map_err(FfiError::from)
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    guard.set_enabled(enabled).map_err(FfiError::from)
 }
 
 // ---------------------------- 路由(取链/搜索的判定视图) ----------------------------
@@ -410,8 +431,9 @@ fn route_plan_dto(plan: &ncm_service::RoutePlan) -> PluginRoutePlanDto {
 
 /// 当前路由偏好.
 pub fn plugin_route_mode() -> Result<PluginRouteModeDto, FfiError> {
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    Ok(route_mode_dto(guard.plugin_route_mode()))
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    Ok(route_mode_dto(guard.route_mode()))
 }
 
 /// 改路由偏好(落盘 `plugin_route.json`, 0600 原子写)并回读生效值.
@@ -425,11 +447,10 @@ pub fn plugin_set_route_mode(mode: String) -> Result<PluginRouteModeDto, FfiErro
             "plugin_set_route_mode: 不认识的模式 `{mode}`, 只接受 auto / builtin / plugin:<id>"
         ))
     })?;
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard
-        .plugin_set_route_mode(parsed)
-        .map_err(FfiError::from)?;
-    Ok(route_mode_dto(guard.plugin_route_mode()))
+    let host = plugin_host()?;
+    let mut guard = host.write().unwrap_or_else(|e| e.into_inner());
+    guard.set_route_mode(parsed).map_err(FfiError::from)?;
+    Ok(route_mode_dto(guard.route_mode()))
 }
 
 /// 这个能力这次会走谁(纯判定; 想要"实际走了谁"看日志/诊断, 那是调用期的事).
@@ -439,8 +460,9 @@ pub fn plugin_set_route_mode(mode: String) -> Result<PluginRouteModeDto, FfiErro
 pub fn plugin_route_plan(cap: String) -> Result<PluginRoutePlanDto, FfiError> {
     let capability = ncm_provider::Capability::parse(&cap)
         .ok_or_else(|| FfiError::unsupported(format!("plugin_route_plan: 未知能力 `{cap}`")))?;
-    let guard = core()?.lock().map_err(FfiError::from)?;
-    Ok(route_plan_dto(&guard.plugin_route_plan(capability)))
+    let host = plugin_host()?;
+    let guard = host.read().unwrap_or_else(|e| e.into_inner());
+    Ok(route_plan_dto(&guard.route_plan(capability)))
 }
 
 // 用例用到 `ncm_service::plugins`(非 Android 才有), 所以测试模块也按平台 gate.

@@ -531,7 +531,7 @@ fn core_routes_to_single_plugin_then_back_after_disable() {
         .expect("写路由偏好");
     assert_eq!(
         core.plugin_route_mode(),
-        &RouteMode::Plugin { id: "demo".into() }
+        RouteMode::Plugin { id: "demo".into() }
     );
 
     // ③ 停用 ⇒ 当次回内置(`selectionMissing`), 偏好本身不被偷偷改掉.
@@ -547,7 +547,7 @@ fn core_routes_to_single_plugin_then_back_after_disable() {
     );
     assert_eq!(
         core.plugin_route_mode(),
-        &RouteMode::Plugin { id: "demo".into() },
+        RouteMode::Plugin { id: "demo".into() },
         "停用插件 ≠ 改用户选择"
     );
 }
@@ -560,16 +560,72 @@ fn core_route_preference_survives_reopen() {
     enable_policy(temp.path());
     {
         let mut core = crate::Core::open(temp.path()).expect("Core 打开");
-        assert_eq!(core.plugin_route_mode(), &RouteMode::Auto);
+        assert_eq!(core.plugin_route_mode(), RouteMode::Auto);
         core.plugin_set_route_mode(RouteMode::Builtin)
             .expect("写路由偏好");
     }
     let core = crate::Core::open(temp.path()).expect("Core 再打开");
-    assert_eq!(core.plugin_route_mode(), &RouteMode::Builtin);
+    assert_eq!(core.plugin_route_mode(), RouteMode::Builtin);
     // 显式内置 ⇒ 判定恒为内置(即使有插件可用).
     let plan = core.plugin_route_plan(Capability::SongUrl);
     assert_eq!(plan.target, RouteTarget::Builtin);
     assert_eq!(plan.reason, RouteReason::BuiltinSelected);
+}
+
+/// 隔离二期切片 A 的判据: 插件宿主句柄与 `Core` 锁**解耦** —— 装载(持有句柄写锁)期间,
+/// `Core` 锁本身仍能拿到, 也就是其它域的 FFI 不会被 `rescan`/`install_*` 挡住.
+///
+/// 反例(改造前): 插件操作走 `MUTEX<Core>`, 而装载在锁内跑(单插件预算 8s) ⇒ 该断言会红.
+#[test]
+fn plugin_handle_does_not_hold_the_core_lock_while_loading() {
+    let temp = TempDir::new("core-plugin-lock");
+    enable_policy(temp.path());
+    let core = Arc::new(std::sync::Mutex::new(
+        crate::Core::open(temp.path()).expect("Core 打开"),
+    ));
+    let handle = core
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .plugin_host_handle();
+    // 每次拿到的都是同一个 `Arc`(FFI 层那份 `PLUGIN` 与 `CORE` 里那份必须同源).
+    assert!(Arc::ptr_eq(
+        &handle,
+        &core
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .plugin_host_handle()
+    ));
+
+    // ① 直接操作句柄不需要 `Core` 锁(空目录 ⇒ 没有已装载插件).
+    {
+        let host = handle.read().unwrap_or_else(|e| e.into_inner());
+        assert!(host.ids().is_empty(), "空白插件目录不应装载出 provider");
+    }
+
+    // ② 另一个线程持**写锁**模拟「正在 rescan/装载 QuickJS」(真实装载预算 8s),
+    //    主线程此时必须还能拿到 `Core` 锁去做别的域的事.
+    let loader = {
+        let handle = handle.clone();
+        std::thread::spawn(move || {
+            let _write = handle.write().unwrap_or_else(|e| e.into_inner());
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        })
+    };
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
+    let started = std::time::Instant::now();
+    {
+        let guard = core.lock().unwrap_or_else(|e| e.into_inner());
+        // 代表「其它域 FFI」: 只读会话字段, 完全不碰插件.
+        assert!(!guard.session.device_id.is_empty());
+    }
+    let elapsed = started.elapsed();
+
+    loader.join().expect("装载线程不应 panic");
+    assert!(
+        elapsed < std::time::Duration::from_millis(200),
+        "插件装载期间其它域不应排队等 Core 锁, 实际等了 {elapsed:?}"
+    );
 }
 
 /// ④ Core 层: 两个插件都启用而用户没选 ⇒ 走内置(不误用任何一个).

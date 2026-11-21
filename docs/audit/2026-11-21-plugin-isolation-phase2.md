@@ -89,12 +89,21 @@ FFI `song_url` → `call_routed`（`route.rs`）→ 插件 `song_url`（worker �
 
 切片（每片可独立验收，不动 UI）：
 
-1. **切片 A：锁面收敛（未做）**——`PluginHost::rescan/install_source/enable` 的装载移到 Core 锁外
-   （注册表用 `ArcSwap`/内部锁）。`sources()` 的装载期缓存**已在 v0.34.5 之前就存在**（见勘误），
-   本片只剩「装载移出 Core 锁」一件事。
-   验收：死循环插件 fixture 存在时，并发取链 20 次测其它域 FFI（如 `search`）p95 延迟
-   < 50ms；`rescan` 期间取链不排队。用例：`host_tests` 新增「rescan 进行中 route_decision
-   不阻塞」。
+1. **切片 A：锁面收敛（已落，v0.36.0）**——落地形态与本文初稿的预案不同，取更小的一刀：
+   ```
+   Core.plugin_host: Arc<RwLock<PluginHost>>      // plugins::PluginHostHandle
+   ncm-ffi: static PLUGIN: OnceLock<PluginHostHandle>   // init() 时与 CORE 填同一个 Arc
+   ```
+   插件 FFI 入口（18 个）**不再取 `CORE` 锁**，改为 `plugin_host()?` 拿句柄再 `read()/write()`：
+   读类取读锁（并发互不阻塞），写类（`rescan/install_*/enable/disable/uninstall/set_enabled/
+   set_root/set_route_mode`）取写锁并彼此串行。`Core` 侧的插件方法保留原签名，内部改走
+   `plugin_host_read()/plugin_host_write()`（`&mut` 方法照样能调）。
+   锁序纪律：允许 `Core 锁 -> 插件句柄`，**禁止**反向（插件 FFI 一个都不再调 `core()`）。
+   判据用例：`ncm-service` `plugins::route_tests::plugin_handle_does_not_hold_the_core_lock_while_loading`
+   （另一线程持写锁 300ms 模拟装载，主线程取 `Core` 锁 < 200ms；改造前必红）。
+   **残留（A2 候选，未做）**：`routed_call` 仍在 `CORE` 锁内做 `route_decision`，而后者要取插件
+   句柄**读锁** ⇒ 重扫（写锁，最多 8s×N）进行中，取链/搜索的**判定**会等。修法：把判定快照
+   （`RouteDecision` 级别的只读视图）在重扫结束时缓存成 `Arc<...>`，读路径不再进句柄锁。
 2. **切片 B：有界调用队列（已落，v0.35.0）**——`worker.rs` 的 oneshot 通道改有界
    （`CALL_QUEUE_DEPTH = 2`/插件，`sync_channel` + `try_send`，满时立即返回
    `ProviderError{kind:network, retryable:true}`）+ 同曲取链合并（`SongUrlCoalescer`：
