@@ -67,7 +67,10 @@ void main() {
         expect(find.byType(BackButton), findsOneWidget);
         await tester.tap(find.byType(BackButton));
         await tester.pumpAndSettle();
-        expect(find.text('设置'), findsOneWidget, reason: '返回后回到设置首页');
+        // 首页不写「设置」标题(与底部导航同名会重复, 见 top_bar_no_duplicate_test),
+        // 所以用只属于首页的主题入口当标记。
+        expect(find.byType(SettingsView), findsOneWidget, reason: '返回后回到设置首页');
+        expect(find.text('播放与音质'), findsOneWidget, reason: '返回后回到设置首页');
       });
     }
   });

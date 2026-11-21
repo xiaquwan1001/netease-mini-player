@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../rust/api_all.dart' as rust;
-import '../section_header.dart';
 import 'settings_about_page.dart';
 import 'settings_appearance_page.dart';
 import 'settings_audio_page.dart';
@@ -117,7 +116,6 @@ class SettingsView extends StatelessWidget {
           24 + MediaQuery.viewPaddingOf(context).bottom,
         ),
         children: [
-          const SectionTitle('设置', icon: Icons.settings_outlined),
           Card(
             margin: EdgeInsets.zero,
             child: Column(
