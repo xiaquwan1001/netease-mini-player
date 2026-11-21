@@ -68,6 +68,59 @@ Future<PluginRescanDto> pluginInstallScript({
   requestDomains: requestDomains,
 );
 
+/// 从**本机文件**导入一个插件(读文件 → 写 `<root>/<id>/{manifest.json,index.js}` 后立即重扫).
+///
+/// `path` 是**绝对路径**(UI 侧只收绝对路径; 也可以用文本输入, 不引文件选择器依赖)。
+/// 口径与 [`plugin_install_script`] 一致: 总开关没开 ⇒ `forbidden`; 文件读不了/不是
+/// UTF-8/超过 2 MiB ⇒ `internal`(`Io`)或 `unsupported`(`Manifest`); 失败**不落任何文件**。
+/// 导入**不**自动启用插件。
+Future<PluginRescanDto> pluginInstallFile({
+  required String id,
+  required String name,
+  required String version,
+  required String path,
+  required List<String> lxEvents,
+  required List<String> requestDomains,
+}) => RustLib.instance.api.crateApiPluginPluginInstallFile(
+  id: id,
+  name: name,
+  version: version,
+  path: path,
+  lxEvents: lxEvents,
+  requestDomains: requestDomains,
+);
+
+/// 从 **URL** 导入一个插件(只允许 `https://`)。
+///
+/// 三条硬约束全在落盘之前: `https://` 形态、重定向上限(3 跳)、响应体 ≤ 2 MiB; 任一不满足
+/// **不落任何文件**。抓取失败是全仓**唯一**可重试的插件错误(`network` + `retryable = true`),
+/// UI 侧可提示“稍后重试”。导入**不**自动启用插件。
+Future<PluginRescanDto> pluginInstallUrl({
+  required String id,
+  required String name,
+  required String version,
+  required String url,
+  required List<String> lxEvents,
+  required List<String> requestDomains,
+}) => RustLib.instance.api.crateApiPluginPluginInstallUrl(
+  id: id,
+  name: name,
+  version: version,
+  url: url,
+  lxEvents: lxEvents,
+  requestDomains: requestDomains,
+);
+
+/// 卸载一个插件: 停用 → **删掉 `<root>/<id>`(含该插件的 `data/`)** → 清状态 → 重扫。
+///
+/// - 总开关没开 ⇒ `forbidden`; 非法 id(`..`/`/`/绝对路径/大写) ⇒ `forbidden`;
+/// - 未登记且目录不存在 ⇒ `notFound`; 目录删不掉 ⇒ `internal` 且插件**保持停用**;
+/// - 指向它的路由选择会自动回 `auto`(否则判定永远停在 `selectionMissing`)。
+///
+/// 返回的 `scanned` 恒为空(卸载不“新登记”任何插件), 结果看 `loaded/skipped/failed`。
+Future<PluginRescanDto> pluginUninstall({required String id}) =>
+    RustLib.instance.api.crateApiPluginPluginUninstall(id: id);
+
 /// 宿主**总开关**(落盘 `<dataDir>/plugin_host.json`, 0600 原子写).
 ///
 /// 打开 = 建注册表 + 首扫; 关闭 = 摘掉注册表(不删目录、不改单插件状态).
