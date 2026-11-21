@@ -428,6 +428,46 @@ impl PluginHost {
     }
 
     /// 重扫根目录并重建 provider 视图(全量重建, 没有热重载).
+    /// 从**脚本文本**导入一个插件(写盘 + 立即重扫装载).
+    ///
+    /// 口径:
+    /// - 宿主总开关没开 ⇒ `forbidden`(与其它写操作一致, 不隐式打开总开关);
+    /// - 清单/入口文件名不合法 ⇒ `unsupported`(Manifest), **不落任何文件**;
+    /// - 文件系统失败 ⇒ `internal`;
+    /// - 覆盖同名插件是允许的(用户显式提交), 该插件的 `data/` 存储保留;
+    /// - 成功后按 `plugins-state.json` 决定是否装载 —— 导入**不**自动启用(与目录导入一致)。
+    #[allow(clippy::too_many_arguments)]
+    pub fn install_source(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        entry: &str,
+        source: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ProviderResult<RegistryReport> {
+        let Some(registry) = self.registry.as_mut() else {
+            return Err(ProviderError::forbidden(
+                "插件宿主未启用: 先打开总开关再导入",
+            ));
+        };
+        let report = registry
+            .manager_mut()
+            .install_source(id, name, version, entry, source, lx_events, request_domains)
+            .map_err(|err| to_provider_error(&err))?;
+        // 写盘后必须让注册表重新扫一遍, 否则 provider 视图还是旧的(与 rescan 同口径).
+        let refreshed = registry.scan();
+        self.error = None;
+        Ok(RegistryReport {
+            scanned: report.installed.clone(),
+            loaded: refreshed.loaded.clone(),
+            skipped: refreshed.skipped.clone(),
+            failed: refreshed.failed.clone(),
+        })
+    }
+
+    /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn rescan(&mut self) -> ProviderResult<RegistryReport> {
         Ok(self.registry_mut()?.scan())
     }

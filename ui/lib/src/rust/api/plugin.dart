@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `count`, `failed_pairs_dto`, `failures_dto`, `rejected_dto`, `rescan_dto`, `route_mode_dto`, `route_plan_dto`, `status_dto`, `summary_dto`, `unsupported_error`, `unsupported_route_mode`, `unsupported_route_plan`, `unsupported_status`
+// These functions are ignored because they are not marked as `pub`: `count`, `failed_pairs_dto`, `failures_dto`, `rejected_dto`, `rescan_dto`, `route_mode_dto`, `route_plan_dto`, `status_dto`, `summary_dto`
 
 /// 宿主状态(UI 用它解释"为什么列表是空的").
 ///
@@ -46,6 +46,27 @@ Future<void> pluginDisable({required String id}) =>
 /// 重扫插件根目录(全量重建 provider 视图).
 Future<PluginRescanDto> pluginRescan() =>
     RustLib.instance.api.crateApiPluginPluginRescan();
+
+/// 从**脚本文本**导入一个插件(写 `<root>/<id>/{manifest.json,index.js}` 后立即重扫).
+///
+/// 口径(与其它写类一致): 总开关没开 ⇒ `forbidden`; 清单字段不合法 ⇒ `unsupported`(不落文件);
+/// 文件系统失败 ⇒ `internal`. 导入**不**自动启用插件(与目录导入一致, 仍由用户决定)。
+/// 覆盖同名插件允许(用户显式提交), 该插件的 `data/` 存储保留。
+Future<PluginRescanDto> pluginInstallScript({
+  required String id,
+  required String name,
+  required String version,
+  required String source,
+  required List<String> lxEvents,
+  required List<String> requestDomains,
+}) => RustLib.instance.api.crateApiPluginPluginInstallScript(
+  id: id,
+  name: name,
+  version: version,
+  source: source,
+  lxEvents: lxEvents,
+  requestDomains: requestDomains,
+);
 
 /// 宿主**总开关**(落盘 `<dataDir>/plugin_host.json`, 0600 原子写).
 ///
@@ -174,7 +195,7 @@ class PluginRescanDto {
 /// 与宿主状态分开: 宿主开不开(`PluginStatusDto.enabled`)决定"有没有插件可用",
 /// 这里决定"可用的时候优先用谁". 两者都缺省(不扫描 + auto)时产品行为不变.
 class PluginRouteModeDto {
-  /// 本平台是否带插件宿主(Android = false ⇒ 路由恒为内置).
+  /// 本平台是否带插件宿主(现在两端都是 true).
   final bool supported;
 
   /// 稳定标签: `auto` / `builtin` / `plugin:<id>`(可原样回传给 [`plugin_set_route_mode`]).
@@ -250,7 +271,7 @@ class PluginRoutePlanDto {
 
 /// 宿主状态: 一句话回答"插件现在能不能用、为什么不能用".
 class PluginStatusDto {
-  /// 本平台是否带插件宿主(Android = false ⇒ 其余字段恒为缺省).
+  /// 本平台是否带插件宿主(实现细节见「平台覆盖」; 现在两端都是 true).
   final bool supported;
 
   /// 策略文件(`plugin_host.json`)里的总开关; 缺省 false = 不扫描.

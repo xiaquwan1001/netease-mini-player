@@ -254,6 +254,35 @@ pub fn plugin_rescan() -> Result<PluginRescanDto, FfiError> {
     Ok(rescan_dto(&report))
 }
 
+/// 从**脚本文本**导入一个插件(写 `<root>/<id>/{manifest.json,index.js}` 后立即重扫).
+///
+/// 口径(与其它写类一致): 总开关没开 ⇒ `forbidden`; 清单字段不合法 ⇒ `unsupported`(不落文件);
+/// 文件系统失败 ⇒ `internal`. 导入**不**自动启用插件(与目录导入一致, 仍由用户决定)。
+/// 覆盖同名插件允许(用户显式提交), 该插件的 `data/` 存储保留。
+#[allow(clippy::too_many_arguments)]
+pub fn plugin_install_script(
+    id: String,
+    name: String,
+    version: String,
+    source: String,
+    lx_events: Vec<String>,
+    request_domains: Vec<String>,
+) -> Result<PluginRescanDto, FfiError> {
+    let mut guard = core()?.lock().map_err(FfiError::from)?;
+    let report = guard
+        .plugin_install_script(
+            &id,
+            &name,
+            &version,
+            "index.js",
+            &source,
+            &lx_events,
+            &request_domains,
+        )
+        .map_err(FfiError::from)?;
+    Ok(rescan_dto(&report))
+}
+
 /// 宿主**总开关**(落盘 `<dataDir>/plugin_host.json`, 0600 原子写).
 ///
 /// 打开 = 建注册表 + 首扫; 关闭 = 摘掉注册表(不删目录、不改单插件状态).

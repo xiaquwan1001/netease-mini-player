@@ -135,6 +135,34 @@ class _FakePluginHost implements RustLibApi {
   }
 
   @override
+  Future<rust.PluginRescanDto> crateApiPluginPluginInstallScript({
+    required String id,
+    required String name,
+    required String version,
+    required String source,
+    required List<String> lxEvents,
+    required List<String> requestDomains,
+  }) async {
+    calls.add(
+      'install($id|$name|$version|${lxEvents.join('+')}|${requestDomains.join('+')})',
+    );
+    if (!enabled) {
+      throw const rust.FfiError(
+        kind: 'forbidden',
+        retryable: false,
+        detail: '插件宿主未启用',
+      );
+    }
+    summaries = [...summaries, _summary(id, name: name, sources: const [])];
+    return rust.PluginRescanDto(
+      scanned: [id],
+      loaded: const [],
+      skipped: [id],
+      failed: const [],
+    );
+  }
+
+  @override
   Future<List<rust.PluginLogDto>> crateApiPluginPluginLogs() async {
     calls.add('logs');
     return logBatches.isEmpty ? const [] : logBatches.removeAt(0);
@@ -454,6 +482,53 @@ void main() {
 
     expect(find.text('平台: kw, wy'), findsOneWidget);
     expect(find.text('平台: 未声明'), findsOneWidget);
+  });
+
+  testWidgets('导入: 弹层收字段(逗号分隔的事件/白名单), 提交后调 FFI 并重取数', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true;
+    await _pumpPage(tester);
+
+    await tester.ensureVisible(find.text('导入'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('导入'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('导入音源插件'), findsOneWidget);
+    // 空正文提交 ⇒ 本地浅校验拦下, 不调 FFI.
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+    expect(_fake.calls, isEmpty);
+    expect(find.textContaining('不能为空'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'id'), 'pasted');
+    await tester.enterText(find.widgetWithText(TextField, '名称'), '粘贴插件');
+    await tester.enterText(
+      find.widgetWithText(TextField, '出站白名单'),
+      'api.example.com, *.cdn.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, '脚本正文'),
+      "lx.on('musicUrl', async () => 'https://cdn.test/a.mp3');",
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '导入'));
+    await tester.pumpAndSettle();
+
+    expect(_fake.calls, [
+      'install(pasted|粘贴插件|1.0.0|musicUrl|api.example.com+*.cdn.test)',
+    ]);
+    expect(find.text('粘贴插件'), findsOneWidget);
+  });
+
+  testWidgets('导入: 总开关没开时入口禁用(不静默失败)', (tester) async {
+    await _pumpPage(tester);
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '导入'))
+          .onPressed,
+      isNull,
+    );
   });
 
   testWidgets('日志: 拉取后按插件分组显示, 再拉一次给"没有新日志"', (tester) async {

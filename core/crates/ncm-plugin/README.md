@@ -299,7 +299,7 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 | # | 事项 | 说明 |
 |---|---|---|
 | 1 | **插件管理层** | ✅ 切片 2 第二步已落目录扫描/启停/元信息(`PluginManager`, 清单 JSON 取代 `@name` 头注释); ✅ P3 已落**清单 `apiVersion` 版本协商**(纯函数 `manifest::check_api_version`, 区间 `1..=1`, 不兼容 ⇒ 拒绝装载 + 带区间文案)与**连续装载失败 3 次自动禁用**(计数落 `plugins-state.json` 的 `failures` 段, 成功一次清零, 重启仍禁用, 手动启用 = 显式重置, `--rescan` 不清计数); 仍**未接 FFI/UI 管理页** |
-| 2 | **导入/启停** | 粘贴/文件/URL 导入、启用禁用、卸载; 目前只接受调用方给的内存脚本文本 |
+| 2 | **导入/启停** | 启用/禁用 ✅(切片 2); **粘贴脚本文本导入 ✅(v0.34.4)**: 插件页「导入」弹层 → FFI `plugin_install_script` → `PluginManager::install_source`(先校验清单再 `write_atomic_private` 落盘, 失败不留文件; 导入不自动启用; 覆盖同名保留 `data/`)。仍缺: 从**文件**导入、从 **URL** 导入、卸载(删目录) |
 | 3 | **插件管理页** | UI 车道; 本切片按要求不碰 UI |
 | 4 | ~~**真实网络 transport**~~ | ✅ 切片 2 第一步已落: `ncm-service::plugins::ReqwestTransport`(UA/连接超时/读超时/重试档位全部复用 `cache.rs` 口径); 只在插件宿主总开关打开时构造(切片 2 第五步) |
 | 5 | ~~**持久化 storage**~~ | ✅ 切片 2 第一步已落: `FileStorage`(0600 / 原子替换 / 坏文件当空); 目录由宿主传入, 接线路由仍待做 |

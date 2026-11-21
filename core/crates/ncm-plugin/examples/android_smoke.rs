@@ -27,7 +27,7 @@ struct FakeTransport {
 
 impl Transport for FakeTransport {
     fn send(&self, _request: &TransportRequest) -> Result<TransportResponse, TransportError> {
-        *self.calls.lock().unwrap() += 1;
+        *self.calls.lock().unwrap_or_else(|e| e.into_inner()) += 1;
         Ok(TransportResponse {
             status: 200,
             headers: Vec::new(),

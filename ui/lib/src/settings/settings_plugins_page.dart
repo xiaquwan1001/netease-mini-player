@@ -235,6 +235,30 @@ class _PluginsPageState extends State<PluginsPage> {
     }
   }
 
+  /// 导入一个插件: 用户在弹层里填 id/名称/版本/白名单/事件 + 粘贴脚本正文。
+  ///
+  /// 落盘与校验全在 Rust 侧(`plugin_install_script`): 本页只收集字段、串行调用、重取数。
+  /// 导入**不**自动启用 —— 装进来后单插件开关仍默认关闭(与目录导入同一套纪律)。
+  Future<void> _importScript() async {
+    final spec = await showAppDialog<_ImportSpec>(
+      context,
+      builder: (_) => const _ImportPluginDialog(),
+    );
+    if (spec == null || !mounted) return;
+    await _run(rescan: true, () async {
+      final result = await rust.pluginInstallScript(
+        id: spec.id,
+        name: spec.name,
+        version: spec.version,
+        source: spec.source,
+        lxEvents: spec.lxEvents,
+        requestDomains: spec.requestDomains,
+      );
+      return '已导入 ${spec.id}: 装载 ${result.loaded.length} · '
+          '未启用 ${result.skipped.length} · 失败 ${result.failed.length}';
+    });
+  }
+
   /// 重扫: 扫盘 + 全量重建 provider 视图(没有热重载)。
   Future<void> _rescan() {
     return _run(rescan: true, () async {
@@ -370,7 +394,7 @@ class _PluginsPageState extends State<PluginsPage> {
         SectionHeader(
           title: '插件',
           icon: Icons.widgets_outlined,
-          trailing: _rescanButton(),
+          trailing: _pluginActions(status),
         ),
         AdaptiveText(
           '重扫会扫盘并装载插件, 期间其它后台调用要排队, 完成前按钮不可再点。',
@@ -545,6 +569,29 @@ class _PluginsPageState extends State<PluginsPage> {
             : '总开关未打开, 打开后才会扫描插件目录。',
         style: Theme.of(context).textTheme.bodySmall,
       ),
+    );
+  }
+
+  /// 「导入 + 重扫」两个入口(标题行 trailing; 在飞/写操作期间整体禁用)。
+  Widget _pluginActions(rust.PluginStatusDto status) {
+    // 导入要写插件目录并重扫: 总开关没开(<顺>没有注册表)时入口禁用, 与其它写操作一致。
+    final canImport = status.enabled && !_busy && !_rescanning;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        TextButton(
+          onPressed: canImport ? _importScript : null,
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: Size.zero,
+          ),
+          child: const Text('导入'),
+        ),
+        const SizedBox(width: 4),
+        _rescanButton(),
+      ],
     );
   }
 
@@ -724,5 +771,161 @@ class _PluginsPageState extends State<PluginsPage> {
     }
     if (!status.enabled) return '总开关未打开 —— 不扫描插件目录';
     return '总开关已打开, 但宿主没有跑起来(见下面的失败原因)';
+  }
+}
+
+/// 导入弹层收集到的字段(全部是用户输入; 校验与落盘都在 Rust 侧)。
+class _ImportSpec {
+  const _ImportSpec({
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.source,
+    required this.lxEvents,
+    required this.requestDomains,
+  });
+
+  final String id;
+  final String name;
+  final String version;
+  final String source;
+  final List<String> lxEvents;
+  final List<String> requestDomains;
+}
+
+/// 导入弹层: id / 名称 / 版本 / 事件 / 出站白名单 + 脚本正文。
+///
+/// 只做**必填**与形态的浅校验(空串直接拦下, 不发给 Rust 换一个错误);
+/// 真正的规则(id 字符集/版本/白名单/事件名)由 `PluginManifest::validate` 判, 错误按
+/// `friendlyError` 回显 —— 页面不复制一份清单规则。
+class _ImportPluginDialog extends StatefulWidget {
+  const _ImportPluginDialog();
+
+  @override
+  State<_ImportPluginDialog> createState() => _ImportPluginDialogState();
+}
+
+class _ImportPluginDialogState extends State<_ImportPluginDialog> {
+  final _id = TextEditingController();
+  final _name = TextEditingController();
+  final _version = TextEditingController(text: '1.0.0');
+  final _events = TextEditingController(text: 'musicUrl');
+  final _domains = TextEditingController();
+  final _source = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _id.dispose();
+    _name.dispose();
+    _version.dispose();
+    _events.dispose();
+    _domains.dispose();
+    _source.dispose();
+    super.dispose();
+  }
+
+  static List<String> _splitCsv(String text) => text
+      .split(RegExp(r'[,，\s]+'))
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+
+  void _submit() {
+    final id = _id.text.trim();
+    final name = _name.text.trim();
+    final version = _version.text.trim();
+    final source = _source.text;
+    if (id.isEmpty ||
+        name.isEmpty ||
+        version.isEmpty ||
+        source.trim().isEmpty) {
+      setState(() => _error = 'id / 名称 / 版本 / 脚本正文都不能为空');
+      return;
+    }
+    Navigator.of(context).pop(
+      _ImportSpec(
+        id: id,
+        name: name,
+        version: version,
+        source: source,
+        lxEvents: _splitCsv(_events.text),
+        requestDomains: _splitCsv(_domains.text),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AlertDialog(
+      title: const Text('导入音源插件'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _id,
+              decoration: const InputDecoration(
+                labelText: 'id',
+                helperText: '小写字母/数字/下划线/短横, 全区唯一',
+              ),
+            ),
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: '名称'),
+            ),
+            TextField(
+              controller: _version,
+              decoration: const InputDecoration(labelText: '版本'),
+            ),
+            TextField(
+              controller: _events,
+              decoration: const InputDecoration(
+                labelText: '注册事件',
+                helperText: '逗号分隔(musicUrl / request / search)',
+              ),
+            ),
+            TextField(
+              controller: _domains,
+              decoration: const InputDecoration(
+                labelText: '出站白名单',
+                helperText: '逗号分隔(api.example.com / *.example.com); 留空 = 全部拒绝',
+              ),
+            ),
+            TextField(
+              controller: _source,
+              minLines: 6,
+              maxLines: 12,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontFamily: 'monospace',
+              ),
+              decoration: const InputDecoration(
+                labelText: '脚本正文',
+                alignLabelWithHint: true,
+                helperText: '粘贴 LX 兼容脚本(lx.on / lx.request ...)',
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('导入')),
+      ],
+    );
   }
 }

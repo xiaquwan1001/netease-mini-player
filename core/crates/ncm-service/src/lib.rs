@@ -264,6 +264,29 @@ impl Core {
         self.plugin_host.disable(id)
     }
 
+    /// 从脚本文本导入一个插件(写盘 + 立即重扫)
+    #[allow(clippy::too_many_arguments)]
+    pub fn plugin_install_script(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        entry: &str,
+        source: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> ncm_provider::ProviderResult<RegistryReport> {
+        self.plugin_host.install_source(
+            id,
+            name,
+            version,
+            entry,
+            source,
+            lx_events,
+            request_domains,
+        )
+    }
+
     /// 重扫插件根目录(全量重建, 没有热重载)
     pub fn plugin_rescan(&mut self) -> ncm_provider::ProviderResult<RegistryReport> {
         self.plugin_host.rescan()

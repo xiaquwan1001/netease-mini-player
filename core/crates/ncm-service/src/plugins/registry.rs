@@ -137,6 +137,14 @@ impl PluginRegistry {
     }
 
     /// 只读访问底层目录管理器(列表/清单字段仍在那边).
+    /// 管理器可变借用(导入/启停这类"先写盘再刷新"的路径需要它)。
+    ///
+    /// 注意: 调用方**必须**在改完盘后自己调 [`Self::scan`] 刷新 provider 视图 ——
+    /// 这里不自动扫, 免得一次导入触发两次全量扫描。
+    pub fn manager_mut(&mut self) -> &mut PluginManager {
+        &mut self.manager
+    }
+
     pub fn manager(&self) -> &PluginManager {
         &self.manager
     }

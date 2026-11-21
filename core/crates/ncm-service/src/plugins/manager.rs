@@ -75,6 +75,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use ncm_plugin::manifest::HOST_API_VERSION;
 use ncm_plugin::{
     DomainPolicy, FileStorage, GuardedTransport, PluginError, PluginManifest, PluginSpec,
     SandboxConfig, ScriptProvider, Storage, Transport, MANIFEST_FILE,
@@ -388,6 +389,67 @@ impl PluginManager {
         report
     }
 
+    /// 从**脚本文本**装一个插件: 写 `<root>/<id>/{manifest.json,<entry>}` 再登记.
+    ///
+    /// 语义(与目录导入同一套安全口径):
+    /// - id/name/version/entry 先用 `PluginManifest::parse + validate` 校验(与盘上清单同一套规则),
+    ///   不合法直接拒, **不落任何文件**;
+    /// - 目录已存在 ⇒ 覆盖(用户显式提交即显式覆盖), 但只写 `manifest.json` 与入口脚本两个文件,
+    ///   该插件的 `data/` 存储目录原样保留;
+    /// - 两个文件都是 tmp+rename 原子替换(0600), 半截文件不会被登记;
+    /// - 写完立刻按根目录刷新(与 `rescan` 同口径), 失败原因照旧进 `errors`/报告.
+    #[allow(clippy::too_many_arguments)]
+    pub fn install_source(
+        &mut self,
+        id: &str,
+        name: &str,
+        version: &str,
+        entry: &str,
+        source: &str,
+        lx_events: &[String],
+        request_domains: &[String],
+    ) -> Result<InstallReport, ManagerError> {
+        let manifest_text = serde_json::json!({
+            "id": id,
+            "name": name,
+            "version": version,
+            "apiVersion": HOST_API_VERSION,
+            "entry": entry,
+            "permissions": {
+                "lxEvents": lx_events,
+                "requestDomains": request_domains,
+            },
+        })
+        .to_string();
+        // 先校验再落盘: 坏清单不该在用户盘上留下任何痕迹.
+        let manifest = PluginManifest::parse(&manifest_text)
+            .and_then(|manifest| manifest.validate().map(|()| manifest))
+            .map_err(|err| ManagerError::new(ManagerErrorKind::Manifest, err.to_string()))?;
+        if manifest.entry != entry {
+            return Err(ManagerError::new(
+                ManagerErrorKind::Manifest,
+                format!("entry `{entry}` 不是合法入口文件名"),
+            ));
+        }
+        let dir = self.root.join(&manifest.id);
+        std::fs::create_dir_all(&dir).map_err(|err| {
+            ManagerError::new(ManagerErrorKind::Io, format!("建插件目录失败: {err}"))
+        })?;
+        crate::fsutil::write_atomic_private(&dir, "manifest.json", manifest_text.as_bytes())
+            .map_err(|err| ManagerError::new(ManagerErrorKind::Io, format!("写清单失败: {err}")))?;
+        crate::fsutil::write_atomic_private(&dir, &manifest.entry, source.as_bytes()).map_err(
+            |err| ManagerError::new(ManagerErrorKind::Io, format!("写入口脚本失败: {err}")),
+        )?;
+        let report = self.rescan();
+        // 登记失败(比如清单里的事件名不认识)要在这一次调用里就报出来, 不要让 UI 以为装好了.
+        if let Some(detail) = self.errors.get(&manifest.id) {
+            return Err(ManagerError::new(
+                ManagerErrorKind::Manifest,
+                detail.clone(),
+            ));
+        }
+        Ok(report)
+    }
     /// 重新扫描自己的根目录.
     pub fn rescan(&mut self) -> InstallReport {
         let root = self.root.clone();

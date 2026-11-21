@@ -64,6 +64,96 @@ fn write_plugin(root: &Path, id: &str) {
     std::fs::write(dir.join("index.js"), MIN_SCRIPT).expect("写入口脚本");
 }
 
+/// 导入(脚本文本): 写盘 + 立刻登记, **不**自动启用; 坏 id 不落任何文件.
+#[test]
+fn install_source_writes_plugin_and_registers_it() {
+    let temp = TempDir::new("install");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+
+    let report = host
+        .install_source(
+            "pasted",
+            "粘贴进来的插件",
+            "1.2.3",
+            "index.js",
+            "lx.on('musicUrl', async () => 'https://cdn.test/pasted.mp3');",
+            &[String::from("musicUrl")],
+            &[String::from("api.example.com")],
+        )
+        .expect("导入应成功");
+    assert_eq!(report.scanned, vec!["pasted".to_string()]);
+
+    // 盘上真的有两个文件, 且清单是合法 JSON(能读回来).
+    let dir = root.join("pasted");
+    let manifest = std::fs::read_to_string(dir.join("manifest.json")).expect("清单要写出来");
+    assert!(manifest.contains("\"id\":\"pasted\""), "{manifest}");
+    assert!(
+        manifest.contains("api.example.com"),
+        "白名单要落进清单: {manifest}"
+    );
+    assert!(dir.join("index.js").exists(), "入口脚本要写出来");
+
+    // 登记成功但**默认停用**(与目录导入同一套纪律).
+    let rows = host.summaries();
+    let row = rows.iter().find(|s| s.id == "pasted").expect("应登记");
+    assert!(!row.enabled, "导入不等于启用");
+    assert_eq!(row.version, "1.2.3");
+    assert!(host.provider("pasted").is_none(), "没启用就不装载");
+
+    // 用户显式启用后才装载.
+    host.enable("pasted").expect("启用");
+    assert!(host.provider("pasted").is_some());
+}
+
+#[test]
+fn install_source_rejects_bad_fields_without_touching_disk() {
+    let temp = TempDir::new("install-bad");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    enable_policy(temp.path());
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+
+    // 大写 id 不合法(validate_id 规则), 且**不应该**留下空目录.
+    let err = host
+        .install_source(
+            "BadId",
+            "x",
+            "1.0.0",
+            "index.js",
+            "lx.on('musicUrl', async () => null);",
+            &[String::from("musicUrl")],
+            &[],
+        )
+        .expect_err("非法 id 必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Unsupported, "detail: {err}");
+    assert!(
+        !root.join("BadId").exists(),
+        "校验失败不能落目录(否则用户盘上会留垃圾)"
+    );
+
+    // 没注册任何事件也能装进来, 但装载时会因为缺能力而不可路由 —— 这里只断言能登记.
+    let ok = host.install_source(
+        "noevents",
+        "无事件",
+        "1.0.0",
+        "index.js",
+        "lx.log('hi');",
+        &[],
+        &[],
+    );
+    assert!(ok.is_ok(), "空事件清单是合法的(只是不可用)");
+}
+
+#[test]
+fn install_source_requires_enabled_host() {
+    let temp = TempDir::new("install-off");
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+    let err = host
+        .install_source("demo", "x", "1.0.0", "index.js", "lx.log(1);", &[], &[])
+        .expect_err("总开关没开必须拒绝");
+    assert_eq!(err.kind, ProviderErrorKind::Forbidden, "detail: {err}");
+}
 /// 日志通道: 取走语义 + 按插件 id 分组(空组不进结果).
 #[test]
 fn take_logs_groups_by_plugin_and_drains() {
