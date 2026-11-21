@@ -60,6 +60,10 @@ exec env \
   "ANDROID_NDK_HOME=$NDK" \
   "ANDROID_NDK_ROOT=$NDK" \
   "LIBCLANG_PATH=$LIBCLANG" \
+  "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$TC/bin/aarch64-linux-android24-clang" \
+  "CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER=$TC/bin/x86_64-linux-android24-clang" \
+  "CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER=$TC/bin/armv7a-linux-androideabi24-clang" \
+  "CARGO_TARGET_I686_LINUX_ANDROID_LINKER=$TC/bin/i686-linux-android24-clang" \
   "CC_aarch64-linux-android=$TC/bin/aarch64-linux-android24-clang" \
   "AR_aarch64-linux-android=$TC/bin/llvm-ar" \
   "RANLIB_aarch64-linux-android=$TC/bin/llvm-ranlib" \

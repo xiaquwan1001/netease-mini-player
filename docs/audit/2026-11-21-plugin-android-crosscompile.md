@@ -161,7 +161,7 @@ a 只作为「顺手回看上游」；c 不做。**
 | ① rquickjs 特性按目标分段 | `core/crates/ncm-plugin/Cargo.toml`: 桌面 `[target.'cfg(not(target_os = "android"))']` 用 `std`(预生成 bindings); Android 用 `std` + `bindgen` | ✅ |
 | ② 构建入口注入 NDK sysroot + libclang | 新增 `tools/android-bindgen-env.sh`(env(1) 注入 `BINDGEN_EXTRA_CLANG_ARGS_<triple>` / `CC_<triple>` / `AR_<triple>`, 变量名带连字符不能用 export); `tools/build-android.sh` 自 re-exec; `tools/ci-gates.sh` 的 android-unit/android-lint 套这层; `ci.yml`(android job + Debug APK job) 与 `release.yml`(Tests gate + Android 构建) 加装 libclang 并把 NDK 28.2 装进每个会触发 cargokit 的 job | ✅ |
 | ③ 撤 `cfg(not(android))` 门 | `ncm-service/Cargo.toml` 的 ncm-plugin 依赖回到 `[dependencies]`; `ncm-service/src/lib.rs` 的 `plugins` mod/use/`Core::plugin_host`/`impl Core` 全部无条件; `ncm-ffi/src/api/plugin.rs` 删掉整套「Android 空视图」分支(两端同一份实现), `api.rs` 的 `with_provider`/`routed_call` 也只剩一条路由实现 | ✅ |
-| ④ 真机/模拟器验收门 | 本机只连着用户物理机(未动); 已验证: `cargo check --target aarch64-linux-android -p ncm_ffi` 过(含 rquickjs-sys bindgen + ncm-plugin/service/ffi)、`tools/ci-gates.sh verify` 全绿(`android-unit`/`android-lint` 会真的编 Android 目标的 Rust)、`bash tools/build-android.sh debug` 出两个 ABI 的 APK | ⏳ 设备侧「启用宿主→装 fixture 插件→取一次链→超时/内存炸弹各一次」仍待模拟器/真机跑 |
+| ④ 设备侧验收 | 新增 `core/crates/ncm-plugin/examples/android_smoke.rs`(独立二进制, 不起 App 不联网), 在 emulator-5554(a34, x86_64) 上实测: `handlers=["request"]` · `sources=["wy"]` · `music_url_ok="https://cdn.test/android.mp3"`(request 适配 + 回调式 lx.request + setTimeout) · `interrupt_kind=Timeout` · `memlimit_kind=Memory` · **`SMOKE_PASS`**; 另把 debug APK 装到同一模拟器并启动成功(无 FATAL), 证明 QuickJS 进包后 App 能起 | ✅ 引擎级验收完成; App 内**手动**走一遍「设置→关于→插件 开总开关→放插件→取链」仍属人眼项(不阻塞) |
 
 成本实测(本机): Android 目标首次 bindgen + 15 个 build-dep 拉取约 +15s/ABI; 桌面构建零变化(仍吃预生成 bindings, 不需要 libclang)。
 

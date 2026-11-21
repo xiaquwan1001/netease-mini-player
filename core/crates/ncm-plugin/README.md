@@ -276,6 +276,9 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
   逃逸面(`require/process/fetch/XMLHttpRequest/Deno/module` 全 undefined)、MD5 向量、缺处理器、脚本抛错映射;
 - `tests/provider.rs`(7 例): `songUrl`/`search` 走既有 `Provider`、能力声明由注册事件决定(含「只注册 `request` ⇒ SongUrl」)、
   不支持能力 -> `unsupported`、语法错误 -> `Load`、`null` 直链 -> `notFound`;
+- **Android 设备侧冒烟**: `examples/android_smoke.rs`(独立二进制, 不起 App 不联网)—— 在模拟器/真机上跑一遍
+  「装载 + `request` 适配 + 回调式 `lx.request` + `setTimeout` / 死循环 interrupt 超时 / 32MB 内存炸弹」,
+  末行 `SMOKE_PASS`。构建/推送命令见 `docs/audit/2026-11-21-plugin-android-crosscompile.md` §3.5 与 `notes-build.md`。
 - JS fixture 在 `tests/fixtures/`(music_url / search / storage / budget / escape / md5 / loop / memory_bomb /
   lx_request_event / lx_timer / lx_timer_hang)。
 
