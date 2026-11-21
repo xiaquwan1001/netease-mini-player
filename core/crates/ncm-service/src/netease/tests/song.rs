@@ -430,10 +430,8 @@ fn play_ranking_keeps_zero_rows_and_parses_loose_counts() {
 /// 会把 `code != 200` 直接换成 `NcmError`(这里 301 ⇒ AuthRequired), 正好验证分流.
 #[tokio::test]
 async fn play_ranking_of_non_network_error_is_empty_list() {
-    let (base, handle) = crate::netease::tests::cloud::spawn_fake_http(
-        200,
-        r#"{"code":301,"message":"需要登录"}"#,
-    );
+    let (base, handle) =
+        crate::netease::tests::cloud::spawn_fake_http(200, r#"{"code":301,"message":"需要登录"}"#);
     let p = NeteaseProvider::with_domain_for_test(Session::default(), base);
     let list = tokio::time::timeout(
         std::time::Duration::from_secs(10),
