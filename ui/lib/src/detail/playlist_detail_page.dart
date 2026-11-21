@@ -105,6 +105,12 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   final ScrollController _scroll = ScrollController();
   final GlobalKey _listKey = GlobalKey();
   final TextEditingController _filterController = TextEditingController();
+
+  /// 筛选框焦点: AppBar 常驻搜索按钮请求它(筛选条已滚出视野时先滚回来)
+  final FocusNode _filterFocus = FocusNode();
+
+  /// 筛选条位置: 用它把筛选条滚进视野(单列/双列右栏都挂在同一个 sliver 里)
+  final GlobalKey _toolbarKey = GlobalKey();
   String _filter = '';
 
   rust.PlaylistDetail? _detail;
@@ -142,6 +148,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   void dispose() {
     _scroll.dispose();
     _filterController.dispose();
+    _filterFocus.dispose();
     super.dispose();
   }
 
@@ -498,8 +505,28 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     );
   }
 
-  /// AppBar 动作(内嵌形态里挪到顶部一行): 收藏 / 管理 / 分享。
+  /// AppBar(内嵌形态里是顶部动作行)的常驻搜索按钮: 筛选条滚出视野后也能一步回到
+  /// 筛选框 —— 先把筛选条滚进视野, 再聚焦弹键盘。
+  Future<void> _focusFilter() async {
+    final toolbarContext = _toolbarKey.currentContext;
+    if (toolbarContext != null) {
+      await Scrollable.ensureVisible(
+        toolbarContext,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+    if (!mounted) return;
+    _filterFocus.requestFocus();
+  }
+
+  /// AppBar 动作(内嵌形态里挪到顶部一行): 搜索 / 收藏 / 管理 / 分享。
   List<Widget> _buildActions() => [
+    IconButton(
+      tooltip: '搜索本页',
+      icon: const Icon(Icons.search),
+      onPressed: _focusFilter,
+    ),
     // "我喜欢的音乐"不提供收藏按钮; 详情没拉到时也不知道收藏状态
     if (!widget.special && widget.loggedIn && _detail != null)
       IconButton(
@@ -640,7 +667,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   );
 
   Widget _buildToolbar() => PlaylistFilterBar(
+    key: _toolbarKey,
     controller: _filterController,
+    focusNode: _filterFocus,
     filter: _filter,
     onChanged: (value) => setState(() => _filter = value),
     onClear: () {

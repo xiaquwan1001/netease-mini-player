@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../cover_art.dart';
 import '../playback_bridge.dart';
 import '../rust/api_all.dart' as rust;
+import '../song_actions.dart' show SongActionSource;
 import '../song_tile.dart' show SongRow;
 
 /// 艺人主页的「区块」组件。只吃 DTO, 不发请求,
@@ -65,6 +66,8 @@ class ArtistRecommendedSongsSection extends StatelessWidget {
           SongRow.cardIndexed(
             song: songs[i],
             indexText: '${i + 1}',
+            // 艺人页推荐单曲: 菜单来源是艺人(与 artistSongs 同一口径)
+            menuSource: SongActionSource.artist,
             // 行尾(时长 + 更多)封顶 45%(列表行审计 B7), 口径同 artist_page。
             capTrailing: true,
             onTap: songs[i].playable

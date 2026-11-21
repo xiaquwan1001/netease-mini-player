@@ -197,7 +197,7 @@ class SongTitleWithBadges extends StatelessWidget {
 /// | 时长 | [showDuration] / [durationGap] / [capTrailing] |
 /// | 红心 | [liked] / [onToggleLike] / [readOnlyHeart] |
 /// | 行尾菜单 | [onMenu](页面自带回调) / [menuSource](走 SongOverflowButton) |
-/// | 点击 / 长按选中 | [onTap] / [onLongPress] / [tapOnlyWhenPlayable] |
+/// | 点击 / 长按 / 右键 | [onTap] / [onLongPress](多选语义) / [tapOnlyWhenPlayable] |
 ///
 /// 布局只有两条臂(见 [SongRowLayout]): ListTile 口径与自绘口径。臂内差异继续由
 /// 上面的参数表达, 不做跨臂合并 —— 换臂等于换 Material 度量, 一定有视觉变化。
@@ -231,7 +231,7 @@ class SongRow extends StatelessWidget {
     this.liked = false,
     this.onToggleLike,
     this.onMenu,
-    this.menuSource,
+    this.menuSource = SongActionSource.other,
     this.onTap,
     this.onLongPress,
     this.padding = EdgeInsets.zero,
@@ -250,7 +250,7 @@ class SongRow extends StatelessWidget {
     Key? key,
     required rust.SongDto song,
     required VoidCallback? onTap,
-    SongActionSource? menuSource,
+    SongActionSource? menuSource = SongActionSource.other,
     EdgeInsetsGeometry padding = EdgeInsets.zero,
     bool capTrailing = false,
     Widget? trailingExtra,
@@ -279,7 +279,7 @@ class SongRow extends StatelessWidget {
     required rust.SongDto song,
     required String indexText,
     required VoidCallback? onTap,
-    SongActionSource? menuSource,
+    SongActionSource? menuSource = SongActionSource.other,
   }) => SongRow(
     key: key,
     song: song,
@@ -305,6 +305,7 @@ class SongRow extends StatelessWidget {
     required rust.SongDto song,
     required String indexText,
     required VoidCallback? onTap,
+    SongActionSource? menuSource = SongActionSource.other,
     bool capTrailing = false,
     bool tapOnlyWhenPlayable = false,
   }) => SongRow(
@@ -322,6 +323,7 @@ class SongRow extends StatelessWidget {
     durationGap: 8,
     capTrailing: capTrailing,
     tapOnlyWhenPlayable: tapOnlyWhenPlayable,
+    menuSource: menuSource,
     onTap: onTap,
   );
 
@@ -437,12 +439,15 @@ class SongRow extends StatelessWidget {
   final VoidCallback? onMenu;
 
   /// 走统一 [SongOverflowButton] 时的菜单来源(决定菜单里是否显示"不感兴趣")。
+  ///
+  /// 默认 [SongActionSource.other] —— 任何歌曲列表行默认就有行尾"...";
+  /// 只有显式传 `null` 才关闭(如无版权曲目不提供菜单)。
   final SongActionSource? menuSource;
 
   /// 点整行。
   final VoidCallback? onTap;
 
-  /// 长按整行(选中/多选等); null = 没有长按语义。
+  /// 长按整行(选中/多选等); null = 长按/右键走菜单(见 [_menuCallback])。
   final VoidCallback? onLongPress;
 
   /// 行内留白: 自绘臂默认零; ListTile 臂默认 [kPageRowPadding], 显式传值时按传入的走
@@ -523,6 +528,18 @@ class SongRow extends StatelessWidget {
     icon: const Icon(Icons.more_vert),
     onPressed: onMenu,
   );
+
+  /// 长按 / 鼠标右键的动作: 显式 [onLongPress](多选语义)优先, 其次页面自带的
+  /// [onMenu], 最后退回行尾"..."的同一个动作面板; 都没有时返回 null(不响应)。
+  VoidCallback? _menuCallback(BuildContext context) {
+    if (onLongPress != null) return onLongPress;
+    if (onMenu != null) return onMenu;
+    final source = menuSource;
+    if (source == null) return null;
+    final host = AppActions.maybeOf(context);
+    if (host == null) return null;
+    return () => showSongActionsSheet(context, song, host, source: source);
+  }
 
   /// 歌名(含徽标 / 只读红心)
   Widget _title(BuildContext context, TextStyle? style) {
@@ -616,8 +633,10 @@ class SongRow extends StatelessWidget {
           ],
         ],
         if (onToggleLike != null) _likeButton(scheme),
-        if (onMenu != null) _moreButton(),
-        if (menuSource != null)
+        // 二选一: 页面自带面板优先, 否则走统一菜单(不会出现两个"...")
+        if (onMenu != null)
+          _moreButton()
+        else if (menuSource != null)
           SongOverflowButton(song: song, size: 20, source: menuSource!),
       ];
       final row = Row(mainAxisSize: MainAxisSize.min, children: children);
@@ -676,9 +695,12 @@ class SongRow extends StatelessWidget {
       );
     }
 
+    final menuAction = _menuCallback(context);
     return InkWell(
       onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
-      onLongPress: onLongPress,
+      onLongPress: menuAction,
+      // 鼠标右键与长按同一语义(桌面端没有长按手势)
+      onSecondaryTap: menuAction,
       child: Container(
         color: playingTint && playing
             ? scheme.primary.withValues(alpha: 0.10)
@@ -726,6 +748,7 @@ class SongRow extends StatelessWidget {
             ],
           );
 
+    final menuAction = _menuCallback(context);
     return LayoutBuilder(
       builder: (context, box) {
         // 行尾封顶(列表行审计 B5): 与自绘臂 [capTrailing] 同一口径 —— 最多吃
@@ -733,33 +756,38 @@ class SongRow extends StatelessWidget {
         final maxTrailingWidth = capTrailing && box.maxWidth.isFinite
             ? box.maxWidth
             : null;
-        return ListTile(
-          dense: true,
-          visualDensity: visualDensity,
-          selected: playing,
-          // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
-          // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
-          contentPadding: padding == EdgeInsets.zero
-              ? kPageRowPadding
-              : padding,
-          leading: leading,
-          title: _title(context, titleStyle),
-          subtitle: Text(
-            _subtitleText,
-            // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: subtitleStyle,
+        // ListTile 没有右键手势: 外层 GestureDetector 只接 secondary tap, 不碰
+        // 已有的 onTap/onLongPress(ListTile 自己处理这两个)。
+        return GestureDetector(
+          onSecondaryTap: menuAction,
+          child: ListTile(
+            dense: true,
+            visualDensity: visualDensity,
+            selected: playing,
+            // 行左右留白统一走 layout.dart(默认 16+16 会白白吃掉 32dp);
+            // 嵌在卡片里的列表传 [padding](卡片边缘 4 + 容器 12 = 16 的同一栅格)
+            contentPadding: padding == EdgeInsets.zero
+                ? kPageRowPadding
+                : padding,
+            leading: leading,
+            title: _title(context, titleStyle),
+            subtitle: Text(
+              _subtitleText,
+              // 不给 maxLines 会在窄宽度下逐字换行 => 竖排 + 高度暴涨(实测 378px)
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: subtitleStyle,
+            ),
+            trailing: _tileTrailing(
+              scheme,
+              playable: playable,
+              grey: grey,
+              narrow: narrow,
+              maxWidth: maxTrailingWidth,
+            ),
+            onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
+            onLongPress: menuAction,
           ),
-          trailing: _tileTrailing(
-            scheme,
-            playable: playable,
-            grey: grey,
-            narrow: narrow,
-            maxWidth: maxTrailingWidth,
-          ),
-          onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
-          onLongPress: onLongPress,
         );
       },
     );
@@ -789,8 +817,10 @@ class SongRow extends StatelessWidget {
         if (showDuration && !narrow)
           maxWidth == null ? duration : Flexible(child: duration),
         if (onToggleLike != null) _likeButton(scheme),
-        if (onMenu != null) _moreButton(),
-        if (menuSource != null)
+        // 二选一: 页面自带面板优先, 否则走统一菜单(不会出现两个"...")
+        if (onMenu != null)
+          _moreButton()
+        else if (menuSource != null)
           SongOverflowButton(song: song, size: 20, source: menuSource!),
       ],
     );

@@ -56,6 +56,16 @@ class _PodcastDetailPage extends StatefulWidget {
 
 class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   final TextEditingController _filterController = TextEditingController();
+
+  /// 筛选框焦点: AppBar 常驻搜索按钮请求它(筛选条已滚出视野时先滚回来)
+  final FocusNode _filterFocus = FocusNode();
+
+  /// 筛选条位置(AppBar 搜索按钮用 ensureVisible 把它滚进视野)
+  final GlobalKey _toolbarKey = GlobalKey();
+
+  /// 单列 body / 双列右栏的滚动口(AppBar 搜索按钮靠它 ensureVisible;
+  /// 左栏不挂 controller, 两列各自滚动互不影响)
+  final ScrollController _scroll = ScrollController();
   String _filter = '';
 
   List<rust.PodcastProgramDto>? _programs;
@@ -70,6 +80,8 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   @override
   void dispose() {
     _filterController.dispose();
+    _filterFocus.dispose();
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -118,6 +130,21 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     );
   }
 
+  /// AppBar 常驻搜索按钮: 把筛选条滚进视野后聚焦弹键盘(节目列表滚下去时也能一步
+  /// 回到筛选框)。
+  Future<void> _focusFilter() async {
+    final toolbarContext = _toolbarKey.currentContext;
+    if (toolbarContext != null) {
+      await Scrollable.ensureVisible(
+        toolbarContext,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeInOut,
+      );
+    }
+    if (!mounted) return;
+    _filterFocus.requestFocus();
+  }
+
   /// display 已经过滤掉 song 为空的节目, 行序即可播队列序
   void _playProgram(int index) {
     final songs = [
@@ -134,6 +161,11 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
       appBar: AppBar(
         title: Text(radio.name),
         actions: [
+          IconButton(
+            tooltip: '搜索本页',
+            icon: const Icon(Icons.search),
+            onPressed: _focusFilter,
+          ),
           // 电台头部卡片没有订阅数字段(PodcastRadioDto 无 subCount),
           // 听众入口放 AppBar 图标(与分享并排).
           IconButton(
@@ -164,6 +196,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 
   /// 单列 body(窄/中档): 与双列改造前**逐像素一致** —— 同一棵 sliver 树、同一顺序。
   Widget _buildSingleColumnBody(rust.PodcastRadio radio) => CustomScrollView(
+    controller: _scroll,
     slivers: [
       SliverToBoxAdapter(child: _buildHeaderCard(radio)),
       SliverToBoxAdapter(child: _buildToolbar()),
@@ -180,9 +213,8 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   /// 顺序原样保留(信息卡 -> 筛选 -> 节目 -> 评论)。
   ///
   /// 滚动口径与歌单详情双列一致: **两列各自滚动**。
-  /// 本页目前没有"定位正在播放"(歌单详情才有), 所以右栏不挂 controller;
-  /// 以后若加定位入口, 把 controller 挂到右栏 CustomScrollView 即可, 左栏保持无
-  /// controller, 两列互不影响。
+  /// 右栏挂 [_scroll] —— AppBar 常驻搜索按钮靠 ensureVisible 把筛选条滚回视野;
+  /// 左栏保持无 controller, 两列互不影响。
   Widget _buildTwoColumnBody(rust.PodcastRadio radio) {
     final info = ListView(
       key: const Key('podcast-detail-info-column'),
@@ -191,6 +223,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     );
     final programs = CustomScrollView(
       key: const Key('podcast-detail-programs-column'),
+      controller: _scroll,
       slivers: [
         SliverToBoxAdapter(child: _buildToolbar()),
         _buildPrograms(_display),
@@ -277,9 +310,11 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 
   Widget _buildToolbar() {
     return Padding(
+      key: _toolbarKey,
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: TextField(
         controller: _filterController,
+        focusNode: _filterFocus,
         onChanged: (value) => setState(() => _filter = value),
         decoration: InputDecoration(
           isDense: true,

@@ -34,8 +34,22 @@ class PodcastProgramRow extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context).textTheme;
     final song = program.song;
+    // 长按/右键 = 这一集的歌曲菜单(与行尾"..."同一个面板, 来源 radio)。
+    final host = song == null ? null : AppActions.maybeOf(context);
+    VoidCallback? openMenu;
+    if (song != null && host != null) {
+      openMenu = () => showSongActionsSheet(
+        context,
+        song,
+        host,
+        source: SongActionSource.radio,
+      );
+    }
     return InkWell(
       onTap: onTap,
+      onLongPress: openMenu,
+      // 鼠标右键与长按同一语义(桌面端没有长按手势)
+      onSecondaryTap: openMenu,
       child: Padding(
         padding: const EdgeInsets.only(left: 16, right: 4),
         child: Row(

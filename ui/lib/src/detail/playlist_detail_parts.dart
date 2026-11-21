@@ -129,6 +129,7 @@ class PlaylistFilterBar extends StatelessWidget {
   const PlaylistFilterBar({
     super.key,
     required this.controller,
+    this.focusNode,
     required this.filter,
     required this.onChanged,
     required this.onClear,
@@ -137,6 +138,9 @@ class PlaylistFilterBar extends StatelessWidget {
   });
 
   final TextEditingController controller;
+
+  /// 筛选框焦点(AppBar 常驻搜索按钮滚到筛选条后 requestFocus)
+  final FocusNode? focusNode;
   final String filter;
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
@@ -154,6 +158,7 @@ class PlaylistFilterBar extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               onChanged: onChanged,
               decoration: InputDecoration(
                 isDense: true,

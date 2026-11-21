@@ -337,6 +337,8 @@ class _HistoryDayView extends StatelessWidget {
           SongRow.pageIndexed(
             song: s,
             indexText: '${i + 1}',
+            // 历史日推与「推荐歌曲」页签同一来源: 菜单保留「不感兴趣」
+            menuSource: SongActionSource.dailyRecommend,
             // 同「推荐歌曲」页签: 点播不退出历史日推列表
             onTap: s.playable
                 ? () => PlaybackBridge.instance.playSongs(
