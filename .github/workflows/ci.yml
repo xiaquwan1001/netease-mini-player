@@ -191,7 +191,7 @@ jobs:
         # 过 tools/android-bindgen-env.sh: 插件宿主的 rquickjs 在 Android 目标用构建期 bindgen,
         # 需要 NDK sysroot + libclang(见 docs/audit/2026-11-21-plugin-android-crosscompile.md).
         run: |
-          ../../../tools/android-bindgen-env.sh bash -c '
+          ../tools/android-bindgen-env.sh bash -c '
             set -euo pipefail
             flutter pub get
             # 必须带 --target-platform, 否则 --split-per-abi 会试图编 32 位包而失败

@@ -14,7 +14,9 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 # 复用统一环境(JAVA/ANDROID_HOME/镜像), 不覆盖调用方已设的值.
-if [ -f "$ROOT/tools/env.sh" ]; then
+# CI(GitHub runner)严禁 source: env.sh 会把 JAVA_HOME 指到 ~/android-dev/jdk(不存在),
+# gradlew 随即报 "JAVA_HOME is set to an invalid directory"(2026-11-21 v0.34.0 实测).
+if [ -f "$ROOT/tools/env.sh" ] && [ -z "${GITHUB_ACTIONS:-}" ] && [ -z "${CI:-}" ]; then
   # shellcheck disable=SC1091
   source "$ROOT/tools/env.sh"
 fi
