@@ -15,7 +15,7 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201401%20%2B%20Rust%20369-brightgreen)](#测试与门禁)
+[![tests](https://img.shields.io/badge/tests-Dart%201528%20%2B%20Rust%20545-brightgreen)](#测试与门禁)
 
 <img src="docs/images/hero.png" alt="轻音 MiniNCM 界面" width="100%">
 
@@ -55,6 +55,16 @@ Rust core(协议/身份/缓存/播放) + Flutter UI(一份代码跑三端) + 平
 <td align="center">搜索:单曲/歌单/播客分类</td>
 <td align="center">长按歌词 → 多选</td>
 <td align="center">播放与音质:响度均衡 / AutoEQ</td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/images/phone-row-menu.png" alt="长按歌曲行唤出歌曲操作面板"></td>
+<td width="33%"><img src="docs/images/phone-playlist-search.png" alt="歌单详情页搜索本页"></td>
+<td width="33%"><img src="docs/images/phone-podcast-search.png" alt="播客详情页搜索本页"></td>
+</tr>
+<tr>
+<td align="center">长按/右键歌曲行 → 统一「歌曲操作」面板</td>
+<td align="center">歌单详情:AppBar「搜索本页」常驻</td>
+<td align="center">播客详情:节目列表 + 「搜索本页」</td>
 </tr>
 </table>
 
@@ -185,9 +195,9 @@ cargo run -p ncm-cli -- lyric 186016
 
 | 门禁 | 现状 |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **369** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **545** 通过 / 0 失败(vendor 24 例里 4 例联网 smoke 离线自跳过; 权威数字只在 `docs/PROGRESS.md` 头部维护) |
 | `cargo clippy --workspace --all-targets -- -D warnings` / `cargo fmt --all -- --check` | **0 warning** / 干净 |
-| `flutter test --exclude-tags network` | **1401** 通过 / 0 失败(**21** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1528** 通过 / 0 失败(**21** 张 golden 含在内, CI 也跑; 真实网络 smoke 单列 `@Tags(['network'])`) |
 | `dart analyze` | **0 issue**(error / warning / info 全清) |
 | `tools/check-write-guard.sh` | OK(测试里不直连评论/点赞/转发/分享/歌单写, CI 不触网) |
 | 构建 | Linux bundle + Android APK 本地通过; Windows x64 zip 由 `windows.yml` CI 构建并实测通过 |

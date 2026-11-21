@@ -16,7 +16,7 @@ Rust core (protocol / identity / cache / playback) + Flutter UI (one codebase, t
 [![Windows](https://img.shields.io/badge/Windows-x64-0078D4?logo=windows&logoColor=white)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/windows.yml)
 [![CI](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/xiaquwan1001/netease-mini-player/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-Dart%201401%20%2B%20Rust%20369-brightgreen)](#build--test)
+[![tests](https://img.shields.io/badge/tests-Dart%201528%20%2B%20Rust%20545-brightgreen)](#build--test)
 
 <img src="docs/images/hero.png" alt="MiniNCM screens" width="100%">
 
@@ -56,6 +56,16 @@ lyrics; no recommendation spam. Protocol, crypto, anti-bot and identity live in 
 <td align="center">Search: songs / playlists / podcasts</td>
 <td align="center">Long-press lyrics → multi-select</td>
 <td align="center">Loudness normalisation / AutoEQ</td>
+</tr>
+<tr>
+<td width="33%"><img src="docs/images/phone-row-menu.png" alt="Song actions from a long press"></td>
+<td width="33%"><img src="docs/images/phone-playlist-search.png" alt="Search-in-page in a playlist"></td>
+<td width="33%"><img src="docs/images/phone-podcast-search.png" alt="Search-in-page in a podcast"></td>
+</tr>
+<tr>
+<td align="center">Long-press / right-click a song row → shared “Song actions” sheet</td>
+<td align="center">Playlist detail: persistent “search in page” icon in the AppBar</td>
+<td align="center">Podcast detail: episode list + “search in page”</td>
 </tr>
 </table>
 
@@ -151,9 +161,9 @@ cargo run -p ncm-cli -- lyric 186016
 
 | Gate | Status |
 |---|---|
-| `cargo test --offline --workspace --exclude ncm-api-rs` | **369** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
+| `cargo test --offline --workspace --exclude ncm-api-rs` | **545** passing / 0 failed (the vendor crate's 4 network smoke tests skip themselves offline; the authoritative numbers live in `docs/PROGRESS.md`) |
 | `cargo clippy --workspace --all-targets` | **0 warnings** |
-| `flutter test --exclude-tags network` | **1401** passing / 0 failing (includes **21** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
+| `flutter test --exclude-tags network` | **1528** passing / 0 failing (includes **21** golden pages, also run in CI; real-network smoke tests are tagged `@Tags(['network'])`) |
 | `dart analyze` | **0 issues** (errors / warnings / infos) |
 | `tools/check-write-guard.sh` | OK (tests never touch comment / like / share / playlist write endpoints) |
 | Builds | Linux bundle + Android APK locally; Windows x64 zip via `windows.yml` CI |
