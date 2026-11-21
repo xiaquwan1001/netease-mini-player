@@ -39,6 +39,7 @@ class PlayRankingView extends StatefulWidget {
     super.key,
     this.load,
     this.compact = false,
+    this.previewLimit = 5,
     this.onOpenAll,
     this.periods,
     this.emptyText,
@@ -46,8 +47,13 @@ class PlayRankingView extends StatefulWidget {
 
   final RankingLoader? load;
 
-  /// 只展示前 5 条 + 一个"查看全部"入口("我的"页内嵌用)
+  /// 只展示前 [previewLimit] 条 + 一个"查看全部"入口("我的"页内嵌用)
   final bool compact;
+
+  /// compact 模式的预览条数: 默认 5("我的"页内嵌口径),
+  /// 他人主页传 20 —— 对方排行同样是一次接口返回的完整列表,
+  /// 只画 5 条会让页面看起来"Ta 的歌很少"。
+  final int previewLimit;
 
   /// compact 模式下点"查看全部"
   final VoidCallback? onOpenAll;
@@ -208,7 +214,7 @@ class _PlayRankingViewState extends State<PlayRankingView>
             title: _emptyText,
           ),
           builder: (context, entries, reload) {
-            final shown = entries.take(5).toList();
+            final shown = entries.take(widget.previewLimit).toList();
             final playable = [
               for (final e in entries)
                 if (e.song.playable) e.song,
@@ -333,19 +339,23 @@ class _RankRow extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          trailing: capRowTrailing(
-            box.maxWidth,
-            Text(
-              '${entry.playCount} 次',
-              // 播放次数位数可变('1234567 次' ≈ 70dp, 1.625 字号下更宽)也算
-              // 行尾: 不封顶会把歌名挤扁(列表行审计 B8)。
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: scheme.outline,
-              ),
-            ),
-          ),
+          trailing: entry.playCount > BigInt.zero
+              ? capRowTrailing(
+                  box.maxWidth,
+                  Text(
+                    '${entry.playCount} 次',
+                    // 播放次数位数可变('1234567 次' ≈ 70dp, 1.625 字号下更宽)也算
+                    // 行尾: 不封顶会把歌名挤扁(列表行审计 B8)。
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.outline,
+                    ),
+                  ),
+                )
+              // 0/缺计数不占位: 上游给不出次数时只留名次与歌名,
+              // 不在页面上摆一排误导人的「0 次」。
+              : null,
           onTap: onTap,
         ),
       ),

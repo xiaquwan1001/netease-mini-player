@@ -82,8 +82,10 @@ impl NeteaseProvider {
 
     /// 他人常听排行: 与 [`play_ranking`](Self::play_ranking) 同一个端点, 只是 uid 由参数给
     /// (vendor 的 /api/v1/play/record 是公开通道, 别人的 uid 也能查).
-    /// 拿不到数据(对方隐私/无记录/接口回非 200)一律返回空列表, 不报错:
-    /// 这是"看别人的资料"场景, 空列表是合法状态, 报错会让 UI 弹错。
+    /// 拿不到数据(对方隐私/无记录/接口回非 200/请求本身被拒)一律返回空列表, 不报错:
+    /// 这是"看别人的资料"场景, 空列表是合法状态, 报错会让 UI 弹错
+    /// (用户反馈: 别人的常听页里直接露出 `[internal error]`)。
+    /// 只有网络错误上抛 —— 那是可重试的, 静默空列表会让人以为对方没数据。
     pub(super) fn play_ranking_of(
         &self,
         uid: u64,
@@ -97,7 +99,18 @@ impl NeteaseProvider {
             let q = make_query(&cookie, &domain, &ua)
                 .param("uid", &uid.to_string())
                 .param("type", period.type_param());
-            let resp = client.user_record(&q).await.map_err(map_error)?;
+            let resp = match client.user_record(&q).await {
+                Ok(resp) => resp,
+                // 请求本身失败也按 kind 分流: 只有网络抖动值得让用户重试,
+                // auth/riskControl/forbidden/internal/notFound 都不该在这页弹错。
+                Err(err) => {
+                    let err = map_error(err);
+                    if err.kind != ProviderErrorKind::Network {
+                        return Ok(Vec::new());
+                    }
+                    return Err(err);
+                }
+            };
             // 非 200(未登录/风控/隐私)按"没数据"处理
             if check_body(&resp.body).is_err() {
                 return Ok(Vec::new());
@@ -983,6 +996,8 @@ pub fn parse_song_wiki(body: &Value) -> Vec<WikiFact> {
 ///
 /// 容错: 当周(type=1)上游目前回 `{"code":200,"weekData":[]}`(也可能完全没有
 /// 这个键), 一律解析成**空列表**而不是错误; 条目缺 song 的跳过。
+/// 计数用 [`u64_count_of`] (数字/字符串/浮点整数值都认),
+/// 缺计数或读不出来就存 0 交给 UI **隐藏**次数列, 不用 score 反推、也不丢条目。
 pub fn parse_play_ranking(body: &Value, period: RankingPeriod) -> Vec<PlayRankEntry> {
     let key = match period {
         RankingPeriod::All => "allData",
@@ -998,7 +1013,7 @@ pub fn parse_play_ranking(body: &Value, period: RankingPeriod) -> Vec<PlayRankEn
                     let song = parse_song_with(item.get("song")?, &privileges)?;
                     Some(PlayRankEntry {
                         song,
-                        play_count: u64_of(item, "playCount").unwrap_or(0),
+                        play_count: u64_count_of(item, "playCount").unwrap_or(0),
                         score: u64_of(item, "score").unwrap_or(0),
                     })
                 })

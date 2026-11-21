@@ -134,9 +134,10 @@ void main() {
     expect(find.textContaining('登录后听几首歌就有了'), findsNothing);
   });
 
-  testWidgets('常听栏: 取数失败给错误 + 重试可恢复', (tester) async {
+  testWidgets('常听栏: 非网络错误(如 internal)不弹错, 直接给对方的空态', (tester) async {
+    // 用户反馈 3: 别人的常听页上直接铺出 `[internal error] ...`。
+    // Rust 侧 play_ranking_of 已吞成空列表, 这里验 Dart 层双保险。
     setTallView(tester);
-    var calls = 0;
     await tester.pumpWidget(
       host(
         UserPage(
@@ -145,24 +146,100 @@ void main() {
           loadProfile: (_) async => detail(),
           loadPlaylists: (_) async => const [],
           loadEvents: (_) async => const [],
-          loadRanking: (_) async {
-            calls++;
-            if (calls == 1) throw Exception('boom');
-            return [entry(1, '重试后的歌', 9)];
-          },
+          loadRanking: (_) async => throw const rust.FfiError(
+            kind: 'internal',
+            retryable: false,
+            detail: 'code=400',
+          ),
           initialTab: '常听',
         ),
       ),
     );
     await pumpFrames(tester);
 
-    expect(find.textContaining('Exception'), findsOneWidget);
-    expect(find.text('重试'), findsOneWidget);
+    expect(find.textContaining('[internal'), findsNothing);
+    expect(find.text('Ta 还没有公开的听歌记录'), findsOneWidget);
+    expect(find.text('重试'), findsNothing);
+  });
 
-    await tester.tap(find.text('重试'));
+  testWidgets('常听栏: 网络错误仍交给四态 UI(可重试)', (tester) async {
+    setTallView(tester);
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1822714196),
+          loggedIn: true,
+          loadProfile: (_) async => detail(),
+          loadPlaylists: (_) async => const [],
+          loadEvents: (_) async => const [],
+          loadRanking: (_) async => throw const rust.FfiError(
+            kind: 'network',
+            retryable: true,
+            detail: 'reset',
+          ),
+          initialTab: '常听',
+        ),
+      ),
+    );
+    // retryNetwork 退避 500ms + 1000ms 后才把错误交给 UI
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
     await pumpFrames(tester);
-    expect(find.text('重试后的歌'), findsOneWidget);
-    expect(calls, greaterThanOrEqualTo(2));
+
+    expect(find.textContaining('网络不稳定'), findsOneWidget);
+    expect(find.text('重试'), findsOneWidget);
+  });
+
+  testWidgets('常听栏: 次数为 0 不渲染「0 次」', (tester) async {
+    setTallView(tester);
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1822714196),
+          loggedIn: true,
+          loadProfile: (_) async => detail(),
+          loadPlaylists: (_) async => const [],
+          loadEvents: (_) async => const [],
+          loadRanking: (_) async => [
+            entry(1, '有次数的歌', 120),
+            entry(2, '上游没给次数的歌', 0),
+          ],
+          initialTab: '常听',
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+
+    expect(find.text('120 次'), findsOneWidget);
+    expect(find.text('0 次'), findsNothing);
+    // 条目本身仍要在(不能因计数为 0 丢行)
+    expect(find.text('上游没给次数的歌'), findsOneWidget);
+  });
+
+  testWidgets('常听栏: 预览 20 条(不是 5 条)', (tester) async {
+    setTallView(tester);
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1822714196),
+          loggedIn: true,
+          loadProfile: (_) async => detail(),
+          loadPlaylists: (_) async => const [],
+          loadEvents: (_) async => const [],
+          loadRanking: (_) async => [
+            for (var i = 1; i <= 25; i++) entry(i, '常听$i', 100 - i),
+          ],
+          initialTab: '常听',
+        ),
+      ),
+    );
+    await pumpFrames(tester);
+
+    // 第 6 条必须还在(预览口径从 5 改成 20), 第 21 条被截掉
+    expect(find.text('常听6'), findsOneWidget);
+    expect(find.text('常听20'), findsOneWidget);
+    expect(find.text('常听21'), findsNothing);
   });
 
   testWidgets('常听栏: 未登录给「登录后可见」, 且根本不发请求', (tester) async {

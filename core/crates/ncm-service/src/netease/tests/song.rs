@@ -401,6 +401,67 @@ fn play_ranking_week_shapes() {
     assert_eq!(list[1].song.name, "D");
 }
 
+/// 次数容错: 数字 / 数字字符串 / 浮点整数值 都认; 0 或缺失计数**保留条目**并存 0
+/// (UI 遮住「0 次」), 不得用 score 反推次数、不得丢条目.
+#[test]
+fn play_ranking_keeps_zero_rows_and_parses_loose_counts() {
+    let body = json!({
+        "code": 200,
+        "allData": [
+            {"playCount": "42", "score": 100, "song": {"id": 1, "name": "A", "ar": [], "dt": 1000}},
+            {"playCount": 7.0, "score": 60, "song": {"id": 2, "name": "B", "ar": [], "dt": 2000}},
+            {"playCount": 0, "score": 0, "song": {"id": 3, "name": "C", "ar": [], "dt": 3000}},
+            // 缺 playCount 但有 score: 次数必须是 0(不拿 score 反推)
+            {"score": 99, "song": {"id": 4, "name": "D", "ar": [], "dt": 4000}}
+        ]
+    });
+    let list = parse_play_ranking(&body, RankingPeriod::All);
+    assert_eq!(list.len(), 4, "0 计数/缺计数的条目也要保留");
+    let counts: Vec<u64> = list.iter().map(|e| e.play_count).collect();
+    assert_eq!(counts, vec![42, 7, 0, 0]);
+    let ids: Vec<u64> = list.iter().map(|e| e.song.id.0).collect();
+    assert_eq!(ids, vec![1, 2, 3, 4]);
+}
+
+/// 看他人资料时, user_record 的非网络错误(auth/riskControl/forbidden/internal/notFound)
+/// 一律是合法空态 —— 用户反馈这条路径会把 `[internal error]` 直接铺在别人主页上.
+///
+/// 走本地假 HTTP 服务(与云盘上传同一套)而不是打真接口: vendor 的 weapi 通道
+/// 会把 `code != 200` 直接换成 `NcmError`(这里 301 ⇒ AuthRequired), 正好验证分流.
+#[tokio::test]
+async fn play_ranking_of_non_network_error_is_empty_list() {
+    let (base, handle) = crate::netease::tests::cloud::spawn_fake_http(
+        200,
+        r#"{"code":301,"message":"需要登录"}"#,
+    );
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), base);
+    let list = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        p.play_ranking_of(1822714196, RankingPeriod::All),
+    )
+    .await
+    .expect("假服务应在超时内回包")
+    .expect("看他人资料: 非网络错误应返回空列表");
+    assert!(list.is_empty());
+    handle.join().expect("假服务线程未 panic");
+}
+
+/// 网络错误不吞: 那是可重试的, 静默空列表会让人以为对方没数据.
+#[tokio::test]
+async fn play_ranking_of_keeps_network_error() {
+    // 取一个刚释放的本地端口: 连接必然被拒 ⇒ network
+    let addr = std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("绑本地端口")
+        .local_addr()
+        .expect("取本地端口");
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), format!("http://{addr}"));
+    let err = p
+        .play_ranking_of(1822714196, RankingPeriod::All)
+        .await
+        .expect_err("网络错误必须上抛");
+    assert_eq!(err.kind, ProviderErrorKind::Network, "{err:?}");
+}
+
 #[test]
 fn style_preference_mapping() {
     // 登录态: data 下的 tagPreferenceVos / tags 两种字段都认

@@ -94,6 +94,48 @@ void main() {
     expect(opened, 1);
   });
 
+  testWidgets('compact 模式的 previewLimit 可调(他人主页传 20)', (tester) async {
+    // 20 行在 800x600 的默认视口里会竖向溢出, 加高视口(真实使用是放在
+    // 他人主页的 ListView 里, 高度本就无上限)
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      host(
+        PlayRankingView(
+          compact: true,
+          previewLimit: 20,
+          load: (_) async => [
+            for (var i = 1; i <= 25; i++) entry(i, '歌曲$i', 100 - i),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('歌曲6'), findsOneWidget);
+    expect(find.text('歌曲20'), findsOneWidget);
+    expect(find.text('歌曲21'), findsNothing);
+  });
+
+  testWidgets('次数为 0 的行不渲染「0 次」(条目本身仍在)', (tester) async {
+    await tester.pumpWidget(
+      host(
+        PlayRankingView(
+          load: (_) async => [
+            entry(1, '有次数', 120),
+            entry(2, '上游没给次数', 0),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('120 次'), findsOneWidget);
+    expect(find.text('0 次'), findsNothing);
+    expect(find.text('上游没给次数'), findsOneWidget);
+  });
+
   testWidgets('空排行显示提示', (tester) async {
     await tester.pumpWidget(host(PlayRankingView(load: (_) async => const [])));
     await tester.pumpAndSettle();

@@ -136,6 +136,18 @@ impl NeteaseProvider {
         }
     }
 
+    /// 测试专用: 固定接口域名(指向本地假 HTTP 服务), 不读 `NCM_DOMAIN` ——
+    /// 环境变量是进程级的, 并行单测里会串到别的用例。
+    #[cfg(test)]
+    pub(super) fn with_domain_for_test(session: Session, domain: String) -> Self {
+        Self {
+            inner: RwLock::new(Inner::new(session, Some(domain), None)),
+            cache: crate::read_cache::ReadCache::default(),
+            followed_artists: RwLock::new(None),
+            suggest_covers: RwLock::new(std::collections::HashMap::new()),
+        }
+    }
+
     pub fn update_session(&self, session: Session) {
         let mut guard = self.inner.write().unwrap_or_else(|e| e.into_inner());
         let domain = guard.domain.clone();
