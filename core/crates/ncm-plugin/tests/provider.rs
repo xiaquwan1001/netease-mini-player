@@ -168,6 +168,36 @@ fn song_url_without_meta_sends_empty_context() {
 }
 
 #[test]
+fn declared_sources_come_from_inited_handshake() {
+    // 上游 LX 的 `send('inited', {sources})` 是脚本自报平台的唯一来源; 宿主只读不改路由.
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/inited_sources.js"),
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+
+    assert_eq!(
+        provider.declared_sources(),
+        vec!["kw".to_string(), "tx".to_string(), "wy".to_string()],
+        "按字典序去重, 与 sources 的 key 一一对应"
+    );
+    assert_eq!(provider.name(), "demo");
+    assert!(provider.supports(Capability::SongUrl));
+}
+
+#[test]
+fn declared_sources_is_empty_without_inited() {
+    // 没发 inited(或形状不对)就是空: 不猜、不报错.
+    let provider = ScriptProvider::load(spec(
+        include_str!("fixtures/music_url.js"),
+        Arc::new(MockTransport::new()),
+        SandboxConfig::default(),
+    ))
+    .expect("插件应加载成功");
+    assert!(provider.declared_sources().is_empty());
+}
+#[test]
 fn search_maps_to_search_page() {
     let transport = Arc::new(MockTransport::new().on(
         "example.test/api/search",

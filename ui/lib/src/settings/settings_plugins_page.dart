@@ -581,6 +581,10 @@ class _PluginsPageState extends State<PluginsPage> {
     final domainsText = summary.requestDomains.isEmpty
         ? '出站: 全部拒绝(清单没有白名单)'
         : '出站: ${summary.requestDomains.join(', ')}';
+    // 脚本 inited 握手自报的平台代号(空 = 未声明/没声明 sources); 只展示, 不参与路由。
+    final sourcesText = summary.sources.isEmpty
+        ? '平台: 未声明'
+        : '平台: ${summary.sources.join(', ')}';
     return SwitchListTile(
       value: summary.enabled,
       onChanged: canToggle ? (value) => _togglePlugin(summary, value) : null,
@@ -603,6 +607,15 @@ class _PluginsPageState extends State<PluginsPage> {
                 ? bodySmall?.copyWith(color: theme.colorScheme.error)
                 : bodySmall,
           ),
+          if (!hasError) ...[
+            const SizedBox(height: 2),
+            AdaptiveText(
+              sourcesText,
+              mode: AdaptiveTextMode.wrap,
+              maxLines: 2,
+              style: bodySmall,
+            ),
+          ],
         ],
       ),
     );

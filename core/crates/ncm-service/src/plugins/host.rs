@@ -305,6 +305,20 @@ impl PluginHost {
             .unwrap_or_default()
     }
 
+    /// 各已装载插件**自报**的平台代号(`send('inited', {sources})` 的 key).
+    ///
+    /// 只用于 UI 展示与诊断; 路由判定不看它(能力面看 `capabilities`)。
+    pub fn sources(&self) -> std::collections::BTreeMap<String, Vec<String>> {
+        let Some(registry) = self.registry.as_ref() else {
+            return std::collections::BTreeMap::new();
+        };
+        registry
+            .entries()
+            .into_iter()
+            .map(|(id, provider)| (id, provider.declared_sources()))
+            .collect()
+    }
+
     /// 拉走所有已装载插件累计的诊断日志(按插件 id 分组, 空组丢弃).
     ///
     /// **取走语义**: 同一批日志只交付一次; UI 按需拉取(不做后台轮询 —— 拉取本身

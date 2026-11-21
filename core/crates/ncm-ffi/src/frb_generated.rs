@@ -8792,6 +8792,7 @@ impl SseDecode for crate::api::plugin::PluginSummaryDto {
         let mut var_enabled = <bool>::sse_decode(deserializer);
         let mut var_requestDomains = <Vec<String>>::sse_decode(deserializer);
         let mut var_error = <Option<String>>::sse_decode(deserializer);
+        let mut var_sources = <Vec<String>>::sse_decode(deserializer);
         return crate::api::plugin::PluginSummaryDto {
             id: var_id,
             name: var_name,
@@ -8799,6 +8800,7 @@ impl SseDecode for crate::api::plugin::PluginSummaryDto {
             enabled: var_enabled,
             request_domains: var_requestDomains,
             error: var_error,
+            sources: var_sources,
         };
     }
 }
@@ -11436,6 +11438,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::plugin::PluginSummaryDto {
             self.enabled.into_into_dart().into_dart(),
             self.request_domains.into_into_dart().into_dart(),
             self.error.into_into_dart().into_dart(),
+            self.sources.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -14056,6 +14059,7 @@ impl SseEncode for crate::api::plugin::PluginSummaryDto {
         <bool>::sse_encode(self.enabled, serializer);
         <Vec<String>>::sse_encode(self.request_domains, serializer);
         <Option<String>>::sse_encode(self.error, serializer);
+        <Vec<String>>::sse_encode(self.sources, serializer);
     }
 }
 

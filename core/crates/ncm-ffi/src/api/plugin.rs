@@ -81,6 +81,10 @@ pub struct PluginSummaryDto {
     pub request_domains: Vec<String>,
     /// `Some(reason)` = 这个目录没装上(清单坏/路径不安全/重复 id ...).
     pub error: Option<String>,
+    /// 脚本自报的平台代号(`send('inited', {sources})` 的 key); 空 = 未声明/没装载.
+    ///
+    /// 只用于展示与诊断, **不参与路由判定**(能力面看 `capabilities`).
+    pub sources: Vec<String>,
 }
 
 /// 一个插件的诊断日志批次(`lx.log` / `console.*`)。
@@ -181,7 +185,10 @@ fn status_dto(status: &ncm_service::PluginHostStatus) -> PluginStatusDto {
 }
 
 #[cfg(not(target_os = "android"))]
-fn summary_dto(summary: &ncm_service::PluginSummary) -> PluginSummaryDto {
+fn summary_dto(
+    summary: &ncm_service::PluginSummary,
+    sources: &std::collections::BTreeMap<String, Vec<String>>,
+) -> PluginSummaryDto {
     PluginSummaryDto {
         id: summary.id.clone(),
         name: summary.name.clone(),
@@ -189,6 +196,7 @@ fn summary_dto(summary: &ncm_service::PluginSummary) -> PluginSummaryDto {
         enabled: summary.enabled,
         request_domains: summary.request_domains.clone(),
         error: summary.error.clone(),
+        sources: sources.get(&summary.id).cloned().unwrap_or_default(),
     }
 }
 
@@ -258,7 +266,12 @@ pub fn plugin_summaries() -> Result<Vec<PluginSummaryDto>, FfiError> {
     #[cfg(not(target_os = "android"))]
     {
         let guard = core()?.lock().map_err(FfiError::from)?;
-        Ok(guard.plugin_summaries().iter().map(summary_dto).collect())
+        let sources = guard.plugin_sources();
+        Ok(guard
+            .plugin_summaries()
+            .iter()
+            .map(|summary| summary_dto(summary, &sources))
+            .collect())
     }
     #[cfg(target_os = "android")]
     {

@@ -47,6 +47,14 @@ pub trait Provider:
         self.capabilities().contains(&cap)
     }
 
+    /// provider 自己声明的"我支持哪些平台代号"(插件脚本的 `send('inited', {sources})`)。
+    ///
+    /// 内置 provider 恒为空; 插件按脚本握手给 `wy/kw/tx/...`。**只用于展示与诊断** ——
+    /// 路由判定不看它(能力面由 [`Self::capabilities`] 决定), 免得脚本乱声明就改路由。
+    fn declared_sources(&self) -> Vec<String> {
+        Vec::new()
+    }
+
     /// 取走 provider 侧累计的诊断日志(插件脚本的 `lx.log` / `console.*`)。
     ///
     /// 缺省是空(内置 provider 不攒日志); 有日志通道的实现自己覆盖。

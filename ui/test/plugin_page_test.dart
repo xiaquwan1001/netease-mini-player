@@ -108,6 +108,7 @@ class _FakePluginHost implements RustLibApi {
             version: s.version,
             enabled: true,
             requestDomains: s.requestDomains,
+            sources: s.sources,
           )
         else
           s,
@@ -126,6 +127,7 @@ class _FakePluginHost implements RustLibApi {
             version: s.version,
             enabled: false,
             requestDomains: s.requestDomains,
+            sources: s.sources,
           )
         else
           s,
@@ -211,6 +213,7 @@ rust.PluginSummaryDto _summary(
   String? name,
   bool enabled = false,
   List<String> domains = const [],
+  List<String> sources = const [],
   String? error,
 }) => rust.PluginSummaryDto(
   id: id,
@@ -219,6 +222,7 @@ rust.PluginSummaryDto _summary(
   enabled: enabled,
   requestDomains: domains,
   error: error,
+  sources: sources,
 );
 
 final _fake = _FakePluginHost();
@@ -431,6 +435,25 @@ void main() {
     // 失败不换 future ⇒ 内容还在, 没闪成错误态。
     expect(find.text('示例插件'), findsOneWidget);
     expect(tester.widget<SwitchListTile>(_masterTile()).onChanged, isNotNull);
+  });
+
+  testWidgets('平台自报: 显示脚本 inited 声明的 sources, 未声明就写"未声明"', (tester) async {
+    _fake
+      ..enabled = true
+      ..active = true
+      ..summaries = [
+        _summary(
+          'demo',
+          name: '示例插件',
+          enabled: true,
+          sources: const ['kw', 'wy'],
+        ),
+        _summary('quiet', name: '沉默插件', enabled: true),
+      ];
+    await _pumpPage(tester);
+
+    expect(find.text('平台: kw, wy'), findsOneWidget);
+    expect(find.text('平台: 未声明'), findsOneWidget);
   });
 
   testWidgets('日志: 拉取后按插件分组显示, 再拉一次给"没有新日志"', (tester) async {

@@ -90,6 +90,8 @@ enum WorkerMsg {
 pub struct ScriptProvider {
     name: String,
     capabilities: &'static [Capability],
+    /// 脚本经 `send('inited', {sources})` 声明的平台代号(装载期读一次, 之后不变).
+    declared_sources: Vec<String>,
     tx: Sender<WorkerMsg>,
     logs: Arc<Mutex<Vec<String>>>,
 }
@@ -100,7 +102,8 @@ impl ScriptProvider {
         let namespace = spec.namespace.clone().unwrap_or_else(|| spec.name.clone());
         let logs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
         let logs_for_thread = logs.clone();
-        let (init_tx, init_rx) = mpsc::channel::<Result<Vec<String>, PluginError>>();
+        type InitResult = Result<(Vec<String>, Vec<String>), PluginError>;
+        let (init_tx, init_rx) = mpsc::channel::<InitResult>();
         let (tx, rx) = mpsc::channel::<WorkerMsg>();
         let thread_name = format!("ncm-plugin:{}", spec.name);
 
@@ -122,8 +125,9 @@ impl ScriptProvider {
                     }
                 };
                 let handlers = engine.handlers().to_vec();
+                let declared_sources = engine.declared_sources();
                 drain_logs(&mut engine, &logs_for_thread);
-                if init_tx.send(Ok(handlers)).is_err() {
+                if init_tx.send(Ok((handlers, declared_sources))).is_err() {
                     return;
                 }
                 while let Ok(msg) = rx.recv() {
@@ -140,8 +144,8 @@ impl ScriptProvider {
             })
             .map_err(|e| PluginError::load(format!("worker 线程创建失败: {e}")))?;
 
-        let handlers = match init_rx.recv_timeout(INIT_TIMEOUT) {
-            Ok(Ok(handlers)) => handlers,
+        let (handlers, declared_sources) = match init_rx.recv_timeout(INIT_TIMEOUT) {
+            Ok(Ok((handlers, sources))) => (handlers, sources),
             Ok(Err(err)) => return Err(err),
             Err(_) => {
                 return Err(PluginError::timeout(format!(
@@ -154,6 +158,7 @@ impl ScriptProvider {
         Ok(Self {
             name: spec.name,
             capabilities: capabilities_for(&handlers),
+            declared_sources,
             tx,
             logs,
         })
@@ -229,6 +234,10 @@ impl Provider for ScriptProvider {
 
     fn capabilities(&self) -> &'static [Capability] {
         self.capabilities
+    }
+
+    fn declared_sources(&self) -> Vec<String> {
+        self.declared_sources.clone()
     }
 
     /// 取走宿主累计的 `lx.log` / `console.*` 输出(取走语义; UI 走 `plugin_logs` 拉取).

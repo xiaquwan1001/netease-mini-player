@@ -241,6 +241,11 @@ impl Core {
         self.plugin_host.rejected()
     }
 
+    /// 各插件自报的平台代号(展示/诊断用, 不参与路由)
+    pub fn plugin_sources(&self) -> std::collections::BTreeMap<String, Vec<String>> {
+        self.plugin_host.sources()
+    }
+
     /// 拉走所有插件累计的诊断日志(按插件 id 分组, 取走语义)
     pub fn plugin_take_logs(&self) -> Vec<(String, Vec<String>)> {
         self.plugin_host.take_logs()

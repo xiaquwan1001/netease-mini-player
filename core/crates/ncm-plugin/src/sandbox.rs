@@ -318,6 +318,28 @@ impl ScriptEngine {
         &self.handlers
     }
 
+    /// 脚本通过 `send('inited', {sources})` 声明的平台代号(去重 + 字典序)。
+    ///
+    /// 这是脚本自己说"我支持哪些平台"的唯一来源(上游 LX 的握手), 宿主**不做推断**:
+    /// 没声明就是空(路由/UI 都按"未声明"处理)。同一事件只认最后一次发送。
+    pub fn declared_sources(&self) -> Vec<String> {
+        let raw: String = match self
+            .context
+            .with(|ctx| ctx.eval::<std::string::String, _>("__lxSends()"))
+        {
+            Ok(raw) => raw,
+            Err(err) => {
+                // 读 sends 失败不该拖垮装载: 记一条日志即可(装载期就有日志通道).
+                let message = err.to_string();
+                self.host
+                    .borrow_mut()
+                    .push_log("warn", &format!("读取 lx.send 记录失败: {message}"));
+                return Vec::new();
+            }
+        };
+        parse_declared_sources(&raw)
+    }
+
     /// 取走累计日志(交付给上层日志通道).
     pub fn take_logs(&self) -> Vec<String> {
         std::mem::take(&mut self.host.borrow_mut().logs)
@@ -545,6 +567,37 @@ impl ScriptEngine {
         })?;
         parse_outcome(&raw)
     }
+}
+
+/// 从 `__lxSends()` 的 JSON 里抽 `inited.data.sources` 的 key(去重 + 排序)。
+///
+/// 形状不成立(脚本没发 inited / sources 不是对象)一律返回空 —— 不猜、不报错: 这是
+/// 可选握手, 缺了只是"不知道支持哪些平台", 不影响取链。
+fn parse_declared_sources(raw: &str) -> Vec<String> {
+    let sends: serde_json::Value = match serde_json::from_str(raw) {
+        Ok(value) => value,
+        Err(_) => return Vec::new(),
+    };
+    let Some(items) = sends.as_array() else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = Vec::new();
+    for item in items {
+        if item.get("name").and_then(|v| v.as_str()) != Some("inited") {
+            continue;
+        }
+        let Some(sources) = item
+            .get("data")
+            .and_then(|d| d.get("sources"))
+            .and_then(|s| s.as_object())
+        else {
+            continue;
+        };
+        out = sources.keys().cloned().collect();
+    }
+    out.sort();
+    out.dedup();
+    out
 }
 
 fn parse_outcome(raw: &str) -> Result<CallOutcome, PluginError> {

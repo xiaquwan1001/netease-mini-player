@@ -147,7 +147,12 @@ fn broken_plugin_is_recorded_not_panicked() {
     assert_eq!(failures[0].id, "demo");
     assert!(!failures[0].detail.is_empty(), "失败原因不能为空");
 
-    let summaries: Vec<_> = host.summaries().iter().map(summary_dto).collect();
+    let sources = host.sources();
+    let summaries: Vec<_> = host
+        .summaries()
+        .iter()
+        .map(|summary| summary_dto(summary, &sources))
+        .collect();
     // 坏目录未必进 summaries(扫描阶段就被拒), 但一定有 error 或进 failures —— 两者至少一处
     assert!(
         summaries.iter().any(|s| s.error.is_some()) || !failures.is_empty(),
@@ -170,7 +175,8 @@ fn broken_plugin_is_recorded_not_panicked() {
 
 #[test]
 fn summary_dto_preserves_every_field() {
-    let dto = summary_dto(&summary("demo", true, Some("装载失败")));
+    let no_sources = std::collections::BTreeMap::new();
+    let dto = summary_dto(&summary("demo", true, Some("装载失败")), &no_sources);
     assert_eq!(dto.id, "demo");
     assert_eq!(dto.name, "demo 插件");
     assert_eq!(dto.version, "1.0.0");
@@ -178,7 +184,7 @@ fn summary_dto_preserves_every_field() {
     assert_eq!(dto.request_domains, vec!["music.163.com".to_string()]);
     assert_eq!(dto.error.as_deref(), Some("装载失败"));
 
-    let clean = summary_dto(&summary("ok", false, None));
+    let clean = summary_dto(&summary("ok", false, None), &no_sources);
     assert_eq!(clean.error, None, "干净条目 error 必须是 None");
     assert!(!clean.enabled, "缺省停用要原样透出");
 }

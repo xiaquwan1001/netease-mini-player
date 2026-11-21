@@ -95,6 +95,30 @@ fn take_logs_groups_by_plugin_and_drains() {
         "取走语义: 同一批日志不能交付两次"
     );
 }
+/// 平台自报: `sources()` 从脚本的 inited 握手读出来, 只做展示(路由不看它).
+#[test]
+fn sources_report_what_script_declared() {
+    let temp = TempDir::new("sources");
+    let root = temp.path().join(DEFAULT_ROOT_DIR);
+    write_plugin(&root, "demo");
+    std::fs::write(
+        root.join("demo").join("index.js"),
+        "lx.send(lx.EVENT_NAMES.inited, { sources: { wy: {}, kw: {} } });\nlx.on('musicUrl', async () => 'https://cdn.test/a.mp3');",
+    )
+    .expect("写入口脚本");
+    enable_policy(temp.path());
+
+    let mut host = PluginHost::open_with_transport(temp.path(), transport());
+    assert!(host.sources().is_empty(), "没启用就没有 provider 可问");
+    host.enable("demo").expect("启用");
+
+    let sources = host.sources();
+    assert_eq!(
+        sources.get("demo"),
+        Some(&vec!["kw".to_string(), "wy".to_string()]),
+        "按字典序透出脚本声明的平台: {sources:?}"
+    );
+}
 /// 打开总开关(写策略文件).
 fn enable_policy(data_dir: &Path) {
     let policy = PluginHostPolicy {

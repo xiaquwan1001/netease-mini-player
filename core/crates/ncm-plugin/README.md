@@ -324,9 +324,10 @@ cargo test -p ncm-plugin --manifest-path core/Cargo.toml --offline
 3. **`lx.utils.crypto`**: 上游只有 `md5`(Melodia 实测), 本 crate 也只实现 md5;
    `aesEncrypt / rsaEncrypt / randomBytes / zlib` 的上游语义未验证, 暂不提供;
    `lx.utils.buffer` + 全局 `btoa/atob` 已按社区脚本实测用法补齐(切片 3)。
-4. **`lx.send('inited', {sources})` 握手**: Melodia 从 `data.sources` 的 key 取支持平台列表;
-   本 crate 仍只把载荷留在沙箱内(未回传宿主), 但 `request` 适配已用它挑 `source` 代号;
-   回传宿主(能力/平台白名单)等接插件管理层时再定。
+4. **`lx.send('inited', {sources})` 握手**: ✅ 已回传(2026-11-21): `ScriptEngine::declared_sources()` 读 `__lxSends()` 的
+   `inited.data.sources` key(去重 + 字典序) → `ScriptProvider::declared_sources()` → `PluginHost::sources()` →
+   `PluginSummaryDto.sources` → 插件页显示「平台: kw, wy / 未声明」。`request` 适配也用它挑 `source`(优先 `wy`)。
+   **只做展示与诊断**: 路由判定仍只看 `capabilities`(脚本乱声明不改路由)。
 5. **LX 脚本元信息头**(`@name/@description/@version/@capabilities/@apiVersion`)解析:
    **仍未做**(元信息一律取自 `manifest.json`)。`apiVersion` 的协商与拒绝文案已在**清单**侧落地
    (见 §1.6 与 `manifest::check_api_version`), 脚本头里的 `@apiVersion` 不作数。

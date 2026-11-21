@@ -100,7 +100,7 @@
 | 5 | **音质码透传**(hires/atmos/master 等不再只映射四档, 未认识的原样传) | 高音质请求降级/失败 | **S** | **建议做** |
 | 6 | **`lx.utils.buffer`**(from/bufToString/toString, base64/utf-8/hex) + 全局 `btoa/atob` | S1/S2 的 token 生成(有 btoa 回退, buffer 缺失仅退化) | **M**(纯 JS 可在 prelude 实现 codec, 不必真 Buffer) | **建议做**(低成本提兼容面) |
 | 7 | **`lx.env`(`{platform, env}`)** | S2 探测端型 | **S** | **建议做**(一行常量) |
-| 8 | **`inited` 握手回传宿主**(sources → 插件能力/平台白名单) | 平台分流脚本(`source: 'wy'` 等) | **M**(sends 已收集, 需回传 PluginRegistry 并决定 source 代号) | **建议做**, 与 §4 第 6 项同批 |
+| 8 | ~~**`inited` 握手回传宿主**(sources → 平台自报)~~ | 平台分流脚本(`source: 'wy'` 等) | **S**(已落) | ✅ 2026-11-21 落地: `ScriptEngine::declared_sources()` 读 `__lxSends()` → `ScriptProvider::declared_sources()` → `PluginHost::sources()` → `Core::plugin_sources()` → `PluginSummaryDto.sources` → 插件页「平台: kw, wy / 未声明」。**只做展示与诊断, 不参与路由判定**(能力面仍只看 `capabilities`, 免得脚本乱声明就改路由) |
 | 9 | `lx.utils.crypto.aesEncrypt/rsaEncrypt/randomBytes` | 部分直连协议脚本(非取样主流) | **L**(AES 需引入实现或 Rust 侧注入) | **缓**, 等有明确要接的源 |
 | 10 | `lx.utils.zlib` | 少数脚本 | **L** | **缓** |
 | 11 | `Buffer` 全局、`updateAlert`、`currentScriptInfo`、resp.url 重定向链 | 容错路径已覆盖 | S~M | **缓**(第 6 项做顺手给 btoa/atob) |

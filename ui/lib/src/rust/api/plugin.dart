@@ -318,6 +318,11 @@ class PluginSummaryDto {
   /// `Some(reason)` = 这个目录没装上(清单坏/路径不安全/重复 id ...).
   final String? error;
 
+  /// 脚本自报的平台代号(`send('inited', {sources})` 的 key); 空 = 未声明/没装载.
+  ///
+  /// 只用于展示与诊断, **不参与路由判定**(能力面看 `capabilities`).
+  final List<String> sources;
+
   const PluginSummaryDto({
     required this.id,
     required this.name,
@@ -325,6 +330,7 @@ class PluginSummaryDto {
     required this.enabled,
     required this.requestDomains,
     this.error,
+    required this.sources,
   });
 
   @override
@@ -334,7 +340,8 @@ class PluginSummaryDto {
       version.hashCode ^
       enabled.hashCode ^
       requestDomains.hashCode ^
-      error.hashCode;
+      error.hashCode ^
+      sources.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -346,5 +353,6 @@ class PluginSummaryDto {
           version == other.version &&
           enabled == other.enabled &&
           requestDomains == other.requestDomains &&
-          error == other.error;
+          error == other.error &&
+          sources == other.sources;
 }

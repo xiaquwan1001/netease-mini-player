@@ -7376,8 +7376,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   PluginSummaryDto dco_decode_plugin_summary_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return PluginSummaryDto(
       id: dco_decode_String(arr[0]),
       name: dco_decode_String(arr[1]),
@@ -7385,6 +7385,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       enabled: dco_decode_bool(arr[3]),
       requestDomains: dco_decode_list_String(arr[4]),
       error: dco_decode_opt_String(arr[5]),
+      sources: dco_decode_list_String(arr[6]),
     );
   }
 
@@ -10161,6 +10162,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_enabled = sse_decode_bool(deserializer);
     var var_requestDomains = sse_decode_list_String(deserializer);
     var var_error = sse_decode_opt_String(deserializer);
+    var var_sources = sse_decode_list_String(deserializer);
     return PluginSummaryDto(
       id: var_id,
       name: var_name,
@@ -10168,6 +10170,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       enabled: var_enabled,
       requestDomains: var_requestDomains,
       error: var_error,
+      sources: var_sources,
     );
   }
 
@@ -12687,6 +12690,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.enabled, serializer);
     sse_encode_list_String(self.requestDomains, serializer);
     sse_encode_opt_String(self.error, serializer);
+    sse_encode_list_String(self.sources, serializer);
   }
 
   @protected
