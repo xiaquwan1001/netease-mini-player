@@ -20,6 +20,7 @@ class PlaylistHeaderCard extends StatelessWidget {
     required this.palette,
     required this.detailError,
     required this.onRetry,
+    this.onOpenCreator,
   });
 
   /// 歌单详情(拉取失败时为 null: 标题/封面用入参兜底)
@@ -31,6 +32,9 @@ class PlaylistHeaderCard extends StatelessWidget {
   /// 详情错误文案(非空时卡片右下角给"点击重试")
   final String? detailError;
   final VoidCallback onRetry;
+
+  /// 「创建者」的点击(进他人主页); null = 不可点(官方/系统歌单 uid 为 0)
+  final VoidCallback? onOpenCreator;
 
   @override
   Widget build(BuildContext context) {
@@ -65,11 +69,9 @@ class PlaylistHeaderCard extends StatelessWidget {
                         if (d != null && d.creatorName.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text(
-                              '创建者: ${d.creatorName}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall,
+                            child: _CreatorLine(
+                              creatorName: d.creatorName,
+                              onTap: onOpenCreator,
                             ),
                           ),
                         if (d != null)
@@ -207,6 +209,35 @@ class PlaylistHiddenNote extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// 「创建者: xxx」一行: 有 uid 时是链接(主色 + 下划线, 点进他人主页),
+/// 没有 uid(官方/系统歌单)时就是普通文字。
+class _CreatorLine extends StatelessWidget {
+  const _CreatorLine({required this.creatorName, this.onTap});
+
+  final String creatorName;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodySmall;
+    final label = Text(
+      '创建者: $creatorName',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: onTap == null
+          ? style
+          : style?.copyWith(
+              color: theme.colorScheme.primary,
+              decoration: TextDecoration.underline,
+              decorationColor: theme.colorScheme.primary,
+            ),
+    );
+    if (onTap == null) return label;
+    return InkWell(onTap: onTap, child: label);
   }
 }
 

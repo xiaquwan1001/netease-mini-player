@@ -18,6 +18,7 @@ import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api_all.dart' as rust;
 import '../toast.dart' show showToast, showUndoToast;
+import '../user/user_page.dart' show showUserPage;
 import 'detail_shared.dart' show showResourceShareSheet;
 import 'playlist_dialogs.dart'
     show confirmDeletePlaylist, confirmRemoveTrack, showEditPlaylistInfoSheet;
@@ -111,6 +112,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   /// 筛选条位置: 用它把筛选条滚进视野(单列/双列右栏都挂在同一个 sliver 里)
   final GlobalKey _toolbarKey = GlobalKey();
+
+  /// 内联评论区锚点: AppBar 的评论入口经它把评论区滚进视野
+  final GlobalKey _commentsKey = GlobalKey();
   String _filter = '';
 
   rust.PlaylistDetail? _detail;
@@ -492,10 +496,9 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_detail?.name ?? widget.name),
-        actions: _buildActions(),
-      ),
+      // 标题只在头部卡片里(用户反馈: 固定栏里的长歌名挤到只剩两个字);
+      // 固定栏只放动作 —— 评论 / 搜索 / 收藏 / 管理 / 分享。
+      appBar: AppBar(actions: _buildActions()),
       // 双列判据用**窗口逻辑尺寸**(MediaQuery.sizeOf), 不是 body 的实测宽:
       // 壳层 ContentWidthLimit 把 body 限到 840, 拿它比 900 永远为假。
       // 窗口 >= 900 时 body 恰好 840 = 300 + 12 + 528, 两栏不挤压。
@@ -520,8 +523,36 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     _filterFocus.requestFocus();
   }
 
-  /// AppBar 动作(内嵌形态里挪到顶部一行): 搜索 / 收藏 / 管理 / 分享。
+  /// AppBar(内嵌形态里是顶部动作行)的评论入口: 把末尾的内联评论区滚进视野。
+  ///
+  /// 评论区在曲目列表之后, 可能整块都在视口外 —— [Scrollable.ensureVisible]
+  /// 会沿着外层所有滚动位置走(单列/内嵌是 [_scroll], 双列是右栏 [_scroll]),
+  /// 与 [_focusFilter] 同一套模式。
+  Future<void> _scrollToComments() async {
+    final anchor = _commentsKey.currentContext;
+    if (anchor == null) return;
+    await Scrollable.ensureVisible(
+      anchor,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  /// 评论入口的图标: 有评论数时挂数字徽标(详情未到/0 条时不挂)
+  Widget _buildCommentsIcon() {
+    final count = _detail?.commentCount.toInt() ?? 0;
+    const icon = Icon(Icons.mode_comment_outlined);
+    if (count <= 0) return icon;
+    return Badge.count(count: count, child: icon);
+  }
+
+  /// AppBar 动作(内嵌形态里挪到顶部一行): 评论 / 搜索 / 收藏 / 管理 / 分享。
   List<Widget> _buildActions() => [
+    IconButton(
+      tooltip: '查看评论',
+      icon: _buildCommentsIcon(),
+      onPressed: _scrollToComments,
+    ),
     IconButton(
       tooltip: '搜索本页',
       icon: const Icon(Icons.search),
@@ -627,6 +658,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   Widget _buildComments() => SliverToBoxAdapter(
     child: CommentThread(
+      key: _commentsKey,
       kind: 'playlist',
       resourceId: widget.playlistId,
       totalHint: _detail?.commentCount.toInt() ?? 0,
@@ -653,6 +685,16 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     builder: (_, detail, _) => _headerCard(detail, null, null),
   );
 
+  /// 头部卡片「创建者」的点击: 进他人主页。uid = 0(官方/系统歌单)不可点。
+  VoidCallback? _openCreatorOf(rust.PlaylistDetail? d) {
+    if (d == null || d.creatorId <= BigInt.zero) return null;
+    return () => showUserPage(
+      context,
+      userId: d.creatorId,
+      fallbackNickname: d.creatorName,
+    );
+  }
+
   Widget _headerCard(
     rust.PlaylistDetail? detail,
     String? error,
@@ -664,6 +706,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     palette: _palette,
     detailError: error,
     onRetry: retry ?? _retryDetail,
+    onOpenCreator: _openCreatorOf(detail),
   );
 
   Widget _buildToolbar() => PlaylistFilterBar(
