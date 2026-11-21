@@ -587,10 +587,19 @@ pub struct PodcastRadio {
     pub description: String,
     #[serde(default)]
     pub dj_name: String,
+    /// 主播(userId)的 uid: 0 = 该通道不带, UI 侧按不可点处理
+    #[serde(default)]
+    pub dj_id: u64,
     #[serde(default)]
     pub program_count: u64,
     #[serde(default)]
     pub play_count: u64,
+    /// 当前账号是否已收藏该电台: None = 接口没给(列表/搜索结果), **不要当成 false**
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subed: Option<bool>,
+    /// 收藏数(dj_detail 的 subCount): 0 = 没给或确实 0
+    #[serde(default)]
+    pub sub_count: u64,
 }
 
 /// 播客单集(节目). 音频本体是 mainSong, 播放时用 song.id 取直链.

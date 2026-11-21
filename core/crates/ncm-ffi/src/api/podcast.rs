@@ -15,8 +15,13 @@ pub struct _PodcastRadio {
     pub cover_url: Option<String>,
     pub description: String,
     pub dj_name: String,
+    /// 主播 uid(0 = 该通道不带, UI 按不可点处理)
+    pub dj_id: u64,
     pub program_count: u64,
     pub play_count: u64,
+    /// 已收藏: None = 接口没给(列表/搜索), 不要当成 false
+    pub subed: Option<bool>,
+    pub sub_count: u64,
 }
 
 pub struct PodcastProgramDto {
@@ -35,6 +40,12 @@ pub struct PodcastProgramDto {
 /// 热门播客/电台
 pub async fn podcast_hot(limit: u32) -> Result<Vec<PodcastRadio>, FfiError> {
     ffi_forward!(Capability::Podcast, provider.podcast_hot(limit))
+}
+
+/// 播客/电台详情: 列表通道不带 `subed`/`subCount`(收藏态), 详情页用它补齐
+/// (2026-11-22 F5: 顶部要画「收藏」而不是「听众」, 状态必须准确)。
+pub async fn podcast_radio(radio_id: u64) -> Result<PodcastRadio, FfiError> {
+    ffi_forward!(Capability::Podcast, provider.podcast_radio(radio_id))
 }
 
 /// 某个播客的节目列表
@@ -59,4 +70,12 @@ pub async fn podcast_program(program_id: u64) -> Result<PodcastProgramDto, FfiEr
         .await
         .map_err(FfiError::from)?;
     Ok(program_dto(p))
+}
+
+/// 收藏/取消收藏播客(电台): 需要登录; 成功后由调用方回写本地状态(与歌单/专辑同款口径)。
+pub async fn set_podcast_subscribed(radio_id: u64, subscribed: bool) -> Result<bool, FfiError> {
+    ffi_forward!(
+        Capability::Podcast,
+        provider.set_podcast_subscribed(radio_id, subscribed)
+    )
 }

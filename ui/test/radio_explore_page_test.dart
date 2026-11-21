@@ -21,8 +21,10 @@ rust.PodcastRadio _radio(
   coverUrl: '',
   description: '',
   djName: dj,
+  djId: BigInt.zero,
   programCount: BigInt.from(progs),
   playCount: plays ?? BigInt.from(6555956),
+  subCount: BigInt.zero,
 );
 
 rust.RadioExploreHome _home({int cats = 3, int picks = 2}) =>

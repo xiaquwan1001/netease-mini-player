@@ -12,6 +12,11 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 Future<List<PodcastRadio>> podcastHot({required int limit}) =>
     RustLib.instance.api.crateApiPodcastPodcastHot(limit: limit);
 
+/// 播客/电台详情: 列表通道不带 `subed`/`subCount`(收藏态), 详情页用它补齐
+/// (2026-11-22 F5: 顶部要画「收藏」而不是「听众」, 状态必须准确)。
+Future<PodcastRadio> podcastRadio({required BigInt radioId}) =>
+    RustLib.instance.api.crateApiPodcastPodcastRadio(radioId: radioId);
+
 /// 某个播客的节目列表
 Future<List<PodcastProgramDto>> podcastPrograms({
   required BigInt radioId,
@@ -26,6 +31,15 @@ Future<List<PodcastProgramDto>> podcastPrograms({
 /// 单个节目详情
 Future<PodcastProgramDto> podcastProgram({required BigInt programId}) =>
     RustLib.instance.api.crateApiPodcastPodcastProgram(programId: programId);
+
+/// 收藏/取消收藏播客(电台): 需要登录; 成功后由调用方回写本地状态(与歌单/专辑同款口径)。
+Future<bool> setPodcastSubscribed({
+  required BigInt radioId,
+  required bool subscribed,
+}) => RustLib.instance.api.crateApiPodcastSetPodcastSubscribed(
+  radioId: radioId,
+  subscribed: subscribed,
+);
 
 class PodcastProgramDto {
   final BigInt id;
@@ -86,8 +100,15 @@ class PodcastRadio {
   final String? coverUrl;
   final String description;
   final String djName;
+
+  /// 主播 uid(0 = 该通道不带, UI 按不可点处理)
+  final BigInt djId;
   final BigInt programCount;
   final BigInt playCount;
+
+  /// 已收藏: None = 接口没给(列表/搜索), 不要当成 false
+  final bool? subed;
+  final BigInt subCount;
 
   const PodcastRadio({
     required this.id,
@@ -95,8 +116,11 @@ class PodcastRadio {
     this.coverUrl,
     required this.description,
     required this.djName,
+    required this.djId,
     required this.programCount,
     required this.playCount,
+    this.subed,
+    required this.subCount,
   });
 
   @override
@@ -106,8 +130,11 @@ class PodcastRadio {
       coverUrl.hashCode ^
       description.hashCode ^
       djName.hashCode ^
+      djId.hashCode ^
       programCount.hashCode ^
-      playCount.hashCode;
+      playCount.hashCode ^
+      subed.hashCode ^
+      subCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -119,6 +146,9 @@ class PodcastRadio {
           coverUrl == other.coverUrl &&
           description == other.description &&
           djName == other.djName &&
+          djId == other.djId &&
           programCount == other.programCount &&
-          playCount == other.playCount;
+          playCount == other.playCount &&
+          subed == other.subed &&
+          subCount == other.subCount;
 }

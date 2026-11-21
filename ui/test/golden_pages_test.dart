@@ -376,8 +376,10 @@ final rust.PodcastRadio _podcastRadio = rust.PodcastRadio(
   coverUrl: null,
   description: '独立音乐人的访谈与现场, 每周一期。',
   djName: '主播小林',
+  djId: BigInt.zero,
   programCount: BigInt.from(8),
   playCount: BigInt.from(523000),
+  subCount: BigInt.zero,
 );
 
 /// 8 集节目: 奇数集正在播(第 1 集 song.id == 701), 时长 30 分钟。

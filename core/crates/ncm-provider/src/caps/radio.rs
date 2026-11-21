@@ -39,6 +39,15 @@ pub trait RadioProvider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no subscribed podcasts")) })
     }
 
+    /// 收藏/取消收藏播客/电台(需要登录; `subscribed = true` = 收藏)
+    fn set_podcast_subscribed(
+        &self,
+        _radio_id: u64,
+        _subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async { Err(ProviderError::unsupported("no podcast subscribe")) })
+    }
+
     // ---- 电台发现(只读; 能力声明 Capability::RadioExplore) ----
 
     /// 电台发现首页: 分类列表(dj_catelist) + 各分类精选(dj_category_recommend), 匿名可用.

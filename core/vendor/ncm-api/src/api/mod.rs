@@ -119,6 +119,7 @@ mod dj_program;
 mod dj_program_detail;
 mod dj_program_toplist;
 mod dj_recommend_type;
+mod dj_sub;
 mod dj_sublist;
 mod dj_subscriber;
 mod dj_toplist;

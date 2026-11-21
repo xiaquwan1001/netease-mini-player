@@ -17,16 +17,24 @@ import '../playback_bridge.dart';
 import '../podcast.dart' show ProgramDetailSheet, ProgramDetailLoader;
 import '../radio_subscribers_page.dart';
 import '../rust/api_all.dart' as rust;
+import '../toast.dart' show showToast, showUndoToast;
+import '../user/user_page.dart' show showUserPage;
 import 'detail_shared.dart' show DetailSkeletonList, showResourceShareSheet;
 import 'podcast_program_row.dart' show PodcastProgramRow;
 
-// ---------------- 播客(电台)详情 ----------------
+/// 播客详情(拉完整详情): 测试可注入; 缺省走 FFI `podcastRadio`
+typedef PodcastRadioLoader = Future<rust.PodcastRadio> Function(BigInt radioId);
 
-/// 打开播客/电台详情页(全屏路由). 电台订阅本轮不做(Rust 侧暂无接口)。
+/// 打开播客/电台详情页(全屏路由)。
+///
+/// [loggedIn] 只用于「未登录先提示」; null = 不知道, 由 FFI 的 auth 错误兼管。
+/// [loadRadioDetail] 用于补齐列表通道没有的收藏态/主播 uid/收藏数(F5)。
 Future<void> showPodcastDetail(
   BuildContext context, {
   required rust.PodcastRadio radio,
   ProgramDetailLoader? loadProgramDetail,
+  PodcastRadioLoader? loadRadioDetail,
+  bool? loggedIn,
 }) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
@@ -34,6 +42,9 @@ Future<void> showPodcastDetail(
         radio: radio,
         loadProgramDetail:
             loadProgramDetail ?? (id) => rust.podcastProgram(programId: id),
+        loadRadioDetail:
+            loadRadioDetail ?? (id) => rust.podcastRadio(radioId: id),
+        loggedIn: loggedIn,
       ),
     ),
   );
@@ -43,12 +54,20 @@ class _PodcastDetailPage extends StatefulWidget {
   const _PodcastDetailPage({
     required this.radio,
     required this.loadProgramDetail,
+    required this.loadRadioDetail,
+    this.loggedIn,
   });
 
   final rust.PodcastRadio radio;
 
   /// 单集详情(podcast_program), 测试可注入 mock
   final ProgramDetailLoader loadProgramDetail;
+
+  /// 电台完整详情(podcast_radio): 补收藏态/主播 uid/收藏数
+  final PodcastRadioLoader loadRadioDetail;
+
+  /// null = 登录态未知(不拦, 由 FFI 的 auth 错误提示)
+  final bool? loggedIn;
 
   @override
   State<_PodcastDetailPage> createState() => _PodcastDetailPageState();
@@ -63,6 +82,9 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   /// 筛选条位置(AppBar 搜索按钮用 ensureVisible 把它滚进视野)
   final GlobalKey _toolbarKey = GlobalKey();
 
+  /// 内联评论区锚点: AppBar 的评论入口经它把评论区滚进视野(F5-F2)
+  final GlobalKey _commentsKey = GlobalKey();
+
   /// 单列 body / 双列右栏的滚动口(AppBar 搜索按钮靠它 ensureVisible;
   /// 左栏不挂 controller, 两列各自滚动互不影响)
   final ScrollController _scroll = ScrollController();
@@ -71,10 +93,84 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
   List<rust.PodcastProgramDto>? _programs;
   String? _programsError;
 
+  /// 列表通道不带收藏态/主播 uid/收藏数 ⇒ 进页时用 podcast_radio 补一次。
+  /// 失败不影响页面(就用在列表里拿到的那份), 所以不报错。
+  late rust.PodcastRadio _radio = widget.radio;
+
+  /// 收藏态: 先用列表里的(可能 null = 未知), 详情回来后以详情为准
+  bool? _subed;
+
+  /// 收藏数(头部「N 人收藏」+ 听众列表入口)
+  late int _subCount = widget.radio.subCount.toInt();
+  bool _subBusy = false;
+
   @override
   void initState() {
     super.initState();
+    _subed = widget.radio.subed;
     _loadPrograms();
+    _loadRadioDetail();
+  }
+
+  Future<void> _loadRadioDetail() async {
+    try {
+      final detail = await widget.loadRadioDetail(widget.radio.id);
+      if (!mounted) return;
+      setState(() {
+        _radio = detail;
+        _subed = detail.subed ?? _subed;
+        _subCount = detail.subCount.toInt();
+      });
+    } catch (_) {
+      // 详情拉不到不影响节目列表: 页面仍用入参那份(收藏按钮保持未知态)
+    }
+  }
+
+  /// 收藏/取消收藏电台(与歌单收藏同款口径: 成功后本地切换, 取消给 5 秒撤销;
+  /// 未登录先提示而不发请求)。
+  Future<void> _toggleSubscribe() async {
+    if (_subBusy) return;
+    if (widget.loggedIn == false) {
+      _toast('收藏需要先登录');
+      return;
+    }
+    final target = !(_subed ?? false);
+    setState(() => _subBusy = true);
+    try {
+      final ok = await rust.setPodcastSubscribed(
+        radioId: _radio.id,
+        subscribed: target,
+      );
+      if (!mounted) return;
+      if (ok) {
+        setState(() {
+          _subed = target;
+          _subCount = target
+              ? _subCount + 1
+              : (_subCount > 0 ? _subCount - 1 : 0);
+        });
+        if (target) {
+          _toast('已收藏播客');
+        } else {
+          showUndoToast(
+            context,
+            message: '已取消收藏播客',
+            onUndo: () => _toggleSubscribe(),
+          );
+        }
+      } else {
+        _toast('操作未生效, 请稍后重试');
+      }
+    } catch (e) {
+      _toast(friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _subBusy = false);
+    }
+  }
+
+  void _toast(String message) {
+    if (!mounted) return;
+    showToast(context, message);
   }
 
   @override
@@ -145,6 +241,19 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
     _filterFocus.requestFocus();
   }
 
+  /// AppBar 的评论入口: 把末尾的内联评论区滚进视野(与歌单详情同一套模式)。
+  /// 评论在节目列表之后, 可能整块在视口外 —— ensureVisible 会沿外层滚动位置走
+  /// (单列/双列右栏都是 [_scroll])。
+  Future<void> _scrollToComments() async {
+    final anchor = _commentsKey.currentContext;
+    if (anchor == null) return;
+    await Scrollable.ensureVisible(
+      anchor,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   /// display 已经过滤掉 song 为空的节目, 行序即可播队列序
   void _playProgram(int index) {
     final songs = [
@@ -156,26 +265,32 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final radio = widget.radio;
+    final radio = _radio;
     return Scaffold(
       appBar: AppBar(
-        title: Text(radio.name),
+        // 电台名只在头部卡片里(用户反馈 F5-F3: 固定栏里的长名挤成两个字); 固定栏只放动作。
         actions: [
+          IconButton(
+            tooltip: '查看评论',
+            icon: const Icon(Icons.mode_comment_outlined),
+            onPressed: _scrollToComments,
+          ),
           IconButton(
             tooltip: '搜索本页',
             icon: const Icon(Icons.search),
             onPressed: _focusFilter,
           ),
-          // 电台头部卡片没有订阅数字段(PodcastRadioDto 无 subCount),
-          // 听众入口放 AppBar 图标(与分享并排).
+          // 用户反馈 F5: 顶部那个「听众」icon 换成「收藏」; 听众入口挪进头部卡片的
+          // 「N 人收藏」(同一个集合, 可点看列表)。
           IconButton(
-            tooltip: '听众',
-            icon: const Icon(Icons.groups_outlined),
-            onPressed: () => showRadioSubscribers(
-              context,
-              radioId: radio.id,
-              radioName: radio.name,
+            tooltip: (_subed ?? false) ? '取消收藏' : '收藏播客',
+            icon: Icon(
+              (_subed ?? false) ? Icons.favorite : Icons.favorite_border,
+              color: (_subed ?? false)
+                  ? Theme.of(context).colorScheme.primary
+                  : null,
             ),
+            onPressed: _subBusy ? null : _toggleSubscribe,
           ),
           IconButton(
             tooltip: '分享',
@@ -244,6 +359,7 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
 
   Widget _buildComments(rust.PodcastRadio radio) => SliverToBoxAdapter(
     child: CommentThread(
+      key: _commentsKey,
       kind: 'podcast',
       resourceId: radio.id,
       // 评论分享卡片的语境(需求 10): 来自哪个播客
@@ -279,11 +395,15 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
                       if (radio.djName.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            radio.djName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
+                          child: _DjLine(
+                            djName: radio.djName,
+                            onTap: radio.djId > BigInt.zero
+                                ? () => showUserPage(
+                                    context,
+                                    userId: radio.djId,
+                                    fallbackNickname: radio.djName,
+                                  )
+                                : null,
                           ),
                         ),
                       Padding(
@@ -293,6 +413,27 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
+                      // 「N 人收藏」可点 = 原来的「听众」入口(用户反馈 F5: 不要两个 icon 堆在
+                      // AppBar 上)。收藏数未知(0)时不渲染这一行, 不留一个空的 0。
+                      if (_subCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: InkWell(
+                            onTap: () => showRadioSubscribers(
+                              context,
+                              radioId: radio.id,
+                              radioName: radio.name,
+                            ),
+                            child: Text(
+                              '$_subCount 人收藏',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                decoration: TextDecoration.underline,
+                                decorationColor: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -399,6 +540,34 @@ class _PodcastDetailPageState extends State<_PodcastDetailPage> {
         );
       }, childCount: display.length),
     );
+  }
+}
+
+/// 「主播: xxx」一行: 有 uid 时是链接(主色 + 下划线, 点进他人主页), 没有就普通文字。
+class _DjLine extends StatelessWidget {
+  const _DjLine({required this.djName, this.onTap});
+
+  final String djName;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.bodySmall;
+    final label = Text(
+      '主播: $djName',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: onTap == null
+          ? style
+          : style?.copyWith(
+              color: theme.colorScheme.primary,
+              decoration: TextDecoration.underline,
+              decorationColor: theme.colorScheme.primary,
+            ),
+    );
+    if (onTap == null) return label;
+    return InkWell(onTap: onTap, child: label);
   }
 }
 

@@ -238,10 +238,7 @@ void main() {
     await _pumpPage(tester, const Size(360, 800));
 
     expect(
-      find.descendant(
-        of: find.byType(AppBar),
-        matching: find.text('华语流行精选'),
-      ),
+      find.descendant(of: find.byType(AppBar), matching: find.text('华语流行精选')),
       findsNothing,
     );
     // 名称没丢: 头部卡片的标题还在

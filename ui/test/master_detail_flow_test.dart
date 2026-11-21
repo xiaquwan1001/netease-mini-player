@@ -279,10 +279,11 @@ void main() {
     expect(detailPaneSlot.value, isNull, reason: '窄档不填右栏');
     expect(find.byType(DetailPaneSurface), findsNothing);
     expect(pageDepth.value, 2, reason: '窄档的详情是真正的一层路由');
-    // push 出来的整页: 有 AppBar + 返回箭头, 标题就是歌单名
+    // push 出来的整页: 有 AppBar + 返回箭头; 歌单名只在头部卡片里
+    // (2026-11-22 F3: AppBar 标题已删, 长歌名不再被挤到两个字), 页面本体用创建者行佐证
     expect(find.byType(AppBar), findsOneWidget);
-    expect(find.widgetWithText(AppBar, '华语精选'), findsOneWidget);
     expect(find.byType(BackButton), findsOneWidget);
+    expect(find.text('华语精选'), findsWidgets);
     expect(find.text('创建者: 云音乐编辑部'), findsOneWidget);
   });
 

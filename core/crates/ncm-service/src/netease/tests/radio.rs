@@ -173,16 +173,36 @@ fn podcast_radio_detail_mapping() {
     let body = json!({
         "code": 200,
         "data": {"id": 5, "name": "电台", "picUrl": "http://p/r.jpg", "desc": "d",
-                 "dj": {"nickname": "主播"}, "programCount": 33, "playCount": 100}
+                 "dj": {"nickname": "主播", "userId": 9001}, "programCount": 33, "playCount": 100,
+                 "subed": true, "subCount": 4567}
     });
     let r = parse_podcast_radio_detail(&body).unwrap();
     assert_eq!(r.id, 5);
     assert_eq!(r.name, "电台");
     assert_eq!(r.cover_url.as_deref(), Some("http://p/r.jpg"));
     assert_eq!(r.dj_name, "主播");
+    assert_eq!(r.dj_id, 9001, "主播 uid 要取 dj.userId(F5 主播可点)");
     assert_eq!(r.program_count, 33);
+    assert_eq!(r.subed, Some(true));
+    assert_eq!(r.sub_count, 4567);
     let err = parse_podcast_radio_detail(&json!({"code": 200})).unwrap_err();
     assert_eq!(err.kind, ProviderErrorKind::NotFound);
+}
+
+/// 列表通道(dj_hot / dj_category_recommend)不带 subed ⇒ 必须是 None(不是 false),
+/// 否则 UI 会把「没告诉你」画成「未收藏」。dj_id 同理缺字段时为 0(不可点)。
+#[test]
+fn podcast_radio_missing_subed_is_none_not_false() {
+    let hot = json!({"code": 200, "djRadios": [
+        {"id": 7, "name": "x", "dj": {"nickname": "主播"}, "programCount": 1}
+    ]});
+    let r = &parse_podcast_hot(&hot)[0];
+    assert_eq!(r.subed, None);
+    assert_eq!(r.sub_count, 0);
+    assert_eq!(r.dj_id, 0);
+    // 显式 false 要如实保留(已登录但未收藏)
+    let off = json!({"code": 200, "data": {"id": 5, "name": "x", "subed": false, "subCount": 0}});
+    assert_eq!(parse_podcast_radio_detail(&off).unwrap().subed, Some(false));
 }
 
 #[test]

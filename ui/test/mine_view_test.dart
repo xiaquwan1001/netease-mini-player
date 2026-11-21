@@ -96,8 +96,10 @@ MineView buildMine({
           coverUrl: null,
           description: '',
           djName: '主播',
+          djId: BigInt.zero,
           programCount: BigInt.from(2),
           playCount: BigInt.zero,
+          subCount: BigInt.zero,
         ),
       ],
 

@@ -21,8 +21,10 @@ final rust.PodcastRadio _radio = rust.PodcastRadio(
   coverUrl: null,
   description: '独立音乐人的访谈与现场, 每周一期。',
   djName: '主播小林',
+  djId: BigInt.from(9001),
   programCount: BigInt.from(20),
   playCount: BigInt.from(523000),
+  subCount: BigInt.from(4321),
 );
 
 /// 播客详情页只有命令式入口且数据直连 FFI, 这里垫最小一套(节目列表 + 评论)。

@@ -716,6 +716,15 @@ impl RadioProvider for NeteaseProvider {
         NeteaseProvider::subscribed_podcasts(self, limit)
     }
 
+    /// 收藏/取消收藏播客/电台
+    fn set_podcast_subscribed(
+        &self,
+        radio_id: u64,
+        subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        NeteaseProvider::set_podcast_subscribed(self, radio_id, subscribed)
+    }
+
     // ---- 电台发现(只读; 全部匿名可用) ----
 
     /// 电台发现首页: dj_catelist(分类) + dj_category_recommend(各分类精选), 并发拉取.

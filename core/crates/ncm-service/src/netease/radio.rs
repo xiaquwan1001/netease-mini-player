@@ -179,6 +179,32 @@ impl NeteaseProvider {
         })
     }
 
+    /// 订阅/取消订阅电台/播客: t=1 订阅, 0 取消(需要登录).
+    ///
+    /// vendor 的 `dj_sub` 是 `/api/djradio/{sub|unsub}`(weapi), 电台 id 的参数名是 `rid`。
+    /// 用户反馈 F5「顶部听众 icon 应换成收藏」靠它。
+    pub(super) fn set_podcast_subscribed(
+        &self,
+        radio_id: u64,
+        subscribed: bool,
+    ) -> BoxFuture<'_, ProviderResult<bool>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            if !cookie.contains("MUSIC_U=") {
+                return Err(ProviderError::auth("收藏播客需要登录"));
+            }
+            if radio_id == 0 {
+                return Err(ProviderError::not_found("radio id 为空"));
+            }
+            let q = make_query(&cookie, &domain, &ua)
+                .param("rid", &radio_id.to_string())
+                .param("t", if subscribed { "1" } else { "0" });
+            let resp = client.dj_sub(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(true)
+        })
+    }
+
     /// 已订阅的播客/电台
     pub(super) fn subscribed_podcasts(
         &self,
@@ -212,8 +238,15 @@ pub(super) fn parse_radio(v: &Value) -> Option<PodcastRadio> {
             .get("dj")
             .and_then(|d| str_of(d, "nickname"))
             .unwrap_or_default(),
+        // 主播 uid: 用户反馈 F5「主播名点不进个人主页」→ 头部卡片点它要 showUserPage(uid)。
+        // 0 = 缺字段(部分列表通道不带 dj.userId), UI 侧按不可点处理。
+        dj_id: v.get("dj").and_then(|d| u64_of(d, "userId")).unwrap_or(0),
         program_count: u64_of(v, "programCount").unwrap_or(0),
         play_count: u64_of(v, "playCount").unwrap_or(0),
+        // 收藏态/收藏数: dj_detail 的 data 里实测有 subed/subCount(2026-11-22 口径),
+        // 列表通道不一定有 ⇒ 缺字段就是 None / 0, 不当成「未收藏」硬写。
+        subed: v.get("subed").and_then(Value::as_bool),
+        sub_count: u64_of(v, "subCount").unwrap_or(0),
     })
 }
 
@@ -449,8 +482,15 @@ pub(super) fn parse_voice_radio(v: &Value) -> Option<PodcastRadio> {
             .get("dj")
             .and_then(|d| str_of(d, "nickname"))
             .unwrap_or_default(),
+        dj_id: base
+            .get("dj")
+            .and_then(|d| u64_of(d, "userId"))
+            .unwrap_or(0),
         program_count: radio.and_then(|r| u64_of(r, "programCount")).unwrap_or(0),
         play_count: u64_of(base, "listenerCount").unwrap_or(0),
+        // voice 是「播客单集」对象: 没有电台收藏态, 保持缺省(None / 0)
+        subed: None,
+        sub_count: 0,
     })
 }
 

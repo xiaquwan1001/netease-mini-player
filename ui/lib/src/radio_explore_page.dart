@@ -444,8 +444,10 @@ class _ToplistTabs extends StatelessWidget {
         name: p.radioName.isEmpty ? p.name : p.radioName,
         description: p.description,
         djName: p.djName,
+        djId: BigInt.zero,
         programCount: BigInt.zero,
         playCount: BigInt.zero,
+        subCount: BigInt.zero,
       ),
     );
   }
@@ -508,8 +510,11 @@ class _ToplistTabs extends StatelessWidget {
               coverUrl: r.coverUrl.isEmpty ? null : r.coverUrl,
               description: r.rcmdText,
               djName: r.djName,
+              // 排行榜通道不带 dj.userId; 详情页会用 podcastRadio 补齐
+              djId: BigInt.zero,
               programCount: r.programCount,
               playCount: r.playCount,
+              subCount: r.subCount,
             ),
           ),
         ),

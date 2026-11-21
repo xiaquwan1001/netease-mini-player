@@ -180,8 +180,11 @@ class HomeNavigation {
         coverUrl: item.coverUrl,
         description: '',
         djName: item.djName,
+        // 搜索结果不带主播 uid / 收藏态; 详情页会用 podcastRadio 补齐
+        djId: BigInt.zero,
         programCount: item.programCount,
         playCount: item.playCount,
+        subCount: BigInt.zero,
       ),
     );
   }
