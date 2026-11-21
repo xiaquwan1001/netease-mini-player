@@ -294,6 +294,144 @@ pub fn plan(
     }
 }
 
+// ------------------------------- 快照 -------------------------------
+
+/// 路由判定的**只读快照**(隔离二期切片 A2): 判定所需的全部输入, 纯内存、无锁、可克隆.
+///
+/// # 为什么要有快照
+///
+/// 判定原本直接问插件宿主([`PluginHost`](super::host::PluginHost)), 也就是取
+/// [`PluginHostHandle`](super::PluginHostHandle) 的**读锁**; 而重扫/导入/启停拿的是
+/// **写锁**(单插件装载预算 8s, N 个插件可能更久). 两者一撞, 取链/搜索/歌词这些
+/// "只要一次判定"的 FFI 就跟着排队 —— 这就是残留 A2.
+///
+/// 现在判定输入在**写路径末尾**被拍成一份快照并原子替换(`Arc` 换 `Arc`), 读路径只
+/// clone 一次 `Arc` 就走, 与插件句柄锁彻底解耦. 发布点全部在
+/// [`PluginHost`](super::host::PluginHost) 的写路径末尾: 首扫/[`set_enabled`]/
+/// [`set_root`]/[`rescan`]/[`install_*`]/[`uninstall`]/[`enable`]/[`disable`]/
+/// [`set_route_mode`]. 加新的写路径**必须**在那里也发布一次, 否则判定会停在旧视图.
+///
+/// # 为什么快照里带 `Arc<dyn Provider>`
+///
+/// 判定命中插件后,**调用期**要的就是这个 `Arc`; 不带它就得回宿主再取一次(又进锁).
+/// 代价: 重扫/停用后旧 provider 会活到下一次发布为止 —— 这恰好是期望语义, 已经在跑的
+/// 那次调用不该被中途换掉.
+///
+/// # 缺快照(宿主未初始化)
+///
+/// [`RouteSnapshot::inactive`] 给出"宿主没开"的语义: 判定一律回内置, 不 panic、不报错
+/// (与 [`Core::route_decision`](crate::Core::route_decision) 改造前的缺省一致).
+///
+/// 判据用例: `route_tests::route_decision_does_not_wait_for_plugin_handle_lock`(写锁
+/// 300ms 期间判定 <200ms 返回)、`route_tests::slow_plugin_call_does_not_block_route_decisions`.
+#[derive(Clone)]
+pub struct RouteSnapshot {
+    /// 宿主总开关开着且注册表建起来了(等价 [`PluginHost::is_active`]).
+    host_active: bool,
+    /// 用户的显式路由偏好(快照那一时刻的值).
+    mode: RouteMode,
+    /// 已装载插件 id, **字典序**(`plugins` 的键), 判定时直接借用, 不再每次排序.
+    ids: Vec<String>,
+    /// 已装载插件: id -> 能力声明 + 调用期 provider.
+    plugins: std::collections::BTreeMap<String, RouteSnapshotPlugin>,
+}
+
+/// 快照里的单个插件: 装载那一刻声明的能力 + 调用期要用的 provider.
+#[derive(Clone)]
+pub struct RouteSnapshotPlugin {
+    provider: std::sync::Arc<dyn Provider>,
+    /// 能力声明在 `Provider::capabilities()` 里恒为 `&'static`, 照抄引用即可.
+    capabilities: &'static [Capability],
+}
+
+impl std::fmt::Debug for RouteSnapshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouteSnapshot")
+            .field("host_active", &self.host_active)
+            .field("mode", &self.mode)
+            .field("ids", &self.ids)
+            .finish_non_exhaustive()
+    }
+}
+
+impl RouteSnapshot {
+    /// 宿主未初始化/不可用的快照: 判定恒为 [`RouteReason::HostInactive`] ⇒ 走内置.
+    pub fn inactive() -> Self {
+        Self::new(false, RouteMode::default(), Vec::new())
+    }
+
+    /// 组装快照(只由插件宿主的写路径调用, 见类型注释的发布点清单).
+    pub fn new(
+        host_active: bool,
+        mode: RouteMode,
+        loaded: Vec<(String, std::sync::Arc<dyn Provider>)>,
+    ) -> Self {
+        let mut plugins = std::collections::BTreeMap::new();
+        let mut ids = Vec::with_capacity(loaded.len());
+        for (id, provider) in loaded {
+            ids.push(id.clone());
+            plugins.insert(
+                id,
+                RouteSnapshotPlugin {
+                    capabilities: provider.capabilities(),
+                    provider,
+                },
+            );
+        }
+        // 已装载 id 是 BTreeMap 的键 ⇒ 天然字典序; 与 [`PluginHost::ids`] 的口径一致.
+        ids.sort_unstable();
+        Self {
+            host_active,
+            mode,
+            ids,
+            plugins,
+        }
+    }
+
+    /// 宿主总开关是否真的生效(等价 [`PluginHost::is_active`]).
+    pub fn is_active(&self) -> bool {
+        self.host_active
+    }
+
+    /// 快照里已装载插件的 id(字典序).
+    pub fn ids(&self) -> &[String] {
+        &self.ids
+    }
+
+    /// 已装载插件数.
+    pub fn len(&self) -> usize {
+        self.ids.len()
+    }
+
+    /// 没有任何已装载插件(含宿主没开).
+    pub fn is_empty(&self) -> bool {
+        self.ids.is_empty()
+    }
+
+    /// 按插件 id 取调用期 provider(判定命中后直接用它, 不再回宿主).
+    pub fn provider(&self, id: &str) -> Option<std::sync::Arc<dyn Provider>> {
+        self.plugins.get(id).map(|entry| entry.provider.clone())
+    }
+
+    /// 该 id 是否声明了能力 `cap`(能力是路由的唯一依据).
+    pub fn supports(&self, id: &str, cap: Capability) -> bool {
+        self.plugins
+            .get(id)
+            .is_some_and(|entry| entry.capabilities.contains(&cap))
+    }
+
+    /// 本次调用该走谁(纯判定: 与 [`plan`] 同一口径, 输入全部来自本快照).
+    pub fn plan(&self, cap: Capability) -> RoutePlan {
+        plan(
+            &self.mode,
+            self.host_active,
+            &self.ids,
+            |id| self.supports(id, cap),
+            cap,
+        )
+    }
+}
+
 // ------------------------------- 诊断 -------------------------------
 
 /// 一次**真实调用**的路由结果(诊断用; 判定见 [`RoutePlan`]).

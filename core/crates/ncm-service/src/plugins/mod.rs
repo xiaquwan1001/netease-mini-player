@@ -34,6 +34,14 @@ pub mod transport;
 /// (所以插件 FFI 入口一个都不要再调 `super::core()`).
 pub type PluginHostHandle = std::sync::Arc<std::sync::RwLock<PluginHost>>;
 
+/// 路由判定**快照**的共享槽位(隔离二期切片 A2): `Arc<RwLock<Arc<RouteSnapshot>>>`.
+///
+/// 读路径(`Core::route_decision` / `Core::plugin_route_plan`)只在这里取一次短锁,
+/// `Arc::clone` 后立刻释放, 之后**不再碰插件句柄锁** —— 重扫/导入持写锁期间判定照跑.
+/// 写路径在插件宿主内部原子替换(见 [`route::RouteSnapshot`] 的发布点清单).
+pub type RouteSnapshotHandle =
+    std::sync::Arc<std::sync::RwLock<std::sync::Arc<route::RouteSnapshot>>>;
+
 pub use host::{PluginHost, PluginHostPolicy, PluginHostStatus};
 pub use manager::{
     check_https_url, ManagerError, ManagerErrorKind, PluginFailureRecord, PluginManager,
@@ -42,6 +50,6 @@ pub use manager::{
 pub use registry::{PluginRegistry, RegistryReport};
 pub use route::{
     call_routed, last_route_event, plan, RouteDecision, RouteMode, RoutePlan, RouteReason,
-    RouteTarget, RouteUsed, Routed,
+    RouteSnapshot, RouteSnapshotPlugin, RouteTarget, RouteUsed, Routed,
 };
 pub use transport::{HttpsSourceFetcher, ReqwestTransport, SourceFetcher};
