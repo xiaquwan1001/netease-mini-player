@@ -53,3 +53,18 @@
 - 过期文档条目: 7 处(上表 A 节), 其中 1 处(§15 标题)编排者已在未提交工作树修正。
 - PROGRESS 头部 545/1528/21 与实测日志**完全一致, 无分叉**;仅「复核口径」引导句时序略乱(P2)。
 - 未能核实: git 历史提交号(89f523b/fe604e2/ade2b97 等未逐一查 git log, 只验证了代码现状);Kotlin instrumented 与模拟器行为(禁止跑构建/测试);`docs/health` 报告内容(任务范围外)。
+
+## 处置回执(2026-11-22 深夜, 自动化会话)
+
+| 节 | 项 | 处置 |
+|---|---|---|
+| A | 7 条文档漂移 | ✅ 已就地修正(e3eacf6) |
+| B | PROGRESS 数字/时序 | ✅ 数字无分叉; 时序随 v0.38.1 条目落位 |
+| C | 5 处 `#[frb(ignore)]` 观察期到期 | ✅ 决策收口(不删代码, 按 `docs/api-coverage.md` 分类写进注释): `cache_stats`/`eq_profile_normalize`/`player_tuning`/`cloud_song_url` = **有意保留**; `consent_plaintext_storage` = **待产品决策**(UI 同意门未落地, 落地时去掉 ignore 复用) |
+| D1 | `NotificationClickTest.startMainActivitySync` 死代码 + 重复注释 | ✅ 删除未用 helper 与重复的「案例 3」注释行 |
+| D2 | `EqProfileParserFixtureTest` 缺 biquad 时静默 continue | ✅ 改为记进 `issues` 并计入 `asserted`(单条漏断言会真的红) |
+| D3 | `marquee_long_title_test` 的 `p1 ?? 0` | ✅ 两个采样点都断言非 null(`p1` 拿不到就 fail) |
+| D4 | `song_tile_test` 的颜色 `isNotNull` 恒真 | ✅ 改为断言等于 `colorScheme.outline`(具体色值) |
+
+口径: C 节判据是「观察期过必须有明确结论」, 而**删 Rust 侧函数会连带 provider/CLI 面**, 收益只是少 5 个 `#[frb(ignore)]`;
+`docs/api-coverage.md` 已按用途分类(给未来设置项留的宿主口 / 凭据回退门), 所以结论取「保留 + 注释如实」。D 节全部是测试有效性加固。

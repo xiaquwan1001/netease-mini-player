@@ -59,8 +59,9 @@ pub async fn cloud_delete(ids: Vec<u64>) -> Result<bool, FfiError> {
 }
 
 /// 云盘歌曲下载直链(需要登录; 签名 URL 约一小时过期).
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
+// UI 未用(2026-11-20 审计 7.2: ui/lib + ui/test 全量 grep 零命中) ⇒ `#[frb(ignore)]` 从 Dart API
+// 摘掉后观察期已过, **结论: 有意保留**(2026-11-22 审计 C 收口, 分类见 docs/api-coverage.md
+// 「有意保留(4)」), 不再按「候选删除」处理。
 #[frb(ignore)]
 pub async fn cloud_song_url(song_id: u64) -> Result<Option<String>, FfiError> {
     let provider = with_provider(Capability::Cloud)?;

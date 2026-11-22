@@ -46,7 +46,12 @@ void main() {
     expect(find.text('VIP'), findsNothing);
     // 名称变灰
     final title = tester.widget<Text>(find.text('晴天'));
-    expect(title.style?.color, isNotNull);
+    // 不可播 ⇒ 标题色 = theme.colorScheme.outline。
+    // 2026-11-22 审计 D4: 原来只断言 isNotNull(恒真), 灰色被删掉/改成别的颜色也能绿。
+    final expected = Theme.of(tester.element(find.text('晴天')))
+        .colorScheme
+        .outline;
+    expect(title.style?.color, expected);
     await tester.tap(find.text('晴天'));
     expect(taps, 1);
   });

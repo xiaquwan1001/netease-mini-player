@@ -305,8 +305,9 @@ pub fn credential_status() -> Result<CredentialStatusDto, FfiError> {
 ///
 /// 只在没有系统钥匙串的平台(Android/Linux 的 P1/P2 未落地前)才有意义;
 /// Windows 走 DPAPI, 不需要这个开关。
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
+// UI 未用(2026-11-20 审计 7.2) ⇒ `#[frb(ignore)]` 观察期已过, **结论: 待产品决策**
+// (2026-11-22 审计 C 收口, 分类见 docs/api-coverage.md「待产品决策(2)」): 凭据明文回退的
+// 「同意门」在 UI 侧还没落地, 落地时去掉 `#[frb(ignore)]` 复用本函数, 不要重写一遍。
 #[frb(ignore)]
 pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, FfiError> {
     let mut guard = core()?.lock().map_err(FfiError::from)?;

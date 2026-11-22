@@ -160,8 +160,6 @@ class NotificationClickTest {
 
     // ---- 案例 3: 通知按钮背后的自定义命令都接上了处理方 ----
 
-    // ---- 案例 3: 通知按钮背后的自定义命令都接上了处理方 ----
-
     @Test
     fun customButtonCommandsAreWiredOnSession() {
         val context = PlaybackServiceTestSupport.context
@@ -266,23 +264,6 @@ class NotificationClickTest {
                     .forEach { it.finish() }
             }
         }
-    }
-
-    /**
-     * 用 instrumentation 直接启动 MainActivity(绕过 BAL, 因为 instrumentation 自身被视为前台),
-     * 等到 RESUMED 即返回 true。用于「通知点击目标可启动」这条二级断言。
-     */
-    private fun startMainActivitySync(): Boolean {
-        val context = PlaybackServiceTestSupport.context
-        val intent = Intent(context, MainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try {
-            InstrumentationRegistry.getInstrumentation().startActivitySync(intent)
-        } catch (e: Throwable) {
-            // 把真实原因带出去(否则只能看到笼统的 false)
-            throw AssertionError("startActivitySync(MainActivity) 抛异常: " + e, e)
-        }
-        return waitForMainActivityResumed(30_000)
     }
 
     /**

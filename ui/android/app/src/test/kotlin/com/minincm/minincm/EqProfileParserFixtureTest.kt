@@ -157,7 +157,14 @@ class EqProfileParserFixtureTest {
                         issues.append("$ctx: $field 期望 $v, 实际 $value\n")
                     }
                 }
-                val biquad = expectFilter.getAsJsonArray("biquad") ?: continue
+                // 夹具缺 biquad 时**不要静默 continue**(2026-11-22 审计 D2: 单条漏断言会被
+                // 整夹具级的 `asserted > 0` 兜住) —— 记进 issues, 让这条真的红。
+                val biquad = expectFilter.getAsJsonArray("biquad")
+                if (biquad == null) {
+                    issues.append("$ctx: 夹具缺 biquad 系数, 无法比对传递函数\n")
+                    asserted++
+                    continue
+                }
                 val coeffs = Biquad.fromFilter(actual, sampleRate)
                     .let { listOf(it.b0, it.b1, it.b2, it.a1, it.a2) }
                 assertEquals("$ctx: biquad 应有 5 个系数", 5, biquad.size())

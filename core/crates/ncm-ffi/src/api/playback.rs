@@ -227,8 +227,9 @@ pub fn eq_profile_validate(text: String) -> Result<EqValidationDto, FfiError> {
 }
 
 /// 归一化曲线文本(统一成 Rust 侧的规范格式, 便于落盘与跨端一致)
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
+// UI 未用(2026-11-20 审计 7.2: ui/lib + ui/test 全量 grep 零命中) ⇒ `#[frb(ignore)]` 从 Dart API
+// 摘掉后观察期已过, **结论: 有意保留**(2026-11-22 审计 C 收口, 分类见 docs/api-coverage.md
+// 「有意保留(4)」), 不再按「候选删除」处理。
 #[frb(ignore)]
 pub fn eq_profile_normalize(text: String) -> Result<String, FfiError> {
     let profile = ncm_domain::EqProfile::parse(&text).map_err(FfiError::from)?;
@@ -263,8 +264,9 @@ pub fn player_configure(
 }
 
 /// 读取当前生效的播放参数
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
+// UI 未用(2026-11-20 审计 7.2: ui/lib + ui/test 全量 grep 零命中) ⇒ `#[frb(ignore)]` 从 Dart API
+// 摘掉后观察期已过, **结论: 有意保留**(2026-11-22 审计 C 收口, 分类见 docs/api-coverage.md
+// 「有意保留(4)」), 不再按「候选删除」处理。
 #[frb(ignore)]
 pub fn player_tuning() -> PlaybackTuningDto {
     tuning_dto(&player().tuning())
@@ -288,8 +290,9 @@ pub struct CacheStatsDto {
 }
 
 /// 只读统计, 不删任何文件
-// UI 未用(2026-11-20 审计 7.2: 在 ui/lib + ui/test 全量 grep 零命中, 只存在于生成的 api.dart),
-// 候选删除; 先 #[frb(ignore)] 从 Dart API 摘掉, 观察一个版本无回归后再删 Rust 侧。
+// UI 未用(2026-11-20 审计 7.2: ui/lib + ui/test 全量 grep 零命中) ⇒ `#[frb(ignore)]` 从 Dart API
+// 摘掉后观察期已过, **结论: 有意保留**(2026-11-22 审计 C 收口, 分类见 docs/api-coverage.md
+// 「有意保留(4)」), 不再按「候选删除」处理。
 #[frb(ignore)]
 pub fn cache_stats(limit_mb: u32) -> Result<CacheStatsDto, FfiError> {
     let cache = audio_cache()?;

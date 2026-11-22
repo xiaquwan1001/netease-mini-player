@@ -90,8 +90,11 @@ void main() {
     final p1 = _marqueeOffset(tester);
     await tester.pump(const Duration(milliseconds: 400));
     final p2 = _marqueeOffset(tester);
-    expect(p2, isNotNull);
-    expect(p2!, lessThan(p1 ?? 0), reason: '文本应向左滚动');
+    // 2026-11-22 审计 D3: 原来是 `expect(p2!, lessThan(p1 ?? 0))` —— p1 为 null(动画没动)
+    // 退化成 `p2 < 0`, marquee 失效也能绿。两个采样点都必须真拿到位移。
+    expect(p1, isNotNull, reason: '第一采样点没拿到 transform, marquee 根本没跑');
+    expect(p2, isNotNull, reason: '第二采样点没拿到 transform');
+    expect(p2!, lessThan(p1!), reason: '文本应向左滚动');
   });
 
   testWidgets('textScaler 回归: 缩放后恰好放不下的文本必须滚动(测量须含 textScaler)', (
