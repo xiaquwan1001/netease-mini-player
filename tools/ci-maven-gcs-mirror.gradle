@@ -1,0 +1,49 @@
+// Gradle init 脚本: 给 **CI 侧**的 Maven Central 加一条官方 GCS 镜像(只加仓库, 不改 ui/android/settings.gradle.kts)。
+//
+// 为什么需要(2026-11-22, 本项目第 4 次): GitHub 共享 runner 的出口 IP 会被 Maven Central 限流,
+// 报 `Could not GET .../kotlin-gradle-plugins-bom-*.pom → 429 Too Many Requests`, Gradle 在**配置阶段**
+// 直接失败(测试压根没跑)。同一次 run 里 Rust/Flutter/APK/Linux 全绿 ⇒ 与提交内容无关。
+//
+// 纪律(见 .pi/memory/notes-build.md):
+//  - **只加仓库**, 不删/不重排 `settings.gradle.kts` 里已有的 google()/mavenCentral()/gradlePluginPortal()。
+//  - **只在 CI 生效**: 由 tools/ci-gradle-mirror.sh 装进 `$GRADLE_USER_HOME/init.d/`(仅 GITHUB_ACTIONS=true),
+//    本机开发继续走各自国内镜像, 不受影响。
+//  - 覆盖**所有** build(含 Flutter 的 `includeBuild(flutter_tools/gradle)`)—— 实测 429 就发生在那个
+//    included build 的插件解析上, 只改根 build 不够。
+//
+// 两个踩过的坑(都别再踩):
+//  ① init 里 `allprojects { repositories { ... } }` 会撞 Flutter 的 `RepositoriesMode.FAIL_ON_PROJECT_REPOS`,
+//     报 “repository 'ciMavenCentralGcsMirror' was added by settings file” ⇒ 只能在 settings 层加。
+//  ② 一旦往 `pluginManagement.repositories` 里加任何一条, Gradle 就**不再用默认的 gradlePluginPortal()**
+//     (实测 flutter_tools/gradle 的 settings 不声明插件仓库, 加完只剩镜像 ⇒ 插件解析全挂)
+//     ⇒ 必须把 gradlePluginPortal() 显式补回来。
+
+def gcsMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+
+settingsEvaluated { settings ->
+    // ---- 插件解析链(429 就发生在这条链上) ----
+    def pluginRepos = settings.pluginManagement.repositories
+    def hadPluginRepos = !pluginRepos.isEmpty()
+    pluginRepos.maven {
+        name = 'ciMavenCentralGcsMirror'
+        url = gcsMirror
+    }
+    if (!hadPluginRepos) {
+        // 原本靠默认值(plugin portal) ⇒ 补回来, 顺序: 镜像 -> portal
+        pluginRepos.gradlePluginPortal()
+    }
+
+    // ---- 依赖解析链 ----
+    def depRepos = settings.dependencyResolutionManagement.repositories
+    def hadDepRepos = !depRepos.isEmpty()
+    depRepos.maven {
+        name = 'ciMavenCentralGcsMirror'
+        url = gcsMirror
+    }
+    if (!hadDepRepos) {
+        // 原本没有 settings 级依赖仓库(靠 project 仓库) ⇒ 这里绝不能只剩镜像,
+        // 否则 FAIL_ON_PROJECT_REPOS 的 build 会解析不了任何依赖
+        depRepos.mavenCentral()
+        depRepos.google()
+    }
+}

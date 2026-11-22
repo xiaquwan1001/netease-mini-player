@@ -164,6 +164,10 @@ jobs:
           } > ui/android/key.properties
           echo "已写入 key.properties, alias=$KEY_ALIAS"
 
+      # Maven Central 429 缓解(只加 GCS 镜像 + 重试次数; 不改 settings.gradle.kts 的仓库顺序)
+      - name: Gradle Maven Central mirror (rate-limit mitigation)
+        run: bash tools/ci-gradle-mirror.sh install
+
       - name: Build Android APK (arm64, release)
         working-directory: ui
         run: |

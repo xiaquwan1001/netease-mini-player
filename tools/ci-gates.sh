@@ -188,11 +188,14 @@ cmd_android_prepare() {
 
 cmd_android_unit() {
   cmd_android_prepare
+  # CI 侧 Maven Central 429 的缓解: 只加 GCS 镜像 + 重试次数, 不改仓库顺序(本机 no-op)
+  bash tools/ci-gradle-mirror.sh install
   ( cd ui/android && run "$ANDROID_ENV" ./gradlew :app:testDebugUnitTest --console=plain )
 }
 
 cmd_android_lint() {
   cmd_android_prepare
+  bash tools/ci-gradle-mirror.sh install
   ( cd ui/android && run "$ANDROID_ENV" ./gradlew :app:lintDebug --console=plain )
 }
 

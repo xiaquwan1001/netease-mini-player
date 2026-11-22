@@ -186,6 +186,10 @@ jobs:
           flutter-version: 3.47.9   # 固定版本: runner 的 stable 已漂到 3.50(要求 AGP>=9.1.1/Gradle>=9.5)
           cache: true
 
+      # Maven Central 429 缓解(只加 GCS 镜像 + 重试次数; 不改 settings.gradle.kts 的仓库顺序)
+      - name: Gradle Maven Central mirror (rate-limit mitigation)
+        run: bash tools/ci-gradle-mirror.sh install
+
       - name: build debug APKs (split per ABI)
         working-directory: ui
         # 过 tools/android-bindgen-env.sh: 插件宿主的 rquickjs 在 Android 目标用构建期 bindgen,
