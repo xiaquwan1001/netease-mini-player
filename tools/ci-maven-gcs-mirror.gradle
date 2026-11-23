@@ -20,7 +20,12 @@
 
 def gcsMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
 
-settingsEvaluated { settings ->
+// 必须用 beforeSettings 而不是 settingsEvaluated(2026-11-24 v0.38.7 Release 实锤):
+// settings.gradle.kts 自己的 `plugins {}` 块(kotlin.android 2.4.0 等)在 settings 求值
+// **期间**解析, settingsEvaluated 在那之后才回调 ⇒ 镜像永远进不了 settings 级
+// 插件解析链, 失败日志的 "Searched in: Google/MavenRepo/Gradle Central Plugin
+// Repository" 里没有镜像就是证据。beforeSettings 在求值前注入, 两条链都覆盖。
+beforeSettings { settings ->
     // ---- 插件解析链(429 就发生在这条链上) ----
     def pluginRepos = settings.pluginManagement.repositories
     def hadPluginRepos = !pluginRepos.isEmpty()
