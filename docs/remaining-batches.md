@@ -16,6 +16,8 @@
 > Android 侧三道门全进 CI(`android-unit` / `android-lint` 阻塞, `android-instrumented` 需 `NCM_INSTRUMENTED=1`);
 > 已发布版本 **见 `PROGRESS.md` 头部的版本时间线**(本文件不复述版本号与门禁数字); 版本时间线与门禁基线只看 `PROGRESS.md`。
 >
+> **2026-11-24 在飞**: 两条只读审计车道并行(reviewer 子代理, 只读零编译): ① 错误码边界(上游码归一化兜底残留 / parse 静默 0 / ProviderErrorKind 与 UI 分支差集 / 吞错 catch, 报告 `/tmp/audit-error-codes-20261124.md`) ② 架构边界(分层泄漏 / 锁序 / 错误类型统一 / vendor 未记账改动 / cfg 分叉, 报告 `/tmp/audit-arch-boundary-20261124.md`)。收口后结论按严重度进 `docs/audit/` 与本文件待办, P0/P1 修复走正常车道。
+>
 > **下一轮从哪挑**: **§11 · 待办**(功能/小改) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**。
 > **2026-11-22 晚(第四批反馈 F1~F5 收口, v0.38.1)**: 安卓淡入淡出重做(FadePolicy + 淡出) / 歌单详情的去标题+评论入口+创建者可点 /
 > 播客详情的同构三条 + 顶部「听众」换「收藏」(新增 vendor `dj_sub` → service → FFI, 补 `PodcastRadio.dj_id/subed/sub_count`)。
