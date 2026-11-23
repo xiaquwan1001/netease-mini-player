@@ -18,6 +18,26 @@ use std::sync::LazyLock;
 static SPECIAL_STATUS_CODES: LazyLock<std::collections::HashSet<i64>> =
     LazyLock::new(|| [201, 302, 400, 502, 800, 801, 802, 803].into());
 
+/// 把「响应体业务码 / HTTP 状态码」归一成一个用于分流的码。
+///
+/// 规则(2026-11-23 实测后修正):
+/// - 体里有 `code` 就以它为准(支持数字与数字字符串), 没有才用 HTTP 状态码;
+/// - [SPECIAL_STATUS_CODES] 里的码视为成功(上游把"带数据的非 200"塞在这些码里);
+/// - **负数码原样保留**: 网易云风控回包是 HTTP 200 + `code:-462`(附 `data.verifyUrl` 与
+///   "请完成验证操作"), 以前这里把负数折成 400 ⇒ 上层只看到
+///   "Invalid parameter: Unknown error", 真实原因(人机验证)完全丢失;
+/// - 只把离谱值(不在 -1000..600)兜成 400。
+fn normalize_status(body_code: Option<i64>, http_status: i64) -> i64 {
+    let mut status = body_code.unwrap_or(http_status);
+    if SPECIAL_STATUS_CODES.contains(&status) {
+        status = 200;
+    }
+    if !(-1000..600).contains(&status) {
+        status = 400;
+    }
+    status
+}
+
 /// 全局设备 ID（进程生命周期内固定）
 static DEVICE_ID: LazyLock<String> = LazyLock::new(generate_device_id);
 /// 全局 WNMCID
@@ -470,23 +490,13 @@ impl ApiClient {
             serde_json::from_str(&text).unwrap_or(Value::String(text))
         };
 
-        let mut status = body
-            .get("code")
-            .and_then(|c| {
+        let status = normalize_status(
+            body.get("code").and_then(|c| {
                 c.as_i64()
                     .or_else(|| c.as_str().and_then(|s| s.parse().ok()))
-            })
-            .unwrap_or(status_code);
-
-        // 特殊状态码视为 200
-        if SPECIAL_STATUS_CODES.contains(&status) {
-            status = 200;
-        }
-
-        // 状态码范围检查
-        if !(100..600).contains(&status) {
-            status = 400;
-        }
+            }),
+            status_code,
+        );
 
         let answer = ApiResponse {
             status,
@@ -497,13 +507,45 @@ impl ApiClient {
         if status == 200 {
             Ok(answer)
         } else {
+            // 网易云的文案键有 `msg` 与 `message` 两种(-462 风控回包用 message),
+            // 只读 msg 就会把它变成 "Unknown error"(2026-11-23 实测)。
             let msg = answer
                 .body
                 .get("msg")
+                .or_else(|| answer.body.get("message"))
                 .and_then(|m| m.as_str())
                 .unwrap_or("Unknown error")
                 .to_string();
             Err(NcmError::from_api(status, msg))
         }
+    }
+}
+
+#[cfg(test)]
+mod status_tests {
+    use super::normalize_status;
+
+    /// -462 = 网易云风控(人机验证): 必须原样交给上层映射成 riskControl,
+    /// 不能被折成 400(那会变成 "Invalid parameter: Unknown error")。
+    #[test]
+    fn negative_risk_control_code_is_preserved() {
+        assert_eq!(normalize_status(Some(-462), 200), -462);
+        assert_eq!(normalize_status(Some(-460), 200), -460);
+    }
+
+    /// 体里没 code 时用 HTTP 状态码; 特殊码(400/502/803…)按上游口径视为成功。
+    #[test]
+    fn special_codes_become_success_and_missing_code_falls_back_to_http() {
+        assert_eq!(normalize_status(Some(400), 200), 200);
+        assert_eq!(normalize_status(Some(803), 200), 200);
+        assert_eq!(normalize_status(None, 200), 200);
+        assert_eq!(normalize_status(None, 500), 500);
+    }
+
+    /// 离谱值兜成 400(避免上层收到 12345 这种"未知业务码")。
+    #[test]
+    fn absurd_codes_are_clamped_to_400() {
+        assert_eq!(normalize_status(Some(12345), 200), 400);
+        assert_eq!(normalize_status(Some(-99999), 200), 400);
     }
 }

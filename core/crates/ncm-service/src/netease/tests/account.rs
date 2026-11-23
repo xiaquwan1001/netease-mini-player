@@ -226,6 +226,25 @@ fn code_8821_is_risk_control() {
     assert_eq!(err.kind, ProviderErrorKind::RiskControl);
 }
 
+/// -462 = 易盾人机验证(搜索/短信等接口在风控收紧时会回它, 附 `data.verifyUrl`)。
+///
+/// 2026-11-23 实测: 上游是 HTTP 200 + `{"code":-462,"message":"请完成验证操作"}`;
+/// 以前 vendor 把负数码折成 400 且只读 `msg`, 上层只能显示
+/// "Invalid parameter: Unknown error" —— 用户看到的就是「服务端异常」, 真实原因(风控)
+/// 完全丢失。这条用例钉住两件事: ① kind 必须是 riskControl(UI 有对应文案与引导);
+/// ② detail 必须保留上游原话, 便于用户/我们判断是不是风控。
+#[test]
+fn code_minus_462_is_risk_control_with_upstream_message() {
+    let body = json!({"code": -462, "message": "请完成验证操作"});
+    let err = check_body(&body).unwrap_err();
+    assert_eq!(err.kind, ProviderErrorKind::RiskControl);
+    assert!(
+        err.detail.contains("请完成验证操作"),
+        "风控原文不能丢, 实际: {}",
+        err.detail
+    );
+}
+
 #[test]
 fn user_level_mapping() {
     // 实测响应原样(2026-11-08, 已登录: 9 级, 2301/12000 首, 350/350 天)
