@@ -72,6 +72,23 @@ void main() {
       expect(friendlyError(fe('forbidden', '')), '没有权限查看');
     });
 
+    test('riskControl 给出「换网络/登录」两条出路, 并保留上游原文', () {
+      // 2026-11-23: 网易云 -462 人机验证。以前这里落进兜底分支, 界面上直接是
+      // "[riskControl] code=-462: 请完成验证操作"(用户读不懂, 以为是客户端坏了)。
+      final rc = fe('riskControl', 'code=-462: 请完成验证操作');
+      expect(isNetworkError(rc), isFalse);
+      // 风控不是网络抖动, 不许被 retryNetwork 自动重试(那只会加重风控)
+      expect(isRetryableError(rc), isFalse);
+      final text = friendlyError(rc);
+      expect(text, contains('风控'));
+      expect(text, contains('换网络'));
+      expect(text, contains('登录'));
+      expect(text, contains('请完成验证操作'), reason: '上游原文要留住, 便于判断具体原因');
+      expect(text, isNot(contains('[riskControl]')), reason: '不能把内部 kind 露给用户');
+      // 文本前缀路径(老异常)也走同一套话术
+      expect(friendlyError('[riskControl] code=-462'), contains('风控'));
+    });
+
     test('network 的 FfiError 会被 retryNetwork 重试', () async {
       var calls = 0;
       final v = await retryNetwork(() async {

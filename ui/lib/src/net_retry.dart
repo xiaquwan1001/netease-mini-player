@@ -9,6 +9,7 @@ import 'rust/api_all.dart' as rust;
 const _kindNetwork = 'network';
 const _kindForbidden = 'forbidden';
 const _kindAuth = 'auth';
+const _kindRiskControl = 'riskControl';
 
 /// 取错误 kind: [rust.FfiError] 直接读字段, 其它异常兜底解析 `[kind]` 前缀。
 String? errorKind(Object? e) {
@@ -62,6 +63,9 @@ Future<T> retryNetwork<T>(
 /// - forbidden: "对方设置了隐私"(关注/粉丝列表不可见等), Rust 侧 detail
 ///   已经是能直接读的中文, 不要把内部 kind 前缀露给用户(用户反馈看到的
 ///   "[internal]code=400" 就是这类)
+/// - riskControl: 网易云的**人机验证/风控**(典型 `code=-462 请完成验证操作`)。
+///   这不是客户端坏了, 也不是没网: 用户能做的就是换网络/登录后再试, 所以文案要给
+///   这两条出路(2026-11-23 实测: 校园 NAT 出口被 -462, 手机流量直连正常)。
 /// - auth: 统一中性引导。detail 是后端内部文本(`[auth] Unknown error` 这种),
 ///   对用户没有任何信息量, 露出来只会让人以为客户端坏了(2026-11-18 用户反馈
 ///   推荐页把 `[auth] Unknown error` 直接当成错误占位)。页面上"需登录才有的
@@ -82,6 +86,15 @@ String friendlyError(Object e) {
                 : e.toString().split('[$_kindForbidden]').last)
             .trim();
     return detail.isEmpty ? '没有权限查看' : detail;
+  }
+  if (kind == _kindRiskControl) {
+    final detail =
+        (e is rust.FfiError
+                ? e.detail
+                : e.toString().split('[$_kindRiskControl]').last)
+            .trim();
+    const hint = '被网易云安全风控拦截(需人机验证): 换网络(如手机流量)或登录后再试';
+    return detail.isEmpty ? hint : '$hint\n$detail';
   }
   return describeError(e);
 }
