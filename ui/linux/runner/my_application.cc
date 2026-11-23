@@ -163,6 +163,59 @@ gboolean tray_watcher_available() {
   return owned;
 }
 
+/// 小屏/移动形态阈值(逻辑像素宽): phosh 平板的合成器宽度是 634/1013 这种量级。
+const int kMobileMaxWidthPx = 1024;
+
+/// 窗口形态: 手机/平板一律全屏, 否则保持 1280x720 的桌面窗口。
+///
+/// 为什么需要: phosh(平板/手机)会给**非全屏**的 GTK 窗口留一条标题栏, 上面写着
+/// 应用名(用户看到的就是常驻的「轻音 MiniNCM」横栏)。全屏后 phosh 不再画那条,
+/// 与我们自己的 UI 也不重复占地。
+///
+/// 覆盖方式(排障用): 环境变量 `MININCM_WINDOW=fullscreen|windowed`,
+/// 不设时按主显示器逻辑宽度自动判定(<= [kMobileMaxWidthPx] ⇒ 全屏)。
+gboolean is_mobile_display(GtkWindow* window) {
+  GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(window));
+  if (display == nullptr) return FALSE;
+  GdkMonitor* monitor = gdk_display_get_primary_monitor(display);
+  if (monitor == nullptr) {
+    monitor = gdk_display_get_monitor(display, 0);
+  }
+  if (monitor == nullptr) return FALSE;
+  GdkRectangle geometry = {0, 0, 0, 0};
+  gdk_monitor_get_geometry(monitor, &geometry);
+  // 逻辑像素(合成器已按 scale 折算), 1280x720 的桌面窗口在 1920 宽显示器上仍走窗口模式
+  return geometry.width > 0 && geometry.width <= kMobileMaxWidthPx;
+}
+
+/// 是否以全屏启动(见 [is_mobile_display] 与 `MININCM_WINDOW` 的说明)。
+gboolean should_start_fullscreen(GtkWindow* window) {
+  const gchar* mode = g_getenv("MININCM_WINDOW");
+  if (mode != nullptr) {
+    if (g_strcmp0(mode, "fullscreen") == 0) return TRUE;
+    if (g_strcmp0(mode, "windowed") == 0) return FALSE;
+  }
+  return is_mobile_display(window);
+}
+
+/// F11 / 「切换全屏」动作: 桌面端顺手可用, 移动端可用来退出全屏(交给系统手势也行)。
+void toggle_fullscreen_cb(GSimpleAction* /*action*/, GVariant* /*param*/,
+                          gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  if (self->window == nullptr) return;
+  // GTK3 没有 gtk_window_is_fullscreen(): 用一个属性标记自己跟踪(phosh/GNOME 的
+  // 系统手势也可能改状态, 那种情况第一次 F11 会先"再全屏一次", 无害)
+  gboolean fullscreen = GPOINTER_TO_INT(
+      g_object_get_data(G_OBJECT(self->window), "minincm-fullscreen"));
+  if (fullscreen) {
+    gtk_window_unfullscreen(self->window);
+  } else {
+    gtk_window_fullscreen(self->window);
+  }
+  g_object_set_data(G_OBJECT(self->window), "minincm-fullscreen",
+                    GINT_TO_POINTER(!fullscreen));
+}
+
 /// 恢复主窗口(托盘菜单 / 第二次启动激活都会走这里)。
 void present_window(MyApplication* self) {
   if (self->window == nullptr) return;
@@ -513,6 +566,14 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
+  // 手机/平板不给 GtkHeaderBar: 那条栏在 phosh 上会常驻占一行(用户反馈 2026-11-23),
+  // 而我们的 UI 顶部已有自己的标题与返回键。窗口交给合成器最大化, 全屏留给 F11/环境变量。
+  const gboolean compact = should_start_fullscreen(window) ||
+                           is_mobile_display(window);
+  if (compact) {
+    use_header_bar = FALSE;
+    gtk_window_set_decorated(window, FALSE);
+  }
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
@@ -528,6 +589,26 @@ static void my_application_activate(GApplication* application) {
   // 默认窗口尺寸两平台统一 1280x720: 与 ui/windows/runner/main.cpp 的
   // Win32Window::Size 保持一致, 改一处要同步另一处(P-18).
   gtk_window_set_default_size(window, 1280, 720);
+
+  // 手机/平板(phosh 等)一律全屏: 否则合成器会留一条写应用名的标题栏,
+  // 与我们的 UI 重复占地方(用户反馈 2026-11-23「轻音 MiniNCM 始终占据一个横栏」)。
+  if (should_start_fullscreen(window)) {
+    // 先最大化占满(保留 phosh 的顶部状态栏), 再按需全屏
+    gtk_window_maximize(window);
+  }
+  // F11 切换全屏(桌面顺手用; 移动端也可用来退回窗口模式)
+  {
+    GSimpleAction* fullscreen_action =
+        g_simple_action_new("toggle-fullscreen", nullptr);
+    g_signal_connect(fullscreen_action, "activate",
+                     G_CALLBACK(toggle_fullscreen_cb), self);
+    g_action_map_add_action(G_ACTION_MAP(application),
+                            G_ACTION(fullscreen_action));
+    const gchar* accels[] = {"F11", nullptr};
+    gtk_application_set_accels_for_action(GTK_APPLICATION(application),
+                                          "app.toggle-fullscreen", accels);
+    g_object_unref(fullscreen_action);
+  }
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

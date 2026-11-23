@@ -46,13 +46,18 @@ ssh elden 'export PATH=$HOME/flutter/bin:$HOME/.cargo/bin:$PATH; cd ~/ncm-src/ui
 python3 tools/lan_proxy_forward.py &     # 监听 192.168.7.9:7890 → 127.0.0.1:7890
 ssh elden 'export https_proxy=http://192.168.7.9:7890 http_proxy=$https_proxy; ...'
 
-# 3) 起 App(必须带 RUNTIME/WAYLAND, App 的 Rust 侧读 HTTP(S)_PROXY 才能连网易云)
-ssh elden 'export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0 \
-  https_proxy=http://192.168.7.9:7890 http_proxy=http://192.168.7.9:7890; \
+# 3) 起 App: 只带 RUNTIME/WAYLAND —— **不要**给 http(s)_proxy!
+#    2026-11-23 实测: 代理只用于 flutter pub / git 下载; 网易云请求走代理会借到 PC 的
+#    校园 NAT 出口, 那个 IP 被风控(搜索/短信回 -462「请完成验证操作」), 而平板自己的
+#    手机流量直连是干净的。判据: 同一条 search 请求, 直连出结果 / 走 PC 代理回 -462。
+ssh elden 'export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0; \
   cd ~/ncm-src/ui/build/linux/arm64/release/bundle && setsid ./minincm >/tmp/ncm.log 2>&1 </dev/null &'
 grim -o DSI-1 /tmp/shot.png              # 桌面: phoc 是 wlroots, grim 直接可用
 ```
 
+- **窗口形态**: 主显示器逻辑宽度 ≤ 1024 时自动「移动形态」(无 GtkHeaderBar + 无窗口装饰 +
+  最大化), 于是 phosh 不再画那条常驻应用名横栏、系统状态栏仍保留; 桌面仍 1280x720 带标题栏。
+  需要强制时设 `MININCM_WINDOW=fullscreen|windowed`; 运行中可用 **F11** 切全屏。
 - **输入注入**: phoc 是 wlroots, `wtype`/`wlrctl` 可用; 但合成器真实指针不受 `wlrctl pointer`
   影响时, 用 `sudo python3 /tmp/ts.py <x> <y>`(uinput 绝对触摸屏, 逻辑坐标 = 物理/3,
   竖屏 634.67×1014)最稳 —— 与 Android 那段 `tools/devui` 同一套思路。

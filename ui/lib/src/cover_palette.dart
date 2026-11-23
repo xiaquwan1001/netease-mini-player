@@ -36,10 +36,17 @@ const double kVibrantMaxValue = 0.95;
 const double kFallbackMaxSaturation = 0.15;
 
 /// 深色主题下渐变颜色的亮度上限(避免刺眼)
-const double kMaxGradientLightness = 0.35;
+const double kMaxGradientLightness = 0.30;
 
-/// 背景混合比例: primary 混入深色底的上限 ~18%
-const double kBackdropPrimaryMix = 0.18;
+/// 背景混合比例: primary 参与背景的比例。
+///
+/// 2026-11-23 从 0.18 提到 0.42: 用户反馈「歌曲详情的背景板颜色发灰」—— 实测取色后
+/// 的背景是 `rgb(74,71,62)`(饱和度只有 ~0.09), 肉眼就是一块灰橄榄, 封面是什么颜色
+/// 完全看不出来。柔化仍然保留(不超过 s=0.27 / l=0.30), 暗色主题下不刺眼, 但色调可辨。
+const double kBackdropPrimaryMix = 0.42;
+
+/// 背景渐变的最小饱和度(低于它的输出视为"发灰", 由单测兜住)。
+const double kBackdropMinSaturation = 0.15;
 
 /// LRU 缓存上限
 const int kPaletteCacheMax = 32;
@@ -219,8 +226,12 @@ PaletteSwatch? _bestWhere(
   return best;
 }
 
-/// 生成深色友好的背景渐变: primary 最多以 [kBackdropPrimaryMix] 比例参与,
-/// 每个颜色亮度都被压到 [maxLightness] 以下。纯函数。
+/// 生成深色友好的背景渐变: primary 以 [kBackdropPrimaryMix] 比例参与,
+/// 每个颜色亮度都被压到 [maxLightness] 以下。
+///
+/// 不变量(单测 `buildGradient 不能把颜色压成灰` 盯着): 输出饱和度 >=
+/// [kBackdropMinSaturation] —— 否则深色背景会和封面毫无关系, 看起来像"发灰"。
+/// 纯函数。
 List<Color> buildGradient(
   Color primary,
   Color secondary, {

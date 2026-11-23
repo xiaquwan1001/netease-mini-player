@@ -122,6 +122,26 @@ void main() {
       expect(hueDistance(100, 200), 100);
     });
 
+    test('buildGradient 不能把颜色压成灰(用户反馈「背景板发灰」)', () {
+      // 2026-11-23: 黄昏 这类暖色封面取色后背景曾是 rgb(74,71,62)(s≈0.09),
+      // 肉眼就是一块灰橄榄。判据: 只要封面有色, 背景就必须保留可辨识的色调。
+      for (final cover in [
+        const Color.fromARGB(255, 214, 176, 88), // 暖黄(黄昏封面那类)
+        const Color.fromARGB(255, 210, 60, 60), // 红
+        const Color.fromARGB(255, 60, 110, 210), // 蓝
+      ]) {
+        for (final c in buildGradient(cover, cover)) {
+          final (_, s, l) = rgbToHsl(_cR(c), _cG(c), _cB(c));
+          expect(
+            s,
+            greaterThanOrEqualTo(kBackdropMinSaturation - 0.01),
+            reason: '背景饱和度过低会显得发灰: $c',
+          );
+          expect(l, lessThanOrEqualTo(kMaxGradientLightness + 0.01));
+        }
+      }
+    });
+
     test('buildGradient 亮度上限与低饱和柔化', () {
       final colors = buildGradient(
         const Color.fromARGB(255, 255, 235, 59), // 亮黄(高亮度高饱和)
