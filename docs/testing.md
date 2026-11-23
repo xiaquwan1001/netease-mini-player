@@ -26,6 +26,44 @@
 | Android | AVD **两台**: `a34`(API 34) / `a36`(API 36 / Android 16), x86_64 google_apis, 无窗口启动。
 先启的那台占 5554, 第二台 5556; 命令一律带 `adb -s emulator-XXXX`。两台可并行跑不同批次(写操作别抢同一账号) |
 | Linux | Xvfb `:99`(1280x720)+ `GDK_BACKEND=x11`,`flutter build linux --debug` |
+| **Linux arm64 真机** | 平板 `elden`(TB322FC / Debian trixie / phosh): `ssh elden`, Flutter 3.47.9 在 `~/flutter`、Rust 在 `~/.cargo`、桌面构建依赖(clang/cmake/ninja/gtk3/alsa/dbus)已装。源码同步 `rsync -az --exclude build/ --exclude .tar* ~/netease-mini-player/ elden:~/ncm-src/` 后在平板 `cd ~/ncm-src/ui && flutter build linux --release`(arm64 只能原生编)。见 §1.1 |
+
+### 1.1 Linux arm64 真机(平板 elden)
+
+为什么值得单列: **arm64 的 Flutter 桌面引擎和 x64 不是一份二进制** —— 官方 linux-arm64
+引擎不链 `libfontconfig.so.1`, 所以设备上「中文全空 / 部分拉丁变豆腐块」是引擎属性而不是
+我们的 bug(同机 Bettbox 同症状, 上游 flutter/flutter#90951)。本项目随包一份
+WenQuanYi Micro Hei, 只在 `Platform.isLinux && Abi.current() == Abi.linuxArm64` 当主字体
+(`ui/lib/src/platform_font.dart`), 所以**这条腿必须真机跑**, Xvfb/x64 覆盖不到。
+
+```bash
+# 1) 平板侧: 构建(第一次 ~1.5 min, 8 核)
+rsync -az --exclude build/ --exclude .dart_tool/ --exclude core/target/ --exclude .git/ \
+  ~/netease-mini-player/ elden:~/ncm-src/
+ssh elden 'export PATH=$HOME/flutter/bin:$HOME/.cargo/bin:$PATH; cd ~/ncm-src/ui && flutter build linux --release'
+
+# 2) 平板网络只有 USTC 镜像可用时: 让平板借用 PC 的代理(仅绑 USB 直连地址, 不暴露给局域网)
+python3 tools/lan_proxy_forward.py &     # 监听 192.168.7.9:7890 → 127.0.0.1:7890
+ssh elden 'export https_proxy=http://192.168.7.9:7890 http_proxy=$https_proxy; ...'
+
+# 3) 起 App(必须带 RUNTIME/WAYLAND, App 的 Rust 侧读 HTTP(S)_PROXY 才能连网易云)
+ssh elden 'export XDG_RUNTIME_DIR=/run/user/$(id -u) WAYLAND_DISPLAY=wayland-0 \
+  https_proxy=http://192.168.7.9:7890 http_proxy=http://192.168.7.9:7890; \
+  cd ~/ncm-src/ui/build/linux/arm64/release/bundle && setsid ./minincm >/tmp/ncm.log 2>&1 </dev/null &'
+grim -o DSI-1 /tmp/shot.png              # 桌面: phoc 是 wlroots, grim 直接可用
+```
+
+- **输入注入**: phoc 是 wlroots, `wtype`/`wlrctl` 可用; 但合成器真实指针不受 `wlrctl pointer`
+  影响时, 用 `sudo python3 /tmp/ts.py <x> <y>`(uinput 绝对触摸屏, 逻辑坐标 = 物理/3,
+  竖屏 634.67×1014)最稳 —— 与 Android 那段 `tools/devui` 同一套思路。
+- **屏保/锁屏**: 长期自动化前 `gsettings set org.gnome.desktop.screensaver lock-enabled false`
+  + `sudo loginctl unlock-sessions`, 否则 `grim` 只拍到锁屏。
+- **音量**: 平板喇叭不小, 起播前 `wpctl set-volume @DEFAULT_AUDIO_SINK@ 0.08`。
+- **验证清单**(与 x64 冒烟等价 + 两条 arm64 特有): 中文/英文都出字形(不能有空白或 □□)、
+  封面图加载、能播(播放条时间前进 + `wpctl status` 里 `alsa_playback.minincm` 为 `[active]`)、
+  暂停/恢复、CPU 空闲时 ≈0%。
+- **装包验证**: `packaging/linux/build-deb.sh` 会校验 bundle 架构与 `ARCH` 一致
+  (曾经能把 x86 内容打成 `Architecture: arm64` 的包, 装到设备上才报 Invalid ELF image)。
 
 启动/安装(本项目用 **a34**;若 a36 空闲也可用):
 
