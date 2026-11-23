@@ -1,6 +1,8 @@
 # 进度记录(Progress)
 
-> 最近更新: **2026-11-23**。已发布版本 **v0.38.7**(**风控错误给用户可执行的出路**: `friendlyError` 之前只认 network/auth/forbidden, `riskControl` 落进兜底分支 ⇒ 界面上是 `[riskControl] code=-462: 请完成验证操作`(用户读不懂, 以为客户端坏了)。现在风险控制态给一句「被网易云安全风控拦截(需人机验证): 换网络(如手机流量)或登录后再试」+ 上游原文, 且**不把内部 kind 露给用户**; `retryable=false` 保证不会被 `retryNetwork` 反复重试(那只会加重风控)。用例 `net_retry_test` 新增 1 例(含文本前缀老路径)。门禁 `ALL GATES OK`。
+> 最近更新: **2026-11-24**。已发布版本 **v0.38.8**(**审计 P1 三条收口**: ① vendor `request.rs` 新增 `ensure_json_object` —— HTTP 200 + 非 JSON 对象(风控页/劫持 HTML/eapi 解密失败被 `unwrap_or` 吞掉)不再静默当成功, 而是报「上游响应不是 JSON 对象」, 与 -462 被吞同类残留(2026-11-24 错误码审计 #1); ② `friendlyError` 补 internal/notFound/unsupported 三条中性文案(`服务开小差了` / `内容不存在或已下架` / `当前版本不支持该功能`), 兜底臂错误不再把 `[internal] code=500` 原文甩给用户, 定位信息留在 `describeError`; ③ 云盘上传 NOS token 的 `resourceId` 缺失从静默空串改显式报错(v0.26.3 坑残余, 免白重试 5 次)。另: 两条只读审计(错误码 18 条 / 架构 6 条)归档 `docs/audit/2026-11-24-*.md`, vendor UPSTREAM.txt 补录 sortType×6 + server 特性裁剪。门禁 `verify` = **ALL GATES OK**(Rust 572 · Dart **1537** · golden 21 零重出; 本机 lld SIGSEGV 坑按既定处置 `RUSTFLAGS=-fuse-ld=bfd`)。受文案影响的老断言(9 个测试文件的 `[internal] boom` 字样)改用未知 kind 保留原文特性。
+>
+> 上一版 **v0.38.7**(**风控错误给用户可执行的出路**: `friendlyError` 之前只认 network/auth/forbidden, `riskControl` 落进兜底分支 ⇒ 界面上是 `[riskControl] code=-462: 请完成验证操作`(用户读不懂, 以为客户端坏了)。现在风险控制态给一句「被网易云安全风控拦截(需人机验证): 换网络(如手机流量)或登录后再试」+ 上游原文, 且**不把内部 kind 露给用户**; `retryable=false` 保证不会被 `retryNetwork` 反复重试(那只会加重风控)。用例 `net_retry_test` 新增 1 例(含文本前缀老路径)。门禁 `ALL GATES OK`。
 >
 > 上一版 **v0.38.6**(移动形态窗口(phosh 去应用名横栏, 逻辑宽≤1024 判移动, F11/MININCM_WINDOW 可覆写) + 封面背景发灰修正(kBackdropPrimaryMix 0.18→0.42, 加 kBackdropMinSaturation 不变量); 平板实机验收通过。)
 >
