@@ -16,7 +16,7 @@
 > Android 侧三道门全进 CI(`android-unit` / `android-lint` 阻塞, `android-instrumented` 需 `NCM_INSTRUMENTED=1`);
 > 已发布版本 **见 `PROGRESS.md` 头部的版本时间线**(本文件不复述版本号与门禁数字); 版本时间线与门禁基线只看 `PROGRESS.md`。
 >
-> **2026-11-24 在飞**: 两条只读审计车道并行(reviewer 子代理, 只读零编译): ① 错误码边界(上游码归一化兜底残留 / parse 静默 0 / ProviderErrorKind 与 UI 分支差集 / 吞错 catch, 报告 `/tmp/audit-error-codes-20261124.md`) ② 架构边界(分层泄漏 / 锁序 / 错误类型统一 / vendor 未记账改动 / cfg 分叉, 报告 `/tmp/audit-arch-boundary-20261124.md`)。收口后结论按严重度进 `docs/audit/` 与本文件待办, P0/P1 修复走正常车道。
+> **2026-11-24 已收**: 两条只读审计完成(报告 `docs/audit/2026-11-24-error-codes.md` 与 `-arch-boundary.md`), 合计 24 条(P0=0 / P1=4 / P2=20)。**P1 待修(下轮车道, 小改)**: ① vendor `request.rs:424-434` HTTP200+非 JSON/解密失败被静默当成功(-462 同类残留, 影响全部接口) ② `ui/lib/src/net_retry.dart` `friendlyError` 补 internal/notFound/unsupported 三条友好文案 ③ `cloud.rs:267` resourceId 缺失静默空串(v0.26.3 坑残余)。vendor UPSTREAM.txt 记账缺口(6 个 sortType + server 特性裁剪)已补录。**P2 按批次清理**(503 三路不一致 / -2·-460 显式分支 / 吞错 catch 补日志 / playback 双实现错误面 / plugins 过期注释等)。
 >
 > **下一轮从哪挑**: **§11 · 待办**(功能/小改) → **§12 · 结构性债务** → **§13 · 平台层审计剩余项**。
 > **2026-11-22 晚(第四批反馈 F1~F5 收口, v0.38.1)**: 安卓淡入淡出重做(FadePolicy + 淡出) / 歌单详情的去标题+评论入口+创建者可点 /

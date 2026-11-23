@@ -1,3 +1,6 @@
 upstream: 133b65bfe482e41ebccf018870d3fce07bf58eb3  chore: 更新仓库地址
 # 本地补回的文件(上游同一 pin 下已存在, 只是本次移植时漏掉; 内容与上游逐字一致):
 #   src/api/dj_sub.rs  (订阅/取消订阅电台, 2026-11-22 为 F5 电台收藏接入)
+# 本地新增的协议参数(2026-11-24 审计补录; v0.38.4 评论区「时间」排序):
+#   src/api/comment_{mv,playlist,music,dj,video,album}.rs  各加 sortType 透传(源本地新增, 非上游)
+# 本地对 Cargo.toml 的裁剪: 裁掉上游 server 特性(只保留客户端需要的部分)
