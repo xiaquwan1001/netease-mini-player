@@ -74,12 +74,23 @@ class FadePolicyTest {
 
     @Test
     fun rampWaitsForRealAudioStart() {
-        // 缓冲期(playWhenReady=true 但还没出声)不许推 ramp: 这是"延迟半秒暂停"的根因
         assertFalse(FadePolicy.shouldStartRamp(audioStarted = false))
         assertTrue(FadePolicy.shouldStartRamp(audioStarted = true))
         // 等不到起声时必须有兜底, 否则播放器会一直停在 0 音量
         assertFalse(FadePolicy.shouldAbandonArmed(FadePolicy.ARM_TIMEOUT_MS - 1))
         assertTrue(FadePolicy.shouldAbandonArmed(FadePolicy.ARM_TIMEOUT_MS))
         assertTrue(FadePolicy.shouldAbandonArmed(FadePolicy.ARM_TIMEOUT_MS * 2))
+    }
+
+    @Test
+    fun fadeOutReportsNotPlayingImmediately() {
+        // 用户反馈 F6: 点暂停后按钮在淡出的一秒内又跳回"播放中", 结束后再跳回暂停。
+        // 判据: 淡出进行中对外必须报**未播放**(声音本来也要在 fadeMs 内归零),
+        // 否则 Dart 侧 500ms 轮询会拿"还在播"把播放按钮顶回暂停图标。
+        assertFalse(FadePolicy.reportsPlaying(delegateIsPlaying = true, fadeOutPending = true))
+        // 没有淡出时完全按播放器真实状态(不引入新的状态源)
+        assertTrue(FadePolicy.reportsPlaying(delegateIsPlaying = true, fadeOutPending = false))
+        assertFalse(FadePolicy.reportsPlaying(delegateIsPlaying = false, fadeOutPending = false))
+        assertFalse(FadePolicy.reportsPlaying(delegateIsPlaying = false, fadeOutPending = true))
     }
 }

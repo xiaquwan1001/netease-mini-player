@@ -138,6 +138,9 @@ class _FakePlayback extends Playback {
   final List<({BigInt trackId, String url, String title})> plays =
       <({BigInt trackId, String url, String title})>[];
 
+  /// 每次 play 带的起播位置(F7: 恢复现场后续播不该是 null/0)
+  final List<BigInt?> startPositions = [];
+
   int pauseCalls = 0;
   int resumeCalls = 0;
   int stopCalls = 0;
@@ -157,8 +160,11 @@ class _FakePlayback extends Playback {
     required String artist,
     BigInt? durationMs,
     Uint8List? artwork,
+    BigInt? startPositionMs,
   }) async {
     plays.add((trackId: trackId, url: url, title: title));
+    // F7: 恢复现场的续播位置必须随"起播"一起传到原生(不再靠起播后再 seek 一次)
+    startPositions.add(startPositionMs);
     current =
         playState ??
         PlayerView(
@@ -687,8 +693,17 @@ void main() {
       await h.coordinator.toggle();
       await pumpEventQueue();
       expect(h.playback.plays.single.trackId, BigInt.from(7));
+      // F7: 起播位置**随 play 一起**传给原生(Android 用它做 MediaItem 起播位置),
+      // 不再只靠起播后的 seek —— 那条路径在真机上会先按 0 加载一段再跳。
+      expect(h.playback.startPositions.single, BigInt.from(42000));
+      // 桌面(Rust)没有该参数, 起播后仍 seek 同一位置 ⇒ 两条路都保住
       expect(h.seeks.single, 42000.0);
       expect(h.coordinator.player!.playing, isTrue);
+
+      // 续播位置只对"恢复出来的那一首"生效: 用户另点一首不能从 42s 开始
+      await h.coordinator.playSong(fakeSong(id: 9, name: '另一首'));
+      await pumpEventQueue();
+      expect(h.playback.startPositions.last, isNull);
     });
 
     test('点击暂停 → 播放按下 → 分别走 pause/resume 并立刻落盘', () async {

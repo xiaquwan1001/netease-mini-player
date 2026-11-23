@@ -56,6 +56,17 @@ internal object FadePolicy {
     fun shouldAbandonArmed(elapsedSinceArmedMs: Long): Boolean =
         elapsedSinceArmedMs >= ARM_TIMEOUT_MS
 
+    /**
+     * 对外报告"在播"还是"已暂停": 淡出进行中必须报**未播放**(用户反馈 F6)。
+     *
+     * 为什么: 暂停/停止是先淡出 [fadeMs] 再真正执行, 这段时间里 ExoPlayer 的
+     * `isPlaying` 仍为 true —— Dart 侧每 500ms 轮询一次状态, 拿到的"还在播"会把
+     * 播放按钮又翻回暂停图标, 手听到的就是"按下暂停 → 一秒内又变回播放中 → 再变回来"。
+     * 用户已经按了暂停, 从意图上就该立即报未播放(声音本来也要在 [fadeMs] 内归零)。
+     */
+    fun reportsPlaying(delegateIsPlaying: Boolean, fadeOutPending: Boolean): Boolean =
+        delegateIsPlaying && !fadeOutPending
+
     /** 时间进度 0..1(duration<=0 视为"瞬时结束", 与 fadeMs=0 的关闭语义一致) */
     private fun progress(elapsedMs: Long, durationMs: Int): Float {
         if (durationMs <= 0) return 1f

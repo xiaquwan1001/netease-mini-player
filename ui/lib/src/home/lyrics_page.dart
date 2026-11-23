@@ -240,6 +240,11 @@ class HomeLyricsPage {
               initialFace: storedDetailFace(),
               faceController: detailFace,
               onFaceChanged: onDetailFaceChanged,
+              // 封面面左下角「当前进度 / 总时长」: 位置搭歌词页已有的高频源
+              // (展开期 120ms ticker 驱动的 positionMs), 控件自己不开定时器;
+              // 总时长与它同源(播放态快照), 换曲时页面的重建会刷新。
+              positionMs: lyric.positionMs,
+              durationMs: lyric.player()?.durationMs.toInt() ?? 0,
               // 封面面右下角「查看评论」: 与歌曲"..."菜单里的查看评论同一条链路;
               // 没有当前曲目(纯占位/未播放)时不显示按钮。
               onOpenComments: currentOf() == null ? null : openComments,

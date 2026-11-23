@@ -423,6 +423,10 @@ class MainActivity : FlutterActivity() {
                     .setMediaMetadata(metadata.build())
                     .build()
                 c.setMediaItem(item)
+                // 恢复现场的续播(F7): 起播位置直接交给 ExoPlayer —— 比"起播后再 seek"稳,
+                // 不会出现"先用 0 加载一段, 再跳"的观感(也不看 seek 通道的时序)
+                val startMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
+                if (startMs > 0L) c.seekTo(startMs)
                 c.prepare()
                 c.play()
                 // 换曲/开始: 按 fadeMs 做淡入, 避免切歌爆音(0 = 关闭)
@@ -450,9 +454,13 @@ class MainActivity : FlutterActivity() {
 
     private fun stateMap(c: MediaController): Map<String, Any?> {
         val duration = if (c.duration == C.TIME_UNSET) 0L else c.duration
+        // 淡出挂起态必须在这层合并(审计 P1, 2026-11-23): MediaController.isPlaying 读的是
+        // 会话缓存的 PlayerInfo, 淡出期间只有音量动画、无 Player 事件 ⇒ 只覆写服务的
+        // SkipAwarePlayer.isPlaying 不会传导到这里, Dart 轮询仍拿到「还在播」(F6 症状)。
+        val playing = c.isPlaying && PlaybackService.instance?.isFadeOutPending != true
         return mapOf(
             "trackId" to c.currentMediaItem?.mediaId?.toLongOrNull(),
-            "playing" to c.isPlaying,
+            "playing" to playing,
             "positionMs" to c.currentPosition,
             "durationMs" to duration,
             "volume" to c.volume.toDouble(),

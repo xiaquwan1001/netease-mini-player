@@ -354,7 +354,7 @@ class PlaybackCoordinator extends ChangeNotifier {
   Future<void> playSong(rust.SongDto song, {bool explicit = false}) async {
     userStopped = false;
     _restoredFromDisk = false;
-    _restoredResumeMs = 0;
+    // 续播位置不在这里清: 由 `_takeResumePositionFor` 取走即清(否则 _resolveAndPlay 读不到)
     var allowVip = explicit;
     var attempts = 0;
     var skippedVip = 0;
@@ -486,6 +486,9 @@ class PlaybackCoordinator extends ChangeNotifier {
   Future<bool> _resolveAndPlay(rust.SongDto song) async {
     // 没版权的曲目连取链都不用试; 自动续播时静默跳过(点列表才提示, 否则一路弹窗)
     if (!song.playable) return false;
+    // 续播位置的影份: 取出后若 play 抱错要回写(catch 看不到 try 内变量, 故提到 try 外)。
+    int resumeTakenMs = 0;
+    BigInt? resumeTakenId;
     try {
       // 先用预取的直链(有就用, 省掉几百毫秒); 没有才真的去取。
       final level = AppSettings.instance.audioLevel;
@@ -527,6 +530,11 @@ class PlaybackCoordinator extends ChangeNotifier {
       }
       // 播放条上的「试听 mm:ss / 已降级 极高」提示(只读展示, 不参与播放控制)
       publishStreamNote(song.id, note);
+      // 恢复现场的续播位置: 取一次就清(F7: 下次打开按播放要从记住的位置起, 不是 0)。
+      // 取之前先影一份: play 抛错时回写, 别让一次失败把记忆位置静默清掉(审计 P2, 2026-11-23)。
+      resumeTakenMs = _resumeAfterPlayMs;
+      resumeTakenId = _resumeAfterPlayTrackId;
+      final resumeMs = _takeResumePositionFor(song.id);
       final state = await playback.play(
         trackId: song.id,
         url: url,
@@ -536,9 +544,17 @@ class PlaybackCoordinator extends ChangeNotifier {
         durationMs: song.durationMs,
         // 通知栏图标 = 当前播放内容的封面(歌曲/播客统一走 coverUrl)
         artwork: await _artworkFor(song),
+        // Android: 直接按这个位置起播(MediaItem 的起播位置, 不依赖 seek 通道的时序)
+        startPositionMs: resumeMs > 0 ? BigInt.from(resumeMs) : null,
       );
       if (_disposed) return true;
       adoptPlayer(state);
+      // 桌面(Rust)没有起播位置参数 ⇒ 起播后 seek 到同一位置;
+      // Android 的起播位置已随 play(positionMs) 交给 ExoPlayer(setMediaItem 后、prepare 前),
+      // 补 seek 反而可能把已前进几十毫秒的进度回拨 ⇒ Android 分支跳过(审计 P2, 2026-11-23)。
+      if (resumeMs > 0 && !_disposed && !playback.isAndroid) {
+        await seekTo(resumeMs.toDouble());
+      }
       // 立刻按这首的响度给一次增益(未测到就先 0 dB, 轮询里会再补一次)
       _loudnessAppliedTrackId = playingId;
       unawaited(applyLoudnessForTrack(playingId, streamUrl: cacheKeyUrl));
@@ -549,6 +565,11 @@ class PlaybackCoordinator extends ChangeNotifier {
       _prefetchNextTrack();
       return true;
     } catch (e) {
+      // 播放没起来 ⇒ 影份回写, 下次按播放仍从记忆位置续(不能静默丢, 审计 P2)
+      if (resumeTakenId != null && resumeTakenMs > 0) {
+        _resumeAfterPlayMs = resumeTakenMs;
+        _resumeAfterPlayTrackId = resumeTakenId;
+      }
       if (_disposed) return false;
       toastError(friendlyError(e));
       return false;
@@ -563,11 +584,10 @@ class PlaybackCoordinator extends ChangeNotifier {
     if (_restoredFromDisk || _player?.trackId == null) {
       final song = queue.current;
       if (song != null) {
-        final resume = _restoredResumeMs;
         _restoredFromDisk = false;
-        _restoredResumeMs = 0;
+        // 续播位置不在这里 seek: 统一在 `_resolveAndPlay` 取(`_takeResumePositionFor`),
+        // 这样任何起播路径都吃得到, 不必每处记得再 seek 一次。
         await playSong(song, explicit: true);
-        if (resume > 0 && !_disposed) await seekTo(resume.toDouble());
         return;
       }
     }
@@ -594,8 +614,21 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 这段时间里轮询到"播放器空"不能把恢复出来的播放条清掉; 用户按播放才真正续播。
   bool _restoredFromDisk = false;
 
-  /// 恢复出来的续播位置(毫秒), 用户按播放时 seek 到这里
-  int _restoredResumeMs = 0;
+  /// 恢复出来的续播位置(毫秒) + 它属于哪首: 用户按播放时**只**对这首生效, 且只取一次。
+  ///
+  /// 为什么要记 id: 恢复后用户可能直接从搜索另点一首, 那个位置不能套到新曲上。
+  int _resumeAfterPlayMs = 0;
+  BigInt? _resumeAfterPlayTrackId;
+
+  /// 取出并清空"恢复现场的续播位置": 只对 [trackId] 这首有效, 其余返回 0。
+  int _takeResumePositionFor(BigInt trackId) {
+    final ms = _resumeAfterPlayMs;
+    final id = _resumeAfterPlayTrackId;
+    _resumeAfterPlayMs = 0;
+    _resumeAfterPlayTrackId = null;
+    if (ms <= 0 || id != trackId) return 0;
+    return ms;
+  }
 
   /// 上次落盘播放现场的时间(节流: 每 5s 最多一次, 避免每 500ms 轮询都写文件)
   DateTime? _lastStateSave;
@@ -620,7 +653,9 @@ class PlaybackCoordinator extends ChangeNotifier {
       volume: 1.0,
     );
     _restoredFromDisk = true;
-    _restoredResumeMs = saved.positionMs;
+    // F7: 记住续播位置与它属于哪首 —— 用户下个动作若是"播放", 就从这里起播(不是 0)
+    _resumeAfterPlayMs = saved.positionMs;
+    _resumeAfterPlayTrackId = song.id;
     // 事件通知: 恢复出来的曲目不会走 `_playSong`(用户可能一直不点播放),
     // 歌词/歌曲信息就永远停在「暂无 / 信息不可用」。开 App 即提前取一次
     // (幂等, 失败只进 `LyricController.error`, 点播放时还会再试)。

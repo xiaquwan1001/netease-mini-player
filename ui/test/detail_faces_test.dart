@@ -14,6 +14,9 @@ import 'package:minincm/src/detail_faces.dart';
 /// - **换曲/换节目不再回歌词**(面是记忆的, 见 AppSettings.detailFace);
 /// - 封面面首帧就有图(播放条同档小图), 大图异步淡入且每首歌只取一次;
 /// - 封面面右下角「查看评论」由页面注入回调, null 时不出现;
+/// - 封面面**左下角**显示「当前进度 / 总时长」(2026-11-20; 取代原来的
+///   「轻点画面返回歌词」提示, 切面手势本身不靠文字解释)。位置由页面注入
+///   [ValueListenable](控件不开定时器), 总时长 ≤0 时那位显示 `--:--`;
 /// - 「保存封面 / 保存原图」的默认实现走 `ncm/share.saveImage` 通道 ——
 ///   这条用例是 \`??\` LUB 退化(位置参数回调 vs 命名参数实现 ⇒ NoSuchMethodError)
 ///   的回归网: 不注入 saveImage, 只 mock 通道。
@@ -473,6 +476,83 @@ void main() {
       oppositeDetailFace(oppositeDetailFace(DetailFace.lyrics)),
       DetailFace.lyrics,
     );
+  });
+
+  // ---------------- A3: 封面面「当前进度 / 总时长」 ----------------
+
+  testWidgets('封面面左下角显示「当前进度 / 总时长」, 并随注入的位置刷新', (tester) async {
+    final position = ValueNotifier<int>(83000);
+    addTearDown(position.dispose);
+    await tester.pumpWidget(
+      _app(
+        DetailFaces(
+          trackId: BigInt.one,
+          coverUrl: _cover,
+          lyrics: _lyrics(),
+          fetchImage: (url) async => _png1x1,
+          positionMs: position,
+          durationMs: 296000,
+        ),
+      ),
+    );
+    // 歌词面时不出现(只有封面面那一行)
+    expect(find.byKey(const ValueKey('detail-cover-progress')), findsNothing);
+
+    await tester.tap(find.text('第0句'));
+    await tester.pump();
+
+    expect(find.text('1:23 / 4:56'), findsOneWidget);
+    expect(find.text('轻点画面返回歌词'), findsNothing);
+
+    // 高频源(页面注入的 positionMs)变一次就跟着变一次
+    position.value = 125000;
+    await tester.pump();
+    expect(find.text('2:05 / 4:56'), findsOneWidget);
+  });
+
+  testWidgets('总时长 ≤0 ⇒ `--:--`; 未注入位置时不崩且显示 0:00', (tester) async {
+    final position = ValueNotifier<int>(0);
+    addTearDown(position.dispose);
+    await tester.pumpWidget(
+      _app(
+        DetailFaces(
+          trackId: BigInt.one,
+          coverUrl: _cover,
+          lyrics: _lyrics(),
+          fetchImage: (url) async => _png1x1,
+          positionMs: position,
+          // 还没拿到时长(或直播/未知): 不能显示成 0 秒的假总时长
+          durationMs: 0,
+        ),
+      ),
+    );
+    await tester.tap(find.text('第0句'));
+    await tester.pump();
+    expect(find.text('0:00 / --:--'), findsOneWidget);
+
+    // 负值同样归到 `--:--`(上游异常时不留回绕的时间)
+    await tester.pumpWidget(
+      _app(
+        DetailFaces(
+          trackId: BigInt.one,
+          coverUrl: _cover,
+          lyrics: _lyrics(),
+          fetchImage: (url) async => _png1x1,
+          positionMs: position,
+          durationMs: -1000,
+        ),
+      ),
+    );
+    expect(find.text('0:00 / --:--'), findsOneWidget);
+
+    // 完全不注入位置(纯控件/无当前曲目): 静态 `0:00 / --:--`, 不崩
+    await tester.pumpWidget(
+      _app(DetailFaces(trackId: BigInt.one, coverUrl: null, lyrics: _lyrics())),
+    );
+    // 同一 State 续用, 面仍停在封面面(记忆), 不需要再切
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('0:00 / --:--'), findsOneWidget);
   });
 
   for (final (size, scale) in <(Size, double)>[

@@ -332,6 +332,9 @@ class Playback {
     required String artist,
     BigInt? durationMs,
     Uint8List? artwork,
+    // 起播位置(毫秒): 仅在恢复现场的续播时非空。Android 交给
+    // `MediaController.setMediaItem(item, ms)`; 桌面 Rust 侧没这个参数, 仍由调用方起播后 seek。
+    BigInt? startPositionMs,
   }) async {
     if (isAndroid) {
       // 首播前保证 UA 已交给原生(启动握手时服务可能还没起, 那次失败了就在这里补)
@@ -342,6 +345,8 @@ class Playback {
         'title': title,
         'artist': artist,
         'artwork': artwork,
+        if (startPositionMs != null && startPositionMs > BigInt.zero)
+          'positionMs': startPositionMs.toInt(),
       });
       return _fromMap(map);
     }

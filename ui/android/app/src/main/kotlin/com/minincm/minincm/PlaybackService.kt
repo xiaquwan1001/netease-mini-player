@@ -101,6 +101,14 @@ class PlaybackService : MediaSessionService() {
 
     /** 淡出结束后要执行的动作(暂停/停止); 被打断也必须落地, 否则请求会静默丢掉 */
     private var pendingAfterFadeOut: (() -> Unit)? = null
+
+    /**
+     * 淡出进行中(已请求暂停/停止, 等 fadeMs 到点才真正执行)。
+     *
+     * 对外状态靠它报"未播放"(用户反馈 F6: 不报的话播放按钮会在淡出的那一秒内
+     * 又跳回"播放中", 淡出结束再跳回"暂停")。
+     */
+    internal val isFadeOutPending: Boolean get() = pendingAfterFadeOut != null
     private val fadeHandler = Handler(Looper.getMainLooper())
 
     /** 等不到起声的兜底: 到点直接把音量落到目标(绝不把播放器留在 0 音量) */
@@ -612,6 +620,9 @@ class PlaybackService : MediaSessionService() {
 
     /** [SkipAwarePlayer.play] 的唯一出口: 立即恢复出声, 淡入从真正出声开始计 */
     fun playWithFade() {
+        // 用户在淡出中又点播放: **丢弃**排队的暂停/停止 —— 交给 cancelFade 会把刚恢复
+        // 起来的播放又停下去(用户看到的则是"点播放还是暂停")。
+        pendingAfterFadeOut = null
         exoPlayer?.play()
         fadeIn()
     }
@@ -1111,6 +1122,19 @@ private class SkipAwarePlayer(private val delegate: Player) : ForwardingPlayer(d
     override fun seekToNext() = PlaybackService.requestSkip(true)
 
     override fun seekToPrevious() = PlaybackService.requestSkip(false)
+
+    /** 淡出进行中 ⇒ 已经按了暂停/停止, 对外就报未播放(用户反馈 F6, 判据在 [FadePolicy.reportsPlaying]) */
+    private val fadeOutPending: Boolean
+        get() = PlaybackService.instance?.isFadeOutPending == true
+
+    // 为什么要覆写这两个: Dart 侧每 500ms 轮询一次播放态, 淡出期间真实 ExoPlayer 仍
+    // isPlaying=true ⇒ 按钮会先跳回"播放中", 淡出结束后再跳回"暂停"(用户反馈)。
+    // 只改"对外怎么说", 不动真实播放(声音仍要在 fadeMs 内平滑归零)。
+    override fun isPlaying(): Boolean =
+        FadePolicy.reportsPlaying(delegate.isPlaying, fadeOutPending)
+
+    override fun getPlayWhenReady(): Boolean =
+        FadePolicy.reportsPlaying(delegate.playWhenReady, fadeOutPending)
 
     // 淡入淡出(F1)的统一入口: Dart 通道、通知栏、锁屏、耳机键都经过 MediaSession ⇒ 这一层拦一次就全覆盖。
     // 暂停/停止先在 fadeMs 内淡出再真正执行(fadeMs=0 时行为与以前完全一致), 恢复播放则从真正出声重新淡入。

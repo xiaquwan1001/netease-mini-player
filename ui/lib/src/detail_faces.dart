@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart'
@@ -11,6 +12,7 @@ import 'cover_art.dart'
         fetchImageBytes,
         httpsImageUrl,
         showImageViewer;
+import 'format.dart' show formatDurationShort;
 import 'image_io.dart';
 import 'net_retry.dart' show describeError;
 import 'state_views.dart' show LoadingView;
@@ -61,6 +63,8 @@ class DetailFaces extends StatefulWidget {
     this.onOpenComments,
     this.saveImage,
     this.fetchImage,
+    this.positionMs,
+    this.durationMs = 0,
   });
 
   /// 当前曲目/节目 id: 换歌**不再**强制回歌词(面是记忆的), 只用于让大图缓存失效
@@ -102,6 +106,18 @@ class DetailFaces extends StatefulWidget {
   /// 取原图字节实现(测试注入假实现, 不联网); null = 走 [fetchImageBytes]
   final Future<Uint8List> Function(String url)? fetchImage;
 
+  /// 播放位置(毫秒), 封面面左下角「当前进度 / 总时长」显示用。
+  ///
+  /// 控件自己**不开定时器**: 页面把已有的高频源(歌词页展开期 120ms ticker 驱动的
+  /// `LyricController.positionMs`)注进来, 只有这一行随位置重建。null = 位置按 0 显示。
+  final ValueListenable<int>? positionMs;
+
+  /// 当前曲目总时长(毫秒)。≤0(未知/无当前曲目)时总时长位显示 `--:--`。
+  ///
+  /// 时长按曲目静态, 与 [positionMs] 同一份播放态快照里读, 换曲时页面重建即更新,
+  /// 所以这里用普通数值而不是第二个 listenable。
+  final int durationMs;
+
   @override
   State<DetailFaces> createState() => _DetailFacesState();
 }
@@ -116,6 +132,22 @@ const double _kThumbLogicalSize = 40;
 
 /// 大图淡入时长(小图已在位, 只是把清晰的大图叠上来)
 const Duration _kBigFade = Duration(milliseconds: 220);
+
+/// 封面面左下角的进度文案: `当前 / 总时长`(如 `1:23 / 4:56`)。
+///
+/// 口径与 `formatDurationShort` 一致(分钟不补零, 超一小时继续累计), 不用
+/// `formatDurationMs` —— 那个会补零成 `01:23`, 且满一小时变成 `1:02:03`.
+/// 总时长 ≤0(未知/还没拿到)时给 `--:--`: 显示 `0:00` 会让人以为歌只有 0 秒;
+/// 位置未知照常 `0:00`(那是真的还没开始)。
+String _progressText(int positionMs, int durationMs) {
+  final total = durationMs > 0
+      ? formatDurationShort(BigInt.from(durationMs))
+      : '--:--';
+  return '${_progressClock(positionMs)} / $total';
+}
+
+String _progressClock(int ms) =>
+    ms > 0 ? formatDurationShort(BigInt.from(ms)) : '0:00';
 
 class _DetailFacesState extends State<DetailFaces> {
   late DetailFace _face = widget.faceController?.value ?? widget.initialFace;
@@ -293,9 +325,30 @@ class _DetailFacesState extends State<DetailFaces> {
     );
   }
 
-  Widget _buildCoverFace(BuildContext context) {
+  /// 封面面左下角的「当前进度 / 总时长」(如 `1:23 / 4:56`)。
+  ///
+  /// 位置来自页面注入的 [DetailFaces.positionMs](歌词页展开期已有的 120ms ticker),
+  /// 控件内**没有任何定时器**: null 时只做一个静态行。
+  Widget _buildProgress(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    Widget text(int positionMs) => Text(
+      _progressText(positionMs, widget.durationMs),
+      key: const ValueKey('detail-cover-progress'),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: theme.textTheme.labelSmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+    final position = widget.positionMs;
+    if (position == null) return text(0);
+    return ValueListenableBuilder<int>(
+      valueListenable: position,
+      builder: (context, value, _) => text(value),
+    );
+  }
+
+  Widget _buildCoverFace(BuildContext context) {
     final cover = _cover;
     return GestureDetector(
       key: const ValueKey('detail-cover-face'),
@@ -325,16 +378,9 @@ class _DetailFacesState extends State<DetailFaces> {
                 bottom: _kCoverInset,
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        '轻点画面返回歌词',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
+                    // 左下角原来的「轻点画面返回歌词」提示改成「当前进度 / 总时长」
+                    // (用户 2026-11-20): 切面手势本身已在用, 这行位置给有用的信息。
+                    Expanded(child: _buildProgress(context)),
                     // 「查看评论」在「保存封面」左边(用户 2026-11-19 要求);
                     // 没有注入回调(纯控件测试/无当前曲目)时不显示。
                     if (widget.onOpenComments != null) ...[
