@@ -404,6 +404,9 @@ fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {
 pub mod account;
 pub mod artist;
 pub mod cloud;
+#[cfg(test)]
+#[path = "api/data_dir_regression_tests.rs"]
+mod data_dir_regression_tests;
 pub mod detail;
 pub mod discover;
 pub mod library;

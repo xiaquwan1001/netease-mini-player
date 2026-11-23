@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.38.2+83
+version: 0.38.3+84
 
 environment:
   sdk: ^3.13.7
@@ -57,6 +57,13 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # CJK 兜底字体: **只给 arm64 Linux**(引擎缺 fontconfig ⇒ 中文全空, 见 assets/fonts/README.md)。
+  # 注册成家族后引擎走 asset 加载, 不依赖 fontconfig; 其它平台由 platform_font.dart 决定不启用。
+  fonts:
+    - family: MiniNcmCjk
+      fonts:
+        - asset: assets/fonts/WenQuanYiMicroHei.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

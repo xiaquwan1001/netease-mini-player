@@ -73,6 +73,26 @@ class FadePolicyTest {
     }
 
     @Test
+    fun trackStartNeverFadesEvenWithLongUserFade() {
+        // 2026-11-23 用户口径: 首次播放/换曲不能淡入 —— 1s 淡入 = 前 1s 近乎静音,
+        // 听感是"直接错过 1s 播放"。淡入只留给"从暂停恢复"。
+        for (ms in listOf(1, 200, 500, 1_000, 5_000)) {
+            assertFalse(
+                "fadeMs=$ms 时换曲不应淡入",
+                FadePolicy.shouldFadeOnResume(trackStart = true, fadeMs = ms),
+            )
+            assertTrue(
+                "fadeMs=$ms 时从暂停恢复应淡入",
+                FadePolicy.shouldFadeOnResume(trackStart = false, fadeMs = ms),
+            )
+        }
+        // fadeMs = 0 仍是关闭: 两个场景都不淡入
+        assertFalse(FadePolicy.shouldFadeOnResume(trackStart = true, fadeMs = 0))
+        assertFalse(FadePolicy.shouldFadeOnResume(trackStart = false, fadeMs = 0))
+        assertFalse(FadePolicy.shouldFadeOnResume(trackStart = false, fadeMs = -1))
+    }
+
+    @Test
     fun rampWaitsForRealAudioStart() {
         assertFalse(FadePolicy.shouldStartRamp(audioStarted = false))
         assertTrue(FadePolicy.shouldStartRamp(audioStarted = true))

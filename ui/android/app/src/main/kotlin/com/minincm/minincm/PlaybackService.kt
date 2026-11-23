@@ -99,6 +99,15 @@ class PlaybackService : MediaSessionService() {
     /** 挂起那一刻捕获的目标音量: 起声后 ramp 的目标 */
     private var fadeArmedTarget = 0f
 
+    /**
+     * 下一次 `play()` 是**换曲/首次起播**, 不淡入(2026-11-23 用户口径)。
+     *
+     * 新曲目从头播本来就从静音开始, 再叠一个用户设置的淡入会把歌曲开头真盖住
+     * (fadeMs=1s ⇒ 前 1s 几乎听不见, 听感是「错过开头」)。淡入只属于**从暂停恢复**。
+     * Dart 侧在 `play` 通道里先调 [markTrackStart] 再 `play()`, 通道走完即清标志。
+     */
+    private var suppressNextFadeIn = false
+
     /** 淡出结束后要执行的动作(暂停/停止); 被打断也必须落地, 否则请求会静默丢掉 */
     private var pendingAfterFadeOut: (() -> Unit)? = null
 
@@ -493,6 +502,8 @@ class PlaybackService : MediaSessionService() {
      * ① 曲线用感知曲线 `1-(1-t)^3`, 不再用 `ValueAnimator` 默认的加速-减速插值 + 线性振幅;
      * ② ramp **等真正出声**才起(`onIsPlayingChanged(true)`), 缓冲期的静默不再把慢起段烧掉;
      * ③ 等不到起声有 [FadePolicy.ARM_TIMEOUT_MS] 兜底。
+     *
+     * 2026-11-23: 只在**从暂停恢复**时调用; 换曲/首次起播走 [settleVolumeForTrackStart]。
      */
     fun fadeIn() {
         val exo = exoPlayer ?: return
@@ -517,6 +528,28 @@ class PlaybackService : MediaSessionService() {
             fadeHandler.postDelayed(abandonArmedTick, FadePolicy.ARM_TIMEOUT_MS)
             Log.d("NCM-PLAYER", "fadeIn armed(等起声) target=$target fadeMs=$fadeMs")
         }
+    }
+
+    /**
+     * Dart → 原生 `play`: 这是换曲/首次起播, **不要淡入**(见 [suppressNextFadeIn])。
+     */
+    fun markTrackStart() {
+        suppressNextFadeIn = true
+    }
+
+    /**
+     * 换曲/首次起播的音量: **不淡入**, 直接落到目标(2026-11-23 用户口径)。
+     *
+     * 仍要做与 [fadeIn] 相同的两件杂事(否则下一次 gain 变化会带着半截斜坡残留):
+     * 取消淡入/挂起态、把 appliedGainDb 对齐到目标增益。
+     */
+    private fun settleVolumeForTrackStart() {
+        val exo = exoPlayer ?: return
+        cancelFade()
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        appliedGainDb = gainDb
+        exo.volume = targetVolume()
     }
 
     /**
@@ -618,13 +651,20 @@ class PlaybackService : MediaSessionService() {
         fadeOutThen { exoPlayer?.stop() }
     }
 
-    /** [SkipAwarePlayer.play] 的唯一出口: 立即恢复出声, 淡入从真正出声开始计 */
+    /** [SkipAwarePlayer.play] 的唯一出口: 立即恢复出声; 换曲不淡入, 暂停恢复才淡入 */
     fun playWithFade() {
         // 用户在淡出中又点播放: **丢弃**排队的暂停/停止 —— 交给 cancelFade 会把刚恢复
         // 起来的播放又停下去(用户看到的则是"点播放还是暂停")。
         pendingAfterFadeOut = null
         exoPlayer?.play()
-        fadeIn()
+        // 2026-11-23 用户口径: 换曲/首次起播不淡入(否则开头 1s 被盖成静音),
+        // 只有从暂停恢复才淡入 —— 判据是纯函数, JVM 单测盯住。
+        if (FadePolicy.shouldFadeOnResume(trackStart = suppressNextFadeIn, fadeMs = fadeMs)) {
+            fadeIn()
+        } else {
+            suppressNextFadeIn = false
+            settleVolumeForTrackStart()
+        }
     }
 
     private fun targetVolume(): Float {

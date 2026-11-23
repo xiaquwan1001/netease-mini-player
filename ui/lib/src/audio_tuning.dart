@@ -24,7 +24,7 @@ class AudioTuningRequest {
   /// 最终送给播放器的增益(dB): 用户精细音量 + 响度均衡增益, 钳到 -40..+12
   final double gainDb;
 
-  /// 淡入时长(ms)
+  /// 淡入时长(ms): **只作用于从暂停恢复**(2026-11-23); 切歌/首次起播不淡入
   final int fadeMs;
 
   /// AutoEQ 曲线原文; null = 旁路

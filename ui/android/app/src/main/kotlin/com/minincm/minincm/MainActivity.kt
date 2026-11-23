@@ -428,9 +428,10 @@ class MainActivity : FlutterActivity() {
                 val startMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
                 if (startMs > 0L) c.seekTo(startMs)
                 c.prepare()
+                // 换曲/首次起播: **不淡入**(2026-11-23 用户口径 —— 淡入会把歌曲开头
+                // 1s 盖成静音, 听感是错过开头)。标志在下一次 `play()` 里生效并清掉。
+                PlaybackService.instance?.markTrackStart()
                 c.play()
-                // 换曲/开始: 按 fadeMs 做淡入, 避免切歌爆音(0 = 关闭)
-                PlaybackService.instance?.fadeIn()
                 result.success(stateMap(c))
             }
             "pause" -> { c.pause(); result.success(stateMap(c)) }

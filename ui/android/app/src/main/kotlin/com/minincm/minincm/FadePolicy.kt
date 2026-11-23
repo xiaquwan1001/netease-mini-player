@@ -19,6 +19,17 @@ internal object FadePolicy {
     /** `fadeMs <= 0` = 关闭淡入淡出(既有口径, 默认值 0 不变) */
     fun isEnabled(fadeMs: Int): Boolean = fadeMs > 0
 
+    /**
+     * `play()` 这一下该不该淡入(2026-11-23 用户口径)。
+     *
+     * - 换曲/首次起播([trackStart] = true) ⇒ **不淡入**: 新曲目开头本来就从静默开始,
+     *   再叠用户的 fadeMs 会把歌曲前 1s 盖成近乎静音(用户原话: "直接错过 1s 播放");
+     * - 从暂停恢复 ⇒ 淡入(这才是"切换不突兀"真正需要斜坡的地方);
+     * - fadeMs = 0 ⇒ 关闭淡入淡出, 两个场景都不淡入(既有语义不变)。
+     */
+    fun shouldFadeOnResume(trackStart: Boolean, fadeMs: Int): Boolean =
+        !trackStart && isEnabled(fadeMs)
+
     /** 动画时长(fadeMs 已由 configure 钳到 0..5000); <=0 时返回 0, 调用方按关闭处理 */
     fun rampDurationMs(fadeMs: Int): Long = fadeMs.coerceAtLeast(0).toLong()
 

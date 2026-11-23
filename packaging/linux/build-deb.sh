@@ -44,6 +44,23 @@ fi
 # 版本号解析唯一实现: tools/ci-gates.sh(从 ui/pubspec.yaml 的 version: X.Y.Z+N 取 X.Y.Z)
 VER=$(bash "$ROOT/tools/ci-gates.sh" version)
 ARCH=${ARCH:-$DEB_ARCH}
+# 防「x86 内容打 arm64 包」(2026-11-23 实测发生过: BUNDLE/ARCH 手动覆盖时组合错
+# 就能打出一个 Architecture: arm64 但内容全是 x86-64 的包, 装到 arm64 机上报
+# Invalid ELF image)。只要 file 可用且 bundle 里有 ELF, 就硬校验主程序机器类型。
+if command -v file >/dev/null 2>&1 && [ -f "$BUNDLE/minincm" ]; then
+  case "$ARCH" in
+    arm64)  WANT_ELF='ARM aarch64' ;;
+    amd64)  WANT_ELF='x86-64' ;;
+    *)      WANT_ELF='' ;;
+  esac
+  if [ -n "$WANT_ELF" ]; then
+    GOT_ELF=$(file -b "$BUNDLE/minincm")
+    case "$GOT_ELF" in
+      *"$WANT_ELF"*) ;;
+      *) echo "ERROR: bundle 主程序与目标架构不符: 期望 $WANT_ELF, 实际: $GOT_ELF" >&2; exit 1 ;;
+    esac
+  fi
+fi
 PKGNAME=minincm
 MAINTAINER=${MAINTAINER:-"MiniNCM <noreply@localhost>"}
 

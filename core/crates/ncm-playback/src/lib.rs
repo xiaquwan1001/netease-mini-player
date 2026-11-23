@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 pub mod agc;
 pub mod biquad;
@@ -23,7 +23,7 @@ pub struct PlaybackTuning {
     /// (ReplayGain 2.0 语义 `target - measured`), 用户自己的音量滑块仍限制在 -40..0。
     /// 正增益实际被"系统音量满格"自然封顶(乘法链钳 0..1), 所以不会引入额外削波。
     pub gain_db: f32,
-    /// R5 淡入: 0 / 200 / 500 / 1000 ms
+    /// R5 暂停恢复的淡入: 0 / 200 / 500 / 1000 ms(切歌不淡入, 见 `INSTANT_FADE`)
     pub fade_ms: u32,
     /// R7 自定义响度曲线(AutoEQ ParametricEQ); None = 旁路
     pub eq: Option<ncm_domain::EqProfile>,
@@ -298,7 +298,8 @@ enum Cmd {
         reply: Option<mpsc::SyncSender<Result<SeekOutcome, PlaybackError>>>,
     },
     Volume(f32),
-    /// 更新播放参数(增益/淡入/EQ). 增益即时生效, EQ 与淡入在下一首开始时套用
+    /// 更新播放参数(增益/淡入/EQ). 增益即时生效, EQ 在下一首开始时套用,
+    /// 淡入作用于下一次从暂停恢复
     Configure(PlaybackTuning),
     Shutdown,
 }
@@ -331,7 +332,7 @@ impl Player {
         Self { tx, state, tuning }
     }
 
-    /// 更新播放参数(增益/淡入/EQ)
+    /// 更新播放参数(增益/淡入/EQ): 淡入值是"暂停恢复"的斜坡时长
     pub fn configure(&self, tuning: PlaybackTuning) {
         let tuning = tuning.sanitized();
         if let Ok(mut t) = self.tuning.lock() {
@@ -501,6 +502,9 @@ mod backend {
         SampleRate, Source,
     };
     use std::fs::File;
+    // Instant 只被桌面后端用(GrowingFile 判死线 / 恢复淡入斜坡的计时), 放在模块内
+    // 而不是文件顶部: 否则 Android 侧(非桌面 backend)会报 unused import。
+    use std::time::Instant;
 
     /// EQ 包装源: 逐样本处理, 不缓冲(因此 span/时长与原始 decoder 完全对齐)
     struct EqSource<I> {
@@ -685,13 +689,14 @@ mod backend {
         EqSource::new(input, chain).fade_in(fade)
     }
 
-    /// 开播时的淡入时长: 0 ms 用 1 ms 近似"立即"(避免除零, 也顺手消除切歌爆音).
+    /// 开播/换曲**不淡入**(2026-11-23 用户口径): 新曲从头播本来就从静音开始, 再叠一个
+    /// 用户设置的淡入会把歌曲开头真盖住(1s 淡入 = 前 1s 几乎听不见, 听感是"错过开头")。
+    /// 用户设置的淡入只属于一个场景: 从暂停恢复(音频线程 `Cmd::Resume` 的音量斜坡);
+    /// 换源防爆音另用固定的 [`SWAP_FADE`](与用户设置无关)。
     ///
-    /// rodio 的 `fade_in` 会断言时长非零, 所以这里必须兜住 0; 抽成函数是为了让
-    /// "设置值 → 实际淡入时长"这条换算能被单测直接盯住(见 `fade_tests`)。
-    fn start_fade(tuning: &PlaybackTuning) -> Duration {
-        Duration::from_millis(tuning.fade_ms.max(1) as u64)
-    }
+    /// rodio 的 `fade_in` 会断言时长非零, 所以"立即"用 1ms 兜底; 抽成常量是为了让
+    /// "开播 → 实际淡入时长"这条换算能被单测直接盯住(见 `fade_tests`)。
+    const INSTANT_FADE: Duration = Duration::from_millis(1);
 
     /// 把一条源套上 EQ 链与淡入后追加进播放队列(**不碰状态**).
     fn append_source<I>(player: &RodioPlayer, input: I, local: &PlaybackTuning, fade: Duration)
@@ -717,8 +722,8 @@ mod backend {
         let duration = input
             .total_duration()
             .or_else(|| expected_duration_ms.map(Duration::from_millis));
-        // 淡入: 0 ms 时用 1 ms 近似"立即"(见 start_fade)
-        append_source(player, input, local, start_fade(local));
+        // 开播不淡入(见 INSTANT_FADE 的注释); 1ms 斜坡只为消除首样本阶跃
+        append_source(player, input, local, INSTANT_FADE);
         player.play();
         if let Ok(mut st) = state.lock() {
             st.track_id = Some(track_id);
@@ -747,6 +752,21 @@ mod backend {
 
     /// 换源时的淡入时长: 足够盖住波形不连续(消爆音), 又短到听不出来
     const SWAP_FADE: Duration = Duration::from_millis(25);
+
+    /// 恢复淡入的斜坡比例(0→1 线性, 纯函数便于单测): `None` = 无斜坡(=1.0);
+    /// 已到时自动清空并返回 1.0, 中间线性过渡。盖在最终音量上(乘法),
+    /// 所以对用户音量/增益限速都是透明的。
+    fn ramp_scale(ramp: &mut Option<(Instant, Duration)>) -> f32 {
+        let Some((start, dur)) = ramp else {
+            return 1.0;
+        };
+        let elapsed = start.elapsed();
+        if elapsed >= *dur || *dur == Duration::ZERO {
+            *ramp = None;
+            return 1.0;
+        }
+        (elapsed.as_secs_f32() / dur.as_secs_f32()).clamp(0.0, 1.0)
+    }
 
     /// 把一次 seek 交给 rodio(错误按"不支持 / 其它"分类)
     fn try_seek_player(player: &RodioPlayer, target_ms: u64) -> Result<(), PlaybackError> {
@@ -895,10 +915,20 @@ mod backend {
         // 播放位置的基准偏移: **只有换源这一条路径**会抬高它(新解码器是先 seek 再追加的,
         // rodio 的相对计数从 0 开始)。其它路径(开播 / 直接 seek)都让 rodio 自己算, 基准为 0。
         let mut pos_base_ms: u64 = 0;
+        // 恢复淡入(2026-11-23 用户口径): 只有**从暂停恢复**才淡入(用户设置的 fade_ms),
+        // 开播/换曲不淡入。记录 = (斜坡起点, 总时长); 音量在循环尾按 elapsed 线性爬升。
+        let mut resume_ramp: Option<(Instant, Duration)> = None;
         player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
 
         loop {
-            match rx.recv_timeout(Duration::from_millis(200)) {
+            // 淡入期间用细 tick(20ms), 让 200ms 级的斜坡也有 >=10 个台阶, 听不出阶梯;
+            // 平时仍用粗 tick(200ms)省电。
+            let tick = if resume_ramp.is_some() {
+                Duration::from_millis(20)
+            } else {
+                Duration::from_millis(200)
+            };
+            match rx.recv_timeout(tick) {
                 Ok(Cmd::Play {
                     track_id,
                     source,
@@ -909,6 +939,8 @@ mod backend {
                     planner.reset();
                     pos_base_ms = 0;
                     // 换曲: 记下来源(渐进源下载完成后要靠它换源), 能力先按当前解码器报
+                    // 换曲即重置恢复淡入: 新曲目从头播, 不吃上一个暂停恢复的斜坡
+                    resume_ramp = None;
                     let seekable = source.seekable();
                     let spec = CurrentTrack {
                         track_id,
@@ -974,8 +1006,23 @@ mod backend {
                     }
                     current = if started { Some(spec) } else { None };
                 }
-                Ok(Cmd::Pause) => player.pause(),
-                Ok(Cmd::Resume) => player.play(),
+                Ok(Cmd::Pause) => {
+                    player.pause();
+                    // 暂停打断斜坡: 恢复时会重新起一个完整的淡入
+                    resume_ramp = None;
+                }
+                Ok(Cmd::Resume) => {
+                    player.play();
+                    // 只有从暂停恢复才淡入(用户设置的 fade_ms; 0 = 关闭淡入 → 瞬时)
+                    resume_ramp = if local.fade_ms > 0 {
+                        Some((
+                            Instant::now(),
+                            Duration::from_millis(local.fade_ms.min(5_000) as u64),
+                        ))
+                    } else {
+                        None
+                    };
+                }
                 Ok(Cmd::Stop) => {
                     player.clear();
                     current = None;
@@ -1033,8 +1080,12 @@ mod backend {
                 }
                 Ok(Cmd::Volume(v)) => {
                     user_volume = v;
-                    // 系统音量瞬时生效(拧音量键必须立刻响应), 但增益部分仍用限速后的当前值
-                    player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
+                    // 系统音量瞬时生效(拧音量键必须立刻响应), 但增益部分仍用限速后的当前值;
+                    // 恢复淡入期间按斜坡比例缩放
+                    player.set_volume(
+                        effective_volume_db(user_volume, limiter.current_db())
+                            * ramp_scale(&mut resume_ramp),
+                    );
                     if let Ok(mut st) = state.lock() {
                         st.volume = v;
                     }
@@ -1059,7 +1110,10 @@ mod backend {
             let dt = (now - last_tick).as_secs_f32();
             last_tick = now;
             let applied_gain = limiter.step(local.gain_db, dt);
-            player.set_volume(effective_volume_db(user_volume, applied_gain));
+            // 恢复淡入斜坡: 线性 0→1 盖在最终音量上; 斜坡结束(或不存在)时 = 1.0 无影响
+            player.set_volume(
+                effective_volume_db(user_volume, applied_gain) * ramp_scale(&mut resume_ramp),
+            );
 
             // P-10 方案 B: 渐进下载完成后, 把待跳位置应用到重建的可 seek 解码器上。
             // 每条待跳只尝试一次: 失败就把原因如实写进 seek_error 并清掉待跳
@@ -1570,55 +1624,50 @@ mod backend {
                 .collect()
         }
 
-        /// 核心判据: fade_ms=200 ⇒ 前 1600 个样本(8kHz 下 200ms)线性 0→1, 之后满幅。
-        ///
-        /// 现状(修复前)也必须过这条 —— 它同时是**回归网**: 以后谁把淡入挪回"音量回调"
-        /// 或把 `max(1)` 去掉(rodio 的 fade_in 断言时长非零), 这里立刻炸。
+        /// 核心判据(2026-11-23 修订): **开播不淡入** —— 即使 fade_ms=200/1000,
+        /// 曲目开头的包络也必须是满幅, 不能把歌曲前 1s 盖成静音。
         #[test]
-        fn fade_ms_200_ramps_up_linearly_over_the_first_200ms() {
-            let tuning = PlaybackTuning {
-                fade_ms: 200,
-                ..Default::default()
-            };
-            let fade = start_fade(&tuning);
-            assert_eq!(fade, Duration::from_millis(200));
-            let s = envelope(&tuning, fade, 2_400);
-
-            // 起点必须是 0(否则第一帧就是个阶跃 = 爆音)
-            assert!(s[0].abs() < 1e-6, "淡入起点应为 0, 实测 {}", s[0]);
-            // 100ms 处 ≈ 0.5, 150ms 处 ≈ 0.75(误差 < 1%)
-            assert!(
-                (s[800] - 0.5).abs() < 0.01,
-                "100ms 处应约 0.5, 实测 {}",
-                s[800]
-            );
-            assert!(
-                (s[1_200] - 0.75).abs() < 0.01,
-                "150ms 处应约 0.75, 实测 {}",
-                s[1_200]
-            );
-            // 200ms 之后恢复原样(1.0), 不再衰减
-            for (i, v) in s[1_600..2_400].iter().enumerate() {
-                assert!(
-                    (v - 1.0).abs() < 1e-4,
-                    "200ms 之后第 {i} 个样本应满幅, 实测 {v}"
-                );
+        fn track_start_does_not_fade_in_even_with_long_user_fade() {
+            for ms in [200u32, 1_000, 5_000] {
+                let tuning = PlaybackTuning {
+                    fade_ms: ms,
+                    ..Default::default()
+                };
+                let s = envelope(&tuning, INSTANT_FADE, 64);
+                // 1ms 兜底斜坡: 8kHz 下 8 个样本就得满幅, 之后全是原值
+                for (i, v) in s[8..64].iter().enumerate() {
+                    assert!(
+                        (v - 1.0).abs() < 1e-4,
+                        "fade_ms={ms} 时开播第 {i} 个样本应满幅(开播不淡入), 实测 {v}"
+                    );
+                }
             }
-            // 单调不减(包络不是"抖动"或"只降不升")
-            assert!(s[..1_600].windows(2).all(|w| w[1] >= w[0] - 1e-6));
         }
 
-        /// fade_ms=0(关闭淡入)仍然用 1ms 近似"立即": 8kHz 下 8 个样本内到满幅。
+        /// 用户设置的淡入真正生效的地方是**暂停恢复**: 斜坡包络由 [`ramp_scale`] 给出,
+        /// 线性 0→1 over fade_ms, 结束后固化在 1.0。
         #[test]
-        fn fade_ms_zero_is_effectively_instant_but_still_starts_at_zero() {
-            let tuning = PlaybackTuning::default();
-            let fade = start_fade(&tuning);
-            assert_eq!(fade, Duration::from_millis(1), "0 必须兜成 1ms");
-            let s = envelope(&tuning, fade, 64);
-            assert!(s[0].abs() < 1e-6);
-            for (i, v) in s[8..64].iter().enumerate() {
-                assert!((v - 1.0).abs() < 1e-4, "第 {i} 个样本应满幅, 实测 {v}");
-            }
+        fn resume_ramp_goes_linearly_from_zero_to_full_over_fade_ms() {
+            // 用 200ms 斜坡, 直接量比例(不依赖声卡)
+            let mut ramp = Some((Instant::now(), Duration::from_millis(200)));
+            assert!(ramp_scale(&mut ramp) < 0.05, "刚恢复时应接近 0");
+            std::thread::sleep(Duration::from_millis(100));
+            let mid = ramp_scale(&mut ramp);
+            assert!(
+                (mid - 0.5).abs() < 0.2,
+                "半程应约 0.5, 实测 {mid}(tick 粒度允许宽松 ±0.2)"
+            );
+            std::thread::sleep(Duration::from_millis(130));
+            assert_eq!(ramp_scale(&mut ramp), 1.0, "到时应回到满幅");
+            assert!(ramp.is_none(), "斜坡结束后应被清空");
+            assert_eq!(ramp_scale(&mut ramp), 1.0, "无斜坡时恒为 1.0");
+        }
+
+        /// fade_ms=0 ⇒ 恢复也不淡入(瞬时); 斜坡从未被建立。
+        #[test]
+        fn zero_fade_means_no_resume_ramp() {
+            let mut no_ramp: Option<(Instant, Duration)> = None;
+            assert_eq!(ramp_scale(&mut no_ramp), 1.0);
         }
 
         /// 防爆音不回归: 换源用的 [`SWAP_FADE`](25ms)即使和用户的长淡入无关, 也必须

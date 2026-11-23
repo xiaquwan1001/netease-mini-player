@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'platform_font.dart' show bundledCjkFallback, bundledCjkPrimary;
+
 /// 视觉风格(主题色): 同一个 seed 生成整套 M3 配色, 浅色/深色共用同一个 seed,
 /// 只换亮度 ⇒ 两套配色语义一致(默认品牌红 seed 沿用改造前的纯红 0xFFF40000).
 ///
@@ -61,6 +63,11 @@ ThemeData buildLightTheme({AccentPalette accent = AccentPalette.neteaseRed}) =>
     ThemeData(
       colorScheme: accentScheme(accent, Brightness.light),
       useMaterial3: true,
+      // arm64 Linux 的引擎没有 fontconfig ⇒ 默认字体解析不出来(CJK 全空、
+      // 拉丁变豆腐块), 直接用随包的拉丁+CJK 字体当主字体
+      // (其它平台为 null/空表, 行为与排版完全不变; 见 platform_font.dart)
+      fontFamily: bundledCjkPrimary,
+      fontFamilyFallback: bundledCjkFallback,
     );
 
 /// 深色主题. [oled] = true 时切到纯黑基底(R6), false 时保持 Material 默认深色.
@@ -76,6 +83,9 @@ ThemeData buildDarkTheme({
   final base = ThemeData(
     colorScheme: accentScheme(accent, Brightness.dark),
     useMaterial3: true,
+    // 同 buildLightTheme: 只在 arm64 Linux 用随包的拉丁+CJK 字体
+    fontFamily: bundledCjkPrimary,
+    fontFamilyFallback: bundledCjkFallback,
   );
   if (!oled) return base;
 

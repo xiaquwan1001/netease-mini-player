@@ -63,6 +63,10 @@ echo "== build linux"
 ( cd ui && flutter build linux --debug )
 
 echo "== build android"
-( cd ui && flutter build apk --debug )
+# 必须套 tools/android-bindgen-env.sh: rquickjs-sys 在 Android 目标上没有预生成 bindings,
+# 裸 `flutter build apk` 会让 bindgen 用宿主机头文件 ⇒
+# `fatal error: 'bits/libc-header-start.h' file not found`(2026-11-23 本机实测;
+# 之前这条命令能过是因为 shell 里残留了 NDK 环境变量)。build-android.sh 里也是同一口径。
+bash tools/android-bindgen-env.sh bash -c 'cd ui && flutter build apk --debug'
 
 echo "CI OK"

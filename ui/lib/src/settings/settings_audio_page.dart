@@ -294,7 +294,7 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         : 0;
     return ListTile(
       title: const Text('淡入淡出'),
-      subtitle: const Text('切歌时的过渡时长, 0 = 关闭'),
+      subtitle: const Text('暂停恢复时的淡入时长, 0 = 关闭(切歌始终不淡入)'),
       trailing: DropdownButton<int>(
         key: const Key('fadeDropdown'),
         value: fade,

@@ -23,7 +23,10 @@ pub fn playback_user_agent() -> String {
 // ---------------- 播放 ----------------
 
 static PLAYER: OnceLock<ncm_playback::Player> = OnceLock::new();
-static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+// 注意: 这里**不能**再声明 `static DATA_DIR`。`super::*` 里的那份是 `init()` 唯一写入过的实例;
+// 同名本地 `static` 会遮蔽 glob 导入(globs 优先级最低), 而没有任何代码会给它 set,
+// 于是本文件所有 `DATA_DIR.get()` 永远 None ⇒ "core not initialized"
+// (2026-11-23 实测: 桌面端播放/缓存全废; 拆分 api.rs 时引入的静默回归)。
 
 fn player() -> &'static ncm_playback::Player {
     PLAYER.get_or_init(ncm_playback::Player::new)
@@ -174,7 +177,8 @@ pub fn player_set_volume(volume: f32) -> PlayerStateDto {
 pub struct PlaybackTuningDto {
     /// 精细音量增益(dB, -40..=0)
     pub gain_db: f64,
-    /// 淡入时长(ms)
+    /// 淡入时长(ms): **只在从暂停恢复时生效**(2026-11-23 口径);
+    /// 切歌/首次起播不淡入(否则会把歌曲开头 1s 盖成静音)
     pub fade_ms: u32,
     /// 生效的滤波器数量(0 = 曲线旁路)
     pub eq_filters: u32,
@@ -236,7 +240,8 @@ pub fn eq_profile_normalize(text: String) -> Result<String, FfiError> {
     Ok(profile.to_text())
 }
 
-/// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
+/// 应用播放参数: 精细音量立即生效; 曲线在下一首开始时套用;
+/// 淡入只作用于**从暂停恢复**(2026-11-23: 切歌/首次起播不淡入)。
 ///
 /// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
 /// `gain_slew_db_per_sec` = 增益变化限速(dB/s): **0 = 瞬时**(静态响度均衡/拖滑杆),
