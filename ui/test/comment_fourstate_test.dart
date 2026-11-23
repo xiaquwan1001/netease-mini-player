@@ -45,8 +45,9 @@ void main() {
           resourceId: BigInt.one,
           loadPage: (limit, offset) async {
             loads++;
-            // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer
-            if (loads == 1) throw Exception('[internal] boom');
+            // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer。
+            // 用未知 kind(2026-11-24 起 internal 有中性文案, 不再露 'boom')。
+            if (loads == 1) throw Exception('[weirdKind] boom');
             return page([comment(1, '好听')]);
           },
           loadHot: (limit, offset) async => page(const []),
@@ -120,7 +121,7 @@ void main() {
               page([comment(1, '父评论', replyCount: 1)]),
           like: (_, _) async => true,
           loadReplies: (_, _) async => page(const []),
-          reply: (_, _) async => throw Exception('[internal] boom'),
+          reply: (_, _) async => throw Exception('[weirdKind] boom'),
         ),
       ),
     );

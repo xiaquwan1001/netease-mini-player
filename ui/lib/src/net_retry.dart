@@ -10,6 +10,9 @@ const _kindNetwork = 'network';
 const _kindForbidden = 'forbidden';
 const _kindAuth = 'auth';
 const _kindRiskControl = 'riskControl';
+const _kindInternal = 'internal';
+const _kindNotFound = 'notFound';
+const _kindUnsupported = 'unsupported';
 
 /// 取错误 kind: [rust.FfiError] 直接读字段, 其它异常兜底解析 `[kind]` 前缀。
 String? errorKind(Object? e) {
@@ -70,7 +73,9 @@ Future<T> retryNetwork<T>(
 ///   对用户没有任何信息量, 露出来只会让人以为客户端坏了(2026-11-18 用户反馈
 ///   推荐页把 `[auth] Unknown error` 直接当成错误占位)。页面上"需登录才有的
 ///   内容"还应该在未登录时直接隐藏(见 recommend_view 的登录态门), 这里是兵底。
-/// - 其它 kind: 保留 `[kind] detail` 原文, 方便定位问题
+/// - internal/notFound/unsupported: 统一中性文案, 不露内部 kind 前缀
+///   (2026-11-24 审计 P1: 这三个 kind 之前落到 describeError 原文)。
+/// - 真正的未知 kind: 保留 `[kind] detail` 原文, 方便定位问题
 String friendlyError(Object e) {
   final kind = errorKind(e);
   if (kind == _kindNetwork) {
@@ -95,6 +100,17 @@ String friendlyError(Object e) {
             .trim();
     const hint = '被网易云安全风控拦截(需人机验证): 换网络(如手机流量)或登录后再试';
     return detail.isEmpty ? hint : '$hint\n$detail';
+  }
+  // map_code 的兜底臂与全部未知码都落 internal, 是用户最可能撞到的 kind ——
+  // 不能再把 `[internal] code=500` 原文甩给用户(2026-11-18/24 两轮同类反馈)。
+  if (kind == _kindInternal) {
+    return '服务开小差了, 请稍后再试';
+  }
+  if (kind == _kindNotFound) {
+    return '内容不存在或已下架';
+  }
+  if (kind == _kindUnsupported) {
+    return '当前版本不支持该功能';
   }
   return describeError(e);
 }

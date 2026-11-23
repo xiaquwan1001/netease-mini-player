@@ -46,7 +46,7 @@ void main() {
           loadFeed: () async {
             loads++;
             // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer
-            if (loads == 1) throw Exception('[internal] boom');
+            if (loads == 1) throw Exception('[weirdKind] boom');
             return [event(1)];
           },
           loadSubscribedArtists: () async => const [],
@@ -81,7 +81,7 @@ void main() {
           onOpenUrl: (_) async {},
           loadFeed: () async {
             loads++;
-            if (loads > 1) throw Exception('[internal] boom');
+            if (loads > 1) throw Exception('[weirdKind] boom');
             return [for (var i = 1; i <= 5; i++) event(i)];
           },
           loadSubscribedArtists: () async => const [],

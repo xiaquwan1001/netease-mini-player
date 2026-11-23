@@ -90,7 +90,7 @@ void main() {
       song: song(),
       load: (_) async {
         calls++;
-        if (calls == 1) throw Exception('[internal] 挂了');
+        if (calls == 1) throw Exception('[weirdKind] 挂了');
         return const [rust.WikiFact(label: '语种', value: '国语')];
       },
     );

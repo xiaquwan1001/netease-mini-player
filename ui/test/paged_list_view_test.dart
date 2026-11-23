@@ -283,7 +283,7 @@ void main() {
       final pager = OffsetPager<String>(
         pageSize: 2,
         load: (limit, offset) async {
-          if (fail) throw Exception('[internal] boom');
+          if (fail) throw Exception('[weirdKind] boom');
           return (items: <String>['a'], hasMore: true);
         },
       );

@@ -100,8 +100,9 @@ void main() {
       tester,
       loadPage: (limit, offset) async {
         calls += 1;
-        // 用非 network 错误: network 会被 friendlyError 换成固定文案
-        if (calls == 1) throw Exception('[internal] boom');
+        // 2026-11-24 起 internal 有中性文案不再露原文; 这里只验「错误可见 + 重试」,
+        // 用未知 kind 保留原文的特性传 'boom' 字样。
+        if (calls == 1) throw Exception('[weirdKind] boom');
         return _page(<rust.CloudSong>[_song(11)]);
       },
     );
@@ -292,7 +293,7 @@ void main() {
         tester,
         loadPage: (limit, offset) async => _page([_song(1)]),
         pickFile: () async => '/tmp/a.mp3',
-        upload: (_) async => throw Exception('[internal] 转码失败'),
+        upload: (_) async => throw Exception('[weirdKind] 转码失败'),
       );
       await tester.tap(find.byTooltip('上传音频到云盘'));
       await tester.pumpAndSettle();

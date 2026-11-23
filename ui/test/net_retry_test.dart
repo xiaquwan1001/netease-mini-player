@@ -42,10 +42,23 @@ void main() {
     expect(calls, 3);
   });
 
-  test('错误文案: 网络错误说人话, 其它保留原文', () {
+  test('错误文案: 网络错误说人话, 未知 kind 保留原文', () {
     expect(friendlyError('[network] x'), contains('网络不稳定'));
     expect(isNetworkError('[riskControl] code=8821'), isFalse);
-    expect(friendlyError('[notFound] code=404'), contains('404'));
+    // internal/notFound/unsupported 已有中性文案(2026-11-24 审计 P1);
+    // 真正的未知 kind 仍保留原文便于定位。
+    expect(friendlyError('[weirdKind] boom'), contains('weirdKind'));
+  });
+
+  test('internal/notFound/unsupported 给中性文案, 不露内部 kind 前缀', () {
+    rust.FfiError fe(String kind, String detail) =>
+        rust.FfiError(kind: kind, retryable: false, detail: detail);
+    expect(friendlyError(fe('internal', 'code=500: boom')), '服务开小差了, 请稍后再试');
+    expect(friendlyError(fe('notFound', 'code=404')), '内容不存在或已下架');
+    expect(friendlyError(fe('unsupported', 'nope')), '当前版本不支持该功能');
+    // 文本前缀路径(老异常)同套话术
+    expect(friendlyError('[internal] code=500'), '服务开小差了, 请稍后再试');
+    expect(friendlyError('[notFound] code=404'), '内容不存在或已下架');
   });
 
   group('结构化错误(FfiError 跨桥后)', () {

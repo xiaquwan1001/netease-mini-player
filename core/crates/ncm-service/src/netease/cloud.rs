@@ -264,9 +264,12 @@ impl NeteaseProvider {
                 .ok_or_else(|| ProviderError::internal("nos token: 响应缺 objectKey"))?;
             // resourceId 是**数字**(如 84382086772), 只按字符串解析会拿到空串 ⇒
             // info/v2 缺 resourceId ⇒ `{"code":400,"songId":"0"}`(2026-11-19 实测复现)。
+            // 缺失必须显式报错而不是静默空串 —— 那会白重试 5 次后报误导性 internal
+            // (2026-11-24 审计 P1, v0.26.3 坑的残余路径)。token/objectKey 同款。
             let resource_id = result
                 .and_then(|r| str_or_num_of(r, "resourceId"))
-                .unwrap_or_default();
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| ProviderError::internal("nos token: 响应缺 resourceId"))?;
 
             // ③ 上传文件字节(秒传跳过)
             if need_upload {

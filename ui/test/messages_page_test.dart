@@ -380,7 +380,7 @@ void main() {
                 message(2, '在的', mine: true, timeMs: 2000),
               ];
             }
-            if (failOlder) throw Exception('[internal] boom');
+            if (failOlder) throw Exception('[weirdKind] boom');
             return [message(0, '更早一条', timeMs: 500)];
           },
           loadNotices: () async => const [],

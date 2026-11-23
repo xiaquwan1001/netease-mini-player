@@ -41,10 +41,16 @@ void main() {
       expect(friendlyError(Exception('[auth] Unknown error')), '需要登录后才能查看');
     });
 
-    test('internal: 原样保留(带前缀方便定位)', () {
+    // 2026-11-24 审计 P1: internal 是 map_code 兕底臂, 用户最常撞到 ⇒ 换中性文案,
+    // 定位信息仍可从日志里的 describeError 拿到。
+    test('internal: 中性文案, 不露内部前缀', () {
       const raw = '[internal] code=500';
-      expect(friendlyError(Exception(raw)), contains('[internal]'));
-      expect(friendlyError(Exception(raw)), contains('code=500'));
+      expect(friendlyError(Exception(raw)), '服务开小差了, 请稍后再试');
+      expect(
+        describeError(Exception(raw)),
+        contains('code=500'),
+        reason: '定位信息留在 describeError',
+      );
     });
 
     test('无前缀: 原样返回', () {
@@ -54,7 +60,7 @@ void main() {
 
     test('风控/无版权等其它 kind 不误判成网络错误', () {
       expect(isNetworkError(Exception('[riskControl] code=8821')), isFalse);
-      expect(friendlyError(Exception('[notFound] code=404')), contains('404'));
+      expect(friendlyError(Exception('[notFound] code=404')), '内容不存在或已下架');
     });
   });
 

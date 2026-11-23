@@ -112,7 +112,7 @@ void main() {
                 loads++;
                 if (loads == 1) return pageOf(const []);
                 // 非网络错: 不触发 retryNetwork 的退避重试, 测试里不会留 pending timer
-                throw Exception('[internal] boom');
+                throw Exception('[weirdKind] boom');
               },
               loadHot: (limit, offset) async => pageOf(const []),
               like: (commentId, liked) async => true,

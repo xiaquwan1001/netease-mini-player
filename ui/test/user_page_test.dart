@@ -164,7 +164,7 @@ void main() {
           loadProfile: (_) async {
             attempts++;
             // 用非 network 错误: retryNetwork 只重试网络错, 这里要的是首屏失败这个状态
-            if (attempts == 1) throw Exception('[internal] boom');
+            if (attempts == 1) throw Exception('[weirdKind] boom');
             return detail(nickname: '小红');
           },
           loadPlaylists: (_) async => [playlist(1, '一个歌单')],

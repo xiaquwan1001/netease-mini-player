@@ -38,6 +38,18 @@ fn normalize_status(body_code: Option<i64>, http_status: i64) -> i64 {
     status
 }
 
+/// HTTP 200 + 非 JSON 对象(风控页/被劫持 HTML/eapi 解密失败被 `unwrap_or` 吞掉):
+/// 以前会落到 `body.get("code")==None` ⇒ 按 HTTP 状态 200 当成功 ⇒ parse 层
+/// 按"无数据"返回空列表, 与 -462 被吞是同一类残留(2026-11-24 审计 P1)。
+fn ensure_json_object(body: &Value, http_status: i64) -> Result<()> {
+    if body.is_object() {
+        return Ok(());
+    }
+    Err(NcmError::Unknown(format!(
+        "上游响应不是 JSON 对象(HTTP {http_status}), 可能是风控页或解密失败"
+    )))
+}
+
 /// 全局设备 ID（进程生命周期内固定）
 static DEVICE_ID: LazyLock<String> = LazyLock::new(generate_device_id);
 /// 全局 WNMCID
@@ -489,6 +501,7 @@ impl ApiClient {
             let text = response.text().await?;
             serde_json::from_str(&text).unwrap_or(Value::String(text))
         };
+        ensure_json_object(&body, status_code)?;
 
         let status = normalize_status(
             body.get("code").and_then(|c| {
@@ -523,7 +536,8 @@ impl ApiClient {
 
 #[cfg(test)]
 mod status_tests {
-    use super::normalize_status;
+    use super::{ensure_json_object, normalize_status, Value};
+    use serde_json::json;
 
     /// -462 = 网易云风控(人机验证): 必须原样交给上层映射成 riskControl,
     /// 不能被折成 400(那会变成 "Invalid parameter: Unknown error")。
@@ -547,5 +561,13 @@ mod status_tests {
     fn absurd_codes_are_clamped_to_400() {
         assert_eq!(normalize_status(Some(12345), 200), 400);
         assert_eq!(normalize_status(Some(-99999), 200), 400);
+    }
+
+    /// 非 JSON body(解密失败=Null / 劫持页=字符串)必须报错, 不能当成功。
+    #[test]
+    fn non_object_body_is_rejected_even_with_http_200() {
+        assert!(ensure_json_object(&json!({"code": 200}), 200).is_ok());
+        assert!(ensure_json_object(&Value::Null, 200).is_err());
+        assert!(ensure_json_object(&json!("<html>verify</html>"), 200).is_err());
     }
 }

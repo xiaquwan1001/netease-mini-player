@@ -26,9 +26,14 @@ void main() {
       expect(friendlyError(Exception('[auth]')), '需要登录后才能查看');
     });
 
-    test('其它 kind 原样返回(方便定位)', () {
-      final e = Exception('[internal] code=500');
-      expect(friendlyError(e), contains('[internal]'));
+    // 2026-11-24 审计 P1: internal/notFound/unsupported 换中性文案,
+    // 真正的未知 kind 仍原样返回方便定位。
+    test('internal 中性文案, 未知 kind 原样返回', () {
+      expect(friendlyError(Exception('[internal] code=500')), '服务开小差了, 请稍后再试');
+      expect(
+        friendlyError(Exception('[weirdKind] boom')),
+        contains('weirdKind'),
+      );
     });
   });
 }
