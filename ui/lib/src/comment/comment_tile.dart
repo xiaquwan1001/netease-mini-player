@@ -165,26 +165,9 @@ class _CommentTileState extends State<_CommentTile> {
                           ),
                         ),
                       ],
-                      if (comment.hot) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: scheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '热门',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: scheme.onPrimaryContainer,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                      ],
+                      // 单条的「热门」小标签已删除(2026-11-23 用户口径):
+                      // 每条已有互动数(点赞数), 而且评论区顶部的「热门」页签已经
+                      // 表达了同一件事 —— 标签重复, 还会挤掉昵称宽度(300dp 折行问题)。
                       // 时间/IP 是裸 Text 时占满自身宽度且不可压缩: 昵称与「回复 @x」
                       // 已被压到最小后, 这两段相加仍会撑破整行(300dp x1.625 必现)。
                       // 包 Flexible 让它们参与同一套宽度分配, 极端窄屏才截断。

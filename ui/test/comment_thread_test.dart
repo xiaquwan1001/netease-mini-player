@@ -110,7 +110,7 @@ void main() {
     expect(sent, ['1:我也说一句']);
   });
 
-  testWidgets('热门页签: 走热门加载器, 条目显示热门标记与 IP 归属', (tester) async {
+  testWidgets('热门页签: 走热门加载器, 单条不再带「热门」角标', (tester) async {
     var hotLoaded = 0;
     await tester.pumpWidget(
       host(
@@ -125,6 +125,7 @@ void main() {
             hotLoaded++;
             return page([comment(3, '热门页评论', hot: true)]);
           },
+          loadLatest: (limit, offset) async => page(const []),
           like: (_, _) async => true,
           loadReplies: (_, _) async => page([]),
           reply: (_, _) async => true,
@@ -133,15 +134,58 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 全部页: 精彩评论带"热门"角标(与页签同名, 所以是 2 个), 普通评论显示 IP 归属
-    expect(find.text('热门'), findsNWidgets(2));
+    // 2026-11-23: 单条「热门」角标已删 —— 页签行里只有 1 个「热门」；
+    // 精彩评论靠点赞数(互动数)体现, 普通评论显示 IP 归属。
+    expect(find.text('热门'), findsOneWidget);
+    expect(find.text('100'), findsOneWidget);
     expect(find.text('广东'), findsOneWidget);
 
-    await tester.tap(find.byType(ChoiceChip).last);
+    await tester.tap(find.text('热门'));
     await tester.pumpAndSettle();
     expect(hotLoaded, 1);
     expect(find.text('热门页评论'), findsOneWidget);
     expect(find.text('精彩评论'), findsNothing);
+  });
+
+  testWidgets('时间页签: 走 comments_sorted(sort: 2) 的加载器并整页重载', (tester) async {
+    final latestCalls = <String>[];
+    await tester.pumpWidget(
+      host(
+        CommentThread(
+          kind: 'song',
+          resourceId: BigInt.one,
+          loadPage: (limit, offset) async =>
+              page([comment(1, '精彩评论', hot: true), comment(2, '旧评论')]),
+          loadHot: (limit, offset) async => page([comment(3, '热门页评论')]),
+          loadLatest: (limit, offset) async {
+            latestCalls.add('$limit:$offset');
+            return page([comment(9, '最新评论'), comment(8, '次新评论')]);
+          },
+          like: (_, _) async => true,
+          loadReplies: (_, _) async => page([]),
+          reply: (_, _) async => true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 三个页签都在: 全部 / 热门 / 时间
+    expect(find.byType(ChoiceChip), findsNWidgets(3));
+    expect(find.text('时间'), findsOneWidget);
+
+    await tester.tap(find.text('时间'));
+    await tester.pumpAndSettle();
+    expect(latestCalls, ['10:0']); // pageSize 默认 10
+    expect(find.text('最新评论'), findsOneWidget);
+    expect(find.text('次新评论'), findsOneWidget);
+    // 整页重载: 旧页签的条目一条都不留(不是追加)
+    expect(find.text('精彩评论'), findsNothing);
+    expect(find.text('热门页评论'), findsNothing);
+
+    // 切回「全部」: 重新走默认页
+    await tester.tap(find.text('全部'));
+    await tester.pumpAndSettle();
+    expect(find.text('旧评论'), findsOneWidget);
   });
 
   testWidgets('全部页翻页: offset 只数最新评论, 热评不重复追加', (tester) async {

@@ -14,7 +14,9 @@ impl ApiClient {
             "rid": id,
             "limit": query.get_or("limit", "20").parse::<i64>().unwrap_or(20),
             "offset": query.get_or("offset", "0").parse::<i64>().unwrap_or(0),
-            "beforeTime": query.get_or("before", "0").parse::<i64>().unwrap_or(0)
+            "beforeTime": query.get_or("before", "0").parse::<i64>().unwrap_or(0),
+            // sortType: 0 推荐(缺省) / 1 热度 / 2 时间. 本地新增(见 vendor/UPSTREAM.txt)
+            "sortType": query.get_or("sort", "0").parse::<i64>().unwrap_or(0)
         });
         self.request(
             &format!("/api/v1/resource/comments/A_PL_0_{}", id),

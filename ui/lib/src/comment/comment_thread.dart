@@ -56,6 +56,7 @@ class CommentThread extends StatefulWidget {
     this.pageSize = 10,
     this.loadPage,
     this.loadHot,
+    this.loadLatest,
     this.like,
     this.loadReplies,
     this.reply,
@@ -81,6 +82,9 @@ class CommentThread extends StatefulWidget {
 
   /// 热门评论加载器(不传就走 rust.hotComments). 动态评论不支持热门, 传空即可
   final CommentPageLoader? loadHot;
+
+  /// 「时间」页签加载器(不传就走 rust.commentsSorted(sort: 2)). 动态评论不支持, 传空即可
+  final CommentPageLoader? loadLatest;
   final CommentLikeHook? like;
   final CommentRepliesLoader? loadReplies;
   final CommentReplyHook? reply;
@@ -111,6 +115,13 @@ class CommentThread extends StatefulWidget {
   State<CommentThread> createState() => CommentThreadState();
 }
 
+/// 评论区的排序页签(2026-11-23 用户口径: 原来只有「全部/热门」, 缺时间排序)。
+///
+/// - [all]: 接口默认页 = 精彩评论在前 + 其后是最新评论(推荐排序, 什么都不传, 老行为);
+/// - [hot]: 单独的热门评论接口(`comment_hot`), 可独立翻页;
+/// - [latest]: 同一个评论端点 + `sortType=2`(按时间倒序), 最新评论在前。
+enum CommentSortTab { all, hot, latest }
+
 /// State 对外公开: 详情页用 `GlobalKey<CommentThreadState>.focusComposer()`
 /// 触发「去写评论」(滚到评论区 + 聚焦输入框), 见 [focusComposer]。
 class CommentThreadState extends State<CommentThread> {
@@ -133,8 +144,8 @@ class CommentThreadState extends State<CommentThread> {
   /// 评论/分享/点赞统计(comment_info_list; 动态评论接口不支持, 保持 null)
   rust.CommentStats? _stats;
 
-  /// false = 全部(精彩评论 + 最新, 接口默认页), true = 只看精彩评论
-  bool _hot = false;
+  /// 当前排序页签: 全部(推荐) / 热门(只看精彩评论) / 时间(最新在前)
+  CommentSortTab _tab = CommentSortTab.all;
 
   /// 当前账号 uid(0 = 未登录): 只有自己发的评论才给"删除"
   BigInt _myUid = BigInt.zero;
@@ -201,8 +212,24 @@ class CommentThreadState extends State<CommentThread> {
       (limit, offset) =>
           rust.hotComments(threadId: _threadId, limit: limit, offset: offset);
 
-  /// 当前页签对应的加载器: 全部走默认页, 热门走 comment_hot
-  CommentPageLoader get _fetchPage => _hot ? _loadHotPage : _loadPage;
+  /// 「时间」页签的加载器(测试可注入). 默认走 `comments_sorted(sort: 2)` ——
+  /// 与「全部」同一个端点, 只是 sortType=2(最新在前); 动态评论不支持排序, 调用方不注入.
+  CommentPageLoader get _loadLatestPage =>
+      widget.loadLatest ??
+      (limit, offset) => rust.commentsSorted(
+        kind: widget.kind!,
+        resourceId: widget.resourceId!,
+        limit: limit,
+        offset: offset,
+        sort: 2,
+      );
+
+  /// 当前页签对应的加载器
+  CommentPageLoader get _fetchPage => switch (_tab) {
+    CommentSortTab.all => _loadPage,
+    CommentSortTab.hot => _loadHotPage,
+    CommentSortTab.latest => _loadLatestPage,
+  };
 
   CommentLikeHook get _like =>
       widget.like ??
@@ -260,10 +287,10 @@ class CommentThreadState extends State<CommentThread> {
   /// 都是就地改这一份, AsyncView 的空态判定读同一实例才不会停在旧快照上
   /// (改造前这里靠 _loading/_error 两个字段自己判四态)。
   Future<List<rust.Comment>> _loadFirstPage() async {
-    final hot = _hot;
-    final page = await (hot ? _loadHotPage : _loadPage)(widget.pageSize, 0);
-    // 取数期间用户切了全部/热门: 旧页签的响应直接丢弃(AsyncView 已按页签换代)
-    if (!mounted || hot != _hot) return _items;
+    final tab = _tab;
+    final page = await _fetchPage(widget.pageSize, 0);
+    // 取数期间用户切了页签: 旧页签的响应直接丢弃(AsyncView 已按页签换代)
+    if (!mounted || tab != _tab) return _items;
     _applyFirstPage(page);
     return _items;
   }
@@ -301,12 +328,10 @@ class CommentThreadState extends State<CommentThread> {
   /// 发表后的静默重取: 不经过 AsyncView(整块不闪回加载态), 失败保留现状
   /// (乐观项还在), 不把整页打成错误。
   Future<void> _reloadSilently() async {
-    final hot = _hot;
+    final tab = _tab;
     try {
-      final page = await retryNetwork(
-        () => (hot ? _loadHotPage : _loadPage)(widget.pageSize, 0),
-      );
-      if (!mounted || hot != _hot) return;
+      final page = await retryNetwork(() => _fetchPage(widget.pageSize, 0));
+      if (!mounted || tab != _tab) return;
       _applyFirstPage(page);
     } catch (_) {
       // 静默重载失败: 保留现状
@@ -327,9 +352,11 @@ class CommentThreadState extends State<CommentThread> {
   }
 
   /// "全部"页的 offset 只能数"最新评论"(接口的 offset 作用在 latest 上,
-  /// 精彩评论每次都随首页一起返回; 用 items.length 会把位置算多, 还会重复拉热评)
-  int get _nextOffset =>
-      _hot ? _items.length : _items.where((c) => !c.hot).length;
+  /// 精彩评论每次都随首页一起返回; 用 items.length 会把位置算多, 还会重复拉热评)。
+  /// "热门/时间"两页是纯排序结果(没有夹带热评), 直接数总数。
+  int get _nextOffset => _tab == CommentSortTab.all
+      ? _items.where((c) => !c.hot).length
+      : _items.length;
 
   Future<void> _loadMore() async {
     if (_loadingMore || !_hasMore) return;
@@ -734,11 +761,17 @@ class CommentThreadState extends State<CommentThread> {
 
   bool get _canHot => _threadId.isNotEmpty || widget.loadHot != null;
 
-  /// 切"全部/热门": 换加载器并整页重载(换 AsyncView 的 key 重挂载)
-  void _switchMode(bool hot) {
-    if (_hot == hot) return;
+  /// 「时间」页签只在资源类评论上出现(动态评论没有 sortType), 且必须有 kind 或注入加载器
+  bool get _supportsLatest => widget.kind != null || widget.loadLatest != null;
+
+  /// 页签整行只在「全部」之上还有别的档位时才显示
+  bool get _supportsSort => _supportsHot || _supportsLatest;
+
+  /// 切页签: 换加载器并整页重载(换 AsyncView 的 key 重挂载)
+  void _switchMode(CommentSortTab tab) {
+    if (_tab == tab) return;
     setState(() {
-      _hot = hot;
+      _tab = tab;
       _items.clear();
       _total = BigInt.zero;
       _hasMore = false;
@@ -813,21 +846,30 @@ class CommentThreadState extends State<CommentThread> {
               ),
             ),
           ],
-          if (_supportsHot) ...[
+          if (_supportsSort) ...[
             const SizedBox(height: 6),
             Wrap(
               spacing: 6,
               children: [
                 ChoiceChip(
                   label: const Text('全部'),
-                  selected: !_hot,
-                  onSelected: (_) => _switchMode(false),
+                  selected: _tab == CommentSortTab.all,
+                  onSelected: (_) => _switchMode(CommentSortTab.all),
                 ),
-                ChoiceChip(
-                  label: const Text('热门'),
-                  selected: _hot,
-                  onSelected: _canHot ? (_) => _switchMode(true) : null,
-                ),
+                if (_supportsHot)
+                  ChoiceChip(
+                    label: const Text('热门'),
+                    selected: _tab == CommentSortTab.hot,
+                    onSelected: _canHot
+                        ? (_) => _switchMode(CommentSortTab.hot)
+                        : null,
+                  ),
+                if (_supportsLatest)
+                  ChoiceChip(
+                    label: const Text('时间'),
+                    selected: _tab == CommentSortTab.latest,
+                    onSelected: (_) => _switchMode(CommentSortTab.latest),
+                  ),
               ],
             ),
           ],

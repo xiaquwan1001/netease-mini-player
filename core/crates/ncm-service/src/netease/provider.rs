@@ -446,6 +446,18 @@ impl CommentProvider for NeteaseProvider {
         NeteaseProvider::comments(self, kind, id, limit, offset)
     }
 
+    /// 评论列表 + 排序(2026-11-23): sort 0 推荐 / 1 热度 / 2 时间(最新在前)
+    fn comments_sorted<'a>(
+        &'a self,
+        kind: &'a str,
+        id: u64,
+        limit: u32,
+        offset: u32,
+        sort: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        NeteaseProvider::comments_with_sort(self, kind, id, limit, offset, Some(sort))
+    }
+
     /// 评论统计(实测: vendor comment_info_list = /api/resource/commentInfo/list, weapi).
     /// 入参是 type(资源类型数字) + ids(逗号分隔), **不是 threadId** —— 传 threadId 只会拿到空数组;
     /// 这里用 split_thread_id 把 threadId 反解成 (type, id). 动态(A_EV_2_)的 id 段是

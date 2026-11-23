@@ -73,7 +73,8 @@ Future<PlayerStateDto> playerSetVolume({required double volume}) =>
 Future<EqValidationDto> eqProfileValidate({required String text}) =>
     RustLib.instance.api.crateApiPlaybackEqProfileValidate(text: text);
 
-/// 应用播放参数: 精细音量立即生效; 淡入与曲线在下一首开始时套用。
+/// 应用播放参数: 精细音量立即生效; 曲线在下一首开始时套用;
+/// 淡入只作用于**从暂停恢复**(2026-11-23: 切歌/首次起播不淡入)。
 ///
 /// `eq_text` 为 None/空串 ⇒ 曲线旁路(清除曲线)。
 /// `gain_slew_db_per_sec` = 增益变化限速(dB/s): **0 = 瞬时**(静态响度均衡/拖滑杆),
@@ -241,7 +242,8 @@ class PlaybackTuningDto {
   /// 精细音量增益(dB, -40..=0)
   final double gainDb;
 
-  /// 淡入时长(ms)
+  /// 淡入时长(ms): **只在从暂停恢复时生效**(2026-11-23 口径);
+  /// 切歌/首次起播不淡入(否则会把歌曲开头 1s 盖成静音)
   final int fadeMs;
 
   /// 生效的滤波器数量(0 = 曲线旁路)

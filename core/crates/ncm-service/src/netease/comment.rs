@@ -154,12 +154,34 @@ impl NeteaseProvider {
         limit: u32,
         offset: u32,
     ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        self.comments_with_sort(kind, id, limit, offset, None)
+    }
+
+    /// 评论列表 + 排序(2026-11-23): `sort` = None/0 推荐 · 1 热度 · 2 时间(最新在前)。
+    ///
+    /// 上游就是那几个 `R_SO_4_/R_PL_0_/R_AL_0_/R_DJ_0_/R_MV_1_/R_VI_62_` 端点上的
+    /// `sortType` 参数(vendor 里本地补的透传, 见 `vendor/UPSTREAM.txt`), 加密/风控仍走 vendor。
+    /// 匿名 + 非 0 排序可能被风控回 -462 ⇒ 这里照常映射成 `ProviderError`, UI 会显示
+    /// 可重试错误而不是空白列表。
+    pub(super) fn comments_with_sort<'a>(
+        &'a self,
+        kind: &'a str,
+        id: u64,
+        limit: u32,
+        offset: u32,
+        sort: Option<u32>,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
             let q = make_query(&cookie, &domain, &ua)
                 .param("id", &id.to_string())
                 .param("limit", &limit.to_string())
                 .param("offset", &offset.to_string());
+            // sortType 只在显式要求排序时才带: 缺省不带 = 与旧行为逐位一致
+            let q = match sort {
+                Some(s) => q.param("sort", &s.to_string()),
+                None => q,
+            };
             let resp = match kind {
                 "song" => client.comment_music(&q).await,
                 "playlist" => client.comment_playlist(&q).await,

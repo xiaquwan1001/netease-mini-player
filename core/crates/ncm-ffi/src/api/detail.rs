@@ -260,6 +260,25 @@ pub async fn comments(
     )
 }
 
+/// 评论列表 + 排序(2026-11-23): `sort` = 0 推荐 / 1 热度 / 2 时间(最新在前).
+///
+/// 上游就是同一个评论端点上的 `sortType` 参数(vendor 透传), 所以分页语义
+/// (limit/offset + hasMore)与 [`comments`] 完全一致, UI 换页签只是换 sort。
+/// 匿名 + 非 0 排序可能被风控回 -462 ⇒ 照常变成 `[kind]` 可重试错误。
+pub async fn comments_sorted(
+    kind: String,
+    resource_id: u64,
+    limit: u32,
+    offset: u32,
+    sort: u32,
+) -> Result<CommentPage, FfiError> {
+    let kind = kind.as_str();
+    ffi_forward!(
+        Capability::Comment,
+        provider.comments_sorted(kind, resource_id, limit, offset, sort)
+    )
+}
+
 /// 评论统计: threadId 形如 R_SO_4_186016 / A_PL_0_24381616(也可用 thread_id_for 现拼).
 /// 缺数据时返回全 0, 不抛错; 只有 threadId 非法/动态才报 unsupported.
 pub async fn comment_stats(thread_id: String) -> Result<CommentStats, FfiError> {

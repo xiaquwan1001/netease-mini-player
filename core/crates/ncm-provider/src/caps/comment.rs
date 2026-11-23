@@ -18,6 +18,26 @@ pub trait CommentProvider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no comments")) })
     }
 
+    /// 评论列表 + 排序(2026-11-23): sort = 0 推荐(与 [Self::comments] 相同) /
+    /// 1 热度 / 2 时间(最新在前)。默认实现只在 sort==0 时退化成 [Self::comments],
+    /// 其余排序报 unsupported ⇒ 由 `routed_call` 回落内置 provider。
+    ///
+    /// 为什么单独一个方法而不是给 `comments` 加参数: 插件脚本不实现评论能力,
+    /// 但 trait 签名一变所有实现/测试都要跟着改; 新方法给默认实现就能零波及。
+    fn comments_sorted<'a>(
+        &'a self,
+        kind: &'a str,
+        id: u64,
+        limit: u32,
+        offset: u32,
+        sort: u32,
+    ) -> BoxFuture<'a, ProviderResult<CommentPage>> {
+        if sort == 0 {
+            return self.comments(kind, id, limit, offset);
+        }
+        Box::pin(async move { Err(ProviderError::unsupported("no comment sort")) })
+    }
+
     /// 评论统计(评论总数/分享数/点赞数). 能力复用 Capability::Comment.
     /// threadId 形如 R_SO_4_186016 / A_PL_0_24381616, 来自 CommentPage.thread_id 或 thread_id_for.
     fn comment_stats<'a>(
