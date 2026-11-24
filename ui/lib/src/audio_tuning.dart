@@ -19,6 +19,7 @@ class AudioTuningRequest {
     required this.eqText,
     this.gainSlewDbPerSec = kGainSlewDefaultDbPerSec,
     this.loudnessGainDb = 0.0,
+    this.audioFocus = AudioFocusPolicy.followSystem,
   });
 
   /// 最终送给播放器的增益(dB): 用户精细音量 + 响度均衡增益, 钳到 -40..+12
@@ -39,6 +40,12 @@ class AudioTuningRequest {
   /// 响度均衡给出的静态增益(RG 2.0 语义), 仅用于测试与调试回显
   final double loudnessGainDb;
 
+  /// 被其他媒体抢占时的播放行为(Android 音频焦点策略; 桌面平台无此概念, 透传即可)。
+  ///
+  /// 放进请求里是为了让「设置里改了这一项」也能走本文件那条统一的
+  /// `configure` 落地链路(见 [applyAudioTuning]): 否则改完要等下次起播才生效。
+  final AudioFocusPolicy audioFocus;
+
   /// 从设置快照构造。
   ///
   /// [loudnessGainDb] 由 [applyLoudnessForTrack] 从测量结果算好传进来:
@@ -55,6 +62,7 @@ class AudioTuningRequest {
       eqText: (text == null || text.isEmpty) ? null : s.eqProfileText,
       gainSlewDbPerSec: gainSlewForSettings(s),
       loudnessGainDb: loudness,
+      audioFocus: s.audioFocus,
     );
   }
 
@@ -64,15 +72,17 @@ class AudioTuningRequest {
       other.gainDb == gainDb &&
       other.fadeMs == fadeMs &&
       other.eqText == eqText &&
-      other.gainSlewDbPerSec == gainSlewDbPerSec;
+      other.gainSlewDbPerSec == gainSlewDbPerSec &&
+      other.audioFocus == audioFocus;
 
   @override
-  int get hashCode => Object.hash(gainDb, fadeMs, eqText, gainSlewDbPerSec);
+  int get hashCode =>
+      Object.hash(gainDb, fadeMs, eqText, gainSlewDbPerSec, audioFocus);
 
   @override
   String toString() =>
       'AudioTuningRequest(gain=$gainDb dB, fade=$fadeMs ms, '
-      'slew=$gainSlewDbPerSec dB/s)';
+      'slew=$gainSlewDbPerSec dB/s, focus=${audioFocus.id})';
 }
 
 /// 动态响度(AGC)的增益限速(dB/s): 防 pump 的验收口径(任务书 §5 "<= 3 dB/s")。
@@ -166,6 +176,8 @@ Future<void> _applyTuningOnce(AudioTuningRequest request) async {
       // 动态 AGC 才限速 3 dB/s(防 pump); 静态 RG2.0(默认)保持瞬时。
       // 桌面分支把**同一个值**交给 Rust 的 GainLimiter(P-03)。
       gainSlewDbPerSec: request.gainSlewDbPerSec,
+      // 音频焦点策略(「总是在后台播放」/「总是停止播放」/「跟随系统」)
+      audioFocus: request.audioFocus.id,
     );
     _reportEqEcho(echo);
     return;

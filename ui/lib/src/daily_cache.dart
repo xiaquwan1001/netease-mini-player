@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -67,6 +68,21 @@ class DailyCacheDay {
 /// 于是修法是: 写入/读取/合并三处**都按 playlist id 去重**(见 [dedupePlaylists]),
 /// 历史页对"和更早某天完全相同"的清单加一句标注(见 `discover/history_tab.dart`),
 /// 并且**空天不再伪造一行**(文件在但歌单与单曲都空 ⇒ 不列, 而不是无条件占位)。
+///
+/// **索引只增不减(2026-11 用户反馈⑥)**: 现场是"某天只缓存了 1~2 首歌甚至一首没有"。
+/// 查过链路, 当天的索引被截断只可能来自三处, 已逐一堵死:
+/// 1. **读-改-写互相覆盖**: 歌单([load])与单曲([loadSongs])共用同一个日期文件,
+///    各自"先读整份、只改自己那一节、再写整份"。两次调用交错时, 后写者手里的
+///    旧快照会把它没改的那一节写成 null(整节消失)或旧值。现在**写入阶段串行化**
+///    (每文件一把进程内锁)且**在锁内重读**文件再合并, 交错也只会互相补全。
+/// 2. **一次短响应把长索引覆盖掉**: 上游偶发只回 1~2 首(风控截断/半截响应),
+///    旧实现直接落盘。现在按 id **单调合并**([_growById]): 已落盘的索引永不被
+///    更短的响应截断, 新响应只做增量补充; 读回给 UI 的也是合并后的全集。
+/// 3. **"只有打开过每日推荐页才缓存"**: 单曲缓存原来只挂在每日推荐页的加载器上,
+///    首页「每日推荐」区块拉到的同一份清单从不落盘, 且 [loadSongsForActive] 在
+///    账号键对不上时直接透传 ⇒ 那些天历史里"一首也没有"。现在首页/日推页共用
+///    [AccountActions.dailySongs](带缓存), 账号键对不上时按**当前**账号键重建实例
+///    而不是放弃缓存 —— 索引与"当天听没听过"彻底解耦。
 class DailyPlaylistCache {
   DailyPlaylistCache({required this.dataDir, required String accountKey})
     : accountKey = _safeSegment(accountKey) {
@@ -144,9 +160,12 @@ class DailyPlaylistCache {
     // fetch 失败时**不吞**: 缓存没有兜底内容, 吞掉会让 UI 停在空白页,
     // 抛给调用方才能进 error 四态(重试按钮)。
     final fresh = dedupePlaylists(await fetch());
-    // 单曲那一节按原样保留(null = 这一天还没存过单曲, 就继续不存)。
-    await _write(file, playlists: fresh, songs: cached?.songs);
-    return fresh;
+    // 写入阶段在锁内**重读**文件再按 id 单调合并:
+    // - 单曲那一节按原样保留(null = 这一天还没存过单曲, 就继续不存);
+    // - 与并发的 [loadSongs] 交错也不会互相抹掉对方那一节;
+    // - 已有索引不会被这次更短的响应截断(见类头注释第 2 条)。
+    final merged = await _commit(file, playlists: fresh);
+    return merged.playlists ?? fresh;
   }
 
   /// 取当日推荐**单曲**: 今天已有单曲缓存就直接读, 否则调 [fetchSongs] 并写入。
@@ -174,23 +193,32 @@ class DailyPlaylistCache {
     }
 
     final fresh = dedupeSongs(await fetchSongs());
-    // 歌单那一节按原样保留(null = 这一天还没存过歌单, 就继续不存)。
-    await _write(file, playlists: cached?.playlists, songs: fresh);
-    return fresh;
+    // 同 [load]: 锁内重读 + 单调合并。歌单那一节按原样保留
+    // (null = 这一天还没存过歌单, 就继续不存)。
+    final merged = await _commit(file, songs: fresh);
+    return merged.songs;
   }
 
   /// 用 [active] 写/读"今天"的单曲; 没有接线或分区键已过期时**原样透传** [fetch]。
   ///
   /// 为什么要比对账号键: [active] 是进程级静态指针, 切号后若外壳还没来得及重建
-  /// 推荐页, 它会短暂指向**上一个账号**的分区 —— 那种时刻宁可少一次缓存, 也不能
-  /// 把 B 的日推写进 A 的目录(隐私上等价于串号)。
+  /// 推荐页, 它会短暂指向**上一个账号**的分区。**但此时不能直接放弃缓存**(2026-11
+  /// 用户反馈⑥: 那样这些天就"一首也没缓存"): 这里改用**当前账号键**新开一个实例
+  /// 读写今天的位置 —— 既不会把 B 的日推写进 A 的目录, 又不会漏掉当天的索引。
   static Future<List<rust.SongDto>> loadSongsForActive({
     required Future<List<rust.SongDto>> Function() fetch,
     required int keepDays,
   }) async {
     final cache = _active;
     if (cache == null || keepDays <= 0) return fetch();
-    if (await resolveAccountKey() != cache.accountKey) return fetch();
+    final key = await resolveAccountKey();
+    if (key != cache.accountKey) {
+      // 分区键已变(切号/登出仍未重建): 按当前键重建, 不写错目录也不放弃缓存。
+      return DailyPlaylistCache(
+        dataDir: cache.dataDir,
+        accountKey: key,
+      ).loadSongs(fetchSongs: fetch, keepDays: keepDays);
+    }
     return cache.loadSongs(fetchSongs: fetch, keepDays: keepDays);
   }
 
@@ -485,6 +513,84 @@ class DailyPlaylistCache {
       await _deleteQuietly(file);
       return null;
     }
+  }
+
+  /// 把一个日期文件的进程内串行锁(key = 文件路径)。
+  ///
+  /// 为什么需要: 歌单([load])与单曲([loadSongs])是**两条独立加载器**
+  /// (首页「每日推荐」区块与日推页各自拉取, 冷启动时几乎同时), 它们各自
+  /// "读整份 → 只改自己那一节 → 写整份"。不加锁就会时交错时把对方刚写好的
+  /// 那一节覆盖成 null/旧值 —— 现场就是"某天只缓存了 1~2 首(甚至一首没有)"。
+  /// 锁只在**写入阶段**拿, fetch 仍在锁外(不阻塞网络)。
+  static final Map<String, Future<void>> _fileLocks = <String, Future<void>>{};
+
+  /// 按文件路径串行执行 [body]; 前一个任务结束(无论成败)才放行下一个。
+  static Future<T> _withLock<T>(String path, Future<T> Function() body) async {
+    final previous = _fileLocks[path] ?? Future<void>.value();
+    final gate = Completer<void>();
+    _fileLocks[path] = gate.future;
+    await previous;
+    try {
+      return await body();
+    } finally {
+      // 队列尾已走到自己: 摘掉 table 项, 进程长跑不会积累空 entry。
+      if (identical(_fileLocks[path], gate.future)) _fileLocks.remove(path);
+      gate.complete();
+    }
+  }
+
+  /// 按 id **单调合并**: 先老后新, id 重复只留首次出现。
+  ///
+  /// 为什么不是直接覆盖: 上游偶发只回 1~2 首(风控截断/半截响应), 若直接落盘,
+  /// 已缓存的 30 首索引就被截成 2 首 —— 而用户当天不会重新打开日推页。
+  /// 一天内的日推本来就是当日固定内容, 因此"只增不减"是安全的方向:
+  /// 新响应只做增量补充, 已落盘的索引永远不丢。
+  static List<T> _growById<T>(
+    List<T>? old,
+    Iterable<T> incoming,
+    BigInt Function(T item) idOf,
+  ) {
+    final seen = <BigInt>{};
+    final out = <T>[];
+    for (final item in <T>[...?old, ...incoming]) {
+      if (seen.add(idOf(item))) out.add(item);
+    }
+    return out;
+  }
+
+  /// 锁内重读 → 单调合并 → 原子写, 返回落盘后的完整一天内容。
+  ///
+  /// [playlists] / [songs] 传 null 表示"这一次不提供这一节": 已有内容原样保留,
+  /// 原本就没有则继续不写(见 [_write] 的 null 语义)。
+  Future<_DayContent> _commit(
+    File file, {
+    List<rust.Playlist>? playlists,
+    List<rust.SongDto>? songs,
+  }) {
+    return _withLock(file.path, () async {
+      // **必须重读**: 调用方手上的快照可能是在 fetch 之前拿的, 期间另一条
+      // 加载器可能已经写过文件。
+      final current = await _readDay(file);
+      final mergedPlaylists = playlists == null
+          ? current?.playlists
+          : _growById<rust.Playlist>(
+              current?.playlists,
+              playlists,
+              (p) => p.id,
+            );
+      final oldSongs = current != null && current.songsKnown
+          ? current.songs
+          : null;
+      final mergedSongs = songs == null
+          ? oldSongs
+          : _growById<rust.SongDto>(oldSongs, songs, (s) => s.id);
+      await _write(file, playlists: mergedPlaylists, songs: mergedSongs);
+      return _DayContent(
+        playlists: mergedPlaylists,
+        songs: mergedSongs ?? const <rust.SongDto>[],
+        songsKnown: mergedSongs != null,
+      );
+    });
   }
 
   /// 原子写: 先写 .tmp 再 rename, 避免进程被杀留下半截 JSON 被当成有效缓存。

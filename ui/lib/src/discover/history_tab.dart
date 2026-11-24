@@ -20,6 +20,8 @@ class _HistoryEntry {
     this.playlists = const <rust.Playlist>[],
     this.songs = const <rust.SongDto>[],
     this.samePlaylistsAs,
+    this.repeatedSongIds = const <BigInt>{},
+    this.sameSongsAs,
   });
 
   /// YYYY-MM-DD
@@ -37,6 +39,13 @@ class _HistoryEntry {
   /// 本地歌单与**更早的某一天**完全相同(上游日推歌单高度稳定), 值是那天的 YYYY-MM-DD。
   final String? samePlaylistsAs;
 
+  /// 当天曲目里**已在更早的日推里出现过**的曲目 id(2026-11 用户反馈⑥: 日推歌曲
+  /// 本身就高度重复, 本地恢复注意事项列表里逐天整份重列)。
+  final Set<BigInt> repeatedSongIds;
+
+  /// 当天曲目**整份**与更早某天相同时的那天日期(部分重复看 [repeatedSongIds])。
+  final String? sameSongsAs;
+
   bool get hasLocal => playlists.isNotEmpty || songs.isNotEmpty;
 
   _HistoryEntry withSamePlaylistsAs(String? date) => _HistoryEntry(
@@ -45,6 +54,8 @@ class _HistoryEntry {
     playlists: playlists,
     songs: songs,
     samePlaylistsAs: date,
+    repeatedSongIds: repeatedSongIds,
+    sameSongsAs: sameSongsAs,
   );
 }
 
@@ -293,6 +304,8 @@ class _HistoryDayView extends StatelessWidget {
   /// 当天头部副标题: 在线日期报接口给的曲目数; 纯本地日期报缓存里的曲目/歌单数。
   String _headerSubtitle(List<rust.SongDto> songs) {
     final playlists = entry.playlists;
+    final repeated = entry.remote ? 0 : entry.repeatedSongIds.length;
+    final dedupe = repeated == 0 ? '' : ' · $repeated 首与更早重复';
     if (entry.remote) {
       return playlists.isEmpty
           ? '${songs.length} 首'
@@ -302,7 +315,7 @@ class _HistoryDayView extends StatelessWidget {
       if (songs.isNotEmpty) '${songs.length} 首',
       if (playlists.isNotEmpty) '${playlists.length} 个歌单',
     ];
-    return '缓存 ${parts.join(' · ')}';
+    return '缓存 ${parts.join(' · ')}$dedupe';
   }
 
   Widget _content(BuildContext context, List<rust.SongDto> remoteSongs) {
@@ -313,6 +326,17 @@ class _HistoryDayView extends StatelessWidget {
     final songs = entry.remote
         ? remoteSongs
         : DailyPlaylistCache.dedupeSongs(entry.songs);
+    // 去重口径(2026-11 用户反馈⑥): 本地日期里**与更早的日推重复**的曲目不整行
+    // 逐天重列 —— 正常行只留当天新增的, 重复的折叠到一行里(点开仍可播, 内容不丢)。
+    final repeatedIds = entry.remote ? const <BigInt>{} : entry.repeatedSongIds;
+    final fresh = <rust.SongDto>[
+      for (final s in songs)
+        if (!repeatedIds.contains(s.id)) s,
+    ];
+    final duplicated = <rust.SongDto>[
+      for (final s in songs)
+        if (repeatedIds.contains(s.id)) s,
+    ];
     final rows = <Widget>[];
     if (entry.remote) {
       if (songs.isEmpty) {
@@ -330,26 +354,55 @@ class _HistoryDayView extends StatelessWidget {
         ),
       );
     }
-    if (songs.isNotEmpty) {
-      for (var i = 0; i < songs.length; i++) {
-        final s = songs[i];
-        rows.add(
-          SongRow.pageIndexed(
-            song: s,
-            indexText: '${i + 1}',
-            // 历史日推与「推荐歌曲」页签同一来源: 菜单保留「不感兴趣」
-            menuSource: SongActionSource.dailyRecommend,
-            // 同「推荐歌曲」页签: 点播不退出历史日推列表
-            onTap: s.playable
-                ? () => PlaybackBridge.instance.playSongs(
-                    songs,
-                    i,
-                    source: SongActionSource.dailyRecommend,
-                  )
-                : null,
+    Widget songRow(
+      rust.SongDto s,
+      int i,
+      List<rust.SongDto> queue,
+      String indexText,
+    ) => SongRow.pageIndexed(
+      song: s,
+      indexText: indexText,
+      // 历史日推与「推荐歌曲」页签同一来源: 菜单保留「不感兴趣」
+      menuSource: SongActionSource.dailyRecommend,
+      // 同「推荐歌曲」页签: 点播不退出历史日推列表
+      onTap: s.playable
+          ? () => PlaybackBridge.instance.playSongs(
+              queue,
+              i,
+              source: SongActionSource.dailyRecommend,
+            )
+          : null,
+    );
+    for (var i = 0; i < fresh.length; i++) {
+      // 队列仍是**当天完整曲目**(不只新增那几首), 序号跟当天真实顺序一致。
+      final index = songs.indexWhere((s) => s.id == fresh[i].id);
+      rows.add(songRow(fresh[i], index, songs, '${index + 1}'));
+    }
+    if (duplicated.isNotEmpty) {
+      final sameAs = entry.sameSongsAs;
+      rows.add(
+        ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+          childrenPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.filter_alt_outlined, size: 20),
+          title: Text(
+            '与更早的日推重复的 ${duplicated.length} 首',
+            style: Theme.of(context).textTheme.labelLarge,
           ),
-        );
-      }
+          subtitle: sameAs == null
+              ? null
+              : Text('这一天的曲目与 $sameAs 相同(服务端当天返回的就是这份)'),
+          children: [
+            for (final s in duplicated)
+              songRow(
+                s,
+                songs.indexWhere((x) => x.id == s.id),
+                songs,
+                '${songs.indexWhere((x) => x.id == s.id) + 1}',
+              ),
+          ],
+        ),
+      );
     }
     if (playlists.isNotEmpty) {
       rows.add(
@@ -414,8 +467,10 @@ class _HistoryDayView extends StatelessWidget {
 /// 2. **同一份内容只留一条**: 歌单/单曲合并前按 id 去重(上游会重复返回同一歌单);
 /// 3. **不伪造天**: 本地那份歌单与单曲都空的天直接跳过(文件在 ≠ 这天有内容)。
 ///
-/// 另外: 若某天的歌单清单与更早某天完全相同, 记下"跟哪天一样", 由 UI 标一行 ——
-/// 上游的日推歌单本来就高度稳定, 让用户看到这是服务端当天的结果, 而不是本地串了号。
+/// 另外: 若某天的歌单清单/曲目清单与更早某天完全相同, 记下"跟哪天一样";
+/// 曲目还会逐个算"这一首在更早的日推里已出现过"([_HistoryEntry.repeatedSongIds]),
+/// 由 UI 折叠成一行 —— 上游的日推本来就高度稳定, 让用户看到这是服务端当天的结果,
+/// 而不是本地串了号或重复落了盘。
 List<_HistoryEntry> _merge(List<String> remote, List<DailyCacheDay> local) {
   final byDate = <String, _HistoryEntry>{};
   for (final raw in remote) {
@@ -436,7 +491,10 @@ List<_HistoryEntry> _merge(List<String> remote, List<DailyCacheDay> local) {
     );
   }
   // 升序扫一遍: 每个「歌单指纹」记住最近一次出现的日期, 撞指纹就标出更早那天。
+  // 曲目同理: 维护一个"更早已出现过"的 id 集合, 并记住整份撞指纹的那天。
   final lastSeenAt = <String, String>{};
+  final lastSeenSongsAt = <String, String>{};
+  final seenSongIds = <BigInt>{};
   final merged = <_HistoryEntry>[];
   final dates = byDate.keys.toList()..sort();
   for (final date in dates) {
@@ -447,7 +505,33 @@ List<_HistoryEntry> _merge(List<String> remote, List<DailyCacheDay> local) {
       same = lastSeenAt[fingerprint];
       lastSeenAt[fingerprint] = date;
     }
-    merged.add(same == null ? entry : entry.withSamePlaylistsAs(same));
+    String? sameSongs;
+    Set<BigInt> repeated = const <BigInt>{};
+    if (entry.songs.isNotEmpty) {
+      final ids = entry.songs.map((s) => s.id).toList(growable: false);
+      final fingerprint = ids.join(',');
+      sameSongs = lastSeenSongsAt[fingerprint];
+      lastSeenSongsAt[fingerprint] = date;
+      repeated = {
+        for (final id in ids)
+          if (seenSongIds.contains(id)) id,
+      };
+      seenSongIds.addAll(ids);
+    }
+    final withPlaylists = same == null
+        ? entry
+        : entry.withSamePlaylistsAs(same);
+    merged.add(
+      _HistoryEntry(
+        date: withPlaylists.date,
+        remote: withPlaylists.remote,
+        playlists: withPlaylists.playlists,
+        songs: withPlaylists.songs,
+        samePlaylistsAs: withPlaylists.samePlaylistsAs,
+        repeatedSongIds: repeated,
+        sameSongsAs: sameSongs,
+      ),
+    );
   }
   return merged.reversed.toList(growable: false);
 }
@@ -460,7 +544,9 @@ String _subtitleOf(_HistoryEntry entry) {
     if (entry.songs.isNotEmpty) '${entry.songs.length} 首',
     if (entry.playlists.isNotEmpty) '${entry.playlists.length} 个歌单',
   ];
-  return '缓存的每日推荐: ${parts.join(' · ')}';
+  final repeated = entry.repeatedSongIds.length;
+  final dedupe = repeated == 0 ? '' : ' · $repeated 首与更早重复';
+  return '缓存的每日推荐: ${parts.join(' · ')}$dedupe';
 }
 
 /// 「本地」标记: 这一天的内容来自本地缓存(设置里关掉缓存后不会出现).

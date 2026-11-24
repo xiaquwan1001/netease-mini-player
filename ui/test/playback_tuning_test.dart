@@ -77,7 +77,10 @@ void main() {
         'cacheLimitMb',
         'eqText',
         'gainSlewDbPerSec',
+        // 音频焦点策略(用户设置「被其他 App 抢占时」, 见 audio_focus_setting_test.dart)
+        'audioFocus',
       });
+      expect(args['audioFocus'], 'followSystem');
       expect(args['gainDb'], -6.0);
       expect(args['fadeMs'], 500);
       expect(args['hardwareDecode'], false);

@@ -143,7 +143,8 @@ class HomeTabBuilder {
         return RecommendView(
           key: ValueKey('recommend-${info?.loggedIn}-${info?.vip}'),
           loggedIn: info?.loggedIn == true,
-          // 每日推荐歌单走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
+          // 每日推荐歌单/歌曲都走本地缓存(同一天只拉一次; 设置里可关/改保留天数)
+          loadDailySongs: account.dailySongs,
           loadDailyPlaylists: account.dailyPlaylists,
           onOpenPlaylist: account.openPlaylist,
           onOpenPodcast: navigation.openPodcastRadio,

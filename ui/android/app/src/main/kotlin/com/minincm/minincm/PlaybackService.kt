@@ -6,6 +6,9 @@ import android.animation.ValueAnimator
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -87,6 +90,31 @@ class PlaybackService : MediaSessionService() {
     private var cacheLimitMb = 512
     private var eqText: String? = null
     private var eqProcessor: EqAudioProcessor? = null
+
+    // ---- 音频焦点策略(设置项「被其他媒体抢占时怎么办」, 决策见 [AudioFocusPolicy]) ----
+
+    /** 当前策略; 默认「跟随系统」= 2026-11-18 起的行为, 升级用户不会感到变化 */
+    @Volatile
+    private var audioFocusMode = AudioFocusMode.FOLLOW_SYSTEM
+
+    /** 「总是停止」档自己持有的焦点请求(API 26+); 其它档保持 null */
+    private var focusRequest: AudioFocusRequest? = null
+
+    /**
+     * 「总是停止」档的焦点回调: 任何失去都暂停, 且**不自动恢复**。
+     * 「跟随系统」交给 Media3(见 buildExoPlayer 的 handleAudioFocus),
+     * 「总是在后台播放」则完全不理会焦点。
+     */
+    private val serviceFocusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (AudioFocusPolicy.actionFor(audioFocusMode, change)) {
+            AudioFocusPolicy.Action.PAUSE -> {
+                Log.i(TAG, "焦点被抢占(change=$change) ⇒ 暂停且不自动恢复(总是停止播放)")
+                exoPlayer?.playWhenReady = false
+            }
+
+            AudioFocusPolicy.Action.NONE -> Unit
+        }
+    }
 
     private var fadeAnimator: ValueAnimator? = null
     private var gainSlewAnimator: ValueAnimator? = null
@@ -355,6 +383,15 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         instance = null
+        // 放弃「总是停止」档自己申请的焦点(否则别的 App 起播时会收到一次假的中断)
+        (getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.let { am ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            } else {
+                am.abandonAudioFocus(serviceFocusListener)
+            }
+        }
+        focusRequest = null
         fadeArmedAt = 0L
         fadeHandler.removeCallbacks(abandonArmedTick)
         fadeAnimator?.cancel()
@@ -406,6 +443,7 @@ class PlaybackService : MediaSessionService() {
         val newCacheLimitMb = (args["cacheLimitMb"] as? Number)?.toInt() ?: cacheLimitMb
         val rawEqText = args["eqText"] as? String
         val newEqText = if (rawEqText.isNullOrBlank()) null else rawEqText
+        val newFocusMode = AudioFocusMode.fromId(args["audioFocus"] as? String)
 
         val clampedGain = newGainDb.coerceIn(-40.0, 12.0)
         val clampedFade = newFadeMs.coerceIn(0, 5000)
@@ -444,14 +482,17 @@ class PlaybackService : MediaSessionService() {
         Log.d(
             "NCM-PLAYER",
             "configure gain=$clampedGain fade=$clampedFade slew=$clampedGainSlew hw=$newHardwareDecode " +
-                "cache=$newStreamCache limit=${clampedLimit}MB eqFilters=$eqFilterCount eqError=$eqError",
+                "cache=$newStreamCache limit=${clampedLimit}MB eqFilters=$eqFilterCount eqError=$eqError " +
+                "focus=${audioFocusMode.id}",
         )
 
-        // media3 1.9 没有运行期 setAudioProcessors, EQ 变化也要重建 player(见 rebuildPlayer 注释)
+        // media3 1.9 没有运行期 setAudioProcessors, EQ 变化也要重建 player(见 rebuildPlayer 注释);
+        // handleAudioFocus 同样是 **build 时** 的构造参数 ⇒ 焦点策略变化也要重建。
         val rebuildNeeded = newHardwareDecode != hardwareDecode ||
             newStreamCache != streamCache ||
             clampedLimit != cacheLimitMb ||
-            newEqText != eqText
+            newEqText != eqText ||
+            newFocusMode != audioFocusMode
 
         if (rebuildNeeded && (newStreamCache != streamCache || clampedLimit != cacheLimitMb)) {
             // 缓存上限变化要换 evictor; 开关变化要整体重建 —— 都先丢旧缓存库
@@ -467,6 +508,10 @@ class PlaybackService : MediaSessionService() {
         cacheLimitMb = clampedLimit
         eqText = newEqText
         eqProcessor = newEqProcessor
+        audioFocusMode = newFocusMode
+        setConfiguredAudioFocusMode(newFocusMode)
+        // 只有「总是停止」自己持有焦点请求; 其它档确保已经放弃(切档不留残余请求)
+        applyFocusMode()
 
         if (rebuildNeeded) rebuildPlayer()
 
@@ -483,7 +528,41 @@ class PlaybackService : MediaSessionService() {
             "eqApplied" to eqOk,
             "eqError" to eqError,
             "eqFilters" to eqFilterCount,
+            "audioFocus" to audioFocusMode.id,
         )
+    }
+
+    /**
+     * 按当前 [audioFocusMode] 申请/放弃焦点(幂等)。
+     *
+     * 只有「总是停止」需要自己拿焦点: 「跟随系统」由 Media3 在起播时申请,
+     * 「总是在后台播放」刻意不申请(申请了就等于宣告独占, 与设置项的语义相反)。
+     */
+    private fun applyFocusMode() {
+        val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        // 先无条件放弃旧请求: 切档/重复 configure 都不该留下两个监听。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { am.abandonAudioFocusRequest(it) }
+        } else {
+            am.abandonAudioFocus(serviceFocusListener)
+        }
+        focusRequest = null
+        if (!AudioFocusPolicy.manageFocusInService(audioFocusMode)) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setOnAudioFocusChangeListener(serviceFocusListener)
+                .setWillPauseWhenDucked(true)
+                .build()
+            focusRequest = request
+            val granted = am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            Log.i(TAG, "总是停止播放: 申请焦点 granted=$granted")
+        } else {
+            am.requestAudioFocus(
+                serviceFocusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN,
+            )
+        }
     }
 
     /** ncm/player#volume: 只更新用户音量档, 立即生效(取消正在进行的淡入, 但不打断增益斜坡) */
@@ -743,7 +822,10 @@ class PlaybackService : MediaSessionService() {
                     .setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .build(),
-                /* handleAudioFocus = */ true,
+                // 焦点策略(用户设置): 「跟随系统」交给 Media3; 「总是在后台播放」= false
+                // (不申请也理会不到, 别人抢焦点也照放); 「总是停止」= false + 服务自己
+                // 申请焦点(Media3 会在 GAIN 时自动续播, 与"总是停止"语义不符)。
+                /* handleAudioFocus = */ AudioFocusPolicy.useExoPlayerFocus(audioFocusMode),
             )
             .build()
     }
@@ -947,6 +1029,20 @@ class PlaybackService : MediaSessionService() {
 
         /** logcat 统一前缀(NCM-PLAYER): 通知按钮/调音的可观测面, 回归与真机排查都看它 */
         const val TAG = "NCM-PLAYER"
+
+        /**
+         * 当前配置的音频焦点策略。放 companion 供**其它音源**(MV 独立 Activity)对齐:
+         * MV 申请焦点/自动续播的口径都按这里读(见 [AudioFocusPolicy.mvRequestsFocus]),
+         * 免得歌曲设成「总是在后台播放」而 MV 还在抢焦点。
+         */
+        @Volatile
+        internal var configuredAudioFocusMode: AudioFocusMode = AudioFocusMode.FOLLOW_SYSTEM
+            private set
+
+        /** [configure] 的落点: 记住策略并同步给其它音源 */
+        internal fun setConfiguredAudioFocusMode(mode: AudioFocusMode) {
+            configuredAudioFocusMode = mode
+        }
 
         /**
          * 「没有同进程消费者」时的兜底出口: 用 Intent 把 MainActivity 拉起来并带上动作名。

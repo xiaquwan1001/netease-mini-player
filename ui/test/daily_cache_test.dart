@@ -503,4 +503,78 @@ void main() {
     expect(results.every((list) => list.single.name == '每日推荐'), isTrue);
     expect(cacheFiles(), ['2026-03-10.json']);
   });
+
+  // -------------------------------------------------------------------------
+  // 用户反馈⑥: 索引只增不减 —— 歌单与单曲并发写同一文件也不许互相抹掉
+  // -------------------------------------------------------------------------
+
+  test('歌单与单曲并发写同一天: 两节都在, 谁先写都不丢', () async {
+    // 冷启动现场: 首页「每日推荐」区块拉歌单, 日推页同时拉单曲 ⇒ 两个日期文件
+    // 的读-改-写交错。旧实现后写者用自己那份旧快照整份覆盖 ⇒ 另一节变成 null,
+    // 表现为「某天只缓存了歌单 / 只缓存了一两首歌」。现在写入阶段串行 + 锁内重读。
+    songFetched = [fakeSong(id: 7, name: '晴天'), fakeSong(id: 8, name: '七里香')];
+    await Future.wait([
+      cache.load(fetch: doFetch, keepDays: 7, now: now),
+      cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 7, now: now),
+      cache.load(fetch: doFetch, keepDays: 7, now: now),
+      cache.loadSongs(fetchSongs: doFetchSongs, keepDays: 7, now: now),
+    ]);
+
+    final decoded = jsonDecode(
+      await File('${cache.dir.path}/2026-03-10.json').readAsString(),
+    ) as Map<String, dynamic>;
+    expect(
+      (decoded['playlists'] as List).single['name'],
+      '每日推荐',
+      reason: '歌单那一节不能被并发的单曲写入抹掉',
+    );
+    expect((decoded['songs'] as List).map((s) => s['name']), [
+      '晴天',
+      '七里香',
+    ], reason: '单曲那一节不能被并发的歌单写入抹掉');
+  });
+
+  test('上游短响应不截断已落盘索引(只增不减)', () async {
+    // 场景: 两个调用方同时发起加载(首页区块 + 日推页), 一个拿到完整的 30 首,
+    // 另一个拿到上游截断的 2 首。锁 + 单调合并之后, 最终索引必须是两者的并集,
+    // 而不是"后写的那个" —— 用户当天不会重新打开日推页, 截断就再也回不来了。
+    final full = [for (var i = 1; i <= 30; i++) fakeSong(id: i, name: '歌$i')];
+    final short = [fakeSong(id: 1, name: '歌1'), fakeSong(id: 31, name: '新歌31')];
+
+    Future<List<rust.SongDto>> fetchFull() async => full;
+    // 让"短响应"晚一点落地, 顺序确定: 先写 30 首, 再合并 2 首。
+    Future<List<rust.SongDto>> fetchShort() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return short;
+    }
+
+    final results = await Future.wait([
+      cache.loadSongs(fetchSongs: fetchFull, keepDays: 7, now: now),
+      cache.loadSongs(fetchSongs: fetchShort, keepDays: 7, now: now),
+    ]);
+    expect(results.first, hasLength(30));
+    expect(results.last, hasLength(31), reason: '短响应只做增量补充, 已缓存的不丢');
+
+    final days = await cache.days();
+    expect(days.single.songs, hasLength(31));
+    expect(days.single.songs.map((s) => s.id).toSet(), hasLength(31));
+  });
+
+  test('上游短响应不截断已落盘歌单(只增不减)', () async {
+    fetched = [for (var i = 1; i <= 8; i++) _playlist(i, '歌单$i')];
+    Future<List<rust.Playlist>> fetchFull() async => fetched;
+
+    Future<List<rust.Playlist>> fetchShort() async {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      return [_playlist(1, '歌单1'), _playlist(9, '歌单9')];
+    }
+
+    final results = await Future.wait([
+      cache.load(fetch: fetchFull, keepDays: 7, now: now),
+      cache.load(fetch: fetchShort, keepDays: 7, now: now),
+    ]);
+    expect(results.first, hasLength(8));
+    expect(results.last, hasLength(9), reason: '新歌单追加, 已有的 8 个不丢');
+    expect((await cache.days()).single.playlists, hasLength(9));
+  });
 }

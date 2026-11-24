@@ -13,6 +13,7 @@ import '../desktop_shell.dart';
 import '../keystore.dart';
 import '../net_retry.dart';
 import '../playback.dart';
+import '../release_notes.dart';
 import '../rust/api_all.dart' as rust;
 import '../song_actions.dart';
 import '../toast.dart' show showToast;
@@ -109,6 +110,9 @@ class HomeStartup {
       unawaited(credentialSync.drainPending());
       // 首帧后 3s 后台静默检查更新(节流/开关在 update_checker 内, 失败静默)
       unawaited(runStartupUpdateCheck(AppSettings.instance));
+      // 更新后首次启动: 已装上的这个版本有什么新特性(每个版本只弹一次)。
+      // 必须在 AppSettings.load 之后(要看 announcedVersion / hadStoredSettings)。
+      unawaited(promptWhatsNew());
       // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
       unawaited(applyAudioTuning());
       unawaited(enforceCacheLimit());
@@ -204,6 +208,32 @@ class HomeStartup {
       if (!isMounted()) return;
       showToast(contextOf(), '集成失败: ${r.error ?? '未知错误'}', isError: true);
     }
+  }
+
+  /// 更新后首次启动的「本次更新」公告。
+  ///
+  /// 口径:
+  /// - 当前版本在 [kReleaseHighlights] 里没有条目 ⇒ 不弹(不是每个 patch 都值得说);
+  /// - 同一个版本只弹一次([AppSettings.announcedVersion] 记下);
+  /// - **全新安装不弹**([AppSettings.hadStoredSettings] = false): 用户没有"上次版本",
+  ///   弹一句"已更新到 X"只会让人困惑。
+  Future<void> promptWhatsNew() async {
+    final settings = AppSettings.instance;
+    if (!settings.hadStoredSettings) return;
+    final tag = normalizeVersionKey(kAppVersion);
+    if (settings.announcedVersion == tag) return;
+    final highlights = highlightsFor(tag);
+    if (highlights.isEmpty) return;
+    // 等首帧: 此时 MaterialApp/Localizations 已就绪, 且不会打断 init 阶段的布局。
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!isMounted()) return;
+      await settings.markAnnounced(tag);
+      await showWhatsNewDialog(
+        contextOf(),
+        version: kAppVersion,
+        highlights: highlights,
+      );
+    });
   }
 
   /// 启动自动检查发现新版本时的弹窗(每天/每周/每月由 AppSettings 决定)。

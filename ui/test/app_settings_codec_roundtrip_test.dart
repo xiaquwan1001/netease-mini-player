@@ -29,6 +29,7 @@ const expectedKeys = <String>{
   // (customQuickAction 已于 2026-11-20 删除: 推荐页顶栏第一格固定为「歌单广场」)
   // 播放/音质
   'audioLevel',
+  'audioFocus',
   'skipVipSongs',
   'volumeGainDb',
   'loudnessNormalize',
@@ -54,6 +55,7 @@ const expectedKeys = <String>{
   'updateCheckInterval',
   'lastUpdateCheckMs',
   'skippedUpdateVersion',
+  'announcedVersion',
   // 诊断
   'anonymousDebug',
   // 交互记录
@@ -69,6 +71,7 @@ void resetToDefaults() {
   s.accent = AccentPalette.neteaseRed;
   s.textScale = 1.0;
   s.audioLevel = 'exhigh';
+  s.audioFocus = AudioFocusPolicy.followSystem;
   s.coverRows = 1;
   s.gridColumns = 3;
   s.clearSearchOnTabSwitch = true;
@@ -95,6 +98,7 @@ void resetToDefaults() {
   s.updateCheckInterval = UpdateCheckInterval.daily;
   s.lastUpdateCheckMs = null;
   s.skippedUpdateVersion = null;
+  s.announcedVersion = null;
   s.queueSwipeHintDismissed = false;
   s.detailFace = 'lyrics';
 }
@@ -137,6 +141,7 @@ void main() {
     s.accent = AccentPalette.pink;
     s.textScale = 1.25;
     s.audioLevel = 'lossless';
+    s.audioFocus = AudioFocusPolicy.alwaysPlay;
     s.coverRows = 2;
     s.gridColumns = 4;
     s.clearSearchOnTabSwitch = false;
@@ -164,6 +169,7 @@ void main() {
     s.updateCheckInterval = UpdateCheckInterval.weekly;
     s.lastUpdateCheckMs = 1700000000000;
     s.skippedUpdateVersion = 'v9.9.9';
+    s.announcedVersion = '0.39.0';
     s.queueSwipeHintDismissed = true;
     s.detailFace = 'cover';
     await s.touchInteraction('album', BigInt.from(42), nowMs: 1700000000001);
@@ -180,6 +186,7 @@ void main() {
     expect(s.accent, AccentPalette.pink);
     expect(s.textScale, 1.25);
     expect(s.audioLevel, 'lossless');
+    expect(s.audioFocus, AudioFocusPolicy.alwaysPlay);
     expect(s.coverRows, 2);
     expect(s.gridColumns, 4);
     expect(s.clearSearchOnTabSwitch, isFalse);
@@ -206,6 +213,7 @@ void main() {
     expect(s.updateCheckInterval, UpdateCheckInterval.weekly);
     expect(s.lastUpdateCheckMs, 1700000000000);
     expect(s.skippedUpdateVersion, 'v9.9.9');
+    expect(s.announcedVersion, '0.39.0');
     expect(s.queueSwipeHintDismissed, isTrue);
     expect(s.detailFace, 'cover', reason: '详情页「歌词 ⇄ 封面」的记忆面');
     expect(s.lastInteractionMs('album', BigInt.from(42)), 1700000000001);

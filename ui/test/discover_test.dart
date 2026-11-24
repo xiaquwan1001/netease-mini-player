@@ -499,6 +499,63 @@ void main() {
     expect(find.textContaining('推荐歌单与 2024-06-20 相同'), findsOneWidget);
   });
 
+  testWidgets('历史日推: 跨天重复的曲目折叠成一行, 当天新增的正常列出(用户反馈⑥)', (tester) async {
+    await tester.pumpWidget(
+      host(() {
+        showDiscoverPage(
+          tester.element(find.text('open')),
+
+          onOpenPlaylist: (_) {},
+          loadSongs: () async => const [],
+          loadPlaylists: () async => const [],
+          loadHistoryDates: () async => const [],
+          loadHistorySongs: (date) async => const [],
+          // 两天几乎一样: 21 号是「晴天 + 七里香」, 22 号多了「稻香」。
+          // 本地缓存保留 7 天, 以前会把同一批 30 首逐天整份重列。
+          loadLocalDays: () async => [
+            DailyCacheDay(
+              date: '2024-06-22',
+              playlists: const [],
+              songs: [
+                fakeSong(id: 3, name: '缓存的晴天'),
+                fakeSong(id: 4, name: '缓存的七里香'),
+                fakeSong(id: 5, name: '缓存的稻香'),
+              ],
+            ),
+            DailyCacheDay(
+              date: '2024-06-21',
+              playlists: const [],
+              songs: [
+                fakeSong(id: 3, name: '缓存的晴天'),
+                fakeSong(id: 4, name: '缓存的七里香'),
+              ],
+            ),
+          ],
+        );
+      }),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('历史日推'));
+    await tester.pumpAndSettle();
+
+    // 日期列表直接标出重复数量(用户一眼能看出"这天没什么新东西")
+    expect(find.textContaining('2 首与更早重复'), findsOneWidget);
+    await tester.tap(find.text('2024-06-22'));
+    await tester.pumpAndSettle();
+
+    // 只有当天新增的那首正常列出, 重复的两首折叠(不是删掉)
+    expect(find.text('缓存的稻香'), findsOneWidget);
+    expect(find.text('缓存的晴天'), findsNothing);
+    expect(find.text('与更早的日推重复的 2 首'), findsOneWidget);
+
+    // 展开后重复曲目仍在, 点播队列是当天完整曲目、下标为当天真实顺序
+    await tester.tap(find.text('与更早的日推重复的 2 首'));
+    await tester.pumpAndSettle();
+    expect(find.text('缓存的晴天'), findsOneWidget);
+    expect(find.text('缓存的七里香'), findsOneWidget);
+  });
+
   testWidgets('历史日推: 在线接口失败但本地有缓存时仍列出(不整屏报错)', (tester) async {
     await tester.pumpWidget(
       host(() {

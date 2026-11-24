@@ -415,6 +415,7 @@ class Playback {
     required int cacheLimitMb,
     String? eqText,
     double gainSlewDbPerSec = 0.0,
+    String audioFocus = 'followSystem',
   }) async {
     if (!isAndroid) return null;
     return _channel.invokeMapMethod<String, Object?>('configure', {
@@ -425,6 +426,7 @@ class Playback {
       'cacheLimitMb': cacheLimitMb,
       'eqText': eqText,
       'gainSlewDbPerSec': gainSlewDbPerSec,
+      'audioFocus': audioFocus,
     });
   }
 

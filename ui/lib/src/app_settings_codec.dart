@@ -63,6 +63,8 @@ extension _AppSettingsJsonCodec on AppSettings {
     if (level is String && AppSettings.audioLevels.containsKey(level)) {
       audioLevel = level;
     }
+    // 被其他媒体抢占时的行为: 未知值回落默认(设置文件被手改坏不该变成"叠音")
+    audioFocus = AudioFocusPolicy.fromId(raw['audioFocus'] as String?);
     final skipVip = raw['skipVipSongs'];
     if (skipVip is bool) skipVipSongs = skipVip;
 
@@ -160,6 +162,10 @@ extension _AppSettingsJsonCodec on AppSettings {
     if (skipped is String && skipped.isNotEmpty) {
       skippedUpdateVersion = skipped;
     }
+    final announced = raw['announcedVersion'];
+    if (announced is String && announced.isNotEmpty) {
+      announcedVersion = announced;
+    }
   }
 
   /// 诊断/隐私开关(匿名诊断包)。
@@ -208,6 +214,7 @@ extension _AppSettingsJsonCodec on AppSettings {
     'oledDark': oledDark,
     // ---- 播放/音质 ----
     'audioLevel': audioLevel,
+    'audioFocus': audioFocus.id,
     'skipVipSongs': skipVipSongs,
     'volumeGainDb': volumeGainDb,
     'loudnessNormalize': loudnessNormalize,
@@ -233,6 +240,7 @@ extension _AppSettingsJsonCodec on AppSettings {
     'updateCheckInterval': updateCheckInterval.name,
     'lastUpdateCheckMs': lastUpdateCheckMs,
     'skippedUpdateVersion': skippedUpdateVersion,
+    'announcedVersion': announcedVersion,
     // ---- 诊断 ----
     'anonymousDebug': anonymousDebug,
     // ---- 交互记录 ----

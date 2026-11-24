@@ -52,7 +52,15 @@ class MvPlayerActivity : Activity() {
      * 暂停/恢复 VideoView, 并记住"这次停是不是焦点造成的"。
      */
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        when (MvAudioFocusPolicy.actionFor(change, pausedByFocus)) {
+        // 用户设置「总是在后台播放」时 MV 也不自动续播(与歌曲侧同一口径, 见 [AudioFocusPolicy])。
+        val action = MvAudioFocusPolicy.actionFor(change, pausedByFocus)
+        if (
+            action == MvAudioFocusPolicy.Action.RESUME &&
+            !AudioFocusPolicy.mvResumesOnGain(PlaybackService.configuredAudioFocusMode)
+        ) {
+            return@OnAudioFocusChangeListener
+        }
+        when (action) {
             MvAudioFocusPolicy.Action.PAUSE -> {
                 pausedByFocus = true
                 if (::video.isInitialized && video.isPlaying) video.pause()
@@ -145,6 +153,10 @@ class MvPlayerActivity : Activity() {
      * 而是直接暂停(视频有对白, 压着听不清)。
      */
     private fun requestAudioFocus(): Boolean {
+        // 「总是在后台播放」: MV 也不抢焦点(否则一进 MV 就把正在播的音乐/导航打断)
+        if (!AudioFocusPolicy.mvRequestsFocus(PlaybackService.configuredAudioFocusMode)) {
+            return false
+        }
         val am = getSystemService(AudioManager::class.java) ?: return false
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)

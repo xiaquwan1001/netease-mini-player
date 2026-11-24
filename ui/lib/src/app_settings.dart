@@ -134,6 +134,7 @@ class AppSettingsSnapshot {
     this.accent = AccentPalette.neteaseRed,
     this.textScale = 1.0,
     this.audioLevel = 'exhigh',
+    this.audioFocus = AudioFocusPolicy.followSystem,
     this.coverRows = 1,
     this.gridColumns = 3,
     this.clearSearchOnTabSwitch = true,
@@ -162,6 +163,7 @@ class AppSettingsSnapshot {
     this.updateCheckInterval = UpdateCheckInterval.daily,
     this.lastUpdateCheckMs,
     this.skippedUpdateVersion,
+    this.announcedVersion,
     this.interactions = const <String, int>{},
   });
 
@@ -169,6 +171,9 @@ class AppSettingsSnapshot {
   final AccentPalette accent;
   final double textScale;
   final String audioLevel;
+
+  /// 被其他媒体抢占时的播放行为(见 [AudioFocusPolicy])。
+  final AudioFocusPolicy audioFocus;
   final int coverRows;
   final int gridColumns;
   final bool clearSearchOnTabSwitch;
@@ -200,6 +205,11 @@ class AppSettingsSnapshot {
   final int? lastUpdateCheckMs;
   final String? skippedUpdateVersion;
 
+  /// 已经给用户看过「本次更新」特性公告的版本(归一化后的 `X.Y.Z`)。
+  /// 与 [skippedUpdateVersion] 分开: 那个是"更新前不想再被提醒", 这个是
+  /// "更新后已经知道自己装了什么", 两件事的生命周期不同。
+  final String? announcedVersion;
+
   /// 最近交互记录(epoch ms), 只读视图; 新记录产出**新 map**, 老快照看不到。
   final Map<String, int> interactions;
 
@@ -211,6 +221,7 @@ class AppSettingsSnapshot {
     AccentPalette? accent,
     double? textScale,
     String? audioLevel,
+    AudioFocusPolicy? audioFocus,
     int? coverRows,
     int? gridColumns,
     bool? clearSearchOnTabSwitch,
@@ -239,6 +250,7 @@ class AppSettingsSnapshot {
     UpdateCheckInterval? updateCheckInterval,
     Object? lastUpdateCheckMs = _notPassed,
     Object? skippedUpdateVersion = _notPassed,
+    Object? announcedVersion = _notPassed,
     Map<String, int>? interactions,
   }) {
     return AppSettingsSnapshot(
@@ -246,6 +258,7 @@ class AppSettingsSnapshot {
       accent: accent ?? this.accent,
       textScale: textScale ?? this.textScale,
       audioLevel: audioLevel ?? this.audioLevel,
+      audioFocus: audioFocus ?? this.audioFocus,
       coverRows: coverRows ?? this.coverRows,
       gridColumns: gridColumns ?? this.gridColumns,
       clearSearchOnTabSwitch:
@@ -286,6 +299,9 @@ class AppSettingsSnapshot {
       skippedUpdateVersion: identical(skippedUpdateVersion, _notPassed)
           ? this.skippedUpdateVersion
           : skippedUpdateVersion as String?,
+      announcedVersion: identical(announcedVersion, _notPassed)
+          ? this.announcedVersion
+          : announcedVersion as String?,
       interactions: interactions ?? this.interactions,
     );
   }
@@ -306,6 +322,7 @@ class AppSettingsSnapshot {
       changed.add(AppSettingsDomain.appearance);
     }
     if (audioLevel != other.audioLevel ||
+        audioFocus != other.audioFocus ||
         skipVipSongs != other.skipVipSongs ||
         volumeGainDb != other.volumeGainDb ||
         loudnessNormalize != other.loudnessNormalize ||
@@ -332,7 +349,8 @@ class AppSettingsSnapshot {
     }
     if (updateCheckInterval != other.updateCheckInterval ||
         lastUpdateCheckMs != other.lastUpdateCheckMs ||
-        skippedUpdateVersion != other.skippedUpdateVersion) {
+        skippedUpdateVersion != other.skippedUpdateVersion ||
+        announcedVersion != other.announcedVersion) {
       changed.add(AppSettingsDomain.update);
     }
     if (anonymousDebug != other.anonymousDebug) {
@@ -482,6 +500,11 @@ class AppSettings extends ChangeNotifier {
   String get audioLevel => _snapshot.audioLevel;
   set audioLevel(String value) =>
       _update(_snapshot.copyWith(audioLevel: value));
+
+  /// 被其他媒体抢占时的播放行为(默认 [AudioFocusPolicy.followSystem])
+  AudioFocusPolicy get audioFocus => _snapshot.audioFocus;
+  set audioFocus(AudioFocusPolicy value) =>
+      _update(_snapshot.copyWith(audioFocus: value));
 
   /// 推荐页歌单/播客卡片每屏展示几排(1 排 = 横向滑动, 2 排 = 网格)
   int get coverRows => _snapshot.coverRows;
@@ -677,6 +700,9 @@ class AppSettings extends ChangeNotifier {
   File? _file;
   bool _loaded = false;
 
+  /// 见 [AppSettings.hadStoredSettings]; load() 里按"settings.json 是否存在"置位。
+  bool _hadStoredSettings = false;
+
   bool get loaded => _loaded;
 
   /// 测试用: 忘掉落盘路径, 让之后的 [update] 直接返回、不再做真实文件 IO。
@@ -734,6 +760,7 @@ class AppSettings extends ChangeNotifier {
     _file = File('$dataDir/settings.json');
     try {
       if (await _file!.exists()) {
+        _hadStoredSettings = true;
         final raw = jsonDecode(await _file!.readAsString());
         if (raw is Map) {
           // 按域解析在 app_settings_codec.dart(part), 加设置项只改那一处 + _toJson。
@@ -767,6 +794,7 @@ class AppSettings extends ChangeNotifier {
     AccentPalette? accent,
     double? textScale,
     String? audioLevel,
+    AudioFocusPolicy? audioFocus,
     int? coverRows,
     int? gridColumns,
     bool? clearSearchOnTabSwitch,
@@ -802,6 +830,7 @@ class AppSettings extends ChangeNotifier {
         accent: accent,
         textScale: textScale,
         audioLevel: audioLevel,
+        audioFocus: audioFocus,
         coverRows: coverRows,
         gridColumns: gridColumns,
         clearSearchOnTabSwitch: clearSearchOnTabSwitch,
@@ -841,6 +870,7 @@ class AppSettings extends ChangeNotifier {
     AccentPalette? accent,
     double? textScale,
     String? audioLevel,
+    AudioFocusPolicy? audioFocus,
     int? coverRows,
     int? gridColumns,
     bool? clearSearchOnTabSwitch,
@@ -881,6 +911,7 @@ class AppSettings extends ChangeNotifier {
     if (audioLevel != null && audioLevels.containsKey(audioLevel)) {
       this.audioLevel = audioLevel;
     }
+    if (audioFocus != null) this.audioFocus = audioFocus;
     if (coverRows != null && (coverRows == 1 || coverRows == 2)) {
       this.coverRows = coverRows;
     }
@@ -1012,6 +1043,17 @@ class AppSettings extends ChangeNotifier {
   set skippedUpdateVersion(String? value) =>
       _update(_snapshot.copyWith(skippedUpdateVersion: value));
 
+  /// 已展示过「本次更新」特性公告的版本(归一化 `X.Y.Z`; null = 还没展示过)
+  String? get announcedVersion => _snapshot.announcedVersion;
+  set announcedVersion(String? value) =>
+      _update(_snapshot.copyWith(announcedVersion: value));
+
+  /// 本次启动前是否**已经有** settings.json(即老用户升级, 而不是全新安装)。
+  ///
+  /// 只给「更新后特性公告」判首启用: 全新安装的用户没有"上次版本", 上来就弹
+  /// 一个"已更新到 X"的窗只会让人困惑(桌面 AppImage 首启还要问应用菜单集成)。
+  bool get hadStoredSettings => _hadStoredSettings;
+
   // ---------------- 最近交互记录(2026-11「我的」页按最近交互排序) ----------------
 
   /// 各类条目("打开/播放")最近一次交互的时间戳(epoch ms).
@@ -1065,6 +1107,14 @@ class AppSettings extends ChangeNotifier {
     _persist();
   }
 
+  /// 记下"这个版本的特性公告已经看过了"(同一次更新不再弹)。
+  ///
+  /// 返回 Future 让调用方能等落盘完成(测试与"弹窗关掉就退出 App"的时序都需要)。
+  Future<void> markAnnounced(String version) async {
+    _quiet(() => announcedVersion = version);
+    await _persist();
+  }
+
   Future<void> _persist() => _save();
 
   static double _doubleOf(Object? value, double fallback) =>
@@ -1101,6 +1151,37 @@ enum LibrarySearchPlayAction {
 
   final String label;
   final String hint;
+}
+
+/// 被其他媒体抢占(来电/别的播放器/导航播报)时本应用怎么办。
+///
+/// [id] 是落盘值与 Kotlin 侧 `AudioFocusMode.fromId` 的唯一契约, 改名要两边一起改。
+enum AudioFocusPolicy {
+  /// 默认: 跟随系统焦点仲裁 —— 被抢占时暂停, 短暂失去回来后自动续播(改造前就是它)
+  followSystem('followSystem', '跟随系统', '被其他 App 抢占时暂停, 焦点回来后自动续播(默认)'),
+
+  /// 不申请也不理会焦点: 别的 App 起播时本应用继续出声(可能叠音, 由用户自己选择)
+  alwaysPlay('alwaysPlay', '总是在后台播放', '不参与系统焦点仲裁, 其他 App 播放时本应用继续出声'),
+
+  /// 任何失去焦点都暂停, 且焦点回来也不自动恢复
+  alwaysStop('alwaysStop', '总是停止播放', '被抢占就暂停, 焦点回来也不自动续播(需手动再播)');
+
+  const AudioFocusPolicy(this.id, this.label, this.hint);
+
+  /// 落盘/通道用的稳定 id(与 Kotlin `AudioFocusMode.id` 对齐)
+  final String id;
+
+  /// 设置页展示名
+  final String label;
+
+  /// 设置页说明(一句话讲清代价)
+  final String hint;
+
+  static AudioFocusPolicy fromId(String? raw) =>
+      AudioFocusPolicy.values.firstWhere(
+        (p) => p.id == raw,
+        orElse: () => AudioFocusPolicy.followSystem,
+      );
 }
 
 /// 让 MaterialApp 跟随 AppSettings 重建(主题/字号即时生效)。

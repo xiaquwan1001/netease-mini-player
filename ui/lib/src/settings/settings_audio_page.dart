@@ -88,6 +88,23 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
                     onChanged: (v) => settings.update(skipVipSongs: v),
                   ),
                   const Divider(height: 1),
+                  // 被其他媒体抢占时的行为(2026-11 用户需求): 以前只有系统默认
+                  // (被抢即暂停、短暂失去后自动续播), 没有任何设置项能改。
+                  ListTile(
+                    leading: const Icon(Icons.headphones_outlined),
+                    title: const Text('被其他 App 抢占时'),
+                    subtitle: Text(
+                      '${settings.audioFocus.label} · ${settings.audioFocus.hint}'
+                      // 桌面(Linux/Windows)由系统混音、没有"焦点被抢占"这回事,
+                      // 设置项仍然落盘(换到手机/平板时同一份配置直接带走), 只是不生效。
+                      '${defaultTargetPlatform == TargetPlatform.android ? '' : ' · 桌面端由系统混音, 此项只在 Android 生效'}',
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => showAudioFocusSheet(context),
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     title: const Text('歌单内搜索后点歌'),
                     subtitle: Text(
@@ -628,4 +645,45 @@ Future<void> showLibrarySearchPlaySheet(BuildContext context) async {
   );
   if (picked == null) return;
   settings.update(librarySearchPlayAction: picked);
+}
+
+/// 「被其他 App 抢占时」策略选择(2026-11 用户需求)。
+///
+/// 三档的语义与代价都写在 [AudioFocusPolicy] 的 doc 上; 这里只做选择 + 落盘,
+/// 平台侧(Android Media3 / MV 独立 Activity)在下次 `configure` 时生效 ——
+/// 改完立刻生效是因为 `AudioTuningRequest` 带上了这一项, 设置域的变更会重调
+/// `applyAudioTuning()`(见 `home/startup.dart` 的 onAudioSettingsChanged)。
+Future<void> showAudioFocusSheet(BuildContext context) async {
+  final settings = AppSettings.instance;
+  final current = settings.audioFocus;
+  final picked = await showAppSheet<AudioFocusPolicy>(
+    context,
+    isScrollControlled: false,
+    showDragHandle: true,
+    builder: (ctx) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              '被其他 App 抢占时',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          for (final value in AudioFocusPolicy.values)
+            ListTile(
+              title: Text(value.label),
+              subtitle: Text(value.hint),
+              trailing: value == current ? const Icon(Icons.check) : null,
+              onTap: () => Navigator.of(ctx).pop(value),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    ),
+  );
+  if (picked == null || picked == current) return;
+  settings.update(audioFocus: picked);
 }

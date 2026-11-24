@@ -401,6 +401,24 @@ class AccountActions extends ChangeNotifier {
     );
   }
 
+  /// 每日推荐**歌曲**(带本地缓存): 与 [dailyPlaylists] 同一个日期文件的另一节。
+  ///
+  /// 为什么首页也要走这里(2026-11 用户反馈⑥): 以前只有「每日推荐」页的加载器
+  /// 写单曲缓存, 用户不进那个页面的那天就**一首也没缓存**。首页推荐区块本来就
+  /// 拉了同一份清单, 走缓存后只要 App 打开过就一定有当天索引, 与"当天听没听过"
+  /// 彻底解耦。
+  Future<List<rust.SongDto>> dailySongs() async {
+    final dir = infoOf()?.dataDir;
+    if (dir == null || dir.isEmpty) return rust.dailyRecommendSongs();
+    return DailyPlaylistCache(
+      dataDir: dir,
+      accountKey: await DailyPlaylistCache.resolveAccountKey(),
+    ).loadSongs(
+      fetchSongs: rust.dailyRecommendSongs,
+      keepDays: AppSettings.instance.dailyCacheDays,
+    );
+  }
+
   /// 历史日推里要合并的本地缓存天(设置 → 每日推荐歌单缓存; 0 天 = 关闭时返回空)。
   Future<List<DailyCacheDay>> dailyLocalDays() async {
     final dir = infoOf()?.dataDir;
