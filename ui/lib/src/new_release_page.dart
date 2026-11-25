@@ -4,7 +4,7 @@ import 'adaptive_text.dart';
 import 'app_settings.dart';
 import 'cover_art.dart';
 import 'layout.dart';
-import 'format.dart' show formatDurationShort;
+import 'format.dart' show formatDurationShort, formatFanCount;
 import 'net_retry.dart';
 import 'paged_list_view.dart';
 import 'playback_bridge.dart';
@@ -296,20 +296,15 @@ class _HotArtistsTab extends StatelessWidget {
           icon: Icons.person_outline,
         ),
         title: AdaptiveText(a.name),
-        subtitle: Text(formatFans(a.fans)),
+        // 粉丝数口径与艺人页/他人主页同一套(format.dart 的 formatFanCount: 万/亿一位小数);
+        // 0 粉丝时不渲染副标题(空串会留一条空白行)。
+        subtitle: a.fans > BigInt.zero
+            ? Text('粉丝 ${formatFanCount(a.fans)}')
+            : null,
         onTap: () => onOpen(a),
       ),
     );
   }
-}
-
-/// 粉丝数: 16908300 → "1690.8万"
-String formatFans(BigInt fans) {
-  if (fans <= BigInt.zero) return '';
-  if (fans < BigInt.from(10000)) return '$fans 粉丝';
-  final wan = fans.toDouble() / 10000;
-  final text = wan >= 100 ? wan.toStringAsFixed(0) : wan.toStringAsFixed(1);
-  return '$text 万粉丝';
 }
 
 /// "精选新碟"页签: album_newest 固定 12 张编辑精选新碟, 封面网格(无地区筛选).

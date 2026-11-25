@@ -297,6 +297,8 @@ class _MineViewState extends State<MineView> {
             if (widget.onOpenMessages != null) ...[
               const SizedBox(height: kCardGap),
               MessageEntryCard(
+                // 下拉刷新换 key 重挂载 ⇒ 未读数跟着重取(与同页其它区块同一机制)
+                key: ValueKey('mine-msg-$_dataGeneration'),
                 onOpen: widget.onOpenMessages!,
                 load: widget.loadMessageCounts,
               ),
@@ -984,6 +986,11 @@ class _RecentSection extends StatelessWidget {
 
 /// "我的"页的消息入口: 未读数合计 + 分项摘要。
 /// 载入失败(未登录/网络)时退化成只有标题, 不报错。
+///
+/// 未读数会随"消息中心里读完了"变化, 而 [onOpen] 是外部传入的 `VoidCallback`
+/// (tab_builder 里就是一次 `Navigator.push`), 拿不到路由的 Future。所以返回后重取
+/// 改成看本页所在路由的 [ModalRoute.secondaryAnimation]: 被上层页面盖住(push)后
+/// 回到 dismissed(pop 回来)就重取一次 —— 否则读完消息回来还是旧数字, 要杀进程。
 class MessageEntryCard extends StatefulWidget {
   const MessageEntryCard({super.key, required this.onOpen, this.load});
 
@@ -998,6 +1005,14 @@ class _MessageEntryCardState extends State<MessageEntryCard>
     with AutomaticKeepAliveClientMixin<MessageEntryCard> {
   rust.MessageCountsDto? _counts;
 
+  /// 点开消息中心后置 true: 回到本页时重取一次。
+  bool _refreshOnReturn = false;
+
+  /// 本页路由是否被上层页面盖住(push 进来过)。
+  bool _covered = false;
+
+  ModalRoute<dynamic>? _route;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -1005,6 +1020,42 @@ class _MessageEntryCardState extends State<MessageEntryCard>
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      _route?.secondaryAnimation?.removeStatusListener(_onCoverStatus);
+      _route = route;
+      route?.secondaryAnimation?.addStatusListener(_onCoverStatus);
+    }
+  }
+
+  @override
+  void dispose() {
+    _route?.secondaryAnimation?.removeStatusListener(_onCoverStatus);
+    super.dispose();
+  }
+
+  void _onCoverStatus(AnimationStatus status) {
+    if (status == AnimationStatus.forward ||
+        status == AnimationStatus.completed) {
+      _covered = true;
+      return;
+    }
+    if (status != AnimationStatus.dismissed) return;
+    final wasCovered = _covered;
+    _covered = false;
+    if (!wasCovered || !_refreshOnReturn) return;
+    _refreshOnReturn = false;
+    unawaited(_load());
+  }
+
+  void _open() {
+    _refreshOnReturn = true;
+    widget.onOpen();
   }
 
   Future<void> _load() async {
@@ -1049,7 +1100,7 @@ class _MessageEntryCardState extends State<MessageEntryCard>
           style: theme.textTheme.bodySmall,
         ),
         trailing: const Icon(Icons.chevron_right),
-        onTap: widget.onOpen,
+        onTap: _open,
       ),
     );
   }

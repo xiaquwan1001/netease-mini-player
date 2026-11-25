@@ -32,13 +32,15 @@ class CommentStatsView {
       Object.hash(commentCount, shareCount, likedCount, hotCount);
 }
 
-/// 紧凑数字: <1000 原样; 1000..9999 -> "x.x千"; >=10000 -> "x.x万";
+/// 紧凑数字: <1000 原样; 1000..9999 -> "x.x千"; >=10000 -> "x.x万"; >=1亿 -> "x.x亿";
 /// 一位小数, 多余的 ".0" 去掉; 负数按 0 处理.
 String formatCompactCount(int n) {
   if (n <= 0) return '0';
   if (n < 1000) return n.toString();
   if (n < 10000) return formatOneDecimal(n / 1000, '千');
-  return formatOneDecimal(n / 10000, '万');
+  if (n < 100000000) return formatOneDecimal(n / 10000, '万');
+  // 亿档: 之前只到万, 1.2 亿的评论/分享会显示成「12000万」.
+  return formatOneDecimal(n / 100000000, '亿');
 }
 
 /// 热评角标文案"(热评 N)".

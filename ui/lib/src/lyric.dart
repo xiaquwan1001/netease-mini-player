@@ -28,6 +28,14 @@ int lyricIndexAt(List<BigInt> timesMs, BigInt positionMs) {
 }
 
 // ---------------- LRC 解析(B0: 纯文本歌词备用展示) ----------------
+//
+// **与 `core/crates/ncm-domain/src/lrc.rs`(权威实现)同口径, 改动需同步两侧。**
+// 正常路径走 Rust(`rust.lyricLinesI18N`, 见 `home/lyric_controller.dart`); 这里只兜底
+// 逐行接口失败/为空时从原始 LRC 里抢回内容, 但同一首歌在两条路径上必须得到同一个时间轴,
+// 否则兜底一回歌词就会整体错位。已对齐的三条: `[offset:±ms]` 整体位移、
+// 按 `(时间, 文本)` 去重、小数只取前 3 位(`.1234` = 123ms, 不是 1234ms)。
+// 已知的**刻意**差异只有一条: 无时间标签的行这里保留为纯文本(Rust 直接丢掉),
+// 因为兜底路径要能展示“只有纯文本的老歌词”。
 
 /// 一行解析结果: 文本 + 可选翻译([sub], 来自 tlyric, 缺失时为 null)。
 class ParsedLyricLine {
@@ -52,41 +60,63 @@ class LyricDoc {
   bool get isEmpty => !hasTimeline && plain.isEmpty;
 }
 
-final RegExp _timeTag = RegExp(r'^(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?$');
+final RegExp _timeTag = RegExp(r'^(\d{1,3}):(\d{1,2})(?:[.:](\d+))?$');
+
+/// `[offset:±ms]` 标签的前缀(元信息行, 不进歌词行)
+const String _offsetTag = 'offset:';
 
 /// 把 `[mm:ss]` / `[mm:ss.xx]` / `[mm:ss.xxx]` 解析成毫秒; 不是合法时间标签返回 null。
-/// 小数位不足 3 位按右补零处理(.5 → 500ms, .50 → 500ms)。
+///
+/// 与 Rust `parse_time_tag` 同口径:
+/// - 秒 >= 60 视为非法标签(`[00:99.00]` 不猜成“1 分 39 秒”);
+/// - 小数只取**前 3 位**(`.1234` → 123ms); 不足 3 位按位权放大(`.5` → 500ms)。
 BigInt? _parseTimeTag(String tag) {
   final m = _timeTag.firstMatch(tag);
   if (m == null) return null;
   final minutes = int.parse(m.group(1)!);
   final seconds = int.parse(m.group(2)!);
+  if (seconds >= 60) return null;
   final fracRaw = m.group(3);
   var fracMs = 0;
-  if (fracRaw != null) {
-    final padded = fracRaw.padRight(3, '0');
-    fracMs = int.parse(padded);
+  if (fracRaw != null && fracRaw.isNotEmpty) {
+    final digits = fracRaw.length > 3 ? fracRaw.substring(0, 3) : fracRaw;
+    final v = int.parse(digits);
+    fracMs = switch (digits.length) {
+      1 => v * 100,
+      2 => v * 10,
+      _ => v,
+    };
   }
   return BigInt.from(minutes * 60000 + seconds * 1000 + fracMs);
 }
 
+/// 应用 `[offset:±ms]`(正数 = 歌词提前), 与 Rust 一样不允许负时间。
+BigInt _applyOffset(BigInt timeMs, int offsetMs) {
+  if (offsetMs == 0) return timeMs;
+  final shifted = timeMs - BigInt.from(offsetMs);
+  return shifted.isNegative ? BigInt.zero : shifted;
+}
+
 /// 解析 LRC 文本。设计目标是不崩、不空白:
 /// - 行首方括号标签逐个剥离; 合法时间标签收集为时间轴, 一行多标签展开成多行;
+/// - `[offset:±ms]` 整体位移时间轴(正数 = 歌词提前), 位移在去重**之前**生效;
+/// - 同一个 `(时间, 文本)` 只保留一条(网易云会返回重复行);
 /// - 剥完后没有时间标签的行进 [LyricDoc.plain](元数据行如 `[ti:...]`、空行、
 ///   剥完只剩空串的行直接丢弃);
 /// - 格式异常的标签(`[00:xx]`、`[abc]`、截断的 `[01:0` 等)不会抛异常:
 ///   剩下的文字按纯文本保留, 什么都剩不下就丢掉该行;
-/// - [translations] 是 tlyric 按毫秒对齐的翻译表; 缺失或没有对应行时
+/// - [translations] 是 tlyric 按毫秒对齐的翻译表(键是**位移后**的毫秒); 缺失或没有对应行时
 ///   [ParsedLyricLine.sub] 为 null, 展示层必须容忍翻译缺失。
 LyricDoc parseLrc(String raw, {Map<BigInt, String>? translations}) {
-  final timed = <ParsedLyricLine>[];
+  final stamped = <({BigInt timeMs, String text})>[];
   final plain = <String>[];
+  var offsetMs = 0;
   for (var line in raw.split('\n')) {
     line = line.trim();
     if (line.isEmpty) continue;
     final times = <BigInt>[];
     var rest = line;
-    // 剥掉行首所有方括号标签(时间标签进 times, 其余丢弃)
+    // 剥掉行首所有方括号标签(时间标签进 times, offset 记账, 其余丢弃)
     while (rest.startsWith('[')) {
       final close = rest.indexOf(']');
       if (close < 0) break; // 截断的标签, 当普通文本处理
@@ -94,22 +124,49 @@ LyricDoc parseLrc(String raw, {Map<BigInt, String>? translations}) {
       final ms = _parseTimeTag(tag);
       if (ms != null) {
         times.add(ms);
+      } else if (tag.startsWith(_offsetTag)) {
+        final v = int.tryParse(tag.substring(_offsetTag.length).trim());
+        if (v != null) offsetMs = v;
       }
       // 无论标签合不合法都从行首剥掉, 文字部分另行处理
       rest = rest.substring(close + 1).trim();
     }
     if (rest.isEmpty) continue; // 纯标签行(元数据/间奏)或剥完什么都不剩
-    if (times.isNotEmpty) {
-      for (final t in times) {
-        timed.add(
-          ParsedLyricLine(timeMs: t, text: rest, sub: translations?[t]),
-        );
-      }
-    } else {
+    if (times.isEmpty) {
       plain.add(rest);
+      continue;
+    }
+    for (final t in times) {
+      stamped.add((timeMs: t, text: rest));
     }
   }
-  timed.sort((a, b) => a.timeMs.compareTo(b.timeMs));
+
+  // 排序按“时间升序 + 原始顺序”做**稳定**排序, 与 Rust `sort_by_key` 同级:
+  // 同时刻的不同行保持出现顺序, 兜底与权威路径不会排出两种字序。
+  final ordered = [
+    for (final (i, s) in stamped.indexed)
+      (index: i, timeMs: _applyOffset(s.timeMs, offsetMs), text: s.text),
+  ];
+  ordered.sort((a, b) {
+    final byTime = a.timeMs.compareTo(b.timeMs);
+    return byTime != 0 ? byTime : a.index.compareTo(b.index);
+  });
+
+  // 去重只去掉**相邻**的完全重复行(排序后即同时间同文本), 与 Rust `dedup_by` 一致
+  final timed = <ParsedLyricLine>[];
+  for (final line in ordered) {
+    if (timed.isNotEmpty) {
+      final prev = timed.last;
+      if (prev.timeMs == line.timeMs && prev.text == line.text) continue;
+    }
+    timed.add(
+      ParsedLyricLine(
+        timeMs: line.timeMs,
+        text: line.text,
+        sub: translations?[line.timeMs],
+      ),
+    );
+  }
   return LyricDoc(timed: timed, plain: plain);
 }
 

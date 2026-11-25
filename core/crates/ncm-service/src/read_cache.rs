@@ -279,19 +279,42 @@ impl ReadCache {
         // 同 key 单飞: 拿到这把锁的才是 leader, 其余在这里排队;
         // leader 写回缓存后它们醒来直接命中(所以锁内要再查一次)。
         let lock = self.inflight_lock(key);
+        // 登记条目的摘除靠 Drop: leader 在 `load().await` 处被取消(Dart 侧 future 丢弃 /
+        // 组件 dispose)时也会走到这里 —— 以前是语句式的 `release_inflight`, 取消路径直接跳过,
+        // `inflight` 里留下永久条目且该 key 的单飞语义失效。
+        let _inflight = InflightGuard {
+            cache: self,
+            key,
+            lock: lock.clone(),
+        };
         let guard = lock.lock().await;
         if let Some(hit) = self.get(key) {
-            drop(guard);
-            self.release_inflight(key, &lock);
             return Ok(hit);
         }
         let result = load().await;
         if let Ok(value) = &result {
             self.store(key, value.clone());
         }
+        // 先放锁(_inflight 随函数结束才 drop), 后来者不会拿到一把已无人等的锁去排队
         drop(guard);
-        self.release_inflight(key, &lock);
         result
+    }
+}
+
+/// 在飞登记条目的 RAII 守卫: 无论 leader 正常结束、报错还是被取消, 都摘掉 `inflight` 条目。
+///
+/// 对应 `ncm-plugin` 的 `CoalesceLeader`: 那个还多了"把等待者唤醒成可重试", 而本缓存
+/// 的等待者只是排队拿同一把锁, leader 消失后它们会依次拿到锁并在锁内重查缓存(未命中就自己
+/// 变 leader), 所以这里只需要收尾条目。
+struct InflightGuard<'a> {
+    cache: &'a ReadCache,
+    key: &'a str,
+    lock: Arc<tokio::sync::Mutex<()>>,
+}
+
+impl Drop for InflightGuard<'_> {
+    fn drop(&mut self) {
+        self.cache.release_inflight(self.key, &self.lock);
     }
 }
 
@@ -547,5 +570,34 @@ mod tests {
         cache.store("b", serde_json::json!(2));
         cache.clear();
         assert!(cache.is_empty());
+    }
+
+    /// R6 判据: leader 的 future 被取消(超时/drop)时, `inflight` 里的登记必须一起消失。
+    /// 修复前是语句式清理(`release_inflight` 在 `load().await` 之后), 取消路径直接跳过。
+    #[tokio::test]
+    async fn cancelled_leader_releases_inflight_entry() {
+        let cache = ReadCache::default();
+        let key = cache_key(endpoint::CLOUDSEARCH, &[("keywords", "郑成河".into())]);
+        let fut = cache.get_or_load(endpoint::CLOUDSEARCH, &key, || async {
+            // 永不返回: 只能靠外部取消结束
+            std::future::pending::<()>().await;
+            Ok(serde_json::json!({}))
+        });
+        let timed_out = tokio::time::timeout(Duration::from_millis(50), fut).await;
+        assert!(timed_out.is_err(), "load 不该在 50ms 内返回");
+        assert!(
+            cache.lock().inflight.is_empty(),
+            "leader 被取消后 in-flight 登记必须摘掉(否则这个 key 的单飞永久失效)"
+        );
+
+        // 取消之后同 key 仍能正常走完(没被写坏的条目卡住)
+        let ok = cache
+            .get_or_load(endpoint::CLOUDSEARCH, &key, || async {
+                Ok(serde_json::json!({ "n": 1 }))
+            })
+            .await
+            .expect("取消后该 key 仍应可用");
+        assert_eq!(ok["n"], 1);
+        assert!(cache.lock().inflight.is_empty(), "正常结束后同样不留条目");
     }
 }

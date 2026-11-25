@@ -11,6 +11,13 @@ rust.AlbumItem album(int id, String name) => rust.AlbumItem(
   trackCount: BigInt.from(10),
 );
 
+rust.HotArtist hotArtist(int id, String name, int fans) => rust.HotArtist(
+  id: BigInt.from(id),
+  name: name,
+  avatarUrl: null,
+  fans: BigInt.from(fans),
+);
+
 Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
@@ -86,6 +93,37 @@ void main() {
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
     expect(find.text('暂时没有精选新碟'), findsOneWidget);
+  });
+
+  // 粉丝数口径必须与艺人页/他人主页同一套(format.dart 的 formatFanCount):
+  // 之前这里自写一份 formatFans(只到万、≥100 取整、0 返回空串), 榜上「1691 万粉丝」
+  // 与艺人页「粉丝 1690.8万」对不上, ≥1 亿更会显示成「10000 万粉丝」。
+  testWidgets('艺人榜: 粉丝数走 formatFanCount(含亿档), 0 粉丝不给空副标题', (tester) async {
+    await tester.pumpWidget(
+      host(
+        NewReleasePage(
+          onOpenAlbum: (_) {},
+          onOpenArtist: (_) {},
+          loadArtists: () async => [
+            hotArtist(1, '周杰伦', 16908300),
+            hotArtist(2, '某乐队', 120000000),
+            hotArtist(3, '新人', 0),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('艺人'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('粉丝 1690.8万'), findsOneWidget);
+    expect(find.text('粉丝 1.2亿'), findsOneWidget);
+    expect(find.text('1691 万粉丝'), findsNothing);
+    expect(
+      find.textContaining('粉丝'),
+      findsNWidgets(2),
+      reason: '0 粉丝传 null, 不渲染空串',
+    );
   });
 
   testWidgets('300dp + 1.25 字号不溢出', (tester) async {

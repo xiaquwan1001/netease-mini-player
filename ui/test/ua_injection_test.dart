@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/rust/frb_generated.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// P-21: 播放 UA 的单一来源是 Rust(ncm-service 的 `platform_profile().ua`, 与取链同一常量),
 /// Dart 负责把它经 `ncm/player#setUserAgent` 推给 Kotlin。
@@ -48,7 +49,7 @@ void main() {
 
   setUp(() {
     calls.clear();
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
     Playback.debugResetUserAgentCache();
     Playback.debugResetActionStateCache();
     api.ua = _ua;
@@ -60,7 +61,7 @@ void main() {
   });
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     Playback.debugResetUserAgentCache();
     Playback.debugResetActionStateCache();
     messenger.setMockMethodCallHandler(channel, null);

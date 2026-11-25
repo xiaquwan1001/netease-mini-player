@@ -172,6 +172,29 @@ mod tests {
         assert_eq!(parse_lrc("[00:01:50]x")[0].time_ms, 1_500);
     }
 
+    /// `[offset:]` / 去重 / 超长小数这三条是 Dart 兜底解析器
+    /// (`ui/lib/src/lyric.dart` 的 `parseLrc`)最容易与这里跑偏的地方, 一条用例钉住它们 ——
+    /// 两侧是同口径的两个实现, 改一边就必须同步改另一边。
+    #[test]
+    fn offset_dedup_and_extra_fraction_digits() {
+        // 4 位小数只取前 3 位: `.1234` = 123ms(按"右补零到 3 位"会错算成 1234ms)
+        assert_eq!(parse_lrc("[00:01.1234]x")[0].time_ms, 1_123);
+        // 同时间同文本只留一条(网易云确实会返回重复行), 同时刻不同文本都保留
+        let dup = parse_lrc("[00:01.00]同\n[00:01.00]同\n[00:01.00]异");
+        assert_eq!(
+            dup.iter()
+                .map(|l| (l.time_ms, l.text.as_str()))
+                .collect::<Vec<_>>(),
+            vec![(1_000, "同"), (1_000, "异")]
+        );
+        // 负 offset = 歌词延后(正数 = 提前); 位移在**去重之前**生效, 且不出负时间
+        let shifted = parse_lrc("[offset:-500]\n[00:01.00]同\n[00:01.00]同\n[00:00.20]起句");
+        assert_eq!(
+            shifted.iter().map(|l| l.time_ms).collect::<Vec<_>>(),
+            vec![700, 1_500]
+        );
+    }
+
     #[test]
     fn drops_unparsable_lines() {
         let src = "[00:01.00]保留\n没有时间戳\n[99:99.99]非法\n[abc]混进来";

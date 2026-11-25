@@ -9,11 +9,17 @@
 //!    判失败, 并映射成 `ProviderError{kind,retryable,detail}` 走既有错误通道。
 //! 3. **失败重取一次**: 只有 `retryable` 的失败才重试, 且总共只多试一次(不无限重试)。
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use ncm_provider::ProviderError;
+
+/// 小于这个字节数的文件不可能是音频(直链被劫持成 HTML/空 body 时"下载成功"也只有几百字节).
+///
+/// 两处口径都靠它: ① 命中缓存(`cached_with_level`)与容量统计的门槛; ② 下载完判"够不够大".
+const MIN_VALID_AUDIO_BYTES: u64 = 64 * 1024;
 
 /// 桌面下载的 Referer: 与 Android 侧 `DefaultHttpDataSource` 的默认请求头保持一致.
 pub const DOWNLOAD_REFERER: &str = "https://music.163.com/";
@@ -168,20 +174,35 @@ pub fn classify_http(
     Ok(())
 }
 
+/// 下载被取消的收口(见 [`AudioCache::download_progressive_cancellable`]):
+/// 不可重试, `kind` 用 internal —— 这不是网络故障, 用户刚切了歌而已.
+fn cancelled_error() -> (ProviderError, bool) {
+    (
+        ProviderError::internal("下载已取消: 已经切到别的歌曲"),
+        false,
+    )
+}
+
 /// 下载客户端(单例): UA 与取链共用一套身份口径, 不自己编字符串。
+///
+/// 只缓存**成功**值: 以前是 `OnceLock<Result<Client, String>>`, 首次构建失败会被永久
+/// 钉住 —— 之后每次下载都返回同一个错误, 进程重启前不可恢复。现在失败即返回、下次再试。
 fn http_client() -> Result<&'static reqwest::Client, ProviderError> {
-    static CLIENT: OnceLock<Result<reqwest::Client, String>> = OnceLock::new();
-    match CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .user_agent(crate::identity::platform_profile().ua)
-            .connect_timeout(CONNECT_TIMEOUT)
-            .read_timeout(READ_TIMEOUT)
-            .build()
-            .map_err(|e| e.to_string())
-    }) {
-        Ok(c) => Ok(c),
-        Err(e) => Err(ProviderError::internal(format!("创建下载客户端失败: {e}"))),
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client);
     }
+    let built = reqwest::Client::builder()
+        .user_agent(crate::identity::platform_profile().ua)
+        .connect_timeout(CONNECT_TIMEOUT)
+        .read_timeout(READ_TIMEOUT)
+        .build()
+        .map_err(|e| ProviderError::internal(format!("创建下载客户端失败: {e}")))?;
+    // 并发首次构建: 谁先 set 谁赢, 输的那个直接丢掉(两者等价), 不需要额外锁
+    let _ = CLIENT.set(built);
+    CLIENT
+        .get()
+        .ok_or_else(|| ProviderError::internal("创建下载客户端失败: 单例未就绪"))
 }
 
 // ---------------------------------------------------------------------------
@@ -284,14 +305,14 @@ impl AudioCache {
         let legacy = self.legacy_path_for(track_id, url);
         let tagged_hit = std::fs::metadata(&tagged)
             .ok()
-            .filter(|m| m.len() > 64 * 1024)
+            .filter(|m| m.len() >= MIN_VALID_AUDIO_BYTES)
             .map(|_| tagged.clone());
         if tagged_hit.is_some() || tagged == legacy {
             return tagged_hit;
         }
         let legacy_hit = std::fs::metadata(&legacy)
             .ok()
-            .filter(|m| m.len() > 64 * 1024)
+            .filter(|m| m.len() >= MIN_VALID_AUDIO_BYTES)
             .map(|_| legacy.clone());
         if legacy_hit.is_some() && level.is_some() {
             eprintln!(
@@ -306,11 +327,29 @@ impl AudioCache {
         self.cached_with_level(track_id, url, None)
     }
 
+    /// 建出(或清空)下载用的 `.part`.
+    ///
+    /// 为什么要单独一步: 真正写数据的那侧是 `write + truncate`(**不** `create`), 文件必须
+    /// 由这里先建出来。边下边播由 [`Self::start_progressive`] 建, 前台下载 [`Self::fetch`]
+    /// 以前**没人建** ⇒ 每次都在开文件那步 ENOENT(`os error 2`), Windows 桌面
+    /// (下完再播)与 `ncm-cli play` 都走那条路。残片也要先清, 否则会从旧数据接着解码。
+    fn prepare_part(part: &Path) -> Result<(), ProviderError> {
+        let _ = std::fs::remove_file(part);
+        std::fs::File::create(part)
+            .map_err(|e| ProviderError::internal(format!("创建缓存临时文件失败: {e}")))?;
+        Ok(())
+    }
+
     /// 准备"边下边播": 清掉旧 `.part`、创建空文件, 立刻返回可读路径。
     ///
     /// 真正的字节由 [`Self::download_progressive`] 在后台写入。
     /// 先创建空文件是必须的: 播放线程可能在第一个字节到达前就 open。
     /// `level` 参与键(见 [`Self::path_for_level`]).
+    ///
+    /// **同 key(`final_path` 相同)单飞**: 已经有在飞下载时不再 `remove`/`create` 同一个
+    /// `.part`(那会把正在写、正在读的 inode 摘掉, 第二个下载再从 0 写同一个路径 ⇒
+    /// 字节交错 / rename 之一 ENOENT / 听到一半变成乱码)。后到者拿到的句柄
+    /// `leader == false`, 与领跑者共享**同一个** `part_path` / `done`, 只播不下载。
     pub fn start_progressive(
         &self,
         track_id: u64,
@@ -319,56 +358,109 @@ impl AudioCache {
     ) -> Result<ProgressiveFetch, ProviderError> {
         let final_path = self.path_for_level(track_id, url, level);
         let part_path = final_path.with_extension("part");
-        // 上一轮中断留下的残片会让播放器从旧数据开始解码, 必须先删
-        let _ = std::fs::remove_file(&part_path);
-        std::fs::File::create(&part_path)
-            .map_err(|e| ProviderError::internal(format!("创建缓存临时文件失败: {e}")))?;
-        Ok(ProgressiveFetch {
+        let mut table = inflight_progressive()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(existing) = table.get(&final_path) {
+            if !existing.done.load(Ordering::Acquire) {
+                // 复用领跑者的句柄: 路径与 `done` 都是同一份, 不碰磁盘
+                return Ok(ProgressiveFetch {
+                    leader: false,
+                    ..existing.clone()
+                });
+            }
+            // 已收尾(成功/失败)但条目还没来得及摘 ⇒ 当没有
+            table.remove(&final_path);
+        }
+        Self::prepare_part(&part_path)?;
+        let fetch = ProgressiveFetch {
             part_path,
-            final_path,
+            final_path: final_path.clone(),
             done: Arc::new(AtomicBool::new(false)),
-        })
+            leader: true,
+        };
+        table.insert(final_path, fetch.clone());
+        Ok(fetch)
     }
 
     /// 流式下载到 `.part`, 完成后原子 rename 成正式缓存文件。
     ///
-    /// 无论成功失败都置位 `done`: 失败时删掉残片, 播放线程立刻结束阻塞而不是挂死。
+    /// 无论成功失败都置位 `done`(由 [`ProgressiveLeader`] 的 Drop 兑现): 失败时删掉残片,
+    /// 播放线程立刻结束阻塞而不是挂死。
     pub async fn download_progressive(
         &self,
         url: &str,
         fetch: ProgressiveFetch,
     ) -> Result<PathBuf, ProviderError> {
-        let result = Self::stream_to_part_with_retry(url, &fetch.part_path).await;
+        self.download_progressive_cancellable(url, fetch, &|| false)
+            .await
+    }
+
+    /// 同 [`Self::download_progressive`], 但每写一块前问一次 `cancelled`。
+    ///
+    /// 取消的语义是"这次起播已经被后来的取代"(FFI 侧用下载代际实现): 立刻停下,
+    /// 删残片、置 `done`、返回不可重试的错误 —— 不把已取消的下载算成网络故障。
+    /// 只有**领跑者**(`fetch.leader`)能调本函数: 复用者再下一遍会二次截断同一个 `.part`。
+    pub async fn download_progressive_cancellable(
+        &self,
+        url: &str,
+        fetch: ProgressiveFetch,
+        cancelled: &(dyn Fn() -> bool + Send + Sync),
+    ) -> Result<PathBuf, ProviderError> {
+        if !fetch.leader {
+            return Err(ProviderError::internal(
+                "同一首歌的下载已在进行中, 复用者不得再下载一份",
+            ));
+        }
+        // 无论正常结束、报错还是被取消/abort, 都要置 done + 摘单飞表
+        let _leader = ProgressiveLeader {
+            final_path: fetch.final_path.clone(),
+            done: Arc::clone(&fetch.done),
+        };
+        let result = Self::stream_to_part_with_retry(url, &fetch.part_path, cancelled).await;
         // 注意: 此时播放线程**正开着** .part。Linux/macOS 允许 rename 打开中的文件;
         // Windows 不允许, 所以桌面 Windows 仍走"下完再播"的旧通道(见 ncm-ffi)。
-        let outcome = match result {
-            Ok(size) if size >= 64 * 1024 => std::fs::rename(&fetch.part_path, &fetch.final_path)
-                .map(|()| fetch.final_path.clone())
+        Self::finish_part(&fetch.part_path, &fetch.final_path, result)
+    }
+
+    /// `.part` 收尾(两条下载路径共用, 口径必须一致):
+    /// 够大 ⇒ rename 成正式缓存文件; 太小/失败 ⇒ 删残片并报错。
+    fn finish_part(
+        part: &Path,
+        final_path: &Path,
+        result: Result<u64, ProviderError>,
+    ) -> Result<PathBuf, ProviderError> {
+        match result {
+            Ok(size) if size >= MIN_VALID_AUDIO_BYTES => std::fs::rename(part, final_path)
+                .map(|()| final_path.to_path_buf())
                 .map_err(|e| ProviderError::internal(format!("缓存落盘失败: {e}"))),
             Ok(size) => {
-                let _ = std::fs::remove_file(&fetch.part_path);
+                let _ = std::fs::remove_file(part);
                 Err(DownloadFailure::TooSmall(size).to_provider_error())
             }
             Err(e) => {
-                let _ = std::fs::remove_file(&fetch.part_path);
+                let _ = std::fs::remove_file(part);
                 Err(e)
             }
-        };
-        fetch.done.store(true, Ordering::Release);
-        outcome
+        }
     }
 
     /// 下载失败重试一次(只重试 `retryable` 的失败).
     ///
     /// 为什么不无限重试: 直链失效(401/403/404)重试只会多打一次上游并放大风控;
     /// 真正需要"再来一次"的是被劫持(HTML 首包)/瞬时 5xx/首包超时这类抖动。
-    async fn stream_to_part_with_retry(url: &str, part: &Path) -> Result<u64, ProviderError> {
+    async fn stream_to_part_with_retry(
+        url: &str,
+        part: &Path,
+        cancelled: &(dyn Fn() -> bool + Send + Sync),
+    ) -> Result<u64, ProviderError> {
         let mut last: Option<ProviderError> = None;
         for attempt in 0..=DOWNLOAD_RETRIES {
-            match Self::stream_to_part(url, part).await {
+            match Self::stream_to_part(url, part, cancelled).await {
                 Ok(size) => return Ok(size),
                 Err((err, retryable)) => {
-                    if attempt < DOWNLOAD_RETRIES && retryable {
+                    // 取消不是故障, 不重试
+                    if attempt < DOWNLOAD_RETRIES && retryable && !cancelled() {
                         eprintln!(
                             "[cache] download attempt {} failed, retrying: {err}",
                             attempt + 1
@@ -388,10 +480,19 @@ impl AudioCache {
     ///
     /// 返回 `(错误, 是否可重试)`: 可重试与否在 [`DownloadFailure::retryable`] 里定,
     /// 传输层错误(reqwest)一律视为可重试 —— 它们几乎都是瞬时抖动。
+    /// `cancelled` 每块之前问一次(见 [`AudioCache::download_progressive_cancellable`]).
     #[allow(clippy::type_complexity)]
-    async fn stream_to_part(url: &str, part: &Path) -> Result<u64, (ProviderError, bool)> {
+    async fn stream_to_part(
+        url: &str,
+        part: &Path,
+        cancelled: &(dyn Fn() -> bool + Send + Sync),
+    ) -> Result<u64, (ProviderError, bool)> {
         use futures::StreamExt;
         use std::io::Write;
+        // 建连之前先看一眼: 已经过期就别握手(连点 10 首不该是 10 次 TLS)
+        if cancelled() {
+            return Err(cancelled_error());
+        }
         let client = http_client().map_err(|e| (e, false))?;
         // 兜底再升一次 https: 调用方可能直接传了上游给的明文直链(桌面旧路径)
         let url = prefer_https(url);
@@ -414,6 +515,10 @@ impl AudioCache {
             .map(str::to_string);
         if let Err(failure) = classify_http(status, content_type.as_deref(), server.as_deref()) {
             return Err((failure.to_provider_error(), failure.retryable()));
+        }
+        // 每块之前问一次取消: 响应头到手后到首包之间也可能已经过期
+        if cancelled() {
+            return Err(cancelled_error());
         }
         let mut file = std::fs::OpenOptions::new()
             .write(true)
@@ -460,6 +565,9 @@ impl AudioCache {
             total += chunk.len() as u64;
         }
         while let Some(chunk) = stream.next().await {
+            if cancelled() {
+                return Err(cancelled_error());
+            }
             let chunk = chunk.map_err(|e| {
                 (
                     ProviderError::network(format!(
@@ -489,6 +597,10 @@ impl AudioCache {
     ///
     /// 失败原因按 `ProviderError{kind,retryable,detail}` 回传(FFI 侧直接转 `FfiError`),
     /// 不再是一句 `"http 403"`。`level` 参与缓存键(见 [`Self::path_for_level`])。
+    ///
+    /// 重试/收尾与边下边播走同一条链(`stream_to_part_with_retry` + `finish_part`):
+    /// 以前这里是内联的重试循环, 且**失败路径不删 `.part`** ⇒ 下次播放会从一个
+    /// 残缺文件接着解码(听起来是一上来就没声音/杂音), 且它会被当成缓存残片一直占着磁盘.
     pub async fn fetch(
         &self,
         track_id: u64,
@@ -499,30 +611,12 @@ impl AudioCache {
             return Ok(p);
         }
         let final_path = self.path_for_level(track_id, url, level);
-        let tmp = final_path.with_extension("part");
-        let mut last: Option<ProviderError> = None;
-        for attempt in 0..=DOWNLOAD_RETRIES {
-            match Self::stream_to_part(url, &tmp).await {
-                Ok(size) if size >= 64 * 1024 => {
-                    std::fs::rename(&tmp, &final_path)
-                        .map_err(|e| ProviderError::internal(format!("缓存落盘失败: {e}")))?;
-                    return Ok(final_path);
-                }
-                Ok(size) => {
-                    let _ = std::fs::remove_file(&tmp);
-                    return Err(DownloadFailure::TooSmall(size).to_provider_error());
-                }
-                Err((err, retryable)) => {
-                    if attempt < DOWNLOAD_RETRIES && retryable {
-                        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-                        last = Some(err);
-                        continue;
-                    }
-                    return Err(err);
-                }
-            }
-        }
-        Err(last.unwrap_or_else(|| ProviderError::network("下载失败: 未知原因")))
+        let part = final_path.with_extension("part");
+        // `.part` 必须先建出来: 写数据那侧是 `write + truncate`(不 create), 见 [`Self::prepare_part`]
+        Self::prepare_part(&part)?;
+        // 前台路径(等下载完才播)没有取消语义: Windows 侧本次播放就在等它
+        let result = Self::stream_to_part_with_retry(url, &part, &|| false).await;
+        Self::finish_part(&part, &final_path, result)
     }
 }
 
@@ -531,6 +625,7 @@ impl AudioCache {
 /// [`Self::part_path`] 是**会持续增长的临时文件**: 播放器一开始就 open 它,
 /// 读到"暂时没有新字节"时阻塞等待; 下载结束后 [`Self::done`] 置位, 读取才返回 EOF。
 /// 全部下完再原子 rename 成正式缓存文件(下次直接命中 [`AudioCache::cached_path`])。
+#[derive(Clone)]
 pub struct ProgressiveFetch {
     /// 播放器读取的临时文件(增长中)
     pub part_path: PathBuf,
@@ -538,6 +633,39 @@ pub struct ProgressiveFetch {
     pub final_path: PathBuf,
     /// 不会再产生新字节了(成功/失败都会置位, 否则播放线程永远阻塞)
     pub done: Arc<AtomicBool>,
+    /// 本次调用是否是**领跑者**: true 才由调用方送去 [`AudioCache::download_progressive`];
+    /// false = 复用了同一个 `.part` 在飞下载(只播不下载, 否则会把同一个文件截断重写)
+    pub leader: bool,
+}
+
+/// 同 key(同一个 `final_path`: 同 track + 同音质)在飞下载的单飞表.
+///
+/// 为什么必须单飞: 第二个 `play_track` 若再 `remove_file(.part)` + `create`, 就会把第一个
+/// 下载正在写、播放线程正在读的 inode 摘掉, 然后两个下载各自 `truncate(true)` 同一个路径
+/// 从 0 写 —— 字节交错、rename 之一 ENOENT、听感上"播到一半变成乱码"。
+///
+/// 条目只在**下载期间**存在: 领跑者收尾时摘掉(见 [`ProgressiveLeader`]).
+fn inflight_progressive() -> &'static Mutex<HashMap<PathBuf, ProgressiveFetch>> {
+    static TABLE: OnceLock<Mutex<HashMap<PathBuf, ProgressiveFetch>>> = OnceLock::new();
+    TABLE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// 领跑下载的收尾守卫: 正常结束、报错、以及被取消/drop 三种路径都必须
+/// ① 置位 `done`(否则播放线程会一直阻塞等新字节, 直到 stall 上限才收尾),
+/// ② 摘掉单飞表里这条(否则同 key 后来的调用会复用一个已经死掉的"在飞下载").
+struct ProgressiveLeader {
+    final_path: PathBuf,
+    done: Arc<AtomicBool>,
+}
+
+impl Drop for ProgressiveLeader {
+    fn drop(&mut self) {
+        self.done.store(true, Ordering::Release);
+        let mut table = inflight_progressive()
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        table.remove(&self.final_path);
+    }
 }
 
 /// 一次容量收敛的结果(R5: 缓存占用上限)
@@ -552,19 +680,25 @@ pub struct CacheEviction {
 }
 
 impl AudioCache {
-    /// 缓存目录里所有已完成文件(不含 `.part`)的 (路径, 大小, 修改时间)
-    fn entries(&self) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
+    /// 缓存目录里的一次扫描: (路径, 大小, 修改时间).
+    ///
+    /// - `include_partial == false`(命中/统计口径): 只算已完成文件, 下载中的 `.part` 与
+    ///   小于 [`MIN_VALID_AUDIO_BYTES`] 的残片不算 —— 它们不可能是能播的完整音频。
+    /// - `include_partial == true`(配额口径): `.part` 也算。下载中的数据同样是磁盘占用,
+    ///   以前把它们全部豁免, 连点切歌时几百 MB 在飞下载等于完全不进配额。
+    fn entries(&self, include_partial: bool) -> Vec<(PathBuf, u64, std::time::SystemTime)> {
         let mut out = Vec::new();
         let Ok(dir) = std::fs::read_dir(&self.dir) else {
             return out;
         };
         for entry in dir.flatten() {
             let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("part") {
-                continue; // 正在下载的临时文件不参与淘汰
+            let partial = path.extension().and_then(|e| e.to_str()) == Some("part");
+            if partial && !include_partial {
+                continue;
             }
             let Ok(meta) = entry.metadata() else { continue };
-            if !meta.is_file() || meta.len() < 64 * 1024 {
+            if !meta.is_file() || (!partial && meta.len() < MIN_VALID_AUDIO_BYTES) {
                 continue;
             }
             let mtime = meta.modified().unwrap_or(std::time::UNIX_EPOCH);
@@ -576,7 +710,7 @@ impl AudioCache {
     /// 不看直链, 直接按曲目 id 找已缓存文件(响度测量等后台任务用)
     pub fn cached_path(&self, track_id: u64) -> Option<PathBuf> {
         let prefix = format!("{track_id}.");
-        self.entries()
+        self.entries(false)
             .into_iter()
             .find(|(p, _, _)| {
                 p.file_name()
@@ -589,25 +723,28 @@ impl AudioCache {
 
     /// 已完成缓存文件的数量(不含 .part)
     pub fn file_count(&self) -> usize {
-        self.entries().len()
+        self.entries(false).len()
     }
 
     /// 当前缓存总占用(字节, 不含 .part)
     pub fn total_bytes(&self) -> u64 {
-        self.entries().iter().map(|(_, size, _)| *size).sum()
+        self.entries(false).iter().map(|(_, size, _)| *size).sum()
     }
 
     /// 按「最久未修改优先」淘汰, 直到总占用 <= limit_bytes。
     ///
     /// - `limit_bytes == 0` 表示不限制(直接返回当前占用)。
     /// - `keep_track_id`: 正在播放的曲目对应的文件**永不删除**(R5 的验收口径)。
-    /// - 只删已完成文件(`.part`)与小于 64 KiB 的残片不参与统计/删除。
+    /// - 统计口径含 `.part`(下载中的字节也是磁盘占用); 小于 [`MIN_VALID_AUDIO_BYTES`]
+    ///   的已完成残片不参与统计/删除。
+    /// - 淘汰一条正在写的 `.part` 会让那次下载最后的 rename 报 ENOENT(错误会回给调用方,
+    ///   不会变成半个正式文件) —— 这是有意的: 磁盘满了优先保旧的可播文件。
     pub fn enforce_limit(
         &self,
         limit_bytes: u64,
         keep_track_id: Option<u64>,
     ) -> Result<CacheEviction, String> {
-        let mut entries = self.entries();
+        let mut entries = self.entries(true);
         let mut total: u64 = entries.iter().map(|(_, size, _)| *size).sum();
         if limit_bytes == 0 || total <= limit_bytes {
             return Ok(CacheEviction {
@@ -941,5 +1078,143 @@ mod tests {
             "无音质的查询也不该乱命中新键"
         );
         assert!(cache.cached_with_level(42, url, Some("exhigh")).is_some());
+    }
+
+    // ---------------- R3/R4: 同 key 单飞 + 收尾 ----------------
+
+    /// R3 判据: 同 track + 同音质的并发起播**只能有一个下载**。
+    /// 后到者拿到的必须是领跑者的同一份 `.part` / `done`, 不能把已写的字节 remove 掉重来。
+    #[test]
+    fn start_progressive_reuses_inflight_download_for_same_key() {
+        let tmp = TempDir::new("single-flight");
+        let cache = AudioCache::open(&tmp.0).unwrap();
+        let url = "https://m701.music.126.net/2026/x/a.mp3";
+
+        let leader = cache.start_progressive(7, url, Some("exhigh")).unwrap();
+        assert!(leader.leader, "第一个起播的是领跑者");
+        // 模拟领跑者已经写进去的字节(下载进行中)
+        std::fs::write(&leader.part_path, vec![7u8; 4096]).unwrap();
+
+        let reuse = cache.start_progressive(7, url, Some("exhigh")).unwrap();
+        assert!(!reuse.leader, "同 key 的后到者必须是复用者, 不得再下一次");
+        assert_eq!(reuse.part_path, leader.part_path, "必须是同一个 .part");
+        assert_eq!(reuse.final_path, leader.final_path);
+        assert!(
+            Arc::ptr_eq(&reuse.done, &leader.done),
+            "done 必须是同一个, 否则播放线程看不到下载完成"
+        );
+        assert_eq!(
+            std::fs::read(&reuse.part_path).unwrap().len(),
+            4096,
+            "复用者不得 remove/create 掉领跑者已经写进去的字节"
+        );
+
+        // 不同 key(换音质)是另一个下载, 互不影响
+        let other = cache.start_progressive(7, url, Some("lossless")).unwrap();
+        assert!(other.leader);
+        assert_ne!(other.part_path, leader.part_path);
+    }
+
+    /// R3 判据(收尾): 下载失败后单飞条目要摘掉、`done` 要置位、`.part` 要删。
+    /// 否则同 key 永远命中一个已经死掉的"在飞下载", 残片还会被下次起播接着解码。
+    /// 用 127.0.0.1:9(本机拒绝连接)而不碰真直链, 测试不联网。
+    #[tokio::test]
+    async fn failed_progressive_download_cleans_up() {
+        let tmp = TempDir::new("progressive-fail");
+        let cache = AudioCache::open(&tmp.0).unwrap();
+        let url = "http://127.0.0.1:9/a.mp3";
+        let fetch = cache.start_progressive(11, url, None).unwrap();
+        let part = fetch.part_path.clone();
+        let done = Arc::clone(&fetch.done);
+
+        assert!(cache.download_progressive(url, fetch).await.is_err());
+        assert!(
+            done.load(Ordering::Acquire),
+            "失败也要置 done, 否则播放线程会干等到 stall 上限"
+        );
+        assert!(!part.exists(), "失败路径必须删掉 .part(D03)");
+        // 条目已摘 ⇒ 同 key 再起播是新的领跑者(而不是复用一个死掉的下载)
+        assert!(cache.start_progressive(11, url, None).unwrap().leader);
+    }
+
+    /// 复用者不允许自己再下一份(会二次截断同一个 `.part`)。
+    #[tokio::test]
+    async fn follower_must_not_download() {
+        let tmp = TempDir::new("follower");
+        let cache = AudioCache::open(&tmp.0).unwrap();
+        let url = "https://m701.music.126.net/2026/x/a.mp3";
+        let _leader = cache.start_progressive(12, url, None).unwrap();
+        let follower = cache.start_progressive(12, url, None).unwrap();
+        assert!(cache.download_progressive(url, follower).await.is_err());
+        assert!(tmp.0.join("12.part").exists(), "领跑者的 .part 不能被卸尸");
+    }
+
+    /// `fetch` 与边下边播共用同一套 `.part` 准备: 不存在要建出来(前台下载以前缺这一步,
+    /// 每次都在 `open` 那步 ENOENT), 有残片要清掉。
+    #[test]
+    fn prepare_part_creates_missing_file_and_clears_stale_bytes() {
+        let tmp = TempDir::new("prepare-part");
+        let stale = tmp.0.join("9.mp3.part");
+        std::fs::write(&stale, vec![1u8; 4096]).unwrap();
+        AudioCache::prepare_part(&stale).unwrap();
+        assert_eq!(
+            std::fs::metadata(&stale).unwrap().len(),
+            0,
+            "残片必须被清空"
+        );
+        let fresh = tmp.0.join("10.mp3.part");
+        AudioCache::prepare_part(&fresh).unwrap();
+        assert!(
+            fresh.exists(),
+            "不存在时必须建出来(否则下载在 open 那步就失败)"
+        );
+    }
+
+    /// D03 判据: `fetch`(下完再播/Windows 走这条)失败后同样不留 `.part`。
+    #[tokio::test]
+    async fn failed_fetch_deletes_part() {
+        let tmp = TempDir::new("fetch-fail");
+        let cache = AudioCache::open(&tmp.0).unwrap();
+        let url = "http://127.0.0.1:9/a.mp3";
+        assert!(cache.fetch(13, url, None).await.is_err());
+        assert!(
+            !tmp.0.join("13.part").exists(),
+            "失败后残片必须删掉(以前会留下, 下次从残缺文件接着解码)"
+        );
+    }
+
+    // ---------------- R4: `.part` 计入配额 ----------------
+
+    /// 下载中的字节也是磁盘占用: 以前 `extension == "part"` 直接 continue, 配额形同虚设。
+    #[test]
+    fn enforce_limit_counts_partial_downloads() {
+        let tmp = TempDir::new("quota-part");
+        write_track(&tmp.0, "1.mp3", 100);
+        write_track(&tmp.0, "2.mp3.part", 100);
+        touch(&tmp.0, "1.mp3", 300);
+        touch(&tmp.0, "2.mp3.part", 100);
+        let cache = AudioCache::open(&tmp.0).unwrap();
+
+        // 只看已完成文件是 100 KiB(不超), 含 `.part` 才是 200 KiB
+        let r = cache.enforce_limit(150 * 1024, None).unwrap();
+        assert_eq!(r.removed, 1, "必须把下载中的占用算进去才会开始淘汰");
+        assert!(!tmp.0.join("1.mp3").exists(), "最久未修改的先淘汰");
+        assert_eq!(r.total_bytes, 100 * 1024);
+    }
+
+    /// 正在播放那一首的 `.part` 绝不能删: 删了就是当场没声音(keep_track_id 的验收口径).
+    #[test]
+    fn enforce_limit_never_evicts_playing_part() {
+        let tmp = TempDir::new("quota-part-keep");
+        write_track(&tmp.0, "5.mp3.part", 100);
+        write_track(&tmp.0, "6.mp3", 100);
+        touch(&tmp.0, "5.mp3.part", 500); // 5 最老, 但正在播
+        touch(&tmp.0, "6.mp3", 100);
+        let cache = AudioCache::open(&tmp.0).unwrap();
+
+        let r = cache.enforce_limit(100 * 1024, Some(5)).unwrap();
+        assert!(tmp.0.join("5.mp3.part").exists(), "正在播放的 .part 不能删");
+        assert!(!tmp.0.join("6.mp3").exists());
+        assert_eq!(r.removed, 1);
     }
 }

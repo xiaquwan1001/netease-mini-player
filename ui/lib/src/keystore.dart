@@ -1,8 +1,6 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'platform_is.dart' show isAndroidPlatform;
 import 'rust/api_all.dart' as rust;
 
 /// Android Keystore 凭据后端的 Dart 封装(通道层).
@@ -19,16 +17,10 @@ class KeystoreChannel {
 
   final MethodChannel _channel;
 
-  /// 测试专用: host 上 Platform.isAndroid 恒为 false, 置 true 可强制走 Android 分支.
-  @visibleForTesting
-  static bool debugForceAndroid = false;
-
-  bool get _isAndroid => !kIsWeb && Platform.isAndroid || debugForceAndroid;
-
   /// Keystore 是否可用(能取到/能创建密钥就 true).
   /// 非 Android 恒为 false; 通道异常按不可用处理.
   Future<bool> available() async {
-    if (!_isAndroid) return false;
+    if (!isAndroidPlatform) return false;
     try {
       return await _channel.invokeMethod<bool>('available') ?? false;
     } on PlatformException {
@@ -41,7 +33,7 @@ class KeystoreChannel {
   /// 写入凭据 [key] -> [value](原生侧加密落盘).
   /// 返回 false 表示平台不支持或原生失败, 不抛异常, 由上层决定回退.
   Future<bool> put(String key, String value) async {
-    if (!_isAndroid) return false;
+    if (!isAndroidPlatform) return false;
     try {
       return await _channel.invokeMethod<bool>('put', {
             'key': key,
@@ -57,7 +49,7 @@ class KeystoreChannel {
 
   /// 读取凭据; 不存在/密钥失效(清数据、备份恢复)/通道异常一律返回 null.
   Future<String?> get(String key) async {
-    if (!_isAndroid) return null;
+    if (!isAndroidPlatform) return null;
     try {
       return await _channel.invokeMethod<String>('get', {'key': key});
     } on PlatformException {
@@ -69,7 +61,7 @@ class KeystoreChannel {
 
   /// 现存凭据 key 列表(lane p1 restore 用); 通道异常按空表处理.
   Future<List<String>> list() async {
-    if (!_isAndroid) return const [];
+    if (!isAndroidPlatform) return const [];
     try {
       final keys = await _channel.invokeMethod<List<Object?>>('list');
       return keys?.cast<String>() ?? const [];
@@ -82,7 +74,7 @@ class KeystoreChannel {
 
   /// 删除凭据; 返回是否确实删掉了文件. 通道异常按 false 处理.
   Future<bool> remove(String key) async {
-    if (!_isAndroid) return false;
+    if (!isAndroidPlatform) return false;
     try {
       return await _channel.invokeMethod<bool>('remove', {'key': key}) ?? false;
     } on PlatformException {

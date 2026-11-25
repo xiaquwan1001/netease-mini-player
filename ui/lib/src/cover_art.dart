@@ -43,8 +43,13 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
   static const double scale = 1.0;
 
   /// 独占一个 HttpClient, 把默认 UA 换成浏览器 UA(不是追加, 是整体替换)
+  ///
+  /// `maxConnectionsPerHost = 6`: 默认(null)不限并发 ⇒ 一屏几十张封面首次加载时
+  /// 会对同一个 CDN host 同时开几十条连接(审计 U8, 2026-11-25)。6 是浏览器的一贯取值,
+  /// 既不会把 CDN 打到风控, 也足够把一个屏填满。
   static final HttpClient _client = HttpClient()
     ..userAgent = kImageUserAgent
+    ..maxConnectionsPerHost = 6
     ..connectionTimeout = const Duration(seconds: 15);
 
   /// 已下载的原始字节(LRU, 200 张上限): 避免 provider 重建时重复拉图.
@@ -52,9 +57,31 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
     maxEntries: 200,
   );
 
-  static Future<Uint8List> _fetch(String url) async {
+  /// 同 URL 的在途请求(合并并发调用)。
+  ///
+  /// 必须在 `await` **之前** put(口径同 `lru.dart` 的注释: 存 `Future` 才能合并并发):
+  /// 旧实现在 await 之后才落缓存, 同一 URL 的并发调用(列表里的 NetImage 与
+  /// `fetchImageBytes` 看大图/取主色)各发一次请求 —— `fetchImageBytes` 还绕过了
+  /// Flutter 的 ImageCache, 所以这是真实的两份下载。
+  static final Map<String, Future<Uint8List>> _inflight =
+      <String, Future<Uint8List>>{};
+
+  /// 取字节(缓存 → 在途合并 → 真下载)
+  static Future<Uint8List> _fetch(String url) {
     final cached = _bytes[url];
-    if (cached != null) return cached;
+    // 已缓存: 保持"异步完成"的心智模型(旧实现是 async 函数), 不改调用方的重入假设
+    if (cached != null) return Future<Uint8List>.value(cached);
+    final pending = _inflight[url];
+    if (pending != null) return pending;
+    // whenComplete 在完成时把在途条目摘掉(成功时字节已进 LRU; 失败时下次可以重试)
+    final merged = _download(url).whenComplete(() {
+      _inflight.remove(url);
+    });
+    _inflight[url] = merged;
+    return merged;
+  }
+
+  static Future<Uint8List> _download(String url) async {
     final req = await _client.getUrl(Uri.parse(url));
     req.headers.set(HttpHeaders.refererHeader, 'https://music.163.com/');
     final resp = await req.close();

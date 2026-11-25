@@ -38,6 +38,14 @@ void main() {
     expect(formatCompactCount(-5), '0');
   });
 
+  // 亿档: 之前只到万, 1.2 亿会显示成「12000万」.
+  test('亿档: 100000000 → 1亿 / 120000000 → 1.2亿', () {
+    expect(formatCompactCount(100000000), '1亿');
+    expect(formatCompactCount(120000000), '1.2亿');
+    expect(formatCompactCount(123456789), '1.2亿');
+    expect(formatHotBadge(120000000), '(热评 1.2亿)');
+  });
+
   testWidgets('三个回调各自计数', (tester) async {
     var comments = 0;
     var share = 0;

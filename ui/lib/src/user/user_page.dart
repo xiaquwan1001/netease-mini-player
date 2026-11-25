@@ -12,6 +12,7 @@ import '../feed_detail_page.dart'
     show feedKindLabels, feedRelativeTime, showFeedDetail;
 import '../feed_media.dart'
     show FeedImageGrid, FeedSongMiniCard, FeedVideoThumb, feedAttachedImages;
+import '../format.dart' show formatFanCount;
 import '../layout.dart';
 import '../net_retry.dart';
 import '../platform.dart';
@@ -319,14 +320,15 @@ class _UserPageState extends State<UserPage> with TickerProviderStateMixin {
     final artistId = d?.artistId;
     final level = d?.level ?? BigInt.zero;
     return [
+      // 数字口径与艺人页同一套(万/亿一位小数): 之前是「关注 1234567」原样铺出.
       ProfileStatChip(
         icon: Icons.people_outline,
-        label: '关注 ${d?.follows ?? BigInt.zero}',
+        label: '关注 ${formatFanCount(d?.follows ?? BigInt.zero)}',
         onTap: () => _openRelationship(fans: false),
       ),
       ProfileStatChip(
         icon: Icons.person_outline,
-        label: '粉丝 ${d?.followeds ?? BigInt.zero}',
+        label: '粉丝 ${formatFanCount(d?.followeds ?? BigInt.zero)}',
         onTap: () => _openRelationship(fans: true),
       ),
       if (level > BigInt.zero)

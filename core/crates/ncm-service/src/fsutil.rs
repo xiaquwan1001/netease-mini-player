@@ -3,8 +3,11 @@
 //! ## 为什么集中在这里
 //!
 //! 所有"写完才算数"的 JSON/文本/二进制文件都走同一条路径:
-//! `create_dir_all(dir)` → 写 `<dir>/<name>.tmp` → `rename` 成 `<dir>/<name>`.
+//! `create_dir_all(dir)` → 写 `<dir>/<name>.tmp.<pid>.<seq>` → `sync_all` →
+//! `rename` 成 `<dir>/<name>`.
 //! rename 之前读者看不到半截文件, 掉电最多丢掉这一次写, 不会让下次启动去读坏文件.
+//!
+//! 三道防线各自防什么见 [`write_atomic_inner`] 的头注释(唯一 tmp 名 / 进程内写锁 / fsync).
 //!
 //! Windows 仍按既有做法处理: 不额外做"删了目标再 rename"的退化尝试 ——
 //! 目标被别的进程开着时 rename 会失败, 此时旧文件必须原样保留(宁可这次写失败,
@@ -54,7 +57,10 @@
 //! 图片另存在 `~/Pictures/MiniNCM`(image_io.dart).
 
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 
 // ---------------------------- 数据目录定位与一次性迁移 ----------------------------
 //
@@ -288,7 +294,8 @@ fn write_migration_marker(legacy: &Path, current: &Path) {
     let _ = std::fs::write(legacy.join(MIGRATED_MARKER), body);
 }
 
-/// 原子写: 建目录 → 写 `<name>.tmp` → rename 成 `<name>`. 普通权限(0644 umask).
+/// 原子写: 建目录 → 写 `<name>.tmp.<pid>.<seq>` → `sync_all` → rename 成 `<name>`.
+/// 普通权限(0644 umask).
 pub fn write_atomic(dir: &Path, name: &str, bytes: &[u8]) -> io::Result<()> {
     write_atomic_inner(dir, name, bytes, false)
 }
@@ -298,20 +305,74 @@ pub fn write_atomic_private(dir: &Path, name: &str, bytes: &[u8]) -> io::Result<
     write_atomic_inner(dir, name, bytes, true)
 }
 
+/// 进程内写锁: 所有 `write_atomic*` 的「写 tmp + 改权限 + rename」都在它下面串行执行.
+///
+/// 三道防线各自防的是不同的事, **不要只留其中一道**:
+/// 1. **唯一 tmp 名**(`{name}.tmp.{pid}.{seq}`): 防两个写者共用同一个 tmp. 同名 tmp 时
+///    后开会 `truncate` 掉前者正在写的内容, 一方的 rename 还会顺手把另一方仍在写的 inode
+///    摘走(对方 rename 就 ENOENT) —— 正式文件因此可能出现两份内容的交错.
+///    跨进程靠 pid 区分, 进程内同 pid 靠自增序号区分.
+/// 2. **进程内写锁**: 唯一 tmp 名只保证各自的 tmp 干净, "谁最后落地"仍由磁盘时序运气决定 ——
+///    先后发起的两次整表重写(history/loudness 这类)可能倒序落地, 表现是较旧的快照盖掉较新的.
+///    持锁后落地顺序 = 进锁顺序, 与调用方的程序顺序一致. 锁只包那三件小文件 IO,
+///    `create_dir_all` 之外的慢活(序列化/网络)一律在锁外由调用方做完.
+/// 3. **`sync_all`**: rename 落了盘而数据还在页缓存时, 掉电会得到一个**长度正确、内容全零**
+///    的文件 —— 比读不到更坏(`history.json` 会被 `serde_json` 判坏后回落成空表).
+///
+/// 实现与 `ncm-plugin/src/storage.rs` 的 `FileStorage::persist` 是**两份**独立实现(依赖方向
+/// service → plugin, 不能反向复用), 顺序必须对齐: tmp → 写 → fsync → (改权限) → rename.
+/// 改一侧就去看另一侧(那边有反向注释指回这里).
+static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+fn write_lock() -> std::sync::MutexGuard<'static, ()> {
+    // 锁被 poison 只可能是"持锁期间 panic"; rename 是最后一步, 那种情况下磁盘上的正式
+    // 文件仍是旧的完整内容, 继续用这把锁是安全的 —— 没理由让之后所有写都失败.
+    WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// `<name>.tmp.<pid>.<seq>`: 唯一临时名(见 [`WRITE_LOCK`] 第 1 条).
+fn tmp_name(name: &str) -> String {
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+    format!("{name}.tmp.{}.{seq}", std::process::id())
+}
+
 fn write_atomic_inner(dir: &Path, name: &str, bytes: &[u8], private: bool) -> io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(format!("{name}.tmp"));
-    std::fs::write(&tmp, bytes)?;
+    let final_path = dir.join(name);
+    let tmp = dir.join(tmp_name(name));
+    let result = {
+        let _guard = write_lock();
+        write_tmp_then_rename(&tmp, &final_path, bytes, private)
+    };
+    if result.is_err() {
+        // 失败不留残骸: 以前 `?` 提前返回会把 tmp 留在数据目录里(下次启动也认不出它是垃圾)
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
+}
+
+/// 调用方必须已持 [`WRITE_LOCK`].
+fn write_tmp_then_rename(
+    tmp: &Path,
+    final_path: &Path,
+    bytes: &[u8],
+    private: bool,
+) -> io::Result<()> {
+    let mut file = std::fs::File::create(tmp)?;
+    file.write_all(bytes)?;
+    // rename 之前先把数据刷到盘上(与 ncm-plugin 的 FileStorage::persist 同一顺序)
+    file.sync_all()?;
+    drop(file);
     if private {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             // 先改权限再 rename: 正式文件名下永远不会出现 0644 的瞬间
-            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+            std::fs::set_permissions(tmp, std::fs::Permissions::from_mode(0o600))?;
         }
     }
-    std::fs::rename(&tmp, dir.join(name))?;
-    Ok(())
+    std::fs::rename(tmp, final_path)
 }
 
 #[cfg(test)]
@@ -336,7 +397,10 @@ mod tests {
         let dir = temp_dir("mkdir").join("nested");
         write_atomic(&dir, "a.json", b"{}").unwrap();
         assert_eq!(std::fs::read(dir.join("a.json")).unwrap(), b"{}");
-        assert!(!dir.join("a.json.tmp").exists(), "临时文件必须被 rename 走");
+        assert!(
+            leftover_tmp_files(&dir).is_empty(),
+            "临时文件必须被 rename 走"
+        );
     }
 
     #[test]
@@ -345,7 +409,7 @@ mod tests {
         write_atomic(&dir, "a.json", b"{\"long\":\"payload\"}").unwrap();
         write_atomic(&dir, "a.json", b"{}").unwrap();
         assert_eq!(std::fs::read(dir.join("a.json")).unwrap(), b"{}");
-        assert!(!dir.join("a.json.tmp").exists());
+        assert!(leftover_tmp_files(&dir).is_empty());
     }
 
     #[cfg(unix)]
@@ -363,16 +427,96 @@ mod tests {
     }
 
     #[test]
-    fn name_with_extension_uses_single_tmp_suffix() {
+    fn name_with_extension_replaces_in_place_without_leftover_tmp() {
         let dir = temp_dir("name");
         write_atomic(&dir, "42.ttml", b"<tt/>").unwrap();
         assert!(dir.join("42.ttml").exists());
-        let leftovers: Vec<_> = std::fs::read_dir(&dir)
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .map(|e| e.file_name().to_string_lossy().to_string())
-            .filter(|n| n.ends_with(".tmp"))
+        let leftovers = leftover_tmp_files(&dir);
+        assert!(leftovers.is_empty(), "残留: {leftovers:?}");
+    }
+
+    /// 目录里所有临时文件名(`{name}.tmp.{pid}.{seq}`).
+    fn leftover_tmp_files(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .map(|rd| {
+                rd.flatten()
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .filter(|n| n.contains(".tmp"))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// R1 判据: 两个线程各写同名文件、payload 长度不同、各写 N 次(模拟 history.json
+    /// 的两份并发快照), 同时有读者在跑:
+    /// - 读者看到的每一份都必须是**完整的某一份**, 不能是两份内容的拼接;
+    /// - 每次写的**rename 都不能失败**(同名 tmp 时一方会把另一方仍在写的 inode 摘走 ⇒ ENOENT);
+    /// - 事后目录里不留任何 tmp 残骸.
+    #[test]
+    fn concurrent_writes_never_interleave_and_leave_no_tmp() {
+        use std::sync::atomic::{AtomicBool, AtomicUsize};
+
+        const ROUNDS: usize = 200;
+        let dir = temp_dir("concurrent");
+        std::fs::create_dir_all(&dir).unwrap();
+        let short = vec![b'a'; 8 * 1024];
+        let long = vec![b'b'; 200 * 1024];
+
+        let stop = std::sync::Arc::new(AtomicBool::new(false));
+        let bad_reads = std::sync::Arc::new(AtomicUsize::new(0));
+        let reader = {
+            let dir = dir.clone();
+            let stop = stop.clone();
+            let bad_reads = bad_reads.clone();
+            let (short, long) = (short.clone(), long.clone());
+            std::thread::spawn(move || {
+                while !stop.load(Ordering::Relaxed) {
+                    let Ok(bytes) = std::fs::read(dir.join("history.json")) else {
+                        // 文件还不存在(第一次写之前)不算错
+                        continue;
+                    };
+                    if bytes != short && bytes != long {
+                        bad_reads.fetch_add(1, Ordering::Relaxed);
+                    }
+                }
+            })
+        };
+
+        let writers: Vec<_> = [short.clone(), long.clone()]
+            .into_iter()
+            .map(|payload| {
+                let dir = dir.clone();
+                std::thread::spawn(move || {
+                    let mut errors = Vec::new();
+                    for _ in 0..ROUNDS {
+                        if let Err(e) = write_atomic(&dir, "history.json", &payload) {
+                            errors.push(e.to_string());
+                        }
+                    }
+                    errors
+                })
+            })
             .collect();
+
+        let mut errors = Vec::new();
+        for writer in writers {
+            errors.extend(writer.join().expect("写线程不应 panic"));
+        }
+        stop.store(true, Ordering::Relaxed);
+        reader.join().expect("读线程不应 panic");
+
+        assert!(errors.is_empty(), "并发写不允许失败: {errors:?}");
+        assert_eq!(
+            bad_reads.load(Ordering::Relaxed),
+            0,
+            "读者读到的必须是完整的某一份, 不能是两份内容的拼接"
+        );
+        let final_bytes = std::fs::read(dir.join("history.json")).unwrap();
+        assert!(
+            final_bytes == short || final_bytes == long,
+            "最终文件必须是完整的某一份"
+        );
+        let leftovers = leftover_tmp_files(&dir);
         assert!(leftovers.is_empty(), "残留: {leftovers:?}");
     }
 

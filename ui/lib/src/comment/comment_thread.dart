@@ -20,6 +20,7 @@ import '../comment_stats_bar.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show InlineError;
 import '../feed_share.dart' show showCommentShareSheet;
+import '../format.dart' show relativeTime;
 import '../net_retry.dart';
 import '../sheet_header.dart';
 import '../rust/api_all.dart' as rust;
@@ -791,18 +792,6 @@ class CommentThreadState extends State<CommentThread> {
     showToast(context, message);
   }
 
-  String _relative(BigInt timeMs) {
-    if (timeMs <= BigInt.zero) return '';
-    final dt = DateTime.fromMillisecondsSinceEpoch(timeMs.toInt());
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return '刚刚';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
-    if (diff.inHours < 24) return '${diff.inHours} 小时前';
-    if (diff.inDays < 30) return '${diff.inDays} 天前';
-    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-'
-        '${dt.day.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -922,7 +911,7 @@ class CommentThreadState extends State<CommentThread> {
             comment: _items[i],
             shareSourceTitle: widget.shareSourceTitle,
             shareSourceKind: widget.shareSourceKind,
-            timeText: _relative(_items[i].timeMs),
+            timeText: relativeTime(_items[i].timeMs),
             onToggleLike: () => _toggleLike(i),
             previewReplies: _previewFor(_items[i]),
             onExpandReplies: () => _openReplies(_items[i]),

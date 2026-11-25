@@ -4,6 +4,7 @@ import '../cover_art.dart';
 import '../cover_backdrop.dart';
 import '../cover_palette.dart';
 import '../expandable_text.dart';
+import '../format.dart' show formatCountMagnitude;
 import '../layout.dart' show kPagePadding;
 import '../marquee_text.dart';
 import '../rust/api_all.dart' as rust;
@@ -78,7 +79,9 @@ class PlaylistHeaderCard extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              '${d.trackCount} 首 · 播放 ${d.playCount} 次',
+                              // 播放量按量级显示(13840325 → 1384w+); 首数是精确计数,
+                              // 用户要能对上自己的歌单, 保持原样。
+                              '${d.trackCount} 首 · 播放 ${formatCountMagnitude(d.playCount.toInt())} 次',
                               style: theme.textTheme.bodySmall,
                             ),
                           ),

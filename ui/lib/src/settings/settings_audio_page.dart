@@ -345,10 +345,13 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
             onChanged: (v) => settings.update(hardwareDecode: v),
           )
         else
-          const ListTile(
-            leading: Icon(Icons.info_outline),
-            title: Text('硬件解码'),
-            subtitle: Text('Linux 端为纯软解(rodio + symphonia), 无硬件解码选项'),
+          ListTile(
+            key: const Key('hardwareDecodeNote'),
+            leading: const Icon(Icons.info_outline),
+            title: const Text('硬件解码'),
+            // 平台名不能写死: 这条分支同时是 Linux 与 Windows(之前写「Linux 端」
+            // 糊到了 Windows 版上, 用户看到自相矛盾的说明)
+            subtitle: Text(hardwareDecodePlatformNote(defaultTargetPlatform)),
           ),
         const Divider(height: 1),
         if (streamCacheNote == null)
@@ -513,6 +516,21 @@ String? streamCachePlatformNote(TargetPlatform platform) {
       return '不可用(整首下载后播放)';
     default:
       return '恒开(渐进下载 + 落盘)';
+  }
+}
+
+/// 桌面「硬件解码」的说明: 桌面播放器是纯软解(rodio + symphonia), 没有硬解开关。
+///
+/// 与 [streamCachePlatformNote] 同一写法: 按平台给文案, 不把「Linux 端」
+/// 糊到 Windows 版上。
+String hardwareDecodePlatformNote(TargetPlatform platform) {
+  switch (platform) {
+    case TargetPlatform.windows:
+      return 'Windows 端为纯软解(rodio + symphonia), 无硬件解码选项';
+    case TargetPlatform.macOS:
+      return 'macOS 端为纯软解(rodio + symphonia), 无硬件解码选项';
+    default:
+      return 'Linux 端为纯软解(rodio + symphonia), 无硬件解码选项';
   }
 }
 

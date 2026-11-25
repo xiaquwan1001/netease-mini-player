@@ -2,19 +2,20 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:minincm/src/keystore.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   tearDown(() {
-    KeystoreChannel.debugForceAndroid = false;
+    debugForceAndroid = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('ncm/keystore'), null);
   });
 
   /// 装一个内存版 Keystore 假通道, 返回句柄供断言.
   ({Map<String, String> store, List<String> calls}) installFakeKeystore() {
-    KeystoreChannel.debugForceAndroid = true; // host 上强制走 Android 分支
+    debugForceAndroid = true; // host 上强制走 Android 分支
     final store = <String, String>{};
     final calls = <String>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -62,7 +63,7 @@ void main() {
     });
 
     test('通道 MissingPluginException 按空/失败处理', () async {
-      KeystoreChannel.debugForceAndroid = true; // 无 handler ⇒ MissingPlugin
+      debugForceAndroid = true; // 无 handler ⇒ MissingPlugin
       final channel = KeystoreChannel();
       expect(await channel.list(), isEmpty);
       expect(await channel.put('k', 'v'), isFalse);
@@ -89,7 +90,7 @@ void main() {
     });
 
     test('ensureRestored: Keystore 不可用就不 restore', () async {
-      KeystoreChannel.debugForceAndroid = false; // 非 Android ⇒ available=false
+      debugForceAndroid = false; // 非 Android ⇒ available=false
       var restored = false;
       final sync = CredentialSync(
         restore: (_) async => restored = true,
@@ -112,7 +113,7 @@ void main() {
       expect(ks.store.containsKey('account:3'), isFalse);
 
       // put 失败(非 Android 通道)不计数、不抛
-      KeystoreChannel.debugForceAndroid = false;
+      debugForceAndroid = false;
       final failing = CredentialSync(
         fetchPending: () async => const [CredOp('put', 'session', 'v')],
       );
@@ -128,7 +129,7 @@ void main() {
 
     test('ensureRestored 中 get 返回 null 的 key 不进 restore', () async {
       installFakeKeystore(); // 空 store: list 空
-      KeystoreChannel.debugForceAndroid = true;
+      debugForceAndroid = true;
       final restores = <List<CredEntry>>[];
       final sync = CredentialSync(
         restore: (entries) async => restores.add(entries),

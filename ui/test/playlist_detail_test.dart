@@ -245,6 +245,15 @@ void main() {
     expect(find.text('华语流行精选'), findsOneWidget);
   });
 
+  // 头部信息行的播放量走 format.dart 的量级口径(128000 → 12w+),
+  // 不再把 BigInt 原样铺出来「播放 128000 次」。
+  testWidgets('头部信息行: 播放量按量级显示, 首数保持精确', (tester) async {
+    await _pumpPage(tester, const Size(360, 800));
+
+    expect(find.text('20 首 · 播放 12w+ 次'), findsOneWidget);
+    expect(find.text('20 首 · 播放 128000 次'), findsNothing);
+  });
+
   testWidgets('单列: 点评论入口把内联评论区滚进视野', (tester) async {
     await _pumpPage(tester, const Size(360, 800));
 

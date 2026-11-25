@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/audio_tuning.dart';
-import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/toast.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// P-05 + P-06: applyAudioTuning 的"诚实化"契约。
 ///
@@ -26,7 +26,7 @@ void main() {
   bool loudnessDynamic = false;
 
   setUp(() {
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
     resetAudioTuningNotices();
     eqText = settings.eqProfileText;
     loudnessDynamic = settings.loudnessDynamic;
@@ -35,7 +35,7 @@ void main() {
   });
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     settings.eqProfileText = eqText;
     settings.loudnessDynamic = loudnessDynamic;
     settings.notifyListeners();

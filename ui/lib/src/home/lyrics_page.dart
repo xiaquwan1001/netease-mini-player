@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_settings.dart';
 import '../auth.dart';
 import '../detail_faces.dart';
+import '../error_views.dart' show InlineError;
 import '../lyric.dart';
 import '../marquee_text.dart';
 import '../rust/api_all.dart' as rust;
@@ -192,9 +193,13 @@ class HomeLyricsPage {
         onLineLongPress: onLong,
       );
     } else if (lyric.error != null) {
+      // 错误态要给出路: 只给一行错误文本时, 同一首只能切歌才可能恢复。
+      // 「重试」走 [LyricController.retryLoad](重新发一次取数, 不是另造四态)。
       body = Padding(
         padding: const EdgeInsets.all(24),
-        child: Center(child: Text(lyric.error!, textAlign: TextAlign.center)),
+        child: Center(
+          child: InlineError(message: lyric.error!, onRetry: lyric.retryLoad),
+        ),
       );
     } else if (lyric.lines.isEmpty) {
       body = const Center(child: Text('暂无歌词'));

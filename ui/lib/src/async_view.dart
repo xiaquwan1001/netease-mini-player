@@ -17,6 +17,7 @@ import 'state_views.dart';
 ///
 /// 判定口径与迁移前的两份 `_AsyncSection` 逐字一致: 未完成为加载中,
 /// `hasError` 为错误, `data == null` / 空 List / 空串为空态。
+/// 唯一例外是「换 future」: 手里还有上一份数据时不退回加载态(见 [_AsyncViewState.build])。
 class AsyncView<T> extends StatefulWidget {
   const AsyncView({
     super.key,
@@ -127,7 +128,12 @@ class _AsyncViewState<T> extends State<AsyncView<T>>
     return FutureBuilder<T>(
       future: _future,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done) {
+        // 只在**手里没有旧数据**时才进加载态。父层换 future(下拉刷新 / 云盘「加载
+        // 更多」/删除一首)时 `FutureBuilder` 会先给一帧 waiting —— 但数据还在快照里
+        // (`inState` 保 data)。那一帧若渲染 LoadingView, 整个列表会被卸载再重建:
+        // 云盘翻到第 N 页后每次跳回顶部、风格页/歌单详情静默刷新时卡片退化成空壳,
+        // 都是这一帧造成的。
+        if (snap.connectionState != ConnectionState.done && !snap.hasData) {
           final loadingBuilder = widget.loadingBuilder;
           if (loadingBuilder != null) return loadingBuilder(context);
           return LoadingView(

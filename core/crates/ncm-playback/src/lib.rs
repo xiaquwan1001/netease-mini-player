@@ -502,6 +502,8 @@ mod backend {
         SampleRate, Source,
     };
     use std::fs::File;
+    // `Seek` 供探测重试时把 `try_clone` 出来的句柄倒回文件头(见 `attempt_pending_play`)
+    use std::io::Seek;
     // Instant 只被桌面后端用(GrowingFile 判死线 / 恢复淡入斜坡的计时), 放在模块内
     // 而不是文件顶部: 否则 Android 侧(非桌面 backend)会报 unused import。
     use std::time::Instant;
@@ -585,6 +587,15 @@ mod backend {
     struct GrowingFile {
         file: File,
         done: Arc<std::sync::atomic::AtomicBool>,
+        /// 读到"暂时没有新字节"时要不要阻塞等下载.
+        ///
+        /// 播放期**必须**等(否则播到已下载末尾就当播完); 建解码器期间的探测
+        /// **不许**等 —— symphonia 探测是逐字节扫 marker(上限 1MiB)、mp3 还要整块读
+        /// ID3, 空 `.part` 上做 `Decoder::build()` 会落进下面的等待循环(上限 90s),
+        /// 而这段代码跑在音频**命令线程**上, 期间 Pause/Stop/Seek/Volume 全排队。
+        /// 开关做成共享原子量是为了"探测完立刻切成等待": 解码器被移进播放器后
+        /// 拿不到 `GrowingFile` 本体了(见 [`build_growing`])。
+        wait_for_more: Arc<std::sync::atomic::AtomicBool>,
         /// **最近一次拿到新字节**的时刻(不是"打开文件"的时刻).
         ///
         /// T2(2026-11-18) 修的真实缺陷: 以前这个字段叫 `since` 且只在 open 时赋值,
@@ -617,13 +628,31 @@ mod backend {
     }
 
     impl GrowingFile {
+        /// 播放期的构造(wait_for_more = true). 生产路径走 [`build_growing`]
+        /// (先不等待地探测, 成功后再置位), 这里只给"就该阻塞等数据"的用例用。
+        #[cfg(test)]
         fn open(path: &str, done: Arc<std::sync::atomic::AtomicBool>) -> std::io::Result<Self> {
-            Ok(Self {
-                file: File::open(path)?,
+            Ok(Self::from_file(File::open(path)?, done, true))
+        }
+
+        /// `wait_for_more` = 读到"暂时没有新字节"时是不是阻塞等下载
+        fn from_file(
+            file: File,
+            done: Arc<std::sync::atomic::AtomicBool>,
+            wait_for_more: bool,
+        ) -> Self {
+            Self {
+                file,
                 done,
+                wait_for_more: Arc::new(std::sync::atomic::AtomicBool::new(wait_for_more)),
                 last_data: Instant::now(),
                 limit: stall_limit(),
-            })
+            }
+        }
+
+        /// 等待开关: 探测成功后由 [`build_growing`] 置 true
+        fn wait_flag(&self) -> Arc<std::sync::atomic::AtomicBool> {
+            Arc::clone(&self.wait_for_more)
         }
     }
 
@@ -638,6 +667,14 @@ mod backend {
                     return Ok(n);
                 }
                 if self.done.load(std::sync::atomic::Ordering::Acquire) {
+                    return Ok(0);
+                }
+                if !self
+                    .wait_for_more
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    // 探测期: 不等数据, 把"暂时还没字节"报成 EOF 让 symphonia 立刻失败
+                    // 返回给命令线程(调用方看到有新字节了再重试, 见 `PendingPlay`)。
                     return Ok(0);
                 }
                 if self.last_data.elapsed() > self.limit {
@@ -663,6 +700,34 @@ mod backend {
     impl std::io::Seek for GrowingFile {
         fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
             self.file.seek(pos)
+        }
+    }
+
+    /// 建一条"边下边播"的解码器, **探测期不阻塞**(R5).
+    ///
+    /// 两个阶段刻意分开:
+    /// 1. 探测(symphonia 扫 marker + 读头部)在 `wait_for_more = false` 下做: 读空立刻当
+    ///    EOF 返回, 于是"首块数据还没到"在毫秒级失败, 而不是把音频命令线程挂到 90s 判死线;
+    /// 2. 探测成功才把开关置 true —— 这之后读到"暂时没新字节"必须阻塞等下载,
+    ///    否则播到已下载末尾就当整首播完(边下边播的核心性质, 见 `blocks_at_eof_until_more_bytes_arrive`)。
+    ///
+    /// 返回 `Err` 表示**数据还不够建解码器**(慢网起播的正常状态), 由调用方登记重试。
+    fn build_growing(
+        file: File,
+        done: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Decoder<GrowingFile>, String> {
+        let source = GrowingFile::from_file(file, done, false);
+        let wait = source.wait_flag();
+        match Decoder::builder()
+            .with_data(source)
+            .with_seekable(false)
+            .build()
+        {
+            Ok(decoder) => {
+                wait.store(true, std::sync::atomic::Ordering::Release);
+                Ok(decoder)
+            }
+            Err(e) => Err(e.to_string()),
         }
     }
 
@@ -738,6 +803,7 @@ mod backend {
     }
 
     /// 当前正在播的来源(P-10 方案 B: 渐进源下载完成后要据此重建可 seek 的解码器)
+    #[derive(Clone)]
     struct CurrentTrack {
         track_id: u64,
         source: PlaySource,
@@ -748,6 +814,96 @@ mod backend {
     /// 当前源的分级(渐进源要看 done 与完整文件是否就位)
     fn current_status(track: &CurrentTrack) -> SourceStatus {
         resolve_source_status(&track.source)
+    }
+
+    /// 等首块数据期间暂存的起播请求(R5).
+    ///
+    /// 以前 `Cmd::Play` 直接在命令线程上 `Decoder::build()`, 慢网起播时那条线程被
+    /// `GrowingFile` 的等待循环占住(上限 90s) ⇒ Pause/Stop/Seek/Volume 全排队、seek 的
+    /// 1.5s 回执必超时。现在建不成解码器就登记在这里, 每个 tick 重试一次。
+    struct PendingPlay {
+        track: CurrentTrack,
+        /// Play 时刻就打开的 `.part` 句柄: 下载完成会 rename 成正式缓存文件, 按路径
+        /// 重开会 404, 而句柄一直指向同一个 inode(与改动前"开播即 open"的语义一致)。
+        /// 重试靠 `try_clone` + `seek(0)` 复用这同一个 inode。
+        file: Option<File>,
+        /// 上次尝试时碰到的文件长度: 没有新字节就不重复探测(免得每个 tick 扫一遍)
+        probed_len: u64,
+        /// 等首块期间用户按过暂停: 首块到达后要停在暂停态, 不能自己放起来
+        paused: bool,
+        /// 最近一次**看到新字节**的时刻(判死口径与 `GrowingFile` 一致)
+        progressed_at: Instant,
+    }
+
+    /// 一条待起播请求重试的结果
+    enum PendingOutcome {
+        /// 已经真的开播了
+        Started,
+        /// 数据还不够建解码器: 等下一块再试(正常状态, 不是错误)
+        NotReady(String),
+    }
+
+    /// 尝试把"等首块"的起播请求真的开起来(**不阻塞**: 见 [`build_growing`])。
+    fn attempt_pending_play(
+        player: &RodioPlayer,
+        pending: &mut PendingPlay,
+        local: &PlaybackTuning,
+        state: &Arc<Mutex<PlayerState>>,
+    ) -> PendingOutcome {
+        let PlaySource::Growing { path, done, .. } = &pending.track.source else {
+            return PendingOutcome::NotReady("待起播的来源不是渐进源".into());
+        };
+        // 用 `try_clone` 而不是把句柄交出去: build 失败时句柄要留着下次再用
+        let cloned = match &pending.file {
+            Some(file) => file.try_clone().map_err(|e| e.to_string()),
+            // 没拿到句柄(Play 时文件还没创建): 优先按 `.part` 路径开; 如果 `.part` 已经被
+            // rename 成正式缓存文件(下得比起播还快), 就开那个完整文件
+            None => match current_status(&pending.track) {
+                SourceStatus::GrowingComplete(final_path) => {
+                    File::open(&final_path).map_err(|e| format!("open {final_path} failed: {e}"))
+                }
+                _ => File::open(path).map_err(|e| format!("open {path} failed: {e}")),
+            },
+        };
+        let mut file = match cloned {
+            Ok(file) => file,
+            Err(e) => return PendingOutcome::NotReady(e),
+        };
+        // 每次探测都从头开始(dup 出来的 fd 与原件共享读写位置)
+        if let Err(e) = file.seek(std::io::SeekFrom::Start(0)) {
+            return PendingOutcome::NotReady(format!("seek {path} failed: {e}"));
+        }
+        match build_growing(file, Arc::clone(done)) {
+            Ok(decoder) => {
+                start_source(
+                    player,
+                    decoder,
+                    local,
+                    pending.track.track_id,
+                    pending.track.expected_duration_ms,
+                    false,
+                    state,
+                );
+                if pending.paused {
+                    // 等首块期间用户已经按了暂停: 起播后立刻停住(状态在 tick 里会对齐)
+                    player.pause();
+                    if let Ok(mut st) = state.lock() {
+                        st.playing = false;
+                    }
+                }
+                PendingOutcome::Started
+            }
+            Err(e) => PendingOutcome::NotReady(e),
+        }
+    }
+
+    /// 渐进源当前的文件长度(判"有没有新字节"用; 拿不到当 0)
+    fn growing_len(track: &CurrentTrack) -> u64 {
+        match &track.source {
+            PlaySource::Growing { path, .. } | PlaySource::File(path) => {
+                std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+            }
+        }
     }
 
     /// 换源时的淡入时长: 足够盖住波形不连续(消爆音), 又短到听不出来
@@ -910,6 +1066,9 @@ mod backend {
         let mut last_tick = Instant::now();
         // 当前曲目的来源(P-10 方案 B: 渐进源下载完成后要靠它找到完整文件并换源)
         let mut current: Option<CurrentTrack> = None;
+        // 等首块数据的起播请求(R5): 建不成解码器就寄存在这里, 由 tick 分支重试,
+        // 命令线程因此始终在 `rx.recv_timeout` 上, Pause/Stop/Seek/Volume 不会被阻塞
+        let mut pending_play: Option<PendingPlay> = None;
         // 待跳登记: 渐进期 seek 先排队, 下载完成后自动应用
         let mut planner = SeekPlanner::new();
         // 播放位置的基准偏移: **只有换源这一条路径**会抬高它(新解码器是先 seek 再追加的,
@@ -938,6 +1097,8 @@ mod backend {
                     player.clear();
                     planner.reset();
                     pos_base_ms = 0;
+                    // 新的一条 Play 取消上一条还没等到首块的起播
+                    pending_play = None;
                     // 换曲: 记下来源(渐进源下载完成后要靠它换源), 能力先按当前解码器报
                     // 换曲即重置恢复淡入: 新曲目从头播, 不吃上一个暂停恢复的斜坡
                     resume_ramp = None;
@@ -974,45 +1135,50 @@ mod backend {
                             }
                         },
                         // 边下边播: 文件还在增长, 报告"不可 seek"以免 symphonia 为算时长扫全文件
-                        PlaySource::Growing { path, done, .. } => {
-                            match GrowingFile::open(&path, done) {
-                                Ok(file) => {
-                                    match Decoder::builder()
-                                        .with_data(file)
-                                        .with_seekable(false)
-                                        .build()
-                                    {
-                                        Ok(decoder) => start_source(
-                                            &player,
-                                            decoder,
-                                            &local,
-                                            track_id,
-                                            expected_duration_ms,
-                                            seekable,
-                                            &state,
-                                        ),
-                                        Err(e) => {
-                                            eprintln!("[playback] stream decode failed: {e}");
-                                            started = false;
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("[playback] open {path} failed: {e}");
+                        PlaySource::Growing { path, .. } => {
+                            // R5: 句柄在 Play 时刻就拿在手上(数据下完 `.part` 会被 rename),
+                            // 首块数据没到也不在这里等 —— 建不成解码器就登记到 tick 重试,
+                            // 命令线程立刻回去收 Pause/Stop/Seek/Volume。
+                            let mut pending = PendingPlay {
+                                track: spec.clone(),
+                                file: File::open(&path).ok(),
+                                probed_len: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+                                paused: false,
+                                progressed_at: Instant::now(),
+                            };
+                            match attempt_pending_play(&player, &mut pending, &local, &state) {
+                                PendingOutcome::Started => started = true,
+                                PendingOutcome::NotReady(e) => {
+                                    // 慢网起播的正常状态(首块还没到), 不是错误
+                                    log::info!("[playback] 等首块数据: {e}");
                                     started = false;
+                                    pending_play = Some(pending);
                                 }
                             }
                         }
                     }
-                    current = if started { Some(spec) } else { None };
+                    // 还在等首块的也算"当前曲目": 让 seek 能登记待跳而不是报"没有可跳转的曲目"
+                    current = if started || pending_play.is_some() {
+                        Some(spec)
+                    } else {
+                        None
+                    };
                 }
                 Ok(Cmd::Pause) => {
                     player.pause();
                     // 暂停打断斜坡: 恢复时会重新起一个完整的淡入
                     resume_ramp = None;
+                    // 等首块期间就按了暂停: 首块到达后也要停着(不得等首字节才响应)
+                    if let Some(pending) = pending_play.as_mut() {
+                        pending.paused = true;
+                    }
                 }
                 Ok(Cmd::Resume) => {
                     player.play();
+                    // 等首块期间按了播放: 首块到达后就直接响, 不要停在暂停态
+                    if let Some(pending) = pending_play.as_mut() {
+                        pending.paused = false;
+                    }
                     // 只有从暂停恢复才淡入(用户设置的 fade_ms; 0 = 关闭淡入 → 瞬时)
                     resume_ramp = if local.fade_ms > 0 {
                         Some((
@@ -1026,6 +1192,8 @@ mod backend {
                 Ok(Cmd::Stop) => {
                     player.clear();
                     current = None;
+                    // 还在等首块的起播也一并取消: stop 不得等首字节
+                    pending_play = None;
                     planner.reset();
                     pos_base_ms = 0;
                     if let Ok(mut st) = state.lock() {
@@ -1045,26 +1213,34 @@ mod backend {
                         None => Err(PlaybackError::Unsupported(
                             "当前没有可跳转的曲目: seek 已忽略".into(),
                         )),
-                        Some(track) => match planner.request(&current_status(track), position_ms) {
-                            Ok(SeekAction::Direct(target)) => {
-                                let r = try_seek_player(&player, target);
-                                if r.is_ok() {
-                                    // rodio 自己会把位置计数挪到 target, 基准回到 0
-                                    pos_base_ms = 0;
+                        Some(track) => {
+                            // 还没起播(等首块)时一律先登记待跳: 此时播放队列是空的,
+                            // 直接去重建/跳转没有意义; 起播后 tick 分支会把待跳应用上去
+                            let status = if pending_play.is_some() {
+                                SourceStatus::Growing
+                            } else {
+                                current_status(track)
+                            };
+                            match planner.request(&status, position_ms) {
+                                Ok(SeekAction::Direct(target)) => {
+                                    let r = try_seek_player(&player, target);
+                                    if r.is_ok() {
+                                        // rodio 自己会把位置计数挪到 target, 基准回到 0
+                                        pos_base_ms = 0;
+                                    }
+                                    r.map(|()| SeekOutcome::Applied)
                                 }
-                                r.map(|()| SeekOutcome::Applied)
+                                Ok(SeekAction::Queue(_)) => Ok(SeekOutcome::Queued),
+                                Ok(SeekAction::Rebuild(target)) => {
+                                    apply_rebuild(&player, &mut current, target, &local, &state)
+                                        .map(|base| {
+                                            pos_base_ms = base;
+                                            SeekOutcome::Applied
+                                        })
+                                }
+                                Err(e) => Err(e),
                             }
-                            Ok(SeekAction::Queue(_)) => Ok(SeekOutcome::Queued),
-                            Ok(SeekAction::Rebuild(target)) => {
-                                apply_rebuild(&player, &mut current, target, &local, &state).map(
-                                    |base| {
-                                        pos_base_ms = base;
-                                        SeekOutcome::Applied
-                                    },
-                                )
-                            }
-                            Err(e) => Err(e),
-                        },
+                        }
                     };
                     record_seek_outcome(&state, &result);
                     // 待跳 / 能力变化都如实落到可轮询状态(UI 据此显示"已排队")
@@ -1140,6 +1316,44 @@ mod backend {
                         record_seek_outcome(&state, &Err(e));
                     }
                     _ => {}
+                }
+            }
+
+            // R5: 等首块数据的起播重试(慢网起播)。只在**有新字节**或下载结束时才重新探测:
+            // 空 `.part` 不会每 200ms 被扫一遍, 而命令线程始终停在 `recv_timeout` 上 ——
+            // 所以等首块期间 Pause/Stop/Seek/Volume 照常响应。
+            if let Some(mut pending) = pending_play.take() {
+                let len = growing_len(&pending.track);
+                let done = matches!(
+                    current_status(&pending.track),
+                    SourceStatus::GrowingComplete(_) | SourceStatus::GrowingFailed
+                );
+                if done || len > pending.probed_len {
+                    if len > pending.probed_len {
+                        pending.probed_len = len;
+                        pending.progressed_at = Instant::now();
+                    }
+                    match attempt_pending_play(&player, &mut pending, &local, &state) {
+                        PendingOutcome::Started => {}
+                        PendingOutcome::NotReady(e) => {
+                            if done {
+                                // 下载已结束(成功但数据不够解码 / 失败): 再等不会有新字节
+                                eprintln!("[playback] stream decode failed: {e}");
+                                current = None;
+                            } else {
+                                pending_play = Some(pending);
+                            }
+                        }
+                    }
+                } else if pending.progressed_at.elapsed() > stall_limit() {
+                    // 与 `GrowingFile` 的判死口径一致: 下载线程整个消失时不无限等
+                    eprintln!(
+                        "[playback] growing file stalled > {:?}, aborting this track",
+                        stall_limit()
+                    );
+                    current = None;
+                } else {
+                    pending_play = Some(pending);
                 }
             }
 
@@ -1279,6 +1493,146 @@ mod backend {
                 total += n;
             }
             assert_eq!(total, 44, "只有 header 时读到 44 字节就该结束");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        // ---- R5: 建解码器不得阻塞音频命令线程 ----
+
+        /// R5 判据: 首块数据还没到时建解码器**不得阻塞**。
+        ///
+        /// 改动前这里的 `Decoder::build()` 会落进 `GrowingFile::read` 的 10ms 等待循环
+        /// (上限 `stall_limit` 90s), 而调用它的正是**音频命令线程** —— 那段时间
+        /// Pause/Stop/Seek/Volume 全排队, seek 的 1.5s 回执必然超时。
+        #[test]
+        fn build_growing_does_not_block_on_empty_part() {
+            let (dir, path) = temp_wav("empty-part");
+            std::fs::write(&path, b"").unwrap();
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let started = Instant::now();
+            let err = match build_growing(File::open(&path).unwrap(), Arc::clone(&done)) {
+                Ok(_) => panic!("空文件不应该能建出解码器"),
+                Err(e) => e,
+            };
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed < Duration::from_secs(1),
+                "建解码器必须立刻失败, 实测 {elapsed:?}"
+            );
+            assert!(!err.is_empty(), "失败原因要能传给调用方");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// 探测期读空必须立刻报 EOF, 不能进等待循环(这是上一条的根因)。
+        #[test]
+        fn probe_reads_report_eof_instead_of_waiting() {
+            let (dir, path) = temp_wav("no-wait");
+            std::fs::write(&path, b"").unwrap();
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let mut file = GrowingFile::from_file(File::open(&path).unwrap(), done, false);
+            let started = Instant::now();
+            let mut buf = [0u8; 16];
+            assert_eq!(file.read(&mut buf).unwrap(), 0, "探测期读空要立刻报 EOF");
+            assert!(started.elapsed() < Duration::from_millis(500));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// 探测成功之后必须切回"阻塞等新字节": 否则播到已下载末尾就当整首播完。
+        ///
+        /// 场景与 [`blocks_at_eof_until_more_bytes_arrive`] 相同, 但走生产路径
+        /// [`build_growing`] (探测期不等待), 断言的样本数必须是"全部"而不是先到的一半。
+        #[test]
+        fn build_growing_waits_for_later_bytes_after_probe_succeeds() {
+            let (dir, path) = temp_wav("probe-then-wait");
+            let total_samples = 4000usize;
+            let half = total_samples / 2;
+            let mut f = std::fs::File::create(&path).unwrap();
+            f.write_all(&wav_header(total_samples)).unwrap();
+            f.write_all(&vec![0u8; half * 2]).unwrap();
+            f.flush().unwrap();
+            drop(f);
+
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let mut decoder = build_growing(File::open(&path).unwrap(), Arc::clone(&done))
+                .expect("头部到齐就该能建解码器");
+            let writer = {
+                let path = path.clone();
+                let done = Arc::clone(&done);
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(50));
+                    let mut f = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .unwrap();
+                    f.write_all(&vec![0u8; (total_samples - half) * 2]).unwrap();
+                    f.flush().unwrap();
+                    done.store(true, std::sync::atomic::Ordering::Release);
+                })
+            };
+            let mut got = 0usize;
+            while decoder.next().is_some() {
+                got += 1;
+            }
+            writer.join().unwrap();
+            assert_eq!(got, total_samples, "探测完之后必须继续阻塞等新字节");
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// R5: 等首块期间的起播重试 —— 首块没到不动播放队列, 到了才开播;
+        /// 期间用户按的暂停不能被起播吞掉。
+        #[test]
+        fn pending_play_starts_on_first_bytes_and_keeps_user_pause() {
+            let (dir, path) = temp_wav("pending");
+            std::fs::write(&path, b"").unwrap();
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let (player, out) = RodioPlayer::new();
+            let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let sink = Arc::new(Mutex::new(Vec::<f32>::new()));
+            let drainer = spawn_drainer(out, Arc::clone(&stop), Arc::clone(&sink));
+            let state = Arc::new(Mutex::new(PlayerState::default()));
+            let local = PlaybackTuning::default();
+
+            let mut pending = PendingPlay {
+                track: CurrentTrack {
+                    track_id: 11,
+                    source: PlaySource::Growing {
+                        path: path.to_string_lossy().to_string(),
+                        final_path: None,
+                        done: Arc::clone(&done),
+                    },
+                    expected_duration_ms: Some(50),
+                },
+                file: Some(File::open(&path).unwrap()),
+                probed_len: 0,
+                // 等首块期间用户按了暂停
+                paused: true,
+                progressed_at: Instant::now(),
+            };
+
+            // 首块还没到: 不建解码器, 也不往播放队列里塞东西
+            assert!(matches!(
+                attempt_pending_play(&player, &mut pending, &local, &state),
+                PendingOutcome::NotReady(_)
+            ));
+            assert!(player.empty(), "首块没到就不能开播");
+            assert!(state.lock().unwrap().track_id.is_none());
+
+            // 首块到达(同一个 inode 被下载线程追加了整首): 重试要真的开播
+            let mut bytes = wav_header(400);
+            bytes.extend(std::iter::repeat_n(0u8, 800));
+            std::fs::write(&path, bytes).unwrap();
+            assert!(matches!(
+                attempt_pending_play(&player, &mut pending, &local, &state),
+                PendingOutcome::Started
+            ));
+            assert!(!player.empty(), "首块到达后要真的把源塞进队列");
+            assert!(player.is_paused(), "等首块期间按的暂停不能被起播吞掉");
+            let st = state.lock().unwrap().clone();
+            assert_eq!(st.track_id, Some(11));
+            assert!(!st.playing, "暂停中起播不能报在播");
+            assert!(!st.seekable, "渐进期的解码器仍然不可 seek");
+
+            stop.store(true, std::sync::atomic::Ordering::Release);
+            drainer.join().unwrap();
             let _ = std::fs::remove_dir_all(&dir);
         }
 

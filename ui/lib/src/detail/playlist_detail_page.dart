@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
@@ -17,6 +18,7 @@ import '../layout.dart'
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api_all.dart' as rust;
+import '../song_actions.dart' show AppActions;
 import '../toast.dart' show showToast, showUndoToast;
 import '../user/user_page.dart' show showUserPage;
 import 'detail_shared.dart' show showResourceShareSheet;
@@ -45,6 +47,11 @@ Future<void> showPlaylistDetail(
   bool special = false,
   bool loggedIn = false,
   Set<BigInt> likedIds = const {},
+
+  /// 红心实时真相(D06): 传访问器时, 本页每次 build 都把宿主的当前状态同步进
+  /// 页内副本 —— 从播放条/歌曲菜单改的同曲红心也能立刻反映到详情页。
+  /// 只给 [likedIds] 快照的旧调用方仍按快照工作(行为不变)。
+  bool Function(BigInt id)? likedOf,
   BigInt? currentTrackId,
   BigInt? currentPlaylistId,
   void Function(BigInt id, bool liked)? onLikeChanged,
@@ -56,6 +63,7 @@ Future<void> showPlaylistDetail(
     special: special,
     loggedIn: loggedIn,
     likedIds: likedIds,
+    likedOf: likedOf,
     currentTrackId: currentTrackId,
     currentPlaylistId: currentPlaylistId,
     onLikeChanged: onLikeChanged,
@@ -78,6 +86,7 @@ class _PlaylistDetailPage extends StatefulWidget {
     this.special = false,
     this.loggedIn = false,
     this.likedIds = const {},
+    this.likedOf,
     this.currentTrackId,
     this.currentPlaylistId,
     this.onLikeChanged,
@@ -94,6 +103,9 @@ class _PlaylistDetailPage extends StatefulWidget {
   final bool special;
   final bool loggedIn;
   final Set<BigInt> likedIds;
+
+  /// 红心实时访问器(见 [showPlaylistDetail] 的同名参数); null = 只认 [likedIds] 快照.
+  final bool Function(BigInt id)? likedOf;
   final BigInt? currentTrackId;
   final BigInt? currentPlaylistId;
   final void Function(BigInt id, bool liked)? onLikeChanged;
@@ -137,8 +149,37 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
   List<rust.SongDto>? _songs;
   String? _songsError;
 
-  /// 红心状态的页面内副本(以入参为初值, 变更经 onLikeChanged 同步回主页)
+  /// 红心状态的页面内副本(渲染用)。
+  ///
+  /// 唯一真相在主页([AppActions.host] 的 `isLiked`, 即主页的"我喜欢的音乐"id 集合);
+  /// 本副本承担三件事: 初值快照、本页红心点击的乐观翻转、"我喜欢的音乐"从
+  /// `likedSongs` 学到的补齐。
+  ///
+  /// **实时回流(D06)**: 调用方传了 [likedOf] 时, [build] 开头会先把宿主当前状态
+  /// 同步进来([_syncLikedFromHost]), 因此从播放条/歌曲菜单改的同曲红心也会反映到本页
+  /// (分栏同屏时最多晚一帧)。没传访问器的旧调用方仍然只认入参快照。
   Set<BigInt> _liked = <BigInt>{};
+
+  /// 把宿主红心真相同步进页内副本(D06)。
+  ///
+  /// 为什么在 build 里做: 宿主变更(主页 `_markLiked` 的 setState)会重建分栏, 本页作为
+  /// 子节点跟着 build —— 这是唯一能拿到"最新真相"的时机; 本页没有被重建时也就没有
+  /// 新的一帧要画。只对本页已知 id 求值(曲目 + 副本已有条目), 不重建全量集合。
+  /// 纯派生缓存刷新, 不发通知/不 setState。
+  void _syncLikedFromHost() {
+    final live = widget.likedOf;
+    if (live == null) return;
+    final ids = <BigInt>{...?_songs?.map((s) => s.id), ..._liked};
+    for (final id in ids) {
+      final liked =
+          live(id) || (widget.special && _likedFromSongs.contains(id));
+      if (liked) {
+        _liked.add(id);
+      } else {
+        _liked.remove(id);
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -146,6 +187,20 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     _liked = Set<BigInt>.of(widget.likedIds);
     _detailFuture = _loadDetail();
     _loadSongs();
+  }
+
+  @override
+  void didUpdateWidget(_PlaylistDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 入参红心集合换了(例如还停在分栏里又被重新选中: openDetail 会拿新的
+    // `likedIds` 重建本页) ⇒ 快照跟上, 不要留两份互不通知的状态(D06)。
+    // 不需要 setState: didUpdateWidget 之后紧跟一次 build。
+    // 有 [likedOf] 访问器时这份快照只是初值, build 里还会按宿主真相刷新。
+    if (!setEquals(oldWidget.likedIds, widget.likedIds)) {
+      _liked = Set<BigInt>.of(widget.likedIds);
+      // "我喜欢的音乐"里已加载的曲目天然都在喜欢列表(与 initState 同口径补齐)
+      if (widget.special) _liked.addAll(_likedFromSongs);
+    }
   }
 
   @override
@@ -215,6 +270,11 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
     }
   }
 
+  /// "我喜欢的音乐"加载回来的曲目 id(含义见 `_liked` 的补齐注释)
+  Set<BigInt> get _likedFromSongs => {
+    for (final s in _songs ?? const <rust.SongDto>[]) s.id,
+  };
+
   Future<void> _loadSongs() async {
     setState(() => _songsError = null);
     try {
@@ -228,7 +288,7 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
         _songs = songs;
         // "我喜欢的音乐"里的曲目天然都在我喜欢列表, 并进红心集合
         // (主页的 likedIds 可能还没拉完, 以加载结果补齐)
-        if (widget.special) _liked.addAll(songs.map((s) => s.id));
+        if (widget.special) _liked.addAll(_likedFromSongs);
       });
     } catch (e) {
       if (!mounted) return;
@@ -288,24 +348,41 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
       _toast('收藏需要先登录');
       return;
     }
-    final liked = _liked.contains(song.id);
+    // 走主页注入的动作宿主(`SongActionWiring.toggleLikeFor`): 同一行上红心与
+    // "..."菜单里的喜欢因此是**同一个实现** —— 乐观翻转、失败回滚、通知栏红心
+    // 同步、取消喜欢那条 3 秒提示都在那边(D05; 改造前这里是"先请求后改", 有网络
+    // 延迟且从不同步通知栏)。
+    final host = AppActions.maybeOf(context);
+    final wasLiked = _liked.contains(song.id);
+    setState(() => _applyLiked(song.id, !wasLiked));
     try {
-      await rust.setLiked(trackId: song.id, liked: !liked);
-      if (!mounted) return;
-      setState(() {
-        if (liked) {
-          _liked.remove(song.id);
-        } else {
-          _liked.add(song.id);
-        }
-      });
-      widget.onLikeChanged?.call(song.id, !liked);
-      // 取消喜欢只给 3 秒提示(再点一次红心即可恢复), 不留常驻的撤销条
-      if (liked) {
-        showToast(context, '已取消喜欢《${song.name}》');
+      if (host != null) {
+        // onLikeChanged 已由宿主的 markLiked 完成, 这里不再重复回调
+        await host.toggleLike(song);
+      } else {
+        // 没有动作宿主(单测/独立路由): 直接请求, 提示文案与宿主路径一致
+        await rust.setLiked(trackId: song.id, liked: !wasLiked);
+        widget.onLikeChanged?.call(song.id, !wasLiked);
+        if (wasLiked) _toast('已取消喜欢《${song.name}》');
       }
     } catch (e) {
+      if (!mounted) return;
+      if (host == null) setState(() => _applyLiked(song.id, wasLiked));
       _toast('收藏失败: ${friendlyError(e)}');
+    }
+    if (!mounted) return;
+    // 宿主是唯一真相(成功时已翻转、失败时已回滚), 用它给本页副本对账
+    final truth = host?.isLiked(song.id);
+    if (truth != null && truth != _liked.contains(song.id)) {
+      setState(() => _applyLiked(song.id, truth));
+    }
+  }
+
+  void _applyLiked(BigInt id, bool liked) {
+    if (liked) {
+      _liked.add(id);
+    } else {
+      _liked.remove(id);
     }
   }
 
@@ -473,6 +550,8 @@ class _PlaylistDetailPageState extends State<_PlaylistDetailPage> {
 
   @override
   Widget build(BuildContext context) {
+    // D06: 先拿宿主真相刷新红心副本, 再渲染(见 [_syncLikedFromHost])
+    _syncLikedFromHost();
     final display = _display;
     // 内嵌形态(主从分栏右栏): 没有 AppBar/返回箭头 —— 否则右栏里会出现一条
     // "返回箭头退整页"的错语义。动作(收藏/管理/分享)一个不少, 挪到顶部一行;

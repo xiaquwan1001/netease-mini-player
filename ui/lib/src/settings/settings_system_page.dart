@@ -1,11 +1,9 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../app_settings.dart';
 import '../app_sheet.dart';
 import '../desktop_shell.dart';
+import '../platform_is.dart' show isAndroidPlatform;
 import '../section_header.dart';
 import '../toast.dart';
 import 'settings_tiles.dart';
@@ -29,7 +27,7 @@ class SystemSettingsPage extends StatelessWidget {
     // Android: 整块不渲染(用户 2026-11-18 口径)。见谓词注释。
     final showCloseBehavior = shouldShowCloseBehaviorTile(
       isLinux: DesktopShell.isSupportedPlatform,
-      isAndroid: _isAndroidPlatform,
+      isAndroid: isAndroidPlatform,
     );
     return Scaffold(
       appBar: AppBar(title: const Text('通知与系统')),
@@ -105,13 +103,6 @@ bool shouldShowCloseBehaviorTile({
   required bool isLinux,
   required bool isAndroid,
 }) => isLinux || !isAndroid;
-
-/// 当前进程是不是 Android(桌面 Linux/Windows 上恒为 false)。
-///
-/// 不用 [defaultTargetPlatform]: 它在 widget 测试里默认是 android, 会把「没有
-/// Android 平台也能测的纯谓词」和一个假的平台标记搅在一起。真实 IO 平台才有
-/// 意义, 单测一律直接调上面的谓词。
-bool get _isAndroidPlatform => !kIsWeb && Platform.isAndroid;
 
 /// 「关闭主窗口时」设置项: Linux 桌面可选「直接退出 / 最小化到托盘」。
 ///

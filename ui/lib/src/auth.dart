@@ -1,7 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/services.dart';
 
+import 'platform_is.dart' show isAndroidPlatform;
 import 'rust/api_all.dart' as rust;
 
 /// 登录门面: 平台差异只出现在这一层。
@@ -18,7 +17,7 @@ import 'rust/api_all.dart' as rust;
 class Auth {
   static const _channel = MethodChannel('ncm/auth');
 
-  bool get isAndroid => Platform.isAndroid;
+  bool get isAndroid => isAndroidPlatform;
 
   /// 打开官方移动端授权页(手机号/微信/QQ/扫码都在页内)。
   /// 返回 null 表示用户放弃, 或页面自始至终没拿到登录态。

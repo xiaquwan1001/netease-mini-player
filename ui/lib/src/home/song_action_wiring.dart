@@ -8,7 +8,7 @@ import '../app_sheet.dart';
 import '../app_settings.dart';
 import '../artist_page.dart';
 import '../comment_thread.dart' show commentSourceKindLabel;
-import '../cover_art.dart' show CoverArt;
+import '../cover_art.dart' show CoverArt, kImageUserAgent;
 import '../detail/comments_sheet.dart' show showCommentsSheet;
 import '../format.dart' show formatCountMagnitude;
 import '../net_retry.dart' show friendlyError, retryNetwork;
@@ -448,7 +448,14 @@ class SongActionWiring {
       final url = preferHttpsStreamUrl(raw);
       final ext = url.contains('.flac') ? 'flac' : 'mp3';
       final name = '${song.artist} - ${song.name}.$ext';
-      final saved = await PlatformBridge.download(url: url, filename: name);
+      // UA 必须透传(D12): 网易 CDN 对 `Dart/3.x` 默认 UA 回 403 —— 图片侧已在
+      // cover_art 实测过同一件事, 下载走同一条 CDN。Android 的 DownloadManager
+      // 与桌面 curl 都按这个值发 `User-Agent`, 与 Referer 一起才拿得到字节。
+      final saved = await PlatformBridge.download(
+        url: url,
+        filename: name,
+        userAgent: kImageUserAgent,
+      );
       if (!isMounted()) return;
       toast(saved == null ? '下载失败' : '已开始下载(Android 在通知栏/Download 目录)');
     } catch (e) {

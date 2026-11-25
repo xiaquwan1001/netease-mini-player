@@ -54,6 +54,52 @@ void main() {
     expect(opened, 1);
   });
 
+  testWidgets('从消息中心返回后重取未读数', (tester) async {
+    // 用户反馈: 读完消息回到「我的」, 未读数还是旧值(下拉刷新也不变), 要杀进程重开。
+    // 入口卡只在 initState 取一次, 消息中心 pop 回来时必须自己再取一次。
+    var loads = 0;
+    var unread = 3;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => MessageEntryCard(
+              onOpen: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      const Scaffold(body: Center(child: Text('消息中心页'))),
+                ),
+              ),
+              load: () async {
+                loads++;
+                return rust.MessageCountsDto(
+                  private: unread,
+                  notices: 0,
+                  comments: 0,
+                  forwards: 0,
+                  total: unread,
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('私信 3'), findsOneWidget);
+
+    unread = 0; // 消息中心里读完了
+    await tester.tap(find.text('消息中心'));
+    await tester.pumpAndSettle();
+    expect(find.text('消息中心页'), findsOneWidget);
+
+    Navigator.of(tester.element(find.text('消息中心页'))).pop();
+    await tester.pumpAndSettle();
+
+    expect(loads, 2, reason: '返回后要重取一次未读数');
+    expect(find.text('暂无未读'), findsOneWidget);
+  });
+
   testWidgets('300dp + 1.25 字号: 卡片不溢出且关键文案可见', (tester) async {
     await pumpNarrow(
       tester,

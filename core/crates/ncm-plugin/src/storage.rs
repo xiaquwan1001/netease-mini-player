@@ -126,6 +126,12 @@ impl FileStorage {
     }
 
     /// 原子落盘: tmp(0600) -> fsync -> rename.
+    ///
+    /// 与 `ncm-service/src/fsutil.rs` 的 `write_atomic_inner` 是**两份**独立实现(依赖方向
+    /// service -> plugin, 不能反向复用): 顺序必须一致(tmp → 写 → fsync → 改权限 → rename),
+    /// 那边还多一层进程内写锁 + 每写唯一的 tmp 名(`{name}.tmp.{pid}.{seq}`), 本实现靠
+    /// `cache` Mutex 全程串行 + 带 pid 的 tmp 名达到同样效果.
+    /// 改一侧就去看另一侧(那边有反向注释指回这里), 合并成一份要先把依赖方向理顺.
     fn persist(&self, namespace: &str, map: &BTreeMap<String, String>) -> std::io::Result<()> {
         let bytes = serde_json::to_vec(map).map_err(std::io::Error::other)?;
         let stem = file_stem(namespace);

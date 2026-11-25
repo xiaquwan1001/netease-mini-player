@@ -22,6 +22,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import 'cover_art.dart' show fetchImageBytes;
 import 'lru.dart';
 
 /// 量化位数: 5-bit/通道 → 最多 32768 个桶
@@ -385,6 +386,10 @@ void clearCoverPaletteCache() => _paletteCache.clear();
 /// 按 url 取色, 带 LRU 缓存(上限 [kPaletteCacheMax]);
 /// 同一 url 只 resolve/计算一次(缓存的是 Future, 并发调用也复用)。
 /// 网络失败返回 null, 调用方回退主题色。
+///
+/// [provider] 只留给测试注入; 不传时走 `cover_art.dart` 的 UA 加载器 ——
+/// 裸 `NetworkImage` 发 `Dart/3.x` 默认 UA 会被网易 CDN 403(2026-11-06 实测),
+/// 于是"封面能显示、取色永远回退主题色"(D13)。
 Future<CoverPalette?> paletteFromUrl(
   String? url, {
   ImageProvider<Object>? provider,
@@ -392,20 +397,37 @@ Future<CoverPalette?> paletteFromUrl(
   if (url == null || url.isEmpty) return null;
   final cached = _paletteCache[url]; // 命中即触碰 LRU
   if (cached != null) return cached;
-  final future = _computeForUrl(url, provider ?? NetworkImage(url));
+  final future = _computeForUrl(url, provider);
   _paletteCache.put(url, future);
   return future;
 }
 
 Future<CoverPalette?> _computeForUrl(
   String url,
-  ImageProvider<Object> provider,
+  ImageProvider<Object>? provider,
 ) async {
   try {
-    final image = await _resolveImage(provider);
+    final image = provider == null
+        ? await _decodeWithImageHeaders(url)
+        : await _resolveImage(provider);
     return await paletteFromImage(image);
   } catch (_) {
     return null;
+  }
+}
+
+/// 用封面加载器(换 UA + Referer)取字节再自己解码。
+///
+/// 为什么不用 [ImageProvider]: cover_art 的 UA provider 是私有实现, 对外只给了
+/// `fetchImageBytes`(D13 报告里记了这条 —— 要么这里就这么用, 要么等它导出)。
+Future<ui.Image> _decodeWithImageHeaders(String url) async {
+  final bytes = await fetchImageBytes(url);
+  final codec = await ui.instantiateImageCodec(bytes);
+  try {
+    final frame = await codec.getNextFrame();
+    return frame.image;
+  } finally {
+    codec.dispose();
   }
 }
 

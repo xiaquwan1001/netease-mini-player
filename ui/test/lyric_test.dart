@@ -108,6 +108,80 @@ void main() {
     });
   });
 
+  // 与权威实现 Rust `core/crates/ncm-domain/src/lrc.rs` 的**对等断言**。
+  //
+  // 兜底路径(Rust 逐行接口失败时用 `parseLrc`)与权威路径必须给出同一条时间轴,
+  // 否则兜底一回歌词就整体错位。期望值抄自 `lrc.rs` 的 tests:
+  // `offset_dedup_and_extra_fraction_digits` / `ignores_metadata_and_applies_offset` /
+  // `drops_unparsable_lines` / `merges_translation_by_timestamp`。改一边必须同步改另一边。
+  group('parseLrc 与 Rust lrc.rs 对等', () {
+    test('[offset:-500] 整体延后, 位移在去重之前生效, 不出负时间', () {
+      // Rust `offset_dedup_and_extra_fraction_digits` 的 shifted 用例: 期望 [700, 1500]
+      final doc = parseLrc(
+        '[offset:-500]\n'
+        '[00:01.00]同\n'
+        '[00:01.00]同\n'
+        '[00:00.20]起句\n',
+      );
+      final times = [for (final l in doc.timed) l.timeMs];
+      expect(times, [_ms(700), _ms(1500)]);
+      expect([for (final l in doc.timed) l.text], ['起句', '同']);
+      expect(times.every((t) => !t.isNegative), isTrue);
+    });
+
+    test('正 offset = 歌词提前, 负数时间钳到 0', () {
+      // Rust `ignores_metadata_and_applies_offset` 的口径; 200ms 那行减 500 后出负数
+      final doc = parseLrc(
+        '[offset:500]\n'
+        '[00:00.20]甲\n'
+        '[00:02.00]乙\n',
+      );
+      expect([for (final l in doc.timed) l.timeMs], [_ms(0), _ms(1500)]);
+    });
+
+    test('4 位小数只取前 3 位: .1234 → 1123ms', () {
+      expect(parseLrc('[00:01.1234]x').timed.single.timeMs, _ms(1123));
+      // 顺带钉住其余位宽(抄 Rust `fractional_precision_variants`)
+      expect(parseLrc('[00:01.5]x').timed.single.timeMs, _ms(1500));
+      expect(parseLrc('[00:01.125]x').timed.single.timeMs, _ms(1125));
+    });
+
+    test('同时间同文本去重, 同时刻不同文本都保留', () {
+      // Rust: dup => [(1000, "同"), (1000, "异")]
+      final doc = parseLrc('[00:01.00]同\n[00:01.00]同\n[00:01.00]异\n');
+      expect(
+        [for (final l in doc.timed) (l.timeMs, l.text)],
+        [(_ms(1000), '同'), (_ms(1000), '异')],
+      );
+    });
+
+    test('[00:99.00] 不是合法时间标签(秒 ≥ 60), 不进时间轴', () {
+      // Rust `drops_unparsable_lines`: 只留 [00:01.00]。Dart 刻意差异: 坏标签行的文字
+      // 落到 plain(兜底路径要能展示纯文本), 但**绝不能**猜成 1 分 39 秒混进时间轴。
+      final doc = parseLrc('[00:01.00]保留\n[00:99.00]非法\n');
+      expect([for (final l in doc.timed) l.timeMs], [_ms(1000)]);
+      expect([for (final l in doc.timed) l.text], ['保留']);
+      expect(doc.plain, ['非法']);
+    });
+
+    test('无时间标签的行进 plain, 不污染时间轴', () {
+      // Rust 直接丢掉这类行(它的歌词接口只回时间轴); Dart 兜底路径刻意保留成纯文本。
+      final doc = parseLrc('第一行\n[00:01.00]甲\n第二行\n');
+      expect([for (final l in doc.timed) l.text], ['甲']);
+      expect(doc.plain, ['第一行', '第二行']);
+    });
+
+    test('翻译表的键是**位移后**的毫秒(Rust 按 time_ms 精确匹配)', () {
+      // offset 500(提前) + 原 00:02.00 ⇒ 1500ms; 用原时间戳当键就匹配不上
+      const raw = '[offset:500]\n[00:02.00]甲\n';
+      final shifted = parseLrc(raw, translations: {_ms(1500): '译'});
+      expect(shifted.timed.single.timeMs, _ms(1500));
+      expect(shifted.timed.single.sub, '译');
+      final unshiftedKey = parseLrc(raw, translations: {_ms(2000): '译'});
+      expect(unshiftedKey.timed.single.sub, isNull);
+    });
+  });
+
   group('PlainLyricView', () {
     testWidgets('纯文本按行展示', (tester) async {
       await tester.pumpWidget(

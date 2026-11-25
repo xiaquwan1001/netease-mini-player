@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/audio_tuning.dart';
-import 'package:minincm/src/playback.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// 用户需求(2026-11): 「播放被其他流媒体抢占」要有明确选项。
 ///
@@ -28,7 +28,7 @@ void main() {
   });
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     settings.audioLevel = originalLevel;
     settings.audioFocus = originalFocus;
     messenger.setMockMethodCallHandler(channel, null);
@@ -84,7 +84,7 @@ void main() {
   });
 
   testWidgets('Android configure 通道带上 audioFocus, 改设置立刻重推', (tester) async {
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
     final captured = <String>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'configure') {

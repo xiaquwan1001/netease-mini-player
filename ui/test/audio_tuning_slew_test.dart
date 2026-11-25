@@ -2,9 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/audio_tuning.dart';
-import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/rust/frb_generated.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// P-03: 增益限速斜率三端同口径。
 ///
@@ -62,7 +62,7 @@ void main() {
   });
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     settings.loudnessDynamic = loudnessDynamic;
     settings.volumeGainDb = volumeGainDb;
     settings.fadeMs = fadeMs;
@@ -93,7 +93,7 @@ void main() {
   test('桌面: 斜率原样透传给 Rust playerConfigure (0 与 3 都透传)', () async {
     final api = _FakeRustApi();
     RustLib.initMock(api: api);
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
 
     settings.loudnessDynamic = false;
     await applyAudioTuning(retryDelaysMs: const <int>[]);
@@ -104,7 +104,7 @@ void main() {
   });
 
   testWidgets('Android: 通道参数里的 gainSlewDbPerSec 跟着设置走', (tester) async {
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
 
     final captured = <double>[];
     messenger.setMockMethodCallHandler(channel, (call) async {

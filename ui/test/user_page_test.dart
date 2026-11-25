@@ -15,18 +15,22 @@ import 'package:minincm/src/user_page.dart';
 
 import 'support/fakes.dart';
 
-rust.ProfileDetail detail({String nickname = '下去玩', String signature = ''}) =>
-    rust.ProfileDetail(
-      userId: BigInt.from(1822714196),
-      nickname: nickname,
-      avatarUrl: null,
-      backgroundUrl: null,
-      signature: signature,
-      vip: false,
-      follows: BigInt.from(44),
-      followeds: BigInt.from(11),
-      level: BigInt.from(8),
-    );
+rust.ProfileDetail detail({
+  String nickname = '下去玩',
+  String signature = '',
+  BigInt? follows,
+  BigInt? followeds,
+}) => rust.ProfileDetail(
+  userId: BigInt.from(1822714196),
+  nickname: nickname,
+  avatarUrl: null,
+  backgroundUrl: null,
+  signature: signature,
+  vip: false,
+  follows: follows ?? BigInt.from(44),
+  followeds: followeds ?? BigInt.from(11),
+  level: BigInt.from(8),
+);
 
 // 共享工厂 + 外人主页歌单口径(首数/是否"我喜欢"由调用方给)。
 rust.Playlist playlist(
@@ -262,6 +266,28 @@ void main() {
     await tester.tap(find.text('粉丝 11'));
     await tester.pumpAndSettle();
     expect(fanTaps, 1);
+  });
+
+  // 大数字不再原样铺出(之前「粉丝 1234567」): 与艺人页同一套 format.dart 口径。
+  testWidgets('关注/粉丝大数字走 formatFanCount(万/亿一位小数)', (tester) async {
+    setTallView(tester);
+    await tester.pumpWidget(
+      host(
+        UserPage(
+          userId: BigInt.from(1),
+          loadProfile: (_) async => detail(
+            follows: BigInt.from(1234567),
+            followeds: BigInt.from(120000000),
+          ),
+          loadPlaylists: (_) async => const [],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('关注 123.5万'), findsOneWidget);
+    expect(find.text('粉丝 1.2亿'), findsOneWidget);
+    expect(find.text('粉丝 12000万'), findsNothing);
   });
 
   testWidgets('关注 chip 切到关注 tab 并渲染列表(无宿主钩子时)', (tester) async {

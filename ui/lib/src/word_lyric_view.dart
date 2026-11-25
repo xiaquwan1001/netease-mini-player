@@ -246,6 +246,11 @@ class _WordLyricViewState extends State<WordLyricView> {
       _activeIndex.value = -1;
       _onPosition();
     }
+    // 换歌: 歌词表换了而播放位置没变(切歌时常见的暂停/0ms 态), 位置通知不会再来
+    // 一次 —— 不按新表重算的话, 活动行还是旧表的下标(高亮错行且不自动滚动)。
+    if (!identical(old.lines, widget.lines)) {
+      _onPosition();
+    }
     // 恢复跟随(定位按钮/seek): 位置可能停在原句没变, 也要立刻把列表滚回当前行
     if (!old.autoScroll && widget.autoScroll) {
       _scrollTo(_activeIndex.value);

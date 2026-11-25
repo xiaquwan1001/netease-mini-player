@@ -323,6 +323,33 @@ void main() {
     expect(painter.debugClipRects.any((r) => r.right > 300.5), isTrue);
   });
 
+  testWidgets('换歌: lines 变了而播放位置没变, 高亮按新表重算', (tester) async {
+    // 切歌时 positionMs 往往还是 0(暂停态), 位置通知不会再来一次。
+    // 旧实现只在 positionMs 变化时重算活动行, 于是新歌词表沿用旧下标 → 高亮错行。
+    final pos = ValueNotifier<int>(0);
+    addTearDown(pos.dispose);
+    final oldLines = [
+      _line(0, 2000, [(0, 2000, '旧歌第一句')]),
+      _line(3000, 5000, [(3000, 5000, '旧歌第二句')]),
+    ];
+    final newLines = [
+      _line(10000, 12000, [(10000, 12000, '新歌第一句')]),
+      _line(13000, 15000, [(13000, 15000, '新歌第二句')]),
+    ];
+
+    await tester.pumpWidget(_host(pos, lines: oldLines));
+    await tester.pump();
+    expect(find.byType(KaraokeLine), findsOneWidget, reason: '前置: 旧歌首句是活动行');
+
+    await tester.pumpWidget(_host(pos, lines: newLines));
+    await tester.pump();
+    expect(
+      find.byType(KaraokeLine),
+      findsNothing,
+      reason: '位置 0 还没唱到新表第一句(10s), 不能留着旧下标 0 当活动行',
+    );
+  });
+
   testWidgets('组件销毁后位置 notifier 更新无异常(无残留监听)', (tester) async {
     final pos = ValueNotifier<int>(0);
     await tester.pumpWidget(_host(pos));

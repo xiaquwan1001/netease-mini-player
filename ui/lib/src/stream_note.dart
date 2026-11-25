@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'format.dart' show formatDurationClock;
 import 'rust/api_all.dart' as rust;
 
 /// 取链结果里"信息无损"那一半的只读展示摘要(方案 A)。
@@ -57,7 +58,11 @@ class StreamNote {
   String? get label {
     final parts = <String>[];
     if (isTrial) {
-      parts.add(trialLenMs == null ? '试听' : '试听 ${_fmtMs(trialLenMs!)}');
+      parts.add(
+        trialLenMs == null
+            ? '试听'
+            : '试听 ${formatDurationClock(BigInt.from(trialLenMs!))}',
+      );
     }
     if (isDegraded) {
       parts.add('已降级 ${audioLevelLabel(actualLevel)}');
@@ -78,14 +83,6 @@ class StreamNote {
   @override
   int get hashCode =>
       Object.hash(isTrial, trialLenMs, actualLevel, requestedLevel);
-}
-
-/// 毫秒 → `mm:ss`(与播放条/歌词的时间口径一致: 分钟补零, 超 60 分钟继续累计)。
-String _fmtMs(int ms) {
-  final total = ms ~/ 1000;
-  final m = (total ~/ 60).toString().padLeft(2, '0');
-  final s = (total % 60).toString().padLeft(2, '0');
-  return '$m:$s';
 }
 
 /// 音质档位的中文短名(只在提示里用; 设置页仍显示英文档位名)。

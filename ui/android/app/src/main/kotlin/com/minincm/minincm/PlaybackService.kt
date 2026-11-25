@@ -170,17 +170,8 @@ class PlaybackService : MediaSessionService() {
         exoPlayer = exo
         // 淡入的起声门控: ramp 只在真正出声后推进, 缓冲期不空转(见 [FadePolicy.shouldStartRamp])。
         // 实测(模拟器 a34, fadeMs=500): play 到真正出声 243–404ms, 旧实现这段静默里已经爬到 55%。
-        exo.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying || fadeArmedAt == 0L) return
-                val target = fadeArmedTarget
-                fadeArmedAt = 0L
-                fadeHandler.removeCallbacks(abandonArmedTick)
-                exo.volume = 0f
-                Log.d("NCM-PLAYER", "fadeIn start(起声) target=$target fadeMs=$fadeMs")
-                startFadeRamp(from = 0f, to = target, out = false)
-            }
-        })
+        // 抽成 [attachFadeGate] 是为了 [rebuildPlayer] 换上来的新 player 也能挂上(审计 U6)。
+        attachFadeGate(exo)
         mediaSession = MediaSession.Builder(this, SkipAwarePlayer(exo))
             // 通知本体点击 = 回 App。默认(不设 sessionActivity)Media3 不生成 contentIntent,
             // 模拟器 a34 实测点通知本体毫无反应; 而没有同进程消费者时按钮只能给提示
@@ -796,6 +787,26 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * 淡入的"等起声"门控: 挂在**当前** player 上(onCreate 的初始 player + [rebuildPlayer] 的新 player)。
+     *
+     * 为什么必须重挂(审计 U6): 门控只认 `onIsPlayingChanged(true)`, 换 player 后不重挂就永远
+     * 等不到回调, 淡入只能靠 [FadePolicy.ARM_TIMEOUT_MS] 兜底直接跳到目标音量。
+     */
+    private fun attachFadeGate(player: ExoPlayer) {
+        player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying || fadeArmedAt == 0L) return
+                val target = fadeArmedTarget
+                fadeArmedAt = 0L
+                fadeHandler.removeCallbacks(abandonArmedTick)
+                player.volume = 0f
+                Log.d("NCM-PLAYER", "fadeIn start(起声) target=$target fadeMs=$fadeMs")
+                startFadeRamp(from = 0f, to = target, out = false)
+            }
+        })
+    }
+
     private fun buildExoPlayer(): ExoPlayer {
         val dataSourceFactory = buildDataSourceFactory()
         val processors: Array<AudioProcessor> = eqProcessor?.let { arrayOf(it) } ?: emptyArray()
@@ -913,8 +924,20 @@ class PlaybackService : MediaSessionService() {
         val position = old.currentPosition
         val playWhenReady = old.playWhenReady
 
+        // 先释放旧 player, 再建新 player(审计 U5, 2026-11-25): buildExoPlayer() 会经
+        // buildDataSourceFactory → ensureCache() 在同一缓存目录建第二个 SimpleCache 实例,
+        // 而 configure() 已经先 releaseCache() 了 —— 旧 player 活在这段窗口里就指向已释放的
+        // SimpleCache(还可能和新建的第二个实例同时开着同一个目录)。item/position/playWhenReady
+        // 已在上面取出, 提前释放是安全的; 会话侧看不到这个窗口(同一主线程同步块, 中间不会让位)。
+        old.release()
+
         val newExo = buildExoPlayer()
         exoPlayer = newExo
+        // 淡入的挂起态/兜底 tick 归 newExo 管(审计 U6): 旧的挂起在换 player 后永远等不到
+        // 起声回调, 只会被 ARM_TIMEOUT 强制落到目标音量。
+        fadeArmedAt = 0L
+        fadeHandler.removeCallbacks(abandonArmedTick)
+        attachFadeGate(newExo)
 
         if (item != null) {
             newExo.setMediaItem(item)
@@ -927,7 +950,6 @@ class PlaybackService : MediaSessionService() {
         // MainActivity 的 controller 无需重连。
         mediaSession?.setPlayer(SkipAwarePlayer(newExo))
 
-        old.release()
         // 新 player 的音量按当前实际增益补上(重建不改增益, appliedGainDb 保持不变);
         // 取消可能存在的淡入/斜坡 —— 它们的回调引用的旧 player 已被 release。
         fadeAnimator?.cancel()

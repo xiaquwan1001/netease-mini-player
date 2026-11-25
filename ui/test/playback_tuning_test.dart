@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/playback.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// S3: Playback.applyTuning 门面契约。
 /// - 非 Android 平台直接返回 null(不抛错, Linux 由 Rust 侧处理)。
@@ -13,12 +14,12 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     messenger.setMockMethodCallHandler(channel, null);
   });
 
   test('非 Android 平台返回 null, 不抛错', () async {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     final result = await Playback().applyTuning(
       gainDb: -6.0,
       fadeMs: 500,
@@ -33,7 +34,7 @@ void main() {
   test(
     'Android 走 configure 通道, 参数 map 形状正确且透传 eqText/gainSlewDbPerSec',
     () async {
-      Playback.debugForceAndroid = true;
+      debugForceAndroid = true;
 
       MethodCall? captured;
       messenger.setMockMethodCallHandler(channel, (call) async {
@@ -100,7 +101,7 @@ void main() {
   );
 
   test('eqText 为 null 时照常发送(旁路 EQ)', () async {
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
 
     MethodCall? captured;
     messenger.setMockMethodCallHandler(channel, (call) async {

@@ -15,6 +15,7 @@
 //
 // RustLib.initMock 每个进程只能调一次(见 eq_import_flow_test.dart), 所以替身是
 // 全局单实例 + 每个用例 reset 行为。
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -47,11 +48,18 @@ class _FakeApi implements RustLibApi {
 
   final List<BigInt> songUrlCalls = <BigInt>[];
 
+  /// 按曲目 id 挂"取链闸门": 用例自己决定这次取链何时返回。
+  ///
+  /// U1(代际守卫)的用例要的就是"先发起的那次取链**后**完成" —— 没有闸门就
+  /// 造不出这个顺序。
+  final Map<String, Completer<void>> songUrlGates = <String, Completer<void>>{};
+
   void reset() {
     defaultUrl = 'http://m801.music.126.net/track.mp3';
     urlByTrack.clear();
     songUrlError = null;
     songUrlCalls.clear();
+    songUrlGates.clear();
   }
 
   @override
@@ -68,6 +76,8 @@ class _FakeApi implements RustLibApi {
     BigInt? interval,
   }) async {
     songUrlCalls.add(trackId);
+    final gate = songUrlGates[trackId.toString()];
+    if (gate != null) await gate.future;
     final err = songUrlError;
     if (err != null) throw err;
     final key = trackId.toString();
@@ -652,6 +662,70 @@ void main() {
       expect(h.playback.plays.single.url, 'http://m801.music.126.net/a.mp3');
       expect(api.songUrlCalls, contains(BigInt.one));
       expect(h.errors, isEmpty);
+    });
+  });
+
+  group('并发切歌(U1 代际守卫)', () {
+    test('先发起的取链后返回: 旧的那次不覆盖播放器/快照/队列', () async {
+      final h = _Harness(
+        songs: [
+          fakeSong(id: 1, name: 'A'),
+          fakeSong(id: 2, name: 'B'),
+        ],
+      );
+      addTearDown(h.dispose);
+      h.queue.mode = PlayMode.sequence;
+      final gate = api.songUrlGates['1'] = Completer<void>();
+
+      // 第一次点歌, 卡在取链上(用户等不及, 又点了第二首)
+      final first = h.coordinator.playSong(fakeSong(id: 1, name: 'A'));
+      await pumpEventQueue();
+
+      // 第二次点歌(真实链路: 页面先把队列定位到那一行再起播)
+      h.queue.jumpTo(1);
+      await h.coordinator.playSong(fakeSong(id: 2, name: 'B'));
+      await pumpEventQueue();
+      expect(h.playback.plays.map((p) => p.trackId), [BigInt.two]);
+      expect(h.coordinator.player!.trackId, BigInt.two);
+
+      // 旧的那次取链现在才完成: 结果必须作废
+      gate.complete();
+      await first;
+      await pumpEventQueue();
+
+      expect(h.playback.plays.map((p) => p.trackId), [
+        BigInt.two,
+      ], reason: '旧代不许再把播放器改成自己那首');
+      expect(
+        h.coordinator.player!.trackId,
+        BigInt.two,
+        reason: '播放条快照跟随真实播放的那首, 不被晚到的旧结果覆盖',
+      );
+      expect(h.queue.index, 1, reason: '队列下标归第二次起播');
+      expect(h.errors, isEmpty);
+    });
+
+    test('旧代取不到直链也不提示/不跳过: 提示与队列都归新的一次', () async {
+      final h = _Harness(songs: [fakeSong(id: 1), fakeSong(id: 2)]);
+      addTearDown(h.dispose);
+      h.queue.mode = PlayMode.sequence;
+      api.urlByTrack['1'] = null; // 旧的那首本来就拿不到直链
+      final gate = api.songUrlGates['1'] = Completer<void>();
+
+      final first = h.coordinator.playSong(fakeSong(id: 1, name: 'A'));
+      await pumpEventQueue();
+      h.queue.jumpTo(1);
+      await h.coordinator.playSong(fakeSong(id: 2, name: 'B'));
+      await pumpEventQueue();
+
+      gate.complete();
+      await first;
+      await pumpEventQueue();
+
+      expect(h.errors, isEmpty, reason: '被取代的那次不该弹「没有可用直链」');
+      expect(h.playback.plays.map((p) => p.trackId), [BigInt.two]);
+      expect(h.queue.index, 1, reason: '旧代不许把队列往后跳(那是给别人跳的)');
+      expect(h.playback.startPositions.length, 1);
     });
   });
 

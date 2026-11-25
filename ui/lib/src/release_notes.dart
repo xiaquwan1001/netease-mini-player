@@ -1,3 +1,5 @@
+import 'update_checker.dart' show compareVersions;
+
 /// 版本特性公告(给用户看的「这次更新带来了什么」)。
 ///
 /// 为什么不用 GitHub release 正文: 那里是提交流水(commit 标题, 面向开发者、中英
@@ -10,6 +12,13 @@
 ///
 /// 发版时在这里加一条即可; 没有条目的版本不显示公告(不是每个 patch 都值得说)。
 const Map<String, List<String>> kReleaseHighlights = <String, List<String>>{
+  'v0.40.0': <String>[
+    '连点切歌不再播错歌: 取直链慢的那次不会再把你刚点的那首顶掉, 队列、播放条与声音保持一致',
+    '缓存与本地历史更稳: 并发写入不再互相覆盖, 同一首歌不会重复下载; 缓存占用把下载中的文件也计入',
+    '换歌/慢网起播时暂停·停止·拖进度条立刻生效, 不再卡住等下载',
+    '云盘「加载更多」和列表刷新不再跳回顶部; 歌词取失败时给出「重试」',
+    '「我的」页消息未读数读完即刷新; 播放量/粉丝数统一按万/亿显示',
+  ],
   'v0.39.0': <String>[
     '每日推荐本地缓存改成「只增不减」的索引: 当天不播放也会缓存, 不再出现只存一两首、或者一首都没有的天',
     '历史日推去掉跨天重复: 与更早日期重复的曲目折叠成一行, 点开仍可播放',
@@ -52,20 +61,14 @@ List<String> highlightsSince(String currentVersion) {
   return <String>[for (final tag in newer) ...highlightsFor(tag)];
 }
 
-/// `a < b ? -1 : a > b ? 1 : 0`, 逐段数字比较(公告表内部用, 不依赖 UI 层的比较器)。
-int compareVersionKeys(String a, String b) {
-  List<int> parse(String raw) =>
-      normalizeVersionKey(raw)
-          .split('.')
-          .map((p) => int.tryParse(p) ?? 0)
-          .toList();
-  final x = parse(a);
-  final y = parse(b);
-  final n = x.length > y.length ? x.length : y.length;
-  for (var i = 0; i < n; i++) {
-    final p = i < x.length ? x[i] : 0;
-    final q = i < y.length ? y[i] : 0;
-    if (p != q) return p > q ? 1 : -1;
-  }
-  return 0;
-}
+/// `a < b ? -1 : a > b ? 1 : 0`。
+///
+/// 比版本号本身只有一份实现 —— 直接复用更新检查的 [compareVersions]
+/// (semver 口径: `+N` build 段数字大者新、有预发布 < 无、无法解析当相等),
+/// 这里只保留本文件"先归一化再比"的预处理: 公告表的 key 带 `v`, 调用方传进来的
+/// 可能是 `0.39.0+90`, 两边都归一化后比较器看到的才是纯 `X.Y.Z[-pre]`。
+///
+/// 改造前这里另写了一份"只比数字段"的实现, 于是 `0.40.0-beta` 与 `0.40.0` 在公告
+/// 排序里相等、在更新检查里前者更旧 —— 同一对版本号两个结论(D10)。
+int compareVersionKeys(String a, String b) =>
+    compareVersions(normalizeVersionKey(a), normalizeVersionKey(b));

@@ -29,10 +29,22 @@ void main() {
     expect(highlightsFor('v0.39.0'), isNotEmpty);
     expect(highlightsFor('v9.9.9'), isEmpty);
 
+    // 公告表里最新的那一版(发版只改表, 不改本用例)
+    final newest =
+        (kReleaseHighlights.keys.toList()..sort(compareVersionKeys)).last;
+
     // 当前版本就是最新: 没有任何"更新后可看"的条目
-    expect(highlightsSince('v0.39.0'), isEmpty);
-    // 从更老的版本升级上来: 会把 0.39.0 的条目全部列出
-    expect(highlightsSince('v0.38.8'), kReleaseHighlights['v0.39.0']);
+    expect(highlightsSince(newest), isEmpty);
+    // 从更老的版本升级上来: 0.39.0 与最新一版的条目都要列出(旧的在上)
+    final since = highlightsSince('v0.38.8');
+    expect(since, containsAll(kReleaseHighlights['v0.39.0']!));
+    expect(since, containsAll(kReleaseHighlights[newest]!));
+    expect(
+      since.length,
+      kReleaseHighlights['v0.39.0']!.length +
+          kReleaseHighlights[newest]!.length,
+      reason: '只列这两版, 不能把更老的也拉进来',
+    );
   });
 
   testWidgets('发现新版本弹窗: 标题 + 新特性公告 + 更新说明都在', (tester) async {

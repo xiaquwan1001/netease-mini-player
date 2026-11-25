@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +9,7 @@ import 'app_sheet.dart';
 import 'cover_art.dart';
 import 'image_io.dart';
 import 'net_retry.dart';
+import 'platform_is.dart' show isAndroidPlatform;
 import 'rust/api_all.dart' as rust;
 import 'share_qr.dart';
 import 'sheet_header.dart';
@@ -49,15 +48,13 @@ List<String> shareableLyricLines(Iterable<String> lines, {int max = 6}) {
 class SongShare {
   static const MethodChannel _channel = MethodChannel('ncm/share');
 
-  static bool get _android => !kIsWeb && Platform.isAndroid;
-
   /// 把 PNG 交给系统分享面板. 返回给用户看的提示文案.
   static Future<String> shareImage(
     Uint8List png, {
     required String filename,
     String text = '',
   }) async {
-    if (_android) {
+    if (isAndroidPlatform) {
       await _channel.invokeMethod<bool>('shareImage', {
         'bytes': png,
         'filename': filename,

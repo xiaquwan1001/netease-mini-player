@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'async_view.dart';
+import 'cover_art.dart' show NetImage;
 import 'error_views.dart' show FullError;
 import 'net_retry.dart';
 import 'rust/api_all.dart' as rust;
@@ -162,16 +163,27 @@ class _VipCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final p = profile;
     final avatarUrl = p?.avatarUrl;
-    // 头像统一走 NetworkImage(不传 headers: UA 传双份会被 CDN 403)
+    // 头像走 cover_art 的统一 UA 加载: 裸 NetworkImage 发的是 `Dart/3.x` 默认 UA,
+    // 网易 CDN 直接 403(见 cover_art.dart 注释, 2026-11-06 实测) ⇒ 头像长期空白,
+    // 而同一张图当封面能显示。载不到时回退到昵称首字(D13)。
+    final letter = CircleAvatar(
+      child: Text(
+        (p != null && p.nickname.isNotEmpty)
+            ? p.nickname.characters.first
+            : '?',
+      ),
+    );
     final avatar = (avatarUrl != null && avatarUrl.isNotEmpty)
-        ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl))
-        : CircleAvatar(
-            child: Text(
-              (p != null && p.nickname.isNotEmpty)
-                  ? p.nickname.characters.first
-                  : '?',
+        ? ClipOval(
+            child: NetImage(
+              url: avatarUrl,
+              width: 40,
+              height: 40,
+              icon: Icons.person,
+              placeholder: letter,
             ),
-          );
+          )
+        : letter;
     final metaParts = <String>[
       p?.levelLabel ?? 'Lv.0',
       '成长值 ${p?.growthValue ?? 0}',

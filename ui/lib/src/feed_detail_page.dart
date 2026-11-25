@@ -5,7 +5,7 @@ import 'comment_thread.dart';
 import 'cover_art.dart';
 import 'feed_media.dart';
 import 'feed_share.dart';
-import 'format.dart' show formatDateYmd;
+import 'format.dart' show relativeTime;
 import 'net_retry.dart';
 import 'playback_bridge.dart';
 import 'rust/api_all.dart' as rust;
@@ -40,17 +40,11 @@ Future<void> showFeedDetail(
   );
 }
 
-String feedRelativeTime(BigInt timeMs) {
-  if (timeMs <= BigInt.zero) return '';
-  final dt = DateTime.fromMillisecondsSinceEpoch(timeMs.toInt());
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return '刚刚';
-  if (diff.inMinutes < 60) return '${diff.inMinutes} 分钟前';
-  if (diff.inHours < 24) return '${diff.inHours} 小时前';
-  if (diff.inDays < 30) return '${diff.inDays} 天前';
-  // 超过 30 天退回日期, 统一走 format.dart 的 yyyy-MM-dd 口径
-  return formatDateYmd(timeMs);
-}
+/// 动态的时间文案 = `format.dart` 的 [relativeTime](超 30 天退回 `yyyy-MM-dd`)。
+///
+/// 保留这个入口名是因为动态卡片/转发卡/艺人页/用户页都从本文件取它;
+/// 实现只有一份, 在 `format.dart`(D01)。
+String feedRelativeTime(BigInt timeMs) => relativeTime(timeMs);
 
 const Map<String, String> feedKindLabels = {
   'song': '单曲',

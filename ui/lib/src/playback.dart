@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/services.dart';
 
+import 'platform_is.dart' show isAndroidPlatform;
 import 'rust/api_all.dart' as rust;
 
 /// UI 用的播放状态(与 Rust/Android 两侧统一)
@@ -90,13 +90,11 @@ bool isNeteaseStreamHost(String host) {
 class Playback {
   static const _channel = MethodChannel('ncm/player');
 
-  /// 测试专用: host 上 Platform.isAndroid 恒为 false, 置 true 可强制走 Android 分支
-  @visibleForTesting
-  static bool debugForceAndroid = false;
-
-  bool get isAndroid => Platform.isAndroid || debugForceAndroid;
-
-  static bool get _isAndroidPlatform => Platform.isAndroid || debugForceAndroid;
+  /// 当前是否走 Android 原生后端(Media3/Kotlin); 非 Android 由 Rust core 处理。
+  ///
+  /// 判定统一走 `platform_is.dart`; 测试要强制 Android 分支就置那里的
+  /// `debugForceAndroid`(host 上 `Platform.isAndroid` 恒为 false)。
+  bool get isAndroid => isAndroidPlatform;
 
   /// 通知按钮(红心/模式)最近一次**成功**推送的状态。
   ///
@@ -196,7 +194,7 @@ class Playback {
     _flushPendingNativeActions();
     // 握手: 告诉原生"通知回调已注册"。上划清任务后点通知按钮时, 原生会先用 Intent 把 App
     // 拉起来并把动作排队, 收到这条握手才执行(见 MainActivity.deliverPendingPlaybackAction)。
-    if (_isAndroidPlatform) {
+    if (isAndroidPlatform) {
       // 播放 UA 的唯一来源在 Rust: 启动时就把真值推给原生(Kotlin 只留兜底常量, P-21)。
       // 与握手同一条通道, 不额外阻塞启动(失败只留日志, 首次 play 前还会再试一次)。
       unawaited(_injectUserAgent());

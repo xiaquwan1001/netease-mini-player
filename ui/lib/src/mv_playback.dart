@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'platform.dart';
+import 'platform_is.dart' show isAndroidPlatform;
 import 'playback.dart';
 
 /// MV 起播前对歌曲的处理决策(纯函数, 单测覆盖; 见 [MvPlayback.duckSong])。
@@ -95,7 +94,7 @@ class MvPlayback {
   final Future<void> Function(String url, String title)? playOverride;
 
   /// Android 是否支持内嵌播放(决定 UI 显示「播放」还是「外链」)
-  bool get supportsInlinePlayback => !kIsWeb && Platform.isAndroid;
+  bool get supportsInlinePlayback => isAndroidPlatform;
 
   /// 起播前让歌曲让路(U-04): 需要时暂停歌曲, 返回「之前是否真的在播(即真暂停过)」。
   ///

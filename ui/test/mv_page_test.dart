@@ -111,7 +111,9 @@ void main() {
     await pumpMv(tester, detail: mvDetail(desc: '简介文本'));
     expect(find.text('主角'), findsWidgets);
     expect(find.textContaining('王菲'), findsOneWidget);
-    expect(find.textContaining('377308'), findsOneWidget);
+    // 播放量走 format.dart 的量级口径(377308 → 37w+), 不再把 BigInt 原样铺出来
+    expect(find.textContaining('播放 37w+'), findsOneWidget);
+    expect(find.textContaining('377308'), findsNothing);
     expect(find.textContaining('2026-05-07'), findsOneWidget);
     expect(find.textContaining('最高 1080P'), findsOneWidget);
     expect(find.text('简介文本'), findsOneWidget);

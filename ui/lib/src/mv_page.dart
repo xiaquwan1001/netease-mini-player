@@ -10,7 +10,7 @@ import 'error_views.dart' show FullError;
 import 'layout.dart' show kSectionGap;
 import 'net_retry.dart' show describeError, friendlyError;
 import 'state_views.dart' show LoadingView;
-import 'format.dart' show formatDurationMs;
+import 'format.dart' show formatCountMagnitude, formatDurationMs;
 import 'mv_playback.dart';
 import 'rust/api_all.dart' as rust;
 import 'toast.dart' show showToast;
@@ -216,7 +216,8 @@ class _MvPageState extends State<MvPage> with WidgetsBindingObserver {
               Text(
                 [
                   if (d.artistName.isNotEmpty) d.artistName,
-                  '播放 ${d.playCount}',
+                  // 播放量按量级显示(1234567 → 123w+), 不把 BigInt 原样铺出来
+                  '播放 ${formatCountMagnitude(d.playCount.toInt())}',
                   if (d.publishTime.isNotEmpty) d.publishTime,
                   formatDurationMs(d.durationMs),
                   if (d.maxBr > 0) '最高 ${d.maxBr}P',

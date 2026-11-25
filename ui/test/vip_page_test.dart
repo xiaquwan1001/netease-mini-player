@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/cover_art.dart' show NetImage;
 import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/vip_page.dart';
 
@@ -478,7 +479,7 @@ void main() {
     expect(find.text('未完成'), findsNWidgets(2));
   });
 
-  testWidgets('头像走 CircleAvatar + NetworkImage(不带 headers)', (tester) async {
+  testWidgets('头像走 cover_art 的 UA 加载(不是裸 NetworkImage)', (tester) async {
     // 测试环境下 HTTP 一律 400: 换掉默认 HttpClient, 避免真实网络与异常
     final saved = HttpOverrides.current;
     HttpOverrides.global = _NoopHttpOverrides();
@@ -493,13 +494,19 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final avatar = tester.widget<CircleAvatar>(find.byType(CircleAvatar).first);
-    expect(avatar.backgroundImage, isA<NetworkImage>());
-    expect(
-      (avatar.backgroundImage! as NetworkImage).url,
-      'https://p1.music.126.net/a.jpg',
-    );
-    expect((avatar.backgroundImage! as NetworkImage).headers, isNull);
+    // D13: 头像必须走 cover_art 的统一加载器(整体替换 UA + Referer);
+    // 裸 NetworkImage 发的是 `Dart/3.x` 默认 UA, 网易 CDN 直接 403 ⇒ 头像空白
+    final avatar = tester.widget<NetImage>(find.byType(NetImage).first);
+    expect(avatar.url, 'https://p1.music.126.net/a.jpg');
+    for (final c in tester.widgetList<CircleAvatar>(
+      find.byType(CircleAvatar),
+    )) {
+      expect(
+        c.backgroundImage,
+        isNull,
+        reason: 'CircleAvatar.backgroundImage 只能接 ImageProvider, 用不了 UA 加载器',
+      );
+    }
   });
 
   testWidgets('300dp 窄屏 + 1.25 倍字号不溢出', (tester) async {

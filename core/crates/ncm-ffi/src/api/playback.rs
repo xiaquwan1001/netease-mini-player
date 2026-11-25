@@ -6,6 +6,32 @@
 
 pub(crate) use super::*;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// 整曲下载的并发上限: 连点切歌时不让 N 条下载同时抢带宽(也顺手给 `.part` 的磁盘占用封顶).
+/// 只用于桌面渐进播放(`cfg(not(windows))`): Windows 走"下完再播", 没有在飞下载。
+#[cfg(not(windows))]
+const MAX_CONCURRENT_DOWNLOADS: usize = 3;
+
+/// 整曲下载的代际: 每起一首新歌 +1, 在飞下载按块对比自己的代际, 过期即收尾。
+///
+/// 为什么用代际而不是 `JoinHandle`/`CancellationToken`: ① 没有 tokio-util, 代际不需要新增依赖;
+/// ② `JoinHandle` 存不住「同一首被并发起播两次」的情形(后者复用前者, 不该互相 abort),
+/// 而代际天然表达"只有最近那一首的下载算数"。
+static DOWNLOAD_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+fn bump_download_epoch() -> u64 {
+    DOWNLOAD_EPOCH
+        .fetch_add(1, Ordering::AcqRel)
+        .wrapping_add(1)
+}
+
+#[cfg(not(windows))]
+fn download_slots() -> &'static tokio::sync::Semaphore {
+    static SLOTS: OnceLock<tokio::sync::Semaphore> = OnceLock::new();
+    SLOTS.get_or_init(|| tokio::sync::Semaphore::new(MAX_CONCURRENT_DOWNLOADS))
+}
+
 /// 播放器与取链**共用的客户端 UA**(唯一来源 = `ncm_service::identity::platform_profile().ua`).
 ///
 /// Android 的 CDN 请求由 Kotlin(Media3)发, 拿不到 `ncm-service` 的常量, 以前手抄了
@@ -89,6 +115,8 @@ pub async fn play_track(
     let level = ncm_service::cache::level_hint(track_id);
     let level = level.as_deref();
     if let Some(path) = cache.cached_with_level(track_id, &url, level) {
+        // 已缓存直接播: 之前那首还在飞的下载没必要再占带宽(它会按块检查发现代际过期)
+        bump_download_epoch();
         player().play_file(track_id, path.to_string_lossy().to_string());
         return Ok(state_dto());
     }
@@ -114,12 +142,25 @@ pub async fn play_track(
             std::sync::Arc::clone(&progressive.done),
             duration_ms,
         );
+        if !progressive.leader {
+            // 同一首歌的下载已经在飞(连点/重叠起播): 复用它的 `.part` 与 `done`, 不再下第二份,
+            // 也**不**推进代际 —— 否则会把正在下这份数据的领跑者自己打断。
+            return Ok(state_dto());
+        }
+        let epoch = bump_download_epoch();
         tokio::spawn(async move {
+            // 并发上限: 排队等许可期间可能已经被后来的曲子取代, 但**必须**走完
+            // `download_progressive_cancellable`: 收尾(删残片 / 置 done / 摘单飞表)在它里面。
+            let _permit = download_slots().acquire().await;
+            let cancelled = || DOWNLOAD_EPOCH.load(Ordering::Acquire) != epoch;
             // 失败时 `done` 已置位, 播放线程会立刻收尾而不是干等; 这里把分类原因
             // (`[kind] detail`, 与 ProviderError 同一文本协议)打进日志便于现场取证。
             // 注意: 渐进播放没有独立的"播放错误"字段可回传(codegen DTO 不在本车道改动面内),
             // 所以 UI 侧表现为"这一首很快结束"; 下载到文件(Win/CLI)走的是有错误通道的 fetch。
-            if let Err(e) = cache.download_progressive(&url, progressive).await {
+            if let Err(e) = cache
+                .download_progressive_cancellable(&url, progressive, &cancelled)
+                .await
+            {
                 eprintln!("[play] progressive download failed: {e}");
             }
         });

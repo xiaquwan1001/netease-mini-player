@@ -464,6 +464,8 @@ class AccountActions extends ChangeNotifier {
       special: pl.special,
       loggedIn: infoOf()?.loggedIn == true,
       likedIds: likedOf(),
+      // D06: 传访问器而不是快照 —— 分栏里打开期间从播放条/菜单改的红心也能回流
+      likedOf: (id) => likedOf().contains(id),
       currentTrackId: currentTrackIdOf(),
       currentPlaylistId: _queuePlaylistId,
       onLikeChanged: markLiked,
@@ -520,6 +522,7 @@ class AccountActions extends ChangeNotifier {
         special: true,
         loggedIn: infoOf()?.loggedIn == true,
         likedIds: likedOf(),
+        likedOf: (id) => likedOf().contains(id),
         currentTrackId: currentTrackIdOf(),
         currentPlaylistId: _queuePlaylistId,
         onLikeChanged: markLiked,

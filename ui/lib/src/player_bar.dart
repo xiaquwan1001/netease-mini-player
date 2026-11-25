@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
+import 'format.dart' show formatDurationClock;
 import 'layout.dart'
     show
         LayoutTier,
@@ -146,20 +147,15 @@ class PlayerBarActions {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
-  /// 播放顺序轮转(列表循环→单曲→顺序→随机→心动, 心动不可用时跳过)
+  /// 播放顺序轮转: 列表循环 → 单曲 → 顺序 → 随机 → 列表循环(**只有 4 档**,
+  /// 见 `home/queue_sheet_controller.dart` 的 `cycleMode`)。
+  /// 心动/私人FM 不在轮转里(它们有自己的入口与续播逻辑); 处于引导态时这个按钮
+  /// 的语义 = 「退出引导回到列表循环」, 图标由 [PlayerBarData.heartActive] /
+  /// [PlayerBarData.fmActive] 换成火焰/广播。
   final VoidCallback onCycleMode;
 
   /// 打开播放队列面板(播放条最右侧)
   final VoidCallback onOpenQueue;
-}
-
-/// 毫秒时长 → `mm:ss`(分钟补零; 超 60 分钟继续累计, 与原 main.dart `_fmt` 同口径,
-/// 不用 format.dart 的 `formatDurationMs` —— 那个在满一小时会变 `h:mm:ss`).
-String _fmt(BigInt ms) {
-  final total = (ms ~/ BigInt.from(1000)).toInt();
-  final m = (total ~/ 60).toString().padLeft(2, '0');
-  final s = (total % 60).toString().padLeft(2, '0');
-  return '$m:$s';
 }
 
 /// 播放顺序图标/文案: 通知栏、播放条、详情页共用一份口径。
@@ -461,7 +457,8 @@ class MiniPlayerBar extends StatelessWidget {
                                             // 否则用户拖完等了几十秒不知道到底跳了没有。
                                             if (queued != null)
                                               TextSpan(
-                                                text: '已排队→${_fmt(queued)}  ',
+                                                text:
+                                                    '已排队→${formatDurationClock(queued)}  ',
                                                 style: TextStyle(
                                                   color: Theme.of(context)
                                                       .colorScheme
@@ -480,7 +477,7 @@ class MiniPlayerBar extends StatelessWidget {
                                             // 队列排位只在手机端追加(桌面版用户口径)
                                             TextSpan(
                                               text:
-                                                  '  ${_fmt(player.positionMs)} / ${_fmt(player.durationMs)}'
+                                                  '  ${formatDurationClock(player.positionMs)} / ${formatDurationClock(player.durationMs)}'
                                                   '${showQueueIndex ? '  ${data.queueIndex}/${data.queueLength}' : ''}',
                                             ),
                                           ],

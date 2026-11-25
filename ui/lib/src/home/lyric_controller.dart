@@ -57,6 +57,10 @@ class LyricController extends ChangeNotifier {
   BigInt? _lyricTrackId;
   String? _lyricError;
 
+  /// 测试用: [load] 真正发起取数的次数(按曲目 id 幂等短路的不计入)。
+  @visibleForTesting
+  int debugLoadCount = 0;
+
   // 歌词来源("yrc"/"ttml"/"line")与择优理由不再上屏(左下角那条像水印的
   // 小字已按用户要求去掉); 打分/择优口径在 Rust(src/lyric_source.dart 只做转发).
   int _lyricIndex = -1;
@@ -131,6 +135,7 @@ class LyricController extends ChangeNotifier {
   Future<void> load(BigInt trackId) async {
     if (_lyricTrackId == trackId) return;
     _lyricTrackId = trackId;
+    debugLoadCount += 1;
     if (!_disposed) {
       _lyricLines = const [];
       _lyricTimes = const [];
@@ -213,9 +218,20 @@ class LyricController extends ChangeNotifier {
       final ok = await _loadRawLyric(trackId);
       if (!ok && !_disposed && _lyricTrackId == trackId) {
         _lyricError = friendlyError(e);
+        // 失败不占位: 占着 id 会让同一首永远走上面的幂等早退 ——
+        // 退出重进歌词页、点「重试」都不再发请求, 只能切歌才可能恢复(用户反馈)。
+        _lyricTrackId = null;
         notifyListeners();
       }
     }
+  }
+
+  /// 歌词错误态的「重试」: 清掉占位后按当前曲目重新取一次。
+  Future<void> retryLoad() {
+    final id = player()?.trackId;
+    if (id == null) return Future<void>.value();
+    _lyricTrackId = null;
+    return load(id);
   }
 
   /// 原始 LRC 兜底(逐行接口失败/为空时): 有时间轴就等价于逐行高亮,
@@ -288,8 +304,9 @@ class LyricController extends ChangeNotifier {
   /// - 进歌曲详情页(歌词页, [toggle] 展开时)——缓存不命中时用户看到的是
   ///   「暂无歌词 / 信息不可用」干等。
   ///
-  /// 幂等: [load] 内部按曲目 id 去重, 重复调用不重复请求。失败不影响页面,
-  /// 错误照旧进 [error]。返回的 Future 供测试等待。
+  /// 幂等: [load] 内部按曲目 id 去重(只对**取成功过**的曲目), 重复调用不重复请求。
+  /// 失败不占位, 所以退出重进/「重试」会重新发一次。错误照旧进 [error]。
+  /// 返回的 Future 供测试等待。
   Future<void> ensureLoaded() {
     final id = player()?.trackId;
     if (id == null) return Future<void>.value();

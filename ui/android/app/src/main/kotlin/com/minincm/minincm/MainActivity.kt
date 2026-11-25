@@ -432,7 +432,12 @@ class MainActivity : FlutterActivity() {
                 // 1s 盖成静音, 听感是错过开头)。标志在下一次 `play()` 里生效并清掉。
                 PlaybackService.instance?.markTrackStart()
                 c.play()
-                result.success(stateMap(c))
+                // 返回值**用请求参数拼**, 不回读 MediaController(审计 U2, 2026-11-25):
+                // setMediaItem/prepare/play 只是把命令发给会话, MediaController 缓存的
+                // PlayerInfo 要靠 binder 回调刷新, 而本方法仍在主线程上 ⇒ stateMap(c) 读到的
+                // 是**上一首**的 trackId/positionMs 且 playing=false。那份快照会被 Dart 直接
+                // adoptPlayer 并立刻 force 落盘 ⇒ "新曲的现场"从旧曲位置上开始。
+                result.success(playResult(trackId = trackId, startMs = startMs, volume = c.volume))
             }
             "pause" -> { c.pause(); result.success(stateMap(c)) }
             "resume" -> { c.play(); result.success(stateMap(c)) }
@@ -467,6 +472,30 @@ class MainActivity : FlutterActivity() {
             "volume" to c.volume.toDouble(),
         )
     }
+
+    /**
+     * `ncm/player#play` 的返回值: 全部用**请求参数**拼(审计 U2)。
+     *
+     * 为什么不能直接用 [stateMap]: 命令发出后 MediaController 的 PlayerInfo 仍是旧值
+     * (binder 回调要等本方法返回、主线程回到 looper 之后才会到), 读到的是上一首的
+     * trackId/positionMs 且 playing=false。各字段口径:
+     *
+     * - `trackId`: 请求值(不是 `c.currentMediaItem`);
+     * - `positionMs`: 传进来的起播位置(没传即 0) —— 这条曲目真正的进度起点,
+     *   Dart 的 force 落盘也用它, 不会再写成旧曲的位置;
+     * - `playing`: 命令已发出, 按"在播"报(与旧行为一致, 也是用户按下的瞬间状态);
+     * - `durationMs`: 通道参数里没有时长 ⇒ 给 0(未知); 下一次 `state` 轮询会补上真值,
+     *   期间 `_looksEnded` 因为 duration==0 不会误判播完;
+     * - `volume`: 音量与曲目无关(`setVolume` 走服务, 不随 setMediaItem 变), 用缓存值即可。
+     */
+    private fun playResult(trackId: Long, startMs: Long, volume: Float): Map<String, Any?> =
+        mapOf(
+            "trackId" to trackId,
+            "playing" to true,
+            "positionMs" to startMs,
+            "durationMs" to 0L,
+            "volume" to volume.toDouble(),
+        )
 
     private fun ensureNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

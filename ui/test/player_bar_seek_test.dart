@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/playback.dart';
 import 'package:minincm/src/player_bar.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 PlayerBarData _data({bool seekable = true, BigInt? pendingSeekMs}) =>
     PlayerBarData(
@@ -163,9 +164,9 @@ void main() {
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
-    setUp(() => Playback.debugForceAndroid = true);
+    setUp(() => debugForceAndroid = true);
     tearDown(() {
-      Playback.debugForceAndroid = false;
+      debugForceAndroid = false;
       messenger.setMockMethodCallHandler(channel, null);
     });
 

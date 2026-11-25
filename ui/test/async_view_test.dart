@@ -309,6 +309,47 @@ void main() {
       expect(find.text('第一版'), findsNothing);
     });
 
+    // 云盘「加载更多」/删除一首的现场: 父层把已完成的 future 换进来,
+    // FutureBuilder 仍先给一帧 waiting。若那一帧渲染 LoadingView, 整个 ListView
+    // 会被卸载又重建 ⇒ 滚动位置归零(用户翻到第 N 页后每次跳回顶部)。
+    // 必须只 pump 一帧才抓得到 —— pumpAndSettle 会跨过这一帧。
+    testWidgets('future 分支: 换 future 的那一帧不闪 loading, 滚动位置不丢', (tester) async {
+      List<String> rows() => [for (var i = 0; i < 40; i++) '行 $i'];
+
+      Widget build(Future<List<String>> future) => host(
+        AsyncView<List<String>>(
+          future: future,
+          builder: (_, data, _) => ListView(
+            key: const ValueKey('list'),
+            children: [
+              for (final row in data) SizedBox(height: 40, child: Text(row)),
+            ],
+          ),
+          emptyText: '暂无',
+        ),
+      );
+
+      await tester.pumpWidget(build(Future<List<String>>.value(rows())));
+      await tester.pumpAndSettle();
+      final list = find.byKey(const ValueKey('list'));
+      await tester.drag(list, const Offset(0, -400));
+      await tester.pumpAndSettle();
+      double offset() => tester
+          .state<ScrollableState>(find.byType(Scrollable))
+          .position
+          .pixels;
+      final before = offset();
+      expect(before, greaterThan(0), reason: '前置: 列表已滚离顶部');
+
+      // pumpWidget 只泵一帧 = 「换 future 之后的第一帧」
+      await tester.pumpWidget(build(Future<List<String>>.value(rows())));
+      expect(find.byType(LoadingView), findsNothing, reason: '换 future 不许闪加载态');
+      expect(list, findsOneWidget, reason: '旧列表这一帧仍要挂着');
+
+      await tester.pump();
+      expect(offset(), before, reason: '列表没被重挂载, 滚动位置保持');
+    });
+
     testWidgets('future 分支: builder 的 reload 在无 onRetry/load 时是空操作', (
       tester,
     ) async {

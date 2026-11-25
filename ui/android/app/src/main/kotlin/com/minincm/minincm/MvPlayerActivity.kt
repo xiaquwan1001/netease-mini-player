@@ -62,8 +62,12 @@ class MvPlayerActivity : Activity() {
         }
         when (action) {
             MvAudioFocusPolicy.Action.PAUSE -> {
-                pausedByFocus = true
-                if (::video.isInitialized && video.isPlaying) video.pause()
+                // 只有"真的在播"才记成焦点暂停(审计 U4, 2026-11-25): 用户自己按的暂停
+                // 不该被 GAIN 偷偷播起来([MvAudioFocusPolicy] KDoc 的承诺)。
+                if (::video.isInitialized && video.isPlaying) {
+                    pausedByFocus = true
+                    video.pause()
+                }
             }
 
             MvAudioFocusPolicy.Action.RESUME -> {

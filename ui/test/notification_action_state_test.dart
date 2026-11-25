@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/playback.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 /// P-02(通知按钮红心/模式状态自愈)的 Dart 侧契约:
 ///
@@ -36,7 +37,7 @@ void main() {
   setUp(() {
     calls.clear();
     failNextPush = false;
-    Playback.debugForceAndroid = true;
+    debugForceAndroid = true;
     Playback.debugResetActionStateCache();
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -55,7 +56,7 @@ void main() {
   });
 
   tearDown(() {
-    Playback.debugForceAndroid = false;
+    debugForceAndroid = false;
     Playback.debugResetActionStateCache();
     messenger.setMockMethodCallHandler(channel, null);
   });

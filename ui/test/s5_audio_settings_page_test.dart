@@ -200,6 +200,10 @@ void main() {
       expect(find.text('不可用(整首下载后播放)'), findsOneWidget);
       // 桌面仍显示"硬件解码"的只读说明(与 Linux 同一分支)
       expect(find.byKey(const Key('hardwareDecodeSwitch')), findsNothing);
+      // 但文案要写对平台名: 之前那句写死了"Linux 端", 在 Windows 版上就自相矛盾
+      expect(find.byKey(const Key('hardwareDecodeNote')), findsOneWidget);
+      expect(find.textContaining('Windows 端为纯软解'), findsOneWidget);
+      expect(find.textContaining('Linux'), findsNothing);
     });
   });
 
@@ -208,6 +212,7 @@ void main() {
       expect(find.byKey(const Key('hardwareDecodeSwitch')), findsNothing);
       expect(find.text('优先硬件解码'), findsNothing);
       expect(find.textContaining('纯软解'), findsOneWidget);
+      expect(find.textContaining('Linux 端为纯软解'), findsOneWidget);
     });
   });
 

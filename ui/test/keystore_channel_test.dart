@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/keystore.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -31,7 +32,7 @@ void main() {
     stored.clear();
     nativeAvailable = true;
     nativeError = null;
-    KeystoreChannel.debugForceAndroid = true;
+    debugForceAndroid = true;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('ncm/keystore'), handler);
     ks = KeystoreChannel();
@@ -40,7 +41,7 @@ void main() {
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('ncm/keystore'), null);
-    KeystoreChannel.debugForceAndroid = false;
+    debugForceAndroid = false;
   });
 
   test('put/get/remove 正常往返', () async {
@@ -53,7 +54,7 @@ void main() {
   });
 
   test('非 Android: available=false, put 返回 false, get 返回 null, 不写明文', () async {
-    KeystoreChannel.debugForceAndroid = false;
+    debugForceAndroid = false;
     expect(await ks.available(), isFalse);
     expect(await ks.put('cookie', 'MUSIC_U=abc'), isFalse);
     expect(await ks.get('cookie'), isNull);

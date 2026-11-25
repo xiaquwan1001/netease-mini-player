@@ -277,6 +277,19 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 续播临界区: 防止一次结束被处理两遍(轮询 500ms + 异步取链)
   bool _advancing = false;
 
+  /// 起播代际: 每次 [playSong] 入口 ++, 取链期间的旧结果靠它作废(审计 U1, 2026-11-25)。
+  ///
+  /// 为什么需要: 从 [playSong] 到真正上播放器要经过两个真实 `await`(取链 + 取封面),
+  /// 连点两首歌时**谁后返回谁赢** —— 播放器上是一首、`queue.index`/播放条/落盘是另一首。
+  /// 触发面: 快速连点; 播完自动续播取链期间用户点另一首([_advancing] 只互斥续播自己);
+  /// 私人FM 的 [guideNext] 与用户点歌并发。
+  ///
+  /// 范式与 `paged_list_view.dart` 的 `_generation` / `detail_faces.dart` 的 `_bigToken` 一致。
+  int _playGen = 0;
+
+  /// 这次起播是否已被后一次 [playSong] 取代
+  bool _superseded(int gen) => gen != _playGen;
+
   /// 原生 STATE_ENDED → 队列续播(与轮询兜底共用 [_onTrackEnded] 的临界区)
   void onNativeTrackEnded() {
     if (_advancing) return;
@@ -352,6 +365,8 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// 用户亲手点的歌必须播(官方也是这么做的 —— 会员曲目能试听前 30s),
   /// 只有取链真的拿不到直链时才继续往后跳。
   Future<void> playSong(rust.SongDto song, {bool explicit = false}) async {
+    // 先抢代际: 后发起的这次一进来就让先前那次作废(它的取链结果晚到也不许落地)
+    final gen = ++_playGen;
     userStopped = false;
     _restoredFromDisk = false;
     // 续播位置不在这里清: 由 `_takeResumePositionFor` 取走即清(否则 _resolveAndPlay 读不到)
@@ -368,10 +383,16 @@ class PlaybackCoordinator extends ChangeNotifier {
     while (true) {
       if (!allowVip && _skipVip(target)) {
         skippedVip += 1;
-      } else if (await _resolveAndPlay(target)) {
-        reportSkipped();
-        _persist(force: true);
-        return;
+      } else {
+        final started = await _resolveAndPlay(target, gen);
+        // 已经被后一次起播取代: 既不继续往后跳(那是给别人跳的), 也不落盘/提示 ——
+        // 播放器、队列与现场此刻都属于新的那一次。
+        if (_superseded(gen)) return;
+        if (started) {
+          reportSkipped();
+          _persist(force: true);
+          return;
+        }
       }
       // 跳过只发生在非主动点选的曲目上; 一旦绕到下一首就回到"自动续播"口径
       allowVip = false;
@@ -483,7 +504,7 @@ class PlaybackCoordinator extends ChangeNotifier {
   ///
   /// 取链优先用预取结果, 没有才真的去取(retryNetwork: 移动网络切网偶发
   /// connection reset, 取链幂等所以值得重试)。
-  Future<bool> _resolveAndPlay(rust.SongDto song) async {
+  Future<bool> _resolveAndPlay(rust.SongDto song, int gen) async {
     // 没版权的曲目连取链都不用试; 自动续播时静默跳过(点列表才提示, 否则一路弹窗)
     if (!song.playable) return false;
     // 续播位置的影份: 取出后若 play 抱错要回写(catch 看不到 try 内变量, 故提到 try 外)。
@@ -511,6 +532,9 @@ class PlaybackCoordinator extends ChangeNotifier {
         // 试听片段 / 静默降级 如实带出来(方案 A: 信息无损)
         note = StreamNote.fromStream(stream);
       }
+      // 代际守卫(第一个 await 之后): 取链期间用户又点了别的歌 ⇒ 这次结果作废,
+      // 不提示、不改提示条、不上播放器、不动队列、不落盘。
+      if (_superseded(gen)) return false;
       if (url == null) {
         // 没拿到直链 ⇒ 清掉提示(不能让上一条曲目的「试听」标签挂在别的曲子上)
         publishStreamNote(null, null);
@@ -532,6 +556,11 @@ class PlaybackCoordinator extends ChangeNotifier {
       publishStreamNote(song.id, note);
       // 恢复现场的续播位置: 取一次就清(F7: 下次打开按播放要从记住的位置起, 不是 0)。
       // 取之前先影一份: play 抛错时回写, 别让一次失败把记忆位置静默清掉(审计 P2, 2026-11-23)。
+      // 取的动作安排在最后一次代际守卫之后(见下): 被取代的那一次不能把记忆位置吃掉。
+      // 封面是第二个真实 await(命中缓存时是微任务级, 未命中要下载): 期间可能又被点歌
+      final artwork = await _artworkFor(song);
+      // 代际守卫(上播放器之前): 旧代绝不能把播放器改成自己要播的那首
+      if (_superseded(gen)) return false;
       resumeTakenMs = _resumeAfterPlayMs;
       resumeTakenId = _resumeAfterPlayTrackId;
       final resumeMs = _takeResumePositionFor(song.id);
@@ -543,11 +572,14 @@ class PlaybackCoordinator extends ChangeNotifier {
         // 边下边播(桌面)时解码器拿不到总时长, 进度条用接口时长兜底
         durationMs: song.durationMs,
         // 通知栏图标 = 当前播放内容的封面(歌曲/播客统一走 coverUrl)
-        artwork: await _artworkFor(song),
+        artwork: artwork,
         // Android: 直接按这个位置起播(MediaItem 的起播位置, 不依赖 seek 通道的时序)
         startPositionMs: resumeMs > 0 ? BigInt.from(resumeMs) : null,
       );
       if (_disposed) return true;
+      // 代际守卫(adoptPlayer 之前): 播放调用本身也是异步的 —— 它落地期间用户又切歌时,
+      // 这份快照属于旧曲, 写回播放条/现场就是「播错歌」。真实状态由 500ms 轮询收敛。
+      if (_superseded(gen)) return false;
       adoptPlayer(state);
       // 桌面(Rust)没有起播位置参数 ⇒ 起播后 seek 到同一位置;
       // Android 的起播位置已随 play(positionMs) 交给 ExoPlayer(setMediaItem 后、prepare 前),
