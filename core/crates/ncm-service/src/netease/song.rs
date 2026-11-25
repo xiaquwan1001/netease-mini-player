@@ -376,6 +376,22 @@ impl NeteaseProvider {
         })
     }
 
+    /// 单曲的官方 MV id(没有 MV ⇒ `None`).
+    ///
+    /// `SongDto`/`Song` 里没有 mv 字段(整个 DTO 面不为一个入口改), 只能现查一次
+    /// `/api/v3/song/detail`(与 [`Self::songs_detail`] 同一个 vendor 端点, 那里返回的
+    /// 每首歌都带 `mv`, 0 = 没有 MV). "没有 MV" 是**正常空态**, 只有网络/风控/无权限
+    /// 才上抛, 由 UI 决定隐藏入口; 匿名可用(MV 与播放权限是两件事).
+    pub(super) fn song_mv_id(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<Option<u64>>> {
+        Box::pin(async move {
+            let (client, domain, ua, cookie) = self.snapshot();
+            let q = make_query(&cookie, &domain, &ua).param("ids", &song_id.to_string());
+            let resp = client.song_detail(&q).await.map_err(map_error)?;
+            check_body(&resp.body)?;
+            Ok(parse_song_mv(&resp.body))
+        })
+    }
+
     /// 每日推荐歌曲(原版每日推荐, 匿名也能取到; 登录后是个性化推荐)
     pub(super) fn daily_recommend_songs(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
@@ -809,6 +825,14 @@ pub fn parse_new_songs(body: &Value) -> Vec<Song> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+/// 单曲的官方 MV id: `song/detail` 的 `songs[0].mv`(0 = 没有 MV)。
+///
+/// 缺失/0/非数字一律 `None` —— 上游把"没有 MV"写成 `mv:0`, 有些曲目干脆不给这个字段。
+pub fn parse_song_mv(body: &Value) -> Option<u64> {
+    let first = body.get("songs")?.as_array()?.first()?;
+    u64_of(first, "mv").filter(|mv| *mv > 0)
 }
 
 /// 通用"songs 数组"桶: 相似歌曲/搜索结果等

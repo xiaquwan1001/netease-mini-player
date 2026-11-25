@@ -245,6 +245,59 @@ fn code_minus_462_is_risk_control_with_upstream_message() {
     );
 }
 
+/// -460 = 风控族「cheating」(上游原话通常是「检测到您的网络环境存在风险, 请稍后再试」)。
+///
+/// 判据见 `netease/mod.rs::map_code` 的 -460 分支与 `fingerprint.md` §4.1/§4.2:
+/// ① kind 必须是 RiskControl —— 归 Auth 会让 `syncAccount` 的 `logout()` 把有效会话
+///    因一次间歇风控踢下线, 且 auth 文案是死路;
+/// ② `retryable == false` —— 同一个出口重试只会再撞风控, 出路是换网络/登录;
+/// ③ detail 必须留 `code=-460` —— 与 -462 同 kind, 只能靠码在日志里分变量统计(T3)。
+#[test]
+fn code_minus_460_is_risk_control_with_code_kept() {
+    let body = json!({"code": -460, "message": "检测到您的网络环境存在风险, 请稍后再试"});
+    let err = check_body(&body).unwrap_err();
+    assert_eq!(err.kind, ProviderErrorKind::RiskControl);
+    assert!(!err.retryable, "风控不可重试, 实际: {}", err.detail);
+    assert!(
+        err.detail.contains("code=-460"),
+        "detail 必须带码才能与 -462 分离统计, 实际: {}",
+        err.detail
+    );
+    assert!(
+        err.detail.contains("检测到您的网络环境存在风险"),
+        "上游原文不能丢, 实际: {}",
+        err.detail
+    );
+}
+
+/// 登录场景的 400 是**精确匹配**(输入错), -460 走 `_ =>` 落全局口径变 RiskControl,
+/// 不能被折成 400/Auth 或 Internal —— 否则登录接口上的风控会显示成「服务开小差了」。
+#[test]
+fn login_code_minus_460_stays_risk_control() {
+    let e = map_login_code(-460, "检测到您的网络环境存在风险".into());
+    assert_eq!(e.kind, ProviderErrorKind::RiskControl);
+    assert!(!e.retryable);
+    assert!(
+        e.detail.contains("code=-460"),
+        "detail 必须带码, 实际: {}",
+        e.detail
+    );
+}
+
+/// 反向用例: 没有语义证据的负数码不许被顺手映射(-461 目前仍落 internal)。
+#[test]
+fn code_minus_461_stays_internal() {
+    let body = json!({"code": -461});
+    let err = check_body(&body).unwrap_err();
+    assert_eq!(err.kind, ProviderErrorKind::Internal);
+    assert!(!err.retryable);
+    assert!(
+        err.detail.contains("code=-461"),
+        "detail 要带码, 实际: {}",
+        err.detail
+    );
+}
+
 #[test]
 fn user_level_mapping() {
     // 实测响应原样(2026-11-08, 已登录: 9 级, 2301/12000 首, 350/350 天)

@@ -42,6 +42,10 @@ class SongActionCounts {
 /// 计数加载器(生产实现由 main.dart 注入; 单测可传假的, 不联网)
 typedef SongCountsLoader = Future<SongActionCounts> Function(rust.SongDto song);
 
+/// 官方 MV id 加载器(生产实现由 song_action_wiring 注入并带缓存; 单测传假的)。
+/// `null` = 这首歌没有官方 MV(空态, 不是错误)。
+typedef SongMvIdLoader = Future<BigInt?> Function(rust.SongDto song);
+
 /// 动作回调集合(由 main.dart 组装, 行组件通过 AppActions 取)
 class SongActionHost {
   const SongActionHost({
@@ -59,6 +63,8 @@ class SongActionHost {
     this.dislike,
     this.songWiki,
     this.counts,
+    this.mvId,
+    this.openMv,
   });
 
   /// 是否已登录(收藏/喜欢仍会回调, 未登录由调用方提示)
@@ -102,6 +108,16 @@ class SongActionHost {
 
   /// 喜欢/评论/分享的数量级(不传 = 菜单里不显示计数)
   final SongCountsLoader? counts;
+
+  /// 该曲目的官方 MV id(不传 = 菜单里不显示「官方 MV」项)。
+  ///
+  /// 菜单打开时立即预取(不等用户点); 返回 `null` 或抛错都当作"没有 MV" ——
+  /// 这一项就不出现, 不留灰条也不 toast(与计数同一口径)。缓存归装配侧管。
+  final SongMvIdLoader? mvId;
+
+  /// 打开官方 MV(MV 播放页现成入口见 mv_page.dart 的 showMvPage)。
+  /// 与 [mvId] 成对挂上才显示「官方 MV」项。
+  final Future<void> Function(rust.SongDto song, BigInt mvId)? openMv;
 }
 
 /// InheritedWidget: 任一子树里的 SongOverflowButton 自动拿到 host
@@ -185,11 +201,13 @@ class _SongActionsSheet extends StatefulWidget {
 
 class _SongActionsSheetState extends State<_SongActionsSheet> {
   SongActionCounts? _counts;
+  BigInt? _mvId;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadMvId();
   }
 
   Future<void> _load() async {
@@ -200,6 +218,23 @@ class _SongActionsSheetState extends State<_SongActionsSheet> {
       if (mounted) setState(() => _counts = counts);
     } catch (_) {
       // 计数是装饰信息: 失败就静默不显示(不能因此让菜单报错)
+    }
+  }
+
+  /// 官方 MV 是否存在只能现查(song/detail 里才有 mv 字段), 所以**面板打开就预取**,
+  /// 命中才插入这一项 —— 菜单本体仍是同步构建的一串 ListTile, 不等这个请求:
+  /// 与上面的计数一个路子(将来若再加异步项, 照这个写法加, 不要另起一个子 widget)。
+  ///
+  /// 没有 MV / 查询失败 ⇒ 这一项不出现: 不留灰条、不 toast(MV 与播放权限无关,
+  /// 未登录也照常显示)。
+  Future<void> _loadMvId() async {
+    final loader = widget.host.mvId;
+    if (loader == null || widget.host.openMv == null) return;
+    try {
+      final id = await loader(widget.song);
+      if (mounted && id != null) setState(() => _mvId = id);
+    } catch (_) {
+      // 入口只在真的查到 MV 时出现; 失败就是没查到(不打扰用户)
     }
   }
 
@@ -225,6 +260,7 @@ class _SongActionsSheetState extends State<_SongActionsSheet> {
                     widget.host,
                     widget.source,
                     _counts,
+                    _mvId,
                   ),
                 ),
               ),
@@ -253,6 +289,7 @@ List<Widget> _menu(
   SongActionHost host,
   SongActionSource source,
   SongActionCounts? counts,
+  BigInt? mvId,
 ) {
   final colorScheme = Theme.of(context).colorScheme;
   final liked = host.isLiked(song.id);
@@ -312,6 +349,14 @@ List<Widget> _menu(
       trailing: _countLabel(context, counts?.comments),
       onTap: () => run(() => host.comments(song)),
     ),
+    // 只有真的查到官方 MV 才出现(异步预取; 没有 MV/查询失败时不出现这一行)
+    if (mvId != null)
+      ListTile(
+        leading: const Icon(Icons.smart_display_outlined),
+        title: const Text('官方 MV'),
+        subtitle: const Text('这首歌的官方 MV'),
+        onTap: () => run(() => host.openMv!(song, mvId)),
+      ),
     ListTile(
       leading: const Icon(Icons.person_outline),
       title: Text(

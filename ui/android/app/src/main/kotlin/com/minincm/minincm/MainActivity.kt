@@ -426,6 +426,9 @@ class MainActivity : FlutterActivity() {
                 // 恢复现场的续播(F7): 起播位置直接交给 ExoPlayer —— 比"起播后再 seek"稳,
                 // 不会出现"先用 0 加载一段, 再跳"的观感(也不看 seek 通道的时序)
                 val startMs = (args["positionMs"] as? Number)?.toLong() ?: 0L
+                // 接口给的时长(审计 U2 尾巴): Dart 已经把 song.durationMs 传进来, 不再写死 0 ——
+                // 否则换曲后进度条要等下一次 500ms 轮询才有总长。缺失/非法仍按 0(未知)处理。
+                val durationMs = (args["durationMs"] as? Number)?.toLong() ?: 0L
                 if (startMs > 0L) c.seekTo(startMs)
                 c.prepare()
                 // 换曲/首次起播: **不淡入**(2026-11-23 用户口径 —— 淡入会把歌曲开头
@@ -437,7 +440,22 @@ class MainActivity : FlutterActivity() {
                 // PlayerInfo 要靠 binder 回调刷新, 而本方法仍在主线程上 ⇒ stateMap(c) 读到的
                 // 是**上一首**的 trackId/positionMs 且 playing=false。那份快照会被 Dart 直接
                 // adoptPlayer 并立刻 force 落盘 ⇒ "新曲的现场"从旧曲位置上开始。
-                result.success(playResult(trackId = trackId, startMs = startMs, volume = c.volume))
+                result.success(
+                    playResult(
+                        trackId = trackId,
+                        startMs = startMs,
+                        durationMs = durationMs,
+                        volume = c.volume,
+                    ),
+                )
+            }
+            // 立即暂停(不走淡出): MV 起播让路专用(审计 U3)。「总是在后台播放」档的 MV
+            // 不申请音频焦点, 没有"系统压停歌曲"这层兜底, 走 pause 的淡出就是双声窗口。
+            "pauseImmediate" -> {
+                val svc = PlaybackService.instance
+                if (svc != null) svc.pauseImmediately() else c.pause()
+                // 命令已发出: 缓存里的 isPlaying 还是旧值, 按请求意图报"未播"(同上一条的理由)
+                result.success(stateMap(c, playingOverride = false))
             }
             "pause" -> { c.pause(); result.success(stateMap(c)) }
             "resume" -> { c.play(); result.success(stateMap(c)) }
@@ -458,12 +476,16 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun stateMap(c: MediaController): Map<String, Any?> {
+    private fun stateMap(c: MediaController, playingOverride: Boolean? = null): Map<String, Any?> {
         val duration = if (c.duration == C.TIME_UNSET) 0L else c.duration
         // 淡出挂起态必须在这层合并(审计 P1, 2026-11-23): MediaController.isPlaying 读的是
         // 会话缓存的 PlayerInfo, 淡出期间只有音量动画、无 Player 事件 ⇒ 只覆写服务的
         // SkipAwarePlayer.isPlaying 不会传导到这里, Dart 轮询仍拿到「还在播」(F6 症状)。
-        val playing = c.isPlaying && PlaybackService.instance?.isFadeOutPending != true
+        //
+        // [playingOverride]: 刚发出播放/暂停命令时缓存还是旧值, 用**请求意图**报
+        // (与 [playResult] 同一个理由, 见那里的注释)。
+        val playing = playingOverride
+            ?: (c.isPlaying && PlaybackService.instance?.isFadeOutPending != true)
         return mapOf(
             "trackId" to c.currentMediaItem?.mediaId?.toLongOrNull(),
             "playing" to playing,
@@ -484,16 +506,21 @@ class MainActivity : FlutterActivity() {
      * - `positionMs`: 传进来的起播位置(没传即 0) —— 这条曲目真正的进度起点,
      *   Dart 的 force 落盘也用它, 不会再写成旧曲的位置;
      * - `playing`: 命令已发出, 按"在播"报(与旧行为一致, 也是用户按下的瞬间状态);
-     * - `durationMs`: 通道参数里没有时长 ⇒ 给 0(未知); 下一次 `state` 轮询会补上真值,
-     *   期间 `_looksEnded` 因为 duration==0 不会误判播完;
+     * - `durationMs`: 请求参数里的接口时长(没有就 0 = 未知); 不再写死 0 —— 换曲后进度条
+     *   立刻就有总长, 不必等下一次 500ms 轮询; 但**绝不编造**: 调用方没给就仍是 0;
      * - `volume`: 音量与曲目无关(`setVolume` 走服务, 不随 setMediaItem 变), 用缓存值即可。
      */
-    private fun playResult(trackId: Long, startMs: Long, volume: Float): Map<String, Any?> =
+    private fun playResult(
+        trackId: Long,
+        startMs: Long,
+        durationMs: Long,
+        volume: Float,
+    ): Map<String, Any?> =
         mapOf(
             "trackId" to trackId,
             "playing" to true,
             "positionMs" to startMs,
-            "durationMs" to 0L,
+            "durationMs" to if (durationMs > 0L) durationMs else 0L,
             "volume" to volume.toDouble(),
         )
 

@@ -8,6 +8,7 @@ import '../app_sheet.dart';
 import '../eq_curve_chart.dart';
 import '../eq_import.dart';
 import '../eq_profile.dart';
+import '../platform_is.dart' show isAndroidPlatform;
 import '../section_header.dart';
 import '../toast.dart';
 import 'settings_sleep_timer_page.dart';
@@ -309,9 +310,11 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
     final fade = AppSettings.fadeOptions.containsKey(settings.fadeMs)
         ? settings.fadeMs
         : 0;
+    final text = fadeCardText(isAndroid: isAndroidPlatform);
     return ListTile(
-      title: const Text('淡入淡出'),
-      subtitle: const Text('暂停恢复时的淡入时长, 0 = 关闭(切歌始终不淡入)'),
+      key: const Key('fadeTile'),
+      title: Text(text.title),
+      subtitle: Text(text.subtitle),
       trailing: DropdownButton<int>(
         key: const Key('fadeDropdown'),
         value: fade,
@@ -410,6 +413,20 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text('拖动柱子即可调整, 无需导入', style: theme.textTheme.bodySmall),
+          ),
+        ),
+        // D08: 图表走的是 eq_biquad.dart 的近似系数(LS/HS 用 S=1 简化、忽略 Q),
+        // 实听由 Rust/Kotlin 的 Q 形式滤波器决定 —— 用户在这里看图调音, 得先知道
+        // 图上与听感会有细微差异, 否则会当成 bug 报上来。
+        Padding(
+          key: const Key('eqCurveApproxNote'),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '曲线为近似示意, 实际听感由播放端滤波器决定',
+              style: theme.textTheme.bodySmall,
+            ),
           ),
         ),
         SizedBox(
@@ -532,6 +549,22 @@ String hardwareDecodePlatformNote(TargetPlatform platform) {
     default:
       return 'Linux 端为纯软解(rodio + symphonia), 无硬件解码选项';
   }
+}
+
+/// 「播放过渡」的标题与说明: 两端的淡入淡出语义不同, 文案必须分开写(D09)。
+///
+/// - Android(`FadePolicy.kt`): 从暂停恢复淡入、暂停/停止淡出, 曲线还是等响感知
+///   曲线 `1-(1-t)^3` —— 叫「淡入淡出」名副其实;
+/// - 桌面(`ncm-playback` 的 `ramp_scale`): **只有**从暂停恢复才淡入, 且是线性;
+///   暂停/停止没有淡出(音量直接交给系统混音) —— 再叫「淡入淡出」就是设置页说谎。
+///
+/// 与 [streamCachePlatformNote] 同一写法: 按平台给文案, 测试直接盯这一对返回值。
+/// 平台判据用 [isAndroidPlatform](唯一入口, 测试置 `debugForceAndroid`)。
+({String title, String subtitle}) fadeCardText({required bool isAndroid}) {
+  if (isAndroid) {
+    return (title: '淡入淡出', subtitle: '暂停恢复时的淡入时长, 0 = 关闭(切歌始终不淡入)');
+  }
+  return (title: '恢复淡入', subtitle: '只有从暂停恢复才淡入; 桌面端切歌与暂停不做淡出(系统混音)');
 }
 
 double _snapHalf(double v) {

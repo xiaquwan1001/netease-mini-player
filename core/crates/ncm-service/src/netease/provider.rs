@@ -96,6 +96,11 @@ impl ReadProvider for NeteaseProvider {
     fn song_like_state(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<SongLikeState>> {
         NeteaseProvider::song_like_state(self, TrackId::new(song_id))
     }
+
+    /// 单曲的官方 MV id(song/detail 里现查一次; 没有 MV ⇒ None)
+    fn song_mv_id(&self, song_id: u64) -> BoxFuture<'_, ProviderResult<Option<u64>>> {
+        NeteaseProvider::song_mv_id(self, song_id)
+    }
 }
 
 impl LyricProvider for NeteaseProvider {

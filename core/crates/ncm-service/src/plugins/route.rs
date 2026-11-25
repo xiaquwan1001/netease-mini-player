@@ -37,8 +37,10 @@
 //! 已经收口成 `ProviderError{kind,retryable,detail}`). 内置 provider 自身的失败**不再回落**
 //! (没有第二个兜底, 直接上抛), 否则真错误会被吞成"看起来成功的空结果".
 
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use ncm_provider::{BoxFuture, Capability, Provider, ProviderError, ProviderResult};
 use serde::{Deserialize, Serialize};
@@ -464,25 +466,61 @@ impl RouteUsed {
     }
 }
 
-/// 最近一次路由调用的结果(进程内一槽, 够诊断用; 不落盘).
-static LAST_EVENT: Mutex<Option<RouteUsed>> = Mutex::new(None);
-/// 最近一次**打过**的配置类告警(去重, 免得每次取链刷一行日志).
-static LAST_WARN: Mutex<Option<String>> = Mutex::new(None);
+/// 最近一次路由调用的结果,**按能力分槽**(不落盘, 只是进程内诊断).
+///
+/// 为什么分槽: 一次 `search_all` 会并发发 6+ 次 `call_routed`, 单槽会被后到那次覆盖,
+/// "刚才那次 `SongUrl` 到底走了插件还是内置"因此查不出来(`last_route_event` 只能回
+/// "最后一个谁先写谁算"的糊结果)。`Capability` 只实现了 `Hash`(没 `Ord`), 所以用
+/// `HashMap` 而不是 `BTreeMap`; 另配一个单调序号, 让不分能力的
+/// [`last_route_event`] 仍能回"最近一次"。
+static LAST_EVENTS: OnceLock<Mutex<HashMap<Capability, (u64, RouteUsed)>>> = OnceLock::new();
+/// 分槽的单调序号(只用来回答"全局最近一次")
+static EVENT_SEQ: AtomicU64 = AtomicU64::new(0);
+/// 每个能力最近一次**打过**的配置类告警 key(去重, 免得每次取链刷一行日志).
+///
+/// 同样按能力分槽: 单槽时 A 能力的告警会把 B 能力的去重记录冲掉, 两者交替发生时同一行
+/// 日志会被反复打印(合并场景: 取链 + 搜索 + 歌词各自上报).
+static LAST_WARNS: OnceLock<Mutex<HashMap<Capability, String>>> = OnceLock::new();
+
+fn event_slots() -> &'static Mutex<HashMap<Capability, (u64, RouteUsed)>> {
+    LAST_EVENTS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn warn_slots() -> &'static Mutex<HashMap<Capability, String>> {
+    LAST_WARNS.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 fn lock_slot<'a, T>(slot: &'a Mutex<T>) -> MutexGuard<'a, T> {
     slot.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn record(used: &RouteUsed) {
-    *lock_slot(&LAST_EVENT) = Some(used.clone());
+fn record(cap: Capability, used: &RouteUsed) {
+    let seq = EVENT_SEQ.fetch_add(1, Ordering::Relaxed) + 1;
+    lock_slot(event_slots()).insert(cap, (seq, used.clone()));
 }
 
 /// 最近一次路由调用结果(`None` = 本进程还没走过路由).
+///
+/// 并发时"最近一次"本身没有确定语义 —— 要知道**某个能力**刚才走了谁, 用
+/// [`last_route_event_for`]。
 pub fn last_route_event() -> Option<RouteUsed> {
-    lock_slot(&LAST_EVENT).clone()
+    let slots = lock_slot(event_slots());
+    slots
+        .values()
+        .max_by_key(|(seq, _)| *seq)
+        .map(|(_, used)| used.clone())
 }
 
-/// 记一条**配置类**判定告警(多插件未选/选择失效/能力不支持), 同一个 key 只打一次.
+/// 某个能力最近一次路由调用的结果(`None` = 这个能力还没走过路由).
+///
+/// 并发取链/搜索时各能力互不覆盖, 这就是单槽改分槽的目的。
+pub fn last_route_event_for(cap: Capability) -> Option<RouteUsed> {
+    lock_slot(event_slots())
+        .get(&cap)
+        .map(|(_, used)| used.clone())
+}
+
+/// 记一条**配置类**判定告警(多插件未选/选择失效/能力不支持), 同一个 (能力, 原因) 只打一次.
 ///
 /// "本来就没插件"/"开关没开"这类不算错, 不打日志: 产品默认路径就是那样, 刷屏没意义.
 pub fn warn_plan(cap: Capability, plan: &RoutePlan) {
@@ -490,11 +528,11 @@ pub fn warn_plan(cap: Capability, plan: &RoutePlan) {
         return;
     }
     let key = format!("{}:{}", cap.as_str(), plan.reason.as_str());
-    let mut last = lock_slot(&LAST_WARN);
-    if last.as_deref() == Some(key.as_str()) {
+    let mut slots = lock_slot(warn_slots());
+    if slots.get(&cap).is_some_and(|last| *last == key) {
         return;
     }
-    *last = Some(key);
+    slots.insert(cap, key);
     eprintln!(
         "[ncm-plugin] 路由提示({}): {}",
         plan.reason.as_str(),
@@ -560,17 +598,20 @@ where
         match attempted {
             Ok(value) => {
                 let used = RouteUsed::Plugin(id.clone());
-                record(&used);
+                record(capability, &used);
                 return Ok(Routed { value, used });
             }
             Err(err) => {
                 let Some(builtin) = builtin else {
                     // 没有内置 provider ⇒ 插件错误原样上抛(不退化成 unsupported 掩盖真因).
-                    record(&RouteUsed::Fallback {
-                        plugin: id.clone(),
-                        kind: err.kind.as_str().to_string(),
-                        detail: err.detail.clone(),
-                    });
+                    record(
+                        capability,
+                        &RouteUsed::Fallback {
+                            plugin: id.clone(),
+                            kind: err.kind.as_str().to_string(),
+                            detail: err.detail.clone(),
+                        },
+                    );
                     return Err(err);
                 };
                 eprintln!(
@@ -583,7 +624,7 @@ where
                     detail: err.detail.clone(),
                 };
                 let value = call(builtin).await?;
-                record(&used);
+                record(capability, &used);
                 return Ok(Routed { value, used });
             }
         }
@@ -599,7 +640,7 @@ where
     })?;
     let value = call(builtin).await?;
     let used = RouteUsed::Builtin;
-    record(&used);
+    record(capability, &used);
     Ok(Routed { value, used })
 }
 

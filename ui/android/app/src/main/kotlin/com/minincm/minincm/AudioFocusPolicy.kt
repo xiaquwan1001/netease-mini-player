@@ -68,6 +68,57 @@ internal object AudioFocusPolicy {
     /** MV 拿到 `AUDIOFOCUS_GAIN` 时是否续播: 只有「跟随系统」允许自动恢复。 */
     fun mvResumesOnGain(mode: AudioFocusMode): Boolean = mode == AudioFocusMode.FOLLOW_SYSTEM
 
+    /**
+     * 一次「让焦点状态与档位对齐」要动系统焦点的哪几步。
+     *
+     * 为什么不是简单的布尔: 「放弃」和「申请」是两次真实的系统调用, 各有副作用
+     * (放弃会让本应用短暂无焦点; 申请会给当时持有焦点的 App 补发一次 LOSS), 所以要能
+     * 分别说出「这一步到底要不要做」。
+     */
+    enum class FocusRequestStep {
+        /** 已经对齐: 系统焦点一个字都不要动 */
+        KEEP,
+
+        /** 只要放弃(切到不需要自己管焦点的档) */
+        ABANDON,
+
+        /** 手上没有请求, 现在申请 */
+        REQUEST,
+
+        /** 放弃旧的再申请(切到「总是停止」) */
+        ABANDON_AND_REQUEST,
+    }
+
+    /**
+     * 把焦点状态对齐到 [nextMode] 需要做什么(纯逻辑, JVM 单测覆盖)。
+     *
+     * 审计 U7(2026-11-25): 以前 [PlaybackService.applyFocusMode] 每次 `configure` 都
+     * 无条件「放弃 → 重申请」, 而 `configure` 在每次换曲、每次响度补测(20s)都会来一次 ⇒
+     * 反复出现无焦点窗口, 且每次重申请都会给当时持有焦点的 App 再补发一次假 LOSS。
+     * 现在只有**档位真的变了**(或账本与目标不一致)才允许动系统焦点。
+     *
+     * @param appliedMode 上次真正落地时的档位(null = 还没碰过系统焦点)
+     * @param nextMode 本次 `configure` 要求的档位
+     * @param hasRequest 手上是否**已经**有请求(API 26+ 与 focusRequest 同生同灭;
+     *   API 26 以下没有请求对象, 由 [PlaybackService] 自己记账)
+     */
+    fun focusRequestStep(
+        appliedMode: AudioFocusMode?,
+        nextMode: AudioFocusMode,
+        hasRequest: Boolean,
+    ): FocusRequestStep {
+        val needsRequest = manageFocusInService(nextMode)
+        // 档位没变且账本已经对上 ⇒ 幂等: 重复 configure 不再「放弃-重抢」
+        if (appliedMode == nextMode && hasRequest == needsRequest) return FocusRequestStep.KEEP
+        return when {
+            hasRequest && needsRequest -> FocusRequestStep.ABANDON_AND_REQUEST
+            hasRequest -> FocusRequestStep.ABANDON
+            needsRequest -> FocusRequestStep.REQUEST
+            // 两个都不用自己管焦点(跟随系统 / 总是在后台播放): 什么都不做
+            else -> FocusRequestStep.KEEP
+        }
+    }
+
     /** 设置项的中文标签(Dart 侧 `AudioFocusPolicy.label` 是同一套口径, 只给日志/诊断用) */
     fun label(mode: AudioFocusMode): String = when (mode) {
         AudioFocusMode.FOLLOW_SYSTEM -> "跟随系统"

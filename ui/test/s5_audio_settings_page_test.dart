@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/eq_profile.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 import 'package:minincm/src/settings_audio_page.dart';
 
 /// S5: 设置页「播放与音质」二级页的字段写回测试(R2/R2b/R5/R7).
@@ -141,6 +142,60 @@ void main() {
     dd.onChanged!(500);
     await tester.pump();
     expect(settings.fadeMs, 500);
+  });
+
+  // D09: 同一个设置项两端的语义不同 —— Android 淡入(感知曲线)+ 暂停/停止淡出,
+  // 桌面线性、只有从暂停恢复才淡入、暂停/停止没有淡出。标题跟功能对齐:
+  // 桌面再写「淡入淡出」就是设置页说谎。
+  group('D09 播放过渡文案分平台', () {
+    test('fadeCardText: Android 叫淡入淡出, 桌面叫恢复淡入', () {
+      final android = fadeCardText(isAndroid: true);
+      expect(android.title, '淡入淡出');
+      final desktop = fadeCardText(isAndroid: false);
+      expect(desktop.title, '恢复淡入');
+      // 桌面必须把「不做淡出」说出来, 不能只换个标题
+      expect(desktop.subtitle, contains('不做淡出'));
+      expect(desktop.subtitle, contains('系统混音'));
+    });
+
+    testWidgets('Android: 标题为「淡入淡出」', (tester) async {
+      debugForceAndroid = true;
+      try {
+        await pumpPage(tester);
+        expect(
+          find.descendant(
+            of: find.byKey(const Key('fadeTile')),
+            matching: find.text('淡入淡出'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.text('恢复淡入'), findsNothing);
+      } finally {
+        debugForceAndroid = false;
+      }
+    });
+
+    testWidgets('桌面: 标题为「恢复淡入」且不再声称淡入淡出', (tester) async {
+      expect(debugForceAndroid, isFalse, reason: '默认必须是关的');
+      await pumpPage(tester);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('fadeTile')),
+          matching: find.text('恢复淡入'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('淡入淡出'), findsNothing);
+      expect(find.textContaining('不做淡出'), findsOneWidget);
+    });
+  });
+
+  // D08: 曲线图用的是近似系数(LS/HS 忽略 Q), 实听由三端滤波器决定 ——
+  // 用户得在页面上看到这句话, 不能只写在代码注释里。
+  testWidgets('D08: 自定义响度曲线旁有「近似」说明', (tester) async {
+    await pumpPage(tester);
+    expect(find.byKey(const Key('eqCurveApproxNote')), findsOneWidget);
+    expect(find.textContaining('近似'), findsOneWidget);
   });
 
   /// 在指定 target platform 下渲染本页, 并在 body 结束前还原覆盖。

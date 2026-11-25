@@ -241,6 +241,27 @@ impl NeteaseProvider {
             let mut playlists = result_of(playlist_body)
                 .map(|r| parse_search_playlists(&r))
                 .unwrap_or_default();
+            let podcasts = result_of(podcast_body)
+                .map(|r| parse_search_podcasts(&r))
+                .unwrap_or_default();
+            let mut users = result_of(user_body)
+                .map(|r| parse_search_users(&r))
+                .unwrap_or_default();
+            // MV 板块允许为空(很多关键词本来就没有 MV), 失败也不拖垮整页
+            let mut mvs = result_of(mv_body)
+                .map(|r| parse_search_mvs(&r))
+                .unwrap_or_default();
+            debug_search_mv(kw, "cloudsearch type=1004", &mvs);
+
+            // 七个板块**第一次直连原关键词**时是否一条都没有 —— 这是前缀回退的唯一
+            // 判据(在任何回退之前算, 否则会被自己的回退结果污染)。
+            let page_empty = page.songs.is_empty()
+                && artists.is_empty()
+                && albums.is_empty()
+                && playlists.is_empty()
+                && podcasts.is_empty()
+                && users.is_empty()
+                && mvs.is_empty();
 
             // 空分类兜底(2026-11 反馈): 关键词拼错一个字时 cloudsearch 对歌手/专辑
             // 直接返回 0 条, UI 于是只剩「单曲」一个分类。这里按「最长匹配」把关键词
@@ -268,12 +289,6 @@ impl NeteaseProvider {
                     }
                 }
             }
-            let podcasts = result_of(podcast_body)
-                .map(|r| parse_search_podcasts(&r))
-                .unwrap_or_default();
-            let mut users = result_of(user_body)
-                .map(|r| parse_search_users(&r))
-                .unwrap_or_default();
             // 用户分类也走同一套最长匹配兜底(空结果时按前缀重试)
             if users.is_empty() {
                 for cand in prefix_candidates(kw) {
@@ -286,20 +301,28 @@ impl NeteaseProvider {
                 }
             }
 
-            // MV 板块允许为空(很多关键词本来就没有 MV), 失败也不拖垮整页
-            let mut mvs = result_of(mv_body)
-                .map(|r| parse_search_mvs(&r))
-                .unwrap_or_default();
-            if mvs.is_empty() {
-                for cand in prefix_candidates(kw) {
-                    if let Some(r) = self.cloudsearch_result(&cand, 1004, side_limit).await {
-                        mvs = parse_search_mvs(&r);
-                        if !mvs.is_empty() {
-                            break;
-                        }
-                    }
+            // MV 分区不再为了填一个装饰性板块而把关键词截短(用户反馈「咬合力」搜出来
+            // 一条同名不同歌的 MV): 空就空着, UI 据此隐藏分区。唯一保留的回退见
+            // `should_fallback_for_mv`(整页全空时试最长前缀一次)。相关性用的关键词就是
+            // 这一次真正发出去的关键词, 不管是原词还是候选词。
+            let mut mv_keywords = kw.to_string();
+            if let Some(cand) = should_fallback_for_mv(page_empty, &prefix_candidates(kw)) {
+                if let Some(r) = self.cloudsearch_result(&cand, 1004, side_limit).await {
+                    mvs = parse_search_mvs(&r);
+                    debug_search_mv(kw, &format!("prefix retry {cand:?}"), &mvs);
+                    mv_keywords = cand;
                 }
             }
+            let raw_count = mvs.len();
+            filter_sort_mvs(&mv_keywords, &mut mvs);
+            debug_search_mv(
+                kw,
+                &format!(
+                    "relevance filter by {mv_keywords:?}: {raw_count} → {}",
+                    mvs.len()
+                ),
+                &mvs,
+            );
 
             Ok(SearchBundle {
                 songs: page.songs,
@@ -404,6 +427,130 @@ impl NeteaseProvider {
         let body = self.cloudsearch_body(keywords, kind, limit, 0).await.ok()?;
         body.get("result").cloned()
     }
+}
+
+/// MV 分区诊断开关: `NCM_DEBUG_SEARCH_MV=1` 时把 type=1004 的原始返回打到 stderr.
+///
+/// 默认零输出、零行为变化。只打印 MV 的 id/标题/艺人/播放量(不含 cookie/token),
+/// 用来判断「MV 分区不相关」到底是上游给错了条目, 还是我们自己放宽了关键词。
+fn debug_search_mv(keywords: &str, source: &str, mvs: &[MvItem]) {
+    if !debug_search_mv_enabled() {
+        return;
+    }
+    eprintln!(
+        "[search-mv] kw={keywords:?} source={source} count={}",
+        mvs.len()
+    );
+    for m in mvs.iter().take(3) {
+        eprintln!(
+            "[search-mv]   id={} name={:?} artist={:?} play={}",
+            m.id, m.name, m.artist_name, m.play_count
+        );
+    }
+}
+
+fn debug_search_mv_enabled() -> bool {
+    std::env::var("NCM_DEBUG_SEARCH_MV").is_ok_and(|v| v == "1")
+}
+
+/// 整页全空时, MV 分区允许用哪个前缀候选词再试一次(`None` = 不回退)。
+///
+/// 判据是「整页空」而不是「MV 空」: MV 是装饰性板块, 为了填它把关键词截短, 换来的
+/// 往往是同名不同歌的条目(用户反馈「搜『咬合力』出来一条不相干的 MV」就是这么来的)。
+/// 只有七个板块一条都没有时, 关键词才更像拼错/太长, 这时放宽一次才值得;
+/// 而且只试**最长**的那个候选 —— 截得越短, 命中无关内容的概率越高。
+pub(super) fn should_fallback_for_mv(page_empty: bool, candidates: &[String]) -> Option<String> {
+    if page_empty {
+        candidates.first().cloned()
+    } else {
+        None
+    }
+}
+
+/// MV 分区的相关性过滤 + 排序(用户反馈「咬合力」搜出来的 MV 不相关且只有一条)。
+///
+/// - **保留**: 归一化后 `name` **或** `artist_name` 包含关键词的行。用包含而不是相等,
+///   因为上游标题普遍带 ` (Live)` / ` 官方版` / `- MV` 这类后缀, 相等匹配会误杀。
+/// - **丢弃**: 两个字段都不包含关键词的行。上游 type=1004 会按字面近似返回同名不同歌、
+///   同名不同艺人的 MV, 这就是「不相关还只有一条」的直接来源。
+/// - **排序**: 归一化后与关键词**完全相等**的 name 最前, 其余按 `play_count` 降序;
+///   同播放量保持上游顺序(`sort_by` 是稳定排序)。
+/// - 关键词归一化后为空(纯标点/空白)时全部丢弃: 没有任何可比对的文本, 按
+///   「MV 分区宁可空」处理, 单曲等主板块不受影响。
+pub fn filter_sort_mvs(keywords: &str, mvs: &mut Vec<MvItem>) {
+    let kw = normalize_keyword(keywords);
+    if kw.is_empty() {
+        mvs.clear();
+        return;
+    }
+    mvs.retain(|mv| {
+        normalize_keyword(&mv.name).contains(&kw)
+            || normalize_keyword(&mv.artist_name).contains(&kw)
+    });
+    let exact = |mv: &MvItem| normalize_keyword(&mv.name) == kw;
+    mvs.sort_by(|a, b| {
+        exact(b)
+            .cmp(&exact(a))
+            .then_with(|| b.play_count.cmp(&a.play_count))
+    });
+}
+
+/// 相关性比较用的归一化: 全角→半角、丢掉空白与中英文标点、小写。
+///
+/// 关键词与 MV 标题/艺人名走同一套(否则「晴天(Jay Chou)」与「晴天（周杰伦）」比不上)。
+/// 只在内存里比较, 不参与请求, 也不回传给 UI。
+fn normalize_keyword(text: &str) -> String {
+    text.chars()
+        .map(fold_width)
+        .filter(|c| !is_keyword_noise(*c))
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// 全角 ASCII(U+FF01..=U+FF5E)与全角空格折成半角, 其它字符原样。
+fn fold_width(c: char) -> char {
+    match c {
+        '\u{3000}' => ' ',
+        '\u{FF01}'..='\u{FF5E}' => char::from_u32(c as u32 - 0xFEE0).unwrap_or(c),
+        _ => c,
+    }
+}
+
+/// 归一化时要丢掉的字符: 空白 + ASCII 标点 + 常见中文/排版标点。
+///
+/// 只列明确的标点, 不用 `\u{3000}..=\u{303F}` 整段: 那一段里的 `々` `〇` 是日文姓名
+/// 常用字, 丢掉会让「田中〇〇」这类标题比不中。
+fn is_keyword_noise(c: char) -> bool {
+    c.is_whitespace()
+        || c.is_ascii_punctuation()
+        || matches!(
+            c,
+            '、' | '。'
+                | '〈'
+                | '〉'
+                | '《'
+                | '》'
+                | '「'
+                | '」'
+                | '『'
+                | '』'
+                | '【'
+                | '】'
+                | '〔'
+                | '〕'
+                | '～'
+                | '〜'
+                | '·'
+                | '•'
+                | '・'
+                | '–'
+                | '—'
+                | '‘'
+                | '’'
+                | '“'
+                | '”'
+                | '…'
+        )
 }
 
 /// 「最长匹配」候选词: 从尾部逐字截短(至少保留 2 字), 最多 3 个候选。

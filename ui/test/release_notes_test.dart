@@ -39,12 +39,11 @@ void main() {
     final since = highlightsSince('v0.38.8');
     expect(since, containsAll(kReleaseHighlights['v0.39.0']!));
     expect(since, containsAll(kReleaseHighlights[newest]!));
-    expect(
-      since.length,
-      kReleaseHighlights['v0.39.0']!.length +
-          kReleaseHighlights[newest]!.length,
-      reason: '只列这两版, 不能把更老的也拉进来',
-    );
+    // 条数必须恰好等于"所有比 0.38.8 新的版本"的条目总和: 既不能漏, 也不能把更老的拉进来
+    final newerThan0388 = kReleaseHighlights.entries
+        .where((e) => compareVersionKeys(e.key, 'v0.38.8') > 0)
+        .fold<int>(0, (sum, e) => sum + e.value.length);
+    expect(since.length, newerThan0388, reason: '只列比 0.38.8 新的那几版, 不能把更老的也拉进来');
   });
 
   testWidgets('发现新版本弹窗: 标题 + 新特性公告 + 更新说明都在', (tester) async {

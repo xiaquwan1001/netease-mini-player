@@ -116,10 +116,7 @@ fn word_lyric_dto(wl: ncm_domain::WordLyric) -> WordLyricDto {
 /// B13: 只取 TTML 第二来源(带磁盘缓存: `dataDir/ttml/<id>.ttml` / `<id>.none`).
 /// 无数据/解析失败返回 Ok(None), 网络错误返回 Err —— 调用方(或 Dart 侧)静默回退.
 pub async fn ttml_lyric_lines(track_id: u64) -> Result<Option<WordLyricDto>, FfiError> {
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?
-        .clone();
+    let dir = data_dir()?.to_path_buf();
     match ncm_service::ttml_source::fetch_ttml(&dir, track_id).await {
         Ok(Some(doc)) => Ok(Some(word_lyric_dto(
             ncm_service::ttml_source::ttml_to_word_lyric(&doc),

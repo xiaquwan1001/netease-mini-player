@@ -54,6 +54,15 @@ Future<MvDetailDto> mvDetail({required BigInt mvId}) =>
 Future<MvUrlDto> mvUrl({required BigInt mvId, required int r}) =>
     RustLib.instance.api.crateApiArtistMvUrl(mvId: mvId, r: r);
 
+/// 歌曲对应的官方 MV id(`None` = 这首歌没有官方 MV).
+///
+/// 为歌曲菜单的「官方 MV」入口做的一次现查: `SongDto` 里没有 mv 字段,
+/// 需要走 `song/detail` 取一次. **没有 MV 不是错误**(`Ok(None)`), 只有网络/风控/
+/// 无权限才上抛 [`FfiError`] —— 调用方按 kind 决定是否重试/隐藏入口.
+/// 与 mv_detail/mv_url 同属 MV 能力面, 能力声明沿用 [`Capability::Artist`].
+Future<BigInt?> songMvId({required BigInt trackId}) =>
+    RustLib.instance.api.crateApiArtistSongMvId(trackId: trackId);
+
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
 Future<bool> artistSubToggle({required BigInt artistId, required bool sub}) =>
     RustLib.instance.api.crateApiArtistArtistSubToggle(

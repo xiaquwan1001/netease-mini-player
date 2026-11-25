@@ -320,6 +320,8 @@ class Playback {
 
   /// 开始播放. [durationMs] 是接口给的歌曲时长: 桌面端"边下边播"时
   /// 解码器一开始算不出总时长(文件还在增长), 进度条先用这个值, 否则会一直显示 0.
+  /// Android 同样透传(审计 U2 尾巴, 2026-11-25): 原生按**请求参数**拼 play 的返回值,
+  /// 有它之后换曲那一刻进度条就有总长, 不必等下一次 500ms 轮询补真值。
   /// [artwork] = 当前播放内容的封面 PNG/JPEG 字节(通知/锁屏/车载的封面)。
   /// Media3 自己按 URL 拉图会用默认 UA, 被网易 CDN 回 403(通知上就是空白),
   /// 所以由 Dart 侧([fetchImageBytes])带正确 UA 下好再传过去; 传 null 就沿用上一张。
@@ -343,6 +345,8 @@ class Playback {
         'title': title,
         'artist': artist,
         'artwork': artwork,
+        if (durationMs != null && durationMs > BigInt.zero)
+          'durationMs': durationMs.toInt(),
         if (startPositionMs != null && startPositionMs > BigInt.zero)
           'positionMs': startPositionMs.toInt(),
       });
@@ -371,6 +375,34 @@ class Playback {
     if (isAndroid) {
       final map = await _channel.invokeMapMethod<String, Object?>('pause');
       return _fromMap(map);
+    }
+    return _fromRust(await rust.playerPause());
+  }
+
+  /// **立即**暂停, 不走淡出(审计 U3, 2026-11-25)。
+  ///
+  /// [pause] 在 Android 上是**淡出**语义: 通道立刻返回, 真正的 `pause()` 在 `fadeMs`
+  /// (≤5s)之后。唯一需要"现在就必须安静"的调用方是 MV 起播让路: 「总是在后台播放」
+  /// 档的 MV 不申请音频焦点, 少了"系统焦点压停歌曲"这层兜底, 淡出那段就是双声。
+  /// 桌面(Rust)的 pause 本来就是立即的, 直接复用。
+  ///
+  /// 通道缺失(旧版原生/测试环境没有实现)时回落普通 [pause]: 宁可退回改动前的行为,
+  /// 也不要让"暂停"这个动作整个失败。
+  Future<PlayerView> pauseImmediately() async {
+    if (isAndroid) {
+      try {
+        final map = await _channel.invokeMapMethod<String, Object?>(
+          'pauseImmediate',
+        );
+        return _fromMap(map);
+      } on MissingPluginException catch (e) {
+        debugPrint('[NCM-PLAYER] pauseImmediate 通道缺失, 回落到淡出暂停: $e');
+      } on PlatformException catch (e) {
+        debugPrint(
+          '[NCM-PLAYER] pauseImmediate 失败(${e.code}: ${e.message}), 回落到淡出暂停',
+        );
+      }
+      return pause();
     }
     return _fromRust(await rust.playerPause());
   }

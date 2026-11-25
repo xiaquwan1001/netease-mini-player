@@ -387,6 +387,33 @@ async fn run() -> Result<(), BoxErr> {
             }
             Ok(())
         }
+        "search-mv" => {
+            // 排障用: 综合搜索的 MV 分区(与 UI 同一条路径: cloudsearch type=1004 →
+            // 相关性过滤 → 排序)。用户反馈「搜出来的 MV 不相关且只有一条」时用它复现。
+            let kw = args
+                .positional
+                .first()
+                .ok_or("usage: ncm search-mv <keywords>")?;
+            let mut q = SearchQuery::new(kw.clone());
+            if let Some(l) = args.value("--limit") {
+                q.limit = l.parse()?;
+            }
+            let p = provider(&core, Capability::SearchAll)?;
+            announce(&core);
+            let b = p.search_all(&q).await?;
+            if args.has("--json") {
+                println!("{}", serde_json::to_string_pretty(&b.mvs)?);
+            } else {
+                println!("mvs={}", b.mvs.len());
+                for m in b.mvs.iter() {
+                    println!(
+                        "  [{}] {} — {} (播放 {})",
+                        m.id, m.name, m.artist_name, m.play_count
+                    );
+                }
+            }
+            Ok(())
+        }
         "searchall" => {
             let kw = args.positional.first().ok_or("usage: ncm searchall <keywords>")?;
             let p = provider(&core, Capability::SearchAll)?;
@@ -1697,7 +1724,7 @@ async fn run() -> Result<(), BoxErr> {
             Ok(())
         }
         other => Err(format!(
-            "unknown command: {other}\ncommands: whoami | login-cookie | search | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | vip | exact | suggestkw | hotdetail | raw"
+            "unknown command: {other}\ncommands: whoami | login-cookie | search | search-mv | url | play | lyric | liked | like | playlists | playlist | playlist-detail | comments | podcast-radio | detail | vip | exact | suggestkw | hotdetail | raw"
         )
         .into()),
     }

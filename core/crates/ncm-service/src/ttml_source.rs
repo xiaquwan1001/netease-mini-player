@@ -9,6 +9,7 @@
 //!   避免反复打 API; 探测经 TtmlProbe trait 走, 测试可注入假实现(不联网).
 use std::error::Error as _;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use ncm_domain::{parse_ttml, TrackId, TtmlLine, WordItem, WordLyric, WordLyricLine};
 use ncm_provider::{BoxFuture, LyricProvider};
@@ -337,35 +338,64 @@ pub fn yrc_good_enough(wl: &WordLyric) -> bool {
     !wl.is_empty() && wl.has_word_timing && yrc_word_coverage(wl) >= YRC_WORD_COVERAGE_THRESHOLD
 }
 
+/// AMLL 客户端(单例): 连接池与 TLS 会话跨曲目复用.
+///
+/// 以前每次 `fetch_ttml` 都 `Client::builder()...build()` —— 逐字歌词是播放页必经路径,
+/// 换一首歌就是一次全新的 TLS 握手去打社区公益 API, 连接完全不复用.
+/// 与 `cache::http_client()` 同一手法: **只缓存成功值**(构建失败下次再试, 不永久钉死).
+fn http_client() -> Result<&'static reqwest::Client, String> {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    if let Some(client) = CLIENT.get() {
+        return Ok(client);
+    }
+    let built = reqwest::Client::builder()
+        .timeout(FETCH_TIMEOUT)
+        .build()
+        .map_err(|e| e.to_string())?;
+    // 并发首次构建: 谁先 set 谁赢, 输的那个直接丢掉(两者等价), 不需要额外锁
+    let _ = CLIENT.set(built);
+    CLIENT
+        .get()
+        .ok_or_else(|| "创建 AMLL 客户端失败: 单例未就绪".to_string())
+}
+
+/// 写「这首歌没有 TTML」的标记(尽力而为: 写不进去只是下次再问一次 API).
+async fn mark_no_ttml(data_dir: &Path, ncm_music_id: u64) {
+    let _ = tokio::fs::write(ttml_none_path(data_dir, ncm_music_id), "").await;
+}
+
 /// 抓取 AMLL TTML(带磁盘缓存). 404/空/解析失败/网络错误一律不致命:
 /// 404 与解析失败写 .none 标记并返回 Ok(None); 网络错误返回 Err(由调用方回退).
+///
+/// 本函数直接跑在 FFI 的 async 入口上(tokio worker), 所以文件 IO 全走 `tokio::fs`,
+/// 同步的 [`crate::fsutil::write_atomic`](带 fsync)挪到阻塞池 —— 不把 worker 占在磁盘上。
 pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<TtmlDoc>, String> {
     let cache = ttml_cache_path(data_dir, ncm_music_id);
-    if let Ok(text) = std::fs::read_to_string(&cache) {
+    if let Ok(text) = tokio::fs::read_to_string(&cache).await {
         return match TtmlDoc::parse(&text) {
             Ok(doc) if !doc.is_empty() => Ok(Some(doc)),
             _ => {
-                let _ = std::fs::write(ttml_none_path(data_dir, ncm_music_id), "");
+                mark_no_ttml(data_dir, ncm_music_id).await;
                 Ok(None)
             }
         };
     }
-    if ttml_none_path(data_dir, ncm_music_id).exists() {
+    if tokio::fs::metadata(ttml_none_path(data_dir, ncm_music_id))
+        .await
+        .is_ok()
+    {
         return Ok(None); // 已知无数据, 不再打 API
     }
 
     let url = format!("{AMLL_API_BASE}?ncmMusicId={ncm_music_id}");
-    let client = reqwest::Client::builder()
-        .timeout(FETCH_TIMEOUT)
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client()?;
     let resp = client
         .get(&url)
         .send()
         .await
         .map_err(|e| reqwest_chain(&e))?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
-        let _ = std::fs::write(ttml_none_path(data_dir, ncm_music_id), "");
+        mark_no_ttml(data_dir, ncm_music_id).await;
         return Ok(None);
     }
     if !resp.status().is_success() {
@@ -378,20 +408,28 @@ pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<Ttm
         .and_then(|l| l.as_str())
         .unwrap_or("");
     if ttml_text.trim().is_empty() {
-        let _ = std::fs::write(ttml_none_path(data_dir, ncm_music_id), "");
+        mark_no_ttml(data_dir, ncm_music_id).await;
         return Ok(None);
     }
     let doc = match TtmlDoc::parse(ttml_text) {
         Ok(doc) if !doc.is_empty() => doc,
         _ => {
             // 解析失败也缓存"无数据", 避免每次播放都重打 API
-            let _ = std::fs::write(ttml_none_path(data_dir, ncm_music_id), "");
+            mark_no_ttml(data_dir, ncm_music_id).await;
             return Ok(None);
         }
     };
     // 落盘缓存(原子改名, 部分写入不可见). 写失败不致命: 下次播放重抓即可.
+    // `write_atomic` 是同步的(进程内写锁 + fsync), 挪到阻塞池上执行, 不占 tokio worker.
     let name = format!("{ncm_music_id}.ttml");
-    let _ = crate::fsutil::write_atomic(&ttml_dir(data_dir), &name, ttml_text.as_bytes());
+    let dir = ttml_dir(data_dir);
+    let bytes = ttml_text.as_bytes().to_vec();
+    if let Err(e) =
+        tokio::task::spawn_blocking(move || crate::fsutil::write_atomic(&dir, &name, &bytes)).await
+    {
+        // 阻塞池 JoinError(线程 panic): 与写失败同等对待 —— 下次播放重抓
+        eprintln!("[ttml] 缓存落盘任务异常: {e}");
+    }
     Ok(Some(doc))
 }
 

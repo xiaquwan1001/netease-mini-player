@@ -8,5 +8,6 @@ mod community;
 mod playlist;
 mod radio;
 mod search;
+mod search_mv;
 mod song;
 mod vip;

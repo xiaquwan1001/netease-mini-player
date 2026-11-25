@@ -24,14 +24,67 @@ pub use ncm_domain::{
 use ncm_provider::{Capability, RankingPeriod, SearchQuery};
 use ncm_service::Core;
 
-static CORE: OnceLock<Mutex<Core>> = OnceLock::new();
-
-/// 插件宿主的共享句柄(与 `CORE` 里那份是**同一个** `Arc`).
+/// `init()` **一次性发布**的三件套: 实际生效的数据目录 / `Core` / 插件宿主句柄.
 ///
-/// 插件 FFI 入口只走这里, **不再取 `CORE` 锁**: `rescan`/`install_*`/`enable` 会真的装载
-/// QuickJS(单插件装载预算 8s), 持 `Core` 锁做这些会让所有其它域的 FFI 排队(隔离二期切片 A).
-/// 锁序纪律: 允许 `Core -> 插件句柄`, **禁止**反过来.
-static PLUGIN: OnceLock<ncm_service::PluginHostHandle> = OnceLock::new();
+/// 为什么合成一个结构体: 以前是 `DATA_DIR` / `CORE` / `PLUGIN` 三个独立 `OnceLock`,
+/// 分三步 `set` 且都用 `let _ =` 吞掉失败 ——
+/// - 并发 `init()`(Dart 侧 `bootstrap()` 与 `refreshInfo()` 都会调)时 TOCTOU:
+///   两个线程都能过 `CORE.get().is_none()`, 各自 `Core::open` 一份; 输掉 `CORE.set` 的那个
+///   仍会把自己的 `plugin_host_handle()` 塞进 `PLUGIN` ⇒ 插件启停/路由看到的是**孤儿
+///   `Core`** 的那套状态, 与其它域用的 `Core` 不是同一份;
+/// - `init()` 回给 Dart 的是**入参** dir, 不是实际生效的目录: 重复 init 传了不同目录时,
+///   Dart 拿 dir2 写 `settings.json`, 而 Rust 仍在 dir1 里写缓存/历史(两份数据分家)。
+///
+/// 现在三者是同一个 `Arc` 一起发布(见 [`init`]), 不存在"半套"状态。
+struct Inited {
+    /// 实际生效的数据目录: 所有 FFI 侧落盘(缓存/历史/响度/TTML/设置)都在它下面。
+    dir: std::path::PathBuf,
+    core: Mutex<Core>,
+    /// 插件宿主的共享句柄(与 `core` 里那份是**同一个** `Arc`).
+    ///
+    /// 插件 FFI 入口只走这里, **不取 `Core` 锁**: `rescan`/`install_*`/`enable` 会真的装载
+    /// QuickJS(单插件装载预算 8s), 持 `Core` 锁做这些会让所有其它域的 FFI 排队(隔离二期切片 A).
+    /// 锁序纪律: 允许 `Core -> 插件句柄`, **禁止**反过来.
+    plugin: ncm_service::PluginHostHandle,
+}
+
+static INITED: OnceLock<std::sync::Arc<Inited>> = OnceLock::new();
+
+/// 已发布的单例(未初始化 ⇒ 与 [`core`] 同一个错误口径).
+fn inited() -> Result<&'static std::sync::Arc<Inited>, FfiError> {
+    INITED
+        .get()
+        .ok_or_else(|| FfiError::internal("core not initialized"))
+}
+
+/// 首次调用时开 `Core` 并**原子发布** [`Inited`](目录 + Core + 插件句柄); 已发布就复用。
+///
+/// 双检 + 持锁做"唯一一次 `set`": 并发 `init()` 里只有一个线程真的 `Core::open`,
+/// 其余线程等它发布完拿到同一份 `Arc`。所以不存在"两个 `Core` 各绑一个插件句柄"——
+/// 以前 `CORE` / `PLUGIN` 分两步 `set` 正是这个漏洞的来源。
+fn inited_or_open(dir: &str) -> Result<&'static std::sync::Arc<Inited>, FfiError> {
+    if let Some(inited) = INITED.get() {
+        return Ok(inited);
+    }
+    // 锁中毒只可能意味着"持锁期间 panic"; 那时什么都没发布, 继续用这把锁是安全的
+    static INIT_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = INIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(inited) = INITED.get() {
+        return Ok(inited);
+    }
+    let core = Core::open(Path::new(dir)).map_err(FfiError::from)?;
+    let plugin = core.plugin_host_handle();
+    let published = INITED.set(std::sync::Arc::new(Inited {
+        dir: Path::new(dir).to_path_buf(),
+        core: Mutex::new(core),
+        plugin,
+    }));
+    if published.is_err() {
+        // 持锁期间不可能有别的写者; 真出现了就如实报错, 不静默丢掉
+        return Err(FfiError::internal("init: 单例已被并发发布, 请重试"));
+    }
+    inited()
+}
 
 /// 跨桥错误: 结构化的 provider 错误, 不再让 Dart 靠文本前缀猜.
 ///
@@ -127,16 +180,17 @@ impl From<tokio::task::JoinError> for FfiError {
 }
 
 fn core() -> Result<&'static Mutex<Core>, FfiError> {
-    CORE.get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))
+    Ok(&inited()?.core)
 }
 
 /// 插件宿主的共享句柄(未初始化 ⇒ 与 `core()` 同一个错误口径).
 fn plugin_host() -> Result<ncm_service::PluginHostHandle, FfiError> {
-    PLUGIN
-        .get()
-        .cloned()
-        .ok_or_else(|| FfiError::internal("core not initialized"))
+    Ok(inited()?.plugin.clone())
+}
+
+/// 实际生效的数据目录(未初始化 ⇒ 与 `core()` 同一个错误口径).
+fn data_dir() -> Result<&'static Path, FfiError> {
+    Ok(&inited()?.dir)
 }
 
 /// D5: 纯 provider 转发型 FFI 封装统一 helper。
@@ -185,18 +239,26 @@ fn data_dir_default() -> String {
 }
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
+///
+/// 首次调用时开 `Core` 并**原子发布** [`Inited`](目录 + Core + 插件句柄); 已发布就直接复用。
+/// 为什么用一把初始化锁 + 双检, 而不用 `OnceLock::get_or_try_init`: 后者截至 Rust 1.99
+/// 仍是 unstable(issue #109737)。两者给的保证一样 —— 并发 `init()` 里只有一个线程真的
+/// `Core::open`, 其余线程等它发布完拿到同一份 `Arc`, 于是不可能出现第二个 `Core`
+/// 把自己的插件句柄写进单例。`Core::open` 失败 ⇒ 什么都不发布(下次调用重试)。
 pub fn init(data_dir: Option<String>) -> Result<InitInfo, FfiError> {
-    let dir = data_dir.unwrap_or_else(data_dir_default);
-    let _ = DATA_DIR.set(std::path::PathBuf::from(&dir));
-    if CORE.get().is_none() {
-        let core = Core::open(Path::new(&dir)).map_err(FfiError::from)?;
-        let handle = core.plugin_host_handle();
-        let _ = CORE.set(Mutex::new(core));
-        let _ = PLUGIN.set(handle);
+    let requested = data_dir.unwrap_or_else(data_dir_default);
+    let inited = inited_or_open(&requested)?;
+    if inited.dir.as_path() != Path::new(&requested) {
+        // 已经初始化过且这次传了别的目录: 以**生效中**的目录为准(见 `Inited` 的注释),
+        // 但要把不一致说出来 —— 静默沿用会让"Dart 用 dir2、Rust 用 dir1"再次变成隐形缺陷。
+        eprintln!(
+            "[ncm-ffi] init(dataDir={requested}) 与已生效的 {} 不一致: 沿用已生效的目录",
+            inited.dir.display()
+        );
     }
-    let guard = core()?.lock().map_err(FfiError::from)?;
+    let guard = inited.core.lock().map_err(FfiError::from)?;
     Ok(InitInfo {
-        data_dir: dir,
+        data_dir: inited.dir.to_string_lossy().into_owned(),
         device_id: guard.session.device_id.clone(),
         logged_in: guard.session.is_logged_in(),
         vip: guard
@@ -375,8 +437,6 @@ where
         .map_err(FfiError::from)?;
     Ok(routed.value)
 }
-
-static DATA_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 /// PodcastProgram -> DTO(podcast 与 radio 两个域共用).
 fn program_dto(p: ncm_domain::PodcastProgram) -> PodcastProgramDto {

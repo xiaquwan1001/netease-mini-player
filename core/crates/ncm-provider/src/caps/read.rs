@@ -35,6 +35,12 @@ pub trait ReadProvider: Send + Sync {
         Box::pin(async { Err(ProviderError::unsupported("no song detail")) })
     }
 
+    /// 单曲的官方 MV id. **没有 MV 是空态(`Ok(None)`), 不是错误** ——
+    /// 只有网络/风控/无权限才上抛, 调用方据此决定要不要显示 MV 入口.
+    fn song_mv_id(&self, _song_id: u64) -> BoxFuture<'_, ProviderResult<Option<u64>>> {
+        Box::pin(async { Err(ProviderError::unsupported("no song mv")) })
+    }
+
     /// 搜索建议(输入联想)
     fn search_suggest<'a>(
         &'a self,

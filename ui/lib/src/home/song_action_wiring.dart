@@ -11,6 +11,8 @@ import '../comment_thread.dart' show commentSourceKindLabel;
 import '../cover_art.dart' show CoverArt, kImageUserAgent;
 import '../detail/comments_sheet.dart' show showCommentsSheet;
 import '../format.dart' show formatCountMagnitude;
+import '../lru.dart' show LruMap;
+import '../mv_page.dart' show showMvPage;
 import '../net_retry.dart' show friendlyError, retryNetwork;
 import '../playback.dart' show preferHttpsStreamUrl;
 import '../platform.dart' show PlatformBridge;
@@ -112,9 +114,28 @@ class SongActionWiring {
     dislike: _dislikeSong,
     songWiki: (song) => showSongWiki(contextOf(), song: song),
     counts: loadCounts,
+    mvId: loadMvId,
+    openMv: openSongMv,
     similarSongs: (song) =>
         showSimilarSongs(contextOf(), song: song, onOpenPlaylist: openPlaylist),
   );
+
+  /// 曲目 id → 官方 MV id 的进程内缓存(含"没有 MV"的否定结果).
+  ///
+  /// 菜单打开就预取(不等用户点), 所以同一首歌反复开菜单必须命中缓存 ——
+  /// 不能每开一次菜单就多打一次 song/detail。
+  final MvIdCache _mvIds = MvIdCache(
+    request: (trackId) => rust.songMvId(trackId: trackId),
+  );
+
+  /// 该曲目的官方 MV id(None = 没有官方 MV; 失败由面板当空态处理)。
+  ///
+  /// 未登录也能查: MV 与播放权限是两件事。
+  Future<BigInt?> loadMvId(rust.SongDto song) => _mvIds.of(song.id);
+
+  /// 打开官方 MV 播放页(Android 内嵌 VideoView, 桌面用系统播放器)。
+  Future<void> openSongMv(rust.SongDto song, BigInt mvId) =>
+      showMvPage(contextOf(), mvId: mvId, name: '${song.name} MV');
 
   /// 歌曲菜单里的三项数量级: 喜欢人数 / 评论数 / 分享数(与原版对齐).
   ///
@@ -484,5 +505,44 @@ class SongActionWiring {
       if (!isMounted()) return;
       toast('操作失败: ${friendlyError(e)}');
     }
+  }
+}
+
+/// 曲目 id → 官方 MV id 的进程内缓存(含"没有 MV"的否定结果)。
+///
+/// 两个语义必须一起成立, 所以缓存的是 `Future` 本身:
+/// - **同曲不重查**: 菜单每次打开都会预取, 连点/并发打开也只发一个请求
+///   (`LruMap` 读即触碰, 上限 200 条);
+/// - **失败不进缓存**: 缓存的是失败的那次 Future 会让入口"永久消失",
+///   网络抖一下之后再打开菜单必须能重查。
+class MvIdCache {
+  MvIdCache({required this.request, int maxEntries = 200})
+    : _pending = LruMap<BigInt, Future<BigInt?>>(maxEntries: maxEntries);
+
+  /// 真正打接口取 mv id(生产: `rust.songMvId`)。
+  final Future<BigInt?> Function(BigInt trackId) request;
+
+  final LruMap<BigInt, Future<BigInt?>> _pending;
+
+  /// 当前缓存条目数(测试用来断言上限淘汰)。
+  int get length => _pending.length;
+
+  Future<BigInt?> of(BigInt trackId) {
+    final cached = _pending[trackId];
+    if (cached != null) return cached;
+    final pending = request(trackId);
+    _pending.put(trackId, pending);
+    unawaited(
+      pending.then<void>(
+        (_) {},
+        onError: (Object _) {
+          // 只删"还是这一次请求"的条目: 并发下可能已被后一次请求覆盖
+          if (identical(_pending.peek(trackId), pending)) {
+            _pending.remove(trackId);
+          }
+        },
+      ),
+    );
+    return pending;
   }
 }

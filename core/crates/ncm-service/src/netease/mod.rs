@@ -282,6 +282,24 @@ pub(super) fn map_code(code: i64, msg: String) -> ProviderError {
         200 | 0 => ProviderError::internal(detail),
         301 | 401 => ProviderError::auth(detail),
         8821 | -462 => ProviderError::risk_control(detail),
+        // -460(风控族「cheating」, 上游原话通常是「检测到您的网络环境存在风险, 请稍后再试」).
+        //
+        // 为什么不留在 internal: internal 在 UI 上是「服务开小差了」, 日志里也没有码的分流,
+        // 于是指纹 A/B 实验(L10)根本统计不到这个因变量
+        // (`.pi/plans/audit-2026-11-25/fingerprint.md` §4.4)。
+        // 为什么是 risk_control 而不是 auth:
+        // ① 证据——`fingerprint.md` §4.1/§4.2 的四组外部实测(同账号同出口, 唯一变量 UA)
+        //    把 -460 绑定到「客户端身份不一致」, 与 405/406/8821 同属风控/限流族,
+        //    是风险挑战而**不是**登录态失效;
+        // ② 用户可见后果——auth 会走 UI 的登录态校验链路
+        //    (`ui/lib/src/home/account_actions.dart::syncAccount`: 只有 kind==auth 才 `logout()`),
+        //    一次间歇风控就会把有效会话踢下线; 而 riskControl 的 `friendlyError` 文案给的
+        //    正是 -460 的两条出路(换网络 / 登录后再试);
+        // ③ `docs/audit/2026-11-24-error-codes.md:15` 的「-460 通常=需要登录 ⇒ 建议 Auth」
+        //    是未标注来源的推断, 按它分类会牺牲可操作性(`auth` 文案是死路)。
+        // detail 保留 `code=-460`: 与 -462 同 kind 时靠 detail 分码统计(fingerprint.md T3)。
+        // -461 目前没有语义证据, 暂不映射(仍落 internal, 用例在 tests/account.rs)。
+        -460 => ProviderError::risk_control(detail),
         -110 | 404 => ProviderError::not_found(detail),
         _ => ProviderError::internal(detail),
     }
@@ -317,6 +335,8 @@ pub(super) fn check_body_with(
 /// 全局 `map_code` 把 400/503 都归成 Internal, 但登录场景这两个码是**用户能当场处理**的:
 /// 400(号码/区号/验证码不合法)算输入错误(Auth), 503(发码太频繁)标成可重试.
 /// 只作用于 sms/captcha/sent 与 login/cellphone, 不动全局语义.
+/// 注意 400 是**精确匹配**: 登录接口回 -460(风控/身份不被接受)不能被折成 400,
+/// 它落 `_ =>` 走全局口径变 riskControl(文案给「换网络/重新验证/登录后再试」)。
 pub(super) fn map_login_code(code: i64, msg: String) -> ProviderError {
     let detail = if msg.is_empty() {
         format!("code={code}")

@@ -7,11 +7,18 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`, `plugin_host`, `program_dto`, `routed_call`, `song_dto`, `song_from_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`, `data_dir`, `inited_or_open`, `inited`, `plugin_host`, `program_dto`, `routed_call`, `song_dto`, `song_from_dto`, `with_provider`
+// These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Inited`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 // These functions have error during generation (see debug logs or enable `stop_on_error: true` for more details): `auth`, `internal`, `network`, `new`, `unsupported`
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
+///
+/// 首次调用时开 `Core` 并**原子发布** [`Inited`](目录 + Core + 插件句柄); 已发布就直接复用。
+/// 为什么用一把初始化锁 + 双检, 而不用 `OnceLock::get_or_try_init`: 后者截至 Rust 1.99
+/// 仍是 unstable(issue #109737)。两者给的保证一样 —— 并发 `init()` 里只有一个线程真的
+/// `Core::open`, 其余线程等它发布完拿到同一份 `Arc`, 于是不可能出现第二个 `Core`
+/// 把自己的插件句柄写进单例。`Core::open` 失败 ⇒ 什么都不发布(下次调用重试)。
 Future<InitInfo> init({String? dataDir}) =>
     RustLib.instance.api.crateApiInit(dataDir: dataDir);
 

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'app_settings.dart' show AppSettings, AudioFocusPolicy;
 import 'platform.dart';
 import 'platform_is.dart' show isAndroidPlatform;
 import 'playback.dart';
@@ -20,6 +21,24 @@ enum MvSongDuckPlan {
 /// 不能因为打开了页面就无声地把他的播放停掉。判断放在这里是为了可单测。
 MvSongDuckPlan mvDuckPlan({required bool songPlaying}) =>
     songPlaying ? MvSongDuckPlan.pause : MvSongDuckPlan.none;
+
+/// 让歌曲让路时用哪种暂停。
+///
+/// - [fade]: 淡出后停 —— `pause` 通道立刻返回, 真正的 `pause()` 在 `fadeMs` 之后;
+/// - [immediate]: 立即静音暂停, 不走淡出。
+enum MvSongPauseMode { fade, immediate }
+
+/// 当前焦点档位下该用哪一种暂停(纯函数, 单测覆盖)。
+///
+/// 审计 U3(2026-11-25): 只有「总是在后台播放」要立即停, 理由不是体验而是**没有兜底**:
+/// 该档 MV **不申请音频焦点**(Kotlin `AudioFocusPolicy.mvRequestsFocus`),
+/// 另外两档 MV 会抢焦点 ⇒ 歌曲的 ExoPlayer(跟随系统)或服务的焦点监听(总是停止)
+/// 收到 LOSS 后立刻停, 淡出只是被提前打断, 不存在双声窗口。这一档若也走淡出,
+/// `pause` 通道立刻返回而真正的 `pause()` 在 fadeMs(≤5s)之后 ⇒ 这一整段 MV 与歌曲双声。
+MvSongPauseMode mvSongPauseMode(AudioFocusPolicy focusMode) =>
+    focusMode == AudioFocusPolicy.alwaysPlay
+    ? MvSongPauseMode.immediate
+    : MvSongPauseMode.fade;
 
 /// 从 MV 返回后的动作。
 enum MvReturnPlan {
@@ -57,8 +76,14 @@ abstract class MvSongGate {
   /// 当前歌曲是否在播
   Future<bool> isPlaying();
 
-  /// 暂停歌曲(调用前应确认在播)
+  /// 暂停歌曲(调用前应确认在播)。淡出语义: 通道立刻返回, 真正停在 `fadeMs` 之后。
   Future<void> pause();
+
+  /// 立即静音暂停(不走淡出), 用于没有焦点兜底的档位(见 [mvSongPauseMode])。
+  ///
+  /// 默认实现回落 [pause](淡出): 新增这个能力时不打破已有的实现者;
+  /// 真正能"现在就必须安静"的只有生产门面 [PlaybackSongGate]。
+  Future<void> pauseImmediately() => pause();
 
   /// 恢复歌曲
   Future<void> resume();
@@ -75,20 +100,36 @@ class PlaybackSongGate extends MvSongGate {
   Future<void> pause() => Playback().pause();
 
   @override
+  Future<void> pauseImmediately() => Playback().pauseImmediately();
+
+  @override
   Future<void> resume() => Playback().resume();
 }
 
 /// MV 播放通道: Android 走 `ncm/mv` MethodChannel 起独立 VideoView Activity;
 /// 其他平台(Linux 桌面)没有内嵌视频能力, 用系统播放器/浏览器打开直链。
 class MvPlayback {
-  MvPlayback({MethodChannel? channel, this.playOverride, MvSongGate? songGate})
-    : _channel = channel ?? const MethodChannel('ncm/mv'),
-      songGate = songGate ?? const PlaybackSongGate();
+  MvPlayback({
+    MethodChannel? channel,
+    this.playOverride,
+    MvSongGate? songGate,
+    AudioFocusPolicy Function()? focusMode,
+  }) : _channel = channel ?? const MethodChannel('ncm/mv'),
+       songGate = songGate ?? const PlaybackSongGate(),
+       focusMode = focusMode ?? _configuredFocusMode;
 
   final MethodChannel _channel;
 
   /// 歌曲侧接口(MV 起播前让路; 测试可注入)
   final MvSongGate songGate;
+
+  /// 当前音频焦点档位: 决定 MV 起播前用淡出还是立即暂停(见 [mvSongPauseMode])。
+  /// 默认读设置单例, 测试注入固定档位。
+  final AudioFocusPolicy Function() focusMode;
+
+  /// 默认(生产)档位来源
+  static AudioFocusPolicy _configuredFocusMode() =>
+      AppSettings.instance.audioFocus;
 
   /// 测试注入: 直接接管 play(不触平台通道)
   final Future<void> Function(String url, String title)? playOverride;
@@ -101,6 +142,7 @@ class MvPlayback {
   /// 这是**体验层**的一层: 返回 MV 页后默认不自动恢复(见 [mvReturnPlan])。
   /// 原生侧还有一层兜底: MvPlayerActivity 申请音频焦点, 歌曲 ExoPlayer 打开了
   /// handleAudioFocus ⇒ 即使这里暂停失败/漏掉, 歌曲也会被系统焦点压停。
+  /// 「总是在后台播放」档没有这层兜底, 所以那一档必须立即停(见 [mvSongPauseMode])。
   Future<bool> duckSong() async {
     final bool playing;
     try {
@@ -110,13 +152,22 @@ class MvPlayback {
       return false;
     }
     if (mvDuckPlan(songPlaying: playing) == MvSongDuckPlan.none) return false;
+    final pauseMode = mvSongPauseMode(focusMode());
     try {
-      await songGate.pause();
+      switch (pauseMode) {
+        case MvSongPauseMode.immediate:
+          await songGate.pauseImmediately();
+        case MvSongPauseMode.fade:
+          await songGate.pause();
+      }
     } catch (e) {
       debugPrint('[NCM-MV] 暂停歌曲失败(MV 起播后由音频焦点兜底): $e');
       return false;
     }
-    debugPrint('[NCM-MV] 歌曲正在播 ⇒ 起播 MV 前已暂停(返回后不自动恢复)');
+    debugPrint(
+      '[NCM-MV] 歌曲正在播 ⇒ 起播 MV 前已暂停'
+      '(${pauseMode == MvSongPauseMode.immediate ? '立即' : '淡出'}, 返回后不自动恢复)',
+    );
     return true;
   }
 

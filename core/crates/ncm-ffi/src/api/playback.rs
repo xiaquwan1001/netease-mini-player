@@ -49,10 +49,11 @@ pub fn playback_user_agent() -> String {
 // ---------------- 播放 ----------------
 
 static PLAYER: OnceLock<ncm_playback::Player> = OnceLock::new();
-// 注意: 这里**不能**再声明 `static DATA_DIR`。`super::*` 里的那份是 `init()` 唯一写入过的实例;
-// 同名本地 `static` 会遮蔽 glob 导入(globs 优先级最低), 而没有任何代码会给它 set,
-// 于是本文件所有 `DATA_DIR.get()` 永远 None ⇒ "core not initialized"
-// (2026-11-23 实测: 桌面端播放/缓存全废; 拆分 api.rs 时引入的静默回归)。
+// 注意: 本文件**不要**再自己声明任何与 `super::*` 同名的单例。2026-11-23 的回归:
+// 拆分 api.rs 时这里重复声明了一份 `static DATA_DIR`, 遮蔽了 `super::*` 里 `init()` 唯一
+// 写入过的那份(glob 导入优先级最低), 而没有任何代码给它 set ⇒ 本文件所有目录读取永远
+// 失败, 报 "core not initialized"(桌面端播放/缓存全废)。现在目录/Core/插件句柄统一从
+// `super::inited()` 取, 本文件只持有播放器(`PLAYER`, 与 `init()` 无关)。
 
 fn player() -> &'static ncm_playback::Player {
     PLAYER.get_or_init(ncm_playback::Player::new)
@@ -89,6 +90,51 @@ fn state_dto() -> PlayerStateDto {
     }
 }
 
+/// 缓存命中后的起播(R10): 返回 `true` = 真的开始放了, `false` = **这一份缓存不可用**,
+/// 调用方按「未命中」处理, 回落「重新下载并播」。
+///
+/// 为什么不能直接 `play_file(path)`: 命中判定([`AudioCache::cached_with_level`])只 `stat`
+/// 一次, 真正的 `File::open` 以前发生在音频线程 —— 这中间 `cache_enforce_limit` 可能已经把
+/// 文件删掉(UI 每次换曲都 `unawaited` 调一次淘汰), 于是这首曲子静默无声、UI 也没有错误。
+/// 现在先在这里 `open`, 成功就把**同一个句柄**交给播放器(之后文件即便被删/rename, inode
+/// 仍在, 解码不受影响), 打开失败或解码失败都回 `false`。
+///
+/// 解码失败时顺手删掉这份坏文件(尽力而为): 否则回落下载时 `AudioCache::fetch`
+/// 会再次"命中"它(Windows 的"下完再播"路径直接返回该路径), 又播一遍无声。
+async fn play_cached(track_id: u64, path: &std::path::Path) -> bool {
+    let file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("[play] 打不开缓存文件({}): {e}", path.display());
+            return false;
+        }
+    };
+    let wanted = path.to_string_lossy().into_owned();
+    // 回执要等音频线程真的建起解码器(纯 CPU, 不该占 tokio worker) ⇒ 阻塞池上等
+    let started =
+        tokio::task::spawn_blocking(move || player().play_opened_file(track_id, wanted, file))
+            .await
+            // 阻塞池 JoinError 不该发生; 按"已在放"处理 —— 宁可少一次回落, 也不和可能正在播的
+            // 同一份数据抢缓存键(第二次下载会 rename 掉当前 inode)
+            .unwrap_or(true);
+    if started {
+        return true;
+    }
+    remove_broken_cache_file(path);
+    false
+}
+
+/// 删掉解不出来的缓存文件(尽力而为: Windows 上句柄刚关闭时可能短暂共享冲突).
+fn remove_broken_cache_file(path: &std::path::Path) {
+    match std::fs::remove_file(path) {
+        Ok(()) => eprintln!("[play] 已删除解不出来的缓存文件: {}", path.display()),
+        Err(e) => eprintln!(
+            "[play] 删除坏缓存文件失败({}): {e}; 下次播放会再试一次",
+            path.display()
+        ),
+    }
+}
+
 /// 桌面播放: 已缓存直接播, 否则**边下边播**(乐观加载).
 ///
 /// 之前的实现是 `fetch()` 等整首歌下载完再播 —— 一首 320kbps 的歌在慢网下
@@ -106,10 +152,7 @@ pub async fn play_track(
     url: String,
     duration_ms: Option<u64>,
 ) -> Result<PlayerStateDto, FfiError> {
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?
-        .join("audio");
+    let dir = data_dir()?.join("audio");
     let cache = ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)?;
     // 缓存键带音质: 取链时记过(见 `song_url`), 没记过就退回旧键(向后兼容)
     let level = ncm_service::cache::level_hint(track_id);
@@ -117,8 +160,15 @@ pub async fn play_track(
     if let Some(path) = cache.cached_with_level(track_id, &url, level) {
         // 已缓存直接播: 之前那首还在飞的下载没必要再占带宽(它会按块检查发现代际过期)
         bump_download_epoch();
-        player().play_file(track_id, path.to_string_lossy().to_string());
-        return Ok(state_dto());
+        if play_cached(track_id, &path).await {
+            return Ok(state_dto());
+        }
+        // 这一份缓存**不可用**(判定命中后被淘汰删掉 / 文件解不出来): 不再静默无声,
+        // 落到下面的下载路径「重新下载并播」。这条回落只有一次(不循环重试同一份坏文件)。
+        eprintln!(
+            "[play] 缓存命中的文件不可用({}): 回落重新下载并播",
+            path.display()
+        );
     }
     #[cfg(windows)]
     {
@@ -321,10 +371,7 @@ pub fn player_tuning() -> PlaybackTuningDto {
 // ---------------- 音频缓存占用上限 (R5) ----------------
 
 fn audio_cache() -> Result<ncm_service::cache::AudioCache, FfiError> {
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?
-        .join("audio");
+    let dir = data_dir()?.join("audio");
     ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)
 }
 
@@ -395,10 +442,7 @@ fn loudness_dto(track_id: u64, l: ncm_domain::TrackLoudness, target_lufs: f64) -
 }
 
 fn loudness_store() -> Result<ncm_service::LoudnessStore, FfiError> {
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?;
-    Ok(ncm_service::LoudnessStore::open(dir))
+    Ok(ncm_service::LoudnessStore::open(data_dir()?))
 }
 
 /// 读缓存的响度(没测过就是 None, 播放时按 0 dB 处理)
@@ -419,10 +463,7 @@ pub async fn loudness_measure_cached(
             return Ok(Some(loudness_dto(track_id, *existing, target_lufs)));
         }
     }
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?
-        .join("audio");
+    let dir = data_dir()?.join("audio");
     let cache = ncm_service::cache::AudioCache::open(&dir).map_err(FfiError::from)?;
     let Some(path) = cache.cached_path(track_id) else {
         return Ok(None);
@@ -477,3 +518,7 @@ fn now_ms() -> u64 {
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+#[path = "playback_tests.rs"]
+mod tests;

@@ -284,6 +284,13 @@ enum Cmd {
         source: PlaySource,
         /// 接口给的预期时长(边下边播时解码器还不知道时长, 先用它撑进度条)
         expected_duration_ms: Option<u64>,
+        /// 调用方**已经打开过**的完整文件句柄(R10, 只给 [`Player::play_opened_file`]).
+        ///
+        /// 有它就复用(同一个 inode, 之后被删/rename 也不影响解码), 没它才按路径 `open`。
+        opened: Option<std::fs::File>,
+        /// 起播回执(R10): 命令线程在"真的开始放/确实放不了"之后回一个 `bool`。
+        /// 只有 [`Player::play_opened_file`] 会要(它要据此决定要不要回落重新下载)。
+        reply: Option<mpsc::SyncSender<bool>>,
     },
     Pause,
     Resume,
@@ -307,6 +314,10 @@ enum Cmd {
 /// seek 回执的等待上限: 音频线程最多 200ms 醒一次处理命令, 1.5s 足够;
 /// 又不会在阻塞读(边下边播等数据/设备挂死)时把 FFI 调用方一起拖住。
 pub const SEEK_REPLY_TIMEOUT: Duration = Duration::from_millis(1_500);
+
+/// 起播回执的等待上限(R10): 音频线程最多 200ms 醒一次处理命令, 建解码器是纯 CPU;
+/// 1.5s 足够, 又不会在设备挂死时把 FFI 调用方一起拖住。
+const PLAY_REPLY_TIMEOUT: Duration = Duration::from_millis(1_500);
 
 /// 单实例播放器: 命令进 channel, 音频线程独占输出设备.
 pub struct Player {
@@ -351,7 +362,48 @@ impl Player {
             track_id,
             source: PlaySource::File(path.into()),
             expected_duration_ms: None,
+            opened: None,
+            reply: None,
         });
+    }
+
+    /// 起播一个**调用方已经打开过**的完整文件, 并等音频线程回执"真的放起来了吗"。
+    ///
+    /// 存在理由(R10): 缓存命中(`AudioCache::cached_with_level`)只是一次 `stat`, 真正的
+    /// `File::open` 在音频线程 —— 这中间 `cache_enforce_limit` 可能把文件删掉, 于是这首曲子
+    /// 静默无声。调用方先自己 `File::open` 再把句柄交进来(同一个 inode, 删掉也还能读),
+    /// 万一文件本身解不出来, 这里如实回 `false`, 调用方据此回落「重新下载并播」。
+    ///
+    /// 回执**有界**(与 `seek` 同口径): 音频线程忙着解码/设备挂死时超时, 超时按"已经在放"
+    /// 返回 —— 宁可少一次回落, 也不要和可能正在播的这份数据抢同一个缓存键。
+    pub fn play_opened_file(
+        &self,
+        track_id: u64,
+        path: impl Into<String>,
+        file: std::fs::File,
+    ) -> bool {
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let sent = self.tx.send(Cmd::Play {
+            track_id,
+            source: PlaySource::File(path.into()),
+            expected_duration_ms: None,
+            opened: Some(file),
+            reply: Some(reply_tx),
+        });
+        if sent.is_err() {
+            // 音频线程已经退出(没有输出设备/已 shutdown): 没得救, 报"已开始"以免
+            // 上层再下一份数据 —— 下载下来的文件也只能躺着没人放
+            return true;
+        }
+        match reply_rx.recv_timeout(PLAY_REPLY_TIMEOUT) {
+            Ok(started) => started,
+            Err(_) => {
+                log::warn!(
+                    "[playback] 起播回执超时({PLAY_REPLY_TIMEOUT:?}): 按已在播放处理, 不触发回落"
+                );
+                true
+            }
+        }
     }
 
     /// 边下边播: 立即开始解码已经到达的字节, 剩余部分由下载线程继续追加.
@@ -375,6 +427,8 @@ impl Player {
                 done,
             },
             expected_duration_ms,
+            opened: None,
+            reply: None,
         });
     }
 
@@ -584,6 +638,20 @@ mod backend {
     /// 这是"边下边播"的关键: rodio/symphonia 只认 `Read + Seek`, 看到 EOF 就会
     /// 认为曲子播完了. 这里把"暂时没有数据"和"真的没有数据"区分开 ——
     /// 只有 `done` 置位(下载成功/失败都会置位)才返回 EOF.
+    ///
+    /// # 这些阻塞的 `read` 跑在哪个线程(已核实, 2026-11-25)
+    ///
+    /// **在 cpal 的音频回调线程上**: 本解码器经 `Player::play_stream` 追加进 rodio 的
+    /// `Player`(`rodio-0.23.0/src/player.rs:73-75` → `mixer.add(source)`), 而
+    /// `MixerSource::sum_current_sources`(`rodio-0.23.0/src/mixer.rs:145-155`)
+    /// **就地**调用每个源的 `next()`(没有中间解码线程), 这条链的源头是
+    /// `DeviceSinkBuilder::open_default_sink` 建出来的输出流回调
+    /// (`rodio-0.23.0/src/stream.rs:518-536`: cpal 回调闭包里 `samples.next()`)。
+    ///
+    /// 后果: 边下边播期如果在回调线程里等数据(见下面的等待循环), 这一段就是**真的**
+    /// 音频 underrun(回调返回不及 → 声卡讨不到数据 → 噼嗒/掉帧), 而不是“只是慢一点”。
+    /// 目前靠两道防线把等待控制在可接受范围(下载线程写入 + `READ_TIMEOUT` 20s 先失败、
+    /// `stall_limit` 90s 兵底), 但这是**真机听感项**(弱网/跨境链路必验), 不能当已解决。
     struct GrowingFile {
         file: File,
         done: Arc<std::sync::atomic::AtomicBool>,
@@ -909,6 +977,19 @@ mod backend {
     /// 换源时的淡入时长: 足够盖住波形不连续(消爆音), 又短到听不出来
     const SWAP_FADE: Duration = Duration::from_millis(25);
 
+    /// 完整文件的打开(R10): 调用方交了句柄就**用它**(同一个 inode), 没交才按路径现开。
+    ///
+    /// 为什么要这个分支: 缓存命中只是 `stat`, 而从 `stat` 到这里的 `open` 之间,
+    /// `cache_enforce_limit` 可能已经把文件删掉(UI 每次换曲都 `unawaited` 调一次) ——
+    /// 以前这就是"切了歌但没声音"。句柄已经拿到手的话, 即便文件被 unlink/rename,
+    /// 读的还是同一个 inode。
+    fn open_file_source(path: &str, opened: Option<File>) -> std::io::Result<File> {
+        match opened {
+            Some(file) => Ok(file),
+            None => File::open(path),
+        }
+    }
+
     /// 恢复淡入的斜坡比例(0→1 线性, 纯函数便于单测): `None` = 无斜坡(=1.0);
     /// 已到时自动清空并返回 1.0, 中间线性过渡。盖在最终音量上(乘法),
     /// 所以对用户音量/增益限速都是透明的。
@@ -1092,6 +1173,8 @@ mod backend {
                     track_id,
                     source,
                     expected_duration_ms,
+                    opened,
+                    reply,
                 }) => {
                     // stop() 之后不可复用,换曲用 clear()
                     player.clear();
@@ -1113,7 +1196,7 @@ mod backend {
                     limiter.reset_to(local.gain_db);
                     player.set_volume(effective_volume_db(user_volume, limiter.current_db()));
                     match source {
-                        PlaySource::File(path) => match File::open(&path) {
+                        PlaySource::File(path) => match open_file_source(&path, opened) {
                             Ok(file) => match Decoder::try_from(file) {
                                 Ok(decoder) => start_source(
                                     &player,
@@ -1136,6 +1219,8 @@ mod backend {
                         },
                         // 边下边播: 文件还在增长, 报告"不可 seek"以免 symphonia 为算时长扫全文件
                         PlaySource::Growing { path, .. } => {
+                            // 渐进源永远是按路径现开的(`play_stream` 不会带句柄)
+                            debug_assert!(opened.is_none(), "渐进源不接受调用方句柄");
                             // R5: 句柄在 Play 时刻就拿在手上(数据下完 `.part` 会被 rename),
                             // 首块数据没到也不在这里等 —— 建不成解码器就登记到 tick 重试,
                             // 命令线程立刻回去收 Pause/Stop/Seek/Volume。
@@ -1163,6 +1248,11 @@ mod backend {
                     } else {
                         None
                     };
+                    // R10: 起播回执(只有 `play_opened_file` 会带) —— 如实告诉调用方
+                    // "真的开起来了"还是"这份文件放不了", 好让它回落重新下载
+                    if let Some(tx) = reply {
+                        let _ = tx.send(started);
+                    }
                 }
                 Ok(Cmd::Pause) => {
                     player.pause();
@@ -1427,6 +1517,41 @@ mod backend {
             std::fs::create_dir_all(&dir).unwrap();
             let path = dir.join("t.wav");
             (dir, path)
+        }
+
+        /// R10: 调用方交进来的句柄在文件被删/rename 之后仍然可读 —— 这就是
+        /// "缓存命中(stat)与音频线程 open 之间被 `cache_enforce_limit` 删掉"的修法。
+        #[test]
+        fn caller_supplied_handle_survives_unlink() {
+            let (dir, path) = temp_wav("r10-handle");
+            let mut f = std::fs::File::create(&path).unwrap();
+            f.write_all(&wav_header(16)).unwrap();
+            f.flush().unwrap();
+            drop(f);
+
+            let handle = File::open(&path).unwrap();
+            // 模拟缓存淘汰: 文件在"交给播放器之后"被删（POSIX 上 unlink 不影响已开句柄）
+            std::fs::remove_file(&path).unwrap();
+            assert!(!path.exists(), "文件确实已经没了");
+
+            let mut opened = open_file_source(path.to_str().unwrap(), Some(handle))
+                .expect("句柄还在手上, 不应该再按路径开");
+            let mut head = [0u8; 4];
+            opened.read_exact(&mut head).unwrap();
+            assert_eq!(&head, b"RIFF", "句柄读到的仍是原 inode 的内容");
+
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// R10 的另一半: 没带句柄且路径也不在了 ⇒ 如实报错(调用方据此回 `false`,
+        /// `ncm-ffi` 的 `play_cached` 于是回落"重新下载并播"而不是静默无声)。
+        #[test]
+        fn missing_file_without_handle_is_an_error() {
+            let (dir, path) = temp_wav("r10-missing");
+            let err = open_file_source(path.to_str().unwrap(), None)
+                .expect_err("打不开就必须报错, 不能假装已开播");
+            assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
+            let _ = std::fs::remove_dir_all(&dir);
         }
 
         /// 边下边播的核心性质: 读到 EOF 时**阻塞**等新字节, 而不是当作播放结束.

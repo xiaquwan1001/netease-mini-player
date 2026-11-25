@@ -200,6 +200,17 @@ pub async fn mv_url(mv_id: u64, r: u32) -> Result<MvUrlDto, FfiError> {
     })
 }
 
+/// 歌曲对应的官方 MV id(`None` = 这首歌没有官方 MV).
+///
+/// 为歌曲菜单的「官方 MV」入口做的一次现查: `SongDto` 里没有 mv 字段,
+/// 需要走 `song/detail` 取一次. **没有 MV 不是错误**(`Ok(None)`), 只有网络/风控/
+/// 无权限才上抛 [`FfiError`] —— 调用方按 kind 决定是否重试/隐藏入口.
+/// 与 mv_detail/mv_url 同属 MV 能力面, 能力声明沿用 [`Capability::Artist`].
+pub async fn song_mv_id(track_id: u64) -> Result<Option<u64>, FfiError> {
+    let provider = with_provider(Capability::Artist)?;
+    provider.song_mv_id(track_id).await.map_err(FfiError::from)
+}
+
 /// 关注/取消关注歌手(需要登录). 返回 true 表示接口接受.
 pub async fn artist_sub_toggle(artist_id: u64, sub: bool) -> Result<bool, FfiError> {
     let provider = with_provider(Capability::Artist)?;

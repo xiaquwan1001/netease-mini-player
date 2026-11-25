@@ -101,6 +101,19 @@ class PlaybackService : MediaSessionService() {
     private var focusRequest: AudioFocusRequest? = null
 
     /**
+     * 手上是否**已经**有生效的焦点请求(两档通用记账)。
+     *
+     * API 26 以下没有请求对象([focusRequest] 恒为 null), 只靠这个布尔记账;
+     * API 26+ 与 [focusRequest] 同生同灭(只在本类的申请/放弃两个出口里改)。
+     * 用途: [applyFocusMode] 的幂等判据(审计 U7) —— 没这份账本就分不出
+     * 「重复 configure」与「档位真的变了」。
+     */
+    private var focusRequested = false
+
+    /** [applyFocusMode] 上次真正落地时的档位(null = 还没碰过系统焦点); 幂等的另一半 */
+    private var appliedFocusMode: AudioFocusMode? = null
+
+    /**
      * 「总是停止」档的焦点回调: 任何失去都暂停, 且**不自动恢复**。
      * 「跟随系统」交给 Media3(见 buildExoPlayer 的 handleAudioFocus),
      * 「总是在后台播放」则完全不理会焦点。
@@ -375,14 +388,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         instance = null
         // 放弃「总是停止」档自己申请的焦点(否则别的 App 起播时会收到一次假的中断)
-        (getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.let { am ->
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                focusRequest?.let { am.abandonAudioFocusRequest(it) }
-            } else {
-                am.abandonAudioFocus(serviceFocusListener)
-            }
-        }
-        focusRequest = null
+        (getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.let { am -> abandonFocus(am) }
         fadeArmedAt = 0L
         fadeHandler.removeCallbacks(abandonArmedTick)
         fadeAnimator?.cancel()
@@ -524,27 +530,63 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * 按当前 [audioFocusMode] 申请/放弃焦点(幂等)。
+     * 按当前 [audioFocusMode] 申请/放弃焦点(**幂等**)。
      *
      * 只有「总是停止」需要自己拿焦点: 「跟随系统」由 Media3 在起播时申请,
      * 「总是在后台播放」刻意不申请(申请了就等于宣告独占, 与设置项的语义相反)。
+     *
+     * 幂等性为什么必要(审计 U7): `configure` 在每次换曲、未测到响度时的每次补测(20s)
+     * 都会来一次。以前的实现每趟都「放弃 → 重申请」, 结果是反复的无焦点窗口(这期间
+     * 别的 App 可以抢走焦点), 并且每次重申请都会给当时持有焦点的 App 再发一次 LOSS。
+     * 现在只在档位真的变了([AudioFocusPolicy.focusRequestStep] 的判据)时才动系统焦点。
      */
     private fun applyFocusMode() {
         val am = getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
-        // 先无条件放弃旧请求: 切档/重复 configure 都不该留下两个监听。
+        val step = AudioFocusPolicy.focusRequestStep(
+            appliedMode = appliedFocusMode,
+            nextMode = audioFocusMode,
+            hasRequest = focusRequested,
+        )
+        if (step == AudioFocusPolicy.FocusRequestStep.KEEP) {
+            Log.d(TAG, "焦点不变(${audioFocusMode.id}) ⇒ 不动系统焦点(幂等)")
+            appliedFocusMode = audioFocusMode
+            return
+        }
+        if (step == AudioFocusPolicy.FocusRequestStep.ABANDON ||
+            step == AudioFocusPolicy.FocusRequestStep.ABANDON_AND_REQUEST
+        ) {
+            abandonFocus(am)
+        }
+        if (step == AudioFocusPolicy.FocusRequestStep.REQUEST ||
+            step == AudioFocusPolicy.FocusRequestStep.ABANDON_AND_REQUEST
+        ) {
+            requestFocus(am)
+        }
+        appliedFocusMode = audioFocusMode
+    }
+
+    /** 放弃手上的焦点请求(没有请求时什么都不做), 并清掉记账 */
+    private fun abandonFocus(am: AudioManager) {
+        if (!focusRequested) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             focusRequest?.let { am.abandonAudioFocusRequest(it) }
         } else {
             am.abandonAudioFocus(serviceFocusListener)
         }
         focusRequest = null
-        if (!AudioFocusPolicy.manageFocusInService(audioFocusMode)) return
+        focusRequested = false
+        Log.i(TAG, "放弃音频焦点(${audioFocusMode.id})")
+    }
+
+    /** 申请焦点(「总是停止」档)并记账 */
+    private fun requestFocus(am: AudioManager) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setOnAudioFocusChangeListener(serviceFocusListener)
                 .setWillPauseWhenDucked(true)
                 .build()
             focusRequest = request
+            focusRequested = true
             val granted = am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             Log.i(TAG, "总是停止播放: 申请焦点 granted=$granted")
         } else {
@@ -553,6 +595,8 @@ class PlaybackService : MediaSessionService() {
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN,
             )
+            focusRequested = true
+            Log.i(TAG, "总是停止播放: 申请焦点(API 26 以下, 无回执)")
         }
     }
 
@@ -714,6 +758,29 @@ class PlaybackService : MediaSessionService() {
     /** [SkipAwarePlayer.pause] 的唯一出口: 先在 fadeMs 内淡出, 再真正暂停 */
     fun pauseWithFade() {
         fadeOutThen { exoPlayer?.pause() }
+    }
+
+    /**
+     * **立即**暂停(不走淡出): MV 起播让路专用(审计 U3, 2026-11-25)。
+     *
+     * [pauseWithFade] 是淡出语义 —— 调用方(通道)立刻拿到返回, 真正的 `pause()` 在
+     * `fadeMs`(≤5s)之后。而「总是在后台播放」档的 MV **不申请音频焦点**
+     * ([AudioFocusPolicy.mvRequestsFocus]), 少了「系统焦点压停歌曲」这层兜底,
+     * 这段淡出就是 MV 与歌曲的双声窗口。这里直接丢淡出、当场暂停。
+     * 用户手动暂停仍走 [pauseWithFade](听感不变)。
+     */
+    fun pauseImmediately() {
+        val exo = exoPlayer ?: return
+        // 先丢掉淡出结束时要执行的动作: 下面自己落地, 不能让 cancelFade 再执行一遍
+        pendingAfterFadeOut = null
+        cancelFade()
+        // 淡出期间音量归淡出管(它每帧把音量压向 0): 取消后要交回目标值, 否则下次继续播放是静音
+        gainSlewAnimator?.cancel()
+        gainSlewAnimator = null
+        appliedGainDb = gainDb
+        exo.volume = targetVolume()
+        exo.pause()
+        Log.d(TAG, "立即暂停(MV 起播让路, 不走淡出)")
     }
 
     /** [SkipAwarePlayer.stop] 的唯一出口: 先在 fadeMs 内淡出, 再真正停止 */

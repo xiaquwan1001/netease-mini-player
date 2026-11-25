@@ -8,7 +8,7 @@ import '../frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `audio_cache`, `loudness_dto`, `loudness_store`, `now_ms`, `player`, `state_dto`, `tuning_dto`
+// These functions are ignored because they are not marked as `pub`: `audio_cache`, `bump_download_epoch`, `download_slots`, `loudness_dto`, `loudness_store`, `now_ms`, `play_cached`, `player`, `remove_broken_cache_file`, `state_dto`, `tuning_dto`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `CacheStatsDto`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `cache_stats`, `eq_profile_normalize`, `player_tuning`
 

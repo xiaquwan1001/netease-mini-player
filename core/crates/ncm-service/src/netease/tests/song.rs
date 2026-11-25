@@ -582,3 +582,68 @@ fn capabilities_include_song_like() {
     assert!(CAPABILITIES.contains(&Capability::SongLike));
     assert_eq!(Capability::SongLike.as_str(), "songLike");
 }
+
+/// 歌曲菜单的「官方 MV」入口要用的 mv id: `songs[0].mv` 三种形状.
+/// 0 / 缺失 / 非数字 都是"没有 MV"(空态), 不得当错误.
+#[test]
+fn song_mv_id_parses_none_and_some() {
+    let with_mv = json!({"code": 200, "songs": [{"id": 42, "name": "A", "mv": 5432}]});
+    assert_eq!(parse_song_mv(&with_mv), Some(5432));
+
+    // 上游把"没有 MV"写成 mv:0(最常见的形状)
+    let no_mv = json!({"code": 200, "songs": [{"id": 42, "name": "A", "mv": 0}]});
+    assert_eq!(parse_song_mv(&no_mv), None);
+
+    // 字段缺失 / 非数字 / songs 空: 一律 None
+    let missing = json!({"code": 200, "songs": [{"id": 42}]});
+    assert_eq!(parse_song_mv(&missing), None);
+    let weird = json!({"code": 200, "songs": [{"id": 42, "mv": "无"}]});
+    assert_eq!(parse_song_mv(&weird), None);
+    let empty = json!({"code": 200, "songs": []});
+    assert_eq!(parse_song_mv(&empty), None);
+}
+
+/// 端到端: 有 MV 时拿到 id(走 song/detail, 与 songs_detail 同一路径).
+#[tokio::test]
+async fn song_mv_id_returns_id_from_song_detail() {
+    let (base, handle) = crate::netease::tests::cloud::spawn_fake_http(
+        200,
+        r#"{"code":200,"songs":[{"id":42,"name":"A","mv":5432}]}"#,
+    );
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), base);
+    let mv = tokio::time::timeout(std::time::Duration::from_secs(10), p.song_mv_id(42))
+        .await
+        .expect("假服务应在超时内回包")
+        .expect("有 MV 应返回 Ok(Some)");
+    assert_eq!(mv, Some(5432));
+    handle.join().expect("假服务线程未 panic");
+}
+
+/// 端到端: 没有 MV 是空态而不是错误(否则 UI 会把它当失败而悄悄藏掉入口).
+#[tokio::test]
+async fn song_mv_id_zero_is_none_not_error() {
+    let (base, handle) = crate::netease::tests::cloud::spawn_fake_http(
+        200,
+        r#"{"code":200,"songs":[{"id":42,"name":"A","mv":0}]}"#,
+    );
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), base);
+    let mv = tokio::time::timeout(std::time::Duration::from_secs(10), p.song_mv_id(42))
+        .await
+        .expect("假服务应在超时内回包")
+        .expect("没有 MV 必须是 Ok(None)");
+    assert_eq!(mv, None);
+    handle.join().expect("假服务线程未 panic");
+}
+
+/// 网络错误不吞: 那是可重试的, UI 靠 kind 决定下次打开是否重查.
+#[tokio::test]
+async fn song_mv_id_keeps_network_error() {
+    // 取一个刚释放的本地端口: 连接必然被拒 ⇒ network
+    let addr = std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("绑本地端口")
+        .local_addr()
+        .expect("取本地端口");
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), format!("http://{addr}"));
+    let err = p.song_mv_id(42).await.expect_err("网络错误必须上抛");
+    assert_eq!(err.kind, ProviderErrorKind::Network, "{err:?}");
+}

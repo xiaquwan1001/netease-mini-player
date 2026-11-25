@@ -121,10 +121,7 @@ pub async fn search_suggest(keywords: String) -> Result<Vec<SuggestItem>, FfiErr
 }
 
 fn history_store() -> Result<ncm_service::HistoryStore, FfiError> {
-    let dir = DATA_DIR
-        .get()
-        .ok_or_else(|| FfiError::internal("core not initialized"))?;
-    ncm_service::HistoryStore::open(dir).map_err(FfiError::from)
+    ncm_service::HistoryStore::open(data_dir()?).map_err(FfiError::from)
 }
 
 /// 搜索历史(最近在前)

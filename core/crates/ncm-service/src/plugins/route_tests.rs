@@ -853,3 +853,28 @@ fn core_two_plugins_without_selection_stay_on_builtin() {
     assert_eq!(plan.target, RouteTarget::Plugin("beta".into()));
     assert_eq!(plan.reason, RouteReason::Selected);
 }
+
+/// R11: 诊断结论**按能力分槽** —— 并发 routed 调用各写各的槽, 不再互相覆盖.
+///
+/// 修复前 `LAST_EVENT` 是进程级单槽: 一次 `search_all` 会并发 6+ 次 `call_routed`,
+/// 后到的那次把前一次的记录冲掉, "刚才那次 `SongUrl` 走了插件还是内置"因此查不出来。
+/// 这里直接喂两条不同能力的记录(`record` 是 `call_routed` 唯一的记账点), 断言每个能力
+/// 都还查得到**自己那次**。刻意用 `Chart`/`PodcastDetail`(其它用例不碰这两个能力),
+/// 免得与并行跑的用例抢槽位。
+#[test]
+fn route_events_are_kept_per_capability() {
+    let chart = Capability::Chart;
+    let podcast = Capability::PodcastDetail;
+    route::record(chart, &RouteUsed::Plugin("p-chart".into()));
+    route::record(podcast, &RouteUsed::Builtin);
+
+    assert_eq!(
+        route::last_route_event_for(chart),
+        Some(RouteUsed::Plugin("p-chart".into())),
+        "不同能力的记录不许互相覆盖"
+    );
+    assert_eq!(
+        route::last_route_event_for(podcast),
+        Some(RouteUsed::Builtin)
+    );
+}

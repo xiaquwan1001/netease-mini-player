@@ -10,8 +10,8 @@
 
 | 文件 | 用途 | 最后更新 |
 |---|---|---|
-| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线(v0.20.0 起) + 未发版在飞状态;按日批次已归档, 见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-19 |
-| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活, §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-18 |
+| [PROGRESS.md](PROGRESS.md) | 进度总账:**门禁基线(唯一权威口径)** + 版本时间线(v0.20.0 起) + 未发版在飞状态;按日批次已归档, 见 `archive/PROGRESS-2026-11-13-11-19.md`、`archive/PROGRESS-2026-11-03-11-12.md` 与 `archive/PROGRESS-v1.md`。**活跃** | 2026-11-25 |
+| [remaining-batches.md](remaining-batches.md) | 待办与分批规划: 硬约束/并行矩阵/批次清单, **下一轮从 §11 挑功能活(含「审计遗留」小节), §12 结构性债务, §13 未做的平台层审计项**。**活跃** | 2026-11-25 |
 | [api-coverage.md](api-coverage.md) | 接口覆盖清单(vendor ↔ 本仓库), 跑 `bash tools/api-coverage.sh` 复算。**活跃** | 2026-11-16 |
 | [README.md](README.md) | 本文件: 文档索引(唯一入口)。**活跃** | 2026-11-18 |
 
@@ -51,7 +51,7 @@
 |---|---|---|
 | [archive/](archive/README.md) | 已完工/已决策的专题文档(2026-11-19 新增 `plans-2026-11/`(31 份车道记录)与 5 份原在根目录的归档件) + 三段 PROGRESS 归档(`PROGRESS-v1.md` v1 WebView 时代 · `PROGRESS-2026-11-03-11-12.md` v2 早期批次 · `PROGRESS-2026-11-13-11-19.md` v0.8.0–v0.19.0 批次) + `remaining-batches-history.md`。**归档** | 2026-11-17 |
 | [audits/](audits/) | 近期审计报告: `2026-11-12-code-audit.md` · `-ui-layout.md` · `-ui-alignment.md` · `2026-11-13-asset-docs-audit.md`(数字为当时快照)。**活跃** | 2026-11-13 |
-| [audit/](audit/) | 只读架构审计: `2026-11-20-architecture.md` 模块边界/FFI 面/门禁漂移/守卫缺口 + 排序后的建议清单(每条带 `文件:行`); `2026-11-21-plugin-android-crosscompile.md` 插件宿主的 Android 可行性实测(缺预生成 bindings ⇒ `bindgen` 路线真机跑通, 触发条件与成本见文末); `2026-11-21-lx-script-compat.md` LX 社区脚本兼容对照(3 份真实脚本 ⇒ `request` 事件适配 / `setTimeout` / 回调式 `lx.request` 三个必做缺口 + 12 项补齐清单); `2026-11-21-plugin-isolation-phase2.md` 插件隔离二期(锁面/panic/预算/ANR 四方案评估 + 切片 A/B/C 落地); `2026-11-22-project-audit.md` 文档-代码一致性审计(7 条文档漂移已修 + 5 处 `#[frb(ignore)]` 观察期到期项 + 4 处弱断言); `2026-11-24-error-codes.md` 错误码边界审计(18 条: HTTP200+非 JSON 静默成功 / friendlyError 缺三个 kind 文案 / resourceId 残余路径等) + `2026-11-24-arch-boundary.md` 架构边界审计(6 条: vendor 记账缺口已补录, 锁序/OnceLock/分层全核实收口)。**活跃** | 2026-11-24 |
+| [audit/](audit/) | 只读架构审计: `2026-11-20-architecture.md` 模块边界/FFI 面/门禁漂移/守卫缺口 + 排序后的建议清单(每条带 `文件:行`); `2026-11-21-plugin-android-crosscompile.md` 插件宿主的 Android 可行性实测(缺预生成 bindings ⇒ `bindgen` 路线真机跑通, 触发条件与成本见文末); `2026-11-21-lx-script-compat.md` LX 社区脚本兼容对照(3 份真实脚本 ⇒ `request` 事件适配 / `setTimeout` / 回调式 `lx.request` 三个必做缺口 + 12 项补齐清单); `2026-11-21-plugin-isolation-phase2.md` 插件隔离二期(锁面/panic/预算/ANR 四方案评估 + 切片 A/B/C 落地); `2026-11-22-project-audit.md` 文档-代码一致性审计(7 条文档漂移已修 + 5 处 `#[frb(ignore)]` 观察期到期项 + 4 处弱断言); `2026-11-24-error-codes.md` 错误码边界审计(18 条: HTTP200+非 JSON 静默成功 / friendlyError 缺三个 kind 文案 / resourceId 残余路径等) + `2026-11-24-arch-boundary.md` 架构边界审计(6 条: vendor 记账缺口已补录, 锁序/OnceLock/分层全核实收口); **`2026-11-25-full-audit.md` 全仓功能性审计**(四条只读车道: Rust 并发/UI 争用/实现重复/显示错误 ⇒ 13 条 P1 全落地 + 33 条 P2 逐条定状态 + 2 条明确证伪 + 6 项仍开, 每条带 `文件:行` 与判据用例名)。**活跃** | 2026-11-25 |
 | [reports/](reports/) | 只读调查报告: `login-risk-analysis-2026-11-17.md`(PC 网页登录为什么被风控 —— 静态分析, 未真登录/未扫码; 关联 v0.21.0 第 ⑤ 项)。**留档** | 2026-11-17 |
 | [spikes/](spikes/) | 零散 spike 产物(如 `2026-11-09-netease-music-spike.md`)。只读留痕 | 2026-11-07 |
 | [b8-dumps/](b8-dumps/README.md) | B8 等级/勋章接口原始 dump(含 `user_medal.sample.json`)。只读留痕 | 2026-11-07 |

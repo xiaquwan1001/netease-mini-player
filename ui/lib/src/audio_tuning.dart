@@ -26,6 +26,10 @@ class AudioTuningRequest {
   final double gainDb;
 
   /// 淡入时长(ms): **只作用于从暂停恢复**(2026-11-23); 切歌/首次起播不淡入
+  ///
+  /// 两端的包络并不相同(D09): Android 是等响感知曲线 `1-(1-t)^3`, 且暂停/停止
+  /// 有淡出; 桌面(`ncm-playback` 的 `ramp_scale`)是线性, 且暂停/停止**没有**淡出。
+  /// 用户看到的文案按平台分开写, 见设置页的 `fadeCardText`。
   final int fadeMs;
 
   /// AutoEQ 曲线原文; null = 旁路

@@ -31,7 +31,7 @@
 //! # 并发: 拿的是**插件宿主自己的锁**, 不再是 `Core` 的唯一一把锁(隔离二期切片 A, v0.36.0)
 //!
 //! 导出函数是同步实现(`frb` 给 Dart 生成 `Future`, 但 Rust 侧不 await). 入口统一走
-//! `super::plugin_host()` 拿 `Arc<RwLock<PluginHost>>`(与 `CORE` 里那份**同一个** `Arc`):
+//! `super::plugin_host()` 拿 `Arc<RwLock<PluginHost>>`(与 `INITED` 里 `core` 那份**同一个** `Arc`):
 //! - 读类(`status/summaries/failures/logs/rejected/route_mode/route_plan`)取**读锁**, 多个读并发;
 //! - 写类(`rescan/set_enabled/install_*/enable/disable/uninstall/set_route_mode`)取**写锁**,
 //!   彼此串行 —— 它们会真的扫盘并装载 QuickJS(单插件预算 8s).
@@ -232,8 +232,17 @@ pub fn plugin_failures() -> Result<Vec<PluginFailureDto>, FfiError> {
 
 /// 拉走所有插件累计的诊断日志(按插件 id 分组, 空组丢弃)。
 ///
-/// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。UI 侧按需点「拉取日志」,
-/// **不做后台轮询**(拉取要拿 `Core` 的唯一一把锁, 轮询会拖慢别的域调用)。
+/// 读类接口, 总开关关闭/宿主未激活时给空视图, 不报错。拿的是**插件宿主的读锁**
+/// (`super::plugin_host()`), 不碰 `Core` 锁 —— 隔离二期切片 A 起插件入口全走独立句柄。
+///
+/// 语义上是"取走"([`PluginHost::take_logs`] → `Provider::take_logs`), 但**不需要写锁**:
+/// 真正保证互斥的是每个 `ScriptProvider` 内部那把 `Mutex`(日志缓冲归它所有,
+/// `take_logs(&self)` 在那里做 drain), 宿主的 `RwLock` 只保护注册表/策略/路由快照。
+/// 改成 `write()` 只会让"拉一次日志"与重扫/启停互斥, 并不会让取走更安全(调用期追加日志
+/// 的路径本来就不持宿主锁), 所以保持读锁。
+///
+/// UI 侧按需点「拉取日志」,**不做后台轮询**: 取走语义下轮询会把日志清空, 用户真去点
+/// 「拉取日志」时反而什么都没有。
 pub fn plugin_logs() -> Result<Vec<PluginLogDto>, FfiError> {
     let host = plugin_host()?;
     let guard = host.read().unwrap_or_else(|e| e.into_inner());

@@ -1,5 +1,11 @@
 // 自定义响度曲线(EQ)可视化/编辑: 频响曲线图 + 柱状图.
 // 纯 Dart + Flutter painting, 无新依赖; 权威解析在 eq_profile.dart.
+//
+// **这张曲线是近似示意, 不是实听响应**(判据见 eq_biquad.dart 文件头「已知差异」):
+// 求值走 eq_biquad.dart, 其中 LS/HS 用 RBJ 的 S=1 简化(忽略 Q); 实听的
+// Rust `ncm-playback/src/biquad.rs` 与 Kotlin `EqProfileParser.kt` 用 Q 形式,
+// shelf 段因此与图上的曲线有可见差异. 对用户的那句说明在
+// settings_audio_page.dart 的 `eqCurveApproxNote`.
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';

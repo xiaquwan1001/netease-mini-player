@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/app_settings.dart' show AudioFocusPolicy;
 import 'package:minincm/src/mv_page.dart';
 import 'package:minincm/src/mv_playback.dart';
 import 'package:minincm/src/rust/api_all.dart' as rust;
@@ -51,6 +52,12 @@ class _RecordingGate extends MvSongGate {
   }
 
   @override
+  Future<void> pauseImmediately() async {
+    log.add('song.pauseImmediate');
+    playing = false;
+  }
+
+  @override
   Future<void> resume() async {
     log.add('song.resume');
     playing = true;
@@ -58,12 +65,19 @@ class _RecordingGate extends MvSongGate {
 }
 
 class _RecordingPlayback extends MvPlayback {
-  _RecordingPlayback({required this.gate, required this.log, this.fail = false})
-    : super(songGate: gate);
+  _RecordingPlayback({
+    required this.gate,
+    required this.log,
+    this.fail = false,
+    this.duckFocusMode = AudioFocusPolicy.followSystem,
+  }) : super(songGate: gate, focusMode: () => duckFocusMode);
 
   final _RecordingGate gate;
   final List<String> log;
   final bool fail;
+
+  /// 当前焦点档位(决定起播前是淡出暂停还是立即暂停, 见 [mvSongPauseMode])
+  final AudioFocusPolicy duckFocusMode;
 
   @override
   bool get supportsInlinePlayback => true;
@@ -133,6 +147,24 @@ void main() {
         MvReturnPlan.autoResume,
       );
     });
+
+    // 审计 U3(2026-11-25): 只有「总是在后台播放」档的 MV 不申请音频焦点
+    // (Kotlin AudioFocusPolicy.mvRequestsFocus == false), 没有系统兜底 ⇒ 必须立即停,
+    // 否则走淡出时 pause 通道立刻返回、真正 pause 在 fadeMs 之后 = 双声窗口。
+    test('只有「总是在后台播放」档需要立即暂停让路', () {
+      expect(
+        mvSongPauseMode(AudioFocusPolicy.alwaysPlay),
+        MvSongPauseMode.immediate,
+      );
+      expect(
+        mvSongPauseMode(AudioFocusPolicy.followSystem),
+        MvSongPauseMode.fade,
+      );
+      expect(
+        mvSongPauseMode(AudioFocusPolicy.alwaysStop),
+        MvSongPauseMode.fade,
+      );
+    });
   });
 
   testWidgets('点播放: 先暂停歌曲再起 MV(顺序 + 只这一次)', (tester) async {
@@ -159,6 +191,26 @@ void main() {
     await _leaveAndReturn(tester);
     expect(find.textContaining('歌曲已暂停'), findsNothing);
     expect(log.contains('song.resume'), isFalse);
+  });
+
+  testWidgets('总是在后台播放档: 用立即暂停让路(不走淡出), MV 立刻独占声音', (tester) async {
+    final log = <String>[];
+    final gate = _RecordingGate(log: log);
+    await _pumpMv(
+      tester,
+      _RecordingPlayback(
+        gate: gate,
+        log: log,
+        duckFocusMode: AudioFocusPolicy.alwaysPlay,
+      ),
+    );
+
+    await tester.tap(find.text('播放'));
+    await tester.pumpAndSettle();
+
+    // 关键: 没有 song.pause(淡出语义, 通道立刻返回) —— 只有立即暂停
+    expect(log, ['song.isPlaying', 'song.pauseImmediate', 'mv.play']);
+    expect(log.contains('song.pause'), isFalse);
   });
 
   testWidgets('从 MV 返回: 不自动恢复歌曲, 给一次手动续播提示', (tester) async {

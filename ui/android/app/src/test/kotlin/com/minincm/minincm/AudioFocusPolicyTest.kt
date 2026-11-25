@@ -103,4 +103,110 @@ class AudioFocusPolicyTest {
         assertTrue(AudioFocusPolicy.mvRequestsFocus(AudioFocusMode.ALWAYS_STOP))
         assertFalse(AudioFocusPolicy.mvResumesOnGain(AudioFocusMode.ALWAYS_STOP))
     }
+
+    /**
+     * 模拟 [PlaybackService.applyFocusMode] 的落地: 账本 + 系统调用计数。
+     *
+     * 账本那几行是 [AudioFocusPolicy.focusRequestStep] 的入参来源
+     * (appliedMode / hasRequest), 真实实现里它们是服务的两个字段。
+     */
+    private class FakeFocusSystem {
+        var appliedMode: AudioFocusMode? = null
+        var hasRequest = false
+        var requests = 0
+        var abandons = 0
+
+        fun apply(mode: AudioFocusMode): AudioFocusPolicy.FocusRequestStep {
+            val step = AudioFocusPolicy.focusRequestStep(appliedMode, mode, hasRequest)
+            when (step) {
+                AudioFocusPolicy.FocusRequestStep.KEEP -> Unit
+
+                AudioFocusPolicy.FocusRequestStep.ABANDON -> {
+                    abandons++
+                    hasRequest = false
+                }
+
+                AudioFocusPolicy.FocusRequestStep.REQUEST -> {
+                    requests++
+                    hasRequest = true
+                }
+
+                AudioFocusPolicy.FocusRequestStep.ABANDON_AND_REQUEST -> {
+                    abandons++
+                    requests++
+                    hasRequest = true
+                }
+            }
+            appliedMode = mode
+            return step
+        }
+    }
+
+    @Test
+    fun configuringTwiceWithSameModeRequestsFocusOnce() {
+        // 审计 U7(2026-11-25): configure 在每次换曲、每次响度补测(20s)都会来一次。
+        // 以前每趟都「放弃 → 重申请」⇒ 反复的无焦点窗口 + 给别的 App 补发假 LOSS。
+        val system = FakeFocusSystem()
+
+        assertEquals(AudioFocusPolicy.FocusRequestStep.REQUEST, system.apply(AudioFocusMode.ALWAYS_STOP))
+        assertEquals(1, system.requests)
+        assertEquals(0, system.abandons)
+
+        // 第二、三次 configure(换曲 / 未测到响度的补测): 档位没变 ⇒ 一个字都不动
+        assertEquals(AudioFocusPolicy.FocusRequestStep.KEEP, system.apply(AudioFocusMode.ALWAYS_STOP))
+        assertEquals(AudioFocusPolicy.FocusRequestStep.KEEP, system.apply(AudioFocusMode.ALWAYS_STOP))
+        assertEquals("同一档位反复 configure 只该申请一次", 1, system.requests)
+        assertEquals("同一档位反复 configure 不该放弃焦点", 0, system.abandons)
+    }
+
+    @Test
+    fun focusFollowsRealModeChangesOnly() {
+        val system = FakeFocusSystem()
+
+        // 首次 configure 是默认档(跟随系统): 服务不碰焦点
+        assertEquals(AudioFocusPolicy.FocusRequestStep.KEEP, system.apply(AudioFocusMode.FOLLOW_SYSTEM))
+        assertEquals(0, system.requests)
+        assertEquals(0, system.abandons)
+
+        // 切到「总是在后台播放」: 两档都不需要服务管焦点 ⇒ 仍然不动
+        assertEquals(AudioFocusPolicy.FocusRequestStep.KEEP, system.apply(AudioFocusMode.ALWAYS_PLAY))
+        assertEquals(0, system.abandons)
+
+        // 切到「总是停止」: 现在真的要抢焦点了
+        assertEquals(
+            AudioFocusPolicy.FocusRequestStep.REQUEST,
+            system.apply(AudioFocusMode.ALWAYS_STOP),
+        )
+        assertEquals(1, system.requests)
+
+        // 切回其它档: 必须放弃(否则别的 App 起播时会收到一次假的中断)
+        assertEquals(
+            AudioFocusPolicy.FocusRequestStep.ABANDON,
+            system.apply(AudioFocusMode.FOLLOW_SYSTEM),
+        )
+        assertEquals(1, system.abandons)
+        assertFalse(system.hasRequest)
+
+        // 再从其它档切回「总是停止」: 放弃旧的(没有) + 重新申请 —— 档位真的变了
+        assertEquals(
+            AudioFocusPolicy.FocusRequestStep.REQUEST,
+            system.apply(AudioFocusMode.ALWAYS_STOP),
+        )
+        assertEquals(2, system.requests)
+        assertEquals(1, system.abandons)
+    }
+
+    @Test
+    fun missingRequestIsReRequestedEvenIfModeMatches() {
+        // 账本与目标不一致(例如 pre-O 申请失败/被系统回收): 仍然要去申请, 不能因为
+        // "档位没变"就永远不出声地停在不持焦点的状态。
+        assertEquals(
+            AudioFocusPolicy.FocusRequestStep.REQUEST,
+            AudioFocusPolicy.focusRequestStep(
+                appliedMode = AudioFocusMode.ALWAYS_STOP,
+                nextMode = AudioFocusMode.ALWAYS_STOP,
+                hasRequest = false,
+            ),
+        )
+    }
 }
