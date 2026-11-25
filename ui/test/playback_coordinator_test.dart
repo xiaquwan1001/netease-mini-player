@@ -629,6 +629,55 @@ void main() {
       expect(h2.toasts, isEmpty);
     });
 
+    test('上一首跳过 VIP 时继续往后跳(不会被弹回刚离开的那首)', () async {
+      settings.skipVipSongs = true;
+      // 队列: 免费 A / VIP B / 免费 C；当前在 C, 按上一首 → B(VIP)
+      final h = _Harness(
+        songs: [
+          fakeSong(id: 1, name: '免费 A'),
+          fakeSong(id: 2, name: 'VIP B', vip: true, fee: 1),
+          fakeSong(id: 3, name: '免费 C'),
+        ],
+        startAt: 2,
+      );
+      addTearDown(h.dispose);
+
+      // 页面「上一首」: 先把下标退到 B, 再把 B 交给 playSong
+      final prev = h.queue.previous();
+      expect(prev!.id, BigInt.two);
+      await h.coordinator.playSong(prev, backward: true);
+      await pumpEventQueue();
+
+      expect(
+        h.playback.plays.single.trackId,
+        BigInt.one,
+        reason: '跳过 VIP 必须继续往后退到 A, 而不是 next() 回到刚离开的 C',
+      );
+      expect(h.queue.current!.id, BigInt.one, reason: '队列下标也要落在真正播的那首');
+      expect(h.toasts.single, contains('已跳过 1 首 VIP'));
+    });
+
+    test('上一首方向: 前面连着两首 VIP 也一路退到最后那首可播的', () async {
+      settings.skipVipSongs = true;
+      final h = _Harness(
+        songs: [
+          fakeSong(id: 1, name: '免费 A'),
+          fakeSong(id: 2, name: 'VIP B', vip: true, fee: 1),
+          fakeSong(id: 3, name: 'VIP C', vip: true, fee: 1),
+          fakeSong(id: 4, name: '免费 D'),
+        ],
+        startAt: 3,
+      );
+      addTearDown(h.dispose);
+
+      final prev = h.queue.previous();
+      await h.coordinator.playSong(prev!, backward: true);
+      await pumpEventQueue();
+
+      expect(h.playback.plays.single.trackId, BigInt.one);
+      expect(h.toasts.single, contains('已跳过 2 首 VIP'));
+    });
+
     test('预取的下一首直链一次性使用: 换曲时不再重复取链', () async {
       final h = _Harness(
         songs: [fakeSong(id: 1), fakeSong(id: 2), fakeSong(id: 3)],

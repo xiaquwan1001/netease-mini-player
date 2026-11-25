@@ -12,6 +12,9 @@ import 'update_checker.dart' show compareVersions;
 ///
 /// 发版时在这里加一条即可; 没有条目的版本不显示公告(不是每个 patch 都值得说)。
 const Map<String, List<String>> kReleaseHighlights = <String, List<String>>{
+  'v0.41.1': <String>[
+    '修: 开着「自动跳过 VIP」按「上一首」时, 如果上一首是 VIP 会被弹回刚离开的那首 —— 现在会继续往回退到前一首可播的',
+  ],
   'v0.41.0': <String>[
     '歌曲菜单新增「官方 MV」: 这首歌有官方 MV 时菜单里会出现入口, 点开直接看 MV(没有就不显示, 不留灰条)',
     '搜索结果里的 MV 更准: 不再把关键词截短去硬凑, 与搜索词无关的 MV 不再出现(搜不到就不显示这个分区)',

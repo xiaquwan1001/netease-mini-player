@@ -364,7 +364,14 @@ class PlaybackCoordinator extends ChangeNotifier {
   /// [explicit] = 用户主动点选的这一首: 「自动跳过 VIP」只约束自动续播/切歌,
   /// 用户亲手点的歌必须播(官方也是这么做的 —— 会员曲目能试听前 30s),
   /// 只有取链真的拿不到直链时才继续往后跳。
-  Future<void> playSong(rust.SongDto song, {bool explicit = false}) async {
+  ///
+  /// [backward] = 这一轮是「上一首」发起的: 跳不可播/VIP 曲目时也必须**往后退**
+  /// (用户反馈: 开着「自动跳过 VIP」按上一首, 先前那首是 VIP 时会被"弹回"原来那首).
+  Future<void> playSong(
+    rust.SongDto song, {
+    bool explicit = false,
+    bool backward = false,
+  }) async {
     // 先抢代际: 后发起的这次一进来就让先前那次作废(它的取链结果晚到也不许落地)
     final gen = ++_playGen;
     userStopped = false;
@@ -402,7 +409,12 @@ class PlaybackCoordinator extends ChangeNotifier {
         reportSkipped();
         return;
       }
-      final next = queue.next();
+      final next = backward
+          // 反向: 与页面「上一首」同一口径(引导态顺序后退, 到段首就停)
+          ? (guideOf() == QueueGuide.none
+                ? queue.previous()
+                : queue.previousSequential())
+          : queue.next();
       // 跳过不可播曲目时下标也动了: 面板高亮要跟上, 否则「正在播放」指在别的行
       queueChanged();
       if (next == null) return;

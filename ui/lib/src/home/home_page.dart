@@ -766,7 +766,9 @@ class _HomePageState extends State<HomePage> {
         : _queue.previousSequential();
     if (prev == null) return;
     _queueUI.queueChanged();
-    await _coordinator.playSong(prev);
+    // backward: 若这一首(或再往前几首)是 VIP/不可播, 跳过方向也必须继续往后**退**,
+    // 否则会顺着 queue.next() 被弹回用户刚离开的那首(用户反馈 2026-11-25)
+    await _coordinator.playSong(prev, backward: true);
   }
 
   /// 引导态续播取料(心动模式/私人FM 各一批; 逻辑在 queue_guide.dart)。
