@@ -36,6 +36,7 @@ class HomeNavigation {
     required this.dailyPlaylists,
     required this.dailyLocalDays,
     required this.touchInteraction,
+    this.onLogin,
   });
 
   /// 调用瞬间取 BuildContext(本类不持有, 与 [AccountActions] /
@@ -56,6 +57,10 @@ class HomeNavigation {
 
   /// 记录"最近一次交互"(我的页收藏栏按它排序, 见 recent_order.dart)
   final void Function(String kind, BigInt id) touchInteraction;
+
+  /// 登录入口(首页 `AccountActions.login`): 每日推荐「推荐歌单」在未登录时
+  /// 只能看到 auth 错误, 页内的「去登录」主按钮走这里(不直接摸全局单例)。
+  final VoidCallback? onLogin;
 
   // ---------------- 输入联想: 精确实体 ----------------
 
@@ -107,6 +112,7 @@ class HomeNavigation {
       // 设置里启用缓存后, 历史日推把磁盘上的本地缓存天也列进来(合并去重 + 「本地」标记)
       loadLocalDays: dailyLocalDays,
       initialTab: initialTab,
+      onLogin: onLogin,
     );
   }
 

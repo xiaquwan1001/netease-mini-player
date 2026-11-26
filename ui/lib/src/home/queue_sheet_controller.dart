@@ -219,6 +219,7 @@ class QueueSheetController extends ChangeNotifier {
             jumpTo(song);
           },
           onRemove: remove,
+          onRestore: restore,
           onMove: move,
           onClear: clear,
           // 面板跟着真实队列走: 心动模式切换/自动续播/别处删歌立刻重排(用户反馈)
@@ -325,6 +326,26 @@ class QueueSheetController extends ChangeNotifier {
     } else {
       unawaited(playSong(next, explicit: false));
     }
+  }
+
+  /// 队列面板「撤销删除」([PlayQueueSheet.onRestore]): 把被滑删的那一首插回**原下标**。
+  ///
+  /// 与 [remove] 严格互逆: 当前曲目不变(删的时候已经换播了, 撤销只恢复列表),
+  /// 插入点在当前项之前(或就是当前项) ⇒ 当前下标 +1。
+  /// `PlayQueue` 没有"按位置插入"的入口, 所以整批写回 + 用 [PlayQueue.setAll] 的
+  /// `startAt` 把当前项的位置定回原来那首。队列被删空后撤销 ⇒ 它就落在唯一
+  /// 位置上成为当前项(播放仍停着, 用户自己去播)。
+  void restore(int index, rust.SongDto song) {
+    if (!isMounted()) return;
+    final items = [...queue.items];
+    final at = index.clamp(0, items.length);
+    items.insert(at, song);
+    final currentIndex = queue.index;
+    final startAt = currentIndex < 0
+        ? 0
+        : (currentIndex >= at ? currentIndex + 1 : currentIndex);
+    queue.setAll(items, startAt: startAt);
+    notifyListeners();
   }
 
   /// 队列空了之后的收尾: 标记用户停止 + 清落盘现场 + 停播(原 `_stopAfterQueueEmpty`)

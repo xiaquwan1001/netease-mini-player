@@ -271,6 +271,39 @@ void main() {
       expect(h.toasts, ['播放队列已清空, 播放已停止']);
     });
 
+    // 撤销删除(2026-11-26 安卓交互审计 P2#6): 面板的撤销条走 [restore] 把被滑删的
+    // 那一首插回**原下标**, 与 [remove] 严格互逆 —— 当前曲目不变、不重播。
+    testWidgets('撤销删除非当前项: 插回原下标, 当前曲目不变', (tester) async {
+      final h = await _pump(tester, names: ['a', 'b', 'c'], startAt: 1);
+      final removed = h.queue.items[0];
+      h.controller.remove(removed, false);
+      expect([for (final s in h.queue.items) s.name], ['b', 'c']);
+      expect(h.queue.index, 0);
+
+      h.controller.restore(0, removed);
+
+      expect([for (final s in h.queue.items) s.name], ['a', 'b', 'c']);
+      expect(h.queue.current?.name, 'b', reason: '撤销只恢复列表, 当前曲目不变');
+      expect(h.queue.index, 1, reason: '插回位置在当前项之前 ⇒ 当前下标 +1');
+      expect(h.played, isEmpty);
+      expect(h.stopped, isEmpty);
+    });
+
+    testWidgets('撤销删除当前项: 队列恢复原序, 播放不回到被删的那首', (tester) async {
+      final h = await _pump(tester, names: ['a', 'b', 'c'], startAt: 1);
+      final removed = h.queue.items[1];
+      h.controller.remove(removed, true);
+      await tester.pump();
+      expect(h.played, [('c', false)]);
+
+      h.controller.restore(1, removed);
+
+      expect([for (final s in h.queue.items) s.name], ['a', 'b', 'c']);
+      expect(h.queue.current?.name, 'c');
+      expect(h.queue.index, 2);
+      expect(h.played, [('c', false)], reason: '撤销不该再触发一次换歌');
+    });
+
     testWidgets('清空: 队列清空后停播(确认弹窗在面板里, 这里只收结果)', (tester) async {
       final h = await _pump(tester, names: ['a', 'b']);
       await h.controller.clear();

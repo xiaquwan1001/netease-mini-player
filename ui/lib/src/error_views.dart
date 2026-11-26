@@ -31,11 +31,28 @@ class InlineError extends StatelessWidget {
 }
 
 /// 整块/首屏错误: 居中文案 + 重试主按钮.
+///
+/// [actionLabel]/[onAction] 是可选的主按钮替身: 有些错误重试永远不会成功
+/// (典型是 auth —— 未登录时重试同一请求还是 auth), 这类页面把主按钮换成
+/// 「去登录」并接上现成的登录入口。两者都不传时行为与改造前完全一致(「重试」
+/// 调 [onRetry]).
 class FullError extends StatelessWidget {
-  const FullError({super.key, required this.message, required this.onRetry});
+  const FullError({
+    super.key,
+    required this.message,
+    required this.onRetry,
+    this.actionLabel,
+    this.onAction,
+  });
 
   final String message;
   final VoidCallback onRetry;
+
+  /// 主按钮文案; null = 保持「重试」([onRetry]).
+  final String? actionLabel;
+
+  /// 主按钮动作; null = 保持「重试」([onRetry]).
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +63,10 @@ class FullError extends StatelessWidget {
         children: [
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 12),
-          FilledButton(onPressed: onRetry, child: const Text('重试')),
+          FilledButton(
+            onPressed: onAction ?? onRetry,
+            child: Text(actionLabel ?? '重试'),
+          ),
         ],
       ),
     );

@@ -22,6 +22,7 @@ Future<void> showDiscoverPage(
   HistorySongsLoader? loadHistorySongs,
   LocalDaysLoader? loadLocalDays,
   int initialTab = 0,
+  VoidCallback? onLogin,
 }) {
   final songs = loadSongs ?? dailySongsWithCache;
   final playlists = loadPlaylists ?? rust.dailyRecommendPlaylists;
@@ -37,6 +38,7 @@ Future<void> showDiscoverPage(
         loadLocalDays: loadLocalDays,
         onOpenPlaylist: onOpenPlaylist,
         initialTab: initialTab,
+        onLogin: onLogin,
       ),
     ),
   );
@@ -67,6 +69,7 @@ class DailyRecommendPage extends StatelessWidget {
     required this.onOpenPlaylist,
     this.loadLocalDays,
     this.initialTab = 0,
+    this.onLogin,
   });
 
   final SongListLoader loadSongs;
@@ -81,6 +84,10 @@ class DailyRecommendPage extends StatelessWidget {
   /// 打开时落在第几个页签(0 推荐歌曲 / 1 推荐歌单 / 2 历史日推)。
   /// B7「历史日推」快捷动作复用它, 不另开一份页面; 默认 0 = 历史行为。
   final int initialTab;
+
+  /// 登录入口(首页 `AccountActions.login`), 经 [DailyPlaylistsTab] 给 auth 错误
+  /// 当「去登录」主按钮; null = 没接登录通道时保持「重试」。
+  final VoidCallback? onLogin;
 
   @override
   Widget build(BuildContext context) {
@@ -109,7 +116,11 @@ class DailyRecommendPage extends StatelessWidget {
           children: [
             // 页签内的点播走 PlaybackBridge(队列来源标记为每日推荐, 见标签内部)
             DailySongsTab(load: loadSongs),
-            DailyPlaylistsTab(load: loadPlaylists, onOpen: onOpenPlaylist),
+            DailyPlaylistsTab(
+              load: loadPlaylists,
+              onOpen: onOpenPlaylist,
+              onLogin: onLogin,
+            ),
             HistoryTab(
               loadDates: loadHistoryDates,
               loadSongs: loadHistorySongs,

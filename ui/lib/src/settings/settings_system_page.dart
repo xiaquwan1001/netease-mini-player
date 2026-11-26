@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 
 import '../app_settings.dart';
 import '../app_sheet.dart';
@@ -8,7 +9,7 @@ import '../section_header.dart';
 import '../toast.dart';
 import 'settings_tiles.dart';
 
-/// 设置二级页: 通知与系统(窗口关闭行为 / 搜索交互 / 自动更新).
+/// 设置二级页: 通知与系统(窗口关闭行为 / 通知权限 / 搜索交互 / 自动更新).
 ///
 /// 从设置首页拆出(2026-11 用户反馈: 设置页平铺内容太乱, 按主题分二级页).
 Future<void> showSystemPage(BuildContext context) {
@@ -59,6 +60,16 @@ class SystemSettingsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
               ],
+              // 通知权限只在 Android 有运行时开关(且 13+ 才需要允许); 其它平台没有
+              // 「通知被拒绝」这个状态, 不给假行。
+              if (isAndroidPlatform) ...[
+                const SectionTitle('通知', icon: Icons.notifications_outlined),
+                const Card(
+                  margin: EdgeInsets.zero,
+                  child: _NotificationPermissionTile(),
+                ),
+                const SizedBox(height: 16),
+              ],
               const SectionTitle('搜索', icon: Icons.search),
               Card(
                 margin: EdgeInsets.zero,
@@ -88,6 +99,110 @@ class SystemSettingsPage extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 通知权限桥(Android 专用)。
+///
+/// 通道就是 MainActivity 里那个 `ncm/open` 处理器(打开链接/下载/系统设置都是系统 Intent 出口,
+/// 不另开通道); 方法名见 MainActivity 的 `notificationPermissionGranted` /
+/// `openNotificationSettings`。
+///
+/// `@visibleForTesting` 导出只为让回归测试能装假通道 —— 页面上不露出通道名。
+@visibleForTesting
+const MethodChannel notificationPermissionChannel = MethodChannel('ncm/open');
+
+/// 系统当前是否已授予本应用通知权限(Android 13+ 才有运行时开关; 更早的系统恒为 true,
+/// 与 MainActivity.hasNotificationPermission 同一口径)。
+///
+/// 通道不可用(桌面/测试未装 handler)按「没有权限」处理: 宁可提示用户去系统设置看一眼,
+/// 也不要谎报「已开启」。
+Future<bool> androidNotificationsGranted() async {
+  try {
+    final granted = await notificationPermissionChannel.invokeMethod<bool>(
+      'notificationPermissionGranted',
+    );
+    return granted ?? false;
+  } catch (_) {
+    return false;
+  }
+}
+
+/// 打开本应用的系统通知设置页(用户在这里把被拒的开关重新打开)。
+Future<void> openAndroidNotificationSettings() async {
+  try {
+    await notificationPermissionChannel.invokeMethod<bool>(
+      'openNotificationSettings',
+    );
+  } catch (_) {
+    // 打不开就算了: 页面上的文案已经告诉用户该去哪里点
+  }
+}
+
+/// 「通知权限」一行: 已开启 → 只说一句; 被拒绝 → 给一个直达系统设置的按钮。
+///
+/// 为什么要这一行(审计 2026-11-26 P2#7): 冷启动 `ensureNotificationPermission()` 只申请一次,
+/// 用户拒过之后 App 里**再没有任何提示或重开入口** —— 通知栏没媒体卡片(无播放控制/进度/封面),
+/// 用户既不知道原因也找不到开关。
+class _NotificationPermissionTile extends StatefulWidget {
+  const _NotificationPermissionTile();
+
+  @override
+  State<_NotificationPermissionTile> createState() =>
+      _NotificationPermissionTileState();
+}
+
+class _NotificationPermissionTileState
+    extends State<_NotificationPermissionTile>
+    with WidgetsBindingObserver {
+  /// null = 还在读(通道是异步的, 先别写「被拒绝」骗人)
+  bool? _granted;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// 从系统设置回来后重读一次: 用户刚点完「去系统设置」允许了权限, 回到这页应该当场变。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final granted = await androidNotificationsGranted();
+    if (!mounted) return;
+    setState(() => _granted = granted);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final granted = _granted;
+    final subtitle = switch (granted) {
+      null => '正在读取…',
+      true => '已开启 · 播放时通知栏会显示封面与播放控制',
+      false => '被拒绝 · 通知栏不会显示播放控制, 需要在系统设置里重新允许',
+    };
+    return ListTile(
+      key: const Key('notificationPermissionTile'),
+      title: const Text('通知权限'),
+      subtitle: Text(subtitle),
+      trailing: granted == false
+          ? TextButton(
+              key: const Key('openNotificationSettings'),
+              onPressed: openAndroidNotificationSettings,
+              child: const Text('去系统设置'),
+            )
+          : null,
     );
   }
 }

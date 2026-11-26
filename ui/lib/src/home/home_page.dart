@@ -335,6 +335,19 @@ class _HomePageState extends State<HomePage> {
       onNext: _next,
       onCycleMode: _queueUI.cycleMode,
       onOpenQueue: _queueUI.open,
+      // 播放条右键 = 当前曲目的「歌曲操作」菜单: 与列表行右键/行尾「...」同一个
+      // 面板(`showSongActionsSheet` + 现成的动作宿主), 不另写菜单；
+      // source 跟着当前队列来源(决定「不感兴趣」等项是否出现)。
+      onMenu: () {
+        final song = _current;
+        if (song == null) return;
+        showSongActionsSheet(
+          context,
+          song,
+          _songActions.buildHost(),
+          source: _account.playSource,
+        );
+      },
     );
     // 进程级静态钩子一次性交给 HomeWiring(拆壳 S8): 注册顺序与拆分前 initState
     // 一致 —— setSkipHandlers 会 flush 排队中的原生动作, 必须先于 setActionHandlers;
@@ -385,6 +398,8 @@ class _HomePageState extends State<HomePage> {
       dailyPlaylists: _account.dailyPlaylists,
       dailyLocalDays: _account.dailyLocalDays,
       touchInteraction: _touchInteraction,
+      // 每日推荐「推荐歌单」的 auth 错误主按钮 = 「去登录」, 走现成登录入口
+      onLogin: _account.login,
     );
     _tabs = HomeTabBuilder(
       contextOf: () => context,
@@ -497,6 +512,7 @@ class _HomePageState extends State<HomePage> {
       _search.bundle != null ||
       _search.exact != null;
 
+  /// 现取的返回键优先级(歌词 → 右栏 → tab → 歌单浏览态 → 搜索态 → 退出)。
   /// 现取的返回键优先级(歌词 → 右栏 → tab → 歌单浏览态 → 搜索态 → 退出)。
   HomeBackAction _resolveBackAction() => resolveHomeBackAction(
     showLyrics: _lyric.visible,
@@ -961,9 +977,13 @@ class _HomePageState extends State<HomePage> {
       // AppBar(歌词页/歌单浏览态才有)仍通栏, 与页内双列(S1)同一口径。
       body: DetailPaneSplit(
         master: (context, selectedKey) => Padding(
-          // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)
+          // 没有 AppBar 时自己吃掉状态栏安全区(放在最外层, 搜索框/内容都不会顶到状态栏下)。
+          // 左右也一律吃: 横屏刘海/扶着孔在左/右时, 纵向 inset 为 0 而 left/right
+          // 非 0, 只吃 top 会把搜索框与列表压到挖孔下面。
           padding: EdgeInsets.only(
             top: topBar == null ? MediaQuery.paddingOf(context).top : 0,
+            left: MediaQuery.paddingOf(context).left,
+            right: MediaQuery.paddingOf(context).right,
           ),
           child: Column(
             children: [

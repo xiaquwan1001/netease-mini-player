@@ -33,8 +33,10 @@
 #         不是 xdotool `key --window` 的 XSendEvent —— GTK 会丢弃后者);
 #      c. 鼠标: XTEST 在播放条那一行(窗口底部 导航栏之上)横扫三个点各点一次 + 进度条
 #         一个点, 覆盖「点播放条/播放键」这类点击;
-#      d. 几何: 缩到 640x480 再缩到 320x240(矮/窄布局重新排版)再还原, 每次都断言进程
-#         存活且标题不变, 还原后几何必须回到初始值。
+#      d. 几何: 缩到 640x480(矮/窄布局重新排版)再缩到 320x240, 每次都断言进程存活
+#         且标题不变; 320x240 低于窗口最小尺寸 ⇒ 必须被夹到 WM_NORMAL_HINTS 的 PMinSize
+#         (平台审计 P2#2: 修之前这里会真的变成 320x240, 播放条按钮被裁); 还原后几何必须
+#         回到初始值。窗口最小尺寸/尺寸记忆的完整回归在 tools/verify-window-geometry.sh。
 #      另加: 应用日志里不得出现 `segmentation fault` / `core dumped` / `GLib-ERROR`
 #      / `Gtk-ERROR` / `FATAL`(崩溃被 X11 层「幸存」掩盖的情况)。
 #      **断言边界(为什么不更强)**: 无 WM 的 xvfb 里**观察不到 Dart 层的状态变化** ——
@@ -88,6 +90,9 @@ cat > "$TMP/inner.sh" <<INNER
 set -uo pipefail
 BIN="$BIN"
 DATA="$TMP/data"
+# 窗口几何记在 XDG_CONFIG_HOME/minincm/window.ini(平台审计 P2#3), 同样指到临时目录:
+# 否则冒烟会改掉用户真实的窗口尺寸偏好, 两次冒烟之间也会互相污染。
+export XDG_CONFIG_HOME="$TMP/config"
 LOG1="$TMP/first.log"
 LOG2="$TMP/second.log"
 export NCM_DATA_DIR="\$DATA"
@@ -217,6 +222,7 @@ else
 set -uo pipefail
 BIN=$1; DATA=$2; LOG=$3; PNAME=$4
 export NCM_DATA_DIR="$DATA"
+export XDG_CONFIG_HOME="$(dirname "$DATA")/config"
 # 同上: 不摘掉真实桌面的 WAYLAND_DISPLAY 会把窗口开到用户屏幕上
 unset WAYLAND_DISPLAY
 export GDK_BACKEND=x11
@@ -328,6 +334,12 @@ xdotool windowsize --sync "$WID" 320 240 || true
 sleep 1.5
 props TINY
 alive ALIVE_AFTER_TINY
+# 最小尺寸(P2#2): 取窗口的 WM_NORMAL_HINTS/PMinSize —— 320x240 低于它就必须被夹住
+# (无 WM 的 xvfb 里由 GtkWindow 自己夹)
+if command -v xprop >/dev/null 2>&1; then
+  echo "MIN_HINTS=$(xprop -id "$WID" WM_NORMAL_HINTS 2>/dev/null \
+    | sed -n 's/.*minimum size: \([0-9]*\) by \([0-9]*\).*/\1x\2/p')"
+fi
 xdotool windowsize --sync "$WID" "$W" "$H" || true
 sleep 1.5
 props RESTORE
@@ -346,7 +358,7 @@ INTERACT
   OUTI=$(timeout -k 10 120 xvfb-run -a dbus-run-session -- \
     "$TMP/interact.sh" "$BIN" "$TMP/interact/data" "$TMP/interact.log" \
     "${WINDOW_TITLE:-轻音 MiniNCM}" 2>&1)
-  printf '%s\n' "$OUTI" | grep -E '^(INTERACT_WINDOW|BASE_|FOCUS_|KEYS_|ALIVE_AFTER_KEYS|CLICKS_|ALIVE_AFTER_CLICKS|SHRINK_|TINY_|RESTORE_|ALIVE_AFTER|APP_WINDOWS|BASE_GEO_USED)=' \
+  printf '%s\n' "$OUTI" | grep -E '^(INTERACT_WINDOW|BASE_|FOCUS_|KEYS_|ALIVE_AFTER_KEYS|CLICKS_|ALIVE_AFTER_CLICKS|SHRINK_|TINY_|MIN_HINTS|RESTORE_|ALIVE_AFTER|APP_WINDOWS|BASE_GEO_USED)=' \
     | sed 's/^/  | /'
   if ! grep -q '^INTERACT_WINDOW=1$' <<<"$OUTI"; then
     bad "交互级断言: 25s 内没等到 map 上来的主窗口($(grep '^INTERACT_WINDOW=' <<<"$OUTI"))"
@@ -401,19 +413,22 @@ INTERACT
       bad "点击后窗口属性变了(几何 '${ICG:-}' 标题 '${ICT:-}' 映射 '${ICM:-}')"
     fi
 
-    # d 几何交互: 缩到 640x480 / 320x240 再还原
+    # d 几何交互: 缩到 640x480(正常) / 320x240(低于最小尺寸, 应被夹住) 再还原
     ISG=$(sed -n 's/^SHRINK_GEO=//p' <<<"$OUTI" | head -1)
     ITG=$(sed -n 's/^TINY_GEO=//p' <<<"$OUTI" | head -1)
+    IMIN=$(sed -n 's/^MIN_HINTS=//p' <<<"$OUTI" | head -1)
     IRG=$(sed -n 's/^RESTORE_GEO=//p' <<<"$OUTI" | head -1)
     if [ "$ISG" = "640x480" ] && grep -q '^ALIVE_AFTER_SHRINK=1$' <<<"$OUTI"; then
       ok "缩窗到 640x480 生效且进程存活(窄布局重新排版不崩)"
     else
       bad "缩窗到 640x480 异常(几何 '${ISG:-}')"
     fi
-    if [ "$ITG" = "320x240" ] && grep -q '^ALIVE_AFTER_TINY=1$' <<<"$OUTI"; then
-      ok "缩窗到 320x240 生效且进程存活(极小窗口重新排版不崩)"
+    if [ -z "$IMIN" ]; then
+      skip "最小尺寸断言: 拿不到 WM_NORMAL_HINTS 的 PMinSize(缺 xprop 或窗口没有 hints)"
+    elif [ "$ITG" = "$IMIN" ] && grep -q '^ALIVE_AFTER_TINY=1$' <<<"$OUTI"; then
+      ok "缩窗到 320x240 被最小尺寸夹到 $ITG 且进程存活(P2#2: 不会缩到裁控件的尺寸)"
     else
-      bad "缩窗到 320x240 异常(几何 '${ITG:-}')"
+      bad "缩窗到 320x240 没有被最小尺寸对 $IMIN 夹住(几何 '${ITG:-}')"
     fi
     IRT=$(sed -n 's/^RESTORE_TITLE=//p' <<<"$OUTI" | head -1)
     IRM=$(sed -n 's/^RESTORE_MAP=//p' <<<"$OUTI" | head -1)
@@ -489,6 +504,8 @@ WMDELETE
 set -uo pipefail
 BIN=$1; DATA=$2; LOG=$3; HELPER=$4; CASE=$5; WATCHER=${6:-}
 export NCM_DATA_DIR="$DATA"
+# 窗口尺寸偏好同样落到临时目录(平台审计 P2#3), 不碰真实 ~/.config
+export XDG_CONFIG_HOME="$(dirname "$DATA")/config"
 # 同首次启动: 不摘掉真实桌面的 WAYLAND_DISPLAY, GTK 会绕过 xvfb 把窗口开到用户屏幕上
 unset WAYLAND_DISPLAY
 export GDK_BACKEND=x11

@@ -8,7 +8,9 @@
 //   · onMenu 与 menuSource 二选一, 不会画出两个「...」。
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodCall, SystemChannels;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 import 'package:minincm/src/rust/api_all.dart' as rust;
 import 'package:minincm/src/song_actions.dart';
 import 'package:minincm/src/song_tile.dart';
@@ -130,5 +132,76 @@ void main() {
     expect(find.byIcon(Icons.more_vert), findsOneWidget);
     await tester.tap(find.byIcon(Icons.more_vert));
     expect(menuCalls, 1);
+  });
+
+  // 触感(2026-11-26 安卓交互审计 P2#5): 长按唤起菜单前给一声轻触感, 仅 Android。
+  //
+  // 只断言**我们发的那一条**(arguments == selectionClick): Material 的 InkWell 自己
+  // 会在长按时发一次 `HapticFeedback.vibrate`(arguments 为 null = 系统 LONG_PRESS),
+  // 而且 widget 测试里 defaultTargetPlatform 恒为 android, 桌面宿主也会看到那条。
+  group('长按触感只在 Android', () {
+    /// 抓 SystemChannels.platform 上我们发的 selectionClick 触感
+    List<MethodCall> captureSelectionClicks(WidgetTester tester) {
+      final calls = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'HapticFeedback.vibrate' &&
+              call.arguments == 'HapticFeedbackType.selectionClick') {
+            calls.add(call);
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      return calls;
+    }
+
+    // 两臂各一个用例: 弹过菜单之后再 pumpWidget 同类型 MaterialApp 会复用
+    // Navigator(上一张菜单还压在栈上, 长按会被遮罩吃掉), 所以不合并。
+    testWidgets('Android: 自绘臂长按发一次 selectionClick', (tester) async {
+      debugForceAndroid = true;
+      addTearDown(() => debugForceAndroid = false);
+      final clicks = captureSelectionClicks(tester);
+
+      await _pumpRow(tester, SongRow(song: _song(), onTap: () {}));
+      await tester.longPress(find.byType(SongRow));
+      await tester.pumpAndSettle();
+
+      expect(clicks.length, 1, reason: '长按开菜单要给一次触感确认');
+    });
+
+    testWidgets('Android: ListTile 臂长按发一次 selectionClick', (tester) async {
+      debugForceAndroid = true;
+      addTearDown(() => debugForceAndroid = false);
+      final clicks = captureSelectionClicks(tester);
+
+      await _pumpRow(
+        tester,
+        SongRow(song: _song(), layout: SongRowLayout.tile, onTap: () {}),
+      );
+      await tester.longPress(find.byType(SongRow));
+      await tester.pumpAndSettle();
+
+      expect(clicks.length, 1, reason: 'ListTile 臂是另一处 onLongPress 挂点');
+    });
+
+    testWidgets('桌面(Linux/Windows): 长按不发 selectionClick, 菜单照常打开', (
+      tester,
+    ) async {
+      final clicks = captureSelectionClicks(tester);
+
+      await _pumpRow(tester, SongRow(song: _song(), onTap: () {}));
+      await tester.longPress(find.byType(SongRow));
+      await tester.pumpAndSettle();
+
+      expect(clicks, isEmpty, reason: '桌面没有振动器, 不该发触感调用');
+      expect(find.text('下一首播放'), findsOneWidget);
+    });
   });
 }

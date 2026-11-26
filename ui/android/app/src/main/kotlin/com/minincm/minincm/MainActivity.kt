@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.Settings
 import android.webkit.CookieManager
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -213,6 +214,17 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) {
                             result.error("download_error", e.message, null)
                         }
+                    }
+                }
+                // 通知权限(P2#7): 设置页要把「有没有通知权限」如实显示出来, 并在被拒绝时
+                // 给一个直达本应用通知设置页的入口 —— 否则用户拒过一次就再无出路。
+                "notificationPermissionGranted" -> result.success(hasNotificationPermission())
+                "openNotificationSettings" -> {
+                    try {
+                        startActivity(notificationSettingsIntent())
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("settings_error", e.message, null)
                     }
                 }
                 else -> result.notImplemented()
@@ -525,18 +537,43 @@ class MainActivity : FlutterActivity() {
         )
 
     private fun ensureNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    this,
-                    arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                    101,
-                )
-            }
+        if (!hasNotificationPermission()) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                101,
+            )
         }
     }
+
+    /**
+     * 本应用是否能发通知(Android 13+ 要运行时权限, 更早的系统恒为 true)。
+     *
+     * 唯一判据在 `ncm/open#notificationPermissionGranted` 与 [ensureNotificationPermission]
+     * 两处共用 —— 设置页显示的「已开启/被拒绝」与冷启动那次申请必须同一口径。
+     */
+    private fun hasNotificationPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /**
+     * 打开本应用的**通知**设置页(Android 8.0+ 有专属页, 更早的系统落到应用详情页)。
+     *
+     * 用 ACTION_APP_NOTIFICATION_SETTINGS + EXTRA_APP_PACKAGE 而不是跳到应用详情:
+     * 用户拒过权限时, 详情页要点两层才到通知开关, 而通知栏没播放控制的直接修复入口就是
+     * 那个通知总开关。
+     */
+    private fun notificationSettingsIntent(): Intent =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.fromParts("package", packageName, null),
+            )
+        }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == REQUEST_PICK_AUDIO) {

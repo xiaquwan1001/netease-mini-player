@@ -1,7 +1,18 @@
+/// 常驻播放条(排版 + 与宿主的契约)。
+///
+/// **桌面右键契约(接线方 = HomePage / 车道 D)**: [PlayerBarActions.onMenu] 是
+/// **可选**回调, 语义 = 「对当前曲目打开**现有的**歌曲操作 sheet」—— 与
+/// `song_tile.dart` 列表行的长按/右键同一个入口(`showSongActionsSheet`),
+/// 播放条不新写一份菜单, 只把**封面**与**信息区**的 `onSecondaryTap` 转给它。
+/// 接线方负责: `onMenu: () { final song = <当前曲目>; if (song != null) showSongActionsSheet(...); }`。
+/// 不传 = 右键没有任何反应(既有行为); 因此它是可选字段, 既有构造点不用改。
+library;
+
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'cover_art.dart';
 import 'format.dart' show formatDurationClock;
@@ -14,6 +25,7 @@ import 'layout.dart'
         kPlayerBarRoomyWidth,
         kRowTitleGap,
         layoutTierFor;
+import 'platform_is.dart' show isAndroidPlatform;
 import 'playback.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api_all.dart' as rust;
@@ -130,6 +142,7 @@ class PlayerBarActions {
     required this.onNext,
     required this.onCycleMode,
     required this.onOpenQueue,
+    this.onMenu,
   });
 
   final void Function(double ms) onSeekStart;
@@ -156,6 +169,12 @@ class PlayerBarActions {
 
   /// 打开播放队列面板(播放条最右侧)
   final VoidCallback onOpenQueue;
+
+  /// 桌面右键(封面 / 信息区)= 打开**现有的**歌曲操作 sheet(见文件头契约)。
+  ///
+  /// null(默认)= 右键无动作。语义与 `song_tile.dart` 列表行的右键完全同一入口,
+  /// 播放条只负责把命中区上的 `onSecondaryTap` 转出来, 接线在 HomePage。
+  final VoidCallback? onMenu;
 }
 
 /// 播放顺序图标/文案: 通知栏、播放条、详情页共用一份口径。
@@ -240,10 +259,16 @@ class MiniPlayerBar extends StatelessWidget {
   /// 没有底部导航时自己吃掉系统手势区(有导航时由 NavigationBar 的 SafeArea 负责)
   final bool absorbBottomInset;
 
-  /// 播放条上的紧凑图标按钮: 34dp 点击区(播放键 38) + 无内边距.
+  /// 播放条上的紧凑图标按钮: 宽 [size](播放键 38, 其余 34) × **高 48** + 无内边距。
   ///
-  /// 加入「上一首」后一排有 6 个按钮: 封面 48 + 5×34 + 38 = 256dp,
-  /// 300dp 窄屏上信息行仍有 ~44dp; 按 40dp 排会只剩 8dp, 等于没有文字.
+  /// 宽度为什么还是手机预算(没跟着提到 48): 一排 6 个按钮, 按 48 宽在 300dp 窄屏上
+  /// 直接溢出(封面 52 + 6×48 = 340 > 300, 信息行会归零); 横向的可点性由
+  /// 「高度 48 + 按钮紧挨着排」兜住, 窄屏上相邻按钮的命中区本来就是相邻的。
+  ///
+  /// 高度 48 才是本次要修的(2026-11-26 安卓交互审计 P2#4: 34/38dp 的方形命中区
+  /// 单手/走路时极容易点空)。注意不能只改 `constraints`: visualDensity.compact
+  /// 会把最小尺寸再减 8、`tapTargetSize.padded` 会把命中区撑成 48×48(宽度一起变),
+  /// 所以这里显式关掉这两条, 让尺寸**只**由 `size` 与 48 决定。
   Widget _barIcon({
     required String tooltip,
     required Widget icon,
@@ -255,8 +280,9 @@ class MiniPlayerBar extends StatelessWidget {
       icon: icon,
       onPressed: onPressed,
       padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      constraints: BoxConstraints(minWidth: size, minHeight: size),
+      visualDensity: VisualDensity.standard,
+      style: const ButtonStyle(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+      constraints: BoxConstraints(minWidth: size, minHeight: 48),
     );
   }
 
@@ -328,30 +354,17 @@ class MiniPlayerBar extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               // 进度条: 用户反馈"占的高度远大于视觉高度"。收掉 Material 默认的
-              // 48dp 触摸留白/大圆点, 只留 2dp 轨道 + 10dp 拇指, 并整体左移贴边。
+              // 48dp 触摸留白/大圆点, 视觉只留 2dp 轨道 + 10dp 拇指。
+              // 命中带则由 [_ProgressSlider] 自己撑到 48dp(见那里的注释)。
               SizedBox(
-                height: 20,
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 5,
-                    ),
-                    overlayShape: SliderComponentShape.noOverlay,
-                    showValueIndicator: ShowValueIndicator.never,
-                  ),
-                  // 不可 seek 期(桌面边下边播)不再换成「只提示不跳转」的轨道:
-                  // P-10 方案 B 落地后 Rust 会把这次跳转**排队**, 所以拖动照常回调;
-                  // 排队状态由拇指位置(见上面 pos)与信息行的「已排队→mm:ss」体现。
-                  // 真正不可跳(下载失败)时 seek 会回传 seek_error, 由页面 toast 如实告知。
-                  child: Slider(
-                    padding: const EdgeInsets.only(left: 8, right: 8),
-                    value: pos,
-                    max: maxMs,
-                    onChangeStart: data.canSeek ? actions.onSeekStart : null,
-                    onChanged: data.canSeek ? actions.onSeekChanging : null,
-                    onChangeEnd: data.canSeek ? actions.onSeekEnd : null,
-                  ),
+                height: kProgressHitHeight,
+                child: _ProgressSlider(
+                  value: pos,
+                  max: maxMs,
+                  label: formatDurationClock(BigInt.from(pos.round())),
+                  onChangeStart: data.canSeek ? actions.onSeekStart : null,
+                  onChanged: data.canSeek ? actions.onSeekChanging : null,
+                  onChangeEnd: data.canSeek ? actions.onSeekEnd : null,
                 ),
               ),
               // 歌曲信息与播放控制同排(用户明确要求合并); 文本块 Expanded + ellipsis,
@@ -361,12 +374,15 @@ class MiniPlayerBar extends StatelessWidget {
                   // 封面: 点开播放详情(歌词页)。专辑入口在歌曲"..."菜单里
                   // MouseRegion: 桌面悬停给手型(2026-11-26 审计 #4 —— 同一排里
                   // 图标按钮有手型+高亮, 封面却是箭头, 用户只能靠试)
+                  // 右键(桌面) = 现有「歌曲操作」sheet(见文件头契约, 回调由 HomePage 接)
+                  // 命中高度 48: 封面图形仍 40dp, 上下各多 4dp 纯命中带
                   MouseRegion(
                     cursor: SystemMouseCursors.click,
                     child: GestureDetector(
                       onTap: actions.onOpenDetail,
+                      onSecondaryTap: actions.onMenu,
                       child: Padding(
-                        padding: const EdgeInsets.only(left: 8, right: 4),
+                        padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
                         child: CoverArt(
                           url: current?.coverUrl,
                           size: 40,
@@ -393,6 +409,8 @@ class MiniPlayerBar extends StatelessWidget {
                         // 点信息区仍是「展开歌词」(既有行为, 不顺手改成详情页);
                         // 点封面 = 播放详情, 两个入口都保留。
                         onTap: actions.onToggleLyrics,
+                        // 桌面右键 = 现有「歌曲操作」sheet(与列表行同一入口)
+                        onSecondaryTap: actions.onMenu,
                         child: LayoutBuilder(
                           builder: (context, info) {
                             // 「空间还有」的口径见 layout.dart 的 kPlayerBarAlbumMinWidth
@@ -576,7 +594,12 @@ class MiniPlayerBar extends StatelessWidget {
                       player.playing ? Icons.pause_circle : Icons.play_circle,
                       size: 38,
                     ),
-                    onPressed: actions.onToggle,
+                    // 播放/暂停是全条最高频的触摸动作: 按下时给一次轻触感
+                    // (仅 Android; 桌面不震动, 也不该假装有 —— 见 isAndroidPlatform)
+                    onPressed: () {
+                      if (isAndroidPlatform) HapticFeedback.selectionClick();
+                      actions.onToggle();
+                    },
                     size: 38,
                   ),
                   if (gap > 0) SizedBox(width: gap),
@@ -611,3 +634,88 @@ class MiniPlayerBar extends StatelessWidget {
 /// 只有下载失败(`GrowingFailed`)等硬不可跳的源, Rust 才会把原因写进 `PlayerState::seek_error`,
 /// 页面据此 toast。旧的「缓存中, 暂不可跳转」闸门已随方案 B 撤掉。
 const String seekFailedHint = '跳转没生效：当前音源暂不可跳转';
+
+/// 进度条的**命中高度**。视觉仍是 2dp 轨道 + 10dp 拇指(见 [_ProgressSlider])。
+///
+/// 20dp 高的横条单手/走路时极难点中(2026-11-26 安卓交互审计 P2#4), 48 是 Material
+/// 的最小触控尺寸。轨道画在这个盒的垂直中心, 上下多出来的都是**真**命中带
+/// (点上去真的 seek, 不是空白)。
+const double kProgressHitHeight = 48;
+
+/// 常驻播放条的进度条: 视觉瘦、命中厚、能看见目标时间。
+///
+/// 三件事(对应两份审计的 P2#4/#8):
+/// 1. **命中带 48dp**: 外层盒就是 [kProgressHitHeight], Slider **不加**垂直
+///    `padding` —— 手势挂在轨道那一层 render object 上, 用 `Slider.padding` 把
+///    盒子撑高、再把轨道挤回顶部, 撑出来的空白是**点不到**的(实测
+///    `bottom: 32` 时点在那 32dp 里 `onChanged` 一次都不触发)。所以这里让
+///    轨道落在 48dp 盒的垂直中心: 拇指/轨道仍是 2dp+10dp, 上下各 19dp 是真的
+///    命中带(点在那个高度也算点进度条)。代价是播放条总高 62 → 98dp。
+/// 2. **拖动时显示目标时间**: 原来全程"盲拖"(值指示器被关掉), 现在拖动中弹气泡、
+///    松手即收 —— 常显会遮住上方内容。文案由父层算好传进来([label] 就是当前
+///    目标时间), 不在这里再读一次播放状态。
+/// 3. **悬停拇指放大** 5 → 8: 桌面鼠标悬停时给一个"这条能拖"的可点提示。
+///
+/// 悬停时的**时间气泡**没做: Slider 不对外暴露 trackRect, 要在外面按 padding +
+/// 拇指尺寸重算一遍落点, 近似值会让气泡时间与真实落点差几秒(200s 的曲子上就是
+/// 好几秒), 比没有更误导; 拖动气泡给的才是精确值。
+class _ProgressSlider extends StatefulWidget {
+  const _ProgressSlider({
+    required this.value,
+    required this.max,
+    required this.label,
+    this.onChangeStart,
+    this.onChanged,
+    this.onChangeEnd,
+  });
+
+  final double value;
+  final double max;
+
+  /// 拖动气泡里的文案(目标时间 mm:ss)。
+  final String label;
+
+  final void Function(double ms)? onChangeStart;
+  final void Function(double ms)? onChanged;
+  final void Function(double ms)? onChangeEnd;
+
+  @override
+  State<_ProgressSlider> createState() => _ProgressSliderState();
+}
+
+class _ProgressSliderState extends State<_ProgressSlider> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          trackHeight: 2,
+          thumbShape: RoundSliderThumbShape(
+            enabledThumbRadius: _hovering ? 8 : 5,
+          ),
+          overlayShape: SliderComponentShape.noOverlay,
+          // 只在拖动中弹目标时间; 平时一点都不占视觉
+          showValueIndicator: ShowValueIndicator.onDrag,
+        ),
+        // 不可 seek 期(桌面边下边播)不再换成「只提示不跳转」的轨道:
+        // P-10 方案 B 落地后 Rust 会把这次跳转**排队**, 所以拖动照常回调;
+        // 排队状态由拇指位置与信息行的「已排队→mm:ss」体现。
+        // 真正不可跳(下载失败)时 seek 会回传 seek_error, 由页面 toast 如实告知。
+        child: Slider(
+          // 只留左右贴边留白; **不要**加垂直 padding(那条命中带点不到, 见类注释)
+          padding: const EdgeInsets.only(left: 8, right: 8),
+          value: widget.value,
+          max: widget.max,
+          label: widget.label,
+          onChangeStart: widget.onChangeStart,
+          onChanged: widget.onChanged,
+          onChangeEnd: widget.onChangeEnd,
+        ),
+      ),
+    );
+  }
+}

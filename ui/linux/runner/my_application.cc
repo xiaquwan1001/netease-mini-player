@@ -27,6 +27,8 @@ struct _MyApplication {
   gboolean tray_has_track;           // FALSE = 没有当前曲目(四个按钮置灰, 点了也没意义)
   gboolean tray_playing;             // 当前是否正在播放(决定「播放」还是「暂停」)
   gboolean tray_liked;               // 当前曲目是否已喜欢(决定「喜欢」还是「取消喜欢」)
+  // ---- 窗口几何(最小尺寸 + 尺寸记忆), 见下面 "Linux 窗口几何" 一节 ----
+  guint window_state_save_id;        // 去抖落盘的 timeout source(0 = 没有待执行的)
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -166,6 +168,25 @@ gboolean tray_watcher_available() {
 /// 小屏/移动形态阈值(逻辑像素宽): phosh 平板的合成器宽度是 634/1013 这种量级。
 const int kMobileMaxWidthPx = 1024;
 
+// ---------------------------------------------------------------------------
+// Linux 窗口几何: 最小尺寸 + 尺寸记忆(平台审计 P2#2 / P2#3)
+//
+// 最小尺寸: 实测 400x600 完全可用, 200x300 会把播放条第 6 个按钮与进度条右半裁掉、
+// 列表可视高度归零 ⇒ 桌面下限取 420x480。**与 ui/windows/runner/win32_window.cpp 的
+// kMinClientWidth / kMinClientHeight 是同一对数**(P-18 两平台同步口径, 改一处要同步另一处)。
+//
+// 尺寸记忆: 用 GKeyFile 存 `$XDG_CONFIG_HOME/minincm/window.ini`(默认 ~/.config/minincm),
+// 键 width / height / maximized。为什么放原生而不是 Dart: 窗口几何只在 GTK 手上,
+// Dart 的 MediaQuery 尺寸晚于窗口创建, 写回去会先闪一帧默认尺寸; 也不进 dataDir
+// (`NCM_DATA_DIR` 是 Rust 内核的运行时数据, 窗口尺寸是"这台机器的界面偏好")。
+// ---------------------------------------------------------------------------
+constexpr int kDefaultWindowWidth = 1280;
+constexpr int kDefaultWindowHeight = 720;
+constexpr int kMinWindowWidth = 420;
+constexpr int kMinWindowHeight = 480;
+constexpr guint kWindowStateSaveDebounceSeconds = 2;
+constexpr const char* kWindowStateGroup = "window";
+
 /// 窗口形态: 手机/平板一律全屏, 否则保持 1280x720 的桌面窗口。
 ///
 /// 为什么需要: phosh(平板/手机)会给**非全屏**的 GTK 窗口留一条标题栏, 上面写着
@@ -216,6 +237,117 @@ void toggle_fullscreen_cb(GSimpleAction* /*action*/, GVariant* /*param*/,
                     GINT_TO_POINTER(!fullscreen));
 }
 
+/// 上次启动时记下的窗口几何(读不到/非法时就是默认值)。
+struct SavedWindowState {
+  int width = kDefaultWindowWidth;
+  int height = kDefaultWindowHeight;
+  gboolean maximized = FALSE;
+};
+
+/// 窗口几何落盘路径: `$XDG_CONFIG_HOME/minincm/window.ini`。
+char* window_state_path() {
+  return g_build_filename(g_get_user_config_dir(), "minincm", "window.ini",
+                          nullptr);
+}
+
+/// 读上次的窗口几何。文件/键缺失或值非法(小于最小尺寸)一律回落默认 1280x720。
+SavedWindowState load_window_state() {
+  SavedWindowState state;
+  g_autofree char* path = window_state_path();
+  g_autoptr(GKeyFile) key_file = g_key_file_new();
+  if (!g_key_file_load_from_file(key_file, path, G_KEY_FILE_NONE, nullptr)) {
+    g_message("window-state: 没有 %s, 用默认尺寸 %dx%d", path, state.width,
+              state.height);
+    return state;
+  }
+  g_autoptr(GError) error = nullptr;
+  const gint width =
+      g_key_file_get_integer(key_file, kWindowStateGroup, "width", &error);
+  g_clear_error(&error);
+  const gint height =
+      g_key_file_get_integer(key_file, kWindowStateGroup, "height", &error);
+  g_clear_error(&error);
+  const gboolean maximized = g_key_file_get_boolean(
+      key_file, kWindowStateGroup, "maximized", &error);
+  g_clear_error(&error);
+  if (width >= kMinWindowWidth && height >= kMinWindowHeight) {
+    state.width = width;
+    state.height = height;
+  } else {
+    g_message("window-state: %s 里的尺寸 %dx%d 非法/缺失, 用默认 %dx%d", path,
+              width, height, state.width, state.height);
+  }
+  state.maximized = maximized;
+  return state;
+}
+
+/// 写窗口几何(目录按需创建; 失败只留日志, 不影响启动/退出)。
+void store_window_state(const SavedWindowState& state) {
+  g_autofree char* path = window_state_path();
+  g_autofree char* dir = g_path_get_dirname(path);
+  if (g_mkdir_with_parents(dir, 0700) != 0) {
+    g_message("window-state: 建不了目录 %s, 跳过保存", dir);
+    return;
+  }
+  g_autoptr(GKeyFile) key_file = g_key_file_new();
+  g_key_file_set_integer(key_file, kWindowStateGroup, "width", state.width);
+  g_key_file_set_integer(key_file, kWindowStateGroup, "height", state.height);
+  g_key_file_set_boolean(key_file, kWindowStateGroup, "maximized",
+                         state.maximized);
+  g_autoptr(GError) error = nullptr;
+  if (!g_key_file_save_to_file(key_file, path, &error)) {
+    g_message("window-state: 写 %s 失败(%s)", path, error->message);
+    return;
+  }
+  g_message("window-state: 已保存 %dx%d maximized=%s", state.width,
+            state.height, state.maximized ? "是" : "否");
+}
+
+/// 把当前几何落盘。最大化时**不存**当前几何(存下来的是占满屏幕的尺寸, 下次当成
+/// 普通窗口还原就变成整屏), 沿用上次的普通尺寸 + maximized 标记。
+void save_window_state(MyApplication* self) {
+  if (self->window == nullptr) return;
+  SavedWindowState state;
+  state.maximized = gtk_window_is_maximized(self->window);
+  if (state.maximized) {
+    const SavedWindowState previous = load_window_state();
+    state.width = previous.width;
+    state.height = previous.height;
+  } else {
+    gtk_window_get_size(self->window, &state.width, &state.height);
+    if (state.width < kMinWindowWidth || state.height < kMinWindowHeight) {
+      // 几何还没算出来(或平台给了怪值)时不覆盖上次存的好值。
+      g_message("window-state: 当前几何 %dx%d 不合理, 跳过保存", state.width,
+                state.height);
+      return;
+    }
+  }
+  store_window_state(state);
+}
+
+gboolean window_state_save_timeout_cb(gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  self->window_state_save_id = 0;
+  save_window_state(self);
+  return G_SOURCE_REMOVE;
+}
+
+/// size-allocate ⇒ 重置去抖定时器(拖边框时每帧都会来, 停手 2s 后才落一次盘)。
+void window_size_allocate_cb(GtkWidget* /*widget*/, GtkAllocation* /*allocation*/,
+                             gpointer user_data) {
+  MyApplication* self = MY_APPLICATION(user_data);
+  if (self->window_state_save_id != 0) {
+    g_source_remove(self->window_state_save_id);
+  }
+  self->window_state_save_id = g_timeout_add_seconds(
+      kWindowStateSaveDebounceSeconds, window_state_save_timeout_cb, self);
+}
+
+/// 窗口被销毁(任何路径)时清掉 self->window: dispose 里要存几何, 不能拿着悬空指针去问尺寸。
+void window_destroyed_cb(GtkWidget* /*widget*/, gpointer user_data) {
+  MY_APPLICATION(user_data)->window = nullptr;
+}
+
 /// 恢复主窗口(托盘菜单 / 第二次启动激活都会走这里)。
 void present_window(MyApplication* self) {
   if (self->window == nullptr) return;
@@ -230,6 +362,8 @@ void present_window(MyApplication* self) {
 /// 与音频线程, 所以播放继续。
 void desktop_quit(MyApplication* self) {
   self->quitting = TRUE;
+  // 关闭前再存一次: 去抖定时器(2s)可能还没到点, 用户改完尺寸立刻关就会丢。
+  save_window_state(self);
   if (self->window != nullptr) {
     GtkWindow* window = self->window;
     self->window = nullptr;
@@ -586,14 +720,38 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "轻音 MiniNCM");
   }
 
-  // 默认窗口尺寸两平台统一 1280x720: 与 ui/windows/runner/main.cpp 的
-  // Win32Window::Size 保持一致, 改一处要同步另一处(P-18).
-  gtk_window_set_default_size(window, 1280, 720);
+  // 窗口最小尺寸(P2#2): 实测 400x600 完全可用, 200x300 会把播放条第 6 个按钮和
+  // 进度条右半裁掉、列表高度归零 ⇒ 桌面下限 420x480。Windows 侧 `WM_GETMINMAXINFO`
+  // 用同一对数, 见 ui/windows/runner/win32_window.cpp(P-18 两平台同步, 改一处要同步另一处)。
+  // 移动形态(phosh 平板/手机)不设下限: 那些合成器的逻辑宽度可能比 420 还小, 全屏才是正解。
+  if (!compact) {
+    GdkGeometry geometry = {};
+    geometry.min_width = kMinWindowWidth;
+    geometry.min_height = kMinWindowHeight;
+    gtk_window_set_geometry_hints(window, nullptr, &geometry, GDK_HINT_MIN_SIZE);
+  }
+
+  // 默认窗口尺寸两平台统一 1280x720(P2#3: 有上次记下的几何就先用它):
+  // 与 ui/windows/runner/main.cpp 的 Win32Window::Size 保持一致, 改一处要同步另一处(P-18).
+  const SavedWindowState saved_state = load_window_state();
+  if (compact) {
+    gtk_window_set_default_size(window, kDefaultWindowWidth,
+                                kDefaultWindowHeight);
+  } else {
+    gtk_window_set_default_size(window, saved_state.width, saved_state.height);
+  }
+  // 尺寸变化 ⇒ 去抖落盘(见 window_size_allocate_cb)。
+  g_signal_connect(window, "size-allocate", G_CALLBACK(window_size_allocate_cb),
+                   self);
+  g_signal_connect(window, "destroy", G_CALLBACK(window_destroyed_cb), self);
 
   // 手机/平板(phosh 等)一律全屏: 否则合成器会留一条写应用名的标题栏,
   // 与我们的 UI 重复占地方(用户反馈 2026-11-23「轻音 MiniNCM 始终占据一个横栏」)。
   if (should_start_fullscreen(window)) {
     // 先最大化占满(保留 phosh 的顶部状态栏), 再按需全屏
+    gtk_window_maximize(window);
+  } else if (!compact && saved_state.maximized) {
+    // 上次退出时是最大化 ⇒ 原样恢复(普通尺寸用上面读回的值, 取消最大化后回到它)
     gtk_window_maximize(window);
   }
   // F11 切换全屏(桌面顺手用; 移动端也可用来退回窗口模式)
@@ -710,6 +868,13 @@ static void my_application_dispose(GObject* object) {
   if (self->tray_menu != nullptr) {
     gtk_widget_destroy(self->tray_menu);
     self->tray_menu = nullptr;
+  }
+  // 兜底再存一次几何(走 g_application_quit 的退出路径不进 desktop_quit),
+  // 然后取消还没到点的去抖定时器, 免得它在 self 释放后触发。
+  save_window_state(self);
+  if (self->window_state_save_id != 0) {
+    g_source_remove(self->window_state_save_id);
+    self->window_state_save_id = 0;
   }
   // 菜单销毁时子项一起没了(绑定结构由 g_signal_connect_data 的 destroy notify 释放)
   self->tray_play_item = nullptr;

@@ -8,11 +8,17 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
+import android.widget.FrameLayout
 import android.widget.MediaController
 import android.widget.Toast
 import android.widget.VideoView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 
 /**
  * MV 播放页(C3): 独立 VideoView 播放, 刻意不进 PlaybackService/Media3 队列 ——
@@ -109,7 +115,33 @@ class MvPlayerActivity : Activity() {
         // 状态栏/导航栏底色与图标亮度, 随系统深浅色切换, 不再固定写死一套。
         video = VideoView(this)
         video.setBackgroundColor(ContextCompat.getColor(this, R.color.player_background))
-        setContentView(video)
+        // Android 15+(targetSdk 36)起系统**强制** edge-to-edge: statusBarColor /
+        // navigationBarColor 已失效, 视频与控制条会铺到状态栏/手势条底下。显式关掉
+        // 「系统替我们留边」, 下面自己按 insets 留白。
+        // 容器只是为了能有 padding: VideoView 是 SurfaceView, 给它自己设 padding 不会
+        // 移动画面, 所以由外层 FrameLayout 吃 insets(黑底也在容器上)。
+        val container = FrameLayout(this).apply {
+            setBackgroundColor(ContextCompat.getColor(this@MvPlayerActivity, R.color.player_background))
+        }
+        container.addView(video, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        setContentView(container)
+        // 这块区域永远是纯黑底 → 状态栏/手势条图标一律用浅色(MvTheme 只覆盖了启动瞬间的
+        // 状态栏图标, 手势条图标一直没人管)。
+        WindowCompat.getInsetsController(window, container).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
+        }
+        // 只吃 left/right/bottom: 顶部让视频居中在黑底上(顶部黑边已足够, 再吃一遍 top
+        // 会让画面整体下移); 底部手势条/横屏挖孔 + 输入法都要让开(控制条在底部)。
+        ViewCompat.setOnApplyWindowInsetsListener(container) { _, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime(),
+            )
+            container.setPadding(bars.left, 0, bars.right, bars.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.requestApplyInsets(container)
 
         // 竖屏按 16:9 容器居中, 横屏铺满(简单处理: 只做居中适配)
         video.setOnPreparedListener { mp ->
@@ -126,10 +158,13 @@ class MvPlayerActivity : Activity() {
             val vw = mp.videoWidth
             val vh = mp.videoHeight
             if (vw > 0 && vh > 0) {
-                val parent = video.parent as android.view.ViewGroup
+                val parent = video.parent as ViewGroup
                 parent.post {
-                    val pw = parent.width
-                    val ph = parent.height
+                    // 可用区要减掉容器吃进去的 insets(见容器上的 insets 监听):
+                    // 用整块宽高算会把画面顶进手势条/挖孔那一条。
+                    val pw = parent.width - parent.paddingLeft - parent.paddingRight
+                    val ph = parent.height - parent.paddingTop - parent.paddingBottom
+                    if (pw <= 0 || ph <= 0) return@post
                     val scale = minOf(pw.toFloat() / vw, ph.toFloat() / vh)
                     val lp = video.layoutParams
                     lp.width = (vw * scale).toInt()

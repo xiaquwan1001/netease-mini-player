@@ -22,9 +22,11 @@
          配色全部走 @color 资源, 不在 Kotlin 里硬编码。 -->
     <style name="LoginTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/login_chrome_bg</item>
-        <item name="android:statusBarColor">@color/login_chrome_bg</item>
-        <item name="android:navigationBarColor">@color/login_chrome_bg</item>
-        <!-- 浅色顶栏 -> 状态栏图标用深色 -->
+        <!-- 2026-11-26(审计 P1#3): 不再写 statusBarColor / navigationBarColor ——
+             targetSdk 36 + Android 15 起系统强制 edge-to-edge, 这两项已失效。
+             系统栏区域现在露出窗口背景(windowBackground = 顶栏色), 看观与旧行为一致;
+             图标明暗由 LoginActivity 里的 WindowInsetsControllerCompat 按深浅色设置。 -->
+        <!-- 浅色顶栏 -> 状态栏图标用深色(只影响启动瞬间, 运行时由 Kotlin 覆盖) -->
         <item name="android:windowLightStatusBar">true</item>
     </style>
 
@@ -32,8 +34,8 @@
          (状态栏图标/MediaController 样式随亮度走), 与登录页同一套 DayNight 手法。 -->
     <style name="MvTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/player_background</item>
-        <item name="android:statusBarColor">@color/player_background</item>
-        <item name="android:navigationBarColor">@color/player_background</item>
+        <!-- 同 LoginTheme: statusBarColor / navigationBarColor 在 API 35+ 已失效,
+             系统栏露出纯黑窗口背景, 图标明暗由 MvPlayerActivity 设成浅色。 -->
         <!-- 黑底 -> 状态栏图标用浅色 -->
         <item name="android:windowLightStatusBar">false</item>
     </style>

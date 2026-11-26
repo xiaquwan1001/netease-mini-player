@@ -12,6 +12,7 @@ import 'player_bar.dart';
 import 'popup_routes.dart' show dismissPopupRoute;
 import 'search_focus.dart' show searchFocusSlot;
 import 'song_actions.dart';
+import 'system_ui_overlay.dart' show SystemUiOverlay;
 import 'theme.dart';
 import 'toast.dart';
 
@@ -413,22 +414,28 @@ class MiniNcmApp extends StatelessWidget {
           themeMode: settings.themeMode,
           // 桌面 Esc = 退一层(非桌面平台内部直接 no-op; 见 desktop_keys.dart)
           navigatorKey: rootNavigatorKey,
+          // 系统栏图标明暗跟着 App 主题走(见 SystemUiOverlay): 必须包在最外层,
+          // Navigator 里所有路由(含无 AppBar 的首页 4/5 个 tab)才都吃到同一份。
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
-            child: DesktopKeys(
-              navigatorKey: rootNavigatorKey,
-              // 空格 = 播放/暂停: 与点播放条上那个键同一个入口(没有播放器时返回 null,
-              // 键不被吃掉 —— 列表仍可翻页)。取 getter 是为了拿当下的那份回调。
-              togglePlayback: () => playerBarActions.value?.onToggle,
-              // Ctrl+F / `/` = 聚焦搜索: 落点由首页投递(search_focus.dart 的槽位)。
-              focusSearch: () => searchFocusSlot.value,
-              // 动作回调挂在 Navigator 之上, pushed route 也能取到
-              child: ValueListenableBuilder<SongActionHost?>(
-                valueListenable: actionsHost,
-                builder: (_, host, inner) => host == null
-                    ? inner!
-                    : AppActions(host: host, child: inner!),
-                child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
+            child: SystemUiOverlay(
+              child: DesktopKeys(
+                navigatorKey: rootNavigatorKey,
+                // 空格 = 播放/暂停: 与点播放条上那个键同一个入口(没有播放器时返回 null,
+                // 键不被吃掉 —— 列表仍可翻页)。取 getter 是为了拿当下的那份回调。
+                togglePlayback: () => playerBarActions.value?.onToggle,
+                // Ctrl+F / `/` = 聚焦搜索: 落点由首页投递(search_focus.dart 的槽位)。
+                focusSearch: () => searchFocusSlot.value,
+                // 动作回调挂在 Navigator 之上, pushed route 也能取到
+                child: ValueListenableBuilder<SongActionHost?>(
+                  valueListenable: actionsHost,
+                  builder: (_, host, inner) => host == null
+                      ? inner!
+                      : AppActions(host: host, child: inner!),
+                  child: PlayerBarHost(
+                    content: child ?? const SizedBox.shrink(),
+                  ),
+                ),
               ),
             ),
           ),

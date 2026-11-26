@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show HapticFeedback;
 
 import 'adaptive_text_row.dart';
 import 'cover_art.dart';
@@ -6,6 +7,7 @@ import 'format.dart' show formatDurationMs;
 import 'layout.dart'
     show capRowTrailing, kPageRowPadding, kPreviewRowPadding, rowHeightBox;
 import 'now_playing.dart';
+import 'platform_is.dart' show isAndroidPlatform;
 import 'rust/api_all.dart' as rust;
 import 'song_actions.dart';
 
@@ -541,6 +543,24 @@ class SongRow extends StatelessWidget {
     return () => showSongActionsSheet(context, song, host, source: source);
   }
 
+  /// 长按唤起菜单前给一声轻触感(2026-11-26 安卓交互审计 P2#5)。
+  ///
+  /// **只挂长按**不挂右键: 桌面右键是鼠标动作, 没有振动器也不该假装有 —— 平台
+  /// 判据走 [isAndroidPlatform](桌面恒 false), 不靠窗口宽度猜。
+  ///
+  /// 注意: Material 的 InkWell 长按本来就发一次 `HapticFeedback.vibrate`(系统
+  /// LONG_PRESS 触感, arguments 为 null)。这里是**再补**一次 selectionClick,
+  /// 目的是让「长按开菜单 / 队列左滑删 / 播放条播放键」三处是同一个触感语汇
+  /// (实机上连着两下短震几乎分辨不出); 若将来觉得重复, 删这一处即可 ——
+  /// 回归用例断的是 selectionClick 这一条, 不是"长按有没有震"。
+  VoidCallback? _withHaptic(VoidCallback? action) {
+    if (action == null) return null;
+    return () {
+      if (isAndroidPlatform) HapticFeedback.selectionClick();
+      action();
+    };
+  }
+
   /// 歌名(含徽标 / 只读红心)
   Widget _title(BuildContext context, TextStyle? style) {
     if (badgesInSubtitle) {
@@ -698,7 +718,7 @@ class SongRow extends StatelessWidget {
     final menuAction = _menuCallback(context);
     return InkWell(
       onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
-      onLongPress: menuAction,
+      onLongPress: _withHaptic(menuAction),
       // 鼠标右键与长按同一语义(桌面端没有长按手势)
       onSecondaryTap: menuAction,
       child: Container(
@@ -786,7 +806,7 @@ class SongRow extends StatelessWidget {
               maxWidth: maxTrailingWidth,
             ),
             onTap: tapOnlyWhenPlayable && !playable ? null : onTap,
-            onLongPress: menuAction,
+            onLongPress: _withHaptic(menuAction),
           ),
         );
       },

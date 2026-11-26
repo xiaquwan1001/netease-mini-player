@@ -18,6 +18,13 @@ namespace {
 
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
+/// 客户区最小尺寸: 与 ui/linux/runner/my_application.cc 的 kMinWindowWidth /
+/// kMinWindowHeight 是同一对数(P-18 两平台同步口径, 改一处要同步另一处)。
+/// 420x480 的来历见那边的注释: 实测 400x600 完全可用, 200x300 会把播放条第 6 个
+/// 按钮与进度条右半裁掉、列表可视高度归零(user-facing 平台审计 P2#2)。
+constexpr int kMinClientWidth = 420;
+constexpr int kMinClientHeight = 480;
+
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
@@ -204,6 +211,20 @@ Win32Window::MessageHandler(HWND hwnd,
         MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
                    rect.bottom - rect.top, TRUE);
       }
+      return 0;
+    }
+
+    // 窗口最小尺寸(平台审计 P2#2): 与 Linux 侧的 GdkGeometry + GDK_HINT_MIN_SIZE
+    // 用同一对数。ptMinTrackSize 是**整体窗口**尺寸(含边框/标题栏), 而 GdkGeometry
+    // 的 PMinSize 是客户区 ⇒ 这里把客户区下限换算成整体, DPI 缩放走 Create() 同一套。
+    case WM_GETMINMAXINFO: {
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      const double scale_factor = FlutterDesktopGetDpiForHWND(hwnd) / 96.0;
+      RECT frame = {0, 0, Scale(kMinClientWidth, scale_factor),
+                    Scale(kMinClientHeight, scale_factor)};
+      AdjustWindowRectEx(&frame, WS_OVERLAPPEDWINDOW, FALSE, 0);
+      info->ptMinTrackSize.x = frame.right - frame.left;
+      info->ptMinTrackSize.y = frame.bottom - frame.top;
       return 0;
     }
 

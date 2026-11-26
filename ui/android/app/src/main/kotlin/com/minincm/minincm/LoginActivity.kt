@@ -1,6 +1,7 @@
 package com.minincm.minincm
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.os.Handler
@@ -18,6 +19,9 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 
 /**
  * 官方网页登录页(移动端授权页).
@@ -97,10 +101,14 @@ class LoginActivity : ComponentActivity() {
         // 夜间打开登录页不再整屏闪白。资源名与主题 LoginTheme 用的是同一组 @color。
         val headerBg = ContextCompat.getColor(this, R.color.login_chrome_bg)
         val headerFg = ContextCompat.getColor(this, R.color.login_chrome_fg)
+        // 顶栏左右留白。Android 15+ 横屏挖孔在侧边时, insets 会再加到这两个值上
+        // (见下面的 insets 监听), 所以基线值只在这里定义一次。
+        val headerStartPadding = dp(16)
+        val headerEndPadding = dp(4)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), 0, dp(4), 0)
+            setPadding(headerStartPadding, 0, headerEndPadding, 0)
             setBackgroundColor(headerBg)
         }
         header.addView(
@@ -130,7 +138,36 @@ class LoginActivity : ComponentActivity() {
         }
         root.addView(header, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
         root.addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+        // Android 15+(targetSdk 36)起系统**强制** edge-to-edge: statusBarColor /
+        // navigationBarColor 已失效, 内容默认铺到状态栏与手势条底下(账号输入框被手势条
+        // 压住、标题被状态栏压住)。显式关掉「系统替我们留边」, 下面自己按 insets 留白。
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(root)
+        // 图标明暗跟着顶栏配色走(顶栏色随系统深浅色, 见 res/values{,-night}/colors.xml)。
+        // 主题里的 android:windowLightStatusBar 只覆盖启动瞬间的状态栏图标, 手势条图标
+        // 一直没人管 —— 浅色顶栏下白图标看不见, 这里一并设掉。
+        val lightChrome = !isNightMode()
+        WindowCompat.getInsetsController(window, root).apply {
+            isAppearanceLightStatusBars = lightChrome
+            isAppearanceLightNavigationBars = lightChrome
+        }
+        // 顶栏吃 top(状态栏), WebView 区域吃 left/right/bottom(横屏挖孔 / 手势条 /
+        // 输入法: 登录页要输手机号和验证码, 键盘弹出时不给 WebView 让位就会挡住输入框)。
+        ViewCompat.setOnApplyWindowInsetsListener(root) { _, windowInsets ->
+            val bars = windowInsets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime(),
+            )
+            header.setPadding(
+                headerStartPadding + bars.left,
+                bars.top,
+                headerEndPadding + bars.right,
+                0,
+            )
+            web.setPadding(bars.left, 0, bars.right, bars.bottom)
+            // 已经自己吃掉了: 不要再让子 View 吃一遍(WebView 内部不做 insets 处理)
+            WindowInsetsCompat.CONSUMED
+        }
+        ViewCompat.requestApplyInsets(root)
 
         // 登录 cookie 的清理**只在这一处**(P-08): 已登录状态下 WebView 里还留着上一个账号的
         // MUSIC_U, 页面会直接判定"已登录"并原地返回 —— "想加第二个账号却立刻跳回来"的根因.
@@ -228,6 +265,11 @@ class LoginActivity : ComponentActivity() {
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    /** 当前是否系统深色模式(登录页顶栏配色跟着它走, 与资源限定符同一判据) */
+    private fun isNightMode(): Boolean =
+        (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
