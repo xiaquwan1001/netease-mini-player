@@ -359,14 +359,19 @@ class MiniPlayerBar extends StatelessWidget {
               Row(
                 children: [
                   // 封面: 点开播放详情(歌词页)。专辑入口在歌曲"..."菜单里
-                  GestureDetector(
-                    onTap: actions.onOpenDetail,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8, right: 4),
-                      child: CoverArt(
-                        url: current?.coverUrl,
-                        size: 40,
-                        radius: 6,
+                  // MouseRegion: 桌面悬停给手型(2026-11-26 审计 #4 —— 同一排里
+                  // 图标按钮有手型+高亮, 封面却是箭头, 用户只能靠试)
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: GestureDetector(
+                      onTap: actions.onOpenDetail,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8, right: 4),
+                        child: CoverArt(
+                          url: current?.coverUrl,
+                          size: 40,
+                          radius: 6,
+                        ),
                       ),
                     ),
                   ),

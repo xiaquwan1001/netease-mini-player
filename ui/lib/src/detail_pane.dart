@@ -13,6 +13,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'app_shell.dart' show pageDepth;
+
 import 'layout.dart' show kDetailPaneWidth, kTwoColumnGap, twoColumnFor;
 
 /// 右栏详情的一次请求。
@@ -83,7 +85,14 @@ Future<void> openDetail(
   required Route<void> Function() route,
 }) async {
   final current = ModalRoute.of(context);
-  final atRoot = current == null || current.isFirst;
+  // 「调用者所在路由是根路由」**两条一起判**(2026-11-26 Linux 交互审计 P1):
+  // 只看 `ModalRoute.of(context).isFirst` 会被"闭包里的 context"绕过 —— 二级页
+  // (歌单广场/每日推荐/最近听过/全部榜单)点歌单时, 回调闭包仍是**首页**的
+  // `AccountActions.openPlaylist`(见 home/account_actions.dart), 于是 isFirst 恒真,
+  // 详情被写进被二级页盖住的右栏 ⇒ 用户看到"点了没反应", 退出二级页后右栏凭空出现歌单。
+  // `pageDepth` 数的是根栈里**非弹层**路由层数(1 = 只有首页), 正是这里要的判据;
+  // 保留 isFirst 是为了没有 NavigatorObserver 的测试子树仍然按原语义工作。
+  final atRoot = pageDepth.value <= 1 && (current == null || current.isFirst);
   if (detailPaneHostActive &&
       atRoot &&
       twoColumnFor(MediaQuery.sizeOf(context))) {

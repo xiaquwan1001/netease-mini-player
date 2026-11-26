@@ -1,3 +1,5 @@
+import 'dart:async';
+
 // 主从分栏(方案 B · S4)的入口与几何回归。
 //
 // 口径(见 lib/src/detail_pane.dart 与 lib/src/layout.dart 的「主从分栏」常量):
@@ -120,6 +122,39 @@ void main() {
     expect(pageDepth.value, 1, reason: '右栏不是路由, 页面层数不变');
     expect(find.text('列表(选中 pl-1)'), findsOneWidget, reason: '左栏仍在且知道选中哪条');
     expect(find.text('打开详情'), findsOneWidget, reason: '左栏的工具条也还在');
+  });
+
+  testWidgets('从全屏二级页调用(闭包仍握首页 context) ⇒ 必须 push, 不许填看不见的右栏', (tester) async {
+    // 2026-11-26 Linux 交互审计 P1: 歌单广场/每日推荐等二级页把首页的
+    // `AccountActions.openPlaylist` 原样下传, 闭包里的 context 是**首页**的,
+    // 于是 `ModalRoute.of(ctx).isFirst` 恒真 ⇒ 详情被写进被二级页盖住的右栏,
+    // 用户看到"点了没反应"。这里复刻这条调用形状。
+    await _pumpHost(tester, size: const Size(1280, 720));
+    final BuildContext homeContext = tester.element(find.text('打开详情'));
+
+    unawaited(
+      Navigator.of(homeContext).push<void>(
+        MaterialPageRoute<void>(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () => _open(homeContext),
+                child: const Text('二级页里点歌单'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(pageDepth.value, 2);
+
+    await tester.tap(find.text('二级页里点歌单'));
+    await tester.pumpAndSettle();
+
+    expect(detailPaneSlot.value, isNull, reason: '二级页压着时不许往右栏塞内容(右栏在它下面, 看不见)');
+    expect(find.byKey(_fullPage), findsOneWidget, reason: '这种情况下必须 push 一整页');
+    expect(pageDepth.value, 3, reason: '详情页真的压在二级页之上');
   });
 
   testWidgets('1280x720: 换一条详情 ⇒ 槽位换 key, 左栏选中态跟着变', (tester) async {

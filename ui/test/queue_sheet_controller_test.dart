@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/src/app_settings.dart';
 import 'package:minincm/src/home/queue_sheet_controller.dart';
 import 'package:minincm/src/play_queue_sheet.dart';
+import 'package:minincm/src/player_bar.dart' show isDesktopPlatform;
 import 'package:minincm/src/queue.dart';
 import 'package:minincm/src/rust/api_all.dart' as rust;
 
@@ -154,7 +155,12 @@ void main() {
       final h = await _pump(tester, names: ['a', 'b']);
       final opening = h.controller.open();
       await tester.pumpAndSettle();
-      expect(find.textContaining('左滑'), findsOneWidget);
+      // 文案按平台分叉: 桌面没有"左滑"这个手势(2026-11-26 审计 #10),
+      // 宿主是 Linux ⇒ 这里跑的是桌面那一句。
+      expect(
+        find.textContaining(isDesktopPlatform ? '向左拖动' : '左滑'),
+        findsOneWidget,
+      );
       expect(find.text('确认后不再展示'), findsOneWidget);
 
       await tester.tap(find.text('确认后不再展示'));

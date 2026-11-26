@@ -72,13 +72,9 @@ class LyricHarnessState extends State<LyricHarness> {
 
   @override
   Widget build(BuildContext context) {
-    final action = resolveHomeBackAction(
-      showLyrics: lyrics,
-      tab: 0,
-      libraryOpen: false,
-    );
     return HomeBackGuard(
-      action: action,
+      action: () =>
+          resolveHomeBackAction(showLyrics: lyrics, tab: 0, libraryOpen: false),
       onBack: () => setState(() {
         backs++;
         lyrics = false;
@@ -110,6 +106,30 @@ void main() {
     test('首 tab 的歌单浏览态再次', () {
       expect(
         resolveHomeBackAction(showLyrics: false, tab: 0, libraryOpen: true),
+        HomeBackAction.closeLibrary,
+      );
+    });
+
+    // 2026-11-26 Android 交互审计 P1: 搜索页有输入/有结果时, 返回键必须先清搜索,
+    // 不能直接退出 App(键盘已收起时用户完全意料不到)。
+    test('搜索页有输入/结果 ⇒ 先清搜索, 排在退出之前', () {
+      expect(
+        resolveHomeBackAction(
+          showLyrics: false,
+          tab: 0,
+          libraryOpen: false,
+          searchActive: true,
+        ),
+        HomeBackAction.clearSearch,
+      );
+      // 歌单浏览态仍然优先于清搜索(浏览态是"更具体"的一层)
+      expect(
+        resolveHomeBackAction(
+          showLyrics: false,
+          tab: 0,
+          libraryOpen: true,
+          searchActive: true,
+        ),
         HomeBackAction.closeLibrary,
       );
     });
@@ -238,6 +258,38 @@ void main() {
     expect(handled, isFalse, reason: '栈底无二级态 = 交给系统');
     expect(calls, contains('SystemNavigator.pop'));
     expect(find.byType(HomePage), findsOneWidget, reason: 'Dart 侧不该自己 pop 根路由');
+  });
+
+  testWidgets('搜索页有输入时按返回 ⇒ 清搜索, 不退出 App', (tester) async {
+    final calls = recordSystemCalls(tester);
+    await pumpHome(tester);
+
+    // 切到搜索 tab 并输入关键词(键盘收起后就再也看不到"返回会退出"的提示了)
+    await tester.tap(find.text('搜索'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    final searchField = find.byType(TextField).first;
+    await tester.enterText(searchField, '七里香');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400)); // 联想防抖
+
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(handled, isTrue, reason: '有搜索态时返回由页面先吃掉');
+    expect(calls, isNot(contains('SystemNavigator.pop')), reason: '不许直接退出 App');
+    expect(
+      tester.widget<TextField>(searchField).controller?.text ?? '',
+      isEmpty,
+      reason: '返回键的第一层 = 清关键词(与搜索框「取消」同一个入口)',
+    );
+
+    // 再按一次: 已是干净的搜索落地页 ⇒ 交还系统
+    final handledAgain = await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(handledAgain, isFalse);
+    expect(calls, contains('SystemNavigator.pop'));
   });
 
   testWidgets('300dp + 1.25 字号: 首页壳不溢出, 栈底返回仍交还系统', (tester) async {

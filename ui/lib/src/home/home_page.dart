@@ -15,12 +15,10 @@ import '../detail_faces.dart';
 import '../desktop_shell.dart';
 import '../detail_pane.dart'
     show
-        DetailPaneRequest,
         DetailPaneSplit,
         attachDetailPaneHost,
         closeDetailPane,
         detachDetailPaneHost,
-        detailPaneOpen,
         detailPaneSlot;
 import '../layout.dart'
     show LayoutTier, kRailWidth, layoutTierFor, rowExtentFor;
@@ -375,6 +373,8 @@ class _HomePageState extends State<HomePage> {
       onClearSearchError: _onClearSearchError,
       onLeaveLibrary: _onLeaveLibrary,
     );
+    // 返回键判定要跟着"搜索框文本 / 搜索状态机"走(两者都不经过页面 setState)
+    _backListenable = Listenable.merge([_controller, _search]);
     // 导航 + tab 正文构建(拆 §7.7): 两者都只**读**页面状态, 状态写入仍在页面
     // (浏览态四件套在 AccountActions、队列在 _queue、搜索结果在 SearchController);
     // 传的是现取回调而不是快照, 与拆分前每次 build 现读 State 字段等价。
@@ -485,6 +485,27 @@ class _HomePageState extends State<HomePage> {
   void _onPageDepthChanged() {
     if (mounted) setState(() {});
   }
+
+  /// 会改变返回键判定的外部状态: 搜索框文本(输入框直接改 controller, 不经过页面)
+  /// + 搜索状态机(结果/联想/错误)。给 [HomeBackGuard] 用来重建 PopScope。
+  late final Listenable _backListenable;
+
+  /// 搜索页当前有没有"值得先清掉"的东西(2026-11-26 交互审计: 有输入/有结果时,
+  /// 返回键必须先清搜索, 不能直接退出 App)。
+  bool get _searchActive =>
+      _controller.text.trim().isNotEmpty ||
+      _search.bundle != null ||
+      _search.exact != null;
+
+  /// 现取的返回键优先级(歌词 → 右栏 → tab → 歌单浏览态 → 搜索态 → 退出)。
+  HomeBackAction _resolveBackAction() => resolveHomeBackAction(
+    showLyrics: _lyric.visible,
+    tab: _tab,
+    libraryOpen: _account.libraryOpen,
+    // 宽档主从分栏的右栏优先级**高于** resetTab(见 back_policy.dart)
+    detailPaneOpen: detailPaneSlot.value != null,
+    searchActive: _searchActive,
+  );
 
   /// 桌面 Ctrl+F / `/` 的落点: 把用户送到搜索框(2026-11-26 审查, 用户拍板要做)。
   ///
@@ -878,39 +899,23 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // 右栏槽位的变化**不会**让 HomePage.build 重跑(它由 [DetailPaneSplit] 自己监听),
-    // 而返回键优先级依赖"右栏开着没有" ⇒ 这里必须监听一次, 否则 PopScope 拿到的是
-    // 旧优先级: 右栏开着按返回会直接跳到 resetTab(详情凭空消失又换了个 tab)。
-    return ValueListenableBuilder<DetailPaneRequest?>(
-      valueListenable: detailPaneSlot,
-      builder: (context, paneRequest, _) {
-        final open = paneRequest != null;
-        final backAction = resolveHomeBackAction(
-          showLyrics: _lyric.visible,
-          tab: _tab,
-          libraryOpen: _account.libraryOpen,
-          // 宽档主从分栏的右栏优先级**高于** resetTab(见 back_policy.dart)
-          detailPaneOpen: open,
-        );
-        return HomeBackGuard(
-          action: backAction,
-          // 用当帧的优先级回调: 槽位在读屏/动画帧之间变化时也不会退错层级
-          onBack: () => _handleBack(
-            resolveHomeBackAction(
-              showLyrics: _lyric.visible,
-              tab: _tab,
-              libraryOpen: _account.libraryOpen,
-              detailPaneOpen: detailPaneOpen,
-            ),
-          ),
-          // 搜索状态在 [SearchController]: 它的一次通知 = 拆分前的一处 setState,
-          // 所以整页重建一次, 重建范围与拆分前一致。
-          child: ListenableBuilder(
-            listenable: _search,
-            builder: (context, _) => _buildPage(context),
-          ),
-        );
-      },
+    // 右栏/搜索态的读取都在 [_resolveBackAction] 里**现取**; HomeBackGuard 自己
+    // 监听 _backListenable 重建 PopScope(右栏由 DetailPaneSplit 自己监听)。
+    return HomeBackGuard(
+      // **现取**优先级(不是快照): 搜索框里的文本/搜索结果不经过页面 setState,
+      // 传值会让 canPop 停在旧值上 —— 那正是"有搜索态按返回直接退出 App"的根因
+      // (2026-11-26 Android 交互审计 P1)。[listenable] 让 PopScope 跟着这两份
+      // 状态重建, 但 child 是同一实例, 页面本身不会因此重排。
+      action: () => _resolveBackAction(),
+      listenable: _backListenable,
+      // 用当帧的优先级回调: 槽位在读屏/动画帧之间变化时也不会退错层级
+      onBack: () => _handleBack(_resolveBackAction()),
+      // 搜索状态在 [SearchController]: 它的一次通知 = 拆分前的一处 setState,
+      // 所以整页重建一次, 重建范围与拆分前一致。
+      child: ListenableBuilder(
+        listenable: _search,
+        builder: (context, _) => _buildPage(context),
+      ),
     );
   }
 
@@ -932,6 +937,9 @@ class _HomePageState extends State<HomePage> {
         _onTabSelected(0);
       case HomeBackAction.closeLibrary:
         _account.leaveLibrary();
+      case HomeBackAction.clearSearch:
+        // 与搜索框右侧的「取消」同一个入口: 清关键词/上一轮结果/联想/错误, 回到落地页
+        _search.clear();
       case HomeBackAction.exitApp:
         // canPop=true 时由系统退出; 走到这里说明确实无可退层级, 兜底交还系统
         SystemNavigator.pop();

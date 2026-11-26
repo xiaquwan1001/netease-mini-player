@@ -6,7 +6,7 @@ import '../app_sheet.dart' show showAppDialog;
 import '../app_settings.dart' show AppSettings;
 import '../notification_mode.dart' show nextNotificationMode;
 import '../play_queue_sheet.dart';
-import '../player_bar.dart' show playModeLabels;
+import '../player_bar.dart' show isDesktopPlatform, playModeLabels;
 import '../popup_routes.dart' show buildAppSheetRoute, dismissPopupRoute;
 import '../queue.dart';
 import '../rust/api_all.dart' as rust;
@@ -252,7 +252,13 @@ class QueueSheetController extends ChangeNotifier {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('左滑一首歌, 可以把它从播放队列里移除。'),
+              // 桌面没有"左滑"这个手势(鼠标是按住向左拖), 文案按平台分叉
+              // (2026-11-26 Linux 交互审计 #10)
+              Text(
+                isDesktopPlatform
+                    ? '按住一行向左拖动, 可以把它从播放队列里移除。'
+                    : '左滑一首歌, 可以把它从播放队列里移除。',
+              ),
               // 不另加间距: CheckboxListTile 自带上下留白(token 门也省了越界风险)
               CheckboxListTile(
                 value: dontShowAgain,

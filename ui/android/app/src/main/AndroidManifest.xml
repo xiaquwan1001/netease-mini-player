@@ -42,10 +42,13 @@
             android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:theme="@style/MvTheme" />
 
+        <!-- configChanges: 旋转/分屏/展开折叠屏时不要重建 Activity —— WebView 一重建
+             已输入的手机号/验证码就全丢(2026-11-26 Android 交互审计 #9) -->
         <activity
             android:name=".LoginActivity"
             android:exported="false"
             android:label="登录网易云"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
             android:theme="@style/LoginTheme" />
 
         <service
