@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
+import 'desktop_escape_back.dart' show DesktopEscapeBack;
 import 'home/home_page.dart' show HomePage;
 import 'layout.dart' show ContentWidthLimit, kRailWidth;
 import 'lifecycle_guard.dart' show runPostFrameIfAlive;
@@ -64,6 +65,10 @@ final ValueNotifier<SongActionHost?> actionsHost =
 /// 初值 0 而不是 1: 首页这条路由本身也会走 didPush(变成 1); 而手工 pump HomePage
 /// 的单测里没有观察者, 值停在 0 —— 两者都满足 "<= 1 就是首页在栈顶"。
 final ValueNotifier<int> pageDepth = ValueNotifier<int>(0);
+
+/// 根 Navigator 的 key: 给桌面 Esc(见 [DesktopEscapeBack])一个不依赖 BuildContext
+/// 的退层入口 —— 键盘 handler 在 HardwareKeyboard 那一层跑, 那里没有页面 context。
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 /// 有弹层(PopupRoute: 底部面板/对话框)压着时为 true。
 ///
@@ -405,14 +410,20 @@ class MiniNcmApp extends StatelessWidget {
             accent: settings.accent,
           ),
           themeMode: settings.themeMode,
+          // 桌面 Esc = 退一层(非桌面平台内部直接 no-op; 见 desktop_escape_back.dart)
+          navigatorKey: rootNavigatorKey,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
-            // 动作回调挂在 Navigator 之上, pushed route 也能取到
-            child: ValueListenableBuilder<SongActionHost?>(
-              valueListenable: actionsHost,
-              builder: (_, host, inner) =>
-                  host == null ? inner! : AppActions(host: host, child: inner!),
-              child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
+            child: DesktopEscapeBack(
+              navigatorKey: rootNavigatorKey,
+              // 动作回调挂在 Navigator 之上, pushed route 也能取到
+              child: ValueListenableBuilder<SongActionHost?>(
+                valueListenable: actionsHost,
+                builder: (_, host, inner) => host == null
+                    ? inner!
+                    : AppActions(host: host, child: inner!),
+                child: PlayerBarHost(content: child ?? const SizedBox.shrink()),
+              ),
             ),
           ),
           // 只用来数"有没有全屏页压在首页上"(决定底部 tab 是否让位)
