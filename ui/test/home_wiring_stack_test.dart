@@ -69,6 +69,7 @@ class Fake {
     onUpdatePrompt: () {},
     onPageDepthChanged: () {},
     onAudioSettingsChanged: () {},
+    onFocusSearch: () {},
   )..attach();
 }
 

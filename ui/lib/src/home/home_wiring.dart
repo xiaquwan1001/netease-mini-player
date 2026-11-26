@@ -8,6 +8,7 @@ import '../app_shell.dart';
 import '../artist_nav.dart';
 import '../playback.dart';
 import '../player_bar.dart';
+import '../search_focus.dart';
 import '../song_actions.dart';
 import '../update_checker.dart';
 
@@ -30,6 +31,7 @@ import '../update_checker.dart';
 /// | 艺人页打开专辑 | ArtistNav.onOpenAlbum = 回调 | = null |
 /// | 启动检查的更新弹窗 | pendingPrompt.addListener | removeListener |
 /// | 根导航层数(底部 tab 让位) | pageDepth.addListener | removeListener |
+/// | 聚焦搜索(Ctrl+F / `/`) | [searchFocusSlot].value = 回调 | = null |
 ///
 /// **多实例语义**: attach 仍是"后建覆盖先建"; 区别只在销毁时不再把槽位留给下一个
 /// 实例, 而是按 attach 顺序**交还**给仍然活着的上一个([_alive] 栈)。
@@ -58,6 +60,7 @@ class HomeWiring {
     required this.onUpdatePrompt,
     required this.onPageDepthChanged,
     required this.onAudioSettingsChanged,
+    required this.onFocusSearch,
   });
 
   /// 队列的上一首/下一首(通知栏、耳机键、蓝牙都只发意图)。
@@ -87,6 +90,9 @@ class HomeWiring {
   final VoidCallback onUpdatePrompt;
   final VoidCallback onPageDepthChanged;
   final VoidCallback onAudioSettingsChanged;
+
+  /// 桌面上 Ctrl+F / `/` 的落点(退全屏页 → 收浮层 → 切搜索 tab → 聚焦输入框)。
+  final VoidCallback onFocusSearch;
 
   /// 仍然存活的实例, **按 attach 顺序**: 栈顶是当前全局槽位的主人。
   static final List<HomeWiring> _alive = <HomeWiring>[];
@@ -146,6 +152,9 @@ class HomeWiring {
     // 宿主建一次就存下: 交还(restore)时写回同一份, 不重复构造。
     _host ??= buildActionsHost();
     ArtistNav.onOpenAlbum = openAlbum;
+    // 键事件那一层没有 BuildContext, 只能靠槽位拿到"聚焦搜索"的落点。
+    // 这条槽位没有监听者(按下键时才读), 不需要帧后投递。
+    searchFocusSlot.value = onFocusSearch;
     // 两个 ValueNotifier 槽位(动作宿主 / 播放条回调)一律**帧后投递**:
     // HomePage.initState 可能发生在 layout 阶段(壳层的 ContentWidthLimit 是
     // LayoutBuilder, 首页首帧因此被压在 layout 里), 同步写槽位会让
@@ -187,6 +196,7 @@ class HomeWiring {
     // 托盘动作同样摘掉: 这之后点托盘按钮安全 no-op(原生那边通常会先把按钮置灰)。
     DesktopShell.instance.setTrayActionHandlers(null);
     ArtistNav.onOpenAlbum = null;
+    searchFocusSlot.value = null;
     // 两个 ValueNotifier 与 [_installSlots] 对称地帧后再清: dispose 也可能发生在
     // 构建/布局阶段(换树时旧 HomePage 的 dispose 与新页面的 build 同属一帧),
     // 同步置 null 同样会命中「setState() called during build」。

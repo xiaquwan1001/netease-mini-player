@@ -364,6 +364,7 @@ class _HomePageState extends State<HomePage> {
       onUpdatePrompt: () => _startup.onUpdatePrompt(),
       onPageDepthChanged: _onPageDepthChanged,
       onAudioSettingsChanged: () => _startup.onAudioSettingsChanged(),
+      onFocusSearch: _focusSearch,
     )..attach();
     // 搜索状态机: 输入框/焦点仍由页面持有, 只把"失败/清错/离开浏览态"三件
     // 需要 setState 的副作用回灌给页面(与原 _search/_clearSearch 一一对应)
@@ -483,6 +484,22 @@ class _HomePageState extends State<HomePage> {
 
   void _onPageDepthChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// 桌面 Ctrl+F / `/` 的落点: 把用户送到搜索框(2026-11-26 审查, 用户拍板要做)。
+  ///
+  /// 顺序 = "干净地回到搜索页": 先退全屏页(否则聚焦的是看不见的那一页), 再收掉浮层
+  /// (弹层的 ModalBarrier 会挡住输入框), 再收起歌词页, 再切到搜索 tab(同 tab 时
+  /// [_onTabSelected] 自己 early return, 不会平白清空搜索结果), 最后聚焦输入框。
+  void _focusSearch() {
+    if (!mounted) return;
+    if (pageDepth.value > 1) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+    dismissAllPopups();
+    if (_lyric.visible) _lyric.collapse();
+    if (_tab != 0) _onTabSelected(0);
+    _searchFocus.requestFocus();
   }
 
   /// 歌词状态机有变更时重建(与拆分前每处 setState 一一对应: 一次通知 = 一次重建)。

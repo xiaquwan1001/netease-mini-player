@@ -3,13 +3,14 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import 'app_settings.dart';
-import 'desktop_escape_back.dart' show DesktopEscapeBack;
+import 'desktop_keys.dart' show DesktopKeys;
 import 'home/home_page.dart' show HomePage;
 import 'layout.dart' show ContentWidthLimit, kRailWidth;
 import 'lifecycle_guard.dart' show runPostFrameIfAlive;
 import 'now_playing.dart' show nowPlayingSongId;
 import 'player_bar.dart';
 import 'popup_routes.dart' show dismissPopupRoute;
+import 'search_focus.dart' show searchFocusSlot;
 import 'song_actions.dart';
 import 'theme.dart';
 import 'toast.dart';
@@ -66,7 +67,7 @@ final ValueNotifier<SongActionHost?> actionsHost =
 /// 的单测里没有观察者, 值停在 0 —— 两者都满足 "<= 1 就是首页在栈顶"。
 final ValueNotifier<int> pageDepth = ValueNotifier<int>(0);
 
-/// 根 Navigator 的 key: 给桌面 Esc(见 [DesktopEscapeBack])一个不依赖 BuildContext
+/// 根 Navigator 的 key: 给桌面键(Esc, 见 [DesktopKeys])一个不依赖 BuildContext
 /// 的退层入口 —— 键盘 handler 在 HardwareKeyboard 那一层跑, 那里没有页面 context。
 final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -410,12 +411,17 @@ class MiniNcmApp extends StatelessWidget {
             accent: settings.accent,
           ),
           themeMode: settings.themeMode,
-          // 桌面 Esc = 退一层(非桌面平台内部直接 no-op; 见 desktop_escape_back.dart)
+          // 桌面 Esc = 退一层(非桌面平台内部直接 no-op; 见 desktop_keys.dart)
           navigatorKey: rootNavigatorKey,
           builder: (context, child) => MediaQuery(
             data: scaledMediaQuery(context, settings.textScale),
-            child: DesktopEscapeBack(
+            child: DesktopKeys(
               navigatorKey: rootNavigatorKey,
+              // 空格 = 播放/暂停: 与点播放条上那个键同一个入口(没有播放器时返回 null,
+              // 键不被吃掉 —— 列表仍可翻页)。取 getter 是为了拿当下的那份回调。
+              togglePlayback: () => playerBarActions.value?.onToggle,
+              // Ctrl+F / `/` = 聚焦搜索: 落点由首页投递(search_focus.dart 的槽位)。
+              focusSearch: () => searchFocusSlot.value,
               // 动作回调挂在 Navigator 之上, pushed route 也能取到
               child: ValueListenableBuilder<SongActionHost?>(
                 valueListenable: actionsHost,
