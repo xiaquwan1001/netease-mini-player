@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app_settings.dart';
+import '../volume_gain.dart';
 import '../app_sheet.dart';
 import '../eq_curve_chart.dart';
 import '../eq_import.dart';
@@ -208,9 +209,9 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
   }
 
   Widget _volumeCard(BuildContext context, AppSettings settings) {
-    final gain = _snapHalf(settings.volumeGainDb);
-    final gainText = gain.toStringAsFixed(1);
-    final label = gain == 0 ? '不变' : '$gainText dB';
+    final gain = volumeGainSnapHalf(settings.volumeGainDb);
+    // 文案与播放条音量入口共用一份(volume_gain.dart), 两处口径不会分叉
+    final label = volumeGainLabel(gain);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -227,9 +228,9 @@ class _AudioSettingsPageState extends State<AudioSettingsPage> {
         Slider(
           key: const Key('volumeGainSlider'),
           value: gain,
-          min: -40,
-          max: 0,
-          divisions: 80,
+          min: kVolumeGainMinDb,
+          max: kVolumeGainMaxDb,
+          divisions: kVolumeGainDivisions,
           label: label,
           onChanged: (v) => settings.update(volumeGainDb: v),
         ),
@@ -565,11 +566,6 @@ String hardwareDecodePlatformNote(TargetPlatform platform) {
     return (title: '淡入淡出', subtitle: '暂停恢复时的淡入时长, 0 = 关闭(切歌始终不淡入)');
   }
   return (title: '恢复淡入', subtitle: '只有从暂停恢复才淡入; 桌面端切歌与暂停不做淡出(系统混音)');
-}
-
-double _snapHalf(double v) {
-  final clamped = v.clamp(-40.0, 0.0);
-  return (clamped * 2).roundToDouble() / 2.0;
 }
 
 class _ImportEqDialog extends StatefulWidget {

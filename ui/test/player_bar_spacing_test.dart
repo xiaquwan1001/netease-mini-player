@@ -106,7 +106,7 @@ Rect _rowRect(WidgetTester tester) => tester.getRect(
       .first,
 );
 
-/// 播放条右侧控件组(红心/顺序/上一首/播放/下一首/队列)的点击区矩形, 按行内顺序.
+/// 播放条右侧控件组(红心/顺序/上一首/播放/下一首/队列, 宽档还有音量)的点击区矩形, 按行内顺序.
 List<Rect> _controlRects(WidgetTester tester) => [
   for (final e in tester.elementList(find.byType(IconButton)))
     tester.getRect(find.byWidget(e.widget)),
@@ -121,7 +121,12 @@ void main() {
     final row = _rowRect(tester);
     final cover = tester.getRect(find.byType(CoverArt));
     final controls = _controlRects(tester);
-    expect(controls.length, 6, reason: '播放条右侧控件数变了(红心/顺序/上一首/播放/下一首/队列)');
+    // 宽档多一个音量入口(2026-11-26: 桌面/平板在播放条上调精细音量), 其余 6 个不变
+    expect(
+      controls.length,
+      7,
+      reason: '播放条右侧控件数变了(红心/顺序/上一首/播放/下一首/队列 + 宽档的音量)',
+    );
 
     // 1) 左右都不贴窗口边: 以前左右留白只有 4dp, 肉眼看就是压在右下角.
     expect(

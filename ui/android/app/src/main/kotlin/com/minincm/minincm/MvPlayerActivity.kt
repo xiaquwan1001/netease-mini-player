@@ -8,6 +8,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
@@ -90,6 +91,14 @@ class MvPlayerActivity : Activity() {
     private var resumePositionMs = 0
 
     /**
+     * 视频**原始**像素尺寸(onPrepared 里从 MediaPlayer 抓), 0 表示还没拿到。
+     *
+     * 旋转时手上没有 MediaPlayer(只有 Configuration), 只能靠这两个字段重算几何。
+     */
+    private var videoIntrinsicWidth = 0
+    private var videoIntrinsicHeight = 0
+
+    /**
      * 待落位的播放位置(毫秒), -1 表示无需 seek。
      *
      * 窗口重新可见时 VideoView 会重建 MediaPlayer 并重新 prepare(surfaceCreated -> openVideo),
@@ -143,7 +152,7 @@ class MvPlayerActivity : Activity() {
         }
         ViewCompat.requestApplyInsets(container)
 
-        // 竖屏按 16:9 容器居中, 横屏铺满(简单处理: 只做居中适配)
+        // 等比缩放居中, 黑底填充剩余区域(P-09)
         video.setOnPreparedListener { mp ->
             // MediaPlayer 被重建过(见 pendingSeekMs 注释): 在这里落回暂停位置再起播。
             // 用 mp.seekTo 而不是 video.seekTo —— VideoView.seekTo 要求 isInPlaybackState(),
@@ -155,23 +164,9 @@ class MvPlayerActivity : Activity() {
                 mp.seekTo(seek)
                 video.start()
             }
-            val vw = mp.videoWidth
-            val vh = mp.videoHeight
-            if (vw > 0 && vh > 0) {
-                val parent = video.parent as ViewGroup
-                parent.post {
-                    // 可用区要减掉容器吃进去的 insets(见容器上的 insets 监听):
-                    // 用整块宽高算会把画面顶进手势条/挖孔那一条。
-                    val pw = parent.width - parent.paddingLeft - parent.paddingRight
-                    val ph = parent.height - parent.paddingTop - parent.paddingBottom
-                    if (pw <= 0 || ph <= 0) return@post
-                    val scale = minOf(pw.toFloat() / vw, ph.toFloat() / vh)
-                    val lp = video.layoutParams
-                    lp.width = (vw * scale).toInt()
-                    lp.height = (vh * scale).toInt()
-                    video.layoutParams = lp
-                }
-            }
+            videoIntrinsicWidth = mp.videoWidth
+            videoIntrinsicHeight = mp.videoHeight
+            applyVideoGeometry(videoIntrinsicWidth, videoIntrinsicHeight)
         }
         video.setOnErrorListener { _, what, extra ->
             Toast.makeText(
@@ -248,10 +243,73 @@ class MvPlayerActivity : Activity() {
         super.onStop()
     }
 
+    /**
+     * 按视频原始像素尺寸 + 容器**可用区**算绝对像素 layoutParams(等比缩放居中)。
+     *
+     * 为什么不能只在 onPrepared 里算(审计 #10): manifest 给本 Activity 配了 configChanges,
+     * 旋转/分屏/展开折叠屏都不重建 Activity, 也就不会重新 prepare —— onPrepared 一辈子只跑一次,
+     * 在里面算出来的绝对像素是**旋转当时容器**的尺寸, 旋转后画面就按旧尺寸摆在左上角。
+     * 所以几何只有这一份实现, prepare 与 [onConfigurationChanged] 都调它。
+     *
+     * 容器可用区要减掉容器吃进去的 insets padding(见容器上的 insets 监听):
+     * 用整块宽高算会把画面顶进手势条/挖孔那一条。
+     */
+    private fun applyVideoGeometry(videoWidth: Int, videoHeight: Int) {
+        if (videoWidth <= 0 || videoHeight <= 0) return
+        val parent = video.parent as? ViewGroup ?: return
+        // 立刻按**当前**容器算一次(prepare 完成时容器通常已布局), 再挂一次性布局监听:
+        // 旋转时容器尺寸要等下一轮 layout 才更新, 只 post 一帧常常抢在 layout 之前 ——
+        // 实测那样会按旧(竖屏)尺寸算出 1079x607 并把横屏的容器留出两条大黑边。
+        applyVideoGeometryNow(parent, videoWidth, videoHeight)
+        val listener = object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                v: View,
+                left: Int,
+                top: Int,
+                right: Int,
+                bottom: Int,
+                oldLeft: Int,
+                oldTop: Int,
+                oldRight: Int,
+                oldBottom: Int,
+            ) {
+                if (v !== parent) return
+                parent.removeOnLayoutChangeListener(this)
+                applyVideoGeometryNow(parent, videoWidth, videoHeight)
+            }
+        }
+        parent.addOnLayoutChangeListener(listener)
+    }
+
+    /** 按容器当前可用区落 layoutParams(可用区为 0 时不动, 不把 0 写进去)。 */
+    private fun applyVideoGeometryNow(
+        parent: ViewGroup,
+        videoWidth: Int,
+        videoHeight: Int,
+    ) {
+        val pw = parent.width - parent.paddingLeft - parent.paddingRight
+        val ph = parent.height - parent.paddingTop - parent.paddingBottom
+        if (pw <= 0 || ph <= 0) return
+        val scale = minOf(pw.toFloat() / videoWidth, ph.toFloat() / videoHeight)
+        val lp = video.layoutParams
+        lp.width = (videoWidth * scale).toInt()
+        lp.height = (videoHeight * scale).toInt()
+        video.layoutParams = lp
+    }
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         // 系统控件即可, 方向变化交给 VideoView 重新布局; 不锁定方向
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        if (!::video.isInitialized) return
+        // 先记位置, 再动几何(顺序不能反): 旋转后 VideoView 的 surface 可能被重建 ⇒
+        // 重新 openVideo/prepare, 播放位置归零; 而重算几何是 parent.post 的异步动作,
+        // 等它跑完再抓位置就已经是 0 了。位置交给 onPrepared 落回去(那里负责 seekTo)。
+        val position = video.currentPosition
+        if (position > 0) pendingSeekMs = position
+        // 容器尺寸要等这一轮配置变化重新布局后才更新: applyVideoGeometry 会先按当前尺寸算
+        // 一次, 再挂一次性布局监听, 等新尺寸落地后补算(见那里的注释)。
+        applyVideoGeometry(videoIntrinsicWidth, videoIntrinsicHeight)
     }
 
     override fun onPause() {

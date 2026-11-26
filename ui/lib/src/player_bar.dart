@@ -27,6 +27,7 @@ import 'layout.dart'
         layoutTierFor;
 import 'platform_is.dart' show isAndroidPlatform;
 import 'playback.dart';
+import 'player_volume_button.dart';
 import 'queue.dart' show PlayMode;
 import 'rust/api_all.dart' as rust;
 import 'stream_note.dart' show currentStreamNote, StreamNote;
@@ -167,7 +168,7 @@ class PlayerBarActions {
   /// [PlayerBarData.fmActive] 换成火焰/广播。
   final VoidCallback onCycleMode;
 
-  /// 打开播放队列面板(播放条最右侧)
+  /// 打开播放队列面板(播放条右侧)
   final VoidCallback onOpenQueue;
 
   /// 桌面右键(封面 / 信息区)= 打开**现有的**歌曲操作 sheet(见文件头契约)。
@@ -615,6 +616,23 @@ class MiniPlayerBar extends StatelessWidget {
                     icon: const Icon(Icons.queue_music, size: 22),
                     onPressed: actions.onOpenQueue,
                   ),
+                  // 音量入口(2026-11-26 用户口径: 桌面/平板等宽屏设备要能直接在
+                  // 播放条上调「精细音量」)。它与设置页是同一个值(AppSettings.volumeGainDb),
+                  // 控件自己订阅 playback 域, 这里只负责放进行内。
+                  //
+                  // **只在宽档渲染**: 窄/中档(手机竖屏/小横屏)没有位置 —— 那一排
+                  // 6 个控件在 300dp 上已经是紧预算(见 [_barIcon] 注释)。
+                  //
+                  // 宽度预算(最紧的宽档 900dp):
+                  //   左右留白 2×kPagePadding = 24
+                  //   封面命中盒 8+40+4 = 52
+                  //   右侧控件 7 个 = 34×6 + 38 = 242
+                  //   控件间隔 7×kRowTitleGap = 56
+                  //   ⇒ 信息块还剩 900 - 24 - 52 - 242 - 56 = 526dp,
+                  //   远大于 kPlayerBarAlbumMinWidth(120), 加这一个不会把宽档的
+                  //   专辑名挤出局, 也不影响窄/中档的任何数字。
+                  if (gap > 0) SizedBox(width: gap),
+                  if (tier == LayoutTier.wide) const PlayerVolumeButton(),
                 ],
               ),
               // 播放条与底部导航之间只留 2dp: 之前 8dp 加上导航栏自带内边距,
