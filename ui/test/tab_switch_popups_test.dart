@@ -74,8 +74,8 @@ void main() {
     // 队列面板首次展开会弹「左滑移除」提示; 这里只关心收起语义, 预置"已确认"
     AppSettings.instance.queueSwipeHintDismissed = true;
     // 壳层的栈计数是全局静态量(一条 app 生命周期一份): 上一个用例的树是被直接
-    // 换掉的(didPop 不会来), 不清零会让下一个用例从 2 起 ⇒ 底部导航因
-    // `pageDepth > 1` 直接不渲染。
+    // 换掉的(didPop 不会来), 不清零会让下一个用例从 2 起 ⇒ 手机语义下底部导航因
+    // `pageDepth > 1` 直接不渲染(桌面导航常驻, 见 desktop_nav_persist_test)。
     pageDepth.value = 0;
     modalRouteOpen.value = false;
   });

@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import 'cover_art.dart';
@@ -191,12 +191,21 @@ bool playerBarShowsAlbum({
   return infoWidth >= kPlayerBarAlbumMinWidth;
 }
 
+/// 测试注入: 在桌面宿主上强制按「非桌面」(手机)判定。
+///
+/// 与 `platform_is.dart` 的 `debugForceAndroid` 同形: widget 测试跑在 Linux 宿主机上,
+/// `Platform.isLinux` 恒为 true, 想验「手机全屏页仍让导航让位」就只能靠它。用完复位。
+@visibleForTesting
+bool debugForceNonDesktopPlatform = false;
+
 /// 当前进程是不是「桌面版」(Linux / Windows)。
 ///
 /// 用户口径(2026-11-18): **桌面版**底部播放栏不要显示当前曲在队列的排位(2/35);
 /// 手机端(Android)保留。判据只看平台, 不看窗口宽度 —— 桌面窗口拖窄了仍然是桌面版。
 bool get isDesktopPlatform =>
-    !kIsWeb && (Platform.isLinux || Platform.isWindows);
+    !debugForceNonDesktopPlatform &&
+    !kIsWeb &&
+    (Platform.isLinux || Platform.isWindows);
 
 /// 播放条是否显示队列排位 `N/M`。
 ///
@@ -253,6 +262,21 @@ class MiniPlayerBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 宽度用**实测可用宽**, 不是窗口宽: 宽档 Rail 在场时播放条挂在右列,
+    // 实际宽 = 窗口宽 - kRailWidth —— 用窗口宽会在 900~980 之间错判档位
+    // (窗口 950: 窗口宽算宽档, 播放条实际只有 870 = 中档)。
+    // 取不到有限宽(被塞进横滑容器)时才回落到窗口宽。
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildBar(
+        context,
+        constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width,
+      ),
+    );
+  }
+
+  Widget _buildBar(BuildContext context, double width) {
     final player = data.player;
     final current = data.current;
     final liked = data.liked;
@@ -272,8 +296,6 @@ class MiniPlayerBar extends StatelessWidget {
     // 窄屏沿用手机预算(留白 [kPlayerBarEdgeInset]、控件零间隔, 否则 300dp 上
     // 信息行被挤到 0); 宽屏(桌面窗口/平板)用 [kPagePadding] + [kRowTitleGap],
     // 否则六个控件会转成一坨贴在窗口右下角(2026-11-18 用户反馈)。
-    // 播放条恒等于窗口宽度(根布局 Column 的直接子项), 直接读 MediaQuery 宽度即可。
-    final width = MediaQuery.sizeOf(context).width;
     // 文案与留白共用同一套档位口径(layout.dart: 窄 < 600 <= 中 < 900 <= 宽),
     // 不再自造阈值。
     final tier = layoutTierFor(width);

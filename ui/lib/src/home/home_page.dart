@@ -1034,6 +1034,13 @@ class _HomePageState extends State<HomePage> {
   );
 
   void _onTabSelected(int index) {
+    // 桌面: 导航是窗口常驻外壳, 点它时可能有全屏页压着(pageDepth > 1)。
+    // 先退回首页再走原有切 tab 逻辑 —— 包括点的是**当前** tab 的情况:
+    // 下面的 `_tab == index` early return 会吞掉这次点击, 表现为「点导航没反应」。
+    // 手机上的导航在全屏页期间仍然让位, 走不到这里。
+    if (isDesktopPlatform && pageDepth.value > 1) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
     if (_tab == index) return;
     // 切 tab = 一个"干净的新视图": 收掉**所有**浮层(底部面板 / 对话框)。
     //
@@ -1140,14 +1147,19 @@ class _HomePageState extends State<HomePage> {
 
   /// 首页底部导航栏的构建结果, 由根布局渲染(见 [playerBarSlot])。
   ///
-  /// 底部 tab 属于首页: 有全屏页压在首页之上时返回 null(播放条由
+  /// 底部 tab 属于首页: **手机上**有全屏页压在首页之上时返回 null(播放条由
   /// [playerBarData] 负责, 此时它自己吃掉系统手势区), 弹层/对话框不算。
   Widget? _buildBottomBar(BuildContext context) {
-    if (pageDepth.value > 1) return null;
+    // 桌面(Linux/Windows)上导航是**窗口常驻外壳**, 全屏页压上来时不让位:
+    // 让位会让根布局(_PlayerBarChrome)在转场第一帧从 Row(rail + 右列) 换成 Column,
+    // 一级页内容横向跳 kRailWidth、播放条从 (窗口宽 - rail) 变成窗口宽 ——
+    // 就是用户 2026-11-26 反馈的「进二级页闪一下 / 内外排版重排 / 播放条边界长度变化」。
+    // 手机上全屏页仍让位: 那里是全屏阅读, 导航不该常驻占一条。
+    if (pageDepth.value > 1 && !isDesktopPlatform) return null;
     // 宽档(>= 900)把导航搬到左侧 NavigationRail, 中/窄档保持底部 NavigationBar。
     // 档位只由可用宽度决定(不看设备类型): 桌面窗口缩窄就退回底部导航。
     // 语义与 NavigationBar 一一对应: 同一 selectedIndex / 同一回调 / 标签常显
-    // (alwaysShow ↔ labelType.all) / 同一 pageDepth 让位(上面那行仍然先判)。
+    // (alwaysShow ↔ labelType.all) / 同一 pageDepth 让位(上面那行仍然先判, 且只手机上让)。
     if (layoutTierFor(MediaQuery.sizeOf(context).width) == LayoutTier.wide) {
       return NavigationRail(
         selectedIndex: _tab,

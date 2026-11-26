@@ -57,6 +57,34 @@ ColorScheme accentScheme(AccentPalette accent, Brightness brightness) =>
 /// 在 OLED 屏上不发光的像素真正熄灭(省电 + 无灰边).
 const Color kOledBlack = Color(0xFF000000);
 
+/// 桌面(Linux/Windows)的页转场: Material 3 的 FadeForwards, 时长收到 220ms.
+///
+/// 为什么不用框架默认(ZoomPageTransitionsBuilder):
+/// 桌面默认表给 linux/windows 的是 Zoom —— 推入新页时旧页**原地滞留并缩放**,
+/// 全程不淡出, 逐帧看就是「一级页没有过渡消失到二级, 闪一下」;
+/// FadeForwards 才是「旧页 0~25% 淡出 + 左移 25%, 新页淡入 + 右移」的接力式转场。
+///
+/// 为什么 220ms: 框架默认的 450ms 是照着 Pixel 9 / Android 16 手感估出来的移动端节奏;
+/// 桌面是鼠标点击, 用户 50~100ms 就会再点下一处, 450ms 的转场会一直追着手势跑,
+/// 220ms 既保留「旧页确实淡出」的可读性, 又不拖点击节奏。
+class DesktopFadeForwardsTransitionsBuilder
+    extends FadeForwardsPageTransitionsBuilder {
+  const DesktopFadeForwardsTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 220);
+}
+
+/// 全平台页转场表: 只覆盖桌面两项, 其余(android/iOS/macOS)保持框架默认表,
+/// 不手抄默认值 —— 框架升级换默认 builder 时这里会自动跟上。
+PageTransitionsTheme buildPageTransitionsTheme() => PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    ...const PageTransitionsTheme().builders,
+    TargetPlatform.linux: const DesktopFadeForwardsTransitionsBuilder(),
+    TargetPlatform.windows: const DesktopFadeForwardsTransitionsBuilder(),
+  },
+);
+
 /// 浅色主题(与改造前 ThemeData(colorSchemeSeed: 0xFFF40000, useMaterial3: true) 等价;
 /// 换主题色只是换 seed, 其余语义不变)
 ThemeData buildLightTheme({AccentPalette accent = AccentPalette.neteaseRed}) =>
@@ -68,6 +96,7 @@ ThemeData buildLightTheme({AccentPalette accent = AccentPalette.neteaseRed}) =>
       // (其它平台为 null/空表, 行为与排版完全不变; 见 platform_font.dart)
       fontFamily: bundledCjkPrimary,
       fontFamilyFallback: bundledCjkFallback,
+      pageTransitionsTheme: buildPageTransitionsTheme(),
     );
 
 /// 深色主题. [oled] = true 时切到纯黑基底(R6), false 时保持 Material 默认深色.
@@ -86,6 +115,7 @@ ThemeData buildDarkTheme({
     // 同 buildLightTheme: 只在 arm64 Linux 用随包的拉丁+CJK 字体
     fontFamily: bundledCjkPrimary,
     fontFamilyFallback: bundledCjkFallback,
+    pageTransitionsTheme: buildPageTransitionsTheme(),
   );
   if (!oled) return base;
 

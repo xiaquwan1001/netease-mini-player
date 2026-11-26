@@ -57,7 +57,8 @@ final ValueNotifier<SongActionHost?> actionsHost =
 
 /// 根导航栈里"全屏页"的层数(弹层/对话框不算一层): 1 = 只有首页.
 ///
-/// 底部 tab 属于首页, 有全屏页压上来时让位; 若按 [ModalRoute.isCurrent] 判断,
+/// 底部 tab 属于首页, 有全屏页压上来时**手机上**让位(桌面是窗口常驻外壳, 不让位 ——
+/// 见 home_page.dart 的 `_buildBottomBar`); 若按 [ModalRoute.isCurrent] 判断,
 /// 弹一个底部面板(PopupRoute)也会让底部导航消失, 所以这里只数非弹层路由。
 ///
 /// 初值 0 而不是 1: 首页这条路由本身也会走 didPush(变成 1); 而手工 pump HomePage
