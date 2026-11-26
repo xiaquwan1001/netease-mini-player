@@ -63,6 +63,16 @@ jobs:
       - name: pub get
         working-directory: ui
         run: flutter pub get
+      # Gradle 依赖缓存: verify job 以前没有任何 Gradle 缓存, 每次都要现下 AGP/Kotlin 插件,
+      # 任何一次 Google Maven 抖动就整个 Release 失败(2026-11-26 v0.41.6/v0.41.7 实锤,
+      # 同一时刻有缓存的 CI android job 反而绿)。这里只缓存, 不改门禁口径。
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-verify-${{ runner.os }}-${{ hashFiles('ui/android/**/*.gradle*', 'ui/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-verify-${{ runner.os }}-
       # 以下门与 ci.yml 的 rust / flutter 两个 job 一一对应(同一脚本):
       # 发版门以前少了 fmt/clippy/token 门, 且测试用 --exclude-tags 'network || golden'
       # 把 golden 也排掉了 —— 等于发出去的包比 main 上测过的少一层(审计 P-13/P-14)。

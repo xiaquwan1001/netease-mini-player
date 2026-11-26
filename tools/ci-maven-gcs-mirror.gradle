@@ -19,6 +19,11 @@
 //     ⇒ 必须把 gradlePluginPortal() 显式补回来。
 
 def gcsMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+// Google Maven(maven.google.com)的镜像: GitHub 共享 runner 偶发拿不到 AGP 插件 marker
+// (2026-11-26 v0.41.6/v0.41.7 的 Release 各挂一次: `com.android.application:9.1.0` 明明
+// 在 Google Maven 上返回 200, runner 上却报 could not resolve, 而同一时刻 CI 的 android
+// job 因缓存命中反而成功)。只**额外加一条**仓库, 不改 settings.gradle.kts 的仓库与顺序。
+def googleMirror = 'https://maven.aliyun.com/repository/google'
 
 // 必须用 beforeSettings 而不是 settingsEvaluated(2026-11-24 v0.38.7 Release 实锤):
 // settings.gradle.kts 自己的 `plugins {}` 块(kotlin.android 2.4.0 等)在 settings 求值
@@ -33,6 +38,10 @@ beforeSettings { settings ->
         name = 'ciMavenCentralGcsMirror'
         url = gcsMirror
     }
+    pluginRepos.maven {
+        name = 'ciGoogleAliyunMirror'
+        url = googleMirror
+    }
     if (!hadPluginRepos) {
         // 原本靠默认值(plugin portal) ⇒ 补回来, 顺序: 镜像 -> portal
         pluginRepos.gradlePluginPortal()
@@ -44,6 +53,10 @@ beforeSettings { settings ->
     depRepos.maven {
         name = 'ciMavenCentralGcsMirror'
         url = gcsMirror
+    }
+    depRepos.maven {
+        name = 'ciGoogleAliyunMirror'
+        url = googleMirror
     }
     if (!hadDepRepos) {
         // 原本没有 settings 级依赖仓库(靠 project 仓库) ⇒ 这里绝不能只剩镜像,
