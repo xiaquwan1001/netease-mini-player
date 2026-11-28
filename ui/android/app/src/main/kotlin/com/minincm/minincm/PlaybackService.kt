@@ -485,16 +485,17 @@ class PlaybackService : MediaSessionService() {
 
         // media3 1.9 没有运行期 setAudioProcessors, EQ 变化也要重建 player(见 rebuildPlayer 注释);
         // handleAudioFocus 同样是 **build 时** 的构造参数 ⇒ 焦点策略变化也要重建。
+        val cacheConfigChanged =
+            newStreamCache != streamCache || clampedLimit != cacheLimitMb
         val rebuildNeeded = newHardwareDecode != hardwareDecode ||
-            newStreamCache != streamCache ||
-            clampedLimit != cacheLimitMb ||
+            cacheConfigChanged ||
             newEqText != eqText ||
             newFocusMode != audioFocusMode
 
-        if (rebuildNeeded && (newStreamCache != streamCache || clampedLimit != cacheLimitMb)) {
-            // 缓存上限变化要换 evictor; 开关变化要整体重建 —— 都先丢旧缓存库
-            releaseCache()
-        }
+        // 缓存上限/开关变化要换 evictor 或整体重建 —— 但**必须在旧 player 释放之后**丢缓存库:
+        // 以前这里先 releaseCache()、旧 ExoPlayer 到 rebuildPlayer() 里才 release, 中间这段
+        // 旧 loader 线程仍可能读已释放的 SimpleCache(IllegalStateException, 那次播放直接断),
+        // 也可能 release() 等缓存锁把主线程卡住(锁审计 2026-11-28 #3)。见下方 rebuildNeeded 分支。
 
         // 先更新字段再重建: buildExoPlayer()/buildDataSourceFactory() 读的就是这些字段
         gainDb = clampedGain
@@ -510,7 +511,9 @@ class PlaybackService : MediaSessionService() {
         // 只有「总是停止」自己持有焦点请求; 其它档确保已经放弃(切档不留残余请求)
         applyFocusMode()
 
-        if (rebuildNeeded) rebuildPlayer()
+        // 缓存配置变了才需要在"旧 player 已释放、新 player 还没建"的那一刻丢缓存库,
+        // 顺序由 rebuildPlayer 保证(见那里的 releaseCacheFirst)。
+        if (rebuildNeeded) rebuildPlayer(releaseCacheFirst = cacheConfigChanged)
 
         // 增益变化: 动态模式(限速>0)按 dB/s 斜坡逼近, 静态模式瞬时(默认, 行为不变)
         applyGainChange()
@@ -985,18 +988,23 @@ class PlaybackService : MediaSessionService() {
      * media3 1.9 也没有运行期 setAudioProcessors, EQ 要换 processor 链也只能重建。
      * 代价: 当前曲目会短暂中断一下(几十毫秒); 这里保留播放项/位置, 属于可接受范围。
      */
-    private fun rebuildPlayer() {
+    private fun rebuildPlayer(releaseCacheFirst: Boolean = false) {
         val old = exoPlayer ?: return
         val item = old.currentMediaItem
         val position = old.currentPosition
         val playWhenReady = old.playWhenReady
 
         // 先释放旧 player, 再建新 player(审计 U5, 2026-11-25): buildExoPlayer() 会经
-        // buildDataSourceFactory → ensureCache() 在同一缓存目录建第二个 SimpleCache 实例,
-        // 而 configure() 已经先 releaseCache() 了 —— 旧 player 活在这段窗口里就指向已释放的
-        // SimpleCache(还可能和新建的第二个实例同时开着同一个目录)。item/position/playWhenReady
-        // 已在上面取出, 提前释放是安全的; 会话侧看不到这个窗口(同一主线程同步块, 中间不会让位)。
+        // buildDataSourceFactory → ensureCache() 在同一缓存目录建第二个 SimpleCache 实例。
+        // item/position/playWhenReady 已在上面取出, 提前释放是安全的。
+        //
+        // releaseCacheFirst(锁审计 2026-11-28 #3): 缓存上限/开关变化时, 丢缓存库必须落在
+        // **旧 player 已 release、新 player 还没 build** 的这一行之间 —— 以前 configure()
+        // 在进入这里之前就 releaseCache(), 旧 loader 线程仍在读已释放的 SimpleCache
+        // (IllegalStateException 直接断播), 或者 release() 等缓存锁卡主线程。
+        // 放到新 player 建好之后再 release 也不行: 那会把新 player 正在用的缓存关掉。
         old.release()
+        if (releaseCacheFirst) releaseCache()
 
         val newExo = buildExoPlayer()
         exoPlayer = newExo

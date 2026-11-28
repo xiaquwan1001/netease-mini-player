@@ -186,10 +186,17 @@ class LoginActivity : ComponentActivity() {
         val manager = CookieManager.getInstance()
         clearLoginCookies(manager)
         if (hasLoginCookieLeft(manager)) {
-            manager.removeAllCookies {
-                manager.flush()
-                loadLoginPage(loginUrl)
+            // 回调 + 800ms 兜底谁先到谁生效(锁审计 2026-11-28 #5): 个别 ROM/有活跃 WebView 时
+            // removeAllCookies 的回调可能根本不触发 ⇒ 这里永远不 loadUrl, 用户看到白屏转圈。
+            val loaded = java.util.concurrent.atomic.AtomicBoolean(false)
+            val proceed = {
+                if (loaded.compareAndSet(false, true)) {
+                    manager.flush()
+                    loadLoginPage(loginUrl)
+                }
             }
+            manager.removeAllCookies { proceed() }
+            handler.postDelayed(proceed, COOKIE_CLEAR_FALLBACK_MS)
         } else {
             manager.flush()
             loadLoginPage(loginUrl)
@@ -290,6 +297,9 @@ class LoginActivity : ComponentActivity() {
 
         /** 顶栏配色见 res/values{,-night}/colors.xml(login_chrome_bg / login_chrome_fg) */
         private const val POLL_MS = 1500L
+
+        /** removeAllCookies 回调的兜底上限: 回调不来也要继续加载登录页(否则白屏) */
+        private const val COOKIE_CLEAR_FALLBACK_MS = 800L
         private val COOKIE_URLS = listOf("https://music.163.com", "https://163.com")
     }
 }

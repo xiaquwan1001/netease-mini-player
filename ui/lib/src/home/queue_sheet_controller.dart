@@ -200,13 +200,29 @@ class QueueSheetController extends ChangeNotifier {
       toast('播放队列是空的');
       return;
     }
-    // 首次展开先告知「左滑移除」: 面板行尾只剩拖拽手柄, 不说一句没人知道能滑。
-    // 用户可以勾「确认后不再展示」, 之后永久不弹(存 settings.json)。
-    await _maybeShowSwipeHint();
-    if (!isMounted()) return;
-    final context = contextOf();
-    if (!context.mounted) return;
+    // 「正在展开」标记必须**在 await 之前**置上(锁审计 2026-11-28 #1): 旧实现等提示框回答完
+    // 才置 true, 而播放条的队列键在 Navigator 之外、遮罩盖不到它 ⇒ 提示框在场时再点一次会
+    // 再弹一个提示框 + 压出第二条 sheet, 先压的那条 pop 时 finally 又把 _open 置 false
+    //(表现: 面板开着但 isOpen=false, 再点又叠一条)。
     _open = true;
+    try {
+      // 首次展开先告知「左滑移除」: 面板行尾只剩拖拽手柄, 不说一句没人知道能滑。
+      // 用户可以勾「确认后不再展示」, 之后永久不弹(存 settings.json)。
+      await _maybeShowSwipeHint();
+      // 提示框期间用户可能已经点了"收起"(close 把 _open 置 false): 那就真的不收尾,
+      // 不要再把面板压出来(否则会变成"关掉了又冒出来")
+      if (!_open || !isMounted()) return;
+      final context = contextOf();
+      if (!context.mounted) return;
+      await _pushQueueSheet(context);
+    } finally {
+      // 早退(未挂载/上下文失效/提示框取消)也要把标记还回去, 否则之后再也打不开
+      if (_route == null) _open = false;
+    }
+  }
+
+  /// 真正压出队列面板(标记由 [open] 负责)
+  Future<void> _pushQueueSheet(BuildContext context) async {
     final navigator = Navigator.of(context);
     final route = buildAppSheetRoute<void>(
       context: context,
@@ -232,8 +248,10 @@ class QueueSheetController extends ChangeNotifier {
     try {
       await navigator.push(route);
     } finally {
-      if (identical(_route, route)) _route = null;
-      _open = false;
+      if (identical(_route, route)) {
+        _route = null;
+        _open = false;
+      }
     }
   }
 

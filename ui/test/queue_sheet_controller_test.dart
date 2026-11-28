@@ -194,6 +194,32 @@ void main() {
       await tester.pumpAndSettle();
       await opening;
     });
+
+    testWidgets('提示框在场时再点一次队列键: 不会叠出第二个提示框/第二条面板', (tester) async {
+      // 锁审计 2026-11-28 #1: 播放条的队列键在 Navigator 之外, 遮罩盖不到它。
+      // 旧实现等提示框回答完才置 `_open`, 于是这段时间再点一次会再弹一个提示框,
+      // 回答后压出第二条 sheet, 先压的那条 pop 时又把 isOpen 置 false。
+      AppSettings.instance.queueSwipeHintDismissed = false;
+      final h = await _pump(tester, names: ['a', 'b']);
+      final first = h.controller.open();
+      await tester.pumpAndSettle();
+      expect(find.text('知道了'), findsOneWidget, reason: '提示框已弹出');
+      expect(h.controller.isOpen, isTrue, reason: '正在展开也要算 open(防重入)');
+
+      // 提示框在场时再点一次: 不叠提示框, 而是当作"收起"
+      final second = h.controller.open();
+      await tester.pumpAndSettle();
+      expect(find.text('知道了'), findsOneWidget, reason: '只能有一个提示框');
+      expect(h.controller.isOpen, isFalse);
+
+      // 关掉提示框: 因为期间已经"收起", 不再压出面板
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      await first;
+      await second;
+      expect(find.text('当前播放队列'), findsNothing);
+      expect(h.controller.isOpen, isFalse);
+    });
   });
 
   group('面板开关', () {

@@ -44,7 +44,10 @@ class MainActivity : FlutterActivity() {
      * 以前只有 Manifest 声明、没有运行时申请 ⇒ Android 7–9 上「保存到图库」必失败
      * (2026-11-28 平台层审计); 而且写文件原本在**主线程**做整块拷贝, 大图会卡/ANR。
      */
-    private var pendingSave: (() -> Unit)? = null
+    private var pendingSave: PendingSave? = null
+
+    /** 等写权限的那次保存: 拿到/拒掉权限后跑 [start], 页面被回收时给 [result] 收尾。 */
+    private class PendingSave(val result: MethodChannel.Result, val start: () -> Unit)
 
     /** 落盘类 IO 的后台线程(保存图片/上传副本), 不占主线程 */
     private val ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -258,24 +261,39 @@ class MainActivity : FlutterActivity() {
             try {
                 when (call.method) {
                     "shareImage" -> {
-                        val file = writeShareCache(bytes, sanitize(filename))
-                        val uri = FileProvider.getUriForFile(
-                            this,
-                            "${applicationContext.packageName}.fileprovider",
-                            file,
-                        )
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/png"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            // clipData 必须一起带上: 只给 EXTRA_STREAM 时, 系统选择器
-                            // (com.android.intentresolver) 的缩略图预览会报
-                            // "Permission Denial ... FileProvider ... not exported"
-                            clipData = android.content.ClipData.newRawUri("image", uri)
-                            if (text.isNotBlank()) putExtra(Intent.EXTRA_TEXT, text)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        // 分享卡通常 1MB+: 写盘同样要离开主线程(保存图片早就挪了, 这里以前
+                        // 还在主线程 File.writeBytes —— 锁审计 2026-11-28 #4)。
+                        val name = sanitize(filename)
+                        ioExecutor.execute {
+                            try {
+                                val file = writeShareCache(bytes, name)
+                                runOnUiThread {
+                                    try {
+                                        val uri = FileProvider.getUriForFile(
+                                            this,
+                                            "${applicationContext.packageName}.fileprovider",
+                                            file,
+                                        )
+                                        val intent = Intent(Intent.ACTION_SEND).apply {
+                                            type = mimeOf(name)
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            // clipData 必须一起带上: 只给 EXTRA_STREAM 时, 系统选择器
+                                            // (com.android.intentresolver) 的缩略图预览会报
+                                            // "Permission Denial ... FileProvider ... not exported"
+                                            clipData = android.content.ClipData.newRawUri("image", uri)
+                                            if (text.isNotBlank()) putExtra(Intent.EXTRA_TEXT, text)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        startActivity(Intent.createChooser(intent, "分享到"))
+                                        result.success(true)
+                                    } catch (e: Exception) {
+                                        result.error("share_error", e.message, null)
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                runOnUiThread { result.error("share_error", e.message, null) }
+                            }
                         }
-                        startActivity(Intent.createChooser(intent, "分享到"))
-                        result.success(true)
                     }
                     // 保存到系统图库: Q+ 走 MediaStore(免权限), 老系统落公共 Pictures
                     // (Android 10 以下先申请运行时写权限; 写盘一律挪到后台线程)
@@ -305,6 +323,20 @@ class MainActivity : FlutterActivity() {
         }
 
         ensureNotificationPermission()
+    }
+
+    /**
+     * 把还在等外部 Activity/权限框的 Result 全部以可读错误收尾, 不让 Dart 侧悬挂。
+     *
+     * 调用时机: `onDestroy`(系统回收/不保留活动)。
+     */
+    private fun completePendingWithError(code: String, message: String) {
+        pendingLogin?.error(code, message, null)
+        pendingLogin = null
+        pendingPick?.error(code, message, null)
+        pendingPick = null
+        pendingSave?.result?.error(code, message, null)
+        pendingSave = null
     }
 
     /** 保存/分享用的 MIME: 按扩展名推断, 认不出就当 png(历史默认值) */
@@ -360,7 +392,7 @@ class MainActivity : FlutterActivity() {
             result.error("save_busy", "上一次保存还没结束", null)
             return
         }
-        pendingSave = {
+        pendingSave = PendingSave(result) {
             if (ContextCompat.checkSelfPermission(
                     this,
                     Manifest.permission.WRITE_EXTERNAL_STORAGE,
@@ -386,7 +418,8 @@ class MainActivity : FlutterActivity() {
     ) {
         if (requestCode == REQUEST_SAVE_IMAGE) {
             // 不管给没给都交给回调判(它在里面自查权限并给出可读错误)
-            pendingSave?.invoke() ?: run { pendingSave = null }
+            val pending = pendingSave ?: return
+            pending.start()
             return
         }
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -771,6 +804,11 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        // 待处理的三个 Result 必须**完成**(锁审计 2026-11-28 #2): 它们等的是外部 Activity
+        // (LoginActivity / 系统文件选择器 / 权限框), 此时主 Activity 完全可能被低内存回收,
+        // 而以前这里只清监听 ⇒ Dart 侧 `await auth.loginWeb()` / `pickAudioFile()` / 保存图片
+        // 永久不返回(按钮没反应、上传卡在"选文件"、保存分享静默)。
+        completePendingWithError("activity_destroyed", "页面被系统回收, 操作已取消")
         PlaybackService.skipListener = null
         PlaybackService.actionListener = null
         PlaybackService.actionStateSyncListener = null
