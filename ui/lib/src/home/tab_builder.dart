@@ -125,10 +125,14 @@ class HomeTabBuilder {
       index: tab,
       children: [
         for (var i = 0; i < 5; i++)
-          if (visited.contains(i))
-            buildPage(i, selectedKey)
-          else
-            const SizedBox.shrink(),
+          // IndexedStack 会 build 所有访问过的 tab, 但不可见的不是"没有":
+          // Offstage 不静音 ticker(SDK 明写), 所以显式按当前 tab 开关 TickerMode。
+          TickerMode(
+            enabled: i == tab,
+            child: visited.contains(i)
+                ? buildPage(i, selectedKey)
+                : const SizedBox.shrink(),
+          ),
       ],
     );
   }

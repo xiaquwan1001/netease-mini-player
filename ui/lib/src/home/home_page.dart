@@ -1089,7 +1089,11 @@ class _HomePageState extends State<HomePage> {
       Positioned.fill(
         child: Offstage(
           offstage: _lyric.visible,
-          child: _tabs.buildPages(selectedKey),
+          // Offstage 不静音 ticker: 歌词展开时 tab 树里的动画(逐字行/滑动组)必须真停。
+          child: TickerMode(
+            enabled: !_lyric.visible,
+            child: _tabs.buildPages(selectedKey),
+          ),
         ),
       ),
       if (_lyric.visible)

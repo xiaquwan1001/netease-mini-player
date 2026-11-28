@@ -383,15 +383,20 @@ class _DetailFacesState extends State<DetailFaces>
             Positioned.fill(
               child: Offstage(
                 offstage: t >= 1,
-                child: IgnorePointer(
-                  ignoring: _face == DetailFace.cover,
-                  child: FadeTransition(
-                    opacity: ReverseAnimation(_fade),
-                    child: GestureDetector(
-                      key: const ValueKey('detail-lyrics-face'),
-                      behavior: HitTestBehavior.opaque,
-                      onTap: widget.tappable ? _toggleFace : null,
-                      child: widget.lyrics,
+                // Offstage 不静音 ticker(SDK: 离屏子树的动画照旧跑): 歌词面里的
+                // 逐字 KaraokeLine 是 60fps 插值, 完全透明时必须真停。
+                child: TickerMode(
+                  enabled: t < 1,
+                  child: IgnorePointer(
+                    ignoring: _face == DetailFace.cover,
+                    child: FadeTransition(
+                      opacity: ReverseAnimation(_fade),
+                      child: GestureDetector(
+                        key: const ValueKey('detail-lyrics-face'),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: widget.tappable ? _toggleFace : null,
+                        child: widget.lyrics,
+                      ),
                     ),
                   ),
                 ),
@@ -401,11 +406,15 @@ class _DetailFacesState extends State<DetailFaces>
             Positioned.fill(
               child: Offstage(
                 offstage: t <= 0,
-                child: IgnorePointer(
-                  ignoring: _face != DetailFace.cover,
-                  child: FadeTransition(
-                    opacity: _fade,
-                    child: _buildCoverFace(context),
+                // 封面层也有自己的动画(封面切换淡入等), 不可见时一并停。
+                child: TickerMode(
+                  enabled: t > 0,
+                  child: IgnorePointer(
+                    ignoring: _face != DetailFace.cover,
+                    child: FadeTransition(
+                      opacity: _fade,
+                      child: _buildCoverFace(context),
+                    ),
                   ),
                 ),
               ),

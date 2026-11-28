@@ -12,7 +12,9 @@ const double kMarqueeMinOverflow = 8;
 /// - 永远单行(`maxLines: 1` + `softWrap: false`), 不会出现逐字竖排;
 /// - 外层 [ClipRect] 防止滚动时超界;
 /// - 点按不拦截(本身不响应手势, 外层 InkWell 仍可点);
-/// - [TickerMode]/Offstage 不可见时 ticker 会被静音, 不后台耗电;
+/// - 在 [TickerMode] 关闭的子树里 ticker 会被静音, 不后台耗电;
+///   注意 [Offstage] **不会**静音 ticker(离屏动画照旧跑), 需要静音时要自己套
+///   [TickerMode](见 detail_faces.dart / tab_builder.dart 的用法);
 /// - 系统开启 reduce motion(MediaQuery.disableAnimations)时退化为 ellipsis,
 ///   不打任何动画.
 ///
