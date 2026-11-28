@@ -122,8 +122,40 @@ class DetailFaces extends StatefulWidget {
   State<DetailFaces> createState() => _DetailFacesState();
 }
 
-/// 封面四周留白(方图不贴边)
-const double _kCoverInset = 16;
+/// 封面四周留白(方图不贴边)。
+///
+/// 16 → 12(2026-11-28): 与页面栅格 `kPagePadding`(12) 同值共线, 同时把方图从
+/// 268dp 放大到 276dp(vivo 300dp 宽实测)—— 这一页真正"浪费"的是方图之外的
+/// 竖向留白, 横向每省 1dp 都直接变成图的内容。不要让到 8 以下: 再省略会把
+/// 图挤到贴边, 且动作行的左右内缩会与其它页(12)错位。
+const double _kCoverInset = 12;
+
+/// 封面面底部动作行的**占位高度**(= `IconButton.filledTonal` 的命中带 48dp,
+/// 视觉圆钮 40dp)。
+///
+/// 方图边长必须**先扣掉这一行 + 它与图之间的间距**再算 —— 旧实现图按
+/// `min(宽,高)` 居中、动作行却钉在区域底部, 两者互不知情: vivo V2454A
+/// (300x660dp) 实测圆钮压住封面下沿 5.4dp; 区域更矮(横屏 / 键盘弹出 / 大字号)
+/// 时整行盖在图上, 极端情况还压到图里的「保存原图」热区。
+const double _kCoverActionHeight = 48;
+
+/// 方图底边与动作行之间的间距。
+///
+/// 取 8(= `kRowTitleGap`, 与歌词面右下竖排按钮的间隔同一口径): 同屏不再出现
+/// 8/12 两种"相邻间距"; 12 会让"图 + 行"这一组显得散。
+const double _kCoverActionGap = 8;
+
+/// 动作行最小可用高度之下的方图边长下限: 再小就改走"图撑满 + 行叠底"的兜底
+/// (见 [_DetailFacesState._buildCoverFace]), 不再硬挤方图。
+const double _kCoverMinSide = 120;
+
+/// 动作行内容的**最小宽度**: 三个 `IconButton.filledTonal` 各 48 + 两个 8 间隔
+/// = 160dp(进度文案靠 `Expanded` 自己省略)。
+///
+/// 行的宽度默汈跟图同宽(共线), 但图窄到这个值以下时不能把行硬塞进图宽
+/// (2026-11-28 审计 P1: `side ∈ [120,160)` 会水平溢出) —— 此时行取本值,
+/// 代价是行比图宽一点, 但按钮不会报 RenderFlex overflow。
+const double _kCoverActionMinWidth = 160;
 
 /// 封面面**首帧小图**复用的逻辑尺寸: 与播放条的 CoverArt(size: 40) 同一档位,
 /// 于是请求的是同一个 `?param=NxN` URL, 命中同一份字节缓存/ImageCache ——
@@ -357,64 +389,112 @@ class _DetailFacesState extends State<DetailFaces> {
       onTap: _toggleFace,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 尽量方形: 取可用空间的短边 —— 方图不裁边, 长边留白
-          final side = math.max(
+          // 方图边长的**竖向预算**: 扣掉上下留白, 再扣掉底部动作行的占位高度
+          // 与它与图之间的间距 —— 图与行成为一组, 不再互相压。
+          final availW = math.max(0.0, constraints.maxWidth - _kCoverInset * 2);
+          final availH = math.max(
             0.0,
-            math.min(constraints.maxWidth, constraints.maxHeight) -
-                _kCoverInset * 2,
+            constraints.maxHeight -
+                _kCoverInset * 2 -
+                _kCoverActionHeight -
+                _kCoverActionGap,
           );
-          return Stack(
-            children: [
-              Center(
-                child: side <= 0
-                    ? const SizedBox.shrink()
-                    : (cover.isEmpty
-                          ? _buildPlaceholder(context, side)
-                          : _buildCoverImage(context, side)),
-              ),
-              Positioned(
-                left: _kCoverInset,
-                right: _kCoverInset,
-                bottom: _kCoverInset,
-                child: Row(
-                  children: [
-                    // 左下角原来的「轻点画面返回歌词」提示改成「当前进度 / 总时长」
-                    // (用户 2026-11-20): 切面手势本身已在用, 这行位置给有用的信息。
-                    Expanded(child: _buildProgress(context)),
-                    // 「查看评论」在「保存封面」左边(用户 2026-11-19 要求);
-                    // 没有注入回调(纯控件测试/无当前曲目)时不显示。
-                    if (widget.onOpenComments != null) ...[
-                      IconButton.filledTonal(
-                        key: const ValueKey('detail-cover-comments'),
-                        tooltip: '查看评论',
-                        icon: const Icon(Icons.forum_outlined, size: 20),
-                        onPressed: widget.onOpenComments,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    if (cover.isNotEmpty) ...[
-                      IconButton.filledTonal(
-                        key: const ValueKey('detail-cover-save'),
-                        tooltip: '保存封面',
-                        icon: _saving
-                            ? const LoadingView.inline(size: 20)
-                            : const Icon(Icons.download, size: 20),
-                        onPressed: _saving ? null : _save,
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton.filledTonal(
-                        key: const ValueKey('detail-cover-view'),
-                        tooltip: '查看原图',
-                        icon: const Icon(Icons.zoom_out_map, size: 20),
-                        onPressed: _openViewer,
-                      ),
-                    ],
-                  ],
+          // 尽量方形: 取可用空间的短边 —— 方图不裁边, 长边留白
+          final side = math.min(availW, availH);
+          final row = _buildCoverActionRow(context, cover);
+
+          // 兜底: 区域矮到连「一行按钮 + 一张还能看的图」都放不下(横屏手机、
+          // 键盘弹出、极小桌面窗口)。此时优先让图占满, 行叠在底部 —— 旧行为,
+          // 但只在这个分支里出现, 常规竖屏不会再有遮挡。
+          if (side < _kCoverMinSide) {
+            final fallbackSide = math.max(
+              0.0,
+              math.min(constraints.maxWidth, constraints.maxHeight) -
+                  _kCoverInset * 2,
+            );
+            return Stack(
+              children: [
+                Center(
+                  child: fallbackSide <= 0
+                      ? const SizedBox.shrink()
+                      : (cover.isEmpty
+                            ? _buildPlaceholder(context, fallbackSide)
+                            : _buildCoverImage(context, fallbackSide)),
                 ),
-              ),
+                Positioned(
+                  left: _kCoverInset,
+                  right: _kCoverInset,
+                  bottom: _kCoverInset,
+                  child: row,
+                ),
+              ],
+            );
+          }
+
+          // 常规分支: 图 + 动作行作为一组**居中**(旧实现图居中、行钉底 ⇒ 上方空
+          // 58dp、下方只剩 5dp, 正是用户看到的"压住图 + 底部不匀")。行的宽度跟
+          // 图同宽, 于是进度文案与三个圆钮与图片左右边线共线; 图太窄时行取自己的
+          // 最小宽度(见 [_kCoverActionMinWidth]), 不靠图宽硬塞。
+          final rowWidth = math.min(
+            constraints.maxWidth,
+            math.max(side, _kCoverActionMinWidth),
+          );
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              cover.isEmpty
+                  ? _buildPlaceholder(context, side)
+                  : _buildCoverImage(context, side),
+              const SizedBox(height: _kCoverActionGap),
+              SizedBox(width: rowWidth, child: row),
             ],
           );
         },
+      ),
+    );
+  }
+
+  /// 封面面底部动作行: 左「当前进度 / 总时长」+ 右三圆钮(评论 / 保存 / 查看原图)。
+  ///
+  /// 行高固定 48dp(按钮命中带), 由调用方在算方图边长时预留 —— 本方法只管内容,
+  /// 不做定位(定位在 [_buildCoverFace])。
+  Widget _buildCoverActionRow(BuildContext context, String cover) {
+    return SizedBox(
+      height: _kCoverActionHeight,
+      child: Row(
+        children: [
+          // 左下角原来的「轻点画面返回歌词」提示改成「当前进度 / 总时长」
+          // (用户 2026-11-20): 切面手势本身已在用, 这行位置给有用的信息。
+          Expanded(child: _buildProgress(context)),
+          // 「查看评论」在「保存封面」左边(用户 2026-11-19 要求);
+          // 没有注入回调(纯控件测试/无当前曲目)时不显示。
+          if (widget.onOpenComments != null) ...[
+            IconButton.filledTonal(
+              key: const ValueKey('detail-cover-comments'),
+              tooltip: '查看评论',
+              icon: const Icon(Icons.forum_outlined, size: 20),
+              onPressed: widget.onOpenComments,
+            ),
+            const SizedBox(width: 8),
+          ],
+          if (cover.isNotEmpty) ...[
+            IconButton.filledTonal(
+              key: const ValueKey('detail-cover-save'),
+              tooltip: '保存封面',
+              icon: _saving
+                  ? const LoadingView.inline(size: 20)
+                  : const Icon(Icons.download, size: 20),
+              onPressed: _saving ? null : _save,
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              key: const ValueKey('detail-cover-view'),
+              tooltip: '查看原图',
+              icon: const Icon(Icons.zoom_out_map, size: 20),
+              onPressed: _openViewer,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -428,6 +508,7 @@ class _DetailFacesState extends State<DetailFaces> {
     final bytes = _bigBytes;
     final radius = BorderRadius.circular(12);
     return SizedBox(
+      key: const ValueKey('detail-cover-image'),
       width: side,
       height: side,
       child: Stack(

@@ -614,4 +614,65 @@ void main() {
       expect(find.text('暂无封面'), findsOneWidget);
     });
   }
+  // ---------------- 封面 ↔ 底部动作行不重叠(2026-11-28 vivo 反馈) ----------------
+  //
+  // 用户截图(vivo V2454A, 1440x3168 物理 / DPR 4.8 ⇒ 逻辑 300x660): 封面面的
+  // 三个圆钮压在封面图下沿上。根因是方图边长按 `min(宽,高)-32` 算而动作行钉在
+  // 区域底部, 两者互不知情。这里锁住几何: 图底边与动作行(命中带)必须留出
+  // `_kCoverActionGap` 量级的间隙, 且动作行整体落在可见区域内。
+  for (final size in <Size>[
+    const Size(300, 660), // 整块屏(等同于没有顶栏/播放条时的极端情况)
+    const Size(300, 381), // 该机实测: DetailFaces 真正分到的区域(顶栏+播放条+底栏已扣)
+    const Size(600, 300), // 横屏 / 极小窗口: 区域高度见紧
+    const Size(300, 240), // 更矮: 方图边长落进 [120,160) —— 行宽不能再跟图同宽
+    const Size(170, 400), // 更窄: 同上, 且进度文案靠 Expanded 省略
+    const Size(840, 486), // 桌面右栏/小窗: 高受限(旧实现这里整行压住图 48dp)
+  ]) {
+    testWidgets('封面与底部动作行不重叠(${size.width.toInt()}x'
+        '${size.height.toInt()}dp)', (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _app(
+          DetailFaces(
+            trackId: BigInt.one,
+            coverUrl: _cover,
+            lyrics: _lyrics(),
+            fetchImage: (url) async => _png1x1,
+            onOpenComments: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.text('第0句'));
+      await tester.pump();
+
+      final view = tester.getRect(
+        find.byKey(const ValueKey('detail-cover-face')),
+      );
+      final cover = tester.getRect(
+        find.byKey(const ValueKey('detail-cover-image')),
+      );
+      final comments = tester.getRect(
+        find.byKey(const ValueKey('detail-cover-comments')),
+      );
+      final save = tester.getRect(
+        find.byKey(const ValueKey('detail-cover-save')),
+      );
+
+      // 图不越出可见区域
+      expect(cover.top, greaterThanOrEqualTo(view.top - 0.5));
+      // 动作行在图**下方**(48dp 命中带内含 4dp 内缩 ⇒ 至少 8dp 净间隙)
+      expect(comments.top, greaterThanOrEqualTo(cover.bottom + 8));
+      expect(save.top, comments.top);
+      // 动作行整体在可见区域内(不被裁/不压到播放条)
+      expect(comments.bottom, lessThanOrEqualTo(view.bottom + 0.5));
+      // 行不横向溢出(审计 P1: 行宽跟图同宽时 side<160dp 会 RenderFlex overflow)
+      expect(comments.right, lessThanOrEqualTo(view.right + 0.5));
+      expect(save.left, greaterThanOrEqualTo(view.left - 0.5));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
