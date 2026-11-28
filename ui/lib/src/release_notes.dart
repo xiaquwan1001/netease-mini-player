@@ -12,9 +12,7 @@ import 'update_checker.dart' show compareVersions;
 ///
 /// 发版时在这里加一条即可; 没有条目的版本不显示公告(不是每个 patch 都值得说)。
 const Map<String, List<String>> kReleaseHighlights = <String, List<String>>{
-  'v0.41.10': <String>[
-    '大歌单(上千首)重复进入更快、更省内存: 响应缓存命中不再复制整份数据',
-  ],
+  'v0.41.10': <String>['大歌单(上千首)重复进入更快、更省内存: 响应缓存命中不再复制整份数据'],
   'v0.41.9': <String>[
     '播放详情页(封面面)不再被底部三个圆钮压住: 封面与进度/按钮成组居中, 封面还大了一点(部分机型原来会压住封面下沿)',
     '点画面在歌词/封面之间切换时是淡入淡出, 不再"跳"一下; 展开歌词页也有淡入',
