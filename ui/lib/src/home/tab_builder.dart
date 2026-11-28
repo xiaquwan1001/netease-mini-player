@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../album_preview.dart';
 import '../artist_page.dart';
 import '../feed_view.dart';
+import '../layout.dart' show rowExtentFor;
 import '../medal_wall.dart';
 import '../messages_page.dart';
 import '../mine_view.dart';
@@ -330,6 +331,9 @@ class HomeTabBuilder {
     // 列表顶部一句说明: 无版权且没收藏的曲目按官方行为直接不出现, 但要让用户知道少了什么
     final headerCount = hidden > 0 ? 1 : 0;
     return ListView.builder(
+      // 行是定高 SongTile(rowHeightBox = 56 × 系统字号): 无隐藏提示行时直接给
+      // itemExtent; 有 header 时它高度不同, 不能把整张表按同一行高拉齐。
+      itemExtent: headerCount == 0 ? rowExtentFor(context) : null,
       itemCount: songs.length + headerCount,
       itemBuilder: (context, i) {
         if (headerCount == 1 && i == 0) {

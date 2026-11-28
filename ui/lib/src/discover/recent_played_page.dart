@@ -4,7 +4,7 @@ import '../adaptive_text.dart';
 import '../async_view.dart';
 import '../cover_art.dart';
 import '../error_views.dart' show FullError;
-import '../layout.dart' show kPageRowPadding;
+import '../layout.dart' show kPageRowPadding, rowExtentFor;
 import '../net_retry.dart';
 import '../playback_bridge.dart';
 import '../rust/api_all.dart' as rust;
@@ -91,6 +91,8 @@ class RecentPlayedPage extends StatelessWidget {
             _RecentBucketTab<rust.SongDto>(
               load: loadRecent,
               emptyText: '还没有最近听过的单曲\n(登录后会自动同步服务端记录)',
+              // 单曲行是定高 SongRow(56 × 系统字号); 另三个 tab 是 ListTile, 不固定。
+              itemExtent: rowExtentFor(context),
               itemBuilder: (context, s, i, list) => SongRow.pageIndexed(
                 song: s,
                 indexText: '${i + 1}',
@@ -189,10 +191,14 @@ class _RecentBucketTab<T> extends StatelessWidget {
     required this.load,
     required this.emptyText,
     required this.itemBuilder,
+    this.itemExtent,
   });
 
   final Future<List<T>> Function() load;
   final String emptyText;
+
+  /// 条目定高时给 sliver 直接算总高; null = 让行自己撑高(ListTile 列不固定)。
+  final double? itemExtent;
 
   /// 第四个参数是整份列表(点播单曲需要用它重置队列)
   final Widget Function(BuildContext context, T item, int index, List<T> list)
@@ -210,6 +216,7 @@ class _RecentBucketTab<T> extends StatelessWidget {
           FullError(message: friendlyError(error), onRetry: retry),
       // 非分页: 单次取全(load 一次拿完), 无更多页
       builder: (context, items, _) => ListView.builder(
+        itemExtent: itemExtent,
         itemCount: items.length,
         itemBuilder: (context, i) => itemBuilder(context, items[i], i, items),
       ),

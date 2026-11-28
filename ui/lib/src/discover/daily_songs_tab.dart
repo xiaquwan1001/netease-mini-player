@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../async_view.dart';
 import '../error_views.dart' show FullError;
+import '../layout.dart' show rowExtentFor;
 import '../net_retry.dart' show friendlyError;
 import '../playback_bridge.dart';
 import '../rust/api_all.dart' as rust;
@@ -33,6 +34,9 @@ class DailySongsTab extends StatelessWidget {
           FullError(message: friendlyError(error), onRetry: retry),
       // 非分页: 每日推荐歌曲一次全量返回, 接口无分页
       builder: (context, songs, _) => ListView.builder(
+        // 行是定高 SongRow(rowHeightBox = 56 × 系统字号): 给 itemExtent 让
+        // sliver 直接算总高, 不必逐行实测/估算滚动范围。
+        itemExtent: rowExtentFor(context),
         itemCount: songs.length,
         itemBuilder: (context, i) {
           final s = songs[i];

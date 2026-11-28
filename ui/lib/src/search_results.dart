@@ -216,12 +216,18 @@ class _SearchResultsViewState extends State<SearchResultsView> {
     }
     switch (section) {
       case _Section.songs:
-        return ListView(
+        // 懒建: 以前用 ListView(children: [...全部单曲...]) 一次性实例化所有行。
+        final headerCount = hidden > 0 ? 1 : 0;
+        return ListView.builder(
           padding: const EdgeInsets.only(bottom: 24),
-          children: [
-            // 单曲行要"左右占满": 不额外加水平留白, 提示行自己补
-            if (hidden > 0)
-              Padding(
+          // 单曲行是定高 SongTile(56 × 系统字号); 有隐藏提示行时高度不同,
+          // 不把整张表按同一行高拉齐(只在该行存在时退回逐行实测)。
+          itemExtent: headerCount == 0 ? rowExtentFor(context) : null,
+          itemCount: visible.length + headerCount,
+          itemBuilder: (context, i) {
+            if (headerCount == 1 && i == 0) {
+              // 单曲行要"左右占满": 不额外加水平留白, 提示行自己补
+              return Padding(
                 padding: const EdgeInsets.fromLTRB(
                   kPagePadding,
                   4,
@@ -233,16 +239,17 @@ class _SearchResultsViewState extends State<SearchResultsView> {
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
-              ),
-            for (final s in visible)
-              SongTile(
-                song: s,
-                active: widget.currentTrackId == s.id,
-                liked: widget.liked.contains(s.id),
-                onTap: () => widget.onPlaySong(s),
-                onMenu: widget.onMenu == null ? null : () => widget.onMenu!(s),
-              ),
-          ],
+              );
+            }
+            final s = visible[i - headerCount];
+            return SongTile(
+              song: s,
+              active: widget.currentTrackId == s.id,
+              liked: widget.liked.contains(s.id),
+              onTap: () => widget.onPlaySong(s),
+              onMenu: widget.onMenu == null ? null : () => widget.onMenu!(s),
+            );
+          },
         );
       case _Section.artists:
         return _grid<rust.SearchArtist>(
